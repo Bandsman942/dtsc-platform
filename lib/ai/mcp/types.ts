@@ -3,6 +3,7 @@ import type { AiToolMode } from "@/lib/ai/tool-registry";
 export type McpTransportKind = "STREAMABLE_HTTP";
 export type McpServerStatus = "DISABLED" | "CERTIFIED" | "SUSPENDED";
 export type McpDataPolicy = "PUBLIC_ONLY" | "BUSINESS_ALLOWED" | "SENSITIVE_CERTIFIED";
+export type McpAuthMode = "NONE" | "BEARER_ENV" | "OAUTH_USER";
 
 export type McpServerDefinition = {
   code: string;
@@ -14,8 +15,13 @@ export type McpServerDefinition = {
   organizationScope: "GLOBAL" | "TENANT";
   status: McpServerStatus;
   dataPolicy: McpDataPolicy;
-  authMode: "NONE" | "BEARER_ENV";
+  authMode: McpAuthMode;
   authEnvKey?: string | null;
+  oauthClientIdEnvKey?: string | null;
+  oauthClientSecretEnvKey?: string | null;
+  oauthScopes?: string[];
+  oauthAuthorizationServer?: string | null;
+  oauthAllowedHosts?: string[];
   timeoutMs: number;
   maxResponseBytes: number;
   allowedToolModes: AiToolMode[];

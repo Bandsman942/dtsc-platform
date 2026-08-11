@@ -68,7 +68,12 @@ export async function executeMcpBoundTool(input: { dtscToolCode: string; args: u
     const dataDecision = authorizeMcpDataBoundary({ server, classifications: effectiveClassifications(input.context) });
     if (!dataDecision.allowed) throw new Error(dataDecision.reasonCode);
 
-    const { snapshot } = await discoverAndPersistMcpServer(server);
+    const userAuth = server.authMode === "OAUTH_USER"
+      ? { userId: input.context.userId, organizationId: input.context.organizationId || "" }
+      : null;
+    if (server.authMode === "OAUTH_USER" && !userAuth?.organizationId) throw new Error("MCP_OAUTH_ORGANIZATION_CONTEXT_REQUIRED");
+
+    const { snapshot } = await discoverAndPersistMcpServer(server, userAuth);
     const remoteTool = getDiscoveredMcpTool(snapshot, binding.remoteToolName);
     if (!remoteTool) throw new Error("MCP_BOUND_TOOL_NOT_DISCOVERED");
     if (hashMcpSchema(remoteTool.inputSchema) !== binding.inputSchemaHash) throw new Error("MCP_TOOL_INPUT_SCHEMA_CHANGED");
@@ -80,6 +85,7 @@ export async function executeMcpBoundTool(input: { dtscToolCode: string; args: u
       method: "tools/call",
       params: { name: binding.remoteToolName, arguments: args },
       additionalHeaders: buildMcpParameterHeaders(remoteTool.inputSchema, args),
+      userAuth,
     });
     if (result.isError) throw new Error("MCP_REMOTE_TOOL_ERROR");
     await writeMcpAuditEvent({ ...auditBase, eventType: "TOOL_CALL", status: "SUCCESS", metadata: { discoveryVersion: snapshot.version } });

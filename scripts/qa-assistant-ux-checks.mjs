@@ -8,6 +8,7 @@ function assert(condition, message) { if (!condition) throw new Error(message); 
 
 const schema = read("prisma/assistant-conversation-preferences.prisma");
 const migration = read("prisma/migrations/20260730043000_add_assistant_conversation_preferences/migration.sql");
+const oauthMigration = read("prisma/migrations/20260811010000_add_mcp_user_oauth/migration.sql");
 const helper = read("lib/assistant-conversation-preferences.ts");
 const promptPolicy = read("lib/ai/prompts.ts");
 const chatPage = read("app/chat/page.tsx");
@@ -27,6 +28,15 @@ const enterpriseConversations = read("app/api/enterprise/ai/conversations/[id]/r
 const enterpriseMessage = read("app/api/enterprise/ai/messages/[id]/route.ts");
 const connectedAppsCatalog = read("lib/ai/mcp/app-catalog.ts");
 const connectedAppsPage = read("app/ai/apps/page.tsx");
+const mcpTypes = read("lib/ai/mcp/types.ts");
+const mcpRegistry = read("lib/ai/mcp/registry.ts");
+const mcpTransport = read("lib/ai/mcp/transport.ts");
+const mcpOauth = read("lib/ai/mcp/oauth.ts");
+const mcpOauthCrypto = read("lib/ai/mcp/oauth-crypto.ts");
+const mcpOauthStore = read("lib/ai/mcp/oauth-store.ts");
+const mcpConnectRoute = read("app/api/ai/apps/oauth/connect/route.ts");
+const mcpCallbackRoute = read("app/api/ai/apps/oauth/callback/route.ts");
+const mcpDisconnectRoute = read("app/api/ai/apps/oauth/disconnect/route.ts");
 const collaboratorComposer = read("components/chat/VoiceConversationComposer.tsx");
 const collaboratorI18n = read("lib/collaboration-experience-i18n.ts");
 const collaboratorAiCompose = read("app/api/collaborators/ai/compose/route.ts");
@@ -87,9 +97,23 @@ assert(!chatWorkspace.includes("useWeb") && !enterpriseWorkspace.includes("useWe
 for (const appName of ["Gmail", "Google Calendar", "Notion", "GitHub", "Linear", "Jira & Confluence", "Stripe"]) {
   assert(connectedAppsCatalog.includes(`name: \"${appName}\"`), `Connected applications catalog must include ${appName}`);
 }
-assert(connectedAppsCatalog.includes("MCP_SERVER_REGISTRY") && connectedAppsCatalog.includes("CERTIFIED_BY_DTSC"), "Connected application availability must be derived from the real certified MCP registry");
-assert(connectedAppsPage.includes("Security first") && connectedAppsPage.includes("certification de sécurité DTSC"), "Connected applications UI must explain the security boundary in human language");
-assert(connectedAppsPage.includes("runtime OAuth utilisateur") && connectedAppsPage.includes("Non activé"), "Connected applications UI must not fabricate a personal OAuth connection that the runtime does not yet provide");
+assert(connectedAppsCatalog.includes("MCP_SERVER_REGISTRY") && connectedAppsCatalog.includes("READY_TO_CONNECT") && connectedAppsCatalog.includes("CONNECTED"), "Connected applications must derive real certification and per-user OAuth status");
+assert(connectedAppsPage.includes("/api/ai/apps/oauth/connect") && connectedAppsPage.includes("/api/ai/apps/oauth/disconnect"), "Connected applications UI must expose real connect and disconnect actions only for eligible servers");
+assert(connectedAppsPage.includes("Seuls les serveurs MCP certifiés par DTSC") && connectedAppsPage.includes("ne les expose jamais au modèle IA"), "Connected applications UI must explain the security boundary in human language");
+
+assert(mcpTypes.includes('"OAUTH_USER"'), "MCP server contract must support user OAuth without changing legacy auth modes");
+assert(mcpRegistry.includes("oauthAllowedHosts") && mcpRegistry.includes("OAUTH_USER requires oauthClientIdEnvKey"), "OAuth servers must declare explicit client configuration and certified metadata hosts");
+assert(mcpOauthCrypto.includes("aes-256-gcm") && mcpOauthCrypto.includes("setAAD") && mcpOauthCrypto.includes("DTSC_MCP_OAUTH_ENCRYPTION_KEY"), "MCP OAuth credentials must be encrypted server-side with authenticated tenant-bound encryption");
+assert(mcpOauth.includes("code_challenge_method") && mcpOauth.includes('"S256"') && mcpOauth.includes('url.searchParams.set("resource"'), "MCP OAuth must use PKCE S256 and resource indicators");
+assert(mcpOauth.includes("oauth-protected-resource") && mcpOauth.includes("oauth-authorization-server") && mcpOauth.includes("openid-configuration"), "MCP OAuth must support protected-resource and authorization-server discovery");
+assert(mcpOauthStore.includes("encryptedCredentials") && mcpOauthStore.includes("consumeMcpOAuthState") && !mcpOauthStore.includes("console.log"), "OAuth tokens and PKCE verifier must remain in the encrypted server store");
+assert(oauthMigration.includes('CREATE TABLE "McpUserOAuthConnection"') && oauthMigration.includes('CREATE TABLE "McpUserOAuthState"'), "MCP OAuth persistence migration must create connection and one-time-state tables");
+assert(!/DROP TABLE|DROP COLUMN|TRUNCATE/i.test(oauthMigration), "MCP OAuth migration must be additive");
+assert(oauthMigration.includes('"userId", "organizationId", "serverCode"') && oauthMigration.includes("ON DELETE CASCADE"), "MCP OAuth credentials must be isolated by user, organization and server");
+assert(mcpConnectRoute.includes("isSameOriginRequest") && mcpConnectRoute.includes("requireActiveOrganizationMembership") && mcpConnectRoute.includes("rateLimit"), "OAuth connect must enforce same-origin, active tenant membership and rate limiting");
+assert(mcpCallbackRoute.includes("consumeMcpOAuthState") && mcpCallbackRoute.includes("activeOrganizationId !== savedState.organizationId"), "OAuth callback must consume state once and reject tenant-context changes");
+assert(mcpDisconnectRoute.includes("revokeMcpOAuthConnection") && mcpDisconnectRoute.includes("localCredentialsDestroyed: true"), "OAuth disconnect must destroy the local encrypted credential even when remote revocation is unavailable");
+assert(mcpTransport.includes("getValidMcpOAuthAccessToken") && mcpTransport.includes("MCP_OAUTH_USER_CONTEXT_REQUIRED"), "MCP transport must resolve user tokens server-side only with explicit user and tenant context");
 
 assert(collaboratorComposer.includes('aiT("aiCopilot")') && collaboratorComposer.includes("PROPOSE_REPLY") && collaboratorI18n.includes('aiCopilot: "Copilote IA DTSC"'), "Mes collaborateurs composer must expose the DTSC AI drafting copilot through the shared i18n contract");
 assert(collaboratorComposer.includes('aiT("aiPrivacyNote")') && collaboratorI18n.includes("vous décidez toujours de l’envoi") && collaboratorI18n.includes("n’envoie aucun message à votre place"), "Collaboration AI drafting must keep explicit user control over sending in the FR/EN i18n source of truth");
@@ -98,4 +122,4 @@ assert(collaboratorAiCompose.includes("isSameOriginRequest") && collaboratorAiCo
 assert(collaboratorAiCompose.includes("Retourne uniquement le texte final") && collaboratorAiCompose.includes("L’envoi reste une action distincte"), "Collaboration AI drafting must return a draft without pretending to send it");
 
 assert(vercel.includes('"main": true') && vercel.includes('"*": false') && vercel.includes("ignoreCommand"), "Vercel must remain production-only from main");
-console.log("Assistant UI/UX, canonical module labels, rich enterprise formatting, connected-apps visibility, collaboration copilot, tenant-safe sources and production-only CI/CD QA passed.");
+console.log("Assistant UI/UX, canonical module labels, rich enterprise formatting, encrypted tenant-safe MCP OAuth, collaboration copilot, tenant-safe sources and production-only CI/CD QA passed.");

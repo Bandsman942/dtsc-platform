@@ -2,19 +2,21 @@
 
 ## Objectif
 
-Cette évolution corrige trois problèmes produit transversaux :
+Cette évolution corrige quatre problèmes produit transversaux :
 
 1. les assistants ne doivent jamais exposer aux utilisateurs normaux des identifiants techniques qui ne sont pas visibles dans l’interface ;
-2. les applications MCP doivent être présentées comme des applications métier compréhensibles, avec un état réel et non simulé ;
-3. l’IA DTSC doit aider à rédiger dans **Mes collaborateurs** sans contourner la sécurité ni envoyer un message à l’insu de l’utilisateur.
+2. l’Assistant entreprise doit restituer les noms de modules tels qu’ils apparaissent réellement dans l’UX et utiliser le rendu enrichi existant ;
+3. les applications MCP doivent être présentées comme des applications métier compréhensibles, avec un état réel et une autorisation personnelle sécurisée lorsqu’elles sont certifiées ;
+4. l’IA DTSC doit aider à rédiger et agir dans les interfaces conversationnelles sans contourner la sécurité ni envoyer un message à l’insu de l’utilisateur.
 
 ## Contrat de langage utilisateur
 
-`lib/ai/prompts.ts` porte désormais un contrat commun de présentation utilisateur appliqué par les routes qui réutilisent `buildLanguageInstruction()`.
+`lib/ai/prompts.ts` porte un contrat commun de présentation utilisateur appliqué par les routes qui réutilisent `buildLanguageInstruction()`.
 
 Sont interdits dans une réponse métier normale :
 
 - codes internes de modules ;
+- noms de modules contenant des underscores ;
 - enums bruts ;
 - clés camelCase ;
 - noms de champs de base de données ;
@@ -30,139 +32,143 @@ L’assistant doit convertir un fait interne en **libellé visible + effet méti
 - interdit : `blockExpiredBatchSale: true` ;
 - attendu : `Les lots expirés ne peuvent pas être vendus.`
 
-La règle ne bloque pas un diagnostic technique demandé explicitement par un utilisateur autorisé ; elle empêche seulement les fuites de détails d’implémentation dans une conversation métier normale.
+La règle ne bloque pas un diagnostic technique demandé explicitement par un utilisateur autorisé ; elle empêche les fuites de détails d’implémentation dans une conversation métier normale.
 
 ### Hotfix Assistant entreprise — noms de modules et rendu enrichi
 
 Une transcription réelle de l’Assistant entreprise a montré une fuite de codes comme `FINANCE_ACCOUNTING`, `FINANCE_CASH`, `FINANCE_PAYABLES` et `FINANCE_RECEIVABLES` dans une réponse destinée à un utilisateur métier.
 
-Le correctif impose désormais deux couches complémentaires :
+Le correctif impose deux couches complémentaires :
 
 1. le contrat global interdit explicitement tout nom de module affiché avec des underscores ;
-2. `lib/enterprise-ai/context.ts` injecte dans le contexte interne de l’Assistant entreprise le vocabulaire bilingue généré depuis le registre canonique `lib/enterprise/module-registry.ts` (`labelFr` / `labelEn`).
+2. `lib/enterprise-ai/context.ts` injecte dans le contexte interne le vocabulaire bilingue généré depuis le registre canonique `lib/enterprise/module-registry.ts` (`labelFr` / `labelEn`).
 
 Le modèle peut utiliser le code interne pour raisonner, mais doit restituer uniquement le nom que l’utilisateur voit dans l’UX. Aucun second dictionnaire de noms de modules n’est maintenu côté IA.
 
-Le rendu des réponses entreprise continue de réutiliser le renderer streaming Markdown existant (`Streamdown`) et le style partagé `dtsc-assistant-markdown`. Les consignes de sortie demandent explicitement, lorsque pertinent :
+Le rendu des réponses entreprise réutilise le renderer streaming Markdown existant (`Streamdown`) et le style partagé `dtsc-assistant-markdown`. Les consignes de sortie demandent, lorsque pertinent : titres courts, paragraphes brefs, listes, étapes numérotées, **gras**, *italique*, citations, séparateurs, tableaux comparatifs et liens Markdown lorsque l’URL est réellement disponible. Le HTML brut n’est pas demandé.
 
-- titres courts ;
-- paragraphes brefs ;
-- listes à puces ;
-- étapes numérotées ;
-- **gras** et *italique* ;
-- citations ;
-- séparateurs ;
-- tableaux comparatifs ;
-- liens Markdown seulement lorsqu’une URL autorisée existe réellement.
+## Mode Agent dans le bouton flottant commun
 
-Le HTML brut n’est pas demandé et les blocs de code restent réservés aux demandes techniques explicites. Cette correction ne modifie ni les permissions, ni le RAG, ni les citations, ni la classification des données, ni les outils backend.
+Dans **Chatbot** et **Assistant IA entreprise**, le mode Agent ne possède plus un second bouton flottant indépendant. `AiAgentRunDock` s’enregistre dans le hub partagé via `useFloatingAction`.
+
+Ordre des actions :
+
+1. **Mode agent** — ordre `5` ;
+2. **Boîte à outils professionnelle** — ordre `10`.
+
+Le changement est uniquement UX. Les endpoints Agent, budgets, étapes persistées, annulation, reprise, Tool Gateway et confirmations humaines restent inchangés.
 
 ## Centre Applications connectées
 
 Route UI : `/ai/apps`
 
-Le catalogue initial présente :
+Le catalogue initial présente Gmail, Google Calendar, Notion, GitHub, Linear, Jira & Confluence et Stripe. La disponibilité est calculée depuis le vrai `MCP_SERVER_REGISTRY`.
 
-- Gmail ;
-- Google Calendar ;
-- Notion ;
-- GitHub ;
-- Linear ;
-- Jira & Confluence ;
-- Stripe.
+### Autorisation personnelle OAuth MCP
 
-Le catalogue est éditorial ; **la disponibilité est calculée à partir du vrai registre `MCP_SERVER_REGISTRY`**. Une application n’est affichée comme certifiée DTSC que lorsqu’un serveur correspondant est réellement déclaré et `CERTIFIED` dans l’environnement courant.
+Le runtime supporte trois modes d’authentification serveur :
 
-Le centre rappelle la chaîne de sécurité existante : session → contexte/tenant → abonnement → permission → classification des données → binding certifié → Tool Gateway → audit.
+- `NONE` pour un serveur ne demandant aucune authentification ;
+- `BEARER_ENV` pour une credential technique DTSC gérée côté serveur ;
+- `OAUTH_USER` pour une autorisation personnelle et tenant-scoped.
 
-### Limite actuelle volontaire
+Une application n’obtient un bouton **Connecter** que lorsqu’un serveur correspondant est réellement `CERTIFIED`, configuré en `OAUTH_USER` et autorisé dans le contexte actif. Une connexion est liée à :
 
-Le runtime MCP actuel supporte seulement les authentifications serveur `NONE` et `BEARER_ENV`. Il ne possède pas encore de coffre OAuth personnel par utilisateur.
+`userId + organizationId + serverCode`.
 
-Par conséquent, cette évolution **n’affiche aucun faux bouton « Connecté »** et ne stocke aucun token utilisateur en clair. Le centre indique honnêtement qu’une autorisation personnelle apparaîtra seulement après livraison du runtime OAuth utilisateur.
+Le passage à une autre entreprise n’emporte donc jamais implicitement une autorisation personnelle.
 
-Pour rendre la connexion personnelle complète, la prochaine couche doit implémenter le flux d’autorisation HTTP MCP conforme OAuth 2.1 avec :
+### Flux de connexion
 
-- Protected Resource Metadata ;
-- découverte de l’Authorization Server ;
-- PKCE ;
-- `state` anti-CSRF ;
-- Resource Indicators ;
-- stockage serveur chiffré des credentials ;
-- rotation/expiration/révocation ;
-- scopes minimaux ;
-- audit de connexion/déconnexion ;
-- aucun token dans le navigateur, les logs ou les prompts ;
-- révalidation des permissions DTSC avant chaque appel MCP.
+1. l’utilisateur choisit **Connecter** depuis `/ai/apps` ;
+2. le serveur revalide session, organisation active, membership, contexte, certification du serveur et rate limit ;
+3. DTSC découvre les métadonnées OAuth uniquement sur des hôtes explicitement certifiés dans `oauthAllowedHosts` ;
+4. DTSC crée un `state` aléatoire et un verifier PKCE ;
+5. le verifier est chiffré côté serveur ;
+6. l’utilisateur est redirigé vers la page d’autorisation du fournisseur ;
+7. le callback consomme le `state` une seule fois et rejette tout changement de user ou d’organisation ;
+8. le code OAuth est échangé côté serveur avec PKCE S256 et Resource Indicator ;
+9. access/refresh tokens sont chiffrés avant persistance ;
+10. le centre affiche **Connecté** seulement après persistance réelle.
 
-Aucun serveur découvert ne peut s’auto-certifier ou s’auto-activer.
+Le transport MCP demande ensuite un access token valide uniquement avec un contexte `{ userId, organizationId }` explicite. Un token expiré est rafraîchi côté serveur et le refresh est audité.
+
+### Coffre de credentials
+
+`DTSC_MCP_OAUTH_ENCRYPTION_KEY` est une clé serveur de 32 octets. Les credentials et les verifiers PKCE utilisent AES-256-GCM avec AAD contenant l’identité user/tenant/server afin qu’un ciphertext copié dans un autre contexte ne soit pas déchiffrable comme une credential valide.
+
+Les tokens :
+
+- ne sont jamais envoyés au modèle ;
+- ne sont jamais rendus au navigateur ;
+- ne sont jamais placés dans `DTSC_MCP_SERVERS_JSON` ;
+- ne sont jamais journalisés ;
+- sont détruits localement lors de la déconnexion, même si le fournisseur ne propose pas ou refuse une révocation distante.
+
+Le runtime échoue fermé si la clé de chiffrement ou le client OAuth requis manque.
+
+### Certification et SSRF
+
+OAuth n’auto-certifie aucun serveur. Le serveur MCP doit déjà être présent dans le registre DTSC. Les endpoints MCP gardent les contrôles SSRF existants ; les endpoints OAuth sont limités séparément par `oauthAllowedHosts`. Les redirections HTTP automatiques sont refusées pendant découverte, échange et révocation.
+
+`oauthClientIdEnvKey` et, si nécessaire, `oauthClientSecretEnvKey` référencent des secrets serveur. `oauthScopes` définit la liste minimale demandée. Aucun secret client ne doit être inclus directement dans le JSON du registre.
+
+### Persistance additive
+
+La migration `20260811010000_add_mcp_user_oauth` ajoute :
+
+- `McpUserOAuthConnection` : credential chiffrée par user/organisation/serveur, scopes et expiration ;
+- `McpUserOAuthState` : état anti-CSRF à usage unique et verifier PKCE chiffré.
+
+La migration ne supprime ni colonne ni table existante.
 
 ## Mes collaborateurs — Copilote IA DTSC
 
-Le composant partagé `VoiceConversationComposer` expose maintenant une action **Copilote IA DTSC**. Elle est donc disponible dans les interfaces de conversation qui utilisent ce composer.
+Le composant partagé `VoiceConversationComposer` expose **Copilote IA DTSC** avec les actions Reformuler, Professionnaliser, Raccourcir, Plus chaleureux et Proposer une réponse.
 
-Actions initiales :
+API : `POST /api/collaborators/ai/compose`.
 
-- Reformuler ;
-- Professionnaliser ;
-- Raccourcir ;
-- Plus chaleureux ;
-- Proposer une réponse à partir d’un message fourni.
+La route exige session, same-origin et rate limit, valide les entrées, réutilise le runtime IA canonique et retourne uniquement un brouillon. Le message reste envoyé manuellement par l’utilisateur.
 
-API : `POST /api/collaborators/ai/compose`
+L’extension suivante porte le **mode Agent de conversation** : le serveur doit fournir automatiquement un contexte borné issu du thread actif après revalidation du membership, sans donner au modèle un droit implicite d’envoi.
 
-La route :
+## Variables d’environnement OAuth
 
-- exige une session ;
-- exige same-origin ;
-- applique un rate limit ;
-- valide les entrées avec Zod ;
-- réutilise `prepareAiTurn()` et `routeAiStream()` ;
-- conserve le contexte `PERSONAL`, `ORGANIZATION` ou `DTSC_INTERNAL` courant ;
-- applique le contrat de langage humain ;
-- journalise l’appel ;
-- retourne uniquement un brouillon.
+Voir `env.example`.
 
-### Pourquoi le message n’est pas envoyé automatiquement
+Obligatoires dès qu’un serveur `OAUTH_USER` est activé :
 
-Le copilote prépare le texte dans la zone de saisie, puis l’utilisateur relit et envoie lui-même. Cette première livraison ne donne donc pas au modèle un droit implicite d’écriture dans les conversations privées.
+- `DTSC_MCP_OAUTH_ENCRYPTION_KEY` ;
+- la variable nommée par `oauthClientIdEnvKey` ;
+- la variable nommée par `oauthClientSecretEnvKey` si le fournisseur exige un client confidentiel ;
+- `NEXT_PUBLIC_APP_URL`, utilisé pour construire le callback `/api/ai/apps/oauth/callback`.
 
-Un futur **Agent de messagerie** pourra proposer des réponses à partir du thread actif et éventuellement exécuter des actions bornées uniquement après ajout d’un contrat explicite : activation opt-in, périmètre de conversations, règles de destinataires, confirmation ou politique d’auto-envoi, kill switch, audit, prévention des boucles agent-agent, quotas et RBAC serveur.
-
-## UX
-
-Les assistants conservent l’interface immersive commune existante. Le composer IA affiche désormais un raccourci vers `/ai/apps`, et les paramètres de conversation contiennent aussi une entrée **Applications connectées**.
-
-Le principe reste :
-
-- réponse centrée lisible ;
-- composer mobile-first ;
-- réglages accessibles sans quitter le contexte ;
-- aucune terminologie d’infrastructure nécessaire pour accomplir une action utilisateur ;
-- les détails techniques restent réservés aux surfaces d’administration et de diagnostic appropriées.
+Un déploiement ne doit pas prétendre qu’un fournisseur est prêt si son serveur n’est pas certifié/configuré dans `DTSC_MCP_SERVERS_JSON`.
 
 ## QA
 
-`scripts/qa-assistant-ux-checks.mjs` vérifie désormais aussi :
+`scripts/qa-assistant-ux-checks.mjs` vérifie :
 
-- le contrat de langage humain ;
-- l’interdiction explicite des noms de modules contenant des underscores ;
-- les exemples de régression `FINANCE_ACCOUNTING`, `FINANCE_CASH`, `FINANCE_PAYABLES`, `FINANCE_RECEIVABLES` ;
-- la provenance des noms de modules depuis le registre canonique bilingue ;
-- l’utilisation du renderer enrichi `Streamdown` dans l’Assistant entreprise ;
-- le contrat de Markdown riche sans HTML brut ;
-- l’existence des applications du catalogue ;
-- la dérivation de disponibilité depuis le registre MCP réel ;
-- l’absence de fausse connexion OAuth ;
-- la présence du Copilote IA DTSC dans le composer collaboratif ;
-- l’usage du runtime IA canonique ;
-- les contrôles same-origin, session et rate limit ;
-- l’absence d’auto-envoi implicite.
+- le contrat de langage humain et l’interdiction des noms de modules avec underscores ;
+- les quatre identifiants Finance observés en régression ;
+- la provenance des labels depuis le registre canonique bilingue ;
+- le renderer enrichi `Streamdown` ;
+- le catalogue et la dérivation de statut MCP ;
+- le mode `OAUTH_USER` ;
+- PKCE S256 et Resource Indicators ;
+- la découverte OAuth ;
+- le chiffrement authentifié ;
+- l’isolation user/tenant/server ;
+- les routes connect/callback/disconnect ;
+- l’injection server-only des tokens dans le transport MCP ;
+- le copilote collaboratif et l’absence d’auto-envoi implicite.
+
+`scripts/qa-standard-ai-agent-ui.mjs` vérifie aussi que **Mode agent** passe par le hub flottant commun avec un ordre supérieur à la boîte à outils tout en conservant les contrôles du runtime.
 
 ## CI/CD
 
-Le workflow reste celui imposé par `AGENTS.md` :
+Le workflow reste :
 
 `feature branch → contrôles → PR → Quality Gates → revue → merge main → unique déploiement Production`.
 
-Aucun déploiement Vercel manuel depuis la branche feature n’est autorisé.
+Aucun déploiement Vercel manuel depuis une branche feature n’est autorisé.
