@@ -39,16 +39,18 @@ export function SensitiveActionConfirmationProvider() {
   useEffect(() => {
     const browserConfirm = window.confirm.bind(window);
     let approvedReplay: { message: string; origin: HTMLElement } | null = null;
+    let replaying = false;
 
     const appConfirm = (message?: string) => {
       const normalizedMessage = String(message || "Confirmer cette action ?").trim() || "Confirmer cette action ?";
-      const origin = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 
-      if (approvedReplay && origin === approvedReplay.origin && normalizedMessage === approvedReplay.message) {
+      if (replaying && approvedReplay?.message === normalizedMessage) {
+        replaying = false;
         approvedReplay = null;
         return true;
       }
 
+      const origin = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       const legacyRequest: SensitiveActionConfirmationRequest = {
         id: crypto.randomUUID(),
         title: "Confirmer cette action",
@@ -59,7 +61,14 @@ export function SensitiveActionConfirmationProvider() {
         resolve: (result) => {
           if (!result.confirmed || !origin || !origin.isConnected) return;
           approvedReplay = { message: normalizedMessage, origin };
-          queueMicrotask(() => origin.click());
+          queueMicrotask(() => {
+            replaying = true;
+            origin.click();
+            queueMicrotask(() => {
+              replaying = false;
+              approvedReplay = null;
+            });
+          });
         },
       };
 
