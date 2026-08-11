@@ -27,6 +27,8 @@ const files = {
   navigation: "lib/navigation/company-relationships.ts",
   navDesktop: "components/layout/nav-links.tsx",
   navMobile: "components/dtsc/mobile-shell.tsx",
+  moduleGroups: "lib/navigation/module-navigation-groups.ts",
+  modulesHub: "app/modules/page.tsx",
   appShell: "components/layout/app-shell.tsx",
   relationships: "components/enterprise/identity-links/enterprise-identity-user-panel.tsx",
   cancelRelationship: "app/api/account/identity-links/cancel/route.ts",
@@ -84,7 +86,9 @@ const checks = {
   navigation() {
     for (const marker of ["COMPANY_RELATIONSHIPS", "/enterprise-links", "Relations avec les entreprises", "Company relationships"]) need(content.navigation, marker, "Navigation canonique");
     for (const marker of ["pendingCompanyRelationships", "aria-current", "99+"]) need(content.navDesktop, marker, "Navigation desktop");
-    for (const marker of ["pendingCompanyRelationships", "data-mobile-secondary-nav", "scrollIntoView", "aria-current", "navigationPath", "getSupportUrl(\"/support\")"]) need(content.navMobile, marker, "Navigation mobile et Support");
+    for (const marker of ["pendingCompanyRelationships", "MODULE_NAVIGATION_GROUPS", "getModuleNavigationGroupHref", "groupIsActive", "aria-current"]) need(content.navMobile, marker, "Navigation mobile groupée");
+    for (const marker of ["ORGANIZATION_ERP", "ACCOUNT_SUPPORT", "SUPPORT"]) need(content.moduleGroups, marker, "Registre des groupes de navigation");
+    for (const marker of ["getEnterpriseNavigationModules", "resolveEnterpriseModuleAccess", "enterpriseModules"]) need(content.modulesHub, marker, "Hub de modules piloté par le serveur");
     for (const marker of ["enterpriseIdentityLink.count", "COMPANY_RELATIONSHIP_USER_ACTION_STATUSES"]) need(content.appShell, marker, "Badge global");
     for (const marker of ["À traiter", "Relations actives", "Mes demandes", "Historique", "submitUserRequest", "organizationCode", "relationType", "Retirer l’autorisation", "DTSC ne propose pas d’annuaire public"]) need(content.relationships, marker, "Workspace relations");
     for (const marker of ["isSameOriginRequest", "rateLimit", "revision", "CANCELLED", "writeAuditLog"]) need(content.cancelRelationship, marker, "Annulation relation");
