@@ -1,5 +1,7 @@
 # Hotfix #243 — QA connexion et choix d’espace
 
+PR de livraison : **#244**.
+
 Statut initial : **NON_EXÉCUTÉ — validation CI et E2E propriétaire requises avant merge**.
 
 ## Objectif
