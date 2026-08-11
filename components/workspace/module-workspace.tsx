@@ -207,7 +207,7 @@ export function ModuleSection({
         className={cn("fixed inset-0 z-[80] min-w-0 max-w-full overflow-y-auto bg-dtsc-page", className)}
       >
         <div className="sticky top-0 z-20 border-b border-dtsc-border bg-dtsc-surface/95 px-4 py-3 shadow-sm backdrop-blur-xl sm:px-6 lg:px-8">
-          <div className="mx-auto flex w-full min-w-0 max-w-[1600px] flex-wrap items-center justify-between gap-3">
+          <div className="mx-auto flex w-full min-w-0 max-w-[1600px] flex-wrap items-center justify-between gap-3 sm:flex-nowrap">
             <button type="button" onClick={closeWorkspace} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-black text-dtsc-blue hover:bg-dtsc-soft">
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />
               {backLabel}
@@ -217,9 +217,9 @@ export function ModuleSection({
         </div>
         <div className="mx-auto w-full min-w-0 max-w-[1600px] px-4 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-6 sm:px-6 lg:px-8 lg:pt-8">
           <div data-workspace-section-header className="mb-6 min-w-0 border-l-[3px] border-cyan-500 pl-4">
-            <div className="flex min-w-0 flex-wrap items-baseline gap-2.5">
+            <div className="flex min-w-0 flex-wrap items-baseline gap-2.5 sm:flex-nowrap">
               <h2 id={titleId} className="min-w-0 break-words text-2xl font-black tracking-[-0.02em] text-dtsc-ink sm:text-3xl">{title}</h2>
-              {count !== undefined ? <span className="rounded-full bg-dtsc-soft px-2.5 py-1 text-xs font-black text-dtsc-blue">{count}</span> : null}
+              {count !== undefined ? <span className="shrink-0 rounded-full bg-dtsc-soft px-2.5 py-1 text-xs font-black text-dtsc-blue">{count}</span> : null}
             </div>
             {description ? <div className="mt-2 max-w-4xl break-words text-sm leading-6 text-dtsc-muted sm:text-[0.95rem] sm:leading-7">{description}</div> : null}
           </div>
@@ -242,12 +242,12 @@ export function ModuleSection({
         onClick={openWorkspace}
         aria-expanded="false"
         data-workspace-section-header
-        className="group flex w-full min-w-0 max-w-full items-center justify-between gap-4 px-4 py-4 text-left transition hover:bg-dtsc-soft/70 sm:px-5 sm:py-5"
+        className="group flex w-full min-w-0 max-w-full flex-wrap items-center justify-between gap-4 px-4 py-4 text-left transition hover:bg-dtsc-soft/70 sm:flex-nowrap sm:px-5 sm:py-5"
       >
         <span className="min-w-0 flex-1 border-l-[3px] border-cyan-500 pl-3.5 sm:pl-4">
-          <span className="flex min-w-0 max-w-full flex-wrap items-baseline gap-2.5">
+          <span className="flex min-w-0 max-w-full flex-wrap items-baseline gap-2.5 sm:flex-nowrap">
             <span id={titleId} className="min-w-0 break-words text-lg font-black tracking-[-0.015em] text-dtsc-ink sm:text-xl">{title}</span>
-            {count !== undefined ? <span className="rounded-full bg-dtsc-soft px-2 py-0.5 text-[0.68rem] font-black leading-5 text-dtsc-blue sm:text-xs">{count}</span> : null}
+            {count !== undefined ? <span className="shrink-0 rounded-full bg-dtsc-soft px-2 py-0.5 text-[0.68rem] font-black leading-5 text-dtsc-blue sm:text-xs">{count}</span> : null}
           </span>
           {description ? <span className="mt-1.5 block max-w-4xl break-words text-sm leading-6 text-dtsc-muted">{description}</span> : null}
         </span>
