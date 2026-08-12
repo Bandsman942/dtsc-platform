@@ -21,6 +21,7 @@ function assertDictionaryPair(frPath, enPath, label) {
 
 assertDictionaryPair("locales/shared-work.fr.json", "locales/shared-work.en.json", "shared-work");
 assertDictionaryPair("locales/collaboration-experience.fr.json", "locales/collaboration-experience.en.json", "collaboration-experience");
+assertDictionaryPair("locales/activities.fr.json", "locales/activities.en.json", "activities");
 
 const i18n = read("lib/i18n.ts");
 for (const required of [
@@ -28,8 +29,11 @@ for (const required of [
   "shared-work.en.json",
   "collaboration-experience.fr.json",
   "collaboration-experience.en.json",
+  "activities.fr.json",
+  "activities.en.json",
   "export function translateSharedWork",
   "export function translateCollaborationExperience",
+  "export function translateActivities",
 ]) {
   if (!i18n.includes(required)) fail(`canonical i18n module is missing: ${required}`);
 }
@@ -39,6 +43,21 @@ for (const forbidden of ["const english =", "locale === \"en\"", "toLocaleString
   if (comments.includes(forbidden)) fail(`entity comments still contains local i18n pattern: ${forbidden}`);
 }
 if (!comments.includes("translateSharedWork") || !comments.includes("formatUserDateTime")) fail("entity comments must use canonical copy and date helpers");
+
+const activitiesDashboard = read("components/activities/activities-dashboard-v3.tsx");
+for (const forbidden of ["const english =", 'locale === "en"', '"en-GB"', '"fr-FR"']) {
+  if (activitiesDashboard.includes(forbidden)) fail(`activities dashboard still contains local i18n pattern: ${forbidden}`);
+}
+if (!activitiesDashboard.includes("translateActivities") || !activitiesDashboard.includes("formatEnumLabelForLocale") || !activitiesDashboard.includes("userLocale")) fail("activities dashboard must use canonical activity copy, enum and locale helpers");
+
+const prestations = read("components/activities/work-prestations-panel-v2.tsx");
+for (const forbidden of ["const english =", 'locale === "en"', "english ?", '"en-GB"', '"fr-FR"']) {
+  if (prestations.includes(forbidden)) fail(`work prestations still contains local i18n pattern: ${forbidden}`);
+}
+if (!prestations.includes("translateActivities") || !prestations.includes("formatEnumLabelForLocale") || !prestations.includes("userLocale")) fail("work prestations must use canonical activity copy, enum and locale helpers");
+for (const persisted of ["Site DTSC", "Télétravail", "Hybride", "Externe", "Mission", "Non défini"]) {
+  if (!prestations.includes(`\"${persisted}\"`)) fail(`work prestations must preserve persisted location mode value: ${persisted}`);
+}
 
 const immersive = read("components/collaborators/collaborators-immersive-conversation-shell.tsx");
 if (immersive.includes("props.userPreferences.locale === \"en\"")) fail("collaborator immersive shell still contains a local FR/EN ternary");
