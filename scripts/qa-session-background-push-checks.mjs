@@ -20,7 +20,7 @@ const check = (label, condition, hint = "") => {
 };
 const all = (source, values) => values.every((value) => source.includes(value));
 
-const packageJson = read("package.json");
+const prismaConfig = read("prisma.config.ts");
 const sessionConfig = read("lib/session-config.ts");
 const sessionPolicy = read("lib/session-policy.ts");
 const session = read("lib/session.ts");
@@ -67,7 +67,10 @@ check("préférence de session utilise un modèle Prisma dédié", all(sessionSc
 check("lecture de préférence ne peut pas casser le login", all(preference, ["try {", "catch {", "return resolveSessionIdleTimeoutMinutes(undefined)"]));
 check("migration session crée table, défaut et whitelist SQL", all(migration, ['CREATE TABLE "UserSessionPreference"', "DEFAULT 30", "CHECK", 'CONSTRAINT "UserSessionPreference_pkey"', "43200"]));
 check("migration de réparation session est idempotente et répare la clé primaire", all(repairMigration, ['CREATE TABLE IF NOT EXISTS "UserSessionPreference"', "ADD COLUMN IF NOT EXISTS", "CREATE INDEX IF NOT EXISTS", "conrelid", "contype = 'p'", 'ADD CONSTRAINT "UserSessionPreference_pkey" PRIMARY KEY', "43200"]));
-check("Prisma charge le dossier multi-fichiers", packageJson.includes('"schema": "./prisma"'));
+check(
+  "Prisma charge le dossier multi-fichiers",
+  all(prismaConfig, ['schema: "prisma"', 'path: "prisma/migrations"']) && !prismaConfig.includes('schema: "prisma/schema.prisma"'),
+);
 check("heartbeat vérifie origine, utilisateur actif et préférence DB", all(heartbeat, ["isSameOriginRequest", "UserStatus.ACTIVE", "getUserSessionIdleTimeoutMinutes", "previousSession: session", "absoluteExpiresAt"]));
 check("changement de contexte conserve l'authTime via previousSession", all(contextRoute, ["previousSession: session", "activeOrganizationId", "activeOrganizationRole", "getUserSessionIdleTimeoutMinutes"]));
 check("endpoint de préférence refuse les valeurs arbitraires et audite", all(policyRoute, ["z.literal(15)", "z.literal(43200)", "ACCOUNT_SESSION_POLICY_UPDATE", "isSameOriginRequest", "rateLimit"]));
