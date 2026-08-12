@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { getSession, requireUser } from "@/lib/auth";
 import { canUseFeature, getOrganizationEntitlements } from "@/lib/billing/entitlements";
+import { translateSharedWork } from "@/lib/i18n";
 import { DTSC_INTERNAL_ORGANIZATION_ID, getActiveOrganizationId } from "@/lib/organizations";
 
 export default async function AddCollaborationContactPage() {
@@ -22,7 +23,7 @@ export default async function AddCollaborationContactPage() {
       return (
         <AppShell user={user}>
           <SaasAccessNotice
-            title="Collaboration indisponible"
+            title={translateSharedWork(user.locale, "collaboration.unavailable")}
             message={featureAccess.message}
             planLabel={entitlements?.planLabel}
             subscriptionStatus={entitlements?.subscriptionStatus}
@@ -32,24 +33,23 @@ export default async function AddCollaborationContactPage() {
     }
   }
 
-  const english = user.locale === "en";
   return (
     <AppShell user={user}>
       <ModuleWorkspace>
         <ModuleHeader
-          eyebrow={english ? "Professional contacts" : "Contacts professionnels"}
-          title={english ? "Add a contact" : "Ajouter un contact"}
-          description={english ? "Find a discoverable DTSC Platform profile, send a contact invitation and manage pending invitations without leaving the collaboration security model." : "Recherchez un profil DTSC Platform découvrable, envoyez une invitation de contact et gérez les invitations en attente sans quitter le modèle de sécurité de la collaboration."}
+          eyebrow={translateSharedWork(user.locale, "collaboration.contact.pageEyebrow")}
+          title={translateSharedWork(user.locale, "collaboration.addContact")}
+          description={translateSharedWork(user.locale, "collaboration.contact.pageDescription")}
           primaryAction={(
             <Button asChild type="button" variant="outline" className="rounded-xl">
-              <Link href="/collaborators"><ArrowLeft className="h-4 w-4" />{english ? "Back to discussions" : "Retour aux discussions"}</Link>
+              <Link href="/collaborators"><ArrowLeft className="h-4 w-4" />{translateSharedWork(user.locale, "collaboration.contact.backToDiscussions")}</Link>
             </Button>
           )}
         />
         <ModuleContent>
           <ModuleSection
-            title={english ? "Contact directory" : "Répertoire des contacts"}
-            description={english ? "Invitations use the existing DTSC collaboration contact request workflow; no separate address book is created." : "Les invitations utilisent le workflow de demandes de contact DTSC existant ; aucun carnet d’adresses parallèle n’est créé."}
+            title={translateSharedWork(user.locale, "collaboration.contact.directoryTitle")}
+            description={translateSharedWork(user.locale, "collaboration.contact.directoryDescription")}
           >
             <ContactDiscoveryWorkspace locale={user.locale} currentUserRole={user.role} />
           </ModuleSection>
