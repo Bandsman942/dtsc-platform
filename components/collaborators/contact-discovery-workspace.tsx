@@ -1,12 +1,13 @@
 "use client";
 
 import { Check, Mail, UserPlus, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ConversationAvatar } from "@/components/chat/ConversationAvatar";
 import { SearchBar } from "@/components/chat/SearchBar";
 import { Button } from "@/components/ui/button";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
+import { translateSharedWork, type SharedWorkKey } from "@/lib/i18n";
 
 type DirectoryUser = {
   id: string;
@@ -27,7 +28,6 @@ type ContactRequest = {
 };
 
 export function ContactDiscoveryWorkspace({ locale, currentUserRole }: { locale: string; currentUserRole: string }) {
-  const english = locale === "en";
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<DirectoryUser[]>([]);
   const [incoming, setIncoming] = useState<ContactRequest[]>([]);
@@ -35,6 +35,7 @@ export function ContactDiscoveryWorkspace({ locale, currentUserRole }: { locale:
   const [searching, setSearching] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState("");
+  const t = useCallback((key: SharedWorkKey) => translateSharedWork(locale, key), [locale]);
   useToastMessage(feedback);
 
   async function loadRequests() {
@@ -66,7 +67,7 @@ export function ContactDiscoveryWorkspace({ locale, currentUserRole }: { locale:
         setResults(body.users || []);
       } else if (response) {
         const body = await response.json().catch(() => null) as { message?: string } | null;
-        setFeedback(body?.message || (english ? "Unable to search contacts." : "Impossible de rechercher des contacts."));
+        setFeedback(body?.message || t("collaboration.contact.searchError"));
       }
       setSearching(false);
     }, 350);
@@ -74,7 +75,7 @@ export function ContactDiscoveryWorkspace({ locale, currentUserRole }: { locale:
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [english, query]);
+  }, [query, t]);
 
   async function invite(targetUserId: string) {
     setBusyId(targetUserId);
@@ -86,11 +87,11 @@ export function ContactDiscoveryWorkspace({ locale, currentUserRole }: { locale:
     const body = await response.json().catch(() => null) as { message?: string } | null;
     setBusyId(null);
     if (!response.ok) {
-      setFeedback(body?.message || (english ? "Unable to send invitation." : "Impossible d’envoyer l’invitation."));
+      setFeedback(body?.message || t("collaboration.contact.inviteError"));
       return;
     }
     setResults((current) => current.filter((user) => user.id !== targetUserId));
-    setFeedback(english ? "Contact invitation sent." : "Invitation de contact envoyée.");
+    setFeedback(t("collaboration.contact.inviteSent"));
     await loadRequests();
   }
 
@@ -104,7 +105,7 @@ export function ContactDiscoveryWorkspace({ locale, currentUserRole }: { locale:
     const body = await response.json().catch(() => null) as { groupId?: string; message?: string } | null;
     setBusyId(null);
     if (!response.ok) {
-      setFeedback(body?.message || (english ? "Unable to update invitation." : "Impossible de mettre à jour l’invitation."));
+      setFeedback(body?.message || t("collaboration.contact.updateError"));
       return;
     }
     await loadRequests();
@@ -117,18 +118,16 @@ export function ContactDiscoveryWorkspace({ locale, currentUserRole }: { locale:
     <div className="grid min-w-0 gap-6">
       <section className="grid min-w-0 gap-3">
         <div>
-          <h3 className="text-base font-black text-dtsc-ink">{english ? "Find a contact" : "Trouver un contact"}</h3>
+          <h3 className="text-base font-black text-dtsc-ink">{t("collaboration.contact.findTitle")}</h3>
           <p className="mt-1 text-sm leading-6 text-dtsc-muted">
-            {currentUserRole === "ADMIN"
-              ? (english ? "Search a platform profile by name, organization, role or exact email. ADMIN exact-email lookup remains audited." : "Recherchez un profil de la plateforme par nom, organisation, fonction ou adresse e-mail exacte. La recherche ADMIN par e-mail exact reste auditée.")
-              : (english ? "Search discoverable profiles by name, organization or role. Exact-email lookup respects profile discovery consent." : "Recherchez les profils découvrables par nom, organisation ou fonction. La recherche par e-mail exact respecte le consentement de visibilité du profil.")}
+            {currentUserRole === "ADMIN" ? t("collaboration.contact.adminDescription") : t("collaboration.contact.memberDescription")}
           </p>
         </div>
-        <SearchBar value={query} onChange={setQuery} placeholder={english ? "Name, organization, role or email…" : "Nom, organisation, fonction ou e-mail…"} />
-        {query.trim().length > 0 && query.trim().length < 3 ? <p className="text-xs font-semibold text-dtsc-muted">{english ? "Enter at least 3 characters." : "Saisissez au moins 3 caractères."}</p> : null}
-        {searching ? <p className="py-5 text-center text-sm font-semibold text-dtsc-muted">{english ? "Searching…" : "Recherche…"}</p> : null}
+        <SearchBar value={query} onChange={setQuery} placeholder={t("collaboration.contact.searchPlaceholder")} />
+        {query.trim().length > 0 && query.trim().length < 3 ? <p className="text-xs font-semibold text-dtsc-muted">{t("collaboration.contact.minChars")}</p> : null}
+        {searching ? <p className="py-5 text-center text-sm font-semibold text-dtsc-muted">{t("collaboration.contact.searching")}</p> : null}
         {!searching && results.length ? (
-          <BusinessList ariaLabel={english ? "Contact search results" : "Résultats de recherche de contacts"}>
+          <BusinessList ariaLabel={t("collaboration.contact.results")}>
             {results.map((user) => (
               <BusinessListItem
                 key={user.id}
@@ -139,30 +138,30 @@ export function ContactDiscoveryWorkspace({ locale, currentUserRole }: { locale:
                 actions={(
                   <Button type="button" size="sm" disabled={busyId === user.id} onClick={() => void invite(user.id)} className="rounded-full">
                     <UserPlus className="h-4 w-4" />
-                    {busyId === user.id ? "…" : english ? "Invite" : "Inviter"}
+                    {busyId === user.id ? "…" : t("collaboration.contact.invite")}
                   </Button>
                 )}
               />
             ))}
           </BusinessList>
         ) : null}
-        {!searching && query.trim().length >= 3 && !results.length ? <p className="py-6 text-center text-sm text-dtsc-muted">{english ? "No new discoverable contact found." : "Aucun nouveau contact découvrable trouvé."}</p> : null}
+        {!searching && query.trim().length >= 3 && !results.length ? <p className="py-6 text-center text-sm text-dtsc-muted">{t("collaboration.contact.noResult")}</p> : null}
       </section>
 
       {incoming.length ? (
         <section className="min-w-0">
-          <h3 className="mb-2 text-sm font-black uppercase tracking-[0.08em] text-dtsc-muted">{english ? "Invitations received" : "Invitations reçues"}</h3>
-          <BusinessList ariaLabel={english ? "Incoming contact invitations" : "Invitations de contact reçues"}>
+          <h3 className="mb-2 text-sm font-black uppercase tracking-[0.08em] text-dtsc-muted">{t("collaboration.contact.incomingTitle")}</h3>
+          <BusinessList ariaLabel={t("collaboration.contact.incomingAria")}>
             {incoming.map((request) => (
               <BusinessListItem
                 key={request.id}
                 leading={<ConversationAvatar title={request.requester.name} avatarUrl={request.requester.avatarUrl} className="h-10 w-10" />}
                 title={request.requester.name}
-                meta={request.requester.jobTitle || (english ? "Wants to add you" : "Souhaite vous ajouter")}
+                meta={request.requester.jobTitle || t("collaboration.contact.wantsToAdd")}
                 actions={(
                   <div className="flex gap-2" data-responsive-actions>
-                    <Button type="button" size="icon" disabled={busyId === request.id} onClick={() => void respond(request.id, "ACCEPT")} className="h-10 w-10 rounded-full" aria-label={english ? "Accept" : "Accepter"}><Check className="h-4 w-4" /></Button>
-                    <Button type="button" size="icon" variant="outline" disabled={busyId === request.id} onClick={() => void respond(request.id, "DECLINE")} className="h-10 w-10 rounded-full" aria-label={english ? "Decline" : "Refuser"}><X className="h-4 w-4" /></Button>
+                    <Button type="button" size="icon" disabled={busyId === request.id} onClick={() => void respond(request.id, "ACCEPT")} className="h-10 w-10 rounded-full" aria-label={t("collaboration.contact.accept")}><Check className="h-4 w-4" /></Button>
+                    <Button type="button" size="icon" variant="outline" disabled={busyId === request.id} onClick={() => void respond(request.id, "DECLINE")} className="h-10 w-10 rounded-full" aria-label={t("collaboration.contact.decline")}><X className="h-4 w-4" /></Button>
                   </div>
                 )}
               />
@@ -173,15 +172,15 @@ export function ContactDiscoveryWorkspace({ locale, currentUserRole }: { locale:
 
       {outgoing.length ? (
         <section className="min-w-0">
-          <h3 className="mb-2 text-sm font-black uppercase tracking-[0.08em] text-dtsc-muted">{english ? "Pending invitations" : "Invitations en attente"}</h3>
-          <BusinessList ariaLabel={english ? "Pending contact invitations" : "Invitations de contact en attente"}>
+          <h3 className="mb-2 text-sm font-black uppercase tracking-[0.08em] text-dtsc-muted">{t("collaboration.contact.pendingTitle")}</h3>
+          <BusinessList ariaLabel={t("collaboration.contact.pendingAria")}>
             {outgoing.map((request) => (
               <BusinessListItem
                 key={request.id}
                 leading={<ConversationAvatar title={request.targetUser.name} avatarUrl={request.targetUser.avatarUrl} className="h-10 w-10" />}
                 title={request.targetUser.name}
-                meta={request.targetUser.jobTitle || (english ? "Invitation pending" : "Invitation en attente")}
-                actions={<Button type="button" size="sm" variant="outline" disabled={busyId === request.id} onClick={() => void respond(request.id, "CANCEL")} className="rounded-full"><Mail className="h-4 w-4" />{english ? "Cancel" : "Annuler"}</Button>}
+                meta={request.targetUser.jobTitle || t("collaboration.contact.pending")}
+                actions={<Button type="button" size="sm" variant="outline" disabled={busyId === request.id} onClick={() => void respond(request.id, "CANCEL")} className="rounded-full"><Mail className="h-4 w-4" />{t("collaboration.contact.cancel")}</Button>}
               />
             ))}
           </BusinessList>
