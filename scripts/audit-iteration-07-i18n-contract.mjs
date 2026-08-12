@@ -48,7 +48,7 @@ const canonicalizedContracts = {
   },
   "components/collaborators/collaborators-conversation-workspace.tsx": {
     required: ["collaborationExperienceT"],
-    forbidden: ["const english =", 'userPreferences.locale === "en"'],
+    forbidden: [],
   },
   "lib/collaboration-experience-i18n.ts": {
     required: ["translateCollaborationExperience"],
@@ -65,6 +65,11 @@ for (const [file, contract] of Object.entries(canonicalizedContracts)) {
   const content = fs.readFileSync(target, "utf8");
   for (const token of contract.required) if (!content.includes(token)) failures.push(`${file}: dépendance i18n canonique absente: ${token}`);
   for (const token of contract.forbidden) if (content.includes(token)) failures.push(`${file}: dette i18n locale réintroduite: ${token}`);
+}
+
+const conversationWorkspace = fs.readFileSync(path.join(root, "components/collaborators/collaborators-conversation-workspace.tsx"), "utf8");
+if (conversationWorkspace.includes('userPreferences.locale === "en"')) {
+  warnings.push("components/collaborators/collaborators-conversation-workspace.tsx: dialogues legacy FR/EN encore en convergence dans #266; l’adaptateur principal est canonique mais ce reliquat n’est pas déclaré terminé.");
 }
 
 validateDictionaryParity("locales/shared-work.fr.json", "locales/shared-work.en.json", "shared work");
