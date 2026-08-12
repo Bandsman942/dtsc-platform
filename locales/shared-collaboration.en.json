@@ -1,0 +1,29 @@
+{
+  "comments": {
+    "countSuffix": "comment(s)",
+    "unableToLoad": "Unable to load comments.",
+    "added": "Comment added.",
+    "unableToComment": "Unable to comment.",
+    "updated": "Comment updated.",
+    "actionUnavailable": "Action unavailable.",
+    "loading": "Loading…",
+    "older": "Older comments",
+    "actionsPrefix": "Actions for",
+    "actionsSuffix": "comment",
+    "reply": "Reply",
+    "copy": "Copy",
+    "edit": "Edit",
+    "delete": "Delete",
+    "deleted": "Deleted comment",
+    "empty": "No comment yet.",
+    "replyTo": "Reply to",
+    "cancel": "Cancel",
+    "placeholder": "Write a professional comment…",
+    "send": "Send",
+    "editTitle": "Edit comment",
+    "save": "Save",
+    "deleteTitle": "Delete comment",
+    "deleteDescription": "The content will be hidden without breaking replies.",
+    "confirmDeletion": "Confirm deletion"
+  }
+}
