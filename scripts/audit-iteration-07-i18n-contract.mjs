@@ -8,7 +8,6 @@ const warnings = [];
 const bilingualContracts = {
   "components/productivity/professional-toolbox.tsx": ["const english", "Professional toolbox", "Boîte à outils professionnelle", "Scientific", "Scientifique", "Financial", "Financière"],
   "components/floating-actions/floating-action-hub.tsx": ["useAppLocale", "Quick actions", "Actions rapides"],
-  "components/activities/work-prestations-panel-v2.tsx": ["english", "Work type", "Type de travail"],
   "components/admin/billing-plan-manager.tsx": ["Individual offers", "Offres individuelles", "Organization offers", "Offres d’organisation"],
 };
 for (const [file, tokens] of Object.entries(bilingualContracts)) {
@@ -22,6 +21,14 @@ const canonicalizedContracts = {
   "components/activities/entity-comments-thread.tsx": {
     required: ["translateSharedWork", "formatUserDateTime"],
     forbidden: ["const english =", 'locale === "en"', '"en-GB"', '"fr-FR"', "toLocaleString("],
+  },
+  "components/activities/activities-dashboard-v3.tsx": {
+    required: ["translateActivities", "formatEnumLabelForLocale", "userLocale"],
+    forbidden: ["const english =", 'locale === "en"', '"en-GB"', '"fr-FR"'],
+  },
+  "components/activities/work-prestations-panel-v2.tsx": {
+    required: ["translateActivities", "formatEnumLabelForLocale", "userLocale", 'const LOCATION_MODES = ["Site DTSC", "Télétravail", "Hybride", "Externe", "Mission", "Non défini"]'],
+    forbidden: ["const english =", 'locale === "en"', "english ?", '"en-GB"', '"fr-FR"'],
   },
   "app/collaborators/contacts/new/page.tsx": {
     required: ["translateSharedWork"],
@@ -62,6 +69,7 @@ for (const [file, contract] of Object.entries(canonicalizedContracts)) {
 
 validateDictionaryParity("locales/shared-work.fr.json", "locales/shared-work.en.json", "shared work");
 validateDictionaryParity("locales/collaboration-experience.fr.json", "locales/collaboration-experience.en.json", "collaboration experience");
+validateDictionaryParity("locales/activities.fr.json", "locales/activities.en.json", "activities");
 
 const forbiddenRawLabels = [
   ["components/productivity/professional-toolbox.tsx", ">DRAFT<"],
@@ -152,10 +160,6 @@ function readBaseVersion(file) {
 }
 
 function countLikelyHardcodedLabels(content) {
-  // Match text only when it follows an actual JSX opening tag. The previous
-  // `>(...)<` expression also started at TypeScript generic closers such as
-  // `useState<Readiness>()`, creating false positives whenever typed UI code grew.
-  // Keep the historical ceilings unchanged; improve only the signal being counted.
   const jsxText = [...content.matchAll(/<(?:[A-Z][A-Za-z0-9.]*|[a-z][a-z0-9-]*)\b[^>\n]*>([^<{\n][^<{]*?)<\//g)]
     .map((match) => match[1].trim())
     .filter((value) => /[A-Za-zÀ-ÿ]{3}/.test(value));
