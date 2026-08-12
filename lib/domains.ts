@@ -142,18 +142,19 @@ export function getPublicUrl(path = "/") {
   return buildUrlForHostType("public", path);
 }
 
-export function getProductBranding(hostType: HostType) {
+export function getProductBranding(hostType: HostType, locale?: string | null) {
+  const english = locale === "en";
   if (hostType === "console") {
     return "Console DTSC";
   }
   if (hostType === "account") {
-    return "Compte DTSC";
+    return english ? "DTSC Account" : "Compte DTSC";
   }
   if (hostType === "support") {
     return "Support DTSC";
   }
   if (hostType === "app") {
-    return "Espace SaaS";
+    return english ? "SaaS Workspace" : "Espace SaaS";
   }
   return "DTSC Platform";
 }
