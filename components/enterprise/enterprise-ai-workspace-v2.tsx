@@ -1,7 +1,7 @@
 "use client";
 
 import { Archive, BarChart3, Bot, Copy, Database, Download, Edit3, FileText, FolderKanban, FolderPlus, History, Info, Menu, Pencil, Pin, PinOff, Plus, RefreshCw, Search, Settings, Settings2, Share2, ThumbsDown, ThumbsUp, Trash2, Upload, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Streamdown } from "streamdown";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { AssistantComposer, AssistantConversationSettingsDialog, AssistantEmptyState, AssistantMessage, type AssistantPreferenceState } from "@/components/chat/assistant-conversation-ui";
@@ -62,6 +62,7 @@ export function EnterpriseAiWorkspaceV2({ organizationId, organizationName, sect
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messageScrollRef = useRef<HTMLDivElement>(null);
   const followOutputRef = useRef(true);
+  const activeConversationIdRef = useRef<string | null>(null);
 
   const activeConversation = useMemo(() => conversations.find((item) => item.id === activeConversationId) || null, [activeConversationId, conversations]);
   const activePreference = activeConversation?.preference || EMPTY_PREFERENCE;
@@ -75,26 +76,27 @@ export function EnterpriseAiWorkspaceV2({ organizationId, organizationName, sect
   }, [conversations, filter, locale, query]);
   const grouped = useMemo(() => visibleConversations.reduce<Record<string, ConversationItem[]>>((acc, conversation) => { const key = conversation.projectName || (en ? "Unfiled" : "Sans projet"); (acc[key] ||= []).push(conversation); return acc; }, {}), [en, visibleConversations]);
 
-  async function loadSources() {
+  const loadSources = useCallback(async () => {
     const response = await fetch(`/api/enterprise/ai/knowledge-sources?organizationId=${encodeURIComponent(organizationId)}`); const body = await response.json().catch(() => null);
     if (!response.ok) throw new Error(body?.message || "Sources unavailable");
     setSources(body?.sources || []); setPermissions((current) => ({ ...current, ...(body?.permissions || {}) }));
-  }
-  async function loadConversations(nextId?: string | null) {
+  }, [organizationId]);
+  const loadConversations = useCallback(async (nextId?: string | null) => {
     const response = await fetch(`/api/enterprise/ai/conversations?organizationId=${encodeURIComponent(organizationId)}`); const body = await response.json().catch(() => null);
     if (!response.ok) throw new Error(body?.message || "History unavailable");
     const loaded = (body?.conversations || []).map(withDefaultPreference);
     setConversations(loaded); setProjects(body?.projects || []); setPermissions((current) => ({ ...current, ...(body?.permissions || {}) }));
-    const wantedId = typeof nextId !== "undefined" ? nextId : activeConversationId;
+    const wantedId = typeof nextId !== "undefined" ? nextId : activeConversationIdRef.current;
     const selected = loaded.find((item: ConversationItem) => item.id === wantedId) || loaded.find((item: ConversationItem) => item.status === "ACTIVE") || loaded[0] || null;
     if (selected) { setActiveConversationId(selected.id); setMessages(selected.messages || []); } else { setActiveConversationId(null); setMessages([]); }
-  }
-  async function loadUsage() { const response = await fetch(`/api/enterprise/ai/usage?organizationId=${encodeURIComponent(organizationId)}`); const body = await response.json().catch(() => null); if (response.ok) setUsage(body?.usage || null); }
-  async function loadSettings() { const response = await fetch(`/api/enterprise/ai/settings?organizationId=${encodeURIComponent(organizationId)}`); const body = await response.json().catch(() => null); if (response.ok) { setSettings({ ...DEFAULT_SETTINGS, ...(body?.settings || {}) }); setPermissions((current) => ({ ...current, ...(body?.permissions || {}) })); } }
-  async function loadGroups() { const response = await fetch("/api/collaborators/groups"); const body = await response.json().catch(() => null); if (response.ok) setCollaborationGroups((body?.groups || []).map((group: { id: string; name: string }) => ({ id: group.id, name: group.name }))); }
-  async function refreshAll() { setLoadingData(true); try { await Promise.all([loadSources(), loadConversations(), loadUsage(), loadSettings()]); } catch (error) { toastError(error instanceof Error ? error.message : (en ? "Unable to load assistant." : "Chargement de l’assistant impossible.")); } finally { setLoadingData(false); } }
+  }, [organizationId]);
+  const loadUsage = useCallback(async () => { const response = await fetch(`/api/enterprise/ai/usage?organizationId=${encodeURIComponent(organizationId)}`); const body = await response.json().catch(() => null); if (response.ok) setUsage(body?.usage || null); }, [organizationId]);
+  const loadSettings = useCallback(async () => { const response = await fetch(`/api/enterprise/ai/settings?organizationId=${encodeURIComponent(organizationId)}`); const body = await response.json().catch(() => null); if (response.ok) { setSettings({ ...DEFAULT_SETTINGS, ...(body?.settings || {}) }); setPermissions((current) => ({ ...current, ...(body?.permissions || {}) })); } }, [organizationId]);
+  const loadGroups = useCallback(async () => { const response = await fetch("/api/collaborators/groups"); const body = await response.json().catch(() => null); if (response.ok) setCollaborationGroups((body?.groups || []).map((group: { id: string; name: string }) => ({ id: group.id, name: group.name }))); }, []);
+  const refreshAll = useCallback(async () => { setLoadingData(true); try { await Promise.all([loadSources(), loadConversations(), loadUsage(), loadSettings()]); } catch (error) { toastError(error instanceof Error ? error.message : (en ? "Unable to load assistant." : "Chargement de l’assistant impossible.")); } finally { setLoadingData(false); } }, [en, loadConversations, loadSettings, loadSources, loadUsage]);
 
-  useEffect(() => { void refreshAll(); void loadGroups(); }, [organizationId]);
+  useEffect(() => { activeConversationIdRef.current = activeConversationId; }, [activeConversationId]);
+  useEffect(() => { void refreshAll(); void loadGroups(); }, [loadGroups, refreshAll]);
   useEffect(() => { const conversation = conversations.find((item) => item.id === activeConversationId); if (conversation) setMessages(conversation.messages || []); }, [activeConversationId, conversations]);
   useEffect(() => { const node = messageScrollRef.current; if (!node || !followOutputRef.current) return; const frame = requestAnimationFrame(() => { node.scrollTop = node.scrollHeight; }); return () => cancelAnimationFrame(frame); }, [messages, loadingChat]);
   useEffect(() => { setSettingsDraft({ modelOverride: activePreference.modelOverride, responseStyle: activePreference.responseStyle || "PROFESSIONAL", responseLength: activePreference.responseLength || "BALANCED", useKnowledge: activePreference.useKnowledge ?? true, useTools: activePreference.useTools ?? true, customInstructions: activePreference.customInstructions }); }, [activeConversationId, activePreference.modelOverride, activePreference.responseStyle, activePreference.responseLength, activePreference.useKnowledge, activePreference.useTools, activePreference.customInstructions]);

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 import type { UserRole } from "@prisma/client";
@@ -908,7 +909,7 @@ function copyText(value: string) {
 function AuthorAvatar({ name, avatarUrl }: { name: string; avatarUrl?: string | null }) {
   return (
     <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-dtsc-soft text-sm font-black text-dtsc-blue">
-      {avatarUrl ? <img src={avatarUrl} alt="" className="h-full w-full object-cover" /> : name.slice(0, 2).toUpperCase()}
+      {avatarUrl ? <Image src={avatarUrl} alt="" width={44} height={44} unoptimized className="h-full w-full object-cover" /> : name.slice(0, 2).toUpperCase()}
     </div>
   );
 }

@@ -1535,11 +1535,12 @@ export function GroupCallRoom({
     }
     let cancelled = false;
     const timeouts: number[] = [];
+    const callShell = callShellRef.current;
     const applyFocusSafely = (attempt = 0) => {
       if (cancelled) {
         return;
       }
-      const root = callShellRef.current?.querySelector<HTMLElement>(".dtsc-livekit-room");
+      const root = callShell?.querySelector<HTMLElement>(".dtsc-livekit-room");
       const applied = root ? applyLiveKitFullscreenFocus(root, fullscreenFocus, group) : false;
       if (!applied && attempt < 5) {
         timeouts.push(window.setTimeout(() => applyFocusSafely(attempt + 1), 220 + attempt * 180));
@@ -1550,7 +1551,7 @@ export function GroupCallRoom({
       cancelled = true;
       window.cancelAnimationFrame(frameId);
       timeouts.forEach((timeout) => window.clearTimeout(timeout));
-      const root = callShellRef.current?.querySelector<HTMLElement>(".dtsc-livekit-room");
+      const root = callShell?.querySelector<HTMLElement>(".dtsc-livekit-room");
       if (!root) {
         return;
       }
