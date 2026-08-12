@@ -13,6 +13,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { ModuleRefreshButton } from "@/components/workspace/module-refresh-button";
 import { canAccessAdministration } from "@/lib/admin-access";
 import { getDashboardUrl, getSignInUrl } from "@/lib/domains";
+import { getExperienceCopy } from "@/lib/experience-i18n";
 import { translate } from "@/lib/i18n";
 import {
   MODULE_NAVIGATION_GROUPS,
@@ -47,29 +48,18 @@ function groupIsActive(pathname: string, selectedGroup: string | null, groupCode
 export function MobilePwaHeader({
   user,
   unreadNotifications,
-  unreadCollaboratorMessages = 0,
-  pendingEnterpriseInvitations = 0,
-  pendingCompanyRelationships = 0,
   currentOrganizationId,
   organizationOptions = [],
-  showInternalModules = false,
   productBranding = "Espace SaaS",
 }: {
   user: MobileShellUser;
   unreadNotifications: number;
-  unreadCollaboratorMessages?: number;
-  pendingEnterpriseInvitations?: number;
-  pendingCompanyRelationships?: number;
   currentOrganizationId?: string | null;
   organizationOptions?: Array<{ id: string; label: string; role?: string | null }>;
-  showInternalModules?: boolean;
   productBranding?: string;
 }) {
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const selectedGroup = searchParams.get("group");
   const locale = user.locale || "fr";
-  const visibleGroups = MODULE_NAVIGATION_GROUPS.filter((group) => group.code !== "DTSC_INTERNAL" || showInternalModules);
+  const copy = getExperienceCopy(locale).mobile;
 
   useEffect(() => {
     let stopped = false;
@@ -114,13 +104,6 @@ export function MobilePwaHeader({
     window.location.href = body?.redirectTo || getSignInUrl();
   }
 
-  function groupBadge(groupCode: ModuleNavigationGroupCode) {
-    if (groupCode === "PILOTAGE") return unreadNotifications;
-    if (groupCode === "AI_COLLABORATION") return unreadCollaboratorMessages;
-    if (groupCode === "ORGANIZATION_ERP") return pendingEnterpriseInvitations + pendingCompanyRelationships;
-    return 0;
-  }
-
   return (
     <motion.header
       data-mobile-top-nav
@@ -130,21 +113,25 @@ export function MobilePwaHeader({
       className="sticky top-0 z-40 border-b border-white/14 bg-dtsc-surface/78 px-4 py-3 shadow-[0_16px_50px_rgba(0,23,54,0.10)] backdrop-blur-2xl lg:hidden"
     >
       <div className="flex min-w-0 items-center justify-between gap-3">
-        <Link href={getDashboardUrl()} className="flex min-w-0 items-center gap-3" aria-label="Accueil DTSC Platform">
+        <Link href={getDashboardUrl()} className="flex min-w-0 flex-1 items-center gap-3" aria-label={copy.homeAria}>
           <span className="relative flex h-11 w-11 shrink-0 overflow-hidden rounded-2xl border border-white/20 bg-dtsc-navy shadow-[0_18px_45px_rgba(0,43,91,0.25)]">
             <Image src="/dtsc-logo.png" alt="Logo DTSC" fill sizes="44px" className="object-cover" priority />
             <span className="animate-dtsc-online-pulse absolute bottom-0.5 right-0.5 z-20 h-3.5 w-3.5 rounded-full border-2 border-dtsc-surface bg-emerald-400 shadow-[0_0_18px_rgba(52,211,153,0.9)]" />
           </span>
-          <span className="min-w-0">
-            <span className="block truncate text-base font-black tracking-tight text-dtsc-ink">DTSC</span>
-            <span className="block truncate text-[0.66rem] font-black uppercase tracking-[0.18em] text-cyan-600">{productBranding}</span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-base font-black tracking-tight text-dtsc-ink">DTSC</span>
+            <span className="block max-w-[9rem] break-words text-[0.62rem] font-black uppercase leading-4 tracking-[0.14em] text-cyan-600">{productBranding}</span>
           </span>
         </Link>
 
         <div className="flex shrink-0 items-center gap-2">
           <ModuleRefreshButton compact />
           <ThemeToggle />
-          <Link href="/notifications" className="relative flex h-11 w-11 items-center justify-center rounded-xl border border-dtsc-border bg-dtsc-surface text-dtsc-muted" aria-label={translate(locale, "navigation.notifications")}>
+          <Link
+            href="/notifications"
+            className="relative flex h-11 w-11 items-center justify-center rounded-xl border border-dtsc-border bg-dtsc-surface text-dtsc-muted transition hover:bg-dtsc-soft hover:text-dtsc-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 active:scale-[0.98]"
+            aria-label={translate(locale, "navigation.notifications")}
+          >
             <Bell className="h-4 w-4" />
             {unreadNotifications > 0 ? (
               <span className="absolute -right-1 -top-1 flex min-w-5 items-center justify-center rounded-full bg-cyan-400 px-1 text-[0.62rem] font-black text-[#001736]">
@@ -156,22 +143,23 @@ export function MobilePwaHeader({
         </div>
       </div>
 
-      <div className="mt-3 flex min-w-0 items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
-        {visibleGroups.map((group) => {
-          const Icon = ICON_BY_GROUP[group.code];
-          const badge = groupBadge(group.code);
-          return (
-            <QuickChip
-              key={group.code}
-              href={getModuleNavigationGroupHref(group.code)}
-              active={groupIsActive(pathname, selectedGroup, group.code)}
-              icon={Icon}
-              label={`${getModuleNavigationGroupLabel(group, locale, true)}${badge > 0 ? ` (${badge > 99 ? "99+" : badge})` : ""}`}
-            />
-          );
-        })}
-        {organizationOptions.length > 0 ? <OrganizationContextSwitcher currentOrganizationId={currentOrganizationId || null} organizations={organizationOptions} /> : null}
-        <button type="button" onClick={() => void signOut()} className="flex min-h-11 shrink-0 items-center gap-2 rounded-2xl border border-dtsc-border/70 bg-dtsc-page/72 px-3 py-2 text-xs font-black text-dtsc-muted">
+      <div
+        data-mobile-system-rail
+        data-horizontal-rail
+        className="mt-3 flex min-w-0 snap-x items-start gap-2 overflow-x-auto pb-1 scrollbar-hide"
+      >
+        {organizationOptions.length > 0 ? (
+          <OrganizationContextSwitcher
+            currentOrganizationId={currentOrganizationId || null}
+            organizations={organizationOptions}
+            variant="mobileRail"
+          />
+        ) : null}
+        <button
+          type="button"
+          onClick={() => void signOut()}
+          className="flex min-h-11 shrink-0 snap-start items-center gap-2 rounded-2xl border border-dtsc-border/70 bg-dtsc-page/72 px-3 py-2 text-xs font-black text-dtsc-muted transition hover:bg-dtsc-soft hover:text-dtsc-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 active:scale-[0.98]"
+        >
           <LogOut className="h-3.5 w-3.5" />
           {translate(locale, "common.signOut")}
         </button>
@@ -205,12 +193,15 @@ export function MobileBottomNavigation({
   const searchParams = useSearchParams();
   const selectedGroup = searchParams.get("group");
   const locale = user.locale || "fr";
+  const copy = getExperienceCopy(locale).mobile;
   const canOpenInternalGroup = showInternalModules && (showEmployeeActivities || canAccessAdministration(user.role));
   const groups = MODULE_NAVIGATION_GROUPS.filter((group) => group.code !== "DTSC_INTERNAL" || canOpenInternalGroup);
   const organizationLabel = enterpriseContext?.organizationName || null;
 
   function groupBadge(groupCode: ModuleNavigationGroupCode) {
-    if (groupCode === "PILOTAGE") return unreadNotifications;
+    // Notifications are already represented by the bell in the system header;
+    // do not repeat the same 99+ counter on the Pilotage destination.
+    if (groupCode === "PILOTAGE") return 0;
     if (groupCode === "AI_COLLABORATION") return showCollaborationModule ? unreadCollaboratorMessages : 0;
     if (groupCode === "ORGANIZATION_ERP") return pendingEnterpriseInvitations + pendingCompanyRelationships;
     return 0;
@@ -221,7 +212,7 @@ export function MobileBottomNavigation({
       data-mobile-bottom-nav
       className="fixed inset-x-3 bottom-3 z-40 rounded-[1.75rem] border border-dtsc-border bg-dtsc-surface px-2 py-2 shadow-[0_24px_90px_rgba(0,23,54,0.28)] lg:hidden"
       style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
-      aria-label="Navigation mobile DTSC"
+      aria-label={copy.navigation}
     >
       <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${groups.length}, minmax(0, 1fr))` }}>
         {groups.map((group) => {
@@ -237,8 +228,8 @@ export function MobileBottomNavigation({
               href={getModuleNavigationGroupHref(group.code)}
               title={title}
               className={cn(
-                "relative flex min-w-0 flex-col items-center gap-1 rounded-2xl px-1 py-2 text-[0.61rem] font-black transition",
-                active ? "bg-cyan-400/14 text-cyan-500" : "text-dtsc-muted",
+                "relative flex min-w-0 flex-col items-center gap-1 rounded-2xl px-1 py-2 text-[0.61rem] font-black transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 active:scale-[0.97]",
+                active ? "bg-cyan-400/14 text-cyan-500" : "text-dtsc-muted hover:bg-dtsc-soft hover:text-dtsc-blue",
               )}
               aria-current={active ? "page" : undefined}
             >
@@ -257,21 +248,5 @@ export function MobileBottomNavigation({
         })}
       </div>
     </nav>
-  );
-}
-
-function QuickChip({ href, active, icon: Icon, label }: { href: string; active?: boolean; icon: ElementType; label: string }) {
-  return (
-    <Link
-      href={href}
-      aria-current={active ? "page" : undefined}
-      className={cn(
-        "flex min-h-11 shrink-0 items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-black transition",
-        active ? "border-cyan-300/45 bg-cyan-400/14 text-cyan-500" : "border-dtsc-border/70 bg-dtsc-page/72 text-dtsc-muted",
-      )}
-    >
-      <Icon className="h-3.5 w-3.5" />
-      {label}
-    </Link>
   );
 }
