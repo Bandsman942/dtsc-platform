@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Camera, CheckCircle2, FolderOpen, Upload } from "lucide-react";
@@ -202,9 +203,12 @@ export function ProfileEditor({ user }: { user: ProfileData }) {
             <div className="flex flex-col items-center text-center">
               <div className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-3xl border border-dtsc-border bg-dtsc-soft text-3xl font-black text-dtsc-blue">
                 {(previewUrl || avatarUrl) && !imageBroken ? (
-                  <img
+                  <Image
                     src={previewUrl || avatarUrl}
                     alt=""
+                    width={112}
+                    height={112}
+                    unoptimized
                     className="h-full w-full object-cover"
                     onError={() => {
                       setImageBroken(true);
