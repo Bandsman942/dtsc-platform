@@ -1,9 +1,13 @@
 # Itération transverse #251 — DTSC Experience Debt Closure
 
-**Issue :** #251  
-**Baseline `main` :** `4480e3b6a6004e3cf2f65ab073b43f4729079858`  
-**Branche :** `fix/251-experience-debt-closure`  
-**Impact livraison :** High  
+**Issue :** #251
+
+**Baseline `main` :** `4480e3b6a6004e3cf2f65ab073b43f4729079858`
+
+**Branche :** `fix/251-experience-debt-closure`
+
+**Impact livraison :** High
+
 **Migration Prisma :** aucune attendue
 
 ## 1. Objectif
