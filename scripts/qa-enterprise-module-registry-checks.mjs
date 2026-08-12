@@ -7,7 +7,7 @@ const root = process.cwd();
 const readJson = (relativePath) => JSON.parse(fs.readFileSync(path.join(root, relativePath), "utf8"));
 
 const registryData = readJson("lib/enterprise/module-registry-data.json");
-const commonDomainRegistryData = readJson("lib/enterprise/module-registry-common-domains.json");
+const modules = registryData.modules || [];
 const financeRegistryData = readJson("lib/enterprise/module-registry-finance.json");
 const retailRegistryData = readJson("lib/enterprise/module-registry-retail.json");
 const sectorConvergenceRegistryData = readJson("lib/enterprise/module-registry-sector-convergence.json");
@@ -18,12 +18,7 @@ const sectorOverrides = new Map((sectorConvergenceRegistryData.overrides || []).
 const finalCleanupOverrides = new Map((finalCleanupRegistryData.overrides || []).map((override) => [override.code, override]));
 const commercialOverrides = new Map((commercialRegistryData.overrides || []).map((override) => [override.code, override]));
 
-const modules = [
-  ...(registryData.modules || []),
-  ...(commonDomainRegistryData.modules || []),
-  ...(financeRegistryData.modules || []),
-  ...(retailRegistryData.modules || []),
-].map((sourceDefinition) => {
+function applyEffectiveOverrides(sourceDefinition) {
   let definition = { ...sourceDefinition };
   const sectorOverride = sectorOverrides.get(definition.code);
   if (sectorOverride) {
@@ -48,8 +43,11 @@ const modules = [
   const commercialOverride = commercialOverrides.get(definition.code);
   if (commercialOverride) definition = { ...definition, minimumPlan: commercialOverride.minimumPlan };
   return definition;
-});
+}
 
+const effectiveFinanceModules = (financeRegistryData.modules || []).map(applyEffectiveOverrides);
+const effectiveRetailModules = (retailRegistryData.modules || []).map(applyEffectiveOverrides);
+const effectiveShopFinanceModules = [...effectiveFinanceModules, ...effectiveRetailModules];
 const errors = [];
 
 function fail(condition, message) {
@@ -159,18 +157,18 @@ for (const moduleDefinition of modules.filter((item) => implementedStatuses.has(
   fail(!iconSource.includes(`"${moduleDefinition.iconKey}"`) && !iconSource.includes(`${moduleDefinition.iconKey}:`), `${moduleDefinition.code}: iconKey non résoluble ${moduleDefinition.iconKey}`);
 }
 
-function requireModule(code) {
-  const definition = modules.find((moduleDefinition) => moduleDefinition.code === code);
+function requireEffectiveShopFinanceModule(code) {
+  const definition = effectiveShopFinanceModules.find((moduleDefinition) => moduleDefinition.code === code);
   fail(!definition, `Contrat Shop/Finance: module canonique absent ${code}`);
   return definition;
 }
 
-const financeOverview = requireModule("FINANCE_OVERVIEW");
-const financeTreasury = requireModule("FINANCE_TREASURY");
-const financeCash = requireModule("FINANCE_CASH");
-const financeAccounting = requireModule("FINANCE_ACCOUNTING");
-const retailPos = requireModule("RETAIL_POS");
-const retailDailyClose = requireModule("RETAIL_DAILY_CLOSE");
+const financeOverview = requireEffectiveShopFinanceModule("FINANCE_OVERVIEW");
+const financeTreasury = requireEffectiveShopFinanceModule("FINANCE_TREASURY");
+const financeCash = requireEffectiveShopFinanceModule("FINANCE_CASH");
+const financeAccounting = requireEffectiveShopFinanceModule("FINANCE_ACCOUNTING");
+const retailPos = requireEffectiveShopFinanceModule("RETAIL_POS");
+const retailDailyClose = requireEffectiveShopFinanceModule("RETAIL_DAILY_CLOSE");
 
 if (financeOverview) fail(financeOverview.minimumPlan !== "BUSINESS", "Contrat Shop: FINANCE_OVERVIEW doit rester BUSINESS");
 if (financeTreasury) {
@@ -211,4 +209,4 @@ if (errors.length) {
   process.exit(1);
 }
 
-console.log(`Enterprise module registry QA OK: ${modules.length} définitions, ${aliasOwners.size} alias, aucune dépendance circulaire, contrat Shop/Finance protégé.`);
+console.log(`Enterprise module registry QA OK: ${modules.length} définitions historiques, ${aliasOwners.size} alias, contrat Shop/Finance protégé.`);
