@@ -1,6 +1,6 @@
 # Vercel Preview et recette E2E pré-merge
 
-Statut : **politique de livraison complémentaire à `docs/CONTRIBUTING.md`**  
+Statut : **politique de livraison complémentaire à `docs/CONTRIBUTING.md`**
 Issue : #264
 
 ## 1. Décision
