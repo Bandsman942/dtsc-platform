@@ -44,9 +44,16 @@ includesAll(experienceI18n, ["getExperienceCopy", "fillExperienceTemplate", "get
 const labelsI18n = read("lib/labels-i18n.ts");
 includesAll(labelsI18n, ["formatEnumLabelForLocale", "englishLabels", "GLOBAL_CLIENT"], "labels-i18n");
 
+const domains = read("lib/domains.ts");
+includesAll(domains, [
+  "getProductBranding(hostType: HostType, locale?: string | null)",
+  'english ? "DTSC Account" : "Compte DTSC"',
+  'english ? "SaaS Workspace" : "Espace SaaS"',
+], "product branding i18n");
+
 const button = read("components/ui/button.tsx");
 ok(button.includes('"inline-flex h-auto'), "Shared Button must use automatic height for wrapped labels.");
-ok(button.includes('min-h-10'), "Shared Button must retain a minimum tactile height.");
+ok(button.includes('default: "min-h-11'), "Shared Button default size must keep a 44px tactile floor.");
 ok(button.includes('active:translate-y-px'), "Shared Button must expose a pressed state.");
 ok(!/size:\s*\{[\s\S]*?default:\s*"h-9\b/.test(button), "Shared Button default size must not reintroduce a fixed h-9 with wrapping.");
 
@@ -58,9 +65,11 @@ includesAll(moduleWorkspace, [
   "ModuleRefreshButton compact",
   "copy.openSection",
   "copy.backToModule",
+  'translate(locale, "common.actions")',
 ], "module-workspace");
 ok(!moduleWorkspace.includes('>DTSC · Workspace<'), "Module workspace must not hardcode the English signature in JSX.");
 ok(!moduleWorkspace.includes('Ouvrir le workspace'), "Module section controls must come from the experience dictionary.");
+ok(!moduleWorkspace.includes('ariaLabel = "Contrôles du module"'), "Shared toolbar accessibility label must follow the active locale.");
 
 const dashboard = read("app/dashboard/page.tsx");
 includesAll(dashboard, [
@@ -92,6 +101,7 @@ includesAll(mobileShell, [
 ], "mobile shell");
 ok(!mobileShell.includes("QuickChip"), "Top mobile header must not duplicate primary module-group navigation.");
 ok(!mobileShell.includes("visibleGroups.map"), "Top mobile header must not enumerate primary module groups.");
+ok(!/MobileBottomNavigation\(\{[\s\S]*?unreadNotifications/.test(mobileShell), "Bottom navigation must not accept the global notification counter after deduplication.");
 
 const swipe = read("components/dtsc/mobile-group-swipe-navigation.tsx");
 includesAll(swipe, [
@@ -110,8 +120,15 @@ const contextSwitcher = read("components/layout/organization-context-switcher.ts
 includesAll(contextSwitcher, ["useAppLocale", "getExperienceCopy", "copy.switchWorkspace", "copy.personalWorkspace"], "context switcher");
 
 const appShell = read("components/layout/app-shell.tsx");
-includesAll(appShell, ["MobileGroupSwipeNavigation", "getExperienceCopy", "formatEnumLabelForLocale"], "app shell");
-ok(!appShell.includes("unreadCollaboratorMessages={unreadCollaboratorMessages}\n          pendingEnterpriseInvitations"), "MobilePwaHeader must not receive primary-group counters after top-nav deduplication.");
+includesAll(appShell, [
+  "MobileGroupSwipeNavigation",
+  "getExperienceCopy",
+  "formatEnumLabelForLocale",
+  "getProductBranding(currentHostType, user.locale)",
+], "app shell");
+const bottomNavInvocation = appShell.match(/<MobileBottomNavigation[\s\S]*?\/>/)?.[0] || "";
+ok(Boolean(bottomNavInvocation), "AppShell must render MobileBottomNavigation.");
+ok(!bottomNavInvocation.includes("unreadNotifications="), "AppShell must not feed the global notification count into the bottom primary navigation.");
 
 const contributing = read("docs/CONTRIBUTING.md");
 includesAll(contributing, [
@@ -146,6 +163,15 @@ includesAll(governanceValidator, [
   "no-silent-debt contribution rule",
   "truthful execution evidence",
 ], "PR governance validator");
+
+const iterationDoc = read("docs/EXPERIENCE_DEBT_CLOSURE_251.md");
+includesAll(iterationDoc, [
+  "#251",
+  "320 px",
+  "Samsung Internet",
+  "NOT_EXECUTED",
+  "Aucune modification de schéma",
+], "iteration documentation");
 
 if (failures.length) {
   console.error(`Experience debt closure QA failed:\n- ${failures.join("\n- ")}`);
