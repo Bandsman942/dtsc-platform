@@ -20,6 +20,7 @@ import { PwaNotificationBridge } from "@/components/pwa/pwa-notification-bridge"
 import { GlobalCallToast } from "@/components/calls/global-call-toast";
 import { PromotionalBannerHost } from "@/components/promotions/promotional-banner-host";
 import { getSession } from "@/lib/auth";
+import { createAppShellPerformanceRecorder } from "@/lib/app-shell-performance";
 import { getUnreadCollaborationMessageCount } from "@/lib/collaboration";
 import { getCurrentHostType, getDashboardUrl, getProductBranding } from "@/lib/domains";
 import { dtsc } from "@/lib/dtsc";
@@ -52,12 +53,14 @@ export async function AppShell({
     locale?: string | null;
   };
 }) {
+  const performanceRecorder = createAppShellPerformanceRecorder();
   const session = await getSession();
   const requestHeaders = await headers();
   const currentHostType = getCurrentHostType(requestHeaders.get("host"));
   const productBranding = getProductBranding(currentHostType, user.locale);
   const dtscInternalContext = isDtscInternalSession(session);
   const activeOrganizationId = session?.activeOrganizationId || null;
+  const organizationContext = session?.activeContext === "ORGANIZATION" && Boolean(activeOrganizationId);
   const showCollaborationModule = Boolean(session);
   const copy = getExperienceCopy(user.locale);
   const notificationWhere = session
@@ -65,7 +68,6 @@ export async function AppShell({
     : { userId: user.id, organizationId: null };
   const [
     unreadNotifications,
-    latestUnreadNotifications,
     unreadCollaboratorMessages,
     pendingEnterpriseInvitations,
     pendingCompanyRelationships,
@@ -76,33 +78,25 @@ export async function AppShell({
     enterpriseAdminDecision,
     promotionalBanners,
   ] = await Promise.all([
-    prisma.notification.count({
+    performanceRecorder.timed("unreadNotifications", prisma.notification.count({
       where: {
         ...notificationWhere,
         readAt: null,
       },
-    }),
-    user.pushNotificationsEnabled
-      ? prisma.notification.findMany({
-          where: { ...notificationWhere, readAt: null },
-          orderBy: { createdAt: "desc" },
-          take: 5,
-          select: { id: true, title: true, body: true, targetUrl: true },
-        })
-      : Promise.resolve([]),
-    getUnreadCollaborationMessageCount(session),
-    getPendingEnterpriseInvitationCount(user.id),
-    prisma.enterpriseIdentityLink.count({
+    })),
+    performanceRecorder.timed("unreadCollaboratorMessages", getUnreadCollaborationMessageCount(session)),
+    performanceRecorder.timed("pendingEnterpriseInvitations", getPendingEnterpriseInvitationCount(user.id)),
+    performanceRecorder.timed("pendingCompanyRelationships", prisma.enterpriseIdentityLink.count({
       where: {
         userId: user.id,
         status: { in: [...COMPANY_RELATIONSHIP_USER_ACTION_STATUSES] },
       },
-    }),
-    prisma.hrcfoEmployee.findFirst({
+    })),
+    performanceRecorder.timed("employeeRecord", prisma.hrcfoEmployee.findFirst({
       where: { userId: user.id, status: { not: "EXITED" } },
       select: { id: true },
-    }),
-    prisma.organizationMember.findMany({
+    })),
+    performanceRecorder.timed("organizationMemberships", prisma.organizationMember.findMany({
       where: {
         userId: user.id,
         status: "ACTIVE",
@@ -115,27 +109,29 @@ export async function AppShell({
       },
       orderBy: { organization: { name: "asc" } },
       take: 12,
-    }),
-    session?.activeContext === "ORGANIZATION" && activeOrganizationId
+    })),
+    performanceRecorder.timed("enterpriseModules", organizationContext && activeOrganizationId
       ? getEnterpriseNavigationModules(activeOrganizationId, user.id, user.locale)
-      : Promise.resolve([]),
-    session?.activeContext === "ORGANIZATION" && activeOrganizationId
+      : Promise.resolve([])),
+    performanceRecorder.timed("enterpriseActivityBlocks", organizationContext && activeOrganizationId
       ? getEnterpriseActivityBlocks(activeOrganizationId, user.id)
-      : Promise.resolve([]),
-    session?.activeContext === "ORGANIZATION" && activeOrganizationId
+      : Promise.resolve([])),
+    performanceRecorder.timed("enterpriseAdminDecision", organizationContext && activeOrganizationId
       ? resolveEnterpriseModuleAccess({
           userId: user.id,
           organizationId: activeOrganizationId,
           moduleCode: "ADMIN_DASHBOARD",
           action: "manage",
         })
-      : Promise.resolve(null),
-    getVisiblePromotionalBannersForUser(user.id, user.role),
+      : Promise.resolve(null)),
+    performanceRecorder.timed("promotionalBanners", getVisiblePromotionalBannersForUser(user.id, user.role)),
   ]);
+  performanceRecorder.finish({ organizationContext });
+
   const enterpriseContext =
-    session?.activeContext === "ORGANIZATION" && activeOrganizationId
+    organizationContext && activeOrganizationId
       ? {
-          organizationName: session.activeOrganizationName || copy.dashboard.company,
+          organizationName: session?.activeOrganizationName || copy.dashboard.company,
           showAdmin: enterpriseAdminDecision?.allowed === true,
           showActivities: enterpriseActivityBlocks.length > 0,
           modules: enterpriseModules,
@@ -239,7 +235,7 @@ export async function AppShell({
             enterpriseContext={enterpriseContext}
           />
           <PWAInstallPrompt />
-          <PwaNotificationBridge notifications={latestUnreadNotifications} enabled={Boolean(user.pushNotificationsEnabled)} />
+          <PwaNotificationBridge enabled={Boolean(user.pushNotificationsEnabled)} />
           <DtscFooter />
         </div>
       </div>
