@@ -40,6 +40,19 @@ const headers = token
     }
   : { accept: 'application/vnd.github+json' };
 
+function sectionBody(body, heading) {
+  const source = String(body || '');
+  const start = source.indexOf(heading);
+  if (start < 0) return '';
+  const contentStart = start + heading.length;
+  const nextHeading = source.indexOf('\n## ', contentStart);
+  return source.slice(contentStart, nextHeading < 0 ? source.length : nextHeading).trim();
+}
+
+function debtLine(section, label) {
+  return section.split(/\r?\n/).find((line) => line.trim().toLowerCase().startsWith(`- ${label.toLowerCase()}`)) || '';
+}
+
 // A rerun keeps the original webhook payload. Always prefer live GitHub
 // metadata so labels, milestone, edited body/title and mergeability are current.
 let pr = eventPr;
@@ -71,7 +84,8 @@ if (!isValidTitle(pr.title)) {
   errors.push(`PR title '${pr.title}' is not Conventional Commit compatible.`);
 }
 
-const issueNumber = extractLinkedIssue(pr.body);
+const body = String(pr.body || '');
+const issueNumber = extractLinkedIssue(body);
 if (!issueNumber) {
   errors.push('PR body must link an Issue with Closes/Fixes/Resolves #N.');
 }
@@ -81,9 +95,12 @@ const requiredHeadings = [
   '## Objectif',
   '## Impact livraison',
   '## Changements',
+  '## Dette de contribution',
   '## Base de données / Prisma',
   '## Sécurité / RBAC / multi-tenant',
   '## Validation automatique',
+  '## Validation UI / i18n / accessibilité',
+  '## Matrice de preuves',
   '## Risques',
   '## Rollback',
   '## Documentation',
@@ -92,14 +109,42 @@ const requiredHeadings = [
   '## Gouvernance de contribution',
 ];
 for (const heading of requiredHeadings) {
-  if (!String(pr.body || '').includes(heading)) {
+  if (!body.includes(heading)) {
     errors.push(`Missing PR template section: ${heading}`);
   }
 }
 
+const debtSection = sectionBody(body, '## Dette de contribution');
+for (const label of ['Dette créée', 'Dette maintenue', 'Dette remboursée', 'Dette reportée']) {
+  if (!debtLine(debtSection, label)) errors.push(`Contribution debt ledger must include '${label}'.`);
+}
+
+for (const label of ['Dette créée', 'Dette reportée']) {
+  const line = debtLine(debtSection, label);
+  if (line && !/\bAucune\b/i.test(line) && !/#\d+/.test(line)) {
+    errors.push(`${label} must be 'Aucune' or reference a dedicated Issue #N.`);
+  }
+}
+
+const evidenceSection = sectionBody(body, '## Matrice de preuves');
+const evidenceStatuses = ['LOCAL_EXECUTED', 'CI_PROVEN', 'OWNER_E2E', 'NOT_EXECUTED'];
+if (!evidenceStatuses.some((status) => evidenceSection.includes(status))) {
+  errors.push(`Evidence matrix must use explicit statuses: ${evidenceStatuses.join(', ')}.`);
+}
+if (/\b(devrait passer|normalement vert|semble vert|supposé vert)\b/i.test(evidenceSection)) {
+  errors.push('Evidence matrix contains speculative success language instead of an execution status.');
+}
+
 const isAutomatedDependencyPr = /^(dependabot|renovate)\//.test(pr.head.ref);
-if (!isAutomatedDependencyPr && !hasContributingAcknowledgement(pr.body)) {
+if (!isAutomatedDependencyPr && !hasContributingAcknowledgement(body)) {
   errors.push("PR must confirm: - [x] J'ai lu et respecté `docs/CONTRIBUTING.md`.");
+}
+
+if (!isAutomatedDependencyPr && !/- \[[xX]\] Je n'ai introduit aucune dette silencieuse/i.test(body)) {
+  errors.push("PR must explicitly confirm the no-silent-debt contribution rule.");
+}
+if (!isAutomatedDependencyPr && !/- \[[xX]\] Je n'ai déclaré aucun test, build, E2E ou déploiement réussi sans preuve réelle/i.test(body)) {
+  errors.push("PR must explicitly confirm truthful execution evidence.");
 }
 
 const structuredMetadata = liveIssueMetadata || pr;
@@ -114,6 +159,14 @@ if (missing.length) {
 const material = labelNames.some((label) => MATERIAL_IMPACTS.has(label));
 if (material && !structuredMetadata.milestone) {
   errors.push('Material PR requires an active milestone.');
+}
+
+const uiMaterial = material && labelNames.some((label) => ['area:ui', 'area:ux', 'area:mobile'].includes(label));
+if (uiMaterial) {
+  const uiSection = sectionBody(body, '## Validation UI / i18n / accessibilité');
+  if (!uiSection || /- \[x\] non concerné/i.test(uiSection)) {
+    errors.push('Material UI/UX/mobile PR cannot mark rendered UI validation as not applicable.');
+  }
 }
 
 if (pr.mergeable === false || pr.mergeable_state === 'dirty') {
