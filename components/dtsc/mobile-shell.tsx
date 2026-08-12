@@ -5,9 +5,10 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { Bell, Blocks, Gauge, LifeBuoy, LogOut, MessagesSquare, ShieldCheck } from "lucide-react";
-import { useEffect, type ElementType } from "react";
+import type { ElementType } from "react";
 import type { UserRole } from "@prisma/client";
 import { MobileAvatar } from "@/components/dtsc/ui-components";
+import { useCollaborationPresenceLease } from "@/components/dtsc/use-collaboration-presence-lease";
 import { OrganizationContextSwitcher } from "@/components/layout/organization-context-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ModuleRefreshButton } from "@/components/workspace/module-refresh-button";
@@ -60,43 +61,7 @@ export function MobilePwaHeader({
 }) {
   const locale = user.locale || "fr";
   const copy = getExperienceCopy(locale).mobile;
-
-  useEffect(() => {
-    let stopped = false;
-    const markOnline = () => {
-      if (stopped) return;
-      void fetch("/api/collaborators/presence", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "online" }),
-      }).catch(() => null);
-    };
-    const markOffline = () => {
-      const browserNavigator = typeof window === "undefined" ? undefined : window.navigator;
-      const payload = new Blob([JSON.stringify({ status: "offline" })], { type: "application/json" });
-      if (!browserNavigator?.sendBeacon?.("/api/collaborators/presence", payload)) {
-        void fetch("/api/collaborators/presence", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "offline" }),
-          keepalive: true,
-        }).catch(() => null);
-      }
-    };
-    const handleVisibility = () => document.visibilityState === "visible" ? markOnline() : markOffline();
-    markOnline();
-    const interval = window.setInterval(markOnline, 15000);
-    window.addEventListener("focus", markOnline);
-    window.addEventListener("pagehide", markOffline);
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => {
-      stopped = true;
-      window.clearInterval(interval);
-      window.removeEventListener("focus", markOnline);
-      window.removeEventListener("pagehide", markOffline);
-      document.removeEventListener("visibilitychange", handleVisibility);
-    };
-  }, []);
+  useCollaborationPresenceLease();
 
   async function signOut() {
     const response = await fetch("/api/auth/sign-out", { method: "POST" });
