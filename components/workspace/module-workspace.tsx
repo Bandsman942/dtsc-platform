@@ -85,7 +85,7 @@ export function ModuleHeader({
           {secondaryActions ? (
             <>
               <div className="hidden min-w-0 sm:contents">{secondaryActions}</div>
-              <details className="group relative sm:hidden">
+              <details className="group min-w-0 sm:hidden open:col-span-2">
                 <summary
                   aria-label={copy.moreActions}
                   title={copy.moreActions}
@@ -93,7 +93,7 @@ export function ModuleHeader({
                 >
                   <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
                 </summary>
-                <div className="absolute right-0 top-[calc(100%+0.5rem)] z-30 min-w-[13rem] max-w-[min(20rem,80vw)] rounded-2xl border border-dtsc-border bg-dtsc-surface p-2 shadow-[0_20px_60px_rgba(0,23,54,0.22)]">
+                <div className="mt-2 min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface p-2 shadow-[0_14px_40px_rgba(0,23,54,0.14)]">
                   <div className="grid min-w-0 gap-2 [&>*]:w-full">{secondaryActions}</div>
                 </div>
               </details>
