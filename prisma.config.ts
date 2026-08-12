@@ -2,7 +2,9 @@ import { defineConfig } from "prisma/config";
 
 export default defineConfig({
   engine: "classic",
-  schema: "prisma/schema.prisma",
+  // DTSC uses Prisma's multi-file schema layout. Keep the directory as the
+  // canonical schema source instead of narrowing the CLI to schema.prisma.
+  schema: "prisma",
   migrations: {
     path: "prisma/migrations",
   },
