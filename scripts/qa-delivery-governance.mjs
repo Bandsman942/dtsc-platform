@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import path from 'node:path';
 import {
   BRANCH_PATTERN,
   isValidBranch,
@@ -93,6 +94,35 @@ assert.match(validator, /Dette de contribution/);
 assert.match(validator, /Matrice de preuves/);
 assert.match(validator, /no-silent-debt contribution rule/);
 assert.match(validator, /truthful execution evidence/);
+
+const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+assert.match(
+  packageJson.packageManager ?? '',
+  /^pnpm@10\./,
+  'DTSC utilise encore pnpm 10 : pnpm/action-setup reste le contrat officiel jusqu’à une migration explicite vers pnpm 11+.',
+);
+
+const workflowDirectory = '.github/workflows';
+const workflowFiles = fs
+  .readdirSync(workflowDirectory)
+  .filter((file) => /\.ya?ml$/i.test(file));
+let pnpmSetupOccurrences = 0;
+for (const file of workflowFiles) {
+  const workflowPath = path.join(workflowDirectory, file);
+  const content = fs.readFileSync(workflowPath, 'utf8');
+  for (const match of content.matchAll(/pnpm\/action-setup@v(\d+)/g)) {
+    pnpmSetupOccurrences += 1;
+    const major = Number(match[1]);
+    assert.ok(
+      major >= 6,
+      `${workflowPath} utilise pnpm/action-setup@v${major}; pnpm 10 exige une version supportée de l'action sans runtime Node.js 20 déprécié.`,
+    );
+  }
+}
+assert.ok(
+  pnpmSetupOccurrences > 0,
+  'Le contrat CI attend au moins une utilisation explicite de pnpm/action-setup tant que DTSC reste sur pnpm 10.',
+);
 
 const productionSuccessEvent = {
   deployment: {
