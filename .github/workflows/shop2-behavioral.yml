@@ -164,7 +164,7 @@ jobs:
           fi
       - name: Upload Shop 2 diagnostics
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: shop2-behavioral-diagnostics
           if-no-files-found: ignore
