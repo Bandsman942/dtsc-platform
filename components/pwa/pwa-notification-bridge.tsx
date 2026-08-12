@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
- type BrowserNotification = {
+type BrowserNotification = {
   id: string;
   title: string;
   body: string;
@@ -17,13 +17,18 @@ function getSeenNotifications(storageKey: string) {
   }
 }
 
-export function PwaNotificationBridge({
-  notifications,
-  enabled,
-}: {
-  notifications: BrowserNotification[];
-  enabled: boolean;
-}) {
+async function getForegroundNotifications(signal: AbortSignal) {
+  const response = await fetch("/api/notifications/foreground", {
+    method: "GET",
+    cache: "no-store",
+    signal,
+  });
+  if (!response.ok) return [];
+  const body = (await response.json().catch(() => null)) as { notifications?: BrowserNotification[] } | null;
+  return Array.isArray(body?.notifications) ? body.notifications : [];
+}
+
+export function PwaNotificationBridge({ enabled }: { enabled: boolean }) {
   useEffect(() => {
     if (!enabled || typeof window === "undefined" || !("Notification" in window)) {
       return;
@@ -34,6 +39,7 @@ export function PwaNotificationBridge({
     }
 
     let disposed = false;
+    const controller = new AbortController();
     const storageKey = "dtsc-visible-notifications";
 
     const run = async () => {
@@ -44,6 +50,9 @@ export function PwaNotificationBridge({
           return;
         }
       }
+
+      const notifications = await getForegroundNotifications(controller.signal).catch(() => []);
+      if (disposed) return;
 
       const seen = getSeenNotifications(storageKey);
       const nextSeen = new Set(seen);
@@ -79,8 +88,9 @@ export function PwaNotificationBridge({
     void run();
     return () => {
       disposed = true;
+      controller.abort();
     };
-  }, [enabled, notifications]);
+  }, [enabled]);
 
   return null;
 }
