@@ -5,9 +5,6 @@
   "engines": {
     "node": "22.x"
   },
-  "prisma": {
-    "schema": "./prisma"
-  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -164,7 +161,7 @@
     "qa:erp-professional-pharmacy-returns": "node scripts/qa-erp-professional-iteration-06-sector-checks.mjs returns",
     "qa:erp-professional-pharmacy-alerts": "node scripts/qa-erp-professional-iteration-06-sector-checks.mjs alerts",
     "qa:erp-professional-pharmacy-quality": "node scripts/qa-erp-professional-iteration-06-sector-checks.mjs pharmacy-quality",
-    "qa:erp-professional-pharmacy-documents": "node scripts/qa-erp-professional-iteration-06-sector-checks.mjs pharmacy-documents",
+    "qa:erp-professional-pharmacy-documents": "node scripts/qa-erp-professional-iteration-06-sector-checks.mjs documents",
     "qa:erp-professional-pharmacy-reports": "node scripts/qa-erp-professional-iteration-06-sector-checks.mjs reports",
     "qa:erp-professional-pharmacy-settings": "node scripts/qa-erp-professional-iteration-06-sector-checks.mjs settings",
     "qa:erp-sector-french-language": "node scripts/qa-erp-professional-iteration-06-sector-checks.mjs french-language",

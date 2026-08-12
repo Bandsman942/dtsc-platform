@@ -81,6 +81,8 @@ export function AnnouncementMediaEnhancer() {
       </div>
       <div className="min-h-0 flex-1 touch-pan-x touch-pan-y overflow-auto overscroll-contain p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:p-5">
         <div className="flex min-h-full min-w-full items-center justify-center">
+          {/* Native image is intentional: the zoom viewer reuses arbitrary rich-content currentSrc values. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={activeImage.src}
             alt={activeImage.alt}
