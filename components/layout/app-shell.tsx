@@ -230,7 +230,6 @@ export async function AppShell({
           <main className="dtsc-private-main min-w-0 px-4 pb-36 pt-5 sm:px-6 lg:px-8 lg:pb-6 lg:pt-6">{children}</main>
           <MobileBottomNavigation
             user={user}
-            unreadNotifications={unreadNotifications}
             unreadCollaboratorMessages={unreadCollaboratorMessages}
             pendingEnterpriseInvitations={pendingEnterpriseInvitations}
             pendingCompanyRelationships={pendingCompanyRelationships}
