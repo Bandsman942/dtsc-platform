@@ -31,6 +31,18 @@ const immersive = read("components/collaborators/collaborators-immersive-convers
 if (immersive.includes("props.userPreferences.locale === \"en\"")) fail("collaborator immersive shell still contains a local FR/EN ternary");
 if (!immersive.includes("translateSharedWork(props.userPreferences.locale, \"collaboration.addContact\")")) fail("collaborator floating action must use shared-work i18n");
 
+const contactDiscovery = read("components/collaborators/contact-discovery-workspace.tsx");
+for (const forbidden of ["const english =", "locale === \"en\""]) {
+  if (contactDiscovery.includes(forbidden)) fail(`contact discovery still contains local i18n pattern: ${forbidden}`);
+}
+if (!contactDiscovery.includes("translateSharedWork")) fail("contact discovery must use shared-work i18n");
+
+const meetingContent = read("components/collaborators/collaboration-meeting-message-content.tsx");
+for (const forbidden of ["const english =", "preferences.locale === \"en\""]) {
+  if (meetingContent.includes(forbidden)) fail(`meeting message content still contains local i18n pattern: ${forbidden}`);
+}
+if (!meetingContent.includes("translateSharedWork")) fail("meeting message content must use shared-work i18n");
+
 const calendar = read("components/calendar/unified-work-calendar-panel.tsx");
 for (const forbidden of ["const en =", "locale === \"en\"", "\"en-GB\"", "\"fr-FR\"", "const SOURCE_LABELS"]) {
   if (calendar.includes(forbidden)) fail(`unified calendar still contains local i18n pattern: ${forbidden}`);
