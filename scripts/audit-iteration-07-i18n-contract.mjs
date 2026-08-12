@@ -19,6 +19,36 @@ for (const [file, tokens] of Object.entries(bilingualContracts)) {
   for (const token of tokens) if (!content.includes(token)) failures.push(`${file}: libellé/contrat FR-EN absent: ${token}`);
 }
 
+const canonicalizedContracts = {
+  "components/activities/entity-comments-thread.tsx": {
+    required: ["getSharedCollaborationCopy", "getIntlLocale"],
+    forbidden: [
+      "const english =",
+      'locale === "en"',
+      '"Unable to load comments."',
+      '"Chargement des commentaires impossible."',
+      '"Comment added."',
+      '"Commentaire ajouté."',
+      '"fr-FR"',
+      '"en-GB"',
+      "toLocaleString(english",
+    ],
+  },
+};
+for (const [file, contract] of Object.entries(canonicalizedContracts)) {
+  const target = path.join(root, file);
+  if (!fs.existsSync(target)) { failures.push(`Fichier i18n canonique absent: ${file}`); continue; }
+  const content = fs.readFileSync(target, "utf8");
+  for (const token of contract.required) if (!content.includes(token)) failures.push(`${file}: dépendance i18n canonique absente: ${token}`);
+  for (const token of contract.forbidden) if (content.includes(token)) failures.push(`${file}: dette i18n locale réintroduite: ${token}`);
+}
+
+validateDictionaryParity(
+  "locales/shared-collaboration.fr.json",
+  "locales/shared-collaboration.en.json",
+  "shared collaboration",
+);
+
 const forbiddenRawLabels = [
   ["components/productivity/professional-toolbox.tsx", ">DRAFT<"],
   ["components/productivity/professional-toolbox.tsx", ">CRITICAL<"],
@@ -65,6 +95,29 @@ if (failures.length) {
   process.exit(1);
 }
 console.log("✓ Contrat i18n itération 07 validé: aucun nouveau dépassement par rapport à la cible historique ou à la branche de base.");
+
+function validateDictionaryParity(frFile, enFile, label) {
+  const frPath = path.join(root, frFile);
+  const enPath = path.join(root, enFile);
+  if (!fs.existsSync(frPath) || !fs.existsSync(enPath)) {
+    failures.push(`Dictionnaires ${label} incomplets: ${frFile} / ${enFile}`);
+    return;
+  }
+  const frKeys = flattenKeys(JSON.parse(fs.readFileSync(frPath, "utf8")));
+  const enKeys = flattenKeys(JSON.parse(fs.readFileSync(enPath, "utf8")));
+  const missingInEn = frKeys.filter((key) => !enKeys.includes(key));
+  const missingInFr = enKeys.filter((key) => !frKeys.includes(key));
+  if (missingInEn.length) failures.push(`${label}: clés absentes en EN: ${missingInEn.join(", ")}`);
+  if (missingInFr.length) failures.push(`${label}: clés absentes en FR: ${missingInFr.join(", ")}`);
+}
+
+function flattenKeys(value, prefix = "") {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return prefix ? [prefix] : [];
+  return Object.entries(value).flatMap(([key, nested]) => {
+    const next = prefix ? `${prefix}.${key}` : key;
+    return nested && typeof nested === "object" && !Array.isArray(nested) ? flattenKeys(nested, next) : [next];
+  });
+}
 
 function ensureMainRef() {
   if (process.env.GITHUB_REF_NAME === "main") {
