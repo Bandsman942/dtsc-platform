@@ -47,7 +47,7 @@ jobs:
           --to-schema-datamodel prisma
           --script > enterprise-accounting-migration.sql
       - name: Upload migration artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: enterprise-accounting-migration
           path: enterprise-accounting-migration.sql

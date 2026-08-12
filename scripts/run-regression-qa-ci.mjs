@@ -10,6 +10,7 @@ if (!regression || typeof regression !== "string") {
 }
 
 const commands = regression.split(/\s+&&\s+/).map((item) => item.trim()).filter(Boolean);
+commands.unshift("node scripts/qa-github-actions-upload-runtime.mjs");
 const escapeAnnotation = (value) => String(value).replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
 
 function diagnostic(output, status) {
