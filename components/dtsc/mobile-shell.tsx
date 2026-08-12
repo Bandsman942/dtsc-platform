@@ -170,7 +170,6 @@ export function MobilePwaHeader({
 
 export function MobileBottomNavigation({
   user,
-  unreadNotifications,
   unreadCollaboratorMessages = 0,
   pendingEnterpriseInvitations = 0,
   pendingCompanyRelationships = 0,
@@ -180,7 +179,6 @@ export function MobileBottomNavigation({
   enterpriseContext = null,
 }: {
   user: MobileShellUser;
-  unreadNotifications: number;
   unreadCollaboratorMessages?: number;
   pendingEnterpriseInvitations?: number;
   pendingCompanyRelationships?: number;
