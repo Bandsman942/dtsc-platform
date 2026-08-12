@@ -31,6 +31,21 @@ Les primitives `ModuleWorkspace`, `ModuleHeader`, `ModuleToolbar`, `ModuleConten
 
 Les actions de header ou toolbar utilisent `data-responsive-actions`. Sous 480 px, elles passent en grille de deux colonnes `minmax(0, 1fr)` ; au-dessus, elles restent en groupe flexible et peuvent se répartir sur plusieurs lignes.
 
+### Boutons partagés
+
+Le composant `Button` ne doit jamais combiner `whitespace-normal` avec une hauteur fixe qui coupe un libellé traduit ou métier.
+
+Le contrat est :
+
+- hauteur automatique ;
+- `min-height` tactile ;
+- texte multiligne autorisé lorsque nécessaire ;
+- états `hover`, `focus-visible`, `active/pressed`, `disabled` perceptibles ;
+- bouton icon-only avec nom accessible ;
+- CTA mobile courte lorsqu'une action principale peut être formulée sans perte de sens.
+
+Un bouton qui tient en français mais déborde en anglais — ou l'inverse — est une régression responsive et i18n.
+
 ## Règles de composition
 
 ### Flex et grid
@@ -65,15 +80,23 @@ Un groupe d'actions ne doit jamais forcer une largeur desktop sur mobile. Utilis
 
 ou une grille mobile explicite puis `sm:flex sm:flex-wrap`.
 
+Sur les headers de module mobiles :
+
+- une action primaire peut rester directement visible ;
+- l'actualisation peut être icon-first ;
+- plusieurs actions secondaires utilisent une divulgation progressive (`…`) au lieu d'empiler trois ou quatre boutons pleine largeur ;
+- les actions restent toutes accessibles au clavier et au lecteur d'écran.
+
 ### Scroll horizontal
 
 Le scroll horizontal de page est interdit. Un scroll local reste autorisé pour :
 
 - une bande de KPI ;
 - une table réellement large ;
-- une timeline ou un carrousel explicitement conçu pour ce comportement.
+- une timeline ou un carrousel explicitement conçu pour ce comportement ;
+- un rail système mobile borné, par exemple le sélecteur d'espace lorsque plusieurs contrôles doivent rester accessibles.
 
-Le conteneur doit être borné, accessible au clavier/tactile et ne jamais déplacer le header ou la navigation globale.
+Le conteneur doit être borné, accessible au clavier/tactile et ne jamais déplacer le header ou la navigation globale. Les rails tactiles utilisent `data-horizontal-rail`, `data-professional-tabs` ou le contrat équivalent afin de déclarer clairement la priorité au pan horizontal local.
 
 ### Valeurs interdites dans le contenu ordinaire
 
@@ -84,6 +107,85 @@ Le conteneur doit être borné, accessible au clavier/tactile et ne jamais dépl
 - masquage d'un bug uniquement avec `overflow-x-hidden`.
 
 Ces valeurs restent possibles pour un overlay réellement plein écran et documenté.
+
+## Shell mobile : une hiérarchie, pas deux navigations concurrentes
+
+Le shell mobile privé sépare désormais deux responsabilités :
+
+### Barre supérieure
+
+Elle contient uniquement le chrome système nécessaire :
+
+- identité DTSC / produit ;
+- actualisation contextuelle ;
+- thème ;
+- notifications ;
+- avatar ;
+- sélecteur d'espace lorsque disponible ;
+- déconnexion.
+
+Elle ne réénumère pas les grands groupes de navigation.
+
+### Barre inférieure
+
+`data-mobile-bottom-nav` reste la navigation primaire entre les grands groupes autorisés :
+
+- Pilotage ;
+- IA & équipe ;
+- Entreprise ;
+- Compte ;
+- DTSC interne uniquement si le serveur permet réellement ce groupe.
+
+Le même compteur ne doit pas être reproduit artificiellement dans plusieurs contrôles. Par exemple, le nombre global de notifications reste porté par la cloche ; le groupe Pilotage n'affiche pas une seconde copie de ce `99+`.
+
+Le contenu principal doit conserver une marge basse suffisante pour ne jamais être recouvert par la barre fixe, y compris avec les safe areas.
+
+## Navigation gestuelle entre grands groupes
+
+Sur mobile, un balayage horizontal peut compléter la barre inférieure pour passer au groupe précédent/suivant. Il ne remplace jamais les liens canoniques `/modules?group=...` et n'accorde aucun droit supplémentaire.
+
+Le composant partagé `MobileGroupSwipeNavigation` applique les règles suivantes :
+
+- actif uniquement sous le breakpoint desktop ;
+- seuil horizontal explicite avant navigation ;
+- dominance horizontale sur le déplacement vertical ;
+- durée maximale afin d'éviter d'interpréter un long geste ambigu ;
+- zone de garde près des bords gauche/droit afin de ne pas concurrencer les gestes navigateur/système ;
+- aucune utilisation de `preventDefault()` pour prendre le contrôle du geste système ;
+- destination calculée uniquement parmi les groupes réellement visibles pour l'utilisateur.
+
+### Gestes qui ne doivent jamais être interceptés
+
+Un swipe démarré sur ou dans l'un des éléments suivants reste à son propriétaire :
+
+- `a`, `button`, `input`, `textarea`, `select`, `label` ;
+- `contenteditable` ;
+- dialog ;
+- éditeur / textbox / combobox ;
+- `summary/details` ;
+- rail horizontal ;
+- tabs ;
+- navigation secondaire ;
+- sélecteur d'espace ;
+- tout conteneur dont le contenu est réellement horizontalement scrollable ;
+- élément explicitement marqué `data-no-group-swipe`.
+
+Le swipe global doit donc commencer sur une zone de contenu neutre. Une interaction métier ne peut pas devenir accidentellement une navigation.
+
+## i18n et responsive sont un seul contrat
+
+Une traduction peut être plus longue que la langue de référence. Toute surface FR/EN doit être testée avec les deux dictionnaires.
+
+Ne pas résoudre une traduction longue en :
+
+- réduisant excessivement la taille de police ;
+- tronquant une CTA dont le sens est nécessaire ;
+- imposant une hauteur fixe ;
+- cachant le débordement.
+
+Préférer : libellé métier plus court, retour à la ligne, action icon-first correctement accessible ou menu secondaire.
+
+Les dates/heures visibles utilisent la locale active plutôt qu'une locale codée en dur.
 
 ## Largeurs de référence
 
@@ -99,7 +201,7 @@ Toute interface nouvelle ou modifiée doit être vérifiée au minimum à :
 
 Les tests doivent couvrir thème clair/sombre, PWA standalone, clavier mobile, safe areas, textes longs, langue française et anglaise, état vide, état chargé et permissions différentes.
 
-## Quality Gate
+## QA statique et validation rendue
 
 Le script suivant vérifie que le contrat global, les primitives, les règles scoped AGENTS et la documentation restent présents :
 
@@ -107,7 +209,13 @@ Le script suivant vérifie que le contrat global, les primitives, les règles sc
 pnpm qa:responsive-ui
 ```
 
-Il est inclus dans `pnpm qa:regression`. Une modification UI ne doit pas être fusionnée si ce contrôle, le type-check, le lint ou le build échoue.
+La gate responsive exécute également `scripts/qa-experience-debt-closure.mjs`, qui protège les invariants i18n, Button, shell mobile, swipe et gouvernance anti-dette de l'itération #251.
+
+Elle est incluse dans `pnpm qa:regression`.
+
+**Important :** une QA statique ne prouve pas à elle seule le rendu. Une modification UI matérielle exige aussi la validation navigateur/E2E prévue par `docs/CONTRIBUTING.md`. Un grep peut confirmer qu'une classe existe ; il ne peut pas confirmer qu'un bouton de trois lignes n'est pas coupé sur Samsung Internet.
+
+Une modification UI ne doit pas être fusionnée si le contrôle responsive, le type-check, le lint, le build ou les E2E requis échouent.
 
 ## Critères de recette
 
@@ -120,4 +228,9 @@ Une page est conforme lorsque :
 5. les listes et détails rétrécissent sans agrandir la page ;
 6. les overlays respectent le clavier et les safe areas ;
 7. le comportement desktop reste dense et lisible ;
-8. `pnpm qa:responsive-ui` et les Quality Gates passent.
+8. la langue active ne mélange pas des libellés FR/EN dans les surfaces couvertes ;
+9. la navigation primaire mobile n'est pas dupliquée en haut et en bas ;
+10. un swipe global n'intercepte jamais un contrôle ou un rail horizontal ;
+11. les badges ne dupliquent pas le même signal sans raison ;
+12. `pnpm qa:responsive-ui` et les Quality Gates passent ;
+13. les E2E visuels requis par le changement ont une preuve explicite.

@@ -60,14 +60,39 @@ assert.match(contributing, /arbre complet d'une branche historique/i);
 assert.match(contributing, /Un test ne se neutralise jamais/i);
 assert.match(contributing, /J'ai lu et respecté `docs\/CONTRIBUTING\.md`/i);
 assert.match(contributing, /Production provient uniquement de `main`/i);
+assert.match(contributing, /Pas de nouvelle dette silencieuse/i);
+assert.match(contributing, /Dette créée/i);
+assert.match(contributing, /Dette maintenue/i);
+assert.match(contributing, /Dette remboursée/i);
+assert.match(contributing, /Dette reportée/i);
+assert.match(contributing, /LOCAL_EXECUTED/);
+assert.match(contributing, /CI_PROVEN/);
+assert.match(contributing, /OWNER_E2E/);
+assert.match(contributing, /NOT_EXECUTED/);
+assert.match(contributing, /aucune nouvelle chaîne utilisateur orpheline/i);
+assert.match(contributing, /un grep ne voit pas un bouton cassé/i);
+assert.match(contributing, /Performance et coût transverse/i);
 
 const prTemplate = fs.readFileSync('.github/PULL_REQUEST_TEMPLATE.md', 'utf8');
+assert.match(prTemplate, /## Dette de contribution/);
+assert.match(prTemplate, /## Matrice de preuves/);
+assert.match(prTemplate, /## Validation UI \/ i18n \/ accessibilité/);
+assert.match(prTemplate, /LOCAL_EXECUTED/);
+assert.match(prTemplate, /CI_PROVEN/);
+assert.match(prTemplate, /OWNER_E2E/);
+assert.match(prTemplate, /NOT_EXECUTED/);
 assert.match(prTemplate, /## Gouvernance de contribution/);
 assert.match(prTemplate, /- \[ \] J'ai lu et respecté `docs\/CONTRIBUTING\.md`\./);
+assert.match(prTemplate, /aucune dette silencieuse/i);
+assert.match(prTemplate, /aucun test, build, E2E ou déploiement réussi sans preuve réelle/i);
 
 const validator = fs.readFileSync('scripts/github/validate-pr-governance.mjs', 'utf8');
 assert.match(validator, /hasContributingAcknowledgement/);
 assert.match(validator, /Gouvernance de contribution/);
+assert.match(validator, /Dette de contribution/);
+assert.match(validator, /Matrice de preuves/);
+assert.match(validator, /no-silent-debt contribution rule/);
+assert.match(validator, /truthful execution evidence/);
 
 const productionSuccessEvent = {
   deployment: {

@@ -1,9 +1,11 @@
 "use client";
 
-import { ArrowLeft, ChevronRight, Sparkles } from "lucide-react";
+import { ArrowLeft, ChevronRight, MoreHorizontal, Sparkles } from "lucide-react";
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
 import { ModuleRefreshButton } from "@/components/workspace/module-refresh-button";
+import { getExperienceCopy } from "@/lib/experience-i18n";
+import { translate } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 export function ModuleWorkspace({ children, className }: { children: ReactNode; className?: string }) {
@@ -38,6 +40,9 @@ export function ModuleHeader({
   secondaryActions?: ReactNode;
   className?: string;
 }) {
+  const locale = useAppLocale();
+  const copy = getExperienceCopy(locale).workspace;
+
   return (
     <header
       data-workspace-module-header
@@ -53,7 +58,7 @@ export function ModuleHeader({
         <div className="min-w-0 max-w-4xl">
           <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-cyan-400/25 bg-cyan-400/10 px-3 py-1 text-[0.64rem] font-black uppercase tracking-[0.16em] text-cyan-700 dark:text-cyan-200">
             <Sparkles className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            <span className="truncate">DTSC · Workspace</span>
+            <span className="break-words">{copy.signature}</span>
           </div>
           {eyebrow ? (
             <div className="mt-3 text-[0.68rem] font-black uppercase tracking-[0.18em] text-cyan-600 sm:text-xs">
@@ -65,7 +70,7 @@ export function ModuleHeader({
               {title}
             </h1>
             {count !== undefined ? (
-              <span className="max-w-full rounded-full bg-dtsc-soft px-2.5 py-1 text-xs font-black text-dtsc-blue">
+              <span className="max-w-full break-words rounded-full bg-dtsc-soft px-2.5 py-1 text-xs font-black text-dtsc-blue">
                 {count}
               </span>
             ) : null}
@@ -76,10 +81,26 @@ export function ModuleHeader({
             </div>
           ) : null}
         </div>
-        <div data-responsive-actions className="relative lg:justify-end">
-          {secondaryActions}
-          <ModuleRefreshButton />
-          {primaryAction}
+        <div data-responsive-actions className="relative items-center lg:justify-end">
+          {secondaryActions ? (
+            <>
+              <div className="hidden min-w-0 sm:contents">{secondaryActions}</div>
+              <details className="group min-w-0 sm:hidden open:col-span-2">
+                <summary
+                  aria-label={copy.moreActions}
+                  title={copy.moreActions}
+                  className="flex min-h-11 min-w-11 cursor-pointer list-none items-center justify-center rounded-xl border border-dtsc-border bg-dtsc-surface text-dtsc-blue transition hover:bg-dtsc-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 [&::-webkit-details-marker]:hidden"
+                >
+                  <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
+                </summary>
+                <div className="mt-2 min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface p-2 shadow-[0_14px_40px_rgba(0,23,54,0.14)]">
+                  <div className="grid min-w-0 gap-2 [&>*]:w-full">{secondaryActions}</div>
+                </div>
+              </details>
+            </>
+          ) : null}
+          <ModuleRefreshButton compact />
+          {primaryAction ? <div className="min-w-0">{primaryAction}</div> : null}
         </div>
       </div>
     </header>
@@ -91,7 +112,7 @@ export function ModuleToolbar({
   controls,
   activeFilters,
   summary,
-  ariaLabel = "Contrôles du module",
+  ariaLabel,
   className,
 }: {
   search?: ReactNode;
@@ -101,6 +122,9 @@ export function ModuleToolbar({
   ariaLabel?: string;
   className?: string;
 }) {
+  const locale = useAppLocale();
+  const resolvedAriaLabel = ariaLabel || translate(locale, "common.actions");
+
   return (
     <section
       data-workspace-toolbar
@@ -108,7 +132,7 @@ export function ModuleToolbar({
         "w-full min-w-0 max-w-full overflow-hidden rounded-2xl border border-dtsc-border bg-dtsc-page/70 p-3.5 sm:p-4",
         className,
       )}
-      aria-label={ariaLabel}
+      aria-label={resolvedAriaLabel}
     >
       <div className="grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-[minmax(16rem,1fr)_minmax(0,auto)] lg:items-end">
         {search ? <div className="min-w-0 max-w-full">{search}</div> : null}
@@ -155,10 +179,9 @@ export function ModuleSection({
   defaultOpen?: boolean;
 }) {
   const locale = useAppLocale();
+  const copy = getExperienceCopy(locale).workspace;
   const titleId = useId();
   const [open, setOpen] = useState(defaultOpen);
-  const openLabel = locale === "en" ? "Open workspace" : "Ouvrir le workspace";
-  const backLabel = locale === "en" ? "Back to module" : "Retour au module";
 
   useEffect(() => {
     if (!id) return;
@@ -208,9 +231,9 @@ export function ModuleSection({
       >
         <div className="sticky top-0 z-20 border-b border-dtsc-border bg-dtsc-surface/95 px-4 py-3 shadow-sm backdrop-blur-xl sm:px-6 lg:px-8">
           <div className="mx-auto flex w-full min-w-0 max-w-[1600px] flex-wrap items-center justify-between gap-3 sm:flex-nowrap">
-            <button type="button" onClick={closeWorkspace} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-black text-dtsc-blue hover:bg-dtsc-soft">
+            <button type="button" onClick={closeWorkspace} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-black text-dtsc-blue transition hover:bg-dtsc-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 active:translate-y-px">
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-              {backLabel}
+              {copy.backToModule}
             </button>
             {action ? <div data-responsive-actions>{action}</div> : null}
           </div>
@@ -242,7 +265,7 @@ export function ModuleSection({
         onClick={openWorkspace}
         aria-expanded="false"
         data-workspace-section-header
-        className="group flex w-full min-w-0 max-w-full flex-wrap items-center justify-between gap-4 px-4 py-4 text-left transition hover:bg-dtsc-soft/70 sm:flex-nowrap sm:px-5 sm:py-5"
+        className="group flex w-full min-w-0 max-w-full flex-wrap items-center justify-between gap-4 px-4 py-4 text-left transition hover:bg-dtsc-soft/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 sm:flex-nowrap sm:px-5 sm:py-5"
       >
         <span className="min-w-0 flex-1 border-l-[3px] border-cyan-500 pl-3.5 sm:pl-4">
           <span className="flex min-w-0 max-w-full flex-wrap items-baseline gap-2.5 sm:flex-nowrap">
@@ -252,7 +275,7 @@ export function ModuleSection({
           {description ? <span className="mt-1.5 block max-w-4xl break-words text-sm leading-6 text-dtsc-muted">{description}</span> : null}
         </span>
         <span className="flex shrink-0 items-center gap-2 text-xs font-black text-dtsc-blue">
-          <span className="hidden sm:inline">{openLabel}</span>
+          <span className="hidden sm:inline">{copy.openSection}</span>
           <ChevronRight className="h-5 w-5 transition group-hover:translate-x-0.5" aria-hidden="true" />
         </span>
       </button>

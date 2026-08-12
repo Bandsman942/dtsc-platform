@@ -15,6 +15,25 @@ Ces règles s'appliquent à tous les composants de `components/` et de ses sous-
 - Réutiliser `components/workspace/*`, `components/ui/*` et le contrat racine `data-dtsc-responsive-root` avant de créer une nouvelle structure responsive parallèle.
 - Ne jamais considérer `overflow-x-hidden` ou `overflow-x-clip` comme la correction unique d'un composant trop large: corriger aussi sa grille, ses enfants flexibles, ses textes longs et ses actions.
 
+## Contrat anti-dette des composants
+
+- Une primitive partagée responsable d'un défaut transverse est corrigée à la source avant d'ajouter des exceptions écran par écran.
+- Un bouton autorisant un libellé multiligne ne doit pas imposer une hauteur fixe susceptible de couper ce libellé.
+- Les nouvelles actions interactives exposent des états perceptibles `hover`, `focus-visible`, `active/pressed` et `disabled`; un état loading est explicite lorsqu'une action asynchrone peut durer.
+- Les CTA mobiles restent courtes lorsque le sens peut être conservé. Plusieurs actions secondaires utilisent divulgation progressive/menu plutôt qu'un empilement permanent.
+- Toute chaîne visible nouvelle sur une surface bilingue vient du mécanisme i18n canonique du domaine; ne pas créer de ternaires FR/EN locaux lorsqu'un dictionnaire existe.
+- Les `aria-label`, `title`, placeholders et textes sr-only suivent le même contrat i18n que le texte visible.
+- Aucun jargon d'implémentation n'est rendu côté client lorsqu'un libellé métier existe.
+- Tout nouveau timer, polling ou fetch monté dans un shell global doit être justifié dans la PR selon `docs/CONTRIBUTING.md`.
+
+## Navigation mobile et gestes
+
+- La navigation primaire ne doit pas être dupliquée dans plusieurs barres mobiles. Le top chrome porte les actions système; la bottom navigation porte les grands groupes.
+- Un compteur déjà représenté par un contrôle système ne doit pas être répété artificiellement sur un autre groupe.
+- Un swipe global entre groupes doit ignorer les contrôles, formulaires, dialogs, éditeurs, carrousels, tabs, rails horizontaux, sélecteurs d'espace et tout ancêtre horizontalement scrollable.
+- Protéger les zones de bord du viewport et ne pas utiliser `preventDefault()` pour prendre le contrôle d'un geste navigateur/système.
+- Utiliser `data-horizontal-rail` pour un rail horizontal réel et `data-no-group-swipe` lorsqu'un composant interactif spécifique doit rester propriétaire de son geste.
+
 ## Expérience standard obligatoire
 
 - Les KPI des modules standards utilisent `ModuleMetrics` et conservent un rail horizontal tactile, borné et snapé sur mobile; ils ne deviennent une grille dense qu'au breakpoint desktop `lg`.
@@ -37,7 +56,7 @@ pnpm lint
 pnpm build
 ```
 
-Une PR UI ne doit pas être fusionnée si le contrat responsive ou l'un de ces Quality Gates échoue.
+Une PR UI ne doit pas être fusionnée si le contrat responsive ou l'un de ces Quality Gates échoue. Une QA statique ne remplace pas les E2E visuels requis par `docs/CONTRIBUTING.md`.
 
 ## Contenu riche partagé
 

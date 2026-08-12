@@ -37,17 +37,33 @@ if (consoleRoutes.includes("feature flags") || consoleRoutes.includes("pilotage 
   process.exitCode = 1;
 }
 
-// Contrat mobile : le sélecteur d'espace doit être large, non rétrécissable et rester
-// strictement avant Déconnexion dans le rail horizontal.
+// Contrat mobile : le sélecteur d'espace reste large et non rétrécissable. Depuis
+// l'itération transverse #251, la barre supérieure ne duplique plus les grands groupes :
+// elle contient le chrome système, puis sélecteur d'espace → Déconnexion. La navigation
+// primaire des groupes appartient uniquement à la barre inférieure.
 requireToken("components/layout/organization-context-switcher.tsx", "w-[82vw]", "le sélecteur mobile doit occuper une largeur confortable");
 requireToken("components/layout/organization-context-switcher.tsx", "min-w-[18rem]", "le sélecteur mobile doit conserver une largeur minimale lisible");
 requireToken("components/layout/organization-context-switcher.tsx", "shrink-0", "le sélecteur mobile ne doit pas être comprimé par le rail");
 const mobileShell = fs.readFileSync("components/dtsc/mobile-shell.tsx", "utf8");
-const groupsPosition = mobileShell.indexOf("{visibleGroups.map((group) => {");
-const switcherPosition = mobileShell.indexOf("{organizationOptions.length > 0 ? <OrganizationContextSwitcher");
-const signOutPosition = mobileShell.indexOf('<button type="button" onClick={() => void signOut()}');
-if (!(groupsPosition >= 0 && switcherPosition > groupsPosition && signOutPosition > switcherPosition)) {
-  console.error("✗ Navigation mobile: l’ordre doit rester espaces de navigation → sélecteur d’espace → Déconnexion");
+const systemRailPosition = mobileShell.indexOf("data-mobile-system-rail");
+const switcherPosition = mobileShell.indexOf("<OrganizationContextSwitcher");
+const signOutPosition = mobileShell.indexOf('onClick={() => void signOut()}');
+const bottomNavPosition = mobileShell.indexOf("data-mobile-bottom-nav");
+const primaryGroupMapPosition = mobileShell.indexOf("{groups.map((group) => {");
+if (!(systemRailPosition >= 0 && switcherPosition > systemRailPosition && signOutPosition > switcherPosition)) {
+  console.error("✗ Navigation mobile: le rail système doit conserver l’ordre sélecteur d’espace → Déconnexion");
+  process.exitCode = 1;
+}
+if (!(bottomNavPosition >= 0 && primaryGroupMapPosition > bottomNavPosition)) {
+  console.error("✗ Navigation mobile: les grands groupes doivent être rendus par la barre inférieure primaire");
+  process.exitCode = 1;
+}
+if (mobileShell.includes("visibleGroups.map") || mobileShell.includes("QuickChip")) {
+  console.error("✗ Navigation mobile: la barre supérieure ne doit pas dupliquer les grands groupes de navigation");
+  process.exitCode = 1;
+}
+if (!mobileShell.includes('if (groupCode === "PILOTAGE") return 0')) {
+  console.error("✗ Navigation mobile: le compteur global de notifications ne doit pas être dupliqué sur Pilotage");
   process.exitCode = 1;
 }
 

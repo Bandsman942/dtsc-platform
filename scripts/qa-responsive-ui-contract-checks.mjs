@@ -1,3 +1,4 @@
+import "./qa-experience-debt-closure.mjs";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -49,6 +50,23 @@ includesAll("components/workspace/business-list.tsx", [
   "[overflow-wrap:anywhere]",
   "data-business-list-item",
 ]);
+
+const sharedButton = includesAll("components/ui/button.tsx", [
+  "h-auto",
+  "min-h-10",
+  "whitespace-normal",
+  "focus-visible:ring",
+  "active:translate-y-px",
+]);
+ok(!sharedButton.includes('default: "h-9 '), "Shared Button must not combine a fixed default height with wrapped labels.");
+
+const mobileShell = includesAll("components/dtsc/mobile-shell.tsx", [
+  "data-mobile-system-rail",
+  "data-mobile-bottom-nav",
+  "data-horizontal-rail",
+  'if (groupCode === "PILOTAGE") return 0',
+]);
+ok(!mobileShell.includes("QuickChip"), "Top mobile chrome must not duplicate the bottom primary navigation.");
 
 const workflowWorkspace = read("components/enterprise/core-v2/enterprise-workflows-workspace.tsx");
 ok(workflowWorkspace.includes("min-w-0"), "Workflow workspace must keep shrinkable grid/flex children.");
@@ -102,10 +120,11 @@ includesAll("docs/RESPONSIVE_UI_CONTRACT.md", [
 const packageJson = read("package.json");
 ok(packageJson.includes("qa:responsive-ui"), "package.json must expose qa:responsive-ui.");
 ok(packageJson.includes("qa-responsive-ui-contract-checks.mjs"), "Responsive contract QA must run inside qa:regression.");
+ok(read("scripts/qa-responsive-ui-contract-checks.mjs").includes('import "./qa-experience-debt-closure.mjs"'), "Experience debt closure QA must run through the canonical responsive regression gate.");
 
 if (failures.length) {
   console.error(`Responsive UI contract QA failed:\n- ${failures.join("\n- ")}`);
   process.exit(1);
 }
 
-console.log("Responsive UI contract QA passed: global root, shared workspace primitives, keyboard-safe toolbox editor, long-content wrapping, mobile action layout, scoped AGENTS rules, documentation and CI guard are present.");
+console.log("Responsive UI contract QA passed: global root, shared workspace primitives, resilient buttons, keyboard-safe toolbox editor, long-content wrapping, deduplicated mobile navigation, scoped AGENTS rules, documentation and CI guards are present.");

@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { Building2 } from "lucide-react";
+import { useAppLocale } from "@/components/i18n/locale-provider";
+import { getExperienceCopy } from "@/lib/experience-i18n";
 
 type ContextOption = {
   id: string;
@@ -20,6 +22,8 @@ export function OrganizationContextSwitcher({
   organizations: ContextOption[];
   variant?: ContextSwitcherVariant;
 }) {
+  const locale = useAppLocale();
+  const copy = getExperienceCopy(locale).mobile;
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const value = currentOrganizationId || "";
@@ -36,15 +40,15 @@ export function OrganizationContextSwitcher({
       });
       const body = (await response.json().catch(() => null)) as { message?: string } | null;
       if (!response.ok) {
-        setError(body?.message || "Impossible d’ouvrir cet espace pour le moment.");
+        setError(body?.message || copy.workspaceOpenFailed);
         return;
       }
 
-      // A hard reload preserves the current URL while rebuilding every Server Component
-      // and client workspace from the newly signed organization context.
+      // A hard reload rebuilds every Server Component from the newly signed
+      // organization context while preserving the current URL.
       window.location.reload();
     } catch {
-      setError("Impossible d’ouvrir cet espace. Vérifiez votre connexion puis réessayez.");
+      setError(copy.workspaceConnectionFailed);
     } finally {
       setPending(false);
     }
@@ -63,16 +67,16 @@ export function OrganizationContextSwitcher({
           : "flex min-h-11 w-full min-w-0 items-center gap-2 rounded-2xl border border-cyan-400/35 bg-dtsc-page/95 px-4 py-2.5 text-xs font-bold text-dtsc-muted shadow-[0_12px_32px_rgba(0,43,91,0.14)] backdrop-blur-xl lg:min-w-[15rem] lg:border-dtsc-border lg:bg-dtsc-page/90 lg:px-3 lg:py-2"}
       >
         <Building2 className="h-4 w-4 shrink-0 text-cyan-500" />
-        <span className="sr-only">Espace de travail</span>
+        <span className="sr-only">{copy.switchWorkspace}</span>
         <select
           value={value}
           disabled={pending}
           onChange={(event) => void changeContext(event.target.value)}
           className="min-w-0 flex-1 truncate bg-transparent text-sm font-black text-dtsc-ink outline-none disabled:opacity-70 lg:text-xs"
-          aria-label="Changer d’espace de travail"
+          aria-label={copy.switchWorkspace}
           aria-describedby={error ? "organization-context-error" : undefined}
         >
-          <option value="">Mon espace personnel</option>
+          <option value="">{copy.personalWorkspace}</option>
           {organizations.map((organization) => (
             <option key={organization.id} value={organization.id}>
               {organization.label}

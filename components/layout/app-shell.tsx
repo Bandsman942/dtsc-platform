@@ -6,31 +6,33 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { SignOutButton } from "@/components/sign-out-button";
 import { SessionTimeoutGuard } from "@/components/auth/session-timeout-guard";
 import { DtscLogo } from "@/components/brand/dtsc-logo";
+import { MobileGroupSwipeNavigation } from "@/components/dtsc/mobile-group-swipe-navigation";
+import { MobileBottomNavigation, MobilePwaHeader } from "@/components/dtsc/mobile-shell";
+import { LocaleProvider } from "@/components/i18n/locale-provider";
 import { DtscFooter } from "@/components/layout/dtsc-footer";
 import { NavLinks } from "@/components/layout/nav-links";
+import { OrganizationContextSwitcher } from "@/components/layout/organization-context-switcher";
+import { PrivateMobileChromeController } from "@/components/layout/private-mobile-chrome-controller";
+import { ProductNavigation } from "@/components/layout/product-navigation";
 import { AppResumeSync } from "@/components/pwa/app-resume-sync";
 import { PWAInstallPrompt } from "@/components/pwa/pwa-install-prompt";
 import { PwaNotificationBridge } from "@/components/pwa/pwa-notification-bridge";
 import { GlobalCallToast } from "@/components/calls/global-call-toast";
-import { MobileBottomNavigation, MobilePwaHeader } from "@/components/dtsc/mobile-shell";
-import { LocaleProvider } from "@/components/i18n/locale-provider";
-import { OrganizationContextSwitcher } from "@/components/layout/organization-context-switcher";
-import { PrivateMobileChromeController } from "@/components/layout/private-mobile-chrome-controller";
-import { ProductNavigation } from "@/components/layout/product-navigation";
 import { PromotionalBannerHost } from "@/components/promotions/promotional-banner-host";
 import { getSession } from "@/lib/auth";
 import { getUnreadCollaborationMessageCount } from "@/lib/collaboration";
 import { getCurrentHostType, getDashboardUrl, getProductBranding } from "@/lib/domains";
 import { dtsc } from "@/lib/dtsc";
-import { initials } from "@/lib/format";
-import { formatEnumLabel } from "@/lib/labels";
-import { isDtscInternalSession } from "@/lib/organizations";
 import { getPendingEnterpriseInvitationCount } from "@/lib/enterprise-invitations";
 import { getEnterpriseActivityBlocks } from "@/lib/enterprise/enterprise-activity-blocks-loader";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { getEnterpriseNavigationModules } from "@/lib/enterprise/enterprise-navigation";
-import { getVisibleNotificationWhereForSession } from "@/lib/notification-access";
+import { getExperienceCopy } from "@/lib/experience-i18n";
+import { initials } from "@/lib/format";
+import { formatEnumLabelForLocale } from "@/lib/labels-i18n";
 import { COMPANY_RELATIONSHIP_USER_ACTION_STATUSES } from "@/lib/navigation/company-relationships";
+import { getVisibleNotificationWhereForSession } from "@/lib/notification-access";
+import { isDtscInternalSession } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { getVisiblePromotionalBannersForUser } from "@/lib/promotional-banners";
 
@@ -53,10 +55,11 @@ export async function AppShell({
   const session = await getSession();
   const requestHeaders = await headers();
   const currentHostType = getCurrentHostType(requestHeaders.get("host"));
-  const productBranding = getProductBranding(currentHostType);
+  const productBranding = getProductBranding(currentHostType, user.locale);
   const dtscInternalContext = isDtscInternalSession(session);
   const activeOrganizationId = session?.activeOrganizationId || null;
   const showCollaborationModule = Boolean(session);
+  const copy = getExperienceCopy(user.locale);
   const notificationWhere = session
     ? await getVisibleNotificationWhereForSession(session)
     : { userId: user.id, organizationId: null };
@@ -132,7 +135,7 @@ export async function AppShell({
   const enterpriseContext =
     session?.activeContext === "ORGANIZATION" && activeOrganizationId
       ? {
-          organizationName: session.activeOrganizationName || "Entreprise",
+          organizationName: session.activeOrganizationName || copy.dashboard.company,
           showAdmin: enterpriseAdminDecision?.allowed === true,
           showActivities: enterpriseActivityBlocks.length > 0,
           modules: enterpriseModules,
@@ -154,13 +157,14 @@ export async function AppShell({
         <MobilePwaHeader
           user={user}
           unreadNotifications={unreadNotifications}
-          unreadCollaboratorMessages={unreadCollaboratorMessages}
-          pendingEnterpriseInvitations={pendingEnterpriseInvitations}
-          pendingCompanyRelationships={pendingCompanyRelationships}
           currentOrganizationId={activeOrganizationId}
           organizationOptions={organizationOptions}
-          showInternalModules={dtscInternalContext}
           productBranding={productBranding}
+        />
+        <MobileGroupSwipeNavigation
+          role={user.role}
+          showInternalModules={dtscInternalContext}
+          showEmployeeActivities={showEmployeeActivities}
         />
         <aside className="fixed inset-y-0 left-0 hidden w-72 flex-col overflow-hidden border-r border-dtsc-border bg-dtsc-surface px-5 py-6 shadow-[0_18px_60px_rgba(0,23,54,0.08)] lg:flex">
           <DtscLogo href={getDashboardUrl()} />
@@ -171,11 +175,11 @@ export async function AppShell({
 
           <Link
             href="/chat"
-            title="Démarrer une nouvelle conversation avec l'assistant DTSC."
-            className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl bg-[#001736] px-4 py-3 text-sm font-semibold text-white shadow-[0_4px_20px_rgba(0,43,91,0.12)] transition hover:-translate-y-0.5 hover:bg-[#002b5b]"
+            title={copy.dashboard.newChat}
+            className="mt-8 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#001736] px-4 py-3 text-sm font-semibold text-white shadow-[0_4px_20px_rgba(0,43,91,0.12)] transition-all duration-150 hover:-translate-y-0.5 hover:bg-[#002b5b] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 active:translate-y-px"
           >
             <Sparkles className="h-4 w-4 text-cyan-300" />
-            Nouveau chat
+            {copy.dashboard.newChat}
           </Link>
 
           <nav className="mt-10 min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
@@ -210,7 +214,7 @@ export async function AppShell({
                 <ThemeToggle />
                 <div className="hidden text-right sm:block">
                   <p className="text-sm font-semibold text-dtsc-ink">{user.name}</p>
-                  <p className="text-xs font-medium text-dtsc-muted">{formatEnumLabel(user.role)}</p>
+                  <p className="text-xs font-medium text-dtsc-muted">{formatEnumLabelForLocale(user.role, user.locale)}</p>
                 </div>
                 <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-dtsc-soft text-sm font-bold text-dtsc-blue">
                   {user.avatarUrl ? (
@@ -226,7 +230,6 @@ export async function AppShell({
           <main className="dtsc-private-main min-w-0 px-4 pb-36 pt-5 sm:px-6 lg:px-8 lg:pb-6 lg:pt-6">{children}</main>
           <MobileBottomNavigation
             user={user}
-            unreadNotifications={unreadNotifications}
             unreadCollaboratorMessages={unreadCollaboratorMessages}
             pendingEnterpriseInvitations={pendingEnterpriseInvitations}
             pendingCompanyRelationships={pendingCompanyRelationships}

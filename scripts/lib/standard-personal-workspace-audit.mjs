@@ -39,6 +39,8 @@ export function runStandardPersonalWorkspaceAudit(mode = "all") {
   if (run("dashboard")) {
     const service = requireFile(errors, "lib/account/personal-workspace.ts");
     const page = requireFile(errors, "app/dashboard/page.tsx");
+    const frCopy = requireFile(errors, "locales/experience.fr.json");
+    const enCopy = requireFile(errors, "locales/experience.en.json");
     expectTokens(errors, "Résumé Dashboard", service, [
       "getPersonalWorkspaceSummary",
       "getVisibleNotificationWhereForSession",
@@ -48,12 +50,29 @@ export function runStandardPersonalWorkspaceAudit(mode = "all") {
       "recentActivity",
       "take: 20",
     ]);
-    expectTokens(errors, "Dashboard", page, [
-      "Contexte actuel",
-      "Actions attendues",
-      "Abonnement et consommation",
-      "Organisations et relations",
-      "Guide du Dashboard",
+    expectTokens(errors, "Dashboard i18n", page, [
+      "getExperienceCopy",
+      "copy.currentContext",
+      "copy.expectedActions",
+      "copy.subscriptionUsage",
+      "copy.organizationsAndRelationships",
+      "copy.guide",
+      "getIntlLocale",
+      "formatEnumLabelForLocale",
+    ]);
+    expectTokens(errors, "Dashboard FR", frCopy, [
+      '"currentContext": "Contexte actuel"',
+      '"expectedActions": "Actions attendues"',
+      '"subscriptionUsage": "Abonnement et consommation"',
+      '"organizationsAndRelationships": "Organisations et relations"',
+      '"guide": "Guide du tableau de bord"',
+    ]);
+    expectTokens(errors, "Dashboard EN", enCopy, [
+      '"currentContext": "Current context"',
+      '"expectedActions": "Pending actions"',
+      '"subscriptionUsage": "Subscription and usage"',
+      '"organizationsAndRelationships": "Organizations and relationships"',
+      '"guide": "Dashboard guide"',
     ]);
     if (/Math\.random|fake|placeholder KPI/i.test(service)) errors.push("Dashboard: source fictive détectée");
   }
@@ -64,6 +83,7 @@ export function runStandardPersonalWorkspaceAudit(mode = "all") {
     const authForm = requireFile(errors, "components/auth/auth-form.tsx");
     const switcher = requireFile(errors, "components/layout/organization-context-switcher.tsx");
     const mobileShell = requireFile(errors, "components/dtsc/mobile-shell.tsx");
+    const mobileCopyFr = requireFile(errors, "locales/experience.fr.json");
     expectTokens(errors, "Changement d’espace", route, [
       "isSameOriginRequest",
       "rateLimit",
@@ -88,16 +108,31 @@ export function runStandardPersonalWorkspaceAudit(mode = "all") {
       "Choisissez votre espace",
       "Mon espace personnel",
     ]);
-    expectTokens(errors, "Sélecteur d’espace", switcher, [
-      "Mon espace personnel",
-      "Changer d’espace de travail",
+    expectTokens(errors, "Sélecteur d’espace localisé", switcher, [
+      "useAppLocale",
+      "getExperienceCopy",
+      "copy.personalWorkspace",
+      "copy.switchWorkspace",
       "/api/account/context",
     ]);
-    const groupsPosition = mobileShell.indexOf("{visibleGroups.map((group) => {");
-    const switcherPosition = mobileShell.indexOf("{organizationOptions.length > 0 ? <OrganizationContextSwitcher");
-    const signOutPosition = mobileShell.indexOf('<button type="button" onClick={() => void signOut()}');
-    if (!(groupsPosition >= 0 && switcherPosition > groupsPosition && signOutPosition > switcherPosition)) {
-      errors.push("Navigation mobile: le sélecteur d’espace doit rester après les groupes DTSC et avant Déconnexion");
+    expectTokens(errors, "Contrat espace FR", mobileCopyFr, [
+      '"personalWorkspace": "Mon espace personnel"',
+      '"switchWorkspace": "Changer d’espace de travail"',
+    ]);
+
+    const systemRailPosition = mobileShell.indexOf("data-mobile-system-rail");
+    const switcherPosition = mobileShell.indexOf("<OrganizationContextSwitcher");
+    const signOutPosition = mobileShell.indexOf('onClick={() => void signOut()}');
+    const bottomNavPosition = mobileShell.indexOf("data-mobile-bottom-nav");
+    const groupsPosition = mobileShell.indexOf("{groups.map((group) => {");
+    if (!(systemRailPosition >= 0 && switcherPosition > systemRailPosition && signOutPosition > switcherPosition)) {
+      errors.push("Navigation mobile: le rail système doit conserver sélecteur d’espace → Déconnexion");
+    }
+    if (!(bottomNavPosition >= 0 && groupsPosition > bottomNavPosition)) {
+      errors.push("Navigation mobile: les grands groupes doivent rester dans la barre inférieure primaire");
+    }
+    if (mobileShell.includes("visibleGroups.map") || mobileShell.includes("QuickChip")) {
+      errors.push("Navigation mobile: la barre supérieure ne doit pas dupliquer les grands groupes");
     }
   }
 
@@ -177,7 +212,17 @@ export function runStandardPersonalWorkspaceAudit(mode = "all") {
   if (run("notification-preferences")) {
     const settings = requireFile(errors, "app/settings/page.tsx");
     const appShell = requireFile(errors, "components/layout/app-shell.tsx");
-    expectTokens(errors, "Préférences notification", settings, ["SessionAndPushSettings", "Préférences du compte", "Guide des Paramètres"]);
+    const frCopy = requireFile(errors, "locales/experience.fr.json");
+    expectTokens(errors, "Préférences notification", settings, [
+      "SessionAndPushSettings",
+      "getExperienceCopy",
+      "copy.accountPreferences",
+      "copy.guide",
+    ]);
+    expectTokens(errors, "Préférences notification FR", frCopy, [
+      '"accountPreferences": "Préférences du compte"',
+      '"guide": "Guide des paramètres"',
+    ]);
     expectTokens(errors, "Pont PWA", appShell, ["PwaNotificationBridge", "AppResumeSync", "pushNotificationsEnabled"]);
     requireFile(errors, "docs/STANDARD_NOTIFICATION_PREFERENCE_MODEL.md");
   }
@@ -201,7 +246,15 @@ export function runStandardPersonalWorkspaceAudit(mode = "all") {
   if (run("sessions")) {
     const settings = requireFile(errors, "app/settings/page.tsx");
     const session = requireFile(errors, "lib/session.ts");
-    expectTokens(errors, "Session actuelle", settings, ["Session actuelle", "authTime", "absoluteExp", "Aucune gestion multi-appareils fictive"]);
+    const frCopy = requireFile(errors, "locales/experience.fr.json");
+    expectTokens(errors, "Session actuelle", settings, [
+      "copy.currentSession",
+      "authTime",
+      "absoluteExp",
+      "Aucune gestion multi-appareils fictive",
+      "getIntlLocale",
+    ]);
+    expectTokens(errors, "Session actuelle FR", frCopy, ['"currentSession": "Session actuelle"']);
     expectTokens(errors, "Session signée", session, ["createSessionToken", "verifySessionToken", "absoluteExp", "constantTimeEqual"]);
     requireFile(errors, "docs/STANDARD_SESSION_SECURITY_MODEL.md");
   }
