@@ -14,13 +14,15 @@ Fermer les warnings applicatifs révélés par le build Production du commit `6f
 
 ## Contrat Prisma
 
-`prisma.config.ts` devient la source de configuration CLI Prisma. Le schéma reste `prisma/schema.prisma`, les migrations restent dans `prisma/migrations`, et `DATABASE_URL` continue d'être fourni par l'environnement d'exécution. Aucune migration de données ni de schéma n'est introduite par cette issue.
+`prisma.config.ts` devient la source de configuration CLI Prisma. DTSC utilise un schéma Prisma multi-fichiers : la source CLI reste donc le répertoire `prisma`, et non le seul fichier `prisma/schema.prisma`. Les migrations restent dans `prisma/migrations`, et `DATABASE_URL` continue d'être fourni par l'environnement d'exécution. Aucune migration de données ni de schéma n'est introduite par cette issue.
+
+Le premier essai de migration vers `prisma.config.ts` avait ciblé uniquement `prisma/schema.prisma` et a été rejeté par la CI, car les modèles répartis dans les autres fichiers n'étaient alors plus chargés. La configuration corrigée protège explicitement le layout multi-fichiers afin qu'un futur refactor ne reproduise pas cette régression.
 
 ## Exceptions image natives
 
-Une exception `@next/next/no-img-element` n'est autorisée que lorsqu'elle est locale, commentée et techniquement nécessaire. Le viewer plein écran des annonces peut conserver une image native car il réutilise le `currentSrc` arbitraire d'un contenu riche et applique un zoom libre. Une prévisualisation locale `blob:` peut également conserver une image native lorsqu'elle précède l'upload et n'est pas une ressource optimisable par le serveur Next.
+Une exception `@next/next/no-img-element` n'est autorisée que lorsqu'elle est locale, commentée et techniquement nécessaire. Le viewer plein écran des annonces peut conserver une image native car il réutilise le `currentSrc` arbitraire d'un contenu riche et applique un zoom libre.
 
-Les avatars, logos et images distantes stables touchés par cette itération doivent utiliser `next/image` avec dimensions explicites.
+Les avatars, logos et images distantes stables touchés par cette itération doivent utiliser `next/image` avec dimensions explicites. Une prévisualisation locale `blob:` peut également être rendue par `next/image` en mode `unoptimized` lorsqu'on veut conserver un composant unique entre l'aperçu local et l'avatar distant.
 
 ## Validation attendue
 
@@ -43,4 +45,4 @@ Les preuves restent `NOT_EXECUTED` tant que les commandes ou jobs correspondants
 
 ## Rollback
 
-Revert de la PR #255. Aucune restauration de données n'est nécessaire car cette itération ne modifie ni schéma ni contenu de base de données.
+Revert de la PR #256. Aucune restauration de données n'est nécessaire car cette itération ne modifie ni schéma ni contenu de base de données.
