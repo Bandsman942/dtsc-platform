@@ -1,4 +1,5 @@
 import "./qa-experience-debt-closure.mjs";
+import "./qa-smooth-mobile-group-swipe.mjs";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -113,6 +114,7 @@ includesAll("docs/RESPONSIVE_UI_CONTRACT.md", [
   "data-dtsc-responsive-root",
   "data-responsive-actions",
   "qa:responsive-ui",
+  "Swipe de groupe fluide",
   "320 px",
   "1024 px",
 ]);
@@ -121,10 +123,11 @@ const packageJson = read("package.json");
 ok(packageJson.includes("qa:responsive-ui"), "package.json must expose qa:responsive-ui.");
 ok(packageJson.includes("qa-responsive-ui-contract-checks.mjs"), "Responsive contract QA must run inside qa:regression.");
 ok(read("scripts/qa-responsive-ui-contract-checks.mjs").includes('import "./qa-experience-debt-closure.mjs"'), "Experience debt closure QA must run through the canonical responsive regression gate.");
+ok(read("scripts/qa-responsive-ui-contract-checks.mjs").includes('import "./qa-smooth-mobile-group-swipe.mjs"'), "Fluid mobile group swipe QA must run through the canonical responsive regression gate.");
 
 if (failures.length) {
   console.error(`Responsive UI contract QA failed:\n- ${failures.join("\n- ")}`);
   process.exit(1);
 }
 
-console.log("Responsive UI contract QA passed: global root, shared workspace primitives, resilient buttons, keyboard-safe toolbox editor, long-content wrapping, deduplicated mobile navigation, scoped AGENTS rules, documentation and CI guards are present.");
+console.log("Responsive UI contract QA passed: global root, shared workspace primitives, resilient buttons, keyboard-safe toolbox editor, long-content wrapping, deduplicated mobile navigation, fluid group swipe, scoped AGENTS rules, documentation and CI guards are present.");
