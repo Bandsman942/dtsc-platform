@@ -132,9 +132,9 @@ export function EnterpriseExchangeRatesWorkspace({ organizationId, organizationN
     } finally {
       setLoading(false);
     }
-  }, [organizationId, refreshKey, t.loadError]);
+  }, [organizationId, t.loadError]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load(); }, [load, refreshKey]);
 
   const activeRates = useMemo(() => payload?.rates.filter((item) => item.status === "ACTIVE") || [], [payload]);
 

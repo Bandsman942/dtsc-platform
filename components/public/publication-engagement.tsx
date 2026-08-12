@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import type { UserRole } from "@prisma/client";
@@ -178,7 +179,7 @@ export function PublicationEngagement({
           <div className="flex items-start gap-3">
             <div className="flex gap-3">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-dtsc-soft text-xs font-black text-dtsc-blue">
-                {comment.user.avatarUrl ? <img src={comment.user.avatarUrl} alt="" className="h-full w-full object-cover" /> : comment.user.name.slice(0, 2).toUpperCase()}
+                {comment.user.avatarUrl ? <Image src={comment.user.avatarUrl} alt="" width={40} height={40} unoptimized className="h-full w-full object-cover" /> : comment.user.name.slice(0, 2).toUpperCase()}
               </span>
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.12em] text-dtsc-blue">{comment.user.name} · {formatEnumLabel(comment.user.role)}</p>

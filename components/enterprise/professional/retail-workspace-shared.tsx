@@ -278,11 +278,11 @@ export function useRetailOperationalWorkspace({
     } finally {
       setLoading(false);
     }
-  }, [locale, moduleCode, organizationId, rangeQuery, refreshKey]);
+  }, [locale, moduleCode, organizationId, rangeQuery]);
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, refreshKey]);
 
   function stableKey(action: string) {
     if (!mutationKeys.current[action]) mutationKeys.current[action] = crypto.randomUUID();

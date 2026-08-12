@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Building2, CheckCircle2, ExternalLink, Loader2, XCircle } from "lucide-react";
@@ -99,7 +100,7 @@ export function EnterpriseInvitationsClient({ invitations }: { invitations: Ente
             <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex min-w-0 gap-4">
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-dtsc-soft text-cyan-600">
-                  {invitation.logoUrl ? <img src={invitation.logoUrl} alt="" className="h-full w-full object-cover" /> : <Building2 className="h-5 w-5" />}
+                  {invitation.logoUrl ? <Image src={invitation.logoUrl} alt="" width={48} height={48} unoptimized className="h-full w-full object-cover" /> : <Building2 className="h-5 w-5" />}
                 </div>
                 <div className="min-w-0">
                   <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">Invitation entreprise</p>

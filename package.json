@@ -5,9 +5,6 @@
   "engines": {
     "node": "22.x"
   },
-  "prisma": {
-    "schema": "./prisma"
-  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
