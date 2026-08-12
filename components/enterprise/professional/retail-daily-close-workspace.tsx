@@ -167,11 +167,11 @@ export function RetailDailyCloseWorkspace({
     } finally {
       setLoading(false);
     }
-  }, [locale, organizationId, refreshKey, statusFilter]);
+  }, [locale, organizationId, statusFilter]);
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, refreshKey]);
 
   function stableKey(action: string) {
     if (!mutationKeys.current[action]) mutationKeys.current[action] = crypto.randomUUID();
