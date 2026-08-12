@@ -154,6 +154,22 @@ Le composant partagé `MobileGroupSwipeNavigation` applique les règles suivante
 - aucune utilisation de `preventDefault()` pour prendre le contrôle du geste système ;
 - destination calculée uniquement parmi les groupes réellement visibles pour l'utilisateur.
 
+### Swipe de groupe fluide
+
+Le changement de groupe ne doit pas être un simple `router.push` brutal après le relâchement. Le mouvement doit rester perceptible et cohérent avec le doigt :
+
+- le contenu courant suit le doigt horizontalement dès que l'intention horizontale est établie ;
+- le déplacement vertical natif reste prioritaire tant que le geste est ambigu ;
+- une destination valide est préchargée pendant le drag afin de réduire la rupture visuelle ;
+- si le seuil ou la vélocité de validation n'est pas atteint, le contenu revient à sa position avec un snap-back court et souple ;
+- si le geste est validé, le groupe courant poursuit sa sortie dans le sens du swipe ;
+- le groupe réellement navigué entre ensuite depuis le côté opposé et remplace le précédent ;
+- aux extrémités de la liste, le drag applique une résistance visuelle au lieu de simuler une destination inexistante ;
+- les animations restent courtes, pilotées par transformation/opacity et ne doivent pas provoquer de reflow du layout ;
+- `prefers-reduced-motion` désactive la transition décorative et conserve uniquement la navigation fonctionnelle.
+
+Le shell fixe, la barre inférieure et les contrôles système restent stables pendant la transition : seule la surface principale de contenu se déplace, comme dans une navigation mobile native.
+
 ### Gestes qui ne doivent jamais être interceptés
 
 Un swipe démarré sur ou dans l'un des éléments suivants reste à son propriétaire :
@@ -209,7 +225,7 @@ Le script suivant vérifie que le contrat global, les primitives, les règles sc
 pnpm qa:responsive-ui
 ```
 
-La gate responsive exécute également `scripts/qa-experience-debt-closure.mjs`, qui protège les invariants i18n, Button, shell mobile, swipe et gouvernance anti-dette de l'itération #251.
+La gate responsive exécute également `scripts/qa-experience-debt-closure.mjs`, qui protège les invariants i18n, Button, shell mobile, swipe et gouvernance anti-dette de l'itération #251, ainsi que `scripts/qa-smooth-mobile-group-swipe.mjs` pour le contrat gestuel fluide de #257.
 
 Elle est incluse dans `pnpm qa:regression`.
 
@@ -231,6 +247,8 @@ Une page est conforme lorsque :
 8. la langue active ne mélange pas des libellés FR/EN dans les surfaces couvertes ;
 9. la navigation primaire mobile n'est pas dupliquée en haut et en bas ;
 10. un swipe global n'intercepte jamais un contrôle ou un rail horizontal ;
-11. les badges ne dupliquent pas le même signal sans raison ;
-12. `pnpm qa:responsive-ui` et les Quality Gates passent ;
-13. les E2E visuels requis par le changement ont une preuve explicite.
+11. un swipe validé montre une sortie/entrée directionnelle souple, et un swipe annulé revient naturellement à sa position ;
+12. `prefers-reduced-motion` conserve la navigation sans imposer l'animation ;
+13. les badges ne dupliquent pas le même signal sans raison ;
+14. `pnpm qa:responsive-ui` et les Quality Gates passent ;
+15. les E2E visuels requis par le changement ont une preuve explicite.
