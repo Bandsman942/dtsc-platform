@@ -5,6 +5,7 @@ import { useEffect, useId, useState, type ReactNode } from "react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
 import { ModuleRefreshButton } from "@/components/workspace/module-refresh-button";
 import { getExperienceCopy } from "@/lib/experience-i18n";
+import { translate } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 export function ModuleWorkspace({ children, className }: { children: ReactNode; className?: string }) {
@@ -111,7 +112,7 @@ export function ModuleToolbar({
   controls,
   activeFilters,
   summary,
-  ariaLabel = "Contrôles du module",
+  ariaLabel,
   className,
 }: {
   search?: ReactNode;
@@ -121,6 +122,9 @@ export function ModuleToolbar({
   ariaLabel?: string;
   className?: string;
 }) {
+  const locale = useAppLocale();
+  const resolvedAriaLabel = ariaLabel || translate(locale, "common.actions");
+
   return (
     <section
       data-workspace-toolbar
@@ -128,7 +132,7 @@ export function ModuleToolbar({
         "w-full min-w-0 max-w-full overflow-hidden rounded-2xl border border-dtsc-border bg-dtsc-page/70 p-3.5 sm:p-4",
         className,
       )}
-      aria-label={ariaLabel}
+      aria-label={resolvedAriaLabel}
     >
       <div className="grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-[minmax(16rem,1fr)_minmax(0,auto)] lg:items-end">
         {search ? <div className="min-w-0 max-w-full">{search}</div> : null}
