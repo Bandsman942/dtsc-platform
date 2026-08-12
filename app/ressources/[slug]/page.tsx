@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
@@ -70,7 +71,7 @@ export default async function PublicationPage({ params, searchParams }: Params) 
               <div className="flex min-w-0 flex-wrap items-center gap-3">
                 {publication.author?.publicProfileConsent ? (
                   <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-white/15 text-sm font-black text-white">
-                    {publication.author.avatarUrl ? <img src={publication.author.avatarUrl} alt="" className="h-full w-full object-cover" /> : publication.author.name.slice(0, 2).toUpperCase()}
+                    {publication.author.avatarUrl ? <Image src={publication.author.avatarUrl} alt="" width={40} height={40} unoptimized className="h-full w-full object-cover" /> : publication.author.name.slice(0, 2).toUpperCase()}
                   </span>
                 ) : null}
                 <span className="min-w-0 break-words">
