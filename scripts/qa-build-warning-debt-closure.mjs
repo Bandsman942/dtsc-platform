@@ -32,13 +32,17 @@ for (const file of [
   "app/ressources/page.tsx",
   "components/enterprise/enterprise-invitations-client.tsx",
   "components/layout/app-shell.tsx",
-  "components/profile/profile-editor.tsx",
   "components/public/publication-engagement.tsx",
 ]) {
   const source = read(file);
   check(source.includes('from "next/image"'), `${file}: stable avatar/logo must use next/image.`);
   check(source.includes("<Image"), `${file}: expected a Next Image render.`);
 }
+
+const profile = read("components/profile/profile-editor.tsx");
+check(profile.includes('import NextImage from "next/image"'), "Profile preview must alias next/image so the browser Image constructor remains available.");
+check(profile.includes("const image = new Image()"), "Profile optimization must keep the browser Image constructor.");
+check(profile.includes("<NextImage"), "Profile avatar preview must use the aliased Next Image component.");
 
 const viewer = read("components/announcements/announcement-media-enhancer.tsx");
 check(viewer.includes("Native image is intentional"), "Native announcement zoom image must be justified locally.");
