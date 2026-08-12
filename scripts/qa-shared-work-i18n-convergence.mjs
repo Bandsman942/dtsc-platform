@@ -31,6 +31,12 @@ const immersive = read("components/collaborators/collaborators-immersive-convers
 if (immersive.includes("props.userPreferences.locale === \"en\"")) fail("collaborator immersive shell still contains a local FR/EN ternary");
 if (!immersive.includes("translateSharedWork(props.userPreferences.locale, \"collaboration.addContact\")")) fail("collaborator floating action must use shared-work i18n");
 
+const addContactPage = read("app/collaborators/contacts/new/page.tsx");
+for (const forbidden of ["const english =", "user.locale === \"en\""]) {
+  if (addContactPage.includes(forbidden)) fail(`add contact page still contains local i18n pattern: ${forbidden}`);
+}
+if (!addContactPage.includes("translateSharedWork")) fail("add contact page must use shared-work i18n");
+
 const contactDiscovery = read("components/collaborators/contact-discovery-workspace.tsx");
 for (const forbidden of ["const english =", "locale === \"en\""]) {
   if (contactDiscovery.includes(forbidden)) fail(`contact discovery still contains local i18n pattern: ${forbidden}`);
@@ -42,6 +48,12 @@ for (const forbidden of ["const english =", "preferences.locale === \"en\""]) {
   if (meetingContent.includes(forbidden)) fail(`meeting message content still contains local i18n pattern: ${forbidden}`);
 }
 if (!meetingContent.includes("translateSharedWork")) fail("meeting message content must use shared-work i18n");
+
+const presenceJournal = read("components/collaborators/group-presence-journal-dialog.tsx");
+for (const forbidden of ["const english =", "locale === \"en\"", "english ?"] ) {
+  if (presenceJournal.includes(forbidden)) fail(`presence journal still contains local i18n pattern: ${forbidden}`);
+}
+if (!presenceJournal.includes("translateSharedWork")) fail("presence journal must use shared-work i18n");
 
 const calendar = read("components/calendar/unified-work-calendar-panel.tsx");
 for (const forbidden of ["const en =", "locale === \"en\"", "\"en-GB\"", "\"fr-FR\"", "const SOURCE_LABELS"]) {
