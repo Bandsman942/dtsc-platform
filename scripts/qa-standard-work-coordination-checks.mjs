@@ -39,7 +39,14 @@ function calendarChecks() {
     "deduplicated.set(`${event.sourceType}:${event.sourceId}`, event)",
     "take: 500",
   ]);
-  requireText("components/calendar/unified-work-calendar-panel.tsx", ["overflow-x-auto", "event.deepLink", "Agenda de travail unifié"]);
+  requireText("components/calendar/unified-work-calendar-panel.tsx", [
+    "overflow-x-auto",
+    "event.deepLink",
+    'translateSharedWork(locale, "calendar.unifiedAgenda")',
+    "userLocale({ locale })",
+  ]);
+  requireText("locales/shared-work.fr.json", ['"calendar.unifiedAgenda": "Agenda de travail unifié"']);
+  requireText("locales/shared-work.en.json", ['"calendar.unifiedAgenda": "Unified work agenda"']);
   requireText("app/api/calendar/route.ts", ["OWNER_IMMUTABLE", "invitedParticipantCreate", "calendarOwnedOrAcceptedWhere", "Conflit de disponibilité détecté pour le responsable ou un participant"]);
   requireText("app/api/calendar/events/[id]/participants/respond/route.ts", ["ACCEPT", "DECLINE", "BLOCKING_CALENDAR_CONFLICT", "CALENDAR_CONFLICT_CONFIRMATION_REQUIRED"]);
   requireText("lib/calendar-participation.ts", ["responseStatus: CALENDAR_RESPONSE.ACCEPTED", "responseStatus: CALENDAR_RESPONSE.PENDING", "calendarInvitationWhere"]);
