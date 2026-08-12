@@ -35,6 +35,8 @@ Capacités principales :
 
 Les modules Retail opérationnels exigent au minimum `BUSINESS`. STARTER ne doit donc pas être vendu comme un POS complet.
 
+**Contrat comptable STARTER :** aucun workspace de comptabilité opérationnelle et aucun sélecteur SYSCOHADA n’est exposé. Les données de préparation restent conservées pour une montée de plan, sans inventer de compte, mapping ou solde.
+
 ### BUSINESS — Shop Operations
 
 Offre opérationnelle recommandée pour un Shop réel.
@@ -44,10 +46,14 @@ Socle :
 - sites et dépôts ;
 - inventaire et logistique ;
 - fournisseurs et achats ;
-- Finance, Trésorerie, comptabilité et caisse ;
+- Finance, Trésorerie, Comptabilité Shop assistée et caisse ;
 - POS ;
 - clôture journalière ;
 - reporting par devise et consolidation FX.
+
+**Comptabilité Shop assistée** signifie que les flux Retail peuvent utiliser la configuration Finance canonique, les comptes financiers réels et les mappings sémantiques nécessaires au posting automatisé. Le plan BUSINESS n’accorde pas l’accès au workspace complet `FINANCE_ACCOUNTING` : il n’expose donc pas l’administration avancée du plan comptable, des journaux, des écritures manuelles, des contrepassations et des fonctions comptables Enterprise.
+
+Les flux Shop ne connaissent jamais les numéros réglementaires en dur. Ils consomment des clés métier, notamment `SALES_REVENUE`, `TAX_PAYABLE`, `COST_OF_SALES` et `INVENTORY`, résolues vers les comptes du template comptable canonique appliqué au tenant.
 
 Extensions activables selon le commerce :
 
@@ -59,6 +65,10 @@ Un commerce standard n’a pas à activer ces extensions pour utiliser Shop.
 ### ENTERPRISE — Shop Scale
 
 Reprend le cœur opérationnel BUSINESS et ajoute la capacité de montée en échelle, la gouvernance et les autres capacités Enterprise éligibles.
+
+**Contrat comptable ENTERPRISE :** le module complet `FINANCE_ACCOUNTING` devient éligible, avec l’administration du plan comptable publié, les exercices, périodes, journaux, écritures et contrepassations selon les permissions. Les modules avancés associés — banque, rapprochement, taxes, clôture financière, états financiers, immobilisations et valorisation comptable du stock — restent soumis à leurs propres entitlements et permissions Enterprise.
+
+Le template canonique actuel pour les tenants OHADA est `OHADA_SYSCOHADA`. Retail continue néanmoins à utiliser des clés sémantiques afin que le secteur reste indépendant des numéros réglementaires et des futures migrations de version.
 
 Les évolutions offline, multi-store avancées et omnicanales font partie de Shop 2.0 itération 4 et ne doivent pas être promises comme terminées avant leur certification.
 
@@ -196,7 +206,13 @@ Avant la première vente, les articles suivis en stock doivent disposer de couch
 
 ---
 
-## 9. Étape 7 — Configurer Finance et la comptabilité POS
+## 9. Étape 7 — Configurer Finance et la Comptabilité Shop assistée
+
+Cette étape s’applique à BUSINESS et ENTERPRISE. STARTER n’expose pas la configuration comptable opérationnelle.
+
+Pour BUSINESS, la configuration s’effectue via les capacités Finance disponibles dès `FINANCE_OVERVIEW`, Trésorerie et Caisse. Elle prépare les mappings sémantiques nécessaires aux postings automatisés sans ouvrir le workspace complet `FINANCE_ACCOUNTING`.
+
+Pour ENTERPRISE, `FINANCE_ACCOUNTING` permet en plus l’administration comptable complète selon les permissions.
 
 ### 9.1 Devise fonctionnelle
 
@@ -208,7 +224,9 @@ Une fois des écritures comptables postées, le moteur Finance protège le chang
 
 Si l’entreprise souhaite consolider ses rapports dans une autre devise, renseigner `presentationCurrencyCode`.
 
-### 9.3 Plan comptable et mappings obligatoires
+### 9.3 Template comptable et mappings obligatoires
+
+Pour un tenant OHADA, appliquer le template canonique publié `OHADA_SYSCOHADA` via le service comptable prévu à cet effet. Ne jamais recopier des numéros de comptes dans la logique Retail.
 
 Avant la première vente, Finance doit être `READY` et les mappings suivants doivent être actifs :
 
@@ -216,6 +234,8 @@ Avant la première vente, Finance doit être `READY` et les mappings suivants do
 - `TAX_PAYABLE` ;
 - `COST_OF_SALES` ;
 - `INVENTORY`.
+
+Ces clés sémantiques sont le contrat entre Retail et Finance. Le compte réglementaire concret est résolu depuis le plan comptable réellement appliqué au tenant.
 
 Les journaux actifs suivants sont requis :
 

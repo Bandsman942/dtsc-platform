@@ -1,9 +1,4 @@
 {
-  "version": 6,
-  "overrides": [
-    {
-      "code": "FINANCE_ACCOUNTING",
-      "minimumPlan": "BUSINESS"
-    }
-  ]
+  "version": 7,
+  "overrides": []
 }

@@ -80,6 +80,11 @@ export type EnterpriseModuleDefinition = {
   qaContract?: string;
 };
 
+type EnterpriseModuleCommercialOverride = {
+  code: string;
+  minimumPlan: SaasPlanCode;
+};
+
 export const ENTERPRISE_MODULE_REGISTRY_VERSION = Math.max(
   registryData.version,
   commonDomainRegistryData.version,
@@ -96,8 +101,8 @@ const sectorOverrides = new Map(
 const finalCleanupOverrides = new Map(
   finalCleanupRegistryData.overrides.map((override) => [override.code, override]),
 );
-const commercialOverrides = new Map(
-  commercialRegistryData.overrides.map((override) => [override.code, override]),
+const commercialOverrides = new Map<string, EnterpriseModuleCommercialOverride>(
+  (commercialRegistryData.overrides as EnterpriseModuleCommercialOverride[]).map((override) => [override.code, override]),
 );
 
 function applySectorConvergenceOverride(definition: EnterpriseModuleDefinition): EnterpriseModuleDefinition {
@@ -129,7 +134,7 @@ function applyCommercialOverride(definition: EnterpriseModuleDefinition): Enterp
   if (!override) return definition;
   return {
     ...definition,
-    minimumPlan: override.minimumPlan as SaasPlanCode,
+    minimumPlan: override.minimumPlan,
   };
 }
 
