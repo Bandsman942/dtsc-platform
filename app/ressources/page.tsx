@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, BarChart3, Bot, ClipboardCheck, FileText, GraduationCap, Layers3, Megaphone, Newspaper, Network } from "lucide-react";
 import { PublicFooter, PublicHeader } from "@/components/public/public-shell";
@@ -212,7 +213,7 @@ export default async function RessourcesPage() {
                     {publication.author?.publicProfileConsent && (
                       <span className="mt-5 flex items-center gap-3 text-xs font-bold text-dtsc-muted">
                         <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-dtsc-soft text-dtsc-blue">
-                          {publication.author.avatarUrl ? <img src={publication.author.avatarUrl} alt="" className="h-full w-full object-cover" /> : publication.author.name.slice(0, 2).toUpperCase()}
+                          {publication.author.avatarUrl ? <Image src={publication.author.avatarUrl} alt="" width={32} height={32} unoptimized className="h-full w-full object-cover" /> : publication.author.name.slice(0, 2).toUpperCase()}
                         </span>
                         {publication.author.name}
                       </span>
