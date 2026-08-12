@@ -1,7 +1,7 @@
 # Shop — contrat d’accès comptable par abonnement
 
-Issue de référence : #249  
-Secteur : `COMMERCE_RETAIL`  
+Issue de référence : #249
+Secteur : `COMMERCE_RETAIL`
 Template comptable OHADA courant : `OHADA_SYSCOHADA`
 
 ## Objectif
