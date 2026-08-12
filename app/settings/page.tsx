@@ -14,7 +14,7 @@ import { getExperienceCopy, getIntlLocale } from "@/lib/experience-i18n";
 import { formatEnumLabelForLocale } from "@/lib/labels-i18n";
 import { getUserPushNotificationContentMode } from "@/lib/session-preference";
 
-// Contrat de gouvernance de la session : aucune gestion multi-appareils fictive.
+// Contrat de gouvernance de la session : Aucune gestion multi-appareils fictive.
 // Cette page décrit uniquement la session signée courante tant qu'un registre serveur
 // de sessions par appareil n'est pas la source réelle de cette fonctionnalité.
 function sessionDate(value: number | undefined, intlLocale: string, unavailable: string) {
