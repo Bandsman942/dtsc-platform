@@ -1,0 +1,28 @@
+{
+  "comments": {
+    "countSuffix": "commentaire(s)",
+    "unableToLoad": "Chargement des commentaires impossible.",
+    "added": "Commentaire ajouté.",
+    "unableToComment": "Commentaire impossible.",
+    "updated": "Commentaire actualisé.",
+    "actionUnavailable": "Action impossible.",
+    "loading": "Chargement…",
+    "older": "Commentaires précédents",
+    "actionsPrefix": "Actions du commentaire de",
+    "reply": "Répondre",
+    "copy": "Copier",
+    "edit": "Modifier",
+    "delete": "Supprimer",
+    "deleted": "Commentaire supprimé",
+    "empty": "Aucun commentaire pour le moment.",
+    "replyTo": "Réponse à",
+    "cancel": "Annuler",
+    "placeholder": "Écrire un commentaire professionnel…",
+    "send": "Envoyer",
+    "editTitle": "Modifier le commentaire",
+    "save": "Enregistrer",
+    "deleteTitle": "Supprimer le commentaire",
+    "deleteDescription": "Le contenu sera masqué sans casser les réponses.",
+    "confirmDeletion": "Confirmer la suppression"
+  }
+}
