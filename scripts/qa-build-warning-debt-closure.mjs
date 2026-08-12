@@ -33,6 +33,7 @@ for (const file of [
   "components/enterprise/enterprise-invitations-client.tsx",
   "components/layout/app-shell.tsx",
   "components/profile/profile-editor.tsx",
+  "components/public/publication-engagement.tsx",
 ]) {
   const source = read(file);
   check(source.includes('from "next/image"'), `${file}: stable avatar/logo must use next/image.`);
