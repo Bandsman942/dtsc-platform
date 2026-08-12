@@ -7,19 +7,32 @@ const fail = (message) => {
   process.exitCode = 1;
 };
 
-const fr = json("locales/shared-work.fr.json");
-const en = json("locales/shared-work.en.json");
-const frKeys = Object.keys(fr).sort();
-const enKeys = Object.keys(en).sort();
-if (JSON.stringify(frKeys) !== JSON.stringify(enKeys)) fail("FR/EN shared-work dictionaries must expose identical keys.");
-for (const key of frKeys) {
-  if (!String(fr[key] || "").trim()) fail(`missing FR value for ${key}`);
-  if (!String(en[key] || "").trim()) fail(`missing EN value for ${key}`);
+function assertDictionaryPair(frPath, enPath, label) {
+  const fr = json(frPath);
+  const en = json(enPath);
+  const frKeys = Object.keys(fr).sort();
+  const enKeys = Object.keys(en).sort();
+  if (JSON.stringify(frKeys) !== JSON.stringify(enKeys)) fail(`${label} FR/EN dictionaries must expose identical keys.`);
+  for (const key of frKeys) {
+    if (!String(fr[key] || "").trim()) fail(`missing FR value for ${label}:${key}`);
+    if (!String(en[key] || "").trim()) fail(`missing EN value for ${label}:${key}`);
+  }
 }
 
+assertDictionaryPair("locales/shared-work.fr.json", "locales/shared-work.en.json", "shared-work");
+assertDictionaryPair("locales/collaboration-experience.fr.json", "locales/collaboration-experience.en.json", "collaboration-experience");
+
 const i18n = read("lib/i18n.ts");
-if (!i18n.includes("shared-work.fr.json") || !i18n.includes("shared-work.en.json")) fail("shared-work dictionaries are not registered in lib/i18n.ts");
-if (!i18n.includes("export function translateSharedWork")) fail("translateSharedWork is missing from the canonical i18n module");
+for (const required of [
+  "shared-work.fr.json",
+  "shared-work.en.json",
+  "collaboration-experience.fr.json",
+  "collaboration-experience.en.json",
+  "export function translateSharedWork",
+  "export function translateCollaborationExperience",
+]) {
+  if (!i18n.includes(required)) fail(`canonical i18n module is missing: ${required}`);
+}
 
 const comments = read("components/activities/entity-comments-thread.tsx");
 for (const forbidden of ["const english =", "locale === \"en\"", "toLocaleString(", "\"en-GB\"", "\"fr-FR\""]) {
@@ -50,10 +63,17 @@ for (const forbidden of ["const english =", "preferences.locale === \"en\""]) {
 if (!meetingContent.includes("translateSharedWork")) fail("meeting message content must use shared-work i18n");
 
 const presenceJournal = read("components/collaborators/group-presence-journal-dialog.tsx");
-for (const forbidden of ["const english =", "locale === \"en\"", "english ?"] ) {
+for (const forbidden of ["const english =", "locale === \"en\"", "english ?"]) {
   if (presenceJournal.includes(forbidden)) fail(`presence journal still contains local i18n pattern: ${forbidden}`);
 }
 if (!presenceJournal.includes("translateSharedWork")) fail("presence journal must use shared-work i18n");
+
+const collaborationAdapter = read("lib/collaboration-experience-i18n.ts");
+if (collaborationAdapter.includes("const messages =")) fail("collaboration experience must not keep a parallel local dictionary");
+if (!collaborationAdapter.includes("translateCollaborationExperience")) fail("collaboration experience adapter must delegate to lib/i18n.ts");
+
+const conversationWorkspace = read("components/collaborators/collaborators-conversation-workspace.tsx");
+if (!conversationWorkspace.includes("collaborationExperienceT")) fail("main collaborator workspace must use the canonical collaboration adapter");
 
 const calendar = read("components/calendar/unified-work-calendar-panel.tsx");
 for (const forbidden of ["const en =", "locale === \"en\"", "\"en-GB\"", "\"fr-FR\"", "const SOURCE_LABELS"]) {
