@@ -1,7 +1,7 @@
 "use client";
 
 import { Archive, Bot, Copy, Download, FolderKanban, FolderPlus, Info, Menu, Pencil, Pin, PinOff, Plus, Search, Settings2, Share2, ThumbsDown, ThumbsUp, Trash2, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Streamdown } from "streamdown";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { AssistantComposer, AssistantConversationSettingsDialog, AssistantEmptyState, AssistantMessage, type AssistantPreferenceState } from "@/components/chat/assistant-conversation-ui";
@@ -106,17 +106,17 @@ export function ChatWorkspaceV2({
     if (nextId) setActiveConversationId(nextId);
   }
 
-  async function loadConversation(id: string) {
+  const loadConversation = useCallback(async (id: string) => {
     if (!id) return setMessages([]);
     const response = await fetch(`/api/conversations/${encodeURIComponent(id)}`);
     const body = await response.json().catch(() => null);
     if (!response.ok) return toastError(en ? "Unable to load this conversation." : "Impossible de charger cette conversation.");
     setMessages(body?.conversation?.messages || []);
     if (body?.conversation?.preference) setConversations((current) => current.map((item) => item.id === id ? { ...item, preference: { ...EMPTY_PREFERENCE, ...body.conversation.preference } } : item));
-  }
+  }, [en]);
 
   useEffect(() => { void refreshConversations(); }, []);
-  useEffect(() => { void loadConversation(activeConversationId); }, [activeConversationId]);
+  useEffect(() => { void loadConversation(activeConversationId); }, [activeConversationId, loadConversation]);
   useEffect(() => {
     const container = messageScrollRef.current;
     if (!container || !followOutputRef.current) return;
