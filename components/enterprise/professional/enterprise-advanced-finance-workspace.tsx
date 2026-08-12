@@ -60,6 +60,8 @@ type Props = {
 };
 
 const EMPTY_LOOKUPS: LookupState = { charts: [], years: [], periods: [], journals: [], accounts: [], assets: [] };
+const EMPTY_SECTIONS: SectionDefinition[] = [];
+const EMPTY_ITEMS: Item[] = [];
 const DEFAULT_FORM: FormState = {
   code: "",
   nameFr: "",
@@ -260,7 +262,7 @@ function amountSummary(item: Item, activeKey: string, locale: FinanceLocale) {
 
 export function EnterpriseAdvancedFinanceWorkspace({ organizationId, organizationName, definition, locale: rawLocale, canManage }: Props) {
   const locale: FinanceLocale = rawLocale === "en" ? "en" : "fr";
-  const sections = SECTIONS[definition.code] || [];
+  const sections = SECTIONS[definition.code] || EMPTY_SECTIONS;
   const [activeKey, setActiveKey] = useState(sections[0]?.key || "overview");
   const activeSection = sections.find((section) => section.key === activeKey) || sections[0];
   const [payload, setPayload] = useState<Payload>({ items: [], pagination: { page: 1, pageSize: 25, total: 0, pageCount: 1 } });
@@ -329,7 +331,7 @@ export function EnterpriseAdvancedFinanceWorkspace({ organizationId, organizatio
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { void loadLookups(); }, [loadLookups]);
 
-  const items = payload.items || [];
+  const items = payload.items || EMPTY_ITEMS;
   const pagination = payload.pagination || { page: 1, pageSize: 25, total: items.length, pageCount: 1 };
   const metrics = useMemo(() => {
     if (payload.metrics && Object.keys(payload.metrics).length) return payload.metrics;
