@@ -6,6 +6,8 @@ import enterpriseFinanceFr from "@/locales/enterprise-finance.fr.json";
 import enterpriseFinanceEn from "@/locales/enterprise-finance.en.json";
 import sharedWorkFr from "@/locales/shared-work.fr.json";
 import sharedWorkEn from "@/locales/shared-work.en.json";
+import collaborationExperienceFr from "@/locales/collaboration-experience.fr.json";
+import collaborationExperienceEn from "@/locales/collaboration-experience.en.json";
 
 type Dictionary = typeof fr;
 type Locale = "fr" | "en";
@@ -23,10 +25,12 @@ const workspaceGeneralizationDictionaries = {
 const enterpriseProcurementDictionaries = { fr: enterpriseProcurementFr, en: enterpriseProcurementEn } as const;
 const enterpriseFinanceDictionaries = { fr: enterpriseFinanceFr, en: enterpriseFinanceEn } as const;
 const sharedWorkDictionaries = { fr: sharedWorkFr, en: sharedWorkEn } as const;
+const collaborationExperienceDictionaries = { fr: collaborationExperienceFr, en: collaborationExperienceEn } as const;
 export type WorkspaceGeneralizationKey = keyof typeof workspaceGeneralizationDictionaries.fr;
 export type EnterpriseProcurementKey = keyof typeof enterpriseProcurementDictionaries.fr;
 export type EnterpriseFinanceKey = keyof typeof enterpriseFinanceDictionaries.fr;
 export type SharedWorkKey = keyof typeof sharedWorkDictionaries.fr;
+export type CollaborationExperienceKey = keyof typeof collaborationExperienceDictionaries.fr;
 
 export function getDictionary(locale?: string | null) { return dictionaries[locale === "en" ? "en" : "fr"]; }
 export function translate(locale: string | null | undefined, key: string) { const dictionary = getDictionary(locale); const localized = key.split(".").reduce<unknown>((current, part) => current && typeof current === "object" && part in current ? (current as Record<string, unknown>)[part] : undefined, dictionary); if (typeof localized === "string") return localized; const fallback = key.split(".").reduce<unknown>((current, part) => current && typeof current === "object" && part in current ? (current as Record<string, unknown>)[part] : undefined, fr); return typeof fallback === "string" ? fallback : key; }
@@ -34,3 +38,4 @@ export function translateWorkspaceGeneralization(locale: string | null | undefin
 export function translateEnterpriseProcurement(locale: string | null | undefined, key: EnterpriseProcurementKey) { const dictionary = enterpriseProcurementDictionaries[locale === "en" ? "en" : "fr"]; return dictionary[key] || enterpriseProcurementDictionaries.fr[key]; }
 export function translateEnterpriseFinance(locale: string | null | undefined, key: EnterpriseFinanceKey) { const dictionary = enterpriseFinanceDictionaries[locale === "en" ? "en" : "fr"]; return dictionary[key] || enterpriseFinanceDictionaries.fr[key]; }
 export function translateSharedWork(locale: string | null | undefined, key: SharedWorkKey) { const dictionary = sharedWorkDictionaries[locale === "en" ? "en" : "fr"]; return dictionary[key] || sharedWorkDictionaries.fr[key]; }
+export function translateCollaborationExperience(locale: string | null | undefined, key: CollaborationExperienceKey) { const dictionary = collaborationExperienceDictionaries[locale === "en" ? "en" : "fr"]; return dictionary[key] || collaborationExperienceDictionaries.fr[key]; }
