@@ -55,7 +55,7 @@ export async function AppShell({
   const session = await getSession();
   const requestHeaders = await headers();
   const currentHostType = getCurrentHostType(requestHeaders.get("host"));
-  const productBranding = getProductBranding(currentHostType);
+  const productBranding = getProductBranding(currentHostType, user.locale);
   const dtscInternalContext = isDtscInternalSession(session);
   const activeOrganizationId = session?.activeOrganizationId || null;
   const showCollaborationModule = Boolean(session);
