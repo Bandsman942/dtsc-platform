@@ -30,21 +30,8 @@ function requireNoText(relativePath, needles) {
 
 function calendarChecks() {
   requireText("app/api/calendar/unified/route.ts", ["loadUnifiedWorkCalendar", "canUseInternalCalendarFeature", "CALENDAR_RANGE_TOO_LARGE"]);
-  requireText("lib/standard-work-coordination/calendar.ts", [
-    "sourceType: string",
-    "sourceId: string",
-    "deepLink: string",
-    "normalizeUnifiedCalendarRange",
-    "resolveLinkedCalendarSource",
-    "deduplicated.set(`${event.sourceType}:${event.sourceId}`, event)",
-    "take: 500",
-  ]);
-  requireText("components/calendar/unified-work-calendar-panel.tsx", [
-    "overflow-x-auto",
-    "event.deepLink",
-    'translateSharedWork(locale, "calendar.unifiedAgenda")',
-    "userLocale({ locale })",
-  ]);
+  requireText("lib/standard-work-coordination/calendar.ts", ["sourceType: string", "sourceId: string", "deepLink: string", "normalizeUnifiedCalendarRange", "resolveLinkedCalendarSource", "deduplicated.set(`${event.sourceType}:${event.sourceId}`, event)", "take: 500"]);
+  requireText("components/calendar/unified-work-calendar-panel.tsx", ["overflow-x-auto", "event.deepLink", 'translateSharedWork(locale, "calendar.unifiedAgenda")', "userLocale({ locale })"]);
   requireText("locales/shared-work.fr.json", ['"calendar.unifiedAgenda": "Agenda de travail unifié"']);
   requireText("locales/shared-work.en.json", ['"calendar.unifiedAgenda": "Unified work agenda"']);
   requireText("app/api/calendar/route.ts", ["OWNER_IMMUTABLE", "invitedParticipantCreate", "calendarOwnedOrAcceptedWhere", "Conflit de disponibilité détecté pour le responsable ou un participant"]);
@@ -117,7 +104,9 @@ function permissionChecks() {
   requireText("app/api/admin/individual-permissions/route.ts", ["DTSC_INDIVIDUAL_PERMISSION_GRANTED", "DTSC_INDIVIDUAL_PERMISSION_REVOKED", "reason"]);
   requireText("components/admin/dtsc-individual-permissions-panel.tsx", ["Permissions individuelles DTSC", "Motif obligatoire", "Refuser explicitement"]);
   requireText("app/api/work/submissions/[id]/submit/route.ts", ["PAST_PERIOD_PERMISSION_REQUIRED", "SUBMIT_PAST_WORK_PERIOD"]);
-  requireText("components/activities/work-prestations-panel-v2.tsx", ["Historique des prestations", "canSubmitPastPeriods", "selectedSubmission"]);
+  requireText("components/activities/work-prestations-panel-v2.tsx", ["translateActivities", "canSubmitPastPeriods", "selectedSubmission"]);
+  requireText("locales/activities.fr.json", ['"work.historyTitle": "Historique des prestations"']);
+  requireText("locales/activities.en.json", ['"work.historyTitle": "Submission history"']);
 }
 
 function slaChecks() {
@@ -127,38 +116,13 @@ function slaChecks() {
 }
 
 function guideChecks() {
-  const guides = [
-    "CALENDAR",
-    "DTSC_ACTIVITIES",
-    "ENTERPRISE_ACTIVITIES",
-    "TASKS_OPERATIONS",
-    "INTERNAL_REQUESTS",
-    "VALIDATIONS",
-    "MEETINGS",
-    "WORKFLOWS",
-    "DOCUMENTS",
-  ];
+  const guides = ["CALENDAR", "DTSC_ACTIVITIES", "ENTERPRISE_ACTIVITIES", "TASKS_OPERATIONS", "INTERNAL_REQUESTS", "VALIDATIONS", "MEETINGS", "WORKFLOWS", "DOCUMENTS"];
   for (const guide of guides) requireText(`docs/user-guides/${guide}.md`, ["# Guide utilisateur", "Guide"]);
   requireText("docs/user-guides/ADMIN_RBAC_INDIVIDUAL_PERMISSIONS.md", ["Permissions individuelles DTSC", "ALLOW", "DENY", "work.past_period.submit"]);
   requireText("lib/user-guides/iteration04-guides.ts", ["CALENDAR:", "DTSC_ACTIVITIES:", "ENTERPRISE_ACTIVITIES:", "ADMIN_RBAC:", "updatedAt: \"2026-08-04\""]);
-  requireText("components/user-guides/contextual-user-guide.tsx", [
-    "useAppLocale",
-    "translate",
-    "userGuides.common.userGuide",
-    "userGuides.common.searchLabel",
-    "userGuides.common.searchPlaceholder",
-    "userGuides.common.limitations",
-  ]);
-  requireText("locales/fr.json", [
-    '"userGuide": "Guide utilisateur"',
-    '"searchLabel": "Rechercher dans le guide"',
-    '"limitations": "Fonctionnalités conditionnelles ou limites connues"',
-  ]);
-  requireText("locales/en.json", [
-    '"userGuide": "User guide"',
-    '"searchLabel": "Search this guide"',
-    '"limitations": "Conditional features or known limitations"',
-  ]);
+  requireText("components/user-guides/contextual-user-guide.tsx", ["useAppLocale", "translate", "userGuides.common.userGuide", "userGuides.common.searchLabel", "userGuides.common.searchPlaceholder", "userGuides.common.limitations"]);
+  requireText("locales/fr.json", ['"userGuide": "Guide utilisateur"', '"searchLabel": "Rechercher dans le guide"', '"limitations": "Fonctionnalités conditionnelles ou limites connues"']);
+  requireText("locales/en.json", ['"userGuide": "User guide"', '"searchLabel": "Search this guide"', '"limitations": "Conditional features or known limitations"']);
   requireText("components/admin/admin-access-panel.tsx", ["ContextualUserGuide", "ADMIN_RBAC"]);
   requireText("components/enterprise/enterprise-module-workspace.tsx", ["ENTERPRISE_MODULE_GUIDE_MAP", "ContextualUserGuide"]);
   requireText("components/enterprise/enterprise-activities-module.tsx", ["ENTERPRISE_ACTIVITIES", "ContextualUserGuide"]);
@@ -173,21 +137,7 @@ function imageDebtChecks() {
   requireText("components/activities/activity-detail.tsx", ["next/image", "<Image"]);
 }
 
-const checks = {
-  calendar: calendarChecks,
-  activities: permissionChecks,
-  tasks: taskChecks,
-  requests: requestChecks,
-  validations: validationChecks,
-  meetings: meetingChecks,
-  workflows: workflowChecks,
-  documents: documentChecks,
-  notifications: notificationChecks,
-  guides: guideChecks,
-  permissions: permissionChecks,
-  sla: slaChecks,
-  images: imageDebtChecks,
-};
+const checks = { calendar: calendarChecks, activities: permissionChecks, tasks: taskChecks, requests: requestChecks, validations: validationChecks, meetings: meetingChecks, workflows: workflowChecks, documents: documentChecks, notifications: notificationChecks, guides: guideChecks, permissions: permissionChecks, sla: slaChecks, images: imageDebtChecks };
 
 if (scope === "all") {
   for (const check of Object.values(checks)) check();
