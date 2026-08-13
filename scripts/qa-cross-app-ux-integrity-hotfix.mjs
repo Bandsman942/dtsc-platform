@@ -48,9 +48,9 @@ expect(readinessUi.includes("getRetailCountryCapabilityDeepLink"), "Country capa
 expect(mobileCss.includes("details > summary + .flex.overflow-x-auto"), "ERP continuation links must be bounded on narrow screens");
 expect(mobileCss.includes("grid-template-columns: repeat(2, minmax(0, 1fr))"), "ERP continuation links must use a responsive bounded grid on mobile");
 
-// 3. Sensitive actions: DTSC Dialog is canonical. Two large legacy workspaces
-// remain source-compatible through the globally mounted bridge; any new native
-// confirmation callsite fails this gate.
+// 3. Sensitive actions: DTSC Dialog is canonical. The internal Calendar workspace
+// and Collaborators workspace remain source-compatible through the globally mounted
+// bridge; any new native confirmation callsite fails this gate.
 const confirmationContract = read("lib/client-confirmation.ts");
 const confirmationProvider = read("components/ui/sensitive-action-confirmation-provider.tsx");
 const rootLayout = read("app/layout.tsx");
@@ -65,7 +65,7 @@ expect(confirmationProvider.includes("window.confirm = browserConfirm"), "Legacy
 expect(rootLayout.includes("SensitiveActionConfirmationProvider"), "Sensitive action confirmation provider must be mounted globally");
 
 const legacyConfirmAllowlist = new Set([
-  "components/calendar/internal-calendar-workspace-v2.tsx",
+  "components/calendar/internal-calendar/workspace.tsx",
   "components/collaborators/collaborators-conversation-workspace.tsx",
 ]);
 for (const file of walkFiles("components")) {
@@ -81,7 +81,7 @@ for (const file of [
   "components/admin/billing-reconciliation-control.tsx",
   "components/admin/admin-audit-tables.tsx",
   "components/admin/operational-sla-panel.tsx",
-  "components/calendar/calendar-advanced-tools-panel.tsx",
+  "components/calendar/calendar-advanced-tools/panel.tsx",
   "components/enterprise/professional/retail-global-readiness.tsx",
 ]) {
   const source = read(file);
