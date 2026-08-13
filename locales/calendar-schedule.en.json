@@ -78,5 +78,22 @@
   "reason": "Reason / private note",
   "reasonHint": "Optional. This note remains private and is not shown in the collective operational view.",
   "privateReason": "Optional private reason.",
-  "reasonProtected": "Private detail hidden in the collective view."
+  "reasonProtected": "Private detail hidden in the collective view.",
+  "exceptionAbsence": "Personal absence",
+  "exceptionAdministrativeAbsence": "Administrative absence",
+  "exceptionOtherAbsence": "Other absence",
+  "exceptionLeave": "Leave",
+  "exceptionSickness": "Sickness",
+  "exceptionMission": "Mission",
+  "exceptionTraining": "Training",
+  "exceptionRemoteWork": "Exceptional remote work",
+  "exceptionExtraAvailability": "Extra availability",
+  "exceptionUnavailable": "Unavailable",
+  "exceptionOther": "Other",
+  "locationUndefined": "Undefined",
+  "locationSite": "DTSC site",
+  "locationRemote": "Remote work",
+  "locationHybrid": "Hybrid",
+  "locationExternal": "External",
+  "locationMission": "Mission"
 }
