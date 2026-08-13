@@ -100,4 +100,6 @@ for (const forbidden of ["const en =", "locale === \"en\"", "\"en-GB\"", "\"fr-F
 }
 if (!calendar.includes("translateSharedWork") || !calendar.includes("userLocale")) fail("unified calendar must use canonical copy and locale helpers");
 
+await import("./qa-collaborator-dialog-i18n-277.mjs");
+
 if (!process.exitCode) console.log("Shared work i18n convergence QA passed.");
