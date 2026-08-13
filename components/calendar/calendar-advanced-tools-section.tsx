@@ -1,5 +1,5 @@
 import type { UserRole } from "@prisma/client";
-import { CalendarAdvancedToolsPanel } from "@/components/calendar/calendar-advanced-tools-panel";
+import { CalendarAdvancedToolsPanel } from "@/components/calendar/calendar-advanced-tools/panel";
 import { canManageCalendarResources, listCalendarResources } from "@/lib/calendar-advanced";
 import type { CalendarContext } from "@/lib/internal-calendar";
 import { getTechnicalDebtFeatureStatuses } from "@/lib/technical-debt/feature-gates";
@@ -8,10 +8,14 @@ export async function CalendarAdvancedToolsSection({
   context,
   events,
   collaborators,
+  locale,
+  timezone,
 }: {
   context: CalendarContext & { role: UserRole };
   events: Array<{ id: string; title: string; startDateTime: Date; endDateTime: Date; createdBy: string | null; ownerCollaboratorId: string | null }>;
   collaborators: Array<{ id: string; fullName: string; department: string; jobTitle: string }>;
+  locale?: string | null;
+  timezone?: string | null;
 }) {
   const [resources, canManageResources] = await Promise.all([
     listCalendarResources(context.activeOrganizationId || ""),
@@ -40,6 +44,8 @@ export async function CalendarAdvancedToolsSection({
       collaborators={collaborators}
       canManageResources={canManageResources}
       featureStatuses={{ externalCalendar: statuses.externalCalendar, slotSuggestions: statuses.slotSuggestions, resourceBooking: statuses.resourceBooking }}
+      locale={locale}
+      timezone={timezone}
     />
   );
 }
