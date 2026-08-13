@@ -113,7 +113,13 @@ requireText("app/api/chat/route.ts", ["getCanonicalAiUsageLimits"]);
 requireText("app/api/chat/v2/route.ts", ["getCanonicalAiUsageLimits"]);
 
 requireText("lib/standard-collaboration.ts", ["getAcceptedCollaborationContacts", "contactSince"]);
-requireText("components/collaborators/collaborators-conversation-workspace.tsx", ["initialContacts", "Mes contacts", "historyExpandedRef", "previousHeight"]);
+requireText("components/collaborators/collaborators-conversation-workspace.tsx", [
+  "initialContacts",
+  'TabsTrigger value="contacts"',
+  "collaborationExperienceT",
+  "historyExpandedRef",
+  "previousHeight",
+]);
 requireText("app/api/collaborators/contact-requests/route.ts", ["ADMIN DTSC", "session.role === UserRole.ADMIN"]);
 
 requireText("scripts/audit-user-guide-contract.mjs", ["Contrat de guide DTSC v2", "PROFESSIONAL_TOOLBOX.md"]);

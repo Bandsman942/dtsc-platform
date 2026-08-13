@@ -66,3 +66,13 @@ Aucun endpoint, schéma Prisma, membership, `organizationId`, RBAC, entitlement,
 ## Rollback
 
 Chaque sous-lot est réversible par revert applicatif. Aucune restauration de données ni migration n’est attendue pour la convergence i18n.
+
+
+## Lot #277 — dialogues Collaborateurs
+
+- Périmètre : copie FR/EN résiduelle, prompts, erreurs, filtres, mentions, appels et informations de lecture dans `collaborators-conversation-workspace.tsx`.
+- Moteur : `collaborationExperienceT` / `translateCollaborationExperience` uniquement ; interpolation canonique ajoutée sans second moteur.
+- Données métier : aucune traduction ni mutation des valeurs persistées ; endpoints et contrats Collaboration conservés.
+- Exception comportementale explicite : `@tous` / `@all` reste un jeton de mention reconnu par le parser, sans mutation des messages utilisateur.
+- QA ciblée : `scripts/qa-collaborator-dialog-i18n-277.mjs`.
+- État au commit d’implémentation : CI de PR, OWNER_E2E et Production restent `NOT_EXECUTED` jusqu’aux preuves correspondantes.
