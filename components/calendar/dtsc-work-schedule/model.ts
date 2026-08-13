@@ -71,7 +71,7 @@ export function scheduleText(locale: string): ScheduleText {
 }
 
 export function calendarWeekdays(locale: string) {
-  const formatter = new Intl.DateTimeFormat(userLocale(locale), { weekday: "long", timeZone: "UTC" });
+  const formatter = new Intl.DateTimeFormat(userLocale({ locale }), { weekday: "long", timeZone: "UTC" });
   const sunday = Date.UTC(2026, 0, 4);
   return Array.from({ length: 7 }, (_, index) => {
     const label = formatter.format(new Date(sunday + index * 86_400_000));
