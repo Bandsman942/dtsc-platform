@@ -78,5 +78,22 @@
   "reason": "Motif / note privée",
   "reasonHint": "Facultatif. Cette note reste privée et n'est pas affichée dans la vue opérationnelle collective.",
   "privateReason": "Motif facultatif et privé.",
-  "reasonProtected": "Détail privé masqué dans la vue collective."
+  "reasonProtected": "Détail privé masqué dans la vue collective.",
+  "exceptionAbsence": "Absence personnelle",
+  "exceptionAdministrativeAbsence": "Absence administrative",
+  "exceptionOtherAbsence": "Autre absence",
+  "exceptionLeave": "Congé",
+  "exceptionSickness": "Maladie",
+  "exceptionMission": "Mission",
+  "exceptionTraining": "Formation",
+  "exceptionRemoteWork": "Télétravail exceptionnel",
+  "exceptionExtraAvailability": "Disponibilité exceptionnelle",
+  "exceptionUnavailable": "Indisponibilité",
+  "exceptionOther": "Autre",
+  "locationUndefined": "Non défini",
+  "locationSite": "Site DTSC",
+  "locationRemote": "Télétravail",
+  "locationHybrid": "Hybride",
+  "locationExternal": "Externe",
+  "locationMission": "Mission"
 }
