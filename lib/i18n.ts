@@ -10,6 +10,8 @@ import collaborationExperienceFr from "@/locales/collaboration-experience.fr.jso
 import collaborationExperienceEn from "@/locales/collaboration-experience.en.json";
 import activitiesFr from "@/locales/activities.fr.json";
 import activitiesEn from "@/locales/activities.en.json";
+import calendarScheduleFr from "@/locales/calendar-schedule.fr.json";
+import calendarScheduleEn from "@/locales/calendar-schedule.en.json";
 
 type Dictionary = typeof fr;
 type Locale = "fr" | "en";
@@ -29,12 +31,14 @@ const enterpriseFinanceDictionaries = { fr: enterpriseFinanceFr, en: enterpriseF
 const sharedWorkDictionaries = { fr: sharedWorkFr, en: sharedWorkEn } as const;
 const collaborationExperienceDictionaries = { fr: collaborationExperienceFr, en: collaborationExperienceEn } as const;
 const activitiesDictionaries = { fr: activitiesFr, en: activitiesEn } as const;
+const calendarScheduleDictionaries = { fr: calendarScheduleFr, en: calendarScheduleEn } as const;
 export type WorkspaceGeneralizationKey = keyof typeof workspaceGeneralizationDictionaries.fr;
 export type EnterpriseProcurementKey = keyof typeof enterpriseProcurementDictionaries.fr;
 export type EnterpriseFinanceKey = keyof typeof enterpriseFinanceDictionaries.fr;
 export type SharedWorkKey = keyof typeof sharedWorkDictionaries.fr;
 export type CollaborationExperienceKey = keyof typeof collaborationExperienceDictionaries.fr;
 export type ActivitiesKey = keyof typeof activitiesDictionaries.fr;
+export type CalendarScheduleKey = keyof typeof calendarScheduleDictionaries.fr;
 
 export function getDictionary(locale?: string | null) { return dictionaries[locale === "en" ? "en" : "fr"]; }
 export function translate(locale: string | null | undefined, key: string) { const dictionary = getDictionary(locale); const localized = key.split(".").reduce<unknown>((current, part) => current && typeof current === "object" && part in current ? (current as Record<string, unknown>)[part] : undefined, dictionary); if (typeof localized === "string") return localized; const fallback = key.split(".").reduce<unknown>((current, part) => current && typeof current === "object" && part in current ? (current as Record<string, unknown>)[part] : undefined, fr); return typeof fallback === "string" ? fallback : key; }
@@ -44,3 +48,4 @@ export function translateEnterpriseFinance(locale: string | null | undefined, ke
 export function translateSharedWork(locale: string | null | undefined, key: SharedWorkKey) { const dictionary = sharedWorkDictionaries[locale === "en" ? "en" : "fr"]; return dictionary[key] || sharedWorkDictionaries.fr[key]; }
 export function translateCollaborationExperience(locale: string | null | undefined, key: CollaborationExperienceKey) { const dictionary = collaborationExperienceDictionaries[locale === "en" ? "en" : "fr"]; return dictionary[key] || collaborationExperienceDictionaries.fr[key]; }
 export function translateActivities(locale: string | null | undefined, key: ActivitiesKey) { const dictionary = activitiesDictionaries[locale === "en" ? "en" : "fr"]; return dictionary[key] || activitiesDictionaries.fr[key]; }
+export function translateCalendarSchedule(locale: string | null | undefined, key: CalendarScheduleKey) { const dictionary = calendarScheduleDictionaries[locale === "en" ? "en" : "fr"]; return dictionary[key] || calendarScheduleDictionaries.fr[key]; }

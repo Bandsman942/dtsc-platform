@@ -15,7 +15,13 @@ const exceptions = read("app/api/calendar/exceptions/route.ts");
 const exceptionItem = read("app/api/calendar/exceptions/[id]/route.ts");
 const mySchedule = read("app/api/calendar/my-schedule/route.ts");
 const page = read("app/calendar/page.tsx");
-const workspace = read("components/calendar/dtsc-work-schedule-panel.tsx");
+const workspaceEntrypoint = read("components/calendar/dtsc-work-schedule-panel.tsx");
+const workspacePanel = read("components/calendar/dtsc-work-schedule/panel.tsx");
+const workspaceLists = read("components/calendar/dtsc-work-schedule/lists.tsx");
+const workspaceModel = read("components/calendar/dtsc-work-schedule/model.ts");
+const scheduleFr = JSON.parse(read("locales/calendar-schedule.fr.json"));
+const scheduleEn = JSON.parse(read("locales/calendar-schedule.en.json"));
+const i18n = read("lib/i18n.ts");
 const agents = read("AGENTS.md");
 
 expect("versioned Sprint 3 migration exists", exists("prisma/migrations/20260729011500_sprint03_work_schedule_boundaries/migration.sql"));
@@ -34,10 +40,11 @@ expect("multi-day exceptions enumerate affected dates", policy.includes("enumera
 expect("calendar conflicts use effective DTSC availability", calendar.includes("resolveDtscEffectiveAvailability") && calendar.includes("Hors disponibilité déclarée"));
 expect("organization calendar keeps legacy compatibility path", calendar.includes("legacyAvailabilities") && availabilityCreate.includes("if (context.dtscInternal)") && availabilityCreate.includes("validateCalendarCollaborators(context, [parsed.data.collaboratorId])"));
 expect("absence notifications do not expose private reason", policy.includes("a déclaré ${label}") && !policy.includes("reason}`"));
-expect("workspace clearly separates weekly exceptions absences", workspace.includes('id="weekly-availability"') && workspace.includes('id="exceptions"') && workspace.includes('id="absences"'));
-expect("team view is explicitly read only", workspace.includes('id="team-availability"') && workspace.includes("lecture seule") && workspace.includes("read only"));
-expect("availability is explicitly not worked time", workspace.includes("ni une prestation réalisée") && mySchedule.includes("availabilityIsWorkedTime: false"));
-expect("calendar page uses reusable Sprint 3 workspace", page.includes("DtscWorkSchedulePanel") && workspace.includes("ModuleWorkspace") && workspace.includes("ModuleSection") && workspace.includes("BusinessList"));
+expect("workspace clearly separates weekly exceptions absences", workspacePanel.includes('id="weekly-availability"') && workspacePanel.includes('id="exceptions"') && workspacePanel.includes('id="absences"'));
+expect("team view is explicitly read only", workspacePanel.includes('id="team-availability"') && workspacePanel.includes("text.readOnly") && scheduleFr.readOnly === "lecture seule" && scheduleEn.readOnly === "read only");
+expect("availability is explicitly not worked time", workspacePanel.includes("text.notWorkedTime") && scheduleFr.notWorkedTime.includes("ni une prestation réalisée") && scheduleEn.notWorkedTime.includes("not completed work") && mySchedule.includes("availabilityIsWorkedTime: false"));
+expect("calendar page uses reusable Sprint 3 workspace", page.includes("DtscWorkSchedulePanel") && workspaceEntrypoint.includes("dtsc-work-schedule/panel") && workspacePanel.includes("ModuleWorkspace") && workspacePanel.includes("ModuleSection") && workspacePanel.includes("BusinessList"));
+expect("schedule presentation uses canonical i18n", i18n.includes("calendarScheduleDictionaries") && workspaceModel.includes("translateCalendarSchedule") && workspaceModel.includes("userLocale({ locale })"));
 expect("Sprint 3 does not introduce timesheet or payroll calculation", !policy.includes("Timesheet") && !policy.includes("ClockIn") && !policy.includes("HrcfoPayroll") && !exceptions.includes("HrcfoPayroll"));
 expect("AGENTS includes permanent work-schedule boundaries", agents.includes("availability") || agents.includes("disponibilit"));
 
