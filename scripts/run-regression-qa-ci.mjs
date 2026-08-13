@@ -10,6 +10,7 @@ if (!regression || typeof regression !== "string") {
 }
 
 const commands = regression.split(/\s+&&\s+/).map((item) => item.trim()).filter(Boolean);
+commands.unshift("node scripts/qa-calendar-internal-i18n-276.mjs");
 commands.unshift("node scripts/qa-calendar-work-schedule-i18n-275.mjs");
 commands.unshift("node scripts/qa-shared-work-i18n-convergence.mjs");
 commands.unshift("node scripts/qa-github-actions-upload-runtime.mjs");
@@ -27,19 +28,12 @@ function diagnostic(output, status) {
 
 for (const [index, command] of commands.entries()) {
   console.log(`\n[regression ${index + 1}/${commands.length}] ${command}`);
-  const result = spawnSync(command, {
-    cwd: process.cwd(),
-    env: process.env,
-    shell: true,
-    encoding: "utf8",
-    stdio: ["inherit", "pipe", "pipe"],
-  });
+  const result = spawnSync(command, { cwd: process.cwd(), env: process.env, shell: true, encoding: "utf8", stdio: ["inherit", "pipe", "pipe"] });
   if (result.stdout) process.stdout.write(result.stdout);
   if (result.stderr) process.stderr.write(result.stderr);
   if (result.status !== 0) {
     const output = `${result.stderr || ""}\n${result.stdout || ""}`.trim();
-    const details = diagnostic(output, result.status);
-    console.error(`::error title=Regression QA ${index + 1}/${commands.length}::${escapeAnnotation(`${command} — ${details}`)}`);
+    console.error(`::error title=Regression QA ${index + 1}/${commands.length}::${escapeAnnotation(`${command} — ${diagnostic(output, result.status)}`)}`);
     process.exit(result.status || 1);
   }
 }
