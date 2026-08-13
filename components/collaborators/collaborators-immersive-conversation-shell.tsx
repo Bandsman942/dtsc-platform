@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, type ComponentProps } from "react";
 import { useImmersiveConversationViewport } from "@/components/chat/use-immersive-conversation-viewport";
 import { CollaboratorsConversationWorkspace } from "@/components/collaborators/collaborators-conversation-workspace";
 import { useFloatingAction } from "@/components/floating-actions/floating-action-hub";
+import { translateSharedWork } from "@/lib/i18n";
 import { getParticipantColor } from "@/lib/participant-colors";
 
 type Props = ComponentProps<typeof CollaboratorsConversationWorkspace>;
@@ -18,7 +19,7 @@ export function CollaboratorsImmersiveConversationShell(props: Props) {
 
   useFloatingAction({
     id: "collaborators-add-contact",
-    label: props.userPreferences.locale === "en" ? "Add a contact" : "Ajouter un contact",
+    label: translateSharedWork(props.userPreferences.locale, "collaboration.addContact"),
     icon: UserPlus,
     order: 40,
     onSelect: () => router.push("/collaborators/contacts/new"),
@@ -162,7 +163,7 @@ export function CollaboratorsImmersiveConversationShell(props: Props) {
         }
 
         [data-collaboration-immersive-root] [data-contact-avatar-rail="true"] > div:last-child > button > span:last-child {
-          display: none;
+          display: none !important;
         }
 
         [data-collaboration-immersive-root] [data-contact-avatar-rail="true"] > div:last-child > button > span:nth-last-child(2) {

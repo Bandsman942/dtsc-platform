@@ -8,8 +8,6 @@ const warnings = [];
 const bilingualContracts = {
   "components/productivity/professional-toolbox.tsx": ["const english", "Professional toolbox", "Boîte à outils professionnelle", "Scientific", "Scientifique", "Financial", "Financière"],
   "components/floating-actions/floating-action-hub.tsx": ["useAppLocale", "Quick actions", "Actions rapides"],
-  "components/activities/work-prestations-panel-v2.tsx": ["english", "Work type", "Type de travail"],
-  "components/collaborators/collaborators-conversation-workspace.tsx": ["Mes contacts", "My contacts", "Messages précédents", "Older messages"],
   "components/admin/billing-plan-manager.tsx": ["Individual offers", "Offres individuelles", "Organization offers", "Offres d’organisation"],
 };
 for (const [file, tokens] of Object.entries(bilingualContracts)) {
@@ -18,6 +16,65 @@ for (const [file, tokens] of Object.entries(bilingualContracts)) {
   const content = fs.readFileSync(target, "utf8");
   for (const token of tokens) if (!content.includes(token)) failures.push(`${file}: libellé/contrat FR-EN absent: ${token}`);
 }
+
+const canonicalizedContracts = {
+  "components/activities/entity-comments-thread.tsx": {
+    required: ["translateSharedWork", "formatUserDateTime"],
+    forbidden: ["const english =", 'locale === "en"', '"en-GB"', '"fr-FR"', "toLocaleString("],
+  },
+  "components/activities/activities-dashboard-v3.tsx": {
+    required: ["translateActivities", "formatEnumLabelForLocale", "userLocale"],
+    forbidden: ["const english =", 'locale === "en"', '"en-GB"', '"fr-FR"'],
+  },
+  "components/activities/work-prestations-panel-v2.tsx": {
+    required: ["translateActivities", "formatEnumLabelForLocale", "userLocale", 'const LOCATION_MODES = ["Site DTSC", "Télétravail", "Hybride", "Externe", "Mission", "Non défini"]'],
+    forbidden: ["const english =", 'locale === "en"', "english ?", '"en-GB"', '"fr-FR"'],
+  },
+  "app/collaborators/contacts/new/page.tsx": {
+    required: ["translateSharedWork"],
+    forbidden: ["const english =", 'user.locale === "en"'],
+  },
+  "components/collaborators/contact-discovery-workspace.tsx": {
+    required: ["translateSharedWork"],
+    forbidden: ["const english =", 'locale === "en"'],
+  },
+  "components/collaborators/collaboration-meeting-message-content.tsx": {
+    required: ["translateSharedWork"],
+    forbidden: ["const english =", 'preferences.locale === "en"'],
+  },
+  "components/collaborators/group-presence-journal-dialog.tsx": {
+    required: ["translateSharedWork", "formatUserDateTime"],
+    forbidden: ["const english =", 'locale === "en"', "english ?"],
+  },
+  "components/collaborators/collaborators-conversation-workspace.tsx": {
+    required: ["collaborationExperienceT"],
+    forbidden: [],
+  },
+  "lib/collaboration-experience-i18n.ts": {
+    required: ["translateCollaborationExperience"],
+    forbidden: ["const messages =", 'locale === "en"'],
+  },
+  "components/calendar/unified-work-calendar-panel.tsx": {
+    required: ["translateSharedWork", "userLocale"],
+    forbidden: ["const en =", 'locale === "en"', '"en-GB"', '"fr-FR"', "const SOURCE_LABELS"],
+  },
+};
+for (const [file, contract] of Object.entries(canonicalizedContracts)) {
+  const target = path.join(root, file);
+  if (!fs.existsSync(target)) { failures.push(`Fichier i18n canonique absent: ${file}`); continue; }
+  const content = fs.readFileSync(target, "utf8");
+  for (const token of contract.required) if (!content.includes(token)) failures.push(`${file}: dépendance i18n canonique absente: ${token}`);
+  for (const token of contract.forbidden) if (content.includes(token)) failures.push(`${file}: dette i18n locale réintroduite: ${token}`);
+}
+
+const conversationWorkspace = fs.readFileSync(path.join(root, "components/collaborators/collaborators-conversation-workspace.tsx"), "utf8");
+if (conversationWorkspace.includes('userPreferences.locale === "en"')) {
+  warnings.push("components/collaborators/collaborators-conversation-workspace.tsx: dialogues legacy FR/EN encore en convergence dans #266; l’adaptateur principal est canonique mais ce reliquat n’est pas déclaré terminé.");
+}
+
+validateDictionaryParity("locales/shared-work.fr.json", "locales/shared-work.en.json", "shared work");
+validateDictionaryParity("locales/collaboration-experience.fr.json", "locales/collaboration-experience.en.json", "collaboration experience");
+validateDictionaryParity("locales/activities.fr.json", "locales/activities.en.json", "activities");
 
 const forbiddenRawLabels = [
   ["components/productivity/professional-toolbox.tsx", ">DRAFT<"],
@@ -66,6 +123,29 @@ if (failures.length) {
 }
 console.log("✓ Contrat i18n itération 07 validé: aucun nouveau dépassement par rapport à la cible historique ou à la branche de base.");
 
+function validateDictionaryParity(frFile, enFile, label) {
+  const frPath = path.join(root, frFile);
+  const enPath = path.join(root, enFile);
+  if (!fs.existsSync(frPath) || !fs.existsSync(enPath)) {
+    failures.push(`Dictionnaires ${label} incomplets: ${frFile} / ${enFile}`);
+    return;
+  }
+  const frKeys = flattenKeys(JSON.parse(fs.readFileSync(frPath, "utf8")));
+  const enKeys = flattenKeys(JSON.parse(fs.readFileSync(enPath, "utf8")));
+  const missingInEn = frKeys.filter((key) => !enKeys.includes(key));
+  const missingInFr = enKeys.filter((key) => !frKeys.includes(key));
+  if (missingInEn.length) failures.push(`${label}: clés absentes en EN: ${missingInEn.join(", ")}`);
+  if (missingInFr.length) failures.push(`${label}: clés absentes en FR: ${missingInFr.join(", ")}`);
+}
+
+function flattenKeys(value, prefix = "") {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return prefix ? [prefix] : [];
+  return Object.entries(value).flatMap(([key, nested]) => {
+    const next = prefix ? `${prefix}.${key}` : key;
+    return nested && typeof nested === "object" && !Array.isArray(nested) ? flattenKeys(nested, next) : [next];
+  });
+}
+
 function ensureMainRef() {
   if (process.env.GITHUB_REF_NAME === "main") {
     const parentProbe = spawnSync("git", ["rev-parse", "--verify", "HEAD^"], { cwd: root, stdio: "ignore" });
@@ -85,10 +165,6 @@ function readBaseVersion(file) {
 }
 
 function countLikelyHardcodedLabels(content) {
-  // Match text only when it follows an actual JSX opening tag. The previous
-  // `>(...)<` expression also started at TypeScript generic closers such as
-  // `useState<Readiness>()`, creating false positives whenever typed UI code grew.
-  // Keep the historical ceilings unchanged; improve only the signal being counted.
   const jsxText = [...content.matchAll(/<(?:[A-Z][A-Za-z0-9.]*|[a-z][a-z0-9-]*)\b[^>\n]*>([^<{\n][^<{]*?)<\//g)]
     .map((match) => match[1].trim())
     .filter((value) => /[A-Za-zÀ-ÿ]{3}/.test(value));

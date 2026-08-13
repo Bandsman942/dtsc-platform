@@ -45,6 +45,8 @@ const mcpCallbackRoute = read("app/api/ai/apps/oauth/callback/route.ts");
 const mcpDisconnectRoute = read("app/api/ai/apps/oauth/disconnect/route.ts");
 const collaboratorComposer = read("components/chat/VoiceConversationComposer.tsx");
 const collaboratorI18n = read("lib/collaboration-experience-i18n.ts");
+const collaboratorI18nFr = read("locales/collaboration-experience.fr.json");
+const collaboratorI18nEn = read("locales/collaboration-experience.en.json");
 const collaboratorAiCompose = read("app/api/collaborators/ai/compose/route.ts");
 const nextConfig = read("next.config.ts");
 const releaseFragment = read("docs/changelog/2026-08-11-ai-conversation-hotfix.md");
@@ -139,7 +141,7 @@ assert(mcpOauth.includes("code_challenge_method") && mcpOauth.includes('"S256"')
 assert(mcpOauth.includes('url.searchParams.set("access_type", "offline")') && mcpOauth.includes('url.searchParams.set("prompt", "consent")'), "Google MCP OAuth must request durable server-side authorization for refresh-token continuity");
 assert(mcpOauth.includes("oauth-protected-resource") && mcpOauth.includes("oauth-authorization-server") && mcpOauth.includes("openid-configuration"), "MCP OAuth must support protected-resource and authorization-server discovery");
 assert(mcpOauthStore.includes("encryptedCredentials") && mcpOauthStore.includes("consumeMcpOAuthState") && !mcpOauthStore.includes("console.log"), "OAuth tokens and PKCE verifier must remain in the encrypted server store");
-assert(mcpOauthStore.includes("listMcpOAuthConnectionGrants") && mcpOauthStore.includes('SELECT "serverCode", "grantedScopes"') && mcpOauthStore.includes("getMcpOAuthGrantedScopes"), "OAuth readiness must inspect granted scopes without decrypting stored credentials");
+assert(mcpOauthStore.includes("listMcpOAuthConnectionGrants") && mcpOauthStore.includes('SELECT \"serverCode\", \"grantedScopes\"') && mcpOauthStore.includes("getMcpOAuthGrantedScopes"), "OAuth readiness must inspect granted scopes without decrypting stored credentials");
 assert(mcpOauthAccess.includes("MCP_OAUTH_REAUTHORIZATION_REQUIRED") && mcpOauthAccess.includes("getMcpOAuthGrantedScopes") && mcpOauthAccess.includes("getValidMcpOAuthAccessToken"), "MCP transport authorization must fail closed before using a stale OAuth grant");
 assert(mcpCallbackRoute.includes("effectiveCredentials") && mcpCallbackRoute.includes("server.oauthScopes") && mcpCallbackRoute.includes("credentials.scope.length"), "OAuth callback must preserve requested scopes when the provider omits the optional scope response field");
 assert(calendarScopeRelease.includes("Renouveler l’autorisation Google Calendar") && calendarScopeRelease.includes("lecture seule"), "Calendar MCP scope alignment must be documented for users and automatic product awareness");
@@ -151,10 +153,10 @@ assert(mcpCallbackRoute.includes("consumeMcpOAuthState") && mcpCallbackRoute.inc
 assert(mcpDisconnectRoute.includes("revokeMcpOAuthConnection") && mcpDisconnectRoute.includes("localCredentialsDestroyed: true"), "OAuth disconnect must destroy the local encrypted credential even when remote revocation is unavailable");
 assert(mcpTransport.includes("getAuthorizedMcpOAuthAccessToken") && mcpTransport.includes("MCP_OAUTH_USER_CONTEXT_REQUIRED"), "MCP transport must resolve only scope-current user tokens with explicit user and tenant context");
 
-assert(collaboratorComposer.includes('aiT("aiCopilot")') && collaboratorComposer.includes("PROPOSE_REPLY") && collaboratorI18n.includes('aiCopilot: "Copilote IA DTSC"'), "Mes collaborateurs composer must expose the DTSC AI drafting copilot through the shared i18n contract");
+assert(collaboratorComposer.includes('aiT("aiCopilot")') && collaboratorComposer.includes("PROPOSE_REPLY") && collaboratorI18n.includes("translateCollaborationExperience") && collaboratorI18nFr.includes('"aiCopilot": "Copilote IA DTSC"') && collaboratorI18nEn.includes('"aiCopilot": "DTSC AI copilot"'), "Mes collaborateurs composer must expose the DTSC AI drafting copilot through the canonical FR/EN i18n contract");
 assert(collaboratorComposer.includes("MAX_COMPOSER_HEIGHT = 176") && collaboratorComposer.includes('className="max-h-44 min-h-12 w-full') && collaboratorComposer.includes("border-t border-dtsc-border/70"), "Collaboration AI drafts must use a full-width mobile composer with a separate professional action rail");
 assert(!collaboratorComposer.includes('className="flex min-w-0 items-end gap-2 rounded-[1.35rem]'), "Collaboration composer must not squeeze long AI drafts between horizontal action buttons");
-assert(collaboratorComposer.includes('aiT("aiPrivacyNote")') && collaboratorI18n.includes("vous décidez toujours de l’envoi") && collaboratorI18n.includes("n’envoie aucun message à votre place"), "Collaboration AI drafting must keep explicit user control over sending in the FR/EN i18n source of truth");
+assert(collaboratorComposer.includes('aiT("aiPrivacyNote")') && collaboratorI18nFr.includes("vous décidez toujours de l’envoi") && collaboratorI18nFr.includes("n’envoie aucun message à votre place") && collaboratorI18nEn.includes("always decide whether to send") && collaboratorI18nEn.includes("sends no message on your behalf"), "Collaboration AI drafting must keep explicit user control over sending in the canonical FR/EN i18n source of truth");
 assert(collaboratorAiCompose.includes("routeAiStream") && collaboratorAiCompose.includes("prepareAiTurn"), "Collaboration AI drafting must use the canonical DTSC AI runtime");
 assert(collaboratorAiCompose.includes("isSameOriginRequest") && collaboratorAiCompose.includes("rateLimit") && collaboratorAiCompose.includes("getSession"), "Collaboration AI drafting must keep same-origin, session and rate-limit protections");
 assert(collaboratorAiCompose.includes("Retourne uniquement le texte final") && collaboratorAiCompose.includes("L’envoi reste une action distincte"), "Collaboration AI drafting must return a draft without pretending to send it");

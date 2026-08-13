@@ -6,6 +6,7 @@ import { ConversationAvatar } from "@/components/chat/ConversationAvatar";
 import { SearchBar } from "@/components/chat/SearchBar";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
+import { translateSharedWork, type SharedWorkKey } from "@/lib/i18n";
 import { formatUserDateTime, type UserDatePreferences } from "@/lib/user-format";
 
 export type PresenceJournalMember = {
@@ -91,7 +92,6 @@ export function GroupPresenceJournalDialog({
   userPreferences: UserDatePreferences;
   onClose: () => void;
 }) {
-  const english = locale === "en";
   const [filters, setFilters] = useState<Filters>(initialFilters);
   const [appliedFilters, setAppliedFilters] = useState<Filters>(initialFilters);
   const [sessions, setSessions] = useState<PresenceSession[]>([]);
@@ -103,6 +103,7 @@ export function GroupPresenceJournalDialog({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [truncated, setTruncated] = useState(false);
+  const t = useCallback((key: SharedWorkKey) => translateSharedWork(locale, key), [locale]);
 
   const query = useMemo(() => {
     const params = new URLSearchParams({ page: String(page), pageSize: "30", status: appliedFilters.status, clientType: appliedFilters.clientType, duration: appliedFilters.duration, sort: appliedFilters.sort });
@@ -121,7 +122,7 @@ export function GroupPresenceJournalDialog({
     const body = await response.json().catch(() => null) as PresenceResponse | null;
     setLoading(false);
     if (!response.ok || !body) {
-      setError(body?.message || (english ? "Unable to load connection history." : "Impossible de charger le journal des connexions."));
+      setError(body?.message || t("collaboration.presence.loadError"));
       return;
     }
     setSessions(body.sessions || []);
@@ -130,7 +131,7 @@ export function GroupPresenceJournalDialog({
     setHasMore(Boolean(body.hasMore));
     setTotal(body.total || 0);
     setTruncated(Boolean(body.truncated));
-  }, [english, groupId, open, query]);
+  }, [groupId, open, query, t]);
 
   useEffect(() => {
     if (open) void load();
@@ -159,62 +160,63 @@ export function GroupPresenceJournalDialog({
   return (
     <Dialog
       open={open}
-      title={english ? "Connection journal" : "Journal des connexions"}
-      description={`${groupName} · ${english ? "visible only to group owners and administrators" : "visible uniquement par les propriétaires et administrateurs du groupe"}`}
+      title={t("collaboration.presence.title")}
+      description={`${groupName} · ${t("collaboration.presence.ownersOnly")}`}
       onClose={onClose}
       className="h-[94dvh] max-w-5xl"
     >
       <div className="grid gap-4">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <Metric icon={Activity} label={english ? "Sessions" : "Sessions"} value={String(metrics.totalSessions)} />
-          <Metric icon={UserRoundCheck} label={english ? "Online now" : "En ligne"} value={String(metrics.onlineNow)} />
-          <Metric icon={Clock3} label={english ? "Average" : "Moyenne"} value={formatDuration(metrics.averageSessionSeconds, english)} />
-          <Metric icon={MonitorSmartphone} label={english ? "Connected time" : "Temps connecté"} value={formatDuration(metrics.totalConnectedSeconds, english)} />
+          <Metric icon={Activity} label={t("collaboration.presence.sessions")} value={String(metrics.totalSessions)} />
+          <Metric icon={UserRoundCheck} label={t("collaboration.presence.onlineNow")} value={String(metrics.onlineNow)} />
+          <Metric icon={Clock3} label={t("collaboration.presence.average")} value={formatDuration(metrics.averageSessionSeconds, locale)} />
+          <Metric icon={MonitorSmartphone} label={t("collaboration.presence.connectedTime")} value={formatDuration(metrics.totalConnectedSeconds, locale)} />
         </div>
 
         <div className="grid gap-2 rounded-2xl border border-dtsc-border bg-dtsc-page p-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="sm:col-span-2 lg:col-span-4">
-            <SearchBar value={filters.search} onChange={(search) => setFilters((current) => ({ ...current, search }))} placeholder={english ? "Name, email or role…" : "Nom, email ou poste…"} />
+            <SearchBar value={filters.search} onChange={(search) => setFilters((current) => ({ ...current, search }))} placeholder={t("collaboration.presence.searchPlaceholder")} />
           </div>
-          <FilterSelect label={english ? "Member" : "Membre"} value={filters.userId} onChange={(userId) => setFilters((current) => ({ ...current, userId }))}>
-            <option value="">{english ? "All members" : "Tous les membres"}</option>
+          <FilterSelect label={t("collaboration.presence.member")} value={filters.userId} onChange={(userId) => setFilters((current) => ({ ...current, userId }))}>
+            <option value="">{t("collaboration.presence.allMembers")}</option>
             {members.map((member) => <option key={member.userId} value={member.userId}>{member.user.name}</option>)}
           </FilterSelect>
-          <FilterSelect label={english ? "Status" : "Statut"} value={filters.status} onChange={(status) => setFilters((current) => ({ ...current, status: status as Filters["status"] }))}>
-            <option value="ALL">{english ? "All" : "Tous"}</option><option value="ONLINE">{english ? "Online" : "En ligne"}</option><option value="OFFLINE">{english ? "Offline" : "Hors ligne"}</option>
+          <FilterSelect label={t("collaboration.presence.status")} value={filters.status} onChange={(status) => setFilters((current) => ({ ...current, status: status as Filters["status"] }))}>
+            <option value="ALL">{t("collaboration.presence.all")}</option><option value="ONLINE">{t("collaboration.presence.online")}</option><option value="OFFLINE">{t("collaboration.presence.offline")}</option>
           </FilterSelect>
-          <FilterSelect label={english ? "Device" : "Appareil"} value={filters.clientType} onChange={(clientType) => setFilters((current) => ({ ...current, clientType: clientType as Filters["clientType"] }))}>
-            <option value="ALL">{english ? "All devices" : "Tous les appareils"}</option><option value="MOBILE">Mobile</option><option value="TABLET">{english ? "Tablet" : "Tablette"}</option><option value="DESKTOP">Desktop</option><option value="PWA">PWA</option><option value="UNKNOWN">{english ? "Unknown" : "Non déterminé"}</option>
+          <FilterSelect label={t("collaboration.presence.device")} value={filters.clientType} onChange={(clientType) => setFilters((current) => ({ ...current, clientType: clientType as Filters["clientType"] }))}>
+            <option value="ALL">{t("collaboration.presence.allDevices")}</option><option value="MOBILE">Mobile</option><option value="TABLET">{t("collaboration.presence.tablet")}</option><option value="DESKTOP">Desktop</option><option value="PWA">PWA</option><option value="UNKNOWN">{t("collaboration.presence.unknown")}</option>
           </FilterSelect>
-          <FilterSelect label={english ? "Duration" : "Durée"} value={filters.duration} onChange={(duration) => setFilters((current) => ({ ...current, duration: duration as Filters["duration"] }))}>
-            <option value="ALL">{english ? "Any duration" : "Toute durée"}</option><option value="UNDER_5">&lt; 5 min</option><option value="5_60">5–60 min</option><option value="OVER_60">&gt; 60 min</option>
+          <FilterSelect label={t("collaboration.presence.duration")} value={filters.duration} onChange={(duration) => setFilters((current) => ({ ...current, duration: duration as Filters["duration"] }))}>
+            <option value="ALL">{t("collaboration.presence.anyDuration")}</option><option value="UNDER_5">&lt; 5 min</option><option value="5_60">5–60 min</option><option value="OVER_60">&gt; 60 min</option>
           </FilterSelect>
-          <label className="grid gap-1 text-xs font-bold text-dtsc-muted">{english ? "From" : "Du"}<input type="date" value={filters.from} onChange={(event) => setFilters((current) => ({ ...current, from: event.target.value }))} className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink" /></label>
-          <label className="grid gap-1 text-xs font-bold text-dtsc-muted">{english ? "To" : "Au"}<input type="date" value={filters.to} onChange={(event) => setFilters((current) => ({ ...current, to: event.target.value }))} className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink" /></label>
-          <FilterSelect label={english ? "Sort" : "Tri"} value={filters.sort} onChange={(sort) => setFilters((current) => ({ ...current, sort: sort as Filters["sort"] }))}>
-            <option value="RECENT">{english ? "Most recent" : "Plus récentes"}</option><option value="OLDEST">{english ? "Oldest" : "Plus anciennes"}</option><option value="LONGEST">{english ? "Longest" : "Plus longues"}</option>
+          <label className="grid gap-1 text-xs font-bold text-dtsc-muted">{t("collaboration.presence.from")}<input type="date" value={filters.from} onChange={(event) => setFilters((current) => ({ ...current, from: event.target.value }))} className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink" /></label>
+          <label className="grid gap-1 text-xs font-bold text-dtsc-muted">{t("collaboration.presence.to")}<input type="date" value={filters.to} onChange={(event) => setFilters((current) => ({ ...current, to: event.target.value }))} className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink" /></label>
+          <FilterSelect label={t("collaboration.presence.sort")} value={filters.sort} onChange={(sort) => setFilters((current) => ({ ...current, sort: sort as Filters["sort"] }))}>
+            <option value="RECENT">{t("collaboration.presence.mostRecent")}</option><option value="OLDEST">{t("collaboration.presence.oldest")}</option><option value="LONGEST">{t("collaboration.presence.longest")}</option>
           </FilterSelect>
-          <div className="flex items-end gap-2"><Button type="button" onClick={applyFilters} className="flex-1">{english ? "Apply" : "Appliquer"}</Button><Button type="button" variant="outline" onClick={resetFilters}>{english ? "Reset" : "Réinitialiser"}</Button></div>
+          <div className="flex items-end gap-2"><Button type="button" onClick={applyFilters} className="flex-1">{t("collaboration.presence.apply")}</Button><Button type="button" variant="outline" onClick={resetFilters}>{t("collaboration.presence.reset")}</Button></div>
         </div>
 
         {error ? <p className="rounded-xl border border-red-300/50 bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-700 dark:text-red-200">{error}</p> : null}
-        {truncated ? <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">{english ? "The selected period is large. Narrow the filters to inspect more than 1,000 sessions." : "La période sélectionnée est large. Affinez les filtres pour analyser plus de 1 000 sessions."}</p> : null}
+        {truncated ? <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">{t("collaboration.presence.truncated")}</p> : null}
 
         <div className="min-h-0 rounded-2xl border border-dtsc-border bg-dtsc-surface">
-          {loading ? <p className="p-8 text-center text-sm font-semibold text-dtsc-muted">{english ? "Loading…" : "Chargement…"}</p> : sessions.length ? <div className="divide-y divide-dtsc-border">{sessions.map((session) => <PresenceRow key={session.id} session={session} preferences={userPreferences} english={english} />)}</div> : <p className="p-8 text-center text-sm font-semibold text-dtsc-muted">{english ? "No session matches these filters." : "Aucune session ne correspond à ces filtres."}</p>}
+          {loading ? <p className="p-8 text-center text-sm font-semibold text-dtsc-muted">{t("collaboration.presence.loading")}</p> : sessions.length ? <div className="divide-y divide-dtsc-border">{sessions.map((session) => <PresenceRow key={session.id} session={session} preferences={userPreferences} locale={locale} />)}</div> : <p className="p-8 text-center text-sm font-semibold text-dtsc-muted">{t("collaboration.presence.empty")}</p>}
         </div>
 
         <div className="flex items-center justify-between gap-3">
-          <p className="text-xs font-semibold text-dtsc-muted">{total} {english ? "session(s)" : "session(s)"}</p>
-          <div className="flex items-center gap-2"><Button type="button" variant="outline" disabled={page <= 1 || loading} onClick={() => setPage((current) => Math.max(1, current - 1))}>{english ? "Previous" : "Précédent"}</Button><span className="text-xs font-black text-dtsc-ink">{page}</span><Button type="button" variant="outline" disabled={!hasMore || loading} onClick={() => setPage((current) => current + 1)}>{english ? "Next" : "Suivant"}</Button><Button type="button" variant="ghost" size="icon" disabled={loading} onClick={() => void load()} aria-label={english ? "Refresh" : "Actualiser"}><RefreshCw className="h-4 w-4" /></Button></div>
+          <p className="text-xs font-semibold text-dtsc-muted">{total} {t("collaboration.presence.sessionCount")}</p>
+          <div className="flex items-center gap-2"><Button type="button" variant="outline" disabled={page <= 1 || loading} onClick={() => setPage((current) => Math.max(1, current - 1))}>{t("collaboration.presence.previous")}</Button><span className="text-xs font-black text-dtsc-ink">{page}</span><Button type="button" variant="outline" disabled={!hasMore || loading} onClick={() => setPage((current) => current + 1)}>{t("collaboration.presence.next")}</Button><Button type="button" variant="ghost" size="icon" disabled={loading} onClick={() => void load()} aria-label={t("collaboration.presence.refresh")}><RefreshCw className="h-4 w-4" /></Button></div>
         </div>
       </div>
     </Dialog>
   );
 }
 
-function PresenceRow({ session, preferences, english }: { session: PresenceSession; preferences: UserDatePreferences; english: boolean }) {
-  return <div className="flex min-w-0 items-start gap-3 px-3 py-3 sm:px-4"><ConversationAvatar title={session.member.user.name} avatarUrl={session.member.user.avatarUrl} isOnline={session.online} className="h-10 w-10 shrink-0" /><div className="min-w-0 flex-1"><div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"><strong className="truncate text-sm text-dtsc-ink">{session.member.user.name}</strong><span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.65rem] font-black ${session.online ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300" : "bg-dtsc-soft text-dtsc-muted"}`}>{session.online ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}{session.online ? (english ? "Online" : "En ligne") : (english ? "Offline" : "Hors ligne")}</span><span className="rounded-full bg-dtsc-soft px-2 py-0.5 text-[0.65rem] font-bold text-dtsc-muted">{clientTypeLabel(session.clientType, english)}</span></div><p className="mt-1 text-xs leading-5 text-dtsc-muted">{english ? "Connected" : "Connexion"} : <strong className="text-dtsc-ink">{formatUserDateTime(session.connectedAt, preferences, { second: "2-digit" })}</strong><br />{english ? "Disconnected" : "Déconnexion"} : <strong className="text-dtsc-ink">{session.disconnectedAt ? formatUserDateTime(session.disconnectedAt, preferences, { second: "2-digit" }) : (english ? "Active session" : "Session active")}</strong> · {english ? "Duration" : "Durée"} {formatDuration(session.durationSeconds, english)}</p></div></div>;
+function PresenceRow({ session, preferences, locale }: { session: PresenceSession; preferences: UserDatePreferences; locale?: string | null }) {
+  const t = (key: SharedWorkKey) => translateSharedWork(locale, key);
+  return <div className="flex min-w-0 items-start gap-3 px-3 py-3 sm:px-4"><ConversationAvatar title={session.member.user.name} avatarUrl={session.member.user.avatarUrl} isOnline={session.online} className="h-10 w-10 shrink-0" /><div className="min-w-0 flex-1"><div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"><strong className="truncate text-sm text-dtsc-ink">{session.member.user.name}</strong><span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.65rem] font-black ${session.online ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300" : "bg-dtsc-soft text-dtsc-muted"}`}>{session.online ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}{session.online ? t("collaboration.presence.online") : t("collaboration.presence.offline")}</span><span className="rounded-full bg-dtsc-soft px-2 py-0.5 text-[0.65rem] font-bold text-dtsc-muted">{clientTypeLabel(session.clientType, locale)}</span></div><p className="mt-1 text-xs leading-5 text-dtsc-muted">{t("collaboration.presence.connected")} : <strong className="text-dtsc-ink">{formatUserDateTime(session.connectedAt, preferences, { second: "2-digit" })}</strong><br />{t("collaboration.presence.disconnected")} : <strong className="text-dtsc-ink">{session.disconnectedAt ? formatUserDateTime(session.disconnectedAt, preferences, { second: "2-digit" }) : t("collaboration.presence.activeSession")}</strong> · {t("collaboration.presence.duration")} {formatDuration(session.durationSeconds, locale)}</p></div></div>;
 }
 
 function Metric({ icon: Icon, label, value }: { icon: typeof Activity; label: string; value: string }) {
@@ -225,19 +227,19 @@ function FilterSelect({ label, value, onChange, children }: { label: string; val
   return <label className="grid gap-1 text-xs font-bold text-dtsc-muted">{label}<select value={value} onChange={(event) => onChange(event.target.value)} className="h-10 min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink">{children}</select></label>;
 }
 
-function formatDuration(seconds: number, english: boolean) {
+function formatDuration(seconds: number, locale?: string | null) {
   const safe = Math.max(0, Math.round(seconds || 0));
   const hours = Math.floor(safe / 3600);
   const minutes = Math.floor((safe % 3600) / 60);
   if (hours) return `${hours} h ${minutes} min`;
   if (minutes) return `${minutes} min`;
-  return `${safe} ${english ? "sec" : "s"}`;
+  return `${safe} ${translateSharedWork(locale, "collaboration.presence.seconds")}`;
 }
 
-function clientTypeLabel(value: string, english: boolean) {
+function clientTypeLabel(value: string, locale?: string | null) {
   if (value === "MOBILE") return "Mobile";
-  if (value === "TABLET") return english ? "Tablet" : "Tablette";
+  if (value === "TABLET") return translateSharedWork(locale, "collaboration.presence.tablet");
   if (value === "DESKTOP") return "Desktop";
   if (value === "PWA") return "PWA";
-  return english ? "Unknown" : "Non déterminé";
+  return translateSharedWork(locale, "collaboration.presence.unknown");
 }
