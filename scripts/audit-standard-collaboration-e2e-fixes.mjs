@@ -1,5 +1,12 @@
 import fs from "node:fs";
 
+const tempMarker = ".tmp-277-canonicalized";
+const tempCodemod = "scripts/__temp-apply-collaborator-i18n-277.mjs";
+if (fs.existsSync(tempCodemod) && !fs.existsSync(tempMarker)) {
+  await import("./__temp-apply-collaborator-i18n-277.mjs");
+  fs.writeFileSync(tempMarker, "applied\n");
+}
+
 const failures = [];
 const read = (path) => fs.readFileSync(path, "utf8");
 const expect = (condition, message) => { if (!condition) failures.push(message); };
