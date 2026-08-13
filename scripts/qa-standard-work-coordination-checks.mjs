@@ -37,11 +37,16 @@ function calendarChecks() {
   requireText("app/api/calendar/route.ts", ["OWNER_IMMUTABLE", "invitedParticipantCreate", "calendarOwnedOrAcceptedWhere", "Conflit de disponibilité détecté pour le responsable ou un participant"]);
   requireText("app/api/calendar/events/[id]/participants/respond/route.ts", ["ACCEPT", "DECLINE", "BLOCKING_CALENDAR_CONFLICT", "CALENDAR_CONFLICT_CONFIRMATION_REQUIRED"]);
   requireText("lib/calendar-participation.ts", ["responseStatus: CALENDAR_RESPONSE.ACCEPTED", "responseStatus: CALENDAR_RESPONSE.PENDING", "calendarInvitationWhere"]);
-  requireText("components/calendar/internal-calendar-workspace-v2.tsx", ["Mon calendrier", "Calendrier équipe", "Invitations", "Cette année", "Date précise", "Par collaborateur", "Par statut"]);
+  requireText("components/calendar/internal-calendar-workspace-v2.tsx", ["internal-calendar/workspace"]);
+  requireText("components/calendar/internal-calendar/workspace.tsx", ["calendarWorkspaceText", "text.myCalendar", "text.teamCalendar", "text.invitations"]);
+  requireText("components/calendar/internal-calendar/availability-view.tsx", ["text.thisYear", "text.specificDate", "text.viewByCollaborator", "text.viewByStatus"]);
+  requireText("locales/calendar-workspace.fr.json", ['"myCalendar": "Mon calendrier"', '"teamCalendar": "Calendrier équipe"', '"suggestSlot": "Proposer un créneau"', '"resourcesTitle": "Ressources réservables"', '"externalCalendars": "Calendriers externes"']);
+  requireText("locales/calendar-workspace.en.json", ['"myCalendar": "My calendar"', '"teamCalendar": "Team calendar"', '"suggestSlot": "Suggest a time slot"', '"resourcesTitle": "Bookable resources"', '"externalCalendars": "External calendars"']);
   requireText("app/api/calendar/slot-suggestions/route.ts", ["14 * 86_400_000", "detectCalendarConflicts", "suggestionsJson"]);
   requireText("app/api/calendar/resources/reservations/route.ts", ["RESOURCE_CONFLICT", "calendarResourceReservationConflictWhere", "Seul le créateur responsable"]);
   requireText("app/api/calendar/integrations/route.ts", ["PROVIDER_NOT_CONFIGURED", "NOT_CONFIGURED", "CONSENT_REQUIRED"]);
-  requireText("components/calendar/calendar-advanced-tools-panel.tsx", ["Proposer un créneau", "Ressources réservables", "Calendriers externes"]);
+  requireText("components/calendar/calendar-advanced-tools-panel.tsx", ["calendar-advanced-tools/panel"]);
+  requireText("components/calendar/calendar-advanced-tools/panel.tsx", ["text.suggestSlot", "text.resourcesTitle", "text.externalCalendars"]);
 }
 
 function taskChecks() {
