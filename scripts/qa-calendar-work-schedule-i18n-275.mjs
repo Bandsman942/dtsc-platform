@@ -39,7 +39,7 @@ for (const forbidden of ["const copy =", "weekdaysFr", "weekdaysEn", 'locale ===
   if (moduleSource.includes(forbidden)) fail(`local schedule i18n pattern is forbidden: ${forbidden}`);
 }
 if (!moduleSource.includes("translateCalendarSchedule")) fail("schedule module must consume the canonical translator");
-if (!moduleSource.includes("Intl.DateTimeFormat(userLocale(locale)")) fail("weekdays must use the active user locale");
+if (!moduleSource.includes("Intl.DateTimeFormat(userLocale({ locale })")) fail("weekdays must use the active user locale preferences");
 
 const dialogs = read("components/calendar/dtsc-work-schedule/dialogs.tsx");
 for (const persisted of ["Non défini", "Site DTSC", "Télétravail", "Hybride", "Externe", "Mission"]) {
