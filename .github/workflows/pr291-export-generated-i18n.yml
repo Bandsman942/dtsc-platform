@@ -1,4 +1,4 @@
-name: PR291 export generated collaborator i18n
+name: PR291 materialize collaborator i18n
 
 on:
   push:
@@ -8,10 +8,10 @@ on:
       - ".github/workflows/pr291-export-generated-i18n.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  export:
+  materialize:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -48,22 +48,24 @@ jobs:
             "historyExpandedRef",
             "previousHeight",
           ]);'''
-          if old not in text:
+          if old in text:
+              path.write_text(text.replace(old, new))
+          elif new not in text:
               raise SystemExit("historical collaborator assertion not found")
-          path.write_text(text.replace(old, new))
           PY
-      - name: Restore generation-only audit hook
-        run: git checkout origin/main -- scripts/audit-standard-collaboration-e2e-fixes.mjs
-      - name: Export generated files
-        uses: actions/upload-artifact@v7
-        with:
-          name: pr291-generated-i18n
-          if-no-files-found: error
-          path: |
-            components/collaborators/collaborators-conversation-workspace.tsx
-            locales/collaboration-experience.fr.json
-            locales/collaboration-experience.en.json
-            lib/collaboration-experience-i18n.ts
-            scripts/qa-collaborator-dialog-i18n-277.mjs
-            scripts/qa-iteration-07-owner-e2e-remediation-v3.mjs
-            docs/I18N_SHARED_WORK_CONVERGENCE_266.md
+      - name: Remove generation-only hooks
+        shell: bash
+        run: |
+          git checkout origin/main -- scripts/audit-standard-collaboration-e2e-fixes.mjs
+          rm -f scripts/__temp-apply-collaborator-i18n-277.mjs
+          rm -f .tmp-277-canonicalized
+          rm -f .github/workflows/pr291-export-generated-i18n.yml
+      - name: Commit materialized source
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && { echo "No generated changes to commit"; exit 1; }
+          git commit -m "refactor(i18n): materialize collaborator dialog convergence"
+          git push origin HEAD:refactor/277-collaborator-dialog-i18n-final
