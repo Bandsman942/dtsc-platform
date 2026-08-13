@@ -1,0 +1,69 @@
+name: PR291 export generated collaborator i18n
+
+on:
+  push:
+    branches:
+      - refactor/277-collaborator-dialog-i18n-final
+    paths:
+      - ".github/workflows/pr291-export-generated-i18n.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v7
+        with:
+          ref: refactor/277-collaborator-dialog-i18n-final
+          fetch-depth: 0
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Apply canonical collaborator i18n codemod
+        run: node scripts/__temp-apply-collaborator-i18n-277.mjs
+      - name: Converge historical owner-E2E QA
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("scripts/qa-iteration-07-owner-e2e-remediation-v3.mjs")
+          text = path.read_text()
+          old = 'requireText("components/collaborators/collaborators-conversation-workspace.tsx", ["initialContacts", "Mes contacts", "historyExpandedRef", "previousHeight"]);'
+          new = '''requireText("components/collaborators/collaborators-conversation-workspace.tsx", [
+            "initialContacts",
+            'TabsTrigger value="contacts"',
+            "collaborationExperienceT",
+            "historyExpandedRef",
+            "previousHeight",
+          ]);'''
+          if old not in text:
+              raise SystemExit("historical collaborator assertion not found")
+          path.write_text(text.replace(old, new))
+          PY
+      - name: Restore generation-only audit hook
+        run: git checkout origin/main -- scripts/audit-standard-collaboration-e2e-fixes.mjs
+      - name: Export generated files
+        uses: actions/upload-artifact@v7
+        with:
+          name: pr291-generated-i18n
+          if-no-files-found: error
+          path: |
+            components/collaborators/collaborators-conversation-workspace.tsx
+            locales/collaboration-experience.fr.json
+            locales/collaboration-experience.en.json
+            lib/collaboration-experience-i18n.ts
+            scripts/qa-collaborator-dialog-i18n-277.mjs
+            scripts/qa-iteration-07-owner-e2e-remediation-v3.mjs
+            docs/I18N_SHARED_WORK_CONVERGENCE_266.md
