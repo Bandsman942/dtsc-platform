@@ -115,7 +115,8 @@ requireText("app/api/chat/v2/route.ts", ["getCanonicalAiUsageLimits"]);
 requireText("lib/standard-collaboration.ts", ["getAcceptedCollaborationContacts", "contactSince"]);
 requireText("components/collaborators/collaborators-conversation-workspace.tsx", [
   "initialContacts",
-  'TabsTrigger value="contacts"',
+  "conversationUiMyContacts",
+  "setDirectOpen(true)",
   "collaborationExperienceT",
   "historyExpandedRef",
   "previousHeight",
