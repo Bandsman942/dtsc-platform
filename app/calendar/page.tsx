@@ -22,6 +22,7 @@ import {
 import { SaasAccessNotice } from "@/components/enterprise/saas-access-notice";
 import { getOrganizationEntitlements } from "@/lib/billing/entitlements";
 import { canAccessEnterpriseModule } from "@/lib/enterprise-sector-templates";
+import { translateCalendarWorkspace } from "@/lib/i18n";
 import { prisma } from "@/lib/prisma";
 import { loadUnifiedWorkCalendar } from "@/lib/standard-work-coordination/calendar";
 import { serializeScheduleException, serializeWeeklyAvailability, todayDateKey } from "@/lib/work-schedule";
@@ -51,8 +52,8 @@ export default async function CalendarPage() {
     return (
       <AppShell user={user}>
         <SaasAccessNotice
-          title="Calendrier indisponible"
-          message={calendarAccess.message}
+          title={translateCalendarWorkspace(user.locale, "unavailableTitle")}
+          message={translateCalendarWorkspace(user.locale, "unavailableMessage")}
           planLabel={entitlements?.planLabel}
           subscriptionStatus={entitlements?.subscriptionStatus}
         />
@@ -167,6 +168,7 @@ export default async function CalendarPage() {
   const explorerRecords = context.dtscInternal
     ? (teamReadAllowed ? [...teamWeeklyRecords, ...teamExceptionRecords] : [...weeklyRecords, ...exceptionRecords])
     : availabilities;
+  const timezone = user.timezone || "Africa/Kinshasa";
 
   return (
     <AppShell user={user}>
@@ -187,7 +189,7 @@ export default async function CalendarPage() {
               overlapConflicts: 0,
             }}
             locale={user.locale}
-            timezone={user.timezone || "Africa/Kinshasa"}
+            timezone={timezone}
           />
         ) : null}
 
@@ -205,7 +207,7 @@ export default async function CalendarPage() {
             dtscScheduleProjection: context.dtscInternal,
           }}
           locale={user.locale}
-          timezone={user.timezone || "Africa/Kinshasa"}
+          timezone={timezone}
         />
 
         <CalendarAdvancedToolsSection
@@ -224,6 +226,8 @@ export default async function CalendarPage() {
             department: collaborator.department,
             jobTitle: collaborator.jobTitle,
           }))}
+          locale={user.locale}
+          timezone={timezone}
         />
 
         <UnifiedWorkCalendarPanel initialEvents={unifiedEvents.map(serializeUnifiedEvent)} locale={user.locale} />
