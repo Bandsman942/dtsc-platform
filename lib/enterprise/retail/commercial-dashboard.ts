@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { getRetailAccountingReadiness } from "@/lib/enterprise/retail/accounting-readiness";
 import { getRetailMetricsByCurrency } from "@/lib/enterprise/retail/commercial-guardrails";
 import { getRetailExchangeRateReadiness } from "@/lib/enterprise/retail/fx-reporting";
@@ -62,7 +63,7 @@ export async function getCommercialRetailDashboard(
     mobileMoney,
     topups,
     closes,
-    cashSession,
+    cashSessionsRaw,
     metricsByCurrency,
     fxReadiness,
     accountingReadiness,
@@ -91,13 +92,32 @@ export async function getCommercialRetailDashboard(
     includeClose
       ? prisma.enterpriseRetailDailyClose.findMany({ where: { organizationId, businessDate: dateFilter }, orderBy: { businessDate: "desc" }, take: 30, include: { lines: true } })
       : Promise.resolve([]),
-    prisma.enterpriseCashSession.findFirst({ where: { organizationId, cashierUserId: userId, status: { in: ["OPEN", "CLOSING", "PENDING_VALIDATION"] } }, orderBy: { openedAt: "desc" }, include: { financialAccount: { select: { id: true, code: true, name: true, currencyCode: true, operationalBalance: true } }, _count: { select: { movements: true, counts: true, discrepancies: true } } } }),
+    prisma.enterpriseCashSession.findMany({
+      where: { organizationId, cashierUserId: userId, status: { in: ["OPEN", "CLOSING", "PENDING_VALIDATION"] } },
+      orderBy: { openedAt: "desc" },
+      take: 12,
+      include: {
+        financialAccount: { select: { id: true, code: true, name: true, currencyCode: true, operationalBalance: true } },
+        movements: { select: { direction: true, amount: true } },
+        _count: { select: { movements: true, counts: true, discrepancies: true } },
+      },
+    }),
     getRetailMetricsByCurrency(organizationId, dateFrom, dateTo, moduleCode),
     getRetailExchangeRateReadiness(organizationId, dateTo),
     includePos ? getRetailAccountingReadiness(organizationId, dateTo) : Promise.resolve(null),
     getCanonicalRetailReadiness(organizationId),
     includeMobileMoney ? getMobileMoneyProviderAccountConfiguration(organizationId) : Promise.resolve(null),
   ]);
+
+  const cashSessions = cashSessionsRaw.map((session) => {
+    const expectedCurrentAmount = session.movements.reduce(
+      (balance, movement) => movement.direction === "INBOUND" ? balance.plus(movement.amount) : balance.minus(movement.amount),
+      new Prisma.Decimal(session.openingAmount),
+    );
+    const { movements: _movements, ...sessionWithoutMovements } = session;
+    return { ...sessionWithoutMovements, expectedCurrentAmount: expectedCurrentAmount.toFixed() };
+  });
+  const cashSession = cashSessions.find((session) => session.status === "OPEN") || cashSessions[0] || null;
 
   const telcoNetworks = providers.filter((provider) => provider.providerType === "TELCO");
   const readinessItems = canonicalReadiness.items.map((item) => ({
@@ -124,6 +144,7 @@ export async function getCommercialRetailDashboard(
     catalogItems,
     inventoryItems,
     cashSession,
+    cashSessions,
     metricsByCurrency,
     fxReadiness,
     accountingReadiness,
