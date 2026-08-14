@@ -10,7 +10,7 @@ import {
   customerFacingStatusLabel,
 } from "@/lib/customer-facing-language";
 import { getRetailCountryCapabilityDeepLink, getRetailReadinessDeepLink } from "@/lib/enterprise/retail/readiness-deep-links";
-import { retailReadinessDetail } from "@/lib/enterprise/retail/readiness-language";
+import { retailReadinessDetail as customerFacingReadinessDetail } from "@/lib/enterprise/retail/readiness-language";
 import { toastError, toastSuccess } from "@/lib/client-toast";
 
 type Props = { organizationId: string; locale: "fr" | "en" };
@@ -193,7 +193,7 @@ export function RetailGlobalReadiness({ organizationId, locale }: Props) {
             return (
               <Link key={item.code} href={href} className="group flex min-w-0 items-start gap-3 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 transition hover:border-cyan-400 hover:bg-cyan-500/5 focus:outline-none focus:ring-2 focus:ring-cyan-400/40">
                 {item.complete ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" /> : <span className="mt-0.5 h-4 w-4 shrink-0 rounded-full border-2 border-amber-500" />}
-                <span className="min-w-0 flex-1"><span className="block text-sm font-black text-dtsc-ink">{label}</span><span className="mt-0.5 block break-words text-xs leading-5 text-dtsc-muted">{retailReadinessDetail(item.code, item.detail, item.complete, locale)}</span></span>
+                <span className="min-w-0 flex-1"><span className="block text-sm font-black text-dtsc-ink">{label}</span><span className="mt-0.5 block break-words text-xs leading-5 text-dtsc-muted">{customerFacingReadinessDetail(item.code, item.detail, item.complete, locale)}</span></span>
                 <ArrowUpRight className="mt-0.5 h-4 w-4 shrink-0 text-dtsc-blue" />
               </Link>
             );
