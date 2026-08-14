@@ -35,6 +35,15 @@ export function formatEnterpriseDate(value: string | Date | null | undefined, lo
   return new Intl.DateTimeFormat(enterpriseCoreIntlLocale(locale), { dateStyle: "medium", timeStyle: "short" }).format(date);
 }
 
+export function formatEnterpriseAmount(value: string | number, currency: string, locale?: string | null) {
+  const number = Number(value || 0);
+  try {
+    return new Intl.NumberFormat(enterpriseCoreIntlLocale(locale), { style: "currency", currency }).format(number);
+  } catch {
+    return `${number.toFixed(2)} ${currency}`;
+  }
+}
+
 export function Field({ label, help, children }: { label: string; help?: string; children: ReactNode }) {
   return <label className="grid min-w-0 gap-1"><span className="flex min-w-0 items-center gap-1 text-xs font-black uppercase text-dtsc-muted"><span className="min-w-0 break-words">{label}</span>{help ? <span title={help} aria-label={`${label} : ${help}`} className="shrink-0 cursor-help"><CircleHelp className="h-3.5 w-3.5" /></span> : null}</span>{children}</label>;
 }
