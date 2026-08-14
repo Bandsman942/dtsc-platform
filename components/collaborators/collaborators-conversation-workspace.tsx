@@ -1013,7 +1013,7 @@ function normalizeCustomFilterCriteria(value: CustomFilterCriteria | null | unde
   };
 }
 
-function describeCustomFilter(value: CustomFilterCriteria, locale: string) {
+function describeCustomFilter(value: CustomFilterCriteria, locale: string | null | undefined) {
   const criteria = normalizeCustomFilterCriteria(value);
   const labels = [
     criteria.includeDirect && (collaborationExperienceT(locale, "conversationUiDirect3")),
@@ -1088,11 +1088,11 @@ function MessageReadInfo({ readInfo, preferences }: { readInfo: ReadInfo; prefer
   return <div className="grid gap-5"><section><strong className="text-sm text-dtsc-ink">{collaborationExperienceT(locale, "conversationUiReadBy")}</strong><div className="mt-2 divide-y divide-dtsc-border rounded-xl border border-dtsc-border">{readInfo.readBy.length ? readInfo.readBy.map((item) => <div key={item.user.id} className="flex items-center gap-3 p-3"><ConversationAvatar title={item.user.name} avatarUrl={item.user.avatarUrl} isOnline={isOnline(item.user.lastSeenAt)} className="h-9 w-9" /><span className="min-w-0 flex-1"><strong className="block truncate text-sm text-dtsc-ink">{item.user.name}</strong><span className="block text-xs text-dtsc-muted">{collaborationExperienceT(locale, "conversationUiReadAt")} {formatUserDateTime(item.readAt, preferences, { second: "2-digit" })}</span></span><OnlineBadge online={isOnline(item.user.lastSeenAt)} locale={preferences.locale} /></div>) : <p className="p-3 text-sm text-dtsc-muted">{collaborationExperienceT(locale, "conversationUiNoMemberHasReadThisMessageYet")}</p>}</div></section><section><strong className="text-sm text-dtsc-ink">{collaborationExperienceT(locale, "conversationUiNotRead")}</strong><div className="mt-2 divide-y divide-dtsc-border rounded-xl border border-dtsc-border">{readInfo.unreadBy.length ? readInfo.unreadBy.map((item) => <div key={item.user.id} className="flex items-center gap-3 p-3"><ConversationAvatar title={item.user.name} avatarUrl={item.user.avatarUrl} isOnline={isOnline(item.user.lastSeenAt)} className="h-9 w-9" /><span className="min-w-0 flex-1"><strong className="block truncate text-sm text-dtsc-ink">{item.user.name}</strong><span className="block truncate text-xs text-dtsc-muted">{item.user.jobTitle || item.user.email}</span></span><OnlineBadge online={isOnline(item.user.lastSeenAt)} locale={preferences.locale} /></div>) : <p className="p-3 text-sm text-dtsc-muted">{collaborationExperienceT(locale, "conversationUiReadByEveryActiveMember")}</p>}</div></section></div>;
 }
 
-function OnlineBadge({ online, locale }: { online: boolean; locale: string }) {
+function OnlineBadge({ online, locale }: { online: boolean; locale: string | null | undefined }) {
   return <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[0.65rem] font-black", online ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300" : "bg-dtsc-soft text-dtsc-muted")}>{online ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}{online ? (collaborationExperienceT(locale, "conversationUiOnline")) : (collaborationExperienceT(locale, "conversationUiOffline"))}</span>;
 }
 
-function MessageReceiptIndicator({ summary, locale }: { summary?: GroupMessage["receiptSummary"]; locale: string }) {
+function MessageReceiptIndicator({ summary, locale }: { summary?: GroupMessage["receiptSummary"]; locale: string | null | undefined }) {
   if (summary?.allRead) {
     return <span className="inline-flex items-center text-emerald-300" title={collaborationExperienceT(locale, "conversationUiReadByEveryActiveRecipient")} aria-label={collaborationExperienceT(locale, "conversationUiReadByAll")}><CheckCheck className="h-4 w-4 stroke-[2.5]" /></span>;
   }
