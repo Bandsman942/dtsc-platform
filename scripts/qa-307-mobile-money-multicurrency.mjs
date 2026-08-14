@@ -203,7 +203,7 @@ check(hasAll(domainDoc, [
   "basculer en un toucher entre ses caisses",
   "Changer de caisse invalide tout brouillon de confirmation non confirmé",
   "chaque caisse `OPEN` est comptée et soumise séparément",
-  "chaque caisse Mobile Money est comptée et soumise séparément en fin de journée",
+  "Chaque caisse Mobile Money est comptée et soumise séparément en fin de journée",
   "cashier ne peut pas auto-valider sa clôture",
 ]), "Retail domain documentation must describe the concurrent Mobile Money till, switching and independent close workflow");
 
