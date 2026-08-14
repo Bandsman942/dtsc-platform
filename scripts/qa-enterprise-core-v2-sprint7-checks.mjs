@@ -56,12 +56,13 @@ for (const component of ["EnterpriseDocumentsWorkspace", "EnterpriseSuppliersWor
 const core = read("lib/enterprise/enterprise-core.ts");
 ok(core.includes("EnterpriseCoreRecord"), "Legacy EnterpriseCoreRecord must remain available for history and compatibility.");
 const vercel = read("vercel.json");
-ok(vercel.includes('"main": true') && vercel.includes('"*": false'), "Vercel must remain production-only from main.");
+ok(vercel.includes('"main": true') && vercel.includes('"**": false'), "Vercel must remain production-only from main, including slash branches.");
 ok(vercel.includes("VERCEL_ENV") && vercel.includes("production"), "Vercel ignoreCommand must preserve production-only behavior.");
 const vercelScript = read("vercel.sh");
 ok(vercelScript.includes("pnpm prisma migrate deploy") && vercelScript.includes("pnpm build"), "Production must migrate before build.");
-const previewStatus = read(".github/workflows/vercel-production-only-status.yml");
-ok(previewStatus.includes("Preview intentionally disabled") && previewStatus.includes("environment == 'preview'"), "Disabled-preview normalization must stay preview-only.");
+const productionOnlyPolicy = read(".github/workflows/vercel-production-only-policy.yml");
+ok(productionOnlyPolicy.includes("Vercel production-only delivery policy") && productionOnlyPolicy.includes("qa-vercel-production-only-policy.mjs"), "Production-only Vercel policy workflow must remain enforced by GitHub CI.");
+ok(!fs.existsSync(path.join(root, ".github/workflows/vercel-production-only-status.yml")), "Legacy Preview status normalizer must stay removed.");
 
 if (failures.length) { console.error("ERP Core v2 Sprint 7 QA failed:\n- " + failures.join("\n- ")); process.exit(1); }
 console.log("ERP Core v2 Sprint 7 QA passed: dedicated documents/procurement, private storage, server totals, receipt guards, additive finance integration, legacy safety and production-only Vercel policy verified.");

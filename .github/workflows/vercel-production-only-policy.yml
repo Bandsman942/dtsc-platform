@@ -1,0 +1,31 @@
+name: Vercel production-only delivery policy
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'vercel.json'
+      - '.github/workflows/vercel-production-only-policy.yml'
+      - '.github/PULL_REQUEST_TEMPLATE.md'
+      - 'docs/CONTRIBUTING.md'
+      - 'docs/VERCEL_PRODUCTION_ONLY_POLICY.md'
+      - 'scripts/qa-vercel-production-only-policy.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  policy-contract:
+    name: Production-only delivery policy contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Validate Vercel production-only delivery policy
+        run: node scripts/qa-vercel-production-only-policy.mjs

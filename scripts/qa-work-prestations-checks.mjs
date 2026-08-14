@@ -70,7 +70,7 @@ expect("Reviewer UI uses workspace/list/detail conventions", reviewUi.includes("
 expect("UI uses translated labels", activitiesUi.includes("translate(locale") && reviewUi.includes("translate(locale"));
 expect("Sprint 4 QA is wired into package scripts", packageJson.includes('"qa:work-prestations"') && packageJson.includes("qa-work-prestations-checks.mjs"));
 expect("Sprint 4 permanent rules are documented", agents.includes("SPRINT_04_WORK_PRESTATIONS_RULES") && agents.includes("may approve their own work submission") && agents.includes("production-only"));
-expect("Vercel remains main-only", vercelJson.includes('"main": true') && vercelJson.includes('"*": false') && vercelJson.includes("ignoreCommand"));
+expect("Vercel remains main-only", vercelJson.includes('"main": true') && vercelJson.includes('"**": false') && vercelJson.includes("ignoreCommand"));
 expect("Vercel script skips non-production", vercelScript.includes('VERCEL_ENV:-') && vercelScript.includes('!= "production"') && vercelScript.includes("exit 0"));
 expect("Production deploy runs migration before build", vercelScript.indexOf("prisma migrate deploy") >= 0 && vercelScript.indexOf("prisma migrate deploy") < vercelScript.indexOf("pnpm build"));
 

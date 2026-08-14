@@ -51,6 +51,10 @@ Aucun / description sans valeur secrète
 - [ ] QA ciblée
 - [ ] build
 
+## Politique Vercel
+
+Les commits de branche/PR restent sur GitHub et ne doivent pas déclencher de déploiement Vercel. Seul le commit fusionné sur `main` part vers Vercel Production. `OWNER_E2E` reste une preuve distincte et ne dépend pas d'un Preview Vercel.
+
 ## Validation UI / i18n / accessibilité
 
 - [ ] non concerné

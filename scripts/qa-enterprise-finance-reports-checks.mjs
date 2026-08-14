@@ -110,12 +110,13 @@ const hrcfoSchema = ["prisma/schema.prisma", ...fs.readdirSync(path.join(root, "
 for (const legacyInternal of ["HrcfoBudget", "HrcfoExpense", "HrcfoPayroll", "FinancialAccount"]) ok(hrcfoSchema.includes(legacyInternal), `DTSC internal finance model must remain present: ${legacyInternal}`);
 
 const vercel = read("vercel.json");
-ok(vercel.includes('"main": true') && vercel.includes('"*": false'), "Vercel must remain production-only from main.");
+ok(vercel.includes('"main": true') && vercel.includes('"**": false'), "Vercel must remain production-only from main, including slash branches.");
 ok(vercel.includes("VERCEL_ENV") && vercel.includes("production"), "Vercel ignoreCommand must preserve production-only behavior.");
 const vercelScript = read("vercel.sh");
 ok(vercelScript.includes("pnpm prisma migrate deploy") && vercelScript.includes("pnpm build"), "Production must run prisma migrate deploy before pnpm build.");
-const previewStatus = read(".github/workflows/vercel-production-only-status.yml");
-ok(previewStatus.includes("Preview intentionally disabled") && previewStatus.includes("environment == 'preview'"), "Disabled-preview normalization must remain preview-only.");
+const productionOnlyPolicy = read(".github/workflows/vercel-production-only-policy.yml");
+ok(productionOnlyPolicy.includes("Vercel production-only delivery policy") && productionOnlyPolicy.includes("qa-vercel-production-only-policy.mjs"), "Production-only Vercel policy workflow must remain enforced by GitHub CI.");
+ok(!exists(".github/workflows/vercel-production-only-status.yml"), "Legacy Preview status normalizer must stay removed.");
 
 const changedFinanceFiles = [financeSchema, migration, budget, expense, commitments, reports].join("\n");
 ok(!/\bBPMN\b/.test(changedFinanceFiles) && !/model\s+.*WorkflowEngine/.test(changedFinanceFiles), "Sprint 8 must not implement the Sprint 9 Workflow Engine/BPMN domain.");
