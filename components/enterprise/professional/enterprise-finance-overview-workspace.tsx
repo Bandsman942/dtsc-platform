@@ -69,6 +69,7 @@ export function EnterpriseFinanceOverviewWorkspace({ organizationId, organizatio
   const [retryingProjectionId, setRetryingProjectionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [configurationOpen, setConfigurationOpen] = useState(false);
+  const [requestedConfiguration, setRequestedConfiguration] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -107,6 +108,12 @@ export function EnterpriseFinanceOverviewWorkspace({ organizationId, organizatio
   }, [locale, organizationId]);
 
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("configure");
+    if (requested !== "finance" && requested !== "currency") return;
+    setRequestedConfiguration(requested);
+    setConfigurationOpen(true);
+  }, []);
   const diagnostics = readiness?.diagnostics || [];
   const blockerDiagnostics = diagnostics.filter((diagnostic) => diagnostic.severity === "BLOCKER");
   const completedBlockers = blockerDiagnostics.filter((diagnostic) => diagnostic.ready).length;
@@ -161,7 +168,7 @@ export function EnterpriseFinanceOverviewWorkspace({ organizationId, organizatio
         <ProfessionalHelp moduleCode="FINANCE_OVERVIEW" />
       </>}
     </ModuleContent>
-    <Dialog open={configurationOpen} onClose={() => setConfigurationOpen(false)} title={locale === "fr" ? "Configuration financière" : "Finance configuration"} description={locale === "fr" ? "Les mutations sont contrôlées par révision et les périodes financières." : "Changes are controlled by revision and finance periods."} className="h-[94dvh] max-w-4xl">
+    <Dialog open={configurationOpen} onClose={() => setConfigurationOpen(false)} title={locale === "fr" ? "Configuration financière" : "Finance configuration"} description={requestedConfiguration === "currency" ? (locale === "fr" ? "Définissez ici la devise fonctionnelle utilisée par Finance et par la mise en service du Shop." : "Set the functional currency used by Finance and Shop setup here.") : (locale === "fr" ? "Les mutations sont contrôlées par révision et les périodes financières." : "Changes are controlled by revision and finance periods.")} className="h-[94dvh] max-w-4xl">
       <form onSubmit={saveConfiguration} className="grid gap-6"><ProfessionalFormSection title={locale === "fr" ? "Devises et méthode" : "Currencies and method"}><Field label={locale === "fr" ? "Devise fonctionnelle" : "Functional currency"}><Input name="functionalCurrencyCode" defaultValue={readiness?.configuration?.functionalCurrencyCode || "USD"} maxLength={3} required /></Field><Field label={locale === "fr" ? "Devise de présentation" : "Presentation currency"}><Input name="presentationCurrencyCode" defaultValue={readiness?.configuration?.presentationCurrencyCode || ""} maxLength={3} /></Field><Field label={locale === "fr" ? "Valorisation du stock" : "Inventory valuation"}><NativeSelect name="inventoryValuationMethod" defaultValue={readiness?.configuration?.inventoryValuationMethod || "WEIGHTED_AVERAGE"} items={[{ id: "WEIGHTED_AVERAGE", label: financeEnumLabel("WEIGHTED_AVERAGE", locale) }, { id: "FIFO", label: financeEnumLabel("FIFO", locale) }]} required /></Field><Field label={locale === "fr" ? "Tolérance de rapprochement" : "Reconciliation tolerance"}><Input name="reconciliationTolerance" inputMode="decimal" defaultValue={String(readiness?.configuration?.reconciliationTolerance || "0.01")} required /></Field></ProfessionalFormSection><ProfessionalFormSection title={locale === "fr" ? "Comptabilisation" : "Posting"}><Field label={locale === "fr" ? "Automatisation" : "Automation"}><label className="flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border px-3"><input name="automaticPostingEnabled" type="checkbox" defaultChecked={Boolean(readiness?.configuration?.automaticPostingEnabled)} />{locale === "fr" ? "Comptabiliser automatiquement après les validations requises" : "Post automatically after required approvals"}</label></Field></ProfessionalFormSection><div className="sticky bottom-0 flex justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface py-3"><Button type="button" variant="outline" onClick={() => setConfigurationOpen(false)}>{locale === "fr" ? "Annuler" : "Cancel"}</Button><Button type="submit">{locale === "fr" ? "Enregistrer" : "Save"}</Button></div></form>
     </Dialog>
   </ModuleWorkspace>;

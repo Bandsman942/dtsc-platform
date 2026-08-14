@@ -36,52 +36,6 @@ export function SensitiveActionConfirmationProvider() {
     return () => window.removeEventListener(DTSC_CONFIRMATION_EVENT, handleRequest);
   }, []);
 
-  useEffect(() => {
-    const browserConfirm = window.confirm.bind(window);
-    let approvedReplay: { message: string; origin: HTMLElement } | null = null;
-    let replaying = false;
-
-    const appConfirm = (message?: string) => {
-      const normalizedMessage = String(message || "Confirmer cette action ?").trim() || "Confirmer cette action ?";
-
-      if (replaying && approvedReplay?.message === normalizedMessage) {
-        replaying = false;
-        approvedReplay = null;
-        return true;
-      }
-
-      const origin = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-      const legacyRequest: SensitiveActionConfirmationRequest = {
-        id: crypto.randomUUID(),
-        title: "Confirmer cette action",
-        description: normalizedMessage,
-        confirmLabel: "Confirmer",
-        cancelLabel: "Annuler",
-        tone: "warning",
-        resolve: (result) => {
-          if (!result.confirmed || !origin || !origin.isConnected) return;
-          approvedReplay = { message: normalizedMessage, origin };
-          queueMicrotask(() => {
-            replaying = true;
-            origin.click();
-            queueMicrotask(() => {
-              replaying = false;
-              approvedReplay = null;
-            });
-          });
-        },
-      };
-
-      window.dispatchEvent(new CustomEvent<SensitiveActionConfirmationRequest>(DTSC_CONFIRMATION_EVENT, { detail: legacyRequest }));
-      return false;
-    };
-
-    window.confirm = appConfirm;
-    return () => {
-      if (window.confirm === appConfirm) window.confirm = browserConfirm;
-    };
-  }, []);
-
   const minimumReasonLength = request?.reason?.minLength ?? 3;
   const reasonValid = !request?.reason || reason.trim().length >= minimumReasonLength;
   const danger = request?.tone === "danger";
