@@ -112,7 +112,7 @@ expect(payrollPath, payroll, "organizationLogoUrl", "branding client en paie");
 const payrollProjectionPath = "lib/reporting/payroll-professional-report.ts";
 const payrollProjection = read(payrollProjectionPath);
 expect(payrollProjectionPath, payrollProjection, "Gross payroll", "KPI paie EN");
-expect(payrollProjectionPath, payrollProjection, "Masse brute", "KPI paie FR");
+expect(payrollProjectionPath, payrollProjection, "Masse salariale brute", "KPI paie FR");
 expect(payrollProjectionPath, payrollProjection, "payrollStatus", "statuts de paie projetés en libellés métier");
 forbid(payrollProjectionPath, payrollProjection, /status \$\{String\(run\.status/, "statut technique de paie non affiché brut");
 
