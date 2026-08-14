@@ -74,7 +74,7 @@ La migration Shop 2.0 change uniquement la valeur par défaut SQL de `Enterprise
 - `AIRTEL_MONEY` — Airtel Money ;
 - `AFRIMONEY` — Afrimoney.
 
-Ils sont de type `MOBILE_MONEY` et utilisent `mobileMoneyFloatAccountId`.
+Ils sont de type `MOBILE_MONEY`. Depuis #307, un opérateur n’est plus limité à un seul compte : ses wallets financiers sont mappés par devise dans `EnterpriseRetailProviderAccount`. En RDC, la readiness attend au minimum un wallet `CDF` et un wallet `USD` par opérateur actif. Le champ historique `mobileMoneyFloatAccountId` est conservé uniquement pendant la fenêtre de compatibilité et n’est plus l’autorité des nouvelles transactions.
 
 ### Opérateurs réseau Télécom du profil spécialisé
 
@@ -167,9 +167,21 @@ Après succès, le ticket affiche numéro, total et lignes et peut être imprim�
 
 Cette capacité est une extension Retail optionnelle.
 
-L’agent sélectionne un wallet, le type `DEPOSIT`/`WITHDRAWAL`, le téléphone, le principal, les frais/commissions et la référence fournisseur.
+L’agent sélectionne l’opérateur, le type `DEPOSIT`/`WITHDRAWAL`, le téléphone, le principal, les frais/commissions et la référence opérateur. Le wallet financier n’est pas choisi arbitrairement par l’agent : la devise de la caisse ouverte détermine la devise de l’opération et le serveur résout le wallet du même opérateur dans cette devise.
 
-Le compte de float est résolu depuis `EnterpriseRetailProvider.mobileMoneyFloatAccountId`. Le compte cash est résolu depuis la session de caisse ouverte par l’agent.
+### Comptes opérateur multi-devise
+
+`EnterpriseRetailProviderAccount` est la source canonique des wallets Mobile Money. Un mapping associe :
+
+- une organisation ;
+- un opérateur ;
+- l’usage `MOBILE_MONEY_FLOAT` ;
+- une devise ;
+- un compte financier `MOBILE_MONEY` actif dans cette devise.
+
+L’unicité `organizationId + providerId + accountUse + currencyCode` interdit deux mappings concurrents pour la même devise d’un opérateur.
+
+En RDC, chaque opérateur actif est considéré prêt lorsque `CDF` et `USD` sont tous les deux configurés. Hors RDC, le mécanisme reste générique et la readiness attend au moins deux devises explicitement mappées. Aucun compte, devise, taux ou solde n’est créé silencieusement.
 
 Le serveur impose notamment :
 
@@ -178,15 +190,61 @@ Le serveur impose notamment :
 - protection unique `organizationId + providerCode + externalReference` ;
 - idempotence ;
 - tenant isolation ;
-- rate limiting spécifique à l’action.
+- rate limiting spécifique à l’action ;
+- résolution serveur du wallet par opérateur + devise ;
+- revalidation du compte financier : même tenant, type `MOBILE_MONEY`, devise correcte, statut actif.
 
-Effets actuels :
+Effets :
 
-- `DEPOSIT` : cash augmente, float diminue du principal ;
-- `WITHDRAWAL` : cash diminue, float augmente du principal ;
-- frais et commission restent séparés.
+- `DEPOSIT` : cash augmente, float opérateur de la même devise diminue du principal ;
+- `WITHDRAWAL` : cash diminue, float opérateur de la même devise augmente du principal ;
+- un frais encaissé en cash reste séparé du principal ;
+- la commission opérateur déclarée reste une donnée opérationnelle tant qu’aucun crédit réel de commission n’a été constaté.
 
-DTSC enregistre et rapproche actuellement l’opération ; les adaptateurs opérateurs asynchrones appartiennent à l’itération 3.
+Une annulation réutilise les identifiants de comptes enregistrés sur la transaction d’origine. Un changement ultérieur du mapping CDF/USD ne peut donc pas déplacer le reversal sur un autre wallet.
+
+### Comptabilité Mobile Money
+
+Les opérations Mobile Money utilisent le moteur Finance commun et le journal `MM` de type `MOBILE_MONEY`.
+
+Événements de posting :
+
+- `RETAIL_MOBILE_MONEY_POSTED` ;
+- `RETAIL_MOBILE_MONEY_REVERSED` ;
+- `RETAIL_MOBILE_MONEY_FX_POSTED` ;
+- `RETAIL_MOBILE_MONEY_FX_REVERSED`.
+
+Pour un dépôt/retrait, les lignes utilisent les vrais `ledgerAccountId` des comptes cash et Mobile Money. Lorsque les effets cash et float diffèrent parce qu’un frais a réellement été encaissé, la différence est comptabilisée via `SERVICE_REVENUE`. Le finalizer est idempotent et identique pour le mode manuel et les confirmations provider connectées.
+
+### Transfert entre devises du même opérateur
+
+Un agent autorisé peut convertir du float entre deux wallets de devises différentes appartenant au même opérateur.
+
+Le serveur :
+
+1. résout les deux mappings depuis un seul `providerId` ;
+2. refuse une paire de devises identiques ;
+3. résout le taux courant via le service Finance canonique `resolveExchangeRateDetails(...)` ;
+4. refuse la conversion si aucun taux explicite applicable n’existe ;
+5. calcule le montant cible ;
+6. contrôle le solde source ;
+7. verrouille les deux comptes dans un ordre déterministe ;
+8. débite le wallet source et crédite le wallet cible atomiquement ;
+9. crée les mouvements `EnterpriseTreasuryTransaction` ;
+10. snapshotte le taux réellement utilisé ;
+11. finalise le posting comptable Mobile Money.
+
+`EnterpriseMobileMoneyFxTransfer` conserve les deux comptes, les deux devises, les deux montants, le taux, sa date/source, l’opérateur, l’agent, la clé d’idempotence et les données de reversal. Le contrat ne possède pas de `targetProviderCode` : un transfert inter-opérateurs est explicitement hors périmètre.
+
+L’annulation d’un transfert FX est non destructive : elle inverse les soldes, crée les mouvements Treasury de reversal et poste l’écriture comptable inverse, sous contrôle de révision et de solde.
+
+### UX
+
+L’interface `MOBILE_MONEY_AGENCY` affiche chaque opérateur une seule fois. Sa carte montre les wallets configurés par devise, leur compte, leur solde et l’état `Prêt` / `À compléter`. En RDC, les lignes CDF et USD sont visibles ensemble.
+
+Lors d’un dépôt/retrait, seuls les opérateurs possédant un wallet dans la devise de la caisse sont proposés. Le récapitulatif avant confirmation montre le wallet et la devise qui seront utilisés.
+
+La section `Transfert entre devises` affiche avant confirmation le taux Finance courant, le montant cible, le solde disponible et la date/source du taux. Les surfaces sont localisées FR/EN et conçues pour mobile/desktop et modes clair/sombre DTSC.
 
 ## Télécom & forfaits — `TELCO_TOPUPS`
 
@@ -232,6 +290,8 @@ Le dashboard commercial calcule les agrégats par `currencyCode` au niveau Prism
 
 La plateforme possède également la gouvernance de taux de change Shop et une readiness FX permettant la consolidation historique lorsqu’un taux explicite et la configuration Finance sont disponibles. Une absence de taux ne doit jamais être compensée par une conversion implicite.
 
+Les transferts Mobile Money entre devises utilisent exactement cette source Finance canonique et mémorisent le taux réellement appliqué ; ils ne définissent pas un second référentiel FX Retail.
+
 ## RBAC Shop
 
 Le catalogue d’administration `COMMERCE_RETAIL` utilise `RETAIL_PERMISSION_CATALOG` et ne retombe pas sur les permissions Healthcare.
@@ -252,11 +312,13 @@ Postes standards actuels :
 
 Les permissions commerciales plus granulaires (price override, discount thresholds, retours, remboursements) appartiennent à l’itération 2.
 
+Pour #307, lecture/preview utilisent `read`, une opération client utilise `submit` et la configuration des wallets, les transferts FX et leurs annulations exigent `manage`.
+
 ## Mise en service guidée
 
 Le dashboard Shop expose les contrôles de readiness nécessaires au profil et aux extensions activées : profil, site/dépôt, catalogue, caisse, FX, rôles de contrôle et mappings opérateurs lorsqu’ils sont utilisés.
 
-Ces états servent à guider l’onboarding et à empêcher la documentation commerciale de masquer une configuration incomplète.
+Pour Mobile Money en RDC, la readiness vérifie désormais explicitement CDF + USD pour chaque opérateur actif. Hors RDC, elle vérifie au moins deux devises configurées par opérateur. Ces états servent à guider l’onboarding et à empêcher la documentation commerciale de masquer une configuration incomplète.
 
 ## Offres
 
@@ -282,3 +344,9 @@ Le programme de professionnalisation est suivi dans GitHub :
 4. **Itération 4/4** — offline, omnicanal, multi-store, country packs et certification globale.
 
 La certification finale sera fondée sur des preuves CI/E2E et une acceptation explicite, pas sur la seule présence des fonctionnalités dans le code.
+
+## Références #307
+
+- `docs/ISSUE_307_MOBILE_MONEY_MULTICURRENCY_ACCOUNTS.md` — contrat détaillé du hotfix multi-devise ;
+- issue #307 — implémentation ;
+- issue #309 — retrait futur du champ legacy `mobileMoneyFloatAccountId` après preuve du cutover production.
