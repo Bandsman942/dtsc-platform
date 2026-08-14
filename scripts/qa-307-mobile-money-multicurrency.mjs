@@ -195,8 +195,21 @@ check(hasAll(dashboard, [
   "cashSessions,",
 ]), "Mobile Money readiness and dashboard must expose every active cashier till with an expected live balance without regressing provider readiness");
 
+const domainDoc = read("docs/ERP_RETAIL_TELCO_MOBILE_MONEY.md");
+check(hasAll(domainDoc, [
+  "## Sessions de caisse",
+  "plusieurs sessions `OPEN` en parallèle",
+  "une caisse CDF et une caisse USD en RDC",
+  "basculer en un toucher entre ses caisses",
+  "Changer de caisse invalide tout brouillon de confirmation non confirmé",
+  "chaque caisse `OPEN` est comptée et soumise séparément",
+  "chaque caisse Mobile Money est comptée et soumise séparément en fin de journée",
+  "cashier ne peut pas auto-valider sa clôture",
+]), "Retail domain documentation must describe the concurrent Mobile Money till, switching and independent close workflow");
+
 check(!fs.existsSync(path.join(root, ".github/workflows/tmp-307-codemod.yml")), "Temporary #307 codemod workflow must not remain in the branch");
 check(!fs.existsSync(path.join(root, ".github/workflows/tmp-307-lint-polish.yml")), "Temporary #307 lint workflow must not remain in the branch");
+check(!fs.existsSync(path.join(root, ".github/workflows/tmp-307-doc-sync.yml")), "Temporary #307 documentation workflow must not remain in the branch");
 check(!fs.existsSync(path.join(root, "scripts/tmp-307-codemod.mjs")), "Temporary #307 codemod script must not remain in the branch");
 
 if (failures.length) {
@@ -204,4 +217,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log("Issue #307 Mobile Money multi-currency QA passed: operator/currency wallets, concurrent CDF/USD tills, frictionless switching, separate end-of-day closes, DRC readiness, deposits/withdrawals, same-operator FX, Treasury/accounting, reversal, RBAC and professional FR/EN UX are guarded.");
+console.log("Issue #307 Mobile Money multi-currency QA passed: operator/currency wallets, concurrent CDF/USD tills, frictionless switching, separate end-of-day closes, DRC readiness, deposits/withdrawals, same-operator FX, Treasury/accounting, reversal, RBAC, documentation and professional FR/EN UX are guarded.");
