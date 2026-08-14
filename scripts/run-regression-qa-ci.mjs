@@ -10,6 +10,7 @@ if (!regression || typeof regression !== "string") {
 }
 
 const commands = regression.split(/\s+&&\s+/).map((item) => item.trim()).filter(Boolean);
+commands.unshift("node scripts/qa-enterprise-core-i18n-292.mjs");
 commands.unshift("node scripts/qa-calendar-internal-i18n-276.mjs");
 commands.unshift("node scripts/qa-calendar-work-schedule-i18n-275.mjs");
 commands.unshift("node scripts/qa-shared-work-i18n-convergence.mjs");

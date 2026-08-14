@@ -3,7 +3,8 @@
 import type { FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Field, NativeSelect, priorityChoicesEn, priorityChoicesFr, type EnterpriseChoice } from "@/components/enterprise/core-v2/erp-v2-ui";
+import { Field, NativeSelect, priorityChoices, type EnterpriseChoice } from "@/components/enterprise/core-v2/erp-v2-ui";
+import { enterpriseCoreT } from "@/lib/enterprise-core-i18n";
 
 export type TaskFormValue = {
   taskType?: string;
@@ -16,19 +17,18 @@ export type TaskFormValue = {
 };
 
 export function EnterpriseTaskForm({ locale, members, departments, value, onSubmit }: { locale?: string | null; members: EnterpriseChoice[]; departments: EnterpriseChoice[]; value?: TaskFormValue; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
-  const en = locale === "en";
   return (
     <form onSubmit={onSubmit} className="grid min-w-0 gap-4">
       <div className="grid gap-3 md:grid-cols-2">
-        <Field label={en ? "Type" : "Type"}><NativeSelect name="taskType" required defaultValue={value?.taskType || "TASK"} items={[{ id: "TASK", label: en ? "Task" : "Tâche" }, { id: "OPERATION", label: en ? "Operation" : "Opération" }, { id: "ACTION", label: "Action" }]} /></Field>
-        <Field label={en ? "Title" : "Titre"}><Input name="title" required minLength={3} defaultValue={value?.title || ""} /></Field>
-        <Field label={en ? "Priority" : "Priorité"}><NativeSelect name="priority" required defaultValue={value?.priority || "NORMAL"} items={en ? priorityChoicesEn : priorityChoicesFr} /></Field>
-        <Field label={en ? "Due date" : "Échéance"}><Input name="dueAt" type="datetime-local" defaultValue={toLocalInput(value?.dueAt)} /></Field>
-        <Field label={en ? "Assignee" : "Assigné à"}><NativeSelect name="assignedToUserId" defaultValue={value?.assignedToUserId || ""} items={members} /></Field>
-        <Field label={en ? "Department" : "Département"}><NativeSelect name="departmentId" defaultValue={value?.departmentId || ""} items={departments} /></Field>
+        <Field label={enterpriseCoreT(locale, "tasks.form.type")}><NativeSelect name="taskType" required defaultValue={value?.taskType || "TASK"} items={[{ id: "TASK", label: enterpriseCoreT(locale, "tasks.form.task") }, { id: "OPERATION", label: enterpriseCoreT(locale, "tasks.form.operation") }, { id: "ACTION", label: enterpriseCoreT(locale, "tasks.form.action") }]} /></Field>
+        <Field label={enterpriseCoreT(locale, "tasks.form.title")}><Input name="title" required minLength={3} defaultValue={value?.title || ""} /></Field>
+        <Field label={enterpriseCoreT(locale, "tasks.form.priority")}><NativeSelect name="priority" required defaultValue={value?.priority || "NORMAL"} items={priorityChoices(locale)} /></Field>
+        <Field label={enterpriseCoreT(locale, "tasks.form.dueDate")}><Input name="dueAt" type="datetime-local" defaultValue={toLocalInput(value?.dueAt)} /></Field>
+        <Field label={enterpriseCoreT(locale, "tasks.form.assignee")}><NativeSelect name="assignedToUserId" defaultValue={value?.assignedToUserId || ""} items={members} /></Field>
+        <Field label={enterpriseCoreT(locale, "tasks.form.department")}><NativeSelect name="departmentId" defaultValue={value?.departmentId || ""} items={departments} /></Field>
       </div>
-      <Field label={en ? "Description" : "Description"}><textarea name="description" defaultValue={value?.description || ""} className="min-h-32 w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm text-dtsc-ink" /></Field>
-      <Button className="w-full rounded-xl bg-dtsc-blue text-white sm:w-fit">{value ? (en ? "Save changes" : "Enregistrer les modifications") : (en ? "Create task" : "Créer la tâche")}</Button>
+      <Field label={enterpriseCoreT(locale, "tasks.form.description")}><textarea name="description" defaultValue={value?.description || ""} className="min-h-32 w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm text-dtsc-ink" /></Field>
+      <Button className="w-full rounded-xl bg-dtsc-blue text-white sm:w-fit">{value ? enterpriseCoreT(locale, "common.saveChanges") : enterpriseCoreT(locale, "tasks.form.create")}</Button>
     </form>
   );
 }
