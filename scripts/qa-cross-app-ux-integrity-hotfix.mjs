@@ -48,20 +48,20 @@ expect(readinessUi.includes("getRetailCountryCapabilityDeepLink"), "Country capa
 expect(mobileCss.includes("details > summary + .flex.overflow-x-auto"), "ERP continuation links must be bounded on narrow screens");
 expect(mobileCss.includes("grid-template-columns: repeat(2, minmax(0, 1fr))"), "ERP continuation links must use a responsive bounded grid on mobile");
 
-// 3. Sensitive actions: DTSC Dialog is canonical. The internal Calendar workspace
-// and Collaborators workspace remain source-compatible through the globally mounted
-// bridge; any new native confirmation callsite fails this gate.
+// 3. Sensitive actions: the explicit async API uses the DTSC Dialog. Legacy
+// synchronous window.confirm callsites keep native browser semantics until migrated;
+// the provider must never monkey-patch the browser API or replay a detached DOM click.
 const confirmationContract = read("lib/client-confirmation.ts");
 const confirmationProvider = read("components/ui/sensitive-action-confirmation-provider.tsx");
 const rootLayout = read("app/layout.tsx");
 expect(confirmationContract.includes("confirmSensitiveAction"), "Sensitive action confirmation API must be reusable");
 expect(confirmationContract.includes('return Promise.resolve({ confirmed: false })'), "Sensitive action confirmation must fail closed without a browser UI");
-expect(confirmationProvider.includes("<Dialog"), "Sensitive action confirmation must use the DTSC dialog component");
-expect(confirmationProvider.includes("window.confirm = appConfirm"), "Legacy confirmation calls must be intercepted by the DTSC dialog provider");
-expect(confirmationProvider.includes("approvedReplay"), "Legacy confirmation bridge must use a one-shot replay token");
-expect(confirmationProvider.includes("replaying = true"), "Legacy confirmation replay must be explicitly scoped");
-expect(confirmationProvider.includes("window.dispatchEvent"), "Legacy confirmation bridge must dispatch the canonical DTSC confirmation event");
-expect(confirmationProvider.includes("window.confirm = browserConfirm"), "Legacy confirmation bridge must restore the browser API on cleanup");
+expect(confirmationProvider.includes("<Dialog"), "Explicit async sensitive actions must use the DTSC dialog component");
+expect(confirmationProvider.includes("DTSC_CONFIRMATION_EVENT"), "DTSC dialog provider must listen to the canonical async confirmation event");
+expect(confirmationProvider.includes("window.addEventListener"), "DTSC dialog provider must subscribe to explicit confirmation requests");
+for (const forbidden of ["window.confirm =", "origin.click()", "approvedReplay", "replaying = true", "window.dispatchEvent"]) {
+  expect(!confirmationProvider.includes(forbidden), `Sensitive action provider must not emulate synchronous confirmation through a global bridge: ${forbidden}`);
+}
 expect(rootLayout.includes("SensitiveActionConfirmationProvider"), "Sensitive action confirmation provider must be mounted globally");
 
 const legacyConfirmAllowlist = new Set([
@@ -71,11 +71,11 @@ const legacyConfirmAllowlist = new Set([
 for (const file of walkFiles("components")) {
   const source = read(file);
   if (/\bwindow\.confirm\s*\(/.test(source) && !legacyConfirmAllowlist.has(file)) {
-    failures.push(`Unbridged native confirmation callsite is forbidden: ${file}`);
+    failures.push(`New native confirmation callsite is forbidden; use confirmSensitiveAction instead: ${file}`);
   }
 }
 for (const file of legacyConfirmAllowlist) {
-  expect(/\bwindow\.confirm\s*\(/.test(read(file)), `${file} is allowlisted only while its audited legacy confirmation call remains present`);
+  expect(/\bwindow\.confirm\s*\(/.test(read(file)), `${file} is allowlisted only while its audited native synchronous confirmation remains present`);
 }
 for (const file of [
   "components/admin/billing-reconciliation-control.tsx",
