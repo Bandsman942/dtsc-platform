@@ -133,6 +133,8 @@ Règle de vérité multi-devise :
 - en cas de taux manquant, le rapport montre le manque et les opérations affectées au lieu de produire un total partiel trompeur ;
 - les comparaisons et graphiques consolidés utilisent la devise de reporting uniquement quand cette consolidation est valide.
 
+Le contrat de readiness Shop conserve en parallèle un état machine non visible `COMPLETE`/`INCOMPLETE` pour la QA et l’automatisation, tandis que l’interface présente uniquement les libellés métier localisés `Complète`/`Suspendue` ou `Complete`/`Withheld`.
+
 ## Sécurité et isolation tenant
 
 Le hotfix ne retire aucun guard existant.
@@ -173,6 +175,8 @@ La QA garde notamment :
 - intégration Finance, Paie, Pharmacie et Retail ;
 - règle multi-devise Retail ;
 - absence des codemods/workflows temporaires de livraison.
+
+Les derniers contrats de types sont également couverts par le type-check CI : KPI financiers typés selon `ProfessionalReportExportModel`, réduction numérique des buckets, propagation du logo uniquement vers les workspaces qui l’acceptent, et fallback de nom d’organisation sur le chemin d’administration Pharmacie historique.
 
 La CI complète doit également prouver type-check, régression, lint, build et contrats de migrations existants.
 
