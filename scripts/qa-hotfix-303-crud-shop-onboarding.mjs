@@ -15,8 +15,10 @@ check(confirmationProvider.includes("window.addEventListener"), "Async DTSC conf
 
 const collaborators = read("components/collaborators/collaborators-conversation-workspace.tsx");
 check(collaborators.includes("async function deleteMessage"), "Collaborators message delete workflow is missing");
-check(collaborators.includes('method: "DELETE"'), "Collaborators delete workflow must still execute a DELETE request after native confirmation");
-check(collaborators.includes("window.confirm"), "Legacy Collaborators confirmation should keep native synchronous browser semantics until explicitly migrated to the async DTSC API");
+check(collaborators.includes('method: "DELETE"'), "Collaborators delete workflow must still execute a DELETE request after explicit confirmation");
+check(collaborators.includes("confirmSensitiveAction"), "Collaborators confirmations must use the explicit async DTSC confirmation API after #305 migration");
+check(collaborators.includes("if (!confirmation.confirmed) return;"), "Collaborators destructive mutations must stop unless the async DTSC confirmation resolves as confirmed");
+check(!collaborators.includes("window.confirm"), "Collaborators must not fall back to native browser confirmation after #305 migration");
 
 const onboarding = read("lib/enterprise/retail/self-service-onboarding.ts");
 for (const marker of ["activePackActivations", "functionalCurrencyCode", "uniqueOrNull(options.sites)", "warehouseCandidates", "cashAccountCandidates", "isCashAccount"]) {
@@ -63,4 +65,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log("Hotfix #303 QA passed: CRUD confirmations keep deterministic semantics, Shop readiness is canonical/actionable, the currency step opens the correct Finance form, and accounting onboarding uses DTSC branding.");
+console.log("Hotfix #303 QA passed: CRUD confirmations keep deterministic async DTSC semantics, Shop readiness is canonical/actionable, the currency step opens the correct Finance form, and accounting onboarding uses DTSC branding.");
