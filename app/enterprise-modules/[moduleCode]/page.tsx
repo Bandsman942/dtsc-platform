@@ -60,7 +60,7 @@ export default async function EnterpriseModulePage({ params }: Params) {
 
   const organization = await prisma.organization.findFirst({
     where: { id: organizationId, status: "ACTIVE", deletedAt: null, organizationType: "CLIENT" },
-    select: { name: true, sectorCode: true },
+    select: { name: true, sectorCode: true, logoUrl: true },
   });
   if (!organization) notFound();
 
@@ -99,6 +99,9 @@ export default async function EnterpriseModulePage({ params }: Params) {
       <AppShell user={user}>
         <EnterpriseSectorModuleWorkspace
           organizationId={organizationId}
+          organizationName={organization.name}
+          organizationLogoUrl={organization.logoUrl}
+          locale={user.locale}
           definition={definition}
           enabledModuleCodes={enabledModules.map((item) => normalizeEnterpriseModuleCode(item.moduleCode))}
           records={JSON.parse(JSON.stringify(betaRecords))}
@@ -156,7 +159,7 @@ export default async function EnterpriseModulePage({ params }: Params) {
     return <AppShell user={user}><EnterpriseTimeAttendanceWorkspace organizationId={organizationId} organizationName={organization.name} definition={definition} /></AppShell>;
   }
   if (definition.code === "PAYROLL_OPERATIONS") {
-    return <AppShell user={user}><EnterprisePayrollOperationsWorkspace organizationId={organizationId} organizationName={organization.name} definition={definition} /></AppShell>;
+    return <AppShell user={user}><EnterprisePayrollOperationsWorkspace organizationId={organizationId} organizationName={organization.name} organizationLogoUrl={organization.logoUrl} locale={user.locale} definition={definition} /></AppShell>;
   }
   if (definition.code === "PROJECTS_SERVICES") {
     return <AppShell user={user}><EnterpriseProjectsDeliverablesWorkspace organizationId={organizationId} organizationName={organization.name} definition={definition} initialFocus="PROJECTS" /></AppShell>;
@@ -258,6 +261,7 @@ export default async function EnterpriseModulePage({ params }: Params) {
       <EnterpriseModuleWorkspace
         organizationId={organizationId}
         organizationName={organization.name}
+        organizationLogoUrl={organization.logoUrl}
         enterpriseModule={{
           code: definition.code,
           label: getEnterpriseModuleLabel(definition, user.locale),

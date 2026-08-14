@@ -1,7 +1,7 @@
 import type { ProfessionalReportExportModel, ProfessionalReportInsight } from "@/lib/reporting/professional-export";
 
 type PayrollItem = {
-  employee?: { id?: string; firstName?: string | null; lastName?: string | null; employeeNumber?: string | null; position?: { title?: string | null } | null; department?: { name?: string | null } | null } | null;
+  employee?: { id?: string; displayName?: string | null; firstName?: string | null; lastName?: string | null; employeeNumber?: string | null; position?: { title?: string | null } | null; department?: { name?: string | null } | null } | null;
   baseGrossAmount?: number | string | null;
   bonusAmount?: number | string | null;
   deductionAmount?: number | string | null;
@@ -13,6 +13,7 @@ type PayrollRun = {
   reference: string;
   periodStart?: string | null;
   periodEnd?: string | null;
+  payrollPeriod?: { periodStart?: string | null; periodEnd?: string | null } | null;
   status?: string | null;
   currency?: string | null;
   employeeCount?: number | null;
@@ -35,7 +36,7 @@ function date(value?: string | null, locale?: string | null) {
 }
 function employeeName(item: PayrollItem) {
   const employee = item.employee;
-  const name = [employee?.firstName, employee?.lastName].filter(Boolean).join(" ").trim();
+  const name = employee?.displayName?.trim() || [employee?.firstName, employee?.lastName].filter(Boolean).join(" ").trim();
   return name || employee?.employeeNumber || "Collaborateur";
 }
 
@@ -49,6 +50,8 @@ export function buildPayrollProfessionalReport(input: {
   const run = input.run;
   const currency = run.currency || "USD";
   const previous = input.previousRun && input.previousRun.currency === currency ? input.previousRun : null;
+  const periodStart = run.periodStart || run.payrollPeriod?.periodStart || null;
+  const periodEnd = run.periodEnd || run.payrollPeriod?.periodEnd || null;
   const gross = n(run.grossAmount);
   const net = n(run.netAmount);
   const deductions = n(run.deductionAmount);
@@ -68,7 +71,7 @@ export function buildPayrollProfessionalReport(input: {
 
   return {
     title: en ? `Payroll report · ${run.reference}` : `Rapport de paie · ${run.reference}`,
-    subtitle: `${date(run.periodStart, input.locale)} → ${date(run.periodEnd, input.locale)} · ${currency}`,
+    subtitle: `${date(periodStart, input.locale)} → ${date(periodEnd, input.locale)} · ${currency}`,
     organizationName: input.organizationName || "DTSC Platform",
     generatedLabel: en ? `Report prepared from the authorized payroll run · status ${String(run.status || "").replace(/_/g, " ")}` : `Rapport préparé à partir de la paie autorisée · statut ${String(run.status || "").replace(/_/g, " ")}`,
     filenameBase: `paie-${run.reference}`,
@@ -97,7 +100,7 @@ export function buildPayrollProfessionalReport(input: {
     ],
     rows: (run.items || []).map((item) => ({ employee: employeeName(item), number: item.employee?.employeeNumber || "—", department: item.employee?.department?.name || "—", gross: money(item.grossAmount, currency, input.locale), bonus: money(item.bonusAmount, currency, input.locale), deduction: money(item.deductionAmount, currency, input.locale), net: money(item.netAmount, currency, input.locale) })),
     insights,
-    filters: [{ label: en ? "Period" : "Période", value: `${date(run.periodStart, input.locale)} → ${date(run.periodEnd, input.locale)}` }, { label: en ? "Currency" : "Devise", value: currency }],
+    filters: [{ label: en ? "Period" : "Période", value: `${date(periodStart, input.locale)} → ${date(periodEnd, input.locale)}` }, { label: en ? "Currency" : "Devise", value: currency }],
     accentHex: "#087EA4",
   };
 }

@@ -56,6 +56,7 @@ type LegacyCoreRecord = {
 export function EnterpriseModuleWorkspace({
   organizationId,
   organizationName,
+  organizationLogoUrl,
   enterpriseModule,
   activityBlocks,
   records,
@@ -68,6 +69,7 @@ export function EnterpriseModuleWorkspace({
 }: {
   organizationId: string;
   organizationName: string;
+  organizationLogoUrl?: string | null;
   enterpriseModule: EnterpriseNavigationModule;
   activityBlocks: ActivityBlock[];
   records: SectorRecord[];
@@ -164,7 +166,7 @@ export function EnterpriseModuleWorkspace({
         ) : enterpriseModule.code === "FINANCE_BUDGETS" ? (
           <EnterpriseFinanceWorkspace organizationId={organizationId} members={memberChoices} departments={departmentChoices} canCreate={canCreate} canManage={canManage} locale={locale} legacyRecords={coreRecords.filter((record) => ["BUDGET", "EXPENSE"].includes(record.recordType))} />
         ) : enterpriseModule.code === "REPORTS" ? (
-          <EnterpriseReportsWorkspace organizationId={organizationId} canCreate={canCreate} canManage={canManage} locale={locale} legacyRecords={coreRecords.filter((record) => record.recordType === "REPORT")} />
+          <EnterpriseReportsWorkspace organizationId={organizationId} organizationName={organizationName} organizationLogoUrl={organizationLogoUrl} canCreate={canCreate} canManage={canManage} locale={locale} legacyRecords={coreRecords.filter((record) => record.recordType === "REPORT")} />
         ) : enterpriseModule.code === "WORKFLOWS" ? (
           <EnterpriseWorkflowsWorkspace organizationId={organizationId} canManage={canManage} locale={locale} members={memberChoices} departments={departmentChoices} legacyWorkflows={coreData.workflows} />
         ) : commonDefinition ? (
