@@ -1,0 +1,48 @@
+name: Temporary #307 documentation sync
+
+on:
+  push:
+    branches:
+      - fix/307-mobile-money-multicurrency-accounts
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/307-mobile-money-multicurrency-accounts
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Align Retail Mobile Money documentation
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const file = 'docs/ERP_RETAIL_TELCO_MOBILE_MONEY.md';
+          let source = fs.readFileSync(file, 'utf8');
+
+          const oldUx = `Lors d’un dépôt/retrait, seuls les opérateurs possédant un wallet dans la devise de la caisse sont proposés. Le récapitulatif avant confirmation montre le wallet et la devise qui seront utilisés.\n\nLa section \`Transfert entre devises\` affiche avant confirmation le taux Finance courant, le montant cible, le solde disponible et la date/source du taux. Les surfaces sont localisées FR/EN et conçues pour mobile/desktop et modes clair/sombre DTSC.`;
+          const newUx = `Dans Mobile Money, toutes les sessions de caisse \`OPEN\` du cashier sur des comptes distincts sont affichées comme cartes sélectionnables. En RDC, la paire CDF + USD est recommandée. Le cashier peut ouvrir une autre caisse sans fermer la première, puis basculer en un toucher entre ses caisses. La caisse sélectionnée fixe la devise de l’opération ; seuls les opérateurs possédant un wallet dans cette devise sont proposés. Changer de caisse invalide tout brouillon de confirmation non confirmé. Le récapitulatif montre explicitement la caisse, le wallet et la devise qui seront utilisés.\n\nEn fin de journée, chaque caisse \`OPEN\` est comptée et soumise séparément. Le service Finance canonique recalcule le théorique, vérifie le total des coupures et exige un motif d’écart avant passage en \`PENDING_VALIDATION\`. L’approbation ou le rejet reste un acte Finance indépendant : le cashier ne peut pas auto-valider sa clôture.\n\nLa section \`Transfert entre devises\` affiche avant confirmation le taux Finance courant, le montant cible, le solde disponible et la date/source du taux. Les surfaces sont localisées FR/EN et conçues pour mobile/desktop et modes clair/sombre DTSC.`;
+          if (!source.includes(oldUx)) throw new Error('Mobile Money UX paragraph marker not found');
+          source = source.replace(oldUx, newUx);
+
+          const oldCash = `## Session de caisse\n\nLa session active est visible dans les surfaces opérationnelles Shop. Sans caisse active :\n\n- un paiement POS cash est bloqué ;\n- une opération Mobile Money qui exige du cash est bloquée ;\n- les autres paiements utilisent leurs comptes réellement configurés selon le flux.\n\nUne session \`PENDING_VALIDATION\` n’est pas une caisse utilisable.`;
+          const newCash = `## Sessions de caisse\n\nLes sessions de caisse restent des objets Finance séparés par compte financier. Le POS conserve son contexte de caisse usuel. Dans \`MOBILE_MONEY_AGENCY\`, un même cashier peut garder plusieurs sessions \`OPEN\` en parallèle lorsque les comptes cash sont distincts, par exemple une caisse CDF et une caisse USD en RDC. L’interface expose toutes ses caisses ouvertes, permet d’en choisir une comme caisse opérationnelle et d’en ouvrir une autre sans fermer la première.\n\nSans caisse \`OPEN\` sélectionnée, une opération Mobile Money qui exige du cash est bloquée. Pour le POS, un paiement cash reste bloqué sans sa session de caisse active. Les autres paiements utilisent leurs comptes réellement configurés selon le flux.\n\nUne session \`CLOSING\` ou \`PENDING_VALIDATION\` n’est jamais une caisse utilisable pour de nouvelles opérations. Chaque caisse Mobile Money est comptée et soumise séparément en fin de journée, puis suit l’approbation Finance indépendante existante.`;
+          if (!source.includes(oldCash)) throw new Error('Retail cash-session section marker not found');
+          source = source.replace(oldCash, newCash);
+
+          fs.writeFileSync(file, source);
+          NODE
+          rm .github/workflows/tmp-307-doc-sync.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/ERP_RETAIL_TELCO_MOBILE_MONEY.md .github/workflows/tmp-307-doc-sync.yml
+          git commit -m "docs(retail): align concurrent Mobile Money till contract"
+          git push origin HEAD:fix/307-mobile-money-multicurrency-accounts
