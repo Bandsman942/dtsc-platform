@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { MobileMoneyAgencyWorkspace } from "@/components/enterprise/professional/mobile-money-agency-workspace";
 import { RetailActiveCustomerBar } from "@/components/enterprise/professional/retail-active-customer-bar";
 import { RetailDailyCloseWorkspace } from "@/components/enterprise/professional/retail-daily-close-workspace";
 import { RetailDeviceReadiness } from "@/components/enterprise/professional/retail-device-readiness";
@@ -47,6 +48,12 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
           />
         ) : moduleCode === "RETAIL_POS" ? (
           <RetailPosWorkspace
+            organizationId={organizationId}
+            organizationName={organization.name}
+            definition={access.definition}
+          />
+        ) : moduleCode === "MOBILE_MONEY_AGENCY" ? (
+          <MobileMoneyAgencyWorkspace
             organizationId={organizationId}
             organizationName={organization.name}
             definition={access.definition}
