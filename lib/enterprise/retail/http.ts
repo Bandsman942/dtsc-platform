@@ -40,6 +40,15 @@ const ERROR_MESSAGES: Record<string, string> = {
   RETAIL_CLOSE_SELF_VALIDATION_FORBIDDEN: "La personne ayant soumis la clôture ne peut pas la valider.",
   RETAIL_CASH_COUNT_TOTAL_MISMATCH: "Le total des coupures doit correspondre au montant de caisse déclaré.",
   RETAIL_VARIANCE_REASON_REQUIRED: "Tout écart de caisse ou de float doit être justifié avant soumission.",
+  CASH_ACCOUNT_INVALID: "Le compte choisi n’est pas une caisse active de cette entreprise.",
+  CASH_SESSION_ALREADY_ACTIVE: "Cette caisse est déjà ouverte ou en attente de validation. Utilisez la session existante ou choisissez une autre caisse.",
+  CASH_SESSION_NOT_FOUND: "Cette session de caisse est introuvable. Actualisez la page avant de réessayer.",
+  CASH_SESSION_NOT_OWNED: "Vous ne pouvez clôturer que vos propres sessions de caisse.",
+  CASH_SESSION_CONFLICT: "Cette caisse a changé d’état depuis votre dernière lecture. Actualisez avant de réessayer.",
+  CASH_COUNT_TOTAL_MISMATCH: "Le total calculé à partir des coupures ne correspond pas au montant compté. Vérifiez le comptage.",
+  CASH_DISCREPANCY_REASON_REQUIRED: "Un motif est obligatoire lorsque le montant compté diffère du théorique de la caisse.",
+  CASH_SESSION_SELF_VALIDATION_FORBIDDEN: "La personne qui tient la caisse ne peut pas approuver elle-même sa clôture.",
+  CASH_REJECTION_REASON_REQUIRED: "Un motif est obligatoire pour rejeter une clôture de caisse.",
   RETAIL_DUPLICATE: "Une même référence ne peut apparaître deux fois dans cette opération.",
   RETAIL_PHONE_INVALID: "Saisissez un numéro au format international avec l’indicatif du pays.",
   RETAIL_EXTERNAL_REFERENCE_REQUIRED: "La référence opérateur est obligatoire pour confirmer cette opération.",
@@ -137,7 +146,7 @@ export function retailErrorResponse(error: unknown, fallback = "RETAIL_OPERATION
   if (error instanceof EnterpriseAccountingError) {
     return NextResponse.json({
       error: error.code,
-      message: "La comptabilisation de l’opération Shop n’est pas prête ou n’a pas pu être finalisée. Vérifiez la configuration Finance, les comptes et la valorisation du stock.",
+      message: ERROR_MESSAGES[error.code] || "La comptabilisation de l’opération Shop n’est pas prête ou n’a pas pu être finalisée. Vérifiez la configuration Finance, les comptes et la valorisation du stock.",
       details: error.details,
     }, { status: error.status });
   }
