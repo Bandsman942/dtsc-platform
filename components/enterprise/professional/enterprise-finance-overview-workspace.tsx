@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { AlertTriangle, ArrowRight, CheckCircle2, Network, RotateCcw, Settings2, ShieldAlert } from "lucide-react";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
@@ -63,16 +62,14 @@ function DiagnosticCard({ diagnostic, locale, canManage, openConfiguration }: { 
 
 export function EnterpriseFinanceOverviewWorkspace({ organizationId, organizationName, definition, locale: requestedLocale, canManage }: { organizationId: string; organizationName: string; definition: EnterpriseModuleDefinition; locale?: string | null; canManage: boolean }) {
   const locale: FinanceLocale = requestedLocale === "en" ? "en" : "fr";
-  const searchParams = useSearchParams();
-  const requestedConfiguration = searchParams.get("configure");
-  const shouldOpenConfiguration = requestedConfiguration === "finance" || requestedConfiguration === "currency";
   const [readiness, setReadiness] = useState<Readiness | null>(null);
   const [summary, setSummary] = useState<Summary>(EMPTY_SUMMARY);
   const [projectionHealth, setProjectionHealth] = useState<ProjectionHealth>(EMPTY_PROJECTION_HEALTH);
   const [projectionError, setProjectionError] = useState("");
   const [retryingProjectionId, setRetryingProjectionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [configurationOpen, setConfigurationOpen] = useState(shouldOpenConfiguration);
+  const [configurationOpen, setConfigurationOpen] = useState(false);
+  const [requestedConfiguration, setRequestedConfiguration] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -111,7 +108,12 @@ export function EnterpriseFinanceOverviewWorkspace({ organizationId, organizatio
   }, [locale, organizationId]);
 
   useEffect(() => { void load(); }, [load]);
-  useEffect(() => { if (shouldOpenConfiguration) setConfigurationOpen(true); }, [shouldOpenConfiguration]);
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("configure");
+    if (requested !== "finance" && requested !== "currency") return;
+    setRequestedConfiguration(requested);
+    setConfigurationOpen(true);
+  }, []);
   const diagnostics = readiness?.diagnostics || [];
   const blockerDiagnostics = diagnostics.filter((diagnostic) => diagnostic.severity === "BLOCKER");
   const completedBlockers = blockerDiagnostics.filter((diagnostic) => diagnostic.ready).length;
