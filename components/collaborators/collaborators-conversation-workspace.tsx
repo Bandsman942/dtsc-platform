@@ -52,6 +52,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useToastMessage } from "@/components/ui/use-toast-message";
+import { confirmSensitiveAction } from "@/lib/client-confirmation";
 import { collaborationExperienceT } from "@/lib/collaboration-experience-i18n";
 import { formatRelativeUserDateTime, formatUserDateTime, type UserDatePreferences } from "@/lib/user-format";
 import { cn } from "@/lib/utils";
@@ -587,7 +588,14 @@ export function CollaboratorsConversationWorkspace(props: Props) {
   }
 
   async function deleteCustomFilter(item: CustomFilter) {
-    if (!window.confirm(collaborationExperienceT(userPreferences.locale, "conversationUiDeleteFilter", { v0: item.name }))) return;
+    const confirmation = await confirmSensitiveAction({
+      title: t("conversationUiDeleteFilter2"),
+      description: collaborationExperienceT(userPreferences.locale, "conversationUiDeleteFilter", { v0: item.name }),
+      confirmLabel: t("conversationUiDeleteFilter2"),
+      cancelLabel: t("cancel"),
+      tone: "danger",
+    });
+    if (!confirmation.confirmed) return;
     const response = await fetch(`/api/collaborators/filters/${item.id}`, { method: "DELETE" });
     if (!response.ok) return setFeedback(collaborationExperienceT(userPreferences.locale, "conversationUiUnableToDeleteFilter"));
     if (filter === `CUSTOM:${item.id}`) setFilter("ALL");
@@ -661,7 +669,14 @@ export function CollaboratorsConversationWorkspace(props: Props) {
   }
 
   async function deleteMessage(message: GroupMessage) {
-    if (!window.confirm(collaborationExperienceT(userPreferences.locale, "conversationUiDeleteThisMessage"))) return;
+    const confirmation = await confirmSensitiveAction({
+      title: t("deleteMessage"),
+      description: t("conversationUiDeleteThisMessage"),
+      confirmLabel: t("deleteMessage"),
+      cancelLabel: t("cancel"),
+      tone: "danger",
+    });
+    if (!confirmation.confirmed) return;
     const response = await fetch(`/api/collaborators/messages/${message.id}`, { method: "DELETE" });
     if (response.ok && activeGroup) await Promise.all([loadMessages(activeGroup.id), refreshGroups()]);
   }
@@ -762,7 +777,19 @@ export function CollaboratorsConversationWorkspace(props: Props) {
   async function manageGroupMember(member: GroupMember, action: "PROMOTE_ADMIN" | "DEMOTE_ADMIN" | "REMOVE" | "TRANSFER_OWNER") {
     if (!activeGroup) return;
     const destructive = action === "REMOVE" || action === "TRANSFER_OWNER";
-    if (destructive && !window.confirm(action === "REMOVE" ? collaborationExperienceT(userPreferences.locale, "conversationUiMemberRemoveConfirm", { v0: member.user.name }) : collaborationExperienceT(userPreferences.locale, "conversationUiMemberTransferConfirm", { v0: member.user.name }))) return;
+    if (destructive) {
+      const removingMember = action === "REMOVE";
+      const confirmation = await confirmSensitiveAction({
+        title: removingMember ? t("conversationUiRemove") : t("conversationUiTransfer"),
+        description: removingMember
+          ? collaborationExperienceT(userPreferences.locale, "conversationUiMemberRemoveConfirm", { v0: member.user.name })
+          : collaborationExperienceT(userPreferences.locale, "conversationUiMemberTransferConfirm", { v0: member.user.name }),
+        confirmLabel: removingMember ? t("conversationUiRemove") : t("conversationUiTransfer"),
+        cancelLabel: t("cancel"),
+        tone: removingMember ? "danger" : "warning",
+      });
+      if (!confirmation.confirmed) return;
+    }
     const response = await fetch(`/api/collaborators/groups/${activeGroup.id}/members/${member.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -776,7 +803,16 @@ export function CollaboratorsConversationWorkspace(props: Props) {
   async function toggleDirectBlock() {
     if (!directPeer || !directBlock) return;
     const action = directBlock.blockedByMe ? "UNBLOCK" : "BLOCK";
-    if (action === "BLOCK" && !window.confirm(collaborationExperienceT(userPreferences.locale, "conversationUiBlockConfirm", { v0: directPeer.user.name }))) return;
+    if (action === "BLOCK") {
+      const confirmation = await confirmSensitiveAction({
+        title: t("conversationUiBlock"),
+        description: collaborationExperienceT(userPreferences.locale, "conversationUiBlockConfirm", { v0: directPeer.user.name }),
+        confirmLabel: t("conversationUiBlock"),
+        cancelLabel: t("cancel"),
+        tone: "warning",
+      });
+      if (!confirmation.confirmed) return;
+    }
     const response = await fetch("/api/collaborators/blocks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -789,8 +825,15 @@ export function CollaboratorsConversationWorkspace(props: Props) {
 
   async function leaveOrDeleteGroup() {
     if (!activeGroup) return;
-    const prompt = isOwner ? (collaborationExperienceT(userPreferences.locale, "conversationUiDeleteThisGroup")) : (collaborationExperienceT(userPreferences.locale, "conversationUiLeaveThisGroup"));
-    if (!window.confirm(prompt)) return;
+    const prompt = isOwner ? collaborationExperienceT(userPreferences.locale, "conversationUiDeleteThisGroup") : collaborationExperienceT(userPreferences.locale, "conversationUiLeaveThisGroup");
+    const confirmation = await confirmSensitiveAction({
+      title: isOwner ? t("delete") : t("leave"),
+      description: prompt,
+      confirmLabel: isOwner ? t("delete") : t("leave"),
+      cancelLabel: t("cancel"),
+      tone: isOwner ? "danger" : "warning",
+    });
+    if (!confirmation.confirmed) return;
     const response = await fetch(`/api/collaborators/groups/${activeGroup.id}`, { method: "DELETE" });
     if (!response.ok) return setFeedback(collaborationExperienceT(userPreferences.locale, "conversationUiUnableToApplyAction"));
     setActiveGroupId(""); setMobileListOpen(true);

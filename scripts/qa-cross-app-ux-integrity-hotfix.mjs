@@ -48,9 +48,9 @@ expect(readinessUi.includes("getRetailCountryCapabilityDeepLink"), "Country capa
 expect(mobileCss.includes("details > summary + .flex.overflow-x-auto"), "ERP continuation links must be bounded on narrow screens");
 expect(mobileCss.includes("grid-template-columns: repeat(2, minmax(0, 1fr))"), "ERP continuation links must use a responsive bounded grid on mobile");
 
-// 3. Sensitive actions: the explicit async API uses the DTSC Dialog. Legacy
-// synchronous window.confirm callsites keep native browser semantics until migrated;
-// the provider must never monkey-patch the browser API or replay a detached DOM click.
+// 3. Sensitive actions: every component uses the explicit async DTSC Dialog API.
+// Native window.confirm is forbidden; the provider must never monkey-patch the browser API
+// or replay a detached DOM click.
 const confirmationContract = read("lib/client-confirmation.ts");
 const confirmationProvider = read("components/ui/sensitive-action-confirmation-provider.tsx");
 const rootLayout = read("app/layout.tsx");
@@ -64,18 +64,16 @@ for (const forbidden of ["window.confirm =", "origin.click()", "approvedReplay",
 }
 expect(rootLayout.includes("SensitiveActionConfirmationProvider"), "Sensitive action confirmation provider must be mounted globally");
 
-const legacyConfirmAllowlist = new Set([
-  "components/calendar/internal-calendar/workspace.tsx",
-  "components/collaborators/collaborators-conversation-workspace.tsx",
-]);
 for (const file of walkFiles("components")) {
   const source = read(file);
-  if (/\bwindow\.confirm\s*\(/.test(source) && !legacyConfirmAllowlist.has(file)) {
-    failures.push(`New native confirmation callsite is forbidden; use confirmSensitiveAction instead: ${file}`);
-  }
+  expect(!/\bwindow\.confirm\s*\(/.test(source), `Native browser confirmation is forbidden; use confirmSensitiveAction instead: ${file}`);
 }
-for (const file of legacyConfirmAllowlist) {
-  expect(/\bwindow\.confirm\s*\(/.test(read(file)), `${file} is allowlisted only while its audited native synchronous confirmation remains present`);
+for (const file of [
+  "components/calendar/internal-calendar/workspace.tsx",
+  "components/collaborators/collaborators-conversation-workspace.tsx",
+]) {
+  const source = read(file);
+  expect(source.includes("confirmSensitiveAction"), `${file} must use the explicit async DTSC confirmation contract`);
 }
 for (const file of [
   "components/admin/billing-reconciliation-control.tsx",
