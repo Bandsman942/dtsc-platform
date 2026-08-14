@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import type { z } from "zod";
 import { transitionRetailProviderOperation } from "@/lib/enterprise/retail/customer-payments";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
+import { finalizeMobileMoneyAccounting } from "@/lib/enterprise/retail/mobile-money-accounting";
 import {
   getRetailPaymentProviderAdapter,
   type RetailPaymentIntent,
@@ -210,7 +211,9 @@ export async function finalizeConfirmedRetailOperatorOperation(organizationId: s
 
   if (operation.sourceEntityType === ACTUAL_MOBILE_MONEY) {
     const transaction = await prisma.enterpriseMobileMoneyTransaction.findFirst({ where: { id: operation.sourceEntityId, organizationId } });
-    return transaction ? { kind: "MOBILE_MONEY" as const, transaction, idempotent: true } : null;
+    if (!transaction) return null;
+    await finalizeMobileMoneyAccounting(organizationId, operation.createdByUserId, transaction.id);
+    return { kind: "MOBILE_MONEY" as const, transaction, idempotent: true };
   }
   if (operation.sourceEntityType === ACTUAL_TELCO_TOPUP) {
     const topup = await prisma.enterpriseTelcoTopup.findFirst({ where: { id: operation.sourceEntityId, organizationId } });
@@ -226,6 +229,7 @@ export async function finalizeConfirmedRetailOperatorOperation(organizationId: s
     });
     if (!parsed.success) throw new EnterpriseRetailError("RETAIL_PROVIDER_PAYLOAD_INVALID", 409);
     const result = await createMobileMoneyTransaction(organizationId, operation.createdByUserId, parsed.data);
+    await finalizeMobileMoneyAccounting(organizationId, operation.createdByUserId, result.transaction.id);
     await prisma.enterpriseRetailProviderOperation.update({
       where: { id: operation.id },
       data: { sourceEntityType: ACTUAL_MOBILE_MONEY, sourceEntityId: result.transaction.id },
