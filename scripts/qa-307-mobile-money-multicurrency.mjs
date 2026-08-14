@@ -44,10 +44,11 @@ check(hasAll(service, [
   "enterpriseMobileMoneyFxTransfer",
   "FOR UPDATE",
   "sourceResolved.account.operationalBalance",
-  "targetResolved.account.operationalBalance",
+  "operationalBalance: { decrement: resolved.sourceAmount }",
+  "operationalBalance: { increment: resolved.targetAmount }",
   'transactionType: "MOBILE_MONEY_FX_TRANSFER"',
   'transactionType: "MOBILE_MONEY_FX_REVERSAL"',
-]), "Canonical service must enforce DRC CDF/USD readiness, generic two-currency readiness, current Finance FX, locking, balances, Treasury movements and reversal");
+]), "Canonical service must enforce DRC CDF/USD readiness, generic two-currency readiness, current Finance FX, locking, source-balance validation, atomic wallet effects, Treasury movements and reversal");
 check(!service.includes("providerCode: input.targetProviderCode"), "FX transfers must never permit a second target operator");
 
 const retailService = read("lib/enterprise/retail/service.ts");
@@ -95,7 +96,6 @@ check(hasAll(workspace, [
   "Mobile Money accounts by currency",
   "CDF et USD",
   "CDF and USD",
-  "wallet opérateur",
   "Operator wallet",
   "Transfert entre devises",
   "Currency transfer",
@@ -107,7 +107,8 @@ check(hasAll(workspace, [
   "lg:grid-cols",
   "bg-dtsc-surface",
   "border-dtsc-border",
-]), "Mobile Money UX must expose a single operator card with clear per-currency wallets, FX preview and responsive DTSC styling in FR/EN");
+]), "Mobile Money UX must expose one operator card with per-currency wallets, FX preview and responsive DTSC styling in FR/EN");
+check(workspace.toLocaleLowerCase("fr").includes("wallet opérateur"), "French Mobile Money UX must describe the operator wallet in customer-facing language");
 check(!workspace.includes("window.confirm"), "The #306 confirmation contract must not regress in the new Mobile Money workspace");
 
 const page = read("app/enterprise-modules/retail-page.tsx");
