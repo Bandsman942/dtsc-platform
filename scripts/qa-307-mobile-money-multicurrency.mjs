@@ -55,6 +55,23 @@ const retailService = read("lib/enterprise/retail/service.ts");
 check(retailService.includes("resolveMobileMoneyFloatAccountTx(tx, organizationId, provider, input.currencyCode)"), "Deposits/withdrawals must resolve float by operator + transaction currency on the server");
 check(!retailService.includes("input.floatAccountId || provider.mobileMoneyFloatAccountId"), "Deposits/withdrawals must not trust a client-selected or legacy single float account");
 check(hasAll(retailService, ["cashEffect", "floatEffect", "transaction.floatAccountId"]), "Existing cash/float effects and historical reversal account IDs must remain explicit");
+check(hasAll(retailService, [
+  "assertOpenCashSession(tx, organizationId, cashAccount.id, actorUserId)",
+  "cashSessionId: cashSession.id",
+]), "Each Mobile Money operation must be bound to the selected OPEN cash session for the matching cash account");
+
+const treasuryService = read("lib/enterprise/accounting/treasury-service.ts");
+check(hasAll(treasuryService, [
+  "organizationId, financialAccountId: account.id, cashierUserId",
+  'status: { in: ["OPEN", "CLOSING", "PENDING_VALIDATION"] }',
+  "CASH_SESSION_ALREADY_ACTIVE",
+]), "Cash opening must prevent duplicates only on the same cash account while allowing the same cashier to hold other account sessions concurrently");
+check(hasAll(treasuryService, [
+  "submitCashSessionClose",
+  'status: "PENDING_VALIDATION"',
+  "CASH_COUNT_TOTAL_MISMATCH",
+  "CASH_DISCREPANCY_REASON_REQUIRED",
+]), "End-of-day till closes must reuse the canonical counted close and independent validation workflow");
 
 const accounting = read("lib/enterprise/accounting/sector-adapters/retail-mobile-money.ts");
 check(hasAll(accounting, [
@@ -86,9 +103,16 @@ check(orchestration.includes("finalizeMobileMoneyAccounting"), "Connected provid
 const accountsRoute = read("app/api/enterprise/[organizationId]/retail/mobile-money/accounts/route.ts");
 const fxRoute = read("app/api/enterprise/[organizationId]/retail/mobile-money/fx/route.ts");
 const fxReverseRoute = read("app/api/enterprise/[organizationId]/retail/mobile-money/fx/[transferId]/reverse/route.ts");
+const retailCashCloseRoute = read("app/api/enterprise/[organizationId]/retail/cash-sessions/[sessionId]/close/route.ts");
 check(hasAll(accountsRoute, ['"MOBILE_MONEY_AGENCY", "read"', '"MOBILE_MONEY_AGENCY", "manage"', "mobileMoneyProviderAccountUpsertSchema"]), "Wallet mapping API must enforce read/manage access and schema validation");
 check(hasAll(fxRoute, ['"MOBILE_MONEY_AGENCY", "read"', '"MOBILE_MONEY_AGENCY", "manage"', "mobileMoneyFxPreviewSchema", "mobileMoneyFxTransferSchema", "finalizeMobileMoneyFxAccounting"]), "FX preview/transfer API must enforce RBAC, validation and accounting");
 check(hasAll(fxReverseRoute, ['"MOBILE_MONEY_AGENCY", "manage"', "mobileMoneyFxReverseSchema", "finalizeMobileMoneyFxReversalAccounting"]), "FX reversal API must enforce manage RBAC, validation and accounting reversal");
+check(hasAll(retailCashCloseRoute, [
+  '"MOBILE_MONEY_AGENCY", "submit"',
+  "cashCloseSchema",
+  "submitCashSessionClose",
+  "ENTERPRISE_RETAIL_CASH_SESSION_SUBMITTED",
+]), "Mobile Money agents must be able to submit each owned till close through Retail RBAC while reusing the Finance close engine");
 
 const workspace = read("components/enterprise/professional/mobile-money-agency-workspace.tsx");
 check(hasAll(workspace, [
@@ -102,20 +126,54 @@ check(hasAll(workspace, [
   "Calculer avec le taux courant",
   "Calculate with current rate",
   "mobile-money-wallet-configuration",
+  "MobileMoneyCashSessionManager",
+  "selectedCashSessionId",
+  "cashSessions",
+  "cashAccountId: activeCash.financialAccount.id",
+  "transactionTill",
   "sm:grid-cols",
   "md:grid-cols",
   "lg:grid-cols",
   "bg-dtsc-surface",
   "border-dtsc-border",
-]), "Mobile Money UX must expose one operator card with per-currency wallets, FX preview and responsive DTSC styling in FR/EN");
+]), "Mobile Money UX must expose one operator card with per-currency wallets, concurrent till switching, FX preview and responsive DTSC styling in FR/EN");
 check(workspace.toLocaleLowerCase("fr").includes("wallet opérateur"), "French Mobile Money UX must describe the operator wallet in customer-facing language");
 check(!workspace.includes("window.confirm"), "The #306 confirmation contract must not regress in the new Mobile Money workspace");
+
+const cashManager = read("components/enterprise/professional/mobile-money-cash-session-manager.tsx");
+check(hasAll(cashManager, [
+  "Mes caisses Mobile Money",
+  "My Mobile Money tills",
+  "CDF + USD",
+  'aria-pressed={selected}',
+  "openSessions",
+  "pendingSessions",
+  "availableAccounts",
+  "DENOMINATIONS",
+  "20000",
+  "100",
+  "expectedCurrentAmount",
+  "countedTotal",
+  "reasonRequired",
+  `/retail/cash-sessions/${"${session.id}"}/close`,
+  "Clôture soumise à l’approbation indépendante.",
+  "Till close submitted for independent approval.",
+  "focus-visible:ring-2",
+  "active:scale-[0.99]",
+]), "Mobile Money cash UX must support concurrent CDF/USD tills, one-tap selection, accessible responsive states and separate counted end-of-day submission");
 
 const page = read("app/enterprise-modules/retail-page.tsx");
 check(page.includes("<MobileMoneyAgencyWorkspace"), "MOBILE_MONEY_AGENCY must use the specialized multi-currency workspace");
 
 const dashboard = read("lib/enterprise/retail/commercial-dashboard.ts");
-check(hasAll(dashboard, ["getMobileMoneyProviderAccountConfiguration", "providers.every((provider) => provider.ready)"]), "Mobile Money readiness must require every active operator to satisfy the new multi-currency contract");
+check(hasAll(dashboard, [
+  "getMobileMoneyProviderAccountConfiguration",
+  "providers.every((provider) => provider.ready)",
+  "enterpriseCashSession.findMany",
+  "cashSessionsRaw.map",
+  "expectedCurrentAmount",
+  "cashSessions,",
+]), "Mobile Money readiness and dashboard must expose every active cashier till with an expected live balance without regressing provider readiness");
 
 check(!fs.existsSync(path.join(root, ".github/workflows/tmp-307-codemod.yml")), "Temporary #307 workflow must not remain in the branch");
 check(!fs.existsSync(path.join(root, "scripts/tmp-307-codemod.mjs")), "Temporary #307 codemod must not remain in the branch");
@@ -125,4 +183,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log("Issue #307 Mobile Money multi-currency QA passed: operator/currency wallets, DRC CDF+USD readiness, deposits/withdrawals, same-operator FX, Treasury/accounting, reversal, RBAC and professional FR/EN UX are guarded.");
+console.log("Issue #307 Mobile Money multi-currency QA passed: operator/currency wallets, concurrent CDF/USD tills, frictionless switching, separate end-of-day closes, DRC readiness, deposits/withdrawals, same-operator FX, Treasury/accounting, reversal, RBAC and professional FR/EN UX are guarded.");
