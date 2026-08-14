@@ -45,7 +45,7 @@ check(!deepLinks.includes('FUNCTIONAL_CURRENCY: "/enterprise-modules/FINANCE_ACC
 check(deepLinks.includes('CASH_ACCOUNT: "/enterprise-modules/FINANCE_TREASURY#cash-accounts"'), "Collection-account readiness must open financial accounts");
 
 const financeOverview = read("components/enterprise/professional/enterprise-finance-overview-workspace.tsx");
-for (const marker of ["window.location.search", 'requested !== "finance" && requested !== "currency"', "setConfigurationOpen(true)", "Devise fonctionnelle utilisée par Finance et par la mise en service du Shop"]) {
+for (const marker of ["window.location.search", 'requested !== "finance" && requested !== "currency"', "setConfigurationOpen(true)", "Définissez ici la devise fonctionnelle utilisée par Finance et par la mise en service du Shop."]) {
   check(financeOverview.includes(marker), `Finance overview must support direct Shop currency configuration: ${marker}`);
 }
 check(!financeOverview.includes("useSearchParams"), "Direct currency configuration must not introduce a Next.js search-param suspense dependency");
