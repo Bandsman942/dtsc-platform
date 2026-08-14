@@ -155,6 +155,7 @@ check(hasAll(workspace, [
 ]), "Mobile Money UX must expose one operator card with per-currency wallets, concurrent till switching, FX preview and responsive DTSC styling in FR/EN");
 check(workspace.toLocaleLowerCase("fr").includes("wallet opérateur"), "French Mobile Money UX must describe the operator wallet in customer-facing language");
 check(!workspace.includes("window.confirm"), "The #306 confirmation contract must not regress in the new Mobile Money workspace");
+check(!workspace.includes("() => providers.filter"), "Eligible Mobile Money providers must not reintroduce an unstable providers useMemo dependency");
 
 const cashManager = read("components/enterprise/professional/mobile-money-cash-session-manager.tsx");
 check(hasAll(cashManager, [
@@ -194,8 +195,9 @@ check(hasAll(dashboard, [
   "cashSessions,",
 ]), "Mobile Money readiness and dashboard must expose every active cashier till with an expected live balance without regressing provider readiness");
 
-check(!fs.existsSync(path.join(root, ".github/workflows/tmp-307-codemod.yml")), "Temporary #307 workflow must not remain in the branch");
-check(!fs.existsSync(path.join(root, "scripts/tmp-307-codemod.mjs")), "Temporary #307 codemod must not remain in the branch");
+check(!fs.existsSync(path.join(root, ".github/workflows/tmp-307-codemod.yml")), "Temporary #307 codemod workflow must not remain in the branch");
+check(!fs.existsSync(path.join(root, ".github/workflows/tmp-307-lint-polish.yml")), "Temporary #307 lint workflow must not remain in the branch");
+check(!fs.existsSync(path.join(root, "scripts/tmp-307-codemod.mjs")), "Temporary #307 codemod script must not remain in the branch");
 
 if (failures.length) {
   console.error("Issue #307 Mobile Money multi-currency QA failed:\n" + failures.map((failure) => `- ${failure}`).join("\n"));
