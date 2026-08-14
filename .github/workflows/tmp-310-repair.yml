@@ -26,17 +26,17 @@ jobs:
           from pathlib import Path
           file = Path("scripts/tmp-310-telco-multicurrency-codemod.mjs")
           source = file.read_text()
-          replacements = {
+          required = {
               '      `/api/enterprise/¤{organizationId}/retail/telco-topups`,': '      §/api/enterprise/¤{organizationId}/retail/telco-topups§,',
               '      `telco-account-¤{provider.id}-¤{currencyCode}`,': '      §telco-account-¤{provider.id}-¤{currencyCode}§,',
               '      `/api/enterprise/¤{organizationId}/retail/telco-topups/accounts`,': '      §/api/enterprise/¤{organizationId}/retail/telco-topups/accounts§,',
-              '  telcoDocs + "## Sessions de caisse"': '  telcoDocs',
-              '  "Compte opérateur Télécom par devise",': '  "Comptes opérateur Télécom par devise",',
           }
-          for old, new in replacements.items():
+          for old, new in required.items():
               if old not in source:
                   raise SystemExit(f"repair marker missing: {old}")
               source = source.replace(old, new)
+          source = source.replace('telcoDocs + "## Sessions de caisse"', 'telcoDocs')
+          source = source.replace('"Compte opérateur Télécom par devise",', '"Comptes opérateur Télécom par devise",')
           file.write_text(source)
       - name: Validate repaired codemod syntax
         run: node --check scripts/tmp-310-telco-multicurrency-codemod.mjs
