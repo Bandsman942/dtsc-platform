@@ -1,6 +1,7 @@
 import { getRetailAccountingReadiness } from "@/lib/enterprise/retail/accounting-readiness";
 import { getRetailMetricsByCurrency } from "@/lib/enterprise/retail/commercial-guardrails";
 import { getRetailExchangeRateReadiness } from "@/lib/enterprise/retail/fx-reporting";
+import { getMobileMoneyProviderAccountConfiguration } from "@/lib/enterprise/retail/mobile-money-multicurrency-service";
 import { getCanonicalRetailReadiness } from "@/lib/enterprise/retail/self-service-onboarding";
 import type { RetailModuleCode } from "@/lib/enterprise/retail/constants";
 import { prisma } from "@/lib/prisma";
@@ -66,6 +67,7 @@ export async function getCommercialRetailDashboard(
     fxReadiness,
     accountingReadiness,
     canonicalReadiness,
+    mobileMoneyConfiguration,
   ] = await Promise.all([
     prisma.enterpriseRetailConfiguration.findUnique({ where: { organizationId } }),
     prisma.enterpriseRetailProvider.findMany({ where: { organizationId, isActive: true }, orderBy: [{ providerType: "asc" }, { label: "asc" }] }),
@@ -94,9 +96,9 @@ export async function getCommercialRetailDashboard(
     getRetailExchangeRateReadiness(organizationId, dateTo),
     includePos ? getRetailAccountingReadiness(organizationId, dateTo) : Promise.resolve(null),
     getCanonicalRetailReadiness(organizationId),
+    includeMobileMoney ? getMobileMoneyProviderAccountConfiguration(organizationId) : Promise.resolve(null),
   ]);
 
-  const mobileWallets = providers.filter((provider) => provider.providerType === "MOBILE_MONEY");
   const telcoNetworks = providers.filter((provider) => provider.providerType === "TELCO");
   const readinessItems = canonicalReadiness.items.map((item) => ({
     code: item.code,
@@ -109,6 +111,10 @@ export async function getCommercialRetailDashboard(
     label: `${FX_REPORTING_READINESS_DESCRIPTOR.label}${fxReadiness.targetCurrencyCode ? ` · ${fxReadiness.targetCurrencyCode}` : ""}`,
     complete: fxReadiness.complete,
   };
+  const allMobileMoneyProvidersReady = Boolean(
+    mobileMoneyConfiguration?.providers.length
+      && mobileMoneyConfiguration.providers.every((provider) => provider.ready),
+  );
 
   return {
     configuration,
@@ -127,7 +133,7 @@ export async function getCommercialRetailDashboard(
       completed: canonicalReadiness.completed,
       total: canonicalReadiness.total,
       readyForFirstSale: canonicalReadiness.ready,
-      readyForMobileMoney: canonicalReadiness.ready && mobileWallets.some((provider) => Boolean(provider.mobileMoneyFloatAccountId)),
+      readyForMobileMoney: canonicalReadiness.ready && allMobileMoneyProvidersReady,
       readyForTelco: canonicalReadiness.ready && telcoNetworks.some((provider) => Boolean(provider.telcoFloatAccountId)),
     },
     recent: {
