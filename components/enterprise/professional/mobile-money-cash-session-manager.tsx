@@ -1,13 +1,12 @@
 "use client";
 
 import { useMemo, useState, type FormEvent } from "react";
-import { Banknote, CheckCircle2, CircleDollarSign, LockKeyhole, Plus, WalletCards } from "lucide-react";
+import { Banknote, CheckCircle2, CircleDollarSign, LockKeyhole, Plus } from "lucide-react";
 import { Field } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ModuleSection } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
-import { customerFacingStatusLabel } from "@/lib/customer-facing-language";
 import { moneyValue, type RetailMutation } from "@/components/enterprise/professional/retail-workspace-shared";
 
 type CashAccount = {
