@@ -86,7 +86,8 @@ check(reports.includes("reportSourceLabel(locale, item.sourcePolicyCode)"), "Rep
 check(reports.includes("reportFreshnessLabel(locale, item.freshnessPolicyCode)"), "Report freshness policy must be projected through a business label");
 check(reports.includes("reportMetricLabel(locale, metric.code)"), "Report metric codes must be projected through business labels");
 check(reports.includes("reportVisibilityLabel(locale, view.visibility)"), "Saved report view visibility must be localized");
-check(reports.includes("<SnapshotView value={detail.report.snapshotJson} locale={locale} />"), "Snapshot view must receive locale explicitly");
+check(reports.includes("<ProfessionalReportView model={detailModel} locale={locale} logoUrl={organizationLogoUrl} />"), "Professional report view must receive locale and organization branding explicitly");
+check(!reports.includes("SnapshotView"), "Legacy raw snapshot view must not return after professional reporting convergence");
 check(!reports.includes("<StatusBadge tone=\"info\">{item.family}</StatusBadge>"), "Raw report family code must not render");
 check(!reports.includes("view.isFavorite ?") || reports.includes("reportVisibilityLabel(locale, view.visibility)"), "Saved report view must not render raw visibility");
 for (const contract of [
