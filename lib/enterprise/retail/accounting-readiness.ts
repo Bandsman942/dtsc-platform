@@ -1,14 +1,12 @@
+import { getEnterpriseFinanceReadiness } from "@/lib/enterprise/accounting/finance-readiness-service";
 import { prisma } from "@/lib/prisma";
 
 const RETAIL_REQUIRED_ACCOUNT_MAPPINGS = ["SALES_REVENUE", "TAX_PAYABLE", "COST_OF_SALES", "INVENTORY"] as const;
 const RETAIL_REQUIRED_JOURNAL_TYPES = ["SALES", "INVENTORY"] as const;
 
 export async function getRetailAccountingReadiness(organizationId: string, at = new Date()) {
-  const [configuration, mappings, journals, currentPeriod] = await Promise.all([
-    prisma.enterpriseFinanceConfiguration.findUnique({
-      where: { organizationId },
-      select: { readinessStatus: true, functionalCurrencyCode: true },
-    }),
+  const [financeReadiness, mappings, journals, currentPeriod] = await Promise.all([
+    getEnterpriseFinanceReadiness(organizationId, { mode: "POSTING", asOf: at }),
     prisma.enterpriseAccountMapping.findMany({
       where: {
         organizationId,
@@ -26,11 +24,12 @@ export async function getRetailAccountingReadiness(organizationId: string, at = 
     prisma.enterpriseFiscalPeriod.findFirst({
       where: {
         organizationId,
+        fiscalYear: { status: "OPEN" },
         startDate: { lte: at },
         endDate: { gte: at },
-        status: { in: ["OPEN", "SOFT_CLOSED"] },
+        status: "OPEN",
       },
-      select: { id: true, status: true },
+      select: { id: true, status: true, fiscalYear: { select: { id: true, status: true } } },
     }),
   ]);
 
@@ -44,8 +43,8 @@ export async function getRetailAccountingReadiness(organizationId: string, at = 
   const missingJournals = RETAIL_REQUIRED_JOURNAL_TYPES.filter((journalType) => !journalSet.has(journalType));
 
   const checklist = {
-    financeReady: configuration?.readinessStatus === "READY",
-    functionalCurrencyConfigured: Boolean(configuration?.functionalCurrencyCode),
+    financeReady: financeReadiness.ready,
+    functionalCurrencyConfigured: Boolean(financeReadiness.configuration?.functionalCurrencyCode),
     requiredMappingsConfigured: missingMappings.length === 0,
     requiredJournalsConfigured: missingJournals.length === 0,
     postingPeriodAvailable: Boolean(currentPeriod),
@@ -54,9 +53,11 @@ export async function getRetailAccountingReadiness(organizationId: string, at = 
   return {
     ready: Object.values(checklist).every(Boolean),
     checklist,
-    functionalCurrencyCode: configuration?.functionalCurrencyCode || null,
+    functionalCurrencyCode: financeReadiness.configuration?.functionalCurrencyCode || null,
     missingMappings,
     missingJournals,
     fiscalPeriodStatus: currentPeriod?.status || null,
+    fiscalYearStatus: currentPeriod?.fiscalYear.status || null,
+    financeBlockers: financeReadiness.blockers.map((diagnostic) => diagnostic.code),
   };
 }

@@ -9,11 +9,19 @@ import type { z } from "zod";
 
 type FinanceConfigurationInput = z.infer<typeof financeConfigurationSchema>;
 
+// Global posting prerequisites are configuration invariants. Fiscal year/period
+// availability is deliberately date-specific and is validated by getPostingPeriod()
+// so a closed accounting date returns FINANCE_PERIOD_CLOSED rather than a generic
+// configuration error. Retail preflight also calls getPostingPeriod before sale effects.
 const POSTING_GLOBAL_BLOCKERS = new Set([
   "FUNCTIONAL_CURRENCY_REQUIRED",
   "CHART_REQUIRED",
   "ACTIVE_CHART_REQUIRED",
   "CHART_ACCOUNTS_REQUIRED",
+  "TEMPLATE_LINEAGE_REQUIRED",
+  "TEMPLATE_SEMANTIC_COVERAGE_REQUIRED",
+  "ORGANIZATION_MAPPINGS_REQUIRED",
+  "JOURNALS_REQUIRED",
 ]);
 
 export async function getFinanceReadiness(organizationId: string) {
