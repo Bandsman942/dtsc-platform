@@ -79,7 +79,7 @@ expect("Dedicated technical documentation includes Sprint 5 payroll architecture
 expect("Changelog records Sprint 5 payroll workflow", changelog.includes("SPRINT_05_PAYROLL_CHANGELOG") && changelog.includes("prestations Sprint 4 approuvées"));
 expect("Sprint 5 QA is wired into regression", packageJson.includes('"qa:payroll-workflow"') && packageJson.includes("qa-payroll-work-integration-checks.mjs"));
 expect("Permanent Sprint 5 rules are documented", agents.includes("SPRINT_05_PAYROLL_WORKFLOW_RULES") && agents.includes("approved DTSC work") && agents.includes("No employee may approve their own payroll"));
-expect("Vercel remains production-only", vercelJson.includes('"main": true') && vercelJson.includes('"*": false') && vercelJson.includes("ignoreCommand"));
+expect("Vercel remains production-only", vercelJson.includes('"main": true') && vercelJson.includes('"**": false') && vercelJson.includes("ignoreCommand"));
 expect("Production still migrates before build", vercelScript.indexOf("prisma migrate deploy") >= 0 && vercelScript.indexOf("prisma migrate deploy") < vercelScript.indexOf("pnpm build"));
 
 let failed = 0;
