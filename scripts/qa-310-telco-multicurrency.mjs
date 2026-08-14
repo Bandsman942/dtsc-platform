@@ -72,7 +72,8 @@ check(hasAll(cashManager, [
   "DENOMINATIONS",
   "/retail/telco-topups/cash-sessions/",
   "PENDING_VALIDATION",
-]), "Telco must reuse the professional concurrent CDF/USD till selector and counted close workflow");
+  "focus-visible:ring-2",
+]), "Telco must reuse the professional concurrent CDF/USD till selector, keyboard focus treatment and counted close workflow");
 
 const sharedWorkspace = read("components/enterprise/professional/retail-workspace-shared.tsx");
 check(sharedWorkspace.includes('moduleCode === "RETAIL_POS" ? <CashSessionBar'), "Operator modules must not show the conflicting legacy single-till banner");
@@ -91,8 +92,9 @@ check(hasAll(workspace, [
   "Comptes opérateur Télécom par devise",
   "Telecom operator accounts by currency",
   "/retail/telco-topups/accounts",
-  "focus",
-]), "Telco UX must expose concurrent tills, payment-derived currency, per-currency operator mappings and a confirmation of the resolved accounts");
+  "md:grid-cols-2",
+  "disabled={Boolean(busyAction)}",
+]), "Telco UX must expose concurrent tills, payment-derived currency, per-currency operator mappings, responsive layout, disabled busy states and a confirmation of the resolved accounts");
 check(!workspace.includes("input.operatorFloatAccountId"), "Telco UI must not become an authority for operator account selection");
 
 const http = read("lib/enterprise/retail/http.ts");
