@@ -40,9 +40,14 @@ for (const marker of ["Functional currency configured", "Country configuration a
 }
 
 const deepLinks = read("lib/enterprise/retail/readiness-deep-links.ts");
-check(deepLinks.includes('FUNCTIONAL_CURRENCY: "/enterprise-modules/FINANCE_OVERVIEW"'), "Main-currency readiness must open Finance configuration instead of accounting onboarding");
+check(deepLinks.includes('FUNCTIONAL_CURRENCY: "/enterprise-modules/FINANCE_OVERVIEW?configure=currency"'), "Main-currency readiness must open the Finance currency form directly");
 check(!deepLinks.includes('FUNCTIONAL_CURRENCY: "/enterprise-modules/FINANCE_ACCOUNTING'), "Main-currency readiness must not route to accounting onboarding");
 check(deepLinks.includes('CASH_ACCOUNT: "/enterprise-modules/FINANCE_TREASURY#cash-accounts"'), "Collection-account readiness must open financial accounts");
+
+const financeOverview = read("components/enterprise/professional/enterprise-finance-overview-workspace.tsx");
+for (const marker of ["useSearchParams", 'requestedConfiguration === "currency"', "setConfigurationOpen(true)", "Devise fonctionnelle utilisée par Finance et par la mise en service du Shop"]) {
+  check(financeOverview.includes(marker), `Finance overview must support direct Shop currency configuration: ${marker}`);
+}
 
 const accountingOnboarding = read("components/enterprise/professional/enterprise-accounting-onboarding-panel.tsx");
 for (const marker of ["bg-dtsc-surface", "bg-dtsc-page", "border-dtsc-border", "text-dtsc-ink", "text-dtsc-muted"]) {
@@ -57,4 +62,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log("Hotfix #303 QA passed: CRUD confirmations keep deterministic semantics, Shop readiness is canonical/actionable, and accounting onboarding uses DTSC branding.");
+console.log("Hotfix #303 QA passed: CRUD confirmations keep deterministic semantics, Shop readiness is canonical/actionable, the currency step opens the correct Finance form, and accounting onboarding uses DTSC branding.");
