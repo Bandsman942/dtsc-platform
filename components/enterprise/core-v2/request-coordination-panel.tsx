@@ -1,6 +1,6 @@
 "use client";
 
-import { formatEnterpriseDate as coreFormatEnterpriseDate, priorityChoices as corePriorityChoices, statusLabel as coreStatusLabel } from "@/components/enterprise/core-v2/erp-v2-ui";
+import { formatEnterpriseDate as coreFormatEnterpriseDate, statusLabel as coreStatusLabel } from "@/components/enterprise/core-v2/erp-v2-ui";
 
 import { enterpriseCoreT } from "@/lib/enterprise-core-i18n";
 
@@ -20,7 +20,6 @@ type RequestCoordinationResponse = {
 };
 
 export function RequestCoordinationPanel({ organizationId, requestId, locale, onChanged }: { organizationId: string; requestId: string; locale?: string | null; onChanged?: () => void }) {
-  const en = locale === "en";
   const [data, setData] = useState<RequestCoordinationResponse | null>(null);
   const [comment, setComment] = useState("");
   const [message, setMessage] = useState("");
@@ -34,7 +33,7 @@ export function RequestCoordinationPanel({ organizationId, requestId, locale, on
     if (!response.ok || !body?.coordination) setMessage(body?.message || (enterpriseCoreT(locale, "requests.coordination.unable.to.load.request.history")));
     else setData(body);
     setLoading(false);
-  }, [endpoint, en]);
+  }, [endpoint, locale]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -71,7 +70,16 @@ export function RequestCoordinationPanel({ organizationId, requestId, locale, on
       {data.capabilities.canClose ? <Button type="button" variant="outline" onClick={() => void act("CLOSE")}><XCircle className="h-4 w-4" />{enterpriseCoreT(locale, "request.action.CLOSE")}</Button> : null}
       {data.capabilities.canReopen ? <Button type="button" variant="outline" onClick={() => void act("REOPEN")}><RotateCcw className="h-4 w-4" />{enterpriseCoreT(locale, "request.action.REOPEN")}</Button> : null}
     </div>
-    <section className="grid gap-2"><h4 className="font-black text-dtsc-ink">{enterpriseCoreT(locale, "requests.coordination.conversation")}</h4>{data.coordination.comments.length ? data.coordination.comments.map((item) => <article key={item.id} className="rounded-xl border border-dtsc-border p-3 text-sm"><p className="whitespace-pre-wrap text-dtsc-ink">{item.content}</p><p className="mt-2 text-xs text-dtsc-muted">{new Date(item.createdAt).toLocaleString(enterpriseCoreT(locale, "meetings.coordination.en.gb"))}</p></article>) : <p className="text-sm text-dtsc-muted">{enterpriseCoreT(locale, "requests.coordination.no.exchange.yet")}</p>}</section>
-    <section className="grid gap-2"><h4 className="font-black text-dtsc-ink">{enterpriseCoreT(locale, "requests.coordination.lifecycle.history")}</h4>{data.coordination.events.map((event) => <article key={event.id} className="rounded-xl border border-dtsc-border p-3 text-sm"><div className="flex flex-wrap items-center gap-2"><StatusBadge>{event.eventType}</StatusBadge>{event.fromStatus || event.toStatus ? <span className="text-xs text-dtsc-muted">{event.fromStatus || "—"} → {event.toStatus || "—"}</span> : null}</div><p className="mt-2 text-dtsc-muted">{event.summary}</p></article>)}</section>
+    <section className="grid gap-2"><h4 className="font-black text-dtsc-ink">{enterpriseCoreT(locale, "requests.coordination.conversation")}</h4>{data.coordination.comments.length ? data.coordination.comments.map((item) => <article key={item.id} className="rounded-xl border border-dtsc-border p-3 text-sm"><p className="whitespace-pre-wrap text-dtsc-ink">{item.content}</p><p className="mt-2 text-xs text-dtsc-muted">{coreFormatEnterpriseDate(item.createdAt, locale)}</p></article>) : <p className="text-sm text-dtsc-muted">{enterpriseCoreT(locale, "requests.coordination.no.exchange.yet")}</p>}</section>
+    <section className="grid gap-2"><h4 className="font-black text-dtsc-ink">{enterpriseCoreT(locale, "requests.coordination.lifecycle.history")}</h4>{data.coordination.events.map((event) => <article key={event.id} className="rounded-xl border border-dtsc-border p-3 text-sm"><div className="flex flex-wrap items-center gap-2"><StatusBadge>{requestCoordinationEventLabel(locale, event.eventType)}</StatusBadge>{event.fromStatus || event.toStatus ? <span className="text-xs text-dtsc-muted">{event.fromStatus ? coreStatusLabel(locale, event.fromStatus) : "—"} → {event.toStatus ? coreStatusLabel(locale, event.toStatus) : "—"}</span> : null}</div><p className="mt-2 text-dtsc-muted">{event.summary}</p></article>)}</section>
   </div>;
+}
+
+function requestCoordinationEventLabel(locale: string | null | undefined, eventType: string) {
+  if (eventType === "ENTERPRISE_REQUEST_REQUEST_INFORMATION") return enterpriseCoreT(locale, "requests.coordination.event.ENTERPRISE_REQUEST_REQUEST_INFORMATION");
+  if (eventType === "ENTERPRISE_REQUEST_RESPOND") return enterpriseCoreT(locale, "requests.coordination.event.ENTERPRISE_REQUEST_RESPOND");
+  if (eventType === "ENTERPRISE_REQUEST_RESOLVE") return enterpriseCoreT(locale, "requests.coordination.event.ENTERPRISE_REQUEST_RESOLVE");
+  if (eventType === "ENTERPRISE_REQUEST_CLOSE") return enterpriseCoreT(locale, "requests.coordination.event.ENTERPRISE_REQUEST_CLOSE");
+  if (eventType === "ENTERPRISE_REQUEST_REOPEN") return enterpriseCoreT(locale, "requests.coordination.event.ENTERPRISE_REQUEST_REOPEN");
+  return eventType;
 }

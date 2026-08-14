@@ -185,7 +185,6 @@
   "meetings.coordination.meeting.coordination.updated": "Meeting coordination updated.",
   "meetings.coordination.loading.agenda.and.minutes": "Loading agenda and minutes…",
   "meetings.coordination.scheduling.conflicts": "Scheduling conflicts",
-  "meetings.coordination.en.gb": "en-GB",
   "meetings.coordination.no.participant.conflict.detected": "No participant conflict detected.",
   "meetings.coordination.structured.agenda": "Structured agenda",
   "meetings.coordination.delete.agenda.item": "Delete agenda item",
@@ -284,5 +283,18 @@
   "approvals.coordination.submitted.versions": "Submitted versions",
   "approvals.coordination.the.first.immutable.snapshot.will.be.created.at": "The first immutable snapshot will be created at the first decision or correction request.",
   "approvals.coordination.decision.history": "Decision history",
-  "approvals.coordination.no.final.decision.yet": "No final decision yet."
+  "approvals.coordination.no.final.decision.yet": "No final decision yet.",
+  "meetings.open.named": "Open {{title}}",
+  "meetings.legacy.aria": "Historical meetings",
+  "requests.open.named": "Open {{title}}",
+  "requests.legacy.aria": "Historical requests",
+  "approvals.legacy.aria": "Historical approvals",
+  "approvals.target.purchase": "Purchases",
+  "approvals.target.budget": "Budgets",
+  "approvals.target.expense": "Expenses",
+  "requests.coordination.event.ENTERPRISE_REQUEST_REQUEST_INFORMATION": "Information requested",
+  "requests.coordination.event.ENTERPRISE_REQUEST_RESPOND": "Requester response",
+  "requests.coordination.event.ENTERPRISE_REQUEST_RESOLVE": "Request resolved",
+  "requests.coordination.event.ENTERPRISE_REQUEST_CLOSE": "Request closed",
+  "requests.coordination.event.ENTERPRISE_REQUEST_REOPEN": "Request reopened"
 }

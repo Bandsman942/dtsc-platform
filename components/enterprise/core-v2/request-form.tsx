@@ -1,13 +1,13 @@
 "use client";
 
-import { formatEnterpriseDate as coreFormatEnterpriseDate, priorityChoices as corePriorityChoices, statusLabel as coreStatusLabel } from "@/components/enterprise/core-v2/erp-v2-ui";
+import { priorityChoices as corePriorityChoices } from "@/components/enterprise/core-v2/erp-v2-ui";
 
 import { enterpriseCoreT } from "@/lib/enterprise-core-i18n";
 
 import type { FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Field, NativeSelect, priorityChoicesEn, priorityChoicesFr, type EnterpriseChoice } from "@/components/enterprise/core-v2/erp-v2-ui";
+import { Field, NativeSelect, type EnterpriseChoice } from "@/components/enterprise/core-v2/erp-v2-ui";
 
 export type RequestFormValue = { requestType?: string; title?: string; description?: string | null; priority?: string; assignedToUserId?: string | null; departmentId?: string | null; dueAt?: string | null };
 

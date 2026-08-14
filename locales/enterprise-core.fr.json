@@ -185,7 +185,6 @@
   "meetings.coordination.meeting.coordination.updated": "Coordination de la réunion mise à jour.",
   "meetings.coordination.loading.agenda.and.minutes": "Chargement de l’ordre du jour et du compte rendu…",
   "meetings.coordination.scheduling.conflicts": "Conflits de planification",
-  "meetings.coordination.en.gb": "fr-FR",
   "meetings.coordination.no.participant.conflict.detected": "Aucun conflit de participant détecté.",
   "meetings.coordination.structured.agenda": "Ordre du jour structuré",
   "meetings.coordination.delete.agenda.item": "Supprimer le sujet",
@@ -284,5 +283,18 @@
   "approvals.coordination.submitted.versions": "Versions soumises",
   "approvals.coordination.the.first.immutable.snapshot.will.be.created.at": "Le premier instantané immuable sera créé lors de la première décision ou demande de correction.",
   "approvals.coordination.decision.history": "Historique des décisions",
-  "approvals.coordination.no.final.decision.yet": "Aucune décision finale pour le moment."
+  "approvals.coordination.no.final.decision.yet": "Aucune décision finale pour le moment.",
+  "meetings.open.named": "Ouvrir {{title}}",
+  "meetings.legacy.aria": "Réunions historiques",
+  "requests.open.named": "Ouvrir {{title}}",
+  "requests.legacy.aria": "Demandes historiques",
+  "approvals.legacy.aria": "Validations historiques",
+  "approvals.target.purchase": "Achats",
+  "approvals.target.budget": "Budgets",
+  "approvals.target.expense": "Dépenses",
+  "requests.coordination.event.ENTERPRISE_REQUEST_REQUEST_INFORMATION": "Informations demandées",
+  "requests.coordination.event.ENTERPRISE_REQUEST_RESPOND": "Réponse du demandeur",
+  "requests.coordination.event.ENTERPRISE_REQUEST_RESOLVE": "Demande résolue",
+  "requests.coordination.event.ENTERPRISE_REQUEST_CLOSE": "Demande clôturée",
+  "requests.coordination.event.ENTERPRISE_REQUEST_REOPEN": "Demande rouverte"
 }

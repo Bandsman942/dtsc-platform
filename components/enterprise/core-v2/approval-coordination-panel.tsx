@@ -1,6 +1,6 @@
 "use client";
 
-import { formatEnterpriseDate as coreFormatEnterpriseDate, priorityChoices as corePriorityChoices, statusLabel as coreStatusLabel } from "@/components/enterprise/core-v2/erp-v2-ui";
+import { formatEnterpriseDate as coreFormatEnterpriseDate, statusLabel as coreStatusLabel } from "@/components/enterprise/core-v2/erp-v2-ui";
 
 import { enterpriseCoreT } from "@/lib/enterprise-core-i18n";
 
@@ -21,7 +21,6 @@ type ApprovalCoordination = {
 };
 
 export function ApprovalCoordinationPanel({ organizationId, approvalId, locale, onChanged }: { organizationId: string; approvalId: string; locale?: string | null; onChanged?: () => void }) {
-  const en = locale === "en";
   const [data, setData] = useState<ApprovalCoordination | null>(null);
   const [reason, setReason] = useState("");
   const [delegateUserId, setDelegateUserId] = useState("");
@@ -36,7 +35,7 @@ export function ApprovalCoordinationPanel({ organizationId, approvalId, locale, 
     if (!response.ok || !body?.approval) setMessage(body?.message || (enterpriseCoreT(locale, "approvals.coordination.unable.to.load.approval.history")));
     else setData(body);
     setLoading(false);
-  }, [endpoint, en]);
+  }, [endpoint, locale]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -91,12 +90,18 @@ export function ApprovalCoordinationPanel({ organizationId, approvalId, locale, 
 
     <section className="grid gap-2">
       <h4 className="font-black text-dtsc-ink">{enterpriseCoreT(locale, "approvals.coordination.submitted.versions")}</h4>
-      {data.versions.length ? data.versions.map((version) => <div key={version.id} className="rounded-xl border border-dtsc-border p-3 text-sm"><div className="flex flex-wrap items-center gap-2"><StatusBadge>v{version.versionNumber}</StatusBadge><span className="font-bold text-dtsc-ink">{new Date(version.submittedAt).toLocaleString(enterpriseCoreT(locale, "meetings.coordination.en.gb"))}</span></div>{version.submissionComment ? <p className="mt-2 text-dtsc-muted">{version.submissionComment}</p> : null}</div>) : <p className="text-sm text-dtsc-muted">{enterpriseCoreT(locale, "approvals.coordination.the.first.immutable.snapshot.will.be.created.at")}</p>}
+      {data.versions.length ? data.versions.map((version) => <div key={version.id} className="rounded-xl border border-dtsc-border p-3 text-sm"><div className="flex flex-wrap items-center gap-2"><StatusBadge>v{version.versionNumber}</StatusBadge><span className="font-bold text-dtsc-ink">{coreFormatEnterpriseDate(version.submittedAt, locale)}</span></div>{version.submissionComment ? <p className="mt-2 text-dtsc-muted">{version.submissionComment}</p> : null}</div>) : <p className="text-sm text-dtsc-muted">{enterpriseCoreT(locale, "approvals.coordination.the.first.immutable.snapshot.will.be.created.at")}</p>}
     </section>
 
     <section className="grid gap-2">
       <h4 className="font-black text-dtsc-ink">{enterpriseCoreT(locale, "approvals.coordination.decision.history")}</h4>
-      {data.decisions.length ? data.decisions.map((decision) => <div key={decision.id} className="rounded-xl border border-dtsc-border p-3 text-sm"><div className="flex flex-wrap items-center gap-2"><StatusBadge>{decision.decision}</StatusBadge><span className="text-dtsc-muted">{new Date(decision.createdAt).toLocaleString(enterpriseCoreT(locale, "meetings.coordination.en.gb"))}</span></div>{decision.reason ? <p className="mt-2 text-dtsc-muted">{decision.reason}</p> : null}</div>) : <p className="text-sm text-dtsc-muted">{enterpriseCoreT(locale, "approvals.coordination.no.final.decision.yet")}</p>}
+      {data.decisions.length ? data.decisions.map((decision) => <div key={decision.id} className="rounded-xl border border-dtsc-border p-3 text-sm"><div className="flex flex-wrap items-center gap-2"><StatusBadge>{approvalDecisionLabel(locale, decision.decision)}</StatusBadge><span className="text-dtsc-muted">{coreFormatEnterpriseDate(decision.createdAt, locale)}</span></div>{decision.reason ? <p className="mt-2 text-dtsc-muted">{decision.reason}</p> : null}</div>) : <p className="text-sm text-dtsc-muted">{enterpriseCoreT(locale, "approvals.coordination.no.final.decision.yet")}</p>}
     </section>
   </div>;
+}
+
+function approvalDecisionLabel(locale: string | null | undefined, decision: string) {
+  if (decision === "APPROVE") return enterpriseCoreT(locale, "approval.decision.APPROVE");
+  if (decision === "REJECT") return enterpriseCoreT(locale, "approval.decision.REJECT");
+  return decision;
 }
