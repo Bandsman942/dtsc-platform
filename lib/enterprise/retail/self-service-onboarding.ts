@@ -95,7 +95,7 @@ export async function computeRetailReadiness(organizationId: string, selection: 
     || uniqueOrNull(options.sites);
 
   let warehouseCandidates = options.warehouses.filter((item) => !site || item.siteId === site.id);
-  let warehouse = requestedWarehouse && (!site || requestedWarehouse.siteId === site.id)
+  const warehouse = requestedWarehouse && (!site || requestedWarehouse.siteId === site.id)
     ? requestedWarehouse
     : uniqueOrNull(warehouseCandidates);
 
