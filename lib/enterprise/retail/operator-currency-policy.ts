@@ -17,7 +17,11 @@ export function requiredRetailOperatorCurrencies(country: string | null | undefi
 }
 
 export function isRetailOperatorCurrencyReady(country: string | null | undefined, currencies: Iterable<string>) {
-  const mapped = new Set(Array.from(currencies, (currency) => currency.trim().toUpperCase()));
+  // Readiness must count only real normalized ISO-like currency values. This keeps the
+  // shared Mobile Money/Telco policy deterministic even if a future caller passes blanks.
+  const mapped = new Set(
+    Array.from(currencies, (currency) => currency.trim().toUpperCase()).filter(Boolean),
+  );
   const required = requiredRetailOperatorCurrencies(country);
   return required.length ? required.every((currency) => mapped.has(currency)) : mapped.size >= 2;
 }
