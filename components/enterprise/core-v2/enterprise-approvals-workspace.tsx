@@ -1,5 +1,7 @@
 "use client";
 
+import { enterpriseCoreT } from "@/lib/enterprise-core-i18n";
+
 import { CheckCircle2, Eye, XCircle } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -21,7 +23,6 @@ type Approval = { id: string; targetEntityType: string; targetEntityId: string; 
 type LegacyRecord = { id: string; title: string; description: string | null; status: string; updatedAt: string };
 
 export function EnterpriseApprovalsWorkspace({ organizationId, locale, legacyRecords = [] }: { organizationId: string; locale?: string | null; legacyRecords?: LegacyRecord[] }) {
-  const en = locale === "en";
   const searchParams = useSearchParams();
   const deepLinkedApprovalId = searchParams.get("approval");
   const [queue, setQueue] = useState("pending");
@@ -56,44 +57,55 @@ export function EnterpriseApprovalsWorkspace({ organizationId, locale, legacyRec
       .then(async (response) => ({ response, body: await response.json().catch(() => null) as { approval?: Omit<Approval, "target">; message?: string } | null }))
       .then(({ response, body }) => {
         if (response.ok && body?.approval) setDetail({ ...body.approval, target: null });
-        else setMessage(body?.message || (en ? "This approval is unavailable." : "Cette validation est indisponible."));
+        else setMessage(body?.message || (enterpriseCoreT(locale, "approvals.this.approval.is.unavailable")));
         setDeepLinkResolved(true);
       });
-  }, [collection.items, collection.loading, deepLinkResolved, deepLinkedApprovalId, en, organizationId]);
+  }, [collection.items, collection.loading, deepLinkResolved, deepLinkedApprovalId, locale, organizationId]);
 
   async function decide() {
     if (!pending) return;
-    if (pending.action === "REJECT" && !comment.trim()) { setMessage(en ? "A rejection reason is required." : "Un motif de rejet est obligatoire."); return; }
+    if (pending.action === "REJECT" && !comment.trim()) { setMessage(enterpriseCoreT(locale, "approvals.a.rejection.reason.is.required")); return; }
     try {
       await enterpriseV2Mutation(`/api/enterprise/${organizationId}/approvals/${pending.approval.id}/actions`, "POST", { action: pending.action, revision: pending.approval.revision, decisionComment: comment.trim() || undefined, idempotencyKey: `list:${pending.approval.id}:${pending.approval.revision}:${pending.action}` });
-      setPending(null); setDetail(null); setComment(""); setRefreshKey((value) => value + 1); setMessage(en ? "Decision saved." : "Décision enregistrée.");
+      setPending(null); setDetail(null); setComment(""); setRefreshKey((value) => value + 1); setMessage(enterpriseCoreT(locale, "approvals.decision.saved"));
     } catch (error) { setMessage(error instanceof Error ? error.message : "ACTION_FAILED"); }
   }
 
   return <div className="grid min-w-0 gap-5">
-    <ModuleMetrics label={en ? "Approval indicators" : "Indicateurs validations"}>
-      <ModuleMetric label={en ? "Queue" : "File affichée"} value={collection.pagination.total} />
-      <ModuleMetric label={en ? "Pending here" : "À traiter ici"} value={collection.items.filter((item) => item.status === "PENDING").length} />
-      <ModuleMetric label={en ? "Corrections" : "Corrections"} value={collection.items.filter((item) => item.status === "CORRECTION_REQUESTED").length} />
-      <ModuleMetric label={en ? "Historical" : "Historiques"} value={legacyRecords.length} />
+    <ModuleMetrics label={enterpriseCoreT(locale, "approvals.approval.indicators")}>
+      <ModuleMetric label={enterpriseCoreT(locale, "approvals.queue")} value={collection.pagination.total} />
+      <ModuleMetric label={enterpriseCoreT(locale, "approvals.pending.here")} value={collection.items.filter((item) => item.status === "PENDING").length} />
+      <ModuleMetric label={enterpriseCoreT(locale, "approvals.corrections")} value={collection.items.filter((item) => item.status === "CORRECTION_REQUESTED").length} />
+      <ModuleMetric label={enterpriseCoreT(locale, "tasks.historicalMetric")} value={legacyRecords.length} />
     </ModuleMetrics>
-    <ModuleSection title={en ? "Approval queue" : "File des validations"} description={en ? "The default view prioritizes decisions assigned to you." : "La vue par défaut privilégie les décisions qui vous sont attribuées."} count={`${collection.pagination.total}`}>
+    <ModuleSection title={enterpriseCoreT(locale, "approvals.approval.queue")} description={enterpriseCoreT(locale, "approvals.the.default.view.prioritizes.decisions.assigned.to.you")} count={`${collection.pagination.total}`}>
       <div className="grid gap-2 border-y border-dtsc-border py-3 md:grid-cols-3">
-        <div className="flex min-w-0 gap-2 overflow-x-auto"><Button variant={queue === "pending" ? "default" : "outline"} onClick={() => { setQueue("pending"); setPage(1); }} className="shrink-0">{en ? "To process" : "À traiter"}</Button><Button variant={queue === "corrections" ? "default" : "outline"} onClick={() => { setQueue("corrections"); setPage(1); }} className="shrink-0">{en ? "Corrections" : "Corrections"}</Button><Button variant={queue === "treated" ? "default" : "outline"} onClick={() => { setQueue("treated"); setPage(1); }} className="shrink-0">{en ? "Processed" : "Traitées"}</Button></div>
-        <NativeSelect value={entityType} onChange={(value) => { setEntityType(value); setPage(1); }} items={[{ id: "EnterpriseRequest", label: en ? "Requests" : "Demandes" }, { id: "EnterpriseTask", label: en ? "Tasks" : "Tâches" }, { id: "EnterpriseMeeting", label: en ? "Meetings" : "Réunions" }, { id: "PharmacyQualityIncident", label: en ? "Pharmacy incidents" : "Incidents pharmacie" }]} />
-        <Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder={en ? "Search context…" : "Rechercher le contexte…"} />
+        <div className="flex min-w-0 gap-2 overflow-x-auto"><Button variant={queue === "pending" ? "default" : "outline"} onClick={() => { setQueue("pending"); setPage(1); }} className="shrink-0">{enterpriseCoreT(locale, "status.PENDING")}</Button><Button variant={queue === "corrections" ? "default" : "outline"} onClick={() => { setQueue("corrections"); setPage(1); }} className="shrink-0">{enterpriseCoreT(locale, "approvals.corrections")}</Button><Button variant={queue === "treated" ? "default" : "outline"} onClick={() => { setQueue("treated"); setPage(1); }} className="shrink-0">{enterpriseCoreT(locale, "approvals.processed")}</Button></div>
+        <NativeSelect value={entityType} onChange={(value) => { setEntityType(value); setPage(1); }} items={[{ id: "EnterpriseRequest", label: enterpriseCoreT(locale, "requests.requests") }, { id: "EnterpriseTask", label: enterpriseCoreT(locale, "tasks.ariaLabel") }, { id: "EnterpriseMeeting", label: enterpriseCoreT(locale, "meetings.meetings") }, { id: "PharmacyQualityIncident", label: enterpriseCoreT(locale, "approvals.pharmacy.incidents") }]} />
+        <Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder={enterpriseCoreT(locale, "approvals.search.context")} />
       </div>
-      {collection.loading ? <p className="py-8 text-center text-sm text-dtsc-muted">{en ? "Loading…" : "Chargement…"}</p> : collection.items.length ? <BusinessList ariaLabel={en ? "Approvals" : "Validations"}>{collection.items.map((approval) => <BusinessListItem key={approval.id} title={approval.target?.title || `${approval.targetEntityType} · ${approval.targetEntityId}`} status={<StatusBadge tone={statusTone(approval.status)}>{statusLabel(locale, approval.status)}</StatusBadge>} meta={`${approval.targetEntityType} · ${formatEnterpriseDate(approval.requestedAt, locale)}`} description={approval.decisionComment || (approval.status === "PENDING" ? (en ? "Decision required." : "Décision requise.") : (en ? "Decision recorded." : "Décision enregistrée."))} onOpen={() => setDetail(approval)} openLabel={en ? "Open approval" : "Ouvrir la validation"} actions={<ContextActions label={en ? "Approval actions" : "Actions validation"} actions={approvalActions(approval, en, setDetail, setPending)} />} />)}</BusinessList> : <EmptyState compact title={en ? "No approvals" : "Aucune validation"} description={collection.error || (en ? "Nothing to process in this view." : "Aucun élément à traiter dans cette vue.")} />}
-      <div className="mt-3 flex items-center justify-between border-t border-dtsc-border pt-3 text-sm text-dtsc-muted"><span>Page {collection.pagination.page}/{collection.pagination.pageCount}</span><div className="flex gap-2"><Button variant="outline" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>{en ? "Previous" : "Précédent"}</Button><Button variant="outline" disabled={page >= collection.pagination.pageCount} onClick={() => setPage((value) => value + 1)}>{en ? "Next" : "Suivant"}</Button></div></div>
+      {collection.loading ? <p className="py-8 text-center text-sm text-dtsc-muted">{enterpriseCoreT(locale, "common.loading")}</p> : collection.items.length ? <BusinessList ariaLabel={enterpriseCoreT(locale, "approvals.approvals")}>{collection.items.map((approval) => <BusinessListItem key={approval.id} title={approval.target?.title || `${approvalTargetLabel(locale, approval.targetEntityType)} · ${approval.targetEntityId}`} status={<StatusBadge tone={statusTone(approval.status)}>{statusLabel(locale, approval.status)}</StatusBadge>} meta={`${approvalTargetLabel(locale, approval.targetEntityType)} · ${formatEnterpriseDate(approval.requestedAt, locale)}`} description={approval.decisionComment || (approval.status === "PENDING" ? (enterpriseCoreT(locale, "approvals.decision.required")) : (enterpriseCoreT(locale, "meetings.decision.recorded")))} onOpen={() => setDetail(approval)} openLabel={enterpriseCoreT(locale, "approvals.open.approval")} actions={<ContextActions label={enterpriseCoreT(locale, "approvals.approval.actions")} actions={approvalActions(approval, locale, setDetail, setPending)} />} />)}</BusinessList> : <EmptyState compact title={enterpriseCoreT(locale, "approvals.no.approvals")} description={collection.error || (enterpriseCoreT(locale, "approvals.nothing.to.process.in.this.view"))} />}
+      <div className="mt-3 flex items-center justify-between border-t border-dtsc-border pt-3 text-sm text-dtsc-muted"><span>{enterpriseCoreT(locale, "common.page", { current: collection.pagination.page, total: collection.pagination.pageCount })}</span><div className="flex gap-2"><Button variant="outline" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>{enterpriseCoreT(locale, "common.previous")}</Button><Button variant="outline" disabled={page >= collection.pagination.pageCount} onClick={() => setPage((value) => value + 1)}>{enterpriseCoreT(locale, "common.next")}</Button></div></div>
     </ModuleSection>
-    {legacyRecords.length ? <ModuleSection title={en ? "Historical validations" : "Historique des validations"} description={en ? "Legacy validation records are read-only." : "Les anciennes validations sont consultables en lecture seule."}><BusinessList ariaLabel="legacy approvals">{legacyRecords.map((record) => <BusinessListItem key={record.id} title={record.title} status={<StatusBadge>{en ? "History" : "Historique"}</StatusBadge>} meta={statusLabel(locale, record.status)} description={record.description || formatEnterpriseDate(record.updatedAt, locale)} />)}</BusinessList></ModuleSection> : null}
-    <Dialog open={Boolean(detail)} onClose={() => setDetail(null)} title={detail?.target?.title || detail?.targetEntityType || ""} className="h-[94dvh] max-w-5xl">{detail ? <div className="grid gap-3 text-sm"><StatusBadge tone={statusTone(detail.status)}>{statusLabel(locale, detail.status)}</StatusBadge><p>{en ? "Requested" : "Demandée"} : {formatEnterpriseDate(detail.requestedAt, locale)}</p><p>{en ? "Target" : "Cible"} : {detail.targetEntityType} · {detail.targetEntityId}</p>{detail.decisionComment ? <p className="rounded-xl border border-dtsc-border p-3 text-dtsc-muted">{detail.decisionComment}</p> : null}<ApprovalCoordinationPanel organizationId={organizationId} approvalId={detail.id} locale={locale} onChanged={() => setRefreshKey((value) => value + 1)} /></div> : null}</Dialog>
-    <Dialog open={Boolean(pending)} onClose={() => { setPending(null); setComment(""); }} title={pending?.action === "REJECT" ? (en ? "Reject approval" : "Rejeter la validation") : (en ? "Approve" : "Approuver")} description={pending?.approval.target?.title || pending?.approval.targetEntityType}>{pending?.action === "REJECT" ? <Field label={en ? "Reason" : "Motif"}><textarea value={comment} onChange={(event) => setComment(event.target.value)} className="min-h-28 w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-3" /></Field> : <p className="text-sm text-dtsc-muted">{en ? "Confirm this decision?" : "Confirmer cette décision ?"}</p>}<Button onClick={() => void decide()} className="mt-4 bg-dtsc-blue text-white">{en ? "Confirm" : "Confirmer"}</Button></Dialog>
+    {legacyRecords.length ? <ModuleSection title={enterpriseCoreT(locale, "approvals.historical.validations")} description={enterpriseCoreT(locale, "approvals.legacy.validation.records.are.read.only")}><BusinessList ariaLabel={enterpriseCoreT(locale, "approvals.legacy.aria")}>{legacyRecords.map((record) => <BusinessListItem key={record.id} title={record.title} status={<StatusBadge>{enterpriseCoreT(locale, "tasks.historyBadge")}</StatusBadge>} meta={statusLabel(locale, record.status)} description={record.description || formatEnterpriseDate(record.updatedAt, locale)} />)}</BusinessList></ModuleSection> : null}
+    <Dialog open={Boolean(detail)} onClose={() => setDetail(null)} title={detail?.target?.title || (detail ? approvalTargetLabel(locale, detail.targetEntityType) : "")} className="h-[94dvh] max-w-5xl">{detail ? <div className="grid gap-3 text-sm"><StatusBadge tone={statusTone(detail.status)}>{statusLabel(locale, detail.status)}</StatusBadge><p>{enterpriseCoreT(locale, "approvals.requested")} : {formatEnterpriseDate(detail.requestedAt, locale)}</p><p>{enterpriseCoreT(locale, "approvals.target")} : {approvalTargetLabel(locale, detail.targetEntityType)} · {detail.targetEntityId}</p>{detail.decisionComment ? <p className="rounded-xl border border-dtsc-border p-3 text-dtsc-muted">{detail.decisionComment}</p> : null}<ApprovalCoordinationPanel organizationId={organizationId} approvalId={detail.id} locale={locale} onChanged={() => setRefreshKey((value) => value + 1)} /></div> : null}</Dialog>
+    <Dialog open={Boolean(pending)} onClose={() => { setPending(null); setComment(""); }} title={pending?.action === "REJECT" ? (enterpriseCoreT(locale, "approvals.reject.approval")) : (enterpriseCoreT(locale, "approval.decision.APPROVE"))} description={pending?.approval.target?.title || (pending ? approvalTargetLabel(locale, pending.approval.targetEntityType) : "")}>{pending?.action === "REJECT" ? <Field label={enterpriseCoreT(locale, "approvals.reason")}><textarea value={comment} onChange={(event) => setComment(event.target.value)} className="min-h-28 w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-3" /></Field> : <p className="text-sm text-dtsc-muted">{enterpriseCoreT(locale, "approvals.confirm.this.decision")}</p>}<Button onClick={() => void decide()} className="mt-4 bg-dtsc-blue text-white">{enterpriseCoreT(locale, "common.confirm")}</Button></Dialog>
   </div>;
 }
 
-function approvalActions(approval: Approval, en: boolean, detail: (item: Approval) => void, decision: (value: { approval: Approval; action: "APPROVE" | "REJECT" }) => void): BusinessContextAction[] {
-  const items: BusinessContextAction[] = [{ id: "open", label: en ? "Open" : "Ouvrir", icon: Eye, onSelect: () => detail(approval) }];
-  if (approval.status === "PENDING") { items.push({ id: "approve", label: en ? "Approve" : "Approuver", icon: CheckCircle2, onSelect: () => decision({ approval, action: "APPROVE" }) }); items.push({ id: "reject", label: en ? "Reject" : "Rejeter", icon: XCircle, destructive: true, onSelect: () => decision({ approval, action: "REJECT" }) }); }
+function approvalTargetLabel(locale: string | null | undefined, entityType: string) {
+  if (entityType === "EnterpriseRequest") return enterpriseCoreT(locale, "requests.requests");
+  if (entityType === "EnterpriseTask") return enterpriseCoreT(locale, "tasks.ariaLabel");
+  if (entityType === "EnterpriseMeeting") return enterpriseCoreT(locale, "meetings.meetings");
+  if (entityType === "EnterprisePurchase") return enterpriseCoreT(locale, "approvals.target.purchase");
+  if (entityType === "EnterpriseBudget") return enterpriseCoreT(locale, "approvals.target.budget");
+  if (entityType === "EnterpriseExpense") return enterpriseCoreT(locale, "approvals.target.expense");
+  if (entityType === "PharmacyQualityIncident") return enterpriseCoreT(locale, "approvals.pharmacy.incidents");
+  return entityType;
+}
+
+function approvalActions(approval: Approval, locale: string | null | undefined, detail: (item: Approval) => void, decision: (value: { approval: Approval; action: "APPROVE" | "REJECT" }) => void): BusinessContextAction[] {
+  const items: BusinessContextAction[] = [{ id: "open", label: enterpriseCoreT(locale, "common.open"), icon: Eye, onSelect: () => detail(approval) }];
+  if (approval.status === "PENDING") { items.push({ id: "approve", label: enterpriseCoreT(locale, "approval.decision.APPROVE"), icon: CheckCircle2, onSelect: () => decision({ approval, action: "APPROVE" }) }); items.push({ id: "reject", label: enterpriseCoreT(locale, "approval.decision.REJECT"), icon: XCircle, destructive: true, onSelect: () => decision({ approval, action: "REJECT" }) }); }
   return items;
 }
