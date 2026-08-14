@@ -12,6 +12,12 @@ const pilotSurfaces = [
   "components/enterprise/identity-links/enterprise-identity-admin-panel.tsx",
   "components/enterprise/identity-links/enterprise-identity-user-panel.tsx",
 ];
+const enterpriseCoreSurfaces = [
+  "components/enterprise/core-v2/erp-v2-ui.tsx",
+  "components/enterprise/core-v2/enterprise-tasks-workspace.tsx",
+  "components/enterprise/core-v2/task-form.tsx",
+  "components/enterprise/core-v2/task-coordination-panel.tsx",
+];
 
 const requiredKeys = [
   "contracts.pendingApproval",
@@ -59,6 +65,48 @@ for (const surfacePath of pilotSurfaces) {
   }
 }
 
+const enterpriseCoreFr = JSON.parse(read("locales/enterprise-core.fr.json"));
+const enterpriseCoreEn = JSON.parse(read("locales/enterprise-core.en.json"));
+const enterpriseCoreFrKeys = Object.keys(enterpriseCoreFr).sort();
+const enterpriseCoreEnKeys = Object.keys(enterpriseCoreEn).sort();
+if (JSON.stringify(enterpriseCoreFrKeys) !== JSON.stringify(enterpriseCoreEnKeys)) {
+  failures.push("Les catalogues Enterprise Core FR/EN doivent garder une parité stricte de clés.");
+}
+for (const key of ["status.TODO", "status.OPEN", "status.RESOLVED", "priority.NORMAL", "tasks.sectionTitle", "tasks.form.create", "tasks.coordination.unableLoad"]) {
+  if (!enterpriseCoreFrKeys.includes(key)) failures.push(`Clé Enterprise Core absente : ${key}`);
+}
+
+const i18nEngine = read("lib/i18n.ts");
+if (!i18nEngine.includes("translateEnterpriseCore") || !i18nEngine.includes("enterpriseCoreDictionaries")) {
+  failures.push("Le catalogue Enterprise Core doit être enregistré dans le moteur canonique lib/i18n.ts.");
+}
+
+for (const surfacePath of enterpriseCoreSurfaces) {
+  const source = read(surfacePath);
+  if (!source.includes("enterpriseCoreT") && surfacePath !== "components/enterprise/core-v2/erp-v2-ui.tsx") {
+    failures.push(`${surfacePath} doit utiliser le helper Enterprise Core canonique.`);
+  }
+  if (source.includes('const en = locale === "en"') || /\ben\s*\?\s*["']/.test(source)) {
+    failures.push(`${surfacePath} contient encore un sélecteur FR/EN local pour la copie utilisateur.`);
+  }
+}
+
+const erpV2Ui = read("components/enterprise/core-v2/erp-v2-ui.tsx");
+for (const forbidden of ["const FR_STATUS", "const EN_STATUS", "const FR_PRIORITY", "const EN_PRIORITY"]) {
+  if (erpV2Ui.includes(forbidden)) failures.push(`erp-v2-ui conserve un dictionnaire local interdit : ${forbidden}`);
+}
+if (!erpV2Ui.includes("enterpriseCoreIntlLocale") || !erpV2Ui.includes("enterpriseCoreT")) {
+  failures.push("erp-v2-ui doit déléguer labels et formatage locale au helper Enterprise Core.");
+}
+
+const coordination = read("components/enterprise/core-v2/task-coordination-panel.tsx");
+if (/\{\s*blocker\.status\s*\}/.test(coordination)) {
+  failures.push("Task coordination affiche directement un statut de blocage serveur.");
+}
+if (!coordination.includes("statusLabel(locale, blocker.status)")) {
+  failures.push("Task coordination doit projeter les statuts de blocage via statusLabel.");
+}
+
 const css = read("app/mobile-stability.css");
 if (/h1,[\s\S]{0,400}overflow-wrap:\s*anywhere/.test(css)) {
   failures.push("La typographie générale ne doit pas appliquer overflow-wrap:anywhere aux titres et paragraphes.");
@@ -71,4 +119,4 @@ if (failures.length) {
   for (const failure of failures) console.error(`❌ ${failure}`);
   process.exit(1);
 }
-console.log("✅ Contrat i18n ERP vérifié : dictionnaire contrôlé, surfaces pilotes et typographie responsive.");
+console.log("✅ Contrat i18n ERP vérifié : dictionnaires contrôlés, Enterprise Core canonique, surfaces pilotes et typographie responsive.");
