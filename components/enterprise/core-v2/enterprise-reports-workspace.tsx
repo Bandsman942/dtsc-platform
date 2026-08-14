@@ -12,43 +12,162 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useToastMessage } from "@/components/ui/use-toast-message";
-import { Field, NativeSelect, formatEnterpriseDate } from "@/components/enterprise/core-v2/erp-v2-ui";
+import { Field, NativeSelect, formatEnterpriseDate, statusLabel } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { enterpriseV2Mutation, useEnterpriseV2Collection } from "@/components/enterprise/core-v2/use-enterprise-v2-collection";
+import { enterpriseCoreT, type EnterpriseCoreKey } from "@/lib/enterprise-core-i18n";
 
 type LegacyRecord = { id: string; title: string; description: string | null; status: string; updatedAt: string };
 type ReportItem = { id: string; reference: string; title: string; description: string | null; reportType: string; status: string; periodStart: string | null; periodEnd: string | null; currency: string | null; unitCode: string | null; sourcePolicyCode: string | null; metricDefinitionCodesJson: unknown; freshnessAt: string | null; generatedByUserId: string; generatedAt: string; schemaVersion: number; revision: number };
 type ReportDetail = { report: ReportItem & { filtersJson: unknown; snapshotJson: unknown; roundingPolicyCode?: string | null; sourceModule?: string | null; sourceEntityType?: string | null; sourceEntityId?: string | null }; links: Array<{ id: string; sourceEntityType: string; sourceEntityId: string; targetEntityType: string; targetEntityId: string }>; events: Array<{ id: string; summary: string; createdAt: string }> };
-
 type ReportCatalogItem = { code: string; titleKey: string; descriptionKey: string; family: string; domain: string; sourcePolicyCode: string; supportedDimensions: readonly string[]; supportedFilters: readonly string[]; freshnessPolicyCode: string; formatCodes: readonly string[] };
 type MetricDefinitionItem = { code: string; sourceCode: string; unitType: string; calculationPolicyCode: string; supportedDimensions: string[]; supportedFilters: string[]; freshnessPolicyCode: string };
 type SavedReportView = { id: string; reportType: string; name: string; visibility: string; filtersJson: unknown; isDefault: boolean; isFavorite: boolean; updatedAt: string };
+
 const reportTypes = ["BUDGET_VS_ACTUAL", "EXPENSE_SUMMARY", "PROCUREMENT_SUMMARY", "FINANCE_OVERVIEW"];
 const statuses = ["GENERATED", "PUBLISHED", "ARCHIVED"];
-const fr: Record<string, string> = { BUDGET_VS_ACTUAL: "Budget vs réalisé", EXPENSE_SUMMARY: "Synthèse des dépenses", PROCUREMENT_SUMMARY: "Synthèse des achats", FINANCE_OVERVIEW: "Vue financière", GENERATED: "Généré", PUBLISHED: "Publié", ARCHIVED: "Archivé" };
-const enLabels: Record<string, string> = { BUDGET_VS_ACTUAL: "Budget vs actual", EXPENSE_SUMMARY: "Expense summary", PROCUREMENT_SUMMARY: "Procurement summary", FINANCE_OVERVIEW: "Finance overview", GENERATED: "Generated", PUBLISHED: "Published", ARCHIVED: "Archived" };
-function label(en: boolean, value: string) { return (en ? enLabels : fr)[value] || value.replaceAll("_", " "); }
-function tone(status: string) { return status === "PUBLISHED" ? "success" : status === "GENERATED" ? "info" : "neutral"; }
+
+function reportLabel(locale: string | null | undefined, prefix: string, value: string) {
+  return enterpriseCoreT(locale, `${prefix}.${value}` as EnterpriseCoreKey);
+}
+
+function reportTypeLabel(locale: string | null | undefined, value: string) {
+  return reportLabel(locale, "reports.type", value);
+}
+
+function reportVisibilityLabel(locale: string | null | undefined, value: string) {
+  return reportLabel(locale, "reports.visibility", value);
+}
+
+function reportFamilyLabel(locale: string | null | undefined, value: string) {
+  return reportLabel(locale, "reports.family", value);
+}
+
+function reportSourceLabel(locale: string | null | undefined, value: string | null | undefined) {
+  return value ? reportLabel(locale, "reports.source", value) : enterpriseCoreT(locale, "reports.canonicalSource");
+}
+
+function reportFreshnessLabel(locale: string | null | undefined, value: string) {
+  return reportLabel(locale, "reports.freshness", value);
+}
+
+function reportMetricLabel(locale: string | null | undefined, value: string) {
+  return reportLabel(locale, "reports.metric", value);
+}
+
+function tone(status: string) {
+  return status === "PUBLISHED" ? "success" as const : status === "GENERATED" ? "info" as const : "neutral" as const;
+}
 
 export function EnterpriseReportsWorkspace({ organizationId, canCreate, canManage, locale, legacyRecords = [] }: { organizationId: string; canCreate: boolean; canManage: boolean; locale?: string | null; legacyRecords?: LegacyRecord[] }) {
-  const en = locale === "en"; const [page, setPage] = useState(1); const [search, setSearch] = useState(""); const [type, setType] = useState(""); const [status, setStatus] = useState(""); const [refreshKey, setRefreshKey] = useState(0); const [createOpen, setCreateOpen] = useState(false); const [saveViewOpen, setSaveViewOpen] = useState(false); const [detail, setDetail] = useState<ReportDetail | null>(null); const [catalog, setCatalog] = useState<ReportCatalogItem[]>([]); const [metrics, setMetrics] = useState<MetricDefinitionItem[]>([]); const [views, setViews] = useState<SavedReportView[]>([]); const [message, setMessage] = useState(""); useToastMessage(message);
-  const params = useMemo(() => { const p = new URLSearchParams({ page: String(page), pageSize: "20" }); if (search.trim()) p.set("search", search.trim()); if (type) p.set("type", type); if (status) p.set("status", status); return p; }, [page, search, type, status]); const reports = useEnterpriseV2Collection<ReportItem>({ endpoint: `/api/enterprise/${organizationId}/reports`, params, refreshKey });
-  useEffect(() => { void Promise.all([fetch(`/api/enterprise/${organizationId}/reports/catalog`, { cache: "no-store" }).then((response) => response.ok ? response.json() : Promise.reject()), fetch(`/api/enterprise/${organizationId}/reports/views`, { cache: "no-store" }).then((response) => response.ok ? response.json() : Promise.reject())]).then(([catalogBody, viewsBody]) => { setCatalog((catalogBody as { catalog?: ReportCatalogItem[] }).catalog || []); setMetrics((catalogBody as { metrics?: MetricDefinitionItem[] }).metrics || []); setViews((viewsBody as { views?: SavedReportView[] }).views || []); }).catch(() => { setCatalog([]); setMetrics([]); setViews([]); }); }, [organizationId, refreshKey]);
-  async function saveView(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const form = Object.fromEntries(new FormData(event.currentTarget).entries()); const reportType = String(form.reportType || type || "FINANCE_OVERVIEW"); try { await enterpriseV2Mutation(`/api/enterprise/${organizationId}/reports/views`, "POST", { reportType, name: form.name, visibility: form.visibility || "PERSONAL", filters: { search, type: type || reportType, status }, dimensions: [], sort: [], isDefault: form.isDefault === "on", isFavorite: form.isFavorite === "on" }); setSaveViewOpen(false); setRefreshKey((value) => value + 1); setMessage(en ? "Report view saved." : "Vue de rapport enregistrée."); } catch (error) { setMessage(error instanceof Error ? error.message : "ACTION_FAILED"); } }
-  function applyView(view: SavedReportView) { const filters = (view.filtersJson && typeof view.filtersJson === "object" ? view.filtersJson : {}) as Record<string, unknown>; setSearch(typeof filters.search === "string" ? filters.search : ""); setType(typeof filters.type === "string" ? filters.type : view.reportType); setStatus(typeof filters.status === "string" ? filters.status : ""); setPage(1); }
-  async function generate(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const form = Object.fromEntries(new FormData(event.currentTarget).entries()); try { await enterpriseV2Mutation(`/api/enterprise/${organizationId}/reports/generate`, "POST", form); setCreateOpen(false); setRefreshKey((v) => v + 1); setMessage(en ? "Report generated from current ERP data." : "Rapport généré à partir des données ERP actuelles."); } catch (error) { setMessage(error instanceof Error ? error.message : "ACTION_FAILED"); } }
-  async function runAction(item: ReportItem, action: "PUBLISH" | "ARCHIVE") { try { await enterpriseV2Mutation(`/api/enterprise/${organizationId}/reports/${item.id}/actions`, "POST", { action, revision: item.revision }); setDetail(null); setRefreshKey((v) => v + 1); setMessage(en ? "Report updated." : "Rapport mis à jour."); } catch (error) { setMessage(error instanceof Error ? error.message : "ACTION_FAILED"); } }
-  async function open(item: ReportItem) { const response = await fetch(`/api/enterprise/${organizationId}/reports/${item.id}`, { cache: "no-store" }); const body = await response.json() as ReportDetail & { message?: string }; if (!response.ok) return setMessage(body.message || "LOAD_FAILED"); setDetail(body); }
-  const actions = (item: ReportItem): BusinessContextAction[] => [{ id: "open", label: en ? "Open" : "Ouvrir", icon: Eye, onSelect: () => void open(item) }, { id: "export", label: en ? "Export CSV" : "Exporter CSV", icon: Download, onSelect: () => { window.location.href = `/api/enterprise/${organizationId}/reports/${item.id}/export`; } }, ...(canManage && item.status === "GENERATED" ? [{ id: "publish", label: en ? "Publish" : "Publier", icon: Send, onSelect: () => void runAction(item, "PUBLISH") }] : []), ...(canManage && item.status !== "ARCHIVED" ? [{ id: "archive", label: en ? "Archive" : "Archiver", icon: Archive, destructive: true, separatorBefore: true, onSelect: () => void runAction(item, "ARCHIVE") }] : [])];
+  const t = (key: EnterpriseCoreKey, vars?: Record<string, string | number>) => enterpriseCoreT(locale, key, vars);
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [type, setType] = useState("");
+  const [status, setStatus] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [saveViewOpen, setSaveViewOpen] = useState(false);
+  const [detail, setDetail] = useState<ReportDetail | null>(null);
+  const [catalog, setCatalog] = useState<ReportCatalogItem[]>([]);
+  const [metrics, setMetrics] = useState<MetricDefinitionItem[]>([]);
+  const [views, setViews] = useState<SavedReportView[]>([]);
+  const [message, setMessage] = useState("");
+  useToastMessage(message);
+
+  const params = useMemo(() => { const value = new URLSearchParams({ page: String(page), pageSize: "20" }); if (search.trim()) value.set("search", search.trim()); if (type) value.set("type", type); if (status) value.set("status", status); return value; }, [page, search, type, status]);
+  const reports = useEnterpriseV2Collection<ReportItem>({ endpoint: `/api/enterprise/${organizationId}/reports`, params, refreshKey });
+
+  useEffect(() => {
+    void Promise.all([
+      fetch(`/api/enterprise/${organizationId}/reports/catalog`, { cache: "no-store" }).then((response) => response.ok ? response.json() : Promise.reject()),
+      fetch(`/api/enterprise/${organizationId}/reports/views`, { cache: "no-store" }).then((response) => response.ok ? response.json() : Promise.reject()),
+    ]).then(([catalogBody, viewsBody]) => {
+      setCatalog((catalogBody as { catalog?: ReportCatalogItem[] }).catalog || []);
+      setMetrics((catalogBody as { metrics?: MetricDefinitionItem[] }).metrics || []);
+      setViews((viewsBody as { views?: SavedReportView[] }).views || []);
+    }).catch(() => {
+      setCatalog([]);
+      setMetrics([]);
+      setViews([]);
+    });
+  }, [organizationId, refreshKey]);
+
+  async function saveView(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = Object.fromEntries(new FormData(event.currentTarget).entries());
+    const reportType = String(form.reportType || type || "FINANCE_OVERVIEW");
+    try {
+      await enterpriseV2Mutation(`/api/enterprise/${organizationId}/reports/views`, "POST", { reportType, name: form.name, visibility: form.visibility || "PERSONAL", filters: { search, type: type || reportType, status }, dimensions: [], sort: [], isDefault: form.isDefault === "on", isFavorite: form.isFavorite === "on" });
+      setSaveViewOpen(false);
+      setRefreshKey((value) => value + 1);
+      setMessage(t("reports.viewSaved"));
+    } catch (error) { setMessage(error instanceof Error ? error.message : "ACTION_FAILED"); }
+  }
+
+  function applyView(view: SavedReportView) {
+    const filters = (view.filtersJson && typeof view.filtersJson === "object" ? view.filtersJson : {}) as Record<string, unknown>;
+    setSearch(typeof filters.search === "string" ? filters.search : "");
+    setType(typeof filters.type === "string" ? filters.type : view.reportType);
+    setStatus(typeof filters.status === "string" ? filters.status : "");
+    setPage(1);
+  }
+
+  async function generate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = Object.fromEntries(new FormData(event.currentTarget).entries());
+    try {
+      await enterpriseV2Mutation(`/api/enterprise/${organizationId}/reports/generate`, "POST", form);
+      setCreateOpen(false);
+      setRefreshKey((value) => value + 1);
+      setMessage(t("reports.generated"));
+    } catch (error) { setMessage(error instanceof Error ? error.message : "ACTION_FAILED"); }
+  }
+
+  async function runAction(item: ReportItem, action: "PUBLISH" | "ARCHIVE") {
+    try {
+      await enterpriseV2Mutation(`/api/enterprise/${organizationId}/reports/${item.id}/actions`, "POST", { action, revision: item.revision });
+      setDetail(null);
+      setRefreshKey((value) => value + 1);
+      setMessage(t("reports.updated"));
+    } catch (error) { setMessage(error instanceof Error ? error.message : "ACTION_FAILED"); }
+  }
+
+  async function open(item: ReportItem) {
+    const response = await fetch(`/api/enterprise/${organizationId}/reports/${item.id}`, { cache: "no-store" });
+    const body = await response.json() as ReportDetail & { message?: string };
+    if (!response.ok) return setMessage(body.message || "LOAD_FAILED");
+    setDetail(body);
+  }
+
+  const actions = (item: ReportItem): BusinessContextAction[] => [
+    { id: "open", label: t("reports.action.open"), icon: Eye, onSelect: () => void open(item) },
+    { id: "export", label: t("reports.action.export"), icon: Download, onSelect: () => { window.location.href = `/api/enterprise/${organizationId}/reports/${item.id}/export`; } },
+    ...(canManage && item.status === "GENERATED" ? [{ id: "publish", label: t("reports.action.publish"), icon: Send, onSelect: () => void runAction(item, "PUBLISH") }] : []),
+    ...(canManage && item.status !== "ARCHIVED" ? [{ id: "archive", label: t("reports.action.archive"), icon: Archive, destructive: true, separatorBefore: true, onSelect: () => void runAction(item, "ARCHIVE") }] : []),
+  ];
+
   return <div className="grid min-w-0 gap-6">
-    <ModuleMetrics label={en ? "Reporting indicators" : "Indicateurs reporting"}><ModuleMetric label={en ? "Reports" : "Rapports"} value={reports.pagination.total} /><ModuleMetric label={en ? "Published on page" : "Publiés sur la page"} value={reports.items.filter((item) => item.status === "PUBLISHED").length} /><ModuleMetric label={en ? "Latest generation" : "Dernière génération"} value={reports.items[0] ? formatEnterpriseDate(reports.items[0].generatedAt, locale) : "—"} /><ModuleMetric label={en ? "Saved views" : "Vues enregistrées"} value={views.length} /></ModuleMetrics>
-    <ModuleSection title={en ? "Report catalog" : "Catalogue de rapports"} description={en ? "Every report exposes its real source, supported filters, metrics and freshness policy." : "Chaque rapport expose sa source réelle, ses filtres, ses indicateurs et sa politique de fraîcheur."} count={`${catalog.length}`}><BusinessList ariaLabel="report catalog">{catalog.map((item) => <BusinessListItem key={item.code} title={label(en, item.code)} status={<StatusBadge tone="info">{item.family}</StatusBadge>} meta={`${item.sourcePolicyCode} · ${item.freshnessPolicyCode}`} description={`${en ? "Metrics" : "Indicateurs"}: ${metrics.filter((metric) => item.code === "FINANCE_OVERVIEW" || metric.supportedFilters.some((filter) => item.supportedFilters.includes(filter))).slice(0, 6).map((metric) => metric.code).join(", ") || "—"} · ${en ? "Formats" : "Formats"}: ${item.formatCodes.join(", ")}`} />)}</BusinessList></ModuleSection>
-    {views.length ? <ModuleSection title={en ? "Saved views and favorites" : "Vues enregistrées et favoris"} description={en ? "Personal views preserve filters without changing the underlying report definitions." : "Les vues personnelles conservent les filtres sans modifier les définitions de rapports."} count={`${views.length}`}><BusinessList ariaLabel="saved report views">{views.map((view) => <BusinessListItem key={view.id} title={view.name} status={<StatusBadge tone={view.isFavorite ? "success" : "neutral"}>{view.isFavorite ? (en ? "Favorite" : "Favori") : view.visibility}</StatusBadge>} meta={label(en, view.reportType)} description={`${view.isDefault ? (en ? "Default · " : "Par défaut · ") : ""}${formatEnterpriseDate(view.updatedAt, locale)}`} onOpen={() => applyView(view)} />)}</BusinessList></ModuleSection> : null}
-    <ModuleSection title={en ? "Reports" : "Rapports"} description={en ? "Immutable snapshots generated from real ERP aggregates. Currencies remain separated without FX." : "Snapshots immuables générés depuis les vrais agrégats ERP. Les devises restent séparées sans FX."} count={`${reports.pagination.total}`} action={<div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => setSaveViewOpen(true)}>{en ? "Save view" : "Enregistrer la vue"}</Button>{canCreate ? <Button onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" />{en ? "Generate report" : "Générer un rapport"}</Button> : null}</div>}><div className="grid gap-2 border-y border-dtsc-border py-3 md:grid-cols-3"><Input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} placeholder={en ? "Search reports…" : "Rechercher un rapport…"} /><NativeSelect value={type} onChange={setType} items={reportTypes.map((id) => ({ id, label: label(en, id) }))} /><NativeSelect value={status} onChange={setStatus} items={statuses.map((id) => ({ id, label: label(en, id) }))} /></div>{reports.loading ? <p className="py-8 text-center text-sm text-dtsc-muted">{en ? "Loading…" : "Chargement…"}</p> : reports.items.length ? <BusinessList ariaLabel="reports">{reports.items.map((item) => <BusinessListItem key={item.id} title={`${item.reference} · ${item.title}`} status={<StatusBadge tone={tone(item.status)}>{label(en, item.status)}</StatusBadge>} meta={`${label(en, item.reportType)}${item.currency ? ` · ${item.currency}` : ""}`} description={`${item.sourcePolicyCode || (en ? "Canonical source" : "Source canonique")} · ${item.freshnessAt ? `${en ? "Fresh" : "Actualisé"} ${formatEnterpriseDate(item.freshnessAt, locale)}` : (en ? "Freshness unavailable" : "Fraîcheur indisponible")} · ${formatEnterpriseDate(item.generatedAt, locale)}${item.periodStart ? ` · ${formatEnterpriseDate(item.periodStart, locale)} → ${formatEnterpriseDate(item.periodEnd, locale)}` : ""}`} onOpen={() => void open(item)} actions={<ContextActions label={en ? "Report actions" : "Actions rapport"} actions={actions(item)} />} />)}</BusinessList> : <EmptyState compact title={en ? "No reports" : "Aucun rapport"} description={reports.error || (en ? "Generate the first report from ERP data." : "Générez le premier rapport à partir des données ERP.")} />}<div className="mt-3 flex justify-between border-t border-dtsc-border pt-3 text-sm text-dtsc-muted"><span>Page {reports.pagination.page}/{reports.pagination.pageCount}</span><div className="flex gap-2"><Button variant="outline" disabled={page <= 1} onClick={() => setPage((v) => Math.max(1, v - 1))}>{en ? "Previous" : "Précédent"}</Button><Button variant="outline" disabled={page >= reports.pagination.pageCount} onClick={() => setPage((v) => v + 1)}>{en ? "Next" : "Suivant"}</Button></div></div></ModuleSection>
-    {legacyRecords.length ? <ModuleSection title={en ? "Historical reports" : "Rapports historiques"} description={en ? "Legacy REPORT records remain read-only." : "Les anciens REPORT restent en lecture seule."}><BusinessList ariaLabel="legacy reports">{legacyRecords.map((item) => <BusinessListItem key={item.id} title={item.title} status={<StatusBadge>{en ? "History" : "Historique"}</StatusBadge>} description={item.description || item.status} />)}</BusinessList></ModuleSection> : null}
-    <Dialog open={saveViewOpen} onClose={() => setSaveViewOpen(false)} title={en ? "Save report view" : "Enregistrer la vue de rapport"}><form onSubmit={saveView} className="grid gap-4"><Field label={en ? "View name" : "Nom de la vue"}><Input name="name" required /></Field><Field label={en ? "Report type" : "Type de rapport"}><NativeSelect name="reportType" defaultValue={type || "FINANCE_OVERVIEW"} items={reportTypes.map((id) => ({ id, label: label(en, id) }))} /></Field><Field label={en ? "Visibility" : "Visibilité"}><NativeSelect name="visibility" defaultValue="PERSONAL" items={[{ id: "PERSONAL", label: en ? "Personal" : "Personnelle" }, ...(canManage ? [{ id: "ORGANIZATION", label: en ? "Organization" : "Organisation" }] : [])]} /></Field><label className="flex min-h-11 items-center gap-2 text-sm font-bold"><input type="checkbox" name="isDefault" />{en ? "Default view" : "Vue par défaut"}</label><label className="flex min-h-11 items-center gap-2 text-sm font-bold"><input type="checkbox" name="isFavorite" />{en ? "Favorite" : "Favori"}</label><Button type="submit">{en ? "Save view" : "Enregistrer"}</Button></form></Dialog>
-    <Dialog open={createOpen} onClose={() => setCreateOpen(false)} title={en ? "Generate report" : "Générer un rapport"} className="h-[96dvh] max-w-3xl"><form onSubmit={generate} className="grid gap-4"><Field label={en ? "Title" : "Titre"}><Input name="title" required /></Field><Field label={en ? "Report type" : "Type de rapport"}><NativeSelect name="reportType" required defaultValue="BUDGET_VS_ACTUAL" items={reportTypes.map((id) => ({ id, label: label(en, id) }))} /></Field><div className="grid gap-3 md:grid-cols-2"><Field label={en ? "Period start" : "Début période"}><Input name="periodStart" type="date" /></Field><Field label={en ? "Period end" : "Fin période"}><Input name="periodEnd" type="date" /></Field><Field label={en ? "Currency filter" : "Filtre devise"}><Input name="currency" maxLength={3} placeholder={en ? "Optional; otherwise separated" : "Optionnel ; sinon séparées"} /></Field><Field label={en ? "Category" : "Catégorie"}><Input name="category" /></Field></div><Field label="Description"><textarea name="description" className="min-h-20 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm" /></Field><Button type="submit"><FileBarChart2 className="h-4 w-4" />{en ? "Generate snapshot" : "Générer le snapshot"}</Button></form></Dialog>
-    <Dialog open={Boolean(detail)} onClose={() => setDetail(null)} title={detail ? `${detail.report.reference} · ${detail.report.title}` : ""} className="h-[96dvh] max-w-5xl">{detail ? <div className="grid gap-5"><div className="grid gap-2 border-y border-dtsc-border py-3 text-sm md:grid-cols-3"><p><strong>{en ? "Type" : "Type"}</strong><br />{label(en, detail.report.reportType)}</p><p><strong>{en ? "Generated" : "Généré"}</strong><br />{formatEnterpriseDate(detail.report.generatedAt, locale)}</p><p><strong>{en ? "Status" : "Statut"}</strong><br />{label(en, detail.report.status)}</p><p><strong>{en ? "Source" : "Source"}</strong><br />{detail.report.sourcePolicyCode || detail.report.sourceModule || "—"}</p><p><strong>{en ? "Freshness" : "Fraîcheur"}</strong><br />{detail.report.freshnessAt ? formatEnterpriseDate(detail.report.freshnessAt, locale) : "—"}</p><p><strong>{en ? "Unit / rounding" : "Unité / arrondi"}</strong><br />{detail.report.unitCode || "—"} · {detail.report.roundingPolicyCode || "HALF_UP_2"}</p></div><SnapshotView value={detail.report.snapshotJson} /><div className="border-y border-dtsc-border py-3 text-sm text-dtsc-muted"><strong>{en ? "Filters" : "Filtres"}</strong><pre className="mt-2 whitespace-pre-wrap break-words font-sans">{JSON.stringify(detail.report.filtersJson, null, 2)}</pre></div>{detail.events.length ? <div className="text-sm text-dtsc-muted">{detail.events.slice(0, 10).map((event) => <p key={event.id}>{formatEnterpriseDate(event.createdAt, locale)} · {event.summary}</p>)}</div> : null}</div> : null}</Dialog>
+    <ModuleMetrics label={t("reports.indicators")}><ModuleMetric label={t("reports.metric.reports")} value={reports.pagination.total} /><ModuleMetric label={t("reports.metric.published")} value={reports.items.filter((item) => item.status === "PUBLISHED").length} /><ModuleMetric label={t("reports.metric.latest")} value={reports.items[0] ? formatEnterpriseDate(reports.items[0].generatedAt, locale) : "—"} /><ModuleMetric label={t("reports.metric.savedViews")} value={views.length} /></ModuleMetrics>
+    <ModuleSection title={t("reports.catalog.title")} description={t("reports.catalog.description")} count={`${catalog.length}`}><BusinessList ariaLabel={t("reports.catalog.aria")}>{catalog.map((item) => <BusinessListItem key={item.code} title={reportTypeLabel(locale, item.code)} status={<StatusBadge tone="info">{reportFamilyLabel(locale, item.family)}</StatusBadge>} meta={`${reportSourceLabel(locale, item.sourcePolicyCode)} · ${reportFreshnessLabel(locale, item.freshnessPolicyCode)}`} description={`${t("reports.catalog.metrics")}: ${metrics.filter((metric) => item.code === "FINANCE_OVERVIEW" || metric.supportedFilters.some((filter) => item.supportedFilters.includes(filter))).slice(0, 6).map((metric) => reportMetricLabel(locale, metric.code)).join(", ") || "—"} · ${t("reports.catalog.formats")}: ${item.formatCodes.join(", ")}`} />)}</BusinessList></ModuleSection>
+    {views.length ? <ModuleSection title={t("reports.saved.title")} description={t("reports.saved.description")} count={`${views.length}`}><BusinessList ariaLabel={t("reports.saved.aria")}>{views.map((view) => <BusinessListItem key={view.id} title={view.name} status={<StatusBadge tone={view.isFavorite ? "success" : "neutral"}>{view.isFavorite ? t("reports.saved.favorite") : reportVisibilityLabel(locale, view.visibility)}</StatusBadge>} meta={reportTypeLabel(locale, view.reportType)} description={`${view.isDefault ? `${t("reports.saved.default")} · ` : ""}${formatEnterpriseDate(view.updatedAt, locale)}`} onOpen={() => applyView(view)} />)}</BusinessList></ModuleSection> : null}
+    <ModuleSection title={t("reports.section.title")} description={t("reports.section.description")} count={`${reports.pagination.total}`} action={<div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => setSaveViewOpen(true)}>{t("reports.saveView")}</Button>{canCreate ? <Button onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" />{t("reports.generateReport")}</Button> : null}</div>}>
+      <div className="grid gap-2 border-y border-dtsc-border py-3 md:grid-cols-3"><Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder={t("reports.search")} /><NativeSelect value={type} onChange={setType} items={reportTypes.map((id) => ({ id, label: reportTypeLabel(locale, id) }))} /><NativeSelect value={status} onChange={setStatus} items={statuses.map((id) => ({ id, label: statusLabel(locale, id) }))} /></div>
+      {reports.loading ? <p className="py-8 text-center text-sm text-dtsc-muted">{t("common.loading")}</p> : reports.items.length ? <BusinessList ariaLabel={t("reports.aria")}>{reports.items.map((item) => <BusinessListItem key={item.id} title={`${item.reference} · ${item.title}`} status={<StatusBadge tone={tone(item.status)}>{statusLabel(locale, item.status)}</StatusBadge>} meta={`${reportTypeLabel(locale, item.reportType)}${item.currency ? ` · ${item.currency}` : ""}`} description={`${reportSourceLabel(locale, item.sourcePolicyCode)} · ${item.freshnessAt ? t("reports.fresh", { date: formatEnterpriseDate(item.freshnessAt, locale) }) : t("reports.freshnessUnavailable")} · ${formatEnterpriseDate(item.generatedAt, locale)}${item.periodStart ? ` · ${formatEnterpriseDate(item.periodStart, locale)} → ${formatEnterpriseDate(item.periodEnd, locale)}` : ""}`} onOpen={() => void open(item)} actions={<ContextActions label={t("reports.actions")} actions={actions(item)} />} />)}</BusinessList> : <EmptyState compact title={t("reports.noReports")} description={reports.error || t("reports.noReportsDescription")} />}
+      <div className="mt-3 flex justify-between border-t border-dtsc-border pt-3 text-sm text-dtsc-muted"><span>{t("common.page", { current: reports.pagination.page, total: reports.pagination.pageCount })}</span><div className="flex gap-2"><Button variant="outline" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>{t("common.previous")}</Button><Button variant="outline" disabled={page >= reports.pagination.pageCount} onClick={() => setPage((value) => value + 1)}>{t("common.next")}</Button></div></div>
+    </ModuleSection>
+    {legacyRecords.length ? <ModuleSection title={t("reports.historical.title")} description={t("reports.historical.description")}><BusinessList ariaLabel={t("reports.historical.aria")}>{legacyRecords.map((item) => <BusinessListItem key={item.id} title={item.title} status={<StatusBadge>{t("reports.historyBadge")}</StatusBadge>} description={item.description || statusLabel(locale, item.status)} />)}</BusinessList></ModuleSection> : null}
+    <Dialog open={saveViewOpen} onClose={() => setSaveViewOpen(false)} title={t("reports.save.title")}><form onSubmit={saveView} className="grid gap-4"><Field label={t("reports.save.name")}><Input name="name" required /></Field><Field label={t("reports.save.reportType")}><NativeSelect name="reportType" defaultValue={type || "FINANCE_OVERVIEW"} items={reportTypes.map((id) => ({ id, label: reportTypeLabel(locale, id) }))} /></Field><Field label={t("reports.save.visibility")}><NativeSelect name="visibility" defaultValue="PERSONAL" items={[{ id: "PERSONAL", label: t("reports.save.personal") }, ...(canManage ? [{ id: "ORGANIZATION", label: t("reports.save.organization") }] : [])]} /></Field><label className="flex min-h-11 items-center gap-2 text-sm font-bold"><input type="checkbox" name="isDefault" />{t("reports.save.default")}</label><label className="flex min-h-11 items-center gap-2 text-sm font-bold"><input type="checkbox" name="isFavorite" />{t("reports.save.favorite")}</label><Button type="submit">{t("reports.saveView")}</Button></form></Dialog>
+    <Dialog open={createOpen} onClose={() => setCreateOpen(false)} title={t("reports.generate.title")} className="h-[96dvh] max-w-3xl"><form onSubmit={generate} className="grid gap-4"><Field label={t("reports.generate.reportTitle")}><Input name="title" required /></Field><Field label={t("reports.generate.reportType")}><NativeSelect name="reportType" required defaultValue="BUDGET_VS_ACTUAL" items={reportTypes.map((id) => ({ id, label: reportTypeLabel(locale, id) }))} /></Field><div className="grid gap-3 md:grid-cols-2"><Field label={t("reports.generate.periodStart")}><Input name="periodStart" type="date" /></Field><Field label={t("reports.generate.periodEnd")}><Input name="periodEnd" type="date" /></Field><Field label={t("reports.generate.currency")}><Input name="currency" maxLength={3} placeholder={t("reports.generate.currencyPlaceholder")} /></Field><Field label={t("reports.generate.category")}><Input name="category" /></Field></div><Field label={t("reports.generate.description")}><textarea name="description" className="min-h-20 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm" /></Field><Button type="submit"><FileBarChart2 className="h-4 w-4" />{t("reports.generate.submit")}</Button></form></Dialog>
+    <Dialog open={Boolean(detail)} onClose={() => setDetail(null)} title={detail ? `${detail.report.reference} · ${detail.report.title}` : ""} className="h-[96dvh] max-w-5xl">{detail ? <div className="grid gap-5"><div className="grid gap-2 border-y border-dtsc-border py-3 text-sm md:grid-cols-3"><p><strong>{t("reports.detail.type")}</strong><br />{reportTypeLabel(locale, detail.report.reportType)}</p><p><strong>{t("reports.detail.generated")}</strong><br />{formatEnterpriseDate(detail.report.generatedAt, locale)}</p><p><strong>{t("reports.detail.status")}</strong><br />{statusLabel(locale, detail.report.status)}</p><p><strong>{t("reports.detail.source")}</strong><br />{reportSourceLabel(locale, detail.report.sourcePolicyCode)}</p><p><strong>{t("reports.detail.freshness")}</strong><br />{detail.report.freshnessAt ? formatEnterpriseDate(detail.report.freshnessAt, locale) : "—"}</p><p><strong>{t("reports.detail.unitRounding")}</strong><br />{detail.report.unitCode || "—"}</p></div><SnapshotView value={detail.report.snapshotJson} locale={locale} /><div className="border-y border-dtsc-border py-3 text-sm text-dtsc-muted"><strong>{t("reports.detail.filters")}</strong><pre className="mt-2 whitespace-pre-wrap break-words font-sans">{JSON.stringify(detail.report.filtersJson, null, 2)}</pre></div>{detail.events.length ? <div className="text-sm text-dtsc-muted">{detail.events.slice(0, 10).map((event) => <p key={event.id}>{formatEnterpriseDate(event.createdAt, locale)} · {event.summary}</p>)}</div> : null}</div> : null}</Dialog>
   </div>;
 }
 
-function SnapshotView({ value }: { value: unknown }) { const envelope = value as Record<string, unknown> | null; if (!envelope) return null; const data = (envelope.data && typeof envelope.data === "object" ? envelope.data : envelope) as Record<string, unknown>; const currencies = Array.isArray(data.currencies) ? data.currencies as Array<Record<string, unknown>> : []; const lines = Array.isArray(data.lines) ? data.lines as Array<Record<string, unknown>> : []; return <div className="grid gap-4">{currencies.length ? <BusinessList ariaLabel="currency summaries">{currencies.map((item, index) => <BusinessListItem key={`${String(item.currency)}-${index}`} title={String(item.currency || "—")} meta={`Planned ${String(item.planned || "0")} · Committed ${String(item.committed || "0")} · Actual ${String(item.actual || "0")} · Available ${String(item.available || "0")}`} />)}</BusinessList> : null}{lines.length ? <BusinessList ariaLabel="report details">{lines.slice(0, 100).map((item, index) => <BusinessListItem key={`${String(item.budgetLineId || index)}`} title={String(item.name || item.budgetTitle || "Line")} meta={`${String(item.currency || "")} · Planned ${String(item.planned || "0")} · Actual ${String(item.actual || "0")}`} description={`Committed ${String(item.committed || "0")} · Available ${String(item.available || "0")}`} />)}</BusinessList> : <pre className="max-h-[55dvh] overflow-auto whitespace-pre-wrap break-words rounded-xl border border-dtsc-border p-3 text-xs">{JSON.stringify(value, null, 2)}</pre>}</div>; }
+function SnapshotView({ value, locale }: { value: unknown; locale?: string | null }) {
+  const envelope = value as Record<string, unknown> | null;
+  if (!envelope) return null;
+  const data = (envelope.data && typeof envelope.data === "object" ? envelope.data : envelope) as Record<string, unknown>;
+  const currencies = Array.isArray(data.currencies) ? data.currencies as Array<Record<string, unknown>> : [];
+  const lines = Array.isArray(data.lines) ? data.lines as Array<Record<string, unknown>> : [];
+  const t = (key: EnterpriseCoreKey) => enterpriseCoreT(locale, key);
+  return <div className="grid gap-4">{currencies.length ? <BusinessList ariaLabel={t("reports.snapshot.currencyAria")}>{currencies.map((item, index) => <BusinessListItem key={`${String(item.currency)}-${index}`} title={String(item.currency || "—")} meta={`${t("reports.snapshot.planned")} ${String(item.planned || "0")} · ${t("reports.snapshot.committed")} ${String(item.committed || "0")} · ${t("reports.snapshot.actual")} ${String(item.actual || "0")} · ${t("reports.snapshot.available")} ${String(item.available || "0")}`} />)}</BusinessList> : null}{lines.length ? <BusinessList ariaLabel={t("reports.snapshot.detailsAria")}>{lines.slice(0, 100).map((item, index) => <BusinessListItem key={`${String(item.budgetLineId || index)}`} title={String(item.name || item.budgetTitle || t("reports.snapshot.line"))} meta={`${String(item.currency || "")} · ${t("reports.snapshot.planned")} ${String(item.planned || "0")} · ${t("reports.snapshot.actual")} ${String(item.actual || "0")}`} description={`${t("reports.snapshot.committed")} ${String(item.committed || "0")} · ${t("reports.snapshot.available")} ${String(item.available || "0")}`} />)}</BusinessList> : <pre className="max-h-[55dvh] overflow-auto whitespace-pre-wrap break-words rounded-xl border border-dtsc-border p-3 text-xs">{JSON.stringify(value, null, 2)}</pre>}</div>;
+}
