@@ -31,10 +31,17 @@ check(!migration.includes("DROP COLUMN") && !migration.includes("DROP TABLE"), "
 const providerSchema = read("prisma/enterprise-retail.prisma");
 check(providerSchema.includes("mobileMoneyFloatAccountId String?"), "Legacy mobileMoneyFloatAccountId must remain during the compatibility window");
 
+const operatorCurrencyPolicy = read("lib/enterprise/retail/operator-currency-policy.ts");
+check(hasAll(operatorCurrencyPolicy, [
+  "requiredRetailOperatorCurrencies",
+  'return DRC_COUNTRY_MARKERS.has(normalizeCountry(country)) ? ["CDF", "USD"] : []',
+  "mapped.size >= 2",
+]), "Shared operator policy must preserve Mobile Money DRC CDF/USD readiness and generic two-currency readiness");
+
 const service = read("lib/enterprise/retail/mobile-money-multicurrency-service.ts");
 check(hasAll(service, [
   'const MOBILE_MONEY_FLOAT = "MOBILE_MONEY_FLOAT"',
-  'return DRC_COUNTRY_MARKERS.has(normalizeCountry(country)) ? ["CDF", "USD"] : []',
+  "requiredRetailOperatorCurrencies",
   "resolveMobileMoneyFloatAccountTx",
   "organizationId_providerId_accountUse_currencyCode",
   'accountType: "MOBILE_MONEY"',
@@ -48,7 +55,7 @@ check(hasAll(service, [
   "operationalBalance: { increment: resolved.targetAmount }",
   'transactionType: "MOBILE_MONEY_FX_TRANSFER"',
   'transactionType: "MOBILE_MONEY_FX_REVERSAL"',
-]), "Canonical service must enforce DRC CDF/USD readiness, generic two-currency readiness, current Finance FX, locking, source-balance validation, atomic wallet effects, Treasury movements and reversal");
+]), "Canonical service must use the shared currency policy while preserving generic readiness, current Finance FX, locking, source-balance validation, atomic wallet effects, Treasury movements and reversal");
 check(!service.includes("providerCode: input.targetProviderCode"), "FX transfers must never permit a second target operator");
 
 const retailService = read("lib/enterprise/retail/service.ts");
@@ -180,7 +187,7 @@ check(hasAll(cashManager, [
 ]), "Mobile Money cash UX must support concurrent CDF/USD tills, one-tap selection, accessible responsive states and separate counted end-of-day submission");
 
 const sharedWorkspace = read("components/enterprise/professional/retail-workspace-shared.tsx");
-check(sharedWorkspace.includes('moduleCode !== "MOBILE_MONEY_AGENCY" ? <CashSessionBar'), "Mobile Money must hide the legacy single-till banner so the concurrent till selector remains the only operational cash context");
+check(sharedWorkspace.includes('moduleCode === "RETAIL_POS" ? <CashSessionBar'), "The legacy single-till banner must be restricted to POS so Mobile Money keeps the concurrent till selector as its only operational cash context");
 
 const page = read("app/enterprise-modules/retail-page.tsx");
 check(page.includes("<MobileMoneyAgencyWorkspace"), "MOBILE_MONEY_AGENCY must use the specialized multi-currency workspace");
@@ -203,9 +210,9 @@ check(hasAll(domainDoc, [
   "basculer en un toucher entre ses caisses",
   "Changer de caisse invalide tout brouillon de confirmation non confirmé",
   "chaque caisse `OPEN` est comptée et soumise séparément",
-  "Chaque caisse Mobile Money est comptée et soumise séparément en fin de journée",
+  "Chaque caisse utilisée dans les parcours Mobile Money ou Télécom est comptée et soumise séparément en fin de journée",
   "cashier ne peut pas auto-valider sa clôture",
-]), "Retail domain documentation must describe the concurrent Mobile Money till, switching and independent close workflow");
+]), "Retail domain documentation must describe the concurrent Mobile Money till, switching and independent close workflow within the shared operator cash contract");
 
 check(!fs.existsSync(path.join(root, ".github/workflows/tmp-307-codemod.yml")), "Temporary #307 codemod workflow must not remain in the branch");
 check(!fs.existsSync(path.join(root, ".github/workflows/tmp-307-lint-polish.yml")), "Temporary #307 lint workflow must not remain in the branch");
