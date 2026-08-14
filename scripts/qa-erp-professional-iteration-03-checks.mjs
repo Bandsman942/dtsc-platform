@@ -141,7 +141,8 @@ const checks = {
     for (const marker of ["ProfessionalWorkflowComments", "canEdit", "canDelete", "method: editing ? \"PATCH\" : \"POST\"", "method: \"DELETE\""]) need(content.workflowComments, marker, "Commentaires workflow UI");
   },
   documents() {
-    for (const marker of ["sourceEntityType", "sourceEntityId", "sourceReference", "requestedAction", "requestedAction === \"upload\"", "Téléverser un document lié", "type=\"file\"", "/versions"]) need(content.documents, marker, "Documents liés et upload réel");
+    for (const marker of ["sourceEntityType", "sourceEntityId", "sourceReference", "requestedAction", "requestedAction === \"upload\"", "type=\"file\"", "/versions"]) need(content.documents, marker, "Documents liés et upload réel");
+    needAny(content.documents, ["Téléverser un document lié", 't("documents.linked.upload")'], "Documents liés et upload réel — libellé upload localisé");
     for (const marker of ["EnterpriseContract", "EnterpriseProject", "EnterpriseAsset", "targetModule", "createEnterpriseLink"]) need(content.documentLinks, marker, "Liens documentaires ERP");
     for (const marker of ["EnterpriseContract", "EnterpriseProject", "EnterpriseAsset", "CROSS_TENANT_LINK_DENIED"]) need(content.procurementShared, marker, "Validation tenant des liens");
   },
