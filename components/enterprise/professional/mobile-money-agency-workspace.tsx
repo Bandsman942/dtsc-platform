@@ -6,7 +6,10 @@ import { ArrowRightLeft, CheckCircle2, RefreshCw, RotateCcw, Settings2, Smartpho
 import { useAppLocale } from "@/components/i18n/locale-provider";
 import { Field, formatEnterpriseDate } from "@/components/enterprise/core-v2/erp-v2-ui";
 import {
-  OpenCashForm,
+  MobileMoneyCashSessionManager,
+  type MobileMoneyCashSession,
+} from "@/components/enterprise/professional/mobile-money-cash-session-manager";
+import {
   RetailErpLinks,
   RetailReportsPanel,
   RetailWorkspaceFrame,
@@ -92,10 +95,14 @@ type OperationDraft = {
   externalReference: string;
 };
 
+type MobileMoneyDashboard = RetailDashboard & {
+  cashSessions?: MobileMoneyCashSession[];
+};
+
 const COPY = {
   fr: {
     operationTitle: "Opération Mobile Money",
-    operationDescription: "Enregistrez l’opération client. Le wallet de l’opérateur correspondant à la devise de la caisse est sélectionné automatiquement.",
+    operationDescription: "Choisissez la caisse ouverte à utiliser, puis enregistrez l’opération. Le wallet opérateur de la même devise est sélectionné automatiquement.",
     service: "Service Mobile Money",
     operation: "Opération",
     phone: "Téléphone client",
@@ -105,7 +112,7 @@ const COPY = {
     feeCollection: "Encaissement des frais",
     reference: "Référence opérateur",
     review: "Vérifier l’opération",
-    tillRequired: "Ouvrez une caisse avant de continuer.",
+    tillRequired: "Ouvrez une caisse ou sélectionnez l’une de vos caisses ouvertes avant de continuer.",
     missingWallet: "Aucun opérateur ne possède encore de wallet dans la devise de cette caisse.",
     walletUsed: "Wallet opérateur utilisé",
     operationConfirmed: "Opération Mobile Money confirmée et comptabilisée.",
@@ -151,10 +158,11 @@ const COPY = {
     requiredCountry: "Requis dans ce pays",
     notConfigured: "Non configuré",
     configureWallets: "Configurer les wallets",
+    transactionTill: "Caisse de l’opération",
   },
   en: {
     operationTitle: "Mobile Money operation",
-    operationDescription: "Record the customer operation. The operator wallet matching the till currency is selected automatically.",
+    operationDescription: "Choose the open till to use, then record the operation. The operator wallet in the same currency is selected automatically.",
     service: "Mobile Money service",
     operation: "Operation",
     phone: "Customer phone",
@@ -164,7 +172,7 @@ const COPY = {
     feeCollection: "Fee collection",
     reference: "Operator reference",
     review: "Review operation",
-    tillRequired: "Open a till before continuing.",
+    tillRequired: "Open a till or select one of your open tills before continuing.",
     missingWallet: "No operator has a wallet configured for this till currency yet.",
     walletUsed: "Operator wallet used",
     operationConfirmed: "Mobile Money operation confirmed and posted.",
@@ -210,6 +218,7 @@ const COPY = {
     requiredCountry: "Required in this country",
     notConfigured: "Not configured",
     configureWallets: "Configure wallets",
+    transactionTill: "Operation till",
   },
 } as const;
 
@@ -265,7 +274,7 @@ export function MobileMoneyAgencyWorkspace({
       includeConfigurationTab
     >
       {(context) => {
-        const dashboard = context.dashboard as RetailDashboard;
+        const dashboard = context.dashboard as MobileMoneyDashboard;
         const reload = async () => {
           await loadConfiguration();
           context.setRefreshKey((value) => value + 1);
@@ -295,7 +304,7 @@ function MobileMoneyOperations({
   mutate,
 }: {
   organizationId: string;
-  dashboard: RetailDashboard;
+  dashboard: MobileMoneyDashboard;
   locale: "fr" | "en";
   configuration: MobileMoneyConfiguration | null;
   configurationBusy: boolean;
@@ -306,7 +315,24 @@ function MobileMoneyOperations({
 }) {
   const copy = COPY[locale];
   const [pending, setPending] = useState<OperationDraft | null>(null);
-  const activeCash = dashboard.cashSession?.status === "OPEN" ? dashboard.cashSession : null;
+  const sessions = useMemo<MobileMoneyCashSession[]>(
+    () => dashboard.cashSessions || (dashboard.cashSession ? [dashboard.cashSession as MobileMoneyCashSession] : []),
+    [dashboard.cashSession, dashboard.cashSessions],
+  );
+  const openCashSessions = useMemo(() => sessions.filter((session) => session.status === "OPEN"), [sessions]);
+  const [selectedCashSessionId, setSelectedCashSessionId] = useState("");
+
+  useEffect(() => {
+    if (!openCashSessions.length) {
+      if (selectedCashSessionId) setSelectedCashSessionId("");
+      return;
+    }
+    if (!openCashSessions.some((session) => session.id === selectedCashSessionId)) {
+      setSelectedCashSessionId(openCashSessions[0].id);
+    }
+  }, [openCashSessions, selectedCashSessionId]);
+
+  const activeCash = openCashSessions.find((session) => session.id === selectedCashSessionId) || openCashSessions[0] || null;
   const currency = activeCash?.financialAccount.currencyCode || "";
   const providers = configuration?.providers || [];
   const eligibleProviders = useMemo(
@@ -315,6 +341,10 @@ function MobileMoneyOperations({
   );
   const selectedProvider = pending ? providers.find((provider) => provider.providerCode === pending.providerCode) : null;
   const selectedWallet = pending ? selectedProvider?.accounts.find((mapping) => mapping.currencyCode === pending.currencyCode) : null;
+
+  useEffect(() => {
+    if (pending && activeCash && pending.cashAccountId !== activeCash.financialAccount.id) setPending(null);
+  }, [activeCash, pending]);
 
   async function confirmOperation() {
     if (!pending) return;
@@ -327,7 +357,21 @@ function MobileMoneyOperations({
 
   return (
     <div className="grid min-w-0 gap-5">
-      <OpenCashForm organizationId={organizationId} dashboard={dashboard} locale={locale} busyAction={busyAction} mutate={mutate} />
+      <MobileMoneyCashSessionManager
+        organizationId={organizationId}
+        accounts={dashboard.accounts}
+        sessions={sessions}
+        selectedSessionId={activeCash?.id || ""}
+        onSelectSession={(sessionId) => {
+          setSelectedCashSessionId(sessionId);
+          setPending(null);
+        }}
+        locale={locale}
+        busyAction={busyAction}
+        mutate={mutate}
+        reload={reload}
+      />
+
       <ModuleSection title={copy.operationTitle} description={copy.operationDescription}>
         <form
           onSubmit={(event) => {
@@ -379,7 +423,7 @@ function MobileMoneyOperations({
             <Field label={copy.reference}><Input name="externalReference" required maxLength={160} disabled={Boolean(busyAction)} /></Field>
           </div>
           <div className="rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm font-semibold text-dtsc-muted">
-            {activeCash ? `${locale === "en" ? "Till" : "Caisse"}: ${activeCash.financialAccount.name} · ${currency}` : copy.tillRequired}
+            {activeCash ? `${copy.transactionTill}: ${activeCash.financialAccount.name} · ${currency}` : copy.tillRequired}
           </div>
           {activeCash && configuration && !eligibleProviders.length ? (
             <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm font-bold text-amber-800 dark:text-amber-200">
@@ -401,6 +445,7 @@ function MobileMoneyOperations({
               <p>{customerFacingMobileMoneyTransactionType(pending.transactionType, locale)} · {moneyValue(pending.principalAmount, pending.currencyCode)}</p>
               <p>{pending.customerPhone}</p>
               <p>{customerFacingFeeCollectionMode(pending.feeCollectionMode, locale)}</p>
+              <p>{copy.transactionTill}: {activeCash?.financialAccount.name || "—"} · {pending.currencyCode}</p>
               <p>{copy.walletUsed}: {selectedWallet?.financialAccount.name || "—"} · {pending.currencyCode}</p>
               <p>{copy.operatorReference}: {pending.externalReference || "—"}</p>
             </div>
