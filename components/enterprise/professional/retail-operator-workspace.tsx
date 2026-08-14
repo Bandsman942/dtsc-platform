@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, RadioTower, RotateCcw, Settings2, Smartphone } from "lucide-react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
+import { MobileMoneyCashSessionManager as RetailMultiCashSessionManager, type MobileMoneyCashSession as OperatorCashSession } from "@/components/enterprise/professional/mobile-money-cash-session-manager";
 import { Field, formatEnterpriseDate } from "@/components/enterprise/core-v2/erp-v2-ui";
 import {
   OpenCashForm,
@@ -35,6 +37,63 @@ import {
   customerFacingMobileMoneyTransactionType,
 } from "@/lib/retail-customer-language";
 
+type TelcoCurrencyAccount = {
+  id: string;
+  code: string;
+  name: string;
+  accountType: string;
+  currencyCode: string;
+  operationalBalance: string | number;
+  ledgerAccountId: string;
+};
+
+type TelcoProviderMapping = {
+  id: string;
+  currencyCode: string;
+  financialAccountId: string;
+  revision: number;
+  financialAccount: TelcoCurrencyAccount;
+};
+
+type TelcoProviderConfiguration = {
+  id: string;
+  providerCode: string;
+  label: string;
+  providerType: string;
+  accounts: TelcoProviderMapping[];
+  mappedCurrencyCount: number;
+  ready: boolean;
+};
+
+type TelcoConfiguration = {
+  country: string | null;
+  requiredCurrencies: string[];
+  minimumCurrencyCount: number;
+  availableCurrencies: string[];
+  financialAccounts: TelcoCurrencyAccount[];
+  providers: TelcoProviderConfiguration[];
+};
+
+type TelcoDashboard = RetailDashboard & {
+  cashSessions?: OperatorCashSession[];
+  telcoConfiguration?: TelcoConfiguration | null;
+};
+
+type TelcoDraft = {
+  providerCode: string;
+  destinationPhone: string;
+  catalogItemId: string | null;
+  offerLabel: string;
+  currencyCode: string;
+  saleAmount: number;
+  operatorCost: number;
+  tenderFinancialAccountId: string;
+  operatorFloatAccountId: null;
+  externalReference: string | null;
+  status: string;
+  failureReason: string | null;
+};
+
 export function RetailOperatorWorkspace({
   organizationId,
   organizationName,
@@ -63,7 +122,7 @@ export function RetailOperatorWorkspace({
         if (context.tab === "REPORTS") return <RetailReportsPanel dashboard={dashboard} moduleCode={moduleCode} locale={locale} />;
         return moduleCode === "MOBILE_MONEY_AGENCY"
           ? <MobileMoneyPanel organizationId={organizationId} dashboard={dashboard} locale={locale} busyAction={context.busyAction} mutate={context.mutate} />
-          : <TelcoPanel organizationId={organizationId} dashboard={dashboard} locale={locale} busyAction={context.busyAction} mutate={context.mutate} />;
+          : <TelcoPanel organizationId={organizationId} dashboard={dashboard} locale={locale} busyAction={context.busyAction} mutate={context.mutate} reload={async () => context.setRefreshKey((value) => value + 1)} />;
       }}
     </RetailWorkspaceFrame>
   );
@@ -180,14 +239,50 @@ function MobileMoneyPanel({ organizationId, dashboard, locale, busyAction, mutat
   );
 }
 
-function TelcoPanel({ organizationId, dashboard, locale, busyAction, mutate }: { organizationId: string; dashboard: RetailDashboard; locale: "fr" | "en"; busyAction: string | null; mutate: RetailMutation }) {
-  const providers = (dashboard.providers || []).filter((provider) => provider.providerType === "TELCO");
-  const mappedProviders = providers.filter((provider) => provider.telcoFloatAccountId);
-  const [pending, setPending] = useState<Record<string, unknown> | null>(null);
-  const [tenderMethod, setTenderMethod] = useState("CASH");
-  const activeCash = dashboard.cashSession?.status === "OPEN" ? dashboard.cashSession : null;
-  const currency = activeCash?.financialAccount.currencyCode || dashboard.configuration?.baseCurrencyCode || "CDF";
-  const nonCash = dashboard.accounts.filter((account) => ["MOBILE_MONEY", "BANK", "CLEARING", "CARD_CLEARING"].includes(account.accountType) && account.currencyCode === currency);
+function TelcoPanel({ organizationId, dashboard, locale, busyAction, mutate, reload }: { organizationId: string; dashboard: RetailDashboard; locale: "fr" | "en"; busyAction: string | null; mutate: RetailMutation; reload: () => Promise<void> }) {
+  const telcoDashboard = dashboard as TelcoDashboard;
+  const configuration = telcoDashboard.telcoConfiguration || null;
+  const sessions = telcoDashboard.cashSessions || [];
+  const openSessions = useMemo(() => sessions.filter((session) => session.status === "OPEN"), [sessions]);
+  const [selectedCashSessionId, setSelectedCashSessionId] = useState("");
+  const [tenderMethod, setTenderMethod] = useState<"CASH" | "NON_CASH">("CASH");
+  const [nonCashAccountId, setNonCashAccountId] = useState("");
+  const [status, setStatus] = useState("SUCCESS");
+  const [pending, setPending] = useState<TelcoDraft | null>(null);
+
+  useEffect(() => {
+    if (!openSessions.length) {
+      if (selectedCashSessionId) setSelectedCashSessionId("");
+      return;
+    }
+    if (!openSessions.some((session) => session.id === selectedCashSessionId)) setSelectedCashSessionId(openSessions[0].id);
+  }, [openSessions, selectedCashSessionId]);
+
+  const activeCash = openSessions.find((session) => session.id === selectedCashSessionId) || openSessions[0] || null;
+  const nonCashAccounts = useMemo(
+    () => dashboard.accounts.filter((account) => ["MOBILE_MONEY", "BANK", "CLEARING"].includes(account.accountType)),
+    [dashboard.accounts],
+  );
+
+  useEffect(() => {
+    if (tenderMethod !== "NON_CASH") return;
+    if (!nonCashAccounts.some((account) => account.id === nonCashAccountId)) setNonCashAccountId(nonCashAccounts[0]?.id || "");
+  }, [nonCashAccountId, nonCashAccounts, tenderMethod]);
+
+  const tenderAccount = tenderMethod === "CASH"
+    ? (activeCash ? dashboard.accounts.find((account) => account.id === activeCash.financialAccount.id) || null : null)
+    : nonCashAccounts.find((account) => account.id === nonCashAccountId) || null;
+  const currency = tenderAccount?.currencyCode || "";
+  const eligibleProviders = useMemo(
+    () => (configuration?.providers || []).filter((provider) => provider.accounts.some((mapping) => mapping.currencyCode === currency)),
+    [configuration, currency],
+  );
+  const eligibleCatalog = useMemo(
+    () => (dashboard.catalogItems || []).filter((item) => !item.currency || item.currency === currency),
+    [currency, dashboard.catalogItems],
+  );
+
+  useEffect(() => { setPending(null); }, [selectedCashSessionId, tenderMethod, nonCashAccountId]);
 
   async function confirm() {
     if (!pending) return;
@@ -195,32 +290,44 @@ function TelcoPanel({ organizationId, dashboard, locale, busyAction, mutate }: {
       "telco-topup",
       `/api/enterprise/${organizationId}/retail/telco-topups`,
       pending,
-      locale === "en" ? "Top-up recorded." : "Recharge enregistrée.",
+      locale === "en" ? "Top-up recorded in the selected currency." : "Recharge enregistrée dans la devise sélectionnée.",
     );
     if (body) setPending(null);
   }
 
-  const selectedProvider = pending ? mappedProviders.find((provider) => provider.providerCode === pending.providerCode) : null;
+  const selectedProvider = pending ? configuration?.providers.find((provider) => provider.providerCode === pending.providerCode) || null : null;
+  const selectedOperatorAccount = pending ? selectedProvider?.accounts.find((mapping) => mapping.currencyCode === pending.currencyCode)?.financialAccount || null : null;
+  const selectedTenderAccount = pending ? dashboard.accounts.find((account) => account.id === pending.tenderFinancialAccountId) || null : null;
 
   return (
     <div className="grid min-w-0 gap-5">
-      <OpenCashForm organizationId={organizationId} dashboard={dashboard} locale={locale} busyAction={busyAction} mutate={mutate} />
+      <RetailMultiCashSessionManager
+        organizationId={organizationId}
+        moduleCode="TELCO_TOPUPS"
+        accounts={dashboard.accounts}
+        sessions={sessions}
+        selectedSessionId={selectedCashSessionId}
+        onSelectSession={(sessionId) => { setSelectedCashSessionId(sessionId); setTenderMethod("CASH"); setPending(null); }}
+        locale={locale}
+        busyAction={busyAction}
+        mutate={mutate}
+        reload={reload}
+      />
+
       <ModuleSection
         title={locale === "en" ? "Airtime / bundle" : "Crédit / forfait"}
         description={locale === "en"
-          ? "Choose the network operator and record the customer top-up. The configured operator account is applied automatically."
-          : "Choisissez l’opérateur réseau et enregistrez la recharge client. Le compte opérateur configuré est appliqué automatiquement."}
+          ? "Choose the payment account first. Its currency determines the eligible operator account automatically, so the same network can be used in CDF or USD without reconfiguration."
+          : "Choisissez d’abord le compte d’encaissement. Sa devise détermine automatiquement le compte opérateur éligible : un même réseau peut ainsi être exploité en CDF ou en USD sans reconfiguration."}
       >
         <form
           onSubmit={(event) => {
             event.preventDefault();
             const form = new FormData(event.currentTarget);
             const providerCode = String(form.get("providerCode") || "");
-            const status = String(form.get("status") || "SUCCESS");
-            const provider = mappedProviders.find((item) => item.providerCode === providerCode);
-            const tenderAccountId = tenderMethod === "CASH" ? activeCash?.financialAccount.id || "" : String(form.get("tenderAccountId") || "");
+            const provider = eligibleProviders.find((item) => item.providerCode === providerCode);
             const externalReference = String(form.get("externalReference") || "").trim();
-            if (!provider || !tenderAccountId || (status === "SUCCESS" && !externalReference)) return;
+            if (!provider || !tenderAccount || !currency || (status === "SUCCESS" && !externalReference)) return;
             setPending({
               providerCode,
               destinationPhone: normalizePhonePreview(String(form.get("destinationPhone") || "")),
@@ -229,44 +336,64 @@ function TelcoPanel({ organizationId, dashboard, locale, busyAction, mutate }: {
               currencyCode: currency,
               saleAmount: Number(form.get("saleAmount") || 0),
               operatorCost: Number(form.get("operatorCost") || 0),
-              tenderFinancialAccountId: tenderAccountId,
+              tenderFinancialAccountId: tenderAccount.id,
               operatorFloatAccountId: null,
               externalReference: externalReference || null,
               status,
-              failureReason: String(form.get("failureReason") || "") || null,
+              failureReason: String(form.get("failureReason") || "").trim() || null,
             });
           }}
           className="grid min-w-0 gap-4"
         >
           <div className="grid min-w-0 gap-4 md:grid-cols-2">
-            <Field label={locale === "en" ? "Network" : "Opérateur réseau"}>
-              <Select name="providerCode" required><option value="">—</option>{mappedProviders.map((provider) => <option key={provider.id} value={provider.providerCode}>{provider.label}</option>)}</Select>
-            </Field>
-            <Field label={locale === "en" ? "Destination phone" : "Numéro destinataire"}><Input name="destinationPhone" required inputMode="tel" placeholder={locale === "en" ? "+country code…" : "+indicatif pays…"} /></Field>
-            <Field label={locale === "en" ? "Catalog offer (optional)" : "Offre catalogue (facultatif)"}>
-              <Select name="catalogItemId"><option value="">—</option>{(dashboard.catalogItems || []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</Select>
-            </Field>
-            <Field label={locale === "en" ? "Offer label" : "Libellé du forfait"}><Input name="offerLabel" required /></Field>
-            <Field label={locale === "en" ? "Sale price" : "Prix de vente"}><Input name="saleAmount" type="number" min="0.01" step="0.01" required /></Field>
-            <Field label={locale === "en" ? "Operator cost" : "Coût opérateur"}><Input name="operatorCost" type="number" min="0" step="0.01" required /></Field>
             <Field label={locale === "en" ? "Payment method" : "Mode d’encaissement"}>
-              <Select name="tenderMethod" value={tenderMethod} onChange={setTenderMethod}>
-                <option value="CASH">{locale === "en" ? "Cash" : "Espèces"}</option>
-                <option value="NON_CASH">{locale === "en" ? "Other configured payment account" : "Autre compte d’encaissement configuré"}</option>
+              <Select name="tenderMethod" value={tenderMethod} onChange={(value) => { setTenderMethod(value === "NON_CASH" ? "NON_CASH" : "CASH"); setPending(null); }} disabled={Boolean(busyAction)}>
+                <option value="CASH">{locale === "en" ? "Cash till" : "Caisse espèces"}</option>
+                <option value="NON_CASH">{locale === "en" ? "Other financial account" : "Autre compte financier"}</option>
               </Select>
             </Field>
-            <Field label={locale === "en" ? "Payment account" : "Compte d’encaissement"}>
-              {tenderMethod === "CASH" ? <Input value={activeCash?.financialAccount.name || (locale === "en" ? "Open a till first" : "Ouvrez d’abord une caisse")} readOnly /> : (
-                <Select name="tenderAccountId" required><option value="">—</option>{nonCash.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.currencyCode}</option>)}</Select>
+            <Field label={locale === "en" ? "Payment account & currency" : "Compte d’encaissement et devise"}>
+              {tenderMethod === "CASH" ? (
+                <Input value={activeCash ? activeCash.financialAccount.name + " · " + activeCash.financialAccount.currencyCode : (locale === "en" ? "Open or select a cash till" : "Ouvrez ou sélectionnez une caisse")} readOnly />
+              ) : (
+                <Select name="tenderAccountId" value={nonCashAccountId} onChange={(value) => { setNonCashAccountId(value); setPending(null); }} required disabled={Boolean(busyAction)}>
+                  <option value="">—</option>
+                  {nonCashAccounts.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.currencyCode} · {customerFacingFinancialAccountType(account.accountType, locale)}</option>)}
+                </Select>
               )}
             </Field>
-            <Field label={locale === "en" ? "Execution status" : "Statut de l’opération"}>
-              <Select name="status" defaultValue="SUCCESS"><option value="SUCCESS">{customerFacingStatusLabel("SUCCESS", locale)}</option><option value="FAILED">{customerFacingStatusLabel("FAILED", locale)}</option></Select>
+            <Field label={locale === "en" ? "Network" : "Opérateur réseau"}>
+              <Select name="providerCode" required disabled={Boolean(busyAction) || !currency}>
+                <option value="">—</option>
+                {eligibleProviders.map((provider) => <option key={provider.id} value={provider.providerCode}>{provider.label}</option>)}
+              </Select>
             </Field>
-            <Field label={locale === "en" ? "Operator reference (required on success)" : "Référence opérateur (obligatoire si réussie)"}><Input name="externalReference" maxLength={160} /></Field>
-            <Field label={locale === "en" ? "Failure reason" : "Motif d’échec"}><Input name="failureReason" maxLength={500} /></Field>
+            <Field label={locale === "en" ? "Destination phone" : "Numéro destinataire"}><Input name="destinationPhone" required inputMode="tel" placeholder={locale === "en" ? "+country code…" : "+indicatif pays…"} disabled={Boolean(busyAction)} /></Field>
+            <Field label={locale === "en" ? "Catalog offer (optional)" : "Offre catalogue (facultatif)"}>
+              <Select name="catalogItemId" disabled={Boolean(busyAction) || !currency}><option value="">—</option>{eligibleCatalog.map((item) => <option key={item.id} value={item.id}>{item.name}{item.currency ? " · " + item.currency : ""}</option>)}</Select>
+            </Field>
+            <Field label={locale === "en" ? "Offer label" : "Libellé du forfait"}><Input name="offerLabel" required disabled={Boolean(busyAction)} /></Field>
+            <Field label={locale === "en" ? "Sale price" : "Prix de vente"}><Input name="saleAmount" type="number" min="0.01" step="0.01" required disabled={Boolean(busyAction)} /></Field>
+            <Field label={locale === "en" ? "Operator cost" : "Coût opérateur"}><Input name="operatorCost" type="number" min="0" step="0.01" required disabled={Boolean(busyAction)} /></Field>
+            <Field label={locale === "en" ? "Execution status" : "Statut de l’opération"}>
+              <Select name="status" value={status} onChange={(value) => { setStatus(value); setPending(null); }} disabled={Boolean(busyAction)}><option value="SUCCESS">{customerFacingStatusLabel("SUCCESS", locale)}</option><option value="FAILED">{customerFacingStatusLabel("FAILED", locale)}</option></Select>
+            </Field>
+            <Field label={locale === "en" ? "Operator reference" : "Référence opérateur"}><Input name="externalReference" maxLength={160} required={status === "SUCCESS"} disabled={Boolean(busyAction)} /></Field>
+            {status === "FAILED" ? <Field label={locale === "en" ? "Failure reason" : "Motif d’échec"}><Input name="failureReason" minLength={3} maxLength={500} required disabled={Boolean(busyAction)} /></Field> : null}
           </div>
-          <Button className="w-fit" disabled={Boolean(busyAction) || !mappedProviders.length || (tenderMethod === "CASH" && !activeCash)}>
+
+          <div className="rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm font-semibold text-dtsc-muted">
+            {tenderAccount && currency
+              ? (locale === "en" ? "Operational currency" : "Devise opérationnelle") + ": " + currency + " · " + (locale === "en" ? "payment account" : "encaissement") + ": " + tenderAccount.name
+              : (locale === "en" ? "Select an available payment account before continuing." : "Sélectionnez un compte d’encaissement disponible avant de continuer.")}
+          </div>
+          {currency && configuration && !eligibleProviders.length ? (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm font-bold text-amber-800 dark:text-amber-200">
+              {locale === "en" ? "No network has an operator account configured in this currency." : "Aucun réseau ne possède encore de compte opérateur dans cette devise."} {" "}
+              <Link href="#telco-provider-account-configuration" className="underline">{locale === "en" ? "Configure operator accounts" : "Configurer les comptes opérateur"}</Link>
+            </div>
+          ) : null}
+          <Button className="w-fit" disabled={Boolean(busyAction) || !tenderAccount || !currency || !eligibleProviders.length}>
             <RadioTower className="h-4 w-4" />{locale === "en" ? "Review top-up" : "Vérifier la recharge"}
           </Button>
         </form>
@@ -278,10 +405,12 @@ function TelcoPanel({ organizationId, dashboard, locale, busyAction, mutate }: {
           title={locale === "en" ? "Confirm top-up" : "Confirmer la recharge"}
           lines={[
             selectedProvider?.label || (locale === "en" ? "Network operator" : "Opérateur réseau"),
-            `${pending.offerLabel} · ${moneyValue(Number(pending.saleAmount), String(pending.currencyCode))}`,
+            pending.offerLabel + " · " + moneyValue(pending.saleAmount, pending.currencyCode),
             String(pending.destinationPhone),
-            `${locale === "en" ? "Operator reference" : "Référence opérateur"}: ${pending.externalReference || "—"}`,
-            locale === "en" ? "Check the phone number carefully before confirming." : "Vérifiez soigneusement le numéro avant de confirmer.",
+            (locale === "en" ? "Payment account" : "Compte d’encaissement") + ": " + (selectedTenderAccount?.name || "—") + " · " + pending.currencyCode,
+            (locale === "en" ? "Operator account" : "Compte opérateur") + ": " + (selectedOperatorAccount?.name || "—") + " · " + pending.currencyCode,
+            (locale === "en" ? "Operator reference" : "Référence opérateur") + ": " + (pending.externalReference || "—"),
+            locale === "en" ? "Check the phone number and currency carefully before confirming." : "Vérifiez soigneusement le numéro et la devise avant de confirmer.",
           ]}
           busy={busyAction === "telco-topup"}
           onCancel={() => setPending(null)}
@@ -369,8 +498,117 @@ function OperatorHistory({ organizationId, moduleCode, dashboard, locale, busyAc
   );
 }
 
+function TelcoProviderConfiguration({ organizationId, dashboard, locale, busyAction, mutate }: { organizationId: string; dashboard: RetailDashboard; locale: "fr" | "en"; busyAction: string | null; mutate: RetailMutation }) {
+  const telcoDashboard = dashboard as TelcoDashboard;
+  const configuration = telcoDashboard.telcoConfiguration;
+  const [extraCurrency, setExtraCurrency] = useState<Record<string, string>>({});
+
+  if (!configuration) return <EmptyState compact title={locale === "en" ? "Telecom configuration unavailable" : "Configuration Télécom indisponible"} description={locale === "en" ? "Refresh the page and try again." : "Actualisez la page puis réessayez."} />;
+
+  async function save(provider: TelcoProviderConfiguration, currencyCode: string, financialAccountId: string) {
+    if (!financialAccountId || !currencyCode) return;
+    await mutate(
+      `telco-account-${provider.id}-${currencyCode}`,
+      `/api/enterprise/${organizationId}/retail/telco-topups/accounts`,
+      { providerCode: provider.providerCode, currencyCode, financialAccountId },
+      locale === "en" ? "Operator account saved." : "Compte opérateur enregistré.",
+      { idempotent: false },
+    );
+  }
+
+  return (
+    <div id="telco-provider-account-configuration" className="grid min-w-0 gap-5">
+      <ModuleSection
+        title={locale === "en" ? "Telecom operator accounts by currency" : "Comptes opérateur Télécom par devise"}
+        description={locale === "en"
+          ? "Each network is displayed once. Link a separate real operator account for every currency you use; in DR Congo, CDF and USD are expected."
+          : "Chaque réseau reste affiché une seule fois. Associez-lui un compte opérateur réel distinct pour chaque devise exploitée ; en RDC, CDF et USD sont attendus."}
+      >
+        <div className="mb-4 rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm font-semibold text-dtsc-muted">
+          {configuration.requiredCurrencies.length
+            ? (locale === "en" ? "Required in this country" : "Requis dans ce pays") + ": " + configuration.requiredCurrencies.join(" + ")
+            : (locale === "en" ? "Configure at least two operating currencies per active network." : "Configurez au moins deux devises d’exploitation par réseau actif.")}
+        </div>
+        <div className="grid min-w-0 gap-4 lg:grid-cols-2">
+          {configuration.providers.map((provider) => {
+            const mappedCurrencies = provider.accounts.map((mapping) => mapping.currencyCode);
+            const displayedCurrencies = configuration.requiredCurrencies.length
+              ? Array.from(new Set([...configuration.requiredCurrencies, ...mappedCurrencies]))
+              : mappedCurrencies;
+            const addable = configuration.availableCurrencies.filter((currency) => !displayedCurrencies.includes(currency));
+            const draftCurrency = extraCurrency[provider.id] || addable[0] || "";
+            return (
+              <article key={provider.id} className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
+                <div className="flex min-w-0 items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="break-words font-black text-dtsc-ink">{provider.label}</p>
+                    <p className="mt-1 text-xs font-semibold text-dtsc-muted">{provider.mappedCurrencyCount} {locale === "en" ? "currencies configured" : "devises configurées"}</p>
+                  </div>
+                  <StatusBadge tone={provider.ready ? "success" : "warning"}>{provider.ready ? (locale === "en" ? "Ready" : "Prêt") : (locale === "en" ? "To complete" : "À compléter")}</StatusBadge>
+                </div>
+
+                <div className="mt-4 grid gap-3">
+                  {displayedCurrencies.map((currencyCode) => {
+                    const mapping = provider.accounts.find((account) => account.currencyCode === currencyCode);
+                    const accounts = configuration.financialAccounts.filter((account) => account.currencyCode === currencyCode);
+                    return (
+                      <form
+                        key={provider.id + "-" + currencyCode + "-" + (mapping?.financialAccountId || "new")}
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          const form = new FormData(event.currentTarget);
+                          void save(provider, currencyCode, String(form.get("operatorAccountId") || ""));
+                        }}
+                        className="grid gap-3 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-end"
+                      >
+                        <div className="min-w-16 self-center text-lg font-black text-dtsc-ink">{currencyCode}</div>
+                        <Field label={locale === "en" ? "Operator financial account" : "Compte financier opérateur"}>
+                          <Select name="operatorAccountId" defaultValue={mapping?.financialAccountId || ""} disabled={!dashboard.access.canManage || Boolean(busyAction)} required>
+                            <option value="">—</option>
+                            {accounts.map((account) => <option key={account.id} value={account.id}>{account.name} · {customerFacingFinancialAccountType(account.accountType, locale)}</option>)}
+                          </Select>
+                        </Field>
+                        {dashboard.access.canManage ? <Button size="sm" disabled={Boolean(busyAction) || !accounts.length}><Settings2 className="h-4 w-4" />{locale === "en" ? "Save" : "Enregistrer"}</Button> : null}
+                      </form>
+                    );
+                  })}
+
+                  {dashboard.access.canManage && addable.length ? (
+                    <form
+                      key={provider.id + "-extra-" + draftCurrency}
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        const form = new FormData(event.currentTarget);
+                        void save(provider, String(form.get("currencyCode") || ""), String(form.get("operatorAccountId") || ""));
+                      }}
+                      className="grid gap-3 rounded-xl border border-dashed border-dtsc-border bg-dtsc-surface p-3 sm:grid-cols-2"
+                    >
+                      <Field label={locale === "en" ? "Add currency" : "Ajouter une devise"}>
+                        <Select name="currencyCode" value={draftCurrency} onChange={(value) => setExtraCurrency((current) => ({ ...current, [provider.id]: value }))} disabled={Boolean(busyAction)}>
+                          {addable.map((currency) => <option key={currency} value={currency}>{currency}</option>)}
+                        </Select>
+                      </Field>
+                      <Field label={locale === "en" ? "Operator financial account" : "Compte financier opérateur"}>
+                        <Select name="operatorAccountId" required disabled={Boolean(busyAction)}><option value="">—</option>{configuration.financialAccounts.filter((account) => account.currencyCode === draftCurrency).map((account) => <option key={account.id} value={account.id}>{account.name} · {customerFacingFinancialAccountType(account.accountType, locale)}</option>)}</Select>
+                      </Field>
+                      <Button className="sm:col-span-2 sm:w-fit" disabled={Boolean(busyAction)}><Settings2 className="h-4 w-4" />{locale === "en" ? "Add account" : "Ajouter le compte"}</Button>
+                    </form>
+                  ) : null}
+                </div>
+              </article>
+            );
+          })}
+          {!configuration.providers.length ? <EmptyState compact title={locale === "en" ? "No network enabled" : "Aucun réseau activé"} description={locale === "en" ? "Enable a Telecom network before mapping its accounts." : "Activez un réseau Télécom avant d’associer ses comptes."} /> : null}
+        </div>
+      </ModuleSection>
+      <RetailErpLinks moduleCode="TELCO_TOPUPS" locale={locale} />
+    </div>
+  );
+}
+
 function ProviderConfiguration({ organizationId, moduleCode, dashboard, locale, busyAction, mutate }: { organizationId: string; moduleCode: "MOBILE_MONEY_AGENCY" | "TELCO_TOPUPS"; dashboard: RetailDashboard; locale: "fr" | "en"; busyAction: string | null; mutate: RetailMutation }) {
-  const expectedType = moduleCode === "MOBILE_MONEY_AGENCY" ? "MOBILE_MONEY" : "TELCO";
+  if (moduleCode === "TELCO_TOPUPS") return <TelcoProviderConfiguration organizationId={organizationId} dashboard={dashboard} locale={locale} busyAction={busyAction} mutate={mutate} />;
+  const expectedType = "MOBILE_MONEY";
   const providers = (dashboard.providers || []).filter((provider) => provider.providerType === expectedType);
   const accountName = (id: string | null) => dashboard.accounts.find((account) => account.id === id)?.name || "—";
   const mobileAccounts = dashboard.accounts.filter((account) => account.accountType === "MOBILE_MONEY");

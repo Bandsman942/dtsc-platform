@@ -98,7 +98,7 @@ for (const marker of ["normalizeRetailPhone", "RETAIL_PRICE_OVERRIDE_FORBIDDEN",
 }
 
 const dashboard = read("lib/enterprise/retail/commercial-dashboard.ts");
-for (const marker of ["metricsByCurrency", "readyForFirstSale", "readyForMobileMoney", "readyForTelco", "cashSession", "includePos", "includeMobileMoney", "includeTelco", "includeClose", "accountingReadiness", 'code: "ACCOUNTING"']) {
+for (const marker of ["metricsByCurrency", "readyForFirstSale", "readyForMobileMoney", "readyForTelco", "cashSession", "cashSessions", "telcoConfiguration", "includePos", "includeMobileMoney", "includeTelco", "includeClose", "accountingReadiness", 'code: "ACCOUNTING"']) {
   check(dashboard.includes(marker), `Retail dashboard missing ${marker}`);
 }
 
@@ -126,6 +126,8 @@ const routes = [
   "app/api/enterprise/[organizationId]/retail/mobile-money/route.ts",
   "app/api/enterprise/[organizationId]/retail/mobile-money/[transactionId]/reverse/route.ts",
   "app/api/enterprise/[organizationId]/retail/telco-topups/route.ts",
+  "app/api/enterprise/[organizationId]/retail/telco-topups/accounts/route.ts",
+  "app/api/enterprise/[organizationId]/retail/telco-topups/cash-sessions/[sessionId]/close/route.ts",
   "app/api/enterprise/[organizationId]/retail/telco-topups/[topupId]/reverse/route.ts",
   "app/api/enterprise/[organizationId]/retail/daily-close/route.ts",
   "app/api/enterprise/[organizationId]/retail/daily-close/[closeId]/decision/route.ts",

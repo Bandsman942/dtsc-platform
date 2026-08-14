@@ -6,6 +6,8 @@ import { publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
 import { applyStockMovementTx } from "@/lib/enterprise/inventory/service";
 import { RETAIL_PROFILE_CODE, RETAIL_SECTOR_CODE } from "@/lib/enterprise/retail/constants";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
+import { resolveMobileMoneyFloatAccountTx } from "@/lib/enterprise/retail/mobile-money-multicurrency-service";
+import { resolveTelcoFloatAccountTx } from "@/lib/enterprise/retail/telco-multicurrency-service";
 import type { mobileMoneyCreateSchema, retailDailyCloseCreateSchema, retailDailyCloseDecisionSchema, retailProviderUpsertSchema, retailSaleCreateSchema, retailSaleReverseSchema, telcoTopupCreateSchema } from "@/lib/enterprise/retail/schemas";
 import { prisma } from "@/lib/prisma";
 import type { z } from "zod";
@@ -341,10 +343,9 @@ export async function createMobileMoneyTransaction(organizationId: string, actor
     if (existing) return { transaction: existing, idempotent: true };
     const provider = await getRetailProviderTx(tx, organizationId, input.providerCode);
     if (!["MOBILE_MONEY", "BOTH"].includes(provider.providerType)) throw new EnterpriseRetailError("RETAIL_PROVIDER_NOT_FOUND", 409, { providerCode: input.providerCode });
-    const floatAccountId = input.floatAccountId || provider.mobileMoneyFloatAccountId;
-    if (!floatAccountId) throw new EnterpriseRetailError("RETAIL_FLOAT_ACCOUNT_REQUIRED", 409, { providerCode: input.providerCode });
     const cashAccount = await assertFinancialAccount(tx, organizationId, input.cashAccountId, input.currencyCode, ["CASH"]);
-    const floatAccount = await assertFinancialAccount(tx, organizationId, floatAccountId, input.currencyCode, ["MOBILE_MONEY"]);
+    const resolvedFloatAccount = await resolveMobileMoneyFloatAccountTx(tx, organizationId, provider, input.currencyCode);
+    const floatAccount = resolvedFloatAccount.account;
     if (cashAccount.id === floatAccount.id) throw new EnterpriseRetailError("RETAIL_FINANCIAL_ACCOUNT_INVALID", 409);
     const cashSession = await assertOpenCashSession(tx, organizationId, cashAccount.id, actorUserId);
     const principal = decimal(input.principalAmount);
@@ -388,14 +389,13 @@ export async function createTelcoTopup(organizationId: string, actorUserId: stri
     if (existing) return { topup: existing, idempotent: true };
     const provider = await getRetailProviderTx(tx, organizationId, input.providerCode);
     if (!["TELCO", "BOTH"].includes(provider.providerType)) throw new EnterpriseRetailError("RETAIL_PROVIDER_NOT_FOUND", 409, { providerCode: input.providerCode });
-    if (input.catalogItemId) {
-      const catalogItem = await tx.enterpriseCatalogItem.findFirst({ where: { id: input.catalogItemId, organizationId, status: "ACTIVE", archivedAt: null } });
-      if (!catalogItem) throw new EnterpriseRetailError("RETAIL_CATALOG_ITEM_INVALID", 409, { catalogItemId: input.catalogItemId });
-    }
-    const operatorFloatAccountId = input.operatorFloatAccountId || provider.telcoFloatAccountId;
-    if (!operatorFloatAccountId) throw new EnterpriseRetailError("RETAIL_FLOAT_ACCOUNT_REQUIRED", 409, { providerCode: input.providerCode });
+    const catalogItem = input.catalogItemId
+      ? await tx.enterpriseCatalogItem.findFirst({ where: { id: input.catalogItemId, organizationId, status: "ACTIVE", archivedAt: null }, select: { id: true, currency: true } })
+      : null;
+    if (input.catalogItemId && !catalogItem) throw new EnterpriseRetailError("RETAIL_CATALOG_ITEM_INVALID", 409, { catalogItemId: input.catalogItemId });
     const tenderAccount = await assertFinancialAccount(tx, organizationId, input.tenderFinancialAccountId, input.currencyCode, ["CASH", "MOBILE_MONEY", "BANK", "CLEARING"]);
-    const operatorFloatAccount = await assertFinancialAccount(tx, organizationId, operatorFloatAccountId, input.currencyCode, ["MOBILE_MONEY", "CLEARING"]);
+    if (catalogItem?.currency && catalogItem.currency !== tenderAccount.currencyCode) throw new EnterpriseRetailError("RETAIL_CURRENCY_MISMATCH", 409, { catalogItemId: catalogItem.id });
+    const operatorFloatAccount = (await resolveTelcoFloatAccountTx(tx, organizationId, provider, tenderAccount.currencyCode)).account;
     if (tenderAccount.id === operatorFloatAccount.id) throw new EnterpriseRetailError("RETAIL_FINANCIAL_ACCOUNT_INVALID", 409);
     const cashSession = tenderAccount.accountType === "CASH" ? await assertOpenCashSession(tx, organizationId, tenderAccount.id, actorUserId) : null;
     const saleAmount = decimal(input.saleAmount);

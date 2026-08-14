@@ -29,6 +29,12 @@ import {
   buildRetailPosSalePosting,
   buildRetailPosSaleReversalPosting,
 } from "@/lib/enterprise/accounting/sector-adapters/retail";
+import {
+  buildRetailMobileMoneyFxPosting,
+  buildRetailMobileMoneyFxReversalPosting,
+  buildRetailMobileMoneyPosting,
+  buildRetailMobileMoneyReversalPosting,
+} from "@/lib/enterprise/accounting/sector-adapters/retail-mobile-money";
 
 export const ENTERPRISE_POSTING_REGISTRY: Record<PostingEvent, PostingBuilder> = {
   SALES_INVOICE_POSTED: buildSalesInvoicePosting,
@@ -52,6 +58,10 @@ export const ENTERPRISE_POSTING_REGISTRY: Record<PostingEvent, PostingBuilder> =
   RETAIL_POS_SALE_REVERSED: buildRetailPosSaleReversalPosting,
   RETAIL_POS_RETURN_POSTED: buildRetailPosReturnPosting,
   RETAIL_POS_INVENTORY_RETURN: buildRetailInventoryReturnPosting,
+  RETAIL_MOBILE_MONEY_POSTED: buildRetailMobileMoneyPosting,
+  RETAIL_MOBILE_MONEY_REVERSED: buildRetailMobileMoneyReversalPosting,
+  RETAIL_MOBILE_MONEY_FX_POSTED: buildRetailMobileMoneyFxPosting,
+  RETAIL_MOBILE_MONEY_FX_REVERSED: buildRetailMobileMoneyFxReversalPosting,
   PHARMACY_CUSTOMER_RETURN: buildPharmacySectorInventoryPosting,
   PHARMACY_SUPPLIER_RETURN: buildPharmacySectorInventoryPosting,
   PHARMACY_LOSS: buildPharmacySectorInventoryPosting,

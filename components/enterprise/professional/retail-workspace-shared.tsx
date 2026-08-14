@@ -376,7 +376,7 @@ export function RetailWorkspaceFrame({
       />
       <ContextualUserGuide guide={guide} open={guideOpen} onOpenChange={setGuideOpen} hideTrigger />
       {context.dashboard ? <ShopReadiness readiness={context.dashboard.readiness} locale={locale} /> : null}
-      {context.dashboard ? <CashSessionBar session={context.dashboard.cashSession} locale={locale} /> : null}
+      {context.dashboard && moduleCode === "RETAIL_POS" ? <CashSessionBar session={context.dashboard.cashSession} locale={locale} /> : null}
       {context.dashboard ? <RetailMetrics moduleCode={moduleCode} dashboard={context.dashboard} locale={locale} /> : null}
       <ModuleToolbar
         controls={(

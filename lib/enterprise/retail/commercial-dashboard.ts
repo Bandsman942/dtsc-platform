@@ -1,6 +1,9 @@
+import { Prisma } from "@prisma/client";
 import { getRetailAccountingReadiness } from "@/lib/enterprise/retail/accounting-readiness";
 import { getRetailMetricsByCurrency } from "@/lib/enterprise/retail/commercial-guardrails";
 import { getRetailExchangeRateReadiness } from "@/lib/enterprise/retail/fx-reporting";
+import { getMobileMoneyProviderAccountConfiguration } from "@/lib/enterprise/retail/mobile-money-multicurrency-service";
+import { getTelcoProviderAccountConfiguration } from "@/lib/enterprise/retail/telco-multicurrency-service";
 import { getCanonicalRetailReadiness } from "@/lib/enterprise/retail/self-service-onboarding";
 import type { RetailModuleCode } from "@/lib/enterprise/retail/constants";
 import { prisma } from "@/lib/prisma";
@@ -61,11 +64,13 @@ export async function getCommercialRetailDashboard(
     mobileMoney,
     topups,
     closes,
-    cashSession,
+    cashSessionsRaw,
     metricsByCurrency,
     fxReadiness,
     accountingReadiness,
     canonicalReadiness,
+    mobileMoneyConfiguration,
+    telcoConfiguration,
   ] = await Promise.all([
     prisma.enterpriseRetailConfiguration.findUnique({ where: { organizationId } }),
     prisma.enterpriseRetailProvider.findMany({ where: { organizationId, isActive: true }, orderBy: [{ providerType: "asc" }, { label: "asc" }] }),
@@ -89,15 +94,35 @@ export async function getCommercialRetailDashboard(
     includeClose
       ? prisma.enterpriseRetailDailyClose.findMany({ where: { organizationId, businessDate: dateFilter }, orderBy: { businessDate: "desc" }, take: 30, include: { lines: true } })
       : Promise.resolve([]),
-    prisma.enterpriseCashSession.findFirst({ where: { organizationId, cashierUserId: userId, status: { in: ["OPEN", "CLOSING", "PENDING_VALIDATION"] } }, orderBy: { openedAt: "desc" }, include: { financialAccount: { select: { id: true, code: true, name: true, currencyCode: true, operationalBalance: true } }, _count: { select: { movements: true, counts: true, discrepancies: true } } } }),
+    prisma.enterpriseCashSession.findMany({
+      where: { organizationId, cashierUserId: userId, status: { in: ["OPEN", "CLOSING", "PENDING_VALIDATION"] } },
+      orderBy: { openedAt: "desc" },
+      take: 12,
+      include: {
+        financialAccount: { select: { id: true, code: true, name: true, currencyCode: true, operationalBalance: true } },
+        movements: { select: { direction: true, amount: true } },
+        _count: { select: { movements: true, counts: true, discrepancies: true } },
+      },
+    }),
     getRetailMetricsByCurrency(organizationId, dateFrom, dateTo, moduleCode),
     getRetailExchangeRateReadiness(organizationId, dateTo),
     includePos ? getRetailAccountingReadiness(organizationId, dateTo) : Promise.resolve(null),
     getCanonicalRetailReadiness(organizationId),
+    includeMobileMoney ? getMobileMoneyProviderAccountConfiguration(organizationId) : Promise.resolve(null),
+    includeTelco ? getTelcoProviderAccountConfiguration(organizationId) : Promise.resolve(null),
   ]);
 
-  const mobileWallets = providers.filter((provider) => provider.providerType === "MOBILE_MONEY");
-  const telcoNetworks = providers.filter((provider) => provider.providerType === "TELCO");
+  const cashSessions = cashSessionsRaw.map((session) => {
+    const expectedCurrentAmount = session.movements.reduce(
+      (balance, movement) => movement.direction === "INBOUND" ? balance.plus(movement.amount) : balance.minus(movement.amount),
+      new Prisma.Decimal(session.openingAmount),
+    );
+    const { movements, ...sessionWithoutMovements } = session;
+    void movements;
+    return { ...sessionWithoutMovements, expectedCurrentAmount: expectedCurrentAmount.toFixed() };
+  });
+  const cashSession = cashSessions.find((session) => session.status === "OPEN") || cashSessions[0] || null;
+
   const readinessItems = canonicalReadiness.items.map((item) => ({
     code: item.code,
     label: READINESS_LABELS[item.code] || "Configuration du Shop",
@@ -109,6 +134,14 @@ export async function getCommercialRetailDashboard(
     label: `${FX_REPORTING_READINESS_DESCRIPTOR.label}${fxReadiness.targetCurrencyCode ? ` · ${fxReadiness.targetCurrencyCode}` : ""}`,
     complete: fxReadiness.complete,
   };
+  const allMobileMoneyProvidersReady = Boolean(
+    mobileMoneyConfiguration?.providers.length
+      && mobileMoneyConfiguration.providers.every((provider) => provider.ready),
+  );
+  const allTelcoProvidersReady = Boolean(
+    telcoConfiguration?.providers.length
+      && telcoConfiguration.providers.every((provider) => provider.ready),
+  );
 
   return {
     configuration,
@@ -118,6 +151,9 @@ export async function getCommercialRetailDashboard(
     catalogItems,
     inventoryItems,
     cashSession,
+    cashSessions,
+    mobileMoneyConfiguration,
+    telcoConfiguration,
     metricsByCurrency,
     fxReadiness,
     accountingReadiness,
@@ -127,8 +163,8 @@ export async function getCommercialRetailDashboard(
       completed: canonicalReadiness.completed,
       total: canonicalReadiness.total,
       readyForFirstSale: canonicalReadiness.ready,
-      readyForMobileMoney: canonicalReadiness.ready && mobileWallets.some((provider) => Boolean(provider.mobileMoneyFloatAccountId)),
-      readyForTelco: canonicalReadiness.ready && telcoNetworks.some((provider) => Boolean(provider.telcoFloatAccountId)),
+      readyForMobileMoney: canonicalReadiness.ready && allMobileMoneyProvidersReady,
+      readyForTelco: canonicalReadiness.ready && allTelcoProvidersReady,
     },
     recent: {
       sales,

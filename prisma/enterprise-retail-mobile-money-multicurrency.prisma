@@ -1,0 +1,58 @@
+model EnterpriseRetailProviderAccount {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  providerId         String
+  providerCode       String
+  accountUse         String   @default("MOBILE_MONEY_FLOAT")
+  currencyCode       String
+  financialAccountId String
+  isActive           Boolean  @default(true)
+  createdByUserId    String
+  updatedByUserId    String?
+  revision           Int      @default(1)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, providerId, accountUse, currencyCode])
+  @@index([organizationId, providerCode, accountUse, isActive])
+  @@index([organizationId, financialAccountId, isActive])
+}
+
+model EnterpriseMobileMoneyFxTransfer {
+  id                      String   @id @default(cuid())
+  organizationId          String
+  number                  String
+  providerId              String
+  providerCode            String
+  sourceProviderAccountId String
+  targetProviderAccountId String
+  sourceFloatAccountId    String
+  targetFloatAccountId    String
+  sourceCurrencyCode      String
+  targetCurrencyCode      String
+  sourceAmount            Decimal  @db.Decimal(20, 6)
+  targetAmount            Decimal  @db.Decimal(20, 6)
+  exchangeRate            Decimal  @db.Decimal(24, 12)
+  exchangeRateId          String?
+  exchangeRateDate        DateTime
+  exchangeRateSource      String
+  status                  String   @default("CONFIRMED")
+  occurredAt              DateTime @default(now())
+  agentUserId             String
+  idempotencyKey          String
+  reversalReason          String?
+  reversedAt              DateTime?
+  reversedByUserId        String?
+  revision                Int      @default(1)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, number])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, providerCode, occurredAt])
+  @@index([organizationId, status, occurredAt])
+  @@index([organizationId, sourceFloatAccountId, occurredAt])
+  @@index([organizationId, targetFloatAccountId, occurredAt])
+}
