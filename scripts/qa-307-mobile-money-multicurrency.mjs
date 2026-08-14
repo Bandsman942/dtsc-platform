@@ -72,6 +72,12 @@ check(hasAll(treasuryService, [
   "CASH_COUNT_TOTAL_MISMATCH",
   "CASH_DISCREPANCY_REASON_REQUIRED",
 ]), "End-of-day till closes must reuse the canonical counted close and independent validation workflow");
+check(hasAll(treasuryService, [
+  "validateCashSession",
+  "assertIndependentActor",
+  "CASH_SESSION_SELF_VALIDATION_FORBIDDEN",
+  'const status = input.approve ? "CLOSED" : "REJECTED"',
+]), "Cash approval must remain independent and preserve the canonical close/reject workflow");
 
 const accounting = read("lib/enterprise/accounting/sector-adapters/retail-mobile-money.ts");
 check(hasAll(accounting, [
@@ -113,6 +119,16 @@ check(hasAll(retailCashCloseRoute, [
   "submitCashSessionClose",
   "ENTERPRISE_RETAIL_CASH_SESSION_SUBMITTED",
 ]), "Mobile Money agents must be able to submit each owned till close through Retail RBAC while reusing the Finance close engine");
+
+const retailHttp = read("lib/enterprise/retail/http.ts");
+check(hasAll(retailHttp, [
+  "CASH_SESSION_ALREADY_ACTIVE",
+  "CASH_SESSION_NOT_OWNED",
+  "CASH_SESSION_CONFLICT",
+  "CASH_COUNT_TOTAL_MISMATCH",
+  "CASH_DISCREPANCY_REASON_REQUIRED",
+  "ERROR_MESSAGES[error.code]",
+]), "Retail cash-session errors must remain actionable instead of falling back to a generic accounting failure message");
 
 const workspace = read("components/enterprise/professional/mobile-money-agency-workspace.tsx");
 check(hasAll(workspace, [
@@ -161,6 +177,9 @@ check(hasAll(cashManager, [
   "focus-visible:ring-2",
   "active:scale-[0.99]",
 ]), "Mobile Money cash UX must support concurrent CDF/USD tills, one-tap selection, accessible responsive states and separate counted end-of-day submission");
+
+const sharedWorkspace = read("components/enterprise/professional/retail-workspace-shared.tsx");
+check(sharedWorkspace.includes('moduleCode !== "MOBILE_MONEY_AGENCY" ? <CashSessionBar'), "Mobile Money must hide the legacy single-till banner so the concurrent till selector remains the only operational cash context");
 
 const page = read("app/enterprise-modules/retail-page.tsx");
 check(page.includes("<MobileMoneyAgencyWorkspace"), "MOBILE_MONEY_AGENCY must use the specialized multi-currency workspace");
