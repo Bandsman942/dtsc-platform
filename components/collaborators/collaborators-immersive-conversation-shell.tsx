@@ -219,6 +219,7 @@ export function CollaboratorsImmersiveConversationShell(props: Props) {
 
         [data-collaboration-immersive-root] [data-collaboration-composer="true"] {
           position: relative;
+          flex: 0 0 auto;
           background: color-mix(in srgb, var(--dtsc-surface) 94%, transparent);
           backdrop-filter: blur(14px);
         }
@@ -227,7 +228,7 @@ export function CollaboratorsImmersiveConversationShell(props: Props) {
           position: absolute;
           z-index: 4;
           left: 0.7rem;
-          bottom: calc(0.75rem + env(safe-area-inset-bottom));
+          bottom: calc(0.7rem + env(safe-area-inset-bottom));
           margin: 0;
         }
 
@@ -242,7 +243,33 @@ export function CollaboratorsImmersiveConversationShell(props: Props) {
 
         [data-collaboration-immersive-root] [data-collaboration-composer="true"] > form {
           margin-left: 3.15rem;
-          border-radius: 9999px;
+          overflow: hidden;
+          border-radius: 1.25rem;
+        }
+
+        [data-collaboration-immersive-root] [data-collaboration-composer="true"] > form > textarea {
+          min-height: 2.75rem !important;
+          max-height: 6rem !important;
+          overflow-y: auto !important;
+          overscroll-behavior: contain;
+          scrollbar-width: thin;
+        }
+
+        [data-collaboration-immersive-root] [data-collaboration-composer="true"] > form > textarea + div {
+          margin-top: 0.125rem;
+          padding-top: 0.25rem;
+          border-top-color: color-mix(in srgb, var(--dtsc-border) 52%, transparent);
+        }
+
+        @media (max-width: 639px) {
+          [data-collaboration-immersive-root] [data-collaboration-composer="true"] {
+            padding-top: 0.6rem !important;
+            padding-bottom: calc(0.6rem + env(safe-area-inset-bottom)) !important;
+          }
+
+          [data-collaboration-immersive-root] [data-collaboration-composer="true"] > form {
+            border-radius: 1.15rem;
+          }
         }
 
         @media (min-width: 640px) {
