@@ -1,6 +1,6 @@
 export const RETAIL_READINESS_DEEP_LINKS: Record<string, string> = {
   COUNTRY_PACK: "/enterprise-modules/RETAIL_POS#shop-country-configuration",
-  FUNCTIONAL_CURRENCY: "/enterprise-modules/FINANCE_ACCOUNTING#functional-currency",
+  FUNCTIONAL_CURRENCY: "/enterprise-modules/FINANCE_OVERVIEW",
   SITE: "/enterprise-modules/SITES_WAREHOUSES#sites",
   WAREHOUSE: "/enterprise-modules/SITES_WAREHOUSES#warehouses",
   CASH_ACCOUNT: "/enterprise-modules/FINANCE_TREASURY#cash-accounts",
