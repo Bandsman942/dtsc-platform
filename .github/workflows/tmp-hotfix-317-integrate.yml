@@ -1,0 +1,36 @@
+name: Temporary hotfix 317 integration
+
+on:
+  push:
+    branches:
+      - fix/317-professional-reports
+    paths:
+      - scripts/tmp-hotfix-317-integrate-reports.mjs
+      - .github/workflows/tmp-hotfix-317-integrate.yml
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/317-professional-reports
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Apply asserted report integrations
+        run: node scripts/tmp-hotfix-317-integrate-reports.mjs
+      - name: Remove temporary integration tooling
+        run: rm scripts/tmp-hotfix-317-integrate-reports.mjs .github/workflows/tmp-hotfix-317-integrate.yml
+      - name: Commit product integration
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "fix(reports): integrate professional reporting surfaces (#317)"
+          git push origin HEAD:fix/317-professional-reports
