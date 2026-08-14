@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import { finalizeRetailSaleAccounting } from "@/lib/enterprise/retail/accounting";
+import { assertRetailSaleAccountingPreflight } from "@/lib/enterprise/retail/accounting-preflight";
 import { persistRetailCommercialDecisions, prepareCommercialRetailSaleV2, previewRetailCommercialPricing } from "@/lib/enterprise/retail/commercial-engine";
 import type { retailCommercialContextSchema } from "@/lib/enterprise/retail/commercial-schemas";
 import { autoEarnRetailLoyaltyForSale } from "@/lib/enterprise/retail/loyalty-sale-hooks";
@@ -53,6 +54,21 @@ export async function executeCanonicalRetailSale(args: {
   }
 
   const guarded = await prepareCommercialRetailSaleV2(args.organizationId, pricingInput, args.commercialContext, args.permissions);
+
+  // Do not create the ticket, stock movements or cash effects when the known
+  // Finance prerequisites cannot produce the canonical accounting projection.
+  // postBusinessEvent/valueInventoryIssue still revalidate authoritatively.
+  await assertRetailSaleAccountingPreflight(args.organizationId, {
+    currencyCode: guarded.input.currencyCode,
+    soldAt: guarded.input.soldAt,
+    warehouseId: guarded.input.warehouseId,
+    lines: guarded.input.lines.map((line) => ({
+      catalogItemId: line.catalogItemId,
+      inventoryItemId: line.inventoryItemId,
+      quantity: line.quantity,
+    })),
+  });
+
   const result = await withRetailTransactionRetry(
     () => createRetailSale(args.organizationId, args.actorUserId, guarded.input),
     { maxAttempts: 3, baseDelayMs: 20 },

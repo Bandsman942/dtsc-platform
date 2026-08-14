@@ -100,6 +100,14 @@ test.describe.serial("Accounting onboarding and production-readiness UX", () => 
     expect(fiscalYear.response.status(), JSON.stringify(fiscalYear.body)).toBe(201);
     const period = await apiPost(page, `/api/enterprise/${organizationId}/fiscal-periods`, { fiscalYearId: fiscalYear.body.year.id, code: "2026-08-E2E", startDate: "2026-08-01T00:00:00.000Z", endDate: "2026-08-31T23:59:59.999Z" });
     expect(period.response.status(), JSON.stringify(period.body)).toBe(201);
+    const openedYear = await apiPost(page, `/api/enterprise/${organizationId}/fiscal-years/${fiscalYear.body.year.id}/open`, { revision: fiscalYear.body.year.revision });
+    expect(openedYear.response.ok(), JSON.stringify(openedYear.body)).toBeTruthy();
+    expect(openedYear.body.year.status).toBe("OPEN");
+
+    setup = await setupPayload(page);
+    const afterOpening = blockerCodes(setup);
+    expect(afterOpening.has("OPEN_FISCAL_YEAR_REQUIRED")).toBeFalsy();
+    expect(afterOpening.has("OPEN_FISCAL_PERIOD_REQUIRED")).toBeFalsy();
 
     await page.reload();
     await expect(onboarding.getByText("Prêt à activer")).toBeVisible();

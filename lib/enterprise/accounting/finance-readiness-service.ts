@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { getChartTemplate } from "@/lib/enterprise/accounting/chart-template-registry";
 import { requiredJournalTypes } from "@/lib/enterprise/accounting/journal-template-registry";
 import { listRequiredPostingSemanticKeys, validateTemplateSemanticCoverage } from "@/lib/enterprise/accounting/semantic-account-registry";
+import { RETAIL_SECTOR_CODE } from "@/lib/enterprise/retail/constants";
 import { prisma } from "@/lib/prisma";
 
 export type FinanceReadinessMode = "SETUP" | "POSTING";
@@ -77,7 +78,8 @@ export async function resolveEnterpriseFinanceReadiness(
   const requiredMappingKeys = [...listRequiredPostingSemanticKeys()];
   const requiredJournals = [...requiredJournalTypes()];
 
-  const [configuration, accounts, mappings, journals, fiscalYearCount, openPeriodCount, treasuryCount, taxCount] = await Promise.all([
+  const [organization, configuration, accounts, mappings, journals, fiscalYearCount, openFiscalYearCount, openPeriodCount, treasuryCount, taxCount] = await Promise.all([
+    db.organization.findFirst({ where: { id: organizationId, deletedAt: null }, select: { sectorCode: true } }),
     db.enterpriseFinanceConfiguration.findUnique({ where: { organizationId } }),
     chartId
       ? db.enterpriseLedgerAccount.findMany({ where: { organizationId, chartId, isActive: true, archivedAt: null }, select: { id: true } })
@@ -96,7 +98,8 @@ export async function resolveEnterpriseFinanceReadiness(
       : Promise.resolve([]),
     db.enterpriseJournal.findMany({ where: { organizationId, isActive: true }, select: { journalType: true } }),
     db.enterpriseFiscalYear.count({ where: { organizationId } }),
-    db.enterpriseFiscalPeriod.count({ where: { organizationId, status: "OPEN" } }),
+    db.enterpriseFiscalYear.count({ where: { organizationId, status: "OPEN" } }),
+    db.enterpriseFiscalPeriod.count({ where: { organizationId, status: "OPEN", fiscalYear: { status: "OPEN" } } }),
     db.enterpriseFinancialAccount.count({ where: { organizationId, status: "ACTIVE", archivedAt: null } }),
     db.enterpriseTaxCode.count({ where: { organizationId, isActive: true } }),
   ]);
@@ -111,6 +114,7 @@ export async function resolveEnterpriseFinanceReadiness(
   const missingJournalTypes = requiredJournals.filter((type) => !configuredJournalTypes.has(type));
   const templateCoverage = template ? validateTemplateSemanticCoverage(template) : { valid: false, issues: ["CHART_TEMPLATE_REFERENCE_REQUIRED"] };
   const reconciliationTolerance = configuration ? Number(configuration.reconciliationTolerance) : Number.NaN;
+  const retailFinanceRequired = organization?.sectorCode === RETAIL_SECTOR_CODE;
 
   const diagnostics: FinanceReadinessDiagnostic[] = [
     {
@@ -131,49 +135,56 @@ export async function resolveEnterpriseFinanceReadiness(
       labelFr: "Exercice financier", labelEn: "Fiscal year",
       messageFr: "Un exercice financier doit être configuré.", messageEn: "A fiscal year must be configured.",
       actionFr: "Créer l’exercice financier correspondant à votre calendrier comptable.", actionEn: "Create the fiscal year matching your accounting calendar.",
-      actionKind: "LINK", actionHref: "/enterprise-modules/FINANCE_ACCOUNTING?tab=fiscal-years",
+      actionKind: "LINK", actionHref: "/enterprise-modules/FINANCE_ACCOUNTING?tab=years",
+    },
+    {
+      code: "OPEN_FISCAL_YEAR_REQUIRED", severity: "BLOCKER", ready: openFiscalYearCount > 0,
+      labelFr: "Exercice financier ouvert", labelEn: "Open fiscal year",
+      messageFr: "L’exercice doit être ouvert après la création d’au moins une période comptable.", messageEn: "The fiscal year must be opened after at least one accounting period is created.",
+      actionFr: "Créer une période si nécessaire, puis ouvrir l’exercice.", actionEn: "Create a period if needed, then open the fiscal year.",
+      actionKind: "LINK", actionHref: "/enterprise-modules/FINANCE_ACCOUNTING?tab=years",
     },
     {
       code: "OPEN_FISCAL_PERIOD_REQUIRED", severity: "BLOCKER", ready: openPeriodCount > 0,
       labelFr: "Période comptable ouverte", labelEn: "Open accounting period",
-      messageFr: "Au moins une période comptable ouverte est requise.", messageEn: "At least one open accounting period is required.",
-      actionFr: "Créer ou ouvrir une période comptable.", actionEn: "Create or open an accounting period.",
-      actionKind: "LINK", actionHref: "/enterprise-modules/FINANCE_ACCOUNTING?tab=fiscal-periods",
+      messageFr: "Au moins une période ouverte rattachée à un exercice ouvert est requise.", messageEn: "At least one open accounting period belonging to an open fiscal year is required.",
+      actionFr: "Créer une période comptable dans l’exercice puis ouvrir l’exercice.", actionEn: "Create an accounting period in the fiscal year, then open the fiscal year.",
+      actionKind: "LINK", actionHref: "/enterprise-modules/FINANCE_ACCOUNTING?tab=periods",
     },
     {
       code: "CHART_REQUIRED", severity: "BLOCKER", ready: Boolean(chart),
       labelFr: "Plan comptable", labelEn: "Chart of accounts",
       messageFr: "Un plan comptable doit être sélectionné.", messageEn: "A chart of accounts must be selected.",
-      actionFr: "Créer un plan comptable puis adopter un template versionné.", actionEn: "Create a chart of accounts and adopt a versioned template.",
-      actionKind: "LINK", actionHref: "/enterprise-modules/FINANCE_ACCOUNTING?tab=ledger-accounts",
+      actionFr: "Créer le plan de l’entreprise puis adopter un template versionné.", actionEn: "Create the company chart and adopt a versioned template.",
+      actionKind: "LINK", actionHref: "/enterprise-modules/FINANCE_ACCOUNTING?tab=charts",
     },
     ...(mode === "POSTING" ? [{
       code: "ACTIVE_CHART_REQUIRED", severity: "BLOCKER" as const, ready: chart?.status === "ACTIVE",
       labelFr: "Activation du plan", labelEn: "Chart activation",
       messageFr: "Le plan comptable doit être activé avant toute comptabilisation.", messageEn: "The chart of accounts must be active before posting.",
       actionFr: "Finaliser la préparation puis activer le plan comptable.", actionEn: "Complete setup and activate the chart of accounts.",
-      actionKind: "LINK" as const, actionHref: "/enterprise-modules/FINANCE_ACCOUNTING",
+      actionKind: "LINK" as const, actionHref: "/enterprise-modules/FINANCE_ACCOUNTING?tab=overview",
     }] : []),
     {
       code: "CHART_ACCOUNTS_REQUIRED", severity: "BLOCKER", ready: accounts.length > 0,
       labelFr: "Comptes du plan", labelEn: "Chart accounts",
       messageFr: "Le plan comptable doit contenir des comptes actifs.", messageEn: "The chart of accounts must contain active accounts.",
       actionFr: "Adopter le template ou créer les sous-comptes autorisés.", actionEn: "Adopt the template or create allowed child accounts.",
-      actionKind: "LINK", actionHref: "/enterprise-modules/FINANCE_ACCOUNTING?tab=ledger-accounts",
+      actionKind: "LINK", actionHref: "/enterprise-modules/FINANCE_ACCOUNTING?tab=accounts",
     },
     {
       code: "TEMPLATE_LINEAGE_REQUIRED", severity: "BLOCKER", ready: Boolean(template),
       labelFr: "Version du référentiel", labelEn: "Reference version",
       messageFr: "La version source du plan comptable doit être traçable.", messageEn: "The chart source version must be traceable.",
       actionFr: "Adopter explicitement un template versionné.", actionEn: "Explicitly adopt a versioned template.",
-      actionKind: "LINK", actionHref: "/enterprise-modules/FINANCE_ACCOUNTING",
+      actionKind: "LINK", actionHref: "/enterprise-modules/FINANCE_ACCOUNTING?tab=overview",
     },
     {
       code: "TEMPLATE_SEMANTIC_COVERAGE_REQUIRED", severity: "BLOCKER", ready: templateCoverage.valid,
       labelFr: "Couverture comptable", labelEn: "Accounting coverage",
       messageFr: "Le template doit couvrir tous les mappings comptables obligatoires.", messageEn: "The template must cover every required accounting mapping.",
       actionFr: "Compléter les mappings recommandés avant activation.", actionEn: "Complete recommended mappings before activation.",
-      actionKind: "LINK", actionHref: "/enterprise-modules/FINANCE_ACCOUNTING",
+      actionKind: "LINK", actionHref: "/enterprise-modules/FINANCE_ACCOUNTING?tab=rules",
     },
     {
       code: "ORGANIZATION_MAPPINGS_REQUIRED", severity: "BLOCKER", ready: missingMappings.length === 0,
@@ -181,7 +192,7 @@ export async function resolveEnterpriseFinanceReadiness(
       messageFr: missingMappings.length ? `Mappings manquants : ${missingMappings.join(", ")}.` : "Tous les mappings obligatoires sont configurés.",
       messageEn: missingMappings.length ? `Missing mappings: ${missingMappings.join(", ")}.` : "All required mappings are configured.",
       actionFr: "Associer chaque clé métier à un compte actif du plan.", actionEn: "Map every business key to an active chart account.",
-      actionKind: "LINK", actionHref: "/enterprise-modules/FINANCE_ACCOUNTING",
+      actionKind: "LINK", actionHref: "/enterprise-modules/FINANCE_ACCOUNTING?tab=rules",
     },
     {
       code: "JOURNALS_REQUIRED", severity: "BLOCKER", ready: missingJournalTypes.length === 0,
@@ -198,10 +209,19 @@ export async function resolveEnterpriseFinanceReadiness(
       actionFr: "Vérifier la tolérance de rapprochement.", actionEn: "Review the reconciliation tolerance.", actionKind: "CONFIGURATION",
     },
     {
-      code: "TREASURY_ACCOUNT_RECOMMENDED", severity: "WARNING", ready: treasuryCount > 0,
-      labelFr: "Comptes financiers", labelEn: "Financial accounts",
-      messageFr: "Aucun compte financier actif n’est configuré.", messageEn: "No active financial account is configured.",
-      actionFr: "Configurer caisse, banque ou Mobile Money avant les encaissements/décaissements.", actionEn: "Configure cash, bank or Mobile Money before collections/disbursements.",
+      code: retailFinanceRequired ? "RETAIL_FINANCIAL_ACCOUNT_REQUIRED" : "TREASURY_ACCOUNT_RECOMMENDED",
+      severity: retailFinanceRequired ? "BLOCKER" : "WARNING",
+      ready: treasuryCount > 0,
+      labelFr: retailFinanceRequired ? "Compte d’encaissement Shop" : "Comptes financiers",
+      labelEn: retailFinanceRequired ? "Shop settlement account" : "Financial accounts",
+      messageFr: retailFinanceRequired
+        ? "Un compte financier actif (caisse, banque, Mobile Money ou clearing) est requis pour encaisser les ventes Shop."
+        : "Aucun compte financier actif n’est configuré.",
+      messageEn: retailFinanceRequired
+        ? "An active financial account (cash, bank, Mobile Money, or clearing) is required to collect Shop sales."
+        : "No active financial account is configured.",
+      actionFr: retailFinanceRequired ? "Créer le compte d’encaissement utilisé par le point de vente." : "Configurer caisse, banque ou Mobile Money avant les encaissements/décaissements.",
+      actionEn: retailFinanceRequired ? "Create the settlement account used by the point of sale." : "Configure cash, bank or Mobile Money before collections/disbursements.",
       actionKind: "LINK", actionHref: "/enterprise-modules/FINANCE_TREASURY?tab=accounts",
     },
     {

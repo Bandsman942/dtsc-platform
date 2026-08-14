@@ -95,12 +95,55 @@ export async function transitionFinancialClose(
     return prisma.$transaction(async (tx) => {
       await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseFinancialClose" WHERE id = ${closeId} AND "organizationId" = ${organizationId} FOR UPDATE`);
       const current = await tx.enterpriseFinancialClose.findFirst({ where: { id: closeId, organizationId } });
-      if (!current || current.status !== "DRAFT" || current.revision !== input.revision) throw new EnterpriseAccountingError("FINANCIAL_CLOSE_CONFLICT", 409);
-      const updated = await tx.enterpriseFinancialClose.update({ where: { id: current.id }, data: { status: fresh.ready ? "PENDING_APPROVAL" : "BLOCKED", checklistJson: serializeFinanceValue(fresh.checklist) as Prisma.InputJsonValue, blockersJson: serializeFinanceValue(fresh.blockers) as Prisma.InputJsonValue, requestedAt: new Date(), revision: { increment: 1 } } });
+      const retryable = current?.status === "DRAFT" || current?.status === "BLOCKED";
+      if (!current || !retryable || current.revision !== input.revision) throw new EnterpriseAccountingError("FINANCIAL_CLOSE_CONFLICT", 409);
+      const updated = await tx.enterpriseFinancialClose.update({
+        where: { id: current.id },
+        data: {
+          status: fresh.ready ? "PENDING_APPROVAL" : "BLOCKED",
+          checklistJson: serializeFinanceValue(fresh.checklist) as Prisma.InputJsonValue,
+          blockersJson: serializeFinanceValue(fresh.blockers) as Prisma.InputJsonValue,
+          requestedByUserId: actorUserId,
+          requestedAt: new Date(),
+          approvedByUserId: null,
+          approvedAt: null,
+          revision: { increment: 1 },
+        },
+      });
       await tx.enterpriseFiscalPeriod.update({ where: { id: current.fiscalPeriodId }, data: { status: fresh.ready ? "SOFT_CLOSED" : "OPEN", softClosedAt: fresh.ready ? new Date() : null, updatedByUserId: actorUserId, revision: { increment: 1 } } });
       await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseFinancialClose", entityId: current.id, eventType: fresh.ready ? "FINANCIAL_CLOSE_SUBMITTED" : "FINANCIAL_CLOSE_BLOCKED", summary: fresh.ready ? "Financial close submitted" : "Financial close blocked", actorUserId, fromStatus: current.status, toStatus: updated.status, metadataJson: { blockers: fresh.blockers } as Prisma.InputJsonValue });
       return updated;
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }
+
+  if (input.action === "CLOSE") {
+    const snapshot = await prisma.enterpriseFinancialClose.findFirst({ where: { id: closeId, organizationId } });
+    if (!snapshot) throw new EnterpriseAccountingError("FINANCIAL_CLOSE_NOT_FOUND", 404);
+    if (snapshot.status !== "APPROVED") throw new EnterpriseAccountingError("FINANCIAL_CLOSE_NOT_APPROVED", 409);
+    if (snapshot.revision !== input.revision) throw new EnterpriseAccountingError("FINANCIAL_CLOSE_REVISION_CONFLICT", 409, { currentRevision: snapshot.revision });
+    assertIndependentActor({ actorUserId, relatedUserIds: [snapshot.requestedByUserId], errorCode: "FINANCIAL_CLOSE_SELF_CLOSE_FORBIDDEN" });
+    const fresh = await calculateFinancialCloseChecklist(organizationId, snapshot.fiscalPeriodId);
+    if (!fresh.ready) {
+      return prisma.$transaction(async (tx) => {
+        await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseFinancialClose" WHERE id = ${closeId} AND "organizationId" = ${organizationId} FOR UPDATE`);
+        const current = await tx.enterpriseFinancialClose.findFirst({ where: { id: closeId, organizationId }, include: { fiscalPeriod: true } });
+        if (!current || current.status !== "APPROVED" || current.revision !== input.revision) throw new EnterpriseAccountingError("FINANCIAL_CLOSE_CONFLICT", 409);
+        const updated = await tx.enterpriseFinancialClose.update({
+          where: { id: current.id },
+          data: {
+            status: "BLOCKED",
+            checklistJson: serializeFinanceValue(fresh.checklist) as Prisma.InputJsonValue,
+            blockersJson: serializeFinanceValue(fresh.blockers) as Prisma.InputJsonValue,
+            approvedByUserId: null,
+            approvedAt: null,
+            revision: { increment: 1 },
+          },
+        });
+        await tx.enterpriseFiscalPeriod.update({ where: { id: current.fiscalPeriodId }, data: { status: "OPEN", softClosedAt: null, updatedByUserId: actorUserId, revision: { increment: 1 } } });
+        await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseFinancialClose", entityId: current.id, eventType: "FINANCIAL_CLOSE_NEW_BLOCKERS", summary: `New blockers detected before closing ${current.fiscalPeriod.code}`, actorUserId, fromStatus: "APPROVED", toStatus: "BLOCKED", metadataJson: { blockers: fresh.blockers } as Prisma.InputJsonValue });
+        return updated;
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    }
   }
 
   return prisma.$transaction(async (tx) => {

@@ -10,6 +10,7 @@ export async function getPostingPeriod(
   const period = await tx.enterpriseFiscalPeriod.findFirst({
     where: {
       organizationId,
+      fiscalYear: { status: "OPEN" },
       startDate: { lte: accountingDate },
       endDate: { gte: accountingDate },
     },
@@ -41,7 +42,7 @@ export async function assertDraftDateEditable(
   accountingDate: Date,
 ) {
   const period = await tx.enterpriseFiscalPeriod.findFirst({
-    where: { organizationId, startDate: { lte: accountingDate }, endDate: { gte: accountingDate } },
+    where: { organizationId, fiscalYear: { status: "OPEN" }, startDate: { lte: accountingDate }, endDate: { gte: accountingDate } },
     select: { id: true, status: true },
   });
   if (!period || period.status === "CLOSED" || period.status === "LOCKED") {

@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
@@ -5,6 +6,122 @@ const prisma = new PrismaClient();
 const organizationId = process.env.E2E_ORGANIZATION_ID || "e2e-erp-professional-org";
 const adminEmail = (process.env.E2E_ADMIN_EMAIL || "erp-admin@example.test").toLowerCase();
 const currencyCode = "USD";
+const templateReference = "OHADA_SYSCOHADA@0.1.0";
+const templateUrl = new URL("../lib/enterprise/accounting/templates/syscohada/syscohada.bootstrap.v0.1.0.json", import.meta.url);
+
+async function readCanonicalTemplate() {
+  const template = JSON.parse(await readFile(templateUrl, "utf8"));
+  const reference = `${template.code}@${template.version}`;
+  if (reference !== templateReference || template.status !== "PUBLISHED") {
+    throw new Error(`Shop 2 seed requires published template ${templateReference}; received ${reference} (${template.status})`);
+  }
+  return template;
+}
+
+async function seedCanonicalTemplate(chartId, actorUserId) {
+  const template = await readCanonicalTemplate();
+  const accountIds = new Map();
+
+  for (const account of template.accounts) {
+    const persisted = await prisma.enterpriseLedgerAccount.upsert({
+      where: { organizationId_code: { organizationId, code: account.code } },
+      update: {
+        chartId,
+        nameFr: account.nameFr,
+        nameEn: account.nameEn,
+        accountType: account.accountType,
+        accountSubtype: account.accountSubtype || null,
+        currencyCode: account.currencyCode || null,
+        isControlAccount: Boolean(account.isControlAccount),
+        isSystemAccount: Boolean(account.isSystemAccount),
+        allowDirectPosting: Boolean(account.allowDirectPosting),
+        isActive: true,
+        archivedAt: null,
+      },
+      create: {
+        organizationId,
+        chartId,
+        code: account.code,
+        nameFr: account.nameFr,
+        nameEn: account.nameEn,
+        accountType: account.accountType,
+        accountSubtype: account.accountSubtype || null,
+        currencyCode: account.currencyCode || null,
+        isControlAccount: Boolean(account.isControlAccount),
+        isSystemAccount: Boolean(account.isSystemAccount),
+        allowDirectPosting: Boolean(account.allowDirectPosting),
+        isActive: true,
+      },
+    });
+    accountIds.set(account.code, persisted.id);
+  }
+
+  const effectiveFrom = new Date(`${template.effectiveFrom}T00:00:00.000Z`);
+  for (const mapping of template.semanticMappings) {
+    const ledgerAccountId = accountIds.get(mapping.accountCode);
+    if (!ledgerAccountId) throw new Error(`Template mapping ${mapping.mappingKey} references missing account ${mapping.accountCode}`);
+
+    const existing = await prisma.enterpriseAccountMapping.findFirst({
+      where: { organizationId, mappingKey: mapping.mappingKey, effectiveFrom },
+      orderBy: { createdAt: "asc" },
+    });
+    if (existing) {
+      await prisma.enterpriseAccountMapping.update({
+        where: { id: existing.id },
+        data: {
+          ledgerAccountId,
+          sourceModule: mapping.sourceModule || null,
+          sourceEntityType: mapping.sourceEntityType || null,
+          isActive: true,
+          effectiveTo: null,
+        },
+      });
+    } else {
+      await prisma.enterpriseAccountMapping.create({
+        data: {
+          organizationId,
+          mappingKey: mapping.mappingKey,
+          ledgerAccountId,
+          sourceModule: mapping.sourceModule || null,
+          sourceEntityType: mapping.sourceEntityType || null,
+          effectiveFrom,
+          isActive: true,
+          createdByUserId: actorUserId,
+        },
+      });
+    }
+  }
+
+  for (const journal of template.journals) {
+    await prisma.enterpriseJournal.upsert({
+      where: { organizationId_code: { organizationId, code: journal.code } },
+      update: {
+        nameFr: journal.nameFr,
+        nameEn: journal.nameEn,
+        journalType: journal.journalType,
+        sequencePrefix: journal.sequencePrefix || null,
+        requiresApproval: Boolean(journal.requiresApproval),
+        isActive: true,
+      },
+      create: {
+        organizationId,
+        code: journal.code,
+        nameFr: journal.nameFr,
+        nameEn: journal.nameEn,
+        journalType: journal.journalType,
+        sequencePrefix: journal.sequencePrefix || null,
+        requiresApproval: Boolean(journal.requiresApproval),
+        isActive: true,
+        createdByUserId: actorUserId,
+      },
+    });
+  }
+
+  await prisma.enterpriseChartOfAccounts.update({
+    where: { id: chartId },
+    data: { templateCode: templateReference, status: "ACTIVE", revision: { increment: 1 } },
+  });
+}
 
 async function upsertMapping(mappingKey, ledgerAccountId, actorUserId) {
   const existing = await prisma.enterpriseAccountMapping.findFirst({
@@ -61,16 +178,20 @@ async function main() {
 
   const chart = await prisma.enterpriseChartOfAccounts.upsert({
     where: { organizationId_code: { organizationId, code: "SHOP2-E2E-COA" } },
-    update: { nameFr: "Plan comptable Shop 2 E2E", nameEn: "Shop 2 E2E chart of accounts", status: "ACTIVE" },
+    update: { nameFr: "Plan comptable Shop 2 E2E", nameEn: "Shop 2 E2E chart of accounts" },
     create: {
       organizationId,
       code: "SHOP2-E2E-COA",
       nameFr: "Plan comptable Shop 2 E2E",
       nameEn: "Shop 2 E2E chart of accounts",
-      status: "ACTIVE",
+      status: "DRAFT",
       createdByUserId: admin.id,
     },
   });
+
+  // Behavioral tests read the same immutable SYSCOHADA JSON as production.
+  // The seed stays plain Node/Prisma so CI never depends on Next.js path aliases.
+  await seedCanonicalTemplate(chart.id, admin.id);
 
   const accountSpecs = [
     ["SHOP2-CASH", "Caisse Shop 2", "Shop 2 cash", "ASSET"],
@@ -326,10 +447,33 @@ async function main() {
     },
   });
 
+  await prisma.enterpriseRetailConfiguration.upsert({
+    where: { organizationId },
+    update: {
+      profileCode: "RETAIL_CORE",
+      baseCurrencyCode: currencyCode,
+      defaultSiteId: site.id,
+      defaultWarehouseId: warehouse.id,
+      status: "ACTIVE",
+      updatedByUserId: admin.id,
+      revision: { increment: 1 },
+    },
+    create: {
+      organizationId,
+      profileCode: "RETAIL_CORE",
+      baseCurrencyCode: currencyCode,
+      defaultSiteId: site.id,
+      defaultWarehouseId: warehouse.id,
+      status: "ACTIVE",
+      createdByUserId: admin.id,
+    },
+  });
+
   console.log(JSON.stringify({
     organizationId,
     adminUserId: admin.id,
     currencyCode,
+    templateReference,
     siteId: site.id,
     warehouseId: warehouse.id,
     catalogItemId: catalogItem.id,
