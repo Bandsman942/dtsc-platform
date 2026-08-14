@@ -3,36 +3,86 @@ import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { enterpriseReportVisibilityWhere, getEnterpriseFinanceAccess } from "@/lib/enterprise/finance/access";
 import { prisma } from "@/lib/prisma";
+import { buildEnterpriseProfessionalReport } from "@/lib/reporting/enterprise-professional-report";
 
 type Params = { params: Promise<{ organizationId: string; id: string }> };
 
+const REPORT_TYPE_LABELS: Record<string, string> = {
+  BUDGET_VS_ACTUAL: "Budget comparé au réalisé",
+  EXPENSE_SUMMARY: "Synthèse des dépenses",
+  PROCUREMENT_SUMMARY: "Synthèse des achats",
+  FINANCE_OVERVIEW: "Vue d’ensemble financière",
+};
+
 function cell(value: unknown) {
-  const text = value === null || value === undefined ? "" : typeof value === "object" ? JSON.stringify(value) : String(value);
+  const text = value === null || value === undefined ? "" : String(value);
   return `"${text.replaceAll('"', '""')}"`;
 }
 
-function rowsFromSnapshot(reportType: string, snapshot: unknown) {
-  const envelope = snapshot as Record<string, unknown>;
-  const data = (envelope.data && typeof envelope.data === "object" ? envelope.data : envelope) as Record<string, unknown>;
-  if (reportType === "BUDGET_VS_ACTUAL" && Array.isArray(data.lines)) return { headers: ["budgetReference", "budgetTitle", "line", "category", "departmentId", "currency", "planned", "committed", "actual", "available", "variance", "utilizationPercent", "deepLink"], rows: (data.lines as Array<Record<string, unknown>>).map((item) => [item.budgetReference, item.budgetTitle, item.name, item.category, item.departmentId, item.currency, item.planned, item.committed, item.actual, item.available, item.variance, item.utilizationPercent, item.deepLink]) };
-  if (reportType === "EXPENSE_SUMMARY" && Array.isArray(data.byCategory)) return { headers: ["currency", "category", "amount", "count"], rows: (data.byCategory as Array<Record<string, unknown>>).map((item) => [item.currency, item.category, item.amount, item.count]) };
-  if (reportType === "PROCUREMENT_SUMMARY" && Array.isArray(data.byStatus)) return { headers: ["currency", "status", "amount", "count"], rows: (data.byStatus as Array<Record<string, unknown>>).map((item) => [item.currency, item.status, item.amount, item.count]) };
-  const entries = Object.entries(data).map(([key, value]) => [key, value]);
-  return { headers: ["metric", "value"], rows: entries };
-}
-
 export async function GET(req: Request, { params }: Params) {
-  const startedAt = Date.now(); const session = await getSession(); if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 }); const { organizationId, id } = await params; const access = await getEnterpriseFinanceAccess({ session, organizationId, moduleCode: "REPORTS", action: "read" }); if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 }); const visibility = enterpriseReportVisibilityWhere({ organizationId, userId: session.userId, canSeeAll: access.canSeeAll }); const report = await prisma.enterpriseReport.findFirst({ where: { AND: [visibility, { id }] } }); if (!report) return NextResponse.json({ error: "Not found" }, { status: 404 }); const table = rowsFromSnapshot(report.reportType, report.snapshotJson); const metadata = [
-    ["reportReference", report.reference],
-    ["reportTitle", report.title],
-    ["reportType", report.reportType],
-    ["periodStart", report.periodStart?.toISOString() || ""],
-    ["periodEnd", report.periodEnd?.toISOString() || ""],
-    ["currency", report.currency || ""],
-    ["unitCode", report.unitCode || ""],
-    ["sourcePolicyCode", report.sourcePolicyCode || ""],
-    ["freshnessAt", report.freshnessAt?.toISOString() || report.generatedAt.toISOString()],
-    ["generatedAt", report.generatedAt.toISOString()],
+  const startedAt = Date.now();
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { organizationId, id } = await params;
+  const access = await getEnterpriseFinanceAccess({ session, organizationId, moduleCode: "REPORTS", action: "read" });
+  if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  const visibility = enterpriseReportVisibilityWhere({ organizationId, userId: session.userId, canSeeAll: access.canSeeAll });
+  const [report, organization] = await Promise.all([
+    prisma.enterpriseReport.findFirst({ where: { AND: [visibility, { id }] } }),
+    prisma.organization.findFirst({ where: { id: organizationId }, select: { name: true } }),
+  ]);
+  if (!report) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const model = buildEnterpriseProfessionalReport({
+    locale: "fr",
+    organizationName: organization?.name || "DTSC Platform",
+    reference: report.reference,
+    title: report.title,
+    reportType: report.reportType,
+    reportTypeLabel: REPORT_TYPE_LABELS[report.reportType] || "Rapport d’entreprise",
+    generatedAt: report.generatedAt.toISOString(),
+    periodStart: report.periodStart?.toISOString() || null,
+    periodEnd: report.periodEnd?.toISOString() || null,
+    currency: report.currency,
+    snapshot: report.snapshotJson,
+    filters: report.filtersJson,
+  });
+
+  const metadata: Array<[string, string]> = [
+    ["Organisation", model.organizationName || "DTSC Platform"],
+    ["Rapport", model.title],
+    ["Type", REPORT_TYPE_LABELS[report.reportType] || "Rapport d’entreprise"],
+    ["Référence", report.reference],
+    ["Période", model.subtitle || ""],
+    ["Généré", model.generatedLabel || ""],
+    ...(model.filters || []).map((item): [string, string] => [item.label, item.value]),
   ];
-  const csv = [...metadata.map((row) => row.map(cell).join(",")), "", table.headers.map(cell).join(","), ...table.rows.map((row) => row.map(cell).join(","))].join("\n"); await writeAuditLog({ userId: session.userId, organizationId, action: "ENTERPRISE_REPORT_EXPORTED", entity: "EnterpriseReport", entityId: id, request: req, reasonCode: "REPORT_EXPORT_CSV", riskLevel: "MEDIUM", metadata: { format: "CSV", reportType: report.reportType, filters: report.filtersJson } }); await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "reports", reportId: id, export: "csv" } }); return new NextResponse(csv, { status: 200, headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="${report.reference}.csv"`, "Cache-Control": "private, no-store" } });
+  const csv = [
+    ...metadata.map((row) => row.map(cell).join(",")),
+    "",
+    model.columns.map((column) => cell(column.label)).join(","),
+    ...model.rows.map((row) => model.columns.map((column) => cell(row[column.key])).join(",")),
+  ].join("\r\n");
+
+  await writeAuditLog({
+    userId: session.userId,
+    organizationId,
+    action: "ENTERPRISE_REPORT_EXPORTED",
+    entity: "EnterpriseReport",
+    entityId: id,
+    request: req,
+    reasonCode: "REPORT_EXPORT_CSV",
+    riskLevel: "MEDIUM",
+    metadata: { format: "CSV", reportType: report.reportType, filters: report.filtersJson },
+  });
+  await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "reports", reportId: id, export: "csv" } });
+  return new NextResponse(`\ufeff${csv}`, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="${report.reference}.csv"`,
+      "Cache-Control": "private, no-store",
+    },
+  });
 }
