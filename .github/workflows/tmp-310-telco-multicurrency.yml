@@ -1,0 +1,32 @@
+name: Temporary
+
+on:
+  push:
+    branches:
+      - fix/307-mobile-money-multicurrency-accounts
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/307-mobile-money-multicurrency-accounts
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply Telco multi-currency implementation
+        run: node scripts/tmp-310-telco-multicurrency-codemod.mjs
+      - name: Commit generated implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "fix(retail): support multi-currency Telco operator accounts"
+          git push origin HEAD:fix/307-mobile-money-multicurrency-accounts
