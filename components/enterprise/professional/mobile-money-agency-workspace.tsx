@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type SelectHTMLAttributes } from "react";
 import { ArrowRightLeft, CheckCircle2, RefreshCw, RotateCcw, Settings2, Smartphone, WalletCards } from "lucide-react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
 import { Field, formatEnterpriseDate } from "@/components/enterprise/core-v2/erp-v2-ui";
@@ -10,7 +10,6 @@ import {
   RetailErpLinks,
   RetailReportsPanel,
   RetailWorkspaceFrame,
-  Select,
   moneyValue,
   normalizePhonePreview,
   providerLabel,
@@ -79,10 +78,24 @@ type FxPreview = {
   sufficientBalance: boolean;
 };
 
+type OperationDraft = {
+  providerCode: string;
+  transactionType: string;
+  customerPhone: string;
+  currencyCode: string;
+  principalAmount: number;
+  customerFeeAmount: number;
+  providerCommissionAmount: number;
+  feeCollectionMode: string;
+  cashAccountId: string;
+  floatAccountId: null;
+  externalReference: string;
+};
+
 const COPY = {
   fr: {
     operationTitle: "Opération Mobile Money",
-    operationDescription: "Choisissez le service et enregistrez l’opération client. Le wallet opérateur correspondant à la devise de la caisse est choisi automatiquement.",
+    operationDescription: "Enregistrez l’opération client. Le wallet de l’opérateur correspondant à la devise de la caisse est sélectionné automatiquement.",
     service: "Service Mobile Money",
     operation: "Opération",
     phone: "Téléphone client",
@@ -93,7 +106,7 @@ const COPY = {
     reference: "Référence opérateur",
     review: "Vérifier l’opération",
     tillRequired: "Ouvrez une caisse avant de continuer.",
-    missingWallet: "Aucun service n’a encore de wallet configuré dans la devise de cette caisse.",
+    missingWallet: "Aucun opérateur ne possède encore de wallet dans la devise de cette caisse.",
     walletUsed: "Wallet opérateur utilisé",
     operationConfirmed: "Opération Mobile Money confirmée et comptabilisée.",
     confirmTitle: "Confirmer Mobile Money",
@@ -102,7 +115,7 @@ const COPY = {
     confirm: "Confirmer",
     processing: "Traitement…",
     configTitle: "Comptes Mobile Money par devise",
-    configDescription: "Chaque opérateur reste unique. Associez-lui un wallet financier distinct pour chaque devise exploitée ; en RDC, CDF et USD sont attendus.",
+    configDescription: "Chaque opérateur reste affiché une seule fois. Associez-lui un wallet financier distinct pour chaque devise exploitée ; en RDC, CDF et USD sont attendus.",
     currentWallet: "Wallet configuré",
     account: "Compte financier",
     save: "Enregistrer",
@@ -114,7 +127,7 @@ const COPY = {
     accountSaved: "Wallet opérateur enregistré.",
     minimumTwo: "Au moins deux devises distinctes sont nécessaires pour exploiter professionnellement cet opérateur.",
     fxTitle: "Transfert entre devises",
-    fxDescription: "Convertissez du float entre deux wallets du même opérateur. Le taux courant de Finance est résolu côté serveur et enregistré avec l’opération.",
+    fxDescription: "Convertissez du float entre deux wallets du même opérateur. Le taux courant de Finance est résolu côté serveur et mémorisé avec l’opération.",
     sourceCurrency: "Devise source",
     targetCurrency: "Devise cible",
     sourceAmount: "Montant à convertir",
@@ -135,10 +148,13 @@ const COPY = {
     reversed: "Annulation enregistrée et comptabilisée.",
     operatorReference: "Référence opérateur",
     refresh: "Actualiser les comptes",
+    requiredCountry: "Requis dans ce pays",
+    notConfigured: "Non configuré",
+    configureWallets: "Configurer les wallets",
   },
   en: {
     operationTitle: "Mobile Money operation",
-    operationDescription: "Choose the service and record the customer operation. The operator wallet matching the till currency is selected automatically.",
+    operationDescription: "Record the customer operation. The operator wallet matching the till currency is selected automatically.",
     service: "Mobile Money service",
     operation: "Operation",
     phone: "Customer phone",
@@ -149,7 +165,7 @@ const COPY = {
     reference: "Operator reference",
     review: "Review operation",
     tillRequired: "Open a till before continuing.",
-    missingWallet: "No service has a wallet configured for this till currency yet.",
+    missingWallet: "No operator has a wallet configured for this till currency yet.",
     walletUsed: "Operator wallet used",
     operationConfirmed: "Mobile Money operation confirmed and posted.",
     confirmTitle: "Confirm Mobile Money",
@@ -158,7 +174,7 @@ const COPY = {
     confirm: "Confirm",
     processing: "Processing…",
     configTitle: "Mobile Money accounts by currency",
-    configDescription: "Each operator stays unique. Link one distinct financial wallet per operating currency; in DR Congo, CDF and USD are expected.",
+    configDescription: "Each operator is displayed once. Link one distinct financial wallet per operating currency; in DR Congo, CDF and USD are expected.",
     currentWallet: "Configured wallet",
     account: "Financial account",
     save: "Save",
@@ -170,7 +186,7 @@ const COPY = {
     accountSaved: "Operator wallet saved.",
     minimumTwo: "At least two distinct currencies are required for professional operation of this service.",
     fxTitle: "Currency transfer",
-    fxDescription: "Convert float between two wallets of the same operator. The current Finance rate is resolved server-side and saved with the operation.",
+    fxDescription: "Convert float between two wallets of the same operator. The current Finance rate is resolved server-side and stored with the operation.",
     sourceCurrency: "Source currency",
     targetCurrency: "Target currency",
     sourceAmount: "Amount to convert",
@@ -191,8 +207,20 @@ const COPY = {
     reversed: "Reversal recorded and posted.",
     operatorReference: "Operator reference",
     refresh: "Refresh accounts",
+    requiredCountry: "Required in this country",
+    notConfigured: "Not configured",
+    configureWallets: "Configure wallets",
   },
 } as const;
+
+function MobileMoneySelect(props: SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <select
+      {...props}
+      className={`min-h-11 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink ${props.className || ""}`}
+    />
+  );
+}
 
 export function MobileMoneyAgencyWorkspace({
   organizationId,
@@ -204,7 +232,6 @@ export function MobileMoneyAgencyWorkspace({
   definition: EnterpriseModuleDefinition;
 }) {
   const locale: "fr" | "en" = useAppLocale() === "en" ? "en" : "fr";
-  const copy = COPY[locale];
   const [configuration, setConfiguration] = useState<MobileMoneyConfiguration | null>(null);
   const [configurationError, setConfigurationError] = useState("");
   const [configurationBusy, setConfigurationBusy] = useState(false);
@@ -239,10 +266,18 @@ export function MobileMoneyAgencyWorkspace({
     >
       {(context) => {
         const dashboard = context.dashboard as RetailDashboard;
-        if (context.tab === "HISTORY") return <MobileMoneyHistory organizationId={organizationId} dashboard={dashboard} locale={locale} busyAction={context.busyAction} mutate={context.mutate} />;
-        if (context.tab === "CONFIG") return <MobileMoneyConfigurationPanel organizationId={organizationId} dashboard={dashboard} locale={locale} configuration={configuration} configurationBusy={configurationBusy} configurationError={configurationError} reload={async () => { await loadConfiguration(); context.setRefreshKey((value) => value + 1); }} busyAction={context.busyAction} mutate={context.mutate} />;
+        const reload = async () => {
+          await loadConfiguration();
+          context.setRefreshKey((value) => value + 1);
+        };
+        if (context.tab === "HISTORY") {
+          return <MobileMoneyHistory organizationId={organizationId} dashboard={dashboard} locale={locale} busyAction={context.busyAction} mutate={context.mutate} />;
+        }
+        if (context.tab === "CONFIG") {
+          return <MobileMoneyConfigurationPanel dashboard={dashboard} locale={locale} configuration={configuration} configurationBusy={configurationBusy} configurationError={configurationError} reload={reload} busyAction={context.busyAction} mutate={context.mutate} organizationId={organizationId} />;
+        }
         if (context.tab === "REPORTS") return <RetailReportsPanel dashboard={dashboard} moduleCode="MOBILE_MONEY_AGENCY" locale={locale} />;
-        return <MobileMoneyOperations organizationId={organizationId} dashboard={dashboard} locale={locale} configuration={configuration} configurationBusy={configurationBusy} configurationError={configurationError} reload={async () => { await loadConfiguration(); context.setRefreshKey((value) => value + 1); }} busyAction={context.busyAction} mutate={context.mutate} copy={copy} />;
+        return <MobileMoneyOperations organizationId={organizationId} dashboard={dashboard} locale={locale} configuration={configuration} configurationBusy={configurationBusy} configurationError={configurationError} reload={reload} busyAction={context.busyAction} mutate={context.mutate} />;
       }}
     </RetailWorkspaceFrame>
   );
@@ -258,7 +293,6 @@ function MobileMoneyOperations({
   reload,
   busyAction,
   mutate,
-  copy,
 }: {
   organizationId: string;
   dashboard: RetailDashboard;
@@ -269,13 +303,16 @@ function MobileMoneyOperations({
   reload: () => Promise<void>;
   busyAction: string | null;
   mutate: RetailMutation;
-  copy: typeof COPY.fr | typeof COPY.en;
 }) {
-  const [pending, setPending] = useState<Record<string, unknown> | null>(null);
+  const copy = COPY[locale];
+  const [pending, setPending] = useState<OperationDraft | null>(null);
   const activeCash = dashboard.cashSession?.status === "OPEN" ? dashboard.cashSession : null;
   const currency = activeCash?.financialAccount.currencyCode || "";
   const providers = configuration?.providers || [];
-  const eligibleProviders = useMemo(() => providers.filter((provider) => provider.accounts.some((mapping) => mapping.currencyCode === currency)), [currency, providers]);
+  const eligibleProviders = useMemo(
+    () => providers.filter((provider) => provider.accounts.some((mapping) => mapping.currencyCode === currency)),
+    [currency, providers],
+  );
   const selectedProvider = pending ? providers.find((provider) => provider.providerCode === pending.providerCode) : null;
   const selectedWallet = pending ? selectedProvider?.accounts.find((mapping) => mapping.currencyCode === pending.currencyCode) : null;
 
@@ -317,27 +354,27 @@ function MobileMoneyOperations({
         >
           <div className="grid min-w-0 gap-4 md:grid-cols-2">
             <Field label={copy.service}>
-              <Select name="providerCode" required disabled={Boolean(busyAction) || configurationBusy || !activeCash}>
+              <MobileMoneySelect name="providerCode" required disabled={Boolean(busyAction) || configurationBusy || !activeCash} defaultValue="">
                 <option value="">—</option>
                 {eligibleProviders.map((provider) => <option key={provider.id} value={provider.providerCode}>{provider.label}</option>)}
-              </Select>
+              </MobileMoneySelect>
             </Field>
             <Field label={copy.operation}>
-              <Select name="transactionType" defaultValue="DEPOSIT" disabled={Boolean(busyAction)}>
+              <MobileMoneySelect name="transactionType" defaultValue="DEPOSIT" disabled={Boolean(busyAction)}>
                 <option value="DEPOSIT">{customerFacingMobileMoneyTransactionType("DEPOSIT", locale)}</option>
                 <option value="WITHDRAWAL">{customerFacingMobileMoneyTransactionType("WITHDRAWAL", locale)}</option>
-              </Select>
+              </MobileMoneySelect>
             </Field>
             <Field label={copy.phone}><Input name="customerPhone" required inputMode="tel" placeholder={locale === "en" ? "+country code…" : "+indicatif pays…"} disabled={Boolean(busyAction)} /></Field>
             <Field label={copy.amount}><Input name="principalAmount" type="number" min="0.01" step="0.01" required disabled={Boolean(busyAction)} /></Field>
             <Field label={copy.fee}><Input name="customerFeeAmount" type="number" min="0" step="0.01" defaultValue="0" disabled={Boolean(busyAction)} /></Field>
             <Field label={copy.commission}><Input name="providerCommissionAmount" type="number" min="0" step="0.01" defaultValue="0" disabled={Boolean(busyAction)} /></Field>
             <Field label={copy.feeCollection}>
-              <Select name="feeCollectionMode" defaultValue="NONE" disabled={Boolean(busyAction)}>
+              <MobileMoneySelect name="feeCollectionMode" defaultValue="NONE" disabled={Boolean(busyAction)}>
                 <option value="NONE">{customerFacingFeeCollectionMode("NONE", locale)}</option>
                 <option value="CASH">{customerFacingFeeCollectionMode("CASH", locale)}</option>
                 <option value="PROVIDER">{customerFacingFeeCollectionMode("PROVIDER", locale)}</option>
-              </Select>
+              </MobileMoneySelect>
             </Field>
             <Field label={copy.reference}><Input name="externalReference" required maxLength={160} disabled={Boolean(busyAction)} /></Field>
           </div>
@@ -346,7 +383,7 @@ function MobileMoneyOperations({
           </div>
           {activeCash && configuration && !eligibleProviders.length ? (
             <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm font-bold text-amber-800 dark:text-amber-200">
-              {copy.missingWallet} <Link href="#mobile-money-wallet-configuration" className="underline">{locale === "en" ? "Configure wallets" : "Configurer les wallets"}</Link>
+              {copy.missingWallet} <Link href="#mobile-money-wallet-configuration" className="underline">{copy.configureWallets}</Link>
             </div>
           ) : null}
           {configurationError ? <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm font-bold text-rose-700 dark:text-rose-200">{configurationError}</div> : null}
@@ -361,11 +398,11 @@ function MobileMoneyOperations({
           <div className="rounded-2xl border-2 border-amber-400/50 bg-amber-500/10 p-4">
             <div className="grid gap-1 text-sm font-bold text-dtsc-ink">
               <p>{selectedProvider?.label || copy.service}</p>
-              <p>{customerFacingMobileMoneyTransactionType(String(pending.transactionType || ""), locale)} · {moneyValue(Number(pending.principalAmount), String(pending.currencyCode))}</p>
-              <p>{String(pending.customerPhone)}</p>
-              <p>{customerFacingFeeCollectionMode(String(pending.feeCollectionMode || ""), locale)}</p>
-              <p>{copy.walletUsed}: {selectedWallet?.financialAccount.name || "—"} · {String(pending.currencyCode)}</p>
-              <p>{copy.operatorReference}: {String(pending.externalReference || "—")}</p>
+              <p>{customerFacingMobileMoneyTransactionType(pending.transactionType, locale)} · {moneyValue(pending.principalAmount, pending.currencyCode)}</p>
+              <p>{pending.customerPhone}</p>
+              <p>{customerFacingFeeCollectionMode(pending.feeCollectionMode, locale)}</p>
+              <p>{copy.walletUsed}: {selectedWallet?.financialAccount.name || "—"} · {pending.currencyCode}</p>
+              <p>{copy.operatorReference}: {pending.externalReference || "—"}</p>
             </div>
             <div data-responsive-actions className="mt-4">
               <Button variant="outline" type="button" disabled={busyAction === "mobile-money"} onClick={() => setPending(null)}>{copy.edit}</Button>
@@ -381,7 +418,21 @@ function MobileMoneyOperations({
   );
 }
 
-function MobileMoneyFxPanel({ organizationId, locale, configuration, busyAction, mutate, reload }: { organizationId: string; locale: "fr" | "en"; configuration: MobileMoneyConfiguration | null; busyAction: string | null; mutate: RetailMutation; reload: () => Promise<void> }) {
+function MobileMoneyFxPanel({
+  organizationId,
+  locale,
+  configuration,
+  busyAction,
+  mutate,
+  reload,
+}: {
+  organizationId: string;
+  locale: "fr" | "en";
+  configuration: MobileMoneyConfiguration | null;
+  busyAction: string | null;
+  mutate: RetailMutation;
+  reload: () => Promise<void>;
+}) {
   const copy = COPY[locale];
   const providers = (configuration?.providers || []).filter((provider) => provider.accounts.length >= 2);
   const [providerCode, setProviderCode] = useState("");
@@ -391,14 +442,17 @@ function MobileMoneyFxPanel({ organizationId, locale, configuration, busyAction,
   const [previewError, setPreviewError] = useState("");
   const [previewBusy, setPreviewBusy] = useState(false);
   const provider = providers.find((item) => item.providerCode === providerCode) || providers[0] || null;
-  const currencies = provider?.accounts.map((account) => account.currencyCode) || [];
+  const currencies = useMemo(() => provider?.accounts.map((account) => account.currencyCode) || [], [provider]);
 
   useEffect(() => {
     if (!provider) return;
-    if (!providerCode) setProviderCode(provider.providerCode);
-    if (!sourceCurrency || !currencies.includes(sourceCurrency)) setSourceCurrency(currencies[0] || "");
-    const nextTarget = currencies.find((currency) => currency !== (sourceCurrency || currencies[0])) || "";
-    if (!targetCurrency || !currencies.includes(targetCurrency) || targetCurrency === sourceCurrency) setTargetCurrency(nextTarget);
+    const source = sourceCurrency && currencies.includes(sourceCurrency) ? sourceCurrency : currencies[0] || "";
+    const target = targetCurrency && currencies.includes(targetCurrency) && targetCurrency !== source
+      ? targetCurrency
+      : currencies.find((currency) => currency !== source) || "";
+    if (providerCode !== provider.providerCode) setProviderCode(provider.providerCode);
+    if (sourceCurrency !== source) setSourceCurrency(source);
+    if (targetCurrency !== target) setTargetCurrency(target);
     setPreview(null);
   }, [currencies, provider, providerCode, sourceCurrency, targetCurrency]);
 
@@ -413,7 +467,7 @@ function MobileMoneyFxPanel({ organizationId, locale, configuration, busyAction,
       const query = new URLSearchParams({ providerCode: provider.providerCode, sourceCurrencyCode: sourceCurrency, targetCurrencyCode: targetCurrency, sourceAmount: String(sourceAmount) });
       const response = await fetch(`/api/enterprise/${organizationId}/retail/mobile-money/fx?${query.toString()}`, { cache: "no-store" });
       const body = await response.json().catch(() => null) as { preview?: FxPreview; message?: string; error?: string } | null;
-      if (!response.ok || !body?.preview) throw new Error(body?.message || body?.error || "MOBILE_MONEY_FX_PREVIEW_FAILED");
+      if (!response.ok || !body?.preview) throw new Error(body?.message || body?.error || copy.fxMissingRate);
       setPreview(body.preview);
     } catch (error) {
       setPreviewError(error instanceof Error ? error.message : copy.fxMissingRate);
@@ -444,20 +498,20 @@ function MobileMoneyFxPanel({ organizationId, locale, configuration, busyAction,
         <div className="grid gap-4">
           <form onSubmit={(event) => { event.preventDefault(); void requestPreview(event.currentTarget); }} className="grid gap-4 md:grid-cols-2">
             <Field label={copy.service}>
-              <Select value={provider?.providerCode || ""} onChange={(value) => { setProviderCode(value); setPreview(null); }}>
+              <MobileMoneySelect name="fxProviderCode" value={provider?.providerCode || ""} onChange={(event) => { setProviderCode(event.target.value); setPreview(null); }}>
                 {providers.map((item) => <option key={item.id} value={item.providerCode}>{item.label}</option>)}
-              </Select>
+              </MobileMoneySelect>
             </Field>
             <div className="hidden md:block" />
             <Field label={copy.sourceCurrency}>
-              <Select value={sourceCurrency} onChange={(value) => { setSourceCurrency(value); setPreview(null); }}>
+              <MobileMoneySelect name="sourceCurrencyCode" value={sourceCurrency} onChange={(event) => { setSourceCurrency(event.target.value); setPreview(null); }}>
                 {currencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}
-              </Select>
+              </MobileMoneySelect>
             </Field>
             <Field label={copy.targetCurrency}>
-              <Select value={targetCurrency} onChange={(value) => { setTargetCurrency(value); setPreview(null); }}>
+              <MobileMoneySelect name="targetCurrencyCode" value={targetCurrency} onChange={(event) => { setTargetCurrency(event.target.value); setPreview(null); }}>
                 {currencies.filter((currency) => currency !== sourceCurrency).map((currency) => <option key={currency} value={currency}>{currency}</option>)}
-              </Select>
+              </MobileMoneySelect>
             </Field>
             <Field label={copy.sourceAmount}><Input name="sourceAmount" type="number" min="0.01" step="0.01" required disabled={previewBusy || Boolean(busyAction)} /></Field>
             <div className="flex items-end"><Button disabled={previewBusy || Boolean(busyAction)}><ArrowRightLeft className="h-4 w-4" />{previewBusy ? copy.processing : copy.preview}</Button></div>
@@ -491,9 +545,30 @@ function MobileMoneyFxPanel({ organizationId, locale, configuration, busyAction,
   );
 }
 
-function MobileMoneyConfigurationPanel({ organizationId, dashboard, locale, configuration, configurationBusy, configurationError, reload, busyAction, mutate }: { organizationId: string; dashboard: RetailDashboard; locale: "fr" | "en"; configuration: MobileMoneyConfiguration | null; configurationBusy: boolean; configurationError: string; reload: () => Promise<void>; busyAction: string | null; mutate: RetailMutation }) {
+function MobileMoneyConfigurationPanel({
+  organizationId,
+  dashboard,
+  locale,
+  configuration,
+  configurationBusy,
+  configurationError,
+  reload,
+  busyAction,
+  mutate,
+}: {
+  organizationId: string;
+  dashboard: RetailDashboard;
+  locale: "fr" | "en";
+  configuration: MobileMoneyConfiguration | null;
+  configurationBusy: boolean;
+  configurationError: string;
+  reload: () => Promise<void>;
+  busyAction: string | null;
+  mutate: RetailMutation;
+}) {
   const copy = COPY[locale];
   const [extraCurrency, setExtraCurrency] = useState<Record<string, string>>({});
+  const [extraAccount, setExtraAccount] = useState<Record<string, string>>({});
 
   async function saveMapping(provider: ProviderConfiguration, currencyCode: string, financialAccountId: string) {
     if (!financialAccountId) return;
@@ -504,7 +579,10 @@ function MobileMoneyConfigurationPanel({ organizationId, dashboard, locale, conf
       copy.accountSaved,
       { idempotent: false },
     );
-    if (body) await reload();
+    if (body) {
+      setExtraAccount((current) => ({ ...current, [provider.id]: "" }));
+      await reload();
+    }
   }
 
   if (configurationBusy && !configuration) return <div className="rounded-xl border border-dtsc-border bg-dtsc-page p-4 text-sm font-semibold text-dtsc-muted">{copy.processing}</div>;
@@ -515,15 +593,19 @@ function MobileMoneyConfigurationPanel({ organizationId, dashboard, locale, conf
     <div id="mobile-money-wallet-configuration" className="grid min-w-0 gap-5">
       <ModuleSection title={copy.configTitle} description={copy.configDescription}>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dtsc-border bg-dtsc-page p-3">
-          <p className="text-sm font-semibold text-dtsc-muted">{configuration.requiredCurrencies.length ? `${locale === "en" ? "Required in this country" : "Requis dans ce pays"}: ${configuration.requiredCurrencies.join(" + ")}` : copy.minimumTwo}</p>
+          <p className="text-sm font-semibold text-dtsc-muted">{configuration.requiredCurrencies.length ? `${copy.requiredCountry}: ${configuration.requiredCurrencies.join(" + ")}` : copy.minimumTwo}</p>
           <Button size="sm" variant="outline" type="button" disabled={configurationBusy} onClick={() => void reload()}><RefreshCw className="h-4 w-4" />{copy.refresh}</Button>
         </div>
         <div className="grid min-w-0 gap-4 lg:grid-cols-2">
           {configuration.providers.map((provider) => {
             const mappedCurrencies = provider.accounts.map((mapping) => mapping.currencyCode);
-            const fixedCurrencies = configuration.requiredCurrencies.length ? Array.from(new Set([...configuration.requiredCurrencies, ...mappedCurrencies])) : mappedCurrencies;
+            const fixedCurrencies = configuration.requiredCurrencies.length
+              ? Array.from(new Set([...configuration.requiredCurrencies, ...mappedCurrencies]))
+              : mappedCurrencies;
             const addable = configuration.availableCurrencies.filter((currency) => !fixedCurrencies.includes(currency));
             const draftCurrency = extraCurrency[provider.id] || addable[0] || "";
+            const draftAccountId = extraAccount[provider.id] || "";
+            const availableAccounts = configuration.financialAccounts.filter((account) => account.currencyCode === draftCurrency);
             return (
               <article key={provider.id} className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -545,20 +627,24 @@ function MobileMoneyConfigurationPanel({ organizationId, dashboard, locale, conf
                       <p className="mb-2 text-xs font-black uppercase tracking-wide text-dtsc-muted">{copy.addCurrency}</p>
                       <div className="grid gap-3 sm:grid-cols-[0.45fr_minmax(0,1fr)_auto] sm:items-end">
                         <Field label={copy.chooseCurrency}>
-                          <Select value={draftCurrency} onChange={(value) => setExtraCurrency((current) => ({ ...current, [provider.id]: value }))}>
+                          <MobileMoneySelect
+                            name={`extraCurrency-${provider.id}`}
+                            value={draftCurrency}
+                            onChange={(event) => {
+                              setExtraCurrency((current) => ({ ...current, [provider.id]: event.target.value }));
+                              setExtraAccount((current) => ({ ...current, [provider.id]: "" }));
+                            }}
+                          >
                             {addable.map((currency) => <option key={currency} value={currency}>{currency}</option>)}
-                          </Select>
+                          </MobileMoneySelect>
                         </Field>
                         <Field label={copy.account}>
-                          <Select id={`extra-account-${provider.id}`} defaultValue="">
+                          <MobileMoneySelect name={`extraAccount-${provider.id}`} value={draftAccountId} onChange={(event) => setExtraAccount((current) => ({ ...current, [provider.id]: event.target.value }))}>
                             <option value="">—</option>
-                            {configuration.financialAccounts.filter((account) => account.currencyCode === draftCurrency).map((account) => <option key={account.id} value={account.id}>{account.name} · {account.code}</option>)}
-                          </Select>
+                            {availableAccounts.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.code}</option>)}
+                          </MobileMoneySelect>
                         </Field>
-                        <Button type="button" disabled={Boolean(busyAction) || !draftCurrency} onClick={() => {
-                          const select = document.getElementById(`extra-account-${provider.id}`) as HTMLSelectElement | null;
-                          if (select?.value) void saveMapping(provider, draftCurrency, select.value);
-                        }}><WalletCards className="h-4 w-4" />{copy.save}</Button>
+                        <Button type="button" disabled={Boolean(busyAction) || !draftCurrency || !draftAccountId} onClick={() => void saveMapping(provider, draftCurrency, draftAccountId)}><WalletCards className="h-4 w-4" />{copy.save}</Button>
                       </div>
                     </div>
                   ) : null}
@@ -573,7 +659,25 @@ function MobileMoneyConfigurationPanel({ organizationId, dashboard, locale, conf
   );
 }
 
-function WalletMappingRow({ provider, currencyCode, mapping, accounts, canManage, busy, locale, onSave }: { provider: ProviderConfiguration; currencyCode: string; mapping: ProviderMapping | null; accounts: CurrencyAccount[]; canManage: boolean; busy: boolean; locale: "fr" | "en"; onSave: (provider: ProviderConfiguration, currencyCode: string, accountId: string) => Promise<void> }) {
+function WalletMappingRow({
+  provider,
+  currencyCode,
+  mapping,
+  accounts,
+  canManage,
+  busy,
+  locale,
+  onSave,
+}: {
+  provider: ProviderConfiguration;
+  currencyCode: string;
+  mapping: ProviderMapping | null;
+  accounts: CurrencyAccount[];
+  canManage: boolean;
+  busy: boolean;
+  locale: "fr" | "en";
+  onSave: (provider: ProviderConfiguration, currencyCode: string, accountId: string) => Promise<void>;
+}) {
   const copy = COPY[locale];
   const [accountId, setAccountId] = useState(mapping?.financialAccountId || "");
   useEffect(() => setAccountId(mapping?.financialAccountId || ""), [mapping?.financialAccountId]);
@@ -583,7 +687,7 @@ function WalletMappingRow({ provider, currencyCode, mapping, accounts, canManage
         <div className="flex items-center gap-2">
           <StatusBadge tone={mapping ? "success" : "warning"}>{currencyCode}</StatusBadge>
           <div>
-            <p className="text-sm font-black text-dtsc-ink">{mapping?.financialAccount.name || (locale === "en" ? "Not configured" : "Non configuré")}</p>
+            <p className="text-sm font-black text-dtsc-ink">{mapping?.financialAccount.name || copy.notConfigured}</p>
             {mapping ? <p className="text-xs font-semibold text-dtsc-muted">{copy.currentWallet} · {moneyValue(Number(mapping.financialAccount.operationalBalance), currencyCode)}</p> : null}
           </div>
         </div>
@@ -592,10 +696,10 @@ function WalletMappingRow({ provider, currencyCode, mapping, accounts, canManage
       {canManage ? (
         <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
           <Field label={`${copy.account} · ${currencyCode}`}>
-            <Select value={accountId} onChange={setAccountId} disabled={busy}>
+            <MobileMoneySelect name={`wallet-${provider.id}-${currencyCode}`} value={accountId} onChange={(event) => setAccountId(event.target.value)} disabled={busy}>
               <option value="">—</option>
               {accounts.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.code}</option>)}
-            </Select>
+            </MobileMoneySelect>
           </Field>
           <Button type="button" disabled={busy || !accountId || accountId === mapping?.financialAccountId} onClick={() => void onSave(provider, currencyCode, accountId)}><Settings2 className="h-4 w-4" />{copy.save}</Button>
         </div>
@@ -604,7 +708,19 @@ function WalletMappingRow({ provider, currencyCode, mapping, accounts, canManage
   );
 }
 
-function MobileMoneyHistory({ organizationId, dashboard, locale, busyAction, mutate }: { organizationId: string; dashboard: RetailDashboard; locale: "fr" | "en"; busyAction: string | null; mutate: RetailMutation }) {
+function MobileMoneyHistory({
+  organizationId,
+  dashboard,
+  locale,
+  busyAction,
+  mutate,
+}: {
+  organizationId: string;
+  dashboard: RetailDashboard;
+  locale: "fr" | "en";
+  busyAction: string | null;
+  mutate: RetailMutation;
+}) {
   const copy = COPY[locale];
   const items = dashboard.recent.mobileMoney || [];
   async function reverse(id: string, revision: number) {
