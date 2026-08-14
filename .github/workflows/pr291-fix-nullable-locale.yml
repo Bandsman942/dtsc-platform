@@ -1,0 +1,51 @@
+name: PR291 apply nullable locale type fix
+
+on:
+  push:
+    branches:
+      - refactor/277-collaborator-dialog-i18n-final
+    paths:
+      - ".github/workflows/pr291-fix-nullable-locale.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v7
+        with:
+          ref: refactor/277-collaborator-dialog-i18n-final
+          fetch-depth: 0
+      - name: Patch nullable locale helper signatures
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("components/collaborators/collaborators-conversation-workspace.tsx")
+          text = path.read_text()
+          replacements = {
+            "function describeCustomFilter(value: CustomFilterCriteria, locale: string) {": "function describeCustomFilter(value: CustomFilterCriteria, locale: string | null | undefined) {",
+            "function OnlineBadge({ online, locale }: { online: boolean; locale: string }) {": "function OnlineBadge({ online, locale }: { online: boolean; locale: string | null | undefined }) {",
+            'function MessageReceiptIndicator({ summary, locale }: { summary?: GroupMessage["receiptSummary"]; locale: string }) {': 'function MessageReceiptIndicator({ summary, locale }: { summary?: GroupMessage["receiptSummary"]; locale: string | null | undefined }) {',
+          }
+          for old, new in replacements.items():
+              if old not in text:
+                  raise SystemExit(f"expected signature not found: {old}")
+              text = text.replace(old, new, 1)
+          path.write_text(text)
+          PY
+      - name: Remove temporary workflow
+        run: rm -f .github/workflows/pr291-fix-nullable-locale.yml
+      - name: Commit patch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && { echo "No changes to commit"; exit 1; }
+          git commit -m "fix(i18n): accept nullable collaborator locale preferences"
+          git push origin HEAD:refactor/277-collaborator-dialog-i18n-final
