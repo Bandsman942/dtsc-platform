@@ -7,10 +7,10 @@ import { Button } from "@/components/ui/button";
 import {
   customerFacingCapabilityLabel,
   customerFacingError,
-  customerFacingReadinessDetail,
   customerFacingStatusLabel,
 } from "@/lib/customer-facing-language";
 import { getRetailCountryCapabilityDeepLink, getRetailReadinessDeepLink } from "@/lib/enterprise/retail/readiness-deep-links";
+import { retailReadinessDetail } from "@/lib/enterprise/retail/readiness-language";
 import { toastError, toastSuccess } from "@/lib/client-toast";
 
 type Props = { organizationId: string; locale: "fr" | "en" };
@@ -34,7 +34,7 @@ const LABELS: Record<string, { fr: string; en: string }> = {
   FUNCTIONAL_CURRENCY: { fr: "Devise principale", en: "Main currency" },
   SITE: { fr: "Point de vente", en: "Store location" },
   WAREHOUSE: { fr: "Dépôt de stock", en: "Stock warehouse" },
-  CASH_ACCOUNT: { fr: "Caisse", en: "Cash account" },
+  CASH_ACCOUNT: { fr: "Compte d’encaissement", en: "Collection account" },
   CATALOG: { fr: "Catalogue de vente", en: "Sales catalog" },
   INVENTORY_LINKS: { fr: "Disponibilité du stock", en: "Stock availability" },
   TEAM: { fr: "Équipe autorisée", en: "Authorized team" },
@@ -75,7 +75,7 @@ export function RetailGlobalReadiness({ organizationId, locale }: Props) {
       setSelection({
         countryCode: next.readiness.selected.countryCode || next.countryPackRegistry[0]?.countryCode || "",
         currencyCode: next.readiness.selected.currencyCode || next.countryPackRegistry[0]?.defaultCurrencyCode || "",
-        siteId: next.readiness.selected.siteId || next.readiness.options.sites[0]?.id || "",
+        siteId: next.readiness.selected.siteId || "",
         warehouseId: next.readiness.selected.warehouseId || "",
         cashFinancialAccountId: next.readiness.selected.cashFinancialAccountId || "",
       });
@@ -125,7 +125,7 @@ export function RetailGlobalReadiness({ organizationId, locale }: Props) {
       if (!response.ok) throw new Error(body?.message || body?.error || "RETAIL_ONBOARDING_SAVE_FAILED");
       toastSuccess(body?.readiness?.ready
         ? (locale === "en" ? "Your Shop is ready for its first sale." : "Votre Shop est prêt pour sa première vente.")
-        : (locale === "en" ? "Setup saved. Open the remaining steps to finish configuration." : "Configuration enregistrée. Ouvrez les étapes restantes pour terminer la mise en service."));
+        : (locale === "en" ? "Setup saved. Each remaining step now explains exactly what is still required." : "Configuration enregistrée. Chaque étape restante indique maintenant précisément ce qu’il faut encore faire."));
       await load();
     } catch (caught) {
       toastError(customerFacingError(caught, locale));
@@ -147,7 +147,7 @@ export function RetailGlobalReadiness({ organizationId, locale }: Props) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2"><Globe2 className="h-5 w-5 text-cyan-600" /><h2 className="text-lg font-black text-dtsc-ink">{locale === "en" ? "Shop setup" : "Mise en service du Shop"}</h2></div>
-          <p className="mt-1 max-w-3xl text-sm text-dtsc-muted">{locale === "en" ? "Choose the company resources used by this point of sale, then open each remaining step to finish its configuration." : "Choisissez les ressources utilisées par ce point de vente, puis ouvrez chaque étape restante pour terminer sa configuration."}</p>
+          <p className="mt-1 max-w-3xl text-sm text-dtsc-muted">{locale === "en" ? "Choose the company resources used by this point of sale. The checklist below recognizes existing configuration and explains any remaining action." : "Choisissez les ressources utilisées par ce point de vente. La checklist ci-dessous reconnaît la configuration existante et explique toute action restante."}</p>
         </div>
         <div className={`rounded-full px-3 py-1.5 text-xs font-black ${state.readiness.ready ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-amber-500/10 text-amber-800 dark:text-amber-200"}`}>{state.readiness.completed}/{state.readiness.total} · {state.readiness.ready ? (locale === "en" ? "Ready to sell" : "Prêt à vendre") : (locale === "en" ? "Setup to finish" : "Mise en service à finaliser")}</div>
       </div>
@@ -177,22 +177,23 @@ export function RetailGlobalReadiness({ organizationId, locale }: Props) {
               <label className="text-xs font-bold text-dtsc-muted">{locale === "en" ? "Currency" : "Devise"}<select className="mt-1 h-10 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-2 text-sm text-dtsc-ink" value={selection.currencyCode} onChange={(event) => setSelection((current) => ({ ...current, currencyCode: event.target.value, cashFinancialAccountId: "" }))}>{(pack?.supportedCurrencyCodes || []).map((code) => <option key={code} value={code}>{code}</option>)}</select></label>
               <label className="text-xs font-bold text-dtsc-muted">{locale === "en" ? "Store" : "Point de vente"}<select className="mt-1 h-10 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-2 text-sm text-dtsc-ink" value={selection.siteId} onChange={(event) => setSelection((current) => ({ ...current, siteId: event.target.value, warehouseId: "", cashFinancialAccountId: "" }))}><option value="">—</option>{state.readiness.options.sites.map((item) => <option key={item.id} value={item.id}>{item.code} · {item.name}</option>)}</select></label>
               <label className="text-xs font-bold text-dtsc-muted">{locale === "en" ? "Stock warehouse" : "Dépôt de stock"}<select className="mt-1 h-10 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-2 text-sm text-dtsc-ink" value={selection.warehouseId} onChange={(event) => setSelection((current) => ({ ...current, warehouseId: event.target.value }))}><option value="">—</option>{warehouses.map((item) => <option key={item.id} value={item.id}>{item.code} · {item.name}</option>)}</select></label>
-              <label className="text-xs font-bold text-dtsc-muted sm:col-span-2">{locale === "en" ? "Cash register account" : "Compte de caisse"}<select className="mt-1 h-10 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-2 text-sm text-dtsc-ink" value={selection.cashFinancialAccountId} onChange={(event) => setSelection((current) => ({ ...current, cashFinancialAccountId: event.target.value }))}><option value="">—</option>{cashAccounts.map((item) => <option key={item.id} value={item.id}>{item.code} · {item.name} · {item.currencyCode}</option>)}</select></label>
+              <label className="text-xs font-bold text-dtsc-muted sm:col-span-2">{locale === "en" ? "Collection account" : "Compte d’encaissement"}<select className="mt-1 h-10 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-2 text-sm text-dtsc-ink" value={selection.cashFinancialAccountId} onChange={(event) => setSelection((current) => ({ ...current, cashFinancialAccountId: event.target.value }))}><option value="">—</option>{cashAccounts.map((item) => <option key={item.id} value={item.id}>{item.code} · {item.name} · {item.currencyCode}</option>)}</select></label>
             </div>
+            <p className="mt-3 text-xs leading-5 text-dtsc-muted">{locale === "en" ? "The collection account is a persistent Shop configuration. Opening or closing a till session does not change whether this account is configured." : "Le compte d’encaissement est une configuration permanente du Shop. Ouvrir ou clôturer une session de caisse ne change pas le fait que ce compte soit configuré."}</p>
             <Button type="button" className="mt-4 w-full" disabled={Boolean(busy)} onClick={() => void save()}>{busy === "save" ? "…" : (locale === "en" ? "Save & check setup" : "Enregistrer & vérifier la mise en service")}</Button>
           </div>
         </div>
 
         <div className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
           <p className="font-black text-dtsc-ink">{locale === "en" ? "Steps before the first sale" : "Étapes avant la première vente"}</p>
-          <p className="mt-1 text-xs leading-5 text-dtsc-muted">{locale === "en" ? "Select any step to open the place where it can be completed." : "Touchez une étape pour ouvrir directement l’espace où la compléter."}</p>
+          <p className="mt-1 text-xs leading-5 text-dtsc-muted">{locale === "en" ? "Each step states what DTSC already recognizes and the exact remaining action, if any." : "Chaque étape indique ce que DTSC reconnaît déjà et l’action exacte restante, s’il y en a une."}</p>
           <div className="mt-3 grid gap-2">{state.readiness.items.map((item) => {
             const label = LABELS[item.code]?.[locale] || (locale === "en" ? "Shop setup" : "Configuration du Shop");
             const href = item.deepLink || getRetailReadinessDeepLink(item.code);
             return (
               <Link key={item.code} href={href} className="group flex min-w-0 items-start gap-3 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 transition hover:border-cyan-400 hover:bg-cyan-500/5 focus:outline-none focus:ring-2 focus:ring-cyan-400/40">
                 {item.complete ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" /> : <span className="mt-0.5 h-4 w-4 shrink-0 rounded-full border-2 border-amber-500" />}
-                <span className="min-w-0 flex-1"><span className="block text-sm font-black text-dtsc-ink">{label}</span><span className="mt-0.5 block break-words text-xs leading-5 text-dtsc-muted">{customerFacingReadinessDetail(item.detail, item.complete, locale)}</span></span>
+                <span className="min-w-0 flex-1"><span className="block text-sm font-black text-dtsc-ink">{label}</span><span className="mt-0.5 block break-words text-xs leading-5 text-dtsc-muted">{retailReadinessDetail(item.code, item.detail, item.complete, locale)}</span></span>
                 <ArrowUpRight className="mt-0.5 h-4 w-4 shrink-0 text-dtsc-blue" />
               </Link>
             );
