@@ -3,6 +3,7 @@ import { getRetailAccountingReadiness } from "@/lib/enterprise/retail/accounting
 import { getRetailMetricsByCurrency } from "@/lib/enterprise/retail/commercial-guardrails";
 import { getRetailExchangeRateReadiness } from "@/lib/enterprise/retail/fx-reporting";
 import { getMobileMoneyProviderAccountConfiguration } from "@/lib/enterprise/retail/mobile-money-multicurrency-service";
+import { getTelcoProviderAccountConfiguration } from "@/lib/enterprise/retail/telco-multicurrency-service";
 import { getCanonicalRetailReadiness } from "@/lib/enterprise/retail/self-service-onboarding";
 import type { RetailModuleCode } from "@/lib/enterprise/retail/constants";
 import { prisma } from "@/lib/prisma";
@@ -69,6 +70,7 @@ export async function getCommercialRetailDashboard(
     accountingReadiness,
     canonicalReadiness,
     mobileMoneyConfiguration,
+    telcoConfiguration,
   ] = await Promise.all([
     prisma.enterpriseRetailConfiguration.findUnique({ where: { organizationId } }),
     prisma.enterpriseRetailProvider.findMany({ where: { organizationId, isActive: true }, orderBy: [{ providerType: "asc" }, { label: "asc" }] }),
@@ -107,6 +109,7 @@ export async function getCommercialRetailDashboard(
     includePos ? getRetailAccountingReadiness(organizationId, dateTo) : Promise.resolve(null),
     getCanonicalRetailReadiness(organizationId),
     includeMobileMoney ? getMobileMoneyProviderAccountConfiguration(organizationId) : Promise.resolve(null),
+    includeTelco ? getTelcoProviderAccountConfiguration(organizationId) : Promise.resolve(null),
   ]);
 
   const cashSessions = cashSessionsRaw.map((session) => {
@@ -120,7 +123,6 @@ export async function getCommercialRetailDashboard(
   });
   const cashSession = cashSessions.find((session) => session.status === "OPEN") || cashSessions[0] || null;
 
-  const telcoNetworks = providers.filter((provider) => provider.providerType === "TELCO");
   const readinessItems = canonicalReadiness.items.map((item) => ({
     code: item.code,
     label: READINESS_LABELS[item.code] || "Configuration du Shop",
@@ -136,6 +138,10 @@ export async function getCommercialRetailDashboard(
     mobileMoneyConfiguration?.providers.length
       && mobileMoneyConfiguration.providers.every((provider) => provider.ready),
   );
+  const allTelcoProvidersReady = Boolean(
+    telcoConfiguration?.providers.length
+      && telcoConfiguration.providers.every((provider) => provider.ready),
+  );
 
   return {
     configuration,
@@ -146,6 +152,8 @@ export async function getCommercialRetailDashboard(
     inventoryItems,
     cashSession,
     cashSessions,
+    mobileMoneyConfiguration,
+    telcoConfiguration,
     metricsByCurrency,
     fxReadiness,
     accountingReadiness,
@@ -156,7 +164,7 @@ export async function getCommercialRetailDashboard(
       total: canonicalReadiness.total,
       readyForFirstSale: canonicalReadiness.ready,
       readyForMobileMoney: canonicalReadiness.ready && allMobileMoneyProvidersReady,
-      readyForTelco: canonicalReadiness.ready && telcoNetworks.some((provider) => Boolean(provider.telcoFloatAccountId)),
+      readyForTelco: canonicalReadiness.ready && allTelcoProvidersReady,
     },
     recent: {
       sales,

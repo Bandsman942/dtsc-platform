@@ -23,6 +23,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   RETAIL_PROVIDER_NOT_FOUND: "L’opérateur sélectionné n’est pas actif pour ce type d’opération.",
   RETAIL_FLOAT_ACCOUNT_REQUIRED: "L’opérateur doit être lié à un vrai compte de float avant la première opération.",
   RETAIL_MOBILE_MONEY_CURRENCY_ACCOUNT_REQUIRED: "Configurez un wallet Mobile Money pour cet opérateur dans la devise de la caisse avant de continuer.",
+  RETAIL_TELCO_CURRENCY_ACCOUNT_REQUIRED: "Configurez un compte opérateur Télécom dans la devise d’encaissement avant de continuer.",
   RETAIL_MOBILE_MONEY_FX_PAIR_INVALID: "Choisissez deux devises différentes pour le transfert Mobile Money.",
   RETAIL_MOBILE_MONEY_FX_MAPPING_REQUIRED: "Cet opérateur doit disposer de deux wallets Mobile Money configurés avant un transfert entre devises.",
   RETAIL_MOBILE_MONEY_FX_AMOUNT_INVALID: "Le montant à convertir doit être strictement positif.",

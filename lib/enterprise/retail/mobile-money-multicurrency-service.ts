@@ -2,17 +2,12 @@ import { Prisma } from "@prisma/client";
 import { resolveExchangeRateDetails, snapshotExchangeRate } from "@/lib/enterprise/accounting/currency";
 import { financeReference, money, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
+import { requiredRetailOperatorCurrencies } from "@/lib/enterprise/retail/operator-currency-policy";
 import { prisma } from "@/lib/prisma";
 
 const MOBILE_MONEY_FLOAT = "MOBILE_MONEY_FLOAT";
-const DRC_COUNTRY_MARKERS = new Set(["CD", "COD", "RDC", "DRC", "CONGO RDC", "CONGO-KINSHASA", "DEMOCRATIC REPUBLIC OF THE CONGO"]);
-
-function normalizeCountry(value: string | null | undefined) {
-  return (value || "").trim().toUpperCase().replace(/[^A-Z -]/g, "");
-}
-
 export function requiredMobileMoneyCurrencies(country: string | null | undefined) {
-  return DRC_COUNTRY_MARKERS.has(normalizeCountry(country)) ? ["CDF", "USD"] : [];
+  return requiredRetailOperatorCurrencies(country);
 }
 
 async function assertProviderTx(tx: Prisma.TransactionClient, organizationId: string, providerCode: string) {

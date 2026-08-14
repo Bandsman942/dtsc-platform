@@ -252,21 +252,36 @@ La section `Transfert entre devises` affiche avant confirmation le taux Finance 
 
 Cette capacité est une extension Retail optionnelle.
 
-Le vendeur choisit l’opérateur réseau, le numéro, l’offre, le prix, le coût fournisseur et le mode d’encaissement.
+### Comptes opérateur multi-devise
 
-Le float Télécom est résolu automatiquement depuis le réseau configuré. Une recharge `SUCCESS` exige une référence opérateur dans le workflow actuel.
+`EnterpriseRetailProviderAccount` est également la source canonique des comptes opérateur Télécom. Pour cet usage, `accountUse = TELCO_FLOAT` associe une organisation, un réseau, une devise et un vrai compte financier compatible (`MOBILE_MONEY` ou `CLEARING`).
 
-Une recharge réussie crédite l’encaissement et débite le float du coût opérateur. Une opération `FAILED` ne débite pas le float.
+Un même réseau reste affiché une seule fois mais peut disposer de plusieurs comptes par devise. En RDC, la readiness attend au minimum **CDF + USD** pour chaque réseau actif ; hors RDC, au moins deux devises explicitement configurées sont attendues. Le champ historique `telcoFloatAccountId` reste uniquement un pont de compatibilité pendant le cutover et n’est plus l’autorité des nouvelles recharges.
 
-La state machine provider asynchrone et les webhooks opérateurs appartiennent à l’itération 3.
+La devise d’une recharge est déterminée par le compte d’encaissement réellement utilisé :
+
+- paiement en espèces : la caisse `OPEN` sélectionnée fixe la devise ;
+- paiement non-cash : le compte financier d’encaissement sélectionné fixe la devise.
+
+Le serveur revalide ce compte puis résout le compte opérateur par `organizationId + provider + TELCO_FLOAT + currencyCode`. Le navigateur ne peut donc pas imposer arbitrairement `operatorFloatAccountId`. Si aucun compte opérateur n’existe dans la devise d’encaissement, la recharge est refusée avant tout mouvement financier.
+
+Lorsqu’une offre Catalogue porte une devise explicite, elle doit correspondre à la devise d’encaissement. Une recharge `SUCCESS` crédite l’encaissement du prix de vente et débite uniquement le compte opérateur de la même devise du coût opérateur. Une opération `FAILED` ne modifie pas les soldes.
+
+L’annulation reste historique et non destructive : `EnterpriseTelcoTopup.operatorFloatAccountId` et `tenderFinancialAccountId` mémorisent les comptes réellement utilisés au moment de l’opération. Une reconfiguration ultérieure CDF/USD ne peut donc pas déplacer un reversal sur un autre compte.
+
+### UX Télécom
+
+Chaque carte réseau affiche ses comptes configurés par devise avec leur état de readiness. Pour une recharge cash, l’agent peut garder plusieurs caisses ouvertes en parallèle — notamment CDF et USD — et basculer en un toucher. Pour un encaissement non-cash, le choix du compte change immédiatement la devise et la liste des réseaux éligibles. Le récapitulatif avant confirmation affiche le réseau, la devise, le compte d’encaissement et le compte opérateur résolu.
+
+Le mode connecté conserve la même autorité serveur : la confirmation provider converge vers `createTelcoTopup(...)`, qui résout à nouveau le mapping canonique avant de matérialiser les effets financiers.
 
 ## Sessions de caisse
 
-Les sessions de caisse restent des objets Finance séparés par compte financier. Le POS conserve son contexte de caisse usuel. Dans `MOBILE_MONEY_AGENCY`, un même cashier peut garder plusieurs sessions `OPEN` en parallèle lorsque les comptes cash sont distincts, par exemple une caisse CDF et une caisse USD en RDC. L’interface expose toutes ses caisses ouvertes, permet d’en choisir une comme caisse opérationnelle et d’en ouvrir une autre sans fermer la première.
+Les sessions de caisse restent des objets Finance séparés par compte financier. Le POS conserve son contexte de caisse usuel. Dans `MOBILE_MONEY_AGENCY` et `TELCO_TOPUPS`, un même cashier peut garder plusieurs sessions `OPEN` en parallèle lorsque les comptes cash sont distincts, par exemple une caisse CDF et une caisse USD en RDC. Les interfaces opérateur exposent toutes ses caisses ouvertes, permettent d’en choisir une comme caisse opérationnelle et d’en ouvrir une autre sans fermer la première.
 
 Sans caisse `OPEN` sélectionnée, une opération Mobile Money qui exige du cash est bloquée. Pour le POS, un paiement cash reste bloqué sans sa session de caisse active. Les autres paiements utilisent leurs comptes réellement configurés selon le flux.
 
-Une session `CLOSING` ou `PENDING_VALIDATION` n’est jamais une caisse utilisable pour de nouvelles opérations. Chaque caisse Mobile Money est comptée et soumise séparément en fin de journée, puis suit l’approbation Finance indépendante existante.
+Une session `CLOSING` ou `PENDING_VALIDATION` n’est jamais une caisse utilisable pour de nouvelles opérations. Chaque caisse utilisée dans les parcours Mobile Money ou Télécom est comptée et soumise séparément en fin de journée, puis suit l’approbation Finance indépendante existante.
 
 ## Clôture journalière — `RETAIL_DAILY_CLOSE`
 

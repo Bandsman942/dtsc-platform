@@ -130,6 +130,7 @@ function currencyPriority(currency: string) {
 
 export function MobileMoneyCashSessionManager({
   organizationId,
+  moduleCode = "MOBILE_MONEY_AGENCY",
   accounts,
   sessions,
   selectedSessionId,
@@ -140,6 +141,7 @@ export function MobileMoneyCashSessionManager({
   reload,
 }: {
   organizationId: string;
+  moduleCode?: "MOBILE_MONEY_AGENCY" | "TELCO_TOPUPS";
   accounts: CashAccount[];
   sessions: MobileMoneyCashSession[];
   selectedSessionId: string;
@@ -150,6 +152,12 @@ export function MobileMoneyCashSessionManager({
   reload: () => Promise<void>;
 }) {
   const copy = COPY[locale];
+  const telco = moduleCode === "TELCO_TOPUPS";
+  const operationTitle = telco ? (locale === "en" ? "My Telco tills" : "Mes caisses Télécom") : copy.title;
+  const operationDescription = telco
+    ? (locale === "en" ? "Keep CDF and USD tills open in parallel for cash top-ups and switch currency with one tap." : "Gardez les caisses CDF et USD ouvertes en parallèle pour les recharges en espèces et changez de devise en un toucher.")
+    : copy.description;
+  const actionScope = telco ? "telco" : "mobile-money";
   const cashAccounts = useMemo(
     () => accounts.filter((account) => account.accountType === "CASH").sort((a, b) => currencyPriority(a.currencyCode) - currencyPriority(b.currencyCode) || a.name.localeCompare(b.name)),
     [accounts],
@@ -170,7 +178,7 @@ export function MobileMoneyCashSessionManager({
     const form = new FormData(event.currentTarget);
     const accountId = String(form.get("financialAccountId") || "");
     const result = await mutate(
-      `open-mobile-money-cash-${accountId}`,
+      `open-${actionScope}-cash-${accountId}`,
       `/api/enterprise/${organizationId}/retail/cash-sessions`,
       {
         financialAccountId: accountId,
@@ -184,7 +192,7 @@ export function MobileMoneyCashSessionManager({
 
   return (
     <div className="grid min-w-0 gap-5">
-      <ModuleSection title={copy.title} description={copy.description}>
+      <ModuleSection title={operationTitle} description={operationDescription}>
         <div className="grid gap-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2 text-xs font-black uppercase tracking-[0.08em] text-dtsc-muted">
@@ -225,7 +233,9 @@ export function MobileMoneyCashSessionManager({
             </div>
           ) : (
             <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm font-bold text-amber-800 dark:text-amber-200">
-              {locale === "en" ? "Open at least one till before recording a Mobile Money operation." : "Ouvrez au moins une caisse avant d’enregistrer une opération Mobile Money."}
+              {telco
+                ? (locale === "en" ? "No cash till is open. You can open one for cash Telco top-ups; non-cash accounts remain available." : "Aucune caisse n’est ouverte. Vous pouvez en ouvrir une pour les recharges Télécom en espèces ; les comptes non-cash restent utilisables.")
+                : (locale === "en" ? "Open at least one till before recording a Mobile Money operation." : "Ouvrez au moins une caisse avant d’enregistrer une opération Mobile Money.")}
             </div>
           )}
 
@@ -243,7 +253,7 @@ export function MobileMoneyCashSessionManager({
                     </select>
                   </Field>
                   <Field label={copy.openingAmount}><Input name="openingAmount" type="number" min="0" step="0.01" required disabled={Boolean(busyAction)} /></Field>
-                  <Button disabled={Boolean(busyAction)}><Banknote className="h-4 w-4" />{busyAction?.startsWith("open-mobile-money-cash") ? copy.processing : copy.open}</Button>
+                  <Button disabled={Boolean(busyAction)}><Banknote className="h-4 w-4" />{busyAction?.startsWith(`open-${actionScope}-cash`) ? copy.processing : copy.open}</Button>
                   <p className="text-xs font-semibold text-dtsc-muted sm:col-span-3">{copy.openAnotherDescription}</p>
                 </form>
               </details>
@@ -262,6 +272,7 @@ export function MobileMoneyCashSessionManager({
             <CashCloseCard
               key={session.id}
               organizationId={organizationId}
+              moduleCode={moduleCode}
               session={session}
               locale={locale}
               busyAction={busyAction}
@@ -289,6 +300,7 @@ export function MobileMoneyCashSessionManager({
 
 function CashCloseCard({
   organizationId,
+  moduleCode,
   session,
   locale,
   busyAction,
@@ -296,6 +308,7 @@ function CashCloseCard({
   reload,
 }: {
   organizationId: string;
+  moduleCode: "MOBILE_MONEY_AGENCY" | "TELCO_TOPUPS";
   session: MobileMoneyCashSession;
   locale: "fr" | "en";
   busyAction: string | null;
@@ -303,6 +316,10 @@ function CashCloseCard({
   reload: () => Promise<void>;
 }) {
   const copy = COPY[locale];
+  const actionScope = moduleCode === "TELCO_TOPUPS" ? "telco" : "mobile-money";
+  const closeEndpoint = moduleCode === "TELCO_TOPUPS"
+    ? `/api/enterprise/${organizationId}/retail/telco-topups/cash-sessions/${session.id}/close`
+    : `/api/enterprise/${organizationId}/retail/cash-sessions/${session.id}/close`;
   const currency = session.financialAccount.currencyCode;
   const denominations = DENOMINATIONS[currency] || [100, 50, 20, 10, 5, 1];
   const [quantities, setQuantities] = useState<Record<string, number>>({});
@@ -323,8 +340,8 @@ function CashCloseCard({
       .filter((item) => item.quantity > 0);
     if (Number(customDenomination) > 0 && customQuantity > 0) counts.push({ denomination: customDenomination, quantity: customQuantity });
     const result = await mutate(
-      `close-mobile-money-cash-${session.id}`,
-      `/api/enterprise/${organizationId}/retail/cash-sessions/${session.id}/close`,
+      `close-${actionScope}-cash-${session.id}`,
+      closeEndpoint,
       {
         countedClosingAmount: countedTotal.toFixed(6).replace(/0+$/, "").replace(/\.$/, "") || "0",
         closingReason: reason.trim() || undefined,
@@ -382,7 +399,7 @@ function CashCloseCard({
 
         {reasonRequired ? <Field label={copy.reason}><Input value={reason} onChange={(event) => setReason(event.target.value)} placeholder={copy.reasonPlaceholder} minLength={3} maxLength={1000} required disabled={Boolean(busyAction)} /></Field> : null}
         <Button className="w-fit" disabled={Boolean(busyAction) || (reasonRequired && reason.trim().length < 3)}>
-          <CheckCircle2 className="h-4 w-4" />{busyAction === `close-mobile-money-cash-${session.id}` ? copy.processing : copy.submitClose}
+          <CheckCircle2 className="h-4 w-4" />{busyAction === `close-${actionScope}-cash-${session.id}` ? copy.processing : copy.submitClose}
         </Button>
       </form>
     </details>
