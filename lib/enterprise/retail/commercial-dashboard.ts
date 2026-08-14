@@ -114,7 +114,8 @@ export async function getCommercialRetailDashboard(
       (balance, movement) => movement.direction === "INBOUND" ? balance.plus(movement.amount) : balance.minus(movement.amount),
       new Prisma.Decimal(session.openingAmount),
     );
-    const { movements: _movements, ...sessionWithoutMovements } = session;
+    const { movements, ...sessionWithoutMovements } = session;
+    void movements;
     return { ...sessionWithoutMovements, expectedCurrentAmount: expectedCurrentAmount.toFixed() };
   });
   const cashSession = cashSessions.find((session) => session.status === "OPEN") || cashSessions[0] || null;
