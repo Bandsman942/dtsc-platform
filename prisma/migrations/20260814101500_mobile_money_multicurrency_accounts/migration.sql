@@ -100,7 +100,7 @@ SELECT
   a."currencyCode",
   a."id",
   true,
-  COALESCE(rc."createdByUserId", 'migration-307'),
+  'migration-307',
   NULL,
   1,
   CURRENT_TIMESTAMP,
@@ -109,8 +109,6 @@ FROM "EnterpriseRetailProvider" p
 JOIN "EnterpriseFinancialAccount" a
   ON a."organizationId" = p."organizationId"
  AND a."id" = p."mobileMoneyFloatAccountId"
-LEFT JOIN "EnterpriseRetailConfiguration" rc
-  ON rc."organizationId" = p."organizationId"
 WHERE p."mobileMoneyFloatAccountId" IS NOT NULL
   AND p."providerType" IN ('MOBILE_MONEY', 'BOTH')
   AND a."accountType" = 'MOBILE_MONEY'
