@@ -153,7 +153,7 @@ export function buildFinancialStatementProfessionalReport(input: { statement: Fi
     return { label: displayValue(row[preferredLabel] ?? `${index + 1}`, preferredLabel || "label", currency, locale), value, displayValue: displayValue(value, preferredNumeric, currency, locale) };
   }).filter((point) => point.value !== 0) : scalar.map(([key, value]) => ({ label: fieldLabel(key, locale), value, displayValue: displayValue(value, key, currency, locale) }));
 
-  const kpis = scalar.map(([key, value]) => ({ label: fieldLabel(key, locale), value: displayValue(value, key, currency, locale), numericValue: value }));
+  const kpis: ProfessionalReportExportModel["kpis"] = scalar.map(([key, value]) => ({ label: fieldLabel(key, locale), value: displayValue(value, key, currency, locale), numericValue: value }));
   if (!kpis.length) {
     kpis.push({ label: locale === "en" ? "Detailed lines" : "Lignes détaillées", value: String(rawRows.length), numericValue: rawRows.length });
   }
@@ -186,7 +186,7 @@ export function buildFinancialStatementProfessionalReport(input: { statement: Fi
     const buckets = asRecord(snapshot.buckets);
     if (buckets) {
       const over90 = numberValue(buckets.over90) || 0;
-      const total = Object.values(buckets).reduce((sum, value) => sum + (numberValue(value) || 0), 0);
+      const total = Object.values(buckets).reduce<number>((sum, value) => sum + (numberValue(value) || 0), 0);
       const share = total ? over90 / total * 100 : 0;
       insights.push({ title: locale === "en" ? "Aging concentration" : "Concentration de l’ancienneté", body: locale === "en" ? `${share.toLocaleString("en-US", { maximumFractionDigits: 1 })}% of the outstanding amount is over 90 days.` : `${share.toLocaleString("fr-FR", { maximumFractionDigits: 1 })}% de l’encours dépasse 90 jours.`, tone: share >= 25 ? "warning" : "info" });
     }

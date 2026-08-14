@@ -69,7 +69,6 @@ export async function EnterpriseFinanceModulePage({ moduleCode }: { moduleCode: 
         <EnterpriseOperationalFinanceWorkspace
           organizationId={organizationId}
           organizationName={organization.name}
-          organizationLogoUrl={organization.logoUrl}
           definition={definition}
           locale={user.locale}
           canManage={canManage}
@@ -78,6 +77,7 @@ export async function EnterpriseFinanceModulePage({ moduleCode }: { moduleCode: 
         <EnterpriseAdvancedFinanceWorkspace
           organizationId={organizationId}
           organizationName={organization.name}
+          organizationLogoUrl={organization.logoUrl}
           definition={definition}
           locale={user.locale}
           canManage={canManage}
