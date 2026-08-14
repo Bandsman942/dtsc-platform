@@ -95,6 +95,8 @@ check(hasAll(workspace, [
   "md:grid-cols-2",
   "disabled={Boolean(busyAction)}",
 ]), "Telco UX must expose concurrent tills, payment-derived currency, per-currency operator mappings, responsive layout, disabled busy states and a confirmation of the resolved accounts");
+check(workspace.includes("const sessions = useMemo(() => telcoDashboard.cashSessions || [], [telcoDashboard.cashSessions]);"), "Telco cash sessions must use a stable memoized fallback before feeding dependent hooks");
+check(!workspace.includes("const sessions = telcoDashboard.cashSessions || [];"), "Telco must not recreate an empty cash-session array on every render");
 check(!workspace.includes("input.operatorFloatAccountId"), "Telco UI must not become an authority for operator account selection");
 
 const http = read("lib/enterprise/retail/http.ts");

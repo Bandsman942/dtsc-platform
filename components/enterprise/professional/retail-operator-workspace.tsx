@@ -242,7 +242,7 @@ function MobileMoneyPanel({ organizationId, dashboard, locale, busyAction, mutat
 function TelcoPanel({ organizationId, dashboard, locale, busyAction, mutate, reload }: { organizationId: string; dashboard: RetailDashboard; locale: "fr" | "en"; busyAction: string | null; mutate: RetailMutation; reload: () => Promise<void> }) {
   const telcoDashboard = dashboard as TelcoDashboard;
   const configuration = telcoDashboard.telcoConfiguration || null;
-  const sessions = telcoDashboard.cashSessions || [];
+  const sessions = useMemo(() => telcoDashboard.cashSessions || [], [telcoDashboard.cashSessions]);
   const openSessions = useMemo(() => sessions.filter((session) => session.status === "OPEN"), [sessions]);
   const [selectedCashSessionId, setSelectedCashSessionId] = useState("");
   const [tenderMethod, setTenderMethod] = useState<"CASH" | "NON_CASH">("CASH");
