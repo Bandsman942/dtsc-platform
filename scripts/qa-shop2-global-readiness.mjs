@@ -20,6 +20,7 @@ for (const file of [
   "lib/enterprise/retail/omnichannel.ts",
   "lib/enterprise/retail/country-packs.ts",
   "lib/enterprise/retail/self-service-onboarding.ts",
+  "lib/enterprise/retail/readiness-language.ts",
   "components/enterprise/professional/retail-offline-continuity.tsx",
   "components/enterprise/professional/retail-omnichannel-panel.tsx",
   "components/enterprise/professional/retail-global-readiness.tsx",
@@ -101,10 +102,12 @@ const countryPacks = read("lib/enterprise/retail/country-packs.ts");
 for (const marker of ["CD_RETAIL_CORE_V1", "EVIDENCE_REQUIRED", "NOT_CERTIFIED", "TENANT_CONFIGURATION_REQUIRED", "evidenceSatisfied"]) check(countryPacks.includes(marker), `Country-pack governance missing ${marker}`);
 check(!countryPacks.includes("taxRate:"), "Country packs must not hardcode tax rates into Retail Core");
 const onboarding = read("lib/enterprise/retail/self-service-onboarding.ts");
-for (const marker of ["COUNTRY_PACK", "FUNCTIONAL_CURRENCY", "SITE", "WAREHOUSE", "CASH_ACCOUNT", "CATALOG", "INVENTORY_LINKS", "TEAM", "ACCOUNTING", "RETAIL_CONFIGURATION", "getRetailAccountingReadiness"]) check(onboarding.includes(marker), `Self-service onboarding readiness missing ${marker}`);
+for (const marker of ["COUNTRY_PACK", "FUNCTIONAL_CURRENCY", "SITE", "WAREHOUSE", "CASH_ACCOUNT", "CATALOG", "INVENTORY_LINKS", "TEAM", "ACCOUNTING", "RETAIL_CONFIGURATION", "getRetailAccountingReadiness", "uniqueOrNull", "functionalCurrencyCode", "cashAccountCandidates", "candidateCount"]) check(onboarding.includes(marker), `Self-service onboarding readiness missing ${marker}`);
 for (const forbidden of ["enterpriseFinancialAccount.create", "enterpriseSite.create", "enterpriseWarehouse.create", "enterpriseInventoryBalance.create"]) check(!onboarding.includes(forbidden), `Self-service onboarding must not invent canonical tenant data through ${forbidden}`);
+const readinessLanguage = read("lib/enterprise/retail/readiness-language.ts");
+for (const marker of ["retailReadinessDetail", "Compte d’encaissement", "Clôturer une session de caisse", "Vue d’ensemble financière", "Sites, entrepôts et emplacements"]) check(readinessLanguage.includes(marker), `Actionable Retail readiness copy missing ${marker}`);
 const readinessUi = read("components/enterprise/professional/retail-global-readiness.tsx");
-for (const marker of ["Mise en service du Shop", "Configuration pays", "Prêt à vendre", "customerFacingCapabilityLabel", "customerFacingStatusLabel", "customerFacingReadinessDetail", "/retail/onboarding", "/retail/country-packs"]) check(readinessUi.includes(marker), `Visible country/onboarding readiness UI missing ${marker}`);
+for (const marker of ["Mise en service du Shop", "Configuration pays", "Prêt à vendre", "Compte d’encaissement", "customerFacingCapabilityLabel", "customerFacingStatusLabel", "retailReadinessDetail", "/retail/onboarding", "/retail/country-packs"]) check(readinessUi.includes(marker), `Visible country/onboarding readiness UI missing ${marker}`);
 for (const forbidden of ["Activate proven core only", "Operational evidence", "COMMERCIAL_READY_GLOBAL", "Country pack"]) check(!readinessUi.includes(forbidden), `Customer onboarding UI must not expose governance wording: ${forbidden}`);
 
 const retailPage = read("app/enterprise-modules/retail-page.tsx");
@@ -119,4 +122,4 @@ if (failures.length) {
   console.error("Shop 2 iteration 4 global readiness QA failed:\n" + failures.map((failure) => `- ${failure}`).join("\n"));
   process.exit(1);
 }
-console.log("Shop 2 global readiness QA passed: technical invariants remain enforced while customer-facing Retail surfaces use business language and global commercial claims stay evidence-gated by country.");
+console.log("Shop 2 global readiness QA passed: technical invariants remain enforced while customer-facing Retail surfaces use actionable business language and global commercial claims stay evidence-gated by country.");
