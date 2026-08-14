@@ -8,6 +8,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import { ContextualUserGuide } from "@/components/user-guides/contextual-user-guide";
+import { confirmSensitiveAction } from "@/lib/client-confirmation";
 import { ITERATION04_USER_GUIDES } from "@/lib/user-guides/iteration04-guides";
 import { AvailabilityExplorer } from "./availability-view";
 import { EventFormDialog } from "./event-dialog";
@@ -98,10 +99,19 @@ export function InternalCalendarWorkspaceV2({ initialEvents, initialInvitations,
     const body = (await response.json().catch(() => null)) as { message?: string; conflicts?: Array<{ message: string; severity: string }> } | null;
     if (response.status === 409 && responseValue === "ACCEPT" && body?.conflicts?.length && !confirmConflicts) {
       const hasBlocking = body.conflicts.some((conflict) => conflict.severity === "Bloquant");
+      if (hasBlocking) {
+        setMessage(serverFallback(locale, body.message, text.blockingConflictAcceptance));
+        return;
+      }
       const conflictDetails = body.conflicts.map((conflict) => `• ${serverFallback(locale, conflict.message, text.slotWarning)}`).join("\n");
-      const prompt = `${serverFallback(locale, body.message, text.conflictsExist)}\n\n${conflictDetails}\n\n${text.confirmAcceptance}`;
-      if (!hasBlocking && window.confirm(prompt)) await respondToInvitation(event, responseValue, true);
-      else setMessage(serverFallback(locale, body.message, text.blockingConflictAcceptance));
+      const confirmation = await confirmSensitiveAction({
+        title: text.conflictsExist,
+        description: `${serverFallback(locale, body.message, text.conflictsExist)}\n\n${conflictDetails}\n\n${text.confirmAcceptance}`,
+        confirmLabel: text.accept,
+        cancelLabel: text.cancel,
+        tone: "warning",
+      });
+      if (confirmation.confirmed) await respondToInvitation(event, responseValue, true);
       return;
     }
     if (!response.ok) {
