@@ -2,6 +2,8 @@
 
 Base d’audit : `main@f6cf6ad3a9ee94e7ebf6b0eb85cb1e3645970ba4`.
 
+Base de réconciliation finale : `main@410bdfda23e623fcad1d9ba67d4dc17f7fe6a3bc` (hotfix #298 inclus).
+
 ## But
 
 Rendre la mise en service financière d’un Shop ENTERPRISE réellement terminable, sans contournement technique et sans affaiblir SYSCOHADA, RBAC, l’isolation tenant, l’idempotence ou l’approbation indépendante.
@@ -74,6 +76,12 @@ Correction : bouton **Recalculer la clôture**, blockers affichés en vocabulair
 - les écritures POSTED ne sont pas réécrites ;
 - les mappings, journaux, périodes et comptes restent tenant-scoped ;
 - aucune migration ou backfill n’est introduit par #296.
+
+## Réconciliation finale après #298
+
+Après fusion du hotfix mobile #298, la branche Finance historique n’a pas été replacée comme un arbre complet au-dessus du nouveau `main`. Conformément à `docs/CONTRIBUTING.md`, le delta fonctionnel #296 a été reconstruit depuis `main@410bdfda23e623fcad1d9ba67d4dc17f7fe6a3bc`.
+
+Le seul fichier commun entre #298 et #296 était `scripts/run-regression-qa-ci.mjs`. La version réconciliée conserve explicitement les deux gardes : `qa-collaborators-mobile-composer-295.mjs` et `qa-finance-production-completion-296.mjs`. Le diff réconcilié contient uniquement les 14 fichiers du lot Finance/Shop attendu et ne supprime aucun fichier du hotfix #298.
 
 ## Parcours E2E requis avant merge
 
