@@ -48,6 +48,14 @@ async function loadOptions(organizationId: string) {
   return { organization, sites, warehouses, accounts, configuration, countryPackActivations };
 }
 
+function uniqueOrNull<T>(items: T[]) {
+  return items.length === 1 ? items[0] : null;
+}
+
+function isCashAccount(account: { accountType?: string | null }) {
+  return String(account.accountType || "").toUpperCase().includes("CASH");
+}
+
 export async function computeRetailReadiness(organizationId: string, selection: OnboardingSelection) {
   const options = await loadOptions(organizationId);
   const accounting = await getRetailAccountingReadiness(organizationId);
@@ -58,28 +66,111 @@ export async function computeRetailReadiness(organizationId: string, selection: 
     prisma.organizationMember.count({ where: { organizationId, status: "ACTIVE" } }),
   ]);
 
-  const countryCode = selection.countryCode?.toUpperCase() || null;
-  const selectedPack = countryCode ? options.countryPackActivations.find((activation) => activation.countryCode === countryCode && ["ACTIVE_CORE", "VALIDATED"].includes(activation.status)) : null;
-  const currencyCode = selection.currencyCode?.toUpperCase() || null;
-  const site = selection.siteId ? options.sites.find((item) => item.id === selection.siteId) : null;
-  const warehouse = selection.warehouseId ? options.warehouses.find((item) => item.id === selection.warehouseId && (!site || item.siteId === site.id)) : null;
-  const cashAccount = selection.cashFinancialAccountId ? options.accounts.find((item) => item.id === selection.cashFinancialAccountId && (!site || !item.siteId || item.siteId === site.id)) : null;
+  const activePackActivations = options.countryPackActivations.filter((activation) => ["ACTIVE_CORE", "VALIDATED"].includes(activation.status));
+  const requestedCountryCode = selection.countryCode?.toUpperCase() || null;
+  const inferredPack = requestedCountryCode
+    ? activePackActivations.find((activation) => activation.countryCode === requestedCountryCode) || null
+    : uniqueOrNull(activePackActivations);
+  const countryCode = requestedCountryCode || inferredPack?.countryCode || null;
+  const selectedPack = countryCode
+    ? activePackActivations.find((activation) => activation.countryCode === countryCode) || null
+    : null;
+
+  const functionalCurrencyCode = accounting.functionalCurrencyCode?.toUpperCase() || null;
+  const currencyCode = selection.currencyCode?.toUpperCase() || functionalCurrencyCode;
+
+  const requestedWarehouse = selection.warehouseId
+    ? options.warehouses.find((item) => item.id === selection.warehouseId) || null
+    : null;
+  const requestedCashAccount = selection.cashFinancialAccountId
+    ? options.accounts.find((item) => item.id === selection.cashFinancialAccountId) || null
+    : null;
+  const requestedSite = selection.siteId
+    ? options.sites.find((item) => item.id === selection.siteId) || null
+    : null;
+
+  const relatedSiteId = requestedWarehouse?.siteId || requestedCashAccount?.siteId || null;
+  let site = requestedSite
+    || (relatedSiteId ? options.sites.find((item) => item.id === relatedSiteId) || null : null)
+    || uniqueOrNull(options.sites);
+
+  let warehouseCandidates = options.warehouses.filter((item) => !site || item.siteId === site.id);
+  let warehouse = requestedWarehouse && (!site || requestedWarehouse.siteId === site.id)
+    ? requestedWarehouse
+    : uniqueOrNull(warehouseCandidates);
+
+  if (!site && warehouse) {
+    site = options.sites.find((item) => item.id === warehouse.siteId) || null;
+    warehouseCandidates = options.warehouses.filter((item) => item.siteId === site?.id);
+  }
+
+  const cashAccountCandidates = options.accounts.filter((item) => (
+    isCashAccount(item)
+    && (!currencyCode || item.currencyCode === currencyCode)
+    && (!site || !item.siteId || item.siteId === site.id)
+  ));
+  const cashAccount = requestedCashAccount && cashAccountCandidates.some((item) => item.id === requestedCashAccount.id)
+    ? requestedCashAccount
+    : uniqueOrNull(cashAccountCandidates);
+
   const inventorySet = new Set(inventoryCatalogIds.map((item) => item.catalogItemId));
   const missingInventoryLinks = trackedCatalogItems.filter((item) => !inventorySet.has(item.id)).length;
   const inventoryLinksComplete = catalogCount > 0 && (trackedCatalogItems.length === 0 || missingInventoryLinks === 0);
 
   const items = [
-    { code: "COUNTRY_PACK", complete: Boolean(countryCode && selectedPack), detail: selectedPack?.packCode || countryCode || null },
-    { code: "FUNCTIONAL_CURRENCY", complete: Boolean(currencyCode && accounting.functionalCurrencyCode === currencyCode), detail: accounting.functionalCurrencyCode },
-    { code: "SITE", complete: Boolean(site), detail: site?.name || null },
-    { code: "WAREHOUSE", complete: Boolean(warehouse), detail: warehouse?.name || null },
-    { code: "CASH_ACCOUNT", complete: Boolean(cashAccount && cashAccount.currencyCode === currencyCode), detail: cashAccount?.name || null },
-    { code: "CATALOG", complete: catalogCount > 0, detail: catalogCount },
-    { code: "INVENTORY_LINKS", complete: inventoryLinksComplete, detail: { trackedCatalogItems: trackedCatalogItems.length, missingInventoryLinks } },
-    { code: "TEAM", complete: activeMembers > 0, detail: activeMembers },
-    { code: "ACCOUNTING", complete: accounting.ready, detail: { missingMappings: accounting.missingMappings, missingJournals: accounting.missingJournals, fiscalPeriodStatus: accounting.fiscalPeriodStatus } },
-    { code: "RETAIL_CONFIGURATION", complete: options.configuration?.status === "ACTIVE", detail: options.configuration?.profileCode || null },
+    {
+      code: "COUNTRY_PACK",
+      complete: Boolean(countryCode && selectedPack),
+      detail: { countryCode, packCode: selectedPack?.packCode || null, candidateCount: activePackActivations.length },
+    },
+    {
+      code: "FUNCTIONAL_CURRENCY",
+      complete: Boolean(currencyCode && functionalCurrencyCode === currencyCode),
+      detail: { selectedCurrencyCode: currencyCode, functionalCurrencyCode },
+    },
+    {
+      code: "SITE",
+      complete: Boolean(site),
+      detail: { name: site?.name || null, candidateCount: options.sites.length },
+    },
+    {
+      code: "WAREHOUSE",
+      complete: Boolean(warehouse),
+      detail: { name: warehouse?.name || null, candidateCount: warehouseCandidates.length, siteName: site?.name || null },
+    },
+    {
+      code: "CASH_ACCOUNT",
+      complete: Boolean(cashAccount && (!currencyCode || cashAccount.currencyCode === currencyCode)),
+      detail: {
+        name: cashAccount?.name || null,
+        candidateCount: cashAccountCandidates.length,
+        currencyCode,
+        siteName: site?.name || null,
+      },
+    },
+    { code: "CATALOG", complete: catalogCount > 0, detail: { count: catalogCount } },
+    {
+      code: "INVENTORY_LINKS",
+      complete: inventoryLinksComplete,
+      detail: { trackedCatalogItems: trackedCatalogItems.length, missingInventoryLinks },
+    },
+    { code: "TEAM", complete: activeMembers > 0, detail: { activeMembers } },
+    {
+      code: "ACCOUNTING",
+      complete: accounting.ready,
+      detail: {
+        missingMappings: accounting.missingMappings,
+        missingJournals: accounting.missingJournals,
+        fiscalPeriodStatus: accounting.fiscalPeriodStatus,
+      },
+    },
+    {
+      code: "RETAIL_CONFIGURATION",
+      complete: options.configuration?.status === "ACTIVE",
+      detail: { profileCode: options.configuration?.profileCode || null, status: options.configuration?.status || null },
+    },
   ].map((item) => ({ ...item, deepLink: getRetailReadinessDeepLink(item.code) }));
+
   const completed = items.filter((item) => item.complete).length;
   const firstIncomplete = items.find((item) => !item.complete)?.code || "COMPLETE";
   return {
@@ -89,7 +180,13 @@ export async function computeRetailReadiness(organizationId: string, selection: 
     currentStep: firstIncomplete,
     items,
     accounting,
-    selected: { countryCode, currencyCode, siteId: site?.id || null, warehouseId: warehouse?.id || null, cashFinancialAccountId: cashAccount?.id || null },
+    selected: {
+      countryCode,
+      currencyCode,
+      siteId: site?.id || null,
+      warehouseId: warehouse?.id || null,
+      cashFinancialAccountId: cashAccount?.id || null,
+    },
     options,
   };
 }
