@@ -335,10 +335,7 @@ function MobileMoneyOperations({
   const activeCash = openCashSessions.find((session) => session.id === selectedCashSessionId) || openCashSessions[0] || null;
   const currency = activeCash?.financialAccount.currencyCode || "";
   const providers = configuration?.providers || [];
-  const eligibleProviders = useMemo(
-    () => providers.filter((provider) => provider.accounts.some((mapping) => mapping.currencyCode === currency)),
-    [currency, providers],
-  );
+  const eligibleProviders = providers.filter((provider) => provider.accounts.some((mapping) => mapping.currencyCode === currency));
   const selectedProvider = pending ? providers.find((provider) => provider.providerCode === pending.providerCode) : null;
   const selectedWallet = pending ? selectedProvider?.accounts.find((mapping) => mapping.currencyCode === pending.currencyCode) : null;
 
