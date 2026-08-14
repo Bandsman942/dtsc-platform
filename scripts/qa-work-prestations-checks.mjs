@@ -18,7 +18,7 @@ const agents = read("AGENTS.md");
 const vercelJson = read("vercel.json");
 const vercelScript = read("vercel.sh");
 const migration = read("prisma/migrations/20260729031000_sprint04_work_prestations/migration.sql");
-const guardMigration = read("prisma/migrations/20260729033000_work_submission_guards/migration.sql");
+const guardMigration = read("prisma/migrations/20260729033000_sprint04_work_submission_guards/migration.sql");
 
 const checks = [];
 const expect = (label, condition) => checks.push({ label, ok: Boolean(condition) });
