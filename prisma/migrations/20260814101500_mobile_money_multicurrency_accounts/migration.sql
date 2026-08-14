@@ -100,7 +100,7 @@ SELECT
   a."currencyCode",
   a."id",
   true,
-  COALESCE(rc."createdByUserId", a."createdByUserId"),
+  COALESCE(rc."createdByUserId", 'migration-307'),
   NULL,
   1,
   CURRENT_TIMESTAMP,
