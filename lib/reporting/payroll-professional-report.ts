@@ -34,6 +34,7 @@ function date(value?: string | null, locale?: string | null) {
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? value : new Intl.DateTimeFormat(String(locale || "fr").startsWith("en") ? "en-GB" : "fr-FR", { dateStyle: "medium" }).format(parsed);
 }
+function payrollStatus(value: string | null | undefined, en: boolean) { const labels: Record<string, [string, string]> = { OPEN: ["Ouverte", "Open"], CLOSED: ["Clôturée", "Closed"], PREPARED: ["Préparée", "Prepared"], PENDING_APPROVAL: ["En attente d’approbation", "Pending approval"], APPROVED: ["Approuvée", "Approved"], REJECTED: ["Rejetée", "Rejected"], CANCELLED: ["Annulée", "Cancelled"], GENERATED: ["Disponible", "Available"] }; return labels[String(value || "")]?.[en ? 1 : 0] || (en ? "Available" : "Disponible"); }
 function employeeName(item: PayrollItem) {
   const employee = item.employee;
   const name = employee?.displayName?.trim() || [employee?.firstName, employee?.lastName].filter(Boolean).join(" ").trim();
@@ -73,7 +74,7 @@ export function buildPayrollProfessionalReport(input: {
     title: en ? `Payroll report · ${run.reference}` : `Rapport de paie · ${run.reference}`,
     subtitle: `${date(periodStart, input.locale)} → ${date(periodEnd, input.locale)} · ${currency}`,
     organizationName: input.organizationName || "DTSC Platform",
-    generatedLabel: en ? `Report prepared from the authorized payroll run · status ${String(run.status || "").replace(/_/g, " ")}` : `Rapport préparé à partir de la paie autorisée · statut ${String(run.status || "").replace(/_/g, " ")}`,
+    generatedLabel: en ? `Report prepared from the authorized payroll run · ${payrollStatus(run.status, true)}` : `Rapport préparé à partir de la paie autorisée · ${payrollStatus(run.status, false)}`,
     filenameBase: `paie-${run.reference}`,
     kpis: [
       { label: en ? "Gross payroll" : "Masse salariale brute", value: money(gross, currency, input.locale), numericValue: gross, comparison: grossVariation == null ? null : `${grossVariation >= 0 ? "+" : ""}${grossVariation.toLocaleString(en ? "en-US" : "fr-FR", { maximumFractionDigits: 1 })}%` },

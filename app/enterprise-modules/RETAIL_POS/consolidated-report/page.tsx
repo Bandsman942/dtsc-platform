@@ -2,12 +2,13 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft, ArrowRightLeft, CheckCircle2, TriangleAlert } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
-import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
+import { ProfessionalReportView } from "@/components/reports/professional-report-view";
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import { getSession, requireUser } from "@/lib/auth";
 import { getRetailMetricsByCurrency } from "@/lib/enterprise/retail/commercial-guardrails";
 import { getRetailFunctionalCurrencySummary } from "@/lib/enterprise/retail/fx-reporting";
+import { buildRetailProfessionalReport } from "@/lib/reporting/retail-professional-report";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
 import { prisma } from "@/lib/prisma";
@@ -36,7 +37,7 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
   if (!access.allowed) notFound();
   const [membership, organization] = await Promise.all([
     requireEnterpriseMembership(session, organizationId),
-    prisma.organization.findFirst({ where: { id: organizationId, status: "ACTIVE", deletedAt: null, organizationType: "CLIENT", sectorCode: "COMMERCE_RETAIL" }, select: { name: true } }),
+    prisma.organization.findFirst({ where: { id: organizationId, status: "ACTIVE", deletedAt: null, organizationType: "CLIENT", sectorCode: "COMMERCE_RETAIL" }, select: { name: true, logoUrl: true } }),
   ]);
   if (!membership || !organization) notFound();
 
@@ -49,6 +50,8 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
   ]);
   const locale = user.locale === "en" ? "en" : "fr";
   const target = consolidated.targetCurrencyCode || "—";
+  const periodLabel = period === "TODAY" ? (locale === "fr" ? "Aujourd’hui" : "Today") : period === "7D" ? (locale === "fr" ? "7 jours" : "7 days") : (locale === "fr" ? "30 jours" : "30 days");
+  const professionalReport = buildRetailProfessionalReport({ organizationName: organization.name, locale, periodLabel, from, to, native, consolidated });
 
   return (
     <AppShell user={user}>
@@ -65,21 +68,15 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
             {[{ id: "TODAY", fr: "Aujourd’hui", en: "Today" }, { id: "7D", fr: "7 jours", en: "7 days" }, { id: "30D", fr: "30 jours", en: "30 days" }].map((item) => <Link key={item.id} href={`/enterprise-modules/RETAIL_POS/consolidated-report?period=${item.id}`} className={`whitespace-nowrap rounded-xl border px-3 py-2 text-sm font-black ${period === item.id ? "border-cyan-500 bg-cyan-500/10 text-cyan-700" : "border-dtsc-border bg-dtsc-surface text-dtsc-ink"}`}>{locale === "fr" ? item.fr : item.en}</Link>)}
           </div>
 
+          <ProfessionalReportView model={professionalReport} locale={locale} logoUrl={organization.logoUrl} />
+
           <ModuleSection title={locale === "fr" ? "État de la consolidation" : "Consolidation status"} description={`${from.toLocaleDateString(locale === "fr" ? "fr-FR" : "en-US")} → ${to.toLocaleDateString(locale === "fr" ? "fr-FR" : "en-US")}`}>
             <div className={`rounded-2xl border p-4 ${consolidated.complete ? "border-emerald-500/30 bg-emerald-500/10" : "border-amber-500/30 bg-amber-500/10"}`}>
-              <div className="flex flex-wrap items-center gap-3">{consolidated.complete ? <CheckCircle2 className="h-5 w-5 text-emerald-600" /> : <TriangleAlert className="h-5 w-5 text-amber-600" />}<p className="font-black text-dtsc-ink">{consolidated.complete ? (locale === "fr" ? `Consolidation complète en ${target}` : `Complete consolidation in ${target}`) : (locale === "fr" ? "Consolidation suspendue : taux manquant" : "Consolidation withheld: missing rate")}</p><StatusBadge tone={consolidated.complete ? "success" : "warning"}>{consolidated.complete ? "COMPLETE" : "INCOMPLETE"}</StatusBadge></div>
+              <div className="flex flex-wrap items-center gap-3">{consolidated.complete ? <CheckCircle2 className="h-5 w-5 text-emerald-600" /> : <TriangleAlert className="h-5 w-5 text-amber-600" />}<p className="font-black text-dtsc-ink">{consolidated.complete ? (locale === "fr" ? `Consolidation complète en ${target}` : `Complete consolidation in ${target}`) : (locale === "fr" ? "Consolidation suspendue : taux manquant" : "Consolidation withheld: missing rate")}</p><StatusBadge tone={consolidated.complete ? "success" : "warning"}>{consolidated.complete ? (locale === "fr" ? "Complète" : "Complete") : (locale === "fr" ? "Suspendue" : "Withheld")}</StatusBadge></div>
               {!consolidated.complete ? <p className="mt-2 text-sm font-semibold text-dtsc-muted">{locale === "fr" ? "DTSC refuse d’additionner des montants partiellement convertis. Configurez les paires manquantes puis rechargez ce rapport." : "DTSC refuses to add partially converted amounts. Configure the missing pairs, then reload this report."}</p> : null}
             </div>
           </ModuleSection>
 
-          {consolidated.complete && consolidated.metrics && consolidated.targetCurrencyCode ? <ModuleMetrics label={locale === "fr" ? `Synthèse consolidée · ${consolidated.targetCurrencyCode}` : `Consolidated summary · ${consolidated.targetCurrencyCode}`}>
-            <ModuleMetric label={locale === "fr" ? "Ventes POS" : "POS sales"} value={money(consolidated.metrics.sales.amount, consolidated.targetCurrencyCode, locale)} />
-            <ModuleMetric label={locale === "fr" ? "Dépôts Mobile Money" : "Mobile Money deposits"} value={money(consolidated.metrics.mobileMoney.deposits, consolidated.targetCurrencyCode, locale)} />
-            <ModuleMetric label={locale === "fr" ? "Retraits Mobile Money" : "Mobile Money withdrawals"} value={money(consolidated.metrics.mobileMoney.withdrawals, consolidated.targetCurrencyCode, locale)} />
-            <ModuleMetric label={locale === "fr" ? "Commissions Mobile Money" : "Mobile Money commissions"} value={money(consolidated.metrics.mobileMoney.commission, consolidated.targetCurrencyCode, locale)} />
-            <ModuleMetric label={locale === "fr" ? "Ventes Télécom" : "Telco sales"} value={money(consolidated.metrics.telco.revenue, consolidated.targetCurrencyCode, locale)} />
-            <ModuleMetric label={locale === "fr" ? "Marge Télécom" : "Telco margin"} value={money(consolidated.metrics.telco.margin, consolidated.targetCurrencyCode, locale)} />
-          </ModuleMetrics> : null}
 
           {!consolidated.complete && consolidated.missingRates.length ? <ModuleSection title={locale === "fr" ? "Taux manquants" : "Missing rates"} description={locale === "fr" ? "Chaque ligne correspond à une date d’opération qui ne possède aucun taux direct ni inverse applicable." : "Each row represents an operation date with no applicable direct or inverse rate."}>
             <div className="grid min-w-0 gap-2">{consolidated.missingRates.map((item) => <div key={`${item.sourceCurrencyCode}-${item.targetCurrencyCode}-${item.at}`} className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm"><strong className="text-dtsc-ink">{item.sourceCurrencyCode} → {item.targetCurrencyCode}</strong><span className="text-dtsc-muted">{new Date(item.at).toLocaleDateString(locale === "fr" ? "fr-FR" : "en-US")} · {item.count} op.</span></div>)}</div>
@@ -94,7 +91,7 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
           </ModuleSection>
 
           {consolidated.ratesUsed.length ? <ModuleSection title={locale === "fr" ? "Taux effectivement utilisés" : "Rates actually used"} description={locale === "fr" ? "La résolution est historique : chaque taux est choisi selon la date de l’opération." : "Resolution is historical: each rate is chosen according to the operation date."}>
-            <div className="grid min-w-0 gap-2">{consolidated.ratesUsed.map((rate) => <div key={`${rate.rateId}-${rate.direction}`} className="grid min-w-0 gap-1 rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm sm:grid-cols-[minmax(0,1fr)_auto]"><span className="break-words font-black text-dtsc-ink">{rate.pair} · {rate.rate} · {rate.direction}</span><span className="text-xs font-semibold text-dtsc-muted">{new Date(rate.rateDate).toLocaleDateString(locale === "fr" ? "fr-FR" : "en-US")} · {rate.source}</span></div>)}</div>
+            <div className="grid min-w-0 gap-2">{consolidated.ratesUsed.map((rate) => <div key={`${rate.rateId}-${rate.direction}`} className="grid min-w-0 gap-1 rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm sm:grid-cols-[minmax(0,1fr)_auto]"><span className="break-words font-black text-dtsc-ink">{rate.pair} · {rate.rate} · {rate.direction === "INVERSE" ? (locale === "fr" ? "taux inversé" : "inverse rate") : (locale === "fr" ? "taux direct" : "direct rate")}</span><span className="text-xs font-semibold text-dtsc-muted">{new Date(rate.rateDate).toLocaleDateString(locale === "fr" ? "fr-FR" : "en-US")} · {rate.source}</span></div>)}</div>
           </ModuleSection> : null}
         </ModuleContent>
       </ModuleWorkspace>

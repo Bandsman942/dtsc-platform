@@ -62,7 +62,8 @@ export function EnterprisePayrollOperationsWorkspace({ organizationId, organizat
   const periods = useProfessionalCollection<PayrollPeriod>({ endpoint: `/api/enterprise/${organizationId}/payroll-periods`, params, refreshKey });
   const runs = useProfessionalCollection<PayrollRun>({ endpoint: `/api/enterprise/${organizationId}/payroll-runs`, params, refreshKey });
   const activeCollection = tab === "RUNS" ? runs : periods;
-  const payrollReportModel = useMemo(() => detail ? buildPayrollProfessionalReport({ organizationName, locale, run: detail, previousRun: runs.items.find((run) => run.id !== detail.id && run.currency === detail.currency) || null }) : null, [detail, locale, organizationName, runs.items]);
+  const previousPayrollRun = useMemo(() => { if (!detail) return null; const currentStart = Date.parse(detail.payrollPeriod.periodStart); return runs.items.filter((run) => run.id !== detail.id && run.currency === detail.currency && Date.parse(run.payrollPeriod.periodStart) < currentStart).sort((left, right) => Date.parse(right.payrollPeriod.periodStart) - Date.parse(left.payrollPeriod.periodStart))[0] || null; }, [detail, runs.items]);
+  const payrollReportModel = useMemo(() => detail ? buildPayrollProfessionalReport({ organizationName, locale, run: detail, previousRun: previousPayrollRun }) : null, [detail, locale, organizationName, previousPayrollRun]);
 
   async function createPeriod(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); const form = new FormData(event.currentTarget);
