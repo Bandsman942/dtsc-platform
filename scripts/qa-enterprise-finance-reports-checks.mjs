@@ -93,7 +93,12 @@ const financeWorkspace = read("components/enterprise/core-v2/enterprise-finance-
 const reportsWorkspace = read("components/enterprise/core-v2/enterprise-reports-workspace.tsx");
 ok(financeWorkspace.includes("BusinessList") && financeWorkspace.includes("Planifié") && financeWorkspace.includes("Disponible"), "Finance workspace must use the mobile-first business list and budget position UI.");
 ok(financeWorkspace.includes("Justificatif") && financeWorkspace.includes("purchaseId"), "Expense UI must expose purchase and supporting-document integration.");
-ok(reportsWorkspace.includes("BusinessList") && reportsWorkspace.includes("Export CSV"), "Reports workspace must use the DTSC business list and lightweight export.");
+ok(
+  reportsWorkspace.includes("BusinessList")
+    && (reportsWorkspace.includes("Export CSV") || reportsWorkspace.includes('t("reports.action.export")'))
+    && reportsWorkspace.includes("/reports/${item.id}/export"),
+  "Reports workspace must use the DTSC business list and lightweight export.",
+);
 const moduleWorkspace = read("components/enterprise/enterprise-module-workspace.tsx");
 for (const component of ["EnterpriseFinanceWorkspace", "EnterpriseReportsWorkspace"]) ok(moduleWorkspace.includes(component), `Dedicated Sprint 8 workspace missing: ${component}`);
 
