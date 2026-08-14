@@ -242,7 +242,9 @@ L’annulation d’un transfert FX est non destructive : elle inverse les soldes
 
 L’interface `MOBILE_MONEY_AGENCY` affiche chaque opérateur une seule fois. Sa carte montre les wallets configurés par devise, leur compte, leur solde et l’état `Prêt` / `À compléter`. En RDC, les lignes CDF et USD sont visibles ensemble.
 
-Lors d’un dépôt/retrait, seuls les opérateurs possédant un wallet dans la devise de la caisse sont proposés. Le récapitulatif avant confirmation montre le wallet et la devise qui seront utilisés.
+Dans Mobile Money, toutes les sessions de caisse `OPEN` du cashier sur des comptes distincts sont affichées comme cartes sélectionnables. En RDC, la paire CDF + USD est recommandée. Le cashier peut ouvrir une autre caisse sans fermer la première, puis basculer en un toucher entre ses caisses. La caisse sélectionnée fixe la devise de l’opération ; seuls les opérateurs possédant un wallet dans cette devise sont proposés. Changer de caisse invalide tout brouillon de confirmation non confirmé. Le récapitulatif montre explicitement la caisse, le wallet et la devise qui seront utilisés.
+
+En fin de journée, chaque caisse `OPEN` est comptée et soumise séparément. Le service Finance canonique recalcule le théorique, vérifie le total des coupures et exige un motif d’écart avant passage en `PENDING_VALIDATION`. L’approbation ou le rejet reste un acte Finance indépendant : le cashier ne peut pas auto-valider sa clôture.
 
 La section `Transfert entre devises` affiche avant confirmation le taux Finance courant, le montant cible, le solde disponible et la date/source du taux. Les surfaces sont localisées FR/EN et conçues pour mobile/desktop et modes clair/sombre DTSC.
 
@@ -258,15 +260,13 @@ Une recharge réussie crédite l’encaissement et débite le float du coût op�
 
 La state machine provider asynchrone et les webhooks opérateurs appartiennent à l’itération 3.
 
-## Session de caisse
+## Sessions de caisse
 
-La session active est visible dans les surfaces opérationnelles Shop. Sans caisse active :
+Les sessions de caisse restent des objets Finance séparés par compte financier. Le POS conserve son contexte de caisse usuel. Dans `MOBILE_MONEY_AGENCY`, un même cashier peut garder plusieurs sessions `OPEN` en parallèle lorsque les comptes cash sont distincts, par exemple une caisse CDF et une caisse USD en RDC. L’interface expose toutes ses caisses ouvertes, permet d’en choisir une comme caisse opérationnelle et d’en ouvrir une autre sans fermer la première.
 
-- un paiement POS cash est bloqué ;
-- une opération Mobile Money qui exige du cash est bloquée ;
-- les autres paiements utilisent leurs comptes réellement configurés selon le flux.
+Sans caisse `OPEN` sélectionnée, une opération Mobile Money qui exige du cash est bloquée. Pour le POS, un paiement cash reste bloqué sans sa session de caisse active. Les autres paiements utilisent leurs comptes réellement configurés selon le flux.
 
-Une session `PENDING_VALIDATION` n’est pas une caisse utilisable.
+Une session `CLOSING` ou `PENDING_VALIDATION` n’est jamais une caisse utilisable pour de nouvelles opérations. Chaque caisse Mobile Money est comptée et soumise séparément en fin de journée, puis suit l’approbation Finance indépendante existante.
 
 ## Clôture journalière — `RETAIL_DAILY_CLOSE`
 
