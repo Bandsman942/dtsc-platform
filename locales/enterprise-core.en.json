@@ -23,6 +23,8 @@
   "status.PARTIALLY_RECEIVED": "Partially received",
   "status.RECEIVED": "Received",
   "status.CLOSED": "Closed",
+  "status.OPEN": "Open",
+  "status.RESOLVED": "Resolved",
   "priority.LOW": "Low",
   "priority.NORMAL": "Normal",
   "priority.HIGH": "High",
