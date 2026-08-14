@@ -14,3 +14,7 @@ export function enterpriseCoreT(
   if (!vars) return template;
   return template.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(vars[name] ?? ""));
 }
+
+export function enterpriseCoreIntlLocale(locale: string | null | undefined) {
+  return locale === "en" ? "en-US" : "fr-FR";
+}
