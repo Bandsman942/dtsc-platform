@@ -21,6 +21,8 @@ const requiredPaths = [
   "app/api/enterprise/[organizationId]/regulatory-statements/route.ts",
   "components/enterprise/professional/enterprise-accounting-onboarding-panel.tsx",
   "components/enterprise/professional/finance-professional-ui.ts",
+  "locales/enterprise-finance.fr.json",
+  "locales/enterprise-finance.en.json",
   "lib/user-guides/accounting-onboarding-guide.ts",
   "docs/ACCOUNTING_PROGRAM_COMPLETION.md",
 ];
@@ -83,7 +85,16 @@ if (exists("lib/enterprise/accounting/chart-version-migration-service.ts")) {
 }
 if (exists("components/enterprise/professional/enterprise-accounting-onboarding-panel.tsx")) {
   const content = read("components/enterprise/professional/enterprise-accounting-onboarding-panel.tsx");
-  for (const token of ["Mise en service comptable", "ADOPT_TEMPLATE", "APPLY_RECOMMENDED_JOURNALS", "ACTIVATE_CHART", "regulatorySupport", "official SYSCOHADA default", "financeStatusLabel", "safeFinanceError"]) if (!content.includes(token)) fail(`Accounting 3-8: onboarding UI incomplet (${token})`);
+  for (const token of ["translateEnterpriseFinance", 't("accountingOnboarding")', 't("accountingOnboardingDescription")', "ADOPT_TEMPLATE", "APPLY_RECOMMENDED_JOURNALS", "ACTIVATE_CHART", "regulatorySupport", "financeStatusLabel", "safeFinanceError"]) if (!content.includes(token)) fail(`Accounting 3-8: onboarding UI incomplet (${token})`);
+
+  if (exists("locales/enterprise-finance.fr.json") && exists("locales/enterprise-finance.en.json")) {
+    const frCatalog = json("locales/enterprise-finance.fr.json");
+    const enCatalog = json("locales/enterprise-finance.en.json");
+    if (frCatalog.accountingOnboarding !== "Mise en service comptable") fail("Accounting 3-8: libellé FR d'onboarding comptable manquant dans le catalogue canonique");
+    if (!String(frCatalog.accountingOnboardingDescription || "").includes("SYSCOHADA")) fail("Accounting 3-8: description FR SYSCOHADA absente du catalogue canonique");
+    if (!String(enCatalog.accountingOnboardingDescription || "").includes("official SYSCOHADA default")) fail("Accounting 3-8: official SYSCOHADA default absent du catalogue canonique EN");
+    if (JSON.stringify(Object.keys(frCatalog).sort()) !== JSON.stringify(Object.keys(enCatalog).sort())) fail("Accounting 3-8: parité de clés FR/EN du catalogue Finance rompue");
+  }
 }
 
 const sectorAdapters = path.join(root, "lib/enterprise/accounting/sector-adapters");
