@@ -35,7 +35,6 @@ type SetupPayload = {
   countryOverlays: unknown[];
   governance: { bootstrapWarning: boolean; officialDefaultReference: string; futureVersionsRequireControlledMigration: boolean; messageFr: string; messageEn: string };
 };
-
 type Props = { organizationId: string; locale?: string | null; canManage: boolean };
 
 async function jsonRequest(url: string, options?: RequestInit) {
@@ -48,7 +47,7 @@ async function jsonRequest(url: string, options?: RequestInit) {
 export function EnterpriseAccountingOnboardingPanel({ organizationId, locale, canManage }: Props) {
   const financeLocale: FinanceLocale = locale === "en" ? "en" : "fr";
   const en = financeLocale === "en";
-  const t = (key: EnterpriseFinanceKey) => translateEnterpriseFinance(financeLocale, key);
+  const t = useCallback((key: EnterpriseFinanceKey) => translateEnterpriseFinance(financeLocale, key), [financeLocale]);
   const [payload, setPayload] = useState<SetupPayload | null>(null);
   const [selectedChartId, setSelectedChartId] = useState("");
   const [selectedTemplate, setSelectedTemplate] = useState("OHADA_SYSCOHADA@0.1.0");
@@ -69,17 +68,16 @@ export function EnterpriseAccountingOnboardingPanel({ organizationId, locale, ca
       if (templateRef) params.set("previewTemplate", templateRef);
       const body = await jsonRequest(`/api/enterprise/${organizationId}/accounting-setup${params.size ? `?${params}` : ""}`) as unknown as SetupPayload;
       setPayload(body);
-      const nextChartId = chartId || body.selectedChartId || body.charts[0]?.id || "";
-      setSelectedChartId(nextChartId);
+      setSelectedChartId(chartId || body.selectedChartId || body.charts[0]?.id || "");
       const requested = templateRef || selectedTemplate;
       if (!body.templates.some((template) => template.reference === requested)) setSelectedTemplate(body.defaultTemplateReference || body.templates[0]?.reference || "");
       else if (!templateRef && !selectedTemplate) setSelectedTemplate(body.defaultTemplateReference);
     } catch (loadError) {
-      setError(safeFinanceError(loadError, t("accountingSetupLoadFailed"), financeLocale));
+      setError(safeFinanceError(loadError, t("accountingLoadFailed"), financeLocale));
     } finally {
       setLoading(false);
     }
-  }, [financeLocale, organizationId, selectedTemplate]);
+  }, [financeLocale, organizationId, selectedTemplate, t]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -144,56 +142,46 @@ export function EnterpriseAccountingOnboardingPanel({ organizationId, locale, ca
               </label>
             </div>
 
-            {!selectedChart ? (
-              <div className="min-w-0 rounded-2xl border border-dashed border-dtsc-border bg-dtsc-page p-4 sm:p-5">
-                <h3 className="font-bold text-dtsc-ink">{t("createCompanyChartStep")}</h3>
-                <div className="mt-4 grid min-w-0 gap-3 md:grid-cols-3">
-                  <label className="min-w-0 text-xs font-semibold text-dtsc-ink">{t("code")}<Input className="mt-1 min-w-0 border-dtsc-border bg-dtsc-surface text-dtsc-ink" value={chartCode} onChange={(event) => setChartCode(event.target.value.toUpperCase())} /></label>
-                  <label className="min-w-0 text-xs font-semibold text-dtsc-ink">{t("frenchName")}<Input className="mt-1 min-w-0 border-dtsc-border bg-dtsc-surface text-dtsc-ink" value={chartNameFr} onChange={(event) => setChartNameFr(event.target.value)} /></label>
-                  <label className="min-w-0 text-xs font-semibold text-dtsc-ink">{t("englishName")}<Input className="mt-1 min-w-0 border-dtsc-border bg-dtsc-surface text-dtsc-ink" value={chartNameEn} onChange={(event) => setChartNameEn(event.target.value)} /></label>
-                </div>
-                {canManage ? <Button className="mt-4 rounded-full" disabled={saving || !chartCode.trim() || !chartNameFr.trim() || !chartNameEn.trim()} onClick={() => void createChart()}>{t("createChart")}</Button> : null}
+            {!selectedChart ? <div className="min-w-0 rounded-2xl border border-dashed border-dtsc-border bg-dtsc-page p-4 sm:p-5">
+              <h3 className="font-bold text-dtsc-ink">{t("createCompanyChartStep")}</h3>
+              <div className="mt-4 grid min-w-0 gap-3 md:grid-cols-3">
+                <label className="min-w-0 text-xs font-semibold text-dtsc-ink">{t("code")}<Input className="mt-1 min-w-0 border-dtsc-border bg-dtsc-surface text-dtsc-ink" value={chartCode} onChange={(event) => setChartCode(event.target.value.toUpperCase())} /></label>
+                <label className="min-w-0 text-xs font-semibold text-dtsc-ink">{t("frenchName")}<Input className="mt-1 min-w-0 border-dtsc-border bg-dtsc-surface text-dtsc-ink" value={chartNameFr} onChange={(event) => setChartNameFr(event.target.value)} /></label>
+                <label className="min-w-0 text-xs font-semibold text-dtsc-ink">{t("englishName")}<Input className="mt-1 min-w-0 border-dtsc-border bg-dtsc-surface text-dtsc-ink" value={chartNameEn} onChange={(event) => setChartNameEn(event.target.value)} /></label>
               </div>
-            ) : (
-              <div className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-4 sm:p-5">
-                <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
-                  <div className="min-w-0"><p className="text-xs font-semibold uppercase text-dtsc-muted">{t("currentChart")}</p><h3 className="mt-1 break-words font-black text-dtsc-ink">{selectedChart.code} · {en ? selectedChart.nameEn : selectedChart.nameFr}</h3><p className="mt-1 break-words text-xs text-dtsc-muted">{selectedChart.templateCode || t("noChartVersionApplied")} · {financeStatusLabel(selectedChart.status, financeLocale)}</p></div>
-                  <span className="rounded-full border border-dtsc-border bg-dtsc-surface px-3 py-1 text-xs font-bold text-dtsc-ink">{selectedChart._count?.accounts || 0} {t("accounts").toLowerCase()}</span>
-                </div>
-                <div data-responsive-actions className="mt-4 flex min-w-0 flex-wrap gap-2">
-                  {canManage && !selectedChart.templateCode ? <Button className="rounded-full" disabled={saving || !selectedTemplate} onClick={() => void mutate({ action: "ADOPT_TEMPLATE", chartId: selectedChart.id, templateReference: selectedTemplate }, "officialChartApplied")}>{t("applyChartVersion")}</Button> : null}
-                  {canManage ? <Button variant="outline" className="rounded-full border-dtsc-border bg-dtsc-surface text-dtsc-blue" disabled={saving} onClick={() => void mutate({ action: "APPLY_RECOMMENDED_JOURNALS" }, "recommendedJournalsConfigured")}>{t("configureRecommendedJournals")}</Button> : null}
-                  {canManage && selectedChart.templateCode && selectedChart.status !== "ACTIVE" ? <Button className="rounded-full" disabled={saving || blocked} onClick={() => void mutate({ action: "ACTIVATE_CHART", chartId: selectedChart.id, revision: selectedChart.revision }, "chartActivated")}>{t("activateAccounting")}</Button> : null}
-                </div>
+              {canManage ? <Button className="mt-4 rounded-full" disabled={saving || !chartCode.trim() || !chartNameFr.trim() || !chartNameEn.trim()} onClick={() => void createChart()}>{t("createChart")}</Button> : null}
+            </div> : <div className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-4 sm:p-5">
+              <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0"><p className="text-xs font-semibold uppercase text-dtsc-muted">{t("currentChart")}</p><h3 className="mt-1 break-words font-black text-dtsc-ink">{selectedChart.code} · {en ? selectedChart.nameEn : selectedChart.nameFr}</h3><p className="mt-1 break-words text-xs text-dtsc-muted">{selectedChart.templateCode || t("noChartVersionApplied")} · {financeStatusLabel(selectedChart.status, financeLocale)}</p></div>
+                <span className="rounded-full border border-dtsc-border bg-dtsc-surface px-3 py-1 text-xs font-bold text-dtsc-ink">{selectedChart._count?.accounts || 0} {t("accounts").toLowerCase()}</span>
               </div>
-            )}
+              <div data-responsive-actions className="mt-4 flex min-w-0 flex-wrap gap-2">
+                {canManage && !selectedChart.templateCode ? <Button className="rounded-full" disabled={saving || !selectedTemplate} onClick={() => void mutate({ action: "ADOPT_TEMPLATE", chartId: selectedChart.id, templateReference: selectedTemplate }, "officialChartApplied")}>{t("applyChartVersion")}</Button> : null}
+                {canManage ? <Button variant="outline" className="rounded-full border-dtsc-border bg-dtsc-surface text-dtsc-blue" disabled={saving} onClick={() => void mutate({ action: "APPLY_RECOMMENDED_JOURNALS" }, "recommendedJournalsConfigured")}>{t("configureRecommendedJournals")}</Button> : null}
+                {canManage && selectedChart.templateCode && selectedChart.status !== "ACTIVE" ? <Button className="rounded-full" disabled={saving || blocked} onClick={() => void mutate({ action: "ACTIVATE_CHART", chartId: selectedChart.id, revision: selectedChart.revision }, "chartActivated")}>{t("activateAccounting")}</Button> : null}
+              </div>
+            </div>}
 
-            {selectedTemplateItem ? (
-              <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                <Metric label={t("jurisdiction")} value={selectedTemplateItem.countryScope.join(", ") || "—"} />
-                <Metric label={t("effectiveFrom")} value={selectedTemplateItem.effectiveFrom} />
-                <Metric label={t("accounts")} value={String(selectedTemplateItem.accountCount)} />
-                <Metric label={t("businessMappings")} value={String(selectedTemplateItem.semanticMappingCount)} />
-                <Metric label={t("statementLineCount")} value={String(selectedTemplateItem.statementMappingCount)} />
-              </div>
-            ) : null}
+            {selectedTemplateItem ? <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              <Metric label={t("jurisdiction")} value={selectedTemplateItem.countryScope.join(", ") || "—"} />
+              <Metric label={t("effectiveFrom")} value={selectedTemplateItem.effectiveFrom} />
+              <Metric label={t("accounts")} value={String(selectedTemplateItem.accountCount)} />
+              <Metric label={t("businessMappings")} value={String(selectedTemplateItem.semanticMappingCount)} />
+              <Metric label={t("statementLineCount")} value={String(selectedTemplateItem.statementMappingCount)} />
+            </div> : null}
           </div>
 
           <aside className="min-w-0 space-y-4">
             <div className={`rounded-2xl border p-4 ${payload?.readiness?.ready ? "border-emerald-500/30 bg-emerald-500/5" : "border-amber-500/30 bg-amber-500/5"}`}>
               <div className="flex min-w-0 items-start gap-3">{payload?.readiness?.ready ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" /> : <CircleDashed className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />}<div className="min-w-0"><h3 className="break-words font-black text-dtsc-ink">{payload?.readiness?.ready ? t("readyToActivate") : t("configurationToComplete")}</h3><p className="mt-1 text-xs leading-5 text-dtsc-muted">{t("everyBlockingRuleChecked")}</p></div></div>
             </div>
-
             <div className="max-h-80 min-w-0 space-y-2 overflow-y-auto pr-1">
               {diagnostics.map((diagnostic) => <DiagnosticRow key={diagnostic.code} diagnostic={diagnostic} en={en} />)}
               {!diagnostics.length && !loading ? <p className="rounded-xl border border-dashed border-dtsc-border bg-dtsc-page p-4 text-sm text-dtsc-muted">{t("createOrSelectChartChecks")}</p> : null}
             </div>
-
-            {payload?.regulatorySupport ? (
-              <div className={`rounded-2xl border p-4 ${payload.regulatorySupport.supported ? "border-emerald-500/30 bg-emerald-500/5" : "border-violet-500/30 bg-violet-500/5"}`}>
-                <div className="flex min-w-0 items-start gap-3">{payload.regulatorySupport.supported ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" /> : <CircleDashed className="mt-0.5 h-5 w-5 shrink-0 text-violet-600" />}<div className="min-w-0"><h3 className="font-black text-dtsc-ink">{t("financialStatements")}</h3><p className="mt-1 break-words text-xs leading-5 text-dtsc-muted">{en ? payload.regulatorySupport.messageEn : payload.regulatorySupport.messageFr}</p></div></div>
-              </div>
-            ) : null}
+            {payload?.regulatorySupport ? <div className={`rounded-2xl border p-4 ${payload.regulatorySupport.supported ? "border-emerald-500/30 bg-emerald-500/5" : "border-violet-500/30 bg-violet-500/5"}`}>
+              <div className="flex min-w-0 items-start gap-3">{payload.regulatorySupport.supported ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" /> : <CircleDashed className="mt-0.5 h-5 w-5 shrink-0 text-violet-600" />}<div className="min-w-0"><h3 className="font-black text-dtsc-ink">{t("financialStatements")}</h3><p className="mt-1 break-words text-xs leading-5 text-dtsc-muted">{en ? payload.regulatorySupport.messageEn : payload.regulatorySupport.messageFr}</p></div></div>
+            </div> : null}
           </aside>
         </div>
 
