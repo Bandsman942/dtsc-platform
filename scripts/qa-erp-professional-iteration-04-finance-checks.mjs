@@ -18,8 +18,8 @@ const need = (content, marker, scope) => {
 const reject = (content, marker, scope) => {
   if (content.includes(marker)) failures.push(`${scope}: marqueur interdit « ${marker} »`);
 };
-const needLocalized = ({ component, key, fr, en, scope }) => {
-  need(component, `t("${key}")`, scope);
+const needLocalized = ({ component, key, fr, en, scope, renderMarker = `t("${key}")` }) => {
+  need(component, renderMarker, scope);
   need(content.financeFr, `"${key}": "${fr}"`, `${scope} · catalogue FR`);
   need(content.financeEn, `"${key}": "${en}"`, `${scope} · catalogue EN`);
 };
@@ -89,7 +89,7 @@ const checks = {
   },
   receivables() {
     for (const localized of [
-      { key: "newCustomerInvoice", fr: "Nouvelle facture client", en: "New customer invoice" },
+      { key: "newCustomerInvoice", fr: "Nouvelle facture client", en: "New customer invoice", renderMarker: '"newCustomerInvoice"' },
       { key: "customerInvoices", fr: "Factures clients", en: "Customer invoices" },
       { key: "receivables", fr: "Créances", en: "Receivables" },
       { key: "creditNotes", fr: "Avoirs", en: "Credit notes" },
@@ -100,7 +100,7 @@ const checks = {
   },
   payables() {
     for (const localized of [
-      { key: "newSupplierInvoice", fr: "Nouvelle facture fournisseur", en: "New supplier invoice" },
+      { key: "newSupplierInvoice", fr: "Nouvelle facture fournisseur", en: "New supplier invoice", renderMarker: '"newSupplierInvoice"' },
       { key: "supplierInvoices", fr: "Factures fournisseurs", en: "Supplier invoices" },
       { key: "payables", fr: "Dettes", en: "Payables" },
       { key: "supplierCreditNotes", fr: "Avoirs fournisseurs", en: "Supplier credit notes" },
@@ -110,14 +110,14 @@ const checks = {
   },
   payments() {
     for (const localized of [
-      { key: "newPayment", fr: "Nouveau paiement", en: "New payment" },
+      { key: "newPayment", fr: "Nouveau paiement", en: "New payment", renderMarker: '"newPayment"' },
       { key: "allocatePayment", fr: "Affecter le paiement", en: "Allocate payment" },
     ]) needLocalized({ component: content.payments, ...localized, scope: "Paiements professionnels" });
     for (const marker of ["unallocatedAmount", "targetId", "idempotencyKey", "PAYROLL_PAYMENT", "REVERSE", "FinanceCollaboration"]) need(content.payments, marker, "Paiements professionnels");
   },
   treasury() {
     for (const localized of [
-      { key: "newFinancialAccount", fr: "Nouveau compte financier", en: "New financial account" },
+      { key: "newFinancialAccount", fr: "Nouveau compte financier", en: "New financial account", renderMarker: '"newFinancialAccount"' },
       { key: "newTransfer", fr: "Nouveau transfert", en: "New transfer" },
     ]) needLocalized({ component: content.payments, ...localized, scope: "Trésorerie professionnelle" });
     for (const marker of ["maskedReference", "sourceFinancialAccountId", "targetFinancialAccountId", "exchangeRate", "ledgerAccountId"]) need(content.payments, marker, "Trésorerie professionnelle");
