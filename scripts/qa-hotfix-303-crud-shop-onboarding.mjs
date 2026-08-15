@@ -47,10 +47,14 @@ check(!deepLinks.includes('FUNCTIONAL_CURRENCY: "/enterprise-modules/FINANCE_ACC
 check(deepLinks.includes('CASH_ACCOUNT: "/enterprise-modules/FINANCE_TREASURY#cash-accounts"'), "Collection-account readiness must open financial accounts");
 
 const financeOverview = read("components/enterprise/professional/enterprise-finance-overview-workspace.tsx");
-for (const marker of ["window.location.search", 'requested !== "finance" && requested !== "currency"', "setConfigurationOpen(true)", "Définissez ici la devise fonctionnelle utilisée par Finance et par la mise en service du Shop."]) {
+for (const marker of ["window.location.search", 'requested !== "finance" && requested !== "currency"', "setConfigurationOpen(true)", 'financeT(locale, "functionalCurrencyShopDescription")']) {
   check(financeOverview.includes(marker), `Finance overview must support direct Shop currency configuration: ${marker}`);
 }
 check(!financeOverview.includes("useSearchParams"), "Direct currency configuration must not introduce a Next.js search-param suspense dependency");
+const financeFr = JSON.parse(read("locales/enterprise-finance.fr.json"));
+const financeEn = JSON.parse(read("locales/enterprise-finance.en.json"));
+check(financeFr.functionalCurrencyShopDescription === "Définissez ici la devise fonctionnelle utilisée par Finance et par la mise en service du Shop.", "Shop currency configuration guidance must remain explicit in the canonical French Finance catalog");
+check(financeEn.functionalCurrencyShopDescription === "Set the functional currency used by Finance and Shop setup here.", "Shop currency configuration guidance must remain explicit in the canonical English Finance catalog");
 
 const accountingOnboarding = read("components/enterprise/professional/enterprise-accounting-onboarding-panel.tsx");
 for (const marker of ["bg-dtsc-surface", "bg-dtsc-page", "border-dtsc-border", "text-dtsc-ink", "text-dtsc-muted"]) {
@@ -65,4 +69,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log("Hotfix #303 QA passed: CRUD confirmations keep deterministic async DTSC semantics, Shop readiness is canonical/actionable, the currency step opens the correct Finance form, and accounting onboarding uses DTSC branding.");
+console.log("Hotfix #303 QA passed: CRUD confirmations keep deterministic async DTSC semantics, Shop readiness is canonical/actionable, the currency step opens the correct Finance form with canonical FR/EN guidance, and accounting onboarding uses DTSC branding.");
