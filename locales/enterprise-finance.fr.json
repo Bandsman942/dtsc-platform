@@ -86,9 +86,5 @@
   "automation": "Automatisation",
   "automaticPostingAfterApprovals": "Comptabiliser automatiquement après les validations requises",
   "cancel": "Annuler",
-  "save": "Enregistrer",
-  "invoiceSubmit": "Soumettre",
-  "invoiceApprove": "Approuver",
-  "invoiceReject": "Refuser",
-  "invoiceIssueAndPost": "Émettre et comptabiliser"
+  "save": "Enregistrer"
 }
