@@ -48,6 +48,7 @@ export async function GET(req: Request, { params }: Params) {
     snapshot: report.snapshotJson,
     filters: report.filtersJson,
   });
+  const freshness = (report.freshnessAt || report.generatedAt).toLocaleString("fr-FR");
 
   const metadata: Array<[string, string]> = [
     ["Organisation", model.organizationName || "DTSC Platform"],
@@ -55,6 +56,7 @@ export async function GET(req: Request, { params }: Params) {
     ["Type", REPORT_TYPE_LABELS[report.reportType] || "Rapport d’entreprise"],
     ["Référence", report.reference],
     ["Période", model.subtitle || ""],
+    ["Fraîcheur des données", freshness],
     ["Généré", model.generatedLabel || ""],
     ...(model.filters || []).map((item): [string, string] => [item.label, item.value]),
   ];
