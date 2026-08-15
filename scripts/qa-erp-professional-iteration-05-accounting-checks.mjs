@@ -12,16 +12,23 @@ const read = (file) => {
   }
   return fs.readFileSync(target, "utf8");
 };
-const need = (content, marker, scope) => {
-  if (!content.includes(marker)) failures.push(`${scope}: marqueur manquant « ${marker} »`);
+const need = (contentValue, marker, scope) => {
+  if (!contentValue.includes(marker)) failures.push(`${scope}: marqueur manquant « ${marker} »`);
 };
-const reject = (content, marker, scope) => {
-  if (content.includes(marker)) failures.push(`${scope}: marqueur interdit « ${marker} »`);
+const reject = (contentValue, marker, scope) => {
+  if (contentValue.includes(marker)) failures.push(`${scope}: marqueur interdit « ${marker} »`);
+};
+const needLocalized = ({ component, key, fr, en, scope, renderMarker = `t("${key}")` }) => {
+  need(component, renderMarker, scope);
+  need(content.financeFr, `"${key}": "${fr}"`, `${scope} · catalogue FR`);
+  need(content.financeEn, `"${key}": "${en}"`, `${scope} · catalogue EN`);
 };
 
 const files = {
   page: "components/enterprise/enterprise-finance-module-page.tsx",
   workspace: "components/enterprise/professional/enterprise-advanced-finance-workspace.tsx",
+  financeFr: "locales/enterprise-finance.fr.json",
+  financeEn: "locales/enterprise-finance.en.json",
   accountingApi: "app/api/enterprise/[organizationId]/accounting-professional/route.ts",
   chartApi: "app/api/enterprise/[organizationId]/charts-of-accounts/route.ts",
   assetApi: "app/api/enterprise/[organizationId]/asset-accounting/route.ts",
@@ -51,7 +58,14 @@ const checks = {
   },
   accounting() {
     for (const marker of ["general-ledger", "trial-balance", "posting-rules", "anomalies", "EnterpriseJournalLine", "EnterprisePostingBatch"]) need(content.accountingApi, marker, "API Comptabilité professionnelle");
-    for (const marker of ["Plans comptables", "Grand livre", "Balance générale", "Règles de comptabilisation", "Contrepasser", "Comptabiliser"]) need(content.workspace, marker, "Workspace Comptabilité");
+    for (const localized of [
+      { key: "chartsOfAccounts", fr: "Plans comptables", en: "Charts of accounts", renderMarker: 'labelKey: "chartsOfAccounts"' },
+      { key: "generalLedger", fr: "Grand livre", en: "General ledger", renderMarker: 'labelKey: "generalLedger"' },
+      { key: "trialBalance", fr: "Balance générale", en: "Trial balance", renderMarker: 'labelKey: "trialBalance"' },
+      { key: "postingRules", fr: "Règles de comptabilisation", en: "Posting rules", renderMarker: 'labelKey: "postingRules"' },
+      { key: "actionReverse", fr: "Contrepasser", en: "Reverse", renderMarker: 't("actionReverse")' },
+      { key: "post", fr: "Comptabiliser", en: "Post", renderMarker: 't("post")' },
+    ]) needLocalized({ component: content.workspace, ...localized, scope: "Workspace Comptabilité" });
     for (const marker of ["createChartOfAccounts", "authorizeFinanceRequest", "writeAuditLog"]) need(content.chartApi, marker, "Plan comptable sécurisé");
   },
   integrity() {
@@ -61,14 +75,26 @@ const checks = {
     for (const marker of ["--organization-id", "--period-id", "--from-date", "--to-date", "--journal-id", "--account-id", "--json", "--output", "entryHeaderLineMismatches", "trialBalanceMismatch", "supplierInvoicesWithoutPayable", "duplicateReversals"]) need(content.audit, marker, "Audit financier borné");
   },
   advanced() {
-    for (const marker of ["Codes et taux fiscaux", "Clôtures financières", "Versions générées et publiées", "Registre des immobilisations", "Valorisation du stock"]) need(content.workspace, marker, "Modules Finance avancée");
+    for (const localized of [
+      { key: "taxCodesRates", fr: "Codes et taux fiscaux", en: "Tax codes and rates", renderMarker: 'labelKey: "taxCodesRates"' },
+      { key: "financialCloses", fr: "Clôtures financières", en: "Financial closes", renderMarker: 'labelKey: "financialCloses"' },
+      { key: "generatedPublishedVersions", fr: "Versions générées et publiées", en: "Generated and published versions", renderMarker: 'labelKey: "generatedPublishedVersions"' },
+      { key: "fixedAssetRegister", fr: "Registre des immobilisations", en: "Fixed asset register", renderMarker: 'labelKey: "fixedAssetRegister"' },
+      { key: "inventoryValuation", fr: "Valorisation du stock", en: "Inventory valuation", renderMarker: 'labelKey: "inventoryValuation"' },
+    ]) needLocalized({ component: content.workspace, ...localized, scope: "Modules Finance avancée" });
     for (const marker of ["createAssetAccountingProfile", "availableAssets", "FINANCE_ASSETS"]) need(content.assetApi, marker, "Immobilisations professionnelles");
     for (const marker of ["publish", "EnterpriseFinancialStatementSnapshot", "authorizeFinanceRequest"]) need(content.statements, marker, "États financiers publiés");
     for (const marker of ["EnterpriseInventoryCostLayer", "LIMIT ${pageSize}", "inventoryItemName", "warehouseName", "weightedAverageUnitCost", "pagination"]) need(content.inventoryApi, marker, "Valorisation professionnelle paginée");
     reject(content.inventoryApi, "getInventoryValuation(", "Valorisation non paginée en mémoire");
   },
   languageMobile() {
-    for (const marker of ["touch-pan-x", "overflow-x-auto", "inputMode=\"decimal\"", "text-base sm:text-sm", "Aucune donnée pour cette vue", "Période", "Écriture", "Amortissements"]) need(content.workspace, marker, "Français et responsive Finance avancée");
+    for (const marker of ["touch-pan-x", "overflow-x-auto", "inputMode=\"decimal\"", "text-base sm:text-sm"]) need(content.workspace, marker, "Responsive Finance avancée");
+    for (const localized of [
+      { key: "noDataForView", fr: "Aucune donnée pour cette vue", en: "No data for this view" },
+      { key: "period", fr: "Période", en: "Period" },
+      { key: "journalEntries", fr: "Écritures", en: "Journal entries", renderMarker: 'labelKey: "journalEntries"' },
+      { key: "accumulatedDepreciation", fr: "Amortissements cumulés", en: "Accumulated depreciation" },
+    ]) needLocalized({ component: content.workspace, ...localized, scope: "Langue Finance avancée" });
     reject(content.workspace, "EnterpriseJournalEntry", "Type Prisma visible dans le workspace");
   },
   readiness() {
