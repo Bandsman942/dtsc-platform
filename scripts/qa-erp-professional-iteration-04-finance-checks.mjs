@@ -29,6 +29,8 @@ const files = {
   shared: "components/enterprise/professional/finance-professional-workspace-shared.tsx",
   professionalUi: "components/enterprise/professional/professional-erp-ui.tsx",
   language: "components/enterprise/professional/finance-professional-ui.ts",
+  financeFr: "locales/enterprise-finance.fr.json",
+  financeEn: "locales/enterprise-finance.en.json",
   comments: "app/api/enterprise/[organizationId]/finance-comments/[entityType]/[entityId]/route.ts",
   bankDetail: "app/api/enterprise/[organizationId]/bank-statements/[statementId]/route.ts",
   reconciliationDetail: "app/api/enterprise/[organizationId]/reconciliations/[sessionId]/route.ts",
@@ -54,11 +56,27 @@ const checks = {
     need(content.page, "OPERATIONAL_FINANCE_MODULE_CODES", "Page Finance");
   },
   overview() {
-    // The original iteration-04 contract expected two locally-computed checklist sections.
-    // The ERP stabilization programme intentionally replaces them with the canonical,
-    // server-driven diagnostic assistant. Keep the business capabilities, but require
-    // the new authority markers so this QA cannot re-introduce a second readiness source.
-    for (const marker of ["Assistant de mise en service", "DiagnosticCard", "diagnostics", "Actions recommandées", "financeMetricLabel", "functionalCurrencyCode", "reconciliationTolerance"]) need(content.overview, marker, "Vue d’ensemble Finance");
+    // Iteration 04 originally asserted two French literals directly in the component.
+    // The canonical i18n convergence keeps the same business capabilities while moving
+    // customer copy into enterprise-finance FR/EN catalogs. Require the rendered keys,
+    // the server-driven diagnostic authority, and both canonical translations instead.
+    for (const marker of [
+      'financeT(locale, "setupAssistant")',
+      "DiagnosticCard",
+      "diagnostics",
+      'financeT(locale, "recommendedActions")',
+      "financeMetricLabel",
+      "functionalCurrencyCode",
+      "reconciliationTolerance",
+    ]) need(content.overview, marker, "Vue d’ensemble Finance");
+    for (const marker of [
+      '"setupAssistant": "Assistant de mise en service"',
+      '"recommendedActions": "Actions recommandées"',
+    ]) need(content.financeFr, marker, "Catalogue Finance FR");
+    for (const marker of [
+      '"setupAssistant": "Setup assistant"',
+      '"recommendedActions": "Recommended actions"',
+    ]) need(content.financeEn, marker, "Catalogue Finance EN");
     reject(content.overview, "Assistant de configuration", "Ancien assistant Finance interdit");
     reject(content.overview, "Checklist de préparation", "Ancienne checklist Finance interdite");
     reject(content.overview, "const steps = useMemo", "Checklist locale Finance interdite");

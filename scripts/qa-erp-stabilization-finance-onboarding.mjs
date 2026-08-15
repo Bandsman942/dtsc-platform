@@ -2,10 +2,12 @@ import "./qa-erp-stabilization-observability.mjs";
 import { forbidTokens, requirePaths, requireTokens, success } from "./qa-enterprise-common-domain-lib.mjs";
 
 const overview = "components/enterprise/professional/enterprise-finance-overview-workspace.tsx";
+const financeFr = "locales/enterprise-finance.fr.json";
+const financeEn = "locales/enterprise-finance.en.json";
 const readiness = "lib/enterprise/accounting/finance-readiness-service.ts";
 const configuration = "lib/enterprise/accounting/configuration-service.ts";
 
-requirePaths([overview, readiness, configuration, "lib/user-guides/accounting-onboarding-guide.ts"]);
+requirePaths([overview, financeFr, financeEn, readiness, configuration, "lib/user-guides/accounting-onboarding-guide.ts"]);
 requireTokens(readiness, [
   "labelFr", "labelEn", "actionKind", "actionHref",
   "PRESENTATION_CURRENCY_READY", "FISCAL_YEAR_REQUIRED", "OPEN_FISCAL_PERIOD_REQUIRED",
@@ -18,8 +20,13 @@ requireTokens(overview, [
   "diagnostic.severity === \"BLOCKER\"",
   "diagnostic.actionKind === \"LINK\"",
   "diagnostic.actionKind === \"CONFIGURATION\"",
-  "Une case se coche automatiquement",
-  "A checkmark appears automatically",
+  'financeT(locale, "setupAssistantDescription")',
+]);
+requireTokens(financeFr, [
+  '"setupAssistantDescription": "Les étapes sont calculées par le serveur. Une case se coche automatiquement dès que la configuration correspondante est réellement valide."',
+]);
+requireTokens(financeEn, [
+  '"setupAssistantDescription": "Steps are calculated by the server. A checkmark appears automatically as soon as the corresponding configuration is truly valid."',
 ]);
 forbidTokens(overview, [
   "checklist.hasFunctionalCurrency",
