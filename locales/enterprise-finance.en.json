@@ -86,9 +86,5 @@
   "automation": "Automation",
   "automaticPostingAfterApprovals": "Post automatically after required approvals",
   "cancel": "Cancel",
-  "save": "Save",
-  "invoiceSubmit": "Submit",
-  "invoiceApprove": "Approve",
-  "invoiceReject": "Reject",
-  "invoiceIssueAndPost": "Issue and post"
+  "save": "Save"
 }
