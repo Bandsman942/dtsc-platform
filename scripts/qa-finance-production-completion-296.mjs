@@ -6,6 +6,8 @@ const files = {
   periods: "lib/enterprise/accounting/periods.ts",
   close: "lib/enterprise/accounting/close-service.ts",
   workspace: "components/enterprise/professional/enterprise-advanced-finance-workspace.tsx",
+  financeFr: "locales/enterprise-finance.fr.json",
+  financeEn: "locales/enterprise-finance.en.json",
   openYearRoute: "app/api/enterprise/[organizationId]/fiscal-years/[fiscalYearId]/open/route.ts",
   retailAccountingReadiness: "lib/enterprise/retail/accounting-readiness.ts",
   retailExecution: "lib/enterprise/retail/sale-execution.ts",
@@ -24,6 +26,8 @@ const configuration = fs.readFileSync(files.configuration, "utf8");
 const periods = fs.readFileSync(files.periods, "utf8");
 const close = fs.readFileSync(files.close, "utf8");
 const workspace = fs.readFileSync(files.workspace, "utf8");
+const financeFr = JSON.parse(fs.readFileSync(files.financeFr, "utf8"));
+const financeEn = JSON.parse(fs.readFileSync(files.financeEn, "utf8"));
 const openYearRoute = fs.readFileSync(files.openYearRoute, "utf8");
 const retailAccountingReadiness = fs.readFileSync(files.retailAccountingReadiness, "utf8");
 const retailExecution = fs.readFileSync(files.retailExecution, "utf8");
@@ -35,6 +39,18 @@ function requireTokens(source, tokens, label) {
       console.error(`FAIL ${label}: contrat absent: ${token}`);
       process.exit(1);
     }
+  }
+}
+
+function requireLocalizedKey(key, fr, en, renderToken, label) {
+  requireTokens(workspace, [renderToken], label);
+  if (financeFr[key] !== fr) {
+    console.error(`FAIL ${label}: catalogue FR inattendu pour ${key}: ${financeFr[key] ?? "ABSENT"}`);
+    process.exit(1);
+  }
+  if (financeEn[key] !== en) {
+    console.error(`FAIL ${label}: catalogue EN inattendu pour ${key}: ${financeEn[key] ?? "ABSENT"}`);
+    process.exit(1);
   }
 }
 
@@ -105,14 +121,23 @@ requireTokens(workspace, [
   'usePathname, useRouter, useSearchParams',
   'const requestedTab = searchParams.get("tab")',
   'router.replace(`${pathname}?${params.toString()}`, { scroll: false })',
-  '"Ouvrir l’exercice"',
-  '"Recalculer la clôture"',
   'item.status === "BLOCKED"',
-  '"Un autre utilisateur autorisé doit approuver et fermer la période."',
-  'unbalancedPostedEntries: { fr:',
-  'openCashSessions: { fr:',
-  'unresolvedClearingAccounts: { fr:',
+  'unbalancedPostedEntries: "unbalancedPostedEntries"',
+  'openCashSessions: "openCashSessions"',
+  'unresolvedClearingAccounts: "unresolvedClearingAccounts"',
 ], "finance workspace");
+
+requireLocalizedKey("openFiscalYear", "Ouvrir l’exercice", "Open fiscal year", 't("openFiscalYear")', "finance workspace / ouverture exercice");
+requireLocalizedKey("recheckClose", "Recalculer la clôture", "Recheck close", 't("recheckClose")', "finance workspace / recalcul clôture");
+requireLocalizedKey("anotherAuthorizedUserClose", "Un autre utilisateur autorisé doit approuver et fermer la période.", "Another authorized user must approve and close the period.", 't("anotherAuthorizedUserClose")', "finance workspace / séparation des rôles");
+requireLocalizedKey("unbalancedPostedEntries", "Écritures comptabilisées déséquilibrées", "Unbalanced posted entries", '"unbalancedPostedEntries"', "finance workspace / anomalie écritures");
+requireLocalizedKey("openCashSessions", "Sessions de caisse ouvertes", "Open cash sessions", '"openCashSessions"', "finance workspace / sessions caisse");
+requireLocalizedKey("unresolvedClearingAccounts", "Comptes d’attente non soldés", "Unresolved clearing accounts", '"unresolvedClearingAccounts"', "finance workspace / comptes d’attente");
+
+if (JSON.stringify(Object.keys(financeFr).sort()) !== JSON.stringify(Object.keys(financeEn).sort())) {
+  console.error("FAIL finance workspace: parité de clés enterprise-finance FR/EN rompue.");
+  process.exit(1);
+}
 
 requireTokens(retailAccountingReadiness, [
   'getEnterpriseFinanceReadiness(organizationId, { mode: "POSTING", asOf: at })',
