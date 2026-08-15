@@ -18,6 +18,11 @@ const need = (content, marker, scope) => {
 const reject = (content, marker, scope) => {
   if (content.includes(marker)) failures.push(`${scope}: marqueur interdit « ${marker} »`);
 };
+const needLocalized = ({ component, key, fr, en, scope }) => {
+  need(component, `t("${key}")`, scope);
+  need(content.financeFr, `"${key}": "${fr}"`, `${scope} · catalogue FR`);
+  need(content.financeEn, `"${key}": "${en}"`, `${scope} · catalogue EN`);
+};
 
 const files = {
   router: "components/enterprise/professional/enterprise-operational-finance-workspace.tsx",
@@ -83,16 +88,39 @@ const checks = {
     reject(content.overview, "checklist.hasFunctionalCurrency", "Contrat checklist legacy interdit");
   },
   receivables() {
-    for (const marker of ["Nouvelle facture client", "Factures clients", "Créances", "Avoirs", "Échéances", "Créer un avoir", "FinanceCollaboration", "sales-credit-notes", "PENDING_APPROVAL"]) need(content.invoices, marker, "Créances professionnelles");
+    for (const localized of [
+      { key: "newCustomerInvoice", fr: "Nouvelle facture client", en: "New customer invoice" },
+      { key: "customerInvoices", fr: "Factures clients", en: "Customer invoices" },
+      { key: "receivables", fr: "Créances", en: "Receivables" },
+      { key: "creditNotes", fr: "Avoirs", en: "Credit notes" },
+      { key: "dueDates", fr: "Échéances", en: "Due dates" },
+      { key: "createCreditNote", fr: "Créer un avoir", en: "Create credit note" },
+    ]) needLocalized({ component: content.invoices, ...localized, scope: "Créances professionnelles" });
+    for (const marker of ["FinanceCollaboration", "sales-credit-notes", "PENDING_APPROVAL"]) need(content.invoices, marker, "Créances professionnelles");
   },
   payables() {
-    for (const marker of ["Nouvelle facture fournisseur", "Factures fournisseurs", "Dettes", "Avoirs fournisseurs", "Contrôle commande-réception-facture", "supplier-credit-notes", "threeWayMatch"]) need(content.invoices, marker, "Dettes professionnelles");
+    for (const localized of [
+      { key: "newSupplierInvoice", fr: "Nouvelle facture fournisseur", en: "New supplier invoice" },
+      { key: "supplierInvoices", fr: "Factures fournisseurs", en: "Supplier invoices" },
+      { key: "payables", fr: "Dettes", en: "Payables" },
+      { key: "supplierCreditNotes", fr: "Avoirs fournisseurs", en: "Supplier credit notes" },
+      { key: "poReceiptInvoiceControl", fr: "Contrôle commande-réception-facture", en: "Purchase order, receipt and invoice control" },
+    ]) needLocalized({ component: content.invoices, ...localized, scope: "Dettes professionnelles" });
+    for (const marker of ["supplier-credit-notes", "threeWayMatch"]) need(content.invoices, marker, "Dettes professionnelles");
   },
   payments() {
-    for (const marker of ["Nouveau paiement", "Affecter le paiement", "unallocatedAmount", "targetId", "idempotencyKey", "PAYROLL_PAYMENT", "REVERSE", "FinanceCollaboration"]) need(content.payments, marker, "Paiements professionnels");
+    for (const localized of [
+      { key: "newPayment", fr: "Nouveau paiement", en: "New payment" },
+      { key: "allocatePayment", fr: "Affecter le paiement", en: "Allocate payment" },
+    ]) needLocalized({ component: content.payments, ...localized, scope: "Paiements professionnels" });
+    for (const marker of ["unallocatedAmount", "targetId", "idempotencyKey", "PAYROLL_PAYMENT", "REVERSE", "FinanceCollaboration"]) need(content.payments, marker, "Paiements professionnels");
   },
   treasury() {
-    for (const marker of ["Nouveau compte financier", "Nouveau transfert", "maskedReference", "sourceFinancialAccountId", "targetFinancialAccountId", "exchangeRate", "ledgerAccountId"]) need(content.payments, marker, "Trésorerie professionnelle");
+    for (const localized of [
+      { key: "newFinancialAccount", fr: "Nouveau compte financier", en: "New financial account" },
+      { key: "newTransfer", fr: "Nouveau transfert", en: "New transfer" },
+    ]) needLocalized({ component: content.payments, ...localized, scope: "Trésorerie professionnelle" });
+    for (const marker of ["maskedReference", "sourceFinancialAccountId", "targetFinancialAccountId", "exchangeRate", "ledgerAccountId"]) need(content.payments, marker, "Trésorerie professionnelle");
   },
   cash() {
     for (const marker of ["Ouvrir une session de caisse", "Assistant de clôture de caisse", "Comptage physique", "Validation indépendante", "PENDING_VALIDATION", "countedClosingAmount"]) need(content.cashBank, marker, "Caisse professionnelle");
@@ -106,7 +134,8 @@ const checks = {
     for (const marker of ["authorizeFinanceRequest", "organizationId", "statementLines", "matches", "writeApiLog"]) need(content.reconciliationDetail, marker, "Détail rapprochement sécurisé");
   },
   language() {
-    for (const marker of ["Paiements non affectés", "Contrôle commande-réception-facture", "Partiellement payé", "Clôture provisoire", "Premier entré, premier sorti", "Une autre personne autorisée"]) need(content.language + content.invoices + content.payments, marker, "Français Finance");
+    for (const marker of ["Paiements non affectés", "Partiellement payé", "Clôture provisoire", "Premier entré, premier sorti", "Une autre personne autorisée"]) need(content.language + content.invoices + content.payments, marker, "Français Finance");
+    needLocalized({ component: content.invoices, key: "poReceiptInvoiceControl", fr: "Contrôle commande-réception-facture", en: "Purchase order, receipt and invoice control", scope: "Français Finance" });
     reject(content.language, "metricLabel(\"", "Libellés automatiques interdits");
   },
   mobile() {
