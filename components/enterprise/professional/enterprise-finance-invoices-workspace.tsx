@@ -39,6 +39,7 @@ import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metri
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
+import { translateEnterpriseFinance, type EnterpriseFinanceKey } from "@/lib/i18n";
 
 type InvoiceLine = {
   key: string;
@@ -141,20 +142,24 @@ type FinanceSourceLookups = {
   purchaseReceipts?: PurchaseReceiptLookup[];
 };
 
-const MODULE_META = {
-  FINANCE_RECEIVABLES: {
-    titleFr: "Créances et factures clients",
-    titleEn: "Receivables and customer invoices",
-    eyebrowFr: "Cycle client",
-    eyebrowEn: "Customer cycle",
-  },
-  FINANCE_PAYABLES: {
-    titleFr: "Dettes et factures fournisseurs",
-    titleEn: "Payables and supplier invoices",
-    eyebrowFr: "Cycle fournisseur",
-    eyebrowEn: "Supplier cycle",
-  },
-} as const;
+const MODULE_META: Record<"FINANCE_RECEIVABLES" | "FINANCE_PAYABLES", { titleKey: EnterpriseFinanceKey; eyebrowKey: EnterpriseFinanceKey }> = {
+  FINANCE_RECEIVABLES: { titleKey: "receivablesTitle", eyebrowKey: "receivablesEyebrow" },
+  FINANCE_PAYABLES: { titleKey: "payablesTitle", eyebrowKey: "payablesEyebrow" },
+};
+
+const invoiceT = (locale: FinanceLocale, key: EnterpriseFinanceKey) => translateEnterpriseFinance(locale, key);
+
+const INVOICE_ACTION_KEYS: Record<string, EnterpriseFinanceKey> = {
+  SUBMIT: "actionSubmit",
+  APPROVE: "actionApprove",
+  REJECT: "actionReject",
+  ISSUE: "actionIssueAndPost",
+};
+
+function invoiceActionLabel(action: string, locale: FinanceLocale) {
+  const key = INVOICE_ACTION_KEYS[action];
+  return key ? invoiceT(locale, key) : action;
+}
 
 function newLine(index: number): InvoiceLine {
   return { key: `finance-line-${Date.now()}-${index}`, catalogItemId: "", description: "", quantity: "1", unitPrice: "0", discountAmount: "0" };
@@ -170,19 +175,19 @@ function ageBucket(dueDate?: string | null) {
   return "D90_PLUS";
 }
 
-function invoiceTransitionActions(status?: string) {
-  if (status === "DRAFT") return [{ action: "SUBMIT", label: "Soumettre", icon: Send }];
+function invoiceTransitionActions(status: string | undefined, locale: FinanceLocale) {
+  if (status === "DRAFT") return [{ action: "SUBMIT", label: invoiceT(locale, "actionSubmit"), icon: Send }];
   if (["SUBMITTED", "IN_REVIEW", "PENDING_APPROVAL"].includes(String(status))) return [
-    { action: "APPROVE", label: "Approuver", icon: CheckCircle2 },
-    { action: "REJECT", label: "Refuser", icon: XCircle },
+    { action: "APPROVE", label: invoiceT(locale, "actionApprove"), icon: CheckCircle2 },
+    { action: "REJECT", label: invoiceT(locale, "actionReject"), icon: XCircle },
   ];
-  if (status === "APPROVED") return [{ action: "ISSUE", label: "Émettre et comptabiliser", icon: ShieldCheck }];
+  if (status === "APPROVED") return [{ action: "ISSUE", label: invoiceT(locale, "actionIssueAndPost"), icon: ShieldCheck }];
   return [];
 }
 
 function DetailLineItems({ items, currencyCode, locale }: { items: InvoiceItem[]; currencyCode: string; locale: FinanceLocale }) {
   return (
-    <BusinessList ariaLabel={locale === "fr" ? "Lignes de facture" : "Invoice lines"}>
+    <BusinessList ariaLabel={invoiceT(locale, "invoiceLines")}>
       {items.map((item) => (
         <BusinessListItem
           key={item.id}
@@ -209,6 +214,7 @@ export function EnterpriseFinanceInvoicesWorkspace({
   canManage: boolean;
 }) {
   const locale: FinanceLocale = requestedLocale === "en" ? "en" : "fr";
+  const t = (key: EnterpriseFinanceKey) => invoiceT(locale, key);
   const moduleCode = definition.code as "FINANCE_RECEIVABLES" | "FINANCE_PAYABLES";
   const isReceivables = moduleCode === "FINANCE_RECEIVABLES";
   const meta = MODULE_META[moduleCode];
@@ -329,9 +335,9 @@ export function EnterpriseFinanceInvoicesWorkspace({
       setCreateOpen(false);
       resetCreateForm();
       setRefreshKey((value) => value + 1);
-      setMessage(locale === "fr" ? "La facture a été enregistrée en brouillon." : "The invoice was saved as a draft.");
+      setMessage(t("invoiceSavedDraft"));
     } catch (createError) {
-      setError(safeFinanceError(createError, locale === "fr" ? "Création impossible." : "Creation failed."));
+      setError(safeFinanceError(createError, t("creationFailed")));
     }
   }
 
@@ -348,9 +354,9 @@ export function EnterpriseFinanceInvoicesWorkspace({
       setActionTarget(null);
       setDetail(null);
       setRefreshKey((value) => value + 1);
-      setMessage(locale === "fr" ? "Le workflow de la facture a été mis à jour." : "The invoice workflow was updated.");
+      setMessage(t("invoiceWorkflowUpdated"));
     } catch (transitionError) {
-      setError(safeFinanceError(transitionError, locale === "fr" ? "Transition impossible." : "Transition failed."));
+      setError(safeFinanceError(transitionError, t("transitionFailed")));
     }
   }
 
@@ -374,25 +380,25 @@ export function EnterpriseFinanceInvoicesWorkspace({
       setDetail(null);
       setTab("credits");
       setRefreshKey((value) => value + 1);
-      setMessage(locale === "fr" ? "L’avoir a été créé et reste soumis à son workflow." : "The credit note was created and remains subject to its workflow.");
+      setMessage(t("creditNoteCreated"));
     } catch (creditError) {
-      setError(safeFinanceError(creditError, locale === "fr" ? "Création de l’avoir impossible." : "Credit note creation failed."));
+      setError(safeFinanceError(creditError, t("creditNoteCreationFailed")));
     }
   }
 
   const tabs = isReceivables ? [
-    { id: "invoices", label: locale === "fr" ? "Factures clients" : "Customer invoices" },
-    { id: "balances", label: locale === "fr" ? "Créances" : "Receivables" },
-    { id: "credits", label: locale === "fr" ? "Avoirs" : "Credit notes" },
-    { id: "ageing", label: locale === "fr" ? "Échéances" : "Due dates" },
-    { id: "overdue", label: locale === "fr" ? "Retards" : "Overdue" },
+    { id: "invoices", label: t("customerInvoices") },
+    { id: "balances", label: t("receivables") },
+    { id: "credits", label: t("creditNotes") },
+    { id: "ageing", label: t("dueDates") },
+    { id: "overdue", label: t("overdue") },
   ] : [
-    { id: "invoices", label: locale === "fr" ? "Factures fournisseurs" : "Supplier invoices" },
-    { id: "balances", label: locale === "fr" ? "Dettes" : "Payables" },
-    { id: "credits", label: locale === "fr" ? "Avoirs fournisseurs" : "Supplier credit notes" },
-    { id: "to-approve", label: locale === "fr" ? "À valider" : "To approve" },
-    { id: "to-pay", label: locale === "fr" ? "À payer" : "To pay" },
-    { id: "overdue", label: locale === "fr" ? "En retard" : "Overdue" },
+    { id: "invoices", label: t("supplierInvoices") },
+    { id: "balances", label: t("payables") },
+    { id: "credits", label: t("supplierCreditNotes") },
+    { id: "to-approve", label: t("toApprove") },
+    { id: "to-pay", label: t("toPay") },
+    { id: "overdue", label: t("overdue") },
   ];
   const openCount = collection.items.filter((item) => ["OPEN", "ISSUED", "PARTIALLY_PAID"].includes(String(item.status))).length;
   const overdueCount = collection.items.filter((item) => ageBucket(String(item.dueDate || "")) !== "TO_DUE").length;
@@ -401,110 +407,110 @@ export function EnterpriseFinanceInvoicesWorkspace({
   return (
     <ModuleWorkspace>
       <ModuleHeader
-        eyebrow={`${locale === "fr" ? meta.eyebrowFr : meta.eyebrowEn} · ${organizationName}`}
-        title={locale === "fr" ? meta.titleFr : meta.titleEn}
-        description={definition.descriptionFr}
+        eyebrow={`${t(meta.eyebrowKey)} · ${organizationName}`}
+        title={t(meta.titleKey)}
+        description={locale === "en" ? definition.descriptionEn : definition.descriptionFr}
         count={`${collection.pagination.total}`}
-        primaryAction={canManage ? <Button onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" />{locale === "fr" ? "Nouvelle facture" : "New invoice"}</Button> : undefined}
+        primaryAction={canManage ? <Button onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" />{t("newInvoice")}</Button> : undefined}
       />
-      <ModuleMetrics label={locale === "fr" ? "Indicateurs du cycle financier" : "Finance-cycle metrics"}>
-        <ModuleMetric label={locale === "fr" ? "Éléments ouverts" : "Open items"} value={openCount} />
-        <ModuleMetric label={locale === "fr" ? "En retard" : "Overdue"} value={overdueCount} />
-        <ModuleMetric label={locale === "fr" ? "À valider" : "To approve"} value={approvalCount} />
-        <ModuleMetric label={locale === "fr" ? "Total de la vue" : "View total"} value={collection.pagination.total} />
+      <ModuleMetrics label={t("financeCycleMetrics")}>
+        <ModuleMetric label={t("openItems")} value={openCount} />
+        <ModuleMetric label={t("overdue")} value={overdueCount} />
+        <ModuleMetric label={t("toApprove")} value={approvalCount} />
+        <ModuleMetric label={t("viewTotal")} value={collection.pagination.total} />
       </ModuleMetrics>
       <ModuleToolbar
-        search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={locale === "fr" ? "Numéro, référence ou note…" : "Number, reference or note…"} />}
-        controls={<div className="grid min-w-0 gap-2"><ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setStatus(""); setPage(1); }} items={tabs} label={locale === "fr" ? "Vues financières" : "Finance views"} /><NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={[{ id: "", label: locale === "fr" ? "Tous les statuts" : "All statuses" }, ...["DRAFT", "SUBMITTED", "IN_REVIEW", "PENDING_APPROVAL", "APPROVED", "ISSUED", "POSTED", "PARTIALLY_PAID", "PAID", "OVERDUE", "CANCELLED"].map((id) => ({ id, label: financeStatusLabel(id, locale) }))]} /></div>}
-        summary={locale === "fr" ? "Les devises différentes restent séparées." : "Different currencies remain separated."}
+        search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("financeSearchPlaceholder")} />}
+        controls={<div className="grid min-w-0 gap-2"><ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setStatus(""); setPage(1); }} items={tabs} label={t("financeViews")} /><NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={[{ id: "", label: t("allStatuses") }, ...["DRAFT", "SUBMITTED", "IN_REVIEW", "PENDING_APPROVAL", "APPROVED", "ISSUED", "POSTED", "PARTIALLY_PAID", "PAID", "OVERDUE", "CANCELLED"].map((id) => ({ id, label: financeStatusLabel(id, locale) }))]} /></div>}
+        summary={t("currenciesSeparated")}
       />
       <ModuleContent>
         {message ? <div role="status" className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-bold text-emerald-800 dark:text-emerald-200">{message}</div> : null}
         {error ? <ProfessionalError message={error} /> : null}
         {lookupData.error ? <ProfessionalError message={lookupData.error} /> : null}
-        <ModuleSection title={tabs.find((item) => item.id === tab)?.label || ""} description={isReceivables ? (locale === "fr" ? "Facture, créance, paiement, allocation et écriture restent des objets distincts." : "Invoice, receivable, payment, allocation and journal entry remain distinct objects.") : (locale === "fr" ? "Le contrôle commande-réception-facture conserve chaque écart et toute dérogation." : "The purchase-order, receipt and invoice control preserves every variance and override.")}>
+        <ModuleSection title={tabs.find((item) => item.id === tab)?.label || ""} description={t(isReceivables ? "receivablesSectionDescription" : "payablesSectionDescription")}>
           {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : tab === "ageing" ? (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{[
-              { id: "TO_DUE", label: locale === "fr" ? "À échoir" : "Not due" },
+              { id: "TO_DUE", label: t("notDue") },
               { id: "D1_30", label: "1–30" },
               { id: "D31_60", label: "31–60" },
               { id: "D61_90", label: "61–90" },
-              { id: "D90_PLUS", label: locale === "fr" ? "Plus de 90 jours" : "Over 90 days" },
+              { id: "D90_PLUS", label: t("over90Days") },
             ].map((bucket) => {
               const records = collection.items.filter((item) => ageBucket(String(item.dueDate || "")) === bucket.id);
-              return <article key={bucket.id} className="rounded-xl border border-dtsc-border p-4"><p className="text-xs font-black uppercase text-dtsc-muted">{bucket.label}</p><p className="mt-2 text-2xl font-black text-dtsc-ink">{records.length}</p><p className="mt-1 text-sm text-dtsc-muted">{locale === "fr" ? "dossier(s)" : "record(s)"}</p></article>;
+              return <article key={bucket.id} className="rounded-xl border border-dtsc-border p-4"><p className="text-xs font-black uppercase text-dtsc-muted">{bucket.label}</p><p className="mt-2 text-2xl font-black text-dtsc-ink">{records.length}</p><p className="mt-1 text-sm text-dtsc-muted">{t("records")}</p></article>;
             })}</div>
-          ) : <FinanceRecordList items={visibleItems} locale={locale} emptyTitle={locale === "fr" ? "Aucun élément dans cette vue" : "No item in this view"} emptyDescription={locale === "fr" ? "Utilisez le formulaire professionnel ou vérifiez les filtres." : "Use the professional form or review the filters."} onOpen={setDetail} />}
+          ) : <FinanceRecordList items={visibleItems} locale={locale} emptyTitle={t("noItemInView")} emptyDescription={t("professionalFormOrFilters")} onOpen={setDetail} />}
           <FinancePaginationControls pagination={collection.pagination} page={page} onPage={setPage} locale={locale} />
         </ModuleSection>
         <ProfessionalHelp moduleCode={moduleCode} />
       </ModuleContent>
 
-      <Dialog open={createOpen} onClose={() => { setCreateOpen(false); resetCreateForm(); }} title={locale === "fr" ? (isReceivables ? "Nouvelle facture client" : "Nouvelle facture fournisseur") : (isReceivables ? "New customer invoice" : "New supplier invoice")} description={locale === "fr" ? "Les sources sont sélectionnées dans les référentiels de l’entreprise puis revalidées côté serveur." : "Sources are selected from company master data and revalidated server-side."} className="h-[96dvh] max-w-5xl">
+      <Dialog open={createOpen} onClose={() => { setCreateOpen(false); resetCreateForm(); }} title={t(isReceivables ? "newCustomerInvoice" : "newSupplierInvoice")} description={t("sourcesRevalidated")} className="h-[96dvh] max-w-5xl">
         <form onSubmit={createInvoice} className="grid gap-6">
-          <ProfessionalFormSection title={locale === "fr" ? "Partie et source" : "Party and source"}>
+          <ProfessionalFormSection title={t("partyAndSource")}>
             {isReceivables ? <>
-              <Field label={locale === "fr" ? "Client" : "Customer"}><NativeSelect name="businessPartyId" value={selectedPartyId} onChange={setSelectedPartyId} required items={lookupData.lookups.parties.map((party) => ({ id: party.id, label: `${party.code || ""} ${party.displayName || party.legalName}`.trim() }))} /></Field>
-              <Field label={locale === "fr" ? "Commande source" : "Source order"}><NativeSelect name="salesOrderId" value={selectedSalesOrderId} onChange={setSelectedSalesOrderId} items={salesOrders.map((order) => ({ id: order.id, label: `${order.reference} · ${order.title}` }))} /></Field>
-              <Field label={locale === "fr" ? "Livraison source" : "Source fulfillment"}><NativeSelect name="fulfillmentId" items={fulfillments.map((fulfillment) => ({ id: fulfillment.id, label: `${fulfillment.reference} · ${financeStatusLabel(fulfillment.status, locale)}` }))} /></Field>
-              <Field label={locale === "fr" ? "Contrat source" : "Source contract"}><NativeSelect name="contractId" items={contracts.map((contract) => ({ id: contract.id, label: `${contract.reference} · ${contract.title}` }))} /></Field>
+              <Field label={t("customer")}><NativeSelect name="businessPartyId" value={selectedPartyId} onChange={setSelectedPartyId} required items={lookupData.lookups.parties.map((party) => ({ id: party.id, label: `${party.code || ""} ${party.displayName || party.legalName}`.trim() }))} /></Field>
+              <Field label={t("sourceOrder")}><NativeSelect name="salesOrderId" value={selectedSalesOrderId} onChange={setSelectedSalesOrderId} items={salesOrders.map((order) => ({ id: order.id, label: `${order.reference} · ${order.title}` }))} /></Field>
+              <Field label={t("sourceFulfillment")}><NativeSelect name="fulfillmentId" items={fulfillments.map((fulfillment) => ({ id: fulfillment.id, label: `${fulfillment.reference} · ${financeStatusLabel(fulfillment.status, locale)}` }))} /></Field>
+              <Field label={t("sourceContract")}><NativeSelect name="contractId" items={contracts.map((contract) => ({ id: contract.id, label: `${contract.reference} · ${contract.title}` }))} /></Field>
             </> : <>
-              <Field label={locale === "fr" ? "Fournisseur" : "Supplier"}><NativeSelect name="supplierId" value={selectedSupplierId} onChange={setSelectedSupplierId} required items={lookupData.lookups.suppliers.map((supplier) => ({ id: supplier.id, label: supplier.displayName || supplier.legalName }))} /></Field>
-              <Field label={locale === "fr" ? "Commande fournisseur source" : "Source purchase order"}><NativeSelect name="purchaseId" value={selectedPurchaseId} onChange={setSelectedPurchaseId} items={purchases.map((purchase) => ({ id: purchase.id, label: `${purchase.reference} · ${purchase.title}` }))} /></Field>
-              <Field label={locale === "fr" ? "Réception source" : "Source receipt"}><NativeSelect name="purchaseReceiptId" items={receipts.map((receipt) => ({ id: receipt.id, label: receipt.reference }))} /></Field>
+              <Field label={t("supplier")}><NativeSelect name="supplierId" value={selectedSupplierId} onChange={setSelectedSupplierId} required items={lookupData.lookups.suppliers.map((supplier) => ({ id: supplier.id, label: supplier.displayName || supplier.legalName }))} /></Field>
+              <Field label={t("sourcePurchaseOrder")}><NativeSelect name="purchaseId" value={selectedPurchaseId} onChange={setSelectedPurchaseId} items={purchases.map((purchase) => ({ id: purchase.id, label: `${purchase.reference} · ${purchase.title}` }))} /></Field>
+              <Field label={t("sourceReceipt")}><NativeSelect name="purchaseReceiptId" items={receipts.map((receipt) => ({ id: receipt.id, label: receipt.reference }))} /></Field>
             </>}
-            <Field label={locale === "fr" ? "Projet" : "Project"}><NativeSelect name="projectId" items={lookupData.lookups.projects.map((project) => ({ id: project.id, label: `${project.reference} · ${project.name}` }))} /></Field>
+            <Field label={t("project")}><NativeSelect name="projectId" items={lookupData.lookups.projects.map((project) => ({ id: project.id, label: `${project.reference} · ${project.name}` }))} /></Field>
           </ProfessionalFormSection>
-          <ProfessionalFormSection title={locale === "fr" ? "Dates et conditions" : "Dates and terms"}>
-            <Field label={locale === "fr" ? "Date de facture" : "Invoice date"}><Input name="invoiceDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required /></Field>
-            <Field label={locale === "fr" ? "Date d’échéance" : "Due date"}><Input name="dueDate" type="date" /></Field>
-            <Field label={locale === "fr" ? "Devise" : "Currency"}><Input name="currencyCode" defaultValue="USD" maxLength={3} required /></Field>
-            {isReceivables ? <Field label={locale === "fr" ? "Conditions de paiement" : "Payment terms"}><Input name="paymentTerms" /></Field> : null}
+          <ProfessionalFormSection title={t("datesAndTerms")}>
+            <Field label={t("invoiceDate")}><Input name="invoiceDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required /></Field>
+            <Field label={t("dueDate")}><Input name="dueDate" type="date" /></Field>
+            <Field label={t("currency")}><Input name="currencyCode" defaultValue="USD" maxLength={3} required /></Field>
+            {isReceivables ? <Field label={t("paymentTerms")}><Input name="paymentTerms" /></Field> : null}
           </ProfessionalFormSection>
-          <ProfessionalFormSection title={locale === "fr" ? "Lignes de facture" : "Invoice lines"}>
+          <ProfessionalFormSection title={t("invoiceLines")}>
             <div className="grid gap-3 md:col-span-2">
               {lines.map((line, index) => (
                 <div key={line.key} className="grid gap-3 rounded-xl border border-dtsc-border p-3 md:grid-cols-12">
-                  <div className="md:col-span-4"><Field label={`${locale === "fr" ? "Article ou service" : "Product or service"} ${index + 1}`}><NativeSelect value={line.catalogItemId} onChange={(value) => selectCatalogItem(line.key, value)} items={catalogItems.map((item) => ({ id: item.id, label: `${item.code} · ${item.name}` }))} /></Field></div>
-                  <div className="md:col-span-4"><Field label={locale === "fr" ? "Description" : "Description"}><Input value={line.description} onChange={(event) => updateLine(line.key, "description", event.target.value)} required /></Field></div>
-                  <div className="md:col-span-1"><Field label={locale === "fr" ? "Qté" : "Qty"}><Input value={line.quantity} onChange={(event) => updateLine(line.key, "quantity", event.target.value)} type="number" inputMode="decimal" min="0.000001" step="0.000001" required /></Field></div>
-                  <div className="md:col-span-1"><Field label={locale === "fr" ? "Prix" : "Price"}><Input value={line.unitPrice} onChange={(event) => updateLine(line.key, "unitPrice", event.target.value)} type="number" inputMode="decimal" min="0" step="0.01" required /></Field></div>
-                  <div className="md:col-span-1"><Field label={locale === "fr" ? "Remise" : "Discount"}><Input value={line.discountAmount} onChange={(event) => updateLine(line.key, "discountAmount", event.target.value)} type="number" inputMode="decimal" min="0" step="0.01" /></Field></div>
-                  <div className="flex items-end md:col-span-1"><Button type="button" variant="outline" disabled={lines.length === 1} onClick={() => setLines((current) => current.filter((item) => item.key !== line.key))}>{locale === "fr" ? "Retirer" : "Remove"}</Button></div>
+                  <div className="md:col-span-4"><Field label={`${t("productOrService")} ${index + 1}`}><NativeSelect value={line.catalogItemId} onChange={(value) => selectCatalogItem(line.key, value)} items={catalogItems.map((item) => ({ id: item.id, label: `${item.code} · ${item.name}` }))} /></Field></div>
+                  <div className="md:col-span-4"><Field label={t("description")}><Input value={line.description} onChange={(event) => updateLine(line.key, "description", event.target.value)} required /></Field></div>
+                  <div className="md:col-span-1"><Field label={t("quantityShort")}><Input value={line.quantity} onChange={(event) => updateLine(line.key, "quantity", event.target.value)} type="number" inputMode="decimal" min="0.000001" step="0.000001" required /></Field></div>
+                  <div className="md:col-span-1"><Field label={t("price")}><Input value={line.unitPrice} onChange={(event) => updateLine(line.key, "unitPrice", event.target.value)} type="number" inputMode="decimal" min="0" step="0.01" required /></Field></div>
+                  <div className="md:col-span-1"><Field label={t("discount")}><Input value={line.discountAmount} onChange={(event) => updateLine(line.key, "discountAmount", event.target.value)} type="number" inputMode="decimal" min="0" step="0.01" /></Field></div>
+                  <div className="flex items-end md:col-span-1"><Button type="button" variant="outline" disabled={lines.length === 1} onClick={() => setLines((current) => current.filter((item) => item.key !== line.key))}>{t("remove")}</Button></div>
                 </div>
               ))}
-              <Button type="button" variant="outline" onClick={() => setLines((current) => [...current, newLine(current.length)])}><Plus className="h-4 w-4" />{locale === "fr" ? "Ajouter une ligne" : "Add a line"}</Button>
+              <Button type="button" variant="outline" onClick={() => setLines((current) => [...current, newLine(current.length)])}><Plus className="h-4 w-4" />{t("addLine")}</Button>
             </div>
           </ProfessionalFormSection>
-          {isReceivables ? <ProfessionalFormSection title={locale === "fr" ? "Notes" : "Notes"}><Field label={locale === "fr" ? "Notes internes" : "Internal notes"}><textarea name="notes" rows={4} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base" /></Field></ProfessionalFormSection> : null}
-          <div className="sticky bottom-0 flex justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface py-3"><Button type="button" variant="outline" onClick={() => { setCreateOpen(false); resetCreateForm(); }}>{locale === "fr" ? "Annuler" : "Cancel"}</Button><Button type="submit">{locale === "fr" ? "Enregistrer le brouillon" : "Save draft"}</Button></div>
+          {isReceivables ? <ProfessionalFormSection title={t("notes")}><Field label={t("internalNotes")}><textarea name="notes" rows={4} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base" /></Field></ProfessionalFormSection> : null}
+          <div className="sticky bottom-0 flex justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface py-3"><Button type="button" variant="outline" onClick={() => { setCreateOpen(false); resetCreateForm(); }}>{t("cancel")}</Button><Button type="submit">{t("saveDraft")}</Button></div>
         </form>
       </Dialog>
 
-      <Dialog open={Boolean(detail)} onClose={() => setDetail(null)} title={detail ? String(detail.number || detail.reference || (locale === "fr" ? "Détail financier" : "Finance details")) : ""} className="h-[94dvh] max-w-5xl">
+      <Dialog open={Boolean(detail)} onClose={() => setDetail(null)} title={detail ? String(detail.number || detail.reference || t("financeDetails")) : ""} className="h-[94dvh] max-w-5xl">
         {detail ? <div className="grid gap-5">
           <div className="flex flex-wrap gap-2">{detail.status ? <StatusBadge tone={financeStatusTone(detail.status)}>{financeStatusLabel(detail.status, locale)}</StatusBadge> : null}{detail.currencyCode ? <StatusBadge>{String(detail.currencyCode)}</StatusBadge> : null}</div>
           <FinanceDetailGrid>
-            <FinanceDetailValue label={locale === "fr" ? "Date" : "Date"}>{financeDate(detail.invoiceDate || detail.dueDate || detail.createdAt, locale)}</FinanceDetailValue>
-            <FinanceDetailValue label={locale === "fr" ? "Total" : "Total"}>{financeMoney(detail.grandTotal ?? detail.originalAmount, String(detail.currencyCode || "USD"), locale)}</FinanceDetailValue>
-            <FinanceDetailValue label={locale === "fr" ? "Solde restant" : "Outstanding"}>{financeMoney(detail.outstandingAmount, String(detail.currencyCode || "USD"), locale)}</FinanceDetailValue>
-            {detail.amountPaid !== undefined ? <FinanceDetailValue label={locale === "fr" ? "Montant payé" : "Paid amount"}>{financeMoney(detail.amountPaid, String(detail.currencyCode || "USD"), locale)}</FinanceDetailValue> : null}
-            {detail.dueDate ? <FinanceDetailValue label={locale === "fr" ? "Échéance" : "Due date"}>{financeDate(detail.dueDate, locale)}</FinanceDetailValue> : null}
-            {detail.revision ? <FinanceDetailValue label={locale === "fr" ? "Révision" : "Revision"}>{locale === "fr" ? "Version" : "Version"} {detail.revision}</FinanceDetailValue> : null}
+            <FinanceDetailValue label={t("date")}>{financeDate(detail.invoiceDate || detail.dueDate || detail.createdAt, locale)}</FinanceDetailValue>
+            <FinanceDetailValue label={t("total")}>{financeMoney(detail.grandTotal ?? detail.originalAmount, String(detail.currencyCode || "USD"), locale)}</FinanceDetailValue>
+            <FinanceDetailValue label={t("outstanding")}>{financeMoney(detail.outstandingAmount, String(detail.currencyCode || "USD"), locale)}</FinanceDetailValue>
+            {detail.amountPaid !== undefined ? <FinanceDetailValue label={t("paidAmount")}>{financeMoney(detail.amountPaid, String(detail.currencyCode || "USD"), locale)}</FinanceDetailValue> : null}
+            {detail.dueDate ? <FinanceDetailValue label={t("dueDate")}>{financeDate(detail.dueDate, locale)}</FinanceDetailValue> : null}
+            {detail.revision ? <FinanceDetailValue label={t("revision")}>{t("version")} {detail.revision}</FinanceDetailValue> : null}
           </FinanceDetailGrid>
           {Array.isArray(detail.items) && detail.items.length ? <DetailLineItems items={detail.items as InvoiceItem[]} currencyCode={String(detail.currencyCode || "USD")} locale={locale} /> : null}
-          {!isReceivables && (detail as Invoice).threeWayMatch ? <section className="rounded-xl border border-dtsc-border p-4"><h3 className="font-black text-dtsc-ink">{locale === "fr" ? "Contrôle commande-réception-facture" : "Purchase order, receipt and invoice control"}</h3><div className="mt-3 grid gap-3 sm:grid-cols-3"><FinanceDetailValue label={locale === "fr" ? "Quantité" : "Quantity"}>{String((detail as Invoice).threeWayMatch?.quantityVariance ?? 0)}</FinanceDetailValue><FinanceDetailValue label={locale === "fr" ? "Prix" : "Price"}>{String((detail as Invoice).threeWayMatch?.priceVariance ?? 0)}</FinanceDetailValue><FinanceDetailValue label={locale === "fr" ? "Écart total" : "Total variance"}>{String((detail as Invoice).threeWayMatch?.totalVariance ?? 0)}</FinanceDetailValue></div></section> : null}
-          {endpoint.includes("invoices") && canManage ? <div data-responsive-actions>{invoiceTransitionActions(detail.status).map((action) => { const Icon = action.icon; return <Button key={action.action} variant={action.action === "REJECT" ? "destructive" : "outline"} onClick={() => setActionTarget({ invoice: detail as Invoice, action: action.action })}><Icon className="h-4 w-4" />{locale === "fr" ? action.label : action.action}</Button>; })}{["ISSUED", "POSTED", "PARTIALLY_PAID", "PAID"].includes(String(detail.status)) ? <Button variant="outline" onClick={() => setCreditTarget(detail as Invoice)}><FileMinus2 className="h-4 w-4" />{locale === "fr" ? "Créer un avoir" : "Create credit note"}</Button> : null}</div> : null}
+          {!isReceivables && (detail as Invoice).threeWayMatch ? <section className="rounded-xl border border-dtsc-border p-4"><h3 className="font-black text-dtsc-ink">{t("poReceiptInvoiceControl")}</h3><div className="mt-3 grid gap-3 sm:grid-cols-3"><FinanceDetailValue label={t("quantity")}>{String((detail as Invoice).threeWayMatch?.quantityVariance ?? 0)}</FinanceDetailValue><FinanceDetailValue label={t("price")}>{String((detail as Invoice).threeWayMatch?.priceVariance ?? 0)}</FinanceDetailValue><FinanceDetailValue label={t("totalVariance")}>{String((detail as Invoice).threeWayMatch?.totalVariance ?? 0)}</FinanceDetailValue></div></section> : null}
+          {endpoint.includes("invoices") && canManage ? <div data-responsive-actions>{invoiceTransitionActions(detail.status, locale).map((action) => { const Icon = action.icon; return <Button key={action.action} variant={action.action === "REJECT" ? "destructive" : "outline"} onClick={() => setActionTarget({ invoice: detail as Invoice, action: action.action })}><Icon className="h-4 w-4" />{action.label}</Button>; })}{["ISSUED", "POSTED", "PARTIALLY_PAID", "PAID"].includes(String(detail.status)) ? <Button variant="outline" onClick={() => setCreditTarget(detail as Invoice)}><FileMinus2 className="h-4 w-4" />{t("createCreditNote")}</Button> : null}</div> : null}
           <FinanceCollaboration organizationId={organizationId} moduleCode={moduleCode} record={detail} locale={locale} />
         </div> : null}
       </Dialog>
 
-      <Dialog open={Boolean(actionTarget)} onClose={() => setActionTarget(null)} title={actionTarget ? `${actionTarget.action} · ${actionTarget.invoice.number}` : ""} description={locale === "fr" ? "La séparation des rôles et la période financière sont vérifiées côté serveur." : "Separation of duties and the finance period are checked server-side."} className="max-w-xl">
-        {actionTarget ? <form onSubmit={transitionInvoice} className="grid gap-4"><Field label={locale === "fr" ? "Motif ou commentaire de décision" : "Decision reason or comment"}><textarea name="reason" rows={4} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base" /></Field><div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setActionTarget(null)}>{locale === "fr" ? "Annuler" : "Cancel"}</Button><Button type="submit">{locale === "fr" ? "Confirmer l’action" : "Confirm action"}</Button></div></form> : null}
+      <Dialog open={Boolean(actionTarget)} onClose={() => setActionTarget(null)} title={actionTarget ? `${invoiceActionLabel(actionTarget.action, locale)} · ${actionTarget.invoice.number}` : ""} description={t("sodAndPeriodChecked")} className="max-w-xl">
+        {actionTarget ? <form onSubmit={transitionInvoice} className="grid gap-4"><Field label={t("decisionReasonComment")}><textarea name="reason" rows={4} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base" /></Field><div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setActionTarget(null)}>{t("cancel")}</Button><Button type="submit">{t("confirmAction")}</Button></div></form> : null}
       </Dialog>
 
-      <Dialog open={Boolean(creditTarget)} onClose={() => setCreditTarget(null)} title={locale === "fr" ? "Créer un avoir" : "Create credit note"} description={locale === "fr" ? "L’avoir conserve la facture d’origine et suit son propre workflow." : "The credit note keeps the original invoice link and follows its own workflow."} className="max-w-2xl">
-        {creditTarget ? <form onSubmit={createCreditNote} className="grid gap-4"><Field label={locale === "fr" ? "Date de l’avoir" : "Credit date"}><Input name="creditDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required /></Field><Field label={locale === "fr" ? "Motif détaillé" : "Detailed reason"}><textarea name="reason" minLength={8} rows={4} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base" required /></Field><p className="text-sm text-dtsc-muted">{locale === "fr" ? "Les lignes de la facture sont proposées. Le serveur contrôle les montants et l’unicité." : "Invoice lines are proposed. The server controls amounts and uniqueness."}</p><div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setCreditTarget(null)}>{locale === "fr" ? "Annuler" : "Cancel"}</Button><Button type="submit"><CircleDollarSign className="h-4 w-4" />{locale === "fr" ? "Créer l’avoir" : "Create credit note"}</Button></div></form> : null}
+      <Dialog open={Boolean(creditTarget)} onClose={() => setCreditTarget(null)} title={t("createCreditNote")} description={t("creditNoteKeepsOriginal")} className="max-w-2xl">
+        {creditTarget ? <form onSubmit={createCreditNote} className="grid gap-4"><Field label={t("creditDate")}><Input name="creditDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required /></Field><Field label={t("detailedReason")}><textarea name="reason" minLength={8} rows={4} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base" required /></Field><p className="text-sm text-dtsc-muted">{t("creditNoteServerControls")}</p><div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setCreditTarget(null)}>{t("cancel")}</Button><Button type="submit"><CircleDollarSign className="h-4 w-4" />{t("createCreditNote")}</Button></div></form> : null}
       </Dialog>
     </ModuleWorkspace>
   );
