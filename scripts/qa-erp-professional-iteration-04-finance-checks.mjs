@@ -12,11 +12,11 @@ const read = (file) => {
   }
   return fs.readFileSync(target, "utf8");
 };
-const need = (content, marker, scope) => {
-  if (!content.includes(marker)) failures.push(`${scope}: marqueur manquant « ${marker} »`);
+const need = (contentValue, marker, scope) => {
+  if (!contentValue.includes(marker)) failures.push(`${scope}: marqueur manquant « ${marker} »`);
 };
-const reject = (content, marker, scope) => {
-  if (content.includes(marker)) failures.push(`${scope}: marqueur interdit « ${marker} »`);
+const reject = (contentValue, marker, scope) => {
+  if (contentValue.includes(marker)) failures.push(`${scope}: marqueur interdit « ${marker} »`);
 };
 const needLocalized = ({ component, key, fr, en, scope, renderMarker = `t("${key}")` }) => {
   need(component, renderMarker, scope);
@@ -61,10 +61,6 @@ const checks = {
     need(content.page, "OPERATIONAL_FINANCE_MODULE_CODES", "Page Finance");
   },
   overview() {
-    // Iteration 04 originally asserted two French literals directly in the component.
-    // The canonical i18n convergence keeps the same business capabilities while moving
-    // customer copy into enterprise-finance FR/EN catalogs. Require the rendered keys,
-    // the server-driven diagnostic authority, and both canonical translations instead.
     for (const marker of [
       'financeT(locale, "setupAssistant")',
       "DiagnosticCard",
@@ -74,14 +70,8 @@ const checks = {
       "functionalCurrencyCode",
       "reconciliationTolerance",
     ]) need(content.overview, marker, "Vue d’ensemble Finance");
-    for (const marker of [
-      '"setupAssistant": "Assistant de mise en service"',
-      '"recommendedActions": "Actions recommandées"',
-    ]) need(content.financeFr, marker, "Catalogue Finance FR");
-    for (const marker of [
-      '"setupAssistant": "Setup assistant"',
-      '"recommendedActions": "Recommended actions"',
-    ]) need(content.financeEn, marker, "Catalogue Finance EN");
+    for (const marker of ['"setupAssistant": "Assistant de mise en service"', '"recommendedActions": "Actions recommandées"']) need(content.financeFr, marker, "Catalogue Finance FR");
+    for (const marker of ['"setupAssistant": "Setup assistant"', '"recommendedActions": "Recommended actions"']) need(content.financeEn, marker, "Catalogue Finance EN");
     reject(content.overview, "Assistant de configuration", "Ancien assistant Finance interdit");
     reject(content.overview, "Checklist de préparation", "Ancienne checklist Finance interdite");
     reject(content.overview, "const steps = useMemo", "Checklist locale Finance interdite");
@@ -123,14 +113,31 @@ const checks = {
     for (const marker of ["maskedReference", "sourceFinancialAccountId", "targetFinancialAccountId", "exchangeRate", "ledgerAccountId"]) need(content.payments, marker, "Trésorerie professionnelle");
   },
   cash() {
-    for (const marker of ["Ouvrir une session de caisse", "Assistant de clôture de caisse", "Comptage physique", "Validation indépendante", "PENDING_VALIDATION", "countedClosingAmount"]) need(content.cashBank, marker, "Caisse professionnelle");
+    for (const localized of [
+      { key: "openCashSessionTitle", fr: "Ouvrir une session de caisse", en: "Open a cash session", renderMarker: '"openCashSessionTitle"' },
+      { key: "cashCloseAssistant", fr: "Assistant de clôture de caisse", en: "Cash-close assistant", renderMarker: '"cashCloseAssistant"' },
+      { key: "physicalCount", fr: "Comptage physique", en: "Physical count", renderMarker: '"physicalCount"' },
+      { key: "independentValidation", fr: "Validation indépendante", en: "Independent validation", renderMarker: '"independentValidation"' },
+    ]) needLocalized({ component: content.cashBank, ...localized, scope: "Caisse professionnelle" });
+    for (const marker of ["PENDING_VALIDATION", "countedClosingAmount", "/cash-sessions/${closeTarget.id}/close", "/cash-sessions/${validateTarget.id}/validate"]) need(content.cashBank, marker, "Caisse professionnelle");
   },
   bank() {
-    for (const marker of ["Importer un relevé bancaire", "accept=\".csv,text/csv\"", "5 * 1024 * 1024", "parseBankCsv", "Prévisualisation", "safeText", "bank-statements"]) need(content.cashBank, marker, "Banque professionnelle");
+    for (const localized of [
+      { key: "importBankStatementTitle", fr: "Importer un relevé bancaire", en: "Import a bank statement", renderMarker: '"importBankStatementTitle"' },
+      { key: "preview", fr: "Prévisualisation", en: "Preview", renderMarker: '"preview"' },
+      { key: "cashCsvNoRows", fr: "Le fichier CSV ne contient aucune ligne bancaire.", en: "The CSV file contains no bank rows.", renderMarker: '"cashCsvNoRows"' },
+      { key: "cashCsvRequiredColumns", fr: "Colonnes requises : date, description, débit et/ou crédit.", en: "Required columns: date, description, debit and/or credit.", renderMarker: '"cashCsvRequiredColumns"' },
+    ]) needLocalized({ component: content.cashBank, ...localized, scope: "Banque professionnelle" });
+    for (const marker of ["accept=\".csv,text/csv\"", "5 * 1024 * 1024", "10_000", "parseBankCsv", "safeText", "bank-statements"]) need(content.cashBank, marker, "Banque professionnelle");
     for (const marker of ["authorizeFinanceRequest", "organizationId", "lines", "maskedReference", "writeApiLog"]) need(content.bankDetail, marker, "Détail relevé sécurisé");
   },
   reconciliation() {
-    for (const marker of ["Créer un rapprochement", "Nouvelle correspondance", "matchedAmount", "Une ambiguïté", "completeReconciliation", "reconciliations"]) need(content.cashBank, marker, "Rapprochement professionnel");
+    for (const localized of [
+      { key: "newReconciliation", fr: "Nouveau rapprochement", en: "New reconciliation", renderMarker: '"newReconciliation"' },
+      { key: "newMatch", fr: "Nouvelle correspondance", en: "New match", renderMarker: '"newMatch"' },
+      { key: "matchDescription", fr: "Montant exact, date proche, référence, tiers, compte et devise sont les critères explicables. Une ambiguïté n’est jamais validée automatiquement.", en: "Exact amount, nearby date, reference, party, account and currency are explainable criteria. Ambiguity is never automatically approved.", renderMarker: '"matchDescription"' },
+    ]) needLocalized({ component: content.cashBank, ...localized, scope: "Rapprochement professionnel" });
+    for (const marker of ["matchedAmount", "completeReconciliation", "reconciliations", "/reconciliations/${matchTarget.id}/matches", "/reconciliations/${record.id}/complete"]) need(content.cashBank, marker, "Rapprochement professionnel");
     for (const marker of ["authorizeFinanceRequest", "organizationId", "statementLines", "matches", "writeApiLog"]) need(content.reconciliationDetail, marker, "Détail rapprochement sécurisé");
   },
   language() {
@@ -199,20 +206,21 @@ const aliases = {
   "french-language": ["language"],
   mobile: ["mobile"],
   "deep-links": ["deeplinks"],
-  security: ["security"],
-  integrity: ["integrity"],
+  security: ["security", "integrity"],
   guides: ["guides"],
-  "commercial-readiness": ["readiness", "guides"],
-  "relationships-navigation": ["navigation"],
+  readiness: ["readiness"],
+  navigation: ["navigation"],
 };
-const selected = aliases[domain] || [domain];
-for (const name of selected) {
-  if (!checks[name]) failures.push(`Domaine QA inconnu: ${name}`);
-  else checks[name]();
+
+const selected = aliases[domain];
+if (!selected) {
+  console.error(`Domaine QA Finance inconnu: ${domain}`);
+  process.exit(1);
 }
+for (const key of selected) checks[key]();
 if (failures.length) {
-  console.error(`QA ERP Finance itération 04: ${failures.length} échec(s)`);
+  console.error(`QA ERP Professional Iteration 04 Finance (${domain}): ${failures.length} échec(s)`);
   for (const failure of failures) console.error(`- ${failure}`);
   process.exit(1);
 }
-console.log(`QA ERP Finance itération 04 (${domain}): OK`);
+console.log(`QA ERP Professional Iteration 04 Finance (${domain}): OK`);
