@@ -5,6 +5,10 @@ import "./qa-erp-stabilization-observability.mjs";
 import "./qa-erp-cross-module-finance.mjs";
 import { forbidTokens, requirePaths, requireTokens, success } from "./qa-enterprise-common-domain-lib.mjs";
 
+const overview = "components/enterprise/professional/enterprise-finance-overview-workspace.tsx";
+const financeFr = "locales/enterprise-finance.fr.json";
+const financeEn = "locales/enterprise-finance.en.json";
+
 requirePaths([
   "lib/enterprise/accounting/access.ts",
   "lib/enterprise/accounting/finance-readiness-service.ts",
@@ -12,7 +16,9 @@ requirePaths([
   "lib/enterprise-sector-templates.ts",
   "lib/enterprise/accounting/posting-registry-final.ts",
   "lib/enterprise/accounting/posting-service.ts",
-  "components/enterprise/professional/enterprise-finance-overview-workspace.tsx",
+  overview,
+  financeFr,
+  financeEn,
   "tests/e2e/erp-cross-module-finance.spec.mjs",
   ".github/workflows/accounting-acceptance.yml",
 ]);
@@ -46,10 +52,18 @@ requireTokens("lib/enterprise/accounting/posting-service.ts", [
   "idempotencyKey",
   "status: \"POSTED\"",
 ]);
-requireTokens("components/enterprise/professional/enterprise-finance-overview-workspace.tsx", [
-  "Indisponible",
-  "Unavailable",
+requireTokens(overview, [
+  'financeT(locale, "unavailable")',
   "projectionError",
+  'financeT(locale, "projectionHealthUnavailable")',
+]);
+requireTokens(financeFr, [
+  '"unavailable": "Indisponible"',
+  '"projectionHealthUnavailable": "La santé des projections inter-modules est indisponible."',
+]);
+requireTokens(financeEn, [
+  '"unavailable": "Unavailable"',
+  '"projectionHealthUnavailable": "Cross-module projection health is unavailable."',
 ]);
 requireTokens(".github/workflows/accounting-acceptance.yml", [
   "Accounting onboarding browser acceptance",
