@@ -32,7 +32,7 @@ export async function EnterpriseFinanceModulePage({ moduleCode }: { moduleCode: 
     requireEnterpriseMembership(session, organizationId),
     prisma.organization.findFirst({
       where: { id: organizationId, status: "ACTIVE", deletedAt: null, organizationType: "CLIENT" },
-      select: { name: true },
+      select: { name: true, logoUrl: true },
     }),
   ]);
   if (!access.allowed || !membership || !organization) notFound();
@@ -77,6 +77,7 @@ export async function EnterpriseFinanceModulePage({ moduleCode }: { moduleCode: 
         <EnterpriseAdvancedFinanceWorkspace
           organizationId={organizationId}
           organizationName={organization.name}
+          organizationLogoUrl={organization.logoUrl}
           definition={definition}
           locale={user.locale}
           canManage={canManage}

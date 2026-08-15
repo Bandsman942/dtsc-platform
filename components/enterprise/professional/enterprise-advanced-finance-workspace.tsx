@@ -15,6 +15,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { FinancialStatementReportDialog } from "@/components/reports/financial-statement-report-dialog";
 import { Input } from "@/components/ui/input";
 import {
   financeDate,
@@ -44,7 +45,7 @@ type Payload = {
 type LookupState = { charts: Item[]; years: Item[]; periods: Item[]; journals: Item[]; accounts: Item[]; assets: Item[] };
 type FormState = Record<string, string | boolean>;
 type SectionDefinition = { key: string; labelFr: string; labelEn: string; endpoint: string };
-type Props = { organizationId: string; organizationName: string; definition: EnterpriseModuleDefinition; locale?: string | null; canManage: boolean };
+type Props = { organizationId: string; organizationName: string; organizationLogoUrl?: string | null; definition: EnterpriseModuleDefinition; locale?: string | null; canManage: boolean };
 
 const EMPTY_LOOKUPS: LookupState = { charts: [], years: [], periods: [], journals: [], accounts: [], assets: [] };
 const EMPTY_SECTIONS: SectionDefinition[] = [];
@@ -169,7 +170,7 @@ function amountSummary(item: Item, activeKey: string, locale: FinanceLocale) {
   return "";
 }
 
-export function EnterpriseAdvancedFinanceWorkspace({ organizationId, organizationName, definition, locale: rawLocale, canManage }: Props) {
+export function EnterpriseAdvancedFinanceWorkspace({ organizationId, organizationName, organizationLogoUrl, definition, locale: rawLocale, canManage }: Props) {
   const locale: FinanceLocale = rawLocale === "en" ? "en" : "fr";
   const sections = SECTIONS[definition.code] || EMPTY_SECTIONS;
   const searchParams = useSearchParams();
@@ -316,6 +317,7 @@ export function EnterpriseAdvancedFinanceWorkspace({ organizationId, organizatio
         <ModuleSection title={activeSection ? (locale === "fr" ? activeSection.labelFr : activeSection.labelEn) : definition.labelFr} description={sectionDescription} count={pagination.total}>
           {loading ? <div className="space-y-3">{Array.from({ length: 4 }).map((_, index) => <div key={index} className="h-28 animate-pulse rounded-xl bg-dtsc-soft" />)}</div> : items.length === 0 ? <div className="flex min-h-48 flex-col items-center justify-center border-y border-dashed border-dtsc-border py-10 text-center"><BookOpen className="h-8 w-8 text-dtsc-muted" /><p className="mt-3 font-black text-dtsc-ink">{locale === "fr" ? "Aucune donnée pour cette vue" : "No data for this view"}</p><p className="mt-1 max-w-xl text-sm text-dtsc-muted">{locale === "fr" ? "Utilisez la prochaine action utile ou vérifiez les filtres. Aucun résultat technique artificiel n’est affiché." : "Use the next useful action or review filters. No artificial technical result is displayed."}</p></div> : <div className="divide-y divide-dtsc-border border-y border-dtsc-border">
             {items.map((item) => <article key={item.id || text(item, "inventoryItemId") + text(item, "warehouseId") + text(item, "currencyCode")} className="py-4 first:pt-0 last:pb-0"><div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between"><div className="min-w-0"><div className="flex min-w-0 flex-wrap items-center gap-2"><h3 className="min-w-0 break-words font-black text-dtsc-ink">{itemTitle(item, activeKey, locale)}</h3>{item.status ? <StatusBadge tone={financeStatusTone(String(item.status))}>{financeStatusLabel(String(item.status), locale)}</StatusBadge> : null}</div><p className="mt-1 break-words text-sm text-dtsc-muted">{itemDescription(item, activeKey, locale)}</p>{amountSummary(item, activeKey, locale) ? <p className="mt-2 text-sm font-black tabular-nums text-dtsc-ink">{amountSummary(item, activeKey, locale)}</p> : null}<BusinessDetails item={item} activeKey={activeKey} locale={locale} /></div><div className="flex shrink-0 flex-wrap gap-2">
+              {activeKey === "statements" && item.id ? <FinancialStatementReportDialog organizationId={organizationId} organizationName={organizationName} organizationLogoUrl={organizationLogoUrl} statementId={item.id} locale={rawLocale} /> : null}
               {activeKey === "years" && item.status === "DRAFT" ? <Button size="sm" variant="outline" onClick={() => void openFiscalYearItem(item)}>{locale === "fr" ? "Ouvrir l’exercice" : "Open fiscal year"}</Button> : null}
               {activeKey === "entries" && item.status === "DRAFT" ? <Button size="sm" variant="outline" onClick={() => void transitionEntry(item, "SUBMIT")}>{locale === "fr" ? "Soumettre" : "Submit"}</Button> : null}
               {activeKey === "entries" && item.status === "PENDING_APPROVAL" ? <><Button size="sm" onClick={() => void transitionEntry(item, "APPROVE")}>{locale === "fr" ? "Approuver" : "Approve"}</Button><Button size="sm" variant="outline" onClick={() => void transitionEntry(item, "REJECT")}>{locale === "fr" ? "Refuser" : "Reject"}</Button></> : null}

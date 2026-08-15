@@ -36,11 +36,14 @@ type HealthRelatedModule = "APPOINTMENTS" | "CONSULTATIONS" | "MEDICAL_RECORDS" 
 
 export function EnterpriseSectorModuleWorkspace(props: {
   organizationId: string;
+  organizationName: string;
+  organizationLogoUrl?: string | null;
+  locale?: string | null;
   definition: EnterpriseModuleDefinition;
   enabledModuleCodes: string[];
   records: EnterpriseSectorRecordItem[];
 }) {
-  const { organizationId, definition, enabledModuleCodes } = props;
+  const { organizationId, organizationName, organizationLogoUrl, locale, definition, enabledModuleCodes } = props;
   const router = useRouter();
   const searchParams = useSearchParams();
   const activeModuleCodes = useMemo(() => new Set(enabledModuleCodes), [enabledModuleCodes]);
@@ -121,7 +124,7 @@ export function EnterpriseSectorModuleWorkspace(props: {
     if (definition.code === "ALERTS_EXPIRY_LOW_STOCK") return withHelp(<PharmacyAlertsWorkspace organizationId={organizationId} />);
     if (definition.code === "QUALITY_PHARMACOVIGILANCE") return withHelp(<PharmacyQualityWorkspace organizationId={organizationId} />);
     if (definition.code === "PHARMACY_DOCUMENTS") return withHelp(<PharmacyDocumentsWorkspace organizationId={organizationId} />);
-    if (definition.code === "PHARMACY_REPORTS") return withHelp(<PharmacyReportsWorkspace organizationId={organizationId} />);
+    if (definition.code === "PHARMACY_REPORTS") return withHelp(<PharmacyReportsWorkspace organizationId={organizationId} organizationName={organizationName} organizationLogoUrl={organizationLogoUrl} locale={locale} />);
     if (definition.code === "PHARMACY_SETTINGS") return withHelp(<PharmacySettingsWorkspace organizationId={organizationId} />);
   }
 
