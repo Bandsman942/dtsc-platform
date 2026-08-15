@@ -15,6 +15,7 @@ import { ensureCanonicalFinanceModulesForOrganization } from "@/lib/enterprise/f
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { getEnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
 import { requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
+import { translateEnterpriseFinance } from "@/lib/i18n";
 import { prisma } from "@/lib/prisma";
 import { getAccountingOnboardingGuide } from "@/lib/user-guides/accounting-onboarding-guide";
 
@@ -41,6 +42,7 @@ export async function EnterpriseFinanceModulePage({ moduleCode }: { moduleCode: 
   if (!definition || definition.code !== moduleCode || definition.routeKind !== "DEDICATED_CORE") notFound();
   const canManage = MANAGER_ROLES.has(membership.role);
   const locale = user.locale === "en" ? "en" : "fr";
+  const t = (key: Parameters<typeof translateEnterpriseFinance>[1]) => translateEnterpriseFinance(locale, key);
 
   return (
     <AppShell user={user}>
@@ -48,8 +50,8 @@ export async function EnterpriseFinanceModulePage({ moduleCode }: { moduleCode: 
         <div className="mx-auto mb-4 w-full max-w-[1600px] px-4 sm:px-6 lg:px-8">
           <Link href="/enterprise-modules/FINANCE_TREASURY/exchange-rates" className="flex min-w-0 items-center justify-between gap-4 rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-3 text-dtsc-ink transition hover:border-cyan-400/60">
             <span className="min-w-0">
-              <span className="block text-sm font-black">{locale === "fr" ? "Taux de change et consolidation multi-devise" : "Exchange rates and multi-currency consolidation"}</span>
-              <span className="mt-1 block text-xs font-semibold text-dtsc-muted">{locale === "fr" ? "Configurer les taux datés utilisés par Finance et les rapports Shop." : "Configure dated rates used by Finance and Shop reports."}</span>
+              <span className="block text-sm font-black">{t("exchangeRatesTitle")}</span>
+              <span className="mt-1 block text-xs font-semibold text-dtsc-muted">{t("exchangeRatesDescription")}</span>
             </span>
             <ArrowRightLeft className="h-5 w-5 shrink-0 text-cyan-600" />
           </Link>
