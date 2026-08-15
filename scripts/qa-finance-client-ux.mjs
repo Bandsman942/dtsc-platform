@@ -6,6 +6,7 @@ const failures = [];
 const fail = (message) => failures.push(message);
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const exists = (file) => fs.existsSync(path.join(root, file));
+const json = (file) => JSON.parse(read(file));
 
 const financeFiles = [
   "components/enterprise/enterprise-finance-module-page.tsx",
@@ -40,7 +41,20 @@ if (exists(shared)) {
 const onboarding = "components/enterprise/professional/enterprise-accounting-onboarding-panel.tsx";
 if (exists(onboarding)) {
   const content = read(onboarding);
-  for (const token of ["official SYSCOHADA default", "plan officiel par défaut", "financeStatusLabel", "safeFinanceError", "Financial statements", "États financiers", "defaultTemplateReference"]) if (!content.includes(token)) fail(`Finance UX: onboarding final incomplet (${token})`);
+  for (const token of ["translateEnterpriseFinance", 't("accountingOnboarding")', 't("accountingOnboardingDescription")', 't("financialStatements")', "financeStatusLabel", "safeFinanceError", "defaultTemplateReference"]) if (!content.includes(token)) fail(`Finance UX: onboarding final incomplet (${token})`);
+
+  const frPath = "locales/enterprise-finance.fr.json";
+  const enPath = "locales/enterprise-finance.en.json";
+  if (!exists(frPath) || !exists(enPath)) fail("Finance UX: catalogues enterprise-finance FR/EN absents");
+  else {
+    const fr = json(frPath);
+    const en = json(enPath);
+    if (!String(fr.accountingOnboardingDescription || "").includes("plan officiel par défaut")) fail("Finance UX: promesse SYSCOHADA officielle absente du catalogue FR");
+    if (!String(en.accountingOnboardingDescription || "").includes("official SYSCOHADA default")) fail("Finance UX: promesse SYSCOHADA officielle absente du catalogue EN");
+    if (fr.financialStatements !== "États financiers" || en.financialStatements !== "Financial statements") fail("Finance UX: libellés États financiers FR/EN absents du catalogue canonique");
+    if (JSON.stringify(Object.keys(fr).sort()) !== JSON.stringify(Object.keys(en).sort())) fail("Finance UX: parité de clés enterprise-finance FR/EN rompue");
+  }
+
   for (const forbidden of ["bootstrap non officiel", "unofficial bootstrap", "REGULATORY_STATEMENT_MAPPING_NOT_VALIDATED"]) if (content.includes(forbidden)) fail(`Finance UX: jargon de gouvernance historique affiché au client (${forbidden})`);
 }
 
