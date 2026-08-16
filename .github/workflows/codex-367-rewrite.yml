@@ -40,6 +40,8 @@ jobs:
       - name: Validate targeted contract
         run: node scripts/qa-retail-operator-i18n-367.mjs
       - name: Type check generated rewrite
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
         run: pnpm type-check
       - name: Commit generated implementation and remove rewrite scaffolding
         run: |
