@@ -1,0 +1,53 @@
+name: Codex Retail hook dependency repair 369
+
+on:
+  push:
+    branches:
+      - refactor/367-retail-operator-i18n
+
+permissions:
+  contents: write
+
+concurrency:
+  group: codex-369-retail-hook-deps
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v7
+        with:
+          ref: refactor/367-retail-operator-i18n
+          fetch-depth: 0
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Repair locale hook dependencies
+        run: node scripts/codex-369-fix-retail-hook-deps.mjs
+      - name: Show affected source
+        run: nl -ba components/enterprise/professional/retail-workspace-shared.tsx | sed -n '860,915p'
+      - name: Lint
+        run: pnpm lint
+      - name: Type check
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+        run: pnpm type-check
+      - name: Commit repair and remove scaffolding
+        run: |
+          git rm -f .github/workflows/codex-369-fix-retail-hook-deps.yml scripts/codex-369-fix-retail-hook-deps.mjs
+          git add components/enterprise/professional/retail-workspace-shared.tsx
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "fix(retail): include locale in hook dependencies"
+          git push origin HEAD:refactor/367-retail-operator-i18n
