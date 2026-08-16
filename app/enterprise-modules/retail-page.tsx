@@ -2,12 +2,8 @@ import { notFound, redirect } from "next/navigation";
 import { MobileMoneyAgencyWorkspace } from "@/components/enterprise/professional/mobile-money-agency-workspace";
 import { RetailActiveCustomerBar } from "@/components/enterprise/professional/retail-active-customer-bar";
 import { RetailDailyCloseWorkspace } from "@/components/enterprise/professional/retail-daily-close-workspace";
-import { RetailDeviceReadiness } from "@/components/enterprise/professional/retail-device-readiness";
-import { RetailGlobalReadiness } from "@/components/enterprise/professional/retail-global-readiness";
-import { RetailOfflineContinuity } from "@/components/enterprise/professional/retail-offline-continuity";
-import { RetailOmnichannelPanel } from "@/components/enterprise/professional/retail-omnichannel-panel";
 import { RetailOperatorWorkspace } from "@/components/enterprise/professional/retail-operator-workspace";
-import { RetailPaymentFollowup } from "@/components/enterprise/professional/retail-payment-followup";
+import { RetailPosSupplementaryTools } from "@/components/enterprise/professional/retail-pos-supplementary-tools";
 import { RetailPosWorkspace } from "@/components/enterprise/professional/retail-pos-workspace";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
@@ -32,8 +28,6 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
     }),
   ]);
   if (!membership || !organization) notFound();
-
-  const locale: "fr" | "en" = user.locale === "en" ? "en" : "fr";
 
   return (
     <AppShell user={user}>
@@ -67,35 +61,7 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
           />
         )}
 
-        {moduleCode === "RETAIL_POS" ? (
-          <section aria-label={locale === "en" ? "Additional Shop tools" : "Outils complémentaires du Shop"} className="space-y-3">
-            <details className="group rounded-2xl border border-dtsc-border bg-dtsc-surface shadow-sm">
-              <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-black text-dtsc-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">
-                <span>{locale === "en" ? "Orders, pickup & offline sales" : "Commandes, retraits & vente hors connexion"}</span>
-                <span className="text-xs font-bold text-dtsc-muted group-open:hidden">{locale === "en" ? "Open" : "Ouvrir"}</span>
-                <span className="hidden text-xs font-bold text-dtsc-muted group-open:inline">{locale === "en" ? "Close" : "Fermer"}</span>
-              </summary>
-              <div className="grid gap-4 border-t border-dtsc-border p-3 sm:p-4">
-                <RetailOfflineContinuity organizationId={organizationId} locale={locale} />
-                <RetailOmnichannelPanel organizationId={organizationId} locale={locale} />
-              </div>
-            </details>
-
-            <RetailPaymentFollowup organizationId={organizationId} locale={locale} />
-
-            <details className="group rounded-2xl border border-dtsc-border bg-dtsc-surface shadow-sm">
-              <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-black text-dtsc-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">
-                <span>{locale === "en" ? "Shop setup & POS equipment" : "Mise en service & équipements du Shop"}</span>
-                <span className="text-xs font-bold text-dtsc-muted group-open:hidden">{locale === "en" ? "Open" : "Ouvrir"}</span>
-                <span className="hidden text-xs font-bold text-dtsc-muted group-open:inline">{locale === "en" ? "Close" : "Fermer"}</span>
-              </summary>
-              <div className="grid gap-4 border-t border-dtsc-border p-3 sm:p-4">
-                <RetailDeviceReadiness organizationId={organizationId} locale={locale} />
-                <RetailGlobalReadiness organizationId={organizationId} locale={locale} />
-              </div>
-            </details>
-          </section>
-        ) : null}
+        {moduleCode === "RETAIL_POS" ? <RetailPosSupplementaryTools organizationId={organizationId} /> : null}
       </div>
     </AppShell>
   );
