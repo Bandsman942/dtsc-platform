@@ -45,7 +45,7 @@ jobs:
         run: pnpm type-check
       - name: Commit generated implementation and remove rewrite scaffolding
         run: |
-          git rm .github/workflows/codex-367-rewrite.yml scripts/codex-367-rewrite.mjs scripts/codex-367-hotfix-scope.mjs
+          git rm -f .github/workflows/codex-367-rewrite.yml scripts/codex-367-rewrite.mjs scripts/codex-367-hotfix-scope.mjs
           git add components/enterprise/professional locales scripts/run-regression-qa-ci.mjs scripts/qa-retail-operator-i18n-367.mjs
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
