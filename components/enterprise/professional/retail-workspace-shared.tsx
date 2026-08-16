@@ -19,6 +19,7 @@ import {
   customerFacingStatusLabel,
 } from "@/lib/customer-facing-language";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
+import { translateRetailWorkspace, type RetailWorkspaceKey } from "@/lib/i18n";
 import { getRetailUserGuide } from "@/lib/user-guides/retail-telco-mobile-money-guides";
 
 export type RetailOperationalModuleCode = "RETAIL_POS" | "MOBILE_MONEY_AGENCY" | "TELCO_TOPUPS";
@@ -175,10 +176,16 @@ export type RetailMutation = (
   options?: { idempotent?: boolean },
 ) => Promise<Record<string, unknown> | null>;
 
-export function moneyValue(value: string | number | null | undefined, currency?: string) {
+function retailText(locale: "fr" | "en", key: RetailWorkspaceKey) {
+  return translateRetailWorkspace(locale, key);
+}
+
+export function moneyValue(value: string | number | null | undefined, currency?: string, locale?: "fr" | "en") {
   const amount = Number(value || 0);
-  const locale = typeof document !== "undefined" && document.documentElement.lang.toLowerCase().startsWith("en") ? "en-US" : "fr-FR";
-  const formatted = Number.isFinite(amount) ? amount.toLocaleString(locale, { maximumFractionDigits: 2 }) : "0";
+  const localeCode = locale
+    ? ({ fr: "fr-FR", en: "en-US" } as const)[locale]
+    : (typeof document !== "undefined" && document.documentElement.lang.toLowerCase().startsWith("en") ? "en-US" : "fr-FR");
+  const formatted = Number.isFinite(amount) ? amount.toLocaleString(localeCode, { maximumFractionDigits: 2 }) : "0";
   return currency ? `${formatted} ${currency}` : formatted;
 }
 
@@ -272,8 +279,8 @@ export function useRetailOperationalWorkspace({
       setDashboard(body);
     } catch (caught) {
       setError(customerFacingError(caught, locale, {
-        fr: "Les informations du Shop ne sont pas disponibles pour le moment. Actualisez puis réessayez.",
-        en: "Shop information is not available right now. Refresh and try again.",
+        fr: translateRetailWorkspace("fr", "retailLoadError"),
+        en: translateRetailWorkspace("en", "retailLoadError"),
       }));
     } finally {
       setLoading(false);
@@ -308,8 +315,8 @@ export function useRetailOperationalWorkspace({
       return body || {};
     } catch (caught) {
       setMessage(customerFacingError(caught, locale, {
-        fr: "Cette action n’a pas pu être terminée. Vérifiez les informations puis réessayez.",
-        en: "This action could not be completed. Check the information and try again.",
+        fr: translateRetailWorkspace("fr", "retailActionError"),
+        en: translateRetailWorkspace("en", "retailActionError"),
       }));
       return null;
     } finally {
@@ -353,23 +360,23 @@ export function RetailWorkspaceFrame({
   const [guideOpen, setGuideOpen] = useState(false);
   const guide = useMemo(() => getRetailUserGuide(moduleCode, locale), [locale, moduleCode]);
   const tabs = useMemo(() => [
-    { id: "OPERATE" as const, label: locale === "en" ? "Operate" : "Opérer" },
-    { id: "HISTORY" as const, label: locale === "en" ? "History" : "Historique" },
-    ...(includeConfigurationTab ? [{ id: "CONFIG" as const, label: locale === "en" ? "Configuration" : "Configuration" }] : []),
-    { id: "REPORTS" as const, label: locale === "en" ? "Reports" : "Rapports" },
+    { id: "OPERATE" as const, label: retailText(locale, "operate") },
+    { id: "HISTORY" as const, label: retailText(locale, "history") },
+    ...(includeConfigurationTab ? [{ id: "CONFIG" as const, label: retailText(locale, "configuration") }] : []),
+    { id: "REPORTS" as const, label: retailText(locale, "reports") },
   ], [includeConfigurationTab, locale]);
 
   return (
     <ModuleWorkspace>
       <ModuleHeader
-        eyebrow={`${locale === "en" ? "Shop operations" : "Opérations Shop"} · ${organizationName}`}
+        eyebrow={`${retailText(locale, "shopOperations")} · ${organizationName}`}
         title={locale === "en" ? definition.labelEn : definition.labelFr}
         description={locale === "en" ? definition.descriptionEn : definition.descriptionFr}
         primaryAction={(
           <div data-responsive-actions>
-            <Button variant="outline" onClick={() => setGuideOpen(true)}>{locale === "en" ? "User guide" : "Guide utilisateur"}</Button>
+            <Button variant="outline" onClick={() => setGuideOpen(true)}>{retailText(locale, "userGuide")}</Button>
             <Button variant="outline" disabled={Boolean(context.busyAction)} onClick={() => context.setRefreshKey((value) => value + 1)}>
-              <RefreshCw className="h-4 w-4" />{locale === "en" ? "Refresh" : "Actualiser"}
+              <RefreshCw className="h-4 w-4" />{retailText(locale, "refresh")}
             </Button>
           </div>
         )}
@@ -381,22 +388,20 @@ export function RetailWorkspaceFrame({
       <ModuleToolbar
         controls={(
           <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-            <ProfessionalTabs value={context.tab} onChange={context.setTab} items={tabs} label={locale === "en" ? "Shop module navigation" : "Navigation du module Shop"} />
+            <ProfessionalTabs value={context.tab} onChange={context.setTab} items={tabs} label={retailText(locale, "shopModuleNavigation")} />
             <div className="flex min-w-0 gap-2 overflow-x-auto [touch-action:pan-x]">
-              <Button size="sm" variant={context.period === "TODAY" ? "default" : "outline"} onClick={() => context.setPeriod("TODAY")}>{locale === "en" ? "Today" : "Aujourd’hui"}</Button>
-              <Button size="sm" variant={context.period === "7D" ? "default" : "outline"} onClick={() => context.setPeriod("7D")}>7 j</Button>
-              <Button size="sm" variant={context.period === "30D" ? "default" : "outline"} onClick={() => context.setPeriod("30D")}>30 j</Button>
+              <Button size="sm" variant={context.period === "TODAY" ? "default" : "outline"} onClick={() => context.setPeriod("TODAY")}>{retailText(locale, "today")}</Button>
+              <Button size="sm" variant={context.period === "7D" ? "default" : "outline"} onClick={() => context.setPeriod("7D")}>{retailText(locale, "sevenDays")}</Button>
+              <Button size="sm" variant={context.period === "30D" ? "default" : "outline"} onClick={() => context.setPeriod("30D")}>{retailText(locale, "thirtyDays")}</Button>
             </div>
           </div>
         )}
-        summary={locale === "en"
-          ? "The Shop uses the same customers, catalog, stock and financial accounts as the rest of your ERP."
-          : "Le Shop utilise les mêmes clients, catalogue, stocks et comptes financiers que le reste de votre ERP."}
+        summary={retailText(locale, "sharedErpSummary")}
       />
       <ModuleContent>
         {context.message ? <div role="status" className="rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-semibold text-dtsc-ink">{context.message}</div> : null}
         {context.error ? <ProfessionalError message={context.error} /> : context.loading ? <ProfessionalLoading rows={4} /> : !context.dashboard ? (
-          <EmptyState title={locale === "en" ? "Shop unavailable" : "Shop indisponible"} description={locale === "en" ? "Refresh this page to try again." : "Actualisez cette page pour réessayer."} />
+          <EmptyState title={retailText(locale, "shopUnavailable")} description={retailText(locale, "refreshToRetry")} />
         ) : children(context)}
       </ModuleContent>
     </ModuleWorkspace>
@@ -406,23 +411,23 @@ export function RetailWorkspaceFrame({
 export function ShopReadiness({ readiness, locale }: { readiness: ShopReadinessData; locale: "fr" | "en" }) {
   return (
     <ModuleSection
-      title={locale === "en" ? "Shop setup" : "Mise en service du Shop"}
-      description={locale === "en" ? "See what still needs to be configured before the first real operation." : "Voyez ce qu’il reste à configurer avant la première opération réelle."}
+      title={retailText(locale, "shopSetup")}
+      description={retailText(locale, "shopSetupDescription")}
     >
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
         <div>
           <p className="text-2xl font-black text-dtsc-ink">{readiness.completed}/{readiness.total}</p>
-          <p className="text-sm font-semibold text-dtsc-muted">{locale === "en" ? "setup checks completed" : "contrôles de configuration terminés"}</p>
+          <p className="text-sm font-semibold text-dtsc-muted">{retailText(locale, "setupChecksCompleted")}</p>
         </div>
         <StatusBadge tone={readiness.completed === readiness.total ? "success" : "warning"}>
-          {readiness.completed === readiness.total ? (locale === "en" ? "Ready" : "Prêt") : (locale === "en" ? "Setup required" : "Configuration requise")}
+          {readiness.completed === readiness.total ? retailText(locale, "ready") : retailText(locale, "setupRequired")}
         </StatusBadge>
       </div>
       <div className="mt-3 grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {readiness.items.map((item) => (
           <Link key={item.code} href={item.deepLink} className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-3 text-sm font-bold text-dtsc-ink">
             <span className="min-w-0 break-words">{item.label}</span>
-            <StatusBadge tone={item.complete ? "success" : "warning"}>{item.complete ? "OK" : (locale === "en" ? "To do" : "À faire")}</StatusBadge>
+            <StatusBadge tone={item.complete ? "success" : "warning"}>{item.complete ? "OK" : retailText(locale, "toDo")}</StatusBadge>
           </Link>
         ))}
       </div>
@@ -432,7 +437,7 @@ export function ShopReadiness({ readiness, locale }: { readiness: ShopReadinessD
 
 export function CashSessionBar({ session, locale }: { session: CashSession | null; locale: "fr" | "en" }) {
   if (!session) {
-    return <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm font-bold text-amber-800 dark:text-amber-200">{locale === "en" ? "No active till. Open a till before accepting cash." : "Aucune caisse active. Ouvrez une caisse avant d’accepter des espèces."}</div>;
+    return <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm font-bold text-amber-800 dark:text-amber-200">{retailText(locale, "noActiveTill")}</div>;
   }
   const pending = session.status !== "OPEN";
   return (
@@ -440,7 +445,7 @@ export function CashSessionBar({ session, locale }: { session: CashSession | nul
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="break-words font-black text-dtsc-ink">{session.financialAccount.name} · {session.financialAccount.currencyCode}</p>
-          <p className="mt-1 text-xs font-semibold text-dtsc-muted">{locale === "en" ? "Opening float" : "Fonds d’ouverture"}: {moneyValue(session.openingAmount, session.financialAccount.currencyCode)} · {locale === "en" ? "current balance" : "solde actuel"}: {moneyValue(session.financialAccount.operationalBalance, session.financialAccount.currencyCode)}</p>
+          <p className="mt-1 text-xs font-semibold text-dtsc-muted">{retailText(locale, "openingFloat")}: {moneyValue(session.openingAmount, session.financialAccount.currencyCode, locale)} · {retailText(locale, "currentBalance")}: {moneyValue(session.financialAccount.operationalBalance, session.financialAccount.currencyCode, locale)}</p>
         </div>
         <StatusBadge tone={pending ? "warning" : "success"}>{customerFacingStatusLabel(session.status, locale)}</StatusBadge>
       </div>
@@ -451,27 +456,27 @@ export function CashSessionBar({ session, locale }: { session: CashSession | nul
 export function RetailMetrics({ moduleCode, dashboard, locale }: { moduleCode: RetailOperationalModuleCode; dashboard: RetailDashboard; locale: "fr" | "en" }) {
   const nodes = moduleCode === "RETAIL_POS"
     ? (dashboard.metricsByCurrency.sales || []).flatMap((row) => [
-        <ModuleMetric key={`${row.currencyCode}-count`} label={`${locale === "en" ? "Receipts" : "Tickets"} · ${row.currencyCode}`} value={row.count} />,
-        <ModuleMetric key={`${row.currencyCode}-sales`} label={`${locale === "en" ? "Sales" : "Ventes"} · ${row.currencyCode}`} value={moneyValue(row.amount, row.currencyCode)} />,
+        <ModuleMetric key={`${row.currencyCode}-count`} label={`${retailText(locale, "receipts")} · ${row.currencyCode}`} value={row.count} />,
+        <ModuleMetric key={`${row.currencyCode}-sales`} label={`${retailText(locale, "sales")} · ${row.currencyCode}`} value={moneyValue(row.amount, row.currencyCode, locale)} />,
       ])
     : moduleCode === "MOBILE_MONEY_AGENCY"
       ? (dashboard.metricsByCurrency.mobileMoney || []).flatMap((row) => [
-          <ModuleMetric key={`${row.currencyCode}-dep`} label={`${locale === "en" ? "Deposits" : "Dépôts"} · ${row.currencyCode}`} value={moneyValue(row.deposits, row.currencyCode)} />,
-          <ModuleMetric key={`${row.currencyCode}-wd`} label={`${locale === "en" ? "Withdrawals" : "Retraits"} · ${row.currencyCode}`} value={moneyValue(row.withdrawals, row.currencyCode)} />,
-          <ModuleMetric key={`${row.currencyCode}-com`} label={`Commission · ${row.currencyCode}`} value={moneyValue(row.commission, row.currencyCode)} />,
+          <ModuleMetric key={`${row.currencyCode}-dep`} label={`${retailText(locale, "deposits")} · ${row.currencyCode}`} value={moneyValue(row.deposits, row.currencyCode, locale)} />,
+          <ModuleMetric key={`${row.currencyCode}-wd`} label={`${retailText(locale, "withdrawals")} · ${row.currencyCode}`} value={moneyValue(row.withdrawals, row.currencyCode, locale)} />,
+          <ModuleMetric key={`${row.currencyCode}-com`} label={`${retailText(locale, "commission")} · ${row.currencyCode}`} value={moneyValue(row.commission, row.currencyCode, locale)} />,
         ])
       : (dashboard.metricsByCurrency.telco || []).flatMap((row) => [
-          <ModuleMetric key={`${row.currencyCode}-rev`} label={`${locale === "en" ? "Top-up sales" : "Ventes Télécom"} · ${row.currencyCode}`} value={moneyValue(row.revenue, row.currencyCode)} />,
-          <ModuleMetric key={`${row.currencyCode}-margin`} label={`${locale === "en" ? "Margin" : "Marge"} · ${row.currencyCode}`} value={moneyValue(row.margin, row.currencyCode)} />,
+          <ModuleMetric key={`${row.currencyCode}-rev`} label={`${retailText(locale, "topupSales")} · ${row.currencyCode}`} value={moneyValue(row.revenue, row.currencyCode, locale)} />,
+          <ModuleMetric key={`${row.currencyCode}-margin`} label={`${retailText(locale, "margin")} · ${row.currencyCode}`} value={moneyValue(row.margin, row.currencyCode, locale)} />,
         ]);
-  return <ModuleMetrics label={locale === "en" ? "Shop indicators by currency" : "Indicateurs Shop par devise"}>{nodes.length ? nodes : <ModuleMetric label={locale === "en" ? "Activity" : "Activité"} value="—" />}</ModuleMetrics>;
+  return <ModuleMetrics label={retailText(locale, "shopIndicatorsByCurrency")}>{nodes.length ? nodes : <ModuleMetric label={retailText(locale, "activity")} value="—" />}</ModuleMetrics>;
 }
 
 export function OpenCashForm({ organizationId, dashboard, locale, busyAction, mutate }: { organizationId: string; dashboard: RetailDashboard; locale: "fr" | "en"; busyAction: string | null; mutate: RetailMutation }) {
   if (dashboard.cashSession) return null;
   const cashAccounts = dashboard.accounts.filter((account) => account.accountType === "CASH");
   return (
-    <ModuleSection title={locale === "en" ? "Open my till" : "Ouvrir ma caisse"} description={locale === "en" ? "Choose the till and count the opening float." : "Choisissez la caisse et comptez le fonds d’ouverture."}>
+    <ModuleSection title={retailText(locale, "openMyTill")} description={retailText(locale, "openMyTillDescription")}>
       <form
         onSubmit={async (event) => {
           event.preventDefault();
@@ -480,20 +485,20 @@ export function OpenCashForm({ organizationId, dashboard, locale, busyAction, mu
             "open-cash",
             `/api/enterprise/${organizationId}/retail/cash-sessions`,
             { financialAccountId: String(form.get("financialAccountId") || ""), openingAmount: String(form.get("openingAmount") || "0") },
-            locale === "en" ? "Till opened." : "Caisse ouverte.",
+            retailText(locale, "tillOpened"),
             { idempotent: false },
           );
         }}
         className="grid min-w-0 gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,0.5fr)_auto] sm:items-end"
       >
-        <Field label={locale === "en" ? "Till" : "Caisse"}>
+        <Field label={retailText(locale, "till")}>
           <Select name="financialAccountId" required disabled={Boolean(busyAction)}>
             <option value="">—</option>
             {cashAccounts.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.currencyCode}</option>)}
           </Select>
         </Field>
-        <Field label={locale === "en" ? "Opening float" : "Fonds d’ouverture"}><Input name="openingAmount" type="number" min="0" step="0.01" required disabled={Boolean(busyAction)} /></Field>
-        <Button disabled={Boolean(busyAction) || !cashAccounts.length}><Banknote className="h-4 w-4" />{locale === "en" ? "Open" : "Ouvrir"}</Button>
+        <Field label={retailText(locale, "openingFloat")}><Input name="openingAmount" type="number" min="0" step="0.01" required disabled={Boolean(busyAction)} /></Field>
+        <Button disabled={Boolean(busyAction) || !cashAccounts.length}><Banknote className="h-4 w-4" />{retailText(locale, "open")}</Button>
       </form>
     </ModuleSection>
   );
@@ -502,22 +507,22 @@ export function OpenCashForm({ organizationId, dashboard, locale, busyAction, mu
 export function RetailErpLinks({ moduleCode, locale }: { moduleCode: RetailOperationalModuleCode; locale: "fr" | "en" }) {
   const links = moduleCode === "RETAIL_POS"
     ? [
-        ["/enterprise-modules/CRM_CUSTOMERS", locale === "en" ? "Customers" : "Clients"],
-        ["/enterprise-modules/CATALOG", locale === "en" ? "Catalog" : "Catalogue"],
-        ["/enterprise-modules/INVENTORY_LOGISTICS", locale === "en" ? "Inventory" : "Stocks"],
-        ["/enterprise-modules/SALES_QUOTES_ORDERS", locale === "en" ? "Sales orders" : "Commandes clients"],
-        ["/enterprise-modules/FINANCE_CASH", locale === "en" ? "Cash" : "Caisse"],
-        ["/enterprise-modules/REPORTS", locale === "en" ? "Reports" : "Rapports"],
+        ["/enterprise-modules/CRM_CUSTOMERS", retailText(locale, "customers")],
+        ["/enterprise-modules/CATALOG", retailText(locale, "catalog")],
+        ["/enterprise-modules/INVENTORY_LOGISTICS", retailText(locale, "inventory")],
+        ["/enterprise-modules/SALES_QUOTES_ORDERS", retailText(locale, "salesOrders")],
+        ["/enterprise-modules/FINANCE_CASH", retailText(locale, "cash")],
+        ["/enterprise-modules/REPORTS", retailText(locale, "reports")],
       ]
     : [
-        ["/enterprise-modules/FINANCE_CASH", locale === "en" ? "Cash" : "Caisse"],
-        ["/enterprise-modules/FINANCE_TREASURY", locale === "en" ? "Treasury" : "Trésorerie"],
-        ["/enterprise-modules/REPORTS", locale === "en" ? "Reports" : "Rapports"],
+        ["/enterprise-modules/FINANCE_CASH", retailText(locale, "cash")],
+        ["/enterprise-modules/FINANCE_TREASURY", retailText(locale, "treasury")],
+        ["/enterprise-modules/REPORTS", retailText(locale, "reports")],
       ];
   return (
     <details className="rounded-2xl border border-dtsc-border bg-dtsc-surface">
       <summary className="min-h-11 cursor-pointer list-none px-4 py-3 text-sm font-black text-dtsc-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">
-        {locale === "en" ? "Continue in the ERP" : "Continuer dans l’ERP"}
+        {retailText(locale, "continueInErp")}
       </summary>
       <div className="flex min-w-0 gap-2 overflow-x-auto border-t border-dtsc-border p-3 [touch-action:pan-x]">
         {links.map(([href, label]) => <Button key={href} asChild size="sm" variant="outline"><Link href={href}>{label}</Link></Button>)}
@@ -529,24 +534,24 @@ export function RetailErpLinks({ moduleCode, locale }: { moduleCode: RetailOpera
 export function RetailReportsPanel({ dashboard, moduleCode, locale }: { dashboard: RetailDashboard; moduleCode: RetailOperationalModuleCode; locale: "fr" | "en" }) {
   const rows: Array<{ label: string; currency: string; value: string; secondary?: string }> = [];
   if (moduleCode === "RETAIL_POS") {
-    for (const row of dashboard.metricsByCurrency.sales || []) rows.push({ label: locale === "en" ? "Sales" : "Ventes", currency: row.currencyCode, value: moneyValue(row.amount, row.currencyCode), secondary: `${row.count} ${locale === "en" ? "receipts" : "tickets"}` });
+    for (const row of dashboard.metricsByCurrency.sales || []) rows.push({ label: retailText(locale, "sales"), currency: row.currencyCode, value: moneyValue(row.amount, row.currencyCode, locale), secondary: `${row.count} ${retailText(locale, "receipts").toLowerCase()}` });
   }
   if (moduleCode === "MOBILE_MONEY_AGENCY") {
     for (const row of dashboard.metricsByCurrency.mobileMoney || []) {
-      rows.push({ label: locale === "en" ? "Deposits" : "Dépôts", currency: row.currencyCode, value: moneyValue(row.deposits, row.currencyCode) });
-      rows.push({ label: locale === "en" ? "Withdrawals" : "Retraits", currency: row.currencyCode, value: moneyValue(row.withdrawals, row.currencyCode) });
-      rows.push({ label: "Commission", currency: row.currencyCode, value: moneyValue(row.commission, row.currencyCode) });
+      rows.push({ label: retailText(locale, "deposits"), currency: row.currencyCode, value: moneyValue(row.deposits, row.currencyCode, locale) });
+      rows.push({ label: retailText(locale, "withdrawals"), currency: row.currencyCode, value: moneyValue(row.withdrawals, row.currencyCode, locale) });
+      rows.push({ label: retailText(locale, "commission"), currency: row.currencyCode, value: moneyValue(row.commission, row.currencyCode, locale) });
     }
   }
   if (moduleCode === "TELCO_TOPUPS") {
     for (const row of dashboard.metricsByCurrency.telco || []) {
-      rows.push({ label: locale === "en" ? "Top-up sales" : "Ventes Télécom", currency: row.currencyCode, value: moneyValue(row.revenue, row.currencyCode), secondary: `${row.count} ${locale === "en" ? "operations" : "opérations"}` });
-      rows.push({ label: locale === "en" ? "Margin" : "Marge", currency: row.currencyCode, value: moneyValue(row.margin, row.currencyCode) });
+      rows.push({ label: retailText(locale, "topupSales"), currency: row.currencyCode, value: moneyValue(row.revenue, row.currencyCode, locale), secondary: `${row.count} ${retailText(locale, "operations")}` });
+      rows.push({ label: retailText(locale, "margin"), currency: row.currencyCode, value: moneyValue(row.margin, row.currencyCode, locale) });
     }
   }
   return (
     <div className="grid min-w-0 gap-5">
-      <ModuleSection title={locale === "en" ? "Period summary by currency" : "Synthèse de période par devise"} description={`${formatEnterpriseDate(dashboard.range.from, locale)} → ${formatEnterpriseDate(dashboard.range.to, locale)}`}>
+      <ModuleSection title={retailText(locale, "periodSummaryByCurrency")} description={`${formatEnterpriseDate(dashboard.range.from, locale)} → ${formatEnterpriseDate(dashboard.range.to, locale)}`}>
         <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {rows.map((row, index) => (
             <div key={`${row.label}-${row.currency}-${index}`} className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
@@ -555,17 +560,17 @@ export function RetailReportsPanel({ dashboard, moduleCode, locale }: { dashboar
               {row.secondary ? <p className="mt-1 text-xs font-bold text-dtsc-muted">{row.secondary}</p> : null}
             </div>
           ))}
-          {!rows.length ? <EmptyState compact title={locale === "en" ? "No metric" : "Aucun indicateur"} description={locale === "en" ? "No operation in the selected period." : "Aucune opération sur la période sélectionnée."} /> : null}
+          {!rows.length ? <EmptyState compact title={retailText(locale, "noMetric")} description={retailText(locale, "noMetricDescription")} /> : null}
         </div>
       </ModuleSection>
-      <ModuleSection title={locale === "en" ? "Operational balances" : "Soldes opérationnels"} description={locale === "en" ? "Balances from different currencies are kept separate." : "Les soldes de devises différentes restent séparés."}>
-        <BusinessList ariaLabel={locale === "en" ? "Shop account balances" : "Soldes des comptes Shop"}>
+      <ModuleSection title={retailText(locale, "operationalBalances")} description={retailText(locale, "operationalBalancesDescription")}>
+        <BusinessList ariaLabel={retailText(locale, "shopAccountBalances")}>
           {dashboard.accounts.map((account) => (
             <BusinessListItem
               key={account.id}
               title={`${account.code} · ${account.name}`}
               status={<StatusBadge tone="info">{customerFacingFinancialAccountType(account.accountType, locale)}</StatusBadge>}
-              meta={moneyValue(account.operationalBalance, account.currencyCode)}
+              meta={moneyValue(account.operationalBalance, account.currencyCode, locale)}
             />
           ))}
         </BusinessList>

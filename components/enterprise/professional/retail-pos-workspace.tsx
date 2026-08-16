@@ -27,6 +27,7 @@ import { ModuleSection } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import { customerFacingError, customerFacingStatusLabel } from "@/lib/customer-facing-language";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
+import { translateRetailWorkspace, type RetailWorkspaceKey } from "@/lib/i18n";
 
 type CartLine = {
   catalogItemId: string;
@@ -38,6 +39,10 @@ type CartLine = {
   currencyCode: string;
   inventoryItemId: string | null;
 };
+
+function retailText(locale: "fr" | "en", key: RetailWorkspaceKey) {
+  return translateRetailWorkspace(locale, key);
+}
 
 export function RetailPosWorkspace({
   organizationId,
@@ -126,8 +131,8 @@ function PosOperate({
         if (controller.signal.aborted) return;
         setProducts([]);
         setSearchError(customerFacingError(caught, locale, {
-          fr: "La recherche des articles n’est pas disponible pour le moment.",
-          en: "Product search is not available right now.",
+          fr: translateRetailWorkspace("fr", "productSearchUnavailable"),
+          en: translateRetailWorkspace("en", "productSearchUnavailable"),
         }));
       } finally {
         if (!controller.signal.aborted) setSearchLoading(false);
@@ -206,7 +211,7 @@ function PosOperate({
         tenders,
         overrideReason: overrideReason || null,
       },
-      locale === "en" ? "Sale completed." : "Vente encaissée.",
+      retailText(locale, "saleCompleted"),
     );
     const sale = body?.sale as Sale | undefined;
     if (sale) {
@@ -221,20 +226,18 @@ function PosOperate({
     <div className="grid min-w-0 gap-5">
       <OpenCashForm organizationId={organizationId} dashboard={dashboard} locale={locale} busyAction={busyAction} mutate={mutate} />
       <ModuleSection
-        title={locale === "en" ? "Counter sale" : "Vente comptoir"}
-        description={locale === "en"
-          ? "Find available items, build the basket and collect payment in one clear flow."
-          : "Recherchez les articles disponibles, composez le panier puis encaissez dans un même parcours."}
+        title={retailText(locale, "counterSale")}
+        description={retailText(locale, "counterSaleDescription")}
       >
         <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
           <div className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
             <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,0.7fr)]">
               <div className="relative min-w-0">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-dtsc-muted" />
-                <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={locale === "en" ? "Name, SKU or code" : "Nom, SKU ou code"} className="pl-9" />
+                <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={retailText(locale, "nameSkuCode")} className="pl-9" />
               </div>
               <Select name="warehouse" value={warehouseId} onChange={setWarehouseId}>
-                <option value="">{locale === "en" ? "Store / warehouse" : "Boutique / dépôt"}</option>
+                <option value="">{retailText(locale, "storeWarehouse")}</option>
                 {warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.site.name} · {warehouse.name}</option>)}
               </Select>
             </div>
@@ -251,84 +254,84 @@ function PosOperate({
                     className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-left transition hover:border-cyan-400 disabled:opacity-50"
                   >
                     <p className="break-words font-black text-dtsc-ink">{item.name}</p>
-                    <p className="mt-1 text-xs font-semibold text-dtsc-muted">{item.sku || item.code} · {moneyValue(item.indicativeSalePrice, item.currency || currency)}</p>
+                    <p className="mt-1 text-xs font-semibold text-dtsc-muted">{item.sku || item.code} · {moneyValue(item.indicativeSalePrice, item.currency || currency, locale)}</p>
                     <p className="mt-1 text-xs font-bold text-dtsc-muted">
                       {item.trackInventory
-                        ? `${locale === "en" ? "Available" : "Disponible"}: ${stock ?? "—"}`
-                        : (locale === "en" ? "Service / no stock tracking" : "Service / sans suivi de stock")}
+                        ? `${retailText(locale, "available")}: ${stock ?? "—"}`
+                        : retailText(locale, "serviceNoStock")}
                     </p>
                   </button>
                 );
               })}
-              {!searchLoading && !products.length && !searchError ? <div className="sm:col-span-2"><EmptyState compact title={locale === "en" ? "No item found" : "Aucun article trouvé"} description={locale === "en" ? "Try another name, SKU or code." : "Essayez un autre nom, SKU ou code."} /></div> : null}
+              {!searchLoading && !products.length && !searchError ? <div className="sm:col-span-2"><EmptyState compact title={retailText(locale, "noItemFound")} description={retailText(locale, "noItemFoundDescription")} /></div> : null}
             </div>
           </div>
 
           <div className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
             <div className="flex items-center justify-between gap-3">
-              <h3 className="font-black text-dtsc-ink">{locale === "en" ? "Basket" : "Panier"}</h3>
-              <span className="text-sm font-black text-dtsc-blue">{moneyValue(total, currency)}</span>
+              <h3 className="font-black text-dtsc-ink">{retailText(locale, "basket")}</h3>
+              <span className="text-sm font-black text-dtsc-blue">{moneyValue(total, currency, locale)}</span>
             </div>
             <div className="mt-3 grid min-w-0 gap-3">
               {cart.map((line) => (
                 <div key={line.catalogItemId} className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page p-3">
                   <div className="flex min-w-0 items-start justify-between gap-3">
-                    <div className="min-w-0"><p className="break-words font-black text-dtsc-ink">{line.name}</p><p className="text-xs font-bold text-dtsc-muted">{moneyValue(line.unitPrice, line.currencyCode)}</p></div>
+                    <div className="min-w-0"><p className="break-words font-black text-dtsc-ink">{line.name}</p><p className="text-xs font-bold text-dtsc-muted">{moneyValue(line.unitPrice, line.currencyCode, locale)}</p></div>
                     <Button type="button" size="sm" variant="outline" onClick={() => setCart((current) => current.filter((item) => item.catalogItemId !== line.catalogItemId))}><XCircle className="h-4 w-4" /></Button>
                   </div>
                   <div className="mt-3 grid min-w-0 gap-2 sm:grid-cols-3">
-                    <Field label={locale === "en" ? "Qty" : "Qté"}><Input type="number" min="0.001" step="0.001" value={line.quantity} onChange={(event) => updateLine(line.catalogItemId, { quantity: Number(event.target.value) })} /></Field>
-                    <Field label={locale === "en" ? "Unit price" : "Prix unitaire"}><Input type="number" min="0" step="0.01" value={line.unitPrice} disabled={!dashboard.access.canManage} onChange={(event) => updateLine(line.catalogItemId, { unitPrice: Number(event.target.value) })} /></Field>
-                    <Field label={locale === "en" ? "Discount" : "Remise"}><Input type="number" min="0" step="0.01" value={line.discountAmount} disabled={!dashboard.access.canManage} onChange={(event) => updateLine(line.catalogItemId, { discountAmount: Number(event.target.value) })} /></Field>
+                    <Field label={retailText(locale, "quantityShort")}><Input type="number" min="0.001" step="0.001" value={line.quantity} onChange={(event) => updateLine(line.catalogItemId, { quantity: Number(event.target.value) })} /></Field>
+                    <Field label={retailText(locale, "unitPrice")}><Input type="number" min="0" step="0.01" value={line.unitPrice} disabled={!dashboard.access.canManage} onChange={(event) => updateLine(line.catalogItemId, { unitPrice: Number(event.target.value) })} /></Field>
+                    <Field label={retailText(locale, "discount")}><Input type="number" min="0" step="0.01" value={line.discountAmount} disabled={!dashboard.access.canManage} onChange={(event) => updateLine(line.catalogItemId, { discountAmount: Number(event.target.value) })} /></Field>
                   </div>
                 </div>
               ))}
-              {!cart.length ? <EmptyState compact title={locale === "en" ? "Empty basket" : "Panier vide"} description={locale === "en" ? "Add one or more items." : "Ajoutez un ou plusieurs articles."} /> : null}
+              {!cart.length ? <EmptyState compact title={retailText(locale, "emptyBasket")} description={retailText(locale, "emptyBasketDescription")} /> : null}
             </div>
-            {dashboard.access.canManage && cart.length ? <div className="mt-3"><Field label={locale === "en" ? "Reason for price or discount change" : "Motif du changement de prix ou remise"}><Input value={overrideReason} onChange={(event) => setOverrideReason(event.target.value)} /></Field></div> : null}
+            {dashboard.access.canManage && cart.length ? <div className="mt-3"><Field label={retailText(locale, "priceDiscountReason")}><Input value={overrideReason} onChange={(event) => setOverrideReason(event.target.value)} /></Field></div> : null}
           </div>
         </div>
 
         {cart.length ? (
           <div className="mt-5 grid min-w-0 gap-4 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
-            <h3 className="font-black text-dtsc-ink">{locale === "en" ? "Payment" : "Encaissement"}</h3>
+            <h3 className="font-black text-dtsc-ink">{retailText(locale, "payment")}</h3>
             <div className="grid min-w-0 gap-3 md:grid-cols-3">
-              <Field label={locale === "en" ? "Method" : "Mode"}>
+              <Field label={retailText(locale, "method")}>
                 <Select name="method1" value={method1} onChange={(value) => { setMethod1(value); setAccount1(""); }}>
-                  <option value="CASH">{locale === "en" ? "Cash" : "Espèces"}</option>
+                  <option value="CASH">{retailText(locale, "cashPayment")}</option>
                   <option value="MOBILE_MONEY">Mobile Money</option>
-                  <option value="BANK_TRANSFER">{locale === "en" ? "Bank transfer" : "Virement bancaire"}</option>
-                  <option value="CARD">{locale === "en" ? "Card" : "Carte"}</option>
+                  <option value="BANK_TRANSFER">{retailText(locale, "bankTransfer")}</option>
+                  <option value="CARD">{retailText(locale, "card")}</option>
                 </Select>
               </Field>
-              <Field label={locale === "en" ? "Account" : "Compte"}>
-                {method1 === "CASH" ? <Input value={dashboard.cashSession?.status === "OPEN" ? dashboard.cashSession.financialAccount.name : (locale === "en" ? "Open a till first" : "Ouvrez d’abord une caisse")} readOnly /> : (
+              <Field label={retailText(locale, "account")}>
+                {method1 === "CASH" ? <Input value={dashboard.cashSession?.status === "OPEN" ? dashboard.cashSession.financialAccount.name : retailText(locale, "openTillFirst")} readOnly /> : (
                   <Select name="account1" value={account1} onChange={setAccount1}><option value="">—</option>{accountsFor(method1).map((account) => <option key={account.id} value={account.id}>{account.name} · {account.currencyCode}</option>)}</Select>
                 )}
               </Field>
-              <Field label={locale === "en" ? "Amount" : "Montant"}><Input type="number" min="0.01" step="0.01" value={amount1} onChange={(event) => setAmount1(Number(event.target.value))} /></Field>
+              <Field label={retailText(locale, "amount")}><Input type="number" min="0.01" step="0.01" value={amount1} onChange={(event) => setAmount1(Number(event.target.value))} /></Field>
             </div>
-            <label className="flex items-center gap-2 text-sm font-bold text-dtsc-ink"><input type="checkbox" checked={split} onChange={(event) => setSplit(event.target.checked)} />{locale === "en" ? "Split payment" : "Paiement fractionné"}</label>
+            <label className="flex items-center gap-2 text-sm font-bold text-dtsc-ink"><input type="checkbox" checked={split} onChange={(event) => setSplit(event.target.checked)} />{retailText(locale, "splitPayment")}</label>
             {split ? (
               <div className="grid min-w-0 gap-3 md:grid-cols-3">
-                <Field label={locale === "en" ? "Second method" : "Deuxième mode"}>
+                <Field label={retailText(locale, "secondMethod")}>
                   <Select name="method2" value={method2} onChange={(value) => { setMethod2(value); setAccount2(""); }}>
-                    <option value="CASH">{locale === "en" ? "Cash" : "Espèces"}</option>
+                    <option value="CASH">{retailText(locale, "cashPayment")}</option>
                     <option value="MOBILE_MONEY">Mobile Money</option>
-                    <option value="BANK_TRANSFER">{locale === "en" ? "Bank transfer" : "Virement bancaire"}</option>
-                    <option value="CARD">{locale === "en" ? "Card" : "Carte"}</option>
+                    <option value="BANK_TRANSFER">{retailText(locale, "bankTransfer")}</option>
+                    <option value="CARD">{retailText(locale, "card")}</option>
                   </Select>
                 </Field>
-                <Field label={locale === "en" ? "Second account" : "Deuxième compte"}>
+                <Field label={retailText(locale, "secondAccount")}>
                   {method2 === "CASH" ? <Input value={dashboard.cashSession?.status === "OPEN" ? dashboard.cashSession.financialAccount.name : "—"} readOnly /> : <Select name="account2" value={account2} onChange={setAccount2}><option value="">—</option>{accountsFor(method2).map((account) => <option key={account.id} value={account.id}>{account.name} · {account.currencyCode}</option>)}</Select>}
                 </Field>
-                <Field label={locale === "en" ? "Second amount" : "Deuxième montant"}><Input type="number" min="0" step="0.01" value={amount2} onChange={(event) => setAmount2(Number(event.target.value))} /></Field>
+                <Field label={retailText(locale, "secondAmount")}><Input type="number" min="0" step="0.01" value={amount2} onChange={(event) => setAmount2(Number(event.target.value))} /></Field>
               </div>
             ) : null}
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-lg font-black text-dtsc-ink">Total: {moneyValue(total, currency)}</p>
+              <p className="text-lg font-black text-dtsc-ink">{retailText(locale, "total")}: {moneyValue(total, currency, locale)}</p>
               <Button type="button" disabled={Boolean(busyAction) || !dashboard.access.canWrite || !resolvedAccount1 || Math.abs(amount1 + amount2 - total) > 0.005} onClick={() => void submitSale()}>
-                <ShoppingCart className="h-4 w-4" />{busyAction === "pos-sale" ? (locale === "en" ? "Processing…" : "Traitement…") : (locale === "en" ? "Collect payment" : "Encaisser")}
+                <ShoppingCart className="h-4 w-4" />{busyAction === "pos-sale" ? retailText(locale, "processing") : retailText(locale, "collectPayment")}
               </Button>
             </div>
           </div>
@@ -336,13 +339,13 @@ function PosOperate({
       </ModuleSection>
 
       {lastReceipt ? (
-        <ModuleSection title={locale === "en" ? "Receipt completed" : "Ticket terminé"} description={lastReceipt.number}>
+        <ModuleSection title={retailText(locale, "receiptCompleted")} description={lastReceipt.number}>
           <div className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <div><p className="text-2xl font-black text-dtsc-ink">{moneyValue(lastReceipt.grandTotal, lastReceipt.currencyCode)}</p><p className="text-sm font-bold text-dtsc-muted">{lastReceipt.lines.map((line) => `${line.description} × ${Number(line.quantity)}`).join(" · ")}</p></div>
+              <div><p className="text-2xl font-black text-dtsc-ink">{moneyValue(lastReceipt.grandTotal, lastReceipt.currencyCode, locale)}</p><p className="text-sm font-bold text-dtsc-muted">{lastReceipt.lines.map((line) => `${line.description} × ${Number(line.quantity)}`).join(" · ")}</p></div>
               <div data-responsive-actions>
-                <Button variant="outline" onClick={() => window.print()}><Printer className="h-4 w-4" />{locale === "en" ? "Print" : "Imprimer"}</Button>
-                {typeof navigator !== "undefined" && "share" in navigator ? <Button variant="outline" onClick={() => void navigator.share({ title: lastReceipt.number, text: `${lastReceipt.number} · ${moneyValue(lastReceipt.grandTotal, lastReceipt.currencyCode)}` })}><Share2 className="h-4 w-4" />{locale === "en" ? "Share" : "Partager"}</Button> : null}
+                <Button variant="outline" onClick={() => window.print()}><Printer className="h-4 w-4" />{retailText(locale, "print")}</Button>
+                {typeof navigator !== "undefined" && "share" in navigator ? <Button variant="outline" onClick={() => void navigator.share({ title: lastReceipt.number, text: `${lastReceipt.number} · ${moneyValue(lastReceipt.grandTotal, lastReceipt.currencyCode, locale)}` })}><Share2 className="h-4 w-4" />{retailText(locale, "share")}</Button> : null}
               </div>
             </div>
           </div>
@@ -356,33 +359,33 @@ function PosOperate({
 function PosHistory({ organizationId, dashboard, locale, busyAction, mutate }: { organizationId: string; dashboard: RetailDashboard; locale: "fr" | "en"; busyAction: string | null; mutate: RetailMutation }) {
   const items = dashboard.recent.sales || [];
   async function reverse(item: Sale) {
-    const reason = window.prompt(locale === "en" ? "Reason for reversal" : "Motif de l’annulation");
+    const reason = window.prompt(retailText(locale, "reversalReason"));
     if (!reason?.trim()) return;
     await mutate(
       `reverse-${item.id}`,
       `/api/enterprise/${organizationId}/retail/sales/${item.id}/reverse`,
       { revision: item.revision, reason: reason.trim() },
-      locale === "en" ? "Reversal completed." : "Annulation enregistrée.",
+      retailText(locale, "reversalCompleted"),
       { idempotent: false },
     );
   }
   return (
     <div className="grid min-w-0 gap-5">
-      <ModuleSection title={locale === "en" ? "Recent receipts" : "Tickets récents"}>
+      <ModuleSection title={retailText(locale, "recentReceipts")}>
         {items.length ? (
-          <BusinessList ariaLabel={locale === "en" ? "POS receipts" : "Tickets de caisse"}>
+          <BusinessList ariaLabel={retailText(locale, "posReceipts")}>
             {items.map((item) => (
               <BusinessListItem
                 key={item.id}
-                title={`${item.number} · ${moneyValue(item.grandTotal, item.currencyCode)}`}
+                title={`${item.number} · ${moneyValue(item.grandTotal, item.currencyCode, locale)}`}
                 status={<StatusBadge tone={statusTone(item.status)}>{customerFacingStatusLabel(item.status, locale)}</StatusBadge>}
                 meta={formatEnterpriseDate(item.soldAt, locale)}
                 description={item.lines.map((line) => `${line.description} × ${Number(line.quantity)}`).join(" · ")}
-                actions={dashboard.access.canManage && item.status === "COMPLETED" ? <Button size="sm" variant="outline" disabled={Boolean(busyAction)} onClick={() => void reverse(item)}><RotateCcw className="h-4 w-4" />{locale === "en" ? "Reverse" : "Annuler"}</Button> : undefined}
+                actions={dashboard.access.canManage && item.status === "COMPLETED" ? <Button size="sm" variant="outline" disabled={Boolean(busyAction)} onClick={() => void reverse(item)}><RotateCcw className="h-4 w-4" />{retailText(locale, "reverse")}</Button> : undefined}
               />
             ))}
           </BusinessList>
-        ) : <EmptyState compact title={locale === "en" ? "No receipt" : "Aucun ticket"} description={locale === "en" ? "Completed sales will appear here." : "Les ventes terminées apparaîtront ici."} />}
+        ) : <EmptyState compact title={retailText(locale, "noReceipt")} description={retailText(locale, "noReceiptDescription")} />}
       </ModuleSection>
       <RetailErpLinks moduleCode="RETAIL_POS" locale={locale} />
     </div>

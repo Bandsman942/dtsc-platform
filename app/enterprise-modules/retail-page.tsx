@@ -4,6 +4,7 @@ import { RetailActiveCustomerBar } from "@/components/enterprise/professional/re
 import { RetailDailyCloseWorkspace } from "@/components/enterprise/professional/retail-daily-close-workspace";
 import { RetailDeviceReadiness } from "@/components/enterprise/professional/retail-device-readiness";
 import { RetailGlobalReadiness } from "@/components/enterprise/professional/retail-global-readiness";
+import { RetailLocaleText } from "@/components/enterprise/professional/retail-locale-text";
 import { RetailOfflineContinuity } from "@/components/enterprise/professional/retail-offline-continuity";
 import { RetailOmnichannelPanel } from "@/components/enterprise/professional/retail-omnichannel-panel";
 import { RetailOperatorWorkspace } from "@/components/enterprise/professional/retail-operator-workspace";
@@ -68,12 +69,13 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
         )}
 
         {moduleCode === "RETAIL_POS" ? (
-          <section aria-label={locale === "en" ? "Additional Shop tools" : "Outils complémentaires du Shop"} className="space-y-3">
+          <section aria-labelledby="retail-pos-additional-tools" className="space-y-3">
+            <span id="retail-pos-additional-tools" className="sr-only"><RetailLocaleText textKey="additionalShopTools" /></span>
             <details className="group rounded-2xl border border-dtsc-border bg-dtsc-surface shadow-sm">
               <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-black text-dtsc-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">
-                <span>{locale === "en" ? "Orders, pickup & offline sales" : "Commandes, retraits & vente hors connexion"}</span>
-                <span className="text-xs font-bold text-dtsc-muted group-open:hidden">{locale === "en" ? "Open" : "Ouvrir"}</span>
-                <span className="hidden text-xs font-bold text-dtsc-muted group-open:inline">{locale === "en" ? "Close" : "Fermer"}</span>
+                <span><RetailLocaleText textKey="ordersPickupOffline" /></span>
+                <span className="text-xs font-bold text-dtsc-muted group-open:hidden"><RetailLocaleText textKey="open" /></span>
+                <span className="hidden text-xs font-bold text-dtsc-muted group-open:inline"><RetailLocaleText textKey="close" /></span>
               </summary>
               <div className="grid gap-4 border-t border-dtsc-border p-3 sm:p-4">
                 <RetailOfflineContinuity organizationId={organizationId} locale={locale} />
@@ -85,9 +87,9 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
 
             <details className="group rounded-2xl border border-dtsc-border bg-dtsc-surface shadow-sm">
               <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-black text-dtsc-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">
-                <span>{locale === "en" ? "Shop setup & POS equipment" : "Mise en service & équipements du Shop"}</span>
-                <span className="text-xs font-bold text-dtsc-muted group-open:hidden">{locale === "en" ? "Open" : "Ouvrir"}</span>
-                <span className="hidden text-xs font-bold text-dtsc-muted group-open:inline">{locale === "en" ? "Close" : "Fermer"}</span>
+                <span><RetailLocaleText textKey="shopSetupEquipment" /></span>
+                <span className="text-xs font-bold text-dtsc-muted group-open:hidden"><RetailLocaleText textKey="open" /></span>
+                <span className="hidden text-xs font-bold text-dtsc-muted group-open:inline"><RetailLocaleText textKey="close" /></span>
               </summary>
               <div className="grid gap-4 border-t border-dtsc-border p-3 sm:p-4">
                 <RetailDeviceReadiness organizationId={organizationId} locale={locale} />
