@@ -4,6 +4,7 @@ type Bucket = {
 };
 
 const buckets = new Map<string, Bucket>();
+const UPSTASH_TIMEOUT_MS = 2_000;
 
 function localRateLimit(key: string, limit: number, windowMs: number) {
   const now = Date.now();
@@ -38,6 +39,7 @@ async function upstashCommand<T>(command: unknown[]) {
     },
     body: JSON.stringify(command),
     cache: "no-store",
+    signal: AbortSignal.timeout(UPSTASH_TIMEOUT_MS),
   });
 
   if (!response.ok) {
