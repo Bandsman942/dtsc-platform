@@ -44,7 +44,8 @@ assert(localeText.includes("translateRetailWorkspace"), "primitive Retail: catal
 
 assert(shared.includes("translateRetailWorkspace"), "Retail partagé: source i18n canonique absente");
 assert(shared.includes("retailText(locale"), "Retail partagé: projection locale canonique absente");
-assert(shared.includes('moneyValue(value: string | number | null | undefined, currency?: string, locale?: "fr" | "en")'), "Retail partagé: formatage monétaire locale-aware absent");
+assert(shared.includes('moneyValue(value: string | number | null | undefined, currency: string | undefined, locale: "fr" | "en")'), "Retail partagé: formateur monétaire à locale explicite obligatoire absent");
+assert(!shared.includes("document.documentElement.lang"), "Retail partagé: fallback DOM-language historique encore présent");
 assert(shared.includes('retailText(locale, "sevenDays")'), "Retail partagé: période 7 jours non canonique");
 assert(shared.includes('retailText(locale, "thirtyDays")'), "Retail partagé: période 30 jours non canonique");
 assert(!shared.includes('label: locale === "en" ? "Operate"'), "Retail partagé: onglet Operate/Opérer encore local");
