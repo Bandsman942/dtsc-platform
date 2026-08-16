@@ -64,6 +64,7 @@ export function EnterpriseEmployeesIdentityWorkspace({ organizationId, organizat
   const t = (key: Parameters<typeof professionalErpT>[1], values?: Record<string, string | number>) => professionalErpT(locale, key, values);
   const suffix = (count: number) => count === 1 ? "" : "s";
   const lookupLabel = (item: LookupItem | undefined, fallback: string) => item ? (locale === "en" ? item.labelEn || item.labelFr || item.name || fallback : item.labelFr || item.labelEn || item.name || fallback) : fallback;
+  const memberLabel = (member: Member) => `${member.label} · ${member.positionTitle || professionalErpEnumLabel(locale, "role", member.role)}`;
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -155,7 +156,7 @@ export function EnterpriseEmployeesIdentityWorkspace({ organizationId, organizat
       <ProfessionalFormSection title={t("identity.professionalIdentity")}>
         <Field label={t("identity.firstName")}><Input name="firstName" required /></Field><Field label={t("identity.lastName")}><Input name="lastName" required /></Field>
         <Field label={t("identity.workEmail")}><Input name="workEmail" type="email" /></Field><Field label={t("identity.workPhone")}><Input name="workPhone" /></Field>
-        <Field label={t("identity.existingMember")}><NativeSelect name="organizationMemberId" items={[{ id: "", label: t("identity.noMember") }, ...lookups.members.map((member) => ({ id: member.membershipId, label: `${member.label} · ${member.positionTitle || member.role}` }))]} /></Field>
+        <Field label={t("identity.existingMember")}><NativeSelect name="organizationMemberId" items={[{ id: "", label: t("identity.noMember") }, ...lookups.members.map((member) => ({ id: member.membershipId, label: memberLabel(member) }))]} /></Field>
         <Field label={t("identity.relationshipType")}><NativeSelect name="employmentType" defaultValue="EMPLOYEE" items={employmentTypeItems} /></Field>
       </ProfessionalFormSection>
       <ProfessionalFormSection title={t("identity.assignment")}>
