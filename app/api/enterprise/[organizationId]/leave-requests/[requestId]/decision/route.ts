@@ -18,7 +18,7 @@ export async function POST(req: Request, { params }: Params) {
   const limited = await rateLimit(getRateLimitKey(req, `enterprise-leave-decision:${session.userId}`), 100, 60 * 60 * 1000);
   if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   const { organizationId, requestId } = await params;
-  const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "TIME_ATTENDANCE", action: "manage" });
+  const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "TIME_ATTENDANCE", action: "approve" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = approvalDecisionSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Décision invalide." }, { status: 400 });
