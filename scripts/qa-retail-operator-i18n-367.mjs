@@ -55,6 +55,7 @@ for (const marker of ["customerFacingMobileMoneyTransactionType", "customerFacin
 const mobile = read(targets[2]);
 for (const marker of ["MobileMoneyCashSessionManager", "customerFacingMobileMoneyTransactionType", "customerFacingFeeCollectionMode", "floatAccountId: null", "/retail/mobile-money", "/retail/mobile-money/fx", "RetailErpLinks"]) check(mobile.includes(marker), `Mobile Money contract lost marker: ${marker}`);
 check(mobile.includes("customerFacingError"), "Mobile Money configuration errors must be customer-facing sanitized.");
+check(!mobile.includes("catch (error) {\n      setPreviewError(copy.fxMissingRate);"), "Mobile Money FX preview must not keep an unused error binding after sanitizing the customer message.");
 
 const cash = read(targets[3]);
 for (const marker of ["/retail/cash-sessions", "PENDING_VALIDATION", "moduleCode", "TELCO_TOPUPS", "MOBILE_MONEY_AGENCY", "RetailMutation"]) check(cash.includes(marker), `Cash-session contract lost marker: ${marker}`);
