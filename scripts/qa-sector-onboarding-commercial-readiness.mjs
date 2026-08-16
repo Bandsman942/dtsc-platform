@@ -46,6 +46,8 @@ function staticShopReleaseChecks() {
   const operatorWorkspace = read("components/enterprise/professional/retail-operator-workspace.tsx");
   const sharedWorkspace = read("components/enterprise/professional/retail-workspace-shared.tsx");
   const dailyCloseWorkspace = read("components/enterprise/professional/retail-daily-close-workspace.tsx");
+  const retailFr = JSON.parse(read("locales/retail-workspace.fr.json"));
+  const retailEn = JSON.parse(read("locales/retail-workspace.en.json"));
   const adminPanels = read("components/enterprise/enterprise-admin-panels.tsx");
   const guides = read("lib/user-guides/retail-telco-mobile-money-guides.ts");
   const migration = read("prisma/migrations/20260807090000_shop_release_candidate_1/migration.sql");
@@ -65,16 +67,16 @@ function staticShopReleaseChecks() {
   const fxDoc = read("docs/ENTERPRISE_EXCHANGE_RATES.md");
 
   const checks = [
-    [posWorkspace.includes("setCart") && posWorkspace.includes("cart.map") && posWorkspace.includes("Basket"), "MULTI_ITEM_POS"],
+    [posWorkspace.includes("setCart") && posWorkspace.includes("cart.map") && posWorkspace.includes('retailText(locale, "basket")') && retailEn.basket === "Basket" && retailFr.basket === "Panier", "MULTI_ITEM_POS"],
     [commercialEngine.includes("prepareCommercialRetailSaleV2") && commercialEngine.includes("RETAIL_PRICE_OVERRIDE_FORBIDDEN") && saleExecution.includes("prepareCommercialRetailSaleV2") && saleExecution.includes("createRetailSale") && salesRoute.includes("executeCanonicalRetailSale"), "SERVER_PRICE_GUARD"],
     [provisioning.includes('providerCode: "MPESA"') && provisioning.includes('providerType: "MOBILE_MONEY"') && provisioning.includes('providerCode: "VODACOM"') && provisioning.includes('providerType: "TELCO"'), "WALLET_NETWORK_SEPARATION"],
     [migration.includes("EnterpriseMobileMoneyTransaction_rc1_external_ref_key") && migration.includes("EnterpriseTelcoTopup_rc1_external_ref_key") && mobileRoute.includes("prepareCommercialMobileMoney") && telcoRoute.includes("prepareCommercialTelcoTopup"), "UNIQUE_PROVIDER_REFERENCE"],
     [guardrails.includes("normalizeRetailPhone") && sharedWorkspace.includes("normalizePhonePreview") && operatorWorkspace.includes("ConfirmationCard"), "PHONE_NORMALIZATION_AND_CONFIRMATION"],
     [operatorWorkspace.includes("floatAccountId: null") && operatorWorkspace.includes("operatorFloatAccountId: null") && sharedWorkspace.includes("dashboard.cashSession") && guardrails.includes("floatAccountId: null") && guardrails.includes("operatorFloatAccountId: null"), "AUTOMATIC_CASH_AND_FLOAT_RESOLUTION"],
-    [sharedWorkspace.includes("CashSessionBar") && sharedWorkspace.includes("No active till") && sharedWorkspace.includes("Fonds d’ouverture"), "VISIBLE_CASH_SESSION"],
+    [sharedWorkspace.includes("CashSessionBar") && sharedWorkspace.includes('retailText(locale, "noActiveTill")') && sharedWorkspace.includes('retailText(locale, "openingFloat")') && retailEn.noActiveTill === "No active till. Open a till before accepting cash." && retailFr.openingFloat === "Fonds d’ouverture", "VISIBLE_CASH_SESSION"],
     [adminPanels.includes("RETAIL_PERMISSION_CATALOG") && adminPanels.includes('sectorCode === "COMMERCE_RETAIL"') && constants.includes("enterprise.purchases.manage"), "RETAIL_RBAC_CATALOG"],
     [guardrails.includes("getRetailMetricsByCurrency") && dashboard.includes("metricsByCurrency") && dashboardRoute.includes("getCommercialRetailDashboard") && !dashboardRoute.includes("getRetailDashboard("), "MULTI_CURRENCY_REPORTING"],
-    [dashboard.includes("readyForFirstSale") && dashboard.includes('code: "FX"') && sharedWorkspace.includes("ShopReadiness") && sharedWorkspace.includes("Mise en service du Shop"), "ONBOARDING_READINESS_CHECKLIST"],
+    [dashboard.includes("readyForFirstSale") && dashboard.includes('code: "FX"') && sharedWorkspace.includes("ShopReadiness") && sharedWorkspace.includes('retailText(locale, "shopSetup")') && retailFr.shopSetup === "Mise en service du Shop" && retailEn.shopSetup === "Shop setup", "ONBOARDING_READINESS_CHECKLIST"],
     [currency.includes("resolveExchangeRateDetails") && currency.includes('direction: "INVERSE"') && currency.includes("snapshotExchangeRate") && fxService.includes("createEnterpriseExchangeRate") && fxService.includes("deactivateEnterpriseExchangeRate") && fxSchemas.includes("CENTRAL_BANK") && fxRoute.includes("authorizeFinanceRequest") && fxDeactivateRoute.includes("writeAuditLog") && financeModulePage.includes("FINANCE_TREASURY/exchange-rates") && fxWorkspace.includes("1 {rate.sourceCurrencyCode}"), "FX_RATE_GOVERNANCE"],
     [fxReporting.includes("getRetailFunctionalCurrencySummary") && fxReporting.includes("resolveFromTimeline") && fxReporting.includes("missingRates") && fxReporting.includes("presentationCurrencyCode") && consolidatedReport.includes("ratesUsed") && consolidatedReport.includes("INCOMPLETE"), "HISTORICAL_FX_CONSOLIDATION"],
     [exists("docs/SHOP_ONBOARDING.md") && onboardingDoc.includes("STARTER — Shop Essentials") && onboardingDoc.includes("BUSINESS — Shop Operations") && onboardingDoc.includes("ENTERPRISE — Shop Scale") && onboardingDoc.includes("Taux de change") && guides.includes("Guide d’onboarding Shop") && guides.includes("Consolidation multi-devise") && fxDoc.includes("Gouvernance des taux de change"), "IN_APP_ONBOARDING_GUIDE"],
