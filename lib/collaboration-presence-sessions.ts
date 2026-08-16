@@ -1,3 +1,4 @@
+import { deleteCachedPresence, writeCachedPresence } from "@/lib/collaboration-presence-cache";
 import { prisma } from "@/lib/prisma";
 
 export const COLLABORATION_PRESENCE_STALE_MS = 60_000;
@@ -14,17 +15,17 @@ function normalizedClientType(value: string | null | undefined): CollaborationCl
   return COLLABORATION_CLIENT_TYPES.includes(value as CollaborationClientType) ? (value as CollaborationClientType) : "UNKNOWN";
 }
 
-export async function markCollaborationPresenceOnline({
+async function persistPresenceHeartbeat({
   userId,
-  clientSessionId,
+  sessionId,
   clientType,
+  now,
 }: {
   userId: string;
-  clientSessionId?: string | null;
-  clientType?: string | null;
+  sessionId: string;
+  clientType: CollaborationClientType;
+  now: Date;
 }) {
-  const now = new Date();
-  const sessionId = normalizedClientSessionId(clientSessionId, userId);
   const staleBefore = new Date(now.getTime() - COLLABORATION_PRESENCE_STALE_MS);
 
   const staleSessions = await prisma.collaborationPresenceSession.findMany({
@@ -56,20 +57,21 @@ export async function markCollaborationPresenceOnline({
       disconnectedAt: null,
       lastHeartbeatAt: { gte: staleBefore },
     },
+    select: { id: true },
     orderBy: { connectedAt: "desc" },
   });
 
   if (openSession) {
     await prisma.collaborationPresenceSession.update({
       where: { id: openSession.id },
-      data: { lastHeartbeatAt: now, clientType: normalizedClientType(clientType) },
+      data: { lastHeartbeatAt: now, clientType },
     });
   } else {
     await prisma.collaborationPresenceSession.create({
       data: {
         userId,
         clientSessionId: sessionId,
-        clientType: normalizedClientType(clientType),
+        clientType,
         connectedAt: now,
         lastHeartbeatAt: now,
       },
@@ -77,6 +79,33 @@ export async function markCollaborationPresenceOnline({
   }
 
   await prisma.user.update({ where: { id: userId }, data: { lastSeenAt: now } }).catch(() => null);
+}
+
+export async function markCollaborationPresenceOnline({
+  userId,
+  clientSessionId,
+  clientType,
+}: {
+  userId: string;
+  clientSessionId?: string | null;
+  clientType?: string | null;
+}) {
+  const now = new Date();
+  const sessionId = normalizedClientSessionId(clientSessionId, userId);
+  const normalizedType = normalizedClientType(clientType);
+  const cacheResult = await writeCachedPresence({
+    userId,
+    clientSessionId: sessionId,
+    clientType: normalizedType,
+    heartbeatAt: now.toISOString(),
+  });
+
+  // Redis is the fast source for live presence. PostgreSQL keeps the durable
+  // journal, but heartbeat writes are coalesced to avoid write amplification.
+  if (cacheResult.shouldPersist) {
+    await persistPresenceHeartbeat({ userId, sessionId, clientType: normalizedType, now });
+  }
+
   return now;
 }
 
@@ -92,6 +121,8 @@ export async function markCollaborationPresenceOffline({
   const now = new Date();
   const sessionId = normalizedClientSessionId(clientSessionId, userId);
   const normalizedReason = reason?.trim().slice(0, 80) || "CLIENT_OFFLINE";
+
+  await deleteCachedPresence(userId, sessionId);
 
   await prisma.collaborationPresenceSession.updateMany({
     where: { userId, clientSessionId: sessionId, disconnectedAt: null },
