@@ -1,27 +1,38 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useAppLocale } from "@/components/i18n/locale-provider";
 import { translateProfessionalErp, type ProfessionalErpKey } from "@/lib/i18n";
 
 export type ProfessionalErpLocale = "fr" | "en";
 
-export function professionalErpClientLocale(): ProfessionalErpLocale {
-  if (typeof document !== "undefined" && document.documentElement.lang.toLowerCase().startsWith("en")) return "en";
-  return "fr";
+export function useProfessionalErpLocale(): ProfessionalErpLocale {
+  const locale = useAppLocale();
+  return locale === "en" ? "en" : "fr";
 }
 
-export function useProfessionalErpLocale(): ProfessionalErpLocale {
-  const [locale, setLocale] = useState<ProfessionalErpLocale>("fr");
+const approvalMessages = {
+  fr: {
+    SELF_APPROVAL_FORBIDDEN: "Vous ne pouvez pas vous choisir comme approbateur. Sélectionnez une autre personne autorisée.",
+    APPROVER_NOT_MEMBER: "Cette personne n’est pas un membre actif de cette entreprise et ne peut pas être choisie comme approbateur.",
+    APPROVER_PERMISSION_DENIED: "Cette personne n’a pas le droit d’approuver dans ce module. Choisissez un approbateur autorisé.",
+    APPROVER_ELIGIBILITY_CHECK_FAILED: "Impossible de vérifier les droits de cet approbateur. Réessayez avant d’envoyer la demande.",
+  },
+  en: {
+    SELF_APPROVAL_FORBIDDEN: "You cannot select yourself as approver. Choose another authorized person.",
+    APPROVER_NOT_MEMBER: "This person is not an active member of this organization and cannot be selected as approver.",
+    APPROVER_PERMISSION_DENIED: "This person does not have approval rights in this module. Choose an authorized approver.",
+    APPROVER_ELIGIBILITY_CHECK_FAILED: "The approver’s permissions could not be verified. Try again before submitting the request.",
+  },
+} as const;
 
-  useEffect(() => {
-    const update = () => setLocale(professionalErpClientLocale());
-    update();
-    const observer = new MutationObserver(update);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
-    return () => observer.disconnect();
-  }, []);
+export type ProfessionalErpApprovalMessageCode = keyof typeof approvalMessages.fr;
 
-  return locale;
+export function professionalErpApprovalMessage(
+  locale: ProfessionalErpLocale,
+  code: string | null | undefined,
+) {
+  const key = code as ProfessionalErpApprovalMessageCode;
+  return approvalMessages[locale][key] || approvalMessages[locale].APPROVER_ELIGIBILITY_CHECK_FAILED;
 }
 
 export function professionalErpT(
