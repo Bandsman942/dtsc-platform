@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+// Canonical Retail close/operator i18n contract for #367.
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const parse = (file) => JSON.parse(read(file));
