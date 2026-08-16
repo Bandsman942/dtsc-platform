@@ -75,7 +75,7 @@ need(files.helper, "professionalErpNumber", "helper format nombre");
 
 for (const marker of [
   "/stock-transfers", "/inventory-counts", "/stock-adjustments",
-  "idempotencyKey: crypto.randomUUID()", 'decision: "APPROVE"', 'decision: "REJECT"', "revision: entity.revision",
+  "idempotencyKey: crypto.randomUUID()", 'decision: "APPROVE" | "REJECT"', "{ decision, revision: entity.revision }",
 ]) need(files.inventory, marker, "stock — invariants");
 
 for (const marker of [
