@@ -18,9 +18,10 @@ requireTokens("lib/enterprise/hr-payroll/payroll.ts", [
   "paymentCreated: false",
   "PAYROLL_RUN_ALREADY_EXISTS",
   "CANCELLED",
+  '"PAYROLL_OPERATIONS"',
 ]);
-requireTokens("lib/enterprise/hr-payroll/leave.ts", ["LEAVE_OVERLAP", "decidedAt"]);
-requireTokens("lib/enterprise/hr-payroll/timesheets.ts", ["TIMESHEET_PERIOD_OVERLAP", "totalApprovedMinutes"]);
+requireTokens("lib/enterprise/hr-payroll/leave.ts", ["LEAVE_OVERLAP", "decidedAt", '"TIME_ATTENDANCE"']);
+requireTokens("lib/enterprise/hr-payroll/timesheets.ts", ["TIMESHEET_PERIOD_OVERLAP", "totalApprovedMinutes", '"TIME_ATTENDANCE"']);
 requireTokens("lib/enterprise/hr-payroll/helpers.ts", [
   "SELF_APPROVAL_FORBIDDEN",
   "APPROVER_NOT_MEMBER",
@@ -46,11 +47,19 @@ requireTokens("app/api/enterprise/[organizationId]/approval-eligibility/route.ts
   "APPROVER_PERMISSION_DENIED",
   'action: "approve"',
 ]);
-requireTokens("app/api/enterprise/[organizationId]/employment-contracts/[contractId]/decision/route.ts", [
-  'action: "approve"',
-]);
+for (const path of [
+  "app/api/enterprise/[organizationId]/employment-contracts/[contractId]/decision/route.ts",
+  "app/api/enterprise/[organizationId]/leave-requests/[requestId]/decision/route.ts",
+  "app/api/enterprise/[organizationId]/timesheets/[timesheetId]/decision/route.ts",
+  "app/api/enterprise/[organizationId]/payroll-runs/[payrollRunId]/decision/route.ts",
+]) {
+  requireTokens(path, ['action: "approve"']);
+}
 forbidTokens("app/api/enterprise/[organizationId]/employment-contracts/[contractId]/decision/route.ts", [
   'moduleCode: "HUMAN_RESOURCES", action: "manage"',
+]);
+forbidTokens("app/api/enterprise/[organizationId]/payroll-runs/[payrollRunId]/decision/route.ts", [
+  'moduleCode: "PAYROLL_OPERATIONS", action: "manage"',
 ]);
 forbidTokens("lib/enterprise/hr-payroll/payroll.ts", ["status: \"PAID\"", "financialTransaction.create", "ledger", "bankAccount"]);
 success("enterprise HR and operational payroll boundaries");
