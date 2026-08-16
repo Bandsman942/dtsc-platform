@@ -180,11 +180,9 @@ function retailText(locale: "fr" | "en", key: RetailWorkspaceKey) {
   return translateRetailWorkspace(locale, key);
 }
 
-export function moneyValue(value: string | number | null | undefined, currency?: string, locale?: "fr" | "en") {
+export function moneyValue(value: string | number | null | undefined, currency: string | undefined, locale: "fr" | "en") {
   const amount = Number(value || 0);
-  const localeCode = locale
-    ? ({ fr: "fr-FR", en: "en-US" } as const)[locale]
-    : (typeof document !== "undefined" && document.documentElement.lang.toLowerCase().startsWith("en") ? "en-US" : "fr-FR");
+  const localeCode = ({ fr: "fr-FR", en: "en-US" } as const)[locale];
   const formatted = Number.isFinite(amount) ? amount.toLocaleString(localeCode, { maximumFractionDigits: 2 }) : "0";
   return currency ? `${formatted} ${currency}` : formatted;
 }

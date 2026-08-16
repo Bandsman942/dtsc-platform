@@ -36,6 +36,7 @@ import {
   customerFacingFeeCollectionMode,
   customerFacingMobileMoneyTransactionType,
 } from "@/lib/retail-customer-language";
+import { translateRetailWorkspace } from "@/lib/i18n";
 
 type TelcoCurrencyAccount = {
   id: string;
@@ -140,7 +141,7 @@ function MobileMoneyPanel({ organizationId, dashboard, locale, busyAction, mutat
       "mobile-money",
       `/api/enterprise/${organizationId}/retail/mobile-money`,
       pending,
-      locale === "en" ? "Mobile Money operation confirmed." : "Opération Mobile Money confirmée.",
+      translateRetailWorkspace(locale, "operatorMobileMoneyOperationConfirmed"),
     );
     if (body) setPending(null);
   }
@@ -153,10 +154,8 @@ function MobileMoneyPanel({ organizationId, dashboard, locale, busyAction, mutat
     <div className="grid min-w-0 gap-5">
       <OpenCashForm organizationId={organizationId} dashboard={dashboard} locale={locale} busyAction={busyAction} mutate={mutate} />
       <ModuleSection
-        title={locale === "en" ? "Mobile Money operation" : "Opération Mobile Money"}
-        description={locale === "en"
-          ? "Choose the Mobile Money service and record the customer operation. The configured operator account is applied automatically."
-          : "Choisissez le service Mobile Money et enregistrez l’opération client. Le compte opérateur configuré est appliqué automatiquement."}
+        title={translateRetailWorkspace(locale, "operatorMobileMoneyOperation")}
+        description={translateRetailWorkspace(locale, "operatorChooseTheMobileMoneyServiceAndRecordTheCustomerOperationTheConfigured")}
       >
         <form
           onSubmit={(event) => {
@@ -182,38 +181,38 @@ function MobileMoneyPanel({ organizationId, dashboard, locale, busyAction, mutat
           className="grid min-w-0 gap-4"
         >
           <div className="grid min-w-0 gap-4 md:grid-cols-2">
-            <Field label={locale === "en" ? "Mobile Money service" : "Service Mobile Money"}>
+            <Field label={translateRetailWorkspace(locale, "operatorMobileMoneyService")}>
               <Select name="providerCode" required disabled={Boolean(busyAction)}>
                 <option value="">—</option>
                 {mappedProviders.map((provider) => <option key={provider.id} value={provider.providerCode}>{provider.label}</option>)}
               </Select>
             </Field>
-            <Field label={locale === "en" ? "Operation" : "Opération"}>
+            <Field label={translateRetailWorkspace(locale, "operatorOperation")}>
               <Select name="transactionType" defaultValue="DEPOSIT">
                 <option value="DEPOSIT">{customerFacingMobileMoneyTransactionType("DEPOSIT", locale)}</option>
                 <option value="WITHDRAWAL">{customerFacingMobileMoneyTransactionType("WITHDRAWAL", locale)}</option>
               </Select>
             </Field>
-            <Field label={locale === "en" ? "Customer phone" : "Téléphone client"}><Input name="customerPhone" required inputMode="tel" placeholder={locale === "en" ? "+country code…" : "+indicatif pays…"} /></Field>
-            <Field label={locale === "en" ? "Customer amount" : "Montant client"}><Input name="principalAmount" type="number" min="0.01" step="0.01" required /></Field>
-            <Field label={locale === "en" ? "Customer fee" : "Frais client"}><Input name="customerFeeAmount" type="number" min="0" step="0.01" defaultValue="0" /></Field>
-            <Field label={locale === "en" ? "Operator commission" : "Commission opérateur"}><Input name="providerCommissionAmount" type="number" min="0" step="0.01" defaultValue="0" /></Field>
-            <Field label={locale === "en" ? "Fee collection" : "Encaissement des frais"}>
+            <Field label={translateRetailWorkspace(locale, "operatorCustomerPhone")}><Input name="customerPhone" required inputMode="tel" placeholder={translateRetailWorkspace(locale, "operatorCountryCode")} /></Field>
+            <Field label={translateRetailWorkspace(locale, "operatorCustomerAmount")}><Input name="principalAmount" type="number" min="0.01" step="0.01" required /></Field>
+            <Field label={translateRetailWorkspace(locale, "operatorCustomerFee")}><Input name="customerFeeAmount" type="number" min="0" step="0.01" defaultValue="0" /></Field>
+            <Field label={translateRetailWorkspace(locale, "operatorOperatorCommission")}><Input name="providerCommissionAmount" type="number" min="0" step="0.01" defaultValue="0" /></Field>
+            <Field label={translateRetailWorkspace(locale, "operatorFeeCollection")}>
               <Select name="feeCollectionMode" defaultValue="NONE">
                 <option value="NONE">{customerFacingFeeCollectionMode("NONE", locale)}</option>
                 <option value="CASH">{customerFacingFeeCollectionMode("CASH", locale)}</option>
                 <option value="PROVIDER">{customerFacingFeeCollectionMode("PROVIDER", locale)}</option>
               </Select>
             </Field>
-            <Field label={locale === "en" ? "Operator reference" : "Référence opérateur"}><Input name="externalReference" required maxLength={160} /></Field>
+            <Field label={translateRetailWorkspace(locale, "operatorOperatorReference")}><Input name="externalReference" required maxLength={160} /></Field>
           </div>
           <div className="rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm font-semibold text-dtsc-muted">
             {activeCash
-              ? `${locale === "en" ? "Till" : "Caisse"}: ${activeCash.financialAccount.name} · ${activeCash.financialAccount.currencyCode}`
-              : (locale === "en" ? "Open a till before continuing." : "Ouvrez une caisse avant de continuer.")}
+              ? `${translateRetailWorkspace(locale, "till")}: ${activeCash.financialAccount.name} · ${activeCash.financialAccount.currencyCode}`
+              : (translateRetailWorkspace(locale, "operatorOpenATillBeforeContinuing"))}
           </div>
           <Button className="w-fit" disabled={Boolean(busyAction) || !activeCash || !mappedProviders.length}>
-            <Smartphone className="h-4 w-4" />{locale === "en" ? "Review operation" : "Vérifier l’opération"}
+            <Smartphone className="h-4 w-4" />{translateRetailWorkspace(locale, "operatorReviewOperation")}
           </Button>
         </form>
       </ModuleSection>
@@ -221,13 +220,13 @@ function MobileMoneyPanel({ organizationId, dashboard, locale, busyAction, mutat
       {pending ? (
         <ConfirmationCard
           locale={locale}
-          title={locale === "en" ? "Confirm Mobile Money" : "Confirmer Mobile Money"}
+          title={translateRetailWorkspace(locale, "operatorConfirmMobileMoney")}
           lines={[
-            selectedProvider?.label || (locale === "en" ? "Mobile Money service" : "Service Mobile Money"),
-            `${pendingType} · ${moneyValue(Number(pending.principalAmount), String(pending.currencyCode))}`,
+            selectedProvider?.label || (translateRetailWorkspace(locale, "operatorMobileMoneyService")),
+            `${pendingType} · ${moneyValue(Number(pending.principalAmount), String(pending.currencyCode), locale)}`,
             String(pending.customerPhone),
             pendingFee,
-            `${locale === "en" ? "Operator reference" : "Référence opérateur"}: ${pending.externalReference}`,
+            `${translateRetailWorkspace(locale, "operatorOperatorReference")}: ${pending.externalReference}`,
           ]}
           busy={busyAction === "mobile-money"}
           onCancel={() => setPending(null)}
@@ -290,7 +289,7 @@ function TelcoPanel({ organizationId, dashboard, locale, busyAction, mutate, rel
       "telco-topup",
       `/api/enterprise/${organizationId}/retail/telco-topups`,
       pending,
-      locale === "en" ? "Top-up recorded in the selected currency." : "Recharge enregistrée dans la devise sélectionnée.",
+      translateRetailWorkspace(locale, "operatorTopUpRecordedInTheSelectedCurrency"),
     );
     if (body) setPending(null);
   }
@@ -315,10 +314,8 @@ function TelcoPanel({ organizationId, dashboard, locale, busyAction, mutate, rel
       />
 
       <ModuleSection
-        title={locale === "en" ? "Airtime / bundle" : "Crédit / forfait"}
-        description={locale === "en"
-          ? "Choose the payment account first. Its currency determines the eligible operator account automatically, so the same network can be used in CDF or USD without reconfiguration."
-          : "Choisissez d’abord le compte d’encaissement. Sa devise détermine automatiquement le compte opérateur éligible : un même réseau peut ainsi être exploité en CDF ou en USD sans reconfiguration."}
+        title={translateRetailWorkspace(locale, "operatorAirtimeBundle")}
+        description={translateRetailWorkspace(locale, "operatorChooseThePaymentAccountFirstItsCurrencyDeterminesTheEligibleOperatorAccount")}
       >
         <form
           onSubmit={(event) => {
@@ -346,15 +343,15 @@ function TelcoPanel({ organizationId, dashboard, locale, busyAction, mutate, rel
           className="grid min-w-0 gap-4"
         >
           <div className="grid min-w-0 gap-4 md:grid-cols-2">
-            <Field label={locale === "en" ? "Payment method" : "Mode d’encaissement"}>
+            <Field label={translateRetailWorkspace(locale, "operatorPaymentMethod")}>
               <Select name="tenderMethod" value={tenderMethod} onChange={(value) => { setTenderMethod(value === "NON_CASH" ? "NON_CASH" : "CASH"); setPending(null); }} disabled={Boolean(busyAction)}>
-                <option value="CASH">{locale === "en" ? "Cash till" : "Caisse espèces"}</option>
-                <option value="NON_CASH">{locale === "en" ? "Other financial account" : "Autre compte financier"}</option>
+                <option value="CASH">{translateRetailWorkspace(locale, "operatorCashTill")}</option>
+                <option value="NON_CASH">{translateRetailWorkspace(locale, "operatorOtherFinancialAccount")}</option>
               </Select>
             </Field>
-            <Field label={locale === "en" ? "Payment account & currency" : "Compte d’encaissement et devise"}>
+            <Field label={translateRetailWorkspace(locale, "operatorPaymentAccountCurrency")}>
               {tenderMethod === "CASH" ? (
-                <Input value={activeCash ? activeCash.financialAccount.name + " · " + activeCash.financialAccount.currencyCode : (locale === "en" ? "Open or select a cash till" : "Ouvrez ou sélectionnez une caisse")} readOnly />
+                <Input value={activeCash ? activeCash.financialAccount.name + " · " + activeCash.financialAccount.currencyCode : (translateRetailWorkspace(locale, "operatorOpenOrSelectACashTill"))} readOnly />
               ) : (
                 <Select name="tenderAccountId" value={nonCashAccountId} onChange={(value) => { setNonCashAccountId(value); setPending(null); }} required disabled={Boolean(busyAction)}>
                   <option value="">—</option>
@@ -362,39 +359,39 @@ function TelcoPanel({ organizationId, dashboard, locale, busyAction, mutate, rel
                 </Select>
               )}
             </Field>
-            <Field label={locale === "en" ? "Network" : "Opérateur réseau"}>
+            <Field label={translateRetailWorkspace(locale, "operatorNetwork")}>
               <Select name="providerCode" required disabled={Boolean(busyAction) || !currency}>
                 <option value="">—</option>
                 {eligibleProviders.map((provider) => <option key={provider.id} value={provider.providerCode}>{provider.label}</option>)}
               </Select>
             </Field>
-            <Field label={locale === "en" ? "Destination phone" : "Numéro destinataire"}><Input name="destinationPhone" required inputMode="tel" placeholder={locale === "en" ? "+country code…" : "+indicatif pays…"} disabled={Boolean(busyAction)} /></Field>
-            <Field label={locale === "en" ? "Catalog offer (optional)" : "Offre catalogue (facultatif)"}>
+            <Field label={translateRetailWorkspace(locale, "operatorDestinationPhone")}><Input name="destinationPhone" required inputMode="tel" placeholder={translateRetailWorkspace(locale, "operatorCountryCode")} disabled={Boolean(busyAction)} /></Field>
+            <Field label={translateRetailWorkspace(locale, "operatorCatalogOfferOptional")}>
               <Select name="catalogItemId" disabled={Boolean(busyAction) || !currency}><option value="">—</option>{eligibleCatalog.map((item) => <option key={item.id} value={item.id}>{item.name}{item.currency ? " · " + item.currency : ""}</option>)}</Select>
             </Field>
-            <Field label={locale === "en" ? "Offer label" : "Libellé du forfait"}><Input name="offerLabel" required disabled={Boolean(busyAction)} /></Field>
-            <Field label={locale === "en" ? "Sale price" : "Prix de vente"}><Input name="saleAmount" type="number" min="0.01" step="0.01" required disabled={Boolean(busyAction)} /></Field>
-            <Field label={locale === "en" ? "Operator cost" : "Coût opérateur"}><Input name="operatorCost" type="number" min="0" step="0.01" required disabled={Boolean(busyAction)} /></Field>
-            <Field label={locale === "en" ? "Execution status" : "Statut de l’opération"}>
+            <Field label={translateRetailWorkspace(locale, "operatorOfferLabel")}><Input name="offerLabel" required disabled={Boolean(busyAction)} /></Field>
+            <Field label={translateRetailWorkspace(locale, "operatorSalePrice")}><Input name="saleAmount" type="number" min="0.01" step="0.01" required disabled={Boolean(busyAction)} /></Field>
+            <Field label={translateRetailWorkspace(locale, "operatorOperatorCost")}><Input name="operatorCost" type="number" min="0" step="0.01" required disabled={Boolean(busyAction)} /></Field>
+            <Field label={translateRetailWorkspace(locale, "operatorExecutionStatus")}>
               <Select name="status" value={status} onChange={(value) => { setStatus(value); setPending(null); }} disabled={Boolean(busyAction)}><option value="SUCCESS">{customerFacingStatusLabel("SUCCESS", locale)}</option><option value="FAILED">{customerFacingStatusLabel("FAILED", locale)}</option></Select>
             </Field>
-            <Field label={locale === "en" ? "Operator reference" : "Référence opérateur"}><Input name="externalReference" maxLength={160} required={status === "SUCCESS"} disabled={Boolean(busyAction)} /></Field>
-            {status === "FAILED" ? <Field label={locale === "en" ? "Failure reason" : "Motif d’échec"}><Input name="failureReason" minLength={3} maxLength={500} required disabled={Boolean(busyAction)} /></Field> : null}
+            <Field label={translateRetailWorkspace(locale, "operatorOperatorReference")}><Input name="externalReference" maxLength={160} required={status === "SUCCESS"} disabled={Boolean(busyAction)} /></Field>
+            {status === "FAILED" ? <Field label={translateRetailWorkspace(locale, "operatorFailureReason")}><Input name="failureReason" minLength={3} maxLength={500} required disabled={Boolean(busyAction)} /></Field> : null}
           </div>
 
           <div className="rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm font-semibold text-dtsc-muted">
             {tenderAccount && currency
-              ? (locale === "en" ? "Operational currency" : "Devise opérationnelle") + ": " + currency + " · " + (locale === "en" ? "payment account" : "encaissement") + ": " + tenderAccount.name
-              : (locale === "en" ? "Select an available payment account before continuing." : "Sélectionnez un compte d’encaissement disponible avant de continuer.")}
+              ? (translateRetailWorkspace(locale, "operatorOperationalCurrency")) + ": " + currency + " · " + (translateRetailWorkspace(locale, "operatorPaymentAccount")) + ": " + tenderAccount.name
+              : (translateRetailWorkspace(locale, "operatorSelectAnAvailablePaymentAccountBeforeContinuing"))}
           </div>
           {currency && configuration && !eligibleProviders.length ? (
             <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm font-bold text-amber-800 dark:text-amber-200">
-              {locale === "en" ? "No network has an operator account configured in this currency." : "Aucun réseau ne possède encore de compte opérateur dans cette devise."} {" "}
-              <Link href="#telco-provider-account-configuration" className="underline">{locale === "en" ? "Configure operator accounts" : "Configurer les comptes opérateur"}</Link>
+              {translateRetailWorkspace(locale, "operatorNoNetworkHasAnOperatorAccountConfiguredInThisCurrency")} {" "}
+              <Link href="#telco-provider-account-configuration" className="underline">{translateRetailWorkspace(locale, "operatorConfigureOperatorAccounts")}</Link>
             </div>
           ) : null}
           <Button className="w-fit" disabled={Boolean(busyAction) || !tenderAccount || !currency || !eligibleProviders.length}>
-            <RadioTower className="h-4 w-4" />{locale === "en" ? "Review top-up" : "Vérifier la recharge"}
+            <RadioTower className="h-4 w-4" />{translateRetailWorkspace(locale, "operatorReviewTopUp")}
           </Button>
         </form>
       </ModuleSection>
@@ -402,15 +399,15 @@ function TelcoPanel({ organizationId, dashboard, locale, busyAction, mutate, rel
       {pending ? (
         <ConfirmationCard
           locale={locale}
-          title={locale === "en" ? "Confirm top-up" : "Confirmer la recharge"}
+          title={translateRetailWorkspace(locale, "operatorConfirmTopUp")}
           lines={[
-            selectedProvider?.label || (locale === "en" ? "Network operator" : "Opérateur réseau"),
-            pending.offerLabel + " · " + moneyValue(pending.saleAmount, pending.currencyCode),
+            selectedProvider?.label || (translateRetailWorkspace(locale, "operatorNetworkOperator")),
+            pending.offerLabel + " · " + moneyValue(pending.saleAmount, pending.currencyCode, locale),
             String(pending.destinationPhone),
-            (locale === "en" ? "Payment account" : "Compte d’encaissement") + ": " + (selectedTenderAccount?.name || "—") + " · " + pending.currencyCode,
-            (locale === "en" ? "Operator account" : "Compte opérateur") + ": " + (selectedOperatorAccount?.name || "—") + " · " + pending.currencyCode,
-            (locale === "en" ? "Operator reference" : "Référence opérateur") + ": " + (pending.externalReference || "—"),
-            locale === "en" ? "Check the phone number and currency carefully before confirming." : "Vérifiez soigneusement le numéro et la devise avant de confirmer.",
+            (translateRetailWorkspace(locale, "operatorPaymentAccount2")) + ": " + (selectedTenderAccount?.name || "—") + " · " + pending.currencyCode,
+            (translateRetailWorkspace(locale, "operatorOperatorAccount")) + ": " + (selectedOperatorAccount?.name || "—") + " · " + pending.currencyCode,
+            (translateRetailWorkspace(locale, "operatorOperatorReference")) + ": " + (pending.externalReference || "—"),
+            translateRetailWorkspace(locale, "operatorCheckThePhoneNumberAndCurrencyCarefullyBeforeConfirming"),
           ]}
           busy={busyAction === "telco-topup"}
           onCancel={() => setPending(null)}
@@ -424,12 +421,12 @@ function TelcoPanel({ organizationId, dashboard, locale, busyAction, mutate, rel
 
 function ConfirmationCard({ locale, title, lines, busy, onCancel, onConfirm }: { locale: "fr" | "en"; title: string; lines: string[]; busy: boolean; onCancel: () => void; onConfirm: () => void }) {
   return (
-    <ModuleSection title={title} description={locale === "en" ? "Review the information before confirming the operation." : "Vérifiez les informations avant de confirmer l’opération."}>
+    <ModuleSection title={title} description={translateRetailWorkspace(locale, "operatorReviewTheInformationBeforeConfirmingTheOperation")}>
       <div className="rounded-2xl border-2 border-amber-400/50 bg-amber-500/10 p-4">
         <div className="grid gap-1">{lines.map((line, index) => <p key={`${line}-${index}`} className="break-words text-sm font-bold text-dtsc-ink">{line}</p>)}</div>
         <div data-responsive-actions className="mt-4">
-          <Button variant="outline" type="button" disabled={busy} onClick={onCancel}>{locale === "en" ? "Edit" : "Modifier"}</Button>
-          <Button type="button" disabled={busy} onClick={onConfirm}><CheckCircle2 className="h-4 w-4" />{busy ? (locale === "en" ? "Processing…" : "Traitement…") : (locale === "en" ? "Confirm" : "Confirmer")}</Button>
+          <Button variant="outline" type="button" disabled={busy} onClick={onCancel}>{translateRetailWorkspace(locale, "operatorEdit")}</Button>
+          <Button type="button" disabled={busy} onClick={onConfirm}><CheckCircle2 className="h-4 w-4" />{busy ? (translateRetailWorkspace(locale, "processing")) : (translateRetailWorkspace(locale, "operatorConfirm"))}</Button>
         </div>
       </div>
     </ModuleSection>
@@ -438,13 +435,13 @@ function ConfirmationCard({ locale, title, lines, busy, onCancel, onConfirm }: {
 
 function OperatorHistory({ organizationId, moduleCode, dashboard, locale, busyAction, mutate }: { organizationId: string; moduleCode: "MOBILE_MONEY_AGENCY" | "TELCO_TOPUPS"; dashboard: RetailDashboard; locale: "fr" | "en"; busyAction: string | null; mutate: RetailMutation }) {
   async function reverse(kind: "mobile-money" | "telco-topups", id: string, revision: number) {
-    const reason = window.prompt(locale === "en" ? "Reason for reversal" : "Motif de l’annulation");
+    const reason = window.prompt(translateRetailWorkspace(locale, "reversalReason"));
     if (!reason?.trim()) return;
     await mutate(
       `reverse-${id}`,
       `/api/enterprise/${organizationId}/retail/${kind}/${id}/reverse`,
       { revision, reason: reason.trim() },
-      locale === "en" ? "Reversal completed." : "Annulation enregistrée.",
+      translateRetailWorkspace(locale, "reversalCompleted"),
       { idempotent: false },
     );
   }
@@ -453,21 +450,21 @@ function OperatorHistory({ organizationId, moduleCode, dashboard, locale, busyAc
     const items = dashboard.recent.mobileMoney || [];
     return (
       <div className="grid min-w-0 gap-5">
-        <ModuleSection title={locale === "en" ? "Mobile Money history" : "Historique Mobile Money"}>
+        <ModuleSection title={translateRetailWorkspace(locale, "operatorMobileMoneyHistory")}>
           {items.length ? (
-            <BusinessList ariaLabel={locale === "en" ? "Mobile Money history" : "Historique Mobile Money"}>
+            <BusinessList ariaLabel={translateRetailWorkspace(locale, "operatorMobileMoneyHistory")}>
               {items.map((item) => (
                 <BusinessListItem
                   key={item.id}
                   title={`${item.number} · ${providerLabel(dashboard, item.providerCode)}`}
                   status={<StatusBadge tone={statusTone(item.status)}>{customerFacingStatusLabel(item.status, locale)}</StatusBadge>}
-                  meta={`${customerFacingMobileMoneyTransactionType(item.transactionType, locale)} · ${moneyValue(item.principalAmount, item.currencyCode)} · ${formatEnterpriseDate(item.occurredAt, locale)}`}
-                  description={`${item.customerPhoneMasked || "—"} · ${locale === "en" ? "Operator reference" : "Référence opérateur"}: ${item.externalReference || "—"}`}
-                  actions={dashboard.access.canManage && item.status === "CONFIRMED" ? <Button size="sm" variant="outline" disabled={Boolean(busyAction)} onClick={() => void reverse("mobile-money", item.id, item.revision)}><RotateCcw className="h-4 w-4" />{locale === "en" ? "Reverse" : "Annuler"}</Button> : undefined}
+                  meta={`${customerFacingMobileMoneyTransactionType(item.transactionType, locale)} · ${moneyValue(item.principalAmount, item.currencyCode, locale)} · ${formatEnterpriseDate(item.occurredAt, locale)}`}
+                  description={`${item.customerPhoneMasked || "—"} · ${translateRetailWorkspace(locale, "operatorOperatorReference")}: ${item.externalReference || "—"}`}
+                  actions={dashboard.access.canManage && item.status === "CONFIRMED" ? <Button size="sm" variant="outline" disabled={Boolean(busyAction)} onClick={() => void reverse("mobile-money", item.id, item.revision)}><RotateCcw className="h-4 w-4" />{translateRetailWorkspace(locale, "reverse")}</Button> : undefined}
                 />
               ))}
             </BusinessList>
-          ) : <EmptyState compact title={locale === "en" ? "No transaction" : "Aucune opération"} description={locale === "en" ? "Confirmed operations will appear here." : "Les opérations confirmées apparaîtront ici."} />}
+          ) : <EmptyState compact title={translateRetailWorkspace(locale, "operatorNoTransaction")} description={translateRetailWorkspace(locale, "operatorConfirmedOperationsWillAppearHere")} />}
         </ModuleSection>
         <RetailErpLinks moduleCode="MOBILE_MONEY_AGENCY" locale={locale} />
       </div>
@@ -477,21 +474,21 @@ function OperatorHistory({ organizationId, moduleCode, dashboard, locale, busyAc
   const items = dashboard.recent.topups || [];
   return (
     <div className="grid min-w-0 gap-5">
-      <ModuleSection title={locale === "en" ? "Top-up history" : "Historique Télécom"}>
+      <ModuleSection title={translateRetailWorkspace(locale, "operatorTopUpHistory")}>
         {items.length ? (
-          <BusinessList ariaLabel={locale === "en" ? "Telco history" : "Historique Télécom"}>
+          <BusinessList ariaLabel={translateRetailWorkspace(locale, "operatorTelcoHistory")}>
             {items.map((item) => (
               <BusinessListItem
                 key={item.id}
                 title={`${item.number} · ${providerLabel(dashboard, item.providerCode)}`}
                 status={<StatusBadge tone={statusTone(item.status)}>{customerFacingStatusLabel(item.status, locale)}</StatusBadge>}
-                meta={`${item.offerLabel} · ${moneyValue(item.saleAmount, item.currencyCode)} · ${formatEnterpriseDate(item.occurredAt, locale)}`}
-                description={`${item.destinationPhoneMasked || "—"} · ${locale === "en" ? "Margin" : "Marge"} ${moneyValue(item.marginAmount, item.currencyCode)} · ${locale === "en" ? "Operator reference" : "Référence opérateur"}: ${item.externalReference || "—"}`}
-                actions={dashboard.access.canManage && item.status === "SUCCESS" ? <Button size="sm" variant="outline" disabled={Boolean(busyAction)} onClick={() => void reverse("telco-topups", item.id, item.revision)}><RotateCcw className="h-4 w-4" />{locale === "en" ? "Reverse" : "Annuler"}</Button> : undefined}
+                meta={`${item.offerLabel} · ${moneyValue(item.saleAmount, item.currencyCode, locale)} · ${formatEnterpriseDate(item.occurredAt, locale)}`}
+                description={`${item.destinationPhoneMasked || "—"} · ${translateRetailWorkspace(locale, "margin")} ${moneyValue(item.marginAmount, item.currencyCode, locale)} · ${translateRetailWorkspace(locale, "operatorOperatorReference")}: ${item.externalReference || "—"}`}
+                actions={dashboard.access.canManage && item.status === "SUCCESS" ? <Button size="sm" variant="outline" disabled={Boolean(busyAction)} onClick={() => void reverse("telco-topups", item.id, item.revision)}><RotateCcw className="h-4 w-4" />{translateRetailWorkspace(locale, "reverse")}</Button> : undefined}
               />
             ))}
           </BusinessList>
-        ) : <EmptyState compact title={locale === "en" ? "No top-up" : "Aucune recharge"} description={locale === "en" ? "Recorded top-ups will appear here." : "Les recharges enregistrées apparaîtront ici."} />}
+        ) : <EmptyState compact title={translateRetailWorkspace(locale, "operatorNoTopUp")} description={translateRetailWorkspace(locale, "operatorRecordedTopUpsWillAppearHere")} />}
       </ModuleSection>
       <RetailErpLinks moduleCode="TELCO_TOPUPS" locale={locale} />
     </div>
@@ -503,7 +500,7 @@ function TelcoProviderConfiguration({ organizationId, dashboard, locale, busyAct
   const configuration = telcoDashboard.telcoConfiguration;
   const [extraCurrency, setExtraCurrency] = useState<Record<string, string>>({});
 
-  if (!configuration) return <EmptyState compact title={locale === "en" ? "Telecom configuration unavailable" : "Configuration Télécom indisponible"} description={locale === "en" ? "Refresh the page and try again." : "Actualisez la page puis réessayez."} />;
+  if (!configuration) return <EmptyState compact title={translateRetailWorkspace(locale, "operatorTelecomConfigurationUnavailable")} description={translateRetailWorkspace(locale, "operatorRefreshThePageAndTryAgain")} />;
 
   async function save(provider: TelcoProviderConfiguration, currencyCode: string, financialAccountId: string) {
     if (!financialAccountId || !currencyCode) return;
@@ -511,7 +508,7 @@ function TelcoProviderConfiguration({ organizationId, dashboard, locale, busyAct
       `telco-account-${provider.id}-${currencyCode}`,
       `/api/enterprise/${organizationId}/retail/telco-topups/accounts`,
       { providerCode: provider.providerCode, currencyCode, financialAccountId },
-      locale === "en" ? "Operator account saved." : "Compte opérateur enregistré.",
+      translateRetailWorkspace(locale, "operatorOperatorAccountSaved"),
       { idempotent: false },
     );
   }
@@ -519,15 +516,13 @@ function TelcoProviderConfiguration({ organizationId, dashboard, locale, busyAct
   return (
     <div id="telco-provider-account-configuration" className="grid min-w-0 gap-5">
       <ModuleSection
-        title={locale === "en" ? "Telecom operator accounts by currency" : "Comptes opérateur Télécom par devise"}
-        description={locale === "en"
-          ? "Each network is displayed once. Link a separate real operator account for every currency you use; in DR Congo, CDF and USD are expected."
-          : "Chaque réseau reste affiché une seule fois. Associez-lui un compte opérateur réel distinct pour chaque devise exploitée ; en RDC, CDF et USD sont attendus."}
+        title={translateRetailWorkspace(locale, "operatorTelecomOperatorAccountsByCurrency")}
+        description={translateRetailWorkspace(locale, "operatorEachNetworkIsDisplayedOnceLinkASeparateRealOperatorAccountFor")}
       >
         <div className="mb-4 rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm font-semibold text-dtsc-muted">
           {configuration.requiredCurrencies.length
-            ? (locale === "en" ? "Required in this country" : "Requis dans ce pays") + ": " + configuration.requiredCurrencies.join(" + ")
-            : (locale === "en" ? "Configure at least two operating currencies per active network." : "Configurez au moins deux devises d’exploitation par réseau actif.")}
+            ? (translateRetailWorkspace(locale, "operatorRequiredInThisCountry")) + ": " + configuration.requiredCurrencies.join(" + ")
+            : (translateRetailWorkspace(locale, "operatorConfigureAtLeastTwoOperatingCurrenciesPerActiveNetwork"))}
         </div>
         <div className="grid min-w-0 gap-4 lg:grid-cols-2">
           {configuration.providers.map((provider) => {
@@ -542,9 +537,9 @@ function TelcoProviderConfiguration({ organizationId, dashboard, locale, busyAct
                 <div className="flex min-w-0 items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="break-words font-black text-dtsc-ink">{provider.label}</p>
-                    <p className="mt-1 text-xs font-semibold text-dtsc-muted">{provider.mappedCurrencyCount} {locale === "en" ? "currencies configured" : "devises configurées"}</p>
+                    <p className="mt-1 text-xs font-semibold text-dtsc-muted">{provider.mappedCurrencyCount} {translateRetailWorkspace(locale, "operatorCurrenciesConfigured")}</p>
                   </div>
-                  <StatusBadge tone={provider.ready ? "success" : "warning"}>{provider.ready ? (locale === "en" ? "Ready" : "Prêt") : (locale === "en" ? "To complete" : "À compléter")}</StatusBadge>
+                  <StatusBadge tone={provider.ready ? "success" : "warning"}>{provider.ready ? (translateRetailWorkspace(locale, "ready")) : (translateRetailWorkspace(locale, "operatorToComplete"))}</StatusBadge>
                 </div>
 
                 <div className="mt-4 grid gap-3">
@@ -562,13 +557,13 @@ function TelcoProviderConfiguration({ organizationId, dashboard, locale, busyAct
                         className="grid gap-3 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-end"
                       >
                         <div className="min-w-16 self-center text-lg font-black text-dtsc-ink">{currencyCode}</div>
-                        <Field label={locale === "en" ? "Operator financial account" : "Compte financier opérateur"}>
+                        <Field label={translateRetailWorkspace(locale, "operatorOperatorFinancialAccount")}>
                           <Select name="operatorAccountId" defaultValue={mapping?.financialAccountId || ""} disabled={!dashboard.access.canManage || Boolean(busyAction)} required>
                             <option value="">—</option>
                             {accounts.map((account) => <option key={account.id} value={account.id}>{account.name} · {customerFacingFinancialAccountType(account.accountType, locale)}</option>)}
                           </Select>
                         </Field>
-                        {dashboard.access.canManage ? <Button size="sm" disabled={Boolean(busyAction) || !accounts.length}><Settings2 className="h-4 w-4" />{locale === "en" ? "Save" : "Enregistrer"}</Button> : null}
+                        {dashboard.access.canManage ? <Button size="sm" disabled={Boolean(busyAction) || !accounts.length}><Settings2 className="h-4 w-4" />{translateRetailWorkspace(locale, "operatorSave")}</Button> : null}
                       </form>
                     );
                   })}
@@ -583,22 +578,22 @@ function TelcoProviderConfiguration({ organizationId, dashboard, locale, busyAct
                       }}
                       className="grid gap-3 rounded-xl border border-dashed border-dtsc-border bg-dtsc-surface p-3 sm:grid-cols-2"
                     >
-                      <Field label={locale === "en" ? "Add currency" : "Ajouter une devise"}>
+                      <Field label={translateRetailWorkspace(locale, "operatorAddCurrency")}>
                         <Select name="currencyCode" value={draftCurrency} onChange={(value) => setExtraCurrency((current) => ({ ...current, [provider.id]: value }))} disabled={Boolean(busyAction)}>
                           {addable.map((currency) => <option key={currency} value={currency}>{currency}</option>)}
                         </Select>
                       </Field>
-                      <Field label={locale === "en" ? "Operator financial account" : "Compte financier opérateur"}>
+                      <Field label={translateRetailWorkspace(locale, "operatorOperatorFinancialAccount")}>
                         <Select name="operatorAccountId" required disabled={Boolean(busyAction)}><option value="">—</option>{configuration.financialAccounts.filter((account) => account.currencyCode === draftCurrency).map((account) => <option key={account.id} value={account.id}>{account.name} · {customerFacingFinancialAccountType(account.accountType, locale)}</option>)}</Select>
                       </Field>
-                      <Button className="sm:col-span-2 sm:w-fit" disabled={Boolean(busyAction)}><Settings2 className="h-4 w-4" />{locale === "en" ? "Add account" : "Ajouter le compte"}</Button>
+                      <Button className="sm:col-span-2 sm:w-fit" disabled={Boolean(busyAction)}><Settings2 className="h-4 w-4" />{translateRetailWorkspace(locale, "operatorAddAccount")}</Button>
                     </form>
                   ) : null}
                 </div>
               </article>
             );
           })}
-          {!configuration.providers.length ? <EmptyState compact title={locale === "en" ? "No network enabled" : "Aucun réseau activé"} description={locale === "en" ? "Enable a Telecom network before mapping its accounts." : "Activez un réseau Télécom avant d’associer ses comptes."} /> : null}
+          {!configuration.providers.length ? <EmptyState compact title={translateRetailWorkspace(locale, "operatorNoNetworkEnabled")} description={translateRetailWorkspace(locale, "operatorEnableATelecomNetworkBeforeMappingItsAccounts")} /> : null}
         </div>
       </ModuleSection>
       <RetailErpLinks moduleCode="TELCO_TOPUPS" locale={locale} />
@@ -614,16 +609,14 @@ function ProviderConfiguration({ organizationId, moduleCode, dashboard, locale, 
   const mobileAccounts = dashboard.accounts.filter((account) => account.accountType === "MOBILE_MONEY");
   const telcoAccounts = dashboard.accounts.filter((account) => ["MOBILE_MONEY", "CLEARING"].includes(account.accountType));
   const accountTypeLabel = moduleCode === "MOBILE_MONEY_AGENCY"
-    ? (locale === "en" ? "Mobile Money operator account" : "Compte opérateur Mobile Money")
-    : (locale === "en" ? "Telecom operator account" : "Compte opérateur Télécom");
+    ? (translateRetailWorkspace(locale, "operatorMobileMoneyOperatorAccount"))
+    : (translateRetailWorkspace(locale, "operatorTelecomOperatorAccount"));
 
   return (
     <div className="grid min-w-0 gap-5">
       <ModuleSection
-        title={moduleCode === "MOBILE_MONEY_AGENCY" ? (locale === "en" ? "Mobile Money services" : "Services Mobile Money") : (locale === "en" ? "Telecom networks" : "Opérateurs Télécom")}
-        description={locale === "en"
-          ? "Choose once which financial account represents each operator service. Staff will not have to select it during every operation."
-          : "Choisissez une seule fois le compte financier associé à chaque service opérateur. Les agents n’auront pas à le sélectionner à chaque opération."}
+        title={moduleCode === "MOBILE_MONEY_AGENCY" ? (translateRetailWorkspace(locale, "operatorMobileMoneyServices")) : (translateRetailWorkspace(locale, "operatorTelecomNetworks"))}
+        description={translateRetailWorkspace(locale, "operatorChooseOnceWhichFinancialAccountRepresentsEachOperatorServiceStaffWillNot")}
       >
         <div className="grid min-w-0 gap-3 md:grid-cols-2">
           {providers.map((provider: RetailProvider) => {
@@ -645,7 +638,7 @@ function ProviderConfiguration({ organizationId, moduleCode, dashboard, locale, 
                       telcoFloatAccountId: provider.providerType === "TELCO" ? String(form.get("operatorAccountId") || "") || null : null,
                       isActive: true,
                     },
-                    locale === "en" ? "Operator account saved." : "Compte opérateur enregistré.",
+                    translateRetailWorkspace(locale, "operatorOperatorAccountSaved"),
                     { idempotent: false },
                   );
                 }}
@@ -654,9 +647,9 @@ function ProviderConfiguration({ organizationId, moduleCode, dashboard, locale, 
                 <div className="flex min-w-0 items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="break-words font-black text-dtsc-ink">{provider.label}</p>
-                    <p className="text-xs font-bold text-dtsc-muted">{locale === "en" ? "Current account" : "Compte actuel"}: {accountName(mappedId)}</p>
+                    <p className="text-xs font-bold text-dtsc-muted">{translateRetailWorkspace(locale, "operatorCurrentAccount")}: {accountName(mappedId)}</p>
                   </div>
-                  <StatusBadge tone={mappedId ? "success" : "warning"}>{mappedId ? "OK" : (locale === "en" ? "To configure" : "À configurer")}</StatusBadge>
+                  <StatusBadge tone={mappedId ? "success" : "warning"}>{mappedId ? "OK" : (translateRetailWorkspace(locale, "operatorToConfigure"))}</StatusBadge>
                 </div>
                 {dashboard.access.canManage ? (
                   <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
@@ -668,13 +661,13 @@ function ProviderConfiguration({ organizationId, moduleCode, dashboard, locale, 
                         ))}
                       </Select>
                     </Field>
-                    <Button disabled={Boolean(busyAction)}><Settings2 className="h-4 w-4" />{locale === "en" ? "Save" : "Enregistrer"}</Button>
+                    <Button disabled={Boolean(busyAction)}><Settings2 className="h-4 w-4" />{translateRetailWorkspace(locale, "operatorSave")}</Button>
                   </div>
                 ) : null}
               </form>
             );
           })}
-          {!providers.length ? <EmptyState compact title={locale === "en" ? "No operator configured" : "Aucun opérateur configuré"} description={locale === "en" ? "Contact your administrator to enable an operator service." : "Contactez votre administrateur pour activer un service opérateur."} /> : null}
+          {!providers.length ? <EmptyState compact title={translateRetailWorkspace(locale, "operatorNoOperatorConfigured")} description={translateRetailWorkspace(locale, "operatorContactYourAdministratorToEnableAnOperatorService")} /> : null}
         </div>
       </ModuleSection>
       <RetailErpLinks moduleCode={moduleCode as RetailOperationalModuleCode} locale={locale} />

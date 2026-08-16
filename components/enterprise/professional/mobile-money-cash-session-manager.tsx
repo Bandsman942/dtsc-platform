@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { ModuleSection } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import { moneyValue, type RetailMutation } from "@/components/enterprise/professional/retail-workspace-shared";
+import { translateRetailWorkspace } from "@/lib/i18n";
 
 type CashAccount = {
   id: string;
@@ -42,78 +43,78 @@ export type MobileMoneyCashSession = {
 
 const COPY = {
   fr: {
-    title: "Mes caisses Mobile Money",
-    description: "Gardez plusieurs caisses ouvertes en parallèle et basculez d’une devise à l’autre en un toucher. Pour la RDC, une caisse CDF et une caisse USD sont recommandées.",
-    active: "Caisse utilisée",
-    openSessions: "caisses ouvertes",
-    select: "Utiliser cette caisse",
-    openingFloat: "Fonds d’ouverture",
-    currentBalance: "Solde du compte",
-    expected: "Théorique maintenant",
-    openAnother: "Ouvrir une autre caisse",
-    openAnotherDescription: "Une caisse déjà ouverte ou en attente d’approbation ne peut pas être ouverte une seconde fois.",
-    till: "Compte de caisse",
-    openingAmount: "Fonds d’ouverture",
-    open: "Ouvrir la caisse",
-    opened: "Caisse ouverte. Vous pouvez maintenant basculer vers cette devise.",
-    noAvailable: "Toutes les caisses disponibles sont déjà ouvertes ou en validation.",
-    noCashAccount: "Aucun compte de caisse actif n’est disponible. Configurez d’abord vos comptes de caisse dans Finance.",
-    endOfDay: "Fin de journée",
-    endOfDayDescription: "Comptez chaque caisse ouverte séparément. Chaque clôture passe ensuite au statut en attente d’approbation, selon le workflow Finance existant.",
-    close: "Compter et clôturer",
-    denominations: "Comptage des coupures",
-    denomination: "Coupure",
-    quantity: "Quantité",
-    customDenomination: "Autre coupure",
-    customQuantity: "Quantité autre",
-    countedTotal: "Total compté",
-    difference: "Écart estimé",
-    reason: "Motif de l’écart",
-    reasonPlaceholder: "Expliquez l’écart avant soumission…",
-    submitClose: "Soumettre la clôture",
-    closeSubmitted: "Clôture soumise à l’approbation indépendante.",
-    pending: "En attente d’approbation",
-    pendingDescription: "Cette caisse n’accepte plus d’opérations jusqu’à la décision du valideur.",
-    nothingToClose: "Aucune caisse ouverte à clôturer.",
-    processing: "Traitement…",
-    recommended: "Recommandé RDC : CDF + USD",
+    title: translateRetailWorkspace("fr", "cashSessionTitle"),
+    description: translateRetailWorkspace("fr", "cashSessionDescription"),
+    active: translateRetailWorkspace("fr", "cashSessionActive"),
+    openSessions: translateRetailWorkspace("fr", "cashSessionOpenSessions"),
+    select: translateRetailWorkspace("fr", "cashSessionSelect"),
+    openingFloat: translateRetailWorkspace("fr", "openingFloat"),
+    currentBalance: translateRetailWorkspace("fr", "cashSessionCurrentBalance"),
+    expected: translateRetailWorkspace("fr", "cashSessionExpected"),
+    openAnother: translateRetailWorkspace("fr", "cashSessionOpenAnother"),
+    openAnotherDescription: translateRetailWorkspace("fr", "cashSessionOpenAnotherDescription"),
+    till: translateRetailWorkspace("fr", "cashSessionTill"),
+    openingAmount: translateRetailWorkspace("fr", "openingFloat"),
+    open: translateRetailWorkspace("fr", "dailyCloseOpenTill"),
+    opened: translateRetailWorkspace("fr", "cashSessionOpened"),
+    noAvailable: translateRetailWorkspace("fr", "cashSessionNoAvailable"),
+    noCashAccount: translateRetailWorkspace("fr", "cashSessionNoCashAccount"),
+    endOfDay: translateRetailWorkspace("fr", "cashSessionEndOfDay"),
+    endOfDayDescription: translateRetailWorkspace("fr", "cashSessionEndOfDayDescription"),
+    close: translateRetailWorkspace("fr", "cashSessionClose"),
+    denominations: translateRetailWorkspace("fr", "cashSessionDenominations"),
+    denomination: translateRetailWorkspace("fr", "cashSessionDenomination"),
+    quantity: translateRetailWorkspace("fr", "cashSessionQuantity"),
+    customDenomination: translateRetailWorkspace("fr", "cashSessionCustomDenomination"),
+    customQuantity: translateRetailWorkspace("fr", "cashSessionCustomQuantity"),
+    countedTotal: translateRetailWorkspace("fr", "cashSessionCountedTotal"),
+    difference: translateRetailWorkspace("fr", "cashSessionDifference"),
+    reason: translateRetailWorkspace("fr", "cashSessionReason"),
+    reasonPlaceholder: translateRetailWorkspace("fr", "cashSessionReasonPlaceholder"),
+    submitClose: translateRetailWorkspace("fr", "cashSessionSubmitClose"),
+    closeSubmitted: translateRetailWorkspace("fr", "cashSessionCloseSubmitted"),
+    pending: translateRetailWorkspace("fr", "cashSessionPending"),
+    pendingDescription: translateRetailWorkspace("fr", "cashSessionPendingDescription"),
+    nothingToClose: translateRetailWorkspace("fr", "cashSessionNothingToClose"),
+    processing: translateRetailWorkspace("fr", "processing"),
+    recommended: translateRetailWorkspace("fr", "cashSessionRecommended"),
   },
   en: {
-    title: "My Mobile Money tills",
-    description: "Keep several tills open in parallel and switch currency with one tap. In DR Congo, one CDF till and one USD till are recommended.",
-    active: "Till in use",
-    openSessions: "open tills",
-    select: "Use this till",
-    openingFloat: "Opening float",
-    currentBalance: "Account balance",
-    expected: "Expected now",
-    openAnother: "Open another till",
-    openAnotherDescription: "A till that is already open or awaiting approval cannot be opened a second time.",
-    till: "Cash account",
-    openingAmount: "Opening float",
-    open: "Open till",
-    opened: "Till opened. You can now switch to this currency.",
-    noAvailable: "All available tills are already open or awaiting validation.",
-    noCashAccount: "No active cash account is available. Configure cash accounts in Finance first.",
-    endOfDay: "End of day",
-    endOfDayDescription: "Count each open till separately. Each close is then submitted for approval through the existing Finance workflow.",
-    close: "Count and close",
-    denominations: "Denomination count",
-    denomination: "Denomination",
-    quantity: "Quantity",
-    customDenomination: "Other denomination",
-    customQuantity: "Other quantity",
-    countedTotal: "Counted total",
-    difference: "Estimated difference",
-    reason: "Variance reason",
-    reasonPlaceholder: "Explain the variance before submitting…",
-    submitClose: "Submit close",
-    closeSubmitted: "Till close submitted for independent approval.",
-    pending: "Awaiting approval",
-    pendingDescription: "This till no longer accepts operations until the validator decides.",
-    nothingToClose: "No open till to close.",
-    processing: "Processing…",
-    recommended: "DRC recommendation: CDF + USD",
+    title: translateRetailWorkspace("en", "cashSessionTitle"),
+    description: translateRetailWorkspace("en", "cashSessionDescription"),
+    active: translateRetailWorkspace("en", "cashSessionActive"),
+    openSessions: translateRetailWorkspace("en", "cashSessionOpenSessions"),
+    select: translateRetailWorkspace("en", "cashSessionSelect"),
+    openingFloat: translateRetailWorkspace("en", "openingFloat"),
+    currentBalance: translateRetailWorkspace("en", "cashSessionCurrentBalance"),
+    expected: translateRetailWorkspace("en", "cashSessionExpected"),
+    openAnother: translateRetailWorkspace("en", "cashSessionOpenAnother"),
+    openAnotherDescription: translateRetailWorkspace("en", "cashSessionOpenAnotherDescription"),
+    till: translateRetailWorkspace("en", "cashSessionTill"),
+    openingAmount: translateRetailWorkspace("en", "openingFloat"),
+    open: translateRetailWorkspace("en", "dailyCloseOpenTill"),
+    opened: translateRetailWorkspace("en", "cashSessionOpened"),
+    noAvailable: translateRetailWorkspace("en", "cashSessionNoAvailable"),
+    noCashAccount: translateRetailWorkspace("en", "cashSessionNoCashAccount"),
+    endOfDay: translateRetailWorkspace("en", "cashSessionEndOfDay"),
+    endOfDayDescription: translateRetailWorkspace("en", "cashSessionEndOfDayDescription"),
+    close: translateRetailWorkspace("en", "cashSessionClose"),
+    denominations: translateRetailWorkspace("en", "cashSessionDenominations"),
+    denomination: translateRetailWorkspace("en", "cashSessionDenomination"),
+    quantity: translateRetailWorkspace("en", "cashSessionQuantity"),
+    customDenomination: translateRetailWorkspace("en", "cashSessionCustomDenomination"),
+    customQuantity: translateRetailWorkspace("en", "cashSessionCustomQuantity"),
+    countedTotal: translateRetailWorkspace("en", "cashSessionCountedTotal"),
+    difference: translateRetailWorkspace("en", "cashSessionDifference"),
+    reason: translateRetailWorkspace("en", "cashSessionReason"),
+    reasonPlaceholder: translateRetailWorkspace("en", "cashSessionReasonPlaceholder"),
+    submitClose: translateRetailWorkspace("en", "cashSessionSubmitClose"),
+    closeSubmitted: translateRetailWorkspace("en", "cashSessionCloseSubmitted"),
+    pending: translateRetailWorkspace("en", "cashSessionPending"),
+    pendingDescription: translateRetailWorkspace("en", "cashSessionPendingDescription"),
+    nothingToClose: translateRetailWorkspace("en", "cashSessionNothingToClose"),
+    processing: translateRetailWorkspace("en", "processing"),
+    recommended: translateRetailWorkspace("en", "cashSessionRecommended"),
   },
 } as const;
 
@@ -153,9 +154,9 @@ export function MobileMoneyCashSessionManager({
 }) {
   const copy = COPY[locale];
   const telco = moduleCode === "TELCO_TOPUPS";
-  const operationTitle = telco ? (locale === "en" ? "My Telco tills" : "Mes caisses Télécom") : copy.title;
+  const operationTitle = telco ? (translateRetailWorkspace(locale, "cashSessionMyTelcoTills")) : copy.title;
   const operationDescription = telco
-    ? (locale === "en" ? "Keep CDF and USD tills open in parallel for cash top-ups and switch currency with one tap." : "Gardez les caisses CDF et USD ouvertes en parallèle pour les recharges en espèces et changez de devise en un toucher.")
+    ? (translateRetailWorkspace(locale, "cashSessionKeepCDFAndUSDTillsOpenInParallelForCashTopUps"))
     : copy.description;
   const actionScope = telco ? "telco" : "mobile-money";
   const cashAccounts = useMemo(
@@ -221,8 +222,8 @@ export function MobileMoneyCashSessionManager({
                           {selected ? <StatusBadge tone="success">{copy.active}</StatusBadge> : null}
                         </div>
                         <p className="mt-1 break-words text-sm font-black text-dtsc-ink">{session.financialAccount.name}</p>
-                        <p className="mt-1 text-xs font-semibold text-dtsc-muted">{copy.openingFloat}: {moneyValue(session.openingAmount, currency)}</p>
-                        <p className="text-xs font-semibold text-dtsc-muted">{copy.currentBalance}: {moneyValue(session.financialAccount.operationalBalance, currency)}</p>
+                        <p className="mt-1 text-xs font-semibold text-dtsc-muted">{copy.openingFloat}: {moneyValue(session.openingAmount, currency, locale)}</p>
+                        <p className="text-xs font-semibold text-dtsc-muted">{copy.currentBalance}: {moneyValue(session.financialAccount.operationalBalance, currency, locale)}</p>
                       </div>
                       <CircleDollarSign className="h-5 w-5 shrink-0 text-dtsc-muted" aria-hidden="true" />
                     </div>
@@ -234,8 +235,8 @@ export function MobileMoneyCashSessionManager({
           ) : (
             <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm font-bold text-amber-800 dark:text-amber-200">
               {telco
-                ? (locale === "en" ? "No cash till is open. You can open one for cash Telco top-ups; non-cash accounts remain available." : "Aucune caisse n’est ouverte. Vous pouvez en ouvrir une pour les recharges Télécom en espèces ; les comptes non-cash restent utilisables.")
-                : (locale === "en" ? "Open at least one till before recording a Mobile Money operation." : "Ouvrez au moins une caisse avant d’enregistrer une opération Mobile Money.")}
+                ? (translateRetailWorkspace(locale, "cashSessionNoCashTillIsOpenYouCanOpenOneForCashTelco"))
+                : (translateRetailWorkspace(locale, "cashSessionOpenAtLeastOneTillBeforeRecordingAMobileMoneyOperation"))}
             </div>
           )}
 
@@ -360,7 +361,7 @@ function CashCloseCard({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="break-words font-black text-dtsc-ink">{currency} · {session.financialAccount.name}</p>
-            <p className="mt-1 text-xs font-semibold text-dtsc-muted">{copy.expected}: {moneyValue(expected, currency)} · {session._count.movements} {locale === "en" ? "movements" : "mouvements"}</p>
+            <p className="mt-1 text-xs font-semibold text-dtsc-muted">{copy.expected}: {moneyValue(expected, currency, locale)} · {session._count.movements} {translateRetailWorkspace(locale, "cashSessionMovements")}</p>
           </div>
           <span className="inline-flex items-center gap-2 text-sm font-black text-dtsc-ink"><LockKeyhole className="h-4 w-4" aria-hidden="true" />{copy.close}</span>
         </div>
@@ -392,9 +393,9 @@ function CashCloseCard({
         </div>
 
         <div className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-xl border border-dtsc-border bg-dtsc-page p-3"><p className="text-xs font-black uppercase text-dtsc-muted">{copy.expected}</p><p className="mt-1 font-black text-dtsc-ink">{moneyValue(expected, currency)}</p></div>
-          <div className="rounded-xl border border-dtsc-border bg-dtsc-page p-3"><p className="text-xs font-black uppercase text-dtsc-muted">{copy.countedTotal}</p><p className="mt-1 font-black text-dtsc-ink">{moneyValue(countedTotal, currency)}</p></div>
-          <div className={`rounded-xl border p-3 ${reasonRequired ? "border-amber-500/30 bg-amber-500/10" : "border-emerald-500/30 bg-emerald-500/10"}`}><p className="text-xs font-black uppercase text-dtsc-muted">{copy.difference}</p><p className="mt-1 font-black text-dtsc-ink">{moneyValue(difference, currency)}</p></div>
+          <div className="rounded-xl border border-dtsc-border bg-dtsc-page p-3"><p className="text-xs font-black uppercase text-dtsc-muted">{copy.expected}</p><p className="mt-1 font-black text-dtsc-ink">{moneyValue(expected, currency, locale)}</p></div>
+          <div className="rounded-xl border border-dtsc-border bg-dtsc-page p-3"><p className="text-xs font-black uppercase text-dtsc-muted">{copy.countedTotal}</p><p className="mt-1 font-black text-dtsc-ink">{moneyValue(countedTotal, currency, locale)}</p></div>
+          <div className={`rounded-xl border p-3 ${reasonRequired ? "border-amber-500/30 bg-amber-500/10" : "border-emerald-500/30 bg-emerald-500/10"}`}><p className="text-xs font-black uppercase text-dtsc-muted">{copy.difference}</p><p className="mt-1 font-black text-dtsc-ink">{moneyValue(difference, currency, locale)}</p></div>
         </div>
 
         {reasonRequired ? <Field label={copy.reason}><Input value={reason} onChange={(event) => setReason(event.target.value)} placeholder={copy.reasonPlaceholder} minLength={3} maxLength={1000} required disabled={Boolean(busyAction)} /></Field> : null}
