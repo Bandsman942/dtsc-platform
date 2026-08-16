@@ -42,6 +42,8 @@ const files = {
   salesEn: "locales/professional-erp-sales.en.json",
   procurement: "components/enterprise/professional/enterprise-procurement-operations-workspace.tsx",
   inventory: "components/enterprise/professional/enterprise-inventory-operations-workspace.tsx",
+  operationsFr: "locales/professional-erp-operations.fr.json",
+  operationsEn: "locales/professional-erp-operations.en.json",
   hr: "components/enterprise/professional/enterprise-human-resources-workspace.tsx",
   time: "components/enterprise/professional/enterprise-time-attendance-workspace.tsx",
   payroll: "components/enterprise/professional/enterprise-payroll-operations-workspace.tsx",
@@ -127,7 +129,15 @@ const checks = {
     for (const marker of ["EnterpriseSuppliersWorkspace", "EnterprisePurchasesWorkspace", "commande-réception-facture", "moduleCode=\"SUPPLIERS_PURCHASES\""]) need(content.procurement, marker, "Achats professionnels composés");
   },
   inventory() {
-    for (const marker of ["Nouveau transfert de stock", "Nouvelle campagne d’inventaire", "Ajustement contrôlé", "approverUserId", "idempotencyKey", "stock négatif", "<form"]) need(content.inventory, marker, "Stock professionnel");
+    for (const marker of ["approverUserId", "idempotencyKey", "<form"]) need(content.inventory, marker, "Stock professionnel — invariants métier");
+    for (const localized of [
+      ["inventory.newTransferTitle", "Nouveau transfert de stock", "New inventory transfer"],
+      ["inventory.newCountTitle", "Nouvelle campagne d’inventaire", "New inventory count campaign"],
+      ["inventory.controlledAdjustment", "Ajustement contrôlé", "Controlled adjustment"],
+      ["inventory.descriptionSuffix", "Les mouvements restent idempotents, isolés par entreprise et protégés contre le stock négatif.", "Movements remain idempotent, isolated by company and protected against negative inventory."],
+    ]) {
+      needLocalized({ ui: content.inventory, key: localized[0], fr: content.operationsFr, frValue: localized[1], en: content.operationsEn, enValue: localized[2], scope: "Stock professionnel localisé" });
+    }
   },
   hr() {
     for (const marker of ["EnterpriseEmployeesIdentityWorkspace", "Nouveau contrat de travail", "Organigramme mobile", "approverUserId", "baseCompensation"]) need(content.hr, marker, "RH professionnelle");
@@ -141,12 +151,31 @@ const checks = {
     reject(content.payroll, "crée automatiquement un paiement", "Frontière paie/paiement");
   },
   projects() {
-    for (const marker of ["Nouveau projet", "Ajouter un membre", "Ajouter un jalon", "Ajouter un risque", "Ajouter un livrable", "REQUEST_CHANGES", "relation active", "<form"]) need(content.projects, marker, "Projets professionnels");
+    for (const marker of ["REQUEST_CHANGES", "<form"]) need(content.projects, marker, "Projets professionnels — invariants métier");
+    for (const localized of [
+      ["projects.newProject", "Nouveau projet", "New project"],
+      ["projects.addMember", "Ajouter un membre", "Add member"],
+      ["projects.addMilestone", "Ajouter un jalon", "Add milestone"],
+      ["projects.addRisk", "Ajouter un risque", "Add risk"],
+      ["projects.addDeliverable", "Ajouter un livrable", "Add deliverable"],
+      ["projects.descriptionSuffix", "L’accès externe exige toujours une relation active, un partage explicite et une permission serveur.", "External access always requires an active relationship, explicit sharing and a server-side permission."],
+    ]) {
+      needLocalized({ ui: content.projects, key: localized[0], fr: content.operationsFr, frValue: localized[1], en: content.operationsEn, enValue: localized[2], scope: "Projets professionnels localisés" });
+    }
     for (const marker of ["organizationId", "archivedAt", "members", "deliverables", "risks"]) need(content.projectOverview, marker, "Détail projet");
     for (const marker of ["isSameOriginRequest", "rateLimit", "organizationId", "employeeId", "ENTERPRISE_PROJECT_MEMBER_REMOVED"]) need(content.projectMembers, marker, "Membres projet");
   },
   assets() {
-    for (const marker of ["Nouvel actif", "Affecter", "Enregistrer le retour", "Planifier une maintenance", "Déclarer un incident", "resolveIncident", "<form"]) need(content.assets, marker, "Actifs professionnels");
+    for (const marker of ["resolveIncident", "<form"]) need(content.assets, marker, "Actifs professionnels — invariants métier");
+    for (const localized of [
+      ["assets.newAsset", "Nouvel actif", "New asset"],
+      ["assets.assign", "Affecter", "Assign"],
+      ["assets.returnAsset", "Enregistrer le retour", "Record return"],
+      ["assets.planMaintenance", "Planifier une maintenance", "Plan maintenance"],
+      ["assets.reportIncident", "Déclarer un incident", "Report incident"],
+    ]) {
+      needLocalized({ ui: content.assets, key: localized[0], fr: content.operationsFr, frValue: localized[1], en: content.operationsEn, enValue: localized[2], scope: "Actifs professionnels localisés" });
+    }
     for (const marker of ["organizationId", "assignments", "maintenanceRecords", "incidents"]) need(content.assetOverview, marker, "Détail actif");
   },
   contracts() {
