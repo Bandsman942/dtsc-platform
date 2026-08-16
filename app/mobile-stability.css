@@ -206,6 +206,42 @@
     grid-column: 1 / -1;
   }
 
+  /* Header actions can themselves contain a responsive action group. Let that
+   * primary group own the full row instead of squeezing it into half a cell. */
+  [data-workspace-module-header] > div > [data-responsive-actions] {
+    width: 100%;
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  }
+
+  [data-workspace-module-header] [data-workspace-refresh-action] {
+    width: auto;
+  }
+
+  [data-workspace-module-header] [data-workspace-primary-action] {
+    width: 100%;
+    min-width: 0;
+  }
+
+  [data-workspace-module-header] [data-workspace-primary-action]:has(> [data-responsive-actions]) {
+    grid-column: 1 / -1;
+  }
+
+  [data-workspace-module-header] [data-workspace-primary-action] > [data-responsive-actions] {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  [data-workspace-module-header] [data-workspace-primary-action] > [data-responsive-actions] > * {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  [data-workspace-module-header] details {
+    grid-column: 1 / -1;
+  }
+
   [data-business-list-actions] {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
