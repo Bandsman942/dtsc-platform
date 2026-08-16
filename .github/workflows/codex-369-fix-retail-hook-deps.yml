@@ -51,3 +51,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "fix(retail): include locale in hook dependencies"
           git push origin HEAD:refactor/367-retail-operator-i18n
+
+# Triggered after workflow creation so the branch-local repair job is executed once.
