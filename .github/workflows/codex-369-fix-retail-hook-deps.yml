@@ -33,10 +33,8 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Repair locale hook dependencies
+      - name: Repair locale hook dependencies and lint debt
         run: node scripts/codex-369-fix-retail-hook-deps.mjs
-      - name: Show affected source
-        run: nl -ba components/enterprise/professional/retail-workspace-shared.tsx | sed -n '860,915p'
       - name: Lint
         run: pnpm lint
       - name: Type check
@@ -46,10 +44,8 @@ jobs:
       - name: Commit repair and remove scaffolding
         run: |
           git rm -f .github/workflows/codex-369-fix-retail-hook-deps.yml scripts/codex-369-fix-retail-hook-deps.mjs
-          git add components/enterprise/professional/retail-workspace-shared.tsx
+          git add components/enterprise/professional/retail-workspace-shared.tsx components/enterprise/professional/mobile-money-agency-workspace.tsx
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "fix(retail): include locale in hook dependencies"
+          git commit -m "fix(retail): clear operator i18n lint debt"
           git push origin HEAD:refactor/367-retail-operator-i18n
-
-# Triggered after workflow creation so the branch-local repair job is executed once.
