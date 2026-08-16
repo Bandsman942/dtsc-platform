@@ -28,6 +28,10 @@ for (const group of ["employmentContractStatus", "employmentContractType", "payF
   assert(helper.includes(`| \"${group}\"`), `groupe enum People absent du helper: ${group}`);
 }
 assert(helper.includes("professionalErpDateTime"), "format date+heure locale-aware absent");
+assert(helper.includes("useAppLocale"), "ERP professionnel: locale applicative canonique non consommée");
+assert(!helper.includes("document.documentElement.lang"), "ERP professionnel: langue HTML encore utilisée comme source de vérité");
+assert(!helper.includes("MutationObserver"), "ERP professionnel: observation DOM de langue encore active");
+assert(helper.includes("SELF_APPROVAL_FORBIDDEN") && helper.includes("APPROVER_PERMISSION_DENIED"), "ERP professionnel: messages d’éligibilité approbateur FR/EN absents");
 
 const targets = [
   "components/enterprise/professional/enterprise-human-resources-workspace.tsx",
@@ -52,6 +56,11 @@ assert(hr.includes('labelEn: string | null'), "RH: départements EN absents du c
 assert(!hr.includes("positionTitle || member.role"), "RH: rôle brut encore utilisé en fallback membre");
 assert(hr.includes('professionalErpEnumLabel(locale, "role", member.role)'), "RH: fallback rôle membre non humanisé");
 assert(hr.includes('"Contrat rejeté"') && hr.includes('"Contrat contrôlé"'), "RH: commentaires d’audit persistés modifiés");
+assert(hr.includes("useToastMessage(message)"), "RH: retours transitoires non remontés par toast");
+assert(!hr.includes('{message ? <div role="status"'), "RH: message transitoire encore persisté dans le corps du module");
+assert(hr.includes("approval-eligibility"), "RH: vérification immédiate de l’approbateur absente");
+assert(hr.includes('method: "PATCH"') || hr.includes('"PATCH"'), "RH: modification du contrat par le créateur absente");
+assert(hr.includes("contract.canEdit"), "RH: action Modifier non conditionnée à la capacité créateur");
 
 const identity = read(targets[1]);
 assert(identity.includes('professionalErpEnumLabel(locale, "employmentStatus"'), "Identité: statut emploi non projeté");
@@ -84,4 +93,4 @@ const choice = read(targets[5]);
 assert(choice.includes('t("identityChoice.legend")'), "Identity link choice: copie canonique absente");
 assert(choice.includes("aria-pressed"), "Identity link choice: contrat accessible perdu");
 
-if (!process.exitCode) console.log(`PASS Professional ERP People i18n #332 — ${frKeys.length} clés FR/EN + confidentialité/workflows préservés.`);
+if (!process.exitCode) console.log(`PASS Professional ERP People i18n #332/#364 — ${frKeys.length} clés FR/EN + locale applicative, confidentialité et workflows préservés.`);
