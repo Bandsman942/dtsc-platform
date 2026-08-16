@@ -47,6 +47,8 @@ const files = {
   hr: "components/enterprise/professional/enterprise-human-resources-workspace.tsx",
   time: "components/enterprise/professional/enterprise-time-attendance-workspace.tsx",
   payroll: "components/enterprise/professional/enterprise-payroll-operations-workspace.tsx",
+  peopleFr: "locales/professional-erp-people.fr.json",
+  peopleEn: "locales/professional-erp-people.en.json",
   projects: "components/enterprise/professional/enterprise-projects-deliverables-workspace.tsx",
   assets: "components/enterprise/professional/enterprise-assets-maintenance-workspace.tsx",
   professionalUi: "components/enterprise/professional/professional-erp-ui.tsx",
@@ -140,14 +142,32 @@ const checks = {
     }
   },
   hr() {
-    for (const marker of ["EnterpriseEmployeesIdentityWorkspace", "Nouveau contrat de travail", "Organigramme mobile", "approverUserId", "baseCompensation"]) need(content.hr, marker, "RH professionnelle");
+    for (const marker of ["EnterpriseEmployeesIdentityWorkspace", "approverUserId", "baseCompensation"]) need(content.hr, marker, "RH professionnelle — invariants métier");
+    for (const localized of [
+      ["hr.newContractDialog", "Nouveau contrat de travail", "New employment contract"],
+      ["hr.orgSection", "Organigramme mobile", "Mobile organization chart"],
+    ]) {
+      needLocalized({ ui: content.hr, key: localized[0], fr: content.peopleFr, frValue: localized[1], en: content.peopleEn, enValue: localized[2], scope: "RH professionnelle localisée" });
+    }
     needAny(content.hr, ["<form", "Dialog"], "Formulaires RH");
   },
   time() {
-    for (const marker of ["Nouvelle demande de congé", "Nouvelle feuille de temps", "partialDay", "approved", "billable", "approverUserId", "<form"]) need(content.time, marker, "Temps et congés");
+    for (const marker of ["partialDay", "approved", "billable", "approverUserId", "<form"]) need(content.time, marker, "Temps et congés — invariants métier");
+    for (const localized of [
+      ["time.newLeave", "Nouvelle demande de congé", "New leave request"],
+      ["time.newTimesheet", "Nouvelle feuille de temps", "New timesheet"],
+    ]) {
+      needLocalized({ ui: content.time, key: localized[0], fr: content.peopleFr, frValue: localized[1], en: content.peopleEn, enValue: localized[2], scope: "Temps et congés localisés" });
+    }
   },
   payroll() {
-    for (const marker of ["Assistant de préparation de paie", "employeeIds", "adjustments", "PENDING_APPROVAL", "payroll-runs", "cancel", "bulletins privés", "<form"]) need(content.payroll, marker, "Paie professionnelle");
+    for (const marker of ["employeeIds", "adjustments", "PENDING_APPROVAL", "payroll-runs", "cancel", "<form"]) need(content.payroll, marker, "Paie professionnelle — invariants métier");
+    for (const localized of [
+      ["payroll.prepareAssistant", "Assistant de préparation de paie", "Payroll preparation assistant"],
+      ["payroll.runApproved", "La paie est approuvée et les bulletins privés ont été générés.", "Payroll is approved and private payslips have been generated."],
+    ]) {
+      needLocalized({ ui: content.payroll, key: localized[0], fr: content.peopleFr, frValue: localized[1], en: content.peopleEn, enValue: localized[2], scope: "Paie professionnelle localisée" });
+    }
     reject(content.payroll, "crée automatiquement un paiement", "Frontière paie/paiement");
   },
   projects() {
