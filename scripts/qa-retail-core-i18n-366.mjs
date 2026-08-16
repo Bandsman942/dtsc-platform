@@ -24,17 +24,23 @@ assert(i18n.includes("translateRetailWorkspace"), "helper canonique translateRet
 assert(i18n.includes("RetailWorkspaceKey"), "type de clé Retail canonique absent");
 
 const pagePath = "app/enterprise-modules/retail-page.tsx";
+const localeTextPath = "components/enterprise/professional/retail-locale-text.tsx";
 const sharedPath = "components/enterprise/professional/retail-workspace-shared.tsx";
 const posPath = "components/enterprise/professional/retail-pos-workspace.tsx";
-const supplementaryPath = "components/enterprise/professional/retail-pos-supplementary-tools.tsx";
 const page = read(pagePath);
+const localeText = read(localeTextPath);
 const shared = read(sharedPath);
 const pos = read(posPath);
-const supplementary = read(supplementaryPath);
 
-assert(page.includes("RetailPosSupplementaryTools"), "shell Retail POS: outils complémentaires non déplacés vers le client locale-aware");
-assert(!page.includes("const locale:"), "shell Retail POS: locale serveur encore figée dans retail-page.tsx");
-assert(!page.includes('locale === "en" ?'), "shell Retail POS: copies FR/EN locales encore présentes");
+assert(page.includes("RetailLocaleText"), "shell Retail POS: primitive de copie locale-reactive absente");
+assert(page.includes('<RetailLocaleText textKey="additionalShopTools"'), "shell Retail POS: libellé des outils complémentaires non canonique");
+assert(page.includes('<RetailLocaleText textKey="ordersPickupOffline"'), "shell Retail POS: libellé offline/commandes non canonique");
+assert(page.includes('<RetailLocaleText textKey="shopSetupEquipment"'), "shell Retail POS: libellé mise en service non canonique");
+for (const literal of ["Additional Shop tools", "Outils complémentaires du Shop", "Orders, pickup & offline sales", "Commandes, retraits & vente hors connexion", "Shop setup & POS equipment", "Mise en service & équipements du Shop"]) {
+  assert(!page.includes(literal), `shell Retail POS: copie locale restante: ${literal}`);
+}
+assert(localeText.includes("useAppLocale"), "primitive Retail: locale applicative canonique non consommée");
+assert(localeText.includes("translateRetailWorkspace"), "primitive Retail: catalogue canonique non consommé");
 
 assert(shared.includes("translateRetailWorkspace"), "Retail partagé: source i18n canonique absente");
 assert(shared.includes("retailText(locale"), "Retail partagé: projection locale canonique absente");
@@ -58,12 +64,7 @@ assert(!pos.includes('locale === "en" ? "Reason for reversal"'), "POS: motif ann
 assert(!pos.includes('moneyValue(total, currency)'), "POS: total encore formaté sans locale explicite");
 assert(!pos.includes('moneyValue(item.grandTotal, item.currencyCode)'), "POS: historique encore formaté sans locale explicite");
 
-assert(supplementary.includes("useAppLocale"), "outils complémentaires POS: locale applicative canonique non consommée");
-assert(supplementary.includes("translateRetailWorkspace"), "outils complémentaires POS: source i18n canonique absente");
-assert(supplementary.includes('t("additionalShopTools")'), "outils complémentaires POS: aria-label non canonique");
-assert(!supplementary.includes('locale === "en" ?'), "outils complémentaires POS: copie FR/EN locale réintroduite");
-
-for (const path of [pagePath, sharedPath, posPath, supplementaryPath]) {
+for (const path of [pagePath, localeTextPath, sharedPath, posPath]) {
   const source = read(path);
   assert(!source.includes('toLocaleString("fr-FR"'), `${path}: format fr-FR direct encore présent`);
   assert(!source.includes('toLocaleString("en-US"'), `${path}: format en-US direct encore présent`);
