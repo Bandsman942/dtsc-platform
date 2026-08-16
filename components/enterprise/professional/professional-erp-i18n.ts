@@ -37,7 +37,35 @@ export function professionalErpT(
 
 export function professionalErpEnumLabel(
   locale: ProfessionalErpLocale,
-  group: "role" | "identityStatus" | "partyType" | "status" | "opportunityStage" | "leadStatus" | "source" | "contractType" | "approvalStatus" | "renewalMode" | "itemType" | "priceType" | "unitCategory",
+  group:
+    | "role"
+    | "identityStatus"
+    | "partyType"
+    | "status"
+    | "opportunityStage"
+    | "leadStatus"
+    | "source"
+    | "contractType"
+    | "approvalStatus"
+    | "renewalMode"
+    | "itemType"
+    | "priceType"
+    | "unitCategory"
+    | "inventoryStatus"
+    | "countType"
+    | "adjustmentType"
+    | "siteStatus"
+    | "siteType"
+    | "warehouseType"
+    | "locationType"
+    | "projectStatus"
+    | "projectType"
+    | "projectRole"
+    | "riskLevel"
+    | "priority"
+    | "assetStatus"
+    | "assetCondition"
+    | "maintenanceType",
   value: string,
 ) {
   const key = `${group}.${value}` as ProfessionalErpKey;
@@ -62,6 +90,16 @@ export function professionalErpMoney(
   } catch {
     return `${numeric.toFixed(2)} ${currency || "USD"}`;
   }
+}
+
+export function professionalErpNumber(
+  value: string | number | null | undefined,
+  locale: ProfessionalErpLocale,
+  maximumFractionDigits = 3,
+) {
+  const numeric = Number(value ?? 0);
+  if (!Number.isFinite(numeric)) return "0";
+  return new Intl.NumberFormat(locale === "en" ? "en-US" : "fr-FR", { maximumFractionDigits }).format(numeric);
 }
 
 export function professionalErpDate(
