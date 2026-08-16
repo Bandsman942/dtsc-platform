@@ -3,10 +3,34 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { BookOpen, CircleHelp, LifeBuoy, Search } from "lucide-react";
+import { useAppLocale } from "@/components/i18n/locale-provider";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 export type ProfessionalPagination = { page: number; pageSize: number; total: number; pageCount: number };
+
+const professionalUiCopy = {
+  fr: {
+    loadFailed: "Chargement impossible.",
+    tabNavigation: "Navigation du module",
+    search: "Rechercher…",
+    userGuide: "Guide utilisateur",
+    contactSupport: "Contacter le support",
+    permissions: "Permissions et configuration",
+  },
+  en: {
+    loadFailed: "Unable to load data.",
+    tabNavigation: "Module navigation",
+    search: "Search…",
+    userGuide: "User guide",
+    contactSupport: "Contact support",
+    permissions: "Permissions and configuration",
+  },
+} as const;
+
+function uiCopy(locale: string | null | undefined) {
+  return professionalUiCopy[locale === "en" ? "en" : "fr"];
+}
 
 export function useProfessionalCollection<T, TExtra extends Record<string, unknown> = Record<string, never>>({
   endpoint,
@@ -17,6 +41,8 @@ export function useProfessionalCollection<T, TExtra extends Record<string, unkno
   params: URLSearchParams;
   refreshKey?: number;
 }) {
+  const locale = useAppLocale();
+  const copy = uiCopy(locale);
   const [items, setItems] = useState<T[]>([]);
   const [pagination, setPagination] = useState<ProfessionalPagination>({ page: 1, pageSize: 20, total: 0, pageCount: 1 });
   const [metrics, setMetrics] = useState<Record<string, number>>({});
@@ -33,7 +59,7 @@ export function useProfessionalCollection<T, TExtra extends Record<string, unkno
     try {
       const response = await fetch(`${endpoint}?${serializedParams}`, { cache: "no-store" });
       const body = await response.json().catch(() => null) as (TExtra & { items?: T[]; pagination?: ProfessionalPagination; metrics?: Record<string, number>; canManage?: boolean; canWrite?: boolean; message?: string; error?: string }) | null;
-      if (!response.ok || !body?.items || !body.pagination) throw new Error(body?.message || body?.error || "Chargement impossible.");
+      if (!response.ok || !body?.items || !body.pagination) throw new Error(body?.message || body?.error || copy.loadFailed);
       setItems(body.items);
       setPagination(body.pagination);
       setMetrics(body.metrics || {});
@@ -44,11 +70,11 @@ export function useProfessionalCollection<T, TExtra extends Record<string, unkno
       );
       setExtra(rest as TExtra);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Chargement impossible.");
+      setError(loadError instanceof Error ? loadError.message : copy.loadFailed);
     } finally {
       setLoading(false);
     }
-  }, [endpoint, serializedParams]);
+  }, [copy.loadFailed, endpoint, serializedParams]);
 
   useEffect(() => { void load(); }, [load, refreshKey]);
   return { items, pagination, metrics, extra, canManage, canWrite, loading, error, reload: load };
@@ -61,7 +87,7 @@ export async function professionalMutation(endpoint: string, payload: unknown, m
     body: JSON.stringify(payload),
   });
   const body = await response.json().catch(() => null) as { message?: string; error?: string; [key: string]: unknown } | null;
-  if (!response.ok) throw new Error(body?.message || body?.error || "L’action n’a pas pu être terminée.");
+  if (!response.ok) throw new Error(body?.message || body?.error || "ACTION_FAILED");
   return body || {};
 }
 
@@ -69,13 +95,14 @@ export function ProfessionalTabs<T extends string>({
   value,
   onChange,
   items,
-  label = "Navigation du module",
+  label,
 }: {
   value: T;
   onChange: (value: T) => void;
   items: Array<{ id: T; label: string; count?: number }>;
   label?: string;
 }) {
+  const locale = useAppLocale();
   const railRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -88,7 +115,7 @@ export function ProfessionalTabs<T extends string>({
   return (
     <nav
       ref={railRef}
-      aria-label={label}
+      aria-label={label || uiCopy(locale).tabNavigation}
       data-professional-tabs
       data-horizontal-rail
       className="flex w-full min-w-0 max-w-full snap-x snap-mandatory gap-2 overflow-x-auto overscroll-x-contain px-0.5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -112,11 +139,12 @@ export function ProfessionalTabs<T extends string>({
   );
 }
 
-export function ProfessionalSearch({ value, onChange, placeholder = "Rechercher…" }: { value: string; onChange: (value: string) => void; placeholder?: string }) {
+export function ProfessionalSearch({ value, onChange, placeholder }: { value: string; onChange: (value: string) => void; placeholder?: string }) {
+  const locale = useAppLocale();
   return (
     <div className="relative min-w-0">
       <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-dtsc-muted" />
-      <Input value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} className="min-h-11 rounded-xl pl-9" />
+      <Input value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder || uiCopy(locale).search} className="min-h-11 rounded-xl pl-9" />
     </div>
   );
 }
@@ -132,11 +160,13 @@ export function ProfessionalFormSection({ title, description, children }: { titl
 }
 
 export function ProfessionalHelp({ moduleCode }: { moduleCode: string }) {
+  const locale = useAppLocale();
+  const copy = uiCopy(locale);
   return (
     <div className="grid gap-3 border-y border-dtsc-border py-4 text-sm text-dtsc-muted sm:grid-cols-3">
-      <Link href={`/help/enterprise?module=${encodeURIComponent(moduleCode)}`} className="inline-flex min-h-11 items-center gap-2 rounded-xl px-2 font-black text-dtsc-blue hover:bg-dtsc-soft"><BookOpen className="h-4 w-4" />Guide utilisateur</Link>
-      <Link href="/support" className="inline-flex min-h-11 items-center gap-2 rounded-xl px-2 font-black text-dtsc-blue hover:bg-dtsc-soft"><LifeBuoy className="h-4 w-4" />Contacter le support</Link>
-      <Link href="/enterprise-admin" className="inline-flex min-h-11 items-center gap-2 rounded-xl px-2 font-black text-dtsc-blue hover:bg-dtsc-soft"><CircleHelp className="h-4 w-4" />Permissions et configuration</Link>
+      <Link href={`/help/enterprise?module=${encodeURIComponent(moduleCode)}`} className="inline-flex min-h-11 items-center gap-2 rounded-xl px-2 font-black text-dtsc-blue hover:bg-dtsc-soft"><BookOpen className="h-4 w-4" />{copy.userGuide}</Link>
+      <Link href="/support" className="inline-flex min-h-11 items-center gap-2 rounded-xl px-2 font-black text-dtsc-blue hover:bg-dtsc-soft"><LifeBuoy className="h-4 w-4" />{copy.contactSupport}</Link>
+      <Link href="/enterprise-admin" className="inline-flex min-h-11 items-center gap-2 rounded-xl px-2 font-black text-dtsc-blue hover:bg-dtsc-soft"><CircleHelp className="h-4 w-4" />{copy.permissions}</Link>
     </div>
   );
 }
