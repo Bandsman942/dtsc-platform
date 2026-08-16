@@ -33,6 +33,13 @@ assert(!helper.includes("document.documentElement.lang"), "ERP professionnel: la
 assert(!helper.includes("MutationObserver"), "ERP professionnel: observation DOM de langue encore active");
 assert(helper.includes("SELF_APPROVAL_FORBIDDEN") && helper.includes("APPROVER_PERMISSION_DENIED"), "ERP professionnel: messages d’éligibilité approbateur FR/EN absents");
 
+const sharedUi = read("components/enterprise/professional/professional-erp-ui.tsx");
+assert(sharedUi.includes("useAppLocale"), "ERP professionnel partagé: locale applicative non consommée");
+assert(sharedUi.includes('userGuide: "User guide"'), "ERP professionnel partagé: guide EN absent");
+assert(sharedUi.includes('contactSupport: "Contact support"'), "ERP professionnel partagé: support EN absent");
+assert(sharedUi.includes('permissions: "Permissions and configuration"'), "ERP professionnel partagé: permissions EN absentes");
+assert(sharedUi.includes('search: "Search…"'), "ERP professionnel partagé: recherche EN absente");
+
 const targets = [
   "components/enterprise/professional/enterprise-human-resources-workspace.tsx",
   "components/enterprise/professional/enterprise-employees-identity-workspace.tsx",
@@ -93,4 +100,4 @@ const choice = read(targets[5]);
 assert(choice.includes('t("identityChoice.legend")'), "Identity link choice: copie canonique absente");
 assert(choice.includes("aria-pressed"), "Identity link choice: contrat accessible perdu");
 
-if (!process.exitCode) console.log(`PASS Professional ERP People i18n #332/#364 — ${frKeys.length} clés FR/EN + locale applicative, confidentialité et workflows préservés.`);
+if (!process.exitCode) console.log(`PASS Professional ERP People i18n #332/#364 — ${frKeys.length} clés FR/EN + locale applicative, chrome partagé, confidentialité et workflows préservés.`);
