@@ -515,7 +515,7 @@ function MobileMoneyFxPanel({
       const body = await response.json().catch(() => null) as { preview?: FxPreview; message?: string; error?: string } | null;
       if (!response.ok || !body?.preview) throw new Error(body?.message || body?.error || copy.fxMissingRate);
       setPreview(body.preview);
-    } catch (error) {
+    } catch {
       setPreviewError(copy.fxMissingRate);
     } finally {
       setPreviewBusy(false);
