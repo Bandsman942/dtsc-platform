@@ -37,7 +37,7 @@ export function professionalErpT(
 
 export function professionalErpEnumLabel(
   locale: ProfessionalErpLocale,
-  group: "role" | "identityStatus" | "partyType" | "status" | "opportunityStage" | "leadStatus" | "source" | "contractType" | "approvalStatus" | "renewalMode",
+  group: "role" | "identityStatus" | "partyType" | "status" | "opportunityStage" | "leadStatus" | "source" | "contractType" | "approvalStatus" | "renewalMode" | "itemType" | "priceType" | "unitCategory",
   value: string,
 ) {
   const key = `${group}.${value}` as ProfessionalErpKey;
