@@ -24,6 +24,14 @@ import {
   professionalMutation,
   useProfessionalCollection,
 } from "@/components/enterprise/professional/professional-erp-ui";
+import {
+  professionalErpDate,
+  professionalErpEnumLabel,
+  professionalErpMoney,
+  professionalErpT,
+  type ProfessionalErpLocale,
+  useProfessionalErpLocale,
+} from "@/components/enterprise/professional/professional-erp-i18n";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
 
 type Party = { id: string; code: string; legalName: string; displayName: string | null; partyType: string; roles: Array<{ roleCode: string }> };
@@ -62,25 +70,7 @@ type Contract = {
   capabilities: ContractCapabilities;
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  DRAFT: "Brouillon",
-  PENDING_APPROVAL: "En attente de validation",
-  APPROVED: "Validé",
-  ACTIVE: "Actif",
-  SUSPENDED: "Suspendu",
-  EXPIRED: "Expiré",
-  TERMINATED: "Résilié",
-  CANCELLED: "Annulé",
-};
-const APPROVAL_STATUS_LABELS: Record<string, string> = { PENDING: "En attente", APPROVED: "Approuvé", RETURNED: "Correction demandée", REJECTED: "Refusé" };
-const CONTRACT_TYPES = [
-  { id: "SERVICE", label: "Contrat de prestation" },
-  { id: "SALE", label: "Contrat commercial" },
-  { id: "PARTNERSHIP", label: "Convention de partenariat" },
-  { id: "SUPPLY", label: "Contrat de fourniture" },
-  { id: "CONSULTING", label: "Contrat de consultance" },
-  { id: "OTHER", label: "Autre contrat" },
-];
+const CONTRACT_TYPES = ["SERVICE", "SALE", "PARTNERSHIP", "SUPPLY", "CONSULTING", "OTHER"] as const;
 
 function statusTone(status: string) {
   if (["ACTIVE", "APPROVED"].includes(status)) return "success" as const;
@@ -88,16 +78,10 @@ function statusTone(status: string) {
   if (["TERMINATED", "EXPIRED", "CANCELLED"].includes(status)) return "danger" as const;
   return "neutral" as const;
 }
-function money(value: Contract["indicativeAmount"], currency?: string | null) {
-  if (value === null || value === undefined || value === "") return "Montant non défini";
-  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: currency || "USD", maximumFractionDigits: 2 }).format(Number(value));
-}
-function dateLabel(value?: string | null) {
-  if (!value) return "Non définie";
-  return new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium" }).format(new Date(value));
-}
 
 export function EnterpriseContractsWorkspace({ organizationId, organizationName, definition }: { organizationId: string; organizationName: string; definition: EnterpriseModuleDefinition }) {
+  const locale = useProfessionalErpLocale();
+  const t = (key: Parameters<typeof professionalErpT>[1], values?: Record<string, string | number>) => professionalErpT(locale, key, values);
   const [tab, setTab] = useState("ALL");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -116,12 +100,12 @@ export function EnterpriseContractsWorkspace({ organizationId, organizationName,
     void fetch(`/api/enterprise/${organizationId}/professional-lookups?module=CONTRACTS`, { cache: "no-store" })
       .then(async (response) => {
         const body = await response.json().catch(() => null) as Lookups & { message?: string; error?: string } | null;
-        if (!response.ok || !body) throw new Error(body?.message || body?.error || "Sélecteurs indisponibles.");
+        if (!response.ok || !body) throw new Error(body?.message || body?.error || professionalErpT(locale, "common.selectorsUnavailable"));
         if (active) setLookups(body);
       })
-      .catch((error) => { if (active) setLookupsError(error instanceof Error ? error.message : "Sélecteurs indisponibles."); });
+      .catch((error) => { if (active) setLookupsError(error instanceof Error ? error.message : professionalErpT(locale, "common.selectorsUnavailable")); });
     return () => { active = false; };
-  }, [organizationId, refreshKey]);
+  }, [locale, organizationId, refreshKey]);
 
   const params = useMemo(() => {
     const value = new URLSearchParams({ page: String(page), pageSize: "50" });
@@ -130,6 +114,7 @@ export function EnterpriseContractsWorkspace({ organizationId, organizationName,
     return value;
   }, [page, search, tab]);
   const collection = useProfessionalCollection<Contract>({ endpoint: `/api/enterprise/${organizationId}/contracts`, params, refreshKey });
+
   useEffect(() => {
     const contractId = searchParams.get("contract");
     if (!contractId) return;
@@ -164,7 +149,7 @@ export function EnterpriseContractsWorkspace({ organizationId, organizationName,
       setCreateOpen(false);
       setRefreshKey((value) => value + 1);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Création impossible.");
+      setMessage(error instanceof Error ? error.message : t("common.createFailed"));
     }
   }
 
@@ -178,7 +163,7 @@ export function EnterpriseContractsWorkspace({ organizationId, organizationName,
       setDetail(null);
       setRefreshKey((value) => value + 1);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Modification impossible.");
+      setMessage(error instanceof Error ? error.message : t("common.updateFailed"));
     }
   }
 
@@ -189,128 +174,132 @@ export function EnterpriseContractsWorkspace({ organizationId, organizationName,
       setDetail(null);
       setRefreshKey((value) => value + 1);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Action contractuelle impossible.");
+      setMessage(error instanceof Error ? error.message : t("contracts.actionFailed"));
     }
   }
 
   function availableActions(contract: Contract) {
     const actions: Array<{ id: string; label: string; icon: typeof Send }> = [];
-    if (contract.status === "DRAFT" && contract.capabilities.canEdit) actions.push({ id: "EDIT", label: "Modifier", icon: Pencil });
-    if (contract.status === "DRAFT" && contract.capabilities.canSubmit) actions.push({ id: "SUBMIT", label: "Soumettre", icon: Send });
+    if (contract.status === "DRAFT" && contract.capabilities.canEdit) actions.push({ id: "EDIT", label: t("contracts.edit"), icon: Pencil });
+    if (contract.status === "DRAFT" && contract.capabilities.canSubmit) actions.push({ id: "SUBMIT", label: t("contracts.submit"), icon: Send });
     if (contract.status === "PENDING_APPROVAL" && contract.capabilities.canDecide) {
       actions.push(
-        { id: "APPROVE", label: "Approuver", icon: CheckCircle2 },
-        { id: "REQUEST_CORRECTION", label: "Demander une correction", icon: RotateCcw },
-        { id: "REJECT", label: "Refuser", icon: XCircle },
+        { id: "APPROVE", label: t("contracts.approve"), icon: CheckCircle2 },
+        { id: "REQUEST_CORRECTION", label: t("contracts.requestCorrection"), icon: RotateCcw },
+        { id: "REJECT", label: t("contracts.reject"), icon: XCircle },
       );
     }
     if (!contract.capabilities.canOperate) return actions;
-    if (contract.status === "APPROVED") actions.push({ id: "ACTIVATE", label: "Activer", icon: CheckCircle2 });
-    if (contract.status === "ACTIVE") actions.push({ id: "SUSPEND", label: "Suspendre", icon: PauseCircle }, { id: "TERMINATE", label: "Résilier", icon: XCircle });
-    if (contract.status === "SUSPENDED") actions.push({ id: "ACTIVATE", label: "Réactiver", icon: CheckCircle2 }, { id: "RENEW", label: "Renouveler", icon: RefreshCcw }, { id: "TERMINATE", label: "Résilier", icon: XCircle });
-    if (contract.status === "EXPIRED") actions.push({ id: "RENEW", label: "Renouveler", icon: RefreshCcw }, { id: "ARCHIVE", label: "Archiver", icon: Archive });
-    if (["TERMINATED", "CANCELLED"].includes(contract.status)) actions.push({ id: "ARCHIVE", label: "Archiver", icon: Archive });
+    if (contract.status === "APPROVED") actions.push({ id: "ACTIVATE", label: t("contracts.activate"), icon: CheckCircle2 });
+    if (contract.status === "ACTIVE") actions.push({ id: "SUSPEND", label: t("contracts.suspend"), icon: PauseCircle }, { id: "TERMINATE", label: t("contracts.terminate"), icon: XCircle });
+    if (contract.status === "SUSPENDED") actions.push({ id: "ACTIVATE", label: t("contracts.reactivate"), icon: CheckCircle2 }, { id: "RENEW", label: t("contracts.renew"), icon: RefreshCcw }, { id: "TERMINATE", label: t("contracts.terminate"), icon: XCircle });
+    if (contract.status === "EXPIRED") actions.push({ id: "RENEW", label: t("contracts.renew"), icon: RefreshCcw }, { id: "ARCHIVE", label: t("contracts.archive"), icon: Archive });
+    if (["TERMINATED", "CANCELLED"].includes(contract.status)) actions.push({ id: "ARCHIVE", label: t("contracts.archive"), icon: Archive });
     return actions;
   }
 
   const tabs = [
-    { id: "ALL", label: "Tous", count: collection.pagination.total },
-    { id: "DRAFT", label: "Brouillons", count: collection.metrics.draft },
-    { id: "PENDING_APPROVAL", label: "À valider", count: collection.metrics.pendingApproval },
-    { id: "ACTIVE", label: "Actifs", count: collection.metrics.active },
-    { id: "SUSPENDED", label: "Suspendus", count: collection.metrics.suspended },
-    { id: "EXPIRED", label: "Expirés", count: collection.metrics.expired },
-    { id: "TERMINATED", label: "Résiliés", count: collection.metrics.terminated },
+    { id: "ALL", label: t("contracts.tabAll"), count: collection.pagination.total },
+    { id: "DRAFT", label: t("contracts.tabDrafts"), count: collection.metrics.draft },
+    { id: "PENDING_APPROVAL", label: t("contracts.tabPending"), count: collection.metrics.pendingApproval },
+    { id: "ACTIVE", label: t("contracts.tabActive"), count: collection.metrics.active },
+    { id: "SUSPENDED", label: t("contracts.tabSuspended"), count: collection.metrics.suspended },
+    { id: "EXPIRED", label: t("contracts.tabExpired"), count: collection.metrics.expired },
+    { id: "TERMINATED", label: t("contracts.tabTerminated"), count: collection.metrics.terminated },
   ];
+  const countSuffix = locale === "en" ? (collection.pagination.total === 1 ? "" : "s") : (collection.pagination.total > 1 ? "s" : "");
 
   return (
     <ModuleWorkspace>
-      <ModuleHeader eyebrow={`Cycle contractuel · ${organizationName}`} title="Contrats commerciaux" description={definition.descriptionFr} count={`${collection.pagination.total} contrat${collection.pagination.total > 1 ? "s" : ""}`} primaryAction={collection.canWrite ? <Button onClick={() => { setMessage(""); setCreateOpen(true); }} className="bg-dtsc-blue text-white"><Plus className="h-4 w-4" />Nouveau contrat</Button> : undefined} />
-      <ModuleMetrics label="Indicateurs contractuels">
-        <ModuleMetric label="Brouillons" value={collection.metrics.draft || 0} />
-        <ModuleMetric label="En attente de validation" value={collection.metrics.pendingApproval || 0} />
-        <ModuleMetric label="Actifs" value={collection.metrics.active || 0} />
-        <ModuleMetric label="À renouveler bientôt" value={collection.metrics.expiring || 0} />
-        <ModuleMetric label="Résiliés" value={collection.metrics.terminated || 0} />
+      <ModuleHeader eyebrow={t("contracts.eyebrow", { organization: organizationName })} title={t("contracts.title")} description={locale === "en" ? definition.descriptionEn : definition.descriptionFr} count={t("contracts.count", { count: collection.pagination.total, suffix: countSuffix })} primaryAction={collection.canWrite ? <Button onClick={() => { setMessage(""); setCreateOpen(true); }} className="bg-dtsc-blue text-white"><Plus className="h-4 w-4" />{t("contracts.new")}</Button> : undefined} />
+      <ModuleMetrics label={t("contracts.metrics")}>
+        <ModuleMetric label={t("contracts.metricDrafts")} value={collection.metrics.draft || 0} />
+        <ModuleMetric label={t("contracts.metricPending")} value={collection.metrics.pendingApproval || 0} />
+        <ModuleMetric label={t("contracts.metricActive")} value={collection.metrics.active || 0} />
+        <ModuleMetric label={t("contracts.metricExpiring")} value={collection.metrics.expiring || 0} />
+        <ModuleMetric label={t("contracts.metricTerminated")} value={collection.metrics.terminated || 0} />
       </ModuleMetrics>
-      <ModuleToolbar search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Titre ou référence du contrat…" />} controls={<ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setPage(1); }} items={tabs} label="États des contrats" />} summary={`${collection.pagination.total} résultat${collection.pagination.total > 1 ? "s" : ""}`} />
+      <ModuleToolbar search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("contracts.search")} />} controls={<ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setPage(1); }} items={tabs} label={t("contracts.tabsLabel")} />} summary={t("common.results", { count: collection.pagination.total, suffix: countSuffix })} />
       <ModuleContent>
         {message ? <ProfessionalError message={message} /> : null}
         {lookupsError ? <ProfessionalError message={lookupsError} /> : null}
-        <ModuleSection title="Portefeuille contractuel" description="Les transitions sont décidées et validées par le serveur. Le frontend ne modifie jamais directement un statut.">
-          {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : collection.items.length ? <BusinessList ariaLabel="Contrats commerciaux">{collection.items.map((contract) => <BusinessListItem key={contract.id} title={contract.title} leading={<FileCheck2 className="h-5 w-5 text-dtsc-blue" />} status={<StatusBadge tone={statusTone(contract.status)}>{STATUS_LABELS[contract.status] || contract.status}</StatusBadge>} meta={`${contract.reference} · ${contract.contractType} · ${money(contract.indicativeAmount, contract.currency)}`} description={`${contract.businessParty?.displayName || contract.businessParty?.legalName || "Partie à vérifier"} · ${dateLabel(contract.startDate)} → ${dateLabel(contract.endDate)}`} onOpen={() => setDetail(contract)} openLabel={`Ouvrir ${contract.title}`} actions={<Button size="sm" variant="outline" onClick={() => setDetail(contract)}><Eye className="h-4 w-4" />Détail</Button>} />)}</BusinessList> : <EmptyState compact title="Aucun contrat" description="Sélectionnez un client, définissez la période et soumettez le premier contrat à validation." />}
+        <ModuleSection title={t("contracts.portfolio")} description={t("contracts.portfolioDescription")}>
+          {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : collection.items.length ? <BusinessList ariaLabel={t("contracts.listAria")}>{collection.items.map((contract) => <BusinessListItem key={contract.id} title={contract.title} leading={<FileCheck2 className="h-5 w-5 text-dtsc-blue" />} status={<StatusBadge tone={statusTone(contract.status)}>{professionalErpEnumLabel(locale, "status", contract.status)}</StatusBadge>} meta={`${contract.reference} · ${professionalErpEnumLabel(locale, "contractType", contract.contractType)} · ${professionalErpMoney(contract.indicativeAmount, contract.currency, locale)}`} description={`${contract.businessParty?.displayName || contract.businessParty?.legalName || t("contracts.partyToReview")} · ${professionalErpDate(contract.startDate, locale)} → ${professionalErpDate(contract.endDate, locale)}`} onOpen={() => setDetail(contract)} openLabel={t("contracts.open", { name: contract.title })} actions={<Button size="sm" variant="outline" onClick={() => setDetail(contract)}><Eye className="h-4 w-4" />{t("common.details")}</Button>} />)}</BusinessList> : <EmptyState compact title={t("contracts.emptyTitle")} description={t("contracts.emptyDescription")} />}
         </ModuleSection>
         <ProfessionalHelp moduleCode="CONTRACTS" />
       </ModuleContent>
 
-      <ContractFormDialog open={createOpen} onClose={() => setCreateOpen(false)} title="Nouveau contrat" onSubmit={createContract} lookups={lookups} message={message} />
-      <ContractFormDialog open={Boolean(edit)} onClose={() => setEdit(null)} title="Modifier le contrat" onSubmit={updateContract} lookups={lookups} message={message} contract={edit} hideApprover />
+      <ContractFormDialog open={createOpen} onClose={() => setCreateOpen(false)} title={t("contracts.new")} onSubmit={createContract} lookups={lookups} message={message} locale={locale} />
+      <ContractFormDialog open={Boolean(edit)} onClose={() => setEdit(null)} title={t("contracts.edit")} onSubmit={updateContract} lookups={lookups} message={message} contract={edit} hideApprover locale={locale} />
 
-      <Dialog open={Boolean(detail)} onClose={() => setDetail(null)} title={detail?.title || "Contrat"} className="h-[94dvh] max-w-4xl">
+      <Dialog open={Boolean(detail)} onClose={() => setDetail(null)} title={detail?.title || t("contracts.fallback")} className="h-[94dvh] max-w-4xl">
         {detail ? <div className="grid gap-6">
           {message ? <ProfessionalError message={message} /> : null}
-          <div className="flex flex-wrap gap-2"><StatusBadge tone={statusTone(detail.status)}>{STATUS_LABELS[detail.status] || detail.status}</StatusBadge><StatusBadge>{detail.reference}</StatusBadge><StatusBadge>{detail.contractType}</StatusBadge>{detail.capabilities.isApprover ? <StatusBadge tone="warning">Votre décision est requise</StatusBadge> : null}</div>
+          <div className="flex flex-wrap gap-2"><StatusBadge tone={statusTone(detail.status)}>{professionalErpEnumLabel(locale, "status", detail.status)}</StatusBadge><StatusBadge>{detail.reference}</StatusBadge><StatusBadge>{professionalErpEnumLabel(locale, "contractType", detail.contractType)}</StatusBadge>{detail.capabilities.isApprover ? <StatusBadge tone="warning">{t("contracts.decisionRequired")}</StatusBadge> : null}</div>
           <dl className="grid gap-4 border-y border-dtsc-border py-5 sm:grid-cols-2 lg:grid-cols-3">
-            <div><dt className="text-xs font-black uppercase text-dtsc-muted">Partie</dt><dd className="mt-1 text-sm text-dtsc-ink">{detail.businessParty?.displayName || detail.businessParty?.legalName}</dd></div>
-            <div><dt className="text-xs font-black uppercase text-dtsc-muted">Période</dt><dd className="mt-1 text-sm text-dtsc-ink">{dateLabel(detail.startDate)} → {dateLabel(detail.endDate)}</dd></div>
-            <div><dt className="text-xs font-black uppercase text-dtsc-muted">Valeur indicative</dt><dd className="mt-1 text-sm text-dtsc-ink">{money(detail.indicativeAmount, detail.currency)}</dd></div>
-            <div><dt className="text-xs font-black uppercase text-dtsc-muted">Renouvellement</dt><dd className="mt-1 text-sm text-dtsc-ink">{detail.renewalMode === "AUTOMATIC" ? "Automatique" : detail.renewalMode === "MANUAL" ? "Manuel" : "Aucun"}{detail.renewalNoticeDays !== null ? ` · préavis ${detail.renewalNoticeDays} jours` : ""}</dd></div>
-            <div><dt className="text-xs font-black uppercase text-dtsc-muted">Validation</dt><dd className="mt-1 text-sm text-dtsc-ink">{detail.approval ? APPROVAL_STATUS_LABELS[detail.approval.status] || detail.approval.status : "Non demandée"}{detail.approval?.decisionComment ? ` · ${detail.approval.decisionComment}` : ""}</dd></div>
-            <div><dt className="text-xs font-black uppercase text-dtsc-muted">Révision</dt><dd className="mt-1 text-sm text-dtsc-ink">Version {detail.revision}</dd></div>
+            <div><dt className="text-xs font-black uppercase text-dtsc-muted">{t("contracts.party")}</dt><dd className="mt-1 text-sm text-dtsc-ink">{detail.businessParty?.displayName || detail.businessParty?.legalName}</dd></div>
+            <div><dt className="text-xs font-black uppercase text-dtsc-muted">{t("contracts.period")}</dt><dd className="mt-1 text-sm text-dtsc-ink">{professionalErpDate(detail.startDate, locale)} → {professionalErpDate(detail.endDate, locale)}</dd></div>
+            <div><dt className="text-xs font-black uppercase text-dtsc-muted">{t("contracts.indicativeValue")}</dt><dd className="mt-1 text-sm text-dtsc-ink">{professionalErpMoney(detail.indicativeAmount, detail.currency, locale)}</dd></div>
+            <div><dt className="text-xs font-black uppercase text-dtsc-muted">{t("contracts.renewal")}</dt><dd className="mt-1 text-sm text-dtsc-ink">{professionalErpEnumLabel(locale, "renewalMode", detail.renewalMode || "NONE")}{detail.renewalNoticeDays !== null ? ` · ${t("contracts.notice", { days: detail.renewalNoticeDays })}` : ""}</dd></div>
+            <div><dt className="text-xs font-black uppercase text-dtsc-muted">{t("contracts.approval")}</dt><dd className="mt-1 text-sm text-dtsc-ink">{detail.approval ? professionalErpEnumLabel(locale, "approvalStatus", detail.approval.status) : t("contracts.notRequested")}{detail.approval?.decisionComment ? ` · ${detail.approval.decisionComment}` : ""}</dd></div>
+            <div><dt className="text-xs font-black uppercase text-dtsc-muted">{t("contracts.revision")}</dt><dd className="mt-1 text-sm text-dtsc-ink">{t("contracts.version", { revision: detail.revision })}</dd></div>
           </dl>
-          {detail.description ? <section><h3 className="font-black text-dtsc-ink">Objet et résumé</h3><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-dtsc-muted">{detail.description}</p></section> : null}
-          {detail.terms ? <section><h3 className="font-black text-dtsc-ink">Clauses ou conditions</h3><p className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap border-y border-dtsc-border py-3 text-sm leading-6 text-dtsc-muted">{detail.terms}</p></section> : null}
-          {detail.terminationReason ? <ProfessionalError message={`Motif de résiliation : ${detail.terminationReason}`} /> : null}
-          <section><h3 className="font-black text-dtsc-ink">Documents</h3><p className="mt-1 text-sm text-dtsc-muted">Téléversez les versions de travail, signées ou annexes dans Documents. Le contrat et sa référence sont préremplis.</p><Link className="mt-3 inline-flex min-h-11 items-center rounded-xl border border-dtsc-border px-4 text-sm font-black text-dtsc-blue" href={`/enterprise-modules/DOCUMENTS?sourceEntityType=EnterpriseContract&sourceEntityId=${encodeURIComponent(detail.id)}&sourceReference=${encodeURIComponent(detail.reference)}&action=upload`}>Téléverser ou ouvrir les documents liés</Link></section>
+          {detail.description ? <section><h3 className="font-black text-dtsc-ink">{t("contracts.summary")}</h3><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-dtsc-muted">{detail.description}</p></section> : null}
+          {detail.terms ? <section><h3 className="font-black text-dtsc-ink">{t("contracts.terms")}</h3><p className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap border-y border-dtsc-border py-3 text-sm leading-6 text-dtsc-muted">{detail.terms}</p></section> : null}
+          {detail.terminationReason ? <ProfessionalError message={t("contracts.terminationReason", { reason: detail.terminationReason })} /> : null}
+          <section><h3 className="font-black text-dtsc-ink">{t("contracts.documents")}</h3><p className="mt-1 text-sm text-dtsc-muted">{t("contracts.documentsDescription")}</p><Link className="mt-3 inline-flex min-h-11 items-center rounded-xl border border-dtsc-border px-4 text-sm font-black text-dtsc-blue" href={`/enterprise-modules/DOCUMENTS?sourceEntityType=EnterpriseContract&sourceEntityId=${encodeURIComponent(detail.id)}&sourceReference=${encodeURIComponent(detail.reference)}&action=upload`}>{t("contracts.documentsAction")}</Link></section>
           {detail.capabilities.canComment ? <ProfessionalWorkflowComments endpoint={`/api/enterprise/${organizationId}/contracts/${detail.id}/comments`} /> : null}
           {availableActions(detail).length ? <section id="validation" className="sticky bottom-0 border-t border-dtsc-border bg-dtsc-surface py-3"><div className="flex flex-wrap justify-end gap-2">{availableActions(detail).map((action) => { const Icon = action.icon; return <Button key={action.id} variant={action.id === "TERMINATE" || action.id === "REJECT" ? "destructive" : "outline"} onClick={() => action.id === "EDIT" ? setEdit(detail) : ["ACTIVATE", "ARCHIVE"].includes(action.id) ? void transitionContract(detail, action.id) : setActionTarget({ contract: detail, action: action.id })}><Icon className="h-4 w-4" />{action.label}</Button>; })}</div></section> : null}
         </div> : null}
       </Dialog>
 
-      <Dialog open={Boolean(actionTarget)} onClose={() => setActionTarget(null)} title={actionTarget ? actionTitle(actionTarget.action) : "Action contractuelle"} className="max-w-xl">
-        {actionTarget ? <ActionForm target={actionTarget} members={lookups.members} onCancel={() => setActionTarget(null)} onSubmit={(payload) => void transitionContract(actionTarget.contract, actionTarget.action, payload)} /> : null}
+      <Dialog open={Boolean(actionTarget)} onClose={() => setActionTarget(null)} title={actionTarget ? actionTitle(locale, actionTarget.action) : t("contracts.actionFallback")} className="max-w-xl">
+        {actionTarget ? <ActionForm target={actionTarget} members={lookups.members} onCancel={() => setActionTarget(null)} onSubmit={(payload) => void transitionContract(actionTarget.contract, actionTarget.action, payload)} locale={locale} /> : null}
       </Dialog>
     </ModuleWorkspace>
   );
 }
 
-function actionTitle(action: string) {
-  return ({ SUBMIT: "Soumettre à validation", APPROVE: "Approuver le contrat", REQUEST_CORRECTION: "Demander une correction", REJECT: "Refuser le contrat", SUSPEND: "Suspendre le contrat", RENEW: "Renouveler le contrat", TERMINATE: "Résilier le contrat" } as Record<string, string>)[action] || "Action contractuelle";
+function actionTitle(locale: ProfessionalErpLocale, action: string) {
+  const key = ({ SUBMIT: "contracts.actionSubmitTitle", APPROVE: "contracts.actionApproveTitle", REQUEST_CORRECTION: "contracts.actionCorrectionTitle", REJECT: "contracts.actionRejectTitle", SUSPEND: "contracts.actionSuspendTitle", RENEW: "contracts.actionRenewTitle", TERMINATE: "contracts.actionTerminateTitle" } as const)[action as "SUBMIT" | "APPROVE" | "REQUEST_CORRECTION" | "REJECT" | "SUSPEND" | "RENEW" | "TERMINATE"];
+  return key ? professionalErpT(locale, key) : professionalErpT(locale, "contracts.actionFallback");
 }
 
-function ActionForm({ target, members, onCancel, onSubmit }: { target: { contract: Contract; action: string }; members: Member[]; onCancel: () => void; onSubmit: (payload: Record<string, unknown>) => void }) {
+function ActionForm({ target, members, onCancel, onSubmit, locale }: { target: { contract: Contract; action: string }; members: Member[]; onCancel: () => void; onSubmit: (payload: Record<string, unknown>) => void; locale: ProfessionalErpLocale }) {
+  const t = (key: Parameters<typeof professionalErpT>[1]) => professionalErpT(locale, key);
   const needsReason = ["REQUEST_CORRECTION", "REJECT", "SUSPEND", "TERMINATE"].includes(target.action);
   return <form onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); onSubmit({ approverUserId: String(form.get("approverUserId") || "") || null, reason: String(form.get("reason") || "") || null, renewedEndDate: String(form.get("renewedEndDate") || "") || null }); }} className="grid gap-4">
-    {target.action === "SUBMIT" ? <Field label="Validateur"><NativeSelect name="approverUserId" required items={[{ id: "", label: "Sélectionner un validateur…" }, ...members.map((member) => ({ id: member.id, label: `${member.label} · ${member.positionTitle || member.role}` }))]} /></Field> : null}
-    {needsReason ? <Field label={target.action === "REQUEST_CORRECTION" ? "Corrections demandées" : "Motif de la décision"}><textarea name="reason" required className="min-h-28 w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-base" placeholder={target.action === "REQUEST_CORRECTION" ? "Décrivez précisément les éléments à corriger avant une nouvelle soumission." : "Expliquez la décision."} /></Field> : null}
-    {target.action === "APPROVE" ? <Field label="Commentaire facultatif"><textarea name="reason" className="min-h-24 w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-base" /></Field> : null}
-    {target.action === "RENEW" ? <Field label="Nouvelle date de fin"><Input name="renewedEndDate" type="date" required /></Field> : null}
-    <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={onCancel}>Annuler</Button><Button type="submit" variant={target.action === "REJECT" || target.action === "TERMINATE" ? "destructive" : "default"}>Confirmer</Button></div>
+    {target.action === "SUBMIT" ? <Field label={t("contracts.validator")}><NativeSelect name="approverUserId" required items={[{ id: "", label: t("contracts.selectValidator") }, ...members.map((member) => ({ id: member.id, label: `${member.label} · ${member.positionTitle || member.role}` }))]} /></Field> : null}
+    {needsReason ? <Field label={target.action === "REQUEST_CORRECTION" ? t("contracts.requestedCorrections") : t("contracts.decisionReason")}><textarea name="reason" required className="min-h-28 w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-base" placeholder={target.action === "REQUEST_CORRECTION" ? t("contracts.correctionPlaceholder") : t("contracts.reasonPlaceholder")} /></Field> : null}
+    {target.action === "APPROVE" ? <Field label={t("contracts.optionalComment")}><textarea name="reason" className="min-h-24 w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-base" /></Field> : null}
+    {target.action === "RENEW" ? <Field label={t("contracts.newEndDate")}><Input name="renewedEndDate" type="date" required /></Field> : null}
+    <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={onCancel}>{t("common.cancel")}</Button><Button type="submit" variant={target.action === "REJECT" || target.action === "TERMINATE" ? "destructive" : "default"}>{t("common.confirm")}</Button></div>
   </form>;
 }
 
-function ContractFormDialog({ open, onClose, title, onSubmit, lookups, message, contract, hideApprover = false }: { open: boolean; onClose: () => void; title: string; onSubmit: (event: FormEvent<HTMLFormElement>) => void; lookups: Lookups; message: string; contract?: Contract | null; hideApprover?: boolean }) {
+function ContractFormDialog({ open, onClose, title, onSubmit, lookups, message, contract, hideApprover = false, locale }: { open: boolean; onClose: () => void; title: string; onSubmit: (event: FormEvent<HTMLFormElement>) => void; lookups: Lookups; message: string; contract?: Contract | null; hideApprover?: boolean; locale: ProfessionalErpLocale }) {
+  const t = (key: Parameters<typeof professionalErpT>[1]) => professionalErpT(locale, key);
   return <Dialog open={open} onClose={onClose} title={title} className="h-[94dvh] max-w-4xl">
     <form onSubmit={onSubmit} className="grid gap-6">
       {message ? <ProfessionalError message={message} /> : null}
-      <ProfessionalFormSection title="Identification et parties">
-        <Field label="Client, collaborateur, fournisseur ou partenaire"><NativeSelect name="businessPartyId" required defaultValue={contract?.businessPartyId || ""} items={[{ id: "", label: "Sélectionner une partie…" }, ...lookups.parties.map((party) => ({ id: party.id, label: `${party.displayName || party.legalName} · ${party.code}` }))]} /></Field>
-        <Field label="Type de contrat"><NativeSelect name="contractType" defaultValue={contract?.contractType || "SERVICE"} items={CONTRACT_TYPES} /></Field>
-        <Field label="Titre"><Input name="title" required defaultValue={contract?.title || ""} /></Field>
-        <Field label="Responsable interne"><NativeSelect name="ownerUserId" defaultValue={contract?.ownerUserId || ""} items={[{ id: "", label: "Moi-même" }, ...lookups.members.map((member) => ({ id: member.id, label: `${member.label} · ${member.positionTitle || member.role}` }))]} /></Field>
-        <Field label="Département"><NativeSelect name="departmentId" defaultValue={contract?.departmentId || ""} items={[{ id: "", label: "Aucun" }, ...lookups.departments.map((department) => ({ id: department.id, label: department.labelFr }))]} /></Field>
-        {!hideApprover ? <Field label="Validateur initial"><NativeSelect name="approverUserId" items={[{ id: "", label: "Enregistrer en brouillon" }, ...lookups.members.map((member) => ({ id: member.id, label: `${member.label} · ${member.positionTitle || member.role}` }))]} /></Field> : null}
+      <ProfessionalFormSection title={t("contracts.identification")}>
+        <Field label={t("contracts.partyField")}><NativeSelect name="businessPartyId" required defaultValue={contract?.businessPartyId || ""} items={[{ id: "", label: t("contracts.selectParty") }, ...lookups.parties.map((party) => ({ id: party.id, label: `${party.displayName || party.legalName} · ${party.code}` }))]} /></Field>
+        <Field label={t("contracts.type")}><NativeSelect name="contractType" defaultValue={contract?.contractType || "SERVICE"} items={CONTRACT_TYPES.map((type) => ({ id: type, label: professionalErpEnumLabel(locale, "contractType", type) }))} /></Field>
+        <Field label={t("contracts.titleField")}><Input name="title" required defaultValue={contract?.title || ""} /></Field>
+        <Field label={t("contracts.owner")}><NativeSelect name="ownerUserId" defaultValue={contract?.ownerUserId || ""} items={[{ id: "", label: t("common.myself") }, ...lookups.members.map((member) => ({ id: member.id, label: `${member.label} · ${member.positionTitle || member.role}` }))]} /></Field>
+        <Field label={t("contracts.department")}><NativeSelect name="departmentId" defaultValue={contract?.departmentId || ""} items={[{ id: "", label: t("common.none") }, ...lookups.departments.map((department) => ({ id: department.id, label: locale === "en" ? department.labelEn : department.labelFr }))]} /></Field>
+        {!hideApprover ? <Field label={t("contracts.initialApprover")}><NativeSelect name="approverUserId" items={[{ id: "", label: t("contracts.saveDraft") }, ...lookups.members.map((member) => ({ id: member.id, label: `${member.label} · ${member.positionTitle || member.role}` }))]} /></Field> : null}
       </ProfessionalFormSection>
-      <ProfessionalFormSection title="Période, valeur et renouvellement">
-        <Field label="Date de début"><Input name="startDate" type="date" defaultValue={contract?.startDate?.slice(0, 10) || ""} /></Field><Field label="Date de fin"><Input name="endDate" type="date" defaultValue={contract?.endDate?.slice(0, 10) || ""} /></Field>
-        <Field label="Montant indicatif"><Input name="indicativeAmount" type="number" min="0" step="0.01" defaultValue={contract?.indicativeAmount !== null && contract?.indicativeAmount !== undefined ? String(contract.indicativeAmount) : ""} /></Field><Field label="Devise"><Input name="currency" defaultValue={contract?.currency || "USD"} maxLength={3} /></Field>
-        <Field label="Renouvellement"><NativeSelect name="renewalMode" defaultValue={contract?.renewalMode || "NONE"} items={[{ id: "NONE", label: "Aucun" }, { id: "MANUAL", label: "Manuel" }, { id: "AUTOMATIC", label: "Automatique" }]} /></Field><Field label="Délai de préavis (jours)"><Input name="renewalNoticeDays" type="number" min="0" max="3650" defaultValue={contract?.renewalNoticeDays ?? ""} /></Field>
+      <ProfessionalFormSection title={t("contracts.periodValueRenewal")}>
+        <Field label={t("contracts.startDate")}><Input name="startDate" type="date" defaultValue={contract?.startDate?.slice(0, 10) || ""} /></Field><Field label={t("contracts.endDate")}><Input name="endDate" type="date" defaultValue={contract?.endDate?.slice(0, 10) || ""} /></Field>
+        <Field label={t("contracts.amount")}><Input name="indicativeAmount" type="number" min="0" step="0.01" defaultValue={contract?.indicativeAmount !== null && contract?.indicativeAmount !== undefined ? String(contract.indicativeAmount) : ""} /></Field><Field label={t("contracts.currency")}><Input name="currency" defaultValue={contract?.currency || "USD"} maxLength={3} /></Field>
+        <Field label={t("contracts.renewal")}><NativeSelect name="renewalMode" defaultValue={contract?.renewalMode || "NONE"} items={["NONE", "MANUAL", "AUTOMATIC"].map((mode) => ({ id: mode, label: professionalErpEnumLabel(locale, "renewalMode", mode) }))} /></Field><Field label={t("contracts.noticeDays")}><Input name="renewalNoticeDays" type="number" min="0" max="3650" defaultValue={contract?.renewalNoticeDays ?? ""} /></Field>
       </ProfessionalFormSection>
-      <ProfessionalFormSection title="Objet, résumé et clauses">
-        <Field label="Objet / description"><textarea name="description" defaultValue={contract?.description || ""} className="min-h-28 w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-base" /></Field>
-        <Field label="Clauses ou conditions"><textarea name="terms" defaultValue={contract?.terms || ""} className="min-h-40 w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-base" /></Field>
+      <ProfessionalFormSection title={t("contracts.content")}>
+        <Field label={t("contracts.description")}><textarea name="description" defaultValue={contract?.description || ""} className="min-h-28 w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-base" /></Field>
+        <Field label={t("contracts.terms")}><textarea name="terms" defaultValue={contract?.terms || ""} className="min-h-40 w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-base" /></Field>
       </ProfessionalFormSection>
-      <div className="sticky bottom-0 flex justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface py-3"><Button type="button" variant="outline" onClick={onClose}>Annuler</Button><Button type="submit" className="bg-dtsc-blue text-white">Enregistrer</Button></div>
+      <div className="sticky bottom-0 flex justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface py-3"><Button type="button" variant="outline" onClick={onClose}>{t("common.cancel")}</Button><Button type="submit" className="bg-dtsc-blue text-white">{t("common.save")}</Button></div>
     </form>
   </Dialog>;
 }
