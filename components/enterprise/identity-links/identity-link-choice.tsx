@@ -1,39 +1,13 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { professionalErpT, useProfessionalErpLocale } from "@/components/enterprise/professional/professional-erp-i18n";
 
 export type EnterpriseIdentityLinkChoiceValue =
   | "MANUAL_ONLY"
   | "INVITE_EXISTING_ACCOUNT"
   | "INVITE_ACCOUNT_CREATION"
   | "LINK_LATER";
-
-const OPTIONS: Array<{
-  value: EnterpriseIdentityLinkChoiceValue;
-  title: string;
-  description: string;
-}> = [
-  {
-    value: "MANUAL_ONLY",
-    title: "Créer une fiche manuellement",
-    description: "La personne existe dans votre entreprise sans devoir posséder un compte DTSC.",
-  },
-  {
-    value: "INVITE_EXISTING_ACCOUNT",
-    title: "Inviter à lier un compte DTSC",
-    description: "Une invitation privée sera envoyée. La relation restera inactive sans consentement explicite.",
-  },
-  {
-    value: "INVITE_ACCOUNT_CREATION",
-    title: "Inviter à créer un compte DTSC",
-    description: "La personne pourra créer son compte, puis décider séparément d’accepter la relation.",
-  },
-  {
-    value: "LINK_LATER",
-    title: "Associer plus tard",
-    description: "Enregistrez d’abord la fiche métier. La liaison pourra être proposée ultérieurement.",
-  },
-];
 
 export function EnterpriseIdentityLinkChoice({
   value,
@@ -50,15 +24,23 @@ export function EnterpriseIdentityLinkChoice({
   status?: "LINKED" | "PENDING" | "REFUSED" | "REVOKED" | null;
   helper?: ReactNode;
 }) {
+  const locale = useProfessionalErpLocale();
+  const t = (key: Parameters<typeof professionalErpT>[1]) => professionalErpT(locale, key);
+  const options: Array<{ value: EnterpriseIdentityLinkChoiceValue; title: string; description: string }> = [
+    { value: "MANUAL_ONLY", title: t("identityChoice.manualTitle"), description: t("identityChoice.manualDescription") },
+    { value: "INVITE_EXISTING_ACCOUNT", title: t("identityChoice.existingTitle"), description: t("identityChoice.existingDescription") },
+    { value: "INVITE_ACCOUNT_CREATION", title: t("identityChoice.createTitle"), description: t("identityChoice.createDescription") },
+    { value: "LINK_LATER", title: t("identityChoice.laterTitle"), description: t("identityChoice.laterDescription") },
+  ];
+  const statusLabel = status === "LINKED" ? t("identityChoice.linked") : status === "PENDING" ? t("identityChoice.pending") : status === "REFUSED" ? t("identityChoice.refused") : status === "REVOKED" ? t("identityChoice.revoked") : null;
+
   return (
     <fieldset className="min-w-0 max-w-full space-y-3" disabled={disabled}>
-      <legend className="text-sm font-black text-dtsc-ink">Lien avec un compte DTSC</legend>
-      <p className="break-words text-sm leading-6 text-dtsc-muted">
-        La fiche métier reste l’autorité de l’entreprise. Le compte DTSC reste l’identité de connexion de la personne.
-      </p>
+      <legend className="text-sm font-black text-dtsc-ink">{t("identityChoice.legend")}</legend>
+      <p className="break-words text-sm leading-6 text-dtsc-muted">{t("identityChoice.description")}</p>
       <input type="hidden" name={name} value={value} />
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-2">
-        {OPTIONS.map((option) => {
+        {options.map((option) => {
           const selected = option.value === value;
           return (
             <button
@@ -78,14 +60,7 @@ export function EnterpriseIdentityLinkChoice({
           );
         })}
       </div>
-      {status ? (
-        <div className="rounded-xl border border-dtsc-border bg-dtsc-soft px-3 py-2 text-sm text-dtsc-ink">
-          {status === "LINKED" && "Relation déjà liée avec consentement actif."}
-          {status === "PENDING" && "Consentement ou approbation en attente."}
-          {status === "REFUSED" && "La liaison a été refusée. La fiche métier reste disponible."}
-          {status === "REVOKED" && "L’autorisation a été retirée. Aucune synchronisation future n’est permise."}
-        </div>
-      ) : null}
+      {statusLabel ? <div className="rounded-xl border border-dtsc-border bg-dtsc-soft px-3 py-2 text-sm text-dtsc-ink">{statusLabel}</div> : null}
       {helper ? <div className="text-xs leading-5 text-dtsc-muted">{helper}</div> : null}
     </fieldset>
   );

@@ -65,7 +65,15 @@ export function professionalErpEnumLabel(
     | "priority"
     | "assetStatus"
     | "assetCondition"
-    | "maintenanceType",
+    | "maintenanceType"
+    | "employmentContractStatus"
+    | "employmentContractType"
+    | "payFrequency"
+    | "employmentStatus"
+    | "employmentType"
+    | "timeStatus"
+    | "leaveType"
+    | "payrollStatus",
   value: string,
 ) {
   const key = `${group}.${value}` as ProfessionalErpKey;
@@ -110,4 +118,14 @@ export function professionalErpDate(
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return professionalErpT(locale, "common.notScheduled");
   return new Intl.DateTimeFormat(locale === "en" ? "en-US" : "fr-FR", { dateStyle: "medium" }).format(date);
+}
+
+export function professionalErpDateTime(
+  value: string | null | undefined,
+  locale: ProfessionalErpLocale,
+) {
+  if (!value) return professionalErpT(locale, "common.notScheduled");
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return professionalErpT(locale, "common.notScheduled");
+  return new Intl.DateTimeFormat(locale === "en" ? "en-US" : "fr-FR", { dateStyle: "medium", timeStyle: "short" }).format(date);
 }

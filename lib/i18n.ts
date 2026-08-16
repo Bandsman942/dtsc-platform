@@ -16,6 +16,8 @@ import professionalErpSalesFr from "@/locales/professional-erp-sales.fr.json";
 import professionalErpSalesEn from "@/locales/professional-erp-sales.en.json";
 import professionalErpOperationsFr from "@/locales/professional-erp-operations.fr.json";
 import professionalErpOperationsEn from "@/locales/professional-erp-operations.en.json";
+import professionalErpPeopleFr from "@/locales/professional-erp-people.fr.json";
+import professionalErpPeopleEn from "@/locales/professional-erp-people.en.json";
 import sharedWorkFr from "@/locales/shared-work.fr.json";
 import sharedWorkEn from "@/locales/shared-work.en.json";
 import collaborationExperienceFr from "@/locales/collaboration-experience.fr.json";
@@ -44,8 +46,8 @@ const enterpriseProcurementDictionaries = { fr: enterpriseProcurementFr, en: ent
 const enterpriseFinanceDictionaries = { fr: enterpriseFinanceFr, en: enterpriseFinanceEn } as const;
 const enterpriseCoreDictionaries = { fr: enterpriseCoreFr, en: enterpriseCoreEn } as const;
 const professionalErpDictionaries = {
-  fr: { ...professionalErpFr, ...professionalErpCommercialFr, ...professionalErpCatalogFr, ...professionalErpSalesFr, ...professionalErpOperationsFr },
-  en: { ...professionalErpEn, ...professionalErpCommercialEn, ...professionalErpCatalogEn, ...professionalErpSalesEn, ...professionalErpOperationsEn },
+  fr: { ...professionalErpFr, ...professionalErpCommercialFr, ...professionalErpCatalogFr, ...professionalErpSalesFr, ...professionalErpOperationsFr, ...professionalErpPeopleFr },
+  en: { ...professionalErpEn, ...professionalErpCommercialEn, ...professionalErpCatalogEn, ...professionalErpSalesEn, ...professionalErpOperationsEn, ...professionalErpPeopleEn },
 } as const;
 const sharedWorkDictionaries = { fr: sharedWorkFr, en: sharedWorkEn } as const;
 const collaborationExperienceDictionaries = { fr: collaborationExperienceFr, en: collaborationExperienceEn } as const;
