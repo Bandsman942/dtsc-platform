@@ -16,12 +16,22 @@ const need = (content, marker, scope) => {
 };
 
 const ui = read("components/enterprise/professional/enterprise-contracts-workspace.tsx");
+const fr = JSON.parse(read("locales/professional-erp-commercial.fr.json") || "{}");
+const en = JSON.parse(read("locales/professional-erp-commercial.en.json") || "{}");
 const service = read("lib/enterprise/crm-sales/contracts.ts");
 const route = read("app/api/enterprise/[organizationId]/contracts/[contractId]/transition/route.ts");
 const lookups = read("app/api/enterprise/[organizationId]/professional-lookups/route.ts");
 
-for (const marker of ["Brouillons", "En attente de validation", "À renouveler bientôt", "Soumettre", "Résilier"]) {
-  need(ui, marker, "UI contrats");
+for (const [key, frValue, enValue] of [
+  ["contracts.tabDrafts", "Brouillons", "Drafts"],
+  ["contracts.metricPending", "En attente de validation", "Pending approval"],
+  ["contracts.metricExpiring", "À renouveler bientôt", "Expiring soon"],
+  ["contracts.submit", "Soumettre", "Submit"],
+  ["contracts.terminate", "Résilier", "Terminate"],
+]) {
+  need(ui, `t(\"${key}\")`, "UI contrats — clé i18n");
+  if (fr[key] !== frValue) failures.push(`Catalogue contrats FR: ${key}`);
+  if (en[key] !== enValue) failures.push(`Catalogue contrats EN: ${key}`);
 }
 for (const marker of [
   "transitionEnterpriseContract",
@@ -47,4 +57,4 @@ if (failures.length) {
   console.error(failures.map((failure) => `❌ ${failure}`).join("\n"));
   process.exit(1);
 }
-console.log("✅ Contrats professionnels vérifiés : contreparties unifiées, canonicalisation, détail, transitions serveur, approbation et lien profond.");
+console.log("✅ Contrats professionnels vérifiés : catalogue FR/EN, contreparties unifiées, détail, transitions serveur, approbation et lien profond.");

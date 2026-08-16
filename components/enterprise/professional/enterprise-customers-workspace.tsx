@@ -23,6 +23,11 @@ import {
   professionalMutation,
   useProfessionalCollection,
 } from "@/components/enterprise/professional/professional-erp-ui";
+import {
+  professionalErpEnumLabel,
+  professionalErpT,
+  useProfessionalErpLocale,
+} from "@/components/enterprise/professional/professional-erp-i18n";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
 
 type Contact = { id: string; contactType: string; label: string | null; value: string; isPrimary: boolean };
@@ -48,25 +53,7 @@ type Party = {
 
 type DuplicateCandidate = Pick<Party, "id" | "code" | "partyType" | "legalName" | "displayName" | "primaryEmail" | "primaryPhone" | "status">;
 
-const ROLE_LABELS: Record<string, string> = {
-  PROSPECT: "Prospect",
-  CUSTOMER: "Client",
-  SUPPLIER: "Fournisseur",
-  PARTNER: "Partenaire",
-  CONTRACTOR: "Prestataire",
-};
-
-const IDENTITY_STATUS_LABELS: Record<string, string> = {
-  INVITATION_PENDING: "Invitation en attente",
-  REQUEST_PENDING: "Demande en attente",
-  USER_CONSENT_REQUIRED: "Consentement requis",
-  ORGANIZATION_APPROVAL_REQUIRED: "Approbation requise",
-  ACTIVE: "Relation DTSC active",
-  REFUSED: "Relation refusée",
-  EXPIRED: "Invitation expirée",
-  REVOKED: "Relation révoquée",
-  CANCELLED: "Relation annulée",
-};
+const ROLE_CODES = ["PROSPECT", "CUSTOMER", "SUPPLIER", "PARTNER", "CONTRACTOR"] as const;
 
 function identityTone(status?: string | null) {
   if (status === "ACTIVE") return "success" as const;
@@ -97,6 +84,8 @@ export function EnterpriseCustomersWorkspace({
   organizationName: string;
   definition: EnterpriseModuleDefinition;
 }) {
+  const locale = useProfessionalErpLocale();
+  const t = (key: Parameters<typeof professionalErpT>[1], values?: Record<string, string | number>) => professionalErpT(locale, key, values);
   const [tab, setTab] = useState("ALL");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -126,15 +115,14 @@ export function EnterpriseCustomersWorkspace({
     params,
     refreshKey,
   });
+
   useEffect(() => {
     const partyId = searchParams.get("party");
     if (partyId) {
       const target = collection.items.find((item) => item.id === partyId);
       if (target) setDetail(target);
     }
-    if (searchParams.get("action") === "create") {
-      setCreateOpen(true);
-    }
+    if (searchParams.get("action") === "create") setCreateOpen(true);
   }, [collection.items, searchParams]);
 
   function resetForm() {
@@ -172,7 +160,7 @@ export function EnterpriseCustomersWorkspace({
     const candidates = await checkDuplicates(form);
     const duplicateConfirmed = form.get("duplicateConfirmed") === "yes";
     if (candidates.length && !duplicateConfirmed) {
-      setMessage("Des fiches proches existent déjà. Comparez-les puis confirmez explicitement la création d’une nouvelle fiche.");
+      setMessage(t("customers.duplicateWarning"));
       return;
     }
     const primaryEmail = String(form.get("primaryEmail") || "").trim();
@@ -208,7 +196,7 @@ export function EnterpriseCustomersWorkspace({
       const result = await professionalMutation(`/api/enterprise/${organizationId}/business-parties`, payload);
       const party = result.party as Party | undefined;
       if (party && identityChoice !== "MANUAL_ONLY" && identityChoice !== "LINK_LATER") {
-        if (!primaryEmail) throw new Error("Une adresse e-mail exacte est nécessaire pour envoyer l’invitation privée.");
+        if (!primaryEmail) throw new Error(t("customers.invitationEmailRequired"));
         await professionalMutation(`/api/enterprise/${organizationId}/identity-link-invitations`, {
           email: primaryEmail,
           displayName: payload.displayName || payload.legalName,
@@ -221,7 +209,7 @@ export function EnterpriseCustomersWorkspace({
       resetForm();
       setRefreshKey((value) => value + 1);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Création impossible.");
+      setMessage(error instanceof Error ? error.message : t("common.createFailed"));
     }
   }
 
@@ -244,118 +232,120 @@ export function EnterpriseCustomersWorkspace({
       setDetail(null);
       setRefreshKey((value) => value + 1);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Modification impossible.");
+      setMessage(error instanceof Error ? error.message : t("common.updateFailed"));
     }
   }
 
   const tabs = [
-    { id: "ALL", label: "Tous", count: collection.metrics.total },
-    { id: "PROSPECT", label: "Prospects", count: collection.metrics.prospects },
-    { id: "CUSTOMER", label: "Clients", count: collection.metrics.customers },
-    { id: "ORGANIZATION", label: "Organisations", count: collection.metrics.organizations },
-    { id: "PERSON", label: "Personnes", count: collection.metrics.persons },
-    { id: "PARTNER", label: "Partenaires" },
+    { id: "ALL", label: t("customers.tabAll"), count: collection.metrics.total },
+    { id: "PROSPECT", label: t("customers.tabProspects"), count: collection.metrics.prospects },
+    { id: "CUSTOMER", label: t("customers.tabCustomers"), count: collection.metrics.customers },
+    { id: "ORGANIZATION", label: t("customers.tabOrganizations"), count: collection.metrics.organizations },
+    { id: "PERSON", label: t("customers.tabPeople"), count: collection.metrics.persons },
+    { id: "PARTNER", label: t("customers.tabPartners") },
   ];
+  const recordSuffix = locale === "en" ? (collection.pagination.total === 1 ? "" : "s") : (collection.pagination.total > 1 ? "s" : "");
+  const resultSuffix = locale === "en" ? (collection.pagination.total === 1 ? "" : "s") : (collection.pagination.total > 1 ? "s" : "");
 
   return (
     <ModuleWorkspace>
       <ModuleHeader
-        eyebrow={`Référentiel commercial · ${organizationName}`}
-        title="Tiers, prospects et clients"
-        description={definition.descriptionFr}
-        count={`${collection.pagination.total} fiche${collection.pagination.total > 1 ? "s" : ""}`}
-        primaryAction={collection.canManage ? <Button onClick={() => { resetForm(); setCreateOpen(true); }} className="bg-dtsc-blue text-white"><Plus className="h-4 w-4" />Nouvelle fiche</Button> : undefined}
+        eyebrow={t("customers.eyebrow", { organization: organizationName })}
+        title={t("customers.title")}
+        description={locale === "en" ? definition.descriptionEn : definition.descriptionFr}
+        count={t("common.records", { count: collection.pagination.total, suffix: recordSuffix })}
+        primaryAction={collection.canManage ? <Button onClick={() => { resetForm(); setCreateOpen(true); }} className="bg-dtsc-blue text-white"><Plus className="h-4 w-4" />{t("customers.newRecord")}</Button> : undefined}
       />
 
-      <ModuleMetrics label="Indicateurs tiers et clients">
-        <ModuleMetric label="Clients actifs" value={collection.metrics.customers || 0} />
-        <ModuleMetric label="Prospects" value={collection.metrics.prospects || 0} />
-        <ModuleMetric label="Organisations" value={collection.metrics.organizations || 0} />
-        <ModuleMetric label="Relations DTSC en attente" value={collection.metrics.pendingIdentity || 0} />
+      <ModuleMetrics label={t("customers.metricsLabel")}>
+        <ModuleMetric label={t("customers.metricActiveCustomers")} value={collection.metrics.customers || 0} />
+        <ModuleMetric label={t("customers.metricProspects")} value={collection.metrics.prospects || 0} />
+        <ModuleMetric label={t("customers.metricOrganizations")} value={collection.metrics.organizations || 0} />
+        <ModuleMetric label={t("customers.metricPendingIdentity")} value={collection.metrics.pendingIdentity || 0} />
       </ModuleMetrics>
 
       <ModuleToolbar
-        search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Nom, référence, e-mail…" />}
-        controls={<ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setPage(1); }} items={tabs} label="Vues du référentiel" />}
-        summary={`${collection.pagination.total} résultat${collection.pagination.total > 1 ? "s" : ""}`}
+        search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("customers.searchPlaceholder")} />}
+        controls={<ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setPage(1); }} items={tabs} label={t("customers.viewsLabel")} />}
+        summary={t("common.results", { count: collection.pagination.total, suffix: resultSuffix })}
       />
 
       <ModuleContent>
-        <ModuleSection title="Référentiel 360°" description="Une même personne ou organisation peut cumuler plusieurs rôles. La fiche reste utilisable sans compte DTSC.">
+        <ModuleSection title={t("customers.section360")} description={t("customers.section360Description")}>
           {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : collection.items.length ? (
-            <BusinessList ariaLabel="Tiers, prospects et clients">
+            <BusinessList ariaLabel={t("customers.listAria")}>
               {collection.items.map((item) => (
                 <BusinessListItem
                   key={item.id}
                   title={item.displayName || item.legalName}
                   leading={item.partyType === "PERSON" ? <UserRound className="h-5 w-5 text-dtsc-blue" /> : <Building2 className="h-5 w-5 text-dtsc-blue" />}
-                  status={<StatusBadge tone={item.status === "ACTIVE" ? "success" : "neutral"}>{item.status === "ACTIVE" ? "Actif" : "Inactif"}</StatusBadge>}
-                  meta={`${item.code} · ${item.roles.map((role) => ROLE_LABELS[role.roleCode] || role.roleCode).join(" · ") || "Sans rôle"}`}
-                  description={[item.primaryEmail, item.primaryPhone, item.addresses[0]?.city].filter(Boolean).join(" · ") || "Coordonnées à compléter"}
+                  status={<StatusBadge tone={item.status === "ACTIVE" ? "success" : "neutral"}>{professionalErpEnumLabel(locale, "status", item.status)}</StatusBadge>}
+                  meta={`${item.code} · ${item.roles.map((role) => professionalErpEnumLabel(locale, "role", role.roleCode)).join(" · ") || t("common.noRole")}`}
+                  description={[item.primaryEmail, item.primaryPhone, item.addresses[0]?.city].filter(Boolean).join(" · ") || t("common.contactToComplete")}
                   onOpen={() => setDetail(item)}
-                  openLabel={`Ouvrir la fiche ${item.displayName || item.legalName}`}
-                  actions={item.identityLink ? <StatusBadge tone={identityTone(item.identityLink.status)}>{IDENTITY_STATUS_LABELS[item.identityLink.status] || item.identityLink.status}</StatusBadge> : <StatusBadge><Link2 className="mr-1 h-3.5 w-3.5" />Non liée</StatusBadge>}
+                  openLabel={t("customers.openRecord", { name: item.displayName || item.legalName })}
+                  actions={item.identityLink ? <StatusBadge tone={identityTone(item.identityLink.status)}>{professionalErpEnumLabel(locale, "identityStatus", item.identityLink.status)}</StatusBadge> : <StatusBadge><Link2 className="mr-1 h-3.5 w-3.5" />{t("customers.notLinked")}</StatusBadge>}
                 />
               ))}
             </BusinessList>
-          ) : <EmptyState title="Aucune fiche métier" description="Commencez par créer un prospect, un client, une organisation ou une personne. La liaison à un compte DTSC reste facultative." action={collection.canManage ? <Button onClick={() => setCreateOpen(true)} className="bg-dtsc-blue text-white"><Plus className="h-4 w-4" />Créer la première fiche</Button> : undefined} />}
+          ) : <EmptyState title={t("customers.emptyTitle")} description={t("customers.emptyDescription")} action={collection.canManage ? <Button onClick={() => setCreateOpen(true)} className="bg-dtsc-blue text-white"><Plus className="h-4 w-4" />{t("customers.createFirst")}</Button> : undefined} />}
           <div className="mt-4 flex items-center justify-between gap-3 text-sm text-dtsc-muted">
-            <span>Page {collection.pagination.page} sur {collection.pagination.pageCount}</span>
-            <div className="flex gap-2"><Button variant="outline" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>Précédent</Button><Button variant="outline" disabled={page >= collection.pagination.pageCount} onClick={() => setPage((value) => value + 1)}>Suivant</Button></div>
+            <span>{t("common.pageOf", { page: collection.pagination.page, pageCount: collection.pagination.pageCount })}</span>
+            <div className="flex gap-2"><Button variant="outline" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>{t("common.previous")}</Button><Button variant="outline" disabled={page >= collection.pagination.pageCount} onClick={() => setPage((value) => value + 1)}>{t("common.next")}</Button></div>
           </div>
         </ModuleSection>
 
-        <ModuleSection title="Prise en main" description="Créez votre premier client, ajoutez ses contacts puis proposez éventuellement une liaison DTSC consentie.">
+        <ModuleSection title={t("customers.gettingStarted")} description={t("customers.gettingStartedDescription")}>
           <ProfessionalHelp moduleCode="CRM_CUSTOMERS" />
         </ModuleSection>
       </ModuleContent>
 
-      <Dialog open={createOpen} onClose={() => setCreateOpen(false)} title="Nouvelle fiche métier" description="La création manuelle reste toujours possible. La liaison DTSC est une étape séparée et consentie." className="h-[94dvh] max-w-5xl">
+      <Dialog open={createOpen} onClose={() => setCreateOpen(false)} title={t("customers.createDialogTitle")} description={t("customers.createDialogDescription")} className="h-[94dvh] max-w-5xl">
         <form onSubmit={createParty} className="grid gap-6">
           {message ? <ProfessionalError message={message} /> : null}
-          <ProfessionalFormSection title="Type et rôles" description="Choisissez l’objet métier avant de compléter ses coordonnées.">
-            <Field label="Type de fiche"><NativeSelect value={partyType} onChange={(value) => setPartyType(value as "PERSON" | "ORGANIZATION")} items={[{ id: "PERSON", label: "Personne" }, { id: "ORGANIZATION", label: "Organisation" }]} /></Field>
+          <ProfessionalFormSection title={t("customers.typeRolesTitle")} description={t("customers.typeRolesDescription")}>
+            <Field label={t("customers.recordType")}><NativeSelect value={partyType} onChange={(value) => setPartyType(value as "PERSON" | "ORGANIZATION")} items={[{ id: "PERSON", label: professionalErpEnumLabel(locale, "partyType", "PERSON") }, { id: "ORGANIZATION", label: professionalErpEnumLabel(locale, "partyType", "ORGANIZATION") }]} /></Field>
             <div className="grid gap-2 md:col-span-2 sm:grid-cols-2 lg:grid-cols-5">
-              {Object.entries(ROLE_LABELS).map(([role, label]) => <label key={role} className="flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border px-3 text-sm font-bold"><input type="checkbox" checked={selectedRoles.includes(role)} onChange={(event) => setSelectedRoles((current) => event.target.checked ? [...new Set([...current, role])] : current.filter((item) => item !== role))} />{label}</label>)}
+              {ROLE_CODES.map((role) => <label key={role} className="flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border px-3 text-sm font-bold"><input type="checkbox" checked={selectedRoles.includes(role)} onChange={(event) => setSelectedRoles((current) => event.target.checked ? [...new Set([...current, role])] : current.filter((item) => item !== role))} />{professionalErpEnumLabel(locale, "role", role)}</label>)}
             </div>
           </ProfessionalFormSection>
-          <ProfessionalFormSection title="Identité" description="Les références techniques sont générées automatiquement.">
-            <Field label={partyType === "PERSON" ? "Nom complet" : "Raison sociale"}><Input name="legalName" required minLength={2} /></Field>
-            <Field label="Nom usuel"><Input name="displayName" /></Field>
-            {partyType === "ORGANIZATION" ? <><Field label="Identifiant fiscal"><Input name="taxIdentifier" /></Field><Field label="Numéro d’enregistrement"><Input name="registrationId" /></Field></> : null}
+          <ProfessionalFormSection title={t("customers.identityTitle")} description={t("customers.identityDescription")}>
+            <Field label={partyType === "PERSON" ? t("customers.fullName") : t("customers.legalName")}><Input name="legalName" required minLength={2} /></Field>
+            <Field label={t("customers.displayName")}><Input name="displayName" /></Field>
+            {partyType === "ORGANIZATION" ? <><Field label={t("customers.taxIdentifier")}><Input name="taxIdentifier" /></Field><Field label={t("customers.registrationId")}><Input name="registrationId" /></Field></> : null}
           </ProfessionalFormSection>
-          <ProfessionalFormSection title="Coordonnées" description="Seules les données utiles à la relation métier sont demandées.">
-            <Field label="E-mail principal"><Input name="primaryEmail" type="email" /></Field>
-            <Field label="Téléphone principal"><Input name="primaryPhone" /></Field>
-            <Field label="Adresse"><Input name="addressLine1" /></Field>
-            <Field label="Complément"><Input name="addressLine2" /></Field>
-            <Field label="Ville"><Input name="city" /></Field>
-            <Field label="Province / région"><Input name="stateProvince" /></Field>
-            <Field label="Code postal"><Input name="postalCode" /></Field>
-            <Field label="Pays (code)"><Input name="countryCode" maxLength={3} /></Field>
+          <ProfessionalFormSection title={t("customers.contactTitle")} description={t("customers.contactDescription")}>
+            <Field label={t("customers.primaryEmail")}><Input name="primaryEmail" type="email" /></Field>
+            <Field label={t("customers.primaryPhone")}><Input name="primaryPhone" /></Field>
+            <Field label={t("customers.address")}><Input name="addressLine1" /></Field>
+            <Field label={t("customers.addressLine2")}><Input name="addressLine2" /></Field>
+            <Field label={t("customers.city")}><Input name="city" /></Field>
+            <Field label={t("customers.stateProvince")}><Input name="stateProvince" /></Field>
+            <Field label={t("customers.postalCode")}><Input name="postalCode" /></Field>
+            <Field label={t("customers.countryCode")}><Input name="countryCode" maxLength={3} /></Field>
           </ProfessionalFormSection>
-          {partyType === "PERSON" ? <ProfessionalFormSection title="Relation avec DTSC" description="La fiche peut être enregistrée sans compte. Aucun rapprochement automatique n’est effectué."><div className="md:col-span-2"><EnterpriseIdentityLinkChoice value={identityChoice} onChange={setIdentityChoice} helper="L’adresse exacte est utilisée uniquement pour remettre l’invitation privée. La réponse reste neutre sur l’existence d’un compte." /></div></ProfessionalFormSection> : null}
-          <ProfessionalFormSection title="Notes et contrôle des doublons">
-            <Field label="Notes"><textarea name="notes" rows={4} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2" /></Field>
-            <label className="flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border px-3 text-sm font-bold"><input type="checkbox" name="duplicateConfirmed" value="yes" />Créer malgré les doublons présentés après comparaison</label>
-            {duplicates.length ? <div className="md:col-span-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4"><p className="font-black">Doublons possibles — aucune fusion automatique</p>{duplicates.map((candidate) => <p key={candidate.id} className="mt-2 text-sm">{candidate.code} · {candidate.displayName || candidate.legalName} · {candidate.primaryEmail || candidate.primaryPhone || "sans contact"}</p>)}</div> : null}
+          {partyType === "PERSON" ? <ProfessionalFormSection title={t("customers.relationshipTitle")} description={t("customers.relationshipDescription")}><div className="md:col-span-2"><EnterpriseIdentityLinkChoice value={identityChoice} onChange={setIdentityChoice} helper={t("customers.relationshipHelper")} /></div></ProfessionalFormSection> : null}
+          <ProfessionalFormSection title={t("customers.notesDuplicatesTitle")}>
+            <Field label={t("customers.notes")}><textarea name="notes" rows={4} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2" /></Field>
+            <label className="flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border px-3 text-sm font-bold"><input type="checkbox" name="duplicateConfirmed" value="yes" />{t("customers.forceDuplicate")}</label>
+            {duplicates.length ? <div className="md:col-span-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4"><p className="font-black">{t("customers.duplicatesTitle")}</p>{duplicates.map((candidate) => <p key={candidate.id} className="mt-2 text-sm">{candidate.code} · {candidate.displayName || candidate.legalName} · {candidate.primaryEmail || candidate.primaryPhone || t("common.noContactValue")}</p>)}</div> : null}
           </ProfessionalFormSection>
-          <div data-responsive-actions><Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>Annuler</Button><Button type="submit" disabled={!selectedRoles.length || checkingDuplicates} className="bg-dtsc-blue text-white">{checkingDuplicates ? "Vérification…" : "Enregistrer la fiche"}</Button></div>
+          <div data-responsive-actions><Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>{t("common.cancel")}</Button><Button type="submit" disabled={!selectedRoles.length || checkingDuplicates} className="bg-dtsc-blue text-white">{checkingDuplicates ? t("common.checking") : t("customers.saveRecord")}</Button></div>
         </form>
       </Dialog>
 
-      <Dialog open={Boolean(detail)} onClose={() => setDetail(null)} title={detail?.displayName || detail?.legalName || "Fiche 360°"} description={detail ? `${detail.code} · ${detail.partyType === "PERSON" ? "Personne" : "Organisation"}` : undefined} className="h-[94dvh] max-w-5xl">
+      <Dialog open={Boolean(detail)} onClose={() => setDetail(null)} title={detail?.displayName || detail?.legalName || t("customers.detailFallbackTitle")} description={detail ? `${detail.code} · ${professionalErpEnumLabel(locale, "partyType", detail.partyType)}` : undefined} className="h-[94dvh] max-w-5xl">
         {detail ? <div className="grid gap-6">
-          <div className="grid gap-4 md:grid-cols-2"><DetailBlock title="Rôles" value={detail.roles.map((role) => ROLE_LABELS[role.roleCode] || role.roleCode).join(", ") || "Aucun"} /><DetailBlock title="Statut" value={detail.status === "ACTIVE" ? "Actif" : "Inactif"} /><DetailBlock title="E-mail" value={detail.primaryEmail || "Non renseigné"} /><DetailBlock title="Téléphone" value={detail.primaryPhone || "Non renseigné"} /></div>
-          <ModuleSection title="Contacts" count={detail.contacts.length}>{detail.contacts.length ? <BusinessList ariaLabel="Contacts de la fiche">{detail.contacts.map((contact) => <BusinessListItem key={contact.id} title={contact.label || contact.contactType} meta={contact.isPrimary ? "Contact principal" : contact.contactType} description={contact.value} />)}</BusinessList> : <EmptyState compact title="Aucun contact" description="Ajoutez un contact autorisé depuis la prochaine action d’édition." />}</ModuleSection>
-          <ModuleSection title="Adresses" count={detail.addresses.length}>{detail.addresses.length ? <BusinessList ariaLabel="Adresses de la fiche">{detail.addresses.map((address) => <BusinessListItem key={address.id} title={address.line1} meta={address.addressType} description={[address.city, address.countryCode].filter(Boolean).join(" · ")} />)}</BusinessList> : <EmptyState compact title="Aucune adresse" description="L’adresse peut être complétée sans affecter la relation DTSC." />}</ModuleSection>
-          <ModuleSection title="Relation DTSC" description="Le compte global et la fiche métier restent deux objets distincts.">{detail.identityLink ? <div className="border-y border-dtsc-border py-4"><StatusBadge tone={identityTone(detail.identityLink.status)}>{IDENTITY_STATUS_LABELS[detail.identityLink.status] || detail.identityLink.status}</StatusBadge><p className="mt-2 text-sm text-dtsc-muted">Type : {detail.identityLink.requestedRelationType}. Les avantages ne sont accordés que lorsque la relation est active.</p></div> : <EmptyState compact title="Aucune relation DTSC" description="Cette fiche fonctionne normalement sans compte global. Une invitation pourra être proposée plus tard." />}</ModuleSection>
-          <ModuleSection title="Historique et objets associés" description="Les opportunités, devis, commandes, contrats, documents et événements resteront accessibles depuis leurs modules dédiés."><div className="border-y border-dtsc-border py-4 text-sm text-dtsc-muted">Les liens profonds utilisent cette référence : <strong>{detail.code}</strong>.</div></ModuleSection>
-          {collection.canManage ? <div className="sticky bottom-0 flex justify-end border-t border-dtsc-border bg-dtsc-surface py-3"><Button onClick={() => setEdit(detail)}>Modifier la fiche</Button></div> : null}
+          <div className="grid gap-4 md:grid-cols-2"><DetailBlock title={t("customers.roles")} value={detail.roles.map((role) => professionalErpEnumLabel(locale, "role", role.roleCode)).join(", ") || t("common.none")} /><DetailBlock title={t("customers.status")} value={professionalErpEnumLabel(locale, "status", detail.status)} /><DetailBlock title={t("customers.email")} value={detail.primaryEmail || t("common.notProvided")} /><DetailBlock title={t("customers.phone")} value={detail.primaryPhone || t("common.notProvided")} /></div>
+          <ModuleSection title={t("customers.contacts")} count={detail.contacts.length}>{detail.contacts.length ? <BusinessList ariaLabel={t("customers.contactsAria")}>{detail.contacts.map((contact) => <BusinessListItem key={contact.id} title={contact.label || (contact.contactType === "EMAIL" ? t("customers.email") : t("customers.phone"))} meta={contact.isPrimary ? t("customers.primaryContact") : undefined} description={contact.value} />)}</BusinessList> : <EmptyState compact title={t("customers.noContactTitle")} description={t("customers.noContactDescription")} />}</ModuleSection>
+          <ModuleSection title={t("customers.addresses")} count={detail.addresses.length}>{detail.addresses.length ? <BusinessList ariaLabel={t("customers.addressesAria")}>{detail.addresses.map((address) => <BusinessListItem key={address.id} title={address.line1} meta={address.isPrimary ? t("customers.primaryAddressPayloadLabel") : undefined} description={[address.city, address.countryCode].filter(Boolean).join(" · ")} />)}</BusinessList> : <EmptyState compact title={t("customers.noAddressTitle")} description={t("customers.noAddressDescription")} />}</ModuleSection>
+          <ModuleSection title={t("customers.relationshipSection")} description={t("customers.relationshipSectionDescription")}>{detail.identityLink ? <div className="border-y border-dtsc-border py-4"><StatusBadge tone={identityTone(detail.identityLink.status)}>{professionalErpEnumLabel(locale, "identityStatus", detail.identityLink.status)}</StatusBadge><p className="mt-2 text-sm text-dtsc-muted">{t("customers.relationshipType", { type: detail.identityLink.requestedRelationType })}</p></div> : <EmptyState compact title={t("customers.noRelationshipTitle")} description={t("customers.noRelationshipDescription")} />}</ModuleSection>
+          <ModuleSection title={t("customers.historyTitle")} description={t("customers.historyDescription")}><div className="border-y border-dtsc-border py-4 text-sm text-dtsc-muted">{t("customers.deepLinkReference")} <strong>{detail.code}</strong>.</div></ModuleSection>
+          {collection.canManage ? <div className="sticky bottom-0 flex justify-end border-t border-dtsc-border bg-dtsc-surface py-3"><Button onClick={() => setEdit(detail)}>{t("customers.editRecord")}</Button></div> : null}
         </div> : null}
       </Dialog>
-      <Dialog open={Boolean(edit)} onClose={() => setEdit(null)} title="Modifier la fiche" className="h-[90dvh] max-w-3xl">
-        {edit ? <form onSubmit={updateParty} className="grid gap-6">{message ? <ProfessionalError message={message} /> : null}<ProfessionalFormSection title="Informations modifiables"><Field label="Nom usuel"><Input name="displayName" defaultValue={edit.displayName || ""} /></Field><Field label="E-mail principal"><Input name="primaryEmail" type="email" defaultValue={edit.primaryEmail || ""} /></Field><Field label="Téléphone principal"><Input name="primaryPhone" defaultValue={edit.primaryPhone || ""} /></Field><Field label="Statut"><NativeSelect name="status" defaultValue={edit.status} items={[{ id: "ACTIVE", label: "Actif" }, { id: "INACTIVE", label: "Inactif" }]} /></Field><Field label="Notes"><textarea name="notes" defaultValue={edit.notes || ""} rows={5} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2" /></Field></ProfessionalFormSection><div data-responsive-actions><Button type="button" variant="outline" onClick={() => setEdit(null)}>Annuler</Button><Button type="submit">Enregistrer</Button></div></form> : null}
+      <Dialog open={Boolean(edit)} onClose={() => setEdit(null)} title={t("customers.editDialogTitle")} className="h-[90dvh] max-w-3xl">
+        {edit ? <form onSubmit={updateParty} className="grid gap-6">{message ? <ProfessionalError message={message} /> : null}<ProfessionalFormSection title={t("customers.editableInformation")}><Field label={t("customers.displayName")}><Input name="displayName" defaultValue={edit.displayName || ""} /></Field><Field label={t("customers.primaryEmail")}><Input name="primaryEmail" type="email" defaultValue={edit.primaryEmail || ""} /></Field><Field label={t("customers.primaryPhone")}><Input name="primaryPhone" defaultValue={edit.primaryPhone || ""} /></Field><Field label={t("customers.status")}><NativeSelect name="status" defaultValue={edit.status} items={[{ id: "ACTIVE", label: professionalErpEnumLabel(locale, "status", "ACTIVE") }, { id: "INACTIVE", label: professionalErpEnumLabel(locale, "status", "INACTIVE") }]} /></Field><Field label={t("customers.notes")}><textarea name="notes" defaultValue={edit.notes || ""} rows={5} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2" /></Field></ProfessionalFormSection><div data-responsive-actions><Button type="button" variant="outline" onClick={() => setEdit(null)}>{t("common.cancel")}</Button><Button type="submit">{t("common.save")}</Button></div></form> : null}
       </Dialog>
     </ModuleWorkspace>
   );

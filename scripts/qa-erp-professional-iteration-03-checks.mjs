@@ -21,6 +21,11 @@ const needAny = (content, markers, scope) => {
 const reject = (content, marker, scope) => {
   if (content.includes(marker)) failures.push(`${scope}: marqueur interdit « ${marker} »`);
 };
+const needLocalized = ({ ui, key, fr, frValue, en, enValue, scope }) => {
+  need(ui, `t(\"${key}\")`, `${scope} — clé UI`);
+  need(fr, `\"${key}\": \"${frValue}\"`, `${scope} — catalogue FR`);
+  need(en, `\"${key}\": \"${enValue}\"`, `${scope} — catalogue EN`);
+};
 
 const files = {
   route: "app/enterprise-modules/[moduleCode]/page.tsx",
@@ -33,6 +38,8 @@ const files = {
   relationships: "components/enterprise/identity-links/enterprise-identity-user-panel.tsx",
   cancelRelationship: "app/api/account/identity-links/cancel/route.ts",
   sales: "components/enterprise/professional/enterprise-sales-operations-workspace.tsx",
+  salesFr: "locales/professional-erp-sales.fr.json",
+  salesEn: "locales/professional-erp-sales.en.json",
   procurement: "components/enterprise/professional/enterprise-procurement-operations-workspace.tsx",
   inventory: "components/enterprise/professional/enterprise-inventory-operations-workspace.tsx",
   hr: "components/enterprise/professional/enterprise-human-resources-workspace.tsx",
@@ -46,6 +53,8 @@ const files = {
   mobileCss: "app/mobile-stability.css",
   commonAccess: "lib/enterprise/common/access.ts",
   contracts: "components/enterprise/professional/enterprise-contracts-workspace.tsx",
+  contractsFr: "locales/professional-erp-commercial.fr.json",
+  contractsEn: "locales/professional-erp-commercial.en.json",
   contractRoute: "app/api/enterprise/[organizationId]/contracts/route.ts",
   contractTransition: "app/api/enterprise/[organizationId]/contracts/[contractId]/transition/route.ts",
   contractComments: "app/api/enterprise/[organizationId]/contracts/[contractId]/comments/route.ts",
@@ -104,7 +113,14 @@ const checks = {
     reject(content.businessList, "grid-cols-[minmax(0,1fr)_auto] items-start", "Colonnes rigides sur petit écran");
   },
   sales() {
-    for (const marker of ["Nouveau devis", "catalogItemId", "Convertir en commande", "quantityRemaining", "idempotencyKey", "Enregistrer la livraison", "<Dialog", "<form"]) need(content.sales, marker, "Ventes professionnelles");
+    for (const marker of ["catalogItemId", "quantityRemaining", "idempotencyKey", "<Dialog", "<form"]) need(content.sales, marker, "Ventes professionnelles");
+    for (const localized of [
+      ["sales.newQuote", "Nouveau devis", "New quote"],
+      ["sales.convertOrder", "Convertir en commande", "Convert to order"],
+      ["sales.recordDelivery", "Enregistrer une livraison", "Record delivery"],
+    ]) {
+      needLocalized({ ui: content.sales, key: localized[0], fr: content.salesFr, frValue: localized[1], en: content.salesEn, enValue: localized[2], scope: "Ventes professionnelles localisées" });
+    }
     reject(content.sales, "businessPartyId\" placeholder=\"UUID", "Ventes professionnelles");
   },
   procurement() {
@@ -134,7 +150,14 @@ const checks = {
     for (const marker of ["organizationId", "assignments", "maintenanceRecords", "incidents"]) need(content.assetOverview, marker, "Détail actif");
   },
   contracts() {
-    for (const marker of ["canDecide", "Votre décision est requise", "REQUEST_CORRECTION", "Demander une correction", "ProfessionalWorkflowComments", "Téléverser ou ouvrir les documents liés"]) need(content.contracts, marker, "Workflow contrats UI");
+    for (const marker of ["canDecide", "REQUEST_CORRECTION", "ProfessionalWorkflowComments"]) need(content.contracts, marker, "Workflow contrats UI");
+    for (const localized of [
+      ["contracts.decisionRequired", "Votre décision est requise", "Your decision is required"],
+      ["contracts.requestCorrection", "Demander une correction", "Request correction"],
+      ["contracts.documentsAction", "Téléverser ou ouvrir les documents liés", "Upload or open linked documents"],
+    ]) {
+      needLocalized({ ui: content.contracts, key: localized[0], fr: content.contractsFr, frValue: localized[1], en: content.contractsEn, enValue: localized[2], scope: "Workflow contrats UI localisé" });
+    }
     for (const marker of ["capabilities", "isApprover", "canDecide", "canComment", "canWrite"]) need(content.contractRoute, marker, "Capacités contrat");
     for (const marker of ["DECISION_ACTIONS", "approverUserId !== session.userId", "REQUEST_CORRECTION", "status: \"RETURNED\"", "notifyUser", "writeAuditLog"]) need(content.contractTransition, marker, "Décision contrat assignée");
     for (const marker of ["export async function GET", "export async function POST", "export async function PATCH", "export async function DELETE", "authorUserId: session.userId", "deletedAt: new Date()", "isSameOriginRequest", "rateLimit"]) need(content.contractComments, marker, "Commentaires contrats CRUD");
