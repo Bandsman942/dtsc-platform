@@ -99,8 +99,10 @@ export function ModuleHeader({
               </details>
             </>
           ) : null}
-          <ModuleRefreshButton compact />
-          {primaryAction ? <div className="min-w-0">{primaryAction}</div> : null}
+          <div data-workspace-refresh-action className="min-w-0">
+            <ModuleRefreshButton compact />
+          </div>
+          {primaryAction ? <div data-workspace-primary-action className="min-w-0">{primaryAction}</div> : null}
         </div>
       </div>
     </header>

@@ -189,7 +189,7 @@ export async function submitEnterprisePayrollRun(
   actorUserId: string,
   input: PayrollRunSubmitInput,
 ) {
-  await assertOrganizationApprover(prisma, organizationId, input.approverUserId, actorUserId);
+  await assertOrganizationApprover(prisma, organizationId, input.approverUserId, actorUserId, "PAYROLL_OPERATIONS");
   return prisma.$transaction(async (tx) => {
     const run = await tx.enterprisePayrollRun.findFirst({
       where: { id: payrollRunId, organizationId, status: "PREPARED", archivedAt: null },

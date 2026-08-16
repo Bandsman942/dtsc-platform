@@ -37,12 +37,13 @@ for (const token of [
 
 const helper = read("components/enterprise/professional/professional-erp-i18n.ts");
 for (const token of [
-  "MutationObserver",
-  "document.documentElement.lang",
+  "useAppLocale",
   "professionalErpMoney",
   "professionalErpDate",
   "professionalErpEnumLabel",
 ]) check(helper.includes(token), `Professional ERP locale helper missing contract: ${token}`);
+check(!helper.includes("MutationObserver"), "Professional ERP locale helper must not observe the DOM as locale authority");
+check(!helper.includes("document.documentElement.lang"), "Professional ERP locale helper must use LocaleProvider rather than the HTML lang attribute");
 check(helper.includes('locale === "en" ? "en-US" : "fr-FR"'), "Professional ERP formats must derive from the active locale");
 
 const workspaces = [
@@ -143,4 +144,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log("Issue #330 Professional ERP commercial i18n QA passed: FR/EN catalog parity, reactive locale projection and CRM/customers/contracts/catalog/sales business contracts remain intact.");
+console.log("Issue #330 Professional ERP commercial i18n QA passed: FR/EN catalog parity, canonical LocaleProvider projection and CRM/customers/contracts/catalog/sales business contracts remain intact.");

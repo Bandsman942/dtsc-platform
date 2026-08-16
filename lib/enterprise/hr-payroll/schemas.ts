@@ -35,6 +35,10 @@ export const employmentContractCreateSchema = z.object({
   approverUserId: z.string().trim().min(1),
 });
 
+export const employmentContractUpdateSchema = employmentContractCreateSchema.omit({ employeeId: true }).extend({
+  revision: z.coerce.number().int().positive(),
+});
+
 export const employmentContractDecisionSchema = z.object({
   decision: z.enum(["APPROVE", "REJECT"]),
   revision: z.coerce.number().int().positive(),

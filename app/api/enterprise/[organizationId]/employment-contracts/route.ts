@@ -42,8 +42,12 @@ export async function GET(req: Request, { params }: Params) {
     prisma.enterpriseEmploymentContract.count({ where: { organizationId, archivedAt: null, status: "ACTIVE" } }),
     prisma.enterpriseEmploymentContract.count({ where: { organizationId, archivedAt: null, status: "PENDING_APPROVAL" } }),
   ]);
+  const visibleItems = items.map((item) => ({
+    ...item,
+    canEdit: item.createdByUserId === session.userId && ["DRAFT", "PENDING_APPROVAL"].includes(item.status),
+  }));
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "employment-contracts", page } });
-  return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { active, pendingApproval }, canManage: access.canManage });
+  return NextResponse.json({ items: visibleItems, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { active, pendingApproval }, canManage: access.canManage });
 }
 
 export async function POST(req: Request, { params }: Params) {
