@@ -49,17 +49,23 @@ assert(hr.includes('professionalErpEnumLabel(locale, "employmentContractStatus"'
 assert(hr.includes('professionalErpEnumLabel(locale, "employmentContractType"'), "RH: types contrat non projetés");
 assert(hr.includes('professionalErpEnumLabel(locale, "payFrequency"'), "RH: fréquence non projetée");
 assert(hr.includes('labelEn: string | null'), "RH: départements EN absents du contrat UI");
+assert(!hr.includes("positionTitle || member.role"), "RH: rôle brut encore utilisé en fallback membre");
+assert(hr.includes('professionalErpEnumLabel(locale, "role", member.role)'), "RH: fallback rôle membre non humanisé");
 assert(hr.includes('"Contrat rejeté"') && hr.includes('"Contrat contrôlé"'), "RH: commentaires d’audit persistés modifiés");
 
 const identity = read(targets[1]);
 assert(identity.includes('professionalErpEnumLabel(locale, "employmentStatus"'), "Identité: statut emploi non projeté");
 assert(identity.includes('professionalErpEnumLabel(locale, "identityStatus"'), "Identité: statut de liaison non projeté");
 assert(identity.includes("labelEn?: string | null"), "Identité: labels EN des référentiels absents");
+assert(!identity.includes("positionTitle || member.role"), "Identité: rôle brut encore utilisé en fallback membre");
+assert(identity.includes('professionalErpEnumLabel(locale, "role", member.role)'), "Identité: fallback rôle membre non humanisé");
 assert(identity.includes("purpose: `Permettre à cette personne"), "Identité: purpose persisté d’invitation modifié silencieusement");
 
 const time = read(targets[2]);
 assert(time.includes('professionalErpEnumLabel(locale, "timeStatus"'), "Temps: statuts non projetés");
 assert(time.includes('professionalErpEnumLabel(locale, "leaveType"'), "Temps: types de congé non projetés");
+assert(!time.includes("positionTitle || member.role"), "Temps: rôle brut encore utilisé en fallback approbateur");
+assert(time.includes('professionalErpEnumLabel(locale, "role", member.role)'), "Temps: fallback rôle approbateur non humanisé");
 assert(time.includes('"Retour motivé depuis le workspace professionnel"'), "Temps: commentaire d’audit existant modifié");
 
 const payroll = read(targets[3]);
