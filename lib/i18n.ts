@@ -18,6 +18,8 @@ import professionalErpOperationsFr from "@/locales/professional-erp-operations.f
 import professionalErpOperationsEn from "@/locales/professional-erp-operations.en.json";
 import professionalErpPeopleFr from "@/locales/professional-erp-people.fr.json";
 import professionalErpPeopleEn from "@/locales/professional-erp-people.en.json";
+import retailWorkspaceFr from "@/locales/retail-workspace.fr.json";
+import retailWorkspaceEn from "@/locales/retail-workspace.en.json";
 import sharedWorkFr from "@/locales/shared-work.fr.json";
 import sharedWorkEn from "@/locales/shared-work.en.json";
 import collaborationExperienceFr from "@/locales/collaboration-experience.fr.json";
@@ -49,6 +51,7 @@ const professionalErpDictionaries = {
   fr: { ...professionalErpFr, ...professionalErpCommercialFr, ...professionalErpCatalogFr, ...professionalErpSalesFr, ...professionalErpOperationsFr, ...professionalErpPeopleFr },
   en: { ...professionalErpEn, ...professionalErpCommercialEn, ...professionalErpCatalogEn, ...professionalErpSalesEn, ...professionalErpOperationsEn, ...professionalErpPeopleEn },
 } as const;
+const retailWorkspaceDictionaries = { fr: retailWorkspaceFr, en: retailWorkspaceEn } as const;
 const sharedWorkDictionaries = { fr: sharedWorkFr, en: sharedWorkEn } as const;
 const collaborationExperienceDictionaries = { fr: collaborationExperienceFr, en: collaborationExperienceEn } as const;
 const activitiesDictionaries = { fr: activitiesFr, en: activitiesEn } as const;
@@ -59,6 +62,7 @@ export type EnterpriseProcurementKey = keyof typeof enterpriseProcurementDiction
 export type EnterpriseFinanceKey = keyof typeof enterpriseFinanceDictionaries.fr;
 export type EnterpriseCoreKey = keyof typeof enterpriseCoreDictionaries.fr;
 export type ProfessionalErpKey = keyof typeof professionalErpDictionaries.fr;
+export type RetailWorkspaceKey = keyof typeof retailWorkspaceDictionaries.fr;
 export type SharedWorkKey = keyof typeof sharedWorkDictionaries.fr;
 export type CollaborationExperienceKey = keyof typeof collaborationExperienceDictionaries.fr;
 export type ActivitiesKey = keyof typeof activitiesDictionaries.fr;
@@ -72,6 +76,7 @@ export function translateEnterpriseProcurement(locale: string | null | undefined
 export function translateEnterpriseFinance(locale: string | null | undefined, key: EnterpriseFinanceKey) { const dictionary = enterpriseFinanceDictionaries[locale === "en" ? "en" : "fr"]; return dictionary[key] || enterpriseFinanceDictionaries.fr[key]; }
 export function translateEnterpriseCore(locale: string | null | undefined, key: EnterpriseCoreKey) { const dictionary = enterpriseCoreDictionaries[locale === "en" ? "en" : "fr"]; return dictionary[key] || enterpriseCoreDictionaries.fr[key]; }
 export function translateProfessionalErp(locale: string | null | undefined, key: ProfessionalErpKey) { const dictionary = professionalErpDictionaries[locale === "en" ? "en" : "fr"]; return dictionary[key] || professionalErpDictionaries.fr[key]; }
+export function translateRetailWorkspace(locale: string | null | undefined, key: RetailWorkspaceKey) { const dictionary = retailWorkspaceDictionaries[locale === "en" ? "en" : "fr"]; return dictionary[key] || retailWorkspaceDictionaries.fr[key]; }
 export function translateSharedWork(locale: string | null | undefined, key: SharedWorkKey) { const dictionary = sharedWorkDictionaries[locale === "en" ? "en" : "fr"]; return dictionary[key] || sharedWorkDictionaries.fr[key]; }
 export function translateCollaborationExperience(locale: string | null | undefined, key: CollaborationExperienceKey) { const dictionary = collaborationExperienceDictionaries[locale === "en" ? "en" : "fr"]; return dictionary[key] || collaborationExperienceDictionaries.fr[key]; }
 export function translateActivities(locale: string | null | undefined, key: ActivitiesKey) { const dictionary = activitiesDictionaries[locale === "en" ? "en" : "fr"]; return dictionary[key] || activitiesDictionaries.fr[key]; }
