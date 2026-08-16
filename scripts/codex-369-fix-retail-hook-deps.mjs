@@ -34,10 +34,21 @@ visit(sf);
 
 console.log("useCallback dependency audit:");
 for (const item of diagnostics) console.log(`- line ${item.line}: locale=${item.usesLocale ? "used" : "unused"}; deps=[${item.dependencyNames.join(", ")}]`);
-console.log(`repairs=${replacements.length}`);
+console.log(`hook repairs=${replacements.length}`);
 
 let output = source;
 for (const replacement of replacements.sort((a, b) => b.start - a.start)) {
   output = output.slice(0, replacement.start) + replacement.text + output.slice(replacement.end);
 }
 if (output !== source) fs.writeFileSync(file, output);
+
+const mobileFile = "components/enterprise/professional/mobile-money-agency-workspace.tsx";
+let mobile = fs.readFileSync(mobileFile, "utf8");
+const unusedCatch = "    } catch (error) {\n      setPreviewError(copy.fxMissingRate);";
+const cleanCatch = "    } catch {\n      setPreviewError(copy.fxMissingRate);";
+if (!mobile.includes(unusedCatch) && !mobile.includes(cleanCatch)) throw new Error("Expected Mobile Money FX preview catch block not found.");
+if (mobile.includes(unusedCatch)) {
+  mobile = mobile.replace(unusedCatch, cleanCatch);
+  fs.writeFileSync(mobileFile, mobile);
+  console.log("Removed unused Mobile Money FX preview catch binding.");
+}
