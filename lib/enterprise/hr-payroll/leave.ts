@@ -19,7 +19,7 @@ export async function createEnterpriseLeaveRequest(organizationId: string, actor
   }
   return prisma.$transaction(async (tx) => {
     const employee = await assertActiveCustomerEmployee(tx, organizationId, input.employeeId);
-    await assertOrganizationApprover(tx, organizationId, input.approverUserId, actorUserId);
+    await assertOrganizationApprover(tx, organizationId, input.approverUserId, actorUserId, "TIME_ATTENDANCE");
     const overlap = await tx.enterpriseLeaveRequest.findFirst({
       where: {
         organizationId,
