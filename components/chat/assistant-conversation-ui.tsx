@@ -1,7 +1,8 @@
 "use client";
 
 import { Bot, Check, ChevronDown, FileSearch, Loader2, PlugZap, Send, Settings2, Sparkles } from "lucide-react";
-import type { FormEvent, ReactNode } from "react";
+import { cloneElement, isValidElement, useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { ASSISTANT_LINK_STYLES, resolveAssistantModuleDeeplinks } from "@/components/chat/assistant-markdown";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
@@ -31,6 +32,19 @@ export function AssistantMessage({
   actions?: ReactNode;
   below?: ReactNode;
 }) {
+  const [origin, setOrigin] = useState("");
+
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
+
+  const resolvedChildren = role === "assistant"
+    && origin
+    && isValidElement<{ children?: ReactNode }>(children)
+    && typeof children.props.children === "string"
+    ? cloneElement(children, { children: resolveAssistantModuleDeeplinks(children.props.children, origin) })
+    : children;
+
   if (role === "system") {
     return <div className="mx-auto max-w-3xl px-4 py-2 text-center text-xs font-semibold text-dtsc-muted">{children}</div>;
   }
@@ -54,7 +68,7 @@ export function AssistantMessage({
         <span>{author || "Assistant"}</span>
         {meta ? <span className="font-semibold text-dtsc-muted">· {meta}</span> : null}
       </div>
-      <div className="dtsc-assistant-markdown mt-2 min-w-0 text-[0.96rem] leading-7 text-dtsc-ink">{children}</div>
+      <div className={cn("dtsc-assistant-markdown mt-2 min-w-0 text-[0.96rem] leading-7 text-dtsc-ink", ASSISTANT_LINK_STYLES)}>{resolvedChildren}</div>
       {below ? <div className="mt-3">{below}</div> : null}
       {actions ? <div className="mt-2 flex min-h-8 flex-wrap items-center gap-1 opacity-80 transition sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">{actions}</div> : null}
     </article>
