@@ -8,6 +8,8 @@ import enterpriseCoreFr from "@/locales/enterprise-core.fr.json";
 import enterpriseCoreEn from "@/locales/enterprise-core.en.json";
 import professionalErpFr from "@/locales/professional-erp.fr.json";
 import professionalErpEn from "@/locales/professional-erp.en.json";
+import professionalErpCommercialFr from "@/locales/professional-erp-commercial.fr.json";
+import professionalErpCommercialEn from "@/locales/professional-erp-commercial.en.json";
 import sharedWorkFr from "@/locales/shared-work.fr.json";
 import sharedWorkEn from "@/locales/shared-work.en.json";
 import collaborationExperienceFr from "@/locales/collaboration-experience.fr.json";
@@ -35,7 +37,10 @@ const workspaceGeneralizationDictionaries = {
 const enterpriseProcurementDictionaries = { fr: enterpriseProcurementFr, en: enterpriseProcurementEn } as const;
 const enterpriseFinanceDictionaries = { fr: enterpriseFinanceFr, en: enterpriseFinanceEn } as const;
 const enterpriseCoreDictionaries = { fr: enterpriseCoreFr, en: enterpriseCoreEn } as const;
-const professionalErpDictionaries = { fr: professionalErpFr, en: professionalErpEn } as const;
+const professionalErpDictionaries = {
+  fr: { ...professionalErpFr, ...professionalErpCommercialFr },
+  en: { ...professionalErpEn, ...professionalErpCommercialEn },
+} as const;
 const sharedWorkDictionaries = { fr: sharedWorkFr, en: sharedWorkEn } as const;
 const collaborationExperienceDictionaries = { fr: collaborationExperienceFr, en: collaborationExperienceEn } as const;
 const activitiesDictionaries = { fr: activitiesFr, en: activitiesEn } as const;
