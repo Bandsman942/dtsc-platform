@@ -37,6 +37,8 @@ const sharedWorkspace = read("components/enterprise/professional/retail-workspac
 const activeCustomer = read("components/enterprise/professional/retail-active-customer-bar.tsx");
 const paymentFollowup = read("components/enterprise/professional/retail-payment-followup.tsx");
 const dailyClose = read("components/enterprise/professional/retail-daily-close-workspace.tsx");
+const retailWorkspaceFr = read("locales/retail-workspace.fr.json");
+const retailWorkspaceEn = read("locales/retail-workspace.en.json");
 const commercial = read("components/enterprise/professional/retail-commercial-workspace.tsx");
 const deviceReadiness = read("components/enterprise/professional/retail-device-readiness.tsx");
 const globalReadiness = read("components/enterprise/professional/retail-global-readiness.tsx");
@@ -102,9 +104,15 @@ for (const marker of [
   "idempotencyKey",
   "stableKey",
   "[touch-action:pan-x]",
-  "Soumettre la clôture journalière",
-  "Historique des clôtures",
 ]) check(dailyClose.includes(marker), `Retail daily close workspace must include ${marker}.`);
+for (const [key, frLabel, enLabel] of [
+  ["dailyCloseSubmitTheDailyClose", "Soumettre la clôture journalière", "Submit the daily close"],
+  ["dailyCloseDailyCloseHistory", "Historique des clôtures", "Daily close history"],
+]) {
+  check(dailyClose.includes(`translateRetailWorkspace(locale, "${key}")`), `Retail daily close must render canonical i18n key ${key}.`);
+  check(retailWorkspaceFr.includes(`"${key}": "${frLabel}"`), `Retail FR catalog must preserve business label for ${key}.`);
+  check(retailWorkspaceEn.includes(`"${key}": "${enLabel}"`), `Retail EN catalog must preserve business label for ${key}.`);
+}
 for (const forbidden of [
   "`${line.accountType}",
   "`${account.accountType}",
