@@ -33,6 +33,8 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Patch rewrite scope detector
+        run: node scripts/codex-367-hotfix-scope.mjs
       - name: Apply canonical Retail rewrite
         run: node scripts/codex-367-rewrite.mjs
       - name: Validate targeted contract
@@ -41,7 +43,7 @@ jobs:
         run: pnpm type-check
       - name: Commit generated implementation and remove rewrite scaffolding
         run: |
-          git rm .github/workflows/codex-367-rewrite.yml scripts/codex-367-rewrite.mjs
+          git rm .github/workflows/codex-367-rewrite.yml scripts/codex-367-rewrite.mjs scripts/codex-367-hotfix-scope.mjs
           git add components/enterprise/professional locales scripts/run-regression-qa-ci.mjs scripts/qa-retail-operator-i18n-367.mjs
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
