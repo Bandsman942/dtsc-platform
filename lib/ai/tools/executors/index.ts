@@ -1,5 +1,6 @@
 import { listEnabledMcpToolBindings } from "@/lib/ai/mcp/bindings";
 import { getMcpToolExecutor } from "@/lib/ai/mcp/tool-adapter";
+import { FORM_IMPORT_AI_TOOL_EXECUTORS } from "@/lib/ai/tools/executors/form-import";
 import { PHARMACY_AI_TOOL_EXECUTORS } from "@/lib/ai/tools/executors/pharmacy";
 import { PRIVATE_ACTION_AI_TOOL_EXECUTORS } from "@/lib/ai/tools/executors/private-actions";
 import { TASK_DRAFT_AI_TOOL_EXECUTORS } from "@/lib/ai/tools/executors/task-drafts";
@@ -9,6 +10,7 @@ const AI_TOOL_EXECUTORS: Record<string, AiToolExecutor> = {
   ...PHARMACY_AI_TOOL_EXECUTORS,
   ...PRIVATE_ACTION_AI_TOOL_EXECUTORS,
   ...TASK_DRAFT_AI_TOOL_EXECUTORS,
+  ...FORM_IMPORT_AI_TOOL_EXECUTORS,
 };
 
 export function getAiToolExecutor(code: string) {
