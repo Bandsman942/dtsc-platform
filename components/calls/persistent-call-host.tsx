@@ -6,6 +6,11 @@ import { Mic, MicOff, PhoneCall, PhoneOff, Video, VideoOff } from "lucide-react"
 import { LiveKitRoom, RoomAudioRenderer } from "@livekit/components-react";
 import { ConnectionState, Room, RoomEvent } from "livekit-client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  PERSISTENT_CALL_HANDOFF_EVENT,
+  requestPersistentCallRestore,
+  type PersistentCallHandoffDetail,
+} from "@/components/calls/persistent-call-events";
 import { Button } from "@/components/ui/button";
 
 const STORAGE_KEY = "dtsc.active-call-handoff.v1";
@@ -145,9 +150,8 @@ export function PersistentCallHost() {
     if (activationRef.current) return activationRef.current;
     const activation = (async () => {
       setPersistent(true);
-      // LiveKit permits reconnecting the same authorized participant. Connecting
-      // before router navigation hands media ownership to the shell so unmounting
-      // the conversation screen does not end the server-side call.
+      // Connect before the full call surface is removed so the authenticated
+      // shell owns an active LiveKit room during the handoff.
       if (room.state === ConnectionState.Disconnected) await room.connect(session.livekitUrl, session.token);
       await room.localParticipant.setMicrophoneEnabled(microphoneEnabled).catch(() => undefined);
       if (session.callType === "VIDEO" || cameraEnabled) {
@@ -163,6 +167,22 @@ export function PersistentCallHost() {
   useEffect(() => {
     if (session && !pathname?.startsWith("/collaborators")) void activatePersistentCall();
   }, [activatePersistentCall, pathname, session]);
+
+  useEffect(() => {
+    const handleHandoff = (event: Event) => {
+      const detail = (event as CustomEvent<PersistentCallHandoffDetail>).detail;
+      if (!detail) return;
+      if (!session) {
+        detail.reject(new Error("PERSISTENT_CALL_SESSION_NOT_FOUND"));
+        return;
+      }
+      void activatePersistentCall()
+        .then(() => detail.resolve())
+        .catch((error) => detail.reject(error));
+    };
+    window.addEventListener(PERSISTENT_CALL_HANDOFF_EVENT, handleHandoff);
+    return () => window.removeEventListener(PERSISTENT_CALL_HANDOFF_EVENT, handleHandoff);
+  }, [activatePersistentCall, session]);
 
   useEffect(() => {
     if (!session || !pathname?.startsWith("/collaborators")) return;
@@ -225,6 +245,14 @@ export function PersistentCallHost() {
     await room.disconnect();
   }
 
+  function restoreFullCallWindow() {
+    requestPersistentCallRestore();
+    window.setTimeout(() => {
+      setPersistent(false);
+      void room.disconnect();
+    }, 1200);
+  }
+
   if (!session || !persistent) return null;
 
   const connected = connectionState === ConnectionState.Connected;
@@ -233,7 +261,7 @@ export function PersistentCallHost() {
       <RoomAudioRenderer />
       <div className="pointer-events-auto fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] left-3 right-3 z-[75] flex items-center gap-2 rounded-2xl border border-cyan-300/40 bg-[#06111f]/95 p-2.5 text-white shadow-[0_18px_60px_rgba(0,23,54,0.35)] backdrop-blur-xl sm:bottom-5 sm:left-auto sm:right-5 sm:w-auto sm:max-w-[32rem]">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-cyan-400/15 text-cyan-200"><PhoneCall className="h-4 w-4" /></span>
-        <Link href={`/collaborators?joinCallId=${encodeURIComponent(session.callId)}`} className="min-w-0 flex-1 px-1">
+        <Link href={`/collaborators?joinCall=${encodeURIComponent(session.callId)}`} onClick={restoreFullCallWindow} className="min-w-0 flex-1 px-1">
           <strong className="block truncate text-xs">Appel DTSC en arrière-plan</strong>
           <span className="block truncate text-[0.68rem] text-slate-300">{connected ? "Connecté · toucher pour revenir" : "Reconnexion de l’appel…"}</span>
         </Link>

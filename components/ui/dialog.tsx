@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useId, useRef, type CSSProperties, type ReactNode } from "react";
+import { isValidElement, useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { X } from "lucide-react";
+import { Minimize2, X } from "lucide-react";
+import { requestPersistentCallHandoff, PERSISTENT_CALL_RESTORE_EVENT } from "@/components/calls/persistent-call-events";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -13,6 +14,8 @@ type DialogProps = {
   children: ReactNode;
   footer?: ReactNode;
   onClose: () => void;
+  onMinimize?: () => void;
+  minimizeLabel?: string;
   className?: string;
   presentation?: "default" | "editor";
 };
@@ -30,10 +33,29 @@ function isEditableDialogControl(target: EventTarget | null): target is HTMLElem
   return target instanceof HTMLElement && target.matches(EDITABLE_DIALOG_CONTROL_SELECTOR);
 }
 
-export function Dialog({ open, title, description, children, footer, onClose, className, presentation = "default" }: DialogProps) {
+function isPersistentCallContent(children: ReactNode) {
+  if (!isValidElement(children)) return false;
+  const props = children.props as Record<string, unknown>;
+  return typeof props["data-call-experience"] === "string";
+}
+
+export function Dialog({
+  open,
+  title,
+  description,
+  children,
+  footer,
+  onClose,
+  onMinimize,
+  minimizeLabel,
+  className,
+  presentation = "default",
+}: DialogProps) {
   const titleId = useId();
   const overlayRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [minimized, setMinimized] = useState(false);
+  const persistentCallDialog = isPersistentCallContent(children);
   const isEditorPresentation = presentation === "editor";
   const isTallDialog =
     isEditorPresentation ||
@@ -44,7 +66,35 @@ export function Dialog({ open, title, description, children, footer, onClose, cl
         className.includes("h-[96dvh]")));
 
   useEffect(() => {
-    if (!open) {
+    if (!open) setMinimized(false);
+  }, [open]);
+
+  useEffect(() => {
+    if (!persistentCallDialog) return;
+    const restore = () => setMinimized(false);
+    window.addEventListener(PERSISTENT_CALL_RESTORE_EVENT, restore);
+    return () => window.removeEventListener(PERSISTENT_CALL_RESTORE_EVENT, restore);
+  }, [persistentCallDialog]);
+
+  async function minimizePersistentCall() {
+    if (onMinimize) {
+      onMinimize();
+      return;
+    }
+    await requestPersistentCallHandoff();
+    setMinimized(true);
+  }
+
+  function handleClose() {
+    if (persistentCallDialog) {
+      void minimizePersistentCall().catch(() => undefined);
+      return;
+    }
+    onClose();
+  }
+
+  useEffect(() => {
+    if (!open || minimized) {
       return;
     }
 
@@ -54,7 +104,7 @@ export function Dialog({ open, title, description, children, footer, onClose, cl
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        onClose();
+        handleClose();
       }
     }
 
@@ -124,9 +174,9 @@ export function Dialog({ open, title, description, children, footer, onClose, cl
       window.clearTimeout(focusTimer);
       window.clearTimeout(secondFocusTimer);
     };
-  }, [onClose, open]);
+  }, [minimized, onClose, open, persistentCallDialog]);
 
-  if (!open || typeof document === "undefined") {
+  if (!open || minimized || typeof document === "undefined") {
     return null;
   }
 
@@ -134,6 +184,7 @@ export function Dialog({ open, title, description, children, footer, onClose, cl
     maxHeight: "calc(var(--dtsc-dialog-visual-height, 100dvh) - 1rem)",
     ...(isEditorPresentation ? { height: "calc(var(--dtsc-dialog-visual-height, 100dvh) - 1rem)" } : {}),
   };
+  const effectiveMinimizeLabel = minimizeLabel || title;
 
   return createPortal(
     <div
@@ -147,7 +198,7 @@ export function Dialog({ open, title, description, children, footer, onClose, cl
       aria-labelledby={titleId}
       onClick={(event) => {
         if (event.target === event.currentTarget) {
-          onClose();
+          handleClose();
         }
       }}
     >
@@ -161,23 +212,61 @@ export function Dialog({ open, title, description, children, footer, onClose, cl
         )}
         style={panelStyle}
       >
-        <div className={cn(
-          "sticky top-0 z-10 flex shrink-0 items-start justify-between gap-4 border-b-2 border-dtsc-border bg-dtsc-page px-4 py-3.5 sm:px-5 sm:py-4",
-          isEditorPresentation && "px-3 py-2.5 sm:px-5 sm:py-3.5",
-        )}>
+        <div
+          className={cn(
+            "sticky top-0 z-10 flex shrink-0 items-start justify-between gap-4 border-b-2 border-dtsc-border bg-dtsc-page px-4 py-3.5 sm:px-5 sm:py-4",
+            isEditorPresentation && "px-3 py-2.5 sm:px-5 sm:py-3.5",
+          )}
+        >
           <div className="min-w-0 border-l-[3px] border-cyan-500 pl-3.5">
-            <h2 id={titleId} className={cn(
-              "break-words font-black tracking-[-0.02em] text-dtsc-ink",
-              isEditorPresentation ? "text-lg sm:text-2xl" : "text-xl sm:text-2xl",
-            )}>{title}</h2>
-            {description && <p className={cn(
-              "mt-1.5 break-words text-sm leading-6 text-dtsc-muted",
-              isEditorPresentation && "hidden sm:block",
-            )}>{description}</p>}
+            <h2
+              id={titleId}
+              className={cn(
+                "break-words font-black tracking-[-0.02em] text-dtsc-ink",
+                isEditorPresentation ? "text-lg sm:text-2xl" : "text-xl sm:text-2xl",
+              )}
+            >
+              {title}
+            </h2>
+            {description && (
+              <p
+                className={cn(
+                  "mt-1.5 break-words text-sm leading-6 text-dtsc-muted",
+                  isEditorPresentation && "hidden sm:block",
+                )}
+              >
+                {description}
+              </p>
+            )}
           </div>
-          <Button type="button" variant="ghost" size="icon" onClick={onClose} className="shrink-0 rounded-xl text-dtsc-muted hover:bg-dtsc-soft hover:text-dtsc-ink" aria-label="Fermer" title="Fermer le formulaire">
-            <X className="h-4 w-4" />
-          </Button>
+          <div className="flex shrink-0 items-center gap-1">
+            {persistentCallDialog || onMinimize ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => void minimizePersistentCall().catch(() => undefined)}
+                className="shrink-0 rounded-xl text-dtsc-muted hover:bg-dtsc-soft hover:text-dtsc-ink"
+                aria-label={effectiveMinimizeLabel}
+                title={effectiveMinimizeLabel}
+              >
+                <Minimize2 className="h-4 w-4" />
+              </Button>
+            ) : null}
+            {!persistentCallDialog ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={onClose}
+                className="shrink-0 rounded-xl text-dtsc-muted hover:bg-dtsc-soft hover:text-dtsc-ink"
+                aria-label="Fermer"
+                title="Fermer le formulaire"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            ) : null}
+          </div>
         </div>
         <div
           ref={scrollRef}
@@ -191,12 +280,18 @@ export function Dialog({ open, title, description, children, footer, onClose, cl
         >
           {children}
         </div>
-        {footer && <div className={cn(
-          "shrink-0 border-t border-dtsc-border bg-dtsc-page pb-[max(0.75rem,env(safe-area-inset-bottom))]",
-          isEditorPresentation
-            ? "grid grid-cols-2 gap-2 px-2 py-2 sm:flex sm:flex-wrap sm:justify-end sm:gap-3 sm:px-5 sm:py-3"
-            : "flex flex-wrap justify-end gap-3 px-4 py-3 sm:px-5 sm:py-4",
-        )}>{footer}</div>}
+        {footer && (
+          <div
+            className={cn(
+              "shrink-0 border-t border-dtsc-border bg-dtsc-page pb-[max(0.75rem,env(safe-area-inset-bottom))]",
+              isEditorPresentation
+                ? "grid grid-cols-2 gap-2 px-2 py-2 sm:flex sm:flex-wrap sm:justify-end sm:gap-3 sm:px-5 sm:py-3"
+                : "flex flex-wrap justify-end gap-3 px-4 py-3 sm:px-5 sm:py-4",
+            )}
+          >
+            {footer}
+          </div>
+        )}
       </div>
     </div>,
     document.body,

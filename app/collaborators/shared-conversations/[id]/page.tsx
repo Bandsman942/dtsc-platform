@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { ArrowLeft, Bot, UserRound } from "lucide-react";
 import { getSession } from "@/lib/auth";
 import { assertGroupMemberForSession } from "@/lib/collaboration";
+import { AssistantRichContent } from "@/components/chat/assistant-rich-content";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ id: string }> };
@@ -75,9 +76,10 @@ export default async function SharedConversationSnapshotPage({ params }: Params)
                   {assistant ? "Assistant DTSC" : message.role === "user" ? "Utilisateur" : "Système"}
                 </span>
               </div>
-              <p className={assistant ? "whitespace-pre-wrap break-words text-sm leading-7 text-slate-900 dark:text-slate-100" : "whitespace-pre-wrap break-words text-sm leading-7"}>
-                {message.content}
-              </p>
+              <AssistantRichContent
+                content={message.content || ""}
+                className={assistant ? "text-sm text-slate-900 dark:text-slate-100" : "text-sm"}
+              />
             </article>
           );
         })}

@@ -15,11 +15,11 @@ export type AiPromptVersion = {
 };
 
 export const AI_PROMPT_REGISTRY: AiPromptVersion[] = [
-  { code: "GLOBAL_ASSISTANT", version: "2026-08-11.3", effectiveAt: "2026-08-11", description: "Global DTSC assistant policy with versioned product awareness and rich responses" },
-  { code: "ENTERPRISE_ASSISTANT", version: "2026-08-11.3", effectiveAt: "2026-08-11", description: "Tenant-aware enterprise assistant policy with canonical UX labels, rich responses and versioned product awareness" },
+  { code: "GLOBAL_ASSISTANT", version: "2026-08-17.1", effectiveAt: "2026-08-17", description: "Global DTSC assistant policy with versioned product awareness and permission-scoped active capabilities" },
+  { code: "ENTERPRISE_ASSISTANT", version: "2026-08-17.1", effectiveAt: "2026-08-17", description: "Tenant-aware enterprise assistant policy with canonical UX labels, permission-scoped module vocabulary and versioned product awareness" },
   { code: "TASK_CLASSIFICATION", version: "2026-08-04.1", effectiveAt: "2026-08-04", description: "Deterministic task classification rules" },
   { code: "SECURITY", version: "2026-08-04.1", effectiveAt: "2026-08-04", description: "Tool, source and prompt-injection boundaries" },
-  { code: "LANGUAGE", version: "2026-08-11.3", effectiveAt: "2026-08-11", description: "Response locale, user-facing presentation contract and automatic product awareness" },
+  { code: "LANGUAGE", version: "2026-08-17.1", effectiveAt: "2026-08-17", description: "Response locale, user-facing presentation contract and automatic versioned product awareness" },
 ];
 
 export function getAiPromptVersion(code: AiPromptCode) {

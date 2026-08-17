@@ -18,6 +18,8 @@ import { writeApiLog } from "@/lib/audit";
 import { getActiveOrganizationId } from "@/lib/organizations";
 import { getCanonicalAiUsageLimits } from "@/lib/billing/ai-usage-limits";
 import { buildLanguageInstruction } from "@/lib/ai/prompts";
+import { AI_PRODUCT_CONTEXT_VERSION } from "@/lib/ai/product-awareness";
+import { getEnterpriseNavigationModules } from "@/lib/enterprise/enterprise-navigation";
 
 export const maxDuration = 60;
 
@@ -222,7 +224,7 @@ export async function POST(req: Request) {
     });
   }
 
-  const [companyContext, ragContext] = await Promise.all([
+  const [companyContext, ragContext, accessibleModules] = await Promise.all([
     getCompanyContextForUser(session.userId, organizationId).catch((error) => {
       console.error("Company context retrieval failed", error);
       return "";
@@ -231,7 +233,22 @@ export async function POST(req: Request) {
       console.error("RAG retrieval failed", error);
       return "";
     }),
+    organizationId
+      ? getEnterpriseNavigationModules(organizationId, session.userId, user.locale).catch((error) => {
+          console.error("AI capability context retrieval failed", error);
+          return [];
+        })
+      : Promise.resolve([]),
   ]);
+
+  const permissionContext = accessibleModules.length
+    ? [
+        `Version du contexte de capacités : ${AI_PRODUCT_CONTEXT_VERSION}.`,
+        "Modules entreprise actuellement accessibles à cet utilisateur dans son contexte actif :",
+        ...accessibleModules.map((module) => `- ${module.label}: ${module.description}`),
+        "Cette liste provient du résolveur canonique DTSC (permissions, plan, secteur et dépendances). Ne présente comme accessible aucun module entreprise absent de cette liste.",
+      ].join("\n")
+    : `Version du contexte de capacités : ${AI_PRODUCT_CONTEXT_VERSION}. Aucun module entreprise accessible n'est exposé dans le contexte actif.`;
 
   const messages: OpenAIInputMessage[] = [
     {
@@ -239,6 +256,9 @@ export async function POST(req: Request) {
       content: [
         "Politique commune de langue, présentation et actualité produit DTSC.",
         buildLanguageInstruction(user.locale || "fr"),
+        "",
+        "Capacités réellement accessibles dans le contexte actif de l'utilisateur.",
+        permissionContext,
         "",
         "Préférences de réponse configurées par l'utilisateur dans DTSC Platform.",
         buildChatPreferenceContext(user.chatResponseStyle, user.chatResponseLength),

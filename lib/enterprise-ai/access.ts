@@ -1,4 +1,5 @@
 import { canAccessEnterpriseModule } from "@/lib/enterprise-sector-templates";
+import { listNavigableEnterpriseModules } from "@/lib/enterprise/module-access";
 import { getOrganizationEntitlements } from "@/lib/billing/entitlements";
 import { prisma } from "@/lib/prisma";
 import type { SessionPayload } from "@/lib/session";
@@ -25,6 +26,7 @@ export type EnterpriseAiAccess = {
   canViewUsage: boolean;
   canUseReadTools: boolean;
   canUseActionDrafts: boolean;
+  accessibleModuleCodes: string[];
 };
 
 function enterpriseActionFor(action: EnterpriseAiAccessAction) {
@@ -111,6 +113,16 @@ export async function getEnterpriseAiAccess(session: SessionPayload, organizatio
   const admin = isAdminRole(membership.role);
   const settingAllowsReadTools = settings?.allowReadTools !== false;
   const settingAllowsActionDrafts = settings?.allowActionDrafts !== false;
+  const navigableModules = action === "chat"
+    ? await listNavigableEnterpriseModules({
+        organizationId,
+        userId: session.userId,
+        action: "read",
+      })
+    : [];
+  const accessibleModuleCodes = navigableModules.flatMap((decision) =>
+    decision.definition ? [decision.definition.code] : [],
+  );
 
   return {
     organizationId,
@@ -127,5 +139,6 @@ export async function getEnterpriseAiAccess(session: SessionPayload, organizatio
     canViewUsage: manager,
     canUseReadTools: entitlements.limits.enterpriseAiReadToolsEnabled && settingAllowsReadTools,
     canUseActionDrafts: entitlements.limits.enterpriseAiActionDraftsEnabled && settingAllowsActionDrafts && manager,
+    accessibleModuleCodes,
   };
 }

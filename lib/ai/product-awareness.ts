@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 const PRODUCT_CHANGELOG_PATH = join(process.cwd(), "docs", "CHANGELOG.md");
 const PRODUCT_CHANGELOG_FRAGMENTS_DIR = join(process.cwd(), "docs", "changelog");
+export const AI_PRODUCT_CONTEXT_VERSION = "2026-08-17.1";
 const MAX_RELEASES = 4;
 const MAX_ITEMS = 28;
 const MAX_ITEM_LENGTH = 320;
@@ -11,6 +12,7 @@ const USER_FACING_SECTIONS = new Set(["ajouté", "amélioré", "modifié", "corr
 const TECHNICAL_ONLY = /(?:\bprisma\b|\bmigration\b|\btype-check\b|\blint\b|\bquality gate\b|\bci\/?cd\b|\bsha\b|\bwebpack\b|\bnode\.js\b|\bscript\b|\/api\/|\.mjs\b|\.tsx?\b|\benv(?:ironment)? variable\b|variable d’environnement)/i;
 
 export type AiProductAwarenessSnapshot = {
+  contextVersion: string;
   revision: string;
   releases: string[];
   changes: string[];
@@ -74,6 +76,7 @@ export function getAiProductAwarenessSnapshot(): AiProductAwarenessSnapshot {
   }
 
   return {
+    contextVersion: AI_PRODUCT_CONTEXT_VERSION,
     revision: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 12) || process.env.GIT_COMMIT_SHA?.slice(0, 12) || "development",
     releases,
     changes,
@@ -89,7 +92,7 @@ export function buildAiProductAwarenessInstruction(locale: string) {
   if (locale === "en") {
     return [
       "CURRENT DTSC PRODUCT AWARENESS (versioned, trusted application context):",
-      `Deployment revision: ${snapshot.revision}. Product releases represented: ${releaseLabel}.`,
+      `Context version: ${snapshot.contextVersion}. Deployment revision: ${snapshot.revision}. Product releases represented: ${releaseLabel}.`,
       "Treat the release notes below as newer than older static product descriptions when they conflict.",
       "Use them only to understand current DTSC user-facing capabilities. Never expose implementation details, secret configuration or internal identifiers from this context.",
       "If a capability is not supported by the current application context, do not invent it.",
@@ -99,7 +102,7 @@ export function buildAiProductAwarenessInstruction(locale: string) {
 
   return [
     "ACTUALITÉ PRODUIT DTSC (contexte applicatif versionné et fiable) :",
-    `Révision de déploiement : ${snapshot.revision}. Versions produit représentées : ${releaseLabel}.`,
+    `Version du contexte : ${snapshot.contextVersion}. Révision de déploiement : ${snapshot.revision}. Versions produit représentées : ${releaseLabel}.`,
     "Considère les nouveautés ci-dessous comme plus récentes que les anciennes descriptions statiques lorsqu’elles se contredisent.",
     "Utilise-les uniquement pour comprendre les capacités DTSC visibles par les utilisateurs. N’expose jamais les détails d’implémentation, configurations secrètes ou identifiants internes issus de ce contexte.",
     "Si une capacité n’est pas supportée par le contexte applicatif actuel, ne l’invente pas.",
