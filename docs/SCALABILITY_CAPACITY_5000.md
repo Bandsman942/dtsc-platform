@@ -11,11 +11,11 @@ The target is a capacity contract, not a claim based on account count. Certifica
 
 ## Current baseline
 
-Canonical starting point for SCALE-0:
+SCALE-0A was merged on:
 
-`main@a4e66c1655d363b1115334c10ea55006dae54ed0`
+`main@eacc49883bee68a2050605ad06b7637443a4f7b6`
 
-This baseline includes the collaboration hotfix delivered through #395/#396 and must be preserved by every scalability change.
+SCALE-0B extends that baseline with a protected Production-observability snapshot. It does not certify any load stage by itself.
 
 ## SLO targets
 
@@ -73,6 +73,25 @@ Every staged load report must capture, when available:
 - tenant-isolation assertions;
 - timestamp, git SHA, environment and exact load profile parameters.
 
+## Production observability snapshot
+
+SCALE-0B exposes a read-only DTSC Console endpoint:
+
+`GET /api/admin/scalability/observability?windowHours=24`
+
+The endpoint requires the existing `SECURITY_READ` Console capability and returns `private, no-store` responses. The measurement window is validated between 1 and 168 hours.
+
+The snapshot intentionally exposes only aggregate technical signals:
+
+- API sample count, server-error count/rate and P50/P95/P99 from persisted `ApiLog.durationMs`;
+- a live PostgreSQL probe latency plus current/max connections from `pg_stat_activity`;
+- AI sample/success/failure counts, P50/P95/P99 and first-token P95 from `AiModelCall`;
+- Redis status explicitly marked `NOT_MEASURED` until SCALE-2 / #355.
+
+It does not return request payloads, user identifiers, organization identifiers, DSNs, credentials, cookies or provider secrets. `ApiLog` coverage is not assumed to be exhaustive: the returned sample count is part of the evidence contract.
+
+The live PostgreSQL probe is a point-in-time application observation, not a substitute for Neon provider telemetry. Redis latency/failover evidence remains a known gap owned by #355 rather than a synthetic value.
+
 ## Reproducible smoke profile
 
 The first repository load profile is:
@@ -115,18 +134,18 @@ PR #362 was created from an obsolete baseline and mixed SCALE-0, SCALE-2 and SCA
 
 Its useful delta is split by responsibility:
 
-- SCALE-0 / #353: documentation + reproducible staged load profile;
+- SCALE-0 / #353: capacity contract + Production observability baseline;
 - SCALE-2 / #355: presence/realtime Redis work, to be re-audited against the then-current `main`;
 - SCALE-3 / #356: distributed rate-limit timeout/degradation work, to be re-audited against the then-current `main`.
 
-No runtime presence or rate-limit change belongs to this SCALE-0 branch.
+No runtime presence or rate-limit change belongs to SCALE-0.
 
 ## Evidence contract
 
-For SCALE-0, repository inspection and CI can prove that the artefacts compile and remain regression-safe. They do **not** prove 5,000-user capacity.
+Repository inspection and CI can prove that the observability contract is protected, bounded, compile-safe and regression-safe. A deployed endpoint can provide a current Production baseline for the configured window. Neither of those facts proves 5,000-user capacity.
 
-Until an actual load run is executed and archived, capacity stages stay `NOT_EXECUTED`.
+Until an actual staged load run is executed and archived, capacity stages stay `NOT_EXECUTED`.
 
 ## Rollback
 
-SCALE-0 adds documentation and load-test tooling only. Rollback is a revert of the SCALE-0 commit; there is no Prisma or Production data rollback.
+SCALE-0B adds a read-only endpoint, helper, documentation and QA. Rollback is a revert of the SCALE-0B commit; there is no Prisma or Production data rollback.
