@@ -1,6 +1,6 @@
 # DTSC Platform — Scalability & Capacity Engineering
 
-Parent programme: #352  
+Parent programme: #352
 Iteration: #353 / SCALE-0
 
 ## Purpose
