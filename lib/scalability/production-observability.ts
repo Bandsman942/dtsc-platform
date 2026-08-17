@@ -12,6 +12,7 @@ type AiLatencyRow = {
   sampleCount: number;
   successCount: number;
   failedCount: number;
+  rateLimitedCount: number;
   p50Ms: number | null;
   p95Ms: number | null;
   p99Ms: number | null;
@@ -25,6 +26,15 @@ type DbConnectionRow = {
 
 function finiteMetric(value: number | null | undefined) {
   return typeof value === "number" && Number.isFinite(value) ? Math.round(value * 100) / 100 : null;
+}
+
+function observedRate(sampleCount: number, windowHours: number) {
+  const seconds = windowHours * 60 * 60;
+  const minutes = windowHours * 60;
+  return {
+    perSecond: finiteMetric(seconds > 0 ? sampleCount / seconds : null),
+    perMinute: finiteMetric(minutes > 0 ? sampleCount / minutes : null),
+  };
 }
 
 export async function getProductionObservabilitySnapshot(windowHours: number) {
@@ -52,6 +62,7 @@ export async function getProductionObservabilitySnapshot(windowHours: number) {
         COUNT(*) FILTER (WHERE "durationMs" IS NOT NULL)::int AS "sampleCount",
         COUNT(*) FILTER (WHERE "status" = 'SUCCESS')::int AS "successCount",
         COUNT(*) FILTER (WHERE "status" = 'FAILED')::int AS "failedCount",
+        COUNT(*) FILTER (WHERE "reasonCode" = 'RATE_LIMITED')::int AS "rateLimitedCount",
         percentile_cont(0.50) WITHIN GROUP (ORDER BY "durationMs") FILTER (WHERE "durationMs" IS NOT NULL)::float8 AS "p50Ms",
         percentile_cont(0.95) WITHIN GROUP (ORDER BY "durationMs") FILTER (WHERE "durationMs" IS NOT NULL)::float8 AS "p95Ms",
         percentile_cont(0.99) WITHIN GROUP (ORDER BY "durationMs") FILTER (WHERE "durationMs" IS NOT NULL)::float8 AS "p99Ms",
@@ -69,7 +80,7 @@ export async function getProductionObservabilitySnapshot(windowHours: number) {
   ]);
 
   const api = apiRows[0] ?? { sampleCount: 0, p50Ms: null, p95Ms: null, p99Ms: null, serverErrorCount: 0 };
-  const ai = aiRows[0] ?? { sampleCount: 0, successCount: 0, failedCount: 0, p50Ms: null, p95Ms: null, p99Ms: null, firstTokenP95Ms: null };
+  const ai = aiRows[0] ?? { sampleCount: 0, successCount: 0, failedCount: 0, rateLimitedCount: 0, p50Ms: null, p95Ms: null, p99Ms: null, firstTokenP95Ms: null };
   const database = dbConnectionRows[0] ?? { currentConnections: 0, maxConnections: 0 };
 
   return {
@@ -82,6 +93,7 @@ export async function getProductionObservabilitySnapshot(windowHours: number) {
       source: "ApiLog.durationMs",
       coverage: "Only routes that persist ApiLog entries are represented.",
       sampleCount: api.sampleCount,
+      throughput: observedRate(api.sampleCount, windowHours),
       serverErrorCount: api.serverErrorCount,
       serverErrorRate: api.sampleCount > 0 ? api.serverErrorCount / api.sampleCount : null,
       latencyMs: {
@@ -100,8 +112,11 @@ export async function getProductionObservabilitySnapshot(windowHours: number) {
     ai: {
       source: "AiModelCall",
       sampleCount: ai.sampleCount,
+      throughput: observedRate(ai.sampleCount, windowHours),
       successCount: ai.successCount,
       failedCount: ai.failedCount,
+      rateLimitedCount: ai.rateLimitedCount,
+      rateLimitedRate: ai.sampleCount > 0 ? ai.rateLimitedCount / ai.sampleCount : null,
       latencyMs: {
         p50: finiteMetric(ai.p50Ms),
         p95: finiteMetric(ai.p95Ms),
