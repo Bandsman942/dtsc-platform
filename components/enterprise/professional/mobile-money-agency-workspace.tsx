@@ -26,9 +26,10 @@ import { BusinessList, BusinessListItem } from "@/components/workspace/business-
 import { EmptyState } from "@/components/workspace/empty-state";
 import { ModuleSection } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
-import { customerFacingStatusLabel } from "@/lib/customer-facing-language";
+import { customerFacingError, customerFacingStatusLabel } from "@/lib/customer-facing-language";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
 import { customerFacingFeeCollectionMode, customerFacingMobileMoneyTransactionType } from "@/lib/retail-customer-language";
+import { translateRetailWorkspace } from "@/lib/i18n";
 
 type CurrencyAccount = {
   id: string;
@@ -101,124 +102,124 @@ type MobileMoneyDashboard = RetailDashboard & {
 
 const COPY = {
   fr: {
-    operationTitle: "Opération Mobile Money",
-    operationDescription: "Choisissez la caisse ouverte à utiliser, puis enregistrez l’opération. Le wallet opérateur de la même devise est sélectionné automatiquement.",
-    service: "Service Mobile Money",
-    operation: "Opération",
-    phone: "Téléphone client",
-    amount: "Montant client",
-    fee: "Frais client",
-    commission: "Commission opérateur",
-    feeCollection: "Encaissement des frais",
-    reference: "Référence opérateur",
-    review: "Vérifier l’opération",
-    tillRequired: "Ouvrez une caisse ou sélectionnez l’une de vos caisses ouvertes avant de continuer.",
-    missingWallet: "Aucun opérateur ne possède encore de wallet dans la devise de cette caisse.",
-    walletUsed: "Wallet opérateur utilisé",
-    operationConfirmed: "Opération Mobile Money confirmée et comptabilisée.",
-    confirmTitle: "Confirmer Mobile Money",
-    reviewDescription: "Vérifiez les informations avant de confirmer l’opération.",
-    edit: "Modifier",
-    confirm: "Confirmer",
-    processing: "Traitement…",
-    configTitle: "Comptes Mobile Money par devise",
-    configDescription: "Chaque opérateur reste affiché une seule fois. Associez-lui un wallet financier distinct pour chaque devise exploitée ; en RDC, CDF et USD sont attendus.",
-    currentWallet: "Wallet configuré",
-    account: "Compte financier",
-    save: "Enregistrer",
-    ready: "Prêt",
-    incomplete: "À compléter",
-    currencies: "devises configurées",
-    addCurrency: "Ajouter une devise",
-    chooseCurrency: "Devise",
-    accountSaved: "Wallet opérateur enregistré.",
-    minimumTwo: "Au moins deux devises distinctes sont nécessaires pour exploiter professionnellement cet opérateur.",
-    fxTitle: "Transfert entre devises",
-    fxDescription: "Convertissez du float entre deux wallets du même opérateur. Le taux courant de Finance est résolu côté serveur et mémorisé avec l’opération.",
-    sourceCurrency: "Devise source",
-    targetCurrency: "Devise cible",
-    sourceAmount: "Montant à convertir",
-    preview: "Calculer avec le taux courant",
-    rate: "Taux Finance",
-    targetAmount: "Montant cible",
-    available: "Disponible",
-    fxConfirm: "Confirmer le transfert",
-    fxSuccess: "Transfert de devise confirmé et comptabilisé.",
-    fxInsufficient: "Le solde source est insuffisant pour ce transfert.",
-    fxMissingRate: "Le taux de change courant n’est pas disponible. Configurez-le dans Finance avant de continuer.",
-    configureRates: "Configurer les taux de change",
-    history: "Historique Mobile Money",
-    noTransaction: "Aucune opération",
-    noTransactionDescription: "Les opérations confirmées apparaîtront ici.",
-    reverse: "Annuler",
-    reverseReason: "Motif de l’annulation",
-    reversed: "Annulation enregistrée et comptabilisée.",
-    operatorReference: "Référence opérateur",
-    refresh: "Actualiser les comptes",
-    requiredCountry: "Requis dans ce pays",
-    notConfigured: "Non configuré",
-    configureWallets: "Configurer les wallets",
-    transactionTill: "Caisse de l’opération",
+    operationTitle: translateRetailWorkspace("fr", "operatorMobileMoneyOperation"),
+    operationDescription: translateRetailWorkspace("fr", "mobileMoneyOperationDescription"),
+    service: translateRetailWorkspace("fr", "operatorMobileMoneyService"),
+    operation: translateRetailWorkspace("fr", "operatorOperation"),
+    phone: translateRetailWorkspace("fr", "operatorCustomerPhone"),
+    amount: translateRetailWorkspace("fr", "operatorCustomerAmount"),
+    fee: translateRetailWorkspace("fr", "operatorCustomerFee"),
+    commission: translateRetailWorkspace("fr", "operatorOperatorCommission"),
+    feeCollection: translateRetailWorkspace("fr", "operatorFeeCollection"),
+    reference: translateRetailWorkspace("fr", "operatorOperatorReference"),
+    review: translateRetailWorkspace("fr", "operatorReviewOperation"),
+    tillRequired: translateRetailWorkspace("fr", "mobileMoneyTillRequired"),
+    missingWallet: translateRetailWorkspace("fr", "mobileMoneyMissingWallet"),
+    walletUsed: translateRetailWorkspace("fr", "mobileMoneyWalletUsed"),
+    operationConfirmed: translateRetailWorkspace("fr", "mobileMoneyOperationConfirmed"),
+    confirmTitle: translateRetailWorkspace("fr", "operatorConfirmMobileMoney"),
+    reviewDescription: translateRetailWorkspace("fr", "operatorReviewTheInformationBeforeConfirmingTheOperation"),
+    edit: translateRetailWorkspace("fr", "operatorEdit"),
+    confirm: translateRetailWorkspace("fr", "operatorConfirm"),
+    processing: translateRetailWorkspace("fr", "processing"),
+    configTitle: translateRetailWorkspace("fr", "mobileMoneyConfigTitle"),
+    configDescription: translateRetailWorkspace("fr", "mobileMoneyConfigDescription"),
+    currentWallet: translateRetailWorkspace("fr", "mobileMoneyCurrentWallet"),
+    account: translateRetailWorkspace("fr", "mobileMoneyAccount"),
+    save: translateRetailWorkspace("fr", "operatorSave"),
+    ready: translateRetailWorkspace("fr", "ready"),
+    incomplete: translateRetailWorkspace("fr", "operatorToComplete"),
+    currencies: translateRetailWorkspace("fr", "operatorCurrenciesConfigured"),
+    addCurrency: translateRetailWorkspace("fr", "mobileMoneyAddCurrency"),
+    chooseCurrency: translateRetailWorkspace("fr", "mobileMoneyChooseCurrency"),
+    accountSaved: translateRetailWorkspace("fr", "mobileMoneyAccountSaved"),
+    minimumTwo: translateRetailWorkspace("fr", "mobileMoneyMinimumTwo"),
+    fxTitle: translateRetailWorkspace("fr", "mobileMoneyFxTitle"),
+    fxDescription: translateRetailWorkspace("fr", "mobileMoneyFxDescription"),
+    sourceCurrency: translateRetailWorkspace("fr", "mobileMoneySourceCurrency"),
+    targetCurrency: translateRetailWorkspace("fr", "mobileMoneyTargetCurrency"),
+    sourceAmount: translateRetailWorkspace("fr", "mobileMoneySourceAmount"),
+    preview: translateRetailWorkspace("fr", "mobileMoneyPreview"),
+    rate: translateRetailWorkspace("fr", "mobileMoneyRate"),
+    targetAmount: translateRetailWorkspace("fr", "mobileMoneyTargetAmount"),
+    available: translateRetailWorkspace("fr", "available"),
+    fxConfirm: translateRetailWorkspace("fr", "mobileMoneyFxConfirm"),
+    fxSuccess: translateRetailWorkspace("fr", "mobileMoneyFxSuccess"),
+    fxInsufficient: translateRetailWorkspace("fr", "mobileMoneyFxInsufficient"),
+    fxMissingRate: translateRetailWorkspace("fr", "mobileMoneyFxMissingRate"),
+    configureRates: translateRetailWorkspace("fr", "mobileMoneyConfigureRates"),
+    history: translateRetailWorkspace("fr", "operatorMobileMoneyHistory"),
+    noTransaction: translateRetailWorkspace("fr", "operatorNoTransaction"),
+    noTransactionDescription: translateRetailWorkspace("fr", "operatorConfirmedOperationsWillAppearHere"),
+    reverse: translateRetailWorkspace("fr", "reverse"),
+    reverseReason: translateRetailWorkspace("fr", "reversalReason"),
+    reversed: translateRetailWorkspace("fr", "mobileMoneyReversed"),
+    operatorReference: translateRetailWorkspace("fr", "operatorOperatorReference"),
+    refresh: translateRetailWorkspace("fr", "mobileMoneyRefresh"),
+    requiredCountry: translateRetailWorkspace("fr", "operatorRequiredInThisCountry"),
+    notConfigured: translateRetailWorkspace("fr", "mobileMoneyNotConfigured"),
+    configureWallets: translateRetailWorkspace("fr", "mobileMoneyConfigureWallets"),
+    transactionTill: translateRetailWorkspace("fr", "mobileMoneyTransactionTill"),
   },
   en: {
-    operationTitle: "Mobile Money operation",
-    operationDescription: "Choose the open till to use, then record the operation. The operator wallet in the same currency is selected automatically.",
-    service: "Mobile Money service",
-    operation: "Operation",
-    phone: "Customer phone",
-    amount: "Customer amount",
-    fee: "Customer fee",
-    commission: "Operator commission",
-    feeCollection: "Fee collection",
-    reference: "Operator reference",
-    review: "Review operation",
-    tillRequired: "Open a till or select one of your open tills before continuing.",
-    missingWallet: "No operator has a wallet configured for this till currency yet.",
-    walletUsed: "Operator wallet used",
-    operationConfirmed: "Mobile Money operation confirmed and posted.",
-    confirmTitle: "Confirm Mobile Money",
-    reviewDescription: "Review the information before confirming the operation.",
-    edit: "Edit",
-    confirm: "Confirm",
-    processing: "Processing…",
-    configTitle: "Mobile Money accounts by currency",
-    configDescription: "Each operator is displayed once. Link one distinct financial wallet per operating currency; in DR Congo, CDF and USD are expected.",
-    currentWallet: "Configured wallet",
-    account: "Financial account",
-    save: "Save",
-    ready: "Ready",
-    incomplete: "To complete",
-    currencies: "currencies configured",
-    addCurrency: "Add a currency",
-    chooseCurrency: "Currency",
-    accountSaved: "Operator wallet saved.",
-    minimumTwo: "At least two distinct currencies are required for professional operation of this service.",
-    fxTitle: "Currency transfer",
-    fxDescription: "Convert float between two wallets of the same operator. The current Finance rate is resolved server-side and stored with the operation.",
-    sourceCurrency: "Source currency",
-    targetCurrency: "Target currency",
-    sourceAmount: "Amount to convert",
-    preview: "Calculate with current rate",
-    rate: "Finance rate",
-    targetAmount: "Target amount",
-    available: "Available",
-    fxConfirm: "Confirm transfer",
-    fxSuccess: "Currency transfer confirmed and posted.",
-    fxInsufficient: "The source balance is insufficient for this transfer.",
-    fxMissingRate: "The current exchange rate is unavailable. Configure it in Finance before continuing.",
-    configureRates: "Configure exchange rates",
-    history: "Mobile Money history",
-    noTransaction: "No transaction",
-    noTransactionDescription: "Confirmed operations will appear here.",
-    reverse: "Reverse",
-    reverseReason: "Reason for reversal",
-    reversed: "Reversal recorded and posted.",
-    operatorReference: "Operator reference",
-    refresh: "Refresh accounts",
-    requiredCountry: "Required in this country",
-    notConfigured: "Not configured",
-    configureWallets: "Configure wallets",
-    transactionTill: "Operation till",
+    operationTitle: translateRetailWorkspace("en", "operatorMobileMoneyOperation"),
+    operationDescription: translateRetailWorkspace("en", "mobileMoneyOperationDescription"),
+    service: translateRetailWorkspace("en", "operatorMobileMoneyService"),
+    operation: translateRetailWorkspace("en", "operatorOperation"),
+    phone: translateRetailWorkspace("en", "operatorCustomerPhone"),
+    amount: translateRetailWorkspace("en", "operatorCustomerAmount"),
+    fee: translateRetailWorkspace("en", "operatorCustomerFee"),
+    commission: translateRetailWorkspace("en", "operatorOperatorCommission"),
+    feeCollection: translateRetailWorkspace("en", "operatorFeeCollection"),
+    reference: translateRetailWorkspace("en", "operatorOperatorReference"),
+    review: translateRetailWorkspace("en", "operatorReviewOperation"),
+    tillRequired: translateRetailWorkspace("en", "mobileMoneyTillRequired"),
+    missingWallet: translateRetailWorkspace("en", "mobileMoneyMissingWallet"),
+    walletUsed: translateRetailWorkspace("en", "mobileMoneyWalletUsed"),
+    operationConfirmed: translateRetailWorkspace("en", "mobileMoneyOperationConfirmed"),
+    confirmTitle: translateRetailWorkspace("en", "operatorConfirmMobileMoney"),
+    reviewDescription: translateRetailWorkspace("en", "operatorReviewTheInformationBeforeConfirmingTheOperation"),
+    edit: translateRetailWorkspace("en", "operatorEdit"),
+    confirm: translateRetailWorkspace("en", "operatorConfirm"),
+    processing: translateRetailWorkspace("en", "processing"),
+    configTitle: translateRetailWorkspace("en", "mobileMoneyConfigTitle"),
+    configDescription: translateRetailWorkspace("en", "mobileMoneyConfigDescription"),
+    currentWallet: translateRetailWorkspace("en", "mobileMoneyCurrentWallet"),
+    account: translateRetailWorkspace("en", "mobileMoneyAccount"),
+    save: translateRetailWorkspace("en", "operatorSave"),
+    ready: translateRetailWorkspace("en", "ready"),
+    incomplete: translateRetailWorkspace("en", "operatorToComplete"),
+    currencies: translateRetailWorkspace("en", "operatorCurrenciesConfigured"),
+    addCurrency: translateRetailWorkspace("en", "mobileMoneyAddCurrency"),
+    chooseCurrency: translateRetailWorkspace("en", "mobileMoneyChooseCurrency"),
+    accountSaved: translateRetailWorkspace("en", "mobileMoneyAccountSaved"),
+    minimumTwo: translateRetailWorkspace("en", "mobileMoneyMinimumTwo"),
+    fxTitle: translateRetailWorkspace("en", "mobileMoneyFxTitle"),
+    fxDescription: translateRetailWorkspace("en", "mobileMoneyFxDescription"),
+    sourceCurrency: translateRetailWorkspace("en", "mobileMoneySourceCurrency"),
+    targetCurrency: translateRetailWorkspace("en", "mobileMoneyTargetCurrency"),
+    sourceAmount: translateRetailWorkspace("en", "mobileMoneySourceAmount"),
+    preview: translateRetailWorkspace("en", "mobileMoneyPreview"),
+    rate: translateRetailWorkspace("en", "mobileMoneyRate"),
+    targetAmount: translateRetailWorkspace("en", "mobileMoneyTargetAmount"),
+    available: translateRetailWorkspace("en", "available"),
+    fxConfirm: translateRetailWorkspace("en", "mobileMoneyFxConfirm"),
+    fxSuccess: translateRetailWorkspace("en", "mobileMoneyFxSuccess"),
+    fxInsufficient: translateRetailWorkspace("en", "mobileMoneyFxInsufficient"),
+    fxMissingRate: translateRetailWorkspace("en", "mobileMoneyFxMissingRate"),
+    configureRates: translateRetailWorkspace("en", "mobileMoneyConfigureRates"),
+    history: translateRetailWorkspace("en", "operatorMobileMoneyHistory"),
+    noTransaction: translateRetailWorkspace("en", "operatorNoTransaction"),
+    noTransactionDescription: translateRetailWorkspace("en", "operatorConfirmedOperationsWillAppearHere"),
+    reverse: translateRetailWorkspace("en", "reverse"),
+    reverseReason: translateRetailWorkspace("en", "reversalReason"),
+    reversed: translateRetailWorkspace("en", "mobileMoneyReversed"),
+    operatorReference: translateRetailWorkspace("en", "operatorOperatorReference"),
+    refresh: translateRetailWorkspace("en", "mobileMoneyRefresh"),
+    requiredCountry: translateRetailWorkspace("en", "operatorRequiredInThisCountry"),
+    notConfigured: translateRetailWorkspace("en", "mobileMoneyNotConfigured"),
+    configureWallets: translateRetailWorkspace("en", "mobileMoneyConfigureWallets"),
+    transactionTill: translateRetailWorkspace("en", "mobileMoneyTransactionTill"),
   },
 } as const;
 
@@ -254,11 +255,14 @@ export function MobileMoneyAgencyWorkspace({
       if (!response.ok || !body) throw new Error(body?.message || body?.error || "MOBILE_MONEY_CONFIGURATION_LOAD_FAILED");
       setConfiguration(body);
     } catch (error) {
-      setConfigurationError(error instanceof Error ? error.message : "MOBILE_MONEY_CONFIGURATION_LOAD_FAILED");
+      setConfigurationError(customerFacingError(error, locale, {
+        fr: translateRetailWorkspace("fr", "retailActionError"),
+        en: translateRetailWorkspace("en", "retailActionError"),
+      }));
     } finally {
       setConfigurationBusy(false);
     }
-  }, [organizationId]);
+  }, [locale, organizationId]);
 
   useEffect(() => {
     void loadConfiguration();
@@ -406,7 +410,7 @@ function MobileMoneyOperations({
                 <option value="WITHDRAWAL">{customerFacingMobileMoneyTransactionType("WITHDRAWAL", locale)}</option>
               </MobileMoneySelect>
             </Field>
-            <Field label={copy.phone}><Input name="customerPhone" required inputMode="tel" placeholder={locale === "en" ? "+country code…" : "+indicatif pays…"} disabled={Boolean(busyAction)} /></Field>
+            <Field label={copy.phone}><Input name="customerPhone" required inputMode="tel" placeholder={translateRetailWorkspace(locale, "operatorCountryCode")} disabled={Boolean(busyAction)} /></Field>
             <Field label={copy.amount}><Input name="principalAmount" type="number" min="0.01" step="0.01" required disabled={Boolean(busyAction)} /></Field>
             <Field label={copy.fee}><Input name="customerFeeAmount" type="number" min="0" step="0.01" defaultValue="0" disabled={Boolean(busyAction)} /></Field>
             <Field label={copy.commission}><Input name="providerCommissionAmount" type="number" min="0" step="0.01" defaultValue="0" disabled={Boolean(busyAction)} /></Field>
@@ -439,7 +443,7 @@ function MobileMoneyOperations({
           <div className="rounded-2xl border-2 border-amber-400/50 bg-amber-500/10 p-4">
             <div className="grid gap-1 text-sm font-bold text-dtsc-ink">
               <p>{selectedProvider?.label || copy.service}</p>
-              <p>{customerFacingMobileMoneyTransactionType(pending.transactionType, locale)} · {moneyValue(pending.principalAmount, pending.currencyCode)}</p>
+              <p>{customerFacingMobileMoneyTransactionType(pending.transactionType, locale)} · {moneyValue(pending.principalAmount, pending.currencyCode, locale)}</p>
               <p>{pending.customerPhone}</p>
               <p>{customerFacingFeeCollectionMode(pending.feeCollectionMode, locale)}</p>
               <p>{copy.transactionTill}: {activeCash?.financialAccount.name || "—"} · {pending.currencyCode}</p>
@@ -511,8 +515,8 @@ function MobileMoneyFxPanel({
       const body = await response.json().catch(() => null) as { preview?: FxPreview; message?: string; error?: string } | null;
       if (!response.ok || !body?.preview) throw new Error(body?.message || body?.error || copy.fxMissingRate);
       setPreview(body.preview);
-    } catch (error) {
-      setPreviewError(error instanceof Error ? error.message : copy.fxMissingRate);
+    } catch {
+      setPreviewError(copy.fxMissingRate);
     } finally {
       setPreviewBusy(false);
     }
@@ -569,10 +573,10 @@ function MobileMoneyFxPanel({
           {preview ? (
             <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/10 p-4">
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                <div><p className="text-xs font-bold uppercase text-dtsc-muted">{copy.sourceAmount}</p><p className="font-black text-dtsc-ink">{moneyValue(Number(preview.sourceAmount), preview.sourceCurrencyCode)}</p></div>
-                <div><p className="text-xs font-bold uppercase text-dtsc-muted">{copy.rate}</p><p className="font-black text-dtsc-ink">1 {preview.sourceCurrencyCode} = {Number(preview.rate).toLocaleString(locale === "en" ? "en-US" : "fr-FR", { maximumFractionDigits: 6 })} {preview.targetCurrencyCode}</p></div>
-                <div><p className="text-xs font-bold uppercase text-dtsc-muted">{copy.targetAmount}</p><p className="font-black text-dtsc-ink">{moneyValue(Number(preview.targetAmount), preview.targetCurrencyCode)}</p></div>
-                <div><p className="text-xs font-bold uppercase text-dtsc-muted">{copy.available}</p><p className="font-black text-dtsc-ink">{moneyValue(Number(preview.sourceAvailableBalance), preview.sourceCurrencyCode)}</p></div>
+                <div><p className="text-xs font-bold uppercase text-dtsc-muted">{copy.sourceAmount}</p><p className="font-black text-dtsc-ink">{moneyValue(Number(preview.sourceAmount), preview.sourceCurrencyCode, locale)}</p></div>
+                <div><p className="text-xs font-bold uppercase text-dtsc-muted">{copy.rate}</p><p className="font-black text-dtsc-ink">1 {preview.sourceCurrencyCode} = {Number(preview.rate).toLocaleString(translateRetailWorkspace(locale, "mobileMoneyEnUS"), { maximumFractionDigits: 6 })} {preview.targetCurrencyCode}</p></div>
+                <div><p className="text-xs font-bold uppercase text-dtsc-muted">{copy.targetAmount}</p><p className="font-black text-dtsc-ink">{moneyValue(Number(preview.targetAmount), preview.targetCurrencyCode, locale)}</p></div>
+                <div><p className="text-xs font-bold uppercase text-dtsc-muted">{copy.available}</p><p className="font-black text-dtsc-ink">{moneyValue(Number(preview.sourceAvailableBalance), preview.sourceCurrencyCode, locale)}</p></div>
               </div>
               <p className="mt-2 text-xs font-semibold text-dtsc-muted">{formatEnterpriseDate(preview.rateDate, locale)} · {preview.rateSource}</p>
               {!preview.sufficientBalance ? <p className="mt-3 font-bold text-rose-700 dark:text-rose-200">{copy.fxInsufficient}</p> : null}
@@ -730,7 +734,7 @@ function WalletMappingRow({
           <StatusBadge tone={mapping ? "success" : "warning"}>{currencyCode}</StatusBadge>
           <div>
             <p className="text-sm font-black text-dtsc-ink">{mapping?.financialAccount.name || copy.notConfigured}</p>
-            {mapping ? <p className="text-xs font-semibold text-dtsc-muted">{copy.currentWallet} · {moneyValue(Number(mapping.financialAccount.operationalBalance), currencyCode)}</p> : null}
+            {mapping ? <p className="text-xs font-semibold text-dtsc-muted">{copy.currentWallet} · {moneyValue(Number(mapping.financialAccount.operationalBalance), currencyCode, locale)}</p> : null}
           </div>
         </div>
         <StatusBadge tone={mapping ? "success" : "warning"}>{mapping ? "OK" : copy.incomplete}</StatusBadge>
@@ -780,7 +784,7 @@ function MobileMoneyHistory({
                 key={item.id}
                 title={`${item.number} · ${providerLabel(dashboard, item.providerCode)}`}
                 status={<StatusBadge tone={statusTone(item.status)}>{customerFacingStatusLabel(item.status, locale)}</StatusBadge>}
-                meta={`${customerFacingMobileMoneyTransactionType(item.transactionType, locale)} · ${moneyValue(item.principalAmount, item.currencyCode)} · ${formatEnterpriseDate(item.occurredAt, locale)}`}
+                meta={`${customerFacingMobileMoneyTransactionType(item.transactionType, locale)} · ${moneyValue(item.principalAmount, item.currencyCode, locale)} · ${formatEnterpriseDate(item.occurredAt, locale)}`}
                 description={`${item.customerPhoneMasked || "—"} · ${copy.operatorReference}: ${item.externalReference || "—"}`}
                 actions={dashboard.access.canManage && item.status === "CONFIRMED" ? <Button size="sm" variant="outline" disabled={Boolean(busyAction)} onClick={() => void reverse(item.id, item.revision)}><RotateCcw className="h-4 w-4" />{copy.reverse}</Button> : undefined}
               />

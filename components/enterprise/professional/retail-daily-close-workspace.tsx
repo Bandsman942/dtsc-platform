@@ -21,6 +21,8 @@ import {
 } from "@/lib/customer-facing-language";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
 import { getRetailUserGuide } from "@/lib/user-guides/retail-telco-mobile-money-guides";
+import { moneyValue } from "@/components/enterprise/professional/retail-workspace-shared";
+import { translateRetailWorkspace } from "@/lib/i18n";
 
 type FinancialAccount = {
   id: string;
@@ -80,13 +82,6 @@ type CloseListResponse = {
   items: DailyClose[];
   pagination: { page: number; pageSize: number; total: number; pageCount: number };
 };
-
-function moneyValue(value: string | number | null | undefined, currency?: string) {
-  const amount = Number(value || 0);
-  const locale = typeof document !== "undefined" && document.documentElement.lang.toLowerCase().startsWith("en") ? "en-US" : "fr-FR";
-  const formatted = Number.isFinite(amount) ? amount.toLocaleString(locale, { maximumFractionDigits: 2 }) : "0";
-  return currency ? `${formatted} ${currency}` : formatted;
-}
 
 function parseDenominations(value: string) {
   return value
@@ -161,8 +156,8 @@ export function RetailDailyCloseWorkspace({
       setCloseList(closesBody);
     } catch (caught) {
       setError(customerFacingError(caught, locale, {
-        fr: "La clôture journalière n’est pas disponible pour le moment. Actualisez puis réessayez.",
-        en: "Daily close is not available right now. Refresh and try again.",
+        fr: translateRetailWorkspace("fr", "dailyCloseError"),
+        en: translateRetailWorkspace("en", "dailyCloseError"),
       }));
     } finally {
       setLoading(false);
@@ -196,8 +191,8 @@ export function RetailDailyCloseWorkspace({
       return body || {};
     } catch (caught) {
       setMessage(customerFacingError(caught, locale, {
-        fr: "Cette action n’a pas pu être terminée. Vérifiez les informations puis réessayez.",
-        en: "This action could not be completed. Check the information and try again.",
+        fr: translateRetailWorkspace("fr", "retailActionError"),
+        en: translateRetailWorkspace("en", "retailActionError"),
       }));
       return null;
     } finally {
@@ -230,7 +225,7 @@ export function RetailDailyCloseWorkspace({
         denominations: account.accountType === "CASH" ? parseDenominations(String(form.get(`denominations-${account.id}`) || "")) : [],
       }));
     if (!lines.length) {
-      setMessage(locale === "en" ? "Select at least one account to close." : "Sélectionnez au moins un compte à clôturer.");
+      setMessage(translateRetailWorkspace(locale, "dailyCloseSelectAtLeastOneAccountToClose"));
       return;
     }
     const businessDate = String(form.get("businessDate") || new Date().toISOString().slice(0, 10));
@@ -242,14 +237,14 @@ export function RetailDailyCloseWorkspace({
         notes: String(form.get("notes") || "").trim() || null,
         lines,
       },
-      locale === "en" ? "Close submitted for independent review." : "Clôture soumise à une validation indépendante.",
+      translateRetailWorkspace(locale, "dailyCloseCloseSubmittedForIndependentReview"),
       true,
     );
   }
 
   async function decide(item: DailyClose, decision: "APPROVE" | "REJECT") {
     const reason = decision === "REJECT"
-      ? window.prompt(locale === "en" ? "Why is this close rejected?" : "Pourquoi cette clôture est-elle refusée ?")
+      ? window.prompt(translateRetailWorkspace(locale, "dailyCloseWhyIsThisCloseRejected"))
       : null;
     if (decision === "REJECT" && !reason?.trim()) return;
     await post(
@@ -257,24 +252,22 @@ export function RetailDailyCloseWorkspace({
       `/api/enterprise/${organizationId}/retail/daily-close/${item.id}/decision`,
       { revision: item.revision, decision, reason: reason?.trim() || null },
       decision === "APPROVE"
-        ? (locale === "en" ? "Close approved." : "Clôture validée.")
-        : (locale === "en" ? "Close rejected." : "Clôture refusée."),
+        ? (translateRetailWorkspace(locale, "dailyCloseCloseApproved"))
+        : (translateRetailWorkspace(locale, "dailyCloseCloseRejected")),
     );
   }
 
   return (
     <ModuleWorkspace>
       <ModuleHeader
-        eyebrow={`${locale === "en" ? "Shop control" : "Contrôle Shop"} · ${organizationName}`}
+        eyebrow={`${translateRetailWorkspace(locale, "shopControl")} · ${organizationName}`}
         title={locale === "en" ? definition.labelEn : definition.labelFr}
-        description={locale === "en"
-          ? "Count the till and operational balances, explain variances, then submit the day for independent review."
-          : "Comptez la caisse et les soldes opérationnels, justifiez les écarts puis soumettez la journée à une validation indépendante."}
+        description={translateRetailWorkspace(locale, "dailyCloseCountTheTillAndOperationalBalancesExplainVariancesThenSubmitTheDay")}
         primaryAction={(
           <div data-responsive-actions>
-            <Button variant="outline" onClick={() => setGuideOpen(true)}>{locale === "en" ? "User guide" : "Guide utilisateur"}</Button>
+            <Button variant="outline" onClick={() => setGuideOpen(true)}>{translateRetailWorkspace(locale, "userGuide")}</Button>
             <Button variant="outline" disabled={Boolean(busyAction)} onClick={() => setRefreshKey((value) => value + 1)}>
-              <RefreshCw className="h-4 w-4" />{locale === "en" ? "Refresh" : "Actualiser"}
+              <RefreshCw className="h-4 w-4" />{translateRetailWorkspace(locale, "refresh")}
             </Button>
           </div>
         )}
@@ -282,11 +275,11 @@ export function RetailDailyCloseWorkspace({
       <ContextualUserGuide guide={guide} open={guideOpen} onOpenChange={setGuideOpen} hideTrigger />
 
       {dashboard ? (
-        <ModuleMetrics label={locale === "en" ? "Daily close indicators" : "Indicateurs de clôture"}>
-          <ModuleMetric label={locale === "en" ? "Till" : "Caisse"} value={dashboard.cashSession?.status === "OPEN" ? (locale === "en" ? "Open" : "Ouverte") : (locale === "en" ? "Not open" : "Non ouverte")} />
-          <ModuleMetric label={locale === "en" ? "Balances to review" : "Soldes à contrôler"} value={closeAccounts.length} />
-          <ModuleMetric label={locale === "en" ? "Awaiting review" : "À valider"} value={pendingCount} />
-          <ModuleMetric label={locale === "en" ? "Variances in view" : "Écarts visibles"} value={varianceCount} />
+        <ModuleMetrics label={translateRetailWorkspace(locale, "dailyCloseDailyCloseIndicators")}>
+          <ModuleMetric label={translateRetailWorkspace(locale, "till")} value={dashboard.cashSession?.status === "OPEN" ? (translateRetailWorkspace(locale, "dailyCloseOpen")) : (translateRetailWorkspace(locale, "dailyCloseNotOpen"))} />
+          <ModuleMetric label={translateRetailWorkspace(locale, "dailyCloseBalancesToReview")} value={closeAccounts.length} />
+          <ModuleMetric label={translateRetailWorkspace(locale, "dailyCloseAwaitingReview")} value={pendingCount} />
+          <ModuleMetric label={translateRetailWorkspace(locale, "dailyCloseVariancesInView")} value={varianceCount} />
         </ModuleMetrics>
       ) : null}
 
@@ -295,23 +288,23 @@ export function RetailDailyCloseWorkspace({
           <div className="flex min-w-0 gap-2 overflow-x-auto [touch-action:pan-x]">
             {["ALL", "SUBMITTED", "APPROVED", "REJECTED"].map((status) => (
               <Button key={status} size="sm" variant={statusFilter === status ? "default" : "outline"} onClick={() => setStatusFilter(status)}>
-                {status === "ALL" ? (locale === "en" ? "All closes" : "Toutes") : customerFacingStatusLabel(status, locale)}
+                {status === "ALL" ? (translateRetailWorkspace(locale, "dailyCloseAllCloses")) : customerFacingStatusLabel(status, locale)}
               </Button>
             ))}
           </div>
         )}
-        summary={locale === "en" ? "Finance remains the source of truth for tills, balances and treasury." : "Finance reste la source de vérité des caisses, soldes et de la trésorerie."}
+        summary={translateRetailWorkspace(locale, "dailyCloseFinanceRemainsTheSourceOfTruthForTillsBalancesAndTreasury")}
       />
 
       <ModuleContent>
         {message ? <div role="status" className="rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-semibold text-dtsc-ink">{message}</div> : null}
         {error ? <ProfessionalError message={error} /> : loading ? <ProfessionalLoading rows={5} /> : !dashboard ? (
-          <EmptyState title={locale === "en" ? "Daily close unavailable" : "Clôture indisponible"} description={locale === "en" ? "Refresh this page to try again." : "Actualisez cette page pour réessayer."} />
+          <EmptyState title={translateRetailWorkspace(locale, "dailyCloseDailyCloseUnavailable")} description={translateRetailWorkspace(locale, "refreshToRetry")} />
         ) : (
           <div className="grid min-w-0 gap-5">
             <ModuleSection
-              title={locale === "en" ? "Till & treasury handoff" : "Caisse & passage vers Finance"}
-              description={locale === "en" ? "Use Finance to manage the underlying accounts; use this workspace to perform the Shop day-end control." : "Utilisez Finance pour gérer les comptes ; utilisez cet espace pour effectuer le contrôle de fin de journée du Shop."}
+              title={translateRetailWorkspace(locale, "dailyCloseTillTreasuryHandoff")}
+              description={translateRetailWorkspace(locale, "dailyCloseUseFinanceToManageTheUnderlyingAccountsUseThisWorkspaceToPerform")}
             >
               <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
                 <div className={`min-w-0 rounded-2xl border p-4 ${dashboard.cashSession?.status === "OPEN" ? "border-emerald-500/30 bg-emerald-500/10" : "border-amber-500/30 bg-amber-500/10"}`}>
@@ -321,19 +314,19 @@ export function RetailDailyCloseWorkspace({
                         <div className="min-w-0">
                           <p className="break-words font-black text-dtsc-ink">{dashboard.cashSession.financialAccount.name} · {dashboard.cashSession.financialAccount.currencyCode}</p>
                           <p className="mt-1 text-xs font-semibold text-dtsc-muted">
-                            {locale === "en" ? "Opening float" : "Fonds d’ouverture"}: {moneyValue(dashboard.cashSession.openingAmount, dashboard.cashSession.financialAccount.currencyCode)} · {locale === "en" ? "current balance" : "solde actuel"}: {moneyValue(dashboard.cashSession.financialAccount.operationalBalance, dashboard.cashSession.financialAccount.currencyCode)}
+                            {translateRetailWorkspace(locale, "openingFloat")}: {moneyValue(dashboard.cashSession.openingAmount, dashboard.cashSession.financialAccount.currencyCode, locale)} · {translateRetailWorkspace(locale, "currentBalance")}: {moneyValue(dashboard.cashSession.financialAccount.operationalBalance, dashboard.cashSession.financialAccount.currencyCode, locale)}
                           </p>
                         </div>
                         <StatusBadge tone="success">{customerFacingStatusLabel(dashboard.cashSession.status, locale)}</StatusBadge>
                       </div>
                     </>
                   ) : (
-                    <p className="text-sm font-bold text-amber-800 dark:text-amber-200">{locale === "en" ? "No active till. Open your till before recording cash activity." : "Aucune caisse active. Ouvrez votre caisse avant d’enregistrer des opérations en espèces."}</p>
+                    <p className="text-sm font-bold text-amber-800 dark:text-amber-200">{translateRetailWorkspace(locale, "dailyCloseNoActiveTillOpenYourTillBeforeRecordingCashActivity")}</p>
                   )}
                 </div>
                 <div data-responsive-actions>
-                  <Button asChild variant="outline"><Link href="/enterprise-modules/FINANCE_CASH">{locale === "en" ? "Cash management" : "Gestion de caisse"}</Link></Button>
-                  <Button asChild variant="outline"><Link href="/enterprise-modules/FINANCE_TREASURY">{locale === "en" ? "Treasury" : "Trésorerie"}</Link></Button>
+                  <Button asChild variant="outline"><Link href="/enterprise-modules/FINANCE_CASH">{translateRetailWorkspace(locale, "dailyCloseCashManagement")}</Link></Button>
+                  <Button asChild variant="outline"><Link href="/enterprise-modules/FINANCE_TREASURY">{translateRetailWorkspace(locale, "treasury")}</Link></Button>
                 </div>
               </div>
 
@@ -349,28 +342,28 @@ export function RetailDailyCloseWorkspace({
                         financialAccountId: String(form.get("financialAccountId") || ""),
                         openingAmount: String(form.get("openingAmount") || "0"),
                       },
-                      locale === "en" ? "Till opened." : "Caisse ouverte.",
+                      translateRetailWorkspace(locale, "tillOpened"),
                     );
                   }}
                   className="mt-4 grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,0.45fr)_auto] sm:items-end"
                 >
-                  <Field label={locale === "en" ? "Till" : "Caisse"}>
+                  <Field label={translateRetailWorkspace(locale, "till")}>
                     <Select name="financialAccountId" required disabled={Boolean(busyAction)}>
                       <option value="">—</option>
                       {cashAccounts.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.currencyCode}</option>)}
                     </Select>
                   </Field>
-                  <Field label={locale === "en" ? "Opening float" : "Fonds d’ouverture"}>
+                  <Field label={translateRetailWorkspace(locale, "openingFloat")}>
                     <Input name="openingAmount" type="number" min="0" step="0.01" required disabled={Boolean(busyAction)} />
                   </Field>
-                  <Button disabled={Boolean(busyAction) || !cashAccounts.length}><Banknote className="h-4 w-4" />{locale === "en" ? "Open till" : "Ouvrir la caisse"}</Button>
+                  <Button disabled={Boolean(busyAction) || !cashAccounts.length}><Banknote className="h-4 w-4" />{translateRetailWorkspace(locale, "dailyCloseOpenTill")}</Button>
                 </form>
               ) : null}
             </ModuleSection>
 
             <ModuleSection
-              title={locale === "en" ? "Balances to count" : "Soldes à compter"}
-              description={locale === "en" ? "Only the accounts relevant to the Shop close are presented here. Their setup remains in Finance." : "Seuls les comptes utiles à la clôture du Shop sont présentés ici. Leur paramétrage reste dans Finance."}
+              title={translateRetailWorkspace(locale, "dailyCloseBalancesToCount")}
+              description={translateRetailWorkspace(locale, "dailyCloseOnlyTheAccountsRelevantToTheShopCloseArePresentedHereTheir")}
             >
               {closeAccounts.length ? (
                 <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -378,22 +371,22 @@ export function RetailDailyCloseWorkspace({
                     <div key={account.id} className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
                       <p className="break-words font-black text-dtsc-ink">{account.name}</p>
                       <p className="mt-1 text-xs font-semibold text-dtsc-muted">{customerFacingFinancialAccountType(account.accountType, locale)} · {account.currencyCode}</p>
-                      <p className="mt-3 text-xl font-black text-dtsc-ink">{moneyValue(account.operationalBalance, account.currencyCode)}</p>
-                      <p className="text-xs font-semibold text-dtsc-muted">{locale === "en" ? "Current operational balance" : "Solde opérationnel actuel"}</p>
+                      <p className="mt-3 text-xl font-black text-dtsc-ink">{moneyValue(account.operationalBalance, account.currencyCode, locale)}</p>
+                      <p className="text-xs font-semibold text-dtsc-muted">{translateRetailWorkspace(locale, "dailyCloseCurrentOperationalBalance")}</p>
                     </div>
                   ))}
                 </div>
-              ) : <EmptyState compact title={locale === "en" ? "No balance to close" : "Aucun solde à clôturer"} description={locale === "en" ? "Configure the relevant cash or payment account in Finance first." : "Configurez d’abord le compte de caisse ou de paiement correspondant dans Finance."} />}
+              ) : <EmptyState compact title={translateRetailWorkspace(locale, "dailyCloseNoBalanceToClose")} description={translateRetailWorkspace(locale, "dailyCloseConfigureTheRelevantCashOrPaymentAccountInFinanceFirst")} />}
             </ModuleSection>
 
             <ModuleSection
-              title={locale === "en" ? "Submit the daily close" : "Soumettre la clôture journalière"}
-              description={locale === "en" ? "Select the balances you counted. Every variance should have a clear business reason before review." : "Sélectionnez les soldes comptés. Tout écart doit avoir une justification claire avant validation."}
+              title={translateRetailWorkspace(locale, "dailyCloseSubmitTheDailyClose")}
+              description={translateRetailWorkspace(locale, "dailyCloseSelectTheBalancesYouCountedEveryVarianceShouldHaveAClearBusiness")}
             >
               <form onSubmit={(event) => void submitClose(event)} className="grid min-w-0 gap-4">
                 <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-                  <Field label={locale === "en" ? "Business date" : "Date d’exploitation"}><Input name="businessDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required /></Field>
-                  <Field label={locale === "en" ? "Close notes" : "Notes de clôture"}><Input name="notes" maxLength={2000} /></Field>
+                  <Field label={translateRetailWorkspace(locale, "dailyCloseBusinessDate")}><Input name="businessDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required /></Field>
+                  <Field label={translateRetailWorkspace(locale, "dailyCloseCloseNotes")}><Input name="notes" maxLength={2000} /></Field>
                 </div>
                 <div className="grid min-w-0 gap-3">
                   {closeAccounts.map((account) => (
@@ -402,56 +395,56 @@ export function RetailDailyCloseWorkspace({
                         <input type="checkbox" name={`include-${account.id}`} />
                         <span className="min-w-0 break-words">{account.name}<span className="block text-xs font-semibold text-dtsc-muted">{customerFacingFinancialAccountType(account.accountType, locale)} · {account.currencyCode}</span></span>
                       </label>
-                      <Field label={locale === "en" ? "Declared balance" : "Solde déclaré"}><Input name={`declared-${account.id}`} type="number" min="0" step="0.01" defaultValue={String(account.operationalBalance)} /></Field>
+                      <Field label={translateRetailWorkspace(locale, "dailyCloseDeclaredBalance")}><Input name={`declared-${account.id}`} type="number" min="0" step="0.01" defaultValue={String(account.operationalBalance)} /></Field>
                       {account.accountType === "CASH" ? (
-                        <Field label={locale === "en" ? "Denominations" : "Coupures"}><Input name={`denominations-${account.id}`} placeholder="50000x2,20000x3" /></Field>
+                        <Field label={translateRetailWorkspace(locale, "dailyCloseDenominations")}><Input name={`denominations-${account.id}`} placeholder="50000x2,20000x3" /></Field>
                       ) : (
                         <div className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-xs font-semibold text-dtsc-muted">
-                          {locale === "en" ? "System balance" : "Solde système"}: {moneyValue(account.operationalBalance, account.currencyCode)}
+                          {translateRetailWorkspace(locale, "dailyCloseSystemBalance")}: {moneyValue(account.operationalBalance, account.currencyCode, locale)}
                         </div>
                       )}
-                      <Field label={locale === "en" ? "Variance reason" : "Motif d’écart"}><Input name={`reason-${account.id}`} maxLength={1000} /></Field>
+                      <Field label={translateRetailWorkspace(locale, "dailyCloseVarianceReason")}><Input name={`reason-${account.id}`} maxLength={1000} /></Field>
                     </div>
                   ))}
                 </div>
                 <Button className="w-fit" disabled={Boolean(busyAction) || !dashboard.access.canWrite || !closeAccounts.length}>
-                  <ClipboardCheck className="h-4 w-4" />{busyAction === "daily-close-submit" ? (locale === "en" ? "Submitting…" : "Soumission…") : (locale === "en" ? "Submit for review" : "Soumettre à validation")}
+                  <ClipboardCheck className="h-4 w-4" />{busyAction === "daily-close-submit" ? (translateRetailWorkspace(locale, "dailyCloseSubmitting")) : (translateRetailWorkspace(locale, "dailyCloseSubmitForReview"))}
                 </Button>
               </form>
             </ModuleSection>
 
             <ModuleSection
-              title={locale === "en" ? "Daily close history" : "Historique des clôtures"}
-              description={closeList ? `${closeList.pagination.total} ${locale === "en" ? "close(s)" : "clôture(s)"}` : undefined}
+              title={translateRetailWorkspace(locale, "dailyCloseDailyCloseHistory")}
+              description={closeList ? `${closeList.pagination.total} ${translateRetailWorkspace(locale, "dailyCloseCloseS")}` : undefined}
             >
               {closes.length ? (
-                <BusinessList ariaLabel={locale === "en" ? "Daily close history" : "Historique des clôtures"}>
+                <BusinessList ariaLabel={translateRetailWorkspace(locale, "dailyCloseDailyCloseHistory")}>
                   {closes.map((item) => {
                     const varianceLines = item.lines.filter((line) => Math.abs(Number(line.differenceAmount || 0)) > 0.005);
                     const description = item.lines.map((line) => {
                       const label = customerFacingFinancialAccountType(line.accountType, locale);
-                      const declared = moneyValue(line.declaredBalance, line.currencyCode);
-                      const difference = moneyValue(line.differenceAmount, line.currencyCode);
-                      return `${label}: ${locale === "en" ? "declared" : "déclaré"} ${declared} · ${locale === "en" ? "variance" : "écart"} ${difference}${line.varianceReason ? ` · ${line.varianceReason}` : ""}`;
+                      const declared = moneyValue(line.declaredBalance, line.currencyCode, locale);
+                      const difference = moneyValue(line.differenceAmount, line.currencyCode, locale);
+                      return `${label}: ${translateRetailWorkspace(locale, "dailyCloseDeclared")} ${declared} · ${translateRetailWorkspace(locale, "dailyCloseVariance")} ${difference}${line.varianceReason ? ` · ${line.varianceReason}` : ""}`;
                     }).join(" | ");
                     return (
                       <BusinessListItem
                         key={item.id}
                         title={item.number}
                         status={<StatusBadge tone={statusTone(item.status)}>{customerFacingStatusLabel(item.status, locale)}</StatusBadge>}
-                        meta={`${formatEnterpriseDate(item.businessDate, locale)} · ${varianceLines.length ? `${varianceLines.length} ${locale === "en" ? "variance(s)" : "écart(s)"}` : (locale === "en" ? "No variance" : "Aucun écart")}`}
+                        meta={`${formatEnterpriseDate(item.businessDate, locale)} · ${varianceLines.length ? `${varianceLines.length} ${translateRetailWorkspace(locale, "dailyCloseVarianceS")}` : (translateRetailWorkspace(locale, "dailyCloseNoVariance"))}`}
                         description={description}
                         actions={dashboard.access.canManage && item.status === "SUBMITTED" ? (
                           <div data-responsive-actions>
-                            <Button size="sm" disabled={Boolean(busyAction)} onClick={() => void decide(item, "APPROVE")}><CheckCircle2 className="h-4 w-4" />{locale === "en" ? "Approve" : "Valider"}</Button>
-                            <Button size="sm" variant="outline" disabled={Boolean(busyAction)} onClick={() => void decide(item, "REJECT")}><XCircle className="h-4 w-4" />{locale === "en" ? "Reject" : "Refuser"}</Button>
+                            <Button size="sm" disabled={Boolean(busyAction)} onClick={() => void decide(item, "APPROVE")}><CheckCircle2 className="h-4 w-4" />{translateRetailWorkspace(locale, "dailyCloseApprove")}</Button>
+                            <Button size="sm" variant="outline" disabled={Boolean(busyAction)} onClick={() => void decide(item, "REJECT")}><XCircle className="h-4 w-4" />{translateRetailWorkspace(locale, "dailyCloseReject")}</Button>
                           </div>
                         ) : undefined}
                       />
                     );
                   })}
                 </BusinessList>
-              ) : <EmptyState compact title={locale === "en" ? "No daily close" : "Aucune clôture"} description={locale === "en" ? "Submitted closes will appear here with their variances and review status." : "Les clôtures soumises apparaîtront ici avec leurs écarts et leur statut de validation."} />}
+              ) : <EmptyState compact title={translateRetailWorkspace(locale, "dailyCloseNoDailyClose")} description={translateRetailWorkspace(locale, "dailyCloseSubmittedClosesWillAppearHereWithTheirVariancesAndReviewStatus")} />}
             </ModuleSection>
           </div>
         )}

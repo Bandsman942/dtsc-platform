@@ -6,6 +6,8 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const failures = [];
 const check = (condition, message) => { if (!condition) failures.push(message); };
 const hasAll = (source, markers) => markers.every((marker) => source.includes(marker));
+const retailWorkspaceFr = read("locales/retail-workspace.fr.json");
+const retailWorkspaceEn = read("locales/retail-workspace.en.json");
 
 const schema = read("prisma/enterprise-retail-mobile-money-multicurrency.prisma");
 check(hasAll(schema, [
@@ -139,15 +141,16 @@ check(hasAll(retailHttp, [
 
 const workspace = read("components/enterprise/professional/mobile-money-agency-workspace.tsx");
 check(hasAll(workspace, [
-  "Comptes Mobile Money par devise",
-  "Mobile Money accounts by currency",
-  "CDF et USD",
-  "CDF and USD",
-  "Operator wallet",
-  "Transfert entre devises",
-  "Currency transfer",
-  "Calculer avec le taux courant",
-  "Calculate with current rate",
+  'translateRetailWorkspace("fr", "mobileMoneyConfigTitle")',
+  'translateRetailWorkspace("en", "mobileMoneyConfigTitle")',
+  'translateRetailWorkspace("fr", "mobileMoneyConfigDescription")',
+  'translateRetailWorkspace("en", "mobileMoneyConfigDescription")',
+  'translateRetailWorkspace("fr", "mobileMoneyWalletUsed")',
+  'translateRetailWorkspace("en", "mobileMoneyWalletUsed")',
+  'translateRetailWorkspace("fr", "mobileMoneyFxTitle")',
+  'translateRetailWorkspace("en", "mobileMoneyFxTitle")',
+  'translateRetailWorkspace("fr", "mobileMoneyPreview")',
+  'translateRetailWorkspace("en", "mobileMoneyPreview")',
   "mobile-money-wallet-configuration",
   "MobileMoneyCashSessionManager",
   "selectedCashSessionId",
@@ -159,16 +162,30 @@ check(hasAll(workspace, [
   "lg:grid-cols",
   "bg-dtsc-surface",
   "border-dtsc-border",
-]), "Mobile Money UX must expose one operator card with per-currency wallets, concurrent till switching, FX preview and responsive DTSC styling in FR/EN");
-check(workspace.toLocaleLowerCase("fr").includes("wallet opérateur"), "French Mobile Money UX must describe the operator wallet in customer-facing language");
+]), "Mobile Money UX must expose one operator card with per-currency wallets, concurrent till switching, FX preview and responsive DTSC styling through canonical FR/EN i18n");
+for (const [key, frLabel, enLabel] of [
+  ["mobileMoneyConfigTitle", "Comptes Mobile Money par devise", "Mobile Money accounts by currency"],
+  ["mobileMoneyConfigDescription", "Chaque opérateur reste affiché une seule fois. Associez-lui un wallet financier distinct pour chaque devise exploitée ; en RDC, CDF et USD sont attendus.", "Each operator is displayed once. Link one distinct financial wallet per operating currency; in DR Congo, CDF and USD are expected."],
+  ["mobileMoneyWalletUsed", "Wallet opérateur utilisé", "Operator wallet used"],
+  ["mobileMoneyFxTitle", "Transfert entre devises", "Currency transfer"],
+  ["mobileMoneyPreview", "Calculer avec le taux courant", "Calculate with current rate"],
+]) {
+  check(retailWorkspaceFr.includes(`"${key}": "${frLabel}"`), `Retail FR catalog must preserve Mobile Money business copy for ${key}`);
+  check(retailWorkspaceEn.includes(`"${key}": "${enLabel}"`), `Retail EN catalog must preserve Mobile Money business copy for ${key}`);
+}
+check(workspace.includes('translateRetailWorkspace("fr", "mobileMoneyWalletUsed")'), "French Mobile Money UX must resolve the operator wallet through the canonical customer-facing label");
+check(retailWorkspaceFr.toLocaleLowerCase("fr").includes("wallet opérateur utilisé"), "French Retail catalog must describe the operator wallet in customer-facing language");
 check(!workspace.includes("window.confirm"), "The #306 confirmation contract must not regress in the new Mobile Money workspace");
 check(!workspace.includes("() => providers.filter"), "Eligible Mobile Money providers must not reintroduce an unstable providers useMemo dependency");
 
 const cashManager = read("components/enterprise/professional/mobile-money-cash-session-manager.tsx");
 check(hasAll(cashManager, [
-  "Mes caisses Mobile Money",
-  "My Mobile Money tills",
-  "CDF + USD",
+  'translateRetailWorkspace("fr", "cashSessionTitle")',
+  'translateRetailWorkspace("en", "cashSessionTitle")',
+  'translateRetailWorkspace("fr", "cashSessionRecommended")',
+  'translateRetailWorkspace("en", "cashSessionRecommended")',
+  'translateRetailWorkspace("fr", "cashSessionCloseSubmitted")',
+  'translateRetailWorkspace("en", "cashSessionCloseSubmitted")',
   'aria-pressed={selected}',
   "openSessions",
   "pendingSessions",
@@ -180,11 +197,17 @@ check(hasAll(cashManager, [
   "countedTotal",
   "reasonRequired",
   `/retail/cash-sessions/${"${session.id}"}/close`,
-  "Clôture soumise à l’approbation indépendante.",
-  "Till close submitted for independent approval.",
   "focus-visible:ring-2",
   "active:scale-[0.99]",
-]), "Mobile Money cash UX must support concurrent CDF/USD tills, one-tap selection, accessible responsive states and separate counted end-of-day submission");
+]), "Mobile Money cash UX must support concurrent CDF/USD tills, one-tap selection, accessible responsive states and separate counted end-of-day submission through canonical i18n");
+for (const [key, frLabel, enLabel] of [
+  ["cashSessionTitle", "Mes caisses Mobile Money", "My Mobile Money tills"],
+  ["cashSessionRecommended", "Recommandé RDC : CDF + USD", "DRC recommendation: CDF + USD"],
+  ["cashSessionCloseSubmitted", "Clôture soumise à l’approbation indépendante.", "Till close submitted for independent approval."],
+]) {
+  check(retailWorkspaceFr.includes(`"${key}": "${frLabel}"`), `Retail FR catalog must preserve Mobile Money cash label for ${key}`);
+  check(retailWorkspaceEn.includes(`"${key}": "${enLabel}"`), `Retail EN catalog must preserve Mobile Money cash label for ${key}`);
+}
 
 const sharedWorkspace = read("components/enterprise/professional/retail-workspace-shared.tsx");
 check(sharedWorkspace.includes('moduleCode === "RETAIL_POS" ? <CashSessionBar'), "The legacy single-till banner must be restricted to POS so Mobile Money keeps the concurrent till selector as its only operational cash context");
@@ -224,4 +247,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log("Issue #307 Mobile Money multi-currency QA passed: operator/currency wallets, concurrent CDF/USD tills, frictionless switching, separate end-of-day closes, DRC readiness, deposits/withdrawals, same-operator FX, Treasury/accounting, reversal, RBAC, documentation and professional FR/EN UX are guarded.");
+console.log("Issue #307 Mobile Money multi-currency QA passed: operator/currency wallets, concurrent CDF/USD tills, frictionless switching, separate end-of-day closes, DRC readiness, deposits/withdrawals, same-operator FX, Treasury/accounting, reversal, RBAC, documentation and canonical professional FR/EN UX are guarded.");
