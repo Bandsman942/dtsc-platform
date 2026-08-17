@@ -43,7 +43,7 @@ export default async function SharedConversationSnapshotPage({ params }: Params)
           <ArrowLeft className="h-4 w-4" />
         </Link>
         <div className="min-w-0">
-          <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-cyan-600">Copie consultable</p>
+          <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-cyan-700 dark:text-cyan-300">Copie consultable</p>
           <h1 className="truncate text-xl font-black text-dtsc-ink sm:text-2xl">{snapshot.title}</h1>
           <p className="truncate text-xs font-semibold text-dtsc-muted">Partagée par {snapshot.sharedBy.name} dans {snapshot.group.name}</p>
         </div>
@@ -53,14 +53,31 @@ export default async function SharedConversationSnapshotPage({ params }: Params)
         {messages.map((message, index) => {
           const assistant = message.role === "assistant";
           return (
-            <article key={message.id || `${index}-${message.createdAt || "message"}`} className={`rounded-2xl border p-4 shadow-sm ${assistant ? "border-cyan-300/60 bg-cyan-50 text-slate-950 dark:bg-cyan-100" : "border-dtsc-border bg-dtsc-surface text-dtsc-ink"}`}>
+            <article
+              key={message.id || `${index}-${message.createdAt || "message"}`}
+              className={
+                assistant
+                  ? "rounded-2xl border border-cyan-300/70 bg-cyan-50 p-4 text-slate-950 shadow-sm dark:border-cyan-700/70 dark:bg-[#082636] dark:text-slate-100"
+                  : "rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 text-dtsc-ink shadow-sm"
+              }
+            >
               <div className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-[0.1em]">
-                <span className={`inline-flex h-8 w-8 items-center justify-center rounded-full ${assistant ? "bg-cyan-700 text-white" : "bg-dtsc-soft text-dtsc-blue"}`}>
+                <span
+                  className={
+                    assistant
+                      ? "inline-flex h-8 w-8 items-center justify-center rounded-full bg-cyan-700 text-white dark:bg-cyan-300 dark:text-slate-950"
+                      : "inline-flex h-8 w-8 items-center justify-center rounded-full bg-dtsc-soft text-dtsc-blue"
+                  }
+                >
                   {assistant ? <Bot className="h-4 w-4" /> : <UserRound className="h-4 w-4" />}
                 </span>
-                {assistant ? "Assistant DTSC" : message.role === "user" ? "Utilisateur" : "Système"}
+                <span className={assistant ? "text-slate-950 dark:text-cyan-50" : undefined}>
+                  {assistant ? "Assistant DTSC" : message.role === "user" ? "Utilisateur" : "Système"}
+                </span>
               </div>
-              <p className="whitespace-pre-wrap break-words text-sm leading-7">{message.content}</p>
+              <p className={assistant ? "whitespace-pre-wrap break-words text-sm leading-7 text-slate-900 dark:text-slate-100" : "whitespace-pre-wrap break-words text-sm leading-7"}>
+                {message.content}
+              </p>
             </article>
           );
         })}
