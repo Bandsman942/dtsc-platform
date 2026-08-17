@@ -7,12 +7,15 @@ function jsonBlock(value: unknown) {
   return JSON.stringify(value, null, 2);
 }
 
-function buildModuleVocabulary(sectorCode: string | null) {
+function buildModuleVocabulary(sectorCode: string | null, accessibleModuleCodes: string[]) {
+  const accessibleCodes = new Set(accessibleModuleCodes);
   const definitions = listEnterpriseModuleDefinitions({ statuses: ["ACTIVE", "BETA"] })
     .filter((definition) =>
-      definition.applicableSectors === "ALL" ||
-      !sectorCode ||
-      definition.applicableSectors.includes(sectorCode)
+      accessibleCodes.has(definition.code) && (
+        definition.applicableSectors === "ALL" ||
+        !sectorCode ||
+        definition.applicableSectors.includes(sectorCode)
+      )
     );
 
   return definitions.map((definition) => ({
@@ -35,7 +38,7 @@ export function buildEnterpriseAiInstructions(
   const sectorContext = runtime?.cagContent?.trim()
     ? runtime.cagContent
     : "Contexte sectoriel non disponible: répondre avec prudence, sans inventer de données et en demandant une validation humaine pour toute action métier.";
-  const moduleVocabulary = buildModuleVocabulary(access.sectorCode);
+  const moduleVocabulary = buildModuleVocabulary(access.sectorCode, access.accessibleModuleCodes);
 
   return [
     "Tu es l'IA Assistant Entreprise de DTSC Platform.",
@@ -49,13 +52,15 @@ export function buildEnterpriseAiInstructions(
     "Réponds dans la langue demandée par l'instruction linguistique du runtime, avec un ton professionnel, clair et actionnable.",
     "",
     "CONTRAT STRICT DE PRÉSENTATION DES MODULES:",
+    "- Le vocabulaire ci-dessous est filtré par les permissions, le plan, le secteur, les dépendances et le contexte actif de l’utilisateur. Il constitue la liste des modules entreprise que cet utilisateur peut réellement consulter maintenant.",
+    "- Ne présente jamais comme disponible pour cet utilisateur un module absent de ce vocabulaire. Si l’utilisateur demande le catalogue général DTSC, distingue explicitement les capacités générales de celles auxquelles il a accès dans son contexte actif.",
     "- Les codes internes servent uniquement au raisonnement et ne doivent jamais être affichés dans une réponse métier normale.",
     "- Quand un code interne de module apparaît dans une source, un résultat d'outil, l'historique ou la question, remplace-le dans la réponse par le libellé UX canonique correspondant ci-dessous, en choisissant labelFr pour le français ou labelEn pour l'anglais.",
     "- N'affiche jamais un nom de module avec des underscores. Ne montre notamment jamais FINANCE_ACCOUNTING, FINANCE_CASH, FINANCE_PAYABLES ou FINANCE_RECEIVABLES à l'utilisateur.",
     "- N'invente pas un nom fonctionnel différent du registre. Si un code ne figure pas dans le vocabulaire canonique, décris son effet métier en langage naturel sans reproduire le code brut.",
     "- Les noms de tables, champs, enums, routes, variables d'environnement et codes d'outils restent également invisibles sauf diagnostic technique explicitement demandé et autorisé.",
     "",
-    "VOCABULAIRE CANONIQUE DES MODULES (strictement interne; ne jamais recopier internalCode dans la réponse):",
+    "VOCABULAIRE CANONIQUE DES MODULES ACCESSIBLES (strictement interne; ne jamais recopier internalCode dans la réponse):",
     jsonBlock(moduleVocabulary),
     "",
     "FORMAT DE RÉPONSE ENRICHI:",
@@ -75,6 +80,7 @@ export function buildEnterpriseAiInstructions(
       role: access.role,
       planCode: access.planCode,
       canUseActionDrafts: access.canUseActionDrafts,
+      accessibleModuleCount: moduleVocabulary.length,
       assistantProfileCode: runtime?.assistantProfileCode || "ENTERPRISE_GENERAL",
       assistantProfileVersion: runtime?.assistantProfileVersion || null,
       cagVersion: runtime?.cagVersion || null,

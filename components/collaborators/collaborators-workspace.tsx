@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
 import { ConversationComposer } from "@/components/chat/ConversationComposer";
+import { AssistantRichContent } from "@/components/chat/assistant-rich-content";
 import { ConversationHeader } from "@/components/chat/ConversationHeader";
 import { ConversationListItem } from "@/components/chat/ConversationListItem";
 import { FloatingActionButton } from "@/components/chat/FloatingActionButton";
@@ -828,23 +829,25 @@ export function CollaboratorsWorkspace({
       </Dialog>
       <Dialog open={Boolean(joinedCall)} title={joinedCall?.call.callType === "VIDEO" ? "Appel vidéo DTSC" : "Appel audio DTSC"} onClose={() => { void leaveJoinedCall(); }} className="max-w-4xl">
         {joinedCall && (
-          <GroupCallRoom
-            joinedCall={joinedCall}
-            group={activeGroup}
-            messages={messages}
-            currentUserId={currentUserId}
-            userPreferences={userPreferences}
-            callPreferences={callPreferences}
-            canEnd={joinedCall.call.startedById === currentUserId || canManage}
-            onLeave={leaveJoinedCall}
-            onEnd={() => endGroupCall(joinedCall.call)}
-            onMessageSent={async () => {
-              if (activeGroup) {
-                await loadMessages(activeGroup.id);
-                await refresh();
-              }
-            }}
-          />
+          <div data-call-experience="legacy" className="contents">
+            <GroupCallRoom
+              joinedCall={joinedCall}
+              group={activeGroup}
+              messages={messages}
+              currentUserId={currentUserId}
+              userPreferences={userPreferences}
+              callPreferences={callPreferences}
+              canEnd={joinedCall.call.startedById === currentUserId || canManage}
+              onLeave={leaveJoinedCall}
+              onEnd={() => endGroupCall(joinedCall.call)}
+              onMessageSent={async () => {
+                if (activeGroup) {
+                  await loadMessages(activeGroup.id);
+                  await refresh();
+                }
+              }}
+            />
+          </div>
         )}
       </Dialog>
       <Dialog open={Boolean(editingMessage)} title="Modifier le message" onClose={() => setEditingMessage(null)}>
@@ -909,17 +912,13 @@ export function CollaboratorsWorkspace({
                         Copie
                       </span>
                     </div>
-                    <p
-                      className={cn(
-                        "mt-3 whitespace-pre-wrap leading-7",
-                        isAssistant && "!text-slate-950 dark:!text-slate-950",
-                        isUser && "text-slate-900 dark:text-slate-100",
-                        !isAssistant && !isUser && "text-slate-900 dark:text-slate-900"
-                      )}
-                      style={isAssistant ? { color: "#0f172a" } : undefined}
-                    >
-                      {message.content}
-                    </p>
+                    {isAssistant ? (
+                      <AssistantRichContent content={message.content} className="mt-3 text-slate-950 dark:text-slate-950" />
+                    ) : (
+                      <p className={cn("mt-3 whitespace-pre-wrap leading-7", isUser ? "text-slate-900 dark:text-slate-100" : "text-slate-900 dark:text-slate-900")}>
+                        {message.content}
+                      </p>
+                    )}
                   </div>
                 );
               })}
