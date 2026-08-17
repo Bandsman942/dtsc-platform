@@ -15,7 +15,9 @@ SCALE-0A was merged on:
 
 `main@eacc49883bee68a2050605ad06b7637443a4f7b6`
 
-SCALE-0B extends that baseline with a protected Production-observability snapshot. It does not certify any load stage by itself.
+SCALE-0B added a protected Production-observability snapshot on `main@342cd1144ee2f8e61a14ab8c42d0611826a9017f`.
+
+SCALE-0C extends that snapshot with observed API/AI throughput and persisted AI rate-limit signals. It does not certify any load stage by itself.
 
 ## SLO targets
 
@@ -83,10 +85,12 @@ The endpoint requires the existing `SECURITY_READ` Console capability and return
 
 The snapshot intentionally exposes only aggregate technical signals:
 
-- API sample count, server-error count/rate and P50/P95/P99 from persisted `ApiLog.durationMs`;
+- API sample count, observed requests/minute and requests/second, server-error count/rate and P50/P95/P99 from persisted `ApiLog.durationMs`;
 - a live PostgreSQL probe latency plus current/max connections from `pg_stat_activity`;
-- AI sample/success/failure counts, P50/P95/P99 and first-token P95 from `AiModelCall`;
+- AI sample/success/failure counts, observed calls/minute and calls/second, persisted `RATE_LIMITED` count/rate, P50/P95/P99 and first-token P95 from `AiModelCall`;
 - Redis status explicitly marked `NOT_MEASURED` until SCALE-2 / #355.
+
+Throughput values are observed averages across the selected bounded window. They are not peak RPS and must not be presented as load-test capacity. Likewise, `rateLimitedCount` only reflects calls persisted with `reasonCode = RATE_LIMITED`; it does not infer provider throttling from missing or unrelated data.
 
 It does not return request payloads, user identifiers, organization identifiers, DSNs, credentials, cookies or provider secrets. `ApiLog` coverage is not assumed to be exhaustive: the returned sample count is part of the evidence contract.
 
@@ -148,4 +152,4 @@ Until an actual staged load run is executed and archived, capacity stages stay `
 
 ## Rollback
 
-SCALE-0B adds a read-only endpoint, helper, documentation and QA. Rollback is a revert of the SCALE-0B commit; there is no Prisma or Production data rollback.
+SCALE-0C extends a read-only helper and QA/documentation only. Rollback is a revert of the SCALE-0C commit; there is no Prisma or Production data rollback.
