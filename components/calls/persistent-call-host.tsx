@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Mic, MicOff, PhoneCall, PhoneOff, Video, VideoOff } from "lucide-react";
 import { LiveKitRoom, RoomAudioRenderer } from "@livekit/components-react";
-import { ConnectionState, Room } from "livekit-client";
+import { ConnectionState, Room, RoomEvent } from "livekit-client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 
@@ -183,10 +183,10 @@ export function PersistentCallHost() {
 
   useEffect(() => {
     const update = () => setConnectionState(room.state);
-    room.on("connectionStateChanged", update);
+    room.on(RoomEvent.ConnectionStateChanged, update);
     update();
     return () => {
-      room.off("connectionStateChanged", update);
+      room.off(RoomEvent.ConnectionStateChanged, update);
     };
   }, [room]);
 
