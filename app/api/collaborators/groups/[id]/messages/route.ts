@@ -236,6 +236,9 @@ export async function POST(req: Request, { params }: Params) {
     : null;
   if (parsed.data.sharedChatbotConversationId && !sharedConversation) return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
 
+  const sharedSnapshotId = sharedConversation ? crypto.randomUUID() : null;
+  const sharedSnapshotUrl = sharedSnapshotId ? new URL(`/collaborators/shared-conversations/${sharedSnapshotId}`, req.url).toString() : null;
+  const messageContent = sharedSnapshotUrl ? `${parsed.data.content}\n\nSnapshot consultable: ${sharedSnapshotUrl}` : parsed.data.content;
   const memberUserIds = await groupMemberUserIds(id);
   const mentionAll = containsCollaborationMentionAll(parsed.data.content);
   if (mentionAll && !canManageGroup(member, session.role)) {
@@ -250,7 +253,7 @@ export async function POST(req: Request, { params }: Params) {
       data: {
         groupId: id,
         authorId: session.userId,
-        content: parsed.data.content,
+        content: messageContent,
         messageType: parsed.data.messageType,
         clientMessageId: parsed.data.clientMessageId || null,
         replyToId: parsed.data.replyToId || null,
@@ -259,9 +262,10 @@ export async function POST(req: Request, { params }: Params) {
         mentions: { create: mentionedUserIds.map((mentionedUserId) => ({ mentionedUserId, isRead: mentionedUserId === session.userId })) },
       },
     });
-    if (sharedConversation) {
+    if (sharedConversation && sharedSnapshotId) {
       await tx.collaborationSharedConversation.create({
         data: {
+          id: sharedSnapshotId,
           originalConversationId: sharedConversation.id,
           sharedById: session.userId,
           groupId: id,
@@ -308,6 +312,6 @@ export async function POST(req: Request, { params }: Params) {
     idempotencyKey: `collaboration:message:${message.id}:${userId}`,
   })));
   await writeGroupAudit({ groupId: id, actorId: session.userId, action: "message.create", entityType: "CollaborationGroupMessage", entityId: message.id });
-  await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt });
-  return NextResponse.json({ ok: true, message }, { status: 201 });
+  await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: sharedSnapshotId ? { sharedSnapshotId } : undefined });
+  return NextResponse.json({ ok: true, message, snapshotUrl: sharedSnapshotUrl }, { status: 201 });
 }

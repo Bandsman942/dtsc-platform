@@ -67,7 +67,10 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Not found", message: "Conversation IA introuvable." }, { status: 404 });
   }
 
-  const content = data.content || `Conversation IA Entreprise partagée: ${conversation.title}`;
+  const snapshotId = crypto.randomUUID();
+  const snapshotUrl = new URL(`/collaborators/shared-conversations/${snapshotId}`, req.url).toString();
+  const baseContent = data.content || `Conversation IA Entreprise partagée: ${conversation.title}`;
+  const content = `${baseContent}\n\nSnapshot consultable: ${snapshotUrl}`;
   const message = await prisma.$transaction(async (tx) => {
     const savedMessage = await tx.collaborationGroupMessage.create({
       data: {
@@ -79,6 +82,7 @@ export async function POST(req: Request, { params }: Params) {
     });
     await tx.collaborationSharedConversation.create({
       data: {
+        id: snapshotId,
         originalConversationId: null,
         sharedById: session.userId,
         groupId: data.groupId,
@@ -113,7 +117,7 @@ export async function POST(req: Request, { params }: Params) {
   await notifyUsers({
     userIds: recipients,
     title: "Conversation IA Entreprise partagée",
-    body: `${session.name}: ${content.slice(0, 160)}`,
+    body: `${session.name}: ${baseContent.slice(0, 160)}`,
     type: "COLLABORATION",
     targetUrl: "/collaborators",
     organizationId: data.organizationId,
@@ -125,8 +129,8 @@ export async function POST(req: Request, { params }: Params) {
     entity: "EnterpriseAiConversation",
     entityId: id,
     request: req,
-    metadata: { organizationId: data.organizationId, groupId: data.groupId, messageId: message.id },
+    metadata: { organizationId: data.organizationId, groupId: data.groupId, messageId: message.id, snapshotId },
   });
-  await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId: data.organizationId, conversationId: id, groupId: data.groupId } });
-  return NextResponse.json({ ok: true, message }, { status: 201 });
+  await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId: data.organizationId, conversationId: id, groupId: data.groupId, snapshotId } });
+  return NextResponse.json({ ok: true, message, snapshotUrl }, { status: 201 });
 }

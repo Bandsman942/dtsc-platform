@@ -1,3 +1,4 @@
+import { CERTIFIED_FORM_IMPORT_CODES } from "@/lib/ai/forms/import-registry";
 import { assertMcpToolBindingIntegrity, listMcpAiToolDefinitions } from "@/lib/ai/mcp/bindings";
 import { assertMcpResourceBindingIntegrity } from "@/lib/ai/mcp/resource-adapter";
 
@@ -97,6 +98,31 @@ const STATIC_AI_TOOL_REGISTRY: AiToolDefinition[] = [
     requiresConfirmation: true,
     idempotent: true,
     auditLevel: "STANDARD",
+  },
+  {
+    code: "ENTERPRISE_FORM_BATCH_IMPORT",
+    labelKey: "ai.tools.enterpriseFormBatchImport.label",
+    descriptionKey: "ai.tools.enterpriseFormBatchImport.description",
+    inputSchema: {
+      type: "object",
+      required: ["formCode", "rows"],
+      properties: {
+        formCode: { enum: CERTIFIED_FORM_IMPORT_CODES },
+        rows: { type: "array", minItems: 1, maxItems: 50, items: { type: "object" } },
+        sourceLabel: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+    outputSchema: OBJECT_OUTPUT,
+    contexts: ["ORGANIZATION"],
+    requiredModuleCodes: [],
+    requiredPermissions: ["ENTERPRISE_AI.TOOLS.MUTATE"],
+    minimumPlan: "BUSINESS",
+    allowedAssistantCodes: ["ENTERPRISE_GENERAL"],
+    mode: "MUTATE",
+    requiresConfirmation: true,
+    idempotent: true,
+    auditLevel: "SENSITIVE",
   },
 ];
 
