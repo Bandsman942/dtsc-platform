@@ -65,8 +65,23 @@ function WindowRail({ locale, active }: { locale: string; active: number }) {
 export function CtoScalabilityDashboard({ snapshot, locale }: { snapshot: Snapshot; locale: string }) {
   const t = (key: Parameters<typeof translateScalabilityConsole>[1]) => translateScalabilityConsole(locale, key);
   const apiWatch = snapshot.api.sampleCount > 0 && ((snapshot.api.serverErrorRate ?? 0) >= 0.01 || (snapshot.api.latencyMs.p95 ?? 0) >= 1000 || (snapshot.api.latencyMs.p99 ?? 0) >= 2000);
-  const dbWatch = (snapshot.database.connectionUtilization ?? 0) >= 0.8;
+  const dbPolicyWatch = snapshot.database.connectionPolicy.status !== "OK";
+  const dbWatch =
+    (snapshot.database.connectionUtilization ?? 0) >= 0.8 ||
+    snapshot.database.idleInTransactionConnections > 0 ||
+    snapshot.database.longRunningQueries > 0 ||
+    dbPolicyWatch;
   const aiWatch = snapshot.ai.sampleCount > 0 && ((snapshot.ai.rateLimitedRate ?? 0) > 0 || (snapshot.ai.latencyMs.p99 ?? 0) >= 2000);
+
+  const databaseModeLabel = (() => {
+    switch (snapshot.database.connectionPolicy.mode) {
+      case "NEON_POOLED": return t("pooled");
+      case "NEON_DIRECT": return t("direct");
+      case "POSTGRESQL_OTHER": return t("otherPostgres");
+      case "UNCONFIGURED": return t("unconfigured");
+      case "INVALID": return t("invalid");
+    }
+  })();
 
   return (
     <div className="w-full min-w-0 max-w-full space-y-5" data-dtsc-responsive-root>
@@ -115,6 +130,14 @@ export function CtoScalabilityDashboard({ snapshot, locale }: { snapshot: Snapsh
             <Metric label={t("utilization")} value={percent(snapshot.database.connectionUtilization)} hint={t("targetNoExhaustion")} />
             <Metric label={t("current")} value={snapshot.database.currentConnections} />
             <Metric label={t("maximum")} value={snapshot.database.maxConnections} />
+            <Metric label={t("activeConnections")} value={snapshot.database.activeConnections} />
+            <Metric label={t("idleConnections")} value={snapshot.database.idleConnections} />
+            <Metric label={t("idleInTransaction")} value={snapshot.database.idleInTransactionConnections} />
+            <Metric label={t("longQueries")} value={snapshot.database.longRunningQueries} />
+            <Metric label={t("poolingMode")} value={databaseModeLabel} hint={t("pooledHint")} />
+            <Metric label={t("connectionLimit")} value={snapshot.database.connectionPolicy.parameters.connectionLimit ?? "—"} />
+            <Metric label={t("poolTimeout")} value={snapshot.database.connectionPolicy.parameters.poolTimeoutSeconds == null ? "—" : `${snapshot.database.connectionPolicy.parameters.poolTimeoutSeconds} ${t("seconds")}`} />
+            <Metric label={t("connectTimeout")} value={snapshot.database.connectionPolicy.parameters.connectTimeoutSeconds == null ? "—" : `${snapshot.database.connectionPolicy.parameters.connectTimeoutSeconds} ${t("seconds")}`} />
           </div>
         </article>
 
