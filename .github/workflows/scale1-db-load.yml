@@ -16,6 +16,8 @@ on:
         description: Type RUN_SCALE1_DB_LOAD to confirm the bounded Production load run
         required: true
         type: string
+  issue_comment:
+    types: [created]
 
 permissions:
   contents: read
@@ -26,6 +28,12 @@ concurrency:
 
 jobs:
   intermediate-db-load:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.number == 410 &&
+       github.event.comment.author_association == 'OWNER' &&
+       github.event.comment.body == 'RUN_SCALE1_DB_LOAD_500')
     name: Intermediate PostgreSQL load evidence
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -34,16 +42,25 @@ jobs:
       SESSION_COOKIE: ${{ secrets.SCALE1_LOAD_SESSION_COOKIE }}
       OBSERVABILITY_COOKIE: ${{ secrets.SCALE1_CTO_SESSION_COOKIE }}
       VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
-      TARGET_VUS: ${{ inputs.target_vus }}
+      TARGET_VUS: ${{ github.event_name == 'workflow_dispatch' && inputs.target_vus || '500' }}
       ARTIFACTS_DIR: artifacts
     steps:
       - name: Validate manual load contract
         shell: bash
         run: |
           set -euo pipefail
-          if [ "${{ inputs.confirmation }}" != "RUN_SCALE1_DB_LOAD" ]; then
-            echo "::error::Confirmation must be RUN_SCALE1_DB_LOAD."
-            exit 1
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "${{ inputs.confirmation }}" != "RUN_SCALE1_DB_LOAD" ]; then
+              echo "::error::Confirmation must be RUN_SCALE1_DB_LOAD."
+              exit 1
+            fi
+          else
+            if [ "${{ github.event.issue.number }}" != "410" ] || \
+               [ "${{ github.event.comment.author_association }}" != "OWNER" ] || \
+               [ "${{ github.event.comment.body }}" != "RUN_SCALE1_DB_LOAD_500" ]; then
+              echo "::error::Issue-comment load trigger is not authorized."
+              exit 1
+            fi
           fi
           if [ -z "${BASE_URL:-}" ]; then
             echo "::error::Repository variable SCALE1_LOAD_BASE_URL is required."
@@ -157,7 +174,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: scale1-db-load-${{ github.sha }}-${{ inputs.target_vus }}vu
+          name: scale1-db-load-${{ github.sha }}-${{ github.event_name == 'workflow_dispatch' && inputs.target_vus || '500' }}vu
           if-no-files-found: error
           retention-days: 30
           path: |
