@@ -25,8 +25,12 @@ const profile = fs.readFileSync(files.profile, "utf8");
 const report = fs.readFileSync(files.report, "utf8");
 const all = `${workflow}\n${profile}\n${report}`;
 
-expect(/^on:\s*\n\s+workflow_dispatch:/m.test(workflow), "workflow must be manual workflow_dispatch only");
+expect(/^on:\s*\n\s+workflow_dispatch:/m.test(workflow), "workflow_dispatch trigger is required");
+expect(/^\s+issue_comment:\s*$/m.test(workflow), "owner issue-comment trigger is required for operator reruns");
 expect(!/^\s+(push|pull_request|schedule):/m.test(workflow), "workflow must never run on push, pull_request or schedule");
+expect(workflow.includes("github.event.issue.number == 410"), "issue-comment trigger must stay scoped to #410");
+expect(workflow.includes("github.event.comment.author_association == 'OWNER'"), "issue-comment trigger must require repository OWNER association");
+expect(workflow.includes("github.event.comment.body == 'RUN_SCALE1_DB_LOAD_500'"), "issue-comment trigger must require the exact 500-VU command");
 expect(workflow.includes('RUN_SCALE1_DB_LOAD'), "manual confirmation gate is missing");
 expect(workflow.includes('vars.SCALE1_LOAD_BASE_URL'), "SCALE1_LOAD_BASE_URL repository variable is missing");
 expect(workflow.includes('secrets.SCALE1_LOAD_SESSION_COOKIE'), "load-session secret is missing");
@@ -56,15 +60,21 @@ expect(!profile.includes('[200, 307, 401]'), "redirect/unauthenticated responses
 expect(!/http\.(post|put|patch|del|delete)\s*\(/i.test(profile), "SCALE-1B Production profile must remain read-only");
 expect(profile.includes('http_req_failed: ["rate<0.01"]'), "HTTP error-rate gate is missing");
 expect(profile.includes('"p(95)<1000"') && profile.includes('"p(99)<2000"'), "P95/P99 latency gates are missing");
+expect(profile.includes('"http_req_duration{workload:dashboard-read}"'), "dashboard workload latency gate is missing");
+expect(profile.includes('"http_req_duration{workload:notifications-read}"'), "notifications workload latency gate is missing");
 expect(profile.includes('checks: ["rate>0.99"]'), "check-rate gate is missing");
 expect(profile.includes('sleep(4 + Math.random() * 4)'), "active-user think time must remain bounded");
 
+expect(report.includes('workloadLatencyMs'), "report must archive per-workload latency");
+expect(report.includes('dashboardP95UnderOneSecond'), "report must gate dashboard P95 separately");
+expect(report.includes('notificationsP95UnderOneSecond'), "report must gate notifications P95 separately");
 expect(report.includes('database.connectionModes[0] === "NEON_POOLED"'), "report must require Neon pooled runtime");
 expect(report.includes('database.connectionStatuses[0] === "OK"'), "report must require an OK runtime policy");
 expect(report.includes('database.maxConnectionUtilization < 0.8'), "report must fail at 80% connection utilization");
 expect(report.includes('database.maxIdleInTransactionConnections === 0'), "report must reject idle-in-transaction sessions");
 expect(report.includes('database.maxCurrentConnections < database.maxConnections'), "report must reject PostgreSQL connection exhaustion");
 expect(report.includes('process.env.GITHUB_ACTIONS === "true" ? "CI_PROVEN" : "LOCAL_EXECUTED"'), "evidence state must reflect the actual executor");
+expect(report.includes('tuningIssue: 416'), "SCALE-1B tuning issue link is missing");
 expect(report.includes('scale7Issue: 360'), "SCALE-7 ownership boundary is missing");
 
 for (const forbidden of ['postgresql://', 'postgres://', 'session=', 'password=', 'NEXT_PUBLIC_DATABASE_URL']) {
