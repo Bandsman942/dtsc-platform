@@ -1,0 +1,175 @@
+name: SCALE-1B database load evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_vus:
+        description: Intermediate virtual-user target
+        required: true
+        default: "500"
+        type: choice
+        options:
+          - "100"
+          - "250"
+          - "500"
+      confirmation:
+        description: Type RUN_SCALE1_DB_LOAD to confirm the bounded Production load run
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scale1-db-load
+  cancel-in-progress: false
+
+jobs:
+  intermediate-db-load:
+    name: Intermediate PostgreSQL load evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BASE_URL: ${{ vars.SCALE1_LOAD_BASE_URL }}
+      SESSION_COOKIE: ${{ secrets.SCALE1_LOAD_SESSION_COOKIE }}
+      OBSERVABILITY_COOKIE: ${{ secrets.SCALE1_CTO_SESSION_COOKIE }}
+      TARGET_VUS: ${{ inputs.target_vus }}
+      ARTIFACTS_DIR: artifacts
+    steps:
+      - name: Validate manual load contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ inputs.confirmation }}" != "RUN_SCALE1_DB_LOAD" ]; then
+            echo "::error::Confirmation must be RUN_SCALE1_DB_LOAD."
+            exit 1
+          fi
+          if [ -z "${BASE_URL:-}" ]; then
+            echo "::error::Repository variable SCALE1_LOAD_BASE_URL is required."
+            exit 1
+          fi
+          if [ -z "${SESSION_COOKIE:-}" ]; then
+            echo "::error::Secret SCALE1_LOAD_SESSION_COOKIE is required."
+            exit 1
+          fi
+          if [ -z "${OBSERVABILITY_COOKIE:-}" ]; then
+            echo "::error::Secret SCALE1_CTO_SESSION_COOKIE is required."
+            exit 1
+          fi
+          case "$TARGET_VUS" in
+            100|250|500) ;;
+            *) echo "::error::target_vus must be 100, 250 or 500."; exit 1 ;;
+          esac
+          case "$BASE_URL" in
+            https://*) ;;
+            *) echo "::error::SCALE1_LOAD_BASE_URL must use HTTPS."; exit 1 ;;
+          esac
+
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Setup k6
+        uses: grafana/setup-k6-action@v1
+        with:
+          k6-version: 2.1.0
+
+      - name: Prepare evidence directory
+        run: mkdir -p artifacts
+
+      - name: Authenticated preflight and initial DB snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            --header "Cookie: ${SESSION_COOKIE}" \
+            "${BASE_URL%/}/api/notifications/unread-count")"
+          if [ "$status" != "200" ]; then
+            echo "::error::Authenticated load preflight returned HTTP ${status}."
+            exit 1
+          fi
+
+          curl --fail --silent --show-error \
+            --header "Cookie: ${OBSERVABILITY_COOKIE}" \
+            "${BASE_URL%/}/api/admin/scalability/observability?windowHours=1" \
+            | jq -c '{generatedAt:.snapshot.generatedAt,database:.snapshot.database}' \
+            >> artifacts/db-observability.ndjson
+
+      - name: Run bounded k6 load and sample PostgreSQL pressure
+        id: load
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          capture_db_snapshot() {
+            curl --fail --silent --show-error \
+              --header "Cookie: ${OBSERVABILITY_COOKIE}" \
+              "${BASE_URL%/}/api/admin/scalability/observability?windowHours=1" \
+              | jq -c '{generatedAt:.snapshot.generatedAt,database:.snapshot.database}' \
+              >> artifacts/db-observability.ndjson
+          }
+
+          (
+            while true; do
+              capture_db_snapshot || echo "::warning::A PostgreSQL observability sample failed."
+              sleep 15
+            done
+          ) &
+          monitor_pid=$!
+
+          set +e
+          k6 run scripts/load/scale1-db-intermediate.js
+          k6_status=$?
+          set -e
+
+          kill "$monitor_pid" 2>/dev/null || true
+          wait "$monitor_pid" 2>/dev/null || true
+          capture_db_snapshot || true
+
+          echo "k6_status=${k6_status}" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Build sanitized SCALE-1B report
+        id: report
+        shell: bash
+        run: |
+          set +e
+          node scripts/load/build-scale1-db-report.mjs
+          report_status=$?
+          set -e
+          echo "report_status=${report_status}" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload SCALE-1B evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: scale1-db-load-${{ github.sha }}-${{ inputs.target_vus }}vu
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/k6-summary.json
+            artifacts/db-observability.ndjson
+            artifacts/scale1-db-load-report.json
+            artifacts/scale1-db-load-report.md
+
+      - name: Enforce SCALE-1B gates
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          k6_status="${{ steps.load.outputs.k6_status }}"
+          report_status="${{ steps.report.outputs.report_status }}"
+          if [ -z "$k6_status" ] || [ "$k6_status" != "0" ]; then
+            echo "::error::k6 SCALE-1B thresholds failed or the load run did not complete."
+            exit 1
+          fi
+          if [ -z "$report_status" ] || [ "$report_status" != "0" ]; then
+            echo "::error::SCALE-1B database evidence gates failed."
+            exit 1
+          fi
+          echo "SCALE-1B intermediate PostgreSQL load evidence: PASS"
