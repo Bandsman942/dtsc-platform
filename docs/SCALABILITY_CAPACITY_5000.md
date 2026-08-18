@@ -1,7 +1,7 @@
 # DTSC Platform — Scalability & Capacity Engineering
 
 Parent programme: #352
-Iteration: #353 / SCALE-0
+Iteration: #353 / SCALE-0, then #354 / SCALE-1
 
 ## Purpose
 
@@ -18,6 +18,10 @@ SCALE-0A was merged on:
 SCALE-0B added a protected Production-observability snapshot on `main@342cd1144ee2f8e61a14ab8c42d0611826a9017f`.
 
 SCALE-0C extends that snapshot with observed API/AI throughput and persisted AI rate-limit signals. It does not certify any load stage by itself.
+
+SCALE-0D exposes those signals in Console → CTO with bounded 1 h / 24 h / 7 d windows.
+
+SCALE-1 adds a serverless-safe database connection contract, explicit Prisma transaction budgets, secret-free runtime pooling status and PostgreSQL pressure signals. The operational runbook is `docs/SCALABILITY_DATABASE_SAFETY.md`.
 
 ## SLO targets
 
@@ -87,14 +91,33 @@ The snapshot intentionally exposes only aggregate technical signals:
 
 - API sample count, observed requests/minute and requests/second, server-error count/rate and P50/P95/P99 from persisted `ApiLog.durationMs`;
 - a live PostgreSQL probe latency plus current/max connections from `pg_stat_activity`;
+- PostgreSQL active, idle, idle-in-transaction and active-query-over-1-second counts;
+- secret-free runtime connection mode and effective Prisma pool/connect timeout parameters;
 - AI sample/success/failure counts, observed calls/minute and calls/second, persisted `RATE_LIMITED` count/rate, P50/P95/P99 and first-token P95 from `AiModelCall`;
 - Redis status explicitly marked `NOT_MEASURED` until SCALE-2 / #355.
 
 Throughput values are observed averages across the selected bounded window. They are not peak RPS and must not be presented as load-test capacity. Likewise, `rateLimitedCount` only reflects calls persisted with `reasonCode = RATE_LIMITED`; it does not infer provider throttling from missing or unrelated data.
 
-It does not return request payloads, user identifiers, organization identifiers, DSNs, credentials, cookies or provider secrets. `ApiLog` coverage is not assumed to be exhaustive: the returned sample count is part of the evidence contract.
+It does not return request payloads, user identifiers, organization identifiers, DSNs, credentials, cookies, SQL text or provider secrets. `ApiLog` coverage is not assumed to be exhaustive: the returned sample count is part of the evidence contract.
 
 The live PostgreSQL probe is a point-in-time application observation, not a substitute for Neon provider telemetry. Redis latency/failover evidence remains a known gap owned by #355 rather than a synthetic value.
+
+## SCALE-1 database runtime contract
+
+Application traffic uses the canonical Prisma singleton in `lib/prisma.ts`.
+
+For Neon Production:
+
+- `DATABASE_URL` should be the pooled `-pooler` endpoint;
+- `DIRECT_URL` may hold the direct endpoint for Prisma CLI/admin operations;
+- pooled Neon runtime URLs receive conservative defaults only when the operator did not set explicit values: `connection_limit=1`, `pool_timeout=5`, `connect_timeout=10`;
+- Prisma interactive transactions keep explicit defaults of `maxWait=2s` and `timeout=5s`;
+- a direct Neon runtime endpoint is surfaced as an operational warning rather than silently rewritten;
+- the CTO dashboard marks idle-in-transaction sessions, >1 s active queries, ≥80% connection utilization or an unverified/unpooled runtime policy as conditions to inspect.
+
+`qa-scale1-database-safety.mjs` also prevents runtime code in `app/`, `components/` or `lib/` from introducing a second `new PrismaClient(...)` outside `lib/prisma.ts`.
+
+This hardens the database path but does not prove connection safety at 500+ users until staged load evidence exists.
 
 ## Reproducible smoke profile
 
@@ -123,7 +146,8 @@ Never commit real cookies, credentials, provider tokens or Production secrets.
 Browser / PWA
    |
 Vercel / Next.js
-   |-- interactive APIs ----------> PostgreSQL / Neon
+   |-- interactive APIs ----------> PostgreSQL / Neon pooled runtime
+   |-- Prisma CLI/admin ----------> PostgreSQL / Neon direct when configured
    |-- ephemeral realtime state --> Redis / Upstash where justified
    |-- asynchronous work ---------> durable queue / workers
    |-- read-heavy dashboards -----> bounded cache / projections
@@ -142,14 +166,14 @@ Its useful delta is split by responsibility:
 - SCALE-2 / #355: presence/realtime Redis work, to be re-audited against the then-current `main`;
 - SCALE-3 / #356: distributed rate-limit timeout/degradation work, to be re-audited against the then-current `main`.
 
-No runtime presence or rate-limit change belongs to SCALE-0.
+No runtime presence or rate-limit change belongs to SCALE-0/1.
 
 ## Evidence contract
 
-Repository inspection and CI can prove that the observability contract is protected, bounded, compile-safe and regression-safe. A deployed endpoint can provide a current Production baseline for the configured window. Neither of those facts proves 5,000-user capacity.
+Repository inspection and CI can prove that the observability and database-safety contracts are protected, bounded, compile-safe and regression-safe. A deployed endpoint can provide a current Production baseline for the configured window. Neither of those facts proves 5,000-user capacity.
 
 Until an actual staged load run is executed and archived, capacity stages stay `NOT_EXECUTED`.
 
 ## Rollback
 
-SCALE-0C extends a read-only helper and QA/documentation only. Rollback is a revert of the SCALE-0C commit; there is no Prisma or Production data rollback.
+SCALE-0/1 changes are additive application, QA and documentation changes only. Rollback is a revert of the relevant commits; there is no Prisma schema or Production data rollback in SCALE-1.
