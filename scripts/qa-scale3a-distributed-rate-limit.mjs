@@ -31,6 +31,7 @@ const checks = [
   [!limiter.includes("fetch("), "rate limiter must not own a direct Upstash fetch"],
   [Number.isFinite(limiterTimeout) && Number.isFinite(genericTimeout) && limiterTimeout > 0 && limiterTimeout < genericTimeout, "rate-limit timeout must be positive and stricter than generic Redis timeout"],
   [limiter.includes('"EVAL", ATOMIC_RATE_LIMIT_SCRIPT'), "distributed limiter must use one EVAL command"],
+  [limiter.includes("#!lua flags=allow-key-locking"), "Lua limiter must use Upstash key-scoped locking instead of the default global script lock"],
   [limiter.includes('redis.call("INCR", KEYS[1])'), "atomic script must increment the limiter key"],
   [limiter.includes('redis.call("PTTL", KEYS[1])'), "atomic script must read remaining TTL"],
   [limiter.includes('redis.call("PEXPIRE", KEYS[1], ARGV[1])'), "atomic script must set or repair expiry"],
