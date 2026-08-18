@@ -1,6 +1,6 @@
 # DTSC Platform — SCALE-1 Database Safety
 
-Parent programme: #352  
+Parent programme: #352
 Iteration: #354 / SCALE-1
 
 ## Purpose
