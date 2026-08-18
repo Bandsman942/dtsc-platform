@@ -1,11 +1,22 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
-import { canAccessGroupInSessionWithSubscription, touchUserPresence } from "@/lib/collaboration";
+import { canAccessGroupInSessionWithSubscription } from "@/lib/collaboration";
+import {
+  claimCollaborationCallDbReconciliation,
+  getCollaborationCallToastSettings,
+  humanCallEventMessage,
+  readCollaborationCallEventInbox,
+  type CollaborationCallInboxEvent,
+} from "@/lib/collaboration-call-event-inbox";
 import { expireMissedCollaborationCalls } from "@/lib/collaboration-calls";
 import { prisma } from "@/lib/prisma";
 
 const MAX_EVENT_AGE_MS = 10 * 60 * 1000;
+
+function participantEvent(eventType: string) {
+  return ["CALL_JOINED", "CALL_LEFT", "USER_JOINED", "USER_LEFT", "PARTICIPANT_MUTED", "PARTICIPANT_UNMUTED"].includes(eventType);
+}
 
 export async function GET(req: Request) {
   const startedAt = Date.now();
@@ -14,132 +25,99 @@ export async function GET(req: Request) {
     await writeApiLog({ request: req, statusCode: 401, startedAt });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  await touchUserPresence(session.userId);
 
   const url = new URL(req.url);
   const cursorParam = url.searchParams.get("cursor");
   const cursorDate = cursorParam ? new Date(cursorParam) : new Date(Date.now() - MAX_EVENT_AGE_MS);
   const since = Number.isNaN(cursorDate.getTime()) ? new Date(Date.now() - MAX_EVENT_AGE_MS) : cursorDate;
 
-  const [groups, user] = await Promise.all([
-    prisma.collaborationGroup.findMany({
+  const [inbox, settingsResult] = await Promise.all([
+    readCollaborationCallEventInbox(session.userId, since),
+    getCollaborationCallToastSettings(session.userId),
+  ]);
+  const reconciliation = inbox.mode === "REDIS"
+    ? await claimCollaborationCallDbReconciliation(session.userId)
+    : { mode: "FALLBACK" as const, due: true };
+
+  let responseEvents: CollaborationCallInboxEvent[] = inbox.events;
+  const shouldReadDatabase = inbox.mode === "FALLBACK" || reconciliation.due;
+
+  if (shouldReadDatabase) {
+    const groups = await prisma.collaborationGroup.findMany({
       where: { status: "ACTIVE", members: { some: { userId: session.userId, status: "ACTIVE" } } },
       select: { id: true, name: true, organizationId: true, groupType: true },
       take: 200,
-    }),
-    prisma.user.findUnique({
-      where: { id: session.userId },
-      select: {
-        callSoundsEnabled: true,
-        callNotificationsEnabled: true,
-        floatingCallAlertsEnabled: true,
-        participantEventAlertsEnabled: true,
-        callAlertSoundEnabled: true,
-        connectionIssueSoundsEnabled: true,
-        callAlertDisplayDuration: true,
-        callSoundVolume: true,
-      },
-    }),
-  ]);
-  const visibleGroupChecks = await Promise.all(groups.map(async (group) => ({
-    group,
-    visible: await canAccessGroupInSessionWithSubscription(group, session),
-  })));
-  const visibleGroups = visibleGroupChecks.filter((item) => item.visible).map((item) => item.group);
-  const groupIds = visibleGroups.map((group) => group.id);
-  if (!groupIds.length) {
-    await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
-    return NextResponse.json({ events: [], cursor: new Date().toISOString(), settings: user });
-  }
+    });
+    const visibleGroupChecks = await Promise.all(groups.map(async (group) => ({
+      group,
+      visible: await canAccessGroupInSessionWithSubscription(group, session),
+    })));
+    const visibleGroups = visibleGroupChecks.filter((item) => item.visible).map((item) => item.group);
+    const groupIds = visibleGroups.map((group) => group.id);
 
-  await expireMissedCollaborationCalls(groupIds);
-  const events = await prisma.collaborationGroupCallEvent.findMany({
-    where: {
-      groupId: { in: groupIds },
-      createdAt: { gt: since },
-      OR: [{ userId: null }, { userId: { not: session.userId } }],
-    },
-    orderBy: { createdAt: "asc" },
-    take: 20,
-    include: {
-      call: {
-        select: {
-          id: true,
-          groupId: true,
-          meetingId: true,
-          callType: true,
-          status: true,
-          startedById: true,
+    if (groupIds.length) {
+      await expireMissedCollaborationCalls(groupIds);
+      const events = await prisma.collaborationGroupCallEvent.findMany({
+        where: {
+          groupId: { in: groupIds },
+          createdAt: { gt: since },
+          OR: [{ userId: null }, { userId: { not: session.userId } }],
         },
-      },
-    },
-  });
-  const groupNameById = new Map(visibleGroups.map((group) => [group.id, group.name]));
-  const filteredEvents = events.filter((event) => {
-    if (event.eventType === "CALL_JOINED" || event.eventType === "CALL_LEFT" || event.eventType === "USER_JOINED" || event.eventType === "USER_LEFT" || event.eventType === "PARTICIPANT_MUTED" || event.eventType === "PARTICIPANT_UNMUTED") {
-      return user?.participantEventAlertsEnabled !== false;
+        orderBy: { createdAt: "asc" },
+        take: 20,
+        include: {
+          call: {
+            select: {
+              id: true,
+              groupId: true,
+              meetingId: true,
+              callType: true,
+              status: true,
+              startedById: true,
+            },
+          },
+        },
+      });
+      const groupNameById = new Map(visibleGroups.map((group) => [group.id, group.name]));
+      const databaseEvents: CollaborationCallInboxEvent[] = events.map((event) => ({
+        id: event.id,
+        callId: event.callId,
+        groupId: event.groupId,
+        meetingId: event.meetingId,
+        groupName: groupNameById.get(event.groupId) || "Groupe DTSC",
+        callType: event.call.callType === "VIDEO" ? "VIDEO" : "AUDIO",
+        eventType: event.eventType,
+        actorName: null,
+        message: humanCallEventMessage(event.eventType, event.message, event.call.callType),
+        createdAt: event.createdAt.toISOString(),
+        canJoin: event.call.status === "RINGING" || event.call.status === "ACTIVE",
+        actionUrl: `/collaborators?groupId=${encodeURIComponent(event.groupId)}&joinCall=${encodeURIComponent(event.callId)}`,
+      }));
+      const merged = new Map(responseEvents.map((event) => [event.id, event]));
+      for (const event of databaseEvents) merged.set(event.id, event);
+      responseEvents = [...merged.values()]
+        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+        .slice(-20);
     }
-    return true;
-  });
-  const responseEvents = filteredEvents.map((event) => ({
-    id: event.id,
-    callId: event.callId,
-    groupId: event.groupId,
-    meetingId: event.meetingId,
-    groupName: groupNameById.get(event.groupId) || "Groupe DTSC",
-    callType: event.call.callType,
-    eventType: event.eventType,
-    actorName: null,
-    message: humanCallEventMessage(event.eventType, event.message, event.call.callType),
-    createdAt: event.createdAt.toISOString(),
-    canJoin: event.call.status === "RINGING" || event.call.status === "ACTIVE",
-    actionUrl: `/collaborators?groupId=${encodeURIComponent(event.groupId)}&joinCall=${encodeURIComponent(event.callId)}`,
-  }));
+  }
 
-  await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
-  return NextResponse.json({
-    events: responseEvents,
-    cursor: new Date().toISOString(),
-    settings: {
-      callSoundsEnabled: user?.callSoundsEnabled ?? true,
-      callNotificationsEnabled: user?.callNotificationsEnabled ?? true,
-      floatingCallAlertsEnabled: user?.floatingCallAlertsEnabled ?? true,
-      participantEventAlertsEnabled: user?.participantEventAlertsEnabled ?? true,
-      callAlertSoundEnabled: user?.callAlertSoundEnabled ?? true,
-      connectionIssueSoundsEnabled: user?.connectionIssueSoundsEnabled ?? true,
-      callAlertDisplayDuration: user?.callAlertDisplayDuration ?? 6000,
-      callSoundVolume: user?.callSoundVolume ?? 45,
+  const settings = settingsResult.settings;
+  const filteredEvents = responseEvents.filter((event) => !participantEvent(event.eventType) || settings.participantEventAlertsEnabled !== false);
+
+  await writeApiLog({
+    request: req,
+    statusCode: 200,
+    userId: session.userId,
+    startedAt,
+    metadata: {
+      callEventInbox: inbox.mode,
+      dbReconciled: shouldReadDatabase,
+      settingsCache: settingsResult.redisMode,
     },
   });
-}
-
-function humanCallEventMessage(eventType: string, storedMessage: string, callType: string) {
-  if (eventType === "CALL_STARTED") {
-    return callType === "VIDEO" ? "Appel vidéo lancé" : "Appel audio lancé";
-  }
-  if (eventType === "CALL_ENDED") {
-    return "L'appel est terminé";
-  }
-  if (eventType === "CALL_MISSED") {
-    return "Appel manqué";
-  }
-  if (eventType === "CALL_JOINED" || eventType === "USER_JOINED") {
-    return storedMessage || "Un collaborateur a rejoint l'appel";
-  }
-  if (eventType === "CALL_LEFT" || eventType === "USER_LEFT") {
-    return storedMessage || "Un collaborateur a quitté l'appel";
-  }
-  if (eventType === "CALL_INTERRUPTED") {
-    return "Connexion instable dans l'appel";
-  }
-  if (eventType === "CALL_RECONNECTED") {
-    return "L'appel a repris";
-  }
-  if (eventType === "PARTICIPANT_MUTED") {
-    return storedMessage || "Un collaborateur a coupé son micro";
-  }
-  if (eventType === "PARTICIPANT_UNMUTED") {
-    return storedMessage || "Un collaborateur a réactivé son micro";
-  }
-  return "Événement d'appel";
+  return NextResponse.json({
+    events: filteredEvents,
+    cursor: new Date().toISOString(),
+    settings,
+  });
 }

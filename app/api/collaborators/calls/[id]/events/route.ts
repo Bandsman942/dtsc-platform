@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
 import { assertGroupMemberForSession, touchUserPresence, writeGroupAudit } from "@/lib/collaboration";
+import { publishCollaborationCallEvent } from "@/lib/collaboration-call-event-inbox";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -56,7 +57,7 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ message: "Événement d'appel invalide." }, { status: 400 });
   }
 
-  await prisma.collaborationGroupCallEvent.create({
+  const event = await prisma.collaborationGroupCallEvent.create({
     data: {
       callId: call.id,
       groupId: call.groupId,
@@ -65,7 +66,9 @@ export async function POST(req: Request, { params }: Params) {
       eventType: parsed.data.eventType,
       message: EVENT_MESSAGES[parsed.data.eventType],
     },
+    select: { id: true },
   });
+  await publishCollaborationCallEvent(event.id);
 
   await writeGroupAudit({ groupId: call.groupId, actorId: session.userId, action: `call.event.${parsed.data.eventType.toLowerCase()}`, entityType: "CollaborationGroupCall", entityId: call.id });
   await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt });

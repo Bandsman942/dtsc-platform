@@ -6,6 +6,7 @@ import { isCatalogAiModelAllowed } from "@/lib/ai/catalog";
 import { getAiErrorMessage } from "@/lib/ai/i18n";
 import type { AiContextCode } from "@/lib/ai/types";
 import { getCanonicalAiUsageLimits } from "@/lib/billing/ai-usage-limits";
+import { invalidateCollaborationCallSettingsCache } from "@/lib/collaboration-call-event-inbox";
 import { getActiveOrganizationId } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { accountPreferencesSchema } from "@/lib/validators";
@@ -85,6 +86,7 @@ export async function PATCH(req: Request) {
       chatResponseLength: body.data.chatResponseLength,
     },
   });
+  await invalidateCollaborationCallSettingsCache(user.id);
 
   await writeAuditLog({
     userId: user.id,

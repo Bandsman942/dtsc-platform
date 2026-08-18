@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { canUseFeature } from "@/lib/billing/entitlements";
 import { assertGroupMemberForSession, createGroupSystemMessage, touchUserPresence, writeGroupAudit } from "@/lib/collaboration";
+import { publishCollaborationCallEvent } from "@/lib/collaboration-call-event-inbox";
 import { expireMissedCollaborationCalls } from "@/lib/collaboration-calls";
 import { generateLiveKitParticipantToken, isLiveKitConfigured, liveKitUrl } from "@/lib/livekit-service";
 import { prisma } from "@/lib/prisma";
@@ -77,14 +78,14 @@ export async function POST(req: Request, { params }: Params) {
     canSubscribe: true,
   });
 
-  await prisma.$transaction(async (tx) => {
+  const eventId = await prisma.$transaction(async (tx) => {
     await tx.collaborationGroupCall.update({ where: { id: call.id }, data: { status: "ACTIVE", acceptedAt: call.acceptedAt || new Date() } });
     await tx.collaborationGroupCallParticipant.upsert({
       where: { callId_userId: { callId: call.id, userId: session.userId } },
       update: { status: "JOINED", joinedAt: new Date(), leftAt: null, microphoneEnabled, cameraEnabled },
       create: { callId: call.id, userId: session.userId, status: "JOINED", joinedAt: new Date(), microphoneEnabled, cameraEnabled },
     });
-    await tx.collaborationGroupCallEvent.create({
+    const event = await tx.collaborationGroupCallEvent.create({
       data: {
         callId: call.id,
         groupId: call.groupId,
@@ -93,8 +94,11 @@ export async function POST(req: Request, { params }: Params) {
         eventType: "CALL_JOINED",
         message: `${session.name} a rejoint l'appel.`,
       },
+      select: { id: true },
     });
+    return event.id;
   });
+  await publishCollaborationCallEvent(eventId);
   await createGroupSystemMessage({ groupId: call.groupId, actorId: session.userId, content: `${session.name} a rejoint l'appel.` });
   await writeGroupAudit({ groupId: call.groupId, actorId: session.userId, action: "call.join", entityType: "CollaborationGroupCall", entityId: call.id });
   await writeAuditLog({ userId: session.userId, action: "collaboration.call.join", entity: "CollaborationGroupCall", entityId: call.id, request: req });

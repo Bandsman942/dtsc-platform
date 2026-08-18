@@ -220,6 +220,7 @@ const callJoinRoute = read("app/api/collaborators/calls/[id]/join/route.ts");
 const callLeaveRoute = read("app/api/collaborators/calls/[id]/leave/route.ts");
 const callEndRoute = read("app/api/collaborators/calls/[id]/end/route.ts");
 const callEventsRoute = read("app/api/collaborators/calls/events/route.ts");
+const callEventInbox = read("lib/collaboration-call-event-inbox.ts");
 const callParticipantRoute = read("app/api/collaborators/calls/[id]/participants/route.ts");
 const callTelemetryRoute = read("app/api/collaborators/calls/[id]/events/route.ts");
 const globalCallToast = read("components/calls/global-call-toast.tsx");
@@ -664,9 +665,27 @@ check(
 );
 
 check(
-  "notifications d'appel: polling léger et visibilité par groupe autorisé",
-  containsAll(callEventsRoute, ["canAccessGroupInSessionWithSubscription", "take: 20", "MAX_EVENT_AGE_MS"])
-    && globalCallToast.includes("}, 6000)")
+  "notifications d'appel: inbox Redis, réconciliation bornée et polling adaptatif",
+  containsAll(callEventsRoute, [
+    "readCollaborationCallEventInbox",
+    "claimCollaborationCallDbReconciliation",
+    "canAccessGroupInSessionWithSubscription",
+    "dbReconciled: shouldReadDatabase",
+    "MAX_EVENT_AGE_MS",
+  ])
+    && !callEventsRoute.includes("touchUserPresence")
+    && containsAll(callEventInbox, [
+      "COLLABORATION_CALL_EVENT_DB_RECONCILE_SECONDS = 5 * 60",
+      '"RPUSH", key, serialized',
+      '"LTRIM", key, -COLLABORATION_CALL_EVENT_INBOX_MAX_ITEMS, -1',
+    ])
+    && containsAll(globalCallToast, [
+      "CALL_EVENT_IDLE_POLL_MS = 12_000",
+      "CALL_EVENT_ACTIVE_POLL_MS = 5_000",
+      'document.visibilityState === "visible"',
+      "navigator.onLine !== false",
+    ])
+    && !globalCallToast.includes("setInterval")
 );
 
 check(

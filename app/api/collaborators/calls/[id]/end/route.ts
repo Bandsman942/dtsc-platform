@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { assertGroupMemberForSession, canManageGroup, createGroupSystemMessage, touchUserPresence, writeGroupAudit } from "@/lib/collaboration";
+import { publishCollaborationCallEvent } from "@/lib/collaboration-call-event-inbox";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -52,13 +53,13 @@ export async function POST(req: Request, { params }: Params) {
   const eventMessage = cancelledBeforeAnswer ? "L’appel a été annulé." : "L’appel est terminé.";
   const activeStartedAt = call.acceptedAt || call.startedAt;
   const durationSeconds = cancelledBeforeAnswer ? 0 : Math.max(0, Math.round((endedAt.getTime() - activeStartedAt.getTime()) / 1000));
-  const followUp = await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     await tx.collaborationGroupCall.update({ where: { id: call.id }, data: { status: finalStatus, endedAt, cancelledAt: cancelledBeforeAnswer ? endedAt : null, durationSeconds } });
     await tx.collaborationGroupCallParticipant.updateMany({
       where: { callId: call.id, status: { in: ["INVITED", "JOINED"] } },
       data: { status: "LEFT", leftAt: endedAt },
     });
-    await tx.collaborationGroupCallEvent.create({
+    const event = await tx.collaborationGroupCallEvent.create({
       data: {
         callId: call.id,
         groupId: call.groupId,
@@ -67,9 +68,10 @@ export async function POST(req: Request, { params }: Params) {
         eventType,
         message: eventMessage,
       },
+      select: { id: true },
     });
 
-    if (!call.meetingId) return null;
+    if (!call.meetingId) return { followUp: null, eventId: event.id };
 
     await tx.cooMeeting.updateMany({ where: { id: call.meetingId, activeCallId: call.id }, data: { activeCallId: null } });
     if (cancelledBeforeAnswer) {
@@ -77,7 +79,7 @@ export async function POST(req: Request, { params }: Params) {
         where: { meetingId: call.meetingId },
         data: { status: "SCHEDULED", lastCallId: call.id },
       });
-      return null;
+      return { followUp: null, eventId: event.id };
     }
     await tx.collaborationMeetingLink.updateMany({
       where: { meetingId: call.meetingId },
@@ -85,7 +87,7 @@ export async function POST(req: Request, { params }: Params) {
     });
 
     const existing = await tx.collaborationMeetingMinutesPublication.findUnique({ where: { callId: call.id } });
-    if (existing) return existing;
+    if (existing) return { followUp: existing, eventId: event.id };
 
     const meeting = await tx.cooMeeting.findUnique({ where: { id: call.meetingId }, select: { title: true } });
     const prompt = await tx.collaborationGroupMessage.create({
@@ -97,7 +99,7 @@ export async function POST(req: Request, { params }: Params) {
         status: "SENT",
       },
     });
-    return tx.collaborationMeetingMinutesPublication.create({
+    const followUp = await tx.collaborationMeetingMinutesPublication.create({
       data: {
         meetingId: call.meetingId,
         callId: call.id,
@@ -106,11 +108,13 @@ export async function POST(req: Request, { params }: Params) {
         status: "PENDING",
       },
     });
+    return { followUp, eventId: event.id };
   });
 
+  await publishCollaborationCallEvent(result.eventId);
   await createGroupSystemMessage({ groupId: call.groupId, actorId: session.userId, content: eventMessage });
   await writeGroupAudit({ groupId: call.groupId, actorId: session.userId, action: cancelledBeforeAnswer ? "call.cancel" : "call.end", entityType: "CollaborationGroupCall", entityId: call.id });
   await writeAuditLog({ userId: session.userId, action: cancelledBeforeAnswer ? "collaboration.call.cancel" : "collaboration.call.end", entity: "CollaborationGroupCall", entityId: call.id, request: req });
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
-  return NextResponse.json({ ok: true, meetingFollowUp: followUp });
+  return NextResponse.json({ ok: true, meetingFollowUp: result.followUp });
 }
