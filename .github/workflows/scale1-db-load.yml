@@ -21,6 +21,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 concurrency:
   group: scale1-db-load
@@ -87,6 +88,24 @@ jobs:
             https://*) ;;
             *) echo "::error::SCALE1_LOAD_BASE_URL must use HTTPS."; exit 1 ;;
           esac
+
+      - name: Publish owner-triggered run identity
+        if: github.event_name == 'issue_comment'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          body="SCALE-1B 500 VU started — run \`${GITHUB_RUN_ID}\`, attempt \`${GITHUB_RUN_ATTEMPT}\`, main \`${GITHUB_SHA}\`. Evidence is pending; no PASS is claimed until the final artifact and gates are available."
+          jq -n --arg body "$body" '{body:$body}' \
+            | curl --fail --silent --show-error \
+              --request POST \
+              --header "Accept: application/vnd.github+json" \
+              --header "Authorization: Bearer ${GH_TOKEN}" \
+              --header "X-GitHub-Api-Version: 2022-11-28" \
+              --data-binary @- \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/issues/410/comments" \
+            > /dev/null
 
       - name: Checkout
         uses: actions/checkout@v7
@@ -184,6 +203,7 @@ jobs:
             artifacts/scale1-db-load-report.md
 
       - name: Enforce SCALE-1B gates
+        id: gates
         if: always()
         shell: bash
         run: |
@@ -199,3 +219,48 @@ jobs:
             exit 1
           fi
           echo "SCALE-1B intermediate PostgreSQL load evidence: PASS"
+
+      - name: Publish owner-triggered sanitized result
+        if: always() && github.event_name == 'issue_comment'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ -f artifacts/scale1-db-load-report.json ]; then
+            status="$(jq -r '.status' artifacts/scale1-db-load-report.json)"
+            requests="$(jq -r '.http.requests // "n/a"' artifacts/scale1-db-load-report.json)"
+            rps="$(jq -r '.http.requestsPerSecond // "n/a"' artifacts/scale1-db-load-report.json)"
+            failures="$(jq -r '.http.failedRate // "n/a"' artifacts/scale1-db-load-report.json)"
+            checks="$(jq -r '.http.checksRate // "n/a"' artifacts/scale1-db-load-report.json)"
+            p95="$(jq -r '.http.latencyMs.p95 // "n/a"' artifacts/scale1-db-load-report.json)"
+            p99="$(jq -r '.http.latencyMs.p99 // "n/a"' artifacts/scale1-db-load-report.json)"
+            dashboard_p95="$(jq -r '.http.workloadLatencyMs.dashboardRead.p95 // "n/a"' artifacts/scale1-db-load-report.json)"
+            dashboard_p99="$(jq -r '.http.workloadLatencyMs.dashboardRead.p99 // "n/a"' artifacts/scale1-db-load-report.json)"
+            notifications_p95="$(jq -r '.http.workloadLatencyMs.notificationsRead.p95 // "n/a"' artifacts/scale1-db-load-report.json)"
+            notifications_p99="$(jq -r '.http.workloadLatencyMs.notificationsRead.p99 // "n/a"' artifacts/scale1-db-load-report.json)"
+            db_connections="$(jq -r '.database.maxCurrentConnections // "n/a"' artifacts/scale1-db-load-report.json)"
+            db_max="$(jq -r '.database.maxConnections // "n/a"' artifacts/scale1-db-load-report.json)"
+            db_util="$(jq -r '.database.maxConnectionUtilization // "n/a"' artifacts/scale1-db-load-report.json)"
+            connection_limit="$(jq -r '.database.connectionLimits | join(",")' artifacts/scale1-db-load-report.json)"
+            failed_gates="$(jq -r 'if (.failedGates|length)==0 then "none" else (.failedGates|join(", ")) end' artifacts/scale1-db-load-report.json)"
+            body=$(cat <<EOF
+          SCALE-1B 500 VU completed — run \`${GITHUB_RUN_ID}\`, attempt \`${GITHUB_RUN_ATTEMPT}\`, main \`${GITHUB_SHA}\`.
+
+          Sanitized report: **${status}**. Requests=${requests}; req/s=${rps}; HTTP failure rate=${failures}; checks=${checks}; aggregate P95/P99=${p95}/${p99} ms; dashboard P95/P99=${dashboard_p95}/${dashboard_p99} ms; notifications P95/P99=${notifications_p95}/${notifications_p99} ms; DB max connections=${db_connections}/${db_max}; max utilization=${db_util}; connection_limit=${connection_limit:-n/a}; failed gates=${failed_gates}.
+
+          Artifact is attached to GitHub Actions run \`${GITHUB_RUN_ID}\`. This comment contains no session, bypass secret, DSN, hostname, SQL text or tenant/user identifier.
+          EOF
+          )
+          else
+            body="SCALE-1B 500 VU ended without a generated sanitized report — run \`${GITHUB_RUN_ID}\`, attempt \`${GITHUB_RUN_ATTEMPT}\`, main \`${GITHUB_SHA}\`. Inspect the run before drawing any capacity conclusion."
+          fi
+          jq -n --arg body "$body" '{body:$body}' \
+            | curl --fail --silent --show-error \
+              --request POST \
+              --header "Accept: application/vnd.github+json" \
+              --header "Authorization: Bearer ${GH_TOKEN}" \
+              --header "X-GitHub-Api-Version: 2022-11-28" \
+              --data-binary @- \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/issues/410/comments" \
+            > /dev/null
