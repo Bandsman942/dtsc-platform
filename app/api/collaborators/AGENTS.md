@@ -13,7 +13,8 @@
 - Les réponses (`replyToId`) doivent pointer vers un message du même groupe.
 - Les préférences de notification doivent être appliquées côté serveur avant `notifyUser(s)` ; le frontend n’est jamais la source de vérité du mute.
 - Les suppressions de messages vocaux doivent rendre le média inaccessible et nettoyer le blob privé lorsque possible.
-- Les heartbeats de présence alimentent `CollaborationPresenceSession` en mettant à jour une session existante ; ne jamais créer une ligne par heartbeat.
+- La présence active est une lease éphémère Redis TTL par utilisateur/session. `CollaborationPresenceSession` reste le journal durable : ouverture, checkpoints coalescés et déconnexion explicite. Un heartbeat récurrent avec Redis disponible ne doit pas écrire dans PostgreSQL à chaque cycle ; si Redis est absent ou indisponible, le fallback PostgreSQL existant reste fonctionnel.
+- Les clés Redis de présence sont serveur-only, bornées/hachées et ne contiennent aucun secret ni identifiant tenant fourni par le client. La lecture de présence utilise Redis en priorité et ne doit jamais élargir le répertoire autorisé.
 - Le journal de présence d’un groupe exige membership actif puis permission OWNER/ADMIN, borne les requêtes et limite chaque membre à sa fenêtre `joinedAt` → `leftAt`.
 - `CollaborationGroupMessageRead.readAt` reste l’unique source des heures de lecture. Ne jamais dupliquer l’accusé de lecture dans une table parallèle.
 - Un lien de réunion dans le fil doit dériver d’un vrai `CooMeeting` AUDIO/VIDEO lié au groupe ; l’API de join revérifie membership, horaire planifié et réutilise l’appel `RINGING`/`ACTIVE` existant avant toute création de room.
