@@ -13,6 +13,10 @@ export const COLLABORATION_PRESENCE_STALE_MS = 60_000;
 export const COLLABORATION_CLIENT_TYPES = ["MOBILE", "TABLET", "DESKTOP", "PWA", "UNKNOWN"] as const;
 export type CollaborationClientType = (typeof COLLABORATION_CLIENT_TYPES)[number];
 
+export type CollaborationPresenceOnlineResult =
+  | { at: Date; mode: "REDIS"; checkpointed: boolean }
+  | { at: Date; mode: "FALLBACK"; checkpointed: true; reason: "UNCONFIGURED" | "TIMEOUT" | "ERROR" };
+
 function normalizedClientSessionId(value: string | null | undefined, userId: string) {
   const trimmed = value?.trim().slice(0, 160);
   return trimmed || `legacy-${userId}`;
@@ -201,14 +205,15 @@ export async function markCollaborationPresenceOnline({
         previousHeartbeatAt: lease.previousHeartbeatAt,
       });
     }
-    return now;
+    return { at: now, mode: "REDIS" as const, checkpointed: lease.checkpointDue };
   }
 
-  return markCollaborationPresenceOnlineInPostgres({
+  const fallbackAt = await markCollaborationPresenceOnlineInPostgres({
     userId,
     clientSessionId: sessionId,
     clientType: normalizedType,
   });
+  return { at: fallbackAt, mode: "FALLBACK" as const, checkpointed: true, reason: lease.reason };
 }
 
 async function markCollaborationPresenceOfflineInPostgres({

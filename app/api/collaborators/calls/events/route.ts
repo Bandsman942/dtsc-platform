@@ -104,17 +104,20 @@ export async function GET(req: Request) {
   const settings = settingsResult.settings;
   const filteredEvents = responseEvents.filter((event) => !participantEvent(event.eventType) || settings.participantEventAlertsEnabled !== false);
 
-  await writeApiLog({
-    request: req,
-    statusCode: 200,
-    userId: session.userId,
-    startedAt,
-    metadata: {
-      callEventInbox: inbox.mode,
-      dbReconciled: shouldReadDatabase,
-      settingsCache: settingsResult.redisMode,
-    },
-  });
+  if (shouldReadDatabase || settingsResult.settingsSource === "DATABASE") {
+    await writeApiLog({
+      request: req,
+      statusCode: 200,
+      userId: session.userId,
+      startedAt,
+      metadata: {
+        callEventInbox: inbox.mode,
+        dbReconciled: shouldReadDatabase,
+        settingsCache: settingsResult.redisMode,
+        settingsSource: settingsResult.settingsSource,
+      },
+    });
+  }
   return NextResponse.json({
     events: filteredEvents,
     cursor: new Date().toISOString(),

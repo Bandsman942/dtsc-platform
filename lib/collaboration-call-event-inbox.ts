@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { redisRestCommand, redisRestPipeline, type RedisRestUnavailableReason } from "@/lib/redis-rest";
+import { REDIS_OBSERVABILITY_METRICS, redisObservabilityMetricCommands } from "@/lib/scalability/redis-observability";
 
 export const COLLABORATION_CALL_EVENT_INBOX_TTL_SECONDS = 15 * 60;
 export const COLLABORATION_CALL_EVENT_INBOX_MAX_ITEMS = 100;
@@ -127,18 +128,24 @@ export async function publishCollaborationCallEvent(eventId: string): Promise<Re
   });
 
   for (let index = 0; index < commands.length; index += 150) {
-    const outcome = await redisRestPipeline(commands.slice(index, index + 150));
+    const chunk = commands.slice(index, index + 150);
+    if (index === 0) chunk.push(...redisObservabilityMetricCommands(REDIS_OBSERVABILITY_METRICS.callPublishRedis));
+    const outcome = await redisRestPipeline(chunk);
     if (!outcome.available) return { mode: "FALLBACK", reason: outcome.reason, recipientCount: recipients.length };
   }
   return { mode: "REDIS", recipientCount: recipients.length };
 }
 
 export async function readCollaborationCallEventInbox(userId: string, since: Date) {
-  const outcome = await redisRestCommand<string[] | null>(["LRANGE", inboxKey(userId), 0, -1]);
+  const outcome = await redisRestPipeline([
+    ["LRANGE", inboxKey(userId), 0, -1],
+    ...redisObservabilityMetricCommands(REDIS_OBSERVABILITY_METRICS.callInboxReadRedis),
+  ]);
   if (!outcome.available) return { mode: "FALLBACK" as const, reason: outcome.reason, events: [] as CollaborationCallInboxEvent[] };
 
+  const rawEvents = Array.isArray(outcome.result[0]?.result) ? (outcome.result[0]?.result as string[]) : [];
   const seen = new Set<string>();
-  const events = (outcome.result || [])
+  const events = rawEvents
     .map((item) => {
       try {
         return JSON.parse(item) as CollaborationCallInboxEvent;
@@ -162,7 +169,7 @@ export async function getCollaborationCallToastSettings(userId: string) {
   const cached = await redisRestCommand<string | null>(["GET", settingsKey(userId)]);
   if (cached.available && cached.result) {
     try {
-      return { settings: normalizedSettings(JSON.parse(cached.result) as CollaborationCallToastSettings), redisMode: "REDIS" as const };
+      return { settings: normalizedSettings(JSON.parse(cached.result) as CollaborationCallToastSettings), redisMode: "REDIS" as const, settingsSource: "REDIS" as const };
     } catch {
       // Cache corrompu : recharger depuis PostgreSQL puis remplacer la valeur.
     }
@@ -184,9 +191,9 @@ export async function getCollaborationCallToastSettings(userId: string) {
   const settings = normalizedSettings(user);
   if (cached.available) {
     await redisRestCommand(["SETEX", settingsKey(userId), COLLABORATION_CALL_SETTINGS_TTL_SECONDS, JSON.stringify(settings)]);
-    return { settings, redisMode: "REDIS" as const };
+    return { settings, redisMode: "REDIS" as const, settingsSource: "DATABASE" as const };
   }
-  return { settings, redisMode: "FALLBACK" as const, reason: cached.reason };
+  return { settings, redisMode: "FALLBACK" as const, settingsSource: "DATABASE" as const, reason: cached.reason };
 }
 
 export async function invalidateCollaborationCallSettingsCache(userId: string) {

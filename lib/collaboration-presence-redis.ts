@@ -4,6 +4,7 @@ import {
   redisRestPipeline,
   type RedisRestUnavailableReason,
 } from "@/lib/redis-rest";
+import { REDIS_OBSERVABILITY_METRICS, redisObservabilityMetricCommands } from "@/lib/scalability/redis-observability";
 
 export const COLLABORATION_PRESENCE_REDIS_TTL_MS = 90_000;
 export const COLLABORATION_PRESENCE_HISTORY_TTL_MS = 35 * 24 * 60 * 60 * 1000;
@@ -89,6 +90,7 @@ export async function refreshCollaborationPresenceRedisLease({
     ["SET", historyKey, nowMs, "PX", COLLABORATION_PRESENCE_HISTORY_TTL_MS],
     ["SET", currentUserKey, nowMs, "PX", COLLABORATION_PRESENCE_REDIS_TTL_MS],
     ["SET", durableCheckpointKey, "1", "PX", COLLABORATION_PRESENCE_DB_CHECKPOINT_MS, "NX"],
+    ...redisObservabilityMetricCommands(REDIS_OBSERVABILITY_METRICS.presenceLeaseRedis, 1, now),
   ]);
 
   if (!outcome.available) return { mode: "FALLBACK", reason: outcome.reason };
@@ -141,16 +143,19 @@ export async function getCollaborationPresenceRedisMap(userIds: string[]) {
   const ids = [...new Set(userIds.map((item) => item.trim()).filter(Boolean))].slice(0, 2_000);
   if (!ids.length) return new Map<string, Date>();
 
-  const outcome = await redisRestCommand<Array<string | number | null>>([
-    "MGET",
-    ...ids.map(userPresenceKey),
+  const outcome = await redisRestPipeline([
+    ["MGET", ...ids.map(userPresenceKey)],
+    ...redisObservabilityMetricCommands(REDIS_OBSERVABILITY_METRICS.presenceReadRedis),
   ]);
   if (!outcome.available) return null;
 
+  const values = Array.isArray(outcome.result[0]?.result)
+    ? (outcome.result[0]?.result as Array<string | number | null>)
+    : [];
   const now = Date.now();
   const map = new Map<string, Date>();
   ids.forEach((userId, index) => {
-    const timestamp = parseTimestamp(outcome.result[index]);
+    const timestamp = parseTimestamp(values[index]);
     if (timestamp && now - timestamp.getTime() <= COLLABORATION_PRESENCE_REDIS_TTL_MS) {
       map.set(userId, timestamp);
     }

@@ -44,21 +44,32 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid presence" }, { status: 400 });
   }
 
+  let successMetadata: Record<string, string | boolean> | null = null;
   if (parsed.data.status === "offline") {
     await markCollaborationPresenceOffline({
       userId: session.userId,
       clientSessionId: parsed.data.clientSessionId,
       reason: parsed.data.reason,
     });
+    successMetadata = { presenceMode: "OFFLINE", dbTouched: true };
   } else {
-    await markCollaborationPresenceOnline({
+    const presence = await markCollaborationPresenceOnline({
       userId: session.userId,
       clientSessionId: parsed.data.clientSessionId,
       clientType: parsed.data.clientType || inferClientType(req.headers.get("user-agent")),
     });
+    if (presence.mode === "FALLBACK" || presence.checkpointed) {
+      successMetadata = {
+        presenceMode: presence.mode,
+        dbCheckpoint: presence.checkpointed,
+        ...(presence.mode === "FALLBACK" ? { fallbackReason: presence.reason } : {}),
+      };
+    }
   }
 
-  await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
+  if (successMetadata) {
+    await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: successMetadata });
+  }
   return NextResponse.json({ ok: true });
 }
 
