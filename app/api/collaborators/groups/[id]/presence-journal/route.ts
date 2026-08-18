@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
 import { assertGroupMemberForSession, canManageGroup } from "@/lib/collaboration";
+import {
+  collaborationPresenceRedisSnapshotKey,
+  getCollaborationPresenceRedisSessionSnapshots,
+} from "@/lib/collaboration-presence-redis";
 import { COLLABORATION_PRESENCE_STALE_MS, effectivePresenceDisconnectedAt } from "@/lib/collaboration-presence-sessions";
 import { prisma } from "@/lib/prisma";
 
@@ -85,13 +89,43 @@ export async function GET(req: Request, { params }: Params) {
     orderBy: { connectedAt: "desc" },
     take: 1000,
   });
+  const redisSnapshots = await getCollaborationPresenceRedisSessionSnapshots(
+    records.map((record) => ({ userId: record.userId, clientSessionId: record.clientSessionId }))
+  );
 
   const normalized = records
     .map((record) => {
       const member = memberByUserId.get(record.userId);
       if (!member) return null;
-      const effectiveDisconnected = effectivePresenceDisconnectedAt(record);
-      const online = effectiveDisconnected === null && now.getTime() - record.lastHeartbeatAt.getTime() <= COLLABORATION_PRESENCE_STALE_MS;
+
+      const redisSnapshot = redisSnapshots?.get(
+        collaborationPresenceRedisSnapshotKey(record.userId, record.clientSessionId)
+      ) || null;
+      const effectiveLastHeartbeat = redisSnapshot?.lastHeartbeatAt
+        && redisSnapshot.lastHeartbeatAt > record.lastHeartbeatAt
+        ? redisSnapshot.lastHeartbeatAt
+        : record.lastHeartbeatAt;
+
+      let effectiveDisconnected: Date | null;
+      let online: boolean;
+      if (record.disconnectedAt) {
+        effectiveDisconnected = record.disconnectedAt;
+        online = false;
+      } else if (redisSnapshots && redisSnapshot?.online) {
+        effectiveDisconnected = null;
+        online = true;
+      } else if (redisSnapshots && redisSnapshot?.lastHeartbeatAt) {
+        effectiveDisconnected = redisSnapshot.lastHeartbeatAt;
+        online = false;
+      } else {
+        effectiveDisconnected = effectivePresenceDisconnectedAt({
+          disconnectedAt: record.disconnectedAt,
+          lastHeartbeatAt: effectiveLastHeartbeat,
+          now,
+        });
+        online = effectiveDisconnected === null && now.getTime() - effectiveLastHeartbeat.getTime() <= COLLABORATION_PRESENCE_STALE_MS;
+      }
+
       const endedAt = effectiveDisconnected || now;
       const durationSeconds = Math.max(0, Math.round((endedAt.getTime() - record.connectedAt.getTime()) / 1000));
       return {
@@ -99,7 +133,7 @@ export async function GET(req: Request, { params }: Params) {
         userId: record.userId,
         clientType: record.clientType,
         connectedAt: record.connectedAt,
-        lastHeartbeatAt: record.lastHeartbeatAt,
+        lastHeartbeatAt: effectiveLastHeartbeat,
         disconnectedAt: effectiveDisconnected,
         disconnectReason: record.disconnectReason || (effectiveDisconnected && !record.disconnectedAt ? "HEARTBEAT_TIMEOUT" : null),
         online,
