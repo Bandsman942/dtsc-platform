@@ -33,6 +33,7 @@ jobs:
       BASE_URL: ${{ vars.SCALE1_LOAD_BASE_URL }}
       SESSION_COOKIE: ${{ secrets.SCALE1_LOAD_SESSION_COOKIE }}
       OBSERVABILITY_COOKIE: ${{ secrets.SCALE1_CTO_SESSION_COOKIE }}
+      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
       TARGET_VUS: ${{ inputs.target_vus }}
       ARTIFACTS_DIR: artifacts
     steps:
@@ -56,6 +57,11 @@ jobs:
             echo "::error::Secret SCALE1_CTO_SESSION_COOKIE is required."
             exit 1
           fi
+          if [ -z "${VERCEL_AUTOMATION_BYPASS_SECRET:-}" ]; then
+            echo "::error::Secret VERCEL_AUTOMATION_BYPASS_SECRET is required."
+            exit 1
+          fi
+          echo "::add-mask::${VERCEL_AUTOMATION_BYPASS_SECRET}"
           case "$TARGET_VUS" in
             100|250|500) ;;
             *) echo "::error::target_vus must be 100, 250 or 500."; exit 1 ;;
@@ -87,6 +93,7 @@ jobs:
           set -euo pipefail
           status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
             --header "Cookie: ${SESSION_COOKIE}" \
+            --header "x-vercel-protection-bypass: ${VERCEL_AUTOMATION_BYPASS_SECRET}" \
             "${BASE_URL%/}/api/notifications/unread-count")"
           if [ "$status" != "200" ]; then
             echo "::error::Authenticated load preflight returned HTTP ${status}."
@@ -95,6 +102,7 @@ jobs:
 
           curl --fail --silent --show-error \
             --header "Cookie: ${OBSERVABILITY_COOKIE}" \
+            --header "x-vercel-protection-bypass: ${VERCEL_AUTOMATION_BYPASS_SECRET}" \
             "${BASE_URL%/}/api/admin/scalability/observability?windowHours=1" \
             | jq -c '{generatedAt:.snapshot.generatedAt,database:.snapshot.database}' \
             >> artifacts/db-observability.ndjson
@@ -108,6 +116,7 @@ jobs:
           capture_db_snapshot() {
             curl --fail --silent --show-error \
               --header "Cookie: ${OBSERVABILITY_COOKIE}" \
+              --header "x-vercel-protection-bypass: ${VERCEL_AUTOMATION_BYPASS_SECRET}" \
               "${BASE_URL%/}/api/admin/scalability/observability?windowHours=1" \
               | jq -c '{generatedAt:.snapshot.generatedAt,database:.snapshot.database}' \
               >> artifacts/db-observability.ndjson

@@ -4,6 +4,7 @@ Parent programme: #352
 Parent SCALE-1: #354
 Evidence gate: #410
 Harness: #411
+Vercel automation bypass fix: #413
 SCALE-7 certification: #360
 
 ## Purpose
@@ -18,13 +19,33 @@ This is **not** the 5,000-user certification. SCALE-7 / #360 remains the only ow
 
 The workflow is intentionally `workflow_dispatch` only. It never runs on `push`, `pull_request`, cron or Vercel Preview.
 
-Before the first Production execution, configure the repository with:
+Before a Production execution, configure the repository with:
 
 - repository variable `SCALE1_LOAD_BASE_URL`: canonical HTTPS application origin for the Production run; the expected DTSC application origin is `https://app.dtsc-platform.com` unless infrastructure ownership deliberately changes it;
 - repository secret `SCALE1_LOAD_SESSION_COOKIE`: a dedicated authenticated application session able to read `/dashboard` and `/api/notifications/unread-count`;
-- repository secret `SCALE1_CTO_SESSION_COOKIE`: a DTSC internal Console session authorized with `SECURITY_READ`, used only to read `/api/admin/scalability/observability`.
+- repository secret `SCALE1_CTO_SESSION_COOKIE`: a DTSC internal Console session authorized with `SECURITY_READ`, used only to read `/api/admin/scalability/observability`;
+- repository secret `VERCEL_AUTOMATION_BYPASS_SECRET`: the Protection Bypass for Automation secret generated for the DTSC Vercel project and used only to authorize the GitHub Actions load runner through Vercel protection.
 
-Never store either cookie in the repository, Issues, PR bodies, screenshots, artifacts or shell traces. A session should be scoped as narrowly as practical and rotated/revoked after the load campaign.
+Never store a cookie or the Vercel automation bypass secret in the repository, Issues, PR bodies, screenshots, artifacts or shell traces. Sessions should be scoped as narrowly as practical and rotated/revoked after the load campaign. The Vercel bypass secret should also be rotated or revoked when the campaign is complete.
+
+## Vercel automation bypass contract
+
+The first real SCALE-1B attempt, GitHub Actions run `32141033725` on `main@437be49f63a3d8d060ffdec357cf39d826c0a190`, stopped during the authenticated preflight with HTTP `429` before k6 started. The route itself does not implement a 429 response and no matching application-runtime request was observed for that window, so the harness now treats Vercel edge authorization as a separate prerequisite from DTSC session authentication.
+
+For this load harness, enable **Protection Bypass for Automation** for the Vercel project and copy the generated secret into the GitHub Actions repository secret named exactly `VERCEL_AUTOMATION_BYPASS_SECRET`.
+
+Every automated Production request made by SCALE-1B sends:
+
+`x-vercel-protection-bypass: <secret>`
+
+This header authorizes the automation through Vercel protection. It does **not** replace DTSC authentication or authorization:
+
+- the load read paths still require `SCALE1_LOAD_SESSION_COOKIE`;
+- CTO database observability still requires `SCALE1_CTO_SESSION_COOKIE` and the DTSC internal `SECURITY_READ` contract;
+- redirects, `401`, `403`, `429` and other non-`200` responses still fail the preflight/checks;
+- the bypass value is never copied into the evidence artifact.
+
+Do not disable the Vercel Firewall globally, do not weaken system protections for ordinary users, and do not add an unauthenticated application route solely for load testing.
 
 ## Manual dispatch contract
 
@@ -39,7 +60,8 @@ The workflow fails closed when:
 
 - the confirmation is incorrect;
 - the base URL is absent or is not HTTPS;
-- either session secret is absent;
+- either DTSC session secret is absent;
+- the Vercel automation bypass secret is absent;
 - the requested target is not one of the allowed intermediate values;
 - the authenticated preflight does not return HTTP 200;
 - the protected CTO observability endpoint cannot provide the initial database snapshot.
@@ -73,7 +95,7 @@ Before, during and after the k6 load, the workflow samples:
 
 `GET /api/admin/scalability/observability?windowHours=1`
 
-The workflow keeps only the already sanitized `snapshot.database` payload plus its generated timestamp. Cookies, DSNs, hostnames, SQL text, user identifiers and organization identifiers are not copied into the evidence artifact.
+The workflow keeps only the already sanitized `snapshot.database` payload plus its generated timestamp. Cookies, bypass secrets, DSNs, hostnames, SQL text, user identifiers and organization identifiers are not copied into the evidence artifact.
 
 The database report fails unless all of these conditions hold:
 
@@ -88,27 +110,29 @@ A point-in-time snapshot can miss a short spike. SCALE-1B mitigates that limitat
 
 ## Evidence artifacts
 
-Every manually dispatched run uploads, even when a gate fails:
+Every manually dispatched run uploads, when files have been produced:
 
 - `k6-summary.json`;
 - `db-observability.ndjson`;
 - `scale1-db-load-report.json`;
 - `scale1-db-load-report.md`.
 
-The artifact name contains the Git SHA and target VU count and is retained for 30 days by the workflow.
+The artifact name contains the Git SHA and target VU count and is retained for 30 days by the workflow. A preflight that fails before evidence files exist is a failed attempt but is not misrepresented as a completed load run.
 
 When executed inside GitHub Actions, the report marks the load execution as `CI_PROVEN`. A developer running the same report locally receives `LOCAL_EXECUTED`. Merely merging the harness is not evidence: #410 remains `NOT_EXECUTED` until a real manual workflow run has produced an archived artifact.
 
 ## Acceptance sequence
 
-1. Merge the harness only after its normal Quality Gates are green.
-2. Confirm Production is `READY` on the merged harness SHA.
-3. Configure/refresh the three repository runtime values listed above.
-4. Dispatch the workflow with `target_vus=500` and confirmation `RUN_SCALE1_DB_LOAD`.
-5. Keep the resulting artifact and workflow run ID as the evidence for #410.
-6. Close #410 only if the report is `PASS` and the workflow itself succeeds.
-7. Close #354 only when the rest of its scope is also satisfied; do not infer slow-query/index evidence that was not measured.
-8. Continue to SCALE-2 / #355 and later SCALE-7 / #360 without re-labeling the 500-VU result as 5,000-user certification.
+1. Merge harness corrections only after normal Quality Gates are green.
+2. Confirm Production is `READY` on the merged SHA.
+3. Enable/refresh Vercel Protection Bypass for Automation and place its value in GitHub as `VERCEL_AUTOMATION_BYPASS_SECRET`.
+4. Configure/refresh `SCALE1_LOAD_BASE_URL`, `SCALE1_LOAD_SESSION_COOKIE` and `SCALE1_CTO_SESSION_COOKIE`.
+5. Dispatch the workflow with `target_vus=500` and confirmation `RUN_SCALE1_DB_LOAD`.
+6. Keep the resulting artifact and workflow run ID as the evidence for #410.
+7. Close #410 only if the report is `PASS` and the workflow itself succeeds.
+8. Close #354 only when the rest of its scope is also satisfied; do not infer slow-query/index evidence that was not measured.
+9. Continue to SCALE-2 / #355 and later SCALE-7 / #360 without re-labeling the 500-VU result as 5,000-user certification.
+10. Rotate/revoke the Vercel automation bypass secret and dedicated load sessions after the load campaign.
 
 ## Failure handling
 
