@@ -1,5 +1,9 @@
 import { getDatabaseConnectionPolicy } from "@/lib/database-connection-policy";
 import { prisma } from "@/lib/prisma";
+import {
+  getRedisObservabilitySnapshot,
+  REDIS_OBSERVABILITY_METRICS,
+} from "@/lib/scalability/redis-observability";
 
 type ApiLatencyRow = {
   sampleCount: number;
@@ -29,6 +33,14 @@ type DbConnectionRow = {
   maxConnections: number;
 };
 
+type Scale2DbPathRow = {
+  presenceCheckpointCount: number;
+  presenceFallbackCount: number;
+  callDbReconciliationCount: number;
+  callFallbackCount: number;
+  callSettingsDbCount: number;
+};
+
 function finiteMetric(value: number | null | undefined) {
   return typeof value === "number" && Number.isFinite(value) ? Math.round(value * 100) / 100 : null;
 }
@@ -42,6 +54,10 @@ function observedRate(sampleCount: number, windowHours: number) {
   };
 }
 
+function ratio(numerator: number, denominator: number) {
+  return denominator > 0 ? numerator / denominator : null;
+}
+
 export async function getProductionObservabilitySnapshot(windowHours: number) {
   const generatedAt = new Date();
   const since = new Date(generatedAt.getTime() - windowHours * 60 * 60 * 1000);
@@ -51,7 +67,7 @@ export async function getProductionObservabilitySnapshot(windowHours: number) {
   await prisma.$queryRaw`SELECT 1`;
   const dbProbeLatencyMs = performance.now() - dbProbeStartedAt;
 
-  const [apiRows, aiRows, dbConnectionRows] = await Promise.all([
+  const [apiRows, aiRows, dbConnectionRows, scale2Rows, redisSnapshot] = await Promise.all([
     prisma.$queryRaw<ApiLatencyRow[]>`
       SELECT
         COUNT(*)::int AS "sampleCount",
@@ -91,6 +107,38 @@ export async function getProductionObservabilitySnapshot(windowHours: number) {
       FROM pg_stat_activity
       WHERE datname = current_database()
     `,
+    prisma.$queryRaw<Scale2DbPathRow[]>`
+      SELECT
+        COUNT(*) FILTER (
+          WHERE "path" = '/api/collaborators/presence'
+            AND "statusCode" = 200
+            AND "metadata"->>'presenceMode' = 'REDIS'
+            AND "metadata"->>'dbCheckpoint' = 'true'
+        )::int AS "presenceCheckpointCount",
+        COUNT(*) FILTER (
+          WHERE "path" = '/api/collaborators/presence'
+            AND "statusCode" = 200
+            AND "metadata"->>'presenceMode' = 'FALLBACK'
+        )::int AS "presenceFallbackCount",
+        COUNT(*) FILTER (
+          WHERE "path" = '/api/collaborators/calls/events'
+            AND "statusCode" = 200
+            AND "metadata"->>'dbReconciled' = 'true'
+        )::int AS "callDbReconciliationCount",
+        COUNT(*) FILTER (
+          WHERE "path" = '/api/collaborators/calls/events'
+            AND "statusCode" = 200
+            AND "metadata"->>'callEventInbox' = 'FALLBACK'
+        )::int AS "callFallbackCount",
+        COUNT(*) FILTER (
+          WHERE "path" = '/api/collaborators/calls/events'
+            AND "statusCode" = 200
+            AND "metadata"->>'settingsSource' = 'DATABASE'
+        )::int AS "callSettingsDbCount"
+      FROM "ApiLog"
+      WHERE "createdAt" >= ${since}
+    `,
+    getRedisObservabilitySnapshot(windowHours),
   ]);
 
   const api = apiRows[0] ?? { sampleCount: 0, p50Ms: null, p95Ms: null, p99Ms: null, serverErrorCount: 0 };
@@ -103,6 +151,17 @@ export async function getProductionObservabilitySnapshot(windowHours: number) {
     longRunningQueries: 0,
     maxConnections: 0,
   };
+  const scale2 = scale2Rows[0] ?? {
+    presenceCheckpointCount: 0,
+    presenceFallbackCount: 0,
+    callDbReconciliationCount: 0,
+    callFallbackCount: 0,
+    callSettingsDbCount: 0,
+  };
+  const presenceRedisLeaseCount = redisSnapshot.metrics[REDIS_OBSERVABILITY_METRICS.presenceLeaseRedis] || 0;
+  const presenceRedisReadCount = redisSnapshot.metrics[REDIS_OBSERVABILITY_METRICS.presenceReadRedis] || 0;
+  const callRedisReadCount = redisSnapshot.metrics[REDIS_OBSERVABILITY_METRICS.callInboxReadRedis] || 0;
+  const callRedisPublishCount = redisSnapshot.metrics[REDIS_OBSERVABILITY_METRICS.callPublishRedis] || 0;
 
   return {
     generatedAt: generatedAt.toISOString(),
@@ -112,7 +171,7 @@ export async function getProductionObservabilitySnapshot(windowHours: number) {
     },
     api: {
       source: "ApiLog.durationMs",
-      coverage: "Only routes that persist ApiLog entries are represented.",
+      coverage: "Only routes that persist ApiLog entries are represented. Redis-only presence heartbeats and call-event polls intentionally do not write PostgreSQL ApiLog rows.",
       sampleCount: api.sampleCount,
       throughput: observedRate(api.sampleCount, windowHours),
       serverErrorCount: api.serverErrorCount,
@@ -151,8 +210,27 @@ export async function getProductionObservabilitySnapshot(windowHours: number) {
       },
     },
     redis: {
-      status: "NOT_MEASURED" as const,
-      reason: "Redis/Upstash production observability is deferred to SCALE-2 #355; no synthetic value is emitted.",
+      source: "Upstash Redis REST live probe + anonymous hourly Redis counters + bounded ApiLog only when PostgreSQL is actually touched",
+      status: redisSnapshot.status,
+      reason: redisSnapshot.reason,
+      probeLatencyMs: redisSnapshot.probeLatencyMs,
+      bucketPrecisionMinutes: redisSnapshot.bucketPrecisionMinutes,
+      presence: {
+        redisLeaseCount: presenceRedisLeaseCount,
+        redisReadCount: presenceRedisReadCount,
+        dbCheckpointCount: scale2.presenceCheckpointCount,
+        dbFallbackCount: scale2.presenceFallbackCount,
+        redisFirstRate: ratio(presenceRedisLeaseCount, presenceRedisLeaseCount + scale2.presenceFallbackCount),
+      },
+      calls: {
+        redisInboxReadCount: callRedisReadCount,
+        redisPublishCount: callRedisPublishCount,
+        dbReconciliationCount: scale2.callDbReconciliationCount,
+        dbFallbackCount: scale2.callFallbackCount,
+        settingsDbLoadCount: scale2.callSettingsDbCount,
+        redisFirstRate: ratio(callRedisReadCount, callRedisReadCount + scale2.callFallbackCount),
+        dbReadRate: ratio(scale2.callDbReconciliationCount, callRedisReadCount + scale2.callFallbackCount),
+      },
     },
   };
 }
