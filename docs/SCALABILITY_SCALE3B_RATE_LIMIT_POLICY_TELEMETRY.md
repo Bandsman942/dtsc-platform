@@ -1,7 +1,7 @@
 # SCALE-3B — Politique de dégradation du rate limiting et télémétrie bornée
 
-Issue: #430  
-Parent: #356  
+Issue: #430
+Parent: #356
 Programme: #352
 
 ## Objectif
