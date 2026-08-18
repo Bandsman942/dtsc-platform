@@ -84,6 +84,8 @@ Redis is an optimization and ephemeral-state authority only when available.
 
 If `UPSTASH_REDIS_REST_URL` or `UPSTASH_REDIS_REST_TOKEN` is absent, or the Redis REST call times out/fails, the existing PostgreSQL presence path is used. The Redis REST client uses a 750 ms timeout so an interactive presence mutation cannot wait indefinitely on the external store.
 
+When Redis recovers after a short outage, SCALE-2A compares the last durable PostgreSQL heartbeat with the last Redis bridge heartbeat. If PostgreSQL contains a newer, still-live fallback heartbeat, the existing durable session is reused instead of being split artificially. A genuine Redis lease gap without such recent DB fallback evidence still closes the stale durable session and opens a new one.
+
 This fallback preserves function but is more expensive and is not the target steady state for Production SCALE-2.
 
 ## Security
@@ -109,6 +111,7 @@ No Prisma schema change, migration or backfill is required. `CollaborationPresen
 - DB checkpoint coalescing;
 - hashed presence keys;
 - Redis-first presence reads with PostgreSQL fallback;
+- Redis recovery preserves a recent PostgreSQL fallback session instead of splitting it;
 - Redis overlay in the presence journal;
 - same-origin/rate-limit/ApiLog preservation;
 - durable collaboration rule documentation;
