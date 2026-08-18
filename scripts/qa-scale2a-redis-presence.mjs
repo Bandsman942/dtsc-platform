@@ -52,6 +52,9 @@ expect(presenceSessions.includes("refreshCollaborationPresenceRedisLease"), "Onl
 expect(presenceSessions.includes('if (lease.mode === "REDIS")'), "Redis presence branch missing");
 expect(presenceSessions.includes("if (lease.checkpointDue)"), "Durable DB checkpoints must be coalesced");
 expect(presenceSessions.includes("markCollaborationPresenceOnlineInPostgres"), "PostgreSQL fallback must remain available");
+expect(presenceSessions.includes("postgresFallbackContinued"), "Redis recovery must detect recent PostgreSQL fallback continuity");
+expect(presenceSessions.includes("primary.lastHeartbeatAt.getTime() > previousHeartbeatAt.getTime()"), "Fallback continuity must require a DB heartbeat newer than the Redis bridge");
+expect(presenceSessions.includes("&& !postgresFallbackContinued"), "A recent DB fallback heartbeat must prevent an artificial Redis session split");
 expect(presenceSessions.includes("clearCollaborationPresenceRedisLease"), "Offline must clear the Redis session lease");
 expect(presenceSessions.includes("hasAnyActiveCollaborationPresenceRedisSession"), "Multi-session offline protection missing");
 
