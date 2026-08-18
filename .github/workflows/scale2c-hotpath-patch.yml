@@ -1,0 +1,114 @@
+name: SCALE-2C hot-path patch
+
+on:
+  push:
+    branches:
+      - feat/425-redis-observability-closeout
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/425-redis-observability-closeout
+          fetch-depth: 0
+
+      - name: Patch Redis hot paths and bounded ApiLog
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              source = p.read_text()
+              if source.count(old) != 1:
+                  raise SystemExit(f"{path}: expected one anchor, found {source.count(old)}")
+              p.write_text(source.replace(old, new, 1))
+
+          replace_once(
+              "lib/collaboration-presence-redis.ts",
+              '} from "@/lib/redis-rest";\n',
+              '} from "@/lib/redis-rest";\nimport { REDIS_OBSERVABILITY_METRICS, redisObservabilityMetricCommands } from "@/lib/scalability/redis-observability";\n'
+          )
+          replace_once(
+              "lib/collaboration-presence-redis.ts",
+              '    ["SET", durableCheckpointKey, "1", "PX", COLLABORATION_PRESENCE_DB_CHECKPOINT_MS, "NX"],\n  ]);',
+              '    ["SET", durableCheckpointKey, "1", "PX", COLLABORATION_PRESENCE_DB_CHECKPOINT_MS, "NX"],\n    ...redisObservabilityMetricCommands(REDIS_OBSERVABILITY_METRICS.presenceLeaseRedis, 1, now),\n  ]);'
+          )
+          replace_once(
+              "lib/collaboration-presence-redis.ts",
+              '''  const outcome = await redisRestCommand<Array<string | number | null>>([\n    "MGET",\n    ...ids.map(userPresenceKey),\n  ]);\n  if (!outcome.available) return null;\n\n  const now = Date.now();\n  const map = new Map<string, Date>();\n  ids.forEach((userId, index) => {\n    const timestamp = parseTimestamp(outcome.result[index]);''',
+              '''  const outcome = await redisRestPipeline([\n    ["MGET", ...ids.map(userPresenceKey)],\n    ...redisObservabilityMetricCommands(REDIS_OBSERVABILITY_METRICS.presenceReadRedis),\n  ]);\n  if (!outcome.available) return null;\n\n  const values = Array.isArray(outcome.result[0]?.result)\n    ? (outcome.result[0]?.result as Array<string | number | null>)\n    : [];\n  const now = Date.now();\n  const map = new Map<string, Date>();\n  ids.forEach((userId, index) => {\n    const timestamp = parseTimestamp(values[index]);'''
+          )
+
+          replace_once(
+              "lib/collaboration-presence-sessions.ts",
+              'export type CollaborationClientType = (typeof COLLABORATION_CLIENT_TYPES)[number];\n',
+              'export type CollaborationClientType = (typeof COLLABORATION_CLIENT_TYPES)[number];\n\nexport type CollaborationPresenceOnlineResult =\n  | { at: Date; mode: "REDIS"; checkpointed: boolean }\n  | { at: Date; mode: "FALLBACK"; checkpointed: true; reason: "UNCONFIGURED" | "TIMEOUT" | "ERROR" };\n'
+          )
+          replace_once(
+              "lib/collaboration-presence-sessions.ts",
+              '''  await prisma.user.update({ where: { id: userId }, data: { lastSeenAt: now } }).catch(() => null);\n  return now;\n}\n\nexport async function markCollaborationPresenceOnline({''',
+              '''  await prisma.user.update({ where: { id: userId }, data: { lastSeenAt: now } }).catch(() => null);\n  return now;\n}\n\nexport async function markCollaborationPresenceOnline({'''
+          )
+          replace_once(
+              "lib/collaboration-presence-sessions.ts",
+              '''    return now;\n  }\n\n  return markCollaborationPresenceOnlineInPostgres({\n    userId,\n    clientSessionId: sessionId,\n    clientType: normalizedType,\n  });\n}\n\nasync function markCollaborationPresenceOfflineInPostgres''',
+              '''    return { at: now, mode: "REDIS" as const, checkpointed: lease.checkpointDue };\n  }\n\n  const fallbackAt = await markCollaborationPresenceOnlineInPostgres({\n    userId,\n    clientSessionId: sessionId,\n    clientType: normalizedType,\n  });\n  return { at: fallbackAt, mode: "FALLBACK" as const, checkpointed: true, reason: lease.reason };\n}\n\nasync function markCollaborationPresenceOfflineInPostgres'''
+          )
+
+          replace_once(
+              "app/api/collaborators/presence/route.ts",
+              '''  if (parsed.data.status === "offline") {\n    await markCollaborationPresenceOffline({\n      userId: session.userId,\n      clientSessionId: parsed.data.clientSessionId,\n      reason: parsed.data.reason,\n    });\n  } else {\n    await markCollaborationPresenceOnline({\n      userId: session.userId,\n      clientSessionId: parsed.data.clientSessionId,\n      clientType: parsed.data.clientType || inferClientType(req.headers.get("user-agent")),\n    });\n  }\n\n  await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });\n  return NextResponse.json({ ok: true });''',
+              '''  let successMetadata: Record<string, string | boolean> | null = null;\n  if (parsed.data.status === "offline") {\n    await markCollaborationPresenceOffline({\n      userId: session.userId,\n      clientSessionId: parsed.data.clientSessionId,\n      reason: parsed.data.reason,\n    });\n    successMetadata = { presenceMode: "OFFLINE", dbTouched: true };\n  } else {\n    const presence = await markCollaborationPresenceOnline({\n      userId: session.userId,\n      clientSessionId: parsed.data.clientSessionId,\n      clientType: parsed.data.clientType || inferClientType(req.headers.get("user-agent")),\n    });\n    if (presence.mode === "FALLBACK" || presence.checkpointed) {\n      successMetadata = {\n        presenceMode: presence.mode,\n        dbCheckpoint: presence.checkpointed,\n        ...(presence.mode === "FALLBACK" ? { fallbackReason: presence.reason } : {}),\n      };\n    }\n  }\n\n  if (successMetadata) {\n    await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: successMetadata });\n  }\n  return NextResponse.json({ ok: true });'''
+          )
+
+          replace_once(
+              "lib/collaboration-call-event-inbox.ts",
+              'import { redisRestCommand, redisRestPipeline, type RedisRestUnavailableReason } from "@/lib/redis-rest";\n',
+              'import { redisRestCommand, redisRestPipeline, type RedisRestUnavailableReason } from "@/lib/redis-rest";\nimport { REDIS_OBSERVABILITY_METRICS, redisObservabilityMetricCommands } from "@/lib/scalability/redis-observability";\n'
+          )
+          replace_once(
+              "lib/collaboration-call-event-inbox.ts",
+              '''  for (let index = 0; index < commands.length; index += 150) {\n    const outcome = await redisRestPipeline(commands.slice(index, index + 150));\n    if (!outcome.available) return { mode: "FALLBACK", reason: outcome.reason, recipientCount: recipients.length };\n  }''',
+              '''  for (let index = 0; index < commands.length; index += 150) {\n    const chunk = commands.slice(index, index + 150);\n    if (index === 0) chunk.push(...redisObservabilityMetricCommands(REDIS_OBSERVABILITY_METRICS.callPublishRedis));\n    const outcome = await redisRestPipeline(chunk);\n    if (!outcome.available) return { mode: "FALLBACK", reason: outcome.reason, recipientCount: recipients.length };\n  }'''
+          )
+          replace_once(
+              "lib/collaboration-call-event-inbox.ts",
+              '''  const outcome = await redisRestCommand<string[] | null>(["LRANGE", inboxKey(userId), 0, -1]);\n  if (!outcome.available) return { mode: "FALLBACK" as const, reason: outcome.reason, events: [] as CollaborationCallInboxEvent[] };\n\n  const seen = new Set<string>();\n  const events = (outcome.result || [])''',
+              '''  const outcome = await redisRestPipeline([\n    ["LRANGE", inboxKey(userId), 0, -1],\n    ...redisObservabilityMetricCommands(REDIS_OBSERVABILITY_METRICS.callInboxReadRedis),\n  ]);\n  if (!outcome.available) return { mode: "FALLBACK" as const, reason: outcome.reason, events: [] as CollaborationCallInboxEvent[] };\n\n  const rawEvents = Array.isArray(outcome.result[0]?.result) ? (outcome.result[0]?.result as string[]) : [];\n  const seen = new Set<string>();\n  const events = rawEvents'''
+          )
+          replace_once(
+              "lib/collaboration-call-event-inbox.ts",
+              '      return { settings: normalizedSettings(JSON.parse(cached.result) as CollaborationCallToastSettings), redisMode: "REDIS" as const };',
+              '      return { settings: normalizedSettings(JSON.parse(cached.result) as CollaborationCallToastSettings), redisMode: "REDIS" as const, settingsSource: "REDIS" as const };'
+          )
+          replace_once(
+              "lib/collaboration-call-event-inbox.ts",
+              '''    return { settings, redisMode: "REDIS" as const };\n  }\n  return { settings, redisMode: "FALLBACK" as const, reason: cached.reason };''',
+              '''    return { settings, redisMode: "REDIS" as const, settingsSource: "DATABASE" as const };\n  }\n  return { settings, redisMode: "FALLBACK" as const, settingsSource: "DATABASE" as const, reason: cached.reason };'''
+          )
+
+          replace_once(
+              "app/api/collaborators/calls/events/route.ts",
+              '''  await writeApiLog({\n    request: req,\n    statusCode: 200,\n    userId: session.userId,\n    startedAt,\n    metadata: {\n      callEventInbox: inbox.mode,\n      dbReconciled: shouldReadDatabase,\n      settingsCache: settingsResult.redisMode,\n    },\n  });''',
+              '''  if (shouldReadDatabase || settingsResult.settingsSource === "DATABASE") {\n    await writeApiLog({\n      request: req,\n      statusCode: 200,\n      userId: session.userId,\n      startedAt,\n      metadata: {\n        callEventInbox: inbox.mode,\n        dbReconciled: shouldReadDatabase,\n        settingsCache: settingsResult.redisMode,\n        settingsSource: settingsResult.settingsSource,\n      },\n    });\n  }'''
+          )
+          PY
+          git diff --check
+
+      - name: Commit patch and remove temporary workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/scale2c-hotpath-patch.yml
+          git add lib/collaboration-presence-redis.ts lib/collaboration-presence-sessions.ts app/api/collaborators/presence/route.ts lib/collaboration-call-event-inbox.ts app/api/collaborators/calls/events/route.ts
+          git commit -m "feat(scalability): remove PostgreSQL writes from Redis hot paths"
+          git push origin HEAD:feat/425-redis-observability-closeout
