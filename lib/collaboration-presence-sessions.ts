@@ -44,10 +44,18 @@ async function persistRedisPresenceCheckpoint({
   });
   const primary = openSessions[0] || null;
   const continuityBudgetMs = COLLABORATION_PRESENCE_DB_CHECKPOINT_MS + COLLABORATION_PRESENCE_REDIS_TTL_MS;
+  const postgresFallbackContinued = Boolean(
+    isNewLease
+      && previousHeartbeatAt
+      && primary
+      && primary.lastHeartbeatAt.getTime() > previousHeartbeatAt.getTime()
+      && now.getTime() - primary.lastHeartbeatAt.getTime() <= COLLABORATION_PRESENCE_STALE_MS
+  );
   const redisGapExpired = Boolean(
     isNewLease
       && previousHeartbeatAt
       && now.getTime() - previousHeartbeatAt.getTime() > COLLABORATION_PRESENCE_REDIS_TTL_MS
+      && !postgresFallbackContinued
   );
   const dbGapExpired = Boolean(
     isNewLease
