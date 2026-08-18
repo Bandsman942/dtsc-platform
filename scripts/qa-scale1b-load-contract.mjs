@@ -31,6 +31,10 @@ expect(workflow.includes('RUN_SCALE1_DB_LOAD'), "manual confirmation gate is mis
 expect(workflow.includes('vars.SCALE1_LOAD_BASE_URL'), "SCALE1_LOAD_BASE_URL repository variable is missing");
 expect(workflow.includes('secrets.SCALE1_LOAD_SESSION_COOKIE'), "load-session secret is missing");
 expect(workflow.includes('secrets.SCALE1_CTO_SESSION_COOKIE'), "CTO observability-session secret is missing");
+expect(workflow.includes('secrets.VERCEL_AUTOMATION_BYPASS_SECRET'), "Vercel automation bypass secret is missing");
+expect(workflow.includes('Secret VERCEL_AUTOMATION_BYPASS_SECRET is required.'), "workflow must fail closed without the Vercel bypass secret");
+expect((workflow.match(/x-vercel-protection-bypass/g) || []).length >= 3, "all workflow curl paths must send the Vercel automation bypass header");
+expect(!workflow.includes('echo "${VERCEL_AUTOMATION_BYPASS_SECRET}"'), "workflow must never echo the Vercel bypass secret");
 expect(workflow.includes('grafana/setup-k6-action@v1'), "official k6 setup action major v1 is required");
 expect(workflow.includes('k6-version: 2.1.0'), "k6 version must stay explicitly pinned for reproducible evidence");
 expect(workflow.includes('actions/upload-artifact@v7'), "load evidence must be archived as a GitHub artifact");
@@ -45,6 +49,8 @@ for (const target of [100, 250, 500]) {
 expect(!/target:\s*(1000|2500|5000)\b/.test(profile), "SCALE-1B must not own 1,000/2,500/5,000 VU stages");
 expect(profile.includes('TARGET_VUS must be one of 100, 250 or 500'), "hard 500-VU upper bound is missing");
 expect(profile.includes('SESSION_COOKIE is required'), "authenticated load must fail closed without a session");
+expect(profile.includes('VERCEL_AUTOMATION_BYPASS_SECRET is required'), "k6 must fail closed without the Vercel automation bypass secret");
+expect(profile.includes('"x-vercel-protection-bypass": vercelAutomationBypassSecret'), "k6 requests must send the Vercel automation bypass header");
 expect(profile.includes('preflight.status !== 200'), "authenticated preflight must require HTTP 200");
 expect(!profile.includes('[200, 307, 401]'), "redirect/unauthenticated responses must not pass SCALE-1B checks");
 expect(!/http\.(post|put|patch|del|delete)\s*\(/i.test(profile), "SCALE-1B Production profile must remain read-only");
