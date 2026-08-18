@@ -3,10 +3,14 @@ import { check, sleep } from "k6";
 
 const rawBaseUrl = __ENV.BASE_URL;
 const sessionCookie = __ENV.SESSION_COOKIE;
+const vercelAutomationBypassSecret = __ENV.VERCEL_AUTOMATION_BYPASS_SECRET;
 const targetVus = Number.parseInt(__ENV.TARGET_VUS || "500", 10);
 
 if (!rawBaseUrl) throw new Error("BASE_URL is required");
 if (!sessionCookie) throw new Error("SESSION_COOKIE is required for SCALE-1B authenticated load evidence");
+if (!vercelAutomationBypassSecret) {
+  throw new Error("VERCEL_AUTOMATION_BYPASS_SECRET is required for SCALE-1B Production automation");
+}
 if (![100, 250, 500].includes(targetVus)) {
   throw new Error("TARGET_VUS must be one of 100, 250 or 500 for SCALE-1B");
 }
@@ -67,6 +71,7 @@ export const options = {
 const headers = {
   Cookie: sessionCookie,
   "User-Agent": "DTSC-SCALE1B/1.0",
+  "x-vercel-protection-bypass": vercelAutomationBypassSecret,
 };
 
 export function setup() {
