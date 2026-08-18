@@ -32,6 +32,13 @@ expect(workflow.includes("github.event.issue.number == 410"), "issue-comment tri
 expect(workflow.includes("github.event.comment.author_association == 'OWNER'"), "issue-comment trigger must require repository OWNER association");
 expect(workflow.includes("github.event.comment.body == 'RUN_SCALE1_DB_LOAD_500'"), "issue-comment trigger must require the exact 500-VU command");
 expect(workflow.includes('RUN_SCALE1_DB_LOAD'), "manual confirmation gate is missing");
+expect(/^\s+issues:\s+write\s*$/m.test(workflow), "owner-triggered result publication requires issues: write");
+expect(workflow.includes('Publish owner-triggered run identity'), "owner-triggered run identity publication is missing");
+expect(workflow.includes('Publish owner-triggered sanitized result'), "owner-triggered sanitized result publication is missing");
+expect(workflow.includes('issues/410/comments'), "operator reporting must remain scoped to Issue #410");
+expect(workflow.includes('GITHUB_RUN_ID'), "operator reporting must publish the real workflow run ID");
+expect(workflow.includes('artifacts/scale1-db-load-report.json'), "operator reporting must read only the sanitized generated report");
+expect(workflow.includes('This comment contains no session, bypass secret, DSN, hostname, SQL text or tenant/user identifier.'), "operator reporting must document its secret-free contract");
 expect(workflow.includes('vars.SCALE1_LOAD_BASE_URL'), "SCALE1_LOAD_BASE_URL repository variable is missing");
 expect(workflow.includes('secrets.SCALE1_LOAD_SESSION_COOKIE'), "load-session secret is missing");
 expect(workflow.includes('secrets.SCALE1_CTO_SESSION_COOKIE'), "CTO observability-session secret is missing");
