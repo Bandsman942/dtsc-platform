@@ -1,7 +1,7 @@
 # SCALE-2C — Observabilité Redis Production et clôture SCALE-2
 
-Issue : #425  
-Parent : #355  
+Issue : #425
+Parent : #355
 Programme : #352
 
 ## Objectif
