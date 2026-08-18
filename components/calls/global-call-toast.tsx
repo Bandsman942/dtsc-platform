@@ -34,6 +34,9 @@ type CallToastSettings = {
   callSoundVolume: number;
 };
 
+const CALL_EVENT_IDLE_POLL_MS = 12_000;
+const CALL_EVENT_ACTIVE_POLL_MS = 5_000;
+
 export function GlobalCallToast() {
   const pathname = usePathname();
   const [events, setEvents] = useState<CallToastEvent[]>([]);
@@ -46,43 +49,96 @@ export function GlobalCallToast() {
 
   useEffect(() => {
     let cancelled = false;
+    let timer: number | null = null;
+    let inFlight = false;
 
-    async function poll() {
-      if (disabledRef.current) return;
-      const cursor = cursorRef.current ? `?cursor=${encodeURIComponent(cursorRef.current)}` : "";
-      const response = await fetch(`/api/collaborators/calls/events${cursor}`, { cache: "no-store" }).catch(() => null);
-      if (response?.status === 401) {
-        disabledRef.current = true;
-        return;
-      }
-      if (!response?.ok) return;
-      const body = await response.json().catch(() => null) as { events?: CallToastEvent[]; settings?: CallToastSettings; cursor?: string } | null;
-      if (cancelled || !body) return;
-      if (body.settings) setSettings(body.settings);
-      if (body.cursor) cursorRef.current = body.cursor;
-      const nextEvents = (body.events || []).filter((event) => {
-        if (seenRef.current.has(event.id)) return false;
-        seenRef.current.add(event.id);
-        return true;
-      });
-      if (!nextEvents.length || shouldMuteGlobalToast || body.settings?.callNotificationsEnabled === false || body.settings?.floatingCallAlertsEnabled === false) return;
-      setEvents((current) => [...nextEvents, ...current].slice(0, 3));
-      const soundEnabled = body.settings?.callSoundsEnabled !== false && body.settings?.callAlertSoundEnabled !== false;
-      if (soundEnabled) {
-        const eventType = nextEvents[0]?.eventType;
-        const kind = eventType === "CALL_ENDED" ? "ended" : eventType === "CALL_LEFT" || eventType === "USER_LEFT" ? "left" : eventType === "CALL_INTERRUPTED" ? "warning" : eventType === "CALL_RECONNECTED" ? "connected" : "incoming";
-        if (kind === "warning" && body.settings?.connectionIssueSoundsEnabled === false) return;
-        void playCallSound(kind, body.settings?.callSoundVolume ?? 45);
+    function clearTimer() {
+      if (timer !== null) {
+        window.clearTimeout(timer);
+        timer = null;
       }
     }
 
-    void poll();
-    const interval = window.setInterval(() => {
-      if (document.visibilityState === "visible") void poll();
-    }, 6000);
+    function canPoll() {
+      return document.visibilityState === "visible" && navigator.onLine !== false && !disabledRef.current;
+    }
+
+    async function poll() {
+      if (!canPoll() || inFlight) return false;
+      inFlight = true;
+      try {
+        const cursor = cursorRef.current ? `?cursor=${encodeURIComponent(cursorRef.current)}` : "";
+        const response = await fetch(`/api/collaborators/calls/events${cursor}`, { cache: "no-store" }).catch(() => null);
+        if (response?.status === 401) {
+          disabledRef.current = true;
+          return false;
+        }
+        if (!response?.ok) return false;
+        const body = await response.json().catch(() => null) as { events?: CallToastEvent[]; settings?: CallToastSettings; cursor?: string } | null;
+        if (cancelled || !body) return false;
+        if (body.settings) setSettings(body.settings);
+        if (body.cursor) cursorRef.current = body.cursor;
+        const nextEvents = (body.events || []).filter((event) => {
+          if (seenRef.current.has(event.id)) return false;
+          seenRef.current.add(event.id);
+          return true;
+        });
+        if (!nextEvents.length || shouldMuteGlobalToast || body.settings?.callNotificationsEnabled === false || body.settings?.floatingCallAlertsEnabled === false) {
+          return nextEvents.length > 0;
+        }
+        setEvents((current) => [...nextEvents, ...current].slice(0, 3));
+        const soundEnabled = body.settings?.callSoundsEnabled !== false && body.settings?.callAlertSoundEnabled !== false;
+        if (soundEnabled) {
+          const eventType = nextEvents[0]?.eventType;
+          const kind = eventType === "CALL_ENDED" ? "ended" : eventType === "CALL_LEFT" || eventType === "USER_LEFT" ? "left" : eventType === "CALL_INTERRUPTED" ? "warning" : eventType === "CALL_RECONNECTED" ? "connected" : "incoming";
+          if (kind !== "warning" || body.settings?.connectionIssueSoundsEnabled !== false) {
+            void playCallSound(kind, body.settings?.callSoundVolume ?? 45);
+          }
+        }
+        return true;
+      } finally {
+        inFlight = false;
+      }
+    }
+
+    function schedule(delay: number) {
+      clearTimer();
+      if (cancelled || disabledRef.current) return;
+      timer = window.setTimeout(async () => {
+        if (cancelled) return;
+        if (!canPoll()) {
+          schedule(CALL_EVENT_IDLE_POLL_MS);
+          return;
+        }
+        const hadEvents = await poll();
+        schedule(hadEvents ? CALL_EVENT_ACTIVE_POLL_MS : CALL_EVENT_IDLE_POLL_MS);
+      }, delay);
+    }
+
+    async function wake() {
+      if (!canPoll()) {
+        clearTimer();
+        return;
+      }
+      clearTimer();
+      const hadEvents = await poll();
+      schedule(hadEvents ? CALL_EVENT_ACTIVE_POLL_MS : CALL_EVENT_IDLE_POLL_MS);
+    }
+
+    void wake();
+    const onVisibilityChange = () => { void wake(); };
+    const onOnline = () => { void wake(); };
+    const onOffline = () => clearTimer();
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
+      clearTimer();
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
     };
   }, [shouldMuteGlobalToast]);
 

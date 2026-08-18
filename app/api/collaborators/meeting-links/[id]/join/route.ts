@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { canUseFeature } from "@/lib/billing/entitlements";
 import { assertGroupMemberForSession, createGroupSystemMessage, groupMemberUserIds, writeGroupAudit } from "@/lib/collaboration";
+import { publishCollaborationCallEvent } from "@/lib/collaboration-call-event-inbox";
 import { meetingLinkCanJoin } from "@/lib/collaboration-meeting-links";
 import { buildLiveKitRoomName } from "@/lib/livekit-service";
 import { notifyUsers } from "@/lib/notifications";
@@ -122,6 +123,12 @@ export async function POST(req: Request, { params }: Params) {
     await tx.collaborationMeetingLink.update({ where: { id: link.id }, data: { status: "ACTIVE", lastCallId: createdCall.id } });
     return createdCall;
   });
+  const startedEvent = await prisma.collaborationGroupCallEvent.findFirst({
+    where: { callId: call.id, eventType: "CALL_STARTED" },
+    orderBy: { createdAt: "desc" },
+    select: { id: true },
+  });
+  if (startedEvent) await publishCollaborationCallEvent(startedEvent.id);
 
   await createGroupSystemMessage({ groupId: link.groupId, actorId: session.userId, content });
   await notifyUsers({

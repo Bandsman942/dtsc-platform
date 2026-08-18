@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
 import { assertGroupMemberForSession, createGroupSystemMessage, touchUserPresence, writeGroupAudit } from "@/lib/collaboration";
+import { publishCollaborationCallEvent } from "@/lib/collaboration-call-event-inbox";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -39,12 +40,12 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  await prisma.$transaction(async (tx) => {
+  const eventId = await prisma.$transaction(async (tx) => {
     await tx.collaborationGroupCallParticipant.updateMany({
       where: { callId: call.id, userId: session.userId },
       data: { status: "LEFT", leftAt: new Date() },
     });
-    await tx.collaborationGroupCallEvent.create({
+    const event = await tx.collaborationGroupCallEvent.create({
       data: {
         callId: call.id,
         groupId: call.groupId,
@@ -53,8 +54,11 @@ export async function POST(req: Request, { params }: Params) {
         eventType: "CALL_LEFT",
         message: `${session.name} a quitté l'appel.`,
       },
+      select: { id: true },
     });
+    return event.id;
   });
+  await publishCollaborationCallEvent(eventId);
   await createGroupSystemMessage({ groupId: call.groupId, actorId: session.userId, content: `${session.name} a quitté l'appel.` });
   await writeGroupAudit({ groupId: call.groupId, actorId: session.userId, action: "call.leave", entityType: "CollaborationGroupCall", entityId: call.id });
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });

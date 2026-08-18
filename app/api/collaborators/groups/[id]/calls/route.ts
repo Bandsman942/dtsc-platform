@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { canUseFeature } from "@/lib/billing/entitlements";
 import { assertGroupMemberForSession, createGroupSystemMessage, groupMemberUserIds, touchUserPresence, writeGroupAudit } from "@/lib/collaboration";
+import { publishCollaborationCallEvent } from "@/lib/collaboration-call-event-inbox";
 import { COLLABORATION_CALL_RING_TIMEOUT_SECONDS, expireMissedCollaborationCalls } from "@/lib/collaboration-calls";
 import { buildLiveKitRoomName, isLiveKitConfigured } from "@/lib/livekit-service";
 import { notifyUsers } from "@/lib/notifications";
@@ -191,6 +192,8 @@ export async function POST(req: Request, { params }: Params) {
     }
     return createdCall;
   });
+  const startedEventId = call.events[0]?.id;
+  if (startedEventId) await publishCollaborationCallEvent(startedEventId);
 
   await createGroupSystemMessage({ groupId: id, actorId: session.userId, content });
   await notifyUsers({

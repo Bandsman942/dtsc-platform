@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
 import { assertGroupMemberForSession, touchUserPresence, writeGroupAudit } from "@/lib/collaboration";
+import { publishCollaborationCallEvent } from "@/lib/collaboration-call-event-inbox";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -64,7 +65,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const nextCameraEnabled = parsed.data.cameraEnabled ?? currentParticipant.cameraEnabled;
   const microphoneChanged = nextMicrophoneEnabled !== currentParticipant.microphoneEnabled;
 
-  await prisma.$transaction(async (tx) => {
+  const eventId = await prisma.$transaction(async (tx) => {
     await tx.collaborationGroupCallParticipant.update({
       where: { callId_userId: { callId: call.id, userId: session.userId } },
       data: {
@@ -73,19 +74,21 @@ export async function PATCH(req: Request, { params }: Params) {
       },
     });
 
-    if (microphoneChanged) {
-      await tx.collaborationGroupCallEvent.create({
-        data: {
-          callId: call.id,
-          groupId: call.groupId,
-          meetingId: call.meetingId,
-          userId: session.userId,
-          eventType: nextMicrophoneEnabled ? "PARTICIPANT_UNMUTED" : "PARTICIPANT_MUTED",
-          message: nextMicrophoneEnabled ? `${session.name} a réactivé son micro.` : `${session.name} a coupé son micro.`,
-        },
-      });
-    }
+    if (!microphoneChanged) return null;
+    const event = await tx.collaborationGroupCallEvent.create({
+      data: {
+        callId: call.id,
+        groupId: call.groupId,
+        meetingId: call.meetingId,
+        userId: session.userId,
+        eventType: nextMicrophoneEnabled ? "PARTICIPANT_UNMUTED" : "PARTICIPANT_MUTED",
+        message: nextMicrophoneEnabled ? `${session.name} a réactivé son micro.` : `${session.name} a coupé son micro.`,
+      },
+      select: { id: true },
+    });
+    return event.id;
   });
+  if (eventId) await publishCollaborationCallEvent(eventId);
 
   await writeGroupAudit({ groupId: call.groupId, actorId: session.userId, action: "call.participant.update", entityType: "CollaborationGroupCall", entityId: call.id });
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
