@@ -1,7 +1,7 @@
 # SCALE-2A — Redis presence leases
 
-Parent programme: #352  
-Parent SCALE-2: #355  
+Parent programme: #352
+Parent SCALE-2: #355
 Issue: #421
 
 ## Purpose
