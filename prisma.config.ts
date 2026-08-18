@@ -9,8 +9,10 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
-    // Commands such as `prisma generate` do not require a live database URL.
-    // Migration/runtime commands still receive DATABASE_URL from their execution environment.
-    url: process.env.DATABASE_URL ?? "",
+    // Runtime application traffic uses DATABASE_URL and should use the Neon
+    // pooled endpoint. Prisma CLI/admin operations may use a direct endpoint
+    // through DIRECT_URL when configured. Falling back preserves local/CI
+    // environments that intentionally provide only DATABASE_URL.
+    url: process.env.DIRECT_URL ?? process.env.DATABASE_URL ?? "",
   },
 });
