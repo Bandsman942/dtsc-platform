@@ -31,6 +31,7 @@ export const RATE_LIMIT_LOCAL_MAX_BUCKETS = 10_000;
 const buckets = new Map<string, Bucket>();
 
 const ATOMIC_RATE_LIMIT_SCRIPT = `
+#!lua flags=allow-key-locking
 local current = redis.call("INCR", KEYS[1])
 local ttl = redis.call("PTTL", KEYS[1])
 if current == 1 or ttl < 0 then
