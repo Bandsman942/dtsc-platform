@@ -39,6 +39,7 @@ commands.unshift("node scripts/qa-calendar-work-schedule-i18n-275.mjs");
 commands.unshift("node scripts/qa-shared-work-i18n-convergence.mjs");
 commands.unshift("node scripts/qa-github-actions-upload-runtime.mjs");
 commands.unshift("node scripts/qa-app-shell-performance-presence.mjs");
+commands.unshift("node scripts/qa-scale2a-redis-presence.mjs");
 const escapeAnnotation = (value) => String(value).replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
 
 function diagnostic(output, status) {
