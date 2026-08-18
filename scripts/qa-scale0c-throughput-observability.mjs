@@ -13,7 +13,9 @@ const checks = [
   [helper.includes("throughput: observedRate(ai.sampleCount, windowHours)"), "AI throughput must derive from AiModelCall sample count"],
   [helper.includes('COUNT(*) FILTER (WHERE "reasonCode" = \'RATE_LIMITED\')::int AS "rateLimitedCount"'), "AI rate limits must derive from persisted reasonCode"],
   [helper.includes("rateLimitedRate: ai.sampleCount > 0"), "AI rate-limit rate must be guarded against empty samples"],
-  [helper.includes('status: "NOT_MEASURED"'), "Redis must remain explicitly not measured"],
+  [helper.includes("getRedisObservabilitySnapshot(windowHours)"), "Redis throughput paths must derive from the measured SCALE-2 snapshot"],
+  [helper.includes("redisFirstRate") && helper.includes("dbReadRate"), "Redis throughput snapshot must expose Redis-first and bounded DB-path ratios"],
+  [!helper.includes('status: "NOT_MEASURED"'), "Redis must not regress to the obsolete NOT_MEASURED placeholder"],
   [!helper.includes("DATABASE_URL"), "snapshot must not expose DATABASE_URL"],
   [!helper.includes("metadataJson"), "snapshot must not expose AI metadata payloads"],
 ];

@@ -72,6 +72,8 @@ export function CtoScalabilityDashboard({ snapshot, locale }: { snapshot: Snapsh
     snapshot.database.longRunningQueries > 0 ||
     dbPolicyWatch;
   const aiWatch = snapshot.ai.sampleCount > 0 && ((snapshot.ai.rateLimitedRate ?? 0) > 0 || (snapshot.ai.latencyMs.p99 ?? 0) >= 2000);
+  const redisMeasured = snapshot.redis.status === "OK";
+  const redisWatch = snapshot.redis.status === "DEGRADED" || snapshot.redis.status === "UNAVAILABLE";
 
   const databaseModeLabel = (() => {
     switch (snapshot.database.connectionPolicy.mode) {
@@ -161,11 +163,29 @@ export function CtoScalabilityDashboard({ snapshot, locale }: { snapshot: Snapsh
         <article className="dtsc-panel min-w-0 max-w-full p-4 sm:p-5">
           <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3"><ServerCog className="h-5 w-5 shrink-0 text-cyan-600" aria-hidden="true" /><h2 className="break-words text-xl font-black text-dtsc-ink">{t("redis")}</h2></div>
-            <StatusPill tone="not-measured" label={t("notMeasured")} />
+            <StatusPill
+              tone={redisMeasured ? "measured" : redisWatch ? "watch" : "not-measured"}
+              label={redisMeasured ? t("measured") : redisWatch ? t("watch") : t("notMeasured")}
+            />
           </div>
-          <div className="mt-4 rounded-2xl border border-dashed border-dtsc-border bg-dtsc-soft p-4">
-            <p className="break-words leading-6 text-dtsc-muted">{t("redisDeferred")}</p>
+          <div className="mt-4 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-[repeat(2,minmax(0,1fr))]">
+            <Metric label={t("redisProbe")} value={milliseconds(snapshot.redis.probeLatencyMs)} />
+            <Metric label={t("redisPrecision")} value={`${snapshot.redis.bucketPrecisionMinutes} min`} hint={t("hourlyBuckets")} />
+            <Metric label={t("presenceRedisLeases")} value={snapshot.redis.presence.redisLeaseCount} />
+            <Metric label={t("presenceRedisReads")} value={snapshot.redis.presence.redisReadCount} />
+            <Metric label={t("presenceDbCheckpoints")} value={snapshot.redis.presence.dbCheckpointCount} />
+            <Metric label={t("presenceDbFallbacks")} value={snapshot.redis.presence.dbFallbackCount} />
+            <Metric label={`${t("redisFirstRate")} · ${t("redis")}`} value={percent(snapshot.redis.presence.redisFirstRate)} />
+            <Metric label={t("callRedisReads")} value={snapshot.redis.calls.redisInboxReadCount} />
+            <Metric label={t("callRedisPublishes")} value={snapshot.redis.calls.redisPublishCount} />
+            <Metric label={t("callDbReconciliations")} value={snapshot.redis.calls.dbReconciliationCount} />
+            <Metric label={t("callDbFallbacks")} value={snapshot.redis.calls.dbFallbackCount} />
+            <Metric label={t("callSettingsDb")} value={snapshot.redis.calls.settingsDbLoadCount} />
+            <Metric label={`${t("redisFirstRate")} · ${t("callRedisReads")}`} value={percent(snapshot.redis.calls.redisFirstRate)} />
+            <Metric label={t("callDbReadRate")} value={percent(snapshot.redis.calls.dbReadRate)} />
           </div>
+          <p className="mt-4 break-words text-xs leading-5 text-dtsc-muted"><strong>{t("coverage")}:</strong> {t("redisSourceHint")}</p>
+          {!redisMeasured ? <p className="mt-3 break-words rounded-xl border border-amber-300/60 bg-amber-50 p-3 text-sm font-semibold text-amber-900 dark:border-amber-600/40 dark:bg-amber-950/30 dark:text-amber-100">{t("redisUnavailable")}</p> : null}
         </article>
       </section>
 
