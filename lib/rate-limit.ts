@@ -2,13 +2,20 @@ import {
   redisRestCommand,
   type RedisRestUnavailableReason,
 } from "@/lib/redis-rest";
+import {
+  resolveRateLimitPolicy,
+  type RateLimitFailureMode,
+  type RateLimitPolicy,
+} from "@/lib/rate-limit-policy";
+import { recordRateLimitFallback } from "@/lib/scalability/rate-limit-fallback-observability";
+
+export type { RateLimitFailureMode } from "@/lib/rate-limit-policy";
 
 type Bucket = {
   count: number;
   resetAt: number;
 };
 
-export type RateLimitFailureMode = "local" | "open" | "closed";
 export type RateLimitSource = "redis" | "local" | "fail-open" | "fail-closed";
 
 export type RateLimitResult = {
@@ -157,6 +164,20 @@ function degradedResult(
   return localRateLimit(safeKey, limit, windowMs, reason);
 }
 
+function observedDegradedResult(
+  safeKey: string,
+  limit: number,
+  windowMs: number,
+  policy: RateLimitPolicy,
+  reason: RedisRestUnavailableReason
+) {
+  const result = degradedResult(safeKey, limit, windowMs, policy.failureMode, reason);
+  if (result.source !== "redis" && result.reason) {
+    recordRateLimitFallback({ policy, source: result.source, reason: result.reason });
+  }
+  return result;
+}
+
 export async function rateLimit(
   key: string,
   limit: number,
@@ -165,8 +186,8 @@ export async function rateLimit(
 ): Promise<RateLimitResult> {
   const safeLimit = normalizeLimit(limit);
   const safeWindowMs = normalizeWindowMs(windowMs);
+  const policy = resolveRateLimitPolicy(key, options.failureMode);
   const safeKey = await rateLimitStorageKey(key);
-  const failureMode = options.failureMode ?? "local";
 
   const outcome = await redisRestCommand<unknown>(
     ["EVAL", ATOMIC_RATE_LIMIT_SCRIPT, 1, safeKey, safeWindowMs],
@@ -174,12 +195,12 @@ export async function rateLimit(
   );
 
   if (!outcome.available) {
-    return degradedResult(safeKey, safeLimit, safeWindowMs, failureMode, outcome.reason);
+    return observedDegradedResult(safeKey, safeLimit, safeWindowMs, policy, outcome.reason);
   }
 
   const parsed = parseAtomicResult(outcome.result);
   if (!parsed) {
-    return degradedResult(safeKey, safeLimit, safeWindowMs, failureMode, "ERROR");
+    return observedDegradedResult(safeKey, safeLimit, safeWindowMs, policy, "ERROR");
   }
 
   return {
