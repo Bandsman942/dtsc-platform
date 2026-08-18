@@ -37,6 +37,8 @@ Un seul `EVAL` Redis exécute, dans la même opération :
 3. `PEXPIRE` si la clé vient d'être créée ou si une ancienne clé sans TTL est rencontrée ;
 4. retour `{ count, ttlMs }`.
 
+Le script déclare `#!lua flags=allow-key-locking` et ne touche qu'à `KEYS[1]`. Sur Upstash, cela borne le verrou du script à la clé de quota concernée au lieu d'utiliser le verrou global par défaut des scripts Lua, ce qui évite de sérialiser des quotas indépendants.
+
 La fenêtre ne dépend donc plus d'un deuxième roundtrip applicatif pour recevoir son expiration.
 
 ## Clés anonymisées
@@ -96,7 +98,7 @@ La gate `scripts/qa-scale3a-distributed-rate-limit.mjs` vérifie notamment :
 - réutilisation de `lib/redis-rest.ts` ;
 - absence de `fetch()` direct dans le limiter ;
 - timeout rate-limit strictement inférieur au timeout Redis générique ;
-- opération unique `EVAL` avec `INCR`, `PTTL`, `PEXPIRE` ;
+- opération unique `EVAL` avec verrouillage limité à la clé et avec `INCR`, `PTTL`, `PEXPIRE` ;
 - SHA-256 et namespace v2 ;
 - modes `local/open/closed` ;
 - résultat enrichi sans suppression du contrat historique ;
