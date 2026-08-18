@@ -1,0 +1,47 @@
+name: SCALE-2C dashboard patch
+
+on:
+  push:
+    branches:
+      - feat/425-redis-observability-closeout
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/425-redis-observability-closeout
+          fetch-depth: 0
+      - name: Patch measured Redis dashboard
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("components/admin/cto-scalability-dashboard.tsx")
+          source = path.read_text()
+          old = '''  const aiWatch = snapshot.ai.sampleCount > 0 && ((snapshot.ai.rateLimitedRate ?? 0) > 0 || (snapshot.ai.latencyMs.p99 ?? 0) >= 2000);\n'''
+          new = '''  const aiWatch = snapshot.ai.sampleCount > 0 && ((snapshot.ai.rateLimitedRate ?? 0) > 0 || (snapshot.ai.latencyMs.p99 ?? 0) >= 2000);\n  const redisMeasured = snapshot.redis.status === "OK";\n  const redisWatch = snapshot.redis.status === "DEGRADED" || snapshot.redis.status === "UNAVAILABLE";\n'''
+          if source.count(old) != 1:
+              raise SystemExit("redis status anchor missing")
+          source = source.replace(old, new, 1)
+          old_article = '''        <article className="dtsc-panel min-w-0 max-w-full p-4 sm:p-5">\n          <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">\n            <div className="flex min-w-0 items-center gap-3"><ServerCog className="h-5 w-5 shrink-0 text-cyan-600" aria-hidden="true" /><h2 className="break-words text-xl font-black text-dtsc-ink">{t("redis")}</h2></div>\n            <StatusPill tone="not-measured" label={t("notMeasured")} />\n          </div>\n          <div className="mt-4 rounded-2xl border border-dashed border-dtsc-border bg-dtsc-soft p-4">\n            <p className="break-words leading-6 text-dtsc-muted">{t("redisDeferred")}</p>\n          </div>\n        </article>'''
+          new_article = '''        <article className="dtsc-panel min-w-0 max-w-full p-4 sm:p-5">\n          <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">\n            <div className="flex min-w-0 items-center gap-3"><ServerCog className="h-5 w-5 shrink-0 text-cyan-600" aria-hidden="true" /><h2 className="break-words text-xl font-black text-dtsc-ink">{t("redis")}</h2></div>\n            <StatusPill\n              tone={redisMeasured ? "measured" : redisWatch ? "watch" : "not-measured"}\n              label={redisMeasured ? t("measured") : redisWatch ? t("watch") : t("notMeasured")}\n            />\n          </div>\n          <div className="mt-4 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-[repeat(2,minmax(0,1fr))]">\n            <Metric label={t("redisProbe")} value={milliseconds(snapshot.redis.probeLatencyMs)} />\n            <Metric label={t("redisPrecision")} value={`${snapshot.redis.bucketPrecisionMinutes} min`} hint={t("hourlyBuckets")} />\n            <Metric label={t("presenceRedisLeases")} value={snapshot.redis.presence.redisLeaseCount} />\n            <Metric label={t("presenceRedisReads")} value={snapshot.redis.presence.redisReadCount} />\n            <Metric label={t("presenceDbCheckpoints")} value={snapshot.redis.presence.dbCheckpointCount} />\n            <Metric label={t("presenceDbFallbacks")} value={snapshot.redis.presence.dbFallbackCount} />\n            <Metric label={`${t("redisFirstRate")} · ${t("redis")}`} value={percent(snapshot.redis.presence.redisFirstRate)} />\n            <Metric label={t("callRedisReads")} value={snapshot.redis.calls.redisInboxReadCount} />\n            <Metric label={t("callRedisPublishes")} value={snapshot.redis.calls.redisPublishCount} />\n            <Metric label={t("callDbReconciliations")} value={snapshot.redis.calls.dbReconciliationCount} />\n            <Metric label={t("callDbFallbacks")} value={snapshot.redis.calls.dbFallbackCount} />\n            <Metric label={t("callSettingsDb")} value={snapshot.redis.calls.settingsDbLoadCount} />\n            <Metric label={`${t("redisFirstRate")} · ${t("callRedisReads")}`} value={percent(snapshot.redis.calls.redisFirstRate)} />\n            <Metric label={t("callDbReadRate")} value={percent(snapshot.redis.calls.dbReadRate)} />\n          </div>\n          <p className="mt-4 break-words text-xs leading-5 text-dtsc-muted"><strong>{t("coverage")}:</strong> {t("redisSourceHint")}</p>\n          {!redisMeasured ? <p className="mt-3 break-words rounded-xl border border-amber-300/60 bg-amber-50 p-3 text-sm font-semibold text-amber-900 dark:border-amber-600/40 dark:bg-amber-950/30 dark:text-amber-100">{t("redisUnavailable")}</p> : null}\n        </article>'''
+          if source.count(old_article) != 1:
+              raise SystemExit("redis article anchor missing")
+          path.write_text(source.replace(old_article, new_article, 1))
+          PY
+          git diff --check
+      - name: Commit and remove temporary workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/scale2c-dashboard-patch.yml
+          git add components/admin/cto-scalability-dashboard.tsx
+          git commit -m "feat(scalability): render measured Redis paths in CTO dashboard"
+          git push origin HEAD:feat/425-redis-observability-closeout
