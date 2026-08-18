@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { Prisma, UserStatus, type UserRole } from "@prisma/client";
 import { collaborationGroupScopeWhere } from "@/lib/collaboration";
+import { getCollaborationPresenceRedisMap } from "@/lib/collaboration-presence-redis";
 import { collaboratorsNotificationTarget } from "@/lib/notification-targets";
 import { notifyUser } from "@/lib/notifications";
 import { getActiveOrganizationId } from "@/lib/organizations";
@@ -192,6 +193,10 @@ export async function getAuthorizedCollaborators(session: SessionPayload, option
 export async function getCollaborationPresenceMap(userIds: string[]) {
   const ids = [...new Set(userIds)].filter(Boolean);
   if (!ids.length) return new Map<string, Date>();
+
+  const redisMap = await getCollaborationPresenceRedisMap(ids);
+  if (redisMap) return redisMap;
+
   const threshold = new Date(Date.now() - ACTIVE_PRESENCE_WINDOW_MS);
   const sessions = await prisma.collaborationPresenceSession.findMany({
     where: { userId: { in: ids }, disconnectedAt: null, lastHeartbeatAt: { gte: threshold } },
