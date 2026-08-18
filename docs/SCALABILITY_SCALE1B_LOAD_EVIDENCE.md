@@ -1,9 +1,9 @@
 # DTSC Platform — SCALE-1B Intermediate Database Load Evidence
 
-Parent programme: #352  
-Parent SCALE-1: #354  
-Evidence gate: #410  
-Harness: #411  
+Parent programme: #352
+Parent SCALE-1: #354
+Evidence gate: #410
+Harness: #411
 SCALE-7 certification: #360
 
 ## Purpose
