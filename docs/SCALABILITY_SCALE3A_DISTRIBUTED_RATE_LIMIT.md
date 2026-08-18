@@ -1,7 +1,7 @@
 # SCALE-3A — Distributed rate limiter primitive
 
-Issue: #427  
-Parent: #356  
+Issue: #427
+Parent: #356
 Programme: #352
 
 ## Objectif
