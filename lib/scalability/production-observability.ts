@@ -1,3 +1,4 @@
+import { getDatabaseConnectionPolicy } from "@/lib/database-connection-policy";
 import { prisma } from "@/lib/prisma";
 
 type ApiLatencyRow = {
@@ -21,6 +22,10 @@ type AiLatencyRow = {
 
 type DbConnectionRow = {
   currentConnections: number;
+  activeConnections: number;
+  idleConnections: number;
+  idleInTransactionConnections: number;
+  longRunningQueries: number;
   maxConnections: number;
 };
 
@@ -40,6 +45,7 @@ function observedRate(sampleCount: number, windowHours: number) {
 export async function getProductionObservabilitySnapshot(windowHours: number) {
   const generatedAt = new Date();
   const since = new Date(generatedAt.getTime() - windowHours * 60 * 60 * 1000);
+  const connectionPolicy = getDatabaseConnectionPolicy();
 
   const dbProbeStartedAt = performance.now();
   await prisma.$queryRaw`SELECT 1`;
@@ -73,6 +79,14 @@ export async function getProductionObservabilitySnapshot(windowHours: number) {
     prisma.$queryRaw<DbConnectionRow[]>`
       SELECT
         COUNT(*)::int AS "currentConnections",
+        COUNT(*) FILTER (WHERE state = 'active')::int AS "activeConnections",
+        COUNT(*) FILTER (WHERE state = 'idle')::int AS "idleConnections",
+        COUNT(*) FILTER (WHERE state = 'idle in transaction')::int AS "idleInTransactionConnections",
+        COUNT(*) FILTER (
+          WHERE state = 'active'
+            AND query_start IS NOT NULL
+            AND now() - query_start >= interval '1 second'
+        )::int AS "longRunningQueries",
         current_setting('max_connections')::int AS "maxConnections"
       FROM pg_stat_activity
       WHERE datname = current_database()
@@ -81,7 +95,14 @@ export async function getProductionObservabilitySnapshot(windowHours: number) {
 
   const api = apiRows[0] ?? { sampleCount: 0, p50Ms: null, p95Ms: null, p99Ms: null, serverErrorCount: 0 };
   const ai = aiRows[0] ?? { sampleCount: 0, successCount: 0, failedCount: 0, rateLimitedCount: 0, p50Ms: null, p95Ms: null, p99Ms: null, firstTokenP95Ms: null };
-  const database = dbConnectionRows[0] ?? { currentConnections: 0, maxConnections: 0 };
+  const database = dbConnectionRows[0] ?? {
+    currentConnections: 0,
+    activeConnections: 0,
+    idleConnections: 0,
+    idleInTransactionConnections: 0,
+    longRunningQueries: 0,
+    maxConnections: 0,
+  };
 
   return {
     generatedAt: generatedAt.toISOString(),
@@ -103,11 +124,16 @@ export async function getProductionObservabilitySnapshot(windowHours: number) {
       },
     },
     database: {
-      source: "PostgreSQL live probe + pg_stat_activity",
+      source: "PostgreSQL live probe + pg_stat_activity + secret-free runtime policy",
       probeLatencyMs: finiteMetric(dbProbeLatencyMs),
       currentConnections: database.currentConnections,
+      activeConnections: database.activeConnections,
+      idleConnections: database.idleConnections,
+      idleInTransactionConnections: database.idleInTransactionConnections,
+      longRunningQueries: database.longRunningQueries,
       maxConnections: database.maxConnections,
       connectionUtilization: database.maxConnections > 0 ? database.currentConnections / database.maxConnections : null,
+      connectionPolicy,
     },
     ai: {
       source: "AiModelCall",
