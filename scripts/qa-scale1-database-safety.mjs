@@ -44,7 +44,7 @@ const checks = [
   [source.prisma.includes("buildPrismaRuntimeDatabaseUrl"), "Prisma runtime must use the canonical database URL policy"],
   [source.prisma.includes("transactionOptions"), "Prisma singleton must declare bounded interactive transaction defaults"],
   [source.prisma.includes("maxWait: 2_000") && source.prisma.includes("timeout: 5_000"), "Prisma transaction budget must remain explicit"],
-  [source.policy.includes("connectionLimit: 1"), "Neon pooled runtime must default to one Prisma connection per serverless instance"],
+  [source.policy.includes("connectionLimit: 5"), "Neon pooled runtime must use the SCALE-1B evidence-tuning candidate of five Prisma connections per warm instance"],
   [source.policy.includes("poolTimeoutSeconds: 5"), "Neon pooled runtime must bound pool wait time"],
   [source.policy.includes("connectTimeoutSeconds: 10"), "Neon pooled runtime must tolerate bounded Neon cold-start connection time"],
   [source.policy.includes('includes("-pooler.")'), "Neon pooled endpoint detection must be explicit"],
@@ -62,6 +62,7 @@ const checks = [
   [source.i18n.includes("poolingMode") && source.i18n.includes("pooledHint"), "SCALE-1 database UI strings must stay in the canonical FR/EN dictionary"],
   [!source.dashboard.includes("DATABASE_URL") && !source.dashboard.includes("DIRECT_URL") && !source.dashboard.includes("hostname") && !source.dashboard.includes("password"), "Dashboard must never expose database credentials or connection identifiers"],
   [source.docs.includes("DATABASE_URL") && source.docs.includes("DIRECT_URL"), "Database safety runbook must document runtime and migration connection roles"],
+  [source.docs.includes("connection_limit=5"), "Database safety runbook must document the current pooled tuning candidate"],
   [prismaClientOffenders.length === 0, `Only lib/prisma.ts may instantiate PrismaClient in runtime code; offenders: ${prismaClientOffenders.join(", ") || "none"}`],
 ];
 

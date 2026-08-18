@@ -2,6 +2,7 @@
 
 Parent programme: #352
 Iteration: #354 / SCALE-1
+Pooled concurrency tuning: #416
 
 ## Purpose
 
@@ -20,11 +21,13 @@ Neither value may be exposed to the browser, user-facing errors, screenshots, fi
 
 ### Neon pooled runtime defaults
 
-When `DATABASE_URL` is a Neon pooled endpoint and the operator has not already set explicit Prisma v6 URL parameters, DTSC applies these conservative runtime defaults in memory:
+When `DATABASE_URL` is a Neon pooled endpoint and the operator has not already set explicit Prisma v6 URL parameters, DTSC applies these runtime defaults in memory:
 
-- `connection_limit=1` per warm serverless instance;
+- `connection_limit=5` per warm serverless / Fluid Compute instance;
 - `pool_timeout=5` seconds;
 - `connect_timeout=10` seconds.
+
+`connection_limit=5` is the first measured tuning candidate tracked by #416. The prior pooled baseline with `connection_limit=1` kept PostgreSQL pressure very low at 500 VU (16 / 901 connections max, no exhaustion) but produced unacceptable application latency (P95 ≈ 18 s, P99 ≈ 29 s). Prisma documents `connection_limit=1` as a serverless starting point when no external pooler is available, while workloads behind an external pooler should tune upward when parallel queries are serialized. DTSC therefore keeps Neon PgBouncer in front of Production and tests the smallest higher application-side pool that restores latency without exhausting PostgreSQL.
 
 Explicit operator values are preserved. A direct Neon hostname is **never** rewritten automatically into a pooled hostname: endpoint selection remains an infrastructure decision.
 
@@ -100,22 +103,26 @@ Before SCALE-7 staged load tests:
 2. Configure `DIRECT_URL` with the direct Neon connection string when Prisma migration/admin tooling should bypass the pooler.
 3. Keep both variables server-only; never prefix them with `NEXT_PUBLIC_`.
 4. Open Console → CTO → Scalability and confirm the runtime connection mode is `Neon poolé / Neon pooled`.
-5. Observe connection utilization, active/idle sessions, idle-in-transaction sessions and >1 s active-query count under representative traffic.
-6. Archive the Git SHA and observation window with the load report.
+5. Confirm the effective `connection_limit` matches the candidate being certified by #416.
+6. Observe connection utilization, active/idle sessions, idle-in-transaction sessions and >1 s active-query count under representative traffic.
+7. Archive the Git SHA and observation window with the load report.
 
-## Capacity evidence still required
+## Capacity evidence
 
-The following remain `NOT_EXECUTED` until real evidence exists:
+Current verified 500-VU evidence establishes that Neon pooled avoids connection exhaustion, but the latency contract is still being tuned under #416. A SCALE-1B run is accepted only when the same archived run satisfies both HTTP and database gates.
 
-- intermediate-load proof that PostgreSQL does not exhaust connections;
-- staged authenticated load at 500, 1,000, 2,500 and 5,000 simultaneous users;
-- provider-side Neon connection/slow-query telemetry archived with those runs;
+The following remain required before final certification:
+
+- 500-VU P95 < 1,000 ms and P99 < 2,000 ms with the selected pooled connection limit;
+- per-workload latency evidence for `/dashboard` and `/api/notifications/unread-count`;
+- staged authenticated load at 1,000, 2,500 and 5,000 simultaneous users under SCALE-7;
+- provider-side Neon connection/slow-query telemetry archived with later certification stages where available;
 - final SCALE-7/SCALE-8 readiness decision.
 
 SCALE-1 therefore hardens the contract but does not close the 5,000-user certification programme by itself.
 
 ## Rollback
 
-Application rollback is a revert of the SCALE-1 changes. No Prisma schema or historical migration is modified by this iteration.
+Application rollback is a normal traceable revert/hotfix through the repository delivery flow; `main` history is never rewritten. No Prisma schema or historical migration is modified by this tuning.
 
-If `DIRECT_URL` is removed, Prisma CLI falls back to `DATABASE_URL`. If the runtime URL policy is reverted, the environment connection string remains the source of truth and no database data requires restoration.
+If the `connection_limit=5` candidate regresses availability or database pressure, restore the previous effective `connection_limit=1` through a compliant change while keeping Neon pooled. If `DIRECT_URL` is removed, Prisma CLI falls back to `DATABASE_URL`. The environment connection string remains the source of truth and no database data requires restoration.

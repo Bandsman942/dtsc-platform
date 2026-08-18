@@ -19,6 +19,17 @@ function metric(summary, name, key) {
   return finite(summary?.metrics?.[name]?.values?.[key]);
 }
 
+function latencyMetric(summary, name) {
+  return {
+    p50: metric(summary, name, "med"),
+    p95: metric(summary, name, "p(95)"),
+    p99: metric(summary, name, "p(99)"),
+    avg: metric(summary, name, "avg"),
+    max: metric(summary, name, "max"),
+    count: metric(summary, name, "count"),
+  };
+}
+
 function maxMetric(samples, selector) {
   const values = samples.map(selector).filter((value) => typeof value === "number" && Number.isFinite(value));
   return values.length ? Math.max(...values) : null;
@@ -53,16 +64,18 @@ const targetVus = Number.parseInt(process.env.TARGET_VUS || "0", 10);
 const targetOrigin = safeOrigin(process.env.BASE_URL || "");
 const executionEvidence = process.env.GITHUB_ACTIONS === "true" ? "CI_PROVEN" : "LOCAL_EXECUTED";
 
+const workloadLatencyMs = {
+  dashboardRead: latencyMetric(summary, "http_req_duration{workload:dashboard-read}"),
+  notificationsRead: latencyMetric(summary, "http_req_duration{workload:notifications-read}"),
+};
+
 const http = {
   requests: metric(summary, "http_reqs", "count"),
   requestsPerSecond: metric(summary, "http_reqs", "rate"),
   failedRate: metric(summary, "http_req_failed", "rate"),
   checksRate: metric(summary, "checks", "rate"),
-  latencyMs: {
-    p50: metric(summary, "http_req_duration", "med"),
-    p95: metric(summary, "http_req_duration", "p(95)"),
-    p99: metric(summary, "http_req_duration", "p(99)"),
-  },
+  latencyMs: latencyMetric(summary, "http_req_duration"),
+  workloadLatencyMs,
 };
 
 const database = {
@@ -77,6 +90,9 @@ const database = {
   maxConnections: maxMetric(dbSamples, (sample) => sample?.database?.maxConnections),
   connectionModes: [...new Set(dbSamples.map((sample) => sample?.database?.connectionPolicy?.mode).filter(Boolean))],
   connectionStatuses: [...new Set(dbSamples.map((sample) => sample?.database?.connectionPolicy?.status).filter(Boolean))],
+  connectionLimits: [...new Set(dbSamples.map((sample) => sample?.database?.connectionPolicy?.parameters?.connectionLimit).filter((value) => Number.isInteger(value)))],
+  poolTimeoutSeconds: [...new Set(dbSamples.map((sample) => sample?.database?.connectionPolicy?.parameters?.poolTimeoutSeconds).filter((value) => Number.isInteger(value)))],
+  connectTimeoutSeconds: [...new Set(dbSamples.map((sample) => sample?.database?.connectionPolicy?.parameters?.connectTimeoutSeconds).filter((value) => Number.isInteger(value)))],
 };
 
 const gates = {
@@ -85,6 +101,14 @@ const gates = {
   httpFailureRateUnderOnePercent: http.failedRate != null && http.failedRate < 0.01,
   httpP95UnderOneSecond: http.latencyMs.p95 != null && http.latencyMs.p95 < 1000,
   httpP99UnderTwoSeconds: http.latencyMs.p99 != null && http.latencyMs.p99 < 2000,
+  dashboardP95UnderOneSecond:
+    workloadLatencyMs.dashboardRead.p95 != null && workloadLatencyMs.dashboardRead.p95 < 1000,
+  dashboardP99UnderTwoSeconds:
+    workloadLatencyMs.dashboardRead.p99 != null && workloadLatencyMs.dashboardRead.p99 < 2000,
+  notificationsP95UnderOneSecond:
+    workloadLatencyMs.notificationsRead.p95 != null && workloadLatencyMs.notificationsRead.p95 < 1000,
+  notificationsP99UnderTwoSeconds:
+    workloadLatencyMs.notificationsRead.p99 != null && workloadLatencyMs.notificationsRead.p99 < 2000,
   checksAboveNinetyNinePercent: http.checksRate != null && http.checksRate > 0.99,
   neonRuntimePooled:
     database.connectionModes.length === 1 &&
@@ -109,6 +133,7 @@ const failedGates = Object.entries(gates)
 const report = {
   contract: "SCALE-1B",
   issue: 410,
+  tuningIssue: 416,
   harnessIssue: 411,
   parentIssue: 354,
   programmeIssue: 352,
@@ -144,12 +169,17 @@ const markdown = [
   `- HTTP req/s: ${http.requestsPerSecond ?? "n/a"}`,
   `- HTTP failure rate: ${http.failedRate ?? "n/a"}`,
   `- P50/P95/P99: ${http.latencyMs.p50 ?? "n/a"} / ${http.latencyMs.p95 ?? "n/a"} / ${http.latencyMs.p99 ?? "n/a"} ms`,
+  `- Dashboard P50/P95/P99: ${workloadLatencyMs.dashboardRead.p50 ?? "n/a"} / ${workloadLatencyMs.dashboardRead.p95 ?? "n/a"} / ${workloadLatencyMs.dashboardRead.p99 ?? "n/a"} ms`,
+  `- Notifications P50/P95/P99: ${workloadLatencyMs.notificationsRead.p50 ?? "n/a"} / ${workloadLatencyMs.notificationsRead.p95 ?? "n/a"} / ${workloadLatencyMs.notificationsRead.p99 ?? "n/a"} ms`,
   `- DB samples: ${database.sampleCount}`,
   `- Max DB connections: ${database.maxCurrentConnections ?? "n/a"} / ${database.maxConnections ?? "n/a"}`,
   `- Max connection utilization: ${database.maxConnectionUtilization ?? "n/a"}`,
   `- Max idle-in-transaction: ${database.maxIdleInTransactionConnections ?? "n/a"}`,
   `- Max >1s active queries: ${database.maxLongRunningQueries ?? "n/a"}`,
   `- Runtime DB mode: ${database.connectionModes.join(", ") || "n/a"}`,
+  `- Runtime connection_limit: ${database.connectionLimits.join(", ") || "n/a"}`,
+  `- Runtime pool_timeout: ${database.poolTimeoutSeconds.join(", ") || "n/a"} s`,
+  `- Runtime connect_timeout: ${database.connectTimeoutSeconds.join(", ") || "n/a"} s`,
   "",
   "## Gates",
   "",
