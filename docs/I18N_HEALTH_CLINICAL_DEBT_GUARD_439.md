@@ -1,6 +1,6 @@
 # i18n Health clinique — garde de dette #439
 
-Parent : #398  
+Parent : #398
 Programme : #268 / #253
 
 ## Objectif
