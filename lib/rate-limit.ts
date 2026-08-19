@@ -192,11 +192,14 @@ async function buildRateLimitContext(
   windowMs: number,
   options: RateLimitOptions
 ): Promise<RateLimitContext> {
+  const policy = resolveRateLimitPolicy(key, options.failureMode);
+  const safeKey = await rateLimitStorageKey(key);
+
   return {
     safeLimit: normalizeLimit(limit),
     safeWindowMs: normalizeWindowMs(windowMs),
-    safeKey: await rateLimitStorageKey(key),
-    policy: resolveRateLimitPolicy(key, options.failureMode),
+    safeKey,
+    policy,
   };
 }
 
