@@ -7,6 +7,73 @@ import { safeWorkflowFailureMessage } from "@/lib/enterprise/workflows/errors";
 import { prisma } from "@/lib/prisma";
 
 type ClaimedEvent = { id: string; attemptCount: number };
+type QueueSnapshotRow = {
+  ready: bigint | number | string;
+  processing: bigint | number | string;
+  dead: bigint | number | string;
+  oldestReadyAt: Date | null;
+};
+
+export type WorkflowQueueSnapshot = {
+  available: boolean;
+  ready: number | null;
+  processing: number | null;
+  dead: number | null;
+  oldestReadyAgeMs: number | null;
+  sampledAt: string;
+};
+
+function numericCount(value: bigint | number | string | null | undefined) {
+  if (typeof value === "bigint") return Number(value);
+  if (typeof value === "number") return value;
+  const parsed = Number(value || 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export async function getWorkflowQueueSnapshot(): Promise<WorkflowQueueSnapshot> {
+  const sampledAt = new Date();
+  const leaseBefore = new Date(sampledAt.getTime() - WORKFLOW_LIMITS.workerLeaseSeconds * 1000);
+  try {
+    const [row] = await prisma.$queryRaw<QueueSnapshotRow[]>(Prisma.sql`
+      SELECT
+        COUNT(*) FILTER (
+          WHERE "processingStatus" IN ('PENDING', 'FAILED')
+            AND "availableAt" <= NOW()
+            AND ("lockedAt" IS NULL OR "lockedAt" < ${leaseBefore})
+        ) AS "ready",
+        COUNT(*) FILTER (
+          WHERE "processingStatus" = 'PROCESSING'
+            AND "lockedAt" IS NOT NULL
+            AND "lockedAt" >= ${leaseBefore}
+        ) AS "processing",
+        COUNT(*) FILTER (WHERE "processingStatus" = 'DEAD') AS "dead",
+        MIN("availableAt") FILTER (
+          WHERE "processingStatus" IN ('PENDING', 'FAILED')
+            AND "availableAt" <= NOW()
+            AND ("lockedAt" IS NULL OR "lockedAt" < ${leaseBefore})
+        ) AS "oldestReadyAt"
+      FROM "EnterpriseDomainEvent"
+    `);
+    const oldestReadyAt = row?.oldestReadyAt ? new Date(row.oldestReadyAt) : null;
+    return {
+      available: true,
+      ready: numericCount(row?.ready),
+      processing: numericCount(row?.processing),
+      dead: numericCount(row?.dead),
+      oldestReadyAgeMs: oldestReadyAt ? Math.max(0, sampledAt.getTime() - oldestReadyAt.getTime()) : null,
+      sampledAt: sampledAt.toISOString(),
+    };
+  } catch {
+    return {
+      available: false,
+      ready: null,
+      processing: null,
+      dead: null,
+      oldestReadyAgeMs: null,
+      sampledAt: sampledAt.toISOString(),
+    };
+  }
+}
 
 async function claimPendingEvents(workerId: string, batchSize: number) {
   const leaseBefore = new Date(Date.now() - WORKFLOW_LIMITS.workerLeaseSeconds * 1000);
@@ -33,6 +100,7 @@ async function claimPendingEvents(workerId: string, batchSize: number) {
 
 export async function processPendingWorkflowEvents({ batchSize = WORKFLOW_LIMITS.workerBatchSize, workerId = `workflow-${randomUUID()}` }: { batchSize?: number; workerId?: string } = {}) {
   const safeBatchSize = Math.max(1, Math.min(batchSize, WORKFLOW_LIMITS.workerBatchSize));
+  const queueBefore = await getWorkflowQueueSnapshot();
   const claimed = await claimPendingEvents(workerId, safeBatchSize);
   const results: Array<{ id: string; status: string; error?: string; projectionFailures?: number }> = [];
   for (const event of claimed) {
@@ -51,5 +119,16 @@ export async function processPendingWorkflowEvents({ batchSize = WORKFLOW_LIMITS
   }
   const pendingProjections = await processPendingCrossModuleProjections(safeBatchSize);
   const resumedRuns = await resumeWaitingRuns();
-  return { workerId, claimed: claimed.length, results, pendingProjections: { processed: pendingProjections.processed, failures: pendingProjections.failures }, resumedRuns: resumedRuns.map((run) => ({ id: run.id, status: run.status })) };
+  const queueAfter = await getWorkflowQueueSnapshot();
+  const saturated = claimed.length === safeBatchSize && queueAfter.available && (queueAfter.ready || 0) > 0;
+  return {
+    workerId,
+    claimed: claimed.length,
+    results,
+    pendingProjections: { processed: pendingProjections.processed, failures: pendingProjections.failures },
+    resumedRuns: resumedRuns.map((run) => ({ id: run.id, status: run.status })),
+    queueBefore,
+    queueAfter,
+    saturated,
+  };
 }
