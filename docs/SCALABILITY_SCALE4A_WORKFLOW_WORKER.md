@@ -1,7 +1,7 @@
 # SCALE-4A — Cadence du worker workflow et pression de file
 
-Parent : #357  
-Programme : #352  
+Parent : #357
+Programme : #352
 Issue : #438
 
 ## Objectif
