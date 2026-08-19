@@ -56,6 +56,15 @@ const checks = [
   [!route.includes("@/lib/db") && !route.includes("prisma") && !route.includes("DATABASE_URL"), "probe route must not write or depend on PostgreSQL"],
   [!route.includes("hostname") && !route.includes("process.pid") && !route.includes("UPSTASH_REDIS"), "probe response code must not expose host/process/Redis configuration"],
   [harness.includes("HEALTHY_REQUESTS") && harness.includes("HEALTHY_CONCURRENCY") && harness.includes("FAILOVER_REQUESTS"), "harness must use bounded concurrent workloads"],
+  [harness.includes('const WARMUP_REQUESTS = boundedInt(process.env.SCALE3_WARMUP_REQUESTS, 160, 40, 400)'), "warm-up request count must remain bounded"],
+  [harness.includes('const WARMUP_CONCURRENCY = boundedInt(process.env.SCALE3_WARMUP_CONCURRENCY, 80, 10, 200)'), "warm-up concurrency must be bounded"],
+  [harness.includes('`${RUN_ID}-warmup`') && harness.includes('`${RUN_ID}-healthy`'), "warm-up and certified healthy workloads must use distinct quota keys"],
+  [harness.indexOf('`${RUN_ID}-warmup`') < harness.indexOf('`${RUN_ID}-healthy`'), "warm-up must execute before the certified healthy burst"],
+  [harness.includes('const HEALTHY_REQUESTS = boundedInt(process.env.SCALE3_HEALTHY_REQUESTS, 400, 100, 1200)'), "certified healthy request volume must remain 400 by default"],
+  [harness.includes('const HEALTHY_CONCURRENCY = boundedInt(process.env.SCALE3_HEALTHY_CONCURRENCY, 80, 10, 200)'), "certified healthy concurrency must remain 80 by default"],
+  [harness.includes('summary.latencyMs.p95 <= 2_000'), "HTTP p95 certification gate must remain <= 2000 ms"],
+  [harness.includes('sourceCount(warmup, "redis") === WARMUP_REQUESTS'), "warm-up must itself validate Redis-only results"],
+  [harness.includes("warmup,") && harness.includes("version: 2"), "sanitized report must expose warm-up diagnostics separately"],
   [harness.includes("healthy.instanceCount >= 2"), "healthy Production gate must require at least two instances"],
   [harness.includes('sourceCount(healthy, "redis") === HEALTHY_REQUESTS'), "healthy gate must require Redis for every result"],
   [harness.includes("healthy.allowed === HEALTHY_LIMIT"), "healthy gate must prove one global distributed quota"],
@@ -70,11 +79,14 @@ const checks = [
   [workflow.includes("workflow_dispatch:") && workflow.includes("issue_comment:"), "resilience workflow must support manual and owner issue triggers"],
   [workflow.includes("github.event.issue.number == 434") && workflow.includes("github.event.comment.author_association == 'OWNER'"), "issue trigger must be restricted to owner on certification issue #434"],
   [workflow.includes("/issues/434/comments"), "owner-triggered evidence comments must be published to certification issue #434"],
+  [workflow.includes('SCALE3_WARMUP_REQUESTS: "160"') && workflow.includes('SCALE3_WARMUP_CONCURRENCY: "80"'), "workflow must explicitly configure the bounded warm-up"],
+  [workflow.includes('SCALE3_HEALTHY_REQUESTS: "400"') && workflow.includes('SCALE3_HEALTHY_CONCURRENCY: "80"'), "workflow must not reduce the certified healthy load"],
   [workflow.includes("SCALE1_LOAD_BASE_URL") && workflow.includes("SCALE1_CTO_SESSION_COOKIE") && workflow.includes("VERCEL_AUTOMATION_BYPASS_SECRET"), "workflow must reuse governed Production load credentials"],
   [workflow.includes("actions/upload-artifact@v7") && workflow.includes("retention-days: 30"), "sanitized evidence must be archived"],
   [!workflow.includes("vercel deploy") && !workflow.includes("deploy_to_vercel") && !workflow.includes("preview"), "resilience workflow must not deploy or provision Preview"],
   [docs.includes(">= 2 instances") && docs.includes("TIMEOUT") && docs.includes("ne coupe jamais Redis Production"), "documentation must state multi-instance and controlled failover boundaries"],
   [docs.includes("#434") && docs.includes("#432"), "documentation must separate implementation and Production certification issues"],
+  [docs.includes("32230763475") && docs.includes("32230979755") && docs.includes("warm-up"), "documentation must preserve failed Production evidence and warm-up rationale"],
   [runner.includes("node scripts/qa-scale3c-resilience-evidence.mjs"), "SCALE-3C QA must be wired into Regression QA"],
 ];
 
@@ -84,4 +96,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(`SCALE-3C resilience evidence contract: OK (probe imports=${probeImports.length}, certification #434 owner-gated, multi-instance/failover gates present).`);
+console.log(`SCALE-3C resilience evidence contract: OK (probe imports=${probeImports.length}, certification #434 owner-gated, warm-up separated, certified load/gates unchanged).`);

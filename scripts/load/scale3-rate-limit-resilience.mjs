@@ -10,6 +10,10 @@ const RUN_ID = String(process.env.SCALE3_RUN_ID || process.env.GITHUB_RUN_ID || 
   .replace(/[^A-Za-z0-9_-]/g, "-")
   .slice(0, 48);
 const ARTIFACTS_DIR = process.env.ARTIFACTS_DIR || "artifacts";
+const WARMUP_REQUESTS = boundedInt(process.env.SCALE3_WARMUP_REQUESTS, 160, 40, 400);
+const WARMUP_CONCURRENCY = boundedInt(process.env.SCALE3_WARMUP_CONCURRENCY, 80, 10, 200);
+const WARMUP_LIMIT = 100;
+const WARMUP_SETTLE_MS = 500;
 const HEALTHY_REQUESTS = boundedInt(process.env.SCALE3_HEALTHY_REQUESTS, 400, 100, 1200);
 const HEALTHY_CONCURRENCY = boundedInt(process.env.SCALE3_HEALTHY_CONCURRENCY, 80, 10, 200);
 const HEALTHY_LIMIT = boundedInt(process.env.SCALE3_HEALTHY_LIMIT, 50, 5, 100);
@@ -160,6 +164,12 @@ function markdownReport(report) {
     `Generated: ${report.generatedAt}`,
     `Run: ${report.runId}`,
     "",
+    "## Warm-up diagnostic (not certification latency)",
+    "",
+    `Requests: ${report.warmup.requests}; instances: ${report.warmup.instanceCount}; P95 HTTP: ${report.warmup.latencyMs.p95 ?? "n/a"} ms; P99 primitive: ${report.warmup.primitiveLatencyMs.p99 ?? "n/a"} ms; sources: ${JSON.stringify(report.warmup.sources)}.`,
+    "",
+    "The warm-up uses a distinct rate-limit key and is excluded from the certified healthy latency/quota measurement.",
+    "",
     "| Mode | Requests | Allowed | Blocked | Instances | P95 HTTP | P99 primitive | Sources | Reasons |",
     "|---|---:|---:|---:|---:|---:|---:|---|---|",
   ];
@@ -190,6 +200,14 @@ if (HEALTHY_REQUESTS <= HEALTHY_LIMIT) {
 }
 
 fs.mkdirSync(ARTIFACTS_DIR, { recursive: true });
+
+const warmupRows = await runConcurrent(
+  WARMUP_REQUESTS,
+  WARMUP_CONCURRENCY,
+  () => requestProbe("healthy", `${RUN_ID}-warmup`, WARMUP_LIMIT),
+);
+const warmup = summarize("healthy", warmupRows);
+await new Promise((resolve) => setTimeout(resolve, WARMUP_SETTLE_MS));
 
 const healthyRows = await runConcurrent(
   HEALTHY_REQUESTS,
@@ -225,6 +243,10 @@ const closed = modes.closed;
 const local = modes.local;
 const open = modes.open;
 
+gate(warmup.httpErrors === 0, "warmup: HTTP errors must be zero", failedGates);
+gate(warmup.invalidPayloads === 0, "warmup: invalid payloads must be zero", failedGates);
+gate(sourceCount(warmup, "redis") === WARMUP_REQUESTS, "warmup: every result must come from Redis", failedGates);
+
 for (const [mode, summary] of Object.entries(modes)) {
   gate(summary.httpErrors === 0, `${mode}: HTTP errors must be zero`, failedGates);
   gate(summary.invalidPayloads === 0, `${mode}: invalid payloads must be zero`, failedGates);
@@ -258,11 +280,14 @@ for (const mode of [closed, local, open]) {
 }
 
 const report = {
-  version: 1,
+  version: 2,
   generatedAt: new Date().toISOString(),
   runId: RUN_ID,
   status: failedGates.length ? "FAIL" : "PASS",
   configuration: {
+    warmupRequests: WARMUP_REQUESTS,
+    warmupConcurrency: WARMUP_CONCURRENCY,
+    warmupLimit: WARMUP_LIMIT,
     healthyRequests: HEALTHY_REQUESTS,
     healthyConcurrency: HEALTHY_CONCURRENCY,
     healthyLimit: HEALTHY_LIMIT,
@@ -270,6 +295,7 @@ const report = {
     failoverConcurrency: FAILOVER_CONCURRENCY,
     localLimit: LOCAL_LIMIT,
   },
+  warmup,
   modes,
   failedGates,
 };
@@ -278,6 +304,7 @@ fs.writeFileSync(path.join(ARTIFACTS_DIR, "scale3-rate-limit-resilience-report.j
 fs.writeFileSync(path.join(ARTIFACTS_DIR, "scale3-rate-limit-resilience-report.md"), markdownReport(report));
 
 console.log(`SCALE-3 resilience evidence: ${report.status}`);
+console.log(`warmup instances=${warmup.instanceCount}, p95=${warmup.latencyMs.p95}ms, redis=${sourceCount(warmup, "redis")}`);
 console.log(`healthy instances=${healthy.instanceCount}, allowed=${healthy.allowed}/${HEALTHY_REQUESTS}, redis=${sourceCount(healthy, "redis")}`);
 console.log(`closed/local/open sources=${JSON.stringify({ closed: closed.sources, local: local.sources, open: open.sources })}`);
 console.log(`failed gates=${failedGates.length ? failedGates.join(" | ") : "none"}`);
