@@ -1,5 +1,6 @@
 import {
   redisRestCommand,
+  type RedisRestOutcome,
   type RedisRestUnavailableReason,
 } from "@/lib/redis-rest";
 import {
@@ -14,6 +15,13 @@ export type { RateLimitFailureMode } from "@/lib/rate-limit-policy";
 type Bucket = {
   count: number;
   resetAt: number;
+};
+
+type RateLimitContext = {
+  safeLimit: number;
+  safeWindowMs: number;
+  safeKey: string;
+  policy: RateLimitPolicy;
 };
 
 export type RateLimitSource = "redis" | "local" | "fail-open" | "fail-closed";
@@ -178,39 +186,84 @@ function observedDegradedResult(
   return result;
 }
 
+async function buildRateLimitContext(
+  key: string,
+  limit: number,
+  windowMs: number,
+  options: RateLimitOptions
+): Promise<RateLimitContext> {
+  return {
+    safeLimit: normalizeLimit(limit),
+    safeWindowMs: normalizeWindowMs(windowMs),
+    safeKey: await rateLimitStorageKey(key),
+    policy: resolveRateLimitPolicy(key, options.failureMode),
+  };
+}
+
+function resultFromRedisOutcome(
+  context: RateLimitContext,
+  outcome: RedisRestOutcome<unknown>
+): RateLimitResult {
+  if (!outcome.available) {
+    return observedDegradedResult(
+      context.safeKey,
+      context.safeLimit,
+      context.safeWindowMs,
+      context.policy,
+      outcome.reason
+    );
+  }
+
+  const parsed = parseAtomicResult(outcome.result);
+  if (!parsed) {
+    return observedDegradedResult(
+      context.safeKey,
+      context.safeLimit,
+      context.safeWindowMs,
+      context.policy,
+      "ERROR"
+    );
+  }
+
+  return {
+    ok: parsed.count <= context.safeLimit,
+    remaining: Math.max(0, context.safeLimit - parsed.count),
+    resetAt: Date.now() + parsed.ttlMs,
+    source: "redis",
+    degraded: false,
+    reason: null,
+  };
+}
+
 export async function rateLimit(
   key: string,
   limit: number,
   windowMs: number,
   options: RateLimitOptions = {}
 ): Promise<RateLimitResult> {
-  const safeLimit = normalizeLimit(limit);
-  const safeWindowMs = normalizeWindowMs(windowMs);
-  const policy = resolveRateLimitPolicy(key, options.failureMode);
-  const safeKey = await rateLimitStorageKey(key);
-
+  const context = await buildRateLimitContext(key, limit, windowMs, options);
   const outcome = await redisRestCommand<unknown>(
-    ["EVAL", ATOMIC_RATE_LIMIT_SCRIPT, 1, safeKey, safeWindowMs],
+    ["EVAL", ATOMIC_RATE_LIMIT_SCRIPT, 1, context.safeKey, context.safeWindowMs],
     boundedTimeoutMs(options.timeoutMs)
   );
 
-  if (!outcome.available) {
-    return observedDegradedResult(safeKey, safeLimit, safeWindowMs, policy, outcome.reason);
-  }
+  return resultFromRedisOutcome(context, outcome);
+}
 
-  const parsed = parseAtomicResult(outcome.result);
-  if (!parsed) {
-    return observedDegradedResult(safeKey, safeLimit, safeWindowMs, policy, "ERROR");
-  }
-
-  return {
-    ok: parsed.count <= safeLimit,
-    remaining: Math.max(0, safeLimit - parsed.count),
-    resetAt: Date.now() + parsed.ttlMs,
-    source: "redis",
-    degraded: false,
-    reason: null,
-  };
+/**
+ * Controlled fault injection for the authenticated SCALE-3 resilience probe only.
+ * This deliberately enters the primitive at the Redis outcome boundary so policy,
+ * anonymization, local fallback and telemetry remain identical to production code.
+ */
+export async function __rateLimitWithUnavailableRedisForScalabilityProbe(
+  key: string,
+  limit: number,
+  windowMs: number,
+  reason: RedisRestUnavailableReason,
+  options: RateLimitOptions = {}
+): Promise<RateLimitResult> {
+  const context = await buildRateLimitContext(key, limit, windowMs, options);
+  return resultFromRedisOutcome(context, { available: false, reason });
 }
 
 export function getRateLimitKey(req: Request, scope: string) {
