@@ -29,7 +29,17 @@ async function handle(request: NextRequest) {
   const batchSize = Number.isFinite(requestedBatch) ? Math.max(1, Math.min(Math.trunc(requestedBatch), WORKFLOW_LIMITS.workerBatchSize)) : WORKFLOW_LIMITS.workerBatchSize;
   const startedAt = Date.now();
   const result = await processPendingWorkflowEvents({ batchSize });
-  return NextResponse.json({ ok: true, durationMs: Date.now() - startedAt, claimed: result.claimed, results: result.results, resumedRuns: result.resumedRuns });
+  return NextResponse.json({
+    ok: true,
+    durationMs: Date.now() - startedAt,
+    claimed: result.claimed,
+    results: result.results,
+    pendingProjections: result.pendingProjections,
+    resumedRuns: result.resumedRuns,
+    queueBefore: result.queueBefore,
+    queueAfter: result.queueAfter,
+    saturated: result.saturated,
+  });
 }
 
 export async function GET(request: NextRequest) {
