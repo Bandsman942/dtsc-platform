@@ -1,12 +1,15 @@
-# SCALE-3C — preuve multi-instance et failover contrôlé du rate limiting
+# SCALE-3C — harness multi-instance et failover contrôlé du rate limiting
 
-Issue: #432
+Issue d'implémentation: #432
+Certification Production: #434
 Parent: #356
 Programme: #352
 
 ## Objectif
 
-Cette itération ne change pas les limites métier. Elle fournit la preuve manquante de SCALE-3 : le rate limiting doit rester distribué sous concurrence quand Redis fonctionne et doit adopter une dégradation bornée, explicite et rapide lorsque Redis est indisponible.
+Cette itération ne change pas les limites métier. Elle fournit le dispositif de preuve manquant de SCALE-3 : le rate limiting doit rester distribué sous concurrence quand Redis fonctionne et doit adopter une dégradation bornée, explicite et rapide lorsque Redis est indisponible.
+
+L'implémentation du harness est suivie par #432. La preuve Production réelle et la fermeture de #356 sont suivies séparément par #434.
 
 La preuve est séparée en deux catégories :
 
@@ -108,7 +111,7 @@ La borne statique `RATE_LIMIT_REDIS_TIMEOUT_MS = 300` reste vérifiée par SCALE
 Deux déclenchements sont autorisés :
 
 - `workflow_dispatch` avec confirmation exacte `RUN_SCALE3_RESILIENCE` ;
-- commentaire exact `RUN_SCALE3_RESILIENCE` par l'OWNER sur l'Issue #432.
+- commentaire exact `RUN_SCALE3_RESILIENCE` par l'OWNER sur l'Issue de certification #434.
 
 Le workflow réutilise les credentials déjà gouvernés pour les preuves de charge :
 
@@ -139,20 +142,20 @@ Le rapport contient uniquement les métriques agrégées. Il exclut explicitemen
 
 ## Politique Vercel
 
-La branche et la PR ne doivent créer aucun Preview. Le workflow SCALE-3C ne déploie rien. Le probe devient disponible uniquement après fusion sur `main` et déploiement Production normal.
+La branche et la PR ne doivent créer aucun Preview. Le workflow SCALE-3 ne déploie rien. Le probe devient disponible uniquement après fusion sur `main` et déploiement Production normal.
 
 ## Séquence de clôture
 
 1. CI de la PR du harness : QA SCALE-3C + Regression QA + type-check + lint + build ;
 2. OWNER_E2E de la PR ;
-3. merge sur `main` ;
+3. merge sur `main` et fermeture de l'Issue d'implémentation #432 ;
 4. Vercel Production READY ;
-5. commentaire OWNER `RUN_SCALE3_RESILIENCE` sur #432 ;
+5. commentaire OWNER `RUN_SCALE3_RESILIENCE` sur #434 ;
 6. artifact + rapport sanitizé PASS ;
-7. publication de la preuve sur #432/#356 ;
-8. fermeture #432 puis #356 si toutes les gates sont satisfaites.
+7. publication de la preuve sur #434 et #356 ;
+8. fermeture #434 puis #356 si toutes les gates sont satisfaites.
 
-La CI de la PR ne constitue pas la preuve multi-instance Production. Cette preuve n'existe qu'après le run owner-triggered post-merge.
+La CI de la PR ne constitue pas la preuve multi-instance Production. Cette preuve n'existe qu'après le run owner-triggered post-merge suivi dans #434.
 
 ## Rollback
 
