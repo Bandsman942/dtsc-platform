@@ -45,6 +45,7 @@ commands.unshift("node scripts/qa-scale2c-redis-observability.mjs");
 commands.unshift("node scripts/qa-scale3a-distributed-rate-limit.mjs");
 commands.unshift("node scripts/qa-scale3b-rate-limit-policy-telemetry.mjs");
 commands.unshift("node scripts/qa-scale3c-resilience-evidence.mjs");
+commands.unshift("node scripts/qa-health-clinical-i18n-439.mjs");
 commands.unshift("node scripts/qa-scale4a-workflow-worker.mjs");
 const escapeAnnotation = (value) => String(value).replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
 
