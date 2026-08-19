@@ -68,11 +68,13 @@ const checks = [
   [!harness.includes("SESSION_COOKIE,") || harness.includes("Cookie: SESSION_COOKIE"), "session cookie may only be used as an HTTP request header"],
   [!harness.includes("baseUrl:") && !harness.includes("redisUrl:") && !harness.includes("instanceIds:"), "sanitized report must not persist base URL, Redis URL or raw instance IDs"],
   [workflow.includes("workflow_dispatch:") && workflow.includes("issue_comment:"), "resilience workflow must support manual and owner issue triggers"],
-  [workflow.includes("github.event.issue.number == 432") && workflow.includes("github.event.comment.author_association == 'OWNER'"), "issue trigger must be restricted to owner on #432"],
+  [workflow.includes("github.event.issue.number == 434") && workflow.includes("github.event.comment.author_association == 'OWNER'"), "issue trigger must be restricted to owner on certification issue #434"],
+  [workflow.includes("/issues/434/comments"), "owner-triggered evidence comments must be published to certification issue #434"],
   [workflow.includes("SCALE1_LOAD_BASE_URL") && workflow.includes("SCALE1_CTO_SESSION_COOKIE") && workflow.includes("VERCEL_AUTOMATION_BYPASS_SECRET"), "workflow must reuse governed Production load credentials"],
   [workflow.includes("actions/upload-artifact@v7") && workflow.includes("retention-days: 30"), "sanitized evidence must be archived"],
   [!workflow.includes("vercel deploy") && !workflow.includes("deploy_to_vercel") && !workflow.includes("preview"), "resilience workflow must not deploy or provision Preview"],
   [docs.includes(">= 2 instances") && docs.includes("TIMEOUT") && docs.includes("ne coupe jamais Redis Production"), "documentation must state multi-instance and controlled failover boundaries"],
+  [docs.includes("#434") && docs.includes("#432"), "documentation must separate implementation and Production certification issues"],
   [runner.includes("node scripts/qa-scale3c-resilience-evidence.mjs"), "SCALE-3C QA must be wired into Regression QA"],
 ];
 
@@ -82,4 +84,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(`SCALE-3C resilience evidence contract: OK (probe imports=${probeImports.length}, workflow owner-gated, multi-instance/failover gates present).`);
+console.log(`SCALE-3C resilience evidence contract: OK (probe imports=${probeImports.length}, certification #434 owner-gated, multi-instance/failover gates present).`);
