@@ -7,7 +7,7 @@
   "crons": [
     {
       "path": "/api/internal/workflows/process?batch=20",
-      "schedule": "*/5 * * * *"
+      "schedule": "* * * * *"
     },
     {
       "path": "/api/internal/identity-links/expire?batch=100",
