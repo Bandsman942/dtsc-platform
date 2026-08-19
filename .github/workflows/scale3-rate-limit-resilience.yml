@@ -23,7 +23,7 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'issue_comment' &&
-       github.event.issue.number == 432 &&
+       github.event.issue.number == 434 &&
        github.event.comment.author_association == 'OWNER' &&
        github.event.comment.body == 'RUN_SCALE3_RESILIENCE')
     name: Production multi-instance and controlled Redis failover
@@ -53,7 +53,7 @@ jobs:
               exit 1
             fi
           else
-            if [ "${{ github.event.issue.number }}" != "432" ] || \
+            if [ "${{ github.event.issue.number }}" != "434" ] || \
                [ "${{ github.event.comment.author_association }}" != "OWNER" ] || \
                [ "${{ github.event.comment.body }}" != "RUN_SCALE3_RESILIENCE" ]; then
               echo "::error::Issue-comment resilience trigger is not authorized."
@@ -79,7 +79,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          body="SCALE-3C resilience run started — run \`${GITHUB_RUN_ID}\`, attempt \`${GITHUB_RUN_ATTEMPT}\`, main \`${GITHUB_SHA}\`. Evidence is pending; no PASS is claimed until the artifact and gates are complete."
+          body="SCALE-3 resilience certification started — run \`${GITHUB_RUN_ID}\`, attempt \`${GITHUB_RUN_ATTEMPT}\`, main \`${GITHUB_SHA}\`. Evidence is pending; no PASS is claimed until the artifact and gates are complete."
           jq -n --arg body "$body" '{body:$body}' \
             | curl --fail --silent --show-error \
               --request POST \
@@ -87,7 +87,7 @@ jobs:
               --header "Authorization: Bearer ${GH_TOKEN}" \
               --header "X-GitHub-Api-Version: 2022-11-28" \
               --data-binary @- \
-              "https://api.github.com/repos/${GITHUB_REPOSITORY}/issues/432/comments" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/issues/434/comments" \
             > /dev/null
 
       - name: Checkout
@@ -112,7 +112,7 @@ jobs:
           echo "status=${status}" >> "$GITHUB_OUTPUT"
           exit 0
 
-      - name: Upload SCALE-3C evidence
+      - name: Upload SCALE-3 evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
@@ -123,25 +123,25 @@ jobs:
             artifacts/scale3-rate-limit-resilience-report.json
             artifacts/scale3-rate-limit-resilience-report.md
 
-      - name: Enforce SCALE-3C gates
+      - name: Enforce SCALE-3 resilience gates
         if: always()
         shell: bash
         run: |
           set -euo pipefail
           status="${{ steps.resilience.outputs.status }}"
           if [ -z "$status" ] || [ "$status" != "0" ]; then
-            echo "::error::SCALE-3C Production resilience gates failed or the harness did not complete."
+            echo "::error::SCALE-3 Production resilience gates failed or the harness did not complete."
             exit 1
           fi
           if [ ! -f artifacts/scale3-rate-limit-resilience-report.json ]; then
-            echo "::error::SCALE-3C sanitized report is missing."
+            echo "::error::SCALE-3 sanitized report is missing."
             exit 1
           fi
           if [ "$(jq -r '.status' artifacts/scale3-rate-limit-resilience-report.json)" != "PASS" ]; then
-            echo "::error::SCALE-3C sanitized report is not PASS."
+            echo "::error::SCALE-3 sanitized report is not PASS."
             exit 1
           fi
-          echo "SCALE-3C multi-instance and controlled failover evidence: PASS"
+          echo "SCALE-3 multi-instance and controlled failover evidence: PASS"
 
       - name: Publish owner-triggered sanitized result
         if: always() && github.event_name == 'issue_comment'
@@ -164,7 +164,7 @@ jobs:
             failover_p99="$(jq -r '[.modes.closed.primitiveLatencyMs.p99,.modes.local.primitiveLatencyMs.p99,.modes.open.primitiveLatencyMs.p99] | max // "n/a"' "$report")"
             failed_gates="$(jq -r 'if (.failedGates|length)==0 then "none" else (.failedGates|join(", ")) end' "$report")"
             body=$(cat <<EOF
-          SCALE-3C resilience run completed — run \`${GITHUB_RUN_ID}\`, attempt \`${GITHUB_RUN_ATTEMPT}\`, main \`${GITHUB_SHA}\`.
+          SCALE-3 resilience certification completed — run \`${GITHUB_RUN_ID}\`, attempt \`${GITHUB_RUN_ATTEMPT}\`, main \`${GITHUB_SHA}\`.
 
           Sanitized report: **${status}**. Healthy requests=${healthy_requests}; global allowed=${healthy_allowed}; observed instances=${healthy_instances}; HTTP P95=${healthy_p95} ms; primitive P95=${healthy_primitive_p95} ms; controlled failover sources closed/local/open=${closed_source}/${local_source}/${open_source}; max failover primitive P99=${failover_p99} ms; failed gates=${failed_gates}.
 
@@ -172,7 +172,7 @@ jobs:
           EOF
           )
           else
-            body="SCALE-3C resilience run ended without a generated sanitized report — run \`${GITHUB_RUN_ID}\`, attempt \`${GITHUB_RUN_ATTEMPT}\`, main \`${GITHUB_SHA}\`. Inspect the run before drawing any resilience conclusion."
+            body="SCALE-3 resilience certification ended without a generated sanitized report — run \`${GITHUB_RUN_ID}\`, attempt \`${GITHUB_RUN_ATTEMPT}\`, main \`${GITHUB_SHA}\`. Inspect the run before drawing any resilience conclusion."
           fi
           jq -n --arg body "$body" '{body:$body}' \
             | curl --fail --silent --show-error \
@@ -181,5 +181,5 @@ jobs:
               --header "Authorization: Bearer ${GH_TOKEN}" \
               --header "X-GitHub-Api-Version: 2022-11-28" \
               --data-binary @- \
-              "https://api.github.com/repos/${GITHUB_REPOSITORY}/issues/432/comments" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/issues/434/comments" \
             > /dev/null
