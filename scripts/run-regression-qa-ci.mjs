@@ -44,6 +44,7 @@ commands.unshift("node scripts/qa-scale2b-call-event-inbox.mjs");
 commands.unshift("node scripts/qa-scale2c-redis-observability.mjs");
 commands.unshift("node scripts/qa-scale3a-distributed-rate-limit.mjs");
 commands.unshift("node scripts/qa-scale3b-rate-limit-policy-telemetry.mjs");
+commands.unshift("node scripts/qa-scale3c-resilience-evidence.mjs");
 const escapeAnnotation = (value) => String(value).replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
 
 function diagnostic(output, status) {
