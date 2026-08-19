@@ -1,11 +1,12 @@
 import fs from "node:fs";
 
 const limiterPath = "lib/rate-limit.ts";
+const policyPath = "lib/rate-limit-policy.ts";
 const redisRestPath = "lib/redis-rest.ts";
 const runnerPath = "scripts/run-regression-qa-ci.mjs";
 const docsPath = "docs/SCALABILITY_SCALE3A_DISTRIBUTED_RATE_LIMIT.md";
 
-for (const path of [limiterPath, redisRestPath, runnerPath, docsPath]) {
+for (const path of [limiterPath, policyPath, redisRestPath, runnerPath, docsPath]) {
   if (!fs.existsSync(path)) {
     console.error(`FAIL: missing ${path}`);
     process.exit(1);
@@ -13,6 +14,7 @@ for (const path of [limiterPath, redisRestPath, runnerPath, docsPath]) {
 }
 
 const limiter = fs.readFileSync(limiterPath, "utf8");
+const policy = fs.readFileSync(policyPath, "utf8");
 const redisRest = fs.readFileSync(redisRestPath, "utf8");
 const runner = fs.readFileSync(runnerPath, "utf8");
 const docs = fs.readFileSync(docsPath, "utf8");
@@ -38,11 +40,12 @@ const checks = [
   [limiter.includes("current == 1 or ttl < 0"), "atomic script must repair legacy keys without TTL"],
   [limiter.includes('crypto.subtle.digest("SHA-256"'), "rate-limit storage key must be SHA-256 hashed"],
   [limiter.includes('return `dtsc:rl:v2:${hex}`'), "rate-limit storage key must use anonymized v2 namespace"],
-  [limiter.includes('export type RateLimitFailureMode = "local" | "open" | "closed"'), "failure modes local/open/closed must be explicit"],
+  [policy.includes('export type RateLimitFailureMode = "local" | "open" | "closed"') && limiter.includes('export type { RateLimitFailureMode } from "@/lib/rate-limit-policy"'), "failure modes local/open/closed must remain explicit and exported"],
   [limiter.includes('source: "redis"') && limiter.includes('source: "local"') && limiter.includes('source: "fail-open"') && limiter.includes('source: "fail-closed"'), "result source must identify Redis and degraded modes"],
   [limiter.includes("degraded: boolean") && limiter.includes("reason: RedisRestUnavailableReason | null"), "result must expose degradation and controlled reason"],
   [limiter.includes("ok: boolean") && limiter.includes("remaining: number") && limiter.includes("resetAt: number"), "historical rate-limit result fields must remain"],
-  [limiter.includes('const failureMode = options.failureMode ?? "local"'), "default mode must preserve historical local fallback"],
+  [policy.includes('availabilityBalanced: { name: "availability-balanced", failureMode: "local" }') && policy.includes("if (!rule) return RATE_LIMIT_POLICY_PROFILES.availabilityBalanced"), "unclassified scopes must preserve historical local fallback through the central policy registry"],
+  [limiter.includes("resolveRateLimitPolicy(key, options.failureMode)"), "rate limiter must resolve the central degradation policy"],
   [Number.isFinite(localMaxBuckets) && localMaxBuckets > 0 && localMaxBuckets <= 10000, "local fallback cardinality must be explicitly bounded"],
   [limiter.includes("pruneLocalBuckets(now)"), "local fallback must prune before inserting new buckets"],
   [!limiter.includes("console.error") && !limiter.includes("console.log"), "provider failure details must not be logged from the limiter primitive"],
