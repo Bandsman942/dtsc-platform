@@ -2,14 +2,9 @@ import { NextResponse } from "next/server";
 import { UserRole, UserStatus } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
+import { enqueueAdminBroadcast } from "@/lib/mail/admin-broadcast-queue";
 import { prisma } from "@/lib/prisma";
-import { notifyUsers } from "@/lib/notifications";
 import { broadcastSchema } from "@/lib/validators";
-import { sendPersonalizedZohoOutboundMail, sendZohoMailWebhook, sendZohoOutboundMail } from "@/lib/zoho-mail";
-
-function personalizeUserToken(content: string, name: string) {
-  return content.replace(/\{user\}/gi, name);
-}
 
 export async function POST(req: Request) {
   const startedAt = Date.now();
@@ -37,7 +32,7 @@ export async function POST(req: Request) {
           error: "Invalid broadcast",
           message: "Vérifiez le titre et le contenu de la diffusion. Le titre et le message doivent contenir au moins 3 caractères.",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -46,63 +41,44 @@ export async function POST(req: Request) {
       select: { id: true, email: true, name: true, notifyBroadcastEnabled: true },
     });
 
-    const emails = users.map((user) => user.email);
-    const mailPayload = {
-      subject: body.data.title,
-      to: emails,
-      message: body.data.body,
-      htmlMessage: body.data.bodyHtml || undefined,
-      heading: "Admin-DTSC",
-      source: "admin-broadcast",
-    };
-    const hasUserPlaceholder = /\{user\}/i.test(`${body.data.body} ${body.data.bodyHtml || ""}`);
-    if (hasUserPlaceholder) {
-      const notificationTargets = users
-        .filter((targetUser) => targetUser.notifyBroadcastEnabled)
-        .map((targetUser) => ({
-          userId: targetUser.id,
-          title: personalizeUserToken(body.data.title, targetUser.name),
-          body: personalizeUserToken(body.data.body, targetUser.name),
-          type: body.data.type,
-          targetUrl: "/notifications",
-        }));
-      if (notificationTargets.length) {
-        await prisma.notification.createMany({ data: notificationTargets });
-      }
-    } else {
-      await notifyUsers({
-        userIds: users.map((targetUser) => targetUser.id),
-        title: body.data.title,
-        body: body.data.body,
-        type: body.data.type,
-        targetUrl: "/notifications",
-      });
-    }
-    const outbound = hasUserPlaceholder
-      ? await sendPersonalizedZohoOutboundMail(users, mailPayload).catch((error) => ({
-          sent: false,
-          reason: error instanceof Error ? error.message : "Zoho personalized outbound failed",
-        }))
-      : await sendZohoOutboundMail(mailPayload).catch((error) => ({
-          sent: false,
-          reason: error instanceof Error ? error.message : "Zoho outbound failed",
-        }));
-    const zoho = outbound.sent
-      ? outbound
-      : await sendZohoMailWebhook(mailPayload).catch((error) => ({ sent: false, reason: error instanceof Error ? error.message : "Zoho webhook failed" }));
+    const queued = await enqueueAdminBroadcast({
+      recipients: users,
+      title: body.data.title,
+      body: body.data.body,
+      bodyHtml: body.data.bodyHtml || undefined,
+      type: body.data.type,
+    });
 
     await writeApiLog({
       request: req,
-      statusCode: 200,
+      statusCode: 202,
       userId: session.userId,
       startedAt,
-      metadata: { recipients: emails.length, zohoSent: zoho.sent, zohoReason: "reason" in zoho ? zoho.reason || null : null },
+      metadata: {
+        broadcastId: queued.broadcastId,
+        recipients: queued.recipients,
+        notificationsQueued: queued.notificationsQueued,
+        pushJobsQueued: queued.pushJobsQueued,
+        emailJobsQueued: queued.emailJobsQueued,
+        personalized: queued.personalized,
+      },
     });
 
-    return NextResponse.json({ ok: true, recipientCount: emails.length, zoho });
+    return NextResponse.json(
+      {
+        ok: true,
+        queued: true,
+        broadcastId: queued.broadcastId,
+        recipientCount: queued.recipients,
+        notificationCount: queued.notificationsQueued,
+        emailJobCount: queued.emailJobsQueued,
+        zoho: { sent: true, queued: true, personalized: queued.personalized },
+      },
+      { status: 202 },
+    );
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unexpected broadcast failure";
-    console.error("Admin broadcast failed", error);
+    const message = error instanceof Error ? error.message : "Unexpected broadcast queue failure";
+    console.error("Admin broadcast queue failed", error);
     await writeApiLog({
       request: req,
       statusCode: 500,
@@ -113,11 +89,11 @@ export async function POST(req: Request) {
 
     return NextResponse.json(
       {
-        error: "Broadcast failed",
-        message: "La diffusion n'a pas pu être traitée côté serveur. Vérifiez les logs Vercel et les variables Zoho Mail.",
+        error: "Broadcast queue failed",
+        message: "La diffusion n'a pas pu être mise en file durable. Vérifiez les logs Vercel et la base de données.",
         details: message,
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
