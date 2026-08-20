@@ -1,0 +1,1316 @@
+import { readFileSync, existsSync } from "node:fs";
+import path from "node:path";
+
+const root = process.cwd();
+const failures = [];
+
+function read(relativePath) {
+  const absolutePath = path.join(root, relativePath);
+  if (!existsSync(absolutePath)) {
+    failures.push(`Fichier introuvable: ${relativePath}`);
+    return "";
+  }
+  return readFileSync(absolutePath, "utf8").replace(/\r\n/g, "\n");
+}
+
+function check(label, condition, hint) {
+  if (condition) {
+    console.log(`PASS ${label}`);
+    return;
+  }
+  failures.push(`${label}${hint ? `\n  ${hint}` : ""}`);
+  console.error(`FAIL ${label}`);
+}
+
+function containsAll(source, patterns) {
+  return patterns.every((pattern) => typeof pattern === "string" ? source.includes(pattern) : pattern.test(source));
+}
+
+function indexOrder(source, before, after) {
+  const beforeIndex = source.indexOf(before);
+  const afterIndex = source.indexOf(after);
+  return beforeIndex !== -1 && afterIndex !== -1 && beforeIndex < afterIndex;
+}
+
+const packageJson = JSON.parse(read("package.json") || "{}");
+const middleware = read("middleware.ts");
+const postLoginRedirect = read("lib/post-login-redirect.ts");
+const supportAccess = read("lib/support-access.ts");
+const supportPage = read("app/support/page.tsx");
+const supportCreateRoute = read("app/api/support/tickets/route.ts");
+const supportUpdateRoute = read("app/api/support/tickets/[id]/route.ts");
+const supportMessageRoute = read("app/api/support/tickets/[id]/messages/route.ts");
+const supportMessageMutationRoute = read("app/api/support/tickets/[id]/messages/[messageId]/route.ts");
+const supportTicketBoard = read("components/support/ticket-board.tsx");
+const activityCommentsRoute = read("app/api/activities/comments/route.ts");
+const actionMenu = read("components/ui/action-menu.tsx");
+const publicPublicationEngagement = read("components/public/publication-engagement.tsx");
+const enterpriseAdminPage = read("app/enterprise-admin/page.tsx");
+const enterpriseActivitiesPage = read("app/enterprise-activities/page.tsx");
+const enterpriseModulePage = read("app/enterprise-modules/[moduleCode]/page.tsx");
+const enterpriseNavigation = read("lib/enterprise/enterprise-navigation.ts");
+const enterpriseModuleWorkspace = read("components/enterprise/enterprise-module-workspace.tsx");
+const enterpriseAdminLoader = read("lib/enterprise/enterprise-admin-loader.ts");
+const enterpriseActivitiesLoader = read("lib/enterprise/enterprise-activities-loader.ts");
+const enterpriseHealthcareLoader = read("lib/enterprise/enterprise-healthcare-loader.ts");
+const enterpriseActivityHealthcareLoader = read("lib/enterprise/enterprise-activity-healthcare-loader.ts");
+const enterprisePharmacyLoader = read("lib/enterprise/enterprise-pharmacy-loader.ts");
+const enterpriseActivityPharmacyLoader = read("lib/enterprise/enterprise-activity-pharmacy-loader.ts");
+const enterpriseAdminApi = read("app/api/enterprise/[organizationId]/administration/route.ts");
+const enterpriseHealthcareApi = read("app/api/enterprise/[organizationId]/healthcare/route.ts");
+const enterpriseHealthcareRecordApi = read("app/api/enterprise/[organizationId]/healthcare/[recordId]/route.ts");
+const healthPatientsApi = read("app/api/enterprise/[organizationId]/healthcare/patients/route.ts");
+const healthPatientApi = read("app/api/enterprise/[organizationId]/healthcare/patients/[patientId]/route.ts");
+const healthPatientsWorkspace = read("components/enterprise/health-patients-workspace.tsx");
+const healthPatientsService = read("lib/health-patients.ts");
+const healthPatientAccess = read("lib/health-patient-access.ts");
+const healthAppointmentsApi = read("app/api/enterprise/[organizationId]/healthcare/appointments/route.ts");
+const healthAppointmentApi = read("app/api/enterprise/[organizationId]/healthcare/appointments/[appointmentId]/route.ts");
+const healthAppointmentActionsApi = read("app/api/enterprise/[organizationId]/healthcare/appointments/[appointmentId]/actions/route.ts");
+const healthAppointmentsWorkspace = read("components/enterprise/health-appointments-workspace.tsx");
+const healthAppointmentsService = read("lib/health-appointments.ts");
+const healthAppointmentAccess = read("lib/health-appointment-access.ts");
+const healthConsultationsApi = read("app/api/enterprise/[organizationId]/healthcare/consultations/route.ts");
+const healthConsultationApi = read("app/api/enterprise/[organizationId]/healthcare/consultations/[consultationId]/route.ts");
+const healthConsultationActionsApi = read("app/api/enterprise/[organizationId]/healthcare/consultations/[consultationId]/actions/route.ts");
+const healthConsultationsWorkspace = read("components/enterprise/health-consultations-workspace.tsx");
+const healthConsultationsService = read("lib/health-consultations.ts");
+const healthConsultationAccess = read("lib/health-consultation-access.ts");
+const healthMedicalRecordsApi = read("app/api/enterprise/[organizationId]/healthcare/medical-records/route.ts");
+const healthMedicalRecordApi = read("app/api/enterprise/[organizationId]/healthcare/medical-records/[recordId]/route.ts");
+const healthMedicalRecordItemsApi = read("app/api/enterprise/[organizationId]/healthcare/medical-records/[recordId]/items/route.ts");
+const healthMedicalRecordsWorkspace = read("components/enterprise/health-medical-records-workspace.tsx");
+const healthMedicalRecordsService = read("lib/health-medical-records.ts");
+const healthMedicalRecordAccess = read("lib/health-medical-record-access.ts");
+const healthStaffApi = read("app/api/enterprise/[organizationId]/healthcare/staff/route.ts");
+const healthStaffRecordApi = read("app/api/enterprise/[organizationId]/healthcare/staff/[staffId]/route.ts");
+const healthStaffWorkspace = read("components/enterprise/health-staff-workspace.tsx");
+const healthStaffService = read("lib/health-staff.ts");
+const healthStaffAccess = read("lib/health-staff-access.ts");
+const healthLaboratoryApi = read("app/api/enterprise/[organizationId]/healthcare/laboratory/route.ts");
+const healthLaboratoryRecordApi = read("app/api/enterprise/[organizationId]/healthcare/laboratory/[requestId]/route.ts");
+const healthLaboratoryActionsApi = read("app/api/enterprise/[organizationId]/healthcare/laboratory/[requestId]/actions/route.ts");
+const healthLaboratoryWorkspace = read("components/enterprise/health-laboratory-workspace.tsx");
+const healthLaboratoryService = read("lib/health-laboratory.ts");
+const healthLaboratoryAccess = read("lib/health-laboratory-access.ts");
+const healthPharmacyApi = read("app/api/enterprise/[organizationId]/healthcare/internal-pharmacy/route.ts");
+const healthPharmacyRecordApi = read("app/api/enterprise/[organizationId]/healthcare/internal-pharmacy/[productId]/route.ts");
+const healthPharmacyActionsApi = read("app/api/enterprise/[organizationId]/healthcare/internal-pharmacy/actions/route.ts");
+const healthPharmacyWorkspace = read("components/enterprise/health-pharmacy-workspace.tsx");
+const healthPharmacyService = read("lib/health-pharmacy.ts");
+const healthPharmacyAccess = read("lib/health-pharmacy-access.ts");
+const healthBillingApi = read("app/api/enterprise/[organizationId]/healthcare/medical-billing/route.ts");
+const healthBillingRecordApi = read("app/api/enterprise/[organizationId]/healthcare/medical-billing/[invoiceId]/route.ts");
+const healthBillingWorkspace = read("components/enterprise/health-medical-billing-workspace.tsx");
+const healthBillingService = read("lib/health-billing.ts");
+const healthBillingAccess = read("lib/health-billing-access.ts");
+const healthInsuranceApi = read("app/api/enterprise/[organizationId]/healthcare/insurance/route.ts");
+const healthInsuranceActionApi = read("app/api/enterprise/[organizationId]/healthcare/insurance/[requestId]/route.ts");
+const healthInsuranceWorkspace = read("components/enterprise/health-insurance-workspace.tsx");
+const healthInsuranceService = read("lib/health-insurance.ts");
+const healthInsuranceAccess = read("lib/health-insurance-access.ts");
+const healthQualityApi = read("app/api/enterprise/[organizationId]/healthcare/quality-incidents/route.ts");
+const healthQualityRecordApi = read("app/api/enterprise/[organizationId]/healthcare/quality-incidents/[incidentId]/route.ts");
+const healthQualityActionsApi = read("app/api/enterprise/[organizationId]/healthcare/quality-incidents/[incidentId]/actions/route.ts");
+const healthQualityActionApi = read("app/api/enterprise/[organizationId]/healthcare/quality-incidents/actions/[actionId]/route.ts");
+const healthQualityWorkspace = read("components/enterprise/health-quality-workspace.tsx");
+const healthQualityService = read("lib/health-quality.ts");
+const healthQualityAccess = read("lib/health-quality-access.ts");
+const healthDocumentsApi = read("app/api/enterprise/[organizationId]/healthcare/documents/route.ts");
+const healthDocumentApi = read("app/api/enterprise/[organizationId]/healthcare/documents/[documentId]/route.ts");
+const healthDocumentVersionsApi = read("app/api/enterprise/[organizationId]/healthcare/documents/[documentId]/versions/route.ts");
+const healthDocumentDownloadApi = read("app/api/enterprise/[organizationId]/healthcare/documents/[documentId]/download/route.ts");
+const healthDocumentsWorkspace = read("components/enterprise/health-documents-workspace.tsx");
+const healthDocumentsService = read("lib/health-documents.ts");
+const healthDocumentAccess = read("lib/health-document-access.ts");
+const enterprisePharmacyApi = read("app/api/enterprise/[organizationId]/pharmacy/route.ts");
+const enterprisePharmacyRecordApi = read("app/api/enterprise/[organizationId]/pharmacy/[recordId]/route.ts");
+const pharmacyProductsApi = read("app/api/enterprise/[organizationId]/pharmacy/products/route.ts");
+const pharmacyProductApi = read("app/api/enterprise/[organizationId]/pharmacy/products/[productId]/route.ts");
+const pharmacyProductsWorkspace = read("components/enterprise/pharmacy-products-workspace.tsx");
+const pharmacyProductsLabels = read("lib/pharmacy-products.ts");
+const pharmacyProductAccess = read("lib/pharmacy-product-access.ts");
+const pharmacyBatchesApi = read("app/api/enterprise/[organizationId]/pharmacy/batches/route.ts");
+const pharmacyBatchApi = read("app/api/enterprise/[organizationId]/pharmacy/batches/[batchId]/route.ts");
+const pharmacyBatchesWorkspace = read("components/enterprise/pharmacy-batches-workspace.tsx");
+const pharmacyBatchAccess = read("lib/pharmacy-batch-access.ts");
+const pharmacyBatchesService = read("lib/pharmacy-batches.ts");
+const pharmacyStockApi = read("app/api/enterprise/[organizationId]/pharmacy/stock/route.ts");
+const pharmacyStockWorkspace = read("components/enterprise/pharmacy-stock-workspace.tsx");
+const pharmacyStockService = read("lib/pharmacy-stock.ts");
+const pharmacyReceiptsApi = read("app/api/enterprise/[organizationId]/pharmacy/receipts/route.ts");
+const pharmacyReceiptApi = read("app/api/enterprise/[organizationId]/pharmacy/receipts/[receiptId]/route.ts");
+const pharmacyReceiptsWorkspace = read("components/enterprise/pharmacy-receipts-workspace.tsx");
+const pharmacyReceiptsService = read("lib/pharmacy-receipts.ts");
+const pharmacyReceiptAccess = read("lib/pharmacy-receipt-access.ts");
+const pharmacySalesApi = read("app/api/enterprise/[organizationId]/pharmacy/sales/route.ts");
+const pharmacySaleApi = read("app/api/enterprise/[organizationId]/pharmacy/sales/[saleId]/route.ts");
+const pharmacySalesWorkspace = read("components/enterprise/pharmacy-sales-workspace.tsx");
+const pharmacySalesService = read("lib/pharmacy-sales.ts");
+const pharmacySaleAccess = read("lib/pharmacy-sale-access.ts");
+const pharmacyPrescriptionsApi = read("app/api/enterprise/[organizationId]/pharmacy/prescriptions/route.ts");
+const pharmacyPrescriptionApi = read("app/api/enterprise/[organizationId]/pharmacy/prescriptions/[prescriptionId]/route.ts");
+const pharmacyPrescriptionsWorkspace = read("components/enterprise/pharmacy-prescriptions-workspace.tsx");
+const pharmacyPrescriptionsService = read("lib/pharmacy-prescriptions.ts");
+const pharmacyPrescriptionAccess = read("lib/pharmacy-prescription-access.ts");
+const pharmacyPurchasesApi = read("app/api/enterprise/[organizationId]/pharmacy/purchases/route.ts");
+const pharmacyPurchaseApi = read("app/api/enterprise/[organizationId]/pharmacy/purchases/[entity]/[id]/route.ts");
+const pharmacyPurchasesWorkspace = read("components/enterprise/pharmacy-purchases-workspace.tsx");
+const pharmacyPurchasesService = read("lib/pharmacy-purchases.ts");
+const pharmacyPurchaseAccess = read("lib/pharmacy-purchase-access.ts");
+const pharmacyCashApi = read("app/api/enterprise/[organizationId]/pharmacy/cash/route.ts");
+const pharmacyCashActionApi = read("app/api/enterprise/[organizationId]/pharmacy/cash/[entity]/[id]/route.ts");
+const pharmacyCashWorkspace = read("components/enterprise/pharmacy-cash-workspace.tsx");
+const pharmacyCashService = read("lib/pharmacy-cash.ts");
+const pharmacyCashAccess = read("lib/pharmacy-cash-access.ts");
+const pharmacyReturnLossApi = read("app/api/enterprise/[organizationId]/pharmacy/returns-losses/route.ts");
+const pharmacyReturnLossActionApi = read("app/api/enterprise/[organizationId]/pharmacy/returns-losses/[entity]/[id]/route.ts");
+const pharmacyReturnLossWorkspace = read("components/enterprise/pharmacy-return-loss-workspace.tsx");
+const pharmacyReturnLossService = read("lib/pharmacy-return-losses.ts");
+const pharmacyReturnLossAccess = read("lib/pharmacy-return-loss-access.ts");
+const pharmacyAlertsApi = read("app/api/enterprise/[organizationId]/pharmacy/alerts/route.ts");
+const pharmacyAlertActionApi = read("app/api/enterprise/[organizationId]/pharmacy/alerts/[entity]/[id]/route.ts");
+const pharmacyAlertsWorkspace = read("components/enterprise/pharmacy-alerts-workspace.tsx");
+const pharmacyAlertsService = read("lib/pharmacy-alerts.ts");
+const pharmacyAlertAccess = read("lib/pharmacy-alert-access.ts");
+const pharmacyQualityApi = read("app/api/enterprise/[organizationId]/pharmacy/quality/route.ts");
+const pharmacyQualityActionApi = read("app/api/enterprise/[organizationId]/pharmacy/quality/[entity]/[id]/route.ts");
+const pharmacyQualityWorkspace = read("components/enterprise/pharmacy-quality-workspace.tsx");
+const pharmacyQualityService = read("lib/pharmacy-quality.ts");
+const pharmacyQualityAccess = read("lib/pharmacy-quality-access.ts");
+const pharmacyDocumentsApi = read("app/api/enterprise/[organizationId]/pharmacy/documents/route.ts");
+const pharmacyDocumentActionApi = read("app/api/enterprise/[organizationId]/pharmacy/documents/actions/[entity]/[id]/route.ts");
+const pharmacyDocumentDownloadApi = read("app/api/enterprise/[organizationId]/pharmacy/documents/[id]/download/route.ts");
+const pharmacyDocumentsWorkspace = read("components/enterprise/pharmacy-documents-workspace.tsx");
+const pharmacyDocumentsService = read("lib/pharmacy-documents.ts");
+const pharmacyDocumentAccess = read("lib/pharmacy-document-access.ts");
+const pharmacyReportsApi = read("app/api/enterprise/[organizationId]/pharmacy/reports/route.ts");
+const pharmacyReportActionApi = read("app/api/enterprise/[organizationId]/pharmacy/reports/actions/[entity]/[id]/route.ts");
+const pharmacyReportExportApi = read("app/api/enterprise/[organizationId]/pharmacy/reports/export/route.ts");
+const pharmacyReportsWorkspace = read("components/enterprise/pharmacy-reports-workspace.tsx");
+const pharmacyReportsService = read("lib/pharmacy-reports.ts");
+const pharmacyReportAccess = read("lib/pharmacy-report-access.ts");
+const pharmacySettingsApi = read("app/api/enterprise/[organizationId]/pharmacy/settings/route.ts");
+const pharmacySettingsActionsApi = read("app/api/enterprise/[organizationId]/pharmacy/settings/actions/route.ts");
+const pharmacySettingsWorkspace = read("components/enterprise/pharmacy-settings-workspace.tsx");
+const pharmacySettingsService = read("lib/pharmacy-settings.ts");
+const pharmacySettingAccess = read("lib/pharmacy-setting-access.ts");
+const pharmacyActivitiesApi = read("app/api/enterprise/[organizationId]/pharmacy/activities/route.ts");
+const pharmacyActivityActionApi = read("app/api/enterprise/[organizationId]/pharmacy/activities/[id]/route.ts");
+const pharmacyActivitiesWorkspace = read("components/enterprise/pharmacy-activities-workspace.tsx");
+const pharmacyActivitiesService = read("lib/pharmacy-activities.ts");
+const pharmacyActivityAccess = read("lib/pharmacy-activity-access.ts");
+const enterpriseAiAccess = read("lib/enterprise-ai/access.ts");
+const enterpriseAiKnowledge = read("lib/enterprise-ai/knowledge.ts");
+const enterpriseAiContext = read("lib/enterprise-ai/context.ts");
+const enterpriseAiPharmacyTools = read("lib/enterprise-ai/pharmacy-tools.ts");
+const enterpriseAiPharmacyToolData = read("lib/enterprise-ai/pharmacy-tool-data.ts");
+const enterpriseAiUsage = read("lib/enterprise-ai/usage.ts");
+const enterpriseAiChatRoute = read("app/api/enterprise/ai/chat/route.ts");
+const enterpriseAiKnowledgeRoute = read("app/api/enterprise/ai/knowledge-sources/route.ts");
+const enterpriseAiKnowledgeActionRoute = read("app/api/enterprise/ai/knowledge-sources/[id]/route.ts");
+const enterpriseAiSettingsRoute = read("app/api/enterprise/ai/settings/route.ts");
+const enterpriseAiWorkspace = read("components/enterprise/enterprise-ai-workspace.tsx");
+const prismaSchema = read("prisma/schema.prisma");
+const collaboratorsPage = read("app/collaborators/page.tsx");
+const collaboratorsGroupsRoute = read("app/api/collaborators/groups/route.ts");
+const collaboratorsMessagesRoute = read("app/api/collaborators/groups/[id]/messages/route.ts");
+const collaboratorsCallsRoute = read("app/api/collaborators/groups/[id]/calls/route.ts");
+const callJoinRoute = read("app/api/collaborators/calls/[id]/join/route.ts");
+const callLeaveRoute = read("app/api/collaborators/calls/[id]/leave/route.ts");
+const callEndRoute = read("app/api/collaborators/calls/[id]/end/route.ts");
+const callEventsRoute = read("app/api/collaborators/calls/events/route.ts");
+const callEventInbox = read("lib/collaboration-call-event-inbox.ts");
+const callParticipantRoute = read("app/api/collaborators/calls/[id]/participants/route.ts");
+const callTelemetryRoute = read("app/api/collaborators/calls/[id]/events/route.ts");
+const globalCallToast = read("components/calls/global-call-toast.tsx");
+const appShell = read("components/layout/app-shell.tsx");
+const calendarRoute = read("app/api/calendar/route.ts");
+const calendarAvailabilityRoute = read("app/api/calendar/availabilities/route.ts");
+const internalCalendar = read("lib/internal-calendar.ts");
+const adminPage = read("app/admin/page.tsx");
+const billingPlans = read("lib/billing/plans.ts");
+const billingDefaults = read("lib/billing.ts");
+const billingEntitlements = read("lib/billing/entitlements.ts");
+const billingModuleEntitlements = read("lib/billing/module-entitlements.ts");
+const consoleBilling = read("lib/console/console-billing.ts");
+const adminBillingSubscriptions = read("components/admin/admin-billing-subscriptions.tsx");
+const billingPlanManager = read("components/admin/billing-plan-manager.tsx");
+const clientOrganizationCreateRoute = read("app/api/admin/client-organizations/route.ts");
+const clientOrganizationUpdateRoute = read("app/api/admin/client-organizations/[id]/route.ts");
+const organizationSubscriptionCreateRoute = read("app/api/admin/organization-subscriptions/route.ts");
+const organizationSubscriptionUpdateRoute = read("app/api/admin/organization-subscriptions/[id]/route.ts");
+const billingPlanUpdateRoute = read("app/api/admin/billing-plans/[id]/route.ts");
+const billingCheckoutRoute = read("app/api/billing/checkout/route.ts");
+const enterpriseModuleToggleRoute = read("app/api/enterprise/[organizationId]/modules/[moduleId]/route.ts");
+const enterpriseCoreApi = read("app/api/enterprise/[organizationId]/core/route.ts");
+const enterpriseCoreActionApi = read("app/api/enterprise/[organizationId]/core/[id]/route.ts");
+const enterpriseCoreWorkspace = read("components/enterprise/enterprise-core-workspace.tsx");
+const enterpriseCoreService = read("lib/enterprise/enterprise-core.ts");
+const enterpriseMembersRoute = read("app/api/enterprise/[organizationId]/members/route.ts");
+const enterpriseInvitationRoute = read("app/api/enterprise/invitations/[id]/route.ts");
+const enterpriseInvitationsPage = read("app/enterprise-invitations/page.tsx");
+const enterpriseInvitationsClient = read("components/enterprise/enterprise-invitations-client.tsx");
+const enterpriseInvitationsMail = read("lib/enterprise-invitations-mail.ts");
+const notificationAccess = read("lib/notification-access.ts");
+const notificationPage = read("app/notifications/page.tsx");
+const authOrganizationsRoute = read("app/api/auth/organizations/route.ts");
+const authForm = read("components/auth/auth-form.tsx");
+
+check(
+  "script qa:regression déclaré",
+  String(packageJson.scripts?.["qa:regression"] || "").includes("node scripts/qa-regression-checks.mjs"),
+  "Ajouter le script npm pour pouvoir exécuter la suite QA sans dépendance externe."
+);
+
+check(
+  "middleware protège les routes privées critiques",
+  containsAll(middleware, [
+    '"/admin"',
+    '"/enterprise-admin"',
+    '"/enterprise-activities"',
+    '"/collaborators"',
+    '"/calendar"',
+    '"/support"',
+    '"/notifications"',
+  ])
+);
+
+check(
+  "middleware ne rewrite pas les API avant les gardes RBAC",
+  indexOrder(middleware, 'if (pathname.startsWith("/api/"))', "applyHostRouting(request, session, hostType)")
+);
+
+check(
+  "middleware réserve la Console DTSC au contexte interne",
+  containsAll(middleware, ["hasDtscInternalContext", 'activeContext === "DTSC_INTERNAL"', 'activeOrganizationId === DTSC_INTERNAL_ORGANIZATION_ID'])
+);
+
+check(
+  "post-login refuse les redirects ouverts",
+  containsAll(postLoginRedirect, ['candidate.startsWith("//")', 'hostType === "unknown"', 'hostType === "local" && process.env.NODE_ENV === "production"'])
+);
+
+check(
+  "post-login oriente DTSC_INTERNAL vers la console et les autres vers le SaaS",
+  containsAll(postLoginRedirect, ['context === "DTSC_INTERNAL"', 'getConsoleUrl("/admin")', "getDashboardUrl()"])
+);
+
+check(
+  "Support isole les tickets par créateur sauf Support DTSC",
+  containsAll(supportAccess, ["ticket.userId === session.userId", "canManageSupportTickets(session)", "{ userId: session.userId }"])
+    && supportPage.includes("supportTicketVisibilityWhere(session)")
+);
+
+check(
+  "création ticket Support: session, origine, rate limit, Zod et organisation active",
+  containsAll(supportCreateRoute, ["isSameOriginRequest", "await rateLimit", "supportTicketSchema.safeParse", "resolveSupportTicketOrganizationId", "status: \"ACTIVE\""])
+);
+
+check(
+  "mise à jour ticket Support: DTSC_INTERNAL, rôle Support, origine et rate limit",
+  containsAll(supportUpdateRoute, ["isDtscInternalSession", "canManageSupportRole", "isSameOriginRequest", "await rateLimit", "supportTicketUpdateSchema.safeParse"])
+);
+
+check(
+  "messages ticket Support: accès ticket, origine, rate limit et validation Zod",
+  containsAll(supportMessageRoute, ["canUserAccessSupportTicket", "isSameOriginRequest", "await rateLimit", "ticketMessageSchema.safeParse"])
+);
+
+check(
+  "messages ticket Support: pagination, réponses et CRUD non destructif",
+  containsAll(supportMessageRoute, ["export async function GET", "replyToId", "nextCursor", "hasMore"])
+    && containsAll(supportMessageMutationRoute, ["export async function PATCH", "export async function DELETE", "deletedAt: new Date()", "writeAuditLog"])
+    && containsAll(supportTicketBoard, ["Charger les précédents", "jumpToMessage", "setReplyingTo", "setEditing", "setDeleting"])
+);
+
+check(
+  "commentaires opérationnels: réponses, pagination et CRUD protégé",
+  containsAll(activityCommentsRoute, ["replyToId", "export async function PATCH", "export async function DELETE", "isSameOriginRequest", "await rateLimit", "deletedAt: new Date()"])
+);
+
+check(
+  "commentaires publics: les réponses permettent de revenir au commentaire source",
+  containsAll(publicPublicationEngagement, ["jumpToComment", "data-publication-comment-id", "parentComment"])
+);
+
+check(
+  "menus d'actions rendus au premier plan hors des conteneurs",
+  containsAll(actionMenu, ["createPortal", "document.body", 'className=\"fixed z-[1000]'])
+);
+
+check(
+  "Enterprise Admin exige contexte ORGANIZATION et permission d'administration",
+  containsAll(enterpriseAdminPage, ['activeContext === "ORGANIZATION"', "canManageEnterpriseAdministration(session.userId, organizationId)", 'canUseFeature(organizationId, "enterprise-admin")', "getEnterpriseAdministrationDataset(organizationId)"])
+);
+
+check(
+  "Enterprise Activities exige contexte ORGANIZATION et membership actif",
+  containsAll(enterpriseActivitiesPage, ['activeContext === "ORGANIZATION"', "requireEnterpriseMembership", "getEnterpriseActivitiesDataset"])
+);
+
+check(
+  "navigation Enterprise expose uniquement les modules actifs et autorisés",
+  containsAll(enterpriseNavigation, ["enterpriseModule.isCore && enterpriseModule.isEnabled && enterpriseModule.accessAllowed", "getOrganizationEntitlements", "getEnterpriseModulesDataset"])
+    && containsAll(read("components/layout/nav-links.tsx"), ["resolveEnterpriseModuleIcon(enterpriseModule)", "enterpriseModule.description"])
+    && containsAll(read("lib/enterprise/enterprise-module-icons.ts"), ["enterpriseModuleIcons", "iconByModuleCode", "ADMIN_DASHBOARD", "LABORATORY", "PHARMACY"])
+    && containsAll(enterpriseModulePage, ["canAccessEnterpriseModule", "requireEnterpriseMembership", "organizationId_moduleCode", "!enterpriseModule.isCore", "internalCalendarEvent", "auditLog.findMany"])
+    && middleware.includes('"/enterprise-modules"')
+);
+
+check(
+  "socle commun Enterprise: pages alimentées par les données réelles de l'organisation",
+  containsAll(enterpriseModuleWorkspace, ["Données actuelles de l'entreprise", "Collaborateurs actifs", "Départements actifs", "resolveModuleItems", "Aucune donnée n'est encore enregistrée"])
+    && !enterpriseModuleWorkspace.includes("Espace opérationnel")
+);
+
+check(
+  "loaders Enterprise filtrent toutes les données par organizationId",
+  containsAll(enterpriseAdminLoader, ["where: { organizationId }", "getEnterpriseHealthcareDataset(organizationId, organization.sectorCode)"])
+    && containsAll(enterpriseActivitiesLoader, ["where: { id: organizationId", "getEnterpriseActivityRequests({ organizationId, userId, membershipRole })"])
+);
+
+check(
+  "données Santé non chargées hors HEALTH_CARE",
+  containsAll(enterpriseHealthcareLoader, ['sectorCode !== HEALTHCARE_SECTOR_CODE', "return [];"])
+    && containsAll(enterpriseActivityHealthcareLoader, ['sectorCode !== HEALTHCARE_SECTOR_CODE', "return [];"])
+);
+
+check(
+  "HEALTH_CARE Patients: modèles dédiés, historique et isolation tenant",
+  containsAll(prismaSchema, ["model HealthPatient", "model HealthPatientEvent", "@@unique([organizationId, patientNumber])", "@@index([organizationId, patientId, createdAt])"])
+    && containsAll(healthPatientsService, ["createHealthPatient", "updateHealthPatient", "maskHealthPatientSensitive", "legacyRecordId", "prisma.$transaction"])
+    && !healthPatientsService.includes("allergies: nil(data.knownAllergies)")
+);
+
+check(
+  "HEALTH_CARE Patients: routes privées, validées, auditées et sans contournement générique",
+  containsAll(healthPatientsApi, ["getHealthPatientAccess", "healthPatientCreateSchema.safeParse", "isSameOriginRequest", "await rateLimit", "writeAuditLog", "organizationId"])
+    && containsAll(healthPatientApi, ["getHealthPatientAccess", "healthPatientUpdateSchema.safeParse", "isSameOriginRequest", "await rateLimit", "writeAuditLog", "organizationId", "actionReason"])
+    && containsAll(healthPatientAccess, ["requireEnterpriseMembership", "canAccessEnterpriseModule", '"HEALTH_CARE"', '"PATIENTS"'])
+    && containsAll(enterpriseHealthcareApi, ['data.moduleCode === "PATIENTS"', '"Dedicated module"'])
+    && containsAll(enterpriseHealthcareRecordApi, ['existingRecord.moduleCode === "PATIENTS"', '"Dedicated module"'])
+);
+
+check(
+  "HEALTH_CARE Patients: liste, formulaires, détail, aides et mobile",
+  containsAll(healthPatientsWorkspace, ["ListControls", "ActionMenu", "CircleHelp", "patient.emptyTitle", "patient.action.createAppointment", "patient.action.createConsultation", "patient.action.addDocument", "patient.action.viewMedicalRecord", "h-[94dvh]", "min-w-0", "overflow-x-hidden"])
+    && !healthPatientsWorkspace.includes("window.prompt")
+    && !healthPatientsWorkspace.includes("window.confirm")
+    && !healthPatientsWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
+);
+
+check(
+  "HEALTH_CARE Rendez-vous: modèles dédiés, patient obligatoire et conversion idempotente",
+  containsAll(prismaSchema, ["model HealthAppointment", "model HealthAppointmentEvent", "@@unique([organizationId, appointmentNumber])", "convertedConsultationId", "@@index([organizationId, patientId, appointmentDate])"])
+    && containsAll(healthAppointmentsService, ["validateHealthAppointmentReferences", "createHealthAppointment", "updateHealthAppointment", "transitionHealthAppointment", "convertedConsultationId", "prisma.$transaction"])
+);
+
+check(
+  "HEALTH_CARE Rendez-vous: routes privées, références tenant, transitions et audit",
+  containsAll(healthAppointmentsApi, ["getHealthAppointmentAccess", "healthAppointmentCreateSchema.safeParse", "validateHealthAppointmentReferences", "isSameOriginRequest", "await rateLimit", "writeAuditLog", "organizationId"])
+    && containsAll(healthAppointmentApi, ["getHealthAppointmentAccess", "healthAppointmentUpdateSchema.safeParse", "validateHealthAppointmentReferences", "writeAuditLog", "organizationId"])
+    && containsAll(healthAppointmentActionsApi, ["healthAppointmentActionSchema.safeParse", "transitionHealthAppointment", "writeAuditLog", "ALREADY_CONVERTED"])
+    && containsAll(healthAppointmentAccess, ["requireEnterpriseMembership", "canAccessEnterpriseModule", '"HEALTH_CARE"', '"APPOINTMENTS"'])
+    && containsAll(enterpriseHealthcareApi, ['data.moduleCode === "APPOINTMENTS"', '"Dedicated module"'])
+    && containsAll(enterpriseHealthcareRecordApi, ['existingRecord.moduleCode === "APPOINTMENTS"', '"Dedicated module"'])
+);
+
+check(
+  "HEALTH_CARE Rendez-vous: liste, planning, formulaires, actions, aides et mobile",
+  containsAll(healthAppointmentsWorkspace, ["ListControls", "ActionMenu", "Vue planning", "Aucun rendez-vous enregistré pour cette entreprise.", "Convertir en consultation", "Marquer absent", "h-[94dvh]", "CircleHelp", "min-w-0", "overflow-x-hidden"])
+    && !healthAppointmentsWorkspace.includes("window.prompt")
+    && !healthAppointmentsWorkspace.includes("window.confirm")
+    && !healthAppointmentsWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
+);
+
+check(
+  "HEALTH_CARE Consultations: modèles dédiés, constantes, historique et isolation tenant",
+  containsAll(prismaSchema, ["model HealthConsultation", "model HealthConsultationEvent", "@@unique([organizationId, consultationNumber])", "@@unique([organizationId, appointmentId])", "@@index([organizationId, patientId, consultationDate])"])
+    && containsAll(healthConsultationsService, ["validateHealthConsultationReferences", "createHealthConsultation", "updateHealthConsultation", "transitionHealthConsultation", "maskHealthConsultationSensitive", "bmi(", "prisma.$transaction"])
+);
+
+check(
+  "HEALTH_CARE Consultations: routes privées, références tenant, transitions et audit",
+  containsAll(healthConsultationsApi, ["getHealthConsultationAccess", "healthConsultationCreateSchema.safeParse", "validateHealthConsultationReferences", "isSameOriginRequest", "await rateLimit", "writeAuditLog", "organizationId"])
+    && containsAll(healthConsultationApi, ["getHealthConsultationAccess", "healthConsultationUpdateSchema.safeParse", "maskHealthConsultationSensitive", "writeAuditLog", "organizationId"])
+    && containsAll(healthConsultationActionsApi, ["healthConsultationActionSchema.safeParse", "transitionHealthConsultation", "writeAuditLog", "REASON_REQUIRED"])
+    && containsAll(healthConsultationAccess, ["requireEnterpriseMembership", "canAccessEnterpriseModule", '"HEALTH_CARE"', '"CONSULTATIONS"'])
+    && containsAll(enterpriseHealthcareApi, ['data.moduleCode === "CONSULTATIONS"', '"Dedicated module"'])
+    && containsAll(enterpriseHealthcareRecordApi, ['existingRecord.moduleCode === "CONSULTATIONS"', '"Dedicated module"'])
+);
+
+check(
+  "HEALTH_CARE Consultations: liste, formulaire clinique, détail, actions, aides et mobile",
+  containsAll(healthConsultationsWorkspace, ["ListControls", "ActionMenu", "Constantes vitales", "Examen clinique", "Diagnostic", "Conduite à tenir", "Aucune consultation enregistrée.", "Clôturer", "Rouvrir", "h-[94dvh]", "CircleHelp", "min-w-0", "overflow-x-hidden"])
+    && !healthConsultationsWorkspace.includes("window.prompt")
+    && !healthConsultationsWorkspace.includes("window.confirm")
+    && !healthConsultationsWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
+);
+
+check(
+  "HEALTH_CARE Dossiers médicaux: modèles dédiés, dossier unique, alertes et isolation tenant",
+  containsAll(prismaSchema, ["model HealthMedicalRecord", "model HealthMedicalHistoryItem", "model HealthAllergy", "model HealthCurrentTreatment", "model HealthMedicalAlert", "model HealthConfidentialNote", "model HealthMedicalRecordEvent", "@@unique([organizationId, patientId])"])
+    && containsAll(healthMedicalRecordsService, ["validateHealthMedicalRecordPatient", "createHealthMedicalRecord", "createHealthMedicalRecordItem", "transitionHealthMedicalRecord", "LIFE_THREATENING", "healthMedicalAlert.create", "prisma.$transaction"])
+);
+
+check(
+  "HEALTH_CARE Dossiers médicaux: routes privées, confidentialité, relations tenant et audit",
+  containsAll(healthMedicalRecordsApi, ["getHealthMedicalRecordAccess", "healthMedicalRecordCreateSchema.safeParse", "validateHealthMedicalRecordPatient", "isSameOriginRequest", "await rateLimit", "writeAuditLog", "organizationId"])
+    && containsAll(healthMedicalRecordApi, ["canViewSensitive", "confidentialNotes", "healthConsultation.findMany", "writeAuditLog", "organizationId"])
+    && containsAll(healthMedicalRecordItemsApi, ["canManageConfidentialNotes", "healthMedicalRecordItemSchema.safeParse", "isSameOriginRequest", "await rateLimit", "writeAuditLog"])
+    && containsAll(healthMedicalRecordAccess, ["requireEnterpriseMembership", "canAccessEnterpriseModule", '"HEALTH_CARE"', '"MEDICAL_RECORDS"'])
+    && containsAll(enterpriseHealthcareApi, ['data.moduleCode === "MEDICAL_RECORDS"', '"Dedicated module"'])
+    && containsAll(enterpriseHealthcareRecordApi, ['existingRecord.moduleCode === "MEDICAL_RECORDS"', '"Dedicated module"'])
+);
+
+check(
+  "HEALTH_CARE Dossiers médicaux: liste, détail, formulaires, aides et mobile",
+  containsAll(healthMedicalRecordsWorkspace, ["ListControls", "ActionMenu", "Alertes médicales actives", "Consultations liées", "Notes confidentielles", "Aucun dossier médical principal", "h-[94dvh]", "CircleHelp", "min-w-0", "overflow-x-hidden"])
+    && !healthMedicalRecordsWorkspace.includes("window.prompt")
+    && !healthMedicalRecordsWorkspace.includes("window.confirm")
+    && !healthMedicalRecordsWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
+);
+
+check(
+  "HEALTH_CARE Équipe médicale: modèles dédiés, membership, référentiels et isolation tenant",
+  containsAll(prismaSchema, ["model HealthStaffAssignment", "model HealthSpecialty", "model HealthStaffEvent", "@@unique([organizationId, organizationMemberId])", "@@index([organizationId, availabilityStatus, status])"])
+    && containsAll(healthStaffService, ["validateHealthStaffReferences", "createHealthStaffAssignment", "updateHealthStaffAssignment", "transitionHealthStaffAssignment", "validateAssignableHealthProfessional", "organizationMemberId", "prisma.$transaction"])
+);
+
+check(
+  "HEALTH_CARE Équipe médicale: routes privées, permissions, audit et intégrations assignables",
+  containsAll(healthStaffApi, ["getHealthStaffAccess", "healthStaffCreateSchema.safeParse", "validateHealthStaffReferences", "isSameOriginRequest", "await rateLimit", "writeAuditLog", "organizationId"])
+    && containsAll(healthStaffRecordApi, ["healthStaffActionSchema.safeParse", "canManagePermissions", "transitionHealthStaffAssignment", "writeAuditLog", "organizationId"])
+    && containsAll(healthStaffAccess, ["requireEnterpriseMembership", "canAccessEnterpriseModule", '"HEALTH_CARE"', '"CARE_TEAM"'])
+    && containsAll(enterpriseHealthcareApi, ['data.moduleCode === "CARE_TEAM"', '"Dedicated module"'])
+    && containsAll(enterpriseHealthcareRecordApi, ['existingRecord.moduleCode === "CARE_TEAM"', '"Dedicated module"'])
+    && containsAll(healthAppointmentsService, ["validateAssignableHealthProfessional"])
+    && containsAll(healthConsultationsService, ["validateAssignableHealthProfessional"])
+);
+
+check(
+  "HEALTH_CARE Équipe médicale: tableau de bord, liste, détail, formulaires et mobile",
+  containsAll(healthStaffWorkspace, ["ListControls", "ActionMenu", "Professionnels actifs", "Permissions Santé", "Activité médicale liée", "Aucun professionnel santé enregistré", "h-[94dvh]", "CircleHelp", "min-w-0", "overflow-hidden"])
+    && !healthStaffWorkspace.includes("window.prompt")
+    && !healthStaffWorkspace.includes("window.confirm")
+    && !healthStaffWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
+);
+
+check(
+  "HEALTH_CARE Laboratoire: modèles dédiés, catalogue, workflow et isolation tenant",
+  containsAll(prismaSchema, ["model HealthLabTestCatalog", "model HealthLabRequest", "model HealthLabRequestItem", "model HealthLabEvent", "@@unique([organizationId, labRequestNumber])", "@@index([organizationId, status, priority, requestedAt])"])
+    && containsAll(healthLaboratoryService, ["validateHealthLabReferences", "createHealthLabRequest", "updateHealthLabRequest", "actionHealthLabRequest", "maskHealthLabSensitive", "prisma.$transaction"])
+);
+
+check(
+  "HEALTH_CARE Laboratoire: routes privées, permissions, transitions et audit",
+  containsAll(healthLaboratoryApi, ["getHealthLaboratoryAccess", "healthLabRequestCreateSchema.safeParse", "validateHealthLabReferences", "isSameOriginRequest", "await rateLimit", "writeAuditLog", "organizationId"])
+    && containsAll(healthLaboratoryRecordApi, ["healthLabRequestUpdateSchema.safeParse", "updateHealthLabRequest", "isSameOriginRequest", "organizationId"])
+    && containsAll(healthLaboratoryActionsApi, ["healthLabActionSchema.safeParse", "actionHealthLabRequest", "canValidate", "canCorrect", "writeAuditLog"])
+    && containsAll(healthLaboratoryAccess, ["requireEnterpriseMembership", "canAccessEnterpriseModule", '"LABORATORY"', "health.laboratory.view_sensitive"])
+    && containsAll(enterpriseHealthcareApi, ['data.moduleCode === "LABORATORY"', '"Dedicated module"'])
+);
+
+check(
+  "HEALTH_CARE Laboratoire: tableau de bord, demandes, prélèvements, résultats et mobile",
+  containsAll(healthLaboratoryWorkspace, ["ListControls", "ActionMenu", "Demandes du jour", "Prélèvements à faire", "Résultats validés", "Résultat critique", "Aucune demande laboratoire enregistrée", "h-[94dvh]", "CircleHelp", "min-w-0", "overflow-hidden"])
+    && !healthLaboratoryWorkspace.includes("window.prompt")
+    && !healthLaboratoryWorkspace.includes("window.confirm")
+    && !healthLaboratoryWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
+);
+
+check(
+  "HEALTH_CARE Pharmacie interne: modèles dédiés, FEFO, délivrances et isolation tenant",
+  containsAll(prismaSchema, ["model HealthPharmacyProduct", "model HealthPharmacyBatch", "model HealthPharmacyStockMovement", "model HealthPharmacyDispensation", "@@unique([organizationId, productCode])"])
+    && containsAll(healthPharmacyService, ["validateHealthPharmacyRelations", "actionHealthPharmacy", "NO_SELLABLE_BATCH", "INSUFFICIENT_STOCK", "prisma.$transaction"])
+);
+
+check(
+  "HEALTH_CARE Pharmacie interne: routes privées, permissions sensibles et audit",
+  containsAll(healthPharmacyApi, ["getHealthPharmacyAccess", "healthPharmacyProductCreateSchema.safeParse", "isSameOriginRequest", "await rateLimit", "writeAuditLog", "organizationId"])
+    && containsAll(healthPharmacyRecordApi, ["healthPharmacyProductUpdateSchema.safeParse", "canViewSensitive", "isSameOriginRequest", "organizationId"])
+    && containsAll(healthPharmacyActionsApi, ["healthPharmacyActionSchema.safeParse", "actionHealthPharmacy", "canAuthorizeSensitive", "writeAuditLog"])
+    && containsAll(healthPharmacyAccess, ['"INTERNAL_PHARMACY"', "health.pharmacy.authorize_sensitive_exit"])
+);
+
+check(
+  "HEALTH_CARE Pharmacie interne: tableau de bord, produits, lots, mouvements et mobile",
+  containsAll(healthPharmacyWorkspace, ["ListControls", "ActionMenu", "Produits actifs", "Lots proches péremption", "Délivrer à un patient", "Aucun produit enregistré", "h-[94dvh]", "CircleHelp", "min-w-0", "overflow-hidden"])
+    && !healthPharmacyWorkspace.includes("window.prompt")
+    && !healthPharmacyWorkspace.includes("window.confirm")
+    && !healthPharmacyWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
+);
+
+check(
+  "HEALTH_CARE Facturation médicale: modèles dédiés, calculs et isolation tenant",
+  containsAll(prismaSchema, ["model HealthMedicalInvoice", "model HealthMedicalInvoiceItem", "model HealthMedicalInvoicePayment", "model HealthMedicalInvoiceEvent", "model HealthBillingServiceCatalog", "@@unique([organizationId, invoiceNumber])"])
+    && containsAll(healthBillingService, ["calculateInvoice", "validateBillingRefs", "createMedicalInvoice", "billingAction", "PAYMENT_EXCEEDS_BALANCE", "prisma.$transaction"])
+);
+
+check(
+  "HEALTH_CARE Facturation médicale: routes privées, permissions et audit",
+  containsAll(healthBillingApi, ["getHealthBillingAccess", "invoiceCreateSchema.safeParse", "isSameOriginRequest", "await rateLimit", "writeAuditLog", "organizationId"])
+    && containsAll(healthBillingRecordApi, ["billingActionSchema.safeParse", "billingAction", "canRecordPayment", "writeAuditLog"])
+    && containsAll(healthBillingAccess, ['"MEDICAL_BILLING"', "health.billing.record_payment"])
+);
+
+check(
+  "HEALTH_CARE Facturation médicale: tableau de bord, lignes, paiements et mobile",
+  containsAll(healthBillingWorkspace, ["ListControls", "ActionMenu", "Factures du jour", "Solde restant", "Enregistrer un paiement", "Aucune facture médicale enregistrée", "h-[94dvh]", "CircleHelp", "min-w-0", "overflow-hidden"])
+    && !healthBillingWorkspace.includes("window.prompt")
+    && !healthBillingWorkspace.includes("window.confirm")
+);
+
+check(
+  "HEALTH_CARE Assurances: modèles dédiés, montants et isolation tenant",
+  containsAll(prismaSchema, ["model HealthInsuranceProvider", "model HealthPatientInsuranceCoverage", "model HealthCoverageRequest", "model HealthCoverageRequestEvent", "@@unique([organizationId, coverageRequestNumber])"])
+    && containsAll(healthInsuranceService, ["validateInsuranceRefs", "createCoverageRequest", "coverageAction", "appliedToInvoice", "APPROVED_EXCEEDS_REQUESTED", "prisma.$transaction"])
+);
+
+check(
+  "HEALTH_CARE Assurances: routes privées, permissions et audit",
+  containsAll(healthInsuranceApi, ["getHealthInsuranceAccess", "requestSchema.safeParse", "isSameOriginRequest", "await rateLimit", "writeAuditLog", "organizationId"])
+    && containsAll(healthInsuranceActionApi, ["insuranceActionSchema.safeParse", "coverageAction", "writeAuditLog", "canApply"])
+    && containsAll(healthInsuranceAccess, ["INSURANCE_COVERAGE", "health.insurance.apply_to_invoice"])
+);
+
+check(
+  "HEALTH_CARE Assurances: organismes, couvertures, demandes et mobile",
+  containsAll(healthInsuranceWorkspace, ["Assurances & prises en charge", "Organismes", "Couvertures", "Prise en charge", "Appliquer à la facture", "ListControls", "ActionMenu", "CircleHelp", "h-[94dvh]", "min-w-0"])
+);
+
+check(
+  "HEALTH_CARE Incidents qualité: modèles dédiés, actions, historique et isolation tenant",
+  containsAll(prismaSchema, ["model HealthQualityIncident", "model HealthQualityCorrectiveAction", "model HealthQualityIncidentEvent", "@@unique([organizationId, incidentNumber])", "@@index([organizationId, confidentialityIncident, restrictedAccess])"])
+    && containsAll(healthQualityService, ["validateHealthQualityReferences", "createHealthQualityIncident", "healthQualityIncidentAction", "createHealthQualityCorrectiveAction", "healthQualityCorrectiveAction", "PATIENT_MISMATCH", "prisma.$transaction"])
+);
+
+check(
+  "HEALTH_CARE Incidents qualité: routes privées, confidentialité, permissions et audit",
+  containsAll(healthQualityApi, ["getHealthQualityAccess", "healthQualityIncidentCreateSchema.safeParse", "isSameOriginRequest", "await rateLimit", "writeAuditLog", "organizationId"])
+    && containsAll(healthQualityRecordApi, ["healthQualityIncidentActionSchema.safeParse", "healthQualityIncidentUpdateSchema.safeParse", "visible(", "writeAuditLog"])
+    && containsAll(healthQualityActionsApi, ["healthQualityCorrectiveActionCreateSchema.safeParse", "canManageActions", "writeAuditLog"])
+    && containsAll(healthQualityActionApi, ["healthQualityCorrectiveActionUpdateSchema.safeParse", "canValidateActions", "writeAuditLog"])
+    && containsAll(healthQualityAccess, ["requireEnterpriseMembership", "canAccessEnterpriseModule", '"QUALITY_INCIDENTS"', "health.quality.view_confidential_incidents"])
+    && containsAll(enterpriseHealthcareApi, ['data.moduleCode === "QUALITY_INCIDENTS"', '"Dedicated module"'])
+);
+
+check(
+  "HEALTH_CARE Incidents qualité: dashboard, formulaires, actions et mobile",
+  containsAll(healthQualityWorkspace, ["Incidents qualité", "Incidents ouverts", "Actions en retard", "ListControls", "ActionMenu", "Nouveau signalement qualité", "Actions correctives et préventives", "h-[94dvh]", "min-w-0", "overflow-x-hidden"])
+    && !healthQualityWorkspace.includes("window.prompt")
+    && !healthQualityWorkspace.includes("window.confirm")
+);
+
+check(
+  "HEALTH_CARE Documents médicaux: modèles dédiés, versions, accès et isolation tenant",
+  containsAll(prismaSchema, ["model HealthDocument", "model HealthDocumentVersion", "model HealthDocumentAccessLog", "@@unique([organizationId, documentNumber])", "@@unique([organizationId, documentId, versionNumber])"])
+    && containsAll(healthDocumentsService, ["validateHealthDocumentRefs", "createHealthDocument", "addHealthDocumentVersion", "actionHealthDocument", "logHealthDocumentAccess", "PATIENT_MISMATCH", "prisma.$transaction"])
+);
+
+check(
+  "HEALTH_CARE Documents médicaux: routes privées, stockage, permissions et audit",
+  containsAll(healthDocumentsApi, ["getHealthDocumentAccess", "healthDocumentSchema.safeParse", "isSameOriginRequest", "await rateLimit", "writeAuditLog", "isSupabaseStorageConfigured", "organizationId"])
+    && containsAll(healthDocumentApi, ["healthDocumentActionSchema.safeParse", "canReadHealthDocument", "writeAuditLog"])
+    && containsAll(healthDocumentVersionsApi, ["addHealthDocumentVersion", "canManageVersions", "isSupabaseStorageConfigured"])
+    && containsAll(healthDocumentDownloadApi, ["downloadHealthDocumentFromSupabase", "logHealthDocumentAccess", "Cache-Control", "private, no-store"])
+    && containsAll(healthDocumentAccess, ["requireEnterpriseMembership", "canAccessEnterpriseModule", '"MEDICAL_DOCUMENTS"', "health.documents.view_restricted"])
+    && containsAll(enterpriseHealthcareApi, ['data.moduleCode === "MEDICAL_DOCUMENTS"', '"Dedicated module"'])
+);
+
+check(
+  "HEALTH_CARE Documents médicaux: dashboard, fichiers, versions et mobile",
+  containsAll(healthDocumentsWorkspace, ["Documents médicaux", "Documents actifs", "Aucun fichier joint à ce document.", "ListControls", "ActionMenu", "Nouveau document médical", "Ajouter une nouvelle version", "Journal d’accès", "h-[94dvh]", "min-w-0", "overflow-x-hidden"])
+    && !healthDocumentsWorkspace.includes("window.prompt")
+    && !healthDocumentsWorkspace.includes("window.confirm")
+);
+
+check(
+  "routes Enterprise mutantes: origine, rate limit, organizationId et permissions métier",
+  containsAll(enterpriseAdminApi, ["isSameOriginRequest", "await rateLimit", "canManageEnterpriseAdministration(session.userId, organizationId)"])
+    && containsAll(enterpriseHealthcareApi, ["isSameOriginRequest", "await rateLimit", "canAccessEnterpriseModule(session.userId, organizationId"])
+);
+
+check(
+  "Mes collaborateurs limite les groupes au scope autorisé",
+  containsAll(collaboratorsGroupsRoute, ["collaborationGroupScopeWhere(session)", 'members: { some: { userId: session.userId, status: "ACTIVE" } }'])
+    && containsAll(collaboratorsPage, ["collaborationGroupScopeWhere(session)", "members: { some: { userId: user.id"])
+);
+
+check(
+  "messages de groupe vérifient membership et contexte de conversation partagée",
+  containsAll(collaboratorsMessagesRoute, ["assertGroupMemberForSession", "getActiveOrganizationId(session)", "userId: session.userId", "organizationId"])
+);
+
+check(
+  "appels de groupe: démarrer/rejoindre/quitter/terminer vérifient origine, rate limit et membership",
+  [collaboratorsCallsRoute, callJoinRoute, callLeaveRoute, callEndRoute, callParticipantRoute, callTelemetryRoute].every((source) =>
+    containsAll(source, ["isSameOriginRequest", "await rateLimit", "assertGroupMemberForSession"])
+  )
+);
+
+check(
+  "terminer un appel reste réservé au lanceur ou gestionnaire de groupe",
+  containsAll(callEndRoute, ["call.startedById !== session.userId", "canManageGroup(member, session.role)", "durationSeconds"])
+);
+
+check(
+  "liste UI des appels n'expose pas roomName/provider",
+  !/roomName|provider/.test(read("components/collaborators/collaborators-workspace.tsx").split("type GroupCall =")[1]?.split("type JoinedCall =")[0] || "")
+    && !/roomName|provider/.test(read("components/collaborators/collaborators-workspace.tsx").split("type JoinedCall =")[1]?.split("type CallPreferences =")[0] || "")
+    && !/roomName|provider/.test(collaboratorsPage)
+    && !/roomName|provider/.test(collaboratorsGroupsRoute)
+    && !/roomName|provider/.test((collaboratorsCallsRoute.match(/return \{[\s\S]*?participants: call\.participants,[\s\S]*?events: call\.events,[\s\S]*?\};/) || [""])[0])
+);
+
+check(
+  "notifications d'appel: inbox Redis, réconciliation bornée et polling adaptatif",
+  containsAll(callEventsRoute, [
+    "readCollaborationCallEventInbox",
+    "claimCollaborationCallDbReconciliation",
+    "canAccessGroupInSessionWithSubscription",
+    "dbReconciled: shouldReadDatabase",
+    "MAX_EVENT_AGE_MS",
+  ])
+    && !callEventsRoute.includes("touchUserPresence")
+    && containsAll(callEventInbox, [
+      "COLLABORATION_CALL_EVENT_DB_RECONCILE_SECONDS = 5 * 60",
+      '"RPUSH", key, serialized',
+      '"LTRIM", key, -COLLABORATION_CALL_EVENT_INBOX_MAX_ITEMS, -1',
+    ])
+    && containsAll(globalCallToast, [
+      "CALL_EVENT_IDLE_POLL_MS = 12_000",
+      "CALL_EVENT_ACTIVE_POLL_MS = 5_000",
+      'document.visibilityState === "visible"',
+      "navigator.onLine !== false",
+    ])
+    && !globalCallToast.includes("setInterval")
+);
+
+check(
+  "GlobalCallToast monté dans AppShell authentifié",
+  appShell.includes("<GlobalCallToast />")
+);
+
+check(
+  "calendrier interne: accès privé, contexte organisation et disponibilité filtrée",
+  containsAll(calendarRoute, ["canAccessInternalCalendar", "canUseInternalCalendarFeature", "getCalendarContext", "organizationId: context.activeOrganizationId"])
+    && containsAll(calendarAvailabilityRoute, ["canAccessInternalCalendar", "canUseInternalCalendarFeature", "collaboratorAvailabilityWhere"])
+    && containsAll(internalCalendar, ["activeOrganizationId", "organizationId", 'canUseFeature(context.activeOrganizationId, "calendar")'])
+);
+
+check(
+  "calendrier interne: routes mutantes avec origine, rate limit et entitlements",
+  containsAll(calendarRoute, ["isSameOriginRequest", "await rateLimit", "canUseInternalCalendarFeature"])
+    && containsAll(calendarAvailabilityRoute, ["isSameOriginRequest", "await rateLimit", "canUseInternalCalendarFeature"])
+    && containsAll(read("app/api/calendar/events/[id]/route.ts"), ["isSameOriginRequest", "await rateLimit", "canUseInternalCalendarFeature"])
+    && containsAll(read("app/api/calendar/availabilities/[id]/route.ts"), ["isSameOriginRequest", "await rateLimit", "canUseInternalCalendarFeature"])
+);
+
+check(
+  "SaaS: plans, limites et entitlements centralisés",
+  containsAll(billingPlans, ["STARTER", "BUSINESS", "ENTERPRISE", "resolveSaasPlanCode", "planMeetsRequirement"])
+    && containsAll(billingModuleEntitlements, ["FEATURE_ENTITLEMENTS", "requiredPlanForModule", "moduleRequiresActiveSubscription"])
+    && containsAll(billingEntitlements, ["getOrganizationEntitlements", "canUseModule", "canUseFeature", "assertCanUseModule", "getOrganizationUsageLimits", "isSubscriptionActive"])
+);
+
+check(
+  "SaaS: initialisation des plans non destructive",
+  containsAll(billingDefaults, ["prisma.billingPlan.createMany", "skipDuplicates: true"])
+    && !billingDefaults.includes("update: plan")
+);
+
+check(
+  "SaaS: gestion des plans et tarifs réservée ADMIN, sécurisée et auditée",
+  containsAll(billingPlanUpdateRoute, [
+    "UserRole.ADMIN",
+    "isDtscInternalSession",
+    "isSameOriginRequest",
+    "await rateLimit",
+    "billingPlanUpdateSchema.safeParse",
+    "BILLING_PLAN_UPDATED",
+    "writeApiLog",
+    'current.id === "freemium"',
+  ])
+    && containsAll(billingPlanManager, ["translate(locale", "plansAndPricing", "editPlanPricing", "/api/admin/billing-plans/", "pricingReason"])
+    && containsAll(adminPage, ["BillingPlanManager", "user.role === UserRole.ADMIN"])
+);
+
+check(
+  "SaaS: modules Enterprise et données sectorielles contrôlés par entitlements",
+  containsAll(enterpriseModuleToggleRoute, ["canUseModule", "PLAN_REQUIRED", "SUBSCRIPTION_REQUIRED"])
+    && containsAll(enterpriseAdminLoader, ["getOrganizationEntitlements", "entitlements"])
+    && containsAll(enterpriseActivitiesLoader, ["getOrganizationEntitlements", "entitlements"])
+    && containsAll(read("lib/enterprise/enterprise-healthcare-loader.ts"), ["getOrganizationEntitlements", "moduleCode: { in: allowedModuleCodes }"])
+);
+
+check(
+  "PHARMACY: données chargées uniquement pour le secteur et modules autorisés",
+  containsAll(enterprisePharmacyLoader, ['sectorCode !== PHARMACY_SECTOR_CODE', "getOrganizationEntitlements", "moduleCode: { in: allowedModuleCodes }"])
+    && containsAll(enterpriseActivityPharmacyLoader, ['sectorCode !== PHARMACY_SECTOR_CODE', "getOrganizationEntitlements", "moduleCode: { in: allowedModuleCodes }"])
+    && containsAll(enterpriseAdminLoader, ["getEnterprisePharmacyDataset", 'organization.sectorCode === "PHARMACY"'])
+    && containsAll(enterpriseActivitiesLoader, ["getEnterpriseActivityPharmacyRecords", 'organization.sectorCode === "PHARMACY"'])
+);
+
+check(
+  "PHARMACY: routes sécurisées, relations isolées et stock transactionnel",
+  containsAll(enterprisePharmacyApi, ["isSameOriginRequest", "await rateLimit", "enterprisePharmacyRecordSchema.safeParse", "canAccessEnterpriseModule", "organizationId", "validateReferences"])
+    && containsAll(enterprisePharmacyRecordApi, ["isSameOriginRequest", "await rateLimit", "canAccessEnterpriseModule", "prisma.$transaction", "BATCH_NOT_SELLABLE", "INSUFFICIENT_STOCK", "stockImpactApplied"])
+);
+
+check(
+  "PHARMACY: Administration et Activités utilisent des vues et formulaires dédiés",
+  containsAll(read("components/enterprise/pharmacy-admin-workspace.tsx"), ["PHARMACY_DASHBOARD", "ListControls", "RecordSelect", "SALES_DISPENSATION", "STOCK_RECEIPTS", "BATCH_EXPIRY"])
+    && containsAll(read("components/enterprise/enterprise-activities-panels.tsx"), ["pharmacyActivityFields", "REQUEST_REPLENISHMENT", "REQUEST_STOCK_ADJUSTMENT_VALIDATION", "REQUEST_PHARMACIST_OPINION", "SUBMIT_INVENTORY"])
+);
+
+check(
+  "PHARMACY Produits: catalogue dédié, sécurisé et non destructif",
+  containsAll(prismaSchema, ["model PharmacyProduct", "@@unique([organizationId, internalCode])", "@@unique([organizationId, barcode])"])
+    && containsAll(pharmacyProductsApi, ["canAccessPharmacyProducts", "pharmacyProductSchema.safeParse", "isSameOriginRequest", "await rateLimit", "organizationId"])
+    && containsAll(pharmacyProductApi, ["pharmacyProductUpdateSchema.safeParse", 'status: "ARCHIVED"', "PHARMACY_PRODUCT_ARCHIVED"])
+    && containsAll(pharmacyProductAccess, ["MEDICINES_PRODUCTS", "organization: { sectorCode: \"PHARMACY\""])
+    && containsAll(pharmacyProductsWorkspace, ["Catalogue central", "PHARMACY_PRODUCT_CATEGORIES", "Nouveau produit", "Lots", "Historique"])
+);
+
+check(
+  "PHARMACY Produits: libellés métier et aides contextuelles sans clés techniques visibles",
+  containsAll(pharmacyProductsWorkspace, ["FIELD_HELP", "CircleHelp", "Ordonnance obligatoire", "Seuil d'alerte de stock", "Nombre d'unités par emballage", "fieldLabel(key)"])
+    && !pharmacyProductsWorkspace.includes("labelText={field}")
+    && !pharmacyProductsWorkspace.includes(">{field}</label>")
+);
+
+check(
+  "PHARMACY Lots: tables dédiées, isolation multi-tenant et mouvement initial",
+  containsAll(prismaSchema, ["model PharmacyBatch", "model PharmacyStockMovement", "@@unique([organizationId, productId, batchNumber])", "@@unique([organizationId, barcode])"])
+    && containsAll(pharmacyBatchesApi, ["canAccessPharmacyBatches", "pharmacyBatchSchema.safeParse", "organizationId", "INITIAL_BATCH_CREATION", "pharmacyStockMovement.create"])
+    && containsAll(pharmacyBatchApi, ["pharmacyBatchUpdateSchema.safeParse", "organizationId", "PHARMACY_BATCH_UPDATED"])
+    && containsAll(pharmacyBatchAccess, ["BATCH_EXPIRY", "organization: { sectorCode: \"PHARMACY\""])
+);
+
+check(
+  "PHARMACY Lots: interface métier, actions réelles et FEFO",
+  containsAll(pharmacyBatchesWorkspace, ["Lots & péremptions", "Aucun lot n&apos;est encore enregistré", "Mettre en quarantaine", "Marquer comme rappelé", "Mouvements stock", "h-[94dvh]", "CircleHelp"])
+    && containsAll(pharmacyBatchesService, ["getSellableBatchesForProduct", 'orderBy: [{ expiryDate: "asc" }', "getEffectivePharmacySettings", "blockExpiredBatchSale", "blockRecalledBatchSale", "blockQuarantinedBatchSale", "blockBlockedBatchSale"])
+);
+
+check(
+  "PHARMACY Stock: modèles dédiés, calculs réels et ajustements transactionnels",
+  containsAll(prismaSchema, ["model PharmacyInventorySession", "model PharmacyInventoryLine", "model PharmacyStockAdjustment", "model PharmacyStockLocation", /direction\s+String\s+@default\("NEUTRAL"\)/])
+    && containsAll(pharmacyStockService, ["getPharmacyStockDataset", "calculateProductStockStatus", "generateInventoryLines", "Number(batch.availableQuantity)"])
+    && containsAll(pharmacyStockApi, ["canAccessPharmacyStock", "isSameOriginRequest", "await rateLimit", "prisma.$transaction", "NEGATIVE_STOCK", "PharmacyStockAdjustment"])
+);
+
+check(
+  "PHARMACY Stock: dix vues fonctionnelles et formulaires plein écran",
+  containsAll(pharmacyStockWorkspace, ["Vue stock global", "Stock par produit", "Stock par lot", "Mouvements de stock", "Sessions d'inventaire", "Écarts d'inventaire", "Ajustements stock", "Emplacements", "Alertes stock", "Historique stock", "h-[94dvh]", "Enregistrer le comptage"])
+);
+
+check(
+  "PHARMACY Stock: formulaires guidés, listes françaises et confinement mobile",
+  containsAll(pharmacyStockWorkspace, ["FIELD_HELP", "LabelWithHelp", "CircleHelp", "Inventaire complet", "Tous les produits", "Entrée en stock", "Zone des produits expirés", "overflow-x-hidden", "min-w-0"])
+    && containsAll(pharmacyProductsWorkspace, ["w-full min-w-0 max-w-full overflow-hidden", "Toutes les catégories", "Toutes les règles"])
+    && containsAll(pharmacyProductsLabels, ["Ordonnance obligatoire", "Produit soumis à contrôle renforcé", "Nom commercial", "Date de création"])
+);
+
+check(
+  "PHARMACY Réceptions: modèles dédiés et impact stock idempotent",
+  containsAll(prismaSchema, ["model PharmacyReceipt", "model PharmacyReceiptLine", "model PharmacyReceiptBatch", "model PharmacyReceiptDiscrepancy", "model PharmacyReceiptDocument", "@@unique([organizationId, receiptNumber])"])
+    && containsAll(pharmacyReceiptsService, ["applyReceiptStockImpact", "reverseReceiptStockImpact", "receipt.stockImpactApplied", 'movementType: "RECEIPT"', "NEGATIVE_STOCK", "prisma.$transaction"])
+);
+
+check(
+  "PHARMACY Réceptions: routes multi-tenant sécurisées et auditées",
+  containsAll(pharmacyReceiptsApi, ["canAccessPharmacyReceipts", "isSameOriginRequest", "await rateLimit", "pharmacyReceiptSchema.safeParse", "validateReceiptReferences", "writeAuditLog"])
+    && containsAll(pharmacyReceiptApi, ["organizationId", "receiptActionSchema.safeParse", "applyReceiptStockImpact", "reverseReceiptStockImpact", "writeAuditLog"])
+    && containsAll(pharmacyReceiptAccess, ["STOCK_RECEIPTS", "organizationMember", "sectorCode: \"PHARMACY\""])
+);
+
+check(
+  "PHARMACY Réceptions: sept vues fonctionnelles, combobox et formulaire mobile plein écran",
+  containsAll(pharmacyReceiptsWorkspace, ["Tableau de bord", "Réceptions fournisseurs", "Lignes de réception", "Réceptions partielles", "Écarts de réception", "Documents de réception", "Historique des réceptions", "h-[96dvh]", "CircleHelp", "Ajouter un lot", "Enregistrer en brouillon"])
+    && !pharmacyReceiptsWorkspace.includes('type="url"')
+);
+
+check(
+  "PHARMACY Ventes: modèles dédiés et sorties stock idempotentes",
+  containsAll(prismaSchema, ["model PharmacySale", "model PharmacySaleLine", "model PharmacySaleRefund", "model PharmacySaleRefundLine", "model PharmacySaleAnomaly", "@@unique([organizationId, saleNumber])"])
+    && containsAll(pharmacySalesService, ["applySaleStockImpact", "reverseSaleStockImpact", "sale.stockImpactApplied", 'movementType: "SALE"', 'movementType: "SALE_CANCELLATION"', "prisma.$transaction"])
+);
+
+check(
+  "PHARMACY Ventes: routes multi-tenant sécurisées et auditées",
+  containsAll(pharmacySalesApi, ["canAccessPharmacySales", "isSameOriginRequest", "await rateLimit", "pharmacySaleSchema.safeParse", "validateSaleReferences", "writeAuditLog"])
+    && containsAll(pharmacySaleApi, ["organizationId", "saleActionSchema.safeParse", "applySaleStockImpact", "reverseSaleStockImpact", "const refundAmount = data.refundAmount", "refundAmount === undefined", "writeAuditLog"])
+    && containsAll(pharmacySaleAccess, ["SALES_DISPENSATION", "organizationMember", 'sectorCode: "PHARMACY"'])
+);
+
+check(
+  "PHARMACY Ventes: onze vues métier, FEFO, aides et formulaire mobile",
+  containsAll(pharmacySalesWorkspace, ["Tableau de bord", "Nouvelle vente / dispensation", "Ventes du jour", "Historique des ventes", "Lignes de vente", "Validations pharmacien", "Annulations & remboursements", "Sorties exceptionnelles", "Reçus / factures", "Anomalies de vente", "Historique des mouvements", "Lot vendable FEFO", "CircleHelp", "h-[96dvh]", "min-w-0", "overflow-x-hidden"])
+    && !pharmacySalesWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
+);
+
+check(
+  "PHARMACY Ordonnances: modèles dédiés, audit et vente brouillon sans impact stock",
+  containsAll(prismaSchema, ["model PharmacyPrescription", "model PharmacyPrescriptionLine", "model PharmacyPrescriptionDocument", "model PharmacyPrescriptionAuditEvent", "@@unique([organizationId, prescriptionNumber])"])
+    && containsAll(pharmacyPrescriptionsService, ["createPharmacyPrescription", "createSaleFromPrescription", "effectivePharmacyBatchStatus", "stockImpactApplied", "pharmacyPrescriptionAuditEvent"])
+);
+
+check(
+  "PHARMACY Ordonnances: routes multi-tenant sécurisées, validées et auditées",
+  containsAll(pharmacyPrescriptionsApi, ["canAccessPharmacyPrescriptions", "isSameOriginRequest", "await rateLimit", "pharmacyPrescriptionSchema.safeParse", "validatePrescriptionReferences", "writeAuditLog"])
+    && containsAll(pharmacyPrescriptionApi, ["organizationId", "prescriptionActionSchema.safeParse", "createSaleFromPrescription", "SUBSTITUTION_NOT_ALLOWED", "const selectedLineId = lineId", "writeAuditLog"])
+    && containsAll(pharmacyPrescriptionAccess, ["PRESCRIPTIONS", "organizationMember", 'sectorCode: "PHARMACY"'])
+);
+
+check(
+  "PHARMACY Ordonnances: onze vues, libellés français, aides et formulaire mobile",
+  containsAll(pharmacyPrescriptionsWorkspace, ["Tableau de bord ordonnances", "Nouvelle ordonnance", "Ordonnances reçues", "Ordonnances en validation", "Ordonnances validées", "Ordonnances partiellement servies", "Ordonnances servies", "Ordonnances rejetées", "Lignes de prescription", "Documents d'ordonnance", "Historique & audit", "h-[96dvh]", "CircleHelp", "min-w-0", "overflow-x-hidden", "Générer une vente brouillon"])
+    && !pharmacyPrescriptionsWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
+);
+
+check(
+  "PHARMACY Achats: modèles fournisseurs, demandes, commandes, documents et alertes",
+  containsAll(prismaSchema, ["model PharmacySupplier", "model PharmacySupplierProduct", "model PharmacyReplenishmentRequest", "model PharmacyPurchaseOrder", "model PharmacyPurchaseOrderLine", "model PharmacySupplierDocument", "model PharmacyPurchaseAlert", "@@unique([organizationId, supplierCode])", "@@unique([organizationId, orderNumber])"])
+    && containsAll(pharmacyPurchasesService, ["validatePurchaseReferences", "createPurchaseEntity", "createReceiptFromPurchaseOrder", "getPurchasesDataset", "remainingQuantity", "ORDER_NOT_RECEIVABLE"])
+);
+
+check(
+  "PHARMACY Achats: réceptions synchronisées et quantités restantes protégées",
+  containsAll(pharmacyReceiptsService, ["pharmacyPurchaseOrderLine.findMany", "purchaseOrderLineMap", "remainingQuantity", "const purchaseOrderId = receipt.purchaseOrderId", "pharmacyPurchaseOrder.update"])
+    && containsAll(pharmacyBatchesApi, ["pharmacySupplier.findFirst", "pharmacyPurchaseOrder.findFirst"])
+);
+
+check(
+  "PHARMACY Achats: routes multi-tenant sécurisées et auditées",
+  containsAll(pharmacyPurchasesApi, ["canAccessPharmacyPurchases", "isSameOriginRequest", "await rateLimit", "purchaseCreateSchema.safeParse", "validatePurchaseReferences", "writeAuditLog"])
+    && containsAll(pharmacyPurchaseApi, ["organizationId", "purchaseActionSchema.safeParse", "const suggestedSupplierId", "createReceiptFromPurchaseOrder", "writeAuditLog"])
+    && containsAll(pharmacyPurchaseAccess, ["SUPPLIERS_ORDERS", "organizationMember", 'sectorCode: "PHARMACY"'])
+);
+
+check(
+  "PHARMACY Achats: onze vues, combobox, aides et formulaires plein écran",
+  containsAll(pharmacyPurchasesWorkspace, ["Tableau de bord achats pharmacie", "Fournisseurs", "Produits par fournisseur", "Demandes de réapprovisionnement", "Commandes fournisseurs", "Lignes de commande", "Suivi de livraison", "Commandes partiellement reçues", "Documents fournisseurs", "Historique fournisseurs & achats", "Alertes achats", "h-[96dvh]", "CircleHelp", "Créer / ouvrir le brouillon de réception", "min-w-0", "overflow-x-hidden"])
+    && !pharmacyPurchasesWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
+);
+
+check(
+  "PHARMACY Caisse: modèles dédiés, ventes reliées et clôture transactionnelle",
+  containsAll(prismaSchema, ["model PharmacyCashSession", "model PharmacyPayment", "model PharmacyInvoice", "model PharmacyCashReceipt", "model PharmacyRefund", "model PharmacyCashDiscrepancy", "@@unique([organizationId, cashSessionNumber])", "@@unique([organizationId, paymentNumber])"])
+    && containsAll(pharmacyCashService, ["openCashSession", "createPayment", "recalculateSalePaymentStatus", "generateInvoiceFromSale", "generateReceiptForPayment", "createRefund", "validateCashRefund", "closeCashSession", "calculateCashSessionTotals", 'movementType: "RETURN_CUSTOMER"', "prisma.$transaction", "REFUND_EXCEEDS_PAID"])
+    && containsAll(pharmacySaleApi, ["Cash payment required", "Caisse, factures & paiements"])
+);
+
+check(
+  "PHARMACY Caisse: routes multi-tenant sécurisées, validées et auditées",
+  containsAll(pharmacyCashApi, ["canAccessPharmacyCash", "isSameOriginRequest", "await rateLimit", "cashCreateSchema.safeParse", "writeAuditLog", "organizationId"])
+    && containsAll(pharmacyCashActionApi, ["cashActionSchema.safeParse", "const countedCashAmount", "SELF_VALIDATION_FORBIDDEN", "writeAuditLog", "organizationId"])
+    && containsAll(pharmacyCashAccess, ["CASH_INVOICES_PAYMENTS", "organizationMember", 'sectorCode: "PHARMACY"'])
+);
+
+check(
+  "PHARMACY Caisse: treize vues, combobox, aides et formulaires plein écran",
+  containsAll(pharmacyCashWorkspace, ["Tableau de bord caisse", "Sessions de caisse", "Ouverture de caisse", "Encaissements", "Paiements", "Factures", "Reçus", "Remboursements", "Clôture de caisse", "Écarts de caisse", "Validation de clôture", "Historique caisse", "Rapports caisse", "h-[96dvh]", "CircleHelp", "min-w-0", "overflow-x-hidden"])
+    && !pharmacyCashWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
+);
+
+check(
+  "PHARMACY Retours et pertes: modèles dédiés et impacts stock réversibles",
+  containsAll(prismaSchema, ["model PharmacyReturnLossEvent", "model PharmacyReturnLossDocument", "model PharmacyReturnLossAlert", "@@unique([organizationId, eventNumber])", "stockImpactApplied"])
+    && containsAll(pharmacyReturnLossService, ["validateReturnLossReferences", "applyReturnLossStockImpact", "reverseReturnLossStockImpact", "RETURN_LOSS_REVERSAL", "RETURN_CUSTOMER", "RETURN_SUPPLIER", "ADJUSTMENT_POSITIVE", "EXPIRY_REMOVAL", "DESTRUCTION", "prisma.$transaction"])
+);
+
+check(
+  "PHARMACY Retours et pertes: routes multi-tenant sécurisées, validées et auditées",
+  containsAll(pharmacyReturnLossApi, ["canAccessPharmacyReturnLoss", "isSameOriginRequest", "await rateLimit", "returnLossEventSchema.safeParse", "validateReturnLossReferences", "writeAuditLog", "organizationId"])
+    && containsAll(pharmacyReturnLossActionApi, ["returnLossActionSchema.safeParse", "applyReturnLossStockImpact", "reverseReturnLossStockImpact", "writeAuditLog", "organizationId"])
+    && containsAll(pharmacyReturnLossAccess, ["RETURNS_ADJUSTMENTS_LOSSES", "organizationMember", 'sectorCode: "PHARMACY"'])
+);
+
+check(
+  "PHARMACY Retours et pertes: douze vues, aides et formulaires mobiles",
+  containsAll(pharmacyReturnLossWorkspace, ["Tableau de bord retours & pertes", "Retours clients", "Retours fournisseurs", "Ajustements stock", "Pertes & casses", "Produits expirés retirés", "Produits rappelés / retraits de lots", "Destructions / mises au rebut", "Validations en attente", "Documents justificatifs", "Historique des mouvements", "Alertes retours & pertes", "h-[96dvh]", "CircleHelp", "min-w-0", "overflow-x-hidden"])
+    && !pharmacyReturnLossWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
+);
+
+check(
+  "PHARMACY Ventes: le texte JSX d'audit échappe son apostrophe",
+  pharmacySalesWorkspace.includes("l&apos;audit") && !pharmacySalesWorkspace.includes("et l'audit.</p>")
+);
+
+check(
+  "PHARMACY Alertes: modèles persistants, règles et déduplication",
+  containsAll(prismaSchema, ["model PharmacyAlert", "model PharmacyAlertEvent", "model PharmacyAlertRule", "model PharmacyAlertSetting", "@@unique([organizationId, deduplicationKey])"])
+    && containsAll(pharmacyAlertsService, ["detectAllPharmacyAlerts", "PRODUCT_OUT_OF_STOCK", "BATCH_EXPIRED", "BATCH_RECALLED", "PURCHASE_ORDER_OVERDUE", "RECEIPT_DISCREPANCY_OPEN", "PHARMACIST_VALIDATION_PENDING", "INVENTORY_VARIANCE_CRITICAL", "LOSS_CRITICAL", "CASH_DISCREPANCY_CRITICAL", "detectedCount: { increment: 1 }"])
+);
+
+check(
+  "PHARMACY Alertes: routes sécurisées et cycle de vie audité",
+  containsAll(pharmacyAlertsApi, ["canAccessPharmacyAlerts", "isSameOriginRequest", "await rateLimit", "detectAllPharmacyAlerts", "writeAuditLog", "organizationId"])
+    && containsAll(pharmacyAlertActionApi, ["pharmacyAlertActionSchema.safeParse", "pharmacyAlertRuleSchema.safeParse", "pharmacyAlertSettingSchema.safeParse", "transitionPharmacyAlert", "writeAuditLog"])
+    && containsAll(pharmacyAlertAccess, ["ALERTS_EXPIRY_LOW_STOCK", "organizationMember", 'sectorCode: "PHARMACY"'])
+);
+
+check(
+  "PHARMACY Alertes: quatorze vues, aides et détail mobile",
+  containsAll(pharmacyAlertsWorkspace, ["Tableau de bord alertes", "Alertes ouvertes", "Alertes critiques", "Alertes stock", "Alertes péremption", "Alertes rappels / quarantaine", "Alertes achats & réapprovisionnement", "Alertes ventes & dispensation", "Alertes inventaire & ajustements", "Alertes retours, pertes & destructions", "Alertes caisse", "Règles de détection", "Affectations & notifications", "Historique des alertes", "h-[94dvh]", "CircleHelp", "min-w-0", "overflow-hidden"])
+    && !pharmacyAlertsWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
+);
+
+check(
+  "PHARMACY Qualité: modèles dédiés et règles de clôture fortes",
+  containsAll(prismaSchema, ["model PharmacyQualityIncident", "model PharmacyQualityInvestigation", "model PharmacyQualityCapaAction", "model PharmacyAdverseReactionReport", "model PharmacyCustomerComplaint", "model PharmacyQualityDocument", "model PharmacyQualityEvent", "@@unique([organizationId, incidentNumber])"])
+    && containsAll(pharmacyQualityService, ["validateQualityReferences", "normalizedCriticality", "IMMEDIATE_ACTION_REQUIRED", "INVESTIGATION_REQUIRED", "CAPA_OPEN", "RESOLUTION_REQUIRED", "quarantine-batch", "block-batch", "createQualityAlert"])
+);
+
+check(
+  "PHARMACY Qualité: routes multi-tenant sécurisées et auditées",
+  containsAll(pharmacyQualityApi, ["canAccessPharmacyQuality", "isSameOriginRequest", "await rateLimit", "pharmacyQualityIncidentSchema.safeParse", "validateQualityReferences", "writeAuditLog", "organizationId"])
+    && containsAll(pharmacyQualityActionApi, ["pharmacyQualityActionSchema.safeParse", "transitionQualityEntity", "writeAuditLog", "organizationId"])
+    && containsAll(pharmacyQualityAccess, ["QUALITY_PHARMACOVIGILANCE", "organizationMember", 'sectorCode: "PHARMACY"'])
+);
+
+check(
+  "PHARMACY Qualité: quatorze vues, aides et formulaires mobiles",
+  containsAll(pharmacyQualityWorkspace, ["Tableau de bord qualité", "Registre des incidents", "Nouvel incident", "Erreurs de dispensation", "Effets indésirables", "Produits suspects / non conformes", "Plaintes clients", "Ruptures de conservation", "Investigations", "Actions correctives & préventives", "Escalades & notifications", "Documents qualité", "Historique & audit", "Rapports qualité", "h-[96dvh]", "CircleHelp", "min-w-0", "overflow-x-hidden"])
+    && !pharmacyQualityWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
+);
+
+check(
+  "PHARMACY Documents: référentiel, liens, versions, accès et conformité",
+  containsAll(prismaSchema, ["model PharmacyDocument", "model PharmacyDocumentLink", "model PharmacyDocumentVersion", "model PharmacyDocumentAccessLog", "model PharmacyDocumentComplianceRule", "model PharmacyMissingDocument", "@@unique([organizationId, documentNumber])"])
+    && containsAll(pharmacyDocumentsService, ["createPharmacyDocument", "validatePharmacyDocumentReference", "detectPharmacyDocumentCompliance", "detectMissingRequiredDocuments", "logPharmacyDocumentAccess", "DOCUMENT_EXPIRED", "DOCUMENT_EXPIRING_SOON", "DESTRUCTION_MINUTES", "CRITICAL_INCIDENT_PROOF", "prisma.$transaction"])
+);
+
+check(
+  "PHARMACY Documents: routes privées, upload et téléchargement audité",
+  containsAll(pharmacyDocumentsApi, ["canAccessPharmacyDocuments", "isSameOriginRequest", "await rateLimit", "pharmacyDocumentMetadataSchema.safeParse", "validatePharmacyDocumentReference", "isSupabaseStorageConfigured", "writeAuditLog", "organizationId"])
+    && containsAll(pharmacyDocumentActionApi, ["pharmacyDocumentActionSchema.safeParse", "detectPharmacyDocumentCompliance", "transitionPharmacyDocument", "writeAuditLog"])
+    && containsAll(pharmacyDocumentDownloadApi, ["canAccessPharmacyDocumentRecord", "downloadPharmacyDocumentFromSupabase", "logPharmacyDocumentAccess", "Cache-Control", "private, no-store"])
+    && containsAll(pharmacyDocumentAccess, ["PHARMACY_DOCUMENTS", "organizationMember", 'sectorCode: "PHARMACY"'])
+);
+
+check(
+  "PHARMACY Documents: quinze vues, aides, fichier privé et mobile",
+  containsAll(pharmacyDocumentsWorkspace, ["Tableau de bord documentaire", "Bibliothèque documents", "Documents par module", "Documents produits & lots", "Documents fournisseurs & achats", "Documents réceptions", "Documents ventes, reçus & factures", "Documents ordonnances", "Documents retours, pertes & destructions", "Documents incidents qualité", "Documents administratifs & conformité", "Documents expirés / à renouveler", "Documents manquants", "Accès & confidentialité", "Historique documentaire", "h-[96dvh]", "CircleHelp", "min-w-0", "overflow-x-hidden", "stockage privé Supabase"])
+    && !pharmacyDocumentsWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
+);
+
+check(
+  "PHARMACY Rapports: modèles, agrégations réelles et isolation tenant",
+  containsAll(prismaSchema, ["model PharmacySavedReportView", "model PharmacyReportExport", "model PharmacyReportSnapshot", "@@index([organizationId, reportType, status])"])
+    && containsAll(pharmacyReportsService, ["getPharmacyReportsDataset", "createSavedReportView", "createPharmacyReportSnapshot", "logReportExport", "rowsToCsv", "organizationId", "prisma.pharmacyPayment", "activeSaleStatuses"])
+    && !pharmacyReportsService.includes("Math.random")
+);
+
+check(
+  "PHARMACY Rapports: routes sécurisées, données sensibles et export audité",
+  containsAll(pharmacyReportsApi, ["canAccessPharmacyReports", "pharmacyReportFiltersSchema.safeParse", "pharmacySavedReportSchema.safeParse", "isSameOriginRequest", "await rateLimit", "writeAuditLog"])
+    && containsAll(pharmacyReportActionApi, ["pharmacyReportActionSchema.safeParse", "createPharmacyReportSnapshot", "writeAuditLog", "organizationId"])
+    && containsAll(pharmacyReportExportApi, ["pharmacyReportExportSchema.safeParse", "export_sensitive", "logReportExport", "writeAuditLog", "private, no-store"])
+    && containsAll(pharmacyReportAccess, ["PHARMACY_REPORTS", "organizationMember", 'sectorCode: "PHARMACY"'])
+);
+
+check(
+  "PHARMACY Rapports: quinze vues, filtres, combobox, sauvegarde et CSV",
+  containsAll(pharmacyReportsWorkspace, ["Tableau de bord rapports", "Rapports ventes", "Rapports stock", "Rapports lots & péremptions", "Rapports achats & fournisseurs", "Rapports réceptions", "Rapports caisse & paiements", "Rapports ordonnances", "Rapports retours, pertes & destructions", "Rapports qualité & pharmacovigilance", "Rapports alertes", "Rapports documents & conformité", "Rapports collaborateurs / activité", "Rapports personnalisés simples", "Exports & historiques", "Sauvegarder la vue", "Exporter CSV", "CircleHelp", "min-w-0", "overflow-x-hidden"])
+    && !pharmacyReportsWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
+);
+
+check(
+  "SaaS: Console DTSC expose le centre de contrôle abonnements, limites, modules et derniers paiements",
+  containsAll(consoleBilling, ["organizationSubscriptionItems", "billingPlanOptions", "billingSummary", "getPlanUsageLimits", "resolveSaasPlanCode", "enabledModules", "latestBillingRecord"])
+    && consoleBilling.includes("plans.filter((plan) => plan.isActive)")
+    && !consoleBilling.includes('getPlanUsageLimits("FREE")')
+    && containsAll(adminBillingSubscriptions, ["Centre de contrôle SaaS", "Créer un abonnement", "Renouveler avec historique", "Annuler l'abonnement", "maxActiveModules"])
+    && adminPage.includes("AdminBillingSubscriptions")
+);
+
+check(
+  "SaaS: CRUD abonnements admin protégé, validé, rate limité et audité",
+  containsAll(organizationSubscriptionCreateRoute, [
+    "isDtscInternalSession",
+    "canManageClientOrganizations",
+    "isSameOriginRequest",
+    "await rateLimit",
+    "organizationSubscriptionCreateSchema.safeParse",
+    "ORGANIZATION_SUBSCRIPTION_CREATED",
+  ])
+    && containsAll(organizationSubscriptionUpdateRoute, [
+      "isDtscInternalSession",
+      "canManageClientOrganizations",
+      "isSameOriginRequest",
+      "await rateLimit",
+      "organizationSubscriptionUpdateSchema.safeParse",
+      "ORGANIZATION_SUBSCRIPTION_RENEWED",
+      '"CANCELED"',
+      '"EXPIRED"',
+    ])
+);
+
+check(
+  "routes admin organisations: contexte DTSC interne, origine, rate limit et validation Zod",
+  containsAll(clientOrganizationCreateRoute, ["isDtscInternalSession", "isSameOriginRequest", "await rateLimit", "enterpriseOrganizationCreateSchema.safeParse"])
+    && containsAll(clientOrganizationUpdateRoute, ["isDtscInternalSession", "isSameOriginRequest", "await rateLimit", "enterpriseOrganizationUpdateSchema.safeParse"])
+);
+
+check(
+  "checkout facturation: origine, rate limit, validation Zod et maintenance MaishaPay explicite",
+  containsAll(billingCheckoutRoute, ["isSameOriginRequest", "await rateLimit", "checkoutSchema.safeParse", "MAISHAPAY_MAINTENANCE", "freePlanAvailable"])
+);
+
+check(
+  "collaboration SaaS: groupes et appels vérifient les entitlements organisation",
+  containsAll(collaboratorsGroupsRoute, ["canUseFeature", '"collaborators"', "featureAccess.message"])
+    && containsAll(collaboratorsCallsRoute, ["canUseFeature", '"collaboration-calls"', "featureAccess.message"])
+    && containsAll(callJoinRoute, ["canUseFeature", '"collaboration-calls"', "featureAccess.message"])
+);
+
+check(
+  "Console DTSC charge par datasets et détails conditionnels",
+  containsAll(adminPage, [
+    "isDtscInternalSession(session)",
+    "getConsoleOverviewMetrics",
+    "loadUserDetails",
+    "loadClientOrganizationDetails",
+    "loadActivityDetails",
+    "loadBillingDetails",
+    "loadAuditDetails",
+    "loadInternalOperations",
+  ])
+);
+
+check(
+  "PHARMACY Paramètres: modèles, audit critique et numérotation transactionnelle",
+  containsAll(prismaSchema, ["model PharmacySetting", "model PharmacyNumberingSequence", "model PharmacySettingsAuditLog", "model PharmacySettingsProfile", "@@unique([organizationId, entityType])"])
+    && containsAll(pharmacySettingsService, ["getEffectivePharmacySettings", "updatePharmacySettingsSection", "generatePharmacyEntityNumber", "previewPharmacyEntityNumber", "criticalPharmacySettingKeys", "pharmacySettingsAuditLog", "prisma.$transaction"])
+);
+
+check(
+  "PHARMACY Paramètres: routes privées, validées, limitées et auditées",
+  containsAll(pharmacySettingsApi, ["canAccessPharmacySettings", "pharmacySettingsUpdateSchema.safeParse", "isSameOriginRequest", "await rateLimit", "writeAuditLog", "organizationId"])
+    && containsAll(pharmacySettingsActionsApi, ["canAccessPharmacySettings", "pharmacySettingsActionSchema.safeParse", "previewPharmacyEntityNumber", "updatePharmacyNumberingSequence", "writeAuditLog"])
+    && containsAll(pharmacySettingAccess, ["PHARMACY_SETTINGS", "organizationMember", 'sectorCode: "PHARMACY"'])
+);
+
+check(
+  "PHARMACY Paramètres: dix-sept sections, aides, historique et mobile",
+  containsAll(pharmacySettingsWorkspace, ["Général", "Numérotation & préfixes", "Produits & lots", "Stock & inventaire", "Péremptions & FEFO", "Ventes & dispensation", "Ordonnances", "Réceptions & achats", "Caisse, factures & paiements", "Retours, ajustements & pertes", "Alertes & notifications", "Documents & conformité", "Qualité & pharmacovigilance", "Rapports & exports", "Confidentialité & sécurité", "Intégrations ERP", "Historique des paramètres", "CircleHelp", "ListControls", "Prévisualiser", "Réinitialiser la section", "min-w-0", "overflow-x-hidden"])
+    && !pharmacySettingsWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
+);
+
+check(
+  "PHARMACY Paramètres: règles et numérotation connectées aux modules métier",
+  containsAll(pharmacySalesService, ["getEffectivePharmacySettings", "generatePharmacyEntityNumber"])
+    && containsAll(pharmacyReceiptsService, ["getEffectivePharmacySettings", "generatePharmacyEntityNumber"])
+    && containsAll(pharmacyCashService, ["getEffectivePharmacySettings", "generatePharmacyEntityNumber"])
+    && containsAll(pharmacyBatchesService, ["getEffectivePharmacySettings"])
+    && containsAll(pharmacyDocumentsService, ["getEffectivePharmacySettings"])
+    && containsAll(pharmacyQualityService, ["getEffectivePharmacySettings", "generatePharmacyEntityNumber"])
+);
+
+check(
+  "PHARMACY Activités: modèles, permissions et connexions métier réelles",
+  containsAll(prismaSchema, ["model PharmacyActivityItem", "model PharmacyActivityComment", "model PharmacyActivityDocument", "model PharmacyActivityEvent", "model PharmacyPharmacistAdviceRequest"])
+    && containsAll(pharmacyActivityAccess, ["pharmacy.activities.view_own", "pharmacy.activities.validate", "pharmacy.activities.attach_document", 'canUseFeature(organizationId, "enterprise-activities")', 'sectorCode: "PHARMACY"'])
+    && containsAll(pharmacyActivitiesService, ["createPharmacyActivityRequest", "getPharmacyActivityDashboard", "resolvePharmacyActivityAction", "pharmacyReplenishmentRequest.create", "pharmacyAlert.upsert", "pharmacyInventoryLine.update", "pharmacyStockAdjustment.create", "pharmacyCashSession.update", "pharmacySaleAnomaly.create", "pharmacyQualityIncident.create", "pharmacyPharmacistAdviceRequest.create", "pharmacyActivityDocument.create", "notifyUsers"])
+);
+
+check(
+  "PHARMACY Activités: routes privées, multi-tenant, validées et auditées",
+  containsAll(pharmacyActivitiesApi, ["getPharmacyActivityAccess", "pharmacyActivityCreateSchema.safeParse", "isSameOriginRequest", "await rateLimit", "writeAuditLog", "organizationId"])
+    && containsAll(pharmacyActivityActionApi, ["getPharmacyActivityAccess", "pharmacyActivityActionSchema.safeParse", "isSameOriginRequest", "await rateLimit", "writeAuditLog", "organizationId"])
+);
+
+check(
+  "PHARMACY Activités: dix-sept vues, français, aides, actions et mobile",
+  containsAll(pharmacyActivitiesWorkspace, ["Mon tableau de bord pharmacie", "Mes tâches pharmacie", "Mes ventes / actions du jour", "Mes validations en attente", "Mes alertes assignées", "Demander réapprovisionnement", "Signaler rupture de stock", "Déclarer produit proche péremption", "Soumettre inventaire", "Demander ajustement stock", "Soumettre rapport caisse", "Signaler anomalie vente", "Déclarer incident qualité", "Demander avis pharmacien", "Mes documents & procédures", "Mes workflows pharmacie", "Historique de mes demandes", "ActionMenu", "CircleHelp", "ListControls", "Associer un document", "Répondre à l'avis", "min-w-0", "overflow-x-hidden"])
+    && !pharmacyActivitiesWorkspace.includes("item.id.replaceAll")
+    && !pharmacyActivitiesWorkspace.includes("window.prompt")
+);
+
+check(
+  "Socle commun ERP: modèles, historique, commentaires et liens transversaux",
+  containsAll(prismaSchema, ["model EnterpriseCoreRecord", "model EnterpriseCoreEvent", "model EnterpriseCoreComment", "model EnterpriseEntityLink"])
+    && containsAll(enterpriseCoreService, ["createEnterpriseCoreRecord", "enterpriseCoreVisibilityWhere", "sourceModule", "sourceEntityType", "sourceEntityId"])
+);
+
+check(
+  "Socle commun ERP: routes privées, multi-tenant, validées et auditées",
+  containsAll(enterpriseCoreApi, ["getEnterpriseCoreAccess", "enterpriseCoreCreateSchema.safeParse", "isSameOriginRequest", "await rateLimit", "writeAuditLog", "organizationId"])
+    && containsAll(enterpriseCoreActionApi, ["getEnterpriseCoreAccess", "enterpriseCoreUpdateSchema.safeParse", "isSameOriginRequest", "await rateLimit", "writeAuditLog", "organizationId"])
+);
+
+check(
+  "Socle commun ERP: interface française, actions réelles et mobile",
+  containsAll(enterpriseCoreWorkspace, ["Créer un élément", "ListControls", "ContextActions", "CircleHelp", "Demander une validation", "min-w-0", "overflow-x-hidden"])
+    && !enterpriseCoreWorkspace.includes("window.prompt")
+    && !enterpriseCoreWorkspace.includes("window.confirm")
+);
+
+check(
+  "Enterprise AI: modèles Prisma et limites SaaS dédiés",
+  containsAll(prismaSchema, [
+    "model EnterpriseAiAssistant",
+    "model EnterpriseAiConversation",
+    "model EnterpriseAiMessage",
+    "model EnterpriseAiKnowledgeSource",
+    "model EnterpriseAiKnowledgeChunk",
+    "model EnterpriseAiToolCall",
+    "model EnterpriseAiUsage",
+    "model EnterpriseAiSetting",
+    "Unsupported(\"vector(1536)\")",
+  ])
+    && containsAll(read("lib/billing/plan-limits.ts"), [
+      "maxEnterpriseAiMonthlyMessages",
+      "maxEnterpriseAiKnowledgeSources",
+      "maxEnterpriseAiStorageMb",
+      "enterpriseAiReadToolsEnabled",
+      "enterpriseAiActionDraftsEnabled",
+    ])
+);
+
+check(
+  "Enterprise AI: accès strictement lié au contexte organisation actif",
+  containsAll(enterpriseAiAccess, [
+    "session.activeContext !== \"ORGANIZATION\"",
+    "session.activeOrganizationId !== organizationId",
+    "canAccessEnterpriseModule(session.userId, organizationId, ENTERPRISE_AI_MODULE_CODE",
+    "status: \"ACTIVE\"",
+    "removedAt: null",
+    "organization: { status: \"ACTIVE\", deletedAt: null, organizationType: \"CLIENT\" }",
+  ])
+);
+
+check(
+  "Enterprise AI: RAG séparé des documents personnels et filtré par organisation",
+  containsAll(enterpriseAiKnowledge, [
+    "enterpriseAiKnowledgeSource.create",
+    "EnterpriseAiKnowledgeChunk",
+    "kc.\"organizationId\" = $2",
+    "ks.\"organizationId\" = $2",
+    "ks.\"status\" = 'READY'",
+    "ks.\"archivedAt\" IS NULL",
+    "ks.\"confidentiality\" = ANY($3::text[])",
+    "uploadEnterpriseAiKnowledgeFileToSupabase",
+  ])
+);
+
+check(
+  "Enterprise AI: routes mutantes protégées par origine, Zod, rate limit et audit",
+  containsAll(enterpriseAiChatRoute, ["isSameOriginRequest", "await rateLimit", "enterpriseAiChatSchema.safeParse", "getEnterpriseAiAccess", "recordEnterpriseAiUsage", "writeAuditLog"])
+    && containsAll(enterpriseAiKnowledgeRoute, ["isSameOriginRequest", "await rateLimit", "enterpriseAiKnowledgeUploadSchema.safeParse", "assertEnterpriseAiKnowledgeQuota", "writeAuditLog"])
+    && containsAll(enterpriseAiKnowledgeActionRoute, ["isSameOriginRequest", "await rateLimit", "enterpriseAiKnowledgeActionSchema.safeParse", "ENTERPRISE_AI_SOURCE_ARCHIVED"])
+    && containsAll(enterpriseAiSettingsRoute, ["isSameOriginRequest", "await rateLimit", "enterpriseAiSettingsUpdateSchema.safeParse", "ENTERPRISE_AI_SETTINGS_UPDATED"])
+);
+
+check(
+  "Enterprise AI PHARMACY: CAG, Tool Gateway lecture et absence de mutation métier directe",
+  containsAll(enterpriseAiContext, ["Contexte secteur PHARMACY", "Respecter FEFO", "ne prétends jamais avoir exécuté une action métier"])
+    && containsAll(enterpriseAiPharmacyTools, [
+      "executeAiTool",
+      "selectPharmacyReadToolCodes",
+      'session.activeContext !== "ORGANIZATION"',
+      "session.activeOrganizationId !== organizationId",
+    ])
+    && containsAll(enterpriseAiPharmacyToolData, [
+      "pharmacy.dashboard.summary",
+      "pharmacy.stock.low",
+      "pharmacy.batches.expiring",
+      "pharmacy.alerts.open",
+      "pharmacy.sales.today",
+      "pharmacy.cash.sessions",
+      "pharmacy.purchases.open",
+      "pharmacy.quality.open",
+      "pharmacy.documents.summary",
+      "organizationId",
+    ])
+    && !enterpriseAiPharmacyTools.includes(".create({")
+    && !enterpriseAiPharmacyTools.includes(".update({")
+    && !enterpriseAiPharmacyTools.includes(".delete({")
+    && !enterpriseAiPharmacyTools.includes(".upsert({")
+    && !enterpriseAiPharmacyToolData.includes(".create({")
+    && !enterpriseAiPharmacyToolData.includes(".update({")
+    && !enterpriseAiPharmacyToolData.includes(".delete({")
+    && !enterpriseAiPharmacyToolData.includes(".upsert({")
+);
+
+check(
+  "Enterprise AI: workspace complet sans alert/confirm/prompt",
+  containsAll(enterpriseModulePage, ["EnterpriseAiWorkspace", "enterpriseModule.moduleCode === \"AI_ASSISTANT\""])
+    && containsAll(enterpriseAiWorkspace, ["Chat", "Sources", "Historique", "Usage", "Paramètres", "ActionMenu", "Dialog", "/api/enterprise/ai/chat", "/api/enterprise/ai/knowledge-sources", "/api/enterprise/ai/settings"])
+    && !enterpriseAiWorkspace.includes("window.alert")
+    && !enterpriseAiWorkspace.includes("window.confirm")
+    && !enterpriseAiWorkspace.includes("window.prompt")
+);
+
+check(
+  "Enterprise invitations: creation conserve INVITED, notification cible la page dediee et email Zoho non bloquant",
+  containsAll(enterpriseMembersRoute, [
+    "canManageEnterpriseAdministration",
+    "status: \"INVITED\"",
+    "joinedAt: null",
+    "removedAt: null",
+    "invitedBy: session.userId",
+    "type: \"ENTERPRISE_INVITATION\"",
+    "/enterprise-invitations?organizationId=",
+    "sendEnterpriseInvitationEmail",
+    "emailSent",
+  ])
+);
+
+check(
+  "Enterprise invitations: route PATCH securisee accepte ou refuse uniquement ses propres invitations",
+  containsAll(enterpriseInvitationRoute, [
+    "isSameOriginRequest",
+    "await rateLimit",
+    "enterpriseInvitationResponseSchema.safeParse",
+    "invitation.userId !== session.userId",
+    "invitation.status !== \"INVITED\"",
+    "invitation.removedAt",
+    "status: \"ACTIVE\"",
+    "joinedAt: now",
+    "status: \"REMOVED\"",
+    "removedAt: now",
+    "ENTERPRISE_INVITATION_ACCEPTED",
+    "ENTERPRISE_INVITATION_DECLINED",
+  ])
+);
+
+check(
+  "Enterprise invitations: page privee, actions client et bascule de contexte apres acceptation",
+  containsAll(enterpriseInvitationsPage, ["getPendingEnterpriseInvitationsForUser", "EnterpriseInvitationsClient", "Invitations reçues"])
+    && containsAll(enterpriseInvitationsClient, ["/api/enterprise/invitations/", "\"ACCEPT\" | \"DECLINE\"", "/api/account/context", "Accéder à l&apos;entreprise", "Invitation refusée"])
+);
+
+check(
+  "Enterprise invitations: notifications visibles hors contexte sans fuite multi-tenant",
+  containsAll(notificationAccess, ["ENTERPRISE_INVITATION_NOTIFICATION_TYPES", "status: { in: [\"ACTIVE\", \"INVITED\"] }", "removedAt: null", "organization: { status: \"ACTIVE\", deletedAt: null }", "userId: session.userId"])
+    && notificationPage.includes("getVisibleNotificationWhereForSession")
+    && appShell.includes("getVisibleNotificationWhereForSession")
+);
+
+check(
+  "Enterprise invitations: login separe organisations actives et invitations en attente",
+  containsAll(authOrganizationsRoute, ["getAccessibleOrganizationsForEmail", "getPendingOrganizationInvitationsForEmail", "pendingInvitations", "status: \"ACTIVE\""])
+    && containsAll(authForm, ["pendingInvitations", "Connectez-vous à votre espace standard pour l&apos;accepter"])
+    && !authForm.includes("option key={invitation.id}")
+);
+
+check(
+  "Enterprise invitations: route privee protegee et workflow groupes collaborateurs separe",
+  containsAll(middleware, ['"/enterprise-invitations"', '"/enterprise-invitations/:path*"'])
+    && containsAll(read("app/api/collaborators/invitations/[id]/route.ts"), ["collaborationInvitationResponseSchema", "collaborationGroupInvitation", "COLLABORATION"])
+);
+
+if (failures.length) {
+  console.error("\nQA regression checks failed:");
+  for (const failure of failures) {
+    console.error(`- ${failure}`);
+  }
+  process.exit(1);
+}
+
+console.log("\nQA regression checks passed.");

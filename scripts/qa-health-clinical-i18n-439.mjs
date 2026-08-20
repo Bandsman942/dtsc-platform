@@ -14,6 +14,7 @@ const baseline = {
 };
 const semanticConvergenceTargets = {
   "components/enterprise/health-patients-workspace.tsx": 0,
+  "components/enterprise/health-appointments-workspace.tsx": 0,
 };
 const localDebtPatterns = [
   'locale === "en"',
@@ -81,20 +82,25 @@ if (failures.length) {
   process.exit(1);
 }
 
-const patientQa = spawnSync(process.execPath, [path.join(root, "scripts/qa-health-patients-i18n-447.mjs")], {
-  cwd: root,
-  env: process.env,
-  encoding: "utf8",
-  stdio: ["ignore", "pipe", "pipe"],
-});
-if (patientQa.stdout) process.stdout.write(patientQa.stdout);
-if (patientQa.stderr) process.stderr.write(patientQa.stderr);
-if (patientQa.status !== 0) {
-  console.error(`FAIL i18n Health #439 — sous-gate Patients #447 en échec (exit ${patientQa.status ?? "unknown"}).`);
-  process.exit(patientQa.status || 1);
+for (const [name, script] of [
+  ["Patients #447", "scripts/qa-health-patients-i18n-447.mjs"],
+  ["Rendez-vous #451", "scripts/qa-health-appointments-i18n-451.mjs"],
+]) {
+  const qa = spawnSync(process.execPath, [path.join(root, script)], {
+    cwd: root,
+    env: process.env,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  if (qa.stdout) process.stdout.write(qa.stdout);
+  if (qa.stderr) process.stderr.write(qa.stderr);
+  if (qa.status !== 0) {
+    console.error(`FAIL i18n Health #439 — sous-gate ${name} en échec (exit ${qa.status ?? "unknown"}).`);
+    process.exit(qa.status || 1);
+  }
 }
 
-console.log("PASS i18n Health #439 — dette heuristique non régressive et cible sémantique Patients à zéro copie système locale prouvée par #447.");
+console.log("PASS i18n Health #439 — dette heuristique non régressive et cibles sémantiques Patients/Rendez-vous à zéro copie système locale prouvées par leurs QA dédiées.");
 
 function occurrences(content, token) {
   return content.split(token).length - 1;
