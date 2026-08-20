@@ -218,18 +218,11 @@ async function dispatch(event: ClaimedBroadcastEmailEvent) {
       }
     : { ...master, to: delivery.recipientEmails! };
 
-  const outbound = await sendZohoOutboundMail(mail).catch((error) => ({
-    sent: false,
-    reason: error instanceof Error ? error.message : "ZOHO_OUTBOUND_FAILED",
-  }));
+  const outbound = await sendZohoOutboundMail(mail).catch(() => ({ sent: false }));
   if (outbound.sent) return;
-  const fallback = await sendZohoMailWebhook(mail).catch((error) => ({
-    sent: false,
-    reason: error instanceof Error ? error.message : "ZOHO_WEBHOOK_FAILED",
-  }));
+  const fallback = await sendZohoMailWebhook(mail).catch(() => ({ sent: false }));
   if (!fallback.sent) {
-    const reason = "reason" in fallback && fallback.reason ? String(fallback.reason) : "ADMIN_BROADCAST_EMAIL_PROVIDER_UNAVAILABLE";
-    throw new AdminBroadcastMailError(reason.slice(0, 220), true);
+    throw new AdminBroadcastMailError("ADMIN_BROADCAST_EMAIL_PROVIDER_UNAVAILABLE", true);
   }
 }
 
@@ -244,7 +237,7 @@ async function settleEvent(event: ClaimedBroadcastEmailEvent, workerId: string) 
   } catch (error) {
     const retryable = error instanceof AdminBroadcastMailError ? error.retryable : true;
     const terminal = !retryable || event.attemptCount >= ADMIN_BROADCAST_EMAIL_QUEUE_LIMITS.maxAttempts;
-    const code = error instanceof AdminBroadcastMailError ? error.code : error instanceof Error ? error.message : "ADMIN_BROADCAST_EMAIL_UNEXPECTED_FAILURE";
+    const code = error instanceof AdminBroadcastMailError ? error.code : "ADMIN_BROADCAST_EMAIL_UNEXPECTED_FAILURE";
     await prisma.enterpriseDomainEvent.updateMany({
       where: { id: event.id, processingStatus: "PROCESSING", lockedBy: workerId },
       data: {
@@ -252,7 +245,7 @@ async function settleEvent(event: ClaimedBroadcastEmailEvent, workerId: string) 
         availableAt: terminal ? new Date() : new Date(Date.now() + retryBackoffSeconds(event.attemptCount) * 1000),
         lockedAt: null,
         lockedBy: null,
-        lastError: code.slice(0, 240),
+        lastError: code,
       },
     });
     return terminal ? "dead" as const : "failed" as const;
