@@ -164,3 +164,7 @@ Ce lot ne déplace pas encore hors requête interactive :
 - indexation IA.
 
 Ces traitements restent tracés par #357 et doivent être découpés dans les sous-lots suivants plutôt qu'ajoutés silencieusement à #449.
+
+## Réconciliation avec le dernier main
+
+Le 20 août 2026, la branche SCALE-4C a été revalidée après la fusion de #448 sur `main@70a90680613b1e6222b2a38850b7878de6a67c4c`. La comparaison confirme que le lot Patients et SCALE-4C ne modifient aucun fichier commun. Une nouvelle CI sur le merge-ref courant reste l'autorité avant toute fusion de #450.
