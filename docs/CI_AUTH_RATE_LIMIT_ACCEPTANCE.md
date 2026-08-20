@@ -8,6 +8,8 @@ Les routes Auth sensibles de DTSC Platform utilisent la politique `security-crit
 
 Les workflows navigateur Accounting et Shop 2 démarraient pourtant l'application sans backend Redis REST. Le premier `POST /api/auth/sign-in` échouait donc avec HTTP 429 avant même l'authentification. Les migrations, seeds, QA statiques et builds pouvaient être verts tandis que l'acceptance navigateur restait impossible.
 
+Une première correction a provisionné Redis 7 et un proxy REST local. Les health checks passaient, mais le sign-in restait bloqué en `security-critical / closed`. Le diagnostic des artifacts CI a montré que le chemin Redis retournait `reason: ERROR` uniquement lors du rate limiting atomique. La cause était la première ligne Upstash du script Lua de production : `#!lua flags=allow-key-locking`. Ce préambule est accepté par le runtime Redis d'Upstash mais n'est pas reconnu tel quel par Redis 7 local lors d'un `EVAL`.
+
 ## Correction
 
 Les workflows concernés provisionnent maintenant deux services strictement locaux au runner :
@@ -16,6 +18,8 @@ Les workflows concernés provisionnent maintenant deux services strictement loca
 2. `scripts/ci-upstash-redis-rest-proxy.mjs`, un adaptateur HTTP local compatible avec les formes de requêtes utilisées par `lib/redis-rest.ts` (`/` et `/pipeline`).
 
 L'adaptateur traduit les commandes HTTP vers Redis via RESP2 sur `127.0.0.1:6379`. Il n'utilise aucun credential de Production, n'expose aucun port public et exige un bearer token éphémère dérivé du run GitHub.
+
+Pour les commandes `EVAL` uniquement, le proxy supprime exactement le préambule Upstash `#!lua flags=allow-key-locking` avant de transmettre le script à Redis local. Le corps Lua atomique reste inchangé et est exécuté par un vrai Redis 7. Cette normalisation est limitée à l'infrastructure de test : `lib/rate-limit.ts` conserve son script Upstash original pour Production.
 
 L'application reçoit ensuite :
 
@@ -27,6 +31,8 @@ La route `POST /api/auth/sign-in` n'est pas modifiée. La politique `security-cr
 ## Pourquoi cette approche
 
 - elle exerce le chemin Redis réel du primitive de rate limiting au lieu de forcer `failureMode: local/open` ;
+- elle conserve l'atomicité du script Lua en exécutant son corps dans Redis 7 local ;
+- elle neutralise uniquement un marqueur d'exécution propre à Upstash, sans changer le code runtime de l'application ;
 - elle évite de brancher les tests sur Redis Production ;
 - elle rend chaque run indépendant ;
 - elle reste compatible avec les autres usages Redis REST éventuellement déclenchés par l'AppShell pendant les tests, car le proxy relaie les commandes Redis génériques au service Redis local ;
@@ -39,6 +45,8 @@ Les workflows doivent prouver :
 - démarrage sain du service Redis ;
 - démarrage sain du proxy REST avec `PING` ;
 - `qa-ci-auth-rate-limit-provisioning.mjs` vert ;
+- conservation du préambule Upstash dans `lib/rate-limit.ts` ;
+- normalisation limitée à `EVAL` dans le proxy CI ;
 - sign-in E2E fonctionnel ;
 - Accounting acceptance vert ;
 - Shop 2 behavioral acceptance vert ;
