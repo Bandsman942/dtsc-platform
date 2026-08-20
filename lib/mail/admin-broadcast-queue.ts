@@ -51,8 +51,19 @@ export async function enqueueAdminBroadcast({
   type: string;
 }) {
   const broadcastId = `broadcast_${randomUUID().replaceAll("-", "")}`;
-  const payloadEventId = `abp_${randomUUID().replaceAll("-", "")}`;
   const hasUserPlaceholder = /\{user\}/i.test(`${body} ${bodyHtml || ""}`);
+  if (!recipients.length) {
+    return {
+      broadcastId,
+      recipients: 0,
+      notificationsQueued: 0,
+      pushJobsQueued: 0,
+      emailJobsQueued: 0,
+      personalized: hasUserPlaceholder,
+    };
+  }
+
+  const payloadEventId = `abp_${randomUUID().replaceAll("-", "")}`;
   const notificationRecipients = recipients.filter((recipient) => recipient.notifyBroadcastEnabled);
   const notificationRows = notificationRecipients.map((recipient) => ({
     id: deterministicNotificationId(broadcastId, recipient.id),
@@ -126,7 +137,7 @@ export async function enqueueAdminBroadcast({
     if (notificationRows.length) await tx.notification.createMany({ data: notificationRows });
     if (pushEvents.length) await tx.enterpriseDomainEvent.createMany({ data: pushEvents });
     await tx.enterpriseDomainEvent.create({ data: payloadEvent });
-    if (deliveryEvents.length) await tx.enterpriseDomainEvent.createMany({ data: deliveryEvents });
+    await tx.enterpriseDomainEvent.createMany({ data: deliveryEvents });
   });
 
   return {
