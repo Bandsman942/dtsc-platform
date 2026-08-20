@@ -1,6 +1,6 @@
 import { UserStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { getWebPushConfig } from "@/lib/push/config";
+import { getWebPushConfigurationState } from "@/lib/push/config";
 import { webPushQueueOrganizationId } from "@/lib/push/constants";
 import { createDtscPushPayload } from "@/lib/push/payload";
 import { sendEncryptedWebPush } from "@/lib/push/web-push";
@@ -34,10 +34,11 @@ export async function dispatchStoredPushNotification({
   notificationId: string;
   expectedQueueOrganizationId: string;
 }): Promise<WebPushDispatchSummary> {
-  const config = getWebPushConfig();
-  if (!config) {
-    return { outcome: "SKIPPED", delivered: 0, staleRemoved: 0, permanentFailures: 0 };
+  const configuration = getWebPushConfigurationState();
+  if (!configuration.configured || !configuration.config) {
+    throw new WebPushDispatchError("WEB_PUSH_CONFIGURATION_UNAVAILABLE", true);
   }
+  const config = configuration.config;
 
   const notification = await prisma.notification.findUnique({
     where: { id: notificationId },
