@@ -105,7 +105,13 @@ expect(settings.includes("Afficher le détail"), "Settings must offer a detailed
 expect(pushPayload.includes('contentMode === "DETAILED"'), "Push payload may show business details only in DETAILED mode");
 expect(pushPayload.includes("NEUTRAL_BODY"), "Private push mode must retain a neutral system body");
 expect(pushSender.includes("pushNotificationContentMode"), "Push dispatch must read the user's notification privacy preference");
-expect(pushSender.includes("id: input.notificationId, userId: input.userId"), "Detailed push content must be loaded only from the target user's own notification");
+expect(
+  pushSender.includes("where: { id: notificationId }")
+    && pushSender.includes("userId: true")
+    && pushSender.includes("user: {")
+    && pushSender.includes("webPushQueueOrganizationId(notification.organizationId) !== expectedQueueOrganizationId"),
+  "Detailed push content must be loaded from the canonical notification and its owning user within the queued organization scope",
+);
 
 // 5. AI module citations: approved links only, server-side access revalidation.
 const interfaceContext = read("lib/ai/application-interface-context.ts");
