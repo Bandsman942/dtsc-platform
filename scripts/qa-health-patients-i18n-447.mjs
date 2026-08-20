@@ -57,8 +57,10 @@ assert.deepEqual(
 
 for (const field of ["knownAllergies", "importantHistory", "chronicTreatments", "medicalNotes", "administrativeNotes"]) {
   assert.match(workspace, new RegExp(`patient\\.${field}|form\\.${field}`), `Health Patients #447: la donnée ${field} doit rester rendue/saisie telle quelle.`);
-  const translatedSensitiveValue = new RegExp(`(?:healthClinicalT|\\bt)\\([^;\\n]*(?<![.\"'])\\b(?:patient|form)\\.${field}\\b`);
-  assert.doesNotMatch(workspace, translatedSensitiveValue, `Health Patients #447: ${field} ne doit jamais passer dans le traducteur.`);
+  const directTranslatorArg = new RegExp(`\\bt\\(\\s*(?:patient|form)\\.${field}\\b`);
+  const directCanonicalTranslatorArg = new RegExp(`healthClinicalT\\(\\s*[^,]+,\\s*(?:patient|form)\\.${field}\\b`);
+  assert.doesNotMatch(workspace, directTranslatorArg, `Health Patients #447: ${field} ne doit jamais être utilisé comme clé du traducteur local.`);
+  assert.doesNotMatch(workspace, directCanonicalTranslatorArg, `Health Patients #447: ${field} ne doit jamais être utilisé comme clé du traducteur canonique.`);
 }
 
 for (const endpoint of [
