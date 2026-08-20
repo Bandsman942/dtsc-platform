@@ -3,11 +3,15 @@
 import { useAppLocale } from "@/components/i18n/locale-provider";
 import fr from "@/locales/health-clinical.fr.json";
 import en from "@/locales/health-clinical.en.json";
+import patientsFr from "@/locales/health-patients.fr.json";
+import patientsEn from "@/locales/health-patients.en.json";
 
 export type HealthClinicalLocale = "fr" | "en";
-type HealthClinicalKey = keyof typeof fr;
-
-const dictionaries = { fr, en: en as typeof fr } as const;
+const dictionaries = {
+  fr: { ...fr, ...patientsFr },
+  en: { ...en, ...patientsEn },
+} as const;
+export type HealthClinicalKey = keyof typeof dictionaries.fr;
 
 export function useHealthClinicalLocale(): HealthClinicalLocale {
   const locale = useAppLocale();
