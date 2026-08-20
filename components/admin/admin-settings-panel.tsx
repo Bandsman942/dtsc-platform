@@ -91,11 +91,15 @@ export function AdminSettingsPanel({
     const body = await response.json().catch(() => null);
     if (response.ok) {
       setBroadcastMessage(
-        body?.zoho?.sent
+        body?.zoho?.queued
           ? body.zoho.personalized
-            ? "Notification créée et diffusion email personnalisée transmise aux utilisateurs actifs."
-            : "Notification créée et diffusion email transmise aux utilisateurs actifs en CCI."
-          : "Notification créée. Configurez l'API Zoho Mail ou le webhook mail sortant pour l'envoi direct aux destinataires."
+            ? "Notification créée et diffusion email personnalisée mise en file pour les utilisateurs actifs."
+            : "Notification créée et diffusion email mise en file pour les utilisateurs actifs en CCI."
+          : body?.zoho?.sent
+            ? body.zoho.personalized
+              ? "Notification créée et diffusion email personnalisée transmise aux utilisateurs actifs."
+              : "Notification créée et diffusion email transmise aux utilisateurs actifs en CCI."
+            : "Notification créée. Configurez l'API Zoho Mail ou le webhook mail sortant pour l'envoi direct aux destinataires."
       );
       form.reset();
     } else {
@@ -192,7 +196,7 @@ export function AdminSettingsPanel({
       <div className="dtsc-card p-6">
         <h2 className="font-black text-dtsc-ink">Diffusion utilisateurs</h2>
         <p className="mt-1 text-sm text-dtsc-muted">
-          Crée une notification interne et envoie un email aux utilisateurs actifs. Ajoutez <span className="font-black text-cyan-300">{"{user}"}</span> pour remplacer automatiquement par le nom du destinataire.
+          Crée une notification interne et met en file un email pour les utilisateurs actifs. Ajoutez <span className="font-black text-cyan-300">{"{user}"}</span> pour remplacer automatiquement par le nom du destinataire.
         </p>
         <form onSubmit={broadcast} className="mt-5 space-y-3">
           <Input name="title" placeholder="Objet / titre" required disabled={!canEdit} />
@@ -219,7 +223,7 @@ export function AdminSettingsPanel({
           <p className="text-xs leading-6 text-dtsc-muted">
             Sans <span className="font-bold text-dtsc-ink">{"{user}"}</span>, l&apos;envoi est groupé en CCI. Avec <span className="font-bold text-dtsc-ink">{"{user}"}</span>, chaque destinataire reçoit une version personnalisée.
           </p>
-          <Button disabled={!canEdit} title={canEdit ? "Créer une notification et envoyer l'email aux utilisateurs actifs." : "Modification réservée au rôle ADMIN."} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Notifier et envoyer email</Button>
+          <Button disabled={!canEdit} title={canEdit ? "Créer une notification et mettre l'email en file pour les utilisateurs actifs." : "Modification réservée au rôle ADMIN."} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Notifier et mettre en file</Button>
         </form>
       </div>
 
