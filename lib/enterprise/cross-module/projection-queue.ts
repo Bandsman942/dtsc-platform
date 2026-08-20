@@ -53,7 +53,7 @@ export async function enqueueCrossModuleProjections(domainEventId: string) {
 export async function getCrossModuleProjectionQueueSnapshot(): Promise<CrossModuleProjectionQueueSnapshot> {
   const sampledAt = new Date();
   const staleProcessingBefore = new Date(sampledAt.getTime() - CROSS_MODULE_PROJECTION_LIMITS.staleProcessingSeconds * 1000);
-  const readyWhere = { status: { in: ["PENDING", "FAILED"] }, availableAt: { lte: sampledAt } } as const;
+  const readyWhere = { status: { in: ["PENDING", "FAILED"] }, availableAt: { lte: sampledAt } };
 
   try {
     const [ready, processing, dead, oldestReady] = await Promise.all([
