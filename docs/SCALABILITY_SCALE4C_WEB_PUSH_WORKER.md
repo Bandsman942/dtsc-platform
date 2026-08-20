@@ -1,7 +1,7 @@
 # SCALE-4C — File durable et worker Web Push isolé
 
-Issue : #449  
-Parent : #357  
+Issue : #449
+Parent : #357
 Programme : #352
 
 ## Objectif
