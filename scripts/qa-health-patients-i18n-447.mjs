@@ -41,6 +41,20 @@ assert.match(workspace, /healthClinicalDateTime/, "Health Patients #447: les dat
 assert.doesNotMatch(workspace, /Intl\.DateTimeFormat|toLocaleString\("fr-FR"|toLocaleDateString\("fr-FR"/, "Health Patients #447: aucun format date FR local ne doit subsister dans le workspace.");
 assert.doesNotMatch(workspace, /Féminin|Masculin|Tous les sexes|Créés à partir du|Nouveau patient|Détail patient|Enregistrement impossible|Aucun patient enregistré/, "Health Patients #447: les principales copies système FR ne doivent plus être codées en dur.");
 
+const catalogValues = [...new Set([...Object.values(fr), ...Object.values(en)])]
+  .filter((value) => typeof value === "string" && value.length >= 4 && !value.includes("{{"));
+const literalLeaks = [];
+for (const value of catalogValues) {
+  const quoted = JSON.stringify(value);
+  const jsxLiteral = `>${value}<`;
+  if (workspace.includes(quoted) || workspace.includes(jsxLiteral)) literalLeaks.push(value);
+}
+assert.deepEqual(
+  literalLeaks,
+  [],
+  `Health Patients #447: des valeurs du catalogue ont été recopiées localement dans le workspace: ${literalLeaks.slice(0, 10).join(" | ")}`,
+);
+
 for (const field of ["knownAllergies", "importantHistory", "chronicTreatments", "medicalNotes", "administrativeNotes"]) {
   assert.match(workspace, new RegExp(`patient\\.${field}|form\\.${field}`), `Health Patients #447: la donnée ${field} doit rester rendue/saisie telle quelle.`);
   assert.doesNotMatch(workspace, new RegExp(`(?:healthClinicalT|\\bt)\\([^\\n]{0,120}(?:patient|form)\\.${field}`), `Health Patients #447: ${field} ne doit jamais passer dans le traducteur.`);
@@ -51,4 +65,4 @@ for (const endpoint of [
   "/healthcare/patients/${patient.id}`",
 ]) assert.ok(workspace.includes(endpoint), `Health Patients #447: endpoint patient attendu absent ${endpoint}.`);
 
-console.log(`PASS Health Patients #447 — ${frKeys.length} clés FR/EN, locale globale, dates/stats localisés et données cliniques laissées intactes.`);
+console.log(`PASS Health Patients #447 — ${frKeys.length} clés FR/EN, zéro valeur catalogue recopiée localement, locale globale et données cliniques intactes.`);
