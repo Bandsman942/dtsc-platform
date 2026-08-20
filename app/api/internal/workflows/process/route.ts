@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { WORKFLOW_LIMITS } from "@/lib/enterprise/workflows/constants";
-import { processPendingWorkflowEvents } from "@/lib/enterprise/workflows/worker";
+import { processPendingWorkflowEventsIsolated } from "@/lib/enterprise/workflows/worker-isolated";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,13 +28,12 @@ async function handle(request: NextRequest) {
   const requestedBatch = Number(request.nextUrl.searchParams.get("batch") || WORKFLOW_LIMITS.workerBatchSize);
   const batchSize = Number.isFinite(requestedBatch) ? Math.max(1, Math.min(Math.trunc(requestedBatch), WORKFLOW_LIMITS.workerBatchSize)) : WORKFLOW_LIMITS.workerBatchSize;
   const startedAt = Date.now();
-  const result = await processPendingWorkflowEvents({ batchSize });
+  const result = await processPendingWorkflowEventsIsolated({ batchSize });
   return NextResponse.json({
     ok: true,
     durationMs: Date.now() - startedAt,
     claimed: result.claimed,
     results: result.results,
-    pendingProjections: result.pendingProjections,
     resumedRuns: result.resumedRuns,
     queueBefore: result.queueBefore,
     queueAfter: result.queueAfter,

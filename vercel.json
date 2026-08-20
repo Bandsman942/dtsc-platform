@@ -10,6 +10,10 @@
       "schedule": "* * * * *"
     },
     {
+      "path": "/api/internal/cross-module-projections/process?batch=20",
+      "schedule": "* * * * *"
+    },
+    {
       "path": "/api/internal/identity-links/expire?batch=100",
       "schedule": "17 * * * *"
     }
