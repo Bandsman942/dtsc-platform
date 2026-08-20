@@ -1,10 +1,12 @@
 # Hotfix #455 — stabilité mobile des détails et langage client
 
-## Contexte
+## Contexte et baseline réconciliée
 
 Le propriétaire a signalé un défaut transversal sur mobile : après ouverture du détail d’un bloc dans un module, un simple toucher au milieu du workspace peut faire trembloter brièvement toute la surface privée. La vidéo E2E fournie montre aussi des formulations d’implémentation visibles par le client, notamment dans Finance/Comptabilité.
 
-Ce hotfix part de `main@f4c0b55a111d4215472afc67f2701b76cc10c942` et suit `docs/CONTRIBUTING.md`, `components/AGENTS.md`, `docs/RESPONSIVE_UI_CONTRACT.md` et `docs/CUSTOMER_FACING_LANGUAGE_CONTRACT.md`.
+Le diagnostic initial a été réalisé depuis `main@f4c0b55a111d4215472afc67f2701b76cc10c942`. À la demande du propriétaire, SCALE-4D #454 a ensuite été fusionné en premier. Le candidat final du hotfix est donc reconstruit depuis le nouveau `main@b99442a5655f5561db8cab25e87542ab83ff4b56`, en préservant explicitement la QA SCALE-4D.
+
+Ce travail suit `docs/CONTRIBUTING.md`, `components/AGENTS.md`, `docs/RESPONSIVE_UI_CONTRACT.md` et `docs/CUSTOMER_FACING_LANGUAGE_CONTRACT.md`.
 
 ## Cause du tremblement
 
@@ -29,7 +31,7 @@ La correction reste dans la primitive globale ; aucun écran métier ne reçoit 
 
 Le problème observé n’est pas traité par une substitution locale dans le workspace Finance. Le hotfix ajoute `lib/client-facing-copy.ts`, un garde exact réservé aux chaînes système issues des catalogues i18n.
 
-Il transforme notamment des formulations comme :
+Il transforme notamment :
 
 - données « paginées côté serveur » → consultation/recherche/suivi métier ;
 - configuration « calculée par le serveur » → étapes qui se cochent automatiquement lorsqu’elles sont prêtes ;
@@ -67,11 +69,13 @@ Aucune transformation automatique ne s’applique aux valeurs utilisateur ou mé
 - aucun secret ou diagnostic fournisseur ajouté côté client ;
 - aucun nouveau polling ou timer global.
 
-## QA automatisée
+## QA automatisée et réconciliation SCALE-4D
 
 Le hotfix renforce `scripts/qa-smooth-mobile-group-swipe.mjs` et ajoute `scripts/qa-hotfix-455-mobile-detail-experience.mjs` dans Regression QA.
 
-La gate transverse vérifie notamment :
+La réconciliation sur `main@b99442a5655f5561db8cab25e87542ab83ff4b56` conserve aussi `scripts/qa-scale4d-admin-broadcast-email.mjs`. Le runner final exécute donc à la fois la gate SCALE-4D et la gate #455.
+
+La gate transverse #455 vérifie notamment :
 
 - tap neutre sans animation globale ;
 - geste vertical pending sans animation ;
@@ -86,24 +90,24 @@ La gate transverse vérifie notamment :
 
 Le hotfix modifie un comportement tactile global ; une preuve humaine sur appareil réel est obligatoire avant Production.
 
-À valider sur le candidat final de la PR #455 :
+À valider sur le head final de la PR #456 après CI verte :
 
 1. ouvrir un module contenant une liste puis le détail d’un bloc ;
 2. effectuer plusieurs taps courts au milieu de zones neutres : aucun tremblement, déplacement ou flash du workspace ;
 3. faire défiler verticalement le détail lentement puis rapidement : aucun snap horizontal ;
 4. utiliser boutons, menus `...`, champs, select et retour : aucun déplacement global parasite ;
 5. depuis une zone neutre hors contrôle, effectuer un vrai swipe horizontal entre groupes : la navigation doit rester fluide ;
-6. vérifier l’écran Comptabilité → Comptes montré dans la vidéo : `Coût des ventes` / `Charges d’exploitation` doivent remplacer le fallback technique et la description ne doit plus parler de pagination serveur ;
+6. vérifier Comptabilité → Comptes : `Coût des ventes` / `Charges d’exploitation` doivent remplacer le fallback technique et la description ne doit plus parler de pagination serveur ;
 7. basculer FR puis EN et vérifier les mêmes règles de langage ;
 8. refaire au minimum à 360/390/414 px ou sur les appareils réels correspondants, puis un contrôle tablette/desktop pour absence de régression.
 
-Une validation `OWNER_E2E` explicite est requise dans la PR avant merge.
+Une validation `OWNER_E2E` explicite est requise avant merge.
 
-## Ordre de livraison
+## Ordre de livraison effectif
 
-1. Hotfix #455 → CI → OWNER_E2E → merge `main` → Vercel Production READY sur le SHA exact ;
-2. SCALE-4D #454 est ensuite réancré/revalidé sur ce `main`, puis fusionné seulement si toutes ses gates restent vertes ;
-3. Rendez-vous #452 est ensuite réancré sur le `main` final et repasse sa CI puis son OWNER_E2E dédié.
+1. SCALE-4D #454 : fusionné en premier sur `main` via `b99442a5655f5561db8cab25e87542ab83ff4b56` ;
+2. Hotfix #456 : réconcilié sur ce nouveau `main`, puis CI → OWNER_E2E → merge → Vercel Production ;
+3. Rendez-vous #452 : vient en dernier, réancré sur le `main` issu du hotfix puis revalidé par sa CI et son OWNER_E2E dédié.
 
 Aucune Preview Vercel intermédiaire n’est requise ni autorisée par la politique actuelle.
 
