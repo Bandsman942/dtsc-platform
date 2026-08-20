@@ -12,6 +12,9 @@ const baseline = {
   "components/enterprise/health-staff-workspace.tsx": 53,
   "components/enterprise/health-laboratory-workspace.tsx": 75,
 };
+const convergenceTargets = {
+  "components/enterprise/health-patients-workspace.tsx": 0,
+};
 const localDebtPatterns = [
   'locale === "en"',
   'locale === "fr"',
@@ -46,26 +49,28 @@ for (const [file, historicalTarget] of Object.entries(baseline)) {
 
   const currentCount = countLikelyHardcodedLabels(content);
   const baseCount = countLikelyHardcodedLabels(baseContent);
-  const allowed = Math.max(historicalTarget, baseCount);
-  if (currentCount > allowed) failures.push(`${file}: dette i18n augmentée (${currentCount} > ${allowed}; cible historique ${historicalTarget}).`);
+  const convergenceTarget = convergenceTargets[file];
+  const allowed = Number.isInteger(convergenceTarget) ? convergenceTarget : Math.max(historicalTarget, baseCount);
+  if (currentCount > allowed) failures.push(`${file}: dette i18n au-dessus du plafond (${currentCount} > ${allowed}; historique ${historicalTarget}, main ${baseCount}).`);
 
   for (const token of localDebtPatterns) {
     const current = occurrences(content, token);
     const base = occurrences(baseContent, token);
     if (current > base) failures.push(`${file}: dette locale supplémentaire pour ${JSON.stringify(token)} (${current} > ${base}).`);
   }
-  reports.push({ file, historicalTarget, baseCount, currentCount });
+  reports.push({ file, historicalTarget, convergenceTarget: Number.isInteger(convergenceTarget) ? convergenceTarget : null, baseCount, currentCount, allowed });
 }
 
 for (const report of reports) {
-  console.log(`${report.file}: ${report.currentCount} libellés probables (main ${report.baseCount}, plafond historique ${report.historicalTarget}).`);
+  const targetText = report.convergenceTarget === null ? `plafond historique ${report.historicalTarget}` : `cible convergence ${report.convergenceTarget}`;
+  console.log(`${report.file}: ${report.currentCount} libellés probables (main ${report.baseCount}, ${targetText}, plafond actif ${report.allowed}).`);
 }
 
 if (failures.length) {
   for (const failure of failures) console.error(`FAIL ${failure}`);
   process.exit(1);
 }
-console.log("PASS i18n Health #439 — aucune hausse de dette sur patients, rendez-vous, consultations, dossiers, équipe et laboratoire.");
+console.log("PASS i18n Health #439 — aucune hausse de dette et cible Patients verrouillée à zéro copie système locale.");
 
 function occurrences(content, token) {
   return content.split(token).length - 1;
