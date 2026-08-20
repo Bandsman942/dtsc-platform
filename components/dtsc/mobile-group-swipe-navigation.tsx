@@ -16,7 +16,7 @@ const EDGE_GUARD_PX = 28;
 const SWIPE_THRESHOLD_PX = 72;
 const MAX_GESTURE_MS = 900;
 const HORIZONTAL_DOMINANCE = 1.2;
-const DRAG_ACTIVATION_PX = 8;
+const DRAG_ACTIVATION_PX = 12;
 const VELOCITY_COMMIT_PX_PER_MS = 0.48;
 const MIN_VELOCITY_COMMIT_DISTANCE_PX = 42;
 const TRANSITION_STORAGE_KEY = "dtsc:mobile-group-swipe-transition";
@@ -126,6 +126,10 @@ function animateBackToRest(main: HTMLElement) {
     },
   );
   void animation.finished.finally(() => resetMainPresentation(main));
+}
+
+function settleGestureWithoutMotion(gesture: SwipeGesture) {
+  resetMainPresentation(gesture.main);
 }
 
 function parseStoredTransition() {
@@ -258,18 +262,19 @@ export function MobileGroupSwipeNavigation({
       gesture.lastY = touch.clientY;
 
       if (performance.now() - gesture.startedAt > MAX_GESTURE_MS) {
-        const main = gesture.main;
+        const activeGesture = gesture;
         gesture = null;
-        animateBackToRest(main);
+        if (activeGesture.axis === "horizontal") animateBackToRest(activeGesture.main);
+        else settleGestureWithoutMotion(activeGesture);
         return;
       }
 
       if (gesture.axis === "pending") {
         if (Math.max(Math.abs(dx), Math.abs(dy)) < DRAG_ACTIVATION_PX) return;
         if (Math.abs(dy) > Math.abs(dx) * HORIZONTAL_DOMINANCE) {
-          const main = gesture.main;
+          const activeGesture = gesture;
           gesture = null;
-          animateBackToRest(main);
+          settleGestureWithoutMotion(activeGesture);
           return;
         }
         if (Math.abs(dx) <= Math.abs(dy) * HORIZONTAL_DOMINANCE) return;
@@ -315,7 +320,11 @@ export function MobileGroupSwipeNavigation({
       const elapsed = Math.max(1, performance.now() - activeGesture.startedAt);
       const velocity = Math.abs(dx) / elapsed;
 
-      if (activeGesture.axis !== "horizontal" || Math.abs(dx) <= Math.abs(dy) * HORIZONTAL_DOMINANCE) {
+      if (activeGesture.axis !== "horizontal") {
+        settleGestureWithoutMotion(activeGesture);
+        return;
+      }
+      if (Math.abs(dx) <= Math.abs(dy) * HORIZONTAL_DOMINANCE) {
         animateBackToRest(activeGesture.main);
         return;
       }
@@ -371,7 +380,10 @@ export function MobileGroupSwipeNavigation({
     }
 
     function onTouchCancel() {
-      if (gesture) animateBackToRest(gesture.main);
+      if (gesture) {
+        if (gesture.axis === "horizontal") animateBackToRest(gesture.main);
+        else settleGestureWithoutMotion(gesture);
+      }
       gesture = null;
     }
 
