@@ -54,4 +54,13 @@ for (const [name, path] of [["accounting", files.accounting], ["shop2", files.sh
   requireToken(workflow, '"scripts/qa-ci-auth-rate-limit-provisioning.mjs"', `${name} QA path trigger`);
 }
 
+const accountingWorkflow = read(files.accounting);
+requireToken(accountingWorkflow, "Reset isolated Redis state before close acceptance", "accounting suite-boundary Redis reset");
+requireToken(accountingWorkflow, '--data \'["FLUSHDB"]\'', "accounting isolated Redis FLUSHDB command");
+const resetIndex = accountingWorkflow.indexOf("Reset isolated Redis state before close acceptance");
+const closeIndex = accountingWorkflow.indexOf("Accounting period close and history protection");
+if (resetIndex === -1 || closeIndex === -1 || resetIndex > closeIndex) {
+  throw new Error("Accounting Redis reset must happen before close/history acceptance");
+}
+
 console.log("QA CI auth rate-limit provisioning: OK — browser acceptances provision isolated Redis REST while Production remains fail-closed");
