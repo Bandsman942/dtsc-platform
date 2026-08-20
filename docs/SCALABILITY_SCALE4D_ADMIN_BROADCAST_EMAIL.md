@@ -1,6 +1,6 @@
 # SCALE-4D — Diffusions admin asynchrones
 
-Issue: #453  
+Issue: #453
 Parent: #357
 
 ## But
@@ -21,8 +21,8 @@ Retirer Zoho Mail et son fallback webhook du chemin interactif `POST /api/admin/
 
 ## Worker
 
-Endpoint interne : `/api/internal/admin-broadcast-email/process?batch=50`  
-Cadence : chaque minute.  
+Endpoint interne : `/api/internal/admin-broadcast-email/process?batch=50`
+Cadence : chaque minute.
 Secrets acceptés : `CRON_SECRET` ou `WORKFLOW_WORKER_SECRET`.
 
 Le worker :
