@@ -4,6 +4,7 @@ import fs from "node:fs";
 const read = (path) => fs.readFileSync(path, "utf8");
 const vercel = JSON.parse(read("vercel.json"));
 const broadcastRoute = read("app/api/admin/broadcast/route.ts");
+const adminSettings = read("components/admin/admin-settings-panel.tsx");
 const queue = read("lib/mail/admin-broadcast-queue.ts");
 const constants = read("lib/mail/broadcast-constants.ts");
 const worker = read("lib/mail/admin-broadcast-worker.ts");
@@ -25,8 +26,12 @@ assert.match(constants, /maxAttempts: 5/, "SCALE-4D: le nombre de tentatives doi
 
 assert.match(broadcastRoute, /enqueueAdminBroadcast/, "SCALE-4D: l'API admin doit remettre la diffusion à l'outbox durable.");
 assert.match(broadcastRoute, /status: 202/, "SCALE-4D: une diffusion acceptée doit répondre 202 sans attendre le provider email.");
+assert.match(broadcastRoute, /zoho:\s*\{\s*sent:\s*false,\s*queued:\s*true/, "SCALE-4D: l'API ne doit jamais annoncer une livraison provider avant le worker.");
 assert.doesNotMatch(broadcastRoute, /sendZohoOutboundMail|sendPersonalizedZohoOutboundMail|sendZohoMailWebhook/, "SCALE-4D: la requête interactive ne doit plus appeler Zoho ni son webhook.");
 assert.doesNotMatch(broadcastRoute, /notification\.createMany/, "SCALE-4D: le chemin {user} ne doit plus contourner le service d'outbox.");
+assert.match(adminSettings, /body\?\.zoho\?\.queued/, "SCALE-4D: l'UI Admin doit reconnaître explicitement l'état mis en file.");
+assert.match(adminSettings, /mise en file/, "SCALE-4D: la confirmation Admin doit présenter la diffusion comme mise en file, pas comme déjà livrée.");
+assert.match(adminSettings, /Notifier et mettre en file/, "SCALE-4D: le CTA Admin doit refléter le contrat asynchrone.");
 
 assert.match(queue, /prisma\.\$transaction/, "SCALE-4D: notifications, Push et email doivent être enregistrés dans une transaction.");
 assert.match(queue, /buildWebPushDomainEventData/, "SCALE-4D: les notifications broadcast personnalisées doivent produire leurs jobs Push durables.");
@@ -61,4 +66,4 @@ const successResponse = workerRoute.match(/return NextResponse\.json\(\{[\s\S]*?
 assert.ok(successResponse, "SCALE-4D: la réponse succès du worker doit rester détectable par la QA.");
 assert.doesNotMatch(successResponse, /recipientEmail|recipientEmails|payloadJson|subject|message|body|content|email/i, "SCALE-4D: la réponse succès interne ne doit exposer aucun destinataire ni contenu métier.");
 
-console.log("PASS SCALE-4D — broadcasts admin asynchrones, atomiques, isolés, retryables et observables.");
+console.log("PASS SCALE-4D — broadcasts admin asynchrones, atomiques, isolés, retryables, observables et honnêtes sur l'état de livraison.");
