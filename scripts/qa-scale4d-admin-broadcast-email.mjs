@@ -47,6 +47,8 @@ assert.match(worker, /Promise\.all/, "SCALE-4D: les livraisons peuvent être par
 assert.match(worker, /workerConcurrency/, "SCALE-4D: le worker doit appliquer la concurrence bornée.");
 assert.match(worker, /sendZohoOutboundMail/, "SCALE-4D: Zoho doit être appelé uniquement côté worker.");
 assert.match(worker, /sendZohoMailWebhook/, "SCALE-4D: le fallback webhook doit rester côté worker.");
+assert.match(worker, /ADMIN_BROADCAST_EMAIL_PROVIDER_UNAVAILABLE/, "SCALE-4D: les échecs fournisseur doivent être normalisés vers un code interne stable.");
+assert.doesNotMatch(worker, /reason\.slice|details\.slice/, "SCALE-4D: aucun détail brut du fournisseur ne doit être persisté dans lastError.");
 assert.match(worker, /processingStatus: terminal \? "DEAD" : "FAILED"/, "SCALE-4D: retries et DLQ DEAD doivent rester explicites.");
 assert.match(worker, /oldestReadyAgeMs/, "SCALE-4D: l'âge du backlog email doit être observable.");
 assert.match(worker, /saturated:/, "SCALE-4D: la saturation email doit être exposée.");
@@ -68,4 +70,4 @@ const successResponse = workerRoute.match(/return NextResponse\.json\(\{[\s\S]*?
 assert.ok(successResponse, "SCALE-4D: la réponse succès du worker doit rester détectable par la QA.");
 assert.doesNotMatch(successResponse, /recipientEmail|recipientEmails|payloadJson|subject|message|body|content|email/i, "SCALE-4D: la réponse succès interne ne doit exposer aucun destinataire ni contenu métier.");
 
-console.log("PASS SCALE-4D — broadcasts admin asynchrones, atomiques, isolés, retryables, observables et honnêtes sur l'état de livraison.");
+console.log("PASS SCALE-4D — broadcasts admin asynchrones, atomiques, isolés, retryables, observables, confidentiels et honnêtes sur l'état de livraison.");
