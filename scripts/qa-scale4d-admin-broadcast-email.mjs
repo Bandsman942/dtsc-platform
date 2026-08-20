@@ -34,6 +34,8 @@ assert.match(adminSettings, /mise en file/, "SCALE-4D: la confirmation Admin doi
 assert.match(adminSettings, /Notifier et mettre en file/, "SCALE-4D: le CTA Admin doit refléter le contrat asynchrone.");
 
 assert.match(queue, /prisma\.\$transaction/, "SCALE-4D: notifications, Push et email doivent être enregistrés dans une transaction.");
+assert.match(queue, /if \(!recipients\.length\)/, "SCALE-4D: une audience vide doit sortir proprement sans créer de job orphelin.");
+assert.match(queue, /emailJobsQueued:\s*0/, "SCALE-4D: une audience vide doit annoncer zéro job email.");
 assert.match(queue, /buildWebPushDomainEventData/, "SCALE-4D: les notifications broadcast personnalisées doivent produire leurs jobs Push durables.");
 assert.match(queue, /ADMIN_BROADCAST_EMAIL_PAYLOAD_EVENT_TYPE/, "SCALE-4D: le contenu lourd doit être stocké une fois dans un payload maître.");
 assert.match(queue, /recipientEmail/, "SCALE-4D: les broadcasts personnalisés doivent être rejouables destinataire par destinataire.");
