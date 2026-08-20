@@ -70,6 +70,20 @@ if (failures.length) {
   for (const failure of failures) console.error(`FAIL ${failure}`);
   process.exit(1);
 }
+
+const patientQa = spawnSync(process.execPath, [path.join(root, "scripts/qa-health-patients-i18n-447.mjs")], {
+  cwd: root,
+  env: process.env,
+  encoding: "utf8",
+  stdio: ["ignore", "pipe", "pipe"],
+});
+if (patientQa.stdout) process.stdout.write(patientQa.stdout);
+if (patientQa.stderr) process.stderr.write(patientQa.stderr);
+if (patientQa.status !== 0) {
+  console.error(`FAIL i18n Health #439 — sous-gate Patients #447 en échec (exit ${patientQa.status ?? "unknown"}).`);
+  process.exit(patientQa.status || 1);
+}
+
 console.log("PASS i18n Health #439 — aucune hausse de dette et cible Patients verrouillée à zéro copie système locale.");
 
 function occurrences(content, token) {
