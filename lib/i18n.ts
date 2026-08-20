@@ -30,6 +30,7 @@ import calendarScheduleFr from "@/locales/calendar-schedule.fr.json";
 import calendarScheduleEn from "@/locales/calendar-schedule.en.json";
 import calendarWorkspaceFr from "@/locales/calendar-workspace.fr.json";
 import calendarWorkspaceEn from "@/locales/calendar-workspace.en.json";
+import { clientFacingCopy } from "@/lib/client-facing-copy";
 
 type Dictionary = typeof fr;
 type Locale = "fr" | "en";
@@ -69,16 +70,20 @@ export type ActivitiesKey = keyof typeof activitiesDictionaries.fr;
 export type CalendarScheduleKey = keyof typeof calendarScheduleDictionaries.fr;
 export type CalendarWorkspaceKey = keyof typeof calendarWorkspaceDictionaries.fr;
 
+function translatedClientCopy(locale: string | null | undefined, value: string) {
+  return clientFacingCopy(locale, value);
+}
+
 export function getDictionary(locale?: string | null) { return dictionaries[locale === "en" ? "en" : "fr"]; }
-export function translate(locale: string | null | undefined, key: string) { const dictionary = getDictionary(locale); const localized = key.split(".").reduce<unknown>((current, part) => current && typeof current === "object" && part in current ? (current as Record<string, unknown>)[part] : undefined, dictionary); if (typeof localized === "string") return localized; const fallback = key.split(".").reduce<unknown>((current, part) => current && typeof current === "object" && part in current ? (current as Record<string, unknown>)[part] : undefined, fr); return typeof fallback === "string" ? fallback : key; }
-export function translateWorkspaceGeneralization(locale: string | null | undefined, key: WorkspaceGeneralizationKey) { const dictionary = workspaceGeneralizationDictionaries[locale === "en" ? "en" : "fr"]; return dictionary[key] || workspaceGeneralizationDictionaries.fr[key]; }
-export function translateEnterpriseProcurement(locale: string | null | undefined, key: EnterpriseProcurementKey) { const dictionary = enterpriseProcurementDictionaries[locale === "en" ? "en" : "fr"]; return dictionary[key] || enterpriseProcurementDictionaries.fr[key]; }
-export function translateEnterpriseFinance(locale: string | null | undefined, key: EnterpriseFinanceKey) { const dictionary = enterpriseFinanceDictionaries[locale === "en" ? "en" : "fr"]; return dictionary[key] || enterpriseFinanceDictionaries.fr[key]; }
-export function translateEnterpriseCore(locale: string | null | undefined, key: EnterpriseCoreKey) { const dictionary = enterpriseCoreDictionaries[locale === "en" ? "en" : "fr"]; return dictionary[key] || enterpriseCoreDictionaries.fr[key]; }
-export function translateProfessionalErp(locale: string | null | undefined, key: ProfessionalErpKey) { const dictionary = professionalErpDictionaries[locale === "en" ? "en" : "fr"]; return dictionary[key] || professionalErpDictionaries.fr[key]; }
-export function translateRetailWorkspace(locale: string | null | undefined, key: RetailWorkspaceKey) { const dictionary = retailWorkspaceDictionaries[locale === "en" ? "en" : "fr"]; return dictionary[key] || retailWorkspaceDictionaries.fr[key]; }
-export function translateSharedWork(locale: string | null | undefined, key: SharedWorkKey) { const dictionary = sharedWorkDictionaries[locale === "en" ? "en" : "fr"]; return dictionary[key] || sharedWorkDictionaries.fr[key]; }
-export function translateCollaborationExperience(locale: string | null | undefined, key: CollaborationExperienceKey) { const dictionary = collaborationExperienceDictionaries[locale === "en" ? "en" : "fr"]; return dictionary[key] || collaborationExperienceDictionaries.fr[key]; }
-export function translateActivities(locale: string | null | undefined, key: ActivitiesKey) { const dictionary = activitiesDictionaries[locale === "en" ? "en" : "fr"]; return dictionary[key] || activitiesDictionaries.fr[key]; }
-export function translateCalendarSchedule(locale: string | null | undefined, key: CalendarScheduleKey) { const dictionary = calendarScheduleDictionaries[locale === "en" ? "en" : "fr"]; return dictionary[key] || calendarScheduleDictionaries.fr[key]; }
-export function translateCalendarWorkspace(locale: string | null | undefined, key: CalendarWorkspaceKey) { const dictionary = calendarWorkspaceDictionaries[locale === "en" ? "en" : "fr"]; return dictionary[key] || calendarWorkspaceDictionaries.fr[key]; }
+export function translate(locale: string | null | undefined, key: string) { const dictionary = getDictionary(locale); const localized = key.split(".").reduce<unknown>((current, part) => current && typeof current === "object" && part in current ? (current as Record<string, unknown>)[part] : undefined, dictionary); if (typeof localized === "string") return translatedClientCopy(locale, localized); const fallback = key.split(".").reduce<unknown>((current, part) => current && typeof current === "object" && part in current ? (current as Record<string, unknown>)[part] : undefined, fr); return typeof fallback === "string" ? translatedClientCopy(locale, fallback) : key; }
+export function translateWorkspaceGeneralization(locale: string | null | undefined, key: WorkspaceGeneralizationKey) { const dictionary = workspaceGeneralizationDictionaries[locale === "en" ? "en" : "fr"]; return translatedClientCopy(locale, dictionary[key] || workspaceGeneralizationDictionaries.fr[key]); }
+export function translateEnterpriseProcurement(locale: string | null | undefined, key: EnterpriseProcurementKey) { const dictionary = enterpriseProcurementDictionaries[locale === "en" ? "en" : "fr"]; return translatedClientCopy(locale, dictionary[key] || enterpriseProcurementDictionaries.fr[key]); }
+export function translateEnterpriseFinance(locale: string | null | undefined, key: EnterpriseFinanceKey) { const dictionary = enterpriseFinanceDictionaries[locale === "en" ? "en" : "fr"]; return translatedClientCopy(locale, dictionary[key] || enterpriseFinanceDictionaries.fr[key]); }
+export function translateEnterpriseCore(locale: string | null | undefined, key: EnterpriseCoreKey) { const dictionary = enterpriseCoreDictionaries[locale === "en" ? "en" : "fr"]; return translatedClientCopy(locale, dictionary[key] || enterpriseCoreDictionaries.fr[key]); }
+export function translateProfessionalErp(locale: string | null | undefined, key: ProfessionalErpKey) { const dictionary = professionalErpDictionaries[locale === "en" ? "en" : "fr"]; return translatedClientCopy(locale, dictionary[key] || professionalErpDictionaries.fr[key]); }
+export function translateRetailWorkspace(locale: string | null | undefined, key: RetailWorkspaceKey) { const dictionary = retailWorkspaceDictionaries[locale === "en" ? "en" : "fr"]; return translatedClientCopy(locale, dictionary[key] || retailWorkspaceDictionaries.fr[key]); }
+export function translateSharedWork(locale: string | null | undefined, key: SharedWorkKey) { const dictionary = sharedWorkDictionaries[locale === "en" ? "en" : "fr"]; return translatedClientCopy(locale, dictionary[key] || sharedWorkDictionaries.fr[key]); }
+export function translateCollaborationExperience(locale: string | null | undefined, key: CollaborationExperienceKey) { const dictionary = collaborationExperienceDictionaries[locale === "en" ? "en" : "fr"]; return translatedClientCopy(locale, dictionary[key] || collaborationExperienceDictionaries.fr[key]); }
+export function translateActivities(locale: string | null | undefined, key: ActivitiesKey) { const dictionary = activitiesDictionaries[locale === "en" ? "en" : "fr"]; return translatedClientCopy(locale, dictionary[key] || activitiesDictionaries.fr[key]); }
+export function translateCalendarSchedule(locale: string | null | undefined, key: CalendarScheduleKey) { const dictionary = calendarScheduleDictionaries[locale === "en" ? "en" : "fr"]; return translatedClientCopy(locale, dictionary[key] || calendarScheduleDictionaries.fr[key]); }
+export function translateCalendarWorkspace(locale: string | null | undefined, key: CalendarWorkspaceKey) { const dictionary = calendarWorkspaceDictionaries[locale === "en" ? "en" : "fr"]; return translatedClientCopy(locale, dictionary[key] || calendarWorkspaceDictionaries.fr[key]); }

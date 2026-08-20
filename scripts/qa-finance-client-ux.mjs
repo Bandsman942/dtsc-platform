@@ -26,8 +26,15 @@ for (const file of financeFiles) if (!exists(file)) fail(`Finance UX: fichier re
 const ui = "components/enterprise/professional/finance-professional-ui.ts";
 if (exists(ui)) {
   const content = read(ui);
-  for (const token of ["FinanceLocale", "fr:", "en:", "financeStatusLabel", "financeEnumLabel", "financeErrorMessage", "safeFinanceError", "FINANCE_PERIOD_CLOSED", "CHART_TEMPLATE_UPGRADE_REQUIRES_CONTROLLED_MIGRATION", "Business value to review", "Valeur métier à vérifier"]) if (!content.includes(token)) fail(`Finance UX: socle i18n/client-safe incomplet (${token})`);
+  for (const token of [
+    "FinanceLocale", "fr:", "en:", "financeStatusLabel", "financeEnumLabel", "financeErrorMessage", "safeFinanceError",
+    "FINANCE_PERIOD_CLOSED", "CHART_TEMPLATE_UPGRADE_REQUIRES_CONTROLLED_MIGRATION", "Autre catégorie", "Other category",
+    "COST_OF_SALES", "Coût des ventes", "OPERATING_EXPENSE", "Charges d’exploitation", "TAX_RECEIVABLE", "Taxes à récupérer",
+  ]) if (!content.includes(token)) fail(`Finance UX: socle i18n/client-safe incomplet (${token})`);
   if (/return\s+error\.message/.test(content)) fail("Finance UX: safeFinanceError ne doit jamais renvoyer error.message brut");
+  for (const forbidden of ["Valeur métier à vérifier", "Business value to review"]) {
+    if (content.includes(forbidden)) fail(`Finance UX: ancien fallback interne encore exposable (${forbidden})`);
+  }
 }
 
 const shared = "components/enterprise/professional/finance-professional-workspace-shared.tsx";
@@ -82,4 +89,4 @@ if (failures.length) {
   for (const failure of failures) console.error(`- ${failure}`);
   process.exit(1);
 }
-console.log("QA Finance client UX/i18n: OK — client-safe messages and FR/EN contracts enforced");
+console.log("QA Finance client UX/i18n: OK — client-safe messages, accounting categories and FR/EN contracts enforced");
