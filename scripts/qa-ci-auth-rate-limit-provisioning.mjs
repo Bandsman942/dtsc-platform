@@ -2,6 +2,7 @@ import fs from "node:fs";
 
 const files = {
   policy: "lib/rate-limit-policy.ts",
+  rateLimit: "lib/rate-limit.ts",
   signIn: "app/api/auth/sign-in/route.ts",
   accounting: ".github/workflows/accounting-acceptance.yml",
   shop2: ".github/workflows/shop2-behavioral.yml",
@@ -20,6 +21,7 @@ function requireToken(content, token, label) {
 }
 
 const policy = read(files.policy);
+const rateLimit = read(files.rateLimit);
 const signIn = read(files.signIn);
 const proxy = read(files.proxy);
 const regression = read(files.regression);
@@ -27,6 +29,7 @@ const regression = read(files.regression);
 requireToken(policy, '{ prefix: "auth:sign-in:", profile: "security-critical"', "security-critical sign-in policy");
 requireToken(policy, 'securityCritical: { name: "security-critical", failureMode: "closed" }', "fail-closed security policy");
 requireToken(signIn, 'rateLimit(getRateLimitKey(req, "auth:sign-in"), 8, 15 * 60 * 1000)', "sign-in rate limiter");
+requireToken(rateLimit, '#!lua flags=allow-key-locking', "Upstash atomic rate-limit Lua header in product runtime");
 if (/auth:sign-in[\s\S]{0,500}failureMode\s*:\s*["'](?:open|local)["']/.test(signIn)) {
   throw new Error("Sign-in route must not weaken the security-critical failure mode for CI");
 }
@@ -34,6 +37,9 @@ if (/auth:sign-in[\s\S]{0,500}failureMode\s*:\s*["'](?:open|local)["']/.test(sig
 requireToken(proxy, "CI_REDIS_REST_TOKEN is required", "explicit CI proxy token");
 requireToken(proxy, '["PING"]', "Redis health probe");
 requireToken(proxy, 'request.url !== "/" && request.url !== "/pipeline"', "Upstash-compatible command endpoints");
+requireToken(proxy, 'const UPSTASH_LUA_KEY_LOCKING_HEADER = "#!lua flags=allow-key-locking"', "exact Upstash Lua header normalization");
+requireToken(proxy, 'normalized[0]?.toUpperCase() === "EVAL"', "EVAL-only normalization scope");
+requireToken(proxy, "normalizeCommandForLocalRedis(command)", "local Redis command normalization");
 requireToken(regression, 'commands.unshift("node scripts/qa-ci-auth-rate-limit-provisioning.mjs")', "regression QA integration");
 
 for (const [name, path] of [["accounting", files.accounting], ["shop2", files.shop2]]) {
