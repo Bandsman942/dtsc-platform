@@ -4,6 +4,7 @@ import { WORKFLOW_LIMITS } from "@/lib/enterprise/workflows/constants";
 import { processWorkflowDomainEvent, resumeWaitingRuns } from "@/lib/enterprise/workflows/engine";
 import { processCrossModuleProjections, processPendingCrossModuleProjections } from "@/lib/enterprise/cross-module/projection-service";
 import { safeWorkflowFailureMessage } from "@/lib/enterprise/workflows/errors";
+import { ADMIN_BROADCAST_EMAIL_DELIVERY_EVENT_TYPE } from "@/lib/mail/broadcast-constants";
 import { prisma } from "@/lib/prisma";
 import { WEB_PUSH_DOMAIN_EVENT_TYPE } from "@/lib/push/constants";
 
@@ -39,22 +40,26 @@ export async function getWorkflowQueueSnapshot(): Promise<WorkflowQueueSnapshot>
       SELECT
         COUNT(*) FILTER (
           WHERE "eventType" <> ${WEB_PUSH_DOMAIN_EVENT_TYPE}
+            AND "eventType" <> ${ADMIN_BROADCAST_EMAIL_DELIVERY_EVENT_TYPE}
             AND "processingStatus" IN ('PENDING', 'FAILED')
             AND "availableAt" <= NOW()
             AND ("lockedAt" IS NULL OR "lockedAt" < ${leaseBefore})
         ) AS "ready",
         COUNT(*) FILTER (
           WHERE "eventType" <> ${WEB_PUSH_DOMAIN_EVENT_TYPE}
+            AND "eventType" <> ${ADMIN_BROADCAST_EMAIL_DELIVERY_EVENT_TYPE}
             AND "processingStatus" = 'PROCESSING'
             AND "lockedAt" IS NOT NULL
             AND "lockedAt" >= ${leaseBefore}
         ) AS "processing",
         COUNT(*) FILTER (
           WHERE "eventType" <> ${WEB_PUSH_DOMAIN_EVENT_TYPE}
+            AND "eventType" <> ${ADMIN_BROADCAST_EMAIL_DELIVERY_EVENT_TYPE}
             AND "processingStatus" = 'DEAD'
         ) AS "dead",
         MIN("availableAt") FILTER (
           WHERE "eventType" <> ${WEB_PUSH_DOMAIN_EVENT_TYPE}
+            AND "eventType" <> ${ADMIN_BROADCAST_EMAIL_DELIVERY_EVENT_TYPE}
             AND "processingStatus" IN ('PENDING', 'FAILED')
             AND "availableAt" <= NOW()
             AND ("lockedAt" IS NULL OR "lockedAt" < ${leaseBefore})
@@ -95,6 +100,7 @@ async function claimPendingEvents(workerId: string, batchSize: number) {
       SELECT "id"
       FROM "EnterpriseDomainEvent"
       WHERE "eventType" <> ${WEB_PUSH_DOMAIN_EVENT_TYPE}
+        AND "eventType" <> ${ADMIN_BROADCAST_EMAIL_DELIVERY_EVENT_TYPE}
         AND "processingStatus" IN ('PENDING', 'FAILED')
         AND "availableAt" <= NOW()
         AND ("lockedAt" IS NULL OR "lockedAt" < ${leaseBefore})
