@@ -111,6 +111,10 @@ Une validation `OWNER_E2E` explicite est requise avant merge.
 
 Aucune Preview Vercel intermédiaire n’est requise ni autorisée par la politique actuelle.
 
+## Gouvernance de livraison
+
+Quality Gates #4019 s’est arrêté au contrôle de gouvernance de la PR avant tout test de code, après la fermeture/réouverture technique nécessaire à la reconstruction de branche. La description de #456 a depuis été restaurée au format complet exigé par `docs/CONTRIBUTING.md` et les labels structurés `type`, `priority`, `area` et `delivery-impact` ont été réappliqués. Ce commit documentaire déclenche une nouvelle validation du candidat réconcilié ; il ne modifie aucun comportement applicatif.
+
 ## Rollback
 
 Revert applicatif du merge du hotfix. Aucune restauration de schéma ou de données n’est nécessaire. Le rollback doit restaurer ensemble le comportement du geste, le garde de copie, les mappings Finance et leurs QA afin de ne pas laisser un contrat partiel.
