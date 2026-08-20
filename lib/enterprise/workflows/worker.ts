@@ -5,6 +5,7 @@ import { processWorkflowDomainEvent, resumeWaitingRuns } from "@/lib/enterprise/
 import { processCrossModuleProjections, processPendingCrossModuleProjections } from "@/lib/enterprise/cross-module/projection-service";
 import { safeWorkflowFailureMessage } from "@/lib/enterprise/workflows/errors";
 import { prisma } from "@/lib/prisma";
+import { WEB_PUSH_DOMAIN_EVENT_TYPE } from "@/lib/push/constants";
 
 type ClaimedEvent = { id: string; attemptCount: number };
 type QueueSnapshotRow = {
@@ -37,18 +38,24 @@ export async function getWorkflowQueueSnapshot(): Promise<WorkflowQueueSnapshot>
     const [row] = await prisma.$queryRaw<QueueSnapshotRow[]>(Prisma.sql`
       SELECT
         COUNT(*) FILTER (
-          WHERE "processingStatus" IN ('PENDING', 'FAILED')
+          WHERE "eventType" <> ${WEB_PUSH_DOMAIN_EVENT_TYPE}
+            AND "processingStatus" IN ('PENDING', 'FAILED')
             AND "availableAt" <= NOW()
             AND ("lockedAt" IS NULL OR "lockedAt" < ${leaseBefore})
         ) AS "ready",
         COUNT(*) FILTER (
-          WHERE "processingStatus" = 'PROCESSING'
+          WHERE "eventType" <> ${WEB_PUSH_DOMAIN_EVENT_TYPE}
+            AND "processingStatus" = 'PROCESSING'
             AND "lockedAt" IS NOT NULL
             AND "lockedAt" >= ${leaseBefore}
         ) AS "processing",
-        COUNT(*) FILTER (WHERE "processingStatus" = 'DEAD') AS "dead",
+        COUNT(*) FILTER (
+          WHERE "eventType" <> ${WEB_PUSH_DOMAIN_EVENT_TYPE}
+            AND "processingStatus" = 'DEAD'
+        ) AS "dead",
         MIN("availableAt") FILTER (
-          WHERE "processingStatus" IN ('PENDING', 'FAILED')
+          WHERE "eventType" <> ${WEB_PUSH_DOMAIN_EVENT_TYPE}
+            AND "processingStatus" IN ('PENDING', 'FAILED')
             AND "availableAt" <= NOW()
             AND ("lockedAt" IS NULL OR "lockedAt" < ${leaseBefore})
         ) AS "oldestReadyAt"
@@ -87,7 +94,8 @@ async function claimPendingEvents(workerId: string, batchSize: number) {
     WHERE "id" IN (
       SELECT "id"
       FROM "EnterpriseDomainEvent"
-      WHERE "processingStatus" IN ('PENDING', 'FAILED')
+      WHERE "eventType" <> ${WEB_PUSH_DOMAIN_EVENT_TYPE}
+        AND "processingStatus" IN ('PENDING', 'FAILED')
         AND "availableAt" <= NOW()
         AND ("lockedAt" IS NULL OR "lockedAt" < ${leaseBefore})
       ORDER BY "availableAt" ASC, "createdAt" ASC

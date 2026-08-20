@@ -1,8 +1,8 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { normalizeNotificationTarget } from "@/lib/notification-targets";
 import { prisma } from "@/lib/prisma";
-import { dispatchPushForNotification, dispatchPushForNotifications } from "@/lib/push/sender";
+import { buildWebPushDomainEventData, enqueueWebPushNotification } from "@/lib/push/queue";
 
 function notificationPreferenceField(type: string) {
   if (type === "SUPPORT") return "notifySupportEnabled" as const;
@@ -25,6 +25,10 @@ function acceptsNotification(
 
 function deterministicNotificationId(idempotencyKey: string) {
   return `wf_${createHash("sha256").update(idempotencyKey).digest("hex").slice(0, 48)}`;
+}
+
+function generatedNotificationId() {
+  return `ntf_${randomUUID().replaceAll("-", "")}`;
 }
 
 export async function notifyUser({
@@ -57,18 +61,24 @@ export async function notifyUser({
   }
 
   const resolvedTargetUrl = normalizeNotificationTarget(targetUrl, "/notifications");
-  let notification;
   try {
-    notification = await prisma.notification.create({
-      data: {
-        ...(idempotencyKey ? { id: deterministicNotificationId(idempotencyKey) } : {}),
-        userId,
+    return await prisma.$transaction(async (tx) => {
+      const notification = await tx.notification.create({
+        data: {
+          ...(idempotencyKey ? { id: deterministicNotificationId(idempotencyKey) } : {}),
+          userId,
+          organizationId,
+          title,
+          body,
+          type,
+          targetUrl: resolvedTargetUrl,
+        },
+      });
+      await enqueueWebPushNotification(tx, {
+        notificationId: notification.id,
         organizationId,
-        title,
-        body,
-        type,
-        targetUrl: resolvedTargetUrl,
-      },
+      });
+      return notification;
     });
   } catch (error) {
     if (idempotencyKey && error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
@@ -76,13 +86,6 @@ export async function notifyUser({
     }
     throw error;
   }
-  await dispatchPushForNotification({
-    userId,
-    notificationId: notification.id,
-    type,
-    targetUrl: resolvedTargetUrl,
-  });
-  return notification;
 }
 
 export async function notifyUsers({
@@ -121,14 +124,23 @@ export async function notifyUsers({
   if (!allowedUserIds.length) return;
 
   const resolvedTargetUrl = normalizeNotificationTarget(targetUrl, "/notifications");
-  await prisma.notification.createMany({
-    data: allowedUserIds.map((userId) => ({ userId, organizationId, title, body, type, targetUrl: resolvedTargetUrl })),
-  });
-  const eventId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-  await dispatchPushForNotifications(allowedUserIds.map((userId) => ({
+  const notifications = allowedUserIds.map((userId) => ({
+    id: generatedNotificationId(),
     userId,
-    notificationId: `${eventId}-${userId}`,
+    organizationId,
+    title,
+    body,
     type,
     targetUrl: resolvedTargetUrl,
-  })));
+  }));
+
+  await prisma.$transaction([
+    prisma.notification.createMany({ data: notifications }),
+    prisma.enterpriseDomainEvent.createMany({
+      data: notifications.map((notification) => buildWebPushDomainEventData({
+        notificationId: notification.id,
+        organizationId: notification.organizationId,
+      })),
+    }),
+  ]);
 }
