@@ -72,7 +72,7 @@ export async function POST(req: Request) {
         recipientCount: queued.recipients,
         notificationCount: queued.notificationsQueued,
         emailJobCount: queued.emailJobsQueued,
-        zoho: { sent: true, queued: true, personalized: queued.personalized },
+        zoho: { sent: false, queued: true, personalized: queued.personalized },
       },
       { status: 202 },
     );
