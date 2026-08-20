@@ -51,6 +51,7 @@ commands.unshift("node scripts/qa-health-clinical-catalog-443.mjs");
 commands.unshift("node scripts/qa-scale4b-projection-worker.mjs");
 commands.unshift("node scripts/qa-scale4c-web-push-worker.mjs");
 commands.unshift("node scripts/qa-scale4d-admin-broadcast-email.mjs");
+commands.unshift("node scripts/qa-hotfix-455-mobile-detail-experience.mjs");
 const escapeAnnotation = (value) => String(value).replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
 
 function diagnostic(output, status) {

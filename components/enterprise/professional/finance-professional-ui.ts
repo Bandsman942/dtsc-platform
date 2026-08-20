@@ -52,6 +52,9 @@ const ENUM_LABELS: Record<FinanceLocale, Record<string, string>> = {
     CUSTOMER_REFUND: "Remboursement client", SUPPLIER_REFUND: "Remboursement fournisseur", PAYROLL_PAYMENT: "Paiement de paie", EXPENSE_REIMBURSEMENT: "Remboursement de dépense",
     TAX_PAYMENT: "Paiement fiscal", REFUND: "Remboursement", TRANSFER: "Transfert", OTHER: "Autre", BANK_TRANSFER: "Virement bancaire", CARD: "Carte", CHEQUE: "Chèque", CREDIT: "Crédit",
     ASSET: "Actif", LIABILITY: "Passif", EQUITY: "Capitaux propres", REVENUE: "Produit", EXPENSE: "Charge", OTHER_INCOME: "Autre produit", OTHER_EXPENSE: "Autre charge",
+    ACCOUNTS_RECEIVABLE: "Créances clients", FIXED_ASSET: "Immobilisations", ACCUMULATED_DEPRECIATION: "Amortissements cumulés", ACCOUNTS_PAYABLE: "Dettes fournisseurs",
+    TAX_PAYABLE: "Taxes à payer", PAYROLL_PAYABLE: "Dettes salariales", RETAINED_EARNINGS: "Résultats reportés", TAX_RECEIVABLE: "Taxes à récupérer",
+    COST_OF_SALES: "Coût des ventes", OPERATING_EXPENSE: "Charges d’exploitation",
     SALES: "Ventes", PURCHASES: "Achats", PAYROLL: "Paie", INVENTORY: "Stocks", ASSETS: "Immobilisations", TAX: "Fiscalité", OPENING: "Ouverture", ADJUSTMENT: "Ajustement", GENERAL: "Opérations générales",
     BALANCE_SHEET: "Bilan", INCOME_STATEMENT: "Compte de résultat", DEBIT: "Débit", CREDIT_BALANCE: "Crédit"
   },
@@ -60,6 +63,9 @@ const ENUM_LABELS: Record<FinanceLocale, Record<string, string>> = {
     INBOUND: "Receipt", OUTBOUND: "Disbursement", CUSTOMER_PAYMENT: "Customer receipt", SUPPLIER_PAYMENT: "Supplier payment", CUSTOMER_REFUND: "Customer refund", SUPPLIER_REFUND: "Supplier refund",
     PAYROLL_PAYMENT: "Payroll payment", EXPENSE_REIMBURSEMENT: "Expense reimbursement", TAX_PAYMENT: "Tax payment", REFUND: "Refund", TRANSFER: "Transfer", OTHER: "Other",
     BANK_TRANSFER: "Bank transfer", CARD: "Card", CHEQUE: "Cheque", CREDIT: "Credit", ASSET: "Asset", LIABILITY: "Liability", EQUITY: "Equity", REVENUE: "Revenue", EXPENSE: "Expense",
+    ACCOUNTS_RECEIVABLE: "Accounts receivable", FIXED_ASSET: "Fixed assets", ACCUMULATED_DEPRECIATION: "Accumulated depreciation", ACCOUNTS_PAYABLE: "Accounts payable",
+    TAX_PAYABLE: "Tax payable", PAYROLL_PAYABLE: "Payroll payable", RETAINED_EARNINGS: "Retained earnings", TAX_RECEIVABLE: "Tax receivable",
+    COST_OF_SALES: "Cost of sales", OPERATING_EXPENSE: "Operating expenses",
     OTHER_INCOME: "Other income", OTHER_EXPENSE: "Other expense", SALES: "Sales", PURCHASES: "Purchases", PAYROLL: "Payroll", INVENTORY: "Inventory", ASSETS: "Fixed assets", TAX: "Tax",
     OPENING: "Opening", ADJUSTMENT: "Adjustment", GENERAL: "General operations", BALANCE_SHEET: "Balance sheet", INCOME_STATEMENT: "Income statement", DEBIT: "Debit", CREDIT_BALANCE: "Credit"
   }
@@ -129,7 +135,7 @@ export function financeMetricLabel(key: string, locale: FinanceLocale = "fr") {
 }
 
 export function financeEnumLabel(value: string, locale: FinanceLocale = "fr") {
-  return ENUM_LABELS[locale][value] || (locale === "fr" ? "Valeur métier à vérifier" : "Business value to review");
+  return ENUM_LABELS[locale][value] || (locale === "fr" ? "Autre catégorie" : "Other category");
 }
 
 export function financeStatusTone(status: string): StatusBadgeTone {
