@@ -13,17 +13,16 @@ type ClaimedEvent = { id: string; attemptCount: number };
 type QueueSnapshotRow = { ready: bigint | number | string; processing: bigint | number | string; dead: bigint | number | string; oldestReadyAt: Date | null };
 export type WorkflowQueueSnapshot = { available:boolean; ready:number|null; processing:number|null; dead:number|null; oldestReadyAgeMs:number|null; sampledAt:string };
 function numericCount(value: bigint | number | string | null | undefined) { if(typeof value==="bigint")return Number(value); if(typeof value==="number")return value; const parsed=Number(value||0); return Number.isFinite(parsed)?parsed:0; }
-const excludedEventTypes = [WEB_PUSH_DOMAIN_EVENT_TYPE, ADMIN_BROADCAST_EMAIL_DELIVERY_EVENT_TYPE, KNOWLEDGE_INDEX_EVENT_TYPE] as const;
 
 export async function getWorkflowQueueSnapshot(): Promise<WorkflowQueueSnapshot> {
   const sampledAt=new Date(), leaseBefore=new Date(sampledAt.getTime()-WORKFLOW_LIMITS.workerLeaseSeconds*1000);
   try {
     const [row]=await prisma.$queryRaw<QueueSnapshotRow[]>(Prisma.sql`
       SELECT
-        COUNT(*) FILTER (WHERE "eventType" NOT IN (${Prisma.join(excludedEventTypes)}) AND "processingStatus" IN ('PENDING','FAILED') AND "availableAt"<=NOW() AND ("lockedAt" IS NULL OR "lockedAt"<${leaseBefore})) AS "ready",
-        COUNT(*) FILTER (WHERE "eventType" NOT IN (${Prisma.join(excludedEventTypes)}) AND "processingStatus"='PROCESSING' AND "lockedAt" IS NOT NULL AND "lockedAt">=${leaseBefore}) AS "processing",
-        COUNT(*) FILTER (WHERE "eventType" NOT IN (${Prisma.join(excludedEventTypes)}) AND "processingStatus"='DEAD') AS "dead",
-        MIN("availableAt") FILTER (WHERE "eventType" NOT IN (${Prisma.join(excludedEventTypes)}) AND "processingStatus" IN ('PENDING','FAILED') AND "availableAt"<=NOW() AND ("lockedAt" IS NULL OR "lockedAt"<${leaseBefore})) AS "oldestReadyAt"
+        COUNT(*) FILTER (WHERE "eventType" <> ${WEB_PUSH_DOMAIN_EVENT_TYPE} AND "eventType" <> ${ADMIN_BROADCAST_EMAIL_DELIVERY_EVENT_TYPE} AND "eventType" <> ${KNOWLEDGE_INDEX_EVENT_TYPE} AND "processingStatus" IN ('PENDING','FAILED') AND "availableAt"<=NOW() AND ("lockedAt" IS NULL OR "lockedAt"<${leaseBefore})) AS "ready",
+        COUNT(*) FILTER (WHERE "eventType" <> ${WEB_PUSH_DOMAIN_EVENT_TYPE} AND "eventType" <> ${ADMIN_BROADCAST_EMAIL_DELIVERY_EVENT_TYPE} AND "eventType" <> ${KNOWLEDGE_INDEX_EVENT_TYPE} AND "processingStatus"='PROCESSING' AND "lockedAt" IS NOT NULL AND "lockedAt">=${leaseBefore}) AS "processing",
+        COUNT(*) FILTER (WHERE "eventType" <> ${WEB_PUSH_DOMAIN_EVENT_TYPE} AND "eventType" <> ${ADMIN_BROADCAST_EMAIL_DELIVERY_EVENT_TYPE} AND "eventType" <> ${KNOWLEDGE_INDEX_EVENT_TYPE} AND "processingStatus"='DEAD') AS "dead",
+        MIN("availableAt") FILTER (WHERE "eventType" <> ${WEB_PUSH_DOMAIN_EVENT_TYPE} AND "eventType" <> ${ADMIN_BROADCAST_EMAIL_DELIVERY_EVENT_TYPE} AND "eventType" <> ${KNOWLEDGE_INDEX_EVENT_TYPE} AND "processingStatus" IN ('PENDING','FAILED') AND "availableAt"<=NOW() AND ("lockedAt" IS NULL OR "lockedAt"<${leaseBefore})) AS "oldestReadyAt"
       FROM "EnterpriseDomainEvent"
     `);
     const oldestReadyAt=row?.oldestReadyAt?new Date(row.oldestReadyAt):null;
@@ -35,7 +34,7 @@ async function claimPendingEvents(workerId:string,batchSize:number){
   const leaseBefore=new Date(Date.now()-WORKFLOW_LIMITS.workerLeaseSeconds*1000);
   return prisma.$queryRaw<ClaimedEvent[]>(Prisma.sql`
     UPDATE "EnterpriseDomainEvent" SET "processingStatus"='PROCESSING',"lockedAt"=NOW(),"lockedBy"=${workerId},"attemptCount"="attemptCount"+1,"updatedAt"=NOW()
-    WHERE "id" IN (SELECT "id" FROM "EnterpriseDomainEvent" WHERE "eventType" NOT IN (${Prisma.join(excludedEventTypes)}) AND "processingStatus" IN ('PENDING','FAILED') AND "availableAt"<=NOW() AND ("lockedAt" IS NULL OR "lockedAt"<${leaseBefore}) ORDER BY "availableAt" ASC,"createdAt" ASC LIMIT ${batchSize} FOR UPDATE SKIP LOCKED)
+    WHERE "id" IN (SELECT "id" FROM "EnterpriseDomainEvent" WHERE "eventType" <> ${WEB_PUSH_DOMAIN_EVENT_TYPE} AND "eventType" <> ${ADMIN_BROADCAST_EMAIL_DELIVERY_EVENT_TYPE} AND "eventType" <> ${KNOWLEDGE_INDEX_EVENT_TYPE} AND "processingStatus" IN ('PENDING','FAILED') AND "availableAt"<=NOW() AND ("lockedAt" IS NULL OR "lockedAt"<${leaseBefore}) ORDER BY "availableAt" ASC,"createdAt" ASC LIMIT ${batchSize} FOR UPDATE SKIP LOCKED)
     RETURNING "id","attemptCount"
   `);
 }
