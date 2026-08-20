@@ -10,6 +10,8 @@ Les workflows navigateur Accounting et Shop 2 démarraient pourtant l'applicatio
 
 Une première correction a provisionné Redis 7 et un proxy REST local. Les health checks passaient, mais le sign-in restait bloqué en `security-critical / closed`. Le diagnostic des artifacts CI a montré que le chemin Redis retournait `reason: ERROR` uniquement lors du rate limiting atomique. La cause était la première ligne Upstash du script Lua de production : `#!lua flags=allow-key-locking`. Ce préambule est accepté par le runtime Redis d'Upstash mais n'est pas reconnu tel quel par Redis 7 local lors d'un `EVAL`.
 
+Après normalisation du préambule, les parcours navigateur ont commencé à exercer réellement le rate limiter. Le workflow Accounting enchaîne cependant plusieurs suites Playwright distinctes avec le même utilisateur E2E et le même Redis éphémère. Les deux premières suites ont correctement accumulé des tentatives de connexion ; la troisième, dédiée à la clôture et à la protection de l'historique, atteignait alors la limite légitime de 8 connexions sur 15 minutes. Ce second échec prouve que Redis et le contrat fail-closed fonctionnent, mais révèle un manque d'isolation entre suites de test indépendantes.
+
 ## Correction
 
 Les workflows concernés provisionnent maintenant deux services strictement locaux au runner :
@@ -20,6 +22,8 @@ Les workflows concernés provisionnent maintenant deux services strictement loca
 L'adaptateur traduit les commandes HTTP vers Redis via RESP2 sur `127.0.0.1:6379`. Il n'utilise aucun credential de Production, n'expose aucun port public et exige un bearer token éphémère dérivé du run GitHub.
 
 Pour les commandes `EVAL` uniquement, le proxy supprime exactement le préambule Upstash `#!lua flags=allow-key-locking` avant de transmettre le script à Redis local. Le corps Lua atomique reste inchangé et est exécuté par un vrai Redis 7. Cette normalisation est limitée à l'infrastructure de test : `lib/rate-limit.ts` conserve son script Upstash original pour Production.
+
+Dans le workflow Accounting, une remise à zéro explicite du Redis **isolé de CI** est exécutée entre les suites fonctionnelles déjà validées et la suite indépendante de clôture/historique. Elle utilise `FLUSHDB` via le proxy local authentifié. Cette remise à zéro intervient uniquement à une frontière de suites, jamais au milieu d'un scénario : chaque suite continue donc à exercer normalement le rate limiting, tandis qu'une suite précédente ne consomme plus le budget de connexion de la suivante. Le Redis concerné ne contient aucune donnée de Production et est détruit avec le job.
 
 L'application reçoit ensuite :
 
@@ -34,7 +38,8 @@ La route `POST /api/auth/sign-in` n'est pas modifiée. La politique `security-cr
 - elle conserve l'atomicité du script Lua en exécutant son corps dans Redis 7 local ;
 - elle neutralise uniquement un marqueur d'exécution propre à Upstash, sans changer le code runtime de l'application ;
 - elle évite de brancher les tests sur Redis Production ;
-- elle rend chaque run indépendant ;
+- elle rend chaque run indépendant et les suites Accounting successives indépendantes entre elles ;
+- le reset intervient seulement entre suites autonomes et ne rend pas les scénarios internes permissifs ;
 - elle reste compatible avec les autres usages Redis REST éventuellement déclenchés par l'AppShell pendant les tests, car le proxy relaie les commandes Redis génériques au service Redis local ;
 - elle ne change aucun comportement runtime de Production.
 
@@ -47,6 +52,7 @@ Les workflows doivent prouver :
 - `qa-ci-auth-rate-limit-provisioning.mjs` vert ;
 - conservation du préambule Upstash dans `lib/rate-limit.ts` ;
 - normalisation limitée à `EVAL` dans le proxy CI ;
+- reset du Redis éphémère Accounting avant la suite indépendante de clôture/historique ;
 - sign-in E2E fonctionnel ;
 - Accounting acceptance vert ;
 - Shop 2 behavioral acceptance vert ;
@@ -56,4 +62,4 @@ Un échec du proxy ou de Redis doit rester bloquant pour les routes `security-cr
 
 ## Rollback
 
-Revert de #463 : suppression du service Redis CI, du proxy local et des variables associées dans les deux workflows. Aucun schéma Prisma, aucune donnée et aucun secret Production ne sont concernés.
+Revert de #463 : suppression du service Redis CI, du proxy local, du reset de frontière de suites et des variables associées dans les deux workflows. Aucun schéma Prisma, aucune donnée et aucun secret Production ne sont concernés.
