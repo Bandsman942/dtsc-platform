@@ -18,6 +18,10 @@
       "schedule": "* * * * *"
     },
     {
+      "path": "/api/internal/admin-broadcast-email/process?batch=50",
+      "schedule": "* * * * *"
+    },
+    {
       "path": "/api/internal/identity-links/expire?batch=100",
       "schedule": "17 * * * *"
     }
