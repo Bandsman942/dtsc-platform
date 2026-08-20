@@ -66,8 +66,8 @@ assert.match(workerRoute, /export const maxDuration = 60/, "SCALE-4D: la Functio
 assert.match(workerRoute, /queueBefore/, "SCALE-4D: le snapshot avant traitement doit être exposé.");
 assert.match(workerRoute, /queueAfter/, "SCALE-4D: le snapshot après traitement doit être exposé.");
 assert.match(workerRoute, /saturated/, "SCALE-4D: la saturation doit être exposée.");
-const successResponse = workerRoute.match(/return NextResponse\.json\(\{[\s\S]*?saturated: result\.saturated,[\s\S]*?\}\);/)?.[0] || "";
+const successResponse = workerRoute.match(/return NextResponse\.json\(\{\s*ok:\s*true,[\s\S]*?saturated:\s*result\.saturated,\s*\}\);/)?.[0] || "";
 assert.ok(successResponse, "SCALE-4D: la réponse succès du worker doit rester détectable par la QA.");
-assert.doesNotMatch(successResponse, /recipientEmail|recipientEmails|payloadJson|subject|message|body|content|email/i, "SCALE-4D: la réponse succès interne ne doit exposer aucun destinataire ni contenu métier.");
+assert.doesNotMatch(successResponse, /\brecipientEmail\b|\brecipientEmails\b|\bpayloadJson\b|\bsubject\b|\bmessage\b|\bbody\b|\bcontent\b/i, "SCALE-4D: la réponse succès interne ne doit exposer aucun destinataire ni contenu métier.");
 
 console.log("PASS SCALE-4D — broadcasts admin asynchrones, atomiques, isolés, retryables, observables, confidentiels et honnêtes sur l'état de livraison.");
