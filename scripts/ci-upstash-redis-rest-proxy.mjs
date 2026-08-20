@@ -8,6 +8,7 @@ const redisPort = Number(process.env.CI_REDIS_PORT || 6379);
 const expectedToken = process.env.CI_REDIS_REST_TOKEN?.trim();
 const MAX_BODY_BYTES = 1024 * 1024;
 const REDIS_TIMEOUT_MS = 2_000;
+const UPSTASH_LUA_KEY_LOCKING_HEADER = "#!lua flags=allow-key-locking";
 
 if (!expectedToken) {
   throw new Error("CI_REDIS_REST_TOKEN is required");
@@ -19,8 +20,24 @@ if (!Number.isInteger(redisPort) || redisPort <= 0 || redisPort > 65_535) {
   throw new Error("CI_REDIS_PORT must be a valid TCP port");
 }
 
+function normalizeCommandForLocalRedis(command) {
+  const normalized = command.map((value) => String(value));
+  if (
+    normalized[0]?.toUpperCase() === "EVAL" &&
+    normalized[1]?.startsWith(`${UPSTASH_LUA_KEY_LOCKING_HEADER}\n`)
+  ) {
+    normalized[1] = normalized[1].slice(UPSTASH_LUA_KEY_LOCKING_HEADER.length + 1);
+  } else if (
+    normalized[0]?.toUpperCase() === "EVAL" &&
+    normalized[1]?.startsWith(`${UPSTASH_LUA_KEY_LOCKING_HEADER}\r\n`)
+  ) {
+    normalized[1] = normalized[1].slice(UPSTASH_LUA_KEY_LOCKING_HEADER.length + 2);
+  }
+  return normalized;
+}
+
 function encodeCommand(command) {
-  const args = command.map((value) => String(value));
+  const args = normalizeCommandForLocalRedis(command);
   let payload = `*${args.length}\r\n`;
   for (const arg of args) {
     const bytes = Buffer.byteLength(arg);
