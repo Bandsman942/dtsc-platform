@@ -6,6 +6,7 @@ const files = {
   accounting: ".github/workflows/accounting-acceptance.yml",
   shop2: ".github/workflows/shop2-behavioral.yml",
   proxy: "scripts/ci-upstash-redis-rest-proxy.mjs",
+  regression: "scripts/run-regression-qa-ci.mjs",
 };
 
 function read(path) {
@@ -21,6 +22,7 @@ function requireToken(content, token, label) {
 const policy = read(files.policy);
 const signIn = read(files.signIn);
 const proxy = read(files.proxy);
+const regression = read(files.regression);
 
 requireToken(policy, '{ prefix: "auth:sign-in:", profile: "security-critical"', "security-critical sign-in policy");
 requireToken(policy, 'securityCritical: { name: "security-critical", failureMode: "closed" }', "fail-closed security policy");
@@ -32,6 +34,7 @@ if (/auth:sign-in[\s\S]{0,500}failureMode\s*:\s*["'](?:open|local)["']/.test(sig
 requireToken(proxy, "CI_REDIS_REST_TOKEN is required", "explicit CI proxy token");
 requireToken(proxy, '["PING"]', "Redis health probe");
 requireToken(proxy, 'request.url !== "/" && request.url !== "/pipeline"', "Upstash-compatible command endpoints");
+requireToken(regression, 'commands.unshift("node scripts/qa-ci-auth-rate-limit-provisioning.mjs")', "regression QA integration");
 
 for (const [name, path] of [["accounting", files.accounting], ["shop2", files.shop2]]) {
   const workflow = read(path);
