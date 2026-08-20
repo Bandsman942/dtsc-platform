@@ -394,7 +394,7 @@ check(
 
 check(
   "HEALTH_CARE Patients: liste, formulaires, détail, aides et mobile",
-  containsAll(healthPatientsWorkspace, ["ListControls", "ActionMenu", "CircleHelp", "Aucun patient enregistré pour cette entreprise.", "Créer un rendez-vous", "Créer une consultation", "Ajouter document", "Voir dossier médical", "h-[94dvh]", "min-w-0", "overflow-x-hidden"])
+  containsAll(healthPatientsWorkspace, ["ListControls", "ActionMenu", "CircleHelp", "patient.emptyTitle", "patient.action.createAppointment", "patient.action.createConsultation", "patient.action.addDocument", "patient.action.viewMedicalRecord", "h-[94dvh]", "min-w-0", "overflow-x-hidden"])
     && !healthPatientsWorkspace.includes("window.prompt")
     && !healthPatientsWorkspace.includes("window.confirm")
     && !healthPatientsWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
