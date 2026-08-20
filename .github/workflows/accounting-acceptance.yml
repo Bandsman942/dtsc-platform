@@ -166,6 +166,13 @@ jobs:
         run: |
           set -o pipefail
           pnpm exec playwright test tests/e2e/erp-cross-module-finance.spec.mjs --workers=1 2>&1 | tee /tmp/dtsc-erp-cross-module-playwright.log
+      - name: Reset isolated Redis state before close acceptance
+        run: |
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${CI_REDIS_REST_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data '["FLUSHDB"]' \
+            http://127.0.0.1:8079/ >/dev/null
       - name: Restart production application before close acceptance
         shell: bash
         run: |
