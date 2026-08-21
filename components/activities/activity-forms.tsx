@@ -227,7 +227,7 @@ export function WorkflowDialog({ open, onClose, collaborators, operations, onDon
             <option value="LEGAL_REQUEST">Faire une demande juridique</option>
           </select>
         </FormField>
-        {workflowType === "COO_MEETING" ? <MeetingFields collaborators={collaborators} operations={operations} /> : <LegalFields workflowType={workflowType} />}
+        {workflowType === "COO_MEETING" ? <MeetingFields collaborators={collaborators} operations={operations} /> : <LegalFields workflowType={workflowType} operations={operations} />}
         <div className="flex justify-end"><Button disabled={submitting} className="rounded-xl bg-[#002b5b] text-white"><Send className="h-4 w-4" />{submitting ? "Transmission..." : "Transmettre"}</Button></div>
       </form>
     </Dialog>
@@ -254,9 +254,10 @@ function MeetingFields({ collaborators, operations }: { collaborators: Collabora
   </div>;
 }
 
-function LegalFields({ workflowType }: { workflowType: string }) {
+function LegalFields({ workflowType, operations }: { workflowType: string; operations: CollaboratorOption[] }) {
   const titleName = workflowType === "LEGAL_REQUEST" ? "subject" : "title";
   const typeConfig = LEGAL_TYPES[workflowType] || { name: "type", values: ["OTHER"] };
+  const supportsOperationLink = ["LEGAL_CASE", "LEGAL_RISK", "LEGAL_REQUEST"].includes(workflowType);
   return <div className="space-y-4">
     <div className="grid gap-3 md:grid-cols-2">
       <FormField label={workflowType === "LEGAL_REQUEST" ? "Objet de la demande" : "Titre"}><Input name={titleName} required className="rounded-xl bg-dtsc-page" /></FormField>
@@ -268,8 +269,7 @@ function LegalFields({ workflowType }: { workflowType: string }) {
       {(workflowType === "LEGAL_CASE" || workflowType === "LEGAL_REQUEST") ? <FormField label="Priorité"><select name="priority" defaultValue="NORMAL" className="w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-dtsc-ink">{PRIORITIES.map((value) => <option key={value} value={value}>{formatEnumLabel(value)}</option>)}</select></FormField> : null}
       {workflowType === "LEGAL_RISK" ? <FormField label="Urgence"><select name="urgency" defaultValue="NORMAL" className="w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-dtsc-ink">{PRIORITIES.map((value) => <option key={value} value={value}>{formatEnumLabel(value)}</option>)}</select></FormField> : null}
       <FormField label="Document joint"><label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-dashed border-dtsc-border bg-dtsc-page px-3 py-2 text-sm font-bold text-dtsc-blue"><UploadCloud className="h-4 w-4" />Ajouter un fichier<input name={`${fileTargetName(workflowType)}__file`} type="file" className="sr-only" /></label></FormField>
-      <FormField label="Élément lié"><Input name="linkedEntityType" placeholder="Projet, fournisseur, client..." className="rounded-xl bg-dtsc-page" /></FormField>
-      <FormField label="Référence liée"><Input name="linkedEntityId" className="rounded-xl bg-dtsc-page" /></FormField>
+      {supportsOperationLink ? <FormField label="Opération liée" hint="Sélectionnez une opération visible dans votre espace Activités ; son identifiant interne n’est jamais saisi manuellement."><select name="linkedOperationId" className="w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-dtsc-ink"><option value="">Aucune</option>{operations.map((operation) => <option key={operation.id} value={operation.id}>{operation.label}</option>)}</select></FormField> : null}
     </div>
     {workflowType === "LEGAL_CONTRACT" ? <FormField label="Objet du contrat"><textarea name="subject" required className="min-h-24 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-dtsc-ink" /></FormField> : <FormField label="Description"><textarea name="description" required className="min-h-24 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-dtsc-ink" /></FormField>}
     {workflowType === "LEGAL_CASE" ? <FormField label="Raison de la demande"><textarea name="reason" className="min-h-20 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-dtsc-ink" /></FormField> : null}
@@ -292,12 +292,17 @@ async function uploadRequestAttachments(values: FormDataEntryValue[]): Promise<A
 async function buildWorkflowPayload(formData: FormData, workflowType: string) {
   const payload: Record<string, unknown> = {};
   for (const [key, value] of formData.entries()) {
-    if (key.endsWith("__file") || key === "participantIds") continue;
+    if (key.endsWith("__file") || key === "participantIds" || key === "linkedOperationId") continue;
     payload[key] = String(value);
   }
   payload.workflowType = workflowType;
   payload.participantIds = formData.getAll("participantIds").map(String);
   payload.strategic = formData.get("strategic") === "on";
+  const linkedOperationId = String(formData.get("linkedOperationId") || "").trim();
+  if (linkedOperationId) {
+    payload.linkedEntityType = "OPERATION";
+    payload.linkedEntityId = linkedOperationId;
+  }
   for (const [key, value] of formData.entries()) {
     if (!key.endsWith("__file") || !(value instanceof File) || value.size === 0) continue;
     payload[key.replace(/__file$/, "")] = await uploadActivityFile(value);

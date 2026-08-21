@@ -40,6 +40,7 @@ export const TASK_TRANSITIONS: Record<(typeof TASK_ACTIONS)[number], { from: rea
   ARCHIVE: { from: ["TODO", "IN_PROGRESS", "BLOCKED", "DONE", "CANCELLED"] },
 };
 
+export const REQUEST_TYPES = ["GENERAL", "INFORMATION", "DOCUMENT", "VALIDATION", "SUPPORT", "ACTION", "MEETING", "FOLLOW_UP", "OTHER"] as const;
 export const REQUEST_STATUSES = ["DRAFT", "SUBMITTED", "IN_REVIEW", "APPROVED", "REJECTED", "FULFILLED", "CANCELLED"] as const;
 export const REQUEST_ACTIONS = ["SUBMIT", "TAKE", "FULFILL", "CANCEL", "ARCHIVE"] as const;
 export const REQUEST_TRANSITIONS: Record<(typeof REQUEST_ACTIONS)[number], { from: readonly (typeof REQUEST_STATUSES)[number][]; to?: (typeof REQUEST_STATUSES)[number] }> = {

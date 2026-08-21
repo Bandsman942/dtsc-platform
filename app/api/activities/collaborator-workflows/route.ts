@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { getOperationalActor, resolveOperationalObjectAccess } from "@/lib/operational-access";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 
@@ -12,6 +13,7 @@ const optionalActivityFileUrl = z.string()
   .refine((value) => value === "" || value.startsWith("/api/activities/files/"), "Le document joint doit provenir d'un téléversement autorisé.")
   .optional()
   .or(z.literal(""));
+const optionalOperationLinkType = z.enum(["OPERATION"]).optional().or(z.literal(""));
 
 const workflowSchema = z.discriminatedUnion("workflowType", [
   z.object({
@@ -39,7 +41,7 @@ const workflowSchema = z.discriminatedUnion("workflowType", [
     reason: optionalText(1600),
     priority: z.enum(["LOW", "NORMAL", "HIGH", "CRITICAL"]).default("NORMAL"),
     attachmentUrl: optionalActivityFileUrl,
-    linkedEntityType: optionalText(120),
+    linkedEntityType: optionalOperationLinkType,
     linkedEntityId: optionalText(120),
     comments: optionalText(1800),
   }),
@@ -52,8 +54,6 @@ const workflowSchema = z.discriminatedUnion("workflowType", [
     subject: z.string().min(5).max(1800),
     desiredValidationDate: optionalDate,
     documentUrl: optionalActivityFileUrl,
-    linkedEntityType: optionalText(120),
-    linkedEntityId: optionalText(120),
     comments: optionalText(1800),
     strategic: z.coerce.boolean().default(false),
   }),
@@ -65,7 +65,7 @@ const workflowSchema = z.discriminatedUnion("workflowType", [
     description: z.string().min(5).max(2400),
     potentialImpact: optionalText(1800),
     urgency: z.enum(["LOW", "NORMAL", "HIGH", "CRITICAL"]).default("NORMAL"),
-    linkedEntityType: optionalText(120),
+    linkedEntityType: optionalOperationLinkType,
     linkedEntityId: optionalText(120),
     attachmentUrl: optionalActivityFileUrl,
     comments: optionalText(1800),
@@ -90,7 +90,7 @@ const workflowSchema = z.discriminatedUnion("workflowType", [
     priority: z.enum(["LOW", "NORMAL", "HIGH", "CRITICAL"]).default("NORMAL"),
     desiredDueDate: optionalDate,
     documentUrl: optionalActivityFileUrl,
-    linkedEntityType: optionalText(120),
+    linkedEntityType: optionalOperationLinkType,
     linkedEntityId: optionalText(120),
     comments: optionalText(1800),
   }),
@@ -120,6 +120,24 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     await writeApiLog({ request: req, statusCode: 400, userId: user.id, startedAt, metadata: { issues: parsed.error.issues.map((issue) => issue.path.join(".")) } });
     return NextResponse.json({ error: "Invalid payload", message: "Le formulaire est invalide." }, { status: 400 });
+  }
+
+  if ("linkedEntityType" in parsed.data || "linkedEntityId" in parsed.data) {
+    const linkedEntityType = "linkedEntityType" in parsed.data ? parsed.data.linkedEntityType || "" : "";
+    const linkedEntityId = "linkedEntityId" in parsed.data ? parsed.data.linkedEntityId || "" : "";
+    if (Boolean(linkedEntityType) !== Boolean(linkedEntityId)) {
+      return NextResponse.json({ error: "Invalid link", message: "Sélectionnez une opération liée complète ou laissez ce champ vide." }, { status: 400 });
+    }
+    if (linkedEntityId) {
+      if (linkedEntityType !== "OPERATION") {
+        return NextResponse.json({ error: "Invalid link", message: "Seules les opérations visibles dans votre espace peuvent être liées depuis ce formulaire." }, { status: 400 });
+      }
+      const actor = await getOperationalActor(user);
+      const access = await resolveOperationalObjectAccess({ actor, objectType: "OPERATION", objectId: linkedEntityId, action: "read" });
+      if (!access.allowed) {
+        return NextResponse.json({ error: "Forbidden link", message: "L’opération sélectionnée est introuvable ou inaccessible." }, { status: 403 });
+      }
+    }
   }
 
   const record = await createWorkflowRecord(parsed.data, employee, user.id);

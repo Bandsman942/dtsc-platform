@@ -7,6 +7,7 @@ import {
   MEETING_PARTICIPANT_ROLES,
   MEETING_RESPONSE_STATUSES,
   REQUEST_ACTIONS,
+  REQUEST_TYPES,
   TASK_ACTIONS,
   TASK_PRIORITIES,
   TASK_TYPES,
@@ -62,7 +63,7 @@ export const enterpriseTaskActionSchema = z.object({
 });
 
 export const enterpriseRequestCreateSchema = z.object({
-  requestType: z.string().trim().min(2).max(100),
+  requestType: z.enum(REQUEST_TYPES),
   title: z.string().trim().min(3).max(180),
   description: z.string().trim().min(3).max(5000),
   priority: prioritySchema,
@@ -72,6 +73,9 @@ export const enterpriseRequestCreateSchema = z.object({
   ...sourceFields,
 });
 
+// Les anciennes demandes peuvent contenir un type historique hors catalogue. L'update
+// reste compatible afin de ne pas rendre ces fiches impossibles à modifier ; les nouvelles
+// demandes, elles, sont strictement bornées par REQUEST_TYPES.
 export const enterpriseRequestUpdateSchema = z.object({
   revision: z.coerce.number().int().min(1),
   requestType: z.string().trim().min(2).max(100).optional(),
