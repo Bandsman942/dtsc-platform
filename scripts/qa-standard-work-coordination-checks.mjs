@@ -46,7 +46,7 @@ function calendarChecks() {
   requireText("app/api/calendar/resources/reservations/route.ts", ["RESOURCE_CONFLICT", "calendarResourceReservationConflictWhere", "Seul le créateur responsable"]);
   requireText("app/api/calendar/integrations/route.ts", ["PROVIDER_NOT_CONFIGURED", "NOT_CONFIGURED", "CONSENT_REQUIRED"]);
   requireText("components/calendar/calendar-advanced-tools-panel.tsx", ["calendar-advanced-tools/panel"]);
-  requireText("components/calendar/calendar-advanced-tools/panel.tsx", ["text.suggestSlot", "text.resourcesTitle", "text.externalCalendars"]);
+  requireText("components/calendar/calendar-advanced-tools-panel.tsx", ["text.suggestSlot", "text.resourcesTitle", "text.externalCalendars"]);
 }
 
 function taskChecks() {
@@ -117,7 +117,8 @@ function permissionChecks() {
 function slaChecks() {
   requireText("app/api/operations/sla/route.ts", ["CREATE_POLICY", "BIND_INSTANCE", "EVALUATE", "ARCHIVE_POLICY"]);
   requireText("lib/operational-sla.ts", ["bindOperationalSlaInstance", "WARNING", "BREACHED"]);
-  requireText("components/admin/operational-sla-panel.tsx", ["SLA opérationnels avancés", "Politiques actives", "Évaluer maintenant"]);
+  requireText("components/admin/operational-sla-panel.tsx", ["useAppLocale", "getOperationalSlaAdminCopy", "text.eyebrow", "text.policies.title", "text.evaluateNow"]);
+  requireText("lib/operational-sla-i18n.ts", ["SLA opérationnels avancés", "Advanced operational SLAs", "Politiques actives", "Active policies", "Évaluer maintenant", "Evaluate now"]);
 }
 
 function guideChecks() {
