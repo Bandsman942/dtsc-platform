@@ -19,10 +19,12 @@ import { enterpriseCoreT, type EnterpriseCoreKey } from "@/lib/enterprise-core-i
 
 type DocumentItem = { id: string; title: string; description: string | null; documentType: string; category: string | null; status: string; visibility: string; ownerUserId: string | null; departmentId: string | null; currentVersion: number; revision: number; expiresAt: string | null; updatedAt: string; versions?: Array<{ fileName: string }> };
 type LegacyRecord = { id: string; title: string; description: string | null; status: string; updatedAt: string };
+type LinkTargetChoice = { id: string; reference?: string | null; title?: string | null; status?: string | null; date?: string | null; relatedEntityType?: string | null };
 
 const documentTypeIds = ["GENERAL", "CONTRACT", "CERTIFICATE", "QUOTE", "PURCHASE_ORDER", "SUPPLIER_INVOICE", "DELIVERY_NOTE", "RECEIPT_PROOF", "TAX_DOCUMENT"] as const;
 const visibilityIds = ["ORGANIZATION", "DEPARTMENT", "RESTRICTED"] as const;
 const linkTypeIds = ["EnterpriseContract", "EnterpriseTask", "EnterpriseRequest", "EnterpriseApproval", "EnterpriseMeeting", "EnterpriseSupplier", "EnterprisePurchase", "EnterpriseProject", "EnterpriseAsset"] as const;
+type LinkTypeId = (typeof linkTypeIds)[number];
 
 function localizedChoice(locale: string | null | undefined, prefix: string, id: string): EnterpriseChoice {
   return { id, label: enterpriseCoreT(locale, `${prefix}.${id}` as EnterpriseCoreKey) };
@@ -34,6 +36,11 @@ function documentTypeLabel(locale: string | null | undefined, value: string) {
 
 function visibilityLabel(locale: string | null | undefined, value: string) {
   return enterpriseCoreT(locale, `documents.visibility.${value}` as EnterpriseCoreKey);
+}
+
+function linkTargetLabel(locale: string | null | undefined, target: LinkTargetChoice) {
+  const relatedType = target.relatedEntityType ? enterpriseCoreT(locale, `documents.target.${target.relatedEntityType}` as EnterpriseCoreKey) : "";
+  return [target.reference, target.title, relatedType, target.status ? statusLabel(locale, target.status) : "", target.date ? formatEnterpriseDate(target.date, locale) : ""].filter(Boolean).join(" · ") || enterpriseCoreT(locale, "common.notSpecified");
 }
 
 export function EnterpriseDocumentsWorkspace({ organizationId, members, departments, canCreate, canManage, locale, legacyRecords = [] }: { organizationId: string; members: EnterpriseChoice[]; departments: EnterpriseChoice[]; canCreate: boolean; canManage: boolean; locale?: string | null; legacyRecords?: LegacyRecord[] }) {
@@ -54,16 +61,44 @@ export function EnterpriseDocumentsWorkspace({ organizationId, members, departme
   const [detail, setDetail] = useState<DocumentItem | null>(null);
   const [uploadTarget, setUploadTarget] = useState<DocumentItem | null>(null);
   const [linkTarget, setLinkTarget] = useState<DocumentItem | null>(null);
+  const [linkEntityType, setLinkEntityType] = useState<LinkTypeId>("EnterpriseContract");
+  const [linkTargets, setLinkTargets] = useState<LinkTargetChoice[]>([]);
+  const [linkTargetsLoading, setLinkTargetsLoading] = useState(false);
   const [message, setMessage] = useState("");
   useToastMessage(message);
 
   const documentTypes = useMemo(() => documentTypeIds.map((id) => localizedChoice(locale, "documents.type", id)), [locale]);
   const visibilityChoices = useMemo(() => visibilityIds.map((id) => localizedChoice(locale, "documents.visibility", id)), [locale]);
   const linkTypes = useMemo(() => linkTypeIds.map((id) => localizedChoice(locale, "documents.target", id)), [locale]);
+  const linkTargetItems = useMemo(() => linkTargets.map((target) => ({ id: target.id, label: linkTargetLabel(locale, target) })), [linkTargets, locale]);
 
   useEffect(() => {
     if (requestedAction === "upload" && linkedContext && canCreate) setCreateOpen(true);
   }, [canCreate, linkedContext, requestedAction]);
+
+  useEffect(() => {
+    if (!linkTarget) {
+      setLinkTargets([]);
+      setLinkTargetsLoading(false);
+      return;
+    }
+    let active = true;
+    setLinkTargets([]);
+    setLinkTargetsLoading(true);
+    void fetch(`/api/enterprise/${organizationId}/documents/link-targets?type=${encodeURIComponent(linkEntityType)}`, { cache: "no-store" })
+      .then(async (response) => {
+        const body = await response.json().catch(() => null) as { targets?: LinkTargetChoice[]; error?: string } | null;
+        if (!response.ok || !body) throw new Error(body?.error || "ACTION_FAILED");
+        if (active) setLinkTargets(body.targets || []);
+      })
+      .catch((error) => {
+        if (!active) return;
+        setLinkTargets([]);
+        setMessage(error instanceof Error ? error.message : "ACTION_FAILED");
+      })
+      .finally(() => { if (active) setLinkTargetsLoading(false); });
+    return () => { active = false; };
+  }, [organizationId, linkEntityType, linkTarget]);
 
   const params = useMemo(() => { const value = new URLSearchParams({ page: String(page), pageSize: "20" }); if (search.trim()) value.set("search", search.trim()); if (status) value.set("status", status); if (visibility) value.set("visibility", visibility); if (type) value.set("type", type); return value; }, [page, search, status, visibility, type]);
   const collection = useEnterpriseV2Collection<DocumentItem>({ endpoint: `/api/enterprise/${organizationId}/documents`, params, refreshKey });
@@ -110,6 +145,7 @@ export function EnterpriseDocumentsWorkspace({ organizationId, members, departme
     try {
       await enterpriseV2Mutation(`/api/enterprise/${organizationId}/documents/${linkTarget.id}/links`, "POST", Object.fromEntries(new FormData(event.currentTarget).entries()));
       setLinkTarget(null);
+      setLinkTargets([]);
       setMessage(t("documents.linked"));
     } catch (error) { setMessage(error instanceof Error ? error.message : "ACTION_FAILED"); }
   }
@@ -138,7 +174,7 @@ export function EnterpriseDocumentsWorkspace({ organizationId, members, departme
     ...(item.currentVersion > 0 ? [{ id: "download", label: t("documents.action.download"), icon: Download, onSelect: () => void download(item) }] : []),
     ...(canManage ? [
       { id: "version", label: t("documents.action.newVersion"), icon: Upload, onSelect: () => setUploadTarget(item) },
-      { id: "link", label: t("documents.action.link"), icon: Link2, onSelect: () => setLinkTarget(item) },
+      { id: "link", label: t("documents.action.link"), icon: Link2, onSelect: () => { setLinkEntityType("EnterpriseContract"); setLinkTargets([]); setLinkTarget(item); } },
       { id: "archive", label: t("documents.action.archive"), icon: Archive, destructive: true, separatorBefore: true, onSelect: () => void archive(item) },
     ] : []),
   ];
@@ -156,7 +192,7 @@ export function EnterpriseDocumentsWorkspace({ organizationId, members, departme
     {legacyRecords.length ? <ModuleSection title={t("documents.historical.title")} description={t("documents.historical.description")}><BusinessList ariaLabel={t("documents.historical.aria")}>{legacyRecords.map((item) => <BusinessListItem key={item.id} title={item.title} status={<StatusBadge>{t("documents.historyBadge")}</StatusBadge>} description={item.description || formatEnterpriseDate(item.updatedAt, locale)} />)}</BusinessList></ModuleSection> : null}
     <Dialog open={createOpen} onClose={() => setCreateOpen(false)} title={linkedContext ? t("documents.form.linkedTitle", { reference: linkedReference }) : t("documents.form.newTitle")} className="h-[94dvh] max-w-3xl"><form onSubmit={createDocument} className="grid gap-4"><Field label={t("documents.form.title")}><Input name="title" defaultValue={sourceReference ? t("documents.form.contractTitle", { reference: sourceReference }) : ""} required /></Field><Field label={t("documents.form.description")}><textarea name="description" defaultValue={linkedContext ? t("documents.form.linkedDescription", { reference: linkedReference }) : ""} className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-base" /></Field><div className="grid gap-3 md:grid-cols-2"><Field label={t("documents.form.type")}><NativeSelect name="documentType" required defaultValue={sourceEntityType === "EnterpriseContract" ? "CONTRACT" : "GENERAL"} items={documentTypes} /></Field><Field label={t("documents.form.visibility")}><NativeSelect name="visibility" required defaultValue="RESTRICTED" items={visibilityChoices} /></Field><Field label={t("documents.form.owner")}><NativeSelect name="ownerUserId" items={members} /></Field><Field label={t("documents.form.department")}><NativeSelect name="departmentId" items={departments} /></Field><Field label={t("documents.form.category")}><Input name="category" defaultValue={sourceEntityType === "EnterpriseContract" ? "CONTRAT" : ""} /></Field><Field label={t("documents.form.expiry")}><Input name="expiresAt" type="date" /></Field></div><Button className="bg-dtsc-blue text-white"><FileText className="h-4 w-4" />{linkedContext ? t("documents.form.createThenUpload") : t("documents.form.createMetadata")}</Button></form></Dialog>
     <Dialog open={Boolean(uploadTarget)} onClose={() => setUploadTarget(null)} title={t("documents.upload.title")} description={uploadTarget?.title}><form onSubmit={uploadVersion} className="grid gap-4"><Field label={t("documents.upload.privateFile")}><Input name="file" type="file" required accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp" /></Field><p className="text-xs text-dtsc-muted">{t("documents.upload.help")}</p><Button className="bg-dtsc-blue text-white"><Upload className="h-4 w-4" />{t("documents.upload.submit")}</Button></form></Dialog>
-    <Dialog open={Boolean(linkTarget)} onClose={() => setLinkTarget(null)} title={t("documents.link.title")} description={linkTarget?.title}><form onSubmit={linkDocument} className="grid gap-4"><Field label={t("documents.link.targetType")}><NativeSelect name="targetEntityType" required items={linkTypes} /></Field><Field label={t("documents.link.targetIdentifier")} help={t("documents.link.targetHelp")}><Input name="targetEntityId" required /></Field><Field label={t("documents.link.label")}><Input name="label" /></Field><Button className="bg-dtsc-blue text-white"><Link2 className="h-4 w-4" />{t("documents.link.submit")}</Button></form></Dialog>
+    <Dialog open={Boolean(linkTarget)} onClose={() => { setLinkTarget(null); setLinkTargets([]); }} title={t("documents.link.title")} description={linkTarget?.title}><form onSubmit={linkDocument} className="grid gap-4"><Field label={t("documents.link.targetType")}><NativeSelect name="targetEntityType" required value={linkEntityType} onChange={(value) => setLinkEntityType(value as LinkTypeId)} items={linkTypes} /></Field><Field label={t("documents.link.targetIdentifier")} help={t("documents.link.targetHelp")}><NativeSelect key={linkEntityType} name="targetEntityId" required disabled={linkTargetsLoading || !linkTargetItems.length} items={linkTargetItems} /></Field>{linkTargetsLoading ? <p className="text-sm text-dtsc-muted">{t("common.loading")}</p> : null}<Field label={t("documents.link.label")}><Input name="label" /></Field><Button disabled={linkTargetsLoading || !linkTargetItems.length} className="bg-dtsc-blue text-white"><Link2 className="h-4 w-4" />{t("documents.link.submit")}</Button></form></Dialog>
     <Dialog open={Boolean(detail)} onClose={() => setDetail(null)} title={detail?.title || ""}>{detail ? <div className="grid gap-3 text-sm"><div className="flex flex-wrap gap-2"><StatusBadge tone={statusTone(detail.status)}>{statusLabel(locale, detail.status)}</StatusBadge><StatusBadge>{visibilityLabel(locale, detail.visibility)}</StatusBadge><StatusBadge>v{detail.currentVersion}</StatusBadge></div><p className="leading-6 text-dtsc-muted">{detail.description || t("common.noDescription")}</p><p>{t("documents.detail.type")}: {documentTypeLabel(locale, detail.documentType)}</p><p>{t("documents.detail.updated")}: {formatEnterpriseDate(detail.updatedAt, locale)}</p>{detail.currentVersion > 0 ? <Button type="button" onClick={() => void download(detail)}><Download className="h-4 w-4" />{t("documents.detail.downloadLatest")}</Button> : canManage ? <Button type="button" onClick={() => setUploadTarget(detail)}><Upload className="h-4 w-4" />{t("documents.detail.uploadFirst")}</Button> : null}</div> : null}</Dialog>
   </div>;
 }

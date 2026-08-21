@@ -71,9 +71,6 @@ export function OperationalSlaPanel() {
         action: "CREATE_POLICY",
         name: String(form.get("name") || ""),
         objectType: String(form.get("objectType") || "TASK"),
-        priority: String(form.get("priority") || ""),
-        startStatus: String(form.get("startStatus") || ""),
-        stopStatuses: String(form.get("stopStatuses") || "").split(",").map((value) => value.trim()).filter(Boolean),
         targetMinutes: Number(form.get("targetMinutes") || 60),
         warningMinutes: form.get("warningMinutes") ? Number(form.get("warningMinutes")) : undefined,
         escalationUserIds: [],
@@ -137,15 +134,15 @@ export function OperationalSlaPanel() {
 
       <div className="mt-6 grid min-w-0 gap-6 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
         <form onSubmit={createPolicy} className="grid gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
-          <h3 className="font-black text-dtsc-ink">Nouvelle règle de délai</h3>
-          <FormField label="Nom" hint="Nom professionnel de la règle."><Input name="name" required minLength={3} maxLength={160} className="h-12 rounded-xl bg-dtsc-surface" /></FormField>
+          <div>
+            <h3 className="font-black text-dtsc-ink">Nouvelle règle de délai</h3>
+            <p className="mt-1 text-sm leading-6 text-dtsc-muted">Cette version applique le délai au type de travail sélectionné. Les anciens filtres libres de priorité et de statut ont été retirés tant qu’ils ne sont pas reliés au moteur d’exécution : une règle affichée doit correspondre à un comportement réellement appliqué.</p>
+          </div>
+          <FormField label="Nom" hint="Nom professionnel de la règle, visible dans le suivi et l’audit."><Input name="name" required minLength={3} maxLength={160} className="h-12 rounded-xl bg-dtsc-surface" /></FormField>
           <div className="grid gap-3 sm:grid-cols-2">
-            <FormField label="Type de travail" hint="Domaine auquel appliquer la règle."><select name="objectType" className="h-12 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink">{OBJECT_TYPES.map((value) => <option key={value}>{value}</option>)}</select></FormField>
-            <FormField label="Priorité facultative" hint="Laissez vide pour toutes les priorités."><Input name="priority" maxLength={80} className="h-12 rounded-xl bg-dtsc-surface" /></FormField>
-            <FormField label="Étape de départ" hint="Étape qui déclenche le suivi du délai."><Input name="startStatus" maxLength={80} placeholder="Soumis" className="h-12 rounded-xl bg-dtsc-surface" /></FormField>
-            <FormField label="Étapes de fin" hint="Séparées par des virgules."><Input name="stopStatuses" placeholder="Terminé, Clôturé" className="h-12 rounded-xl bg-dtsc-surface" /></FormField>
-            <FormField label="Objectif en minutes" hint="Durée maximale avant dépassement."><Input name="targetMinutes" type="number" min={5} max={525600} defaultValue={1440} required className="h-12 rounded-xl bg-dtsc-surface" /></FormField>
-            <FormField label="Avertissement avant échéance" hint="Minutes avant l'objectif."><Input name="warningMinutes" type="number" min={1} max={525599} defaultValue={120} className="h-12 rounded-xl bg-dtsc-surface" /></FormField>
+            <FormField label="Type de travail" hint="Choisissez le domaine opérationnel auquel le délai doit réellement s’appliquer."><select name="objectType" className="h-12 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink">{OBJECT_TYPES.map((value) => <option key={value}>{value}</option>)}</select></FormField>
+            <FormField label="Objectif en minutes" hint="Durée maximale autorisée entre le démarrage du suivi et son échéance."><Input name="targetMinutes" type="number" min={5} max={525600} defaultValue={1440} required className="h-12 rounded-xl bg-dtsc-surface" /></FormField>
+            <FormField label="Avertissement avant échéance" hint="Nombre de minutes avant l’échéance auquel le suivi passe en état d’avertissement."><Input name="warningMinutes" type="number" min={1} max={525599} defaultValue={120} className="h-12 rounded-xl bg-dtsc-surface" /></FormField>
           </div>
           <Button type="submit" disabled={saving} className="rounded-xl bg-dtsc-blue text-white"><Plus className="h-4 w-4" /> Créer la règle</Button>
         </form>

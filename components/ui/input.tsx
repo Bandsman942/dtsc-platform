@@ -1,5 +1,7 @@
 import * as React from "react"
 
+import { ReferenceSelect } from "@/components/ui/reference-select"
+import { controlledReferenceKind } from "@/lib/forms/reference-catalog"
 import { cn } from "@/lib/utils"
 
 type InputProps = React.ComponentProps<"input"> & {
@@ -9,6 +11,25 @@ type InputProps = React.ComponentProps<"input"> & {
 
 function Input({ className, type, placeholder, title, "aria-label": ariaLabel, multiline = false, rows = 3, ...props }: InputProps) {
   const accessibleHint = typeof placeholder === "string" && placeholder.length > 0 ? placeholder : undefined;
+  const referenceKind = controlledReferenceKind(typeof props.name === "string" ? props.name : undefined);
+
+  if (referenceKind && (!type || type === "text")) {
+    return (
+      <ReferenceSelect
+        kind={referenceKind}
+        name={props.name}
+        value={props.value}
+        defaultValue={props.defaultValue}
+        required={props.required}
+        disabled={props.disabled}
+        onChange={props.onChange}
+        title={title ?? accessibleHint}
+        ariaLabel={ariaLabel ?? accessibleHint}
+        className={className}
+      />
+    );
+  }
+
   const commentComposer = typeof placeholder === "string"
     && /^(ajouter|répondre|votre réponse|écrire|rédiger).*(commentaire|discussion|réponse)/i.test(placeholder.trim());
   const shouldUseTextarea = multiline || ((!type || type === "text") && commentComposer);

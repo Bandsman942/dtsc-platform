@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { requireConsoleCapability } from "@/lib/admin-api";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { CONSOLE_CAPABILITIES } from "@/lib/console/console-capabilities";
+import { PAYMENT_METHOD_CODES } from "@/lib/forms/reference-catalog";
 import { isDtscInternalSession } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
@@ -17,7 +18,7 @@ const createSchema = z.object({
   validatorUserId: z.string().cuid(),
   amount: z.coerce.number().positive().max(1_000_000),
   currency: z.string().trim().min(3).max(3).default("USD"),
-  paymentMethod: z.string().trim().min(2).max(80),
+  paymentMethod: z.enum(PAYMENT_METHOD_CODES),
   externalReference: z.string().trim().max(160).optional(),
   reason: z.string().trim().min(3).max(500),
 });

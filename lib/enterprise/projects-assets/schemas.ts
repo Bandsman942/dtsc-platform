@@ -127,7 +127,7 @@ export const assetMaintenanceTransitionSchema = z.object({
 });
 
 export const assetIncidentCreateSchema = z.object({
-  incidentType: z.string().trim().min(2).max(120),
+  incidentType: z.enum(["DAMAGE"]).default("DAMAGE"),
   title: z.string().trim().min(2).max(240),
   description: z.string().trim().min(2).max(6000),
   severity: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).default("MEDIUM"),
