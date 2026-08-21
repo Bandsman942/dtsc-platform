@@ -16,6 +16,8 @@ Une facture validée devient un document financier suivi dans les créances. Un 
 
 Les fournisseurs sont gérés dans un référentiel commun. Une demande ou commande d’achat peut produire une réception ; la réception met à jour le stock mais ne remplace pas une facture fournisseur.
 
+Lors de la saisie d’une facture fournisseur de charge, choisissez pour chaque ligne le compte de charge correspondant dans le plan comptable actif de l’entreprise. DTSC propose uniquement les comptes utilisables et conserve ce choix lors de la comptabilisation. Les factures liées à une réception de stock ou à une immobilisation suivent leur traitement comptable spécialisé plutôt qu’un compte de charge ordinaire.
+
 Les mouvements de stock conservent leur origine, leur date, leur quantité et leur historique.
 
 ## Ressources humaines et paie
