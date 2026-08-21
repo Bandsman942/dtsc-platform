@@ -20,6 +20,20 @@ Lors de la saisie d’une facture fournisseur de charge, choisissez pour chaque 
 
 Les mouvements de stock conservent leur origine, leur date, leur quantité et leur historique.
 
+## Shop — reprise d'un historique papier
+
+Un Shop qui a commencé son activité dans un cahier peut restituer ses premières opérations Mobile Money et Télécom depuis `Clôture magasin > Reprise de l'historique du Shop`.
+
+Avant la reprise, créez les vraies caisses et les vrais floats avec les soldes du cutover, configurez chaque opérateur par devise et ouvrez les périodes comptables couvrant les dates historiques. Le workflow exige un solde de départ explicite pour chaque compte utilisé et peut contrôler un solde final vérifié.
+
+Utilisez toujours `Prévisualiser la reprise` avant l'enregistrement. Cette étape calcule les effets sur les caisses et floats sans écrire de mouvement. Si un solde a changé, si une période est fermée, si une référence opérateur existe déjà ou si le solde final ne concorde pas, la reprise est bloquée.
+
+La personne qui prépare le document ne peut pas l'appliquer elle-même. Après validation par une autre personne autorisée, DTSC crée les opérations avec leurs dates d'origine, des sessions de caisse historiques fermées et les écritures comptables correspondantes. Une caisse courante ouverte n'est jamais réutilisée pour un import historique.
+
+Pour une recharge Télécom, renseignez toujours le prix réellement payé par le client et le coût réellement débité par l'opérateur. DTSC calcule la marge et comptabilise l'encaissement, la diminution du float et le revenu de service. N'utilisez pas `0` comme coût uniquement pour compléter un historique lorsque le coût réel est inconnu.
+
+Une reprise déjà appliquée reste immuable. Toute correction ultérieure passe par le workflow d'annulation de l'opération concernée afin de préserver l'audit.
+
 ## Ressources humaines et paie
 
 Les entreprises clientes gèrent leurs collaborateurs, absences, temps de travail et paie dans leur propre espace. Les validations et paiements dépendent des permissions et du workflow prévu.

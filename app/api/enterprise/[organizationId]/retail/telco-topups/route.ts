@@ -7,6 +7,7 @@ import { authorizeRetailRequest, retailErrorResponse, retailListParams } from "@
 import { createConnectedTelcoTopupOperation } from "@/lib/enterprise/retail/operator-orchestration";
 import { telcoTopupCreateSchema } from "@/lib/enterprise/retail/schemas";
 import { createTelcoTopup } from "@/lib/enterprise/retail/service";
+import { finalizeTelcoTopupAccounting } from "@/lib/enterprise/retail/telco-accounting";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -69,9 +70,48 @@ export async function POST(req: Request, { params }: Params) {
     }
 
     const result = await createTelcoTopup(organizationId, auth.session.userId, prepared.input);
-    await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_TELCO_TOPUP_RECORDED", entity: "EnterpriseTelcoTopup", entityId: result.topup.id, request: req, metadata: { organizationId, number: result.topup.number, providerCode: result.topup.providerCode, status: result.topup.status, saleAmount: result.topup.saleAmount.toFixed(), operatorCost: result.topup.operatorCost.toFixed(), margin: result.topup.marginAmount.toFixed(), externalReference: result.topup.externalReference, idempotent: result.idempotent, mode: "MANUAL" } });
-    await writeApiLog({ request: req, statusCode: result.idempotent ? 200 : 201, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "telco-topups", action: "create", mode: "MANUAL" } });
-    return NextResponse.json({ ok: true, mode: "MANUAL", ...result }, { status: result.idempotent ? 200 : 201 });
+    const accounting = result.topup.status === "SUCCESS"
+      ? await finalizeTelcoTopupAccounting(organizationId, auth.session.userId, result.topup.id)
+      : null;
+    await writeAuditLog({
+      userId: auth.session.userId,
+      action: "ENTERPRISE_TELCO_TOPUP_RECORDED",
+      entity: "EnterpriseTelcoTopup",
+      entityId: result.topup.id,
+      request: req,
+      metadata: {
+        organizationId,
+        number: result.topup.number,
+        providerCode: result.topup.providerCode,
+        status: result.topup.status,
+        saleAmount: result.topup.saleAmount.toFixed(),
+        operatorCost: result.topup.operatorCost.toFixed(),
+        margin: result.topup.marginAmount.toFixed(),
+        externalReference: result.topup.externalReference,
+        idempotent: result.idempotent,
+        mode: "MANUAL",
+        journalEntryId: accounting?.entry.id || null,
+      },
+    });
+    await writeApiLog({
+      request: req,
+      statusCode: result.idempotent ? 200 : 201,
+      userId: auth.session.userId,
+      startedAt,
+      metadata: {
+        organizationId,
+        domain: "telco-topups",
+        action: "create",
+        mode: "MANUAL",
+        journalEntryId: accounting?.entry.id || null,
+      },
+    });
+    return NextResponse.json({
+      ok: true,
+      mode: "MANUAL",
+      ...result,
+      accounting: accounting ? { journalEntryId: accounting.entry.id, idempotent: accounting.idempotent } : null,
+    }, { status: result.idempotent ? 200 : 201 });
   } catch (error) {
     return retailErrorResponse(error, "TELCO_TOPUP_CREATE_FAILED");
   }
