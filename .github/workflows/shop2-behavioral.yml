@@ -47,6 +47,8 @@ on:
       - "scripts/qa-shop2-active-customer-cookie.mjs"
       - "scripts/qa-session-cookie-security.mjs"
       - "scripts/qa-retail-product-coherence.mjs"
+      - "scripts/ci-upstash-redis-rest-proxy.mjs"
+      - "scripts/qa-ci-auth-rate-limit-provisioning.mjs"
       - ".github/workflows/shop2-behavioral.yml"
 
 permissions:
@@ -75,6 +77,15 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=10
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dtsc_shop2_behavioral?schema=public
       AUTH_SECRET: shop2-auth-secret-with-more-than-thirty-two-characters-2026
@@ -94,6 +105,9 @@ jobs:
       E2E_USER_PASSWORD: E2eUser2026!
       E2E_CRON_SECRET: shop2-cron-secret-with-more-than-twenty-four-characters
       DEFAULT_ADMIN_BOOTSTRAP_ENABLED: "false"
+      UPSTASH_REDIS_REST_URL: http://127.0.0.1:8079
+      UPSTASH_REDIS_REST_TOKEN: dtsc-ci-${{ github.run_id }}-${{ github.run_attempt }}
+      CI_REDIS_REST_TOKEN: dtsc-ci-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -108,6 +122,20 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - name: Start isolated Redis REST proxy
+        run: |
+          nohup node scripts/ci-upstash-redis-rest-proxy.mjs >/tmp/dtsc-ci-redis-rest.log 2>&1 &
+          echo $! >/tmp/dtsc-ci-redis-rest.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error \
+              -H "Authorization: Bearer ${CI_REDIS_REST_TOKEN}" \
+              http://127.0.0.1:8079/healthz >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/dtsc-ci-redis-rest.log
+          exit 1
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Generate Prisma client
@@ -133,6 +161,7 @@ jobs:
           node scripts/qa-shop2-active-customer-cookie.mjs
           node scripts/qa-retail-product-coherence.mjs
           node --experimental-strip-types scripts/qa-session-cookie-security.mjs
+          node scripts/qa-ci-auth-rate-limit-provisioning.mjs
       - name: Build production application
         shell: bash
         run: |
@@ -156,11 +185,14 @@ jobs:
           exit 1
       - name: Shop 2 POS behavioral acceptance
         run: pnpm exec playwright test tests/e2e/shop2-retail.spec.mjs tests/e2e/shop2-commercial.spec.mjs tests/e2e/shop2-customer-payments.spec.mjs tests/e2e/shop2-customer-value-ui.spec.mjs tests/e2e/shop2-daily-close-ui.spec.mjs tests/e2e/shop2-final-coherence-ui.spec.mjs tests/e2e/shop2-z-global.spec.mjs
-      - name: Stop application
+      - name: Stop application and Redis REST proxy
         if: always()
         run: |
           if [ -f /tmp/dtsc-shop2-next.pid ]; then
             kill "$(cat /tmp/dtsc-shop2-next.pid)" || true
+          fi
+          if [ -f /tmp/dtsc-ci-redis-rest.pid ]; then
+            kill "$(cat /tmp/dtsc-ci-redis-rest.pid)" || true
           fi
       - name: Upload Shop 2 diagnostics
         if: failure()
@@ -173,3 +205,4 @@ jobs:
             test-results
             /tmp/dtsc-shop2-build.log
             /tmp/dtsc-shop2-next.log
+            /tmp/dtsc-ci-redis-rest.log

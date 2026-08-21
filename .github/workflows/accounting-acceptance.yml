@@ -30,6 +30,8 @@ on:
       - "scripts/qa-accounting-program-150-155.mjs"
       - "scripts/qa-accounting-acceptance-contract.mjs"
       - "scripts/qa-erp-cross-module-finance.mjs"
+      - "scripts/ci-upstash-redis-rest-proxy.mjs"
+      - "scripts/qa-ci-auth-rate-limit-provisioning.mjs"
       - "tests/e2e/accounting-onboarding.spec.mjs"
       - "tests/e2e/erp-cross-module-finance.spec.mjs"
       - "tests/e2e/accounting-z-close-protection.spec.mjs"
@@ -62,6 +64,15 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=10
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dtsc_accounting_acceptance?schema=public
       AUTH_SECRET: accounting-acceptance-auth-secret-with-more-than-thirty-two-characters-2026
@@ -79,6 +90,9 @@ jobs:
       E2E_USER_EMAIL: erp-user@example.test
       E2E_USER_PASSWORD: E2eUser2026!
       DEFAULT_ADMIN_BOOTSTRAP_ENABLED: "false"
+      UPSTASH_REDIS_REST_URL: http://127.0.0.1:8079
+      UPSTASH_REDIS_REST_TOKEN: dtsc-ci-${{ github.run_id }}-${{ github.run_attempt }}
+      CI_REDIS_REST_TOKEN: dtsc-ci-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -93,6 +107,20 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - name: Start isolated Redis REST proxy
+        run: |
+          nohup node scripts/ci-upstash-redis-rest-proxy.mjs >/tmp/dtsc-ci-redis-rest.log 2>&1 &
+          echo $! >/tmp/dtsc-ci-redis-rest.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error \
+              -H "Authorization: Bearer ${CI_REDIS_REST_TOKEN}" \
+              http://127.0.0.1:8079/healthz >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/dtsc-ci-redis-rest.log
+          exit 1
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Generate Prisma client
@@ -106,6 +134,7 @@ jobs:
           node scripts/qa-accounting-program-150-155.mjs
           node scripts/qa-accounting-acceptance-contract.mjs
           node scripts/qa-erp-cross-module-finance.mjs
+          node scripts/qa-ci-auth-rate-limit-provisioning.mjs
       - name: Build production application
         shell: bash
         run: |
@@ -137,6 +166,13 @@ jobs:
         run: |
           set -o pipefail
           pnpm exec playwright test tests/e2e/erp-cross-module-finance.spec.mjs --workers=1 2>&1 | tee /tmp/dtsc-erp-cross-module-playwright.log
+      - name: Reset isolated Redis state before close acceptance
+        run: |
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${CI_REDIS_REST_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data '["FLUSHDB"]' \
+            http://127.0.0.1:8079/ >/dev/null
       - name: Restart production application before close acceptance
         shell: bash
         run: |
@@ -159,11 +195,14 @@ jobs:
         run: |
           set -o pipefail
           pnpm exec playwright test tests/e2e/accounting-z-close-protection.spec.mjs --workers=1 2>&1 | tee /tmp/dtsc-accounting-close-playwright.log
-      - name: Stop application
+      - name: Stop application and Redis REST proxy
         if: always()
         run: |
           if [ -f /tmp/dtsc-accounting-next.pid ]; then
             kill "$(cat /tmp/dtsc-accounting-next.pid)" || true
+          fi
+          if [ -f /tmp/dtsc-ci-redis-rest.pid ]; then
+            kill "$(cat /tmp/dtsc-ci-redis-rest.pid)" || true
           fi
       - name: Upload accounting diagnostics
         if: failure()
@@ -180,3 +219,4 @@ jobs:
             /tmp/dtsc-accounting-onboarding-playwright.log
             /tmp/dtsc-erp-cross-module-playwright.log
             /tmp/dtsc-accounting-close-playwright.log
+            /tmp/dtsc-ci-redis-rest.log
