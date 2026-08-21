@@ -65,7 +65,7 @@ function looksReferenceLike(fieldName) {
 }
 
 function looksTenantRelation(fieldName) {
-  return /(User|Employee|Department|Supplier|Customer|Client|Patient|Project|Budget|Account|Site|Warehouse|Location|Product|Category|Organization|Member|Plan|Contract|Document|Party|Approver|Owner|Assignee|Responsible|Validator|Recipient)Id$/i.test(fieldName);
+  return /(User|Employee|Department|Supplier|Customer|Client|Patient|Project|Budget|Account|Site|Warehouse|Location|Product|Category|Organization|Member|Plan|Contract|Document|Party|Entity|Approver|Owner|Assignee|Responsible|Validator|Recipient)Id$/i.test(fieldName);
 }
 
 function isDocumentedException(relativePath, fieldName) {
