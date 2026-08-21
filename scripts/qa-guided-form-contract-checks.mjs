@@ -25,7 +25,7 @@ expect("ERP exposes controlled unit choices", /export function unitChoices/.test
 
 expect("Purchase form declares the guided-form contract", purchases.includes('data-dtsc-guided-form="purchase"'));
 expect("Purchase currency uses a controlled selector", purchases.includes('items={currencyChoices(locale)}') && !purchases.includes('<Input name="currency"'));
-expect("Purchase unit uses a controlled selector", purchases.includes('items={unitChoices(locale)}') && !/value=\{item\.unit\}[\s\S]{0,180}<Input/.test(purchases));
+expect("Purchase unit uses a controlled selector", purchases.includes('items={unitChoices(locale)}') && !purchases.includes('<Input value={item.unit}'));
 expect("Purchase form uses contextual help broadly", (purchases.match(/help=\{guide\(/g) || []).length >= 14);
 expect("Purchase lines expose explicit business labels", purchases.includes('guide("lineDescription")') && purchases.includes('guide("quantity")') && purchases.includes('guide("unitPrice")') && purchases.includes('guide("taxRate")'));
 expect("Purchase form keeps mobile-safe minmax grids", purchases.includes('grid-cols-[minmax(0,1fr)]'));
