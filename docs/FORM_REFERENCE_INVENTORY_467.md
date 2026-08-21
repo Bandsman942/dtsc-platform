@@ -43,6 +43,17 @@ L’audit a remonté plusieurs `<input type="hidden" name="entityType">` et `rel
 
 La QA ignore donc uniquement les champs HTML explicitement `type="hidden"`. Un `<input>` visible portant le même nom reste bloqué. Cette règle ne constitue pas une exception métier et ne permet pas de contourner le contrôle des références visibles.
 
+## Relations métier contrôlées
+
+Les identifiants de relations visibles sont désormais traités comme des références, au même titre que les enums. Le scanner recherche notamment les champs terminant par `UserId`, `EmployeeId`, `DepartmentId`, `SupplierId`, `ProjectId`, `BudgetId`, `AccountId`, `OrganizationId`, `EntityId`, `ApproverId`, `OwnerId`, `ResponsibleId` ou `ValidatorId`. Un identifiant caché et dérivé par le code reste autorisé ; un identifiant demandé manuellement à l’utilisateur ne l’est pas.
+
+Deux migrations transverses ont été nécessaires après ce scan :
+
+- **Activités / juridique** : les dossiers, risques et demandes juridiques ne demandent plus un `linkedEntityId`. L’utilisateur sélectionne une opération visible dans son espace Activités ; `linkedEntityType = OPERATION` est dérivé par le client, et la route `collaborator-workflows` revalide côté serveur que l’opération existe et que l’acteur possède un accès de lecture via `resolveOperationalObjectAccess`. Les formulaires Contrat et Litige n’affichent plus ce couple de champs car leur runtime ne persistait pas cette relation : aucun réglage placebo n’est conservé.
+- **Documents entreprise** : la boîte « Lier le document » ne demande plus une référence interne à copier-coller. Le type de cible reste un choix contrôlé, puis `GET /api/enterprise/[organizationId]/documents/link-targets` charge uniquement des cibles du même tenant et autorisées pour le module Documents. Le second champ est un `NativeSelect` affichant référence, titre, statut et/ou date métier. La création finale continue d’être revalidée par `createEnterpriseLink`, qui appelle `enterpriseSourceEntityExists` avec le même `organizationId` avant toute écriture.
+
+Ainsi, les listes côté client améliorent l’UX mais ne constituent jamais une autorisation : une requête forgée avec un identifiant externe au périmètre reste rejetée côté serveur.
+
 ## Aide contextuelle
 
 `FormField` et `Field` peuvent fournir une aide générique bilingue lorsqu’un contrôle expose un nom de référence connu. Une aide métier spécifique fournie par le formulaire reste prioritaire.
@@ -62,7 +73,7 @@ Ils ont donc été retirés du formulaire de création dans cette migration. Les
 - que devise, unité, mode de paiement et les types historiques migrés passent par le catalogue partagé ;
 - qu’un `<input>` HTML natif visible ne réintroduit pas directement une référence contrôlée ;
 - que les champs cachés dérivés par le code ne sont pas confondus avec une saisie utilisateur ;
-- qu’un `Input` générique ne reste pas utilisé comme saisie libre pour un nom de champ ressemblant à un statut, une priorité, un type, une catégorie ou un mode ;
+- qu’un `Input` générique ne reste pas utilisé comme saisie libre pour un nom de champ ressemblant à un statut, une priorité, un type, une catégorie, un mode ou une relation métier `...Id` ;
 - qu’une priorité numérique (`type="number"`) reste classée comme rang/poids mesuré, et non comme enum métier ;
 - que les taxonomies personnalisables restantes sont explicitement bornées par fichier et documentées ci-dessous ;
 - que la QA fait partie de `qa:regression`.
