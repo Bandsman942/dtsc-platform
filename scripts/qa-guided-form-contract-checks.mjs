@@ -12,16 +12,21 @@ function expect(name, condition) {
 
 const formField = read("components/ui/form-field.tsx");
 const erpUi = read("components/enterprise/core-v2/erp-v2-ui.tsx");
+const referenceCatalog = read("lib/forms/reference-catalog.ts");
+const referenceSelect = read("components/ui/reference-select.tsx");
 const purchases = read("components/enterprise/core-v2/enterprise-purchases-workspace.tsx");
 const purchaseCopy = read("lib/enterprise/purchase-form-i18n.ts");
 const contract = read("docs/ENTERPRISE_FORM_UX_CONTRACT.md");
 
-expect("FormField keeps contextual help visible below the control", /hint \? <span className="break-words text-sm leading-6 text-dtsc-muted">\{hint\}<\/span>/.test(formField));
+expect("FormField keeps contextual help visible below the control", formField.includes('effectiveHint ? <span className="break-words text-sm leading-6 text-dtsc-muted">{effectiveHint}</span>'));
 expect("FormField supports visible field errors", /role="alert"/.test(formField));
-expect("ERP Field keeps help visible below the control", /help \? <span className="break-words text-sm leading-6 text-dtsc-muted">\{help\}<\/span>/.test(erpUi));
+expect("FormField prefers explicit guidance over generic reference guidance", formField.includes("const effectiveHint = hint || automaticHint"));
+expect("ERP Field keeps help visible below the control", erpUi.includes('effectiveHelp ? <span className="break-words text-sm leading-6 text-dtsc-muted">{effectiveHelp}</span>'));
 expect("ERP Field marks required business fields", /required = false/.test(erpUi) && /text-red-500/.test(erpUi));
-expect("ERP exposes controlled currency choices", /export function currencyChoices/.test(erpUi) && /"CDF"/.test(erpUi) && /"USD"/.test(erpUi));
-expect("ERP exposes controlled unit choices", /export function unitChoices/.test(erpUi) && /id: "unit"/.test(erpUi) && /id: "kg"/.test(erpUi));
+expect("ERP uses the canonical reference catalog", erpUi.includes('from "@/lib/forms/reference-catalog"') && erpUi.includes("export { currencyChoices, unitChoices }"));
+expect("Canonical catalog exposes controlled currency choices", referenceCatalog.includes("export function currencyChoices") && referenceCatalog.includes('id: "CDF"') && referenceCatalog.includes('id: "USD"'));
+expect("Canonical catalog exposes controlled unit choices", referenceCatalog.includes("export function unitChoices") && referenceCatalog.includes('id: "unit"') && referenceCatalog.includes('id: "kg"'));
+expect("Canonical reference selector renders a real select", referenceSelect.includes("<select") && referenceSelect.includes("data-dtsc-controlled-reference"));
 
 expect("Purchase form declares the guided-form contract", purchases.includes('data-dtsc-guided-form="purchase"'));
 expect("Purchase currency uses a controlled selector", purchases.includes('items={currencyChoices(locale)}') && !purchases.includes('<Input name="currency"'));
@@ -41,4 +46,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log("PASS guided form UX contract: contextual help, controlled currency/unit and responsive purchase form are enforced.");
+console.log("PASS guided form UX contract: visible guidance, canonical currency/unit catalogs and responsive purchase form are enforced.");
