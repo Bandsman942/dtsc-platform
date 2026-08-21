@@ -18,16 +18,30 @@ Cet inventaire matérialise le travail de l’Issue #467. Il complète `docs/ENT
 | Relation tenant-scoped | utilisateur, fournisseur, client, patient, projet, département, budget, compte | options chargées depuis le même `organizationId`, identifiant revalidé côté serveur |
 | Contenu rédigé | titre, description, note, commentaire, motif | texte libre avec aide visible |
 | Valeur mesurée | montant, quantité, rang numérique, taux, durée | contrôle numérique avec bornes métier |
+| Référence technique dérivée | `entityType` caché, type d’un élément déjà sélectionné | valeur calculée par l’application, jamais saisie par l’utilisateur |
 
 ## Source canonique commune
 
-Les devises, unités et modes de paiement manuels pris en charge sont désormais définis dans `lib/forms/reference-catalog.ts`. Les primitives ERP réutilisent ce catalogue ; elles ne maintiennent plus une copie concurrente.
+Les devises, unités et modes de paiement manuels pris en charge sont définis dans `lib/forms/reference-catalog.ts`. Le même catalogue sert désormais aussi de pont de migration pour plusieurs types métier historiques dont la source existait déjà dans le repo :
 
-`components/ui/input.tsx` reconnaît les noms `currency`, `currencyCode`, `unit`, `unitCode` et `paymentMethod` et délègue leur rendu à `components/ui/reference-select.tsx`. Ainsi, les anciens formulaires qui utilisent encore la primitive `Input` pour ces champs deviennent contrôlés sans modifier le format persistant des devises et unités : les valeurs enregistrées restent les mêmes codes (`USD`, `CDF`, `kg`, `unit`, etc.).
+- `requestType` : `GENERAL`, puis les familles de demandes déjà utilisées par Activités (`INFORMATION`, `DOCUMENT`, `VALIDATION`, `SUPPORT`, `ACTION`, `MEETING`, `FOLLOW_UP`, `OTHER`) ;
+- `linkedEntityType` juridique : valeurs reprises des natures de liens/sources déjà utilisées par les workflows juridiques (`PROJECT`, `SUPPLIER`, `CLIENT`, `EMPLOYEE`, `CONTRACT`, `OPERATION`, `FINANCE`, `TECHNICAL`, `SENSITIVE_DATA`, `MEDICAL_DATA`, `OTHER`) ;
+- `pharmacyType` : référentiel déjà présent dans `PharmacySettingsWorkspace` (`OFFICINE`, `CLINIC_INTERNAL`, `HOSPITAL`, `DEPOT`, `WHOLESALE`, `MOBILE`, `OTHER`) ;
+- `incidentType` des actifs : le domaine ne définit actuellement qu’une valeur métier explicite, `DAMAGE`. La migration ne fabrique donc pas artificiellement d’autres types.
 
-Pour les nouveaux paiements manuels, `paymentMethod` est désormais borné côté serveur aux codes `BANK_TRANSFER`, `CASH`, `MOBILE_MONEY`, `CARD` et `CHECK`. Les anciennes valeurs déjà persistées restent lisibles : l’affichage utilise le libellé canonique lorsqu’il connaît le code et conserve sinon la valeur historique.
+`components/ui/input.tsx` reconnaît les noms `currency`, `currencyCode`, `unit`, `unitCode`, `paymentMethod`, `requestType`, `linkedEntityType`, `pharmacyType` et `incidentType`, puis délègue leur rendu à `components/ui/reference-select.tsx`. Cela permet de corriger les formulaires historiques qui utilisent encore la primitive `Input` sans réécrire chaque gros composant en aveugle.
 
-Cette compatibilité n’est pas une autorisation pour créer de nouveaux `<Input name="currency">`, `<Input name="unit">` ou `<Input name="paymentMethod">` en comptant uniquement sur un effet de bord. Les nouveaux formulaires doivent utiliser explicitement une primitive de sélection ou une primitive métier qui documente le comportement attendu.
+`ReferenceSelect` conserve une option « valeur existante » lorsqu’un enregistrement historique contient un code absent du catalogue actuel. Cette compatibilité protège la lisibilité des données anciennes sans transformer automatiquement une ancienne valeur libre en nouveau choix autorisé.
+
+Pour les nouveaux paiements manuels, `paymentMethod` est borné côté serveur aux codes `BANK_TRANSFER`, `CASH`, `MOBILE_MONEY`, `CARD` et `CHECK`. Pour les nouvelles demandes ERP communes, `enterpriseRequestCreateSchema` est désormais borné au référentiel canonique de `REQUEST_TYPES`, tandis que l’update reste compatible avec une valeur historique déjà persistée. Pour les nouveaux incidents d’actif, `assetIncidentCreateSchema` accepte uniquement le type explicitement supporté `DAMAGE` jusqu’à ce qu’une taxonomie métier supplémentaire soit réellement définie.
+
+Cette compatibilité n’est pas une autorisation pour créer de nouveaux `<Input name="currency">`, `<Input name="unit">`, `<Input name="paymentMethod">` ou `<Input name="...Type">` en comptant uniquement sur un effet de bord. Les nouveaux formulaires doivent utiliser explicitement une primitive de sélection ou une primitive métier qui documente le comportement attendu.
+
+## Références techniques cachées
+
+L’audit a remonté plusieurs `<input type="hidden" name="entityType">` et `relatedEntityType`. Ces champs ne sont pas des saisies libres : leur valeur est dérivée par le code à partir du formulaire ouvert ou de l’objet déjà sélectionné. Les convertir en select visible dégraderait le contrat UX et exposerait un détail technique inutile.
+
+La QA ignore donc uniquement les champs HTML explicitement `type="hidden"`. Un `<input>` visible portant le même nom reste bloqué. Cette règle ne constitue pas une exception métier et ne permet pas de contourner le contrôle des références visibles.
 
 ## Aide contextuelle
 
@@ -39,14 +53,15 @@ Le formulaire de paiement manuel a également reçu des aides explicites sur le 
 
 Le formulaire SLA exposait `priority`, `startStatus` et `stopStatuses` comme textes libres. L’audit du runtime a montré que ces trois attributs étaient persistés mais **non appliqués par `bindOperationalSlaInstance` ni `evaluateSlaInstances`**. Les laisser dans l’interface aurait donné l’impression qu’un filtre métier était actif alors qu’il ne modifiait aucun comportement.
 
-Ils ont donc été retirés du formulaire de création dans cette migration. Les anciennes politiques restent lisibles. La réintroduction future de filtres priorité/statut devra d’abord relier ces références à un référentiel de statuts réellement compatible avec chaque `objectType`, puis les appliquer dans le moteur SLA et les couvrir par tests.
+Ils ont donc été retirés du formulaire de création dans cette migration. Les anciennes politiques restent lisibles. La réintroduction future de filtres priorité/statut devra d’abord relier ces références à un référentiel de statuts réellement compatible avec chaque `objectType`, puis les appliquer dans le moteur SLA et les couvrir par tests. Cette dette fonctionnelle est suivie par l’Issue #469.
 
 ## Audit automatisé
 
 `scripts/qa-controlled-form-reference-checks.mjs` parcourt les fichiers TSX/JSX actifs de `components/` et `app/` et vérifie notamment :
 
-- que devise, unité et mode de paiement passent par le catalogue partagé ;
-- qu’un `<input>` HTML natif ne réintroduit pas directement une référence contrôlée ;
+- que devise, unité, mode de paiement et les types historiques migrés passent par le catalogue partagé ;
+- qu’un `<input>` HTML natif visible ne réintroduit pas directement une référence contrôlée ;
+- que les champs cachés dérivés par le code ne sont pas confondus avec une saisie utilisateur ;
 - qu’un `Input` générique ne reste pas utilisé comme saisie libre pour un nom de champ ressemblant à un statut, une priorité, un type, une catégorie ou un mode ;
 - qu’une priorité numérique (`type="number"`) reste classée comme rang/poids mesuré, et non comme enum métier ;
 - que les taxonomies personnalisables restantes sont explicitement bornées par fichier et documentées ci-dessous ;
