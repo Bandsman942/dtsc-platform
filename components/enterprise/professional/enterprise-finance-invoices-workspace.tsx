@@ -48,6 +48,7 @@ type InvoiceLine = {
   quantity: string;
   unitPrice: string;
   discountAmount: string;
+  expenseAccountId: string;
 };
 type InvoiceItem = {
   id: string;
@@ -133,6 +134,7 @@ type PurchaseLookup = {
   totalAmount?: string | number | null;
 };
 type PurchaseReceiptLookup = { id: string; reference: string; purchaseId: string };
+type ExpenseAccountLookup = { id: string; code: string; nameFr: string; nameEn: string; accountType: string };
 type FinanceSourceLookups = {
   catalogItems?: CatalogLookup[];
   salesOrders?: SalesOrderLookup[];
@@ -140,6 +142,7 @@ type FinanceSourceLookups = {
   commercialContracts?: ContractLookup[];
   purchases?: PurchaseLookup[];
   purchaseReceipts?: PurchaseReceiptLookup[];
+  expenseAccounts?: ExpenseAccountLookup[];
 };
 
 const MODULE_META: Record<"FINANCE_RECEIVABLES" | "FINANCE_PAYABLES", { titleKey: EnterpriseFinanceKey; eyebrowKey: EnterpriseFinanceKey }> = {
@@ -162,7 +165,7 @@ function invoiceActionLabel(action: string, locale: FinanceLocale) {
 }
 
 function newLine(index: number): InvoiceLine {
-  return { key: `finance-line-${Date.now()}-${index}`, catalogItemId: "", description: "", quantity: "1", unitPrice: "0", discountAmount: "0" };
+  return { key: `finance-line-${Date.now()}-${index}`, catalogItemId: "", description: "", quantity: "1", unitPrice: "0", discountAmount: "0", expenseAccountId: "" };
 }
 
 function ageBucket(dueDate?: string | null) {
@@ -257,6 +260,7 @@ export function EnterpriseFinanceInvoicesWorkspace({
   const lookupData = useFinanceLookups(organizationId, moduleCode, refreshKey);
   const sources = lookupData.lookups as typeof lookupData.lookups & FinanceSourceLookups;
   const catalogItems = sources.catalogItems || [];
+  const expenseAccounts = sources.expenseAccounts || [];
   const salesOrders = (sources.salesOrders || []).filter((order) => !selectedPartyId || order.businessPartyId === selectedPartyId);
   const fulfillments = (sources.fulfillments || []).filter((fulfillment) => !selectedSalesOrderId || fulfillment.salesOrderId === selectedSalesOrderId);
   const contracts = (sources.commercialContracts || []).filter((contract) => !selectedPartyId || contract.businessPartyId === selectedPartyId);
@@ -312,6 +316,7 @@ export function EnterpriseFinanceInvoicesWorkspace({
         quantity: line.quantity,
         unitPrice: line.unitPrice,
         discountAmount: line.discountAmount,
+        expenseAccountId: !isReceivables && line.expenseAccountId ? line.expenseAccountId : undefined,
       })),
     };
     const payload = isReceivables ? {
@@ -473,10 +478,11 @@ export function EnterpriseFinanceInvoicesWorkspace({
                 <div key={line.key} className="grid gap-3 rounded-xl border border-dtsc-border p-3 md:grid-cols-12">
                   <div className="md:col-span-4"><Field label={`${t("productOrService")} ${index + 1}`}><NativeSelect value={line.catalogItemId} onChange={(value) => selectCatalogItem(line.key, value)} items={catalogItems.map((item) => ({ id: item.id, label: `${item.code} · ${item.name}` }))} /></Field></div>
                   <div className="md:col-span-4"><Field label={t("description")}><Input value={line.description} onChange={(event) => updateLine(line.key, "description", event.target.value)} required /></Field></div>
-                  <div className="md:col-span-1"><Field label={t("quantityShort")}><Input value={line.quantity} onChange={(event) => updateLine(line.key, "quantity", event.target.value)} type="number" inputMode="decimal" min="0.000001" step="0.000001" required /></Field></div>
-                  <div className="md:col-span-1"><Field label={t("price")}><Input value={line.unitPrice} onChange={(event) => updateLine(line.key, "unitPrice", event.target.value)} type="number" inputMode="decimal" min="0" step="0.01" required /></Field></div>
-                  <div className="md:col-span-1"><Field label={t("discount")}><Input value={line.discountAmount} onChange={(event) => updateLine(line.key, "discountAmount", event.target.value)} type="number" inputMode="decimal" min="0" step="0.01" /></Field></div>
-                  <div className="flex items-end md:col-span-1"><Button type="button" variant="outline" disabled={lines.length === 1} onClick={() => setLines((current) => current.filter((item) => item.key !== line.key))}>{t("remove")}</Button></div>
+                  {!isReceivables ? <div className="md:col-span-4"><Field label={t("expense")}><NativeSelect value={line.expenseAccountId} onChange={(value) => updateLine(line.key, "expenseAccountId", value)} items={expenseAccounts.map((account) => ({ id: account.id, label: `${account.code} · ${locale === "fr" ? account.nameFr : account.nameEn}` }))} /></Field></div> : null}
+                  <div className={isReceivables ? "md:col-span-1" : "md:col-span-3"}><Field label={t("quantityShort")}><Input value={line.quantity} onChange={(event) => updateLine(line.key, "quantity", event.target.value)} type="number" inputMode="decimal" min="0.000001" step="0.000001" required /></Field></div>
+                  <div className={isReceivables ? "md:col-span-1" : "md:col-span-3"}><Field label={t("price")}><Input value={line.unitPrice} onChange={(event) => updateLine(line.key, "unitPrice", event.target.value)} type="number" inputMode="decimal" min="0" step="0.01" required /></Field></div>
+                  <div className={isReceivables ? "md:col-span-1" : "md:col-span-3"}><Field label={t("discount")}><Input value={line.discountAmount} onChange={(event) => updateLine(line.key, "discountAmount", event.target.value)} type="number" inputMode="decimal" min="0" step="0.01" /></Field></div>
+                  <div className={`flex items-end ${isReceivables ? "md:col-span-1" : "md:col-span-3"}`}><Button type="button" variant="outline" disabled={lines.length === 1} onClick={() => setLines((current) => current.filter((item) => item.key !== line.key))}>{t("remove")}</Button></div>
                 </div>
               ))}
               <Button type="button" variant="outline" onClick={() => setLines((current) => [...current, newLine(current.length)])}><Plus className="h-4 w-4" />{t("addLine")}</Button>

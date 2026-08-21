@@ -26,14 +26,47 @@ export const buildSalesCreditNotePosting: PostingBuilder = async (tx, input) => 
 };
 
 export const buildSupplierInvoicePosting: PostingBuilder = async (tx, input) => {
-  const invoice = await tx.enterpriseSupplierInvoice.findFirst({ where: { id: input.sourceEntityId, organizationId: input.organizationId, status: { in: ["APPROVED", "POSTED", "PARTIALLY_PAID", "PAID"] } } });
+  const invoice = await tx.enterpriseSupplierInvoice.findFirst({
+    where: { id: input.sourceEntityId, organizationId: input.organizationId, status: { in: ["APPROVED", "POSTED", "PARTIALLY_PAID", "PAID"] } },
+    include: { items: true },
+  });
   if (!invoice) throw new EnterpriseAccountingError("SUPPLIER_INVOICE_NOT_POSTABLE", 409);
-  const debitKey = invoice.purchaseReceiptId ? "GOODS_RECEIVED_CLEARING" : invoice.assetId ? "FIXED_ASSET" : "OPERATING_EXPENSE";
-  const lines: PostingLineDraft[] = [
-    { accountMappingKey: debitKey, description: `Supplier invoice ${invoice.number}`, debit: invoice.subtotal, transactionCurrencyCode: invoice.currencyCode, transactionAmount: invoice.subtotal, businessPartyId: invoice.businessPartyId, projectId: invoice.projectId, assetId: invoice.assetId },
-    { accountMappingKey: "ACCOUNTS_PAYABLE", description: `Payable ${invoice.number}`, credit: invoice.grandTotal, transactionCurrencyCode: invoice.currencyCode, transactionAmount: invoice.grandTotal, businessPartyId: invoice.businessPartyId },
-  ];
-  if (invoice.taxTotal.gt(0)) lines.splice(1, 0, { accountMappingKey: "TAX_RECEIVABLE", description: `Recoverable tax ${invoice.number}`, debit: invoice.taxTotal, transactionCurrencyCode: invoice.currencyCode, transactionAmount: invoice.taxTotal, businessPartyId: invoice.businessPartyId });
+
+  const selectedExpenseAccountIds = Array.from(new Set(invoice.items.map((item) => item.expenseAccountId).filter((value): value is string => Boolean(value))));
+  if (!invoice.purchaseReceiptId && !invoice.assetId && selectedExpenseAccountIds.length) {
+    const validExpenseAccounts = await tx.enterpriseLedgerAccount.findMany({
+      where: {
+        organizationId: input.organizationId,
+        id: { in: selectedExpenseAccountIds },
+        isActive: true,
+        archivedAt: null,
+        allowDirectPosting: true,
+        accountType: { in: ["EXPENSE", "OTHER_EXPENSE"] },
+      },
+      select: { id: true },
+    });
+    if (validExpenseAccounts.length !== selectedExpenseAccountIds.length) {
+      throw new EnterpriseAccountingError("SUPPLIER_INVOICE_EXPENSE_ACCOUNT_INVALID", 409);
+    }
+  }
+
+  const debitLines: PostingLineDraft[] = invoice.purchaseReceiptId
+    ? [{ accountMappingKey: "GOODS_RECEIVED_CLEARING", description: `Supplier invoice ${invoice.number}`, debit: invoice.subtotal, transactionCurrencyCode: invoice.currencyCode, transactionAmount: invoice.subtotal, businessPartyId: invoice.businessPartyId, projectId: invoice.projectId }]
+    : invoice.assetId
+      ? [{ accountMappingKey: "FIXED_ASSET", description: `Supplier invoice ${invoice.number}`, debit: invoice.subtotal, transactionCurrencyCode: invoice.currencyCode, transactionAmount: invoice.subtotal, businessPartyId: invoice.businessPartyId, projectId: invoice.projectId, assetId: invoice.assetId }]
+      : invoice.items.map((item) => ({
+          accountMappingKey: item.expenseAccountId ? `ACCOUNT_ID:${item.expenseAccountId}` : "OPERATING_EXPENSE",
+          description: item.description || `Supplier invoice ${invoice.number}`,
+          debit: item.netAmount,
+          transactionCurrencyCode: invoice.currencyCode,
+          transactionAmount: item.netAmount,
+          businessPartyId: invoice.businessPartyId,
+          projectId: item.projectId || invoice.projectId,
+        }));
+
+  const lines: PostingLineDraft[] = [...debitLines];
+  if (invoice.taxTotal.gt(0)) lines.push({ accountMappingKey: "TAX_RECEIVABLE", description: `Recoverable tax ${invoice.number}`, debit: invoice.taxTotal, transactionCurrencyCode: invoice.currencyCode, transactionAmount: invoice.taxTotal, businessPartyId: invoice.businessPartyId });
+  lines.push({ accountMappingKey: "ACCOUNTS_PAYABLE", description: `Payable ${invoice.number}`, credit: invoice.grandTotal, transactionCurrencyCode: invoice.currencyCode, transactionAmount: invoice.grandTotal, businessPartyId: invoice.businessPartyId });
   return { organizationId: input.organizationId, journalType: "PURCHASES", accountingDate: invoice.invoiceDate, documentDate: invoice.invoiceDate, reference: invoice.number, description: `Supplier invoice ${invoice.number}`, sourceModule: "FINANCE_PAYABLES", sourceEntityType: "EnterpriseSupplierInvoice", sourceEntityId: invoice.id, currencyCode: invoice.currencyCode, lines };
 };
 

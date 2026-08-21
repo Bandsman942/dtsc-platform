@@ -70,6 +70,7 @@ export async function GET(req: Request, { params }: Params) {
     commercialContracts,
     purchases,
     purchaseReceipts,
+    expenseAccounts,
   ] = await Promise.all([
     prisma.organizationMember.findMany({
       where: { organizationId, status: "ACTIVE", removedAt: null },
@@ -191,6 +192,20 @@ export async function GET(req: Request, { params }: Params) {
       take: 1000,
       select: { id: true, reference: true, purchaseId: true },
     }),
+    moduleCode === "FINANCE_PAYABLES"
+      ? prisma.enterpriseLedgerAccount.findMany({
+          where: {
+            organizationId,
+            isActive: true,
+            archivedAt: null,
+            allowDirectPosting: true,
+            accountType: { in: ["EXPENSE", "OTHER_EXPENSE"] },
+          },
+          orderBy: { code: "asc" },
+          take: 1000,
+          select: { id: true, code: true, nameFr: true, nameEn: true, accountType: true },
+        })
+      : Promise.resolve([]),
   ]);
 
   const financePayrollPeriods = moduleCode === "FINANCE_PAYMENTS"
@@ -224,5 +239,6 @@ export async function GET(req: Request, { params }: Params) {
     commercialContracts,
     purchases,
     purchaseReceipts,
+    expenseAccounts,
   });
 }

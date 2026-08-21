@@ -111,12 +111,16 @@ test.describe.serial("ERP cross-module Finance acceptance", () => {
     expect(await prisma.enterpriseJournalEntry.count({ where: { organizationId: foreignOrganizationId, sourceEntityId: entry.sourceEntityId } })).toBe(0);
   });
 
-  test("Procurement supplier invoice posts through the canonical Finance engine idempotently", async () => {
+  test("Procurement supplier invoice posts the selected expense account through the canonical Finance engine idempotently", async () => {
     const supplier = await prisma.enterpriseSupplier.upsert({
       where: { organizationId_normalizedName: { organizationId, normalizedName: "cross module supplier e2e" } },
       update: { status: "ACTIVE", archivedAt: null },
       create: { organizationId, legalName: "Cross Module Supplier E2E", displayName: "Cross Module Supplier", normalizedName: "cross module supplier e2e", status: "ACTIVE", createdByUserId: adminUserId },
     });
+    const selectedExpenseAccount = await prisma.enterpriseLedgerAccount.findFirst({
+      where: { organizationId, code: "6588", isActive: true, archivedAt: null, allowDirectPosting: true, accountType: { in: ["EXPENSE", "OTHER_EXPENSE"] } },
+    });
+    expect(selectedExpenseAccount, "Canonical SYSCOHADA seed must expose postable account 6588").toBeTruthy();
     const invoice = await prisma.enterpriseSupplierInvoice.create({
       data: {
         organizationId,
@@ -133,14 +137,18 @@ test.describe.serial("ERP cross-module Finance acceptance", () => {
         approvedAt: new Date(),
         approvedByUserId: adminUserId,
         createdByUserId: adminUserId,
-        items: { create: { description: "Cross-module operating expense", quantity: "1", unitPrice: "40", netAmount: "40", taxAmount: "0", totalAmount: "40" } },
+        items: { create: { description: "Cross-module operating expense", quantity: "1", unitPrice: "40", netAmount: "40", taxAmount: "0", totalAmount: "40", expenseAccountId: selectedExpenseAccount.id } },
       },
     });
     const first = await post(authenticatedPage, `/api/enterprise/${organizationId}/supplier-invoices/${invoice.id}/transition`, { action: "POST", revision: invoice.revision });
     expect(first.response.ok(), JSON.stringify(first.body)).toBeTruthy();
     const posted = await prisma.enterpriseSupplierInvoice.findUniqueOrThrow({ where: { id: invoice.id } });
     expect(posted.status).toBe("POSTED");
-    await assertBalancedPosting({ postingEvent: "SUPPLIER_INVOICE_POSTED", sourceEntityType: "EnterpriseSupplierInvoice", sourceEntityId: invoice.id });
+    const posting = await assertBalancedPosting({ postingEvent: "SUPPLIER_INVOICE_POSTED", sourceEntityType: "EnterpriseSupplierInvoice", sourceEntityId: invoice.id });
+    const selectedExpenseLine = posting.lines.find((line) => line.ledgerAccountId === selectedExpenseAccount.id);
+    expect(selectedExpenseLine, "Supplier posting must debit the explicitly selected expense account").toBeTruthy();
+    expect(Number(selectedExpenseLine.debit)).toBe(40);
+    expect(Number(selectedExpenseLine.credit)).toBe(0);
     expect(await prisma.enterprisePayable.count({ where: { organizationId, supplierInvoiceId: invoice.id } })).toBe(1);
 
     const second = await post(authenticatedPage, `/api/enterprise/${organizationId}/supplier-invoices/${invoice.id}/transition`, { action: "POST", revision: posted.revision });

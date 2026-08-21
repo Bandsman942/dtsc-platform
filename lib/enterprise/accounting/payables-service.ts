@@ -16,12 +16,34 @@ type CalculatedSupplierItem = SupplierInvoiceInput["items"][number] & {
   totalAmount: Prisma.Decimal;
 };
 
+async function assertExpenseAccounts(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  items: SupplierInvoiceInput["items"],
+) {
+  const accountIds = Array.from(new Set(items.map((item) => item.expenseAccountId).filter((value): value is string => Boolean(value))));
+  if (!accountIds.length) return;
+  const accounts = await tx.enterpriseLedgerAccount.findMany({
+    where: {
+      organizationId,
+      id: { in: accountIds },
+      isActive: true,
+      archivedAt: null,
+      allowDirectPosting: true,
+      accountType: { in: ["EXPENSE", "OTHER_EXPENSE"] },
+    },
+    select: { id: true },
+  });
+  if (accounts.length !== accountIds.length) throw new EnterpriseAccountingError("SUPPLIER_INVOICE_EXPENSE_ACCOUNT_INVALID", 409);
+}
+
 async function calculateSupplierItems(
   tx: Prisma.TransactionClient,
   organizationId: string,
   invoiceDate: Date,
   items: SupplierInvoiceInput["items"],
 ): Promise<CalculatedSupplierItem[]> {
+  await assertExpenseAccounts(tx, organizationId, items);
   const calculated: CalculatedSupplierItem[] = [];
   for (const item of items) {
     const quantityDecimal = new Prisma.Decimal(item.quantity);
