@@ -1,0 +1,25 @@
+model EnterpriseRetailHistoricalImport {
+  id               String   @id @default(cuid())
+  organizationId   String
+  reference        String
+  sourceLabel      String
+  status           String   @default("DRAFT")
+  periodStart      DateTime
+  periodEnd        DateTime
+  payloadJson      Json
+  previewJson      Json
+  resultJson       Json?
+  preparedByUserId String
+  approvedByUserId String?
+  approvedAt       DateTime?
+  appliedAt        DateTime?
+  lastErrorCode    String?
+  revision         Int      @default(1)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, reference])
+  @@index([organizationId, status, periodStart])
+  @@index([organizationId, createdAt])
+}
