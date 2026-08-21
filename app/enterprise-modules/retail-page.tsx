@@ -4,6 +4,7 @@ import { RetailActiveCustomerBar } from "@/components/enterprise/professional/re
 import { RetailDailyCloseWorkspace } from "@/components/enterprise/professional/retail-daily-close-workspace";
 import { RetailDeviceReadiness } from "@/components/enterprise/professional/retail-device-readiness";
 import { RetailGlobalReadiness } from "@/components/enterprise/professional/retail-global-readiness";
+import { RetailHistoricalImportPanel } from "@/components/enterprise/professional/retail-historical-import-panel";
 import { RetailLocaleText } from "@/components/enterprise/professional/retail-locale-text";
 import { RetailOfflineContinuity } from "@/components/enterprise/professional/retail-offline-continuity";
 import { RetailOmnichannelPanel } from "@/components/enterprise/professional/retail-omnichannel-panel";
@@ -25,12 +26,15 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
   const access = await resolveEnterpriseModuleAccess({ userId: user.id, organizationId, moduleCode, action: "read" });
   if (!access.allowed || !access.definition || access.definition.code !== moduleCode) notFound();
 
-  const [membership, organization] = await Promise.all([
+  const [membership, organization, manageAccess] = await Promise.all([
     requireEnterpriseMembership(session, organizationId),
     prisma.organization.findFirst({
       where: { id: organizationId, status: "ACTIVE", deletedAt: null, organizationType: "CLIENT", sectorCode: "COMMERCE_RETAIL" },
       select: { name: true },
     }),
+    moduleCode === "RETAIL_DAILY_CLOSE"
+      ? resolveEnterpriseModuleAccess({ userId: user.id, organizationId, moduleCode, action: "manage" })
+      : Promise.resolve(null),
   ]);
   if (!membership || !organization) notFound();
 
@@ -67,6 +71,10 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
             moduleCode={moduleCode}
           />
         )}
+
+        {moduleCode === "RETAIL_DAILY_CLOSE" ? (
+          <RetailHistoricalImportPanel organizationId={organizationId} canManage={Boolean(manageAccess?.allowed)} />
+        ) : null}
 
         {moduleCode === "RETAIL_POS" ? (
           <section aria-labelledby="retail-pos-additional-tools" className="space-y-3">
