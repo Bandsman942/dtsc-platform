@@ -93,6 +93,17 @@ const fr = {
     CTO_PROJECT: "Projet CTO",
     CTO_RECORD: "Registre CTO",
   } satisfies Record<OperationalSlaObjectType, string>,
+  referenceLabels: {
+    "Planifié": "Planifié",
+    "En cours": "En cours",
+    "Terminé": "Terminé",
+    "Reporté": "Reporté",
+    "Annulé": "Annulé",
+    "Faible": "Faible",
+    "Normale": "Normale",
+    "Élevée": "Élevée",
+    "Critique": "Critique",
+  } satisfies Record<string, string>,
 };
 
 const en: typeof fr = {
@@ -187,6 +198,17 @@ const en: typeof fr = {
     MPO_RECORD: "MPO record",
     CTO_PROJECT: "CTO project",
     CTO_RECORD: "CTO record",
+  },
+  referenceLabels: {
+    "Planifié": "Planned",
+    "En cours": "In progress",
+    "Terminé": "Completed",
+    "Reporté": "Postponed",
+    "Annulé": "Canceled",
+    "Faible": "Low",
+    "Normale": "Normal",
+    "Élevée": "High",
+    "Critique": "Critical",
   },
 };
 
