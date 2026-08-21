@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { historicalImportDraftSchema } from "@/lib/enterprise/retail/historical-import-schemas";
-import { createHistoricalImportDraft, getHistoricalImportWorkspace } from "@/lib/enterprise/retail/historical-import-service";
+import { createHistoricalImportDraft } from "@/lib/enterprise/retail/historical-import-service";
+import { getHistoricalImportWorkspaceView } from "@/lib/enterprise/retail/historical-import-workspace-service";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -12,7 +13,7 @@ export async function GET(req: Request, { params }: Params) {
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_DAILY_CLOSE", "read");
   if (!auth.ok) return auth.response;
   try {
-    const workspace = await getHistoricalImportWorkspace(organizationId, auth.session.userId);
+    const workspace = await getHistoricalImportWorkspaceView(organizationId, auth.session.userId);
     await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-history", action: "list" } });
     return NextResponse.json(workspace);
   } catch (error) {
