@@ -41,6 +41,9 @@ export function ReferenceSelect({
   const choices = controlledReferenceChoices(kind, locale);
   const controlledValue = typeof value === "string" || typeof value === "number" ? String(value) : undefined;
   const uncontrolledDefault = typeof defaultValue === "string" || typeof defaultValue === "number" ? String(defaultValue) : undefined;
+  const currentValue = controlledValue ?? uncontrolledDefault ?? "";
+  const historicalValue = currentValue && !choices.some((item) => item.id === currentValue) ? currentValue : "";
+  const historicalLabel = locale === "en" ? "Existing value" : "Valeur existante";
 
   return (
     <select
@@ -61,6 +64,7 @@ export function ReferenceSelect({
       )}
     >
       <option value="">—</option>
+      {historicalValue ? <option value={historicalValue}>{historicalValue} · {historicalLabel}</option> : null}
       {choices.map((item) => (
         <option key={item.id} value={item.id}>{item.label}</option>
       ))}
