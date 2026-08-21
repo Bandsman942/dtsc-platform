@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 const id = z.string().trim().min(1).max(240);
+const idempotencyKey = z.string().trim().min(8).max(180);
 const moneyString = z.union([z.string(), z.number()]).transform((value) => String(value).trim()).refine(
   (value) => /^-?\d+(?:\.\d{1,6})?$/.test(value),
   "Montant invalide.",
@@ -52,6 +53,7 @@ export const historicalImportLineSchema = z.discriminatedUnion("kind", [
 ]);
 
 export const historicalImportDraftSchema = z.object({
+  idempotencyKey,
   sourceLabel: z.string().trim().min(3).max(200),
   periodStart: occurredAt,
   periodEnd: occurredAt,
