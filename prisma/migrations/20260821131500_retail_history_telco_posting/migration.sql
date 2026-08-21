@@ -2,6 +2,7 @@ CREATE TABLE "EnterpriseRetailHistoricalImport" (
   "id" TEXT NOT NULL,
   "organizationId" TEXT NOT NULL,
   "reference" TEXT NOT NULL,
+  "idempotencyKey" TEXT NOT NULL,
   "sourceLabel" TEXT NOT NULL,
   "status" TEXT NOT NULL DEFAULT 'DRAFT',
   "periodStart" TIMESTAMP(3) NOT NULL,
@@ -26,6 +27,9 @@ CREATE UNIQUE INDEX "EnterpriseRetailHistoricalImport_organizationId_id_key"
 
 CREATE UNIQUE INDEX "EnterpriseRetailHistoricalImport_organizationId_reference_key"
   ON "EnterpriseRetailHistoricalImport"("organizationId", "reference");
+
+CREATE UNIQUE INDEX "EnterpriseRetailHistoricalImport_organizationId_idempotencyKey_key"
+  ON "EnterpriseRetailHistoricalImport"("organizationId", "idempotencyKey");
 
 CREATE INDEX "EnterpriseRetailHistoricalImport_organizationId_status_periodStart_idx"
   ON "EnterpriseRetailHistoricalImport"("organizationId", "status", "periodStart");
