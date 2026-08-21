@@ -64,6 +64,10 @@ function looksReferenceLike(fieldName) {
     || /(Status|Priority|Type|Category|Method)$/.test(fieldName);
 }
 
+function looksTenantRelation(fieldName) {
+  return /(User|Employee|Department|Supplier|Customer|Client|Patient|Project|Budget|Account|Site|Warehouse|Location|Product|Category|Organization|Member|Plan|Contract|Document|Party|Approver|Owner|Assignee|Responsible|Validator|Recipient)Id$/i.test(fieldName);
+}
+
 function isDocumentedException(relativePath, fieldName) {
   return documentedFreeTextExceptions.get(relativePath)?.has(fieldName) || false;
 }
@@ -81,7 +85,7 @@ for (const relativePath of sourceFiles) {
     const fieldName = match[1];
     const tag = match[0];
     if (isHiddenInput(tag)) continue;
-    if (globallyControlledInputNames.has(fieldName) || looksReferenceLike(fieldName)) {
+    if (globallyControlledInputNames.has(fieldName) || looksReferenceLike(fieldName) || looksTenantRelation(fieldName)) {
       failures.push(`${relativePath}: native input remains free for reference-like field '${fieldName}'`);
     }
   }
@@ -90,7 +94,7 @@ for (const relativePath of sourceFiles) {
     const fieldName = match[1];
     const tag = match[0];
     if (globallyControlledInputNames.has(fieldName)) continue;
-    if (!looksReferenceLike(fieldName)) continue;
+    if (!looksReferenceLike(fieldName) && !looksTenantRelation(fieldName)) continue;
     // A numeric priority is a rank/weight measurement, not a business-priority enum.
     if (/Priority$/i.test(fieldName) && /\btype=["']number["']/.test(tag)) continue;
     if (isDocumentedException(relativePath, fieldName)) continue;
@@ -104,4 +108,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(`PASS controlled form reference contract: ${sourceFiles.length} active TSX/JSX files scanned; canonical references and documented custom taxonomies are clean.`);
+console.log(`PASS controlled form reference contract: ${sourceFiles.length} active TSX/JSX files scanned; canonical references, tenant relations and documented custom taxonomies are clean.`);
