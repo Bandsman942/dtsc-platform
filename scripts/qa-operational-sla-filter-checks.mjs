@@ -89,15 +89,31 @@ requireText("components/admin/operational-sla-panel.tsx", [
   'name="startStatus"',
   'name="stopStatuses"',
   "OPERATIONAL_SLA_OBJECT_TYPES",
-  "Démarrer un suivi",
-  "Aucune règle active ne correspond actuellement",
-  "Les filtres historiques non reconnus restent lisibles",
+  "useAppLocale",
+  "getOperationalSlaAdminCopy",
+  "formatEnumLabelForLocale",
+  "copy.binding.title",
+  "copy.binding.noMatch",
+  "copy.binding.reference",
 ]);
 forbidText("components/admin/operational-sla-panel.tsx", [
   '<Input name="priority"',
   '<Input name="startStatus"',
   '<Input name="stopStatuses"',
   "Les anciens filtres libres de priorité et de statut ont été retirés",
+  ">Démarrer un suivi<",
+]);
+
+requireText("lib/operational-sla-i18n.ts", [
+  "getOperationalSlaAdminCopy",
+  'title: "Démarrer un suivi"',
+  'title: "Start tracking"',
+  "Aucune règle active ne correspond actuellement",
+  "No active rule currently matches",
+  "Les filtres historiques non reconnus restent lisibles",
+  "Unrecognized historical filters remain readable",
+  'CALENDAR_EVENT: "Événement calendrier"',
+  'CALENDAR_EVENT: "Calendar event"',
 ]);
 
 requireText("docs/MANUAL_E2E_OPERATIONAL_SLA_469.md", [
