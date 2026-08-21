@@ -12,6 +12,7 @@ Ces règles s'appliquent à tous les composants de `components/` et de ses sous-
 - `w-screen`, `100vw`, les `min-width` fixes et les largeurs en pixels supérieures au viewport sont interdits pour le contenu ordinaire. Ils ne sont acceptés que pour un vrai overlay plein écran documenté.
 - Le scroll horizontal est interdit au niveau de la page. Un scroll horizontal local n'est accepté que pour un contenu qui l'exige réellement, dans un conteneur borné et accessible.
 - Les formulaires, listes, cartes, dialogues, tableaux et médias doivent rester `min-w-0`/`max-w-full`; les dialogues et formulaires longs gardent un scroll interne et les safe areas.
+- Tous les formulaires professionnels respectent `docs/ENTERPRISE_FORM_UX_CONTRACT.md` : aide contextuelle visible sur les champs significatifs, valeurs de référence contrôlées, combobox/select pour devise/unité/statut/type/catégorie quand un référentiel existe, et texte libre uniquement lorsqu'il représente réellement un contenu rédigé par l'utilisateur.
 - Réutiliser `components/workspace/*`, `components/ui/*` et le contrat racine `data-dtsc-responsive-root` avant de créer une nouvelle structure responsive parallèle.
 - Ne jamais considérer `overflow-x-hidden` ou `overflow-x-clip` comme la correction unique d'un composant trop large: corriger aussi sa grille, ses enfants flexibles, ses textes longs et ses actions.
 

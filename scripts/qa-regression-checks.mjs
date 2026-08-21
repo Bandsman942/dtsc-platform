@@ -14,3 +14,4 @@ if (matches !== 1) {
 const migratedSource = legacySource.replace(obsoleteAppointmentAssertion, canonicalAppointmentAssertion);
 const sourceUrl = `data:text/javascript;base64,${Buffer.from(migratedSource, "utf8").toString("base64")}`;
 await import(sourceUrl);
+await import("./qa-guided-form-contract-checks.mjs");
