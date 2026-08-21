@@ -16,3 +16,4 @@ const sourceUrl = `data:text/javascript;base64,${Buffer.from(migratedSource, "ut
 await import(sourceUrl);
 await import("./qa-guided-form-contract-checks.mjs");
 await import("./qa-controlled-form-reference-checks.mjs");
+await import("./qa-operational-sla-filter-checks.mjs");
