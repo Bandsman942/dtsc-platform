@@ -35,6 +35,10 @@ import {
   buildRetailMobileMoneyPosting,
   buildRetailMobileMoneyReversalPosting,
 } from "@/lib/enterprise/accounting/sector-adapters/retail-mobile-money";
+import {
+  buildRetailTelcoTopupPosting,
+  buildRetailTelcoTopupReversalPosting,
+} from "@/lib/enterprise/accounting/sector-adapters/retail-telco";
 
 export const ENTERPRISE_POSTING_REGISTRY: Record<PostingEvent, PostingBuilder> = {
   SALES_INVOICE_POSTED: buildSalesInvoicePosting,
@@ -62,6 +66,8 @@ export const ENTERPRISE_POSTING_REGISTRY: Record<PostingEvent, PostingBuilder> =
   RETAIL_MOBILE_MONEY_REVERSED: buildRetailMobileMoneyReversalPosting,
   RETAIL_MOBILE_MONEY_FX_POSTED: buildRetailMobileMoneyFxPosting,
   RETAIL_MOBILE_MONEY_FX_REVERSED: buildRetailMobileMoneyFxReversalPosting,
+  RETAIL_TELCO_TOPUP_POSTED: buildRetailTelcoTopupPosting,
+  RETAIL_TELCO_TOPUP_REVERSED: buildRetailTelcoTopupReversalPosting,
   PHARMACY_CUSTOMER_RETURN: buildPharmacySectorInventoryPosting,
   PHARMACY_SUPPLIER_RETURN: buildPharmacySectorInventoryPosting,
   PHARMACY_LOSS: buildPharmacySectorInventoryPosting,
