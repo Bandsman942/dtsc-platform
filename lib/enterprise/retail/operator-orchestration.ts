@@ -11,6 +11,7 @@ import {
 } from "@/lib/enterprise/retail/payment-provider-adapter";
 import { mobileMoneyCreateSchema, telcoTopupCreateSchema } from "@/lib/enterprise/retail/schemas";
 import { createMobileMoneyTransaction, createTelcoTopup } from "@/lib/enterprise/retail/service";
+import { finalizeTelcoTopupAccounting } from "@/lib/enterprise/retail/telco-accounting";
 import { prisma } from "@/lib/prisma";
 
 type MobileMoneyInput = z.infer<typeof mobileMoneyCreateSchema>;
@@ -217,7 +218,9 @@ export async function finalizeConfirmedRetailOperatorOperation(organizationId: s
   }
   if (operation.sourceEntityType === ACTUAL_TELCO_TOPUP) {
     const topup = await prisma.enterpriseTelcoTopup.findFirst({ where: { id: operation.sourceEntityId, organizationId } });
-    return topup ? { kind: "TELCO_TOPUP" as const, topup, idempotent: true } : null;
+    if (!topup) return null;
+    await finalizeTelcoTopupAccounting(organizationId, operation.createdByUserId, topup.id);
+    return { kind: "TELCO_TOPUP" as const, topup, idempotent: true };
   }
   if (operation.status !== "CONFIRMED") return null;
 
@@ -250,6 +253,7 @@ export async function finalizeConfirmedRetailOperatorOperation(organizationId: s
     });
     if (!parsed.success) throw new EnterpriseRetailError("RETAIL_PROVIDER_PAYLOAD_INVALID", 409);
     const result = await createTelcoTopup(organizationId, operation.createdByUserId, parsed.data);
+    await finalizeTelcoTopupAccounting(organizationId, operation.createdByUserId, result.topup.id);
     await prisma.enterpriseRetailProviderOperation.update({
       where: { id: operation.id },
       data: { sourceEntityType: ACTUAL_TELCO_TOPUP, sourceEntityId: result.topup.id },
