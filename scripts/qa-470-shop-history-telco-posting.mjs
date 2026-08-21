@@ -93,8 +93,10 @@ requireText("historyWorkspace", 'accountUse: { in: ["MOBILE_MONEY_FLOAT", "TELCO
 
 requireText("historyCopy", "fr:", "copie FR reprise");
 requireText("historyCopy", "en:", "copie EN reprise");
-requireText("historyUi", "Prévisualiser", "surface reprise guidée");
+requireText("historyCopy", 'preview: "Prévisualiser la reprise"', "libellé FR de prévisualisation");
+requireText("historyCopy", 'preview: "Preview restore"', "libellé EN de prévisualisation");
 requireText("historyUi", "historicalImportCopy", "UI reliée au dictionnaire partagé");
+requireText("historyUi", "copy.preview", "CTA de prévisualisation reliée au dictionnaire partagé");
 requireText("historyUi", "datetime-local", "date/heure historique visible");
 requireText("historyUi", "operatorCost", "coût opérateur dans UI");
 requireText("retailPage", "RetailHistoricalImportPanel", "reprise accessible depuis clôture Shop");
