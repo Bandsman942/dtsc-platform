@@ -2,6 +2,7 @@ model EnterpriseRetailHistoricalImport {
   id               String   @id @default(cuid())
   organizationId   String
   reference        String
+  idempotencyKey   String
   sourceLabel      String
   status           String   @default("DRAFT")
   periodStart      DateTime
@@ -20,6 +21,7 @@ model EnterpriseRetailHistoricalImport {
 
   @@unique([organizationId, id])
   @@unique([organizationId, reference])
+  @@unique([organizationId, idempotencyKey])
   @@index([organizationId, status, periodStart])
   @@index([organizationId, createdAt])
 }
