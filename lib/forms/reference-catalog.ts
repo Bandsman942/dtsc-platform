@@ -6,7 +6,9 @@ type LocalizedReferenceChoice = {
   en: string;
 };
 
-export type ControlledReferenceKind = "currency" | "unit";
+export const PAYMENT_METHOD_CODES = ["BANK_TRANSFER", "CASH", "MOBILE_MONEY", "CARD", "CHECK"] as const;
+
+export type ControlledReferenceKind = "currency" | "unit" | "paymentMethod";
 
 const CURRENCY_OPTIONS: readonly LocalizedReferenceChoice[] = [
   { id: "USD", fr: "Dollar américain (USD)", en: "US dollar (USD)" },
@@ -40,11 +42,20 @@ const UNIT_OPTIONS: readonly LocalizedReferenceChoice[] = [
   { id: "service", fr: "Prestation / service", en: "Service" },
 ] as const;
 
+const PAYMENT_METHOD_OPTIONS: readonly LocalizedReferenceChoice[] = [
+  { id: "BANK_TRANSFER", fr: "Virement bancaire", en: "Bank transfer" },
+  { id: "CASH", fr: "Espèces", en: "Cash" },
+  { id: "MOBILE_MONEY", fr: "Mobile Money", en: "Mobile Money" },
+  { id: "CARD", fr: "Carte bancaire", en: "Payment card" },
+  { id: "CHECK", fr: "Chèque", en: "Cheque" },
+] as const;
+
 const CONTROLLED_REFERENCE_FIELDS: Readonly<Record<string, ControlledReferenceKind>> = {
   currency: "currency",
   currencyCode: "currency",
   unit: "unit",
   unitCode: "unit",
+  paymentMethod: "paymentMethod",
 };
 
 const GENERIC_FIELD_HELP = {
@@ -85,13 +96,24 @@ export function unitChoices(locale?: string | null): ReferenceChoice[] {
   return localize(UNIT_OPTIONS, locale);
 }
 
+export function paymentMethodChoices(locale?: string | null): ReferenceChoice[] {
+  return localize(PAYMENT_METHOD_OPTIONS, locale);
+}
+
 export function controlledReferenceKind(fieldName: string | null | undefined): ControlledReferenceKind | null {
   if (!fieldName) return null;
   return CONTROLLED_REFERENCE_FIELDS[fieldName] || null;
 }
 
 export function controlledReferenceChoices(kind: ControlledReferenceKind, locale?: string | null): ReferenceChoice[] {
-  return kind === "currency" ? currencyChoices(locale) : unitChoices(locale);
+  if (kind === "currency") return currencyChoices(locale);
+  if (kind === "unit") return unitChoices(locale);
+  return paymentMethodChoices(locale);
+}
+
+export function referenceChoiceLabel(kind: ControlledReferenceKind, value: string | null | undefined, locale?: string | null): string {
+  if (!value) return "";
+  return controlledReferenceChoices(kind, locale).find((item) => item.id === value)?.label || value;
 }
 
 export function referenceFieldHelp(fieldName: string | null | undefined, locale?: string | null): string | undefined {
