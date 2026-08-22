@@ -114,10 +114,27 @@ Aucun `vercel --prod` depuis une branche feature n’est autorisé.
 - le motif global `**` n’est plus désactivé ;
 - le fallback `ignoreCommand` ne distingue plus Production des autres environnements ;
 - l’ancien workflow de normalisation Preview réapparaît ;
-- la documentation ou le template de PR réintroduisent un Preview Vercel comme condition de merge.
+- la documentation ou le template de PR réintroduisent un Preview Vercel comme condition de merge ;
+- `vercel.sh` ne conserve plus le retry borné des erreurs Prisma `P1001` avant le build Production.
 
-## 9. Rollback
+## 9. Résilience des migrations Prisma en Production
+
+`vercel.sh` exécute toujours `pnpm prisma migrate deploy` avant `pnpm build` sur `main` en Production.
+
+Une indisponibilité réseau ou compute temporaire peut produire Prisma `P1001` alors que la même base et la même configuration viennent de fonctionner sur un déploiement précédent. Dans ce cas uniquement, le script applique un **retry borné** :
+
+- maximum 4 tentatives ;
+- délais progressifs entre tentatives ;
+- seules les sorties contenant `P1001` sont retentées ;
+- toute autre erreur Prisma/migration échoue immédiatement ;
+- si `P1001` persiste après la dernière tentative, le build Production échoue explicitement.
+
+Ce mécanisme ne remplace pas la supervision de la base et ne transforme jamais une panne persistante en succès. Il évite seulement qu’un incident de connectivité transitoire fasse échouer immédiatement un déploiement autrement sain.
+
+## 10. Rollback
 
 Toute réactivation de Preview doit faire l’objet d’une nouvelle Issue explicite, modifier `git.deploymentEnabled`, réintroduire un contrat de QA cohérent et documenter le coût/risque de la nouvelle politique.
 
 Aucun retour implicite aux Preview n’est autorisé.
+
+Le retry P1001 peut être retiré par revert de sa PR si son comportement devient indésirable ; aucun changement de schéma ou de donnée n’est requis pour ce rollback.
