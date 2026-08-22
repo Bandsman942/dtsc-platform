@@ -81,6 +81,8 @@ const profiles = {
     has("app/api/enterprise/[organizationId]/administration/modules/[moduleCode]/access/route.ts", "isSameOriginRequest");
     has("app/api/enterprise/[organizationId]/administration/departments/route.ts", "enterpriseDepartment.create");
     has("app/api/enterprise/[organizationId]/administration/departments/[departmentId]/route.ts", "isActive: false");
+    has("app/api/enterprise/[organizationId]/administration/departments/[departmentId]/route.ts", "createsDepartmentCycle");
+    has("app/api/enterprise/[organizationId]/administration/departments/[departmentId]/route.ts", "DEPARTMENT_CYCLE");
     has("app/api/enterprise/invitations/[id]/route.ts", "updatedAt: true");
     has("app/api/enterprise/invitations/[id]/route.ts", "const invitationIssuedAt = invitation.updatedAt");
     lacks("app/api/enterprise/invitations/[id]/route.ts", "invitation.createdAt.getTime() + expiryHours");
