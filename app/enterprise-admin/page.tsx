@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { EnterpriseAdministrationModule } from "@/components/enterprise/enterprise-administration-module";
 import { SaasAccessNotice } from "@/components/enterprise/saas-access-notice";
+import { LocaleProvider } from "@/components/i18n/locale-provider";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
 import { canUseFeature, getOrganizationEntitlements } from "@/lib/billing/entitlements";
@@ -69,11 +70,13 @@ export default async function EnterpriseAdminPage({ searchParams }: PageProps) {
 
   return (
     <AppShell user={user}>
-      <EnterpriseAdministrationModule
-        {...dataset}
-        locale={administrationLocale}
-        initialSection={section}
-      />
+      <LocaleProvider locale={administrationLocale}>
+        <EnterpriseAdministrationModule
+          {...dataset}
+          locale={administrationLocale}
+          initialSection={section}
+        />
+      </LocaleProvider>
     </AppShell>
   );
 }
