@@ -88,6 +88,8 @@ export function ClientOrganizationsPanel({
   const [sectorQuery, setSectorQuery] = useState("");
   const [templatePreview, setTemplatePreview] = useState<TemplatePreview | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [createAdminUserId, setCreateAdminUserId] = useState("");
+  const [createAdminReason, setCreateAdminReason] = useState("");
   const [editingOrganization, setEditingOrganization] = useState<ClientOrganization | null>(null);
   const [subscriptionOrganization, setSubscriptionOrganization] = useState<ClientOrganization | null>(null);
   const [organizationToDelete, setOrganizationToDelete] = useState<ClientOrganization | null>(null);
@@ -134,20 +136,44 @@ export function ClientOrganizationsPanel({
     };
   }, [selectedSectorId]);
 
+  function resetCreateAdminInvitation() {
+    setCreateAdminUserId("");
+    setCreateAdminReason("");
+  }
+
+  function closeCreateDialog() {
+    setCreateOpen(false);
+    resetCreateAdminInvitation();
+  }
+
   async function createOrganization(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
-    const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
+    const payload = Object.fromEntries(new FormData(event.currentTarget).entries()) as Record<string, string>;
+    if (createAdminUserId) {
+      const normalizedReason = createAdminReason.trim();
+      if (normalizedReason.length < 3) {
+        setMessage(t("adminReasonRequired"));
+        return;
+      }
+      payload.adminUserId = createAdminUserId;
+      payload.adminReason = normalizedReason;
+    } else {
+      delete payload.adminUserId;
+      delete payload.adminReason;
+    }
     const response = await fetch("/api/admin/client-organizations", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    const body = (await response.json().catch(() => null)) as { message?: string } | null;
-    setMessage(response.ok ? "Entreprise cliente créée." : body?.message || "Création impossible.");
+    const body = (await response.json().catch(() => null)) as OrganizationUpdateBody | null;
+    setMessage(response.ok
+      ? createAdminUserId ? t("companyCreatedWithAdmin") : t("companyCreated")
+      : resolveUpdateError(body, response.status));
     if (response.ok) {
       event.currentTarget.reset();
-      setCreateOpen(false);
+      closeCreateDialog();
       setSelectedSectorId("");
       setSectorQuery("");
       setTemplatePreview(null);
@@ -159,7 +185,7 @@ export function ClientOrganizationsPanel({
     if (body?.reasonCode === "ADMIN_ALREADY_ACTIVE") return t("adminAlreadyActive");
     if (body?.reasonCode === "ADMIN_INVITATION_ALREADY_PENDING") return t("adminInvitationAlreadyPending");
     if (body?.reasonCode === "ADMIN_TARGET_PRIVILEGED") return t("adminTargetPrivileged");
-    if (body?.reasonCode === "VALIDATION_ERROR" && body.field === "reason") return t("adminReasonRequired");
+    if (body?.reasonCode === "VALIDATION_ERROR" && (body.field === "reason" || body.field === "adminReason")) return t("adminReasonRequired");
     if (body?.reasonCode === "VALIDATION_ERROR" || body?.error === "Invalid payload" || responseStatus === 400) return body?.message || t("invalidForm");
     return body?.message || t("actionImpossible");
   }
@@ -279,15 +305,15 @@ export function ClientOrganizationsPanel({
             <h3 className="font-black text-dtsc-ink">Nouvelle entreprise cliente</h3>
             <p className="mt-1 text-sm text-dtsc-muted">Créez l&apos;organisation, son secteur, son administrateur initial et son plan.</p>
           </div>
-          <Button type="button" onClick={() => setCreateOpen(true)} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
+          <Button type="button" onClick={() => { resetCreateAdminInvitation(); setCreateOpen(true); }} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
             <Building2 className="h-4 w-4" />
             Créer l&apos;entreprise cliente
           </Button>
         </div>
       </div>
 
-      <Dialog open={createOpen} title="Créer une entreprise cliente" description="DTSC crée l'espace client, sélectionne le secteur et peut appliquer un modèle sectoriel sans accéder aux données privées futures." onClose={() => setCreateOpen(false)} className="h-[92dvh] max-w-6xl">
-      <form onSubmit={createOrganization} className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <Dialog open={createOpen} title="Créer une entreprise cliente" description="DTSC crée l'espace client, sélectionne le secteur et peut appliquer un modèle sectoriel sans accéder aux données privées futures." onClose={closeCreateDialog} className="h-[92dvh] max-w-6xl">
+      <form onSubmit={createOrganization} className="grid min-w-0 max-w-full gap-4 md:grid-cols-2 xl:grid-cols-3">
         <FormField label="Nom de l'entreprise" hint="Nom officiel ou commercial qui apparaîtra dans le sélecteur d'espace.">
           <Input name="name" placeholder="Nom de l'entreprise" required />
         </FormField>
@@ -295,7 +321,7 @@ export function ClientOrganizationsPanel({
           <Input name="slug" placeholder="slug-entreprise" pattern="[a-z0-9]+(-[a-z0-9]+)*" />
         </FormField>
         <FormField label="Secteur d'activité" hint="Choisissez un secteur pour prévisualiser et appliquer le template adapté." className="md:col-span-2 xl:col-span-1">
-          <div className="relative">
+          <div className="relative min-w-0 max-w-full">
             <input type="hidden" name="sectorId" value={selectedSectorId} />
             <Input
               value={sectorQuery}
@@ -307,7 +333,7 @@ export function ClientOrganizationsPanel({
               aria-label="Secteur d'activité"
             />
             {filteredSectors.length > 0 && (
-              <div className="mt-2 max-h-56 overflow-y-auto rounded-2xl border border-dtsc-border bg-[color-mix(in_srgb,var(--dtsc-surface)_88%,transparent)] p-2 shadow-[0_18px_55px_rgba(0,23,54,0.14)] backdrop-blur-xl">
+              <div className="mt-2 max-h-56 max-w-full overflow-y-auto rounded-2xl border border-dtsc-border bg-[color-mix(in_srgb,var(--dtsc-surface)_88%,transparent)] p-2 shadow-[0_18px_55px_rgba(0,23,54,0.14)] backdrop-blur-xl">
                 {filteredSectors.slice(0, 8).map((sector) => {
                   const active = selectedSectorId === sector.id;
                   return (
@@ -318,12 +344,12 @@ export function ClientOrganizationsPanel({
                         setSelectedSectorId(sector.id);
                         setSectorQuery(sector.labelFr);
                       }}
-                      className={`flex w-full items-start gap-3 rounded-xl px-3 py-2 text-left transition ${active ? "bg-cyan-400/18 text-cyan-600" : "text-dtsc-ink hover:bg-dtsc-soft"}`}
+                      className={`flex w-full min-w-0 items-start gap-3 rounded-xl px-3 py-2 text-left transition ${active ? "bg-cyan-400/18 text-cyan-600" : "text-dtsc-ink hover:bg-dtsc-soft"}`}
                     >
                       <span className="mt-0.5 h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: sector.color || "#22d3ee" }} />
                       <span className="min-w-0">
-                        <span className="block text-sm font-black">{sector.labelFr}</span>
-                        <span className="line-clamp-2 text-xs font-semibold text-dtsc-muted">{sector.descriptionFr || sector.labelEn}</span>
+                        <span className="block break-words text-sm font-black">{sector.labelFr}</span>
+                        <span className="line-clamp-2 break-words text-xs font-semibold text-dtsc-muted">{sector.descriptionFr || sector.labelEn}</span>
                       </span>
                     </button>
                   );
@@ -338,23 +364,50 @@ export function ClientOrganizationsPanel({
         <FormField label="Téléphone" hint="Numéro administratif de contact."><Input name="phone" placeholder="Téléphone" /></FormField>
         <FormField label="Adresse" hint="Adresse physique ou administrative."><Input name="address" placeholder="Adresse" /></FormField>
         <FormField label="Statut" hint="État administratif de l'espace client.">
-          <select name="status" defaultValue="DRAFT" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+          <select name="status" defaultValue="DRAFT" className="h-11 w-full min-w-0 max-w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
             <option value="DRAFT">Brouillon</option>
             <option value="ACTIVE">Actif</option>
             <option value="SUSPENDED">Suspendu</option>
             <option value="ARCHIVED">Archivé</option>
           </select>
         </FormField>
-        <FormField label="Administrateur entreprise" hint="Utilisateur existant qui recevra le rôle admin entreprise.">
-          <select name="adminUserId" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
-            <option value="">Désigner un admin entreprise existant</option>
-            {activeUsers.map((user) => (
-              <option key={user.id} value={user.id}>{user.name} · {user.email}</option>
-            ))}
-          </select>
-        </FormField>
+
+        <section className="grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-4 rounded-2xl border border-cyan-300/30 bg-cyan-400/10 p-4 md:col-span-2 xl:col-span-3">
+          <FormField label={t("createAdminLabel")} hint={t("createAdminHint")}>
+            <ReferenceCombobox
+              key={createOpen ? "create-admin-open" : "create-admin-closed"}
+              name="adminUserId"
+              options={activeUsers.map((user) => ({ id: user.id, label: `${user.name} · ${user.email}` }))}
+              allowCustom={false}
+              onValueChange={(value) => {
+                setCreateAdminUserId(value);
+                setCreateAdminReason("");
+              }}
+            />
+          </FormField>
+          {createAdminUserId ? (
+            <>
+              <FormField label={t("reasonLabel")} hint={t("reasonHint")} required>
+                <textarea
+                  name="adminReason"
+                  value={createAdminReason}
+                  onChange={(event) => setCreateAdminReason(event.currentTarget.value)}
+                  placeholder={t("reasonPlaceholder")}
+                  aria-label={t("reasonLabel")}
+                  aria-required="true"
+                  required
+                  minLength={3}
+                  maxLength={500}
+                  className="min-h-28 w-full min-w-0 max-w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+                />
+              </FormField>
+              <p className="min-w-0 break-words text-sm leading-6 text-dtsc-muted">{t("acceptanceHint")}</p>
+            </>
+          ) : null}
+        </section>
+
         <FormField label="Plan initial" hint="Plan d'abonnement à rattacher maintenant ou plus tard.">
-          <select name="planId" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+          <select name="planId" className="h-11 w-full min-w-0 max-w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
             <option value="">Plan à lier plus tard</option>
             {plans.map((plan) => (
               <option key={plan.id} value={plan.id}>{plan.name}</option>
@@ -362,22 +415,22 @@ export function ClientOrganizationsPanel({
           </select>
         </FormField>
         <FormField label="Notes internes DTSC" hint="Notes administratives visibles uniquement côté DTSC." className="xl:col-span-3">
-          <textarea name="notes" placeholder="Notes internes DTSC" className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" />
+          <textarea name="notes" placeholder="Notes internes DTSC" className="min-h-24 w-full min-w-0 max-w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" />
         </FormField>
         {templatePreview && (
-          <div className="rounded-2xl border border-cyan-300/30 bg-cyan-400/10 p-4 xl:col-span-3">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
+          <div className="min-w-0 max-w-full rounded-2xl border border-cyan-300/30 bg-cyan-400/10 p-4 xl:col-span-3">
+            <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
                 <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">Aperçu du modèle sectoriel</p>
-                <h3 className="mt-1 text-lg font-black text-dtsc-ink">{templatePreview.sector.labelFr}</h3>
-                <p className="mt-1 max-w-3xl text-sm text-dtsc-muted">{templatePreview.sector.descriptionFr}</p>
+                <h3 className="mt-1 break-words text-lg font-black text-dtsc-ink">{templatePreview.sector.labelFr}</h3>
+                <p className="mt-1 max-w-3xl break-words text-sm text-dtsc-muted">{templatePreview.sector.descriptionFr}</p>
               </div>
               <label className="flex items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-xs font-black text-dtsc-ink">
                 <input type="checkbox" name="applySectorTemplate" value="true" className="h-4 w-4 accent-cyan-500" />
                 Appliquer après création
               </label>
             </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-4">
+            <div className="mt-4 grid min-w-0 gap-3 md:grid-cols-4">
               <PreviewColumn title="Modules" items={templatePreview.modules.slice(0, 8).map((item) => item.labelFr)} moreCount={Math.max(0, templatePreview.modules.length - 8)} />
               <PreviewColumn title="Postes" items={templatePreview.positions.slice(0, 6).map((item) => item.labelFr)} moreCount={Math.max(0, templatePreview.positions.length - 6)} />
               <PreviewColumn title="Départements" items={templatePreview.departments.slice(0, 5).map((item) => item.labelFr)} moreCount={Math.max(0, templatePreview.departments.length - 5)} />
@@ -385,8 +438,8 @@ export function ClientOrganizationsPanel({
             </div>
           </div>
         )}
-        <div className="xl:col-span-3">
-          <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
+        <div className="flex min-w-0 justify-end xl:col-span-3" data-responsive-actions>
+          <Button disabled={Boolean(createAdminUserId) && createAdminReason.trim().length < 3} className="w-full rounded-xl bg-[#002b5b] text-white hover:bg-[#001736] sm:w-auto">
             <Building2 className="h-4 w-4" />
             Créer l&apos;entreprise cliente
           </Button>
@@ -701,11 +754,11 @@ function SubscriptionDialog({
 
 function PreviewColumn({ title, items, moreCount }: { title: string; items: string[]; moreCount: number }) {
   return (
-    <div className="rounded-2xl border border-dtsc-border bg-dtsc-surface/70 p-3">
-      <p className="text-xs font-black uppercase tracking-[0.14em] text-dtsc-muted">{title}</p>
-      <div className="mt-2 flex flex-wrap gap-1.5">
+    <div className="min-w-0 max-w-full rounded-2xl border border-dtsc-border bg-dtsc-surface/70 p-3">
+      <p className="break-words text-xs font-black uppercase tracking-[0.14em] text-dtsc-muted">{title}</p>
+      <div className="mt-2 flex min-w-0 flex-wrap gap-1.5">
         {items.map((item) => (
-          <span key={item} className="rounded-full bg-dtsc-page px-2 py-1 text-[0.68rem] font-black text-dtsc-ink">
+          <span key={item} className="max-w-full break-words rounded-full bg-dtsc-page px-2 py-1 text-[0.68rem] font-black text-dtsc-ink">
             {item}
           </span>
         ))}
