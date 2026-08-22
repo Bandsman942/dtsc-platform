@@ -203,7 +203,15 @@ export function EnterpriseAdministrationDepartmentsPanel({ organizationId, depar
   }
 
   async function deactivate(department: EnterpriseDepartmentItem) {
-    if (!window.confirm(t(locale, `Désactiver « ${department.labelFr} » sans supprimer son historique ?`, `Deactivate “${department.labelEn}” without deleting its history?`))) return;
+    const { confirmSensitiveAction } = await import("@/lib/client-confirmation");
+    const confirmation = await confirmSensitiveAction({
+      title: t(locale, "Désactiver le département", "Deactivate department"),
+      description: t(locale, `Désactiver « ${department.labelFr} » ? Son historique et ses anciens rattachements resteront conservés.`, `Deactivate “${department.labelEn}”? Its history and previous links will remain preserved.`),
+      confirmLabel: t(locale, "Désactiver", "Deactivate"),
+      cancelLabel: t(locale, "Annuler", "Cancel"),
+      tone: "warning",
+    });
+    if (!confirmation.confirmed) return;
     setMessage("");
     const response = await fetch(`/api/enterprise/${organizationId}/administration/departments/${department.id}`, { method: "DELETE" });
     const body = await response.json().catch(() => null) as { message?: string } | null;
