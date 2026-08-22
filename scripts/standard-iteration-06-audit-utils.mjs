@@ -14,6 +14,11 @@ function has(file, needle) {
   if (!content.includes(needle)) throw new Error(`${file}: contrat absent: ${needle}`);
 }
 
+function lacks(file, needle) {
+  const content = read(file);
+  if (content.includes(needle)) throw new Error(`${file}: contrat obsolète encore présent: ${needle}`);
+}
+
 function json(file) {
   return JSON.parse(read(file));
 }
@@ -56,8 +61,22 @@ const profiles = {
     has("app/api/enterprise/[organizationId]/reports/[id]/export/route.ts", "freshness");
   },
   administration: () => {
-    has("components/enterprise/enterprise-administration-module.tsx", "Checklist de configuration réelle");
+    has("components/enterprise/enterprise-administration-module.tsx", "EnterpriseConfigurationChecklistPanel");
+    has("components/enterprise/enterprise-administration-module.tsx", "EnterprisePendingActionsPanel");
+    lacks("components/enterprise/enterprise-administration-module.tsx", "Modules sectoriels");
+    has("components/enterprise/enterprise-admin-hotfix-panels.tsx", "BRAND_COLORS");
+    has("components/enterprise/enterprise-admin-hotfix-panels.tsx", "type=\"file\"");
+    has("components/enterprise/enterprise-admin-hotfix-panels.tsx", "Bloquer temporairement un accès");
+    has("components/enterprise/enterprise-admin-hotfix-panels.tsx", "fullScreen");
     has("lib/enterprise/enterprise-admin-loader.ts", "configurationChecklist");
+    has("lib/enterprise/enterprise-admin-loader.ts", "pendingActions");
+    has("lib/enterprise/enterprise-admin-loader.ts", "FINANCE_ACCOUNTS");
+    has("lib/enterprise/enterprise-admin-loader.ts", "FINANCE_BUDGETS");
+    has("lib/enterprise/module-access.ts", "getActiveEnterpriseModuleRestriction");
+    has("app/api/enterprise/[organizationId]/administration/modules/[moduleCode]/access/route.ts", "isSameOriginRequest");
+    has("app/api/enterprise/[organizationId]/administration/departments/route.ts", "enterpriseDepartment.create");
+    has("app/api/enterprise/[organizationId]/administration/departments/[departmentId]/route.ts", "isActive: false");
+    has("docs/CHANGELOG_ENTERPRISE_ADMIN_475.md", "Recette E2E propriétaire requise avant merge");
   },
   rbac: () => {
     has("prisma/schema.prisma", "model EnterpriseOrganizationRole");
