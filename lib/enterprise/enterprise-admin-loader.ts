@@ -287,7 +287,8 @@ export async function getEnterpriseAdministrationDataset(
   const pendingActions: EnterprisePendingActionItem[] = [];
   for (const task of tasks.filter((item) => openTaskStatuses.has(item.status))) {
     const involved = task.assignedToUserId === viewerUserId || task.createdByUserId === viewerUserId;
-    if (!involved && !(await canReadModule(task.sourceModule))) continue;
+    const moduleReadable = task.sourceModule ? await canReadModule(task.sourceModule) : false;
+    if (task.sourceModule ? !moduleReadable : !involved) continue;
     const presentation = modulePresentation(task.sourceModule);
     pendingActions.push({
       id: task.id,
@@ -299,7 +300,7 @@ export async function getEnterpriseAdministrationDataset(
       sourceModuleCode: presentation.code,
       sourceModuleLabel: presentation.label,
       actionUrl: presentation.actionUrl,
-      canAct: task.assignedToUserId === viewerUserId,
+      canAct: task.assignedToUserId === viewerUserId && (!task.sourceModule || moduleReadable),
       assignedUserName: task.assignedToUserId ? memberNameByUserId.get(task.assignedToUserId) || null : null,
       requestedByName: memberNameByUserId.get(task.createdByUserId) || null,
       dueAt: task.dueAt?.toISOString() || null,
@@ -308,7 +309,8 @@ export async function getEnterpriseAdministrationDataset(
   }
   for (const requestRecord of requests.filter((item) => openRequestStatuses.has(item.status))) {
     const involved = requestRecord.assignedToUserId === viewerUserId || requestRecord.requestedByUserId === viewerUserId;
-    if (!involved && !(await canReadModule(requestRecord.sourceModule))) continue;
+    const moduleReadable = requestRecord.sourceModule ? await canReadModule(requestRecord.sourceModule) : false;
+    if (requestRecord.sourceModule ? !moduleReadable : !involved) continue;
     const presentation = modulePresentation(requestRecord.sourceModule);
     pendingActions.push({
       id: requestRecord.id,
@@ -320,7 +322,7 @@ export async function getEnterpriseAdministrationDataset(
       sourceModuleCode: presentation.code,
       sourceModuleLabel: presentation.label,
       actionUrl: presentation.actionUrl,
-      canAct: requestRecord.assignedToUserId === viewerUserId,
+      canAct: requestRecord.assignedToUserId === viewerUserId && (!requestRecord.sourceModule || moduleReadable),
       assignedUserName: requestRecord.assignedToUserId ? memberNameByUserId.get(requestRecord.assignedToUserId) || null : null,
       requestedByName: memberNameByUserId.get(requestRecord.requestedByUserId) || null,
       dueAt: requestRecord.dueAt?.toISOString() || null,
@@ -331,7 +333,7 @@ export async function getEnterpriseAdministrationDataset(
     pendingActions.push({
       id: approval.id,
       kind: "APPROVAL",
-      title: english ? `Approval · ${approval.targetEntityType}` : `Validation · ${approval.targetEntityType}`,
+      title: english ? "Approval pending" : "Validation en attente",
       description: english ? "A pending approval needs a decision before the related process can continue." : "Une validation est en attente avant que le traitement associé puisse continuer.",
       status: approval.approverUserId === viewerUserId ? "WAITING_FOR_YOU" : "WAITING_FOR_VALIDATION",
       priority: "HIGH",
