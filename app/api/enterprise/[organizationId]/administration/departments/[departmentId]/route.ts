@@ -33,6 +33,23 @@ async function mutationContext(req: Request, organizationId: string, userId: str
   return { ok: true as const };
 }
 
+async function createsDepartmentCycle(organizationId: string, departmentId: string, parentDepartmentId: string) {
+  let cursor: string | null = parentDepartmentId;
+  const visited = new Set<string>();
+  while (cursor) {
+    if (cursor === departmentId) return true;
+    if (visited.has(cursor)) return true;
+    visited.add(cursor);
+    const ancestor = await prisma.enterpriseDepartment.findFirst({
+      where: { id: cursor, organizationId },
+      select: { parentDepartmentId: true },
+    });
+    if (!ancestor) return false;
+    cursor = ancestor.parentDepartmentId;
+  }
+  return false;
+}
+
 export async function PATCH(req: Request, { params }: Params) {
   const startedAt = Date.now();
   const session = await getSession();
@@ -54,6 +71,9 @@ export async function PATCH(req: Request, { params }: Params) {
   ]);
   if (responsibleUserId && !responsibleMember) return NextResponse.json({ error: "INVALID_RESPONSIBLE", message: "Le responsable choisi n’est pas un collaborateur actif de cette entreprise." }, { status: 400 });
   if (parentDepartmentId && !parentDepartment) return NextResponse.json({ error: "INVALID_PARENT", message: "Le département parent choisi n’est plus disponible." }, { status: 400 });
+  if (parentDepartmentId && await createsDepartmentCycle(organizationId, departmentId, parentDepartmentId)) {
+    return NextResponse.json({ error: "DEPARTMENT_CYCLE", message: "Ce déplacement créerait un cycle dans la hiérarchie des départements." }, { status: 409 });
+  }
 
   const updated = await prisma.enterpriseDepartment.update({
     where: { id: departmentId },
