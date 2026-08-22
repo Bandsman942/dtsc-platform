@@ -81,6 +81,9 @@ const profiles = {
     has("app/api/enterprise/[organizationId]/administration/modules/[moduleCode]/access/route.ts", "isSameOriginRequest");
     has("app/api/enterprise/[organizationId]/administration/departments/route.ts", "enterpriseDepartment.create");
     has("app/api/enterprise/[organizationId]/administration/departments/[departmentId]/route.ts", "isActive: false");
+    has("app/api/enterprise/invitations/[id]/route.ts", "updatedAt: true");
+    has("app/api/enterprise/invitations/[id]/route.ts", "const invitationIssuedAt = invitation.updatedAt");
+    lacks("app/api/enterprise/invitations/[id]/route.ts", "invitation.createdAt.getTime() + expiryHours");
     has("tests/e2e/erp-identity-professional.spec.mjs", "administration entreprise #475");
     has("tests/e2e/erp-identity-professional.spec.mjs", "viewport: { width: 390, height: 844 }");
     has("tests/e2e/erp-identity-professional.spec.mjs", "/administration/security");
