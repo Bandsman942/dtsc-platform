@@ -53,6 +53,7 @@ export async function PATCH(req: Request, { params }: Params) {
         joinedAt: true,
         removedAt: true,
         createdAt: true,
+        updatedAt: true,
         organization: {
           select: { id: true, name: true, status: true, deletedAt: true, organizationType: true },
         },
@@ -105,11 +106,15 @@ export async function PATCH(req: Request, { params }: Params) {
 
   const policy = await prisma.enterpriseOrganizationSecurityPolicy.findUnique({ where: { organizationId: invitation.organizationId }, select: { invitationExpiryHours: true } });
   const expiryHours = policy?.invitationExpiryHours ?? 168;
-  const expiresAt = new Date(invitation.createdAt.getTime() + expiryHours * 60 * 60 * 1000);
+  // A membership may be reused after a previous decline/removal. `createdAt`
+  // then points to the historic first membership, while `updatedAt` is refreshed
+  // by the invitation upsert and therefore represents the current invitation cycle.
+  const invitationIssuedAt = invitation.updatedAt;
+  const expiresAt = new Date(invitationIssuedAt.getTime() + expiryHours * 60 * 60 * 1000);
   const now = new Date();
   if (now > expiresAt) {
     await prisma.organizationMember.update({ where: { id: invitation.id }, data: { status: "REMOVED", removedAt: now, joinedAt: null } });
-    await writeAuditLog({ userId: session.userId, organizationId: invitation.organizationId, action: "ENTERPRISE_INVITATION_EXPIRED", entity: "OrganizationMember", entityId: invitation.id, request: req, riskLevel: "LOW", reasonCode: "INVITATION_EXPIRED", metadata: { organizationId: invitation.organizationId, expiryHours } });
+    await writeAuditLog({ userId: session.userId, organizationId: invitation.organizationId, action: "ENTERPRISE_INVITATION_EXPIRED", entity: "OrganizationMember", entityId: invitation.id, request: req, riskLevel: "LOW", reasonCode: "INVITATION_EXPIRED", metadata: { organizationId: invitation.organizationId, expiryHours, invitationIssuedAt: invitationIssuedAt.toISOString() } });
     await writeApiLog({ request: req, statusCode: 410, userId: session.userId, startedAt, metadata: { action: "enterprise_invitation_expired", organizationId: invitation.organizationId } });
     return NextResponse.json({ error: "INVITATION_EXPIRED", message: "Cette invitation a expiré selon la politique de sécurité de l’entreprise. Demandez une nouvelle invitation." }, { status: 410 });
   }
