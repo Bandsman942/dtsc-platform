@@ -12,6 +12,14 @@ type PageProps = {
   searchParams: Promise<{ section?: string }>;
 };
 
+function companyLocale(settingsJson: unknown, fallback?: string | null) {
+  if (settingsJson && typeof settingsJson === "object" && !Array.isArray(settingsJson)) {
+    const configured = (settingsJson as Record<string, unknown>).defaultLanguage;
+    if (configured === "en" || configured === "fr") return configured;
+  }
+  return fallback === "en" ? "en" : "fr";
+}
+
 // Legacy QA marker: canManageEnterpriseAdministration(session.userId, organizationId)
 // The effective server-side decision is now stricter and comes from resolveEnterpriseModuleAccess.
 export default async function EnterpriseAdminPage({ searchParams }: PageProps) {
@@ -53,12 +61,13 @@ export default async function EnterpriseAdminPage({ searchParams }: PageProps) {
   if (!dataset) {
     redirect("/dashboard");
   }
+  const administrationLocale = companyLocale(dataset.organization.settingsJson, user.locale);
 
   return (
     <AppShell user={user}>
       <EnterpriseAdministrationModule
         {...dataset}
-        locale={user.locale}
+        locale={administrationLocale}
         initialSection={section}
       />
     </AppShell>
