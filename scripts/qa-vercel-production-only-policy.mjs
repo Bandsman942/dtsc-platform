@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const vercel = JSON.parse(fs.readFileSync('vercel.json', 'utf8'));
+const vercelBuild = fs.readFileSync('vercel.sh', 'utf8');
 const policy = fs.readFileSync('docs/VERCEL_PRODUCTION_ONLY_POLICY.md', 'utf8');
 const contributing = fs.readFileSync('docs/CONTRIBUTING.md', 'utf8');
 const prTemplate = fs.readFileSync('.github/PULL_REQUEST_TEMPLATE.md', 'utf8');
@@ -22,6 +23,15 @@ assert.match(vercel.ignoreCommand ?? '', /production/);
 assert.match(vercel.ignoreCommand ?? '', /exit 1/);
 assert.match(vercel.ignoreCommand ?? '', /exit 0/);
 
+assert.match(vercelBuild, /VERCEL_ENV/);
+assert.match(vercelBuild, /VERCEL_GIT_COMMIT_REF/);
+assert.match(vercelBuild, /pnpm prisma migrate deploy/);
+assert.match(vercelBuild, /migration_max_attempts=4/);
+assert.match(vercelBuild, /grep -q "P1001"/);
+assert.match(vercelBuild, /non-retryable error/);
+assert.match(vercelBuild, /P1001 persisted after/);
+assert.match(vercelBuild, /pnpm build/);
+
 assert.equal(
   fs.existsSync('.github/workflows/vercel-production-only-status.yml'),
   false,
@@ -39,6 +49,8 @@ assert.match(policy, /GitHub Actions/i);
 assert.match(policy, /OWNER_E2E/i);
 assert.match(policy, /main.*Vercel Production/is);
 assert.match(policy, /Preview Vercel inattendu.*violation du contrat de configuration/is);
+assert.match(policy, /P1001/i);
+assert.match(policy, /retry.*borné/is);
 
 assert.match(contributing, /Production provient uniquement de `main`/i);
 assert.match(contributing, /merge\s*→\s*Vercel Production/i);
