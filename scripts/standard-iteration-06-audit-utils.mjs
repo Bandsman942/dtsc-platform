@@ -68,10 +68,15 @@ const profiles = {
     has("components/enterprise/enterprise-admin-hotfix-panels.tsx", "type=\"file\"");
     has("components/enterprise/enterprise-admin-hotfix-panels.tsx", "Bloquer temporairement un accès");
     has("components/enterprise/enterprise-admin-hotfix-panels.tsx", "fullScreen");
+    has("components/enterprise/enterprise-admin-hotfix-panels.tsx", "useFormSubmissionGuard");
+    has("components/enterprise/enterprise-admin-hotfix-panels.tsx", "aria-busy");
+    has("components/enterprise/enterprise-admin-hotfix-panels.tsx", "disabled:cursor-wait");
     has("lib/enterprise/enterprise-admin-loader.ts", "configurationChecklist");
     has("lib/enterprise/enterprise-admin-loader.ts", "pendingActions");
     has("lib/enterprise/enterprise-admin-loader.ts", "FINANCE_ACCOUNTS");
     has("lib/enterprise/enterprise-admin-loader.ts", "FINANCE_BUDGETS");
+    has("lib/enterprise/enterprise-admin-loader.ts", "manageAccessPromiseByModule");
+    has("lib/enterprise/enterprise-admin-loader.ts", "!moduleReadable || (!involved && !moduleManageable)");
     has("lib/enterprise/module-access.ts", "getActiveEnterpriseModuleRestriction");
     has("app/api/enterprise/[organizationId]/administration/modules/[moduleCode]/access/route.ts", "isSameOriginRequest");
     has("app/api/enterprise/[organizationId]/administration/departments/route.ts", "enterpriseDepartment.create");
