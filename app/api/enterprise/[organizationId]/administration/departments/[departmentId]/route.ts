@@ -40,7 +40,7 @@ async function createsDepartmentCycle(organizationId: string, departmentId: stri
     if (cursor === departmentId) return true;
     if (visited.has(cursor)) return true;
     visited.add(cursor);
-    const ancestor = await prisma.enterpriseDepartment.findFirst({
+    const ancestor: { parentDepartmentId: string | null } | null = await prisma.enterpriseDepartment.findFirst({
       where: { id: cursor, organizationId },
       select: { parentDepartmentId: true },
     });
