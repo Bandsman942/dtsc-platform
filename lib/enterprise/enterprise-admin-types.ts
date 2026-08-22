@@ -64,6 +64,7 @@ export type EnterpriseModuleItem = {
   labelFr: string;
   labelEn: string;
   descriptionFr: string | null;
+  descriptionEn?: string | null;
   moduleCategory: string;
   icon: string | null;
   isEnabled: boolean;
