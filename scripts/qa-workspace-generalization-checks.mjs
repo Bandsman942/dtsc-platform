@@ -37,8 +37,9 @@ expect("enterprise administration uses flat summary and workspace", enterpriseAd
 expect(
   "health uses dedicated workspaces outside the retired generic sector CRUD",
   !enterpriseAdmin.includes("HealthcareAdminWorkspace") &&
-    enterpriseAdmin.includes("Les domaines Health et Pharmacy utilisent exclusivement leurs workspaces dédiés") &&
-    enterpriseAdmin.includes('href="/enterprise-modules"') &&
+    !enterpriseAdmin.includes("EnterpriseSectorRecordsPanel") &&
+    !enterpriseAdmin.includes("sectorRecords") &&
+    enterpriseAdmin.includes("EnterpriseAdministrationModulesPanel") &&
     healthPatients.includes("HealthPatientsWorkspace") &&
     healthPatients.includes(`/api/enterprise/${"${organizationId}"}/healthcare/patients`) &&
     !healthPatients.includes("EnterpriseSectorRecordItem"),
