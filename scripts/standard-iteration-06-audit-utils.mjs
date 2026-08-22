@@ -81,6 +81,10 @@ const profiles = {
     has("app/api/enterprise/[organizationId]/administration/modules/[moduleCode]/access/route.ts", "isSameOriginRequest");
     has("app/api/enterprise/[organizationId]/administration/departments/route.ts", "enterpriseDepartment.create");
     has("app/api/enterprise/[organizationId]/administration/departments/[departmentId]/route.ts", "isActive: false");
+    has("tests/e2e/erp-identity-professional.spec.mjs", "administration entreprise #475");
+    has("tests/e2e/erp-identity-professional.spec.mjs", "viewport: { width: 390, height: 844 }");
+    has("tests/e2e/erp-identity-professional.spec.mjs", "/administration/security");
+    has("tests/e2e/erp-identity-professional.spec.mjs", "son historique et ses anciens rattachements resteront conservés");
     has("docs/CHANGELOG_ENTERPRISE_ADMIN_475.md", "Recette E2E propriétaire requise avant merge");
   },
   rbac: () => {
