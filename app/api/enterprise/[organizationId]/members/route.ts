@@ -12,19 +12,23 @@ import { enterpriseMemberInviteSchema } from "@/lib/validators";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
+function allowedDomains(value: unknown) {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string").map((item) => item.toLowerCase()) : [];
+}
+
 // Legacy QA marker: canManageEnterpriseAdministration
 // Invitations now use the stricter COLLABORATORS_POSITIONS manage decision from the canonical resolver.
 export async function POST(req: Request, { params }: Params) {
   const startedAt = Date.now();
   if (!isSameOriginRequest(req)) {
     await writeApiLog({ request: req, statusCode: 403, startedAt, metadata: { action: "enterprise_member_origin_denied" } });
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json({ error: "Forbidden", message: "Cette action doit être lancée depuis DTSC Platform." }, { status: 403 });
   }
 
   const session = await getSession();
   if (!session) {
     await writeApiLog({ request: req, statusCode: 401, startedAt });
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Unauthorized", message: "Votre session a expiré." }, { status: 401 });
   }
 
   const limited = await rateLimit(getRateLimitKey(req, `enterprise-member:${session.userId}`), 40, 60 * 60 * 1000);
@@ -45,13 +49,14 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Forbidden", message: "Seul un administrateur autorisé de cette entreprise peut inviter des collaborateurs." }, { status: 403 });
   }
 
-  const parsed = enterpriseMemberInviteSchema.safeParse(await req.json().catch(() => null));
+  const rawPayload = await req.json().catch(() => null);
+  const parsed = enterpriseMemberInviteSchema.safeParse(rawPayload);
   if (!parsed.success) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Invalid payload", message: "L'email ou le rôle est invalide." }, { status: 400 });
   }
 
-  const [organization, targetUser, inviter, position] = await Promise.all([
+  const [organization, targetUser, inviter, position, securityPolicy, pendingInvitations] = await Promise.all([
     prisma.organization.findFirst({
       where: { id: organizationId, status: "ACTIVE", deletedAt: null, organizationType: "CLIENT" },
       select: { id: true, name: true },
@@ -70,6 +75,8 @@ export async function POST(req: Request, { params }: Params) {
           select: { id: true, positionCode: true, labelFr: true },
         })
       : Promise.resolve(null),
+    prisma.enterpriseOrganizationSecurityPolicy.findUnique({ where: { organizationId } }),
+    prisma.organizationMember.count({ where: { organizationId, status: "INVITED", removedAt: null } }),
   ]);
 
   if (!organization) {
@@ -85,6 +92,21 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Invalid position", message: "Le poste sélectionné n'appartient pas à cette entreprise." }, { status: 400 });
   }
 
+  const maxPendingInvitations = securityPolicy?.maxPendingInvitations ?? 100;
+  if (pendingInvitations >= maxPendingInvitations) {
+    await writeAuditLog({ userId: session.userId, organizationId, action: "ENTERPRISE_INVITATION_LIMIT_BLOCKED", entity: "Organization", entityId: organizationId, request: req, riskLevel: "MEDIUM", reasonCode: "PENDING_INVITATION_LIMIT", metadata: { organizationId, maxPendingInvitations } });
+    return NextResponse.json({ error: "INVITATION_LIMIT_REACHED", message: `La limite de ${maxPendingInvitations} invitations en attente est atteinte. Traitez ou annulez une invitation avant d’en créer une nouvelle.` }, { status: 409 });
+  }
+
+  if (securityPolicy?.requireApprovedDomains) {
+    const domains = allowedDomains(securityPolicy.allowedEmailDomainsJson);
+    const emailDomain = targetUser.email.split("@").pop()?.toLowerCase() || "";
+    if (!emailDomain || !domains.includes(emailDomain)) {
+      await writeAuditLog({ userId: session.userId, organizationId, action: "ENTERPRISE_INVITATION_DOMAIN_BLOCKED", entity: "Organization", entityId: organizationId, request: req, riskLevel: "HIGH", reasonCode: "EMAIL_DOMAIN_NOT_APPROVED", metadata: { organizationId, emailDomain } });
+      return NextResponse.json({ error: "EMAIL_DOMAIN_NOT_APPROVED", message: "Cette adresse email n’utilise pas un domaine approuvé par la politique de sécurité de l’entreprise." }, { status: 403 });
+    }
+  }
+
   const existingMembership = await prisma.organizationMember.findUnique({
     where: { organizationId_userId: { organizationId, userId: targetUser.id } },
     select: { id: true, status: true, removedAt: true },
@@ -98,10 +120,13 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Invitation pending", message: "Une invitation est déjà en attente pour cet utilisateur." }, { status: 409 });
   }
 
+  const role = rawPayload && typeof rawPayload === "object" && "role" in rawPayload
+    ? parsed.data.role
+    : securityPolicy?.defaultInvitationRole || parsed.data.role;
   const membership = await prisma.organizationMember.upsert({
     where: { organizationId_userId: { organizationId, userId: targetUser.id } },
     update: {
-      role: parsed.data.role,
+      role,
       positionId: position?.id || null,
       positionCode: position?.positionCode || null,
       positionTitle: position?.labelFr || null,
@@ -113,7 +138,7 @@ export async function POST(req: Request, { params }: Params) {
     create: {
       organizationId,
       userId: targetUser.id,
-      role: parsed.data.role,
+      role,
       positionId: position?.id || null,
       positionCode: position?.positionCode || null,
       positionTitle: position?.labelFr || null,
@@ -139,7 +164,7 @@ export async function POST(req: Request, { params }: Params) {
     name: targetUser.name,
     organizationName: organization.name,
     invitedByName: inviter?.name || session.name,
-    role: parsed.data.role,
+    role,
     message: parsed.data.message,
   }).catch((error) => ({
     sent: false,
@@ -148,11 +173,12 @@ export async function POST(req: Request, { params }: Params) {
 
   await writeAuditLog({
     userId: session.userId,
+    organizationId,
     action: "ENTERPRISE_MEMBER_INVITED",
     entity: "OrganizationMember",
     entityId: membership.id,
     request: req,
-    metadata: { organizationId, invitedUserId: targetUser.id, role: parsed.data.role, emailSent: emailResult.sent },
+    metadata: { organizationId, invitedUserId: targetUser.id, role, emailSent: emailResult.sent, invitationExpiryHours: securityPolicy?.invitationExpiryHours ?? 168 },
   });
   await writeApiLog({
     request: req,
