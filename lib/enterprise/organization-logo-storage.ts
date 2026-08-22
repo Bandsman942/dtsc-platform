@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import { env } from "@/lib/env";
 
@@ -30,12 +31,15 @@ export async function uploadOrganizationLogo({ organizationId, file }: { organiz
   const validation = validateOrganizationLogo(file);
   if (!validation.ok) throw new Error(validation.message);
   const client = storageClient();
-  const storagePath = `company-logos/${organizationId}/logo.${validation.extension}`;
+  // Candidate path: the currently saved logo is never overwritten before the
+  // settings mutation succeeds. A failed form submission therefore leaves the
+  // active branding unchanged.
+  const storagePath = `company-logos/${organizationId}/${randomUUID()}.${validation.extension}`;
   const buffer = Buffer.from(await file.arrayBuffer());
   const { data, error } = await client.storage.from(env.SUPABASE_STORAGE_BUCKET).upload(storagePath, buffer, {
     contentType: file.type,
     cacheControl: "3600",
-    upsert: true,
+    upsert: false,
   });
   if (error) throw new Error(`ORGANIZATION_LOGO_UPLOAD_FAILED:${error.message}`);
   const { data: publicData } = client.storage.from(env.SUPABASE_STORAGE_BUCKET).getPublicUrl(data.path);
