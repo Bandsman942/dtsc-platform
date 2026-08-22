@@ -47,8 +47,10 @@ export async function PATCH(req: Request, { params }: Params) {
   const { id } = await params;
   const parsed = enterpriseOrganizationUpdateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
-    await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+    const firstIssue = parsed.error.issues[0];
+    const field = typeof firstIssue?.path?.[0] === "string" ? firstIssue.path[0] : null;
+    await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt, metadata: { action: "client_organization_validation_failed", field } });
+    return NextResponse.json({ error: "Invalid payload", reasonCode: "VALIDATION_ERROR", field }, { status: 400 });
   }
 
   const organization = await prisma.organization.findFirst({ where: { id, deletedAt: null } });
@@ -59,12 +61,34 @@ export async function PATCH(req: Request, { params }: Params) {
 
   const data = parsed.data;
   if (data.action === "grant_admin") {
-    if (!data.userId) return NextResponse.json({ error: "Missing user" }, { status: 400 });
+    if (!data.userId) return NextResponse.json({ error: "Missing user", reasonCode: "VALIDATION_ERROR" }, { status: 400 });
     const targetUserId = data.userId;
-    const targetUser = await prisma.user.findFirst({ where: { id: targetUserId, status: "ACTIVE" }, select: { id: true } });
+    const [targetUser, existingMembership, existingGrant] = await Promise.all([
+      prisma.user.findFirst({ where: { id: targetUserId, status: "ACTIVE" }, select: { id: true } }),
+      prisma.organizationMember.findUnique({
+        where: { organizationId_userId: { organizationId: id, userId: targetUserId } },
+        select: { role: true, status: true, removedAt: true },
+      }),
+      prisma.organizationAdminGrant.findFirst({
+        where: { organizationId: id, userId: targetUserId, revokedAt: null, status: { in: ["ACTIVE", "PENDING"] } },
+        select: { status: true },
+      }),
+    ]);
     if (!targetUser) {
       await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
       return NextResponse.json({ error: "Invalid user", message: "L'utilisateur sélectionné est introuvable ou inactif." }, { status: 400 });
+    }
+    if (existingGrant?.status === "ACTIVE" || (existingMembership?.status === "ACTIVE" && ["ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE"].includes(existingMembership.role))) {
+      await writeApiLog({ request: req, statusCode: 409, userId: session.userId, startedAt, metadata: { action: "client_organization_admin_already_active" } });
+      return NextResponse.json({ error: "Administrator already active", reasonCode: "ADMIN_ALREADY_ACTIVE" }, { status: 409 });
+    }
+    if (existingMembership?.status === "ACTIVE" && existingMembership.role === "OWNER") {
+      await writeApiLog({ request: req, statusCode: 409, userId: session.userId, startedAt, metadata: { action: "client_organization_admin_target_privileged" } });
+      return NextResponse.json({ error: "Administrator target already privileged", reasonCode: "ADMIN_TARGET_PRIVILEGED" }, { status: 409 });
+    }
+    if (existingGrant?.status === "PENDING" || (existingMembership?.status === "INVITED" && !existingMembership.removedAt && ["ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE"].includes(existingMembership.role))) {
+      await writeApiLog({ request: req, statusCode: 409, userId: session.userId, startedAt, metadata: { action: "client_organization_admin_invitation_pending" } });
+      return NextResponse.json({ error: "Administrator invitation already pending", reasonCode: "ADMIN_INVITATION_ALREADY_PENDING" }, { status: 409 });
     }
     await prisma.$transaction(async (tx) => {
       await tx.organizationMember.upsert({
