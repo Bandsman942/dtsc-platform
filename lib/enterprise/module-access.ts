@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { getOrganizationEntitlements } from "@/lib/billing/entitlements";
+import { getActiveEnterpriseModuleRestriction } from "@/lib/enterprise/module-access-restrictions";
 import {
   getEnterpriseModuleDefinition,
   isEnterpriseModuleImplemented,
@@ -60,10 +61,12 @@ export type EnterpriseModuleConfigurationIssue = {
 };
 
 type EnterpriseAccessSnapshot = {
+  userId: string;
   organizationId: string;
   sectorCode: string | null;
   role: string;
   permissions: string[];
+  organizationSettings: Prisma.JsonValue | null;
   enabledCanonicalCodes: Set<string>;
   tenantModuleByCanonicalCode: Map<string, { id: string; moduleCode: string; isEnabled: boolean }>;
   entitlementByCanonicalCode: Map<string, { allowed: boolean; message: string }>;
@@ -138,7 +141,7 @@ async function getEnterpriseAccessSnapshot(userId: string, organizationId: strin
           where: { revokedAt: null, role: { isActive: true, archivedAt: null } },
           select: { role: { select: { permissionsJson: true, modulesJson: true, code: true } } },
         },
-        organization: { select: { id: true, status: true, deletedAt: true, organizationType: true, sectorCode: true } },
+        organization: { select: { id: true, status: true, deletedAt: true, organizationType: true, sectorCode: true, settingsJson: true } },
       },
     }),
     prisma.enterpriseModule.findMany({
@@ -188,10 +191,12 @@ async function getEnterpriseAccessSnapshot(userId: string, organizationId: strin
   const permissions = Array.from(new Set([...permissionList(position?.permissionsJson), ...inheritedRolePermissions]));
 
   return {
+    userId,
     organizationId,
     sectorCode: membership.organization.sectorCode,
     role: membership.role,
     permissions,
+    organizationSettings: membership.organization.settingsJson,
     enabledCanonicalCodes,
     tenantModuleByCanonicalCode,
     entitlementByCanonicalCode,
@@ -214,6 +219,17 @@ function resolveFromSnapshot(snapshot: EnterpriseAccessSnapshot, moduleCode: str
   const tenantModule = snapshot.tenantModuleByCanonicalCode.get(definition.code) || null;
   if (!tenantModule) return denied("TENANT_MODULE_MISSING", "Ce service n’est pas encore configuré pour l’entreprise.", definition);
   if (!tenantModule.isEnabled) return denied("TENANT_MODULE_DISABLED", "Ce service n’est pas activé dans l’abonnement de l’entreprise.", definition, tenantModule);
+
+  const temporaryRestriction = getActiveEnterpriseModuleRestriction(snapshot.organizationSettings, snapshot.userId, definition.code);
+  if (temporaryRestriction) {
+    const until = new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(temporaryRestriction.blockedUntil));
+    return denied(
+      "PERMISSION_DENIED",
+      `Votre accès à ce service est temporairement suspendu jusqu’au ${until}. ${temporaryRestriction.reason}`,
+      definition,
+      tenantModule,
+    );
+  }
 
   for (const dependencyCode of definition.dependencies) {
     const canonicalDependency = normalizeEnterpriseModuleCode(dependencyCode);
