@@ -36,6 +36,10 @@ export async function getEnterpriseModulesDataset(organizationId: string, entitl
     const registryAllowsAccess = implemented && sectorCompatible && definition?.routeKind !== "HIDDEN";
     return {
       ...enterpriseModule,
+      labelFr: definition?.labelFr || enterpriseModule.labelFr,
+      labelEn: definition?.labelEn || enterpriseModule.labelEn,
+      descriptionFr: definition?.descriptionFr || enterpriseModule.descriptionFr,
+      descriptionEn: definition?.descriptionEn || enterpriseModule.descriptionFr,
       canonicalCode: definition?.code || null,
       implementationStatus: definition?.implementationStatus || null,
       navigationGroup: definition?.navigationGroup || null,

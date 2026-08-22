@@ -14,6 +14,11 @@ function has(file, needle) {
   if (!content.includes(needle)) throw new Error(`${file}: contrat absent: ${needle}`);
 }
 
+function lacks(file, needle) {
+  const content = read(file);
+  if (content.includes(needle)) throw new Error(`${file}: contrat obsolète encore présent: ${needle}`);
+}
+
 function json(file) {
   return JSON.parse(read(file));
 }
@@ -56,8 +61,36 @@ const profiles = {
     has("app/api/enterprise/[organizationId]/reports/[id]/export/route.ts", "freshness");
   },
   administration: () => {
-    has("components/enterprise/enterprise-administration-module.tsx", "Checklist de configuration réelle");
+    has("components/enterprise/enterprise-administration-module.tsx", "EnterpriseConfigurationChecklistPanel");
+    has("components/enterprise/enterprise-administration-module.tsx", "EnterprisePendingActionsPanel");
+    lacks("components/enterprise/enterprise-administration-module.tsx", "Modules sectoriels");
+    has("components/enterprise/enterprise-admin-hotfix-panels.tsx", "BRAND_COLORS");
+    has("components/enterprise/enterprise-admin-hotfix-panels.tsx", "type=\"file\"");
+    has("components/enterprise/enterprise-admin-hotfix-panels.tsx", "Bloquer temporairement un accès");
+    has("components/enterprise/enterprise-admin-hotfix-panels.tsx", "fullScreen");
+    has("components/enterprise/enterprise-admin-hotfix-panels.tsx", "useFormSubmissionGuard");
+    has("components/enterprise/enterprise-admin-hotfix-panels.tsx", "aria-busy");
+    has("components/enterprise/enterprise-admin-hotfix-panels.tsx", "disabled:cursor-wait");
     has("lib/enterprise/enterprise-admin-loader.ts", "configurationChecklist");
+    has("lib/enterprise/enterprise-admin-loader.ts", "pendingActions");
+    has("lib/enterprise/enterprise-admin-loader.ts", "FINANCE_ACCOUNTS");
+    has("lib/enterprise/enterprise-admin-loader.ts", "FINANCE_BUDGETS");
+    has("lib/enterprise/enterprise-admin-loader.ts", "manageAccessPromiseByModule");
+    has("lib/enterprise/enterprise-admin-loader.ts", "!moduleReadable || (!involved && !moduleManageable)");
+    has("lib/enterprise/module-access.ts", "getActiveEnterpriseModuleRestriction");
+    has("app/api/enterprise/[organizationId]/administration/modules/[moduleCode]/access/route.ts", "isSameOriginRequest");
+    has("app/api/enterprise/[organizationId]/administration/departments/route.ts", "enterpriseDepartment.create");
+    has("app/api/enterprise/[organizationId]/administration/departments/[departmentId]/route.ts", "isActive: false");
+    has("app/api/enterprise/[organizationId]/administration/departments/[departmentId]/route.ts", "createsDepartmentCycle");
+    has("app/api/enterprise/[organizationId]/administration/departments/[departmentId]/route.ts", "DEPARTMENT_CYCLE");
+    has("app/api/enterprise/invitations/[id]/route.ts", "updatedAt: true");
+    has("app/api/enterprise/invitations/[id]/route.ts", "const invitationIssuedAt = invitation.updatedAt");
+    lacks("app/api/enterprise/invitations/[id]/route.ts", "invitation.createdAt.getTime() + expiryHours");
+    has("tests/e2e/erp-identity-professional.spec.mjs", "administration entreprise #475");
+    has("tests/e2e/erp-identity-professional.spec.mjs", "viewport: { width: 390, height: 844 }");
+    has("tests/e2e/erp-identity-professional.spec.mjs", "/administration/security");
+    has("tests/e2e/erp-identity-professional.spec.mjs", "son historique et ses anciens rattachements resteront conservés");
+    has("docs/CHANGELOG_ENTERPRISE_ADMIN_475.md", "Recette E2E propriétaire requise avant merge");
   },
   rbac: () => {
     has("prisma/schema.prisma", "model EnterpriseOrganizationRole");

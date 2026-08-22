@@ -41,6 +41,86 @@ test.describe("ERP professionnel et identité relationnelle", () => {
   test.describe.configure({ mode: "serial" });
   test.skip(!configured, "Secrets E2E authentifiés non configurés dans GitHub/Production.");
 
+  test("administration entreprise #475 : configuration, départements, sécurité et mobile", async ({ browser }) => {
+    const admin = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    await signIn(admin, process.env.E2E_ADMIN_EMAIL, process.env.E2E_ADMIN_PASSWORD, "/enterprise-admin");
+    await admin.goto("/enterprise-admin");
+    await admin.waitForLoadState("networkidle");
+
+    const navigation = admin.getByRole("navigation", { name: /sections administration entreprise/i });
+    await expect(navigation).toBeVisible();
+    await expect(admin.getByText("Configuration globale de l’entreprise", { exact: true })).toBeVisible();
+    await expect(admin.getByText("Modules sectoriels", { exact: true })).toHaveCount(0);
+
+    const viewport = await admin.evaluate(() => ({
+      clientWidth: document.documentElement.clientWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+    }));
+    expect(viewport.scrollWidth - viewport.clientWidth, `Débordement horizontal détecté à 390 px: ${JSON.stringify(viewport)}`).toBeLessThanOrEqual(2);
+
+    await navigation.getByRole("link", { name: "Départements", exact: true }).click();
+    await expect(admin).toHaveURL(/\/enterprise-admin\?section=departments/);
+    await admin.getByRole("button", { name: /nouveau département/i }).click();
+
+    const departmentName = `Recette Administration ${Date.now()}`;
+    const createDialog = admin.getByRole("dialog").last();
+    await expect(createDialog).toBeVisible();
+    await createDialog.getByLabel(/nom en français/i).fill(departmentName);
+    await createDialog.getByLabel(/nom en anglais/i).fill(`E2E Department ${Date.now()}`);
+    await createDialog.getByLabel(/^responsable$/i).selectOption({ index: 1 });
+    await createDialog.getByLabel(/^description$/i).fill("Département éphémère utilisé uniquement pour la recette navigateur authentifiée du hotfix 475.");
+
+    const createResponsePromise = admin.waitForResponse((response) =>
+      response.url().includes(`/api/enterprise/${organizationId}/administration/departments`) &&
+      response.request().method() === "POST",
+    );
+    await createDialog.getByRole("button", { name: /^enregistrer$/i }).click();
+    const createResponse = await createResponsePromise;
+    expect(createResponse.ok(), `Création département échouée avec ${createResponse.status()}`).toBeTruthy();
+    await expect(admin.getByText(/département enregistré/i).first()).toBeVisible();
+
+    const departmentCard = admin.getByRole("button", { name: new RegExp(departmentName, "i") }).first();
+    await expect(departmentCard).toBeVisible();
+    await departmentCard.click();
+    const detailDialog = admin.getByRole("dialog").last();
+    await expect(detailDialog.getByText(departmentName, { exact: true })).toBeVisible();
+    await detailDialog.getByRole("button", { name: /^désactiver$/i }).click();
+
+    const confirmationDialog = admin.getByRole("dialog").last();
+    await expect(confirmationDialog.getByText(/son historique et ses anciens rattachements resteront conservés/i)).toBeVisible();
+    const deactivateResponsePromise = admin.waitForResponse((response) =>
+      response.url().includes(`/api/enterprise/${organizationId}/administration/departments/`) &&
+      response.request().method() === "DELETE",
+    );
+    await confirmationDialog.getByRole("button", { name: /^désactiver$/i }).click();
+    const deactivateResponse = await deactivateResponsePromise;
+    expect(deactivateResponse.ok(), `Désactivation département échouée avec ${deactivateResponse.status()}`).toBeTruthy();
+    await expect(admin.getByText(/département désactivé/i).first()).toBeVisible();
+
+    await navigation.getByRole("link", { name: "Sécurité", exact: true }).click();
+    await expect(admin).toHaveURL(/\/enterprise-admin\?section=security/);
+    await admin.getByRole("button", { name: /configurer la sécurité de l’organisation/i }).click();
+    const securityDialog = admin.getByRole("dialog").last();
+    await expect(securityDialog).toBeVisible();
+    await securityDialog.getByLabel(/durée de validité d’une invitation/i).selectOption("72");
+    await securityDialog.getByLabel(/nombre maximal d’invitations en attente/i).selectOption("50");
+
+    const securityResponsePromise = admin.waitForResponse((response) =>
+      response.url().includes(`/api/enterprise/${organizationId}/administration/security`) &&
+      response.request().method() === "PUT",
+    );
+    await securityDialog.getByRole("button", { name: /enregistrer la politique/i }).click();
+    const securityResponse = await securityResponsePromise;
+    expect(securityResponse.ok(), `Enregistrement sécurité échoué avec ${securityResponse.status()}`).toBeTruthy();
+    await expect(admin.getByText(/politique de sécurité enregistrée/i).first()).toBeVisible();
+
+    const finalViewport = await admin.evaluate(() => ({
+      clientWidth: document.documentElement.clientWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+    }));
+    expect(finalViewport.scrollWidth - finalViewport.clientWidth, `Débordement horizontal après mutations: ${JSON.stringify(finalViewport)}`).toBeLessThanOrEqual(2);
+  });
+
   test("entreprise → utilisateur : fiche, invitation, consentement et relation ACTIVE", async ({ browser }) => {
     const admin = await browser.newPage();
     await signIn(admin, process.env.E2E_ADMIN_EMAIL, process.env.E2E_ADMIN_PASSWORD, "/enterprise-modules/CRM_CUSTOMERS");

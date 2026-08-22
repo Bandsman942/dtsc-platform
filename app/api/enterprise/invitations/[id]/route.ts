@@ -14,13 +14,13 @@ export async function PATCH(req: Request, { params }: Params) {
   const startedAt = Date.now();
   if (!isSameOriginRequest(req)) {
     await writeApiLog({ request: req, statusCode: 403, startedAt, metadata: { action: "enterprise_invitation_origin_denied" } });
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json({ error: "Forbidden", message: "Cette action doit être lancée depuis DTSC Platform." }, { status: 403 });
   }
 
   const session = await getSession();
   if (!session) {
     await writeApiLog({ request: req, statusCode: 401, startedAt });
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Unauthorized", message: "Votre session a expiré." }, { status: 401 });
   }
 
   const limited = await rateLimit(getRateLimitKey(req, `enterprise-invitation:${session.userId}`), 40, 60 * 60 * 1000);
@@ -52,6 +52,8 @@ export async function PATCH(req: Request, { params }: Params) {
         invitedBy: true,
         joinedAt: true,
         removedAt: true,
+        createdAt: true,
+        updatedAt: true,
         organization: {
           select: { id: true, name: true, status: true, deletedAt: true, organizationType: true },
         },
@@ -61,7 +63,7 @@ export async function PATCH(req: Request, { params }: Params) {
 
   if (!user || user.status !== UserStatus.ACTIVE) {
     await writeApiLog({ request: req, statusCode: 401, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Unauthorized", message: "Votre compte n’est pas actif." }, { status: 401 });
   }
 
   if (!invitation) {
@@ -84,24 +86,12 @@ export async function PATCH(req: Request, { params }: Params) {
 
   if (parsed.data.action === "ACCEPT" && invitation.status === "ACTIVE" && !invitation.removedAt) {
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { action: "enterprise_invitation_accept_replayed", organizationId: invitation.organizationId } });
-    return NextResponse.json({
-      ok: true,
-      idempotent: true,
-      status: "ACTIVE",
-      organizationId: invitation.organizationId,
-      redirectTo: "/dashboard",
-    });
+    return NextResponse.json({ ok: true, idempotent: true, status: "ACTIVE", organizationId: invitation.organizationId, redirectTo: "/dashboard" });
   }
 
   if (parsed.data.action === "DECLINE" && invitation.status === "REMOVED" && invitation.removedAt) {
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { action: "enterprise_invitation_decline_replayed", organizationId: invitation.organizationId } });
-    return NextResponse.json({
-      ok: true,
-      idempotent: true,
-      status: "REMOVED",
-      organizationId: invitation.organizationId,
-      redirectTo: "/enterprise-invitations",
-    });
+    return NextResponse.json({ ok: true, idempotent: true, status: "REMOVED", organizationId: invitation.organizationId, redirectTo: "/enterprise-invitations" });
   }
 
   if (invitation.status !== "INVITED" || invitation.removedAt) {
@@ -114,7 +104,21 @@ export async function PATCH(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Organization unavailable", message: "L'entreprise liée à cette invitation n'est plus disponible." }, { status: 404 });
   }
 
+  const policy = await prisma.enterpriseOrganizationSecurityPolicy.findUnique({ where: { organizationId: invitation.organizationId }, select: { invitationExpiryHours: true } });
+  const expiryHours = policy?.invitationExpiryHours ?? 168;
+  // A membership may be reused after a previous decline/removal. `createdAt`
+  // then points to the historic first membership, while `updatedAt` is refreshed
+  // by the invitation upsert and therefore represents the current invitation cycle.
+  const invitationIssuedAt = invitation.updatedAt;
+  const expiresAt = new Date(invitationIssuedAt.getTime() + expiryHours * 60 * 60 * 1000);
   const now = new Date();
+  if (now > expiresAt) {
+    await prisma.organizationMember.update({ where: { id: invitation.id }, data: { status: "REMOVED", removedAt: now, joinedAt: null } });
+    await writeAuditLog({ userId: session.userId, organizationId: invitation.organizationId, action: "ENTERPRISE_INVITATION_EXPIRED", entity: "OrganizationMember", entityId: invitation.id, request: req, riskLevel: "LOW", reasonCode: "INVITATION_EXPIRED", metadata: { organizationId: invitation.organizationId, expiryHours, invitationIssuedAt: invitationIssuedAt.toISOString() } });
+    await writeApiLog({ request: req, statusCode: 410, userId: session.userId, startedAt, metadata: { action: "enterprise_invitation_expired", organizationId: invitation.organizationId } });
+    return NextResponse.json({ error: "INVITATION_EXPIRED", message: "Cette invitation a expiré selon la politique de sécurité de l’entreprise. Demandez une nouvelle invitation." }, { status: 410 });
+  }
+
   if (parsed.data.action === "ACCEPT") {
     const membership = await prisma.$transaction(async (tx) => {
       const updatedMembership = await tx.organizationMember.update({
@@ -133,6 +137,7 @@ export async function PATCH(req: Request, { params }: Params) {
 
     await writeAuditLog({
       userId: session.userId,
+      organizationId: invitation.organizationId,
       action: "ENTERPRISE_INVITATION_ACCEPTED",
       entity: "OrganizationMember",
       entityId: invitation.id,
@@ -150,13 +155,7 @@ export async function PATCH(req: Request, { params }: Params) {
       });
     }
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { action: "enterprise_invitation_accepted", organizationId: invitation.organizationId } });
-    return NextResponse.json({
-      ok: true,
-      idempotent: false,
-      status: membership.status,
-      organizationId: membership.organizationId,
-      redirectTo: "/dashboard",
-    });
+    return NextResponse.json({ ok: true, idempotent: false, status: membership.status, organizationId: membership.organizationId, redirectTo: "/dashboard" });
   }
 
   await prisma.$transaction(async (tx) => {
@@ -173,6 +172,7 @@ export async function PATCH(req: Request, { params }: Params) {
   });
   await writeAuditLog({
     userId: session.userId,
+    organizationId: invitation.organizationId,
     action: "ENTERPRISE_INVITATION_DECLINED",
     entity: "OrganizationMember",
     entityId: invitation.id,
@@ -190,11 +190,5 @@ export async function PATCH(req: Request, { params }: Params) {
     });
   }
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { action: "enterprise_invitation_declined", organizationId: invitation.organizationId } });
-  return NextResponse.json({
-    ok: true,
-    idempotent: false,
-    status: "REMOVED",
-    organizationId: invitation.organizationId,
-    redirectTo: "/enterprise-invitations",
-  });
+  return NextResponse.json({ ok: true, idempotent: false, status: "REMOVED", organizationId: invitation.organizationId, redirectTo: "/enterprise-invitations" });
 }

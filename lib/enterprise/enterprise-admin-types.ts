@@ -64,6 +64,7 @@ export type EnterpriseModuleItem = {
   labelFr: string;
   labelEn: string;
   descriptionFr: string | null;
+  descriptionEn?: string | null;
   moduleCategory: string;
   icon: string | null;
   isEnabled: boolean;
@@ -96,10 +97,13 @@ export type EnterpriseDepartmentItem = {
   labelFr: string;
   labelEn: string;
   descriptionFr: string | null;
+  descriptionEn?: string | null;
   responsibleUserId?: string | null;
   parentDepartmentId?: string | null;
   isActive: boolean;
   sortOrder?: number;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type EnterprisePositionItem = {
@@ -142,6 +146,23 @@ export type EnterpriseRequestItem = {
   priority: string;
   createdAt: string;
   createdBy: { name: string; email: string };
+};
+
+export type EnterprisePendingActionItem = {
+  id: string;
+  kind: "TASK" | "REQUEST" | "APPROVAL";
+  title: string;
+  description?: string | null;
+  status: "IN_PROGRESS" | "WAITING_FOR_YOU" | "WAITING_FOR_VALIDATION" | "BLOCKED";
+  priority: "LOW" | "NORMAL" | "HIGH" | "CRITICAL";
+  sourceModuleCode: string | null;
+  sourceModuleLabel: string | null;
+  actionUrl: string;
+  canAct: boolean;
+  assignedUserName: string | null;
+  requestedByName: string | null;
+  dueAt: string | null;
+  createdAt: string;
 };
 
 export type EnterpriseCalendarEventItem = {
@@ -229,10 +250,12 @@ export type EnterpriseAuditItem = {
 
 export type EnterpriseConfigurationChecklistItem = {
   code: string;
+  group: "SETTINGS" | "MODULES";
   label: string;
+  help: string;
   complete: boolean;
   deepLink: string;
-  reasonCode: string;
+  reason: string;
 };
 
 export type EnterpriseAdminDataset = {
@@ -249,6 +272,7 @@ export type EnterpriseAdminDataset = {
   activityBlocks: EnterpriseActivityBlockItem[];
   workflows: EnterpriseWorkflowItem[];
   recentRequests: EnterpriseRequestItem[];
+  pendingActions: EnterprisePendingActionItem[];
   calendarEvents: EnterpriseCalendarEventItem[];
   sectorRecords: EnterpriseSectorRecordItem[];
   entitlements: EnterpriseSaasEntitlements;
