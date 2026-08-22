@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { Sparkles } from "lucide-react";
+import type { CSSProperties } from "react";
 import type { UserRole } from "@prisma/client";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SignOutButton } from "@/components/sign-out-button";
@@ -37,6 +38,12 @@ import { getVisibleNotificationWhereForSession } from "@/lib/notification-access
 import { isDtscInternalSession } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { getVisiblePromotionalBannersForUser } from "@/lib/promotional-banners";
+
+function brandingColor(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const primaryColor = (value as Record<string, unknown>).primaryColor;
+  return typeof primaryColor === "string" && /^#[0-9a-f]{6}$/i.test(primaryColor) ? primaryColor : null;
+}
 
 export async function AppShell({
   children,
@@ -106,7 +113,7 @@ export async function AppShell({
       },
       select: {
         role: true,
-        organization: { select: { id: true, name: true, organizationType: true } },
+        organization: { select: { id: true, name: true, organizationType: true, logoUrl: true, brandingJson: true } },
       },
       orderBy: { organization: { name: "asc" } },
       take: 12,
@@ -129,6 +136,13 @@ export async function AppShell({
   ]);
   performanceRecorder.finish({ organizationContext });
 
+  const activeOrganization = activeOrganizationId
+    ? organizationMemberships.find((membership) => membership.organization.id === activeOrganizationId)?.organization || null
+    : null;
+  const primaryColor = organizationContext ? brandingColor(activeOrganization?.brandingJson) : null;
+  const enterpriseBrandStyle = primaryColor
+    ? ({ "--dtsc-product-accent": primaryColor } as CSSProperties)
+    : undefined;
   const enterpriseContext =
     organizationContext && activeOrganizationId
       ? {
@@ -145,7 +159,7 @@ export async function AppShell({
 
   return (
     <LocaleProvider locale={user.locale}>
-      <div className="min-h-screen bg-dtsc-page text-dtsc-ink dtsc-mobile-mesh">
+      <div style={enterpriseBrandStyle} className="min-h-screen bg-dtsc-page text-dtsc-ink dtsc-mobile-mesh">
         <SessionTimeoutGuard />
         <AppResumeSync pushEnabled={Boolean(user.pushNotificationsEnabled)} />
         <PrivateMobileChromeController />
@@ -168,6 +182,12 @@ export async function AppShell({
           <div className="mt-3 inline-flex w-fit items-center rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-cyan-600 dark:text-cyan-200">
             {productBranding}
           </div>
+          {organizationContext && activeOrganization ? (
+            <div className="mt-3 flex items-center gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-3">
+              {activeOrganization.logoUrl ? <Image src={activeOrganization.logoUrl} alt="" width={40} height={40} unoptimized className="h-10 w-10 rounded-xl bg-white object-contain p-1" /> : <div className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--dtsc-product-accent)] text-xs font-black text-white">{initials(activeOrganization.name)}</div>}
+              <div className="min-w-0"><p className="truncate text-sm font-black text-dtsc-ink">{activeOrganization.name}</p><p className="mt-0.5 text-[11px] font-bold text-dtsc-muted">{user.locale === "en" ? "Company workspace" : "Espace entreprise"}</p></div>
+            </div>
+          ) : null}
           <ProductNavigation currentHostType={currentHostType} isDtscInternal={dtscInternalContext} className="mt-5" />
 
           <Link
@@ -201,8 +221,9 @@ export async function AppShell({
               <Link href={getDashboardUrl()} className="font-extrabold text-dtsc-ink lg:hidden">
                 DTSC
               </Link>
-              <div className="hidden text-sm font-medium text-dtsc-muted md:block">
-                {productBranding} · {dtsc.slogan}
+              <div className="hidden items-center gap-2 text-sm font-medium text-dtsc-muted md:flex">
+                {organizationContext && activeOrganization?.logoUrl ? <Image src={activeOrganization.logoUrl} alt="" width={28} height={28} unoptimized className="h-7 w-7 rounded-lg bg-white object-contain p-0.5" /> : null}
+                <span>{organizationContext && activeOrganization ? activeOrganization.name : productBranding} · {dtsc.slogan}</span>
               </div>
               <div className="flex items-center gap-3">
                 {organizationOptions.length > 0 && (
