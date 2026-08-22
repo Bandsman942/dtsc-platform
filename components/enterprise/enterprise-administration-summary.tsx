@@ -6,6 +6,7 @@ import { ModuleHeader, ModuleSection } from "@/components/workspace/module-works
 import { StatusBadge } from "@/components/workspace/status-badge";
 import type { EnterpriseAdminDashboard, EnterpriseAdminOrganization, EnterpriseMemberItem, EnterpriseModuleItem, EnterpriseSaasEntitlements } from "@/lib/enterprise/enterprise-admin-types";
 import { translateWorkspaceGeneralization } from "@/lib/i18n";
+import { formatEnumLabelForLocale } from "@/lib/labels-i18n";
 
 export function EnterpriseAdministrationSummary({
   organization,
@@ -25,22 +26,26 @@ export function EnterpriseAdministrationSummary({
   const locale = useAppLocale();
   const enabledModules = visibleModules.filter((enterpriseModule) => enterpriseModule.isEnabled).length;
   const t = (key: Parameters<typeof translateWorkspaceGeneralization>[1]) => translateWorkspaceGeneralization(locale, key);
+  const sectorLabel = locale === "en"
+    ? organization.businessSector?.labelEn || organization.sector || "Sector to specify"
+    : organization.businessSector?.labelFr || organization.sector || "Secteur à préciser";
+  const subscriptionStatus = formatEnumLabelForLocale(entitlements.subscriptionStatus, locale);
 
   return (
     <>
       <ModuleHeader
         eyebrow={t("enterpriseAdministration")}
         title={`${t("enterpriseAdministration")} · ${organization.name}`}
-        count={organization.businessSector?.labelFr || organization.sector || organization.sectorCode || "NO_SECTOR"}
-        description={locale === "en" ? `Modules, positions, permissions, procedures and settings isolated for ${organization.name}. Actions remain limited to this organization.` : `Modules, postes, permissions, procédures et paramètres isolés pour ${organization.name}. Les actions restent limitées à cette organisation.`}
+        count={sectorLabel}
+        description={locale === "en" ? `Modules, positions, permissions, procedures and settings for ${organization.name}. Actions remain limited to this company.` : `Modules, postes, permissions, procédures et paramètres de ${organization.name}. Les actions restent limitées à cette entreprise.`}
       />
 
       <ModuleSection title={t("enterpriseContext")} description={t("enterpriseContextDescription")}>
         <div className="flex min-w-0 flex-wrap gap-2 border-y border-dtsc-border py-3">
-          <StatusBadge tone="info">{organization.sectorCode || "NO_SECTOR"}</StatusBadge>
+          <StatusBadge tone="info">{sectorLabel}</StatusBadge>
           <StatusBadge>Plan {entitlements.planLabel}</StatusBadge>
           <StatusBadge tone={entitlements.subscriptionActive ? "success" : "warning"}>
-            {entitlements.subscriptionActive ? (locale === "en" ? "Active subscription" : "Abonnement actif") : `${locale === "en" ? "Status" : "Statut"} ${entitlements.subscriptionStatus}`}
+            {entitlements.subscriptionActive ? (locale === "en" ? "Active subscription" : "Abonnement actif") : `${locale === "en" ? "Status" : "Statut"} ${subscriptionStatus}`}
           </StatusBadge>
         </div>
       </ModuleSection>
