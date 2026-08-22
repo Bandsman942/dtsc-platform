@@ -263,14 +263,16 @@ export async function getEnterpriseAdministrationDataset(
   }
 
   const memberNameByUserId = new Map(members.map((member) => [member.user.id, member.user.name]));
-  const accessPromiseByModule = new Map<string, Promise<boolean>>();
-  const canReadModule = (sourceModule: string | null) => {
+  const readAccessPromiseByModule = new Map<string, Promise<boolean>>();
+  const manageAccessPromiseByModule = new Map<string, Promise<boolean>>();
+  const canAccessModule = (sourceModule: string | null, action: "read" | "manage") => {
     if (!sourceModule) return Promise.resolve(false);
     const moduleCode = normalizeEnterpriseModuleCode(sourceModule);
-    const cached = accessPromiseByModule.get(moduleCode);
+    const cache = action === "read" ? readAccessPromiseByModule : manageAccessPromiseByModule;
+    const cached = cache.get(moduleCode);
     if (cached) return cached;
-    const promise = resolveEnterpriseModuleAccess({ userId: viewerUserId, organizationId, moduleCode, action: "read" }).then((decision) => decision.allowed);
-    accessPromiseByModule.set(moduleCode, promise);
+    const promise = resolveEnterpriseModuleAccess({ userId: viewerUserId, organizationId, moduleCode, action }).then((decision) => decision.allowed);
+    cache.set(moduleCode, promise);
     return promise;
   };
   const modulePresentation = (sourceModule: string | null) => {
@@ -287,8 +289,9 @@ export async function getEnterpriseAdministrationDataset(
   const pendingActions: EnterprisePendingActionItem[] = [];
   for (const task of tasks.filter((item) => openTaskStatuses.has(item.status))) {
     const involved = task.assignedToUserId === viewerUserId || task.createdByUserId === viewerUserId;
-    const moduleReadable = task.sourceModule ? await canReadModule(task.sourceModule) : false;
-    if (task.sourceModule ? !moduleReadable : !involved) continue;
+    const moduleReadable = task.sourceModule ? await canAccessModule(task.sourceModule, "read") : false;
+    const moduleManageable = task.sourceModule ? await canAccessModule(task.sourceModule, "manage") : false;
+    if (task.sourceModule ? (!moduleReadable || (!involved && !moduleManageable)) : !involved) continue;
     const presentation = modulePresentation(task.sourceModule);
     pendingActions.push({
       id: task.id,
@@ -309,8 +312,9 @@ export async function getEnterpriseAdministrationDataset(
   }
   for (const requestRecord of requests.filter((item) => openRequestStatuses.has(item.status))) {
     const involved = requestRecord.assignedToUserId === viewerUserId || requestRecord.requestedByUserId === viewerUserId;
-    const moduleReadable = requestRecord.sourceModule ? await canReadModule(requestRecord.sourceModule) : false;
-    if (requestRecord.sourceModule ? !moduleReadable : !involved) continue;
+    const moduleReadable = requestRecord.sourceModule ? await canAccessModule(requestRecord.sourceModule, "read") : false;
+    const moduleManageable = requestRecord.sourceModule ? await canAccessModule(requestRecord.sourceModule, "manage") : false;
+    if (requestRecord.sourceModule ? (!moduleReadable || (!involved && !moduleManageable)) : !involved) continue;
     const presentation = modulePresentation(requestRecord.sourceModule);
     pendingActions.push({
       id: requestRecord.id,
