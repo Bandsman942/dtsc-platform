@@ -45,6 +45,10 @@ function tx(locale: string | null | undefined, fr: string, en: string) {
   return locale === "en" ? en : fr;
 }
 
+function clientError(locale: string | null | undefined, serverMessage: string | undefined, fr: string, en: string) {
+  return locale === "en" ? en : serverMessage || fr;
+}
+
 export function EnterpriseAdministrationModule(
   props: EnterpriseAdminDataset & { locale?: string | null; initialSection?: string | null },
 ) {
@@ -100,7 +104,7 @@ export function EnterpriseAdministrationModule(
       body: JSON.stringify(payload),
     });
     const body = (await response.json().catch(() => null)) as { message?: string } | null;
-    setMessage(response.ok ? successMessage : body?.message || tx(locale, "Enregistrement impossible. Corrigez les informations et réessayez.", "Unable to save. Correct the information and try again."));
+    setMessage(response.ok ? successMessage : clientError(locale, body?.message, "Enregistrement impossible. Corrigez les informations et réessayez.", "Unable to save. Correct the information and try again."));
     if (response.ok) {
       formElement.reset();
       router.refresh();
@@ -114,7 +118,9 @@ export function EnterpriseAdministrationModule(
       return;
     }
     if (!enterpriseModule.accessAllowed && !enterpriseModule.isEnabled) {
-      setMessage(enterpriseModule.accessMessage || tx(locale, "Ce module n’est pas inclus dans le plan actif.", "This module is not included in the active plan."));
+      setMessage(locale === "en"
+        ? tx(locale, "Ce module n’est pas inclus dans le plan actif.", "This module is not included in the active plan.")
+        : enterpriseModule.accessMessage || "Ce module n’est pas inclus dans le plan actif.");
       return;
     }
     const response = await fetch(`/api/enterprise/${organization.id}/modules/${enterpriseModule.id}`, {
@@ -125,7 +131,7 @@ export function EnterpriseAdministrationModule(
     const body = (await response.json().catch(() => null)) as { message?: string } | null;
     setMessage(response.ok
       ? (enterpriseModule.isEnabled ? tx(locale, "Module désactivé. Les données restent conservées.", "Module disabled. Data remains preserved.") : tx(locale, "Module activé pour l’entreprise.", "Module enabled for the company."))
-      : body?.message || tx(locale, "Mise à jour du module impossible.", "Unable to update the module."));
+      : clientError(locale, body?.message, "Mise à jour du module impossible. Vérifiez votre abonnement et vos autorisations puis réessayez.", "Unable to update the module. Check your subscription and permissions, then try again."));
     if (response.ok) router.refresh();
   }
 
@@ -140,7 +146,9 @@ export function EnterpriseAdministrationModule(
       body: JSON.stringify(payload),
     });
     const body = (await response.json().catch(() => null)) as { message?: string } | null;
-    setMessage(response.ok ? tx(locale, "Invitation envoyée. Le collaborateur devra l’accepter avant intégration.", "Invitation sent. The collaborator must accept it before joining.") : body?.message || tx(locale, "Invitation impossible.", "Unable to send invitation."));
+    setMessage(response.ok
+      ? tx(locale, "Invitation envoyée. Le collaborateur devra l’accepter avant intégration.", "Invitation sent. The collaborator must accept it before joining.")
+      : clientError(locale, body?.message, "Invitation impossible. Vérifiez l’adresse, le poste et la politique de sécurité de l’entreprise.", "Unable to send the invitation. Check the address, position and company security policy."));
     if (response.ok) {
       formElement.reset();
       router.refresh();
@@ -155,7 +163,7 @@ export function EnterpriseAdministrationModule(
       body: JSON.stringify(payload),
     });
     const body = (await response.json().catch(() => null)) as { message?: string } | null;
-    setMessage(response.ok ? successMessage : body?.message || tx(locale, "Mise à jour du collaborateur impossible.", "Unable to update collaborator."));
+    setMessage(response.ok ? successMessage : clientError(locale, body?.message, "Mise à jour du collaborateur impossible. Vérifiez ses informations et vos autorisations.", "Unable to update the collaborator. Check their information and your permissions."));
     if (response.ok) router.refresh();
   }
 
@@ -182,7 +190,7 @@ export function EnterpriseAdministrationModule(
 
       <ModuleContent>
         <div id="enterprise-admin-subscription" className="scroll-mt-24 outline-none">
-          <ModuleSection title={tx(locale, "Abonnement & limites", "Subscription & limits")} description={tx(locale, "Limites réellement résolues depuis le plan et l’abonnement actifs. Aucun module ne peut se débloquer depuis le frontend.", "Limits are resolved from the active plan and subscription. No module can be unlocked from the frontend.")}>
+          <ModuleSection title={tx(locale, "Abonnement & limites", "Subscription & limits")} description={tx(locale, "Les limites affichées proviennent du plan et de l’abonnement actifs. Un module reste indisponible tant que le plan ne l’autorise pas.", "The displayed limits come from the active plan and subscription. A module remains unavailable until the plan allows it.")}>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <AdminMetric label={tx(locale, "Plan", "Plan")} value={entitlements.planLabel} />
               <AdminMetric label={tx(locale, "Statut", "Status")} value={entitlements.subscriptionStatus} />
@@ -193,18 +201,18 @@ export function EnterpriseAdministrationModule(
         </div>
 
         <div id="enterprise-admin-modules" className="scroll-mt-24 outline-none">
-          <ModuleSection title={tx(locale, "Modules", "Modules")} description={tx(locale, "Ouvrez un module, consultez ses utilisateurs et actions autorisées, gérez une restriction temporaire ou consultez ses informations générales.", "Open a module, review users and allowed actions, manage a temporary restriction, or view general module information.")}>
+          <ModuleSection title={tx(locale, "Modules", "Modules")} description={tx(locale, "Ouvrez un module, consultez ses utilisateurs et leurs actions autorisées, gérez une restriction temporaire ou consultez ses informations générales.", "Open a module, review its users and their allowed actions, manage a temporary restriction, or view general module information.")}>
             <EnterpriseAdministrationModulesPanel organizationId={organization.id} modules={visibleModules} toggleModule={toggleModule} locale={locale} />
             <div className="mt-4 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
-              <p className="font-black text-dtsc-ink">Workflow Engine v2</p>
-              <p className="mt-1 text-sm text-dtsc-muted">{tx(locale, "La création et l’exécution des workflows se font dans le moteur versionné. Les anciennes définitions restent archivées en lecture seule.", "Workflow creation and execution use the versioned engine. Legacy definitions remain archived as read-only.")}</p>
-              <Link href="/enterprise-modules/WORKFLOWS" className="mt-3 inline-flex min-h-11 items-center rounded-xl border border-dtsc-border px-3 text-sm font-black text-dtsc-ink">{tx(locale, "Ouvrir les workflows", "Open workflows")}</Link>
+              <p className="font-black text-dtsc-ink">{tx(locale, "Automatisations de travail", "Work automations")}</p>
+              <p className="mt-1 text-sm text-dtsc-muted">{tx(locale, "Créez et suivez les enchaînements d’actions utilisés par vos équipes. Les anciennes configurations restent consultables sans pouvoir être modifiées.", "Create and follow the action sequences used by your teams. Previous configurations remain viewable without being editable.")}</p>
+              <Link href="/enterprise-modules/WORKFLOWS" className="mt-3 inline-flex min-h-11 items-center rounded-xl border border-dtsc-border px-3 text-sm font-black text-dtsc-ink">{tx(locale, "Ouvrir les automatisations", "Open automations")}</Link>
             </div>
           </ModuleSection>
         </div>
 
         <div id="enterprise-admin-members" className="scroll-mt-24 outline-none">
-          <ModuleSection title={tx(locale, "Collaborateurs", "Collaborators")} description={tx(locale, "Invitations, membres actifs et retraits non destructifs.", "Invitations, active members and non-destructive removals.")}>
+          <ModuleSection title={tx(locale, "Collaborateurs", "Collaborators")} description={tx(locale, "Invitations, membres actifs et retraits sans suppression de l’historique.", "Invitations, active members and removals that preserve history.")}>
             <Accordion>
               <AccordionItem title={tx(locale, "Collaborateurs", "Collaborators")} defaultOpen>
                 <EnterpriseMembersPanel members={members} pendingMembers={pendingMembers} activeMembers={activeMembers} positions={positions} inviteMember={inviteMember} updateMember={updateMember} removeMember={removeMember} />
@@ -214,38 +222,38 @@ export function EnterpriseAdministrationModule(
         </div>
 
         <div id="enterprise-admin-positions" className="scroll-mt-24 outline-none">
-          <ModuleSection title={tx(locale, "Postes", "Positions")} description={tx(locale, "Les postes structurent les responsabilités et fournissent des permissions héritées explicables.", "Positions structure responsibilities and provide explainable inherited permissions.")}>
-            <Accordion><AccordionItem title={tx(locale, "Postes et permissions héritées", "Positions and inherited permissions")} defaultOpen><EnterprisePositionsPanel sectorCode={organization.sectorCode} departments={departments} positions={positions} submitAdminMutation={submitAdminMutation} /></AccordionItem></Accordion>
+          <ModuleSection title={tx(locale, "Postes", "Positions")} description={tx(locale, "Les postes structurent les responsabilités et les autorisations héritées de chaque fonction.", "Positions structure responsibilities and the permissions inherited by each function.")}>
+            <Accordion><AccordionItem title={tx(locale, "Postes et autorisations héritées", "Positions and inherited permissions")} defaultOpen><EnterprisePositionsPanel sectorCode={organization.sectorCode} departments={departments} positions={positions} submitAdminMutation={submitAdminMutation} /></AccordionItem></Accordion>
           </ModuleSection>
         </div>
 
         <div id="enterprise-admin-permissions" className="scroll-mt-24 outline-none">
-          <ModuleSection title={tx(locale, "Rôles & permissions", "Roles & permissions")} description={tx(locale, "Rôles personnalisés propres à l’entreprise, affectations auditées et simulation sans mutation.", "Company-scoped custom roles, audited assignments and non-mutating simulation.")}>
+          <ModuleSection title={tx(locale, "Rôles & permissions", "Roles & permissions")} description={tx(locale, "Rôles propres à l’entreprise, affectations suivies dans l’historique et vérification des droits avant application.", "Company-specific roles, assignments recorded in history, and permission checks before changes are applied.")}>
             <EnterpriseRolesPermissionsPanel organizationId={organization.id} roles={roles} members={members} modules={visibleModules} />
           </ModuleSection>
         </div>
 
         <div id="enterprise-admin-departments" className="scroll-mt-24 outline-none">
-          <ModuleSection title={tx(locale, "Départements", "Departments")} description={tx(locale, "CRUD professionnel, hiérarchie, responsables et détail plein écran, toujours dans l’entreprise active.", "Professional CRUD, hierarchy, owners and full-screen details, always scoped to the active company.")}>
+          <ModuleSection title={tx(locale, "Départements", "Departments")} description={tx(locale, "Créez, consultez, modifiez ou désactivez les départements, leur hiérarchie et leurs responsables dans l’entreprise active.", "Create, view, edit or deactivate departments, their hierarchy and owners within the active company.")}>
             <EnterpriseAdministrationDepartmentsPanel organizationId={organization.id} departments={departments} members={members} locale={locale} />
           </ModuleSection>
         </div>
 
         <div id="enterprise-admin-settings" className="scroll-mt-24 outline-none">
-          <ModuleSection title={tx(locale, "Paramètres entreprise", "Company settings")} description={tx(locale, "Identité, logo depuis l’appareil, couleur visuelle et paramètres généraux persistés.", "Identity, device logo upload, visual color choice and persistent general settings.")}>
+          <ModuleSection title={tx(locale, "Paramètres entreprise", "Company settings")} description={tx(locale, "Identité, logo depuis l’appareil, couleur visuelle et paramètres généraux enregistrés pour l’entreprise.", "Identity, device logo upload, visual color choice and general settings saved for the company.")}>
             <EnterpriseAdministrationBrandingPanel organization={organization} locale={locale} />
             <div className="mt-4"><Accordion><EnterpriseCalendarPanel organizationName={organization.name} calendarEvents={calendarEvents} locale={locale} /></Accordion></div>
           </ModuleSection>
         </div>
 
         <div id="enterprise-admin-security" className="scroll-mt-24 outline-none">
-          <ModuleSection title={tx(locale, "Sécurité de l’organisation", "Organization security")} description={tx(locale, "Règles locales à l’entreprise, expliquées en langage clair et contrôlées côté serveur.", "Company-local rules explained in clear language and enforced server-side.")}>
+          <ModuleSection title={tx(locale, "Sécurité de l’organisation", "Organization security")} description={tx(locale, "Règles propres à l’entreprise, expliquées en langage clair et appliquées à ses utilisateurs.", "Company-specific rules explained clearly and applied to its users.")}>
             <EnterpriseAdministrationSecurityPanel organizationId={organization.id} policy={securityPolicy} locale={locale} />
           </ModuleSection>
         </div>
 
         <div id="enterprise-admin-audit" className="scroll-mt-24 outline-none">
-          <ModuleSection title={tx(locale, "Audit & cohérence des modules", "Audit & module consistency")} count={`${configurationIssues.length}`} description={tx(locale, "Historique compréhensible avec noms des utilisateurs et aucune variable d’implémentation exposée.", "Understandable history with user names and no implementation variables exposed.")}>
+          <ModuleSection title={tx(locale, "Audit & cohérence des modules", "Audit & module consistency")} count={`${configurationIssues.length}`} description={tx(locale, "Historique compréhensible avec les noms des utilisateurs et des informations directement utiles à l’administrateur.", "Understandable history with user names and information directly useful to the administrator.")}>
             <EnterpriseAdministrationAuditPanel items={auditItems} members={members} issues={configurationIssues} locale={locale} />
           </ModuleSection>
         </div>
