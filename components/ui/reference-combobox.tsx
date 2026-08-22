@@ -15,6 +15,7 @@ type ReferenceComboboxProps = {
   allowCustom?: boolean;
   className?: string;
   customPlaceholder?: string;
+  onValueChange?: (value: string) => void;
 };
 
 const CUSTOM_VALUE = "__DTSC_CUSTOM_REFERENCE__";
@@ -28,6 +29,7 @@ export function ReferenceCombobox({
   allowCustom = true,
   className,
   customPlaceholder,
+  onValueChange,
 }: ReferenceComboboxProps) {
   const [locale, setLocale] = React.useState<"fr" | "en">("fr");
   const normalizedDefault = String(defaultValue || "").trim();
@@ -52,8 +54,14 @@ export function ReferenceCombobox({
         required={required && !allowCustom}
         disabled={disabled}
         onChange={(event) => {
-          setSelected(event.target.value);
-          if (event.target.value !== CUSTOM_VALUE) setCustomValue("");
+          const nextSelected = event.target.value;
+          setSelected(nextSelected);
+          if (nextSelected !== CUSTOM_VALUE) {
+            setCustomValue("");
+            onValueChange?.(nextSelected);
+          } else {
+            onValueChange?.("");
+          }
         }}
         className={cn(
           "h-11 w-full min-w-0 max-w-full truncate rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-base text-dtsc-ink outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 disabled:opacity-60 md:text-sm",
@@ -67,7 +75,11 @@ export function ReferenceCombobox({
       {selected === CUSTOM_VALUE ? (
         <Input
           value={customValue}
-          onChange={(event) => setCustomValue(event.target.value)}
+          onChange={(event) => {
+            const nextCustomValue = event.target.value;
+            setCustomValue(nextCustomValue);
+            onValueChange?.(nextCustomValue.trim());
+          }}
           placeholder={resolvedCustomPlaceholder}
           required={required}
           disabled={disabled}
