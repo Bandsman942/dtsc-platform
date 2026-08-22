@@ -15,6 +15,7 @@ type ReferenceComboboxProps = {
   allowCustom?: boolean;
   className?: string;
   customPlaceholder?: string;
+  emptyLabel?: string;
   onValueChange?: (value: string) => void;
 };
 
@@ -29,6 +30,7 @@ export function ReferenceCombobox({
   allowCustom = true,
   className,
   customPlaceholder,
+  emptyLabel,
   onValueChange,
 }: ReferenceComboboxProps) {
   const [locale, setLocale] = React.useState<"fr" | "en">("fr");
@@ -43,7 +45,7 @@ export function ReferenceCombobox({
 
   const value = selected === CUSTOM_VALUE ? customValue.trim() : selected;
   const addCustomLabel = locale === "en" ? "Add another value…" : "Ajouter une autre valeur…";
-  const emptyLabel = locale === "en" ? "Select…" : "Sélectionner…";
+  const resolvedEmptyLabel = emptyLabel || (locale === "en" ? "Select…" : "Sélectionner…");
   const resolvedCustomPlaceholder = customPlaceholder || (locale === "en" ? "Enter the new value" : "Saisir la nouvelle valeur");
 
   return (
@@ -68,7 +70,7 @@ export function ReferenceCombobox({
           className,
         )}
       >
-        <option value="">{emptyLabel}</option>
+        <option value="">{resolvedEmptyLabel}</option>
         {options.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
         {allowCustom ? <option value={CUSTOM_VALUE}>{addCustomLabel}</option> : null}
       </select>
