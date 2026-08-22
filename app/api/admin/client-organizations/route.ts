@@ -60,7 +60,12 @@ export async function POST(req: Request) {
     const firstIssue = parsedAdminInvitation.error.issues[0];
     const field = typeof firstIssue?.path?.[0] === "string" ? firstIssue.path[0] : null;
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt, metadata: { action: "client_organization_admin_invitation_validation_failed", field } });
-    return NextResponse.json({ error: "Invalid administrator invitation", reasonCode: "VALIDATION_ERROR", field }, { status: 400 });
+    return NextResponse.json({
+      error: "Invalid administrator invitation",
+      reasonCode: "VALIDATION_ERROR",
+      field,
+      message: field === "adminReason" ? "Renseignez une raison valide avant d'envoyer l'invitation administrateur." : "L'invitation administrateur contient une information invalide.",
+    }, { status: 400 });
   }
 
   const data = parsed.data;
@@ -156,7 +161,14 @@ export async function POST(req: Request) {
   });
 
   if (data.adminUserId) {
-    await notifyUser({ userId: data.adminUserId, title: `Invitation administrateur · ${organization.name}`, body: "DTSC vous invite à administrer cette entreprise. Acceptez explicitement l'invitation depuis votre espace.", type: "ENTERPRISE_INVITATION", targetUrl: `/enterprise-invitations?organizationId=${encodeURIComponent(organization.id)}`, organizationId: organization.id }).catch(() => null);
+    await notifyUser({
+      userId: data.adminUserId,
+      title: `Invitation administrateur · ${organization.name}`,
+      body: adminReason,
+      type: "ENTERPRISE_INVITATION",
+      targetUrl: `/enterprise-invitations?organizationId=${encodeURIComponent(organization.id)}`,
+      organizationId: organization.id,
+    }).catch(() => null);
   }
 
   if (sector && data.applySectorTemplate) {
