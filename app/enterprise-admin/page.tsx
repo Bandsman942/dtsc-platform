@@ -49,7 +49,7 @@ export default async function EnterpriseAdminPage({ searchParams }: PageProps) {
     );
   }
 
-  const dataset = await getEnterpriseAdministrationDataset(organizationId);
+  const dataset = await getEnterpriseAdministrationDataset(organizationId, user.id, user.locale);
   if (!dataset) {
     redirect("/dashboard");
   }
@@ -57,10 +57,10 @@ export default async function EnterpriseAdminPage({ searchParams }: PageProps) {
   return (
     <AppShell user={user}>
       <EnterpriseAdministrationModule
-      {...dataset}
-      locale={user.locale}
-      initialSection={section}
-    />
+        {...dataset}
+        locale={user.locale}
+        initialSection={section}
+      />
     </AppShell>
   );
 }
