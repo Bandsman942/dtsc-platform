@@ -4,7 +4,7 @@ import { SaasAccessNotice } from "@/components/enterprise/saas-access-notice";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
 import { canUseFeature, getOrganizationEntitlements } from "@/lib/billing/entitlements";
-import { getEnterpriseAdministrationDataset } from "@/lib/enterprise/enterprise-admin-loader";
+import { getEnterpriseAdministrationDataset, getEnterpriseOrganizationForAdmin } from "@/lib/enterprise/enterprise-admin-loader";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
 
@@ -57,11 +57,15 @@ export default async function EnterpriseAdminPage({ searchParams }: PageProps) {
     );
   }
 
-  const dataset = await getEnterpriseAdministrationDataset(organizationId, user.id, user.locale);
+  const organization = await getEnterpriseOrganizationForAdmin(organizationId);
+  if (!organization) {
+    redirect("/dashboard");
+  }
+  const administrationLocale = companyLocale(organization.settingsJson, user.locale);
+  const dataset = await getEnterpriseAdministrationDataset(organizationId, user.id, administrationLocale);
   if (!dataset) {
     redirect("/dashboard");
   }
-  const administrationLocale = companyLocale(dataset.organization.settingsJson, user.locale);
 
   return (
     <AppShell user={user}>
