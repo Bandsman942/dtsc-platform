@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { requireConsoleCapability } from "@/lib/admin-api";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { applyCanonicalSectorTemplateToOrganization } from "@/lib/enterprise/sector-template-application";
+import { parseInitialAdminInvitation } from "@/lib/console/client-organization-create-invitation";
 import { CONSOLE_CAPABILITIES } from "@/lib/console/console-capabilities";
+import { applyCanonicalSectorTemplateToOrganization } from "@/lib/enterprise/sector-template-application";
 import { canManageClientOrganizations, isDtscInternalSession } from "@/lib/organizations";
 import { notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
@@ -46,13 +47,24 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Too many requests", message: "Trop d'opérations organisations sur une courte période." }, { status: 429 });
   }
 
-  const parsed = enterpriseOrganizationCreateSchema.safeParse(await req.json().catch(() => null));
+  const rawBody = await req.json().catch(() => null);
+  const parsed = enterpriseOrganizationCreateSchema.safeParse(rawBody);
+  const parsedAdminInvitation = parseInitialAdminInvitation(rawBody);
   if (!parsed.success) {
-    await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Invalid payload", message: "Les informations de l'entreprise sont invalides." }, { status: 400 });
+    const firstIssue = parsed.error.issues[0];
+    const field = typeof firstIssue?.path?.[0] === "string" ? firstIssue.path[0] : null;
+    await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt, metadata: { action: "client_organization_create_validation_failed", field } });
+    return NextResponse.json({ error: "Invalid payload", reasonCode: "VALIDATION_ERROR", field, message: "Les informations de l'entreprise sont invalides." }, { status: 400 });
+  }
+  if (!parsedAdminInvitation.success) {
+    const firstIssue = parsedAdminInvitation.error.issues[0];
+    const field = typeof firstIssue?.path?.[0] === "string" ? firstIssue.path[0] : null;
+    await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt, metadata: { action: "client_organization_admin_invitation_validation_failed", field } });
+    return NextResponse.json({ error: "Invalid administrator invitation", reasonCode: "VALIDATION_ERROR", field }, { status: 400 });
   }
 
   const data = parsed.data;
+  const adminReason = parsedAdminInvitation.data.adminReason?.trim() || "";
   const slug = data.slug || slugify(data.name);
   const existing = await prisma.organization.findUnique({ where: { slug } });
   if (existing) {
@@ -122,7 +134,7 @@ export async function POST(req: Request) {
           userId: data.adminUserId,
           grantedByDtscUserId: session.userId,
           status: "PENDING",
-          reason: "Désignation initiale en attente d'acceptation",
+          reason: adminReason,
         },
       });
     }
@@ -156,7 +168,20 @@ export async function POST(req: Request) {
     });
   }
 
-  await writeAuditLog({ userId: session.userId, action: "CLIENT_ORGANIZATION_CREATED", entity: "Organization", entityId: organization.id, reasonCode: capability.reasonCode, metadata: { adminInvitationPending: Boolean(data.adminUserId), planId: data.planId || null, sectorId: sector?.id || null }, request: req });
+  await writeAuditLog({
+    userId: session.userId,
+    action: "CLIENT_ORGANIZATION_CREATED",
+    entity: "Organization",
+    entityId: organization.id,
+    reasonCode: capability.reasonCode,
+    metadata: {
+      adminInvitationPending: Boolean(data.adminUserId),
+      adminInvitationReason: data.adminUserId ? adminReason : null,
+      planId: data.planId || null,
+      sectorId: sector?.id || null,
+    },
+    request: req,
+  });
   await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt });
   return NextResponse.json({ ok: true, organization }, { status: 201 });
 }
