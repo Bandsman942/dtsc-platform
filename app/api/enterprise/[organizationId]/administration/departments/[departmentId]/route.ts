@@ -94,11 +94,18 @@ export async function DELETE(req: Request, { params }: Params) {
   const current = await prisma.enterpriseDepartment.findFirst({ where: { id: departmentId, organizationId } });
   if (!current) return NextResponse.json({ error: "NOT_FOUND", message: "Ce département est introuvable dans cette entreprise." }, { status: 404 });
 
-  const [positionCount, memberCount, childCount] = await Promise.all([
-    prisma.enterprisePosition.count({ where: { organizationId, departmentId } }),
-    prisma.organizationMember.count({ where: { organizationId, removedAt: null, departmentId } }),
+  const linkedPositions = await prisma.enterprisePosition.findMany({
+    where: { organizationId, departmentId },
+    select: { id: true },
+  });
+  const positionIds = linkedPositions.map((position) => position.id);
+  const [memberCount, childCount] = await Promise.all([
+    positionIds.length
+      ? prisma.organizationMember.count({ where: { organizationId, removedAt: null, positionId: { in: positionIds } } })
+      : Promise.resolve(0),
     prisma.enterpriseDepartment.count({ where: { organizationId, parentDepartmentId: departmentId, isActive: true } }),
   ]);
+  const positionCount = linkedPositions.length;
   const updated = await prisma.enterpriseDepartment.update({ where: { id: departmentId }, data: { isActive: false } });
   await writeAuditLog({
     userId: session.userId,
