@@ -580,9 +580,10 @@ function OrganizationEditDialog({
   }, [organization?.id]);
 
   if (!organization) {
-    return <Dialog open={false} title="Modifier l'entreprise" onClose={onClose} />;
+    return null;
   }
 
+  const organizationId = organization.id;
   const activeAdmins = organization.members.filter((member) => ADMIN_ROLES.has(member.role) && member.status === "ACTIVE");
   const pendingAdmins = organization.members.filter((member) => ADMIN_ROLES.has(member.role) && member.status === "INVITED");
   const unavailableAdminIds = new Set([...activeAdmins, ...pendingAdmins].map((member) => member.user.id));
@@ -596,7 +597,7 @@ function OrganizationEditDialog({
     }
     setIsInvitingAdmin(true);
     try {
-      await onInviteAdmin(organization.id, selectedAdminUserId, adminReason);
+      await onInviteAdmin(organizationId, selectedAdminUserId, adminReason);
     } finally {
       setIsInvitingAdmin(false);
     }
