@@ -16,6 +16,7 @@ const logoStorage = read("lib/enterprise/organization-logo-storage.ts");
 const logoReadRoute = read("app/api/enterprise/[organizationId]/logo/route.ts");
 const logoUploadRoute = read("app/api/enterprise/[organizationId]/administration/logo/route.ts");
 const enterpriseAdminPage = read("app/enterprise-admin/page.tsx");
+const appShell = read("components/layout/app-shell.tsx");
 const avatarAccess = read("lib/avatar-access.ts");
 const avatarRoute = read("app/api/users/[id]/avatar/route.ts");
 const conversationAvatar = read("components/chat/ConversationAvatar.tsx");
@@ -48,6 +49,12 @@ requireAll("logo upload route", logoUploadRoute, [
 requireAll("legacy admin logo normalization", enterpriseAdminPage, [
   "organizationLogoProxyUrl",
   "dataset.organization.logoUrl",
+]);
+requireAll("legacy app shell logo normalization", appShell, [
+  "organizationLogoProxyUrl",
+  "activeOrganizationLogoUrl",
+  "organizationLogoProxyUrl(activeOrganization.id, activeOrganization.logoUrl)",
+  "src={activeOrganizationLogoUrl}",
 ]);
 
 requireAll("avatar access", avatarAccess, [
