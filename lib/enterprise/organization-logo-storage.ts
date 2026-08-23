@@ -70,9 +70,11 @@ export function organizationLogoProxyUrl(organizationId: string, logoUrl: string
       return `${parsed.pathname}${parsed.search}`;
     }
   } catch {
-    // Legacy values are intentionally routed through the authenticated proxy.
+    return logoUrl;
   }
-  return `/api/enterprise/${organizationId}/logo`;
+  return resolveOrganizationLogoStoragePath({ organizationId, logoUrl })
+    ? `/api/enterprise/${organizationId}/logo`
+    : logoUrl;
 }
 
 export async function uploadOrganizationLogo({ organizationId, file }: { organizationId: string; file: File }) {
