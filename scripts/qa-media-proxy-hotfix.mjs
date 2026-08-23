@@ -28,6 +28,8 @@ requireAll("logo storage", logoStorage, [
   "organizationLogoProxyUrl",
   "downloadOrganizationLogoFromSupabase",
   "company-logos/${organizationId}/",
+  "resolveOrganizationLogoStoragePath({ organizationId, logoUrl })",
+  ": logoUrl",
 ]);
 if (logoStorage.includes("getPublicUrl")) {
   console.error("FAIL media proxy hotfix: organization logos must not depend on Supabase public URLs.");
