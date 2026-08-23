@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useEffect, useState } from "react";
 import { Bot, Building2, Users, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -21,13 +22,18 @@ export function ConversationAvatar({
   isOnline?: boolean;
   className?: string;
 }) {
+  const [imageFailed, setImageFailed] = useState(false);
   const label = initials || buildInitials(title);
   const Icon = type === "assistant" || type === "system" ? Bot : type === "group" ? Users : type === "organization" ? Building2 : UserRound;
 
+  useEffect(() => {
+    setImageFailed(false);
+  }, [avatarUrl]);
+
   return (
     <span className={cn("relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#002b5b] text-sm font-black text-white shadow-[0_8px_24px_rgba(0,43,91,0.18)] sm:h-11 sm:w-11", className)}>
-      {avatarUrl ? (
-        <Image src={avatarUrl} alt={title} fill unoptimized sizes="48px" className="object-cover" />
+      {avatarUrl && !imageFailed ? (
+        <Image src={avatarUrl} alt={title} fill unoptimized sizes="48px" className="object-cover" onError={() => setImageFailed(true)} />
       ) : type === "collaborator" ? (
         <span>{label}</span>
       ) : (

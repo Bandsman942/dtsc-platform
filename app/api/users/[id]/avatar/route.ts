@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { canReadUserAvatar } from "@/lib/avatar-access";
 import { prisma } from "@/lib/prisma";
 import { downloadProfileAvatarFromSupabase } from "@/lib/supabase-storage";
 
@@ -25,7 +26,11 @@ export async function GET(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Avatar not found" }, { status: 404 });
   }
 
-  const canRead = session?.userId === id || user.publicProfileConsent;
+  const canRead = await canReadUserAvatar({
+    viewerUserId: session?.userId,
+    targetUserId: id,
+    publicProfileConsent: user.publicProfileConsent,
+  });
   if (!canRead) {
     return NextResponse.json({ error: "Avatar not found" }, { status: 404 });
   }

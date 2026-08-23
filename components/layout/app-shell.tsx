@@ -28,6 +28,7 @@ import { getCurrentHostType, getDashboardUrl, getProductBranding } from "@/lib/d
 import { dtsc } from "@/lib/dtsc";
 import { getPendingEnterpriseInvitationCount } from "@/lib/enterprise-invitations";
 import { getEnterpriseActivityBlocks } from "@/lib/enterprise/enterprise-activity-blocks-loader";
+import { organizationLogoProxyUrl } from "@/lib/enterprise/organization-logo-storage";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { getEnterpriseNavigationModules } from "@/lib/enterprise/enterprise-navigation";
 import { getExperienceCopy } from "@/lib/experience-i18n";
@@ -139,6 +140,9 @@ export async function AppShell({
   const activeOrganization = activeOrganizationId
     ? organizationMemberships.find((membership) => membership.organization.id === activeOrganizationId)?.organization || null
     : null;
+  const activeOrganizationLogoUrl = activeOrganization
+    ? organizationLogoProxyUrl(activeOrganization.id, activeOrganization.logoUrl)
+    : null;
   const primaryColor = organizationContext ? brandingColor(activeOrganization?.brandingJson) : null;
   const enterpriseBrandStyle = primaryColor
     ? ({ "--dtsc-product-accent": primaryColor } as CSSProperties)
@@ -184,7 +188,7 @@ export async function AppShell({
           </div>
           {organizationContext && activeOrganization ? (
             <div className="mt-3 flex items-center gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-3">
-              {activeOrganization.logoUrl ? <Image src={activeOrganization.logoUrl} alt="" width={40} height={40} unoptimized className="h-10 w-10 rounded-xl bg-white object-contain p-1" /> : <div className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--dtsc-product-accent)] text-xs font-black text-white">{initials(activeOrganization.name)}</div>}
+              {activeOrganizationLogoUrl ? <Image src={activeOrganizationLogoUrl} alt="" width={40} height={40} unoptimized className="h-10 w-10 rounded-xl bg-white object-contain p-1" /> : <div className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--dtsc-product-accent)] text-xs font-black text-white">{initials(activeOrganization.name)}</div>}
               <div className="min-w-0"><p className="truncate text-sm font-black text-dtsc-ink">{activeOrganization.name}</p><p className="mt-0.5 text-[11px] font-bold text-dtsc-muted">{user.locale === "en" ? "Company workspace" : "Espace entreprise"}</p></div>
             </div>
           ) : null}
@@ -222,7 +226,7 @@ export async function AppShell({
                 DTSC
               </Link>
               <div className="hidden items-center gap-2 text-sm font-medium text-dtsc-muted md:flex">
-                {organizationContext && activeOrganization?.logoUrl ? <Image src={activeOrganization.logoUrl} alt="" width={28} height={28} unoptimized className="h-7 w-7 rounded-lg bg-white object-contain p-0.5" /> : null}
+                {organizationContext && activeOrganizationLogoUrl ? <Image src={activeOrganizationLogoUrl} alt="" width={28} height={28} unoptimized className="h-7 w-7 rounded-lg bg-white object-contain p-0.5" /> : null}
                 <span>{organizationContext && activeOrganization ? activeOrganization.name : productBranding} · {dtsc.slogan}</span>
               </div>
               <div className="flex items-center gap-3">

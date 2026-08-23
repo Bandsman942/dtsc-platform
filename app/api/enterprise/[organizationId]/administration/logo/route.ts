@@ -28,8 +28,10 @@ export async function POST(req: Request, { params }: Params) {
   if (!validation.ok) return NextResponse.json({ error: "INVALID_LOGO", message: validation.message }, { status: 400 });
   try {
     const uploaded = await uploadOrganizationLogo({ organizationId, file });
+    const origin = new URL(req.url).origin;
+    const logoUrl = `${origin}/api/enterprise/${organizationId}/logo?asset=${encodeURIComponent(uploaded.assetKey)}&v=${Date.now()}`;
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "organization-logo" } });
-    return NextResponse.json({ ok: true, logoUrl: uploaded.publicUrl, message: "Le nouveau logo est prêt à être enregistré avec les paramètres de l’entreprise." });
+    return NextResponse.json({ ok: true, logoUrl, message: "Le nouveau logo est prêt à être enregistré avec les paramètres de l’entreprise." });
   } catch (error) {
     const message = error instanceof Error && !error.message.startsWith("ORGANIZATION_LOGO_") ? error.message : "Le logo n’a pas pu être envoyé. Vérifiez le stockage puis réessayez.";
     await writeApiLog({ request: req, statusCode: 500, userId: session.userId, startedAt, metadata: { organizationId, domain: "organization-logo", failed: true } });

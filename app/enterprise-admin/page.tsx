@@ -6,6 +6,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
 import { canUseFeature, getOrganizationEntitlements } from "@/lib/billing/entitlements";
 import { getEnterpriseAdministrationDataset, getEnterpriseOrganizationForAdmin } from "@/lib/enterprise/enterprise-admin-loader";
+import { organizationLogoProxyUrl } from "@/lib/enterprise/organization-logo-storage";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
 
@@ -67,12 +68,19 @@ export default async function EnterpriseAdminPage({ searchParams }: PageProps) {
   if (!dataset) {
     redirect("/dashboard");
   }
+  const normalizedDataset = {
+    ...dataset,
+    organization: {
+      ...dataset.organization,
+      logoUrl: organizationLogoProxyUrl(organizationId, dataset.organization.logoUrl),
+    },
+  };
 
   return (
     <AppShell user={user}>
       <LocaleProvider locale={administrationLocale}>
         <EnterpriseAdministrationModule
-          {...dataset}
+          {...normalizedDataset}
           locale={administrationLocale}
           initialSection={section}
         />
