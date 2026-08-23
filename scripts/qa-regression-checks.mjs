@@ -36,3 +36,4 @@ await import(sourceUrl);
 await import("./qa-guided-form-contract-checks.mjs");
 await import("./qa-controlled-form-reference-checks.mjs");
 await import("./qa-operational-sla-filter-checks.mjs");
+await import("./qa-media-proxy-hotfix.mjs");
