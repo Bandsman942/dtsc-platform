@@ -1,3 +1,4 @@
+import "./qa-hotfix-486-accounting-ux.mjs";
 import fs from "node:fs";
 import path from "node:path";
 
