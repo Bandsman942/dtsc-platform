@@ -1,11 +1,10 @@
 import Link from "next/link";
 import { ArrowRightLeft } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
-import { EnterpriseAccountingOnboardingPanel } from "@/components/enterprise/professional/enterprise-accounting-onboarding-panel";
+import { EnterpriseAccountingWorkspace } from "@/components/enterprise/professional/enterprise-accounting-workspace";
 import { EnterpriseAdvancedFinanceWorkspace } from "@/components/enterprise/professional/enterprise-advanced-finance-workspace";
 import { EnterpriseOperationalFinanceWorkspace } from "@/components/enterprise/professional/enterprise-operational-finance-workspace";
 import { AppShell } from "@/components/layout/app-shell";
-import { ContextualUserGuide } from "@/components/user-guides/contextual-user-guide";
 import { getSession, requireUser } from "@/lib/auth";
 import {
   OPERATIONAL_FINANCE_MODULE_CODES,
@@ -17,7 +16,6 @@ import { getEnterpriseModuleDefinition } from "@/lib/enterprise/module-registry"
 import { requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
 import { translateEnterpriseFinance } from "@/lib/i18n";
 import { prisma } from "@/lib/prisma";
-import { getAccountingOnboardingGuide } from "@/lib/user-guides/accounting-onboarding-guide";
 
 const MANAGER_ROLES = new Set(["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE", "MANAGER"]);
 
@@ -57,15 +55,16 @@ export async function EnterpriseFinanceModulePage({ moduleCode }: { moduleCode: 
           </Link>
         </div>
       ) : null}
+
       {moduleCode === "FINANCE_ACCOUNTING" ? (
-        <>
-          <div className="mx-auto mb-4 flex w-full max-w-[1600px] justify-end px-4 sm:px-6 lg:px-8">
-            <ContextualUserGuide guide={getAccountingOnboardingGuide(user.locale)} compact />
-          </div>
-          <EnterpriseAccountingOnboardingPanel organizationId={organizationId} locale={user.locale} canManage={canManage} />
-        </>
-      ) : null}
-      {OPERATIONAL_FINANCE_MODULE_CODES.includes(
+        <EnterpriseAccountingWorkspace
+          organizationId={organizationId}
+          organizationName={organization.name}
+          definition={definition}
+          locale={user.locale}
+          canManage={canManage}
+        />
+      ) : OPERATIONAL_FINANCE_MODULE_CODES.includes(
         moduleCode as (typeof OPERATIONAL_FINANCE_MODULE_CODES)[number],
       ) ? (
         <EnterpriseOperationalFinanceWorkspace

@@ -7,7 +7,44 @@ import { ledgerAccountCreateSchema } from "@/lib/enterprise/accounting/schemas";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
-export async function GET(req: Request, { params }: Params) { const startedAt = Date.now(); const { organizationId } = await params; const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_ACCOUNTING", "view"); if (!auth.ok) return auth.response; const { page, pageSize, search } = financeListParams(req); const where = { organizationId, archivedAt: null, ...(search ? { OR: [{ code: { contains: search, mode: "insensitive" as const } }, { nameFr: { contains: search, mode: "insensitive" as const } }, { nameEn: { contains: search, mode: "insensitive" as const } }] } : {}) }; const [items, total] = await Promise.all([prisma.enterpriseLedgerAccount.findMany({ where, orderBy: { code: "asc" }, skip: (page - 1) * pageSize, take: pageSize, include: { chart: true, parent: true } }), prisma.enterpriseLedgerAccount.count({ where })]); await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "ledger-accounts", page } }); return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } }); }
+
+export async function GET(req: Request, { params }: Params) {
+  const startedAt = Date.now();
+  const { organizationId } = await params;
+  const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_ACCOUNTING", "view");
+  if (!auth.ok) return auth.response;
+
+  const { page, pageSize, search } = financeListParams(req);
+  const url = new URL(req.url);
+  const chartId = url.searchParams.get("chartId") || undefined;
+  const accountType = url.searchParams.get("accountType") || undefined;
+  const requestedStatus = url.searchParams.get("status") || undefined;
+  const where = {
+    organizationId,
+    archivedAt: null,
+    ...(chartId ? { chartId } : {}),
+    ...(accountType ? { accountType } : {}),
+    ...(requestedStatus === "ACTIVE" ? { isActive: true } : requestedStatus === "INACTIVE" ? { isActive: false } : {}),
+    ...(search ? { OR: [
+      { code: { contains: search, mode: "insensitive" as const } },
+      { nameFr: { contains: search, mode: "insensitive" as const } },
+      { nameEn: { contains: search, mode: "insensitive" as const } },
+    ] } : {}),
+  };
+  const [items, total] = await Promise.all([
+    prisma.enterpriseLedgerAccount.findMany({
+      where,
+      orderBy: { code: "asc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      include: { chart: true, parent: true, group: true, _count: { select: { children: true, journalLines: true, accountMappings: true } } },
+    }),
+    prisma.enterpriseLedgerAccount.count({ where }),
+  ]);
+  await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "ledger-accounts", page, chartId: chartId || null } });
+  return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } });
+}
+
 export async function POST(req: Request, { params }: Params) {
   const startedAt = Date.now();
   const { organizationId } = await params;
@@ -21,13 +58,7 @@ export async function POST(req: Request, { params }: Params) {
     if (parsed.data.isSystemAccount) return NextResponse.json({ error: "SYSTEM_ACCOUNT_REQUIRES_REINFORCED_PERMISSION", message: "Un compte système ne peut pas être créé depuis ce formulaire." }, { status: 403 });
     const account = chart.templateCode
       ? parsed.data.parentId
-        ? await createCustomChildAccount(organizationId, chart.id, auth.session.userId, {
-            parentId: parsed.data.parentId,
-            code: parsed.data.code,
-            nameFr: parsed.data.nameFr,
-            nameEn: parsed.data.nameEn,
-            currencyCode: parsed.data.currencyCode,
-          })
+        ? await createCustomChildAccount(organizationId, chart.id, auth.session.userId, { parentId: parsed.data.parentId, code: parsed.data.code, nameFr: parsed.data.nameFr, nameEn: parsed.data.nameEn, currencyCode: parsed.data.currencyCode })
         : null
       : await createLedgerAccount(organizationId, auth.session.userId, parsed.data);
     if (!account) return NextResponse.json({ error: "CUSTOM_ACCOUNT_PARENT_REQUIRED", message: "Un sous-compte personnalisé doit être rattaché à un compte parent du template." }, { status: 409 });

@@ -19,6 +19,7 @@ const financeFiles = [
   "components/enterprise/professional/enterprise-operational-finance-workspace.tsx",
   "components/enterprise/professional/enterprise-advanced-finance-workspace.tsx",
   "components/enterprise/professional/enterprise-exchange-rates-workspace.tsx",
+  "components/enterprise/professional/enterprise-accounting-workspace.tsx",
   "components/enterprise/professional/enterprise-accounting-onboarding-panel.tsx",
 ];
 for (const file of financeFiles) if (!exists(file)) fail(`Finance UX: fichier requis absent ${file}`);
@@ -48,7 +49,10 @@ if (exists(shared)) {
 const onboarding = "components/enterprise/professional/enterprise-accounting-onboarding-panel.tsx";
 if (exists(onboarding)) {
   const content = read(onboarding);
-  for (const token of ["translateEnterpriseFinance", 't("accountingOnboarding")', 't("accountingOnboardingDescription")', 't("financialStatements")', "financeStatusLabel", "safeFinanceError", "defaultTemplateReference"]) if (!content.includes(token)) fail(`Finance UX: onboarding final incomplet (${token})`);
+  for (const token of [
+    "translateEnterpriseFinance", 't("accountingOnboarding")', 't("accountingOnboardingDescription")', 't("financialStatements")',
+    "financeStatusLabel", "safeFinanceError", "defaultTemplateReference", "ContextualUserGuide", "getAccountingOnboardingGuide",
+  ]) if (!content.includes(token)) fail(`Finance UX: onboarding final incomplet (${token})`);
 
   const frPath = "locales/enterprise-finance.fr.json";
   const enPath = "locales/enterprise-finance.en.json";
@@ -65,6 +69,17 @@ if (exists(onboarding)) {
   for (const forbidden of ["bootstrap non officiel", "unofficial bootstrap", "REGULATORY_STATEMENT_MAPPING_NOT_VALIDATED"]) if (content.includes(forbidden)) fail(`Finance UX: jargon de gouvernance historique affiché au client (${forbidden})`);
 }
 
+const accountingWorkspace = "components/enterprise/professional/enterprise-accounting-workspace.tsx";
+if (exists(accountingWorkspace)) {
+  const content = read(accountingWorkspace);
+  for (const token of ["EnterpriseAccountingOnboardingPanel", "ProfessionalTabs", '"setup"', "ForegroundToast"]) {
+    if (!content.includes(token)) fail(`Finance UX: workspace Comptabilité incomplet (${token})`);
+  }
+  const setupIndex = content.indexOf('{ id: "setup"');
+  const overviewIndex = content.indexOf('{ id: "overview"');
+  if (setupIndex < 0 || overviewIndex < 0 || setupIndex > overviewIndex) fail("Finance UX: Mise en service doit rester le premier sous-bloc du workspace Comptabilité");
+}
+
 for (const file of financeFiles) {
   if (!exists(file)) continue;
   const content = read(file);
@@ -76,8 +91,22 @@ for (const file of financeFiles) {
 const modulePage = "components/enterprise/enterprise-finance-module-page.tsx";
 if (exists(modulePage)) {
   const content = read(modulePage);
-  for (const token of ["OPERATIONAL_FINANCE_MODULE_CODES", "EnterpriseOperationalFinanceWorkspace", "EnterpriseAdvancedFinanceWorkspace", "EnterpriseAccountingOnboardingPanel", "getAccountingOnboardingGuide"]) if (!content.includes(token)) fail(`Finance UX: routeur Finance incomplet (${token})`);
+  for (const token of ["OPERATIONAL_FINANCE_MODULE_CODES", "EnterpriseOperationalFinanceWorkspace", "EnterpriseAdvancedFinanceWorkspace", "EnterpriseAccountingWorkspace"]) {
+    if (!content.includes(token)) fail(`Finance UX: routeur Finance incomplet (${token})`);
+  }
+  if (content.includes("EnterpriseAccountingOnboardingPanel")) fail("Finance UX: le routeur Finance ne doit plus rendre Mise en service avant le workspace Comptabilité");
+  if (!content.includes('moduleCode === "FINANCE_ACCOUNTING"')) fail("Finance UX: FINANCE_ACCOUNTING doit être routé explicitement vers son workspace dédié");
 }
+
+const guidePath = "lib/user-guides/accounting-onboarding-guide.ts";
+if (!exists(guidePath)) fail("Finance UX: guide de mise en service comptable absent");
+else {
+  const content = read(guidePath);
+  for (const token of ["getAccountingOnboardingGuide", "FINANCE_ACCOUNTING_ONBOARDING", "États financiers versionnés", "Versioned financial statements"]) {
+    if (!content.includes(token)) fail(`Finance UX: guide Comptabilité incomplet (${token})`);
+  }
+}
+
 const constants = "lib/enterprise/accounting/constants.ts";
 if (exists(constants)) {
   const content = read(constants);
@@ -89,4 +118,4 @@ if (failures.length) {
   for (const failure of failures) console.error(`- ${failure}`);
   process.exit(1);
 }
-console.log("QA Finance client UX/i18n: OK — client-safe messages, accounting categories and FR/EN contracts enforced");
+console.log("QA Finance client UX/i18n: OK — client-safe messages, dedicated accounting workspace, guide and FR/EN contracts enforced");
