@@ -151,7 +151,7 @@ export function EnterpriseAccountingOnboardingPanel({ organizationId, locale, ca
     <div className="min-w-0 space-y-5">
       <ForegroundToast open={Boolean(toast)} tone={toast?.tone || "success"} title={toast?.title || ""} message={toast?.message || ""} closeLabel={copy.closeToast} onClose={() => setToast(null)} />
 
-      <ModuleSection title={t("accountingOnboarding")} description={t("accountingOnboardingDescription")}>
+      <ModuleSection title={t("accountingOnboarding")} description={t("accountingOnboardingDescription")} defaultOpen>
         <div className="mb-4 flex min-w-0 justify-end">
           <ContextualUserGuide guide={getAccountingOnboardingGuide(financeLocale)} compact />
         </div>
