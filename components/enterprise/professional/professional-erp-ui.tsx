@@ -5,6 +5,7 @@ import Link from "next/link";
 import { BookOpen, CircleHelp, LifeBuoy, Search } from "lucide-react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
 import { Input } from "@/components/ui/input";
+import { useToastMessage } from "@/components/ui/use-toast-message";
 import { cn } from "@/lib/utils";
 
 export type ProfessionalPagination = { page: number; pageSize: number; total: number; pageCount: number };
@@ -172,6 +173,7 @@ export function ProfessionalHelp({ moduleCode }: { moduleCode: string }) {
 }
 
 export function ProfessionalError({ message }: { message: string }) {
+  useToastMessage(message, "error");
   return <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-bold text-red-700 dark:text-red-300">{message}</div>;
 }
 
