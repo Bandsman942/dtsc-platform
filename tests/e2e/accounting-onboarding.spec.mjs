@@ -59,17 +59,23 @@ test.describe.serial("Accounting onboarding and production-readiness UX", () => 
     await signIn(page);
     await page.goto(accountingPath);
     await page.waitForURL((url) => url.pathname === accountingPath, { timeout: 30_000 });
-    const onboarding = page.locator('section[aria-labelledby="accounting-onboarding-title"]');
-    await expect(onboarding.getByText("Mise en service comptable")).toBeVisible();
-    await expect(onboarding.getByText(/plan comptable officiel par défaut de DTSC Platform/i)).toBeVisible();
-    await expect(onboarding.getByLabel("Version du plan")).toHaveValue(defaultTemplateReference);
-    await expect(onboarding.getByLabel("Plan de l’entreprise")).toHaveValue("");
 
-    await onboarding.getByLabel("Code", { exact: true }).fill("SYS17");
-    await onboarding.getByLabel("Nom français").fill("Plan SYSCOHADA E2E");
-    await onboarding.getByLabel("Nom anglais").fill("SYSCOHADA E2E chart");
-    await onboarding.getByRole("button", { name: "Créer le plan" }).click();
-    await expect(onboarding.getByText(/Plan créé/i)).toBeVisible();
+    const setupTab = page.getByRole("button", { name: "Mise en service comptable", exact: true });
+    await expect(setupTab).toBeVisible();
+    await expect(setupTab).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByText("Aucun plan comptable n’est encore sélectionné.", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Référentiel / version")).toHaveValue(defaultTemplateReference);
+    await expect(page.getByLabel("Plan de l’entreprise")).toHaveValue("");
+
+    await page.getByRole("button", { name: "Créer le plan de l’entreprise" }).click();
+    const createDialog = page.getByRole("dialog", { name: "Créer le plan de l’entreprise" });
+    await expect(createDialog).toBeVisible();
+    await createDialog.getByLabel("Code interne du plan").fill("SYS17");
+    await createDialog.getByLabel("Nom du plan en français").fill("Plan SYSCOHADA E2E");
+    await createDialog.getByLabel("Nom du plan en anglais").fill("SYSCOHADA E2E chart");
+    await createDialog.getByRole("button", { name: "Créer", exact: true }).click();
+    await expect(createDialog).toBeHidden();
+    await expect(page.getByRole("status")).toBeVisible();
 
     let setup = await setupPayload(page);
     chartId = setup.selectedChartId;
@@ -83,10 +89,10 @@ test.describe.serial("Accounting onboarding and production-readiness UX", () => 
     expect(syscohada?.statementMappingCount).toBeGreaterThan(0);
     expect(syscohada?.semanticMappingCount).toBeGreaterThan(40);
 
-    await onboarding.getByRole("button", { name: "Appliquer la version" }).click();
-    await expect(onboarding.getByText(/Plan officiel appliqué/i)).toBeVisible();
-    await onboarding.getByRole("button", { name: "Configurer les journaux recommandés" }).click();
-    await expect(onboarding.getByText(/Journaux recommandés configurés/i)).toBeVisible();
+    await page.getByRole("button", { name: "Appliquer la version" }).click();
+    await expect(page.getByRole("status")).toBeVisible();
+    await page.getByRole("button", { name: "Installer les journaux recommandés" }).click();
+    await expect(page.getByRole("status")).toBeVisible();
 
     setup = await setupPayload(page);
     const before = blockerCodes(setup);
@@ -110,11 +116,11 @@ test.describe.serial("Accounting onboarding and production-readiness UX", () => 
     expect(afterOpening.has("OPEN_FISCAL_PERIOD_REQUIRED")).toBeFalsy();
 
     await page.reload();
-    await expect(onboarding.getByText("Prêt à activer")).toBeVisible();
-    const activate = onboarding.getByRole("button", { name: "Activer la comptabilité" });
+    await expect(page.getByText("Prêt pour la comptabilisation", { exact: true })).toBeVisible();
+    const activate = page.getByRole("button", { name: "Activer le plan comptable" });
     await expect(activate).toBeEnabled();
     await activate.click();
-    await expect(onboarding.getByText(/Plan comptable activé/i)).toBeVisible();
+    await expect(page.getByRole("status")).toBeVisible();
 
     setup = await setupPayload(page);
     expect(setup.ready).toBeTruthy();
@@ -187,10 +193,11 @@ test.describe.serial("Accounting onboarding and production-readiness UX", () => 
     await prisma.user.update({ where: { id: adminUserId }, data: { locale: "en" } });
     await page.context().clearCookies(); await signIn(page);
     await page.setViewportSize({ width: 768, height: 1024 }); await page.goto(accountingPath);
-    const onboarding = page.locator('section[aria-labelledby="accounting-onboarding-title"]');
-    await expect(onboarding.getByText("Accounting onboarding")).toBeVisible();
-    await expect(onboarding.getByText(/official default chart of accounts in DTSC Platform/i)).toBeVisible();
-    await expect(onboarding.getByRole("heading", { name: "Financial statements", exact: true })).toBeVisible();
+    const setupTab = page.getByRole("button", { name: "Accounting setup", exact: true });
+    await expect(setupTab).toBeVisible();
+    await expect(page.getByText(/prepare accounting in order/i)).toBeVisible();
+    await expect(page.getByLabel("Reference / version")).toHaveValue(defaultTemplateReference);
+    await expect(page.getByText("Professional accounting", { exact: false }).first()).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 2)).toBeFalsy();
   });
 });
