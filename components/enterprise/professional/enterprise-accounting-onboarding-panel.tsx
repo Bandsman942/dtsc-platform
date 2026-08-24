@@ -4,14 +4,16 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowRight, CheckCircle2, CircleDashed, Loader2, RefreshCw, ShieldAlert } from "lucide-react";
 import { ProfessionalFormSection } from "@/components/enterprise/professional/professional-erp-ui";
-import { financeStatusLabel, safeFinanceError, type FinanceLocale } from "@/components/enterprise/professional/finance-professional-ui";
+import { financeEnumLabel, financeStatusLabel, safeFinanceError, type FinanceLocale } from "@/components/enterprise/professional/finance-professional-ui";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { ForegroundToast } from "@/components/ui/foreground-toast";
 import { Input } from "@/components/ui/input";
+import { ContextualUserGuide } from "@/components/user-guides/contextual-user-guide";
 import { ModuleSection } from "@/components/workspace/module-workspace";
 import { getAccountingWorkspaceCopy } from "@/lib/enterprise/accounting/accounting-workspace-copy";
 import { translateEnterpriseFinance, type EnterpriseFinanceKey } from "@/lib/i18n";
+import { getAccountingOnboardingGuide } from "@/lib/user-guides/accounting-onboarding-guide";
 
 type Template = {
   reference: string;
@@ -111,6 +113,7 @@ export function EnterpriseAccountingOnboardingPanel({ organizationId, locale, ca
   const diagnostics = payload?.readiness?.diagnostics || [];
   const blocked = Boolean(payload?.readiness && !payload.readiness.ready);
   const governanceMessage = payload?.governance ? (en ? payload.governance.messageEn : payload.governance.messageFr) : "";
+  const regulatoryMessage = payload?.regulatorySupport ? (en ? payload.regulatorySupport.messageEn : payload.regulatorySupport.messageFr) : "";
 
   async function createChart() {
     setSaving(true);
@@ -149,6 +152,9 @@ export function EnterpriseAccountingOnboardingPanel({ organizationId, locale, ca
       <ForegroundToast open={Boolean(toast)} tone={toast?.tone || "success"} title={toast?.title || ""} message={toast?.message || ""} closeLabel={copy.closeToast} onClose={() => setToast(null)} />
 
       <ModuleSection title={t("accountingOnboarding")} description={t("accountingOnboardingDescription")}>
+        <div className="mb-4 flex min-w-0 justify-end">
+          <ContextualUserGuide guide={getAccountingOnboardingGuide(financeLocale)} compact />
+        </div>
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.8fr)]">
           <div className="min-w-0 space-y-4">
             <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-2">
@@ -198,6 +204,14 @@ export function EnterpriseAccountingOnboardingPanel({ organizationId, locale, ca
                 <Metric label={t("effectiveFrom")} value={selectedTemplateItem.effectiveFrom} />
                 <Metric label={copy.accounts} value={String(selectedTemplateItem.accountCount)} />
                 <Metric label={t("businessMappings")} value={String(selectedTemplateItem.semanticMappingCount)} />
+              </div>
+            ) : null}
+
+            {payload?.regulatorySupport ? (
+              <div className={`rounded-xl border p-4 ${payload.regulatorySupport.supported ? "border-emerald-500/30 bg-emerald-500/5" : "border-amber-500/30 bg-amber-500/5"}`}>
+                <p className="font-black text-dtsc-ink">{t("financialStatements")}</p>
+                <p className="mt-1 text-xs leading-5 text-dtsc-muted">{regulatoryMessage}</p>
+                {payload.regulatorySupport.statementTypes.length ? <p className="mt-2 text-xs font-bold text-dtsc-ink">{payload.regulatorySupport.statementTypes.map((type) => financeEnumLabel(type, financeLocale)).join(" · ")}</p> : null}
               </div>
             ) : null}
 
