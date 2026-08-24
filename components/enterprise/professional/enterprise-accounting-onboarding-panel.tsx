@@ -110,6 +110,7 @@ export function EnterpriseAccountingOnboardingPanel({ organizationId, locale, ca
   const selectedTemplateItem = useMemo(() => payload?.templates.find((template) => template.reference === selectedTemplate) || null, [payload, selectedTemplate]);
   const diagnostics = payload?.readiness?.diagnostics || [];
   const blocked = Boolean(payload?.readiness && !payload.readiness.ready);
+  const governanceMessage = payload?.governance ? (en ? payload.governance.messageEn : payload.governance.messageFr) : "";
 
   async function createChart() {
     setSaving(true);
@@ -147,7 +148,7 @@ export function EnterpriseAccountingOnboardingPanel({ organizationId, locale, ca
     <div className="min-w-0 space-y-5">
       <ForegroundToast open={Boolean(toast)} tone={toast?.tone || "success"} title={toast?.title || ""} message={toast?.message || ""} closeLabel={copy.closeToast} onClose={() => setToast(null)} />
 
-      <ModuleSection title={copy.setup} description={copy.setupDescription}>
+      <ModuleSection title={t("accountingOnboarding")} description={t("accountingOnboardingDescription")}>
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.8fr)]">
           <div className="min-w-0 space-y-4">
             <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-2">
@@ -199,6 +200,12 @@ export function EnterpriseAccountingOnboardingPanel({ organizationId, locale, ca
                 <Metric label={t("businessMappings")} value={String(selectedTemplateItem.semanticMappingCount)} />
               </div>
             ) : null}
+
+            {governanceMessage ? (
+              <div className="rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-xs leading-5 text-dtsc-muted">
+                {governanceMessage}
+              </div>
+            ) : null}
           </div>
 
           <aside className="min-w-0 space-y-3">
@@ -209,7 +216,7 @@ export function EnterpriseAccountingOnboardingPanel({ organizationId, locale, ca
               </div>
             </div>
             <div className="space-y-2">
-              {diagnostics.map((diagnostic) => <DiagnosticRow key={diagnostic.code} diagnostic={diagnostic} locale={financeLocale} copy={copy} />)}
+              {diagnostics.map((diagnostic) => <DiagnosticRow key={diagnostic.code} diagnostic={diagnostic} en={en} copy={copy} />)}
               {!diagnostics.length && !loading ? <p className="rounded-xl border border-dashed border-dtsc-border p-4 text-sm text-dtsc-muted">{t("createOrSelectChartChecks")}</p> : null}
               {loading ? <div className="grid place-items-center rounded-xl border border-dtsc-border p-6"><Loader2 className="h-5 w-5 animate-spin text-dtsc-blue" /></div> : null}
             </div>
@@ -238,10 +245,10 @@ export function EnterpriseAccountingOnboardingPanel({ organizationId, locale, ca
   );
 }
 
-function DiagnosticRow({ diagnostic, locale, copy }: { diagnostic: Diagnostic; locale: FinanceLocale; copy: ReturnType<typeof getAccountingWorkspaceCopy> }) {
-  const label = locale === "fr" ? diagnostic.labelFr : diagnostic.labelEn;
-  const message = locale === "fr" ? diagnostic.messageFr : diagnostic.messageEn;
-  const action = locale === "fr" ? diagnostic.actionFr : diagnostic.actionEn;
+function DiagnosticRow({ diagnostic, en, copy }: { diagnostic: Diagnostic; en: boolean; copy: ReturnType<typeof getAccountingWorkspaceCopy> }) {
+  const label = en ? diagnostic.labelEn : diagnostic.labelFr;
+  const message = en ? diagnostic.messageEn : diagnostic.messageFr;
+  const action = en ? diagnostic.actionEn : diagnostic.actionFr;
   const href = diagnosticHref(diagnostic);
   const content = (
     <div className={`flex min-w-0 items-start gap-3 rounded-xl border p-3 transition ${diagnostic.ready ? "border-emerald-500/30 bg-emerald-500/5" : diagnostic.severity === "BLOCKER" ? "border-red-500/30 bg-red-500/5 hover:border-red-500/60" : "border-amber-500/30 bg-amber-500/5 hover:border-amber-500/60"}`}>
