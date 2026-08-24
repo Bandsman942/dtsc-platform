@@ -63,7 +63,7 @@ test.describe.serial("Accounting onboarding and production-readiness UX", () => 
     const setupTab = page.getByRole("button", { name: "Mise en service comptable", exact: true });
     await expect(setupTab).toBeVisible();
     await expect(setupTab).toHaveAttribute("aria-pressed", "true");
-    await expect(page.getByText("Aucun plan comptable n’est encore sélectionné.", { exact: true })).toBeVisible();
+    await expect(page.getByRole("paragraph").filter({ hasText: "Aucun plan comptable n’est encore sélectionné." })).toBeVisible();
     await expect(page.getByLabel("Référentiel / version")).toHaveValue(defaultTemplateReference);
     await expect(page.getByLabel("Plan de l’entreprise")).toHaveValue("");
 
