@@ -7,11 +7,13 @@ import patientsFr from "@/locales/health-patients.fr.json";
 import patientsEn from "@/locales/health-patients.en.json";
 import appointmentsFr from "@/locales/health-appointments.fr.json";
 import appointmentsEn from "@/locales/health-appointments.en.json";
+import consultationsFr from "@/locales/health-consultations.fr.json";
+import consultationsEn from "@/locales/health-consultations.en.json";
 
 export type HealthClinicalLocale = "fr" | "en";
 const dictionaries = {
-  fr: { ...fr, ...patientsFr, ...appointmentsFr },
-  en: { ...en, ...patientsEn, ...appointmentsEn },
+  fr: { ...fr, ...patientsFr, ...appointmentsFr, ...consultationsFr },
+  en: { ...en, ...patientsEn, ...appointmentsEn, ...consultationsEn },
 } as const;
 export type HealthClinicalKey = keyof typeof dictionaries.fr;
 

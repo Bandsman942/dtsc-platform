@@ -15,6 +15,7 @@ const baseline = {
 const semanticConvergenceTargets = {
   "components/enterprise/health-patients-workspace.tsx": 0,
   "components/enterprise/health-appointments-workspace.tsx": 0,
+  "components/enterprise/health-consultations-workspace.tsx": 0,
 };
 const localDebtPatterns = [
   'locale === "en"',
@@ -60,20 +61,11 @@ for (const [file, historicalTarget] of Object.entries(baseline)) {
     const base = occurrences(baseContent, token);
     if (current > base) failures.push(`${file}: dette locale supplémentaire pour ${JSON.stringify(token)} (${current} > ${base}).`);
   }
-  reports.push({
-    file,
-    historicalTarget,
-    semanticTarget: hasSemanticGate ? semanticConvergenceTargets[file] : null,
-    baseCount,
-    currentCount,
-    allowed,
-  });
+  reports.push({ file, historicalTarget, semanticTarget: hasSemanticGate ? semanticConvergenceTargets[file] : null, baseCount, currentCount, allowed });
 }
 
 for (const report of reports) {
-  const targetText = report.semanticTarget === null
-    ? `plafond historique ${report.historicalTarget}`
-    : `cible sémantique ${report.semanticTarget} via QA dédiée`;
+  const targetText = report.semanticTarget === null ? `plafond historique ${report.historicalTarget}` : `cible sémantique ${report.semanticTarget} via QA dédiée`;
   console.log(`${report.file}: ${report.currentCount} motifs heuristiques (main ${report.baseCount}, ${targetText}, plafond heuristique ${report.allowed}).`);
 }
 
@@ -85,13 +77,9 @@ if (failures.length) {
 for (const [name, script] of [
   ["Patients #447", "scripts/qa-health-patients-i18n-447.mjs"],
   ["Rendez-vous #451", "scripts/qa-health-appointments-i18n-451.mjs"],
+  ["Consultations #457", "scripts/qa-health-consultations-i18n-457.mjs"],
 ]) {
-  const qa = spawnSync(process.execPath, [path.join(root, script)], {
-    cwd: root,
-    env: process.env,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-  });
+  const qa = spawnSync(process.execPath, [path.join(root, script)], { cwd: root, env: process.env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   if (qa.stdout) process.stdout.write(qa.stdout);
   if (qa.stderr) process.stderr.write(qa.stderr);
   if (qa.status !== 0) {
@@ -100,27 +88,20 @@ for (const [name, script] of [
   }
 }
 
-console.log("PASS i18n Health #439 — dette heuristique non régressive et cibles sémantiques Patients/Rendez-vous à zéro copie système locale prouvées par leurs QA dédiées.");
+console.log("PASS i18n Health #439 — dette heuristique non régressive et cibles sémantiques Patients/Rendez-vous/Consultations à zéro copie système locale prouvées par leurs QA dédiées.");
 
-function occurrences(content, token) {
-  return content.split(token).length - 1;
-}
-
+function occurrences(content, token) { return content.split(token).length - 1; }
 function countLikelyHardcodedLabels(content) {
-  const jsxText = [...content.matchAll(/<(?:[A-Z][A-Za-z0-9.]*|[a-z][a-z0-9-]*)\b[^>\n]*>([^<{\n][^<{]*?)<\//g)]
-    .map((match) => match[1].trim())
-    .filter((value) => /[A-Za-zÀ-ÿ]{3}/.test(value));
+  const jsxText = [...content.matchAll(/<(?:[A-Z][A-Za-z0-9.]*|[a-z][a-z0-9-]*)\b[^>\n]*>([^<{\n][^<{]*?)<\//g)].map((match) => match[1].trim()).filter((value) => /[A-Za-zÀ-ÿ]{3}/.test(value));
   const attributes = [...content.matchAll(/(?:placeholder|title|aria-label)="([^"]*[A-Za-zÀ-ÿ][^"]*)"/g)].map((match) => match[1]);
   return jsxText.length + attributes.length;
 }
-
 function ensureMainRef() {
   const ref = process.env.GITHUB_REF_NAME === "main" ? "HEAD^" : "origin/main";
   const probe = spawnSync("git", ["rev-parse", "--verify", ref], { cwd: root, stdio: "ignore" });
   if (probe.status === 0) return;
   spawnSync("git", ["fetch", "origin", "main", "--depth=2"], { cwd: root, stdio: "ignore" });
 }
-
 function readBaseVersion(file) {
   const ref = process.env.GITHUB_REF_NAME === "main" ? "HEAD^" : "origin/main";
   const result = spawnSync("git", ["show", `${ref}:${file}`], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });

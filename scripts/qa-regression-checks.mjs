@@ -15,6 +15,9 @@ function replaceExactlyOnce(source, obsoleteAssertion, canonicalAssertion, label
 const obsoleteAppointmentAssertion = 'containsAll(healthAppointmentsWorkspace, ["ListControls", "ActionMenu", "Vue planning", "Aucun rendez-vous enregistré pour cette entreprise.", "Convertir en consultation", "Marquer absent", "h-[94dvh]", "CircleHelp", "min-w-0", "overflow-x-hidden"])';
 const canonicalAppointmentAssertion = 'containsAll(healthAppointmentsWorkspace, ["ListControls", "ActionMenu", "appointment.viewPlanning", "appointment.emptyTitle", "appointment.action.convert", "appointment.action.absent", "h-[94dvh]", "CircleHelp", "min-w-0", "overflow-x-hidden"])';
 
+const obsoleteConsultationAssertion = 'containsAll(healthConsultationsWorkspace, ["ListControls", "ActionMenu", "Constantes vitales", "Examen clinique", "Diagnostic", "Conduite à tenir", "Aucune consultation enregistrée.", "Clôturer", "Rouvrir", "h-[94dvh]", "CircleHelp", "min-w-0", "overflow-x-hidden"])';
+const canonicalConsultationAssertion = 'containsAll(healthConsultationsWorkspace, ["ListControls", "ActionMenu", "consultation.section.vitals", "consultation.section.exam", "consultation.section.diagnosis", "consultation.section.management", "consultation.emptyTitle", "consultation.action.close", "consultation.action.reopen", "h-[94dvh]", "CircleHelp", "min-w-0", "overflow-x-hidden"])';
+
 const obsoleteEnterpriseAdminAssertion = 'containsAll(enterpriseAdminPage, [\'activeContext === "ORGANIZATION"\', "canManageEnterpriseAdministration(session.userId, organizationId)", \'canUseFeature(organizationId, "enterprise-admin")\', "getEnterpriseAdministrationDataset(organizationId)"])';
 const canonicalEnterpriseAdminAssertion = 'containsAll(enterpriseAdminPage, [\'activeContext === "ORGANIZATION"\', "requireEnterpriseMembership", "resolveEnterpriseModuleAccess", \'moduleCode: "ADMIN_DASHBOARD"\', \'action: "manage"\', "!membership || !adminAccess?.allowed", \'canUseFeature(organizationId, "enterprise-admin")\', "getEnterpriseAdministrationDataset(organizationId, user.id, administrationLocale)"])';
 
@@ -23,6 +26,12 @@ let migratedSource = replaceExactlyOnce(
   obsoleteAppointmentAssertion,
   canonicalAppointmentAssertion,
   "Rendez-vous historique",
+);
+migratedSource = replaceExactlyOnce(
+  migratedSource,
+  obsoleteConsultationAssertion,
+  canonicalConsultationAssertion,
+  "Consultations historique",
 );
 migratedSource = replaceExactlyOnce(
   migratedSource,
