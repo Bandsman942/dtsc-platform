@@ -18,7 +18,17 @@ for(const marker of ["useHealthClinicalLocale","healthClinicalT","healthClinical
 for(const forbidden of ["Nouvelle consultation","Aucune consultation enregistrée","Mettre en attente d’examens","Informations médicales protégées","Consultation générale","À réévaluer","toLocaleString(\"fr-FR\"","toLocaleDateString(\"fr-FR\""]){assert.doesNotMatch(workspace,new RegExp(forbidden.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")),`Health Consultations #457: copie système locale résiduelle ${forbidden}.`)}
 assert.match(workspace,/toLocaleLowerCase\(intlLocale\)/,"Health Consultations #457: recherche locale-aware requise.");
 for(const raw of ["item.chiefComplaint","item.reason","clinical(\"historyOfPresentIllness\")","clinical(\"symptoms\")","clinical(\"provisionalDiagnosis\")","clinical(\"finalDiagnosis\")","clinical(\"prescriptionText\")","request.resultText","event.summary","event.eventType","selectedAppointment.reason","selectedPatient.knownAllergies","selectedPatient.chronicTreatments"]){assert.match(workspace,new RegExp(raw.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")),`Health Consultations #457: donnée clinique brute attendue absente ${raw}.`)}
-for(const dangerous of [/healthClinicalT\([^\n]*(chiefComplaint|reason|symptoms|Diagnosis|prescriptionText|resultText|event\.summary)/,/t\([^\n]*(item\.chiefComplaint|item\.reason|request\.resultText|event\.summary)/]){assert.doesNotMatch(workspace,dangerous,"Health Consultations #457: une donnée clinique libre ne doit jamais entrer dans le traducteur.")}
+// A free clinical value may appear on the same compact source line as a translated label.
+// The safety contract is stricter and more precise: the clinical value itself must never be
+// the translation key nor be passed as the direct value argument to the canonical translator.
+for(const raw of ["item.chiefComplaint","item.reason","request.resultText","event.summary"]){
+  const escaped=raw.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+  assert.doesNotMatch(workspace,new RegExp(`healthClinicalT\\(\\s*${escaped}(?:\\s*[,\\)])`),"Health Consultations #457: une donnée clinique libre ne doit jamais être une clé du traducteur canonique.");
+  assert.doesNotMatch(workspace,new RegExp(`\\bt\\(\\s*${escaped}(?:\\s*[,\\)])`),"Health Consultations #457: une donnée clinique libre ne doit jamais être une clé du traducteur local.");
+}
+for(const raw of ["chiefComplaint","reason","symptoms","provisionalDiagnosis","finalDiagnosis","prescriptionText","resultText"]){
+  assert.doesNotMatch(workspace,new RegExp(`healthClinicalT\\([^)]*\\{[^}]*\\b${raw}\\s*:`),`Health Consultations #457: ${raw} ne doit pas être injecté comme variable de traduction.`);
+}
 assert.match(workspace,/department\?\.labelFr/,"Health Consultations #457: le libellé de référentiel service doit rester fourni par le serveur.");
 assert.match(workspace,/h-\[94dvh\]/,"Health Consultations #457: contrat mobile plein écran manquant.");
 assert.match(workspace,/min-w-0/,"Health Consultations #457: garde responsive min-width manquante.");
