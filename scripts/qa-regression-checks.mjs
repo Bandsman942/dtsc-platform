@@ -18,6 +18,9 @@ const canonicalAppointmentAssertion = 'containsAll(healthAppointmentsWorkspace, 
 const obsoleteConsultationAssertion = 'containsAll(healthConsultationsWorkspace, ["ListControls", "ActionMenu", "Constantes vitales", "Examen clinique", "Diagnostic", "Conduite à tenir", "Aucune consultation enregistrée.", "Clôturer", "Rouvrir", "h-[94dvh]", "CircleHelp", "min-w-0", "overflow-x-hidden"])';
 const canonicalConsultationAssertion = 'containsAll(healthConsultationsWorkspace, ["ListControls", "ActionMenu", "consultation.section.vitals", "consultation.section.exam", "consultation.section.diagnosis", "consultation.section.management", "consultation.emptyTitle", "consultation.action.close", "consultation.action.reopen", "h-[94dvh]", "CircleHelp", "min-w-0", "overflow-x-hidden"])';
 
+const obsoleteMedicalRecordsAssertion = 'containsAll(healthMedicalRecordsWorkspace, ["ListControls", "ActionMenu", "Alertes médicales actives", "Consultations liées", "Notes confidentielles", "Aucun dossier médical principal", "h-[94dvh]", "CircleHelp", "min-w-0", "overflow-x-hidden"])';
+const canonicalMedicalRecordsAssertion = 'containsAll(healthMedicalRecordsWorkspace, ["ListControls", "ActionMenu", "medicalRecords.section.alerts", "medicalRecords.section.consultations", "medicalRecords.section.confidentialNotes", "medicalRecords.empty", "h-[94dvh]", "CircleHelp", "min-w-0", "overflow-x-hidden"])';
+
 const obsoleteEnterpriseAdminAssertion = 'containsAll(enterpriseAdminPage, [\'activeContext === "ORGANIZATION"\', "canManageEnterpriseAdministration(session.userId, organizationId)", \'canUseFeature(organizationId, "enterprise-admin")\', "getEnterpriseAdministrationDataset(organizationId)"])';
 const canonicalEnterpriseAdminAssertion = 'containsAll(enterpriseAdminPage, [\'activeContext === "ORGANIZATION"\', "requireEnterpriseMembership", "resolveEnterpriseModuleAccess", \'moduleCode: "ADMIN_DASHBOARD"\', \'action: "manage"\', "!membership || !adminAccess?.allowed", \'canUseFeature(organizationId, "enterprise-admin")\', "getEnterpriseAdministrationDataset(organizationId, user.id, administrationLocale)"])';
 
@@ -32,6 +35,12 @@ migratedSource = replaceExactlyOnce(
   obsoleteConsultationAssertion,
   canonicalConsultationAssertion,
   "Consultations historique",
+);
+migratedSource = replaceExactlyOnce(
+  migratedSource,
+  obsoleteMedicalRecordsAssertion,
+  canonicalMedicalRecordsAssertion,
+  "Dossiers médicaux historique",
 );
 migratedSource = replaceExactlyOnce(
   migratedSource,
