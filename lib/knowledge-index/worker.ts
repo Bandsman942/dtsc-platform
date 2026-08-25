@@ -109,7 +109,11 @@ export async function processPendingKnowledgeIndexJobs({ batchSize = KNOWLEDGE_I
   let processed=0, failed=0, dead=0;
   for (let offset=0; offset<claimed.length; offset+=KNOWLEDGE_INDEX_QUEUE_LIMITS.workerConcurrency) {
     const outcomes = await Promise.all(claimed.slice(offset, offset+KNOWLEDGE_INDEX_QUEUE_LIMITS.workerConcurrency).map((job)=>settle(job,workerId)));
-    for (const outcome of outcomes) outcome === "processed" ? processed++ : outcome === "dead" ? dead++ : failed++;
+    for (const outcome of outcomes) {
+      if (outcome === "processed") processed++;
+      else if (outcome === "dead") dead++;
+      else failed++;
+    }
   }
   const queueAfter = await getKnowledgeIndexQueueSnapshot();
   return { workerId, claimed: claimed.length, processed, failed, dead, recovered: recovered.count, orphaned, queueBefore, queueAfter, saturated: claimed.length === safeBatchSize && queueAfter.available && (queueAfter.ready || 0) > 0 };
