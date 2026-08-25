@@ -70,7 +70,11 @@ check("Laboratoire #496: données cliniques et résultats restent rendus verbati
   "row.referenceRange",
   "event.summary",
 ]));
-check("Laboratoire #496: aucune donnée libre n'est transformée en clé de traduction", !/[th]ealthClinicalT\([^\n]*(clinicalIndication|medicalNotes|resultText|resultUnit|referenceRange|resultInterpretation|sampleNotes|event\.summary|row\.resultText)/.test(workspace) && !/t\([^\n]*(clinicalIndication|medicalNotes|resultText|resultUnit|referenceRange|resultInterpretation|sampleNotes|event\.summary|row\.resultText)/.test(workspace));
+const forbiddenTranslationInputs = [
+  "t(item.clinicalIndication", "t(item.medicalNotes", "t(item.resultText", "t(item.resultUnit", "t(item.referenceRange", "t(item.resultInterpretation", "t(item.sampleNotes", "t(event.summary", "t(row.resultText",
+  "healthClinicalT(locale,item.clinicalIndication", "healthClinicalT(locale,item.medicalNotes", "healthClinicalT(locale,item.resultText", "healthClinicalT(locale,item.referenceRange", "healthClinicalT(locale,item.resultInterpretation", "healthClinicalT(locale,event.summary",
+];
+check("Laboratoire #496: aucune donnée libre n'est transformée en clé de traduction", !forbiddenTranslationInputs.some((token)=>workspace.includes(token)));
 check("Laboratoire #496: anciennes copies système françaises absentes", ![
   "Demandes du jour",
   "Prélèvements à faire",
