@@ -22,6 +22,10 @@
       "schedule": "* * * * *"
     },
     {
+      "path": "/api/internal/knowledge-index/process?batch=8",
+      "schedule": "* * * * *"
+    },
+    {
       "path": "/api/internal/identity-links/expire?batch=100",
       "schedule": "17 * * * *"
     }
