@@ -1,12 +1,12 @@
-import { after, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { DocumentStatus, SubscriptionStatus } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { enqueueKnowledgeIndexJob } from "@/lib/knowledge-index/queue";
 import { getActiveOrganizationId } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { documentUploadSchema } from "@/lib/validators";
 import {
-  indexPreparedKnowledgeDocument,
   knowledgeUploadLimits,
   prepareKnowledgeDocument,
 } from "@/lib/rag";
@@ -85,28 +85,16 @@ export async function POST(req: Request) {
       language: user?.locale === "en" ? "en" : "fr",
       file,
     });
-    const userId = session.userId;
-    const documentId = prepared.id;
-    after(async () => {
-      try {
-        const indexed = await indexPreparedKnowledgeDocument({ documentId, userId, organizationId });
-        await writeAuditLog({
-          userId,
-          action: "KNOWLEDGE_DOCUMENT_INDEXED",
-          entity: "KnowledgeDocument",
-          entityId: documentId,
-          metadata: { chunks: indexed._count.chunks, indexVersion: prepared.indexVersion },
-        });
-      } catch (error) {
-        console.error("Personal knowledge background indexing failed", documentId, error);
-      }
+    const queueEventId = await enqueueKnowledgeIndexJob({
+      documentId: prepared.id,
+      organizationId,
     });
     await writeAuditLog({
       userId: session.userId,
       action: "KNOWLEDGE_DOCUMENT_PREPARED",
       entity: "KnowledgeDocument",
-      entityId: documentId,
-      metadata: { indexVersion: prepared.indexVersion },
+      entityId: prepared.id,
+      metadata: { indexVersion: prepared.indexVersion, queueEventId },
       request: req,
     });
     await writeApiLog({
@@ -114,17 +102,18 @@ export async function POST(req: Request) {
       statusCode: 202,
       userId: session.userId,
       startedAt,
-      metadata: { documentId, status: "PROCESSING" },
+      metadata: { documentId: prepared.id, status: "PROCESSING", queued: true },
     });
     return NextResponse.json(
       {
         ok: true,
         document: {
-          id: documentId,
+          id: prepared.id,
           title: prepared.title,
           status: "PROCESSING",
           indexVersion: prepared.indexVersion,
         },
+        indexing: { queued: true },
       },
       { status: 202 }
     );
