@@ -21,6 +21,9 @@ const canonicalConsultationAssertion = 'containsAll(healthConsultationsWorkspace
 const obsoleteMedicalRecordsAssertion = 'containsAll(healthMedicalRecordsWorkspace, ["ListControls", "ActionMenu", "Alertes médicales actives", "Consultations liées", "Notes confidentielles", "Aucun dossier médical principal", "h-[94dvh]", "CircleHelp", "min-w-0", "overflow-x-hidden"])';
 const canonicalMedicalRecordsAssertion = 'containsAll(healthMedicalRecordsWorkspace, ["ListControls", "ActionMenu", "medicalRecords.section.alerts", "medicalRecords.section.consultations", "medicalRecords.section.confidentialNotes", "medicalRecords.empty", "h-[94dvh]", "CircleHelp", "min-w-0", "overflow-x-hidden"])';
 
+const obsoleteStaffAssertion = 'containsAll(healthStaffWorkspace, ["ListControls", "ActionMenu", "Professionnels actifs", "Permissions Santé", "Activité médicale liée", "Aucun professionnel santé enregistré", "h-[94dvh]", "CircleHelp", "min-w-0", "overflow-hidden"])';
+const canonicalStaffAssertion = 'containsAll(healthStaffWorkspace, ["ListControls", "ActionMenu", "staff.dashboard.active", "staff.section.permissions", "staff.section.activity", "staff.empty", "h-[94dvh]", "CircleHelp", "min-w-0", "overflow-x-hidden"])';
+
 const obsoleteEnterpriseAdminAssertion = 'containsAll(enterpriseAdminPage, [\'activeContext === "ORGANIZATION"\', "canManageEnterpriseAdministration(session.userId, organizationId)", \'canUseFeature(organizationId, "enterprise-admin")\', "getEnterpriseAdministrationDataset(organizationId)"])';
 const canonicalEnterpriseAdminAssertion = 'containsAll(enterpriseAdminPage, [\'activeContext === "ORGANIZATION"\', "requireEnterpriseMembership", "resolveEnterpriseModuleAccess", \'moduleCode: "ADMIN_DASHBOARD"\', \'action: "manage"\', "!membership || !adminAccess?.allowed", \'canUseFeature(organizationId, "enterprise-admin")\', "getEnterpriseAdministrationDataset(organizationId, user.id, administrationLocale)"])';
 
@@ -41,6 +44,12 @@ migratedSource = replaceExactlyOnce(
   obsoleteMedicalRecordsAssertion,
   canonicalMedicalRecordsAssertion,
   "Dossiers médicaux historique",
+);
+migratedSource = replaceExactlyOnce(
+  migratedSource,
+  obsoleteStaffAssertion,
+  canonicalStaffAssertion,
+  "Équipe médicale historique",
 );
 migratedSource = replaceExactlyOnce(
   migratedSource,
