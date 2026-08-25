@@ -17,7 +17,7 @@ function containsAll(source, patterns) { return patterns.every((pattern)=>source
 
 const frKeys = Object.keys(fr).sort();
 const enKeys = Object.keys(en).sort();
-check("Laboratoire #496: catalogues FR/EN non vides", frKeys.length > 100 && enKeys.length > 100);
+check("Laboratoire #496: catalogues FR/EN complets", frKeys.length === 207 && enKeys.length === 207);
 check("Laboratoire #496: symétrie exacte des clés FR/EN", JSON.stringify(frKeys) === JSON.stringify(enKeys));
 check("Laboratoire #496: valeurs FR/EN définies", [...Object.values(fr),...Object.values(en)].every((value)=>typeof value === "string" && value.trim().length > 0));
 check("Laboratoire #496: helper clinique enregistre les deux catalogues", containsAll(helper,[
