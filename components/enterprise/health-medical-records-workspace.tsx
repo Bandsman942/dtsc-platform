@@ -136,7 +136,9 @@ export function HealthMedicalRecordsWorkspace({organizationId,initialPatientLega
     <div className="grid min-w-0 gap-2 sm:grid-cols-2"><Filter label={t("medicalRecords.filter.status")}><Choice value={status} set={setStatus} options={statusOptions} all={t("medicalRecords.allStatuses")}/></Filter></div>
     <ListControls query={query} onQueryChange={setQuery} page={list.page} pageCount={list.pageCount} totalCount={records.length} filteredCount={filtered.length} onPageChange={list.setPage} placeholder={t("medicalRecords.searchPlaceholder")}/>
     {loading?<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{[1,2,3].map(id=><div key={id} className="h-40 animate-pulse rounded-2xl bg-dtsc-page"/>)}</div>:<div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-3">{list.paginatedItems.map(record=><RecordCard key={record.id} record={record} permissions={permissions} locale={locale} t={t} detail={openDetail} edit={openEdit} action={action=>setPendingAction({record,action})}/>)}</div>}
-    {!loading&&!filtered.length&&<Empty text={t("medicalRecords.empty")}/>} 
+    {!loading&&!filtered.length&&(
+      <Empty text={t("medicalRecords.empty")}/>
+    )}
     <Dialog open={formOpen} onClose={()=>setFormOpen(false)} title={editing?t("medicalRecords.form.editTitle",{number:editing.recordNumber}):t("medicalRecords.form.newTitle")} description={t("medicalRecords.form.description")} className="h-[94dvh] max-w-6xl">
       <form onSubmit={save} className="grid min-w-0 gap-4 overflow-x-hidden">
         <Section title={t("medicalRecords.section.patientConfidentiality")}><Grid>
@@ -173,7 +175,9 @@ function RecordDetail({record,consultations,labRequests,dispensations,permission
     <Collection title={t("medicalRecords.section.allergies")} emptyText={t("medicalRecords.empty.allergies")} items={record.allergies} titleKey="allergen" textKey="reaction" locale={locale} t={t}/>
     <Collection title={t("medicalRecords.section.treatments")} emptyText={t("medicalRecords.empty.treatments")} items={record.currentTreatments} titleKey="medicationName" textKey="indication" locale={locale} t={t}/>
     <Collection title={t("medicalRecords.section.alerts")} emptyText={t("medicalRecords.empty.alerts")} items={record.alerts} titleKey="title" textKey="description" locale={locale} t={t}/>
-    {permissions.canManageConfidentialNotes&&<Collection title={t("medicalRecords.section.confidentialNotes")} emptyText={t("medicalRecords.empty.confidentialNotes")} items={record.confidentialNotes} titleKey="title" textKey="content" locale={locale} t={t}/>} 
+    {permissions.canManageConfidentialNotes&&(
+      <Collection title={t("medicalRecords.section.confidentialNotes")} emptyText={t("medicalRecords.empty.confidentialNotes")} items={record.confidentialNotes} titleKey="title" textKey="content" locale={locale} t={t}/>
+    )}
     <Section title={t("medicalRecords.section.consultations")}><div className="grid gap-2">{consultations.map(item=><ItemCard key={item.id} title={`${item.consultationNumber} · ${item.chiefComplaint}`} text={`${healthClinicalDateTime(item.consultationDate,locale)} · ${item.professional.name}${item.finalDiagnosis?` · ${item.finalDiagnosis}`:""}`} badge={healthClinicalStatusLabel(locale,item.status)}/>)}</div>{!consultations.length&&<Empty text={t("medicalRecords.noConsultations")}/>}</Section>
     <Section title={t("medicalRecords.section.pharmacy")}><div className="grid gap-2">{dispensations.map(item=><ItemCard key={item.id} title={`${item.product.productCode} · ${item.product.name}`} text={`${item.quantity} ${item.product.unit} · ${healthClinicalDateTime(item.dispensedAt,locale)} · ${item.dispensedBy.name}`} badge={healthClinicalStatusLabel(locale,item.billingStatus)}/>)}</div>{!dispensations.length&&<Empty text={t("medicalRecords.noPharmacy")}/>}</Section>
     <Section title={t("medicalRecords.section.laboratory")}><div className="grid gap-2">{labRequests.map(item=><ItemCard key={item.id} title={`${item.labRequestNumber} · ${item.testLabel}`} text={`${healthClinicalDateTime(item.requestedAt,locale)}${item.resultText?` · ${item.resultText}`:""}`} badge={item.abnormalityLevel==="CRITICAL"?t("medicalRecords.resultCritical"):healthClinicalStatusLabel(locale,item.status)}/>)}</div>{!labRequests.length&&<Empty text={t("medicalRecords.noLaboratory")}/>}</Section>
