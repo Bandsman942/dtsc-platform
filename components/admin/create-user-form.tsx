@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type InvalidEvent } from "react";
 import { UserPlus } from "lucide-react";
 import { adminCreateUserT, type AdminCreateUserCopyKey } from "@/components/admin/create-user-i18n";
 import { useAppLocale } from "@/components/i18n/locale-provider";
@@ -77,6 +77,16 @@ export function CreateUserForm() {
     return next;
   }
 
+  function handleInvalid(event: InvalidEvent<HTMLFormElement>) {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement)) return;
+    const field = target.name as UserField;
+    if (!Object.prototype.hasOwnProperty.call(fieldErrorCopy, field)) return;
+    setFieldErrors((current) => ({ ...current, [field]: t(fieldErrorCopy[field]) }));
+    setMessageTone("error");
+    setMessage(t("validationError"));
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -136,7 +146,7 @@ export function CreateUserForm() {
         onClose={closeDialog}
         className="h-[92dvh] max-w-4xl"
       >
-        <form onSubmit={submit} className="grid gap-4 md:grid-cols-2">
+        <form onSubmit={submit} onInvalid={handleInvalid} className="grid gap-4 md:grid-cols-2">
           <FormField label={t("nameLabel")} hint={t("nameHint")} error={fieldErrors.name} required>
             <Input name="name" placeholder={t("namePlaceholder")} minLength={2} maxLength={120} required onInput={() => clearFieldError("name")} />
           </FormField>

@@ -61,6 +61,11 @@ check(
   "Le contrat HTML et l'aide utilisateur doivent refléter adminCreateUserSchema.",
 );
 check(
+  "la validation navigateur produit aussi l'erreur inline et le toast",
+  form.includes("function handleInvalid") && form.includes("onInvalid={handleInvalid}") && form.includes('setMessage(t("validationError"))'),
+  "Un champ invalide doit expliquer son problème avant tout appel réseau.",
+);
+check(
   "les erreurs sont raccordées aux champs accessibles",
   formField.includes('"aria-describedby"') && formField.includes('"aria-invalid"') && formField.includes("cloneElement"),
   "Une erreur inline doit être annoncée et reliée au contrôle concerné.",

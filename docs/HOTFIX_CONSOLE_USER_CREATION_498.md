@@ -44,6 +44,7 @@ Les messages Zod, Prisma, routes, noms de tables, mots de passe et stack traces 
 ## UX et accessibilité
 
 - le mot de passe temporaire impose explicitement `minLength=10` et `maxLength=128` ;
+- tout contrôle HTML invalide alimente aussi l’erreur inline et le toast avant l’appel réseau ;
 - les autres contraintes HTML reflètent le validateur serveur ;
 - l’UI lit le JSON d’erreur et affiche une erreur dédiée au bon champ ;
 - `FormField` relie désormais aide et erreur au contrôle via `aria-describedby` et `aria-invalid` ;
@@ -72,7 +73,7 @@ Le script `scripts/qa-hotfix-498-console-user-creation.mjs` vérifie statiquemen
 - conflit email dédié ;
 - transaction compte + abonnement ;
 - lecture JSON côté client ;
-- minimum de 10 caractères ;
+- minimum de 10 caractères et remontée de la validation navigateur ;
 - accessibilité des erreurs ;
 - dictionnaire FR/EN ;
 - toast au-dessus du `Dialog` ;
@@ -84,7 +85,7 @@ Cette QA est ajoutée à `scripts/run-regression-qa-ci.mjs` afin de devenir une 
 
 | Contrôle | Statut | Preuve |
 |---|---|---|
-| Inspection baseline / diff | LOCAL_EXECUTED | Diagnostic GitHub sur `main@e785a2b...` et runtime Production du 26/08/2026 |
+| Baseline et diff GitHub | NOT_EXECUTED | Inspection outillée effectuée, mais aucun `git diff` local n’a pu être exécuté dans cette session ; CI/PR reste l’autorité |
 | QA ciblée #498 | NOT_EXECUTED | À produire par CI sur le SHA de la PR |
 | `pnpm prisma:generate` | NOT_EXECUTED | Environnement local complet non disponible dans cette session |
 | `pnpm type-check` | NOT_EXECUTED | À produire par CI |
