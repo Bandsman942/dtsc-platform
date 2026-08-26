@@ -6,9 +6,17 @@ import { Eye, EyeOff } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
-type PasswordInputProps = Omit<ComponentProps<"input">, "type">;
+type PasswordInputProps = Omit<ComponentProps<"input">, "type"> & {
+  showPasswordLabel?: string;
+  hidePasswordLabel?: string;
+};
 
-export function PasswordInput({ className, ...props }: PasswordInputProps) {
+export function PasswordInput({
+  className,
+  showPasswordLabel = "Afficher le mot de passe",
+  hidePasswordLabel = "Masquer le mot de passe",
+  ...props
+}: PasswordInputProps) {
   const [visible, setVisible] = useState(false);
 
   return (
@@ -22,7 +30,7 @@ export function PasswordInput({ className, ...props }: PasswordInputProps) {
         type="button"
         onClick={() => setVisible((current) => !current)}
         className="absolute right-2 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-dtsc-muted transition hover:bg-dtsc-soft hover:text-dtsc-blue"
-        aria-label={visible ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+        aria-label={visible ? hidePasswordLabel : showPasswordLabel}
       >
         {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
       </button>

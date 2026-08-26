@@ -87,7 +87,7 @@ export function ToastProvider() {
     <div
       aria-live="polite"
       aria-atomic="false"
-      className="pointer-events-none fixed inset-x-0 top-3 z-[250] flex flex-col items-center gap-3 px-3 sm:inset-x-auto sm:right-4 sm:top-4 sm:w-[min(24rem,calc(100vw-2rem))] sm:items-stretch"
+      className="pointer-events-none fixed inset-x-0 top-3 z-[1200] flex flex-col items-center gap-3 px-3 sm:inset-x-auto sm:right-4 sm:top-4 sm:w-[min(24rem,calc(100vw-2rem))] sm:items-stretch"
     >
       {renderedToasts.map((toast) => {
         const config = toneConfig[toast.tone];
@@ -95,7 +95,7 @@ export function ToastProvider() {
         return (
           <div
             key={toast.id}
-            role="status"
+            role={toast.tone === "error" ? "alert" : "status"}
             className={cn(
               "pointer-events-auto w-full max-w-[min(100%,24rem)] animate-dtsc-toast-in rounded-2xl border px-4 py-3 shadow-[0_22px_70px_rgba(0,23,54,0.28)] backdrop-blur-2xl",
               "bg-dtsc-surface/92",

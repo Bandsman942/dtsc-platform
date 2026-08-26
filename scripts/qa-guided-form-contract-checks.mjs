@@ -18,7 +18,22 @@ const purchases = read("components/enterprise/core-v2/enterprise-purchases-works
 const purchaseCopy = read("lib/enterprise/purchase-form-i18n.ts");
 const contract = read("docs/ENTERPRISE_FORM_UX_CONTRACT.md");
 
-expect("FormField keeps contextual help visible below the control", formField.includes('effectiveHint ? <span className="break-words text-sm leading-6 text-dtsc-muted">{effectiveHint}</span>'));
+const formFieldControlIndex = formField.indexOf("{renderedChildren}");
+const formFieldHintPattern = /effectiveHint\s*\?\s*<span[^>]*className="break-words text-sm leading-6 text-dtsc-muted"[^>]*>\{effectiveHint\}<\/span>/;
+const formFieldHintIndex = formField.search(formFieldHintPattern);
+
+expect(
+  "FormField keeps contextual help visible below the control",
+  formFieldControlIndex >= 0 && formFieldHintIndex > formFieldControlIndex,
+);
+expect(
+  "FormField links contextual help and errors to the rendered control",
+  formField.includes('"aria-describedby": describedBy') &&
+    formField.includes("effectiveHint ? hintId : null") &&
+    formField.includes("error ? errorId : null") &&
+    formField.includes("id={hintId}") &&
+    formField.includes("id={errorId}"),
+);
 expect("FormField supports visible field errors", /role="alert"/.test(formField));
 expect("FormField prefers explicit guidance over generic reference guidance", formField.includes("const effectiveHint = hint || automaticHint"));
 expect("ERP Field keeps help visible below the control", erpUi.includes('effectiveHelp ? <span className="break-words text-sm leading-6 text-dtsc-muted">{effectiveHelp}</span>'));
@@ -46,4 +61,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log("PASS guided form UX contract: visible guidance, canonical currency/unit catalogs and responsive purchase form are enforced.");
+console.log("PASS guided form UX contract: visible guidance, accessible descriptions, canonical currency/unit catalogs and responsive purchase form are enforced.");

@@ -1,83 +1,200 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, type FormEvent, type InvalidEvent } from "react";
 import { UserPlus } from "lucide-react";
+import { adminCreateUserT, type AdminCreateUserCopyKey } from "@/components/admin/create-user-i18n";
+import { useAppLocale } from "@/components/i18n/locale-provider";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { useToastMessage } from "@/components/ui/use-toast-message";
-import { formatEnumLabel } from "@/lib/labels";
+import type { ToastTone } from "@/lib/client-toast";
+
+type UserField =
+  | "name"
+  | "email"
+  | "password"
+  | "role"
+  | "companyName"
+  | "phone"
+  | "dailyMessageLimit"
+  | "dailyTokenLimit";
+
+type FieldErrors = Partial<Record<UserField, string>>;
+type AdminCreateUserResponse = {
+  ok?: boolean;
+  reasonCode?: string;
+  fieldErrors?: Partial<Record<UserField, string>>;
+};
+
+const fieldErrorCopy: Record<UserField, AdminCreateUserCopyKey> = {
+  name: "nameError",
+  email: "emailError",
+  password: "passwordError",
+  role: "roleError",
+  companyName: "companyError",
+  phone: "phoneError",
+  dailyMessageLimit: "messageLimitError",
+  dailyTokenLimit: "tokenLimitError",
+};
 
 export function CreateUserForm() {
   const router = useRouter();
+  const locale = useAppLocale();
+  const t = (key: AdminCreateUserCopyKey) => adminCreateUserT(locale, key);
   const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState<ToastTone>("info");
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
-  useToastMessage(message);
+  useToastMessage(message, messageTone);
 
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function closeDialog() {
+    if (busy) return;
+    setOpen(false);
+    setFieldErrors({});
     setMessage("");
-    const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
-    const response = await fetch("/api/admin/users", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+  }
+
+  function clearFieldError(field: UserField) {
+    setFieldErrors((current) => {
+      if (!current[field]) return current;
+      const next = { ...current };
+      delete next[field];
+      return next;
     });
-    setMessage(response.ok ? "Compte utilisateur créé." : "Impossible de créer ce compte.");
-    if (response.ok) {
-      event.currentTarget.reset();
+  }
+
+  function validationErrorsFromResponse(body: AdminCreateUserResponse | null) {
+    const next: FieldErrors = {};
+    if (!body?.fieldErrors) return next;
+    for (const field of Object.keys(body.fieldErrors) as UserField[]) {
+      if (field in fieldErrorCopy) next[field] = t(fieldErrorCopy[field]);
+    }
+    return next;
+  }
+
+  function handleInvalid(event: InvalidEvent<HTMLFormElement>) {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement)) return;
+    const field = target.name as UserField;
+    if (!Object.prototype.hasOwnProperty.call(fieldErrorCopy, field)) return;
+    setFieldErrors((current) => ({ ...current, [field]: t(fieldErrorCopy[field]) }));
+    setMessageTone("error");
+    setMessage(t("validationError"));
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    setMessage("");
+    setFieldErrors({});
+    setBusy(true);
+
+    try {
+      const payload = Object.fromEntries(new FormData(form).entries());
+      const response = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = (await response.json().catch(() => null)) as AdminCreateUserResponse | null;
+
+      if (!response.ok) {
+        const nextFieldErrors = validationErrorsFromResponse(body);
+        if (body?.reasonCode === "EMAIL_ALREADY_EXISTS") nextFieldErrors.email = t("emailExists");
+        setFieldErrors(nextFieldErrors);
+        setMessageTone("error");
+
+        if (body?.reasonCode === "VALIDATION_ERROR") setMessage(t("validationError"));
+        else if (body?.reasonCode === "EMAIL_ALREADY_EXISTS") setMessage(t("emailExists"));
+        else if (response.status === 401 || response.status === 403) setMessage(t("accessDenied"));
+        else if (body?.reasonCode === "PROVISIONING_UNAVAILABLE") setMessage(t("provisioningUnavailable"));
+        else setMessage(t("unexpectedError"));
+        return;
+      }
+
+      setMessageTone("success");
+      setMessage(t("success"));
+      form.reset();
       setOpen(false);
       router.refresh();
+    } catch {
+      setMessageTone("error");
+      setMessage(t("networkError"));
+    } finally {
+      setBusy(false);
     }
   }
 
   return (
     <div className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm font-semibold text-dtsc-muted">Créez un compte avec rôle, limites d&apos;usage et coordonnées contrôlées.</p>
+        <p className="text-sm font-semibold text-dtsc-muted">{t("description")}</p>
         <Button type="button" onClick={() => setOpen(true)} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
           <UserPlus className="h-4 w-4" />
-          Créer le compte
+          {t("openButton")}
         </Button>
       </div>
-      <Dialog open={open} title="Créer un compte utilisateur" description="Renseignez les informations nécessaires au compte. Les limites d'usage sont appliquées côté serveur." onClose={() => setOpen(false)} className="h-[92dvh] max-w-4xl">
-        <form onSubmit={submit} className="grid gap-4 md:grid-cols-2">
-          <FormField label="Nom complet" hint="Nom affiché dans l'application et les notifications.">
-            <Input name="name" placeholder="Nom complet" required />
+      <Dialog
+        open={open}
+        title={t("dialogTitle")}
+        description={t("dialogDescription")}
+        onClose={closeDialog}
+        className="h-[92dvh] max-w-4xl"
+      >
+        <form onSubmit={submit} onInvalid={handleInvalid} className="grid gap-4 md:grid-cols-2">
+          <FormField label={t("nameLabel")} hint={t("nameHint")} error={fieldErrors.name} required>
+            <Input name="name" placeholder={t("namePlaceholder")} minLength={2} maxLength={120} required onInput={() => clearFieldError("name")} />
           </FormField>
-          <FormField label="Email" hint="Adresse de connexion unique de l'utilisateur.">
-            <Input name="email" type="email" placeholder="Email" required />
+          <FormField label={t("emailLabel")} hint={t("emailHint")} error={fieldErrors.email} required>
+            <Input name="email" type="email" placeholder={t("emailPlaceholder")} maxLength={180} required onInput={() => clearFieldError("email")} />
           </FormField>
-          <FormField label="Mot de passe temporaire" hint="L'utilisateur devra le remplacer selon la politique interne.">
-            <PasswordInput name="password" placeholder="Mot de passe temporaire" autoComplete="new-password" required />
+          <FormField label={t("passwordLabel")} hint={t("passwordHint")} error={fieldErrors.password} required>
+            <PasswordInput
+              name="password"
+              placeholder={t("passwordPlaceholder")}
+              autoComplete="new-password"
+              minLength={10}
+              maxLength={128}
+              required
+              showPasswordLabel={t("showPassword")}
+              hidePasswordLabel={t("hidePassword")}
+              onInput={() => clearFieldError("password")}
+            />
           </FormField>
-          <FormField label="Rôle global" hint="Définit les droits plateforme globaux, sans passe-droit sur les entreprises clientes.">
-            <select name="role" className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink">
-              <option value="CLIENT">{formatEnumLabel("CLIENT")}</option>
-              <option value="SUPPORT">{formatEnumLabel("SUPPORT")}</option>
-              <option value="MANAGER">{formatEnumLabel("MANAGER")}</option>
-              <option value="ADMIN">{formatEnumLabel("ADMIN")}</option>
+          <FormField label={t("roleLabel")} hint={t("roleHint")} error={fieldErrors.role} required>
+            <select
+              name="role"
+              required
+              onChange={() => clearFieldError("role")}
+              className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink"
+            >
+              <option value="CLIENT">{t("roleClient")}</option>
+              <option value="SUPPORT">{t("roleSupport")}</option>
+              <option value="MANAGER">{t("roleManager")}</option>
+              <option value="ADMIN">{t("roleAdmin")}</option>
             </select>
           </FormField>
-          <FormField label="Entreprise" hint="Information de profil, différente du rattachement officiel à une organisation.">
-            <Input name="companyName" placeholder="Entreprise" />
+          <FormField label={t("companyLabel")} hint={t("companyHint")} error={fieldErrors.companyName}>
+            <Input name="companyName" placeholder={t("companyPlaceholder")} maxLength={160} onInput={() => clearFieldError("companyName")} />
           </FormField>
-          <FormField label="Téléphone" hint="Coordonnée utile pour support et qualification.">
-            <Input name="phone" placeholder="Téléphone" />
+          <FormField label={t("phoneLabel")} hint={t("phoneHint")} error={fieldErrors.phone}>
+            <Input name="phone" placeholder={t("phonePlaceholder")} maxLength={40} onInput={() => clearFieldError("phone")} />
           </FormField>
-          <FormField label="Limite messages/jour" hint="Nombre maximum de messages IA par jour pour ce compte.">
-            <Input name="dailyMessageLimit" type="number" defaultValue={30} min={1} max={1000} />
+          <FormField label={t("messageLimitLabel")} hint={t("messageLimitHint")} error={fieldErrors.dailyMessageLimit} required>
+            <Input name="dailyMessageLimit" type="number" defaultValue={30} min={1} max={1000} step={1} required onInput={() => clearFieldError("dailyMessageLimit")} />
           </FormField>
-          <FormField label="Limite tokens/jour" hint="Budget quotidien maximal en tokens pour ce compte.">
-            <Input name="dailyTokenLimit" type="number" defaultValue={100000} min={1000} max={2000000} />
+          <FormField label={t("tokenLimitLabel")} hint={t("tokenLimitHint")} error={fieldErrors.dailyTokenLimit} required>
+            <Input name="dailyTokenLimit" type="number" defaultValue={100000} min={1000} max={2000000} step={1} required onInput={() => clearFieldError("dailyTokenLimit")} />
           </FormField>
           <div className="md:col-span-2">
-            <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
+            <Button type="submit" disabled={busy} aria-busy={busy} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
               <UserPlus className="h-4 w-4" />
-              Créer le compte
+              {busy ? t("submitting") : t("submit")}
             </Button>
           </div>
         </form>
