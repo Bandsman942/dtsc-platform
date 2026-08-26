@@ -2,16 +2,18 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { ArrowLeft, ArrowRightLeft, Plus, RefreshCw, ShieldCheck, XCircle } from "lucide-react";
+import { ArrowLeft, Edit3, Plus, ShieldCheck } from "lucide-react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
-import { Field } from "@/components/enterprise/core-v2/erp-v2-ui";
-import { ProfessionalError, ProfessionalLoading } from "@/components/enterprise/professional/professional-erp-ui";
+import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
+import { ProfessionalError, ProfessionalHelp, ProfessionalLoading } from "@/components/enterprise/professional/professional-erp-ui";
+import { financeDate, financeEnumLabel, financeStatusTone, safeFinanceError, type FinanceLocale } from "@/components/enterprise/professional/finance-professional-ui";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { EmptyState } from "@/components/workspace/empty-state";
-import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
+import { ContextActions } from "@/components/workspace/context-actions";
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
+import { translateExchangeRate } from "@/lib/i18n/enterprise-exchange-rates";
 
 type Rate = {
   id: string;
@@ -24,214 +26,164 @@ type Rate = {
   status: string;
   createdAt: string;
 };
+type Currency = { code: string; name: string; symbol?: string | null; precision: number };
+type Payload = { rates: Rate[]; currencies: Currency[]; configuration?: { functionalCurrencyCode?: string | null; presentationCurrencyCode?: string | null } | null };
+type RateFormDefaults = { sourceCurrencyCode: string; targetCurrencyCode: string; rateDate: string; source: string };
 
-type Payload = {
-  configuration: { functionalCurrencyCode: string; presentationCurrencyCode: string | null; readinessStatus: string } | null;
-  currencies: Array<{ code: string; name: string; symbol: string | null; precision: number }>;
-  rates: Rate[];
-};
+const SOURCE_VALUES = ["MANUAL", "CENTRAL_BANK", "COMMERCIAL_BANK", "PROVIDER", "CONTRACTUAL", "IMPORTED"] as const;
 
-const copy = {
-  fr: {
-    eyebrow: "Finance · Gouvernance des devises",
-    title: "Taux de change",
-    description: "Configurez des taux datés et auditables. DTSC conserve la devise d’origine et ne consolide jamais des devises différentes sans taux applicable.",
-    functional: "Devise fonctionnelle",
-    presentation: "Devise de présentation",
-    activeRates: "Taux actifs",
-    history: "Historique des taux",
-    newRate: "Nouveau taux",
-    sourceCurrency: "Devise source",
-    targetCurrency: "Devise cible",
-    rate: "Taux",
-    rateDate: "Date d’effet",
-    source: "Source",
-    precision: "Précision",
-    save: "Enregistrer le taux",
-    deactivate: "Désactiver",
-    refresh: "Actualiser",
-    back: "Retour à la Trésorerie",
-    noRates: "Aucun taux de change",
-    noRatesDescription: "Ajoutez le premier taux avant toute consolidation multi-devise.",
-    immutable: "Un taux publié n’est pas modifié. Pour le corriger, désactivez-le avec un motif puis créez une nouvelle version datée.",
-    inverse: "DTSC utilise d’abord la paire directe ; à défaut, il peut utiliser l’inverse du taux opposé et conserve ce sens dans la résolution.",
-    deactivatePrompt: "Motif de désactivation du taux",
-    created: "Le taux de change a été enregistré.",
-    deactivated: "Le taux a été désactivé sans supprimer l’historique.",
-    loadError: "Chargement des taux impossible.",
-    operationError: "L’opération sur le taux de change a échoué.",
-  },
-  en: {
-    eyebrow: "Finance · Currency governance",
-    title: "Exchange rates",
-    description: "Configure dated, auditable rates. DTSC preserves original currencies and never consolidates different currencies without an applicable rate.",
-    functional: "Functional currency",
-    presentation: "Presentation currency",
-    activeRates: "Active rates",
-    history: "Rate history",
-    newRate: "New rate",
-    sourceCurrency: "Source currency",
-    targetCurrency: "Target currency",
-    rate: "Rate",
-    rateDate: "Effective date",
-    source: "Source",
-    precision: "Precision",
-    save: "Save rate",
-    deactivate: "Deactivate",
-    refresh: "Refresh",
-    back: "Back to Treasury",
-    noRates: "No exchange rate",
-    noRatesDescription: "Add the first rate before any multi-currency consolidation.",
-    immutable: "A published rate is not edited. To correct it, deactivate it with a reason and create a new dated version.",
-    inverse: "DTSC resolves the direct pair first; if absent, it may use the inverse opposite pair and keeps that direction in the resolution.",
-    deactivatePrompt: "Reason for deactivating this rate",
-    created: "The exchange rate was saved.",
-    deactivated: "The rate was deactivated without deleting history.",
-    loadError: "Unable to load exchange rates.",
-    operationError: "The exchange-rate operation failed.",
-  },
-} as const;
-
-const sources = ["MANUAL", "CENTRAL_BANK", "COMMERCIAL_BANK", "PROVIDER", "CONTRACTUAL", "IMPORTED"] as const;
-
-function formatRate(value: string | number, precision = 6) {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return String(value);
-  return number.toLocaleString(undefined, { maximumFractionDigits: Math.min(12, Math.max(2, precision)) });
+async function requestJson(endpoint: string, method: "GET" | "POST" | "PATCH" = "GET", body?: unknown) {
+  const response = await fetch(endpoint, {
+    method,
+    cache: "no-store",
+    headers: body === undefined ? undefined : { "content-type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const payload = await response.json().catch(() => null) as { message?: string; error?: string; [key: string]: unknown } | null;
+  if (!response.ok) throw new Error(payload?.message || payload?.error || "EXCHANGE_RATE_OPERATION_FAILED");
+  return payload || {};
 }
 
-function CurrencySelect({ name, currencies, required }: { name: string; currencies: Payload["currencies"]; required?: boolean }) {
-  return (
-    <select name={name} required={required} className="min-h-11 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
-      <option value="">—</option>
-      {currencies.map((currency) => <option key={currency.code} value={currency.code}>{currency.code} · {currency.name}</option>)}
-    </select>
-  );
+function today() {
+  return new Date().toISOString().slice(0, 10);
 }
 
-export function EnterpriseExchangeRatesWorkspace({ organizationId, organizationName, canManage }: { organizationId: string; organizationName: string; canManage: boolean }) {
-  const locale = useAppLocale() === "en" ? "en" : "fr";
-  const t = copy[locale];
-  const [payload, setPayload] = useState<Payload | null>(null);
+export function EnterpriseExchangeRatesWorkspace({
+  organizationId,
+  organizationName,
+  canManage,
+}: {
+  organizationId: string;
+  organizationName: string;
+  canManage: boolean;
+}) {
+  const appLocale = useAppLocale();
+  const locale: FinanceLocale = appLocale === "en" ? "en" : "fr";
+  const t = (key: Parameters<typeof translateExchangeRate>[1]) => translateExchangeRate(locale, key);
+  const [payload, setPayload] = useState<Payload>({ rates: [], currencies: [] });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [notice, setNotice] = useState("");
+  const [rateDialogOpen, setRateDialogOpen] = useState(false);
+  const [correctionTarget, setCorrectionTarget] = useState<Rate | null>(null);
+  const [defaults, setDefaults] = useState<RateFormDefaults>({ sourceCurrencyCode: "", targetCurrencyCode: "", rateDate: today(), source: "MANUAL" });
 
   const load = useCallback(async () => {
-    setLoading(true);
-    setError("");
+    setLoading(true); setError("");
     try {
-      const response = await fetch(`/api/enterprise/${organizationId}/exchange-rates`, { cache: "no-store" });
-      const body = await response.json().catch(() => null) as (Payload & { message?: string }) | null;
-      if (!response.ok || !body) throw new Error(body?.message || t.loadError);
-      setPayload(body);
+      const body = await requestJson(`/api/enterprise/${organizationId}/exchange-rates`);
+      setPayload(body as unknown as Payload);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : t.loadError);
-    } finally {
-      setLoading(false);
-    }
-  }, [organizationId, t.loadError]);
+      setError(loadError instanceof Error ? loadError.message : t("loadError"));
+    } finally { setLoading(false); }
+  }, [organizationId, t]);
 
-  useEffect(() => { void load(); }, [load, refreshKey]);
+  useEffect(() => { void load(); }, [load]);
 
-  const activeRates = useMemo(() => payload?.rates.filter((item) => item.status === "ACTIVE") || [], [payload]);
+  const currencyChoices = useMemo(() => payload.currencies.map((currency) => ({ id: currency.code, label: `${currency.code} · ${currency.name}` })), [payload.currencies]);
+  const sourceChoices = SOURCE_VALUES.map((source) => ({ id: source, label: source === "MANUAL" ? t("manual") : source === "CENTRAL_BANK" ? t("centralBank") : source === "COMMERCIAL_BANK" ? t("commercialBank") : source === "PROVIDER" ? t("provider") : source === "CONTRACTUAL" ? t("contractual") : t("imported") }));
 
-  async function createRate(event: FormEvent<HTMLFormElement>) {
+  function openNewRate(prefill?: Partial<RateFormDefaults>) {
+    setDefaults({ sourceCurrencyCode: prefill?.sourceCurrencyCode || "", targetCurrencyCode: prefill?.targetCurrencyCode || "", rateDate: prefill?.rateDate || today(), source: prefill?.source || "MANUAL" });
+    setRateDialogOpen(true);
+    setNotice(""); setError("");
+  }
+
+  async function publishRate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
     const form = new FormData(event.currentTarget);
-    setBusy(true); setError(""); setMessage("");
+    setBusy(true); setError(""); setNotice("");
     try {
-      const response = await fetch(`/api/enterprise/${organizationId}/exchange-rates`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          sourceCurrencyCode: String(form.get("sourceCurrencyCode") || ""),
-          targetCurrencyCode: String(form.get("targetCurrencyCode") || ""),
-          rate: String(form.get("rate") || ""),
-          rateDate: String(form.get("rateDate") || ""),
-          source: String(form.get("source") || "MANUAL"),
-          precision: Number(form.get("precision") || 12),
-        }),
+      await requestJson(`/api/enterprise/${organizationId}/exchange-rates`, "POST", {
+        sourceCurrencyCode: String(form.get("sourceCurrencyCode") || ""),
+        targetCurrencyCode: String(form.get("targetCurrencyCode") || ""),
+        rate: String(form.get("rate") || ""),
+        rateDate: String(form.get("rateDate") || ""),
+        source: String(form.get("source") || "MANUAL"),
       });
-      const body = await response.json().catch(() => null) as { message?: string } | null;
-      if (!response.ok) throw new Error(body?.message || t.operationError);
-      event.currentTarget.reset();
-      setMessage(t.created);
-      setRefreshKey((value) => value + 1);
-    } catch (createError) {
-      setError(createError instanceof Error ? createError.message : t.operationError);
-    } finally {
-      setBusy(false);
-    }
+      setRateDialogOpen(false);
+      setNotice(t("created"));
+      await load();
+    } catch (mutationError) {
+      setError(mutationError instanceof Error ? mutationError.message : t("operationError"));
+    } finally { setBusy(false); }
   }
 
-  async function deactivate(rate: Rate) {
-    if (busy) return;
-    const reason = window.prompt(t.deactivatePrompt);
-    if (!reason?.trim()) return;
-    setBusy(true); setError(""); setMessage("");
+  async function continueCorrection(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy || !correctionTarget) return;
+    const form = new FormData(event.currentTarget);
+    setBusy(true); setError(""); setNotice("");
     try {
-      const response = await fetch(`/api/enterprise/${organizationId}/exchange-rates/${rate.id}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ reason: reason.trim() }),
+      await requestJson(`/api/enterprise/${organizationId}/exchange-rates/${correctionTarget.id}`, "PATCH", { reason: String(form.get("reason") || "") });
+      const target = correctionTarget;
+      setCorrectionTarget(null);
+      await load();
+      openNewRate({
+        sourceCurrencyCode: target.sourceCurrencyCode,
+        targetCurrencyCode: target.targetCurrencyCode,
+        rateDate: String(target.rateDate).slice(0, 10),
+        source: target.source,
       });
-      const body = await response.json().catch(() => null) as { message?: string } | null;
-      if (!response.ok) throw new Error(body?.message || t.operationError);
-      setMessage(t.deactivated);
-      setRefreshKey((value) => value + 1);
-    } catch (deactivateError) {
-      setError(deactivateError instanceof Error ? deactivateError.message : t.operationError);
-    } finally {
-      setBusy(false);
-    }
+    } catch (mutationError) {
+      setError(mutationError instanceof Error ? mutationError.message : t("operationError"));
+    } finally { setBusy(false); }
   }
 
   return (
     <ModuleWorkspace>
       <ModuleHeader
-        eyebrow={`${t.eyebrow} · ${organizationName}`}
-        title={t.title}
-        description={t.description}
-        primaryAction={<Button variant="outline" disabled={busy} onClick={() => setRefreshKey((value) => value + 1)}><RefreshCw className="h-4 w-4" />{t.refresh}</Button>}
-        secondaryActions={<Link href="/enterprise-modules/FINANCE_TREASURY" className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-bold text-dtsc-ink"><ArrowLeft className="h-4 w-4" />{t.back}</Link>}
+        eyebrow={`${t("eyebrow")} · ${organizationName}`}
+        title={t("title")}
+        description={t("description")}
+        primaryAction={canManage ? <Button onClick={() => openNewRate()}><Plus className="h-4 w-4" />{t("newRate")}</Button> : undefined}
+        secondaryActions={<Link href="/enterprise-modules/FINANCE_TREASURY"><Button variant="outline"><ArrowLeft className="h-4 w-4" />{t("backTreasury")}</Button></Link>}
       />
       <ModuleContent>
-        {message ? <div role="status" className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-bold text-emerald-800 dark:text-emerald-200">{message}</div> : null}
-        {error ? <ProfessionalError message={error} /> : null}
-        {loading ? <ProfessionalLoading rows={5} /> : !payload ? null : <>
-          <ModuleMetrics label={locale === "fr" ? "Configuration monétaire" : "Currency configuration"}>
-            <ModuleMetric label={t.functional} value={payload.configuration?.functionalCurrencyCode || "—"} />
-            <ModuleMetric label={t.presentation} value={payload.configuration?.presentationCurrencyCode || payload.configuration?.functionalCurrencyCode || "—"} />
-            <ModuleMetric label={t.activeRates} value={activeRates.length} />
-          </ModuleMetrics>
-
-          <ModuleSection title={t.newRate} description={t.immutable}>
-            {canManage ? <form onSubmit={createRate} className="grid min-w-0 gap-4 rounded-2xl border border-dtsc-border bg-dtsc-page p-4 lg:grid-cols-3">
-              <Field label={t.sourceCurrency}><CurrencySelect name="sourceCurrencyCode" currencies={payload.currencies} required /></Field>
-              <Field label={t.targetCurrency}><CurrencySelect name="targetCurrencyCode" currencies={payload.currencies} required /></Field>
-              <Field label={t.rate}><Input name="rate" type="number" inputMode="decimal" min="0.000000000001" step="0.000000000001" required /></Field>
-              <Field label={t.rateDate}><Input name="rateDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required /></Field>
-              <Field label={t.source}><select name="source" defaultValue="MANUAL" className="min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">{sources.map((source) => <option key={source} value={source}>{source.replaceAll("_", " ")}</option>)}</select></Field>
-              <Field label={t.precision}><Input name="precision" type="number" min="2" max="12" defaultValue="12" required /></Field>
-              <div className="lg:col-span-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-cyan-400/25 bg-cyan-400/10 p-3 text-sm font-semibold text-dtsc-muted"><span><ShieldCheck className="mr-2 inline h-4 w-4" />{t.inverse}</span><Button type="submit" disabled={busy}><Plus className="h-4 w-4" />{t.save}</Button></div>
-            </form> : <div className="rounded-xl border border-dtsc-border bg-dtsc-page p-4 text-sm font-semibold text-dtsc-muted">{locale === "fr" ? "Vous pouvez consulter les taux, mais leur administration exige un rôle de gestion Finance." : "You may view rates, but managing them requires a Finance management role."}</div>}
-          </ModuleSection>
-
-          <ModuleSection title={t.history} description={t.inverse}>
-            {payload.rates.length ? <div className="grid min-w-0 gap-3">{payload.rates.map((rate) => <article key={rate.id} className="grid min-w-0 gap-3 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
-              <div className="min-w-0">
-                <div className="flex min-w-0 flex-wrap items-center gap-2"><ArrowRightLeft className="h-4 w-4 text-cyan-600" /><p className="break-words font-black text-dtsc-ink">1 {rate.sourceCurrencyCode} = {formatRate(rate.rate, rate.precision)} {rate.targetCurrencyCode}</p><StatusBadge tone={rate.status === "ACTIVE" ? "success" : "neutral"}>{rate.status}</StatusBadge></div>
-                <p className="mt-1 text-xs font-semibold text-dtsc-muted">{new Intl.DateTimeFormat(locale === "fr" ? "fr-FR" : "en-US", { dateStyle: "medium" }).format(new Date(rate.rateDate))} · {rate.source.replaceAll("_", " ")} · p={rate.precision}</p>
-              </div>
-              {canManage && rate.status === "ACTIVE" ? <Button type="button" variant="outline" disabled={busy} onClick={() => void deactivate(rate)}><XCircle className="h-4 w-4" />{t.deactivate}</Button> : null}
-            </article>)}</div> : <EmptyState compact title={t.noRates} description={t.noRatesDescription} />}
-          </ModuleSection>
-        </>}
+        {notice ? <div role="status" className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-bold text-emerald-800 dark:text-emerald-200">{notice}</div> : null}
+        {error ? <ProfessionalError message={safeFinanceError(error)} /> : null}
+        <div className="rounded-xl border border-cyan-400/25 bg-cyan-400/10 p-4 text-sm font-semibold leading-6 text-dtsc-muted"><ShieldCheck className="mr-2 inline h-4 w-4 text-cyan-600" />{t("fieldPolicy")}</div>
+        <ModuleSection title={t("history")} description={t("historyDescription")} defaultOpen>
+          {loading ? <ProfessionalLoading rows={5} /> : payload.rates.length ? <div className="grid gap-2">
+            {payload.rates.map((rate) => (
+              <article key={rate.id} className="grid min-w-0 gap-3 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                <div className="min-w-0">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <strong className="text-dtsc-ink">{rate.sourceCurrencyCode} → {rate.targetCurrencyCode}</strong>
+                    <StatusBadge tone={financeStatusTone(rate.status)}>{rate.status === "ACTIVE" ? t("active") : t("inactive")}</StatusBadge>
+                  </div>
+                  <p className="mt-1 text-sm font-semibold text-dtsc-muted">1 {rate.sourceCurrencyCode} = {String(rate.rate)} {rate.targetCurrencyCode} · {financeDate(rate.rateDate, locale)} · {financeEnumLabel(rate.source, locale)}</p>
+                </div>
+                {canManage && rate.status === "ACTIVE" ? <ContextActions label={`${t("actions")} · ${rate.sourceCurrencyCode}/${rate.targetCurrencyCode}`} actions={[{ id: "correct", label: t("correction"), icon: Edit3, onSelect: () => setCorrectionTarget(rate) }]} /> : null}
+              </article>
+            ))}
+          </div> : <div className="rounded-xl border border-dashed border-dtsc-border p-6 text-center"><p className="font-black text-dtsc-ink">{t("noRates")}</p><p className="mt-1 text-sm text-dtsc-muted">{t("noRatesDescription")}</p></div>}
+        </ModuleSection>
+        <ProfessionalHelp moduleCode="FINANCE_TREASURY" />
       </ModuleContent>
+
+      <Dialog open={rateDialogOpen} onClose={() => setRateDialogOpen(false)} title={defaults.sourceCurrencyCode ? t("correctionRate") : t("newRate")} description={t("fieldPolicy")} className="h-[94dvh] w-[min(96vw,56rem)] max-w-3xl overflow-x-hidden">
+        <form onSubmit={publishRate} className="grid gap-5">
+          <div className="grid min-w-0 gap-4 md:grid-cols-2">
+            <Field label={t("sourceCurrency")} help={t("sourceCurrencyHelp")} required><NativeSelect name="sourceCurrencyCode" items={currencyChoices} defaultValue={defaults.sourceCurrencyCode} required /></Field>
+            <Field label={t("targetCurrency")} help={t("targetCurrencyHelp")} required><NativeSelect name="targetCurrencyCode" items={currencyChoices} defaultValue={defaults.targetCurrencyCode} required /></Field>
+            <Field label={t("rate")} help={t("rateHelp")} required><Input name="rate" type="number" inputMode="decimal" min="0.000000000001" step="0.000000000001" required /></Field>
+            <Field label={t("rateDate")} help={t("rateDateHelp")} required><Input name="rateDate" type="date" defaultValue={defaults.rateDate} required /></Field>
+            <Field label={t("source")} help={t("sourceHelp")} required><NativeSelect name="source" items={sourceChoices} defaultValue={defaults.source} required /></Field>
+          </div>
+          <div className="sticky bottom-0 flex flex-wrap justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface/95 py-3 backdrop-blur"><Button type="button" variant="outline" onClick={() => setRateDialogOpen(false)}>{t("cancel")}</Button><Button type="submit" disabled={busy || currencyChoices.length < 2}><Plus className="h-4 w-4" />{t("publish")}</Button></div>
+        </form>
+      </Dialog>
+
+      <Dialog open={Boolean(correctionTarget)} onClose={() => setCorrectionTarget(null)} title={t("correction")} description={t("correctionWarning")} className="w-[min(96vw,44rem)] max-w-xl overflow-x-hidden">
+        {correctionTarget ? <form onSubmit={continueCorrection} className="grid gap-4">
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm font-semibold leading-6 text-dtsc-muted">{t("correctionWarning")}</div>
+          <Field label={t("correctionReason")} help={t("correctionReasonHelp")} required><Input name="reason" minLength={4} maxLength={1000} required /></Field>
+          <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" onClick={() => setCorrectionTarget(null)}>{t("cancel")}</Button><Button type="submit" disabled={busy}><Edit3 className="h-4 w-4" />{t("continueCorrection")}</Button></div>
+        </form> : null}
+      </Dialog>
     </ModuleWorkspace>
   );
 }
