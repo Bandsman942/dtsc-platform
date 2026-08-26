@@ -1,7 +1,8 @@
+import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { authorizeFinanceRequest, financeErrorResponse, financeListParams } from "@/lib/enterprise/accounting/http";
-import { createAccountTransfer } from "@/lib/enterprise/accounting/treasury-service";
+import { createTreasuryTransfer } from "@/lib/enterprise/accounting/treasury-transfer-service";
 import { accountTransferSchema } from "@/lib/enterprise/accounting/treasury-schemas";
 import { prisma } from "@/lib/prisma";
 
@@ -13,8 +14,12 @@ export async function GET(req: Request, { params }: Params) {
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_TREASURY", "view");
   if (!auth.ok) return auth.response;
 
-  const { page, pageSize, status } = financeListParams(req);
-  const where = { organizationId, ...(status ? { status } : {}) };
+  const { page, pageSize, search, status } = financeListParams(req);
+  const where: Prisma.EnterpriseAccountTransferWhereInput = {
+    organizationId,
+    ...(status ? { status } : {}),
+    ...(search ? { number: { contains: search, mode: "insensitive" } } : {}),
+  };
   const [rawItems, total] = await Promise.all([
     prisma.enterpriseAccountTransfer.findMany({
       where,
@@ -27,7 +32,7 @@ export async function GET(req: Request, { params }: Params) {
   const accountIds = [...new Set(rawItems.flatMap((item) => [item.sourceFinancialAccountId, item.targetFinancialAccountId]))];
   const accounts = await prisma.enterpriseFinancialAccount.findMany({
     where: { organizationId, id: { in: accountIds } },
-    select: { id: true, code: true, name: true, currencyCode: true },
+    select: { id: true, code: true, name: true, accountType: true, currencyCode: true },
   });
   const accountById = new Map(accounts.map((account) => [account.id, account]));
   const items = rawItems.map((item) => ({
@@ -49,7 +54,7 @@ export async function POST(req: Request, { params }: Params) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
 
   try {
-    const transfer = await createAccountTransfer(organizationId, auth.session.userId, parsed.data);
+    const transfer = await createTreasuryTransfer(organizationId, auth.session.userId, parsed.data);
     await writeAuditLog({
       userId: auth.session.userId,
       action: "ENTERPRISE_ACCOUNT_TRANSFER_CREATED",
@@ -61,7 +66,10 @@ export async function POST(req: Request, { params }: Params) {
         sourceFinancialAccountId: transfer.sourceFinancialAccountId,
         targetFinancialAccountId: transfer.targetFinancialAccountId,
         sourceAmount: transfer.sourceAmount.toFixed(),
+        targetAmount: transfer.targetAmount.toFixed(),
         sourceCurrency: transfer.sourceCurrencyCode,
+        targetCurrency: transfer.targetCurrencyCode,
+        exchangeRate: transfer.exchangeRate?.toFixed() || "1",
       },
     });
     await writeApiLog({ request: req, statusCode: 201, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "account-transfers" } });
