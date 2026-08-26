@@ -81,6 +81,10 @@ Le script `scripts/qa-hotfix-498-console-user-creation.mjs` vérifie statiquemen
 
 Cette QA est ajoutée à `scripts/run-regression-qa-ci.mjs` afin de devenir une garde permanente de Regression QA.
 
+### Revalidation GitHub Actions après passage du repository en public
+
+Le 26/08/2026, le repository a été confirmé `public`. Une relance du run historique `32976709045` a alors obtenu un runner GitHub-hosted : `Delivery governance` et `Migration` ont exécuté leurs étapes et terminé en succès. Cette relance a ensuite été interrompue par la politique de concurrence lorsqu’un nouveau run a été déclenché par la réouverture de la PR. Une nouvelle exécution propre est donc requise sur le SHA final ; aucune étape interrompue n’est comptée comme preuve de succès pour la PR.
+
 ### Matrice de preuves au moment du commit initial
 
 | Contrôle | Statut | Preuve |
