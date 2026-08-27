@@ -1,16 +1,20 @@
-# ERP Retail — Shop 2.0 / Télécom & Mobile Money
+# ERP Retail — Commerce Retail / Shop 2.0 / Télécom & Mobile Money
 
 ## Statut produit
 
 Secteur : `COMMERCE_RETAIL`
 
-Profil métier par défaut pour les nouveaux tenants : `RETAIL_CORE`
+Sous-type métier actuellement disponible : `SHOP`
 
-Profil spécialisé rétrocompatible : `RETAIL_TELCO_MOBILE_MONEY`
+Sous-type absent : **Commerce retail général**
 
-Template : Commerce Retail v2
+Profil technique par défaut pour les nouveaux runtimes Retail : `RETAIL_CORE`
 
-Plan minimal opérationnel : `BUSINESS`
+Profil technique spécialisé rétrocompatible : `RETAIL_TELCO_MOBILE_MONEY`
+
+Template source : Commerce Retail v2, filtré par le contrat de sous-type au moment de l’application.
+
+Plan minimal opérationnel des modules Shop spécialisés : `BUSINESS`
 
 Statut commercial du Shop déjà accepté : `COMMERCIAL_READY`
 
@@ -18,20 +22,82 @@ Programme d’évolution en cours : **Shop 2.0 — itération 1/4** (`#122`, `#1
 
 `COMMERCIAL_READY` provient de l’acceptation propriétaire déjà réalisée sur le périmètre Shop précédent. Shop 2.0 ne doit pas être présenté comme `COMMERCIAL_READY_GLOBAL` tant que les quatre itérations et leurs preuves comportementales ne sont pas terminées. La CI ne peut promouvoir seule un statut commercial.
 
+## Commerce Retail général et sous-types métier — hotfix #512
+
+Depuis #512, `COMMERCE_RETAIL` n’est plus synonyme de `SHOP` dans le formulaire de création d’une entreprise.
+
+La classification possède désormais deux niveaux :
+
+```text
+COMMERCE_RETAIL
+├── aucun sous-type → Commerce retail général
+└── SHOP            → socle retail général + modules Shop
+```
+
+Le registre canonique vit dans `lib/enterprise/retail/subtype-registry.ts`. Ajouter plus tard `MAGASIN`, `FASHION_STORE`, `HAIR_SALON`, `TAILORING_WORKSHOP` ou un autre métier Retail doit se faire dans ce registre et dans son contrat de modules, jamais par une nouvelle condition isolée dans le formulaire de création.
+
+### Socle Commerce retail général
+
+Sans sous-type, le template conserve les domaines ERP communs déjà présents dans Commerce Retail :
+
+- `CRM_CUSTOMERS` ;
+- `CATALOG` ;
+- `SITES_WAREHOUSES` ;
+- `INVENTORY_LOGISTICS` ;
+- `SUPPLIERS_PURCHASES` ;
+- `FINANCE_OVERVIEW` ;
+- `FINANCE_ACCOUNTING` ;
+- `FINANCE_TREASURY` ;
+- `FINANCE_CASH` ;
+- `REPORTS` ;
+- `DOCUMENTS`.
+
+Les modules Shop spécialisés sont exclus du template général :
+
+- `RETAIL_POS` ;
+- `RETAIL_DAILY_CLOSE` ;
+- `MOBILE_MONEY_AGENCY` ;
+- `TELCO_TOPUPS`.
+
+Le retrait d’un sous-type ne supprime aucune donnée historique : les modules devenus hors périmètre sont désactivés de manière non destructive, ainsi que leurs sections/activités associées. Le backend continue à bloquer un module désactivé.
+
+### Sous-type `SHOP`
+
+`SHOP` ajoute au socle Commerce retail général les modules historiques déjà développés pour le Shop :
+
+- `RETAIL_POS` — point de vente ;
+- `RETAIL_DAILY_CLOSE` — clôture magasin ;
+- `MOBILE_MONEY_AGENCY` — agence Mobile Money ;
+- `TELCO_TOPUPS` — recharges Télécom.
+
+Leur activation opérationnelle reste soumise au registre de modules, au plan, à l’entitlement, aux permissions, au profil Retail et aux prérequis de configuration. Le fait qu’un module appartienne au sous-type ne remplace jamais ces contrôles.
+
+### Compatibilité des entreprises Retail existantes
+
+Le hotfix ne crée pas de migration destructive. La décision de sous-type est persistée dans `EnterpriseRetailConfiguration.settingsJson` avec un marqueur de version :
+
+- `businessSubtypeSelectionVersion: 1` ;
+- `businessSubtypeCode: "SHOP"` pour Shop ;
+- `businessSubtypeCode: null` pour Commerce retail général.
+
+Une configuration Retail créée avant #512 ne possède pas ce marqueur. Elle est interprétée comme `SHOP` afin de préserver les entreprises historiques qui ont été provisionnées quand Commerce Retail et Shop étaient encore confondus.
+
+Cette compatibilité est volontairement distincte du **profil technique** `RETAIL_CORE` / `RETAIL_TELCO_MOBILE_MONEY`. Le sous-type décrit le métier et les modules du template ; le profil technique continue de piloter les extensions runtime/providers existants. Les deux concepts ne doivent pas être fusionnés.
+
 ## Architecture Shop 2.0
 
-Le Retail Core devient le socle neutre de `COMMERCE_RETAIL` :
+Dans une entreprise de sous-type `SHOP`, les capacités Shop s’appuient sur :
 
 - `RETAIL_POS` — point de vente ;
 - `RETAIL_DAILY_CLOSE` — clôture magasin ;
 - catalogue, sites, inventaire, achats, CRM et Finance issus des domaines ERP communs.
 
-Les capacités suivantes deviennent des extensions spécialisées optionnelles :
+Les capacités opérateur suivantes restent spécialisées et leur utilisation réelle dépend de la configuration et des droits :
 
 - `MOBILE_MONEY_AGENCY` ;
 - `TELCO_TOPUPS`.
 
-Un nouveau tenant Retail ne reçoit plus automatiquement des opérateurs Mobile Money ou Télécom. Un tenant existant portant le profil `RETAIL_TELCO_MOBILE_MONEY` conserve son profil et ses providers afin d’éviter toute régression.
+Un tenant Retail général ne reçoit plus automatiquement ces modules Shop. Un tenant historique reste interprété comme Shop pendant le cutover afin d’éviter une régression silencieuse. Un tenant portant le profil technique `RETAIL_TELCO_MOBILE_MONEY` conserve en plus son profil et ses providers existants.
 
 ## Sources de vérité
 
@@ -48,24 +114,34 @@ Le Shop s’appuie exclusivement sur les sources ERP Core DTSC :
 
 Aucune nouvelle opération Retail n’écrit dans `EnterpriseCoreRecord`. Les anciens modules Commerce (`PRODUCTS`, `SALES`, `CASH_REGISTER`, `STOCK`, `CUSTOMERS`, `SUPPLIERS`, `PURCHASE_ORDERS`, `INVENTORY`, `PROMOTIONS`, `SALES_REPORTS`) restent désactivés ; `PROMOTIONS` ne doit pas être réactivé tant que le moteur promotionnel Shop 2.0 de l’itération 2 n’est pas livré.
 
-## Provisionnement du Shop
+## Provisionnement Retail / Shop
 
-L’application du template canonique `COMMERCE_RETAIL` synchronise `EnterpriseRetailConfiguration` de façon idempotente.
+L’application du template canonique `COMMERCE_RETAIL` synchronise `EnterpriseRetailConfiguration` de façon idempotente et applique le filtre de sous-type côté serveur.
 
-Pour un nouveau tenant :
+Pour un nouveau tenant Commerce retail général :
 
-- profil `RETAIL_CORE` ;
+- profil technique `RETAIL_CORE` ;
+- `businessSubtypeCode = null` ;
+- modules ERP communs du socle Retail uniquement ;
+- aucun module Shop spécialisé ;
 - devise de base issue en priorité de la devise fonctionnelle Finance ;
-- aucun wallet ou opérateur imposé ;
+- aucun wallet, opérateur, compte, float ou solde inventé.
+
+Pour un nouveau tenant `SHOP` :
+
+- profil technique `RETAIL_CORE` sauf profil spécialisé explicitement conservé/configuré ;
+- `businessSubtypeCode = SHOP` ;
+- socle Retail général + modules Shop du registre ;
 - aucun compte, float ou solde inventé.
 
 Pour un tenant déjà spécialisé :
 
-- le profil reconnu est conservé ;
+- l’absence de marqueur #512 est interprétée comme `SHOP` ;
+- le profil technique reconnu est conservé ;
 - les mappings financiers existants restent conservés ;
 - le profil `RETAIL_TELCO_MOBILE_MONEY` continue d’activer les providers spécialisés historiques.
 
-La migration Shop 2.0 change uniquement la valeur par défaut SQL de `EnterpriseRetailConfiguration.profileCode` vers `RETAIL_CORE`. Elle ne réécrit pas les profils existants.
+La migration Shop 2.0 antérieure change uniquement la valeur par défaut SQL de `EnterpriseRetailConfiguration.profileCode` vers `RETAIL_CORE`. Le hotfix #512 ne réécrit aucune migration historique et n’ajoute pas de colonne Prisma : il utilise le JSON de configuration déjà existant avec un marqueur de version explicite.
 
 ### Wallets Mobile Money du profil spécialisé
 
@@ -91,12 +167,15 @@ La séparation réseau/wallet est intentionnelle : par exemple Vodacom est l’o
 
 Le contrat générique est décrit dans `docs/SECTOR_ONBOARDING_COMMERCIAL_READINESS.md` et piloté par `lib/enterprise/sector-onboarding-readiness.json`.
 
-La QA Retail contrôle désormais également les fondations Shop 2.0 :
+La QA Retail contrôle désormais également les fondations Shop 2.0 et le hotfix #512 :
 
-- nouveau profil par défaut `RETAIL_CORE` ;
+- séparation `COMMERCE_RETAIL` / sous-type `SHOP` ;
+- exclusion des modules Shop lorsque le sous-type est absent ;
+- préservation des tenants historiques comme Shop ;
+- nouveau profil technique par défaut `RETAIL_CORE` ;
 - préservation des profils existants ;
-- Mobile Money et Télécom non obligatoires pour la clôture Retail Core ;
-- migration additive sans réécriture des tenants existants ;
+- Mobile Money et Télécom non obligatoires pour la clôture du moteur historique Retail Core ;
+- aucune réécriture de migration historique ;
 - recherche POS serveur paginée ;
 - dashboard réellement scoped au module ;
 - rate limiting par module et action ;
@@ -104,9 +183,10 @@ La QA Retail contrôle désormais également les fondations Shop 2.0 :
 - posting comptable vente / annulation ;
 - valorisation `COGS / INVENTORY` via le moteur Finance Inventory commun ;
 - idempotence et isolation `Serializable` ;
-- absence de réactivation des domaines legacy.
+- absence de réactivation des domaines legacy ;
+- contrat de feedback/formulaire Mobile Money raccordé à `docs/FORM_UX_CONTRACT.md`.
 
-Le gate est exécuté sur la base Quality Gate migrée et sur une base reconstruite depuis zéro.
+Le gate est exécuté sur la base Quality Gate migrée et sur une base reconstruite depuis zéro lorsque la CI/le workflow concerné le prévoit.
 
 ## Point de vente — `RETAIL_POS`
 
@@ -165,9 +245,24 @@ Après succès, le ticket affiche numéro, total et lignes et peut être imprim�
 
 ## Agence Mobile Money — `MOBILE_MONEY_AGENCY`
 
-Cette capacité est une extension Retail optionnelle.
+Cette capacité est un module spécialisé du sous-type `SHOP` dans le registre métier actuel. Son utilisation réelle reste optionnelle et soumise à l’activation du module, au plan, aux permissions et à la configuration Finance.
 
 L’agent sélectionne l’opérateur, le type `DEPOSIT`/`WITHDRAWAL`, le téléphone, le principal, les frais/commissions et la référence opérateur. Le wallet financier n’est pas choisi arbitrairement par l’agent : la devise de la caisse ouverte détermine la devise de l’opération et le serveur résout le wallet du même opérateur dans cette devise.
+
+### Contrat de formulaires Mobile Money — #512
+
+Tous les formulaires de ce module suivent `docs/FORM_UX_CONTRACT.md` :
+
+- les opérateurs, caisses, devises et comptes proposés proviennent des données existantes de l’entreprise ;
+- le serveur revalide toujours le même `organizationId`, le type de compte, la devise, le statut du compte, le module et les permissions ;
+- les erreurs de précondition sont expliquées localement et remontées dans le toast global ;
+- les erreurs backend passent par le dictionnaire métier Retail et ne montrent pas d’erreur Prisma/provider brute ;
+- une mutation réussie déclenche un toast de succès global ;
+- une mutation en erreur laisse le formulaire/dialog ouvert et conserve les valeurs saisies ;
+- la contrepassation n’utilise plus `window.prompt` : elle passe par un dialog contrôlé avec motif obligatoire ;
+- aucune action visible ne doit rester sans loading/disabled/feedback final.
+
+Le provider de toast global est volontairement réutilisé par la primitive de mutation Retail partagée ; le module ne crée pas un second système de notifications superposé.
 
 ### Comptes opérateur multi-devise
 
@@ -250,7 +345,7 @@ La section `Transfert entre devises` affiche avant confirmation le taux Finance 
 
 ## Télécom & forfaits — `TELCO_TOPUPS`
 
-Cette capacité est une extension Retail optionnelle.
+Cette capacité est un module spécialisé du sous-type `SHOP` dans le registre métier actuel. Son utilisation réelle reste soumise à l’activation du module et à la configuration opérateur.
 
 ### Comptes opérateur multi-devise
 
@@ -285,9 +380,9 @@ Une session `CLOSING` ou `PENDING_VALIDATION` n’est jamais une caisse utilisab
 
 ## Clôture journalière — `RETAIL_DAILY_CLOSE`
 
-La clôture Retail Core dépend du POS, pas de l’extension Mobile Money.
+La clôture journalière est un module Shop. Elle n’est pas appliquée au template Commerce retail général sans sous-type.
 
-Elle conserve :
+Dans un Shop où elle est activée, elle conserve :
 
 - comptage des coupures cash ;
 - théorique depuis fonds d’ouverture + entrées - sorties ;
@@ -337,13 +432,13 @@ Pour Mobile Money en RDC, la readiness vérifie désormais explicitement CDF + U
 
 ## Offres
 
-### Starter — Shop Essentials
+### Starter — Commerce Retail Essentials
 
-Préparation du catalogue, des clients et documents. Les modules Retail opérationnels restent Business minimum selon le registre actuel.
+Socle Commerce retail général : catalogue, clients, documents et domaines ERP communs activés selon le plan. Aucun module Shop spécialisé n’est implicite sans sous-type.
 
 ### Business — Shop Operations
 
-Socle recommandé : sites, stock, fournisseurs/achats, Finance/caisse, POS, clôture et rapports. Mobile Money et Télécom peuvent être activés comme extensions lorsque le commerce en a besoin.
+Pour le sous-type `SHOP` : socle Retail général + POS, clôture et, lorsque l’entreprise en a besoin et les configure, Mobile Money/Télécom.
 
 ### Enterprise — Shop Scale
 
@@ -360,8 +455,10 @@ Le programme de professionnalisation est suivi dans GitHub :
 
 La certification finale sera fondée sur des preuves CI/E2E et une acceptation explicite, pas sur la seule présence des fonctionnalités dans le code.
 
-## Références #307
+## Références
 
+- issue #512 — séparation Commerce retail général / sous-type Shop et contrat formulaires DTSC ;
+- `docs/FORM_UX_CONTRACT.md` — contrat transverse des formulaires ;
 - `docs/ISSUE_307_MOBILE_MONEY_MULTICURRENCY_ACCOUNTS.md` — contrat détaillé du hotfix multi-devise ;
-- issue #307 — implémentation ;
+- issue #307 — implémentation multi-devise ;
 - issue #309 — retrait futur du champ legacy `mobileMoneyFloatAccountId` après preuve du cutover production.
