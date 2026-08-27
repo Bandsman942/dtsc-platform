@@ -139,8 +139,8 @@ test.describe.serial("ERP cross-module Finance acceptance", () => {
       expect(accountPayload.items?.some((item) => item.id === createdAccountId && item.name === accountName)).toBeTruthy();
       await expect(authenticatedPage.getByRole("button", { name: /Comptes financiers 1|Financial accounts 1/i })).toBeVisible();
 
-      const historyTab = authenticatedPage.getByRole("button", { name: /Historique|History/i });
-      const transfersTab = authenticatedPage.getByRole("button", { name: /Transferts|Transfers/i });
+      const historyTab = authenticatedPage.getByRole("button", { name: /^(Historique|History)$/i });
+      const transfersTab = authenticatedPage.getByRole("button", { name: /^(Transferts|Transfers)$/i });
       const firstHistoryResponse = authenticatedPage.waitForResponse((response) => response.url().includes("/treasury-history?") && response.request().method() === "GET");
       await historyTab.click();
       expect((await firstHistoryResponse).ok()).toBeTruthy();
