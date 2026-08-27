@@ -33,14 +33,25 @@ export const financialAccountArchiveSchema = z.object({
   revision,
 });
 
-export const accountTransferSchema = z.object({
+const accountTransferBaseSchema = z.object({
   sourceFinancialAccountId: id,
   targetFinancialAccountId: id,
   sourceAmount: positiveAmount,
   transferDate: date,
-}).refine((value) => value.sourceFinancialAccountId !== value.targetFinancialAccountId, { message: "Transfer accounts must differ" });
+});
 
-export const accountTransferPreviewSchema = accountTransferSchema;
+export const accountTransferPreviewSchema = accountTransferBaseSchema.refine(
+  (value) => value.sourceFinancialAccountId !== value.targetFinancialAccountId,
+  { message: "Transfer accounts must differ" },
+);
+
+export const accountTransferSchema = accountTransferBaseSchema.extend({
+  approverUserId: id,
+}).refine(
+  (value) => value.sourceFinancialAccountId !== value.targetFinancialAccountId,
+  { message: "Transfer accounts must differ" },
+);
+
 export const transferTransitionSchema = z.object({ action: z.enum(["APPROVE", "CONFIRM"]), revision });
 export const cashSessionOpenSchema = z.object({ financialAccountId: id, openingAmount: amount, siteId: id.optional() });
 export const cashCloseSchema = z.object({ countedClosingAmount: amount, closingReason: z.string().trim().min(3).max(1000).optional(), counts: z.array(z.object({ denomination: amount, quantity: z.coerce.number().int().nonnegative().max(1000000) })).max(100), revision });
