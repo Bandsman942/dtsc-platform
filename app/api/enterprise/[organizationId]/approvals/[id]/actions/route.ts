@@ -2,12 +2,19 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
+import { approveAssignedAccountTransfer, rejectAssignedAccountTransfer } from "@/lib/enterprise/accounting/treasury-approval-service";
+import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { getEnterpriseCoreV2Access } from "@/lib/enterprise/core-v2/access";
 import { decideAssignedEnterpriseApproval } from "@/lib/enterprise/core-v2/approval-assignment-service";
 import { normalizeEnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
 import { enterpriseApprovalActionSchema } from "@/lib/enterprise/core-v2/validators";
 import { decideEnterpriseBudgetApproval } from "@/lib/enterprise/finance/budget-service";
 import { decideEnterpriseExpenseApproval } from "@/lib/enterprise/finance/expense-service";
+import { decideEnterpriseEmploymentContract } from "@/lib/enterprise/hr-payroll/contracts";
+import { decideEnterpriseLeaveRequest } from "@/lib/enterprise/hr-payroll/leave";
+import { decideEnterprisePayrollRun } from "@/lib/enterprise/hr-payroll/payroll";
+import { decideEnterpriseTimesheet } from "@/lib/enterprise/hr-payroll/timesheets";
 import { decideEnterprisePurchaseApproval } from "@/lib/enterprise/procurement/purchase-service";
 import { notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
@@ -22,6 +29,7 @@ import {
 import { workCoordinationDeepLink } from "@/lib/standard-work-coordination/deep-links";
 
 type Params = { params: Promise<{ organizationId: string; id: string }> };
+type CurrentApproval = { id: string; organizationId: string; targetEntityType: string; targetEntityId: string; requestedByUserId: string; approverUserId: string; status: string; revision: number };
 
 const professionalApprovalActionSchema = z.object({
   action: z.enum(["REQUEST_CORRECTION", "RESUBMIT", "DELEGATE"]),
@@ -30,6 +38,62 @@ const professionalApprovalActionSchema = z.object({
   delegateUserId: z.string().trim().max(160).optional(),
   idempotencyKey: z.string().trim().max(240).optional(),
 });
+
+async function targetRevision(organizationId: string, approval: CurrentApproval) {
+  if (approval.targetEntityType === "EnterpriseAccountTransfer") {
+    return (await prisma.enterpriseAccountTransfer.findFirst({ where: { id: approval.targetEntityId, organizationId }, select: { revision: true } }))?.revision ?? null;
+  }
+  if (approval.targetEntityType === "EnterpriseLeaveRequest") {
+    return (await prisma.enterpriseLeaveRequest.findFirst({ where: { id: approval.targetEntityId, organizationId, archivedAt: null }, select: { revision: true } }))?.revision ?? null;
+  }
+  if (approval.targetEntityType === "EnterpriseEmploymentContract") {
+    return (await prisma.enterpriseEmploymentContract.findFirst({ where: { id: approval.targetEntityId, organizationId, archivedAt: null }, select: { revision: true } }))?.revision ?? null;
+  }
+  if (approval.targetEntityType === "EnterpriseTimesheet") {
+    return (await prisma.enterpriseTimesheet.findFirst({ where: { id: approval.targetEntityId, organizationId, archivedAt: null }, select: { revision: true } }))?.revision ?? null;
+  }
+  if (approval.targetEntityType === "EnterprisePayrollRun") {
+    return (await prisma.enterprisePayrollRun.findFirst({ where: { id: approval.targetEntityId, organizationId, archivedAt: null }, select: { revision: true } }))?.revision ?? null;
+  }
+  return null;
+}
+
+async function decideDomainApproval(
+  organizationId: string,
+  current: CurrentApproval,
+  actorUserId: string,
+  data: { action: "APPROVE" | "REJECT" | "CANCEL"; revision: number; decisionComment?: string },
+  canManage: boolean,
+) {
+  const args = { organizationId, approvalId: current.id, actorUserId, action: data.action, revision: data.revision, decisionComment: data.decisionComment || undefined, canManage };
+  if (current.targetEntityType === "EnterprisePurchase") return decideEnterprisePurchaseApproval(args);
+  if (current.targetEntityType === "EnterpriseBudget") return decideEnterpriseBudgetApproval(args);
+  if (current.targetEntityType === "EnterpriseExpense") return decideEnterpriseExpenseApproval(args);
+  if (data.action === "CANCEL") return decideAssignedEnterpriseApproval(args);
+
+  const revision = await targetRevision(organizationId, current);
+  if (["EnterpriseAccountTransfer", "EnterpriseLeaveRequest", "EnterpriseEmploymentContract", "EnterpriseTimesheet", "EnterprisePayrollRun"].includes(current.targetEntityType) && revision === null) {
+    throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "L’objet métier lié à cette validation est introuvable.");
+  }
+  if (current.targetEntityType === "EnterpriseAccountTransfer") {
+    return data.action === "APPROVE"
+      ? approveAssignedAccountTransfer(organizationId, current.targetEntityId, actorUserId, revision!)
+      : rejectAssignedAccountTransfer(organizationId, current.targetEntityId, actorUserId, revision!, data.decisionComment || "");
+  }
+  if (current.targetEntityType === "EnterpriseLeaveRequest") {
+    return decideEnterpriseLeaveRequest(organizationId, current.targetEntityId, actorUserId, { decision: data.action, revision: revision!, comment: data.decisionComment });
+  }
+  if (current.targetEntityType === "EnterpriseEmploymentContract") {
+    return decideEnterpriseEmploymentContract(organizationId, current.targetEntityId, actorUserId, { decision: data.action, revision: revision!, comment: data.decisionComment });
+  }
+  if (current.targetEntityType === "EnterpriseTimesheet") {
+    return decideEnterpriseTimesheet(organizationId, current.targetEntityId, actorUserId, { decision: data.action, revision: revision!, comment: data.decisionComment });
+  }
+  if (current.targetEntityType === "EnterprisePayrollRun") {
+    return decideEnterprisePayrollRun(organizationId, current.targetEntityId, actorUserId, { decision: data.action, revision: revision!, comment: data.decisionComment });
+  }
+  return decideAssignedEnterpriseApproval(args);
+}
 
 export async function POST(req: Request, { params }: Params) {
   const startedAt = Date.now();
@@ -83,17 +147,11 @@ export async function POST(req: Request, { params }: Params) {
       if (current.approverUserId !== session.userId) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
       await ensureApprovalSubmissionVersion({ organizationId, approvalId: id, actorUserId: current.requestedByUserId });
     }
-    const args = { organizationId, approvalId: id, actorUserId: session.userId, action: data.action, revision: data.revision, decisionComment: data.decisionComment || undefined, canManage: access.canManage };
-    const approval = current.targetEntityType === "EnterprisePurchase"
-      ? await decideEnterprisePurchaseApproval(args)
-      : current.targetEntityType === "EnterpriseBudget"
-        ? await decideEnterpriseBudgetApproval(args)
-        : current.targetEntityType === "EnterpriseExpense"
-          ? await decideEnterpriseExpenseApproval(args)
-          : await decideAssignedEnterpriseApproval(args);
+    await decideDomainApproval(organizationId, current, session.userId, data, access.canManage);
     if (data.action === "APPROVE" || data.action === "REJECT") {
       await recordApprovalDecision({ organizationId, approvalId: id, actorUserId: session.userId, decision: data.action, reason: data.decisionComment, idempotencyKey: typeof payload?.idempotencyKey === "string" ? payload.idempotencyKey : null });
     }
+    const approval = await prisma.enterpriseApproval.findFirst({ where: { id, organizationId, archivedAt: null } });
     if (current.requestedByUserId !== session.userId) {
       await notifyUser({ userId: current.requestedByUserId, organizationId, type: "ENTERPRISE_APPROVAL", title: data.action === "APPROVE" ? "Validation approuvée" : data.action === "REJECT" ? "Validation rejetée" : "Validation annulée", body: data.decisionComment || "Une décision a été prise sur votre demande de validation.", targetUrl: workCoordinationDeepLink("APPROVAL", id) });
     }
@@ -102,6 +160,10 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ ok: true, approval });
   } catch (error) {
     if (error instanceof ApprovalCoordinationError) {
+      await writeApiLog({ request: req, statusCode: error.status, userId: session.userId, startedAt, metadata: { organizationId, domain: "approvals", approvalId: id, action, error: error.code } });
+      return NextResponse.json({ error: error.code, message: error.message }, { status: error.status });
+    }
+    if (error instanceof EnterpriseDomainError || error instanceof EnterpriseAccountingError) {
       await writeApiLog({ request: req, statusCode: error.status, userId: session.userId, startedAt, metadata: { organizationId, domain: "approvals", approvalId: id, action, error: error.code } });
       return NextResponse.json({ error: error.code, message: error.message }, { status: error.status });
     }
