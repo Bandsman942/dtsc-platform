@@ -1,4 +1,5 @@
 import type { EnterpriseAdminDataset, EnterprisePendingActionItem } from "@/lib/enterprise/enterprise-admin-types";
+import { resolveEnterpriseApprovalPresentations } from "@/lib/enterprise/approval-presentation";
 import { getEnterpriseCalendarDataset } from "@/lib/enterprise/enterprise-calendar-loader";
 import { getEnterpriseMembersDataset } from "@/lib/enterprise/enterprise-members-loader";
 import { getEnterpriseModulesDataset } from "@/lib/enterprise/enterprise-modules-loader";
@@ -122,7 +123,7 @@ export async function getEnterpriseAdministrationDataset(
       where: { organizationId, archivedAt: null, status: "PENDING", OR: [{ approverUserId: viewerUserId }, { requestedByUserId: viewerUserId }] },
       orderBy: { requestedAt: "desc" },
       take: 40,
-      select: { id: true, targetEntityType: true, requestedByUserId: true, approverUserId: true, status: true, requestedAt: true, createdAt: true },
+      select: { id: true, targetEntityType: true, targetEntityId: true, requestedByUserId: true, approverUserId: true, status: true, requestedAt: true, createdAt: true },
     }),
     prisma.enterpriseApproval.count({ where: { organizationId, archivedAt: null, status: "PENDING" } }),
     prisma.enterpriseMeeting.findMany({ where: { organizationId, archivedAt: null }, select: { status: true, startAt: true } }),
@@ -263,6 +264,7 @@ export async function getEnterpriseAdministrationDataset(
   }
 
   const memberNameByUserId = new Map(members.map((member) => [member.user.id, member.user.name]));
+  const approvalPresentations = await resolveEnterpriseApprovalPresentations(organizationId, pendingApprovals, english);
   const readAccessPromiseByModule = new Map<string, Promise<boolean>>();
   const manageAccessPromiseByModule = new Map<string, Promise<boolean>>();
   const canAccessModule = (sourceModule: string | null, action: "read" | "manage") => {
@@ -334,17 +336,20 @@ export async function getEnterpriseAdministrationDataset(
     });
   }
   for (const approval of pendingApprovals) {
+    const presentation = approvalPresentations.get(`${approval.targetEntityType}:${approval.targetEntityId}`);
+    const moduleReadable = presentation?.sourceModuleCode ? await canAccessModule(presentation.sourceModuleCode, "read") : true;
+    if (!moduleReadable && approval.approverUserId !== viewerUserId && approval.requestedByUserId !== viewerUserId) continue;
     pendingActions.push({
       id: approval.id,
       kind: "APPROVAL",
-      title: english ? "Approval pending" : "Validation en attente",
-      description: english ? "A pending approval needs a decision before the related process can continue." : "Une validation est en attente avant que le traitement associé puisse continuer.",
+      title: presentation?.title || (english ? "Approval pending" : "Validation en attente"),
+      description: presentation?.description || (english ? "A pending approval needs a decision before the related process can continue." : "Une validation est en attente avant que le traitement associé puisse continuer."),
       status: approval.approverUserId === viewerUserId ? "WAITING_FOR_YOU" : "WAITING_FOR_VALIDATION",
-      priority: "HIGH",
-      sourceModuleCode: null,
-      sourceModuleLabel: english ? "Approvals" : "Validations",
-      actionUrl: "/enterprise-activities?section=validations",
-      canAct: approval.approverUserId === viewerUserId,
+      priority: normalizePriority(presentation?.priority || "HIGH"),
+      sourceModuleCode: presentation?.sourceModuleCode || "VALIDATIONS",
+      sourceModuleLabel: presentation?.sourceModuleLabel || (english ? "Approvals" : "Validations"),
+      actionUrl: presentation?.actionUrl || `/enterprise-modules/VALIDATIONS?approval=${encodeURIComponent(approval.id)}`,
+      canAct: approval.approverUserId === viewerUserId && moduleReadable,
       assignedUserName: memberNameByUserId.get(approval.approverUserId) || null,
       requestedByName: memberNameByUserId.get(approval.requestedByUserId) || null,
       dueAt: null,
