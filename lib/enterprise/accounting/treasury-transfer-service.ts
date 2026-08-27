@@ -49,6 +49,52 @@ async function resolveTransfer(
   return { source, target, sourceAmount, targetAmount, rate };
 }
 
+function preferredTransferJournalType(accountType: string) {
+  if (accountType === "CASH") return "CASH";
+  if (accountType === "MOBILE_MONEY") return "MOBILE_MONEY";
+  if (accountType === "CLEARING") return "GENERAL";
+  return "BANK";
+}
+
+async function resolveTransferPostingContext(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  input: {
+    sourceAccountType: string;
+    sourceLedgerAccountId: string;
+    targetLedgerAccountId: string;
+    transferDate: Date;
+  },
+) {
+  const preferredJournalType = preferredTransferJournalType(input.sourceAccountType);
+  const journal = await tx.enterpriseJournal.findFirst({
+    where: { organizationId, journalType: preferredJournalType, isActive: true },
+    select: { id: true },
+  }) || (preferredJournalType === "GENERAL"
+    ? await tx.enterpriseJournal.findFirst({
+        where: { organizationId, journalType: "BANK", isActive: true },
+        select: { id: true },
+      })
+    : null);
+  if (!journal) throw new EnterpriseAccountingError("TRANSFER_JOURNAL_REQUIRED", 409);
+
+  const ledgerAccountIds = [...new Set([input.sourceLedgerAccountId, input.targetLedgerAccountId])];
+  const postableLedgerCount = await tx.enterpriseLedgerAccount.count({
+    where: {
+      organizationId,
+      id: { in: ledgerAccountIds },
+      isActive: true,
+      archivedAt: null,
+    },
+  });
+  if (postableLedgerCount !== ledgerAccountIds.length) {
+    throw new EnterpriseAccountingError("TREASURY_LEDGER_ACCOUNT_INVALID", 409);
+  }
+
+  const period = await getPostingPeriod(tx, organizationId, input.transferDate, { allowSoftClosed: true });
+  return { journalId: journal.id, fiscalPeriodId: period.id };
+}
+
 export async function previewTreasuryTransfer(organizationId: string, input: TransferInput) {
   return prisma.$transaction(async (tx) => {
     const resolved = await resolveTransfer(tx, organizationId, input);
@@ -162,12 +208,19 @@ export async function confirmTreasuryTransfer(
         targetCurrencyCode: configuration.functionalCurrencyCode,
         rateDate: transfer.transferDate,
       });
+      const postingContext = await resolveTransferPostingContext(tx, organizationId, {
+        sourceAccountType: source.accountType,
+        sourceLedgerAccountId: source.ledgerAccountId,
+        targetLedgerAccountId: target.ledgerAccountId,
+        transferDate: transfer.transferDate,
+      });
       return {
         transfer,
         source,
         target,
         functionalCurrencyCode: configuration.functionalCurrencyCode,
         functionalAmount: money(transfer.sourceAmount.times(functionalResolution.rate)),
+        ...postingContext,
       };
     }
     if (transfer.status !== "APPROVED" || transfer.revision !== revision) throw new EnterpriseAccountingError("TRANSFER_NOT_APPROVED", 409);
@@ -187,6 +240,13 @@ export async function confirmTreasuryTransfer(
       rateDate: transfer.transferDate,
     });
     const functionalAmount = money(transfer.sourceAmount.times(functionalResolution.rate));
+    const postingContext = await resolveTransferPostingContext(tx, organizationId, {
+      sourceAccountType: source.accountType,
+      sourceLedgerAccountId: source.ledgerAccountId,
+      targetLedgerAccountId: target.ledgerAccountId,
+      transferDate: transfer.transferDate,
+    });
+
     await snapshotExchangeRate(tx, {
       organizationId,
       sourceEntityType: "EnterpriseAccountTransfer",
@@ -263,30 +323,17 @@ export async function confirmTreasuryTransfer(
       target,
       functionalCurrencyCode: configuration.functionalCurrencyCode,
       functionalAmount,
+      ...postingContext,
     };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
   const idempotency = `${organizationId}:ACCOUNT_TRANSFER:${result.transfer.id}:1`;
   let entry = await prisma.enterpriseJournalEntry.findFirst({ where: { organizationId, idempotencyKey: idempotency } });
   if (!entry) {
-    const preferredJournalType = result.source.accountType === "CASH"
-      ? "CASH"
-      : result.source.accountType === "MOBILE_MONEY"
-        ? "MOBILE_MONEY"
-        : result.source.accountType === "CLEARING"
-          ? "GENERAL"
-          : "BANK";
-    const journal = await prisma.enterpriseJournal.findFirst({
-      where: { organizationId, journalType: preferredJournalType, isActive: true },
-    }) || (preferredJournalType === "GENERAL"
-      ? await prisma.enterpriseJournal.findFirst({ where: { organizationId, journalType: "BANK", isActive: true } })
-      : null);
-    if (!journal) throw new EnterpriseAccountingError("TRANSFER_JOURNAL_REQUIRED", 409);
-    const period = await prisma.$transaction((tx) => getPostingPeriod(tx, organizationId, result.transfer.transferDate, { allowSoftClosed: true }));
     const functionalAmount = result.functionalAmount.toFixed();
     entry = await createJournalEntryDraft(organizationId, actorUserId, {
-      journalId: journal.id,
-      fiscalPeriodId: period.id,
+      journalId: result.journalId,
+      fiscalPeriodId: result.fiscalPeriodId,
       accountingDate: result.transfer.transferDate,
       documentDate: result.transfer.transferDate,
       reference: result.transfer.number,
