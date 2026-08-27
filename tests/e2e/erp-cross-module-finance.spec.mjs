@@ -117,6 +117,8 @@ test.describe.serial("ERP cross-module Finance acceptance", () => {
       openingBalance: "0",
     });
     expect(created.response.ok(), JSON.stringify(created.body)).toBeTruthy();
+    const createdAccountId = created.body?.account?.id;
+    expect(createdAccountId, "Treasury E2E account creation must return the created account id").toBeTruthy();
 
     const pageErrors = [];
     const capturePageError = (error) => pageErrors.push(error.message);
@@ -125,8 +127,17 @@ test.describe.serial("ERP cross-module Finance acceptance", () => {
       await authenticatedPage.goto(`${baseUrl}/enterprise-modules/FINANCE_TREASURY`);
       const accountSearch = authenticatedPage.getByPlaceholder(/Rechercher un compte|Search an account/i);
       await expect(accountSearch).toBeVisible();
+      const filteredAccountsResponse = authenticatedPage.waitForResponse((response) => {
+        if (response.request().method() !== "GET" || !response.url().includes("/financial-accounts?")) return false;
+        const url = new URL(response.url());
+        return url.searchParams.get("search") === accountName;
+      });
       await accountSearch.fill(accountName);
-      await expect(authenticatedPage.getByText(accountName, { exact: true })).toBeVisible();
+      const accountResponse = await filteredAccountsResponse;
+      expect(accountResponse.ok()).toBeTruthy();
+      const accountPayload = await accountResponse.json();
+      expect(accountPayload.items?.some((item) => item.id === createdAccountId && item.name === accountName)).toBeTruthy();
+      await expect(authenticatedPage.getByRole("button", { name: /Comptes financiers 1|Financial accounts 1/i })).toBeVisible();
 
       const historyTab = authenticatedPage.getByRole("button", { name: /Historique|History/i });
       const transfersTab = authenticatedPage.getByRole("button", { name: /Transferts|Transfers/i });
