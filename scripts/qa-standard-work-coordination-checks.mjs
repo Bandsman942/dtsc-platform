@@ -70,8 +70,11 @@ function requestChecks() {
 
 function validationChecks() {
   requireText("prisma/standard-work-coordination.prisma", ["model EnterpriseApprovalSubmissionVersion", "model EnterpriseApprovalDecision", "idempotencyKey"]);
-  requireText("lib/standard-work-coordination/approval-coordination.ts", ["CORRECTION_REASON_REQUIRED", "VERSION_MISMATCH", "recordApprovalDecision", "versionNumber", "plannedAmount: true"]);
-  requireText("app/api/enterprise/[organizationId]/approvals/[id]/actions/route.ts", ["REQUEST_CORRECTION", "RESUBMIT", "DELEGATE", "SELF_APPROVAL_FORBIDDEN", "notifyUser"]);
+  requireText("lib/standard-work-coordination/approval-coordination.ts", ["CORRECTION_REASON_REQUIRED", "VERSION_MISMATCH", "recordApprovalDecision", "versionNumber", "plannedAmount: true", "assertEnterpriseApprovalCandidate", "enterpriseApprovalModuleForTarget"]);
+  requireText("app/api/enterprise/[organizationId]/approvals/[id]/actions/route.ts", ["REQUEST_CORRECTION", "RESUBMIT", "DELEGATE", "decideAssignedEnterpriseApproval", "notifyUser"]);
+  requireText("lib/enterprise/approval-assignment.ts", ["assertEnterpriseApprovalDecision", "canUseSelfApprovalOverride", "SELF_APPROVAL_FORBIDDEN", "policy.selfApprovalModuleCodes.includes"]);
+  requireText("lib/enterprise/core-v2/approval-assignment-service.ts", ["decideAssignedEnterpriseApproval", "assertEnterpriseApprovalDecision", "selfApprovalOverride"]);
+  requireNoText("app/api/enterprise/[organizationId]/approvals/[id]/actions/route.ts", ["Vous ne pouvez pas décider sur votre propre soumission"]);
   requireNoText("lib/standard-work-coordination/approval-coordination.ts", ["totalAmount: true, revision: true, updatedAt: true } });\n    if (!item) throw new ApprovalCoordinationError(\"TARGET_NOT_FOUND\", 404, \"Budget source"]);
 }
 
