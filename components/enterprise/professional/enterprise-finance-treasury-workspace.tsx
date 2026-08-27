@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Archive, ArrowRightLeft, Edit3, Eye, Landmark, Plus, Power, ShieldCheck } from "lucide-react";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import {
@@ -107,6 +107,7 @@ export function EnterpriseFinanceTreasuryWorkspace({ organizationId, organizatio
   const [transferPayload, setTransferPayload] = useState<{ sourceFinancialAccountId: string; targetFinancialAccountId: string; sourceAmount: string; transferDate: string } | null>(null);
   const [accountType, setAccountType] = useState("CASH");
   const [accountCurrency, setAccountCurrency] = useState("");
+  const listRequestVersion = useRef(0);
 
   const loadLookups = useCallback(async () => {
     setLookupLoading(true);
@@ -125,20 +126,40 @@ export function EnterpriseFinanceTreasuryWorkspace({ organizationId, organizatio
   }, [historyFilters, organizationId, page, search, status, tab]);
 
   const loadList = useCallback(async () => {
+    const requestVersion = ++listRequestVersion.current;
     setLoading(true); setError("");
     try {
       const payload = await requestJson(listEndpoint);
+      if (requestVersion !== listRequestVersion.current) return;
       setItems(Array.isArray(payload.items) ? payload.items as FinanceRecord[] : []);
       setPagination((payload.pagination as FinancePagination | undefined) || EMPTY_PAGINATION);
-    } catch (loadError) { setItems([]); setError(safeFinanceError(loadError, t("loadError"), locale)); }
-    finally { setLoading(false); }
+    } catch (loadError) {
+      if (requestVersion !== listRequestVersion.current) return;
+      setItems([]);
+      setPagination(EMPTY_PAGINATION);
+      setError(safeFinanceError(loadError, t("loadError"), locale));
+    } finally {
+      if (requestVersion === listRequestVersion.current) setLoading(false);
+    }
   }, [listEndpoint, t, locale]);
 
   useEffect(() => { void loadLookups(); }, [loadLookups, refreshKey]);
   useEffect(() => { void loadList(); }, [loadList, refreshKey]);
 
   const refresh = useCallback((message?: string) => { if (message) setNotice(message); setRefreshKey((value) => value + 1); }, []);
-  const changeTab = (next: TreasuryTab) => { setTab(next); setPage(1); setSearch(""); setStatus(""); setHistoryFilters(EMPTY_HISTORY_FILTERS); setSelected(null); };
+  const changeTab = (next: TreasuryTab) => {
+    if (next === tab) return;
+    listRequestVersion.current += 1;
+    setLoading(true);
+    setItems([]);
+    setPagination(EMPTY_PAGINATION);
+    setTab(next);
+    setPage(1);
+    setSearch("");
+    setStatus("");
+    setHistoryFilters(EMPTY_HISTORY_FILTERS);
+    setSelected(null);
+  };
   const accounts = lookups.accounts;
   const accountChoices = accounts.map((account) => ({ id: account.id, label: `${account.code} · ${account.name} · ${financeEnumLabel(account.accountType, locale)} · ${account.currencyCode}` }));
   const currencies = lookups.currencies.map((currency) => ({ id: currency.code, label: `${currency.code} · ${currency.name}` }));
@@ -195,7 +216,7 @@ export function EnterpriseFinanceTreasuryWorkspace({ organizationId, organizatio
 
   async function prepareTransfer() {
     if (busy || !transferPayload) return; setBusy(true); setError("");
-    try { await requestJson(`/api/enterprise/${organizationId}/account-transfers`, "POST", transferPayload); setTransferDialog(false); setTransferPreview(null); setTransferPayload(null); setTab("transfers"); setPage(1); refresh(t("transferCreated")); }
+    try { await requestJson(`/api/enterprise/${organizationId}/account-transfers`, "POST", transferPayload); setTransferDialog(false); setTransferPreview(null); setTransferPayload(null); changeTab("transfers"); refresh(t("transferCreated")); }
     catch (mutationError) { setError(safeFinanceError(mutationError, t("operationError"), locale)); }
     finally { setBusy(false); }
   }
