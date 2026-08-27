@@ -5,6 +5,7 @@ import { listEnterpriseApprovalCandidates } from "@/lib/enterprise/approval-assi
 import { enterpriseApprovalModuleForTarget, enterpriseApprovalTargetDeepLink } from "@/lib/enterprise/approval-targets";
 import { enterpriseApprovalVisibilityWhere, getEnterpriseCoreV2Access } from "@/lib/enterprise/core-v2/access";
 import { prisma } from "@/lib/prisma";
+import { supportsProfessionalApprovalCorrection } from "@/lib/standard-work-coordination/approval-coordination";
 
 type Params = { params: Promise<{ organizationId: string; id: string }> };
 
@@ -35,14 +36,15 @@ export async function GET(req: Request, { params }: Params) {
   const isRequester = approval.requestedByUserId === session.userId;
   const selfApprovalAllowed = candidateResult.candidates.some((candidate) => candidate.userId === session.userId && candidate.selfApprovalOverride);
   const canDecide = approval.status === "PENDING" && isAssignedValidator && (!isRequester || selfApprovalAllowed);
+  const correctionSupported = supportsProfessionalApprovalCorrection(approval.targetEntityType);
   const capabilities = {
     canView: true,
     canComment: true,
     canApprove: canDecide,
     canReject: canDecide,
-    canRequestCorrection: canDecide,
+    canRequestCorrection: correctionSupported && canDecide,
     canDelegate: approval.status === "PENDING" && Boolean(moduleCode) && delegates.length > 0 && (access.canManage || isAssignedValidator),
-    canResubmit: approval.status === "CORRECTION_REQUESTED" && (access.canManage || isRequester),
+    canResubmit: correctionSupported && approval.status === "CORRECTION_REQUESTED" && (access.canManage || isRequester),
   };
 
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, approvalId: id, domain: "approval-coordination", moduleCode } });
