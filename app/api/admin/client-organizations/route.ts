@@ -5,6 +5,12 @@ import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { parseInitialAdminInvitation } from "@/lib/console/client-organization-create-invitation";
 import { CONSOLE_CAPABILITIES } from "@/lib/console/console-capabilities";
 import { applyCanonicalSectorTemplateToOrganization } from "@/lib/enterprise/sector-template-application";
+import { RETAIL_SECTOR_CODE } from "@/lib/enterprise/retail/constants";
+import { syncRetailOnboardingProvisioning } from "@/lib/enterprise/retail/provisioning";
+import {
+  getRetailBusinessSubtype,
+  normalizeRetailBusinessSubtypeCode,
+} from "@/lib/enterprise/retail/subtype-registry";
 import { canManageClientOrganizations, isDtscInternalSession } from "@/lib/organizations";
 import { notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
@@ -48,6 +54,20 @@ export async function POST(req: Request) {
   }
 
   const rawBody = await req.json().catch(() => null);
+  const rawSubtype = rawBody && typeof rawBody === "object" && typeof (rawBody as Record<string, unknown>).businessSubtypeCode === "string"
+    ? String((rawBody as Record<string, unknown>).businessSubtypeCode).trim()
+    : "";
+  const normalizedSubtype = normalizeRetailBusinessSubtypeCode(rawSubtype);
+  if (rawSubtype && !getRetailBusinessSubtype(normalizedSubtype)) {
+    await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt, metadata: { action: "client_organization_invalid_retail_subtype" } });
+    return NextResponse.json({
+      error: "Invalid retail subtype",
+      reasonCode: "RETAIL_BUSINESS_SUBTYPE_INVALID",
+      field: "businessSubtypeCode",
+      message: "Le sous-type Commerce retail sélectionné n’est pas disponible. Choisissez une option proposée par DTSC Platform.",
+    }, { status: 400 });
+  }
+
   const parsed = enterpriseOrganizationCreateSchema.safeParse(rawBody);
   const parsedAdminInvitation = parseInitialAdminInvitation(rawBody);
   if (!parsed.success) {
@@ -97,6 +117,16 @@ export async function POST(req: Request) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Invalid sector", message: "Le secteur d'activité sélectionné est introuvable ou inactif." }, { status: 400 });
   }
+  if (rawSubtype && sector?.code !== RETAIL_SECTOR_CODE) {
+    await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt, metadata: { action: "client_organization_retail_subtype_without_retail_sector" } });
+    return NextResponse.json({
+      error: "Retail subtype not applicable",
+      reasonCode: "RETAIL_BUSINESS_SUBTYPE_SECTOR_MISMATCH",
+      field: "businessSubtypeCode",
+      message: "Le sous-type Commerce retail ne peut être utilisé qu’avec le secteur Commerce retail.",
+    }, { status: 400 });
+  }
+  const businessSubtypeCode = sector?.code === RETAIL_SECTOR_CODE ? normalizedSubtype : null;
 
   const organization = await prisma.$transaction(async (tx) => {
     const created = await tx.organization.create({
@@ -177,6 +207,16 @@ export async function POST(req: Request) {
       sectorId: sector.id,
       actorUserId: session.userId,
       mode: "merge",
+      businessSubtypeCode,
+    });
+  } else if (sector?.code === RETAIL_SECTOR_CODE) {
+    // Persist an explicit subtype decision even when DTSC postpones template
+    // application. `null` is meaningful here: it means generic Retail.
+    await syncRetailOnboardingProvisioning({
+      organizationId: organization.id,
+      sectorCode: sector.code,
+      actorUserId: session.userId,
+      businessSubtypeCode,
     });
   }
 
@@ -191,9 +231,11 @@ export async function POST(req: Request) {
       adminInvitationReason: data.adminUserId ? adminReason : null,
       planId: data.planId || null,
       sectorId: sector?.id || null,
+      sectorCode: sector?.code || null,
+      businessSubtypeCode,
     },
     request: req,
   });
   await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt });
-  return NextResponse.json({ ok: true, organization }, { status: 201 });
+  return NextResponse.json({ ok: true, organization, businessSubtypeCode }, { status: 201 });
 }

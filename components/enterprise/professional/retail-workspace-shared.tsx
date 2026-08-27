@@ -13,6 +13,7 @@ import { EmptyState } from "@/components/workspace/empty-state";
 import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
+import { notifyToast } from "@/lib/client-toast";
 import {
   customerFacingError,
   customerFacingFinancialAccountType,
@@ -309,13 +310,16 @@ export function useRetailOperationalWorkspace({
       if (!response.ok) throw new Error(body?.message || body?.error || "RETAIL_ACTION_FAILED");
       delete mutationKeys.current[action];
       setMessage(success);
+      notifyToast(success, "success");
       setRefreshKey((value) => value + 1);
       return body || {};
     } catch (caught) {
-      setMessage(customerFacingError(caught, locale, {
+      const errorMessage = customerFacingError(caught, locale, {
         fr: translateRetailWorkspace("fr", "retailActionError"),
         en: translateRetailWorkspace("en", "retailActionError"),
-      }));
+      });
+      setMessage(errorMessage);
+      notifyToast(errorMessage, "error");
       return null;
     } finally {
       setBusyAction(null);

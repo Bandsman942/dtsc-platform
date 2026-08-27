@@ -1,6 +1,12 @@
 import { Prisma } from "@prisma/client";
 import { canUseFeature } from "@/lib/billing/entitlements";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
+import { RETAIL_SECTOR_CODE } from "@/lib/enterprise/retail/constants";
+import {
+  getRetailBusinessSubtype,
+  retailSubtypeAllowsModule,
+  type RetailBusinessSubtypeCode,
+} from "@/lib/enterprise/retail/subtype-registry";
 import { prisma } from "@/lib/prisma";
 import type { SessionPayload } from "@/lib/session";
 import { requireActiveOrganizationMembership } from "@/lib/organizations";
@@ -19,6 +25,13 @@ export type SectorTemplatePreview = {
     icon: string | null;
     color: string | null;
   };
+  businessSubtype: {
+    code: string;
+    labelFr: string;
+    labelEn: string;
+    descriptionFr: string;
+    descriptionEn: string;
+  } | null;
   modules: Array<{ code: string; labelFr: string; labelEn: string; category: string; icon: string | null; isCore: boolean }>;
   positions: Array<{ code: string; labelFr: string; labelEn: string; departmentCode: string | null; isKeyPosition: boolean }>;
   departments: Array<{ code: string; labelFr: string; labelEn: string }>;
@@ -89,7 +102,10 @@ export async function listBusinessSectors() {
   });
 }
 
-export async function getSectorTemplatePreview(sectorIdOrCode: string): Promise<SectorTemplatePreview | null> {
+export async function getSectorTemplatePreview(
+  sectorIdOrCode: string,
+  options: { businessSubtypeCode?: RetailBusinessSubtypeCode | null } = {},
+): Promise<SectorTemplatePreview | null> {
   const sector = await prisma.businessSector.findFirst({
     where: {
       isActive: true,
@@ -116,6 +132,14 @@ export async function getSectorTemplatePreview(sectorIdOrCode: string): Promise<
     return null;
   }
 
+  const businessSubtype = sector.code === RETAIL_SECTOR_CODE ? getRetailBusinessSubtype(options.businessSubtypeCode) : null;
+  const modules = sector.code === RETAIL_SECTOR_CODE
+    ? template.modules.filter((templateModule) => retailSubtypeAllowsModule(templateModule.moduleCode, businessSubtype?.code || null))
+    : template.modules;
+  const activityBlocks = sector.code === RETAIL_SECTOR_CODE
+    ? template.activityBlocks.filter((block) => !block.targetModuleCode || retailSubtypeAllowsModule(block.targetModuleCode, businessSubtype?.code || null))
+    : template.activityBlocks;
+
   return {
     sector: {
       id: sector.id,
@@ -127,7 +151,14 @@ export async function getSectorTemplatePreview(sectorIdOrCode: string): Promise<
       icon: sector.icon,
       color: sector.color,
     },
-    modules: template.modules.map((templateModule) => ({
+    businessSubtype: businessSubtype ? {
+      code: businessSubtype.code,
+      labelFr: businessSubtype.labelFr,
+      labelEn: businessSubtype.labelEn,
+      descriptionFr: businessSubtype.descriptionFr,
+      descriptionEn: businessSubtype.descriptionEn,
+    } : null,
+    modules: modules.map((templateModule) => ({
       code: templateModule.moduleCode,
       labelFr: templateModule.labelFr,
       labelEn: templateModule.labelEn,
@@ -147,7 +178,7 @@ export async function getSectorTemplatePreview(sectorIdOrCode: string): Promise<
       labelFr: department.labelFr,
       labelEn: department.labelEn,
     })),
-    activityBlocks: template.activityBlocks.map((block) => ({
+    activityBlocks: activityBlocks.map((block) => ({
       code: block.blockCode,
       labelFr: block.labelFr,
       labelEn: block.labelEn,
@@ -239,11 +270,14 @@ export async function applySectorTemplateToOrganization({
   sectorId,
   actorUserId,
   mode = "merge",
+  businessSubtypeCode,
 }: {
   organizationId: string;
   sectorId: string;
   actorUserId: string;
   mode?: ApplySectorTemplateMode;
+  /** undefined preserves legacy direct callers as Shop; null explicitly means generic Retail. */
+  businessSubtypeCode?: RetailBusinessSubtypeCode | null;
 }) {
   const sector = await prisma.businessSector.findFirst({
     where: { id: sectorId, isActive: true },
@@ -268,6 +302,24 @@ export async function applySectorTemplateToOrganization({
     throw new Error("SECTOR_TEMPLATE_NOT_FOUND");
   }
 
+  const effectiveSubtypeCode: RetailBusinessSubtypeCode | null = sector.code === RETAIL_SECTOR_CODE
+    ? (businessSubtypeCode === undefined ? "SHOP" : businessSubtypeCode)
+    : null;
+  const businessSubtype = effectiveSubtypeCode ? getRetailBusinessSubtype(effectiveSubtypeCode) : null;
+  if (effectiveSubtypeCode && !businessSubtype) {
+    throw new Error("RETAIL_BUSINESS_SUBTYPE_INVALID");
+  }
+
+  const selectedModules = sector.code === RETAIL_SECTOR_CODE
+    ? template.modules.filter((templateModule) => retailSubtypeAllowsModule(templateModule.moduleCode, effectiveSubtypeCode))
+    : template.modules;
+  const excludedModuleCodes = sector.code === RETAIL_SECTOR_CODE
+    ? template.modules.filter((templateModule) => !retailSubtypeAllowsModule(templateModule.moduleCode, effectiveSubtypeCode)).map((templateModule) => templateModule.moduleCode)
+    : [];
+  const selectedActivityBlocks = sector.code === RETAIL_SECTOR_CODE
+    ? template.activityBlocks.filter((block) => !block.targetModuleCode || retailSubtypeAllowsModule(block.targetModuleCode, effectiveSubtypeCode))
+    : template.activityBlocks;
+
   return prisma.$transaction(async (tx) => {
     const organization = await tx.organization.update({
       where: { id: organizationId },
@@ -287,6 +339,21 @@ export async function applySectorTemplateToOrganization({
       });
       await tx.enterpriseModule.updateMany({
         where: { organizationId, isEnabled: true, isCore: false, sectorId: { not: null } },
+        data: { isEnabled: false },
+      });
+    }
+
+    if (excludedModuleCodes.length) {
+      await tx.enterpriseModule.updateMany({
+        where: { organizationId, moduleCode: { in: excludedModuleCodes }, isEnabled: true },
+        data: { isEnabled: false },
+      });
+      await tx.enterpriseAdminSection.updateMany({
+        where: { organizationId, sectionCode: { in: excludedModuleCodes }, isEnabled: true },
+        data: { isEnabled: false },
+      });
+      await tx.enterpriseActivityBlock.updateMany({
+        where: { organizationId, targetModuleCode: { in: excludedModuleCodes }, isEnabled: true },
         data: { isEnabled: false },
       });
     }
@@ -321,7 +388,7 @@ export async function applySectorTemplateToOrganization({
     }
 
     const modules = [];
-    for (const templateModule of template.modules) {
+    for (const templateModule of selectedModules) {
       const isCore = templateModule.moduleCategory === "CORE";
       const savedModule = await tx.enterpriseModule.upsert({
         where: { organizationId_moduleCode: { organizationId, moduleCode: templateModule.moduleCode } },
@@ -422,7 +489,7 @@ export async function applySectorTemplateToOrganization({
       });
     }
 
-    for (const block of template.activityBlocks) {
+    for (const block of selectedActivityBlocks) {
       await tx.enterpriseActivityBlock.upsert({
         where: { organizationId_blockCode: { organizationId, blockCode: block.blockCode } },
         update: {
@@ -491,10 +558,11 @@ export async function applySectorTemplateToOrganization({
         metadata: {
           organizationName: organization.name,
           sectorCode: sector.code,
+          businessSubtypeCode: effectiveSubtypeCode,
           mode,
-          modules: template.modules.length,
+          modules: selectedModules.length,
           positions: template.positions.length,
-          activityBlocks: template.activityBlocks.length,
+          activityBlocks: selectedActivityBlocks.length,
         },
       },
     });
@@ -502,10 +570,11 @@ export async function applySectorTemplateToOrganization({
     return {
       organizationId,
       sectorCode: sector.code,
+      businessSubtypeCode: effectiveSubtypeCode,
       modulesCreatedOrUpdated: modules.length,
       positionsCreatedOrUpdated: template.positions.length,
       departmentsCreatedOrUpdated: template.departments.length,
-      activityBlocksCreatedOrUpdated: template.activityBlocks.length,
+      activityBlocksCreatedOrUpdated: selectedActivityBlocks.length,
       workflowsCreatedOrUpdated: template.workflows.length,
     };
   });

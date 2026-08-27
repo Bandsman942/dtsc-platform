@@ -266,6 +266,24 @@ Pour une action mobile :
 - la cible tactile reste adaptée ;
 - l'utilisateur reçoit un effet visuel au hover/focus/press lorsque le dispositif le permet.
 
+### Formulaires DTSC — contrat obligatoire
+
+Tout formulaire nouveau ou modifié doit respecter `docs/FORM_UX_CONTRACT.md`. Ce document est la référence détaillée des règles de formulaire et complète le présent contrat.
+
+Au minimum :
+
+- toute relation métier existante utilise une combobox/select de référence alimentée par la source canonique du domaine plutôt qu'un identifiant ou texte libre ;
+- les options sont bornées au contexte autorisé et toute référence client est revalidée côté serveur dans le même `organizationId`, avec membership, module, entitlement, permission et statut applicables ;
+- le formulaire contient uniquement les champs utiles à l'action et fournit une aide contextuelle lorsque le champ est ambigu ou dépend d'une configuration ;
+- toute action visible possède un état perceptible `pressed/loading/disabled` et un résultat explicite ; aucun bouton placeholder ou muet n'est autorisé ;
+- une mutation réussie produit un toast global de succès au premier plan, puis seulement après succès backend confirmé le formulaire peut être fermé ou réinitialisé ;
+- une mutation en erreur produit un toast global d'erreur métier, conserve le formulaire ouvert et préserve les valeurs saisies ; une erreur locale complète le toast lorsqu'elle aide à corriger le champ ou la précondition ;
+- les toasts doivent rester au-dessus des dialogs, sheets/drawers et overlays applicatifs ; ne pas créer un système de toast local concurrent si le provider global répond au besoin ;
+- aucun message visible ne doit exposer Prisma, route API, stack trace, enum brut, provider error brute, `organizationId`, payload ou jargon interne lorsqu'un équivalent métier existe ;
+- mobile, clavier, safe areas, accessibilité, FR/EN et clair/sombre sont vérifiés selon les contrats applicables.
+
+Une PR qui touche un formulaire doit inclure dans sa QA ciblée au moins un scénario de succès, un scénario d'échec conservant la saisie et, lorsqu'une référence tenant-scoped existe, un rejet serveur de référence invalide/hors tenant.
+
 ### Langage client humain
 
 Tout texte visible par un client parle de son métier, de son action ou de la conséquence utile. Les détails d'implémentation restent dans les logs/diagnostics protégés.
@@ -441,6 +459,7 @@ Une limitation d'outil ou de réseau n'autorise pas à déclarer une étape réu
 - [ ] Toute dette reportée est liée à une Issue.
 - [ ] J'ai rempli la matrice de preuves sans présenter une inspection comme une exécution.
 - [ ] Si UI : j'ai vérifié i18n, tailles mobiles, actions, dark mode et accessibilité applicables.
+- [ ] Si formulaire : j'ai vérifié `docs/FORM_UX_CONTRACT.md`, succès/échec, conservation de la saisie, feedback et références tenant-scoped applicables.
 - [ ] Si shell/global : j'ai vérifié le coût des requêtes/pollings/subscriptions ajoutés.
 - [ ] La PR ferme une Issue réelle.
 - [ ] Les labels et le milestone sont corrects.

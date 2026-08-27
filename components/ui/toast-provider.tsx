@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, Info, X, XCircle, type LucideIcon } from "lucide-react";
+import { useAppLocale } from "@/components/i18n/locale-provider";
 import { DTSC_TOAST_EVENT, type ToastPayload, type ToastTone } from "@/lib/client-toast";
 import { cn } from "@/lib/utils";
 
@@ -12,34 +13,49 @@ type ToastItem = Required<Pick<ToastPayload, "description" | "tone">> & {
   expiresAt: number;
 };
 
-const toneConfig: Record<ToastTone, { icon: LucideIcon; className: string; label: string }> = {
+const toneConfig: Record<ToastTone, { icon: LucideIcon; className: string }> = {
   success: {
     icon: CheckCircle2,
     className: "border-emerald-300/60 bg-emerald-500/14 text-emerald-900 dark:text-emerald-50",
-    label: "Succès",
   },
   error: {
     icon: XCircle,
     className: "border-red-300/70 bg-red-500/14 text-red-950 dark:text-red-50",
-    label: "Erreur",
   },
   warning: {
     icon: AlertTriangle,
     className: "border-amber-300/70 bg-amber-400/16 text-amber-950 dark:text-amber-50",
-    label: "Attention",
   },
   info: {
     icon: Info,
     className: "border-cyan-300/60 bg-cyan-400/14 text-cyan-950 dark:text-cyan-50",
-    label: "Information",
   },
 };
+
+const toastCopy = {
+  fr: {
+    success: "Succès",
+    error: "Erreur",
+    warning: "Attention",
+    info: "Information",
+    close: "Fermer la notification",
+  },
+  en: {
+    success: "Success",
+    error: "Error",
+    warning: "Attention",
+    info: "Information",
+    close: "Dismiss notification",
+  },
+} as const;
 
 function toastId() {
   return `toast-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 export function ToastProvider() {
+  const locale = useAppLocale() === "en" ? "en" : "fr";
+  const copy = toastCopy[locale];
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
   const dismiss = useCallback((id: string) => {
@@ -107,15 +123,15 @@ export function ToastProvider() {
                 <Icon className="h-4 w-4" />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="break-words text-sm font-black text-dtsc-ink dark:text-white">{toast.title || config.label}</p>
+                <p className="break-words text-sm font-black text-dtsc-ink dark:text-white">{toast.title || copy[toast.tone]}</p>
                 <p className="mt-1 break-words text-sm font-semibold leading-6 text-dtsc-muted dark:text-slate-200">{toast.description}</p>
               </div>
               <button
                 type="button"
                 onClick={() => dismiss(toast.id)}
                 className="rounded-xl p-1 text-dtsc-muted transition hover:bg-dtsc-soft hover:text-dtsc-ink focus:outline-none focus:ring-2 focus:ring-cyan-300"
-                aria-label="Fermer la notification"
-                title="Fermer la notification"
+                aria-label={copy.close}
+                title={copy.close}
               >
                 <X className="h-4 w-4" />
               </button>

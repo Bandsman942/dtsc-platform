@@ -12,6 +12,8 @@ import { ListControls } from "@/components/ui/list-controls";
 import { ReferenceCombobox } from "@/components/ui/reference-combobox";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import { translateClientOrganizations, type ClientOrganizationsLocale } from "@/lib/console/client-organizations-i18n";
+import { RETAIL_SECTOR_CODE } from "@/lib/enterprise/retail/constants";
+import { listRetailBusinessSubtypes } from "@/lib/enterprise/retail/subtype-registry";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 
 type ClientOrganization = {
@@ -55,6 +57,7 @@ type BusinessSectorOption = {
 };
 type TemplatePreview = {
   sector: { id: string; code: string; labelFr: string; labelEn: string; descriptionFr: string | null };
+  businessSubtype?: { code: string; labelFr: string; labelEn: string; descriptionFr: string; descriptionEn: string } | null;
   modules: Array<{ code: string; labelFr: string; category: string; isCore: boolean }>;
   positions: Array<{ code: string; labelFr: string; isKeyPosition: boolean }>;
   departments: Array<{ code: string; labelFr: string }>;
@@ -69,6 +72,7 @@ type OrganizationUpdateBody = {
 type OrganizationUpdateResult = { ok: boolean; message: string };
 
 const ADMIN_ROLES = new Set(["ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE", "OWNER"]);
+const RETAIL_SUBTYPE_OPTIONS = listRetailBusinessSubtypes();
 
 export function ClientOrganizationsPanel({
   organizations,
@@ -85,6 +89,7 @@ export function ClientOrganizationsPanel({
   const [message, setMessage] = useState("");
   const [locale, setLocale] = useState<ClientOrganizationsLocale>("fr");
   const [selectedSectorId, setSelectedSectorId] = useState("");
+  const [selectedRetailSubtypeCode, setSelectedRetailSubtypeCode] = useState("");
   const [sectorQuery, setSectorQuery] = useState("");
   const [templatePreview, setTemplatePreview] = useState<TemplatePreview | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -100,6 +105,8 @@ export function ClientOrganizationsPanel({
     getSearchText: (organization) => `${organization.name} ${organization.slug || ""} ${organization.industry || ""} ${organization.country || ""} ${organization.status}`,
   });
   const activeUsers = useMemo(() => users.filter((user) => user.role !== "CLIENT" || user.email), [users]);
+  const selectedSector = useMemo(() => sectors.find((sector) => sector.id === selectedSectorId) || null, [sectors, selectedSectorId]);
+  const isRetailSector = selectedSector?.code === RETAIL_SECTOR_CODE;
   const filteredSectors = useMemo(() => {
     const query = sectorQuery.trim().toLowerCase();
     if (!query) {
@@ -119,7 +126,12 @@ export function ClientOrganizationsPanel({
       setTemplatePreview(null);
       return;
     }
-    fetch(`/api/admin/sector-templates?sectorId=${encodeURIComponent(selectedSectorId)}`)
+    const params = new URLSearchParams({ sectorId: selectedSectorId });
+    if (isRetailSector) {
+      // Empty is intentional and means the generic COMMERCE_RETAIL template.
+      params.set("businessSubtypeCode", selectedRetailSubtypeCode);
+    }
+    fetch(`/api/admin/sector-templates?${params.toString()}`)
       .then((response) => response.ok ? response.json() : null)
       .then((body: { preview?: TemplatePreview } | null) => {
         if (!cancelled) {
@@ -134,16 +146,24 @@ export function ClientOrganizationsPanel({
     return () => {
       cancelled = true;
     };
-  }, [selectedSectorId]);
+  }, [isRetailSector, selectedRetailSubtypeCode, selectedSectorId]);
 
   function resetCreateAdminInvitation() {
     setCreateAdminUserId("");
     setCreateAdminReason("");
   }
 
+  function resetCreateClassification() {
+    setSelectedSectorId("");
+    setSelectedRetailSubtypeCode("");
+    setSectorQuery("");
+    setTemplatePreview(null);
+  }
+
   function closeCreateDialog() {
     setCreateOpen(false);
     resetCreateAdminInvitation();
+    resetCreateClassification();
   }
 
   async function createOrganization(event: FormEvent<HTMLFormElement>) {
@@ -162,6 +182,9 @@ export function ClientOrganizationsPanel({
       delete payload.adminUserId;
       delete payload.adminReason;
     }
+    if (!isRetailSector) {
+      delete payload.businessSubtypeCode;
+    }
     const response = await fetch("/api/admin/client-organizations", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -173,10 +196,9 @@ export function ClientOrganizationsPanel({
       : resolveUpdateError(body, response.status));
     if (response.ok) {
       event.currentTarget.reset();
-      closeCreateDialog();
-      setSelectedSectorId("");
-      setSectorQuery("");
-      setTemplatePreview(null);
+      setCreateOpen(false);
+      resetCreateAdminInvitation();
+      resetCreateClassification();
       router.refresh();
     }
   }
@@ -186,6 +208,7 @@ export function ClientOrganizationsPanel({
     if (body?.reasonCode === "ADMIN_INVITATION_ALREADY_PENDING") return t("adminInvitationAlreadyPending");
     if (body?.reasonCode === "ADMIN_TARGET_PRIVILEGED") return t("adminTargetPrivileged");
     if (body?.reasonCode === "VALIDATION_ERROR" && (body.field === "reason" || body.field === "adminReason")) return t("adminReasonRequired");
+    if (body?.reasonCode === "RETAIL_BUSINESS_SUBTYPE_INVALID" || body?.reasonCode === "RETAIL_BUSINESS_SUBTYPE_SECTOR_MISMATCH") return body.message || t("invalidForm");
     if (body?.reasonCode === "VALIDATION_ERROR" || body?.error === "Invalid payload" || responseStatus === 400) return body?.message || t("invalidForm");
     return body?.message || t("actionImpossible");
   }
@@ -305,7 +328,7 @@ export function ClientOrganizationsPanel({
             <h3 className="font-black text-dtsc-ink">Nouvelle entreprise cliente</h3>
             <p className="mt-1 text-sm text-dtsc-muted">Créez l&apos;organisation, son secteur, son administrateur initial et son plan.</p>
           </div>
-          <Button type="button" onClick={() => { resetCreateAdminInvitation(); setCreateOpen(true); }} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
+          <Button type="button" onClick={() => { resetCreateAdminInvitation(); resetCreateClassification(); setCreateOpen(true); }} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
             <Building2 className="h-4 w-4" />
             Créer l&apos;entreprise cliente
           </Button>
@@ -328,6 +351,7 @@ export function ClientOrganizationsPanel({
               onChange={(event) => {
                 setSectorQuery(event.currentTarget.value);
                 setSelectedSectorId("");
+                setSelectedRetailSubtypeCode("");
               }}
               placeholder="Choisir un secteur d'activité"
               aria-label="Secteur d'activité"
@@ -343,6 +367,7 @@ export function ClientOrganizationsPanel({
                       onClick={() => {
                         setSelectedSectorId(sector.id);
                         setSectorQuery(sector.labelFr);
+                        if (sector.code !== RETAIL_SECTOR_CODE) setSelectedRetailSubtypeCode("");
                       }}
                       className={`flex w-full min-w-0 items-start gap-3 rounded-xl px-3 py-2 text-left transition ${active ? "bg-cyan-400/18 text-cyan-600" : "text-dtsc-ink hover:bg-dtsc-soft"}`}
                     >
@@ -358,6 +383,36 @@ export function ClientOrganizationsPanel({
             )}
           </div>
         </FormField>
+
+        {isRetailSector ? (
+          <section className="grid min-w-0 gap-3 rounded-2xl border border-cyan-300/30 bg-cyan-400/10 p-4 md:col-span-2 xl:col-span-3">
+            <FormField
+              label={locale === "en" ? "Retail subtype" : "Sous-type de commerce retail"}
+              hint={locale === "en"
+                ? "Leave empty for the general Retail template. Selecting a subtype adds only the modules registered for that business."
+                : "Laissez vide pour le template Commerce retail général. Un sous-type ajoute uniquement les modules enregistrés pour ce métier."}
+            >
+              <ReferenceCombobox
+                key={`retail-subtype-${selectedSectorId}`}
+                name="businessSubtypeCode"
+                options={RETAIL_SUBTYPE_OPTIONS.map((subtype) => ({ id: subtype.code, label: locale === "en" ? subtype.labelEn : subtype.labelFr }))}
+                allowCustom={false}
+                emptyLabel={locale === "en" ? "No subtype — General retail" : "Aucun sous-type — Commerce retail général"}
+                onValueChange={setSelectedRetailSubtypeCode}
+              />
+            </FormField>
+            <p className="text-sm font-semibold leading-6 text-dtsc-muted">
+              {selectedRetailSubtypeCode
+                ? (locale === "en"
+                    ? "The general Retail foundation will be combined with the selected subtype modules."
+                    : "Le socle Commerce retail général sera combiné avec les modules du sous-type sélectionné.")
+                : (locale === "en"
+                    ? "Only the generic Retail foundation will be proposed; Shop-specific modules are excluded."
+                    : "Seul le socle Commerce retail général sera proposé ; les modules spécifiques Shop sont exclus.")}
+            </p>
+          </section>
+        ) : null}
+
         <FormField label="Pays" hint="Pays principal de l'entreprise."><Input name="country" placeholder="Pays" /></FormField>
         <FormField label="Ville" hint="Ville ou zone principale."><Input name="city" placeholder="Ville" /></FormField>
         <FormField label="Email principal" hint="Adresse administrative de contact."><Input name="email" type="email" placeholder="Email principal" /></FormField>
@@ -422,8 +477,13 @@ export function ClientOrganizationsPanel({
             <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">Aperçu du modèle sectoriel</p>
-                <h3 className="mt-1 break-words text-lg font-black text-dtsc-ink">{templatePreview.sector.labelFr}</h3>
-                <p className="mt-1 max-w-3xl break-words text-sm text-dtsc-muted">{templatePreview.sector.descriptionFr}</p>
+                <h3 className="mt-1 break-words text-lg font-black text-dtsc-ink">
+                  {templatePreview.sector.labelFr}
+                  {isRetailSector ? ` · ${templatePreview.businessSubtype?.labelFr || "Retail général"}` : ""}
+                </h3>
+                <p className="mt-1 max-w-3xl break-words text-sm text-dtsc-muted">
+                  {templatePreview.businessSubtype?.descriptionFr || templatePreview.sector.descriptionFr}
+                </p>
               </div>
               <label className="flex items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-xs font-black text-dtsc-ink">
                 <input type="checkbox" name="applySectorTemplate" value="true" className="h-4 w-4 accent-cyan-500" />
