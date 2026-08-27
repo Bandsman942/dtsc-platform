@@ -43,7 +43,7 @@ export async function GET(req: Request, { params }: Params) {
     canApprove: canDecide,
     canReject: canDecide,
     canRequestCorrection: correctionSupported && canDecide,
-    canDelegate: approval.status === "PENDING" && Boolean(moduleCode) && delegates.length > 0 && (access.canManage || isAssignedValidator),
+    canDelegate: approval.status === "PENDING" && Boolean(moduleCode) && delegates.length > 0 && (access.canManage || (isAssignedValidator && !isRequester)),
     canResubmit: correctionSupported && approval.status === "CORRECTION_REQUESTED" && (access.canManage || isRequester),
   };
 
