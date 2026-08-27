@@ -123,17 +123,24 @@ test.describe.serial("ERP cross-module Finance acceptance", () => {
     authenticatedPage.on("pageerror", capturePageError);
     try {
       await authenticatedPage.goto(`${baseUrl}/enterprise-modules/FINANCE_TREASURY`);
-      await expect(authenticatedPage.getByText(accountName)).toBeVisible();
+      const accountSearch = authenticatedPage.getByPlaceholder(/Rechercher un compte|Search an account/i);
+      await expect(accountSearch).toBeVisible();
+      await accountSearch.fill(accountName);
+      await expect(authenticatedPage.getByText(accountName, { exact: true })).toBeVisible();
 
       const historyTab = authenticatedPage.getByRole("button", { name: /Historique|History/i });
       const transfersTab = authenticatedPage.getByRole("button", { name: /Transferts|Transfers/i });
+      const firstHistoryResponse = authenticatedPage.waitForResponse((response) => response.url().includes("/treasury-history?") && response.request().method() === "GET");
       await historyTab.click();
+      expect((await firstHistoryResponse).ok()).toBeTruthy();
       await expect(historyTab).toHaveAttribute("aria-pressed", "true");
       await expect(authenticatedPage.getByText("Application error: a client-side exception has occurred")).toHaveCount(0);
 
       await transfersTab.click();
       await expect(transfersTab).toHaveAttribute("aria-pressed", "true");
+      const secondHistoryResponse = authenticatedPage.waitForResponse((response) => response.url().includes("/treasury-history?") && response.request().method() === "GET");
       await historyTab.click();
+      expect((await secondHistoryResponse).ok()).toBeTruthy();
       await expect(historyTab).toHaveAttribute("aria-pressed", "true");
       await expect(authenticatedPage.getByText("Application error: a client-side exception has occurred")).toHaveCount(0);
       expect(pageErrors).toEqual([]);
