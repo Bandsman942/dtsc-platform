@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
+import { listEnterpriseApprovalCandidates } from "@/lib/enterprise/approval-assignment";
+import { enterpriseApprovalModuleForTarget, enterpriseApprovalTargetDeepLink } from "@/lib/enterprise/approval-targets";
 import { enterpriseApprovalVisibilityWhere, getEnterpriseCoreV2Access } from "@/lib/enterprise/core-v2/access";
 import { prisma } from "@/lib/prisma";
-import { workCoordinationDeepLink } from "@/lib/standard-work-coordination/deep-links";
 
 type Params = { params: Promise<{ organizationId: string; id: string }> };
 
@@ -19,43 +20,39 @@ export async function GET(req: Request, { params }: Params) {
   });
   if (!approval) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
 
-  const [versions, decisions, comments, members] = await Promise.all([
+  const [versions, decisions, comments] = await Promise.all([
     prisma.enterpriseApprovalSubmissionVersion.findMany({ where: { organizationId, approvalId: id }, orderBy: { versionNumber: "desc" }, take: 100 }),
     prisma.enterpriseApprovalDecision.findMany({ where: { organizationId, approvalId: id }, orderBy: { createdAt: "desc" }, take: 100 }),
     prisma.enterpriseOperationalComment.findMany({ where: { organizationId, entityType: "EnterpriseApproval", entityId: id, deletedAt: null }, orderBy: { createdAt: "asc" }, take: 300 }),
-    prisma.organizationMember.findMany({ where: { organizationId, status: "ACTIVE", removedAt: null, userId: { not: approval.requestedByUserId } }, select: { userId: true, role: true, user: { select: { name: true, email: true } } }, orderBy: { user: { name: "asc" } }, take: 300 }),
   ]);
 
+  const moduleCode = enterpriseApprovalModuleForTarget(approval.targetEntityType);
+  const candidateResult = moduleCode && approval.status === "PENDING"
+    ? await listEnterpriseApprovalCandidates({ organizationId, requesterUserId: approval.requestedByUserId, moduleCode })
+    : { candidates: [], selfApprovalOverrideAvailable: false };
+  const delegates = candidateResult.candidates.filter((candidate) => candidate.userId !== approval.approverUserId);
   const isAssignedValidator = approval.approverUserId === session.userId;
   const isRequester = approval.requestedByUserId === session.userId;
-  const canDecide = approval.status === "PENDING" && (access.canManage || isAssignedValidator) && (access.canManage || !isRequester);
+  const selfApprovalAllowed = candidateResult.candidates.some((candidate) => candidate.userId === session.userId && candidate.selfApprovalOverride);
+  const canDecide = approval.status === "PENDING" && isAssignedValidator && (!isRequester || selfApprovalAllowed);
   const capabilities = {
     canView: true,
     canComment: true,
     canApprove: canDecide,
     canReject: canDecide,
     canRequestCorrection: canDecide,
-    canDelegate: approval.status === "PENDING" && (access.canManage || isAssignedValidator),
+    canDelegate: approval.status === "PENDING" && Boolean(moduleCode) && delegates.length > 0 && (access.canManage || isAssignedValidator),
     canResubmit: approval.status === "CORRECTION_REQUESTED" && (access.canManage || isRequester),
   };
 
-  await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, approvalId: id, domain: "approval-coordination" } });
+  await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, approvalId: id, domain: "approval-coordination", moduleCode } });
   return NextResponse.json({
     approval,
     versions,
     decisions,
     comments,
-    delegates: members.map((member) => ({ id: member.userId, label: `${member.user.name} · ${member.role}`, email: member.user.email })),
-    sourceDeepLink: approvalSourceDeepLink(approval.targetEntityType, approval.targetEntityId),
+    delegates: delegates.map((candidate) => ({ id: candidate.userId, label: candidate.positionTitle ? `${candidate.name} · ${candidate.positionTitle}` : candidate.name, email: candidate.email })),
+    sourceDeepLink: enterpriseApprovalTargetDeepLink(approval.targetEntityType, approval.targetEntityId, approval.id),
     capabilities,
   });
-}
-
-function approvalSourceDeepLink(entityType: string, entityId: string) {
-  if (entityType === "EnterpriseTask") return workCoordinationDeepLink("TASK", entityId);
-  if (entityType === "EnterpriseRequest") return workCoordinationDeepLink("REQUEST", entityId);
-  if (entityType === "EnterpriseMeeting") return workCoordinationDeepLink("MEETING", entityId);
-  if (entityType === "EnterprisePurchase") return `/enterprise-modules/SUPPLIERS_PURCHASES?purchase=${encodeURIComponent(entityId)}`;
-  if (entityType === "EnterpriseBudget" || entityType === "EnterpriseExpense") return `/enterprise-modules/FINANCE_BUDGETS?object=${encodeURIComponent(entityId)}`;
-  return `/enterprise-modules/QUALITY_PHARMACOVIGILANCE?incident=${encodeURIComponent(entityId)}`;
 }
