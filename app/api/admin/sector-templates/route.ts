@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
 import { getSectorTemplatePreview } from "@/lib/enterprise-sector-templates";
+import {
+  getRetailBusinessSubtype,
+  normalizeRetailBusinessSubtypeCode,
+} from "@/lib/enterprise/retail/subtype-registry";
 import { canManageClientOrganizations } from "@/lib/organizations";
 
 export async function GET(req: Request) {
@@ -22,7 +26,19 @@ export async function GET(req: Request) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Missing sector" }, { status: 400 });
   }
-  const preview = await getSectorTemplatePreview(sectorId);
+
+  const requestedSubtype = searchParams.get("businessSubtypeCode")?.trim() || "";
+  const businessSubtypeCode = normalizeRetailBusinessSubtypeCode(requestedSubtype);
+  if (requestedSubtype && !getRetailBusinessSubtype(businessSubtypeCode)) {
+    await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
+    return NextResponse.json({
+      error: "Invalid retail subtype",
+      message: "Le sous-type Commerce retail sélectionné n’est pas disponible.",
+      reasonCode: "RETAIL_BUSINESS_SUBTYPE_INVALID",
+    }, { status: 400 });
+  }
+
+  const preview = await getSectorTemplatePreview(sectorId, { businessSubtypeCode });
   if (!preview) {
     await writeApiLog({ request: req, statusCode: 404, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Not found" }, { status: 404 });
