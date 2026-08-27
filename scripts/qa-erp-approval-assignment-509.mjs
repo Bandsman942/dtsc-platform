@@ -84,7 +84,8 @@ expect(has(approvalActions, "decideEnterprisePayrollRun"), "Centre des actions d
 expect(has(approvalActions, "validateDelegationCandidate"), "délégation revalidée côté serveur avant persistance");
 expect(has(approvalActions, "assertEnterpriseApprovalCandidate"), "délégation utilise le même contrat RBAC que l’affectation initiale");
 expect(has(approvalActions, "enterpriseApprovalModuleForTarget"), "délégation résout le module à partir du type métier canonique");
-expect(has(bridge, "MODULE_BY_TARGET"), "bridge générique mappe explicitement les familles métier");
+expect(has(bridge, "enterpriseApprovalModuleForTarget"), "bridge générique réutilise le registre canonique des modules de validation");
+expect(!has(bridge, "MODULE_BY_TARGET"), "bridge générique ne maintient plus une seconde table de correspondance des modules");
 
 expect(has(coordinationRoute, "listEnterpriseApprovalCandidates"), "coordination ne propose que des délégués éligibles côté backend");
 expect(has(coordinationRoute, "candidate.userId !== approval.requestedByUserId"), "coordination ne transforme pas la délégation en auto-validation implicite");
