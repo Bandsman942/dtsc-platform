@@ -2,6 +2,19 @@ import { z } from "zod";
 
 const permissionCode = z.string().trim().min(3).max(160).regex(/^[a-z0-9._:-]+$/i);
 const moduleCode = z.string().trim().min(2).max(120).regex(/^[A-Z0-9_]+$/);
+export const enterpriseCapabilityActionSchema = z.enum(["read", "submit", "write", "approve", "manage"]);
+export const enterpriseGuidedCapabilitySchema = z.object({
+  moduleCode,
+  actions: z.array(enterpriseCapabilityActionSchema).min(1).max(5),
+});
+
+export const enterpriseOrganizationGuidedRoleSchema = z.object({
+  locale: z.enum(["fr", "en"]).default("fr"),
+  label: z.string().trim().min(2).max(160),
+  description: z.string().trim().max(1200).optional().or(z.literal("")),
+  capabilities: z.array(enterpriseGuidedCapabilitySchema).min(1).max(200),
+  isActive: z.boolean().default(true),
+});
 
 export const enterpriseOrganizationRoleSchema = z.object({
   code: z.string().trim().min(2).max(80).regex(/^[A-Z0-9_]+$/),
@@ -44,5 +57,5 @@ export const enterpriseSecurityPolicySchema = z.object({
 export const enterprisePermissionSimulationSchema = z.object({
   userId: z.string().trim().min(1).max(180),
   moduleCode,
-  action: z.enum(["read", "submit", "write", "manage"]),
+  action: enterpriseCapabilityActionSchema,
 });
