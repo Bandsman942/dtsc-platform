@@ -21,11 +21,13 @@ import {
   type RetailMutation,
 } from "@/components/enterprise/professional/retail-workspace-shared";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { EmptyState } from "@/components/workspace/empty-state";
 import { ModuleSection } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
+import { notifyToast } from "@/lib/client-toast";
 import { customerFacingError, customerFacingStatusLabel } from "@/lib/customer-facing-language";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
 import { customerFacingFeeCollectionMode, customerFacingMobileMoneyTransactionType } from "@/lib/retail-customer-language";
@@ -160,6 +162,14 @@ const COPY = {
     notConfigured: translateRetailWorkspace("fr", "mobileMoneyNotConfigured"),
     configureWallets: translateRetailWorkspace("fr", "mobileMoneyConfigureWallets"),
     transactionTill: translateRetailWorkspace("fr", "mobileMoneyTransactionTill"),
+    selectProvider: "Choisissez un opérateur Mobile Money configuré pour la devise de la caisse avant de continuer.",
+    invalidOperation: "Vérifiez la caisse, l’opérateur, le numéro client et le montant avant de prévisualiser l’opération.",
+    fxInvalid: "Choisissez deux devises différentes et saisissez un montant supérieur à zéro pour obtenir une prévisualisation.",
+    mappingRequired: "Choisissez un compte financier existant avant d’enregistrer ce portefeuille opérateur.",
+    reverseHelp: "Indiquez la raison métier de la contrepassation. La transaction originale restera dans l’historique d’audit.",
+    reverseConfirm: "Confirmer la contrepassation",
+    cancel: "Annuler",
+    reasonRequired: "Renseignez une raison de contrepassation d’au moins 3 caractères.",
   },
   en: {
     operationTitle: translateRetailWorkspace("en", "operatorMobileMoneyOperation"),
@@ -220,6 +230,14 @@ const COPY = {
     notConfigured: translateRetailWorkspace("en", "mobileMoneyNotConfigured"),
     configureWallets: translateRetailWorkspace("en", "mobileMoneyConfigureWallets"),
     transactionTill: translateRetailWorkspace("en", "mobileMoneyTransactionTill"),
+    selectProvider: "Select a Mobile Money provider configured for the till currency before continuing.",
+    invalidOperation: "Check the till, provider, customer phone and amount before reviewing the operation.",
+    fxInvalid: "Choose two different currencies and enter an amount greater than zero to preview the transfer.",
+    mappingRequired: "Select an existing financial account before saving this provider wallet.",
+    reverseHelp: "State the business reason for the reversal. The original transaction will remain in the audit history.",
+    reverseConfirm: "Confirm reversal",
+    cancel: "Cancel",
+    reasonRequired: "Enter a reversal reason of at least 3 characters.",
   },
 } as const;
 
@@ -230,6 +248,10 @@ function MobileMoneySelect(props: SelectHTMLAttributes<HTMLSelectElement>) {
       className={`min-h-11 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink ${props.className || ""}`}
     />
   );
+}
+
+function formError(message: string) {
+  notifyToast(message, "error");
 }
 
 export function MobileMoneyAgencyWorkspace({
@@ -255,10 +277,12 @@ export function MobileMoneyAgencyWorkspace({
       if (!response.ok || !body) throw new Error(body?.message || body?.error || "MOBILE_MONEY_CONFIGURATION_LOAD_FAILED");
       setConfiguration(body);
     } catch (error) {
-      setConfigurationError(customerFacingError(error, locale, {
+      const message = customerFacingError(error, locale, {
         fr: translateRetailWorkspace("fr", "retailActionError"),
         en: translateRetailWorkspace("en", "retailActionError"),
-      }));
+      });
+      setConfigurationError(message);
+      notifyToast(message, "error");
     } finally {
       setConfigurationBusy(false);
     }
@@ -319,6 +343,7 @@ function MobileMoneyOperations({
 }) {
   const copy = COPY[locale];
   const [pending, setPending] = useState<OperationDraft | null>(null);
+  const [operationError, setOperationError] = useState("");
   const sessions = useMemo<MobileMoneyCashSession[]>(
     () => dashboard.cashSessions || (dashboard.cashSession ? [dashboard.cashSession as MobileMoneyCashSession] : []),
     [dashboard.cashSession, dashboard.cashSessions],
@@ -352,6 +377,7 @@ function MobileMoneyOperations({
     const body = await mutate("mobile-money", `/api/enterprise/${organizationId}/retail/mobile-money`, pending, copy.operationConfirmed);
     if (body) {
       setPending(null);
+      setOperationError("");
       await reload();
     }
   }
@@ -366,6 +392,7 @@ function MobileMoneyOperations({
         onSelectSession={(sessionId) => {
           setSelectedCashSessionId(sessionId);
           setPending(null);
+          setOperationError("");
         }}
         locale={locale}
         busyAction={busyAction}
@@ -380,13 +407,30 @@ function MobileMoneyOperations({
             const form = new FormData(event.currentTarget);
             const providerCode = String(form.get("providerCode") || "");
             const provider = eligibleProviders.find((item) => item.providerCode === providerCode);
-            if (!provider || !activeCash) return;
+            const phone = normalizePhonePreview(String(form.get("customerPhone") || ""));
+            const principalAmount = Number(form.get("principalAmount") || 0);
+            if (!activeCash) {
+              setOperationError(copy.tillRequired);
+              formError(copy.tillRequired);
+              return;
+            }
+            if (!provider) {
+              setOperationError(copy.selectProvider);
+              formError(copy.selectProvider);
+              return;
+            }
+            if (!phone || !Number.isFinite(principalAmount) || principalAmount <= 0) {
+              setOperationError(copy.invalidOperation);
+              formError(copy.invalidOperation);
+              return;
+            }
+            setOperationError("");
             setPending({
               providerCode,
               transactionType: String(form.get("transactionType") || "DEPOSIT"),
-              customerPhone: normalizePhonePreview(String(form.get("customerPhone") || "")),
+              customerPhone: phone,
               currencyCode: activeCash.financialAccount.currencyCode,
-              principalAmount: Number(form.get("principalAmount") || 0),
+              principalAmount,
               customerFeeAmount: Number(form.get("customerFeeAmount") || 0),
               providerCommissionAmount: Number(form.get("providerCommissionAmount") || 0),
               feeCollectionMode: String(form.get("feeCollectionMode") || "NONE"),
@@ -431,6 +475,7 @@ function MobileMoneyOperations({
               {copy.missingWallet} <Link href="#mobile-money-wallet-configuration" className="underline">{copy.configureWallets}</Link>
             </div>
           ) : null}
+          {operationError ? <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm font-bold text-rose-700 dark:text-rose-200">{operationError}</div> : null}
           {configurationError ? <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm font-bold text-rose-700 dark:text-rose-200">{configurationError}</div> : null}
           <Button className="w-fit" disabled={Boolean(busyAction) || !activeCash || !eligibleProviders.length}>
             <Smartphone className="h-4 w-4" />{copy.review}
@@ -500,12 +545,17 @@ function MobileMoneyFxPanel({
     if (sourceCurrency !== source) setSourceCurrency(source);
     if (targetCurrency !== target) setTargetCurrency(target);
     setPreview(null);
+    setPreviewError("");
   }, [currencies, provider, providerCode, sourceCurrency, targetCurrency]);
 
   async function requestPreview(form: HTMLFormElement) {
     const data = new FormData(form);
     const sourceAmount = Number(data.get("sourceAmount") || 0);
-    if (!provider || !sourceCurrency || !targetCurrency || sourceCurrency === targetCurrency || sourceAmount <= 0) return;
+    if (!provider || !sourceCurrency || !targetCurrency || sourceCurrency === targetCurrency || sourceAmount <= 0) {
+      setPreviewError(copy.fxInvalid);
+      formError(copy.fxInvalid);
+      return;
+    }
     setPreviewBusy(true);
     setPreviewError("");
     setPreview(null);
@@ -515,8 +565,10 @@ function MobileMoneyFxPanel({
       const body = await response.json().catch(() => null) as { preview?: FxPreview; message?: string; error?: string } | null;
       if (!response.ok || !body?.preview) throw new Error(body?.message || body?.error || copy.fxMissingRate);
       setPreview(body.preview);
-    } catch {
-      setPreviewError(copy.fxMissingRate);
+    } catch (caught) {
+      const message = customerFacingError(caught, locale, { fr: copy.fxMissingRate, en: copy.fxMissingRate });
+      setPreviewError(message);
+      notifyToast(message, "error");
     } finally {
       setPreviewBusy(false);
     }
@@ -532,6 +584,7 @@ function MobileMoneyFxPanel({
     );
     if (result) {
       setPreview(null);
+      setPreviewError("");
       await reload();
     }
   }
@@ -544,18 +597,18 @@ function MobileMoneyFxPanel({
         <div className="grid gap-4">
           <form onSubmit={(event) => { event.preventDefault(); void requestPreview(event.currentTarget); }} className="grid gap-4 md:grid-cols-2">
             <Field label={copy.service}>
-              <MobileMoneySelect name="fxProviderCode" value={provider?.providerCode || ""} onChange={(event) => { setProviderCode(event.target.value); setPreview(null); }}>
+              <MobileMoneySelect name="fxProviderCode" value={provider?.providerCode || ""} onChange={(event) => { setProviderCode(event.target.value); setPreview(null); setPreviewError(""); }}>
                 {providers.map((item) => <option key={item.id} value={item.providerCode}>{item.label}</option>)}
               </MobileMoneySelect>
             </Field>
             <div className="hidden md:block" />
             <Field label={copy.sourceCurrency}>
-              <MobileMoneySelect name="sourceCurrencyCode" value={sourceCurrency} onChange={(event) => { setSourceCurrency(event.target.value); setPreview(null); }}>
+              <MobileMoneySelect name="sourceCurrencyCode" value={sourceCurrency} onChange={(event) => { setSourceCurrency(event.target.value); setPreview(null); setPreviewError(""); }}>
                 {currencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}
               </MobileMoneySelect>
             </Field>
             <Field label={copy.targetCurrency}>
-              <MobileMoneySelect name="targetCurrencyCode" value={targetCurrency} onChange={(event) => { setTargetCurrency(event.target.value); setPreview(null); }}>
+              <MobileMoneySelect name="targetCurrencyCode" value={targetCurrency} onChange={(event) => { setTargetCurrency(event.target.value); setPreview(null); setPreviewError(""); }}>
                 {currencies.filter((currency) => currency !== sourceCurrency).map((currency) => <option key={currency} value={currency}>{currency}</option>)}
               </MobileMoneySelect>
             </Field>
@@ -617,7 +670,10 @@ function MobileMoneyConfigurationPanel({
   const [extraAccount, setExtraAccount] = useState<Record<string, string>>({});
 
   async function saveMapping(provider: ProviderConfiguration, currencyCode: string, financialAccountId: string) {
-    if (!financialAccountId) return;
+    if (!financialAccountId) {
+      formError(copy.mappingRequired);
+      return;
+    }
     const body = await mutate(
       `mobile-wallet-${provider.id}-${currencyCode}`,
       `/api/enterprise/${organizationId}/retail/mobile-money/accounts`,
@@ -769,11 +825,37 @@ function MobileMoneyHistory({
 }) {
   const copy = COPY[locale];
   const items = dashboard.recent.mobileMoney || [];
-  async function reverse(id: string, revision: number) {
-    const reason = window.prompt(copy.reverseReason);
-    if (!reason?.trim()) return;
-    await mutate(`reverse-${id}`, `/api/enterprise/${organizationId}/retail/mobile-money/${id}/reverse`, { revision, reason: reason.trim() }, copy.reversed, { idempotent: false });
+  const [reverseTarget, setReverseTarget] = useState<{ id: string; revision: number; number: string } | null>(null);
+  const [reverseReason, setReverseReason] = useState("");
+  const [reverseError, setReverseError] = useState("");
+
+  function closeReverseDialog() {
+    if (reverseTarget && busyAction === `reverse-${reverseTarget.id}`) return;
+    setReverseTarget(null);
+    setReverseReason("");
+    setReverseError("");
   }
+
+  async function confirmReverse() {
+    if (!reverseTarget) return;
+    const reason = reverseReason.trim();
+    if (reason.length < 3) {
+      setReverseError(copy.reasonRequired);
+      formError(copy.reasonRequired);
+      return;
+    }
+    setReverseError("");
+    const result = await mutate(
+      `reverse-${reverseTarget.id}`,
+      `/api/enterprise/${organizationId}/retail/mobile-money/${reverseTarget.id}/reverse`,
+      { revision: reverseTarget.revision, reason },
+      copy.reversed,
+      { idempotent: false },
+    );
+    // Keep the dialog and the user's reason intact when the backend rejects the action.
+    if (result) closeReverseDialog();
+  }
+
   return (
     <div className="grid min-w-0 gap-5">
       <ModuleSection title={copy.history}>
@@ -786,13 +868,58 @@ function MobileMoneyHistory({
                 status={<StatusBadge tone={statusTone(item.status)}>{customerFacingStatusLabel(item.status, locale)}</StatusBadge>}
                 meta={`${customerFacingMobileMoneyTransactionType(item.transactionType, locale)} · ${moneyValue(item.principalAmount, item.currencyCode, locale)} · ${formatEnterpriseDate(item.occurredAt, locale)}`}
                 description={`${item.customerPhoneMasked || "—"} · ${copy.operatorReference}: ${item.externalReference || "—"}`}
-                actions={dashboard.access.canManage && item.status === "CONFIRMED" ? <Button size="sm" variant="outline" disabled={Boolean(busyAction)} onClick={() => void reverse(item.id, item.revision)}><RotateCcw className="h-4 w-4" />{copy.reverse}</Button> : undefined}
+                actions={dashboard.access.canManage && item.status === "CONFIRMED" ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={Boolean(busyAction)}
+                    onClick={() => {
+                      setReverseTarget({ id: item.id, revision: item.revision, number: item.number });
+                      setReverseReason("");
+                      setReverseError("");
+                    }}
+                  >
+                    <RotateCcw className="h-4 w-4" />{copy.reverse}
+                  </Button>
+                ) : undefined}
               />
             ))}
           </BusinessList>
         ) : <EmptyState compact title={copy.noTransaction} description={copy.noTransactionDescription} />}
       </ModuleSection>
       <RetailErpLinks moduleCode="MOBILE_MONEY_AGENCY" locale={locale} />
+
+      <Dialog
+        open={Boolean(reverseTarget)}
+        title={`${copy.reverse} · ${reverseTarget?.number || ""}`}
+        description={copy.reverseHelp}
+        onClose={closeReverseDialog}
+        className="max-w-xl"
+        footer={
+          <>
+            <Button type="button" variant="outline" disabled={Boolean(reverseTarget && busyAction === `reverse-${reverseTarget.id}`)} onClick={closeReverseDialog}>{copy.cancel}</Button>
+            <Button type="button" disabled={!reverseTarget || reverseReason.trim().length < 3 || Boolean(reverseTarget && busyAction === `reverse-${reverseTarget.id}`)} onClick={() => void confirmReverse()}>
+              <RotateCcw className="h-4 w-4" />
+              {reverseTarget && busyAction === `reverse-${reverseTarget.id}` ? copy.processing : copy.reverseConfirm}
+            </Button>
+          </>
+        }
+      >
+        <Field label={copy.reverseReason}>
+          <textarea
+            value={reverseReason}
+            onChange={(event) => {
+              setReverseReason(event.currentTarget.value);
+              if (reverseError) setReverseError("");
+            }}
+            minLength={3}
+            maxLength={500}
+            disabled={Boolean(reverseTarget && busyAction === `reverse-${reverseTarget.id}`)}
+            className="min-h-32 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+          />
+        </Field>
+        {reverseError ? <p role="alert" className="mt-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm font-bold text-rose-700 dark:text-rose-200">{reverseError}</p> : null}
+      </Dialog>
     </div>
   );
 }
