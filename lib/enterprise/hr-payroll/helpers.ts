@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
-import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
+import { assertEnterpriseApprovalCandidate, assertEnterpriseApprovalDecision } from "@/lib/enterprise/approval-assignment";
 import { enqueueWorkflowDomainEvent } from "@/lib/enterprise/workflows/domain-events";
 
 export function hrReference(prefix: string) {
@@ -16,28 +16,48 @@ export async function assertActiveCustomerEmployee(tx: Prisma.TransactionClient,
   return employee;
 }
 
+function normalizeApprovalError(error: unknown) {
+  const code = error && typeof error === "object" && "code" in error ? String(error.code) : "APPROVER_PERMISSION_DENIED";
+  const status = error && typeof error === "object" && "statusCode" in error ? Number(error.statusCode) : 403;
+  return new EnterpriseDomainError(code, Number.isFinite(status) ? status : 403);
+}
+
 export async function assertOrganizationApprover(
-  tx: Prisma.TransactionClient,
+  _tx: Prisma.TransactionClient,
   organizationId: string,
   approverUserId: string,
   requesterUserId: string,
   moduleCode?: string,
 ) {
-  if (approverUserId === requesterUserId) throw new EnterpriseDomainError("SELF_APPROVAL_FORBIDDEN", 409);
-  const member = await tx.organizationMember.findFirst({
-    where: { organizationId, userId: approverUserId, status: "ACTIVE", removedAt: null },
-    select: { id: true },
-  });
-  if (!member) throw new EnterpriseDomainError("APPROVER_NOT_MEMBER", 404);
-  if (!moduleCode) return;
+  if (!moduleCode) {
+    if (approverUserId === requesterUserId) throw new EnterpriseDomainError("SELF_APPROVAL_FORBIDDEN", 409);
+    return;
+  }
+  try {
+    await assertEnterpriseApprovalCandidate({ organizationId, requesterUserId, approverUserId, moduleCode });
+  } catch (error) {
+    throw normalizeApprovalError(error);
+  }
+}
 
-  const access = await resolveEnterpriseModuleAccess({
-    userId: approverUserId,
-    organizationId,
-    moduleCode,
-    action: "approve",
-  });
-  if (!access.allowed) throw new EnterpriseDomainError("APPROVER_PERMISSION_DENIED", 403);
+export async function assertOrganizationApprovalDecision({
+  organizationId,
+  requesterUserId,
+  approverUserId,
+  actorUserId,
+  moduleCode,
+}: {
+  organizationId: string;
+  requesterUserId: string;
+  approverUserId: string;
+  actorUserId: string;
+  moduleCode: string;
+}) {
+  try {
+    return await assertEnterpriseApprovalDecision({ organizationId, requesterUserId, approverUserId, actorUserId, moduleCode });
+  } catch (error) {
+    throw normalizeApprovalError(error);
+  }
 }
 
 export async function publishHrEvent(tx: Prisma.TransactionClient, input: { organizationId: string; entityType: string; entityId: string; eventType: string; summary: string; actorUserId: string; fromStatus?: string; toStatus?: string; metadataJson?: Prisma.InputJsonValue }) {

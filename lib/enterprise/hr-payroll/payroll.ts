@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import type { z } from "zod";
 import { EnterpriseDomainConflictError, EnterpriseDomainError } from "@/lib/enterprise/common/errors";
-import { assertOrganizationApprover, hrReference, publishHrEvent } from "@/lib/enterprise/hr-payroll/helpers";
+import { assertOrganizationApprovalDecision, assertOrganizationApprover, hrReference, publishHrEvent } from "@/lib/enterprise/hr-payroll/helpers";
 import type {
   payrollPeriodCreateSchema,
   payrollRunCancelSchema,
@@ -238,6 +238,19 @@ export async function decideEnterprisePayrollRun(
   actorUserId: string,
   input: PayrollRunDecisionInput,
 ) {
+  const pending = await prisma.enterpriseApproval.findFirst({
+    where: { organizationId, targetEntityType: "EnterprisePayrollRun", targetEntityId: payrollRunId, status: "PENDING", archivedAt: null },
+    select: { requestedByUserId: true, approverUserId: true },
+  });
+  if (!pending) throw new EnterpriseDomainError("APPROVAL_NOT_FOUND", 404);
+  const decision = await assertOrganizationApprovalDecision({
+    organizationId,
+    requesterUserId: pending.requestedByUserId,
+    approverUserId: pending.approverUserId,
+    actorUserId,
+    moduleCode: "PAYROLL_OPERATIONS",
+  });
+
   return prisma.$transaction(async (tx) => {
     const run = await tx.enterprisePayrollRun.findFirst({
       where: { id: payrollRunId, organizationId, status: "PENDING_APPROVAL", archivedAt: null },
@@ -255,9 +268,6 @@ export async function decideEnterprisePayrollRun(
       },
     });
     if (!approval) throw new EnterpriseDomainError("APPROVAL_NOT_FOUND", 404);
-    if (approval.requestedByUserId === actorUserId) {
-      throw new EnterpriseDomainError("SELF_APPROVAL_FORBIDDEN", 409);
-    }
 
     if (input.decision === "REJECT") {
       const updated = await tx.enterprisePayrollRun.updateMany({
@@ -275,7 +285,7 @@ export async function decideEnterprisePayrollRun(
         data: {
           status: "REJECTED",
           decidedAt: new Date(),
-          decisionComment: input.comment || null,
+          decisionComment: input.comment || (decision.selfApprovalOverride ? "SELF_APPROVAL_OVERRIDE" : null),
           revision: { increment: 1 },
         },
       });
@@ -288,6 +298,7 @@ export async function decideEnterprisePayrollRun(
         actorUserId,
         fromStatus: "PENDING_APPROVAL",
         toStatus: "REJECTED",
+        metadataJson: { selfApprovalOverride: decision.selfApprovalOverride },
       });
       return tx.enterprisePayrollRun.findUniqueOrThrow({
         where: { id: run.id },
@@ -336,7 +347,7 @@ export async function decideEnterprisePayrollRun(
       data: {
         status: "APPROVED",
         decidedAt: new Date(),
-        decisionComment: input.comment || null,
+        decisionComment: input.comment || (decision.selfApprovalOverride ? "SELF_APPROVAL_OVERRIDE" : null),
         revision: { increment: 1 },
       },
     });
@@ -349,7 +360,7 @@ export async function decideEnterprisePayrollRun(
       actorUserId,
       fromStatus: "PENDING_APPROVAL",
       toStatus: "APPROVED",
-      metadataJson: { payslipCount: run.items.length, paymentCreated: false },
+      metadataJson: { payslipCount: run.items.length, paymentCreated: false, selfApprovalOverride: decision.selfApprovalOverride },
     });
     return tx.enterprisePayrollRun.findUniqueOrThrow({
       where: { id: run.id },

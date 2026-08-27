@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import type { z } from "zod";
+import { assertEnterpriseApprovalCandidate, assertEnterpriseApprovalDecision } from "@/lib/enterprise/approval-assignment";
 import { prisma } from "@/lib/prisma";
 import { EnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
 import { ENTERPRISE_BUDGET_TRANSITIONS } from "@/lib/enterprise/finance/constants";
@@ -44,6 +45,13 @@ function decimal(value: Prisma.Decimal.Value, scale = 2) {
 
 function jsonOrUndefined(value: unknown): Prisma.InputJsonValue | undefined {
   return value === undefined ? undefined : (value as Prisma.InputJsonValue);
+}
+
+function approvalError(error: unknown, fallback: string) {
+  const code = error && typeof error === "object" && "code" in error ? String(error.code) : fallback;
+  const status = error && typeof error === "object" && "statusCode" in error ? Number(error.statusCode) : 403;
+  const message = error instanceof Error ? error.message : "Le validateur sélectionné n’est pas autorisé pour cette action.";
+  return new EnterpriseCoreV2Error(message, Number.isFinite(status) ? status : 403, code);
 }
 
 async function requireOptionalMember(tx: Tx, organizationId: string, userId?: string | null) {
@@ -197,6 +205,14 @@ export async function createEnterpriseBudgetApproval({
   approverUserId: string;
   budgetRevision?: number;
 }) {
+  const candidateBudget = await prisma.enterpriseBudget.findFirst({ where: { id: budgetId, organizationId, archivedAt: null }, select: { createdByUserId: true } });
+  if (!candidateBudget) throw new EnterpriseCoreV2Error("Budget introuvable.", 404, "BUDGET_NOT_FOUND");
+  try {
+    await assertEnterpriseApprovalCandidate({ organizationId, requesterUserId: candidateBudget.createdByUserId, approverUserId, moduleCode: "FINANCE_BUDGETS" });
+  } catch (error) {
+    throw approvalError(error, "APPROVER_NOT_ELIGIBLE");
+  }
+
   return prisma.$transaction(async (tx) => {
     const budget = await tx.enterpriseBudget.findFirst({ where: { id: budgetId, organizationId, archivedAt: null }, include: { lines: true } });
     if (!budget) throw new EnterpriseCoreV2Error("Budget introuvable.", 404, "BUDGET_NOT_FOUND");
@@ -204,7 +220,6 @@ export async function createEnterpriseBudgetApproval({
     if (!budget.lines.length) throw new EnterpriseCoreV2Error("Le budget doit contenir au moins une ligne.", 400, "BUDGET_LINES_REQUIRED");
     await requireActiveEnterpriseMember(tx, organizationId, actorUserId);
     await requireActiveEnterpriseMember(tx, organizationId, approverUserId);
-    if (budget.createdByUserId === approverUserId) throw new EnterpriseCoreV2Error("Le créateur du budget ne peut pas approuver son propre budget.", 403, "SELF_APPROVAL_DENIED");
     const pending = await tx.enterpriseApproval.findFirst({ where: { organizationId, targetEntityType: "EnterpriseBudget", targetEntityId: budgetId, status: "PENDING", archivedAt: null }, select: { id: true } });
     if (pending) throw new EnterpriseCoreV2Error("Une validation est déjà en attente pour ce budget.", 409, "PENDING_APPROVAL_EXISTS");
     const promoted = await tx.enterpriseBudget.updateMany({
@@ -238,13 +253,25 @@ export async function decideEnterpriseBudgetApproval({
   canManage: boolean;
 }) {
   if (action === "REJECT" && !nullable(decisionComment)) throw new EnterpriseCoreV2Error("Un motif est obligatoire pour rejeter une validation.", 400, "REJECTION_REASON_REQUIRED");
+  let selfApprovalOverride = false;
+  if (action === "APPROVE" || action === "REJECT") {
+    const currentApproval = await prisma.enterpriseApproval.findFirst({ where: { id: approvalId, organizationId, targetEntityType: "EnterpriseBudget", archivedAt: null }, select: { requestedByUserId: true, approverUserId: true, status: true } });
+    if (!currentApproval) throw new EnterpriseCoreV2Error("Validation budgétaire introuvable.", 404, "APPROVAL_NOT_FOUND");
+    if (currentApproval.status !== "PENDING") throw new EnterpriseCoreV2Error("Cette validation a déjà été décidée.", 409, "APPROVAL_ALREADY_DECIDED");
+    try {
+      const decision = await assertEnterpriseApprovalDecision({ organizationId, requesterUserId: currentApproval.requestedByUserId, approverUserId: currentApproval.approverUserId, actorUserId, moduleCode: "FINANCE_BUDGETS" });
+      selfApprovalOverride = decision.selfApprovalOverride;
+    } catch (error) {
+      throw approvalError(error, "APPROVAL_DECISION_DENIED");
+    }
+  }
+
   return prisma.$transaction(async (tx) => {
     const approval = await tx.enterpriseApproval.findFirst({ where: { id: approvalId, organizationId, targetEntityType: "EnterpriseBudget", archivedAt: null } });
     if (!approval) throw new EnterpriseCoreV2Error("Validation budgétaire introuvable.", 404, "APPROVAL_NOT_FOUND");
     if (approval.status !== "PENDING") throw new EnterpriseCoreV2Error("Cette validation a déjà été décidée.", 409, "APPROVAL_ALREADY_DECIDED");
     if (action === "APPROVE" || action === "REJECT") {
       if (approval.approverUserId !== actorUserId) throw new EnterpriseCoreV2Error("Seul l’approbateur désigné peut décider ce budget.", 403, "VALIDATOR_NOT_ALLOWED");
-      if (approval.requestedByUserId === actorUserId) throw new EnterpriseCoreV2Error("L’auto-approbation est interdite.", 403, "SELF_APPROVAL_DENIED");
     } else if (approval.requestedByUserId !== actorUserId && !canManage) {
       throw new EnterpriseCoreV2Error("Vous ne pouvez pas annuler cette validation.", 403, "APPROVAL_CANCEL_DENIED");
     }
@@ -252,15 +279,16 @@ export async function decideEnterpriseBudgetApproval({
     if (!budget || budget.status !== "PENDING_APPROVAL") throw new EnterpriseCoreV2Error("Le budget cible n’est plus en attente d’approbation.", 409, "APPROVAL_TARGET_CONFLICT");
     const approvalStatus = action === "APPROVE" ? "APPROVED" : action === "REJECT" ? "REJECTED" : "CANCELLED";
     const budgetStatus = action === "APPROVE" ? "ACTIVE" : action === "REJECT" ? "REJECTED" : "DRAFT";
-    const approvalUpdated = await tx.enterpriseApproval.updateMany({ where: { id: approvalId, organizationId, status: "PENDING", revision, archivedAt: null }, data: { status: approvalStatus, decidedAt: action === "CANCEL" ? null : new Date(), decisionComment: nullable(decisionComment), revision: { increment: 1 } } });
+    const resolvedComment = nullable(decisionComment) || (selfApprovalOverride ? "SELF_APPROVAL_OVERRIDE" : null);
+    const approvalUpdated = await tx.enterpriseApproval.updateMany({ where: { id: approvalId, organizationId, status: "PENDING", revision, archivedAt: null }, data: { status: approvalStatus, decidedAt: action === "CANCEL" ? null : new Date(), decisionComment: resolvedComment, revision: { increment: 1 } } });
     if (approvalUpdated.count !== 1) throw new EnterpriseCoreV2Error("La validation a été décidée simultanément.", 409, "APPROVAL_DECISION_CONFLICT");
     const budgetUpdated = await tx.enterpriseBudget.updateMany({
       where: { id: budget.id, organizationId, status: "PENDING_APPROVAL", revision: budget.revision, archivedAt: null },
       data: { status: budgetStatus, ...(action === "APPROVE" ? { approvedAt: new Date(), actualFreshnessAt: new Date() } : {}), updatedByUserId: actorUserId, revision: { increment: 1 } },
     });
     if (budgetUpdated.count !== 1) throw new EnterpriseCoreV2Error("Le budget a changé pendant la décision.", 409, "APPROVAL_TARGET_CONFLICT");
-    await addEnterpriseOperationalEvent(tx, { organizationId, entityType: "EnterpriseApproval", entityId: approvalId, eventType: action === "APPROVE" ? "ENTERPRISE_APPROVAL_APPROVED" : action === "REJECT" ? "ENTERPRISE_APPROVAL_REJECTED" : "ENTERPRISE_APPROVAL_CANCELLED", summary: nullable(decisionComment) || `Validation ${approvalStatus.toLowerCase()}.`, actorUserId, fromStatus: "PENDING", toStatus: approvalStatus });
-    await addEnterpriseOperationalEvent(tx, { organizationId, entityType: "EnterpriseBudget", entityId: budget.id, eventType: action === "APPROVE" ? "ENTERPRISE_BUDGET_APPROVED" : action === "REJECT" ? "ENTERPRISE_BUDGET_REJECTED" : "ENTERPRISE_BUDGET_APPROVAL_CANCELLED", summary: nullable(decisionComment) || (action === "APPROVE" ? "Budget activé après approbation." : action === "REJECT" ? "Budget rejeté." : "Validation du budget annulée."), actorUserId, fromStatus: "PENDING_APPROVAL", toStatus: budgetStatus });
+    await addEnterpriseOperationalEvent(tx, { organizationId, entityType: "EnterpriseApproval", entityId: approvalId, eventType: action === "APPROVE" ? "ENTERPRISE_APPROVAL_APPROVED" : action === "REJECT" ? "ENTERPRISE_APPROVAL_REJECTED" : "ENTERPRISE_APPROVAL_CANCELLED", summary: resolvedComment || `Validation ${approvalStatus.toLowerCase()}.`, actorUserId, fromStatus: "PENDING", toStatus: approvalStatus, metadata: selfApprovalOverride ? { selfApprovalOverride: true } : undefined });
+    await addEnterpriseOperationalEvent(tx, { organizationId, entityType: "EnterpriseBudget", entityId: budget.id, eventType: action === "APPROVE" ? "ENTERPRISE_BUDGET_APPROVED" : action === "REJECT" ? "ENTERPRISE_BUDGET_REJECTED" : "ENTERPRISE_BUDGET_APPROVAL_CANCELLED", summary: nullable(decisionComment) || (action === "APPROVE" ? "Budget activé après approbation." : action === "REJECT" ? "Budget rejeté." : "Validation du budget annulée."), actorUserId, fromStatus: "PENDING_APPROVAL", toStatus: budgetStatus, metadata: selfApprovalOverride ? { selfApprovalOverride: true } : undefined });
     return tx.enterpriseApproval.findUnique({ where: { id: approvalId } });
   });
 }

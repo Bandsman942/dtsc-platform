@@ -1,7 +1,7 @@
 "use client";
 
 import { priorityChoices as corePriorityChoices } from "@/components/enterprise/core-v2/erp-v2-ui";
-
+import { EnterpriseApproverSelect } from "@/components/enterprise/enterprise-approver-select";
 import { enterpriseCoreT } from "@/lib/enterprise-core-i18n";
 
 import { Archive, CheckCircle2, Eye, Pencil, Plus, Send, ShieldCheck, UserCheck, XCircle } from "lucide-react";
@@ -19,7 +19,7 @@ import { Input } from "@/components/ui/input";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import { EnterpriseRequestForm } from "@/components/enterprise/core-v2/request-form";
 import { RequestCoordinationPanel } from "@/components/enterprise/core-v2/request-coordination-panel";
-import { Field, NativeSelect, formatEnterpriseDate, priorityLabel, statusLabel, statusTone, type EnterpriseChoice } from "@/components/enterprise/core-v2/erp-v2-ui";
+import { NativeSelect, formatEnterpriseDate, priorityLabel, statusLabel, statusTone, type EnterpriseChoice } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { enterpriseV2Mutation, useEnterpriseV2Collection } from "@/components/enterprise/core-v2/use-enterprise-v2-collection";
 
 type RequestItem = { id: string; requestType: string; title: string; description: string; status: string; priority: string; requestedByUserId: string; assignedToUserId: string | null; departmentId: string | null; dueAt: string | null; sourceModule: string | null; sourceEntityType: string | null; revision: number; createdAt: string };
@@ -112,7 +112,7 @@ export function EnterpriseRequestsWorkspace({ organizationId, members, departmen
     <Dialog open={createOpen} onClose={() => setCreateOpen(false)} title={enterpriseCoreT(locale, "requests.new.internal.request")} className="h-[94dvh] max-w-4xl"><EnterpriseRequestForm locale={locale} members={members} departments={departments} onSubmit={submitCreate} /></Dialog>
     <Dialog open={Boolean(edit)} onClose={() => setEdit(null)} title={enterpriseCoreT(locale, "requests.edit.request")} className="h-[94dvh] max-w-4xl">{edit ? <EnterpriseRequestForm locale={locale} members={members} departments={departments} value={edit} onSubmit={submitEdit} /> : null}</Dialog>
     <Dialog open={Boolean(activeDetail)} onClose={closeDetail} title={activeDetail?.title || ""} className="h-[94dvh] max-w-5xl">{activeDetail ? <div className="grid gap-5 text-sm"><div className="grid gap-3"><div className="flex flex-wrap gap-2"><StatusBadge tone={statusTone(activeDetail.status)}>{statusLabel(locale, activeDetail.status)}</StatusBadge><StatusBadge>{priorityLabel(locale, activeDetail.priority)}</StatusBadge><StatusBadge>{activeDetail.requestType}</StatusBadge></div><p className="leading-6 text-dtsc-muted">{activeDetail.description}</p><p>{enterpriseCoreT(locale, "tasks.due")} : {formatEnterpriseDate(activeDetail.dueAt, locale)}</p><p>{enterpriseCoreT(locale, "tasks.revision")} : {activeDetail.revision}</p>{activeDetail.sourceEntityType ? <p className="text-xs text-dtsc-muted">{enterpriseCoreT(locale, "tasks.linkedSource")} : {activeDetail.sourceModule} · {activeDetail.sourceEntityType}</p> : null}</div><RequestCoordinationPanel organizationId={organizationId} requestId={activeDetail.id} locale={locale} onChanged={() => setRefreshKey((value) => value + 1)} /></div> : null}</Dialog>
-    <Dialog open={Boolean(approvalTarget)} onClose={() => setApprovalTarget(null)} title={enterpriseCoreT(locale, "requests.request.approval")} description={approvalTarget?.title}><form onSubmit={createApproval} className="grid gap-4"><Field label={enterpriseCoreT(locale, "requests.designated.approver")}><NativeSelect name="approverUserId" required items={members} /></Field><Button className="bg-dtsc-blue text-white">{enterpriseCoreT(locale, "requests.request.approval.2")}</Button></form></Dialog>
+    <Dialog open={Boolean(approvalTarget)} onClose={() => setApprovalTarget(null)} title={enterpriseCoreT(locale, "requests.request.approval")} description={approvalTarget?.title}><form onSubmit={createApproval} className="grid gap-4"><label className="grid gap-1 text-xs font-black text-dtsc-muted">{enterpriseCoreT(locale, "requests.designated.approver")}<EnterpriseApproverSelect organizationId={organizationId} moduleCode="INTERNAL_REQUESTS" locale={locale} /></label><Button className="bg-dtsc-blue text-white">{enterpriseCoreT(locale, "requests.request.approval.2")}</Button></form></Dialog>
     <Dialog open={Boolean(pendingAction)} onClose={() => setPendingAction(null)} title={enterpriseCoreT(locale, "tasks.confirmAction")}><p className="text-sm text-dtsc-muted">{pendingAction ? requestActionLabel(locale, pendingAction.action) : ""} · {pendingAction?.request.title}</p><Button onClick={() => void runAction()} className="mt-4 bg-dtsc-blue text-white">{enterpriseCoreT(locale, "common.confirm")}</Button></Dialog>
   </div>;
 }

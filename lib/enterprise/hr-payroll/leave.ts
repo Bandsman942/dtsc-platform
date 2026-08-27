@@ -2,6 +2,7 @@ import type { z } from "zod";
 import { EnterpriseDomainConflictError, EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import {
   assertActiveCustomerEmployee,
+  assertOrganizationApprovalDecision,
   assertOrganizationApprover,
   hrReference,
   publishHrEvent,
@@ -57,18 +58,28 @@ export async function createEnterpriseLeaveRequest(organizationId: string, actor
 }
 
 export async function decideEnterpriseLeaveRequest(organizationId: string, requestId: string, actorUserId: string, input: ApprovalDecisionInput) {
+  const request = await prisma.enterpriseLeaveRequest.findFirst({ where: { id: requestId, organizationId, status: "SUBMITTED", archivedAt: null } });
+  if (!request) throw new EnterpriseDomainError("LEAVE_REQUEST_NOT_FOUND", 404);
+  if (!request.approverUserId) throw new EnterpriseDomainError("APPROVER_NOT_ASSIGNED", 409);
+  const decision = await assertOrganizationApprovalDecision({
+    organizationId,
+    requesterUserId: request.requestedByUserId,
+    approverUserId: request.approverUserId,
+    actorUserId,
+    moduleCode: "TIME_ATTENDANCE",
+  });
+
   return prisma.$transaction(async (tx) => {
-    const request = await tx.enterpriseLeaveRequest.findFirst({ where: { id: requestId, organizationId, status: "SUBMITTED", archivedAt: null } });
-    if (!request) throw new EnterpriseDomainError("LEAVE_REQUEST_NOT_FOUND", 404);
-    if (request.requestedByUserId === actorUserId) throw new EnterpriseDomainError("SELF_APPROVAL_FORBIDDEN", 409);
-    if (request.approverUserId !== actorUserId) throw new EnterpriseDomainError("NOT_LEAVE_APPROVER", 403);
-    const approval = await tx.enterpriseApproval.findFirst({ where: { organizationId, targetEntityType: "EnterpriseLeaveRequest", targetEntityId: request.id, status: "PENDING", approverUserId: actorUserId } });
+    const current = await tx.enterpriseLeaveRequest.findFirst({ where: { id: requestId, organizationId, status: "SUBMITTED", archivedAt: null } });
+    if (!current) throw new EnterpriseDomainError("LEAVE_REQUEST_NOT_FOUND", 404);
+    if (current.approverUserId !== actorUserId) throw new EnterpriseDomainError("NOT_LEAVE_APPROVER", 403);
+    const approval = await tx.enterpriseApproval.findFirst({ where: { organizationId, targetEntityType: "EnterpriseLeaveRequest", targetEntityId: current.id, status: "PENDING", approverUserId: actorUserId } });
     if (!approval) throw new EnterpriseDomainError("APPROVAL_NOT_FOUND", 404);
     const targetStatus = input.decision === "APPROVE" ? "APPROVED" : "REJECTED";
-    const updated = await tx.enterpriseLeaveRequest.updateMany({ where: { id: request.id, organizationId, revision: input.revision, status: "SUBMITTED" }, data: { status: targetStatus, decidedAt: new Date(), decisionComment: input.comment || null, revision: { increment: 1 } } });
+    const updated = await tx.enterpriseLeaveRequest.updateMany({ where: { id: current.id, organizationId, revision: input.revision, status: "SUBMITTED" }, data: { status: targetStatus, decidedAt: new Date(), decisionComment: input.comment || null, revision: { increment: 1 } } });
     if (updated.count !== 1) throw new EnterpriseDomainConflictError();
-    await tx.enterpriseApproval.update({ where: { id: approval.id }, data: { status: targetStatus, decidedAt: new Date(), decisionComment: input.comment || null, revision: { increment: 1 } } });
-    await publishHrEvent(tx, { organizationId, entityType: "EnterpriseLeaveRequest", entityId: request.id, eventType: `LEAVE_${targetStatus}`, summary: `Congé ${request.reference} ${targetStatus.toLowerCase()}`, actorUserId, fromStatus: "SUBMITTED", toStatus: targetStatus });
-    return tx.enterpriseLeaveRequest.findUniqueOrThrow({ where: { id: request.id } });
+    await tx.enterpriseApproval.update({ where: { id: approval.id }, data: { status: targetStatus, decidedAt: new Date(), decisionComment: input.comment || (decision.selfApprovalOverride ? "SELF_APPROVAL_OVERRIDE" : null), revision: { increment: 1 } } });
+    await publishHrEvent(tx, { organizationId, entityType: "EnterpriseLeaveRequest", entityId: current.id, eventType: `LEAVE_${targetStatus}`, summary: `Congé ${current.reference} ${targetStatus.toLowerCase()}`, actorUserId, fromStatus: "SUBMITTED", toStatus: targetStatus, metadataJson: { selfApprovalOverride: decision.selfApprovalOverride } });
+    return tx.enterpriseLeaveRequest.findUniqueOrThrow({ where: { id: current.id } });
   });
 }

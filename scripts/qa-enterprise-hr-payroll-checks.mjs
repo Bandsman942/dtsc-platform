@@ -13,7 +13,7 @@ requirePaths([
 ]);
 requireTokens("lib/enterprise/hr-payroll/payroll.ts", [
   "ACTIVE_EMPLOYMENT_CONTRACT_REQUIRED",
-  "SELF_APPROVAL_FORBIDDEN",
+  "assertOrganizationApprovalDecision",
   "enterprisePayslip",
   "paymentCreated: false",
   "PAYROLL_RUN_ALREADY_EXISTS",
@@ -24,9 +24,9 @@ requireTokens("lib/enterprise/hr-payroll/leave.ts", ["LEAVE_OVERLAP", "decidedAt
 requireTokens("lib/enterprise/hr-payroll/timesheets.ts", ["TIMESHEET_PERIOD_OVERLAP", "totalApprovedMinutes", '"TIME_ATTENDANCE"']);
 requireTokens("lib/enterprise/hr-payroll/helpers.ts", [
   "SELF_APPROVAL_FORBIDDEN",
-  "APPROVER_NOT_MEMBER",
   "APPROVER_PERMISSION_DENIED",
-  'action: "approve"',
+  "assertEnterpriseApprovalCandidate",
+  "assertEnterpriseApprovalDecision",
 ]);
 requireTokens("lib/enterprise/hr-payroll/contracts.ts", [
   "EMPLOYMENT_CONTRACT_EDIT_FORBIDDEN",

@@ -41,13 +41,13 @@ const commitments = includes("lib/enterprise/finance/commitments.ts", ["remainin
 ok(commitments.includes("position.available.add(realizable)"), "Expense approval must avoid double-counting the commitment portion converted to actual.");
 ok(commitments.includes("sourceEntityType: \"EnterprisePurchase\""), "Purchase commitments must use a deterministic source identity.");
 
-const purchase = includes("lib/enterprise/procurement/purchase-service.ts", ["createPurchaseBudgetCommitment", "releasePurchaseBudgetCommitment", "budgetLineId", "BUDGET_CURRENCY_MISMATCH", "SELF_APPROVAL_DENIED"]);
+const purchase = includes("lib/enterprise/procurement/purchase-service.ts", ["createPurchaseBudgetCommitment", "releasePurchaseBudgetCommitment", "budgetLineId", "BUDGET_CURRENCY_MISMATCH", "assertEnterpriseApprovalCandidate", "assertEnterpriseApprovalDecision"]);
 ok(!purchase.includes("pharmacyStockMovement.create"), "Common purchase finance integration must not mutate pharmacy stock truth.");
 
-const budget = includes("lib/enterprise/finance/budget-service.ts", ["PENDING_APPROVAL", "ACTIVE", "EnterpriseApproval", "SELF_APPROVAL_DENIED", "REVISION_CONFLICT", "ENTERPRISE_BUDGET_APPROVED", "ENTERPRISE_BUDGET_REJECTED"]);
+const budget = includes("lib/enterprise/finance/budget-service.ts", ["PENDING_APPROVAL", "ACTIVE", "EnterpriseApproval", "assertEnterpriseApprovalCandidate", "assertEnterpriseApprovalDecision", "REVISION_CONFLICT", "ENTERPRISE_BUDGET_APPROVED", "ENTERPRISE_BUDGET_REJECTED"]);
 ok(budget.includes('existing.status !== "DRAFT"'), "Budget edits must be limited to DRAFT.");
 
-const expense = includes("lib/enterprise/finance/expense-service.ts", ["amountVarianceReason", "EnterpriseApproval", "SELF_APPROVAL_DENIED", "BUDGET_CURRENCY_MISMATCH", "applyExpenseCommitmentRealization", "budgetImpactAppliedAt", "ENTERPRISE_EXPENSE_APPROVED"]);
+const expense = includes("lib/enterprise/finance/expense-service.ts", ["amountVarianceReason", "EnterpriseApproval", "assertEnterpriseApprovalCandidate", "assertEnterpriseApprovalDecision", "BUDGET_CURRENCY_MISMATCH", "applyExpenseCommitmentRealization", "budgetImpactAppliedAt", "ENTERPRISE_EXPENSE_APPROVED"]);
 ok(expense.includes('existing.status !== "DRAFT"'), "Approved or pending expenses must not be editable through normal PATCH.");
 ok(expense.includes("documentIds"), "Expenses must support private EnterpriseDocument evidence links.");
 
@@ -128,4 +128,4 @@ ok(!/\bBPMN\b/.test(changedFinanceFiles) && !/model\s+.*WorkflowEngine/.test(cha
 ok(!/general ledger|bank reconciliation|double-entry/i.test(changedFinanceFiles), "Sprint 8 must not implement general-ledger or bank-reconciliation logic.");
 
 if (failures.length) { console.error("Enterprise finance/reporting Sprint 8 QA failed:\n- " + failures.join("\n- ")); process.exit(1); }
-console.log("Enterprise finance/reporting Sprint 8 QA passed: dedicated models, Decimal-safe budget controls, purchase commitments, atomic approvals, tenant guards, server-derived currency-separated snapshots, legacy isolation and production-only Vercel policy verified.");
+console.log("Enterprise finance/reporting Sprint 8 QA passed: dedicated models, Decimal-safe budget controls, purchase commitments, atomic approvals through the shared assignment contract, tenant guards, server-derived currency-separated snapshots, legacy isolation and production-only Vercel policy verified.");

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { authorizeFinanceRequest, financeErrorResponse } from "@/lib/enterprise/accounting/http";
-import { approveAccountTransfer } from "@/lib/enterprise/accounting/treasury-service";
+import { approveAssignedAccountTransfer } from "@/lib/enterprise/accounting/treasury-approval-service";
 import { confirmTreasuryTransfer } from "@/lib/enterprise/accounting/treasury-transfer-service";
 import { transferTransitionSchema } from "@/lib/enterprise/accounting/treasury-schemas";
 
@@ -16,7 +16,7 @@ export async function POST(req: Request, { params }: Params) {
   if (!auth.ok) return auth.response;
   try {
     const transfer = parsed.data.action === "APPROVE"
-      ? await approveAccountTransfer(organizationId, transferId, auth.session.userId, parsed.data.revision)
+      ? await approveAssignedAccountTransfer(organizationId, transferId, auth.session.userId, parsed.data.revision)
       : await confirmTreasuryTransfer(organizationId, transferId, auth.session.userId, parsed.data.revision);
     await writeAuditLog({
       userId: auth.session.userId,
