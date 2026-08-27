@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { EnterpriseAdminSectionActivator } from "@/components/enterprise/enterprise-admin-section-activator";
 import { EnterpriseRolesPermissionsPanel } from "@/components/enterprise/enterprise-governance-panels";
 import { EnterpriseAdministrationSummary } from "@/components/enterprise/enterprise-administration-summary";
+import { EnterprisePositionsGuidedPanel } from "@/components/enterprise/enterprise-positions-guided-panel";
 import {
   EnterpriseAdministrationAuditPanel,
   EnterpriseAdministrationBrandingPanel,
@@ -19,7 +20,6 @@ import { ContextualUserGuide } from "@/components/user-guides/contextual-user-gu
 import {
   EnterpriseCalendarPanel,
   EnterpriseMembersPanel,
-  EnterprisePositionsPanel,
 } from "@/components/enterprise/enterprise-admin-panels";
 import { Accordion, AccordionItem } from "@/components/ui/accordion";
 import { useToastMessage } from "@/components/ui/use-toast-message";
@@ -85,31 +85,6 @@ export function EnterpriseAdministrationModule(
     ),
     [modules],
   );
-
-  async function submitAdminMutation(event: FormEvent<HTMLFormElement>, successMessage: string) {
-    event.preventDefault();
-    setMessage("");
-    const formElement = event.currentTarget;
-    const formData = new FormData(formElement);
-    const payload: Record<string, unknown> = Object.fromEntries(formData.entries());
-    payload.permissions = formData.getAll("permissions").map(String);
-    payload.responsibleUserIds = formData.getAll("responsibleUserIds").map(String).filter(Boolean);
-    payload.recipientUserIds = formData.getAll("recipientUserIds").map(String).filter(Boolean);
-    payload.isActive = formData.getAll("isActive").includes("on");
-    payload.isEnabled = formData.getAll("isEnabled").includes("on") || !formData.has("isEnabled");
-    payload.isKeyPosition = formData.getAll("isKeyPosition").includes("on");
-    const response = await fetch(`/api/enterprise/${organization.id}/administration`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const body = (await response.json().catch(() => null)) as { message?: string } | null;
-    setMessage(response.ok ? successMessage : clientError(locale, body?.message, "Enregistrement impossible. Corrigez les informations et réessayez.", "Unable to save. Correct the information and try again."));
-    if (response.ok) {
-      formElement.reset();
-      router.refresh();
-    }
-  }
 
   async function toggleModule(enterpriseModule: EnterpriseModuleItem) {
     setMessage("");
@@ -223,7 +198,7 @@ export function EnterpriseAdministrationModule(
 
         <div id="enterprise-admin-positions" className="scroll-mt-24 outline-none">
           <ModuleSection title={tx(locale, "Postes", "Positions")} description={tx(locale, "Les postes structurent les responsabilités et les autorisations héritées de chaque fonction.", "Positions structure responsibilities and the permissions inherited by each function.")}>
-            <Accordion><AccordionItem title={tx(locale, "Postes et autorisations héritées", "Positions and inherited permissions")} defaultOpen><EnterprisePositionsPanel sectorCode={organization.sectorCode} departments={departments} positions={positions} submitAdminMutation={submitAdminMutation} /></AccordionItem></Accordion>
+            <EnterprisePositionsGuidedPanel organizationId={organization.id} departments={departments} positions={positions} modules={visibleModules} locale={locale} onSaved={setMessage} />
           </ModuleSection>
         </div>
 
