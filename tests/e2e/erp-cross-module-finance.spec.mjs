@@ -69,7 +69,7 @@ test.describe.serial("ERP cross-module Finance acceptance", () => {
     const admin = await prisma.user.findUnique({ where: { email: adminEmail } });
     if (!admin) throw new Error("Cross-module Finance acceptance requires canonical ERP seed");
     adminUserId = admin.id;
-    for (const moduleCode of ["FINANCE_OVERVIEW", "FINANCE_ACCOUNTING", "FINANCE_PAYABLES", "PAYROLL_OPERATIONS", "INVENTORY_LOGISTICS", "ASSETS_MAINTENANCE", "SUPPLIERS_PURCHASES"]) {
+    for (const moduleCode of ["FINANCE_OVERVIEW", "FINANCE_ACCOUNTING", "FINANCE_PAYABLES", "FINANCE_TREASURY", "PAYROLL_OPERATIONS", "INVENTORY_LOGISTICS", "ASSETS_MAINTENANCE", "SUPPLIERS_PURCHASES"]) {
       await enableModule(moduleCode);
     }
     await prisma.organization.upsert({
@@ -95,6 +95,51 @@ test.describe.serial("ERP cross-module Finance acceptance", () => {
     await authenticatedContext?.close();
     await prisma.organization.deleteMany({ where: { id: foreignOrganizationId } }).catch(() => undefined);
     await prisma.$disconnect();
+  });
+
+  test("Treasury history tab never renders stale account records during tab transitions", async () => {
+    const lookupsResponse = await authenticatedPage.context().request.get(`${baseUrl}/api/enterprise/${organizationId}/treasury-lookups`, {
+      headers: { origin: baseUrl, referer: `${baseUrl}/enterprise-modules/FINANCE_TREASURY` },
+    });
+    expect(lookupsResponse.ok(), await lookupsResponse.text()).toBeTruthy();
+    const lookups = await lookupsResponse.json();
+    const ledger = lookups.ledgerAccounts.find((account) => ["CASH", "BANK", "MOBILE_MONEY", "CLEARING"].includes(account.accountSubtype));
+    expect(ledger, "Treasury E2E requires one compatible ledger account from canonical seed").toBeTruthy();
+    const currency = (ledger.currencyCode && lookups.currencies.find((item) => item.code === ledger.currencyCode)) || lookups.currencies.find((item) => item.code === "XAF") || lookups.currencies[0];
+    expect(currency, "Treasury E2E requires one configured currency").toBeTruthy();
+
+    const accountName = `Treasury history race ${Date.now()}`;
+    const created = await post(authenticatedPage, `/api/enterprise/${organizationId}/financial-accounts`, {
+      name: accountName,
+      accountType: ledger.accountSubtype,
+      currencyCode: currency.code,
+      ledgerAccountId: ledger.id,
+      openingBalance: "0",
+    });
+    expect(created.response.ok(), JSON.stringify(created.body)).toBeTruthy();
+
+    const pageErrors = [];
+    const capturePageError = (error) => pageErrors.push(error.message);
+    authenticatedPage.on("pageerror", capturePageError);
+    try {
+      await authenticatedPage.goto(`${baseUrl}/enterprise-modules/FINANCE_TREASURY`);
+      await expect(authenticatedPage.getByText(accountName)).toBeVisible();
+
+      const historyTab = authenticatedPage.getByRole("button", { name: /Historique|History/i });
+      const transfersTab = authenticatedPage.getByRole("button", { name: /Transferts|Transfers/i });
+      await historyTab.click();
+      await expect(historyTab).toHaveAttribute("aria-pressed", "true");
+      await expect(authenticatedPage.getByText("Application error: a client-side exception has occurred")).toHaveCount(0);
+
+      await transfersTab.click();
+      await expect(transfersTab).toHaveAttribute("aria-pressed", "true");
+      await historyTab.click();
+      await expect(historyTab).toHaveAttribute("aria-pressed", "true");
+      await expect(authenticatedPage.getByText("Application error: a client-side exception has occurred")).toHaveCount(0);
+      expect(pageErrors).toEqual([]);
+    } finally {
+      authenticatedPage.off("pageerror", capturePageError);
+    }
   });
 
   test("Sales posting produced by onboarding remains single, balanced and tenant-scoped", async () => {
