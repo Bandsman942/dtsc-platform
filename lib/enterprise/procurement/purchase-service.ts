@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import type { z } from "zod";
+import { assertEnterpriseApprovalCandidate, assertEnterpriseApprovalDecision } from "@/lib/enterprise/approval-assignment";
 import { EnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
 import { createPurchaseBudgetCommitment, releasePurchaseBudgetCommitment } from "@/lib/enterprise/finance/commitments";
 import { assertSameCurrency } from "@/lib/enterprise/finance/money";
@@ -34,6 +35,13 @@ function purchaseReference() { const date = new Date().toISOString().slice(0, 10
 function receiptReference() { const date = new Date().toISOString().slice(0, 10).replace(/-/g, ""); return `REC-${date}-${randomUUID().slice(0, 8).toUpperCase()}`; }
 function money(value: number | string | Prisma.Decimal) { return new Prisma.Decimal(value).toDecimalPlaces(2); }
 function quantity(value: number | string | Prisma.Decimal) { return new Prisma.Decimal(value).toDecimalPlaces(3); }
+
+function approvalError(error: unknown, fallback: string) {
+  const code = error && typeof error === "object" && "code" in error ? String(error.code) : fallback;
+  const status = error && typeof error === "object" && "statusCode" in error ? Number(error.statusCode) : 403;
+  const message = error instanceof Error ? error.message : "Le validateur sélectionné n’est pas autorisé pour cette action.";
+  return new EnterpriseCoreV2Error(message, Number.isFinite(status) ? status : 403, code);
+}
 
 async function preparePurchaseItems(tx: ProcurementTransaction, organizationId: string, items: PurchaseItemInput[]) {
   const prepared = [];
@@ -122,6 +130,14 @@ export async function updateEnterprisePurchase(organizationId: string, purchaseI
 }
 
 export async function createEnterprisePurchaseApproval({ organizationId, purchaseId, actorUserId, approverUserId, purchaseRevision }: { organizationId: string; purchaseId: string; actorUserId: string; approverUserId: string; purchaseRevision?: number }) {
+  const candidatePurchase = await prisma.enterprisePurchase.findFirst({ where: { id: purchaseId, organizationId, archivedAt: null }, select: { requestedByUserId: true } });
+  if (!candidatePurchase) throw new EnterpriseCoreV2Error("Achat introuvable.", 404, "PURCHASE_NOT_FOUND");
+  try {
+    await assertEnterpriseApprovalCandidate({ organizationId, requesterUserId: candidatePurchase.requestedByUserId, approverUserId, moduleCode: "SUPPLIERS_PURCHASES" });
+  } catch (error) {
+    throw approvalError(error, "APPROVER_NOT_ELIGIBLE");
+  }
+
   return prisma.$transaction(async (tx) => {
     const purchase = await tx.enterprisePurchase.findFirst({ where: { id: purchaseId, organizationId, archivedAt: null }, include: { items: true } });
     if (!purchase) throw new EnterpriseCoreV2Error("Achat introuvable.", 404, "PURCHASE_NOT_FOUND");
@@ -129,7 +145,6 @@ export async function createEnterprisePurchaseApproval({ organizationId, purchas
     if (!purchase.items.length) throw new EnterpriseCoreV2Error("Un achat doit comporter au moins une ligne.", 400, "PURCHASE_ITEMS_REQUIRED");
     await requireActiveEnterpriseMember(tx, organizationId, actorUserId); await requireActiveEnterpriseMember(tx, organizationId, approverUserId); await requireSupplier(tx, organizationId, purchase.supplierId, true);
     if (purchase.budgetLineId) await requireBudgetLine(tx, organizationId, purchase.budgetLineId, purchase.currency);
-    if (purchase.requestedByUserId === approverUserId) throw new EnterpriseCoreV2Error("Le demandeur de l’achat ne peut pas approuver son propre achat.", 403, "SELF_APPROVAL_DENIED");
     const pending = await tx.enterpriseApproval.findFirst({ where: { organizationId, targetEntityType: "EnterprisePurchase", targetEntityId: purchaseId, status: "PENDING", archivedAt: null }, select: { id: true } });
     if (pending) throw new EnterpriseCoreV2Error("Une validation est déjà en attente pour cet achat.", 409, "PENDING_APPROVAL_EXISTS");
     const promoted = await tx.enterprisePurchase.updateMany({ where: { id: purchaseId, organizationId, status: "DRAFT", revision: purchaseRevision ?? purchase.revision, archivedAt: null }, data: { status: "PENDING_APPROVAL", updatedByUserId: actorUserId, revision: { increment: 1 } } });
@@ -137,30 +152,43 @@ export async function createEnterprisePurchaseApproval({ organizationId, purchas
     const approval = await tx.enterpriseApproval.create({ data: { organizationId, targetEntityType: "EnterprisePurchase", targetEntityId: purchaseId, requestedByUserId: purchase.requestedByUserId, approverUserId, status: "PENDING" } });
     await createEnterpriseLink(tx, { organizationId, sourceModule: "SUPPLIERS_PURCHASES", sourceEntityType: "EnterprisePurchase", sourceEntityId: purchaseId, targetModule: "VALIDATIONS", targetEntityType: "EnterpriseApproval", targetEntityId: approval.id, linkType: "REQUIRES_APPROVAL", createdById: actorUserId });
     await addEnterpriseOperationalEvent(tx, { organizationId, entityType: "EnterprisePurchase", entityId: purchaseId, eventType: "ENTERPRISE_PURCHASE_SUBMITTED", summary: "Achat soumis pour approbation.", actorUserId, fromStatus: "DRAFT", toStatus: "PENDING_APPROVAL" });
-    await addEnterpriseOperationalEvent(tx, { organizationId, entityType: "EnterpriseApproval", entityId: approval.id, eventType: "ENTERPRISE_APPROVAL_REQUESTED", summary: "Validation d’achat demandée.", actorUserId, toStatus: "PENDING", metadata: { targetEntityType: "EnterprisePurchase", targetEntityId: purchaseId } });
+    await addEnterpriseOperationalEvent(tx, { organizationId, entityType: "EnterpriseApproval", entityId: approval.id, eventType: "ENTERPRISE_APPROVAL_REQUESTED", summary: "Validation d’achat demandée.", actorUserId, toStatus: "PENDING", metadata: { targetEntityType: "EnterprisePurchase", targetEntityId: purchaseId, approverUserId } });
     return approval;
   });
 }
 
 export async function decideEnterprisePurchaseApproval({ organizationId, approvalId, actorUserId, action, revision, decisionComment, canManage }: { organizationId: string; approvalId: string; actorUserId: string; action: "APPROVE" | "REJECT" | "CANCEL"; revision: number; decisionComment?: string | null; canManage: boolean }) {
   if (action === "REJECT" && !nullable(decisionComment)) throw new EnterpriseCoreV2Error("Un motif est obligatoire pour rejeter une validation.", 400, "REJECTION_REASON_REQUIRED");
+  let selfApprovalOverride = false;
+  if (action === "APPROVE" || action === "REJECT") {
+    const pending = await prisma.enterpriseApproval.findFirst({ where: { id: approvalId, organizationId, targetEntityType: "EnterprisePurchase", status: "PENDING", archivedAt: null }, select: { requestedByUserId: true, approverUserId: true } });
+    if (!pending) throw new EnterpriseCoreV2Error("Validation d’achat introuvable.", 404, "APPROVAL_NOT_FOUND");
+    try {
+      const decision = await assertEnterpriseApprovalDecision({ organizationId, requesterUserId: pending.requestedByUserId, approverUserId: pending.approverUserId, actorUserId, moduleCode: "SUPPLIERS_PURCHASES" });
+      selfApprovalOverride = decision.selfApprovalOverride;
+    } catch (error) {
+      throw approvalError(error, "APPROVAL_DECISION_DENIED");
+    }
+  }
+
   return prisma.$transaction(async (tx) => {
     const approval = await tx.enterpriseApproval.findFirst({ where: { id: approvalId, organizationId, targetEntityType: "EnterprisePurchase", archivedAt: null } });
     if (!approval) throw new EnterpriseCoreV2Error("Validation d’achat introuvable.", 404, "APPROVAL_NOT_FOUND");
     if (approval.status !== "PENDING") throw new EnterpriseCoreV2Error("Cette validation a déjà été décidée.", 409, "APPROVAL_ALREADY_DECIDED");
-    if (action === "APPROVE" || action === "REJECT") { if (approval.approverUserId !== actorUserId) throw new EnterpriseCoreV2Error("Seul l’approbateur désigné peut décider cet achat.", 403, "WRONG_APPROVER"); if (approval.requestedByUserId === actorUserId) throw new EnterpriseCoreV2Error("L’auto-approbation est interdite.", 403, "SELF_APPROVAL_DENIED"); }
+    if (action === "APPROVE" || action === "REJECT") { if (approval.approverUserId !== actorUserId) throw new EnterpriseCoreV2Error("Seul l’approbateur désigné peut décider cet achat.", 403, "WRONG_APPROVER"); }
     else if (approval.requestedByUserId !== actorUserId && !canManage) throw new EnterpriseCoreV2Error("Vous ne pouvez pas annuler cette validation.", 403, "APPROVAL_CANCEL_DENIED");
     const purchase = await tx.enterprisePurchase.findFirst({ where: { id: approval.targetEntityId, organizationId, archivedAt: null } });
     if (!purchase || purchase.status !== "PENDING_APPROVAL") throw new EnterpriseCoreV2Error("L’achat cible n’est plus en attente d’approbation.", 409, "APPROVAL_TARGET_CONFLICT");
     const approvalStatus = action === "APPROVE" ? "APPROVED" : action === "REJECT" ? "REJECTED" : "CANCELLED";
     const purchaseStatus = action === "APPROVE" ? "APPROVED" : action === "REJECT" ? "REJECTED" : "DRAFT";
-    const approvalUpdated = await tx.enterpriseApproval.updateMany({ where: { id: approvalId, organizationId, status: "PENDING", revision, archivedAt: null }, data: { status: approvalStatus, decidedAt: action === "CANCEL" ? null : new Date(), decisionComment: nullable(decisionComment), revision: { increment: 1 } } });
+    const comment = nullable(decisionComment) || (selfApprovalOverride ? "SELF_APPROVAL_OVERRIDE" : null);
+    const approvalUpdated = await tx.enterpriseApproval.updateMany({ where: { id: approvalId, organizationId, status: "PENDING", revision, archivedAt: null }, data: { status: approvalStatus, decidedAt: action === "CANCEL" ? null : new Date(), decisionComment: comment, revision: { increment: 1 } } });
     if (approvalUpdated.count !== 1) throw new EnterpriseCoreV2Error("La validation a été décidée simultanément.", 409, "APPROVAL_DECISION_CONFLICT");
     const purchaseUpdated = await tx.enterprisePurchase.updateMany({ where: { id: purchase.id, organizationId, status: "PENDING_APPROVAL", revision: purchase.revision, archivedAt: null }, data: { status: purchaseStatus, updatedByUserId: actorUserId, revision: { increment: 1 } } });
     if (purchaseUpdated.count !== 1) throw new EnterpriseCoreV2Error("L’achat a changé pendant la décision.", 409, "APPROVAL_TARGET_CONFLICT");
     if (action === "APPROVE") await createPurchaseBudgetCommitment(tx, { organizationId, purchaseId: purchase.id, actorUserId });
-    await addEnterpriseOperationalEvent(tx, { organizationId, entityType: "EnterpriseApproval", entityId: approvalId, eventType: action === "APPROVE" ? "ENTERPRISE_APPROVAL_APPROVED" : action === "REJECT" ? "ENTERPRISE_APPROVAL_REJECTED" : "ENTERPRISE_APPROVAL_CANCELLED", summary: nullable(decisionComment) || `Validation ${approvalStatus.toLowerCase()}.`, actorUserId, fromStatus: "PENDING", toStatus: approvalStatus });
-    await addEnterpriseOperationalEvent(tx, { organizationId, entityType: "EnterprisePurchase", entityId: purchase.id, eventType: action === "APPROVE" ? "ENTERPRISE_PURCHASE_APPROVED" : action === "REJECT" ? "ENTERPRISE_PURCHASE_REJECTED" : "ENTERPRISE_PURCHASE_APPROVAL_CANCELLED", summary: nullable(decisionComment) || (action === "APPROVE" ? "Achat approuvé." : action === "REJECT" ? "Achat rejeté." : "Validation de l’achat annulée."), actorUserId, fromStatus: "PENDING_APPROVAL", toStatus: purchaseStatus });
+    await addEnterpriseOperationalEvent(tx, { organizationId, entityType: "EnterpriseApproval", entityId: approvalId, eventType: action === "APPROVE" ? "ENTERPRISE_APPROVAL_APPROVED" : action === "REJECT" ? "ENTERPRISE_APPROVAL_REJECTED" : "ENTERPRISE_APPROVAL_CANCELLED", summary: nullable(decisionComment) || `Validation ${approvalStatus.toLowerCase()}.`, actorUserId, fromStatus: "PENDING", toStatus: approvalStatus, metadata: { selfApprovalOverride } });
+    await addEnterpriseOperationalEvent(tx, { organizationId, entityType: "EnterprisePurchase", entityId: purchase.id, eventType: action === "APPROVE" ? "ENTERPRISE_PURCHASE_APPROVED" : action === "REJECT" ? "ENTERPRISE_PURCHASE_REJECTED" : "ENTERPRISE_PURCHASE_APPROVAL_CANCELLED", summary: nullable(decisionComment) || (action === "APPROVE" ? "Achat approuvé." : action === "REJECT" ? "Achat rejeté." : "Validation de l’achat annulée."), actorUserId, fromStatus: "PENDING_APPROVAL", toStatus: purchaseStatus, metadata: { selfApprovalOverride } });
     return tx.enterpriseApproval.findUnique({ where: { id: approvalId } });
   });
 }
