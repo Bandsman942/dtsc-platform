@@ -4,8 +4,6 @@ import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { approveAssignedAccountTransfer, rejectAssignedAccountTransfer } from "@/lib/enterprise/accounting/treasury-approval-service";
-import { assertEnterpriseApprovalCandidate } from "@/lib/enterprise/approval-assignment";
-import { enterpriseApprovalModuleForTarget } from "@/lib/enterprise/approval-targets";
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { getEnterpriseCoreV2Access } from "@/lib/enterprise/core-v2/access";
 import { decideAssignedEnterpriseApproval } from "@/lib/enterprise/core-v2/approval-assignment-service";
@@ -58,21 +56,6 @@ async function targetRevision(organizationId: string, approval: CurrentApproval)
     return (await prisma.enterprisePayrollRun.findFirst({ where: { id: approval.targetEntityId, organizationId, archivedAt: null }, select: { revision: true } }))?.revision ?? null;
   }
   return null;
-}
-
-async function validateDelegationCandidate(organizationId: string, current: CurrentApproval, delegateUserId?: string) {
-  const delegate = delegateUserId?.trim();
-  if (!delegate) throw new ApprovalCoordinationError("VALIDATION_ERROR", 400, "Le nouveau validateur est obligatoire.");
-  if (delegate === current.requestedByUserId) throw new ApprovalCoordinationError("VALIDATOR_NOT_ALLOWED", 400, "Le demandeur ne peut pas devenir son propre validateur par délégation.");
-  const moduleCode = enterpriseApprovalModuleForTarget(current.targetEntityType);
-  if (!moduleCode) throw new ApprovalCoordinationError("TARGET_NOT_SUPPORTED", 400, "Ce type de validation ne supporte pas encore la délégation gouvernée.");
-  try {
-    await assertEnterpriseApprovalCandidate({ organizationId, requesterUserId: current.requestedByUserId, approverUserId: delegate, moduleCode });
-  } catch (error) {
-    const code = error && typeof error === "object" && "code" in error ? String(error.code) : "APPROVER_NOT_ELIGIBLE";
-    const status = error && typeof error === "object" && "statusCode" in error ? Number(error.statusCode) : 403;
-    throw new ApprovalCoordinationError(code, Number.isFinite(status) ? status : 403, error instanceof Error ? error.message : "Le validateur délégué n’est pas autorisé pour ce module.");
-  }
 }
 
 async function decideDomainApproval(
@@ -133,7 +116,6 @@ export async function POST(req: Request, { params }: Params) {
   try {
     if (professional) {
       const data = professionalApprovalActionSchema.parse(payload);
-      if (data.action === "DELEGATE") await validateDelegationCandidate(organizationId, current, data.delegateUserId);
       const result = await applyProfessionalApprovalAction({
         organizationId,
         approvalId: id,
