@@ -26,6 +26,16 @@ for (const marker of ["Sous-type de commerce retail", "ReferenceCombobox", "Comm
   check(createPanel.includes(marker), `Company form missing ${marker}`);
 }
 
+const clientToast = read("lib/client-toast.ts");
+for (const marker of ['notifyToast(description: string, tone?: ToastTone)', 'durationMs: tone === "error" ? 7000 : undefined']) {
+  check(clientToast.includes(marker), `Global toast dispatch contract missing ${marker}`);
+}
+
+const toastProvider = read("components/ui/toast-provider.tsx");
+for (const marker of ["useAppLocale", 'z-[1200]', 'Dismiss notification', 'copy[toast.tone]']) {
+  check(toastProvider.includes(marker), `Foreground/i18n toast provider missing ${marker}`);
+}
+
 const shared = read("components/enterprise/professional/retail-workspace-shared.tsx");
 check(shared.includes('notifyToast(success, "success")'), "Retail mutations must raise success toasts");
 check(shared.includes('notifyToast(errorMessage, "error")'), "Retail mutations must raise error toasts");
