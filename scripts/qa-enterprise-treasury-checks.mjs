@@ -84,12 +84,31 @@ requireTokens("components/enterprise/professional/enterprise-finance-treasury-wo
   "transferPreview",
   "account-transfers/preview",
   "treasury-history",
+  "useRef",
+  "listRequestVersion",
+  "requestVersion !== listRequestVersion.current",
 ]);
 forbidTokens("components/enterprise/professional/enterprise-finance-treasury-workspace.tsx", [
   "form.get(\"code\")",
   "name=\"targetAmount\"",
   "name=\"exchangeRate\"",
+  "setTab(\"transfers\")",
 ]);
+
+const treasuryWorkspaceSource = fs.readFileSync("components/enterprise/professional/enterprise-finance-treasury-workspace.tsx", "utf8");
+const changeTabStart = treasuryWorkspaceSource.indexOf("const changeTab = (next: TreasuryTab) => {");
+const accountsStart = treasuryWorkspaceSource.indexOf("const accounts = lookups.accounts;", changeTabStart);
+const changeTabSource = changeTabStart >= 0 && accountsStart > changeTabStart ? treasuryWorkspaceSource.slice(changeTabStart, accountsStart) : "";
+for (const token of ["listRequestVersion.current += 1", "setLoading(true)", "setItems([])", "setPagination(EMPTY_PAGINATION)", "setTab(next)"]) {
+  if (!changeTabSource.includes(token)) {
+    throw new Error(`Treasury tab transition must invalidate stale list state before rendering the next tab: missing ${token}.`);
+  }
+}
+const staleResponseGuards = treasuryWorkspaceSource.match(/requestVersion !== listRequestVersion\.current/g) || [];
+if (staleResponseGuards.length < 2) {
+  throw new Error("Treasury list loading must ignore stale success and error responses after a tab change.");
+}
+
 requireTokens("components/enterprise/professional/enterprise-exchange-rates-workspace.tsx", [
   "sourceCurrencyHelp",
   "targetCurrencyHelp",
