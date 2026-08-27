@@ -60,6 +60,7 @@ export async function createEnterpriseLeaveRequest(organizationId: string, actor
 export async function decideEnterpriseLeaveRequest(organizationId: string, requestId: string, actorUserId: string, input: ApprovalDecisionInput) {
   const request = await prisma.enterpriseLeaveRequest.findFirst({ where: { id: requestId, organizationId, status: "SUBMITTED", archivedAt: null } });
   if (!request) throw new EnterpriseDomainError("LEAVE_REQUEST_NOT_FOUND", 404);
+  if (!request.approverUserId) throw new EnterpriseDomainError("APPROVER_NOT_ASSIGNED", 409);
   const decision = await assertOrganizationApprovalDecision({
     organizationId,
     requesterUserId: request.requestedByUserId,
