@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { ModuleSection } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import { moneyValue, type RetailMutation } from "@/components/enterprise/professional/retail-workspace-shared";
+import { notifyToast } from "@/lib/client-toast";
 import { translateRetailWorkspace } from "@/lib/i18n";
 
 type CashAccount = {
@@ -78,6 +79,9 @@ const COPY = {
     nothingToClose: translateRetailWorkspace("fr", "cashSessionNothingToClose"),
     processing: translateRetailWorkspace("fr", "processing"),
     recommended: translateRetailWorkspace("fr", "cashSessionRecommended"),
+    accountRequired: "Choisissez une caisse existante de cette entreprise avant de l’ouvrir.",
+    openingAmountInvalid: "Le fond de caisse doit être un montant valide supérieur ou égal à zéro.",
+    reasonRequired: "Expliquez l’écart de caisse avec un motif d’au moins 3 caractères avant de soumettre la clôture.",
   },
   en: {
     title: translateRetailWorkspace("en", "cashSessionTitle"),
@@ -115,6 +119,9 @@ const COPY = {
     nothingToClose: translateRetailWorkspace("en", "cashSessionNothingToClose"),
     processing: translateRetailWorkspace("en", "processing"),
     recommended: translateRetailWorkspace("en", "cashSessionRecommended"),
+    accountRequired: "Select an existing cash account for this company before opening the till.",
+    openingAmountInvalid: "The opening float must be a valid amount greater than or equal to zero.",
+    reasonRequired: "Explain the cash discrepancy with a reason of at least 3 characters before submitting the close.",
   },
 } as const;
 
@@ -173,22 +180,39 @@ export function MobileMoneyCashSessionManager({
   );
   const lockedAccountIds = useMemo(() => new Set(sessions.map((session) => session.financialAccountId)), [sessions]);
   const availableAccounts = cashAccounts.filter((account) => !lockedAccountIds.has(account.id));
+  const [openError, setOpenError] = useState("");
 
   async function openTill(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const accountId = String(form.get("financialAccountId") || "");
+    const openingAmount = Number(form.get("openingAmount") || 0);
+    if (!accountId || !availableAccounts.some((account) => account.id === accountId)) {
+      setOpenError(copy.accountRequired);
+      notifyToast(copy.accountRequired, "error");
+      return;
+    }
+    if (!Number.isFinite(openingAmount) || openingAmount < 0) {
+      setOpenError(copy.openingAmountInvalid);
+      notifyToast(copy.openingAmountInvalid, "error");
+      return;
+    }
+    setOpenError("");
     const result = await mutate(
       `open-${actionScope}-cash-${accountId}`,
       `/api/enterprise/${organizationId}/retail/cash-sessions`,
       {
         financialAccountId: accountId,
-        openingAmount: String(form.get("openingAmount") || "0"),
+        openingAmount: String(openingAmount),
       },
       copy.opened,
       { idempotent: false },
     );
-    if (result) await reload();
+    if (result) {
+      formElement.reset();
+      await reload();
+    }
   }
 
   return (
@@ -256,6 +280,7 @@ export function MobileMoneyCashSessionManager({
                   <Field label={copy.openingAmount}><Input name="openingAmount" type="number" min="0" step="0.01" required disabled={Boolean(busyAction)} /></Field>
                   <Button disabled={Boolean(busyAction)}><Banknote className="h-4 w-4" />{busyAction?.startsWith(`open-${actionScope}-cash`) ? copy.processing : copy.open}</Button>
                   <p className="text-xs font-semibold text-dtsc-muted sm:col-span-3">{copy.openAnotherDescription}</p>
+                  {openError ? <p role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm font-bold text-rose-700 dark:text-rose-200 sm:col-span-3">{openError}</p> : null}
                 </form>
               </details>
             ) : (
@@ -327,6 +352,7 @@ function CashCloseCard({
   const [customDenomination, setCustomDenomination] = useState("");
   const [customQuantity, setCustomQuantity] = useState(0);
   const [reason, setReason] = useState("");
+  const [closeError, setCloseError] = useState("");
   const countedTotal = denominations.reduce((total, denomination) => total + denomination * (quantities[String(denomination)] || 0), 0)
     + (Number(customDenomination) > 0 ? Number(customDenomination) * customQuantity : 0);
   const expected = Number(session.expectedCurrentAmount ?? session.openingAmount ?? 0);
@@ -335,7 +361,12 @@ function CashCloseCard({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (reasonRequired && !reason.trim()) return;
+    if (reasonRequired && reason.trim().length < 3) {
+      setCloseError(copy.reasonRequired);
+      notifyToast(copy.reasonRequired, "error");
+      return;
+    }
+    setCloseError("");
     const counts = denominations
       .map((denomination) => ({ denomination: String(denomination), quantity: quantities[String(denomination)] || 0 }))
       .filter((item) => item.quantity > 0);
@@ -352,7 +383,14 @@ function CashCloseCard({
       copy.closeSubmitted,
       { idempotent: false },
     );
-    if (result) await reload();
+    if (result) {
+      setQuantities({});
+      setCustomDenomination("");
+      setCustomQuantity(0);
+      setReason("");
+      setCloseError("");
+      await reload();
+    }
   }
 
   return (
@@ -398,7 +436,8 @@ function CashCloseCard({
           <div className={`rounded-xl border p-3 ${reasonRequired ? "border-amber-500/30 bg-amber-500/10" : "border-emerald-500/30 bg-emerald-500/10"}`}><p className="text-xs font-black uppercase text-dtsc-muted">{copy.difference}</p><p className="mt-1 font-black text-dtsc-ink">{moneyValue(difference, currency, locale)}</p></div>
         </div>
 
-        {reasonRequired ? <Field label={copy.reason}><Input value={reason} onChange={(event) => setReason(event.target.value)} placeholder={copy.reasonPlaceholder} minLength={3} maxLength={1000} required disabled={Boolean(busyAction)} /></Field> : null}
+        {reasonRequired ? <Field label={copy.reason}><Input value={reason} onChange={(event) => { setReason(event.target.value); if (closeError) setCloseError(""); }} placeholder={copy.reasonPlaceholder} minLength={3} maxLength={1000} required disabled={Boolean(busyAction)} /></Field> : null}
+        {closeError ? <p role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm font-bold text-rose-700 dark:text-rose-200">{closeError}</p> : null}
         <Button className="w-fit" disabled={Boolean(busyAction) || (reasonRequired && reason.trim().length < 3)}>
           <CheckCircle2 className="h-4 w-4" />{busyAction === `close-${actionScope}-cash-${session.id}` ? copy.processing : copy.submitClose}
         </Button>
