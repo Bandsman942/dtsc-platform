@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { canUseSelfApprovalOverride } from "@/lib/enterprise/approval-assignment";
+import { assertEnterpriseApprovalDecision } from "@/lib/enterprise/approval-assignment";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 
@@ -21,12 +21,21 @@ export async function approveAssignedAccountTransfer(
     select: { id: true, approverUserId: true, requestedByUserId: true, revision: true },
   });
   if (!pendingApproval) throw new EnterpriseAccountingError("TRANSFER_APPROVAL_NOT_ASSIGNED", 409);
-  if (pendingApproval.approverUserId !== actorUserId) throw new EnterpriseAccountingError("TRANSFER_APPROVER_NOT_ALLOWED", 403);
 
-  let selfApprovalAllowed = false;
-  if (pendingApproval.requestedByUserId === actorUserId) {
-    selfApprovalAllowed = await canUseSelfApprovalOverride({ organizationId, userId: actorUserId, moduleCode: "FINANCE_TREASURY" });
-    if (!selfApprovalAllowed) throw new EnterpriseAccountingError("TRANSFER_SELF_APPROVAL_FORBIDDEN", 403);
+  let decision: { selfApprovalOverride: boolean };
+  try {
+    decision = await assertEnterpriseApprovalDecision({
+      organizationId,
+      requesterUserId: pendingApproval.requestedByUserId,
+      approverUserId: pendingApproval.approverUserId,
+      actorUserId,
+      moduleCode: "FINANCE_TREASURY",
+    });
+  } catch (error) {
+    const code = error && typeof error === "object" && "code" in error ? String(error.code) : "TRANSFER_APPROVER_NOT_ALLOWED";
+    if (code === "WRONG_APPROVER" || code === "APPROVER_PERMISSION_DENIED") throw new EnterpriseAccountingError("TRANSFER_APPROVER_NOT_ALLOWED", 403);
+    if (code === "SELF_APPROVAL_FORBIDDEN") throw new EnterpriseAccountingError("TRANSFER_SELF_APPROVAL_FORBIDDEN", 403);
+    throw error;
   }
 
   return prisma.$transaction(async (tx) => {
@@ -39,7 +48,6 @@ export async function approveAssignedAccountTransfer(
       where: { id: pendingApproval.id, organizationId, targetEntityType: "EnterpriseAccountTransfer", targetEntityId: transferId, status: "PENDING", archivedAt: null },
     });
     if (!approval || approval.approverUserId !== actorUserId) throw new EnterpriseAccountingError("TRANSFER_APPROVAL_CONFLICT", 409);
-    if (approval.requestedByUserId === actorUserId && !selfApprovalAllowed) throw new EnterpriseAccountingError("TRANSFER_SELF_APPROVAL_FORBIDDEN", 403);
 
     const updated = await tx.enterpriseAccountTransfer.update({
       where: { id: transfer.id },
@@ -47,7 +55,7 @@ export async function approveAssignedAccountTransfer(
     });
     const decided = await tx.enterpriseApproval.updateMany({
       where: { id: approval.id, organizationId, status: "PENDING", revision: approval.revision, archivedAt: null },
-      data: { status: "APPROVED", decidedAt: new Date(), decisionComment: selfApprovalAllowed ? "SELF_APPROVAL_OVERRIDE" : null, revision: { increment: 1 } },
+      data: { status: "APPROVED", decidedAt: new Date(), decisionComment: decision.selfApprovalOverride ? "SELF_APPROVAL_OVERRIDE" : null, revision: { increment: 1 } },
     });
     if (decided.count !== 1) throw new EnterpriseAccountingError("TRANSFER_APPROVAL_CONFLICT", 409);
 
@@ -60,7 +68,7 @@ export async function approveAssignedAccountTransfer(
       actorUserId,
       fromStatus: "DRAFT",
       toStatus: "APPROVED",
-      metadataJson: { approvalId: approval.id, selfApprovalOverride: selfApprovalAllowed },
+      metadataJson: { approvalId: approval.id, selfApprovalOverride: decision.selfApprovalOverride },
     });
     return updated;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
