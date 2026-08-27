@@ -2,6 +2,7 @@ import type { z } from "zod";
 import { EnterpriseDomainConflictError, EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import {
   assertActiveCustomerEmployee,
+  assertOrganizationApprovalDecision,
   assertOrganizationApprover,
   hrReference,
   publishHrEvent,
@@ -80,12 +81,24 @@ export async function createEnterpriseTimesheet(organizationId: string, actorUse
 }
 
 export async function decideEnterpriseTimesheet(organizationId: string, timesheetId: string, actorUserId: string, input: ApprovalDecisionInput) {
+  const pending = await prisma.enterpriseApproval.findFirst({
+    where: { organizationId, targetEntityType: "EnterpriseTimesheet", targetEntityId: timesheetId, status: "PENDING", archivedAt: null },
+    select: { requestedByUserId: true, approverUserId: true },
+  });
+  if (!pending) throw new EnterpriseDomainError("APPROVAL_NOT_FOUND", 404);
+  const decision = await assertOrganizationApprovalDecision({
+    organizationId,
+    requesterUserId: pending.requestedByUserId,
+    approverUserId: pending.approverUserId,
+    actorUserId,
+    moduleCode: "TIME_ATTENDANCE",
+  });
+
   return prisma.$transaction(async (tx) => {
     const timesheet = await tx.enterpriseTimesheet.findFirst({ where: { id: timesheetId, organizationId, status: "SUBMITTED", archivedAt: null }, include: { entries: true } });
     if (!timesheet) throw new EnterpriseDomainError("TIMESHEET_NOT_FOUND", 404);
     const approval = await tx.enterpriseApproval.findFirst({ where: { organizationId, targetEntityType: "EnterpriseTimesheet", targetEntityId: timesheet.id, status: "PENDING", approverUserId: actorUserId } });
     if (!approval) throw new EnterpriseDomainError("APPROVAL_NOT_FOUND", 404);
-    if (approval.requestedByUserId === actorUserId) throw new EnterpriseDomainError("SELF_APPROVAL_FORBIDDEN", 409);
 
     const targetStatus = input.decision === "APPROVE" ? "APPROVED" : "REJECTED";
     const totalApprovedMinutes = input.decision === "APPROVE" ? timesheet.totalDeclaredMinutes : 0;
@@ -107,8 +120,8 @@ export async function decideEnterpriseTimesheet(organizationId: string, timeshee
       },
     });
     if (updated.count !== 1) throw new EnterpriseDomainConflictError();
-    await tx.enterpriseApproval.update({ where: { id: approval.id }, data: { status: targetStatus, decidedAt: new Date(), decisionComment: input.comment || null, revision: { increment: 1 } } });
-    await publishHrEvent(tx, { organizationId, entityType: "EnterpriseTimesheet", entityId: timesheet.id, eventType: `TIMESHEET_${targetStatus}`, summary: `Timesheet ${timesheet.reference} ${targetStatus.toLowerCase()}`, actorUserId, fromStatus: "SUBMITTED", toStatus: targetStatus, metadataJson: { totalApprovedMinutes } });
+    await tx.enterpriseApproval.update({ where: { id: approval.id }, data: { status: targetStatus, decidedAt: new Date(), decisionComment: input.comment || (decision.selfApprovalOverride ? "SELF_APPROVAL_OVERRIDE" : null), revision: { increment: 1 } } });
+    await publishHrEvent(tx, { organizationId, entityType: "EnterpriseTimesheet", entityId: timesheet.id, eventType: `TIMESHEET_${targetStatus}`, summary: `Timesheet ${timesheet.reference} ${targetStatus.toLowerCase()}`, actorUserId, fromStatus: "SUBMITTED", toStatus: targetStatus, metadataJson: { totalApprovedMinutes, selfApprovalOverride: decision.selfApprovalOverride } });
     return tx.enterpriseTimesheet.findUniqueOrThrow({ where: { id: timesheet.id }, include: { entries: true } });
   });
 }
