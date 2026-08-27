@@ -25,6 +25,7 @@ import {
   financeMoney,
   financeStatusLabel,
   financeStatusTone,
+  safeFinanceError,
   type FinanceLocale,
 } from "@/components/enterprise/professional/finance-professional-ui";
 import { Button } from "@/components/ui/button";
@@ -60,7 +61,7 @@ const EMPTY_HISTORY_FILTERS: HistoryFilters = { accountId: "", transactionType: 
 async function requestJson(endpoint: string, method: "GET" | "POST" | "PATCH" | "DELETE" = "GET", body?: unknown) {
   const response = await fetch(endpoint, { method, cache: "no-store", headers: body === undefined ? undefined : { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
   const payload = await response.json().catch(() => null) as { message?: string; error?: string; [key: string]: unknown } | null;
-  if (!response.ok) throw new Error(payload?.message || payload?.error || "TREASURY_OPERATION_FAILED");
+  if (!response.ok) throw new Error(payload?.error || payload?.message || "TREASURY_OPERATION_FAILED");
   return payload || {};
 }
 
@@ -110,9 +111,9 @@ export function EnterpriseFinanceTreasuryWorkspace({ organizationId, organizatio
   const loadLookups = useCallback(async () => {
     setLookupLoading(true);
     try { setLookups(await requestJson(`/api/enterprise/${organizationId}/treasury-lookups`) as unknown as LookupPayload); }
-    catch (loadError) { setError(loadError instanceof Error ? loadError.message : t("loadError")); }
+    catch (loadError) { setError(safeFinanceError(loadError, t("loadError"), locale)); }
     finally { setLookupLoading(false); }
-  }, [organizationId, t]);
+  }, [organizationId, t, locale]);
 
   const listEndpoint = useMemo(() => {
     const base = tab === "accounts" ? `/api/enterprise/${organizationId}/financial-accounts` : tab === "transfers" ? `/api/enterprise/${organizationId}/account-transfers` : `/api/enterprise/${organizationId}/treasury-history`;
@@ -129,9 +130,9 @@ export function EnterpriseFinanceTreasuryWorkspace({ organizationId, organizatio
       const payload = await requestJson(listEndpoint);
       setItems(Array.isArray(payload.items) ? payload.items as FinanceRecord[] : []);
       setPagination((payload.pagination as FinancePagination | undefined) || EMPTY_PAGINATION);
-    } catch (loadError) { setItems([]); setError(loadError instanceof Error ? loadError.message : t("loadError")); }
+    } catch (loadError) { setItems([]); setError(safeFinanceError(loadError, t("loadError"), locale)); }
     finally { setLoading(false); }
-  }, [listEndpoint, t]);
+  }, [listEndpoint, t, locale]);
 
   useEffect(() => { void loadLookups(); }, [loadLookups, refreshKey]);
   useEffect(() => { void loadList(); }, [loadList, refreshKey]);
@@ -153,7 +154,7 @@ export function EnterpriseFinanceTreasuryWorkspace({ organizationId, organizatio
     try {
       await requestJson(`/api/enterprise/${organizationId}/financial-accounts`, "POST", { name: String(form.get("name") || ""), accountType: String(form.get("accountType") || ""), currencyCode: String(form.get("currencyCode") || ""), ledgerAccountId: String(form.get("ledgerAccountId") || ""), openingBalance: String(form.get("openingBalance") || "0"), maskedReference: String(form.get("maskedReference") || "") || undefined });
       setAccountDialog(false); setAccountType("CASH"); setAccountCurrency(""); refresh(t("accountCreated"));
-    } catch (mutationError) { setError(mutationError instanceof Error ? mutationError.message : t("operationError")); }
+    } catch (mutationError) { setError(safeFinanceError(mutationError, t("operationError"), locale)); }
     finally { setBusy(false); }
   }
 
@@ -163,14 +164,14 @@ export function EnterpriseFinanceTreasuryWorkspace({ organizationId, organizatio
     try {
       await requestJson(`/api/enterprise/${organizationId}/financial-accounts/${editingAccount.id}`, "PATCH", { name: String(form.get("name") || ""), maskedReference: String(form.get("maskedReference") || "") || null, responsibleUserId: String(form.get("responsibleUserId") || "") || null, siteId: String(form.get("siteId") || "") || null, revision: editingAccount.revision });
       setEditingAccount(null); refresh(t("accountUpdated"));
-    } catch (mutationError) { setError(mutationError instanceof Error ? mutationError.message : t("operationError")); }
+    } catch (mutationError) { setError(safeFinanceError(mutationError, t("operationError"), locale)); }
     finally { setBusy(false); }
   }
 
   async function setAccountStatus(account: Account, nextStatus: "ACTIVE" | "INACTIVE") {
     if (busy) return; setBusy(true); setError("");
     try { await requestJson(`/api/enterprise/${organizationId}/financial-accounts/${account.id}`, "PATCH", { status: nextStatus, revision: account.revision }); refresh(t("accountUpdated")); }
-    catch (mutationError) { setError(mutationError instanceof Error ? mutationError.message : t("operationError")); }
+    catch (mutationError) { setError(safeFinanceError(mutationError, t("operationError"), locale)); }
     finally { setBusy(false); }
   }
 
@@ -178,7 +179,7 @@ export function EnterpriseFinanceTreasuryWorkspace({ organizationId, organizatio
     event.preventDefault(); if (busy || !archiveAccount) return;
     const form = new FormData(event.currentTarget); setBusy(true); setError("");
     try { await requestJson(`/api/enterprise/${organizationId}/financial-accounts/${archiveAccount.id}`, "DELETE", { reason: String(form.get("reason") || ""), revision: archiveAccount.revision }); setArchiveAccount(null); setSelected(null); refresh(t("accountArchived")); }
-    catch (mutationError) { setError(mutationError instanceof Error ? mutationError.message : t("operationError")); }
+    catch (mutationError) { setError(safeFinanceError(mutationError, t("operationError"), locale)); }
     finally { setBusy(false); }
   }
 
@@ -188,21 +189,21 @@ export function EnterpriseFinanceTreasuryWorkspace({ organizationId, organizatio
     const payload = { sourceFinancialAccountId: String(form.get("sourceFinancialAccountId") || ""), targetFinancialAccountId: String(form.get("targetFinancialAccountId") || ""), sourceAmount: String(form.get("sourceAmount") || ""), transferDate: String(form.get("transferDate") || "") };
     setBusy(true); setError("");
     try { const body = await requestJson(`/api/enterprise/${organizationId}/account-transfers/preview`, "POST", payload); setTransferPayload(payload); setTransferPreview(body.preview as TransferPreview); }
-    catch (mutationError) { setError(mutationError instanceof Error ? mutationError.message : t("operationError")); }
+    catch (mutationError) { setError(safeFinanceError(mutationError, t("operationError"), locale)); }
     finally { setBusy(false); }
   }
 
   async function prepareTransfer() {
     if (busy || !transferPayload) return; setBusy(true); setError("");
     try { await requestJson(`/api/enterprise/${organizationId}/account-transfers`, "POST", transferPayload); setTransferDialog(false); setTransferPreview(null); setTransferPayload(null); setTab("transfers"); setPage(1); refresh(t("transferCreated")); }
-    catch (mutationError) { setError(mutationError instanceof Error ? mutationError.message : t("operationError")); }
+    catch (mutationError) { setError(safeFinanceError(mutationError, t("operationError"), locale)); }
     finally { setBusy(false); }
   }
 
   async function transitionTransfer(transfer: Transfer, action: "APPROVE" | "CONFIRM") {
     if (busy) return; setBusy(true); setError("");
     try { await requestJson(`/api/enterprise/${organizationId}/account-transfers/${transfer.id}/transition`, "POST", { action, revision: transfer.revision }); setSelected(null); refresh(); }
-    catch (mutationError) { setError(mutationError instanceof Error ? mutationError.message : t("operationError")); }
+    catch (mutationError) { setError(safeFinanceError(mutationError, t("operationError"), locale)); }
     finally { setBusy(false); }
   }
 
