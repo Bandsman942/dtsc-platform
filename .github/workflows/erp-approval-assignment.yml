@@ -1,0 +1,57 @@
+name: ERP approval assignment gate
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "app/api/enterprise/**"
+      - "components/enterprise/**"
+      - "lib/enterprise/**"
+      - "scripts/qa-erp-approval-assignment-509.mjs"
+      - ".github/workflows/erp-approval-assignment.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    name: Approval assignment contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        run: pnpm prisma:generate
+      - name: Run #509 transverse contract
+        run: node scripts/qa-erp-approval-assignment-509.mjs
+      - name: Type check with diagnostic capture
+        id: typecheck
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm type-check 2>&1 | tee typecheck-509.log
+      - name: Upload type-check diagnostics
+        if: steps.typecheck.outcome == 'failure'
+        uses: actions/upload-artifact@v7
+        with:
+          name: typecheck-509-${{ github.sha }}
+          path: typecheck-509.log
+          if-no-files-found: error
+          retention-days: 3
+      - name: Enforce type-check result
+        if: steps.typecheck.outcome == 'failure'
+        run: exit 1
