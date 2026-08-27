@@ -30,16 +30,48 @@ export async function GET(req: Request, { params }: Params) {
     prisma.enterpriseAccountTransfer.count({ where }),
   ]);
   const accountIds = [...new Set(rawItems.flatMap((item) => [item.sourceFinancialAccountId, item.targetFinancialAccountId]))];
-  const accounts = await prisma.enterpriseFinancialAccount.findMany({
-    where: { organizationId, id: { in: accountIds } },
-    select: { id: true, code: true, name: true, accountType: true, currencyCode: true },
-  });
+  const transferIds = rawItems.map((item) => item.id);
+  const [accounts, approvals] = await Promise.all([
+    prisma.enterpriseFinancialAccount.findMany({
+      where: { organizationId, id: { in: accountIds } },
+      select: { id: true, code: true, name: true, accountType: true, currencyCode: true },
+    }),
+    transferIds.length
+      ? prisma.enterpriseApproval.findMany({
+          where: {
+            organizationId,
+            targetEntityType: "EnterpriseAccountTransfer",
+            targetEntityId: { in: transferIds },
+            archivedAt: null,
+          },
+          orderBy: [{ requestedAt: "desc" }, { createdAt: "desc" }],
+          select: { id: true, targetEntityId: true, requestedByUserId: true, approverUserId: true, status: true },
+        })
+      : Promise.resolve([]),
+  ]);
+  const approvalByTransferId = new Map<string, (typeof approvals)[number]>();
+  for (const approval of approvals) if (!approvalByTransferId.has(approval.targetEntityId)) approvalByTransferId.set(approval.targetEntityId, approval);
+  const approverUserIds = [...new Set(approvals.map((approval) => approval.approverUserId))];
+  const approvers = approverUserIds.length
+    ? await prisma.user.findMany({ where: { id: { in: approverUserIds } }, select: { id: true, name: true } })
+    : [];
+  const approverNameById = new Map(approvers.map((user) => [user.id, user.name]));
   const accountById = new Map(accounts.map((account) => [account.id, account]));
-  const items = rawItems.map((item) => ({
-    ...item,
-    sourceFinancialAccount: accountById.get(item.sourceFinancialAccountId) || null,
-    targetFinancialAccount: accountById.get(item.targetFinancialAccountId) || null,
-  }));
+  const items = rawItems.map((item) => {
+    const approval = approvalByTransferId.get(item.id);
+    return {
+      ...item,
+      sourceFinancialAccount: accountById.get(item.sourceFinancialAccountId) || null,
+      targetFinancialAccount: accountById.get(item.targetFinancialAccountId) || null,
+      approval: approval ? {
+        id: approval.id,
+        approverUserId: approval.approverUserId,
+        approverName: approverNameById.get(approval.approverUserId) || "—",
+        requestedByUserId: approval.requestedByUserId,
+        status: approval.status,
+      } : null,
+    };
+  });
 
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "account-transfers" } });
   return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } });
@@ -70,6 +102,7 @@ export async function POST(req: Request, { params }: Params) {
         sourceCurrency: transfer.sourceCurrencyCode,
         targetCurrency: transfer.targetCurrencyCode,
         exchangeRate: transfer.exchangeRate?.toFixed() || "1",
+        approverUserId: parsed.data.approverUserId,
       },
     });
     await writeApiLog({ request: req, statusCode: 201, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "account-transfers" } });
