@@ -39,7 +39,7 @@ export async function POST(req: Request, { params }: Params) {
   const { organizationId } = await params;
   if (!(await requireEnterpriseGovernanceAccess(session.userId, organizationId))) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
   const parsed = enterpriseOrganizationGuidedRoleSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "VALIDATION_ERROR", message: parsed.error.issues[0]?.message || (parsed.data?.locale === "en" ? "Invalid role." : "Rôle invalide.") }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "VALIDATION_ERROR", message: parsed.error.issues[0]?.message || "Rôle invalide / Invalid role." }, { status: 400 });
 
   let derived: Awaited<ReturnType<typeof deriveTenantPermissionsFromCapabilities>>;
   try {
