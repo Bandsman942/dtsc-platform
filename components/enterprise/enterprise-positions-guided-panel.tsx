@@ -44,8 +44,8 @@ function permissionMatchesAction(permission: string, action: GuidedAction) {
 function initialCapabilities(position: EnterprisePositionItem | null, modules: EnterpriseModuleItem[]) {
   const current = permissions(position);
   const result: Capability[] = [];
-  for (const module of modules) {
-    const code = normalizeEnterpriseModuleCode(module.canonicalCode || module.moduleCode);
+  for (const moduleItem of modules) {
+    const code = normalizeEnterpriseModuleCode(moduleItem.canonicalCode || moduleItem.moduleCode);
     const definition = getEnterpriseModuleDefinition(code);
     if (!definition?.permissionPrefixes.length) continue;
     const related = current.filter((permission) => definition.permissionPrefixes.some((prefix) => permission.startsWith(prefix)));
