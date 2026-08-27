@@ -39,6 +39,7 @@ export function EnterpriseExchangeRatesWorkspace({ organizationId, organizationN
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
   const [rateDialogOpen, setRateDialogOpen] = useState(false);
   const [correctionTarget, setCorrectionTarget] = useState<Rate | null>(null);
   const [defaults, setDefaults] = useState<RateFormDefaults>({ sourceCurrencyCode: "", targetCurrencyCode: "", rateDate: today(), source: "MANUAL" });
@@ -50,9 +51,13 @@ export function EnterpriseExchangeRatesWorkspace({ organizationId, organizationN
     finally { setLoading(false); }
   }, [organizationId, t]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load(); }, [load, refreshKey]);
   const currencyChoices = useMemo(() => payload.currencies.map((currency) => ({ id: currency.code, label: `${currency.code} · ${currency.name}` })), [payload.currencies]);
   const sourceChoices = SOURCE_VALUES.map((source) => ({ id: source, label: source === "MANUAL" ? t("manual") : source === "CENTRAL_BANK" ? t("centralBank") : source === "COMMERCIAL_BANK" ? t("commercialBank") : source === "PROVIDER" ? t("provider") : source === "CONTRACTUAL" ? t("contractual") : t("imported") }));
+
+  function refresh() {
+    setRefreshKey((value) => value + 1);
+  }
 
   function openNewRate(prefill?: Partial<RateFormDefaults>) {
     setDefaults({ sourceCurrencyCode: prefill?.sourceCurrencyCode || "", targetCurrencyCode: prefill?.targetCurrencyCode || "", rateDate: prefill?.rateDate || today(), source: prefill?.source || "MANUAL" });
@@ -64,7 +69,7 @@ export function EnterpriseExchangeRatesWorkspace({ organizationId, organizationN
     const form = new FormData(event.currentTarget); setBusy(true); setError(""); setNotice("");
     try {
       await requestJson(`/api/enterprise/${organizationId}/exchange-rates`, "POST", { sourceCurrencyCode: String(form.get("sourceCurrencyCode") || ""), targetCurrencyCode: String(form.get("targetCurrencyCode") || ""), rate: String(form.get("rate") || ""), rateDate: String(form.get("rateDate") || ""), source: String(form.get("source") || "MANUAL") });
-      setRateDialogOpen(false); setNotice(t("created")); await load();
+      setRateDialogOpen(false); setNotice(t("created")); refresh();
     } catch (mutationError) { setError(mutationError instanceof Error ? mutationError.message : t("operationError")); }
     finally { setBusy(false); }
   }
@@ -74,7 +79,7 @@ export function EnterpriseExchangeRatesWorkspace({ organizationId, organizationN
     const form = new FormData(event.currentTarget); setBusy(true); setError(""); setNotice("");
     try {
       await requestJson(`/api/enterprise/${organizationId}/exchange-rates/${correctionTarget.id}`, "PATCH", { reason: String(form.get("reason") || "") });
-      const target = correctionTarget; setCorrectionTarget(null); await load();
+      const target = correctionTarget; setCorrectionTarget(null); refresh();
       openNewRate({ sourceCurrencyCode: target.sourceCurrencyCode, targetCurrencyCode: target.targetCurrencyCode, rateDate: String(target.rateDate).slice(0, 10), source: target.source });
     } catch (mutationError) { setError(mutationError instanceof Error ? mutationError.message : t("operationError")); }
     finally { setBusy(false); }
