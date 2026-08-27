@@ -1,15 +1,16 @@
 import { Prisma } from "@prisma/client";
 import { assertEnterpriseApprovalCandidate, assertEnterpriseApprovalDecision } from "@/lib/enterprise/approval-assignment";
+import { enterpriseApprovalModuleForTarget } from "@/lib/enterprise/approval-targets";
 import { EnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
 import { createEnterpriseApproval, decideEnterpriseApproval } from "@/lib/enterprise/core-v2/service";
 import { prisma } from "@/lib/prisma";
 
-const MODULE_BY_TARGET: Record<string, string> = {
-  EnterpriseRequest: "INTERNAL_REQUESTS",
-  EnterpriseTask: "TASKS_OPERATIONS",
-  EnterpriseMeeting: "MEETINGS",
-  PharmacyQualityIncident: "QUALITY_PHARMACOVIGILANCE",
-};
+const GENERIC_APPROVAL_TARGETS = new Set([
+  "EnterpriseRequest",
+  "EnterpriseTask",
+  "EnterpriseMeeting",
+  "PharmacyQualityIncident",
+]);
 
 function assignmentError(error: unknown, fallback: string) {
   const code = error && typeof error === "object" && "code" in error ? String(error.code) : fallback;
@@ -18,8 +19,13 @@ function assignmentError(error: unknown, fallback: string) {
   return new EnterpriseCoreV2Error(message, Number.isFinite(status) ? status : 403, code);
 }
 
+function genericApprovalModule(targetEntityType: string) {
+  if (!GENERIC_APPROVAL_TARGETS.has(targetEntityType)) return null;
+  return enterpriseApprovalModuleForTarget(targetEntityType);
+}
+
 async function requireSelfApprovalTarget(tx: Prisma.TransactionClient, organizationId: string, targetEntityType: string, targetEntityId: string) {
-  const moduleCode = MODULE_BY_TARGET[targetEntityType];
+  const moduleCode = genericApprovalModule(targetEntityType);
   if (!moduleCode) throw new EnterpriseCoreV2Error("Ce type d’objet n’utilise pas le moteur générique de validation.", 400, "INVALID_APPROVAL_TARGET_TYPE");
   if (targetEntityType === "EnterpriseRequest") {
     const target = await tx.enterpriseRequest.findFirst({ where: { id: targetEntityId, organizationId, archivedAt: null }, select: { id: true, status: true } });
@@ -37,9 +43,12 @@ async function requireSelfApprovalTarget(tx: Prisma.TransactionClient, organizat
     if (!target) throw new EnterpriseCoreV2Error("La réunion ciblée est introuvable dans cette entreprise.", 400, "INVALID_APPROVAL_TARGET");
     return { moduleCode, status: target.status };
   }
-  const target = await tx.pharmacyQualityIncident.findFirst({ where: { id: targetEntityId, organizationId }, select: { id: true, status: true } });
-  if (!target) throw new EnterpriseCoreV2Error("L’incident pharmacie ciblé est introuvable dans cette entreprise.", 400, "INVALID_APPROVAL_TARGET");
-  return { moduleCode, status: target.status };
+  if (targetEntityType === "PharmacyQualityIncident") {
+    const target = await tx.pharmacyQualityIncident.findFirst({ where: { id: targetEntityId, organizationId }, select: { id: true, status: true } });
+    if (!target) throw new EnterpriseCoreV2Error("L’incident pharmacie ciblé est introuvable dans cette entreprise.", 400, "INVALID_APPROVAL_TARGET");
+    return { moduleCode, status: target.status };
+  }
+  throw new EnterpriseCoreV2Error("Ce type d’objet n’utilise pas le moteur générique de validation.", 400, "INVALID_APPROVAL_TARGET_TYPE");
 }
 
 async function createApprovalLink(tx: Prisma.TransactionClient, input: {
@@ -83,7 +92,7 @@ export async function createAssignedEnterpriseApproval({
   targetEntityId: string;
   approverUserId: string;
 }) {
-  const moduleCode = MODULE_BY_TARGET[targetEntityType];
+  const moduleCode = genericApprovalModule(targetEntityType);
   if (!moduleCode) return createEnterpriseApproval({ organizationId, actorUserId, targetEntityType, targetEntityId, approverUserId });
   let candidate: Awaited<ReturnType<typeof assertEnterpriseApprovalCandidate>>;
   try {
@@ -121,7 +130,7 @@ export async function decideAssignedEnterpriseApproval(args: {
   if (args.action === "CANCEL") return decideEnterpriseApproval(args);
   const pending = await prisma.enterpriseApproval.findFirst({ where: { id: args.approvalId, organizationId: args.organizationId, status: "PENDING", archivedAt: null }, select: { targetEntityType: true, targetEntityId: true, requestedByUserId: true, approverUserId: true } });
   if (!pending) throw new EnterpriseCoreV2Error("Validation introuvable.", 404, "APPROVAL_NOT_FOUND");
-  const moduleCode = MODULE_BY_TARGET[pending.targetEntityType];
+  const moduleCode = genericApprovalModule(pending.targetEntityType);
   if (!moduleCode) return decideEnterpriseApproval(args);
 
   let decision: Awaited<ReturnType<typeof assertEnterpriseApprovalDecision>>;
