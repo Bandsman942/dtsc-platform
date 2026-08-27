@@ -3,14 +3,44 @@ import { z } from "zod";
 const currency = z.string().trim().regex(/^[A-Z]{3}$/);
 const id = z.string().cuid();
 const amount = z.union([z.string(), z.number()]).transform(String).refine((value) => /^-?\d+(\.\d{1,6})?$/.test(value));
+const positiveAmount = amount.refine((value) => Number(value) > 0, { message: "Amount must be positive" });
 const date = z.coerce.date();
 const revision = z.coerce.number().int().positive();
 
 export const financialAccountCreateSchema = z.object({
-  code: z.string().trim().min(1).max(40), name: z.string().trim().min(2).max(160), accountType: z.enum(["CASH", "BANK", "MOBILE_MONEY", "CLEARING"]), currencyCode: currency,
-  maskedReference: z.string().trim().max(120).optional(), openingBalance: amount.default("0"), ledgerAccountId: id, responsibleUserId: id.optional(), siteId: id.optional(), settingsJson: z.record(z.string(), z.unknown()).optional(),
+  name: z.string().trim().min(2).max(160),
+  accountType: z.enum(["CASH", "BANK", "MOBILE_MONEY", "CLEARING"]),
+  currencyCode: currency,
+  maskedReference: z.string().trim().max(120).optional(),
+  openingBalance: amount.default("0"),
+  ledgerAccountId: id,
+  responsibleUserId: id.optional(),
+  siteId: id.optional(),
+  settingsJson: z.record(z.string(), z.unknown()).optional(),
 });
-export const accountTransferSchema = z.object({ sourceFinancialAccountId: id, targetFinancialAccountId: id, sourceAmount: amount, targetAmount: amount, exchangeRate: amount.optional(), transferDate: date }).refine((v) => v.sourceFinancialAccountId !== v.targetFinancialAccountId);
+
+export const financialAccountUpdateSchema = z.object({
+  name: z.string().trim().min(2).max(160).optional(),
+  maskedReference: z.string().trim().max(120).nullable().optional(),
+  responsibleUserId: id.nullable().optional(),
+  siteId: id.nullable().optional(),
+  status: z.enum(["ACTIVE", "INACTIVE"]).optional(),
+  revision,
+}).refine((value) => Object.keys(value).some((key) => key !== "revision"), { message: "At least one editable field is required" });
+
+export const financialAccountArchiveSchema = z.object({
+  reason: z.string().trim().min(4).max(1000),
+  revision,
+});
+
+export const accountTransferSchema = z.object({
+  sourceFinancialAccountId: id,
+  targetFinancialAccountId: id,
+  sourceAmount: positiveAmount,
+  transferDate: date,
+}).refine((value) => value.sourceFinancialAccountId !== value.targetFinancialAccountId, { message: "Transfer accounts must differ" });
+
+export const accountTransferPreviewSchema = accountTransferSchema;
 export const transferTransitionSchema = z.object({ action: z.enum(["APPROVE", "CONFIRM"]), revision });
 export const cashSessionOpenSchema = z.object({ financialAccountId: id, openingAmount: amount, siteId: id.optional() });
 export const cashCloseSchema = z.object({ countedClosingAmount: amount, closingReason: z.string().trim().min(3).max(1000).optional(), counts: z.array(z.object({ denomination: amount, quantity: z.coerce.number().int().nonnegative().max(1000000) })).max(100), revision });
