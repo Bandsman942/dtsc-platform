@@ -69,6 +69,7 @@ export async function GET(req: Request, { params }: Params) {
         approverName: approverNameById.get(approval.approverUserId) || "—",
         requestedByUserId: approval.requestedByUserId,
         status: approval.status,
+        canAct: approval.status === "PENDING" && approval.approverUserId === auth.session.userId,
       } : null,
     };
   });
