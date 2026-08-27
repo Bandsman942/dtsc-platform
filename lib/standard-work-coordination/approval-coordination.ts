@@ -1,12 +1,20 @@
 import { Prisma } from "@prisma/client";
+import { assertEnterpriseApprovalCandidate } from "@/lib/enterprise/approval-assignment";
+import { enterpriseApprovalModuleForTarget } from "@/lib/enterprise/approval-targets";
 import { prisma } from "@/lib/prisma";
 
 export type ProfessionalApprovalAction = "REQUEST_CORRECTION" | "RESUBMIT" | "DELEGATE";
+
+const CORRECTION_CAPABLE_TARGETS = new Set(["EnterpriseTask", "EnterpriseRequest"]);
 
 export class ApprovalCoordinationError extends Error {
   constructor(public code: string, public status: number, message: string) {
     super(message);
   }
+}
+
+export function supportsProfessionalApprovalCorrection(targetEntityType: string) {
+  return CORRECTION_CAPABLE_TARGETS.has(targetEntityType);
 }
 
 export async function ensureApprovalSubmissionVersion(args: {
@@ -61,6 +69,7 @@ export async function applyProfessionalApprovalAction(args: {
     if (approval.revision !== args.revision) throw new ApprovalCoordinationError("VERSION_MISMATCH", 409, "Cette validation a été modifiée. Actualisez avant de continuer.");
 
     if (args.action === "RESUBMIT") {
+      if (!supportsProfessionalApprovalCorrection(approval.targetEntityType)) throw new ApprovalCoordinationError("TARGET_ACTION_NOT_SUPPORTED", 400, "Ce type de validation ne prend pas en charge le cycle correction / resoumission.");
       if (!args.canManage && approval.requestedByUserId !== args.actorUserId) throw new ApprovalCoordinationError("FORBIDDEN", 403, "Seul le demandeur peut soumettre la correction.");
       if (approval.status !== "CORRECTION_REQUESTED") throw new ApprovalCoordinationError("INVALID_STATE", 409, "Cette validation n’attend pas de correction.");
       const latest = await tx.enterpriseApprovalSubmissionVersion.findFirst({ where: { organizationId: args.organizationId, approvalId: approval.id }, orderBy: { versionNumber: "desc" } });
@@ -88,14 +97,23 @@ export async function applyProfessionalApprovalAction(args: {
     if (args.action === "DELEGATE") {
       const delegateUserId = args.delegateUserId?.trim();
       if (!delegateUserId) throw new ApprovalCoordinationError("VALIDATION_ERROR", 400, "Le nouveau validateur est obligatoire.");
-      if (delegateUserId === approval.requestedByUserId) throw new ApprovalCoordinationError("VALIDATOR_NOT_ALLOWED", 400, "Le demandeur ne peut pas devenir son propre validateur.");
-      const member = await tx.organizationMember.findFirst({ where: { organizationId: args.organizationId, userId: delegateUserId, status: "ACTIVE", removedAt: null }, select: { userId: true } });
-      if (!member) throw new ApprovalCoordinationError("VALIDATOR_NOT_ALLOWED", 400, "Le validateur délégué doit être membre actif de cette entreprise.");
+      if (delegateUserId === approval.requestedByUserId) throw new ApprovalCoordinationError("VALIDATOR_NOT_ALLOWED", 400, "Le demandeur ne peut pas devenir son propre validateur par délégation.");
+      const moduleCode = enterpriseApprovalModuleForTarget(approval.targetEntityType);
+      if (!moduleCode) throw new ApprovalCoordinationError("TARGET_NOT_SUPPORTED", 400, "Ce type de validation ne supporte pas encore la délégation gouvernée.");
+      try {
+        await assertEnterpriseApprovalCandidate({ organizationId: args.organizationId, requesterUserId: approval.requestedByUserId, approverUserId: delegateUserId, moduleCode });
+      } catch (error) {
+        const code = error && typeof error === "object" && "code" in error ? String(error.code) : "APPROVER_NOT_ELIGIBLE";
+        const status = error && typeof error === "object" && "statusCode" in error ? Number(error.statusCode) : 403;
+        throw new ApprovalCoordinationError(code, Number.isFinite(status) ? status : 403, error instanceof Error ? error.message : "Le validateur délégué n’est pas autorisé pour ce module.");
+      }
+      await syncTargetApproverForDelegation(tx, approval.targetEntityType, approval.targetEntityId, args.organizationId, delegateUserId);
       const updated = await tx.enterpriseApproval.update({ where: { id: approval.id }, data: { approverUserId: delegateUserId, revision: { increment: 1 } } });
-      await addApprovalEvent(tx, args.organizationId, approval.id, args.actorUserId, "APPROVAL_DELEGATED", "Validation déléguée à un autre validateur.", approval.status, updated.status, { previousApproverUserId: approval.approverUserId, approverUserId: delegateUserId });
+      await addApprovalEvent(tx, args.organizationId, approval.id, args.actorUserId, "APPROVAL_DELEGATED", "Validation déléguée à un autre validateur autorisé.", approval.status, updated.status, { previousApproverUserId: approval.approverUserId, approverUserId: delegateUserId, moduleCode });
       return { approval: updated };
     }
 
+    if (!supportsProfessionalApprovalCorrection(approval.targetEntityType)) throw new ApprovalCoordinationError("TARGET_ACTION_NOT_SUPPORTED", 400, "Ce type de validation ne prend pas en charge le cycle correction / resoumission.");
     const reason = normalize(args.reason);
     if (!reason) throw new ApprovalCoordinationError("CORRECTION_REASON_REQUIRED", 400, "Le motif de correction est obligatoire.");
     const version = await ensureSubmissionVersionInTransaction(tx, { organizationId: args.organizationId, approvalId: approval.id, actorUserId: approval.requestedByUserId });
@@ -206,6 +224,21 @@ async function approvalTargetSnapshot(tx: Prisma.TransactionClient, organization
 
 function serializeSnapshot(value: Record<string, unknown>): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+}
+
+async function syncTargetApproverForDelegation(tx: Prisma.TransactionClient, entityType: string, entityId: string, organizationId: string, approverUserId: string) {
+  if (entityType === "EnterpriseLeaveRequest") {
+    const updated = await tx.enterpriseLeaveRequest.updateMany({ where: { id: entityId, organizationId, status: "SUBMITTED", archivedAt: null }, data: { approverUserId, revision: { increment: 1 } } });
+    if (updated.count !== 1) throw new ApprovalCoordinationError("TARGET_CONFLICT", 409, "Le congé lié a changé pendant la délégation.");
+  }
+  if (entityType === "EnterpriseTimesheet") {
+    const updated = await tx.enterpriseTimesheet.updateMany({ where: { id: entityId, organizationId, status: "SUBMITTED", archivedAt: null }, data: { approverUserId, revision: { increment: 1 } } });
+    if (updated.count !== 1) throw new ApprovalCoordinationError("TARGET_CONFLICT", 409, "La feuille de temps liée a changé pendant la délégation.");
+  }
+  if (entityType === "EnterprisePayrollRun") {
+    const updated = await tx.enterprisePayrollRun.updateMany({ where: { id: entityId, organizationId, status: "PENDING_APPROVAL", archivedAt: null }, data: { approverUserId, revision: { increment: 1 } } });
+    if (updated.count !== 1) throw new ApprovalCoordinationError("TARGET_CONFLICT", 409, "La paie liée a changé pendant la délégation.");
+  }
 }
 
 async function syncTargetForCorrection(tx: Prisma.TransactionClient, entityType: string, entityId: string, organizationId: string) {
