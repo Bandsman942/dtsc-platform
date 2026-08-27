@@ -31,6 +31,17 @@ Cette règle constitue l’exception gouvernée à la séparation des fonctions 
 
 Une validation décidée ou annulée sort de la file `PENDING` ; elle n’est donc plus présentée comme action ouverte.
 
+## Inventaire des anciennes séparations de fonctions
+
+L’inventaire opposable des usages comptables historiques de `assertIndependentActor` est documenté dans `docs/HOTFIX_509_ACCOUNTING_APPROVAL_BOUNDARIES.md`.
+
+Il distingue explicitement :
+
+- les **validations humaines** devant converger vers une affectation persistée dans `EnterpriseApproval` ;
+- les **étapes d’exécution, posting, confirmation, clôture ou réversibilité** qui doivent conserver une indépendance stricte et ne sont jamais rendues auto-validables par `approvalPolicy`.
+
+Les transferts de trésorerie sont raccordés dans ce hotfix. Les validations comptables structurellement différentes — écritures, paiements, facturation, clôture, caisse, rapprochement et opérations combinant approbation + posting — sont inventoriées et leur cutover est porté par l’Issue **#511**. Cette Issue est la reprise explicite de dette exigée par `docs/CONTRIBUTING.md`; elle évite de neutraliser des contrôles comptables pour faire entrer artificiellement des workflows multi-étapes dans le hotfix.
+
 ## Rôles et postes guidés
 
 Les rôles et postes personnalisés ne demandent plus de saisir des permissions telles que `enterprise.*`. L’administrateur choisit des capacités métier localisées — consulter, créer/soumettre, modifier, approuver/valider, administrer — uniquement pour les modules actifs et autorisés de l’entreprise. Le backend dérive les permissions techniques à partir du registre canonique et refuse tout module hors catalogue tenant.
@@ -42,7 +53,8 @@ Les rôles et postes personnalisés ne demandent plus de saisir des permissions 
 - l’UI n’est jamais la barrière de sécurité ;
 - les permissions globales DTSC ne sont pas exposées ni acceptées comme entrée client ;
 - la concurrence continue d’utiliser les révisions des agrégats et des validations ;
-- aucune migration destructive ni backfill n’est introduit par ce hotfix.
+- aucune migration destructive ni backfill n’est introduit par ce hotfix ;
+- les contrôles POST/CONFIRM/REVERSE/CLOSE/REOPEN inventoriés restent fail-closed et ne sont pas assimilés à une simple approbation.
 
 ## QA opposable
 
@@ -52,8 +64,10 @@ Le contrat statique transverse est vérifié par :
 node scripts/qa-erp-approval-assignment-509.mjs
 ```
 
-Il est également injecté en tête de `scripts/run-regression-qa-ci.mjs`. Les Quality Gates restent la preuve pour type-check, migrations, régression, lint et build. L’OWNER_E2E reste requis avant merge pour les parcours rendus, en desktop/mobile et FR/EN.
+La QA vérifie aussi l’inventaire #511 et la conservation des frontières comptables strictes afin qu’un futur changement ne supprime pas silencieusement une séparation des fonctions sous prétexte d’auto-validation.
+
+Le contrat #509 est également injecté en tête de `scripts/run-regression-qa-ci.mjs`. Les Quality Gates restent la preuve pour type-check, migrations, régression, lint et build. L’OWNER_E2E reste requis avant merge pour les parcours rendus, en desktop/mobile et FR/EN.
 
 ## Rollback
 
-Un revert applicatif suffit. La clé additive `approvalPolicy` reste sans effet sur une version antérieure. Aucune donnée métier ou historique de validation ne doit être supprimé pendant un rollback.
+Un revert applicatif suffit. La clé additive `approvalPolicy` reste sans effet sur une version antérieure. Aucune donnée métier ou historique de validation ne doit être supprimée pendant un rollback.
