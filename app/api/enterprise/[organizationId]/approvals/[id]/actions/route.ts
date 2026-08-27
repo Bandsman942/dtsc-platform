@@ -3,8 +3,8 @@ import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCoreV2Access } from "@/lib/enterprise/core-v2/access";
+import { decideAssignedEnterpriseApproval } from "@/lib/enterprise/core-v2/approval-assignment-service";
 import { normalizeEnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
-import { decideEnterpriseApproval } from "@/lib/enterprise/core-v2/service";
 import { enterpriseApprovalActionSchema } from "@/lib/enterprise/core-v2/validators";
 import { decideEnterpriseBudgetApproval } from "@/lib/enterprise/finance/budget-service";
 import { decideEnterpriseExpenseApproval } from "@/lib/enterprise/finance/expense-service";
@@ -80,8 +80,7 @@ export async function POST(req: Request, { params }: Params) {
 
     const data = enterpriseApprovalActionSchema.parse(payload);
     if (["APPROVE", "REJECT"].includes(data.action)) {
-      if (!access.canManage && current.approverUserId !== session.userId) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
-      if (!access.canManage && current.requestedByUserId === session.userId) return NextResponse.json({ error: "SELF_APPROVAL_FORBIDDEN", message: "Vous ne pouvez pas décider sur votre propre soumission." }, { status: 403 });
+      if (current.approverUserId !== session.userId) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
       await ensureApprovalSubmissionVersion({ organizationId, approvalId: id, actorUserId: current.requestedByUserId });
     }
     const args = { organizationId, approvalId: id, actorUserId: session.userId, action: data.action, revision: data.revision, decisionComment: data.decisionComment || undefined, canManage: access.canManage };
@@ -91,7 +90,7 @@ export async function POST(req: Request, { params }: Params) {
         ? await decideEnterpriseBudgetApproval(args)
         : current.targetEntityType === "EnterpriseExpense"
           ? await decideEnterpriseExpenseApproval(args)
-          : await decideEnterpriseApproval(args);
+          : await decideAssignedEnterpriseApproval(args);
     if (data.action === "APPROVE" || data.action === "REJECT") {
       await recordApprovalDecision({ organizationId, approvalId: id, actorUserId: session.userId, decision: data.action, reason: data.decisionComment, idempotencyKey: typeof payload?.idempotencyKey === "string" ? payload.idempotencyKey : null });
     }
