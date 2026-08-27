@@ -6,12 +6,14 @@ const expect = (condition, label) => checks.push({ ok: Boolean(condition), label
 const has = (source, pattern) => typeof pattern === "string" ? source.includes(pattern) : pattern.test(source);
 
 const assignment = read("lib/enterprise/approval-assignment.ts");
+const approvalTargets = read("lib/enterprise/approval-targets.ts");
 const candidateRoute = read("app/api/enterprise/[organizationId]/approval-candidates/route.ts");
 const treasury = read("lib/enterprise/accounting/treasury-transfer-service.ts");
 const treasuryDecision = read("lib/enterprise/accounting/treasury-approval-service.ts");
 const treasuryTransitionRoute = read("app/api/enterprise/[organizationId]/account-transfers/[transferId]/transition/route.ts");
 const approvalsRoute = read("app/api/enterprise/[organizationId]/approvals/route.ts");
 const approvalActions = read("app/api/enterprise/[organizationId]/approvals/[id]/actions/route.ts");
+const coordinationRoute = read("app/api/enterprise/[organizationId]/approvals/[id]/coordination/route.ts");
 const approvalCoordination = read("lib/standard-work-coordination/approval-coordination.ts");
 const bridge = read("lib/enterprise/core-v2/approval-assignment-service.ts");
 const purchase = read("lib/enterprise/procurement/purchase-service.ts");
@@ -45,6 +47,20 @@ expect(has(assignment, "if (otherCandidates.length) return"), "auto-validation i
 expect(has(assignment, "policy.selfApprovalModuleCodes.includes(canonicalModuleCode)"), "override borné par module");
 expect(has(assignment, "assertEnterpriseApprovalDecision"), "décision revalidée au moment de l’approbation");
 
+for (const [targetType, moduleCode] of [
+  ["EnterpriseAccountTransfer", "FINANCE_TREASURY"],
+  ["EnterprisePurchase", "SUPPLIERS_PURCHASES"],
+  ["EnterpriseBudget", "FINANCE_BUDGETS"],
+  ["EnterpriseExpense", "FINANCE_BUDGETS"],
+  ["EnterpriseLeaveRequest", "TIME_ATTENDANCE"],
+  ["EnterpriseEmploymentContract", "HUMAN_RESOURCES"],
+  ["EnterpriseTimesheet", "TIME_ATTENDANCE"],
+  ["EnterprisePayrollRun", "PAYROLL_OPERATIONS"],
+]) {
+  expect(has(approvalTargets, `${targetType}: "${moduleCode}"`), `module canonique centralisé pour ${targetType}`);
+}
+expect(has(approvalTargets, "enterpriseApprovalTargetDeepLink"), "deep-links de validation centralisés par type métier");
+
 expect(has(candidateRoute, "resolveEnterpriseModuleAccess"), "endpoint candidats vérifie l’accès module");
 expect(has(candidateRoute, "listEnterpriseApprovalCandidates"), "endpoint candidats utilise la primitive canonique");
 expect(has(candidateRoute, "session.userId"), "demandeur dérivé de la session");
@@ -65,7 +81,15 @@ expect(has(approvalActions, "decideEnterpriseLeaveRequest"), "Centre des actions
 expect(has(approvalActions, "decideEnterpriseEmploymentContract"), "Centre des actions délègue les contrats au service RH");
 expect(has(approvalActions, "decideEnterpriseTimesheet"), "Centre des actions délègue les feuilles de temps au service RH");
 expect(has(approvalActions, "decideEnterprisePayrollRun"), "Centre des actions délègue les paies au service RH");
+expect(has(approvalActions, "validateDelegationCandidate"), "délégation revalidée côté serveur avant persistance");
+expect(has(approvalActions, "assertEnterpriseApprovalCandidate"), "délégation utilise le même contrat RBAC que l’affectation initiale");
+expect(has(approvalActions, "enterpriseApprovalModuleForTarget"), "délégation résout le module à partir du type métier canonique");
 expect(has(bridge, "MODULE_BY_TARGET"), "bridge générique mappe explicitement les familles métier");
+
+expect(has(coordinationRoute, "listEnterpriseApprovalCandidates"), "coordination ne propose que des délégués éligibles côté backend");
+expect(has(coordinationRoute, "candidate.userId !== approval.requestedByUserId"), "coordination ne transforme pas la délégation en auto-validation implicite");
+expect(has(coordinationRoute, "enterpriseApprovalTargetDeepLink"), "coordination ouvre le vrai module métier au lieu d’un fallback pharmacie");
+expect(!has(coordinationRoute, "organizationMember.findMany"), "coordination ne liste plus tous les membres actifs comme validateurs potentiels");
 
 expect(has(purchase, "assertEnterpriseApprovalCandidate"), "achats valident l’affectation via le contrat partagé");
 expect(has(purchase, "assertEnterpriseApprovalDecision"), "achats valident la décision via le contrat partagé");
