@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
+import { normalizeEnterpriseModuleCode } from "@/lib/enterprise/module-registry";
 
 export type EnterpriseApprovalCandidate = {
   userId: string;
@@ -16,15 +17,31 @@ export type EnterpriseApprovalPolicy = {
   selfApprovalModuleCodes: string[];
 };
 
+type ApprovalDecisionInput = {
+  organizationId: string;
+  requesterUserId: string;
+  approverUserId: string;
+  actorUserId: string;
+  moduleCode: string;
+};
+
 function jsonObject(value: Prisma.JsonValue | null | undefined): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function approvalError(message: string, code: string, statusCode: number) {
+  const error = new Error(message);
+  Object.assign(error, { code, statusCode });
+  return error;
 }
 
 export function readEnterpriseApprovalPolicy(settingsJson: Prisma.JsonValue | null | undefined): EnterpriseApprovalPolicy {
   const root = jsonObject(settingsJson);
   const rawPolicy = jsonObject(root.approvalPolicy as Prisma.JsonValue | null | undefined);
   const selfApprovalModuleCodes = Array.isArray(rawPolicy.selfApprovalModuleCodes)
-    ? rawPolicy.selfApprovalModuleCodes.filter((value): value is string => typeof value === "string")
+    ? rawPolicy.selfApprovalModuleCodes
+        .filter((value): value is string => typeof value === "string")
+        .map((value) => normalizeEnterpriseModuleCode(value))
     : [];
   return { selfApprovalModuleCodes: Array.from(new Set(selfApprovalModuleCodes)) };
 }
@@ -56,7 +73,7 @@ export async function setEnterpriseApprovalPolicy({
       settingsJson: {
         ...current,
         approvalPolicy: {
-          selfApprovalModuleCodes: Array.from(new Set(selfApprovalModuleCodes)),
+          selfApprovalModuleCodes: Array.from(new Set(selfApprovalModuleCodes.map((code) => normalizeEnterpriseModuleCode(code)))),
         },
       } as Prisma.InputJsonValue,
     },
@@ -73,7 +90,8 @@ export async function listEnterpriseApprovalCandidates({
   requesterUserId: string;
   moduleCode: string;
 }): Promise<{ candidates: EnterpriseApprovalCandidate[]; selfApprovalOverrideAvailable: boolean }> {
-  const requesterAccess = await resolveEnterpriseModuleAccess({ userId: requesterUserId, organizationId, moduleCode, action: "submit" });
+  const canonicalModuleCode = normalizeEnterpriseModuleCode(moduleCode);
+  const requesterAccess = await resolveEnterpriseModuleAccess({ userId: requesterUserId, organizationId, moduleCode: canonicalModuleCode, action: "submit" });
   if (!requesterAccess.allowed) return { candidates: [], selfApprovalOverrideAvailable: false };
 
   const members = await prisma.organizationMember.findMany({
@@ -90,7 +108,7 @@ export async function listEnterpriseApprovalCandidates({
 
   const resolved = await Promise.all(members.map(async (member) => ({
     member,
-    access: await resolveEnterpriseModuleAccess({ userId: member.userId, organizationId, moduleCode, action: "approve" }),
+    access: await resolveEnterpriseModuleAccess({ userId: member.userId, organizationId, moduleCode: canonicalModuleCode, action: "approve" }),
   })));
   const otherCandidates = resolved
     .filter(({ member, access }) => member.userId !== requesterUserId && access.allowed)
@@ -108,7 +126,7 @@ export async function listEnterpriseApprovalCandidates({
 
   const policy = await getEnterpriseApprovalPolicy(organizationId);
   const requester = resolved.find(({ member }) => member.userId === requesterUserId);
-  const selfApprovalOverrideAvailable = Boolean(requester?.access.allowed && policy.selfApprovalModuleCodes.includes(moduleCode));
+  const selfApprovalOverrideAvailable = Boolean(requester?.access.allowed && policy.selfApprovalModuleCodes.includes(canonicalModuleCode));
   if (!requester || !selfApprovalOverrideAvailable) return { candidates: [], selfApprovalOverrideAvailable };
 
   return {
@@ -139,11 +157,13 @@ export async function assertEnterpriseApprovalCandidate({
   const result = await listEnterpriseApprovalCandidates({ organizationId, requesterUserId, moduleCode });
   const candidate = result.candidates.find((item) => item.userId === approverUserId);
   if (!candidate) {
-    const error = new Error(result.candidates.length
-      ? "Le validateur sélectionné n’est plus autorisé pour cette action."
-      : "Aucun validateur autorisé n’est disponible. Un administrateur peut habiliter un collaborateur ou autoriser l’auto-validation de secours pour ce module.");
-    Object.assign(error, { code: "APPROVER_NOT_ELIGIBLE", statusCode: 403 });
-    throw error;
+    throw approvalError(
+      result.candidates.length
+        ? "Le validateur sélectionné n’est plus autorisé pour cette action."
+        : "Aucun validateur autorisé n’est disponible. Un administrateur peut habiliter un collaborateur ou autoriser l’auto-validation de secours pour ce service.",
+      "APPROVER_NOT_ELIGIBLE",
+      403,
+    );
   }
   return candidate;
 }
@@ -151,4 +171,31 @@ export async function assertEnterpriseApprovalCandidate({
 export async function canUseSelfApprovalOverride({ organizationId, userId, moduleCode }: { organizationId: string; userId: string; moduleCode: string }) {
   const result = await listEnterpriseApprovalCandidates({ organizationId, requesterUserId: userId, moduleCode });
   return result.candidates.length === 1 && result.candidates[0]?.userId === userId && result.candidates[0]?.selfApprovalOverride === true;
+}
+
+export async function assertEnterpriseApprovalDecision({
+  organizationId,
+  requesterUserId,
+  approverUserId,
+  actorUserId,
+  moduleCode,
+}: ApprovalDecisionInput) {
+  if (approverUserId !== actorUserId) {
+    throw approvalError("Seul le validateur désigné peut prendre cette décision.", "WRONG_APPROVER", 403);
+  }
+  const access = await resolveEnterpriseModuleAccess({
+    userId: actorUserId,
+    organizationId,
+    moduleCode: normalizeEnterpriseModuleCode(moduleCode),
+    action: "approve",
+  });
+  if (!access.allowed) {
+    throw approvalError("Vous ne disposez plus de l’autorisation nécessaire pour valider cette action.", "APPROVER_PERMISSION_DENIED", 403);
+  }
+  if (requesterUserId !== actorUserId) return { selfApprovalOverride: false };
+  const allowed = await canUseSelfApprovalOverride({ organizationId, userId: actorUserId, moduleCode });
+  if (!allowed) {
+    throw approvalError("Une autre personne autorisée doit valider cette opération.", "SELF_APPROVAL_FORBIDDEN", 403);
+  }
+  return { selfApprovalOverride: true };
 }
