@@ -81,16 +81,19 @@ expect(has(approvalActions, "decideEnterpriseLeaveRequest"), "Centre des actions
 expect(has(approvalActions, "decideEnterpriseEmploymentContract"), "Centre des actions délègue les contrats au service RH");
 expect(has(approvalActions, "decideEnterpriseTimesheet"), "Centre des actions délègue les feuilles de temps au service RH");
 expect(has(approvalActions, "decideEnterprisePayrollRun"), "Centre des actions délègue les paies au service RH");
-expect(has(approvalActions, "validateDelegationCandidate"), "délégation revalidée côté serveur avant persistance");
-expect(has(approvalActions, "assertEnterpriseApprovalCandidate"), "délégation utilise le même contrat RBAC que l’affectation initiale");
-expect(has(approvalActions, "enterpriseApprovalModuleForTarget"), "délégation résout le module à partir du type métier canonique");
 expect(has(bridge, "enterpriseApprovalModuleForTarget"), "bridge générique réutilise le registre canonique des modules de validation");
 expect(!has(bridge, "MODULE_BY_TARGET"), "bridge générique ne maintient plus une seconde table de correspondance des modules");
 
 expect(has(coordinationRoute, "listEnterpriseApprovalCandidates"), "coordination ne propose que des délégués éligibles côté backend");
 expect(has(coordinationRoute, "candidate.userId !== approval.requestedByUserId"), "coordination ne transforme pas la délégation en auto-validation implicite");
 expect(has(coordinationRoute, "enterpriseApprovalTargetDeepLink"), "coordination ouvre le vrai module métier au lieu d’un fallback pharmacie");
+expect(has(coordinationRoute, "supportsProfessionalApprovalCorrection"), "coordination n’expose la correction qu’aux types métier synchronisés");
 expect(!has(coordinationRoute, "organizationMember.findMany"), "coordination ne liste plus tous les membres actifs comme validateurs potentiels");
+expect(has(approvalCoordination, "assertEnterpriseApprovalCandidate"), "service de coordination revalide la délégation avec le contrat RBAC partagé");
+expect(has(approvalCoordination, "enterpriseApprovalModuleForTarget"), "service de coordination résout le module canonique lors de la délégation");
+expect(has(approvalCoordination, "syncTargetApproverForDelegation"), "délégation synchronise les objets RH qui répliquent l’approbateur");
+expect(has(approvalCoordination, "supportsProfessionalApprovalCorrection"), "service bloque correction/resoumission sur les cibles non synchronisées");
+expect(has(approvalCoordination, "TARGET_ACTION_NOT_SUPPORTED"), "correction non supportée échoue explicitement au backend");
 
 expect(has(purchase, "assertEnterpriseApprovalCandidate"), "achats valident l’affectation via le contrat partagé");
 expect(has(purchase, "assertEnterpriseApprovalDecision"), "achats valident la décision via le contrat partagé");
