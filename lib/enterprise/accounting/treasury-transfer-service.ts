@@ -136,12 +136,16 @@ export async function createTreasuryTransfer(
   actorUserId: string,
   input: TransferInput,
 ) {
-  await assertEnterpriseApprovalCandidate({
-    organizationId,
-    requesterUserId: actorUserId,
-    approverUserId: input.approverUserId,
-    moduleCode: "FINANCE_TREASURY",
-  });
+  try {
+    await assertEnterpriseApprovalCandidate({
+      organizationId,
+      requesterUserId: actorUserId,
+      approverUserId: input.approverUserId,
+      moduleCode: "FINANCE_TREASURY",
+    });
+  } catch {
+    throw new EnterpriseAccountingError("TRANSFER_APPROVER_NOT_ELIGIBLE", 403);
+  }
 
   return prisma.$transaction(async (tx) => {
     const approverMembership = await tx.organizationMember.findFirst({
