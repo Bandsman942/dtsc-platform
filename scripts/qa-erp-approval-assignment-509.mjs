@@ -13,6 +13,9 @@ const approvalsRoute = read("app/api/enterprise/[organizationId]/approvals/route
 const approvalActions = read("app/api/enterprise/[organizationId]/approvals/[id]/actions/route.ts");
 const bridge = read("lib/enterprise/core-v2/approval-assignment-service.ts");
 const purchase = read("lib/enterprise/procurement/purchase-service.ts");
+const budget = read("lib/enterprise/finance/budget-service.ts");
+const expense = read("lib/enterprise/finance/expense-service.ts");
+const financeUi = read("components/enterprise/core-v2/enterprise-finance-workspace.tsx");
 const hrHelpers = read("lib/enterprise/hr-payroll/helpers.ts");
 const rolesRoute = read("app/api/enterprise/[organizationId]/administration/roles/route.ts");
 const positionsRoute = read("app/api/enterprise/[organizationId]/administration/positions-guided/route.ts");
@@ -45,6 +48,12 @@ expect(has(bridge, "MODULE_BY_TARGET"), "bridge générique mappe explicitement 
 
 expect(has(purchase, "assertEnterpriseApprovalCandidate"), "achats valident l’affectation via le contrat partagé");
 expect(has(purchase, "assertEnterpriseApprovalDecision"), "achats valident la décision via le contrat partagé");
+expect(has(budget, "assertEnterpriseApprovalCandidate"), "budgets valident l’affectation via le contrat partagé");
+expect(has(budget, "assertEnterpriseApprovalDecision"), "budgets valident la décision via le contrat partagé");
+expect(has(expense, "assertEnterpriseApprovalCandidate"), "dépenses valident l’affectation via le contrat partagé");
+expect(has(expense, "assertEnterpriseApprovalDecision"), "dépenses valident la décision via le contrat partagé");
+expect(has(financeUi, "EnterpriseApproverSelect"), "budgets et dépenses utilisent le sélecteur de validateurs éligibles");
+expect(has(financeUi, 'moduleCode="FINANCE_BUDGETS"'), "UI finance demande les validateurs dans le bon contexte module");
 expect(has(hrHelpers, "assertEnterpriseApprovalCandidate"), "RH/paie utilisent le contrat partagé à l’affectation");
 expect(has(hrHelpers, "assertEnterpriseApprovalDecision"), "RH/paie utilisent le contrat partagé à la décision");
 
