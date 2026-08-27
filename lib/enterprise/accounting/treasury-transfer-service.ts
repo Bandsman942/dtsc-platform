@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import type { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { assertEnterpriseApprovalCandidate } from "@/lib/enterprise/approval-assignment";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import {
   getFinanceConfiguration,
@@ -10,14 +11,15 @@ import {
 import { financeReference, money, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { createJournalEntryDraft, postJournalEntry } from "@/lib/enterprise/accounting/journal-service";
 import { getPostingPeriod } from "@/lib/enterprise/accounting/periods";
-import type { accountTransferSchema } from "@/lib/enterprise/accounting/treasury-schemas";
+import type { accountTransferPreviewSchema, accountTransferSchema } from "@/lib/enterprise/accounting/treasury-schemas";
 
+type TransferPreviewInput = z.infer<typeof accountTransferPreviewSchema>;
 type TransferInput = z.infer<typeof accountTransferSchema>;
 
 async function resolveTransfer(
   tx: Prisma.TransactionClient,
   organizationId: string,
-  input: TransferInput,
+  input: TransferPreviewInput,
 ) {
   const accounts = await tx.enterpriseFinancialAccount.findMany({
     where: {
@@ -95,7 +97,7 @@ async function resolveTransferPostingContext(
   return { journalId: journal.id, fiscalPeriodId: period.id };
 }
 
-export async function previewTreasuryTransfer(organizationId: string, input: TransferInput) {
+export async function previewTreasuryTransfer(organizationId: string, input: TransferPreviewInput) {
   return prisma.$transaction(async (tx) => {
     const resolved = await resolveTransfer(tx, organizationId, input);
     return {
@@ -134,7 +136,20 @@ export async function createTreasuryTransfer(
   actorUserId: string,
   input: TransferInput,
 ) {
+  await assertEnterpriseApprovalCandidate({
+    organizationId,
+    requesterUserId: actorUserId,
+    approverUserId: input.approverUserId,
+    moduleCode: "FINANCE_TREASURY",
+  });
+
   return prisma.$transaction(async (tx) => {
+    const approverMembership = await tx.organizationMember.findFirst({
+      where: { organizationId, userId: input.approverUserId, status: "ACTIVE", removedAt: null },
+      select: { id: true },
+    });
+    if (!approverMembership) throw new EnterpriseAccountingError("TRANSFER_APPROVER_NOT_ELIGIBLE", 403);
+
     const resolved = await resolveTransfer(tx, organizationId, input);
     const transfer = await tx.enterpriseAccountTransfer.create({
       data: {
@@ -149,6 +164,16 @@ export async function createTreasuryTransfer(
         exchangeRate: resolved.rate.rate,
         transferDate: input.transferDate,
         initiatedByUserId: actorUserId,
+      },
+    });
+    const approval = await tx.enterpriseApproval.create({
+      data: {
+        organizationId,
+        targetEntityType: "EnterpriseAccountTransfer",
+        targetEntityId: transfer.id,
+        requestedByUserId: actorUserId,
+        approverUserId: input.approverUserId,
+        status: "PENDING",
       },
     });
     await snapshotExchangeRate(tx, {
@@ -178,6 +203,8 @@ export async function createTreasuryTransfer(
         targetCurrency: resolved.target.currencyCode,
         exchangeRate: resolved.rate.rate.toFixed(),
         exchangeRateDate: resolved.rate.rateDate.toISOString(),
+        approvalId: approval.id,
+        approverUserId: input.approverUserId,
       },
     });
     return transfer;
