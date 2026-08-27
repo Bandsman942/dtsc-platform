@@ -30,7 +30,7 @@ export async function GET(req: Request, { params }: Params) {
   const candidateResult = moduleCode && approval.status === "PENDING"
     ? await listEnterpriseApprovalCandidates({ organizationId, requesterUserId: approval.requestedByUserId, moduleCode })
     : { candidates: [], selfApprovalOverrideAvailable: false };
-  const delegates = candidateResult.candidates.filter((candidate) => candidate.userId !== approval.approverUserId);
+  const delegates = candidateResult.candidates.filter((candidate) => candidate.userId !== approval.approverUserId && candidate.userId !== approval.requestedByUserId);
   const isAssignedValidator = approval.approverUserId === session.userId;
   const isRequester = approval.requestedByUserId === session.userId;
   const selfApprovalAllowed = candidateResult.candidates.some((candidate) => candidate.userId === session.userId && candidate.selfApprovalOverride);
