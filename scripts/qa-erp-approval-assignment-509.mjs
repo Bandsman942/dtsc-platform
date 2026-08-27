@@ -11,6 +11,7 @@ const treasury = read("lib/enterprise/accounting/treasury-transfer-service.ts");
 const treasuryDecision = read("lib/enterprise/accounting/treasury-approval-service.ts");
 const approvalsRoute = read("app/api/enterprise/[organizationId]/approvals/route.ts");
 const approvalActions = read("app/api/enterprise/[organizationId]/approvals/[id]/actions/route.ts");
+const approvalCoordination = read("lib/standard-work-coordination/approval-coordination.ts");
 const bridge = read("lib/enterprise/core-v2/approval-assignment-service.ts");
 const purchase = read("lib/enterprise/procurement/purchase-service.ts");
 const budget = read("lib/enterprise/finance/budget-service.ts");
@@ -40,10 +41,16 @@ expect(has(treasury, 'targetEntityType: "EnterpriseAccountTransfer"'), "transfer
 expect(has(treasury, "assertEnterpriseApprovalCandidate"), "transfert revalide le validateur côté backend");
 expect(has(treasuryDecision, "assertEnterpriseApprovalDecision"), "décision transfert revalide le validateur");
 expect(has(treasuryDecision, 'status: "APPROVED"'), "approbation transfert clôt la validation");
+expect(has(treasuryDecision, "rejectAssignedAccountTransfer"), "rejet du transfert clôt aussi la validation sans désynchroniser le brouillon");
 
 expect(has(approvalsRoute, "createAssignedEnterpriseApproval"), "route générique utilise le contrat d’affectation");
 expect(has(approvalActions, "decideAssignedEnterpriseApproval"), "route générique utilise le contrat de décision");
 expect(!has(approvalActions, "Vous ne pouvez pas décider sur votre propre soumission"), "route générique ne court-circuite pas l’override gouverné");
+expect(has(approvalActions, "approveAssignedAccountTransfer"), "Centre des actions délègue les transferts au service Trésorerie");
+expect(has(approvalActions, "decideEnterpriseLeaveRequest"), "Centre des actions délègue les congés au service RH");
+expect(has(approvalActions, "decideEnterpriseEmploymentContract"), "Centre des actions délègue les contrats au service RH");
+expect(has(approvalActions, "decideEnterpriseTimesheet"), "Centre des actions délègue les feuilles de temps au service RH");
+expect(has(approvalActions, "decideEnterprisePayrollRun"), "Centre des actions délègue les paies au service RH");
 expect(has(bridge, "MODULE_BY_TARGET"), "bridge générique mappe explicitement les familles métier");
 
 expect(has(purchase, "assertEnterpriseApprovalCandidate"), "achats valident l’affectation via le contrat partagé");
@@ -56,6 +63,17 @@ expect(has(financeUi, "EnterpriseApproverSelect"), "budgets et dépenses utilise
 expect(has(financeUi, 'moduleCode="FINANCE_BUDGETS"'), "UI finance demande les validateurs dans le bon contexte module");
 expect(has(hrHelpers, "assertEnterpriseApprovalCandidate"), "RH/paie utilisent le contrat partagé à l’affectation");
 expect(has(hrHelpers, "assertEnterpriseApprovalDecision"), "RH/paie utilisent le contrat partagé à la décision");
+
+for (const targetType of [
+  "EnterpriseAccountTransfer",
+  "EnterpriseLeaveRequest",
+  "EnterpriseEmploymentContract",
+  "EnterpriseTimesheet",
+  "EnterprisePayrollRun",
+]) {
+  expect(has(approvalCoordination, targetType), `snapshot versionné disponible pour ${targetType}`);
+}
+expect(has(approvalCoordination, "TARGET_NOT_SUPPORTED"), "un type inconnu échoue explicitement au lieu d’être traité comme incident pharmacie");
 
 expect(has(permissionCatalog, "deriveTenantPermissionsFromCapabilities"), "permissions dérivées de capacités guidées côté serveur");
 expect(has(permissionCatalog, "isEnabled: true"), "catalogue de capacités borné aux modules activés du tenant");
