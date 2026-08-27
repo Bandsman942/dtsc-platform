@@ -2,6 +2,7 @@ import type { z } from "zod";
 import { EnterpriseDomainConflictError, EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import {
   assertActiveCustomerEmployee,
+  assertOrganizationApprovalDecision,
   assertOrganizationApprover,
   hrReference,
   publishHrEvent,
@@ -166,6 +167,19 @@ export async function updateEnterpriseEmploymentContract(
 }
 
 export async function decideEnterpriseEmploymentContract(organizationId: string, contractId: string, actorUserId: string, input: ContractDecisionInput) {
+  const pending = await prisma.enterpriseApproval.findFirst({
+    where: { organizationId, targetEntityType: "EnterpriseEmploymentContract", targetEntityId: contractId, status: "PENDING", archivedAt: null },
+    select: { requestedByUserId: true, approverUserId: true },
+  });
+  if (!pending) throw new EnterpriseDomainError("APPROVAL_NOT_FOUND", 404);
+  const decision = await assertOrganizationApprovalDecision({
+    organizationId,
+    requesterUserId: pending.requestedByUserId,
+    approverUserId: pending.approverUserId,
+    actorUserId,
+    moduleCode: "HUMAN_RESOURCES",
+  });
+
   return prisma.$transaction(async (tx) => {
     const contract = await tx.enterpriseEmploymentContract.findFirst({
       where: { id: contractId, organizationId, status: "PENDING_APPROVAL", archivedAt: null },
@@ -175,7 +189,6 @@ export async function decideEnterpriseEmploymentContract(organizationId: string,
       where: { organizationId, targetEntityType: "EnterpriseEmploymentContract", targetEntityId: contract.id, status: "PENDING", approverUserId: actorUserId, archivedAt: null },
     });
     if (!approval) throw new EnterpriseDomainError("APPROVAL_NOT_FOUND", 404);
-    if (approval.requestedByUserId === actorUserId) throw new EnterpriseDomainError("SELF_APPROVAL_FORBIDDEN", 409);
 
     if (input.decision === "REJECT") {
       const updated = await tx.enterpriseEmploymentContract.updateMany({
@@ -185,7 +198,7 @@ export async function decideEnterpriseEmploymentContract(organizationId: string,
       if (updated.count !== 1) throw new EnterpriseDomainConflictError();
       await tx.enterpriseApproval.update({
         where: { id: approval.id },
-        data: { status: "REJECTED", decidedAt: new Date(), decisionComment: input.comment || null, revision: { increment: 1 } },
+        data: { status: "REJECTED", decidedAt: new Date(), decisionComment: input.comment || (decision.selfApprovalOverride ? "SELF_APPROVAL_OVERRIDE" : null), revision: { increment: 1 } },
       });
       return tx.enterpriseEmploymentContract.findUniqueOrThrow({ where: { id: contract.id } });
     }
@@ -217,8 +230,8 @@ export async function decideEnterpriseEmploymentContract(organizationId: string,
         revision: { increment: 1 },
       },
     });
-    await tx.enterpriseApproval.update({ where: { id: approval.id }, data: { status: "APPROVED", decidedAt: new Date(), decisionComment: input.comment || null, revision: { increment: 1 } } });
-    await publishHrEvent(tx, { organizationId, entityType: "EnterpriseEmploymentContract", entityId: contract.id, eventType: "EMPLOYMENT_CONTRACT_ACTIVATED", summary: `Contrat ${contract.reference} activé`, actorUserId, fromStatus: "PENDING_APPROVAL", toStatus: "ACTIVE" });
+    await tx.enterpriseApproval.update({ where: { id: approval.id }, data: { status: "APPROVED", decidedAt: new Date(), decisionComment: input.comment || (decision.selfApprovalOverride ? "SELF_APPROVAL_OVERRIDE" : null), revision: { increment: 1 } } });
+    await publishHrEvent(tx, { organizationId, entityType: "EnterpriseEmploymentContract", entityId: contract.id, eventType: "EMPLOYMENT_CONTRACT_ACTIVATED", summary: `Contrat ${contract.reference} activé`, actorUserId, fromStatus: "PENDING_APPROVAL", toStatus: "ACTIVE", metadataJson: { selfApprovalOverride: decision.selfApprovalOverride } });
     return tx.enterpriseEmploymentContract.findUniqueOrThrow({ where: { id: contract.id } });
   });
 }
