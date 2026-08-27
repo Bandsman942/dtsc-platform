@@ -9,7 +9,8 @@ import {
   isEnterpriseModuleSectorCompatible,
   normalizeEnterpriseModuleCode,
 } from "@/lib/enterprise/module-registry";
-import { syncRetailOnboardingProvisioning } from "@/lib/enterprise/retail/provisioning";
+import { getRetailBusinessProfile, syncRetailOnboardingProvisioning } from "@/lib/enterprise/retail/provisioning";
+import type { RetailBusinessSubtypeCode } from "@/lib/enterprise/retail/subtype-registry";
 import { prisma } from "@/lib/prisma";
 
 export async function applyCanonicalSectorTemplateToOrganization({
@@ -17,17 +18,30 @@ export async function applyCanonicalSectorTemplateToOrganization({
   sectorId,
   actorUserId,
   mode = "merge",
+  businessSubtypeCode,
 }: {
   organizationId: string;
   sectorId: string;
   actorUserId: string;
   mode?: ApplySectorTemplateMode;
+  businessSubtypeCode?: RetailBusinessSubtypeCode | null;
 }) {
-  const result = await applySectorTemplateToOrganization({ organizationId, sectorId, actorUserId, mode });
+  const existingRetailProfile = businessSubtypeCode === undefined ? await getRetailBusinessProfile(organizationId) : null;
+  const subtypeForApply = businessSubtypeCode === undefined
+    ? existingRetailProfile?.businessSubtypeCode
+    : businessSubtypeCode;
+  const result = await applySectorTemplateToOrganization({
+    organizationId,
+    sectorId,
+    actorUserId,
+    mode,
+    businessSubtypeCode: subtypeForApply,
+  });
   const retailProvisioning = await syncRetailOnboardingProvisioning({
     organizationId,
     sectorCode: result.sectorCode,
     actorUserId,
+    businessSubtypeCode: result.businessSubtypeCode,
   });
   const commonModules = await ensureCanonicalCommonModulesForOrganization({ organizationId });
   const organization = await prisma.organization.findFirst({
