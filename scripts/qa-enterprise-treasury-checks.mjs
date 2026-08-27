@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { forbidTokens, requirePaths, requireTokens, success } from "./qa-enterprise-common-domain-lib.mjs";
 
 requirePaths([
@@ -38,11 +39,28 @@ requireTokens("lib/enterprise/accounting/financial-account-service.ts", [
 requireTokens("lib/enterprise/accounting/treasury-transfer-service.ts", [
   "resolveExchangeRateDetails",
   "snapshotExchangeRate",
+  "resolveTransferPostingContext",
+  "TRANSFER_JOURNAL_REQUIRED",
+  "getPostingPeriod",
   "targetAmount",
   "functionalCurrencyCode",
   "ACCOUNT_TRANSFER_CONFIRMED",
   "TransactionIsolationLevel.Serializable",
 ]);
+
+const transferServiceSource = fs.readFileSync("lib/enterprise/accounting/treasury-transfer-service.ts", "utf8");
+const balanceDebitIndex = transferServiceSource.indexOf("operationalBalance: { decrement: transfer.sourceAmount }");
+const postingPreflightIndex = transferServiceSource.lastIndexOf("const postingContext = await resolveTransferPostingContext", balanceDebitIndex);
+if (balanceDebitIndex < 0 || postingPreflightIndex < 0 || postingPreflightIndex > balanceDebitIndex) {
+  throw new Error("Treasury transfer posting context must be validated before financial balances are mutated.");
+}
+const confirmationStart = transferServiceSource.indexOf("export async function confirmTreasuryTransfer");
+const confirmationTransactionEnd = transferServiceSource.indexOf("}, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });", confirmationStart);
+const postCommitConfirmation = confirmationTransactionEnd >= 0 ? transferServiceSource.slice(confirmationTransactionEnd) : "";
+if (postCommitConfirmation.includes("enterpriseJournal.findFirst") || postCommitConfirmation.includes("getPostingPeriod(")) {
+  throw new Error("Treasury transfer journal/period validation must not first occur after the balance transaction commits.");
+}
+
 requireTokens("app/api/enterprise/[organizationId]/account-transfers/preview/route.ts", [
   "authorizeFinanceRequest",
   "accountTransferPreviewSchema",
