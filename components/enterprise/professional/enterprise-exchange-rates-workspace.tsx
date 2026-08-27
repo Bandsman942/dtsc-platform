@@ -6,7 +6,7 @@ import { ArrowLeft, Edit3, Plus, ShieldCheck } from "lucide-react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { ProfessionalError, ProfessionalHelp, ProfessionalLoading } from "@/components/enterprise/professional/professional-erp-ui";
-import { financeDate, financeEnumLabel, financeStatusTone, type FinanceLocale } from "@/components/enterprise/professional/finance-professional-ui";
+import { financeDate, financeStatusTone, type FinanceLocale } from "@/components/enterprise/professional/finance-professional-ui";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -54,6 +54,18 @@ export function EnterpriseExchangeRatesWorkspace({ organizationId, organizationN
   useEffect(() => { void load(); }, [load, refreshKey]);
   const currencyChoices = useMemo(() => payload.currencies.map((currency) => ({ id: currency.code, label: `${currency.code} · ${currency.name}` })), [payload.currencies]);
   const sourceChoices = SOURCE_VALUES.map((source) => ({ id: source, label: source === "MANUAL" ? t("manual") : source === "CENTRAL_BANK" ? t("centralBank") : source === "COMMERCIAL_BANK" ? t("commercialBank") : source === "PROVIDER" ? t("provider") : source === "CONTRACTUAL" ? t("contractual") : t("imported") }));
+  const rateSourceLabel = useCallback((source: string) => {
+    const keyBySource: Record<string, ExchangeRateCopyKey> = {
+      MANUAL: "manual",
+      CENTRAL_BANK: "centralBank",
+      COMMERCIAL_BANK: "commercialBank",
+      PROVIDER: "provider",
+      CONTRACTUAL: "contractual",
+      IMPORTED: "imported",
+    };
+    const key = keyBySource[source];
+    return key ? t(key) : source;
+  }, [t]);
 
   function refresh() {
     setRefreshKey((value) => value + 1);
@@ -92,7 +104,7 @@ export function EnterpriseExchangeRatesWorkspace({ organizationId, organizationN
       {error ? <ProfessionalError message={error} /> : null}
       <div className="rounded-xl border border-cyan-400/25 bg-cyan-400/10 p-4 text-sm font-semibold leading-6 text-dtsc-muted"><ShieldCheck className="mr-2 inline h-4 w-4 text-cyan-600" />{t("fieldPolicy")}</div>
       <ModuleSection title={t("history")} description={t("historyDescription")} count={payload.rates.length}>
-        {loading ? <ProfessionalLoading rows={5} /> : payload.rates.length ? <div className="grid gap-2">{payload.rates.map((rate) => <article key={rate.id} className="grid min-w-0 gap-3 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><strong className="text-dtsc-ink">{rate.sourceCurrencyCode} → {rate.targetCurrencyCode}</strong><StatusBadge tone={financeStatusTone(rate.status)}>{rate.status === "ACTIVE" ? t("active") : t("inactive")}</StatusBadge></div><p className="mt-1 text-sm font-semibold text-dtsc-muted">1 {rate.sourceCurrencyCode} = {String(rate.rate)} {rate.targetCurrencyCode} · {financeDate(rate.rateDate, locale)} · {financeEnumLabel(rate.source, locale)}</p></div>{canManage && rate.status === "ACTIVE" ? <ContextActions label={`${t("actions")} · ${rate.sourceCurrencyCode}/${rate.targetCurrencyCode}`} actions={[{ id: "correct", label: t("correction"), icon: Edit3, onSelect: () => setCorrectionTarget(rate) }]} /> : null}</article>)}</div> : <div className="rounded-xl border border-dashed border-dtsc-border p-6 text-center"><p className="font-black text-dtsc-ink">{t("noRates")}</p><p className="mt-1 text-sm text-dtsc-muted">{t("noRatesDescription")}</p></div>}
+        {loading ? <ProfessionalLoading rows={5} /> : payload.rates.length ? <div className="grid gap-2">{payload.rates.map((rate) => <article key={rate.id} className="grid min-w-0 gap-3 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><strong className="text-dtsc-ink">{rate.sourceCurrencyCode} → {rate.targetCurrencyCode}</strong><StatusBadge tone={financeStatusTone(rate.status)}>{rate.status === "ACTIVE" ? t("active") : t("inactive")}</StatusBadge></div><p className="mt-1 text-sm font-semibold text-dtsc-muted">1 {rate.sourceCurrencyCode} = {String(rate.rate)} {rate.targetCurrencyCode} · {financeDate(rate.rateDate, locale)} · {rateSourceLabel(rate.source)}</p></div>{canManage && rate.status === "ACTIVE" ? <ContextActions label={`${t("actions")} · ${rate.sourceCurrencyCode}/${rate.targetCurrencyCode}`} actions={[{ id: "correct", label: t("correction"), icon: Edit3, onSelect: () => setCorrectionTarget(rate) }]} /> : null}</article>)}</div> : <div className="rounded-xl border border-dashed border-dtsc-border p-6 text-center"><p className="font-black text-dtsc-ink">{t("noRates")}</p><p className="mt-1 text-sm text-dtsc-muted">{t("noRatesDescription")}</p></div>}
       </ModuleSection>
       <ProfessionalHelp moduleCode="FINANCE_TREASURY" />
     </ModuleContent>
