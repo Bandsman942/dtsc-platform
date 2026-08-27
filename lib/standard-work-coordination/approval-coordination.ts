@@ -171,9 +171,37 @@ async function approvalTargetSnapshot(tx: Prisma.TransactionClient, organization
     if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Dépense source introuvable.");
     return serializeSnapshot(item);
   }
-  const item = await tx.pharmacyQualityIncident.findFirst({ where: { id: entityId, organizationId }, select: { id: true, title: true, description: true, status: true, priority: true, updatedAt: true } });
-  if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Objet source introuvable.");
-  return serializeSnapshot(item);
+  if (entityType === "EnterpriseAccountTransfer") {
+    const item = await tx.enterpriseAccountTransfer.findFirst({ where: { id: entityId, organizationId }, select: { id: true, number: true, status: true, sourceAmount: true, sourceCurrencyCode: true, targetAmount: true, targetCurrencyCode: true, revision: true, updatedAt: true } });
+    if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Transfert source introuvable.");
+    return serializeSnapshot(item);
+  }
+  if (entityType === "EnterpriseLeaveRequest") {
+    const item = await tx.enterpriseLeaveRequest.findFirst({ where: { id: entityId, organizationId, archivedAt: null }, select: { id: true, reference: true, leaveType: true, startDate: true, endDate: true, status: true, revision: true, updatedAt: true } });
+    if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Congé source introuvable.");
+    return serializeSnapshot(item);
+  }
+  if (entityType === "EnterpriseEmploymentContract") {
+    const item = await tx.enterpriseEmploymentContract.findFirst({ where: { id: entityId, organizationId, archivedAt: null }, select: { id: true, reference: true, contractType: true, jobTitle: true, status: true, revision: true, updatedAt: true } });
+    if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Contrat de travail source introuvable.");
+    return serializeSnapshot(item);
+  }
+  if (entityType === "EnterpriseTimesheet") {
+    const item = await tx.enterpriseTimesheet.findFirst({ where: { id: entityId, organizationId, archivedAt: null }, select: { id: true, reference: true, periodStart: true, periodEnd: true, status: true, totalDeclaredMinutes: true, revision: true, updatedAt: true } });
+    if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Feuille de temps source introuvable.");
+    return serializeSnapshot(item);
+  }
+  if (entityType === "EnterprisePayrollRun") {
+    const item = await tx.enterprisePayrollRun.findFirst({ where: { id: entityId, organizationId, archivedAt: null }, select: { id: true, reference: true, status: true, employeeCount: true, netAmount: true, currency: true, revision: true, updatedAt: true } });
+    if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Paie source introuvable.");
+    return serializeSnapshot(item);
+  }
+  if (entityType === "PharmacyQualityIncident") {
+    const item = await tx.pharmacyQualityIncident.findFirst({ where: { id: entityId, organizationId }, select: { id: true, title: true, description: true, status: true, priority: true, updatedAt: true } });
+    if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Incident qualité source introuvable.");
+    return serializeSnapshot(item);
+  }
+  throw new ApprovalCoordinationError("TARGET_NOT_SUPPORTED", 400, "Ce type d’objet ne prend pas encore en charge le suivi versionné des validations.");
 }
 
 function serializeSnapshot(value: Record<string, unknown>): Prisma.InputJsonValue {
