@@ -30,7 +30,7 @@ const guidedActions: GuidedAction[] = ["read", "submit", "write", "approve", "ma
 
 export function EnterpriseRolesPermissionsPanel({ organizationId, roles, members, modules }: { organizationId: string; roles: EnterpriseOrganizationRoleItem[]; members: EnterpriseMemberItem[]; modules: EnterpriseModuleItem[] }) {
   const router = useRouter();
-  const { locale: rawLocale } = useAppLocale();
+  const rawLocale = useAppLocale();
   const locale = rawLocale === "en" ? "en" : "fr";
   const english = locale === "en";
   const [message, setMessage] = useState("");
