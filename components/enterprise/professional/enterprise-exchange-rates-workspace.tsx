@@ -6,7 +6,7 @@ import { ArrowLeft, Edit3, Plus, ShieldCheck } from "lucide-react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { ProfessionalError, ProfessionalHelp, ProfessionalLoading } from "@/components/enterprise/professional/professional-erp-ui";
-import { financeDate, financeStatusTone, type FinanceLocale } from "@/components/enterprise/professional/finance-professional-ui";
+import { financeDate, financeStatusTone, safeFinanceError, type FinanceLocale } from "@/components/enterprise/professional/finance-professional-ui";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -24,7 +24,7 @@ const SOURCE_VALUES = ["MANUAL", "CENTRAL_BANK", "COMMERCIAL_BANK", "PROVIDER", 
 async function requestJson(endpoint: string, method: "GET" | "POST" | "PATCH" = "GET", body?: unknown) {
   const response = await fetch(endpoint, { method, cache: "no-store", headers: body === undefined ? undefined : { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
   const payload = await response.json().catch(() => null) as { message?: string; error?: string; [key: string]: unknown } | null;
-  if (!response.ok) throw new Error(payload?.message || payload?.error || "EXCHANGE_RATE_OPERATION_FAILED");
+  if (!response.ok) throw new Error(payload?.error || payload?.message || "EXCHANGE_RATE_OPERATION_FAILED");
   return payload || {};
 }
 
@@ -47,9 +47,9 @@ export function EnterpriseExchangeRatesWorkspace({ organizationId, organizationN
   const load = useCallback(async () => {
     setLoading(true); setError("");
     try { setPayload(await requestJson(`/api/enterprise/${organizationId}/exchange-rates`) as unknown as Payload); }
-    catch (loadError) { setError(loadError instanceof Error ? loadError.message : t("loadError")); }
+    catch (loadError) { setError(safeFinanceError(loadError, t("loadError"), locale)); }
     finally { setLoading(false); }
-  }, [organizationId, t]);
+  }, [organizationId, t, locale]);
 
   useEffect(() => { void load(); }, [load, refreshKey]);
   const currencyChoices = useMemo(() => payload.currencies.map((currency) => ({ id: currency.code, label: `${currency.code} · ${currency.name}` })), [payload.currencies]);
@@ -82,7 +82,7 @@ export function EnterpriseExchangeRatesWorkspace({ organizationId, organizationN
     try {
       await requestJson(`/api/enterprise/${organizationId}/exchange-rates`, "POST", { sourceCurrencyCode: String(form.get("sourceCurrencyCode") || ""), targetCurrencyCode: String(form.get("targetCurrencyCode") || ""), rate: String(form.get("rate") || ""), rateDate: String(form.get("rateDate") || ""), source: String(form.get("source") || "MANUAL") });
       setRateDialogOpen(false); setNotice(t("created")); refresh();
-    } catch (mutationError) { setError(mutationError instanceof Error ? mutationError.message : t("operationError")); }
+    } catch (mutationError) { setError(safeFinanceError(mutationError, t("operationError"), locale)); }
     finally { setBusy(false); }
   }
 
@@ -93,7 +93,7 @@ export function EnterpriseExchangeRatesWorkspace({ organizationId, organizationN
       await requestJson(`/api/enterprise/${organizationId}/exchange-rates/${correctionTarget.id}`, "PATCH", { reason: String(form.get("reason") || "") });
       const target = correctionTarget; setCorrectionTarget(null); refresh();
       openNewRate({ sourceCurrencyCode: target.sourceCurrencyCode, targetCurrencyCode: target.targetCurrencyCode, rateDate: String(target.rateDate).slice(0, 10), source: target.source });
-    } catch (mutationError) { setError(mutationError instanceof Error ? mutationError.message : t("operationError")); }
+    } catch (mutationError) { setError(safeFinanceError(mutationError, t("operationError"), locale)); }
     finally { setBusy(false); }
   }
 
