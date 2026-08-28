@@ -13,11 +13,13 @@ import medicalRecordsFr from "@/locales/health-medical-records.fr.json";
 import medicalRecordsEn from "@/locales/health-medical-records.en.json";
 import staffFr from "@/locales/health-staff.fr.json";
 import staffEn from "@/locales/health-staff.en.json";
+import laboratoryFr from "@/locales/health-laboratory.fr.json";
+import laboratoryEn from "@/locales/health-laboratory.en.json";
 
 export type HealthClinicalLocale = "fr" | "en";
 const dictionaries = {
-  fr: { ...fr, ...patientsFr, ...appointmentsFr, ...consultationsFr, ...medicalRecordsFr, ...staffFr },
-  en: { ...en, ...patientsEn, ...appointmentsEn, ...consultationsEn, ...medicalRecordsEn, ...staffEn },
+  fr: { ...fr, ...patientsFr, ...appointmentsFr, ...consultationsFr, ...medicalRecordsFr, ...staffFr, ...laboratoryFr },
+  en: { ...en, ...patientsEn, ...appointmentsEn, ...consultationsEn, ...medicalRecordsEn, ...staffEn, ...laboratoryEn },
 } as const;
 export type HealthClinicalKey = keyof typeof dictionaries.fr;
 

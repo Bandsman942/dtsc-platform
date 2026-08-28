@@ -16,7 +16,7 @@ La convergence FR/EN du cœur clinique Health reste un chantier fonctionnel dist
 | Consultations | 68 | 0 |
 | Dossiers médicaux | 47 | 0 |
 | Équipe médicale | 53 | 0 |
-| Laboratoire | 75 | à converger |
+| Laboratoire | 75 | 0 |
 
 Les valeurs historiques proviennent de `config/i18n-hardcoded-baseline.json` et du périmètre #398. Une surface à cible sémantique `0` est prouvée par sa QA dédiée plutôt que par le seul compteur heuristique.
 
@@ -29,8 +29,8 @@ Les valeurs historiques proviennent de `config/i18n-hardcoded-baseline.json` et 
 - utilise le même compteur de libellés probables que le contrat i18n global ;
 - compare la branche avec le vrai `origin/main` afin de tolérer une dette préexistante sur la baseline tout en refusant toute aggravation ;
 - refuse également l'augmentation de patterns de traduction locale ou de locales de formatage codées en dur ;
-- exécute les sous-gates sémantiques Patients #447, Rendez-vous #451, Consultations #457, Dossiers médicaux #491 et Équipe médicale #494 ;
-- ne lit ni ne traduit aucune donnée patient, diagnostic, prescription, résultat laboratoire, donnée professionnelle libre ou note clinique.
+- exécute les sous-gates sémantiques Patients #447, Rendez-vous #451, Consultations #457, Dossiers médicaux #491, Équipe médicale #494 et Laboratoire #496 ;
+- ne lit ni ne traduit aucune donnée patient, diagnostic, prescription, résultat laboratoire, unité, valeur de référence, interprétation, donnée professionnelle libre ou note clinique.
 
 ## Politique de remboursement
 
@@ -44,7 +44,7 @@ Le plafond est un maximum, jamais une cible à conserver. Chaque PR de convergen
 
 ## Ce que cette contribution ne revendique pas
 
-Cette gate ne clôture pas #398. La surface Laboratoire reste à converger, ainsi que le shell Health prévu par #398. La gate ne remplace jamais l'OWNER_E2E FR/EN desktop/mobile demandé pour chaque surface à impact utilisateur.
+Cette gate ne clôture pas #398. Les six workspaces cliniques prioritaires sont désormais à cible sémantique `0`, mais le shell Health `healthcare-admin-workspace.tsx` prévu par #398 reste à converger et à auditer. La gate ne remplace jamais l'OWNER_E2E FR/EN desktop/mobile demandé pour chaque surface à impact utilisateur.
 
 ## QA
 
