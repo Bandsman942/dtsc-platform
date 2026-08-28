@@ -92,10 +92,29 @@ for (const marker of [
   check(workspace.includes(marker), `Mobile Money wallet configuration UI contract missing ${marker}`);
 }
 
+const browserProof = read("tests/e2e/shop2-final-coherence-ui.spec.mjs");
+for (const marker of [
+  'data: { profileCode: "RETAIL_CORE" }',
+  'activateOperatorModule(page, "MOBILE_MONEY_AGENCY")',
+  'activateOperatorModule(page, "TELCO_TOPUPS")',
+  'expect(retailConfiguration?.profileCode).toBe("RETAIL_CORE")',
+  'expect(mobileMoneyConfig?.requiredCurrencies).toEqual(["CDF", "USD"])',
+  '"AFRIMONEY"',
+  '"AIRTEL_MONEY"',
+  '"MPESA"',
+  '"ORANGE_MONEY"',
+  'page.getByRole("button", { name: "Configuration" }).click()',
+  'page.getByText("CDF", { exact: true })).toHaveCount(4)',
+  'page.getByText("USD", { exact: true })).toHaveCount(4)',
+]) {
+  check(browserProof.includes(marker), `Mobile Money browser proof missing ${marker}`);
+}
+check(!browserProof.includes('data: { profileCode: "RETAIL_TELCO_MOBILE_MONEY" }'), "Browser acceptance must not mask #518 by forcing the legacy specialized profile");
+
 if (failures.length) {
   console.error("Hotfix #518 Mobile Money provider provisioning QA failed:");
   for (const failure of failures) console.error(`- ${failure}`);
   process.exit(1);
 }
 
-console.log("Hotfix #518 QA passed: active operator modules provision their canonical providers, wallet mappings remain Finance-owned, and the Mobile Money UI can render CDF/USD account selectors.");
+console.log("Hotfix #518 QA passed: active operator modules provision their canonical providers under RETAIL_CORE, wallet mappings remain Finance-owned, and browser acceptance proves the Mobile Money CDF/USD configuration surface.");
