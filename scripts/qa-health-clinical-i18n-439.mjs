@@ -18,6 +18,7 @@ const semanticConvergenceTargets = {
   "components/enterprise/health-consultations-workspace.tsx": 0,
   "components/enterprise/health-medical-records-workspace.tsx": 0,
   "components/enterprise/health-staff-workspace.tsx": 0,
+  "components/enterprise/health-laboratory-workspace.tsx": 0,
 };
 const localDebtPatterns = [
   'locale === "en"',
@@ -82,6 +83,7 @@ for (const [name, script] of [
   ["Consultations #457", "scripts/qa-health-consultations-i18n-457.mjs"],
   ["Dossiers médicaux #491", "scripts/qa-health-medical-records-i18n-491.mjs"],
   ["Équipe médicale #494", "scripts/qa-health-staff-i18n-494.mjs"],
+  ["Laboratoire #496", "scripts/qa-health-laboratory-i18n-496.mjs"],
 ]) {
   const qa = spawnSync(process.execPath, [path.join(root, script)], { cwd: root, env: process.env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   if (qa.stdout) process.stdout.write(qa.stdout);
@@ -92,7 +94,7 @@ for (const [name, script] of [
   }
 }
 
-console.log("PASS i18n Health #439 — dette heuristique non régressive et cibles sémantiques Patients/Rendez-vous/Consultations/Dossiers médicaux/Équipe médicale à zéro copie système locale prouvées par leurs QA dédiées.");
+console.log("PASS i18n Health #439 — dette heuristique non régressive et cibles sémantiques Patients/Rendez-vous/Consultations/Dossiers médicaux/Équipe médicale/Laboratoire à zéro copie système locale prouvées par leurs QA dédiées.");
 
 function occurrences(content, token) { return content.split(token).length - 1; }
 function countLikelyHardcodedLabels(content) {

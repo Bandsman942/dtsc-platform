@@ -24,6 +24,9 @@ const canonicalMedicalRecordsAssertion = 'containsAll(healthMedicalRecordsWorksp
 const obsoleteStaffAssertion = 'containsAll(healthStaffWorkspace, ["ListControls", "ActionMenu", "Professionnels actifs", "Permissions Santé", "Activité médicale liée", "Aucun professionnel santé enregistré", "h-[94dvh]", "CircleHelp", "min-w-0", "overflow-hidden"])';
 const canonicalStaffAssertion = 'containsAll(healthStaffWorkspace, ["ListControls", "ActionMenu", "staff.dashboard.active", "staff.section.permissions", "staff.section.activity", "staff.empty", "h-[94dvh]", "CircleHelp", "min-w-0", "overflow-x-hidden"])';
 
+const obsoleteLaboratoryAssertion = 'containsAll(healthLaboratoryWorkspace, ["ListControls", "ActionMenu", "Demandes du jour", "Prélèvements à faire", "Résultats validés", "Résultat critique", "Aucune demande laboratoire enregistrée", "h-[94dvh]", "CircleHelp", "min-w-0", "overflow-hidden"])';
+const canonicalLaboratoryAssertion = 'containsAll(healthLaboratoryWorkspace, ["ListControls", "ActionMenu", "lab.dashboard.today", "lab.dashboard.toSample", "lab.dashboard.validated", "lab.badge.criticalResult", "lab.empty", "h-[94dvh]", "CircleHelp", "min-w-0", "overflow-x-hidden"])';
+
 const obsoleteEnterpriseAdminAssertion = 'containsAll(enterpriseAdminPage, [\'activeContext === "ORGANIZATION"\', "canManageEnterpriseAdministration(session.userId, organizationId)", \'canUseFeature(organizationId, "enterprise-admin")\', "getEnterpriseAdministrationDataset(organizationId)"])';
 const canonicalEnterpriseAdminAssertion = 'containsAll(enterpriseAdminPage, [\'activeContext === "ORGANIZATION"\', "requireEnterpriseMembership", "resolveEnterpriseModuleAccess", \'moduleCode: "ADMIN_DASHBOARD"\', \'action: "manage"\', "!membership || !adminAccess?.allowed", \'canUseFeature(organizationId, "enterprise-admin")\', "getEnterpriseAdministrationDataset(organizationId, user.id, administrationLocale)"])';
 
@@ -50,6 +53,12 @@ migratedSource = replaceExactlyOnce(
   obsoleteStaffAssertion,
   canonicalStaffAssertion,
   "Équipe médicale historique",
+);
+migratedSource = replaceExactlyOnce(
+  migratedSource,
+  obsoleteLaboratoryAssertion,
+  canonicalLaboratoryAssertion,
+  "Laboratoire historique",
 );
 migratedSource = replaceExactlyOnce(
   migratedSource,
