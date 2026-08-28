@@ -33,6 +33,7 @@ const salesCreditTransitionRoute = read("app/api/enterprise/[organizationId]/sal
 const salesCreditPostRoute = read("app/api/enterprise/[organizationId]/sales-credit-notes/[creditNoteId]/post/route.ts");
 const supplierCreditTransitionRoute = read("app/api/enterprise/[organizationId]/supplier-credit-notes/[creditNoteId]/transition/route.ts");
 const supplierCreditPostRoute = read("app/api/enterprise/[organizationId]/supplier-credit-notes/[creditNoteId]/post/route.ts");
+const cashReconciliationWorkspace = read("components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-workspace.tsx");
 
 for (const target of [
   "EnterpriseJournalEntry",
@@ -72,6 +73,23 @@ assert(closeRoute.includes("transitionFinancialClose"), "CLOSE/REOPEN restent s�
 assert(cashCloseRoute.includes("submitCashSessionCloseForAssignedValidation") && cashValidateRoute.includes("validateCashSessionAssignedApproval"), "session de caisse possède un validateur affecté");
 assert(reconciliationRoute.includes("submitReconciliationForAssignedValidation") && reconciliationRoute.includes("decideReconciliationAssignedValidation"), "rapprochement possède soumission puis validation explicite");
 assert(operations.includes('status: "PENDING_VALIDATION"'), "les opérations préparées attendent une décision explicite");
+assert(
+  cashReconciliationWorkspace.includes('moduleCode="FINANCE_CASH"')
+    && cashReconciliationWorkspace.includes('approverUserId: String(form.get("approverUserId") || "")'),
+  "clôture de caisse exige un validateur sélectionné dans l’UI",
+);
+assert(
+  cashReconciliationWorkspace.includes('moduleCode="FINANCE_RECONCILIATION"')
+    && cashReconciliationWorkspace.includes('action: "SUBMIT"')
+    && cashReconciliationWorkspace.includes('action: "APPROVE"')
+    && cashReconciliationWorkspace.includes('action: "REJECT"')
+    && cashReconciliationWorkspace.includes('detail.status === "PENDING_VALIDATION"'),
+  "rapprochement expose soumission affectée puis approbation/rejet dans l’UI",
+);
+assert(
+  cashReconciliationWorkspace.includes('tab === "pending" ? (isBank ? "SUBMITTED" : "PENDING_VALIDATION")'),
+  "le filtre pending conserve SUBMITTED pour Banque et PENDING_VALIDATION pour Caisse/Rapprochement",
+);
 
 for (const [label, source, submitMarker, decisionMarker, postSource, postMarker, legacyMarker] of [
   ["soldes d'ouverture", openingTransitionRoute, "submitOpeningBalanceForAssignedApproval", "decideOpeningBalanceAssignedApproval", openingPostRoute, "postApprovedOpeningBalance", "approveAndPostOpeningBalance"],
