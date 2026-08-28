@@ -75,7 +75,7 @@ test.describe.serial("Accounting period close and historical protection", () => 
     let close = prepared.body.close;
     expect(close.status).toBe("DRAFT");
 
-    const submitted = await apiPost(page, `/api/enterprise/${organizationId}/financial-close/${close.id}/transition`, { action: "SUBMIT", revision: close.revision });
+    const submitted = await apiPost(page, `/api/enterprise/${organizationId}/financial-close/${close.id}/transition`, { action: "SUBMIT", revision: close.revision, approverUserId: reviewer.id });
     expect(submitted.response.ok(), JSON.stringify(submitted.body)).toBeTruthy();
     close = submitted.body.close;
     expect(close.status).toBe("PENDING_APPROVAL");
@@ -109,7 +109,7 @@ test.describe.serial("Accounting period close and historical protection", () => 
     expect(created.response.status(), JSON.stringify(created.body)).toBe(201);
     let blockedInvoice = created.body.invoice;
 
-    const submittedInvoice = await apiPost(page, `/api/enterprise/${organizationId}/sales-invoices/${blockedInvoice.id}/transition`, { action: "SUBMIT", revision: blockedInvoice.revision });
+    const submittedInvoice = await apiPost(page, `/api/enterprise/${organizationId}/sales-invoices/${blockedInvoice.id}/transition`, { action: "SUBMIT", revision: blockedInvoice.revision, approverUserId: reviewer.id });
     expect(submittedInvoice.response.ok(), JSON.stringify(submittedInvoice.body)).toBeTruthy();
     blockedInvoice = submittedInvoice.body.invoice;
 
