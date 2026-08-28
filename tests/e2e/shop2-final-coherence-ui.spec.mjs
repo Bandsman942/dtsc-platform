@@ -7,6 +7,7 @@ const organizationId = process.env.E2E_ORGANIZATION_ID || "e2e-erp-professional-
 const adminEmail = process.env.E2E_ADMIN_EMAIL || "erp-admin@example.test";
 const adminPassword = process.env.E2E_ADMIN_PASSWORD || "E2eAdmin2026!";
 let originalProfileCode = "RETAIL_CORE";
+let originalCountry = null;
 
 async function signIn(page) {
   const response = await page.context().request.post(`${baseUrl}/api/auth/sign-in`, {
@@ -23,31 +24,42 @@ async function setLocale(locale) {
   await prisma.user.update({ where: { id: user.id }, data: { locale } });
 }
 
-async function enableOperatorModules() {
+async function prepareOperatorModules() {
   const user = await prisma.user.findUnique({ where: { email: adminEmail } });
   if (!user) throw new Error(`Missing E2E admin ${adminEmail}`);
-  const configuration = await prisma.enterpriseRetailConfiguration.findUnique({ where: { organizationId } });
+  const [configuration, organization] = await Promise.all([
+    prisma.enterpriseRetailConfiguration.findUnique({ where: { organizationId } }),
+    prisma.organization.findUnique({ where: { id: organizationId }, select: { country: true } }),
+  ]);
   if (!configuration) throw new Error(`Missing Retail configuration for ${organizationId}`);
+  if (!organization) throw new Error(`Missing organization ${organizationId}`);
   originalProfileCode = configuration.profileCode;
+  originalCountry = organization.country;
+
   await prisma.enterpriseRetailConfiguration.update({
     where: { organizationId },
-    data: { profileCode: "RETAIL_TELCO_MOBILE_MONEY" },
+    data: { profileCode: "RETAIL_CORE" },
   });
-  for (const [moduleCode, labelFr, labelEn, isCore] of [
-    ["FINANCE_TREASURY", "Trésorerie", "Treasury", true],
-    ["MOBILE_MONEY_AGENCY", "Agence Mobile Money", "Mobile Money agency", false],
-    ["TELCO_TOPUPS", "Recharges Télécom", "Telecom top-ups", false],
+  await prisma.organization.update({
+    where: { id: organizationId },
+    data: { country: "CD" },
+  });
+
+  for (const [moduleCode, labelFr, labelEn, isCore, isEnabled] of [
+    ["FINANCE_TREASURY", "Trésorerie", "Treasury", true, true],
+    ["MOBILE_MONEY_AGENCY", "Agence Mobile Money", "Mobile Money agency", false, false],
+    ["TELCO_TOPUPS", "Recharges Télécom", "Telecom top-ups", false, false],
   ]) {
     await prisma.enterpriseModule.upsert({
       where: { organizationId_moduleCode: { organizationId, moduleCode } },
-      update: { isEnabled: true },
+      update: { isEnabled },
       create: {
         organizationId,
         moduleCode,
         labelFr,
         labelEn,
         moduleCategory: "SHOP2_E2E",
-        isEnabled: true,
+        isEnabled,
         isCore,
         requiresPlanLevel: "BUSINESS",
         sortOrder: 940,
@@ -56,10 +68,31 @@ async function enableOperatorModules() {
   }
 }
 
+async function activateOperatorModule(page, moduleCode) {
+  const enterpriseModule = await prisma.enterpriseModule.findUnique({
+    where: { organizationId_moduleCode: { organizationId, moduleCode } },
+    select: { id: true },
+  });
+  if (!enterpriseModule) throw new Error(`Missing E2E module ${moduleCode}`);
+  const response = await page.context().request.patch(
+    `${baseUrl}/api/enterprise/${organizationId}/modules/${enterpriseModule.id}`,
+    {
+      data: { isEnabled: true, activateDependencies: true },
+      headers: { origin: baseUrl, referer: `${baseUrl}/enterprise-admin` },
+    },
+  );
+  const body = await response.json().catch(() => null);
+  expect(response.ok(), `${moduleCode} activation failed: ${JSON.stringify(body)}`).toBeTruthy();
+}
+
 async function restoreFixture() {
   await prisma.enterpriseRetailConfiguration.update({
     where: { organizationId },
     data: { profileCode: originalProfileCode },
+  });
+  await prisma.organization.update({
+    where: { id: organizationId },
+    data: { country: originalCountry },
   });
   await setLocale("fr");
 }
@@ -89,7 +122,7 @@ async function assertNoRawRetailLanguage(page) {
 
 test.describe.serial("Shop 2.0 final product coherence", () => {
   test.beforeAll(async () => {
-    await enableOperatorModules();
+    await prepareOperatorModules();
   });
 
   test.afterAll(async () => {
@@ -108,10 +141,37 @@ test.describe.serial("Shop 2.0 final product coherence", () => {
     await assertNoRawRetailLanguage(page);
     await assertNoHorizontalOverflow(page);
 
-    await page.setViewportSize({ width: 768, height: 1024 });
+    await activateOperatorModule(page, "MOBILE_MONEY_AGENCY");
+    await activateOperatorModule(page, "TELCO_TOPUPS");
+
+    const retailConfiguration = await prisma.enterpriseRetailConfiguration.findUnique({
+      where: { organizationId },
+      select: { profileCode: true },
+    });
+    expect(retailConfiguration?.profileCode).toBe("RETAIL_CORE");
+
+    const mobileMoneyConfigResponse = await page.context().request.get(
+      `${baseUrl}/api/enterprise/${organizationId}/retail/mobile-money/accounts`,
+    );
+    const mobileMoneyConfig = await mobileMoneyConfigResponse.json().catch(() => null);
+    expect(mobileMoneyConfigResponse.ok(), `Mobile Money configuration failed: ${JSON.stringify(mobileMoneyConfig)}`).toBeTruthy();
+    expect(mobileMoneyConfig?.requiredCurrencies).toEqual(["CDF", "USD"]);
+    expect((mobileMoneyConfig?.providers || []).map((provider) => provider.providerCode).sort()).toEqual([
+      "AFRIMONEY",
+      "AIRTEL_MONEY",
+      "MPESA",
+      "ORANGE_MONEY",
+    ]);
+
     await page.goto("/enterprise-modules/MOBILE_MONEY_AGENCY");
     await expect(page.getByText("Opération Mobile Money", { exact: true })).toBeVisible();
     await expect(page.getByText("Continuer dans l’ERP", { exact: true }).first()).toBeVisible();
+    await page.getByRole("button", { name: "Configuration" }).click();
+    for (const label of ["M-Pesa", "Orange Money", "Airtel Money", "Afrimoney"]) {
+      await expect(page.getByText(label, { exact: true })).toBeVisible();
+    }
+    await expect(page.getByText("CDF", { exact: true })).toHaveCount(4);
+    await expect(page.getByText("USD", { exact: true })).toHaveCount(4);
     await assertNoRawRetailLanguage(page);
     for (const raw of ["MOBILE_MONEY", "DEPOSIT", "WITHDRAWAL", "CLEARING"]) {
       await expect(page.getByText(raw, { exact: true })).toHaveCount(0);
