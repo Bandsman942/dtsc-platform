@@ -2,7 +2,10 @@ import { z } from "zod";
 import { cashCloseSchema } from "@/lib/enterprise/accounting/treasury-schemas";
 
 const revision = z.coerce.number().int().positive();
-const id = z.string().cuid();
+// User ids are persisted as String @id values. Prisma generates CUIDs by default,
+// but imported/seeded legacy identities may legitimately use stable non-CUID ids.
+// Keep this aligned with the canonical EnterpriseApproval validator contract.
+const id = z.string().trim().min(1).max(160);
 const reason = z.string().trim().min(4).max(1000).optional();
 const requiredReason = z.string().trim().min(4).max(1000);
 
