@@ -167,6 +167,8 @@ test.describe.serial("Shop 2.0 final product coherence", () => {
     await expect(page.getByText("Opération Mobile Money", { exact: true })).toBeVisible();
     await expect(page.getByText("Continuer dans l’ERP", { exact: true }).first()).toBeVisible();
     await page.getByRole("button", { name: "Configuration" }).click();
+    await page.getByRole("button", { name: /Comptes Mobile Money par devise/ }).click();
+    await expect(page.getByRole("button", { name: "Retour au module" })).toBeVisible();
     for (const label of ["M-Pesa", "Orange Money", "Airtel Money", "Afrimoney"]) {
       await expect(page.getByText(label, { exact: true })).toBeVisible();
     }
