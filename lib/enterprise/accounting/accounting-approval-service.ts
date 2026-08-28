@@ -33,20 +33,16 @@ function mapAssignmentError(error: unknown) {
   return error instanceof Error ? error : new EnterpriseAccountingError("ACCOUNTING_APPROVAL_FAILED", 409);
 }
 
-export async function createAccountingApprovalAssignment(
-  tx: Prisma.TransactionClient,
-  input: {
-    organizationId: string;
-    targetEntityType: string;
-    targetEntityId: string;
-    requesterUserId: string;
-    approverUserId: string;
-  },
-) {
+export async function assertAccountingApprovalCandidate(input: {
+  organizationId: string;
+  targetEntityType: string;
+  requesterUserId: string;
+  approverUserId: string;
+}) {
   const moduleCode = accountingApprovalModuleForTarget(input.targetEntityType);
   if (!moduleCode) throw new EnterpriseAccountingError("ACCOUNTING_APPROVAL_TARGET_UNSUPPORTED", 400);
   try {
-    await assertEnterpriseApprovalCandidate({
+    return await assertEnterpriseApprovalCandidate({
       organizationId: input.organizationId,
       requesterUserId: input.requesterUserId,
       approverUserId: input.approverUserId,
@@ -55,13 +51,28 @@ export async function createAccountingApprovalAssignment(
   } catch (error) {
     throw mapAssignmentError(error);
   }
+}
+
+export async function createAccountingApprovalAssignment(
+  tx: Prisma.TransactionClient,
+  input: {
+    organizationId: string;
+    targetEntityType: string;
+    targetEntityId: string;
+    requesterUserId: string;
+    approverUserId: string;
+    initialStatus?: "PENDING" | "QUEUED";
+  },
+) {
+  await assertAccountingApprovalCandidate(input);
+  const initialStatus = input.initialStatus || "PENDING";
 
   const existing = await tx.enterpriseApproval.findFirst({
     where: {
       organizationId: input.organizationId,
       targetEntityType: input.targetEntityType,
       targetEntityId: input.targetEntityId,
-      status: "PENDING",
+      status: { in: ["PENDING", "QUEUED"] },
       archivedAt: null,
     },
     select: { id: true },
@@ -75,9 +86,32 @@ export async function createAccountingApprovalAssignment(
       targetEntityId: input.targetEntityId,
       requestedByUserId: input.requesterUserId,
       approverUserId: input.approverUserId,
-      status: "PENDING",
+      status: initialStatus,
     },
   });
+}
+
+export async function activateQueuedAccountingApproval(
+  tx: Prisma.TransactionClient,
+  input: { organizationId: string; targetEntityType: string; targetEntityId: string },
+) {
+  const queued = await tx.enterpriseApproval.findFirst({
+    where: {
+      organizationId: input.organizationId,
+      targetEntityType: input.targetEntityType,
+      targetEntityId: input.targetEntityId,
+      status: "QUEUED",
+      archivedAt: null,
+    },
+    select: { id: true, revision: true },
+  });
+  if (!queued) throw new EnterpriseAccountingError("ACCOUNTING_QUEUED_APPROVAL_NOT_FOUND", 409);
+  const updated = await tx.enterpriseApproval.updateMany({
+    where: { id: queued.id, organizationId: input.organizationId, status: "QUEUED", revision: queued.revision, archivedAt: null },
+    data: { status: "PENDING", requestedAt: new Date(), revision: { increment: 1 } },
+  });
+  if (updated.count !== 1) throw new EnterpriseAccountingError("ACCOUNTING_APPROVAL_CONFLICT", 409);
+  return queued.id;
 }
 
 export async function requireAccountingApprovalDecision(input: {
@@ -161,7 +195,7 @@ export async function cancelPendingAccountingApprovals(
       organizationId: input.organizationId,
       targetEntityType: { in: input.targetEntityTypes },
       targetEntityId: input.targetEntityId,
-      status: "PENDING",
+      status: { in: ["PENDING", "QUEUED"] },
       archivedAt: null,
     },
     data: {
