@@ -60,6 +60,90 @@ function nextRetailSettings(value: Prisma.JsonValue | null | undefined, business
   };
 }
 
+/**
+ * Keep the canonical operator catalogue aligned with the modules that are
+ * actually usable by the tenant. The historical specialized profile remains a
+ * compatibility bridge, but RETAIL_CORE tenants no longer lose their providers
+ * when MOBILE_MONEY_AGENCY or TELCO_TOPUPS is enabled.
+ *
+ * This function only provisions provider identities. It never creates finance
+ * accounts, wallet mappings, balances or exchange rates.
+ */
+export async function syncRetailOperatorProvidersTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  knownProfileCode?: RetailBusinessProfileCode | null,
+) {
+  let profileCode = knownProfileCode;
+  if (profileCode === undefined) {
+    const configuration = await tx.enterpriseRetailConfiguration.findUnique({
+      where: { organizationId },
+      select: { profileCode: true },
+    });
+    profileCode = configuration?.profileCode && isRetailBusinessProfileCode(configuration.profileCode)
+      ? configuration.profileCode
+      : null;
+  }
+
+  if (!profileCode) return [];
+
+  const [mobileMoneyModule, telcoModule] = await Promise.all([
+    tx.enterpriseModule.findFirst({
+      where: { organizationId, moduleCode: "MOBILE_MONEY_AGENCY", isEnabled: true },
+      select: { id: true },
+    }),
+    tx.enterpriseModule.findFirst({
+      where: { organizationId, moduleCode: "TELCO_TOPUPS", isEnabled: true },
+      select: { id: true },
+    }),
+  ]);
+
+  const legacySpecializedProfile = profileCode === RETAIL_TELCO_MOBILE_MONEY_PROFILE_CODE;
+  const mobileMoneyEnabled = legacySpecializedProfile || Boolean(mobileMoneyModule);
+  const telcoEnabled = legacySpecializedProfile || Boolean(telcoModule);
+
+  for (const provider of RETAIL_DEFAULT_PROVIDERS) {
+    const shouldBeActive = provider.providerType === "MOBILE_MONEY" ? mobileMoneyEnabled : telcoEnabled;
+    if (shouldBeActive) {
+      await tx.enterpriseRetailProvider.upsert({
+        where: { organizationId_providerCode: { organizationId, providerCode: provider.providerCode } },
+        update: {
+          label: provider.label,
+          providerType: provider.providerType,
+          isActive: true,
+          revision: { increment: 1 },
+        },
+        create: {
+          organizationId,
+          providerCode: provider.providerCode,
+          label: provider.label,
+          providerType: provider.providerType,
+          isActive: true,
+        },
+      });
+    } else {
+      await tx.enterpriseRetailProvider.updateMany({
+        where: { organizationId, providerCode: provider.providerCode, isActive: true },
+        data: { isActive: false, revision: { increment: 1 } },
+      });
+    }
+  }
+
+  const providers = await tx.enterpriseRetailProvider.findMany({
+    where: { organizationId, isActive: true },
+    orderBy: { providerCode: "asc" },
+    select: { providerCode: true },
+  });
+  return providers.map((provider) => provider.providerCode);
+}
+
+export async function syncRetailOperatorProvidersForModules(organizationId: string) {
+  return prisma.$transaction(
+    (tx) => syncRetailOperatorProvidersTx(tx, organizationId),
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
+}
+
 async function provisionRetailBusinessProfileTx(
   tx: Prisma.TransactionClient,
   {
@@ -109,30 +193,14 @@ async function provisionRetailBusinessProfileTx(
     create: { organizationId, profileCode, baseCurrencyCode, status: "ACTIVE", settingsJson, createdByUserId: actorUserId },
   });
 
-  if (profileCode === RETAIL_TELCO_MOBILE_MONEY_PROFILE_CODE) {
-    for (const provider of RETAIL_DEFAULT_PROVIDERS) {
-      await tx.enterpriseRetailProvider.upsert({
-        where: { organizationId_providerCode: { organizationId, providerCode: provider.providerCode } },
-        update: { label: provider.label, providerType: provider.providerType, isActive: true, revision: { increment: 1 } },
-        create: { organizationId, providerCode: provider.providerCode, label: provider.label, providerType: provider.providerType, isActive: true },
-      });
-    }
-  } else {
-    await tx.enterpriseRetailProvider.updateMany({ where: { organizationId, isActive: true }, data: { isActive: false } });
-  }
-
-  const providers = await tx.enterpriseRetailProvider.findMany({
-    where: { organizationId, isActive: true },
-    orderBy: { providerCode: "asc" },
-    select: { providerCode: true },
-  });
+  const providerCodes = await syncRetailOperatorProvidersTx(tx, organizationId, profileCode);
   return {
     organizationId,
     sectorCode,
     businessSubtypeCode: resolvedSubtype,
     businessProfileCode: profileCode,
     configurationStatus: "ACTIVE",
-    providerCodes: providers.map((provider) => provider.providerCode),
+    providerCodes,
   };
 }
 
