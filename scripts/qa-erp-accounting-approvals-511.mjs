@@ -20,6 +20,7 @@ const invoices = read("lib/enterprise/accounting/accounting-invoice-approval-orc
 const operations = read("lib/enterprise/accounting/accounting-operations-approval-orchestration.ts");
 const documents = read("lib/enterprise/accounting/accounting-document-approval-orchestration.ts");
 const workflowAdapter = read("lib/enterprise/workflows/adapters/finance.ts");
+const financeUi = read("components/enterprise/professional/finance-professional-ui.ts");
 const journalRoute = read("app/api/enterprise/[organizationId]/journal-entries/[entryId]/transition/route.ts");
 const paymentRoute = read("app/api/enterprise/[organizationId]/payments/[paymentId]/transition/route.ts");
 const salesRoute = read("app/api/enterprise/[organizationId]/sales-invoices/[invoiceId]/transition/route.ts");
@@ -57,6 +58,17 @@ assert(
   approvalSchemas.includes('const id = z.string().trim().min(1).max(160)') && !approvalSchemas.includes('.cuid()'),
   "les affectations acceptent le contrat canonique String @id, y compris les identités stables non-CUID",
 );
+for (const code of [
+  "ACCOUNTING_SELF_APPROVAL_FORBIDDEN",
+  "ACCOUNTING_APPROVER_NOT_ELIGIBLE",
+  "ACCOUNTING_APPROVER_NOT_ALLOWED",
+  "ACCOUNTING_APPROVAL_ALREADY_PENDING",
+  "ACCOUNTING_APPROVAL_NOT_ASSIGNED",
+  "ACCOUNTING_APPROVAL_TARGET_UNSUPPORTED",
+  "ACCOUNTING_QUEUED_APPROVAL_NOT_FOUND",
+]) {
+  assert((financeUi.match(new RegExp(`${code}:`, "g")) || []).length === 2, `${code} possède un message métier FR et EN`);
+}
 assert(service.includes('initialStatus?: "PENDING" | "QUEUED"'), "les étapes multi-niveaux supportent QUEUED");
 assert(service.includes("activateQueuedAccountingApproval"), "une approbation finale peut être activée après revue");
 assert(invoices.includes('targetEntityType: "EnterpriseSupplierInvoiceReview"'), "la revue fournisseur possède sa propre affectation");
