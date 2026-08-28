@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 
 type Candidate = {
   userId: string;
@@ -17,6 +17,7 @@ type Props = {
   moduleCode: string;
   locale?: string | null;
   name?: string;
+  label?: string;
   required?: boolean;
   disabled?: boolean;
   defaultValue?: string;
@@ -32,11 +33,13 @@ export function EnterpriseApproverSelect({
   moduleCode,
   locale,
   name = "approverUserId",
+  label,
   required = true,
   disabled = false,
   defaultValue = "",
   className = "min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm text-dtsc-ink",
 }: Props) {
+  const selectId = useId();
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -75,7 +78,8 @@ export function EnterpriseApproverSelect({
   }, [locale]);
 
   return <div className="grid min-w-0 gap-1.5">
-    <select name={name} value={value} onChange={(event) => setValue(event.target.value)} required={required} disabled={disabled || loading || !candidates.length} className={className}>
+    {label ? <label htmlFor={selectId} className="text-sm font-semibold text-dtsc-ink">{label}</label> : null}
+    <select id={selectId} aria-label={label || tx(locale, "Validateur", "Approver")} name={name} value={value} onChange={(event) => setValue(event.target.value)} required={required} disabled={disabled || loading || !candidates.length} className={className}>
       <option value="">{loading ? tx(locale, "Recherche des validateurs autorisés…", "Looking for authorized approvers…") : tx(locale, "Sélectionner un validateur", "Select an approver")}</option>
       {candidates.map((candidate) => <option key={candidate.userId} value={candidate.userId}>{optionLabel(candidate)}</option>)}
     </select>

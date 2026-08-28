@@ -157,7 +157,7 @@ test.describe.serial("Accounting onboarding and production-readiness UX", () => 
     const created = await apiPost(page, `/api/enterprise/${organizationId}/sales-invoices`, { businessPartyId: "e2e-baseline-business-party", invoiceDate: "2026-08-09T12:00:00.000Z", dueDate: "2026-08-31T12:00:00.000Z", currencyCode: "XAF", notes: "Accounting production-like acceptance", items: [{ description: "Service ERP E2E", quantity: "1", unitPrice: "10000", discountAmount: "0" }] });
     expect(created.response.status(), JSON.stringify(created.body)).toBe(201);
     let invoice = created.body.invoice;
-    const submitted = await apiPost(page, `/api/enterprise/${organizationId}/sales-invoices/${invoice.id}/transition`, { action: "SUBMIT", revision: invoice.revision });
+    const submitted = await apiPost(page, `/api/enterprise/${organizationId}/sales-invoices/${invoice.id}/transition`, { action: "SUBMIT", revision: invoice.revision, approverUserId: outsiderUserId });
     expect(submitted.response.ok(), JSON.stringify(submitted.body)).toBeTruthy(); invoice = submitted.body.invoice;
     await page.context().clearCookies(); await signIn(page, { email: outsiderEmail, password: outsiderPassword, organization: organizationId });
     const approved = await apiPost(page, `/api/enterprise/${organizationId}/sales-invoices/${invoice.id}/transition`, { action: "APPROVE", revision: invoice.revision });

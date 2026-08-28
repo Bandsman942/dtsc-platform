@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AlertCircle, BookOpen, CheckCircle2, Plus, RefreshCw, RotateCcw, Save, Search, Settings2, ShieldCheck } from "lucide-react";
+import { AssignedApprovalSubmitPanel } from "@/components/enterprise/professional/assigned-approval-submit-panel";
 import { Button } from "@/components/ui/button";
 import { FinancialStatementReportDialog } from "@/components/reports/financial-statement-report-dialog";
 import { Input } from "@/components/ui/input";
@@ -19,6 +20,7 @@ type Payload = { items?: Item[]; metrics?: Record<string, number>; pagination?: 
 type LookupState = { charts: Item[]; years: Item[]; periods: Item[]; journals: Item[]; accounts: Item[]; assets: Item[] };
 type FormState = Record<string, string | boolean>;
 type SectionDefinition = { key: string; labelKey: EnterpriseFinanceKey; endpoint: string };
+type ApprovalSubmitState = { item: Item; kind: "ENTRY" | "CLOSE" };
 type Props = { organizationId: string; organizationName: string; organizationLogoUrl?: string | null; definition: EnterpriseModuleDefinition; locale?: string | null; canManage: boolean };
 
 const EMPTY_LOOKUPS: LookupState = { charts: [], years: [], periods: [], journals: [], accounts: [], assets: [] };
@@ -96,7 +98,7 @@ function today() { return new Date().toISOString().slice(0, 10); }
 function itemTitle(item: Item, activeKey: string, locale: FinanceLocale) {
   if (activeKey === "assets") return nestedText(item, "asset", "name") || nestedText(item, "asset", "code") || ft(locale, "fixedAsset");
   if (activeKey === "ledger") return `${text(item, "accountCode")} · ${locale === "fr" ? text(item, "accountNameFr") : text(item, "accountNameEn")}`;
-  if (activeKey === "trial") return `${text(item, "code")} · ${locale === "fr" ? text(item, "nameFr") : text(item, "nameEn")}`;
+  if (activeKey === "trial") return `${text(item, "code")} · ${locale === "fr" ? text(item, "nameFr") : text(item, "nameNameEn")}`;
   if (activeKey === "rules") return text(item, "mappingKey");
   if (activeKey === "anomalies") return text(item, "reference") || businessLabel(item.postingEvent, locale);
   if (activeKey === "inventory") return text(item, "inventoryItemName") || text(item, "itemName") || text(item, "inventoryItemId") || ft(locale, "valuedItem");
@@ -154,8 +156,9 @@ export function EnterpriseAdvancedFinanceWorkspace({ organizationId, organizatio
   const [showForm, setShowForm] = useState(false);
   const [reversalEntryId, setReversalEntryId] = useState("");
   const [reopenClose, setReopenClose] = useState<Item | null>(null);
+  const [approvalSubmit, setApprovalSubmit] = useState<ApprovalSubmitState | null>(null);
 
-  const resetSectionState = useCallback(() => { setPage(1); setSearch(""); setStatus(""); setShowForm(false); setReversalEntryId(""); setReopenClose(null); }, []);
+  const resetSectionState = useCallback(() => { setPage(1); setSearch(""); setStatus(""); setShowForm(false); setReversalEntryId(""); setReopenClose(null); setApprovalSubmit(null); }, []);
   useEffect(() => {
     const nextKey = requestedTab && sections.some((section) => section.key === requestedTab) ? requestedTab : sections[0]?.key || "overview";
     if (nextKey !== activeKey) { setActiveKey(nextKey); resetSectionState(); }
@@ -212,6 +215,27 @@ export function EnterpriseAdvancedFinanceWorkspace({ organizationId, organizatio
     finally { setSaving(false); }
   }
 
+  async function submitAssignedApproval(approverUserId: string) {
+    if (!approvalSubmit) return;
+    setSaving(true); setError(""); setNotice("");
+    const endpoint = approvalSubmit.kind === "ENTRY"
+      ? `/api/enterprise/${organizationId}/journal-entries/${approvalSubmit.item.id}/transition`
+      : `/api/enterprise/${organizationId}/financial-close/${approvalSubmit.item.id}/transition`;
+    try {
+      await requestJson(endpoint, locale, "POST", { action: "SUBMIT", revision: approvalSubmit.item.revision, approverUserId });
+      setNotice(t(approvalSubmit.kind === "CLOSE" && approvalSubmit.item.status === "BLOCKED" ? "closeRecalculated" : approvalSubmit.kind === "ENTRY" ? "journalWorkflowUpdated" : "closeWorkflowUpdated"));
+      setApprovalSubmit(null);
+      await Promise.all([load(), loadLookups()]);
+    } catch (mutationError) {
+      setError(safeFinanceError(mutationError, t("accountingActionFailed")));
+    } finally { setSaving(false); }
+  }
+
+  function beginAssignedSubmit(item: Item, kind: ApprovalSubmitState["kind"]) {
+    setError(""); setNotice(""); setApprovalSubmit({ item, kind }); setShowForm(false); setReversalEntryId(""); setReopenClose(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   async function submitForm(event: FormEvent) {
     event.preventDefault();
     const base = `/api/enterprise/${organizationId}`;
@@ -230,12 +254,12 @@ export function EnterpriseAdvancedFinanceWorkspace({ organizationId, organizatio
     else if (activeKey === "inventory") await mutate(`${base}/financial-statements`, { statementType: "INVENTORY_VALUATION", periodStart: form.periodStart, periodEnd: form.periodEnd, currencyCode: form.currencyCode, publish: true }, "immutableValuationPublished");
   }
 
-  async function transitionEntry(item: Item, action: "SUBMIT" | "APPROVE" | "REJECT" | "POST") {
+  async function transitionEntry(item: Item, action: "APPROVE" | "REJECT" | "POST") {
     const reason = action === "REJECT" ? (form.reason || t("correctionRequired")) : undefined;
     await mutate(`/api/enterprise/${organizationId}/journal-entries/${item.id}/transition`, { action, reason, revision: item.revision }, "journalWorkflowUpdated");
   }
-  async function transitionClose(item: Item, action: "SUBMIT" | "APPROVE" | "CLOSE") {
-    await mutate(`/api/enterprise/${organizationId}/financial-close/${item.id}/transition`, { action, revision: item.revision }, action === "SUBMIT" && item.status === "BLOCKED" ? "closeRecalculated" : "closeWorkflowUpdated");
+  async function transitionClose(item: Item, action: "APPROVE" | "CLOSE") {
+    await mutate(`/api/enterprise/${organizationId}/financial-close/${item.id}/transition`, { action, revision: item.revision }, "closeWorkflowUpdated");
   }
   async function openFiscalYearItem(item: Item) { await mutate(`/api/enterprise/${organizationId}/fiscal-years/${item.id}/open`, { revision: item.revision }, "fiscalYearOpened"); }
   async function runDepreciation() { await mutate(`/api/enterprise/${organizationId}/asset-depreciation/run`, { throughDate: form.throughDate }, "depreciationPosted"); }
@@ -248,7 +272,7 @@ export function EnterpriseAdvancedFinanceWorkspace({ organizationId, organizatio
       eyebrow={`${organizationName} · ${t("advancedFinance")}`}
       title={locale === "fr" ? definition.labelFr : definition.labelEn}
       description={t("advancedFinanceDescription")}
-      primaryAction={actionAvailable ? <Button onClick={() => { setShowForm((current) => !current); setReversalEntryId(""); setReopenClose(null); }}><Plus className="h-4 w-4" />{showForm ? t("close") : t("professionalAction")}</Button> : undefined}
+      primaryAction={actionAvailable ? <Button onClick={() => { setShowForm((current) => !current); setReversalEntryId(""); setReopenClose(null); setApprovalSubmit(null); }}><Plus className="h-4 w-4" />{showForm ? t("close") : t("professionalAction")}</Button> : undefined}
       secondaryActions={<Button variant="outline" onClick={() => void load()} disabled={loading}><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />{t("refresh")}</Button>}
     />
 
@@ -266,6 +290,22 @@ export function EnterpriseAdvancedFinanceWorkspace({ organizationId, organizatio
     {error ? <div className="flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/5 p-4 text-sm"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" /><span>{error}</span></div> : null}
     {payload.disclaimer ? <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" /><span>{payload.disclaimer}</span></div> : null}
 
+    {approvalSubmit ? <ModuleSection
+      title={locale === "en" ? "Assign the approval" : "Affecter la validation"}
+      description={approvalSubmit.kind === "ENTRY"
+        ? (locale === "en" ? "Select the authorized person who must approve this journal entry before posting." : "Sélectionnez la personne autorisée qui doit valider cette écriture avant comptabilisation.")
+        : (locale === "en" ? "Select the authorized person who must approve this financial close before the final close action." : "Sélectionnez la personne autorisée qui doit valider cette clôture avant l'action de clôture définitive.")}
+    >
+      <AssignedApprovalSubmitPanel
+        organizationId={organizationId}
+        moduleCode={approvalSubmit.kind === "ENTRY" ? "FINANCE_ACCOUNTING" : "FINANCE_CLOSE"}
+        locale={rawLocale}
+        submitting={saving}
+        onSubmit={submitAssignedApproval}
+        onCancel={() => setApprovalSubmit(null)}
+      />
+    </ModuleSection> : null}
+
     {(showForm || reversalEntryId || reopenClose) && actionAvailable ? <ModuleSection title={reversalEntryId ? t("reverseJournalEntry") : reopenClose ? t("reopenPeriod") : t("professionalAction")} description={t("finalControlsServer")}>
       <form onSubmit={submitForm} className="grid gap-4 rounded-2xl border border-dtsc-border bg-dtsc-page/70 p-4 sm:grid-cols-2 lg:grid-cols-3">
         {reversalEntryId ? <><Field label={t("authorizedDate")}><Input type="date" value={String(form.accountingDate)} onChange={(event) => updateForm("accountingDate", event.target.value)} required /></Field><Field label={t("detailedReason")} className="sm:col-span-2"><Input value={String(form.reason)} onChange={(event) => updateForm("reason", event.target.value)} minLength={8} required /></Field></> : reopenClose ? <Field label={t("detailedReopeningReason")} className="sm:col-span-2 lg:col-span-3"><Input value={String(form.reason)} onChange={(event) => updateForm("reason", event.target.value)} minLength={8} required /></Field> : <ActionFields activeKey={activeKey} locale={locale} form={form} updateForm={updateForm} lookups={lookups} />}
@@ -278,15 +318,15 @@ export function EnterpriseAdvancedFinanceWorkspace({ organizationId, organizatio
         {items.map((item) => <article key={item.id || text(item, "inventoryItemId") + text(item, "warehouseId") + text(item, "currencyCode")} className="py-4 first:pt-0 last:pb-0"><div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between"><div className="min-w-0"><div className="flex min-w-0 flex-wrap items-center gap-2"><h3 className="min-w-0 break-words font-black text-dtsc-ink">{itemTitle(item, activeKey, locale)}</h3>{item.status ? <StatusBadge tone={financeStatusTone(String(item.status))}>{financeStatusLabel(String(item.status), locale)}</StatusBadge> : null}</div><p className="mt-1 break-words text-sm text-dtsc-muted">{itemDescription(item, activeKey, locale)}</p>{amountSummary(item, activeKey, locale) ? <p className="mt-2 text-sm font-black tabular-nums text-dtsc-ink">{amountSummary(item, activeKey, locale)}</p> : null}<BusinessDetails item={item} activeKey={activeKey} locale={locale} /></div><div className="flex shrink-0 flex-wrap gap-2">
           {activeKey === "statements" && item.id ? <FinancialStatementReportDialog organizationId={organizationId} organizationName={organizationName} organizationLogoUrl={organizationLogoUrl} statementId={item.id} locale={rawLocale} /> : null}
           {activeKey === "years" && item.status === "DRAFT" ? <Button size="sm" variant="outline" onClick={() => void openFiscalYearItem(item)}>{t("openFiscalYear")}</Button> : null}
-          {activeKey === "entries" && item.status === "DRAFT" ? <Button size="sm" variant="outline" onClick={() => void transitionEntry(item, "SUBMIT")}>{t("actionSubmit")}</Button> : null}
+          {activeKey === "entries" && item.status === "DRAFT" ? <Button size="sm" variant="outline" onClick={() => beginAssignedSubmit(item, "ENTRY")}>{t("actionSubmit")}</Button> : null}
           {activeKey === "entries" && item.status === "PENDING_APPROVAL" ? <><Button size="sm" onClick={() => void transitionEntry(item, "APPROVE")}>{t("actionApprove")}</Button><Button size="sm" variant="outline" onClick={() => void transitionEntry(item, "REJECT")}>{t("actionReject")}</Button></> : null}
           {activeKey === "entries" && item.status === "APPROVED" ? <Button size="sm" onClick={() => void transitionEntry(item, "POST")}>{t("post")}</Button> : null}
-          {activeKey === "entries" && item.status === "POSTED" ? <Button size="sm" variant="outline" onClick={() => { setReversalEntryId(item.id); setShowForm(true); window.scrollTo({ top: 0, behavior: "smooth" }); }}>{t("actionReverse")}</Button> : null}
-          {activeKey === "close" && item.status === "DRAFT" ? <Button size="sm" variant="outline" onClick={() => void transitionClose(item, "SUBMIT")}>{t("actionSubmit")}</Button> : null}
-          {activeKey === "close" && item.status === "BLOCKED" ? <Button size="sm" variant="outline" onClick={() => void transitionClose(item, "SUBMIT")}>{t("recheckClose")}</Button> : null}
+          {activeKey === "entries" && item.status === "POSTED" ? <Button size="sm" variant="outline" onClick={() => { setReversalEntryId(item.id); setShowForm(true); setApprovalSubmit(null); window.scrollTo({ top: 0, behavior: "smooth" }); }}>{t("actionReverse")}</Button> : null}
+          {activeKey === "close" && item.status === "DRAFT" ? <Button size="sm" variant="outline" onClick={() => beginAssignedSubmit(item, "CLOSE")}>{t("actionSubmit")}</Button> : null}
+          {activeKey === "close" && item.status === "BLOCKED" ? <Button size="sm" variant="outline" onClick={() => beginAssignedSubmit(item, "CLOSE")}>{t("recheckClose")}</Button> : null}
           {activeKey === "close" && item.status === "PENDING_APPROVAL" ? <Button size="sm" onClick={() => void transitionClose(item, "APPROVE")}>{t("actionApprove")}</Button> : null}
           {activeKey === "close" && item.status === "APPROVED" ? <Button size="sm" onClick={() => void transitionClose(item, "CLOSE")}>{t("closePeriod")}</Button> : null}
-          {activeKey === "close" && item.status === "CLOSED" ? <Button size="sm" variant="outline" onClick={() => { setForm((current) => ({ ...current, reason: "" })); setReopenClose(item); setShowForm(true); window.scrollTo({ top: 0, behavior: "smooth" }); }}>{t("requestReopening")}</Button> : null}
+          {activeKey === "close" && item.status === "CLOSED" ? <Button size="sm" variant="outline" onClick={() => { setForm((current) => ({ ...current, reason: "" })); setReopenClose(item); setShowForm(true); setApprovalSubmit(null); window.scrollTo({ top: 0, behavior: "smooth" }); }}>{t("requestReopening")}</Button> : null}
         </div></div></article>)}
       </div>}
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-dtsc-border pt-4 text-sm text-dtsc-muted"><span>{t("page")} {pagination.page}/{pagination.pageCount}</span><div className="flex gap-2"><Button variant="outline" disabled={page <= 1 || loading} onClick={() => setPage((current) => Math.max(1, current - 1))}>{t("previous")}</Button><Button variant="outline" disabled={page >= pagination.pageCount || loading} onClick={() => setPage((current) => Math.min(pagination.pageCount, current + 1))}>{t("next")}</Button></div></div>

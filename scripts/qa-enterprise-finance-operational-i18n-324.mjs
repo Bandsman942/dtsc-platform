@@ -50,13 +50,36 @@ for (const key of [
 }
 
 check(invoice.includes('translateEnterpriseFinance'), "Factures utilise le catalogue enterprise-finance");
-check(invoice.includes('invoiceTransitionActions(detail.status, locale)'), "Factures projette les actions selon la locale");
+check(
+  invoice.includes('invoiceTransitionActions(detail.status, locale, isReceivables)'),
+  "Factures projette les actions selon la locale et le workflow clients/fournisseurs",
+);
 check(invoice.includes('{action.label}</Button>'), "Factures rend un libellé client et non le code API");
-check(invoice.includes('invoiceActionLabel(actionTarget.action, locale)'), "Le titre du dialogue facture localise l’action");
-check(invoice.includes('action: actionTarget.action'), "Factures préserve le code d’action API dans le payload");
+check(
+  invoice.includes('actionLabel(actionTarget.action, locale)'),
+  "Le titre du dialogue facture localise l’action depuis le code canonique",
+);
+check(
+  invoice.includes('const action = actionTarget.action;')
+    && invoice.includes('...(isCredit && action === "POST" ? {} : { action })'),
+  "Factures préserve le code d’action API canonique dans le payload sans envoyer le libellé localisé",
+);
 check(invoice.includes('description={locale === "en" ? definition.descriptionEn : definition.descriptionFr}'), "Factures utilise la description de module correspondant à la locale");
 check(!invoice.includes('locale === "fr" ? action.label : action.action'), "Factures n’affiche plus le code API comme libellé EN");
 check(!invoice.includes('description={definition.descriptionFr}'), "Factures n’impose plus la description française en EN");
+
+check(
+  invoice.includes('if (action === "SUBMIT") return invoiceT(locale, "actionSubmit")')
+    && invoice.includes('if (action === "APPROVE") return invoiceT(locale, "actionApprove")')
+    && invoice.includes('if (action === "REJECT") return invoiceT(locale, "actionReject")')
+    && invoice.includes('if (action === "ISSUE") return invoiceT(locale, "actionIssueAndPost")'),
+  "Factures localise les codes d’action canoniques via le catalogue Finance",
+);
+check(
+  invoice.includes('if (status === "APPROVED") return [{ action: isReceivables ? "ISSUE" : "POST"')
+    && invoice.includes('actionLabel(isReceivables ? "ISSUE" : "POST", locale)'),
+  "Factures conserve ISSUE pour les créances approuvées et POST pour les dettes approuvées",
+);
 
 check(payments.includes('translateEnterpriseFinance'), "Paiements/Trésorerie utilise le catalogue enterprise-finance");
 check(payments.includes('paymentActions(detail.status, locale)'), "Paiements projette les actions selon la locale");
@@ -69,9 +92,13 @@ check(payments.includes('description={locale === "en" ? definition.descriptionEn
 check(!payments.includes('locale === "fr" ? action.label : action.action'), "Paiements/Trésorerie n’affiche plus le code API comme libellé EN");
 check(!payments.includes('description={definition.descriptionFr}'), "Paiements/Trésorerie n’impose plus la description française en EN");
 
-for (const code of ["SUBMIT", "APPROVE", "REJECT", "ISSUE"]) {
+for (const code of ["SUBMIT", "APPROVE", "REJECT"]) {
   check(invoice.includes(`action: "${code}"`), `Factures conserve le code API ${code}`);
 }
+check(
+  invoice.includes('action: isReceivables ? "ISSUE" : "POST"'),
+  "Factures conserve les codes API ISSUE/POST selon la famille comptable",
+);
 for (const code of ["SUBMIT", "CANCEL", "APPROVE", "CONFIRM", "RECONCILE", "REVERSE"]) {
   check(payments.includes(`action: "${code}"`), `Paiements/Trésorerie conserve le code API ${code}`);
 }

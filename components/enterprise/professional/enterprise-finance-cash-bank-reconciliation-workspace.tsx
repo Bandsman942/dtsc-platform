@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type ChangeEvent, type FormEvent } fr
 import { Banknote, CheckCircle2, FileSpreadsheet, LockKeyhole, Plus, Scale, ShieldCheck } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
+import { EnterpriseApproverSelect } from "@/components/enterprise/enterprise-approver-select";
 import {
   FinanceCollaboration,
   FinanceDetailGrid,
@@ -110,6 +111,10 @@ type ParsedBankLine = {
   credit: string;
   runningBalance?: string;
 };
+type ReconciliationActionTarget = {
+  record: Reconciliation;
+  action: "SUBMIT" | "APPROVE" | "REJECT";
+};
 
 const cashT = (locale: FinanceLocale, key: EnterpriseFinanceKey) => translateEnterpriseFinance(locale, key);
 
@@ -202,13 +207,14 @@ export function EnterpriseFinanceCashBankReconciliationWorkspace({
   const [closeTarget, setCloseTarget] = useState<CashSession | null>(null);
   const [validateTarget, setValidateTarget] = useState<CashSession | null>(null);
   const [matchTarget, setMatchTarget] = useState<Reconciliation | null>(null);
+  const [reconciliationActionTarget, setReconciliationActionTarget] = useState<ReconciliationActionTarget | null>(null);
   const [csvLines, setCsvLines] = useState<ParsedBankLine[]>([]);
   const [csvName, setCsvName] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
   const endpoint = isCash ? "cash-sessions" : isBank ? "bank-statements" : "reconciliations";
-  const effectiveStatus = status || (tab === "pending" ? (isCash ? "PENDING_VALIDATION" : "SUBMITTED") : tab === "open" ? "OPEN" : "");
+  const effectiveStatus = status || (tab === "pending" ? (isBank ? "SUBMITTED" : "PENDING_VALIDATION") : tab === "open" ? "OPEN" : "");
   const collection = useFinanceCollection<FinanceRecord>({ endpoint: `/api/enterprise/${organizationId}/${endpoint}`, page, search, status: effectiveStatus, refreshKey });
   const lookupData = useFinanceLookups(organizationId, moduleCode, refreshKey);
 
@@ -251,8 +257,11 @@ export function EnterpriseFinanceCashBankReconciliationWorkspace({
     const denominations = ["100", "50", "20", "10", "5", "1"];
     try {
       await financeMutation(`/api/enterprise/${organizationId}/cash-sessions/${closeTarget.id}/close`, {
-        countedClosingAmount: String(form.get("countedClosingAmount") || "0"), closingReason: String(form.get("closingReason") || "") || undefined,
-        counts: denominations.map((denomination) => ({ denomination, quantity: Number(form.get(`denomination_${denomination}`) || 0) })).filter((item) => item.quantity > 0), revision: closeTarget.revision,
+        countedClosingAmount: String(form.get("countedClosingAmount") || "0"),
+        closingReason: String(form.get("closingReason") || "") || undefined,
+        counts: denominations.map((denomination) => ({ denomination, quantity: Number(form.get(`denomination_${denomination}`) || 0) })).filter((item) => item.quantity > 0),
+        revision: closeTarget.revision,
+        approverUserId: String(form.get("approverUserId") || ""),
       });
       setCloseTarget(null); setDetail(null); setRefreshKey((value) => value + 1); setMessage(t("cashCloseSubmitted"));
     } catch (cashError) { setError(safeFinanceError(cashError, t("closeFailed"))); }
@@ -314,18 +323,28 @@ export function EnterpriseFinanceCashBankReconciliationWorkspace({
     } catch (matchError) { setError(safeFinanceError(matchError, t("matchingFailed"))); }
   }
 
-  async function completeReconciliation(record: Reconciliation) {
+  async function transitionReconciliation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!reconciliationActionTarget) return;
+    const form = new FormData(event.currentTarget);
+    const { record, action } = reconciliationActionTarget;
     try {
-      await financeMutation(`/api/enterprise/${organizationId}/reconciliations/${record.id}/complete`, { revision: record.revision });
-      setDetail(null); setRefreshKey((value) => value + 1); setMessage(t("reconciliationCompleted"));
-    } catch (completeError) { setError(safeFinanceError(completeError, t("completionFailed"))); }
+      await financeMutation(`/api/enterprise/${organizationId}/reconciliations/${record.id}/complete`, {
+        action,
+        revision: record.revision,
+        ...(action === "SUBMIT" ? { approverUserId: String(form.get("approverUserId") || "") } : {}),
+        reason: String(form.get("reason") || "") || undefined,
+      });
+      setReconciliationActionTarget(null); setDetail(null); setRefreshKey((value) => value + 1);
+      setMessage(action === "SUBMIT" ? t("pendingApproval") : action === "APPROVE" ? t("reconciliationCompleted") : t("correctionRequired"));
+    } catch (transitionError) { setError(safeFinanceError(transitionError, action === "SUBMIT" ? t("completionFailed") : t("validationFailed"))); }
   }
 
   const cashTabs = [{ id: "all", label: t("allSessions") }, { id: "open", label: t("openSessions") }, { id: "pending", label: t("toValidate") }, { id: "closed", label: t("closedSessions") }];
   const bankTabs = [{ id: "all", label: t("allStatements") }, { id: "pending", label: t("toReconcile") }];
   const reconciliationTabs = [{ id: "all", label: t("allSessions") }, { id: "pending", label: t("toValidate") }, { id: "closed", label: t("closedSessions") }];
   const tabs = isCash ? cashTabs : isBank ? bankTabs : reconciliationTabs;
-  const openCount = collection.items.filter((item) => ["OPEN", "PREPARED", "IN_PROGRESS"].includes(String(item.status))).length;
+  const openCount = collection.items.filter((item) => ["OPEN", "DRAFT", "PREPARED", "IN_PROGRESS"].includes(String(item.status))).length;
   const pendingCount = collection.items.filter((item) => ["PENDING_VALIDATION", "SUBMITTED"].includes(String(item.status))).length;
   const cashAccounts = lookupData.accounts.filter((account) => account.accountType === "CASH");
   const bankAccounts = lookupData.accounts.filter((account) => account.accountType === "BANK");
@@ -346,7 +365,7 @@ export function EnterpriseFinanceCashBankReconciliationWorkspace({
     </ModuleMetrics>
     <ModuleToolbar
       search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("cashSearchPlaceholder")} />}
-      controls={<div className="grid min-w-0 gap-2"><ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setStatus(""); setPage(1); }} items={tabs} label={t("moduleViews")} /><NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={[{ id: "", label: t("allStatuses") }, ...["OPEN", "PENDING_VALIDATION", "VALIDATED", "CLOSED", "IMPORTED", "PREPARED", "IN_PROGRESS", "SUBMITTED", "COMPLETED"].map((id) => ({ id, label: financeStatusLabel(id, locale) }))]} /></div>}
+      controls={<div className="grid min-w-0 gap-2"><ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setStatus(""); setPage(1); }} items={tabs} label={t("moduleViews")} /><NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={[{ id: "", label: t("allStatuses") }, ...["OPEN", "DRAFT", "PENDING_VALIDATION", "VALIDATED", "CLOSED", "IMPORTED", "PREPARED", "IN_PROGRESS", "SUBMITTED", "COMPLETED"].map((id) => ({ id, label: financeStatusLabel(id, locale) }))]} /></div>}
       summary={t("noReconciledLineReuse")}
     />
     <ModuleContent>
@@ -407,7 +426,8 @@ export function EnterpriseFinanceCashBankReconciliationWorkspace({
         {!isCash && !isBank && Array.isArray((detail as Reconciliation).matches) ? <BusinessList ariaLabel={t("matches")}>{((detail as Reconciliation).matches || []).map((match) => <BusinessListItem key={match.id} title={t("financialMatch")} meta={financeMoney(match.matchedAmount, String((detail as Reconciliation).financialAccount?.currencyCode || "USD"), locale)} status={<StatusBadge tone={financeStatusTone(match.status)}>{financeStatusLabel(match.status, locale)}</StatusBadge>} />)}</BusinessList> : null}
         {canManage && isCash && detail.status === "OPEN" ? <Button onClick={() => setCloseTarget(detail as CashSession)}><LockKeyhole className="h-4 w-4" />{t("closeCashSession")}</Button> : null}
         {canManage && isCash && detail.status === "PENDING_VALIDATION" ? <Button onClick={() => setValidateTarget(detail as CashSession)}><ShieldCheck className="h-4 w-4" />{t("validateClose")}</Button> : null}
-        {canManage && !isCash && !isBank && !["COMPLETED", "CLOSED"].includes(String(detail.status)) ? <div data-responsive-actions><Button onClick={() => setMatchTarget(detail as Reconciliation)}><Scale className="h-4 w-4" />{t("addMatch")}</Button><Button variant="outline" onClick={() => void completeReconciliation(detail as Reconciliation)}><CheckCircle2 className="h-4 w-4" />{t("completeReconciliation")}</Button></div> : null}
+        {canManage && !isCash && !isBank && ["DRAFT", "IN_PROGRESS"].includes(String(detail.status)) ? <div data-responsive-actions><Button onClick={() => setMatchTarget(detail as Reconciliation)}><Scale className="h-4 w-4" />{t("addMatch")}</Button><Button variant="outline" onClick={() => setReconciliationActionTarget({ record: detail as Reconciliation, action: "SUBMIT" })}><CheckCircle2 className="h-4 w-4" />{t("completeReconciliation")}</Button></div> : null}
+        {canManage && !isCash && !isBank && detail.status === "PENDING_VALIDATION" ? <div data-responsive-actions><Button onClick={() => setReconciliationActionTarget({ record: detail as Reconciliation, action: "APPROVE" })}><ShieldCheck className="h-4 w-4" />{t("actionApprove")}</Button><Button variant="outline" onClick={() => setReconciliationActionTarget({ record: detail as Reconciliation, action: "REJECT" })}>{t("actionReject")}</Button></div> : null}
         <FinanceCollaboration organizationId={organizationId} moduleCode={moduleCode} record={detail} locale={locale} />
       </div> : null}
     </Dialog>
@@ -417,11 +437,21 @@ export function EnterpriseFinanceCashBankReconciliationWorkspace({
         {["100", "50", "20", "10", "5", "1"].map((denomination) => <Field key={denomination} label={`${t("notesCoinsOf")} ${denomination}`}><Input name={`denomination_${denomination}`} type="number" inputMode="numeric" min="0" defaultValue="0" /></Field>)}
         <Field label={t("physicalTotal")}><Input name="countedClosingAmount" type="number" inputMode="decimal" min="0" step="0.01" required /></Field>
         <Field label={t("varianceExplanation")}><textarea name="closingReason" rows={4} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base" /></Field>
+        <EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_CASH" locale={locale} label={t("independentApproval")} />
       </ProfessionalFormSection><p className="text-sm text-dtsc-muted">{t("cashCloseSod")}</p><div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setCloseTarget(null)}>{t("cancel")}</Button><Button type="submit">{t("submitClose")}</Button></div></form> : null}
     </Dialog>
 
     <Dialog open={Boolean(validateTarget)} onClose={() => setValidateTarget(null)} title={t("independentValidation")} className="max-w-xl">
       {validateTarget ? <form onSubmit={validateCashSession} className="grid gap-4"><Field label={t("decision")}><NativeSelect name="approve" required items={[{ id: "true", label: t("approveClose") }, { id: "false", label: t("rejectRequestCorrection") }]} /></Field><Field label={t("reason")}><textarea name="reason" rows={4} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base" /></Field><div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setValidateTarget(null)}>{t("cancel")}</Button><Button type="submit">{t("saveDecision")}</Button></div></form> : null}
+    </Dialog>
+
+    <Dialog open={Boolean(reconciliationActionTarget)} onClose={() => setReconciliationActionTarget(null)} title={reconciliationActionTarget?.action === "SUBMIT" ? t("completeReconciliation") : t("independentValidation")} className="max-w-xl">
+      {reconciliationActionTarget ? <form onSubmit={transitionReconciliation} className="grid gap-4">
+        {reconciliationActionTarget.action === "SUBMIT" ? <EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_RECONCILIATION" locale={locale} label={t("independentApproval")} /> : null}
+        <Field label={t("reason")}><textarea name="reason" rows={4} minLength={reconciliationActionTarget.action === "REJECT" ? 4 : undefined} required={reconciliationActionTarget.action === "REJECT"} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base" /></Field>
+        <p className="text-sm text-dtsc-muted">{t("reconciliationSectionDescription")}</p>
+        <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setReconciliationActionTarget(null)}>{t("cancel")}</Button><Button type="submit">{reconciliationActionTarget.action === "SUBMIT" ? t("submit") : t("saveDecision")}</Button></div>
+      </form> : null}
     </Dialog>
 
     <Dialog open={Boolean(matchTarget)} onClose={() => setMatchTarget(null)} title={t("newMatch")} description={t("matchDescription")} className="max-w-3xl">

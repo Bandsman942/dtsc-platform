@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { ArrowRightLeft, CheckCircle2, CircleDollarSign, Plus, Send, ShieldCheck, Undo2, XCircle } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
+import { EnterpriseApproverSelect } from "@/components/enterprise/enterprise-approver-select";
 import {
   FinanceCollaboration,
   FinanceDetailGrid,
@@ -200,6 +201,7 @@ export function EnterpriseFinancePaymentsTreasuryWorkspace({
   async function createTransfer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    setError("");
     try {
       await financeMutation(`/api/enterprise/${organizationId}/account-transfers`, {
         sourceFinancialAccountId: String(form.get("sourceFinancialAccountId") || ""),
@@ -208,6 +210,7 @@ export function EnterpriseFinancePaymentsTreasuryWorkspace({
         targetAmount: String(form.get("targetAmount") || "0"),
         exchangeRate: String(form.get("exchangeRate") || "") || undefined,
         transferDate: String(form.get("transferDate") || ""),
+        approverUserId: String(form.get("approverUserId") || ""),
       });
       setTransferOpen(false);
       setTab("transfers");
@@ -230,6 +233,9 @@ export function EnterpriseFinancePaymentsTreasuryWorkspace({
         action: actionTarget.action,
         reason: String(form.get("reason") || "") || undefined,
         revision: actionTarget.record.revision,
+        ...(actionTarget.kind === "payment" && actionTarget.action === "SUBMIT"
+          ? { approverUserId: String(form.get("approverUserId") || "") }
+          : {}),
       });
       setActionTarget(null);
       setDetail(null);
@@ -369,6 +375,9 @@ export function EnterpriseFinancePaymentsTreasuryWorkspace({
             <Field label={t("exchangeRate")}><Input name="exchangeRate" type="number" inputMode="decimal" min="0.000001" step="0.000001" /></Field>
             <Field label={t("date")}><Input name="transferDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required /></Field>
           </ProfessionalFormSection>
+          <ProfessionalFormSection title={locale === "en" ? "Approval" : "Validation"}>
+            <EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_TREASURY" locale={requestedLocale} />
+          </ProfessionalFormSection>
           <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setTransferOpen(false)}>{t("cancel")}</Button><Button type="submit"><ArrowRightLeft className="h-4 w-4" />{t("prepareTransfer")}</Button></div>
         </form>
       </Dialog>
@@ -391,7 +400,12 @@ export function EnterpriseFinancePaymentsTreasuryWorkspace({
       </Dialog>
 
       <Dialog open={Boolean(actionTarget)} onClose={() => setActionTarget(null)} title={actionTarget ? `${actionTarget.label} · ${String(actionTarget.record.number || actionTarget.record.reference || "")}` : ""} className="max-w-xl">
-        {actionTarget ? <form onSubmit={transition} className="grid gap-4"><Field label={t("reason")}><textarea name="reason" rows={4} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base" /></Field><p className="text-sm text-dtsc-muted">{t("sodSelfApprovalBlocked")}</p><div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setActionTarget(null)}>{t("cancel")}</Button><Button type="submit">{t("confirm")}</Button></div></form> : null}
+        {actionTarget ? <form onSubmit={transition} className="grid gap-4">
+          {actionTarget.kind === "payment" && actionTarget.action === "SUBMIT" ? <EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_PAYMENTS" locale={requestedLocale} /> : null}
+          <Field label={t("reason")}><textarea name="reason" rows={4} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base" /></Field>
+          <p className="text-sm text-dtsc-muted">{t("sodSelfApprovalBlocked")}</p>
+          <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setActionTarget(null)}>{t("cancel")}</Button><Button type="submit">{t("confirm")}</Button></div>
+        </form> : null}
       </Dialog>
 
       <Dialog open={Boolean(allocationTarget)} onClose={() => setAllocationTarget(null)} title={t("allocatePayment")} description={allocationTarget ? `${financeMoney(allocationTarget.unallocatedAmount, allocationTarget.currencyCode, locale)} ${t("stillAvailable")}` : ""} className="max-w-3xl">

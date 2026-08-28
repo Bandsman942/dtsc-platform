@@ -1,5 +1,16 @@
 export const ENTERPRISE_APPROVAL_MODULE_BY_TARGET: Readonly<Record<string, string>> = {
   EnterpriseAccountTransfer: "FINANCE_TREASURY",
+  EnterpriseJournalEntry: "FINANCE_ACCOUNTING",
+  EnterprisePayment: "FINANCE_PAYMENTS",
+  EnterpriseSalesInvoice: "FINANCE_RECEIVABLES",
+  EnterpriseSupplierInvoiceReview: "FINANCE_PAYABLES",
+  EnterpriseSupplierInvoiceApproval: "FINANCE_PAYABLES",
+  EnterpriseFinancialClose: "FINANCE_CLOSE",
+  EnterpriseCashSession: "FINANCE_CASH",
+  EnterpriseReconciliationSession: "FINANCE_RECONCILIATION",
+  EnterpriseOpeningBalanceApproval: "FINANCE_ACCOUNTING",
+  EnterpriseSalesCreditNoteApproval: "FINANCE_RECEIVABLES",
+  EnterpriseSupplierCreditNoteApproval: "FINANCE_PAYABLES",
   EnterpriseRequest: "INTERNAL_REQUESTS",
   EnterpriseTask: "TASKS_OPERATIONS",
   EnterpriseMeeting: "MEETINGS",
@@ -20,6 +31,16 @@ export function enterpriseApprovalModuleForTarget(targetEntityType: string) {
 export function enterpriseApprovalTargetDeepLink(targetEntityType: string, targetEntityId: string, approvalId?: string | null) {
   const id = encodeURIComponent(targetEntityId);
   if (targetEntityType === "EnterpriseAccountTransfer") return `/enterprise-modules/FINANCE_TREASURY?transfer=${id}`;
+  if (targetEntityType === "EnterpriseJournalEntry") return `/enterprise-modules/FINANCE_ACCOUNTING?tab=entries&entry=${id}`;
+  if (targetEntityType === "EnterprisePayment") return `/enterprise-modules/FINANCE_PAYMENTS?payment=${id}`;
+  if (targetEntityType === "EnterpriseSalesInvoice") return `/enterprise-modules/FINANCE_RECEIVABLES?invoice=${id}`;
+  if (targetEntityType === "EnterpriseSupplierInvoiceReview" || targetEntityType === "EnterpriseSupplierInvoiceApproval") return `/enterprise-modules/FINANCE_PAYABLES?invoice=${id}`;
+  if (targetEntityType === "EnterpriseFinancialClose") return `/enterprise-modules/FINANCE_CLOSE?close=${id}`;
+  if (targetEntityType === "EnterpriseCashSession") return `/enterprise-modules/FINANCE_CASH?session=${id}`;
+  if (targetEntityType === "EnterpriseReconciliationSession") return `/enterprise-modules/FINANCE_RECONCILIATION?session=${id}`;
+  if (targetEntityType === "EnterpriseOpeningBalanceApproval") return `/enterprise-modules/FINANCE_ACCOUNTING?tab=setup&openingBalance=${id}`;
+  if (targetEntityType === "EnterpriseSalesCreditNoteApproval") return `/enterprise-modules/FINANCE_RECEIVABLES?creditNote=${id}`;
+  if (targetEntityType === "EnterpriseSupplierCreditNoteApproval") return `/enterprise-modules/FINANCE_PAYABLES?creditNote=${id}`;
   if (targetEntityType === "EnterpriseRequest") return `/enterprise-modules/INTERNAL_REQUESTS?request=${id}`;
   if (targetEntityType === "EnterpriseTask") return `/enterprise-modules/TASKS_OPERATIONS?task=${id}`;
   if (targetEntityType === "EnterpriseMeeting") return `/enterprise-modules/MEETINGS?meeting=${id}`;
