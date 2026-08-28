@@ -2,7 +2,8 @@ export type RetailMutationOutcome = "SUCCESS" | "PENDING" | "FAILURE";
 
 export type RetailMutationMessageCode =
   | "RETAIL_ACCOUNTING_PENDING"
-  | "RETAIL_PROVIDER_PENDING";
+  | "RETAIL_PROVIDER_PENDING"
+  | "RETAIL_PROVIDER_FAILED";
 
 type LocalizedCopy = { fr: string; en: string };
 
@@ -15,6 +16,10 @@ const OUTCOME_MESSAGES: Record<RetailMutationMessageCode, LocalizedCopy> = {
     fr: "L’opération a été transmise à l’opérateur et reste en attente de confirmation. Ne la relancez pas avec de nouvelles données tant que son statut n’a pas été actualisé.",
     en: "The operation was sent to the provider and is still awaiting confirmation. Do not submit it again with new data until its status has been refreshed.",
   },
+  RETAIL_PROVIDER_FAILED: {
+    fr: "L’opérateur n’a pas confirmé l’opération. Aucun succès n’est enregistré : vérifiez le statut et les informations avant de réessayer.",
+    en: "The provider did not confirm the operation. No success was recorded: check the status and details before trying again.",
+  },
 };
 
 export function retailMutationOutcomeMessage(
@@ -26,16 +31,19 @@ export function retailMutationOutcomeMessage(
 }
 
 export function retailSuccessOutcome<T extends Record<string, unknown>>(payload: T) {
-  return { ok: true as const, outcome: "SUCCESS" as const, ...payload };
+  return { ...payload, ok: true as const, outcome: "SUCCESS" as const };
 }
 
 export function retailPendingOutcome<T extends Record<string, unknown>>(
   messageCode: RetailMutationMessageCode,
   payload: T,
 ) {
-  return { ok: true as const, outcome: "PENDING" as const, messageCode, ...payload };
+  return { ...payload, ok: true as const, outcome: "PENDING" as const, messageCode };
 }
 
-export function retailFailureOutcome<T extends Record<string, unknown>>(payload: T) {
-  return { ok: false as const, outcome: "FAILURE" as const, ...payload };
+export function retailFailureOutcome<T extends Record<string, unknown>>(
+  messageCode: RetailMutationMessageCode | null,
+  payload: T,
+) {
+  return { ...payload, ok: false as const, outcome: "FAILURE" as const, ...(messageCode ? { messageCode } : {}) };
 }
