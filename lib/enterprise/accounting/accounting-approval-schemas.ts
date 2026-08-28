@@ -64,3 +64,9 @@ export const assignedReconciliationTransitionSchema = z.discriminatedUnion("acti
   z.object({ action: z.literal("APPROVE"), revision, reason }),
   z.object({ action: z.literal("REJECT"), revision, reason: requiredReason }),
 ]);
+
+export const assignedDocumentTransitionSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("SUBMIT"), revision, approverUserId: id, reason }),
+  z.object({ action: z.literal("APPROVE"), revision, reason }),
+  z.object({ action: z.literal("REJECT"), revision, reason: requiredReason }),
+]);
