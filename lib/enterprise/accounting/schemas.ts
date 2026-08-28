@@ -2,7 +2,6 @@ import { z } from "zod";
 import {
   ACCOUNT_SUBTYPES,
   ACCOUNT_TYPES,
-  FINANCIAL_ACCOUNT_TYPES,
   FISCAL_PERIOD_STATUSES,
   JOURNAL_TYPES,
   PAYMENT_DIRECTIONS,
@@ -223,28 +222,6 @@ export const paymentAllocationSchema = z.object({
   payableId: z.string().min(1).optional(),
   amount: positiveMoneyInputSchema,
 }).refine((value) => Boolean(value.receivableId) !== Boolean(value.payableId), { message: "Choose exactly one receivable or payable" });
-
-export const financialAccountCreateSchema = z.object({
-  code: z.string().trim().min(2).max(40),
-  name: z.string().trim().min(2).max(180),
-  accountType: z.enum(FINANCIAL_ACCOUNT_TYPES),
-  currencyCode: currencyCodeSchema,
-  maskedReference: z.string().trim().max(160).optional(),
-  openingBalance: moneyInputSchema.default("0"),
-  ledgerAccountId: z.string().min(1),
-  responsibleUserId: z.string().min(1).optional(),
-  siteId: z.string().min(1).optional(),
-  settingsJson: z.record(z.string(), z.unknown()).optional(),
-});
-
-export const accountTransferCreateSchema = z.object({
-  sourceFinancialAccountId: z.string().min(1),
-  targetFinancialAccountId: z.string().min(1),
-  sourceAmount: positiveMoneyInputSchema,
-  targetAmount: positiveMoneyInputSchema,
-  exchangeRate: positiveMoneyInputSchema.optional(),
-  transferDate: dateInputSchema,
-}).refine((value) => value.sourceFinancialAccountId !== value.targetFinancialAccountId, { message: "Transfer accounts must differ" });
 
 export const cashSessionOpenSchema = z.object({
   financialAccountId: z.string().min(1),
