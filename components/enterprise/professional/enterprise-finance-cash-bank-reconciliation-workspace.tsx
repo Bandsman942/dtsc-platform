@@ -214,7 +214,7 @@ export function EnterpriseFinanceCashBankReconciliationWorkspace({
   const [error, setError] = useState("");
 
   const endpoint = isCash ? "cash-sessions" : isBank ? "bank-statements" : "reconciliations";
-  const effectiveStatus = status || (tab === "pending" ? "PENDING_VALIDATION" : tab === "open" ? "OPEN" : "");
+  const effectiveStatus = status || (tab === "pending" ? (isBank ? "SUBMITTED" : "PENDING_VALIDATION") : tab === "open" ? "OPEN" : "");
   const collection = useFinanceCollection<FinanceRecord>({ endpoint: `/api/enterprise/${organizationId}/${endpoint}`, page, search, status: effectiveStatus, refreshKey });
   const lookupData = useFinanceLookups(organizationId, moduleCode, refreshKey);
 
