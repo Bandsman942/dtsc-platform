@@ -20,6 +20,7 @@ import {
   customerFacingStatusLabel,
 } from "@/lib/customer-facing-language";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
+import { retailMutationOutcomeMessage, type RetailMutationOutcome } from "@/lib/enterprise/retail/mutation-outcome";
 import { translateRetailWorkspace, type RetailWorkspaceKey } from "@/lib/i18n";
 import { getRetailUserGuide } from "@/lib/user-guides/retail-telco-mobile-money-guides";
 
@@ -169,6 +170,14 @@ export type RetailDashboard = {
   range: { from: string; to: string };
 };
 
+type RetailMutationResponse = {
+  ok?: boolean;
+  outcome?: RetailMutationOutcome;
+  message?: string;
+  error?: string;
+  messageCode?: string;
+} & Record<string, unknown>;
+
 export type RetailMutation = (
   action: string,
   endpoint: string,
@@ -306,8 +315,26 @@ export function useRetailOperationalWorkspace({
         headers: { "content-type": "application/json" },
         body: JSON.stringify(bodyPayload),
       });
-      const body = await response.json().catch(() => null) as ({ message?: string; error?: string } & Record<string, unknown>) | null;
-      if (!response.ok) throw new Error(body?.message || body?.error || "RETAIL_ACTION_FAILED");
+      const body = await response.json().catch(() => null) as RetailMutationResponse | null;
+      const localizedOutcomeMessage = retailMutationOutcomeMessage(
+        typeof body?.messageCode === "string" ? body.messageCode : null,
+        locale,
+      );
+      const responseMessage = localizedOutcomeMessage || body?.message || body?.error || "";
+      const failed = !response.ok || body?.ok === false || body?.outcome === "FAILURE";
+      if (failed) throw new Error(responseMessage || "RETAIL_ACTION_FAILED");
+
+      const pending = response.status === 202 || body?.outcome === "PENDING";
+      if (pending) {
+        const pendingMessage = responseMessage || translateRetailWorkspace(locale, "processing");
+        setMessage(pendingMessage);
+        notifyToast(pendingMessage, "warning");
+        setRefreshKey((value) => value + 1);
+        // Keep the stable idempotency key and return null so the form remains
+        // available for a safe retry without replaying already durable effects.
+        return null;
+      }
+
       delete mutationKeys.current[action];
       setMessage(success);
       notifyToast(success, "success");
