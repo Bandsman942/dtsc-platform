@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { planMeetsRequirement, resolveSaasPlanCode, type SaasPlanCode } from "@/lib/billing/plans";
 import {
   getEnterpriseModuleDefinition,
@@ -8,6 +9,7 @@ import {
   type EnterpriseModuleDefinition,
 } from "@/lib/enterprise/module-registry";
 import { compareEnterpriseModuleDefinitions } from "@/lib/enterprise/module-order";
+import { syncRetailOperatorProvidersTx } from "@/lib/enterprise/retail/provisioning";
 import { prisma } from "@/lib/prisma";
 
 export class EnterpriseModuleConfigurationError extends Error {
@@ -199,10 +201,10 @@ export async function activateEnterpriseModule({
   }
 
   const definitionsToEnable = activateDependencies ? definitions : [requestedDefinition];
-  await prisma.$transaction(
-    definitionsToEnable.map((definition) => {
+  await prisma.$transaction(async (tx) => {
+    for (const definition of definitionsToEnable) {
       const data = moduleWriteData(definition, organizationId, true);
-      return prisma.enterpriseModule.upsert({
+      await tx.enterpriseModule.upsert({
         where: { organizationId_moduleCode: { organizationId, moduleCode: definition.code } },
         update: {
           labelFr: data.labelFr,
@@ -218,8 +220,9 @@ export async function activateEnterpriseModule({
         },
         create: data,
       });
-    }),
-  );
+    }
+    await syncRetailOperatorProvidersTx(tx, organizationId);
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
   return {
     requestedModule: requestedDefinition.code,
@@ -243,10 +246,13 @@ export async function disableEnterpriseModule({ organizationId, moduleCode }: { 
       activeDependents.map((definition) => definition.labelFr),
     );
   }
-  await prisma.enterpriseModule.updateMany({
-    where: { organizationId, moduleCode: { in: [moduleCode, canonicalCode] } },
-    data: { isEnabled: false },
-  });
+  await prisma.$transaction(async (tx) => {
+    await tx.enterpriseModule.updateMany({
+      where: { organizationId, moduleCode: { in: [moduleCode, canonicalCode] } },
+      data: { isEnabled: false },
+    });
+    await syncRetailOperatorProvidersTx(tx, organizationId);
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   return { disabledModule: canonicalCode };
 }
 
@@ -277,26 +283,6 @@ export async function reconcileOrganizationModulesWithSubscription(organizationI
   }
 
   const canonicalCodes = new Set(definitions.map((definition) => definition.code));
-  const writes = definitions.map((definition) => {
-    const data = moduleWriteData(definition, organizationId, eligibleCodes.has(definition.code));
-    return prisma.enterpriseModule.upsert({
-      where: { organizationId_moduleCode: { organizationId, moduleCode: definition.code } },
-      update: {
-        labelFr: data.labelFr,
-        labelEn: data.labelEn,
-        descriptionFr: data.descriptionFr,
-        descriptionEn: data.descriptionEn,
-        moduleCategory: data.moduleCategory,
-        icon: data.icon,
-        isEnabled: data.isEnabled,
-        isCore: data.isCore,
-        requiresPlanLevel: data.requiresPlanLevel,
-        sortOrder: data.sortOrder,
-      },
-      create: data,
-    });
-  });
-
   const rowsToDisable = context.tenantModules
     .filter((tenantModule) => {
       const canonicalCode = normalizeEnterpriseModuleCode(tenantModule.moduleCode);
@@ -311,13 +297,32 @@ export async function reconcileOrganizationModulesWithSubscription(organizationI
     })
     .map((tenantModule) => tenantModule.id);
 
-  await prisma.$transaction([
-    ...writes,
-    prisma.enterpriseModule.updateMany({
+  await prisma.$transaction(async (tx) => {
+    for (const definition of definitions) {
+      const data = moduleWriteData(definition, organizationId, eligibleCodes.has(definition.code));
+      await tx.enterpriseModule.upsert({
+        where: { organizationId_moduleCode: { organizationId, moduleCode: definition.code } },
+        update: {
+          labelFr: data.labelFr,
+          labelEn: data.labelEn,
+          descriptionFr: data.descriptionFr,
+          descriptionEn: data.descriptionEn,
+          moduleCategory: data.moduleCategory,
+          icon: data.icon,
+          isEnabled: data.isEnabled,
+          isCore: data.isCore,
+          requiresPlanLevel: data.requiresPlanLevel,
+          sortOrder: data.sortOrder,
+        },
+        create: data,
+      });
+    }
+    await tx.enterpriseModule.updateMany({
       where: { id: { in: rowsToDisable } },
       data: { isEnabled: false },
-    }),
-  ]);
+    });
+    await syncRetailOperatorProvidersTx(tx, organizationId);
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
   return {
     planCode: context.planCode,
