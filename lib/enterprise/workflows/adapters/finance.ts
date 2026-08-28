@@ -1,10 +1,12 @@
-import { approveAndPostSalesCreditNote, transitionSalesInvoice } from "@/lib/enterprise/accounting/receivables-service";
+import { transitionSalesInvoice } from "@/lib/enterprise/accounting/receivables-service";
 import { transitionSupplierInvoice } from "@/lib/enterprise/accounting/payables-service";
-import { approveAndPostSupplierCreditNote } from "@/lib/enterprise/accounting/supplier-credit-notes-service";
 import { transitionEnterprisePayment } from "@/lib/enterprise/accounting/payments-service";
 import { transitionJournalEntry } from "@/lib/enterprise/accounting/journal-service";
 import { postAssetDepreciation } from "@/lib/enterprise/accounting/asset-accounting-service";
-import { completeReconciliationSession, validateCashSession } from "@/lib/enterprise/accounting/treasury-service";
+import {
+  postApprovedSalesCreditNote,
+  postApprovedSupplierCreditNote,
+} from "@/lib/enterprise/accounting/accounting-document-approval-orchestration";
 import type { WorkflowAssignmentStrategy, WorkflowEntityType } from "@/lib/enterprise/workflows/constants";
 import { EnterpriseWorkflowError } from "@/lib/enterprise/workflows/errors";
 import type { WorkflowDomainActionInput, WorkflowDomainActionResult, WorkflowEntityAdapter, WorkflowEntitySnapshot } from "@/lib/enterprise/workflows/adapters/types";
@@ -75,7 +77,9 @@ function assertAction(input: WorkflowDomainActionInput, allowed: readonly string
   if (!allowed.includes(input.action)) throw new EnterpriseWorkflowError(`L'action ${input.action} n'est pas autorisée pour ${entityType}.`, 400, "WORKFLOW_DOMAIN_ACTION_DENIED", "CONFIGURATION");
 }
 
-const salesInvoiceActions = ["SUBMIT", "APPROVE", "ISSUE", "CANCEL", "VOID"] as const;
+// Automated workflows may execute post-decision accounting operations, but they must never
+// select an approver, submit a human approval request, or make a human approval/review decision.
+const salesInvoiceActions = ["ISSUE", "CANCEL", "VOID"] as const;
 const salesInvoiceAdapter: WorkflowEntityAdapter = {
   entityType: "EnterpriseSalesInvoice",
   conditionFields: new Set(["status", "currencyCode", "grandTotal", "outstandingAmount", "businessPartyId", "projectId", "createdByUserId", "invoiceDate", "dueDate"]),
@@ -99,8 +103,8 @@ const salesCreditNoteAdapter: WorkflowEntityAdapter = {
   entityType: "EnterpriseSalesCreditNote",
   conditionFields: new Set(["status", "currencyCode", "grandTotal", "salesInvoiceId", "createdByUserId", "creditDate"]),
   placeholders: PLACEHOLDERS,
-  triggerEvents: new Set(["SALES_CREDIT_NOTE_CREATED", "SALES_CREDIT_NOTE_POSTED"]),
-  domainActions: new Set(["APPROVE_AND_POST"]),
+  triggerEvents: new Set(["SALES_CREDIT_NOTE_CREATED", "SALES_CREDIT_NOTE_SUBMITTED", "SALES_CREDIT_NOTE_APPROVE", "SALES_CREDIT_NOTE_POSTED"]),
+  domainActions: new Set(["POST"]),
   async loadEntity(organizationId, entityId) {
     return snapshot(await prisma.enterpriseSalesCreditNote.findFirst({ where: { id: entityId, organizationId }, select: { id: true, organizationId: true, number: true, status: true, currencyCode: true, grandTotal: true, salesInvoiceId: true, createdByUserId: true, creditDate: true, revision: true } }), "EnterpriseSalesCreditNote");
   },
@@ -108,13 +112,13 @@ const salesCreditNoteAdapter: WorkflowEntityAdapter = {
   getTemplateValues: templateValues,
   resolveEntityUser,
   async executeDomainAction(input) {
-    assertAction(input, ["APPROVE_AND_POST"], "EnterpriseSalesCreditNote");
-    await approveAndPostSalesCreditNote(input.organizationId, input.entityId, input.actorUserId, input.revision);
+    assertAction(input, ["POST"], "EnterpriseSalesCreditNote");
+    await postApprovedSalesCreditNote(input.organizationId, input.entityId, input.actorUserId, input.revision);
     return result(salesCreditNoteAdapter, input);
   },
 };
 
-const supplierInvoiceActions = ["SUBMIT", "REVIEW", "APPROVE", "POST", "REJECT", "CANCEL"] as const;
+const supplierInvoiceActions = ["POST", "CANCEL"] as const;
 const supplierInvoiceAdapter: WorkflowEntityAdapter = {
   entityType: "EnterpriseSupplierInvoice",
   conditionFields: new Set(["status", "currencyCode", "grandTotal", "outstandingAmount", "supplierId", "businessPartyId", "purchaseId", "expenseId", "createdByUserId", "invoiceDate", "dueDate"]),
@@ -138,8 +142,8 @@ const supplierCreditNoteAdapter: WorkflowEntityAdapter = {
   entityType: "EnterpriseSupplierCreditNote",
   conditionFields: new Set(["status", "currencyCode", "grandTotal", "supplierInvoiceId", "createdByUserId", "creditDate"]),
   placeholders: PLACEHOLDERS,
-  triggerEvents: new Set(["SUPPLIER_CREDIT_NOTE_CREATED", "SUPPLIER_CREDIT_NOTE_POSTED"]),
-  domainActions: new Set(["APPROVE_AND_POST"]),
+  triggerEvents: new Set(["SUPPLIER_CREDIT_NOTE_CREATED", "SUPPLIER_CREDIT_NOTE_SUBMITTED", "SUPPLIER_CREDIT_NOTE_APPROVE", "SUPPLIER_CREDIT_NOTE_POSTED"]),
+  domainActions: new Set(["POST"]),
   async loadEntity(organizationId, entityId) {
     return snapshot(await prisma.enterpriseSupplierCreditNote.findFirst({ where: { id: entityId, organizationId }, select: { id: true, organizationId: true, number: true, status: true, currencyCode: true, grandTotal: true, supplierInvoiceId: true, createdByUserId: true, creditDate: true, revision: true } }), "EnterpriseSupplierCreditNote");
   },
@@ -147,13 +151,13 @@ const supplierCreditNoteAdapter: WorkflowEntityAdapter = {
   getTemplateValues: templateValues,
   resolveEntityUser,
   async executeDomainAction(input) {
-    assertAction(input, ["APPROVE_AND_POST"], "EnterpriseSupplierCreditNote");
-    await approveAndPostSupplierCreditNote(input.organizationId, input.entityId, input.actorUserId, input.revision);
+    assertAction(input, ["POST"], "EnterpriseSupplierCreditNote");
+    await postApprovedSupplierCreditNote(input.organizationId, input.entityId, input.actorUserId, input.revision);
     return result(supplierCreditNoteAdapter, input);
   },
 };
 
-const paymentActions = ["SUBMIT", "APPROVE", "CONFIRM", "RECONCILE", "CANCEL", "REVERSE"] as const;
+const paymentActions = ["CONFIRM", "RECONCILE", "CANCEL", "REVERSE"] as const;
 const paymentAdapter: WorkflowEntityAdapter = {
   entityType: "EnterprisePayment",
   conditionFields: new Set(["status", "direction", "paymentType", "methodType", "currencyCode", "amount", "unallocatedAmount", "businessPartyId", "initiatedByUserId", "paymentDate"]),
@@ -178,21 +182,17 @@ const cashSessionAdapter: WorkflowEntityAdapter = {
   conditionFields: new Set(["status", "financialAccountId", "cashierUserId", "openingAmount", "expectedClosingAmount", "countedClosingAmount", "discrepancyAmount", "openedAt", "submittedAt"]),
   placeholders: PLACEHOLDERS,
   triggerEvents: new Set(["CASH_SESSION_OPENED", "CASH_SESSION_SUBMITTED", "CASH_SESSION_CLOSED"]),
-  domainActions: new Set(["VALIDATE", "REJECT"]),
+  domainActions: new Set(),
   async loadEntity(organizationId, entityId) {
     return snapshot(await prisma.enterpriseCashSession.findFirst({ where: { id: entityId, organizationId }, select: { id: true, organizationId: true, number: true, status: true, financialAccountId: true, cashierUserId: true, openingAmount: true, expectedClosingAmount: true, countedClosingAmount: true, discrepancyAmount: true, openedAt: true, submittedAt: true, revision: true } }), "EnterpriseCashSession");
   },
   getConditionField: valueAt,
   getTemplateValues: templateValues,
   resolveEntityUser,
-  async executeDomainAction(input) {
-    assertAction(input, ["VALIDATE", "REJECT"], "EnterpriseCashSession");
-    await validateCashSession(input.organizationId, input.entityId, input.actorUserId, { approve: input.action === "VALIDATE", reason: input.comment || undefined, revision: input.revision });
-    return result(cashSessionAdapter, input);
-  },
+  async executeDomainAction() { return denyAction("EnterpriseCashSession"); },
 };
 
-const journalActions = ["SUBMIT", "APPROVE", "REJECT", "POST", "CANCEL"] as const;
+const journalActions = ["POST", "CANCEL"] as const;
 const journalEntryAdapter: WorkflowEntityAdapter = {
   entityType: "EnterpriseJournalEntry",
   conditionFields: new Set(["status", "journalId", "fiscalPeriodId", "accountingDate", "totalDebit", "totalCredit", "functionalCurrencyCode", "preparedByUserId", "sourceEntityType", "sourceEntityId"]),
@@ -231,19 +231,15 @@ const reconciliationAdapter: WorkflowEntityAdapter = {
   entityType: "EnterpriseReconciliationSession",
   conditionFields: new Set(["status", "financialAccountId", "bankStatementId", "bookBalance", "statementBalance", "reconciledDifference", "preparedByUserId", "periodStart", "periodEnd"]),
   placeholders: PLACEHOLDERS,
-  triggerEvents: new Set(["RECONCILIATION_CREATED", "RECONCILIATION_COMPLETED"]),
-  domainActions: new Set(["COMPLETE"]),
+  triggerEvents: new Set(["RECONCILIATION_CREATED", "RECONCILIATION_SUBMITTED", "RECONCILIATION_COMPLETED"]),
+  domainActions: new Set(),
   async loadEntity(organizationId, entityId) {
     return snapshot(await prisma.enterpriseReconciliationSession.findFirst({ where: { id: entityId, organizationId }, select: { id: true, organizationId: true, number: true, status: true, financialAccountId: true, bankStatementId: true, bookBalance: true, statementBalance: true, reconciledDifference: true, preparedByUserId: true, periodStart: true, periodEnd: true, revision: true } }), "EnterpriseReconciliationSession");
   },
   getConditionField: valueAt,
   getTemplateValues: templateValues,
   resolveEntityUser,
-  async executeDomainAction(input) {
-    assertAction(input, ["COMPLETE"], "EnterpriseReconciliationSession");
-    await completeReconciliationSession(input.organizationId, input.entityId, input.actorUserId, input.revision);
-    return result(reconciliationAdapter, input);
-  },
+  async executeDomainAction() { return denyAction("EnterpriseReconciliationSession"); },
 };
 
 const depreciationAdapter: WorkflowEntityAdapter = {
