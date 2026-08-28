@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { CheckCircle2, CircleDollarSign, FileMinus2, Plus, Send, ShieldCheck, XCircle } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
+import { EnterpriseApproverSelect } from "@/components/enterprise/enterprise-approver-select";
 import {
   FinanceCollaboration,
   FinanceDetailGrid,
@@ -144,6 +145,7 @@ type FinanceSourceLookups = {
   purchaseReceipts?: PurchaseReceiptLookup[];
   expenseAccounts?: ExpenseAccountLookup[];
 };
+type WorkflowActionTarget = { record: FinanceRecord; action: string; kind: "invoice" | "credit" };
 
 const MODULE_META: Record<"FINANCE_RECEIVABLES" | "FINANCE_PAYABLES", { titleKey: EnterpriseFinanceKey; eyebrowKey: EnterpriseFinanceKey }> = {
   FINANCE_RECEIVABLES: { titleKey: "receivablesTitle", eyebrowKey: "receivablesEyebrow" },
@@ -152,16 +154,14 @@ const MODULE_META: Record<"FINANCE_RECEIVABLES" | "FINANCE_PAYABLES", { titleKey
 
 const invoiceT = (locale: FinanceLocale, key: EnterpriseFinanceKey) => translateEnterpriseFinance(locale, key);
 
-const INVOICE_ACTION_KEYS: Record<string, EnterpriseFinanceKey> = {
-  SUBMIT: "actionSubmit",
-  APPROVE: "actionApprove",
-  REJECT: "actionReject",
-  ISSUE: "actionIssueAndPost",
-};
-
-function invoiceActionLabel(action: string, locale: FinanceLocale) {
-  const key = INVOICE_ACTION_KEYS[action];
-  return key ? invoiceT(locale, key) : action;
+function actionLabel(action: string, locale: FinanceLocale) {
+  if (action === "SUBMIT") return invoiceT(locale, "actionSubmit");
+  if (action === "APPROVE") return invoiceT(locale, "actionApprove");
+  if (action === "REJECT") return invoiceT(locale, "actionReject");
+  if (action === "ISSUE") return invoiceT(locale, "actionIssueAndPost");
+  if (action === "POST") return invoiceT(locale, "post");
+  if (action === "REVIEW") return locale === "en" ? "Review" : "Revoir";
+  return action;
 }
 
 function newLine(index: number): InvoiceLine {
@@ -178,13 +178,28 @@ function ageBucket(dueDate?: string | null) {
   return "D90_PLUS";
 }
 
-function invoiceTransitionActions(status: string | undefined, locale: FinanceLocale) {
-  if (status === "DRAFT") return [{ action: "SUBMIT", label: invoiceT(locale, "actionSubmit"), icon: Send }];
-  if (["SUBMITTED", "IN_REVIEW", "PENDING_APPROVAL"].includes(String(status))) return [
-    { action: "APPROVE", label: invoiceT(locale, "actionApprove"), icon: CheckCircle2 },
-    { action: "REJECT", label: invoiceT(locale, "actionReject"), icon: XCircle },
+function invoiceTransitionActions(status: string | undefined, locale: FinanceLocale, isReceivables: boolean) {
+  if (status === "DRAFT") return [{ action: "SUBMIT", label: actionLabel("SUBMIT", locale), icon: Send }];
+  if (isReceivables && status === "PENDING_APPROVAL") return [{ action: "APPROVE", label: actionLabel("APPROVE", locale), icon: CheckCircle2 }];
+  if (!isReceivables && status === "PENDING_REVIEW") return [
+    { action: "REVIEW", label: actionLabel("REVIEW", locale), icon: CheckCircle2 },
+    { action: "REJECT", label: actionLabel("REJECT", locale), icon: XCircle },
   ];
-  if (status === "APPROVED") return [{ action: "ISSUE", label: invoiceT(locale, "actionIssueAndPost"), icon: ShieldCheck }];
+  if (!isReceivables && status === "PENDING_APPROVAL") return [
+    { action: "APPROVE", label: actionLabel("APPROVE", locale), icon: CheckCircle2 },
+    { action: "REJECT", label: actionLabel("REJECT", locale), icon: XCircle },
+  ];
+  if (status === "APPROVED") return [{ action: isReceivables ? "ISSUE" : "POST", label: actionLabel(isReceivables ? "ISSUE" : "POST", locale), icon: ShieldCheck }];
+  return [];
+}
+
+function creditTransitionActions(status: string | undefined, locale: FinanceLocale) {
+  if (status === "DRAFT" || status === "REJECTED") return [{ action: "SUBMIT", label: actionLabel("SUBMIT", locale), icon: Send }];
+  if (status === "PENDING_APPROVAL") return [
+    { action: "APPROVE", label: actionLabel("APPROVE", locale), icon: CheckCircle2 },
+    { action: "REJECT", label: actionLabel("REJECT", locale), icon: XCircle },
+  ];
+  if (status === "APPROVED") return [{ action: "POST", label: actionLabel("POST", locale), icon: ShieldCheck }];
   return [];
 }
 
@@ -230,7 +245,7 @@ export function EnterpriseFinanceInvoicesWorkspace({
   const [detail, setDetail] = useState<FinanceRecord | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [creditTarget, setCreditTarget] = useState<Invoice | null>(null);
-  const [actionTarget, setActionTarget] = useState<{ invoice: Invoice; action: string } | null>(null);
+  const [actionTarget, setActionTarget] = useState<WorkflowActionTarget | null>(null);
   const [lines, setLines] = useState<InvoiceLine[]>([newLine(0)]);
   const [selectedPartyId, setSelectedPartyId] = useState("");
   const [selectedSupplierId, setSelectedSupplierId] = useState("");
@@ -346,20 +361,35 @@ export function EnterpriseFinanceInvoicesWorkspace({
     }
   }
 
-  async function transitionInvoice(event: FormEvent<HTMLFormElement>) {
+  async function transitionDocument(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!actionTarget) return;
     const form = new FormData(event.currentTarget);
+    const isCredit = actionTarget.kind === "credit";
+    const action = actionTarget.action;
+    const base = `/api/enterprise/${organizationId}/${isCredit
+      ? (isReceivables ? "sales-credit-notes" : "supplier-credit-notes")
+      : (isReceivables ? "sales-invoices" : "supplier-invoices")}/${actionTarget.record.id}`;
+    const endpointPath = isCredit && action === "POST" ? `${base}/post` : `${base}/transition`;
+    const payload: Record<string, unknown> = {
+      ...(isCredit && action === "POST" ? {} : { action }),
+      reason: String(form.get("reason") || "") || undefined,
+      revision: actionTarget.record.revision,
+    };
+    if (action === "SUBMIT" && isCredit) {
+      payload.approverUserId = String(form.get("approverUserId") || "");
+    } else if (action === "SUBMIT" && isReceivables) {
+      payload.approverUserId = String(form.get("approverUserId") || "");
+    } else if (action === "SUBMIT") {
+      payload.reviewerUserId = String(form.get("reviewerUserId") || "");
+      payload.approverUserId = String(form.get("approverUserId") || "");
+    }
     try {
-      await financeMutation(`/api/enterprise/${organizationId}/${isReceivables ? "sales-invoices" : "supplier-invoices"}/${actionTarget.invoice.id}/transition`, {
-        action: actionTarget.action,
-        reason: String(form.get("reason") || "") || undefined,
-        revision: actionTarget.invoice.revision,
-      });
+      await financeMutation(endpointPath, payload);
       setActionTarget(null);
       setDetail(null);
       setRefreshKey((value) => value + 1);
-      setMessage(t("invoiceWorkflowUpdated"));
+      setMessage(isCredit ? (locale === "en" ? "Credit note workflow updated." : "Workflow de l’avoir mis à jour.") : t("invoiceWorkflowUpdated"));
     } catch (transitionError) {
       setError(safeFinanceError(transitionError, t("transitionFailed")));
     }
@@ -407,7 +437,7 @@ export function EnterpriseFinanceInvoicesWorkspace({
   ];
   const openCount = collection.items.filter((item) => ["OPEN", "ISSUED", "PARTIALLY_PAID"].includes(String(item.status))).length;
   const overdueCount = collection.items.filter((item) => ageBucket(String(item.dueDate || "")) !== "TO_DUE").length;
-  const approvalCount = collection.items.filter((item) => ["SUBMITTED", "IN_REVIEW", "PENDING_APPROVAL"].includes(String(item.status))).length;
+  const approvalCount = collection.items.filter((item) => ["PENDING_REVIEW", "PENDING_APPROVAL"].includes(String(item.status))).length;
 
   return (
     <ModuleWorkspace>
@@ -426,7 +456,7 @@ export function EnterpriseFinanceInvoicesWorkspace({
       </ModuleMetrics>
       <ModuleToolbar
         search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("financeSearchPlaceholder")} />}
-        controls={<div className="grid min-w-0 gap-2"><ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setStatus(""); setPage(1); }} items={tabs} label={t("financeViews")} /><NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={[{ id: "", label: t("allStatuses") }, ...["DRAFT", "SUBMITTED", "IN_REVIEW", "PENDING_APPROVAL", "APPROVED", "ISSUED", "POSTED", "PARTIALLY_PAID", "PAID", "OVERDUE", "CANCELLED"].map((id) => ({ id, label: financeStatusLabel(id, locale) }))]} /></div>}
+        controls={<div className="grid min-w-0 gap-2"><ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setStatus(""); setPage(1); setDetail(null); }} items={tabs} label={t("financeViews")} /><NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={[{ id: "", label: t("allStatuses") }, ...["DRAFT", "PENDING_REVIEW", "PENDING_APPROVAL", "APPROVED", "REJECTED", "ISSUED", "POSTED", "PARTIALLY_PAID", "PAID", "OVERDUE", "CANCELLED"].map((id) => ({ id, label: financeStatusLabel(id, locale) }))]} /></div>}
         summary={t("currenciesSeparated")}
       />
       <ModuleContent>
@@ -497,22 +527,33 @@ export function EnterpriseFinanceInvoicesWorkspace({
         {detail ? <div className="grid gap-5">
           <div className="flex flex-wrap gap-2">{detail.status ? <StatusBadge tone={financeStatusTone(detail.status)}>{financeStatusLabel(detail.status, locale)}</StatusBadge> : null}{detail.currencyCode ? <StatusBadge>{String(detail.currencyCode)}</StatusBadge> : null}</div>
           <FinanceDetailGrid>
-            <FinanceDetailValue label={t("date")}>{financeDate(detail.invoiceDate || detail.dueDate || detail.createdAt, locale)}</FinanceDetailValue>
+            <FinanceDetailValue label={t("date")}>{financeDate(detail.invoiceDate || detail.creditDate || detail.dueDate || detail.createdAt, locale)}</FinanceDetailValue>
             <FinanceDetailValue label={t("total")}>{financeMoney(detail.grandTotal ?? detail.originalAmount, String(detail.currencyCode || "USD"), locale)}</FinanceDetailValue>
-            <FinanceDetailValue label={t("outstanding")}>{financeMoney(detail.outstandingAmount, String(detail.currencyCode || "USD"), locale)}</FinanceDetailValue>
+            {detail.outstandingAmount !== undefined ? <FinanceDetailValue label={t("outstanding")}>{financeMoney(detail.outstandingAmount, String(detail.currencyCode || "USD"), locale)}</FinanceDetailValue> : null}
             {detail.amountPaid !== undefined ? <FinanceDetailValue label={t("paidAmount")}>{financeMoney(detail.amountPaid, String(detail.currencyCode || "USD"), locale)}</FinanceDetailValue> : null}
             {detail.dueDate ? <FinanceDetailValue label={t("dueDate")}>{financeDate(detail.dueDate, locale)}</FinanceDetailValue> : null}
             {detail.revision ? <FinanceDetailValue label={t("revision")}>{t("version")} {detail.revision}</FinanceDetailValue> : null}
           </FinanceDetailGrid>
           {Array.isArray(detail.items) && detail.items.length ? <DetailLineItems items={detail.items as InvoiceItem[]} currencyCode={String(detail.currencyCode || "USD")} locale={locale} /> : null}
-          {!isReceivables && (detail as Invoice).threeWayMatch ? <section className="rounded-xl border border-dtsc-border p-4"><h3 className="font-black text-dtsc-ink">{t("poReceiptInvoiceControl")}</h3><div className="mt-3 grid gap-3 sm:grid-cols-3"><FinanceDetailValue label={t("quantity")}>{String((detail as Invoice).threeWayMatch?.quantityVariance ?? 0)}</FinanceDetailValue><FinanceDetailValue label={t("price")}>{String((detail as Invoice).threeWayMatch?.priceVariance ?? 0)}</FinanceDetailValue><FinanceDetailValue label={t("totalVariance")}>{String((detail as Invoice).threeWayMatch?.totalVariance ?? 0)}</FinanceDetailValue></div></section> : null}
-          {endpoint.includes("invoices") && canManage ? <div data-responsive-actions>{invoiceTransitionActions(detail.status, locale).map((action) => { const Icon = action.icon; return <Button key={action.action} variant={action.action === "REJECT" ? "destructive" : "outline"} onClick={() => setActionTarget({ invoice: detail as Invoice, action: action.action })}><Icon className="h-4 w-4" />{action.label}</Button>; })}{["ISSUED", "POSTED", "PARTIALLY_PAID", "PAID"].includes(String(detail.status)) ? <Button variant="outline" onClick={() => setCreditTarget(detail as Invoice)}><FileMinus2 className="h-4 w-4" />{t("createCreditNote")}</Button> : null}</div> : null}
+          {!isReceivables && endpoint.includes("invoices") && (detail as Invoice).threeWayMatch ? <section className="rounded-xl border border-dtsc-border p-4"><h3 className="font-black text-dtsc-ink">{t("poReceiptInvoiceControl")}</h3><div className="mt-3 grid gap-3 sm:grid-cols-3"><FinanceDetailValue label={t("quantity")}>{String((detail as Invoice).threeWayMatch?.quantityVariance ?? 0)}</FinanceDetailValue><FinanceDetailValue label={t("price")}>{String((detail as Invoice).threeWayMatch?.priceVariance ?? 0)}</FinanceDetailValue><FinanceDetailValue label={t("totalVariance")}>{String((detail as Invoice).threeWayMatch?.totalVariance ?? 0)}</FinanceDetailValue></div></section> : null}
+          {endpoint.includes("invoices") && canManage ? <div data-responsive-actions>{invoiceTransitionActions(detail.status, locale, isReceivables).map((action) => { const Icon = action.icon; return <Button key={action.action} variant={action.action === "REJECT" ? "destructive" : "outline"} onClick={() => setActionTarget({ record: detail, action: action.action, kind: "invoice" })}><Icon className="h-4 w-4" />{action.label}</Button>; })}{["ISSUED", "POSTED", "PARTIALLY_PAID", "PAID"].includes(String(detail.status)) ? <Button variant="outline" onClick={() => setCreditTarget(detail as Invoice)}><FileMinus2 className="h-4 w-4" />{t("createCreditNote")}</Button> : null}</div> : null}
+          {endpoint.includes("credit-notes") && canManage ? <div data-responsive-actions>{creditTransitionActions(detail.status, locale).map((action) => { const Icon = action.icon; return <Button key={action.action} variant={action.action === "REJECT" ? "destructive" : "outline"} onClick={() => setActionTarget({ record: detail, action: action.action, kind: "credit" })}><Icon className="h-4 w-4" />{action.label}</Button>; })}</div> : null}
           <FinanceCollaboration organizationId={organizationId} moduleCode={moduleCode} record={detail} locale={locale} />
         </div> : null}
       </Dialog>
 
-      <Dialog open={Boolean(actionTarget)} onClose={() => setActionTarget(null)} title={actionTarget ? `${invoiceActionLabel(actionTarget.action, locale)} · ${actionTarget.invoice.number}` : ""} description={t("sodAndPeriodChecked")} className="max-w-xl">
-        {actionTarget ? <form onSubmit={transitionInvoice} className="grid gap-4"><Field label={t("decisionReasonComment")}><textarea name="reason" rows={4} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base" /></Field><div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setActionTarget(null)}>{t("cancel")}</Button><Button type="submit">{t("confirmAction")}</Button></div></form> : null}
+      <Dialog open={Boolean(actionTarget)} onClose={() => setActionTarget(null)} title={actionTarget ? `${actionLabel(actionTarget.action, locale)} · ${String(actionTarget.record.number || actionTarget.record.reference || "")}` : ""} description={t("sodAndPeriodChecked")} className="max-w-xl">
+        {actionTarget ? <form onSubmit={transitionDocument} className="grid gap-4">
+          {actionTarget.action === "SUBMIT" && actionTarget.kind === "invoice" && isReceivables ? <EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_RECEIVABLES" locale={requestedLocale} /> : null}
+          {actionTarget.action === "SUBMIT" && actionTarget.kind === "invoice" && !isReceivables ? <>
+            <EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_PAYABLES" locale={requestedLocale} name="reviewerUserId" label={locale === "en" ? "Reviewer" : "Responsable de revue"} />
+            <EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_PAYABLES" locale={requestedLocale} name="approverUserId" label={locale === "en" ? "Final approver" : "Approbateur final"} />
+            <p className="text-sm text-dtsc-muted">{locale === "en" ? "The reviewer and final approver must be different people." : "Le responsable de revue et l’approbateur final doivent être deux personnes distinctes."}</p>
+          </> : null}
+          {actionTarget.action === "SUBMIT" && actionTarget.kind === "credit" ? <EnterpriseApproverSelect organizationId={organizationId} moduleCode={moduleCode} locale={requestedLocale} /> : null}
+          {actionTarget.action !== "POST" ? <Field label={t("decisionReasonComment")}><textarea name="reason" rows={4} minLength={actionTarget.action === "REJECT" ? 4 : undefined} required={actionTarget.action === "REJECT"} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base" /></Field> : null}
+          <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setActionTarget(null)}>{t("cancel")}</Button><Button type="submit">{t("confirmAction")}</Button></div>
+        </form> : null}
       </Dialog>
 
       <Dialog open={Boolean(creditTarget)} onClose={() => setCreditTarget(null)} title={t("createCreditNote")} description={t("creditNoteKeepsOriginal")} className="max-w-2xl">
