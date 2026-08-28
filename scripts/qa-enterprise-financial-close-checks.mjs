@@ -24,7 +24,12 @@ requireTokens("lib/enterprise/accounting/periods.ts", [
 ]);
 requireTokens("app/api/enterprise/[organizationId]/financial-close/[closeId]/transition/route.ts", [
   "authorizeFinanceRequest",
-  "closeTransitionSchema.safeParse",
+  "assignedFinancialCloseTransitionSchema.safeParse",
+  "submitFinancialCloseForAssignedApproval",
+  "approveFinancialCloseAssignedApproval",
+  "transitionFinancialClose",
+  'parsed.data.action === "CLOSE"',
+  'parsed.data.action === "REOPEN"',
   "writeAuditLog",
 ]);
-success("enterprise financial close controls");
+success("enterprise financial close controls and assigned approval boundaries");
