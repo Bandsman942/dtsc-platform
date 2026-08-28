@@ -1,6 +1,6 @@
 # #511 — état d'implémentation
 
-Cette note accompagne la PR de travail pendant que les contrôles automatiques sont exécutés.
+Cette note accompagne la PR de travail et distingue les éléments implémentés des preuves encore requises avant readiness.
 
 ## Implémenté
 
@@ -12,16 +12,19 @@ Cette note accompagne la PR de travail pendant que les contrôles automatiques s
 - Financial Close : SUBMIT → APPROVE affectés, CLOSE/REOPEN séparés ;
 - Cash Session : validateur affecté lors de la soumission de clôture ;
 - Reconciliation : SUBMIT → APPROVE/REJECT affectés ;
+- Opening Balance : approbation affectée puis POST séparé ;
+- Sales Credit Note : approbation affectée puis POST séparé ;
+- Supplier Credit Note : approbation affectée puis POST séparé ;
+- UI de sélection explicite des responsables sur les soumissions concernées, y compris caisse et rapprochement ;
+- adapters Finance : les workflows automatiques ne prennent plus les décisions humaines d'approbation et ne peuvent exécuter que les opérations strictes autorisées après validation ;
 - Centre des actions : mappings et deep-links des nouvelles cibles ;
-- QA structurale #511 intégrée à la régression.
+- QA structurale #511 intégrée à la régression, avec garde des flux UI caisse/rapprochement et des statuts de filtrage ;
+- recettes Accounting production-like alignées sur l'affectation explicite des approbateurs sans réintroduire l'auto-approbation.
 
-## Encore en cours avant readiness
+## Encore requis avant readiness
 
-- UI de sélection des responsables sur toutes les surfaces ;
-- séparation des opérations historiques `approveAndPostOpeningBalance`, `approveAndPostSalesCreditNote`, `approveAndPostSupplierCreditNote` ;
-- vérification/correction des adapters workflows automatiques ;
-- catalogues d'erreurs utilisateur FR/EN ;
-- CI complète sur head final ;
-- OWNER_E2E mobile/desktop FR/EN.
+- validation finale des messages d'erreur utilisateur FR/EN sur l'ensemble des parcours #511 ;
+- CI complète verte sur le head final ;
+- OWNER_E2E mobile/desktop FR/EN sur le head final.
 
-Aucun de ces éléments n'est déclaré terminé tant que la PR finale et les preuves correspondantes ne l'attestent.
+Aucune CI finale ni aucun OWNER_E2E n'est déclaré réussi sans preuve attachée au SHA final.
