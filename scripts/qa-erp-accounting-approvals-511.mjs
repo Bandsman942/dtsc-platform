@@ -14,6 +14,7 @@ function assert(condition, message) {
 
 const targets = read("lib/enterprise/approval-targets.ts");
 const service = read("lib/enterprise/accounting/accounting-approval-service.ts");
+const approvalSchemas = read("lib/enterprise/accounting/accounting-approval-schemas.ts");
 const human = read("lib/enterprise/accounting/accounting-human-approval-orchestration.ts");
 const invoices = read("lib/enterprise/accounting/accounting-invoice-approval-orchestration.ts");
 const operations = read("lib/enterprise/accounting/accounting-operations-approval-orchestration.ts");
@@ -52,6 +53,10 @@ for (const target of [
   assert(targets.includes(target), `${target} est projeté dans le Centre des actions`);
 }
 
+assert(
+  approvalSchemas.includes('const id = z.string().trim().min(1).max(160)') && !approvalSchemas.includes('.cuid()'),
+  "les affectations acceptent le contrat canonique String @id, y compris les identités stables non-CUID",
+);
 assert(service.includes('initialStatus?: "PENDING" | "QUEUED"'), "les étapes multi-niveaux supportent QUEUED");
 assert(service.includes("activateQueuedAccountingApproval"), "une approbation finale peut être activée après revue");
 assert(invoices.includes('targetEntityType: "EnterpriseSupplierInvoiceReview"'), "la revue fournisseur possède sa propre affectation");
