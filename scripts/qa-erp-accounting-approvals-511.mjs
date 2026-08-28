@@ -17,6 +17,8 @@ const service = read("lib/enterprise/accounting/accounting-approval-service.ts")
 const human = read("lib/enterprise/accounting/accounting-human-approval-orchestration.ts");
 const invoices = read("lib/enterprise/accounting/accounting-invoice-approval-orchestration.ts");
 const operations = read("lib/enterprise/accounting/accounting-operations-approval-orchestration.ts");
+const documents = read("lib/enterprise/accounting/accounting-document-approval-orchestration.ts");
+const workflowAdapter = read("lib/enterprise/workflows/adapters/finance.ts");
 const journalRoute = read("app/api/enterprise/[organizationId]/journal-entries/[entryId]/transition/route.ts");
 const paymentRoute = read("app/api/enterprise/[organizationId]/payments/[paymentId]/transition/route.ts");
 const salesRoute = read("app/api/enterprise/[organizationId]/sales-invoices/[invoiceId]/transition/route.ts");
@@ -25,6 +27,12 @@ const closeRoute = read("app/api/enterprise/[organizationId]/financial-close/[cl
 const cashCloseRoute = read("app/api/enterprise/[organizationId]/cash-sessions/[sessionId]/close/route.ts");
 const cashValidateRoute = read("app/api/enterprise/[organizationId]/cash-sessions/[sessionId]/validate/route.ts");
 const reconciliationRoute = read("app/api/enterprise/[organizationId]/reconciliations/[sessionId]/complete/route.ts");
+const openingTransitionRoute = read("app/api/enterprise/[organizationId]/opening-balances/[openingId]/transition/route.ts");
+const openingPostRoute = read("app/api/enterprise/[organizationId]/opening-balances/[openingId]/post/route.ts");
+const salesCreditTransitionRoute = read("app/api/enterprise/[organizationId]/sales-credit-notes/[creditNoteId]/transition/route.ts");
+const salesCreditPostRoute = read("app/api/enterprise/[organizationId]/sales-credit-notes/[creditNoteId]/post/route.ts");
+const supplierCreditTransitionRoute = read("app/api/enterprise/[organizationId]/supplier-credit-notes/[creditNoteId]/transition/route.ts");
+const supplierCreditPostRoute = read("app/api/enterprise/[organizationId]/supplier-credit-notes/[creditNoteId]/post/route.ts");
 
 for (const target of [
   "EnterpriseJournalEntry",
@@ -64,5 +72,37 @@ assert(closeRoute.includes("transitionFinancialClose"), "CLOSE/REOPEN restent s�
 assert(cashCloseRoute.includes("submitCashSessionCloseForAssignedValidation") && cashValidateRoute.includes("validateCashSessionAssignedApproval"), "session de caisse possède un validateur affecté");
 assert(reconciliationRoute.includes("submitReconciliationForAssignedValidation") && reconciliationRoute.includes("decideReconciliationAssignedValidation"), "rapprochement possède soumission puis validation explicite");
 assert(operations.includes('status: "PENDING_VALIDATION"'), "les opérations préparées attendent une décision explicite");
+
+for (const [label, source, submitMarker, decisionMarker, postSource, postMarker, legacyMarker] of [
+  ["soldes d'ouverture", openingTransitionRoute, "submitOpeningBalanceForAssignedApproval", "decideOpeningBalanceAssignedApproval", openingPostRoute, "postApprovedOpeningBalance", "approveAndPostOpeningBalance"],
+  ["avoirs clients", salesCreditTransitionRoute, "submitSalesCreditNoteForAssignedApproval", "decideSalesCreditNoteAssignedApproval", salesCreditPostRoute, "postApprovedSalesCreditNote", "approveAndPostSalesCreditNote"],
+  ["avoirs fournisseurs", supplierCreditTransitionRoute, "submitSupplierCreditNoteForAssignedApproval", "decideSupplierCreditNoteAssignedApproval", supplierCreditPostRoute, "postApprovedSupplierCreditNote", "approveAndPostSupplierCreditNote"],
+]) {
+  assert(source.includes(submitMarker) && source.includes(decisionMarker), `${label}: SUBMIT et décision humaine utilisent l'orchestrateur affecté`);
+  assert(postSource.includes(postMarker), `${label}: POST utilise une opération post-approbation distincte`);
+  assert(!postSource.includes(legacyMarker), `${label}: la route POST ne combine plus approbation et comptabilisation`);
+}
+
+assert(documents.includes('status: "PENDING_APPROVAL"'), "les soldes d'ouverture et avoirs passent par PENDING_APPROVAL");
+assert(documents.includes('targetEntityType: "EnterpriseOpeningBalanceApproval"'), "soldes d'ouverture affectés dans EnterpriseApproval");
+assert(documents.includes('targetEntityType: "EnterpriseSalesCreditNoteApproval"'), "avoirs clients affectés dans EnterpriseApproval");
+assert(documents.includes('targetEntityType: "EnterpriseSupplierCreditNoteApproval"'), "avoirs fournisseurs affectés dans EnterpriseApproval");
+assert(documents.includes('initial.status !== "APPROVED"') && documents.includes('credit.status !== "APPROVED"'), "les opérations POST refusent un document non approuvé");
+
+for (const forbidden of [
+  "approveAndPostSalesCreditNote",
+  "approveAndPostSupplierCreditNote",
+  "validateCashSession",
+  "completeReconciliationSession",
+]) {
+  assert(!workflowAdapter.includes(forbidden), `workflow automatique n'utilise plus ${forbidden}`);
+}
+assert(workflowAdapter.includes('const salesInvoiceActions = ["ISSUE", "CANCEL", "VOID"]'), "workflow facture client ne peut ni soumettre ni approuver");
+assert(workflowAdapter.includes('const supplierInvoiceActions = ["POST", "CANCEL"]'), "workflow facture fournisseur ne peut ni reviewer ni approuver");
+assert(workflowAdapter.includes('const paymentActions = ["CONFIRM", "RECONCILE", "CANCEL", "REVERSE"]'), "workflow paiement ne peut ni soumettre ni approuver");
+assert(workflowAdapter.includes('const journalActions = ["POST", "CANCEL"]'), "workflow journal ne peut ni soumettre ni approuver");
+assert(workflowAdapter.includes('entityType: "EnterpriseCashSession"') && workflowAdapter.includes('async executeDomainAction() { return denyAction("EnterpriseCashSession"); }'), "workflow caisse ne peut pas prendre une décision humaine");
+assert(workflowAdapter.includes('async executeDomainAction() { return denyAction("EnterpriseReconciliationSession"); }'), "workflow rapprochement ne peut pas prendre une décision humaine");
+assert(workflowAdapter.includes('domainActions: new Set(["POST"])') && workflowAdapter.includes("postApprovedSalesCreditNote") && workflowAdapter.includes("postApprovedSupplierCreditNote"), "workflows d'avoirs ne peuvent exécuter que POST après approbation");
 
 console.log("QA #511 accounting approval orchestration: PASS");
