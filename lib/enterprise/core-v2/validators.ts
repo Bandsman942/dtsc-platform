@@ -145,7 +145,6 @@ export const enterpriseMeetingUpdateSchema = z.object({
   locationMode: z.enum(MEETING_LOCATION_MODES).optional(),
   physicalLocation: optionalText(500),
   meetingLink: optionalText(1000),
-  minutes: optionalText(20000),
   departmentId: optionalId,
   participants: z.array(meetingParticipantSchema).max(100).optional(),
 });
