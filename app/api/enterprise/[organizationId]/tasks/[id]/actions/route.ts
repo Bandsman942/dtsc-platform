@@ -5,6 +5,7 @@ import { getEnterpriseCoreV2Access } from "@/lib/enterprise/core-v2/access";
 import { normalizeEnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
 import { transitionEnterpriseTask } from "@/lib/enterprise/core-v2/service";
 import { enterpriseTaskActionSchema } from "@/lib/enterprise/core-v2/validators";
+import { assertEnterpriseTaskCompletionReady, WorkCoordinationHotfixError } from "@/lib/enterprise/work-coordination/hotfix-guards";
 import { notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
@@ -37,6 +38,9 @@ export async function POST(req: Request, { params }: Params) {
   if (!allowed) return NextResponse.json({ error: "Forbidden", message: "Vous n’êtes pas autorisé à exécuter cette transition." }, { status: 403 });
 
   try {
+    if (data.action === "COMPLETE") {
+      await assertEnterpriseTaskCompletionReady({ organizationId, taskId: id });
+    }
     const updated = await transitionEnterpriseTask({ organizationId, taskId: id, actorUserId: session.userId, action: data.action, revision: data.revision, comment: data.comment || undefined });
     if (data.action === "BLOCK" && task.createdByUserId !== session.userId) {
       await notifyUser({ userId: task.createdByUserId, organizationId, type: "ENTERPRISE_TASK", title: "Tâche bloquée", body: task.title, targetUrl: "/enterprise-modules/TASKS_OPERATIONS" });
@@ -45,6 +49,10 @@ export async function POST(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "tasks", taskId: id, action: data.action } });
     return NextResponse.json({ ok: true, task: updated });
   } catch (error) {
+    if (error instanceof WorkCoordinationHotfixError) {
+      await writeApiLog({ request: req, statusCode: error.status, userId: session.userId, startedAt, metadata: { organizationId, domain: "tasks", taskId: id, action: data.action, error: error.code } });
+      return NextResponse.json({ error: error.code, message: error.message }, { status: error.status });
+    }
     const normalized = normalizeEnterpriseCoreV2Error(error);
     await writeApiLog({ request: req, statusCode: normalized.status, userId: session.userId, startedAt, metadata: { organizationId, domain: "tasks", taskId: id, action: data.action, error: normalized.code } });
     return NextResponse.json({ error: normalized.code, message: normalized.message }, { status: normalized.status });
