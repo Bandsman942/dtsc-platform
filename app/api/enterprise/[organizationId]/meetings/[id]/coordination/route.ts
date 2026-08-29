@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { assertMeetingCoordinationMutationAllowed, WorkCoordinationHotfixError } from "@/lib/enterprise/work-coordination/hotfix-guards";
 import { notifyUsers } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
@@ -24,10 +25,22 @@ export async function GET(req: Request, { params }: Params) {
   if (!context) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
   const [coordination, tasks] = await Promise.all([
     loadMeetingCoordination(organizationId, id),
-    prisma.enterpriseTask.findMany({ where: { organizationId, archivedAt: null, status: { in: ["TODO", "IN_PROGRESS", "BLOCKED", "PENDING_APPROVAL"] } }, select: { id: true, title: true, status: true, assignedToUserId: true }, orderBy: { updatedAt: "desc" }, take: 300 }),
+    prisma.enterpriseTask.findMany({ where: { organizationId, archivedAt: null, status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] } }, select: { id: true, title: true, status: true, assignedToUserId: true }, orderBy: { updatedAt: "desc" }, take: 300 }),
   ]);
+  const terminalCancelled = context.meeting.status === "CANCELLED";
+  const agendaEditable = context.canMutate && ["SCHEDULED", "IN_PROGRESS"].includes(context.meeting.status);
+  const postMeetingEditable = context.canMutate && !terminalCancelled;
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, meetingId: id, domain: "meeting-coordination" } });
-  return NextResponse.json({ meeting: context.meeting, coordination, tasks, capabilities: { canUpdate: context.canMutate, canPublishMinutes: context.canMutate, canCreateFollowUpActions: context.canMutate } });
+  return NextResponse.json({
+    meeting: context.meeting,
+    coordination,
+    tasks,
+    capabilities: {
+      canUpdate: agendaEditable,
+      canPublishMinutes: postMeetingEditable,
+      canCreateFollowUpActions: postMeetingEditable,
+    },
+  });
 }
 
 export async function POST(req: Request, { params }: Params) {
@@ -44,6 +57,7 @@ export async function POST(req: Request, { params }: Params) {
   const parsed = meetingCoordinationActionSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "VALIDATION_ERROR", message: parsed.error.issues[0]?.message || "Action réunion invalide." }, { status: 400 });
   try {
+    assertMeetingCoordinationMutationAllowed({ meetingStatus: context.meeting.status, action: parsed.data.action });
     const result = await applyMeetingCoordinationAction({ organizationId, meetingId: id, actorUserId: session.userId, payload: parsed.data });
     const coordination = await loadMeetingCoordination(organizationId, id);
     if (parsed.data.action === "SAVE_MINUTES" && parsed.data.publish) {
@@ -54,7 +68,7 @@ export async function POST(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, meetingId: id, action: parsed.data.action, domain: "meeting-coordination" } });
     return NextResponse.json({ ok: true, result, coordination });
   } catch (error) {
-    const known = error instanceof MeetingCoordinationError ? error : null;
+    const known = error instanceof MeetingCoordinationError || error instanceof WorkCoordinationHotfixError ? error : null;
     const status = known?.status || 500;
     const code = known?.code || "INTERNAL_ERROR";
     await writeApiLog({ request: req, statusCode: status, userId: session.userId, startedAt, metadata: { organizationId, meetingId: id, action: parsed.data.action, code } });
