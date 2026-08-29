@@ -7,6 +7,7 @@ import {
 } from "@/lib/enterprise/accounting/chart-template-registry";
 import type { AccountingChartTemplateDefinition } from "@/lib/enterprise/accounting/chart-template-types";
 import { publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
+import { SYSTEM_ACCOUNTING_CHART_CODE } from "@/lib/enterprise/accounting/system-accounting-continuity";
 import { prisma } from "@/lib/prisma";
 
 async function applyTemplateGroups(
@@ -155,7 +156,7 @@ async function populateDraftChartTemplate(
 ) {
   const reference = chartTemplateReference(template);
   const [chart, postedEntries, accounts] = await Promise.all([
-    tx.enterpriseChartOfAccounts.findFirst({ where: { id: chartId, organizationId, status: { in: ["DRAFT", "ACTIVE"] } } }),
+    tx.enterpriseChartOfAccounts.findFirst({ where: { id: chartId, organizationId, status: "DRAFT" } }),
     tx.enterpriseJournalEntry.count({ where: { organizationId, status: "POSTED" } }),
     tx.enterpriseLedgerAccount.count({ where: { organizationId, chartId } }),
   ]);
@@ -216,38 +217,31 @@ export async function ensureDefaultSystemAccountingBaselineTx(
     tx.enterpriseJournalEntry.count({ where: { organizationId, status: "POSTED" } }),
     tx.enterpriseChartOfAccounts.findMany({ where: { organizationId }, orderBy: { createdAt: "asc" } }),
   ]);
-  if (postedEntries > 0) return { chart: charts[0] || null, provisioned: false };
-
-  const reusableDraft = charts.find((chart) => chart.status === "DRAFT");
-  if (reusableDraft) {
-    const accountCount = await tx.enterpriseLedgerAccount.count({ where: { organizationId, chartId: reusableDraft.id } });
-    if (accountCount > 0) return { chart: reusableDraft, provisioned: false };
+  if (postedEntries > 0 || charts.length > 0) {
+    return { chart: charts[0] || null, provisioned: false };
   }
-  if (!reusableDraft && charts.length > 0) return { chart: charts[0], provisioned: false };
 
   const template = getDefaultChartTemplate();
   const reference = chartTemplateReference(template);
-  const chart = reusableDraft || await tx.enterpriseChartOfAccounts.create({
+  const chart = await tx.enterpriseChartOfAccounts.create({
     data: {
       organizationId,
-      code: "DTSC-SYSTEM-OHADA",
+      code: SYSTEM_ACCOUNTING_CHART_CODE,
       nameFr: "Plan comptable système DTSC — SYSCOHADA",
       nameEn: "DTSC system chart — SYSCOHADA",
       createdByUserId: actorUserId,
     },
   });
-  if (!reusableDraft) {
-    await publishFinanceEvent(tx, {
-      organizationId,
-      entityType: "EnterpriseChartOfAccounts",
-      entityId: chart.id,
-      eventType: "CHART_OF_ACCOUNTS_CREATED",
-      summary: `System chart ${chart.code} created from ${reference}`,
-      actorUserId,
-      toStatus: "DRAFT",
-      metadataJson: { systemAccountingContinuity: true, templateReference: reference },
-    });
-  }
+  await publishFinanceEvent(tx, {
+    organizationId,
+    entityType: "EnterpriseChartOfAccounts",
+    entityId: chart.id,
+    eventType: "CHART_OF_ACCOUNTS_CREATED",
+    summary: `System chart ${chart.code} created from ${reference}`,
+    actorUserId,
+    toStatus: "DRAFT",
+    metadataJson: { systemAccountingContinuity: true, templateReference: reference },
+  });
   const activated = await populateDraftChartTemplate(tx, organizationId, actorUserId, chart.id, template, "ACTIVE");
   return { chart: activated, provisioned: true };
 }
