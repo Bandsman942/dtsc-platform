@@ -1,6 +1,10 @@
 import { Prisma } from "@prisma/client";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
-import { chartTemplateReference, getChartTemplate } from "@/lib/enterprise/accounting/chart-template-registry";
+import {
+  chartTemplateReference,
+  getChartTemplate,
+  getDefaultChartTemplate,
+} from "@/lib/enterprise/accounting/chart-template-registry";
 import type { AccountingChartTemplateDefinition } from "@/lib/enterprise/accounting/chart-template-types";
 import { publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { prisma } from "@/lib/prisma";
@@ -189,6 +193,63 @@ async function populateDraftChartTemplate(
     },
   });
   return updated;
+}
+
+/**
+ * Provision the accounting substrate used internally by operational BUSINESS
+ * modules. This never changes module entitlements: it prepares the canonical
+ * chart, semantic mappings and journals only when the organization has no
+ * accounting history or custom chart to preserve.
+ */
+export async function ensureDefaultSystemAccountingBaselineTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  actorUserId: string,
+) {
+  const active = await tx.enterpriseChartOfAccounts.findFirst({
+    where: { organizationId, status: "ACTIVE" },
+    orderBy: { updatedAt: "desc" },
+  });
+  if (active) return { chart: active, provisioned: false };
+
+  const [postedEntries, charts] = await Promise.all([
+    tx.enterpriseJournalEntry.count({ where: { organizationId, status: "POSTED" } }),
+    tx.enterpriseChartOfAccounts.findMany({ where: { organizationId }, orderBy: { createdAt: "asc" } }),
+  ]);
+  if (postedEntries > 0) return { chart: charts[0] || null, provisioned: false };
+
+  const reusableDraft = charts.find((chart) => chart.status === "DRAFT");
+  if (reusableDraft) {
+    const accountCount = await tx.enterpriseLedgerAccount.count({ where: { organizationId, chartId: reusableDraft.id } });
+    if (accountCount > 0) return { chart: reusableDraft, provisioned: false };
+  }
+  if (!reusableDraft && charts.length > 0) return { chart: charts[0], provisioned: false };
+
+  const template = getDefaultChartTemplate();
+  const reference = chartTemplateReference(template);
+  const chart = reusableDraft || await tx.enterpriseChartOfAccounts.create({
+    data: {
+      organizationId,
+      code: "DTSC-SYSTEM-OHADA",
+      nameFr: "Plan comptable système DTSC — SYSCOHADA",
+      nameEn: "DTSC system chart — SYSCOHADA",
+      createdByUserId: actorUserId,
+    },
+  });
+  if (!reusableDraft) {
+    await publishFinanceEvent(tx, {
+      organizationId,
+      entityType: "EnterpriseChartOfAccounts",
+      entityId: chart.id,
+      eventType: "CHART_OF_ACCOUNTS_CREATED",
+      summary: `System chart ${chart.code} created from ${reference}`,
+      actorUserId,
+      toStatus: "DRAFT",
+      metadataJson: { systemAccountingContinuity: true, templateReference: reference },
+    });
+  }
+  const activated = await populateDraftChartTemplate(tx, organizationId, actorUserId, chart.id, template, "ACTIVE");
+  return { chart: activated, provisioned: true };
 }
 
 export async function adoptDraftChartTemplate(
