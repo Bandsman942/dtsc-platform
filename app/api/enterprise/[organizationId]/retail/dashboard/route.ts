@@ -144,7 +144,15 @@ export async function GET(req: Request, { params }: Params) {
   }
 
   const scoped = moduleCode === "RETAIL_POS"
-    ? { ...common, warehouses: dashboard.warehouses, catalogItems: dashboard.catalogItems, inventoryItems: dashboard.inventoryItems, metricsByCurrency: { sales: dashboard.metricsByCurrency.sales }, recent: { sales: dashboard.recent.sales } }
+    ? {
+        ...common,
+        accounts: dashboard.accounts.filter((account) => account.accountType !== "CARD_CLEARING"),
+        warehouses: dashboard.warehouses,
+        catalogItems: dashboard.catalogItems,
+        inventoryItems: dashboard.inventoryItems,
+        metricsByCurrency: { sales: dashboard.metricsByCurrency.sales },
+        recent: { sales: dashboard.recent.sales },
+      }
     : moduleCode === "MOBILE_MONEY_AGENCY"
       ? { ...common, providers: dashboard.providers.filter((item) => item.providerType === "MOBILE_MONEY"), metricsByCurrency: { mobileMoney: dashboard.metricsByCurrency.mobileMoney }, recent: { mobileMoney: mobileMoneyHistory } }
       : moduleCode === "TELCO_TOPUPS"
