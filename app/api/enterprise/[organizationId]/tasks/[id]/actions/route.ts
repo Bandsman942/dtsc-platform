@@ -10,6 +10,7 @@ import { notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
+import { applyTaskCoordinationAction, TaskCoordinationError } from "@/lib/standard-work-coordination/task-coordination";
 
 type Params = { params: Promise<{ organizationId: string; id: string }> };
 
@@ -24,7 +25,7 @@ export async function POST(req: Request, { params }: Params) {
   const access = await getEnterpriseCoreV2Access({ session, organizationId, moduleCode: "TASKS_OPERATIONS", action: "submit" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = enterpriseTaskActionSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: "L’action demandée est invalide." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "L’action demandée est invalide." }, { status: 400 });
   const task = await prisma.enterpriseTask.findFirst({ where: { id, organizationId, archivedAt: null } });
   if (!task) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const data = parsed.data;
@@ -41,15 +42,26 @@ export async function POST(req: Request, { params }: Params) {
     if (data.action === "COMPLETE") {
       await assertEnterpriseTaskCompletionReady({ organizationId, taskId: id });
     }
-    const updated = await transitionEnterpriseTask({ organizationId, taskId: id, actorUserId: session.userId, action: data.action, revision: data.revision, comment: data.comment || undefined });
+    if (data.action === "BLOCK") {
+      if (task.status !== "IN_PROGRESS") throw new WorkCoordinationHotfixError("INVALID_TASK_TRANSITION", 409, "Seule une tâche en cours peut être bloquée.");
+      if (task.revision !== data.revision) throw new WorkCoordinationHotfixError("REVISION_CONFLICT", 409, "La tâche a changé. Actualisez avant de déclarer le blocage.");
+      await applyTaskCoordinationAction({ organizationId, taskId: id, actorUserId: session.userId, payload: { action: "ADD_BLOCKER", reason: data.comment!.trim() } });
+    }
+    if (data.action === "RESUME") {
+      const openBlockers = await prisma.enterpriseTaskBlocker.count({ where: { organizationId, taskId: id, status: "OPEN" } });
+      if (openBlockers > 0) throw new WorkCoordinationHotfixError("TASK_BLOCKERS_OPEN", 409, "Résolvez les blocages ouverts dans la coordination avant de reprendre la tâche.");
+    }
+    const updated = data.action === "BLOCK"
+      ? await prisma.enterpriseTask.findFirst({ where: { id, organizationId, archivedAt: null } })
+      : await transitionEnterpriseTask({ organizationId, taskId: id, actorUserId: session.userId, action: data.action, revision: data.revision, comment: data.comment || undefined });
     if (data.action === "BLOCK" && task.createdByUserId !== session.userId) {
       await notifyUser({ userId: task.createdByUserId, organizationId, type: "ENTERPRISE_TASK", title: "Tâche bloquée", body: task.title, targetUrl: "/enterprise-modules/TASKS_OPERATIONS" });
     }
-    await writeAuditLog({ userId: session.userId, action: `ENTERPRISE_TASK_${data.action}`, entity: "EnterpriseTask", entityId: id, request: req, metadata: { organizationId, fromStatus: task.status, toStatus: updated?.status } });
+    await writeAuditLog({ userId: session.userId, action: `ENTERPRISE_TASK_${data.action}`, entity: "EnterpriseTask", entityId: id, request: req, metadata: { organizationId, fromStatus: task.status, toStatus: updated?.status, canonicalBlocker: data.action === "BLOCK" } });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "tasks", taskId: id, action: data.action } });
     return NextResponse.json({ ok: true, task: updated });
   } catch (error) {
-    if (error instanceof WorkCoordinationHotfixError) {
+    if (error instanceof WorkCoordinationHotfixError || error instanceof TaskCoordinationError) {
       await writeApiLog({ request: req, statusCode: error.status, userId: session.userId, startedAt, metadata: { organizationId, domain: "tasks", taskId: id, action: data.action, error: error.code } });
       return NextResponse.json({ error: error.code, message: error.message }, { status: error.status });
     }
