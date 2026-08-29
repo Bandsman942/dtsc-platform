@@ -63,6 +63,8 @@ for (const marker of [
 ]) {
   check(mobileMoneyAdapter.includes(marker), `Mobile Money FX posting contract missing ${marker}`);
 }
+check(!mobileMoneyAdapter.includes('"552"'), "Retail Mobile Money accounting adapter must not hardcode the OHADA 552 account number");
+check(!mobileMoneyAdapter.includes('"675"') && !mobileMoneyAdapter.includes('"776"'), "Retail Mobile Money accounting adapter must resolve FX gain/loss semantically instead of hardcoding OHADA account numbers");
 
 const walletLedger = read("lib/enterprise/accounting/mobile-money-ledger-provisioning.ts");
 for (const marker of [
