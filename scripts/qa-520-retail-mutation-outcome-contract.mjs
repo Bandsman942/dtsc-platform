@@ -44,8 +44,8 @@ for (const [name, route] of [["mobile-money", source.mobileMoney], ["telco", sou
   requireSource(name, route.includes('retailPendingOutcome("RETAIL_ACCOUNTING_PENDING"'), "l'échec de posting après commit métier n'est pas représenté comme PENDING");
 }
 
-requireSource("mobile-money-fx", source.mobileMoneyFx.includes('retailPendingOutcome("RETAIL_ACCOUNTING_PENDING"'), "le transfert FX peut encore retourner un faux échec après commit métier");
-requireSource("mobile-money-fx", source.mobileMoneyFx.includes("accounting: { status: \"PENDING\" }"), "le statut comptable pending du FX n'est pas explicite");
+requireSource("mobile-money-fx", source.mobileMoneyFx.includes("retailPendingOutcome(diagnostic.messageCode"), "le transfert FX peut encore retourner un faux échec après commit métier");
+requireSource("mobile-money-fx", source.mobileMoneyFx.includes('status: "PENDING"'), "le statut comptable pending du FX n'est pas explicite");
 requireSource("mobile-money-fx", source.mobileMoneyFx.includes("retailSuccessOutcome"), "le succès FX n'est pas explicitement contractuel");
 
 requireSource("http", source.http.includes("retailFailureOutcome"), "retailErrorResponse n'encode pas FAILURE");

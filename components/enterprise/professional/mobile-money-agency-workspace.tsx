@@ -152,7 +152,7 @@ const COPY = {
     configureRates: translateRetailWorkspace("fr", "mobileMoneyConfigureRates"),
     history: translateRetailWorkspace("fr", "operatorMobileMoneyHistory"),
     noTransaction: translateRetailWorkspace("fr", "operatorNoTransaction"),
-    noTransactionDescription: translateRetailWorkspace("fr", "operatorConfirmedOperationsWillAppearHere"),
+    noTransactionDescription: "Les opérations et conversions Mobile Money enregistrées apparaîtront ici, y compris celles dont la comptabilisation reste en attente.",
     reverse: translateRetailWorkspace("fr", "reverse"),
     reverseReason: translateRetailWorkspace("fr", "reversalReason"),
     reversed: translateRetailWorkspace("fr", "mobileMoneyReversed"),
@@ -162,6 +162,8 @@ const COPY = {
     notConfigured: translateRetailWorkspace("fr", "mobileMoneyNotConfigured"),
     configureWallets: translateRetailWorkspace("fr", "mobileMoneyConfigureWallets"),
     transactionTill: translateRetailWorkspace("fr", "mobileMoneyTransactionTill"),
+    accountingRetry: "Finaliser la comptabilisation",
+    accountingFinalized: "Comptabilisation Mobile Money finalisée.",
     selectProvider: "Choisissez un opérateur Mobile Money configuré pour la devise de la caisse avant de continuer.",
     invalidOperation: "Vérifiez la caisse, l’opérateur, le numéro client et le montant avant de prévisualiser l’opération.",
     fxInvalid: "Choisissez deux devises différentes et saisissez un montant supérieur à zéro pour obtenir une prévisualisation.",
@@ -220,7 +222,7 @@ const COPY = {
     configureRates: translateRetailWorkspace("en", "mobileMoneyConfigureRates"),
     history: translateRetailWorkspace("en", "operatorMobileMoneyHistory"),
     noTransaction: translateRetailWorkspace("en", "operatorNoTransaction"),
-    noTransactionDescription: translateRetailWorkspace("en", "operatorConfirmedOperationsWillAppearHere"),
+    noTransactionDescription: "Recorded Mobile Money operations and currency conversions will appear here, including those whose accounting posting is still pending.",
     reverse: translateRetailWorkspace("en", "reverse"),
     reverseReason: translateRetailWorkspace("en", "reversalReason"),
     reversed: translateRetailWorkspace("en", "mobileMoneyReversed"),
@@ -230,6 +232,8 @@ const COPY = {
     notConfigured: translateRetailWorkspace("en", "mobileMoneyNotConfigured"),
     configureWallets: translateRetailWorkspace("en", "mobileMoneyConfigureWallets"),
     transactionTill: translateRetailWorkspace("en", "mobileMoneyTransactionTill"),
+    accountingRetry: "Finalize accounting",
+    accountingFinalized: "Mobile Money accounting finalized.",
     selectProvider: "Select a Mobile Money provider configured for the till currency before continuing.",
     invalidOperation: "Check the till, provider, customer phone and amount before reviewing the operation.",
     fxInvalid: "Choose two different currencies and enter an amount greater than zero to preview the transfer.",
@@ -861,29 +865,51 @@ function MobileMoneyHistory({
       <ModuleSection title={copy.history}>
         {items.length ? (
           <BusinessList ariaLabel={copy.history}>
-            {items.map((item) => (
-              <BusinessListItem
-                key={item.id}
-                title={`${item.number} · ${providerLabel(dashboard, item.providerCode)}`}
-                status={<StatusBadge tone={statusTone(item.status)}>{customerFacingStatusLabel(item.status, locale)}</StatusBadge>}
-                meta={`${customerFacingMobileMoneyTransactionType(item.transactionType, locale)} · ${moneyValue(item.principalAmount, item.currencyCode, locale)} · ${formatEnterpriseDate(item.occurredAt, locale)}`}
-                description={`${item.customerPhoneMasked || "—"} · ${copy.operatorReference}: ${item.externalReference || "—"}`}
-                actions={dashboard.access.canManage && item.status === "CONFIRMED" ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={Boolean(busyAction)}
-                    onClick={() => {
-                      setReverseTarget({ id: item.id, revision: item.revision, number: item.number });
-                      setReverseReason("");
-                      setReverseError("");
-                    }}
-                  >
-                    <RotateCcw className="h-4 w-4" />{copy.reverse}
-                  </Button>
-                ) : undefined}
-              />
-            ))}
+            {items.map((item) => {
+              const isFxConversion = item.transactionType.startsWith("FX_CONVERSION_");
+              const isFxAccountingPending = item.transactionType.startsWith("FX_CONVERSION_PENDING:");
+              const accountingAction = `fx-accounting-${item.id}`;
+              return (
+                <BusinessListItem
+                  key={item.id}
+                  title={`${item.number} · ${providerLabel(dashboard, item.providerCode)}`}
+                  status={<StatusBadge tone={statusTone(item.status)}>{customerFacingStatusLabel(item.status, locale)}</StatusBadge>}
+                  meta={`${customerFacingMobileMoneyTransactionType(item.transactionType, locale)} · ${moneyValue(item.principalAmount, item.currencyCode, locale)} · ${formatEnterpriseDate(item.occurredAt, locale)}`}
+                  description={isFxConversion
+                    ? `${item.customerPhoneMasked || "—"} · ${item.externalReference || "—"}`
+                    : `${item.customerPhoneMasked || "—"} · ${copy.operatorReference}: ${item.externalReference || "—"}`}
+                  actions={dashboard.access.canManage && isFxAccountingPending ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={Boolean(busyAction)}
+                      onClick={() => void mutate(
+                        accountingAction,
+                        `/api/enterprise/${organizationId}/retail/mobile-money/fx/${item.id}/accounting`,
+                        {},
+                        copy.accountingFinalized,
+                        { idempotent: false },
+                      )}
+                    >
+                      <RefreshCw className="h-4 w-4" />{busyAction === accountingAction ? copy.processing : copy.accountingRetry}
+                    </Button>
+                  ) : dashboard.access.canManage && item.status === "CONFIRMED" ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={Boolean(busyAction)}
+                      onClick={() => {
+                        setReverseTarget({ id: item.id, revision: item.revision, number: item.number });
+                        setReverseReason("");
+                        setReverseError("");
+                      }}
+                    >
+                      <RotateCcw className="h-4 w-4" />{copy.reverse}
+                    </Button>
+                  ) : undefined}
+                />
+              );
+            })}
           </BusinessList>
         ) : <EmptyState compact title={copy.noTransaction} description={copy.noTransactionDescription} />}
       </ModuleSection>

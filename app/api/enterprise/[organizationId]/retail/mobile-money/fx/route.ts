@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { retailAccountingPendingDiagnostic } from "@/lib/enterprise/retail/accounting-pending-diagnostic";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { finalizeMobileMoneyFxAccounting } from "@/lib/enterprise/retail/mobile-money-accounting";
 import { mobileMoneyFxPreviewSchema, mobileMoneyFxTransferSchema } from "@/lib/enterprise/retail/mobile-money-multicurrency-schemas";
@@ -66,10 +67,11 @@ export async function POST(req: Request, { params }: Params) {
         writeApiLog({ request: req, statusCode, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "mobile-money-fx", action: "create", outcome: "SUCCESS" } }),
       ]);
       return NextResponse.json(
-        retailSuccessOutcome({ ...result, accounting: { journalEntryId: accounting.entry.id, idempotent: accounting.idempotent } }),
+        retailSuccessOutcome({ ...result, accounting: { status: "POSTED", journalEntryId: accounting.entry.id, idempotent: accounting.idempotent } }),
         { status: statusCode },
       );
     } catch (accountingError) {
+      const diagnostic = retailAccountingPendingDiagnostic(accountingError);
       await Promise.allSettled([
         writeAuditLog({
           userId: auth.session.userId,
@@ -86,15 +88,20 @@ export async function POST(req: Request, { params }: Params) {
             targetAmount: result.transfer.targetAmount.toFixed(),
             idempotent: result.idempotent,
             accountingPending: true,
+            accountingErrorCode: diagnostic.errorCode,
+            accountingMessageCode: diagnostic.messageCode,
           },
         }),
-        writeApiLog({ request: req, statusCode: 202, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "mobile-money-fx", action: "create", outcome: "PENDING", accountingPending: true } }),
+        writeApiLog({ request: req, statusCode: 202, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "mobile-money-fx", action: "create", outcome: "PENDING", accountingPending: true, accountingErrorCode: diagnostic.errorCode } }),
       ]);
-      void accountingError;
       return NextResponse.json(
-        retailPendingOutcome("RETAIL_ACCOUNTING_PENDING", {
+        retailPendingOutcome(diagnostic.messageCode, {
           ...result,
-          accounting: { status: "PENDING" },
+          accounting: {
+            status: "PENDING",
+            blockerCode: diagnostic.errorCode,
+            actionHref: diagnostic.actionHref,
+          },
         }),
         { status: 202 },
       );
