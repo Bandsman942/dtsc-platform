@@ -49,6 +49,7 @@ export async function GET(req: Request, { params }: Params) {
     configuration: dashboard.configuration,
     accounts: dashboard.accounts,
     cashSession: dashboard.cashSession,
+    cashSessions: dashboard.cashSessions,
     readiness: dashboard.readiness,
     access: { canWrite: auth.access.canWrite, canManage: auth.access.canAdminister },
     range: dashboard.range,
