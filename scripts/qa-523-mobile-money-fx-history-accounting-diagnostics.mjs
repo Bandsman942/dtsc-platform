@@ -5,7 +5,6 @@ const files = {
   fx: "app/api/enterprise/[organizationId]/retail/mobile-money/fx/route.ts",
   retry: "app/api/enterprise/[organizationId]/retail/mobile-money/fx/[transferId]/accounting/route.ts",
   workspace: "components/enterprise/professional/mobile-money-agency-workspace.tsx",
-  shared: "components/enterprise/professional/retail-workspace-shared.tsx",
   diagnostic: "lib/enterprise/retail/accounting-pending-diagnostic.ts",
   outcome: "lib/enterprise/retail/mutation-outcome.ts",
   language: "lib/retail-customer-language.ts",
@@ -32,7 +31,6 @@ requireSource("dashboard", source.dashboard.includes('status: reversed ? "REVERS
 requireSource("dashboard", source.dashboard.includes('accountingStatus: posted ? "POSTED" : "PENDING"'), "le statut comptable FX n'est pas exposé séparément");
 requireSource("dashboard", source.dashboard.includes("accountingBlockerCode"), "le blocker comptable FX n'est pas exposé dans le modèle d'historique");
 requireSource("dashboard", !source.dashboard.includes("finalizeMobileMoneyFxAccounting"), "un GET d'historique ne doit jamais déclencher de comptabilisation");
-requireSource("shared", source.shared.includes('accountingStatus?: "POSTED" | "PENDING" | "NOT_APPLICABLE"'), "le contrat UI partagé ne distingue pas le statut comptable du statut de l'opération");
 
 requireSource("fx", source.fx.includes("retailAccountingPendingDiagnostic(accountingError)"), "la cause comptable est encore détruite ou ignorée dans la route FX");
 requireSource("fx", source.fx.includes("accountingErrorCode: diagnostic.errorCode"), "le diagnostic comptable n'est pas audité de façon sûre");
@@ -89,7 +87,7 @@ if (failures.length) {
 
 console.log("PASS qa-523-mobile-money-fx-history-accounting-diagnostics");
 console.log("- les conversions FX durables sont visibles dans l'historique Mobile Money");
-console.log("- statut métier et statut comptable restent distincts");
+console.log("- statut métier et statut comptable restent distincts dans le payload FX sans modifier le socle Retail partagé");
 console.log("- le blocker comptable réel est conservé et traduit sans exposer la stack");
 console.log("- la reprise comptable est tenant-scoped, idempotente et ne rejoue jamais le transfert wallet");
 console.log("- le GET d'historique reste strictement en lecture seule");
