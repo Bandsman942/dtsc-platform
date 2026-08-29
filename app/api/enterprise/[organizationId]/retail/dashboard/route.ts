@@ -19,6 +19,8 @@ type MobileMoneyHistoryItem = {
   providerCommissionAmount: string | number | { toString(): string };
   externalReference: string | null;
   status: string;
+  accountingStatus?: "POSTED" | "PENDING" | "NOT_APPLICABLE";
+  accountingBlockerCode?: string | null;
   occurredAt: Date | string;
   revision: number;
 };
@@ -123,7 +125,9 @@ export async function GET(req: Request, { params }: Params) {
         customerFeeAmount: "0",
         providerCommissionAmount: "0",
         externalReference: `${transfer.sourceCurrencyCode}→${transfer.targetCurrencyCode}`,
-        status: reversed ? "REVERSED" : posted ? "SUCCESS" : "PENDING",
+        status: reversed ? "REVERSED" : "CONFIRMED",
+        accountingStatus: posted ? "POSTED" : "PENDING",
+        accountingBlockerCode: posted ? null : accountingErrorCode,
         occurredAt: transfer.occurredAt,
         revision: transfer.revision,
       };
