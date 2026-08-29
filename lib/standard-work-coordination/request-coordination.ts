@@ -7,7 +7,7 @@ export const requestCoordinationActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("REQUEST_INFORMATION"), comment: z.string().trim().min(3).max(3000) }),
   z.object({ action: z.literal("RESPOND"), comment: z.string().trim().min(1).max(3000) }),
   z.object({ action: z.literal("RESOLVE"), comment: z.string().trim().min(3).max(3000) }),
-  z.object({ action: z.literal("CLOSE"), comment: z.string().trim().max(3000).optional() }),
+  z.object({ action: z.literal("CLOSE"), comment: z.string().trim().min(3).max(3000) }),
   z.object({ action: z.literal("REOPEN"), comment: z.string().trim().min(3).max(3000) }),
 ]);
 
@@ -54,14 +54,15 @@ export async function applyRequestCoordinationAction(args: { organizationId: str
     if (comment) {
       await tx.enterpriseOperationalComment.create({ data: { organizationId: args.organizationId, entityType: "EnterpriseRequest", entityId: request.id, authorUserId: args.actorUserId, content: comment } });
     }
-    const updated = await tx.enterpriseRequest.update({
-      where: { id: request.id },
+    const updated = await tx.enterpriseRequest.updateMany({
+      where: { id: request.id, organizationId: args.organizationId, status: request.status, revision: request.revision, archivedAt: null },
       data: {
         status: nextStatus,
         closedAt: nextStatus === "CLOSED" ? new Date() : action === "REOPEN" ? null : request.closedAt,
         revision: { increment: 1 },
       },
     });
+    if (updated.count !== 1) throw new RequestCoordinationError("REVISION_CONFLICT", 409, "La demande a changé pendant cette action. Actualisez avant de réessayer.");
     await tx.enterpriseOperationalEvent.create({
       data: {
         organizationId: args.organizationId,
@@ -74,14 +75,14 @@ export async function applyRequestCoordinationAction(args: { organizationId: str
         toStatus: nextStatus,
       },
     });
-    return updated;
+    return tx.enterpriseRequest.findUnique({ where: { id: request.id } });
   });
 }
 
 function allowedStatuses(action: z.infer<typeof requestCoordinationActionSchema>["action"]) {
-  if (action === "REQUEST_INFORMATION") return ["SUBMITTED", "IN_REVIEW", "ASSIGNED", "IN_PROGRESS"];
+  if (action === "REQUEST_INFORMATION") return ["SUBMITTED", "IN_REVIEW", "IN_PROGRESS"];
   if (action === "RESPOND") return ["WAITING_REQUESTER"];
-  if (action === "RESOLVE") return ["IN_REVIEW", "ASSIGNED", "IN_PROGRESS", "WAITING_APPROVAL", "APPROVED"];
+  if (action === "RESOLVE") return ["IN_REVIEW", "IN_PROGRESS", "APPROVED"];
   if (action === "CLOSE") return ["RESOLVED", "FULFILLED"];
   return ["CLOSED", "RESOLVED", "FULFILLED"];
 }
@@ -91,7 +92,7 @@ function actionStatus(action: z.infer<typeof requestCoordinationActionSchema>["a
   if (action === "RESPOND") return "IN_PROGRESS";
   if (action === "RESOLVE") return "RESOLVED";
   if (action === "CLOSE") return "CLOSED";
-  return "REOPENED";
+  return "IN_PROGRESS";
 }
 
 function actionSummary(action: z.infer<typeof requestCoordinationActionSchema>["action"]) {
@@ -99,7 +100,7 @@ function actionSummary(action: z.infer<typeof requestCoordinationActionSchema>["
   if (action === "RESPOND") return "Réponse du demandeur reçue.";
   if (action === "RESOLVE") return "Demande résolue.";
   if (action === "CLOSE") return "Demande clôturée.";
-  return "Demande rouverte.";
+  return "Demande rouverte pour traitement.";
 }
 
 function normalize(value?: string | null) {
