@@ -13,27 +13,16 @@ const mobileMoneyAccounts = read("app/api/enterprise/[organizationId]/retail/mob
 const cashManager = read("components/enterprise/professional/mobile-money-cash-session-manager.tsx");
 const pos = read("components/enterprise/professional/retail-pos-dtsc-workspace.tsx");
 const posCash = read("components/enterprise/professional/retail-pos-cash-session-manager.tsx");
-const telco = read("components/enterprise/professional/telco-topups-workspace.tsx");
-const telcoService = read("lib/enterprise/retail/telco-multicurrency-service.ts");
 const retailService = read("lib/enterprise/retail/service.ts");
 const guardrails = read("lib/enterprise/retail/commercial-guardrails.ts");
+const frCopy = read("locales/retail-transaction-forms.fr.json");
+const enCopy = read("locales/retail-transaction-forms.en.json");
 
-for (const marker of [
-  "MobileMoneyAgencyWorkspace",
-  "RetailPosDtscWorkspace",
-  "TelcoTopupsWorkspace",
-]) {
-  check(page.includes(marker), `Retail page is not routed through ${marker}`);
-}
-
-for (const marker of [
-  'cashSessions: dashboard.cashSessions',
-  'moduleCode === "TELCO_TOPUPS" ? getTelcoProviderAccountConfiguration(organizationId)',
-  'telcoConfiguration, catalogItems: dashboard.catalogItems',
-  'account.accountType !== "CARD_CLEARING"',
-]) {
-  check(dashboard.includes(marker), `Retail dashboard contract missing ${marker}`);
-}
+check(page.includes("MobileMoneyAgencyWorkspace"), "Retail page must keep the Mobile Money professional workspace routed");
+check(page.includes("RetailPosDtscWorkspace"), "Retail page must route POS through the DTSC guided workspace");
+check(page.includes("RetailOperatorWorkspace"), "Telco routing must remain on its existing workspace outside hotfix #529");
+check(!page.includes("TelcoTopupsWorkspace"), "Hotfix #529 must not replace the Telco workspace");
+check(dashboard.includes("cashSessions: dashboard.cashSessions"), "Retail dashboard must expose all current-user cash sessions");
 
 for (const marker of [
   "overflow-x-auto",
@@ -42,85 +31,74 @@ for (const marker of [
   "value={selectedSessionId}",
   "onSelectSession(event.target.value)",
 ]) {
-  check(cashManager.includes(marker), `Shared Mobile Money/Telco cash rail missing ${marker}`);
+  check(cashManager.includes(marker), `Mobile Money cash rail missing ${marker}`);
 }
 
 for (const marker of [
-  "RetailPosCashSessionManager",
-  "cashSessions",
-  "openCashAccounts",
-  'method === "CASH"',
-  "paymentMismatch",
-  "overrideNeeded",
-  "GuidedField",
-  'presentation="editor"',
-  'h-[96dvh]',
-  "buildReview",
-  'notifyToast(message, "error")',
-]) {
-  check(pos.includes(marker), `POS guided-form contract missing ${marker}`);
-}
-check(!pos.includes("window.prompt"), "Routed POS workspace must not use window.prompt");
-check(posCash.includes("overflow-x-auto") && posCash.includes("snap-x") && posCash.includes("selectedSessionId"), "POS cash sessions must expose a synchronized horizontal rail and combobox");
-check(posCash.includes("notifyToast(copy.accountRequired, \"error\")") && posCash.includes("noValidate"), "POS till opening must use explicit inline/toast validation");
-
-for (const marker of [
+  "retail-transaction-forms.fr.json",
+  "retail-transaction-forms.en.json",
+  "OperationFieldErrors",
   "MobileMoneyGuidedField",
   "eligibleProviders",
   "formWallet",
   "executionMode",
   "manualExecution",
-  "referenceRequired",
-  "fieldErrors",
-  "formCopy",
+  "fieldErrors.reference",
+  "formProvider && manualExecution",
   'presentation="editor"',
   'h-[96dvh]',
-  'notifyToast(message, "error")',
+  "setPending({",
+  "confirmOperation",
+  "floatAccountId: null",
 ]) {
-  check(mobileMoney.includes(marker), `Mobile Money guided-form contract missing ${marker}`);
+  check(mobileMoney.includes(marker), `Mobile Money DTSC form contract missing ${marker}`);
 }
-check(!mobileMoney.includes("window.prompt"), "Routed Mobile Money workspace must not use window.prompt");
-check(mobileMoney.includes("providerManualExecution ? externalReference : \"\""), "Connected Mobile Money providers must not accept an operator reference from the form");
-check(mobileMoneyAccounts.includes("integrationMode") && mobileMoneyAccounts.includes("executionMode"), "Mobile Money configuration must expose execution mode without exposing credentials");
+check(!mobileMoney.includes("window.prompt"), "Mobile Money routed workspace must not use window.prompt");
+check(mobileMoney.includes("formError(preciseError)"), "Mobile Money field validation must surface a foreground error toast");
+check(mobileMoney.includes('externalReference: providerManualExecution ? externalReference : ""'), "Connected Mobile Money operations must not trust a manual reference");
+check(mobileMoneyAccounts.includes("integrationMode") && mobileMoneyAccounts.includes("executionMode"), "Mobile Money configuration must expose MANUAL/CONNECTED execution mode");
 check(!mobileMoneyAccounts.includes("credentialReference") && !mobileMoneyAccounts.includes("webhookSecretReference"), "Mobile Money configuration must not expose provider secrets");
 
 for (const marker of [
+  "RetailPosCashSessionManager",
+  "cashSessions",
+  "openCashAccounts",
+  "paymentAccounts1",
+  "paymentAccounts2",
+  "paymentMismatch",
+  "overrideNeeded",
   "GuidedField",
-  "telcoConfiguration",
-  "eligibleProviders",
-  "operatorAccount",
-  "executionMode",
-  "manual",
-  "manualStatus",
-  "referenceRequired",
-  "failureReasonRequired",
-  "selectedCatalog",
+  "buildReview",
   'presentation="editor"',
   'h-[96dvh]',
-  "buildReview",
   'notifyToast(message, "error")',
+  "confirmSale",
 ]) {
-  check(telco.includes(marker), `Telco guided-form contract missing ${marker}`);
+  check(pos.includes(marker), `POS guided-form contract missing ${marker}`);
 }
-check(!telco.includes("window.prompt"), "Routed Telco workspace must not use window.prompt");
-for (const marker of [
-  "enterpriseRetailProviderIntegration.findMany",
-  "integrationModeByProviderId",
-  "executionMode",
-  "TELCO_FLOAT_ACCOUNT_USE",
-]) {
-  check(telcoService.includes(marker), `Telco provider/currency configuration contract missing ${marker}`);
+check(!pos.includes("window.prompt"), "Routed POS workspace must not use window.prompt");
+check(pos.includes("overrideNeeded && dashboard.access.canManage"), "POS override reason must remain conditional");
+check(pos.includes("selectedAccount2.id === selectedAccount1?.id"), "POS split payment must reject the same financial account twice");
+check(pos.includes("Math.abs(tenderTotal - total) > 0.005"), "POS must validate tender total before review");
+check(posCash.includes("overflow-x-auto") && posCash.includes("snap-x") && posCash.includes("selectedSessionId"), "POS cash sessions must expose a synchronized horizontal rail and combobox");
+check(posCash.includes('notifyToast(copy.accountRequired, "error")') && posCash.includes("noValidate"), "POS till opening must use explicit inline/toast validation");
+
+for (const copy of [frCopy, enCopy]) {
+  check(copy.includes('"pos"'), "Transaction form dictionary must contain POS copy");
+  check(copy.includes('"posCash"'), "Transaction form dictionary must contain POS cash copy");
+  check(copy.includes('"mobileMoney"'), "Transaction form dictionary must contain Mobile Money copy");
+  check(copy.includes('"reviewSafety"'), "Transaction form dictionary must explain pre-confirmation safety");
+  check(copy.includes('"referenceRequired"'), "Transaction form dictionary must explain manual provider reference requirement");
 }
 
 for (const marker of [
   "resolveMobileMoneyFloatAccountTx(tx, organizationId, provider, input.currencyCode)",
   "assertOpenCashSession(tx, organizationId, cashAccount.id, actorUserId)",
-  "resolveTelcoFloatAccountTx(tx, organizationId, provider, tenderAccount.currencyCode)",
 ]) {
-  check(retailService.includes(marker), `Retail server-authority contract missing ${marker}`);
+  check(retailService.includes(marker), `Mobile Money server-authority contract missing ${marker}`);
 }
-check(guardrails.includes('executionMode === "MANUAL" && !requestedExternalReference'), "Manual provider reference guardrail is missing");
-check(guardrails.includes('externalReference: executionMode === "CONNECTED" ? null : requestedExternalReference'), "Connected provider reference must remain provider-authoritative");
+check(guardrails.includes('executionMode === "MANUAL" && !requestedExternalReference'), "Manual Mobile Money provider reference guardrail is missing");
+check(guardrails.includes('externalReference: executionMode === "CONNECTED" ? null : requestedExternalReference'), "Connected provider reference must remain server/provider-authoritative");
 
 if (failures.length) {
   console.error("FAIL qa-529-retail-guided-review");
@@ -129,8 +107,8 @@ if (failures.length) {
 }
 
 console.log("PASS qa-529-retail-guided-review");
-console.log("- Mobile Money, POS and Telco are routed through their canonical guided workspaces");
-console.log("- all three flows use explicit validation and full-screen review before financial mutation");
-console.log("- POS and Telco consume multi-cash sessions and currency-scoped enterprise references");
-console.log("- Mobile Money and Telco expose provider execution mode without exposing secrets");
-console.log("- server authority remains enforced for tenant, till session, wallet/operator account and provider mode");
+console.log("- Mobile Money uses guided fields, conditional MANUAL reference and full-screen review before mutation");
+console.log("- POS consumes multi-cash sessions, validates real tender accounts and uses full-screen review before sale creation");
+console.log("- POS and Mobile Money reversal flows avoid window.prompt and preserve controlled dialogs");
+console.log("- FR/EN form copy is externalized and Mobile Money server authority remains intact");
+console.log("- Telco remains outside the #529 implementation scope");
