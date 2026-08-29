@@ -5,6 +5,7 @@ import { canMutateOwnedObject, enterpriseRequestVisibilityWhere, getEnterpriseCo
 import { normalizeEnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
 import { getEnterpriseOperationalTimeline, updateEnterpriseRequest } from "@/lib/enterprise/core-v2/service";
 import { enterpriseRequestUpdateSchema } from "@/lib/enterprise/core-v2/validators";
+import { updateEnterpriseRequestCorrection, WorkCoordinationHotfixError } from "@/lib/enterprise/work-coordination/hotfix-guards";
 import { notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
@@ -45,31 +46,35 @@ export async function PATCH(req: Request, { params }: Params) {
   const existing = await prisma.enterpriseRequest.findFirst({ where: { id, organizationId, archivedAt: null } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (!canMutateOwnedObject({ canManage: access.canManage, userId: session.userId, relatedUserIds: [existing.requestedByUserId, existing.assignedToUserId] })) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  if (!access.canManage && existing.status !== "DRAFT") return NextResponse.json({ error: "Forbidden", message: "Le demandeur ne peut modifier librement que son brouillon." }, { status: 403 });
+  const isRequester = existing.requestedByUserId === session.userId;
+  if (!access.canManage && !(isRequester && ["DRAFT", "CORRECTION_REQUESTED"].includes(existing.status))) {
+    return NextResponse.json({ error: "Forbidden", message: "Le demandeur peut modifier son brouillon ou une demande explicitement retournée pour correction." }, { status: 403 });
+  }
   try {
     const data = parsed.data;
-    const requestRecord = await updateEnterpriseRequest({
-      organizationId,
-      requestId: id,
-      actorUserId: session.userId,
-      revision: data.revision,
-      data: {
-        requestType: data.requestType,
-        title: data.title,
-        description: data.description,
-        priority: data.priority,
-        assignedToUserId: data.assignedToUserId === undefined ? undefined : data.assignedToUserId || null,
-        departmentId: data.departmentId === undefined ? undefined : data.departmentId || null,
-        dueAt: data.dueAt === undefined ? undefined : data.dueAt instanceof Date ? data.dueAt : null,
-      },
-    });
+    const updateData = {
+      requestType: data.requestType,
+      title: data.title,
+      description: data.description,
+      priority: data.priority,
+      assignedToUserId: data.assignedToUserId === undefined ? undefined : data.assignedToUserId || null,
+      departmentId: data.departmentId === undefined ? undefined : data.departmentId || null,
+      dueAt: data.dueAt === undefined ? undefined : data.dueAt instanceof Date ? data.dueAt : null,
+    };
+    const requestRecord = existing.status === "CORRECTION_REQUESTED"
+      ? await updateEnterpriseRequestCorrection({ organizationId, requestId: id, actorUserId: session.userId, revision: data.revision, data: updateData })
+      : await updateEnterpriseRequest({ organizationId, requestId: id, actorUserId: session.userId, revision: data.revision, data: updateData });
     if (requestRecord?.assignedToUserId && requestRecord.assignedToUserId !== existing.assignedToUserId && requestRecord.assignedToUserId !== session.userId) {
       await notifyUser({ userId: requestRecord.assignedToUserId, organizationId, type: "ENTERPRISE_REQUEST", title: "Demande affectée", body: requestRecord.title, targetUrl: "/enterprise-modules/INTERNAL_REQUESTS" });
     }
-    await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_REQUEST_UPDATED", entity: "EnterpriseRequest", entityId: id, request: req, metadata: { organizationId, revision: data.revision } });
+    await writeAuditLog({ userId: session.userId, action: existing.status === "CORRECTION_REQUESTED" ? "ENTERPRISE_REQUEST_CORRECTION_UPDATED" : "ENTERPRISE_REQUEST_UPDATED", entity: "EnterpriseRequest", entityId: id, request: req, metadata: { organizationId, revision: data.revision, status: existing.status } });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "requests", requestId: id } });
     return NextResponse.json({ ok: true, request: requestRecord });
   } catch (error) {
+    if (error instanceof WorkCoordinationHotfixError) {
+      await writeApiLog({ request: req, statusCode: error.status, userId: session.userId, startedAt, metadata: { organizationId, domain: "requests", requestId: id, error: error.code } });
+      return NextResponse.json({ error: error.code, message: error.message }, { status: error.status });
+    }
     const normalized = normalizeEnterpriseCoreV2Error(error);
     await writeApiLog({ request: req, statusCode: normalized.status, userId: session.userId, startedAt, metadata: { organizationId, domain: "requests", requestId: id, error: normalized.code } });
     return NextResponse.json({ error: normalized.code, message: normalized.message }, { status: normalized.status });
