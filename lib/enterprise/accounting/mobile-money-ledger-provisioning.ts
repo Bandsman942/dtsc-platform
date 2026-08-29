@@ -145,6 +145,42 @@ async function ensureWalletSubledgerTx(
   return child;
 }
 
+export async function ensureMobileMoneyTransactionLedgerMapping(
+  organizationId: string,
+  actorUserId: string,
+  transactionId: string,
+) {
+  return prisma.$transaction(async (tx) => {
+    const transaction = await tx.enterpriseMobileMoneyTransaction.findFirst({
+      where: { id: transactionId, organizationId },
+      select: {
+        id: true,
+        providerCode: true,
+        currencyCode: true,
+        floatAccountId: true,
+        occurredAt: true,
+      },
+    });
+    if (!transaction) throw new EnterpriseAccountingError("RETAIL_MOBILE_MONEY_NOT_POSTABLE", 409);
+    const provider = await tx.enterpriseRetailProvider.findFirst({
+      where: { organizationId, providerCode: transaction.providerCode, isActive: true },
+      select: { providerCode: true, label: true },
+    });
+    if (!provider) throw new EnterpriseAccountingError("RETAIL_MOBILE_MONEY_FINANCIAL_ACCOUNTS_INVALID", 409);
+
+    const ledger = await ensureWalletSubledgerTx(tx, {
+      organizationId,
+      actorUserId,
+      financialAccountId: transaction.floatAccountId,
+      providerCode: provider.providerCode,
+      providerLabel: provider.label,
+      currencyCode: transaction.currencyCode,
+      accountingDate: transaction.occurredAt,
+    });
+    return { ledgerAccountId: ledger.id };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
+}
+
 export async function ensureMobileMoneyFxLedgerMappings(
   organizationId: string,
   actorUserId: string,
