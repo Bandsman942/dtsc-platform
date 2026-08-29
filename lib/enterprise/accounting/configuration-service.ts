@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { ensureDefaultSystemAccountingBaselineTx } from "@/lib/enterprise/accounting/chart-template-application-service";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { assertActiveClientOrganization, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { assertFunctionalCurrencyMutable } from "@/lib/enterprise/accounting/currency";
@@ -108,6 +109,12 @@ export async function upsertFinanceConfiguration(
         createdByUserId: actorUserId,
       },
     });
+
+    // Finance setup is available below the Accounting commercial tier. Prepare
+    // the immutable accounting substrate now so operational BUSINESS modules can
+    // post continuously, while module entitlements still govern visibility.
+    await ensureDefaultSystemAccountingBaselineTx(tx, organizationId, actorUserId);
+
     await publishFinanceEvent(tx, {
       organizationId,
       entityType: "EnterpriseFinanceConfiguration",
