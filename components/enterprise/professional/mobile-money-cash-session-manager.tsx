@@ -49,6 +49,7 @@ const COPY = {
     active: translateRetailWorkspace("fr", "cashSessionActive"),
     openSessions: translateRetailWorkspace("fr", "cashSessionOpenSessions"),
     select: translateRetailWorkspace("fr", "cashSessionSelect"),
+    useTill: "Caisse ouverte à utiliser",
     openingFloat: translateRetailWorkspace("fr", "openingFloat"),
     currentBalance: translateRetailWorkspace("fr", "cashSessionCurrentBalance"),
     expected: translateRetailWorkspace("fr", "cashSessionExpected"),
@@ -89,6 +90,7 @@ const COPY = {
     active: translateRetailWorkspace("en", "cashSessionActive"),
     openSessions: translateRetailWorkspace("en", "cashSessionOpenSessions"),
     select: translateRetailWorkspace("en", "cashSessionSelect"),
+    useTill: "Open till to use",
     openingFloat: translateRetailWorkspace("en", "openingFloat"),
     currentBalance: translateRetailWorkspace("en", "cashSessionCurrentBalance"),
     expected: translateRetailWorkspace("en", "cashSessionExpected"),
@@ -227,35 +229,51 @@ export function MobileMoneyCashSessionManager({
           </div>
 
           {openSessions.length ? (
-            <div role="group" aria-label={copy.active} className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {openSessions.map((session) => {
-                const selected = session.id === selectedSessionId;
-                const currency = session.financialAccount.currencyCode;
-                return (
-                  <button
-                    key={session.id}
-                    type="button"
-                    aria-pressed={selected}
-                    onClick={() => onSelectSession(session.id)}
-                    className={`min-h-24 min-w-0 rounded-2xl border p-4 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 active:scale-[0.99] ${selected ? "border-cyan-500 bg-cyan-500/10 shadow-sm" : "border-dtsc-border bg-dtsc-page hover:border-cyan-500/50"}`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-xl font-black text-dtsc-ink">{currency}</span>
-                          {selected ? <StatusBadge tone="success">{copy.active}</StatusBadge> : null}
+            <>
+              <Field label={copy.useTill}>
+                <select
+                  value={selectedSessionId}
+                  onChange={(event) => onSelectSession(event.target.value)}
+                  disabled={Boolean(busyAction)}
+                  className="min-h-11 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink"
+                >
+                  {openSessions.map((session) => (
+                    <option key={session.id} value={session.id}>
+                      {session.financialAccount.currencyCode} · {session.financialAccount.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <div role="group" aria-label={copy.active} className="flex min-w-0 snap-x snap-mandatory gap-3 overflow-x-auto pb-2 overscroll-x-contain">
+                {openSessions.map((session) => {
+                  const selected = session.id === selectedSessionId;
+                  const currency = session.financialAccount.currencyCode;
+                  return (
+                    <button
+                      key={session.id}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => onSelectSession(session.id)}
+                      className={`min-h-24 w-[min(82vw,22rem)] shrink-0 snap-start rounded-2xl border p-4 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 active:scale-[0.99] ${selected ? "border-cyan-500 bg-cyan-500/10 shadow-sm" : "border-dtsc-border bg-dtsc-page hover:border-cyan-500/50"}`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xl font-black text-dtsc-ink">{currency}</span>
+                            {selected ? <StatusBadge tone="success">{copy.active}</StatusBadge> : null}
+                          </div>
+                          <p className="mt-1 break-words text-sm font-black text-dtsc-ink">{session.financialAccount.name}</p>
+                          <p className="mt-1 text-xs font-semibold text-dtsc-muted">{copy.openingFloat}: {moneyValue(session.openingAmount, currency, locale)}</p>
+                          <p className="text-xs font-semibold text-dtsc-muted">{copy.currentBalance}: {moneyValue(session.financialAccount.operationalBalance, currency, locale)}</p>
                         </div>
-                        <p className="mt-1 break-words text-sm font-black text-dtsc-ink">{session.financialAccount.name}</p>
-                        <p className="mt-1 text-xs font-semibold text-dtsc-muted">{copy.openingFloat}: {moneyValue(session.openingAmount, currency, locale)}</p>
-                        <p className="text-xs font-semibold text-dtsc-muted">{copy.currentBalance}: {moneyValue(session.financialAccount.operationalBalance, currency, locale)}</p>
+                        <CircleDollarSign className="h-5 w-5 shrink-0 text-dtsc-muted" aria-hidden="true" />
                       </div>
-                      <CircleDollarSign className="h-5 w-5 shrink-0 text-dtsc-muted" aria-hidden="true" />
-                    </div>
-                    {!selected ? <span className="mt-3 inline-flex text-xs font-black text-cyan-700 dark:text-cyan-200">{copy.select}</span> : null}
-                  </button>
-                );
-              })}
-            </div>
+                      {!selected ? <span className="mt-3 inline-flex text-xs font-black text-cyan-700 dark:text-cyan-200">{copy.select}</span> : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
           ) : (
             <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm font-bold text-amber-800 dark:text-amber-200">
               {telco
