@@ -43,7 +43,8 @@ function staticShopReleaseChecks() {
   const telcoRoute = read("app/api/enterprise/[organizationId]/retail/telco-topups/route.ts");
   const retailPage = read("app/enterprise-modules/retail-page.tsx");
   const posWorkspace = read("components/enterprise/professional/retail-pos-workspace.tsx");
-  const operatorWorkspace = read("components/enterprise/professional/retail-operator-workspace.tsx");
+  const mobileMoneyWorkspace = read("components/enterprise/professional/mobile-money-agency-workspace.tsx");
+  const telcoWorkspace = read("components/enterprise/professional/telco-topups-workspace.tsx");
   const sharedWorkspace = read("components/enterprise/professional/retail-workspace-shared.tsx");
   const dailyCloseWorkspace = read("components/enterprise/professional/retail-daily-close-workspace.tsx");
   const retailFr = JSON.parse(read("locales/retail-workspace.fr.json"));
@@ -71,8 +72,8 @@ function staticShopReleaseChecks() {
     [commercialEngine.includes("prepareCommercialRetailSaleV2") && commercialEngine.includes("RETAIL_PRICE_OVERRIDE_FORBIDDEN") && saleExecution.includes("prepareCommercialRetailSaleV2") && saleExecution.includes("createRetailSale") && salesRoute.includes("executeCanonicalRetailSale"), "SERVER_PRICE_GUARD"],
     [provisioning.includes('providerCode: "MPESA"') && provisioning.includes('providerType: "MOBILE_MONEY"') && provisioning.includes('providerCode: "VODACOM"') && provisioning.includes('providerType: "TELCO"'), "WALLET_NETWORK_SEPARATION"],
     [migration.includes("EnterpriseMobileMoneyTransaction_rc1_external_ref_key") && migration.includes("EnterpriseTelcoTopup_rc1_external_ref_key") && mobileRoute.includes("prepareCommercialMobileMoney") && telcoRoute.includes("prepareCommercialTelcoTopup"), "UNIQUE_PROVIDER_REFERENCE"],
-    [guardrails.includes("normalizeRetailPhone") && sharedWorkspace.includes("normalizePhonePreview") && operatorWorkspace.includes("ConfirmationCard"), "PHONE_NORMALIZATION_AND_CONFIRMATION"],
-    [operatorWorkspace.includes("floatAccountId: null") && operatorWorkspace.includes("operatorFloatAccountId: null") && sharedWorkspace.includes("dashboard.cashSession") && guardrails.includes("floatAccountId: null") && guardrails.includes("operatorFloatAccountId: null"), "AUTOMATIC_CASH_AND_FLOAT_RESOLUTION"],
+    [guardrails.includes("normalizeRetailPhone") && sharedWorkspace.includes("normalizePhonePreview") && mobileMoneyWorkspace.includes('presentation="editor"') && telcoWorkspace.includes('presentation="editor"'), "PHONE_NORMALIZATION_AND_CONFIRMATION"],
+    [mobileMoneyWorkspace.includes("floatAccountId: null") && telcoWorkspace.includes("operatorFloatAccountId: null") && mobileMoneyWorkspace.includes("MobileMoneyCashSessionManager") && telcoWorkspace.includes("MobileMoneyCashSessionManager") && guardrails.includes("floatAccountId: null") && guardrails.includes("operatorFloatAccountId: null"), "AUTOMATIC_CASH_AND_FLOAT_RESOLUTION"],
     [sharedWorkspace.includes("CashSessionBar") && sharedWorkspace.includes('retailText(locale, "noActiveTill")') && sharedWorkspace.includes('retailText(locale, "openingFloat")') && retailEn.noActiveTill === "No active till. Open a till before accepting cash." && retailFr.openingFloat === "Fonds d’ouverture", "VISIBLE_CASH_SESSION"],
     [adminPanels.includes("RETAIL_PERMISSION_CATALOG") && adminPanels.includes('sectorCode === "COMMERCE_RETAIL"') && constants.includes("enterprise.purchases.manage"), "RETAIL_RBAC_CATALOG"],
     [guardrails.includes("getRetailMetricsByCurrency") && dashboard.includes("metricsByCurrency") && dashboardRoute.includes("getCommercialRetailDashboard") && !dashboardRoute.includes("getRetailDashboard("), "MULTI_CURRENCY_REPORTING"],
@@ -86,9 +87,10 @@ function staticShopReleaseChecks() {
   for (const marker of ["getSession", "rateLimit", "isSameOriginRequest", "getEnterpriseCommonDomainAccess"]) check(http.includes(marker), `Shop secure mutation contract missing ${marker}`);
   check(schemas.includes("idempotencyKey"), "Shop writes must remain idempotent");
   check(sharedWorkspace.includes("stableKey") && sharedWorkspace.includes("busyAction"), "Shop UI must preserve stable idempotency keys and repeated-submission protection");
-  check(posWorkspace.includes("min-w-0") && operatorWorkspace.includes("min-w-0") && dailyCloseWorkspace.includes("min-w-0"), "Shop dedicated workspaces must preserve the mobile-first responsive contract");
+  check(posWorkspace.includes("min-w-0") && mobileMoneyWorkspace.includes("min-w-0") && telcoWorkspace.includes("min-w-0") && dailyCloseWorkspace.includes("min-w-0"), "Shop dedicated workspaces must preserve the mobile-first responsive contract");
   check(!exists("components/enterprise/professional/enterprise-retail-shop-workspace.tsx"), "Retired monolithic Shop workspace must not return");
-  check(retailPage.includes("RetailPosWorkspace") && retailPage.includes("RetailOperatorWorkspace") && retailPage.includes("RetailDailyCloseWorkspace"), "Retail routing must use dedicated workspaces");
+  check(retailPage.includes("RetailPosWorkspace") && retailPage.includes("MobileMoneyAgencyWorkspace") && retailPage.includes("TelcoTopupsWorkspace") && retailPage.includes("RetailDailyCloseWorkspace"), "Retail routing must use dedicated POS, Mobile Money, Telco and daily-close workspaces");
+  check(!retailPage.includes("RetailOperatorWorkspace"), "Retail routing must not fall back to the transitional generic operator workspace");
   check(templateApplication.includes("syncRetailOnboardingProvisioning"), "Shop template application must provision the Retail profile at runtime");
   for (const code of ["RETAIL_POS", "MOBILE_MONEY_AGENCY", "TELCO_TOPUPS", "RETAIL_DAILY_CLOSE"]) check(guides.includes(`${code}:`), `Shop user guide missing ${code}`);
   check(guides.includes("Vodacom") && guides.includes("M-Pesa"), "Shop guides must distinguish telecom networks from Mobile Money services");
@@ -168,4 +170,4 @@ if (failures.length) {
   }
   process.exit(1);
 }
-console.log("\nSector onboarding commercial-readiness QA passed. COMMERCE_RETAIL satisfies the enforced COMMERCIAL_READY onboarding contract with dedicated Retail workspaces.");
+console.log("\nSector onboarding commercial-readiness QA passed. COMMERCE_RETAIL satisfies the enforced COMMERCIAL_READY onboarding contract with dedicated POS, Mobile Money, Telco and daily-close workspaces.");

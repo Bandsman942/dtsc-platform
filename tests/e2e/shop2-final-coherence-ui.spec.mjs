@@ -183,7 +183,7 @@ test.describe.serial("Shop 2.0 final product coherence", () => {
     await setLocale("en");
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto("/enterprise-modules/TELCO_TOPUPS");
-    await expect(page.getByText("Airtime / bundle", { exact: true })).toBeVisible();
+    await expect(page.getByText("Telecom top-up or bundle", { exact: true })).toBeVisible();
     await assertNoRawRetailLanguage(page);
     await page.getByRole("button", { name: "Reports" }).click();
     await expect(page.getByText("Operational balances", { exact: true })).toBeVisible();

@@ -144,7 +144,7 @@ export async function GET(req: Request, { params }: Params) {
     : moduleCode === "MOBILE_MONEY_AGENCY"
       ? { ...common, providers: dashboard.providers.filter((item) => item.providerType === "MOBILE_MONEY"), metricsByCurrency: { mobileMoney: dashboard.metricsByCurrency.mobileMoney }, recent: { mobileMoney: mobileMoneyHistory } }
       : moduleCode === "TELCO_TOPUPS"
-        ? { ...common, providers: dashboard.providers.filter((item) => item.providerType === "TELCO"), catalogItems: dashboard.catalogItems, metricsByCurrency: { telco: dashboard.metricsByCurrency.telco }, recent: { topups: topupRecent } }
+        ? { ...common, providers: dashboard.providers.filter((item) => item.providerType === "TELCO" || item.providerType === "BOTH"), telcoConfiguration: dashboard.telcoConfiguration, catalogItems: dashboard.catalogItems, metricsByCurrency: { telco: dashboard.metricsByCurrency.telco }, recent: { topups: topupRecent } }
         : { ...common, metricsByCurrency: {}, recent: { closes: dashboard.recent.closes } };
 
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-dashboard", moduleCode } });

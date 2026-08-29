@@ -63,6 +63,9 @@ check(hasAll(closeRoute, ['"TELCO_TOPUPS", "submit"', "cashCloseSchema", "submit
 const dashboard = read("lib/enterprise/retail/commercial-dashboard.ts");
 check(hasAll(dashboard, ["getTelcoProviderAccountConfiguration", "telcoConfiguration", "allTelcoProvidersReady", "readyForTelco: canonicalReadiness.ready && allTelcoProvidersReady", "cashSessions"]), "Telco dashboard must expose multi-currency configuration, concurrent tills and readiness");
 
+const dashboardRoute = read("app/api/enterprise/[organizationId]/retail/dashboard/route.ts");
+check(dashboardRoute.includes("telcoConfiguration: dashboard.telcoConfiguration"), "Scoped TELCO_TOPUPS dashboard response must preserve the Telco configuration it computes");
+
 const cashManager = read("components/enterprise/professional/mobile-money-cash-session-manager.tsx");
 check(hasAll(cashManager, [
   'moduleCode?: "MOBILE_MONEY_AGENCY" | "TELCO_TOPUPS"',
@@ -88,27 +91,30 @@ for (const [key, frLabel, enLabel] of [
 const sharedWorkspace = read("components/enterprise/professional/retail-workspace-shared.tsx");
 check(sharedWorkspace.includes('moduleCode === "RETAIL_POS" ? <CashSessionBar'), "Operator modules must not show the conflicting legacy single-till banner");
 
-const workspace = read("components/enterprise/professional/retail-operator-workspace.tsx");
+const page = read("app/enterprise-modules/retail-page.tsx");
+const workspace = read("components/enterprise/professional/telco-topups-workspace.tsx");
+check(page.includes("TelcoTopupsWorkspace") && !page.includes("RetailOperatorWorkspace"), "TELCO_TOPUPS must be routed through its dedicated professional workspace");
 check(hasAll(workspace, [
-  "TelcoDashboard",
-  "telcoConfiguration",
-  "RetailMultiCashSessionManager",
+  "TelcoConfiguration",
+  "MobileMoneyCashSessionManager",
   'moduleCode="TELCO_TOPUPS"',
   "selectedCashSessionId",
   "eligibleProviders",
   "nonCashAccountId",
   "operatorFloatAccountId: null",
-  "selectedOperatorAccount",
-  'translateRetailWorkspace(locale, "operatorTelecomOperatorAccountsByCurrency")',
+  "selectedOperatorMapping",
   "/retail/telco-topups/accounts",
+  'presentation="editor"',
   "md:grid-cols-2",
   "disabled={Boolean(busyAction)}",
-]), "Telco UX must expose concurrent tills, payment-derived currency, per-currency operator mappings, responsive layout, disabled busy states and a confirmation of the resolved accounts through canonical i18n");
+]), "Dedicated Telco UX must expose concurrent tills, payment-derived currency, per-currency operator mappings, responsive layout, disabled busy states and full-screen review");
+check(workspace.includes("useMemo<MobileMoneyCashSession[]>") && workspace.includes("dashboard.cashSessions ||"), "Telco cash sessions must keep a memoized current-user session list before dependent hooks");
+check(!workspace.includes("window.prompt"), "Dedicated Telco workflow must not use window.prompt");
+check(!workspace.includes("input.operatorFloatAccountId"), "Telco UI must not become an authority for operator account selection");
+check(workspace.includes("selectedProvider.executionMode") || workspace.includes("selectedProvider?.executionMode"), "Telco UI must distinguish safe MANUAL and CONNECTED execution modes");
+
 check(retailWorkspaceFr.includes('"operatorTelecomOperatorAccountsByCurrency": "Comptes opérateur Télécom par devise"'), "Retail FR catalog must preserve the Telco operator-account business title");
 check(retailWorkspaceEn.includes('"operatorTelecomOperatorAccountsByCurrency": "Telecom operator accounts by currency"'), "Retail EN catalog must preserve the Telco operator-account business title");
-check(workspace.includes("const sessions = useMemo(() => telcoDashboard.cashSessions || [], [telcoDashboard.cashSessions]);"), "Telco cash sessions must use a stable memoized fallback before feeding dependent hooks");
-check(!workspace.includes("const sessions = telcoDashboard.cashSessions || [];"), "Telco must not recreate an empty cash-session array on every render");
-check(!workspace.includes("input.operatorFloatAccountId"), "Telco UI must not become an authority for operator account selection");
 
 const http = read("lib/enterprise/retail/http.ts");
 check(http.includes("RETAIL_TELCO_CURRENCY_ACCOUNT_REQUIRED"), "Missing Telco currency-specific actionable error");
@@ -126,4 +132,4 @@ if (failures.length) {
   console.error("Issue #310 Telco multi-currency QA failed:\n" + failures.map((failure) => "- " + failure).join("\n"));
   process.exit(1);
 }
-console.log("Issue #310 Telco multi-currency QA passed: operator/currency mappings, CDF/USD readiness, server-side account resolution, concurrent tills, non-cash tender currencies, safe reversal, RBAC and canonical FR/EN UX are guarded.");
+console.log("Issue #310 Telco multi-currency QA passed: operator/currency mappings, CDF/USD readiness, server-side account resolution, concurrent tills, non-cash tender currencies, safe reversal, RBAC and dedicated FR/EN UX are guarded.");

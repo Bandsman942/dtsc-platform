@@ -78,7 +78,7 @@ export async function resolveTelcoFloatAccountTx(
 }
 
 export async function getTelcoProviderAccountConfiguration(organizationId: string) {
-  const [organization, providers, mappings, financialAccounts, financeConfiguration] = await Promise.all([
+  const [organization, providers, mappings, financialAccounts, financeConfiguration, integrations] = await Promise.all([
     prisma.organization.findFirst({ where: { id: organizationId, deletedAt: null }, select: { country: true } }),
     prisma.enterpriseRetailProvider.findMany({
       where: { organizationId, providerType: { in: ["TELCO", "BOTH"] }, isActive: true },
@@ -97,10 +97,15 @@ export async function getTelcoProviderAccountConfiguration(organizationId: strin
       where: { organizationId },
       select: { functionalCurrencyCode: true, presentationCurrencyCode: true },
     }),
+    prisma.enterpriseRetailProviderIntegration.findMany({
+      where: { organizationId, archivedAt: null },
+      select: { providerId: true, integrationMode: true },
+    }),
   ]);
   if (!organization) throw new EnterpriseRetailError("RETAIL_ORGANIZATION_NOT_FOUND", 404);
 
   const accountById = new Map(financialAccounts.map((account) => [account.id, account]));
+  const integrationModeByProviderId = new Map(integrations.map((integration) => [integration.providerId, integration.integrationMode]));
   const requiredCurrencies = requiredRetailOperatorCurrencies(organization.country);
   const availableCurrencies = Array.from(new Set([
     ...requiredCurrencies,
@@ -120,6 +125,7 @@ export async function getTelcoProviderAccountConfiguration(organizationId: strin
       providerCode: provider.providerCode,
       label: provider.label,
       providerType: provider.providerType,
+      executionMode: integrationModeByProviderId.get(provider.id) === "CONNECTED" ? "CONNECTED" as const : "MANUAL" as const,
       accounts: providerMappings,
       mappedCurrencyCount: mappedCurrencies.size,
       ready: isRetailOperatorCurrencyReady(organization.country, mappedCurrencies),

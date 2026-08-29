@@ -143,6 +143,7 @@ for (const marker of ["pageSize", "contains", "quantityOnHand", "quantityReserve
 const dashboardRoute = read("app/api/enterprise/[organizationId]/retail/dashboard/route.ts");
 check(dashboardRoute.includes("getCommercialRetailDashboard"), "Retail dashboard must use commercial multi-currency loader");
 check(dashboardRoute.includes("moduleCode,"), "Retail dashboard must receive requested module scope");
+check(dashboardRoute.includes("telcoConfiguration: dashboard.telcoConfiguration"), "TELCO_TOPUPS dashboard scope must preserve canonical Telco configuration");
 check(!dashboardRoute.includes("getRetailDashboard("), "Legacy Retail dashboard must not return");
 
 const saleExecution = read("lib/enterprise/retail/sale-execution.ts");
@@ -173,18 +174,28 @@ for (const marker of ["RETAIL_POS_SALE_POSTED", "RETAIL_POS_SALE_REVERSED", "RET
 const retailPage = read("app/enterprise-modules/retail-page.tsx");
 const posWorkspace = read("components/enterprise/professional/retail-pos-workspace.tsx");
 const operatorWorkspace = read("components/enterprise/professional/retail-operator-workspace.tsx");
+const mobileMoneyWorkspace = read("components/enterprise/professional/mobile-money-agency-workspace.tsx");
+const telcoWorkspace = read("components/enterprise/professional/telco-topups-workspace.tsx");
 const dailyCloseWorkspace = read("components/enterprise/professional/retail-daily-close-workspace.tsx");
 const sharedWorkspace = read("components/enterprise/professional/retail-workspace-shared.tsx");
 
 check(!exists("components/enterprise/professional/enterprise-retail-shop-workspace.tsx"), "Legacy monolithic Retail workspace must remain retired");
-for (const marker of ["RetailPosWorkspace", "RetailOperatorWorkspace", "RetailDailyCloseWorkspace"]) {
+for (const marker of ["RetailPosWorkspace", "MobileMoneyAgencyWorkspace", "TelcoTopupsWorkspace", "RetailDailyCloseWorkspace"]) {
   check(retailPage.includes(marker), `Retail page must route through ${marker}`);
 }
+check(!retailPage.includes("RetailOperatorWorkspace"), "Retail page must not route Mobile Money or Telco through the transitional generic operator workspace");
 for (const marker of ["setCart", "/retail/products/search", 'pageSize: "30"', "RetailErpLinks", "grid min-w-0"]) {
   check(posWorkspace.includes(marker), `Dedicated POS workspace missing ${marker}`);
 }
+for (const marker of ["RetailWorkspaceFrame", "MobileMoneyCashSessionManager", "executionMode", 'presentation="editor"', "floatAccountId: null", "RetailErpLinks"]) {
+  check(mobileMoneyWorkspace.includes(marker), `Dedicated Mobile Money workspace missing ${marker}`);
+}
+for (const marker of ["RetailWorkspaceFrame", "MobileMoneyCashSessionManager", "TelcoConfigurationPanel", "executionMode", 'presentation="editor"', "operatorFloatAccountId: null", "RetailErpLinks"]) {
+  check(telcoWorkspace.includes(marker), `Dedicated Telco workspace missing ${marker}`);
+}
+check(!telcoWorkspace.includes("window.prompt"), "Dedicated Telco workspace must not use window.prompt");
 for (const marker of ["ConfirmationCard", "customerFacingMobileMoneyTransactionType", "customerFacingFeeCollectionMode", "providerLabel", "RetailErpLinks", "floatAccountId: null", "operatorFloatAccountId: null"]) {
-  check(operatorWorkspace.includes(marker), `Dedicated operator workspace missing ${marker}`);
+  check(operatorWorkspace.includes(marker), `Transitional operator workspace missing preserved contract marker ${marker}`);
 }
 for (const marker of ["stableKey", "busyAction", "CashSessionBar", "ShopReadiness", "metricsByCurrency", "customerFacingError", "customerFacingFinancialAccountType", "[touch-action:pan-x]"]) {
   check(sharedWorkspace.includes(marker), `Shared Retail workspace contract missing ${marker}`);
@@ -211,4 +222,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log("Retail/Telco/Mobile Money QA passed: registry, security, accounting, canonical flows, dedicated workspaces, responsive UX, guides and operator separation are consistent.");
+console.log("Retail/Telco/Mobile Money QA passed: registry, security, accounting, canonical flows, dedicated POS/Mobile Money/Telco workspaces, responsive UX, guides and operator separation are consistent.");
