@@ -10,7 +10,7 @@ import { RetailOfflineContinuity } from "@/components/enterprise/professional/re
 import { RetailOmnichannelPanel } from "@/components/enterprise/professional/retail-omnichannel-panel";
 import { RetailOperatorWorkspace } from "@/components/enterprise/professional/retail-operator-workspace";
 import { RetailPaymentFollowup } from "@/components/enterprise/professional/retail-payment-followup";
-import { RetailPosDtscWorkspace } from "@/components/enterprise/professional/retail-pos-dtsc-workspace";
+import { RetailPosDtscWorkspace as RetailPosWorkspace } from "@/components/enterprise/professional/retail-pos-dtsc-workspace";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
@@ -52,7 +52,7 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
             definition={access.definition}
           />
         ) : moduleCode === "RETAIL_POS" ? (
-          <RetailPosDtscWorkspace
+          <RetailPosWorkspace
             organizationId={organizationId}
             organizationName={organization.name}
             definition={access.definition}
