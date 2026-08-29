@@ -7,8 +7,20 @@ import { resolveExchangeRate, snapshotExchangeRate } from "@/lib/enterprise/acco
 import { financeReference, idempotencyKey, money, publishFinanceEvent, sumDecimals } from "@/lib/enterprise/accounting/helpers";
 import { getPostingPeriod } from "@/lib/enterprise/accounting/periods";
 import { getPostingBuilderV2 } from "@/lib/enterprise/accounting/posting-registry-v2";
-import type { PostingLineDraft } from "@/lib/enterprise/accounting/posting-types";
+import type { PostingDocument, PostingLineDraft } from "@/lib/enterprise/accounting/posting-types";
 import { resolveSemanticPostingAccount } from "@/lib/enterprise/accounting/semantic-account-resolver";
+import { ensureSystemFiscalCalendarForDateTx } from "@/lib/enterprise/accounting/system-accounting-continuity";
+
+function postingSemanticRequirements(document: PostingDocument) {
+  const keys = new Set<string>();
+  for (const line of document.lines) {
+    if (!line.accountMappingKey.startsWith("ACCOUNT_ID:")) keys.add(line.accountMappingKey);
+  }
+  // Functional balance mappings are conditional by design. They are resolved
+  // only if currency conversion creates an actual functional residual, so a
+  // perfectly balanced FX transfer must not be blocked by unused gain/loss keys.
+  return [...keys];
+}
 
 async function prepareFunctionalLines(
   tx: Prisma.TransactionClient,
@@ -19,6 +31,7 @@ async function prepareFunctionalLines(
     accountingDate: Date;
     functionalCurrencyCode: string;
     lines: PostingLineDraft[];
+    functionalBalanceMappings?: PostingDocument["functionalBalanceMappings"];
   },
 ) {
   const cache = new Map<string, Prisma.Decimal>();
@@ -80,9 +93,50 @@ async function prepareFunctionalLines(
       functionalAmount: debit.gt(0) ? debit : credit,
     });
   }
-  const totalDebit = money(sumDecimals(prepared.map((line) => line.debit)));
-  const totalCredit = money(sumDecimals(prepared.map((line) => line.credit)));
-  if (!totalDebit.equals(totalCredit)) throw new EnterpriseAccountingError("POSTING_NOT_BALANCED", 409, { totalDebit: totalDebit.toFixed(), totalCredit: totalCredit.toFixed() });
+
+  let totalDebit = money(sumDecimals(prepared.map((line) => line.debit)));
+  let totalCredit = money(sumDecimals(prepared.map((line) => line.credit)));
+
+  if (!totalDebit.equals(totalCredit) && input.functionalBalanceMappings) {
+    const debitShortfall = totalDebit.lt(totalCredit);
+    const difference = money(
+      debitShortfall ? totalCredit.minus(totalDebit) : totalDebit.minus(totalCredit),
+    );
+    const mappingKey = debitShortfall
+      ? input.functionalBalanceMappings.debitShortfall
+      : input.functionalBalanceMappings.creditShortfall;
+    const account = await resolveSemanticPostingAccount(tx, {
+      organizationId: input.organizationId,
+      mappingKey,
+      accountingDate: input.accountingDate,
+    });
+    const zero = new Prisma.Decimal(0);
+    prepared.push({
+      ledgerAccountId: account.id,
+      businessPartyId: null,
+      projectId: null,
+      departmentId: null,
+      siteId: null,
+      assetId: null,
+      inventoryItemId: null,
+      description: `Functional FX difference ${input.sourceEntityId}`,
+      debit: debitShortfall ? difference : zero,
+      credit: debitShortfall ? zero : difference,
+      transactionCurrencyCode: input.functionalCurrencyCode,
+      transactionAmount: difference,
+      exchangeRate: new Prisma.Decimal(1),
+      functionalAmount: difference,
+    });
+    totalDebit = money(sumDecimals(prepared.map((line) => line.debit)));
+    totalCredit = money(sumDecimals(prepared.map((line) => line.credit)));
+  }
+
+  if (!totalDebit.equals(totalCredit)) {
+    throw new EnterpriseAccountingError("POSTING_NOT_BALANCED", 409, {
+      totalDebit: totalDebit.toFixed(),
+      totalCredit: totalCredit.toFixed(),
+    });
+  }
   return { lines: prepared, totalDebit, totalCredit };
 }
 
@@ -110,7 +164,6 @@ export async function postBusinessEvent(
         return { batch: existingBatch, entry: existingEntry, idempotent: true };
       }
       if (existingBatch?.status === "PROCESSING") throw new EnterpriseAccountingError("POSTING_ALREADY_PROCESSING", 409);
-      const configuration = await assertFinanceReady(tx, organizationId);
       const batch = existingBatch
         ? await tx.enterprisePostingBatch.update({ where: { id: existingBatch.id }, data: { status: "PROCESSING", errorCode: null, errorMessage: null } })
         : await tx.enterprisePostingBatch.create({
@@ -131,6 +184,17 @@ export async function postBusinessEvent(
       if (document.organizationId !== organizationId || document.sourceEntityId !== input.sourceEntityId) {
         throw new EnterpriseAccountingError("POSTING_SOURCE_SCOPE_MISMATCH", 409);
       }
+
+      // The system-managed hidden ledger receives a deterministic calendar-year
+      // calendar only while that DTSC system chart remains active. Existing
+      // customer-managed fiscal years are never reopened or replaced.
+      await ensureSystemFiscalCalendarForDateTx(tx, organizationId, actorUserId, document.accountingDate);
+
+      const configuration = await assertFinanceReady(tx, organizationId, {
+        asOf: document.accountingDate,
+        requiredMappingKeys: postingSemanticRequirements(document),
+        requiredJournalTypes: [document.journalType],
+      });
       const [period, journal] = await Promise.all([
         getPostingPeriod(tx, organizationId, document.accountingDate, { allowSoftClosed: true }),
         tx.enterpriseJournal.findFirst({ where: { organizationId, journalType: document.journalType, isActive: true }, orderBy: { createdAt: "asc" } }),
@@ -143,6 +207,7 @@ export async function postBusinessEvent(
         accountingDate: document.accountingDate,
         functionalCurrencyCode: configuration.functionalCurrencyCode,
         lines: document.lines,
+        functionalBalanceMappings: document.functionalBalanceMappings,
       });
       const entry = await tx.enterpriseJournalEntry.create({
         data: {

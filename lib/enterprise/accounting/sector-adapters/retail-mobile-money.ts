@@ -186,6 +186,11 @@ function buildFxLines(source: Awaited<ReturnType<typeof loadFxTransfer>>, revers
       ];
 }
 
+const FX_FUNCTIONAL_BALANCE_MAPPINGS = {
+  debitShortfall: "FX_LOSS",
+  creditShortfall: "FX_GAIN",
+} as const;
+
 export const buildRetailMobileMoneyFxPosting: PostingBuilder = async (tx, input) => {
   const source = await loadFxTransfer(tx, input, ["CONFIRMED", "REVERSED"]);
   return {
@@ -200,6 +205,7 @@ export const buildRetailMobileMoneyFxPosting: PostingBuilder = async (tx, input)
     sourceEntityId: source.transfer.id,
     currencyCode: source.transfer.sourceCurrencyCode,
     lines: buildFxLines(source, false),
+    functionalBalanceMappings: FX_FUNCTIONAL_BALANCE_MAPPINGS,
   };
 };
 
@@ -218,5 +224,6 @@ export const buildRetailMobileMoneyFxReversalPosting: PostingBuilder = async (tx
     sourceEntityId: source.transfer.id,
     currencyCode: source.transfer.sourceCurrencyCode,
     lines: buildFxLines(source, true),
+    functionalBalanceMappings: FX_FUNCTIONAL_BALANCE_MAPPINGS,
   };
 };
