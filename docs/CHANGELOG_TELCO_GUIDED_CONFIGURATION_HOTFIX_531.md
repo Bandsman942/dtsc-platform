@@ -1,6 +1,6 @@
 # Hotfix #531 — Télécom et forfaits : formulaire guidé et configuration
 
-Date : 2026-08-29  
+Date : 2026-08-29
 Baseline : `main@8e2dec7436d80f149a763dd3ee136e34d29146db`
 
 ## Contexte
