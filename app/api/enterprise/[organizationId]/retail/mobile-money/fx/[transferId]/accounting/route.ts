@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { retailAccountingPendingDiagnostic } from "@/lib/enterprise/retail/accounting-pending-diagnostic";
-import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
+import { authorizeRetailRequest } from "@/lib/enterprise/retail/http";
 import { finalizeMobileMoneyFxAccounting } from "@/lib/enterprise/retail/mobile-money-accounting";
 import { retailPendingOutcome, retailSuccessOutcome } from "@/lib/enterprise/retail/mutation-outcome";
 import { prisma } from "@/lib/prisma";
@@ -83,9 +83,6 @@ export async function POST(req: Request, { params }: Params) {
       }),
       writeApiLog({ request: req, statusCode: 202, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "mobile-money-fx", action: "finalize-accounting", outcome: "PENDING", accountingErrorCode: diagnostic.errorCode } }),
     ]);
-    if (diagnostic.errorCode === "POSTING_FAILED") {
-      return retailErrorResponse(error, "MOBILE_MONEY_FX_ACCOUNTING_RETRY_FAILED");
-    }
     return NextResponse.json(
       retailPendingOutcome(diagnostic.messageCode, {
         transferId: transfer.id,
