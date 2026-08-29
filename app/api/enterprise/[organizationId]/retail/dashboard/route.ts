@@ -125,7 +125,7 @@ export async function GET(req: Request, { params }: Params) {
         customerFeeAmount: "0",
         providerCommissionAmount: "0",
         externalReference: `${transfer.sourceCurrencyCode}→${transfer.targetCurrencyCode}`,
-        status: reversed ? "REVERSED" : "CONFIRMED",
+        status: reversed ? "REVERSED" : posted ? "SUCCESS" : "CONFIRMED",
         accountingStatus: posted ? "POSTED" : "PENDING",
         accountingBlockerCode: posted ? null : accountingErrorCode,
         occurredAt: transfer.occurredAt,
