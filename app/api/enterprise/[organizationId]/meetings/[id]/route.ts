@@ -5,6 +5,7 @@ import { enterpriseMeetingVisibilityWhere, getEnterpriseCoreV2Access } from "@/l
 import { normalizeEnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
 import { getEnterpriseOperationalTimeline, updateEnterpriseMeeting } from "@/lib/enterprise/core-v2/service";
 import { enterpriseMeetingUpdateSchema } from "@/lib/enterprise/core-v2/validators";
+import { preserveMeetingParticipantResponses } from "@/lib/enterprise/work-coordination/hotfix-guards";
 import { notifyUsers } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
@@ -46,6 +47,9 @@ export async function PATCH(req: Request, { params }: Params) {
   if (!access.canManage && existing.organizerUserId !== session.userId) return NextResponse.json({ error: "Forbidden", message: "Seul l’organisateur ou un responsable peut modifier la réunion." }, { status: 403 });
   try {
     const data = parsed.data;
+    const participants = data.participants
+      ? preserveMeetingParticipantResponses(existing.participants, data.participants)
+      : undefined;
     const meeting = await updateEnterpriseMeeting({
       organizationId,
       meetingId: id,
@@ -59,9 +63,8 @@ export async function PATCH(req: Request, { params }: Params) {
         locationMode: data.locationMode,
         physicalLocation: data.physicalLocation === undefined ? undefined : data.physicalLocation || null,
         meetingLink: data.meetingLink === undefined ? undefined : data.meetingLink || null,
-        minutes: data.minutes === undefined ? undefined : data.minutes || null,
         departmentId: data.departmentId === undefined ? undefined : data.departmentId || null,
-        participants: data.participants,
+        participants,
       },
     });
     const participantIds = meeting?.participants.map((participantItem) => participantItem.userId).filter((userId) => userId !== session.userId) || [];
