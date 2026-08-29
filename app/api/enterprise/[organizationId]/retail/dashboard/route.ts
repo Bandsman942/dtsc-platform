@@ -3,6 +3,7 @@ import { writeApiLog } from "@/lib/audit";
 import { getCommercialRetailDashboard } from "@/lib/enterprise/retail/commercial-dashboard";
 import { RETAIL_MODULE_CODES, type RetailModuleCode } from "@/lib/enterprise/retail/constants";
 import { authorizeRetailRequest } from "@/lib/enterprise/retail/http";
+import { getTelcoProviderAccountConfiguration } from "@/lib/enterprise/retail/telco-multicurrency-service";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -37,13 +38,16 @@ export async function GET(req: Request, { params }: Params) {
   const toValue = url.searchParams.get("to");
   const from = fromValue ? new Date(fromValue) : undefined;
   const to = toValue ? new Date(toValue) : undefined;
-  const dashboard = await getCommercialRetailDashboard(
-    organizationId,
-    auth.session.userId,
-    from && !Number.isNaN(from.getTime()) ? from : undefined,
-    to && !Number.isNaN(to.getTime()) ? to : undefined,
-    moduleCode,
-  );
+  const [dashboard, telcoConfiguration] = await Promise.all([
+    getCommercialRetailDashboard(
+      organizationId,
+      auth.session.userId,
+      from && !Number.isNaN(from.getTime()) ? from : undefined,
+      to && !Number.isNaN(to.getTime()) ? to : undefined,
+      moduleCode,
+    ),
+    moduleCode === "TELCO_TOPUPS" ? getTelcoProviderAccountConfiguration(organizationId) : Promise.resolve(null),
+  ]);
 
   const common = {
     configuration: dashboard.configuration,
@@ -144,7 +148,7 @@ export async function GET(req: Request, { params }: Params) {
     : moduleCode === "MOBILE_MONEY_AGENCY"
       ? { ...common, providers: dashboard.providers.filter((item) => item.providerType === "MOBILE_MONEY"), metricsByCurrency: { mobileMoney: dashboard.metricsByCurrency.mobileMoney }, recent: { mobileMoney: mobileMoneyHistory } }
       : moduleCode === "TELCO_TOPUPS"
-        ? { ...common, providers: dashboard.providers.filter((item) => item.providerType === "TELCO"), catalogItems: dashboard.catalogItems, metricsByCurrency: { telco: dashboard.metricsByCurrency.telco }, recent: { topups: topupRecent } }
+        ? { ...common, providers: dashboard.providers.filter((item) => item.providerType === "TELCO"), telcoConfiguration, catalogItems: dashboard.catalogItems, metricsByCurrency: { telco: dashboard.metricsByCurrency.telco }, recent: { topups: topupRecent } }
         : { ...common, metricsByCurrency: {}, recent: { closes: dashboard.recent.closes } };
 
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-dashboard", moduleCode } });
