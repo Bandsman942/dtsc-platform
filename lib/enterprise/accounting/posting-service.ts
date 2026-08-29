@@ -16,10 +16,9 @@ function postingSemanticRequirements(document: PostingDocument) {
   for (const line of document.lines) {
     if (!line.accountMappingKey.startsWith("ACCOUNT_ID:")) keys.add(line.accountMappingKey);
   }
-  if (document.functionalBalanceMappings) {
-    keys.add(document.functionalBalanceMappings.debitShortfall);
-    keys.add(document.functionalBalanceMappings.creditShortfall);
-  }
+  // Functional balance mappings are conditional by design. They are resolved
+  // only if currency conversion creates an actual functional residual, so a
+  // perfectly balanced FX transfer must not be blocked by unused gain/loss keys.
   return [...keys];
 }
 
