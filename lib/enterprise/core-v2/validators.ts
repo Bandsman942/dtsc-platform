@@ -60,6 +60,10 @@ export const enterpriseTaskActionSchema = z.object({
   action: z.enum(TASK_ACTIONS),
   revision: z.coerce.number().int().min(1),
   comment: optionalText(3000),
+}).superRefine((data, ctx) => {
+  if (["BLOCK", "CANCEL", "ARCHIVE"].includes(data.action) && !data.comment?.trim()) {
+    ctx.addIssue({ code: "custom", path: ["comment"], message: "Un motif est obligatoire pour cette action." });
+  }
 });
 
 export const enterpriseRequestCreateSchema = z.object({
@@ -91,6 +95,10 @@ export const enterpriseRequestActionSchema = z.object({
   action: z.enum(REQUEST_ACTIONS),
   revision: z.coerce.number().int().min(1),
   comment: optionalText(3000),
+}).superRefine((data, ctx) => {
+  if (["CANCEL", "ARCHIVE"].includes(data.action) && !data.comment?.trim()) {
+    ctx.addIssue({ code: "custom", path: ["comment"], message: "Un motif est obligatoire pour cette action." });
+  }
 });
 
 export const enterpriseApprovalCreateSchema = z.object({
@@ -153,6 +161,10 @@ export const enterpriseMeetingActionSchema = z.object({
   action: z.enum(MEETING_ACTIONS),
   revision: z.coerce.number().int().min(1),
   comment: optionalText(3000),
+}).superRefine((data, ctx) => {
+  if (["CANCEL", "ARCHIVE"].includes(data.action) && !data.comment?.trim()) {
+    ctx.addIssue({ code: "custom", path: ["comment"], message: "Un motif est obligatoire pour cette action." });
+  }
 });
 
 export const enterpriseMeetingDecisionCreateSchema = z.object({
