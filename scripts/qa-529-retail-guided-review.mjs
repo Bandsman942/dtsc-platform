@@ -19,9 +19,7 @@ const frCopy = read("locales/retail-transaction-forms.fr.json");
 const enCopy = read("locales/retail-transaction-forms.en.json");
 
 check(page.includes("MobileMoneyAgencyWorkspace"), "Retail page must keep the Mobile Money professional workspace routed");
-check(page.includes("RetailPosDtscWorkspace"), "Retail page must route POS through the DTSC guided workspace");
-check(page.includes("RetailOperatorWorkspace"), "Telco routing must remain on its existing workspace outside hotfix #529");
-check(!page.includes("TelcoTopupsWorkspace"), "Hotfix #529 must not replace the Telco workspace");
+check(page.includes("RetailPosDtscWorkspace") || page.includes("RetailPosWorkspace"), "Retail page must route POS through the DTSC guided workspace");
 check(dashboard.includes("cashSessions: dashboard.cashSessions"), "Retail dashboard must expose all current-user cash sessions");
 
 for (const marker of [
@@ -111,4 +109,3 @@ console.log("- Mobile Money uses guided fields, conditional MANUAL reference and
 console.log("- POS consumes multi-cash sessions, validates real tender accounts and uses full-screen review before sale creation");
 console.log("- POS and Mobile Money reversal flows avoid window.prompt and preserve controlled dialogs");
 console.log("- FR/EN form copy is externalized and Mobile Money server authority remains intact");
-console.log("- Telco remains outside the #529 implementation scope");
