@@ -24,9 +24,9 @@ export async function GET(req: Request, { params }: Params) {
   if (!context) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
   const coordination = await loadRequestCoordination(organizationId, id);
   const capabilities = {
-    canRequestInformation: context.canOperate && ["SUBMITTED", "IN_REVIEW", "ASSIGNED", "IN_PROGRESS"].includes(context.request.status),
+    canRequestInformation: context.canOperate && ["SUBMITTED", "IN_REVIEW", "IN_PROGRESS"].includes(context.request.status),
     canRespond: context.isRequester && context.request.status === "WAITING_REQUESTER",
-    canResolve: context.canOperate && ["IN_REVIEW", "ASSIGNED", "IN_PROGRESS", "WAITING_APPROVAL", "APPROVED"].includes(context.request.status),
+    canResolve: context.canOperate && ["IN_REVIEW", "IN_PROGRESS", "APPROVED"].includes(context.request.status),
     canClose: context.canOperate && ["RESOLVED", "FULFILLED"].includes(context.request.status),
     canReopen: context.isRequester && ["CLOSED", "RESOLVED", "FULFILLED"].includes(context.request.status),
   };
