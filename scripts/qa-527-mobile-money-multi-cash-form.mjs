@@ -52,13 +52,30 @@ requireSource(
 );
 requireSource(
   "workspace",
-  source.workspace.includes("selectedWallet") && source.workspace.includes("mapping.currencyCode === pending.currencyCode"),
-  "le wallet opérateur de même devise n'est pas résolu pour la confirmation",
+  source.workspace.includes("formWallet = formProvider?.accounts.find((mapping) => mapping.currencyCode === currency)")
+    && source.workspace.includes("value={formWallet?.financialAccountId || \"\"}")
+    && source.workspace.includes("walletAutomatic"),
+  "le wallet opérateur de même devise n'est pas sélectionné et affiché automatiquement dans le formulaire",
+);
+requireSource(
+  "workspace",
+  source.workspace.includes("pendingWallet = pending ? pendingProvider?.accounts.find((mapping) => mapping.currencyCode === pending.currencyCode)"),
+  "le wallet opérateur de même devise n'est pas conservé dans la prévisualisation de confirmation",
+);
+requireSource(
+  "workspace",
+  source.workspace.includes("noValidate") && source.workspace.includes("phone.length < 5") && source.workspace.includes("customerFeeAmount < 0") && source.workspace.includes("providerCommissionAmount < 0"),
+  "le formulaire d'opération dépend encore d'une validation navigateur silencieuse au lieu de sa validation métier explicite",
 );
 requireSource(
   "workspace",
   source.workspace.includes("setOperationError(copy.tillRequired)") && source.workspace.includes("formError(copy.tillRequired)"),
   "l'absence de caisse ne produit pas à la fois une erreur locale et un toast global",
+);
+requireSource(
+  "workspace",
+  source.workspace.includes("setOperationError(copy.missingWallet)") && source.workspace.includes("formError(copy.missingWallet)"),
+  "l'absence de wallet dans la devise de la caisse ne produit pas de feedback métier explicite",
 );
 requireSource(
   "workspace",
@@ -69,6 +86,12 @@ requireSource(
   "workspace",
   source.workspace.includes("setOperationError(copy.invalidOperation)") && source.workspace.includes("formError(copy.invalidOperation)"),
   "les données d'opération invalides ne produisent pas de feedback métier explicite",
+);
+requireSource(
+  "workspace",
+  source.workspace.includes('disabled={Boolean(busyAction) || configurationBusy}')
+    && !source.workspace.includes('disabled={Boolean(busyAction) || !activeCash || !eligibleProviders.length}'),
+  "le CTA Vérifier l'opération peut encore rester muet derrière des préconditions désactivantes",
 );
 requireSource(
   "workspace",
@@ -96,5 +119,5 @@ if (failures.length) {
 console.log("PASS qa-527-mobile-money-multi-cash-form");
 console.log("- toutes les caisses ouvertes sont exposées et sélectionnables");
 console.log("- les cartes de caisses utilisent un rail horizontal scrollable et synchronisé avec la combobox");
-console.log("- provider/devise/wallet restent cohérents et le wallet est re-résolu côté serveur");
-console.log("- les erreurs métier du formulaire disposent d'un feedback local + toast global");
+console.log("- provider/devise/wallet restent cohérents, visibles et re-résolus côté serveur");
+console.log("- Vérifier l'opération utilise une validation métier explicite avec erreur inline + toast global");
