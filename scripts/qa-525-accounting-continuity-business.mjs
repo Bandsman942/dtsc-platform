@@ -32,17 +32,32 @@ const templateApplication = read("lib/enterprise/accounting/chart-template-appli
 for (const marker of [
   "ensureDefaultSystemAccountingBaselineTx",
   "getDefaultChartTemplate",
-  'code: "DTSC-SYSTEM-OHADA"',
+  "SYSTEM_ACCOUNTING_CHART_CODE",
   'populateDraftChartTemplate(tx, organizationId, actorUserId, chart.id, template, "ACTIVE")',
-  "postedEntries > 0",
+  "postedEntries > 0 || charts.length > 0",
 ]) {
   check(templateApplication.includes(marker), `System accounting baseline contract missing ${marker}`);
 }
+
+const systemContinuity = read("lib/enterprise/accounting/system-accounting-continuity.ts");
+for (const marker of [
+  'SYSTEM_ACCOUNTING_CHART_CODE = "DTSC-SYSTEM-OHADA"',
+  "ensureSystemFiscalCalendarForDateTx",
+  "getUTCFullYear()",
+  "enterpriseFiscalYear.findFirst",
+  "enterpriseFiscalPeriod.createMany",
+  'status: "OPEN"',
+  "SYSTEM_FISCAL_CALENDAR_PROVISIONED",
+]) {
+  check(systemContinuity.includes(marker), `System fiscal continuity contract missing ${marker}`);
+}
+check(systemContinuity.includes("if (existing)"), "System fiscal continuity must preserve any existing fiscal year covering the posting date");
 
 const posting = read("lib/enterprise/accounting/posting-service.ts");
 for (const marker of [
   "postingSemanticRequirements",
   'line.accountMappingKey.startsWith("ACCOUNT_ID:")',
+  "ensureSystemFiscalCalendarForDateTx",
   "requiredMappingKeys: postingSemanticRequirements(document)",
   "requiredJournalTypes: [document.journalType]",
   "functionalBalanceMappings",
@@ -103,4 +118,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log("Hotfix #525 QA passed: BUSINESS operational modules keep continuous internal accounting, event posting requires only consumed mappings/journals, SYSCOHADA stays canonical, and FINANCE_ACCOUNTING remains ENTERPRISE-only.");
+console.log("Hotfix #525 QA passed: BUSINESS operational modules keep continuous internal accounting, system-managed fiscal continuity remains non-destructive, event posting requires only consumed mappings/journals, SYSCOHADA stays canonical, and FINANCE_ACCOUNTING remains ENTERPRISE-only.");
