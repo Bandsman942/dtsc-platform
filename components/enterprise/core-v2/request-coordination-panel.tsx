@@ -24,13 +24,14 @@ export function RequestCoordinationPanel({ organizationId, requestId, locale, on
   const [comment, setComment] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const endpoint = `/api/enterprise/${organizationId}/requests/${requestId}/coordination`;
 
   const load = useCallback(async () => {
     setLoading(true);
     const response = await fetch(endpoint, { cache: "no-store" });
     const body = (await response.json().catch(() => null)) as RequestCoordinationResponse & { message?: string } | null;
-    if (!response.ok || !body?.coordination) setMessage(body?.message || (enterpriseCoreT(locale, "requests.coordination.unable.to.load.request.history")));
+    if (!response.ok || !body?.coordination) setMessage(body?.message || enterpriseCoreT(locale, "requests.coordination.unable.to.load.request.history"));
     else setData(body);
     setLoading(false);
   }, [endpoint, locale]);
@@ -38,37 +39,40 @@ export function RequestCoordinationPanel({ organizationId, requestId, locale, on
   useEffect(() => { void load(); }, [load]);
 
   async function act(action: "REQUEST_INFORMATION" | "RESPOND" | "RESOLVE" | "CLOSE" | "REOPEN") {
-    if (!data) return;
-    if (action !== "CLOSE" && !comment.trim()) {
+    if (!data || submitting) return;
+    if (!comment.trim()) {
       setMessage(enterpriseCoreT(locale, "requests.coordination.a.comment.is.required"));
       return;
     }
-    const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, comment: comment.trim() || undefined }) });
+    setSubmitting(true);
+    const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, comment: comment.trim() }) });
     const body = (await response.json().catch(() => null)) as { message?: string } | null;
     if (!response.ok) {
-      setMessage(body?.message || (enterpriseCoreT(locale, "requests.coordination.request.action.failed")));
+      setMessage(body?.message || enterpriseCoreT(locale, "requests.coordination.request.action.failed"));
+      setSubmitting(false);
       return;
     }
     setComment("");
     setMessage(enterpriseCoreT(locale, "requests.request.updated"));
     await load();
     onChanged?.();
+    setSubmitting(false);
   }
 
   if (loading) return <p className="text-sm text-dtsc-muted">{enterpriseCoreT(locale, "requests.coordination.loading.request.lifecycle")}</p>;
   if (!data) return <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{message}</p>;
 
-  const needsComment = data.capabilities.canRequestInformation || data.capabilities.canRespond || data.capabilities.canResolve || data.capabilities.canReopen;
+  const hasAction = Object.values(data.capabilities).some(Boolean);
   return <div className="grid min-w-0 gap-5 border-t border-dtsc-border pt-4">
     {message ? <p className="rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm text-dtsc-muted" role="status">{message}</p> : null}
     <div className="flex flex-wrap gap-2"><StatusBadge>{coreStatusLabel(locale, data.request.status)}</StatusBadge><StatusBadge>{data.coordination.comments.length} {enterpriseCoreT(locale, "requests.coordination.message.s")}</StatusBadge></div>
-    {needsComment ? <Input value={comment} onChange={(event) => setComment(event.target.value)} maxLength={3000} placeholder={enterpriseCoreT(locale, "requests.coordination.professional.response.or.reason")} /> : null}
+    {hasAction ? <div className="grid gap-1"><Input value={comment} onChange={(event) => setComment(event.target.value)} maxLength={3000} aria-invalid={comment.length > 0 && !comment.trim()} placeholder={enterpriseCoreT(locale, "requests.coordination.professional.response.or.reason")} /><p className="text-xs leading-5 text-dtsc-muted">{locale === "en" ? "A contextual note is required for every lifecycle change and is preserved when an action fails." : "Une note de contexte est obligatoire pour chaque changement de cycle et reste conservée si l’action échoue."}</p></div> : null}
     <div className="flex min-w-0 flex-wrap gap-2">
-      {data.capabilities.canRequestInformation ? <Button type="button" variant="outline" onClick={() => void act("REQUEST_INFORMATION")}><MessageSquareMore className="h-4 w-4" />{enterpriseCoreT(locale, "requests.coordination.request.information")}</Button> : null}
-      {data.capabilities.canRespond ? <Button type="button" onClick={() => void act("RESPOND")} className="bg-dtsc-blue text-white"><MessageSquareMore className="h-4 w-4" />{enterpriseCoreT(locale, "requests.coordination.send.response")}</Button> : null}
-      {data.capabilities.canResolve ? <Button type="button" onClick={() => void act("RESOLVE")} className="bg-emerald-600 text-white"><CheckCircle2 className="h-4 w-4" />{enterpriseCoreT(locale, "request.action.RESOLVE")}</Button> : null}
-      {data.capabilities.canClose ? <Button type="button" variant="outline" onClick={() => void act("CLOSE")}><XCircle className="h-4 w-4" />{enterpriseCoreT(locale, "request.action.CLOSE")}</Button> : null}
-      {data.capabilities.canReopen ? <Button type="button" variant="outline" onClick={() => void act("REOPEN")}><RotateCcw className="h-4 w-4" />{enterpriseCoreT(locale, "request.action.REOPEN")}</Button> : null}
+      {data.capabilities.canRequestInformation ? <Button type="button" disabled={submitting} variant="outline" onClick={() => void act("REQUEST_INFORMATION")}><MessageSquareMore className="h-4 w-4" />{enterpriseCoreT(locale, "requests.coordination.request.information")}</Button> : null}
+      {data.capabilities.canRespond ? <Button type="button" disabled={submitting} onClick={() => void act("RESPOND")} className="bg-dtsc-blue text-white"><MessageSquareMore className="h-4 w-4" />{enterpriseCoreT(locale, "requests.coordination.send.response")}</Button> : null}
+      {data.capabilities.canResolve ? <Button type="button" disabled={submitting} onClick={() => void act("RESOLVE")} className="bg-emerald-600 text-white"><CheckCircle2 className="h-4 w-4" />{enterpriseCoreT(locale, "request.action.RESOLVE")}</Button> : null}
+      {data.capabilities.canClose ? <Button type="button" disabled={submitting} variant="outline" onClick={() => void act("CLOSE")}><XCircle className="h-4 w-4" />{enterpriseCoreT(locale, "request.action.CLOSE")}</Button> : null}
+      {data.capabilities.canReopen ? <Button type="button" disabled={submitting} variant="outline" onClick={() => void act("REOPEN")}><RotateCcw className="h-4 w-4" />{enterpriseCoreT(locale, "request.action.REOPEN")}</Button> : null}
     </div>
     <section className="grid gap-2"><h4 className="font-black text-dtsc-ink">{enterpriseCoreT(locale, "requests.coordination.conversation")}</h4>{data.coordination.comments.length ? data.coordination.comments.map((item) => <article key={item.id} className="rounded-xl border border-dtsc-border p-3 text-sm"><p className="whitespace-pre-wrap text-dtsc-ink">{item.content}</p><p className="mt-2 text-xs text-dtsc-muted">{coreFormatEnterpriseDate(item.createdAt, locale)}</p></article>) : <p className="text-sm text-dtsc-muted">{enterpriseCoreT(locale, "requests.coordination.no.exchange.yet")}</p>}</section>
     <section className="grid gap-2"><h4 className="font-black text-dtsc-ink">{enterpriseCoreT(locale, "requests.coordination.lifecycle.history")}</h4>{data.coordination.events.map((event) => <article key={event.id} className="rounded-xl border border-dtsc-border p-3 text-sm"><div className="flex flex-wrap items-center gap-2"><StatusBadge>{requestCoordinationEventLabel(locale, event.eventType)}</StatusBadge>{event.fromStatus || event.toStatus ? <span className="text-xs text-dtsc-muted">{event.fromStatus ? coreStatusLabel(locale, event.fromStatus) : "—"} → {event.toStatus ? coreStatusLabel(locale, event.toStatus) : "—"}</span> : null}</div><p className="mt-2 text-dtsc-muted">{event.summary}</p></article>)}</section>
