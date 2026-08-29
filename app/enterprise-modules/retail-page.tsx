@@ -9,7 +9,7 @@ import { RetailLocaleText } from "@/components/enterprise/professional/retail-lo
 import { RetailOfflineContinuity } from "@/components/enterprise/professional/retail-offline-continuity";
 import { RetailOmnichannelPanel } from "@/components/enterprise/professional/retail-omnichannel-panel";
 import { RetailPaymentFollowup } from "@/components/enterprise/professional/retail-payment-followup";
-import { RetailPosWorkspace } from "@/components/enterprise/professional/retail-pos-workspace";
+import { RetailPosDtscWorkspace } from "@/components/enterprise/professional/retail-pos-dtsc-workspace";
 import { TelcoTopupsWorkspace } from "@/components/enterprise/professional/telco-topups-workspace";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
@@ -52,7 +52,7 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
             definition={access.definition}
           />
         ) : moduleCode === "RETAIL_POS" ? (
-          <RetailPosWorkspace
+          <RetailPosDtscWorkspace
             organizationId={organizationId}
             organizationName={organization.name}
             definition={access.definition}
