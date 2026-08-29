@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { MobileMoneyAgencyDtscWorkspace } from "@/components/enterprise/professional/mobile-money-agency-dtsc-workspace";
+import { MobileMoneyAgencyWorkspace } from "@/components/enterprise/professional/mobile-money-agency-workspace";
 import { RetailActiveCustomerBar } from "@/components/enterprise/professional/retail-active-customer-bar";
 import { RetailDailyCloseWorkspace } from "@/components/enterprise/professional/retail-daily-close-workspace";
 import { RetailDeviceReadiness } from "@/components/enterprise/professional/retail-device-readiness";
@@ -58,7 +58,7 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
             definition={access.definition}
           />
         ) : moduleCode === "MOBILE_MONEY_AGENCY" ? (
-          <MobileMoneyAgencyDtscWorkspace
+          <MobileMoneyAgencyWorkspace
             organizationId={organizationId}
             organizationName={organization.name}
             definition={access.definition}
@@ -93,7 +93,7 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
             <RetailPaymentFollowup organizationId={organizationId} locale={locale} />
 
             <details className="group rounded-2xl border border-dtsc-border bg-dtsc-surface shadow-sm">
-              <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-black text-dtsc-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">
+              <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-black text-dtsc-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">
                 <span><RetailLocaleText textKey="shopSetupEquipment" /></span>
                 <span className="text-xs font-bold text-dtsc-muted group-open:hidden"><RetailLocaleText textKey="open" /></span>
                 <span className="hidden text-xs font-bold text-dtsc-muted group-open:inline"><RetailLocaleText textKey="close" /></span>
