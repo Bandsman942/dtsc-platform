@@ -66,6 +66,9 @@ for (const marker of [
 ]) {
   check(posting.includes(marker), `Posting continuity contract missing ${marker}`);
 }
+const requirementsBody = posting.match(/function postingSemanticRequirements\([\s\S]*?return \[\.\.\.keys\];\n}/)?.[0] || "";
+check(Boolean(requirementsBody), "Unable to inspect postingSemanticRequirements contract");
+check(!requirementsBody.includes("functionalBalanceMappings"), "Conditional FX_GAIN/FX_LOSS mappings must not be required before an actual functional residual exists");
 check(!posting.includes("canUseModule("), "Internal accounting posting must not depend on Accounting module visibility entitlement");
 
 const mobileMoneyAdapter = read("lib/enterprise/accounting/sector-adapters/retail-mobile-money.ts");
@@ -89,13 +92,16 @@ for (const marker of [
   'accountSubtype: "MOBILE_MONEY"',
   "enterpriseFinancialAccount.update",
   "postedUsage > 0",
+  "ensureMobileMoneyTransactionLedgerMapping",
+  "ensureMobileMoneyFxLedgerMappings",
 ]) {
   check(walletLedger.includes(marker), `Mobile Money subledger provisioning contract missing ${marker}`);
 }
 check(!walletLedger.includes('"552"'), "Retail wallet subledger provisioning must not hardcode the OHADA 552 account number");
 
 const mobileMoneyAccounting = read("lib/enterprise/retail/mobile-money-accounting.ts");
-check(mobileMoneyAccounting.includes("ensureMobileMoneyFxLedgerMappings"), "FX accounting must prepare wallet subledgers before posting");
+check(mobileMoneyAccounting.includes("ensureMobileMoneyTransactionLedgerMapping"), "Every Mobile Money posting must prepare the wallet subledger on first accounting use");
+check(mobileMoneyAccounting.includes("ensureMobileMoneyFxLedgerMappings"), "FX accounting must prepare both wallet subledgers before posting");
 
 const financeModules = json("lib/enterprise/module-registry-finance.json").modules;
 const retailModules = json("lib/enterprise/module-registry-retail.json").modules;
@@ -118,4 +124,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log("Hotfix #525 QA passed: BUSINESS operational modules keep continuous internal accounting, system-managed fiscal continuity remains non-destructive, event posting requires only consumed mappings/journals, SYSCOHADA stays canonical, and FINANCE_ACCOUNTING remains ENTERPRISE-only.");
+console.log("Hotfix #525 QA passed: BUSINESS operational modules keep continuous internal accounting, system-managed fiscal continuity remains non-destructive, first-use Mobile Money subledgers are prepared, conditional FX gain/loss mappings are resolved only for real residuals, SYSCOHADA stays canonical, and FINANCE_ACCOUNTING remains ENTERPRISE-only.");
