@@ -8,7 +8,7 @@ const check = (condition, message) => { if (!condition) failures.push(message); 
 
 const page = read("app/enterprise-modules/retail-page.tsx");
 const dashboard = read("app/api/enterprise/[organizationId]/retail/dashboard/route.ts");
-const mobileMoney = read("components/enterprise/professional/mobile-money-agency-dtsc-workspace.tsx");
+const mobileMoney = read("components/enterprise/professional/mobile-money-agency-workspace.tsx");
 const mobileMoneyAccounts = read("app/api/enterprise/[organizationId]/retail/mobile-money/accounts/route.ts");
 const cashManager = read("components/enterprise/professional/mobile-money-cash-session-manager.tsx");
 const pos = read("components/enterprise/professional/retail-pos-dtsc-workspace.tsx");
@@ -19,7 +19,7 @@ const retailService = read("lib/enterprise/retail/service.ts");
 const guardrails = read("lib/enterprise/retail/commercial-guardrails.ts");
 
 for (const marker of [
-  "MobileMoneyAgencyDtscWorkspace",
+  "MobileMoneyAgencyWorkspace",
   "RetailPosDtscWorkspace",
   "TelcoTopupsWorkspace",
 ]) {
@@ -30,6 +30,7 @@ for (const marker of [
   'cashSessions: dashboard.cashSessions',
   'moduleCode === "TELCO_TOPUPS" ? getTelcoProviderAccountConfiguration(organizationId)',
   'telcoConfiguration, catalogItems: dashboard.catalogItems',
+  'account.accountType !== "CARD_CLEARING"',
 ]) {
   check(dashboard.includes(marker), `Retail dashboard contract missing ${marker}`);
 }
@@ -64,21 +65,22 @@ check(posCash.includes("overflow-x-auto") && posCash.includes("snap-x") && posCa
 check(posCash.includes("notifyToast(copy.accountRequired, \"error\")") && posCash.includes("noValidate"), "POS till opening must use explicit inline/toast validation");
 
 for (const marker of [
-  "GuidedField",
+  "MobileMoneyGuidedField",
   "eligibleProviders",
-  "wallet",
+  "formWallet",
   "executionMode",
-  "manual",
+  "manualExecution",
   "referenceRequired",
-  "hasFee",
+  "fieldErrors",
+  "formCopy",
   'presentation="editor"',
   'h-[96dvh]',
-  "buildReview",
   'notifyToast(message, "error")',
 ]) {
   check(mobileMoney.includes(marker), `Mobile Money guided-form contract missing ${marker}`);
 }
 check(!mobileMoney.includes("window.prompt"), "Routed Mobile Money workspace must not use window.prompt");
+check(mobileMoney.includes("providerManualExecution ? externalReference : \"\""), "Connected Mobile Money providers must not accept an operator reference from the form");
 check(mobileMoneyAccounts.includes("integrationMode") && mobileMoneyAccounts.includes("executionMode"), "Mobile Money configuration must expose execution mode without exposing credentials");
 check(!mobileMoneyAccounts.includes("credentialReference") && !mobileMoneyAccounts.includes("webhookSecretReference"), "Mobile Money configuration must not expose provider secrets");
 
@@ -127,7 +129,7 @@ if (failures.length) {
 }
 
 console.log("PASS qa-529-retail-guided-review");
-console.log("- Mobile Money, POS and Telco are routed through dedicated DTSC guided workspaces");
+console.log("- Mobile Money, POS and Telco are routed through their canonical guided workspaces");
 console.log("- all three flows use explicit validation and full-screen review before financial mutation");
 console.log("- POS and Telco consume multi-cash sessions and currency-scoped enterprise references");
 console.log("- Mobile Money and Telco expose provider execution mode without exposing secrets");
