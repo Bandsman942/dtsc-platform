@@ -1,5 +1,7 @@
 # Hotfix #527 — Agence Mobile Money multi-caisses et formulaire DTSC
 
+Suivi livraison : Issue #527 · PR #528.
+
 ## Problème corrigé
 
 L’Agence Mobile Money pouvait disposer de plusieurs sessions de caisse réellement ouvertes pour le même utilisateur, par exemple une caisse CDF et une caisse USD, alors que le dashboard Retail ne renvoyait au client que la caisse singulière historique `cashSession`. L’interface retombait donc sur une seule session et empêchait de basculer proprement la devise de travail.
