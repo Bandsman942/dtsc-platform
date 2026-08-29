@@ -3,6 +3,7 @@ import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { mobileMoneyProviderAccountUpsertSchema } from "@/lib/enterprise/retail/mobile-money-multicurrency-schemas";
 import { getMobileMoneyProviderAccountConfiguration, upsertMobileMoneyProviderAccount } from "@/lib/enterprise/retail/mobile-money-multicurrency-service";
+import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -13,8 +14,20 @@ export async function GET(req: Request, { params }: Params) {
   if (!auth.ok) return auth.response;
   try {
     const configuration = await getMobileMoneyProviderAccountConfiguration(organizationId);
+    const integrations = await prisma.enterpriseRetailProviderIntegration.findMany({
+      where: { organizationId, archivedAt: null },
+      select: { providerId: true, integrationMode: true },
+    });
+    const integrationModeByProviderId = new Map(integrations.map((integration) => [integration.providerId, integration.integrationMode]));
+    const enrichedConfiguration = {
+      ...configuration,
+      providers: configuration.providers.map((provider) => ({
+        ...provider,
+        executionMode: integrationModeByProviderId.get(provider.id) === "CONNECTED" ? "CONNECTED" as const : "MANUAL" as const,
+      })),
+    };
     await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "mobile-money-provider-accounts" } });
-    return NextResponse.json(configuration);
+    return NextResponse.json(enrichedConfiguration);
   } catch (error) {
     return retailErrorResponse(error, "MOBILE_MONEY_PROVIDER_ACCOUNTS_LOAD_FAILED");
   }
