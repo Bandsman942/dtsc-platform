@@ -186,12 +186,36 @@ export async function postBusinessEvent(
       return { batch: completedBatch, entry, idempotent: false };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
   } catch (error) {
-    if (error instanceof EnterpriseAccountingError) throw error;
-    const message = error instanceof Error ? error.message.slice(0, 500) : "Unknown posting error";
-    await prisma.enterprisePostingBatch.updateMany({
-      where: { organizationId, idempotencyKey: stableKey, status: { in: ["PENDING", "PROCESSING"] } },
-      data: { status: "FAILED", errorCode: "POSTING_FAILED", errorMessage: message },
-    }).catch(() => undefined);
+    const accountingError = error instanceof EnterpriseAccountingError ? error : null;
+    const errorCode = accountingError?.code || "POSTING_FAILED";
+    const errorMessage = accountingError
+      ? JSON.stringify(accountingError.details || {}).slice(0, 500)
+      : error instanceof Error
+        ? error.message.slice(0, 500)
+        : "Unknown posting error";
+
+    const updated = await prisma.enterprisePostingBatch.updateMany({
+      where: { organizationId, idempotencyKey: stableKey, status: { not: "COMPLETED" } },
+      data: { status: "FAILED", errorCode, errorMessage, completedAt: null },
+    }).catch(() => ({ count: 0 }));
+
+    if (!updated.count) {
+      await prisma.enterprisePostingBatch.create({
+        data: {
+          organizationId,
+          reference: financeReference("POST"),
+          postingEvent: input.postingEvent,
+          sourceEntityType: input.sourceEntityType,
+          sourceEntityId: input.sourceEntityId,
+          postingVersion: version,
+          idempotencyKey: stableKey,
+          status: "FAILED",
+          errorCode,
+          errorMessage,
+          createdByUserId: actorUserId,
+        },
+      }).catch(() => undefined);
+    }
     throw error;
   }
 }
