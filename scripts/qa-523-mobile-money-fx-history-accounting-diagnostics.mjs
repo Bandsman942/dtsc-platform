@@ -3,6 +3,8 @@ import fs from "node:fs";
 const files = {
   dashboard: "app/api/enterprise/[organizationId]/retail/dashboard/route.ts",
   fx: "app/api/enterprise/[organizationId]/retail/mobile-money/fx/route.ts",
+  retry: "app/api/enterprise/[organizationId]/retail/mobile-money/fx/[transferId]/accounting/route.ts",
+  workspace: "components/enterprise/professional/mobile-money-agency-workspace.tsx",
   diagnostic: "lib/enterprise/retail/accounting-pending-diagnostic.ts",
   outcome: "lib/enterprise/retail/mutation-outcome.ts",
   language: "lib/retail-customer-language.ts",
@@ -31,6 +33,19 @@ requireSource("fx", source.fx.includes("retailAccountingPendingDiagnostic(accoun
 requireSource("fx", source.fx.includes("accountingErrorCode: diagnostic.errorCode"), "le diagnostic comptable n'est pas audité de façon sûre");
 requireSource("fx", source.fx.includes("blockerCode: diagnostic.errorCode") && source.fx.includes("actionHref: diagnostic.actionHref"), "la réponse PENDING n'expose pas un diagnostic actionnable");
 requireSource("fx", !source.fx.includes("void accountingError"), "le code d'erreur comptable est encore explicitement jeté");
+
+requireSource("retry", source.retry.includes("finalizeMobileMoneyFxAccounting(organizationId, auth.session.userId, transfer.id)"), "la reprise ne réutilise pas le posting idempotent du transfert existant");
+requireSource("retry", source.retry.includes("where: { id: transferId, organizationId }"), "la reprise comptable n'est pas strictement tenant-scoped");
+requireSource("retry", source.retry.includes("retailAccountingPendingDiagnostic(error)"), "la reprise comptable perd le blocker réel");
+requireSource("retry", source.retry.includes("retailPendingOutcome(diagnostic.messageCode"), "un échec de finalisation après transfert durable n'est pas conservé en PENDING");
+requireSource("retry", source.retry.includes("status: 202"), "la reprise encore bloquée ne renvoie pas HTTP 202");
+requireSource("retry", !source.retry.includes("createMobileMoneyFxTransfer"), "la reprise comptable ne doit jamais recréer/rejouer le transfert wallet");
+requireSource("retry", !source.retry.includes("operationalBalance"), "la reprise comptable ne doit jamais modifier directement les soldes wallet");
+
+requireSource("workspace", source.workspace.includes('startsWith("FX_CONVERSION_PENDING:")'), "l'historique ne détecte pas les conversions en attente de comptabilisation");
+requireSource("workspace", source.workspace.includes("/retail/mobile-money/fx/${item.id}/accounting"), "l'action de finalisation comptable n'appelle pas l'endpoint dédié");
+requireSource("workspace", source.workspace.includes('accountingRetry: "Finaliser la comptabilisation"') && source.workspace.includes('accountingRetry: "Finalize accounting"'), "l'action de reprise n'est pas bilingue");
+requireSource("workspace", source.workspace.includes("{ idempotent: false }"), "l'action de reprise doit appeler l'endpoint dédié sans générer une seconde clé de transfert côté client");
 
 for (const code of [
   "RETAIL_ACCOUNTING_PENDING_JOURNAL",
@@ -69,4 +84,5 @@ if (failures.length) {
 console.log("PASS qa-523-mobile-money-fx-history-accounting-diagnostics");
 console.log("- les conversions FX durables sont visibles dans l'historique Mobile Money");
 console.log("- le blocker comptable réel est conservé et traduit sans exposer la stack");
+console.log("- la reprise comptable est tenant-scoped, idempotente et ne rejoue jamais le transfert wallet");
 console.log("- le GET d'historique reste strictement en lecture seule");
