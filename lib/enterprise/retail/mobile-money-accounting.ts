@@ -1,7 +1,11 @@
-import { ensureMobileMoneyFxLedgerMappings } from "@/lib/enterprise/accounting/mobile-money-ledger-provisioning";
+import {
+  ensureMobileMoneyFxLedgerMappings,
+  ensureMobileMoneyTransactionLedgerMapping,
+} from "@/lib/enterprise/accounting/mobile-money-ledger-provisioning";
 import { postBusinessEvent } from "@/lib/enterprise/accounting/posting-service";
 
 export async function finalizeMobileMoneyAccounting(organizationId: string, actorUserId: string, transactionId: string) {
+  await ensureMobileMoneyTransactionLedgerMapping(organizationId, actorUserId, transactionId);
   return postBusinessEvent(organizationId, actorUserId, {
     postingEvent: "RETAIL_MOBILE_MONEY_POSTED",
     sourceEntityType: "EnterpriseMobileMoneyTransaction",
