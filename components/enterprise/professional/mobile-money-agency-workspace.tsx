@@ -118,6 +118,7 @@ const COPY = {
     tillRequired: translateRetailWorkspace("fr", "mobileMoneyTillRequired"),
     missingWallet: translateRetailWorkspace("fr", "mobileMoneyMissingWallet"),
     walletUsed: translateRetailWorkspace("fr", "mobileMoneyWalletUsed"),
+    walletAutomatic: "Le wallet de l’opérateur est choisi automatiquement dans la même devise que la caisse sélectionnée.",
     operationConfirmed: translateRetailWorkspace("fr", "mobileMoneyOperationConfirmed"),
     confirmTitle: translateRetailWorkspace("fr", "operatorConfirmMobileMoney"),
     reviewDescription: translateRetailWorkspace("fr", "operatorReviewTheInformationBeforeConfirmingTheOperation"),
@@ -165,7 +166,7 @@ const COPY = {
     accountingRetry: "Finaliser la comptabilisation",
     accountingFinalized: "Comptabilisation Mobile Money finalisée.",
     selectProvider: "Choisissez un opérateur Mobile Money configuré pour la devise de la caisse avant de continuer.",
-    invalidOperation: "Vérifiez la caisse, l’opérateur, le numéro client et le montant avant de prévisualiser l’opération.",
+    invalidOperation: "Vérifiez la caisse, l’opérateur, le numéro client, les montants et les frais avant de prévisualiser l’opération.",
     fxInvalid: "Choisissez deux devises différentes et saisissez un montant supérieur à zéro pour obtenir une prévisualisation.",
     mappingRequired: "Choisissez un compte financier existant avant d’enregistrer ce portefeuille opérateur.",
     reverseHelp: "Indiquez la raison métier de la contrepassation. La transaction originale restera dans l’historique d’audit.",
@@ -188,6 +189,7 @@ const COPY = {
     tillRequired: translateRetailWorkspace("en", "mobileMoneyTillRequired"),
     missingWallet: translateRetailWorkspace("en", "mobileMoneyMissingWallet"),
     walletUsed: translateRetailWorkspace("en", "mobileMoneyWalletUsed"),
+    walletAutomatic: "The provider wallet is selected automatically in the same currency as the selected till.",
     operationConfirmed: translateRetailWorkspace("en", "mobileMoneyOperationConfirmed"),
     confirmTitle: translateRetailWorkspace("en", "operatorConfirmMobileMoney"),
     reviewDescription: translateRetailWorkspace("en", "operatorReviewTheInformationBeforeConfirmingTheOperation"),
@@ -235,7 +237,7 @@ const COPY = {
     accountingRetry: "Finalize accounting",
     accountingFinalized: "Mobile Money accounting finalized.",
     selectProvider: "Select a Mobile Money provider configured for the till currency before continuing.",
-    invalidOperation: "Check the till, provider, customer phone and amount before reviewing the operation.",
+    invalidOperation: "Check the till, provider, customer phone, amounts and fees before reviewing the operation.",
     fxInvalid: "Choose two different currencies and enter an amount greater than zero to preview the transfer.",
     mappingRequired: "Select an existing financial account before saving this provider wallet.",
     reverseHelp: "State the business reason for the reversal. The original transaction will remain in the audit history.",
@@ -348,6 +350,7 @@ function MobileMoneyOperations({
   const copy = COPY[locale];
   const [pending, setPending] = useState<OperationDraft | null>(null);
   const [operationError, setOperationError] = useState("");
+  const [selectedProviderCode, setSelectedProviderCode] = useState("");
   const sessions = useMemo<MobileMoneyCashSession[]>(
     () => dashboard.cashSessions || (dashboard.cashSession ? [dashboard.cashSession as MobileMoneyCashSession] : []),
     [dashboard.cashSession, dashboard.cashSessions],
@@ -369,8 +372,16 @@ function MobileMoneyOperations({
   const currency = activeCash?.financialAccount.currencyCode || "";
   const providers = configuration?.providers || [];
   const eligibleProviders = providers.filter((provider) => provider.accounts.some((mapping) => mapping.currencyCode === currency));
-  const selectedProvider = pending ? providers.find((provider) => provider.providerCode === pending.providerCode) : null;
-  const selectedWallet = pending ? selectedProvider?.accounts.find((mapping) => mapping.currencyCode === pending.currencyCode) : null;
+  const formProvider = eligibleProviders.find((provider) => provider.providerCode === selectedProviderCode) || null;
+  const formWallet = formProvider?.accounts.find((mapping) => mapping.currencyCode === currency) || null;
+  const pendingProvider = pending ? providers.find((provider) => provider.providerCode === pending.providerCode) : null;
+  const pendingWallet = pending ? pendingProvider?.accounts.find((mapping) => mapping.currencyCode === pending.currencyCode) : null;
+
+  useEffect(() => {
+    if (selectedProviderCode && !eligibleProviders.some((provider) => provider.providerCode === selectedProviderCode)) {
+      setSelectedProviderCode("");
+    }
+  }, [eligibleProviders, selectedProviderCode]);
 
   useEffect(() => {
     if (pending && activeCash && pending.cashAccountId !== activeCash.financialAccount.id) setPending(null);
@@ -395,6 +406,7 @@ function MobileMoneyOperations({
         selectedSessionId={activeCash?.id || ""}
         onSelectSession={(sessionId) => {
           setSelectedCashSessionId(sessionId);
+          setSelectedProviderCode("");
           setPending(null);
           setOperationError("");
         }}
@@ -406,24 +418,41 @@ function MobileMoneyOperations({
 
       <ModuleSection title={copy.operationTitle} description={copy.operationDescription}>
         <form
+          noValidate
           onSubmit={(event) => {
             event.preventDefault();
             const form = new FormData(event.currentTarget);
-            const providerCode = String(form.get("providerCode") || "");
+            const providerCode = selectedProviderCode || String(form.get("providerCode") || "");
             const provider = eligibleProviders.find((item) => item.providerCode === providerCode);
+            const wallet = provider?.accounts.find((mapping) => mapping.currencyCode === currency);
             const phone = normalizePhonePreview(String(form.get("customerPhone") || ""));
             const principalAmount = Number(form.get("principalAmount") || 0);
+            const customerFeeAmount = Number(form.get("customerFeeAmount") || 0);
+            const providerCommissionAmount = Number(form.get("providerCommissionAmount") || 0);
             if (!activeCash) {
               setOperationError(copy.tillRequired);
               formError(copy.tillRequired);
               return;
             }
-            if (!provider) {
+            if (!eligibleProviders.length) {
+              setOperationError(copy.missingWallet);
+              formError(copy.missingWallet);
+              return;
+            }
+            if (!provider || !wallet) {
               setOperationError(copy.selectProvider);
               formError(copy.selectProvider);
               return;
             }
-            if (!phone || !Number.isFinite(principalAmount) || principalAmount <= 0) {
+            if (
+              phone.length < 5
+              || !Number.isFinite(principalAmount)
+              || principalAmount <= 0
+              || !Number.isFinite(customerFeeAmount)
+              || customerFeeAmount < 0
+              || !Number.isFinite(providerCommissionAmount)
+              || providerCommissionAmount < 0
+            ) {
               setOperationError(copy.invalidOperation);
               formError(copy.invalidOperation);
               return;
@@ -435,8 +464,8 @@ function MobileMoneyOperations({
               customerPhone: phone,
               currencyCode: activeCash.financialAccount.currencyCode,
               principalAmount,
-              customerFeeAmount: Number(form.get("customerFeeAmount") || 0),
-              providerCommissionAmount: Number(form.get("providerCommissionAmount") || 0),
+              customerFeeAmount,
+              providerCommissionAmount,
               feeCollectionMode: String(form.get("feeCollectionMode") || "NONE"),
               cashAccountId: activeCash.financialAccount.id,
               floatAccountId: null,
@@ -447,10 +476,26 @@ function MobileMoneyOperations({
         >
           <div className="grid min-w-0 gap-4 md:grid-cols-2">
             <Field label={copy.service}>
-              <MobileMoneySelect name="providerCode" required disabled={Boolean(busyAction) || configurationBusy || !activeCash} defaultValue="">
+              <MobileMoneySelect
+                name="providerCode"
+                value={selectedProviderCode}
+                onChange={(event) => {
+                  setSelectedProviderCode(event.target.value);
+                  setPending(null);
+                  if (operationError) setOperationError("");
+                }}
+                disabled={Boolean(busyAction) || configurationBusy || !activeCash}
+              >
                 <option value="">—</option>
                 {eligibleProviders.map((provider) => <option key={provider.id} value={provider.providerCode}>{provider.label}</option>)}
               </MobileMoneySelect>
+            </Field>
+            <Field label={copy.walletUsed}>
+              <MobileMoneySelect value={formWallet?.financialAccountId || ""} disabled aria-label={copy.walletUsed}>
+                <option value="">—</option>
+                {formWallet ? <option value={formWallet.financialAccountId}>{formWallet.financialAccount.name} · {currency}</option> : null}
+              </MobileMoneySelect>
+              <p className="mt-1 text-xs font-semibold text-dtsc-muted">{copy.walletAutomatic}</p>
             </Field>
             <Field label={copy.operation}>
               <MobileMoneySelect name="transactionType" defaultValue="DEPOSIT" disabled={Boolean(busyAction)}>
@@ -458,8 +503,8 @@ function MobileMoneyOperations({
                 <option value="WITHDRAWAL">{customerFacingMobileMoneyTransactionType("WITHDRAWAL", locale)}</option>
               </MobileMoneySelect>
             </Field>
-            <Field label={copy.phone}><Input name="customerPhone" required inputMode="tel" placeholder={translateRetailWorkspace(locale, "operatorCountryCode")} disabled={Boolean(busyAction)} /></Field>
-            <Field label={copy.amount}><Input name="principalAmount" type="number" min="0.01" step="0.01" required disabled={Boolean(busyAction)} /></Field>
+            <Field label={copy.phone}><Input name="customerPhone" inputMode="tel" placeholder={translateRetailWorkspace(locale, "operatorCountryCode")} disabled={Boolean(busyAction)} /></Field>
+            <Field label={copy.amount}><Input name="principalAmount" type="number" min="0.01" step="0.01" disabled={Boolean(busyAction)} /></Field>
             <Field label={copy.fee}><Input name="customerFeeAmount" type="number" min="0" step="0.01" defaultValue="0" disabled={Boolean(busyAction)} /></Field>
             <Field label={copy.commission}><Input name="providerCommissionAmount" type="number" min="0" step="0.01" defaultValue="0" disabled={Boolean(busyAction)} /></Field>
             <Field label={copy.feeCollection}>
@@ -469,7 +514,7 @@ function MobileMoneyOperations({
                 <option value="PROVIDER">{customerFacingFeeCollectionMode("PROVIDER", locale)}</option>
               </MobileMoneySelect>
             </Field>
-            <Field label={copy.reference}><Input name="externalReference" required maxLength={160} disabled={Boolean(busyAction)} /></Field>
+            <Field label={copy.reference}><Input name="externalReference" maxLength={160} disabled={Boolean(busyAction)} /></Field>
           </div>
           <div className="rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm font-semibold text-dtsc-muted">
             {activeCash ? `${copy.transactionTill}: ${activeCash.financialAccount.name} · ${currency}` : copy.tillRequired}
@@ -481,7 +526,7 @@ function MobileMoneyOperations({
           ) : null}
           {operationError ? <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm font-bold text-rose-700 dark:text-rose-200">{operationError}</div> : null}
           {configurationError ? <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm font-bold text-rose-700 dark:text-rose-200">{configurationError}</div> : null}
-          <Button className="w-fit" disabled={Boolean(busyAction) || !activeCash || !eligibleProviders.length}>
+          <Button className="w-fit" disabled={Boolean(busyAction) || configurationBusy}>
             <Smartphone className="h-4 w-4" />{copy.review}
           </Button>
         </form>
@@ -491,12 +536,12 @@ function MobileMoneyOperations({
         <ModuleSection title={copy.confirmTitle} description={copy.reviewDescription}>
           <div className="rounded-2xl border-2 border-amber-400/50 bg-amber-500/10 p-4">
             <div className="grid gap-1 text-sm font-bold text-dtsc-ink">
-              <p>{selectedProvider?.label || copy.service}</p>
+              <p>{pendingProvider?.label || copy.service}</p>
               <p>{customerFacingMobileMoneyTransactionType(pending.transactionType, locale)} · {moneyValue(pending.principalAmount, pending.currencyCode, locale)}</p>
               <p>{pending.customerPhone}</p>
               <p>{customerFacingFeeCollectionMode(pending.feeCollectionMode, locale)}</p>
               <p>{copy.transactionTill}: {activeCash?.financialAccount.name || "—"} · {pending.currencyCode}</p>
-              <p>{copy.walletUsed}: {selectedWallet?.financialAccount.name || "—"} · {pending.currencyCode}</p>
+              <p>{copy.walletUsed}: {pendingWallet?.financialAccount.name || "—"} · {pending.currencyCode}</p>
               <p>{copy.operatorReference}: {pending.externalReference || "—"}</p>
             </div>
             <div data-responsive-actions className="mt-4">
@@ -904,8 +949,7 @@ function MobileMoneyHistory({
                         setReverseError("");
                       }}
                     >
-                      <RotateCcw className="h-4 w-4" />{copy.reverse}
-                    </Button>
+                      <RotateCcw className="h-4 w-4" />{copy.reverse}</Button>
                   ) : undefined}
                 />
               );
