@@ -9,6 +9,7 @@ import { getPostingPeriod } from "@/lib/enterprise/accounting/periods";
 import { getPostingBuilderV2 } from "@/lib/enterprise/accounting/posting-registry-v2";
 import type { PostingDocument, PostingLineDraft } from "@/lib/enterprise/accounting/posting-types";
 import { resolveSemanticPostingAccount } from "@/lib/enterprise/accounting/semantic-account-resolver";
+import { ensureSystemFiscalCalendarForDateTx } from "@/lib/enterprise/accounting/system-accounting-continuity";
 
 function postingSemanticRequirements(document: PostingDocument) {
   const keys = new Set<string>();
@@ -184,6 +185,11 @@ export async function postBusinessEvent(
       if (document.organizationId !== organizationId || document.sourceEntityId !== input.sourceEntityId) {
         throw new EnterpriseAccountingError("POSTING_SOURCE_SCOPE_MISMATCH", 409);
       }
+
+      // The system-managed hidden ledger receives a deterministic calendar-year
+      // calendar only while that DTSC system chart remains active. Existing
+      // customer-managed fiscal years are never reopened or replaced.
+      await ensureSystemFiscalCalendarForDateTx(tx, organizationId, actorUserId, document.accountingDate);
 
       const configuration = await assertFinanceReady(tx, organizationId, {
         asOf: document.accountingDate,
