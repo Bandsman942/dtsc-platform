@@ -10,7 +10,7 @@ import { RetailOfflineContinuity } from "@/components/enterprise/professional/re
 import { RetailOmnichannelPanel } from "@/components/enterprise/professional/retail-omnichannel-panel";
 import { RetailOperatorWorkspace } from "@/components/enterprise/professional/retail-operator-workspace";
 import { RetailPaymentFollowup } from "@/components/enterprise/professional/retail-payment-followup";
-import { RetailPosWorkspace } from "@/components/enterprise/professional/retail-pos-workspace";
+import { RetailPosDtscWorkspace as RetailPosWorkspace } from "@/components/enterprise/professional/retail-pos-dtsc-workspace";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
@@ -94,7 +94,7 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
             <RetailPaymentFollowup organizationId={organizationId} locale={locale} />
 
             <details className="group rounded-2xl border border-dtsc-border bg-dtsc-surface shadow-sm">
-              <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-black text-dtsc-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">
+              <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-black text-dtsc-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">
                 <span><RetailLocaleText textKey="shopSetupEquipment" /></span>
                 <span className="text-xs font-bold text-dtsc-muted group-open:hidden"><RetailLocaleText textKey="open" /></span>
                 <span className="hidden text-xs font-bold text-dtsc-muted group-open:inline"><RetailLocaleText textKey="close" /></span>

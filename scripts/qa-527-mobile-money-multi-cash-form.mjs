@@ -77,14 +77,25 @@ requireSource(
   source.workspace.includes("setOperationError(copy.missingWallet)") && source.workspace.includes("formError(copy.missingWallet)"),
   "l'absence de wallet dans la devise de la caisse ne produit pas de feedback métier explicite",
 );
+
+const preciseFieldFeedback = source.workspace.includes("OperationFieldErrors")
+  && source.workspace.includes("nextErrors.provider = formCopy.providerRequired")
+  && source.workspace.includes("nextErrors.phone = formCopy.phoneRequired")
+  && source.workspace.includes("nextErrors.amount = formCopy.amountInvalid")
+  && source.workspace.includes("nextErrors.fee = formCopy.feeInvalid")
+  && source.workspace.includes("nextErrors.commission = formCopy.commissionInvalid")
+  && source.workspace.includes("formError(preciseError)");
+
 requireSource(
   "workspace",
-  source.workspace.includes("setOperationError(copy.selectProvider)") && source.workspace.includes("formError(copy.selectProvider)"),
+  (source.workspace.includes("setOperationError(copy.selectProvider)") && source.workspace.includes("formError(copy.selectProvider)"))
+    || preciseFieldFeedback,
   "l'absence d'opérateur compatible ne produit pas de feedback métier explicite",
 );
 requireSource(
   "workspace",
-  source.workspace.includes("setOperationError(copy.invalidOperation)") && source.workspace.includes("formError(copy.invalidOperation)"),
+  (source.workspace.includes("setOperationError(copy.invalidOperation)") && source.workspace.includes("formError(copy.invalidOperation)"))
+    || preciseFieldFeedback,
   "les données d'opération invalides ne produisent pas de feedback métier explicite",
 );
 requireSource(

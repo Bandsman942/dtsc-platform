@@ -1,0 +1,845 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { CheckCircle2, Printer, RotateCcw, Search, Share2, ShoppingCart, XCircle } from "lucide-react";
+import { useAppLocale } from "@/components/i18n/locale-provider";
+import { formatEnterpriseDate } from "@/components/enterprise/core-v2/erp-v2-ui";
+import type { MobileMoneyCashSession } from "@/components/enterprise/professional/mobile-money-cash-session-manager";
+import { ProfessionalLoading } from "@/components/enterprise/professional/professional-erp-ui";
+import { RetailPosCashSessionManager } from "@/components/enterprise/professional/retail-pos-cash-session-manager";
+import {
+  RetailErpLinks,
+  RetailReportsPanel,
+  RetailWorkspaceFrame,
+  Select,
+  moneyValue,
+  statusTone,
+  type CatalogItem,
+  type FinancialAccount,
+  type RetailDashboard,
+  type RetailMutation,
+  type Sale,
+  type Warehouse,
+} from "@/components/enterprise/professional/retail-workspace-shared";
+import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
+import { EmptyState } from "@/components/workspace/empty-state";
+import { ModuleSection } from "@/components/workspace/module-workspace";
+import { StatusBadge } from "@/components/workspace/status-badge";
+import retailTransactionFormsEn from "@/locales/retail-transaction-forms.en.json";
+import retailTransactionFormsFr from "@/locales/retail-transaction-forms.fr.json";
+import { notifyToast } from "@/lib/client-toast";
+import { customerFacingError, customerFacingFinancialAccountType, customerFacingStatusLabel } from "@/lib/customer-facing-language";
+import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
+import { translateRetailWorkspace, type RetailWorkspaceKey } from "@/lib/i18n";
+
+type PosDashboard = RetailDashboard & { cashSessions?: MobileMoneyCashSession[] };
+
+type CartLine = {
+  catalogItemId: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  referenceUnitPrice: number | null;
+  discountAmount: number;
+  taxAmount: number;
+  currencyCode: string;
+  inventoryItemId: string | null;
+};
+
+type TenderDraft = {
+  methodType: string;
+  financialAccountId: string;
+  amount: number;
+  reference: null;
+};
+
+type SaleDraft = {
+  warehouseId: string;
+  siteId: string | null;
+  storageLocationId: null;
+  currencyCode: string;
+  lines: Array<{
+    catalogItemId: string;
+    inventoryItemId: string | null;
+    quantity: number;
+    unitPrice: number;
+    discountAmount: number;
+    taxAmount: number;
+  }>;
+  tenders: TenderDraft[];
+  overrideReason: string | null;
+};
+
+type ErrorKey = "warehouse" | "cart" | "override" | "payment1" | "payment2" | "amounts";
+type FormErrors = Partial<Record<ErrorKey, string>>;
+
+function retailText(locale: "fr" | "en", key: RetailWorkspaceKey) {
+  return translateRetailWorkspace(locale, key);
+}
+
+function GuidedField({
+  id,
+  label,
+  help,
+  required,
+  requiredLabel,
+  error,
+  children,
+}: {
+  id?: string;
+  label: string;
+  help: string;
+  required?: boolean;
+  requiredLabel?: string;
+  error?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="min-w-0">
+      <div className="mb-1.5 flex flex-wrap items-center gap-2">
+        <label htmlFor={id} className="text-sm font-black text-dtsc-ink">{label}</label>
+        {required ? (
+          <span className="rounded-full border border-dtsc-border px-2 py-0.5 text-[11px] font-black uppercase tracking-wide text-dtsc-muted">
+            {requiredLabel || "*"}
+          </span>
+        ) : null}
+      </div>
+      {children}
+      <p className="mt-1 text-xs font-semibold leading-5 text-dtsc-muted">{help}</p>
+      {error ? <p role="alert" className="mt-1 text-xs font-bold leading-5 text-rose-700 dark:text-rose-200">{error}</p> : null}
+    </div>
+  );
+}
+
+function firstError(errors: FormErrors) {
+  return Object.values(errors).find(Boolean) || "";
+}
+
+export function RetailPosDtscWorkspace({
+  organizationId,
+  organizationName,
+  definition,
+}: {
+  organizationId: string;
+  organizationName: string;
+  definition: EnterpriseModuleDefinition;
+}) {
+  const locale: "fr" | "en" = useAppLocale() === "en" ? "en" : "fr";
+  return (
+    <RetailWorkspaceFrame organizationId={organizationId} organizationName={organizationName} definition={definition} moduleCode="RETAIL_POS" locale={locale}>
+      {(context) => {
+        const dashboard = context.dashboard as PosDashboard;
+        if (context.tab === "HISTORY") {
+          return <PosHistory organizationId={organizationId} dashboard={dashboard} locale={locale} busyAction={context.busyAction} mutate={context.mutate} />;
+        }
+        if (context.tab === "REPORTS") return <RetailReportsPanel dashboard={dashboard} moduleCode="RETAIL_POS" locale={locale} />;
+        return (
+          <PosOperate
+            organizationId={organizationId}
+            dashboard={dashboard}
+            locale={locale}
+            busyAction={context.busyAction}
+            mutate={context.mutate}
+            reload={async () => context.setRefreshKey((value) => value + 1)}
+          />
+        );
+      }}
+    </RetailWorkspaceFrame>
+  );
+}
+
+function PosOperate({
+  organizationId,
+  dashboard,
+  locale,
+  busyAction,
+  mutate,
+  reload,
+}: {
+  organizationId: string;
+  dashboard: PosDashboard;
+  locale: "fr" | "en";
+  busyAction: string | null;
+  mutate: RetailMutation;
+  reload: () => Promise<void>;
+}) {
+  const copy = (locale === "en" ? retailTransactionFormsEn : retailTransactionFormsFr).pos;
+  const warehouses = dashboard.warehouses || [];
+  const sessions = useMemo(
+    () => dashboard.cashSessions || (dashboard.cashSession ? [dashboard.cashSession as MobileMoneyCashSession] : []),
+    [dashboard.cashSession, dashboard.cashSessions],
+  );
+  const openSessions = useMemo(() => sessions.filter((session) => session.status === "OPEN"), [sessions]);
+  const [selectedCashSessionId, setSelectedCashSessionId] = useState("");
+  const [search, setSearch] = useState("");
+  const [warehouseId, setWarehouseId] = useState(warehouses[0]?.id || "");
+  const [products, setProducts] = useState<CatalogItem[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState("");
+  const [cart, setCart] = useState<CartLine[]>([]);
+  const [overrideReason, setOverrideReason] = useState("");
+  const [method1, setMethod1] = useState("CASH");
+  const [account1, setAccount1] = useState("");
+  const [amount1, setAmount1] = useState(0);
+  const [split, setSplit] = useState(false);
+  const [method2, setMethod2] = useState("MOBILE_MONEY");
+  const [account2, setAccount2] = useState("");
+  const [amount2, setAmount2] = useState(0);
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [pending, setPending] = useState<SaleDraft | null>(null);
+  const [lastReceipt, setLastReceipt] = useState<Sale | null>(null);
+  const currency = cart[0]?.currencyCode || dashboard.configuration?.baseCurrencyCode || "CDF";
+  const total = useMemo(
+    () => cart.reduce((sum, line) => sum + line.quantity * line.unitPrice - line.discountAmount + line.taxAmount, 0),
+    [cart],
+  );
+  const overrideNeeded = useMemo(
+    () => cart.some((line) => line.referenceUnitPrice === null || Math.abs(line.unitPrice - line.referenceUnitPrice) > 0.000001 || line.discountAmount > 0 || line.taxAmount > 0),
+    [cart],
+  );
+
+  useEffect(() => {
+    if (!openSessions.length) {
+      if (selectedCashSessionId) setSelectedCashSessionId("");
+      return;
+    }
+    const current = openSessions.find((session) => session.id === selectedCashSessionId) || null;
+    const compatible = openSessions.filter((session) => session.financialAccount.currencyCode === currency);
+    if (cart.length && compatible.length && current?.financialAccount.currencyCode !== currency) {
+      setSelectedCashSessionId(compatible[0].id);
+      return;
+    }
+    if (!current) setSelectedCashSessionId((compatible[0] || openSessions[0]).id);
+  }, [cart.length, currency, openSessions, selectedCashSessionId]);
+
+  const activeCash = openSessions.find((session) => session.id === selectedCashSessionId) || null;
+
+  useEffect(() => {
+    if (!split) {
+      setAmount1(Number(total.toFixed(2)));
+      setAmount2(0);
+    }
+  }, [split, total]);
+
+  useEffect(() => {
+    if (!warehouseId) {
+      setProducts([]);
+      setSearchError("");
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setSearchLoading(true);
+      setSearchError("");
+      try {
+        const params = new URLSearchParams({ q: search.trim(), warehouseId, page: "1", pageSize: "30" });
+        const response = await fetch(`/api/enterprise/${organizationId}/retail/products/search?${params.toString()}`, { cache: "no-store", signal: controller.signal });
+        const body = await response.json().catch(() => null) as { items?: CatalogItem[]; message?: string; error?: string } | null;
+        if (!response.ok || !body) throw new Error(body?.message || body?.error || "RETAIL_PRODUCT_SEARCH_FAILED");
+        setProducts(body.items || []);
+      } catch (caught) {
+        if (controller.signal.aborted) return;
+        setProducts([]);
+        setSearchError(customerFacingError(caught, locale, {
+          fr: translateRetailWorkspace("fr", "productSearchUnavailable"),
+          en: translateRetailWorkspace("en", "productSearchUnavailable"),
+        }));
+      } finally {
+        if (!controller.signal.aborted) setSearchLoading(false);
+      }
+    }, 250);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [locale, organizationId, search, warehouseId]);
+
+  function available(item: CatalogItem) {
+    if (!item.trackInventory || item.availableQuantity === null || item.availableQuantity === undefined) return null;
+    const value = Number(item.availableQuantity);
+    return Number.isFinite(value) ? value : null;
+  }
+
+  function addItem(item: CatalogItem) {
+    const itemCurrency = item.currency || dashboard.configuration?.baseCurrencyCode || "CDF";
+    if (cart.length && itemCurrency !== currency) {
+      notifyToast(copy.mixedCurrency, "error");
+      return;
+    }
+    const stock = available(item);
+    if (item.trackInventory && !item.allowNegativeStock && (stock === null || stock <= 0)) {
+      notifyToast(copy.itemUnavailable, "error");
+      return;
+    }
+    const existing = cart.find((line) => line.catalogItemId === item.id);
+    if (existing && item.trackInventory && !item.allowNegativeStock && stock !== null && existing.quantity >= stock) {
+      notifyToast(copy.itemUnavailable, "error");
+      return;
+    }
+    const rawPrice = item.indicativeSalePrice;
+    const parsedPrice = rawPrice === null || rawPrice === undefined ? null : Number(rawPrice);
+    const referenceUnitPrice = parsedPrice !== null && Number.isFinite(parsedPrice) ? parsedPrice : null;
+    const unitPrice = referenceUnitPrice ?? 0;
+    setCart((current) => {
+      const currentLine = current.find((line) => line.catalogItemId === item.id);
+      if (currentLine) {
+        return current.map((line) => line.catalogItemId === item.id ? { ...line, quantity: line.quantity + 1 } : line);
+      }
+      return [...current, {
+        catalogItemId: item.id,
+        name: item.name,
+        quantity: 1,
+        unitPrice,
+        referenceUnitPrice,
+        discountAmount: 0,
+        taxAmount: 0,
+        currencyCode: itemCurrency,
+        inventoryItemId: item.inventoryItemId || null,
+      }];
+    });
+    setPending(null);
+    setErrors({});
+  }
+
+  function updateLine(id: string, patch: Partial<CartLine>) {
+    setCart((current) => current.map((line) => line.catalogItemId === id ? { ...line, ...patch } : line));
+    setPending(null);
+    setErrors((current) => ({ ...current, cart: undefined, override: undefined, amounts: undefined }));
+  }
+
+  const openCashAccounts = useMemo(
+    () => openSessions
+      .filter((session) => session.financialAccount.currencyCode === currency)
+      .map((session) => dashboard.accounts.find((account) => account.id === session.financialAccount.id))
+      .filter((account): account is FinancialAccount => Boolean(account)),
+    [currency, dashboard.accounts, openSessions],
+  );
+
+  const accountsFor = useCallback((method: string) => {
+    if (method === "CASH") return openCashAccounts;
+    if (method === "MOBILE_MONEY") {
+      return dashboard.accounts.filter((account) => account.accountType === "MOBILE_MONEY" && account.currencyCode === currency);
+    }
+    if (method === "CARD") {
+      return dashboard.accounts.filter((account) => ["BANK", "CLEARING", "CARD_CLEARING"].includes(account.accountType) && account.currencyCode === currency);
+    }
+    return dashboard.accounts.filter((account) => ["BANK", "CLEARING"].includes(account.accountType) && account.currencyCode === currency);
+  }, [currency, dashboard.accounts, openCashAccounts]);
+
+  const paymentAccounts1 = useMemo(() => accountsFor(method1), [accountsFor, method1]);
+  const paymentAccounts2 = useMemo(() => accountsFor(method2), [accountsFor, method2]);
+
+  useEffect(() => {
+    if (!paymentAccounts1.some((account) => account.id === account1)) {
+      const preferred = method1 === "CASH" && activeCash?.financialAccount.currencyCode === currency
+        ? paymentAccounts1.find((account) => account.id === activeCash.financialAccount.id)
+        : paymentAccounts1[0];
+      setAccount1(preferred?.id || "");
+    }
+  }, [account1, activeCash?.financialAccount.currencyCode, activeCash?.financialAccount.id, currency, method1, paymentAccounts1]);
+
+  useEffect(() => {
+    if (!split) return;
+    if (!paymentAccounts2.some((account) => account.id === account2)) {
+      setAccount2(paymentAccounts2.find((account) => account.id !== account1)?.id || paymentAccounts2[0]?.id || "");
+    }
+  }, [account1, account2, paymentAccounts2, split]);
+
+  function buildReview() {
+    const nextErrors: FormErrors = {};
+    if (!warehouseId || !warehouses.some((warehouse) => warehouse.id === warehouseId)) nextErrors.warehouse = copy.missingWarehouse;
+    if (!cart.length) nextErrors.cart = copy.emptyCart;
+    const invalidLine = cart.some((line) =>
+      !Number.isFinite(line.quantity)
+      || line.quantity <= 0
+      || !Number.isFinite(line.unitPrice)
+      || line.unitPrice < 0
+      || !Number.isFinite(line.discountAmount)
+      || line.discountAmount < 0
+      || line.discountAmount > line.quantity * line.unitPrice + line.taxAmount
+    );
+    if (invalidLine || !Number.isFinite(total) || total <= 0) nextErrors.cart = copy.invalidCart;
+    if (overrideNeeded && !dashboard.access.canManage) nextErrors.override = copy.overrideForbidden;
+    if (overrideNeeded && dashboard.access.canManage && overrideReason.trim().length < 3) nextErrors.override = copy.overrideRequired;
+
+    const selectedAccount1 = paymentAccounts1.find((account) => account.id === account1) || null;
+    if (!selectedAccount1) nextErrors.payment1 = method1 === "CASH" && openCashAccounts.length === 0 ? copy.tillCurrency : copy.missingPayment;
+
+    let selectedAccount2: FinancialAccount | null = null;
+    if (split) {
+      selectedAccount2 = paymentAccounts2.find((account) => account.id === account2) || null;
+      if (!selectedAccount2 || selectedAccount2.id === selectedAccount1?.id) nextErrors.payment2 = copy.missingSecondPayment;
+    }
+    const tenderTotal = amount1 + (split ? amount2 : 0);
+    if (!Number.isFinite(amount1) || amount1 <= 0 || (split && (!Number.isFinite(amount2) || amount2 <= 0)) || Math.abs(tenderTotal - total) > 0.005) {
+      nextErrors.amounts = copy.paymentMismatch;
+    }
+
+    setErrors(nextErrors);
+    const message = firstError(nextErrors);
+    if (message) {
+      notifyToast(message, "error");
+      setPending(null);
+      return;
+    }
+    if (!selectedAccount1) return;
+
+    const tenders: TenderDraft[] = [{ methodType: method1, financialAccountId: selectedAccount1.id, amount: amount1, reference: null }];
+    if (split && selectedAccount2) tenders.push({ methodType: method2, financialAccountId: selectedAccount2.id, amount: amount2, reference: null });
+    setPending({
+      warehouseId,
+      siteId: warehouses.find((warehouse: Warehouse) => warehouse.id === warehouseId)?.site.id || null,
+      storageLocationId: null,
+      currencyCode: currency,
+      lines: cart.map((line) => ({
+        catalogItemId: line.catalogItemId,
+        inventoryItemId: line.inventoryItemId,
+        quantity: line.quantity,
+        unitPrice: line.unitPrice,
+        discountAmount: line.discountAmount,
+        taxAmount: line.taxAmount,
+      })),
+      tenders,
+      overrideReason: overrideNeeded ? overrideReason.trim() : null,
+    });
+  }
+
+  async function confirmSale() {
+    if (!pending) return;
+    const body = await mutate("pos-sale", `/api/enterprise/${organizationId}/retail/sales`, pending, copy.saleCompleted);
+    const sale = body?.sale as Sale | undefined;
+    if (sale) {
+      setLastReceipt(sale);
+      setPending(null);
+      setCart([]);
+      setOverrideReason("");
+      setSplit(false);
+      setAmount2(0);
+      setErrors({});
+      await reload();
+    }
+  }
+
+  return (
+    <div className="grid min-w-0 gap-5">
+      <RetailPosCashSessionManager
+        organizationId={organizationId}
+        accounts={dashboard.accounts}
+        sessions={sessions}
+        selectedSessionId={activeCash?.id || ""}
+        onSelectSession={(sessionId) => {
+          setSelectedCashSessionId(sessionId);
+          const session = openSessions.find((item) => item.id === sessionId);
+          if (method1 === "CASH") {
+            if (session?.financialAccount.currencyCode === currency) setAccount1(session.financialAccount.id);
+            else if (cart.length) {
+              setAccount1("");
+              notifyToast(copy.selectedTillMismatch, "error");
+            }
+          }
+          setPending(null);
+          setErrors({});
+        }}
+        locale={locale}
+        busyAction={busyAction}
+        mutate={mutate}
+        reload={reload}
+      />
+
+      <ModuleSection title={retailText(locale, "counterSale")} description={retailText(locale, "counterSaleDescription")}>
+        <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+          <div className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
+            <div className="grid min-w-0 gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,0.7fr)]">
+              <GuidedField id="pos-product-search" label={retailText(locale, "nameSkuCode")} help={copy.searchHelp}>
+                <div className="relative min-w-0">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-dtsc-muted" />
+                  <Input id="pos-product-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={retailText(locale, "nameSkuCode")} className="pl-9" />
+                </div>
+              </GuidedField>
+              <GuidedField label={copy.warehouse} help={copy.warehouseHelp} required requiredLabel={copy.required} error={errors.warehouse}>
+                <Select name="warehouse" value={warehouseId} onChange={(value) => {
+                  setWarehouseId(value);
+                  setCart([]);
+                  setPending(null);
+                  setErrors({});
+                }}>
+                  <option value="">—</option>
+                  {warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.site.name} · {warehouse.name}</option>)}
+                </Select>
+              </GuidedField>
+            </div>
+            {searchError ? <p role="alert" className="mt-3 text-sm font-semibold text-red-600 dark:text-red-300">{searchError}</p> : null}
+            <div className="mt-4 grid min-w-0 gap-2 sm:grid-cols-2">
+              {searchLoading ? <div className="sm:col-span-2"><ProfessionalLoading rows={3} /></div> : products.map((item) => {
+                const stock = available(item);
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    disabled={Boolean(busyAction) || !warehouseId || (item.trackInventory && !item.allowNegativeStock && (stock === null || stock <= 0))}
+                    onClick={() => addItem(item)}
+                    className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-left transition hover:border-cyan-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 disabled:opacity-50"
+                  >
+                    <p className="break-words font-black text-dtsc-ink">{item.name}</p>
+                    <p className="mt-1 text-xs font-semibold text-dtsc-muted">{item.sku || item.code} · {moneyValue(item.indicativeSalePrice, item.currency || currency, locale)}</p>
+                    <p className="mt-1 text-xs font-bold text-dtsc-muted">{item.trackInventory ? `${retailText(locale, "available")}: ${stock ?? "—"}` : retailText(locale, "serviceNoStock")}</p>
+                  </button>
+                );
+              })}
+              {!searchLoading && !products.length && !searchError ? <div className="sm:col-span-2"><EmptyState compact title={retailText(locale, "noItemFound")} description={retailText(locale, "noItemFoundDescription")} /></div> : null}
+            </div>
+          </div>
+
+          <div className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="font-black text-dtsc-ink">{copy.basket}</h3>
+              <span className="text-sm font-black text-dtsc-blue">{moneyValue(total, currency, locale)}</span>
+            </div>
+            <div className="mt-3 grid min-w-0 gap-3">
+              {cart.map((line) => (
+                <div key={line.catalogItemId} className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page p-3">
+                  <div className="flex min-w-0 items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="break-words font-black text-dtsc-ink">{line.name}</p>
+                      <p className="text-xs font-bold text-dtsc-muted">{line.referenceUnitPrice === null ? "—" : moneyValue(line.referenceUnitPrice, line.currencyCode, locale)}</p>
+                    </div>
+                    <Button type="button" size="sm" variant="outline" onClick={() => {
+                      setCart((current) => current.filter((item) => item.catalogItemId !== line.catalogItemId));
+                      setPending(null);
+                      setErrors({});
+                    }}><XCircle className="h-4 w-4" /></Button>
+                  </div>
+                  <div className="mt-3 grid min-w-0 gap-3 sm:grid-cols-3">
+                    <GuidedField label={retailText(locale, "quantityShort")} help={copy.quantityHelp} required requiredLabel={copy.required}>
+                      <Input type="number" min="0.001" step="0.001" value={line.quantity} onChange={(event) => updateLine(line.catalogItemId, { quantity: Number(event.target.value) })} />
+                    </GuidedField>
+                    <GuidedField label={retailText(locale, "unitPrice")} help={copy.priceHelp} required requiredLabel={copy.required}>
+                      <Input type="number" min="0" step="0.01" value={line.unitPrice} disabled={!dashboard.access.canManage} onChange={(event) => updateLine(line.catalogItemId, { unitPrice: Number(event.target.value) })} />
+                    </GuidedField>
+                    <GuidedField label={retailText(locale, "discount")} help={copy.discountHelp}>
+                      <Input type="number" min="0" step="0.01" value={line.discountAmount} disabled={!dashboard.access.canManage} onChange={(event) => updateLine(line.catalogItemId, { discountAmount: Number(event.target.value) })} />
+                    </GuidedField>
+                  </div>
+                </div>
+              ))}
+              {!cart.length ? <EmptyState compact title={retailText(locale, "emptyBasket")} description={retailText(locale, "emptyBasketDescription")} /> : null}
+              {errors.cart ? <p role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm font-bold text-rose-700 dark:text-rose-200">{errors.cart}</p> : null}
+            </div>
+            {overrideNeeded && dashboard.access.canManage ? (
+              <div className="mt-3">
+                <GuidedField id="pos-override-reason" label={copy.overrideReason} help={copy.overrideHelp} required requiredLabel={copy.required} error={errors.override}>
+                  <Input
+                    id="pos-override-reason"
+                    value={overrideReason}
+                    onChange={(event) => {
+                      setOverrideReason(event.target.value);
+                      setPending(null);
+                      setErrors((current) => ({ ...current, override: undefined }));
+                    }}
+                    minLength={3}
+                    maxLength={1000}
+                    aria-invalid={Boolean(errors.override)}
+                  />
+                </GuidedField>
+              </div>
+            ) : null}
+            {errors.override && !dashboard.access.canManage ? <p role="alert" className="mt-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm font-bold text-rose-700 dark:text-rose-200">{errors.override}</p> : null}
+          </div>
+        </div>
+
+        {cart.length ? (
+          <form noValidate onSubmit={(event) => { event.preventDefault(); buildReview(); }} className="mt-5 grid min-w-0 gap-4 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
+            <h3 className="font-black text-dtsc-ink">{copy.payment}</h3>
+            <div className="grid min-w-0 gap-4 md:grid-cols-3">
+              <GuidedField label={copy.paymentMethod} help={copy.paymentMethodHelp} required requiredLabel={copy.required}>
+                <Select name="method1" value={method1} onChange={(value) => {
+                  setMethod1(value);
+                  setAccount1("");
+                  setPending(null);
+                  setErrors((current) => ({ ...current, payment1: undefined, amounts: undefined }));
+                }}>
+                  <option value="CASH">{copy.cash}</option>
+                  <option value="MOBILE_MONEY">{copy.mobileMoney}</option>
+                  <option value="BANK_TRANSFER">{copy.bank}</option>
+                  <option value="CARD">{copy.card}</option>
+                </Select>
+              </GuidedField>
+              <GuidedField
+                label={copy.account}
+                help={paymentAccounts1.length ? (method1 === "CASH" ? copy.cashAccountHelp : copy.accountHelp) : copy.noAccountAvailable}
+                required
+                requiredLabel={copy.required}
+                error={errors.payment1}
+              >
+                <Select name="account1" value={account1} onChange={(value) => {
+                  setAccount1(value);
+                  setPending(null);
+                  setErrors((current) => ({ ...current, payment1: undefined, payment2: undefined }));
+                }}>
+                  <option value="">—</option>
+                  {paymentAccounts1.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.currencyCode} · {customerFacingFinancialAccountType(account.accountType, locale)}</option>)}
+                </Select>
+              </GuidedField>
+              <GuidedField id="pos-amount1" label={copy.amount} help={copy.amountHelp} required requiredLabel={copy.required} error={errors.amounts}>
+                <Input id="pos-amount1" type="number" min="0.01" step="0.01" value={amount1} onChange={(event) => {
+                  setAmount1(Number(event.target.value));
+                  setPending(null);
+                  setErrors((current) => ({ ...current, amounts: undefined }));
+                }} aria-invalid={Boolean(errors.amounts)} />
+              </GuidedField>
+            </div>
+
+            <div className="rounded-xl border border-dtsc-border bg-dtsc-surface p-3">
+              <label className="flex items-center gap-2 text-sm font-black text-dtsc-ink">
+                <input type="checkbox" checked={split} onChange={(event) => {
+                  setSplit(event.target.checked);
+                  setPending(null);
+                  setErrors((current) => ({ ...current, payment2: undefined, amounts: undefined }));
+                }} />
+                {copy.split}
+              </label>
+              <p className="mt-1 text-xs font-semibold leading-5 text-dtsc-muted">{copy.splitHelp}</p>
+            </div>
+
+            {split ? (
+              <div className="grid min-w-0 gap-4 md:grid-cols-3">
+                <GuidedField label={copy.secondPayment} help={copy.paymentMethodHelp} required requiredLabel={copy.required}>
+                  <Select name="method2" value={method2} onChange={(value) => {
+                    setMethod2(value);
+                    setAccount2("");
+                    setPending(null);
+                    setErrors((current) => ({ ...current, payment2: undefined, amounts: undefined }));
+                  }}>
+                    <option value="CASH">{copy.cash}</option>
+                    <option value="MOBILE_MONEY">{copy.mobileMoney}</option>
+                    <option value="BANK_TRANSFER">{copy.bank}</option>
+                    <option value="CARD">{copy.card}</option>
+                  </Select>
+                </GuidedField>
+                <GuidedField
+                  label={copy.account}
+                  help={paymentAccounts2.length ? (method2 === "CASH" ? copy.cashAccountHelp : copy.accountHelp) : copy.noAccountAvailable}
+                  required
+                  requiredLabel={copy.required}
+                  error={errors.payment2}
+                >
+                  <Select name="account2" value={account2} onChange={(value) => {
+                    setAccount2(value);
+                    setPending(null);
+                    setErrors((current) => ({ ...current, payment2: undefined }));
+                  }}>
+                    <option value="">—</option>
+                    {paymentAccounts2.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.currencyCode} · {customerFacingFinancialAccountType(account.accountType, locale)}</option>)}
+                  </Select>
+                </GuidedField>
+                <GuidedField id="pos-amount2" label={copy.amount} help={copy.amountHelp} required requiredLabel={copy.required} error={errors.amounts}>
+                  <Input id="pos-amount2" type="number" min="0.01" step="0.01" value={amount2} onChange={(event) => {
+                    setAmount2(Number(event.target.value));
+                    setPending(null);
+                    setErrors((current) => ({ ...current, amounts: undefined }));
+                  }} aria-invalid={Boolean(errors.amounts)} />
+                </GuidedField>
+              </div>
+            ) : null}
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-lg font-black text-dtsc-ink">{copy.total}: {moneyValue(total, currency, locale)}</p>
+                <p className="mt-1 text-xs font-semibold text-dtsc-muted">{copy.serverAuthority}</p>
+              </div>
+              <Button type="submit" disabled={Boolean(busyAction) || !dashboard.access.canWrite}>
+                <ShoppingCart className="h-4 w-4" />{copy.review}
+              </Button>
+            </div>
+            {!dashboard.access.canWrite ? <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm font-bold text-amber-800 dark:text-amber-200">{copy.noWrite}</p> : null}
+          </form>
+        ) : null}
+      </ModuleSection>
+
+      {lastReceipt ? (
+        <ModuleSection title={retailText(locale, "receiptCompleted")} description={lastReceipt.number}>
+          <div className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-2xl font-black text-dtsc-ink">{moneyValue(lastReceipt.grandTotal, lastReceipt.currencyCode, locale)}</p>
+                <p className="text-sm font-bold text-dtsc-muted">{lastReceipt.lines.map((line) => `${line.description} × ${Number(line.quantity)}`).join(" · ")}</p>
+              </div>
+              <div data-responsive-actions>
+                <Button variant="outline" onClick={() => window.print()}><Printer className="h-4 w-4" />{retailText(locale, "print")}</Button>
+                {typeof navigator !== "undefined" && "share" in navigator ? (
+                  <Button variant="outline" onClick={() => void navigator.share({ title: lastReceipt.number, text: `${lastReceipt.number} · ${moneyValue(lastReceipt.grandTotal, lastReceipt.currencyCode, locale)}` })}>
+                    <Share2 className="h-4 w-4" />{retailText(locale, "share")}
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        </ModuleSection>
+      ) : null}
+
+      <RetailErpLinks moduleCode="RETAIL_POS" locale={locale} />
+
+      <Dialog
+        open={Boolean(pending)}
+        title={copy.reviewTitle}
+        description={copy.reviewDescription}
+        onClose={() => { if (busyAction !== "pos-sale") setPending(null); }}
+        presentation="editor"
+        className="h-[96dvh] max-w-4xl"
+        footer={(
+          <>
+            <Button type="button" variant="outline" disabled={busyAction === "pos-sale"} onClick={() => setPending(null)}>{copy.edit}</Button>
+            <Button type="button" disabled={!pending || busyAction === "pos-sale"} onClick={() => void confirmSale()}>
+              <CheckCircle2 className="h-4 w-4" />{busyAction === "pos-sale" ? copy.processing : copy.confirm}
+            </Button>
+          </>
+        )}
+      >
+        {pending ? (
+          <div className="grid min-w-0 gap-4 p-4 sm:p-5">
+            <div className="rounded-2xl border-2 border-amber-400/50 bg-amber-500/10 p-4">
+              <p className="text-xs font-black uppercase tracking-[0.12em] text-dtsc-muted">{warehouses.find((warehouse) => warehouse.id === pending.warehouseId)?.name || copy.warehouse}</p>
+              <p className="mt-2 text-2xl font-black text-dtsc-ink">{moneyValue(total, pending.currencyCode, locale)}</p>
+              <p className="mt-1 text-sm font-bold text-dtsc-muted">{cart.length} {copy.lineCount}</p>
+            </div>
+            <p className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3 text-sm font-bold text-dtsc-ink">{copy.reviewSafety}</p>
+            <div className="grid gap-2">
+              {cart.map((line) => (
+                <div key={line.catalogItemId} className="flex min-w-0 items-start justify-between gap-3 rounded-xl border border-dtsc-border bg-dtsc-page p-3">
+                  <div className="min-w-0">
+                    <p className="break-words text-sm font-black text-dtsc-ink">{line.name}</p>
+                    <p className="text-xs font-semibold text-dtsc-muted">{Number(line.quantity)} × {moneyValue(line.unitPrice, line.currencyCode, locale)}{line.discountAmount ? ` · -${moneyValue(line.discountAmount, line.currencyCode, locale)}` : ""}</p>
+                  </div>
+                  <p className="shrink-0 text-sm font-black text-dtsc-ink">{moneyValue(line.quantity * line.unitPrice - line.discountAmount + line.taxAmount, line.currencyCode, locale)}</p>
+                </div>
+              ))}
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {pending.tenders.map((tender, index) => {
+                const account = dashboard.accounts.find((item) => item.id === tender.financialAccountId);
+                return <ReviewItem key={`${tender.financialAccountId}-${index}`} label={`${copy.payment} ${index + 1}`} value={`${account?.name || "—"} · ${moneyValue(tender.amount, pending.currencyCode, locale)}`} />;
+              })}
+              {pending.overrideReason ? <ReviewItem label={copy.overrideReason} value={pending.overrideReason} /> : null}
+            </div>
+          </div>
+        ) : null}
+      </Dialog>
+    </div>
+  );
+}
+
+function ReviewItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-dtsc-border bg-dtsc-page p-3">
+      <p className="text-xs font-black uppercase tracking-[0.08em] text-dtsc-muted">{label}</p>
+      <p className="mt-1 break-words text-sm font-black text-dtsc-ink">{value}</p>
+    </div>
+  );
+}
+
+function PosHistory({
+  organizationId,
+  dashboard,
+  locale,
+  busyAction,
+  mutate,
+}: {
+  organizationId: string;
+  dashboard: PosDashboard;
+  locale: "fr" | "en";
+  busyAction: string | null;
+  mutate: RetailMutation;
+}) {
+  const items = dashboard.recent.sales || [];
+  const copy = (locale === "en" ? retailTransactionFormsEn : retailTransactionFormsFr).pos;
+  const [target, setTarget] = useState<Sale | null>(null);
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState("");
+
+  function close() {
+    if (target && busyAction === `reverse-${target.id}`) return;
+    setTarget(null);
+    setReason("");
+    setError("");
+  }
+
+  async function reverse() {
+    if (!target) return;
+    const normalized = reason.trim();
+    if (normalized.length < 3) {
+      setError(copy.reasonRequired);
+      notifyToast(copy.reasonRequired, "error");
+      return;
+    }
+    setError("");
+    const result = await mutate(
+      `reverse-${target.id}`,
+      `/api/enterprise/${organizationId}/retail/sales/${target.id}/reverse`,
+      { revision: target.revision, reason: normalized },
+      retailText(locale, "reversalCompleted"),
+      { idempotent: false },
+    );
+    if (result) close();
+  }
+
+  return (
+    <div className="grid min-w-0 gap-5">
+      <ModuleSection title={retailText(locale, "recentReceipts")}>
+        {items.length ? (
+          <BusinessList ariaLabel={retailText(locale, "posReceipts")}>
+            {items.map((item) => (
+              <BusinessListItem
+                key={item.id}
+                title={`${item.number} · ${moneyValue(item.grandTotal, item.currencyCode, locale)}`}
+                status={<StatusBadge tone={statusTone(item.status)}>{customerFacingStatusLabel(item.status, locale)}</StatusBadge>}
+                meta={formatEnterpriseDate(item.soldAt, locale)}
+                description={item.lines.map((line) => `${line.description} × ${Number(line.quantity)}`).join(" · ")}
+                actions={dashboard.access.canManage && item.status === "COMPLETED" ? (
+                  <Button size="sm" variant="outline" disabled={Boolean(busyAction)} onClick={() => {
+                    setTarget(item);
+                    setReason("");
+                    setError("");
+                  }}><RotateCcw className="h-4 w-4" />{retailText(locale, "reverse")}</Button>
+                ) : undefined}
+              />
+            ))}
+          </BusinessList>
+        ) : <EmptyState compact title={retailText(locale, "noReceipt")} description={retailText(locale, "noReceiptDescription")} />}
+      </ModuleSection>
+      <RetailErpLinks moduleCode="RETAIL_POS" locale={locale} />
+      <Dialog
+        open={Boolean(target)}
+        title={`${retailText(locale, "reverse")} · ${target?.number || ""}`}
+        description={copy.reasonHelp}
+        onClose={close}
+        className="max-w-xl"
+        footer={(
+          <>
+            <Button type="button" variant="outline" disabled={Boolean(target && busyAction === `reverse-${target.id}`)} onClick={close}>{copy.cancel}</Button>
+            <Button type="button" disabled={!target || Boolean(target && busyAction === `reverse-${target.id}`)} onClick={() => void reverse()}>
+              <RotateCcw className="h-4 w-4" />{target && busyAction === `reverse-${target.id}` ? copy.processing : copy.confirmReversal}
+            </Button>
+          </>
+        )}
+      >
+        <GuidedField id="pos-reversal-reason" label={retailText(locale, "reversalReason")} help={copy.reasonHelp} required requiredLabel={copy.required} error={error}>
+          <textarea
+            id="pos-reversal-reason"
+            value={reason}
+            onChange={(event) => {
+              setReason(event.currentTarget.value);
+              if (error) setError("");
+            }}
+            minLength={3}
+            maxLength={1000}
+            disabled={Boolean(target && busyAction === `reverse-${target.id}`)}
+            className="min-h-32 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+          />
+        </GuidedField>
+      </Dialog>
+    </div>
+  );
+}
