@@ -7,6 +7,22 @@ import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
+type MobileMoneyHistoryItem = {
+  id: string;
+  number: string;
+  providerCode: string;
+  transactionType: string;
+  customerPhoneMasked?: string;
+  currencyCode: string;
+  principalAmount: string | number | { toString(): string };
+  customerFeeAmount: string | number | { toString(): string };
+  providerCommissionAmount: string | number | { toString(): string };
+  externalReference: string | null;
+  status: string;
+  occurredAt: Date | string;
+  revision: number;
+};
+
 export async function GET(req: Request, { params }: Params) {
   const startedAt = Date.now();
   const { organizationId } = await params;
@@ -35,10 +51,10 @@ export async function GET(req: Request, { params }: Params) {
     access: { canWrite: auth.access.canWrite, canManage: auth.access.canAdminister },
     range: dashboard.range,
   };
-  const mobileMoneyRecent = dashboard.recent.mobileMoney.map((entry) => {
+  const mobileMoneyRecent: MobileMoneyHistoryItem[] = dashboard.recent.mobileMoney.map((entry) => {
     const item = { ...entry };
     Reflect.deleteProperty(item, "customerPhone");
-    return item;
+    return item as MobileMoneyHistoryItem;
   });
   const topupRecent = dashboard.recent.topups.map((entry) => {
     const item = { ...entry };
@@ -46,7 +62,7 @@ export async function GET(req: Request, { params }: Params) {
     return item;
   });
 
-  let mobileMoneyHistory = mobileMoneyRecent;
+  let mobileMoneyHistory: MobileMoneyHistoryItem[] = mobileMoneyRecent;
   if (moduleCode === "MOBILE_MONEY_AGENCY") {
     const fxTransfers = await prisma.enterpriseMobileMoneyFxTransfer.findMany({
       where: {
@@ -87,7 +103,7 @@ export async function GET(req: Request, { params }: Params) {
       if (!postingByTransferId.has(batch.sourceEntityId)) postingByTransferId.set(batch.sourceEntityId, batch);
     }
 
-    const fxHistory = fxTransfers.map((transfer) => {
+    const fxHistory: MobileMoneyHistoryItem[] = fxTransfers.map((transfer) => {
       const batch = postingByTransferId.get(transfer.id);
       const posted = batch?.status === "COMPLETED";
       const reversed = transfer.status === "REVERSED";
