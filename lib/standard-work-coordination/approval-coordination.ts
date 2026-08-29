@@ -242,12 +242,13 @@ async function syncTargetApproverForDelegation(tx: Prisma.TransactionClient, ent
 }
 
 async function syncTargetForCorrection(tx: Prisma.TransactionClient, entityType: string, entityId: string, organizationId: string) {
-  if (entityType === "EnterpriseTask") await tx.enterpriseTask.updateMany({ where: { id: entityId, organizationId }, data: { status: "CORRECTION_REQUESTED", revision: { increment: 1 } } });
+  // EnterpriseTask keeps its own TODO/IN_PROGRESS/BLOCKED lifecycle. Approval correction is
+  // orthogonal and lives on EnterpriseApproval; mutating the task status created orphan states.
   if (entityType === "EnterpriseRequest") await tx.enterpriseRequest.updateMany({ where: { id: entityId, organizationId }, data: { status: "CORRECTION_REQUESTED", revision: { increment: 1 } } });
 }
 
 async function syncTargetForResubmission(tx: Prisma.TransactionClient, entityType: string, entityId: string, organizationId: string) {
-  if (entityType === "EnterpriseTask") await tx.enterpriseTask.updateMany({ where: { id: entityId, organizationId }, data: { status: "PENDING_APPROVAL", revision: { increment: 1 } } });
+  // Same principle for tasks: resubmission changes the approval version, not the task lifecycle.
   if (entityType === "EnterpriseRequest") await tx.enterpriseRequest.updateMany({ where: { id: entityId, organizationId }, data: { status: "SUBMITTED", revision: { increment: 1 } } });
 }
 
