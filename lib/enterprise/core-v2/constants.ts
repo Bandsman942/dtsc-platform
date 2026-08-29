@@ -41,17 +41,17 @@ export const TASK_TRANSITIONS: Record<(typeof TASK_ACTIONS)[number], { from: rea
 };
 
 export const REQUEST_TYPES = ["GENERAL", "INFORMATION", "DOCUMENT", "VALIDATION", "SUPPORT", "ACTION", "MEETING", "FOLLOW_UP", "OTHER"] as const;
-export const REQUEST_STATUSES = ["DRAFT", "SUBMITTED", "IN_REVIEW", "APPROVED", "REJECTED", "FULFILLED", "CANCELLED"] as const;
+export const REQUEST_STATUSES = ["DRAFT", "SUBMITTED", "IN_REVIEW", "IN_PROGRESS", "WAITING_REQUESTER", "CORRECTION_REQUESTED", "APPROVED", "REJECTED", "RESOLVED", "FULFILLED", "CLOSED", "CANCELLED"] as const;
 export const REQUEST_ACTIONS = ["SUBMIT", "TAKE", "FULFILL", "CANCEL", "ARCHIVE"] as const;
 export const REQUEST_TRANSITIONS: Record<(typeof REQUEST_ACTIONS)[number], { from: readonly (typeof REQUEST_STATUSES)[number][]; to?: (typeof REQUEST_STATUSES)[number] }> = {
-  SUBMIT: { from: ["DRAFT"], to: "SUBMITTED" },
+  SUBMIT: { from: ["DRAFT", "CORRECTION_REQUESTED"], to: "SUBMITTED" },
   TAKE: { from: ["SUBMITTED"], to: "IN_REVIEW" },
-  FULFILL: { from: ["IN_REVIEW", "APPROVED"], to: "FULFILLED" },
-  CANCEL: { from: ["DRAFT", "SUBMITTED", "IN_REVIEW"], to: "CANCELLED" },
-  ARCHIVE: { from: ["DRAFT", "SUBMITTED", "IN_REVIEW", "APPROVED", "REJECTED", "FULFILLED", "CANCELLED"] },
+  FULFILL: { from: ["IN_REVIEW", "IN_PROGRESS", "APPROVED", "RESOLVED"], to: "FULFILLED" },
+  CANCEL: { from: ["DRAFT", "SUBMITTED", "IN_REVIEW", "IN_PROGRESS", "WAITING_REQUESTER", "CORRECTION_REQUESTED", "APPROVED", "RESOLVED"], to: "CANCELLED" },
+  ARCHIVE: { from: ["DRAFT", "SUBMITTED", "IN_REVIEW", "IN_PROGRESS", "WAITING_REQUESTER", "CORRECTION_REQUESTED", "APPROVED", "REJECTED", "RESOLVED", "FULFILLED", "CLOSED", "CANCELLED"] },
 };
 
-export const APPROVAL_STATUSES = ["PENDING", "APPROVED", "REJECTED", "CANCELLED"] as const;
+export const APPROVAL_STATUSES = ["PENDING", "CORRECTION_REQUESTED", "APPROVED", "REJECTED", "CANCELLED"] as const;
 export const APPROVAL_ACTIONS = ["APPROVE", "REJECT", "CANCEL"] as const;
 export const APPROVAL_TARGET_TYPES = ["EnterpriseRequest", "EnterpriseTask", "EnterpriseMeeting", "EnterprisePurchase", "EnterpriseBudget", "EnterpriseExpense", "PharmacyQualityIncident"] as const;
 
