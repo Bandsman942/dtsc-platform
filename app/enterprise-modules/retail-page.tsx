@@ -8,9 +8,9 @@ import { RetailHistoricalImportPanel } from "@/components/enterprise/professiona
 import { RetailLocaleText } from "@/components/enterprise/professional/retail-locale-text";
 import { RetailOfflineContinuity } from "@/components/enterprise/professional/retail-offline-continuity";
 import { RetailOmnichannelPanel } from "@/components/enterprise/professional/retail-omnichannel-panel";
-import { RetailOperatorWorkspace } from "@/components/enterprise/professional/retail-operator-workspace";
 import { RetailPaymentFollowup } from "@/components/enterprise/professional/retail-payment-followup";
 import { RetailPosDtscWorkspace as RetailPosWorkspace } from "@/components/enterprise/professional/retail-pos-dtsc-workspace";
+import { TelcoTopupsWorkspace } from "@/components/enterprise/professional/telco-topups-workspace";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
@@ -64,11 +64,10 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
             definition={access.definition}
           />
         ) : (
-          <RetailOperatorWorkspace
+          <TelcoTopupsWorkspace
             organizationId={organizationId}
             organizationName={organization.name}
             definition={access.definition}
-            moduleCode={moduleCode}
           />
         )}
 
