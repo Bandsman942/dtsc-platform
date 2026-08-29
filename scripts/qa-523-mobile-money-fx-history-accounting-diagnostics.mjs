@@ -5,6 +5,7 @@ const files = {
   fx: "app/api/enterprise/[organizationId]/retail/mobile-money/fx/route.ts",
   retry: "app/api/enterprise/[organizationId]/retail/mobile-money/fx/[transferId]/accounting/route.ts",
   workspace: "components/enterprise/professional/mobile-money-agency-workspace.tsx",
+  shared: "components/enterprise/professional/retail-workspace-shared.tsx",
   diagnostic: "lib/enterprise/retail/accounting-pending-diagnostic.ts",
   outcome: "lib/enterprise/retail/mutation-outcome.ts",
   language: "lib/retail-customer-language.ts",
@@ -27,7 +28,11 @@ const requireSource = (name, condition, message) => {
 requireSource("dashboard", source.dashboard.includes("enterpriseMobileMoneyFxTransfer.findMany"), "les conversions FX ne sont pas chargées dans l'historique Mobile Money");
 requireSource("dashboard", source.dashboard.includes('sourceEntityType: "EnterpriseMobileMoneyFxTransfer"') && source.dashboard.includes('postingEvent: "RETAIL_MOBILE_MONEY_FX_POSTED"'), "le statut comptable des conversions FX n'est pas relié au posting canonique");
 requireSource("dashboard", source.dashboard.includes("mobileMoneyHistory = [...mobileMoneyRecent, ...fxHistory]"), "les conversions FX ne sont pas fusionnées à l'historique rendu");
+requireSource("dashboard", source.dashboard.includes('status: reversed ? "REVERSED" : posted ? "SUCCESS" : "CONFIRMED"'), "le statut métier d'une conversion durable est encore confondu avec son statut comptable");
+requireSource("dashboard", source.dashboard.includes('accountingStatus: posted ? "POSTED" : "PENDING"'), "le statut comptable FX n'est pas exposé séparément");
+requireSource("dashboard", source.dashboard.includes("accountingBlockerCode"), "le blocker comptable FX n'est pas exposé dans le modèle d'historique");
 requireSource("dashboard", !source.dashboard.includes("finalizeMobileMoneyFxAccounting"), "un GET d'historique ne doit jamais déclencher de comptabilisation");
+requireSource("shared", source.shared.includes('accountingStatus?: "POSTED" | "PENDING" | "NOT_APPLICABLE"'), "le contrat UI partagé ne distingue pas le statut comptable du statut de l'opération");
 
 requireSource("fx", source.fx.includes("retailAccountingPendingDiagnostic(accountingError)"), "la cause comptable est encore détruite ou ignorée dans la route FX");
 requireSource("fx", source.fx.includes("accountingErrorCode: diagnostic.errorCode"), "le diagnostic comptable n'est pas audité de façon sûre");
@@ -41,6 +46,7 @@ requireSource("retry", source.retry.includes("retailPendingOutcome(diagnostic.me
 requireSource("retry", source.retry.includes("status: 202"), "la reprise encore bloquée ne renvoie pas HTTP 202");
 requireSource("retry", !source.retry.includes("createMobileMoneyFxTransfer"), "la reprise comptable ne doit jamais recréer/rejouer le transfert wallet");
 requireSource("retry", !source.retry.includes("operationalBalance"), "la reprise comptable ne doit jamais modifier directement les soldes wallet");
+requireSource("retry", !source.retry.includes("retailErrorResponse"), "une erreur de posting non classée après transfert durable ne doit pas redevenir un faux FAILURE global");
 
 requireSource("workspace", source.workspace.includes('startsWith("FX_CONVERSION_PENDING:")'), "l'historique ne détecte pas les conversions en attente de comptabilisation");
 requireSource("workspace", source.workspace.includes("/retail/mobile-money/fx/${item.id}/accounting"), "l'action de finalisation comptable n'appelle pas l'endpoint dédié");
@@ -83,6 +89,7 @@ if (failures.length) {
 
 console.log("PASS qa-523-mobile-money-fx-history-accounting-diagnostics");
 console.log("- les conversions FX durables sont visibles dans l'historique Mobile Money");
+console.log("- statut métier et statut comptable restent distincts");
 console.log("- le blocker comptable réel est conservé et traduit sans exposer la stack");
 console.log("- la reprise comptable est tenant-scoped, idempotente et ne rejoue jamais le transfert wallet");
 console.log("- le GET d'historique reste strictement en lecture seule");
