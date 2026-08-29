@@ -1,3 +1,4 @@
+import { REQUEST_TYPES } from "@/lib/enterprise/core-v2/constants";
 import { prisma } from "@/lib/prisma";
 
 export class WorkCoordinationHotfixError extends Error {
@@ -120,4 +121,123 @@ export function preserveMeetingParticipantResponses(
       responseStatus: existing.responseStatus,
     };
   });
+}
+
+export async function updateEnterpriseRequestCorrection(args: {
+  organizationId: string;
+  requestId: string;
+  actorUserId: string;
+  revision: number;
+  data: {
+    requestType?: string;
+    title?: string;
+    description?: string;
+    priority?: string;
+    assignedToUserId?: string | null;
+    departmentId?: string | null;
+    dueAt?: Date | null;
+  };
+}) {
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.enterpriseRequest.findFirst({
+      where: {
+        id: args.requestId,
+        organizationId: args.organizationId,
+        archivedAt: null,
+        status: "CORRECTION_REQUESTED",
+      },
+    });
+    if (!existing) {
+      throw new WorkCoordinationHotfixError(
+        "REQUEST_CORRECTION_NOT_EDITABLE",
+        409,
+        "Cette demande n’attend plus de correction. Actualisez la page."
+      );
+    }
+    if (existing.requestedByUserId !== args.actorUserId) {
+      throw new WorkCoordinationHotfixError(
+        "REQUEST_CORRECTION_FORBIDDEN",
+        403,
+        "Seul le demandeur peut modifier le contenu demandé en correction."
+      );
+    }
+    if (args.data.requestType && args.data.requestType !== existing.requestType && !(REQUEST_TYPES as readonly string[]).includes(args.data.requestType)) {
+      throw new WorkCoordinationHotfixError(
+        "INVALID_REQUEST_TYPE",
+        400,
+        "Le nouveau type de demande doit appartenir au catalogue standard."
+      );
+    }
+    if (args.data.assignedToUserId) {
+      const member = await tx.organizationMember.findFirst({
+        where: { organizationId: args.organizationId, userId: args.data.assignedToUserId, status: "ACTIVE", removedAt: null },
+        select: { userId: true },
+      });
+      if (!member) {
+        throw new WorkCoordinationHotfixError(
+          "INVALID_ENTERPRISE_MEMBER",
+          400,
+          "Le collaborateur sélectionné n’est pas un membre actif de cette entreprise."
+        );
+      }
+    }
+    if (args.data.departmentId) {
+      const department = await tx.enterpriseDepartment.findFirst({
+        where: { id: args.data.departmentId, organizationId: args.organizationId, isActive: true },
+        select: { id: true },
+      });
+      if (!department) {
+        throw new WorkCoordinationHotfixError(
+          "INVALID_ENTERPRISE_DEPARTMENT",
+          400,
+          "Le département sélectionné n’appartient pas à cette entreprise ou n’est plus actif."
+        );
+      }
+    }
+    const updated = await tx.enterpriseRequest.updateMany({
+      where: {
+        id: existing.id,
+        organizationId: args.organizationId,
+        status: "CORRECTION_REQUESTED",
+        revision: args.revision,
+        archivedAt: null,
+      },
+      data: {
+        ...(args.data.requestType !== undefined ? { requestType: args.data.requestType } : {}),
+        ...(args.data.title !== undefined ? { title: args.data.title } : {}),
+        ...(args.data.description !== undefined ? { description: args.data.description } : {}),
+        ...(args.data.priority !== undefined ? { priority: args.data.priority } : {}),
+        ...(args.data.assignedToUserId !== undefined ? { assignedToUserId: normalizeNullable(args.data.assignedToUserId) } : {}),
+        ...(args.data.departmentId !== undefined ? { departmentId: normalizeNullable(args.data.departmentId) } : {}),
+        ...(args.data.dueAt !== undefined ? { dueAt: args.data.dueAt } : {}),
+        revision: { increment: 1 },
+      },
+    });
+    if (updated.count !== 1) {
+      throw new WorkCoordinationHotfixError(
+        "REVISION_CONFLICT",
+        409,
+        "La demande a changé pendant la correction. Actualisez avant de réessayer."
+      );
+    }
+    const saved = await tx.enterpriseRequest.findUnique({ where: { id: existing.id } });
+    await tx.enterpriseOperationalEvent.create({
+      data: {
+        organizationId: args.organizationId,
+        entityType: "EnterpriseRequest",
+        entityId: existing.id,
+        eventType: "ENTERPRISE_REQUEST_CORRECTION_UPDATED",
+        summary: "Contenu de la demande corrigé avant resoumission.",
+        actorUserId: args.actorUserId,
+        fromStatus: existing.status,
+        toStatus: existing.status,
+      },
+    });
+    return saved;
+  });
+}
+
+function normalizeNullable(value?: string | null) {
+  const normalized = value?.trim();
+  return normalized ? normalized : null;
 }
