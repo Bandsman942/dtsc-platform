@@ -57,7 +57,11 @@ La nouvelle QA `scripts/qa-531-telco-guided-configuration.mjs` protège :
 - le reversal sur les comptes historiques ;
 - RBAC, audit et isolation multi-tenant.
 
-La QA historique `qa-310-telco-multicurrency.mjs` a été migrée vers le workspace dédié sans suppression de ses garde-fous.
+La QA historique `qa-310-telco-multicurrency.mjs` a été migrée vers le workspace dédié sans suppression de ses garde-fous. Le contrat de cohérence produit vérifie désormais séparément les workspaces dédiés POS, Mobile Money et Télécom au lieu de considérer le workspace opérateur transitionnel comme surface obligatoire.
+
+## Gouvernance du hotfix
+
+La PR respecte le template opposable de `docs/CONTRIBUTING.md` : Issue liée, impact de livraison, registre de dette, matrice de preuves à statuts explicites, sécurité, rollback et validation UI. Aucun test, build ou E2E n'est déclaré réussi avant une preuve d'exécution réelle.
 
 ## Livraison
 
