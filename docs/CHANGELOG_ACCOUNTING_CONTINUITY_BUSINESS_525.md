@@ -28,7 +28,7 @@ Les invariants globaux restent obligatoires : devise fonctionnelle, plan actif e
 
 ## Baseline comptable système
 
-Lorsqu’une configuration Finance est enregistrée et que l’organisation ne possède encore ni plan actif, ni comptes personnalisés à préserver, ni écritures `POSTED`, DTSC prépare automatiquement le socle comptable système :
+Lorsqu’une configuration Finance est enregistrée et que l’organisation ne possède encore ni plan actif, ni plan/draft personnalisé à préserver, ni écritures `POSTED`, DTSC prépare automatiquement le socle comptable système :
 
 - template par défaut provenant exclusivement de `getDefaultChartTemplate()` ;
 - plan comptable actif ;
@@ -38,9 +38,19 @@ Lorsqu’une configuration Finance est enregistrée et que l’organisation ne p
 
 Aucun numéro réglementaire n’est dupliqué dans un service Retail. Pour la baseline actuelle, le registre canonique reste `OHADA_SYSCOHADA@0.1.0`.
 
-Le provisioning est non destructif : un plan actif, un draft déjà personnalisé ou un historique comptable existant n’est jamais remplacé automatiquement.
+Le provisioning est non destructif : tout plan existant, y compris un draft vide créé volontairement par un utilisateur, ou tout historique comptable existant empêche le remplacement automatique par le plan système.
 
-Le calendrier fiscal n’est pas inventé par ce hotfix : l’exercice et la période restent une politique explicite de l’entreprise et continuent à bloquer proprement un posting lorsque la date n’est pas couverte.
+### Continuité fiscale du plan système
+
+Une comptabilité cachée Business ne peut pas être réellement continue si aucun exercice/période n’existe. Le hotfix ajoute donc un calendrier **uniquement lorsque le plan actif est le plan système `DTSC-SYSTEM-OHADA` créé par DTSC**.
+
+Pour une date de posting non encore couverte, DTSC crée de façon idempotente :
+
+- un exercice système correspondant à l’année civile UTC ;
+- douze périodes mensuelles ouvertes ;
+- l’exercice ouvert.
+
+Cette règle n’est jamais appliquée à un plan comptable client/personnalisé. Si un exercice couvrant déjà la date existe, quel que soit son statut, il est respecté : DTSC ne le rouvre pas, ne le remplace pas et ne modifie pas sa politique de clôture. Le calendrier système se renouvelle uniquement tant que le plan système DTSC reste le plan actif.
 
 ## Mobile Money et sous-comptes
 
@@ -106,6 +116,7 @@ Les écritures générées par les opérations autorisées restent persistées d
 - absence de dépendance de `postBusinessEvent()` à l’entitlement de visibilité Comptabilité ;
 - maintien de `FINANCE_ACCOUNTING = ENTERPRISE` ;
 - maintien de `MOBILE_MONEY_AGENCY` et `FINANCE_TREASURY = BUSINESS` ;
+- provisioning fiscal limité au plan système et respect des exercices existants ;
 - utilisation des comptes ledger réels des wallets ;
 - présence de `FX_LOSS` / `FX_GAIN` pour les seuls écarts fonctionnels ;
 - résolution sémantique `MOBILE_MONEY` sans `552` codé en dur dans le service Retail/provisioning ;
@@ -117,9 +128,9 @@ Cette QA est ajoutée au runner de régression CI.
 
 - Dette créée : aucune connue.
 - Dette maintenue : la dette transactionnelle métier + posting déjà suivie par #521 reste distincte de ce hotfix.
-- Dette remboursée : readiness globale sans rapport avec l’événement ; absence de baseline comptable système lors du paramétrage Finance ; absence de granularisation sûre des wallets avant FX.
+- Dette remboursée : readiness globale sans rapport avec l’événement ; absence de baseline comptable système lors du paramétrage Finance ; absence de continuité fiscale du plan système ; absence de granularisation sûre des wallets avant FX.
 - Dette reportée : aucune nouvelle dette silencieuse.
 
 ## Rollback
 
-Revert applicatif des commits du hotfix. Les écritures `POSTED` éventuellement créées pendant l’utilisation du hotfix ne doivent jamais être supprimées ou modifiées par le rollback. Les sous-comptes créés restent des données comptables historiques et peuvent être désactivés ultérieurement par une procédure contrôlée si nécessaire.
+Revert applicatif des commits du hotfix. Les écritures `POSTED` éventuellement créées pendant l’utilisation du hotfix ne doivent jamais être supprimées ou modifiées par le rollback. Les sous-comptes et calendriers système créés restent des données comptables historiques et ne sont jamais supprimés automatiquement par un rollback applicatif.
