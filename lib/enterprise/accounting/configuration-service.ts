@@ -3,11 +3,16 @@ import { prisma } from "@/lib/prisma";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { assertActiveClientOrganization, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { assertFunctionalCurrencyMutable } from "@/lib/enterprise/accounting/currency";
-import { getEnterpriseFinanceReadiness, resolveEnterpriseFinanceReadiness } from "@/lib/enterprise/accounting/finance-readiness-service";
+import {
+  getEnterpriseFinanceReadiness,
+  resolveEnterpriseFinanceReadiness,
+  type ResolveFinanceReadinessOptions,
+} from "@/lib/enterprise/accounting/finance-readiness-service";
 import type { financeConfigurationSchema } from "@/lib/enterprise/accounting/schemas";
 import type { z } from "zod";
 
 type FinanceConfigurationInput = z.infer<typeof financeConfigurationSchema>;
+type PostingReadinessRequirements = Pick<ResolveFinanceReadinessOptions, "requiredMappingKeys" | "requiredJournalTypes" | "asOf">;
 
 // Global posting prerequisites are configuration invariants. Fiscal year/period
 // availability is deliberately date-specific and is validated by getPostingPeriod()
@@ -38,12 +43,21 @@ export async function getFinanceReadiness(organizationId: string) {
   };
 }
 
-export async function assertFinanceReady(tx: Prisma.TransactionClient, organizationId: string) {
-  const readiness = await resolveEnterpriseFinanceReadiness(tx, organizationId, { mode: "POSTING" });
+export async function assertFinanceReady(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  requirements: PostingReadinessRequirements = {},
+) {
+  const readiness = await resolveEnterpriseFinanceReadiness(tx, organizationId, {
+    mode: "POSTING",
+    ...requirements,
+  });
   const globalBlockers = readiness.blockers.filter((diagnostic) => POSTING_GLOBAL_BLOCKERS.has(diagnostic.code));
   if (!readiness.configuration || globalBlockers.length > 0) {
     throw new EnterpriseAccountingError("FINANCE_CONFIGURATION_NOT_READY", 409, {
       blockers: globalBlockers.map((diagnostic) => diagnostic.code),
+      missingMappings: readiness.missingMappings,
+      missingJournalTypes: readiness.missingJournalTypes,
     });
   }
   return readiness.configuration;
