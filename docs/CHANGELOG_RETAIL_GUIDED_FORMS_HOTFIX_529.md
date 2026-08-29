@@ -1,6 +1,6 @@
 # Hotfix #529 — formulaires guidés Retail : Mobile Money et Point de vente
 
-Suivi livraison : Issue #529.
+Suivi livraison : Issue #529 · PR #530.
 
 ## Contexte
 
