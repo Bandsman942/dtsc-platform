@@ -2,12 +2,14 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import { Banknote, CircleDollarSign, Plus } from "lucide-react";
+import type { MobileMoneyCashSession } from "@/components/enterprise/professional/mobile-money-cash-session-manager";
+import { moneyValue, type RetailMutation } from "@/components/enterprise/professional/retail-workspace-shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ModuleSection } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
-import { moneyValue, type RetailMutation } from "@/components/enterprise/professional/retail-workspace-shared";
-import type { MobileMoneyCashSession } from "@/components/enterprise/professional/mobile-money-cash-session-manager";
+import retailTransactionFormsEn from "@/locales/retail-transaction-forms.en.json";
+import retailTransactionFormsFr from "@/locales/retail-transaction-forms.fr.json";
 import { notifyToast } from "@/lib/client-toast";
 
 type CashAccount = {
@@ -40,56 +42,7 @@ export function RetailPosCashSessionManager({
   mutate: RetailMutation;
   reload: () => Promise<void>;
 }) {
-  const copy = locale === "en" ? {
-    title: "My point-of-sale tills",
-    description: "Choose the open till used for cash payments. You can keep several tills and currencies open in parallel.",
-    useTill: "Open till to use",
-    active: "Selected till",
-    openSessions: "open tills",
-    select: "Use this till",
-    openingFloat: "Opening float",
-    currentBalance: "Current balance",
-    openAnother: "Open another till",
-    openAnotherHelp: "Only active cash accounts from this company are proposed. The server will revalidate the account, currency and cashier.",
-    till: "Cash account",
-    openingAmount: "Opening float",
-    open: "Open till",
-    opened: "Till opened.",
-    required: "Required",
-    accountHelp: "Choose a real cash account configured in Finance for this company.",
-    amountHelp: "Enter the amount physically present when the till starts. Zero is allowed.",
-    accountRequired: "Choose an available cash account before opening the till.",
-    amountInvalid: "The opening float must be zero or a positive amount.",
-    noOpen: "No till is open for this cashier. Open one before collecting a cash payment.",
-    noAvailable: "All available cash accounts already have an active or pending session.",
-    noCashAccount: "No active cash account is configured for this company.",
-    processing: "Processing…",
-  } : {
-    title: "Mes caisses du point de vente",
-    description: "Choisissez la caisse ouverte utilisée pour les encaissements cash. Plusieurs caisses et devises peuvent rester ouvertes en parallèle.",
-    useTill: "Caisse ouverte à utiliser",
-    active: "Caisse sélectionnée",
-    openSessions: "caisses ouvertes",
-    select: "Utiliser cette caisse",
-    openingFloat: "Fond d’ouverture",
-    currentBalance: "Solde actuel",
-    openAnother: "Ouvrir une autre caisse",
-    openAnotherHelp: "Seules les vraies caisses actives de cette entreprise sont proposées. Le serveur revalide le compte, la devise et le caissier.",
-    till: "Compte de caisse",
-    openingAmount: "Fond de caisse",
-    open: "Ouvrir la caisse",
-    opened: "Caisse ouverte.",
-    required: "Obligatoire",
-    accountHelp: "Choisissez une caisse réellement configurée dans les Finances de cette entreprise.",
-    amountHelp: "Saisissez le montant physiquement présent à l’ouverture. La valeur zéro est autorisée.",
-    accountRequired: "Choisissez une caisse disponible avant de l’ouvrir.",
-    amountInvalid: "Le fond de caisse doit être égal ou supérieur à zéro.",
-    noOpen: "Aucune caisse n’est ouverte pour ce caissier. Ouvrez-en une avant un encaissement cash.",
-    noAvailable: "Toutes les caisses disponibles ont déjà une session active ou en attente.",
-    noCashAccount: "Aucune caisse financière active n’est configurée pour cette entreprise.",
-    processing: "Traitement…",
-  };
-
+  const copy = (locale === "en" ? retailTransactionFormsEn : retailTransactionFormsFr).posCash;
   const cashAccounts = useMemo(
     () => accounts.filter((account) => account.accountType === "CASH").sort((a, b) => a.currencyCode.localeCompare(b.currencyCode) || a.name.localeCompare(b.name)),
     [accounts],
@@ -196,12 +149,21 @@ export function RetailPosCashSessionManager({
             </summary>
             <form noValidate onSubmit={openTill} className="grid min-w-0 gap-4 border-t border-dtsc-border p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,0.55fr)_auto] sm:items-end">
               <div className="min-w-0">
-                <div className="mb-1.5 flex flex-wrap items-center gap-2"><label className="text-sm font-black text-dtsc-ink" htmlFor="pos-open-cash-account">{copy.till}</label><span className="rounded-full border border-dtsc-border px-2 py-0.5 text-[11px] font-black uppercase text-dtsc-muted">{copy.required}</span></div>
-                <select id="pos-open-cash-account" name="financialAccountId" disabled={Boolean(busyAction)} className="min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink"><option value="">—</option>{availableAccounts.map((account) => <option key={account.id} value={account.id}>{account.currencyCode} · {account.name}</option>)}</select>
+                <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                  <label className="text-sm font-black text-dtsc-ink" htmlFor="pos-open-cash-account">{copy.till}</label>
+                  <span className="rounded-full border border-dtsc-border px-2 py-0.5 text-[11px] font-black uppercase text-dtsc-muted">{copy.required}</span>
+                </div>
+                <select id="pos-open-cash-account" name="financialAccountId" disabled={Boolean(busyAction)} className="min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+                  <option value="">—</option>
+                  {availableAccounts.map((account) => <option key={account.id} value={account.id}>{account.currencyCode} · {account.name}</option>)}
+                </select>
                 <p className="mt-1 text-xs font-semibold leading-5 text-dtsc-muted">{copy.accountHelp}</p>
               </div>
               <div className="min-w-0">
-                <div className="mb-1.5 flex flex-wrap items-center gap-2"><label className="text-sm font-black text-dtsc-ink" htmlFor="pos-opening-amount">{copy.openingAmount}</label><span className="rounded-full border border-dtsc-border px-2 py-0.5 text-[11px] font-black uppercase text-dtsc-muted">{copy.required}</span></div>
+                <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                  <label className="text-sm font-black text-dtsc-ink" htmlFor="pos-opening-amount">{copy.openingAmount}</label>
+                  <span className="rounded-full border border-dtsc-border px-2 py-0.5 text-[11px] font-black uppercase text-dtsc-muted">{copy.required}</span>
+                </div>
                 <Input id="pos-opening-amount" name="openingAmount" type="number" min="0" step="0.01" defaultValue="0" disabled={Boolean(busyAction)} />
                 <p className="mt-1 text-xs font-semibold leading-5 text-dtsc-muted">{copy.amountHelp}</p>
               </div>
@@ -210,7 +172,11 @@ export function RetailPosCashSessionManager({
               {error ? <p role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm font-bold text-rose-700 dark:text-rose-200 sm:col-span-3">{error}</p> : null}
             </form>
           </details>
-        ) : <div className="rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm font-semibold text-dtsc-muted">{copy.noAvailable}</div> : <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm font-bold text-amber-800 dark:text-amber-200">{copy.noCashAccount}</div>}
+        ) : (
+          <div className="rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm font-semibold text-dtsc-muted">{copy.noAvailable}</div>
+        ) : (
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm font-bold text-amber-800 dark:text-amber-200">{copy.noCashAccount}</div>
+        )}
       </div>
     </ModuleSection>
   );
