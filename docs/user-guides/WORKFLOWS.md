@@ -44,9 +44,9 @@ Une exécution reste liée à la version publiée qui l’a créée. La timeline
 
 Les retries ne sont proposés que pour les états autorisés. Une annulation demande un motif et n’effectue pas de rollback automatique des actions métier déjà réussies.
 
-## Idempotence et concurrence
+## Statuts, validations et traçabilité
 
-Les effets métier et décisions conservent leurs clés d’idempotence. Les versions publiées ne sont pas modifiées rétroactivement et une revue obsolète ne peut pas publier silencieusement une nouvelle configuration.
+Les versions brouillon et publiées, les états d’exécution, les décisions de validation, les retries, les annulations et les événements conservent leur historique. Les effets métier et décisions utilisent leurs clés d’idempotence, les versions publiées ne sont pas modifiées rétroactivement et une revue obsolète ne peut pas publier silencieusement une nouvelle configuration.
 
 ## Accès et permissions
 
@@ -54,6 +54,10 @@ Les effets métier et décisions conservent leurs clés d’idempotence. Les ver
 - La publication exige `canPublish` côté serveur.
 - Les références utilisateur et département sont contrôlées dans le tenant actif.
 - L’interface n’est jamais la seule barrière de sécurité.
+
+## Sécurité et confidentialité
+
+Chaque définition, version, étape, branche et exécution reste limitée à l’organisation active. Le serveur revalide les références membres et départements, les capacités de publication et le snapshot exact avant mutation afin d’empêcher une publication inter-tenant ou fondée sur une revue obsolète.
 
 ## Expérience guidée
 

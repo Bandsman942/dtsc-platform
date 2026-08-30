@@ -11,7 +11,7 @@ Une tâche contient notamment un type, un titre, une priorité, un responsable, 
 
 Toutes les références sont revérifiées dans l’organisation active.
 
-## États métier
+## Statuts, validations et traçabilité
 
 Le cycle canonique est :
 
@@ -21,7 +21,7 @@ Le cycle canonique est :
 - **Terminée** (`DONE`) ;
 - **Annulée** (`CANCELLED`).
 
-Le serveur décide si la transition demandée est encore autorisée au moment de l’enregistrement.
+Le serveur décide si la transition demandée est encore autorisée au moment de l’enregistrement. Chaque transition conserve l’acteur, l’état précédent, l’état suivant, la date et le motif lorsqu’il est requis. Les liens vers la source métier restent conservés.
 
 ## Checklist, blocages et dépendances
 
@@ -47,9 +47,9 @@ Les créations, modifications et actions sensibles utilisent les dialogues édit
 - Une action masquée dans l’interface reste refusée côté serveur si elle n’est pas autorisée.
 - Les révisions protègent contre une modification concurrente.
 
-## Traçabilité
+## Sécurité et confidentialité
 
-Chaque transition conserve l’acteur, l’état précédent, l’état suivant, la date et le motif lorsqu’il est requis. Les liens vers la source métier restent conservés.
+Toutes les mutations sont limitées à l’organisation active et les références de membres, départements, dépendances et sources sont revérifiées côté serveur. L’interface ne constitue jamais la barrière de sécurité et aucune transition ne doit permettre d’agir sur une tâche d’un autre tenant.
 
 ## Dépannage
 

@@ -23,11 +23,11 @@ Les participants doivent être des membres actifs de l’organisation. Lors d’
 
 Un participant retiré est supprimé explicitement de la réunion.
 
-## États de réunion
+## Statuts, validations et traçabilité
 
 Le cycle principal est **Planifiée → En cours → Terminée**, avec possibilité d’annulation selon les permissions. L’édition générale n’est autorisée que pendant les états planifié ou en cours.
 
-**Annuler** et **Archiver** demandent un motif professionnel dans l’interface guidée.
+**Annuler** et **Archiver** demandent un motif professionnel dans l’interface guidée. Les changements d’état, réponses des participants, versions de compte rendu, décisions et actions de suivi restent historisés avec leurs acteurs.
 
 ## Ordre du jour structuré
 
@@ -49,6 +49,10 @@ Les décisions sont enregistrées pendant ou après la réunion. Une décision p
 ## Accès et permissions
 
 L’organisateur ou un responsable autorisé pilote les changements d’état et les modifications. Toutes les mutations restent vérifiées côté serveur dans l’organisation active.
+
+## Sécurité et confidentialité
+
+Les participants, départements, décisions, comptes rendus et tâches de suivi sont revalidés dans la même organisation. Les liens et lieux ne donnent aucun droit supplémentaire : l’accès dépend toujours de la session, du membership et des permissions serveur applicables à la réunion.
 
 ## Expérience guidée
 

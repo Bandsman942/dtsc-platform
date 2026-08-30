@@ -35,15 +35,19 @@ La délégation est autorisée uniquement vers un candidat éligible de la même
 
 Les politiques d’auto-approbation restent serveur-authoritative. Un rôle élevé ne constitue pas, à lui seul, une dérogation.
 
-## Traçabilité
+## Statuts, validations et traçabilité
 
-Le détail conserve : versions soumises, snapshots, décisions, motifs, corrections, délégations, dates et acteurs. Une décision finalisée n’est pas remplacée silencieusement.
+Le détail conserve les statuts de validation, les versions soumises, les snapshots, les décisions, les motifs, les corrections, les délégations, les dates et les acteurs. Une décision finalisée n’est pas remplacée silencieusement et une nouvelle soumission produit une nouvelle version immuable.
 
 ## Accès et permissions
 
 - Le validateur assigné prend la décision finale lorsqu’il est éligible.
 - Le demandeur ou un responsable autorisé peut préparer la revue selon les règles du module.
 - Les permissions sont revérifiées au moment de chaque mutation.
+
+## Sécurité et confidentialité
+
+Le serveur contrôle l’organisation, l’approbateur éligible, la version relue, l’auto-approbation et les règles de délégation avant toute décision. Un snapshot ou une validation d’une autre organisation ne peut pas être utilisé comme cible, même si son identifiant est fourni manuellement.
 
 ## Expérience guidée
 

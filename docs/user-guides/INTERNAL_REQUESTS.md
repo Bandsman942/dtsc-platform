@@ -11,7 +11,7 @@ Le type est choisi dans le catalogue contrôlé : Général, Information, Docume
 
 Le destinataire et le département sont revérifiés dans la même organisation.
 
-## Cycle canonique
+## Statuts, validations et traçabilité
 
 Les seuls états métier persistés sont :
 
@@ -23,7 +23,7 @@ Les seuls états métier persistés sont :
 - **Traitée** (`FULFILLED`) ;
 - **Annulée** (`CANCELLED`).
 
-Les actions de coordination n’introduisent pas une seconde machine d’état. Demander une information ou répondre conserve la demande dans son état canonique de revue, tandis que les échanges et motifs restent historisés séparément.
+Les actions de coordination n’introduisent pas une seconde machine d’état. Demander une information ou répondre conserve la demande dans son état canonique de revue, tandis que les échanges, versions, motifs, acteurs et transitions restent historisés séparément.
 
 ## Prise en charge et échanges
 
@@ -50,6 +50,10 @@ Les annulations, clôtures, réouvertures et autres actions nécessitant un cont
 - Le demandeur contrôle son brouillon et les actions qui lui sont explicitement réservées.
 - Le responsable ou l’assigné traite la demande selon son état et ses permissions.
 - Les contrôles serveur restent l’autorité finale, indépendamment de l’affichage UI.
+
+## Sécurité et confidentialité
+
+Les demandes, assignations, départements et validations liées restent strictement limitées à l’organisation active. Les références externes sont rejetées côté serveur, les permissions sont revérifiées à chaque mutation et les motifs ou commentaires sensibles ne doivent jamais devenir visibles à un autre tenant.
 
 ## Expérience guidée
 
