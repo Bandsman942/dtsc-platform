@@ -3,82 +3,62 @@
 
 ## Objectif et périmètre
 
-Ce guide explique l’utilisation opérationnelle de **Workflows** dans DTSC Platform. Il décrit uniquement les actions disponibles dans l’application, leurs règles métier et les contrôles appliqués.
+Le module **Workflows** exécute des processus transverses versionnés. Ce guide décrit la préparation d’un brouillon, sa revue avant publication et le suivi des exécutions.
 
-## Rôle du module
+## Définitions et versions
 
-Le module **Workflows** exécute des processus transverses versionnés. Il distingue le modèle, la version publiée, l’instance, les étapes, les acteurs, les transitions et les événements d’exécution.
+Une définition contient son déclencheur et ses versions. Une version publiée est immuable. Toute évolution est réalisée dans une nouvelle version brouillon.
 
-Le bouton **Guide utilisateur** ouvre ce guide directement dans l’application.
+## Construire un brouillon
 
-## Modèles et versions
+Le graphe est composé d’étapes contrôlées : départ, condition, affectation, création de validation, création de tâche, action métier, notification, attente et fin.
 
-Un modèle décrit le déclencheur, les étapes, les acteurs, les conditions, les délais, les notifications et le résultat attendu.
+Les branches relient deux étapes avec un résultat éventuel. Les erreurs évidentes de saisie, comme un code d’étape dupliqué ou une branche identique, sont signalées localement sans fermer le formulaire.
 
-Une version publiée n’est jamais modifiée rétroactivement. Toute évolution crée une nouvelle version, tandis que les instances existantes restent liées à leur version d’origine.
+Toute modification locale du graphe marque le brouillon comme non enregistré. La publication reste alors désactivée jusqu’à l’enregistrement serveur.
 
-## Démarrer une instance
+## Readiness serveur
 
-Une instance conserve :
+Le serveur vérifie notamment :
 
-- le modèle et la version ;
-- l’objet source ;
-- l’initiateur ;
-- l’étape actuelle ;
-- les acteurs résolus ;
-- les délais ;
-- l’historique ;
-- les événements d’outbox.
+- la présence et l’unicité des étapes ;
+- le chemin de départ vers une fin ;
+- la cohérence des transitions ;
+- les affectations obligatoires ;
+- les actions métier autorisées ;
+- les références membre/département dans l’organisation active.
 
-## Acteurs et transitions
+Un brouillon comportant un blocage de readiness ne peut pas être publié.
 
-Les acteurs sont résolus côté serveur à partir des règles prises en charge : utilisateur, rôle, poste, département, responsable d’objet ou gestionnaire explicitement autorisé.
+## Revue avant publication
 
-Une transition est disponible uniquement pour l’acteur résolu de l’étape courante. Les droits ne sont pas déduits d’un libellé saisi dans l’interface.
+La publication ne repose plus sur un simple acquittement implicite. Utilisez **Revoir et publier**.
 
-## Conditions
+La revue plein écran affiche la version exacte candidate, son déclencheur, sa readiness, les blocages, les étapes, leurs paramètres métier lisibles et les branches.
 
-Les conditions utilisent uniquement des champs et opérateurs allow-listés. Aucun code JavaScript fourni par l’utilisateur n’est exécuté.
+Le serveur calcule un jeton SHA-256 à partir du snapshot stocké. Au moment de publier, il recharge le brouillon, recalcule la readiness et le jeton. Si le brouillon a changé depuis la revue, la publication est refusée et une nouvelle revue est obligatoire.
 
-## Idempotence
+## Exécutions
 
-Chaque transition possède une clé stable. Un double clic, un retry réseau ou un worker relancé ne produit pas deux décisions ni deux effets métier.
+Une exécution reste liée à la version publiée qui l’a créée. La timeline affiche les événements, l’état et le contexte source.
 
-## Délais, SLA et reprise
+Les retries ne sont proposés que pour les états autorisés. Une annulation demande un motif et n’effectue pas de rollback automatique des actions métier déjà réussies.
 
-Les délais d’étape, dates de reprise et escalades sont conservés dans l’instance.
+## Idempotence et concurrence
 
-Une politique SLA peut compléter le workflow sans remplacer son statut métier. Le SLA calcule les états RUNNING, WARNING et BREACHED.
-
-## Observabilité
-
-Le détail expose la version, l’étape, les acteurs, les délais, les transitions, les erreurs et les retries autorisés. Les secrets et données sensibles ne sont jamais affichés dans les logs utilisateur.
-
-## Liens profonds
-
-Une notification peut ouvrir directement l’instance avec `?run=...`. L’accès est revérifié au moment de l’ouverture.
+Les effets métier et décisions conservent leurs clés d’idempotence. Les versions publiées ne sont pas modifiées rétroactivement et une revue obsolète ne peut pas publier silencieusement une nouvelle configuration.
 
 ## Accès et permissions
 
-- Ouvrez le module depuis la navigation du contexte actif.
-- Les boutons et actions dépendent du rôle, du poste officiel, des permissions individuelles, du tenant actif et de l’état du module.
-- Une action masquée dans l’interface reste également refusée par le serveur lorsqu’elle n’est pas autorisée.
-- Sur mobile, utilisez le parcours liste → détail plein écran → formulaire plein écran → retour.
+- La création et l’édition de brouillons dépendent des capacités du module.
+- La publication exige `canPublish` côté serveur.
+- Les références utilisateur et département sont contrôlées dans le tenant actif.
+- L’interface n’est jamais la seule barrière de sécurité.
 
-## Statuts, validations et traçabilité
+## Expérience guidée
 
-- Les statuts visibles correspondent aux états réellement persistés ; les codes techniques ne sont pas présentés comme libellés métier.
-- Les validations, refus, annulations, réouvertures et actions sensibles conservent leur auteur, leur date et, lorsque requis, leur motif.
-- Une action répétée avec la même clé métier ne doit pas produire de doublon ni un second impact.
-
-## Sécurité et confidentialité
-
-- Les données sont limitées à l’utilisateur ou à l’organisation autorisée.
-- Les références reçues du navigateur sont revérifiées côté serveur dans le même contexte.
-- Les documents et informations sensibles utilisent les routes privées et les contrôles d’accès prévus par le module.
+Les dialogues de création, étape, branche, revue de publication, timeline et actions critiques utilisent la présentation éditeur adaptée au mobile. Les libellés visibles sont fournis en français ou en anglais selon la langue active.
 
 ## Dépannage
 
-- Actualisez la vue si une opération validée n’apparaît pas immédiatement.
-- Vérifiez le contexte d’organisation, les permissions, le statut du module et la connexion réseau.
-- En cas de refus persistant, conservez le message affiché et contactez le responsable du module ou le support DTSC sans partager de donnée sensible.
+Si **Revoir et publier** est désactivé, enregistrez d’abord les changements locaux et corrigez les blocages de readiness. Si la revue devient obsolète, fermez-la, rechargez le brouillon et ouvrez une nouvelle revue avant publication.
