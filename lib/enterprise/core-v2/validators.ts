@@ -100,6 +100,7 @@ export const enterpriseApprovalActionSchema = z.object({
   action: z.enum(APPROVAL_ACTIONS),
   revision: z.coerce.number().int().min(1),
   decisionComment: optionalText(3000),
+  reviewedVersionId: optionalId,
 });
 
 const meetingParticipantSchema = z.object({
