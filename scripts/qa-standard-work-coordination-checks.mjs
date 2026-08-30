@@ -67,7 +67,7 @@ function calendarChecks() {
   requireText("app/api/calendar/resources/reservations/route.ts", ["RESOURCE_CONFLICT", "calendarResourceReservationConflictWhere", "Seul le créateur responsable"]);
   requireText("app/api/calendar/integrations/route.ts", ["PROVIDER_NOT_CONFIGURED", "NOT_CONFIGURED", "CONSENT_REQUIRED"]);
   requireText("components/calendar/calendar-advanced-tools-panel.tsx", ["calendar-advanced-tools/panel"]);
-  requireText("components/calendar/calendar-advanced-tools-panel.tsx", ["calendarWorkspaceText", "text.suggestSlot", "text.resourcesTitle", "text.externalCalendars"]);
+  requireText("components/calendar/calendar-advanced-tools/panel.tsx", ["calendarWorkspaceText", "text.suggestSlot", "text.resourcesTitle", "text.externalCalendars"]);
 }
 
 function taskChecks() {
