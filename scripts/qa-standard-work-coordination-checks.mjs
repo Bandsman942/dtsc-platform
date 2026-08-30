@@ -57,16 +57,16 @@ function taskChecks() {
   requireText("prisma/standard-work-coordination.prisma", ["model EnterpriseTaskChecklistItem", "model EnterpriseTaskDependency", "model EnterpriseTaskBlocker"]);
   requireText("lib/standard-work-coordination/task-coordination.ts", ["DEPENDENCY_CYCLE", "wouldCreateDependencyCycle", "TASK_BLOCKER_RESOLVED", "progress:"]);
   requireText("app/api/enterprise/[organizationId]/tasks/[id]/actions/route.ts", [
-    "ACTION_REASON_REQUIRED",
+    "TASK_ACTION_REASON_REQUIRED",
     "TASK_CHECKLIST_INCOMPLETE",
-    "TASK_BLOCKERS_OPEN",
-    "TASK_DEPENDENCY_OPEN",
+    "TASK_OPEN_BLOCKERS",
+    "TASK_DEPENDENCIES_INCOMPLETE",
     "enterpriseTaskChecklistItem.count",
     "enterpriseTaskBlocker.count",
-    "enterpriseTaskDependency.count",
-    'predecessor: { status: { not: "DONE" } }',
+    "enterpriseTaskDependency.findMany",
+    'status: "DONE"',
   ]);
-  requireText("app/api/enterprise/[organizationId]/tasks/[id]/coordination/route.ts", ["isSameOriginRequest", "rateLimit", "context.canMutate", 'terminal = ["DONE", "CANCELLED"].includes(context.task.status)', "TASK_TERMINAL_STATE"]);
+  requireText("app/api/enterprise/[organizationId]/tasks/[id]/coordination/route.ts", ["isSameOriginRequest", "rateLimit", "context.canMutate", "coordinationMutable", "TASK_COORDINATION_LOCKED", '["DONE", "CANCELLED"]']);
   requireText("components/enterprise/core-v2/enterprise-tasks-workspace.tsx", ["collection.meta.currentUserId", "TaskCoordinationPanel", "actionComment", "aria-invalid", 'presentation="editor"']);
   requireNoText("components/enterprise/core-v2/enterprise-tasks-workspace.tsx", ["|| Boolean(detail.assignedToUserId)"]);
   requireNoNativeConfirmation("components/enterprise/core-v2/enterprise-tasks-workspace.tsx");
@@ -80,7 +80,7 @@ function taskChecks() {
 
 function requestChecks() {
   requireText("lib/enterprise/core-v2/constants.ts", ["REQUEST_COORDINATION_ACTIONS", "REQUEST_TRANSITIONS"]);
-  requireText("app/api/enterprise/[organizationId]/requests/[id]/coordination/route.ts", ["isSameOriginRequest", "rateLimit", "canCoordinateRequest", "revision: context.request.revision"]);
+  requireText("app/api/enterprise/[organizationId]/requests/[id]/coordination/route.ts", ["isSameOriginRequest", "rateLimit", "canCoordinateRequest", "parsed.data.revision"]);
   requireText("lib/standard-work-coordination/request-coordination.ts", ["revisionSchema", "REQUEST_INFORMATION", "REOPEN", "REQUEST_TRANSITIONS[action]", "revision: args.payload.revision", "REVISION_CONFLICT", "enterpriseOperationalEvent", "enterpriseOperationalComment"]);
   requireNoText("lib/standard-work-coordination/request-coordination.ts", ['status: "WAITING_REQUESTER"', 'status: "RESOLVED"', 'status: "CLOSED"', 'status: "REOPENED"']);
   requireText("lib/enterprise/core-v2/validators.ts", ["requestType: z.enum(REQUEST_TYPES)"]);
@@ -108,8 +108,8 @@ function validationChecks() {
 
 function meetingChecks() {
   requireText("prisma/standard-work-coordination.prisma", ["model EnterpriseMeetingAgendaItem", "model EnterpriseMeetingMinutesVersion", "model EnterpriseMeetingAction"]);
-  requireText("lib/standard-work-coordination/meeting-coordination.ts", ["ADD_AGENDA_ITEM", "SAVE_MINUTES", "LINK_TASK", "MEETING_MINUTES_PUBLISHED", "MEETING_AGENDA_LOCKED", "MEETING_MINUTES_STATE_INVALID", "MEETING_MINUTES_PUBLISH_REQUIRES_COMPLETION", "MEETING_FOLLOW_UP_LOCKED"]);
-  requireText("app/api/enterprise/[organizationId]/meetings/[id]/coordination/route.ts", ["isSameOriginRequest", "rateLimit", "agendaMutable", "minutesMutable", "followUpMutable"]);
+  requireText("lib/standard-work-coordination/meeting-coordination.ts", ["ADD_AGENDA_ITEM", "SAVE_MINUTES", "LINK_TASK", "MEETING_MINUTES_PUBLISHED", "MEETING_COORDINATION_LOCKED", "AGENDA_STRUCTURE_LOCKED", "AGENDA_STATUS_LOCKED", "MINUTES_NOT_AVAILABLE", "MINUTES_PUBLISH_REQUIRES_COMPLETION", "FOLLOW_UP_NOT_AVAILABLE"]);
+  requireText("app/api/enterprise/[organizationId]/meetings/[id]/coordination/route.ts", ["isSameOriginRequest", "rateLimit", "meetingCoordinationCapabilities"]);
   requireText("lib/enterprise/core-v2/validators.ts", ["enterpriseMeetingUpdateSchema"]);
   requireNoText("lib/enterprise/core-v2/validators.ts", ["minutes: optionalText(20000)"]);
   requireNoText("app/api/enterprise/[organizationId]/meetings/[id]/route.ts", ["minutes: data.minutes"]);
@@ -135,7 +135,7 @@ function documentChecks() {
   requireText("components/enterprise/core-v2/enterprise-documents-workspace.tsx", ["/links", "/versions", "/download", "signedUrl"]);
   requireText("scripts/qa-enterprise-core-v2-sprint7-checks.mjs", ["EnterpriseDocumentVersion", "createSignedUrl", "private storage"]);
   requireNoText("prisma/standard-work-coordination.prisma", ["model EnterpriseDocumentLink"]);
-  requireText("app/api/enterprise/[organizationId]/documents/[id]/advanced/route.ts", ["PROVIDER_NOT_CONFIGURED", "getEnterpriseDocumentSignedDownload", "DOCUMENT_INDEX_ENDPOINT", "DOCUMENT_VISUAL_DIFF_ENDPOINT", "AbortSignal.timeout"]);
+  requireText("app/api/enterprise/[organizationId]/documents/[id]/advanced/route.ts", ["PROVIDER_NOT_CONFIGURED", "NOT_CONFIGURED", "getEnterpriseDocumentSignedDownload", "DOCUMENT_INDEX_ENDPOINT", "DOCUMENT_VISUAL_DIFF_ENDPOINT", "AbortSignal.timeout"]);
   requireText("lib/technical-debt/feature-gates.ts", ["getDocumentIndexFeatureStatus", "getDocumentVisualComparisonFeatureStatus", "DISABLED"]);
 }
 
