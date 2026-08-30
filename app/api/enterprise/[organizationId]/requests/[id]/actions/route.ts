@@ -38,6 +38,11 @@ export async function POST(req: Request, { params }: Params) {
         : access.canManage;
   if (!allowed) return NextResponse.json({ error: "Forbidden", message: "Vous n’êtes pas autorisé à exécuter cette transition." }, { status: 403 });
 
+  const comment = (data.comment || "").trim();
+  if (["CANCEL", "ARCHIVE"].includes(data.action) && comment.length < 3) {
+    return NextResponse.json({ error: "REQUEST_ACTION_REASON_REQUIRED", message: "Un motif professionnel d’au moins 3 caractères est obligatoire pour cette action." }, { status: 400 });
+  }
+
   try {
     const updated = data.action === "TAKE"
       ? await prisma.$transaction(async (tx) => {
@@ -54,7 +59,7 @@ export async function POST(req: Request, { params }: Params) {
               entityType: "EnterpriseRequest",
               entityId: id,
               eventType: "ENTERPRISE_REQUEST_REVIEW_STARTED",
-              summary: data.comment || "Demande prise en charge.",
+              summary: comment || "Demande prise en charge.",
               fromStatus: "SUBMITTED",
               toStatus: "IN_REVIEW",
               actorUserId: session.userId,
@@ -63,7 +68,7 @@ export async function POST(req: Request, { params }: Params) {
           });
           return tx.enterpriseRequest.findUnique({ where: { id } });
         })
-      : await transitionEnterpriseRequest({ organizationId, requestId: id, actorUserId: session.userId, action: data.action, revision: data.revision, comment: data.comment || undefined });
+      : await transitionEnterpriseRequest({ organizationId, requestId: id, actorUserId: session.userId, action: data.action, revision: data.revision, comment: comment || undefined });
 
     if (data.action === "TAKE" && requestRecord.requestedByUserId !== session.userId) {
       await notifyUser({ userId: requestRecord.requestedByUserId, organizationId, type: "ENTERPRISE_REQUEST", title: "Demande prise en charge", body: requestRecord.title, targetUrl: "/enterprise-modules/INTERNAL_REQUESTS" });
@@ -71,7 +76,7 @@ export async function POST(req: Request, { params }: Params) {
     if ((data.action === "FULFILL" || data.action === "CANCEL") && requestRecord.requestedByUserId !== session.userId) {
       await notifyUser({ userId: requestRecord.requestedByUserId, organizationId, type: "ENTERPRISE_REQUEST", title: data.action === "FULFILL" ? "Demande traitée" : "Demande annulée", body: requestRecord.title, targetUrl: "/enterprise-modules/INTERNAL_REQUESTS" });
     }
-    await writeAuditLog({ userId: session.userId, action: `ENTERPRISE_REQUEST_${data.action}`, entity: "EnterpriseRequest", entityId: id, request: req, metadata: { organizationId, fromStatus: requestRecord.status, toStatus: updated?.status, assignedToUserId: updated?.assignedToUserId } });
+    await writeAuditLog({ userId: session.userId, action: `ENTERPRISE_REQUEST_${data.action}`, entity: "EnterpriseRequest", entityId: id, request: req, metadata: { organizationId, fromStatus: requestRecord.status, toStatus: updated?.status, assignedToUserId: updated?.assignedToUserId, reason: comment || null } });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "requests", requestId: id, action: data.action } });
     return NextResponse.json({ ok: true, request: updated });
   } catch (error) {
