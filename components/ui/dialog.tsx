@@ -274,7 +274,7 @@ export function Dialog({
           className={cn(
             "min-h-0 min-w-0 flex-1 touch-pan-y overscroll-contain bg-dtsc-surface",
             isEditorPresentation
-              ? "flex flex-col overflow-hidden p-0 scroll-pb-0"
+              ? "flex flex-col overflow-x-hidden overflow-y-auto p-0 scroll-pb-24 sm:scroll-pb-0"
               : "overflow-x-hidden overflow-y-auto px-3 py-4 scroll-pb-24 sm:px-5 sm:py-5",
           )}
         >
