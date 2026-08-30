@@ -1,9 +1,9 @@
 "use client";
 
 import { priorityChoices as corePriorityChoices } from "@/components/enterprise/core-v2/erp-v2-ui";
-
 import { enterpriseCoreT } from "@/lib/enterprise-core-i18n";
-
+import { REQUEST_TYPES } from "@/lib/enterprise/core-v2/constants";
+import { requestTypeChoices } from "@/lib/standard-work-coordination/request-i18n";
 import type { FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,9 +12,10 @@ import { Field, NativeSelect, type EnterpriseChoice } from "@/components/enterpr
 export type RequestFormValue = { requestType?: string; title?: string; description?: string | null; priority?: string; assignedToUserId?: string | null; departmentId?: string | null; dueAt?: string | null };
 
 export function EnterpriseRequestForm({ locale, members, departments, value, onSubmit }: { locale?: string | null; members: EnterpriseChoice[]; departments: EnterpriseChoice[]; value?: RequestFormValue; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
-  return <form onSubmit={onSubmit} className="grid gap-4">
+  const selectedRequestType = value?.requestType && REQUEST_TYPES.includes(value.requestType as (typeof REQUEST_TYPES)[number]) ? value.requestType : value ? "OTHER" : "GENERAL";
+  return <form onSubmit={onSubmit} className="grid gap-4" noValidate>
     <div className="grid gap-3 md:grid-cols-2">
-      <Field label={enterpriseCoreT(locale, "requests.request.type")}><Input name="requestType" required minLength={2} defaultValue={value?.requestType || "GENERAL"} /></Field>
+      <Field label={enterpriseCoreT(locale, "requests.request.type")}><NativeSelect name="requestType" required defaultValue={selectedRequestType} items={requestTypeChoices(locale)} /></Field>
       <Field label={enterpriseCoreT(locale, "requests.form.title")}><Input name="title" required minLength={3} defaultValue={value?.title || ""} /></Field>
       <Field label={enterpriseCoreT(locale, "tasks.form.priority")}><NativeSelect name="priority" required defaultValue={value?.priority || "NORMAL"} items={corePriorityChoices(locale)} /></Field>
       <Field label={enterpriseCoreT(locale, "tasks.form.dueDate")}><Input name="dueAt" type="datetime-local" defaultValue={toLocalInput(value?.dueAt)} /></Field>
@@ -22,7 +23,7 @@ export function EnterpriseRequestForm({ locale, members, departments, value, onS
       <Field label={enterpriseCoreT(locale, "tasks.form.department")}><NativeSelect name="departmentId" defaultValue={value?.departmentId || ""} items={departments} /></Field>
     </div>
     <Field label={enterpriseCoreT(locale, "tasks.form.description")}><textarea name="description" required minLength={3} defaultValue={value?.description || ""} className="min-h-36 w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm text-dtsc-ink" /></Field>
-    <Button className="w-full bg-dtsc-blue text-white sm:w-fit">{value ? (enterpriseCoreT(locale, "common.saveChanges")) : (enterpriseCoreT(locale, "requests.form.create.draft"))}</Button>
+    <Button className="w-full bg-dtsc-blue text-white sm:w-fit">{value ? enterpriseCoreT(locale, "common.saveChanges") : enterpriseCoreT(locale, "requests.form.create.draft")}</Button>
   </form>;
 }
 

@@ -3,7 +3,8 @@
 import { priorityChoices as corePriorityChoices } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { EnterpriseApproverSelect } from "@/components/enterprise/enterprise-approver-select";
 import { enterpriseCoreT } from "@/lib/enterprise-core-i18n";
-
+import { REQUEST_STATUSES } from "@/lib/enterprise/core-v2/constants";
+import { requestTypeChoices, requestTypeLabel } from "@/lib/standard-work-coordination/request-i18n";
 import { Archive, CheckCircle2, Eye, Pencil, Plus, Send, ShieldCheck, UserCheck, XCircle } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useMemo, useState, type FormEvent } from "react";
@@ -24,7 +25,7 @@ import { enterpriseV2Mutation, useEnterpriseV2Collection } from "@/components/en
 
 type RequestItem = { id: string; requestType: string; title: string; description: string; status: string; priority: string; requestedByUserId: string; assignedToUserId: string | null; departmentId: string | null; dueAt: string | null; sourceModule: string | null; sourceEntityType: string | null; revision: number; createdAt: string };
 type LegacyRecord = { id: string; title: string; description: string | null; status: string; priority: string; updatedAt: string };
-const requestStatuses = ["DRAFT", "SUBMITTED", "TRIAGED", "ASSIGNED", "IN_REVIEW", "IN_PROGRESS", "WAITING_REQUESTER", "WAITING_APPROVAL", "CORRECTION_REQUESTED", "APPROVED", "REJECTED", "RESOLVED", "FULFILLED", "CLOSED", "REOPENED", "CANCELLED"];
+type PendingRequestAction = { request: RequestItem; action: string };
 
 export function EnterpriseRequestsWorkspace({ organizationId, members, departments, canCreate, canManage, locale, legacyRecords = [] }: { organizationId: string; members: EnterpriseChoice[]; departments: EnterpriseChoice[]; canCreate: boolean; canManage: boolean; locale?: string | null; legacyRecords?: LegacyRecord[] }) {
   const searchParams = useSearchParams();
@@ -41,7 +42,10 @@ export function EnterpriseRequestsWorkspace({ organizationId, members, departmen
   const [dismissedDeepLinkId, setDismissedDeepLinkId] = useState<string | null>(null);
   const [edit, setEdit] = useState<RequestItem | null>(null);
   const [approvalTarget, setApprovalTarget] = useState<RequestItem | null>(null);
-  const [pendingAction, setPendingAction] = useState<{ request: RequestItem; action: string } | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingRequestAction | null>(null);
+  const [actionReason, setActionReason] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [actionSubmitting, setActionSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   useToastMessage(message);
   const params = useMemo(() => {
@@ -49,7 +53,7 @@ export function EnterpriseRequestsWorkspace({ organizationId, members, departmen
     if (deepLinkedRequestId) value.set("id", deepLinkedRequestId);
     if (search.trim()) value.set("search", search.trim());
     if (status) value.set("status", status);
-    if (type.trim()) value.set("type", type.trim());
+    if (type) value.set("type", type);
     if (priority) value.set("priority", priority);
     if (department) value.set("department", department);
     return value;
@@ -73,9 +77,20 @@ export function EnterpriseRequestsWorkspace({ organizationId, members, departmen
   }
 
   async function runAction() {
-    if (!pendingAction) return;
-    try { await enterpriseV2Mutation(`/api/enterprise/${organizationId}/requests/${pendingAction.request.id}/actions`, "POST", { action: pendingAction.action, revision: pendingAction.request.revision }); setPendingAction(null); setDetail(null); setRefreshKey((value) => value + 1); setMessage(enterpriseCoreT(locale, "requests.request.action.saved")); }
-    catch (error) { setMessage(error instanceof Error ? error.message : "ACTION_FAILED"); }
+    if (!pendingAction || actionSubmitting) return;
+    const requiresReason = ["CANCEL", "ARCHIVE"].includes(pendingAction.action);
+    const normalizedReason = actionReason.trim();
+    if (requiresReason && normalizedReason.length < 3) {
+      setActionError(enterpriseCoreT(locale, "requests.coordination.professional.response.or.reason"));
+      return;
+    }
+    setActionError("");
+    setActionSubmitting(true);
+    try {
+      await enterpriseV2Mutation(`/api/enterprise/${organizationId}/requests/${pendingAction.request.id}/actions`, "POST", { action: pendingAction.action, revision: pendingAction.request.revision, comment: normalizedReason || undefined });
+      setPendingAction(null); setActionReason(""); setDetail(null); setRefreshKey((value) => value + 1); setMessage(enterpriseCoreT(locale, "requests.request.action.saved"));
+    } catch (error) { setMessage(error instanceof Error ? error.message : "ACTION_FAILED"); }
+    finally { setActionSubmitting(false); }
   }
 
   async function createApproval(event: FormEvent<HTMLFormElement>) {
@@ -90,30 +105,39 @@ export function EnterpriseRequestsWorkspace({ organizationId, members, departmen
     if (deepLinkedRequestId) setDismissedDeepLinkId(deepLinkedRequestId);
   }
 
+  function closeAction() {
+    if (actionSubmitting) return;
+    setPendingAction(null);
+    setActionReason("");
+    setActionError("");
+  }
+
+  const actionRequiresReason = Boolean(pendingAction && ["CANCEL", "ARCHIVE"].includes(pendingAction.action));
+
   return <div className="grid min-w-0 gap-5">
     <ModuleMetrics label={enterpriseCoreT(locale, "requests.request.indicators")}>
       <ModuleMetric label={enterpriseCoreT(locale, "tasks.visible")} value={collection.pagination.total} />
       <ModuleMetric label={enterpriseCoreT(locale, "requests.submitted")} value={collection.items.filter((item) => item.status === "SUBMITTED").length} />
-      <ModuleMetric label={enterpriseCoreT(locale, "requests.waiting.requester")} value={collection.items.filter((item) => item.status === "WAITING_REQUESTER").length} />
+      <ModuleMetric label={statusLabel(locale, "IN_REVIEW")} value={collection.items.filter((item) => item.status === "IN_REVIEW").length} />
       <ModuleMetric label={enterpriseCoreT(locale, "tasks.historicalMetric")} value={legacyRecords.length} />
     </ModuleMetrics>
     <ModuleSection title={enterpriseCoreT(locale, "requests.internal.requests")} description={enterpriseCoreT(locale, "requests.self.service.requests.with.information.resolution.closure.and")} count={`${collection.pagination.total}`} action={canCreate ? <Button onClick={() => setCreateOpen(true)} className="bg-dtsc-blue text-white"><Plus className="h-4 w-4" />{enterpriseCoreT(locale, "requests.new.request")}</Button> : undefined}>
       <div className="grid gap-2 border-y border-dtsc-border py-3 md:grid-cols-3 xl:grid-cols-5">
         <Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder={enterpriseCoreT(locale, "requests.search.requests")} />
-        <NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={[{ id: "", label: enterpriseCoreT(locale, "requests.all.statuses") }, ...requestStatuses.map((id) => ({ id, label: statusLabel(locale, id) }))]} />
-        <Input value={type} onChange={(event) => { setType(event.target.value); setPage(1); }} placeholder={enterpriseCoreT(locale, "requests.request.type")} />
+        <NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={[{ id: "", label: enterpriseCoreT(locale, "requests.all.statuses") }, ...REQUEST_STATUSES.map((id) => ({ id, label: statusLabel(locale, id) }))]} />
+        <NativeSelect value={type} onChange={(value) => { setType(value); setPage(1); }} items={[{ id: "", label: enterpriseCoreT(locale, "requests.request.type") }, ...requestTypeChoices(locale)]} />
         <NativeSelect value={priority} onChange={(value) => { setPriority(value); setPage(1); }} items={corePriorityChoices(locale)} />
         <NativeSelect value={department} onChange={(value) => { setDepartment(value); setPage(1); }} items={departments} />
       </div>
-      {collection.loading ? <p className="py-8 text-center text-sm text-dtsc-muted">{enterpriseCoreT(locale, "common.loading")}</p> : collection.items.length ? <BusinessList ariaLabel={enterpriseCoreT(locale, "requests.requests")}>{collection.items.map((requestRecord) => <BusinessListItem key={requestRecord.id} title={requestRecord.title} status={<StatusBadge tone={statusTone(requestRecord.status)}>{statusLabel(locale, requestRecord.status)}</StatusBadge>} meta={`${requestRecord.requestType} · ${priorityLabel(locale, requestRecord.priority)} · ${formatEnterpriseDate(requestRecord.createdAt, locale)}`} description={requestRecord.description} onOpen={() => setDetail(requestRecord)} openLabel={enterpriseCoreT(locale, "requests.open.named", { title: requestRecord.title })} actions={<ContextActions label={enterpriseCoreT(locale, "requests.request.actions")} actions={actionsFor(requestRecord, canManage, locale, setDetail, setEdit, setApprovalTarget, setPendingAction)} />} />)}</BusinessList> : <EmptyState compact title={enterpriseCoreT(locale, "requests.no.requests")} description={collection.error || (deepLinkedRequestId ? (enterpriseCoreT(locale, "requests.this.request.is.unavailable.or.no.longer.accessible")) : (enterpriseCoreT(locale, "requests.no.request.matches.the.current.filters")))} />}
+      {collection.loading ? <p className="py-8 text-center text-sm text-dtsc-muted">{enterpriseCoreT(locale, "common.loading")}</p> : collection.items.length ? <BusinessList ariaLabel={enterpriseCoreT(locale, "requests.requests")}>{collection.items.map((requestRecord) => <BusinessListItem key={requestRecord.id} title={requestRecord.title} status={<StatusBadge tone={statusTone(requestRecord.status)}>{statusLabel(locale, requestRecord.status)}</StatusBadge>} meta={`${requestTypeLabel(locale, requestRecord.requestType)} · ${priorityLabel(locale, requestRecord.priority)} · ${formatEnterpriseDate(requestRecord.createdAt, locale)}`} description={requestRecord.description} onOpen={() => setDetail(requestRecord)} openLabel={enterpriseCoreT(locale, "requests.open.named", { title: requestRecord.title })} actions={<ContextActions label={enterpriseCoreT(locale, "requests.request.actions")} actions={actionsFor(requestRecord, canManage, locale, setDetail, setEdit, setApprovalTarget, setPendingAction)} />} />)}</BusinessList> : <EmptyState compact title={enterpriseCoreT(locale, "requests.no.requests")} description={collection.error || (deepLinkedRequestId ? enterpriseCoreT(locale, "requests.this.request.is.unavailable.or.no.longer.accessible") : enterpriseCoreT(locale, "requests.no.request.matches.the.current.filters"))} />}
       <div className="mt-3 flex items-center justify-between border-t border-dtsc-border pt-3 text-sm text-dtsc-muted"><span>{enterpriseCoreT(locale, "common.page", { current: collection.pagination.page, total: collection.pagination.pageCount })}</span><div className="flex gap-2"><Button variant="outline" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>{enterpriseCoreT(locale, "common.previous")}</Button><Button variant="outline" disabled={page >= collection.pagination.pageCount} onClick={() => setPage((value) => value + 1)}>{enterpriseCoreT(locale, "common.next")}</Button></div></div>
     </ModuleSection>
     {legacyRecords.length ? <ModuleSection title={enterpriseCoreT(locale, "requests.historical.requests")} description={enterpriseCoreT(locale, "requests.legacy.requests.remain.readable.and.read.only")}><BusinessList ariaLabel={enterpriseCoreT(locale, "requests.legacy.aria")}>{legacyRecords.map((record) => <BusinessListItem key={record.id} title={record.title} status={<StatusBadge>{enterpriseCoreT(locale, "tasks.historyBadge")}</StatusBadge>} meta={`${statusLabel(locale, record.status)} · ${priorityLabel(locale, record.priority)}`} description={record.description || formatEnterpriseDate(record.updatedAt, locale)} />)}</BusinessList></ModuleSection> : null}
-    <Dialog open={createOpen} onClose={() => setCreateOpen(false)} title={enterpriseCoreT(locale, "requests.new.internal.request")} className="h-[94dvh] max-w-4xl"><EnterpriseRequestForm locale={locale} members={members} departments={departments} onSubmit={submitCreate} /></Dialog>
-    <Dialog open={Boolean(edit)} onClose={() => setEdit(null)} title={enterpriseCoreT(locale, "requests.edit.request")} className="h-[94dvh] max-w-4xl">{edit ? <EnterpriseRequestForm locale={locale} members={members} departments={departments} value={edit} onSubmit={submitEdit} /> : null}</Dialog>
-    <Dialog open={Boolean(activeDetail)} onClose={closeDetail} title={activeDetail?.title || ""} className="h-[94dvh] max-w-5xl">{activeDetail ? <div className="grid gap-5 text-sm"><div className="grid gap-3"><div className="flex flex-wrap gap-2"><StatusBadge tone={statusTone(activeDetail.status)}>{statusLabel(locale, activeDetail.status)}</StatusBadge><StatusBadge>{priorityLabel(locale, activeDetail.priority)}</StatusBadge><StatusBadge>{activeDetail.requestType}</StatusBadge></div><p className="leading-6 text-dtsc-muted">{activeDetail.description}</p><p>{enterpriseCoreT(locale, "tasks.due")} : {formatEnterpriseDate(activeDetail.dueAt, locale)}</p><p>{enterpriseCoreT(locale, "tasks.revision")} : {activeDetail.revision}</p>{activeDetail.sourceEntityType ? <p className="text-xs text-dtsc-muted">{enterpriseCoreT(locale, "tasks.linkedSource")} : {activeDetail.sourceModule} · {activeDetail.sourceEntityType}</p> : null}</div><RequestCoordinationPanel organizationId={organizationId} requestId={activeDetail.id} locale={locale} onChanged={() => setRefreshKey((value) => value + 1)} /></div> : null}</Dialog>
-    <Dialog open={Boolean(approvalTarget)} onClose={() => setApprovalTarget(null)} title={enterpriseCoreT(locale, "requests.request.approval")} description={approvalTarget?.title}><form onSubmit={createApproval} className="grid gap-4"><label className="grid gap-1 text-xs font-black text-dtsc-muted">{enterpriseCoreT(locale, "requests.designated.approver")}<EnterpriseApproverSelect organizationId={organizationId} moduleCode="INTERNAL_REQUESTS" locale={locale} /></label><Button className="bg-dtsc-blue text-white">{enterpriseCoreT(locale, "requests.request.approval.2")}</Button></form></Dialog>
-    <Dialog open={Boolean(pendingAction)} onClose={() => setPendingAction(null)} title={enterpriseCoreT(locale, "tasks.confirmAction")}><p className="text-sm text-dtsc-muted">{pendingAction ? requestActionLabel(locale, pendingAction.action) : ""} · {pendingAction?.request.title}</p><Button onClick={() => void runAction()} className="mt-4 bg-dtsc-blue text-white">{enterpriseCoreT(locale, "common.confirm")}</Button></Dialog>
+    <Dialog open={createOpen} onClose={() => setCreateOpen(false)} title={enterpriseCoreT(locale, "requests.new.internal.request")} presentation="editor" className="max-w-4xl"><EnterpriseRequestForm locale={locale} members={members} departments={departments} onSubmit={submitCreate} /></Dialog>
+    <Dialog open={Boolean(edit)} onClose={() => setEdit(null)} title={enterpriseCoreT(locale, "requests.edit.request")} presentation="editor" className="max-w-4xl">{edit ? <EnterpriseRequestForm locale={locale} members={members} departments={departments} value={edit} onSubmit={submitEdit} /> : null}</Dialog>
+    <Dialog open={Boolean(activeDetail)} onClose={closeDetail} title={activeDetail?.title || ""} presentation="editor" className="max-w-5xl">{activeDetail ? <div className="grid gap-5 text-sm"><div className="grid gap-3"><div className="flex flex-wrap gap-2"><StatusBadge tone={statusTone(activeDetail.status)}>{statusLabel(locale, activeDetail.status)}</StatusBadge><StatusBadge>{priorityLabel(locale, activeDetail.priority)}</StatusBadge><StatusBadge>{requestTypeLabel(locale, activeDetail.requestType)}</StatusBadge></div><p className="leading-6 text-dtsc-muted">{activeDetail.description}</p><p>{enterpriseCoreT(locale, "tasks.due")} : {formatEnterpriseDate(activeDetail.dueAt, locale)}</p><p>{enterpriseCoreT(locale, "tasks.revision")} : {activeDetail.revision}</p>{activeDetail.sourceEntityType ? <p className="text-xs text-dtsc-muted">{enterpriseCoreT(locale, "tasks.linkedSource")} : {activeDetail.sourceModule} · {activeDetail.sourceEntityType}</p> : null}</div><RequestCoordinationPanel organizationId={organizationId} requestId={activeDetail.id} locale={locale} onChanged={() => setRefreshKey((value) => value + 1)} /></div> : null}</Dialog>
+    <Dialog open={Boolean(approvalTarget)} onClose={() => setApprovalTarget(null)} title={enterpriseCoreT(locale, "requests.request.approval")} description={approvalTarget?.title} presentation="editor"><form onSubmit={createApproval} className="grid gap-4"><label className="grid gap-1 text-xs font-black text-dtsc-muted">{enterpriseCoreT(locale, "requests.designated.approver")}<EnterpriseApproverSelect organizationId={organizationId} moduleCode="INTERNAL_REQUESTS" locale={locale} /></label><Button className="bg-dtsc-blue text-white">{enterpriseCoreT(locale, "requests.request.approval.2")}</Button></form></Dialog>
+    <Dialog open={Boolean(pendingAction)} onClose={closeAction} title={enterpriseCoreT(locale, "tasks.confirmAction")} presentation={actionRequiresReason ? "editor" : "default"}>{pendingAction ? <div className="grid gap-4"><p className="text-sm text-dtsc-muted">{requestActionLabel(locale, pendingAction.action)} · {pendingAction.request.title}</p>{actionRequiresReason ? <label className="grid gap-1 text-sm font-semibold text-dtsc-ink"><span>{enterpriseCoreT(locale, "requests.coordination.professional.response.or.reason")}</span><textarea value={actionReason} onChange={(event) => { setActionReason(event.target.value); if (actionError) setActionError(""); }} required minLength={3} maxLength={3000} aria-invalid={Boolean(actionError)} aria-describedby={actionError ? "request-action-reason-error" : undefined} className="min-h-32 w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm" />{actionError ? <span id="request-action-reason-error" className="text-xs text-red-700" role="alert">{actionError}</span> : null}</label> : null}<Button disabled={actionSubmitting} onClick={() => void runAction()} className="bg-dtsc-blue text-white">{enterpriseCoreT(locale, "common.confirm")}</Button></div> : null}</Dialog>
   </div>;
 }
 
@@ -126,14 +150,14 @@ function requestActionLabel(locale: string | null | undefined, action: string) {
   return action;
 }
 
-function actionsFor(requestRecord: RequestItem, canManage: boolean, locale: string | null | undefined, detail: (item: RequestItem) => void, edit: (item: RequestItem) => void, approval: (item: RequestItem) => void, action: (value: { request: RequestItem; action: string }) => void): BusinessContextAction[] {
+function actionsFor(requestRecord: RequestItem, canManage: boolean, locale: string | null | undefined, detail: (item: RequestItem) => void, edit: (item: RequestItem) => void, approval: (item: RequestItem) => void, action: (value: PendingRequestAction) => void): BusinessContextAction[] {
   const items: BusinessContextAction[] = [{ id: "open", label: enterpriseCoreT(locale, "common.open"), icon: Eye, onSelect: () => detail(requestRecord) }];
-  if (requestRecord.status === "DRAFT" || requestRecord.status === "CORRECTION_REQUESTED" || canManage) items.push({ id: "edit", label: enterpriseCoreT(locale, "common.edit"), icon: Pencil, onSelect: () => edit(requestRecord) });
+  if (requestRecord.status === "DRAFT" || canManage) items.push({ id: "edit", label: enterpriseCoreT(locale, "common.edit"), icon: Pencil, onSelect: () => edit(requestRecord) });
   if (requestRecord.status === "DRAFT") items.push({ id: "submit", label: enterpriseCoreT(locale, "requests.submit"), icon: Send, onSelect: () => action({ request: requestRecord, action: "SUBMIT" }) });
   if (requestRecord.status === "SUBMITTED") items.push({ id: "take", label: enterpriseCoreT(locale, "requests.take.ownership"), icon: UserCheck, onSelect: () => action({ request: requestRecord, action: "TAKE" }) });
-  if (["SUBMITTED", "IN_REVIEW", "ASSIGNED", "IN_PROGRESS"].includes(requestRecord.status)) items.push({ id: "approval", label: enterpriseCoreT(locale, "requests.request.approval.3"), icon: ShieldCheck, onSelect: () => approval(requestRecord) });
+  if (["SUBMITTED", "IN_REVIEW"].includes(requestRecord.status)) items.push({ id: "approval", label: enterpriseCoreT(locale, "requests.request.approval.3"), icon: ShieldCheck, onSelect: () => approval(requestRecord) });
   if (["IN_REVIEW", "APPROVED"].includes(requestRecord.status)) items.push({ id: "fulfill", label: enterpriseCoreT(locale, "requests.mark.fulfilled"), icon: CheckCircle2, onSelect: () => action({ request: requestRecord, action: "FULFILL" }) });
-  if (["DRAFT", "SUBMITTED", "IN_REVIEW", "ASSIGNED", "IN_PROGRESS", "WAITING_REQUESTER"].includes(requestRecord.status)) items.push({ id: "cancel", label: enterpriseCoreT(locale, "common.cancel"), icon: XCircle, destructive: true, separatorBefore: true, onSelect: () => action({ request: requestRecord, action: "CANCEL" }) });
+  if (["DRAFT", "SUBMITTED", "IN_REVIEW"].includes(requestRecord.status)) items.push({ id: "cancel", label: enterpriseCoreT(locale, "common.cancel"), icon: XCircle, destructive: true, separatorBefore: true, onSelect: () => action({ request: requestRecord, action: "CANCEL" }) });
   if (canManage) items.push({ id: "archive", label: enterpriseCoreT(locale, "common.archive"), icon: Archive, separatorBefore: true, onSelect: () => action({ request: requestRecord, action: "ARCHIVE" }) });
   return items;
 }

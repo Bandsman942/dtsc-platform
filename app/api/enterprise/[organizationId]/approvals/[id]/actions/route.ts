@@ -39,6 +39,11 @@ const professionalApprovalActionSchema = z.object({
   idempotencyKey: z.string().trim().max(240).optional(),
 });
 
+const prepareReviewSchema = z.object({
+  action: z.literal("PREPARE_REVIEW"),
+  revision: z.coerce.number().int().min(1),
+});
+
 async function targetRevision(organizationId: string, approval: CurrentApproval) {
   if (approval.targetEntityType === "EnterpriseAccountTransfer") {
     return (await prisma.enterpriseAccountTransfer.findFirst({ where: { id: approval.targetEntityId, organizationId }, select: { revision: true } }))?.revision ?? null;
@@ -107,13 +112,31 @@ export async function POST(req: Request, { params }: Params) {
   if (!access) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
   const payload = await req.json().catch(() => null);
   const action = typeof payload?.action === "string" ? payload.action : "";
+  const prepareReview = action === "PREPARE_REVIEW";
   const professional = ["REQUEST_CORRECTION", "RESUBMIT", "DELEGATE"].includes(action);
-  const parsed = professional ? professionalApprovalActionSchema.safeParse(payload) : enterpriseApprovalActionSchema.safeParse(payload);
+  const parsed = prepareReview
+    ? prepareReviewSchema.safeParse(payload)
+    : professional
+      ? professionalApprovalActionSchema.safeParse(payload)
+      : enterpriseApprovalActionSchema.safeParse(payload);
   if (!parsed.success) return NextResponse.json({ error: "VALIDATION_ERROR", message: parsed.error.issues[0]?.message || "La décision demandée est invalide." }, { status: 400 });
   const current = await prisma.enterpriseApproval.findFirst({ where: { id, organizationId, archivedAt: null } });
   if (!current) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
 
   try {
+    if (prepareReview) {
+      const data = prepareReviewSchema.parse(payload);
+      if (current.status !== "PENDING") throw new ApprovalCoordinationError("INVALID_STATE", 409, "Cette validation n’est plus en attente de revue.");
+      if (current.revision !== data.revision) throw new ApprovalCoordinationError("VERSION_MISMATCH", 409, "Cette validation a changé. Actualisez avant de préparer la revue.");
+      if (!access.canManage && current.approverUserId !== session.userId && current.requestedByUserId !== session.userId) {
+        throw new ApprovalCoordinationError("FORBIDDEN", 403, "Vous ne pouvez pas préparer la revue de cette validation.");
+      }
+      const version = await ensureApprovalSubmissionVersion({ organizationId, approvalId: id, actorUserId: current.requestedByUserId });
+      await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_APPROVAL_REVIEW_PREPARED", entity: "EnterpriseApproval", entityId: id, request: req, metadata: { organizationId, submissionVersionId: version.id, versionNumber: version.versionNumber } });
+      await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "approvals", approvalId: id, action } });
+      return NextResponse.json({ ok: true, submissionVersion: version });
+    }
+
     if (professional) {
       const data = professionalApprovalActionSchema.parse(payload);
       const result = await applyProfessionalApprovalAction({
@@ -143,9 +166,15 @@ export async function POST(req: Request, { params }: Params) {
     }
 
     const data = enterpriseApprovalActionSchema.parse(payload);
+    if (data.action === "REJECT" && !(data.decisionComment || "").trim()) {
+      throw new ApprovalCoordinationError("REJECTION_REASON_REQUIRED", 400, "Un motif est obligatoire pour rejeter une validation.");
+    }
     if (["APPROVE", "REJECT"].includes(data.action)) {
       if (current.approverUserId !== session.userId) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
-      await ensureApprovalSubmissionVersion({ organizationId, approvalId: id, actorUserId: current.requestedByUserId });
+      const version = await ensureApprovalSubmissionVersion({ organizationId, approvalId: id, actorUserId: current.requestedByUserId });
+      if (!data.reviewedVersionId || data.reviewedVersionId !== version.id) {
+        throw new ApprovalCoordinationError("APPROVAL_REVIEW_REQUIRED", 409, "Ouvrez la validation et relisez la version soumise avant de prendre une décision.");
+      }
     }
     await decideDomainApproval(organizationId, current, session.userId, data, access.canManage);
     if (data.action === "APPROVE" || data.action === "REJECT") {
@@ -155,7 +184,7 @@ export async function POST(req: Request, { params }: Params) {
     if (current.requestedByUserId !== session.userId) {
       await notifyUser({ userId: current.requestedByUserId, organizationId, type: "ENTERPRISE_APPROVAL", title: data.action === "APPROVE" ? "Validation approuvée" : data.action === "REJECT" ? "Validation rejetée" : "Validation annulée", body: data.decisionComment || "Une décision a été prise sur votre demande de validation.", targetUrl: workCoordinationDeepLink("APPROVAL", id) });
     }
-    await writeAuditLog({ userId: session.userId, action: `ENTERPRISE_APPROVAL_${data.action}`, entity: "EnterpriseApproval", entityId: id, request: req, metadata: { organizationId, targetEntityType: current.targetEntityType, targetEntityId: current.targetEntityId, fromStatus: current.status, toStatus: approval?.status } });
+    await writeAuditLog({ userId: session.userId, action: `ENTERPRISE_APPROVAL_${data.action}`, entity: "EnterpriseApproval", entityId: id, request: req, metadata: { organizationId, targetEntityType: current.targetEntityType, targetEntityId: current.targetEntityId, fromStatus: current.status, toStatus: approval?.status, reviewedVersionId: data.reviewedVersionId || null } });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "approvals", approvalId: id, action: data.action } });
     return NextResponse.json({ ok: true, approval });
   } catch (error) {

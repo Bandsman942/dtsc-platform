@@ -3,91 +3,61 @@
 
 ## Objectif et périmètre
 
-Ce guide explique l’utilisation opérationnelle de **Réunions** dans DTSC Platform. Il décrit uniquement les actions disponibles dans l’application, leurs règles métier et les contrôles appliqués.
+Le module **Réunions** couvre la préparation, la tenue, le compte rendu versionné, les décisions et les tâches de suivi.
 
-## Rôle du module
+## Planifier une réunion
 
-Le module **Réunions** couvre la préparation, la tenue, le compte rendu, les décisions et les tâches de suivi.
+Renseignez le titre, les dates, le mode, le département, les participants et l’ordre du jour.
 
-Le bouton **Guide utilisateur** ouvre ce guide directement dans l’application.
+Le formulaire adapte les champs au mode choisi :
 
-## Créer une réunion
+- **En ligne** : lien de réunion obligatoire ;
+- **Présentiel** : lieu physique obligatoire ;
+- **Hybride** : lieu physique et lien obligatoires.
 
-Renseignez le titre, l’objet, les dates, le mode, le lieu ou lien d’appel, l’organisateur, les participants, le département et la source éventuelle.
+Quand le mode change, les données devenues incompatibles ne sont pas conservées comme seconde source cachée.
 
-Lorsque la réunion est créée depuis le Calendrier interne, le créateur reste responsable et les autres collaborateurs sont invités. Une réunion n’apparaît dans le calendrier personnel d’un participant qu’après son acceptation.
+## Participants et réponses
 
-## Conflits et créneaux
+Les participants doivent être des membres actifs de l’organisation. Lors d’une modification, les participants déjà présents conservent leur réponse `ACCEPTED`, `DECLINED`, `TENTATIVE` ou `INVITED`. Seuls les nouveaux participants démarrent à `INVITED`.
 
-Les conflits du responsable et de chaque participant sont contrôlés avant la planification et de nouveau avant l’acceptation.
-
-Le moteur local de proposition de créneaux peut rechercher des périodes compatibles sur quatorze jours maximum.
-
-## Ordre du jour
-
-Ajoutez des sujets avec :
-
-- un titre ;
-- une description ;
-- un responsable facultatif ;
-- une durée estimée ;
-- une position ;
-- un statut de traitement.
-
-## Checklist et progression
-
-Les résultats de préparation ou de suivi peuvent être ajoutés à la checklist. La progression est calculée à partir des éléments réalisés.
-
-## Compte rendu
-
-Chaque enregistrement crée une version. Une version publiée conserve son numéro, son auteur et sa date. Une nouvelle version ne remplace jamais silencieusement l’historique.
-
-## Décisions et tâches de suivi
-
-Une décision peut être transformée explicitement en vraie tâche :
-
-1. la tâche est créée dans le module Tâches ;
-2. le responsable et l’échéance sont enregistrés ;
-3. le lien réunion → tâche est conservé ;
-4. la tâche apparaît dans le calendrier lorsqu’elle est datée.
-
-## Commentaires et mentions
-
-Les participants autorisés peuvent commenter et mentionner des collaborateurs. Les mentions cliquables proposent des actions professionnelles soumises aux permissions actuelles.
-
-## Appels audio et vidéo
-
-Les réunions réutilisent l’infrastructure Collaboration déjà déployée. Aucun second moteur d’appel n’est créé.
-
-## Ressources
-
-Le créateur responsable peut réserver une salle, un véhicule, un équipement ou un espace de travail pour sa réunion. Le moteur interdit les chevauchements de réservation.
-
-## Synchronisation externe
-
-Google Calendar et Microsoft 365 restent désactivés proprement tant que leurs variables OAuth ne sont pas configurées. Aucun faux succès ni aucune exception Production ne sont produits.
-
-## Accès et permissions
-
-- Ouvrez le module depuis la navigation du contexte actif.
-- Les boutons et actions dépendent du rôle, du poste officiel, des permissions individuelles, du tenant actif et de l’état du module.
-- Une action masquée dans l’interface reste également refusée par le serveur lorsqu’elle n’est pas autorisée.
-- Sur mobile, utilisez le parcours liste → détail plein écran → formulaire plein écran → retour.
+Un participant retiré est supprimé explicitement de la réunion.
 
 ## Statuts, validations et traçabilité
 
-- Les statuts visibles correspondent aux états réellement persistés ; les codes techniques ne sont pas présentés comme libellés métier.
-- Les validations, refus, annulations, réouvertures et actions sensibles conservent leur auteur, leur date et, lorsque requis, leur motif.
-- Une action répétée avec la même clé métier ne doit pas produire de doublon ni un second impact.
+Le cycle principal est **Planifiée → En cours → Terminée**, avec possibilité d’annulation selon les permissions. L’édition générale n’est autorisée que pendant les états planifié ou en cours.
+
+**Annuler** et **Archiver** demandent un motif professionnel dans l’interface guidée. Les changements d’état, réponses des participants, versions de compte rendu, décisions et actions de suivi restent historisés avec leurs acteurs.
+
+## Ordre du jour structuré
+
+La structure de l’ordre du jour est préparée avant le démarrage. Pendant la réunion, les sujets peuvent être marqués comme discutés, reportés ou annulés. Après la fin, l’ordre du jour ne peut plus être modifié.
+
+## Compte rendu versionné
+
+Le compte rendu n’est jamais saisi dans le formulaire général de réunion. Il possède son propre moteur versionné.
+
+- un brouillon de compte rendu peut être enregistré pendant ou après la réunion ;
+- chaque enregistrement crée une nouvelle version ;
+- la publication est autorisée uniquement lorsque la réunion est `COMPLETED` ;
+- l’historique des versions reste conservé.
+
+## Décisions et tâches de suivi
+
+Les décisions sont enregistrées pendant ou après la réunion. Une décision peut produire une vraie tâche liée. Les actions de suivi peuvent être liées ou déliées pendant ou après la réunion, mais pas avant son démarrage ni après annulation.
+
+## Accès et permissions
+
+L’organisateur ou un responsable autorisé pilote les changements d’état et les modifications. Toutes les mutations restent vérifiées côté serveur dans l’organisation active.
 
 ## Sécurité et confidentialité
 
-- Les données sont limitées à l’utilisateur ou à l’organisation autorisée.
-- Les références reçues du navigateur sont revérifiées côté serveur dans le même contexte.
-- Les documents et informations sensibles utilisent les routes privées et les contrôles d’accès prévus par le module.
+Les participants, départements, décisions, comptes rendus et tâches de suivi sont revalidés dans la même organisation. Les liens et lieux ne donnent aucun droit supplémentaire : l’accès dépend toujours de la session, du membership et des permissions serveur applicables à la réunion.
+
+## Expérience guidée
+
+Les formulaires et détails utilisent la présentation éditeur adaptée au mobile. Les champs requis changent selon le mode et les erreurs n’effacent pas la saisie en cours.
 
 ## Dépannage
 
-- Actualisez la vue si une opération validée n’apparaît pas immédiatement.
-- Vérifiez le contexte d’organisation, les permissions, le statut du module et la connexion réseau.
-- En cas de refus persistant, conservez le message affiché et contactez le responsable du module ou le support DTSC sans partager de donnée sensible.
+Si la publication d’un compte rendu est refusée, terminez d’abord la réunion. Si un champ lieu/lien est signalé, vérifiez le mode actif. Après une modification concurrente, actualisez la réunion avant de reprendre l’action.

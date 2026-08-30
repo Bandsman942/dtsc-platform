@@ -13,6 +13,8 @@ export const meetingCoordinationActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("UNLINK_TASK"), meetingActionId: z.string().cuid() }),
 ]);
 
+type MeetingCoordinationPayload = z.infer<typeof meetingCoordinationActionSchema>;
+
 export class MeetingCoordinationError extends Error {
   constructor(public code: string, public status: number, message: string) {
     super(message);
@@ -68,11 +70,23 @@ export async function loadMeetingCoordination(organizationId: string, meetingId:
   };
 }
 
-export async function applyMeetingCoordinationAction(args: { organizationId: string; meetingId: string; actorUserId: string; payload: z.infer<typeof meetingCoordinationActionSchema> }) {
+export function meetingCoordinationCapabilities(status: string, canMutate: boolean) {
+  return {
+    canUpdateAgenda: canMutate && ["SCHEDULED", "IN_PROGRESS"].includes(status),
+    canAddOrDeleteAgenda: canMutate && status === "SCHEDULED",
+    canSaveMinutes: canMutate && ["IN_PROGRESS", "COMPLETED"].includes(status),
+    canPublishMinutes: canMutate && status === "COMPLETED",
+    canCreateFollowUpActions: canMutate && ["IN_PROGRESS", "COMPLETED"].includes(status),
+  };
+}
+
+export async function applyMeetingCoordinationAction(args: { organizationId: string; meetingId: string; actorUserId: string; payload: MeetingCoordinationPayload }) {
   const { organizationId, meetingId, actorUserId, payload } = args;
   return prisma.$transaction(async (tx) => {
     const meeting = await tx.enterpriseMeeting.findFirst({ where: { id: meetingId, organizationId, archivedAt: null }, include: { participants: true } });
     if (!meeting) throw new MeetingCoordinationError("NOT_FOUND", 404, "Réunion introuvable.");
+    assertMeetingCoordinationState(meeting.status, payload);
+
     if (payload.action === "ADD_AGENDA_ITEM") {
       if (payload.ownerUserId) await requireMeetingMember(tx, organizationId, meeting, payload.ownerUserId);
       const item = await tx.enterpriseMeetingAgendaItem.create({ data: { organizationId, meetingId, title: payload.title, description: normalize(payload.description), ownerUserId: normalize(payload.ownerUserId), durationMinutes: payload.durationMinutes || null, position: payload.position, createdById: actorUserId } });
@@ -124,6 +138,23 @@ export async function applyMeetingCoordinationAction(args: { organizationId: str
     await addEvent(tx, organizationId, meetingId, actorUserId, "MEETING_FOLLOW_UP_TASK_UNLINKED", "Tâche de suivi déliée de la réunion.");
     return { deletedId: action.id };
   });
+}
+
+function assertMeetingCoordinationState(status: string, payload: MeetingCoordinationPayload) {
+  if (status === "CANCELLED") throw new MeetingCoordinationError("MEETING_COORDINATION_LOCKED", 409, "La coordination d’une réunion annulée est verrouillée.");
+  if ((payload.action === "ADD_AGENDA_ITEM" || payload.action === "DELETE_AGENDA_ITEM") && status !== "SCHEDULED") {
+    throw new MeetingCoordinationError("AGENDA_STRUCTURE_LOCKED", 409, "La structure de l’ordre du jour ne peut être modifiée qu’avant le démarrage de la réunion.");
+  }
+  if (payload.action === "SET_AGENDA_STATUS" && !["SCHEDULED", "IN_PROGRESS"].includes(status)) {
+    throw new MeetingCoordinationError("AGENDA_STATUS_LOCKED", 409, "L’ordre du jour ne peut plus changer après la fin de la réunion.");
+  }
+  if (payload.action === "SAVE_MINUTES") {
+    if (!["IN_PROGRESS", "COMPLETED"].includes(status)) throw new MeetingCoordinationError("MINUTES_NOT_AVAILABLE", 409, "Le compte rendu est disponible pendant ou après la réunion.");
+    if (payload.publish && status !== "COMPLETED") throw new MeetingCoordinationError("MINUTES_PUBLISH_REQUIRES_COMPLETION", 409, "Terminez la réunion avant de publier le compte rendu.");
+  }
+  if ((payload.action === "LINK_TASK" || payload.action === "UNLINK_TASK") && !["IN_PROGRESS", "COMPLETED"].includes(status)) {
+    throw new MeetingCoordinationError("FOLLOW_UP_NOT_AVAILABLE", 409, "Les actions de suivi sont disponibles pendant ou après la réunion.");
+  }
 }
 
 async function requireMeetingMember(tx: Prisma.TransactionClient, organizationId: string, meeting: { organizerUserId: string; participants: Array<{ userId: string }> }, userId: string) {

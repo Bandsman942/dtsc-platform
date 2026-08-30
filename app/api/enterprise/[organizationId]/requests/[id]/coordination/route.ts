@@ -6,6 +6,7 @@ import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 import {
   applyRequestCoordinationAction,
+  canCoordinateRequest,
   getRequestCoordinationContext,
   loadRequestCoordination,
   requestCoordinationActionSchema,
@@ -23,12 +24,14 @@ export async function GET(req: Request, { params }: Params) {
   const context = await getRequestCoordinationContext({ session, organizationId, requestId: id, action: "read" });
   if (!context) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
   const coordination = await loadRequestCoordination(organizationId, id);
+  const canOperate = context.canOperate || context.access.canManage;
+  const canRequesterAct = context.isRequester || context.access.canManage;
   const capabilities = {
-    canRequestInformation: context.canOperate && ["SUBMITTED", "IN_REVIEW", "ASSIGNED", "IN_PROGRESS"].includes(context.request.status),
-    canRespond: context.isRequester && context.request.status === "WAITING_REQUESTER",
-    canResolve: context.canOperate && ["IN_REVIEW", "ASSIGNED", "IN_PROGRESS", "WAITING_APPROVAL", "APPROVED"].includes(context.request.status),
-    canClose: context.canOperate && ["RESOLVED", "FULFILLED"].includes(context.request.status),
-    canReopen: context.isRequester && ["CLOSED", "RESOLVED", "FULFILLED"].includes(context.request.status),
+    canRequestInformation: canOperate && canCoordinateRequest("REQUEST_INFORMATION", context.request.status),
+    canRespond: canRequesterAct && canCoordinateRequest("RESPOND", context.request.status),
+    canResolve: canOperate && canCoordinateRequest("RESOLVE", context.request.status),
+    canClose: canOperate && canCoordinateRequest("CLOSE", context.request.status),
+    canReopen: canRequesterAct && canCoordinateRequest("REOPEN", context.request.status),
   };
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, requestId: id, domain: "request-coordination" } });
   return NextResponse.json({ request: context.request, coordination, capabilities });
@@ -48,10 +51,11 @@ export async function POST(req: Request, { params }: Params) {
   if (!parsed.success) return NextResponse.json({ error: "VALIDATION_ERROR", message: parsed.error.issues[0]?.message || "Action invalide." }, { status: 400 });
   try {
     const requestRecord = await applyRequestCoordinationAction({ organizationId, requestId: id, actorUserId: session.userId, canManage: context.access.canManage, canOperate: context.canOperate, isRequester: context.isRequester, payload: parsed.data });
+    if (!requestRecord) throw new RequestCoordinationError("NOT_FOUND", 404, "Demande introuvable après la mutation.");
     const coordination = await loadRequestCoordination(organizationId, id);
     const recipientId = parsed.data.action === "REQUEST_INFORMATION" || parsed.data.action === "RESOLVE" || parsed.data.action === "CLOSE" ? context.request.requestedByUserId : context.request.assignedToUserId;
     if (recipientId && recipientId !== session.userId) await notifyUser({ userId: recipientId, organizationId, type: "ENTERPRISE_REQUEST", title: requestTitle(parsed.data.action), body: parsed.data.comment || context.request.title, targetUrl: workCoordinationDeepLink("REQUEST", id) });
-    await writeAuditLog({ userId: session.userId, action: `ENTERPRISE_REQUEST_${parsed.data.action}`, entity: "EnterpriseRequest", entityId: id, request: req, metadata: { organizationId, fromStatus: context.request.status, toStatus: requestRecord.status } });
+    await writeAuditLog({ userId: session.userId, action: `ENTERPRISE_REQUEST_${parsed.data.action}`, entity: "EnterpriseRequest", entityId: id, request: req, metadata: { organizationId, fromStatus: context.request.status, toStatus: requestRecord.status, revision: parsed.data.revision } });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, requestId: id, action: parsed.data.action, domain: "request-coordination" } });
     return NextResponse.json({ ok: true, request: requestRecord, coordination });
   } catch (error) {
@@ -66,7 +70,7 @@ export async function POST(req: Request, { params }: Params) {
 function requestTitle(action: string) {
   if (action === "REQUEST_INFORMATION") return "Informations demandées";
   if (action === "RESPOND") return "Réponse reçue";
-  if (action === "RESOLVE") return "Demande résolue";
-  if (action === "CLOSE") return "Demande clôturée";
+  if (action === "RESOLVE") return "Demande traitée";
+  if (action === "CLOSE") return "Traitement clôturé";
   return "Demande rouverte";
 }

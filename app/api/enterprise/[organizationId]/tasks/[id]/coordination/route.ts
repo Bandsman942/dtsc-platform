@@ -21,8 +21,9 @@ export async function GET(req: Request, { params }: Params) {
   const context = await getTaskCoordinationContext({ session, organizationId, taskId: id, action: "read" });
   if (!context) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
   const coordination = await loadTaskCoordination(organizationId, id);
+  const coordinationMutable = !["DONE", "CANCELLED"].includes(context.task.status);
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, taskId: id, domain: "task-coordination" } });
-  return NextResponse.json({ task: context.task, coordination, capabilities: { canUpdate: context.canMutate, canManage: context.access.canManage } });
+  return NextResponse.json({ task: context.task, coordination, capabilities: { canUpdate: context.canMutate && coordinationMutable, canManage: context.access.canManage } });
 }
 
 export async function POST(req: Request, { params }: Params) {
@@ -36,13 +37,16 @@ export async function POST(req: Request, { params }: Params) {
   const context = await getTaskCoordinationContext({ session, organizationId, taskId: id, action: "write" });
   if (!context) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
   if (!context.canMutate) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+  if (["DONE", "CANCELLED"].includes(context.task.status)) {
+    return NextResponse.json({ error: "TASK_COORDINATION_LOCKED", message: "La coordination d’une tâche terminée ou annulée est verrouillée." }, { status: 409 });
+  }
   const parsed = taskCoordinationActionSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "VALIDATION_ERROR", message: parsed.error.issues[0]?.message || "Action de coordination invalide." }, { status: 400 });
 
   try {
     const result = await applyTaskCoordinationAction({ organizationId, taskId: id, actorUserId: session.userId, payload: parsed.data });
     const coordination = await loadTaskCoordination(organizationId, id);
-    await writeAuditLog({ userId: session.userId, action: `ENTERPRISE_TASK_${parsed.data.action}`, entity: "EnterpriseTask", entityId: id, request: req, metadata: { organizationId } });
+    await writeAuditLog({ userId: session.userId, action: `ENTERPRISE_TASK_${parsed.data.action}`, entity: "EnterpriseTask", entityId: id, request: req, metadata: { organizationId, taskStatus: context.task.status } });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, taskId: id, action: parsed.data.action, domain: "task-coordination" } });
     return NextResponse.json({ ok: true, result, coordination });
   } catch (error) {

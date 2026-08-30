@@ -72,6 +72,7 @@ export async function applyProfessionalApprovalAction(args: {
       if (!supportsProfessionalApprovalCorrection(approval.targetEntityType)) throw new ApprovalCoordinationError("TARGET_ACTION_NOT_SUPPORTED", 400, "Ce type de validation ne prend pas en charge le cycle correction / resoumission.");
       if (!args.canManage && approval.requestedByUserId !== args.actorUserId) throw new ApprovalCoordinationError("FORBIDDEN", 403, "Seul le demandeur peut soumettre la correction.");
       if (approval.status !== "CORRECTION_REQUESTED") throw new ApprovalCoordinationError("INVALID_STATE", 409, "Cette validation n’attend pas de correction.");
+      await syncTargetForResubmission(tx, approval.targetEntityType, approval.targetEntityId, args.organizationId);
       const latest = await tx.enterpriseApprovalSubmissionVersion.findFirst({ where: { organizationId: args.organizationId, approvalId: approval.id }, orderBy: { versionNumber: "desc" } });
       const snapshot = await approvalTargetSnapshot(tx, args.organizationId, approval.targetEntityType, approval.targetEntityId);
       const version = await tx.enterpriseApprovalSubmissionVersion.create({
@@ -84,7 +85,6 @@ export async function applyProfessionalApprovalAction(args: {
           submissionComment: normalize(args.reason),
         },
       });
-      await syncTargetForResubmission(tx, approval.targetEntityType, approval.targetEntityId, args.organizationId);
       const updated = await tx.enterpriseApproval.update({ where: { id: approval.id }, data: { status: "PENDING", decisionComment: null, decidedAt: null, revision: { increment: 1 } } });
       await addApprovalEvent(tx, args.organizationId, approval.id, args.actorUserId, "APPROVAL_RESUBMITTED", `Correction soumise en version ${version.versionNumber}.`, approval.status, updated.status, { submissionVersionId: version.id });
       return { approval: updated, submissionVersion: version };
@@ -242,13 +242,25 @@ async function syncTargetApproverForDelegation(tx: Prisma.TransactionClient, ent
 }
 
 async function syncTargetForCorrection(tx: Prisma.TransactionClient, entityType: string, entityId: string, organizationId: string) {
-  if (entityType === "EnterpriseTask") await tx.enterpriseTask.updateMany({ where: { id: entityId, organizationId }, data: { status: "CORRECTION_REQUESTED", revision: { increment: 1 } } });
-  if (entityType === "EnterpriseRequest") await tx.enterpriseRequest.updateMany({ where: { id: entityId, organizationId }, data: { status: "CORRECTION_REQUESTED", revision: { increment: 1 } } });
+  if (entityType === "EnterpriseRequest") {
+    const updated = await tx.enterpriseRequest.updateMany({ where: { id: entityId, organizationId, archivedAt: null }, data: { status: "DRAFT", closedAt: null, revision: { increment: 1 } } });
+    if (updated.count !== 1) throw new ApprovalCoordinationError("TARGET_CONFLICT", 409, "La demande liée a changé pendant la demande de correction.");
+  }
+  if (entityType === "EnterpriseTask") {
+    const exists = await tx.enterpriseTask.count({ where: { id: entityId, organizationId, archivedAt: null } });
+    if (!exists) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "La tâche liée est introuvable.");
+  }
 }
 
 async function syncTargetForResubmission(tx: Prisma.TransactionClient, entityType: string, entityId: string, organizationId: string) {
-  if (entityType === "EnterpriseTask") await tx.enterpriseTask.updateMany({ where: { id: entityId, organizationId }, data: { status: "PENDING_APPROVAL", revision: { increment: 1 } } });
-  if (entityType === "EnterpriseRequest") await tx.enterpriseRequest.updateMany({ where: { id: entityId, organizationId }, data: { status: "SUBMITTED", revision: { increment: 1 } } });
+  if (entityType === "EnterpriseRequest") {
+    const updated = await tx.enterpriseRequest.updateMany({ where: { id: entityId, organizationId, status: "DRAFT", archivedAt: null }, data: { status: "SUBMITTED", revision: { increment: 1 } } });
+    if (updated.count !== 1) throw new ApprovalCoordinationError("TARGET_CONFLICT", 409, "La demande liée doit être en brouillon corrigé avant resoumission.");
+  }
+  if (entityType === "EnterpriseTask") {
+    const exists = await tx.enterpriseTask.count({ where: { id: entityId, organizationId, archivedAt: null } });
+    if (!exists) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "La tâche liée est introuvable.");
+  }
 }
 
 async function addApprovalEvent(tx: Prisma.TransactionClient, organizationId: string, approvalId: string, actorUserId: string, eventType: string, summary: string, fromStatus: string, toStatus: string, metadata: Prisma.InputJsonValue) {

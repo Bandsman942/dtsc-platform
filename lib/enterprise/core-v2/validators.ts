@@ -73,12 +73,9 @@ export const enterpriseRequestCreateSchema = z.object({
   ...sourceFields,
 });
 
-// Les anciennes demandes peuvent contenir un type historique hors catalogue. L'update
-// reste compatible afin de ne pas rendre ces fiches impossibles à modifier ; les nouvelles
-// demandes, elles, sont strictement bornées par REQUEST_TYPES.
 export const enterpriseRequestUpdateSchema = z.object({
   revision: z.coerce.number().int().min(1),
-  requestType: z.string().trim().min(2).max(100).optional(),
+  requestType: z.enum(REQUEST_TYPES).optional(),
   title: z.string().trim().min(3).max(180).optional(),
   description: z.string().trim().min(3).max(5000).optional(),
   priority: z.enum(TASK_PRIORITIES).optional(),
@@ -103,6 +100,7 @@ export const enterpriseApprovalActionSchema = z.object({
   action: z.enum(APPROVAL_ACTIONS),
   revision: z.coerce.number().int().min(1),
   decisionComment: optionalText(3000),
+  reviewedVersionId: optionalId,
 });
 
 const meetingParticipantSchema = z.object({
@@ -145,7 +143,6 @@ export const enterpriseMeetingUpdateSchema = z.object({
   locationMode: z.enum(MEETING_LOCATION_MODES).optional(),
   physicalLocation: optionalText(500),
   meetingLink: optionalText(1000),
-  minutes: optionalText(20000),
   departmentId: optionalId,
   participants: z.array(meetingParticipantSchema).max(100).optional(),
 });

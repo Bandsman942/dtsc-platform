@@ -78,7 +78,11 @@ export const workflowVersionSchema = z.object({
   configuration: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
 });
 
-export const workflowPublishSchema = z.object({ acknowledgeReadiness: z.literal(true) });
+export const workflowPublishSchema = z.object({
+  acknowledgeReadiness: z.literal(true),
+  reviewedVersionId: idSchema,
+  reviewToken: z.string().trim().regex(/^[a-f0-9]{64}$/),
+});
 export const workflowManualStartSchema = z.object({ workflowDefinitionId: idSchema, sourceEntityType: z.enum(WORKFLOW_ENTITY_TYPES), sourceEntityId: idSchema });
 export const workflowRetrySchema = z.object({ reason: z.string().trim().min(3).max(500) });
 export const workflowCancelSchema = z.object({ reason: z.string().trim().min(3).max(500), revision: z.number().int().positive() });

@@ -39,6 +39,9 @@ export function EnterpriseTasksWorkspace({ organizationId, members, departments,
   const [dismissedDeepLinkId, setDismissedDeepLinkId] = useState<string | null>(null);
   const [edit, setEdit] = useState<Task | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+  const [actionComment, setActionComment] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [actionSubmitting, setActionSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   useToastMessage(message);
   const params = useMemo(() => {
@@ -76,17 +79,35 @@ export function EnterpriseTasksWorkspace({ organizationId, members, departments,
   }
 
   async function runAction() {
-    if (!pendingAction) return;
+    if (!pendingAction || actionSubmitting) return;
+    const requiresReason = ["BLOCK", "CANCEL", "ARCHIVE"].includes(pendingAction.action);
+    const normalizedReason = actionComment.trim();
+    if (requiresReason && normalizedReason.length < 3) {
+      setActionError(enterpriseCoreT(locale, "tasks.coordination.blockingReason"));
+      return;
+    }
+    setActionError("");
+    setActionSubmitting(true);
     try {
-      await enterpriseV2Mutation(`/api/enterprise/${organizationId}/tasks/${pendingAction.task.id}/actions`, "POST", { action: pendingAction.action, revision: pendingAction.task.revision });
-      setPendingAction(null); setDetail(null); setRefreshKey((value) => value + 1); setMessage(enterpriseCoreT(locale, "tasks.actionSaved"));
+      await enterpriseV2Mutation(`/api/enterprise/${organizationId}/tasks/${pendingAction.task.id}/actions`, "POST", { action: pendingAction.action, revision: pendingAction.task.revision, comment: normalizedReason || undefined });
+      setPendingAction(null); setActionComment(""); setDetail(null); setRefreshKey((value) => value + 1); setMessage(enterpriseCoreT(locale, "tasks.actionSaved"));
     } catch (error) { setMessage(error instanceof Error ? error.message : "ACTION_FAILED"); }
+    finally { setActionSubmitting(false); }
   }
 
   function closeDetail() {
     setDetail(null);
     if (deepLinkedTaskId) setDismissedDeepLinkId(deepLinkedTaskId);
   }
+
+  function closeAction() {
+    if (actionSubmitting) return;
+    setPendingAction(null);
+    setActionComment("");
+    setActionError("");
+  }
+
+  const actionRequiresReason = Boolean(pendingAction && ["BLOCK", "CANCEL", "ARCHIVE"].includes(pendingAction.action));
 
   return <div className="grid min-w-0 gap-5">
     <ModuleMetrics label={enterpriseCoreT(locale, "tasks.indicators")}>
@@ -108,10 +129,10 @@ export function EnterpriseTasksWorkspace({ organizationId, members, departments,
       <div className="mt-3 flex items-center justify-between border-t border-dtsc-border pt-3 text-sm text-dtsc-muted"><span>{enterpriseCoreT(locale, "common.page", { current: collection.pagination.page, total: collection.pagination.pageCount })}</span><div className="flex gap-2"><Button variant="outline" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>{enterpriseCoreT(locale, "common.previous")}</Button><Button variant="outline" disabled={page >= collection.pagination.pageCount} onClick={() => setPage((value) => value + 1)}>{enterpriseCoreT(locale, "common.next")}</Button></div></div>
     </ModuleSection>
     {legacyRecords.length ? <ModuleSection title={enterpriseCoreT(locale, "tasks.historicalTitle")} description={enterpriseCoreT(locale, "tasks.historicalDescription")}><BusinessList ariaLabel="legacy">{legacyRecords.map((record) => <BusinessListItem key={record.id} title={record.title} status={<StatusBadge>{enterpriseCoreT(locale, "tasks.historyBadge")}</StatusBadge>} meta={`${taskTypeLabel(locale, record.recordType)} · ${statusLabel(locale, record.status)}`} description={record.description || formatEnterpriseDate(record.updatedAt, locale)} />)}</BusinessList></ModuleSection> : null}
-    <Dialog open={createOpen} onClose={() => setCreateOpen(false)} title={enterpriseCoreT(locale, "tasks.newTask")} className="h-[94dvh] max-w-4xl"><EnterpriseTaskForm locale={locale} members={members} departments={departments} onSubmit={submitCreate} /></Dialog>
-    <Dialog open={Boolean(edit)} onClose={() => setEdit(null)} title={enterpriseCoreT(locale, "tasks.editTask")} className="h-[94dvh] max-w-4xl">{edit ? <EnterpriseTaskForm locale={locale} members={members} departments={departments} value={edit} onSubmit={submitEdit} /> : null}</Dialog>
-    <Dialog open={Boolean(activeDetail)} onClose={closeDetail} title={activeDetail?.title || ""} className="h-[94dvh] max-w-5xl">{activeDetail ? <div className="grid gap-5 text-sm"><div className="grid gap-3"><div className="flex gap-2"><StatusBadge tone={statusTone(activeDetail.status)}>{statusLabel(locale, activeDetail.status)}</StatusBadge><StatusBadge>{priorityLabel(locale, activeDetail.priority)}</StatusBadge></div><p className="leading-6 text-dtsc-muted">{activeDetail.description || enterpriseCoreT(locale, "common.noDescription")}</p><p>{enterpriseCoreT(locale, "tasks.due")} : {formatEnterpriseDate(activeDetail.dueAt, locale)}</p><p>{enterpriseCoreT(locale, "tasks.revision")} : {activeDetail.revision}</p>{activeDetail.sourceEntityType ? <p className="text-xs text-dtsc-muted">{enterpriseCoreT(locale, "tasks.linkedSource")} : {activeDetail.sourceModule} · {activeDetail.sourceEntityType}</p> : null}</div><TaskCoordinationPanel organizationId={organizationId} taskId={activeDetail.id} canUpdate={canManage || activeDetail.createdByUserId === collection.meta.currentUserId || activeDetail.assignedToUserId === collection.meta.currentUserId} taskChoices={collection.items.map((task) => ({ id: task.id, title: task.title }))} members={members} locale={locale} /></div> : null}</Dialog>
-    <Dialog open={Boolean(pendingAction)} onClose={() => setPendingAction(null)} title={enterpriseCoreT(locale, "tasks.confirmAction")}><p className="text-sm text-dtsc-muted">{pendingAction?.label} · {pendingAction?.task.title}</p><Button onClick={() => void runAction()} className="mt-4 bg-dtsc-blue text-white">{enterpriseCoreT(locale, "common.confirm")}</Button></Dialog>
+    <Dialog open={createOpen} onClose={() => setCreateOpen(false)} title={enterpriseCoreT(locale, "tasks.newTask")} presentation="editor" className="max-w-4xl"><EnterpriseTaskForm locale={locale} members={members} departments={departments} onSubmit={submitCreate} /></Dialog>
+    <Dialog open={Boolean(edit)} onClose={() => setEdit(null)} title={enterpriseCoreT(locale, "tasks.editTask")} presentation="editor" className="max-w-4xl">{edit ? <EnterpriseTaskForm locale={locale} members={members} departments={departments} value={edit} onSubmit={submitEdit} /> : null}</Dialog>
+    <Dialog open={Boolean(activeDetail)} onClose={closeDetail} title={activeDetail?.title || ""} presentation="editor" className="max-w-5xl">{activeDetail ? <div className="grid gap-5 text-sm"><div className="grid gap-3"><div className="flex gap-2"><StatusBadge tone={statusTone(activeDetail.status)}>{statusLabel(locale, activeDetail.status)}</StatusBadge><StatusBadge>{priorityLabel(locale, activeDetail.priority)}</StatusBadge></div><p className="leading-6 text-dtsc-muted">{activeDetail.description || enterpriseCoreT(locale, "common.noDescription")}</p><p>{enterpriseCoreT(locale, "tasks.due")} : {formatEnterpriseDate(activeDetail.dueAt, locale)}</p><p>{enterpriseCoreT(locale, "tasks.revision")} : {activeDetail.revision}</p>{activeDetail.sourceEntityType ? <p className="text-xs text-dtsc-muted">{enterpriseCoreT(locale, "tasks.linkedSource")} : {activeDetail.sourceModule} · {activeDetail.sourceEntityType}</p> : null}</div><TaskCoordinationPanel organizationId={organizationId} taskId={activeDetail.id} canUpdate={canManage || activeDetail.createdByUserId === collection.meta.currentUserId || activeDetail.assignedToUserId === collection.meta.currentUserId} taskChoices={collection.items.map((task) => ({ id: task.id, title: task.title }))} members={members} locale={locale} /></div> : null}</Dialog>
+    <Dialog open={Boolean(pendingAction)} onClose={closeAction} title={enterpriseCoreT(locale, "tasks.confirmAction")} presentation={actionRequiresReason ? "editor" : "default"}>{pendingAction ? <div className="grid gap-4"><p className="text-sm text-dtsc-muted">{pendingAction.label} · {pendingAction.task.title}</p>{actionRequiresReason ? <label className="grid gap-1 text-sm font-semibold text-dtsc-ink"><span>{enterpriseCoreT(locale, "tasks.coordination.blockingReason")}</span><textarea value={actionComment} onChange={(event) => { setActionComment(event.target.value); if (actionError) setActionError(""); }} required minLength={3} maxLength={3000} aria-invalid={Boolean(actionError)} aria-describedby={actionError ? "task-action-reason-error" : undefined} className="min-h-32 w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm" />{actionError ? <span id="task-action-reason-error" className="text-xs text-red-700" role="alert">{actionError}</span> : null}</label> : null}<Button disabled={actionSubmitting} onClick={() => void runAction()} className="bg-dtsc-blue text-white">{enterpriseCoreT(locale, "common.confirm")}</Button></div> : null}</Dialog>
   </div>;
 }
 

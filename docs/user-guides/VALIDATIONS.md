@@ -3,85 +3,56 @@
 
 ## Objectif et périmètre
 
-Ce guide explique l’utilisation opérationnelle de **Validations** dans DTSC Platform. Il décrit uniquement les actions disponibles dans l’application, leurs règles métier et les contrôles appliqués.
-
-## Rôle du module
-
-Le module **Validations** centralise les décisions sans dupliquer l’objet métier soumis. Chaque validation conserve un lien vers sa tâche, demande, budget, dépense, document, réunion ou autre source canonique.
-
-Le bouton **Guide utilisateur** de l’en-tête ouvre ce guide dans l’application.
+Le module **Validations** centralise les décisions sans dupliquer l’objet métier soumis. Chaque validation reste liée à sa source canonique et à ses versions de soumission.
 
 ## Consulter la file
 
-La file affiche :
+La file présente le contexte de chaque validation, son statut et sa cible. Une validation en attente s’ouvre dans le détail : la liste ne propose plus d’action rapide permettant d’approuver ou de rejeter sans revue.
 
-- les validations demandées par vous ;
-- celles qui vous sont attribuées ;
-- celles du contexte entreprise lorsque votre permission l’autorise ;
-- le statut ;
-- la source ;
-- la révision ;
-- la date de soumission.
+## Préparer la revue
 
-## Versions de soumission
+Avant une décision finale, ouvrez la validation et préparez sa revue. Le serveur crée ou retourne la version immuable soumise avec son snapshot métier.
 
-Chaque soumission crée une version avec un snapshot de l’objet. Une correction puis une resoumission créent une nouvelle version ; la version précédente et sa décision restent conservées.
+Le détail affiche les champs utiles du snapshot, le numéro de version et le lien vers la source. La version affichée devient la référence de la décision.
 
-## Décider
+## Approuver ou rejeter
 
-Seul le validateur désigné ou le délégué explicitement autorisé peut :
+Pour **Approuver** ou **Rejeter**, le navigateur transmet l’identifiant exact de la version relue (`reviewedVersionId`). Le serveur refuse la décision si cette version ne correspond pas à la version soumise courante.
 
-- approuver ;
-- refuser ;
-- demander une correction.
+Un rejet exige un motif professionnel. Les doubles clics et retries restent protégés par l’idempotence de décision.
 
-Le serveur vérifie la révision, l’état, l’acteur, la source et la clé d’idempotence avant d’enregistrer la décision.
+## Demander une correction et resoumettre
 
-## Demander une correction
+Une demande de correction exige un motif. La validation passe à l’état de correction, tandis que l’objet métier conserve son propre cycle canonique. Après modification de la source, la resoumission crée une nouvelle version immuable et remet la validation en attente.
 
-Le motif est obligatoire et doit indiquer ce qui doit changer. Le demandeur corrige l’objet source puis soumet une nouvelle version.
+Les versions antérieures ne sont ni écrasées ni modifiées.
 
 ## Déléguer
 
-Une délégation est possible uniquement vers un membre actif de la même organisation disposant des capacités nécessaires. Elle est historisée et notifiée.
+La délégation est autorisée uniquement vers un candidat éligible de la même organisation. Le demandeur ne peut pas devenir son propre validateur par délégation. L’éligibilité est recalculée côté serveur.
 
 ## Auto-approbation
 
-L’auto-approbation est refusée lorsque le parcours métier l’interdit. Un rôle élevé n’est pas un contournement automatique.
-
-## Idempotence
-
-Un double clic ou un retry réseau ne crée pas deux décisions. La clé de décision dépend de la validation, de la version, de l’acteur et de l’action.
-
-## Documents, commentaires et liens
-
-Les documents et commentaires restent gérés par leurs modules canoniques. Le lien profond ouvre la validation exacte puis revérifie les permissions actuelles.
-
-## Historique
-
-Le détail affiche les versions, décisions, motifs, délégations, corrections, dates et acteurs. Une décision finalisée n’est pas modifiée silencieusement ; une nouvelle procédure métier est requise pour la remplacer.
-
-## Accès et permissions
-
-- Ouvrez le module depuis la navigation du contexte actif.
-- Les boutons et actions dépendent du rôle, du poste officiel, des permissions individuelles, du tenant actif et de l’état du module.
-- Une action masquée dans l’interface reste également refusée par le serveur lorsqu’elle n’est pas autorisée.
-- Sur mobile, utilisez le parcours liste → détail plein écran → formulaire plein écran → retour.
+Les politiques d’auto-approbation restent serveur-authoritative. Un rôle élevé ne constitue pas, à lui seul, une dérogation.
 
 ## Statuts, validations et traçabilité
 
-- Les statuts visibles correspondent aux états réellement persistés ; les codes techniques ne sont pas présentés comme libellés métier.
-- Les validations, refus, annulations, réouvertures et actions sensibles conservent leur auteur, leur date et, lorsque requis, leur motif.
-- Une action répétée avec la même clé métier ne doit pas produire de doublon ni un second impact.
+Le détail conserve les statuts de validation, les versions soumises, les snapshots, les décisions, les motifs, les corrections, les délégations, les dates et les acteurs. Une décision finalisée n’est pas remplacée silencieusement et une nouvelle soumission produit une nouvelle version immuable.
+
+## Accès et permissions
+
+- Le validateur assigné prend la décision finale lorsqu’il est éligible.
+- Le demandeur ou un responsable autorisé peut préparer la revue selon les règles du module.
+- Les permissions sont revérifiées au moment de chaque mutation.
 
 ## Sécurité et confidentialité
 
-- Les données sont limitées à l’utilisateur ou à l’organisation autorisée.
-- Les références reçues du navigateur sont revérifiées côté serveur dans le même contexte.
-- Les documents et informations sensibles utilisent les routes privées et les contrôles d’accès prévus par le module.
+Le serveur contrôle l’organisation, l’approbateur éligible, la version relue, l’auto-approbation et les règles de délégation avant toute décision. Un snapshot ou une validation d’une autre organisation ne peut pas être utilisé comme cible, même si son identifiant est fourni manuellement.
+
+## Expérience guidée
+
+Le détail utilise un éditeur adapté au mobile. Les motifs invalides sont signalés localement avec conservation de la saisie. Aucun raccourci de liste ne contourne la revue versionnée.
 
 ## Dépannage
 
-- Actualisez la vue si une opération validée n’apparaît pas immédiatement.
-- Vérifiez le contexte d’organisation, les permissions, le statut du module et la connexion réseau.
-- En cas de refus persistant, conservez le message affiché et contactez le responsable du module ou le support DTSC sans partager de donnée sensible.
+Si le serveur demande de relire la validation, actualisez le détail, préparez de nouveau la revue et vérifiez la dernière version avant de décider.

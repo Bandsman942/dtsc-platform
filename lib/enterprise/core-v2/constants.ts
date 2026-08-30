@@ -43,12 +43,21 @@ export const TASK_TRANSITIONS: Record<(typeof TASK_ACTIONS)[number], { from: rea
 export const REQUEST_TYPES = ["GENERAL", "INFORMATION", "DOCUMENT", "VALIDATION", "SUPPORT", "ACTION", "MEETING", "FOLLOW_UP", "OTHER"] as const;
 export const REQUEST_STATUSES = ["DRAFT", "SUBMITTED", "IN_REVIEW", "APPROVED", "REJECTED", "FULFILLED", "CANCELLED"] as const;
 export const REQUEST_ACTIONS = ["SUBMIT", "TAKE", "FULFILL", "CANCEL", "ARCHIVE"] as const;
-export const REQUEST_TRANSITIONS: Record<(typeof REQUEST_ACTIONS)[number], { from: readonly (typeof REQUEST_STATUSES)[number][]; to?: (typeof REQUEST_STATUSES)[number] }> = {
+export const REQUEST_COORDINATION_ACTIONS = ["REQUEST_INFORMATION", "RESPOND", "RESOLVE", "CLOSE", "REOPEN"] as const;
+export const REQUEST_TRANSITIONS: Record<
+  (typeof REQUEST_ACTIONS)[number] | (typeof REQUEST_COORDINATION_ACTIONS)[number],
+  { from: readonly (typeof REQUEST_STATUSES)[number][]; to?: (typeof REQUEST_STATUSES)[number] }
+> = {
   SUBMIT: { from: ["DRAFT"], to: "SUBMITTED" },
   TAKE: { from: ["SUBMITTED"], to: "IN_REVIEW" },
   FULFILL: { from: ["IN_REVIEW", "APPROVED"], to: "FULFILLED" },
   CANCEL: { from: ["DRAFT", "SUBMITTED", "IN_REVIEW"], to: "CANCELLED" },
   ARCHIVE: { from: ["DRAFT", "SUBMITTED", "IN_REVIEW", "APPROVED", "REJECTED", "FULFILLED", "CANCELLED"] },
+  REQUEST_INFORMATION: { from: ["SUBMITTED", "IN_REVIEW"], to: "IN_REVIEW" },
+  RESPOND: { from: ["IN_REVIEW"], to: "IN_REVIEW" },
+  RESOLVE: { from: ["IN_REVIEW", "APPROVED"], to: "FULFILLED" },
+  CLOSE: { from: ["FULFILLED"], to: "FULFILLED" },
+  REOPEN: { from: ["FULFILLED", "REJECTED", "CANCELLED"], to: "IN_REVIEW" },
 };
 
 export const APPROVAL_STATUSES = ["PENDING", "APPROVED", "REJECTED", "CANCELLED"] as const;
