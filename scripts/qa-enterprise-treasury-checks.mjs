@@ -4,8 +4,13 @@ import { forbidTokens, requirePaths, requireTokens, success } from "./qa-enterpr
 requirePaths([
   "lib/enterprise/accounting/payments-service.ts",
   "lib/enterprise/accounting/treasury-service.ts",
+  "lib/enterprise/accounting/treasury-schemas.ts",
   "lib/enterprise/accounting/financial-account-service.ts",
   "lib/enterprise/accounting/treasury-transfer-service.ts",
+  "lib/enterprise/accounting/treasury-approval-service.ts",
+  "app/api/enterprise/[organizationId]/financial-accounts/route.ts",
+  "app/api/enterprise/[organizationId]/account-transfers/route.ts",
+  "app/api/enterprise/[organizationId]/account-transfers/[transferId]/transition/route.ts",
   "app/api/enterprise/[organizationId]/cash-sessions/[sessionId]/validate/route.ts",
   "app/api/enterprise/[organizationId]/reconciliations/[sessionId]/matches/route.ts",
   "app/api/enterprise/[organizationId]/account-transfers/preview/route.ts",
@@ -25,8 +30,31 @@ requireTokens("lib/enterprise/accounting/treasury-service.ts", [
   "TransactionIsolationLevel.Serializable",
   "CASH_SESSION_ALREADY_ACTIVE",
   "CASH_SESSION_SELF_VALIDATION_FORBIDDEN",
-  "TRANSFER_SELF_APPROVAL_FORBIDDEN",
+  "RECONCILIATION_SELF_APPROVAL_FORBIDDEN",
   "UNRECONCILED",
+]);
+forbidTokens("lib/enterprise/accounting/treasury-service.ts", [
+  "export async function createFinancialAccount",
+  "export async function createAccountTransfer",
+  "export async function approveAccountTransfer",
+  "export async function confirmAccountTransfer",
+  "accountTransferCreateSchema",
+]);
+forbidTokens("lib/enterprise/accounting/schemas.ts", [
+  "export const financialAccountCreateSchema",
+  "export const accountTransferCreateSchema",
+  "FINANCIAL_ACCOUNT_TYPES",
+]);
+requireTokens("lib/enterprise/accounting/treasury-schemas.ts", [
+  "export const financialAccountCreateSchema",
+  "export const accountTransferPreviewSchema",
+  "export const accountTransferSchema",
+  "sourceAmount: positiveAmount",
+  "approverUserId: id",
+]);
+forbidTokens("lib/enterprise/accounting/treasury-schemas.ts", [
+  "targetAmount: positiveAmount",
+  "exchangeRate: positiveAmount",
 ]);
 requireTokens("lib/enterprise/accounting/financial-account-service.ts", [
   "ACCOUNT_CODE_PREFIX",
@@ -47,6 +75,12 @@ requireTokens("lib/enterprise/accounting/treasury-transfer-service.ts", [
   "ACCOUNT_TRANSFER_CONFIRMED",
   "TransactionIsolationLevel.Serializable",
 ]);
+requireTokens("lib/enterprise/accounting/treasury-approval-service.ts", [
+  "assertEnterpriseApprovalDecision",
+  "TRANSFER_SELF_APPROVAL_FORBIDDEN",
+  "approveAssignedAccountTransfer",
+  "rejectAssignedAccountTransfer",
+]);
 
 const transferServiceSource = fs.readFileSync("lib/enterprise/accounting/treasury-transfer-service.ts", "utf8");
 const balanceDebitIndex = transferServiceSource.indexOf("operationalBalance: { decrement: transfer.sourceAmount }");
@@ -61,6 +95,21 @@ if (postCommitConfirmation.includes("enterpriseJournal.findFirst") || postCommit
   throw new Error("Treasury transfer journal/period validation must not first occur after the balance transaction commits.");
 }
 
+requireTokens("app/api/enterprise/[organizationId]/financial-accounts/route.ts", [
+  "createManagedFinancialAccount",
+  "financialAccountCreateSchema",
+  "@/lib/enterprise/accounting/treasury-schemas",
+]);
+requireTokens("app/api/enterprise/[organizationId]/account-transfers/route.ts", [
+  "createTreasuryTransfer",
+  "accountTransferSchema",
+  "@/lib/enterprise/accounting/treasury-schemas",
+]);
+requireTokens("app/api/enterprise/[organizationId]/account-transfers/[transferId]/transition/route.ts", [
+  "approveAssignedAccountTransfer",
+  "confirmTreasuryTransfer",
+  "transferTransitionSchema",
+]);
 requireTokens("app/api/enterprise/[organizationId]/account-transfers/preview/route.ts", [
   "authorizeFinanceRequest",
   "accountTransferPreviewSchema",
