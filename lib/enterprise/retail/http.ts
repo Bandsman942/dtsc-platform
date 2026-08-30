@@ -6,6 +6,7 @@ import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import type { EnterpriseModuleAction } from "@/lib/enterprise/module-access";
 import type { RetailModuleCode } from "@/lib/enterprise/retail/constants";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
+import { retailFailureOutcome } from "@/lib/enterprise/retail/mutation-outcome";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 
@@ -25,7 +26,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   RETAIL_MOBILE_MONEY_CURRENCY_ACCOUNT_REQUIRED: "Configurez un wallet Mobile Money pour cet opérateur dans la devise de la caisse avant de continuer.",
   RETAIL_TELCO_CURRENCY_ACCOUNT_REQUIRED: "Configurez un compte opérateur Télécom dans la devise d’encaissement avant de continuer.",
   RETAIL_MOBILE_MONEY_FX_PAIR_INVALID: "Choisissez deux devises différentes pour le transfert Mobile Money.",
-  RETAIL_MOBILE_MONEY_FX_MAPPING_REQUIRED: "Cet opérateur doit disposer de deux wallets Mobile Money configurés avant un transfert entre devises.",
+  RETAIL_MOBILE_MONEY_FX_MAPPING_REQUIRED: "Cet opérérateur doit disposer de deux wallets Mobile Money configurés avant un transfert entre devises.",
   RETAIL_MOBILE_MONEY_FX_AMOUNT_INVALID: "Le montant à convertir doit être strictement positif.",
   RETAIL_MOBILE_MONEY_FX_TRANSFER_NOT_FOUND: "Le transfert Mobile Money demandé est introuvable.",
   RETAIL_MOBILE_MONEY_FX_TRANSFER_CONFLICT: "Ce transfert Mobile Money a déjà changé d’état. Actualisez avant de réessayer.",
@@ -128,36 +129,53 @@ export async function authorizeRetailRequest(
   action: EnterpriseModuleAction,
   options?: { mutation?: boolean; limit?: number },
 ) {
-  if (options?.mutation && !isSameOriginRequest(req)) return { ok: false as const, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
+  if (options?.mutation && !isSameOriginRequest(req)) return { ok: false as const, response: NextResponse.json(retailFailureOutcome(null, { error: "Forbidden" }), { status: 403 }) };
   const session = await getSession();
-  if (!session) return { ok: false as const, response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+  if (!session) return { ok: false as const, response: NextResponse.json(retailFailureOutcome(null, { error: "Unauthorized" }), { status: 401 }) };
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode, action });
-  if (!access) return { ok: false as const, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
+  if (!access) return { ok: false as const, response: NextResponse.json(retailFailureOutcome(null, { error: "Forbidden" }), { status: 403 }) };
   if (options?.mutation) {
     const policy = getRetailMutationRateLimitPolicy(moduleCode, action, options.limit);
     const key = getRateLimitKey(req, `retail:${moduleCode}:${action}:${organizationId}:${session.userId}`);
     const limited = await rateLimit(key, policy.limit, policy.windowMs);
-    if (!limited.ok) return { ok: false as const, response: NextResponse.json({ error: "Too many requests", message: "Trop d’opérations sur une courte période." }, { status: 429 }) };
+    if (!limited.ok) return { ok: false as const, response: NextResponse.json(retailFailureOutcome(null, { error: "Too many requests", message: "Trop d’opérations sur une courte période." }), { status: 429 }) };
   }
   return { ok: true as const, session, access };
 }
 
 export function retailErrorResponse(error: unknown, fallback = "RETAIL_OPERATION_FAILED") {
-  if (error instanceof EnterpriseRetailError) return NextResponse.json({ error: error.code, message: ERROR_MESSAGES[error.code] || "L’opération Retail n’a pas pu être terminée.", details: error.details }, { status: error.status });
+  if (error instanceof EnterpriseRetailError) {
+    return NextResponse.json(
+      retailFailureOutcome(null, { error: error.code, message: ERROR_MESSAGES[error.code] || "L’opération Retail n’a pas pu être terminée.", details: error.details }),
+      { status: error.status },
+    );
+  }
   if (error instanceof EnterpriseAccountingError) {
-    return NextResponse.json({
-      error: error.code,
-      message: ERROR_MESSAGES[error.code] || "La comptabilisation de l’opération Shop n’est pas prête ou n’a pas pu être finalisée. Vérifiez la configuration Finance, les comptes et la valorisation du stock.",
-      details: error.details,
-    }, { status: error.status });
+    return NextResponse.json(
+      retailFailureOutcome(null, {
+        error: error.code,
+        message: ERROR_MESSAGES[error.code] || "La comptabilisation de l’opération Shop n’est pas prête ou n’a pas pu être finalisée. Vérifiez la configuration Finance, les comptes et la valorisation du stock.",
+        details: error.details,
+      }),
+      { status: error.status },
+    );
   }
   if (error instanceof EnterpriseDomainError) {
-    return NextResponse.json({ error: error.code, message: ERROR_MESSAGES[error.code] || error.message || "L’opération métier n’a pas pu être terminée." }, { status: error.status });
+    return NextResponse.json(
+      retailFailureOutcome(null, { error: error.code, message: ERROR_MESSAGES[error.code] || error.message || "L’opération métier n’a pas pu être terminée." }),
+      { status: error.status },
+    );
   }
   if (error && typeof error === "object" && "code" in error && (error as { code?: string }).code === "P2002") {
-    return NextResponse.json({ error: "RETAIL_DUPLICATE", message: "Cette opération existe déjà ou sa référence est déjà utilisée." }, { status: 409 });
+    return NextResponse.json(
+      retailFailureOutcome(null, { error: "RETAIL_DUPLICATE", message: "Cette opération existe déjà ou sa référence est déjà utilisée." }),
+      { status: 409 },
+    );
   }
-  return NextResponse.json({ error: fallback, message: "L’opération n’a pas pu être terminée. Vérifiez les données et réessayez." }, { status: 500 });
+  return NextResponse.json(
+    retailFailureOutcome(null, { error: fallback, message: "L’opération n’a pas pu être terminée. Vérifiez les données et réessayez." }),
+    { status: 500 },
+  );
 }
 
 export function retailListParams(req: Request) {

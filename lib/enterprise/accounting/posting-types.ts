@@ -30,6 +30,14 @@ export type PostingDocument = {
   sourceEntityId: string;
   currencyCode: string;
   lines: PostingLineDraft[];
+  /**
+   * Optional semantic accounts used only when converting transaction-currency
+   * lines to the functional currency creates a genuine residual difference.
+   */
+  functionalBalanceMappings?: {
+    debitShortfall: string;
+    creditShortfall: string;
+  };
 };
 
 export type PostingBuilder = (

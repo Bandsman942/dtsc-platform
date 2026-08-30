@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState, type SelectHTMLAttributes } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode, type SelectHTMLAttributes } from "react";
 import { ArrowRightLeft, CheckCircle2, RefreshCw, RotateCcw, Settings2, Smartphone, WalletCards } from "lucide-react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
 import { Field, formatEnterpriseDate } from "@/components/enterprise/core-v2/erp-v2-ui";
@@ -27,6 +27,8 @@ import { BusinessList, BusinessListItem } from "@/components/workspace/business-
 import { EmptyState } from "@/components/workspace/empty-state";
 import { ModuleSection } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
+import retailTransactionFormsEn from "@/locales/retail-transaction-forms.en.json";
+import retailTransactionFormsFr from "@/locales/retail-transaction-forms.fr.json";
 import { notifyToast } from "@/lib/client-toast";
 import { customerFacingError, customerFacingStatusLabel } from "@/lib/customer-facing-language";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
@@ -55,6 +57,7 @@ type ProviderConfiguration = {
   providerCode: string;
   label: string;
   providerType: string;
+  executionMode?: "MANUAL" | "CONNECTED";
   accounts: ProviderMapping[];
   mappedCurrencyCount: number;
   ready: boolean;
@@ -98,6 +101,9 @@ type OperationDraft = {
   externalReference: string;
 };
 
+type OperationFieldErrorKey = "provider" | "phone" | "amount" | "fee" | "commission" | "reference";
+type OperationFieldErrors = Partial<Record<OperationFieldErrorKey, string>>;
+
 type MobileMoneyDashboard = RetailDashboard & {
   cashSessions?: MobileMoneyCashSession[];
 };
@@ -118,6 +124,7 @@ const COPY = {
     tillRequired: translateRetailWorkspace("fr", "mobileMoneyTillRequired"),
     missingWallet: translateRetailWorkspace("fr", "mobileMoneyMissingWallet"),
     walletUsed: translateRetailWorkspace("fr", "mobileMoneyWalletUsed"),
+    walletAutomatic: "Le wallet de l’opérateur est choisi automatiquement dans la même devise que la caisse sélectionnée.",
     operationConfirmed: translateRetailWorkspace("fr", "mobileMoneyOperationConfirmed"),
     confirmTitle: translateRetailWorkspace("fr", "operatorConfirmMobileMoney"),
     reviewDescription: translateRetailWorkspace("fr", "operatorReviewTheInformationBeforeConfirmingTheOperation"),
@@ -152,7 +159,7 @@ const COPY = {
     configureRates: translateRetailWorkspace("fr", "mobileMoneyConfigureRates"),
     history: translateRetailWorkspace("fr", "operatorMobileMoneyHistory"),
     noTransaction: translateRetailWorkspace("fr", "operatorNoTransaction"),
-    noTransactionDescription: translateRetailWorkspace("fr", "operatorConfirmedOperationsWillAppearHere"),
+    noTransactionDescription: "Les opérations et conversions Mobile Money enregistrées apparaîtront ici, y compris celles dont la comptabilisation reste en attente.",
     reverse: translateRetailWorkspace("fr", "reverse"),
     reverseReason: translateRetailWorkspace("fr", "reversalReason"),
     reversed: translateRetailWorkspace("fr", "mobileMoneyReversed"),
@@ -162,8 +169,10 @@ const COPY = {
     notConfigured: translateRetailWorkspace("fr", "mobileMoneyNotConfigured"),
     configureWallets: translateRetailWorkspace("fr", "mobileMoneyConfigureWallets"),
     transactionTill: translateRetailWorkspace("fr", "mobileMoneyTransactionTill"),
+    accountingRetry: "Finaliser la comptabilisation",
+    accountingFinalized: "Comptabilisation Mobile Money finalisée.",
     selectProvider: "Choisissez un opérateur Mobile Money configuré pour la devise de la caisse avant de continuer.",
-    invalidOperation: "Vérifiez la caisse, l’opérateur, le numéro client et le montant avant de prévisualiser l’opération.",
+    invalidOperation: "Vérifiez la caisse, l’opérateur, le numéro client, les montants et les frais avant de prévisualiser l’opération.",
     fxInvalid: "Choisissez deux devises différentes et saisissez un montant supérieur à zéro pour obtenir une prévisualisation.",
     mappingRequired: "Choisissez un compte financier existant avant d’enregistrer ce portefeuille opérateur.",
     reverseHelp: "Indiquez la raison métier de la contrepassation. La transaction originale restera dans l’historique d’audit.",
@@ -186,6 +195,7 @@ const COPY = {
     tillRequired: translateRetailWorkspace("en", "mobileMoneyTillRequired"),
     missingWallet: translateRetailWorkspace("en", "mobileMoneyMissingWallet"),
     walletUsed: translateRetailWorkspace("en", "mobileMoneyWalletUsed"),
+    walletAutomatic: "The provider wallet is selected automatically in the same currency as the selected till.",
     operationConfirmed: translateRetailWorkspace("en", "mobileMoneyOperationConfirmed"),
     confirmTitle: translateRetailWorkspace("en", "operatorConfirmMobileMoney"),
     reviewDescription: translateRetailWorkspace("en", "operatorReviewTheInformationBeforeConfirmingTheOperation"),
@@ -220,7 +230,7 @@ const COPY = {
     configureRates: translateRetailWorkspace("en", "mobileMoneyConfigureRates"),
     history: translateRetailWorkspace("en", "operatorMobileMoneyHistory"),
     noTransaction: translateRetailWorkspace("en", "operatorNoTransaction"),
-    noTransactionDescription: translateRetailWorkspace("en", "operatorConfirmedOperationsWillAppearHere"),
+    noTransactionDescription: "Recorded Mobile Money operations and currency conversions will appear here, including those whose accounting posting is still pending.",
     reverse: translateRetailWorkspace("en", "reverse"),
     reverseReason: translateRetailWorkspace("en", "reversalReason"),
     reversed: translateRetailWorkspace("en", "mobileMoneyReversed"),
@@ -230,8 +240,10 @@ const COPY = {
     notConfigured: translateRetailWorkspace("en", "mobileMoneyNotConfigured"),
     configureWallets: translateRetailWorkspace("en", "mobileMoneyConfigureWallets"),
     transactionTill: translateRetailWorkspace("en", "mobileMoneyTransactionTill"),
+    accountingRetry: "Finalize accounting",
+    accountingFinalized: "Mobile Money accounting finalized.",
     selectProvider: "Select a Mobile Money provider configured for the till currency before continuing.",
-    invalidOperation: "Check the till, provider, customer phone and amount before reviewing the operation.",
+    invalidOperation: "Check the till, provider, customer phone, amounts and fees before reviewing the operation.",
     fxInvalid: "Choose two different currencies and enter an amount greater than zero to preview the transfer.",
     mappingRequired: "Select an existing financial account before saving this provider wallet.",
     reverseHelp: "State the business reason for the reversal. The original transaction will remain in the audit history.",
@@ -248,6 +260,40 @@ function MobileMoneySelect(props: SelectHTMLAttributes<HTMLSelectElement>) {
       className={`min-h-11 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink ${props.className || ""}`}
     />
   );
+}
+
+function MobileMoneyGuidedField({
+  id,
+  label,
+  help,
+  required,
+  requiredLabel,
+  error,
+  children,
+}: {
+  id?: string;
+  label: string;
+  help: string;
+  required?: boolean;
+  requiredLabel: string;
+  error?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="min-w-0">
+      <div className="mb-1.5 flex flex-wrap items-center gap-2">
+        <label htmlFor={id} className="text-sm font-black text-dtsc-ink">{label}</label>
+        {required ? <span className="rounded-full border border-dtsc-border px-2 py-0.5 text-[11px] font-black uppercase tracking-wide text-dtsc-muted">{requiredLabel}</span> : null}
+      </div>
+      {children}
+      <p className="mt-1 text-xs font-semibold leading-5 text-dtsc-muted">{help}</p>
+      {error ? <p role="alert" className="mt-1 text-xs font-bold leading-5 text-rose-700 dark:text-rose-200">{error}</p> : null}
+    </div>
+  );
+}
+
+function firstOperationError(errors: OperationFieldErrors) {
+  return Object.values(errors).find(Boolean) || "";
 }
 
 function formError(message: string) {
@@ -342,8 +388,11 @@ function MobileMoneyOperations({
   mutate: RetailMutation;
 }) {
   const copy = COPY[locale];
+  const formCopy = (locale === "en" ? retailTransactionFormsEn : retailTransactionFormsFr).mobileMoney;
   const [pending, setPending] = useState<OperationDraft | null>(null);
   const [operationError, setOperationError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<OperationFieldErrors>({});
+  const [selectedProviderCode, setSelectedProviderCode] = useState("");
   const sessions = useMemo<MobileMoneyCashSession[]>(
     () => dashboard.cashSessions || (dashboard.cashSession ? [dashboard.cashSession as MobileMoneyCashSession] : []),
     [dashboard.cashSession, dashboard.cashSessions],
@@ -365,8 +414,21 @@ function MobileMoneyOperations({
   const currency = activeCash?.financialAccount.currencyCode || "";
   const providers = configuration?.providers || [];
   const eligibleProviders = providers.filter((provider) => provider.accounts.some((mapping) => mapping.currencyCode === currency));
-  const selectedProvider = pending ? providers.find((provider) => provider.providerCode === pending.providerCode) : null;
-  const selectedWallet = pending ? selectedProvider?.accounts.find((mapping) => mapping.currencyCode === pending.currencyCode) : null;
+  const formProvider = eligibleProviders.find((provider) => provider.providerCode === selectedProviderCode) || null;
+  const formWallet = formProvider?.accounts.find((mapping) => mapping.currencyCode === currency) || null;
+  const pendingProvider = pending ? providers.find((provider) => provider.providerCode === pending.providerCode) : null;
+  const pendingWallet = pending ? pendingProvider?.accounts.find((mapping) => mapping.currencyCode === pending.currencyCode) : null;
+  const manualExecution = Boolean(formProvider && formProvider.executionMode !== "CONNECTED");
+
+  useEffect(() => {
+    if (selectedProviderCode && !eligibleProviders.some((provider) => provider.providerCode === selectedProviderCode)) {
+      setSelectedProviderCode("");
+      return;
+    }
+    if (!selectedProviderCode && eligibleProviders.length === 1) {
+      setSelectedProviderCode(eligibleProviders[0].providerCode);
+    }
+  }, [eligibleProviders, selectedProviderCode]);
 
   useEffect(() => {
     if (pending && activeCash && pending.cashAccountId !== activeCash.financialAccount.id) setPending(null);
@@ -378,6 +440,7 @@ function MobileMoneyOperations({
     if (body) {
       setPending(null);
       setOperationError("");
+      setFieldErrors({});
       await reload();
     }
   }
@@ -391,8 +454,10 @@ function MobileMoneyOperations({
         selectedSessionId={activeCash?.id || ""}
         onSelectSession={(sessionId) => {
           setSelectedCashSessionId(sessionId);
+          setSelectedProviderCode("");
           setPending(null);
           setOperationError("");
+          setFieldErrors({});
         }}
         locale={locale}
         busyAction={busyAction}
@@ -402,28 +467,51 @@ function MobileMoneyOperations({
 
       <ModuleSection title={copy.operationTitle} description={copy.operationDescription}>
         <form
+          noValidate
           onSubmit={(event) => {
             event.preventDefault();
             const form = new FormData(event.currentTarget);
-            const providerCode = String(form.get("providerCode") || "");
-            const provider = eligibleProviders.find((item) => item.providerCode === providerCode);
-            const phone = normalizePhonePreview(String(form.get("customerPhone") || ""));
-            const principalAmount = Number(form.get("principalAmount") || 0);
             if (!activeCash) {
               setOperationError(copy.tillRequired);
+              setFieldErrors({});
               formError(copy.tillRequired);
               return;
             }
-            if (!provider) {
-              setOperationError(copy.selectProvider);
-              formError(copy.selectProvider);
+            if (!eligibleProviders.length) {
+              setOperationError(copy.missingWallet);
+              setFieldErrors({});
+              formError(copy.missingWallet);
               return;
             }
-            if (!phone || !Number.isFinite(principalAmount) || principalAmount <= 0) {
-              setOperationError(copy.invalidOperation);
-              formError(copy.invalidOperation);
+
+            const providerCode = selectedProviderCode || String(form.get("providerCode") || "");
+            const provider = eligibleProviders.find((item) => item.providerCode === providerCode) || null;
+            const wallet = provider?.accounts.find((mapping) => mapping.currencyCode === currency) || null;
+            const phone = normalizePhonePreview(String(form.get("customerPhone") || ""));
+            const principalAmount = Number(form.get("principalAmount") || 0);
+            const customerFeeAmount = Number(form.get("customerFeeAmount") || 0);
+            const providerCommissionAmount = Number(form.get("providerCommissionAmount") || 0);
+            const externalReference = String(form.get("externalReference") || "").trim();
+            const providerManualExecution = Boolean(provider && provider.executionMode !== "CONNECTED");
+            const nextErrors: OperationFieldErrors = {};
+
+            if (!provider || !wallet) nextErrors.provider = formCopy.providerRequired;
+            if (phone.length < 5) nextErrors.phone = formCopy.phoneRequired;
+            if (!Number.isFinite(principalAmount) || principalAmount <= 0) nextErrors.amount = formCopy.amountInvalid;
+            if (!Number.isFinite(customerFeeAmount) || customerFeeAmount < 0) nextErrors.fee = formCopy.feeInvalid;
+            if (!Number.isFinite(providerCommissionAmount) || providerCommissionAmount < 0) nextErrors.commission = formCopy.commissionInvalid;
+            if (providerManualExecution && !externalReference) nextErrors.reference = formCopy.referenceRequired;
+
+            setFieldErrors(nextErrors);
+            const preciseError = firstOperationError(nextErrors);
+            if (preciseError) {
+              setOperationError(formCopy.fieldErrorSummary);
+              formError(preciseError);
+              setPending(null);
               return;
             }
+            if (!provider || !wallet) return;
+
             setOperationError("");
             setPending({
               providerCode,
@@ -431,45 +519,156 @@ function MobileMoneyOperations({
               customerPhone: phone,
               currencyCode: activeCash.financialAccount.currencyCode,
               principalAmount,
-              customerFeeAmount: Number(form.get("customerFeeAmount") || 0),
-              providerCommissionAmount: Number(form.get("providerCommissionAmount") || 0),
+              customerFeeAmount,
+              providerCommissionAmount,
               feeCollectionMode: String(form.get("feeCollectionMode") || "NONE"),
               cashAccountId: activeCash.financialAccount.id,
               floatAccountId: null,
-              externalReference: String(form.get("externalReference") || "").trim(),
+              externalReference: providerManualExecution ? externalReference : "",
             });
           }}
           className="grid min-w-0 gap-4"
         >
           <div className="grid min-w-0 gap-4 md:grid-cols-2">
-            <Field label={copy.service}>
-              <MobileMoneySelect name="providerCode" required disabled={Boolean(busyAction) || configurationBusy || !activeCash} defaultValue="">
+            <MobileMoneyGuidedField label={copy.service} help={formCopy.providerHelp} required requiredLabel={formCopy.required} error={fieldErrors.provider}>
+              <MobileMoneySelect
+                name="providerCode"
+                value={selectedProviderCode}
+                onChange={(event) => {
+                  setSelectedProviderCode(event.target.value);
+                  setPending(null);
+                  setOperationError("");
+                  setFieldErrors((current) => ({ ...current, provider: undefined, reference: undefined }));
+                }}
+                disabled={Boolean(busyAction) || configurationBusy || !activeCash}
+                aria-invalid={Boolean(fieldErrors.provider)}
+              >
                 <option value="">—</option>
                 {eligibleProviders.map((provider) => <option key={provider.id} value={provider.providerCode}>{provider.label}</option>)}
               </MobileMoneySelect>
-            </Field>
-            <Field label={copy.operation}>
+              {formProvider ? (
+                <div className="mt-2">
+                  <StatusBadge tone={formProvider.executionMode === "CONNECTED" ? "success" : "neutral"}>
+                    {formProvider.executionMode === "CONNECTED" ? formCopy.connectedMode : formCopy.manualMode}
+                  </StatusBadge>
+                </div>
+              ) : null}
+            </MobileMoneyGuidedField>
+
+            <MobileMoneyGuidedField label={copy.walletUsed} help={formCopy.walletHelp} required requiredLabel={formCopy.required} error={fieldErrors.provider}>
+              <MobileMoneySelect value={formWallet?.financialAccountId || ""} disabled aria-label={copy.walletUsed}>
+                <option value="">—</option>
+                {formWallet ? <option value={formWallet.financialAccountId}>{formWallet.financialAccount.name} · {currency}</option> : null}
+              </MobileMoneySelect>
+            </MobileMoneyGuidedField>
+
+            <MobileMoneyGuidedField label={copy.operation} help={formCopy.operationHelp} required requiredLabel={formCopy.required}>
               <MobileMoneySelect name="transactionType" defaultValue="DEPOSIT" disabled={Boolean(busyAction)}>
                 <option value="DEPOSIT">{customerFacingMobileMoneyTransactionType("DEPOSIT", locale)}</option>
                 <option value="WITHDRAWAL">{customerFacingMobileMoneyTransactionType("WITHDRAWAL", locale)}</option>
               </MobileMoneySelect>
-            </Field>
-            <Field label={copy.phone}><Input name="customerPhone" required inputMode="tel" placeholder={translateRetailWorkspace(locale, "operatorCountryCode")} disabled={Boolean(busyAction)} /></Field>
-            <Field label={copy.amount}><Input name="principalAmount" type="number" min="0.01" step="0.01" required disabled={Boolean(busyAction)} /></Field>
-            <Field label={copy.fee}><Input name="customerFeeAmount" type="number" min="0" step="0.01" defaultValue="0" disabled={Boolean(busyAction)} /></Field>
-            <Field label={copy.commission}><Input name="providerCommissionAmount" type="number" min="0" step="0.01" defaultValue="0" disabled={Boolean(busyAction)} /></Field>
-            <Field label={copy.feeCollection}>
-              <MobileMoneySelect name="feeCollectionMode" defaultValue="NONE" disabled={Boolean(busyAction)}>
+            </MobileMoneyGuidedField>
+
+            <MobileMoneyGuidedField id="mobile-money-customer-phone" label={copy.phone} help={formCopy.phoneHelp} required requiredLabel={formCopy.required} error={fieldErrors.phone}>
+              <Input
+                id="mobile-money-customer-phone"
+                name="customerPhone"
+                inputMode="tel"
+                placeholder={translateRetailWorkspace(locale, "operatorCountryCode")}
+                disabled={Boolean(busyAction)}
+                aria-invalid={Boolean(fieldErrors.phone)}
+                onChange={() => {
+                  setPending(null);
+                  setFieldErrors((current) => ({ ...current, phone: undefined }));
+                }}
+              />
+            </MobileMoneyGuidedField>
+
+            <MobileMoneyGuidedField id="mobile-money-principal" label={copy.amount} help={formCopy.amountHelp} required requiredLabel={formCopy.required} error={fieldErrors.amount}>
+              <Input
+                id="mobile-money-principal"
+                name="principalAmount"
+                type="number"
+                min="0.01"
+                step="0.01"
+                disabled={Boolean(busyAction)}
+                aria-invalid={Boolean(fieldErrors.amount)}
+                onChange={() => {
+                  setPending(null);
+                  setFieldErrors((current) => ({ ...current, amount: undefined }));
+                }}
+              />
+            </MobileMoneyGuidedField>
+
+            <MobileMoneyGuidedField id="mobile-money-fee" label={copy.fee} help={formCopy.feeHelp} required requiredLabel={formCopy.required} error={fieldErrors.fee}>
+              <Input
+                id="mobile-money-fee"
+                name="customerFeeAmount"
+                type="number"
+                min="0"
+                step="0.01"
+                defaultValue="0"
+                disabled={Boolean(busyAction)}
+                aria-invalid={Boolean(fieldErrors.fee)}
+                onChange={() => {
+                  setPending(null);
+                  setFieldErrors((current) => ({ ...current, fee: undefined }));
+                }}
+              />
+            </MobileMoneyGuidedField>
+
+            <MobileMoneyGuidedField id="mobile-money-commission" label={copy.commission} help={formCopy.commissionHelp} required requiredLabel={formCopy.required} error={fieldErrors.commission}>
+              <Input
+                id="mobile-money-commission"
+                name="providerCommissionAmount"
+                type="number"
+                min="0"
+                step="0.01"
+                defaultValue="0"
+                disabled={Boolean(busyAction)}
+                aria-invalid={Boolean(fieldErrors.commission)}
+                onChange={() => {
+                  setPending(null);
+                  setFieldErrors((current) => ({ ...current, commission: undefined }));
+                }}
+              />
+            </MobileMoneyGuidedField>
+
+            <MobileMoneyGuidedField label={copy.feeCollection} help={formCopy.feeCollectionHelp} required requiredLabel={formCopy.required}>
+              <MobileMoneySelect name="feeCollectionMode" defaultValue="NONE" disabled={Boolean(busyAction)} onChange={() => setPending(null)}>
                 <option value="NONE">{customerFacingFeeCollectionMode("NONE", locale)}</option>
                 <option value="CASH">{customerFacingFeeCollectionMode("CASH", locale)}</option>
                 <option value="PROVIDER">{customerFacingFeeCollectionMode("PROVIDER", locale)}</option>
               </MobileMoneySelect>
-            </Field>
-            <Field label={copy.reference}><Input name="externalReference" required maxLength={160} disabled={Boolean(busyAction)} /></Field>
+            </MobileMoneyGuidedField>
+
+            {formProvider && manualExecution ? (
+              <MobileMoneyGuidedField id="mobile-money-reference" label={copy.reference} help={formCopy.referenceHelp} required requiredLabel={formCopy.required} error={fieldErrors.reference}>
+                <Input
+                  id="mobile-money-reference"
+                  name="externalReference"
+                  maxLength={160}
+                  disabled={Boolean(busyAction)}
+                  aria-invalid={Boolean(fieldErrors.reference)}
+                  onChange={() => {
+                    setPending(null);
+                    setFieldErrors((current) => ({ ...current, reference: undefined }));
+                  }}
+                />
+              </MobileMoneyGuidedField>
+            ) : formProvider ? (
+              <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3 text-sm font-semibold text-dtsc-ink">
+                <p className="font-black">{formCopy.connectedMode}</p>
+                <p className="mt-1 text-xs leading-5 text-dtsc-muted">{formCopy.connectedModeHelp}</p>
+              </div>
+            ) : null}
           </div>
+
           <div className="rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm font-semibold text-dtsc-muted">
-            {activeCash ? `${copy.transactionTill}: ${activeCash.financialAccount.name} · ${currency}` : copy.tillRequired}
+            <p>{activeCash ? `${copy.transactionTill}: ${activeCash.financialAccount.name} · ${currency}` : copy.tillRequired}</p>
+            <p className="mt-1 text-xs leading-5">{formCopy.tillHelp}</p>
           </div>
+
           {activeCash && configuration && !eligibleProviders.length ? (
             <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm font-bold text-amber-800 dark:text-amber-200">
               {copy.missingWallet} <Link href="#mobile-money-wallet-configuration" className="underline">{copy.configureWallets}</Link>
@@ -477,34 +676,61 @@ function MobileMoneyOperations({
           ) : null}
           {operationError ? <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm font-bold text-rose-700 dark:text-rose-200">{operationError}</div> : null}
           {configurationError ? <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm font-bold text-rose-700 dark:text-rose-200">{configurationError}</div> : null}
-          <Button className="w-fit" disabled={Boolean(busyAction) || !activeCash || !eligibleProviders.length}>
+          <Button className="w-fit" disabled={Boolean(busyAction) || configurationBusy}>
             <Smartphone className="h-4 w-4" />{copy.review}
           </Button>
         </form>
       </ModuleSection>
 
-      {pending ? (
-        <ModuleSection title={copy.confirmTitle} description={copy.reviewDescription}>
-          <div className="rounded-2xl border-2 border-amber-400/50 bg-amber-500/10 p-4">
-            <div className="grid gap-1 text-sm font-bold text-dtsc-ink">
-              <p>{selectedProvider?.label || copy.service}</p>
-              <p>{customerFacingMobileMoneyTransactionType(pending.transactionType, locale)} · {moneyValue(pending.principalAmount, pending.currencyCode, locale)}</p>
-              <p>{pending.customerPhone}</p>
-              <p>{customerFacingFeeCollectionMode(pending.feeCollectionMode, locale)}</p>
-              <p>{copy.transactionTill}: {activeCash?.financialAccount.name || "—"} · {pending.currencyCode}</p>
-              <p>{copy.walletUsed}: {selectedWallet?.financialAccount.name || "—"} · {pending.currencyCode}</p>
-              <p>{copy.operatorReference}: {pending.externalReference || "—"}</p>
+      <Dialog
+        open={Boolean(pending)}
+        title={formCopy.reviewTitle}
+        description={formCopy.reviewDescription}
+        onClose={() => { if (busyAction !== "mobile-money") setPending(null); }}
+        presentation="editor"
+        className="h-[96dvh] max-w-4xl"
+        footer={(
+          <>
+            <Button variant="outline" type="button" disabled={busyAction === "mobile-money"} onClick={() => setPending(null)}>{formCopy.edit}</Button>
+            <Button type="button" disabled={!pending || busyAction === "mobile-money"} onClick={() => void confirmOperation()}>
+              <CheckCircle2 className="h-4 w-4" />{busyAction === "mobile-money" ? formCopy.processing : formCopy.confirm}
+            </Button>
+          </>
+        )}
+      >
+        {pending ? (
+          <div className="grid min-w-0 gap-4 p-4 sm:p-5">
+            <p className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3 text-sm font-bold text-dtsc-ink">{formCopy.reviewSafety}</p>
+            <div className="rounded-2xl border-2 border-amber-400/50 bg-amber-500/10 p-4">
+              <p className="text-sm font-black text-dtsc-ink">{pendingProvider?.label || copy.service}</p>
+              <p className="mt-2 text-2xl font-black text-dtsc-ink">{moneyValue(pending.principalAmount, pending.currencyCode, locale)}</p>
+              <p className="mt-1 text-sm font-bold text-dtsc-muted">{customerFacingMobileMoneyTransactionType(pending.transactionType, locale)}</p>
             </div>
-            <div data-responsive-actions className="mt-4">
-              <Button variant="outline" type="button" disabled={busyAction === "mobile-money"} onClick={() => setPending(null)}>{copy.edit}</Button>
-              <Button type="button" disabled={busyAction === "mobile-money"} onClick={() => void confirmOperation()}><CheckCircle2 className="h-4 w-4" />{busyAction === "mobile-money" ? copy.processing : copy.confirm}</Button>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <MobileMoneyReviewItem label={formCopy.till} value={`${activeCash?.financialAccount.name || "—"} · ${pending.currencyCode}`} />
+              <MobileMoneyReviewItem label={formCopy.wallet} value={`${pendingWallet?.financialAccount.name || "—"} · ${pending.currencyCode}`} />
+              <MobileMoneyReviewItem label={formCopy.customer} value={pending.customerPhone} />
+              <MobileMoneyReviewItem label={copy.feeCollection} value={customerFacingFeeCollectionMode(pending.feeCollectionMode, locale)} />
+              <MobileMoneyReviewItem label={formCopy.fees} value={moneyValue(pending.customerFeeAmount, pending.currencyCode, locale)} />
+              <MobileMoneyReviewItem label={formCopy.commission} value={moneyValue(pending.providerCommissionAmount, pending.currencyCode, locale)} />
+              <MobileMoneyReviewItem label={formCopy.reference} value={pending.externalReference || (pendingProvider?.executionMode === "CONNECTED" ? formCopy.connectedMode : "—")} />
+              <MobileMoneyReviewItem label={formCopy.operator} value={`${pendingProvider?.label || "—"} · ${pendingProvider?.executionMode === "CONNECTED" ? formCopy.connectedMode : formCopy.manualMode}`} />
             </div>
           </div>
-        </ModuleSection>
-      ) : null}
+        ) : null}
+      </Dialog>
 
       <MobileMoneyFxPanel organizationId={organizationId} locale={locale} configuration={configuration} busyAction={busyAction} mutate={mutate} reload={reload} />
       <RetailErpLinks moduleCode="MOBILE_MONEY_AGENCY" locale={locale} />
+    </div>
+  );
+}
+
+function MobileMoneyReviewItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-dtsc-border bg-dtsc-page p-3">
+      <p className="text-xs font-black uppercase tracking-[0.08em] text-dtsc-muted">{label}</p>
+      <p className="mt-1 break-words text-sm font-black text-dtsc-ink">{value}</p>
     </div>
   );
 }
@@ -852,7 +1078,6 @@ function MobileMoneyHistory({
       copy.reversed,
       { idempotent: false },
     );
-    // Keep the dialog and the user's reason intact when the backend rejects the action.
     if (result) closeReverseDialog();
   }
 
@@ -861,29 +1086,51 @@ function MobileMoneyHistory({
       <ModuleSection title={copy.history}>
         {items.length ? (
           <BusinessList ariaLabel={copy.history}>
-            {items.map((item) => (
-              <BusinessListItem
-                key={item.id}
-                title={`${item.number} · ${providerLabel(dashboard, item.providerCode)}`}
-                status={<StatusBadge tone={statusTone(item.status)}>{customerFacingStatusLabel(item.status, locale)}</StatusBadge>}
-                meta={`${customerFacingMobileMoneyTransactionType(item.transactionType, locale)} · ${moneyValue(item.principalAmount, item.currencyCode, locale)} · ${formatEnterpriseDate(item.occurredAt, locale)}`}
-                description={`${item.customerPhoneMasked || "—"} · ${copy.operatorReference}: ${item.externalReference || "—"}`}
-                actions={dashboard.access.canManage && item.status === "CONFIRMED" ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={Boolean(busyAction)}
-                    onClick={() => {
-                      setReverseTarget({ id: item.id, revision: item.revision, number: item.number });
-                      setReverseReason("");
-                      setReverseError("");
-                    }}
-                  >
-                    <RotateCcw className="h-4 w-4" />{copy.reverse}
-                  </Button>
-                ) : undefined}
-              />
-            ))}
+            {items.map((item) => {
+              const isFxConversion = item.transactionType.startsWith("FX_CONVERSION_");
+              const isFxAccountingPending = item.transactionType.startsWith("FX_CONVERSION_PENDING:");
+              const accountingAction = `fx-accounting-${item.id}`;
+              return (
+                <BusinessListItem
+                  key={item.id}
+                  title={`${item.number} · ${providerLabel(dashboard, item.providerCode)}`}
+                  status={<StatusBadge tone={statusTone(item.status)}>{customerFacingStatusLabel(item.status, locale)}</StatusBadge>}
+                  meta={`${customerFacingMobileMoneyTransactionType(item.transactionType, locale)} · ${moneyValue(item.principalAmount, item.currencyCode, locale)} · ${formatEnterpriseDate(item.occurredAt, locale)}`}
+                  description={isFxConversion
+                    ? `${item.customerPhoneMasked || "—"} · ${item.externalReference || "—"}`
+                    : `${item.customerPhoneMasked || "—"} · ${copy.operatorReference}: ${item.externalReference || "—"}`}
+                  actions={dashboard.access.canManage && isFxAccountingPending ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={Boolean(busyAction)}
+                      onClick={() => void mutate(
+                        accountingAction,
+                        `/api/enterprise/${organizationId}/retail/mobile-money/fx/${item.id}/accounting`,
+                        {},
+                        copy.accountingFinalized,
+                        { idempotent: false },
+                      )}
+                    >
+                      <RefreshCw className="h-4 w-4" />{busyAction === accountingAction ? copy.processing : copy.accountingRetry}
+                    </Button>
+                  ) : dashboard.access.canManage && item.status === "CONFIRMED" ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={Boolean(busyAction)}
+                      onClick={() => {
+                        setReverseTarget({ id: item.id, revision: item.revision, number: item.number });
+                        setReverseReason("");
+                        setReverseError("");
+                      }}
+                    >
+                      <RotateCcw className="h-4 w-4" />{copy.reverse}
+                    </Button>
+                  ) : undefined}
+                />
+              );
+            })}
           </BusinessList>
         ) : <EmptyState compact title={copy.noTransaction} description={copy.noTransactionDescription} />}
       </ModuleSection>
@@ -895,7 +1142,7 @@ function MobileMoneyHistory({
         description={copy.reverseHelp}
         onClose={closeReverseDialog}
         className="max-w-xl"
-        footer={
+        footer={(
           <>
             <Button type="button" variant="outline" disabled={Boolean(reverseTarget && busyAction === `reverse-${reverseTarget.id}`)} onClick={closeReverseDialog}>{copy.cancel}</Button>
             <Button type="button" disabled={!reverseTarget || reverseReason.trim().length < 3 || Boolean(reverseTarget && busyAction === `reverse-${reverseTarget.id}`)} onClick={() => void confirmReverse()}>
@@ -903,7 +1150,7 @@ function MobileMoneyHistory({
               {reverseTarget && busyAction === `reverse-${reverseTarget.id}` ? copy.processing : copy.reverseConfirm}
             </Button>
           </>
-        }
+        )}
       >
         <Field label={copy.reverseReason}>
           <textarea

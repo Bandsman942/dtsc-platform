@@ -41,10 +41,17 @@ export type EnterpriseFinanceReadiness = {
 
 type ReadinessClient = Prisma.TransactionClient | typeof prisma;
 
-type ResolveFinanceReadinessOptions = {
+export type ResolveFinanceReadinessOptions = {
   chartId?: string | null;
   mode?: FinanceReadinessMode;
   asOf?: Date;
+  /**
+   * Posting callers may restrict readiness to the semantic mappings actually
+   * consumed by the current business event. Setup keeps the full canonical set.
+   */
+  requiredMappingKeys?: readonly string[];
+  /** Posting callers may restrict readiness to the journal types used by the event. */
+  requiredJournalTypes?: readonly string[];
 };
 
 async function resolveChart(
@@ -75,8 +82,12 @@ export async function resolveEnterpriseFinanceReadiness(
   const chart = await resolveChart(db, organizationId, options.chartId, mode);
   const chartId = chart?.id || null;
   const template = chart?.templateCode ? getChartTemplate(chart.templateCode) : undefined;
-  const requiredMappingKeys = [...listRequiredPostingSemanticKeys()];
-  const requiredJournals = [...requiredJournalTypes()];
+  const requiredMappingKeys = [
+    ...new Set(options.requiredMappingKeys ?? listRequiredPostingSemanticKeys()),
+  ];
+  const requiredJournals = [
+    ...new Set(options.requiredJournalTypes ?? requiredJournalTypes()),
+  ];
 
   const [organization, configuration, accounts, mappings, journals, fiscalYearCount, openFiscalYearCount, openPeriodCount, treasuryCount, taxCount] = await Promise.all([
     db.organization.findFirst({ where: { id: organizationId, deletedAt: null }, select: { sectorCode: true } }),
@@ -84,7 +95,7 @@ export async function resolveEnterpriseFinanceReadiness(
     chartId
       ? db.enterpriseLedgerAccount.findMany({ where: { organizationId, chartId, isActive: true, archivedAt: null }, select: { id: true } })
       : Promise.resolve([]),
-    chartId
+    chartId && requiredMappingKeys.length
       ? db.enterpriseAccountMapping.findMany({
           where: {
             organizationId,
@@ -189,17 +200,17 @@ export async function resolveEnterpriseFinanceReadiness(
     {
       code: "ORGANIZATION_MAPPINGS_REQUIRED", severity: "BLOCKER", ready: missingMappings.length === 0,
       labelFr: "Règles de comptabilisation", labelEn: "Posting mappings",
-      messageFr: missingMappings.length ? `Mappings manquants : ${missingMappings.join(", ")}.` : "Tous les mappings obligatoires sont configurés.",
-      messageEn: missingMappings.length ? `Missing mappings: ${missingMappings.join(", ")}.` : "All required mappings are configured.",
-      actionFr: "Associer chaque clé métier à un compte actif du plan.", actionEn: "Map every business key to an active chart account.",
+      messageFr: missingMappings.length ? `Mappings manquants : ${missingMappings.join(", ")}.` : "Tous les mappings requis pour cette opération sont configurés.",
+      messageEn: missingMappings.length ? `Missing mappings: ${missingMappings.join(", ")}.` : "All mappings required for this operation are configured.",
+      actionFr: "Associer les clés métier requises à des comptes actifs du plan.", actionEn: "Map the required business keys to active chart accounts.",
       actionKind: "LINK", actionHref: "/enterprise-modules/FINANCE_ACCOUNTING?tab=rules",
     },
     {
       code: "JOURNALS_REQUIRED", severity: "BLOCKER", ready: missingJournalTypes.length === 0,
       labelFr: "Journaux comptables", labelEn: "Accounting journals",
-      messageFr: missingJournalTypes.length ? `Types de journaux manquants : ${missingJournalTypes.join(", ")}.` : "Les journaux requis sont disponibles.",
-      messageEn: missingJournalTypes.length ? `Missing journal types: ${missingJournalTypes.join(", ")}.` : "Required journals are available.",
-      actionFr: "Installer ou configurer les journaux recommandés.", actionEn: "Install or configure the recommended journals.",
+      messageFr: missingJournalTypes.length ? `Types de journaux manquants : ${missingJournalTypes.join(", ")}.` : "Les journaux requis pour cette opération sont disponibles.",
+      messageEn: missingJournalTypes.length ? `Missing journal types: ${missingJournalTypes.join(", ")}.` : "The journals required for this operation are available.",
+      actionFr: "Installer ou configurer les journaux requis.", actionEn: "Install or configure the required journals.",
       actionKind: "LINK", actionHref: "/enterprise-modules/FINANCE_ACCOUNTING?tab=journals",
     },
     {

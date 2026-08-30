@@ -33,6 +33,8 @@ const operatorLanguage = read("lib/retail-customer-language.ts");
 const retailPage = read("app/enterprise-modules/retail-page.tsx");
 const posWorkspace = read("components/enterprise/professional/retail-pos-workspace.tsx");
 const operatorWorkspace = read("components/enterprise/professional/retail-operator-workspace.tsx");
+const mobileMoneyWorkspace = read("components/enterprise/professional/mobile-money-agency-workspace.tsx");
+const telcoWorkspace = read("components/enterprise/professional/telco-topups-workspace.tsx");
 const sharedWorkspace = read("components/enterprise/professional/retail-workspace-shared.tsx");
 const activeCustomer = read("components/enterprise/professional/retail-active-customer-bar.tsx");
 const paymentFollowup = read("components/enterprise/professional/retail-payment-followup.tsx");
@@ -86,7 +88,9 @@ for (const marker of ["customerFacingMobileMoneyTransactionType", "customerFacin
 
 check(!fs.existsSync(path.join(root, "components/enterprise/professional/enterprise-retail-shop-workspace.tsx")), "The retired monolithic Retail workspace must not remain in the active codebase.");
 check(retailPage.includes("RetailPosWorkspace"), "Retail POS must use its dedicated workspace.");
-check(retailPage.includes("RetailOperatorWorkspace"), "Mobile Money and Telco must use the dedicated operator workspace.");
+check(retailPage.includes("MobileMoneyAgencyWorkspace"), "Mobile Money must use its dedicated professional workspace.");
+check(retailPage.includes("TelcoTopupsWorkspace"), "Telecom & bundles must use its dedicated professional workspace.");
+check(!retailPage.includes("RetailOperatorWorkspace"), "Retail routing must not send Mobile Money or Telecom back through the transitional generic operator workspace.");
 check(retailPage.includes("RetailDailyCloseWorkspace"), "Retail daily close must use its dedicated workspace.");
 check(!retailPage.includes("EnterpriseRetailShopWorkspace"), "Retail routing must not revive the retired monolithic workspace.");
 check(before(retailPage, "<RetailPosWorkspace", "<RetailOfflineContinuity"), "The core POS workspace must render before offline tools.");
@@ -94,6 +98,7 @@ check(before(retailPage, "<RetailPosWorkspace", "<RetailOmnichannelPanel"), "The
 check(before(retailPage, "<RetailPosWorkspace", "<RetailGlobalReadiness"), "The core POS workspace must render before setup/readiness tools.");
 check((retailPage.match(/<details/g) || []).length >= 2, "Retail POS secondary tools must use progressive disclosure.");
 check(retailPage.includes("RetailPaymentFollowup"), "Retail POS must integrate the permission-aware payment follow-up surface.");
+check(mobileMoneyWorkspace.includes("RetailWorkspaceFrame") && telcoWorkspace.includes("RetailWorkspaceFrame"), "Mobile Money and Telecom dedicated workspaces must keep the shared professional Retail frame.");
 
 for (const marker of [
   "customerFacingError",
@@ -156,7 +161,7 @@ for (const marker of [
   "/enterprise-modules/FINANCE_CASH",
   "/enterprise-modules/FINANCE_TREASURY",
   "/enterprise-modules/REPORTS",
-]) check((operatorWorkspace + sharedWorkspace).includes(marker), `Operator workspace must include ${marker}.`);
+]) check((operatorWorkspace + sharedWorkspace).includes(marker), `Transitional operator workspace must preserve ${marker} while it remains in the codebase.`);
 for (const forbidden of [
   "provider float",
   "float de l’opérateur",
@@ -174,7 +179,7 @@ for (const forbidden of [
   ">{provider.providerType}<",
   "Float account",
   "Compte de float",
-]) check(!operatorWorkspace.includes(forbidden), `Operator customer UI still contains technical/raw wording: ${forbidden}`);
+]) check(!operatorWorkspace.includes(forbidden), `Transitional operator customer UI still contains technical/raw wording: ${forbidden}`);
 check(!operatorWorkspace.includes("String(pending.providerCode)"), "Operator confirmation must display the business provider label, not the provider code.");
 check(operatorWorkspace.includes("selectedProvider?.label"), "Operator confirmations must resolve provider labels.");
 check(operatorWorkspace.includes("providerLabel(dashboard, item.providerCode)"), "Operator histories must resolve provider labels.");
