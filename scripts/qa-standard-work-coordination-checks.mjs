@@ -32,6 +32,23 @@ function requireNoNativeConfirmation(relativePath) {
   requireNoText(relativePath, ["window.prompt(", "window.alert(", "window.confirm("]);
 }
 
+function editorDialogScrollChecks() {
+  const relativePath = "components/ui/dialog.tsx";
+  const content = read(relativePath);
+  requireText(relativePath, ["data-dtsc-dialog-scroll", "touch-pan-y", "--dtsc-dialog-visual-height", "ensureFocusedControlVisible"]);
+
+  const editorScrollBranch = content.match(/data-dtsc-dialog-scroll[\s\S]*?isEditorPresentation\s*\?\s*"([^"]+)"/);
+  if (!editorScrollBranch) {
+    failures.push(`${relativePath}: branche de scroll presentation=editor introuvable`);
+    return;
+  }
+
+  const classes = editorScrollBranch[1].split(/\s+/);
+  if (!classes.includes("overflow-y-auto")) failures.push(`${relativePath}: presentation=editor doit autoriser overflow-y-auto`);
+  if (!classes.includes("overflow-x-hidden")) failures.push(`${relativePath}: presentation=editor doit masquer uniquement le débordement horizontal`);
+  if (classes.includes("overflow-hidden")) failures.push(`${relativePath}: presentation=editor ne doit pas neutraliser le scroll avec overflow-hidden`);
+}
+
 function calendarChecks() {
   requireText("app/api/calendar/unified/route.ts", ["loadUnifiedWorkCalendar", "canUseInternalCalendarFeature", "CALENDAR_RANGE_TOO_LARGE"]);
   requireText("lib/standard-work-coordination/calendar.ts", ["sourceType: string", "sourceId: string", "deepLink: string", "normalizeUnifiedCalendarRange", "resolveLinkedCalendarSource", "deduplicated.set(`${event.sourceType}:${event.sourceId}`, event)", "take: 500"]);
@@ -187,6 +204,9 @@ function imageDebtChecks() {
 }
 
 const checks = { calendar: calendarChecks, activities: permissionChecks, tasks: taskChecks, requests: requestChecks, validations: validationChecks, meetings: meetingChecks, workflows: workflowChecks, documents: documentChecks, notifications: notificationChecks, guides: guideChecks, permissions: permissionChecks, sla: slaChecks, images: imageDebtChecks };
+
+const editorDialogScopes = new Set(["all", "tasks", "requests", "validations", "meetings", "workflows"]);
+if (editorDialogScopes.has(scope)) editorDialogScrollChecks();
 
 if (scope === "all") {
   for (const check of Object.values(checks)) check();
