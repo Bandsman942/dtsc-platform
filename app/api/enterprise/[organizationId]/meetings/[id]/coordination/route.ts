@@ -10,6 +10,7 @@ import {
   getMeetingCoordinationContext,
   loadMeetingCoordination,
   meetingCoordinationActionSchema,
+  meetingCoordinationCapabilities,
   MeetingCoordinationError,
 } from "@/lib/standard-work-coordination/meeting-coordination";
 
@@ -24,10 +25,11 @@ export async function GET(req: Request, { params }: Params) {
   if (!context) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
   const [coordination, tasks] = await Promise.all([
     loadMeetingCoordination(organizationId, id),
-    prisma.enterpriseTask.findMany({ where: { organizationId, archivedAt: null, status: { in: ["TODO", "IN_PROGRESS", "BLOCKED", "PENDING_APPROVAL"] } }, select: { id: true, title: true, status: true, assignedToUserId: true }, orderBy: { updatedAt: "desc" }, take: 300 }),
+    prisma.enterpriseTask.findMany({ where: { organizationId, archivedAt: null, status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] } }, select: { id: true, title: true, status: true, assignedToUserId: true }, orderBy: { updatedAt: "desc" }, take: 300 }),
   ]);
+  const capabilities = meetingCoordinationCapabilities(context.meeting.status, context.canMutate);
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, meetingId: id, domain: "meeting-coordination" } });
-  return NextResponse.json({ meeting: context.meeting, coordination, tasks, capabilities: { canUpdate: context.canMutate, canPublishMinutes: context.canMutate, canCreateFollowUpActions: context.canMutate } });
+  return NextResponse.json({ meeting: context.meeting, coordination, tasks, capabilities });
 }
 
 export async function POST(req: Request, { params }: Params) {
@@ -50,7 +52,7 @@ export async function POST(req: Request, { params }: Params) {
       const recipientIds = [...new Set(context.meeting.participants.map((participant) => participant.userId).filter((userId) => userId !== session.userId))];
       if (recipientIds.length) await notifyUsers({ userIds: recipientIds, organizationId, type: "ENTERPRISE_MEETING", title: "Compte rendu publié", body: context.meeting.title, targetUrl: `/enterprise-modules/MEETINGS?meeting=${encodeURIComponent(id)}` });
     }
-    await writeAuditLog({ userId: session.userId, action: `ENTERPRISE_MEETING_${parsed.data.action}`, entity: "EnterpriseMeeting", entityId: id, request: req, metadata: { organizationId } });
+    await writeAuditLog({ userId: session.userId, action: `ENTERPRISE_MEETING_${parsed.data.action}`, entity: "EnterpriseMeeting", entityId: id, request: req, metadata: { organizationId, meetingStatus: context.meeting.status } });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, meetingId: id, action: parsed.data.action, domain: "meeting-coordination" } });
     return NextResponse.json({ ok: true, result, coordination });
   } catch (error) {
