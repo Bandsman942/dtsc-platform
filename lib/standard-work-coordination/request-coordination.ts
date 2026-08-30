@@ -1,14 +1,17 @@
 import { z } from "zod";
 import { canMutateOwnedObject, enterpriseRequestVisibilityWhere, getEnterpriseCoreV2Access } from "@/lib/enterprise/core-v2/access";
+import { REQUEST_COORDINATION_ACTIONS, REQUEST_TRANSITIONS } from "@/lib/enterprise/core-v2/constants";
 import { prisma } from "@/lib/prisma";
 import type { SessionPayload } from "@/lib/session";
 
+const revisionSchema = z.coerce.number().int().min(1);
+
 export const requestCoordinationActionSchema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("REQUEST_INFORMATION"), comment: z.string().trim().min(3).max(3000) }),
-  z.object({ action: z.literal("RESPOND"), comment: z.string().trim().min(1).max(3000) }),
-  z.object({ action: z.literal("RESOLVE"), comment: z.string().trim().min(3).max(3000) }),
-  z.object({ action: z.literal("CLOSE"), comment: z.string().trim().max(3000).optional() }),
-  z.object({ action: z.literal("REOPEN"), comment: z.string().trim().min(3).max(3000) }),
+  z.object({ action: z.literal("REQUEST_INFORMATION"), revision: revisionSchema, comment: z.string().trim().min(3).max(3000) }),
+  z.object({ action: z.literal("RESPOND"), revision: revisionSchema, comment: z.string().trim().min(1).max(3000) }),
+  z.object({ action: z.literal("RESOLVE"), revision: revisionSchema, comment: z.string().trim().min(3).max(3000) }),
+  z.object({ action: z.literal("CLOSE"), revision: revisionSchema, comment: z.string().trim().min(3).max(3000) }),
+  z.object({ action: z.literal("REOPEN"), revision: revisionSchema, comment: z.string().trim().min(3).max(3000) }),
 ]);
 
 export class RequestCoordinationError extends Error {
@@ -37,31 +40,46 @@ export async function loadRequestCoordination(organizationId: string, requestId:
   return { events, comments };
 }
 
+export function canCoordinateRequest(action: (typeof REQUEST_COORDINATION_ACTIONS)[number], status: string) {
+  const transition = REQUEST_TRANSITIONS[action];
+  return transition.from.includes(status as never);
+}
+
 export async function applyRequestCoordinationAction(args: { organizationId: string; requestId: string; actorUserId: string; canManage: boolean; canOperate: boolean; isRequester: boolean; payload: z.infer<typeof requestCoordinationActionSchema> }) {
   return prisma.$transaction(async (tx) => {
     const request = await tx.enterpriseRequest.findFirst({ where: { id: args.requestId, organizationId: args.organizationId, archivedAt: null } });
     if (!request) throw new RequestCoordinationError("NOT_FOUND", 404, "Demande introuvable.");
     const action = args.payload.action;
-    const allowed = allowedStatuses(action);
-    if (!allowed.includes(request.status)) throw new RequestCoordinationError("INVALID_STATE", 409, `Cette action n’est pas disponible depuis le statut ${request.status}.`);
+    const transition = REQUEST_TRANSITIONS[action];
+    if (!transition.from.includes(request.status as never)) throw new RequestCoordinationError("INVALID_STATE", 409, "Cette action n’est plus disponible depuis l’état actuel de la demande.");
     if (action === "RESPOND" || action === "REOPEN") {
-      if (!args.isRequester && !args.canManage) throw new RequestCoordinationError("FORBIDDEN", 403, "Cette action est réservée au demandeur.");
+      if (!args.isRequester && !args.canManage) throw new RequestCoordinationError("FORBIDDEN", 403, "Cette action est réservée au demandeur ou à un responsable autorisé.");
     } else if (!args.canOperate && !args.canManage) {
       throw new RequestCoordinationError("FORBIDDEN", 403, "Cette action est réservée au responsable de la demande.");
     }
-    const nextStatus = actionStatus(action);
+
     const comment = normalize(args.payload.comment);
     if (comment) {
       await tx.enterpriseOperationalComment.create({ data: { organizationId: args.organizationId, entityType: "EnterpriseRequest", entityId: request.id, authorUserId: args.actorUserId, content: comment } });
     }
-    const updated = await tx.enterpriseRequest.update({
-      where: { id: request.id },
+
+    const updated = await tx.enterpriseRequest.updateMany({
+      where: {
+        id: request.id,
+        organizationId: args.organizationId,
+        status: request.status,
+        revision: args.payload.revision,
+        archivedAt: null,
+      },
       data: {
-        status: nextStatus,
-        closedAt: nextStatus === "CLOSED" ? new Date() : action === "REOPEN" ? null : request.closedAt,
+        status: transition.to,
+        ...(action === "RESOLVE" || action === "CLOSE" ? { closedAt: new Date() } : {}),
+        ...(action === "REOPEN" ? { closedAt: null } : {}),
         revision: { increment: 1 },
       },
     });
+    if (updated.count !== 1) throw new RequestCoordinationError("REVISION_CONFLICT", 409, "La demande a changé. Actualisez-la avant de réessayer.");
+
     await tx.enterpriseOperationalEvent.create({
       data: {
         organizationId: args.organizationId,
@@ -71,35 +89,19 @@ export async function applyRequestCoordinationAction(args: { organizationId: str
         summary: comment || actionSummary(action),
         actorUserId: args.actorUserId,
         fromStatus: request.status,
-        toStatus: nextStatus,
+        toStatus: transition.to,
       },
     });
-    return updated;
+    return tx.enterpriseRequest.findUnique({ where: { id: request.id } });
   });
-}
-
-function allowedStatuses(action: z.infer<typeof requestCoordinationActionSchema>["action"]) {
-  if (action === "REQUEST_INFORMATION") return ["SUBMITTED", "IN_REVIEW", "ASSIGNED", "IN_PROGRESS"];
-  if (action === "RESPOND") return ["WAITING_REQUESTER"];
-  if (action === "RESOLVE") return ["IN_REVIEW", "ASSIGNED", "IN_PROGRESS", "WAITING_APPROVAL", "APPROVED"];
-  if (action === "CLOSE") return ["RESOLVED", "FULFILLED"];
-  return ["CLOSED", "RESOLVED", "FULFILLED"];
-}
-
-function actionStatus(action: z.infer<typeof requestCoordinationActionSchema>["action"]) {
-  if (action === "REQUEST_INFORMATION") return "WAITING_REQUESTER";
-  if (action === "RESPOND") return "IN_PROGRESS";
-  if (action === "RESOLVE") return "RESOLVED";
-  if (action === "CLOSE") return "CLOSED";
-  return "REOPENED";
 }
 
 function actionSummary(action: z.infer<typeof requestCoordinationActionSchema>["action"]) {
   if (action === "REQUEST_INFORMATION") return "Informations complémentaires demandées.";
   if (action === "RESPOND") return "Réponse du demandeur reçue.";
-  if (action === "RESOLVE") return "Demande résolue.";
-  if (action === "CLOSE") return "Demande clôturée.";
-  return "Demande rouverte.";
+  if (action === "RESOLVE") return "Demande traitée.";
+  if (action === "CLOSE") return "Traitement confirmé et clôturé.";
+  return "Demande rouverte pour nouvelle revue.";
 }
 
 function normalize(value?: string | null) {
