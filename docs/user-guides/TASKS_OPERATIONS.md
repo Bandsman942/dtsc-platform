@@ -15,7 +15,7 @@ Toutes les références sont revérifiées dans l’organisation active.
 
 Le cycle canonique est :
 
-- **À faire** (`TODO`) ;
+- **À faire** — état initial d’une nouvelle tâche ;
 - **En cours** (`IN_PROGRESS`) ;
 - **Bloquée** (`BLOCKED`) ;
 - **Terminée** (`DONE`) ;

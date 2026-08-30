@@ -39,7 +39,7 @@ export function EnterpriseTasksWorkspace({ organizationId, members, departments,
   const [dismissedDeepLinkId, setDismissedDeepLinkId] = useState<string | null>(null);
   const [edit, setEdit] = useState<Task | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
-  const [actionReason, setActionReason] = useState("");
+  const [actionComment, setActionComment] = useState("");
   const [actionError, setActionError] = useState("");
   const [actionSubmitting, setActionSubmitting] = useState(false);
   const [message, setMessage] = useState("");
@@ -81,7 +81,7 @@ export function EnterpriseTasksWorkspace({ organizationId, members, departments,
   async function runAction() {
     if (!pendingAction || actionSubmitting) return;
     const requiresReason = ["BLOCK", "CANCEL", "ARCHIVE"].includes(pendingAction.action);
-    const normalizedReason = actionReason.trim();
+    const normalizedReason = actionComment.trim();
     if (requiresReason && normalizedReason.length < 3) {
       setActionError(enterpriseCoreT(locale, "tasks.coordination.blockingReason"));
       return;
@@ -90,7 +90,7 @@ export function EnterpriseTasksWorkspace({ organizationId, members, departments,
     setActionSubmitting(true);
     try {
       await enterpriseV2Mutation(`/api/enterprise/${organizationId}/tasks/${pendingAction.task.id}/actions`, "POST", { action: pendingAction.action, revision: pendingAction.task.revision, comment: normalizedReason || undefined });
-      setPendingAction(null); setActionReason(""); setDetail(null); setRefreshKey((value) => value + 1); setMessage(enterpriseCoreT(locale, "tasks.actionSaved"));
+      setPendingAction(null); setActionComment(""); setDetail(null); setRefreshKey((value) => value + 1); setMessage(enterpriseCoreT(locale, "tasks.actionSaved"));
     } catch (error) { setMessage(error instanceof Error ? error.message : "ACTION_FAILED"); }
     finally { setActionSubmitting(false); }
   }
@@ -103,7 +103,7 @@ export function EnterpriseTasksWorkspace({ organizationId, members, departments,
   function closeAction() {
     if (actionSubmitting) return;
     setPendingAction(null);
-    setActionReason("");
+    setActionComment("");
     setActionError("");
   }
 
@@ -132,7 +132,7 @@ export function EnterpriseTasksWorkspace({ organizationId, members, departments,
     <Dialog open={createOpen} onClose={() => setCreateOpen(false)} title={enterpriseCoreT(locale, "tasks.newTask")} presentation="editor" className="max-w-4xl"><EnterpriseTaskForm locale={locale} members={members} departments={departments} onSubmit={submitCreate} /></Dialog>
     <Dialog open={Boolean(edit)} onClose={() => setEdit(null)} title={enterpriseCoreT(locale, "tasks.editTask")} presentation="editor" className="max-w-4xl">{edit ? <EnterpriseTaskForm locale={locale} members={members} departments={departments} value={edit} onSubmit={submitEdit} /> : null}</Dialog>
     <Dialog open={Boolean(activeDetail)} onClose={closeDetail} title={activeDetail?.title || ""} presentation="editor" className="max-w-5xl">{activeDetail ? <div className="grid gap-5 text-sm"><div className="grid gap-3"><div className="flex gap-2"><StatusBadge tone={statusTone(activeDetail.status)}>{statusLabel(locale, activeDetail.status)}</StatusBadge><StatusBadge>{priorityLabel(locale, activeDetail.priority)}</StatusBadge></div><p className="leading-6 text-dtsc-muted">{activeDetail.description || enterpriseCoreT(locale, "common.noDescription")}</p><p>{enterpriseCoreT(locale, "tasks.due")} : {formatEnterpriseDate(activeDetail.dueAt, locale)}</p><p>{enterpriseCoreT(locale, "tasks.revision")} : {activeDetail.revision}</p>{activeDetail.sourceEntityType ? <p className="text-xs text-dtsc-muted">{enterpriseCoreT(locale, "tasks.linkedSource")} : {activeDetail.sourceModule} · {activeDetail.sourceEntityType}</p> : null}</div><TaskCoordinationPanel organizationId={organizationId} taskId={activeDetail.id} canUpdate={canManage || activeDetail.createdByUserId === collection.meta.currentUserId || activeDetail.assignedToUserId === collection.meta.currentUserId} taskChoices={collection.items.map((task) => ({ id: task.id, title: task.title }))} members={members} locale={locale} /></div> : null}</Dialog>
-    <Dialog open={Boolean(pendingAction)} onClose={closeAction} title={enterpriseCoreT(locale, "tasks.confirmAction")} presentation={actionRequiresReason ? "editor" : "default"}>{pendingAction ? <div className="grid gap-4"><p className="text-sm text-dtsc-muted">{pendingAction.label} · {pendingAction.task.title}</p>{actionRequiresReason ? <label className="grid gap-1 text-sm font-semibold text-dtsc-ink"><span>{enterpriseCoreT(locale, "tasks.coordination.blockingReason")}</span><textarea value={actionReason} onChange={(event) => { setActionReason(event.target.value); if (actionError) setActionError(""); }} required minLength={3} maxLength={3000} aria-invalid={Boolean(actionError)} aria-describedby={actionError ? "task-action-reason-error" : undefined} className="min-h-32 w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm" />{actionError ? <span id="task-action-reason-error" className="text-xs text-red-700" role="alert">{actionError}</span> : null}</label> : null}<Button disabled={actionSubmitting} onClick={() => void runAction()} className="bg-dtsc-blue text-white">{enterpriseCoreT(locale, "common.confirm")}</Button></div> : null}</Dialog>
+    <Dialog open={Boolean(pendingAction)} onClose={closeAction} title={enterpriseCoreT(locale, "tasks.confirmAction")} presentation={actionRequiresReason ? "editor" : "default"}>{pendingAction ? <div className="grid gap-4"><p className="text-sm text-dtsc-muted">{pendingAction.label} · {pendingAction.task.title}</p>{actionRequiresReason ? <label className="grid gap-1 text-sm font-semibold text-dtsc-ink"><span>{enterpriseCoreT(locale, "tasks.coordination.blockingReason")}</span><textarea value={actionComment} onChange={(event) => { setActionComment(event.target.value); if (actionError) setActionError(""); }} required minLength={3} maxLength={3000} aria-invalid={Boolean(actionError)} aria-describedby={actionError ? "task-action-reason-error" : undefined} className="min-h-32 w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm" />{actionError ? <span id="task-action-reason-error" className="text-xs text-red-700" role="alert">{actionError}</span> : null}</label> : null}<Button disabled={actionSubmitting} onClick={() => void runAction()} className="bg-dtsc-blue text-white">{enterpriseCoreT(locale, "common.confirm")}</Button></div> : null}</Dialog>
   </div>;
 }
 
