@@ -32,6 +32,23 @@ function requireNoNativeConfirmation(relativePath) {
   requireNoText(relativePath, ["window.prompt(", "window.alert(", "window.confirm("]);
 }
 
+function editorDialogScrollChecks() {
+  const relativePath = "components/ui/dialog.tsx";
+  const content = read(relativePath);
+  requireText(relativePath, ["data-dtsc-dialog-scroll", "touch-pan-y", "--dtsc-dialog-visual-height", "ensureFocusedControlVisible"]);
+
+  const editorScrollBranch = content.match(/data-dtsc-dialog-scroll[\s\S]*?isEditorPresentation\s*\?\s*"([^"]+)"/);
+  if (!editorScrollBranch) {
+    failures.push(`${relativePath}: branche de scroll presentation=editor introuvable`);
+    return;
+  }
+
+  const classes = editorScrollBranch[1].split(/\s+/);
+  if (!classes.includes("overflow-y-auto")) failures.push(`${relativePath}: presentation=editor doit autoriser overflow-y-auto`);
+  if (!classes.includes("overflow-x-hidden")) failures.push(`${relativePath}: presentation=editor doit masquer uniquement le débordement horizontal`);
+  if (classes.includes("overflow-hidden")) failures.push(`${relativePath}: presentation=editor ne doit pas neutraliser le scroll avec overflow-hidden`);
+}
+
 function calendarChecks() {
   requireText("app/api/calendar/unified/route.ts", ["loadUnifiedWorkCalendar", "canUseInternalCalendarFeature", "CALENDAR_RANGE_TOO_LARGE"]);
   requireText("lib/standard-work-coordination/calendar.ts", ["sourceType: string", "sourceId: string", "deepLink: string", "normalizeUnifiedCalendarRange", "resolveLinkedCalendarSource", "deduplicated.set(`${event.sourceType}:${event.sourceId}`, event)", "take: 500"]);
@@ -170,8 +187,8 @@ function guideChecks() {
   requireText("docs/user-guides/ADMIN_RBAC_INDIVIDUAL_PERMISSIONS.md", ["Permissions individuelles DTSC", "ALLOW", "DENY", "work.past_period.submit"]);
   requireText("lib/user-guides/iteration04-guides.ts", ["CALENDAR:", "DTSC_ACTIVITIES:", "ENTERPRISE_ACTIVITIES:", "ADMIN_RBAC:", "updatedAt: \"2026-08-04\""]);
   requireText("components/user-guides/contextual-user-guide.tsx", ["useAppLocale", "translate", "userGuides.common.userGuide", "userGuides.common.searchLabel", "userGuides.common.searchPlaceholder", "userGuides.common.limitations"]);
-  requireText("locales/fr.json", ['"userGuide": "Guide utilisateur"', '"searchLabel": "Rechercher dans le guide"', '"limitations": "Fonctionnalités conditionnelles ou limites connues"']);
-  requireText("locales/en.json", ['"userGuide": "User guide"', '"searchLabel": "Search this guide"', '"limitations": "Conditional features or known limitations"']);
+  requireText("locales/fr.json", ['"userGuide": "Guide utilisateur"', '"searchLabel": "Rechercher dans le guide"', '"searchPlaceholder": "Tapez un mot-clé"', '"limitations": "Fonctionnalités conditionnelles ou limites connues"']);
+  requireText("locales/en.json", ['"userGuide": "User guide"', '"searchLabel": "Search this guide"', '"searchPlaceholder": "Type a keyword"', '"limitations": "Conditional features or known limitations"']);
   requireText("components/admin/admin-access-panel.tsx", ["ContextualUserGuide", "ADMIN_RBAC"]);
   requireText("components/enterprise/enterprise-module-workspace.tsx", ["ENTERPRISE_MODULE_GUIDE_MAP", "ContextualUserGuide"]);
   requireText("components/enterprise/enterprise-activities-module.tsx", ["ENTERPRISE_ACTIVITIES", "ContextualUserGuide"]);
@@ -187,6 +204,9 @@ function imageDebtChecks() {
 }
 
 const checks = { calendar: calendarChecks, activities: permissionChecks, tasks: taskChecks, requests: requestChecks, validations: validationChecks, meetings: meetingChecks, workflows: workflowChecks, documents: documentChecks, notifications: notificationChecks, guides: guideChecks, permissions: permissionChecks, sla: slaChecks, images: imageDebtChecks };
+
+const editorDialogScopes = new Set(["all", "tasks", "requests", "validations", "meetings", "workflows"]);
+if (editorDialogScopes.has(scope)) editorDialogScrollChecks();
 
 if (scope === "all") {
   for (const check of Object.values(checks)) check();
