@@ -28,13 +28,17 @@ export async function POST(req: Request, { params }: Params) {
   if (!meeting) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (!access.canManage && meeting.organizerUserId !== session.userId) return NextResponse.json({ error: "Forbidden", message: "Seul l’organisateur ou un responsable peut changer l’état de la réunion." }, { status: 403 });
   const data = parsed.data;
+  const comment = (data.comment || "").trim();
+  if (["CANCEL", "ARCHIVE"].includes(data.action) && comment.length < 3) {
+    return NextResponse.json({ error: "MEETING_ACTION_REASON_REQUIRED", message: "Un motif professionnel d’au moins 3 caractères est obligatoire pour cette action." }, { status: 400 });
+  }
   try {
-    const updated = await transitionEnterpriseMeeting({ organizationId, meetingId: id, actorUserId: session.userId, action: data.action, revision: data.revision, comment: data.comment || undefined });
+    const updated = await transitionEnterpriseMeeting({ organizationId, meetingId: id, actorUserId: session.userId, action: data.action, revision: data.revision, comment: comment || undefined });
     if (data.action === "CANCEL") {
       const participantIds = meeting.participants.map((participantItem) => participantItem.userId).filter((userId) => userId !== session.userId);
       if (participantIds.length) await notifyUsers({ userIds: participantIds, organizationId, type: "ENTERPRISE_MEETING", title: "Réunion annulée", body: meeting.title, targetUrl: "/enterprise-modules/MEETINGS" });
     }
-    await writeAuditLog({ userId: session.userId, action: `ENTERPRISE_MEETING_${data.action}`, entity: "EnterpriseMeeting", entityId: id, request: req, metadata: { organizationId, fromStatus: meeting.status, toStatus: updated?.status } });
+    await writeAuditLog({ userId: session.userId, action: `ENTERPRISE_MEETING_${data.action}`, entity: "EnterpriseMeeting", entityId: id, request: req, metadata: { organizationId, fromStatus: meeting.status, toStatus: updated?.status, reason: comment || null } });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "meetings", meetingId: id, action: data.action } });
     return NextResponse.json({ ok: true, meeting: updated });
   } catch (error) {
