@@ -44,8 +44,17 @@ export async function PATCH(req: Request, { params }: Params) {
   const existing = await prisma.enterpriseMeeting.findFirst({ where: { id, organizationId, archivedAt: null }, include: { participants: true } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (!access.canManage && existing.organizerUserId !== session.userId) return NextResponse.json({ error: "Forbidden", message: "Seul l’organisateur ou un responsable peut modifier la réunion." }, { status: 403 });
+  if (["COMPLETED", "CANCELLED"].includes(existing.status)) {
+    return NextResponse.json({ error: "MEETING_NOT_EDITABLE", message: "Une réunion terminée ou annulée ne peut plus être modifiée depuis l’édition générale." }, { status: 409 });
+  }
   try {
     const data = parsed.data;
+    const responseByUserId = new Map(existing.participants.map((participant) => [participant.userId, participant.responseStatus]));
+    const participants = data.participants?.map((participant) => ({
+      userId: participant.userId,
+      role: participant.role,
+      responseStatus: responseByUserId.get(participant.userId) || "INVITED",
+    }));
     const meeting = await updateEnterpriseMeeting({
       organizationId,
       meetingId: id,
@@ -59,14 +68,13 @@ export async function PATCH(req: Request, { params }: Params) {
         locationMode: data.locationMode,
         physicalLocation: data.physicalLocation === undefined ? undefined : data.physicalLocation || null,
         meetingLink: data.meetingLink === undefined ? undefined : data.meetingLink || null,
-        minutes: data.minutes === undefined ? undefined : data.minutes || null,
         departmentId: data.departmentId === undefined ? undefined : data.departmentId || null,
-        participants: data.participants,
+        participants,
       },
     });
     const participantIds = meeting?.participants.map((participantItem) => participantItem.userId).filter((userId) => userId !== session.userId) || [];
     if (participantIds.length) await notifyUsers({ userIds: participantIds, organizationId, type: "ENTERPRISE_MEETING", title: "Réunion mise à jour", body: meeting?.title || existing.title, targetUrl: "/enterprise-modules/MEETINGS" });
-    await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_MEETING_UPDATED", entity: "EnterpriseMeeting", entityId: id, request: req, metadata: { organizationId, revision: data.revision, participants: participantIds.length } });
+    await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_MEETING_UPDATED", entity: "EnterpriseMeeting", entityId: id, request: req, metadata: { organizationId, revision: data.revision, participants: participantIds.length, responseStatusesPreserved: true } });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "meetings", meetingId: id } });
     return NextResponse.json({ ok: true, meeting });
   } catch (error) {
