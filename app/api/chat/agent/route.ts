@@ -3,13 +3,13 @@ import {
   buildAssistantResponsePreferencePrompt,
   getChatConversationPreference,
 } from "@/lib/assistant-conversation-preferences";
+import { buildAiAgentClientFailurePayload } from "@/lib/ai/agent/failures";
 import { createInteractiveAiAgentStream } from "@/lib/ai/agent/runtime";
 import { prepareAiTurn } from "@/lib/ai/assistant-runtime";
 import { classifyAiTask } from "@/lib/ai/classifier";
 import { getAiModelDefinition } from "@/lib/ai/catalog";
 import { AiExecutionContextError } from "@/lib/ai/context-engine";
 import { toAiReasonCode } from "@/lib/ai/errors";
-import { getAiErrorMessage } from "@/lib/ai/i18n";
 import { buildLanguageInstruction } from "@/lib/ai/prompts";
 import { resolveAiSessionContext } from "@/lib/ai/session-context";
 import { getSession } from "@/lib/auth";
@@ -28,24 +28,46 @@ import { chatRequestSchema } from "@/lib/validators";
 
 export const maxDuration = 60;
 
+function requestLocale(req: Request) {
+  return req.headers.get("accept-language")?.toLowerCase().startsWith("en") ? "en" : "fr";
+}
+
+function safeAgentStartResponse(
+  req: Request,
+  reasonCode: string,
+  statusCode: number,
+  locale?: string,
+  extra?: Record<string, unknown>,
+) {
+  return NextResponse.json({
+    ...buildAiAgentClientFailurePayload({
+      reasonCode,
+      status: statusCode === 429 ? "BUDGET_EXHAUSTED" : "FAILED",
+      locale: locale || requestLocale(req),
+      error: "AGENT_START_UNAVAILABLE",
+    }),
+    ...(extra || {}),
+  }, { status: statusCode });
+}
+
 export async function POST(req: Request) {
   const startedAt = Date.now();
   if (!isSameOriginRequest(req)) {
     await writeApiLog({ request: req, statusCode: 403, startedAt, metadata: { action: "chat_agent_origin_denied" } });
-    return NextResponse.json({ error: "FORBIDDEN", reasonCode: "FORBIDDEN" }, { status: 403 });
+    return safeAgentStartResponse(req, "FORBIDDEN", 403);
   }
 
   const session = await getSession();
-  if (!session) return NextResponse.json({ error: "UNAUTHORIZED", reasonCode: "UNAUTHORIZED" }, { status: 401 });
+  if (!session) return safeAgentStartResponse(req, "UNAUTHORIZED", 401);
   const organizationId = getActiveOrganizationId(session);
   const limiter = await rateLimit(`chat-agent:${session.userId}`, 20, 60 * 60 * 1000);
-  if (!limiter.ok) return NextResponse.json({ error: "RATE_LIMITED", reasonCode: "RATE_LIMITED" }, { status: 429 });
+  if (!limiter.ok) return safeAgentStartResponse(req, "RATE_LIMITED", 429);
 
   const parsed = chatRequestSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "INVALID_REQUEST", reasonCode: "INVALID_REQUEST" }, { status: 400 });
+  if (!parsed.success) return safeAgentStartResponse(req, "INVALID_REQUEST", 400);
   const data = parsed.data;
   if (data.model && !getAiModelDefinition(data.model)) {
-    return NextResponse.json({ error: "MODEL_UNAVAILABLE", reasonCode: "MODEL_UNAVAILABLE" }, { status: 400 });
+    return safeAgentStartResponse(req, "MODEL_UNAVAILABLE", 400);
   }
 
   const [user, settings] = await Promise.all([
@@ -55,10 +77,10 @@ export async function POST(req: Request) {
     }),
     getAppSettings(),
   ]);
-  if (!user || user.status !== "ACTIVE") return NextResponse.json({ error: "ACCOUNT_UNAVAILABLE", reasonCode: "ACCOUNT_UNAVAILABLE" }, { status: 403 });
+  if (!user || user.status !== "ACTIVE") return safeAgentStartResponse(req, "ACCOUNT_UNAVAILABLE", 403);
   const locale = user.locale === "en" ? "en" : "fr";
   if (!settings.chatbotEnabled || settings.maintenanceMode) {
-    return NextResponse.json({ error: "PROVIDER_UNAVAILABLE", reasonCode: "PROVIDER_UNAVAILABLE", message: getAiErrorMessage("PROVIDER_UNAVAILABLE", locale) }, { status: 503 });
+    return safeAgentStartResponse(req, "PROVIDER_UNAVAILABLE", 503, locale);
   }
 
   const today = new Date();
@@ -72,9 +94,7 @@ export async function POST(req: Request) {
   ]);
   const totalTokensToday = tokensToday._sum.totalTokens ?? 0;
   if (messagesToday >= usageLimits.dailyMessageLimit || totalTokensToday >= usageLimits.dailyTokenLimit) {
-    return NextResponse.json({
-      error: "DAILY_LIMIT_REACHED",
-      reasonCode: "DAILY_LIMIT_REACHED",
+    return safeAgentStartResponse(req, "DAILY_LIMIT_REACHED", 429, locale, {
       usage: {
         messagesToday,
         dailyMessageLimit: usageLimits.dailyMessageLimit,
@@ -82,19 +102,19 @@ export async function POST(req: Request) {
         dailyTokenLimit: usageLimits.dailyTokenLimit,
         resetAt: resetAt.toISOString(),
       },
-    }, { status: 429 });
+    });
   }
 
   const conversation = data.conversationId
     ? await prisma.conversation.findFirst({ where: { id: data.conversationId, userId: session.userId, organizationId } })
     : await prisma.conversation.create({ data: { userId: session.userId, organizationId, title: truncate(data.content.replace(/\s+/g, " "), 72) } });
-  if (!conversation) return NextResponse.json({ error: "CONVERSATION_NOT_FOUND", reasonCode: "CONVERSATION_NOT_FOUND" }, { status: 404 });
+  if (!conversation) return safeAgentStartResponse(req, "CONVERSATION_NOT_FOUND", 404, locale);
 
   const preference = await getChatConversationPreference({ conversationId: conversation.id, userId: session.userId, organizationId });
-  if (preference?.archivedAt) return NextResponse.json({ error: "CONVERSATION_ARCHIVED", reasonCode: "CONVERSATION_ARCHIVED" }, { status: 409 });
+  if (preference?.archivedAt) return safeAgentStartResponse(req, "CONVERSATION_ARCHIVED", 409, locale);
   const requestedModel = preference?.modelOverride || data.model || user.preferredModel || undefined;
   if (requestedModel && !getAiModelDefinition(requestedModel)) {
-    return NextResponse.json({ error: "MODEL_UNAVAILABLE", reasonCode: "MODEL_UNAVAILABLE" }, { status: 400 });
+    return safeAgentStartResponse(req, "MODEL_UNAVAILABLE", 400, locale);
   }
 
   await prisma.message.create({
@@ -118,15 +138,11 @@ export async function POST(req: Request) {
   } catch (error) {
     if (error instanceof AiExecutionContextError) {
       await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt, metadata: { action: "chat_agent_context_denied", reasonCode: error.reasonCode, contextCode } });
-      return NextResponse.json({
-        error: error.reasonCode,
-        reasonCode: error.reasonCode,
-        message: locale === "en" ? "This assistant context is not available for your current session." : "Ce contexte de l’assistant n’est pas disponible pour votre session actuelle.",
-      }, { status: 403 });
+      return safeAgentStartResponse(req, error.reasonCode, 403, locale);
     }
     const reasonCode = toAiReasonCode(error);
     await writeApiLog({ request: req, statusCode: 502, userId: session.userId, startedAt, metadata: { action: "chat_agent_context_failed", reasonCode, contextCode } });
-    return NextResponse.json({ error: reasonCode, reasonCode, message: getAiErrorMessage(reasonCode, locale) }, { status: 502 });
+    return safeAgentStartResponse(req, reasonCode, 502, locale);
   }
 
   const [companyContext, ragContext] = await Promise.all([
@@ -247,6 +263,6 @@ export async function POST(req: Request) {
       startedAt,
       metadata: { action: "chat_agent_start_failed", reasonCode, conversationId, ...preparedTurn.auditMetadata },
     });
-    return NextResponse.json({ error: reasonCode, reasonCode, message: getAiErrorMessage(reasonCode, locale) }, { status: 502 });
+    return safeAgentStartResponse(req, reasonCode, 502, locale);
   }
 }
