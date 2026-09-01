@@ -55,7 +55,9 @@ function normalizeNativeEvent(event: NativeOpenAiEvent, toolCallIds: Map<string,
     return [];
   }
   if (event.type === "response.output_item.done" && event.item?.type === "reasoning") {
-    if (typeof event.output_index !== "number" || !event.item.id || !event.item.encrypted_content) return [];
+    if (typeof event.output_index !== "number" || !event.item.id || !event.item.encrypted_content) {
+      return [{ type: "ERROR", reasonCode: "PROVIDER_PROTOCOL_INVALID" }];
+    }
     return [{
       type: "CONTINUATION_STATE_ITEM",
       item: {
