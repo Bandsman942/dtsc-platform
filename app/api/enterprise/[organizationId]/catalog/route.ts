@@ -11,6 +11,15 @@ import { isSameOriginRequest } from "@/lib/request-security";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
+async function catalogTaxCodeExists(organizationId: string, taxCode: string | null | undefined) {
+  if (!taxCode) return true;
+  const found = await prisma.enterpriseTaxCode.findFirst({
+    where: { organizationId, code: taxCode, isActive: true },
+    select: { id: true },
+  });
+  return Boolean(found);
+}
+
 export async function GET(req: Request, { params }: Params) {
   const startedAt = Date.now();
   const session = await getSession();
@@ -43,7 +52,7 @@ export async function GET(req: Request, { params }: Params) {
     prisma.enterpriseCatalogCategory.findMany({ where: { organizationId, archivedAt: null, status: "ACTIVE" }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }], take: 200 }),
   ]);
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "catalog", page } });
-  return NextResponse.json({ items, units, categories, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { products, services, tracked }, canManage: access.canManage });
+  return NextResponse.json({ items, units, categories, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { products, services, tracked }, canManage: access.canManage, canWrite: access.canWrite });
 }
 
 export async function POST(req: Request, { params }: Params) {
@@ -58,6 +67,9 @@ export async function POST(req: Request, { params }: Params) {
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = catalogItemCreateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Article invalide." }, { status: 400 });
+  if (!(await catalogTaxCodeExists(organizationId, parsed.data.taxCode))) {
+    return NextResponse.json({ error: "CATALOG_TAX_CODE_INVALID", message: "Sélectionnez un code taxe actif de cette entreprise." }, { status: 400 });
+  }
   try {
     const item = await createEnterpriseCatalogItem(organizationId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_CATALOG_ITEM_CREATED", entity: "EnterpriseCatalogItem", entityId: item.id, request: req, metadata: { organizationId, itemType: item.itemType } });
@@ -69,12 +81,13 @@ export async function POST(req: Request, { params }: Params) {
   }
 }
 
-
 export async function PATCH(req: Request, { params }: Params) {
   const startedAt = Date.now();
   if (!isSameOriginRequest(req)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const limited = await rateLimit(getRateLimitKey(req, `enterprise-catalog-update:${session.userId}`), 180, 60 * 60 * 1000);
+  if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   const { organizationId } = await params;
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "CATALOG", action: "write" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -82,6 +95,9 @@ export async function PATCH(req: Request, { params }: Params) {
   const entityId = typeof raw?.itemId === "string" ? raw.itemId : "";
   const parsed = catalogItemUpdateSchema.safeParse(raw);
   if (!entityId || !parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.success ? "Référence manquante." : parsed.error.issues[0]?.message || "Article invalide." }, { status: 400 });
+  if (!(await catalogTaxCodeExists(organizationId, parsed.data.taxCode))) {
+    return NextResponse.json({ error: "CATALOG_TAX_CODE_INVALID", message: "Sélectionnez un code taxe actif de cette entreprise." }, { status: 400 });
+  }
   try {
     const entity = await updateEnterpriseCatalogItem(organizationId, entityId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_CATALOG_ITEM_UPDATED", entity: "EnterpriseCatalogItem", entityId, request: req, metadata: { organizationId } });
