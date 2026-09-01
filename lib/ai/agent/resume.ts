@@ -114,6 +114,7 @@ export async function resumeAiAgentRun(input: {
       role: "assistant",
       content: "",
       toolCalls: [{ id: resumedToolCallId, name: execution.toolCode, arguments: execution.argumentsJson ?? {} }],
+      providerContinuation: execution.providerContinuation || undefined,
     },
     {
       role: "tool",
