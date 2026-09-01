@@ -33,7 +33,16 @@ export async function GET(req: Request, { params }: Params) {
     ...(businessPartyId ? { businessPartyId } : {}),
   };
   const [items, total, draft, sent, accepted, converted] = await Promise.all([
-    prisma.enterpriseQuote.findMany({ where, orderBy: [{ createdAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { items: { orderBy: { sortOrder: "asc" }, take: 50 } } }),
+    prisma.enterpriseQuote.findMany({
+      where,
+      orderBy: [{ createdAt: "desc" }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      include: {
+        businessParty: { select: { id: true, code: true, legalName: true, displayName: true } },
+        items: { orderBy: { sortOrder: "asc" }, take: 50 },
+      },
+    }),
     prisma.enterpriseQuote.count({ where }),
     prisma.enterpriseQuote.count({ where: { organizationId, archivedAt: null, status: "DRAFT" } }),
     prisma.enterpriseQuote.count({ where: { organizationId, archivedAt: null, status: "SENT" } }),
@@ -41,7 +50,13 @@ export async function GET(req: Request, { params }: Params) {
     prisma.enterpriseQuote.count({ where: { organizationId, archivedAt: null, status: "CONVERTED" } }),
   ]);
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "quotes", page } });
-  return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { draft, sent, accepted, converted }, canManage: access.canManage });
+  return NextResponse.json({
+    items,
+    pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) },
+    metrics: { draft, sent, accepted, converted },
+    canManage: access.canManage,
+    canWrite: access.canWrite,
+  });
 }
 
 export async function POST(req: Request, { params }: Params) {
