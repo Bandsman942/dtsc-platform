@@ -70,6 +70,7 @@ assert(enterpriseContext.includes("appelle cet outil dans le même tour") && ent
 assert(enterpriseContext.includes("EMPTY signifie que la lecture backend a réussi") && enterpriseContext.includes("ne doit jamais être reformulée comme zéro"), "Enterprise prompt must distinguish successful empty reads from failures");
 
 assert(shell.includes("EnterpriseAiToolConfirmationBridge") && confirmationBridge.includes("/api/ai/tools/pending"), "Enterprise workspace must surface structural pending confirmations");
+assert(confirmationBridge.includes('import { createPortal } from "react-dom"') && confirmationBridge.includes("document.body"), "Enterprise confirmation UI must render outside the immersive shell layout contract");
 assert(confirmationBridge.includes("/api/ai/tools/confirm") && confirmationBridge.includes("/api/ai/tools/cancel") && confirmationBridge.includes("/resume"), "Enterprise confirmation bridge must confirm/reject structurally and resume the linked agent run");
 assert(!confirmationBridge.includes('body: JSON.stringify({ content: "oui"') && !confirmationBridge.includes('body: JSON.stringify({ content: "yes"'), "Natural-language confirmation must never authorize a mutation");
 
