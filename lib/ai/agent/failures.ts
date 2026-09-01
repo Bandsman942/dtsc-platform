@@ -54,3 +54,17 @@ export function getAiAgentClientFailureMessage(category: AiAgentClientFailureCat
       return en ? "The agent could not complete this run." : "L’agent n’a pas pu terminer cette exécution.";
   }
 }
+
+export function buildAiAgentClientFailurePayload(input: {
+  reasonCode?: string | null;
+  status?: string | null;
+  locale: string;
+  error?: string;
+}) {
+  const failureCategory = classifyAiAgentFailure(input.reasonCode, input.status) || "UNAVAILABLE";
+  return {
+    error: input.error || "AGENT_UNAVAILABLE",
+    failureCategory,
+    message: getAiAgentClientFailureMessage(failureCategory, input.locale),
+  };
+}
