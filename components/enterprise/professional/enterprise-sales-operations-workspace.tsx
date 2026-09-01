@@ -328,7 +328,13 @@ export function EnterpriseSalesOperationsWorkspace({
       setMessage(hotfix.deliveryQuantityTooHigh);
       return;
     }
-    const items = allItems.filter((item) => item.quantityFulfilled > 0).map(({ remaining: _remaining, ...item }) => item);
+    const items = allItems
+      .filter((item) => item.quantityFulfilled > 0)
+      .map((item) => ({
+        salesOrderItemId: item.salesOrderItemId,
+        quantityFulfilled: item.quantityFulfilled,
+        notes: item.notes,
+      }));
     if (!items.length) {
       setMessage(hotfix.deliveryQuantityRequired);
       return;
