@@ -56,7 +56,7 @@ const files = {
   businessList: "components/workspace/business-list.tsx",
   mobileCss: "app/mobile-stability.css",
   commonAccess: "lib/enterprise/common/access.ts",
-  contracts: "components/enterprise/professional/enterprise-contracts-workspace.tsx",
+  contracts: "components/enterprise/professional/enterprise-contracts-workspace-v2.tsx",
   contractsFr: "locales/professional-erp-commercial.fr.json",
   contractsEn: "locales/professional-erp-commercial.en.json",
   contractRoute: "app/api/enterprise/[organizationId]/contracts/route.ts",
@@ -78,6 +78,7 @@ const files = {
   assetOverview: "app/api/enterprise/[organizationId]/assets/[assetId]/overview/route.ts",
   input: "components/ui/input.tsx",
   nativeSelect: "components/enterprise/core-v2/erp-v2-ui.tsx",
+  dialog: "components/ui/dialog.tsx",
   readiness: "lib/enterprise/module-commercial-readiness-iteration-03.json",
   manualE2e: "docs/MANUAL_E2E_ERP_PROFESSIONALIZATION_ITERATION_03.md",
 };
@@ -277,9 +278,15 @@ const checks = {
   mobile() {
     need(content.input, "text-base", "Contrat Input iOS");
     need(content.nativeSelect, "text-base", "Contrat NativeSelect iOS");
+    for (const marker of ["data-dtsc-dialog-scroll", "shrink-0 border-t", "pb-[max(0.75rem,env(safe-area-inset-bottom))]"]) need(content.dialog, marker, "Footer Dialog editor hors scroll");
     for (const key of ["sales", "inventory", "hr", "time", "payroll", "projects", "assets"]) {
       need(content[key], "h-[9", `Dialogue mobile ${key}`);
-      need(content[key], "sticky bottom-0", `Actions mobiles ${key}`);
+      if (key === "sales") {
+        need(content[key], 'presentation="editor"', "Actions mobiles sales — présentation editor");
+        need(content[key], "footer={<", "Actions mobiles sales — footer persistant");
+      } else {
+        need(content[key], "sticky bottom-0", `Actions mobiles ${key}`);
+      }
       needAny(content[key], ["<Input", "<NativeSelect", "text-base"], `Champs iOS ${key}`);
     }
   },
