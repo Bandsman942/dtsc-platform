@@ -16,6 +16,8 @@ const runtime = read("lib/ai/agent/runtime.ts");
 const failures = read("lib/ai/agent/failures.ts");
 const persistence = read("lib/ai/agent/persistence.ts");
 const resume = read("lib/ai/agent/resume.ts");
+const globalAgentRoute = read("app/api/chat/agent/route.ts");
+const enterpriseAgentRoute = read("app/api/enterprise/ai/agent/route.ts");
 const runRoute = read("app/api/ai/agent/runs/[id]/route.ts");
 const resumeRoute = read("app/api/ai/agent/runs/[id]/resume/route.ts");
 const dock = read("components/chat/ai-agent-run-dock.tsx");
@@ -41,16 +43,23 @@ assert(runtime.includes('messages.push({ role: "assistant", content: turn.conten
 assert(runtime.includes('messages.push({ role: "tool", toolCallId: toolCall.id'), "Runtime must append structural tool result messages");
 assert(!runtime.includes('messages.push({ role: "user", content: buildAgentToolResultMessage'), "Runtime must never disguise a tool result as a user message");
 const retryIndex = runtime.indexOf("let modelRetryAttempt = 0");
+const retryEnd = retryIndex >= 0 ? runtime.indexOf("lastProviderCode = turn.providerCode", retryIndex) : -1;
 const executionIndex = runtime.indexOf("const execution = await executeAiTool");
-assert(retryIndex >= 0 && executionIndex > retryIndex, "Tool execution must remain outside the post-tool model retry loop so a successful tool is never replayed");
+const retrySource = retryIndex >= 0 && retryEnd > retryIndex ? runtime.slice(retryIndex, retryEnd) : "";
+assert(retryIndex >= 0 && retryEnd > retryIndex && executionIndex > retryEnd && !retrySource.includes("executeAiTool"), "Tool execution must remain outside the post-tool model retry loop so a successful tool is never replayed");
 
 assert(failures.includes("RETRYABLE_PROVIDER_REASONS") && failures.includes("SERVICE_TEMPORARILY_UNAVAILABLE"), "Agent failures must separate retryable provider failures from safe client categories");
 assert(failures.includes("getAiAgentClientFailureMessage") && failures.includes("Le service IA a été temporairement indisponible"), "Safe agent failure copy must exist in FR/EN");
+assert(failures.includes("buildAiAgentClientFailurePayload") && failures.includes("failureCategory"), "Agent endpoints must share a safe client failure payload contract");
 
 assert(persistence.includes("providerToolCallId") && persistence.includes("argumentsJson") && persistence.includes("runId: string"), "Confirmed resume must recover original tool id and arguments without a schema change");
 assert(resume.includes("resumedToolCallId") && resume.includes("resumedToolMessages") && resume.includes('role: "tool"'), "Confirmed agent resume must reconstruct the structural tool call/result pair");
 assert(resume.includes("getConfirmedAiToolExecutionForRun({ runId: run.id") && !resume.includes('{ role: "user", content: canonicalResultMessage }'), "Confirmed resume must not fall back to a fake user tool result");
 
+assert(globalAgentRoute.includes("safeAgentStartResponse") && globalAgentRoute.includes("buildAiAgentClientFailurePayload"), "Global Agent start API must return safe categorized failures");
+assert(!globalAgentRoute.includes("return NextResponse.json({ error:") && !globalAgentRoute.includes("return NextResponse.json({ error: reasonCode"), "Global Agent start API must not return raw reasonCode failures to the client");
+assert(enterpriseAgentRoute.includes("safeAgentStartResponse") && enterpriseAgentRoute.includes("buildAiAgentClientFailurePayload"), "Enterprise Agent start API must return safe categorized failures");
+assert(!enterpriseAgentRoute.includes("return NextResponse.json({ error:") && !enterpriseAgentRoute.includes("return NextResponse.json({ error: reasonCode"), "Enterprise Agent start API must not return raw reasonCode failures to the client");
 assert(runRoute.includes("failureCategory: classifyAiAgentFailure") && !runRoute.includes("reasonCode: run.reasonCode") && !runRoute.includes("...step"), "Agent run API must expose a safe category and explicit step fields, not raw technical diagnostics");
 assert(!runRoute.includes("providerCode: step.providerCode") && !runRoute.includes("modelCode: step.modelCode") && !runRoute.includes("reasonCode: step.reasonCode"), "Agent step API must not leak provider/model/raw reason codes");
 assert(resumeRoute.includes("safeFailureResponse") && resumeRoute.includes("getAiAgentClientFailureMessage") && !resumeRoute.includes("return NextResponse.json({ error: reasonCode, reasonCode }"), "Resume API must humanize failures without returning internal reason codes");
