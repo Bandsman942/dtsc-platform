@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { toastError, toastSuccess } from "@/lib/client-toast";
 import { getEnterpriseAiToolConfirmationCopy } from "@/lib/enterprise-ai/i18n";
 
-const REFRESH_EVENT = "dtsc:enterprise-ai-tools-refresh";
+const POLL_INTERVAL_MS = 5_000;
 
 type PendingConfirmation = {
   id: string;
@@ -54,16 +54,16 @@ export function EnterpriseAiToolConfirmationBridge() {
 
   useEffect(() => {
     setMounted(true);
+    if (pending) return;
     void refresh();
-    const onRefresh = () => void refresh();
+    const timer = window.setInterval(() => void refresh(), POLL_INTERVAL_MS);
     const onVisible = () => { if (document.visibilityState === "visible") void refresh(); };
-    window.addEventListener(REFRESH_EVENT, onRefresh);
     document.addEventListener("visibilitychange", onVisible);
     return () => {
-      window.removeEventListener(REFRESH_EVENT, onRefresh);
+      window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [refresh]);
+  }, [pending, refresh]);
 
   async function confirm() {
     if (!pending || busy) return;
