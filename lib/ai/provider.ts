@@ -29,7 +29,7 @@ export async function createProviderEventStream({
   }
 
   throw new AiProviderError({
-    reasonCode: "INVALID_REQUEST",
+    reasonCode: "PROVIDER_PROTOCOL_INVALID",
     message: `Unsupported AI provider protocol: ${provider.protocol}`,
     providerCode: provider.code,
     modelCode: model.code,
