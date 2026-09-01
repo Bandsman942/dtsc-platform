@@ -37,7 +37,7 @@ export function classifyProviderHttpError(status: number): Pick<AiProviderError,
   if (status === 408 || status === 504) return { reasonCode: "TIMEOUT", retryable: true, statusCode: 504 };
   if (status === 413) return { reasonCode: "CONTEXT_TOO_LARGE", retryable: false, statusCode: 413 };
   if (status === 429) return { reasonCode: "RATE_LIMITED", retryable: true, statusCode: 429 };
-  if (status === 400 || status === 422) return { reasonCode: "INVALID_REQUEST", retryable: false, statusCode: 400 };
+  if (status === 400 || status === 422) return { reasonCode: "PROVIDER_PROTOCOL_INVALID", retryable: false, statusCode: 502 };
   if (status === 404) return { reasonCode: "MODEL_UNAVAILABLE", retryable: true, statusCode: 502 };
   if (status >= 500) return { reasonCode: "PROVIDER_UNAVAILABLE", retryable: true, statusCode: 502 };
   return { reasonCode: "UNKNOWN_PROVIDER_ERROR", retryable: false, statusCode: 502 };
