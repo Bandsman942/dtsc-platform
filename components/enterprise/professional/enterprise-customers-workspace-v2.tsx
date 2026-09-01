@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { Building2, Link2, Plus, UserRound } from "lucide-react";
 import { EnterpriseIdentityLinkChoice, type EnterpriseIdentityLinkChoiceValue } from "@/components/enterprise/identity-links/identity-link-choice";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
