@@ -1,4 +1,7 @@
 import { AiProviderError } from "@/lib/ai/errors";
+import { getAiProviderDefinition } from "@/lib/ai/catalog";
+import { createAiProviderContinuationState } from "@/lib/ai/provider-continuation";
+import type { AiOpenAiResponsesContinuationItem } from "@/lib/ai/provider-continuation";
 import type { AiStreamResult } from "@/lib/ai/types";
 import type { AiAgentTurnResult } from "@/lib/ai/agent/types";
 
@@ -18,6 +21,7 @@ export async function consumeAiAgentModelTurn(input: {
   const reader = input.routed.stream.getReader();
   let content = "";
   const toolCalls: AiAgentTurnResult["toolCalls"] = [];
+  const continuationItems: AiOpenAiResponsesContinuationItem[] = [];
   let inputTokens = 0;
   let outputTokens = 0;
   let totalTokens = 0;
@@ -38,6 +42,7 @@ export async function consumeAiAgentModelTurn(input: {
       if (value.type === "TOOL_CALL_COMPLETED") {
         toolCalls.push({ id: value.id, name: value.name, arguments: value.arguments });
       }
+      if (value.type === "CONTINUATION_STATE_ITEM") continuationItems.push(value.item);
       if (value.type === "USAGE") {
         inputTokens = Math.max(inputTokens, value.inputTokens || 0);
         outputTokens = Math.max(outputTokens, value.outputTokens || 0);
@@ -55,10 +60,37 @@ export async function consumeAiAgentModelTurn(input: {
     reader.releaseLock();
   }
 
+  const providerContinuation = createAiProviderContinuationState(continuationItems);
+  const provider = getAiProviderDefinition(input.routed.providerCode);
+  const requiresOpaqueReasoningContinuation =
+    provider?.protocol === "OPENAI_RESPONSES" &&
+    input.routed.selection.selectedModel.capabilities.reasoning &&
+    toolCalls.length > 0;
+
+  if (requiresOpaqueReasoningContinuation) {
+    const continuationToolCalls = providerContinuation?.items.filter((item) => item.type === "function_call") || [];
+    const reasoningItems = providerContinuation?.items.filter((item) => item.type === "reasoning") || [];
+    const toolCallIds = toolCalls.map((toolCall) => toolCall.id || "");
+    const continuationCallIds = continuationToolCalls.map((item) => item.callId);
+    const identitiesMatch =
+      toolCallIds.every(Boolean) &&
+      toolCallIds.length === continuationCallIds.length &&
+      toolCallIds.every((id, index) => id === continuationCallIds[index]);
+    if (!providerContinuation || reasoningItems.length === 0 || !identitiesMatch) {
+      throw new AiProviderError({
+        reasonCode: "PROVIDER_PROTOCOL_INVALID",
+        message: "OpenAI Responses reasoning continuation state missing or inconsistent",
+        providerCode: input.routed.providerCode,
+        modelCode: input.routed.modelCode,
+      });
+    }
+  }
+
   if (!totalTokens) totalTokens = inputTokens + outputTokens;
   return {
     content,
     toolCalls,
+    providerContinuation: providerContinuation || undefined,
     usage: { inputTokens, outputTokens, totalTokens, cachedInputTokens, estimatedCost: 0 },
     providerCode: input.routed.providerCode,
     modelCode: input.routed.modelCode,
