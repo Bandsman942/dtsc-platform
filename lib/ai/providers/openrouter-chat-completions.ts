@@ -1,8 +1,8 @@
 import { AiProviderError, classifyProviderHttpError } from "@/lib/ai/errors";
 import type { AiProviderEvent } from "@/lib/ai/provider-events";
-import type { AiModelDefinition, AiProviderDefinition, AiProviderToolDefinition, AiRoutingConstraints } from "@/lib/ai/types";
+import { buildChatCompletionsMessages } from "@/lib/ai/providers/message-format";
+import type { AiModelDefinition, AiProviderDefinition, AiProviderInputMessage, AiProviderToolDefinition, AiRoutingConstraints } from "@/lib/ai/types";
 import { env } from "@/lib/env";
-import type { OpenAIInputMessage } from "@/lib/openai";
 
 type OpenRouterToolCallDelta = { index?: number; id?: string; function?: { name?: string; arguments?: string } };
 type OpenRouterChunk = {
@@ -80,7 +80,7 @@ export async function createOpenRouterChatCompletionsEventStream({
 }: {
   provider: AiProviderDefinition;
   model: AiModelDefinition;
-  messages: OpenAIInputMessage[];
+  messages: AiProviderInputMessage[];
   instructions: string;
   routingConstraints?: AiRoutingConstraints;
   tools?: AiProviderToolDefinition[];
@@ -99,7 +99,7 @@ export async function createOpenRouterChatCompletionsEventStream({
       headers,
       body: JSON.stringify({
         model: model.providerModelId,
-        messages: [{ role: "system", content: instructions }, ...messages.filter((message) => message.role !== "system").map((message) => ({ role: message.role, content: message.content }))],
+        messages: buildChatCompletionsMessages(messages, instructions),
         ...(tools?.length ? {
           tools: tools.map((tool) => ({ type: "function", function: { name: tool.code, description: tool.description, parameters: tool.inputSchema } })),
           tool_choice: "auto",
@@ -153,7 +153,16 @@ export async function createOpenRouterChatCompletionsEventStream({
         }
         if (!cancelled) controller.close();
       } catch (error) {
-        if (!cancelled) controller.error(error);
+        if (!cancelled) {
+          controller.error(error instanceof AiProviderError ? error : new AiProviderError({
+            reasonCode: "STREAM_INTERRUPTED",
+            message: "AI provider stream interrupted",
+            retryable: !signal?.aborted,
+            statusCode: signal?.aborted ? 499 : 502,
+            providerCode: provider.code,
+            modelCode: model.code,
+          }));
+        }
       } finally {
         reader?.releaseLock();
         reader = null;
