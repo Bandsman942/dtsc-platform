@@ -15,12 +15,18 @@ const need = (content, marker, scope) => {
   if (!content.includes(marker)) failures.push(`${scope}: ${marker}`);
 };
 
-const ui = read("components/enterprise/professional/enterprise-contracts-workspace.tsx");
+const ui = read("components/enterprise/professional/enterprise-contracts-workspace-v2.tsx");
+const canonicalContracts = read("components/enterprise/professional/enterprise-contracts-workspace.tsx");
+const customers = read("components/enterprise/professional/enterprise-customers-workspace-v2.tsx");
+const crm = read("components/enterprise/professional/enterprise-crm-workspace-v2.tsx");
+const catalog = read("components/enterprise/professional/enterprise-catalog-workspace-v2.tsx");
+const sales = read("components/enterprise/professional/enterprise-sales-operations-workspace.tsx");
+const lookups = read("app/api/enterprise/[organizationId]/professional-lookups/route.ts");
+const catalogRoute = read("app/api/enterprise/[organizationId]/catalog/route.ts");
 const fr = JSON.parse(read("locales/professional-erp-commercial.fr.json") || "{}");
 const en = JSON.parse(read("locales/professional-erp-commercial.en.json") || "{}");
 const service = read("lib/enterprise/crm-sales/contracts.ts");
 const route = read("app/api/enterprise/[organizationId]/contracts/[contractId]/transition/route.ts");
-const lookups = read("app/api/enterprise/[organizationId]/professional-lookups/route.ts");
 
 for (const [key, frValue, enValue] of [
   ["contracts.tabDrafts", "Brouillons", "Drafts"],
@@ -33,28 +39,27 @@ for (const [key, frValue, enValue] of [
   if (fr[key] !== frValue) failures.push(`Catalogue contrats FR: ${key}`);
   if (en[key] !== enValue) failures.push(`Catalogue contrats EN: ${key}`);
 }
-for (const marker of [
-  "transitionEnterpriseContract",
-  "enterpriseApproval",
-  "revision",
-  "resolveContractBusinessParty",
-  "enterpriseSupplierPartyLink",
-  "organizationMemberId",
-  "COLLABORATOR",
-  "EMPLOYEE",
-  "SUPPLIER",
-]) {
-  need(service, marker, "Service contrats");
+for (const marker of ["transitionEnterpriseContract", "enterpriseApproval", "revision", "resolveContractBusinessParty", "enterpriseSupplierPartyLink", "organizationMemberId", "COLLABORATOR", "EMPLOYEE", "SUPPLIER"]) need(service, marker, "Service contrats");
+for (const marker of ["contractTransitionSchema", "notifyUser", "section=validation"]) need(route, marker, "Route contrats");
+for (const marker of ["employee:", "supplier:", "member:", "contractParties", "businessPartyId", '"SALES_QUOTES_ORDERS"', "currencies", "taxCodes"]) need(lookups, marker, "Sélecteurs commerciaux");
+
+need(canonicalContracts, "enterprise-contracts-workspace-v2", "Routage contrats");
+for (const [name, source] of [["Tiers", customers], ["CRM", crm], ["Catalogue", catalog], ["Contrats", ui]]) {
+  need(source, 'presentation="editor"', `${name} — formulaire guidé`);
+  if (source.includes("window.prompt")) failures.push(`${name}: window.prompt interdit`);
 }
-for (const marker of ["contractTransitionSchema", "notifyUser", "section=validation"]) {
-  need(route, marker, "Route contrats");
-}
-for (const marker of ["employee:", "supplier:", "member:", "contractParties", "businessPartyId"]) {
-  need(lookups, marker, "Sélecteurs contrats");
-}
+for (const marker of ["useToastMessage", "openEdit", "setDetail(null)"]) need(ui, marker, "Contrats — feedback/navigation");
+need(ui, "contractTerminationInfo", "Contrats — motif informatif");
+need(ui, "confirmArchiveTitle", "Contrats — confirmation archivage");
+need(catalog, "taxChoices", "Catalogue — taxes tenant-scoped");
+need(catalogRoute, "catalogTaxCodeExists", "Catalogue — revalidation serveur taxe");
+need(catalogRoute, "organizationId, code: taxCode, isActive: true", "Catalogue — isolation taxe");
+for (const marker of ["/professional-lookups?module=SALES_QUOTES_ORDERS", "/catalog?${params.toString()}", "if (!response.ok", "fulfillmentKey", "idempotencyKey: fulfillmentKey", "quoteActionTarget", 'presentation="editor"']) need(sales, marker, "Devis/commandes #549");
+if (sales.includes("/catalog-items?page=1&pageSize=200")) failures.push("Devis/commandes: ancienne route catalogue inexistante encore utilisée");
+if (sales.includes("idempotencyKey: crypto.randomUUID()")) failures.push("Devis/commandes: clé d’idempotence régénérée pendant la soumission");
 
 if (failures.length) {
   console.error(failures.map((failure) => `❌ ${failure}`).join("\n"));
   process.exit(1);
 }
-console.log("✅ Contrats professionnels vérifiés : catalogue FR/EN, contreparties unifiées, détail, transitions serveur, approbation et lien profond.");
+console.log("✅ Hotfix ERP commercial #549 vérifié : formulaires guidés, lookups tenant-scoped, taxes, confirmations, idempotence et transitions serveur.");
