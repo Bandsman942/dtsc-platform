@@ -1,4 +1,5 @@
 import type { AiProviderEvent } from "@/lib/ai/provider-events";
+import type { AiProviderContinuationState } from "@/lib/ai/provider-continuation";
 import type { OpenAIInputMessage } from "@/lib/openai";
 import type { SaasPlanCode } from "@/lib/billing/plans";
 
@@ -74,7 +75,12 @@ export type AiProviderToolCall = {
 
 export type AiProviderInputMessage =
   | OpenAIInputMessage
-  | { role: "assistant"; content: string; toolCalls: AiProviderToolCall[] }
+  | {
+      role: "assistant";
+      content: string;
+      toolCalls: AiProviderToolCall[];
+      providerContinuation?: AiProviderContinuationState;
+    }
   | { role: "tool"; content: string; toolCallId: string; name?: string };
 
 export type AiModelStatus = "ACTIVE" | "DEGRADED" | "DISABLED" | "RETIRED";
@@ -137,6 +143,7 @@ export type AiProviderErrorCode =
   | "CONTEXT_TOO_LARGE"
   | "CONTENT_REJECTED"
   | "INVALID_REQUEST"
+  | "PROVIDER_PROTOCOL_INVALID"
   | "AUTHENTICATION_FAILED"
   | "STRUCTURED_OUTPUT_INVALID"
   | "TOOL_CALL_INVALID"
