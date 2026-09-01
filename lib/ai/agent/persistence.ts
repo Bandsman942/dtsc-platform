@@ -173,21 +173,49 @@ export async function markAiAgentReadyAfterConfirmation(input: { confirmationId:
   return result.count;
 }
 
+function readProviderToolCallId(value: Prisma.JsonValue | null) {
+  if (!value || Array.isArray(value) || typeof value !== "object") return null;
+  const candidate = (value as Prisma.JsonObject).providerToolCallId;
+  return typeof candidate === "string" && candidate.trim() ? candidate : null;
+}
+
 export async function getConfirmedAiToolExecutionForRun(input: {
+  runId: string;
   confirmationId: string;
   userId: string;
   organizationId?: string | null;
 }) {
-  return prisma.aiToolExecution.findFirst({
-    where: {
-      confirmationId: input.confirmationId,
-      userId: input.userId,
-      organizationId: input.organizationId || null,
-      status: "SUCCESS",
-    },
-    orderBy: { completedAt: "desc" },
-    select: { id: true, toolCode: true, resultJson: true, reasonCode: true, completedAt: true },
-  });
+  const [execution, confirmation, latestToolStep] = await Promise.all([
+    prisma.aiToolExecution.findFirst({
+      where: {
+        confirmationId: input.confirmationId,
+        userId: input.userId,
+        organizationId: input.organizationId || null,
+        status: "SUCCESS",
+      },
+      orderBy: { completedAt: "desc" },
+      select: { id: true, toolCode: true, resultJson: true, reasonCode: true, completedAt: true },
+    }),
+    prisma.aiToolConfirmation.findFirst({
+      where: {
+        id: input.confirmationId,
+        userId: input.userId,
+        organizationId: input.organizationId || null,
+      },
+      select: { toolCode: true, argumentsJson: true },
+    }),
+    prisma.aiAgentStep.findFirst({
+      where: { runId: input.runId, kind: "TOOL" },
+      orderBy: { createdAt: "desc" },
+      select: { toolCode: true, metadataJson: true },
+    }),
+  ]);
+  if (!execution) return null;
+  return {
+    ...execution,
+    argumentsJson: confirmation?.toolCode === execution.toolCode ? confirmation.argumentsJson : null,
+    providerToolCallId: latestToolStep?.toolCode === execution.toolCode ? readProviderToolCallId(latestToolStep.metadataJson) : null,
+  };
 }
 
 export async function claimAiAgentRunResume(input: {
