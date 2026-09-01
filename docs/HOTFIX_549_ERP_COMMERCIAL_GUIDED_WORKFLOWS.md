@@ -10,7 +10,7 @@ Ce hotfix aligne les modules suivants sur les contrats UX déjà appliqués à P
 - `SALES_QUOTES_ORDERS` — Devis et commandes ;
 - `CONTRACTS` — Contrats.
 
-Le travail respecte `docs/CONTRIBUTING.md`, `AGENTS.md` et `docs/FORM_UX_CONTRACT.md`.
+Le travail respecte `docs/CONTRIBUTING.md`, `AGENTS.md`, `docs/FORM_UX_CONTRACT.md` et le contrat des références de formulaires documenté par l’Issue #467.
 
 ## Diagnostic confirmé
 
@@ -33,7 +33,7 @@ Le parcours « nouveau prospect » créait prématurément un Tiers, éventuelle
 
 ### Catalogue
 
-La devise et le code taxe étaient saisis librement. La catégorie d’unité était également libre. Les formulaires longs n’utilisaient pas systématiquement le mode `editor` de la primitive Dialog.
+La devise et le code taxe étaient saisis librement. La famille d’unité était également une saisie peu guidée, alors que le contrat #467 précise qu’elle est volontairement personnalisable par entreprise et qu’aucun référentiel global DTSC ne doit être inventé. Les formulaires longs n’utilisaient pas systématiquement le mode `editor` de la primitive Dialog.
 
 ### Contrats
 
@@ -68,6 +68,8 @@ Les formulaires longs utilisent `Dialog presentation="editor"`, avec :
 
 Le Catalogue revalide côté serveur tout code taxe reçu avec `organizationId + code + isActive=true`. Le navigateur ne devient jamais l’autorité.
 
+La famille d’unité respecte le contrat #467 : le formulaire propose d’abord les familles déjà présentes dans les unités du tenant. Une option explicite permet de créer une nouvelle famille propre à l’organisation. Aucune liste globale `QUANTITY/WEIGHT/...` n’est introduite comme seconde source de vérité.
+
 ### Tiers et identité
 
 Une fiche Tiers créée avec succès reste un succès métier même si l’invitation DTSC échoue ensuite. L’échec d’invitation produit un avertissement et peut être repris depuis la fiche existante sans recréer le Tiers.
@@ -89,6 +91,8 @@ Le devis utilise une devise contrôlée ; une ligne provenant d’un article dan
 Rejet et annulation passent par une confirmation contrôlée.
 
 Une livraison reçoit une clé d’idempotence au moment d’ouvrir le parcours. Cette même clé est conservée pendant les retries et n’est remplacée qu’après succès ou ouverture d’une nouvelle livraison.
+
+Les listes Devis/Commandes projettent le Tiers métier par une requête groupée sur les `businessPartyId` de la page, bornée au même `organizationId`. Le schéma Prisma ne définit pas de relation directe Quote/Order → BusinessParty ; le hotfix n’en invente donc pas une.
 
 ### Contrats
 
@@ -116,6 +120,7 @@ La QA de régression commerciale vérifie notamment :
 - absence de `window.prompt` dans les workspaces guidés ;
 - formulaires longs en mode `editor` ;
 - validation serveur du code taxe Catalogue ;
+- réutilisation des familles d’unité du tenant et absence d’une taxonomie globale artificielle ;
 - confirmation contrôlée rejet/annulation de devis ;
 - confirmation contrôlée archivage de contrat ;
 - clé d’idempotence stable pour une tentative de livraison ;
@@ -130,6 +135,6 @@ Le rollback applicatif consiste à revenir sur les commits du hotfix #549. Aucun
 ## Dette de contribution
 
 - Dette créée : **Aucune connue**.
-- Dette remboursée : sélecteurs silencieusement vides, route catalogue inexistante, lookups ventes refusés, prompts natifs, formulaire/feedback non conformes, idempotence de livraison fragile, taxe Catalogue libre, dialogs empilés.
+- Dette remboursée : sélecteurs silencieusement vides, route catalogue inexistante, lookups ventes refusés, prompts natifs, formulaire/feedback non conformes, idempotence de livraison fragile, taxe Catalogue libre, famille d’unité peu guidée sans inventer de taxonomie globale, dialogs empilés.
 - Dette maintenue : aucune dette matérielle identifiée dans le périmètre nécessaire au hotfix.
 - Dette reportée : **Aucune**.
