@@ -75,24 +75,23 @@ export async function consumeAiAgentModelTurn(input: {
 
   const providerContinuation = createAiProviderContinuationState(continuationItems);
   const provider = getAiProviderDefinition(input.routed.providerCode);
-  const requiresOpaqueReasoningContinuation =
+  const requiresResponsesContinuation =
     provider?.protocol === "OPENAI_RESPONSES" &&
     input.routed.selection.selectedModel.capabilities.reasoning &&
     toolCalls.length > 0;
 
-  if (requiresOpaqueReasoningContinuation) {
+  if (requiresResponsesContinuation) {
     const continuationToolCalls = providerContinuation?.items.filter((item) => item.type === "function_call") || [];
-    const reasoningItems = providerContinuation?.items.filter((item) => item.type === "reasoning") || [];
     const toolCallIds = toolCalls.map((toolCall) => toolCall.id || "");
     const continuationCallIds = continuationToolCalls.map((item) => item.callId);
     const identitiesMatch =
       toolCallIds.every(Boolean) &&
       toolCallIds.length === continuationCallIds.length &&
       toolCallIds.every((id, index) => id === continuationCallIds[index]);
-    if (!providerContinuation || reasoningItems.length === 0 || !identitiesMatch) {
+    if (!providerContinuation || !identitiesMatch) {
       throw new AiProviderError({
         reasonCode: "PROVIDER_PROTOCOL_INVALID",
-        message: "OpenAI Responses reasoning continuation state missing or inconsistent",
+        message: "OpenAI Responses continuation state missing or inconsistent",
         providerCode: input.routed.providerCode,
         modelCode: input.routed.modelCode,
       });
