@@ -2,6 +2,7 @@
 
 import { CheckCircle2, Loader2, ShieldCheck, XCircle } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useAppLocale } from "@/components/i18n/locale-provider";
 import { Button } from "@/components/ui/button";
 import { toastError, toastSuccess } from "@/lib/client-toast";
@@ -35,6 +36,7 @@ async function consumeTextStream(response: Response) {
 export function EnterpriseAiToolConfirmationBridge() {
   const locale = useAppLocale() || "fr";
   const en = locale === "en";
+  const [mounted, setMounted] = useState(false);
   const [pending, setPending] = useState<PendingConfirmation | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -48,6 +50,7 @@ export function EnterpriseAiToolConfirmationBridge() {
   }, [busy]);
 
   useEffect(() => {
+    setMounted(true);
     void refresh();
     const timer = window.setInterval(() => void refresh(), 2500);
     const onVisible = () => { if (document.visibilityState === "visible") void refresh(); };
@@ -112,9 +115,9 @@ export function EnterpriseAiToolConfirmationBridge() {
     }
   }
 
-  if (!pending) return null;
+  if (!mounted || !pending) return null;
 
-  return (
+  return createPortal(
     <aside
       className="fixed bottom-[calc(5.4rem+env(safe-area-inset-bottom))] right-3 z-[970] w-[min(calc(100vw-1.5rem),26rem)] rounded-3xl border border-amber-500/30 bg-dtsc-surface p-4 shadow-2xl shadow-black/15 sm:bottom-5 sm:right-24"
       role="dialog"
@@ -150,6 +153,7 @@ export function EnterpriseAiToolConfirmationBridge() {
           {en ? "Approve" : "Confirmer"}
         </Button>
       </div>
-    </aside>
+    </aside>,
+    document.body,
   );
 }
