@@ -12,6 +12,7 @@ const chatRoute = read("app/api/enterprise/ai/chat/route.ts");
 const agentRoute = read("app/api/enterprise/ai/agent/route.ts");
 const shell = read("components/chat/assistant-immersive-workspace-shell.tsx");
 const confirmationBridge = read("components/chat/enterprise-ai-tool-confirmation-bridge.tsx");
+const confirmationCopy = read("lib/enterprise-ai/i18n.ts");
 const financeContract = read("lib/ai/tools/finance-contract.ts");
 const financeExecutor = read("lib/ai/tools/executors/finance.ts");
 const executorIndex = read("lib/ai/tools/executors/index.ts");
@@ -73,6 +74,9 @@ assert(shell.includes("EnterpriseAiToolConfirmationBridge") && confirmationBridg
 assert(confirmationBridge.includes('import { createPortal } from "react-dom"') && confirmationBridge.includes("document.body"), "Enterprise confirmation UI must render outside the immersive shell layout contract");
 assert(confirmationBridge.includes("/api/ai/tools/confirm") && confirmationBridge.includes("/api/ai/tools/cancel") && confirmationBridge.includes("/resume"), "Enterprise confirmation bridge must confirm/reject structurally and resume the linked agent run");
 assert(!confirmationBridge.includes('body: JSON.stringify({ content: "oui"') && !confirmationBridge.includes('body: JSON.stringify({ content: "yes"'), "Natural-language confirmation must never authorize a mutation");
+assert(confirmationBridge.includes("getEnterpriseAiToolConfirmationCopy") && confirmationCopy.includes("Validation requise") && confirmationCopy.includes("Approval required"), "Enterprise confirmation user copy must come from the domain i18n source");
+assert(!confirmationBridge.includes('locale === "en"') && !confirmationBridge.includes("error.message"), "Enterprise confirmation UI must not add local language ternaries or expose raw technical errors");
+assert(confirmationBridge.includes("POLL_INTERVAL_MS = 5_000") && confirmationBridge.includes('document.visibilityState === "hidden"') && confirmationBridge.includes("if (pending) return"), "Enterprise confirmation polling must stay bounded, suspend in background, and stop after a pending action is found");
 
 assert(regressionRunner.includes("qa-hotfix-543-enterprise-ai-erp-tool-gateway.mjs"), "Hotfix #543 QA must run inside the CI regression gate");
 
