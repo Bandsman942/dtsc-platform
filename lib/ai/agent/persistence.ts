@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
+import { parseAiProviderContinuationState } from "@/lib/ai/provider-continuation";
 import { prisma } from "@/lib/prisma";
 import type { AiAgentBudget, AiAgentExecutionClass, AiAgentRunStatus, AiAgentScope, AiAgentUsage } from "@/lib/ai/agent/types";
 
@@ -179,13 +180,18 @@ function readProviderToolCallId(value: Prisma.JsonValue | null) {
   return typeof candidate === "string" && candidate.trim() ? candidate : null;
 }
 
+function readProviderContinuation(value: Prisma.JsonValue | null) {
+  if (!value || Array.isArray(value) || typeof value !== "object") return null;
+  return parseAiProviderContinuationState((value as Prisma.JsonObject).providerContinuation);
+}
+
 export async function getConfirmedAiToolExecutionForRun(input: {
   runId: string;
   confirmationId: string;
   userId: string;
   organizationId?: string | null;
 }) {
-  const [execution, confirmation, latestToolStep] = await Promise.all([
+  const [execution, confirmation, latestToolStep, latestModelStep] = await Promise.all([
     prisma.aiToolExecution.findFirst({
       where: {
         confirmationId: input.confirmationId,
@@ -209,12 +215,18 @@ export async function getConfirmedAiToolExecutionForRun(input: {
       orderBy: { createdAt: "desc" },
       select: { toolCode: true, metadataJson: true },
     }),
+    prisma.aiAgentStep.findFirst({
+      where: { runId: input.runId, kind: "MODEL", status: "SUCCESS" },
+      orderBy: { createdAt: "desc" },
+      select: { metadataJson: true },
+    }),
   ]);
   if (!execution) return null;
   return {
     ...execution,
     argumentsJson: confirmation?.toolCode === execution.toolCode ? confirmation.argumentsJson : null,
     providerToolCallId: latestToolStep?.toolCode === execution.toolCode ? readProviderToolCallId(latestToolStep.metadataJson) : null,
+    providerContinuation: readProviderContinuation(latestModelStep?.metadataJson ?? null),
   };
 }
 
