@@ -2,6 +2,7 @@ import { AiProviderError } from "@/lib/ai/errors";
 import { getAiProviderDefinition } from "@/lib/ai/catalog";
 import { createAiProviderContinuationState } from "@/lib/ai/provider-continuation";
 import type { AiOpenAiResponsesContinuationItem } from "@/lib/ai/provider-continuation";
+import { AI_TOOL_REGISTRY } from "@/lib/ai/tool-registry";
 import type { AiStreamResult } from "@/lib/ai/types";
 import type { AiAgentTurnResult } from "@/lib/ai/agent/types";
 
@@ -58,6 +59,18 @@ export async function consumeAiAgentModelTurn(input: {
     throw error;
   } finally {
     reader.releaseLock();
+  }
+
+  if (toolCalls.length > 1) {
+    const confirmationToolCodes = new Set(AI_TOOL_REGISTRY.filter((definition) => definition.requiresConfirmation).map((definition) => definition.code));
+    if (toolCalls.some((toolCall) => Boolean(toolCall.name && confirmationToolCodes.has(toolCall.name)))) {
+      throw new AiProviderError({
+        reasonCode: "TOOL_CALL_INVALID",
+        message: "A confirmation-required tool must be requested in its own model turn",
+        providerCode: input.routed.providerCode,
+        modelCode: input.routed.modelCode,
+      });
+    }
   }
 
   const providerContinuation = createAiProviderContinuationState(continuationItems);
