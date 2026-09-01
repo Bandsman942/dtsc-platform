@@ -39,7 +39,11 @@ assert(openrouter.includes('reasonCode: "STREAM_INTERRUPTED"') && openrouter.inc
 
 assert(runtime.includes("let modelRetryAttempt = 0") && runtime.includes("modelRetryAttempt < 1") && runtime.includes("isRetryableAgentModelError(error)"), "Post-tool model recovery must be bounded to one retry and only retryable failures");
 assert(runtime.includes("hasStructuredToolContext") && runtime.includes('phase: "POST_TOOL_MODEL"') && runtime.includes('status: "RETRYING"'), "Retry must only happen after a structural tool result and remain auditable");
-assert(runtime.includes('messages.push({ role: "assistant", content: turn.content, toolCalls: canonicalToolCalls })'), "Runtime must append the assistant tool_call turn before tool results");
+const canonicalToolCallsIndex = runtime.indexOf("const canonicalToolCalls =");
+const assistantToolTurnIndex = canonicalToolCallsIndex >= 0 ? runtime.indexOf('role: "assistant"', canonicalToolCallsIndex) : -1;
+const assistantToolCallsIndex = assistantToolTurnIndex >= 0 ? runtime.indexOf("toolCalls: canonicalToolCalls", assistantToolTurnIndex) : -1;
+const firstToolResultIndex = assistantToolCallsIndex >= 0 ? runtime.indexOf('role: "tool"', assistantToolCallsIndex) : -1;
+assert(canonicalToolCallsIndex >= 0 && assistantToolTurnIndex > canonicalToolCallsIndex && assistantToolCallsIndex > assistantToolTurnIndex && firstToolResultIndex > assistantToolCallsIndex, "Runtime must append the canonical assistant tool_call turn before any structural tool result");
 assert(runtime.includes('messages.push({ role: "tool", toolCallId: toolCall.id'), "Runtime must append structural tool result messages");
 assert(!runtime.includes('messages.push({ role: "user", content: buildAgentToolResultMessage'), "Runtime must never disguise a tool result as a user message");
 const retryIndex = runtime.indexOf("let modelRetryAttempt = 0");
