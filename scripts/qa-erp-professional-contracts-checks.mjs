@@ -16,6 +16,9 @@ const need = (content, marker, scope) => {
 };
 
 const ui = read("components/enterprise/professional/enterprise-contracts-workspace-v2.tsx");
+const canonicalCustomers = read("components/enterprise/professional/enterprise-customers-workspace.tsx");
+const canonicalCrm = read("components/enterprise/professional/enterprise-crm-workspace.tsx");
+const canonicalCatalog = read("components/enterprise/professional/enterprise-catalog-workspace.tsx");
 const canonicalContracts = read("components/enterprise/professional/enterprise-contracts-workspace.tsx");
 const customers = read("components/enterprise/professional/enterprise-customers-workspace-v2.tsx");
 const crm = read("components/enterprise/professional/enterprise-crm-workspace-v2.tsx");
@@ -43,7 +46,10 @@ for (const marker of ["transitionEnterpriseContract", "enterpriseApproval", "rev
 for (const marker of ["contractTransitionSchema", "notifyUser", "section=validation"]) need(route, marker, "Route contrats");
 for (const marker of ["employee:", "supplier:", "member:", "contractParties", "businessPartyId", '"SALES_QUOTES_ORDERS"', "currencies", "taxCodes"]) need(lookups, marker, "Sélecteurs commerciaux");
 
-need(canonicalContracts, "enterprise-contracts-workspace-v2", "Routage contrats");
+need(canonicalCustomers, "enterprise-customers-workspace-v2", "Routage Tiers");
+need(canonicalCrm, "enterprise-crm-workspace-v2", "Routage CRM");
+need(canonicalCatalog, "enterprise-catalog-workspace-v2", "Routage Catalogue");
+need(canonicalContracts, "enterprise-contracts-workspace-v2", "Routage Contrats");
 for (const [name, source] of [["Tiers", customers], ["CRM", crm], ["Catalogue", catalog], ["Contrats", ui]]) {
   need(source, 'presentation="editor"', `${name} — formulaire guidé`);
   if (source.includes("window.prompt")) failures.push(`${name}: window.prompt interdit`);
@@ -62,4 +68,4 @@ if (failures.length) {
   console.error(failures.map((failure) => `❌ ${failure}`).join("\n"));
   process.exit(1);
 }
-console.log("✅ Hotfix ERP commercial #549 vérifié : formulaires guidés, lookups tenant-scoped, taxes, confirmations, idempotence et transitions serveur.");
+console.log("✅ Hotfix ERP commercial #549 vérifié : routage guidé, lookups tenant-scoped, taxes, confirmations, idempotence et transitions serveur.");
