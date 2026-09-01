@@ -27,12 +27,40 @@ export function getAiAgentInternalReasonCode(error: unknown) {
   return "AGENT_RUNTIME_FAILED";
 }
 
+export function getAiAgentInternalDiagnostic(error: unknown) {
+  if (error instanceof AiProviderError) {
+    return {
+      reasonCode: error.reasonCode,
+      statusCode: error.statusCode,
+      providerCode: error.providerCode || null,
+      modelCode: error.modelCode || null,
+      fingerprint: error.message.slice(0, 160),
+    };
+  }
+  if (error instanceof Error) {
+    return {
+      reasonCode: "AGENT_RUNTIME_FAILED",
+      statusCode: null,
+      providerCode: null,
+      modelCode: null,
+      fingerprint: error.name.slice(0, 80),
+    };
+  }
+  return {
+    reasonCode: "AGENT_RUNTIME_FAILED",
+    statusCode: null,
+    providerCode: null,
+    modelCode: null,
+    fingerprint: "unknown",
+  };
+}
+
 export function classifyAiAgentFailure(reasonCode?: string | null, status?: string | null): AiAgentClientFailureCategory | null {
   if (status === "CANCELLED" || reasonCode?.includes("CANCELLED")) return "CANCELLED";
   if (status === "BUDGET_EXHAUSTED" || reasonCode?.startsWith("MAX_") || reasonCode?.includes("LIMIT_REACHED") || reasonCode === "RATE_LIMITED") return "LIMIT_REACHED";
   if (reasonCode === "FORBIDDEN" || reasonCode === "UNAUTHORIZED" || reasonCode?.includes("NOT_ALLOWED") || reasonCode?.includes("DENIED") || reasonCode?.includes("NOT_READY")) return "ACTION_REFUSED";
-  if (reasonCode === "INVALID_REQUEST" || reasonCode === "CONTEXT_TOO_LARGE" || (reasonCode?.includes("INVALID") && reasonCode !== "PROVIDER_PROTOCOL_INVALID")) return "REQUEST_INVALID";
-  if (reasonCode && ["PROVIDER_UNAVAILABLE", "MODEL_UNAVAILABLE", "TIMEOUT", "STREAM_INTERRUPTED", "UNKNOWN_PROVIDER_ERROR", "AGENT_RUNTIME_FAILED", "PROVIDER_PROTOCOL_INVALID"].includes(reasonCode)) return "SERVICE_TEMPORARILY_UNAVAILABLE";
+  if (reasonCode === "INVALID_REQUEST" || reasonCode === "CONTEXT_TOO_LARGE" || (reasonCode?.includes("INVALID") && !["PROVIDER_PROTOCOL_INVALID", "TOOL_CALL_INVALID"].includes(reasonCode))) return "REQUEST_INVALID";
+  if (reasonCode && ["PROVIDER_UNAVAILABLE", "MODEL_UNAVAILABLE", "TIMEOUT", "STREAM_INTERRUPTED", "UNKNOWN_PROVIDER_ERROR", "AGENT_RUNTIME_FAILED", "PROVIDER_PROTOCOL_INVALID", "TOOL_CALL_INVALID"].includes(reasonCode)) return "SERVICE_TEMPORARILY_UNAVAILABLE";
   if (status === "FAILED" || reasonCode) return "UNAVAILABLE";
   return null;
 }
