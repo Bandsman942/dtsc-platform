@@ -11,6 +11,7 @@ function assert(condition, message) {
 const continuation = read("lib/ai/provider-continuation.ts");
 const types = read("lib/ai/types.ts");
 const events = read("lib/ai/provider-events.ts");
+const provider = read("lib/ai/provider.ts");
 const format = read("lib/ai/providers/message-format.ts");
 const openai = read("lib/ai/providers/openai-responses.ts");
 const openrouter = read("lib/ai/providers/openrouter-chat-completions.ts");
@@ -24,8 +25,9 @@ const runRoute = read("app/api/ai/agent/runs/[id]/route.ts");
 const regressionRunner = read("scripts/run-regression-qa-ci.mjs");
 
 assert(continuation.includes('protocol: "OPENAI_RESPONSES"'), "Continuation state must be protocol-scoped to OpenAI Responses");
-assert(continuation.includes('type: "reasoning"') && continuation.includes("encryptedContent: string"), "Continuation state must retain opaque encrypted reasoning");
+assert(continuation.includes('type: "reasoning"') && continuation.includes("encryptedContent: string"), "Continuation state must retain opaque encrypted reasoning when the provider emits it");
 assert(continuation.includes('type: "function_call"') && continuation.includes("outputIndex: number") && continuation.includes("callId: string"), "Continuation state must retain ordered function calls and call ids");
+assert(continuation.includes("itemId?: string") && continuation.includes("id: item.itemId"), "Responses function item ids must be preserved when the provider supplies them");
 assert(continuation.includes("MAX_AI_REASONING_ENCRYPTED_CHARS") && continuation.includes("MAX_AI_PROVIDER_CONTINUATION_CHARS") && continuation.includes("MAX_AI_PROVIDER_CONTINUATION_ITEMS"), "Opaque provider continuation must be bounded");
 assert(continuation.includes("toOpenAiResponsesContinuationInput") && continuation.includes("encrypted_content: item.encryptedContent"), "Opaque reasoning must be re-emitted to Responses input");
 assert(!continuation.includes("reasoning_text") && !continuation.includes("summary_text"), "Continuation storage must not model plaintext chain-of-thought content");
@@ -35,7 +37,8 @@ assert(events.includes('type: "CONTINUATION_STATE_ITEM"'), "Provider stream even
 
 assert(openai.includes('include: ["reasoning.encrypted_content"]'), "Reasoning models must request encrypted reasoning continuation from OpenAI");
 assert(openai.includes("model.capabilities.reasoning"), "Encrypted reasoning include must remain limited to reasoning-capable models");
-assert(openai.includes("event.item?.type === \"reasoning\"") && openai.includes("event.item.encrypted_content"), "OpenAI stream parser must capture only encrypted reasoning state");
+assert(openai.includes("event.item?.type === \"reasoning\"") && openai.includes("event.item.encrypted_content"), "OpenAI stream parser must capture encrypted reasoning state when reasoning is emitted");
+assert(openai.includes('return [{ type: "ERROR", reasonCode: "PROVIDER_PROTOCOL_INVALID" }]'), "An emitted reasoning item without encrypted state must fail closed before business tools run");
 assert(openai.includes('type: "CONTINUATION_STATE_ITEM"') && openai.includes('type: "function_call"') && openai.includes("outputIndex: event.output_index"), "OpenAI stream parser must capture ordered function-call continuation items");
 assert(openai.includes('store: false'), "OpenAI Responses must remain store:false");
 assert(!openai.includes("reasoning_text.done") && !openai.includes("summary_text"), "Provider adapter must not capture plaintext reasoning events");
@@ -43,12 +46,16 @@ assert(openai.includes("readProviderErrorFingerprint") && openai.includes("slice
 
 assert(format.includes("validatedOpenAiContinuation") && format.includes("toOpenAiResponsesContinuationInput(state)"), "Responses formatter must validate and re-inject opaque continuation state");
 assert(format.includes("expectedCallIds") && format.includes("continuationCallIds") && format.includes("PROVIDER_PROTOCOL_INVALID"), "Responses formatter must reject call-id mismatch before provider execution");
-assert(format.indexOf("input.push(...continuation)") < format.indexOf('type: "function_call_output"') || format.includes('message.role === "tool"'), "Continuation items must be emitted as provider input items before subsequent structural tool outputs in message order");
+const assistantContinuationIndex = format.indexOf("input.push(...continuation)");
+const toolOutputBranchIndex = format.indexOf('type: "function_call_output"');
+assert(assistantContinuationIndex >= 0 && toolOutputBranchIndex >= 0, "Responses formatter must contain both continuation and function output paths");
 assert(!openrouter.includes("providerContinuation") && !openrouter.includes("encrypted_content"), "OpenRouter/Chat Completions must not receive OpenAI Responses continuation state");
+assert(provider.includes('reasonCode: "PROVIDER_PROTOCOL_INVALID"') && !provider.includes('reasonCode: "INVALID_REQUEST"'), "Unsupported provider protocols must be classified as internal protocol failures");
 
 assert(turn.includes("createAiProviderContinuationState(continuationItems)"), "Agent model turn must assemble provider continuation state");
-assert(turn.includes("requiresOpaqueReasoningContinuation") && turn.includes("reasoningItems.length === 0") && turn.includes("identitiesMatch"), "Reasoning tool turns must fail closed if opaque state or call identity is incomplete");
-assert(turn.includes('reasonCode: "PROVIDER_PROTOCOL_INVALID"'), "Missing reasoning continuation must have a stable internal protocol failure");
+assert(turn.includes("requiresResponsesContinuation") && turn.includes("identitiesMatch"), "Reasoning-capable Responses tool turns must validate the complete function-call continuation state");
+assert(turn.includes('reasonCode: "PROVIDER_PROTOCOL_INVALID"'), "Missing or inconsistent Responses continuation must have a stable internal protocol failure");
+assert(!turn.includes("reasoningItems.length === 0"), "A zero-effort reasoning-capable model must not be forced to emit a reasoning item when the provider emitted none");
 assert(turn.includes("toolCalls.length > 1") && turn.includes("requiresConfirmation") && turn.includes('reasonCode: "TOOL_CALL_INVALID"'), "A confirmation-required tool must be isolated before any multi-tool execution");
 
 assert(runtime.includes("providerContinuation: turn.providerContinuation"), "Runtime must carry continuation state on the canonical assistant tool-call turn");
@@ -63,7 +70,8 @@ assert(runRoute.includes("stepIndex: step.stepIndex") && !runRoute.includes("met
 
 assert(errors.includes('status === 400 || status === 422') && errors.includes('reasonCode: "PROVIDER_PROTOCOL_INVALID"'), "Provider 400/422 generated from DTSC payload construction must not blame the user by default");
 assert(failures.includes('"PROVIDER_PROTOCOL_INVALID"') && failures.includes('"TOOL_CALL_INVALID"') && failures.includes("SERVICE_TEMPORARILY_UNAVAILABLE"), "Internal provider/tool protocol failures must map to a safe service category");
-assert(failures.includes("getAiAgentInternalDiagnostic") && failures.includes("fingerprint"), "Bounded server-side protocol diagnostics must be available without client leakage");
+assert(failures.includes("getAiAgentInternalDiagnostic") && failures.includes("providerFingerprint") && failures.includes("[ai-agent-provider-failure]"), "Server-side provider diagnostics must be bounded, structured and actually emitted without client leakage");
+assert(!failures.includes("return error.message.slice(0, 160)"), "Arbitrary runtime error messages must not become persisted agent reason codes");
 
 const fiveFinanceTools = [
   "FINANCE_TREASURY_READ",
