@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { BriefcaseBusiness, Eye, Plus, RefreshCcw, UserRound } from "lucide-react";
+import { EnterpriseIdentityLinkChoice, type EnterpriseIdentityLinkChoiceValue } from "@/components/enterprise/identity-links/identity-link-choice";
 import { currencyChoices, Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { commercialHotfixCopy } from "@/components/enterprise/professional/commercial-hotfix-copy";
 import { professionalMutation, ProfessionalError, ProfessionalFormSection, ProfessionalHelp, ProfessionalLoading, ProfessionalSearch, ProfessionalTabs, useProfessionalCollection } from "@/components/enterprise/professional/professional-erp-ui";
@@ -24,6 +25,7 @@ type Lookups = { members: Member[]; departments: Department[]; parties: Party[];
 type Lead = { id: string; reference: string; partyType: "PERSON" | "ORGANIZATION"; legalName: string; displayName: string | null; email: string | null; phone: string | null; source: string | null; status: string; expectedValue: string | number | null; currency: string | null; nextAction: string | null; nextActionAt: string | null; businessPartyId: string | null; businessParty: { id: string; code: string; legalName: string; displayName: string | null } | null; revision: number };
 type Opportunity = { id: string; reference: string; businessPartyId: string; businessParty: { id: string; code: string; legalName: string; displayName: string | null } | null; name: string; status: string; estimatedValue: string | number | null; currency: string | null; probabilityPercent: number; expectedCloseDate: string | null; source: string | null; nextAction: string | null; nextActionAt: string | null; revision: number; quotes: Array<{ id: string; reference: string; status: string; totalAmount: string | number; currency: string }> };
 type ConversionPreview = { lead: Lead; candidates: Party[] };
+type ConversionResult = { partyId?: string; opportunityId?: string | null; idempotent?: boolean; reusedParty?: boolean };
 
 const STAGES = ["OPEN", "QUALIFIED", "PROPOSAL", "NEGOTIATION", "WON", "LOST", "CLOSED"] as const;
 const SOURCES = ["REFERRAL", "WEBSITE", "SOCIAL", "EVENT", "OUTBOUND", "OTHER"] as const;
@@ -57,10 +59,14 @@ export function EnterpriseCrmWorkspace({ organizationId, organizationName, defin
   const [lostOpportunity, setLostOpportunity] = useState<Opportunity | null>(null);
   const [conversion, setConversion] = useState<ConversionPreview | null>(null);
   const [conversionPartyId, setConversionPartyId] = useState("");
+  const [conversionPartyDecision, setConversionPartyDecision] = useState<"EXISTING" | "NEW">("NEW");
+  const [identityChoice, setIdentityChoice] = useState<EnterpriseIdentityLinkChoiceValue>("MANUAL_ONLY");
   const [message, setMessage] = useState("");
   const [success, setSuccess] = useState("");
+  const [warning, setWarning] = useState("");
   const [busy, setBusy] = useState(false);
   useToastMessage(success, "success");
+  useToastMessage(warning, "warning");
 
   useEffect(() => {
     let active = true;
@@ -81,7 +87,7 @@ export function EnterpriseCrmWorkspace({ organizationId, organizationName, defin
   const currencies = lookups.currencies.length ? lookups.currencies.map((code) => ({ id: code, label: code })) : currencyChoices(locale);
   const sources = SOURCES.map((code) => ({ id: code, label: professionalErpEnumLabel(locale, "source", code) }));
 
-  const resetFeedback = () => { setMessage(""); setSuccess(""); };
+  const resetFeedback = () => { setMessage(""); setSuccess(""); setWarning(""); };
 
   async function createLead(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); resetFeedback();
@@ -141,16 +147,34 @@ export function EnterpriseCrmWorkspace({ organizationId, organizationName, defin
 
   async function openConversion(item: Lead) {
     resetFeedback();
-    try { const response = await fetch(`/api/enterprise/${organizationId}/leads/${item.id}/convert`, { cache: "no-store" }); const body = await response.json().catch(() => null) as (ConversionPreview & { message?: string; error?: string }) | null; if (!response.ok || !body) throw new Error(body?.message || body?.error || t("common.previewFailed")); setConversion(body); setConversionPartyId(item.businessPartyId || body.candidates[0]?.id || ""); setDetailLead(null); }
-    catch (error) { setMessage(error instanceof Error ? error.message : t("common.previewFailed")); }
+    try {
+      const response = await fetch(`/api/enterprise/${organizationId}/leads/${item.id}/convert`, { cache: "no-store" });
+      const body = await response.json().catch(() => null) as (ConversionPreview & { message?: string; error?: string }) | null;
+      if (!response.ok || !body) throw new Error(body?.message || body?.error || t("common.previewFailed"));
+      const existingPartyId = item.businessPartyId || body.candidates[0]?.id || "";
+      setConversion(body);
+      setConversionPartyId(existingPartyId);
+      setConversionPartyDecision(existingPartyId ? "EXISTING" : "NEW");
+      setIdentityChoice("MANUAL_ONLY");
+      setDetailLead(null);
+    } catch (error) { setMessage(error instanceof Error ? error.message : t("common.previewFailed")); }
   }
 
   async function convertLead(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); if (!conversion) return; resetFeedback(); const form = new FormData(event.currentTarget); const createNewParty = form.get("partyDecision") === "NEW";
+    event.preventDefault(); if (!conversion) return; resetFeedback(); const form = new FormData(event.currentTarget); const createNewParty = conversionPartyDecision === "NEW";
     if (!createNewParty && !conversionPartyId) { setMessage(t("crm.conversionDecisionRequired")); return; }
+    const shouldInviteIdentity = createNewParty && conversion.lead.partyType === "PERSON" && identityChoice !== "MANUAL_ONLY" && identityChoice !== "LINK_LATER";
+    if (shouldInviteIdentity && !conversion.lead.email) { setMessage(t("customers.invitationEmailRequired")); return; }
     setBusy(true);
-    try { await professionalMutation(`/api/enterprise/${organizationId}/leads/${conversion.lead.id}/convert`, { businessPartyId: createNewParty ? null : conversionPartyId, createNewParty, createOpportunity: form.get("createOpportunity") === "on", opportunityName: String(form.get("opportunityName") || "") || null, estimatedValue: String(form.get("estimatedValue") || "") || null, currency: String(form.get("currency") || "") || null, expectedCloseDate: String(form.get("expectedCloseDate") || "") || null, revision: conversion.lead.revision }); setConversion(null); setRefreshKey((value) => value + 1); setSuccess(`${t("common.convert")} · ${conversion.lead.displayName || conversion.lead.legalName}`); }
-    catch (error) { setMessage(error instanceof Error ? error.message : t("common.conversionFailed")); } finally { setBusy(false); }
+    try {
+      const result = await professionalMutation(`/api/enterprise/${organizationId}/leads/${conversion.lead.id}/convert`, { businessPartyId: createNewParty ? null : conversionPartyId, createNewParty, createOpportunity: form.get("createOpportunity") === "on", opportunityName: String(form.get("opportunityName") || "") || null, estimatedValue: String(form.get("estimatedValue") || "") || null, currency: String(form.get("currency") || "") || null, expectedCloseDate: String(form.get("expectedCloseDate") || "") || null, revision: conversion.lead.revision }) as ConversionResult;
+      if (shouldInviteIdentity && result.partyId) {
+        try {
+          await professionalMutation(`/api/enterprise/${organizationId}/identity-link-invitations`, { email: conversion.lead.email, displayName: conversion.lead.displayName || conversion.lead.legalName, businessPartyId: result.partyId, relationType: "CUSTOMER", purpose: t("customers.invitationPurpose", { organization: organizationName }) });
+        } catch { setWarning(hotfix.savedPartyInvitationPending); }
+      }
+      setConversion(null); setConversionPartyId(""); setConversionPartyDecision("NEW"); setIdentityChoice("MANUAL_ONLY"); setRefreshKey((value) => value + 1); setSuccess(`${t("common.convert")} · ${conversion.lead.displayName || conversion.lead.legalName}`);
+    } catch (error) { setMessage(error instanceof Error ? error.message : t("common.conversionFailed")); } finally { setBusy(false); }
   }
 
   const views = [{ id: "PIPELINE", label: t("crm.viewPipeline"), count: opportunities.pagination.total }, { id: "OPPORTUNITIES", label: t("crm.viewOpportunities"), count: opportunities.pagination.total }, { id: "LEADS", label: t("crm.viewLeads"), count: leads.pagination.total }];
@@ -183,8 +207,8 @@ export function EnterpriseCrmWorkspace({ organizationId, organizationName, defin
     <LostDialog open={Boolean(lostLead)} title={hotfix.leadLostTitle} message={message} busy={busy} reasonPlaceholder={hotfix.leadLostReason} cancelLabel={t("common.cancel")} confirmLabel={t("common.confirm")} onClose={() => setLostLead(null)} onSubmit={(reason) => lostLead ? void transitionLead(lostLead, "LOST", reason) : undefined} />
     <LostDialog open={Boolean(lostOpportunity)} title={t("crm.lostDialogTitle")} message={message} busy={busy} reasonPlaceholder={hotfix.leadLostReason} cancelLabel={t("common.cancel")} confirmLabel={t("common.confirm")} onClose={() => setLostOpportunity(null)} onSubmit={(reason) => lostOpportunity ? void transitionOpportunity(lostOpportunity, "LOST", reason) : undefined} />
 
-    <Dialog open={Boolean(conversion)} onClose={() => { if (!busy) setConversion(null); }} title={t("crm.convertDialogTitle")} className="h-[92dvh] max-w-3xl" presentation="editor" footer={<><Button variant="outline" disabled={busy} onClick={() => setConversion(null)}>{t("common.cancel")}</Button><Button type="submit" form="crm-convert-form" disabled={busy}>{busy ? hotfix.busy : t("common.convert")}</Button></>}>
-      {conversion ? <form id="crm-convert-form" onSubmit={convertLead} className="grid gap-5 p-4 sm:p-5">{message ? <ProfessionalError message={message} /> : null}<ProfessionalFormSection title={t("crm.recordDecision")} description={t("crm.recordDecisionDescription")}><div className="md:col-span-2 grid gap-3"><NativeSelect value={conversionPartyId} onChange={setConversionPartyId} items={conversion.candidates.map((party) => ({ id: party.id, label: `${party.displayName || party.legalName} · ${party.code}` }))} /><label className="flex gap-2"><input type="radio" name="partyDecision" value="EXISTING" defaultChecked={Boolean(conversion.candidates.length)} />{t("crm.selectRecord")}</label><label className="flex gap-2"><input type="radio" name="partyDecision" value="NEW" defaultChecked={!conversion.candidates.length} />{t("crm.createCustomerRecord")}</label></div></ProfessionalFormSection><ProfessionalFormSection title={t("crm.opportunitySection")}><Field label={t("crm.createCommercialOpportunity")}><label className="flex gap-2"><input type="checkbox" name="createOpportunity" defaultChecked />{t("crm.createCommercialOpportunity")}</label></Field><Field label={t("crm.opportunityName")}><Input name="opportunityName" defaultValue={t("crm.opportunityDefaultName", { name: conversion.lead.displayName || conversion.lead.legalName })} /></Field><Field label={t("crm.estimatedValue")}><Input name="estimatedValue" type="number" min="0" step="0.01" defaultValue={conversion.lead.expectedValue ? String(conversion.lead.expectedValue) : ""} /></Field><Field label={t("crm.currency")}><NativeSelect name="currency" defaultValue={conversion.lead.currency || ""} items={currencies} /></Field><Field label={t("crm.expectedClose")}><Input name="expectedCloseDate" type="date" /></Field></ProfessionalFormSection></form> : null}
+    <Dialog open={Boolean(conversion)} onClose={() => { if (!busy) { setConversion(null); setConversionPartyId(""); setConversionPartyDecision("NEW"); setIdentityChoice("MANUAL_ONLY"); } }} title={t("crm.convertDialogTitle")} className="h-[92dvh] max-w-3xl" presentation="editor" footer={<><Button variant="outline" disabled={busy} onClick={() => { setConversion(null); setConversionPartyId(""); setConversionPartyDecision("NEW"); setIdentityChoice("MANUAL_ONLY"); }}>{t("common.cancel")}</Button><Button type="submit" form="crm-convert-form" disabled={busy}>{busy ? hotfix.busy : t("common.convert")}</Button></>}>
+      {conversion ? <form id="crm-convert-form" onSubmit={convertLead} className="grid gap-5 p-4 sm:p-5">{message ? <ProfessionalError message={message} /> : null}<ProfessionalFormSection title={t("crm.recordDecision")} description={t("crm.recordDecisionDescription")}><div className="md:col-span-2 grid gap-3"><NativeSelect value={conversionPartyId} onChange={setConversionPartyId} disabled={conversionPartyDecision === "NEW"} items={conversion.candidates.map((party) => ({ id: party.id, label: `${party.displayName || party.legalName} · ${party.code}` }))} /><label className="flex gap-2"><input type="radio" name="partyDecision" value="EXISTING" checked={conversionPartyDecision === "EXISTING"} onChange={() => { setConversionPartyDecision("EXISTING"); setIdentityChoice("MANUAL_ONLY"); }} />{t("crm.selectRecord")}</label><label className="flex gap-2"><input type="radio" name="partyDecision" value="NEW" checked={conversionPartyDecision === "NEW"} onChange={() => setConversionPartyDecision("NEW")} />{t("crm.createCustomerRecord")}</label>{conversionPartyDecision === "NEW" && conversion.lead.partyType === "PERSON" ? <EnterpriseIdentityLinkChoice value={identityChoice} onChange={setIdentityChoice} disabled={busy} /> : null}</div></ProfessionalFormSection><ProfessionalFormSection title={t("crm.opportunitySection")}><Field label={t("crm.createCommercialOpportunity")}><label className="flex gap-2"><input type="checkbox" name="createOpportunity" defaultChecked />{t("crm.createCommercialOpportunity")}</label></Field><Field label={t("crm.opportunityName")}><Input name="opportunityName" defaultValue={t("crm.opportunityDefaultName", { name: conversion.lead.displayName || conversion.lead.legalName })} /></Field><Field label={t("crm.estimatedValue")}><Input name="estimatedValue" type="number" min="0" step="0.01" defaultValue={conversion.lead.expectedValue ? String(conversion.lead.expectedValue) : ""} /></Field><Field label={t("crm.currency")}><NativeSelect name="currency" defaultValue={conversion.lead.currency || ""} items={currencies} /></Field><Field label={t("crm.expectedClose")}><Input name="expectedCloseDate" type="date" /></Field></ProfessionalFormSection></form> : null}
     </Dialog>
   </ModuleWorkspace>;
 }
