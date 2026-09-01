@@ -90,6 +90,7 @@ export function toOpenAiResponsesContinuationInput(state: AiProviderContinuation
     }
     return {
       type: "function_call",
+      ...(item.itemId ? { id: item.itemId } : {}),
       call_id: item.callId,
       name: item.name,
       arguments: item.arguments,
