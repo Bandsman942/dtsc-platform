@@ -11,11 +11,14 @@ type NativeOpenAiEvent = {
   name?: string;
   arguments?: string;
   code?: string;
+  output_index?: number;
   item?: {
     id?: string;
     type?: string;
     call_id?: string;
     name?: string;
+    arguments?: string;
+    encrypted_content?: string;
   };
   response?: {
     usage?: {
@@ -51,6 +54,20 @@ function normalizeNativeEvent(event: NativeOpenAiEvent, toolCallIds: Map<string,
     if (event.item.id && event.item.call_id) toolCallIds.set(event.item.id, event.item.call_id);
     return [];
   }
+  if (event.type === "response.output_item.done" && event.item?.type === "reasoning") {
+    if (typeof event.output_index !== "number" || !event.item.id || !event.item.encrypted_content) {
+      return [{ type: "ERROR", reasonCode: "PROVIDER_PROTOCOL_INVALID" }];
+    }
+    return [{
+      type: "CONTINUATION_STATE_ITEM",
+      item: {
+        type: "reasoning",
+        outputIndex: event.output_index,
+        id: event.item.id,
+        encryptedContent: event.item.encrypted_content,
+      },
+    }];
+  }
   if (event.type === "response.output_text.delta" && event.delta) return [{ type: "TEXT_DELTA", text: event.delta }];
   if (event.type === "response.function_call_arguments.delta") {
     const id = event.item_id ? toolCallIds.get(event.item_id) || event.item_id : event.call_id;
@@ -58,9 +75,23 @@ function normalizeNativeEvent(event: NativeOpenAiEvent, toolCallIds: Map<string,
   }
   if (event.type === "response.function_call_arguments.done") {
     const id = event.item_id ? toolCallIds.get(event.item_id) || event.item_id : event.call_id;
-    return [{ type: "TOOL_CALL_COMPLETED", id, name: event.name, arguments: parseToolArguments(event.arguments) }];
+    const events: AiProviderEvent[] = [{ type: "TOOL_CALL_COMPLETED", id, name: event.name, arguments: parseToolArguments(event.arguments) }];
+    if (id && event.name && typeof event.arguments === "string" && typeof event.output_index === "number") {
+      events.push({
+        type: "CONTINUATION_STATE_ITEM",
+        item: {
+          type: "function_call",
+          outputIndex: event.output_index,
+          itemId: event.item_id,
+          callId: id,
+          name: event.name,
+          arguments: event.arguments,
+        },
+      });
+    }
+    return events;
   }
-  if (event.type === "error") return [{ type: "ERROR", reasonCode: "UNKNOWN_PROVIDER_ERROR" }];
+  if (event.type === "error" || event.type === "response.failed") return [{ type: "ERROR", reasonCode: "UNKNOWN_PROVIDER_ERROR" }];
   if (event.type === "response.completed") {
     const usage = event.response?.usage;
     const events: AiProviderEvent[] = [];
@@ -77,6 +108,18 @@ function normalizeNativeEvent(event: NativeOpenAiEvent, toolCallIds: Map<string,
     return events;
   }
   return [];
+}
+
+async function readProviderErrorFingerprint(response: Response) {
+  try {
+    const text = (await response.text()).slice(0, 8_000);
+    const parsed = JSON.parse(text) as { error?: { type?: unknown; code?: unknown } };
+    const type = typeof parsed.error?.type === "string" ? parsed.error.type : null;
+    const code = typeof parsed.error?.code === "string" ? parsed.error.code : null;
+    return [type, code].filter(Boolean).join(":").slice(0, 120);
+  } catch {
+    return "";
+  }
 }
 
 export async function createOpenAiResponsesEventStream({
@@ -117,12 +160,14 @@ export async function createOpenAiResponsesEventStream({
           tools: tools.map((tool) => ({ type: "function", name: tool.code, description: tool.description, parameters: tool.inputSchema, strict: true })),
           tool_choice: "auto",
         } : {}),
+        ...(model.capabilities.reasoning ? { include: ["reasoning.encrypted_content"] } : {}),
         stream: true,
         store: false,
       }),
       signal,
     });
   } catch (error) {
+    if (error instanceof AiProviderError) throw error;
     const interrupted = error instanceof DOMException && error.name === "AbortError";
     throw new AiProviderError({
       reasonCode: interrupted ? "STREAM_INTERRUPTED" : "PROVIDER_UNAVAILABLE",
@@ -134,9 +179,23 @@ export async function createOpenAiResponsesEventStream({
     });
   }
 
-  if (!response.ok || !response.body) {
+  if (!response.ok) {
     const classified = classifyProviderHttpError(response.status);
-    throw new AiProviderError({ ...classified, message: `${provider.code} response ${response.status}`, providerCode: provider.code, modelCode: model.code });
+    const fingerprint = await readProviderErrorFingerprint(response);
+    throw new AiProviderError({
+      ...classified,
+      message: `${provider.code} response ${response.status}${fingerprint ? ` (${fingerprint})` : ""}`,
+      providerCode: provider.code,
+      modelCode: model.code,
+    });
+  }
+  if (!response.body) {
+    throw new AiProviderError({
+      reasonCode: "UNKNOWN_PROVIDER_ERROR",
+      message: `${provider.code} response body missing`,
+      providerCode: provider.code,
+      modelCode: model.code,
+    });
   }
 
   const source = response.body;

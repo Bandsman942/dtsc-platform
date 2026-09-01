@@ -1,4 +1,7 @@
-import type { AiProviderInputMessage } from "@/lib/ai/types";
+import { AiProviderError } from "@/lib/ai/errors";
+import { toOpenAiResponsesContinuationInput } from "@/lib/ai/provider-continuation";
+import type { AiProviderContinuationState } from "@/lib/ai/provider-continuation";
+import type { AiProviderInputMessage, AiProviderToolCall } from "@/lib/ai/types";
 
 function serializeToolArguments(value: unknown) {
   if (typeof value === "string") return value;
@@ -7,6 +10,23 @@ function serializeToolArguments(value: unknown) {
   } catch {
     return "{}";
   }
+}
+
+function validatedOpenAiContinuation(message: {
+  toolCalls: AiProviderToolCall[];
+  providerContinuation?: AiProviderContinuationState;
+}) {
+  const state = message.providerContinuation;
+  if (!state) return null;
+  if (state.protocol !== "OPENAI_RESPONSES") {
+    throw new AiProviderError({ reasonCode: "PROVIDER_PROTOCOL_INVALID", message: "Unsupported provider continuation protocol" });
+  }
+  const expectedCallIds = message.toolCalls.map((toolCall) => toolCall.id);
+  const continuationCallIds = state.items.filter((item) => item.type === "function_call").map((item) => item.callId);
+  if (expectedCallIds.length !== continuationCallIds.length || expectedCallIds.some((id, index) => id !== continuationCallIds[index])) {
+    throw new AiProviderError({ reasonCode: "PROVIDER_PROTOCOL_INVALID", message: "Provider continuation tool call identity mismatch" });
+  }
+  return toOpenAiResponsesContinuationInput(state);
 }
 
 export function buildOpenAiResponsesInput(messages: AiProviderInputMessage[]) {
@@ -23,13 +43,18 @@ export function buildOpenAiResponsesInput(messages: AiProviderInputMessage[]) {
     }
     if (message.role === "assistant" && "toolCalls" in message && message.toolCalls?.length) {
       if (message.content.trim()) input.push({ role: "assistant", content: message.content });
-      for (const toolCall of message.toolCalls) {
-        input.push({
-          type: "function_call",
-          call_id: toolCall.id,
-          name: toolCall.name,
-          arguments: serializeToolArguments(toolCall.arguments),
-        });
+      const continuation = validatedOpenAiContinuation(message);
+      if (continuation) {
+        input.push(...continuation);
+      } else {
+        for (const toolCall of message.toolCalls) {
+          input.push({
+            type: "function_call",
+            call_id: toolCall.id,
+            name: toolCall.name,
+            arguments: serializeToolArguments(toolCall.arguments),
+          });
+        }
       }
       continue;
     }

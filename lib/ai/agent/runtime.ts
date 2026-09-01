@@ -155,7 +155,27 @@ async function createAgentLoopStream(input: AgentLoopInput) {
           const cost = estimateAiCost({ model: routed.selection.selectedModel, inputTokens: turn.usage.inputTokens, outputTokens: turn.usage.outputTokens, cachedInputTokens: turn.usage.cachedInputTokens }).amount || 0;
           currentStep += 1;
           usage = { inputTokens: usage.inputTokens + turn.usage.inputTokens, outputTokens: usage.outputTokens + turn.usage.outputTokens, totalTokens: usage.totalTokens + turn.usage.totalTokens, estimatedCost: usage.estimatedCost + cost };
-          await recordAiAgentStep({ runId: input.runId, stepIndex: currentStep, kind: "MODEL", status: "SUCCESS", providerCode: turn.providerCode, modelCode: turn.modelCode, inputTokens: turn.usage.inputTokens, outputTokens: turn.usage.outputTokens, totalTokens: turn.usage.totalTokens, estimatedCost: cost, durationMs: turn.durationMs, metadata: { toolCallCount: turn.toolCalls.length, bufferedTextChars: turn.content.length, retryCount: modelRetryAttempt } });
+          await recordAiAgentStep({
+            runId: input.runId,
+            stepIndex: currentStep,
+            kind: "MODEL",
+            status: "SUCCESS",
+            providerCode: turn.providerCode,
+            modelCode: turn.modelCode,
+            inputTokens: turn.usage.inputTokens,
+            outputTokens: turn.usage.outputTokens,
+            totalTokens: turn.usage.totalTokens,
+            estimatedCost: cost,
+            durationMs: turn.durationMs,
+            metadata: {
+              toolCallCount: turn.toolCalls.length,
+              bufferedTextChars: turn.content.length,
+              retryCount: modelRetryAttempt,
+              providerContinuationItemCount: turn.providerContinuation?.items.length || 0,
+              hasOpaqueReasoningState: Boolean(turn.providerContinuation?.items.some((item) => item.type === "reasoning")),
+              providerContinuation: turn.providerContinuation || null,
+            },
+          });
           await updateAiAgentRunProgress({ runId: input.runId, status: "RUNNING", currentStep, toolCallCount, usage, reasonCode: null });
 
           const postTurnExceeded = isAgentBudgetExceeded({ budget: input.budget, currentStep, toolCallCount, totalTokens: usage.totalTokens, estimatedCost: usage.estimatedCost, elapsedMs: activeElapsed() });
@@ -179,7 +199,7 @@ async function createAgentLoopStream(input: AgentLoopInput) {
             name: toolCall.name?.trim() || "UNKNOWN_TOOL",
             arguments: toolCall.arguments ?? {},
           }));
-          messages.push({ role: "assistant", content: turn.content, toolCalls: canonicalToolCalls });
+          messages.push({ role: "assistant", content: turn.content, toolCalls: canonicalToolCalls, providerContinuation: turn.providerContinuation });
 
           for (const toolCall of canonicalToolCalls) {
             if (toolCallCount >= input.budget.maxToolCalls) {

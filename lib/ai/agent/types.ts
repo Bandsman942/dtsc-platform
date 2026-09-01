@@ -1,3 +1,4 @@
+import type { AiProviderContinuationState } from "@/lib/ai/provider-continuation";
 import type { AiDataClassification } from "@/lib/ai/types";
 import type { AiToolMode } from "@/lib/ai/tool-registry";
 
@@ -30,6 +31,7 @@ export type AiAgentToolCall = { id?: string; name?: string; arguments?: unknown 
 export type AiAgentTurnResult = {
   content: string;
   toolCalls: AiAgentToolCall[];
+  providerContinuation?: AiProviderContinuationState;
   usage: AiAgentUsage & { cachedInputTokens: number };
   providerCode: string;
   modelCode: string;

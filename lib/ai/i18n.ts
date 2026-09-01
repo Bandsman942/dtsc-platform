@@ -9,6 +9,7 @@ const errorTranslationKeys: Record<AiProviderErrorCode, string> = {
   CONTEXT_TOO_LARGE: "ai.errors.contextTooLarge",
   CONTENT_REJECTED: "ai.errors.contentRejected",
   INVALID_REQUEST: "ai.errors.invalidRequest",
+  PROVIDER_PROTOCOL_INVALID: "ai.errors.providerUnavailable",
   AUTHENTICATION_FAILED: "ai.errors.authenticationFailed",
   STRUCTURED_OUTPUT_INVALID: "ai.errors.structuredOutputInvalid",
   TOOL_CALL_INVALID: "ai.errors.toolCallInvalid",
