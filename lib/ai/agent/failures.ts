@@ -21,10 +21,9 @@ export function isRetryableAgentModelError(error: unknown) {
   return error instanceof AiProviderError && (error.retryable || RETRYABLE_PROVIDER_REASONS.has(error.reasonCode));
 }
 
-export function getAiAgentInternalReasonCode(error: unknown) {
-  if (error instanceof AiProviderError) return error.reasonCode;
-  if (error instanceof Error && error.message) return error.message.slice(0, 160);
-  return "AGENT_RUNTIME_FAILED";
+function providerFingerprint(error: AiProviderError) {
+  const match = error.message.match(/\(([A-Za-z0-9_.:-]{1,120})\)$/);
+  return match?.[1] || error.reasonCode;
 }
 
 export function getAiAgentInternalDiagnostic(error: unknown) {
@@ -34,7 +33,7 @@ export function getAiAgentInternalDiagnostic(error: unknown) {
       statusCode: error.statusCode,
       providerCode: error.providerCode || null,
       modelCode: error.modelCode || null,
-      fingerprint: error.message.slice(0, 160),
+      fingerprint: providerFingerprint(error),
     };
   }
   if (error instanceof Error) {
@@ -53,6 +52,16 @@ export function getAiAgentInternalDiagnostic(error: unknown) {
     modelCode: null,
     fingerprint: "unknown",
   };
+}
+
+export function getAiAgentInternalReasonCode(error: unknown) {
+  const diagnostic = getAiAgentInternalDiagnostic(error);
+  if (error instanceof AiProviderError) {
+    console.error("[ai-agent-provider-failure]", diagnostic);
+    return error.reasonCode;
+  }
+  if (error instanceof Error) console.error("[ai-agent-runtime-failure]", diagnostic);
+  return "AGENT_RUNTIME_FAILED";
 }
 
 export function classifyAiAgentFailure(reasonCode?: string | null, status?: string | null): AiAgentClientFailureCategory | null {
