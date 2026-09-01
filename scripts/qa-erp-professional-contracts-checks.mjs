@@ -58,6 +58,8 @@ for (const marker of ["useToastMessage", "openEdit", "setDetail(null)"]) need(ui
 need(ui, "contractTerminationInfo", "Contrats — motif informatif");
 need(ui, "confirmArchiveTitle", "Contrats — confirmation archivage");
 need(catalog, "taxChoices", "Catalogue — taxes tenant-scoped");
+for (const marker of ["tenantUnitCategories", 'id: "__NEW__"', "unitCategoryCustom", "unitCategoryRequired"]) need(catalog, marker, "Catalogue — familles d’unité tenant-defined");
+if (catalog.includes("COMMERCIAL_UNIT_CATEGORIES")) failures.push("Catalogue: taxonomie globale artificielle de familles d’unité interdite");
 need(catalogRoute, "catalogTaxCodeExists", "Catalogue — revalidation serveur taxe");
 need(catalogRoute, "organizationId, code: taxCode, isActive: true", "Catalogue — isolation taxe");
 for (const marker of ["/professional-lookups?module=SALES_QUOTES_ORDERS", "/catalog?${params.toString()}", "if (!response.ok", "fulfillmentKey", "idempotencyKey: fulfillmentKey", "quoteActionTarget", 'presentation="editor"']) need(sales, marker, "Devis/commandes #549");
@@ -68,4 +70,4 @@ if (failures.length) {
   console.error(failures.map((failure) => `❌ ${failure}`).join("\n"));
   process.exit(1);
 }
-console.log("✅ Hotfix ERP commercial #549 vérifié : routage guidé, lookups tenant-scoped, taxes, confirmations, idempotence et transitions serveur.");
+console.log("✅ Hotfix ERP commercial #549 vérifié : routage guidé, lookups tenant-scoped, familles d’unité tenant-defined, taxes, confirmations, idempotence et transitions serveur.");
