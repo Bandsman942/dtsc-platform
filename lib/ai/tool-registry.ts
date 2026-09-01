@@ -22,6 +22,8 @@ export type AiToolDefinition = {
   auditLevel: "STANDARD" | "SENSITIVE";
 };
 
+import { FINANCE_AI_TOOL_DEFINITIONS } from "@/lib/ai/tools/finance-contract";
+
 const EMPTY_OBJECT = { type: "object", additionalProperties: false } as const;
 const OBJECT_OUTPUT = { type: "object" } as const;
 const SESSION_CONTEXTS = new Set(["GLOBAL_CLIENT", "COMMUNITY", "DTSC_INTERNAL", "ORGANIZATION"]);
@@ -56,6 +58,7 @@ const STATIC_AI_TOOL_REGISTRY: AiToolDefinition[] = [
   pharmacyReadTool({ code: "PHARMACY_OPEN_PURCHASES_READ", label: "ai.tools.pharmacyPurchases.label", description: "ai.tools.pharmacyPurchases.description", modules: ["SUPPLIERS_ORDERS"] }),
   pharmacyReadTool({ code: "PHARMACY_QUALITY_INCIDENTS_READ", label: "ai.tools.pharmacyQuality.label", description: "ai.tools.pharmacyQuality.description", modules: ["QUALITY_INCIDENTS"] }),
   pharmacyReadTool({ code: "PHARMACY_DOCUMENTS_SUMMARY_READ", label: "ai.tools.pharmacyDocuments.label", description: "ai.tools.pharmacyDocuments.description", modules: ["DOCUMENTS"] }),
+  ...FINANCE_AI_TOOL_DEFINITIONS,
   {
     code: "TASK_DRAFT_PREPARE",
     labelKey: "ai.tools.taskDraft.label",

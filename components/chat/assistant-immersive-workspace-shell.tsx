@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { AiAgentRunDock } from "@/components/chat/ai-agent-run-dock";
+import { EnterpriseAiToolConfirmationBridge } from "@/components/chat/enterprise-ai-tool-confirmation-bridge";
 import { useImmersiveConversationViewport } from "@/components/chat/use-immersive-conversation-viewport";
 import { cn } from "@/lib/utils";
 
@@ -74,6 +75,7 @@ export function AssistantImmersiveWorkspaceShell({
         }
       `}</style>
       {children}
+      {variant === "enterprise" ? <EnterpriseAiToolConfirmationBridge /> : null}
       <AiAgentRunDock variant={variant} />
     </div>
   );

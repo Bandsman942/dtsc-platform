@@ -4,6 +4,7 @@ import {
   buildAssistantResponsePreferencePrompt,
   getEnterpriseAiConversationPreference,
 } from "@/lib/assistant-conversation-preferences";
+import { POST as enterpriseAgentPost } from "@/app/api/enterprise/ai/agent/route";
 import { prepareAiTurn } from "@/lib/ai/assistant-runtime";
 import { classifyAiTask } from "@/lib/ai/classifier";
 import { getAiModelDefinition } from "@/lib/ai/catalog";
@@ -49,6 +50,20 @@ export async function POST(req: Request) {
     });
     return NextResponse.json({ error: "FORBIDDEN", reasonCode: "FORBIDDEN" }, { status: 403 });
   }
+
+  // Keep the request body available for the canonical agent route. Tool-enabled
+  // conversations are cut over before the legacy chat path creates any message,
+  // usage row, model call or deterministic tool result.
+  const agentRequest = req.clone();
+  const parsed = enterpriseAiChatSchema.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) {
+    return NextResponse.json({ error: "INVALID_REQUEST", reasonCode: "INVALID_REQUEST" }, { status: 400 });
+  }
+  const data = parsed.data;
+  if (data.useTools) {
+    return enterpriseAgentPost(agentRequest);
+  }
+
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "UNAUTHORIZED", reasonCode: "UNAUTHORIZED" }, { status: 401 });
@@ -61,11 +76,6 @@ export async function POST(req: Request) {
   if (!limited.ok) {
     return NextResponse.json({ error: "RATE_LIMITED", reasonCode: "RATE_LIMITED" }, { status: 429 });
   }
-  const parsed = enterpriseAiChatSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) {
-    return NextResponse.json({ error: "INVALID_REQUEST", reasonCode: "INVALID_REQUEST" }, { status: 400 });
-  }
-  const data = parsed.data;
   if (data.model && !getAiModelDefinition(data.model)) {
     return NextResponse.json({ error: "MODEL_UNAVAILABLE", reasonCode: "MODEL_UNAVAILABLE" }, { status: 400 });
   }
