@@ -20,6 +20,7 @@ import { Streamdown } from "streamdown";
 import { useFloatingAction } from "@/components/floating-actions/floating-action-hub";
 import { useAppLocale } from "@/components/i18n/locale-provider";
 import { Button } from "@/components/ui/button";
+import { getAiAgentClientFailureMessage, type AiAgentClientFailureCategory } from "@/lib/ai/agent/failures";
 import { toastError, toastSuccess } from "@/lib/client-toast";
 import { cn } from "@/lib/utils";
 
@@ -36,7 +37,6 @@ type AgentStep = {
   outputTokens?: number | null;
   totalTokens?: number | null;
   estimatedCost?: number | null;
-  reasonCode?: string | null;
 };
 
 type AgentSnapshot = {
@@ -45,7 +45,7 @@ type AgentSnapshot = {
   currentStep: number;
   toolCallCount: number;
   pendingConfirmationId?: string | null;
-  reasonCode?: string | null;
+  failureCategory?: AiAgentClientFailureCategory | null;
   limits: {
     maxSteps: number;
     maxToolCalls: number;
@@ -68,7 +68,14 @@ type PendingConfirmation = {
   preview?: { subject?: string | null; priority?: string | null };
 };
 
+type AgentFailureResponse = {
+  message?: string;
+  failureCategory?: AiAgentClientFailureCategory | null;
+};
+
 const TERMINAL_STATUSES = new Set(["COMPLETED", "FAILED", "CANCELLED", "BUDGET_EXHAUSTED"]);
+const SUCCESS_STEP_STATUSES = new Set(["SUCCESS", "COMPLETED", "CONSUMED"]);
+const ACTIVE_STEP_STATUSES = new Set(["RUNNING", "PENDING", "RETRYING", "STARTED"]);
 
 function statusLabel(status: string, en: boolean) {
   const labels: Record<string, [string, string]> = {
@@ -84,13 +91,20 @@ function statusLabel(status: string, en: boolean) {
 }
 
 function stepLabel(step: AgentStep, en: boolean) {
+  if (step.kind === "SYSTEM" && step.status === "RETRYING") return en ? "AI service recovery" : "Reprise du service IA";
   if (step.toolCode) return `${en ? "Tool" : "Outil"} · ${step.toolCode}`;
   const labels: Record<string, [string, string]> = {
     MODEL: ["Analyse du modèle", "Model analysis"],
     TOOL: ["Exécution d’outil", "Tool execution"],
     CONFIRMATION: ["Validation humaine", "Human approval"],
+    SYSTEM: ["État du service IA", "AI service status"],
   };
   return labels[step.kind]?.[en ? 1 : 0] || step.kind;
+}
+
+function safeFailureMessage(body: AgentFailureResponse | null, locale: string) {
+  if (typeof body?.message === "string" && body.message.trim()) return body.message;
+  return getAiAgentClientFailureMessage(body?.failureCategory || "UNAVAILABLE", locale);
 }
 
 async function readTextStream(response: Response, onChunk: (chunk: string) => void) {
@@ -201,8 +215,8 @@ export function AiAgentRunDock({ variant }: { variant: AgentVariant }) {
         body: JSON.stringify(payload),
       });
       if (!response.ok) {
-        const body = await response.json().catch(() => null);
-        throw new Error(body?.message || body?.reasonCode || body?.error || "AGENT_START_FAILED");
+        const body = await response.json().catch(() => null) as AgentFailureResponse | null;
+        throw new Error(safeFailureMessage(body, locale));
       }
 
       const nextRunId = response.headers.get("X-AI-Agent-Run-Id") || "";
@@ -213,7 +227,7 @@ export function AiAgentRunDock({ variant }: { variant: AgentVariant }) {
       await readTextStream(response, (chunk) => setAnswer((current) => current + chunk));
       if (nextRunId) await refreshRun(nextRunId);
     } catch (error) {
-      toastError(error instanceof Error ? error.message : (en ? "Unable to start the agent." : "Impossible de démarrer l’agent."));
+      toastError(error instanceof Error ? error.message : getAiAgentClientFailureMessage("UNAVAILABLE", locale));
     } finally {
       setBusy(false);
     }
@@ -244,7 +258,7 @@ export function AiAgentRunDock({ variant }: { variant: AgentVariant }) {
         body: JSON.stringify({ confirmationId: confirmation.id }),
       });
       const body = await response.json().catch(() => null);
-      if (!response.ok || !body?.ok) throw new Error(body?.reasonCode || body?.error || "CONFIRM_FAILED");
+      if (!response.ok || !body?.ok) throw new Error("CONFIRM_FAILED");
       setConfirmation(null);
       await refreshRun(runId);
       toastSuccess(en ? "Action confirmed. The agent can now resume." : "Action confirmée. L’agent peut maintenant reprendre.");
@@ -280,13 +294,13 @@ export function AiAgentRunDock({ variant }: { variant: AgentVariant }) {
     try {
       const response = await fetch(`/api/ai/agent/runs/${encodeURIComponent(runId)}/resume`, { method: "POST" });
       if (!response.ok) {
-        const body = await response.json().catch(() => null);
-        throw new Error(body?.reasonCode || body?.error || "AGENT_RESUME_FAILED");
+        const body = await response.json().catch(() => null) as AgentFailureResponse | null;
+        throw new Error(safeFailureMessage(body, locale));
       }
       await readTextStream(response, (chunk) => setAnswer((current) => current + chunk));
       await refreshRun(runId);
     } catch (error) {
-      toastError(error instanceof Error ? error.message : (en ? "Unable to resume the agent." : "Impossible de reprendre l’agent."));
+      toastError(error instanceof Error ? error.message : getAiAgentClientFailureMessage("UNAVAILABLE", locale));
     } finally {
       setBusy(false);
     }
@@ -318,6 +332,13 @@ export function AiAgentRunDock({ variant }: { variant: AgentVariant }) {
             </div>
           ) : null}
 
+          {snapshot?.status === "FAILED" ? (
+            <div className="rounded-2xl border border-rose-500/25 bg-rose-500/[0.06] p-3 text-xs leading-5 text-dtsc-muted" role="alert">
+              <strong className="block text-dtsc-ink">{en ? "The analysis stopped" : "L’analyse s’est interrompue"}</strong>
+              <span>{getAiAgentClientFailureMessage(snapshot.failureCategory || "UNAVAILABLE", locale)}</span>
+            </div>
+          ) : null}
+
           {snapshot ? (
             <div className="rounded-2xl border border-dtsc-border bg-dtsc-page/80">
               <button type="button" onClick={() => setDetailsOpen((value) => !value)} className="flex w-full items-center gap-2 px-3 py-2.5 text-left">
@@ -336,7 +357,13 @@ export function AiAgentRunDock({ variant }: { variant: AgentVariant }) {
                     <div className="mt-3 grid gap-1.5">
                       {latestSteps.map((step) => (
                         <div key={step.id} className="flex items-center gap-2 rounded-xl bg-dtsc-surface px-2.5 py-2 text-[0.7rem]">
-                          {step.status === "COMPLETED" ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" /> : <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-cyan-500" />}
+                          {SUCCESS_STEP_STATUSES.has(step.status) ? (
+                            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                          ) : ACTIVE_STEP_STATUSES.has(step.status) ? (
+                            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-cyan-500" />
+                          ) : (
+                            <CircleStop className="h-3.5 w-3.5 shrink-0 text-rose-500" />
+                          )}
                           <span className="min-w-0 flex-1 truncate font-bold text-dtsc-ink">{stepLabel(step, en)}</span>
                           {step.totalTokens ? <span className="text-dtsc-muted">{step.totalTokens} t</span> : null}
                         </div>
