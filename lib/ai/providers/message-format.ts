@@ -1,6 +1,7 @@
 import { AiProviderError } from "@/lib/ai/errors";
 import { toOpenAiResponsesContinuationInput } from "@/lib/ai/provider-continuation";
-import type { AiProviderInputMessage } from "@/lib/ai/types";
+import type { AiProviderContinuationState } from "@/lib/ai/provider-continuation";
+import type { AiProviderInputMessage, AiProviderToolCall } from "@/lib/ai/types";
 
 function serializeToolArguments(value: unknown) {
   if (typeof value === "string") return value;
@@ -11,7 +12,10 @@ function serializeToolArguments(value: unknown) {
   }
 }
 
-function validatedOpenAiContinuation(message: Extract<AiProviderInputMessage, { role: "assistant" }> & { toolCalls: NonNullable<Extract<AiProviderInputMessage, { role: "assistant" }>["toolCalls"]> }) {
+function validatedOpenAiContinuation(message: {
+  toolCalls: AiProviderToolCall[];
+  providerContinuation?: AiProviderContinuationState;
+}) {
   const state = message.providerContinuation;
   if (!state) return null;
   if (state.protocol !== "OPENAI_RESPONSES") {
