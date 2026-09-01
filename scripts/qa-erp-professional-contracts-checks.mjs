@@ -66,8 +66,20 @@ for (const marker of ["/professional-lookups?module=SALES_QUOTES_ORDERS", "/cata
 if (sales.includes("/catalog-items?page=1&pageSize=200")) failures.push("Devis/commandes: ancienne route catalogue inexistante encore utilisée");
 if (sales.includes("idempotencyKey: crypto.randomUUID()")) failures.push("Devis/commandes: clé d’idempotence régénérée pendant la soumission");
 
+for (const marker of ["EnterpriseIdentityLinkChoice", "conversionPartyDecision", "/identity-link-invitations", "savedPartyInvitationPending"]) need(crm, marker, "CRM — identité différée à la conversion");
+const createLeadStart = crm.indexOf("async function createLead");
+const createOpportunityStart = crm.indexOf("async function createOpportunity");
+const createLeadBlock = createLeadStart >= 0 && createOpportunityStart > createLeadStart ? crm.slice(createLeadStart, createOpportunityStart) : "";
+if (!createLeadBlock) failures.push("CRM: bloc createLead introuvable pour contrôler l’identité différée");
+if (createLeadBlock.includes("/business-parties")) failures.push("CRM: createLead ne doit plus créer de Tiers avant la conversion");
+if (createLeadBlock.includes("/identity-link-invitations")) failures.push("CRM: createLead ne doit plus envoyer d’invitation identité avant la conversion");
+const convertLeadStart = crm.indexOf("async function convertLead");
+const viewsStart = crm.indexOf("const views", convertLeadStart);
+const convertLeadBlock = convertLeadStart >= 0 && viewsStart > convertLeadStart ? crm.slice(convertLeadStart, viewsStart) : "";
+for (const marker of ["/leads/${conversion.lead.id}/convert", "/identity-link-invitations", "result.partyId", "relationType: \"CUSTOMER\""]) need(convertLeadBlock, marker, "CRM — conversion puis invitation identité");
+
 if (failures.length) {
   console.error(failures.map((failure) => `❌ ${failure}`).join("\n"));
   process.exit(1);
 }
-console.log("✅ Hotfix ERP commercial #549 vérifié : routage guidé, lookups tenant-scoped, familles d’unité tenant-defined, taxes, confirmations, idempotence et transitions serveur.");
+console.log("✅ Hotfix ERP commercial #549 vérifié : routage guidé, lookups tenant-scoped, identité CRM différée, familles d’unité tenant-defined, taxes, confirmations, idempotence et transitions serveur.");
