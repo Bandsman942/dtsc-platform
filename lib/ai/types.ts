@@ -66,6 +66,17 @@ export type AiProviderToolDefinition = {
   inputSchema: Record<string, unknown>;
 };
 
+export type AiProviderToolCall = {
+  id: string;
+  name: string;
+  arguments?: unknown;
+};
+
+export type AiProviderInputMessage =
+  | OpenAIInputMessage
+  | { role: "assistant"; content: string; toolCalls: AiProviderToolCall[] }
+  | { role: "tool"; content: string; toolCallId: string; name?: string };
+
 export type AiModelStatus = "ACTIVE" | "DEGRADED" | "DISABLED" | "RETIRED";
 
 export type AiProviderDefinition = {
@@ -137,7 +148,7 @@ export type AiRouteRequest = {
   taskType: AiTaskType;
   context: AiContextCode;
   locale: string;
-  messages: OpenAIInputMessage[];
+  messages: AiProviderInputMessage[];
   instructions: string;
   userId: string;
   organizationId?: string | null;

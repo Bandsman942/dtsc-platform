@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
+import { classifyAiAgentFailure } from "@/lib/ai/agent/failures";
 import { getAiAgentRunForUser } from "@/lib/ai/agent/persistence";
 import { getActiveOrganizationId } from "@/lib/organizations";
 
@@ -41,14 +42,24 @@ export async function GET(req: Request, { params }: Params) {
       estimatedCost: Number(run.estimatedCost),
     },
     pendingConfirmationId: run.pendingConfirmationId,
-    reasonCode: run.reasonCode,
+    failureCategory: classifyAiAgentFailure(run.reasonCode, run.status),
     cancelRequestedAt: run.cancelRequestedAt,
     startedAt: run.startedAt,
     completedAt: run.completedAt,
     cancelledAt: run.cancelledAt,
     steps: run.steps.map((step) => ({
-      ...step,
+      id: step.id,
+      stepIndex: step.stepIndex,
+      kind: step.kind,
+      status: step.status,
+      toolCode: step.toolCode,
+      inputTokens: step.inputTokens,
+      outputTokens: step.outputTokens,
+      totalTokens: step.totalTokens,
       estimatedCost: Number(step.estimatedCost),
+      durationMs: step.durationMs,
+      createdAt: step.createdAt,
+      completedAt: step.completedAt,
     })),
   };
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { action: "ai_agent_run_read", runId: run.id, status: run.status } });

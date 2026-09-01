@@ -76,9 +76,25 @@ export function runStandardAiAgentAudit(mode = "all") {
   }
 
   if (["all", "idempotency"].includes(mode)) {
+    const retryLoopStart = runtime.indexOf("let modelRetryAttempt = 0");
+    const retryLoopEnd = retryLoopStart >= 0 ? runtime.indexOf("lastProviderCode = turn.providerCode", retryLoopStart) : -1;
+    const retryLoopSource = retryLoopStart >= 0 && retryLoopEnd > retryLoopStart ? runtime.slice(retryLoopStart, retryLoopEnd) : "";
+    const toolExecutionIndex = runtime.indexOf("const execution = await executeAiTool");
+
     check(runtime.includes("executeAiTool"), "Agent mutations must inherit canonical Tool Gateway idempotency");
     check(toolExecutor.includes("claimAiToolExecution") || toolExecutor.includes("idempotency"), "Canonical Tool Gateway idempotency contract must remain present");
-    check(!runtime.includes("retry") && !runtime.includes("RETRY"), "Agent runtime must not blindly retry tool mutations in the initial certified loop");
+    check(
+      retryLoopStart < 0 || (
+        runtime.includes("modelRetryAttempt < 1") &&
+        runtime.includes("isRetryableAgentModelError(error)") &&
+        runtime.includes("hasStructuredToolContext") &&
+        runtime.includes('phase: "POST_TOOL_MODEL"') &&
+        retryLoopEnd > retryLoopStart &&
+        !retryLoopSource.includes("executeAiTool") &&
+        toolExecutionIndex > retryLoopEnd
+      ),
+      "Agent runtime may retry only the post-tool model turn and must never replay a successful tool execution",
+    );
     check(runtime.includes("toolCallCount"), "Each proposed tool call must consume the run tool budget exactly once at the Gateway boundary");
   }
 
@@ -113,7 +129,7 @@ export function runStandardAiAgentAudit(mode = "all") {
     }
     check(prisma.includes("conversationId") && prisma.includes("enterpriseConversationId"), "Agent run must reference existing conversation sources of truth");
     check(!statusRoute.includes("metadataJson") && !statusRoute.includes("argumentsJson"), "Run status API must not expose private run metadata/tool arguments");
-    check(runtime.includes("messages: OpenAIInputMessage[]"), "Agent loop must consume existing conversation messages rather than create a third memory model");
+    check(runtime.includes("messages: AiProviderInputMessage[]") || runtime.includes("messages: OpenAIInputMessage[]"), "Agent loop must consume existing conversation messages rather than create a third memory model");
   }
 
   if (failures.length) {

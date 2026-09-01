@@ -2,8 +2,7 @@ import { AiProviderError } from "@/lib/ai/errors";
 import type { AiProviderEvent } from "@/lib/ai/provider-events";
 import { createOpenAiResponsesEventStream } from "@/lib/ai/providers/openai-responses";
 import { createOpenRouterChatCompletionsEventStream } from "@/lib/ai/providers/openrouter-chat-completions";
-import type { AiModelDefinition, AiProviderDefinition, AiProviderToolDefinition, AiRoutingConstraints } from "@/lib/ai/types";
-import type { OpenAIInputMessage } from "@/lib/openai";
+import type { AiModelDefinition, AiProviderDefinition, AiProviderInputMessage, AiProviderToolDefinition, AiRoutingConstraints } from "@/lib/ai/types";
 
 export async function createProviderEventStream({
   provider,
@@ -16,7 +15,7 @@ export async function createProviderEventStream({
 }: {
   provider: AiProviderDefinition;
   model: AiModelDefinition;
-  messages: OpenAIInputMessage[];
+  messages: AiProviderInputMessage[];
   instructions: string;
   routingConstraints?: AiRoutingConstraints;
   tools?: AiProviderToolDefinition[];

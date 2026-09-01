@@ -4,12 +4,12 @@ import {
   buildAssistantResponsePreferencePrompt,
   getEnterpriseAiConversationPreference,
 } from "@/lib/assistant-conversation-preferences";
+import { buildAiAgentClientFailurePayload } from "@/lib/ai/agent/failures";
 import { createInteractiveAiAgentStream } from "@/lib/ai/agent/runtime";
 import { prepareAiTurn } from "@/lib/ai/assistant-runtime";
 import { classifyAiTask } from "@/lib/ai/classifier";
 import { getAiModelDefinition } from "@/lib/ai/catalog";
 import { toAiReasonCode } from "@/lib/ai/errors";
-import { getAiErrorMessage } from "@/lib/ai/i18n";
 import { buildLanguageInstruction } from "@/lib/ai/prompts";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
@@ -29,23 +29,45 @@ import { isSameOriginRequest } from "@/lib/request-security";
 const jsonValue = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 export const maxDuration = 60;
 
+function requestLocale(req: Request) {
+  return req.headers.get("accept-language")?.toLowerCase().startsWith("en") ? "en" : "fr";
+}
+
+function safeAgentStartResponse(
+  req: Request,
+  reasonCode: string,
+  statusCode: number,
+  locale?: string,
+  extra?: Record<string, unknown>,
+) {
+  return NextResponse.json({
+    ...buildAiAgentClientFailurePayload({
+      reasonCode,
+      status: statusCode === 429 ? "BUDGET_EXHAUSTED" : "FAILED",
+      locale: locale || requestLocale(req),
+      error: "AGENT_START_UNAVAILABLE",
+    }),
+    ...(extra || {}),
+  }, { status: statusCode });
+}
+
 export async function POST(req: Request) {
   const startedAt = Date.now();
   if (!isSameOriginRequest(req)) {
     await writeApiLog({ request: req, statusCode: 403, startedAt, metadata: { action: "enterprise_ai_agent_origin_denied" } });
-    return NextResponse.json({ error: "FORBIDDEN", reasonCode: "FORBIDDEN" }, { status: 403 });
+    return safeAgentStartResponse(req, "FORBIDDEN", 403);
   }
 
   const session = await getSession();
-  if (!session) return NextResponse.json({ error: "UNAUTHORIZED", reasonCode: "UNAUTHORIZED" }, { status: 401 });
+  if (!session) return safeAgentStartResponse(req, "UNAUTHORIZED", 401);
   const limited = await rateLimit(getRateLimitKey(req, `enterprise-ai-agent:${session.userId}`), 40, 60 * 60 * 1000);
-  if (!limited.ok) return NextResponse.json({ error: "RATE_LIMITED", reasonCode: "RATE_LIMITED" }, { status: 429 });
+  if (!limited.ok) return safeAgentStartResponse(req, "RATE_LIMITED", 429);
 
   const parsed = enterpriseAiChatSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "INVALID_REQUEST", reasonCode: "INVALID_REQUEST" }, { status: 400 });
+  if (!parsed.success) return safeAgentStartResponse(req, "INVALID_REQUEST", 400);
   const data = parsed.data;
   if (data.model && !getAiModelDefinition(data.model)) {
-    return NextResponse.json({ error: "MODEL_UNAVAILABLE", reasonCode: "MODEL_UNAVAILABLE" }, { status: 400 });
+    return safeAgentStartResponse(req, "MODEL_UNAVAILABLE", 400);
   }
 
   const [access, user] = await Promise.all([
@@ -53,11 +75,11 @@ export async function POST(req: Request) {
     prisma.user.findUnique({ where: { id: session.userId }, select: { locale: true } }),
   ]);
   const locale = user?.locale === "en" ? "en" : "fr";
-  if (!access) return NextResponse.json({ error: "FORBIDDEN", reasonCode: "FORBIDDEN" }, { status: 403 });
+  if (!access) return safeAgentStartResponse(req, "FORBIDDEN", 403, locale);
 
   const quota = await assertEnterpriseAiMessageQuota(data.organizationId, session.userId, access);
   if (!quota.ok) {
-    return NextResponse.json({ error: "MONTHLY_LIMIT_REACHED", reasonCode: "MONTHLY_LIMIT_REACHED", usage: quota.snapshot }, { status: 429 });
+    return safeAgentStartResponse(req, "MONTHLY_LIMIT_REACHED", 429, locale, { usage: quota.snapshot });
   }
 
   try {
@@ -83,7 +105,7 @@ export async function POST(req: Request) {
           },
           select: { id: true, title: true },
         });
-    if (!conversation) return NextResponse.json({ error: "CONVERSATION_NOT_FOUND", reasonCode: "CONVERSATION_NOT_FOUND" }, { status: 404 });
+    if (!conversation) return safeAgentStartResponse(req, "CONVERSATION_NOT_FOUND", 404, locale);
 
     if (!existingConversationId) {
       await prisma.enterpriseAiConversationPreference.upsert({
@@ -107,7 +129,7 @@ export async function POST(req: Request) {
     });
     const requestedModel = preference?.modelOverride || data.model || undefined;
     if (requestedModel && !getAiModelDefinition(requestedModel)) {
-      return NextResponse.json({ error: "MODEL_UNAVAILABLE", reasonCode: "MODEL_UNAVAILABLE" }, { status: 400 });
+      return safeAgentStartResponse(req, "MODEL_UNAVAILABLE", 400, locale);
     }
     const useKnowledge = preference?.useKnowledge ?? data.useKnowledge;
     const useTools = preference?.useTools ?? data.useTools;
@@ -302,6 +324,6 @@ export async function POST(req: Request) {
       startedAt,
       metadata: { action: "enterprise_ai_agent_failed", organizationId: data.organizationId, reasonCode },
     });
-    return NextResponse.json({ error: reasonCode, reasonCode, message: getAiErrorMessage(reasonCode, locale) }, { status: 502 });
+    return safeAgentStartResponse(req, reasonCode, 502, locale);
   }
 }
