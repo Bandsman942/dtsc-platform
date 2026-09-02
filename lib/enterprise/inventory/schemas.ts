@@ -71,3 +71,9 @@ export const stockAdjustmentCreateSchema = z.object({
   approverUserId: z.string().trim().min(1),
   idempotencyKey: z.string().trim().min(8).max(180).optional().nullable(),
 });
+
+export const stockAdjustmentDecisionSchema = z.object({
+  decision: z.enum(["APPROVE", "REJECT"]),
+  revision: z.coerce.number().int().positive(),
+  comment: z.string().trim().max(2000).optional().nullable(),
+});
