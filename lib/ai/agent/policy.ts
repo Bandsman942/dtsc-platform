@@ -3,10 +3,31 @@ import type { AiDataClassification } from "@/lib/ai/types";
 import type { AiToolMode } from "@/lib/ai/tool-registry";
 import { containsSensitiveAgentDomain, type AiAgentBudget, type AiAgentBudgetRequest } from "@/lib/ai/agent/types";
 
-const SERVER_LIMITS: Record<SaasPlanCode, AiAgentBudget> = {
-  STARTER: { maxSteps: 3, maxToolCalls: 2, maxTokens: 4_000, maxEstimatedCost: 0.1, maxDurationMs: 20_000, allowedToolModes: ["READ", "PREPARE"] },
-  BUSINESS: { maxSteps: 6, maxToolCalls: 4, maxTokens: 12_000, maxEstimatedCost: 0.5, maxDurationMs: 45_000, allowedToolModes: ["READ", "PREPARE", "MUTATE"] },
-  ENTERPRISE: { maxSteps: 8, maxToolCalls: 6, maxTokens: 24_000, maxEstimatedCost: 2, maxDurationMs: 50_000, allowedToolModes: ["READ", "PREPARE", "MUTATE"] },
+export const SERVER_LIMITS: Record<SaasPlanCode, AiAgentBudget> = {
+  STARTER: {
+    maxSteps: 4,
+    maxToolCalls: 3,
+    maxTokens: 8_000,
+    maxEstimatedCost: 0.15,
+    maxDurationMs: 30_000,
+    allowedToolModes: ["READ", "PREPARE"],
+  },
+  BUSINESS: {
+    maxSteps: 10,
+    maxToolCalls: 10,
+    maxTokens: 32_000,
+    maxEstimatedCost: 1,
+    maxDurationMs: 90_000,
+    allowedToolModes: ["READ", "PREPARE", "MUTATE"],
+  },
+  ENTERPRISE: {
+    maxSteps: 18,
+    maxToolCalls: 20,
+    maxTokens: 64_000,
+    maxEstimatedCost: 4,
+    maxDurationMs: 150_000,
+    allowedToolModes: ["READ", "PREPARE", "MUTATE"],
+  },
 };
 
 function clampInteger(requested: number | undefined, ceiling: number, minimum = 1) {
