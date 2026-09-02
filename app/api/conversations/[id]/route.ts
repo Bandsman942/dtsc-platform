@@ -89,7 +89,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const shouldTouchPreference = data.action !== "update" ||
     typeof data.modelOverride !== "undefined" || typeof data.responseStyle !== "undefined" ||
     typeof data.responseLength !== "undefined" || typeof data.useCompanyContext !== "undefined" ||
-    typeof data.useKnowledge !== "undefined" || typeof data.customInstructions !== "undefined";
+    typeof data.useKnowledge !== "undefined" || typeof data.reasoningEffort !== "undefined" || typeof data.customInstructions !== "undefined";
 
   if (shouldTouchPreference) {
     const preferenceData = {
@@ -100,6 +100,7 @@ export async function PATCH(req: Request, { params }: Params) {
       ...(typeof data.modelOverride !== "undefined" ? { modelOverride: data.modelOverride?.trim() || null } : {}),
       ...(typeof data.responseStyle !== "undefined" ? { responseStyle: data.responseStyle || null } : {}),
       ...(typeof data.responseLength !== "undefined" ? { responseLength: data.responseLength || null } : {}),
+      ...(typeof data.reasoningEffort !== "undefined" ? { reasoningEffort: data.reasoningEffort } : {}),
       ...(typeof data.useCompanyContext !== "undefined" ? { useCompanyContext: data.useCompanyContext } : {}),
       ...(typeof data.useKnowledge !== "undefined" ? { useKnowledge: data.useKnowledge } : {}),
       ...(typeof data.customInstructions !== "undefined" ? { customInstructions: data.customInstructions?.trim() || null } : {}),

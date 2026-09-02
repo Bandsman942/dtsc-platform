@@ -4,6 +4,7 @@ import type { OpenAIInputMessage } from "@/lib/openai";
 import type { SaasPlanCode } from "@/lib/billing/plans";
 
 export type AiContextCode = "PERSONAL" | "DTSC_INTERNAL" | "ORGANIZATION" | "PROJECT" | "MODULE" | "OBJECT";
+export type AiReasoningEffort = "AUTO" | "LOW" | "MEDIUM" | "HIGH";
 
 export type AiTaskType =
   | "GENERAL_CHAT"
@@ -169,6 +170,7 @@ export type AiRouteRequest = {
   tools?: AiProviderToolDefinition[];
   tags?: string[];
   signal?: AbortSignal;
+  reasoningEffort?: AiReasoningEffort | null;
 };
 
 export type AiRouteSelection = {

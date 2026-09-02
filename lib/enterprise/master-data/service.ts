@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import type {
   businessPartyCreateSchema,
   businessPartyUpdateSchema,
@@ -46,7 +47,7 @@ async function assertClientOrganization(tx: Parameters<Parameters<typeof prisma.
     where: { id: organizationId, status: "ACTIVE", deletedAt: null, organizationType: "CLIENT" },
     select: { id: true },
   });
-  if (!organization) throw new Error("ORGANIZATION_NOT_ACTIVE");
+  if (!organization) throw new EnterpriseDomainError("ORGANIZATION_NOT_ACTIVE", 403);
 }
 
 export async function createEnterpriseBusinessParty(organizationId: string, actorUserId: string, input: BusinessPartyInput) {

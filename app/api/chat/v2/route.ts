@@ -10,14 +10,13 @@ import { getAiModelDefinition } from "@/lib/ai/catalog";
 import { AiExecutionContextError } from "@/lib/ai/context-engine";
 import { AiProviderError, toAiReasonCode } from "@/lib/ai/errors";
 import { getAiErrorMessage } from "@/lib/ai/i18n";
+import { resolveAiSessionContext } from "@/lib/ai/session-context";
 import { completeAiModelCall, failAiModelCall, interruptAiModelCall, startAiModelCall } from "@/lib/ai/observability";
 import { routeAiStream } from "@/lib/ai/orchestrator";
 import { buildLanguageInstruction } from "@/lib/ai/prompts";
-import { resolveAiSessionContext } from "@/lib/ai/session-context";
 import { createAuditedAiTextStream, type AiStreamConsumption } from "@/lib/ai/stream";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
-import { getCompanyContextForUser } from "@/lib/company-context";
 import { truncate } from "@/lib/format";
 import { DTSC_SYSTEM_PROMPT, type OpenAIInputMessage } from "@/lib/openai";
 import { getActiveOrganizationId } from "@/lib/organizations";
@@ -44,6 +43,10 @@ export async function POST(req: Request) {
     await writeApiLog({ request: req, statusCode: 401, startedAt });
     return NextResponse.json({ error: "UNAUTHORIZED", reasonCode: "UNAUTHORIZED" }, { status: 401 });
   }
+  // Validate the authenticated workspace server-side, then deliberately narrow
+  // this assistant to PERSONAL below. This keeps session denials fail-closed
+  // without granting the general chatbot access to enterprise context.
+  resolveAiSessionContext(session);
   const organizationId = getActiveOrganizationId(session);
   const limiter = await rateLimit(`chat-v2:${session.userId}`, 30, 60 * 60 * 1000);
   if (!limiter.ok) return NextResponse.json({ error: "RATE_LIMITED", reasonCode: "RATE_LIMITED" }, { status: 429 });
@@ -101,6 +104,10 @@ export async function POST(req: Request) {
   const requestedModel = preference?.modelOverride || body.data.model || user.preferredModel || undefined;
   const requestedDefinition = getAiModelDefinition(requestedModel);
   if (requestedModel && !requestedDefinition) return NextResponse.json({ error: "MODEL_UNAVAILABLE", reasonCode: "MODEL_UNAVAILABLE" }, { status: 400 });
+  const reasoningEffort = (preference?.reasoningEffort || "AUTO") as "AUTO" | "LOW" | "MEDIUM" | "HIGH";
+  if (reasoningEffort !== "AUTO" && requestedDefinition && !requestedDefinition.capabilities.reasoning) {
+    return NextResponse.json({ error: "REASONING_UNAVAILABLE", reasonCode: "REASONING_UNAVAILABLE", message: locale === "en" ? "The selected model does not support configurable reasoning." : "Le modèle sélectionné ne permet pas de régler le niveau de raisonnement." }, { status: 400 });
+  }
   const provisionalModel = requestedDefinition?.code || null;
 
   await prisma.message.create({
@@ -119,15 +126,17 @@ export async function POST(req: Request) {
     return new Response(privateAction.reply, { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-cache, no-transform", "X-Conversation-Id": conversation.id, "X-AI-Execution": "CANONICAL_TOOL" } });
   }
 
-  const useCompanyContext = preference?.useCompanyContext ?? true;
+  // The general DTSC chatbot is deliberately personal/product-scoped. Enterprise
+  // data belongs to IA Entreprise and must never leak through the general route.
+  const useCompanyContext = false;
   const useKnowledge = preference?.useKnowledge ?? true;
-  const contextCode = resolveAiSessionContext(session);
+  const contextCode = "PERSONAL" as const;
   let preparedTurn: Awaited<ReturnType<typeof prepareAiTurn>>;
   try {
     preparedTurn = await prepareAiTurn({
       userId: session.userId,
-      contextCode,
-      organizationId,
+      contextCode: "PERSONAL",
+      organizationId: null,
       assistantCode: "DTSC_GENERAL",
     });
   } catch (error) {
@@ -145,10 +154,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: reasonCode, reasonCode, message: getAiErrorMessage(reasonCode, locale) }, { status: statusCode });
   }
 
-  const [companyContext, ragContext] = await Promise.all([
-    useCompanyContext ? getCompanyContextForUser(session.userId, organizationId).catch(() => "") : Promise.resolve(""),
-    useKnowledge ? retrieveKnowledgeContext(session.userId, body.data.content, organizationId).catch(() => "") : Promise.resolve(""),
-  ]);
+  const companyContext = "";
+  const ragContext = useKnowledge ? await retrieveKnowledgeContext(session.userId, body.data.content, null).catch(() => "") : "";
 
   const responsePreferencePrompt = buildAssistantResponsePreferencePrompt({
     style: preference?.responseStyle || user.chatResponseStyle,
@@ -163,23 +170,24 @@ export async function POST(req: Request) {
     ...history.map((message) => ({ role: message.role, content: message.content })),
   ];
   const taskType = classifyAiTask(body.data.content);
-  const instructions = `${DTSC_SYSTEM_PROMPT}\n\n${buildLanguageInstruction(locale)}`;
+  const instructions = `${DTSC_SYSTEM_PROMPT}\n\n${buildLanguageInstruction(locale)}\n\nCHATBOT GÉNÉRAL — FRONTIÈRE STRICTE:\n- Tu expliques DTSC Platform, ses fonctionnalités générales, l’aide et l’orientation.\n- Tu n’as jamais accès aux données ERP de l’entreprise active dans cette surface.\n- N’affirme aucun solde, paiement, client, stock, rapprochement, statut ou résultat propre à une entreprise.\n- Pour lire ou analyser les données autorisées d’une entreprise, oriente vers IA Entreprise. Pour exécuter une action multi-étapes avec outils et confirmations, oriente vers le mode Agent.\n- Si l’utilisateur demande une donnée d’entreprise ici, dis clairement que ce chatbot général ne peut pas y accéder; ne fournis aucun exemple chiffré sauf demande explicite d’un exemple fictif, alors marqué comme fictif dans chaque section.`;
 
   let routed: Awaited<ReturnType<typeof routeAiStream>>;
   try {
     routed = await routeAiStream({
       requestedModel,
       taskType,
-      context: contextCode,
+      context: "PERSONAL",
       locale,
       messages,
       instructions,
       userId: session.userId,
-      organizationId,
+      organizationId: null,
       assistantCode: preparedTurn.routePolicy.assistantCode,
       dataClassifications: preparedTurn.routePolicy.dataClassifications,
       tags: ["feature:global-chat", `assistant:${preparedTurn.executionContext.profile.code}`, `locale:${locale}`],
       signal: req.signal,
+      reasoningEffort,
     });
   } catch (error) {
     const reasonCode = toAiReasonCode(error);

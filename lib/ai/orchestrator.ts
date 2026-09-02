@@ -164,6 +164,7 @@ export async function routeAiStream(request: AiRouteRequest): Promise<AiStreamRe
         routingConstraints: effectiveRequest.routingConstraints,
         tools: effectiveRequest.tools,
         signal: effectiveRequest.signal,
+        reasoningEffort: model.capabilities.reasoning ? effectiveRequest.reasoningEffort : "AUTO",
       });
       const stream = observeAiProviderAttemptStream({ source: providerStream, attemptId: attempt?.id, startedAt: attemptStartedAt });
       attempts.push({ providerCode: provider.code, modelCode: model.code, outcome: "SUCCESS" });

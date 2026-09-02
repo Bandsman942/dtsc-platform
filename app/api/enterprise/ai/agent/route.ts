@@ -118,6 +118,7 @@ export async function POST(req: Request) {
           modelOverride: data.model || null,
           useKnowledge: data.useKnowledge,
           useTools: data.useTools,
+          reasoningEffort: data.reasoningEffort,
         },
       });
     }
@@ -130,6 +131,11 @@ export async function POST(req: Request) {
     const requestedModel = preference?.modelOverride || data.model || undefined;
     if (requestedModel && !getAiModelDefinition(requestedModel)) {
       return safeAgentStartResponse(req, "MODEL_UNAVAILABLE", 400, locale);
+    }
+    const requestedDefinition = getAiModelDefinition(requestedModel);
+    const reasoningEffort = (preference?.reasoningEffort || data.reasoningEffort) as "AUTO" | "LOW" | "MEDIUM" | "HIGH";
+    if (reasoningEffort !== "AUTO" && requestedDefinition && !requestedDefinition.capabilities.reasoning) {
+      return safeAgentStartResponse(req, "REASONING_UNAVAILABLE", 400, locale);
     }
     const useKnowledge = preference?.useKnowledge ?? data.useKnowledge;
     const useTools = preference?.useTools ?? data.useTools;
@@ -203,6 +209,7 @@ export async function POST(req: Request) {
       assistantCode: preparedTurn.routePolicy.assistantCode,
       enterpriseConversationId: conversationId,
       requestedModel,
+      reasoningEffort,
       dataClassifications: routeDataClassifications,
       budgetRequest: useTools ? undefined : { maxToolCalls: 0, allowedToolModes: [], allowedToolCodes: [] },
       request: req,

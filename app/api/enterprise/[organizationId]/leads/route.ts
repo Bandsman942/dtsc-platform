@@ -59,13 +59,13 @@ export async function POST(req: Request, { params }: Params) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Lead invalide." }, { status: 400 });
   try {
     const lead = await createEnterpriseLead(organizationId, session.userId, parsed.data);
-    if (parsed.data.ownerUserId && parsed.data.ownerUserId !== session.userId) {
-      await notifyUser({ userId: parsed.data.ownerUserId, organizationId, type: "ENTERPRISE_CRM", title: "Nouveau prospect affecté", body: lead.displayName || lead.legalName, targetUrl: `/enterprise-modules/CRM_PIPELINE?lead=${encodeURIComponent(lead.id)}&section=next-action`, idempotencyKey: `lead-assigned:${lead.id}` });
-    }
-    await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_LEAD_CREATED", entity: "EnterpriseLead", entityId: lead.id, request: req, metadata: { organizationId } });
-    await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "leads" } });
+    await Promise.allSettled([
+      ...(parsed.data.ownerUserId && parsed.data.ownerUserId !== session.userId ? [notifyUser({ userId: parsed.data.ownerUserId, organizationId, type: "ENTERPRISE_CRM", title: "Nouveau prospect affecté", body: lead.displayName || lead.legalName, targetUrl: `/enterprise-modules/CRM_PIPELINE?lead=${encodeURIComponent(lead.id)}&section=next-action`, idempotencyKey: `lead-assigned:${lead.id}` })] : []),
+      writeAuditLog({ userId: session.userId, action: "ENTERPRISE_LEAD_CREATED", entity: "EnterpriseLead", entityId: lead.id, request: req, metadata: { organizationId } }),
+      writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "leads" } }),
+    ]);
     return NextResponse.json({ ok: true, lead }, { status: 201 });
   } catch (error) {
-    return enterpriseDomainErrorResponse(error, "LEAD_CREATE_FAILED");
+    return enterpriseDomainErrorResponse(error, "LEAD_CREATE_FAILED", req);
   }
 }

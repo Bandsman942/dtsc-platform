@@ -8,7 +8,8 @@ model ChatConversationPreference {
   modelOverride      String?
   responseStyle      String?
   responseLength     String?
-  useCompanyContext Boolean  @default(true)
+  reasoningEffort    String   @default("AUTO")
+  useCompanyContext Boolean  @default(false)
   useKnowledge       Boolean  @default(true)
   customInstructions String?
   createdAt          DateTime @default(now())
@@ -27,8 +28,9 @@ model EnterpriseAiConversationPreference {
   modelOverride       String?
   responseStyle       String   @default("PROFESSIONAL")
   responseLength      String   @default("BALANCED")
+  reasoningEffort     String   @default("AUTO")
   useKnowledge        Boolean  @default(true)
-  useTools            Boolean  @default(true)
+  useTools            Boolean  @default(false)
   customInstructions String?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt

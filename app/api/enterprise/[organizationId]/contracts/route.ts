@@ -85,8 +85,8 @@ export async function POST(req: Request, { params }: Params) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Contrat invalide." }, { status: 400 });
   try {
     const contract = await createEnterpriseContract(organizationId, session.userId, parsed.data);
-    if (parsed.data.approverUserId && parsed.data.approverUserId !== session.userId) {
-      await notifyUser({
+    await Promise.allSettled([
+      ...(parsed.data.approverUserId && parsed.data.approverUserId !== session.userId ? [notifyUser({
         userId: parsed.data.approverUserId,
         organizationId,
         type: "ENTERPRISE_APPROVAL",
@@ -94,13 +94,13 @@ export async function POST(req: Request, { params }: Params) {
         body: contract.title,
         targetUrl: `/enterprise-modules/CONTRACTS?contract=${encodeURIComponent(contract.id)}&section=validation`,
         idempotencyKey: `contract-approval:${contract.id}:${contract.revision}`,
-      });
-    }
-    await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_CONTRACT_CREATED", entity: "EnterpriseContract", entityId: contract.id, request: req, metadata: { organizationId, status: contract.status } });
-    await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "contracts" } });
+      })] : []),
+      writeAuditLog({ userId: session.userId, action: "ENTERPRISE_CONTRACT_CREATED", entity: "EnterpriseContract", entityId: contract.id, request: req, metadata: { organizationId, status: contract.status } }),
+      writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "contracts" } }),
+    ]);
     return NextResponse.json({ ok: true, contract }, { status: 201 });
   } catch (error) {
-    return enterpriseDomainErrorResponse(error, "CONTRACT_CREATE_FAILED");
+    return enterpriseDomainErrorResponse(error, "CONTRACT_CREATE_FAILED", req);
   }
 }
 

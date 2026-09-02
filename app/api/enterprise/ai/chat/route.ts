@@ -137,6 +137,7 @@ export async function POST(req: Request) {
           modelOverride: data.model || null,
           useKnowledge: data.useKnowledge,
           useTools: data.useTools,
+          reasoningEffort: data.reasoningEffort,
         },
       });
     }
@@ -148,6 +149,11 @@ export async function POST(req: Request) {
     const requestedModel = preference?.modelOverride || data.model || undefined;
     if (requestedModel && !getAiModelDefinition(requestedModel)) {
       return NextResponse.json({ error: "MODEL_UNAVAILABLE", reasonCode: "MODEL_UNAVAILABLE" }, { status: 400 });
+    }
+    const requestedDefinition = getAiModelDefinition(requestedModel);
+    const reasoningEffort = (preference?.reasoningEffort || data.reasoningEffort) as "AUTO" | "LOW" | "MEDIUM" | "HIGH";
+    if (reasoningEffort !== "AUTO" && requestedDefinition && !requestedDefinition.capabilities.reasoning) {
+      return NextResponse.json({ error: "REASONING_UNAVAILABLE", reasonCode: "REASONING_UNAVAILABLE", message: locale === "en" ? "The selected model does not support configurable reasoning." : "Le modèle sélectionné ne permet pas de régler le niveau de raisonnement." }, { status: 400 });
     }
     const useKnowledge = preference?.useKnowledge ?? data.useKnowledge;
     const useTools = preference?.useTools ?? data.useTools;
@@ -262,6 +268,7 @@ export async function POST(req: Request) {
           `locale:${locale}`,
         ],
         signal: req.signal,
+        reasoningEffort,
       });
     } catch (error) {
       const reasonCode = toAiReasonCode(error);

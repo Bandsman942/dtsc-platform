@@ -70,7 +70,7 @@ export async function PATCH(req: Request, { params }: Params) {
 
   const shouldTouchPreference = ["configure", "pin", "unpin"].includes(data.action) ||
     typeof data.modelOverride !== "undefined" || typeof data.responseStyle !== "undefined" || typeof data.responseLength !== "undefined" ||
-    typeof data.useKnowledge !== "undefined" || typeof data.useTools !== "undefined" || typeof data.customInstructions !== "undefined";
+    typeof data.reasoningEffort !== "undefined" || typeof data.useKnowledge !== "undefined" || typeof data.useTools !== "undefined" || typeof data.customInstructions !== "undefined";
   if (shouldTouchPreference) {
     const preferenceData = {
       ...(data.action === "pin" ? { pinnedAt: now } : {}),
@@ -78,6 +78,7 @@ export async function PATCH(req: Request, { params }: Params) {
       ...(typeof data.modelOverride !== "undefined" ? { modelOverride: data.modelOverride?.trim() || null } : {}),
       ...(typeof data.responseStyle !== "undefined" ? { responseStyle: data.responseStyle } : {}),
       ...(typeof data.responseLength !== "undefined" ? { responseLength: data.responseLength } : {}),
+      ...(typeof data.reasoningEffort !== "undefined" ? { reasoningEffort: data.reasoningEffort } : {}),
       ...(typeof data.useKnowledge !== "undefined" ? { useKnowledge: data.useKnowledge } : {}),
       ...(typeof data.useTools !== "undefined" ? { useTools: data.useTools } : {}),
       ...(typeof data.customInstructions !== "undefined" ? { customInstructions: data.customInstructions?.trim() || null } : {}),

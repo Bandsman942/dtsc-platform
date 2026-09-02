@@ -9,6 +9,7 @@ function assert(condition, message) { if (!condition) throw new Error(message); 
 const schema = read("prisma/assistant-conversation-preferences.prisma");
 const migration = read("prisma/migrations/20260730043000_add_assistant_conversation_preferences/migration.sql");
 const oauthMigration = read("prisma/migrations/20260811010000_add_mcp_user_oauth/migration.sql");
+const trustMigration = read("prisma/migrations/20260902003000_add_ai_reasoning_effort/migration.sql");
 const helper = read("lib/assistant-conversation-preferences.ts");
 const promptPolicy = read("lib/ai/prompts.ts");
 const productAwareness = read("lib/ai/product-awareness.ts");
@@ -27,6 +28,8 @@ const enterprisePage = read("app/enterprise-modules/[moduleCode]/page.tsx");
 const enterpriseWorkspace = read("components/enterprise/enterprise-ai-workspace-v2.tsx");
 const enterpriseChat = read("app/api/enterprise/ai/chat/route.ts");
 const enterpriseContext = read("lib/enterprise-ai/context.ts");
+const agentRuntime = read("lib/ai/agent/runtime.ts");
+const aiProvider = read("lib/ai/providers/openai-responses.ts");
 const enterpriseModuleRegistry = read("lib/enterprise/module-registry.ts");
 const enterpriseConversations = read("app/api/enterprise/ai/conversations/[id]/route.ts");
 const enterpriseMessage = read("app/api/enterprise/ai/messages/[id]/route.ts");
@@ -59,6 +62,8 @@ for (const model of ["ChatConversationPreference", "EnterpriseAiConversationPref
 }
 assert(!/DROP TABLE|DROP COLUMN|TRUNCATE/i.test(migration), "Assistant UX migration must be non-destructive");
 assert(migration.includes("EnterpriseAiMessageFeedback_value_check"), "Enterprise AI feedback must remain bounded to +/-1");
+assert(trustMigration.includes('ADD COLUMN "reasoningEffort"') && !/DROP TABLE|DROP COLUMN|TRUNCATE/i.test(trustMigration), "Reasoning effort migration must be additive");
+assert(schema.match(/reasoningEffort/g)?.length === 2, "Both assistant conversation types must persist reasoning effort");
 
 assert(helper.includes("isolation tenant") && helper.includes("confirmation humaine"), "Custom conversation instructions must never override DTSC safety rules");
 assert(helper.includes("getChatConversationPreference") && helper.includes("getEnterpriseAiConversationPreference"), "Conversation preferences must be server-side sources of truth");
@@ -81,13 +86,14 @@ assert(assistantUi.includes("<textarea") && assistantUi.includes("requestSubmit"
 assert(assistantUi.includes("Context and sources") && assistantUi.includes("Conversation instructions"), "Assistant settings must expose context/source and per-conversation instructions");
 assert(assistantUi.includes("/ai/apps") && assistantUi.includes("Applications connectées"), "Assistant composer and settings must expose the connected applications center");
 assert(chatWorkspace.includes("PINNED") && chatWorkspace.includes("ARCHIVED") && chatWorkspace.includes("Exporter en Markdown"), "Chatbot contextual menu must support pin/archive/export");
-assert(chatWorkspace.includes("useCompanyContext") && chatWorkspace.includes("useKnowledge"), "Chatbot must expose real company/document context toggles");
+assert(chatWorkspace.includes("Documents personnels") && !chatWorkspace.includes('key: "company"'), "General chatbot must expose personal documents without an enterprise-context toggle");
 assert(chatWorkspace.includes('import { Streamdown } from "streamdown"') && chatWorkspace.includes("<Streamdown") && assistantUi.includes("dtsc-assistant-markdown"), "General Chatbot v2 must render assistant output with the shared rich streaming Markdown surface");
 assert(legacyChatWorkspace.includes('import { Streamdown } from "streamdown"') && legacyChatWorkspace.includes("<Streamdown") && legacyChatWorkspace.includes("dtsc-assistant-markdown"), "Legacy Chatbot history/streaming must keep the same rich Markdown renderer");
 assert(legacyChatRoute.includes("buildLanguageInstruction") && legacyChatRoute.includes("format enrichi DTSC"), "Legacy general Chatbot must apply the shared rich presentation and product-awareness policy");
 assert(chatWorkspace.includes("/api/chat/v2") && chatRoute.includes("getChatConversationPreference"), "Chatbot v2 must apply persisted preferences server-side");
-assert(chatRoute.includes("useCompanyContext") && chatRoute.includes("useKnowledge") && chatRoute.includes("modelOverride"), "Chatbot server must apply context and model overrides");
-assert(chatRoute.includes("performPrivateChatActionFromHistory") && chatRoute.includes("retrieveKnowledgeContext") && chatRoute.includes("getCompanyContextForUser"), "Chatbot v2 must preserve existing private actions, RAG and company context");
+assert(chatRoute.includes("const useCompanyContext = false") && chatRoute.includes('contextCode: "PERSONAL"') && chatRoute.includes('organizationId: null'), "General chatbot must be technically isolated from enterprise context");
+assert(chatRoute.includes("performPrivateChatActionFromHistory") && chatRoute.includes("retrieveKnowledgeContext"), "Chatbot v2 must preserve personal actions and personal RAG");
+assert(chatRoute.includes("CHATBOT GÉNÉRAL — FRONTIÈRE STRICTE") && chatRoute.includes("IA Entreprise") && chatRoute.includes("mode Agent"), "General chatbot must explain assistant routing and refuse enterprise-data claims");
 assert(conversationsRoute.includes("isCatalogAiModelAllowed") && conversationsRoute.includes("chatConversationPreference.upsert"), "Chat conversation configuration must validate canonical catalog models and persist server-side");
 
 assert(immersiveShell.includes("useImmersiveConversationViewport") && immersiveShell.includes("data-collaboration-immersive-root"), "Assistant workspaces must reuse the proven immersive viewport and chrome gesture contract");
@@ -109,6 +115,9 @@ assert(enterpriseContext.includes("listEnterpriseModuleDefinitions") && enterpri
 assert(enterpriseContext.includes("VOCABULAIRE CANONIQUE DES MODULES") && enterpriseContext.includes("labelFr") && enterpriseContext.includes("labelEn"), "Enterprise assistant prompt must receive bilingual canonical module labels");
 assert(enterpriseContext.includes("N'affiche jamais un nom de module avec des underscores") && enterpriseContext.includes("FINANCE_ACCOUNTING") && enterpriseContext.includes("FINANCE_CASH") && enterpriseContext.includes("FINANCE_PAYABLES") && enterpriseContext.includes("FINANCE_RECEIVABLES"), "Enterprise assistant must explicitly guard the real accounting underscore regression");
 assert(enterpriseContext.includes("FORMAT DE RÉPONSE ENRICHI") && enterpriseContext.includes("Markdown riche") && enterpriseContext.includes("tableaux"), "Enterprise assistant must request the existing enriched message format");
+assert(enterpriseContext.includes("Aucun chiffre, nom, solde") && enterpriseContext.includes("ne prouve jamais qu’une donnée a été lue") && enterpriseContext.includes("données d’exemple non sollicitées"), "Enterprise assistant must forbid unsupported business facts and unsolicited fake examples");
+assert(agentRuntime.includes("minimizeToolResult") && agentRuntime.includes("TOOL_RESULT_PRIVATE_KEYS") && agentRuntime.includes("ne le recopie jamais brut"), "Agent tool receipts must be minimized before model continuation and never dumped to users");
+assert(assistantUi.includes("Niveau de raisonnement") && assistantUi.includes("reasoningAvailable") && aiProvider.includes("reasoning: { effort:"), "Reasoning-capable models must expose and receive a bounded reasoning effort");
 assert(enterpriseConversations.includes("enterpriseAiConversationPreference.upsert") && enterpriseConversations.includes("isCatalogAiModelAllowed"), "Enterprise conversation configuration must validate canonical catalog models and persist preferences");
 assert(enterpriseMessage.includes("enterpriseAiMessageFeedback.upsert") && enterpriseMessage.includes('message.role !== "assistant"'), "Enterprise feedback must persist only for assistant responses");
 assert(!chatWorkspace.includes("useWeb") && !enterpriseWorkspace.includes("useWeb") && !enterpriseChat.includes("useWeb"), "Do not advertise a web-search source that DTSC does not implement");

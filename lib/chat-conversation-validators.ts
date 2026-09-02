@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ASSISTANT_RESPONSE_LENGTHS, ASSISTANT_RESPONSE_STYLES } from "@/lib/assistant-conversation-preferences";
+import { ASSISTANT_REASONING_EFFORTS, ASSISTANT_RESPONSE_LENGTHS, ASSISTANT_RESPONSE_STYLES } from "@/lib/assistant-conversation-preferences";
 
 export const chatConversationActionSchema = z.object({
   action: z.enum(["update", "configure", "pin", "unpin", "archive", "restore"]).default("update"),
@@ -9,6 +9,7 @@ export const chatConversationActionSchema = z.object({
   modelOverride: z.string().trim().max(120).optional().nullable().or(z.literal("")),
   responseStyle: z.enum(ASSISTANT_RESPONSE_STYLES).optional().nullable(),
   responseLength: z.enum(ASSISTANT_RESPONSE_LENGTHS).optional().nullable(),
+  reasoningEffort: z.enum(ASSISTANT_REASONING_EFFORTS).optional(),
   useCompanyContext: z.boolean().optional(),
   useKnowledge: z.boolean().optional(),
   customInstructions: z.string().trim().max(4_000).optional().nullable().or(z.literal("")),
