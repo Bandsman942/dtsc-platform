@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BUSINESS_PARTY_ROLES, BUSINESS_PARTY_TYPES, CATALOG_ITEM_TYPES, SITE_TYPES } from "@/lib/enterprise/master-data/constants";
+import { BUSINESS_PARTY_ROLES, BUSINESS_PARTY_TYPES, CATALOG_ITEM_TYPES, SITE_TYPES, STORAGE_LOCATION_TYPES, WAREHOUSE_TYPES } from "@/lib/enterprise/master-data/constants";
 
 const optionalText = z.string().trim().max(500).optional().nullable();
 
@@ -68,7 +68,7 @@ export const siteCreateSchema = z.object({
 export const warehouseCreateSchema = z.object({
   siteId: z.string().trim().min(1),
   name: z.string().trim().min(2).max(240),
-  warehouseType: z.string().trim().min(2).max(80).default("GENERAL"),
+  warehouseType: z.enum(WAREHOUSE_TYPES).default("GENERAL"),
   managerUserId: z.string().trim().min(1).optional().nullable(),
 });
 
@@ -93,7 +93,7 @@ export const storageLocationCreateSchema = z.object({
   parentLocationId: z.string().trim().min(1).optional().nullable(),
   name: z.string().trim().min(2).max(160),
   code: z.string().trim().toUpperCase().min(1).max(60).regex(/^[A-Z0-9_-]+$/).optional(),
-  locationType: z.string().trim().toUpperCase().min(2).max(60).default("STORAGE"),
+  locationType: z.enum(STORAGE_LOCATION_TYPES).default("STORAGE"),
   barcode: z.string().trim().max(120).optional().nullable(),
   capacityValue: z.coerce.number().nonnegative().max(1_000_000_000).optional().nullable(),
   capacityUnit: z.string().trim().max(40).optional().nullable(),
