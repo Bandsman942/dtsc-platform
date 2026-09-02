@@ -6,7 +6,7 @@ import {
 } from "@/lib/i18n";
 
 type EnterpriseProcurementCoreKey = keyof typeof enterpriseProcurementFr;
-type EnterpriseCoordinationSupplementKey = "meetings.action.reason" | "meetings.action.reason.required";
+type EnterpriseCoordinationSupplementKey = "meetings.action.reason" | "meetings.action.reason.required" | "common.save";
 export type EnterpriseCoreKey = BaseEnterpriseCoreKey | EnterpriseProcurementCoreKey | EnterpriseCoordinationSupplementKey;
 
 const procurementFragments = {
@@ -18,10 +18,12 @@ const coordinationSupplements: Record<"fr" | "en", Record<EnterpriseCoordination
   fr: {
     "meetings.action.reason": "Motif professionnel",
     "meetings.action.reason.required": "Un motif professionnel d’au moins 3 caractères est obligatoire.",
+    "common.save": "Enregistrer",
   },
   en: {
     "meetings.action.reason": "Professional reason",
     "meetings.action.reason.required": "A professional reason of at least 3 characters is required.",
+    "common.save": "Save",
   },
 };
 
