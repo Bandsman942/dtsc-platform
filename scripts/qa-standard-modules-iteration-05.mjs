@@ -53,6 +53,7 @@ const checks = [
   ["AI Agent cancellation", "scripts/qa-standard-ai-agent-cancellation.mjs"],
   ["AI Agent tenant isolation", "scripts/qa-standard-ai-agent-tenant-isolation.mjs"],
   ["AI Agent sensitive domains", "scripts/qa-standard-ai-agent-sensitive-domains.mjs"],
+  ["Enterprise AI ERP READ coverage", "scripts/qa-hotfix-556-enterprise-ai-erp-read.mjs"],
 ];
 
 for (const [label, script] of checks) {
