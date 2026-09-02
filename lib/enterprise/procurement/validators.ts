@@ -47,7 +47,10 @@ export const enterpriseDocumentUpdateSchema = z.object({
 });
 
 export const enterpriseDocumentAccessSchema = z.object({ userId: z.string().trim().min(1).max(180), accessLevel: z.enum(["READ", "DOWNLOAD", "EDIT"]).default("READ") });
-export const enterpriseDocumentArchiveSchema = z.object({ revision });
+export const enterpriseDocumentArchiveSchema = z.object({
+  revision,
+  reason: z.string().trim().min(3, "Un motif professionnel d’au moins 3 caractères est obligatoire pour archiver ce document.").max(1000),
+});
 
 const supplierContactSchema = z.object({
   name: z.string().trim().min(2).max(160),
