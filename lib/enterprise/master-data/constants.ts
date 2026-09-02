@@ -13,3 +13,5 @@ export const BUSINESS_PARTY_ROLES = [
 export const CATALOG_ITEM_TYPES = ["PRODUCT", "SERVICE", "FEE", "SUBSCRIPTION", "OTHER"] as const;
 export const DEFAULT_UNIT_CODES = ["UNIT", "HOUR", "DAY", "KG", "LITER", "BOX", "PACK", "SERVICE"] as const;
 export const SITE_TYPES = ["HEADQUARTERS", "BRANCH", "ESTABLISHMENT", "STORE", "CENTER", "DEPOT", "OFFICE", "FIELD_SITE"] as const;
+export const WAREHOUSE_TYPES = ["GENERAL", "RETAIL", "TRANSIT", "SECURE", "COLD"] as const;
+export const STORAGE_LOCATION_TYPES = ["ZONE", "AISLE", "RACK", "BIN", "STORAGE"] as const;
