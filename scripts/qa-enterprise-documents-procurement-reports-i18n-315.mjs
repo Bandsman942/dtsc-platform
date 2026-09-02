@@ -36,13 +36,16 @@ const i18nHelper = read("lib/enterprise-core-i18n.ts");
 check(i18nHelper.includes('import enterpriseProcurementFr from "@/locales/enterprise-procurement.fr.json"'), "Enterprise Core translator must compose the procurement FR fragment");
 check(i18nHelper.includes('import enterpriseProcurementEn from "@/locales/enterprise-procurement.en.json"'), "Enterprise Core translator must compose the procurement EN fragment");
 check(i18nHelper.includes("type EnterpriseProcurementCoreKey"), "Enterprise Core translator must expose procurement fragment keys through its canonical key union");
+check(i18nHelper.includes('"documents.archiveReview"') && i18nHelper.includes('"documents.sourceUnavailable"'), "Document hotfix copy must remain in the canonical Enterprise Core translator");
 
 const ui = read("components/enterprise/core-v2/erp-v2-ui.tsx");
 check(ui.includes("export function formatEnterpriseAmount"), "Enterprise UI primitives must expose the canonical locale-aware amount formatter");
 check(ui.includes("new Intl.NumberFormat(enterpriseCoreIntlLocale(locale)"), "Enterprise amount formatter must use the canonical Intl locale helper");
 
 const documents = read("components/enterprise/core-v2/enterprise-documents-workspace.tsx");
+const documentService = read("lib/enterprise/procurement/document-service.ts");
 check(!documents.includes("visibilityChoicesFr") && !documents.includes("visibilityChoicesEn"), "Documents must not keep parallel FR/EN visibility arrays");
+check(!documents.includes("const documentUi") && !documents.includes("const language = locale ==="), "Documents must not keep local FR/EN customer-copy dictionaries");
 check(!documents.includes('replaceAll("_", " ")'), "Documents must not derive customer labels from raw document enum codes");
 check(!documents.includes('replace("Enterprise", "")'), "Documents must not derive link-target labels from technical entity names");
 check(documents.includes('localizedChoice(locale, "documents.visibility"'), "Document visibility choices must come from canonical i18n");
@@ -51,11 +54,16 @@ check(documents.includes('localizedChoice(locale, "documents.target"'), "Documen
 check(documents.includes("documentTypeLabel(locale, item.documentType)"), "Document list must project document type through a localized label");
 check(documents.includes("visibilityLabel(locale, item.visibility)"), "Document list must project visibility through a localized label");
 for (const contract of [
-  "/documents/${document.id}/links",
   "/documents/${uploadTarget.id}/versions",
   "/documents/${linkTarget.id}/links",
   "/documents/${item.id}/download",
 ]) check(documents.includes(contract), `Documents contract must remain intact: ${contract}`);
+for (const sourceField of ["sourceModule", "sourceEntityType", "sourceEntityId"]) {
+  check(documents.includes(sourceField), `Linked document creation must submit ${sourceField} atomically`);
+}
+for (const backendContract of ["prisma.$transaction", "requireEnterpriseSourceReference", "createEnterpriseLink"]) {
+  check(documentService.includes(backendContract), `Atomic linked document creation must keep backend contract: ${backendContract}`);
+}
 
 const suppliers = read("components/enterprise/core-v2/enterprise-suppliers-workspace.tsx");
 check(!suppliers.includes("identityLabels"), "Suppliers must not keep a French-only identity status dictionary");
@@ -71,9 +79,10 @@ check(!purchases.includes("priorityChoicesEn") && !purchases.includes("priorityC
 check(!purchases.includes("new Intl.NumberFormat"), "Purchases must not keep a local currency formatter");
 check(purchases.includes("formatEnterpriseAmount"), "Purchases must use the canonical locale-aware amount formatter");
 check(purchases.includes("items={priorityChoices(locale)}"), "Purchase form must use canonical locale-aware priority choices");
-check(purchases.includes("/purchases/${receiveTarget.id}/receive"), "Purchase receipt endpoint must remain intact");
+check(purchases.includes("/purchases/${receiveTarget.purchase.id}/receive"), "Purchase receipt endpoint must remain intact through the operational detail payload");
 check(purchases.includes("/purchases/${item.id}/actions"), "Purchase action endpoint must remain intact");
-check(purchases.includes("/enterprise-modules/FINANCE_BUDGETS?purchaseId=${encodeURIComponent(item.id)}"), "Purchase to Finance expense deep-link must remain intact");
+check(purchases.includes("/enterprise-modules/FINANCE_PAYABLES?purchaseId=${encodeURIComponent(item.id)}"), "Purchase to Finance payable deep-link must remain intact");
+check(!purchases.includes("/enterprise-modules/FINANCE_BUDGETS?purchaseId=${encodeURIComponent(item.id)}"), "Purchase UI must not restore the obsolete direct Budget expense shortcut");
 for (const action of ["SUBMIT", "ORDER", "CLOSE", "CANCEL"]) check(purchases.includes(`\"${action}\"`), `Purchase action code must remain intact: ${action}`);
 
 const reports = read("components/enterprise/core-v2/enterprise-reports-workspace.tsx");
