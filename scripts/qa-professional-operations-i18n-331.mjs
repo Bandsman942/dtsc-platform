@@ -72,11 +72,21 @@ need(files.helper, '"inventoryStatus"', "helper enum stock");
 need(files.helper, '"projectStatus"', "helper enum projets");
 need(files.helper, '"assetStatus"', "helper enum actifs");
 need(files.helper, "professionalErpNumber", "helper format nombre");
+need(files.helper, '"inventory.rejectionReasonRequired"', "helper décision stock");
+need(files.helper, '"inventory.adjustmentSection"', "helper ajustements stock");
 
 for (const marker of [
   "/stock-transfers", "/inventory-counts", "/stock-adjustments",
-  "idempotencyKey: crypto.randomUUID()", 'decision: "APPROVE" | "REJECT"', "{ decision, revision: entity.revision }",
+  "idempotencyKey: crypto.randomUUID()",
+  'decision: "APPROVE" | "REJECT"',
+  "decision: decisionTarget.decision, revision: entity.revision, comment: comment || null",
+  'decisionTarget.decision === "REJECT" && !comment',
+  't("inventory.rejectionReasonRequired")',
+  'presentation="editor"',
 ]) need(files.inventory, marker, "stock — invariants");
+reject(files.inventory, 'const isEn = locale === "en"', "stock — i18n");
+reject(files.inventory, 'A rejection reason is required.', "stock — i18n");
+reject(files.inventory, 'Un motif est obligatoire pour rejeter l’opération.', "stock — i18n");
 
 for (const marker of [
   "/sites", "/warehouses", "/storage-locations", '"PATCH"', "revision: edit.revision", "<details",
