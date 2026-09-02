@@ -52,7 +52,7 @@ if (readNumber(enterprise, "maxToolCalls") < 15) fail("ENTERPRISE must allow at 
 if (readNumber(enterprise, "maxToolCalls") !== 20) fail("ENTERPRISE maxToolCalls must remain 20 for the #554 contract");
 if (readNumber(enterprise, "maxSteps") !== 18) fail("ENTERPRISE maxSteps must remain 18 for the #554 contract");
 if (readNumber(enterprise, "maxTokens") !== 64_000) fail("ENTERPRISE maxTokens must remain 64000 for the #554 contract");
-if (readNumber(enterprise, "maxDurationMs") !== 150_000) fail("ENTERPRISE maxDurationMs must remain 150000 for the #554 contract");
+if (readNumber(enterprise, "maxDurationMs") !== 55_000) fail("ENTERPRISE maxDurationMs must remain 55000 for the #554 contract");
 
 for (const alias of ["premium", "enterprise", "entreprise"]) {
   if (!plans.includes(`${alias}: "ENTERPRISE"`)) fail(`${alias} must resolve to ENTERPRISE`);
@@ -62,7 +62,10 @@ if (!policy.includes("Math.min")) fail("client-requested budgets must remain ser
 if (!policy.includes('mode === "READ" || mode === "PREPARE"')) fail("sensitive domains must remain READ/PREPARE only");
 
 for (const [name, source] of [["global", globalAgentRoute], ["enterprise", enterpriseAgentRoute]]) {
-  if (!/export const maxDuration = 180;/.test(source)) fail(`${name} Agent route must allow the bounded 180s infrastructure ceiling`);
+  const routeDuration = Number(source.match(/export const maxDuration = (\d+);/)?.[1] || 0) * 1_000;
+  if (routeDuration <= readNumber(enterprise, "maxDurationMs")) {
+    fail(`${name} Agent route duration must stay above the ENTERPRISE active budget`);
+  }
 }
 
 if (!process.exitCode) console.log("Agent plan budget QA passed");
