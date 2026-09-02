@@ -101,13 +101,15 @@ export async function addEnterpriseDocumentVersion({ organizationId, documentId,
   });
 }
 
-export async function archiveEnterpriseDocument(organizationId: string, documentId: string, actorUserId: string, revision: number) {
+export async function archiveEnterpriseDocument(organizationId: string, documentId: string, actorUserId: string, revision: number, reason: string) {
+  const normalizedReason = reason.trim();
+  if (normalizedReason.length < 3) throw new EnterpriseCoreV2Error("Un motif professionnel est obligatoire pour archiver un document.", 400, "DOCUMENT_ARCHIVE_REASON_REQUIRED");
   return prisma.$transaction(async (tx) => {
     const existing = await tx.enterpriseDocument.findFirst({ where: { id: documentId, organizationId, archivedAt: null } });
     if (!existing) throw new EnterpriseCoreV2Error("Document introuvable.", 404, "DOCUMENT_NOT_FOUND");
     const result = await tx.enterpriseDocument.updateMany({ where: { id: documentId, organizationId, revision, archivedAt: null }, data: { status: "ARCHIVED", archivedAt: new Date(), updatedByUserId: actorUserId, revision: { increment: 1 } } });
     if (result.count !== 1) throw new EnterpriseCoreV2Error("Le document a été modifié par un autre utilisateur.", 409, "REVISION_CONFLICT");
-    await addEnterpriseOperationalEvent(tx, { organizationId, entityType: "EnterpriseDocument", entityId: documentId, eventType: "ENTERPRISE_DOCUMENT_ARCHIVED", summary: "Document archivé.", actorUserId, fromStatus: existing.status, toStatus: "ARCHIVED" });
+    await addEnterpriseOperationalEvent(tx, { organizationId, entityType: "EnterpriseDocument", entityId: documentId, eventType: "ENTERPRISE_DOCUMENT_ARCHIVED", summary: normalizedReason, actorUserId, fromStatus: existing.status, toStatus: "ARCHIVED", metadata: { archiveReason: normalizedReason } });
   });
 }
 
