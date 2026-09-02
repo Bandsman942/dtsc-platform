@@ -4,65 +4,29 @@ import { enterpriseApprovalModuleForTarget } from "@/lib/enterprise/approval-tar
 import { prisma } from "@/lib/prisma";
 
 export type ProfessionalApprovalAction = "REQUEST_CORRECTION" | "RESUBMIT" | "DELEGATE";
-
 const CORRECTION_CAPABLE_TARGETS = new Set(["EnterpriseTask", "EnterpriseRequest"]);
 
 export class ApprovalCoordinationError extends Error {
-  constructor(public code: string, public status: number, message: string) {
-    super(message);
-  }
+  constructor(public code: string, public status: number, message: string) { super(message); }
 }
 
-export function supportsProfessionalApprovalCorrection(targetEntityType: string) {
-  return CORRECTION_CAPABLE_TARGETS.has(targetEntityType);
-}
+export function supportsProfessionalApprovalCorrection(targetEntityType: string) { return CORRECTION_CAPABLE_TARGETS.has(targetEntityType); }
 
-export async function ensureApprovalSubmissionVersion(args: {
-  organizationId: string;
-  approvalId: string;
-  actorUserId: string;
-  comment?: string | null;
-}) {
+export async function ensureApprovalSubmissionVersion(args: { organizationId: string; approvalId: string; actorUserId: string; comment?: string | null }) {
   return prisma.$transaction(async (tx) => ensureSubmissionVersionInTransaction(tx, args));
 }
 
-export async function recordApprovalDecision(args: {
-  organizationId: string;
-  approvalId: string;
-  actorUserId: string;
-  decision: "APPROVE" | "REJECT";
-  reason?: string | null;
-  idempotencyKey?: string | null;
-}) {
+export async function recordApprovalDecision(args: { organizationId: string; approvalId: string; actorUserId: string; decision: "APPROVE" | "REJECT"; reason?: string | null; idempotencyKey?: string | null }) {
   return prisma.$transaction(async (tx) => {
     const version = await ensureSubmissionVersionInTransaction(tx, args);
     const key = args.idempotencyKey?.trim() || `approval:${args.approvalId}:version:${version.versionNumber}:actor:${args.actorUserId}:${args.decision}`;
     const existing = await tx.enterpriseApprovalDecision.findUnique({ where: { idempotencyKey: key } });
     if (existing) return existing;
-    return tx.enterpriseApprovalDecision.create({
-      data: {
-        organizationId: args.organizationId,
-        approvalId: args.approvalId,
-        submissionVersionId: version.id,
-        actorUserId: args.actorUserId,
-        decision: args.decision,
-        reason: normalize(args.reason),
-        idempotencyKey: key,
-      },
-    });
+    return tx.enterpriseApprovalDecision.create({ data: { organizationId: args.organizationId, approvalId: args.approvalId, submissionVersionId: version.id, actorUserId: args.actorUserId, decision: args.decision, reason: normalize(args.reason), idempotencyKey: key } });
   });
 }
 
-export async function applyProfessionalApprovalAction(args: {
-  organizationId: string;
-  approvalId: string;
-  actorUserId: string;
-  canManage: boolean;
-  action: ProfessionalApprovalAction;
-  reason?: string | null;
-  delegateUserId?: string | null;
-  revision: number;
-}) {
+export async function applyProfessionalApprovalAction(args: { organizationId: string; approvalId: string; actorUserId: string; canManage: boolean; action: ProfessionalApprovalAction; reason?: string | null; delegateUserId?: string | null; revision: number }) {
   return prisma.$transaction(async (tx) => {
     const approval = await tx.enterpriseApproval.findFirst({ where: { id: args.approvalId, organizationId: args.organizationId, archivedAt: null } });
     if (!approval) throw new ApprovalCoordinationError("NOT_FOUND", 404, "Validation introuvable.");
@@ -75,16 +39,7 @@ export async function applyProfessionalApprovalAction(args: {
       await syncTargetForResubmission(tx, approval.targetEntityType, approval.targetEntityId, args.organizationId);
       const latest = await tx.enterpriseApprovalSubmissionVersion.findFirst({ where: { organizationId: args.organizationId, approvalId: approval.id }, orderBy: { versionNumber: "desc" } });
       const snapshot = await approvalTargetSnapshot(tx, args.organizationId, approval.targetEntityType, approval.targetEntityId);
-      const version = await tx.enterpriseApprovalSubmissionVersion.create({
-        data: {
-          organizationId: args.organizationId,
-          approvalId: approval.id,
-          versionNumber: (latest?.versionNumber || 0) + 1,
-          submittedByUserId: args.actorUserId,
-          snapshotJson: snapshot,
-          submissionComment: normalize(args.reason),
-        },
-      });
+      const version = await tx.enterpriseApprovalSubmissionVersion.create({ data: { organizationId: args.organizationId, approvalId: approval.id, versionNumber: (latest?.versionNumber || 0) + 1, submittedByUserId: args.actorUserId, snapshotJson: snapshot, submissionComment: normalize(args.reason) } });
       const updated = await tx.enterpriseApproval.update({ where: { id: approval.id }, data: { status: "PENDING", decisionComment: null, decidedAt: null, revision: { increment: 1 } } });
       await addApprovalEvent(tx, args.organizationId, approval.id, args.actorUserId, "APPROVAL_RESUBMITTED", `Correction soumise en version ${version.versionNumber}.`, approval.status, updated.status, { submissionVersionId: version.id });
       return { approval: updated, submissionVersion: version };
@@ -92,7 +47,6 @@ export async function applyProfessionalApprovalAction(args: {
 
     if (!args.canManage && approval.approverUserId !== args.actorUserId) throw new ApprovalCoordinationError("FORBIDDEN", 403, "Cette décision n’est pas attribuée à cet utilisateur.");
     if (approval.status !== "PENDING") throw new ApprovalCoordinationError("ALREADY_DECIDED", 409, "Cette validation n’est plus en attente.");
-    if (approval.requestedByUserId === args.actorUserId && !args.canManage) throw new ApprovalCoordinationError("SELF_APPROVAL_FORBIDDEN", 403, "Vous ne pouvez pas décider sur votre propre soumission.");
 
     if (args.action === "DELEGATE") {
       const delegateUserId = args.delegateUserId?.trim();
@@ -113,6 +67,7 @@ export async function applyProfessionalApprovalAction(args: {
       return { approval: updated };
     }
 
+    if (approval.requestedByUserId === args.actorUserId && !args.canManage) throw new ApprovalCoordinationError("SELF_APPROVAL_FORBIDDEN", 403, "Vous ne pouvez pas demander une correction sur votre propre soumission.");
     if (!supportsProfessionalApprovalCorrection(approval.targetEntityType)) throw new ApprovalCoordinationError("TARGET_ACTION_NOT_SUPPORTED", 400, "Ce type de validation ne prend pas en charge le cycle correction / resoumission.");
     const reason = normalize(args.reason);
     if (!reason) throw new ApprovalCoordinationError("CORRECTION_REASON_REQUIRED", 400, "Le motif de correction est obligatoire.");
@@ -130,101 +85,74 @@ async function ensureSubmissionVersionInTransaction(tx: Prisma.TransactionClient
   const approval = await tx.enterpriseApproval.findFirst({ where: { id: args.approvalId, organizationId: args.organizationId, archivedAt: null } });
   if (!approval) throw new ApprovalCoordinationError("NOT_FOUND", 404, "Validation introuvable.");
   const snapshot = await approvalTargetSnapshot(tx, args.organizationId, approval.targetEntityType, approval.targetEntityId);
-  return tx.enterpriseApprovalSubmissionVersion.create({
-    data: {
-      organizationId: args.organizationId,
-      approvalId: approval.id,
-      versionNumber: 1,
-      submittedByUserId: approval.requestedByUserId || args.actorUserId,
-      snapshotJson: snapshot,
-      submissionComment: normalize(args.comment),
-    },
-  });
+  return tx.enterpriseApprovalSubmissionVersion.create({ data: { organizationId: args.organizationId, approvalId: approval.id, versionNumber: 1, submittedByUserId: approval.requestedByUserId || args.actorUserId, snapshotJson: snapshot, submissionComment: normalize(args.comment) } });
 }
 
 async function approvalTargetSnapshot(tx: Prisma.TransactionClient, organizationId: string, entityType: string, entityId: string): Promise<Prisma.InputJsonValue> {
   if (entityType === "EnterpriseTask") {
     const item = await tx.enterpriseTask.findFirst({ where: { id: entityId, organizationId }, select: { id: true, title: true, description: true, status: true, priority: true, assignedToUserId: true, startAt: true, dueAt: true, revision: true, updatedAt: true } });
-    if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Tâche source introuvable.");
-    return serializeSnapshot(item);
+    if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Tâche source introuvable."); return serializeSnapshot(item);
   }
   if (entityType === "EnterpriseRequest") {
     const item = await tx.enterpriseRequest.findFirst({ where: { id: entityId, organizationId }, select: { id: true, requestType: true, title: true, description: true, status: true, priority: true, assignedToUserId: true, dueAt: true, revision: true, updatedAt: true } });
-    if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Demande source introuvable.");
-    return serializeSnapshot(item);
+    if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Demande source introuvable."); return serializeSnapshot(item);
   }
   if (entityType === "EnterpriseMeeting") {
     const item = await tx.enterpriseMeeting.findFirst({ where: { id: entityId, organizationId }, select: { id: true, title: true, agenda: true, status: true, startAt: true, endAt: true, locationMode: true, revision: true, updatedAt: true } });
-    if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Réunion source introuvable.");
-    return serializeSnapshot(item);
+    if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Réunion source introuvable."); return serializeSnapshot(item);
   }
   if (entityType === "EnterprisePurchase") {
     const item = await tx.enterprisePurchase.findFirst({ where: { id: entityId, organizationId }, select: { id: true, reference: true, title: true, description: true, status: true, priority: true, currency: true, totalAmount: true, revision: true, updatedAt: true } });
-    if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Achat source introuvable.");
-    return serializeSnapshot(item);
+    if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Achat source introuvable."); return serializeSnapshot(item);
+  }
+  if (entityType === "EnterpriseStockTransfer") {
+    const item = await tx.enterpriseStockTransfer.findFirst({ where: { id: entityId, organizationId, archivedAt: null }, select: { id: true, reference: true, status: true, sourceWarehouseId: true, destinationWarehouseId: true, notes: true, requestedByUserId: true, approvedByUserId: true, revision: true, updatedAt: true, lines: { select: { id: true, inventoryItemId: true, sourceLocationId: true, destinationLocationId: true, stockLotId: true, quantity: true } } } });
+    if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Transfert de stock source introuvable."); return serializeSnapshot(item);
+  }
+  if (entityType === "EnterpriseInventoryCount") {
+    const item = await tx.enterpriseInventoryCount.findFirst({ where: { id: entityId, organizationId, archivedAt: null }, select: { id: true, reference: true, status: true, countType: true, warehouseId: true, storageLocationId: true, notes: true, requestedByUserId: true, approvedByUserId: true, revision: true, updatedAt: true, lines: { select: { id: true, inventoryItemId: true, stockLotId: true, expectedQuantity: true, countedQuantity: true, varianceQuantity: true } } } });
+    if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Inventaire source introuvable."); return serializeSnapshot(item);
+  }
+  if (entityType === "EnterpriseStockAdjustment") {
+    const item = await tx.enterpriseStockAdjustment.findFirst({ where: { id: entityId, organizationId }, select: { id: true, reference: true, status: true, adjustmentType: true, inventoryItemId: true, warehouseId: true, storageLocationId: true, stockLotId: true, quantity: true, reason: true, requestedByUserId: true, approvedByUserId: true, revision: true, updatedAt: true } });
+    if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Ajustement de stock source introuvable."); return serializeSnapshot(item);
   }
   if (entityType === "EnterpriseBudget") {
-    const item = await tx.enterpriseBudget.findFirst({
-      where: { id: entityId, organizationId },
-      select: {
-        id: true,
-        reference: true,
-        title: true,
-        description: true,
-        status: true,
-        periodStart: true,
-        periodEnd: true,
-        currency: true,
-        departmentId: true,
-        revision: true,
-        updatedAt: true,
-        lines: { select: { id: true, code: true, name: true, category: true, departmentId: true, plannedAmount: true } },
-      },
-    });
-    if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Budget source introuvable.");
-    return serializeSnapshot(item);
+    const item = await tx.enterpriseBudget.findFirst({ where: { id: entityId, organizationId }, select: { id: true, reference: true, title: true, description: true, status: true, periodStart: true, periodEnd: true, currency: true, departmentId: true, revision: true, updatedAt: true, lines: { select: { id: true, code: true, name: true, category: true, departmentId: true, plannedAmount: true } } } });
+    if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Budget source introuvable."); return serializeSnapshot(item);
   }
   if (entityType === "EnterpriseExpense") {
     const item = await tx.enterpriseExpense.findFirst({ where: { id: entityId, organizationId }, select: { id: true, reference: true, title: true, status: true, currency: true, amount: true, revision: true, updatedAt: true } });
-    if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Dépense source introuvable.");
-    return serializeSnapshot(item);
+    if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Dépense source introuvable."); return serializeSnapshot(item);
   }
   if (entityType === "EnterpriseAccountTransfer") {
     const item = await tx.enterpriseAccountTransfer.findFirst({ where: { id: entityId, organizationId }, select: { id: true, number: true, status: true, sourceAmount: true, sourceCurrencyCode: true, targetAmount: true, targetCurrencyCode: true, revision: true, updatedAt: true } });
-    if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Transfert source introuvable.");
-    return serializeSnapshot(item);
+    if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Transfert source introuvable."); return serializeSnapshot(item);
   }
   if (entityType === "EnterpriseLeaveRequest") {
     const item = await tx.enterpriseLeaveRequest.findFirst({ where: { id: entityId, organizationId, archivedAt: null }, select: { id: true, reference: true, leaveType: true, startDate: true, endDate: true, status: true, revision: true, updatedAt: true } });
-    if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Congé source introuvable.");
-    return serializeSnapshot(item);
+    if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Congé source introuvable."); return serializeSnapshot(item);
   }
   if (entityType === "EnterpriseEmploymentContract") {
     const item = await tx.enterpriseEmploymentContract.findFirst({ where: { id: entityId, organizationId, archivedAt: null }, select: { id: true, reference: true, contractType: true, jobTitle: true, status: true, revision: true, updatedAt: true } });
-    if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Contrat de travail source introuvable.");
-    return serializeSnapshot(item);
+    if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Contrat de travail source introuvable."); return serializeSnapshot(item);
   }
   if (entityType === "EnterpriseTimesheet") {
     const item = await tx.enterpriseTimesheet.findFirst({ where: { id: entityId, organizationId, archivedAt: null }, select: { id: true, reference: true, periodStart: true, periodEnd: true, status: true, totalDeclaredMinutes: true, revision: true, updatedAt: true } });
-    if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Feuille de temps source introuvable.");
-    return serializeSnapshot(item);
+    if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Feuille de temps source introuvable."); return serializeSnapshot(item);
   }
   if (entityType === "EnterprisePayrollRun") {
     const item = await tx.enterprisePayrollRun.findFirst({ where: { id: entityId, organizationId, archivedAt: null }, select: { id: true, reference: true, status: true, employeeCount: true, netAmount: true, currency: true, revision: true, updatedAt: true } });
-    if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Paie source introuvable.");
-    return serializeSnapshot(item);
+    if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Paie source introuvable."); return serializeSnapshot(item);
   }
   if (entityType === "PharmacyQualityIncident") {
     const item = await tx.pharmacyQualityIncident.findFirst({ where: { id: entityId, organizationId }, select: { id: true, title: true, description: true, status: true, priority: true, updatedAt: true } });
-    if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Incident qualité source introuvable.");
-    return serializeSnapshot(item);
+    if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Incident qualité source introuvable."); return serializeSnapshot(item);
   }
   throw new ApprovalCoordinationError("TARGET_NOT_SUPPORTED", 400, "Ce type d’objet ne prend pas encore en charge le suivi versionné des validations.");
 }
 
-function serializeSnapshot(value: Record<string, unknown>): Prisma.InputJsonValue {
-  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
-}
+function serializeSnapshot(value: Record<string, unknown>): Prisma.InputJsonValue { return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue; }
 
 async function syncTargetApproverForDelegation(tx: Prisma.TransactionClient, entityType: string, entityId: string, organizationId: string, approverUserId: string) {
   if (entityType === "EnterpriseLeaveRequest") {
@@ -238,6 +166,18 @@ async function syncTargetApproverForDelegation(tx: Prisma.TransactionClient, ent
   if (entityType === "EnterprisePayrollRun") {
     const updated = await tx.enterprisePayrollRun.updateMany({ where: { id: entityId, organizationId, status: "PENDING_APPROVAL", archivedAt: null }, data: { approverUserId, revision: { increment: 1 } } });
     if (updated.count !== 1) throw new ApprovalCoordinationError("TARGET_CONFLICT", 409, "La paie liée a changé pendant la délégation.");
+  }
+  if (entityType === "EnterpriseStockTransfer") {
+    const updated = await tx.enterpriseStockTransfer.updateMany({ where: { id: entityId, organizationId, status: "PENDING_APPROVAL", archivedAt: null }, data: { approvedByUserId: approverUserId, revision: { increment: 1 } } });
+    if (updated.count !== 1) throw new ApprovalCoordinationError("TARGET_CONFLICT", 409, "Le transfert de stock lié a changé pendant la délégation.");
+  }
+  if (entityType === "EnterpriseInventoryCount") {
+    const updated = await tx.enterpriseInventoryCount.updateMany({ where: { id: entityId, organizationId, status: "SUBMITTED", archivedAt: null }, data: { approvedByUserId: approverUserId, revision: { increment: 1 } } });
+    if (updated.count !== 1) throw new ApprovalCoordinationError("TARGET_CONFLICT", 409, "L’inventaire lié a changé pendant la délégation.");
+  }
+  if (entityType === "EnterpriseStockAdjustment") {
+    const updated = await tx.enterpriseStockAdjustment.updateMany({ where: { id: entityId, organizationId, status: "PENDING_APPROVAL" }, data: { approvedByUserId: approverUserId, revision: { increment: 1 } } });
+    if (updated.count !== 1) throw new ApprovalCoordinationError("TARGET_CONFLICT", 409, "L’ajustement de stock lié a changé pendant la délégation.");
   }
 }
 
@@ -267,7 +207,4 @@ async function addApprovalEvent(tx: Prisma.TransactionClient, organizationId: st
   await tx.enterpriseOperationalEvent.create({ data: { organizationId, entityType: "EnterpriseApproval", entityId: approvalId, eventType, summary, actorUserId, fromStatus, toStatus, metadataJson: metadata } });
 }
 
-function normalize(value?: string | null) {
-  const normalized = value?.trim();
-  return normalized ? normalized : null;
-}
+function normalize(value?: string | null) { const normalized = value?.trim(); return normalized ? normalized : null; }
