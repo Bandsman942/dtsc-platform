@@ -4,7 +4,31 @@ import { useAppLocale } from "@/components/i18n/locale-provider";
 import { translateProfessionalErp, type ProfessionalErpKey as BaseProfessionalErpKey } from "@/lib/i18n";
 
 export type ProfessionalErpLocale = "fr" | "en";
-type ProfessionalErpSupplementKey = "common.loadFailed" | "common.loading" | "common.page";
+type ProfessionalErpSupplementKey =
+  | "common.loadFailed"
+  | "common.loading"
+  | "common.page"
+  | "common.previous"
+  | "common.next"
+  | "common.submitting"
+  | "common.saving"
+  | "inventory.rejectionReasonRequired"
+  | "inventory.pendingAdjustments"
+  | "inventory.tabAdjustments"
+  | "inventory.adjustmentSection"
+  | "inventory.adjustmentDescription"
+  | "inventory.adjustmentsAria"
+  | "inventory.adjustmentActions"
+  | "inventory.noAdjustment"
+  | "inventory.noAdjustmentDescription"
+  | "inventory.reviewApprove"
+  | "inventory.reviewReject"
+  | "inventory.decisionReviewDescription"
+  | "inventory.transferKind"
+  | "inventory.countKind"
+  | "inventory.adjustmentKind"
+  | "inventory.rejectionReason"
+  | "inventory.decisionComment";
 export type ProfessionalErpKey = BaseProfessionalErpKey | ProfessionalErpSupplementKey;
 
 export function useProfessionalErpLocale(): ProfessionalErpLocale {
@@ -32,11 +56,53 @@ const professionalSupplements: Record<ProfessionalErpLocale, Record<Professional
     "common.loadFailed": "Impossible de charger les données.",
     "common.loading": "Chargement…",
     "common.page": "Page {{current}} sur {{total}}",
+    "common.previous": "Précédent",
+    "common.next": "Suivant",
+    "common.submitting": "Envoi…",
+    "common.saving": "Enregistrement…",
+    "inventory.rejectionReasonRequired": "Un motif est obligatoire pour rejeter l’opération.",
+    "inventory.pendingAdjustments": "Ajustements en attente",
+    "inventory.tabAdjustments": "Ajustements",
+    "inventory.adjustmentSection": "Ajustements de stock contrôlés",
+    "inventory.adjustmentDescription": "Chaque ajustement est revu indépendamment avant de modifier le journal de stock.",
+    "inventory.adjustmentsAria": "Ajustements de stock",
+    "inventory.adjustmentActions": "Actions de l’ajustement",
+    "inventory.noAdjustment": "Aucun ajustement",
+    "inventory.noAdjustmentDescription": "Les ajustements de stock contrôlés apparaîtront ici.",
+    "inventory.reviewApprove": "Revoir et approuver",
+    "inventory.reviewReject": "Revoir et rejeter",
+    "inventory.decisionReviewDescription": "Vérifiez l’opération avant d’enregistrer votre décision indépendante.",
+    "inventory.transferKind": "Transfert de stock",
+    "inventory.countKind": "Inventaire",
+    "inventory.adjustmentKind": "Ajustement de stock",
+    "inventory.rejectionReason": "Motif du rejet",
+    "inventory.decisionComment": "Commentaire de décision",
   },
   en: {
     "common.loadFailed": "Unable to load data.",
     "common.loading": "Loading…",
     "common.page": "Page {{current}} of {{total}}",
+    "common.previous": "Previous",
+    "common.next": "Next",
+    "common.submitting": "Submitting…",
+    "common.saving": "Saving…",
+    "inventory.rejectionReasonRequired": "A rejection reason is required.",
+    "inventory.pendingAdjustments": "Pending adjustments",
+    "inventory.tabAdjustments": "Adjustments",
+    "inventory.adjustmentSection": "Controlled stock adjustments",
+    "inventory.adjustmentDescription": "Every adjustment is independently reviewed before the stock journal is changed.",
+    "inventory.adjustmentsAria": "Stock adjustments",
+    "inventory.adjustmentActions": "Adjustment actions",
+    "inventory.noAdjustment": "No adjustment",
+    "inventory.noAdjustmentDescription": "Controlled stock adjustments will appear here.",
+    "inventory.reviewApprove": "Review and approve",
+    "inventory.reviewReject": "Review and reject",
+    "inventory.decisionReviewDescription": "Check the operation before recording your independent decision.",
+    "inventory.transferKind": "Stock transfer",
+    "inventory.countKind": "Inventory count",
+    "inventory.adjustmentKind": "Stock adjustment",
+    "inventory.rejectionReason": "Rejection reason",
+    "inventory.decisionComment": "Decision comment",
   },
 };
 
