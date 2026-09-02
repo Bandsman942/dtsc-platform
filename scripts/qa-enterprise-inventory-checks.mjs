@@ -10,6 +10,7 @@ requirePaths([
 ]);
 requireTokens("lib/enterprise/inventory/service.ts", [
   "NEGATIVE_STOCK_FORBIDDEN",
+  "allowNegativeStock",
   "Prisma.TransactionIsolationLevel.Serializable",
   "TRANSFER_OUT",
   "TRANSFER_IN",
@@ -21,4 +22,5 @@ requireTokens("lib/enterprise/procurement/common-domain-adapter.ts", [
   "expectedItemType === \"SERVICE\"",
   "enterprisePurchaseReceiptItemStockLink",
 ]);
+await import("./qa-hotfix-560-supply-integrity.mjs");
 success("enterprise inventory invariants");
