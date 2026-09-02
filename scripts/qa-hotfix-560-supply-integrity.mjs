@@ -24,8 +24,8 @@ requireTokens("lib/enterprise/procurement/validators.ts", [
   "storageLocationId",
 ]);
 requireTokens("lib/enterprise/procurement/purchase-service.ts", [
-  "PURCHASE_REQUEST_REQUIRED",
   "APPROVED_PURCHASE_REQUEST_REQUIRED",
+  "requestType: \"PURCHASE_REQUEST\"",
   "enterprisePurchaseItemCatalogLink",
   "enterprisePurchaseOperationalLink",
   "postEnterprisePurchaseReceiptToInventoryTx",
@@ -33,7 +33,7 @@ requireTokens("lib/enterprise/procurement/purchase-service.ts", [
 requireTokens("lib/enterprise/procurement/common-domain-adapter.ts", [
   "postEnterprisePurchaseReceiptToInventoryTx",
   "PURCHASE_RECEIPT",
-  "expectedItemType === \"SERVICE\"",
+  "expectedItemType === \"GOODS\"",
   "enterprisePurchaseReceiptItemStockLink",
   "STORAGE_LOCATION_NOT_FOUND",
 ]);
