@@ -9,7 +9,7 @@ export const SERVER_LIMITS: Record<SaasPlanCode, AiAgentBudget> = {
     maxToolCalls: 3,
     maxTokens: 8_000,
     maxEstimatedCost: 0.15,
-    maxDurationMs: 30_000,
+    maxDurationMs: 25_000,
     allowedToolModes: ["READ", "PREPARE"],
   },
   BUSINESS: {
@@ -17,7 +17,7 @@ export const SERVER_LIMITS: Record<SaasPlanCode, AiAgentBudget> = {
     maxToolCalls: 10,
     maxTokens: 32_000,
     maxEstimatedCost: 1,
-    maxDurationMs: 90_000,
+    maxDurationMs: 45_000,
     allowedToolModes: ["READ", "PREPARE", "MUTATE"],
   },
   ENTERPRISE: {
@@ -25,7 +25,7 @@ export const SERVER_LIMITS: Record<SaasPlanCode, AiAgentBudget> = {
     maxToolCalls: 20,
     maxTokens: 64_000,
     maxEstimatedCost: 4,
-    maxDurationMs: 150_000,
+    maxDurationMs: 55_000,
     allowedToolModes: ["READ", "PREPARE", "MUTATE"],
   },
 };
