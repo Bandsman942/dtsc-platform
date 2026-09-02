@@ -32,11 +32,15 @@ export const stockTransferCreateSchema = z.object({
   lines: z.array(stockTransferLineSchema).min(1).max(500),
 });
 
-export const stockTransferDecisionSchema = z.object({
+const stockDecisionSchema = z.object({
   decision: z.enum(["APPROVE", "REJECT"]),
   revision: z.coerce.number().int().positive(),
   comment: z.string().trim().max(2000).optional().nullable(),
+}).superRefine((data, ctx) => {
+  if (data.decision === "REJECT" && !data.comment?.trim()) ctx.addIssue({ code: "custom", path: ["comment"], message: "Un motif est obligatoire pour rejeter cette opération." });
 });
+
+export const stockTransferDecisionSchema = stockDecisionSchema;
 
 export const inventoryCountLineSchema = z.object({
   inventoryItemId: z.string().trim().min(1),
@@ -54,11 +58,7 @@ export const inventoryCountCreateSchema = z.object({
   lines: z.array(inventoryCountLineSchema).min(1).max(2000),
 });
 
-export const inventoryCountDecisionSchema = z.object({
-  decision: z.enum(["APPROVE", "REJECT"]),
-  revision: z.coerce.number().int().positive(),
-  comment: z.string().trim().max(2000).optional().nullable(),
-});
+export const inventoryCountDecisionSchema = stockDecisionSchema;
 
 export const stockAdjustmentCreateSchema = z.object({
   inventoryItemId: z.string().trim().min(1),
@@ -72,8 +72,4 @@ export const stockAdjustmentCreateSchema = z.object({
   idempotencyKey: z.string().trim().min(8).max(180).optional().nullable(),
 });
 
-export const stockAdjustmentDecisionSchema = z.object({
-  decision: z.enum(["APPROVE", "REJECT"]),
-  revision: z.coerce.number().int().positive(),
-  comment: z.string().trim().max(2000).optional().nullable(),
-});
+export const stockAdjustmentDecisionSchema = stockDecisionSchema;
