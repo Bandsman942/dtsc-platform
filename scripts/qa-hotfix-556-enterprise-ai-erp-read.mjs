@@ -10,12 +10,14 @@ const includesAll = (content, values, label) => {
 };
 
 const contract = read("lib/ai/tools/erp-contract.ts");
+const assistantPolicy = read("lib/ai/tools/erp-assistant-policy.ts");
 const executor = read("lib/ai/tools/executors/erp.ts");
 const registry = read("lib/ai/tool-registry.ts");
 const schemas = read("lib/ai/tools/schemas.ts");
 const executorIndex = read("lib/ai/tools/executors/index.ts");
 const agentTools = read("lib/ai/agent/tools.ts");
 const runtime = read("lib/ai/agent/runtime.ts");
+const toolResult = read("lib/ai/agent/tool-result.ts");
 const authorize = read("lib/ai/tools/authorize.ts");
 const finance = read("lib/ai/tools/executors/finance.ts");
 
@@ -57,11 +59,19 @@ includesAll(contract, [
   "ERP_AI_TOOL_DEFINITIONS",
   "requiredModuleCodes: [spec.moduleCode]",
   'requiredPermissions: ["ENTERPRISE_AI.TOOLS.READ"]',
-  'allowedAssistantCodes: ["ENTERPRISE_GENERAL"]',
+  "allowedAssistantCodes: assistantCodesForErpModule(spec.moduleCode)",
   'mode: "READ"',
   "requiresConfirmation: false",
   "idempotent: false",
 ], "ERP contract");
+includesAll(assistantPolicy, [
+  '"ENTERPRISE_GENERAL"',
+  '"SHOP_ASSISTANT"',
+  '"PHARMACY_ASSISTANT"',
+  '"HEALTH_ASSISTANT"',
+  '"MOBILE_MONEY_AGENCY"',
+  "assistantCodesForErpModule",
+], "ERP assistant compatibility policy");
 includesAll(registry, ["ERP_AI_TOOL_DEFINITIONS", "...ERP_AI_TOOL_DEFINITIONS"], "Tool registry");
 includesAll(schemas, ["ERP_AI_TOOL_INPUT_SCHEMAS", "ERP_AI_TOOL_OUTPUT_SCHEMAS", "...ERP_AI_TOOL_INPUT_SCHEMAS", "...ERP_AI_TOOL_OUTPUT_SCHEMAS"], "Tool schemas");
 includesAll(executorIndex, ["ERP_AI_TOOL_EXECUTORS", "...ERP_AI_TOOL_EXECUTORS"], "Executor registry");
@@ -75,10 +85,14 @@ includesAll(authorize, [
 ], "Tool authorization");
 
 includesAll(runtime, [
+  'buildAgentToolResultMessage } from "@/lib/ai/agent/tool-result"',
+], "Agent tool result integration");
+includesAll(toolResult, [
   "Ne reproduis pas la structure JSON ni les champs techniques",
   "restitue fidèlement les valeurs métier autorisées",
   "montants, devises, quantités, prix, coûts, marges, dates, références, statuts, noms et libellés",
   "N'invente jamais une valeur absente",
+  "serializeAgentToolResult",
 ], "Post-tool business-value guidance");
 
 includesAll(finance, [
