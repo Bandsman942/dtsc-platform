@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 
 export const ASSISTANT_RESPONSE_STYLES = ["PROFESSIONAL", "DIRECT", "DETAILED", "EXECUTIVE"] as const;
 export const ASSISTANT_RESPONSE_LENGTHS = ["SHORT", "BALANCED", "DETAILED"] as const;
+export const ASSISTANT_REASONING_EFFORTS = ["AUTO", "LOW", "MEDIUM", "HIGH"] as const;
 
 export type AssistantResponseStyle = (typeof ASSISTANT_RESPONSE_STYLES)[number];
 export type AssistantResponseLength = (typeof ASSISTANT_RESPONSE_LENGTHS)[number];
@@ -12,6 +13,7 @@ export type AssistantConversationPreferenceView = {
   modelOverride: string | null;
   responseStyle: string | null;
   responseLength: string | null;
+  reasoningEffort: string;
   useCompanyContext?: boolean;
   useKnowledge: boolean;
   useTools?: boolean;
@@ -116,7 +118,8 @@ export function chatPreferenceView(preference: Awaited<ReturnType<typeof getChat
     modelOverride: preference?.modelOverride || null,
     responseStyle: preference?.responseStyle || null,
     responseLength: preference?.responseLength || null,
-    useCompanyContext: preference?.useCompanyContext ?? true,
+    reasoningEffort: preference?.reasoningEffort || "AUTO",
+    useCompanyContext: false,
     useKnowledge: preference?.useKnowledge ?? true,
     customInstructions: preference?.customInstructions || null,
   };
@@ -128,8 +131,9 @@ export function enterprisePreferenceView(preference: Awaited<ReturnType<typeof g
     modelOverride: preference?.modelOverride || null,
     responseStyle: preference?.responseStyle || "PROFESSIONAL",
     responseLength: preference?.responseLength || "BALANCED",
+    reasoningEffort: preference?.reasoningEffort || "AUTO",
     useKnowledge: preference?.useKnowledge ?? true,
-    useTools: preference?.useTools ?? true,
+    useTools: preference?.useTools ?? false,
     customInstructions: preference?.customInstructions || null,
   };
 }

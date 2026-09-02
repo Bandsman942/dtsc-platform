@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ASSISTANT_RESPONSE_LENGTHS, ASSISTANT_RESPONSE_STYLES } from "@/lib/assistant-conversation-preferences";
+import { ASSISTANT_REASONING_EFFORTS, ASSISTANT_RESPONSE_LENGTHS, ASSISTANT_RESPONSE_STYLES } from "@/lib/assistant-conversation-preferences";
 
 export const enterpriseAiChatSchema = z.object({
   organizationId: z.string().min(1).max(160),
@@ -7,7 +7,8 @@ export const enterpriseAiChatSchema = z.object({
   content: z.string().trim().min(1).max(8_000),
   model: z.string().trim().min(1).max(120).optional().or(z.literal("")),
   useKnowledge: z.coerce.boolean().default(true),
-  useTools: z.coerce.boolean().default(true),
+  useTools: z.coerce.boolean().default(false),
+  reasoningEffort: z.enum(ASSISTANT_REASONING_EFFORTS).default("AUTO"),
 });
 
 export const enterpriseAiKnowledgeUploadSchema = z.object({
@@ -50,6 +51,7 @@ export const enterpriseAiConversationUpdateSchema = z.object({
   modelOverride: z.string().trim().max(120).optional().nullable().or(z.literal("")),
   responseStyle: z.enum(ASSISTANT_RESPONSE_STYLES).optional(),
   responseLength: z.enum(ASSISTANT_RESPONSE_LENGTHS).optional(),
+  reasoningEffort: z.enum(ASSISTANT_REASONING_EFFORTS).optional(),
   useKnowledge: z.boolean().optional(),
   useTools: z.boolean().optional(),
   customInstructions: z.string().trim().max(4_000).optional().nullable().or(z.literal("")),

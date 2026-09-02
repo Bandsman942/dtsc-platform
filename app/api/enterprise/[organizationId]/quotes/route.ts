@@ -84,10 +84,12 @@ export async function POST(req: Request, { params }: Params) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Devis invalide." }, { status: 400 });
   try {
     const quote = await createEnterpriseQuote(organizationId, session.userId, parsed.data);
-    await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_QUOTE_CREATED", entity: "EnterpriseQuote", entityId: quote.id, request: req, metadata: { organizationId, totalAmount: quote.totalAmount.toString(), currency: quote.currency } });
-    await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "quotes" } });
+    await Promise.allSettled([
+      writeAuditLog({ userId: session.userId, action: "ENTERPRISE_QUOTE_CREATED", entity: "EnterpriseQuote", entityId: quote.id, request: req, metadata: { organizationId, totalAmount: quote.totalAmount.toString(), currency: quote.currency } }),
+      writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "quotes" } }),
+    ]);
     return NextResponse.json({ ok: true, quote }, { status: 201 });
   } catch (error) {
-    return enterpriseDomainErrorResponse(error, "QUOTE_CREATE_FAILED");
+    return enterpriseDomainErrorResponse(error, "QUOTE_CREATE_FAILED", req);
   }
 }

@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
@@ -8,6 +8,7 @@ import { createEnterpriseBusinessParty, updateEnterpriseBusinessParty } from "@/
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
+import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -84,12 +85,13 @@ export async function POST(req: Request, { params }: Params) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Tiers invalide." }, { status: 400 });
   try {
     const party = await createEnterpriseBusinessParty(organizationId, session.userId, parsed.data);
-    await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_BUSINESS_PARTY_CREATED", entity: "EnterpriseBusinessParty", entityId: party.id, request: req, metadata: { organizationId, roles: parsed.data.roles } });
-    await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "business-parties" } });
+    await Promise.allSettled([
+      writeAuditLog({ userId: session.userId, action: "ENTERPRISE_BUSINESS_PARTY_CREATED", entity: "EnterpriseBusinessParty", entityId: party.id, request: req, metadata: { organizationId, roles: parsed.data.roles } }),
+      writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "business-parties" } }),
+    ]);
     return NextResponse.json({ ok: true, party }, { status: 201 });
   } catch (error) {
-    const duplicate = error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
-    return NextResponse.json({ error: duplicate ? "BUSINESS_PARTY_DUPLICATE" : "BUSINESS_PARTY_CREATE_FAILED", message: duplicate ? "Un tiers possédant ce code ou cette clé existe déjà." : "Création du tiers impossible." }, { status: duplicate ? 409 : 400 });
+    return enterpriseDomainErrorResponse(error, "BUSINESS_PARTY_CREATE_FAILED", req);
   }
 }
 

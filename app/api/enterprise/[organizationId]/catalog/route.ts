@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
@@ -8,6 +8,7 @@ import { createEnterpriseCatalogItem, updateEnterpriseCatalogItem } from "@/lib/
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
+import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -72,12 +73,13 @@ export async function POST(req: Request, { params }: Params) {
   }
   try {
     const item = await createEnterpriseCatalogItem(organizationId, session.userId, parsed.data);
-    await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_CATALOG_ITEM_CREATED", entity: "EnterpriseCatalogItem", entityId: item.id, request: req, metadata: { organizationId, itemType: item.itemType } });
-    await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "catalog" } });
+    await Promise.allSettled([
+      writeAuditLog({ userId: session.userId, action: "ENTERPRISE_CATALOG_ITEM_CREATED", entity: "EnterpriseCatalogItem", entityId: item.id, request: req, metadata: { organizationId, itemType: item.itemType } }),
+      writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "catalog" } }),
+    ]);
     return NextResponse.json({ ok: true, item }, { status: 201 });
   } catch (error) {
-    const duplicate = error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
-    return NextResponse.json({ error: duplicate ? "CATALOG_ITEM_DUPLICATE" : "CATALOG_ITEM_CREATE_FAILED", message: duplicate ? "Un article possédant ce code ou ce SKU existe déjà." : "Création de l’article impossible." }, { status: duplicate ? 409 : 400 });
+    return enterpriseDomainErrorResponse(error, "CATALOG_ITEM_CREATE_FAILED", req);
   }
 }
 

@@ -1,7 +1,7 @@
 import { AiProviderError, classifyProviderHttpError } from "@/lib/ai/errors";
 import type { AiProviderEvent } from "@/lib/ai/provider-events";
 import { buildOpenAiResponsesInput } from "@/lib/ai/providers/message-format";
-import type { AiModelDefinition, AiProviderDefinition, AiProviderInputMessage, AiProviderToolDefinition } from "@/lib/ai/types";
+import type { AiModelDefinition, AiProviderDefinition, AiProviderInputMessage, AiProviderToolDefinition, AiReasoningEffort } from "@/lib/ai/types";
 
 type NativeOpenAiEvent = {
   type?: string;
@@ -129,6 +129,7 @@ export async function createOpenAiResponsesEventStream({
   instructions,
   tools,
   signal,
+  reasoningEffort,
 }: {
   provider: AiProviderDefinition;
   model: AiModelDefinition;
@@ -136,6 +137,7 @@ export async function createOpenAiResponsesEventStream({
   instructions: string;
   tools?: AiProviderToolDefinition[];
   signal?: AbortSignal;
+  reasoningEffort?: AiReasoningEffort | null;
 }): Promise<ReadableStream<AiProviderEvent>> {
   const apiKey = process.env[provider.apiKeyEnv];
   if (!apiKey) {
@@ -161,6 +163,7 @@ export async function createOpenAiResponsesEventStream({
           tool_choice: "auto",
         } : {}),
         ...(model.capabilities.reasoning ? { include: ["reasoning.encrypted_content"] } : {}),
+        ...(model.capabilities.reasoning && reasoningEffort && reasoningEffort !== "AUTO" ? { reasoning: { effort: reasoningEffort.toLowerCase() } } : {}),
         stream: true,
         store: false,
       }),

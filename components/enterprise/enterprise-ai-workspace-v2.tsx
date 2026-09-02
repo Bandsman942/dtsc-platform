@@ -27,9 +27,9 @@ type Filter = "ALL" | "PINNED" | "ARCHIVED";
 type Tab = "chat" | "sources" | "history" | "usage" | "settings";
 
 const DEFAULT_SETTINGS: SettingsState = { enabled: true, defaultLanguage: "fr", allowKnowledgeUpload: true, allowReadTools: true, allowActionDrafts: true, retentionDays: 365 };
-const EMPTY_PREFERENCE: Preference = { pinnedAt: null, modelOverride: null, responseStyle: "PROFESSIONAL", responseLength: "BALANCED", useKnowledge: true, useTools: true, customInstructions: null };
+const EMPTY_PREFERENCE: Preference = { pinnedAt: null, modelOverride: null, responseStyle: "PROFESSIONAL", responseLength: "BALANCED", reasoningEffort: "AUTO", useKnowledge: true, useTools: false, customInstructions: null };
 
-export function EnterpriseAiWorkspaceV2({ organizationId, organizationName, sectorCode, canManage, models }: { organizationId: string; organizationName: string; sectorCode: string | null; canManage: boolean; models: Array<{ id: string; label: string }> }) {
+export function EnterpriseAiWorkspaceV2({ organizationId, organizationName, sectorCode, canManage, models }: { organizationId: string; organizationName: string; sectorCode: string | null; canManage: boolean; models: Array<{ id: string; label: string; reasoning?: boolean }> }) {
   const locale = useAppLocale() || "fr";
   const en = locale === "en";
   const [activeTab, setActiveTab] = useState<Tab>("chat");
@@ -99,7 +99,7 @@ export function EnterpriseAiWorkspaceV2({ organizationId, organizationName, sect
   useEffect(() => { void refreshAll(); void loadGroups(); }, [loadGroups, refreshAll]);
   useEffect(() => { const conversation = conversations.find((item) => item.id === activeConversationId); if (conversation) setMessages(conversation.messages || []); }, [activeConversationId, conversations]);
   useEffect(() => { const node = messageScrollRef.current; if (!node || !followOutputRef.current) return; const frame = requestAnimationFrame(() => { node.scrollTop = node.scrollHeight; }); return () => cancelAnimationFrame(frame); }, [messages, loadingChat]);
-  useEffect(() => { setSettingsDraft({ modelOverride: activePreference.modelOverride, responseStyle: activePreference.responseStyle || "PROFESSIONAL", responseLength: activePreference.responseLength || "BALANCED", useKnowledge: activePreference.useKnowledge ?? true, useTools: activePreference.useTools ?? true, customInstructions: activePreference.customInstructions }); }, [activeConversationId, activePreference.modelOverride, activePreference.responseStyle, activePreference.responseLength, activePreference.useKnowledge, activePreference.useTools, activePreference.customInstructions]);
+  useEffect(() => { setSettingsDraft({ modelOverride: activePreference.modelOverride, responseStyle: activePreference.responseStyle || "PROFESSIONAL", responseLength: activePreference.responseLength || "BALANCED", reasoningEffort: activePreference.reasoningEffort || "AUTO", useKnowledge: activePreference.useKnowledge ?? true, useTools: activePreference.useTools ?? false, customInstructions: activePreference.customInstructions }); }, [activeConversationId, activePreference.modelOverride, activePreference.responseStyle, activePreference.responseLength, activePreference.reasoningEffort, activePreference.useKnowledge, activePreference.useTools, activePreference.customInstructions]);
 
   async function createConversation(projectId?: string) {
     const response = await fetch("/api/enterprise/ai/conversations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId, projectId: projectId || "" }) }); const body = await response.json().catch(() => null);
@@ -123,7 +123,7 @@ export function EnterpriseAiWorkspaceV2({ organizationId, organizationName, sect
     const userDraft: ChatMessage = { id: `draft-${Date.now()}`, role: "user", content: trimmed, createdAt: new Date().toISOString() }; const assistantDraftId = `assistant-${Date.now()}`;
     setMessages((current) => [...current, userDraft, { id: assistantDraftId, role: "assistant", content: "", createdAt: new Date().toISOString() }]); setMessage("");
     try {
-      const response = await fetch("/api/enterprise/ai/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId, conversationId: activeConversationId || "", content: trimmed, useKnowledge: settingsDraft.useKnowledge, useTools: settingsDraft.useTools }) });
+      const response = await fetch("/api/enterprise/ai/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId, conversationId: activeConversationId || "", content: trimmed, useKnowledge: settingsDraft.useKnowledge, useTools: settingsDraft.useTools, reasoningEffort: settingsDraft.reasoningEffort }) });
       if (!response.ok || !response.body) { const body = await response.json().catch(() => null); throw new Error(body?.message || (en ? "AI response unavailable." : "Réponse IA impossible.")); }
       const conversationId = response.headers.get("X-Conversation-Id"); if (conversationId) setActiveConversationId(conversationId);
       const reader = response.body.getReader(); const decoder = new TextDecoder(); while (true) { const { done, value } = await reader.read(); if (done) break; const chunk = decoder.decode(value, { stream: true }); setMessages((current) => current.map((item) => item.id === assistantDraftId ? { ...item, content: item.content + chunk } : item)); }

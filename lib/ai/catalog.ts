@@ -212,6 +212,7 @@ export function listCatalogAiModelsForUi(input: AiAvailabilityInput) {
     minimumPlan: model.minimumPlan || null,
     profileCodes: model.profileCodes || [],
     certificationVersion: model.certificationVersion || null,
+    reasoning: model.capabilities.reasoning,
   }));
 }
 

@@ -62,13 +62,13 @@ export async function POST(req: Request, { params }: Params) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Opportunité invalide." }, { status: 400 });
   try {
     const opportunity = await createEnterpriseOpportunity(organizationId, session.userId, parsed.data);
-    if (parsed.data.ownerUserId && parsed.data.ownerUserId !== session.userId) {
-      await notifyUser({ userId: parsed.data.ownerUserId, organizationId, type: "ENTERPRISE_CRM", title: "Nouvelle opportunité affectée", body: opportunity.name, targetUrl: `/enterprise-modules/CRM_PIPELINE?opportunity=${encodeURIComponent(opportunity.id)}&section=next-action`, idempotencyKey: `opportunity-assigned:${opportunity.id}` });
-    }
-    await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_OPPORTUNITY_CREATED", entity: "EnterpriseOpportunity", entityId: opportunity.id, request: req, metadata: { organizationId } });
-    await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "opportunities" } });
+    await Promise.allSettled([
+      ...(parsed.data.ownerUserId && parsed.data.ownerUserId !== session.userId ? [notifyUser({ userId: parsed.data.ownerUserId, organizationId, type: "ENTERPRISE_CRM", title: "Nouvelle opportunité affectée", body: opportunity.name, targetUrl: `/enterprise-modules/CRM_PIPELINE?opportunity=${encodeURIComponent(opportunity.id)}&section=next-action`, idempotencyKey: `opportunity-assigned:${opportunity.id}` })] : []),
+      writeAuditLog({ userId: session.userId, action: "ENTERPRISE_OPPORTUNITY_CREATED", entity: "EnterpriseOpportunity", entityId: opportunity.id, request: req, metadata: { organizationId } }),
+      writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "opportunities" } }),
+    ]);
     return NextResponse.json({ ok: true, opportunity }, { status: 201 });
   } catch (error) {
-    return enterpriseDomainErrorResponse(error, "OPPORTUNITY_CREATE_FAILED");
+    return enterpriseDomainErrorResponse(error, "OPPORTUNITY_CREATE_FAILED", req);
   }
 }

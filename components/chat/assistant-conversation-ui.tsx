@@ -11,6 +11,7 @@ export type AssistantPreferenceState = {
   modelOverride: string | null;
   responseStyle: string | null;
   responseLength: string | null;
+  reasoningEffort: string;
   useCompanyContext?: boolean;
   useKnowledge: boolean;
   useTools?: boolean;
@@ -180,17 +181,19 @@ export function AssistantConversationSettingsDialog({
   preference: AssistantPreferenceState;
   onChange: (next: AssistantPreferenceState) => void;
   onSave: () => void;
-  models: Array<{ id: string; label: string }>;
+  models: Array<{ id: string; label: string; reasoning?: boolean }>;
   sourceOptions: Array<{ key: "useCompanyContext" | "useKnowledge" | "useTools"; label: string; description: string; disabled?: boolean }>;
   locale?: string | null;
 }) {
   const en = locale === "en";
+  const selectedModel = models.find((model) => model.id === preference.modelOverride);
+  const reasoningAvailable = !preference.modelOverride || Boolean(selectedModel?.reasoning);
   return (
     <Dialog open={open} title={title} description={en ? "These settings apply only to this conversation." : "Ces réglages s’appliquent uniquement à cette conversation."} onClose={onClose} className="max-h-[92dvh] max-w-2xl overflow-y-auto">
       <div className="grid gap-5">
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="grid gap-1.5 text-sm font-black text-dtsc-ink">{en ? "Model" : "Modèle"}
-            <select value={preference.modelOverride || ""} onChange={(event) => onChange({ ...preference, modelOverride: event.target.value || null })} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-semibold">
+            <select value={preference.modelOverride || ""} onChange={(event) => { const modelOverride = event.target.value || null; const nextModel = models.find((model) => model.id === modelOverride); onChange({ ...preference, modelOverride, reasoningEffort: modelOverride && !nextModel?.reasoning ? "AUTO" : preference.reasoningEffort }); }} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-semibold">
               <option value="">{en ? "Automatic / account default" : "Automatique / défaut du compte"}</option>
               {models.map((model) => <option key={model.id} value={model.id}>{model.label}</option>)}
             </select>
@@ -204,6 +207,12 @@ export function AssistantConversationSettingsDialog({
             <select value={preference.responseLength || "BALANCED"} onChange={(event) => onChange({ ...preference, responseLength: event.target.value })} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-semibold">
               <option value="SHORT">{en ? "Short" : "Courte"}</option><option value="BALANCED">{en ? "Balanced" : "Équilibrée"}</option><option value="DETAILED">{en ? "Detailed" : "Détaillée"}</option>
             </select>
+          </label>
+          <label className="grid gap-1.5 text-sm font-black text-dtsc-ink">{en ? "Reasoning level" : "Niveau de raisonnement"}
+            <select value={reasoningAvailable ? preference.reasoningEffort : "AUTO"} disabled={!reasoningAvailable} onChange={(event) => onChange({ ...preference, reasoningEffort: event.target.value })} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-semibold disabled:opacity-50">
+              <option value="AUTO">{en ? "Automatic" : "Automatique"}</option><option value="LOW">{en ? "Low" : "Faible"}</option><option value="MEDIUM">{en ? "Medium" : "Moyen"}</option><option value="HIGH">{en ? "High" : "Élevé"}</option>
+            </select>
+            <span className="text-xs font-semibold text-dtsc-muted">{reasoningAvailable ? (en ? "Controls effort without exposing private reasoning." : "Ajuste l’effort sans exposer le raisonnement interne.") : (en ? "This model does not support configurable reasoning." : "Ce modèle ne permet pas de régler le raisonnement.")}</span>
           </label>
         </div>
         <div className="grid gap-2">
