@@ -25,21 +25,29 @@ const approvalMessages = {
   },
 } as const;
 
+const siteTypeSupplements = {
+  fr: {
+    ESTABLISHMENT: "Établissement",
+    CENTER: "Centre",
+    DEPOT: "Dépôt",
+    FIELD_SITE: "Site terrain",
+  },
+  en: {
+    ESTABLISHMENT: "Establishment",
+    CENTER: "Center",
+    DEPOT: "Depot",
+    FIELD_SITE: "Field site",
+  },
+} as const;
+
 export type ProfessionalErpApprovalMessageCode = keyof typeof approvalMessages.fr;
 
-export function professionalErpApprovalMessage(
-  locale: ProfessionalErpLocale,
-  code: string | null | undefined,
-) {
+export function professionalErpApprovalMessage(locale: ProfessionalErpLocale, code: string | null | undefined) {
   const key = code as ProfessionalErpApprovalMessageCode;
   return approvalMessages[locale][key] || approvalMessages[locale].APPROVER_ELIGIBILITY_CHECK_FAILED;
 }
 
-export function professionalErpT(
-  locale: ProfessionalErpLocale,
-  key: ProfessionalErpKey,
-  values?: Record<string, string | number>,
-) {
+export function professionalErpT(locale: ProfessionalErpLocale, key: ProfessionalErpKey, values?: Record<string, string | number>) {
   let text = translateProfessionalErp(locale, key);
   if (!values) return text;
   for (const [name, value] of Object.entries(values)) text = text.replaceAll(`{{${name}}}`, String(value));
@@ -87,54 +95,40 @@ export function professionalErpEnumLabel(
     | "payrollStatus",
   value: string,
 ) {
+  if (group === "siteType") {
+    const supplemented = siteTypeSupplements[locale][value as keyof typeof siteTypeSupplements.fr];
+    if (supplemented) return supplemented;
+  }
   const key = `${group}.${value}` as ProfessionalErpKey;
   const localized = translateProfessionalErp(locale, key);
   return localized || professionalErpT(locale, "common.valueToReview");
 }
 
-export function professionalErpMoney(
-  value: string | number | null | undefined,
-  currency: string | null | undefined,
-  locale: ProfessionalErpLocale,
-) {
+export function professionalErpMoney(value: string | number | null | undefined, currency: string | null | undefined, locale: ProfessionalErpLocale) {
   if (value === null || value === undefined || value === "") return professionalErpT(locale, "common.amountToDefine");
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return professionalErpT(locale, "common.amountToDefine");
   try {
-    return new Intl.NumberFormat(locale === "en" ? "en-US" : "fr-FR", {
-      style: "currency",
-      currency: currency || "USD",
-      maximumFractionDigits: 2,
-    }).format(numeric);
+    return new Intl.NumberFormat(locale === "en" ? "en-US" : "fr-FR", { style: "currency", currency: currency || "USD", maximumFractionDigits: 2 }).format(numeric);
   } catch {
     return `${numeric.toFixed(2)} ${currency || "USD"}`;
   }
 }
 
-export function professionalErpNumber(
-  value: string | number | null | undefined,
-  locale: ProfessionalErpLocale,
-  maximumFractionDigits = 3,
-) {
+export function professionalErpNumber(value: string | number | null | undefined, locale: ProfessionalErpLocale, maximumFractionDigits = 3) {
   const numeric = Number(value ?? 0);
   if (!Number.isFinite(numeric)) return "0";
   return new Intl.NumberFormat(locale === "en" ? "en-US" : "fr-FR", { maximumFractionDigits }).format(numeric);
 }
 
-export function professionalErpDate(
-  value: string | null | undefined,
-  locale: ProfessionalErpLocale,
-) {
+export function professionalErpDate(value: string | null | undefined, locale: ProfessionalErpLocale) {
   if (!value) return professionalErpT(locale, "common.notScheduled");
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return professionalErpT(locale, "common.notScheduled");
   return new Intl.DateTimeFormat(locale === "en" ? "en-US" : "fr-FR", { dateStyle: "medium" }).format(date);
 }
 
-export function professionalErpDateTime(
-  value: string | null | undefined,
-  locale: ProfessionalErpLocale,
-) {
+export function professionalErpDateTime(value: string | null | undefined, locale: ProfessionalErpLocale) {
   if (!value) return professionalErpT(locale, "common.notScheduled");
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return professionalErpT(locale, "common.notScheduled");
