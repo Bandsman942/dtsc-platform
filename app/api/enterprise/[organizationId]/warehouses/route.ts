@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
+import { assertWarehouseCanBecomeInactive, locationIntegrityMessage } from "@/lib/enterprise/master-data/location-integrity";
 import { warehouseCreateSchema, warehouseUpdateSchema } from "@/lib/enterprise/master-data/schemas";
 import { createEnterpriseWarehouse, updateEnterpriseWarehouse } from "@/lib/enterprise/master-data/service";
 import { prisma } from "@/lib/prisma";
@@ -64,7 +65,6 @@ export async function POST(req: Request, { params }: Params) {
   }
 }
 
-
 export async function PATCH(req: Request, { params }: Params) {
   const startedAt = Date.now();
   if (!isSameOriginRequest(req)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -78,11 +78,14 @@ export async function PATCH(req: Request, { params }: Params) {
   const parsed = warehouseUpdateSchema.safeParse(raw);
   if (!entityId || !parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.success ? "Référence manquante." : parsed.error.issues[0]?.message || "Entrepôt invalide." }, { status: 400 });
   try {
+    if (parsed.data.status === "INACTIVE") await prisma.$transaction((tx) => assertWarehouseCanBecomeInactive(tx, organizationId, entityId), { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     const entity = await updateEnterpriseWarehouse(organizationId, entityId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_WAREHOUSE_UPDATED", entity: "EnterpriseWarehouse", entityId, request: req, metadata: { organizationId } });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, action: "update" } });
     return NextResponse.json({ ok: true, entity });
   } catch (error) {
+    const integrityMessage = locationIntegrityMessage(error);
+    if (integrityMessage) return NextResponse.json({ error: error instanceof Error ? error.message : "WAREHOUSE_INTEGRITY_CONFLICT", message: integrityMessage }, { status: 409 });
     const message = error instanceof Error ? error.message : "UPDATE_FAILED";
     const conflict = message === "REVISION_CONFLICT";
     return NextResponse.json({ error: message, message: conflict ? "L’élément a été modifié par un autre utilisateur. Actualisez avant de réessayer." : "Modification impossible." }, { status: conflict ? 409 : 400 });

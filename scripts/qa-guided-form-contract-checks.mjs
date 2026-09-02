@@ -15,6 +15,8 @@ const erpUi = read("components/enterprise/core-v2/erp-v2-ui.tsx");
 const referenceCatalog = read("lib/forms/reference-catalog.ts");
 const referenceSelect = read("components/ui/reference-select.tsx");
 const purchases = read("components/enterprise/core-v2/enterprise-purchases-workspace.tsx");
+const operationalLookups = read("app/api/enterprise/[organizationId]/operational-lookups/route.ts");
+const purchaseService = read("lib/enterprise/procurement/purchase-service.ts");
 const purchaseCopy = read("lib/enterprise/purchase-form-i18n.ts");
 const contract = read("docs/ENTERPRISE_FORM_UX_CONTRACT.md");
 
@@ -45,9 +47,27 @@ expect("Canonical reference selector renders a real select", referenceSelect.inc
 
 expect("Purchase form declares the guided-form contract", purchases.includes('data-dtsc-guided-form="purchase"'));
 expect("Purchase currency uses a controlled selector", purchases.includes('items={currencyChoices(locale)}') && !purchases.includes('<Input name="currency"'));
-expect("Purchase unit uses a controlled selector", purchases.includes('items={unitChoices(locale)}') && !purchases.includes('<Input value={item.unit}'));
+expect(
+  "Purchase unit is derived from the selected catalog item",
+  purchases.includes("unitOfMeasure:") &&
+    purchases.includes("catalog.unitOfMeasure.symbol || catalog.unitOfMeasure.code") &&
+    purchases.includes("data-dtsc-canonical-unit") &&
+    purchases.includes('guide("unit")') &&
+    purchases.includes('guide("unitHelp")') &&
+    !purchases.includes('<Input value={item.unit}') &&
+    !purchases.includes('items={unitChoices(locale)}'),
+);
+expect(
+  "Operational lookups expose the catalog unit without creating a second reference source",
+  operationalLookups.includes('unitOfMeasure: { select: { id: true, code: true, symbol: true, name: true } }'),
+);
+expect(
+  "Purchase service remains authoritative for the persisted unit",
+  purchaseService.includes("const canonicalUnit = catalogItem.unitOfMeasure.symbol || catalogItem.unitOfMeasure.code || item.unit") &&
+    purchaseService.includes("unit: canonicalUnit"),
+);
 expect("Purchase form uses contextual help broadly", (purchases.match(/help=\{guide\(/g) || []).length >= 14);
-expect("Purchase lines expose explicit business labels", purchases.includes('guide("lineDescription")') && purchases.includes('guide("quantity")') && purchases.includes('guide("unitPrice")') && purchases.includes('guide("taxRate")'));
+expect("Purchase lines expose explicit business labels", purchases.includes('guide("lineDescription")') && purchases.includes('guide("quantity")') && purchases.includes('guide("unit")') && purchases.includes('guide("unitPrice")') && purchases.includes('guide("taxRate")'));
 expect("Purchase form keeps mobile-safe minmax grids", purchases.includes('grid-cols-[minmax(0,1fr)]'));
 
 expect("Purchase guidance is bilingual", purchaseCopy.includes("fr: {") && purchaseCopy.includes("en: {") && purchaseCopy.includes("currency:") && purchaseCopy.includes("unitHelp:"));
@@ -61,4 +81,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log("PASS guided form UX contract: visible guidance, accessible descriptions, canonical currency/unit catalogs and responsive purchase form are enforced.");
+console.log("PASS guided form UX contract: visible guidance, accessible descriptions, canonical reference catalogs, catalog-authoritative purchase units and responsive purchase form are enforced.");

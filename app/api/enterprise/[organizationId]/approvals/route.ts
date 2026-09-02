@@ -19,20 +19,27 @@ type ApprovalTargetSummary = { type: string; id: string; title: string; priority
 
 async function targetSummaries(organizationId: string, search = "") {
   const contains = search ? { contains: search, mode: "insensitive" as const } : undefined;
-  const [tasks, requests, meetings, purchases, budgets, expenses, incidents] = await Promise.all([
-    prisma.enterpriseTask.findMany({ where: { organizationId, archivedAt: null, ...(contains ? { title: contains } : {}) }, select: { id: true, title: true, priority: true, status: true }, take: search ? 80 : 0 }),
-    prisma.enterpriseRequest.findMany({ where: { organizationId, archivedAt: null, ...(contains ? { title: contains } : {}) }, select: { id: true, title: true, priority: true, status: true }, take: search ? 80 : 0 }),
-    prisma.enterpriseMeeting.findMany({ where: { organizationId, archivedAt: null, ...(contains ? { title: contains } : {}) }, select: { id: true, title: true, status: true }, take: search ? 80 : 0 }),
-    prisma.enterprisePurchase.findMany({ where: { organizationId, archivedAt: null, ...(contains ? { title: contains } : {}) }, select: { id: true, title: true, priority: true, status: true }, take: search ? 80 : 0 }),
-    prisma.enterpriseBudget.findMany({ where: { organizationId, archivedAt: null, ...(contains ? { title: contains } : {}) }, select: { id: true, title: true, status: true }, take: search ? 80 : 0 }),
-    prisma.enterpriseExpense.findMany({ where: { organizationId, archivedAt: null, ...(contains ? { title: contains } : {}) }, select: { id: true, title: true, status: true }, take: search ? 80 : 0 }),
-    prisma.pharmacyQualityIncident.findMany({ where: { organizationId, ...(contains ? { title: contains } : {}) }, select: { id: true, title: true, priority: true, status: true }, take: search ? 80 : 0 }),
+  const take = search ? 80 : 0;
+  const [tasks, requests, meetings, purchases, stockTransfers, inventoryCounts, stockAdjustments, budgets, expenses, incidents] = await Promise.all([
+    prisma.enterpriseTask.findMany({ where: { organizationId, archivedAt: null, ...(contains ? { title: contains } : {}) }, select: { id: true, title: true, priority: true, status: true }, take }),
+    prisma.enterpriseRequest.findMany({ where: { organizationId, archivedAt: null, ...(contains ? { title: contains } : {}) }, select: { id: true, title: true, priority: true, status: true }, take }),
+    prisma.enterpriseMeeting.findMany({ where: { organizationId, archivedAt: null, ...(contains ? { title: contains } : {}) }, select: { id: true, title: true, status: true }, take }),
+    prisma.enterprisePurchase.findMany({ where: { organizationId, archivedAt: null, ...(contains ? { OR: [{ title: contains }, { reference: contains }] } : {}) }, select: { id: true, reference: true, title: true, priority: true, status: true }, take }),
+    prisma.enterpriseStockTransfer.findMany({ where: { organizationId, archivedAt: null, ...(contains ? { reference: contains } : {}) }, select: { id: true, reference: true, status: true }, take }),
+    prisma.enterpriseInventoryCount.findMany({ where: { organizationId, archivedAt: null, ...(contains ? { reference: contains } : {}) }, select: { id: true, reference: true, status: true }, take }),
+    prisma.enterpriseStockAdjustment.findMany({ where: { organizationId, ...(contains ? { reference: contains } : {}) }, select: { id: true, reference: true, status: true }, take }),
+    prisma.enterpriseBudget.findMany({ where: { organizationId, archivedAt: null, ...(contains ? { title: contains } : {}) }, select: { id: true, title: true, status: true }, take }),
+    prisma.enterpriseExpense.findMany({ where: { organizationId, archivedAt: null, ...(contains ? { title: contains } : {}) }, select: { id: true, title: true, status: true }, take }),
+    prisma.pharmacyQualityIncident.findMany({ where: { organizationId, ...(contains ? { title: contains } : {}) }, select: { id: true, title: true, priority: true, status: true }, take }),
   ]);
   const map = new Map<string, ApprovalTargetSummary>();
   for (const item of tasks) map.set(`EnterpriseTask:${item.id}`, { type: "EnterpriseTask", ...item });
   for (const item of requests) map.set(`EnterpriseRequest:${item.id}`, { type: "EnterpriseRequest", ...item });
   for (const item of meetings) map.set(`EnterpriseMeeting:${item.id}`, { type: "EnterpriseMeeting", ...item });
-  for (const item of purchases) map.set(`EnterprisePurchase:${item.id}`, { type: "EnterprisePurchase", ...item });
+  for (const item of purchases) map.set(`EnterprisePurchase:${item.id}`, { type: "EnterprisePurchase", id: item.id, title: `${item.reference} · ${item.title}`, priority: item.priority, status: item.status });
+  for (const item of stockTransfers) map.set(`EnterpriseStockTransfer:${item.id}`, { type: "EnterpriseStockTransfer", id: item.id, title: item.reference, status: item.status });
+  for (const item of inventoryCounts) map.set(`EnterpriseInventoryCount:${item.id}`, { type: "EnterpriseInventoryCount", id: item.id, title: item.reference, status: item.status });
+  for (const item of stockAdjustments) map.set(`EnterpriseStockAdjustment:${item.id}`, { type: "EnterpriseStockAdjustment", id: item.id, title: item.reference, status: item.status });
   for (const item of budgets) map.set(`EnterpriseBudget:${item.id}`, { type: "EnterpriseBudget", ...item });
   for (const item of expenses) map.set(`EnterpriseExpense:${item.id}`, { type: "EnterpriseExpense", ...item });
   for (const item of incidents) map.set(`PharmacyQualityIncident:${item.id}`, { type: "PharmacyQualityIncident", ...item });
@@ -56,6 +63,7 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params; const access = await getEnterpriseCoreV2Access({ session, organizationId, moduleCode: "VALIDATIONS", action: "read" }); if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const url = new URL(req.url); const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1); const pageSize = Math.min(50, Math.max(5, Number(url.searchParams.get("pageSize") || 20) || 20)); const queue = url.searchParams.get("queue") || "pending"; const explicitStatus = url.searchParams.get("status")?.trim() || ""; const targetEntityType = url.searchParams.get("entityType")?.trim() || ""; const search = url.searchParams.get("search")?.trim() || ""; const from = url.searchParams.get("from"); const to = url.searchParams.get("to"); const filters: Prisma.EnterpriseApprovalWhereInput[] = [];
   if (queue === "pending") filters.push({ approverUserId: session.userId, status: "PENDING" });
+  if (queue === "corrections") filters.push({ OR: [{ requestedByUserId: session.userId, status: "CORRECTION_REQUESTED" }, { approverUserId: session.userId, status: "CORRECTION_REQUESTED" }] });
   if (queue === "treated") filters.push({ approverUserId: session.userId, status: { in: ["APPROVED", "REJECTED", "CANCELLED"] } });
   if (explicitStatus) filters.push({ status: explicitStatus }); if (targetEntityType) filters.push({ targetEntityType }); if (from || to) { const requestedAt: { gte?: Date; lte?: Date } = {}; if (from) requestedAt.gte = new Date(from); if (to) requestedAt.lte = new Date(to); filters.push({ requestedAt }); }
   const matchingTargets = search ? await targetSummaries(organizationId, search) : new Map<string, ApprovalTargetSummary>();
@@ -69,16 +77,30 @@ export async function GET(req: Request, { params }: Params) {
 
 async function resolveTargets(organizationId: string, approvals: Array<{ targetEntityType: string; targetEntityId: string }>) {
   const byType = new Map<string, string[]>(); for (const approval of approvals) byType.set(approval.targetEntityType, [...(byType.get(approval.targetEntityType) || []), approval.targetEntityId]);
-  const [tasks, requests, meetings, purchases, budgets, expenses, incidents] = await Promise.all([
+  const [tasks, requests, meetings, purchases, stockTransfers, inventoryCounts, stockAdjustments, budgets, expenses, incidents] = await Promise.all([
     prisma.enterpriseTask.findMany({ where: { organizationId, id: { in: byType.get("EnterpriseTask") || [] } }, select: { id: true, title: true, priority: true, status: true } }),
     prisma.enterpriseRequest.findMany({ where: { organizationId, id: { in: byType.get("EnterpriseRequest") || [] } }, select: { id: true, title: true, priority: true, status: true } }),
     prisma.enterpriseMeeting.findMany({ where: { organizationId, id: { in: byType.get("EnterpriseMeeting") || [] } }, select: { id: true, title: true, status: true } }),
-    prisma.enterprisePurchase.findMany({ where: { organizationId, id: { in: byType.get("EnterprisePurchase") || [] } }, select: { id: true, title: true, priority: true, status: true } }),
+    prisma.enterprisePurchase.findMany({ where: { organizationId, id: { in: byType.get("EnterprisePurchase") || [] } }, select: { id: true, reference: true, title: true, priority: true, status: true } }),
+    prisma.enterpriseStockTransfer.findMany({ where: { organizationId, id: { in: byType.get("EnterpriseStockTransfer") || [] } }, select: { id: true, reference: true, status: true } }),
+    prisma.enterpriseInventoryCount.findMany({ where: { organizationId, id: { in: byType.get("EnterpriseInventoryCount") || [] } }, select: { id: true, reference: true, status: true } }),
+    prisma.enterpriseStockAdjustment.findMany({ where: { organizationId, id: { in: byType.get("EnterpriseStockAdjustment") || [] } }, select: { id: true, reference: true, status: true } }),
     prisma.enterpriseBudget.findMany({ where: { organizationId, id: { in: byType.get("EnterpriseBudget") || [] } }, select: { id: true, title: true, status: true } }),
     prisma.enterpriseExpense.findMany({ where: { organizationId, id: { in: byType.get("EnterpriseExpense") || [] } }, select: { id: true, title: true, status: true } }),
     prisma.pharmacyQualityIncident.findMany({ where: { organizationId, id: { in: byType.get("PharmacyQualityIncident") || [] } }, select: { id: true, title: true, priority: true, status: true } }),
   ]);
-  const map = new Map<string, ApprovalTargetSummary>(); for (const item of tasks) map.set(`EnterpriseTask:${item.id}`, { type: "EnterpriseTask", ...item }); for (const item of requests) map.set(`EnterpriseRequest:${item.id}`, { type: "EnterpriseRequest", ...item }); for (const item of meetings) map.set(`EnterpriseMeeting:${item.id}`, { type: "EnterpriseMeeting", ...item }); for (const item of purchases) map.set(`EnterprisePurchase:${item.id}`, { type: "EnterprisePurchase", ...item }); for (const item of budgets) map.set(`EnterpriseBudget:${item.id}`, { type: "EnterpriseBudget", ...item }); for (const item of expenses) map.set(`EnterpriseExpense:${item.id}`, { type: "EnterpriseExpense", ...item }); for (const item of incidents) map.set(`PharmacyQualityIncident:${item.id}`, { type: "PharmacyQualityIncident", ...item }); return map;
+  const map = new Map<string, ApprovalTargetSummary>();
+  for (const item of tasks) map.set(`EnterpriseTask:${item.id}`, { type: "EnterpriseTask", ...item });
+  for (const item of requests) map.set(`EnterpriseRequest:${item.id}`, { type: "EnterpriseRequest", ...item });
+  for (const item of meetings) map.set(`EnterpriseMeeting:${item.id}`, { type: "EnterpriseMeeting", ...item });
+  for (const item of purchases) map.set(`EnterprisePurchase:${item.id}`, { type: "EnterprisePurchase", id: item.id, title: `${item.reference} · ${item.title}`, priority: item.priority, status: item.status });
+  for (const item of stockTransfers) map.set(`EnterpriseStockTransfer:${item.id}`, { type: "EnterpriseStockTransfer", id: item.id, title: item.reference, status: item.status });
+  for (const item of inventoryCounts) map.set(`EnterpriseInventoryCount:${item.id}`, { type: "EnterpriseInventoryCount", id: item.id, title: item.reference, status: item.status });
+  for (const item of stockAdjustments) map.set(`EnterpriseStockAdjustment:${item.id}`, { type: "EnterpriseStockAdjustment", id: item.id, title: item.reference, status: item.status });
+  for (const item of budgets) map.set(`EnterpriseBudget:${item.id}`, { type: "EnterpriseBudget", ...item });
+  for (const item of expenses) map.set(`EnterpriseExpense:${item.id}`, { type: "EnterpriseExpense", ...item });
+  for (const item of incidents) map.set(`PharmacyQualityIncident:${item.id}`, { type: "PharmacyQualityIncident", ...item });
+  return map;
 }
 
 export async function POST(req: Request, { params }: Params) {

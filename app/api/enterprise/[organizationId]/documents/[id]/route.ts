@@ -67,10 +67,10 @@ export async function DELETE(req: Request, { params }: Params) {
   const access = await getEnterpriseProcurementAccess({ session, organizationId, moduleCode: "DOCUMENTS", action: "manage" });
   if (!access?.canManage) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = enterpriseDocumentArchiveSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: "Révision documentaire invalide." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Document invalide." }, { status: 400 });
   try {
-    await archiveEnterpriseDocument(organizationId, id, session.userId, parsed.data.revision);
-    await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_DOCUMENT_ARCHIVED", entity: "EnterpriseDocument", entityId: id, request: req, metadata: { organizationId } });
+    await archiveEnterpriseDocument(organizationId, id, session.userId, parsed.data.revision, parsed.data.reason);
+    await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_DOCUMENT_ARCHIVED", entity: "EnterpriseDocument", entityId: id, request: req, metadata: { organizationId, reason: parsed.data.reason } });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "documents", documentId: id } });
     return NextResponse.json({ ok: true });
   } catch (error) {

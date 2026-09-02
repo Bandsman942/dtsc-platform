@@ -50,6 +50,7 @@ export async function convergePharmacyPurchaseOrder(
         sourceEntityType: "PharmacyPurchaseOrder",
         sourceEntityId: source.id,
         items: source.lines.map((line) => ({
+          catalogItemId: catalogByProduct.get(line.productId)!,
           description: `Produit Pharmacy ${line.productId}`,
           quantity: Number(line.orderedQuantity),
           unit: line.unit,

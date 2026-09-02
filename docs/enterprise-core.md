@@ -165,7 +165,7 @@ La soumission crée une `EnterpriseApproval` liée. La décision Approval et la 
 
 `EnterprisePurchaseReceipt` et `EnterprisePurchaseReceiptItem` enregistrent les réceptions. Le serveur additionne les quantités déjà reçues et refuse toute sur-réception.
 
-Une réception commune ne modifie jamais automatiquement les stocks PHARMACY, HEALTH_CARE ou d'un autre secteur spécialisé.
+Une réception commune d’un article relié au Catalogue et suivi en stock projette un `EnterpriseStockMovement(PURCHASE_RECEIPT)` puis met à jour `EnterpriseInventoryBalance` dans la même transaction, avec une clé d’idempotence stable par ligne de réception. Une prestation ou un article non suivi ne crée aucun mouvement. Cette projection concerne exclusivement le stock ERP commun : elle ne crée jamais automatiquement de `PharmacyStockMovement`, ni de mouvement propre à HEALTH_CARE ou à un autre secteur spécialisé.
 
 ## EnterpriseEntityLink
 
@@ -221,7 +221,7 @@ Le backend reste autoritatif. La présence d'un bouton dans l'UI n'accorde jamai
 
 Les tables PHARMACY et HEALTH_CARE restent les sources métier sectorielles.
 
-PHARMACY conserve notamment ses fournisseurs, commandes, réceptions et mouvements de stock spécialisés. Un objet sectoriel peut être lié à un `EnterprisePurchase` transversal lorsque nécessaire, mais le Core ne remplace jamais le détail sectoriel et ne génère pas automatiquement de mouvement de stock.
+PHARMACY conserve notamment ses fournisseurs, commandes, réceptions et mouvements de stock spécialisés. Un objet sectoriel peut être lié à un `EnterprisePurchase` transversal lorsque nécessaire, mais le Core ne remplace jamais le détail sectoriel et ne génère jamais automatiquement de `PharmacyStockMovement`. Lorsqu’un achat transversal utilise le Catalogue et le stock ERP commun, sa réception peut en revanche projeter le mouvement commun `PURCHASE_RECEIPT` sans dual-write vers les tables PHARMACY.
 
 HEALTH_CARE conserve ses documents et données cliniques spécialisés. Un document ERP commun ne recopie pas automatiquement des informations patient, diagnostic ou traitement sensibles.
 

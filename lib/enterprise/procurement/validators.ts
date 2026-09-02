@@ -47,7 +47,10 @@ export const enterpriseDocumentUpdateSchema = z.object({
 });
 
 export const enterpriseDocumentAccessSchema = z.object({ userId: z.string().trim().min(1).max(180), accessLevel: z.enum(["READ", "DOWNLOAD", "EDIT"]).default("READ") });
-export const enterpriseDocumentArchiveSchema = z.object({ revision });
+export const enterpriseDocumentArchiveSchema = z.object({
+  revision,
+  reason: z.string().trim().min(3, "Un motif professionnel d’au moins 3 caractères est obligatoire pour archiver ce document.").max(1000),
+});
 
 const supplierContactSchema = z.object({
   name: z.string().trim().min(2).max(160),
@@ -97,6 +100,7 @@ export const enterpriseSupplierActionSchema = z.object({ revision, action: z.enu
 });
 
 const purchaseItemSchema = z.object({
+  catalogItemId: z.string().trim().min(1).max(180),
   description: z.string().trim().min(2).max(1000),
   quantity: z.coerce.number().positive().max(1_000_000),
   unit: z.string().trim().min(1).max(80),
@@ -115,18 +119,20 @@ const purchaseBase = z.object({
   departmentId: optionalId,
   requestId: optionalId,
   budgetLineId: optionalId,
+  siteId: optionalId,
+  destinationWarehouseId: optionalId,
   currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/).default("USD"),
   expectedAt: optionalDate,
   sourceModule: optionalText(120),
   sourceEntityType: optionalText(120),
   sourceEntityId: optionalId,
   items: z.array(purchaseItemSchema).min(1).max(200),
-});
-
-export const enterprisePurchaseCreateSchema = purchaseBase.superRefine((data, ctx) => {
+}).superRefine((data, ctx) => {
   const sourceCount = [data.sourceModule, data.sourceEntityType, data.sourceEntityId].filter(Boolean).length;
   if (sourceCount !== 0 && sourceCount !== 3) ctx.addIssue({ code: "custom", path: ["sourceEntityId"], message: "La source liée doit être complète." });
 });
+
+export const enterprisePurchaseCreateSchema = purchaseBase;
 
 export const enterprisePurchaseUpdateSchema = z.object({
   revision,
@@ -137,6 +143,8 @@ export const enterprisePurchaseUpdateSchema = z.object({
   buyerUserId: optionalId,
   departmentId: optionalId,
   budgetLineId: optionalId,
+  siteId: optionalId,
+  destinationWarehouseId: optionalId,
   currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/).optional(),
   expectedAt: optionalDate,
   items: z.array(purchaseItemSchema).min(1).max(200).optional(),
@@ -144,11 +152,14 @@ export const enterprisePurchaseUpdateSchema = z.object({
 
 export const enterprisePurchaseActionSchema = z.object({ revision, action: z.enum(ENTERPRISE_PURCHASE_ACTIONS), approverUserId: optionalId, comment: optionalText(3000) }).superRefine((data, ctx) => {
   if (data.action === "SUBMIT" && !data.approverUserId) ctx.addIssue({ code: "custom", path: ["approverUserId"], message: "Un approbateur doit être désigné avant soumission." });
+  if (["CANCEL", "ARCHIVE"].includes(data.action) && !data.comment) ctx.addIssue({ code: "custom", path: ["comment"], message: "Un motif est obligatoire pour cette action." });
 });
 
 export const enterprisePurchaseReceiptSchema = z.object({
   revision,
   receivedAt: z.coerce.date(),
+  warehouseId: optionalId,
+  storageLocationId: optionalId,
   notes: optionalText(5000),
   items: z.array(z.object({ purchaseItemId: z.string().trim().min(1).max(180), quantityReceived: z.coerce.number().positive().max(1_000_000) })).min(1).max(200),
 });

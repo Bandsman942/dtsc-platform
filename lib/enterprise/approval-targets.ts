@@ -15,6 +15,9 @@ export const ENTERPRISE_APPROVAL_MODULE_BY_TARGET: Readonly<Record<string, strin
   EnterpriseTask: "TASKS_OPERATIONS",
   EnterpriseMeeting: "MEETINGS",
   EnterprisePurchase: "SUPPLIERS_PURCHASES",
+  EnterpriseStockTransfer: "INVENTORY_LOGISTICS",
+  EnterpriseInventoryCount: "INVENTORY_LOGISTICS",
+  EnterpriseStockAdjustment: "INVENTORY_LOGISTICS",
   EnterpriseBudget: "FINANCE_BUDGETS",
   EnterpriseExpense: "FINANCE_BUDGETS",
   PharmacyQualityIncident: "QUALITY_PHARMACOVIGILANCE",
@@ -45,6 +48,9 @@ export function enterpriseApprovalTargetDeepLink(targetEntityType: string, targe
   if (targetEntityType === "EnterpriseTask") return `/enterprise-modules/TASKS_OPERATIONS?task=${id}`;
   if (targetEntityType === "EnterpriseMeeting") return `/enterprise-modules/MEETINGS?meeting=${id}`;
   if (targetEntityType === "EnterprisePurchase") return `/enterprise-modules/SUPPLIERS_PURCHASES?purchase=${id}`;
+  if (targetEntityType === "EnterpriseStockTransfer") return `/enterprise-modules/INVENTORY_LOGISTICS?tab=TRANSFERS&transfer=${id}`;
+  if (targetEntityType === "EnterpriseInventoryCount") return `/enterprise-modules/INVENTORY_LOGISTICS?tab=COUNTS&count=${id}`;
+  if (targetEntityType === "EnterpriseStockAdjustment") return `/enterprise-modules/INVENTORY_LOGISTICS?tab=ADJUSTMENTS&adjustment=${id}`;
   if (targetEntityType === "EnterpriseBudget") return `/enterprise-modules/FINANCE_BUDGETS?budget=${id}`;
   if (targetEntityType === "EnterpriseExpense") return `/enterprise-modules/FINANCE_BUDGETS?expense=${id}`;
   if (targetEntityType === "PharmacyQualityIncident") return `/enterprise-modules/QUALITY_PHARMACOVIGILANCE?incident=${id}`;

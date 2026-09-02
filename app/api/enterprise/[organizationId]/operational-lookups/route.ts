@@ -160,7 +160,17 @@ export async function GET(req: Request, { params }: Params) {
       where: { organizationId, status: "ACTIVE", archivedAt: null },
       orderBy: { name: "asc" },
       take: 3000,
-      select: { id: true, code: true, sku: true, name: true, itemType: true, currency: true, indicativeSalePrice: true, indicativeCost: true },
+      select: {
+        id: true,
+        code: true,
+        sku: true,
+        name: true,
+        itemType: true,
+        currency: true,
+        indicativeSalePrice: true,
+        indicativeCost: true,
+        unitOfMeasure: { select: { id: true, code: true, symbol: true, name: true } },
+      },
     }),
     prisma.enterpriseSalesOrder.findMany({
       where: { organizationId, archivedAt: null, status: { notIn: ["CANCELLED", "CLOSED"] } },
