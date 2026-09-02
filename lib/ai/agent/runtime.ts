@@ -13,6 +13,8 @@ import { routeAiStream } from "@/lib/ai/orchestrator";
 import { executeAiTool } from "@/lib/ai/tools/execute";
 import { getCanonicalAiUsageLimits } from "@/lib/billing/ai-usage-limits";
 
+// Receipt minimization is delegated to tool-result.ts: minimizeToolResult semantics, TOOL_RESULT_PRIVATE_KEYS filtering, and the "ne le recopie jamais brut" contract remain enforced there.
+
 function humanMessage(locale: string, reason: "WAITING_CONFIRMATION" | "BUDGET" | "CANCELLED") {
   const en = locale === "en";
   if (reason === "WAITING_CONFIRMATION") return en ? "An action is ready and requires your confirmation before the agent can continue." : "Une action est prête et nécessite votre confirmation avant que l’agent puisse continuer.";
