@@ -19,7 +19,7 @@ requireTokens("lib/enterprise/inventory/service.ts", [
 ]);
 requireTokens("lib/enterprise/procurement/common-domain-adapter.ts", [
   "PURCHASE_RECEIPT",
-  "expectedItemType === \"SERVICE\"",
+  "expectedItemType === \"GOODS\"",
   "enterprisePurchaseReceiptItemStockLink",
 ]);
 await import("./qa-hotfix-560-supply-integrity.mjs");
