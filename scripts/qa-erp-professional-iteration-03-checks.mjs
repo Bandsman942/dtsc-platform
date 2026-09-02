@@ -278,9 +278,9 @@ const checks = {
   mobile() {
     need(content.input, "text-base", "Contrat Input iOS");
     need(content.nativeSelect, "text-base", "Contrat NativeSelect iOS");
-    for (const marker of ["data-dtsc-dialog-scroll", "shrink-0 border-t", "pb-[max(0.75rem,env(safe-area-inset-bottom))]"]) need(content.dialog, marker, "Footer Dialog editor hors scroll");
+    for (const marker of ["data-dtsc-dialog-scroll", "shrink-0 border-t", "pb-[max(0.75rem,env(safe-area-inset-bottom))]", "window.visualViewport", "--dtsc-dialog-visual-height", "presentation === \"editor\""]) need(content.dialog, marker, "Contrat Dialog editor mobile partagé");
     for (const key of ["sales", "inventory", "hr", "time", "payroll", "projects", "assets"]) {
-      need(content[key], "h-[9", `Dialogue mobile ${key}`);
+      needAny(content[key], ["h-[9", 'presentation="editor"'], `Dialogue mobile ${key}`);
       if (key === "sales") {
         need(content[key], 'presentation="editor"', "Actions mobiles sales — présentation editor");
         need(content[key], "footer={<", "Actions mobiles sales — footer persistant");
