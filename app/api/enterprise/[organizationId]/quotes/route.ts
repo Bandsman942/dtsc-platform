@@ -33,15 +33,41 @@ export async function GET(req: Request, { params }: Params) {
     ...(businessPartyId ? { businessPartyId } : {}),
   };
   const [items, total, draft, sent, accepted, converted] = await Promise.all([
-    prisma.enterpriseQuote.findMany({ where, orderBy: [{ createdAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { items: { orderBy: { sortOrder: "asc" }, take: 50 } } }),
+    prisma.enterpriseQuote.findMany({
+      where,
+      orderBy: [{ createdAt: "desc" }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      include: {
+        items: { orderBy: { sortOrder: "asc" }, take: 50 },
+      },
+    }),
     prisma.enterpriseQuote.count({ where }),
     prisma.enterpriseQuote.count({ where: { organizationId, archivedAt: null, status: "DRAFT" } }),
     prisma.enterpriseQuote.count({ where: { organizationId, archivedAt: null, status: "SENT" } }),
     prisma.enterpriseQuote.count({ where: { organizationId, archivedAt: null, status: "ACCEPTED" } }),
     prisma.enterpriseQuote.count({ where: { organizationId, archivedAt: null, status: "CONVERTED" } }),
   ]);
+  const partyIds = [...new Set(items.map((item) => item.businessPartyId))];
+  const parties = partyIds.length
+    ? await prisma.enterpriseBusinessParty.findMany({
+        where: { organizationId, id: { in: partyIds }, archivedAt: null },
+        select: { id: true, code: true, legalName: true, displayName: true },
+      })
+    : [];
+  const partyById = new Map(parties.map((party) => [party.id, party]));
+  const projectedItems = items.map((item) => ({
+    ...item,
+    businessParty: partyById.get(item.businessPartyId) || null,
+  }));
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "quotes", page } });
-  return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { draft, sent, accepted, converted }, canManage: access.canManage });
+  return NextResponse.json({
+    items: projectedItems,
+    pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) },
+    metrics: { draft, sent, accepted, converted },
+    canManage: access.canManage,
+    canWrite: access.canWrite,
+  });
 }
 
 export async function POST(req: Request, { params }: Params) {

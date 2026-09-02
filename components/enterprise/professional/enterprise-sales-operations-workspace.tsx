@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { CheckCircle2, Eye, PackageCheck, Plus, RefreshCcw, Send, ShoppingCart, XCircle } from "lucide-react";
-import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
+import { currencyChoices, Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
+import { commercialHotfixCopy } from "@/components/enterprise/professional/commercial-hotfix-copy";
 import {
   ProfessionalError,
   ProfessionalFormSection,
@@ -23,6 +24,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useToastMessage } from "@/components/ui/use-toast-message";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { ContextActions, type BusinessContextAction } from "@/components/workspace/context-actions";
 import { EmptyState } from "@/components/workspace/empty-state";
@@ -41,12 +43,15 @@ type QuoteLine = {
   taxRate: string;
 };
 
+type BusinessPartySummary = { id: string; code?: string; legalName: string; displayName: string | null };
+
 type Quote = {
   id: string;
   reference: string;
   title: string;
   description: string | null;
   businessPartyId: string;
+  businessParty: BusinessPartySummary | null;
   status: string;
   currency: string;
   subtotal: string | number;
@@ -64,6 +69,7 @@ type SalesOrder = {
   title: string;
   status: string;
   businessPartyId: string;
+  businessParty: BusinessPartySummary | null;
   currency: string;
   totalAmount: string | number;
   expectedFulfillmentAt: string | null;
@@ -73,9 +79,18 @@ type SalesOrder = {
 };
 
 type Party = { id: string; legalName: string; displayName: string | null; roles?: Array<{ roleCode: string }> };
-type CatalogItem = { id: string; code: string; name: string; itemType: string; salesPrice: string | number | null; currency: string | null };
+type CatalogItem = {
+  id: string;
+  code: string;
+  name: string;
+  itemType: string;
+  indicativeSalePrice: string | number | null;
+  currency: string | null;
+};
 type Warehouse = { id: string; code: string; name: string };
-type Lookups = { parties: Party[]; warehouses: Warehouse[] };
+type Lookups = { parties: Party[]; warehouses: Warehouse[]; currencies: string[] };
+
+type QuoteActionTarget = { quote: Quote; targetStatus: "REJECTED" | "CANCELLED" };
 
 const QUOTE_STATUSES = ["DRAFT", "SENT", "ACCEPTED", "REJECTED", "EXPIRED", "CONVERTED", "CANCELLED"] as const;
 const ORDER_STATUSES = ["DRAFT", "PENDING_APPROVAL", "CONFIRMED", "PARTIALLY_FULFILLED", "FULFILLED", "CLOSED", "CANCELLED"] as const;
@@ -101,6 +116,7 @@ export function EnterpriseSalesOperationsWorkspace({
   definition: EnterpriseModuleDefinition;
 }) {
   const locale = useProfessionalErpLocale();
+  const hotfix = commercialHotfixCopy(locale);
   const t = (key: Parameters<typeof professionalErpT>[1], values?: Record<string, string | number>) => professionalErpT(locale, key, values);
   const statusLabel = (value: string) => professionalErpEnumLabel(locale, "status", value);
   const [tab, setTab] = useState("QUOTES");
@@ -112,25 +128,56 @@ export function EnterpriseSalesOperationsWorkspace({
   const [quoteDetail, setQuoteDetail] = useState<Quote | null>(null);
   const [orderDetail, setOrderDetail] = useState<SalesOrder | null>(null);
   const [fulfillTarget, setFulfillTarget] = useState<SalesOrder | null>(null);
+  const [fulfillmentKey, setFulfillmentKey] = useState("");
+  const [quoteActionTarget, setQuoteActionTarget] = useState<QuoteActionTarget | null>(null);
   const [lines, setLines] = useState<QuoteLine[]>([newLine(0)]);
-  const [lookups, setLookups] = useState<Lookups>({ parties: [], warehouses: [] });
+  const [lookups, setLookups] = useState<Lookups>({ parties: [], warehouses: [], currencies: [] });
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
+  const [catalogSearch, setCatalogSearch] = useState("");
+  const [quoteCurrency, setQuoteCurrency] = useState("");
   const [message, setMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useToastMessage(successMessage, "success");
 
   useEffect(() => {
     let active = true;
-    void Promise.all([
-      fetch(`/api/enterprise/${organizationId}/professional-lookups?module=SALES_QUOTES_ORDERS`, { cache: "no-store" }).then((response) => response.json()) as Promise<Lookups>,
-      fetch(`/api/enterprise/${organizationId}/catalog-items?page=1&pageSize=200&status=ACTIVE`, { cache: "no-store" }).then(async (response) => response.ok ? response.json() : ({ items: [] })) as Promise<{ items?: CatalogItem[] }>,
-    ]).then(([lookupBody, catalogBody]) => {
-      if (!active) return;
-      setLookups({ parties: lookupBody.parties || [], warehouses: lookupBody.warehouses || [] });
-      setCatalogItems(catalogBody.items || []);
-    }).catch(() => {
-      if (active) setMessage(professionalErpT(locale, "sales.selectorsUnavailable"));
-    });
+    void fetch(`/api/enterprise/${organizationId}/professional-lookups?module=SALES_QUOTES_ORDERS`, { cache: "no-store" })
+      .then(async (response) => {
+        const body = await response.json().catch(() => null) as (Lookups & { message?: string; error?: string }) | null;
+        if (!response.ok || !body) throw new Error(body?.message || body?.error || hotfix.salesSelectorsUnavailable);
+        if (!active) return;
+        const currencies = Array.isArray(body.currencies) ? body.currencies : [];
+        setLookups({ parties: body.parties || [], warehouses: body.warehouses || [], currencies });
+        setQuoteCurrency((current) => current || currencies[0] || currencyChoices(locale)[0]?.id || "USD");
+      })
+      .catch((error) => {
+        if (active) setMessage(error instanceof Error ? error.message : hotfix.salesSelectorsUnavailable);
+      });
     return () => { active = false; };
-  }, [locale, organizationId, refreshKey]);
+  }, [hotfix.salesSelectorsUnavailable, locale, organizationId, refreshKey]);
+
+  useEffect(() => {
+    let active = true;
+    const timeout = window.setTimeout(() => {
+      const params = new URLSearchParams({ page: "1", pageSize: "50", status: "ACTIVE" });
+      if (catalogSearch.trim()) params.set("search", catalogSearch.trim());
+      void fetch(`/api/enterprise/${organizationId}/catalog?${params.toString()}`, { cache: "no-store" })
+        .then(async (response) => {
+          const body = await response.json().catch(() => null) as { items?: CatalogItem[]; message?: string; error?: string } | null;
+          if (!response.ok || !body?.items) throw new Error(body?.message || body?.error || hotfix.catalogUnavailable);
+          if (active) setCatalogItems(body.items);
+        })
+        .catch((error) => {
+          if (active) setMessage(error instanceof Error ? error.message : hotfix.catalogUnavailable);
+        });
+    }, 250);
+    return () => {
+      active = false;
+      window.clearTimeout(timeout);
+    };
+  }, [catalogSearch, hotfix.catalogUnavailable, organizationId, refreshKey]);
 
   const params = useMemo(() => {
     const value = new URLSearchParams({ page: String(page), pageSize: "25" });
@@ -141,8 +188,25 @@ export function EnterpriseSalesOperationsWorkspace({
   const quotes = useProfessionalCollection<Quote>({ endpoint: `/api/enterprise/${organizationId}/quotes`, params, refreshKey });
   const orders = useProfessionalCollection<SalesOrder>({ endpoint: `/api/enterprise/${organizationId}/sales-orders`, params, refreshKey });
   const activeCollection = tab === "QUOTES" ? quotes : orders;
+  const currencyItems = lookups.currencies.length
+    ? lookups.currencies.map((code) => ({ id: code, label: code }))
+    : currencyChoices(locale);
+
+  function clearFeedback() {
+    setMessage("");
+    setSuccessMessage("");
+  }
+
+  function openCreate() {
+    clearFeedback();
+    setLines([newLine(0)]);
+    setCatalogSearch("");
+    setQuoteCurrency(lookups.currencies[0] || currencyChoices(locale)[0]?.id || "USD");
+    setCreateOpen(true);
+  }
 
   function updateLine(lineId: string, key: keyof QuoteLine, value: string) {
+    setMessage("");
     setLines((current) => current.map((line) => {
       if (line.id !== lineId) return line;
       const next = { ...line, [key]: value };
@@ -150,23 +214,43 @@ export function EnterpriseSalesOperationsWorkspace({
         const item = catalogItems.find((candidate) => candidate.id === value);
         if (item) {
           next.description = item.name;
-          next.unitPrice = String(item.salesPrice || 0);
+          next.unitPrice = String(item.indicativeSalePrice || 0);
         }
       }
       return next;
     }));
   }
 
+  function validateQuote(form: FormData) {
+    if (!String(form.get("businessPartyId") || "")) return hotfix.selectParty;
+    if (!String(form.get("title") || "").trim()) return hotfix.quoteTitleRequired;
+    if (!quoteCurrency) return hotfix.selectCurrency;
+    for (const line of lines) {
+      if (!line.description.trim() || !(Number(line.quantity) > 0) || Number(line.unitPrice) < 0 || !Number.isFinite(Number(line.unitPrice))) {
+        return hotfix.quoteLineRequired;
+      }
+      const item = line.catalogItemId ? catalogItems.find((candidate) => candidate.id === line.catalogItemId) : null;
+      if (item?.currency && item.currency !== quoteCurrency) return hotfix.quoteCurrencyMismatch;
+    }
+    return "";
+  }
+
   async function createQuote(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setMessage("");
+    clearFeedback();
     const form = new FormData(event.currentTarget);
+    const validation = validateQuote(form);
+    if (validation) {
+      setMessage(validation);
+      return;
+    }
+    setBusy(true);
     try {
       await professionalMutation(`/api/enterprise/${organizationId}/quotes`, {
         businessPartyId: String(form.get("businessPartyId") || ""),
         title: String(form.get("title") || ""),
         description: String(form.get("description") || "") || null,
-        currency: String(form.get("currency") || "USD"),
+        currency: quoteCurrency,
         validUntil: String(form.get("validUntil") || "") || null,
         ownerUserId: String(form.get("ownerUserId") || "") || null,
         terms: String(form.get("terms") || "") || null,
@@ -182,60 +266,99 @@ export function EnterpriseSalesOperationsWorkspace({
       setCreateOpen(false);
       setLines([newLine(0)]);
       setRefreshKey((value) => value + 1);
-      setMessage(t("sales.quoteSaved"));
+      setSuccessMessage(hotfix.savedQuote);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : t("sales.quoteCreateFailed"));
+    } finally {
+      setBusy(false);
     }
   }
 
   async function transitionQuote(quote: Quote, targetStatus: string) {
+    clearFeedback();
+    setBusy(true);
     try {
       await professionalMutation(`/api/enterprise/${organizationId}/quotes/${quote.id}/transition`, { targetStatus, revision: quote.revision });
+      setQuoteActionTarget(null);
       setQuoteDetail(null);
       setRefreshKey((value) => value + 1);
-      setMessage(t("sales.quoteUpdated"));
+      setSuccessMessage(hotfix.quoteUpdated);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : t("sales.quoteTransitionFailed"));
+    } finally {
+      setBusy(false);
     }
   }
 
   async function convertQuote(quote: Quote) {
+    clearFeedback();
+    setBusy(true);
     try {
       await professionalMutation(`/api/enterprise/${organizationId}/quotes/${quote.id}/convert`, { revision: quote.revision });
       setQuoteDetail(null);
       setTab("ORDERS");
       setRefreshKey((value) => value + 1);
-      setMessage(t("sales.quoteConverted"));
+      setSuccessMessage(hotfix.quoteConverted);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : t("sales.quoteConversionFailed"));
+    } finally {
+      setBusy(false);
     }
+  }
+
+  function openFulfillment(order: SalesOrder) {
+    clearFeedback();
+    setOrderDetail(null);
+    setFulfillTarget(order);
+    setFulfillmentKey(crypto.randomUUID());
   }
 
   async function fulfillOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!fulfillTarget) return;
+    if (!fulfillTarget || !fulfillmentKey) return;
+    clearFeedback();
     const form = new FormData(event.currentTarget);
-    const items = fulfillTarget.items.map((item) => ({
+    const allItems = fulfillTarget.items.map((item) => ({
       salesOrderItemId: item.id,
       quantityFulfilled: Number(form.get(`quantity_${item.id}`) || 0),
       notes: String(form.get(`notes_${item.id}`) || "") || null,
-    })).filter((item) => item.quantityFulfilled > 0);
+      remaining: Number(item.quantityRemaining),
+    }));
+    if (allItems.some((item) => item.quantityFulfilled > item.remaining)) {
+      setMessage(hotfix.deliveryQuantityTooHigh);
+      return;
+    }
+    const items = allItems
+      .filter((item) => item.quantityFulfilled > 0)
+      .map((item) => ({
+        salesOrderItemId: item.salesOrderItemId,
+        quantityFulfilled: item.quantityFulfilled,
+        notes: item.notes,
+      }));
+    if (!items.length) {
+      setMessage(hotfix.deliveryQuantityRequired);
+      return;
+    }
+    setBusy(true);
     try {
       await professionalMutation(`/api/enterprise/${organizationId}/sales-orders/${fulfillTarget.id}/fulfill`, {
         fulfillmentType: "PRODUCT_DELIVERY",
         warehouseId: String(form.get("warehouseId") || "") || null,
         acceptedByCustomer: form.get("acceptedByCustomer") === "on",
         acceptanceNotes: String(form.get("acceptanceNotes") || "") || null,
-        idempotencyKey: crypto.randomUUID(),
+        idempotencyKey: fulfillmentKey,
         notes: String(form.get("notes") || "") || null,
         revision: fulfillTarget.revision,
         items,
       });
       setFulfillTarget(null);
+      setFulfillmentKey("");
       setRefreshKey((value) => value + 1);
-      setMessage(t("sales.fulfillmentSaved"));
+      setSuccessMessage(hotfix.fulfillmentSaved);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : t("sales.fulfillmentFailed"));
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -245,17 +368,17 @@ export function EnterpriseSalesOperationsWorkspace({
       ...(quote.status === "DRAFT" ? [{ id: "send", label: t("sales.send"), icon: Send, onSelect: () => void transitionQuote(quote, "SENT") }] : []),
       ...(quote.status === "SENT" ? [
         { id: "accept", label: t("sales.markAccepted"), icon: CheckCircle2, onSelect: () => void transitionQuote(quote, "ACCEPTED") },
-        { id: "reject", label: t("sales.markRejected"), icon: XCircle, destructive: true, onSelect: () => void transitionQuote(quote, "REJECTED") },
+        { id: "reject", label: t("sales.markRejected"), icon: XCircle, destructive: true, onSelect: () => setQuoteActionTarget({ quote, targetStatus: "REJECTED" }) },
       ] : []),
       ...(quote.status === "ACCEPTED" ? [{ id: "convert", label: t("sales.convertOrder"), icon: ShoppingCart, onSelect: () => void convertQuote(quote) }] : []),
-      ...(["DRAFT", "SENT", "ACCEPTED"].includes(quote.status) ? [{ id: "cancel", label: t("sales.cancel"), icon: XCircle, destructive: true, separatorBefore: true, onSelect: () => void transitionQuote(quote, "CANCELLED") }] : []),
+      ...(["DRAFT", "SENT", "ACCEPTED"].includes(quote.status) ? [{ id: "cancel", label: t("sales.cancel"), icon: XCircle, destructive: true, separatorBefore: true, onSelect: () => setQuoteActionTarget({ quote, targetStatus: "CANCELLED" }) }] : []),
     ];
   }
 
   function orderActions(order: SalesOrder): BusinessContextAction[] {
     return [
       { id: "open", label: t("sales.open"), icon: Eye, onSelect: () => setOrderDetail(order) },
-      ...(["CONFIRMED", "PARTIALLY_FULFILLED"].includes(order.status) ? [{ id: "fulfill", label: t("sales.recordDelivery"), icon: PackageCheck, onSelect: () => setFulfillTarget(order) }] : []),
+      ...(["CONFIRMED", "PARTIALLY_FULFILLED"].includes(order.status) ? [{ id: "fulfill", label: t("sales.recordDelivery"), icon: PackageCheck, onSelect: () => openFulfillment(order) }] : []),
     ];
   }
 
@@ -268,7 +391,7 @@ export function EnterpriseSalesOperationsWorkspace({
         title={t("sales.title")}
         description={`${locale === "en" ? definition.descriptionEn : definition.descriptionFr} ${t("sales.descriptionSuffix")}`}
         count={t("sales.count", { quotes: quotes.pagination.total, orders: orders.pagination.total })}
-        primaryAction={quotes.canManage ? <Button onClick={() => setCreateOpen(true)} className="bg-dtsc-blue text-white"><Plus className="h-4 w-4" />{t("sales.newQuote")}</Button> : undefined}
+        primaryAction={quotes.canWrite ? <Button onClick={openCreate} className="bg-dtsc-blue text-white"><Plus className="h-4 w-4" />{t("sales.newQuote")}</Button> : undefined}
       />
       <ModuleMetrics label={t("sales.metrics")}>
         <ModuleMetric label={t("sales.metricDraftQuotes")} value={quotes.metrics.draft || 0} />
@@ -283,46 +406,67 @@ export function EnterpriseSalesOperationsWorkspace({
         summary={t("sales.toolbarSummary")}
       />
       <ModuleContent>
-        {message ? <div role="status" className="rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-semibold text-dtsc-ink">{message}</div> : null}
+        {message && !createOpen && !fulfillTarget && !quoteActionTarget ? <ProfessionalError message={message} /> : null}
         <ModuleSection title={tab === "QUOTES" ? t("sales.quotesTitle") : t("sales.ordersTitle")} description={tab === "QUOTES" ? t("sales.quotesDescription") : t("sales.ordersDescription")}>
           {activeCollection.error ? <ProfessionalError message={activeCollection.error} /> : activeCollection.loading ? <ProfessionalLoading /> : tab === "QUOTES" ? (
-            quotes.items.length ? <BusinessList ariaLabel={t("sales.quotesAria")}>{quotes.items.map((quote) => { const lineSuffix = locale === "en" ? (quote.items.length === 1 ? "" : "s") : (quote.items.length > 1 ? "s" : ""); return <BusinessListItem key={quote.id} title={`${quote.reference} · ${quote.title}`} status={<StatusBadge tone={statusTone(quote.status)}>{statusLabel(quote.status)}</StatusBadge>} meta={`${professionalErpMoney(quote.totalAmount, quote.currency, locale)}${quote.validUntil ? ` · ${t("sales.validUntil", { date: professionalErpDate(quote.validUntil, locale) })}` : ""}`} description={`${t("sales.lines", { count: quote.items.length, suffix: lineSuffix })} · ${t("sales.discounts", { amount: professionalErpMoney(quote.discountTotal, quote.currency, locale) })} · ${t("sales.taxes", { amount: professionalErpMoney(quote.taxTotal, quote.currency, locale) })}`} onOpen={() => setQuoteDetail(quote)} openLabel={t("sales.openQuote", { reference: quote.reference })} actions={<ContextActions label={t("sales.quoteActions")} actions={quoteActions(quote)} />} />; })}</BusinessList> : <EmptyState compact title={t("sales.noQuote")} description={t("sales.noQuoteHelp")} />
-          ) : orders.items.length ? <BusinessList ariaLabel={t("sales.ordersAria")}>{orders.items.map((order) => { const lineSuffix = locale === "en" ? (order.items.length === 1 ? "" : "s") : (order.items.length > 1 ? "s" : ""); const deliverySuffix = locale === "en" ? (order.fulfillments.length === 1 ? "y" : "ies") : (order.fulfillments.length > 1 ? "s" : ""); return <BusinessListItem key={order.id} title={`${order.reference} · ${order.title}`} status={<StatusBadge tone={statusTone(order.status)}>{statusLabel(order.status)}</StatusBadge>} meta={`${professionalErpMoney(order.totalAmount, order.currency, locale)} · ${t("sales.lines", { count: order.items.length, suffix: lineSuffix })}`} description={t("sales.deliveries", { count: order.fulfillments.length, suffix: deliverySuffix })} onOpen={() => setOrderDetail(order)} openLabel={t("sales.openOrder", { reference: order.reference })} actions={<ContextActions label={t("sales.orderActions")} actions={orderActions(order)} />} />; })}</BusinessList> : <EmptyState compact title={t("sales.noOrder")} description={t("sales.noOrderHelp")} />}
+            quotes.items.length ? <BusinessList ariaLabel={t("sales.quotesAria")}>{quotes.items.map((quote) => { const lineSuffix = locale === "en" ? (quote.items.length === 1 ? "" : "s") : (quote.items.length > 1 ? "s" : ""); return <BusinessListItem key={quote.id} title={`${quote.reference} · ${quote.title}`} status={<StatusBadge tone={statusTone(quote.status)}>{statusLabel(quote.status)}</StatusBadge>} meta={`${professionalErpMoney(quote.totalAmount, quote.currency, locale)}${quote.validUntil ? ` · ${t("sales.validUntil", { date: professionalErpDate(quote.validUntil, locale) })}` : ""}`} description={`${quote.businessParty?.displayName || quote.businessParty?.legalName || t("common.thirdPartyToReview")} · ${t("sales.lines", { count: quote.items.length, suffix: lineSuffix })}`} onOpen={() => setQuoteDetail(quote)} openLabel={t("sales.openQuote", { reference: quote.reference })} actions={<ContextActions label={t("sales.quoteActions")} actions={quoteActions(quote)} />} />; })}</BusinessList> : <EmptyState compact title={t("sales.noQuote")} description={t("sales.noQuoteHelp")} />
+          ) : orders.items.length ? <BusinessList ariaLabel={t("sales.ordersAria")}>{orders.items.map((order) => { const lineSuffix = locale === "en" ? (order.items.length === 1 ? "" : "s") : (order.items.length > 1 ? "s" : ""); const deliverySuffix = locale === "en" ? (order.fulfillments.length === 1 ? "y" : "ies") : (order.fulfillments.length > 1 ? "s" : ""); return <BusinessListItem key={order.id} title={`${order.reference} · ${order.title}`} status={<StatusBadge tone={statusTone(order.status)}>{statusLabel(order.status)}</StatusBadge>} meta={`${professionalErpMoney(order.totalAmount, order.currency, locale)} · ${t("sales.lines", { count: order.items.length, suffix: lineSuffix })}`} description={`${order.businessParty?.displayName || order.businessParty?.legalName || t("common.thirdPartyToReview")} · ${t("sales.deliveries", { count: order.fulfillments.length, suffix: deliverySuffix })}`} onOpen={() => setOrderDetail(order)} openLabel={t("sales.openOrder", { reference: order.reference })} actions={<ContextActions label={t("sales.orderActions")} actions={orderActions(order)} />} />; })}</BusinessList> : <EmptyState compact title={t("sales.noOrder")} description={t("sales.noOrderHelp")} />}
           <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-dtsc-border pt-3 text-sm text-dtsc-muted"><span>{t("sales.page", { page: activeCollection.pagination.page, pageCount: activeCollection.pagination.pageCount })}</span><div className="flex gap-2"><Button variant="outline" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>{t("common.previous")}</Button><Button variant="outline" disabled={page >= activeCollection.pagination.pageCount} onClick={() => setPage((value) => value + 1)}>{t("common.next")}</Button></div></div>
         </ModuleSection>
         <ProfessionalHelp moduleCode="SALES_QUOTES_ORDERS" />
       </ModuleContent>
 
-      <Dialog open={createOpen} onClose={() => setCreateOpen(false)} title={t("sales.newQuote")} description={t("sales.newQuoteDescription")} className="h-[96dvh] max-w-5xl">
-        <form onSubmit={createQuote} className="grid gap-6">
+      <Dialog
+        open={createOpen}
+        onClose={() => { if (!busy) setCreateOpen(false); }}
+        title={t("sales.newQuote")}
+        description={t("sales.newQuoteDescription")}
+        className="h-[96dvh] max-w-5xl"
+        presentation="editor"
+        footer={<><Button type="button" variant="outline" disabled={busy} onClick={() => setCreateOpen(false)}>{t("common.cancel")}</Button><Button type="submit" form="quote-create-form" disabled={busy}>{busy ? t("common.saving") : t("sales.saveDraft")}</Button></>}
+      >
+        <form id="quote-create-form" onSubmit={createQuote} className="grid gap-6 p-4 sm:p-5">
+          {message ? <ProfessionalError message={message} /> : null}
           <ProfessionalFormSection title={t("sales.customerTerms")}>
-            <Field label={t("sales.customerOrProspect")}><NativeSelect name="businessPartyId" required items={[{ id: "", label: t("sales.selectParty") }, ...lookups.parties.map((party) => ({ id: party.id, label: party.displayName || party.legalName }))]} /></Field>
-            <Field label={t("sales.quoteTitle")}><Input name="title" required /></Field>
-            <Field label={t("sales.currency")}><Input name="currency" defaultValue="USD" maxLength={3} required /></Field>
+            <Field label={t("sales.customerOrProspect")} required><NativeSelect name="businessPartyId" required items={lookups.parties.map((party) => ({ id: party.id, label: party.displayName || party.legalName }))} /></Field>
+            <Field label={t("sales.quoteTitle")} required><Input name="title" required /></Field>
+            <Field label={t("sales.currency")} help={hotfix.currencyConfigurationHelp} required><NativeSelect name="currency" value={quoteCurrency} onChange={setQuoteCurrency} required items={currencyItems} /></Field>
             <Field label={t("sales.validity")}><Input name="validUntil" type="date" /></Field>
             <Field label={t("sales.description")}><textarea name="description" rows={3} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base" /></Field>
             <Field label={t("sales.terms")}><textarea name="terms" rows={3} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base" /></Field>
           </ProfessionalFormSection>
           <ProfessionalFormSection title={t("sales.productsServices")} description={t("sales.productsServicesHelp")}>
-            <div className="md:col-span-2 grid gap-4">
-              {lines.map((line, index) => <div key={line.id} className="grid gap-3 rounded-2xl border border-dtsc-border p-3 md:grid-cols-6"><div className="md:col-span-2"><Field label={t("sales.item", { index: index + 1 })}><NativeSelect value={line.catalogItemId} onChange={(value) => updateLine(line.id, "catalogItemId", value)} items={[{ id: "", label: t("sales.freeDescription") }, ...catalogItems.map((item) => ({ id: item.id, label: `${item.code} · ${item.name}` }))]} /></Field></div><div className="md:col-span-2"><Field label={t("sales.description")}><Input value={line.description} onChange={(event) => updateLine(line.id, "description", event.target.value)} required /></Field></div><Field label={t("sales.quantity")}><Input type="number" min="0.01" step="0.01" value={line.quantity} onChange={(event) => updateLine(line.id, "quantity", event.target.value)} required /></Field><Field label={t("sales.unitPrice")}><Input type="number" min="0" step="0.01" value={line.unitPrice} onChange={(event) => updateLine(line.id, "unitPrice", event.target.value)} required /></Field><Field label={t("sales.discount")}><Input type="number" min="0" max="100" step="0.01" value={line.discountRate} onChange={(event) => updateLine(line.id, "discountRate", event.target.value)} /></Field><Field label={t("sales.tax")}><Input type="number" min="0" max="100" step="0.01" value={line.taxRate} onChange={(event) => updateLine(line.id, "taxRate", event.target.value)} /></Field>{lines.length > 1 ? <div className="md:col-span-2 flex items-end"><Button type="button" variant="outline" onClick={() => setLines((current) => current.filter((candidate) => candidate.id !== line.id))}>{t("sales.removeLine")}</Button></div> : null}</div>)}
+            <div className="md:col-span-2 grid gap-3">
+              <Field label={t("sales.productsServices")} help={hotfix.catalogSearchHelp}><ProfessionalSearch value={catalogSearch} onChange={setCatalogSearch} placeholder={hotfix.catalogSearch} /></Field>
+              {lines.map((line, index) => <div key={line.id} className="grid gap-3 rounded-2xl border border-dtsc-border p-3 md:grid-cols-6"><div className="md:col-span-2"><Field label={t("sales.item", { index: index + 1 })}><NativeSelect value={line.catalogItemId} onChange={(value) => updateLine(line.id, "catalogItemId", value)} items={[{ id: "", label: t("sales.freeDescription") }, ...catalogItems.map((item) => ({ id: item.id, label: `${item.code} · ${item.name}${item.currency ? ` · ${item.currency}` : ""}` }))]} /></Field></div><div className="md:col-span-2"><Field label={t("sales.description")} required><Input value={line.description} onChange={(event) => updateLine(line.id, "description", event.target.value)} required /></Field></div><Field label={t("sales.quantity")} required><Input type="number" min="0.01" step="0.01" value={line.quantity} onChange={(event) => updateLine(line.id, "quantity", event.target.value)} required /></Field><Field label={t("sales.unitPrice")} required><Input type="number" min="0" step="0.01" value={line.unitPrice} onChange={(event) => updateLine(line.id, "unitPrice", event.target.value)} required /></Field><Field label={t("sales.discount")}><Input type="number" min="0" max="100" step="0.01" value={line.discountRate} onChange={(event) => updateLine(line.id, "discountRate", event.target.value)} /></Field><Field label={t("sales.tax")}><Input type="number" min="0" max="100" step="0.01" value={line.taxRate} onChange={(event) => updateLine(line.id, "taxRate", event.target.value)} /></Field>{lines.length > 1 ? <div className="md:col-span-2 flex items-end"><Button type="button" variant="outline" onClick={() => setLines((current) => current.filter((candidate) => candidate.id !== line.id))}>{t("sales.removeLine")}</Button></div> : null}</div>)}
               <Button type="button" variant="outline" onClick={() => setLines((current) => [...current, newLine(current.length)])}><Plus className="h-4 w-4" />{t("sales.addLine")}</Button>
             </div>
           </ProfessionalFormSection>
-          <div className="sticky bottom-0 flex justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface py-3"><Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>{t("common.cancel")}</Button><Button type="submit">{t("sales.saveDraft")}</Button></div>
         </form>
       </Dialog>
 
       <Dialog open={Boolean(quoteDetail)} onClose={() => setQuoteDetail(null)} title={quoteDetail ? `${quoteDetail.reference} · ${quoteDetail.title}` : t("sales.quoteDetail")} className="h-[92dvh] max-w-4xl">
-        {quoteDetail ? <div className="grid gap-5"><div className="flex flex-wrap gap-2"><StatusBadge tone={statusTone(quoteDetail.status)}>{statusLabel(quoteDetail.status)}</StatusBadge><StatusBadge>{professionalErpMoney(quoteDetail.totalAmount, quoteDetail.currency, locale)}</StatusBadge></div><BusinessList ariaLabel={t("sales.quoteLines")}>{quoteDetail.items.map((item) => <BusinessListItem key={item.id} title={item.description} meta={`${item.quantity} × ${professionalErpMoney(item.unitPrice, quoteDetail.currency, locale)}`} status={<StatusBadge>{professionalErpMoney(item.lineTotal, quoteDetail.currency, locale)}</StatusBadge>} />)}</BusinessList><div data-responsive-actions>{quoteActions(quoteDetail).filter((action) => action.id !== "open").map((action) => <Button key={action.id} type="button" variant={action.destructive ? "outline" : "default"} onClick={() => action.onSelect?.()}>{action.label}</Button>)}</div></div> : null}
+        {quoteDetail ? <div className="grid gap-5"><div className="flex flex-wrap gap-2"><StatusBadge tone={statusTone(quoteDetail.status)}>{statusLabel(quoteDetail.status)}</StatusBadge><StatusBadge>{professionalErpMoney(quoteDetail.totalAmount, quoteDetail.currency, locale)}</StatusBadge></div><p className="text-sm font-bold text-dtsc-ink">{quoteDetail.businessParty?.displayName || quoteDetail.businessParty?.legalName || t("common.thirdPartyToReview")}</p><BusinessList ariaLabel={t("sales.quoteLines")}>{quoteDetail.items.map((item) => <BusinessListItem key={item.id} title={item.description} meta={`${item.quantity} × ${professionalErpMoney(item.unitPrice, quoteDetail.currency, locale)}`} status={<StatusBadge>{professionalErpMoney(item.lineTotal, quoteDetail.currency, locale)}</StatusBadge>} />)}</BusinessList><div data-responsive-actions>{quoteActions(quoteDetail).filter((action) => action.id !== "open").map((action) => <Button key={action.id} type="button" variant={action.destructive ? "outline" : "default"} disabled={busy} onClick={() => action.onSelect?.()}>{action.label}</Button>)}</div></div> : null}
       </Dialog>
 
       <Dialog open={Boolean(orderDetail)} onClose={() => setOrderDetail(null)} title={orderDetail ? `${orderDetail.reference} · ${orderDetail.title}` : t("sales.orderDetail")} className="h-[92dvh] max-w-4xl">
-        {orderDetail ? <div className="grid gap-5"><div className="flex flex-wrap gap-2"><StatusBadge tone={statusTone(orderDetail.status)}>{statusLabel(orderDetail.status)}</StatusBadge><StatusBadge>{professionalErpMoney(orderDetail.totalAmount, orderDetail.currency, locale)}</StatusBadge></div><BusinessList ariaLabel={t("sales.orderQuantities")}>{orderDetail.items.map((item) => <BusinessListItem key={item.id} title={item.description} meta={t("sales.orderedDelivered", { ordered: item.quantityOrdered, fulfilled: item.quantityFulfilled })} status={<StatusBadge tone={Number(item.quantityRemaining) > 0 ? "warning" : "success"}>{t("sales.remaining", { remaining: item.quantityRemaining })}</StatusBadge>} />)}</BusinessList>{["CONFIRMED", "PARTIALLY_FULFILLED"].includes(orderDetail.status) ? <Button onClick={() => { setFulfillTarget(orderDetail); setOrderDetail(null); }}><PackageCheck className="h-4 w-4" />{t("sales.recordDelivery")}</Button> : null}</div> : null}
+        {orderDetail ? <div className="grid gap-5"><div className="flex flex-wrap gap-2"><StatusBadge tone={statusTone(orderDetail.status)}>{statusLabel(orderDetail.status)}</StatusBadge><StatusBadge>{professionalErpMoney(orderDetail.totalAmount, orderDetail.currency, locale)}</StatusBadge></div><p className="text-sm font-bold text-dtsc-ink">{orderDetail.businessParty?.displayName || orderDetail.businessParty?.legalName || t("common.thirdPartyToReview")}</p><BusinessList ariaLabel={t("sales.orderQuantities")}>{orderDetail.items.map((item) => <BusinessListItem key={item.id} title={item.description} meta={t("sales.orderedDelivered", { ordered: item.quantityOrdered, fulfilled: item.quantityFulfilled })} status={<StatusBadge tone={Number(item.quantityRemaining) > 0 ? "warning" : "success"}>{t("sales.remaining", { remaining: item.quantityRemaining })}</StatusBadge>} />)}</BusinessList>{["CONFIRMED", "PARTIALLY_FULFILLED"].includes(orderDetail.status) ? <Button onClick={() => openFulfillment(orderDetail)}><PackageCheck className="h-4 w-4" />{t("sales.recordDelivery")}</Button> : null}</div> : null}
       </Dialog>
 
-      <Dialog open={Boolean(fulfillTarget)} onClose={() => setFulfillTarget(null)} title={fulfillTarget ? t("sales.deliver", { reference: fulfillTarget.reference }) : t("sales.newDelivery")} description={t("sales.deliveryDescription")} className="h-[94dvh] max-w-4xl">
-        {fulfillTarget ? <form onSubmit={fulfillOrder} className="grid gap-5"><ProfessionalFormSection title={t("sales.originReceipt")}><Field label={t("sales.warehouse")}><NativeSelect name="warehouseId" items={[{ id: "", label: t("sales.noWarehouseService") }, ...lookups.warehouses.map((warehouse) => ({ id: warehouse.id, label: `${warehouse.code} · ${warehouse.name}` }))]} /></Field><Field label={t("sales.idempotentReference")}><Input value={t("sales.generatedAutomatically")} disabled /></Field></ProfessionalFormSection><ProfessionalFormSection title={t("sales.deliveredQuantities")}><div className="md:col-span-2 grid gap-3">{fulfillTarget.items.map((item) => <div key={item.id} className="grid gap-3 rounded-xl border border-dtsc-border p-3 md:grid-cols-3"><div className="md:col-span-2"><p className="font-black text-dtsc-ink">{item.description}</p><p className="text-sm text-dtsc-muted">{t("sales.remainder", { remaining: item.quantityRemaining })}</p></div><Field label={t("sales.deliveredQuantity")}><Input name={`quantity_${item.id}`} type="number" min="0" max={Number(item.quantityRemaining)} step="0.01" defaultValue="0" /></Field></div>)}</div></ProfessionalFormSection><ProfessionalFormSection title={t("sales.proofConfirmation")}><Field label={t("sales.notes")}><textarea name="notes" rows={3} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base" /></Field><Field label={t("sales.customerConfirmation")}><label className="mt-3 flex min-h-11 items-center gap-2"><input name="acceptedByCustomer" type="checkbox" />{t("sales.recipientConfirms")}</label></Field><Field label={t("sales.recipientNotes")}><Input name="acceptanceNotes" /></Field></ProfessionalFormSection><div className="sticky bottom-0 flex justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface py-3"><Button type="button" variant="outline" onClick={() => setFulfillTarget(null)}>{t("common.cancel")}</Button><Button type="submit"><RefreshCcw className="h-4 w-4" />{t("sales.saveDelivery")}</Button></div></form> : null}
+      <Dialog
+        open={Boolean(fulfillTarget)}
+        onClose={() => { if (!busy) { setFulfillTarget(null); setFulfillmentKey(""); } }}
+        title={fulfillTarget ? t("sales.deliver", { reference: fulfillTarget.reference }) : t("sales.newDelivery")}
+        description={t("sales.deliveryDescription")}
+        className="h-[94dvh] max-w-4xl"
+        presentation="editor"
+        footer={<><Button type="button" variant="outline" disabled={busy} onClick={() => { setFulfillTarget(null); setFulfillmentKey(""); }}>{t("common.cancel")}</Button><Button type="submit" form="order-fulfillment-form" disabled={busy}><RefreshCcw className="h-4 w-4" />{busy ? t("common.saving") : t("sales.saveDelivery")}</Button></>}
+      >
+        {fulfillTarget ? <form id="order-fulfillment-form" onSubmit={fulfillOrder} className="grid gap-5 p-4 sm:p-5">{message ? <ProfessionalError message={message} /> : null}<p className="rounded-xl border border-dtsc-border bg-dtsc-soft px-4 py-3 text-sm text-dtsc-muted">{hotfix.deliveryRetrySafe}</p><ProfessionalFormSection title={t("sales.originReceipt")}><Field label={t("sales.warehouse")}><NativeSelect name="warehouseId" items={[{ id: "", label: t("sales.noWarehouseService") }, ...lookups.warehouses.map((warehouse) => ({ id: warehouse.id, label: `${warehouse.code} · ${warehouse.name}` }))]} /></Field><Field label={t("sales.idempotentReference")}><Input value={fulfillmentKey || t("sales.generatedAutomatically")} disabled /></Field></ProfessionalFormSection><ProfessionalFormSection title={t("sales.deliveredQuantities")}><div className="md:col-span-2 grid gap-3">{fulfillTarget.items.map((item) => <div key={item.id} className="grid gap-3 rounded-xl border border-dtsc-border p-3 md:grid-cols-3"><div className="md:col-span-2"><p className="font-black text-dtsc-ink">{item.description}</p><p className="text-sm text-dtsc-muted">{t("sales.remainder", { remaining: item.quantityRemaining })}</p></div><Field label={t("sales.deliveredQuantity")}><Input name={`quantity_${item.id}`} type="number" min="0" max={Number(item.quantityRemaining)} step="0.01" defaultValue="0" /></Field></div>)}</div></ProfessionalFormSection><ProfessionalFormSection title={t("sales.proofConfirmation")}><Field label={t("sales.notes")}><textarea name="notes" rows={3} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base" /></Field><Field label={t("sales.customerConfirmation")}><label className="mt-3 flex min-h-11 items-center gap-2"><input name="acceptedByCustomer" type="checkbox" />{t("sales.recipientConfirms")}</label></Field><Field label={t("sales.recipientNotes")}><Input name="acceptanceNotes" /></Field></ProfessionalFormSection></form> : null}
+      </Dialog>
+
+      <Dialog open={Boolean(quoteActionTarget)} onClose={() => { if (!busy) setQuoteActionTarget(null); }} title={hotfix.confirmQuoteAction} description={hotfix.confirmQuoteActionHelp} className="max-w-xl">
+        {quoteActionTarget ? <div className="grid gap-4">{message ? <ProfessionalError message={message} /> : null}<p className="text-sm text-dtsc-muted">{quoteActionTarget.quote.reference} · {quoteActionTarget.quote.title} · {statusLabel(quoteActionTarget.targetStatus)}</p><div className="flex justify-end gap-2"><Button variant="outline" disabled={busy} onClick={() => setQuoteActionTarget(null)}>{t("common.cancel")}</Button><Button variant="destructive" disabled={busy} onClick={() => void transitionQuote(quoteActionTarget.quote, quoteActionTarget.targetStatus)}>{busy ? hotfix.busy : t("common.confirm")}</Button></div></div> : null}
       </Dialog>
     </ModuleWorkspace>
   );

@@ -9,6 +9,7 @@ const ALLOWED_MODULES = new Set([
   "CATALOG",
   "SITES_WAREHOUSES",
   "CRM_PIPELINE",
+  "SALES_QUOTES_ORDERS",
   "CONTRACTS",
   "SUPPLIERS_PURCHASES",
   "HUMAN_RESOURCES",
@@ -49,6 +50,9 @@ export async function GET(req: Request, { params }: Params) {
     units,
     sites,
     warehouses,
+    financeConfiguration,
+    financialAccountCurrencies,
+    taxCodes,
   ] = await Promise.all([
     prisma.organizationMember.findMany({
       where: { organizationId, status: "ACTIVE", removedAt: null },
@@ -149,6 +153,23 @@ export async function GET(req: Request, { params }: Params) {
       take: 500,
       select: { id: true, siteId: true, code: true, name: true, warehouseType: true },
     }),
+    prisma.enterpriseFinanceConfiguration.findUnique({
+      where: { organizationId },
+      select: { functionalCurrencyCode: true, presentationCurrencyCode: true },
+    }),
+    prisma.enterpriseFinancialAccount.findMany({
+      where: { organizationId, status: "ACTIVE", archivedAt: null },
+      distinct: ["currencyCode"],
+      orderBy: { currencyCode: "asc" },
+      take: 50,
+      select: { currencyCode: true },
+    }),
+    prisma.enterpriseTaxCode.findMany({
+      where: { organizationId, isActive: true },
+      orderBy: [{ category: "asc" }, { code: "asc" }],
+      take: 300,
+      select: { id: true, code: true, nameFr: true, nameEn: true, category: true },
+    }),
   ]);
 
   const mappedMembers = members.map((member) => ({
@@ -226,6 +247,13 @@ export async function GET(req: Request, { params }: Params) {
     );
   }
 
+  const currencyCodes = [
+    financeConfiguration?.functionalCurrencyCode,
+    financeConfiguration?.presentationCurrencyCode,
+    ...financialAccountCurrencies.map((account) => account.currencyCode),
+  ].filter((value): value is string => Boolean(value));
+  const currencies = [...new Set(currencyCodes.map((value) => value.toUpperCase()))].sort();
+
   await writeApiLog({
     request: req,
     statusCode: 200,
@@ -243,5 +271,7 @@ export async function GET(req: Request, { params }: Params) {
     units,
     sites,
     warehouses,
+    currencies,
+    taxCodes,
   });
 }

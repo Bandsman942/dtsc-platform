@@ -28,13 +28,40 @@ export async function GET(req: Request, { params }: Params) {
     ...(businessPartyId ? { businessPartyId } : {}),
   };
   const [items, total, confirmed, partial, fulfilled, pending] = await Promise.all([
-    prisma.enterpriseSalesOrder.findMany({ where, orderBy: [{ expectedFulfillmentAt: "asc" }, { createdAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { items: { orderBy: { sortOrder: "asc" } }, fulfillments: { orderBy: { createdAt: "desc" }, take: 10, include: { items: true } } } }),
+    prisma.enterpriseSalesOrder.findMany({
+      where,
+      orderBy: [{ expectedFulfillmentAt: "asc" }, { createdAt: "desc" }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      include: {
+        items: { orderBy: { sortOrder: "asc" } },
+        fulfillments: { orderBy: { createdAt: "desc" }, take: 10, include: { items: true } },
+      },
+    }),
     prisma.enterpriseSalesOrder.count({ where }),
     prisma.enterpriseSalesOrder.count({ where: { organizationId, archivedAt: null, status: "CONFIRMED" } }),
     prisma.enterpriseSalesOrder.count({ where: { organizationId, archivedAt: null, status: "PARTIALLY_FULFILLED" } }),
     prisma.enterpriseSalesOrder.count({ where: { organizationId, archivedAt: null, status: "FULFILLED" } }),
     prisma.enterpriseSalesOrder.count({ where: { organizationId, archivedAt: null, status: { in: ["DRAFT", "PENDING_APPROVAL"] } } }),
   ]);
+  const partyIds = [...new Set(items.map((item) => item.businessPartyId))];
+  const parties = partyIds.length
+    ? await prisma.enterpriseBusinessParty.findMany({
+        where: { organizationId, id: { in: partyIds }, archivedAt: null },
+        select: { id: true, code: true, legalName: true, displayName: true },
+      })
+    : [];
+  const partyById = new Map(parties.map((party) => [party.id, party]));
+  const projectedItems = items.map((item) => ({
+    ...item,
+    businessParty: partyById.get(item.businessPartyId) || null,
+  }));
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "sales-orders", page } });
-  return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { confirmed, partial, fulfilled, pending }, canManage: access.canManage });
+  return NextResponse.json({
+    items: projectedItems,
+    pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) },
+    metrics: { confirmed, partial, fulfilled, pending },
+    canManage: access.canManage,
+    canWrite: access.canWrite,
+  });
 }

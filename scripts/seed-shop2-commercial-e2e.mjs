@@ -28,6 +28,47 @@ async function upsertCatalogPrice(catalogItemId, amount, taxIncluded, actorUserI
   });
 }
 
+async function ensureCurrentFiscalPeriod(actorUserId) {
+  const now = new Date();
+  const year = now.getUTCFullYear();
+  const month = now.getUTCMonth();
+  const monthCode = String(month + 1).padStart(2, "0");
+  const fiscalYearCode = `FY${year}-SHOP2`;
+  const periodCode = `${year}-${monthCode}-SHOP2`;
+  const fiscalYearStart = new Date(Date.UTC(year, 0, 1));
+  const fiscalYearEnd = new Date(Date.UTC(year + 1, 0, 1) - 1);
+  const periodStart = new Date(Date.UTC(year, month, 1));
+  const periodEnd = new Date(Date.UTC(year, month + 1, 1) - 1);
+
+  const fiscalYear = await prisma.enterpriseFiscalYear.upsert({
+    where: { organizationId_code: { organizationId, code: fiscalYearCode } },
+    update: { startDate: fiscalYearStart, endDate: fiscalYearEnd, status: "OPEN" },
+    create: {
+      organizationId,
+      code: fiscalYearCode,
+      startDate: fiscalYearStart,
+      endDate: fiscalYearEnd,
+      status: "OPEN",
+      createdByUserId: actorUserId,
+      openedAt: fiscalYearStart,
+    },
+  });
+
+  await prisma.enterpriseFiscalPeriod.upsert({
+    where: { organizationId_code: { organizationId, code: periodCode } },
+    update: { fiscalYearId: fiscalYear.id, startDate: periodStart, endDate: periodEnd, status: "OPEN" },
+    create: {
+      organizationId,
+      fiscalYearId: fiscalYear.id,
+      code: periodCode,
+      startDate: periodStart,
+      endDate: periodEnd,
+      status: "OPEN",
+      createdByUserId: actorUserId,
+    },
+  });
+}
+
 async function main() {
   const [admin, user, baseProduct, site, warehouse, uom, taxLedgerAccount, cashAccount] = await Promise.all([
     prisma.user.findUnique({ where: { email: adminEmail } }),
@@ -48,6 +89,10 @@ async function main() {
     update: { role: "OWNER", status: "ACTIVE", joinedAt: new Date(), removedAt: null },
     create: { organizationId, userId: user.id, role: "OWNER", status: "ACTIVE", joinedAt: new Date() },
   });
+
+  // Retail postings are dated at execution time. Keep the acceptance fixture aligned
+  // with the current UTC month so the Finance period gate remains strict year-round.
+  await ensureCurrentFiscalPeriod(admin.id);
 
   const bankLedgerAccount = await prisma.enterpriseLedgerAccount.upsert({
     where: { organizationId_code: { organizationId, code: "SHOP2-BANK" } },

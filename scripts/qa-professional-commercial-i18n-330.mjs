@@ -36,64 +36,17 @@ for (const token of [
 ]) check(i18n.includes(token), `Canonical Professional ERP i18n registration missing: ${token}`);
 
 const helper = read("components/enterprise/professional/professional-erp-i18n.ts");
-for (const token of [
-  "useAppLocale",
-  "professionalErpMoney",
-  "professionalErpDate",
-  "professionalErpEnumLabel",
-]) check(helper.includes(token), `Professional ERP locale helper missing contract: ${token}`);
+for (const token of ["useAppLocale", "professionalErpMoney", "professionalErpDate", "professionalErpEnumLabel"]) check(helper.includes(token), `Professional ERP locale helper missing contract: ${token}`);
 check(!helper.includes("MutationObserver"), "Professional ERP locale helper must not observe the DOM as locale authority");
 check(!helper.includes("document.documentElement.lang"), "Professional ERP locale helper must use LocaleProvider rather than the HTML lang attribute");
 check(helper.includes('locale === "en" ? "en-US" : "fr-FR"'), "Professional ERP formats must derive from the active locale");
 
 const workspaces = [
-  ["components/enterprise/professional/enterprise-customers-workspace.tsx", [
-    "/business-parties",
-    "/business-parties/duplicates",
-    "/identity-link-invitations",
-    "relationForRoles",
-    "revision: edit.revision",
-  ]],
-  ["components/enterprise/professional/enterprise-crm-workspace.tsx", [
-    "/professional-lookups?module=CRM_PIPELINE",
-    "/leads",
-    "/opportunities",
-    "/transition",
-    "/convert",
-    "revision: item.revision",
-  ]],
-  ["components/enterprise/professional/enterprise-contracts-workspace.tsx", [
-    "/professional-lookups?module=CONTRACTS",
-    "/contracts",
-    "/transition",
-    "revision: contract.revision",
-    '"SUBMIT"',
-    '"APPROVE"',
-    '"REQUEST_CORRECTION"',
-    '"ACTIVATE"',
-    '"RENEW"',
-    '"TERMINATE"',
-  ]],
-  ["components/enterprise/professional/enterprise-catalog-workspace.tsx", [
-    "/catalog",
-    "/catalog-categories",
-    "/units-of-measure",
-    "revision: edit.revision",
-    "trackInventory",
-    "taxable",
-  ]],
-  ["components/enterprise/professional/enterprise-sales-operations-workspace.tsx", [
-    "/professional-lookups?module=SALES_QUOTES_ORDERS",
-    "/catalog-items?page=1&pageSize=200&status=ACTIVE",
-    "/quotes",
-    "/sales-orders",
-    "/transition",
-    "/convert",
-    "/fulfill",
-    'fulfillmentType: "PRODUCT_DELIVERY"',
-    "idempotencyKey: crypto.randomUUID()",
-    "revision: fulfillTarget.revision",
-  ]],
+  ["components/enterprise/professional/enterprise-customers-workspace-v2.tsx", ["/business-parties", "/business-parties/duplicates", "/identity-link-invitations", "relationForRoles", "revision: edit.revision"]],
+  ["components/enterprise/professional/enterprise-crm-workspace-v2.tsx", ["/professional-lookups?module=CRM_PIPELINE", "/leads", "/opportunities", "/transition", "/convert", "revision: item.revision"]],
+  ["components/enterprise/professional/enterprise-contracts-workspace-v2.tsx", ["/professional-lookups?module=CONTRACTS", "/contracts", "/transition", "revision: actionTarget.contract.revision", '"SUBMIT"', '"APPROVE"', '"REQUEST_CORRECTION"', '"ACTIVATE"', '"RENEW"', '"TERMINATE"']],
+  ["components/enterprise/professional/enterprise-catalog-workspace-v2.tsx", ["/catalog", "/catalog-categories", "/units-of-measure", "revision: edit.revision", "trackInventory", "taxable"]],
+  ["components/enterprise/professional/enterprise-sales-operations-workspace.tsx", ["/professional-lookups?module=SALES_QUOTES_ORDERS", "/catalog?${params.toString()}", "/quotes", "/sales-orders", "/transition", "/convert", "/fulfill", 'fulfillmentType: "PRODUCT_DELIVERY"', "idempotencyKey: fulfillmentKey", "revision: fulfillTarget.revision"]],
 ];
 
 for (const [file, contracts] of workspaces) {
@@ -107,27 +60,27 @@ for (const [file, contracts] of workspaces) {
   for (const contract of contracts) check(source.includes(contract), `${file} business contract must remain intact: ${contract}`);
 }
 
-const customers = read("components/enterprise/professional/enterprise-customers-workspace.tsx");
+const customers = read("components/enterprise/professional/enterprise-customers-workspace-v2.tsx");
 check(!customers.includes("const ROLE_LABELS"), "Customers must not keep a local role-label dictionary");
 check(!customers.includes("const IDENTITY_STATUS_LABELS"), "Customers must not keep a local identity-status dictionary");
 check(customers.includes('professionalErpEnumLabel(locale, "role"'), "Customers must project role codes through canonical labels");
 check(customers.includes('professionalErpEnumLabel(locale, "identityStatus"'), "Customers must project identity statuses through canonical labels");
 
-const crm = read("components/enterprise/professional/enterprise-crm-workspace.tsx");
+const crm = read("components/enterprise/professional/enterprise-crm-workspace-v2.tsx");
 check(!crm.includes("const OPPORTUNITY_LABELS"), "CRM must not keep a local opportunity-stage dictionary");
 check(!crm.includes("const LEAD_LABELS"), "CRM must not keep a local lead-status dictionary");
 check(crm.includes('professionalErpEnumLabel(locale, "opportunityStage"'), "CRM stages must be projected canonically");
 check(crm.includes('locale === "en" ? department.labelEn : department.labelFr'), "CRM department selectors must use the active language");
 
-const contracts = read("components/enterprise/professional/enterprise-contracts-workspace.tsx");
+const contracts = read("components/enterprise/professional/enterprise-contracts-workspace-v2.tsx");
 check(!contracts.includes("const STATUS_LABELS"), "Contracts must not keep a local status dictionary");
 check(!contracts.includes("const APPROVAL_STATUS_LABELS"), "Contracts must not keep a local approval-status dictionary");
 check(contracts.includes('professionalErpEnumLabel(locale, "contractType"'), "Contract types must be projected canonically");
 check(contracts.includes('professionalErpEnumLabel(locale, "approvalStatus"'), "Contract approvals must be projected canonically");
 
-const catalog = read("components/enterprise/professional/enterprise-catalog-workspace.tsx");
+const catalog = read("components/enterprise/professional/enterprise-catalog-workspace-v2.tsx");
 check(catalog.includes('professionalErpEnumLabel(locale, "itemType"'), "Catalog item types must be projected canonically");
-check(catalog.includes('professionalErpEnumLabel(locale, "unitCategory"'), "Catalog unit categories must not be rendered as raw enums");
+check(catalog.includes("unitCategoryLabel"), "Catalog unit categories must use localized controlled labels");
 check(catalog.includes("professionalErpDate(price.effectiveFrom, locale)"), "Catalog price history dates must be locale-aware");
 
 const sales = read("components/enterprise/professional/enterprise-sales-operations-workspace.tsx");
@@ -143,5 +96,4 @@ if (failures.length) {
   console.error("Issue #330 Professional ERP commercial i18n QA failed:\n" + failures.map((failure) => `- ${failure}`).join("\n"));
   process.exit(1);
 }
-
-console.log("Issue #330 Professional ERP commercial i18n QA passed: FR/EN catalog parity, canonical LocaleProvider projection and CRM/customers/contracts/catalog/sales business contracts remain intact.");
+console.log("Issue #330 Professional ERP commercial i18n QA passed: FR/EN parity, canonical locale projection and guided commercial workflows remain intact.");

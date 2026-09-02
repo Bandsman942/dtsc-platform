@@ -8,7 +8,7 @@ const need = (file, marker) => {
   if (!content.includes(marker)) failures.push(`${file}: ${marker}`);
 };
 
-const crmFile = "components/enterprise/professional/enterprise-crm-workspace.tsx";
+const crmFile = "components/enterprise/professional/enterprise-crm-workspace-v2.tsx";
 const crm = read(crmFile);
 const fr = JSON.parse(read("locales/professional-erp.fr.json"));
 const en = JSON.parse(read("locales/professional-erp.en.json"));
