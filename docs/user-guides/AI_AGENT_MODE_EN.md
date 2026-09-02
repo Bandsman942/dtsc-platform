@@ -9,6 +9,18 @@ To start a run, open the panel, describe the outcome you need and choose **Run a
 
 Agent Mode is an explicit opt-in path. It does not automatically replace regular conversations and does not grant unlimited autonomy. Maximum steps, tool calls, tokens, estimated cost and active duration are enforced by server policy according to plan and data classifications.
 
+### Execution budget by plan
+
+The organization’s active commercial plan automatically determines the run ceiling. The browser can never select a higher tier; it may only request a more restrictive budget.
+
+| DTSC plan | Max steps | Max tool calls | Max tokens/run | Max estimated cost/run | Max active duration |
+|---|---:|---:|---:|---:|---:|
+| Starter | 4 | 3 | 8,000 | USD 0.15 | 25 s |
+| Business | 10 | 10 | 32,000 | USD 1 | 45 s |
+| Enterprise / Premium | 18 | 20 | 64,000 | USD 4 | 55 s |
+
+Legacy offers named **Premium**, **Enterprise** or **Entreprise** use the **Enterprise** tier. These per-run ceilings do not replace global commercial message/token quotas, rate limits, permissions or security policies. A Premium cross-module analysis can therefore perform more authorized reads in one run—for example across Treasury, Bank, Payments, Reconciliation and other Finance modules—without gaining any additional data permission.
+
 ## Accès et permissions
 
 - Access depends on the authenticated session, active context, role, permissions, subscription plan and enabled modules.
@@ -53,7 +65,7 @@ Before an important decision, review citations, business results and the relevan
 
 ## Dépannage
 
-- **Budget reached**: reduce the objective or start a more focused run; do not try to increase limits from the browser.
+- **Budget reached**: first check the active plan and the reason shown in the run panel. Enterprise/Premium has a wider budget for cross-module tasks; if the run still reaches its ceiling, narrow the objective or start a new run. Never attempt to raise the ceiling from the browser.
 - **Action not authorized**: verify active organization context, role, permissions, plan and enabled modules.
 - **Expired approval**: ask the agent to prepare the action again so a fresh valid proposal can be created.
 - **Ready to resume but stopped**: use **Resume after approval**; continuation uses the same run and the canonical server-side tool result.

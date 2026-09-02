@@ -9,6 +9,18 @@ Pour démarrer un run, ouvrez le panneau, décrivez le résultat attendu puis ch
 
 Le Mode Agent est un parcours opt-in. Il ne remplace pas automatiquement une conversation classique et n’active pas une autonomie illimitée. Les plafonds d’étapes, d’appels outils, de tokens, de coût estimé et de durée active sont déterminés côté serveur selon le plan et les classifications de données.
 
+### Budget d’exécution selon le plan
+
+Le plan commercial actif de l’entreprise détermine automatiquement le plafond du run. Le navigateur ne choisit jamais un niveau supérieur : il peut seulement demander un budget plus restrictif.
+
+| Plan DTSC | Étapes max. | Appels outils max. | Tokens max./run | Coût estimé max./run | Durée active max. |
+|---|---:|---:|---:|---:|---:|
+| Essentiel | 4 | 3 | 8 000 | 0,15 USD | 25 s |
+| Professionnel | 10 | 10 | 32 000 | 1 USD | 45 s |
+| Entreprise / Premium | 18 | 20 | 64 000 | 4 USD | 55 s |
+
+Les anciennes offres nommées **Premium**, **Enterprise** ou **Entreprise** utilisent le niveau **Entreprise**. Ces plafonds de run ne remplacent pas les quotas commerciaux globaux de messages/tokens, le rate limiting, les permissions ou les règles de sécurité. Une analyse transversale Premium peut ainsi utiliser plus de lectures autorisées dans un même run, par exemple pour rapprocher Trésorerie, Banque, Paiements, Rapprochement et d’autres modules Finance, sans donner de droit supplémentaire sur les données.
+
 ## Accès et permissions
 
 - L’accès dépend de la session authentifiée, du contexte actif, du rôle, des permissions, du plan et des modules disponibles.
@@ -53,7 +65,7 @@ Avant toute décision importante, vérifiez les citations, les résultats métie
 
 ## Dépannage
 
-- **Limite atteinte** : réduisez la tâche ou démarrez un nouveau run plus ciblé ; ne cherchez pas à augmenter les plafonds depuis le navigateur.
+- **Limite atteinte** : vérifiez d’abord le plan actif et le motif affiché dans le panneau. Le niveau Entreprise/Premium dispose d’un budget plus large pour les tâches multi-modules ; si la tâche atteint malgré tout son plafond, ciblez le périmètre ou démarrez un nouveau run. N’essayez jamais d’augmenter le plafond depuis le navigateur.
 - **Action non autorisée** : vérifiez le contexte d’organisation, votre rôle, vos permissions, votre plan et les modules accessibles.
 - **Validation expirée** : demandez à l’agent de préparer de nouveau l’action afin de générer une nouvelle proposition valide.
 - **Run prêt mais non repris** : utilisez **Reprendre après validation** ; la reprise continue le même run à partir du résultat canonique de l’outil.
