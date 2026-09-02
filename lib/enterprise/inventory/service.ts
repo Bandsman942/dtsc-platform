@@ -49,7 +49,7 @@ async function assertInventoryCoordinates(tx: Prisma.TransactionClient, organiza
 export async function applyStockMovementTx(tx: Prisma.TransactionClient, organizationId: string, actorUserId: string, input: StockMovementInput) {
   const existing = await tx.enterpriseStockMovement.findFirst({ where: { organizationId, idempotencyKey: input.idempotencyKey } });
   if (existing) return { movement: existing, idempotent: true };
-  await assertInventoryCoordinates(tx, organizationId, input);
+  const inventoryItem = await assertInventoryCoordinates(tx, organizationId, input);
 
   const balance = await tx.enterpriseInventoryBalance.findFirst({
     where: {
@@ -63,7 +63,7 @@ export async function applyStockMovementTx(tx: Prisma.TransactionClient, organiz
   const currentQuantity = Number(balance?.quantityOnHand || 0);
   const delta = input.direction === "IN" ? input.quantity : -input.quantity;
   const nextQuantity = currentQuantity + delta;
-  if (nextQuantity < -0.000001) throw new EnterpriseDomainError("NEGATIVE_STOCK_FORBIDDEN", 409);
+  if (nextQuantity < -0.000001 && !inventoryItem.allowNegativeStock) throw new EnterpriseDomainError("NEGATIVE_STOCK_FORBIDDEN", 409);
 
   const movement = await tx.enterpriseStockMovement.create({
     data: {
