@@ -9,7 +9,12 @@ type EnterpriseCoordinationSupplementKey =
   | "common.save"
   | "approvals.target.stockTransfer"
   | "approvals.target.inventoryCount"
-  | "approvals.target.stockAdjustment";
+  | "approvals.target.stockAdjustment"
+  | "documents.editTitle"
+  | "documents.archiveReview"
+  | "documents.archiveReason"
+  | "documents.archiveReasonHelp"
+  | "documents.sourceUnavailable";
 export type EnterpriseCoreKey = BaseEnterpriseCoreKey | EnterpriseProcurementCoreKey | EnterpriseCoordinationSupplementKey;
 
 const procurementFragments = { fr: enterpriseProcurementFr, en: enterpriseProcurementEn } as const;
@@ -22,6 +27,11 @@ const coordinationSupplements: Record<"fr" | "en", Record<EnterpriseCoordination
     "approvals.target.stockTransfer": "Transfert de stock",
     "approvals.target.inventoryCount": "Inventaire physique",
     "approvals.target.stockAdjustment": "Ajustement de stock",
+    "documents.editTitle": "Modifier le document",
+    "documents.archiveReview": "Vérifiez le document avant de l’archiver. Le fichier et son historique restent conservés.",
+    "documents.archiveReason": "Motif professionnel",
+    "documents.archiveReasonHelp": "Expliquez brièvement pourquoi ce document doit être retiré des documents actifs.",
+    "documents.sourceUnavailable": "La source de ce document ne possède pas de module canonique reconnu. Le document n’a pas été créé.",
   },
   en: {
     "meetings.action.reason": "Professional reason",
@@ -30,6 +40,11 @@ const coordinationSupplements: Record<"fr" | "en", Record<EnterpriseCoordination
     "approvals.target.stockTransfer": "Stock transfer",
     "approvals.target.inventoryCount": "Inventory count",
     "approvals.target.stockAdjustment": "Stock adjustment",
+    "documents.editTitle": "Edit document",
+    "documents.archiveReview": "Review the document before archiving it. The file and its history remain preserved.",
+    "documents.archiveReason": "Business reason",
+    "documents.archiveReasonHelp": "Briefly explain why this document should be removed from active documents.",
+    "documents.sourceUnavailable": "This document source has no recognized canonical module. The document was not created.",
   },
 };
 
