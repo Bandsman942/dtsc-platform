@@ -1,9 +1,11 @@
 "use client";
 
 import { useAppLocale } from "@/components/i18n/locale-provider";
-import { translateProfessionalErp, type ProfessionalErpKey } from "@/lib/i18n";
+import { translateProfessionalErp, type ProfessionalErpKey as BaseProfessionalErpKey } from "@/lib/i18n";
 
 export type ProfessionalErpLocale = "fr" | "en";
+type ProfessionalErpSupplementKey = "common.loadFailed" | "common.loading" | "common.page";
+export type ProfessionalErpKey = BaseProfessionalErpKey | ProfessionalErpSupplementKey;
 
 export function useProfessionalErpLocale(): ProfessionalErpLocale {
   const locale = useAppLocale();
@@ -24,6 +26,19 @@ const approvalMessages = {
     APPROVER_ELIGIBILITY_CHECK_FAILED: "The approver’s permissions could not be verified. Try again before submitting the request.",
   },
 } as const;
+
+const professionalSupplements: Record<ProfessionalErpLocale, Record<ProfessionalErpSupplementKey, string>> = {
+  fr: {
+    "common.loadFailed": "Impossible de charger les données.",
+    "common.loading": "Chargement…",
+    "common.page": "Page {{current}} sur {{total}}",
+  },
+  en: {
+    "common.loadFailed": "Unable to load data.",
+    "common.loading": "Loading…",
+    "common.page": "Page {{current}} of {{total}}",
+  },
+};
 
 const siteTypeSupplements = {
   fr: {
@@ -48,7 +63,9 @@ export function professionalErpApprovalMessage(locale: ProfessionalErpLocale, co
 }
 
 export function professionalErpT(locale: ProfessionalErpLocale, key: ProfessionalErpKey, values?: Record<string, string | number>) {
-  let text = translateProfessionalErp(locale, key);
+  let text = key in professionalSupplements[locale]
+    ? professionalSupplements[locale][key as ProfessionalErpSupplementKey]
+    : translateProfessionalErp(locale, key as BaseProfessionalErpKey);
   if (!values) return text;
   for (const [name, value] of Object.entries(values)) text = text.replaceAll(`{{${name}}}`, String(value));
   return text;
@@ -99,7 +116,7 @@ export function professionalErpEnumLabel(
     const supplemented = siteTypeSupplements[locale][value as keyof typeof siteTypeSupplements.fr];
     if (supplemented) return supplemented;
   }
-  const key = `${group}.${value}` as ProfessionalErpKey;
+  const key = `${group}.${value}` as BaseProfessionalErpKey;
   const localized = translateProfessionalErp(locale, key);
   return localized || professionalErpT(locale, "common.valueToReview");
 }
