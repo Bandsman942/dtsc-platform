@@ -343,7 +343,7 @@ async function inventory(context: AiToolRuntimeContext, organizationId: string, 
   });
   const movements = await prisma.enterpriseStockMovement.findMany({
     where: { organizationId, occurredAt: { gte: start } }, orderBy: { occurredAt: "desc" }, take: limit,
-    select: { movementType: true, quantity: true, occurredAt: true, reference: true, notes: true, inventoryItem: { select: { catalogItem: { select: { code: true, name: true } } } }, warehouse: { select: { code: true, name: true } } },
+    select: { movementType: true, direction: true, quantity: true, balanceAfter: true, occurredAt: true, reason: true, sourceEntityType: true, inventoryItem: { select: { catalogItem: { select: { code: true, name: true } } } }, warehouse: { select: { code: true, name: true } } },
   });
   return output(toolName, normalized.length + movements.length, `${normalized.length} article(s) de stock et ${movements.length} mouvement(s) récent(s) lus.`, { lowStockCount: normalized.filter((item) => item.isLowStock).length, items: normalized, movements });
 }
