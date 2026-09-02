@@ -12,8 +12,9 @@ requirePaths([
 
 requireTokens("lib/enterprise/core-v2/constants.ts", ["PURCHASE_REQUEST"]);
 requireTokens("lib/standard-work-coordination/request-i18n.ts", ["PURCHASE_REQUEST: \"Demande d’achat\"", "PURCHASE_REQUEST: \"Purchase request\""]);
-requireTokens("lib/enterprise/procurement/validators.ts", ["catalogItemId", "expectedItemType", "destinationSiteId", "destinationWarehouseId", "warehouseId", "storageLocationId"]);
-requireTokens("lib/enterprise/procurement/purchase-service.ts", ["APPROVED_PURCHASE_REQUEST_REQUIRED", "requestType: \"PURCHASE_REQUEST\"", "enterprisePurchaseItemCatalogLink", "enterprisePurchaseOperationalLink", "postEnterprisePurchaseReceiptToInventoryTx"]);
+requireTokens("lib/enterprise/procurement/validators.ts", ["catalogItemId", "siteId", "destinationWarehouseId", "warehouseId", "storageLocationId"]);
+forbidTokens("lib/enterprise/procurement/validators.ts", ["expectedItemType"]);
+requireTokens("lib/enterprise/procurement/purchase-service.ts", ["APPROVED_PURCHASE_REQUEST_REQUIRED", "requestType: \"PURCHASE_REQUEST\"", "enterprisePurchaseItemCatalogLink", "enterprisePurchaseOperationalLink", "postEnterprisePurchaseReceiptToInventoryTx", "catalogExpectedItemType", "catalogItem.trackInventory", "expectedItemType: catalogExpectedItemType(catalogItem.itemType, catalogItem.trackInventory)"]);
 requireTokens("lib/enterprise/procurement/common-domain-adapter.ts", ["postEnterprisePurchaseReceiptToInventoryTx", "PURCHASE_RECEIPT", "expectedItemType === \"GOODS\"", "enterprisePurchaseReceiptItemStockLink", "STORAGE_LOCATION_NOT_FOUND"]);
 requireTokens("lib/enterprise/sector-convergence/pharmacy-procurement-service.ts", ["catalogItemId: catalogByProduct.get(line.productId)!", "PHARMACY_PRODUCT_MAPPING_REQUIRED"]);
 
@@ -37,7 +38,7 @@ requireTokens("components/enterprise/professional/enterprise-sites-workspace.tsx
 requireTokens("lib/enterprise/procurement/validators.ts", ["enterpriseDocumentArchiveSchema", "reason"]);
 requireTokens("lib/enterprise/procurement/document-service.ts", ["DOCUMENT_ARCHIVE", "reason"]);
 requireTokens("components/enterprise/core-v2/enterprise-documents-workspace.tsx", ["archiveTarget", "presentation=\"editor\"", "sourceModule", "sourceEntityType", "sourceEntityId"]);
-requireTokens("components/enterprise/core-v2/enterprise-purchases-workspace.tsx", ["catalogItemId", "destinationSiteId", "destinationWarehouseId", "presentation=\"editor\"", "FINANCE_PAYABLES"]);
+requireTokens("components/enterprise/core-v2/enterprise-purchases-workspace.tsx", ["catalogItemId", "siteId", "destinationWarehouseId", "presentation=\"editor\"", "FINANCE_PAYABLES"]);
 forbidTokens("components/enterprise/core-v2/enterprise-purchases-workspace.tsx", ["/enterprise-modules/FINANCE_BUDGETS?purchaseId="]);
 
 success("hotfix #560 ERP supply, locations, documents, validations and inventory integrity");
