@@ -9,7 +9,8 @@ import {
   recordAiAgentStep,
   updateAiAgentRunProgress,
 } from "@/lib/ai/agent/persistence";
-import { buildAgentToolResultMessage, resumeInteractiveAiAgentStream } from "@/lib/ai/agent/runtime";
+import { resumeInteractiveAiAgentStream } from "@/lib/ai/agent/runtime";
+import { buildAgentToolResultMessage } from "@/lib/ai/agent/tool-result";
 import { prepareAiTurn } from "@/lib/ai/assistant-runtime";
 import { classifyAiTask } from "@/lib/ai/classifier";
 import {
