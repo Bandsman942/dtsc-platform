@@ -1,0 +1,27 @@
+const COMMON_ERP_ASSISTANT_CODES = [
+  "ENTERPRISE_GENERAL",
+  "SHOP_ASSISTANT",
+  "PHARMACY_ASSISTANT",
+  "HEALTH_ASSISTANT",
+] as const;
+
+const RETAIL_ERP_ASSISTANT_CODES = ["ENTERPRISE_GENERAL", "SHOP_ASSISTANT"] as const;
+
+const RETAIL_ERP_MODULE_CODES = new Set([
+  "RETAIL_POS",
+  "MOBILE_MONEY_AGENCY",
+  "TELCO_TOPUPS",
+  "RETAIL_DAILY_CLOSE",
+]);
+
+export function assistantCodesForErpModule(moduleCode: string): string[] {
+  return RETAIL_ERP_MODULE_CODES.has(moduleCode)
+    ? [...RETAIL_ERP_ASSISTANT_CODES]
+    : [...COMMON_ERP_ASSISTANT_CODES];
+}
+
+export const ERP_ASSISTANT_POLICY = {
+  common: [...COMMON_ERP_ASSISTANT_CODES],
+  retail: [...RETAIL_ERP_ASSISTANT_CODES],
+  retailModules: [...RETAIL_ERP_MODULE_CODES],
+};

@@ -5,6 +5,7 @@ const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const persistence = read("lib/ai/agent/persistence.ts");
 const runtime = read("lib/ai/agent/runtime.ts");
+const toolResult = read("lib/ai/agent/tool-result.ts");
 const resume = read("lib/ai/agent/resume.ts");
 const route = read("app/api/ai/agent/runs/[id]/resume/route.ts");
 const confirm = read("app/api/ai/tools/confirm/route.ts");
@@ -20,7 +21,12 @@ check(runtime.includes("resumeInteractiveAiAgentStream") && runtime.includes("pe
 check(runtime.includes("resolveAiAgentBudget") && resume.includes("maxEstimatedCost: Number(run.maxEstimatedCost)"), "Persisted budget must be re-clamped against current server policy");
 check(resume.includes("deltaUsage") && resume.includes("recordEnterpriseAiUsage") && resume.includes("usageLog.create"), "Resume must record only continuation usage delta");
 check(resume.includes("assertEnterpriseAiMessageQuota") && resume.includes("dailyTokenLimit"), "Resume must re-check current quotas");
-check(resume.includes("buildAgentToolResultMessage") && runtime.includes("données non fiables"), "Canonical tool result must re-enter the model as untrusted data");
+check(
+  resume.includes('buildAgentToolResultMessage } from "@/lib/ai/agent/tool-result"') &&
+  toolResult.includes("données non fiables") &&
+  toolResult.includes("ne le recopie jamais brut"),
+  "Canonical tool result must re-enter the model through the structural serializer as untrusted data",
+);
 check(resume.includes("getActiveOrganizationId") === false, "Resume service must receive resolved organization rather than infer client tenant state itself");
 check(route.includes("getActiveOrganizationId") && route.includes("isSameOriginRequest"), "Resume API must be same-origin and active-organization scoped");
 check(!route.includes("req.json("), "Resume API must not accept tool result or arguments from the browser");
