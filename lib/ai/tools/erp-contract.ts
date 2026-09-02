@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { AiToolDefinition } from "@/lib/ai/tool-registry";
+import { assistantCodesForErpModule } from "@/lib/ai/tools/erp-assistant-policy";
 
 export const ERP_AI_READ_SPECS = [
   { code: "ERP_TASKS_READ", moduleCode: "TASKS_OPERATIONS", label: "Tâches & opérations", description: "Lire les tâches et opérations récentes autorisées de l’entreprise." },
@@ -78,7 +79,7 @@ export const ERP_AI_TOOL_DEFINITIONS: AiToolDefinition[] = ERP_AI_READ_SPECS.map
   requiredModuleCodes: [spec.moduleCode],
   requiredPermissions: ["ENTERPRISE_AI.TOOLS.READ"],
   minimumPlan: "BUSINESS",
-  allowedAssistantCodes: ["ENTERPRISE_GENERAL"],
+  allowedAssistantCodes: assistantCodesForErpModule(spec.moduleCode),
   mode: "READ",
   requiresConfirmation: false,
   idempotent: false,
