@@ -84,6 +84,19 @@ const files = {
 };
 const content = Object.fromEntries(Object.entries(files).map(([key, file]) => [key, read(file)]));
 
+// Les façades historiques délèguent désormais vers des workspaces professionnels spécialisés.
+// Les contrôles de l'itération 03 doivent suivre la surface effectivement rendue, sans forcer
+// la duplication de l'implémentation dans les routeurs de compatibilité.
+content.projects = [
+  content.projects,
+  read("components/enterprise/professional/enterprise-projects-services-workspace.tsx"),
+  read("components/enterprise/professional/enterprise-time-deliverables-workspace.tsx"),
+].join("\n");
+content.assets = [
+  content.assets,
+  read("components/enterprise/professional/enterprise-assets-maintenance-workspace-v2.tsx"),
+].join("\n");
+
 const iterationModules = [
   "SALES_QUOTES_ORDERS",
   "SUPPLIERS_PURCHASES",
@@ -187,7 +200,7 @@ const checks = {
     for (const marker of ["isSameOriginRequest", "rateLimit", "organizationId", "employeeId", "ENTERPRISE_PROJECT_MEMBER_REMOVED"]) need(content.projectMembers, marker, "Membres projet");
   },
   assets() {
-    for (const marker of ["resolveIncident", "<form"]) need(content.assets, marker, "Actifs professionnels — invariants métier");
+    for (const marker of ["/asset-incidents/${review.item.id}/resolve", "<form"]) need(content.assets, marker, "Actifs professionnels — invariants métier");
     for (const localized of [
       ["assets.newAsset", "Nouvel actif", "New asset"],
       ["assets.assign", "Affecter", "Assign"],
