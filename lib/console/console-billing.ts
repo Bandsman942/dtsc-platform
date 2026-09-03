@@ -85,7 +85,7 @@ export async function getConsoleBillingDataset(input: {
     const planCode = publishedOffer?.capabilityCode || resolveSaasPlanCode(plan);
     return {
       id: plan.id,
-      name: publishedOffer?.name || plan.name,
+      name: plan.name,
       configuredName: plan.name,
       slug: plan.slug,
       description: publishedOffer?.positioningFr || plan.description,
@@ -129,7 +129,7 @@ export async function getConsoleBillingDataset(input: {
       subscription: subscription ? {
         id: subscription.id,
         planId: subscription.planId,
-        planName: publishedOffer?.name || subscription.plan.name,
+        planName: subscription.plan.name,
         planCode: planCode || "STARTER",
         capabilityLabel: getSaasPlanLabel(planCode || "STARTER", "fr"),
         priceUsd: publishedOffer?.priceUsd ?? Number(subscription.plan.priceUsd),
@@ -146,7 +146,7 @@ export async function getConsoleBillingDataset(input: {
         const historyPlanCode = historyPublishedOffer?.capabilityCode || resolveSaasPlanCode(item.plan);
         return {
           id: item.id,
-          planName: historyPublishedOffer?.name || item.plan.name,
+          planName: item.plan.name,
           planCode: historyPlanCode,
           capabilityLabel: getSaasPlanLabel(historyPlanCode, "fr"),
           priceUsd: historyPublishedOffer?.priceUsd ?? Number(item.plan.priceUsd),
