@@ -160,6 +160,9 @@ requireTokens("components/enterprise/professional/enterprise-project-control-act
 ]);
 requireTokens("components/enterprise/professional/enterprise-projects-services-workspace.tsx", [
   "EnterpriseProjectControlActions",
+  "PROJECT_EDITABLE_STATUSES",
+  "isProjectEditableStatus",
+  "projects.canWrite && isProjectEditableStatus(overview.status)",
   "ProfessionalPager",
   "presentation=\"editor\"",
   "useToastMessage",
