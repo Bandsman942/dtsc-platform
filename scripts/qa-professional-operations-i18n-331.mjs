@@ -102,12 +102,12 @@ for (const marker of [
 const projectContract = `${files.projects}\n${files.deliverables}`;
 for (const marker of [
   "/projects", "/deliverables", '"SUBMIT"', '"ACCEPT"', '"REQUEST_CHANGES"', '"REJECT"',
-  "revision: item.revision", 'role: "MEMBER"', "allocationPercent: 100",
+  "revision: review.item.revision", 'role: "MEMBER"', "allocationPercent: 100",
 ]) need(projectContract, marker, "projets — invariants");
 
 for (const marker of [
   "/assets", "/assignments", "/asset-assignments/", "/maintenance", "/incidents", "/asset-maintenance/", "/asset-incidents/",
-  '"START"', '"COMPLETE"', '"CANCEL"', "revision: item.revision", "revision: active.revision",
+  '"START"', '"COMPLETE"', '"CANCEL"', "revision: review.item.revision", "revision: active.revision",
 ]) need(files.assets, marker, "actifs — invariants");
 
 need(files.runner, "qa-professional-operations-i18n-331.mjs", "Regression QA");
