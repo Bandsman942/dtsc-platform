@@ -45,13 +45,13 @@ requireTokens("lib/enterprise/hr-payroll/timesheets.ts", [
   "TIMESHEET_PERIOD_OVERLAP",
   "totalApprovedMinutes",
   '"TIME_ATTENDANCE"',
-  "TIMESHEET_ENTRY_DURATION_MISMATCH",
-  "enterpriseTask.findFirst",
-  "enterpriseProjectMilestone.findFirst",
-  "enterpriseProjectDeliverable.findFirst",
-  "enterpriseContract.findFirst",
-  "enterpriseBusinessParty.findFirst",
-  "enterpriseCatalogItem.findFirst",
+  "TIMESHEET_ENTRY_DURATION_INVALID",
+  "enterpriseTask.findMany",
+  "enterpriseProjectMilestone.findMany",
+  "enterpriseProjectDeliverable.findMany",
+  "enterpriseContract.findMany",
+  "enterpriseBusinessParty.findMany",
+  "enterpriseCatalogItem.findMany",
 ]);
 
 requireTokens("lib/enterprise/hr-payroll/leave.ts", [
@@ -75,9 +75,7 @@ for (const path of [
   "app/api/enterprise/[organizationId]/work-schedules/route.ts",
   "app/api/enterprise/[organizationId]/attendance/route.ts",
   "app/api/enterprise/[organizationId]/leave-requests/[requestId]/cancel/route.ts",
-]) {
-  requireTokens(path, ["isSameOriginRequest", "rateLimit", "writeAuditLog", 'moduleCode: "TIME_ATTENDANCE"']);
-}
+]) requireTokens(path, ["isSameOriginRequest", "rateLimit", "writeAuditLog", 'moduleCode: "TIME_ATTENDANCE"']);
 
 requireTokens("app/api/enterprise/[organizationId]/hr-payroll-lookups/route.ts", [
   "listEnterpriseApprovalCandidates",
