@@ -1,82 +1,193 @@
 # Guide utilisateur — Abonnement
-> **Contrat de guide DTSC v2** — Fonctionnalités réellement déployées, interface FR/EN, permissions serveur et parcours mobile.
+> **Contrat de guide DTSC v2** — Catalogue publié, limites réelles, permissions serveur et parcours mobile.
 
-## Objectif et périmètre
+## Objectif
 
-Ce guide explique l’utilisation opérationnelle de **Abonnement** dans DTSC Platform. Il décrit uniquement les actions disponibles dans l’application, leurs règles métier et les contrôles appliqués.
+Le module **Abonnement** permet de comprendre l’offre réellement appliquée à votre compte ou à votre organisation, ses limites et son état de facturation.
 
-## Comprendre les trois notions affichées
+La page publique **Tarifs** (`/tarifs`), le module **Abonnement**, la Console DTSC et les assistants IA utilisent désormais le même catalogue commercial publié.
 
-Le module distingue désormais clairement :
+## Trois notions à distinguer
 
-- **l’offre commerciale** : ce qui est réellement proposé ou souscrit, par exemple `Découverte`, `Organisation Essentielle`, `Organisation Croissance` ou `Organisation Premium` ;
-- **l’abonnement** : l’instance active ou historique qui relie votre compte ou votre organisation à cette offre, avec son statut et sa période ;
-- **le niveau de capacité** : **Essentiel**, **Professionnel** ou **Entreprise**, utilisé par le serveur pour déterminer les fonctionnalités et limites disponibles.
+### Offre commerciale
 
-Le code technique correspondant au niveau peut être `STARTER`, `BUSINESS` ou `ENTERPRISE`, mais ces codes ne sont pas présentés comme le nom de votre offre commerciale.
+C’est le package que vous voyez et souscrivez : par exemple **Individuel Professionnel**, **Organisation Essentielle**, **Organisation Croissance** ou **Organisation Premium**.
+
+### Abonnement
+
+C’est l’instance qui relie votre compte ou votre organisation à une offre, avec son statut, sa période, son essai éventuel et son expiration.
+
+### Niveau de capacité
+
+DTSC Platform dérive ensuite un niveau **Essentiel**, **Professionnel** ou **Entreprise** pour appliquer les règles techniques. Ces niveaux ne remplacent jamais le nom de l’offre commerciale visible par le client.
+
+## Offres personnelles
+
+La release commerciale 2026.09 conserve quatre offres individuelles :
+
+| Offre | Prix mensuel de référence | Messages IA / jour | Tokens / jour | Sources IA |
+| --- | ---: | ---: | ---: | ---: |
+| Découverte individuelle | Gratuit | 5 | 15 000 | 1 |
+| Individuel Essentiel | 2 USD | 40 | 120 000 | 2 |
+| Individuel Professionnel | 15 USD | 200 | 750 000 | 20 |
+| Individuel Premium | 50 USD | 1 000 | 3 000 000 | 100 |
+
+Les offres personnelles se différencient principalement par les volumes de l’assistant IA et le nombre de sources de connaissance utilisables.
+
+Les valeurs réellement affichées sur `/tarifs` et `/billing` viennent du catalogue administré courant. Si DTSC publie plus tard une nouvelle révision, ces pages n’utilisent pas une ancienne copie codée en dur.
+
+## Offres organisation
+
+### Organisation Essentielle — 25 USD/mois de référence
+
+Pensée pour **structurer et collaborer** :
+
+- jusqu’à 10 utilisateurs ;
+- 5 Go de stockage ;
+- 300 minutes d’appels collaboratifs par mois ;
+- jusqu’à 12 modules actifs ;
+- 1 000 documents métier ;
+- 50 sources de connaissance IA avec la valeur de référence actuelle ;
+- administration entreprise de base ;
+- collaborateurs, postes, départements et permissions de base ;
+- demandes internes, documents, rapports, clients/tiers, catalogue, projets & services ;
+- calendrier et appels collaboratifs ;
+- IA Assistant Entreprise en **lecture, recherche, résumé et analyse**.
+
+Le mode Agent de l’IA Entreprise reste limité aux outils de lecture dans cette offre.
+
+### Organisation Croissance — 75 USD/mois de référence
+
+Pensée pour **gérer et automatiser** :
+
+- jusqu’à 50 utilisateurs ;
+- 50 Go ;
+- 3 000 minutes d’appels par mois ;
+- jusqu’à 60 modules actifs ;
+- 20 000 documents métier ;
+- 250 sources IA avec la valeur de référence actuelle ;
+- tout le socle Essentiel ;
+- tâches, validations, réunions et workflows ;
+- CRM, ventes, contrats, fournisseurs, achats, sites, stocks et logistique ;
+- RH, temps & présences, temps & livrables, actifs & maintenance ;
+- finances opérationnelles selon les modules disponibles ;
+- IA Entreprise pouvant **préparer des actions** lorsque votre rôle et vos permissions l’autorisent.
+
+Une préparation IA n’est pas une exécution automatique : les contrôles et confirmations du module restent applicables.
+
+### Organisation Premium — 180 USD/mois de référence
+
+Pensée pour **piloter, comptabiliser et sectorialiser** :
+
+- jusqu’à 500 utilisateurs ;
+- 500 Go ;
+- 30 000 minutes d’appels par mois ;
+- jusqu’à 250 modules actifs ;
+- 250 000 documents métier ;
+- 1 000 sources IA avec la valeur de référence actuelle ;
+- tout le socle Croissance ;
+- paie opérationnelle ;
+- banque, rapprochement, comptabilité, fiscalité, clôture et états financiers ;
+- finance des actifs et inventaire ;
+- capacités sectorielles avancées Health/Pharmacy lorsque le secteur est concerné ;
+- mode Agent avancé, toujours soumis aux permissions, confirmations et règles métier.
+
+## Comprendre les limites affichées
+
+Trois compteurs sont volontairement séparés.
+
+### Sources de connaissance IA
+
+Fichiers et sources utilisés par les assistants IA pour rechercher, résumer ou analyser des informations autorisées.
+
+### Documents métier
+
+Pièces opérationnelles de l’ERP : factures, contrats, documents de processus et autres documents métier. Leur plafond est indépendant des sources IA.
+
+### Stockage
+
+Capacité globale de stockage. Un espace peut donc avoir une limite de documents métier, une limite de sources IA et une limite de stockage différentes.
 
 ## Offre appliquée selon le contexte
 
-Le module distingue l’abonnement personnel de l’abonnement de l’organisation active.
+- **Compte personnel** : l’offre vient de votre abonnement personnel actif ou, à défaut, de l’offre gratuite Découverte.
+- **Organisation cliente** : l’offre vient uniquement de l’abonnement de l’organisation active. Votre offre personnelle ne remplace jamais celle de l’entreprise.
+- **DTSC interne** : les capacités internes restent séparées des abonnements clients.
 
-- Dans le contexte personnel, l’offre appliquée vient de votre abonnement personnel actif ou, à défaut, de l’offre gratuite Découverte.
-- Dans une organisation cliente, l’offre appliquée vient exclusivement de l’abonnement de cette organisation. Le compte personnel d’un membre ne remplace jamais silencieusement l’offre de l’entreprise.
-- Dans le contexte interne DTSC, les capacités internes restent séparées des abonnements clients.
+Il est normal d’avoir une offre personnelle Découverte tout en travaillant dans une organisation Premium.
 
-Il est donc normal d’avoir, par exemple, une offre personnelle **Découverte** tout en travaillant dans une entreprise dont l’offre active est **Organisation Premium** et le niveau de capacité **Entreprise**.
+## IA et catalogue commercial
 
-## Statuts
+### Assistant du site public
 
-Les statuts peuvent notamment être gratuit, actif, en attente de paiement, en retard, annulé ou expiré selon les valeurs réellement enregistrées.
+L’assistant public peut expliquer les abonnements DTSC Platform et citer leurs tarifs uniquement depuis le catalogue publié courant. Il distingue ces abonnements d’un devis de conseil, développement, intégration ou formation.
 
-## Limites et consommation
+### Chatbot général connecté
 
-Les messages, tokens et documents affichés utilisent les journaux et compteurs réels du **contexte actif**. Les limites affichées proviennent de la même résolution commerciale que l’offre et le niveau de capacité visibles en haut de page. Le frontend n’autorise jamais seul un dépassement.
+Le chatbot général peut expliquer DTSC Platform et son catalogue. Il ne lit pas les données ERP de votre entreprise active.
 
-## Factures SaaS
+### IA Assistant Entreprise
 
-Les factures de ce module concernent l’abonnement DTSC. Elles ne sont pas les factures clients, fournisseurs ou comptables des modules ERP.
+L’IA Entreprise reçoit l’offre et les limites effectives de l’organisation, mais l’abonnement n’accorde jamais à lui seul l’accès aux données.
 
-## Paiements
+Le serveur vérifie toujours le contexte d’organisation, le rôle, les permissions, les modules, le secteur et les outils réellement disponibles.
 
-La référence, le fournisseur, le montant, la devise, le statut et la date sont affichés lorsqu’ils existent.
+Selon l’offre :
 
-## Changement d’offre
+- **Essentielle** : outils de lecture uniquement ;
+- **Croissance** : lecture + préparation d’actions ;
+- **Premium** : lecture + préparation + modes d’action avancés autorisés.
 
-Une action de paiement ou de changement n’est affichée que lorsque le fournisseur est réellement configuré. Pour une organisation, seules les offres destinées aux organisations peuvent être sélectionnées. En cas d’échec, conserver la référence et contacter le support.
+Une action sensible reste soumise aux confirmations et règles du module concerné.
+
+## Statuts et facturation
+
+Les statuts peuvent notamment indiquer qu’un abonnement est actif, en essai, en attente de paiement, en retard, annulé ou expiré selon la situation réellement enregistrée.
+
+Les factures présentées dans **Abonnement** concernent l’abonnement SaaS DTSC Platform. Elles sont distinctes des factures clients, fournisseurs et pièces comptables de l’ERP.
+
+La référence, le fournisseur, le montant, la devise, le statut et la date du paiement sont affichés lorsqu’ils existent.
+
+## Changer d’offre
+
+Une action de paiement ou de changement n’est affichée que lorsque le fournisseur de paiement correspondant est réellement configuré.
+
+Pour une organisation :
+
+- seules les offres organisation peuvent être sélectionnées ;
+- seuls les rôles autorisés peuvent gérer l’abonnement ;
+- une modification d’offre peut entraîner une réconciliation des modules éligibles ;
+- les données historiques des modules désactivés ne doivent pas être supprimées par un simple changement de package.
+
+## Console DTSC et révision du catalogue
+
+La Console DTSC affiche l’identifiant de release/révision du catalogue et distingue :
+
+- prix et quotas de l’offre ;
+- niveau de capacité ;
+- sources de connaissance IA ;
+- documents métier ;
+- stockage ;
+- mode IA ;
+- modules inclus par le niveau.
+
+Les changements administrés d’une offre sont historisés par le mécanisme de versions de plans existant.
 
 ## Accès et permissions
 
-- Ouvrez le module depuis la navigation du contexte actif.
-- Les boutons et actions dépendent du rôle, du poste officiel, des permissions individuelles, du tenant actif et de l’état du module.
-- Une action masquée dans l’interface reste également refusée par le serveur lorsqu’elle n’est pas autorisée.
-- Sur mobile, utilisez le parcours liste → détail plein écran → formulaire plein écran → retour.
+Une fonctionnalité incluse commercialement peut rester inaccessible à un utilisateur précis si son rôle ou ses permissions ne l’autorisent pas.
 
-## Statuts, validations et traçabilité
-
-- Les statuts visibles correspondent aux états réellement persistés ; les codes techniques ne sont pas présentés comme libellés métier.
-- Les validations, refus, annulations, réouvertures et actions sensibles conservent leur auteur, leur date et, lorsque requis, leur motif.
-- Une action répétée avec la même clé métier ne doit pas produire de doublon ni un second impact.
-
-## Sécurité et confidentialité
-
-- Les données sont limitées à l’utilisateur ou à l’organisation autorisée.
-- Les références reçues du navigateur sont revérifiées côté serveur dans le même contexte.
-- Les documents et informations sensibles utilisent les routes privées et les contrôles d’accès prévus par le module.
-- Une organisation cliente ne reçoit jamais des capacités IA depuis l’abonnement personnel d’un de ses membres.
+Le frontend n’est jamais une barrière de sécurité. Les routes serveur revalident le tenant, le membership, le module, l’entitlement, la permission et les références utilisées par l’action.
 
 ## Dépannage
 
-Si l’offre affichée dans le contexte d’une organisation ne correspond pas à celle attendue, vérifiez d’abord l’**Abonnement de l’organisation active** et son statut. Un ancien abonnement historique peut être affiché dans l’historique sans devenir l’autorité du contexte courant.
+Si l’offre d’une organisation ne correspond pas à celle attendue :
 
-Actualisez la vue si une opération validée n’apparaît pas immédiatement. Vérifiez le contexte d’organisation, les permissions, le statut du module et la connexion réseau. En cas de refus persistant, conservez le message affiché et contactez le responsable du module ou le support DTSC sans partager de donnée sensible.
+1. vérifiez le contexte d’organisation actif ;
+2. ouvrez **Abonnement** et consultez **Abonnement de l’organisation active** ;
+3. vérifiez le statut et la période ;
+4. comparez la release du catalogue affichée avec `/tarifs` ;
+5. si un module reste refusé, vérifiez son activation et vos permissions ;
+6. contactez le support DTSC en conservant le message d’erreur, sans partager de donnée sensible.
 
-## Catalogue unique des offres
-
-- Les offres sont séparées en **offres individuelles** et **offres d’organisation**.
-- Le nom, la description, le montant, les quotas de messages, de jetons et de documents proviennent de `BillingPlan`, source commerciale unique administrable et versionnée. **C’est la source unique du catalogue commercial.**
-- Une modification validée dans Administration DTSC s’applique aux cartes Abonnement et aux résolutions serveur qui alimentent le chatbot global et l’Assistant IA d’entreprise.
-- Dans la Console DTSC, les cartes d’offres affichent séparément le **nom de l’offre commerciale**, son **audience**, son **niveau de capacité** et son **code technique**. L’écran des abonnements organisations affiche de la même manière l’offre liée à l’abonnement et le niveau de capacité qu’elle produit.
-- Le serveur dérive ensuite le niveau de capacité Essentiel / Professionnel / Entreprise à partir de l’offre effective.
-- Pour les offres canoniques DTSC, l’audience est verrouillée : une offre `org-*` reste une offre d’organisation et une offre personnelle canonique reste personnelle. Cette protection empêche de recréer l’ambiguïté entre catalogue personnel et catalogue entreprise.
-- Les anciens quotas du profil utilisateur servent uniquement de repli de compatibilité lorsqu’aucune offre personnelle active n’est résolue ; ils ne remplacent jamais l’offre d’une organisation cliente.
+Si l’IA indique qu’un outil n’est pas autorisé, cela ne signifie pas nécessairement que l’offre est incorrecte : la permission de l’utilisateur, le module actif, le secteur ou une confirmation métier peuvent aussi limiter l’action.
