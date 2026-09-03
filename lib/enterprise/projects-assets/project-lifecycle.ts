@@ -42,10 +42,24 @@ export async function transitionEnterpriseProject(
       throw new EnterpriseDomainError("PROJECT_TRANSITION_INVALID", 409);
     }
     if (input.action === "COMPLETE") {
-      const incompleteDeliverables = await tx.enterpriseProjectDeliverable.count({
-        where: { organizationId, projectId, status: { not: "ACCEPTED" } },
-      });
+      const [incompleteDeliverables, incompleteMilestones, openRisks, openIssues] = await Promise.all([
+        tx.enterpriseProjectDeliverable.count({
+          where: { organizationId, projectId, status: { not: "ACCEPTED" } },
+        }),
+        tx.enterpriseProjectMilestone.count({
+          where: { organizationId, projectId, status: { notIn: ["COMPLETED", "APPROVED"] } },
+        }),
+        tx.enterpriseProjectRisk.count({
+          where: { organizationId, projectId, status: "OPEN" },
+        }),
+        tx.enterpriseProjectIssue.count({
+          where: { organizationId, projectId, status: "OPEN" },
+        }),
+      ]);
       if (incompleteDeliverables > 0) throw new EnterpriseDomainError("PROJECT_DELIVERABLES_INCOMPLETE", 409);
+      if (incompleteMilestones > 0) throw new EnterpriseDomainError("PROJECT_MILESTONES_INCOMPLETE", 409);
+      if (openRisks > 0) throw new EnterpriseDomainError("PROJECT_RISKS_OPEN", 409);
+      if (openIssues > 0) throw new EnterpriseDomainError("PROJECT_ISSUES_OPEN", 409);
     }
     const targetStatus = STATUS_BY_ACTION[input.action];
     const now = new Date();
