@@ -80,8 +80,10 @@ assert(hr.includes("hr-payroll-lookups?module=HUMAN_RESOURCES") && hr.includes("
 assert(hr.includes('"PATCH"'), "RH: modification du contrat par le créateur absente");
 assert(hr.includes("contract.canEdit"), "RH: action Modifier non conditionnée à la capacité créateur");
 for (const id of ["EMPLOYMENT", "FIXED_TERM", "INDEFINITE", "CONSULTING", "INTERNSHIP"]) assert(hr.includes(`\"${id}\"`), `RH: type contrat canonique absent du formulaire: ${id}`);
-assert(hr.includes("applyEmployeeAssignment") && hr.includes("selectedPositionCode") && hr.includes("selectedDepartmentId") && hr.includes("selectedSiteId"), "RH: préremplissage de l’affectation depuis le collaborateur absent");
-assert(hr.includes("membersWithoutHrRecord"), "RH: distinction membre DTSC / dossier RH absent");
+assert(hr.includes("applyCollaboratorSelection") && hr.includes("selectedPositionCode") && hr.includes("selectedDepartmentId") && hr.includes("selectedSiteId"), "RH: préremplissage de l’affectation depuis le collaborateur absent");
+assert(hr.includes("selectedOrganizationMemberId") && hr.includes("contractCandidateItems") && hr.includes("Administration entreprise"), "RH: membres actifs Administration entreprise absents du parcours contrat");
+assert(hr.includes("membersWithoutHrRecord"), "RH: distinction membre entreprise / dossier RH absent");
+assert(!hr.includes("Employés et collaborateurs"), "RH: ancienne remédiation vers un module inexistant encore visible");
 assert(!hr.includes('contractType: String(data.get("contractType") || "EMPLOYEE")'), "RH: ancienne catégorie contrat non canonique encore utilisée à la création");
 
 const identity = read(targets[1]);
@@ -121,4 +123,4 @@ const choice = read(targets[5]);
 assert(choice.includes('t("identityChoice.legend")'), "Identity link choice: copie canonique absente");
 assert(choice.includes("aria-pressed"), "Identity link choice: contrat accessible perdu");
 
-if (!process.exitCode) console.log(`PASS Professional ERP People i18n #332/#364/#562/#564 — ${frKeys.length} clés FR/EN + formulaires guidés, référentiels canoniques, confidentialité et workflows préservés.`);
+if (!process.exitCode) console.log(`PASS Professional ERP People i18n #332/#364/#562/#564/#566 — ${frKeys.length} clés FR/EN + formulaires guidés, référentiels canoniques, confidentialité et workflows préservés.`);
