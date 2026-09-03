@@ -8,6 +8,9 @@ requirePaths([
   "lib/enterprise/hr-payroll/time-attendance.ts",
   "lib/enterprise/hr-payroll/time-schemas.ts",
   "lib/enterprise/hr-payroll/payroll.ts",
+  "lib/forms/reference-catalog.ts",
+  "components/enterprise/core-v2/erp-v2-ui.tsx",
+  "components/ui/toast-provider.tsx",
   "app/api/enterprise/[organizationId]/employment-contracts/[contractId]/route.ts",
   "app/api/enterprise/[organizationId]/approval-eligibility/route.ts",
   "app/api/enterprise/[organizationId]/hr-payroll-lookups/route.ts",
@@ -28,6 +31,20 @@ requireTokens("lib/enterprise/hr-payroll/helpers.ts", [
   "APPROVER_PERMISSION_DENIED",
   "assertEnterpriseApprovalCandidate",
   "assertEnterpriseApprovalDecision",
+]);
+
+requireTokens("lib/enterprise/hr-payroll/schemas.ts", [
+  "EMPLOYMENT_CONTRACT_TYPES",
+  '"EMPLOYMENT"',
+  '"INDEFINITE"',
+  '"FIXED_TERM"',
+  '"CONSULTING"',
+  '"INTERNSHIP"',
+  "contractType: z.enum(EMPLOYMENT_CONTRACT_TYPES)",
+  "LEAVE_TYPES",
+  "leaveType: z.enum(LEAVE_TYPES)",
+  "entry.workDate < value.periodStart",
+  "La fin de période de paie ne peut pas précéder son début.",
 ]);
 
 requireTokens("lib/enterprise/hr-payroll/contracts.ts", [
@@ -96,6 +113,8 @@ for (const path of [
 requireTokens("app/api/enterprise/[organizationId]/hr-payroll-lookups/route.ts", [
   "listEnterpriseApprovalCandidates",
   "candidate.userId !== session.userId",
+  "enterpriseEmployee.findMany",
+  'employmentStatus: "ACTIVE"',
   "enterprisePosition.findMany",
   "enterpriseSite.findMany",
   "timezone: true",
@@ -134,15 +153,49 @@ requireTokens("lib/enterprise/accounting/payments-service.ts", [
   'input.paymentType === "PAYROLL_PAYMENT" ? new Prisma.Decimal(0) : amount',
 ]);
 
+requireTokens("components/enterprise/core-v2/erp-v2-ui.tsx", [
+  "effectiveRequired",
+  "childProps?.required === true",
+  "hasExplicitEmptyChoice",
+  'items.some((item) => item.id === "")',
+]);
+requireTokens("lib/forms/reference-catalog.ts", [
+  "PROFESSIONAL_FIELD_HELP",
+  "employeeId:",
+  "approverUserId:",
+  "contractType:",
+  "payrollPeriodId:",
+  "/^(bonusReason_|deductionReason_)/",
+]);
+requireTokens("components/ui/toast-provider.tsx", ["z-[1200]", "env(safe-area-inset-top)"]);
+
 for (const path of [
   "components/enterprise/professional/enterprise-human-resources-workspace.tsx",
   "components/enterprise/professional/enterprise-time-attendance-workspace.tsx",
   "components/enterprise/professional/enterprise-payroll-operations-workspace.tsx",
 ]) {
-  requireTokens(path, ['presentation="editor"', "useToastMessage"]);
+  requireTokens(path, ['presentation="editor"', "useToastMessage", "ProfessionalError"]);
   forbidTokens(path, ["window.prompt"]);
 }
-requireTokens("components/enterprise/professional/enterprise-human-resources-workspace.tsx", ["disabled={saving}", "contract.canDecide", 't("hr.newContractDialog")', 't("hr.orgSection")']);
+
+requireTokens("components/enterprise/professional/enterprise-human-resources-workspace.tsx", [
+  "disabled={saving}",
+  "contract.canDecide",
+  't("hr.newContractDialog")',
+  't("hr.orgSection")',
+  "CONTRACT_TYPES",
+  "applyEmployeeAssignment",
+  "selectedPositionCode",
+  "selectedDepartmentId",
+  "selectedSiteId",
+  "membersWithoutHrRecord",
+  "Aucun dossier collaborateur RH actif",
+  "Aucun validateur indépendant",
+]);
+forbidTokens("components/enterprise/professional/enterprise-human-resources-workspace.tsx", [
+  'contractType: String(data.get("contractType") || "EMPLOYEE")',
+]);
+
 requireTokens("components/enterprise/professional/enterprise-time-attendance-workspace.tsx", [
   "disabled={Boolean(busyAction)}",
   '"SCHEDULES"',
@@ -158,7 +211,16 @@ requireTokens("components/enterprise/professional/enterprise-time-attendance-wor
   "item.canCancel",
   "/leave-requests/${cancelTarget.id}/cancel",
   "DEFAULT_REJECTION_AUDIT_COMMENT",
+  "selectScheduleEmployee",
+  "scheduleTimezone",
+  "selectAttendanceEmployee",
+  "attendanceSiteId",
+  'useToastMessage(notice, "success")',
+  "Aucun dossier collaborateur RH actif",
+  "Aucun validateur indépendant",
 ]);
+forbidTokens("components/enterprise/professional/enterprise-time-attendance-workspace.tsx", ["useToastMessage(message)"]);
+
 requireTokens("components/enterprise/professional/enterprise-payroll-operations-workspace.tsx", [
   "disabled={Boolean(busyAction)}",
   "bonusReason_",
@@ -167,7 +229,13 @@ requireTokens("components/enterprise/professional/enterprise-payroll-operations-
   "DEFAULT_PAYROLL_REJECTION_AUDIT_COMMENT",
   "DEFAULT_PAYROLL_APPROVAL_AUDIT_COMMENT",
   "FINANCE_PAYMENTS?payrollRunId=",
+  'useToastMessage(notice, "success")',
+  "Aucun dossier collaborateur RH actif",
+  "Aucun validateur indépendant",
+  "Aucune période de paie ouverte",
+  "Chaque variable de paie non nulle exige un motif précis.",
 ]);
+forbidTokens("components/enterprise/professional/enterprise-payroll-operations-workspace.tsx", ["useToastMessage(message)", 'value="Variable de paie"']);
 
 requireTokens("app/api/enterprise/[organizationId]/employment-contracts/[contractId]/route.ts", [
   "employmentContractUpdateSchema",
@@ -192,4 +260,4 @@ forbidTokens("app/api/enterprise/[organizationId]/employment-contracts/[contract
 forbidTokens("app/api/enterprise/[organizationId]/payroll-runs/[payrollRunId]/decision/route.ts", ['moduleCode: "PAYROLL_OPERATIONS", action: "manage"']);
 forbidTokens("lib/enterprise/hr-payroll/payroll.ts", ["status: \"PAID\"", "financialTransaction.create", "ledger", "bankAccount"]);
 
-success("enterprise HR, time/attendance and operational payroll boundaries #562");
+success("enterprise HR, time/attendance and operational payroll boundaries #562/#564");

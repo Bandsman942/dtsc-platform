@@ -56,17 +56,20 @@ export function Field({ label, help, error, required = false, children }: { labe
     setDocumentLocale(document.documentElement.lang === "en" ? "en" : "fr");
   }, []);
 
-  const childName = isValidElement(children)
-    ? (children.props as { name?: unknown }).name
+  const childProps = isValidElement(children)
+    ? children.props as { name?: unknown; required?: unknown }
     : undefined;
+  const childName = childProps?.name;
+  const effectiveRequired = required || childProps?.required === true;
   const automaticHelp = referenceFieldHelp(typeof childName === "string" ? childName : undefined, documentLocale);
   const effectiveHelp = help || automaticHelp;
 
-  return <label className="grid min-w-0 max-w-full gap-1.5"><span className="flex min-w-0 items-center gap-1 text-xs font-black uppercase text-dtsc-muted"><span className="min-w-0 break-words">{label}{required ? <span aria-hidden="true" className="ml-1 text-red-500">*</span> : null}</span>{effectiveHelp ? <span title={effectiveHelp} aria-label={`${label} : ${effectiveHelp}`} className="shrink-0 cursor-help"><CircleHelp className="h-3.5 w-3.5" /></span> : null}</span>{children}{effectiveHelp ? <span className="break-words text-sm leading-6 text-dtsc-muted">{effectiveHelp}</span> : null}{error ? <span role="alert" className="break-words text-sm font-semibold leading-6 text-red-600">{error}</span> : null}</label>;
+  return <label className="grid min-w-0 max-w-full gap-1.5"><span className="flex min-w-0 items-center gap-1 text-xs font-black uppercase text-dtsc-muted"><span className="min-w-0 break-words">{label}{effectiveRequired ? <span aria-hidden="true" className="ml-1 text-red-500">*</span> : null}</span>{effectiveHelp ? <span title={effectiveHelp} aria-label={`${label} : ${effectiveHelp}`} className="shrink-0 cursor-help"><CircleHelp className="h-3.5 w-3.5" /></span> : null}</span>{children}{effectiveHelp ? <span className="break-words text-sm leading-6 text-dtsc-muted">{effectiveHelp}</span> : null}{error ? <span role="alert" className="break-words text-sm font-semibold leading-6 text-red-600">{error}</span> : null}</label>;
 }
 
 export function NativeSelect({ name, items, required, defaultValue, value, onChange, disabled }: { name?: string; items: EnterpriseChoice[]; required?: boolean; defaultValue?: string; value?: string; onChange?: (value: string) => void; disabled?: boolean }) {
-  return <select name={name} required={required} defaultValue={value === undefined ? defaultValue : undefined} value={value} onChange={onChange ? (event) => onChange(event.target.value) : undefined} disabled={disabled} className="h-11 w-full min-w-0 max-w-full truncate rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-base text-dtsc-ink disabled:opacity-60 md:text-sm"><option value="">—</option>{items.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>;
+  const hasExplicitEmptyChoice = items.some((item) => item.id === "");
+  return <select name={name} required={required} defaultValue={value === undefined ? defaultValue : undefined} value={value} onChange={onChange ? (event) => onChange(event.target.value) : undefined} disabled={disabled} className="h-11 w-full min-w-0 max-w-full truncate rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-base text-dtsc-ink disabled:opacity-60 md:text-sm">{hasExplicitEmptyChoice ? null : <option value="">—</option>}{items.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>;
 }
 
 export function priorityChoices(locale: string | null | undefined): EnterpriseChoice[] {

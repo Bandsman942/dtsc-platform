@@ -137,6 +137,75 @@ const GENERIC_FIELD_HELP = {
   },
 } as const;
 
+const PROFESSIONAL_FIELD_HELP: Record<"fr" | "en", Record<string, string>> = {
+  fr: {
+    employeeId: "Sélectionnez un dossier collaborateur RH actif. Le poste, le département et le site peuvent être repris automatiquement depuis ce dossier.",
+    organizationMemberId: "La liaison à un membre DTSC est facultative : le dossier RH reste la source de vérité de l’emploi.",
+    contractType: "Choisissez la nature juridique ou opérationnelle du contrat. Cette valeur est contrôlée et ne doit pas être remplacée par un intitulé libre.",
+    jobTitle: "Choisissez le poste officiel du référentiel RH de l’entreprise. Le poste sélectionné doit rester cohérent avec le département.",
+    positionId: "Choisissez le poste officiel du référentiel RH de l’entreprise.",
+    departmentId: "Choisissez le département de rattachement. Lorsqu’un poste impose un département, la cohérence est vérifiée côté serveur.",
+    siteId: "Choisissez le site d’affectation réel. Pour les présences, son fuseau horaire devient la référence métier.",
+    managerEmployeeId: "Choisissez un responsable hiérarchique parmi les dossiers RH actifs de la même entreprise.",
+    approverUserId: "Choisissez une autre personne active disposant du droit d’approuver ce module. L’auto-validation RH, Temps et Paie est interdite.",
+    startDate: "Indiquez la date de début réelle. Elle doit être cohérente avec toute date de fin ou de période d’essai.",
+    endDate: "Laissez vide si la période n’a pas de fin prévue ; sinon la date doit être postérieure ou égale au début.",
+    probationEndDate: "Indiquez la fin de période d’essai uniquement si elle existe et reste comprise dans la durée du contrat.",
+    baseCompensation: "Saisissez la rémunération contractuelle de base. La paie utilisera le contrat actif comme autorité, sans la recalculer depuis les présences.",
+    compensationCurrency: "Choisissez la devise contractuelle. Une paie utilisant une autre devise sera refusée.",
+    payFrequency: "Choisissez la fréquence contractuelle de rémunération.",
+    standardHoursPerWeek: "Indiquez le volume hebdomadaire contractuel attendu. Il ne constitue pas une preuve de temps réellement travaillé.",
+    timezone: "Utilisez le fuseau du site de travail. Les heures de présence sont converties côté serveur à partir de cette référence.",
+    effectiveFrom: "Date à partir de laquelle cet horaire planifié devient applicable.",
+    effectiveUntil: "Date facultative de fin d’application. Clôturer un horaire conserve son historique.",
+    attendanceDate: "Date locale du site correspondant à l’observation de présence.",
+    observedStart: "Heure locale réellement observée sur le site ; elle ne crée pas automatiquement une feuille de temps.",
+    observedEnd: "Heure locale réellement observée sur le site ; elle ne crée pas automatiquement une feuille de temps.",
+    leaveType: "Choisissez le type de congé correspondant à la demande réelle.",
+    periodStart: "Début de la période couverte par cette opération.",
+    periodEnd: "Fin de la période couverte ; elle doit être postérieure ou égale au début.",
+    workDate: "Date de l’activité réellement déclarée dans la feuille de temps.",
+    projectId: "Rattachez le temps à un projet uniquement lorsque l’activité appartient réellement à ce projet.",
+    taskId: "Rattachez l’activité à une tâche existante lorsque cela améliore la traçabilité.",
+    serviceDescription: "Décrivez brièvement l’activité réellement effectuée afin que le validateur puisse la contrôler.",
+    payrollPeriodId: "Choisissez une période de paie ouverte et non déjà utilisée par un traitement actif.",
+    payDate: "Date de paiement prévue. Elle ne signifie pas que la paie est effectivement payée.",
+  },
+  en: {
+    employeeId: "Select an active HR employee record. Position, department and site can then be prefilled from that record.",
+    organizationMemberId: "Linking a DTSC member is optional: the HR record remains the employment source of truth.",
+    contractType: "Choose the legal or operational contract nature. This is a controlled value and must not be replaced by free text.",
+    jobTitle: "Choose an official position from the organization HR reference. The selected position must remain consistent with its department.",
+    positionId: "Choose an official position from the organization HR reference.",
+    departmentId: "Choose the owning department. When a position implies a department, server-side validation enforces consistency.",
+    siteId: "Choose the actual assignment site. For attendance, its timezone becomes the business reference.",
+    managerEmployeeId: "Choose a manager among active HR records in the same organization.",
+    approverUserId: "Choose another active person who can approve this module. Self-approval is forbidden for HR, Time and Payroll.",
+    startDate: "Enter the actual start date. It must be consistent with any end or probation date.",
+    endDate: "Leave empty when there is no planned end; otherwise it must be on or after the start date.",
+    probationEndDate: "Only enter a probation end when applicable and keep it within the contract period.",
+    baseCompensation: "Enter contractual base compensation. Payroll uses the active contract as authority and does not recalculate it from attendance.",
+    compensationCurrency: "Choose the contractual currency. Payroll in another currency will be rejected.",
+    payFrequency: "Choose the contractual pay frequency.",
+    standardHoursPerWeek: "Enter contractual weekly expected hours. They are not evidence of actual worked time.",
+    timezone: "Use the work site's timezone. Attendance times are converted server-side using this reference.",
+    effectiveFrom: "Date from which this planned schedule becomes effective.",
+    effectiveUntil: "Optional end date. Ending a schedule preserves its history.",
+    attendanceDate: "Site-local date corresponding to the attendance observation.",
+    observedStart: "Actual local arrival time observed at the site; it does not automatically create a timesheet.",
+    observedEnd: "Actual local departure time observed at the site; it does not automatically create a timesheet.",
+    leaveType: "Choose the leave category matching the actual request.",
+    periodStart: "Start of the period covered by this operation.",
+    periodEnd: "End of the covered period; it must be on or after the start.",
+    workDate: "Date of the activity actually declared in the timesheet.",
+    projectId: "Link time to a project only when the activity genuinely belongs to that project.",
+    taskId: "Link the activity to an existing task when it improves traceability.",
+    serviceDescription: "Briefly describe the actual activity so the approver can review it.",
+    payrollPeriodId: "Choose an open payroll period that is not already used by an active run.",
+    payDate: "Planned payment date. It does not mean payroll has actually been paid.",
+  },
+};
+
 function isEnglish(locale: string | null | undefined) {
   return String(locale || "fr").toLowerCase().startsWith("en");
 }
@@ -181,6 +250,13 @@ export function referenceChoiceLabel(kind: ControlledReferenceKind, value: strin
 export function referenceFieldHelp(fieldName: string | null | undefined, locale?: string | null): string | undefined {
   if (!fieldName) return undefined;
   const language = isEnglish(locale) ? "en" : "fr";
+  if (PROFESSIONAL_FIELD_HELP[language][fieldName]) return PROFESSIONAL_FIELD_HELP[language][fieldName];
+  if (/^(bonusReason_|deductionReason_)/.test(fieldName)) {
+    return language === "en" ? "A non-zero payroll adjustment requires a precise business reason." : "Toute variable de paie non nulle exige un motif métier précis.";
+  }
+  if (/^(bonus_|deduction_)/.test(fieldName)) {
+    return language === "en" ? "Enter only the explicit adjustment amount for this employee; zero means no adjustment." : "Saisissez uniquement le montant explicite de la variable pour ce collaborateur ; zéro signifie aucune variable.";
+  }
   const normalized = fieldName === "currencyCode" ? "currency" : fieldName === "unitCode" ? "unit" : fieldName;
   return GENERIC_FIELD_HELP[language][normalized as keyof typeof GENERIC_FIELD_HELP.fr];
 }

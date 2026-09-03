@@ -17,6 +17,17 @@ for (const key of frKeys) {
   assert(typeof en[key] === "string" && en[key].trim(), `valeur EN vide: ${key}`);
 }
 
+for (const key of [
+  "employmentContractType.EMPLOYMENT",
+  "employmentContractType.FIXED_TERM",
+  "employmentContractType.INDEFINITE",
+  "employmentContractType.CONSULTING",
+  "employmentContractType.INTERNSHIP",
+]) {
+  assert(fr[key] && fr[key] !== fr["common.valueToReview"], `type de contrat FR non humanisé: ${key}`);
+  assert(en[key] && en[key] !== en["common.valueToReview"], `type de contrat EN non humanisé: ${key}`);
+}
+
 const i18n = read("lib/i18n.ts");
 assert(i18n.includes("professional-erp-people.fr.json"), "catalogue People FR non enregistré dans lib/i18n.ts");
 assert(i18n.includes("professional-erp-people.en.json"), "catalogue People EN non enregistré dans lib/i18n.ts");
@@ -68,6 +79,10 @@ assert(!hr.includes('{message ? <div role="status"'), "RH: message transitoire e
 assert(hr.includes("hr-payroll-lookups?module=HUMAN_RESOURCES") && hr.includes("lookups.approvers"), "RH: approbateurs préfiltrés par capacité absents");
 assert(hr.includes('"PATCH"'), "RH: modification du contrat par le créateur absente");
 assert(hr.includes("contract.canEdit"), "RH: action Modifier non conditionnée à la capacité créateur");
+for (const id of ["EMPLOYMENT", "FIXED_TERM", "INDEFINITE", "CONSULTING", "INTERNSHIP"]) assert(hr.includes(`\"${id}\"`), `RH: type contrat canonique absent du formulaire: ${id}`);
+assert(hr.includes("applyEmployeeAssignment") && hr.includes("selectedPositionCode") && hr.includes("selectedDepartmentId") && hr.includes("selectedSiteId"), "RH: préremplissage de l’affectation depuis le collaborateur absent");
+assert(hr.includes("membersWithoutHrRecord"), "RH: distinction membre DTSC / dossier RH absent");
+assert(!hr.includes('contractType: String(data.get("contractType") || "EMPLOYEE")'), "RH: ancienne catégorie contrat non canonique encore utilisée à la création");
 
 const identity = read(targets[1]);
 assert(identity.includes('professionalErpEnumLabel(locale, "employmentStatus"'), "Identité: statut emploi non projeté");
@@ -84,14 +99,18 @@ assert(!time.includes("positionTitle || member.role"), "Temps: rôle brut encore
 assert(time.includes('professionalErpEnumLabel(locale, "role", member.role)'), "Temps: fallback rôle approbateur non humanisé");
 assert(time.includes('"Retour motivé depuis le workspace professionnel"'), "Temps: commentaire d’audit existant modifié");
 assert(time.includes('"SCHEDULES"') && time.includes('"ATTENDANCE"'), "Temps: séparation planning / présence absente de l’interface");
+assert(time.includes("selectScheduleEmployee") && time.includes("scheduleTimezone") && time.includes("selectAttendanceEmployee") && time.includes("attendanceSiteId"), "Temps: préremplissage site/fuseau depuis le dossier RH absent");
+assert(time.includes('useToastMessage(notice, "success")') && !time.includes("useToastMessage(message)"), "Temps: succès et erreurs encore confondus dans le toast");
 
 const payroll = read(targets[3]);
 assert(payroll.includes('professionalErpEnumLabel(locale, "payrollStatus"'), "Paie: statuts non projetés");
 assert(payroll.includes('name="approverUserId"'), "Paie: sélecteur d’approbateur absent");
 assert(!payroll.includes("Identifiant de l’approbateur sélectionné"), "Paie: saisie d’identifiant brut encore visible");
 assert(payroll.includes('"Paie rejetée"') && payroll.includes('"Paie contrôlée"'), "Paie: commentaires d’audit persistés modifiés");
-assert(payroll.includes('value="Variable de paie"'), "Paie: raison persistée existante modifiée silencieusement");
 assert(payroll.includes("bonusReason_") && payroll.includes("deductionReason_"), "Paie: motifs distincts des variables absents");
+assert(!payroll.includes('value="Variable de paie"'), "Paie: raison générique cachée encore utilisée dans le formulaire");
+assert(payroll.includes('useToastMessage(notice, "success")') && !payroll.includes("useToastMessage(message)"), "Paie: succès et erreurs encore confondus dans le toast");
+assert(payroll.includes("noEmployee") && payroll.includes("noApprover") && payroll.includes("noOpenPeriod"), "Paie: états vides guidés absents");
 
 const comments = read(targets[4]);
 assert(comments.includes("professionalErpDateTime"), "Workflow comments: date+heure locale-aware absente");
@@ -102,4 +121,4 @@ const choice = read(targets[5]);
 assert(choice.includes('t("identityChoice.legend")'), "Identity link choice: copie canonique absente");
 assert(choice.includes("aria-pressed"), "Identity link choice: contrat accessible perdu");
 
-if (!process.exitCode) console.log(`PASS Professional ERP People i18n #332/#364/#562 — ${frKeys.length} clés FR/EN + locale applicative, référentiels canoniques, confidentialité et workflows préservés.`);
+if (!process.exitCode) console.log(`PASS Professional ERP People i18n #332/#364/#562/#564 — ${frKeys.length} clés FR/EN + formulaires guidés, référentiels canoniques, confidentialité et workflows préservés.`);

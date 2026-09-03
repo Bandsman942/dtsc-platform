@@ -22,9 +22,12 @@ export const employeeCreateSchema = z.object({
   }
 });
 
+export const EMPLOYMENT_CONTRACT_TYPES = ["EMPLOYMENT", "INDEFINITE", "FIXED_TERM", "CONSULTING", "INTERNSHIP"] as const;
+export const LEAVE_TYPES = ["ANNUAL", "SICK", "MATERNITY", "PATERNITY", "UNPAID", "OTHER"] as const;
+
 const employmentContractPayloadSchema = z.object({
   employeeId: z.string().trim().min(1),
-  contractType: z.string().trim().min(2).max(120),
+  contractType: z.enum(EMPLOYMENT_CONTRACT_TYPES),
   startDate: z.coerce.date(),
   endDate: z.coerce.date().optional().nullable(),
   probationEndDate: z.coerce.date().optional().nullable(),
@@ -62,7 +65,7 @@ export const employmentContractDecisionSchema = z.object({
 
 export const leaveRequestCreateSchema = z.object({
   employeeId: z.string().trim().min(1),
-  leaveType: z.string().trim().min(2).max(120),
+  leaveType: z.enum(LEAVE_TYPES),
   startDate: z.coerce.date(),
   endDate: z.coerce.date(),
   partialDay: z.boolean().default(false),
@@ -114,6 +117,9 @@ export const timesheetCreateSchema = z.object({
   entries: z.array(timesheetEntrySchema).min(1).max(500),
 }).superRefine((value, ctx) => {
   if (value.periodEnd < value.periodStart) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "La fin de période ne peut pas précéder le début.", path: ["periodEnd"] });
+  value.entries.forEach((entry, index) => {
+    if (entry.workDate < value.periodStart || entry.workDate > value.periodEnd) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "La date travaillée doit appartenir à la période de la feuille de temps.", path: ["entries", index, "workDate"] });
+  });
 });
 
 export const payrollPeriodCreateSchema = z.object({
@@ -122,6 +128,9 @@ export const payrollPeriodCreateSchema = z.object({
   periodStart: z.coerce.date(),
   periodEnd: z.coerce.date(),
   payDate: z.coerce.date().optional().nullable(),
+}).superRefine((value, ctx) => {
+  if (value.periodEnd < value.periodStart) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "La fin de période de paie ne peut pas précéder son début.", path: ["periodEnd"] });
+  if (value.payDate && value.payDate < value.periodStart) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "La date de paiement prévue ne peut pas précéder le début de la période.", path: ["payDate"] });
 });
 
 const payrollAdjustmentSchema = z.object({
