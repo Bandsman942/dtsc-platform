@@ -1,162 +1,264 @@
-# Offres SaaS, niveaux de capacité et entitlements
+# Offres SaaS, catalogue commercial et entitlements
 
-Dernière mise à jour : 11 août 2026
+Dernière mise à jour : 3 septembre 2026
 
-Ce document décrit la logique SaaS active pour les comptes personnels et les organisations clientes DTSC Platform. Il sépare volontairement le catalogue commercial, les abonnements et les niveaux techniques de capacité.
+Ce document décrit le contrat SaaS actif de DTSC Platform. Il sépare volontairement :
 
-## Vocabulaire canonique
+1. le **catalogue commercial publié** ;
+2. l’**abonnement effectif** du compte ou de l’organisation ;
+3. le **niveau technique de capacité** ;
+4. les **entitlements serveur** ;
+5. les **permissions métier et l’isolation tenant**.
 
-### Offre commerciale
+Le principe central de Billing Catalog v2 est que le site public, `/billing`, la Console DTSC, le backend et les assistants IA ne reconstruisent plus chacun leur propre histoire commerciale.
 
-Une **offre** est une ligne `BillingPlan`. Elle porte le nom commercial, l'audience (`PERSONAL`, `ORGANIZATION` ou `BOTH`), le prix, les quotas IA et la capacité documentaire.
+## Source commerciale canonique
 
-Exemples actuels :
+### BillingPlan reste l’autorité des prix et quotas administrés
 
-- offres personnelles : `Découverte`, `Individuel Essentiel`, `Individuel Professionnel`, `Individuel Premium` ;
-- offres organisation : `Organisation Essentielle`, `Organisation Croissance`, `Organisation Premium`.
+Une offre commerciale est une ligne `BillingPlan`. Elle porte l’identité commerciale stable, l’audience, le nom administré, la description, le prix, les quotas IA journaliers et le champ historique `maxDocuments`.
 
-`config/billing-plans.bootstrap.json` initialise uniquement les offres absentes. Une fois la ligne créée, `BillingPlan` en base est la source commerciale administrable ; `ensureBillingPlans()` utilise `createMany(..., skipDuplicates: true)` et n'écrase pas les valeurs administrées.
+Dans Billing Catalog v2, ce champ historique `BillingPlan.maxDocuments` représente le **nombre de sources de connaissance IA** de l’offre. Il ne doit jamais être confondu avec `OrganizationUsageLimits.maxDocuments`, qui représente les **documents métier ERP**.
 
-### Abonnement
+`config/billing-plans.bootstrap.json` initialise uniquement les offres absentes avec `createMany(..., skipDuplicates: true)`. Il ne remplace pas les valeurs administrées en base.
 
-Un **abonnement** relie un bénéficiaire à une offre :
+Les sept identifiants commerciaux canoniques restent :
 
-- `Subscription` pour le compte personnel ;
-- `OrganizationSubscription` pour une organisation cliente.
+- `freemium` — Découverte individuelle ;
+- `starter` — Individuel Essentiel ;
+- `growth` — Individuel Professionnel ;
+- `premium` — Individuel Premium ;
+- `org-starter` — Organisation Essentielle ;
+- `org-growth` — Organisation Croissance ;
+- `org-premium` — Organisation Premium.
 
-Le statut, la période, l'essai et l'expiration appartiennent à l'abonnement, pas à l'offre.
+### Projection publiée Billing Catalog v2
 
-### Niveau de capacité
+`lib/billing/commercial-catalog.ts` expose `getPublishedBillingCatalog()`.
 
-Le **niveau de capacité** est dérivé de l'offre par `lib/billing/plans.ts` :
+Cette projection :
+
+- lit les valeurs administrées réelles de `BillingPlan` ;
+- conserve uniquement les sept identités canoniques ;
+- dérive le niveau de capacité depuis l’identifiant de l’offre ;
+- ajoute la promesse commerciale, les limites organisation, les modules et le mode IA ;
+- expose la release `2026.09` et une `releaseId` calculée à partir de la révision réelle du catalogue ;
+- utilise l’historique `BillingPlanVersion` existant pour exposer la version d’offre la plus récente sans ajouter de migration destructive.
+
+Une modification administrée de prix ou quota modifie la révision publiée. Le CAG IA utilise cette `releaseId` comme version de cache afin qu’un nouveau tour ne continue pas à raconter une ancienne grille sous une clé commerciale périmée.
+
+## Prix et quotas de référence de la release 2026.09
+
+Les valeurs bootstrap de référence restent inchangées :
+
+| Offre | Prix mensuel | Messages IA / jour | Tokens / jour | Sources de connaissance IA |
+| --- | ---: | ---: | ---: | ---: |
+| Découverte individuelle | 0 USD | 5 | 15 000 | 1 |
+| Individuel Essentiel | 2 USD | 40 | 120 000 | 2 |
+| Individuel Professionnel | 15 USD | 200 | 750 000 | 20 |
+| Individuel Premium | 50 USD | 1 000 | 3 000 000 | 100 |
+| Organisation Essentielle | 25 USD | 500 | 1 500 000 | 50 |
+| Organisation Croissance | 75 USD | 2 000 | 6 000 000 | 250 |
+| Organisation Premium | 180 USD | 10 000 | 30 000 000 | 1 000 |
+
+Ces montants sont les valeurs bootstrap de la release. Lorsqu’un administrateur DTSC modifie légalement une offre via la Console, les surfaces consomment la valeur administrée courante de `BillingPlan` au lieu de recopier ce tableau dans leur code.
+
+## Trois limites qui ne doivent plus être confondues
+
+### Sources de connaissance IA
+
+Documents ou sources ingérés par les assistants IA. Le quota commercial vient de `BillingPlan.maxDocuments` pour compatibilité de schéma et est projeté vers `maxEnterpriseAiKnowledgeSources`.
+
+### Documents métier ERP
+
+Factures, contrats, pièces et documents opérationnels gérés par les modules métier. La limite vient de `OrganizationUsageLimits.maxDocuments` :
+
+- Essentiel : 1 000 ;
+- Professionnel : 20 000 ;
+- Entreprise : 250 000.
+
+Le quota de sources IA ne remplace jamais cette limite.
+
+### Stockage
+
+Capacité de stockage globale de l’organisation :
+
+- Essentiel : 5 Go ;
+- Professionnel : 50 Go ;
+- Entreprise : 500 Go.
+
+Le stockage est une limite distincte du nombre de documents et du nombre de sources IA.
+
+## Niveaux de capacité
+
+Le niveau technique reste dérivé par `lib/billing/plans.ts` :
 
 - `STARTER` → **Essentiel** ;
 - `BUSINESS` → **Professionnel** ;
 - `ENTERPRISE` → **Entreprise**.
 
-Ces codes techniques pilotent les exigences de modules, les modèles IA et les limites générales. Ils ne doivent pas être présentés au client comme le nom de son offre commerciale.
+Ces codes servent au backend. Ils ne doivent jamais devenir le nom commercial présenté au client.
 
-## Résolution canonique du contexte commercial
+## Contrat des offres organisation
 
-`lib/billing/commercial-context.ts` est l'autorité de résolution entre offre, abonnement et niveau de capacité.
+### Organisation Essentielle — structurer et collaborer
+
+Limites générales :
+
+- 10 utilisateurs ;
+- 5 Go de stockage ;
+- 300 minutes d’appels collaboratifs par mois ;
+- 12 modules actifs ;
+- 1 000 documents métier ;
+- 50 sources de connaissance IA avec la valeur bootstrap actuelle ;
+- support standard.
+
+Fonctionnalités commerciales principales : administration entreprise de base, collaborateurs, postes, départements et permissions de base, demandes internes, documents, rapports, tiers/clients, catalogue, projets & services, calendrier, appels collaboratifs et IA Assistant Entreprise en lecture/recherche/résumé/analyse.
+
+`collaboration-calls`, `calendar` et `enterprise-admin` exigent maintenant le niveau Essentiel **avec abonnement actif**. `AI_ASSISTANT` est commercialement inclus à partir d’Essentiel via le registre canonique.
+
+### Organisation Croissance — gérer et automatiser
+
+Limites générales :
+
+- 50 utilisateurs ;
+- 50 Go ;
+- 3 000 minutes d’appels par mois ;
+- 60 modules actifs ;
+- 20 000 documents métier ;
+- 250 sources de connaissance IA avec la valeur bootstrap actuelle ;
+- support prioritaire.
+
+Cette offre ajoute notamment tâches & opérations, validations, réunions, workflows, CRM pipeline, ventes, contrats, fournisseurs & achats, sites/entrepôts, stocks/logistique, RH, temps & présences, temps & livrables, actifs & maintenance et finance opérationnelle selon le registre canonique.
+
+L’IA Entreprise peut lire les données autorisées et **préparer** des actions lorsque le rôle, la permission, le module, le paramètre IA et le Tool Gateway l’autorisent.
+
+### Organisation Premium — piloter, comptabiliser et sectorialiser
+
+Limites générales :
+
+- 500 utilisateurs ;
+- 500 Go ;
+- 30 000 minutes d’appels par mois ;
+- 250 modules actifs ;
+- 250 000 documents métier ;
+- 1 000 sources de connaissance IA avec la valeur bootstrap actuelle ;
+- support dédié.
+
+Cette offre ajoute les capacités Entreprise du registre : paie opérationnelle, banque, rapprochement, comptabilité, fiscalité, clôture, états financiers, finance des actifs/inventaire, gouvernance avancée et modules sectoriels avancés Health/Pharmacy lorsque le secteur et les permissions le permettent.
+
+Le mode Agent peut exposer des modes `READ`, `PREPARE` et `MUTATE`, mais aucune mutation ne contourne les confirmations, autorisations, validations et restrictions de domaine du Tool Gateway.
+
+## Résolution canonique de l’abonnement
+
+`lib/billing/commercial-context.ts` reste l’autorité pour déterminer l’offre réellement appliquée.
 
 ### Organisation cliente
 
-Le contexte organisation utilise exclusivement `OrganizationSubscription`. Il ne retombe jamais sur l'abonnement personnel ou l'offre freemium d'un membre pour déterminer les quotas IA ou le niveau commercial de l'entreprise.
+Le contexte organisation utilise exclusivement `OrganizationSubscription`. Il ne retombe jamais sur l’abonnement personnel ou l’offre freemium d’un membre.
 
-Le resolver accepte les offres `ORGANIZATION` ou `BOTH`. Pour la compatibilité de lecture avant/après migration, les références historiques suivantes sont reconnues :
+Les références historiques restent reconnues :
 
 - `freemium` / `starter` → `org-starter` ;
 - `growth` → `org-growth` ;
 - `premium` → `org-premium`.
 
-La migration `20260811103500_reconcile_organization_billing_plan_audience` crée les offres organisation manquantes sans écraser les valeurs existantes, normalise leur audience et remappe les `OrganizationSubscription` historiques. Les factures et paiements historiques ne sont pas réécrits.
-
-Si aucune offre organisation valide n'est résolue, le contexte reste sur une baseline restrictive : aucune limite IA personnelle n'est empruntée silencieusement.
+Sans offre organisation valide, la baseline est restrictive et n’emprunte aucun quota personnel.
 
 ### Compte personnel
 
 Le contexte personnel utilise :
 
-1. un `Subscription` actif et encore dans sa période ;
-2. sinon l'offre `freemium` active ;
-3. sinon, uniquement en compatibilité historique, `User.dailyMessageLimit` et `User.dailyTokenLimit`.
+1. un `Subscription` actif et valide ;
+2. sinon l’offre `freemium` active ;
+3. sinon uniquement le fallback historique des limites utilisateur.
 
 ### DTSC interne
 
-`DTSC_INTERNAL` garde le niveau `ENTERPRISE`. Les quotas messages/tokens des collaborateurs DTSC sont les limites administrées par membre dans la Console ; elles ne sont pas un abonnement client.
+`DTSC_INTERNAL` reste isolé des abonnements clients et conserve ses règles internes.
 
-## Limites
+## Entitlements et modules
 
-`lib/billing/plan-limits.ts` définit les limites générales par niveau : utilisateurs, stockage, appels, modules, documents, IA et support.
+`lib/billing/entitlements.ts` reste l’autorité serveur pour :
 
-Les quotas commerciaux propres à une offre (`dailyMessageLimit`, `dailyTokenLimit`, `maxDocuments`) sont projetés dans :
+- `getOrganizationEntitlements()` ;
+- `canUseModule()` ;
+- `canUseFeature()` ;
+- `assertCanUseModule()` ;
+- `getOrganizationUsageLimits()`.
 
-- `lib/billing/entitlements.ts` pour les capacités organisation ;
-- `lib/billing/ai-usage-limits.ts` pour le runtime IA.
+Une promesse commerciale ne suffit jamais à lire une donnée. L’accès final reste conditionné par :
 
-Les deux couches utilisent le même resolver commercial et ne maintiennent plus deux lectures concurrentes de l'abonnement organisation.
+- organisation active et de type correct ;
+- abonnement/période valides lorsqu’ils sont requis ;
+- module configuré et activé ;
+- secteur compatible ;
+- membership actif ;
+- rôle et permissions ;
+- dépendances de modules ;
+- restrictions temporaires ;
+- contrôles serveur propres à chaque route.
 
-## Entitlements
+## IA DTSC
 
-`lib/billing/entitlements.ts` expose :
+### Assistant public
 
-- `getOrganizationEntitlements(organizationId)` ;
-- `canUseModule(organizationId, moduleCode)` ;
-- `canUseFeature(organizationId, feature)` ;
-- `assertCanUseModule(organizationId, moduleCode)` ;
-- `getOrganizationUsageLimits(organizationId)` ;
-- `isSubscriptionActive(subscription)`.
+L’assistant public reçoit le catalogue depuis `getPublishedBillingCatalog()` puis `formatPublishedBillingCatalogForAi()`.
 
-Les décisions tiennent compte du statut de l'organisation, du statut/période d'abonnement, du niveau de capacité, des modules configurés et de leurs exigences.
+Il peut citer un prix d’**abonnement DTSC Platform** uniquement depuis cette source. Il ne transforme jamais ce montant en devis de conseil, intégration, formation ou développement. Si le catalogue n’est pas disponible, il doit s’abstenir de donner un prix et orienter vers `/tarifs`.
 
-## Règles d'accès
+### Chatbot général privé
 
-- Le tenant interne DTSC conserve son accès via `DTSC_INTERNAL`.
-- Une organisation active sans abonnement actif garde uniquement les fonctionnalités explicitement prévues sans abonnement actif ; elle n'hérite jamais du compte personnel d'un membre.
-- Les modules Business/Professionnel ou Enterprise/Entreprise exigent un abonnement ou essai valide lorsque leur contrat l'impose.
-- Une organisation suspendue est restreinte avec message explicite ; le support reste disponible selon son entitlement.
-- Les routes serveur restent l'autorité : masquer un bouton côté UI ne suffit jamais.
+Le chatbot général reçoit le catalogue versionné via le CAG mais reste volontairement personnel/produit : il n’accède jamais aux données ERP de l’entreprise active.
 
-## Modules contrôlés
+### IA Assistant Entreprise
 
-Les droits de fonctionnalités sont déclarés dans `lib/billing/module-entitlements.ts` :
+L’assistant reçoit l’offre effective, le statut, les quotas, la limite de sources IA, les documents métier, le stockage, les appels et les modules réellement lisibles.
 
-- `support` : Essentiel, sans abonnement actif requis ;
-- `collaborators` : Essentiel, sans abonnement actif requis ;
-- `collaboration-calls` : Professionnel avec abonnement actif ;
-- `calendar` : Professionnel avec abonnement actif ;
-- `enterprise-admin` : Professionnel avec abonnement actif ;
-- `enterprise-activities` : Professionnel avec abonnement actif ;
-- `enterprise-workflows` : Professionnel avec abonnement actif ;
-- `healthcare` : Entreprise avec abonnement actif.
+Les modes d’outils sont bornés commercialement dans la route Agent Entreprise :
 
-Les modules sectoriels santé avancés exigent le niveau Entreprise selon le registre canonique.
+- Essentielle : `READ` uniquement ;
+- Croissance : `READ` + `PREPARE` ;
+- Premium : `READ` + `PREPARE` + `MUTATE`.
 
-## Interface Abonnement
+Ces modes sont seulement un plafond. `authorizeAiTool()`, le Tool Gateway, les permissions métier, les classifications sensibles et les confirmations peuvent encore réduire ou refuser l’exécution.
 
-`/billing` distingue maintenant explicitement :
+## Surfaces
 
-- **Offre appliquée** ;
-- **Niveau de capacité** ;
-- **Statut** ;
-- quotas du contexte actif ;
-- abonnement personnel ;
-- abonnement de l'organisation active ;
-- factures et paiements SaaS.
+### `/tarifs`
 
-Les quotas affichés en contexte organisation proviennent de l'offre organisation résolue, jamais de l'offre personnelle visible dans le bloc « Abonnement personnel ».
+Page publique alimentée directement par `getPublishedBillingCatalog()`. Elle montre les offres personnelles et organisation, leurs prix, limites et promesses sans tableau parallèle codé en dur.
 
-## IA et CAG
+### `/billing`
 
-Le runtime IA reçoit le niveau technique pour le routage mais le CAG expose séparément :
+Consomme le même catalogue et affiche séparément : offre appliquée, niveau, statut, messages/tokens, sources IA, documents métier et stockage.
 
-- l'**offre commerciale** ;
-- le **niveau de capacité** ;
-- le **statut d'abonnement**.
+### Console DTSC
 
-Le texte ambigu `Plan: STARTER|BUSINESS|ENTERPRISE` n'est plus utilisé comme identité commerciale du client.
+La Console utilise la même projection avec `includeInactive: true` pour administrer et auditer l’ensemble du catalogue. Les modifications de `BillingPlan` continuent de créer une entrée `BillingPlanVersion` et restent auditées.
 
-## Console DTSC
+Une offre canonique ne peut pas changer silencieusement d’audience.
 
-La section `Abonnements & facturation` de l'administration DTSC reste le centre de contrôle des abonnements organisations. Les routes de création et modification revalident que l'offre choisie a une audience `ORGANIZATION` ou `BOTH`, conservent les contrôles `DTSC_INTERNAL`, same-origin, rate limit, Zod et audit.
+## Historique et versionnement
 
-Les identifiants et slugs d'offres restent immuables pour préserver les abonnements, factures et mappings. Une offre inactive reste historique mais n'est plus proposée pour une nouvelle souscription.
+Billing Catalog v2 n’ajoute aucune migration Prisma. Il réutilise `BillingPlanVersion` et calcule une release publiée à partir de l’état administré courant.
 
-## Séparation ERP
-
-Les paiements et factures SaaS restent distincts des ventes, achats, factures clients/fournisseurs et écritures comptables ERP.
+Un abonnement existant référence toujours son `BillingPlan` actuel ; ce hotfix ne prétend donc pas introduire un mécanisme de grandfathering tarifaire par version d’abonnement qui n’existe pas dans le schéma courant. Une évolution future de ce comportement devra être additive et explicite.
 
 ## QA
 
-Les gates Standard Subscription et Standard AI vérifient notamment :
+`scripts/qa-billing-catalog-v2-checks.mjs`, intégré à `qa:regression`, vérifie notamment :
 
-- présence du resolver commercial canonique ;
-- absence de fallback organisation → abonnement personnel dans les limites IA ;
-- mapping historique vers `org-starter`, `org-growth`, `org-premium` ;
-- cohérence de l'interface Abonnement ;
-- terminologie CAG « offre commerciale » / « niveau de capacité » ;
-- migration idempotente de réconciliation ;
-- maintien de l'isolation `DTSC_INTERNAL` / `CLIENT`.
+- les sept identités et valeurs bootstrap ;
+- la présence du catalogue partagé ;
+- l’absence d’écrasement `documents métier ← sources IA` ;
+- appels/calendrier/administration en Essentiel actif ;
+- IA Assistant Entreprise incluse à partir d’Essentiel ;
+- `/tarifs`, `/billing` et Console alimentés par le catalogue ;
+- CAG versionné par `releaseId` ;
+- assistant public sans grille de prix parallèle ;
+- chatbot général alimenté par le CAG commercial ;
+- contexte IA Entreprise et distinction des limites ;
+- modes outils Agent conformes à Essentielle/Croissance/Premium.
 
-Avant merge : `git diff --check`, migrations sur base propre, `pnpm type-check`, QA ciblées, `pnpm qa:regression`, `pnpm lint` et `pnpm build` doivent être verts, la CI GitHub faisant foi lorsqu'un environnement local complet n'est pas disponible.
+Avant merge, les preuves exigées par `docs/CONTRIBUTING.md` restent obligatoires : `git diff --check`, `pnpm prisma:generate`, `pnpm type-check`, QA ciblée, `pnpm qa:regression`, `pnpm lint`, `pnpm build`, puis OWNER_E2E pour les surfaces concernées. La CI GitHub fait foi lorsque l’environnement local ne permet pas leur exécution complète.
