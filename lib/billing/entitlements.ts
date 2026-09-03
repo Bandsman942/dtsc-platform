@@ -169,13 +169,12 @@ function resolveOrganizationUsageLimits(planCode: SaasPlanCode, offer?: Commerci
   if (!offer) return defaults;
   const dailyMessages = Math.max(1, offer.dailyMessageLimit || Math.ceil(defaults.maxEnterpriseAiMonthlyMessages / 30));
   const dailyTokens = Math.max(1, offer.dailyTokenLimit || defaults.maxEnterpriseAiMonthlyTokens / 30);
-  const documents = Math.max(0, offer.maxDocuments ?? defaults.maxDocuments);
+  const knowledgeSources = Math.max(0, offer.maxDocuments ?? defaults.maxEnterpriseAiKnowledgeSources);
   return {
     ...defaults,
-    maxDocuments: documents,
     maxEnterpriseAiMonthlyMessages: dailyMessages * 30,
     maxEnterpriseAiMonthlyTokens: dailyTokens * 30,
-    maxEnterpriseAiKnowledgeSources: documents,
+    maxEnterpriseAiKnowledgeSources: knowledgeSources,
   };
 }
 
