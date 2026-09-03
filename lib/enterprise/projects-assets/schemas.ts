@@ -42,6 +42,10 @@ export const projectDeliverableTransitionSchema = z.object({
   action: z.enum(["SUBMIT", "ACCEPT", "REQUEST_CHANGES", "REJECT"]),
   revision: z.coerce.number().int().positive(),
   comment: z.string().trim().max(4000).optional().nullable(),
+}).superRefine((value, ctx) => {
+  if (["REQUEST_CHANGES", "REJECT"].includes(value.action) && (!value.comment || value.comment.trim().length < 3)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["comment"], message: "Un motif de revue est requis." });
+  }
 });
 
 export const projectRiskCreateSchema = z.object({
@@ -97,7 +101,10 @@ export const assetAssignmentCreateSchema = z.object({
   expectedReturnAt: z.coerce.date().optional().nullable(),
   initialCondition: z.enum(["NEW", "GOOD", "FAIR", "POOR", "DAMAGED"]),
   notes: z.string().trim().max(4000).optional().nullable(),
-}).refine((value) => Boolean(value.employeeId || value.departmentId), { message: "Un employé ou un département est requis." });
+}).refine((value) => Boolean(value.employeeId) !== Boolean(value.departmentId), {
+  message: "Choisissez soit un collaborateur, soit un département.",
+  path: ["employeeId"],
+});
 
 export const assetReturnSchema = z.object({
   revision: z.coerce.number().int().positive(),
@@ -107,7 +114,7 @@ export const assetReturnSchema = z.object({
 });
 
 export const assetMaintenanceCreateSchema = z.object({
-  maintenanceType: z.string().trim().min(2).max(120),
+  maintenanceType: z.enum(["PREVENTIVE", "CORRECTIVE"]),
   title: z.string().trim().min(2).max(240),
   description: z.string().trim().max(6000).optional().nullable(),
   priority: z.enum(["LOW", "NORMAL", "HIGH", "CRITICAL"]).default("NORMAL"),
@@ -124,6 +131,10 @@ export const assetMaintenanceTransitionSchema = z.object({
   action: z.enum(["START", "COMPLETE", "CANCEL"]),
   revision: z.coerce.number().int().positive(),
   comment: z.string().trim().max(4000).optional().nullable(),
+}).superRefine((value, ctx) => {
+  if (value.action === "CANCEL" && (!value.comment || value.comment.trim().length < 3)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["comment"], message: "Un motif d’annulation est requis." });
+  }
 });
 
 export const assetIncidentCreateSchema = z.object({
