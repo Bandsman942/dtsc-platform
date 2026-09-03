@@ -1,4 +1,5 @@
 import { PaymentStatus, Prisma } from "@prisma/client";
+import { getPublishedBillingCatalog } from "@/lib/billing/commercial-catalog";
 import { getPlanUsageLimits } from "@/lib/billing/plan-limits";
 import { getPlanModuleCatalog } from "@/lib/billing/plan-catalog";
 import { getSaasPlanLabel, resolveSaasPlanCode } from "@/lib/billing/plans";
@@ -36,7 +37,7 @@ export async function getConsoleBillingDataset(input: {
     ...(search ? { OR: [{ reference: { contains: search, mode: "insensitive" } }, { providerReference: { contains: search, mode: "insensitive" } }, { user: { OR: [{ email: { contains: search, mode: "insensitive" } }, { name: { contains: search, mode: "insensitive" } }] } }] } : {}),
   };
 
-  const [payments, paymentTotal, organizations, organizationTotal, plans, revenueAggregate, failedPayments, invoiceCount] = await Promise.all([
+  const [payments, paymentTotal, organizations, organizationTotal, plans, revenueAggregate, failedPayments, invoiceCount, publishedCatalog] = await Promise.all([
     prisma.payment.findMany({
       where: paymentWhere,
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
@@ -74,23 +75,26 @@ export async function getConsoleBillingDataset(input: {
     prisma.payment.aggregate({ where: { status: { in: [PaymentStatus.ACCEPTED, PaymentStatus.PAID] } }, _sum: { amount: true }, _count: { _all: true } }),
     prisma.payment.count({ where: { status: PaymentStatus.FAILED } }),
     prisma.invoice.count(),
+    getPublishedBillingCatalog({ includeInactive: true }),
   ]);
 
+  const publishedById = new Map(publishedCatalog.offers.map((offer) => [offer.id, offer]));
   const activePlanIds = new Set(plans.filter((plan) => plan.isActive).map((plan) => plan.id));
   const billingPlans = plans.map((plan) => {
-    const planCode = resolveSaasPlanCode(plan);
+    const publishedOffer = publishedById.get(plan.id as typeof publishedCatalog.offers[number]["id"]);
+    const planCode = publishedOffer?.capabilityCode || resolveSaasPlanCode(plan);
     return {
       id: plan.id,
-      name: plan.name,
+      name: publishedOffer?.name || plan.name,
       configuredName: plan.name,
       slug: plan.slug,
-      description: plan.description,
+      description: publishedOffer?.positioningFr || plan.description,
       audience: audienceLabel(plan.audience),
       audienceCode: (plan.audience === "PERSONAL" || plan.audience === "ORGANIZATION" ? plan.audience : "BOTH") as "PERSONAL" | "ORGANIZATION" | "BOTH",
-      priceUsd: Number(plan.priceUsd),
-      dailyMessageLimit: plan.dailyMessageLimit,
-      dailyTokenLimit: plan.dailyTokenLimit,
-      maxDocuments: plan.maxDocuments,
+      priceUsd: publishedOffer?.priceUsd ?? Number(plan.priceUsd),
+      dailyMessageLimit: publishedOffer?.dailyMessageLimit ?? plan.dailyMessageLimit,
+      dailyTokenLimit: publishedOffer?.dailyTokenLimit ?? plan.dailyTokenLimit,
+      maxDocuments: publishedOffer?.maxKnowledgeSources ?? plan.maxDocuments,
       isActive: plan.isActive,
       sortOrder: plan.sortOrder,
       updatedAt: plan.updatedAt.toISOString(),
@@ -101,15 +105,18 @@ export async function getConsoleBillingDataset(input: {
       planCode,
       capabilityCode: planCode,
       capabilityLabel: getSaasPlanLabel(planCode, "fr"),
-      limits: getPlanUsageLimits(planCode),
-      moduleCatalog: getPlanModuleCatalog(planCode),
+      limits: publishedOffer?.organizationLimits || getPlanUsageLimits(planCode),
+      moduleCatalog: publishedOffer?.moduleCatalog || getPlanModuleCatalog(planCode),
+      catalogReleaseId: publishedOffer ? publishedCatalog.releaseId : null,
+      aiModeFr: publishedOffer?.aiModeFr || null,
     };
   });
 
   const organizationSubscriptionItems = organizations.map((organization) => {
     const subscription = organization.subscriptions[0] || null;
-    const planCode = subscription ? resolveSaasPlanCode(subscription.plan) : null;
-    const limits = planCode ? getPlanUsageLimits(planCode) : null;
+    const publishedOffer = subscription ? publishedById.get(subscription.planId as typeof publishedCatalog.offers[number]["id"]) : null;
+    const planCode = publishedOffer?.capabilityCode || (subscription ? resolveSaasPlanCode(subscription.plan) : null);
+    const limits = publishedOffer?.organizationLimits || (planCode ? getPlanUsageLimits(planCode) : null);
     const latestBillingRecord = subscription?.billingRecords[0] || organization.billingRecords[0] || null;
     return {
       organizationId: organization.id,
@@ -122,10 +129,10 @@ export async function getConsoleBillingDataset(input: {
       subscription: subscription ? {
         id: subscription.id,
         planId: subscription.planId,
-        planName: subscription.plan.name,
+        planName: publishedOffer?.name || subscription.plan.name,
         planCode: planCode || "STARTER",
         capabilityLabel: getSaasPlanLabel(planCode || "STARTER", "fr"),
-        priceUsd: Number(subscription.plan.priceUsd),
+        priceUsd: publishedOffer?.priceUsd ?? Number(subscription.plan.priceUsd),
         status: subscription.status,
         startedAt: subscription.startedAt?.toISOString() || null,
         trialEndsAt: subscription.trialEndsAt?.toISOString() || null,
@@ -135,13 +142,14 @@ export async function getConsoleBillingDataset(input: {
         limits: limits || getPlanUsageLimits("STARTER"),
       } : null,
       history: organization.subscriptions.map((item) => {
-        const historyPlanCode = resolveSaasPlanCode(item.plan);
+        const historyPublishedOffer = publishedById.get(item.planId as typeof publishedCatalog.offers[number]["id"]);
+        const historyPlanCode = historyPublishedOffer?.capabilityCode || resolveSaasPlanCode(item.plan);
         return {
           id: item.id,
-          planName: item.plan.name,
+          planName: historyPublishedOffer?.name || item.plan.name,
           planCode: historyPlanCode,
           capabilityLabel: getSaasPlanLabel(historyPlanCode, "fr"),
-          priceUsd: Number(item.plan.priceUsd),
+          priceUsd: historyPublishedOffer?.priceUsd ?? Number(item.plan.priceUsd),
           status: item.status,
           startedAt: item.startedAt?.toISOString() || null,
           trialEndsAt: item.trialEndsAt?.toISOString() || null,
@@ -172,6 +180,12 @@ export async function getConsoleBillingDataset(input: {
   return {
     payments,
     billingPlans,
+    billingCatalog: {
+      release: publishedCatalog.release,
+      releaseId: publishedCatalog.releaseId,
+      revision: publishedCatalog.revision,
+      publishedAt: publishedCatalog.publishedAt,
+    },
     billingPlanOptions: billingPlans
       .filter((plan) => activePlanIds.has(plan.id) && (plan.audienceCode === "ORGANIZATION" || plan.audienceCode === "BOTH"))
       .map(({ id, name, slug, priceUsd, planCode, capabilityLabel, limits, moduleCatalog }) => ({ id, name, slug, priceUsd, planCode, capabilityLabel, limits, moduleCatalog })),
