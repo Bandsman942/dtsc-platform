@@ -19,6 +19,14 @@ export const enterpriseProjectCreateSchema = z.object({
     role: z.string().trim().min(2).max(120).default("MEMBER"),
     allocationPercent: z.coerce.number().int().min(1).max(100).default(100),
   })).max(500).default([]),
+}).superRefine((value, ctx) => {
+  if (value.projectType === "CLIENT" && !value.businessPartyId && !value.contractId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["businessPartyId"],
+      message: "Un projet client doit référencer un client ou un contrat client.",
+    });
+  }
 });
 
 export const projectTransitionSchema = z.object({
@@ -37,6 +45,17 @@ export const projectMilestoneCreateSchema = z.object({
   dueDate: z.coerce.date().optional().nullable(),
   ownerUserId: z.string().trim().min(1).optional().nullable(),
   approvalRequired: z.boolean().default(false),
+});
+
+export const projectMilestoneTransitionSchema = z.object({
+  action: z.enum(["COMPLETE", "SUBMIT_APPROVAL"]),
+  revision: z.coerce.number().int().positive(),
+  approverUserId: z.string().trim().min(1).optional().nullable(),
+  comment: z.string().trim().max(4000).optional().nullable(),
+}).superRefine((value, ctx) => {
+  if (value.action === "SUBMIT_APPROVAL" && !value.approverUserId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["approverUserId"], message: "Un validateur est requis pour ce jalon." });
+  }
 });
 
 export const projectDeliverableCreateSchema = z.object({
@@ -70,6 +89,16 @@ export const projectRiskCreateSchema = z.object({
   dueDate: z.coerce.date().optional().nullable(),
 });
 
+export const projectRiskTransitionSchema = z.object({
+  action: z.enum(["CLOSE", "REOPEN"]),
+  revision: z.coerce.number().int().positive(),
+  comment: z.string().trim().max(4000).optional().nullable(),
+}).superRefine((value, ctx) => {
+  if (value.action === "CLOSE" && (!value.comment || value.comment.trim().length < 3)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["comment"], message: "Un motif de clôture est requis." });
+  }
+});
+
 export const projectIssueCreateSchema = z.object({
   title: z.string().trim().min(2).max(240),
   description: z.string().trim().min(2).max(6000),
@@ -77,6 +106,16 @@ export const projectIssueCreateSchema = z.object({
   priority: z.enum(["LOW", "NORMAL", "HIGH", "CRITICAL"]).default("NORMAL"),
   ownerUserId: z.string().trim().min(1).optional().nullable(),
   dueDate: z.coerce.date().optional().nullable(),
+});
+
+export const projectIssueTransitionSchema = z.object({
+  action: z.enum(["RESOLVE", "CLOSE", "REOPEN"]),
+  revision: z.coerce.number().int().positive(),
+  resolution: z.string().trim().max(6000).optional().nullable(),
+}).superRefine((value, ctx) => {
+  if (value.action === "RESOLVE" && (!value.resolution || value.resolution.trim().length < 3)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["resolution"], message: "Une résolution est requise." });
+  }
 });
 
 export const assetCategoryCreateSchema = z.object({
