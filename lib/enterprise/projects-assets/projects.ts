@@ -42,7 +42,9 @@ export async function createEnterpriseProject(
       businessPartyId: input.businessPartyId,
       contractId: input.contractId,
       ownerUserId: input.ownerUserId,
+      departmentId: input.departmentId,
       siteId: input.siteId,
+      budgetId: input.budgetId,
       memberEmployeeIds: employeeIds,
     });
     const project = await tx.enterpriseProject.create({
@@ -100,6 +102,9 @@ export async function createEnterpriseProjectMilestone(
     const project = await tx.enterpriseProject.findFirst({ where: { id: projectId, organizationId, archivedAt: null } });
     if (!project) throw new EnterpriseDomainError("PROJECT_NOT_FOUND", 404);
     if (input.ownerUserId) await assertProjectRelations(tx, organizationId, { ownerUserId: input.ownerUserId });
+    if (project.startDate && input.dueDate && input.dueDate < project.startDate) {
+      throw new EnterpriseDomainError("MILESTONE_BEFORE_PROJECT_START", 409);
+    }
     if (project.targetEndDate && input.dueDate && input.dueDate > project.targetEndDate) {
       throw new EnterpriseDomainError("MILESTONE_AFTER_PROJECT_END", 409);
     }
@@ -138,11 +143,25 @@ export async function createEnterpriseProjectDeliverable(
   return prisma.$transaction(async (tx) => {
     const project = await tx.enterpriseProject.findFirst({ where: { id: projectId, organizationId, archivedAt: null } });
     if (!project) throw new EnterpriseDomainError("PROJECT_NOT_FOUND", 404);
+    let milestoneDueDate: Date | null = null;
     if (input.milestoneId) {
       const milestone = await tx.enterpriseProjectMilestone.findFirst({ where: { id: input.milestoneId, organizationId, projectId } });
       if (!milestone) throw new EnterpriseDomainError("PROJECT_MILESTONE_NOT_FOUND", 404);
+      milestoneDueDate = milestone.dueDate;
     }
-    if (input.ownerUserId) await assertProjectRelations(tx, organizationId, { ownerUserId: input.ownerUserId });
+    await assertProjectRelations(tx, organizationId, {
+      ownerUserId: input.ownerUserId,
+      documentId: input.documentId,
+    });
+    if (project.startDate && input.dueDate && input.dueDate < project.startDate) {
+      throw new EnterpriseDomainError("DELIVERABLE_BEFORE_PROJECT_START", 409);
+    }
+    if (project.targetEndDate && input.dueDate && input.dueDate > project.targetEndDate) {
+      throw new EnterpriseDomainError("DELIVERABLE_AFTER_PROJECT_END", 409);
+    }
+    if (milestoneDueDate && input.dueDate && input.dueDate > milestoneDueDate) {
+      throw new EnterpriseDomainError("DELIVERABLE_AFTER_MILESTONE", 409);
+    }
     const deliverable = await tx.enterpriseProjectDeliverable.create({
       data: {
         organizationId,
@@ -184,8 +203,11 @@ export async function transitionEnterpriseProjectDeliverable(
     if (!(DELIVERABLE_TRANSITIONS[deliverable.status] || []).includes(input.action)) {
       throw new EnterpriseDomainError("DELIVERABLE_TRANSITION_INVALID", 409);
     }
-    if (["ACCEPT", "REJECT"].includes(input.action) && deliverable.createdByUserId === actorUserId) {
+    if (["ACCEPT", "REQUEST_CHANGES", "REJECT"].includes(input.action) && deliverable.createdByUserId === actorUserId) {
       throw new EnterpriseDomainError("SELF_APPROVAL_FORBIDDEN", 409);
+    }
+    if (["REQUEST_CHANGES", "REJECT"].includes(input.action) && (!input.comment || input.comment.trim().length < 3)) {
+      throw new EnterpriseDomainError("DELIVERABLE_REVIEW_COMMENT_REQUIRED", 400);
     }
     const statusByAction = {
       SUBMIT: "SUBMITTED",
