@@ -33,7 +33,7 @@ export async function GET(req: Request, { params }: Params) {
     }),
     prisma.enterpriseDepartment.findMany({ where: { organizationId, isActive: true }, orderBy: [{ sortOrder: "asc" }, { labelFr: "asc" }], take: 500, select: { id: true, departmentCode: true, labelFr: true, labelEn: true } }),
     prisma.enterprisePosition.findMany({ where: { organizationId, isActive: true }, orderBy: [{ hierarchyLevel: "asc" }, { labelFr: "asc" }], take: 1000, select: { id: true, positionCode: true, labelFr: true, labelEn: true, departmentId: true } }),
-    prisma.enterpriseSite.findMany({ where: { organizationId, status: "ACTIVE", archivedAt: null }, orderBy: { name: "asc" }, take: 500, select: { id: true, code: true, name: true, siteType: true } }),
+    prisma.enterpriseSite.findMany({ where: { organizationId, status: "ACTIVE", archivedAt: null }, orderBy: { name: "asc" }, take: 500, select: { id: true, code: true, name: true, siteType: true, timezone: true } }),
     prisma.enterpriseFinanceConfiguration.findUnique({ where: { organizationId }, select: { functionalCurrencyCode: true, presentationCurrencyCode: true } }),
     prisma.enterpriseFinancialAccount.findMany({ where: { organizationId, status: "ACTIVE", archivedAt: null }, distinct: ["currencyCode"], take: 50, select: { currencyCode: true } }),
     listEnterpriseApprovalCandidates({ organizationId, requesterUserId: session.userId, moduleCode }).catch(() => ({ candidates: [], selfApprovalOverrideAvailable: false })),
