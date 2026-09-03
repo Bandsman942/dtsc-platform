@@ -29,6 +29,16 @@ const FINANCE_ERROR_MESSAGES: Record<string, string> = {
   FINANCE_EXCHANGE_RATE_NOT_FOUND: "Ce taux de change n’existe pas dans cette entreprise.",
   FINANCE_EXCHANGE_RATE_CONFLICT: "Le taux a changé pendant l’opération. Rechargez l’historique avant de recommencer.",
   FINANCE_AMOUNT_MUST_BE_POSITIVE: "Le montant doit être strictement supérieur à zéro.",
+  PAYMENT_AMOUNT_INVALID: "Le montant du paiement doit être strictement positif.",
+  PAYMENT_COUNTERPARTY_AMBIGUOUS: "Un paiement ne peut pas cibler simultanément un tiers et un collaborateur.",
+  PAYMENT_EMPLOYEE_INVALID: "Le collaborateur sélectionné n’est plus actif dans cette entreprise.",
+  PAYROLL_RUN_REQUIRED: "Sélectionnez une paie approuvée pour créer un paiement de paie.",
+  PAYROLL_PAYMENT_TYPE_REQUIRED: "Une référence de paie ne peut être utilisée que pour un paiement de paie.",
+  PAYROLL_PAYMENT_DIRECTION_INVALID: "Un paiement de paie doit être un décaissement sortant.",
+  PAYROLL_PAYMENT_COUNTERPARTY_INVALID: "Le paiement d’une paie globale doit référencer la paie elle-même, sans tiers ni collaborateur individuel.",
+  PAYROLL_RUN_NOT_PAYABLE: "La paie sélectionnée n’est pas approuvée ou n’est plus payable.",
+  PAYROLL_PAYMENT_CURRENCY_MISMATCH: "La devise du paiement doit être identique à celle de la paie approuvée.",
+  PAYROLL_PAYMENT_EXCEEDS_REMAINING: "Le paiement dépasse le solde restant de cette paie. Vérifiez les paiements déjà préparés ou confirmés.",
   TREASURY_LEDGER_ACCOUNT_INVALID: "Le compte comptable sélectionné n’est plus disponible dans cette entreprise.",
   TREASURY_LEDGER_SUBTYPE_MISMATCH: "Le compte comptable choisi ne correspond pas au type de compte financier.",
   TREASURY_LEDGER_CURRENCY_MISMATCH: "La devise du compte comptable ne correspond pas à la devise du compte financier.",
@@ -38,7 +48,7 @@ const FINANCE_ERROR_MESSAGES: Record<string, string> = {
   TREASURY_ACCOUNT_CONFLICT: "Ce compte a été modifié entre-temps. Rechargez-le avant de recommencer.",
   TREASURY_ACCOUNT_BALANCE_NOT_ZERO: "Ce compte conserve un solde. Transférez ou régularisez ce solde avant de l’archiver.",
   TREASURY_ACCOUNT_ACTIVE_CASH_SESSION: "Une session de caisse est encore ouverte sur ce compte. Clôturez-la avant l’archivage.",
-  TREASURY_ACCOUNT_PENDING_TRANSFER: "Un transfert non terminé utilise encore ce compte. Terminez ou annulez ce transfert avant de l’archiver.",
+  TREASURY_ACCOUNT_PENDING_TRANSFER: "Un transfert non terminé utilise encore ce compte. Terminez ou annulez ce transfert avant de l’archivage.",
   TRANSFER_ACCOUNTS_INVALID: "Sélectionnez deux comptes financiers actifs et différents de cette entreprise.",
   TRANSFER_INSUFFICIENT_OPERATIONAL_BALANCE: "Le solde disponible du compte source est insuffisant pour ce transfert.",
   TRANSFER_NOT_FOUND: "Ce transfert n’existe pas dans cette entreprise.",
@@ -72,26 +82,11 @@ export async function authorizeFinanceRequest(
 
 export function financeErrorResponse(error: unknown, fallback = "FINANCE_OPERATION_FAILED") {
   if (error instanceof EnterpriseAccountingError) {
-    return NextResponse.json(
-      {
-        error: error.code,
-        message: FINANCE_ERROR_MESSAGES[error.code] || "L’opération financière n’a pas pu être terminée. Vérifiez les données et le statut de la période.",
-        details: error.details,
-      },
-      { status: error.status },
-    );
+    return NextResponse.json({ error: error.code, message: FINANCE_ERROR_MESSAGES[error.code] || "L’opération financière n’a pas pu être terminée. Vérifiez les données et le statut de la période.", details: error.details }, { status: error.status });
   }
-  if (error && typeof error === "object" && "code" in error && error.code === "P2002") {
-    return NextResponse.json({ error: "FINANCE_DUPLICATE", message: FINANCE_ERROR_MESSAGES.FINANCE_DUPLICATE }, { status: 409 });
-  }
+  if (error && typeof error === "object" && "code" in error && error.code === "P2002") return NextResponse.json({ error: "FINANCE_DUPLICATE", message: FINANCE_ERROR_MESSAGES.FINANCE_DUPLICATE }, { status: 409 });
   console.error(fallback, error);
-  return NextResponse.json(
-    {
-      error: fallback,
-      message: FINANCE_ERROR_MESSAGES[fallback] || "Une erreur interne a empêché l’opération financière. Aucune donnée comptable ne doit être considérée comme validée.",
-    },
-    { status: 500 },
-  );
+  return NextResponse.json({ error: fallback, message: FINANCE_ERROR_MESSAGES[fallback] || "Une erreur interne a empêché l’opération financière. Aucune donnée comptable ne doit être considérée comme validée." }, { status: 500 });
 }
 
 export function financeListParams(req: Request) {
