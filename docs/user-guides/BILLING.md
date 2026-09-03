@@ -38,7 +38,7 @@ Les offres personnelles se différencient principalement par les volumes de l’
 
 Les valeurs réellement affichées sur `/tarifs` et `/billing` viennent du catalogue administré courant. Si DTSC publie plus tard une nouvelle révision, ces pages n’utilisent pas une ancienne copie codée en dur.
 
-## Offres organisation
+## Offres d’organisation
 
 ### Organisation Essentielle — 25 USD/mois de référence
 
@@ -158,7 +158,7 @@ Une action de paiement ou de changement n’est affichée que lorsque le fournis
 
 Pour une organisation :
 
-- seules les offres organisation peuvent être sélectionnées ;
+- seules les offres d’organisation peuvent être sélectionnées ;
 - seuls les rôles autorisés peuvent gérer l’abonnement ;
 - une modification d’offre peut entraîner une réconciliation des modules éligibles ;
 - les données historiques des modules désactivés ne doivent pas être supprimées par un simple changement de package.
