@@ -50,7 +50,7 @@ export function formatEnterpriseAmount(value: string | number, currency: string,
   }
 }
 
-export function Field({ label, help, error, required, children }: { label: string; help?: string; error?: string; required?: boolean; children: ReactNode }) {
+export function Field({ label, help, error, required = false, children }: { label: string; help?: string; error?: string; required?: boolean; children: ReactNode }) {
   const [documentLocale, setDocumentLocale] = useState<"fr" | "en">("fr");
   useEffect(() => {
     setDocumentLocale(document.documentElement.lang === "en" ? "en" : "fr");
@@ -60,7 +60,7 @@ export function Field({ label, help, error, required, children }: { label: strin
     ? children.props as { name?: unknown; required?: unknown }
     : undefined;
   const childName = childProps?.name;
-  const effectiveRequired = required ?? childProps?.required === true;
+  const effectiveRequired = required || childProps?.required === true;
   const automaticHelp = referenceFieldHelp(typeof childName === "string" ? childName : undefined, documentLocale);
   const effectiveHelp = help || automaticHelp;
 
