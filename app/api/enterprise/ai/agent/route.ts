@@ -11,6 +11,7 @@ import { classifyAiTask } from "@/lib/ai/classifier";
 import { getAiModelDefinition } from "@/lib/ai/catalog";
 import { toAiReasonCode } from "@/lib/ai/errors";
 import { buildLanguageInstruction } from "@/lib/ai/prompts";
+import type { AiToolMode } from "@/lib/ai/tool-registry";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseAiAccess } from "@/lib/enterprise-ai/access";
@@ -139,6 +140,11 @@ export async function POST(req: Request) {
     }
     const useKnowledge = preference?.useKnowledge ?? data.useKnowledge;
     const useTools = preference?.useTools ?? data.useTools;
+    const commercialToolModes: AiToolMode[] = access.planCode === "ENTERPRISE"
+      ? ["READ", "PREPARE", "MUTATE"]
+      : access.planCode === "BUSINESS"
+        ? ["READ", "PREPARE"]
+        : ["READ"];
     const preparedTurn = await prepareAiTurn({ userId: session.userId, contextCode: "ORGANIZATION", organizationId: data.organizationId });
 
     await prisma.enterpriseAiMessage.create({
@@ -211,7 +217,9 @@ export async function POST(req: Request) {
       requestedModel,
       reasoningEffort,
       dataClassifications: routeDataClassifications,
-      budgetRequest: useTools ? undefined : { maxToolCalls: 0, allowedToolModes: [], allowedToolCodes: [] },
+      budgetRequest: useTools
+        ? { allowedToolModes: commercialToolModes }
+        : { maxToolCalls: 0, allowedToolModes: [], allowedToolCodes: [] },
       request: req,
       signal: req.signal,
       tags: [
@@ -250,6 +258,7 @@ export async function POST(req: Request) {
               dataClassifications: routeDataClassifications,
               useKnowledge,
               useTools,
+              commercialToolModes,
               taskType,
               reasonCode: result.reasonCode || null,
               ...preparedTurn.auditMetadata,
