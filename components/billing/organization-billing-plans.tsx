@@ -103,9 +103,9 @@ export function OrganizationBillingPlans({
                 <p className="mt-2 text-sm leading-6 text-dtsc-muted">{plan.description}</p>
                 <p className="mt-4 text-2xl font-black text-dtsc-ink">{plan.priceUsd.toFixed(2)} USD <span className="text-xs font-bold text-dtsc-muted">/ mois</span></p>
                 <div className="mt-3 grid gap-1 text-xs font-semibold text-dtsc-muted">
-                  <span>{plan.dailyMessageLimit.toLocaleString("fr-FR")} messages/jour</span>
+                  <span>{plan.dailyMessageLimit.toLocaleString("fr-FR")} messages IA/jour</span>
                   <span>{plan.dailyTokenLimit.toLocaleString("fr-FR")} tokens/jour</span>
-                  <span>{plan.maxDocuments.toLocaleString("fr-FR")} documents</span>
+                  <span>{plan.maxDocuments.toLocaleString("fr-FR")} sources de connaissance IA</span>
                 </div>
                 <Button type="button" onClick={() => checkout(plan.id)} disabled={active || !canManage || Boolean(pendingPlanId) || !paymentAvailable} className="mt-5 bg-[#002b5b] text-white hover:bg-[#001736]">
                   <CreditCard className="h-4 w-4" />
