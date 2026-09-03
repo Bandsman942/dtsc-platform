@@ -199,7 +199,7 @@ export function BillingPlanManager({ plans, canManage, locale }: { plans: Manage
 
                       <div className="mt-4 rounded-xl border border-dtsc-border bg-dtsc-surface p-3">
                         <div className="flex items-center justify-between gap-3">
-                          <span className="flex items-center gap-2 text-sm font-black text-dtsc-ink"><Layers3 className="h-4 w-4 text-cyan-600" />{english ? "Modules included by the published capability contract" : "Modules inclus par le contrat de capacité publié"}</span>
+                          <span className="flex items-center gap-2 text-sm font-black text-dtsc-ink"><Layers3 className="h-4 w-4 text-cyan-600" />{english ? "Modules allowed by the capability level" : "Modules autorisés par le niveau de capacité"}</span>
                           <span className="rounded-full bg-cyan-400/14 px-2 py-1 text-xs font-black text-cyan-600">{plan.moduleCatalog.totalModules}</span>
                         </div>
                         <p className="mt-2 text-xs font-semibold text-dtsc-muted">
