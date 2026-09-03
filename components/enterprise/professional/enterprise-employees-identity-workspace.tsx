@@ -55,6 +55,7 @@ export function EnterpriseEmployeesIdentityWorkspace({ organizationId, organizat
   const collection = useProfessionalCollection<Employee>({ endpoint: `/api/enterprise/${organizationId}/employees`, params, refreshKey });
   const lookupLabel = (item: LookupItem | undefined, fallback: string) => item ? (locale === "en" ? item.labelEn || item.labelFr || item.name || fallback : item.labelFr || item.labelEn || item.name || fallback) : fallback;
   const positionLabel = (employee: Employee) => lookupLabel(lookups.positions.find((position) => position.id === employee.positionId), t("people.positionToComplete"));
+  const memberLabel = (member: Member) => `${member.label} · ${member.positionTitle || professionalErpEnumLabel(locale, "role", member.role)}`;
 
   async function createEmployee(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -81,7 +82,14 @@ export function EnterpriseEmployeesIdentityWorkspace({ organizationId, organizat
       const email = String(data.get("workEmail") || "").trim();
       if (employee && identityChoice !== "MANUAL_ONLY" && identityChoice !== "LINK_LATER") {
         if (!email) throw new Error(t("identity.exactEmailRequired"));
-        await professionalMutation(`/api/enterprise/${organizationId}/identity-link-invitations`, { email, displayName: employee.displayName, employeeId: employee.id, relationType: String(data.get("employmentType") || "") === "CONTRACTOR" ? "COLLABORATOR" : "EMPLOYEE", roleCode: selectedPosition?.positionCode || null, purpose: `Accès professionnel autorisé par ${organizationName}, sans synchronisation silencieuse du dossier RH.` });
+        await professionalMutation(`/api/enterprise/${organizationId}/identity-link-invitations`, {
+          email,
+          displayName: employee.displayName,
+          employeeId: employee.id,
+          relationType: String(data.get("employmentType") || "") === "CONTRACTOR" ? "COLLABORATOR" : "EMPLOYEE",
+          roleCode: selectedPosition?.positionCode || null,
+          purpose: `Permettre à cette personne d’accéder aux services professionnels autorisés par ${organizationName}, sans synchroniser silencieusement son dossier RH.`,
+        });
       }
       form.reset(); setCreateOpen(false); setIdentityChoice("MANUAL_ONLY"); setNotice(locale === "en" ? "Employee record saved." : "Dossier collaborateur enregistré."); setRefreshKey((value) => value + 1);
     } catch (mutationError) { setError(mutationError instanceof Error ? mutationError.message : t("identity.createFailed")); }
@@ -105,7 +113,7 @@ export function EnterpriseEmployeesIdentityWorkspace({ organizationId, organizat
 
     <Dialog open={createOpen} onClose={() => { if (!saving) setCreateOpen(false); }} title={t("identity.newEmployeeDialog")} presentation="editor" className="h-[96dvh] max-w-5xl"><form onSubmit={createEmployee} className="grid gap-6">
       {error ? <ProfessionalError message={error} /> : null}
-      <ProfessionalFormSection title={t("identity.professionalIdentity")}><Field label={t("identity.firstName")}><Input name="firstName" required /></Field><Field label={t("identity.lastName")}><Input name="lastName" required /></Field><Field label={t("identity.workEmail")}><Input name="workEmail" type="email" /></Field><Field label={t("identity.workPhone")}><Input name="workPhone" /></Field><Field label={t("identity.existingMember")}><NativeSelect name="organizationMemberId" items={[{ id: "", label: t("identity.noMember") }, ...lookups.members.map((member) => ({ id: member.membershipId, label: `${member.label} · ${member.positionTitle || member.role}` }))]} /></Field><Field label={t("identity.relationshipType")}><NativeSelect name="employmentType" defaultValue="EMPLOYEE" items={["EMPLOYEE", "CONTRACTOR", "INTERN", "TEMPORARY"].map((id) => ({ id, label: professionalErpEnumLabel(locale, "employmentType", id) }))} /></Field></ProfessionalFormSection>
+      <ProfessionalFormSection title={t("identity.professionalIdentity")}><Field label={t("identity.firstName")}><Input name="firstName" required /></Field><Field label={t("identity.lastName")}><Input name="lastName" required /></Field><Field label={t("identity.workEmail")}><Input name="workEmail" type="email" /></Field><Field label={t("identity.workPhone")}><Input name="workPhone" /></Field><Field label={t("identity.existingMember")}><NativeSelect name="organizationMemberId" items={[{ id: "", label: t("identity.noMember") }, ...lookups.members.map((member) => ({ id: member.membershipId, label: memberLabel(member) }))]} /></Field><Field label={t("identity.relationshipType")}><NativeSelect name="employmentType" defaultValue="EMPLOYEE" items={["EMPLOYEE", "CONTRACTOR", "INTERN", "TEMPORARY"].map((id) => ({ id, label: professionalErpEnumLabel(locale, "employmentType", id) }))} /></Field></ProfessionalFormSection>
       <ProfessionalFormSection title={t("identity.assignment")}><Field label={t("identity.position")}><NativeSelect name="positionId" items={positionItems} /></Field><Field label={t("identity.department")}><NativeSelect name="departmentId" items={departmentItems} /></Field><Field label={t("identity.manager")}><NativeSelect name="managerEmployeeId" items={[{ id: "", label: t("people.none") }, ...lookups.employees.map((employee) => ({ id: employee.id, label: `${employee.displayName || ""} · ${employee.employeeNumber || ""}` }))]} /></Field><Field label={t("identity.site")}><NativeSelect name="siteId" items={[{ id: "", label: t("people.none") }, ...lookups.sites.map((site) => ({ id: site.id, label: site.name || site.code || t("people.toComplete") }))]} /></Field><Field label={t("identity.hireDate")}><Input name="hireDate" type="date" required /></Field></ProfessionalFormSection>
       <ProfessionalFormSection title={t("identity.compensationSection")} description={t("identity.compensationDescription")}><Field label={t("identity.baseCompensation")}><Input name="baseCompensation" type="number" min="0" step="0.01" /></Field><Field label={t("identity.currency")}><NativeSelect name="compensationCurrency" defaultValue={currencies[0]} items={currencies.map((id) => ({ id, label: id }))} /></Field></ProfessionalFormSection>
       <ProfessionalFormSection title={t("identity.accountRelationship")}><div className="md:col-span-2"><EnterpriseIdentityLinkChoice value={identityChoice} onChange={setIdentityChoice} helper={t("identity.accountHelper")} /></div></ProfessionalFormSection>
