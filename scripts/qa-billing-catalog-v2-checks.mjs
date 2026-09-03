@@ -23,6 +23,9 @@ const billingPage = read("app/billing/page.tsx");
 const consoleBilling = read("lib/console/console-billing.ts");
 const billingManager = read("components/admin/billing-plan-manager.tsx");
 const cagRegistry = read("lib/ai/cag-registry.ts");
+const personalChat = read("app/api/chat/v2/route.ts");
+const publicAgent = read("app/api/public/dtsc-agent/route.ts");
+const enterpriseAgent = read("app/api/enterprise/ai/agent/route.ts");
 const enterpriseAiAccess = read("lib/enterprise-ai/access.ts");
 const enterpriseAiContext = read("lib/enterprise-ai/context.ts");
 const regressionAdapter = read("scripts/qa-regression-checks.mjs");
@@ -93,9 +96,36 @@ containsAll(billingPage, ["getPublishedBillingCatalog", "catalog.releaseId", "So
 containsAll(consoleBilling, ["getPublishedBillingCatalog({ includeInactive: true })", "publishedById", "catalogReleaseId", "aiModeFr"], "Console DTSC");
 containsAll(billingManager, ["catalogReleaseId", "sources de connaissance IA", "documents métier", "aiModeFr"], "Console DTSC UI");
 
-containsAll(cagRegistry, ["getPublishedBillingCatalog", "formatPublishedBillingCatalogForAi", 'code: "billing-catalog"', "Quotas effectifs"], "CAG IA");
+containsAll(cagRegistry, [
+  "getPublishedBillingCatalog",
+  "formatPublishedBillingCatalogForAi",
+  'code: "billing-catalog"',
+  "releaseId",
+  "Quotas effectifs",
+], "CAG IA");
+containsAll(personalChat, ["preparedTurn.cag.content", "catalogue commercial versionné", "n’invente jamais un tarif"], "chatbot général");
+containsAll(publicAgent, [
+  "getPublishedBillingCatalog",
+  "formatPublishedBillingCatalogForAi",
+  "CATALOGUE COMMERCIAL DTSC PUBLIÉ",
+  "/tarifs",
+  "ne cite que les prix présents dans le catalogue publié",
+], "assistant public");
+for (const hardcodedPrice of ["25 USD", "75 USD", "180 USD", "50 USD/mois", "15 USD/mois"]) {
+  expect(!publicAgent.includes(hardcodedPrice), `assistant public: tarif codé en dur interdit (${hardcodedPrice})`);
+}
+
 containsAll(enterpriseAiAccess, ["offerName", "subscriptionStatus", "dailyMessageLimit", "dailyTokenLimit", "maxKnowledgeSources", "canUseReadTools", "canUseActionDrafts"], "accès IA Entreprise");
 containsAll(enterpriseAiContext, ["CONTRAT COMMERCIAL", "offerName: access.offerName", "maxKnowledgeSources", "maxBusinessDocuments", "canUseReadTools", "canUseActionDrafts"], "prompt IA Entreprise");
+containsAll(enterpriseAgent, [
+  "commercialToolModes",
+  'access.planCode === "ENTERPRISE"',
+  '["READ", "PREPARE", "MUTATE"]',
+  'access.planCode === "BUSINESS"',
+  '["READ", "PREPARE"]',
+  ': ["READ"]',
+  "allowedToolModes: commercialToolModes",
+], "modes outils IA Entreprise");
 
 expect(regressionAdapter.includes('await import("./qa-billing-catalog-v2-checks.mjs")'), "qa:regression: Billing Catalog v2 n’est pas intégré à la gate canonique");
 
