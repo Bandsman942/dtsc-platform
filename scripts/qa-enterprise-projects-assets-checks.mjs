@@ -16,7 +16,9 @@ requirePaths([
   "app/api/enterprise/[organizationId]/project-issues/[issueId]/transition/route.ts",
   "app/api/enterprise/[organizationId]/deliverables/route.ts",
   "app/api/enterprise/[organizationId]/assets/route.ts",
+  "app/api/enterprise/[organizationId]/approvals/route.ts",
   "app/api/enterprise/[organizationId]/projects-assets-lookups/route.ts",
+  "components/enterprise/professional/enterprise-project-control-actions.tsx",
   "components/enterprise/professional/enterprise-projects-services-workspace.tsx",
   "components/enterprise/professional/enterprise-time-deliverables-workspace.tsx",
   "components/enterprise/professional/enterprise-assets-maintenance-workspace-v2.tsx",
@@ -94,6 +96,12 @@ requireTokens("app/api/enterprise/[organizationId]/approvals/[id]/actions/route.
   "decideEnterpriseProjectMilestone",
   "cancelEnterpriseProjectMilestoneApproval",
 ]);
+requireTokens("app/api/enterprise/[organizationId]/approvals/route.ts", [
+  "EnterpriseProjectMilestone",
+  "enterpriseProjectMilestone.findMany",
+  "project.reference",
+  "project.name",
+]);
 requireTokens("lib/enterprise/approval-targets.ts", [
   'EnterpriseProjectMilestone: "PROJECTS_SERVICES"',
   'targetEntityType === "EnterpriseProjectMilestone"',
@@ -139,7 +147,18 @@ requireTokens("lib/enterprise/projects-assets/assets.ts", [
   "AVAILABLE",
   "ASSET_INCIDENT_RESOLVED",
 ]);
+requireTokens("components/enterprise/professional/enterprise-project-control-actions.tsx", [
+  "approval-candidates?moduleCode=PROJECTS_SERVICES",
+  "!candidate.isRequester",
+  "!candidate.selfApprovalOverride",
+  "SUBMIT_APPROVAL",
+  "project-risks/${control.item.id}/transition",
+  "project-issues/${control.item.id}/transition",
+  "revision: control.item.revision",
+  "presentation=\"editor\"",
+]);
 requireTokens("components/enterprise/professional/enterprise-projects-services-workspace.tsx", [
+  "EnterpriseProjectControlActions",
   "ProfessionalPager",
   "presentation=\"editor\"",
   "useToastMessage",
@@ -169,6 +188,7 @@ requireTokens("components/enterprise/professional/enterprise-assets-maintenance-
   "purchaseId",
   "assignmentTarget",
 ]);
+forbidTokens("components/enterprise/professional/enterprise-project-control-actions.tsx", ["window.prompt", "window.alert", "window.confirm"]);
 forbidTokens("components/enterprise/professional/enterprise-projects-services-workspace.tsx", ["window.prompt", "window.alert", "window.confirm"]);
 forbidTokens("components/enterprise/professional/enterprise-time-deliverables-workspace.tsx", ["window.prompt", "window.alert", "window.confirm"]);
 forbidTokens("components/enterprise/professional/enterprise-assets-maintenance-workspace-v2.tsx", ["window.prompt", "window.alert", "window.confirm"]);
