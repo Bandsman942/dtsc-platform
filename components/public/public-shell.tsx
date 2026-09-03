@@ -7,7 +7,7 @@ import { PublicScrollAnimator } from "@/components/public/public-scroll-animator
 import { dtsc } from "@/lib/dtsc";
 
 const columns = [
-  { title: "Entreprise", links: [["À propos", "/a-propos"], ["Secteurs", "/secteurs"], ["Projets", "/projets"], ["Contact", "/contact"]] },
+  { title: "Entreprise", links: [["À propos", "/a-propos"], ["Secteurs", "/secteurs"], ["Projets", "/projets"], ["Tarifs DTSC Platform", "/tarifs"], ["Contact", "/contact"]] },
   { title: "Expertise", links: [["Services", "/services"], ["Solutions", "/solutions"], ["Data en Afrique", "/data-afrique"], ["BI & KPI", "/bi-kpi"], ["IA en entreprise", "/ia-entreprise"]] },
   { title: "Ressources", links: [["Publications", "/ressources"], ["Conditions", "/conditions-utilisation"], ["Confidentialité", "/politique-confidentialite"], ["Cookies", "/politique-cookies"]] },
 ] as const;
