@@ -26,7 +26,7 @@ export async function GET(req: Request, { params }: Params) {
   const status = url.searchParams.get("status")?.trim() || "";
   const where: Prisma.EnterpriseAttendanceWhereInput = { organizationId, ...(employeeId ? { employeeId } : {}), ...(status ? { status } : {}) };
   const [items, total, present, absent] = await Promise.all([
-    prisma.enterpriseAttendance.findMany({ where, orderBy: [{ attendanceDate: "desc" }, { createdAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { employee: { select: { id: true, employeeNumber: true, displayName: true } } } }),
+    prisma.enterpriseAttendance.findMany({ where, orderBy: [{ attendanceDate: "desc" }, { createdAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { employee: { select: { id: true, employeeNumber: true, displayName: true, siteId: true } } } }),
     prisma.enterpriseAttendance.count({ where }),
     prisma.enterpriseAttendance.count({ where: { organizationId, status: { in: ["PRESENT", "LATE", "PARTIAL", "REMOTE"] } } }),
     prisma.enterpriseAttendance.count({ where: { organizationId, status: "ABSENT" } }),
