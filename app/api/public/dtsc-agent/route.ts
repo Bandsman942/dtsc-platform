@@ -1,21 +1,22 @@
 import { NextResponse } from "next/server";
-import { createLeadAndNotify } from "@/lib/public-ai-leads";
+import { writeApiLog } from "@/lib/audit";
+import { formatPublishedBillingCatalogForAi, getPublishedBillingCatalog } from "@/lib/billing/commercial-catalog";
 import { env } from "@/lib/env";
 import { getOpenAIModel } from "@/lib/openai";
 import { prisma } from "@/lib/prisma";
+import { createLeadAndNotify } from "@/lib/public-ai-leads";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { getAppSettings } from "@/lib/settings";
 import { publicDtscAgentSchema } from "@/lib/validators";
-import { writeApiLog } from "@/lib/audit";
 
 const DTSC_PUBLIC_AGENT_PROMPT = `Tu es l'assistant IA officiel de DTSC - Data and Tech Solutions Consulting.
 
-Ta mission est d'aider les visiteurs du site public à comprendre les 7 leviers numériques officiels de DTSC, qualifier leurs besoins et transmettre les demandes commerciales à l'équipe.
+Ta mission est d'aider les visiteurs du site public à comprendre les 7 leviers numériques officiels de DTSC, DTSC Platform et ses abonnements publiés, qualifier leurs besoins et transmettre les demandes commerciales à l'équipe.
 
-Tu dois répondre exclusivement aux questions liées à DTSC, ses 7 leviers, ses exemples de solutions, ses secteurs d'intervention, ses articles publics, ses prestations et ses processus de contact.
+Tu dois répondre exclusivement aux questions liées à DTSC, ses 7 leviers, DTSC Platform, ses abonnements publiés, ses exemples de solutions, ses secteurs d'intervention, ses articles publics, ses prestations et ses processus de contact.
 
 Si une question est hors sujet, tu dois répondre :
-Je suis l'assistant IA de DTSC. Je peux uniquement répondre aux questions concernant DTSC, ses 7 leviers numériques, ses exemples de solutions et vos besoins de performance.
+Je suis l'assistant IA de DTSC. Je peux uniquement répondre aux questions concernant DTSC, DTSC Platform, ses abonnements publiés, ses 7 leviers numériques, ses exemples de solutions et vos besoins de performance.
 
 Tu peux parler uniquement des 7 leviers officiels :
 1. Data & BI ;
@@ -30,6 +31,8 @@ Règle centrale :
 - Ne présente jamais transformation numérique, applications métier, automatisation, chatbot, CRM, portail client, assistant documentaire, dashboard, reporting, ERP, développement web ou conseil technologique comme des services séparés.
 - Ces termes peuvent rester uniquement comme exemples rattachés à l'un des 7 leviers.
 - Exemples: chatbot et assistant documentaire -> Intelligence artificielle; dashboards, KPI et reporting -> Data & BI; ERP, CRM, portails clients et applications web -> Solutions digitales; audit des processus et réduction des coûts -> Audit & optimisation.
+- Les abonnements DTSC Platform sont un catalogue produit distinct des devis de conseil. Tu peux citer leurs prix uniquement lorsqu'ils figurent dans le contexte "CATALOGUE COMMERCIAL DTSC PUBLIÉ" du tour courant.
+- Ne transforme jamais un prix d'abonnement DTSC Platform en devis de prestation de conseil, d'intégration, de formation, de développement ou d'accompagnement.
 
 Lorsque le visiteur exprime un besoin, tu dois qualifier le prospect en collectant progressivement :
 1. nom complet ;
@@ -62,7 +65,8 @@ Si ces informations ne sont pas encore disponibles, continue la conversation pou
 Tu dois toujours garder les réponses courtes, professionnelles et faciles à comprendre.
 
 Garde-fous complémentaires :
-- ne donne jamais de prix définitif ;
+- ne donne jamais de prix définitif pour une prestation de conseil ou un devis personnalisé ;
+- pour un abonnement DTSC Platform, ne cite que les prix présents dans le catalogue publié injecté dans ce tour et invite vers /tarifs pour le détail ;
 - ne promets jamais une prestation sans validation humaine ;
 - ne collecte pas de données sensibles inutiles ;
 - ne donne pas de conseils médicaux, juridiques, financiers ou politiques ;
@@ -121,30 +125,30 @@ function getFunctionCall(body: unknown) {
 }
 
 const disabledFallback =
-  "L'assistant IA public DTSC est actuellement désactivé par l'administrateur. Voici l'essentiel à retenir sur DTSC: Data and Tech Solutions Consulting aide les organisations à booster leur performance avec 7 leviers numériques: Data & BI, Intelligence artificielle, Solutions digitales, Audit & optimisation, Formations, Marketing digital et Imprimerie numérique. Les dashboards, chatbots, ERP, CRM, portails clients, assistants documentaires, workflows numériques et reporting sont des exemples rattachés à ces leviers, pas des services séparés. Vous pouvez consulter la FAQ de la landing page pour les questions fréquentes, puis remplir manuellement le formulaire de contact ou le formulaire newsletter sur la page Contact afin que l'équipe DTSC puisse qualifier votre besoin.";
+  "L'assistant IA public DTSC est actuellement désactivé par l'administrateur. Voici l'essentiel à retenir sur DTSC: Data and Tech Solutions Consulting aide les organisations à booster leur performance avec 7 leviers numériques: Data & BI, Intelligence artificielle, Solutions digitales, Audit & optimisation, Formations, Marketing digital et Imprimerie numérique. Les dashboards, chatbots, ERP, CRM, portails clients, assistants documentaires, workflows numériques et reporting sont des exemples rattachés à ces leviers, pas des services séparés. Les abonnements DTSC Platform publiés sont consultables sur la page /tarifs. Vous pouvez aussi remplir le formulaire de contact ou le formulaire newsletter sur la page Contact afin que l'équipe DTSC puisse qualifier votre besoin.";
 
 const outOfScopeReply =
-  "Je suis l'assistant IA de DTSC. Je peux uniquement répondre aux questions concernant DTSC, ses 7 leviers numériques, ses exemples de solutions et vos besoins de performance.";
+  "Je suis l'assistant IA de DTSC. Je peux uniquement répondre aux questions concernant DTSC, DTSC Platform, ses abonnements publiés, ses 7 leviers numériques, ses exemples de solutions et vos besoins de performance.";
 
 const faqContext = [
   "FAQ landing page DTSC disponible:",
   "- DTSC accompagne les organisations avec 7 leviers numériques: Data & BI, Intelligence artificielle, Solutions digitales, Audit & optimisation, Formations, Marketing digital et Imprimerie numérique.",
   "- Les dashboards, chatbots, ERP, CRM, portails clients, assistants documentaires et workflows numériques sont des exemples rattachés aux 7 leviers, pas des services séparés.",
+  "- DTSC Platform possède un catalogue d'abonnements publié sur /tarifs. Les tarifs d'abonnement sont distincts des devis de prestations de conseil ou d'intégration.",
   "- Une première consultation sert à clarifier le contexte, les objectifs, les contraintes et les priorités avant de recommander les leviers prioritaires, une feuille de route, un prototype ou un accompagnement.",
   "- Un cahier des charges détaillé n'est pas obligatoire: DTSC peut aider à structurer une idée, un problème métier, un fichier ou un processus manuel.",
   "- L'assistant IA public répond uniquement aux sujets DTSC, qualifie les besoins et transmet une demande commerciale après confirmation.",
   "- L'assistant public ne doit jamais inventer de guide, article, checklist, étude de cas, PDF ou ressource non publiée.",
-  "- Dans l'espace privé, le chatbot peut utiliser le profil entreprise et les documents de l'utilisateur sans les mélanger avec d'autres comptes.",
-  "- Dans l'espace privé, le chatbot peut préparer puis envoyer un message à DTSC ou créer un ticket support après confirmation explicite.",
-  "- Les documents et contextes privés restent isolés par utilisateur.",
-  "- Les plans incluent un niveau gratuit limité et des plans payants selon disponibilité du paiement.",
+  "- Dans l'espace privé, le chatbot général explique DTSC Platform et son catalogue sans lire les données ERP de l'entreprise active.",
+  "- IA Entreprise peut lire les données ERP uniquement via les outils backend autorisés par l'organisation, le rôle, les permissions et les modules actifs.",
+  "- Les documents et contextes privés restent isolés par utilisateur et organisation.",
   "- Les demandes de démonstration ou devis passent par Contact, l'assistant public ou le chatbot privé pour les utilisateurs connectés.",
   "- Selon les paramètres globaux, des utilisateurs non-client peuvent rédiger des brouillons publics; seul un admin peut publier ou supprimer.",
-  "Règle: si une question fréquente correspond à ces points, répondre brièvement et orienter vers la FAQ de la landing page pour plus de détails.",
+  "Règle: si une question fréquente correspond à ces points, répondre brièvement et orienter vers la FAQ de la landing page ou /tarifs pour les abonnements.",
 ].join("\n");
 
 const allowedTopicPattern =
-  /\b(dtsc|data|donnee|donnée|analytics|tableau|dashboard|reporting|automatisation|processus|ia|intelligence artificielle|application|web|logiciel|numerique|numérique|transformation|gouvernance|conseil|technologique|site|plateforme|crm|erp|workflow|contact|devis|projet|besoin|service|offre|newsletter|ressource|article|publication|consulting|consultance|entreprise|organisation)\b/i;
+  /\b(dtsc|data|donnee|donnée|analytics|tableau|dashboard|reporting|automatisation|processus|ia|intelligence artificielle|application|web|logiciel|numerique|numérique|transformation|gouvernance|conseil|technologique|site|plateforme|crm|erp|workflow|contact|devis|projet|besoin|service|offre|tarif|prix|abonnement|package|newsletter|ressource|article|publication|consulting|consultance|entreprise|organisation)\b/i;
 
 const commercialIntentPattern =
   /\b(j(?:e|')\s*(veux|souhaite|voudrais|cherche|besoin)|nous\s*(voulons|souhaitons|cherchons|avons besoin)|pouvez-vous|pouvez vous|aidez|accompagner|automatiser|developper|développer|creer|créer|mettre en place|contacter|rendez-vous|rdv|audit|diagnostic)\b/i;
@@ -289,10 +293,15 @@ export async function POST(req: Request) {
   }
 
   try {
-    const resourceContext = await getPublishedResourceContext();
+    const [resourceContext, billingCatalogContext] = await Promise.all([
+      getPublishedResourceContext(),
+      getPublishedBillingCatalog()
+        .then((catalog) => formatPublishedBillingCatalogForAi(catalog))
+        .catch(() => "CATALOGUE COMMERCIAL DTSC PUBLIÉ: momentanément indisponible. Ne donne aucun prix d'abonnement et oriente vers /tarifs."),
+    ]);
     const aiPayload: Record<string, unknown> = {
       model: getOpenAIModel(),
-      instructions: `${DTSC_PUBLIC_AGENT_PROMPT}\n\n${faqContext}\n\n${resourceContext}`,
+      instructions: `${DTSC_PUBLIC_AGENT_PROMPT}\n\n${faqContext}\n\n${billingCatalogContext}\n\n${resourceContext}`,
       input: parsed.data.messages.map((message) => ({ role: message.role, content: message.content })),
       store: false,
     };
