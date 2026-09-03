@@ -19,6 +19,10 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "PROJECTS_SERVICES", action: "read" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const [writeAccess, manageAccess] = await Promise.all([
+    getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "PROJECTS_SERVICES", action: "write" }),
+    getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "PROJECTS_SERVICES", action: "manage" }),
+  ]);
   const url = new URL(req.url);
   const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
   const pageSize = Math.min(100, Math.max(5, Number(url.searchParams.get("pageSize") || 25) || 25));
@@ -44,7 +48,13 @@ export async function GET(req: Request, { params }: Params) {
     prisma.enterpriseProjectRisk.count({ where: { organizationId, status: "OPEN", severity: { in: ["HIGH", "CRITICAL"] } } }),
   ]);
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "projects", page } });
-  return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { active, overdue, highRisks: risks }, canManage: access.canManage });
+  return NextResponse.json({
+    items,
+    pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) },
+    metrics: { active, overdue, highRisks: risks },
+    canWrite: Boolean(writeAccess),
+    canManage: Boolean(manageAccess),
+  });
 }
 
 export async function POST(req: Request, { params }: Params) {
