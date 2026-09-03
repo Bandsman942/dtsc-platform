@@ -26,7 +26,8 @@ export const EMPLOYMENT_CONTRACT_TYPES = ["EMPLOYMENT", "INDEFINITE", "FIXED_TER
 export const LEAVE_TYPES = ["ANNUAL", "SICK", "MATERNITY", "PATERNITY", "UNPAID", "OTHER"] as const;
 
 const employmentContractPayloadSchema = z.object({
-  employeeId: z.string().trim().min(1),
+  employeeId: z.string().trim().min(1).optional().nullable(),
+  organizationMemberId: z.string().trim().min(1).optional().nullable(),
   contractType: z.enum(EMPLOYMENT_CONTRACT_TYPES),
   startDate: z.coerce.date(),
   endDate: z.coerce.date().optional().nullable(),
@@ -48,8 +49,19 @@ function validateContractDates(value: { startDate: Date; endDate?: Date | null; 
   if (value.endDate && value.probationEndDate && value.probationEndDate > value.endDate) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "La période d’essai doit se terminer avant la fin du contrat.", path: ["probationEndDate"] });
 }
 
-export const employmentContractCreateSchema = employmentContractPayloadSchema.superRefine(validateContractDates);
-export const employmentContractUpdateSchema = employmentContractPayloadSchema.omit({ employeeId: true }).extend({ revision: z.coerce.number().int().positive() }).superRefine(validateContractDates);
+export const employmentContractCreateSchema = employmentContractPayloadSchema.superRefine((value, ctx) => {
+  validateContractDates(value, ctx);
+  const hasEmployee = Boolean(value.employeeId);
+  const hasMember = Boolean(value.organizationMemberId);
+  if (hasEmployee === hasMember) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Sélectionnez exactement un collaborateur actif de l’entreprise.",
+      path: hasEmployee ? ["organizationMemberId"] : ["employeeId"],
+    });
+  }
+});
+export const employmentContractUpdateSchema = employmentContractPayloadSchema.omit({ employeeId: true, organizationMemberId: true }).extend({ revision: z.coerce.number().int().positive() }).superRefine(validateContractDates);
 
 function requireRejectionReason(value: { decision: "APPROVE" | "REJECT"; comment?: string | null }, ctx: z.RefinementCtx) {
   if (value.decision === "REJECT" && (!value.comment || value.comment.trim().length < 3)) {
