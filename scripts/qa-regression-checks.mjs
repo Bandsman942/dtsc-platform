@@ -75,3 +75,4 @@ await import("./qa-operational-sla-filter-checks.mjs");
 await import("./qa-media-proxy-hotfix.mjs");
 await import("./qa-hotfix-512-retail-subtypes-mobile-money-forms.mjs");
 await import("./qa-erp-accounting-approvals-511.mjs");
+await import("./qa-billing-catalog-v2-checks.mjs");
