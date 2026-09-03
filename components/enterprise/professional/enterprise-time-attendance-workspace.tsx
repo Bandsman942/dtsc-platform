@@ -34,11 +34,11 @@ type Employee = { id: string; employeeNumber: string; displayName: string; siteI
 type Member = { userId: string; name: string; email: string; role: string; positionTitle: string | null };
 type Project = { id: string; reference: string; name: string; status: string };
 type Task = { id: string; title: string; status: string };
-type Site = { id: string; code: string; name: string; siteType: string };
+type Site = { id: string; code: string; name: string; siteType: string; timezone: string | null };
 type Lookups = { employees: Employee[]; approvers: Member[]; projects: Project[]; tasks: Task[]; sites: Site[] };
-type LeaveRequest = { id: string; reference: string; employeeId: string; leaveType: string; startDate: string; endDate: string; partialDay: boolean; status: string; reason: string | null; approverUserId: string | null; revision: number; employee: Employee };
+type LeaveRequest = { id: string; reference: string; employeeId: string; leaveType: string; startDate: string; endDate: string; partialDay: boolean; status: string; reason: string | null; approverUserId: string | null; revision: number; canDecide: boolean; canCancel: boolean; employee: Employee };
 type TimesheetEntry = { id: string; workDate: string; declaredMinutes: number; approvedMinutes: number | null; projectId: string | null; taskId?: string | null; serviceDescription: string | null; billable: boolean; notes: string | null };
-type Timesheet = { id: string; reference: string; employeeId: string; periodStart: string; periodEnd: string; status: string; totalDeclaredMinutes: number; totalApprovedMinutes: number; approverUserId: string | null; revision: number; employee: Employee; entries: TimesheetEntry[] };
+type Timesheet = { id: string; reference: string; employeeId: string; periodStart: string; periodEnd: string; status: string; totalDeclaredMinutes: number; totalApprovedMinutes: number; approverUserId: string | null; revision: number; canDecide: boolean; employee: Employee; entries: TimesheetEntry[] };
 type WorkSchedule = { id: string; employeeId: string; scheduleType: string; dayOfWeek: number | null; scheduleDate: string | null; startMinute: number; endMinute: number; breakMinutes: number; timezone: string; status: string; effectiveFrom: string; effectiveUntil: string | null; revision: number; employee: Employee };
 type Attendance = { id: string; employeeId: string; attendanceDate: string; observedStartAt: string | null; observedEndAt: string | null; status: string; source: string; siteId: string | null; notes: string | null; revision: number; employee: Employee };
 type DecisionTarget = { item: LeaveRequest | Timesheet; decision: "APPROVE" | "REJECT" };
@@ -103,6 +103,12 @@ const localCopy = {
     scheduleSaved: "Horaire planifié.",
     attendanceSaved: "Présence enregistrée.",
     leaveCancelled: "Demande de congé annulée.",
+    endSchedule: "Clôturer l’horaire",
+    endScheduleDate: "Dernier jour d’application",
+    endScheduleReason: "Motif de clôture",
+    endScheduleHelp: "La clôture conserve l’horaire dans l’historique. Créez ensuite le nouvel horaire à partir du jour suivant.",
+    scheduleEnded: "Horaire clôturé. L’historique est conservé.",
+    siteTimezoneMissing: "Fuseau non configuré",
     actionFailed: "L’opération n’a pas pu être terminée.",
     page: "Page",
     previous: "Précédent",
@@ -169,6 +175,12 @@ const localCopy = {
     scheduleSaved: "Schedule saved.",
     attendanceSaved: "Attendance recorded.",
     leaveCancelled: "Leave request cancelled.",
+    endSchedule: "End schedule",
+    endScheduleDate: "Last effective day",
+    endScheduleReason: "Reason for ending",
+    endScheduleHelp: "Ending keeps the schedule in history. Create the replacement schedule starting on the following day.",
+    scheduleEnded: "Schedule ended. History has been preserved.",
+    siteTimezoneMissing: "Timezone not configured",
     actionFailed: "The operation could not be completed.",
     page: "Page",
     previous: "Previous",
@@ -209,6 +221,14 @@ function dateTimeIso(date: string, time: string) {
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
+function formatObservedTime(value: string, locale: string, timezone?: string | null) {
+  return new Intl.DateTimeFormat(locale === "en" ? "en-US" : "fr-FR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: timezone || "UTC",
+  }).format(new Date(value));
+}
+
 function interpolate(template: string, values: Record<string, string | number>) {
   return Object.entries(values).reduce((result, [key, value]) => result.replace(`{${key}}`, String(value)), template);
 }
@@ -245,6 +265,7 @@ export function EnterpriseTimeAttendanceWorkspace({ organizationId, organization
   const [detail, setDetail] = useState<LeaveRequest | Timesheet | WorkSchedule | Attendance | null>(null);
   const [decisionTarget, setDecisionTarget] = useState<DecisionTarget | null>(null);
   const [cancelTarget, setCancelTarget] = useState<LeaveRequest | null>(null);
+  const [scheduleEndTarget, setScheduleEndTarget] = useState<WorkSchedule | null>(null);
   const [scheduleType, setScheduleType] = useState("WEEKLY");
   const [busyAction, setBusyAction] = useState("");
   const [message, setMessage] = useState("");
@@ -316,14 +337,13 @@ export function EnterpriseTimeAttendanceWorkspace({ organizationId, organization
   async function createAttendance(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const date = String(form.get("attendanceDate") || "");
     const observedStart = String(form.get("observedStart") || "");
     const observedEnd = String(form.get("observedEnd") || "");
     const ok = await runMutation("attendance-create", `/api/enterprise/${organizationId}/attendance`, {
       employeeId: String(form.get("employeeId") || ""),
-      attendanceDate: date,
-      observedStartAt: observedStart ? dateTimeIso(date, observedStart) : null,
-      observedEndAt: observedEnd ? dateTimeIso(date, observedEnd) : null,
+      attendanceDate: String(form.get("attendanceDate") || ""),
+      observedStartMinute: observedStart ? timeToMinute(observedStart) : null,
+      observedEndMinute: observedEnd ? timeToMinute(observedEnd) : null,
       status: String(form.get("status") || "PRESENT"),
       source: "MANUAL",
       siteId: String(form.get("siteId") || "") || null,
@@ -408,13 +428,24 @@ export function EnterpriseTimeAttendanceWorkspace({ organizationId, organization
     if (ok) { setCancelTarget(null); setDetail(null); }
   }
 
+  async function endSchedule(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!scheduleEndTarget) return;
+    const form = new FormData(event.currentTarget);
+    const reason = String(form.get("reason") || "").trim();
+    const effectiveUntil = String(form.get("effectiveUntil") || "");
+    if (!reason || !effectiveUntil) return;
+    const ok = await runMutation(`schedule-end-${scheduleEndTarget.id}`, `/api/enterprise/${organizationId}/work-schedules/${scheduleEndTarget.id}/end`, { revision: scheduleEndTarget.revision, effectiveUntil, reason }, copy.scheduleEnded);
+    if (ok) { setScheduleEndTarget(null); setDetail(null); }
+  }
+
   const actionsFor = (item: LeaveRequest | Timesheet): BusinessContextAction[] => [
     { id: "open", label: t("people.open"), icon: Eye, onSelect: () => setDetail(item) },
-    ...(item.status === "SUBMITTED" ? [
+    ...(item.canDecide ? [
       { id: "approve", label: t("people.approve"), icon: CheckCircle2, onSelect: () => setDecisionTarget({ item, decision: "APPROVE" as const }) },
       { id: "reject", label: t("people.refuse"), icon: XCircle, destructive: true, onSelect: () => setDecisionTarget({ item, decision: "REJECT" as const }) },
     ] : []),
-    ...("leaveType" in item && ["SUBMITTED", "APPROVED"].includes(item.status) ? [
+    ...("leaveType" in item && item.canCancel ? [
       { id: "cancel", label: copy.cancelLeave, icon: Ban, destructive: true, onSelect: () => setCancelTarget(item) },
     ] : []),
   ];
@@ -460,11 +491,12 @@ export function EnterpriseTimeAttendanceWorkspace({ organizationId, organization
         {activeCollection.error ? <ProfessionalError message={activeCollection.error} /> : activeCollection.loading ? <ProfessionalLoading /> : tab === "SCHEDULES" ? (
           schedules.items.length ? <BusinessList ariaLabel={copy.scheduleSection}>{schedules.items.map((item) => {
             const day = item.scheduleType === "WEEKLY" ? dayLabels[Math.max(0, (item.dayOfWeek || 1) - 1)] : (item.scheduleDate ? professionalErpDate(item.scheduleDate, locale) : copy.dateSpecific);
-            return <BusinessListItem key={item.id} title={employeeLabel(item.employee)} leading={<CalendarClock className="h-5 w-5 text-dtsc-blue" />} status={<StatusBadge tone={statusTone(item.status)}>{item.status === "ACTIVE" ? (locale === "en" ? "Active" : "Actif") : item.status}</StatusBadge>} meta={interpolate(copy.scheduleMeta, { day, start: minuteToTime(item.startMinute), end: minuteToTime(item.endMinute), breakMinutes: item.breakMinutes })} description={`${professionalErpDate(item.effectiveFrom, locale)}${item.effectiveUntil ? ` – ${professionalErpDate(item.effectiveUntil, locale)}` : ""} · ${item.timezone}`} onOpen={() => setDetail(item)} actions={<Button size="sm" variant="outline" onClick={() => setDetail(item)}><Eye className="h-4 w-4" />{t("people.details")}</Button>} />;
+            return <BusinessListItem key={item.id} title={employeeLabel(item.employee)} leading={<CalendarClock className="h-5 w-5 text-dtsc-blue" />} status={<StatusBadge tone={statusTone(item.status)}>{item.status === "ACTIVE" ? (locale === "en" ? "Active" : "Actif") : item.status === "ENDED" ? (locale === "en" ? "Ended" : "Clôturé") : item.status}</StatusBadge>} meta={interpolate(copy.scheduleMeta, { day, start: minuteToTime(item.startMinute), end: minuteToTime(item.endMinute), breakMinutes: item.breakMinutes })} description={`${professionalErpDate(item.effectiveFrom, locale)}${item.effectiveUntil ? ` – ${professionalErpDate(item.effectiveUntil, locale)}` : ""} · ${item.timezone}`} onOpen={() => setDetail(item)} actions={<div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={() => setDetail(item)}><Eye className="h-4 w-4" />{t("people.details")}</Button>{schedules.canManage && item.status === "ACTIVE" ? <Button size="sm" variant="outline" onClick={() => setScheduleEndTarget(item)}><Ban className="h-4 w-4" />{copy.endSchedule}</Button> : null}</div>} />;
           })}</BusinessList> : <EmptyState compact title={copy.noSchedule} description={copy.noScheduleDescription} />
         ) : tab === "ATTENDANCE" ? (
           attendance.items.length ? <BusinessList ariaLabel={copy.attendanceSection}>{attendance.items.map((item) => {
-            const observed = item.observedStartAt && item.observedEndAt ? interpolate(copy.observedMeta, { date: professionalErpDate(item.attendanceDate, locale), start: new Date(item.observedStartAt).toLocaleTimeString(locale === "en" ? "en-US" : "fr-FR", { hour: "2-digit", minute: "2-digit" }), end: new Date(item.observedEndAt).toLocaleTimeString(locale === "en" ? "en-US" : "fr-FR", { hour: "2-digit", minute: "2-digit" }) }) : `${professionalErpDate(item.attendanceDate, locale)} · ${copy.noObservedHours}`;
+            const site = lookups.sites.find((entry) => entry.id === item.siteId) || lookups.sites.find((entry) => entry.id === item.employee.siteId);
+            const observed = item.observedStartAt && item.observedEndAt ? interpolate(copy.observedMeta, { date: professionalErpDate(item.attendanceDate, locale), start: formatObservedTime(item.observedStartAt, locale, site?.timezone), end: formatObservedTime(item.observedEndAt, locale, site?.timezone) }) : `${professionalErpDate(item.attendanceDate, locale)} · ${copy.noObservedHours}`;
             return <BusinessListItem key={item.id} title={employeeLabel(item.employee)} leading={<UserCheck className="h-5 w-5 text-dtsc-blue" />} status={<StatusBadge tone={statusTone(item.status)}>{currentStatusItems.find((entry) => entry.id === item.status)?.label || item.status}</StatusBadge>} meta={observed} description={item.notes || `${locale === "en" ? "Source" : "Source"}: ${item.source}`} onOpen={() => setDetail(item)} actions={<Button size="sm" variant="outline" onClick={() => setDetail(item)}><Eye className="h-4 w-4" />{t("people.details")}</Button>} />;
           })}</BusinessList> : <EmptyState compact title={copy.noAttendance} description={copy.noAttendanceDescription} />
         ) : tab === "LEAVE" ? (
@@ -500,7 +532,7 @@ export function EnterpriseTimeAttendanceWorkspace({ organizationId, organization
           <Field label={t("time.employee")}><NativeSelect name="employeeId" required items={[{ id: "", label: t("people.select") }, ...lookups.employees.map((employee) => ({ id: employee.id, label: employeeLabel(employee) }))]} /></Field>
           <Field label={copy.attendanceDate}><Input name="attendanceDate" type="date" required /></Field>
           <Field label={copy.attendanceStatus}><NativeSelect name="status" defaultValue="PRESENT" items={currentStatusItems.filter((item) => item.id)} /></Field>
-          <Field label={copy.site}><NativeSelect name="siteId" items={[{ id: "", label: t("people.notProvided") }, ...lookups.sites.map((site) => ({ id: site.id, label: `${site.code} · ${site.name}` }))]} /></Field>
+          <Field label={copy.site}><NativeSelect name="siteId" items={[{ id: "", label: t("people.notProvided") }, ...lookups.sites.map((site) => ({ id: site.id, label: `${site.code} · ${site.name} · ${site.timezone || copy.siteTimezoneMissing}` }))]} /></Field>
           <Field label={copy.observedStart}><Input name="observedStart" type="time" /></Field>
           <Field label={copy.observedEnd}><Input name="observedEnd" type="time" /></Field>
           <Field label={copy.notes}><textarea name="notes" rows={4} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base" /></Field>
@@ -561,11 +593,15 @@ export function EnterpriseTimeAttendanceWorkspace({ organizationId, organization
       {cancelTarget ? <form onSubmit={cancelLeave} className="grid gap-5"><div className="rounded-xl border border-dtsc-border bg-dtsc-page p-4 text-sm"><strong>{cancelTarget.reference}</strong> · {cancelTarget.employee.displayName}</div><Field label={copy.cancellationReason}><textarea name="reason" rows={6} required className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base" /><p className="mt-2 text-sm text-dtsc-muted">{copy.cancellationHelp}</p></Field><div className="sticky bottom-0 flex justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface py-3"><Button type="button" variant="outline" onClick={() => setCancelTarget(null)} disabled={Boolean(busyAction)}>{t("people.cancel")}</Button><Button type="submit" disabled={Boolean(busyAction)}>{copy.cancelLeave}</Button></div></form> : null}
     </Dialog>
 
+    <Dialog open={Boolean(scheduleEndTarget)} onClose={() => setScheduleEndTarget(null)} title={copy.endSchedule} presentation="editor" className="h-[68dvh] max-w-2xl">
+      {scheduleEndTarget ? <form onSubmit={endSchedule} className="grid gap-5"><div className="rounded-xl border border-dtsc-border bg-dtsc-page p-4 text-sm"><strong>{scheduleEndTarget.employee.displayName}</strong> · {minuteToTime(scheduleEndTarget.startMinute)}–{minuteToTime(scheduleEndTarget.endMinute)}</div><Field label={copy.endScheduleDate}><Input name="effectiveUntil" type="date" min={scheduleEndTarget.effectiveFrom.slice(0, 10)} required /></Field><Field label={copy.endScheduleReason}><textarea name="reason" rows={5} required className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base" /><p className="mt-2 text-sm text-dtsc-muted">{copy.endScheduleHelp}</p></Field><div className="sticky bottom-0 flex justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface py-3"><Button type="button" variant="outline" onClick={() => setScheduleEndTarget(null)} disabled={Boolean(busyAction)}>{t("people.cancel")}</Button><Button type="submit" disabled={Boolean(busyAction)}>{copy.endSchedule}</Button></div></form> : null}
+    </Dialog>
+
     <Dialog open={Boolean(detail)} onClose={() => setDetail(null)} title={(detail && "reference" in detail ? detail.reference : detail?.employee.displayName) || t("time.detail")} className="h-[88dvh] max-w-4xl">
       {detail && "entries" in detail ? <div className="grid gap-4"><p className="text-sm text-dtsc-muted">{detail.employee.displayName} · {t("time.declared", { duration: minutesLabel(detail.totalDeclaredMinutes) })}</p><BusinessList ariaLabel={t("time.entries")}>{detail.entries.map((entry) => <BusinessListItem key={entry.id} title={entry.serviceDescription || t("time.activity")} meta={professionalErpDate(entry.workDate, locale)} status={<StatusBadge>{minutesLabel(entry.approvedMinutes ?? entry.declaredMinutes)}</StatusBadge>} description={`${entry.billable ? t("time.billableYes") : t("time.billableNo")}${entry.notes ? ` · ${entry.notes}` : ""}`} />)}</BusinessList><div data-responsive-actions>{actionsFor(detail).filter((action) => action.id !== "open").map((action) => <Button key={action.id} type="button" variant={action.destructive ? "outline" : "default"} onClick={() => action.onSelect?.()}>{action.label}</Button>)}</div></div> : null}
       {detail && "leaveType" in detail ? <div className="grid gap-4"><div className="grid gap-3 text-sm leading-6"><p><strong>{t("time.employeeLabel")}</strong> {detail.employee.displayName}</p><p><strong>{t("time.periodLabel")}</strong> {t("time.periodRange", { start: professionalErpDate(detail.startDate, locale), end: professionalErpDate(detail.endDate, locale) })}</p><p><strong>{t("time.typeLabel")}</strong> {professionalErpEnumLabel(locale, "leaveType", detail.leaveType)}</p><p><strong>{t("time.reasonLabel")}</strong> {detail.reason || t("people.notProvided")}</p></div><div data-responsive-actions>{actionsFor(detail).filter((action) => action.id !== "open").map((action) => <Button key={action.id} type="button" variant={action.destructive ? "outline" : "default"} onClick={() => action.onSelect?.()}>{action.label}</Button>)}</div></div> : null}
-      {detail && "scheduleType" in detail ? <div className="grid gap-3 text-sm leading-6"><p><strong>{t("time.employeeLabel")}</strong> {detail.employee.displayName}</p><p><strong>{copy.scheduleType}:</strong> {detail.scheduleType === "WEEKLY" ? copy.weekly : copy.dateSpecific}</p><p><strong>{copy.startTime}:</strong> {minuteToTime(detail.startMinute)} – {minuteToTime(detail.endMinute)}</p><p><strong>{copy.timezone}:</strong> {detail.timezone}</p></div> : null}
-      {detail && "attendanceDate" in detail ? <div className="grid gap-3 text-sm leading-6"><p><strong>{t("time.employeeLabel")}</strong> {detail.employee.displayName}</p><p><strong>{copy.attendanceDate}:</strong> {professionalErpDate(detail.attendanceDate, locale)}</p><p><strong>{copy.attendanceStatus}:</strong> {detail.status}</p><p><strong>{copy.notes}:</strong> {detail.notes || t("people.notProvided")}</p></div> : null}
+      {detail && "scheduleType" in detail ? <div className="grid gap-3 text-sm leading-6"><p><strong>{t("time.employeeLabel")}</strong> {detail.employee.displayName}</p><p><strong>{copy.scheduleType}:</strong> {detail.scheduleType === "WEEKLY" ? copy.weekly : copy.dateSpecific}</p><p><strong>{copy.startTime}:</strong> {minuteToTime(detail.startMinute)} – {minuteToTime(detail.endMinute)}</p><p><strong>{copy.timezone}:</strong> {detail.timezone}</p>{schedules.canManage && detail.status === "ACTIVE" ? <div data-responsive-actions><Button type="button" variant="outline" onClick={() => setScheduleEndTarget(detail)}><Ban className="h-4 w-4" />{copy.endSchedule}</Button></div> : null}</div> : null}
+      {detail && "attendanceDate" in detail ? <div className="grid gap-3 text-sm leading-6"><p><strong>{t("time.employeeLabel")}</strong> {detail.employee.displayName}</p><p><strong>{copy.attendanceDate}:</strong> {professionalErpDate(detail.attendanceDate, locale)}</p><p><strong>{copy.attendanceStatus}:</strong> {currentStatusItems.find((entry) => entry.id === detail.status)?.label || detail.status}</p><p><strong>{copy.notes}:</strong> {detail.notes || t("people.notProvided")}</p></div> : null}
     </Dialog>
   </ModuleWorkspace>;
 }
