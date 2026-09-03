@@ -62,10 +62,22 @@ export async function assertProjectRelations(
 ) {
   const [party, contract, department, site, budget, document] = await Promise.all([
     input.businessPartyId
-      ? tx.enterpriseBusinessParty.findFirst({ where: { id: input.businessPartyId, organizationId, archivedAt: null }, select: { id: true } })
+      ? tx.enterpriseBusinessParty.findFirst({
+          where: {
+            id: input.businessPartyId,
+            organizationId,
+            archivedAt: null,
+            status: "ACTIVE",
+            roles: { some: { status: "ACTIVE", archivedAt: null, roleCode: { in: ["CUSTOMER", "PROSPECT"] } } },
+          },
+          select: { id: true },
+        })
       : Promise.resolve(null),
     input.contractId
-      ? tx.enterpriseContract.findFirst({ where: { id: input.contractId, organizationId, archivedAt: null }, select: { id: true, businessPartyId: true } })
+      ? tx.enterpriseContract.findFirst({
+          where: { id: input.contractId, organizationId, archivedAt: null, status: { in: ["APPROVED", "ACTIVE"] } },
+          select: { id: true, businessPartyId: true },
+        })
       : Promise.resolve(null),
     input.departmentId
       ? tx.enterpriseDepartment.findFirst({ where: { id: input.departmentId, organizationId, isActive: true }, select: { id: true } })
@@ -74,10 +86,16 @@ export async function assertProjectRelations(
       ? tx.enterpriseSite.findFirst({ where: { id: input.siteId, organizationId, archivedAt: null, status: "ACTIVE" }, select: { id: true } })
       : Promise.resolve(null),
     input.budgetId
-      ? tx.enterpriseBudget.findFirst({ where: { id: input.budgetId, organizationId, archivedAt: null }, select: { id: true } })
+      ? tx.enterpriseBudget.findFirst({
+          where: { id: input.budgetId, organizationId, archivedAt: null, status: { notIn: ["CLOSED", "CANCELLED"] } },
+          select: { id: true },
+        })
       : Promise.resolve(null),
     input.documentId
-      ? tx.enterpriseDocument.findFirst({ where: { id: input.documentId, organizationId, archivedAt: null }, select: { id: true } })
+      ? tx.enterpriseDocument.findFirst({
+          where: { id: input.documentId, organizationId, archivedAt: null, status: { notIn: ["ARCHIVED", "DELETED"] } },
+          select: { id: true },
+        })
       : Promise.resolve(null),
   ]);
   if (input.businessPartyId && !party) throw new EnterpriseDomainError("BUSINESS_PARTY_NOT_FOUND", 404);
@@ -98,4 +116,6 @@ export async function assertProjectRelations(
     });
     if (count !== employeeIds.length) throw new EnterpriseDomainError("PROJECT_MEMBER_EMPLOYEE_NOT_FOUND", 404);
   }
+
+  return { party, contract, department, site, budget, document };
 }
