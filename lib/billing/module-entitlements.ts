@@ -33,19 +33,19 @@ export const FEATURE_ENTITLEMENTS: Record<SaasFeatureCode, FeatureEntitlement> =
   },
   "collaboration-calls": {
     feature: "collaboration-calls",
-    requiredPlan: "BUSINESS",
+    requiredPlan: "STARTER",
     requiresActiveSubscription: true,
     label: "Appels collaboratifs",
   },
   calendar: {
     feature: "calendar",
-    requiredPlan: "BUSINESS",
+    requiredPlan: "STARTER",
     requiresActiveSubscription: true,
     label: "Calendrier interne",
   },
   "enterprise-admin": {
     feature: "enterprise-admin",
-    requiredPlan: "BUSINESS",
+    requiredPlan: "STARTER",
     requiresActiveSubscription: true,
     label: "Administration entreprise",
   },
