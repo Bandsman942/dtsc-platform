@@ -21,6 +21,16 @@ export const enterpriseProjectCreateSchema = z.object({
   })).max(500).default([]),
 });
 
+export const projectTransitionSchema = z.object({
+  action: z.enum(["PLAN", "START", "MARK_AT_RISK", "BLOCK", "RESUME", "COMPLETE", "CLOSE", "CANCEL"]),
+  revision: z.coerce.number().int().positive(),
+  comment: z.string().trim().max(4000).optional().nullable(),
+}).superRefine((value, ctx) => {
+  if (["MARK_AT_RISK", "BLOCK", "CANCEL"].includes(value.action) && (!value.comment || value.comment.trim().length < 3)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["comment"], message: "Un motif est requis pour cette transition." });
+  }
+});
+
 export const projectMilestoneCreateSchema = z.object({
   name: z.string().trim().min(2).max(240),
   description: z.string().trim().max(4000).optional().nullable(),
