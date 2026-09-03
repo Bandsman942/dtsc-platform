@@ -14,6 +14,7 @@ function containsAll(source, values, label) {
 
 const bootstrap = JSON.parse(read("config/billing-plans.bootstrap.json"));
 const catalog = read("lib/billing/commercial-catalog.ts");
+const catalogApi = read("app/api/billing/catalog/route.ts");
 const entitlements = read("lib/billing/entitlements.ts");
 const featureEntitlements = read("lib/billing/module-entitlements.ts");
 const planLimits = read("lib/billing/plan-limits.ts");
@@ -61,6 +62,8 @@ containsAll(catalog, [
   "formatPublishedBillingCatalogForAi",
 ], "catalogue commercial");
 for (const id of expected.keys()) expect(catalog.includes(`"${id}"`), `catalogue commercial: offre ${id} absente`);
+containsAll(catalogApi, ["getPublishedBillingCatalog", 'dynamic = "force-dynamic"', '"Cache-Control": "no-store"'], "API catalogue public");
+expect(!catalogApi.includes("max-age"), "API catalogue public: une ancienne révision ne doit pas rester publiquement cachée");
 
 containsAll(planLimits, [
   "maxMonthlyCallMinutes: 300",
