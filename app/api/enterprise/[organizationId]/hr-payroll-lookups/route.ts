@@ -18,7 +18,13 @@ export async function GET(req: Request, { params }: Params) {
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode, action: "read" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const [employees, departments, positions, sites, approval] = await Promise.all([
+  const [members, employees, departments, positions, sites, approval] = await Promise.all([
+    prisma.organizationMember.findMany({
+      where: { organizationId, status: "ACTIVE", removedAt: null },
+      orderBy: { user: { name: "asc" } },
+      take: 1000,
+      select: { id: true, userId: true, role: true, positionCode: true, positionTitle: true, user: { select: { name: true, email: true } } },
+    }),
     prisma.enterpriseEmployee.findMany({
       where: { organizationId, employmentStatus: "ACTIVE", archivedAt: null },
       orderBy: { displayName: "asc" },
@@ -31,6 +37,7 @@ export async function GET(req: Request, { params }: Params) {
     listEnterpriseApprovalCandidates({ organizationId, requesterUserId: session.userId, moduleCode }).catch(() => ({ candidates: [], selfApprovalOverrideAvailable: false })),
   ]);
 
+  const mappedMembers = members.map((member) => ({ id: member.userId, membershipId: member.id, label: member.user.name || member.user.email, email: member.user.email, role: member.role, positionCode: member.positionCode, positionTitle: member.positionTitle }));
   const approvers = approval.candidates.filter((candidate) => candidate.userId !== session.userId);
   let modulePayload: Record<string, unknown> = {};
 
@@ -53,5 +60,5 @@ export async function GET(req: Request, { params }: Params) {
   }
 
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "hr-payroll-lookups", moduleCode } });
-  return NextResponse.json({ employees, departments, positions, sites, approvers, ...modulePayload });
+  return NextResponse.json({ members: mappedMembers, employees, departments, positions, sites, approvers, ...modulePayload });
 }
