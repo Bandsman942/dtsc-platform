@@ -97,7 +97,7 @@ expect(!entitlements.includes("maxDocuments: documents"), "projection des limite
 containsAll(pricingPage, ["getPublishedBillingCatalog", "catalog.offers.filter", "sources de connaissance IA", "documents métier", "storageLabel"], "site public /tarifs");
 containsAll(billingPage, ["getPublishedBillingCatalog", "catalog.releaseId", "Sources de connaissance IA", "Documents métier", "Sources IA"], "/billing");
 containsAll(consoleBilling, ["getPublishedBillingCatalog({ includeInactive: true })", "publishedById", "catalogReleaseId", "aiModeFr"], "Console DTSC");
-containsAll(billingManager, ["catalogReleaseId", "sources de connaissance IA", "documents métier", "aiModeFr"], "Console DTSC UI");
+containsAll(billingManager, ["catalogReleaseId", "sources de connaissance IA", "documents métier", "aiModeFr", "Modules autorisés par le niveau de capacité"], "Console DTSC UI");
 
 containsAll(cagRegistry, [
   "getPublishedBillingCatalog",
@@ -118,7 +118,19 @@ for (const hardcodedPrice of ["25 USD", "75 USD", "180 USD", "50 USD/mois", "15 
   expect(!publicAgent.includes(hardcodedPrice), `assistant public: tarif codé en dur interdit (${hardcodedPrice})`);
 }
 
-containsAll(enterpriseAiAccess, ["offerName", "subscriptionStatus", "dailyMessageLimit", "dailyTokenLimit", "maxKnowledgeSources", "canUseReadTools", "canUseActionDrafts"], "accès IA Entreprise");
+containsAll(enterpriseAiAccess, [
+  "offerName",
+  "subscriptionStatus",
+  "dailyMessageLimit",
+  "dailyTokenLimit",
+  "maxKnowledgeSources",
+  "canUseReadTools",
+  "canUseActionDrafts",
+  "provisionEssentialAiModuleIfMissing",
+  "if (current) return;",
+  "prisma.enterpriseModule.create",
+], "accès IA Entreprise");
+expect(!enterpriseAiAccess.includes("prisma.enterpriseModule.upsert"), "accès IA Entreprise: une lecture ne doit jamais réactiver ou réécrire un module tenant existant");
 containsAll(enterpriseAiContext, ["CONTRAT COMMERCIAL", "offerName: access.offerName", "maxKnowledgeSources", "maxBusinessDocuments", "canUseReadTools", "canUseActionDrafts"], "prompt IA Entreprise");
 containsAll(enterpriseAgent, [
   "commercialToolModes",

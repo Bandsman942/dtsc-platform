@@ -1,11 +1,13 @@
 # Guide utilisateur — Abonnement
 > **Contrat de guide DTSC v2** — Catalogue publié, limites réelles, permissions serveur et parcours mobile.
 
-## Objectif
+## Objectif et périmètre
 
 Le module **Abonnement** permet de comprendre l’offre réellement appliquée à votre compte ou à votre organisation, ses limites et son état de facturation.
 
-La page publique **Tarifs** (`/tarifs`), le module **Abonnement**, la Console DTSC et les assistants IA utilisent désormais le même catalogue commercial publié.
+La page publique **Tarifs** (`/tarifs`), le module **Abonnement**, la Console DTSC et les assistants IA utilisent désormais le même catalogue commercial publié. Ce catalogue constitue la **source unique** des offres, prix et quotas commerciaux affichés par ces surfaces.
+
+Ce guide couvre les offres individuelles et d’organisation, la lecture des limites, les statuts, les règles d’accès et le comportement des assistants. Il ne remplace pas les guides fonctionnels propres aux modules ERP ni les conditions contractuelles particulières conclues avec DTSC.
 
 ## Trois notions à distinguer
 
@@ -52,7 +54,7 @@ Pensée pour **structurer et collaborer** :
 - collaborateurs, postes, départements et permissions de base ;
 - demandes internes, documents, rapports, clients/tiers, catalogue, projets & services ;
 - calendrier et appels collaboratifs ;
-- IA Assistant Entreprise en **lecture, recherche, résumé et analyse**.
+- **Assistant IA d’entreprise** en lecture, recherche, résumé et analyse.
 
 Le mode Agent de l’IA Entreprise reste limité aux outils de lecture dans cette offre.
 
@@ -126,9 +128,9 @@ L’assistant public peut expliquer les abonnements DTSC Platform et citer leurs
 
 Le chatbot général peut expliquer DTSC Platform et son catalogue. Il ne lit pas les données ERP de votre entreprise active.
 
-### IA Assistant Entreprise
+### Assistant IA d’entreprise
 
-L’IA Entreprise reçoit l’offre et les limites effectives de l’organisation, mais l’abonnement n’accorde jamais à lui seul l’accès aux données.
+L’Assistant IA d’entreprise reçoit l’offre et les limites effectives de l’organisation, mais l’abonnement n’accorde jamais à lui seul l’accès aux données.
 
 Le serveur vérifie toujours le contexte d’organisation, le rôle, les permissions, les modules, le secteur et les outils réellement disponibles.
 
@@ -140,13 +142,15 @@ Selon l’offre :
 
 Une action sensible reste soumise aux confirmations et règles du module concerné.
 
-## Statuts et facturation
+## Statuts, validations et traçabilité
 
 Les statuts peuvent notamment indiquer qu’un abonnement est actif, en essai, en attente de paiement, en retard, annulé ou expiré selon la situation réellement enregistrée.
 
 Les factures présentées dans **Abonnement** concernent l’abonnement SaaS DTSC Platform. Elles sont distinctes des factures clients, fournisseurs et pièces comptables de l’ERP.
 
-La référence, le fournisseur, le montant, la devise, le statut et la date du paiement sont affichés lorsqu’ils existent.
+La référence, le fournisseur, le montant, la devise, le statut et la date du paiement sont affichés lorsqu’ils existent. Les changements administrés d’une offre conservent l’historique prévu par les versions de plans ; une modification courante ne doit donc pas effacer la traçabilité des valeurs commerciales précédentes.
+
+Une validation de paiement, une modification d’offre ou une action administrative reste soumise aux autorisations serveur correspondantes. Les statuts affichés sont ceux réellement persistés et ne doivent pas être simulés par l’interface.
 
 ## Changer d’offre
 
@@ -169,9 +173,9 @@ La Console DTSC affiche l’identifiant de release/révision du catalogue et dis
 - documents métier ;
 - stockage ;
 - mode IA ;
-- modules inclus par le niveau.
+- modules autorisés par le niveau de capacité.
 
-Les changements administrés d’une offre sont historisés par le mécanisme de versions de plans existant.
+Les changements administrés d’une offre sont historisés par le mécanisme de versions de plans existant. Le nom configuré dans `BillingPlan` reste l’identité de l’offre ; la projection publiée fournit les valeurs commerciales et capacités appliquées aux autres surfaces.
 
 ## Accès et permissions
 
@@ -179,12 +183,24 @@ Une fonctionnalité incluse commercialement peut rester inaccessible à un utili
 
 Le frontend n’est jamais une barrière de sécurité. Les routes serveur revalident le tenant, le membership, le module, l’entitlement, la permission et les références utilisées par l’action.
 
+Dans une organisation, le **contexte actif** doit correspondre à l’organisation concernée. Un abonnement personnel ne sert jamais de repli silencieux pour accorder des capacités à l’organisation active.
+
+## Sécurité et confidentialité
+
+Les données restent isolées entre comptes personnels, organisations clientes et contexte interne DTSC. Le catalogue commercial peut être public, mais les consommations, factures, paiements, permissions et données ERP restent protégés par les contrôles d’accès de leur contexte.
+
+L’Assistant IA d’entreprise ne peut lire que les modules et données autorisés pour l’utilisateur courant. L’offre commerciale fixe un plafond de capacités ; elle ne contourne jamais le rôle, les permissions, le module actif, le secteur, les restrictions temporaires ni l’isolation du tenant.
+
+Lorsqu’un module `AI_ASSISTANT` existe déjà dans une organisation, son état d’activation reste autoritaire. Une simple lecture ou ouverture de l’assistant ne doit pas réactiver automatiquement un module volontairement désactivé par l’organisation.
+
+Les actions préparées ou exécutées par le mode Agent restent soumises au Tool Gateway, aux contrôles serveur et, lorsque le métier l’exige, à une confirmation explicite. Aucune donnée sensible ne doit être partagée au support lors d’un diagnostic.
+
 ## Dépannage
 
 Si l’offre d’une organisation ne correspond pas à celle attendue :
 
 1. vérifiez le contexte d’organisation actif ;
-2. ouvrez **Abonnement** et consultez **Abonnement de l’organisation active** ;
+2. ouvrez **Abonnement** et consultez le **détail** de l’abonnement de l’organisation active ;
 3. vérifiez le statut et la période ;
 4. comparez la release du catalogue affichée avec `/tarifs` ;
 5. si un module reste refusé, vérifiez son activation et vos permissions ;
