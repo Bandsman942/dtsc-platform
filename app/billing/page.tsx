@@ -11,7 +11,7 @@ import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metri
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import { getSession, requireUser } from "@/lib/auth";
-import { ensureBillingPlans } from "@/lib/billing";
+import { getPublishedBillingCatalog } from "@/lib/billing/commercial-catalog";
 import { resolvePersonalCommercialContext } from "@/lib/billing/commercial-context";
 import { getOrganizationEntitlements } from "@/lib/billing/entitlements";
 import { formatEnumLabel } from "@/lib/labels";
@@ -24,13 +24,18 @@ function dateLabel(value: Date | string | null | undefined) {
   return new Date(value).toLocaleDateString("fr-FR");
 }
 
+function storageLabel(maxStorageMb: number) {
+  if (maxStorageMb >= 1024) return `${Math.round(maxStorageMb / 1024)} Go`;
+  return `${maxStorageMb} Mo`;
+}
+
 export default async function BillingPage() {
   const user = await requireUser();
   const session = await getSession();
   const activeOrganizationId = getActiveOrganizationId(session);
   const paymentAvailable = isMaishaPayConfigured();
-  const [plans, latestSubscription, recentInvoices, recentPayments, organizationEntitlements, personalCommercialContext, organizationBillingRecords, organizationInvoices, organizationMembership, usageToday, documentCount] = await Promise.all([
-    ensureBillingPlans(),
+  const [catalog, latestSubscription, recentInvoices, recentPayments, organizationEntitlements, personalCommercialContext, organizationBillingRecords, organizationInvoices, organizationMembership, usageToday, knowledgeSourceCount] = await Promise.all([
+    getPublishedBillingCatalog(),
     prisma.subscription.findFirst({
       where: { userId: user.id },
       orderBy: { createdAt: "desc" },
@@ -75,8 +80,8 @@ export default async function BillingPage() {
     prisma.knowledgeDocument.count({ where: { userId: user.id, organizationId: activeOrganizationId } }),
   ]);
 
-  const personalPlans = plans.filter((plan) => plan.audience === "PERSONAL" || plan.audience === "BOTH");
-  const organizationPlans = plans.filter((plan) => plan.audience === "ORGANIZATION" || plan.audience === "BOTH");
+  const personalPlans = catalog.offers.filter((offer) => offer.audience === "PERSONAL");
+  const organizationPlans = catalog.offers.filter((offer) => offer.audience === "ORGANIZATION");
   const canManageOrganizationSubscription = organizationMembership?.role === "OWNER" || organizationMembership?.role === "ADMIN";
   const hasClientOrganizationContext = Boolean(organizationEntitlements && !organizationEntitlements.isDtscInternal);
   const contextualOfferLabel = hasClientOrganizationContext
@@ -97,7 +102,7 @@ export default async function BillingPage() {
   const contextualDailyTokenLimit = hasClientOrganizationContext
     ? organizationEntitlements?.dailyTokenLimit || 0
     : personalCommercialContext.dailyTokenLimit;
-  const contextualMaxDocuments = hasClientOrganizationContext
+  const contextualMaxKnowledgeSources = hasClientOrganizationContext
     ? organizationEntitlements?.maxDocuments || 0
     : personalCommercialContext.maxDocuments;
 
@@ -108,7 +113,7 @@ export default async function BillingPage() {
           eyebrow="Abonnement SaaS"
           title="Offres, capacités et facturation DTSC"
           count={`Offre ${contextualOfferLabel}`}
-          description="Cette page distingue l’offre commerciale souscrite, l’abonnement qui la porte et le niveau de capacité réellement appliqué au contexte. Les factures SaaS restent distinctes de toute facture comptable ERP."
+          description="Cette page utilise le même catalogue commercial publié que le site public, la Console DTSC et les résolveurs backend. Elle distingue l’offre souscrite, les sources de connaissance IA, les documents métier ERP et le stockage."
           secondaryActions={(
             <Button asChild variant="outline" className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft">
               <Link href="/help/standard?guide=billing">Guide de l’Abonnement</Link>
@@ -121,15 +126,15 @@ export default async function BillingPage() {
           <ModuleMetric label="Statut" value={formatEnumLabel(contextualStatus)} hint={contextualActive ? "Capacités actives" : "Intervention requise"} />
           <ModuleMetric label="Messages aujourd’hui" value={usageToday._count._all} hint={`Limite ${contextualDailyMessageLimit}`} />
           <ModuleMetric label="Tokens aujourd’hui" value={usageToday._sum.totalTokens || 0} hint={`Limite ${contextualDailyTokenLimit}`} />
-          <ModuleMetric label="Documents" value={documentCount} hint={`Limite ${contextualMaxDocuments}`} />
+          <ModuleMetric label="Sources IA" value={knowledgeSourceCount} hint={`Limite ${contextualMaxKnowledgeSources}`} />
           <ModuleMetric label="Factures SaaS" value={recentInvoices.length + organizationInvoices.length} hint="Historique récent" />
         </ModuleMetrics>
         <ModuleContent>
-          <ModuleSection title="Source de vérité commerciale" description="Le catalogue d’offres, l’abonnement actif, son statut et sa période, puis les entitlements serveur déterminent le niveau de capacité et les limites applicables.">
+          <ModuleSection title="Source de vérité commerciale" description={`Catalogue publié ${catalog.releaseId}. Les offres, prix et quotas affichés proviennent du même resolver commercial que le site public et l’IA DTSC.`}>
             <BusinessList ariaLabel="Résumé commercial">
               <BusinessListItem leading={<CreditCard className="h-5 w-5 text-cyan-600" />} title="Offre, niveau et statut" description={`Offre ${contextualOfferLabel} · Niveau ${contextualCapabilityLabel} · ${formatEnumLabel(contextualStatus)}`} status={<StatusBadge tone={contextualActive ? "success" : "warning"}>{contextualActive ? "Actif" : "À vérifier"}</StatusBadge>} />
-              <BusinessListItem leading={<ShieldCheck className="h-5 w-5 text-cyan-600" />} title="Autorité serveur" description="Le frontend n’autorise jamais seul un module, une fonctionnalité ou un dépassement de limite." status={<StatusBadge>Entitlements canoniques</StatusBadge>} />
-              <BusinessListItem leading={<ReceiptText className="h-5 w-5 text-cyan-600" />} title="Séparation des factures" description="Les documents ci-dessous concernent l’abonnement DTSC. Les factures clients, fournisseurs et comptables restent dans les modules ERP." status={<StatusBadge>Facturation SaaS</StatusBadge>} />
+              <BusinessListItem leading={<ShieldCheck className="h-5 w-5 text-cyan-600" />} title="Autorité serveur" description="Une offre fixe les plafonds commerciaux; les accès réels restent soumis au tenant, au rôle, aux permissions, aux modules et au secteur." status={<StatusBadge>Entitlements canoniques</StatusBadge>} />
+              <BusinessListItem leading={<ReceiptText className="h-5 w-5 text-cyan-600" />} title="Trois limites distinctes" description="Sources de connaissance IA, documents métier ERP et stockage sont comptés séparément et ne se remplacent jamais mutuellement." status={<StatusBadge>Contrat clarifié</StatusBadge>} />
             </BusinessList>
           </ModuleSection>
 
@@ -140,11 +145,11 @@ export default async function BillingPage() {
               plans={personalPlans.map((plan) => ({
                 id: plan.id,
                 name: plan.name,
-                description: plan.description,
-                priceUsd: Number(plan.priceUsd),
+                description: plan.positioningFr,
+                priceUsd: plan.priceUsd,
                 dailyMessageLimit: plan.dailyMessageLimit,
                 dailyTokenLimit: plan.dailyTokenLimit,
-                maxDocuments: plan.maxDocuments,
+                maxDocuments: plan.maxKnowledgeSources,
               }))}
             />
           </ModuleSection>
@@ -172,11 +177,11 @@ export default async function BillingPage() {
                     plans={organizationPlans.map((plan) => ({
                       id: plan.id,
                       name: plan.name,
-                      description: plan.description,
-                      priceUsd: Number(plan.priceUsd),
+                      description: plan.positioningFr,
+                      priceUsd: plan.priceUsd,
                       dailyMessageLimit: plan.dailyMessageLimit,
                       dailyTokenLimit: plan.dailyTokenLimit,
-                      maxDocuments: plan.maxDocuments,
+                      maxDocuments: plan.maxKnowledgeSources,
                     }))}
                   />
                   <BusinessList ariaLabel="Limites de l’abonnement organisation">
@@ -186,8 +191,9 @@ export default async function BillingPage() {
                       ["Statut", formatEnumLabel(organizationEntitlements.subscriptionStatus)],
                       ["Modules autorisés", `${organizationEntitlements.modules.filter((enterpriseModule) => enterpriseModule.allowed).length}/${organizationEntitlements.modules.length}`],
                       ["Utilisateurs", String(organizationEntitlements.limits.maxUsers)],
-                      ["Documents", String(organizationEntitlements.limits.maxDocuments)],
-                      ["Stockage", `${organizationEntitlements.limits.maxStorageMb} Mo`],
+                      ["Sources de connaissance IA", String(organizationEntitlements.maxDocuments)],
+                      ["Documents métier", String(organizationEntitlements.limits.maxDocuments)],
+                      ["Stockage", storageLabel(organizationEntitlements.limits.maxStorageMb)],
                       ["Appels", `${organizationEntitlements.limits.maxMonthlyCallMinutes} min/mois`],
                       ["Support", organizationEntitlements.limits.supportLevel],
                       ["Expiration", dateLabel(organizationEntitlements.expiresAt)],
