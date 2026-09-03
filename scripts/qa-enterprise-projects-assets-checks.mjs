@@ -7,6 +7,7 @@ requirePaths([
   "lib/enterprise/projects-assets/assets.ts",
   "app/api/enterprise/[organizationId]/projects/route.ts",
   "app/api/enterprise/[organizationId]/projects/[projectId]/transition/route.ts",
+  "app/api/enterprise/[organizationId]/projects/[projectId]/deliverables/route.ts",
   "app/api/enterprise/[organizationId]/deliverables/route.ts",
   "app/api/enterprise/[organizationId]/assets/route.ts",
   "app/api/enterprise/[organizationId]/projects-assets-lookups/route.ts",
@@ -49,6 +50,24 @@ requireTokens("app/api/enterprise/[organizationId]/deliverables/route.ts", [
   "canRequestChanges",
   "canReject",
   "item.createdByUserId !== session.userId",
+]);
+requireTokens("app/api/enterprise/[organizationId]/projects/[projectId]/deliverables/route.ts", [
+  "getEnterpriseProcurementAccess",
+  "canAccessEnterpriseDocument",
+  "moduleCode: \"DOCUMENTS\"",
+  "documentAccess.canManage",
+]);
+requireTokens("app/api/enterprise/[organizationId]/projects-assets-lookups/route.ts", [
+  "enterpriseDocumentVisibilityWhere",
+  "enterprisePurchaseVisibilityWhere",
+  "getEnterpriseProcurementAccess",
+  "canReadDocuments",
+  "canReadProcurement",
+]);
+requireTokens("app/api/enterprise/[organizationId]/assets/route.ts", [
+  "getEnterpriseProcurementAccess",
+  "enterprisePurchaseVisibilityWhere",
+  "moduleCode: \"SUPPLIERS_PURCHASES\"",
 ]);
 requireTokens("lib/enterprise/projects-assets/assets.ts", [
   "synchronizeAssetOperationalStatus",
