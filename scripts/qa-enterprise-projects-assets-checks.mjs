@@ -4,10 +4,16 @@ requirePaths([
   "prisma/enterprise-projects-assets.prisma",
   "lib/enterprise/projects-assets/projects.ts",
   "lib/enterprise/projects-assets/project-lifecycle.ts",
+  "lib/enterprise/projects-assets/project-controls.ts",
+  "lib/enterprise/projects-assets/milestone-approval-coordination.ts",
+  "lib/enterprise/projects-assets/milestone-approval-cancel.ts",
   "lib/enterprise/projects-assets/assets.ts",
   "app/api/enterprise/[organizationId]/projects/route.ts",
   "app/api/enterprise/[organizationId]/projects/[projectId]/transition/route.ts",
   "app/api/enterprise/[organizationId]/projects/[projectId]/deliverables/route.ts",
+  "app/api/enterprise/[organizationId]/projects/[projectId]/milestones/[milestoneId]/transition/route.ts",
+  "app/api/enterprise/[organizationId]/project-risks/[riskId]/transition/route.ts",
+  "app/api/enterprise/[organizationId]/project-issues/[issueId]/transition/route.ts",
   "app/api/enterprise/[organizationId]/deliverables/route.ts",
   "app/api/enterprise/[organizationId]/assets/route.ts",
   "app/api/enterprise/[organizationId]/projects-assets-lookups/route.ts",
@@ -36,9 +42,62 @@ requireTokens("lib/enterprise/projects-assets/projects.ts", [
 requireTokens("lib/enterprise/projects-assets/project-lifecycle.ts", [
   "PROJECT_TRANSITIONS",
   "PROJECT_DELIVERABLES_INCOMPLETE",
+  "PROJECT_MILESTONES_INCOMPLETE",
+  "PROJECT_RISKS_OPEN",
+  "PROJECT_ISSUES_OPEN",
+  "enterpriseProjectMilestone.count",
+  "enterpriseProjectRisk.count",
+  "enterpriseProjectIssue.count",
   "updateMany",
   "revision: input.revision",
   "PROJECT_${targetStatus}",
+]);
+requireTokens("lib/enterprise/projects-assets/project-controls.ts", [
+  "transitionEnterpriseProjectMilestone",
+  "transitionEnterpriseProjectRisk",
+  "transitionEnterpriseProjectIssue",
+  "SUBMIT_APPROVAL",
+  "EnterpriseProjectMilestone",
+  "assertEnterpriseApprovalCandidate",
+  "assertEnterpriseApprovalDecision",
+  "SELF_APPROVAL_FORBIDDEN",
+  "PENDING_APPROVAL_EXISTS",
+  "PROJECT_RISK_CLOSED",
+  "PROJECT_RISK_REOPENED",
+  "PROJECT_ISSUE_${targetStatus}",
+  "revision: input.revision",
+]);
+requireTokens("lib/enterprise/projects-assets/milestone-approval-coordination.ts", [
+  "ensureProjectMilestoneApprovalSubmissionVersion",
+  "recordProjectMilestoneApprovalDecision",
+  "EnterpriseProjectMilestone",
+  "enterpriseApprovalSubmissionVersion",
+  "enterpriseApprovalDecision",
+  "idempotencyKey",
+]);
+requireTokens("lib/enterprise/projects-assets/milestone-approval-cancel.ts", [
+  "cancelEnterpriseProjectMilestoneApproval",
+  "APPROVAL_CANCEL_DENIED",
+  "PROJECT_MILESTONE_APPROVAL_CANCELLED",
+  "status: \"PLANNED\"",
+  "approvalRevision",
+]);
+for (const path of [
+  "app/api/enterprise/[organizationId]/projects/[projectId]/milestones/[milestoneId]/transition/route.ts",
+  "app/api/enterprise/[organizationId]/project-risks/[riskId]/transition/route.ts",
+  "app/api/enterprise/[organizationId]/project-issues/[issueId]/transition/route.ts",
+]) requireTokens(path, ["isSameOriginRequest", "rateLimit", "writeAuditLog", 'moduleCode: "PROJECTS_SERVICES"']);
+requireTokens("app/api/enterprise/[organizationId]/approvals/[id]/actions/route.ts", [
+  "EnterpriseProjectMilestone",
+  "ensureProjectMilestoneApprovalSubmissionVersion",
+  "recordProjectMilestoneApprovalDecision",
+  "decideEnterpriseProjectMilestone",
+  "cancelEnterpriseProjectMilestoneApproval",
+]);
+requireTokens("lib/enterprise/approval-targets.ts", [
+  'EnterpriseProjectMilestone: "PROJECTS_SERVICES"',
+  'targetEntityType === "EnterpriseProjectMilestone"',
+  "PROJECTS_SERVICES?milestone=",
 ]);
 requireTokens("app/api/enterprise/[organizationId]/deliverables/route.ts", [
   "TIME_DELIVERABLES",
