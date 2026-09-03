@@ -88,7 +88,8 @@ for (const path of [
   "app/api/enterprise/[organizationId]/projects/[projectId]/milestones/[milestoneId]/transition/route.ts",
   "app/api/enterprise/[organizationId]/project-risks/[riskId]/transition/route.ts",
   "app/api/enterprise/[organizationId]/project-issues/[issueId]/transition/route.ts",
-]) requireTokens(path, ["isSameOriginRequest", "rateLimit", "writeAuditLog", 'moduleCode: "PROJECTS_SERVICES"']);
+]) requireTokens(path, ["isSameOriginRequest", "rateLimit", "writeAuditLog", 'moduleCode: "PROJECTS_SERVICES"', 'action: "write"']);
+requireTokens("app/api/enterprise/[organizationId]/projects/[projectId]/transition/route.ts", ['moduleCode: "PROJECTS_SERVICES"', 'action: "manage"']);
 requireTokens("app/api/enterprise/[organizationId]/approvals/[id]/actions/route.ts", [
   "EnterpriseProjectMilestone",
   "ensureProjectMilestoneApprovalSubmissionVersion",
