@@ -131,6 +131,17 @@ const siteTypeSupplements = {
   },
 } as const;
 
+const projectStatusSupplements = {
+  fr: {
+    APPROVED: "Approuvé",
+    RESOLVED: "Résolu",
+  },
+  en: {
+    APPROVED: "Approved",
+    RESOLVED: "Resolved",
+  },
+} as const;
+
 export type ProfessionalErpApprovalMessageCode = keyof typeof approvalMessages.fr;
 
 export function professionalErpApprovalMessage(locale: ProfessionalErpLocale, code: string | null | undefined) {
@@ -193,6 +204,10 @@ export function professionalErpEnumLabel(
 ) {
   if (group === "siteType") {
     const supplemented = siteTypeSupplements[locale][value as keyof typeof siteTypeSupplements.fr];
+    if (supplemented) return supplemented;
+  }
+  if (group === "projectStatus") {
+    const supplemented = projectStatusSupplements[locale][value as keyof typeof projectStatusSupplements.fr];
     if (supplemented) return supplemented;
   }
   const key = `${group}.${value}` as BaseProfessionalErpKey;
