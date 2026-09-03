@@ -12,6 +12,7 @@ requirePaths([
   "app/api/enterprise/[organizationId]/approval-eligibility/route.ts",
   "app/api/enterprise/[organizationId]/hr-payroll-lookups/route.ts",
   "app/api/enterprise/[organizationId]/work-schedules/route.ts",
+  "app/api/enterprise/[organizationId]/work-schedules/[scheduleId]/end/route.ts",
   "app/api/enterprise/[organizationId]/attendance/route.ts",
   "app/api/enterprise/[organizationId]/leave-requests/[requestId]/cancel/route.ts",
   "app/api/enterprise/[organizationId]/payroll-runs/route.ts",
@@ -65,14 +66,29 @@ requireTokens("lib/enterprise/hr-payroll/leave.ts", [
 requireTokens("lib/enterprise/hr-payroll/time-attendance.ts", [
   "createEnterpriseWorkSchedule",
   "WORK_SCHEDULE_OVERLAP",
+  "endEnterpriseWorkSchedule",
+  "WORK_SCHEDULE_ENDED",
+  'status: "ENDED"',
   "createEnterpriseAttendance",
   "ATTENDANCE_ALREADY_RECORDED",
   "ATTENDANCE_APPROVED_LEAVE_CONFLICT",
   "ATTENDANCE_ABSENT_WITH_OBSERVED_TIME",
+  "ATTENDANCE_SITE_TIMEZONE_REQUIRED",
+  "ATTENDANCE_SITE_TIMEZONE_INVALID",
+  "zonedMinuteToUtc",
+  "site?.timezone",
+]);
+
+requireTokens("lib/enterprise/hr-payroll/time-schemas.ts", [
+  "workScheduleEndSchema",
+  "observedStartMinute",
+  "observedEndMinute",
+  "Utilisez soit des instants absolus, soit des heures locales du site, pas les deux.",
 ]);
 
 for (const path of [
   "app/api/enterprise/[organizationId]/work-schedules/route.ts",
+  "app/api/enterprise/[organizationId]/work-schedules/[scheduleId]/end/route.ts",
   "app/api/enterprise/[organizationId]/attendance/route.ts",
   "app/api/enterprise/[organizationId]/leave-requests/[requestId]/cancel/route.ts",
 ]) requireTokens(path, ["isSameOriginRequest", "rateLimit", "writeAuditLog", 'moduleCode: "TIME_ATTENDANCE"']);
@@ -82,9 +98,15 @@ requireTokens("app/api/enterprise/[organizationId]/hr-payroll-lookups/route.ts",
   "candidate.userId !== session.userId",
   "enterprisePosition.findMany",
   "enterpriseSite.findMany",
+  "timezone: true",
   "enterpriseTask.findMany",
   "enterprisePayrollPeriod.findMany",
 ]);
+
+requireTokens("app/api/enterprise/[organizationId]/leave-requests/route.ts", ["canDecide", "canCancel", "item.approverUserId === session.userId", "item.requestedByUserId === session.userId"]);
+requireTokens("app/api/enterprise/[organizationId]/timesheets/route.ts", ["canDecide", "item.approverUserId === session.userId"]);
+requireTokens("app/api/enterprise/[organizationId]/employment-contracts/route.ts", ["canDecide", "approverByContract.get(item.id) === session.userId"]);
+requireTokens("app/api/enterprise/[organizationId]/payroll-runs/route.ts", ["canDecide"]);
 
 requireTokens("lib/enterprise/hr-payroll/payroll.ts", [
   "ACTIVE_EMPLOYMENT_CONTRACT_REQUIRED",
@@ -120,13 +142,20 @@ for (const path of [
   requireTokens(path, ['presentation="editor"', "useToastMessage"]);
   forbidTokens(path, ["window.prompt"]);
 }
-requireTokens("components/enterprise/professional/enterprise-human-resources-workspace.tsx", ["disabled={saving}"]);
+requireTokens("components/enterprise/professional/enterprise-human-resources-workspace.tsx", ["disabled={saving}", "contract.canDecide", 't("hr.newContractDialog")', 't("hr.orgSection")']);
 requireTokens("components/enterprise/professional/enterprise-time-attendance-workspace.tsx", [
   "disabled={Boolean(busyAction)}",
   '"SCHEDULES"',
   '"ATTENDANCE"',
   "/work-schedules",
+  "/work-schedules/${scheduleEndTarget.id}/end",
   "/attendance",
+  "observedStartMinute",
+  "observedEndMinute",
+  "formatObservedTime",
+  "site?.timezone",
+  "item.canDecide",
+  "item.canCancel",
   "/leave-requests/${cancelTarget.id}/cancel",
   "DEFAULT_REJECTION_AUDIT_COMMENT",
 ]);
