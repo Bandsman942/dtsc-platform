@@ -80,6 +80,7 @@ export function EnterpriseProjectControlActions({
   risks,
   issues,
   canWrite,
+  canManage,
   disabled,
   onChanged,
   onMessage,
@@ -91,6 +92,7 @@ export function EnterpriseProjectControlActions({
   risks: Risk[];
   issues: Issue[];
   canWrite: boolean;
+  canManage: boolean;
   disabled: boolean;
   onChanged: () => Promise<void>;
   onMessage: (message: string) => void;
@@ -178,7 +180,7 @@ export function EnterpriseProjectControlActions({
   }
 
   function riskActions(item: Risk): BusinessContextAction[] {
-    if (!canWrite || disabled) return [];
+    if (!canManage || disabled) return [];
     return item.status === "OPEN"
       ? [{ id: "close", label: tr("Clôturer le risque", "Close risk"), icon: CircleStop, onSelect: () => void openControl({ kind: "RISK", action: "CLOSE", item }) }]
       : item.status === "CLOSED"
@@ -187,7 +189,7 @@ export function EnterpriseProjectControlActions({
   }
 
   function issueActions(item: Issue): BusinessContextAction[] {
-    if (!canWrite || disabled) return [];
+    if (!canManage || disabled) return [];
     if (item.status === "OPEN") return [{ id: "resolve", label: tr("Résoudre", "Resolve"), icon: Wrench, onSelect: () => void openControl({ kind: "ISSUE", action: "RESOLVE", item }) }];
     if (item.status === "RESOLVED") return [
       { id: "close", label: tr("Clôturer", "Close"), icon: CircleStop, onSelect: () => void openControl({ kind: "ISSUE", action: "CLOSE", item }) },
