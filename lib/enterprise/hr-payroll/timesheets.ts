@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import type { z } from "zod";
 import { EnterpriseDomainConflictError, EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import {
@@ -12,6 +13,59 @@ import { prisma } from "@/lib/prisma";
 
 type TimesheetCreateInput = z.infer<typeof timesheetCreateSchema>;
 type ApprovalDecisionInput = z.infer<typeof approvalDecisionSchema>;
+type TimesheetEntryInput = TimesheetCreateInput["entries"][number];
+
+function unique(values: Array<string | null | undefined>) {
+  return [...new Set(values.filter((value): value is string => Boolean(value)))];
+}
+
+function assertAllResolved(requested: string[], resolved: Array<{ id: string }>, code: string) {
+  const ids = new Set(resolved.map((item) => item.id));
+  if (requested.some((id) => !ids.has(id))) throw new EnterpriseDomainError(code, 404);
+}
+
+function normalizedDeclaredMinutes(entry: TimesheetEntryInput) {
+  if (!entry.startAt || !entry.endAt) return entry.declaredMinutes;
+  const elapsedMinutes = Math.round((entry.endAt.getTime() - entry.startAt.getTime()) / 60_000);
+  const workedMinutes = elapsedMinutes - entry.breakMinutes;
+  if (workedMinutes <= 0 || workedMinutes > 1440) throw new EnterpriseDomainError("TIMESHEET_ENTRY_DURATION_INVALID", 409);
+  return workedMinutes;
+}
+
+async function assertTimesheetReferences(tx: Prisma.TransactionClient, organizationId: string, entries: TimesheetEntryInput[]) {
+  const projectIds = unique(entries.map((entry) => entry.projectId));
+  const milestoneIds = unique(entries.map((entry) => entry.milestoneId));
+  const deliverableIds = unique(entries.map((entry) => entry.deliverableId));
+  const taskIds = unique(entries.map((entry) => entry.taskId));
+  const contractIds = unique(entries.map((entry) => entry.contractId));
+  const businessPartyIds = unique(entries.map((entry) => entry.businessPartyId));
+  const catalogItemIds = unique(entries.map((entry) => entry.catalogItemId));
+
+  const [projects, milestones, deliverables, tasks, contracts, parties, catalogItems] = await Promise.all([
+    projectIds.length ? tx.enterpriseProject.findMany({ where: { organizationId, id: { in: projectIds } }, select: { id: true } }) : [],
+    milestoneIds.length ? tx.enterpriseProjectMilestone.findMany({ where: { organizationId, id: { in: milestoneIds } }, select: { id: true, projectId: true } }) : [],
+    deliverableIds.length ? tx.enterpriseProjectDeliverable.findMany({ where: { organizationId, id: { in: deliverableIds } }, select: { id: true, projectId: true } }) : [],
+    taskIds.length ? tx.enterpriseTask.findMany({ where: { organizationId, id: { in: taskIds } }, select: { id: true } }) : [],
+    contractIds.length ? tx.enterpriseContract.findMany({ where: { organizationId, id: { in: contractIds } }, select: { id: true } }) : [],
+    businessPartyIds.length ? tx.enterpriseBusinessParty.findMany({ where: { organizationId, id: { in: businessPartyIds } }, select: { id: true } }) : [],
+    catalogItemIds.length ? tx.enterpriseCatalogItem.findMany({ where: { organizationId, id: { in: catalogItemIds } }, select: { id: true } }) : [],
+  ]);
+
+  assertAllResolved(projectIds, projects, "TIMESHEET_PROJECT_NOT_FOUND");
+  assertAllResolved(milestoneIds, milestones, "TIMESHEET_MILESTONE_NOT_FOUND");
+  assertAllResolved(deliverableIds, deliverables, "TIMESHEET_DELIVERABLE_NOT_FOUND");
+  assertAllResolved(taskIds, tasks, "TIMESHEET_TASK_NOT_FOUND");
+  assertAllResolved(contractIds, contracts, "TIMESHEET_CONTRACT_NOT_FOUND");
+  assertAllResolved(businessPartyIds, parties, "TIMESHEET_PARTY_NOT_FOUND");
+  assertAllResolved(catalogItemIds, catalogItems, "TIMESHEET_CATALOG_ITEM_NOT_FOUND");
+
+  const milestoneProject = new Map(milestones.map((item) => [item.id, item.projectId]));
+  const deliverableProject = new Map(deliverables.map((item) => [item.id, item.projectId]));
+  for (const entry of entries) {
+    if (entry.projectId && entry.milestoneId && milestoneProject.get(entry.milestoneId) !== entry.projectId) throw new EnterpriseDomainError("TIMESHEET_MILESTONE_PROJECT_MISMATCH", 409);
+    if (entry.projectId && entry.deliverableId && deliverableProject.get(entry.deliverableId) !== entry.projectId) throw new EnterpriseDomainError("TIMESHEET_DELIVERABLE_PROJECT_MISMATCH", 409);
+  }
+}
 
 export async function createEnterpriseTimesheet(organizationId: string, actorUserId: string, input: TimesheetCreateInput) {
   if (input.periodEnd < input.periodStart) throw new EnterpriseDomainError("TIMESHEET_PERIOD_INVALID");
@@ -23,7 +77,7 @@ export async function createEnterpriseTimesheet(organizationId: string, actorUse
         organizationId,
         employeeId: employee.id,
         archivedAt: null,
-        status: { notIn: ["REJECTED"] },
+        status: { notIn: ["REJECTED", "CANCELLED"] },
         periodStart: { lte: input.periodEnd },
         periodEnd: { gte: input.periodStart },
       },
@@ -31,15 +85,14 @@ export async function createEnterpriseTimesheet(organizationId: string, actorUse
     });
     if (overlap) throw new EnterpriseDomainError("TIMESHEET_PERIOD_OVERLAP", 409);
 
-    for (const entry of input.entries) {
+    await assertTimesheetReferences(tx, organizationId, input.entries);
+    const entries = input.entries.map((entry) => {
       if (entry.workDate < input.periodStart || entry.workDate > input.periodEnd) throw new EnterpriseDomainError("TIMESHEET_ENTRY_OUTSIDE_PERIOD");
-      if (entry.startAt && entry.endAt && entry.endAt <= entry.startAt) throw new EnterpriseDomainError("TIMESHEET_ENTRY_TIME_INVALID");
-      if (entry.projectId) {
-        const project = await tx.enterpriseProject.findFirst({ where: { id: entry.projectId, organizationId, archivedAt: null }, select: { id: true } });
-        if (!project) throw new EnterpriseDomainError("PROJECT_NOT_FOUND", 404);
-      }
-    }
-    const totalDeclaredMinutes = input.entries.reduce((sum, entry) => sum + entry.declaredMinutes, 0);
+      const declaredMinutes = normalizedDeclaredMinutes(entry);
+      return { ...entry, declaredMinutes };
+    });
+    const totalDeclaredMinutes = entries.reduce((sum, entry) => sum + entry.declaredMinutes, 0);
+
     const timesheet = await tx.enterpriseTimesheet.create({
       data: {
         organizationId,
@@ -52,7 +105,7 @@ export async function createEnterpriseTimesheet(organizationId: string, actorUse
         submittedAt: new Date(),
         approverUserId: input.approverUserId,
         entries: {
-          create: input.entries.map((entry) => ({
+          create: entries.map((entry) => ({
             organizationId,
             workDate: entry.workDate,
             startAt: entry.startAt || null,
@@ -86,7 +139,7 @@ export async function decideEnterpriseTimesheet(organizationId: string, timeshee
     select: { requestedByUserId: true, approverUserId: true },
   });
   if (!pending) throw new EnterpriseDomainError("APPROVAL_NOT_FOUND", 404);
-  const decision = await assertOrganizationApprovalDecision({
+  await assertOrganizationApprovalDecision({
     organizationId,
     requesterUserId: pending.requestedByUserId,
     approverUserId: pending.approverUserId,
@@ -103,7 +156,6 @@ export async function decideEnterpriseTimesheet(organizationId: string, timeshee
     const targetStatus = input.decision === "APPROVE" ? "APPROVED" : "REJECTED";
     const totalApprovedMinutes = input.decision === "APPROVE" ? timesheet.totalDeclaredMinutes : 0;
     if (input.decision === "APPROVE") {
-      await tx.enterpriseTimesheetEntry.updateMany({ where: { organizationId, timesheetId: timesheet.id }, data: { approvedMinutes: { set: 0 } } });
       for (const entry of timesheet.entries) {
         await tx.enterpriseTimesheetEntry.update({ where: { id: entry.id }, data: { approvedMinutes: entry.declaredMinutes } });
       }
@@ -115,13 +167,13 @@ export async function decideEnterpriseTimesheet(organizationId: string, timeshee
         totalApprovedMinutes,
         approvedAt: input.decision === "APPROVE" ? new Date() : null,
         rejectedAt: input.decision === "REJECT" ? new Date() : null,
-        rejectionComment: input.decision === "REJECT" ? input.comment || null : null,
+        rejectionComment: input.decision === "REJECT" ? input.comment : null,
         revision: { increment: 1 },
       },
     });
     if (updated.count !== 1) throw new EnterpriseDomainConflictError();
-    await tx.enterpriseApproval.update({ where: { id: approval.id }, data: { status: targetStatus, decidedAt: new Date(), decisionComment: input.comment || (decision.selfApprovalOverride ? "SELF_APPROVAL_OVERRIDE" : null), revision: { increment: 1 } } });
-    await publishHrEvent(tx, { organizationId, entityType: "EnterpriseTimesheet", entityId: timesheet.id, eventType: `TIMESHEET_${targetStatus}`, summary: `Timesheet ${timesheet.reference} ${targetStatus.toLowerCase()}`, actorUserId, fromStatus: "SUBMITTED", toStatus: targetStatus, metadataJson: { totalApprovedMinutes, selfApprovalOverride: decision.selfApprovalOverride } });
+    await tx.enterpriseApproval.update({ where: { id: approval.id }, data: { status: targetStatus, decidedAt: new Date(), decisionComment: input.comment || null, revision: { increment: 1 } } });
+    await publishHrEvent(tx, { organizationId, entityType: "EnterpriseTimesheet", entityId: timesheet.id, eventType: `TIMESHEET_${targetStatus}`, summary: `Timesheet ${timesheet.reference} ${targetStatus.toLowerCase()}`, actorUserId, fromStatus: "SUBMITTED", toStatus: targetStatus, metadataJson: { totalApprovedMinutes } });
     return tx.enterpriseTimesheet.findUniqueOrThrow({ where: { id: timesheet.id }, include: { entries: true } });
   });
 }
