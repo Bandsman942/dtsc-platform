@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { CheckCircle2, CircleStop, RotateCcw, Send, ShieldAlert, Wrench } from "lucide-react";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
-import { professionalErpDate, professionalErpEnumLabel } from "@/components/enterprise/professional/professional-erp-i18n";
+import { professionalErpDate, professionalErpEnumLabel, type ProfessionalErpLocale } from "@/components/enterprise/professional/professional-erp-i18n";
 import { ProfessionalFormSection, professionalMutation } from "@/components/enterprise/professional/professional-erp-ui";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -86,7 +86,7 @@ export function EnterpriseProjectControlActions({
 }: {
   organizationId: string;
   projectId: string;
-  locale: string;
+  locale: ProfessionalErpLocale;
   milestones: Milestone[];
   risks: Risk[];
   issues: Issue[];
