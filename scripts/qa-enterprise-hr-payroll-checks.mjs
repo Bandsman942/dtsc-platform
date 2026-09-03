@@ -167,7 +167,7 @@ requireTokens("lib/forms/reference-catalog.ts", [
   "payrollPeriodId:",
   "/^(bonusReason_|deductionReason_)/",
 ]);
-requireTokens("components/ui/toast-provider.tsx", ["z-[1600]", "env(safe-area-inset-top)"]);
+requireTokens("components/ui/toast-provider.tsx", ["z-[1200]", "env(safe-area-inset-top)"]);
 
 for (const path of [
   "components/enterprise/professional/enterprise-human-resources-workspace.tsx",
