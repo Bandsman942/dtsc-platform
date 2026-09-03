@@ -8,10 +8,12 @@ import {
   publishHrEvent,
 } from "@/lib/enterprise/hr-payroll/helpers";
 import type { approvalDecisionSchema, leaveRequestCreateSchema } from "@/lib/enterprise/hr-payroll/schemas";
+import type { leaveRequestCancelSchema } from "@/lib/enterprise/hr-payroll/time-schemas";
 import { prisma } from "@/lib/prisma";
 
 type LeaveCreateInput = z.infer<typeof leaveRequestCreateSchema>;
 type ApprovalDecisionInput = z.infer<typeof approvalDecisionSchema>;
+type LeaveCancelInput = z.infer<typeof leaveRequestCancelSchema>;
 
 export async function createEnterpriseLeaveRequest(organizationId: string, actorUserId: string, input: LeaveCreateInput) {
   if (input.endDate < input.startDate) throw new EnterpriseDomainError("LEAVE_DATE_RANGE_INVALID");
@@ -42,8 +44,8 @@ export async function createEnterpriseLeaveRequest(organizationId: string, actor
         startDate: input.startDate,
         endDate: input.endDate,
         partialDay: input.partialDay,
-        startMinute: input.startMinute ?? null,
-        endMinute: input.endMinute ?? null,
+        startMinute: input.partialDay ? input.startMinute ?? null : null,
+        endMinute: input.partialDay ? input.endMinute ?? null : null,
         status: "SUBMITTED",
         reason: input.reason || null,
         requestedByUserId: actorUserId,
@@ -61,7 +63,7 @@ export async function decideEnterpriseLeaveRequest(organizationId: string, reque
   const request = await prisma.enterpriseLeaveRequest.findFirst({ where: { id: requestId, organizationId, status: "SUBMITTED", archivedAt: null } });
   if (!request) throw new EnterpriseDomainError("LEAVE_REQUEST_NOT_FOUND", 404);
   if (!request.approverUserId) throw new EnterpriseDomainError("APPROVER_NOT_ASSIGNED", 409);
-  const decision = await assertOrganizationApprovalDecision({
+  await assertOrganizationApprovalDecision({
     organizationId,
     requesterUserId: request.requestedByUserId,
     approverUserId: request.approverUserId,
@@ -73,13 +75,32 @@ export async function decideEnterpriseLeaveRequest(organizationId: string, reque
     const current = await tx.enterpriseLeaveRequest.findFirst({ where: { id: requestId, organizationId, status: "SUBMITTED", archivedAt: null } });
     if (!current) throw new EnterpriseDomainError("LEAVE_REQUEST_NOT_FOUND", 404);
     if (current.approverUserId !== actorUserId) throw new EnterpriseDomainError("NOT_LEAVE_APPROVER", 403);
-    const approval = await tx.enterpriseApproval.findFirst({ where: { organizationId, targetEntityType: "EnterpriseLeaveRequest", targetEntityId: current.id, status: "PENDING", approverUserId: actorUserId } });
+    const approval = await tx.enterpriseApproval.findFirst({ where: { organizationId, targetEntityType: "EnterpriseLeaveRequest", targetEntityId: current.id, status: "PENDING", approverUserId: actorUserId, archivedAt: null } });
     if (!approval) throw new EnterpriseDomainError("APPROVAL_NOT_FOUND", 404);
     const targetStatus = input.decision === "APPROVE" ? "APPROVED" : "REJECTED";
     const updated = await tx.enterpriseLeaveRequest.updateMany({ where: { id: current.id, organizationId, revision: input.revision, status: "SUBMITTED" }, data: { status: targetStatus, decidedAt: new Date(), decisionComment: input.comment || null, revision: { increment: 1 } } });
     if (updated.count !== 1) throw new EnterpriseDomainConflictError();
-    await tx.enterpriseApproval.update({ where: { id: approval.id }, data: { status: targetStatus, decidedAt: new Date(), decisionComment: input.comment || (decision.selfApprovalOverride ? "SELF_APPROVAL_OVERRIDE" : null), revision: { increment: 1 } } });
-    await publishHrEvent(tx, { organizationId, entityType: "EnterpriseLeaveRequest", entityId: current.id, eventType: `LEAVE_${targetStatus}`, summary: `Congé ${current.reference} ${targetStatus.toLowerCase()}`, actorUserId, fromStatus: "SUBMITTED", toStatus: targetStatus, metadataJson: { selfApprovalOverride: decision.selfApprovalOverride } });
+    await tx.enterpriseApproval.update({ where: { id: approval.id }, data: { status: targetStatus, decidedAt: new Date(), decisionComment: input.comment || null, revision: { increment: 1 } } });
+    await publishHrEvent(tx, { organizationId, entityType: "EnterpriseLeaveRequest", entityId: current.id, eventType: `LEAVE_${targetStatus}`, summary: `Congé ${current.reference} ${targetStatus.toLowerCase()}`, actorUserId, fromStatus: "SUBMITTED", toStatus: targetStatus });
     return tx.enterpriseLeaveRequest.findUniqueOrThrow({ where: { id: current.id } });
+  });
+}
+
+export async function cancelEnterpriseLeaveRequest(organizationId: string, requestId: string, actorUserId: string, input: LeaveCancelInput) {
+  return prisma.$transaction(async (tx) => {
+    const request = await tx.enterpriseLeaveRequest.findFirst({ where: { id: requestId, organizationId, status: "SUBMITTED", archivedAt: null } });
+    if (!request) throw new EnterpriseDomainError("LEAVE_REQUEST_NOT_CANCELLABLE", 409);
+    if (request.requestedByUserId !== actorUserId) throw new EnterpriseDomainError("LEAVE_CANCEL_FORBIDDEN", 403);
+    const updated = await tx.enterpriseLeaveRequest.updateMany({
+      where: { id: request.id, organizationId, status: "SUBMITTED", revision: input.revision },
+      data: { status: "CANCELLED", cancelledAt: new Date(), decisionComment: input.reason, revision: { increment: 1 } },
+    });
+    if (updated.count !== 1) throw new EnterpriseDomainConflictError();
+    await tx.enterpriseApproval.updateMany({
+      where: { organizationId, targetEntityType: "EnterpriseLeaveRequest", targetEntityId: request.id, status: "PENDING", archivedAt: null },
+      data: { status: "CANCELLED", decidedAt: new Date(), decisionComment: input.reason, archivedAt: new Date(), revision: { increment: 1 } },
+    });
+    await publishHrEvent(tx, { organizationId, entityType: "EnterpriseLeaveRequest", entityId: request.id, eventType: "LEAVE_CANCELLED", summary: `Congé ${request.reference} annulé avant décision`, actorUserId, fromStatus: "SUBMITTED", toStatus: "CANCELLED" });
+    return tx.enterpriseLeaveRequest.findUniqueOrThrow({ where: { id: request.id } });
   });
 }

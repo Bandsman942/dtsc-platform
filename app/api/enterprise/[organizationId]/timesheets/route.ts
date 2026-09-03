@@ -18,13 +18,14 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "TIME_ATTENDANCE", action: "read" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const approvalAccess = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "TIME_ATTENDANCE", action: "approve" });
   const url = new URL(req.url);
   const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
   const pageSize = Math.min(100, Math.max(5, Number(url.searchParams.get("pageSize") || 25) || 25));
   const employeeId = url.searchParams.get("employeeId")?.trim() || "";
   const status = url.searchParams.get("status")?.trim() || "";
   const where = { organizationId, archivedAt: null, ...(employeeId ? { employeeId } : {}), ...(status ? { status } : {}) };
-  const [items, total, pending, approvedMinutes] = await Promise.all([
+  const [rawItems, total, pending, approvedMinutes] = await Promise.all([
     prisma.enterpriseTimesheet.findMany({
       where,
       orderBy: [{ periodEnd: "desc" }, { createdAt: "desc" }],
@@ -39,6 +40,10 @@ export async function GET(req: Request, { params }: Params) {
     prisma.enterpriseTimesheet.count({ where: { organizationId, archivedAt: null, status: "SUBMITTED" } }),
     prisma.enterpriseTimesheet.aggregate({ where: { organizationId, archivedAt: null, status: "APPROVED" }, _sum: { totalApprovedMinutes: true } }),
   ]);
+  const items = rawItems.map((item) => ({
+    ...item,
+    canDecide: Boolean(approvalAccess && item.status === "SUBMITTED" && item.approverUserId === session.userId),
+  }));
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "timesheets", page } });
   return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { pending, approvedMinutes: approvedMinutes._sum.totalApprovedMinutes || 0 }, canManage: access.canManage });
 }
@@ -61,6 +66,6 @@ export async function POST(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "timesheets" } });
     return NextResponse.json({ ok: true, timesheet }, { status: 201 });
   } catch (error) {
-    return enterpriseDomainErrorResponse(error, "TIMESHEET_CREATE_FAILED");
+    return enterpriseDomainErrorResponse(error, "TIMESHEET_CREATE_FAILED", req);
   }
 }

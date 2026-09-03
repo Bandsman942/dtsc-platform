@@ -26,12 +26,8 @@ export async function createEnterprisePayrollPeriod(
   actorUserId: string,
   input: PayrollPeriodCreateInput,
 ) {
-  if (input.periodEnd < input.periodStart) {
-    throw new EnterpriseDomainError("PAYROLL_PERIOD_RANGE_INVALID");
-  }
-  if (input.payDate && input.payDate < input.periodEnd) {
-    throw new EnterpriseDomainError("PAYROLL_PAY_DATE_INVALID");
-  }
+  if (input.periodEnd < input.periodStart) throw new EnterpriseDomainError("PAYROLL_PERIOD_RANGE_INVALID");
+  if (input.payDate && input.payDate < input.periodEnd) throw new EnterpriseDomainError("PAYROLL_PAY_DATE_INVALID");
 
   return prisma.enterprisePayrollPeriod.create({
     data: {
@@ -52,38 +48,23 @@ export async function prepareEnterprisePayrollRun(
   input: PayrollRunPrepareInput,
 ) {
   const employeeIds = [...new Set(input.employeeIds)];
-  if (employeeIds.length !== input.employeeIds.length) {
-    throw new EnterpriseDomainError("PAYROLL_EMPLOYEE_DUPLICATE");
-  }
+  if (employeeIds.length !== input.employeeIds.length) throw new EnterpriseDomainError("PAYROLL_EMPLOYEE_DUPLICATE");
   const adjustments = new Map(input.adjustments.map((item) => [item.employeeId, item]));
-  if (adjustments.size !== input.adjustments.length) {
-    throw new EnterpriseDomainError("PAYROLL_ADJUSTMENT_DUPLICATE");
-  }
+  if (adjustments.size !== input.adjustments.length) throw new EnterpriseDomainError("PAYROLL_ADJUSTMENT_DUPLICATE");
+  if ([...adjustments.keys()].some((employeeId) => !employeeIds.includes(employeeId))) throw new EnterpriseDomainError("PAYROLL_ADJUSTMENT_EMPLOYEE_OUTSIDE_POPULATION", 409);
 
   return prisma.$transaction(async (tx) => {
-    const period = await tx.enterprisePayrollPeriod.findFirst({
-      where: { id: input.payrollPeriodId, organizationId, status: "OPEN" },
-    });
+    const period = await tx.enterprisePayrollPeriod.findFirst({ where: { id: input.payrollPeriodId, organizationId, status: "OPEN" } });
     if (!period) throw new EnterpriseDomainError("PAYROLL_PERIOD_NOT_OPEN", 404);
 
     const existing = await tx.enterprisePayrollRun.findFirst({
-      where: {
-        organizationId,
-        payrollPeriodId: period.id,
-        archivedAt: null,
-        status: { notIn: ["CANCELLED", "REJECTED"] },
-      },
+      where: { organizationId, payrollPeriodId: period.id, archivedAt: null, status: { notIn: ["CANCELLED", "REJECTED"] } },
       select: { id: true },
     });
     if (existing) throw new EnterpriseDomainError("PAYROLL_RUN_ALREADY_EXISTS", 409);
 
     const employees = await tx.enterpriseEmployee.findMany({
-      where: {
-        organizationId,
-        id: { in: employeeIds },
-        employmentStatus: "ACTIVE",
-        archivedAt: null,
-      },
+      where: { organizationId, id: { in: employeeIds }, employmentStatus: "ACTIVE", archivedAt: null },
       include: {
         contracts: {
           where: {
@@ -97,45 +78,42 @@ export async function prepareEnterprisePayrollRun(
         },
       },
     });
-    if (employees.length !== employeeIds.length) {
-      throw new EnterpriseDomainError("PAYROLL_EMPLOYEE_NOT_ACTIVE", 404);
-    }
+    if (employees.length !== employeeIds.length) throw new EnterpriseDomainError("PAYROLL_EMPLOYEE_NOT_ACTIVE", 404);
 
-    const approvedTimes = await tx.enterpriseTimesheet.groupBy({
-      by: ["employeeId"],
+    // Payroll coverage is evidence only: use approved line minutes whose work date is inside the payroll period.
+    // This avoids dropping a weekly timesheet merely because that sheet crosses a month boundary.
+    const approvedEntries = await tx.enterpriseTimesheetEntry.findMany({
       where: {
         organizationId,
-        employeeId: { in: employeeIds },
-        status: "APPROVED",
-        archivedAt: null,
-        periodStart: { gte: period.periodStart },
-        periodEnd: { lte: period.periodEnd },
+        workDate: { gte: period.periodStart, lte: period.periodEnd },
+        approvedMinutes: { not: null },
+        timesheet: { status: "APPROVED", archivedAt: null, employeeId: { in: employeeIds } },
       },
-      _sum: { totalApprovedMinutes: true },
+      select: { approvedMinutes: true, timesheet: { select: { employeeId: true } } },
     });
-    const approvedMinutesByEmployee = new Map(
-      approvedTimes.map((item) => [item.employeeId, item._sum.totalApprovedMinutes || 0]),
-    );
+    const approvedMinutesByEmployee = new Map<string, number>();
+    for (const entry of approvedEntries) {
+      approvedMinutesByEmployee.set(entry.timesheet.employeeId, (approvedMinutesByEmployee.get(entry.timesheet.employeeId) || 0) + (entry.approvedMinutes || 0));
+    }
 
     const items = employees.map((employee) => {
       const contract = employee.contracts[0];
       if (!contract) throw new EnterpriseDomainError("ACTIVE_EMPLOYMENT_CONTRACT_REQUIRED", 409);
-      if (contract.compensationCurrency !== input.currency) {
-        throw new EnterpriseDomainError("PAYROLL_CURRENCY_MISMATCH", 409);
-      }
+      if (contract.compensationCurrency !== input.currency) throw new EnterpriseDomainError("PAYROLL_CURRENCY_MISMATCH", 409);
       const adjustment = adjustments.get(employee.id);
       const baseGrossAmount = money(Number(contract.baseCompensation));
       const bonusAmount = money(adjustment?.bonusAmount || 0);
       const deductionAmount = money(adjustment?.deductionAmount || 0);
+      if (bonusAmount > 0 && !adjustment?.bonusReason) throw new EnterpriseDomainError("PAYROLL_BONUS_REASON_REQUIRED", 409);
+      if (deductionAmount > 0 && !adjustment?.deductionReason) throw new EnterpriseDomainError("PAYROLL_DEDUCTION_REASON_REQUIRED", 409);
       const grossAmount = money(baseGrossAmount + bonusAmount);
-      if (deductionAmount > grossAmount) {
-        throw new EnterpriseDomainError("PAYROLL_DEDUCTION_EXCEEDS_GROSS", 409);
-      }
+      if (deductionAmount > grossAmount) throw new EnterpriseDomainError("PAYROLL_DEDUCTION_EXCEEDS_GROSS", 409);
       return {
         organizationId,
         employeeId: employee.id,
         employmentContractId: contract.id,
         baseGrossAmount,
+        // Approved minutes never prorate contractual compensation; they are auditable coverage evidence only.
         approvedTimeMinutes: approvedMinutesByEmployee.get(employee.id) || null,
         bonusAmount,
         bonusReason: adjustment?.bonusReason || null,
@@ -177,7 +155,7 @@ export async function prepareEnterprisePayrollRun(
       summary: `Paie ${run.reference} préparée pour ${items.length} employé(s)`,
       actorUserId,
       toStatus: "PREPARED",
-      metadataJson: { payrollPeriodId: period.id, netAmount, currency: input.currency },
+      metadataJson: { payrollPeriodId: period.id, netAmount, currency: input.currency, employeesWithApprovedTime: items.filter((item) => item.approvedTimeMinutes != null).length },
     });
     return run;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
@@ -191,44 +169,16 @@ export async function submitEnterprisePayrollRun(
 ) {
   await assertOrganizationApprover(prisma, organizationId, input.approverUserId, actorUserId, "PAYROLL_OPERATIONS");
   return prisma.$transaction(async (tx) => {
-    const run = await tx.enterprisePayrollRun.findFirst({
-      where: { id: payrollRunId, organizationId, status: "PREPARED", archivedAt: null },
-    });
+    const run = await tx.enterprisePayrollRun.findFirst({ where: { id: payrollRunId, organizationId, status: "PREPARED", archivedAt: null } });
     if (!run) throw new EnterpriseDomainError("PAYROLL_RUN_NOT_PREPARED", 404);
     const updated = await tx.enterprisePayrollRun.updateMany({
       where: { id: run.id, organizationId, status: "PREPARED", revision: input.revision },
-      data: {
-        status: "PENDING_APPROVAL",
-        submittedByUserId: actorUserId,
-        approverUserId: input.approverUserId,
-        submittedAt: new Date(),
-        revision: { increment: 1 },
-      },
+      data: { status: "PENDING_APPROVAL", submittedByUserId: actorUserId, approverUserId: input.approverUserId, submittedAt: new Date(), revision: { increment: 1 } },
     });
     if (updated.count !== 1) throw new EnterpriseDomainConflictError();
-    await tx.enterpriseApproval.create({
-      data: {
-        organizationId,
-        targetEntityType: "EnterprisePayrollRun",
-        targetEntityId: run.id,
-        requestedByUserId: actorUserId,
-        approverUserId: input.approverUserId,
-      },
-    });
-    await publishHrEvent(tx, {
-      organizationId,
-      entityType: "EnterprisePayrollRun",
-      entityId: run.id,
-      eventType: "PAYROLL_RUN_SUBMITTED",
-      summary: `Paie ${run.reference} soumise pour approbation`,
-      actorUserId,
-      fromStatus: "PREPARED",
-      toStatus: "PENDING_APPROVAL",
-    });
-    return tx.enterprisePayrollRun.findUniqueOrThrow({
-      where: { id: run.id },
-      include: { items: true, payrollPeriod: true },
-    });
+    await tx.enterpriseApproval.create({ data: { organizationId, targetEntityType: "EnterprisePayrollRun", targetEntityId: run.id, requestedByUserId: actorUserId, approverUserId: input.approverUserId } });
+    await publishHrEvent(tx, { organizationId, entityType: "EnterprisePayrollRun", entityId: run.id, eventType: "PAYROLL_RUN_SUBMITTED", summary: `Paie ${run.reference} soumise pour approbation`, actorUserId, fromStatus: "PREPARED", toStatus: "PENDING_APPROVAL" });
+    return tx.enterprisePayrollRun.findUniqueOrThrow({ where: { id: run.id }, include: { items: true, payrollPeriod: true } });
   });
 }
 
@@ -243,114 +193,38 @@ export async function decideEnterprisePayrollRun(
     select: { requestedByUserId: true, approverUserId: true },
   });
   if (!pending) throw new EnterpriseDomainError("APPROVAL_NOT_FOUND", 404);
-  const decision = await assertOrganizationApprovalDecision({
-    organizationId,
-    requesterUserId: pending.requestedByUserId,
-    approverUserId: pending.approverUserId,
-    actorUserId,
-    moduleCode: "PAYROLL_OPERATIONS",
-  });
+  await assertOrganizationApprovalDecision({ organizationId, requesterUserId: pending.requestedByUserId, approverUserId: pending.approverUserId, actorUserId, moduleCode: "PAYROLL_OPERATIONS" });
 
   return prisma.$transaction(async (tx) => {
-    const run = await tx.enterprisePayrollRun.findFirst({
-      where: { id: payrollRunId, organizationId, status: "PENDING_APPROVAL", archivedAt: null },
-      include: { items: true, payrollPeriod: true },
-    });
+    const run = await tx.enterprisePayrollRun.findFirst({ where: { id: payrollRunId, organizationId, status: "PENDING_APPROVAL", archivedAt: null }, include: { items: true, payrollPeriod: true } });
     if (!run) throw new EnterpriseDomainError("PAYROLL_RUN_NOT_PENDING", 404);
     if (run.approverUserId !== actorUserId) throw new EnterpriseDomainError("NOT_PAYROLL_APPROVER", 403);
-    const approval = await tx.enterpriseApproval.findFirst({
-      where: {
-        organizationId,
-        targetEntityType: "EnterprisePayrollRun",
-        targetEntityId: run.id,
-        status: "PENDING",
-        approverUserId: actorUserId,
-      },
-    });
+    const approval = await tx.enterpriseApproval.findFirst({ where: { organizationId, targetEntityType: "EnterprisePayrollRun", targetEntityId: run.id, status: "PENDING", approverUserId: actorUserId, archivedAt: null } });
     if (!approval) throw new EnterpriseDomainError("APPROVAL_NOT_FOUND", 404);
 
     if (input.decision === "REJECT") {
       const updated = await tx.enterprisePayrollRun.updateMany({
         where: { id: run.id, organizationId, status: "PENDING_APPROVAL", revision: input.revision },
-        data: {
-          status: "REJECTED",
-          rejectedAt: new Date(),
-          rejectionReason: input.comment || "Paie rejetée",
-          revision: { increment: 1 },
-        },
+        data: { status: "REJECTED", rejectedAt: new Date(), rejectionReason: input.comment, revision: { increment: 1 } },
       });
       if (updated.count !== 1) throw new EnterpriseDomainConflictError();
-      await tx.enterpriseApproval.update({
-        where: { id: approval.id },
-        data: {
-          status: "REJECTED",
-          decidedAt: new Date(),
-          decisionComment: input.comment || (decision.selfApprovalOverride ? "SELF_APPROVAL_OVERRIDE" : null),
-          revision: { increment: 1 },
-        },
-      });
-      await publishHrEvent(tx, {
-        organizationId,
-        entityType: "EnterprisePayrollRun",
-        entityId: run.id,
-        eventType: "PAYROLL_RUN_REJECTED",
-        summary: `Paie ${run.reference} rejetée`,
-        actorUserId,
-        fromStatus: "PENDING_APPROVAL",
-        toStatus: "REJECTED",
-        metadataJson: { selfApprovalOverride: decision.selfApprovalOverride },
-      });
-      return tx.enterprisePayrollRun.findUniqueOrThrow({
-        where: { id: run.id },
-        include: { items: true, payrollPeriod: true },
-      });
+      await tx.enterpriseApproval.update({ where: { id: approval.id }, data: { status: "REJECTED", decidedAt: new Date(), decisionComment: input.comment, revision: { increment: 1 } } });
+      await publishHrEvent(tx, { organizationId, entityType: "EnterprisePayrollRun", entityId: run.id, eventType: "PAYROLL_RUN_REJECTED", summary: `Paie ${run.reference} rejetée`, actorUserId, fromStatus: "PENDING_APPROVAL", toStatus: "REJECTED" });
+      return tx.enterprisePayrollRun.findUniqueOrThrow({ where: { id: run.id }, include: { items: true, payrollPeriod: true } });
     }
 
-    const updated = await tx.enterprisePayrollRun.updateMany({
-      where: { id: run.id, organizationId, status: "PENDING_APPROVAL", revision: input.revision },
-      data: { status: "APPROVED", approvedAt: new Date(), revision: { increment: 1 } },
-    });
+    const updated = await tx.enterprisePayrollRun.updateMany({ where: { id: run.id, organizationId, status: "PENDING_APPROVAL", revision: input.revision }, data: { status: "APPROVED", approvedAt: new Date(), revision: { increment: 1 } } });
     if (updated.count !== 1) throw new EnterpriseDomainConflictError();
 
     for (const item of run.items) {
       await tx.enterprisePayslip.upsert({
         where: { organizationId_payrollItemId: { organizationId, payrollItemId: item.id } },
-        update: {
-          status: "GENERATED",
-          generatedAt: new Date(),
-          grossAmount: item.grossAmount,
-          deductionAmount: item.deductionAmount,
-          netAmount: item.netAmount,
-          currency: run.currency,
-          revision: { increment: 1 },
-        },
-        create: {
-          organizationId,
-          payrollItemId: item.id,
-          payslipNumber: hrReference("PSL"),
-          status: "GENERATED",
-          generatedAt: new Date(),
-          grossAmount: item.grossAmount,
-          deductionAmount: item.deductionAmount,
-          netAmount: item.netAmount,
-          currency: run.currency,
-          createdByUserId: actorUserId,
-        },
+        update: { status: "GENERATED", generatedAt: new Date(), grossAmount: item.grossAmount, deductionAmount: item.deductionAmount, netAmount: item.netAmount, currency: run.currency, revision: { increment: 1 } },
+        create: { organizationId, payrollItemId: item.id, payslipNumber: hrReference("PSL"), status: "GENERATED", generatedAt: new Date(), grossAmount: item.grossAmount, deductionAmount: item.deductionAmount, netAmount: item.netAmount, currency: run.currency, createdByUserId: actorUserId },
       });
     }
-    await tx.enterprisePayrollPeriod.update({
-      where: { id: run.payrollPeriodId },
-      data: { status: "CLOSED", revision: { increment: 1 } },
-    });
-    await tx.enterpriseApproval.update({
-      where: { id: approval.id },
-      data: {
-        status: "APPROVED",
-        decidedAt: new Date(),
-        decisionComment: input.comment || (decision.selfApprovalOverride ? "SELF_APPROVAL_OVERRIDE" : null),
-        revision: { increment: 1 },
-      },
-    });
+    await tx.enterprisePayrollPeriod.update({ where: { id: run.payrollPeriodId }, data: { status: "CLOSED", revision: { increment: 1 } } });
+    await tx.enterpriseApproval.update({ where: { id: approval.id }, data: { status: "APPROVED", decidedAt: new Date(), decisionComment: input.comment || null, revision: { increment: 1 } } });
     await publishHrEvent(tx, {
       organizationId,
       entityType: "EnterprisePayrollRun",
@@ -360,12 +234,9 @@ export async function decideEnterprisePayrollRun(
       actorUserId,
       fromStatus: "PENDING_APPROVAL",
       toStatus: "APPROVED",
-      metadataJson: { payslipCount: run.items.length, paymentCreated: false, selfApprovalOverride: decision.selfApprovalOverride },
+      metadataJson: { payslipCount: run.items.length, paymentCreated: false },
     });
-    return tx.enterprisePayrollRun.findUniqueOrThrow({
-      where: { id: run.id },
-      include: { items: { include: { payslip: true } }, payrollPeriod: true },
-    });
+    return tx.enterprisePayrollRun.findUniqueOrThrow({ where: { id: run.id }, include: { items: { include: { payslip: true } }, payrollPeriod: true } });
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
@@ -376,39 +247,11 @@ export async function cancelEnterprisePayrollRun(
   input: PayrollRunCancelInput,
 ) {
   return prisma.$transaction(async (tx) => {
-    const run = await tx.enterprisePayrollRun.findFirst({
-      where: {
-        id: payrollRunId,
-        organizationId,
-        status: { in: ["PREPARED", "REJECTED"] },
-        archivedAt: null,
-      },
-    });
+    const run = await tx.enterprisePayrollRun.findFirst({ where: { id: payrollRunId, organizationId, status: { in: ["PREPARED", "REJECTED"] }, archivedAt: null } });
     if (!run) throw new EnterpriseDomainError("PAYROLL_RUN_NOT_CANCELLABLE", 409);
-    const updated = await tx.enterprisePayrollRun.updateMany({
-      where: { id: run.id, organizationId, revision: input.revision, status: run.status },
-      data: {
-        status: "CANCELLED",
-        cancelledAt: new Date(),
-        cancellationReason: input.reason,
-        revision: { increment: 1 },
-      },
-    });
+    const updated = await tx.enterprisePayrollRun.updateMany({ where: { id: run.id, organizationId, revision: input.revision, status: run.status }, data: { status: "CANCELLED", cancelledAt: new Date(), cancellationReason: input.reason, revision: { increment: 1 } } });
     if (updated.count !== 1) throw new EnterpriseDomainConflictError();
-    await publishHrEvent(tx, {
-      organizationId,
-      entityType: "EnterprisePayrollRun",
-      entityId: run.id,
-      eventType: "PAYROLL_RUN_CANCELLED",
-      summary: `Paie ${run.reference} annulée`,
-      actorUserId,
-      fromStatus: run.status,
-      toStatus: "CANCELLED",
-      metadataJson: { reason: input.reason },
-    });
-    return tx.enterprisePayrollRun.findUniqueOrThrow({
-      where: { id: run.id },
-      include: { items: true, payrollPeriod: true },
-    });
+    await publishHrEvent(tx, { organizationId, entityType: "EnterprisePayrollRun", entityId: run.id, eventType: "PAYROLL_RUN_CANCELLED", summary: `Paie ${run.reference} annulée`, actorUserId, fromStatus: run.status, toStatus: "CANCELLED", metadataJson: { reason: input.reason } });
+    return tx.enterprisePayrollRun.findUniqueOrThrow({ where: { id: run.id }, include: { items: true, payrollPeriod: true } });
   });
 }

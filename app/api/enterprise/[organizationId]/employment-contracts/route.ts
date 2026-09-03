@@ -19,32 +19,28 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "HUMAN_RESOURCES", action: "read" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const approvalAccess = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "HUMAN_RESOURCES", action: "approve" });
   const url = new URL(req.url);
   const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
   const pageSize = Math.min(100, Math.max(5, Number(url.searchParams.get("pageSize") || 25) || 25));
   const employeeId = url.searchParams.get("employeeId")?.trim() || "";
   const status = url.searchParams.get("status")?.trim() || "";
-  const where: Prisma.EnterpriseEmploymentContractWhereInput = {
-    organizationId,
-    archivedAt: null,
-    ...(employeeId ? { employeeId } : {}),
-    ...(status ? { status } : {}),
-  };
+  const where: Prisma.EnterpriseEmploymentContractWhereInput = { organizationId, archivedAt: null, ...(employeeId ? { employeeId } : {}), ...(status ? { status } : {}) };
   const [items, total, active, pendingApproval] = await Promise.all([
-    prisma.enterpriseEmploymentContract.findMany({
-      where,
-      orderBy: [{ status: "asc" }, { startDate: "desc" }],
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      include: { employee: { select: { id: true, employeeNumber: true, displayName: true, employmentStatus: true } } },
-    }),
+    prisma.enterpriseEmploymentContract.findMany({ where, orderBy: [{ status: "asc" }, { startDate: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { employee: { select: { id: true, employeeNumber: true, displayName: true, employmentStatus: true } } } }),
     prisma.enterpriseEmploymentContract.count({ where }),
     prisma.enterpriseEmploymentContract.count({ where: { organizationId, archivedAt: null, status: "ACTIVE" } }),
     prisma.enterpriseEmploymentContract.count({ where: { organizationId, archivedAt: null, status: "PENDING_APPROVAL" } }),
   ]);
+  const pendingApprovals = items.length ? await prisma.enterpriseApproval.findMany({
+    where: { organizationId, targetEntityType: "EnterpriseEmploymentContract", targetEntityId: { in: items.map((item) => item.id) }, status: "PENDING", archivedAt: null },
+    select: { targetEntityId: true, approverUserId: true },
+  }) : [];
+  const approverByContract = new Map(pendingApprovals.map((approval) => [approval.targetEntityId, approval.approverUserId]));
   const visibleItems = items.map((item) => ({
     ...item,
     canEdit: item.createdByUserId === session.userId && ["DRAFT", "PENDING_APPROVAL"].includes(item.status),
+    canDecide: Boolean(approvalAccess && item.status === "PENDING_APPROVAL" && approverByContract.get(item.id) === session.userId),
   }));
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "employment-contracts", page } });
   return NextResponse.json({ items: visibleItems, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { active, pendingApproval }, canManage: access.canManage });
@@ -70,6 +66,6 @@ export async function POST(req: Request, { params }: Params) {
   } catch (error) {
     const duplicate = error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
     if (duplicate) return NextResponse.json({ error: "EMPLOYMENT_CONTRACT_DUPLICATE", message: "Une version identique existe déjà." }, { status: 409 });
-    return enterpriseDomainErrorResponse(error, "EMPLOYMENT_CONTRACT_CREATE_FAILED");
+    return enterpriseDomainErrorResponse(error, "EMPLOYMENT_CONTRACT_CREATE_FAILED", req);
   }
 }

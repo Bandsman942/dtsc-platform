@@ -4,192 +4,117 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { CheckCircle2, Eye, FileText, Pencil, Plus, UsersRound, XCircle } from "lucide-react";
 import { EnterpriseEmployeesIdentityWorkspace } from "@/components/enterprise/professional/enterprise-employees-identity-workspace";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
-import {
-  professionalErpApprovalMessage,
-  professionalErpDate,
-  professionalErpEnumLabel,
-  professionalErpMoney,
-  professionalErpNumber,
-  professionalErpT,
-  useProfessionalErpLocale,
-} from "@/components/enterprise/professional/professional-erp-i18n";
-import {
-  ProfessionalError,
-  ProfessionalFormSection,
-  ProfessionalHelp,
-  ProfessionalLoading,
-  ProfessionalTabs,
-  professionalMutation,
-  useProfessionalCollection,
-} from "@/components/enterprise/professional/professional-erp-ui";
+import { professionalErpDate, professionalErpEnumLabel, professionalErpMoney, professionalErpT, useProfessionalErpLocale } from "@/components/enterprise/professional/professional-erp-i18n";
+import { ProfessionalPager } from "@/components/enterprise/professional/professional-pager";
+import { ProfessionalError, ProfessionalFormSection, ProfessionalHelp, ProfessionalLoading, ProfessionalTabs, professionalMutation, useProfessionalCollection } from "@/components/enterprise/professional/professional-erp-ui";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
-import { ContextActions, type BusinessContextAction } from "@/components/workspace/context-actions";
 import { EmptyState } from "@/components/workspace/empty-state";
 import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
-import { translateWorkspaceGeneralization } from "@/lib/i18n";
 
 type Employee = { id: string; employeeNumber: string; displayName: string; departmentId: string | null; positionId: string | null };
-type Member = { id: string; label: string; role: string; positionTitle: string | null };
-type Department = { id: string; departmentCode: string; labelFr: string; labelEn: string | null };
-type Site = { id: string; code: string; name: string };
-type Lookups = { employees: Employee[]; members: Member[]; departments: Department[]; sites: Site[] };
-type EmploymentContract = { id: string; reference: string; employeeId: string; contractType: string; status: string; versionNumber: number; startDate: string; endDate: string | null; probationEndDate: string | null; jobTitle: string | null; departmentId: string | null; siteId: string | null; baseCompensation: string | number; compensationCurrency: string; payFrequency: string; standardHoursPerWeek: string | number | null; terms: string | null; revision: number; canEdit: boolean; employee: { id: string; employeeNumber: string; displayName: string; employmentStatus: string } };
-
-const CONTRACT_STATUSES = ["DRAFT", "PENDING_APPROVAL", "APPROVED", "ACTIVE", "REJECTED", "SUSPENDED", "ENDED", "CANCELLED"];
-const CONTRACT_TYPES = ["EMPLOYMENT", "FIXED_TERM", "INDEFINITE", "CONSULTING", "INTERNSHIP"];
-const PAY_FREQUENCIES = ["MONTHLY", "BIWEEKLY", "WEEKLY", "DAILY", "HOURLY"];
-const APPROVER_ERROR_CODES = new Set(["SELF_APPROVAL_FORBIDDEN", "APPROVER_NOT_MEMBER", "APPROVER_PERMISSION_DENIED"]);
-function statusTone(status: string) { if (["ACTIVE", "APPROVED"].includes(status)) return "success" as const; if (["PENDING_APPROVAL", "SUSPENDED"].includes(status)) return "warning" as const; if (["REJECTED", "ENDED", "CANCELLED"].includes(status)) return "danger" as const; return "neutral" as const; }
-function inputDate(value: string | null | undefined) { return value ? value.slice(0, 10) : ""; }
+type Contract = { id: string; reference: string; employeeId: string; contractType: string; status: string; revision: number; startDate: string; endDate: string | null; probationEndDate: string | null; jobTitle: string | null; departmentId: string | null; siteId: string | null; baseCompensation: string | number; compensationCurrency: string; payFrequency: string; standardHoursPerWeek: string | number | null; terms: string | null; canEdit: boolean; canDecide: boolean; employee: { id: string; employeeNumber: string; displayName: string; employmentStatus: string } };
+type Lookup = { id: string; labelFr?: string; labelEn?: string | null; departmentCode?: string; positionCode?: string; departmentId?: string | null; code?: string; name?: string; employeeNumber?: string; displayName?: string };
+type Approver = { userId: string; name: string | null; email: string; positionTitle: string | null; role: string };
+type Lookups = { employees: Employee[]; departments: Lookup[]; positions: Lookup[]; sites: Lookup[]; approvers: Approver[]; currencies: string[] };
+type Tab = "CONTRACTS" | "ORG";
+type DecisionState = { contract: Contract; decision: "APPROVE" | "REJECT" };
 
 export function EnterpriseHumanResourcesWorkspace({ organizationId, organizationName, definition }: { organizationId: string; organizationName: string; definition: EnterpriseModuleDefinition }) {
   const locale = useProfessionalErpLocale();
   const t = (key: Parameters<typeof professionalErpT>[1], values?: Record<string, string | number>) => professionalErpT(locale, key, values);
-  const suffix = (count: number) => count === 1 ? "" : "s";
-  const departmentLabel = (department: Department) => locale === "en" ? department.labelEn || department.labelFr : department.labelFr;
-  const memberLabel = (member: Member) => `${member.label} · ${member.positionTitle || professionalErpEnumLabel(locale, "role", member.role)}`;
-  const [tab, setTab] = useState("CONTRACTS");
-  const [status, setStatus] = useState("");
+  const [tab, setTab] = useState<Tab>("CONTRACTS");
   const [page, setPage] = useState(1);
+  const [status, setStatus] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
-  const [lookups, setLookups] = useState<Lookups>({ employees: [], members: [], departments: [], sites: [] });
-  const [createOpen, setCreateOpen] = useState(false);
-  const [editingContract, setEditingContract] = useState<EmploymentContract | null>(null);
-  const [approverUserId, setApproverUserId] = useState("");
-  const [detail, setDetail] = useState<EmploymentContract | null>(null);
-  const [message, setMessage] = useState("");
-  useToastMessage(message);
+  const [lookups, setLookups] = useState<Lookups>({ employees: [], departments: [], positions: [], sites: [], approvers: [], currencies: [] });
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<Contract | null>(null);
+  const [detail, setDetail] = useState<Contract | null>(null);
+  const [decision, setDecision] = useState<DecisionState | null>(null);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [saving, setSaving] = useState(false);
+  useToastMessage(notice, "success");
 
   useEffect(() => {
     let active = true;
-    void fetch(`/api/enterprise/${organizationId}/operational-lookups?module=HUMAN_RESOURCES`, { cache: "no-store" })
-      .then(async (response) => { const body = await response.json().catch(() => null) as Lookups & { message?: string } | null; if (!response.ok || !body) throw new Error(body?.message || professionalErpT(locale, "hr.selectorsUnavailable")); if (active) setLookups({ employees: body.employees || [], members: body.members || [], departments: body.departments || [], sites: body.sites || [] }); })
-      .catch((error) => { if (active) setMessage(error instanceof Error ? error.message : professionalErpT(locale, "hr.selectorsUnavailable")); });
+    void fetch(`/api/enterprise/${organizationId}/hr-payroll-lookups?module=HUMAN_RESOURCES`, { cache: "no-store" }).then(async (response) => {
+      const body = await response.json().catch(() => null) as Lookups & { message?: string; error?: string } | null;
+      if (!response.ok || !body) throw new Error(body?.message || body?.error || (locale === "en" ? "HR selectors are unavailable." : "Les référentiels RH sont indisponibles."));
+      if (active) setLookups(body);
+    }).catch((loadError) => { if (active) setError(loadError instanceof Error ? loadError.message : "Chargement impossible."); });
     return () => { active = false; };
   }, [organizationId, refreshKey, locale]);
 
-  const params = useMemo(() => { const value = new URLSearchParams({ page: String(page), pageSize: "25" }); if (status) value.set("status", status); return value; }, [page, status]);
-  const contracts = useProfessionalCollection<EmploymentContract>({ endpoint: `/api/enterprise/${organizationId}/employment-contracts`, params, refreshKey });
+  const params = useMemo(() => { const query = new URLSearchParams({ page: String(page), pageSize: "25" }); if (status) query.set("status", status); return query; }, [page, status]);
+  const collection = useProfessionalCollection<Contract>({ endpoint: `/api/enterprise/${organizationId}/employment-contracts`, params, refreshKey });
+  const label = (item: Lookup | undefined, fallback = "—") => item ? (locale === "en" ? item.labelEn || item.labelFr || item.name || fallback : item.labelFr || item.labelEn || item.name || fallback) : fallback;
+  const positionFor = (contract: Contract) => lookups.positions.find((item) => item.positionCode === contract.jobTitle);
+  const approverItems = lookups.approvers.map((approver) => ({ id: approver.userId, label: `${approver.name || approver.email} · ${approver.positionTitle || professionalErpEnumLabel(locale, "role", approver.role)}` }));
+  const currencies = lookups.currencies.length ? lookups.currencies : ["USD"];
 
-  function openNewContract() {
-    setEditingContract(null);
-    setApproverUserId("");
-    setMessage("");
-    setCreateOpen(true);
-  }
-
-  function openEditContract(contract: EmploymentContract) {
-    setDetail(null);
-    setEditingContract(contract);
-    setApproverUserId("");
-    setMessage("");
-    setCreateOpen(true);
-  }
-
-  function closeContractForm() {
-    setCreateOpen(false);
-    setEditingContract(null);
-    setApproverUserId("");
-  }
-
-  async function selectApprover(value: string) {
-    setMessage("");
-    if (!value) {
-      setApproverUserId("");
-      return;
-    }
-    try {
-      const query = new URLSearchParams({ module: "HUMAN_RESOURCES", approverUserId: value });
-      const response = await fetch(`/api/enterprise/${organizationId}/approval-eligibility?${query.toString()}`, { cache: "no-store" });
-      const body = await response.json().catch(() => null) as { eligible?: boolean; code?: string; message?: string } | null;
-      if (!response.ok || !body) throw new Error(body?.message || body?.code || "APPROVER_ELIGIBILITY_CHECK_FAILED");
-      if (!body.eligible) {
-        setApproverUserId("");
-        setMessage(professionalErpApprovalMessage(locale, body.code));
-        return;
-      }
-      setApproverUserId(value);
-    } catch {
-      setApproverUserId("");
-      setMessage(professionalErpApprovalMessage(locale, "APPROVER_ELIGIBILITY_CHECK_FAILED"));
-    }
-  }
+  function openCreate() { setEditing(null); setError(""); setFormOpen(true); }
+  function openEdit(contract: Contract) { setEditing(contract); setError(""); setFormOpen(true); }
 
   async function saveContract(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const sharedPayload = {
-      contractType: String(form.get("contractType") || "EMPLOYMENT"),
-      startDate: String(form.get("startDate") || ""),
-      endDate: String(form.get("endDate") || "") || null,
-      probationEndDate: String(form.get("probationEndDate") || "") || null,
-      jobTitle: String(form.get("jobTitle") || "") || null,
-      departmentId: String(form.get("departmentId") || "") || null,
-      siteId: String(form.get("siteId") || "") || null,
-      baseCompensation: Number(form.get("baseCompensation") || 0),
-      compensationCurrency: String(form.get("compensationCurrency") || "USD"),
-      payFrequency: String(form.get("payFrequency") || "MONTHLY"),
-      standardHoursPerWeek: String(form.get("standardHoursPerWeek") || "") ? Number(form.get("standardHoursPerWeek")) : null,
-      terms: String(form.get("terms") || "") || null,
-      approverUserId,
+    event.preventDefault(); setError(""); setNotice(""); setSaving(true);
+    const form = event.currentTarget; const data = new FormData(form);
+    const payload = {
+      ...(editing ? {} : { employeeId: String(data.get("employeeId") || "") }),
+      contractType: String(data.get("contractType") || "EMPLOYEE"), startDate: String(data.get("startDate") || ""), endDate: String(data.get("endDate") || "") || null, probationEndDate: String(data.get("probationEndDate") || "") || null,
+      jobTitle: String(data.get("jobTitle") || "") || null, departmentId: String(data.get("departmentId") || "") || null, siteId: String(data.get("siteId") || "") || null,
+      baseCompensation: String(data.get("baseCompensation") || "0"), compensationCurrency: String(data.get("compensationCurrency") || ""), payFrequency: String(data.get("payFrequency") || "MONTHLY"), standardHoursPerWeek: String(data.get("standardHoursPerWeek") || "") || null, terms: String(data.get("terms") || "") || null, approverUserId: String(data.get("approverUserId") || ""), ...(editing ? { revision: editing.revision } : {}),
     };
     try {
-      if (editingContract) {
-        await professionalMutation(
-          `/api/enterprise/${organizationId}/employment-contracts/${editingContract.id}`,
-          { ...sharedPayload, revision: editingContract.revision },
-          "PATCH",
-        );
-      } else {
-        await professionalMutation(`/api/enterprise/${organizationId}/employment-contracts`, {
-          ...sharedPayload,
-          employeeId: String(form.get("employeeId") || ""),
-        });
-      }
-      closeContractForm();
-      setRefreshKey((value) => value + 1);
-      setMessage(t("hr.contractSubmitted"));
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "";
-      setMessage(APPROVER_ERROR_CODES.has(errorMessage) ? professionalErpApprovalMessage(locale, errorMessage) : (errorMessage || t("hr.contractCreateFailed")));
-    }
+      await professionalMutation(editing ? `/api/enterprise/${organizationId}/employment-contracts/${editing.id}` : `/api/enterprise/${organizationId}/employment-contracts`, payload, editing ? "PATCH" : "POST");
+      form.reset(); setFormOpen(false); setEditing(null); setNotice(locale === "en" ? "Contract saved and submitted for independent review." : "Contrat enregistré et soumis à une validation indépendante."); setRefreshKey((value) => value + 1);
+    } catch (mutationError) { setError(mutationError instanceof Error ? mutationError.message : (locale === "en" ? "Unable to save contract." : "Impossible d’enregistrer le contrat.")); }
+    finally { setSaving(false); }
   }
 
-  async function decide(contract: EmploymentContract, decision: "APPROVE" | "REJECT") {
-    const comment = decision === "REJECT" ? window.prompt(t("hr.rejectPrompt")) || "Contrat rejeté" : "Contrat contrôlé";
-    try { await professionalMutation(`/api/enterprise/${organizationId}/employment-contracts/${contract.id}/decision`, { decision, revision: contract.revision, comment }); setDetail(null); setRefreshKey((value) => value + 1); setMessage(decision === "APPROVE" ? t("hr.contractApproved") : t("hr.contractRejected")); }
-    catch (error) { setMessage(error instanceof Error ? error.message : t("hr.decisionFailed")); }
+  async function decideContract(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); if (!decision) return; setError(""); setNotice(""); setSaving(true);
+    const data = new FormData(event.currentTarget); const comment = String(data.get("comment") || "").trim();
+    if (decision.decision === "REJECT" && comment.length < 3) { setError(locale === "en" ? "A rejection reason is required." : "Un motif de refus est obligatoire."); setSaving(false); return; }
+    try {
+      await professionalMutation(`/api/enterprise/${organizationId}/employment-contracts/${decision.contract.id}/decision`, { decision: decision.decision, revision: decision.contract.revision, comment: comment || (decision.decision === "APPROVE" ? "Contrat contrôlé" : "Contrat rejeté") });
+      setDecision(null); setNotice(decision.decision === "APPROVE" ? (locale === "en" ? "Contract approved." : "Contrat approuvé.") : (locale === "en" ? "Contract returned with a reason." : "Contrat retourné avec motif.")); setRefreshKey((value) => value + 1);
+    } catch (mutationError) { setError(mutationError instanceof Error ? mutationError.message : "Décision impossible."); }
+    finally { setSaving(false); }
   }
 
-  function actionsFor(contract: EmploymentContract): BusinessContextAction[] { return [{ id: "open", label: t("people.open"), icon: Eye, onSelect: () => setDetail(contract) }, ...(contract.canEdit ? [{ id: "edit", label: translateWorkspaceGeneralization(locale, "edit"), icon: Pencil, onSelect: () => openEditContract(contract) }] : []), ...(contract.status === "PENDING_APPROVAL" ? [{ id: "approve", label: t("people.approve"), icon: CheckCircle2, onSelect: () => void decide(contract, "APPROVE") }, { id: "reject", label: t("people.reject"), icon: XCircle, destructive: true, onSelect: () => void decide(contract, "REJECT") }] : [])]; }
-
-  const departments = lookups.departments.map((department) => ({ department, employees: lookups.employees.filter((employee) => employee.departmentId === department.id) }));
-  const unassignedEmployees = lookups.employees.filter((employee) => !employee.departmentId);
-  const contractTypeItems = CONTRACT_TYPES.map((id) => ({ id, label: professionalErpEnumLabel(locale, "employmentContractType", id) }));
-  const frequencyItems = PAY_FREQUENCIES.map((id) => ({ id, label: professionalErpEnumLabel(locale, "payFrequency", id) }));
-  const statusItems = [{ id: "", label: t("people.allStatuses") }, ...CONTRACT_STATUSES.map((id) => ({ id, label: professionalErpEnumLabel(locale, "employmentContractStatus", id) }))];
+  const grouped = useMemo(() => {
+    const groups = new Map<string, Employee[]>();
+    for (const employee of lookups.employees) { const key = employee.departmentId || "NONE"; groups.set(key, [...(groups.get(key) || []), employee]); }
+    return [...groups.entries()];
+  }, [lookups.employees]);
 
   return <div className="grid gap-8">
     <EnterpriseEmployeesIdentityWorkspace organizationId={organizationId} organizationName={organizationName} definition={definition} />
     <ModuleWorkspace>
-      <ModuleHeader eyebrow={t("hr.eyebrow", { organization: organizationName })} title={t("hr.title")} description={t("hr.description")} count={t("hr.count", { count: contracts.pagination.total, suffix: suffix(contracts.pagination.total) })} primaryAction={<Button onClick={openNewContract}><Plus className="h-4 w-4" />{t("hr.newContract")}</Button>} />
-      <ModuleMetrics label={t("hr.metrics")}><ModuleMetric label={t("hr.activeContracts")} value={contracts.metrics.active || 0} /><ModuleMetric label={t("hr.toApprove")} value={contracts.metrics.pendingApproval || 0} /><ModuleMetric label={t("hr.activeEmployees")} value={lookups.employees.length} /><ModuleMetric label={t("hr.departments")} value={lookups.departments.length} /></ModuleMetrics>
-      <ModuleToolbar controls={<><ProfessionalTabs value={tab} onChange={setTab} items={[{ id: "CONTRACTS", label: t("hr.contractsTab"), count: contracts.pagination.total }, { id: "ORG", label: t("hr.orgTab"), count: lookups.employees.length }]} />{tab === "CONTRACTS" ? <NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={statusItems} /> : null}</>} summary={t("hr.toolbarSummary")} />
+      <ModuleHeader eyebrow={locale === "en" ? "HR governance" : "Gouvernance RH"} title={locale === "en" ? "Contracts & organization" : "Contrats & organisation"} description={locale === "en" ? "Official positions, controlled assignments, contract versions and independent approval." : "Postes officiels, affectations contrôlées, versions contractuelles et validation indépendante."} count={`${collection.pagination.total}`} primaryAction={collection.canManage && tab === "CONTRACTS" ? <Button onClick={openCreate} className="bg-dtsc-blue text-white"><Plus className="h-4 w-4" />{locale === "en" ? "New contract" : "Nouveau contrat"}</Button> : undefined} />
+      <ModuleMetrics label="RH"><ModuleMetric label={locale === "en" ? "Active contracts" : "Contrats actifs"} value={collection.metrics.active || 0} /><ModuleMetric label={locale === "en" ? "Pending approval" : "En attente de validation"} value={collection.metrics.pendingApproval || 0} /><ModuleMetric label={locale === "en" ? "Active employees" : "Collaborateurs actifs"} value={lookups.employees.length} /></ModuleMetrics>
+      <ModuleToolbar controls={<ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setPage(1); }} items={[{ id: "CONTRACTS", label: locale === "en" ? "Contracts" : "Contrats", count: collection.pagination.total }, { id: "ORG", label: locale === "en" ? "Organization" : "Organisation", count: lookups.employees.length }]} />} summary={tab === "CONTRACTS" ? (locale === "en" ? "No free-text position: contract assignment comes from enterprise reference data." : "Aucun poste en texte libre : l’affectation contractuelle vient des référentiels entreprise.") : (locale === "en" ? "Organization chart built from canonical HR assignments." : "Organisation construite à partir des affectations RH canoniques.")} />
       <ModuleContent>
-        {tab === "CONTRACTS" ? <ModuleSection title={t("hr.contractsSection")} description={t("hr.contractsSectionDescription")}>{contracts.error ? <ProfessionalError message={contracts.error} /> : contracts.loading ? <ProfessionalLoading /> : contracts.items.length ? <BusinessList ariaLabel={t("hr.contractsSection")}>{contracts.items.map((contract) => <BusinessListItem key={contract.id} title={`${contract.reference} · ${contract.employee.displayName}`} leading={<FileText className="h-5 w-5 text-dtsc-blue" />} status={<StatusBadge tone={statusTone(contract.status)}>{professionalErpEnumLabel(locale, "employmentContractStatus", contract.status)}</StatusBadge>} meta={`${professionalErpEnumLabel(locale, "employmentContractType", contract.contractType)} · ${professionalErpMoney(contract.baseCompensation, contract.compensationCurrency, locale)} · ${professionalErpEnumLabel(locale, "payFrequency", contract.payFrequency)}`} description={t("hr.contractVersionRange", { version: contract.versionNumber, start: professionalErpDate(contract.startDate, locale), end: contract.endDate ? t("hr.contractEnd", { date: professionalErpDate(contract.endDate, locale) }) : t("hr.noEndDate") })} onOpen={() => setDetail(contract)} actions={<ContextActions label={t("hr.contractActions")} actions={actionsFor(contract)} />} />)}</BusinessList> : <EmptyState compact title={t("hr.noContract")} description={t("hr.noContractDescription")} />}</ModuleSection> : <ModuleSection title={t("hr.orgSection")} description={t("hr.orgDescription")}><div className="grid gap-4 md:grid-cols-2">{departments.map(({ department, employees }) => <section key={department.id} className="rounded-2xl border border-dtsc-border p-4"><div className="flex items-center gap-2"><UsersRound className="h-5 w-5 text-dtsc-blue" /><h3 className="font-black text-dtsc-ink">{departmentLabel(department)}</h3></div><div className="mt-3 grid gap-2">{employees.length ? employees.map((employee) => <div key={employee.id} className="rounded-xl bg-dtsc-page px-3 py-2 text-sm"><p className="font-black">{employee.displayName}</p><p className="text-dtsc-muted">{employee.employeeNumber}</p></div>) : <p className="text-sm text-dtsc-muted">{t("hr.noActiveEmployee")}</p>}</div></section>)}{unassignedEmployees.length ? <section className="rounded-2xl border border-dashed border-dtsc-border p-4"><h3 className="font-black">{t("hr.noDepartment")}</h3><div className="mt-3 grid gap-2">{unassignedEmployees.map((employee) => <div key={employee.id} className="rounded-xl bg-dtsc-page px-3 py-2 text-sm">{employee.employeeNumber} · {employee.displayName}</div>)}</div></section> : null}</div></ModuleSection>}
+        {error ? <ProfessionalError message={error} /> : null}
+        {tab === "CONTRACTS" ? <ModuleSection title={locale === "en" ? "Employment contracts" : "Contrats de travail"} description={locale === "en" ? "Search by workflow status and open a record before taking a sensitive decision." : "Filtrez par statut et ouvrez une fiche avant toute décision sensible."} action={<NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={[{ id: "", label: locale === "en" ? "All statuses" : "Tous les statuts" }, ...["DRAFT", "PENDING_APPROVAL", "ACTIVE", "REJECTED", "ENDED", "CANCELLED"].map((id) => ({ id, label: professionalErpEnumLabel(locale, "employmentContractStatus", id) }))]} />}>
+          {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : collection.items.length ? <><BusinessList ariaLabel={locale === "en" ? "Employment contracts" : "Contrats de travail"}>{collection.items.map((contract) => <BusinessListItem key={contract.id} title={`${contract.reference} · ${contract.employee.displayName}`} leading={<FileText className="h-5 w-5 text-dtsc-blue" />} status={<StatusBadge tone={contract.status === "ACTIVE" ? "success" : contract.status === "REJECTED" ? "danger" : contract.status === "PENDING_APPROVAL" ? "warning" : "neutral"}>{professionalErpEnumLabel(locale, "employmentContractStatus", contract.status)}</StatusBadge>} meta={`${professionalErpEnumLabel(locale, "employmentContractType", contract.contractType)} · ${label(positionFor(contract), locale === "en" ? "Position not set" : "Poste non défini")}`} description={`${professionalErpMoney(contract.baseCompensation, contract.compensationCurrency, locale)} · ${professionalErpEnumLabel(locale, "payFrequency", contract.payFrequency)} · ${professionalErpDate(contract.startDate, locale)}`} onOpen={() => setDetail(contract)} openLabel={locale === "en" ? "Open contract" : "Ouvrir le contrat"} actions={<div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={() => setDetail(contract)}><Eye className="h-4 w-4" />{locale === "en" ? "Review" : "Revoir"}</Button>{contract.canEdit ? <Button size="sm" variant="outline" onClick={() => openEdit(contract)}><Pencil className="h-4 w-4" />{locale === "en" ? "Edit" : "Modifier"}</Button> : null}{contract.canDecide ? <><Button size="sm" variant="outline" onClick={() => setDecision({ contract, decision: "APPROVE" })}><CheckCircle2 className="h-4 w-4" />{locale === "en" ? "Approve" : "Approuver"}</Button><Button size="sm" variant="outline" onClick={() => setDecision({ contract, decision: "REJECT" })}><XCircle className="h-4 w-4" />{locale === "en" ? "Reject" : "Refuser"}</Button></> : null}</div>} />)}</BusinessList><ProfessionalPager pagination={collection.pagination} onPageChange={setPage} locale={locale} /></> : <EmptyState compact title={locale === "en" ? "No contract" : "Aucun contrat"} description={locale === "en" ? "Create a contract from an active employee record." : "Créez un contrat depuis un dossier collaborateur actif."} />}
+        </ModuleSection> : <ModuleSection title={t("hr.orgSection")} description={locale === "en" ? "Department grouping uses canonical HR department identifiers." : "Le regroupement par département utilise les identifiants RH canoniques."}>{grouped.length ? <div className="grid gap-4 md:grid-cols-2">{grouped.map(([departmentId, employees]) => <div key={departmentId} className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4"><h3 className="font-black text-dtsc-ink">{departmentId === "NONE" ? (locale === "en" ? "No department" : "Sans département") : label(lookups.departments.find((item) => item.id === departmentId))}</h3><div className="mt-3 grid gap-2">{employees.map((employee) => <div key={employee.id} className="flex items-center gap-2 rounded-xl bg-dtsc-soft px-3 py-2 text-sm"><UsersRound className="h-4 w-4 text-dtsc-blue" /><span className="font-bold">{employee.displayName}</span><span className="ml-auto text-xs text-dtsc-muted">{label(lookups.positions.find((item) => item.id === employee.positionId), employee.employeeNumber)}</span></div>)}</div></div>)}</div> : <EmptyState compact title={locale === "en" ? "No active employee" : "Aucun collaborateur actif"} description={locale === "en" ? "Add employee records first." : "Ajoutez d’abord les dossiers collaborateurs."} />}</ModuleSection>}
         <ProfessionalHelp moduleCode="HUMAN_RESOURCES" />
       </ModuleContent>
 
-      <Dialog open={createOpen} onClose={closeContractForm} title={editingContract ? `${translateWorkspaceGeneralization(locale, "edit")} · ${editingContract.reference}` : t("hr.newContractDialog")} className="h-[96dvh] max-w-5xl"><form key={editingContract?.id || "new-contract"} onSubmit={saveContract} className="grid gap-5"><ProfessionalFormSection title={t("hr.employeeAndJob")}><Field label={t("hr.employee")}><NativeSelect name="employeeId" required defaultValue={editingContract?.employeeId || ""} disabled={Boolean(editingContract)} items={[{ id: "", label: t("people.select") }, ...lookups.employees.map((employee) => ({ id: employee.id, label: `${employee.employeeNumber} · ${employee.displayName}` }))]} /></Field><Field label={t("hr.contractType")}><NativeSelect name="contractType" defaultValue={editingContract?.contractType || "EMPLOYMENT"} items={contractTypeItems} /></Field><Field label={t("hr.jobTitle")}><Input name="jobTitle" defaultValue={editingContract?.jobTitle || ""} /></Field><Field label={t("hr.department")}><NativeSelect name="departmentId" defaultValue={editingContract?.departmentId || ""} items={[{ id: "", label: t("people.notProvided") }, ...lookups.departments.map((department) => ({ id: department.id, label: departmentLabel(department) }))]} /></Field><Field label={t("hr.site")}><NativeSelect name="siteId" defaultValue={editingContract?.siteId || ""} items={[{ id: "", label: t("people.notProvided") }, ...lookups.sites.map((site) => ({ id: site.id, label: `${site.code} · ${site.name}` }))]} /></Field><Field label={t("hr.approver")}><NativeSelect name="approverUserId" required value={approverUserId} onChange={(value) => void selectApprover(value)} items={[{ id: "", label: t("people.selectAnother") }, ...lookups.members.map((member) => ({ id: member.id, label: memberLabel(member) }))]} /></Field></ProfessionalFormSection><ProfessionalFormSection title={t("hr.periodAndCompensation")}><Field label={t("hr.startDate")}><Input name="startDate" type="date" required defaultValue={inputDate(editingContract?.startDate)} /></Field><Field label={t("hr.endDate")}><Input name="endDate" type="date" defaultValue={inputDate(editingContract?.endDate)} /></Field><Field label={t("hr.probationEnd")}><Input name="probationEndDate" type="date" defaultValue={inputDate(editingContract?.probationEndDate)} /></Field><Field label={t("hr.baseCompensation")}><Input name="baseCompensation" type="number" min="0" step="0.01" required defaultValue={editingContract ? String(editingContract.baseCompensation) : ""} /></Field><Field label={t("hr.currency")}><Input name="compensationCurrency" defaultValue={editingContract?.compensationCurrency || "USD"} maxLength={3} required /></Field><Field label={t("hr.frequency")}><NativeSelect name="payFrequency" defaultValue={editingContract?.payFrequency || "MONTHLY"} items={frequencyItems} /></Field><Field label={t("hr.standardHoursWeek")}><Input name="standardHoursPerWeek" type="number" min="1" max="168" step="0.5" defaultValue={editingContract?.standardHoursPerWeek != null ? String(editingContract.standardHoursPerWeek) : ""} /></Field><Field label={t("hr.terms")}><textarea name="terms" rows={4} defaultValue={editingContract?.terms || ""} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base" /></Field></ProfessionalFormSection><div className="sticky bottom-0 flex flex-wrap justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface py-3"><Button type="button" variant="outline" onClick={closeContractForm}>{t("people.cancel")}</Button><Button type="submit" disabled={!approverUserId}>{editingContract ? translateWorkspaceGeneralization(locale, "saveChanges") : t("hr.submitContract")}</Button></div></form></Dialog>
+      <Dialog open={formOpen} onClose={() => { if (!saving) { setFormOpen(false); setEditing(null); } }} title={editing ? (locale === "en" ? "Edit contract" : "Modifier le contrat") : t("hr.newContractDialog")} presentation="editor" className="h-[96dvh] max-w-5xl"><form key={editing?.id || "new"} onSubmit={saveContract} className="grid gap-6">{error ? <ProfessionalError message={error} /> : null}<ProfessionalFormSection title={locale === "en" ? "Employee & assignment" : "Collaborateur & affectation"}><Field label={locale === "en" ? "Employee" : "Collaborateur"}><NativeSelect name="employeeId" disabled={Boolean(editing)} defaultValue={editing?.employeeId || ""} required items={[{ id: "", label: locale === "en" ? "Select an employee" : "Choisir un collaborateur" }, ...lookups.employees.map((employee) => ({ id: employee.id, label: `${employee.displayName} · ${employee.employeeNumber}` }))]} /></Field><Field label={locale === "en" ? "Contract type" : "Type de contrat"}><NativeSelect name="contractType" defaultValue={editing?.contractType || "EMPLOYEE"} items={["EMPLOYEE", "CONTRACTOR", "INTERN", "TEMPORARY"].map((id) => ({ id, label: professionalErpEnumLabel(locale, "employmentContractType", id) }))} /></Field><Field label={locale === "en" ? "Official position" : "Poste officiel"}><NativeSelect name="jobTitle" defaultValue={editing?.jobTitle || ""} items={[{ id: "", label: locale === "en" ? "No position" : "Aucun poste" }, ...lookups.positions.map((item) => ({ id: item.positionCode || "", label: label(item) }))]} /></Field><Field label={locale === "en" ? "Department" : "Département"}><NativeSelect name="departmentId" defaultValue={editing?.departmentId || ""} items={[{ id: "", label: locale === "en" ? "No department" : "Aucun département" }, ...lookups.departments.map((item) => ({ id: item.id, label: label(item) }))]} /></Field><Field label={locale === "en" ? "Site" : "Site"}><NativeSelect name="siteId" defaultValue={editing?.siteId || ""} items={[{ id: "", label: locale === "en" ? "No site" : "Aucun site" }, ...lookups.sites.map((item) => ({ id: item.id, label: item.name || item.code || item.id }))]} /></Field><Field label={locale === "en" ? "Independent approver" : "Validateur indépendant"}><NativeSelect name="approverUserId" required items={[{ id: "", label: locale === "en" ? "Select an authorized approver" : "Choisir un validateur autorisé" }, ...approverItems]} /></Field></ProfessionalFormSection><ProfessionalFormSection title={locale === "en" ? "Dates & compensation" : "Dates & rémunération"}><Field label={locale === "en" ? "Start date" : "Date de début"}><Input name="startDate" type="date" defaultValue={editing?.startDate?.slice(0, 10) || ""} required /></Field><Field label={locale === "en" ? "End date" : "Date de fin"}><Input name="endDate" type="date" defaultValue={editing?.endDate?.slice(0, 10) || ""} /></Field><Field label={locale === "en" ? "Probation end" : "Fin de période d’essai"}><Input name="probationEndDate" type="date" defaultValue={editing?.probationEndDate?.slice(0, 10) || ""} /></Field><Field label={locale === "en" ? "Base compensation" : "Rémunération de base"}><Input name="baseCompensation" type="number" min="0" step="0.01" defaultValue={editing ? String(editing.baseCompensation) : ""} required /></Field><Field label={locale === "en" ? "Currency" : "Devise"}><NativeSelect name="compensationCurrency" defaultValue={editing?.compensationCurrency || currencies[0]} items={currencies.map((id) => ({ id, label: id }))} /></Field><Field label={locale === "en" ? "Pay frequency" : "Fréquence"}><NativeSelect name="payFrequency" defaultValue={editing?.payFrequency || "MONTHLY"} items={["MONTHLY", "BIWEEKLY", "WEEKLY", "DAILY", "HOURLY"].map((id) => ({ id, label: professionalErpEnumLabel(locale, "payFrequency", id) }))} /></Field><Field label={locale === "en" ? "Standard hours / week" : "Heures standard / semaine"}><Input name="standardHoursPerWeek" type="number" min="0.1" max="168" step="0.1" defaultValue={editing?.standardHoursPerWeek == null ? "" : String(editing.standardHoursPerWeek)} /></Field><Field label={locale === "en" ? "Terms" : "Conditions"}><textarea name="terms" defaultValue={editing?.terms || ""} className="min-h-28 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm" /></Field></ProfessionalFormSection><div className="sticky bottom-0 flex justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface py-3"><Button type="button" variant="outline" disabled={saving} onClick={() => { setFormOpen(false); setEditing(null); }}>{locale === "en" ? "Cancel" : "Annuler"}</Button><Button type="submit" disabled={saving} aria-busy={saving}>{saving ? (locale === "en" ? "Saving…" : "Enregistrement…") : (locale === "en" ? "Save & submit" : "Enregistrer & soumettre")}</Button></div></form></Dialog>
 
-      <Dialog open={Boolean(detail)} onClose={() => setDetail(null)} title={detail ? `${detail.reference} · ${detail.employee.displayName}` : t("hr.contractDetail")} className="h-[90dvh] max-w-4xl">{detail ? <div className="grid gap-4"><div className="flex flex-wrap gap-2"><StatusBadge tone={statusTone(detail.status)}>{professionalErpEnumLabel(locale, "employmentContractStatus", detail.status)}</StatusBadge><StatusBadge>{professionalErpMoney(detail.baseCompensation, detail.compensationCurrency, locale)}</StatusBadge></div><div className="grid gap-3 text-sm leading-6 md:grid-cols-2"><p><strong>{t("hr.typeLabel")}</strong> {professionalErpEnumLabel(locale, "employmentContractType", detail.contractType)}</p><p><strong>{t("hr.positionLabel")}</strong> {detail.jobTitle || t("people.notProvided")}</p><p><strong>{t("hr.startLabel")}</strong> {professionalErpDate(detail.startDate, locale)}</p><p><strong>{t("hr.endLabel")}</strong> {detail.endDate ? professionalErpDate(detail.endDate, locale) : t("people.notProvided")}</p><p><strong>{t("hr.frequencyLabel")}</strong> {professionalErpEnumLabel(locale, "payFrequency", detail.payFrequency)}</p><p><strong>{t("hr.standardTimeLabel")}</strong> {detail.standardHoursPerWeek != null ? t("hr.hoursPerWeek", { value: professionalErpNumber(detail.standardHoursPerWeek, locale, 1) }) : "—"}</p></div><div data-responsive-actions>{actionsFor(detail).filter((action) => action.id !== "open").map((action) => <Button key={action.id} variant={action.destructive ? "outline" : "default"} onClick={() => action.onSelect?.()}>{action.label}</Button>)}</div></div> : null}</Dialog>
+      <Dialog open={Boolean(detail)} onClose={() => setDetail(null)} title={detail ? `${detail.reference} · ${detail.employee.displayName}` : ""} presentation="editor" className="h-[94dvh] max-w-4xl">{detail ? <div className="grid gap-5"><div className="flex flex-wrap gap-2"><StatusBadge tone={detail.status === "ACTIVE" ? "success" : detail.status === "PENDING_APPROVAL" ? "warning" : "neutral"}>{professionalErpEnumLabel(locale, "employmentContractStatus", detail.status)}</StatusBadge><StatusBadge>{professionalErpEnumLabel(locale, "employmentContractType", detail.contractType)}</StatusBadge></div><dl className="grid gap-4 border-y border-dtsc-border py-4 sm:grid-cols-2"><div><dt className="text-xs font-black uppercase text-dtsc-muted">{locale === "en" ? "Official position" : "Poste officiel"}</dt><dd className="mt-1 text-sm">{label(positionFor(detail), "—")}</dd></div><div><dt className="text-xs font-black uppercase text-dtsc-muted">{locale === "en" ? "Compensation" : "Rémunération"}</dt><dd className="mt-1 text-sm">{professionalErpMoney(detail.baseCompensation, detail.compensationCurrency, locale)}</dd></div><div><dt className="text-xs font-black uppercase text-dtsc-muted">{locale === "en" ? "Period" : "Période"}</dt><dd className="mt-1 text-sm">{professionalErpDate(detail.startDate, locale)} → {detail.endDate ? professionalErpDate(detail.endDate, locale) : "∞"}</dd></div><div><dt className="text-xs font-black uppercase text-dtsc-muted">{locale === "en" ? "Frequency" : "Fréquence"}</dt><dd className="mt-1 text-sm">{professionalErpEnumLabel(locale, "payFrequency", detail.payFrequency)}</dd></div></dl>{detail.terms ? <p className="whitespace-pre-wrap rounded-xl bg-dtsc-soft p-4 text-sm">{detail.terms}</p> : null}</div> : null}</Dialog>
+
+      <Dialog open={Boolean(decision)} onClose={() => { if (!saving) setDecision(null); }} title={decision?.decision === "APPROVE" ? (locale === "en" ? "Approve contract" : "Approuver le contrat") : (locale === "en" ? "Reject contract" : "Refuser le contrat")} presentation="editor" className="h-[72dvh] max-w-2xl"><form onSubmit={decideContract} className="grid gap-5">{error ? <ProfessionalError message={error} /> : null}<p className="text-sm text-dtsc-muted">{decision ? `${decision.contract.reference} · ${decision.contract.employee.displayName}` : ""}</p><Field label={decision?.decision === "REJECT" ? (locale === "en" ? "Required reason" : "Motif obligatoire") : (locale === "en" ? "Review comment" : "Commentaire de contrôle")}><textarea name="comment" required={decision?.decision === "REJECT"} className="min-h-36 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm" /></Field><div className="sticky bottom-0 flex justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface py-3"><Button type="button" variant="outline" disabled={saving} onClick={() => setDecision(null)}>{locale === "en" ? "Back" : "Retour"}</Button><Button type="submit" disabled={saving} aria-busy={saving}>{saving ? (locale === "en" ? "Saving…" : "Enregistrement…") : decision?.decision === "APPROVE" ? (locale === "en" ? "Confirm approval" : "Confirmer l’approbation") : (locale === "en" ? "Confirm rejection" : "Confirmer le refus")}</Button></div></form></Dialog>
     </ModuleWorkspace>
   </div>;
 }

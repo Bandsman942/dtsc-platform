@@ -20,6 +20,7 @@ export async function createEnterpriseEmployee(organizationId: string, actorUser
       });
       if (duplicate) throw new EnterpriseDomainError("EMPLOYEE_MEMBER_ALREADY_LINKED", 409);
     }
+
     if (input.businessPartyId) {
       const party = await tx.enterpriseBusinessParty.findFirst({
         where: { id: input.businessPartyId, organizationId, archivedAt: null },
@@ -27,6 +28,20 @@ export async function createEnterpriseEmployee(organizationId: string, actorUser
       });
       if (!party) throw new EnterpriseDomainError("BUSINESS_PARTY_NOT_FOUND", 404);
     }
+
+    const position = input.positionId
+      ? await tx.enterprisePosition.findFirst({ where: { id: input.positionId, organizationId, isActive: true }, select: { id: true, positionCode: true, departmentId: true } })
+      : input.positionCode
+        ? await tx.enterprisePosition.findFirst({ where: { organizationId, positionCode: input.positionCode, isActive: true }, select: { id: true, positionCode: true, departmentId: true } })
+        : null;
+    if ((input.positionId || input.positionCode) && !position) throw new EnterpriseDomainError("EMPLOYEE_POSITION_NOT_FOUND", 404);
+
+    const department = input.departmentId
+      ? await tx.enterpriseDepartment.findFirst({ where: { id: input.departmentId, organizationId, isActive: true }, select: { id: true } })
+      : null;
+    if (input.departmentId && !department) throw new EnterpriseDomainError("EMPLOYEE_DEPARTMENT_NOT_FOUND", 404);
+    if (position?.departmentId && department && position.departmentId !== department.id) throw new EnterpriseDomainError("EMPLOYEE_POSITION_DEPARTMENT_MISMATCH", 409);
+
     if (input.managerEmployeeId) {
       const manager = await tx.enterpriseEmployee.findFirst({
         where: { id: input.managerEmployeeId, organizationId, employmentStatus: "ACTIVE", archivedAt: null },
@@ -34,10 +49,12 @@ export async function createEnterpriseEmployee(organizationId: string, actorUser
       });
       if (!manager) throw new EnterpriseDomainError("MANAGER_EMPLOYEE_NOT_FOUND", 404);
     }
+
     if (input.siteId) {
       const site = await tx.enterpriseSite.findFirst({ where: { id: input.siteId, organizationId, status: "ACTIVE", archivedAt: null }, select: { id: true } });
       if (!site) throw new EnterpriseDomainError("SITE_NOT_FOUND", 404);
     }
+
     const employee = await tx.enterpriseEmployee.create({
       data: {
         organizationId,
@@ -49,9 +66,9 @@ export async function createEnterpriseEmployee(organizationId: string, actorUser
         displayName: `${input.firstName} ${input.lastName}`.trim(),
         workEmail: input.workEmail?.toLocaleLowerCase("fr") || null,
         workPhone: input.workPhone || null,
-        positionId: input.positionId || null,
-        positionCode: input.positionCode || null,
-        departmentId: input.departmentId || null,
+        positionId: position?.id || null,
+        positionCode: position?.positionCode || null,
+        departmentId: department?.id || position?.departmentId || null,
         managerEmployeeId: input.managerEmployeeId || null,
         siteId: input.siteId || null,
         hireDate: input.hireDate,
@@ -61,6 +78,7 @@ export async function createEnterpriseEmployee(organizationId: string, actorUser
         createdByUserId: actorUserId,
       },
     });
+
     await publishHrEvent(tx, {
       organizationId,
       entityType: "EnterpriseEmployee",
@@ -69,6 +87,7 @@ export async function createEnterpriseEmployee(organizationId: string, actorUser
       summary: `Employé ${employee.employeeNumber} créé`,
       actorUserId,
       toStatus: employee.employmentStatus,
+      metadataJson: { positionId: employee.positionId, departmentId: employee.departmentId, siteId: employee.siteId },
     });
     return employee;
   });

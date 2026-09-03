@@ -16,9 +16,13 @@ export const employeeCreateSchema = z.object({
   employmentType: z.string().trim().max(120).optional().nullable(),
   baseCompensation: z.coerce.number().nonnegative().max(1_000_000_000).optional().nullable(),
   compensationCurrency: z.string().trim().toUpperCase().length(3).optional().nullable(),
+}).superRefine((value, ctx) => {
+  if ((value.baseCompensation == null) !== (value.compensationCurrency == null)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "La rémunération et sa devise doivent être renseignées ensemble.", path: value.baseCompensation == null ? ["baseCompensation"] : ["compensationCurrency"] });
+  }
 });
 
-export const employmentContractCreateSchema = z.object({
+const employmentContractPayloadSchema = z.object({
   employeeId: z.string().trim().min(1),
   contractType: z.string().trim().min(2).max(120),
   startDate: z.coerce.date(),
@@ -35,15 +39,26 @@ export const employmentContractCreateSchema = z.object({
   approverUserId: z.string().trim().min(1),
 });
 
-export const employmentContractUpdateSchema = employmentContractCreateSchema.omit({ employeeId: true }).extend({
-  revision: z.coerce.number().int().positive(),
-});
+function validateContractDates(value: { startDate: Date; endDate?: Date | null; probationEndDate?: Date | null }, ctx: z.RefinementCtx) {
+  if (value.endDate && value.endDate < value.startDate) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "La date de fin ne peut pas précéder la date de début.", path: ["endDate"] });
+  if (value.probationEndDate && value.probationEndDate < value.startDate) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "La fin de période d’essai ne peut pas précéder le début du contrat.", path: ["probationEndDate"] });
+  if (value.endDate && value.probationEndDate && value.probationEndDate > value.endDate) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "La période d’essai doit se terminer avant la fin du contrat.", path: ["probationEndDate"] });
+}
+
+export const employmentContractCreateSchema = employmentContractPayloadSchema.superRefine(validateContractDates);
+export const employmentContractUpdateSchema = employmentContractPayloadSchema.omit({ employeeId: true }).extend({ revision: z.coerce.number().int().positive() }).superRefine(validateContractDates);
+
+function requireRejectionReason(value: { decision: "APPROVE" | "REJECT"; comment?: string | null }, ctx: z.RefinementCtx) {
+  if (value.decision === "REJECT" && (!value.comment || value.comment.trim().length < 3)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Un motif de refus est obligatoire.", path: ["comment"] });
+  }
+}
 
 export const employmentContractDecisionSchema = z.object({
   decision: z.enum(["APPROVE", "REJECT"]),
   revision: z.coerce.number().int().positive(),
   comment: z.string().trim().max(2000).optional().nullable(),
-});
+}).superRefine(requireRejectionReason);
 
 export const leaveRequestCreateSchema = z.object({
   employeeId: z.string().trim().min(1),
@@ -55,13 +70,19 @@ export const leaveRequestCreateSchema = z.object({
   endMinute: z.coerce.number().int().min(1).max(1440).optional().nullable(),
   reason: z.string().trim().max(4000).optional().nullable(),
   approverUserId: z.string().trim().min(1),
+}).superRefine((value, ctx) => {
+  if (value.endDate < value.startDate) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "La date de fin ne peut pas précéder la date de début.", path: ["endDate"] });
+  if (value.partialDay && (!Number.isInteger(value.startMinute) || !Number.isInteger(value.endMinute) || Number(value.endMinute) <= Number(value.startMinute))) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Indiquez une plage horaire valide pour l’absence partielle.", path: ["endMinute"] });
+  }
+  if (!value.partialDay && (value.startMinute != null || value.endMinute != null)) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Les heures partielles ne sont autorisées que pour une absence partielle.", path: ["partialDay"] });
 });
 
 export const approvalDecisionSchema = z.object({
   decision: z.enum(["APPROVE", "REJECT"]),
   revision: z.coerce.number().int().positive(),
   comment: z.string().trim().max(2000).optional().nullable(),
-});
+}).superRefine(requireRejectionReason);
 
 export const timesheetEntrySchema = z.object({
   workDate: z.coerce.date(),
@@ -79,6 +100,10 @@ export const timesheetEntrySchema = z.object({
   serviceDescription: z.string().trim().max(1000).optional().nullable(),
   billable: z.boolean().default(false),
   notes: z.string().trim().max(2000).optional().nullable(),
+}).superRefine((value, ctx) => {
+  if ((value.startAt == null) !== (value.endAt == null)) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "L’heure de début et l’heure de fin doivent être renseignées ensemble.", path: [value.startAt == null ? "startAt" : "endAt"] });
+  if (value.startAt && value.endAt && value.endAt <= value.startAt) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "L’heure de fin doit être postérieure à l’heure de début.", path: ["endAt"] });
+  if (!value.startAt && value.breakMinutes >= value.declaredMinutes) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "La pause ne peut pas couvrir toute la durée déclarée.", path: ["breakMinutes"] });
 });
 
 export const timesheetCreateSchema = z.object({
@@ -87,6 +112,8 @@ export const timesheetCreateSchema = z.object({
   periodEnd: z.coerce.date(),
   approverUserId: z.string().trim().min(1),
   entries: z.array(timesheetEntrySchema).min(1).max(500),
+}).superRefine((value, ctx) => {
+  if (value.periodEnd < value.periodStart) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "La fin de période ne peut pas précéder le début.", path: ["periodEnd"] });
 });
 
 export const payrollPeriodCreateSchema = z.object({
@@ -97,17 +124,22 @@ export const payrollPeriodCreateSchema = z.object({
   payDate: z.coerce.date().optional().nullable(),
 });
 
+const payrollAdjustmentSchema = z.object({
+  employeeId: z.string().trim().min(1),
+  bonusAmount: z.coerce.number().nonnegative().max(1_000_000_000).default(0),
+  bonusReason: z.string().trim().max(2000).optional().nullable(),
+  deductionAmount: z.coerce.number().nonnegative().max(1_000_000_000).default(0),
+  deductionReason: z.string().trim().max(2000).optional().nullable(),
+}).superRefine((value, ctx) => {
+  if (value.bonusAmount > 0 && (!value.bonusReason || value.bonusReason.trim().length < 3)) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Justifiez toute prime non nulle.", path: ["bonusReason"] });
+  if (value.deductionAmount > 0 && (!value.deductionReason || value.deductionReason.trim().length < 3)) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Justifiez toute retenue non nulle.", path: ["deductionReason"] });
+});
+
 export const payrollRunPrepareSchema = z.object({
   payrollPeriodId: z.string().trim().min(1),
   currency: z.string().trim().toUpperCase().length(3),
   employeeIds: z.array(z.string().trim().min(1)).min(1).max(2000),
-  adjustments: z.array(z.object({
-    employeeId: z.string().trim().min(1),
-    bonusAmount: z.coerce.number().nonnegative().max(1_000_000_000).default(0),
-    bonusReason: z.string().trim().max(2000).optional().nullable(),
-    deductionAmount: z.coerce.number().nonnegative().max(1_000_000_000).default(0),
-    deductionReason: z.string().trim().max(2000).optional().nullable(),
-  })).max(2000).default([]),
+  adjustments: z.array(payrollAdjustmentSchema).max(2000).default([]),
 });
 
 export const payrollRunSubmitSchema = z.object({
@@ -119,7 +151,7 @@ export const payrollRunDecisionSchema = z.object({
   decision: z.enum(["APPROVE", "REJECT"]),
   revision: z.coerce.number().int().positive(),
   comment: z.string().trim().max(2000).optional().nullable(),
-});
+}).superRefine(requireRejectionReason);
 
 export const payrollRunCancelSchema = z.object({
   revision: z.coerce.number().int().positive(),

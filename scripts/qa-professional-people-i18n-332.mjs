@@ -59,14 +59,14 @@ const hr = read(targets[0]);
 assert(hr.includes('professionalErpEnumLabel(locale, "employmentContractStatus"'), "RH: statuts contrat non projetés");
 assert(hr.includes('professionalErpEnumLabel(locale, "employmentContractType"'), "RH: types contrat non projetés");
 assert(hr.includes('professionalErpEnumLabel(locale, "payFrequency"'), "RH: fréquence non projetée");
-assert(hr.includes('labelEn: string | null'), "RH: départements EN absents du contrat UI");
+assert(hr.includes('labelEn?: string | null') || hr.includes('labelEn: string | null'), "RH: départements EN absents du contrat UI");
 assert(!hr.includes("positionTitle || member.role"), "RH: rôle brut encore utilisé en fallback membre");
-assert(hr.includes('professionalErpEnumLabel(locale, "role", member.role)'), "RH: fallback rôle membre non humanisé");
+assert(hr.includes('professionalErpEnumLabel(locale, "role", approver.role)'), "RH: fallback rôle approbateur non humanisé");
 assert(hr.includes('"Contrat rejeté"') && hr.includes('"Contrat contrôlé"'), "RH: commentaires d’audit persistés modifiés");
-assert(hr.includes("useToastMessage(message)"), "RH: retours transitoires non remontés par toast");
+assert(hr.includes("useToastMessage("), "RH: retours transitoires non remontés par toast");
 assert(!hr.includes('{message ? <div role="status"'), "RH: message transitoire encore persisté dans le corps du module");
-assert(hr.includes("approval-eligibility"), "RH: vérification immédiate de l’approbateur absente");
-assert(hr.includes('method: "PATCH"') || hr.includes('"PATCH"'), "RH: modification du contrat par le créateur absente");
+assert(hr.includes("hr-payroll-lookups?module=HUMAN_RESOURCES") && hr.includes("lookups.approvers"), "RH: approbateurs préfiltrés par capacité absents");
+assert(hr.includes('"PATCH"'), "RH: modification du contrat par le créateur absente");
 assert(hr.includes("contract.canEdit"), "RH: action Modifier non conditionnée à la capacité créateur");
 
 const identity = read(targets[1]);
@@ -83,6 +83,7 @@ assert(time.includes('professionalErpEnumLabel(locale, "leaveType"'), "Temps: ty
 assert(!time.includes("positionTitle || member.role"), "Temps: rôle brut encore utilisé en fallback approbateur");
 assert(time.includes('professionalErpEnumLabel(locale, "role", member.role)'), "Temps: fallback rôle approbateur non humanisé");
 assert(time.includes('"Retour motivé depuis le workspace professionnel"'), "Temps: commentaire d’audit existant modifié");
+assert(time.includes('"SCHEDULES"') && time.includes('"ATTENDANCE"'), "Temps: séparation planning / présence absente de l’interface");
 
 const payroll = read(targets[3]);
 assert(payroll.includes('professionalErpEnumLabel(locale, "payrollStatus"'), "Paie: statuts non projetés");
@@ -90,6 +91,7 @@ assert(payroll.includes('name="approverUserId"'), "Paie: sélecteur d’approbat
 assert(!payroll.includes("Identifiant de l’approbateur sélectionné"), "Paie: saisie d’identifiant brut encore visible");
 assert(payroll.includes('"Paie rejetée"') && payroll.includes('"Paie contrôlée"'), "Paie: commentaires d’audit persistés modifiés");
 assert(payroll.includes('value="Variable de paie"'), "Paie: raison persistée existante modifiée silencieusement");
+assert(payroll.includes("bonusReason_") && payroll.includes("deductionReason_"), "Paie: motifs distincts des variables absents");
 
 const comments = read(targets[4]);
 assert(comments.includes("professionalErpDateTime"), "Workflow comments: date+heure locale-aware absente");
@@ -100,4 +102,4 @@ const choice = read(targets[5]);
 assert(choice.includes('t("identityChoice.legend")'), "Identity link choice: copie canonique absente");
 assert(choice.includes("aria-pressed"), "Identity link choice: contrat accessible perdu");
 
-if (!process.exitCode) console.log(`PASS Professional ERP People i18n #332/#364 — ${frKeys.length} clés FR/EN + locale applicative, chrome partagé, confidentialité et workflows préservés.`);
+if (!process.exitCode) console.log(`PASS Professional ERP People i18n #332/#364/#562 — ${frKeys.length} clés FR/EN + locale applicative, référentiels canoniques, confidentialité et workflows préservés.`);
