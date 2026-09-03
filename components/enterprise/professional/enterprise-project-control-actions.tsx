@@ -80,7 +80,7 @@ export function EnterpriseProjectControlActions({
   risks,
   issues,
   canWrite,
-  canManage,
+  canManage = canWrite,
   disabled,
   onChanged,
   onMessage,
@@ -92,7 +92,7 @@ export function EnterpriseProjectControlActions({
   risks: Risk[];
   issues: Issue[];
   canWrite: boolean;
-  canManage: boolean;
+  canManage?: boolean;
   disabled: boolean;
   onChanged: () => Promise<void>;
   onMessage: (message: string) => void;
