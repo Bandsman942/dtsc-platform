@@ -40,7 +40,7 @@ type PayrollPeriodLookup = { id: string; code: string; name: string; status: str
 type Lookups = { employees: Employee[]; approvers: Member[]; payrollPeriods: PayrollPeriodLookup[]; currencies: string[] };
 type PayrollPeriod = PayrollPeriodLookup & { revision: number; _count: { payrollRuns: number } };
 type PayrollItem = { id: string; employeeId: string; baseGrossAmount: string | number; approvedTimeMinutes: number | null; bonusAmount: string | number; bonusReason: string | null; deductionAmount: string | number; deductionReason: string | null; grossAmount: string | number; netAmount: string | number; status: string; employee: Employee; payslip: { id: string; payslipNumber: string; status: string; generatedAt: string | null; netAmount: string | number; currency: string } | null };
-type PayrollRun = { id: string; payrollPeriodId: string; reference: string; status: string; currency: string; employeeCount: number; grossAmount: string | number; bonusAmount: string | number; deductionAmount: string | number; netAmount: string | number; preparedByUserId: string; submittedByUserId: string | null; approverUserId: string | null; revision: number; payrollPeriod: PayrollPeriodLookup; items: PayrollItem[] };
+type PayrollRun = { id: string; payrollPeriodId: string; reference: string; status: string; currency: string; employeeCount: number; grossAmount: string | number; bonusAmount: string | number; deductionAmount: string | number; netAmount: string | number; preparedByUserId: string; submittedByUserId: string | null; approverUserId: string | null; revision: number; canDecide: boolean; payrollPeriod: PayrollPeriodLookup; items: PayrollItem[] };
 type PayrollTab = "RUNS" | "PERIODS";
 type DecisionTarget = { run: PayrollRun; decision: "APPROVE" | "REJECT" };
 
@@ -279,7 +279,7 @@ export function EnterprisePayrollOperationsWorkspace({ organizationId, organizat
         { id: "submit", label: t("payroll.submit"), icon: Send, onSelect: () => setSubmitTarget(run) },
         { id: "cancel", label: t("payroll.cancel"), icon: Ban, destructive: true, onSelect: () => setCancelTarget(run) },
       ] : []),
-      ...(run.status === "PENDING_APPROVAL" ? [
+      ...(run.canDecide ? [
         { id: "approve", label: t("people.approve"), icon: CheckCircle2, onSelect: () => setDecisionTarget({ run, decision: "APPROVE" as const }) },
         { id: "reject", label: t("people.reject"), icon: XCircle, destructive: true, onSelect: () => setDecisionTarget({ run, decision: "REJECT" as const }) },
       ] : []),
