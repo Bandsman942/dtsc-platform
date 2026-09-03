@@ -49,7 +49,7 @@ function isAdminRole(role: string) {
   return ENTERPRISE_AI_ADMIN_ROLES.has(role);
 }
 
-async function promoteEssentialAiModuleWhenCatalogChanged(
+async function provisionEssentialAiModuleIfMissing(
   organizationId: string,
   entitlements: NonNullable<Awaited<ReturnType<typeof getOrganizationEntitlements>>>,
 ) {
@@ -59,43 +59,39 @@ async function promoteEssentialAiModuleWhenCatalogChanged(
 
   const current = await prisma.enterpriseModule.findUnique({
     where: { organizationId_moduleCode: { organizationId, moduleCode: ENTERPRISE_AI_MODULE_CODE } },
-    select: { id: true, requiresPlanLevel: true },
+    select: { id: true },
   });
-  if (current?.requiresPlanLevel === "STARTER") return;
+  // A row that already exists is authoritative for tenant enablement. In
+  // particular, never turn a deliberately disabled module back on from a read path.
+  if (current) return;
 
-  const data = {
-    organizationId,
-    sectorId: null,
-    moduleCode: definition.code,
-    labelFr: definition.labelFr,
-    labelEn: definition.labelEn,
-    descriptionFr: definition.descriptionFr,
-    descriptionEn: definition.descriptionEn,
-    moduleCategory: definition.domain,
-    icon: definition.iconKey,
-    isEnabled: true,
-    isCore: true,
-    sourceTemplateId: null,
-    requiresPlanLevel: definition.minimumPlan,
-    sortOrder: definition.navigationOrder,
-  };
-
-  await prisma.enterpriseModule.upsert({
-    where: { organizationId_moduleCode: { organizationId, moduleCode: ENTERPRISE_AI_MODULE_CODE } },
-    create: data,
-    update: {
+  await prisma.enterpriseModule.create({
+    data: {
+      organizationId,
       sectorId: null,
-      labelFr: data.labelFr,
-      labelEn: data.labelEn,
-      descriptionFr: data.descriptionFr,
-      descriptionEn: data.descriptionEn,
-      moduleCategory: data.moduleCategory,
-      icon: data.icon,
+      moduleCode: definition.code,
+      labelFr: definition.labelFr,
+      labelEn: definition.labelEn,
+      descriptionFr: definition.descriptionFr,
+      descriptionEn: definition.descriptionEn,
+      moduleCategory: definition.domain,
+      icon: definition.iconKey,
       isEnabled: true,
       isCore: true,
-      requiresPlanLevel: data.requiresPlanLevel,
-      sortOrder: data.sortOrder,
+      sourceTemplateId: null,
+      requiresPlanLevel: definition.minimumPlan,
+      sortOrder: definition.navigationOrder,
     },
+  }).catch((error) => {
+    // Concurrent first access can race on the organization/module unique key.
+    // Re-read instead of broadening the write or mutating an existing tenant row.
+    return prisma.enterpriseModule.findUnique({
+      where: { organizationId_moduleCode: { organizationId, moduleCode: ENTERPRISE_AI_MODULE_CODE } },
+      select: { id: true },
+    }).then((row) => {
+      if (!row) throw error;
+      return row;
+    });
   });
 }
 
@@ -137,7 +133,7 @@ export async function getEnterpriseAiAccess(session: SessionPayload, organizatio
 
   const entitlements = await getOrganizationEntitlements(organizationId);
   if (!entitlements || entitlements.isDtscInternal) return null;
-  await promoteEssentialAiModuleWhenCatalogChanged(organizationId, entitlements);
+  await provisionEssentialAiModuleIfMissing(organizationId, entitlements);
 
   const allowed = await canAccessEnterpriseModule(session.userId, organizationId, ENTERPRISE_AI_MODULE_CODE, enterpriseActionFor(action));
   if (!allowed) {
