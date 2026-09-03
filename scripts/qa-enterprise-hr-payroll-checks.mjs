@@ -117,10 +117,12 @@ for (const path of [
   "components/enterprise/professional/enterprise-time-attendance-workspace.tsx",
   "components/enterprise/professional/enterprise-payroll-operations-workspace.tsx",
 ]) {
-  requireTokens(path, ['presentation="editor"', "useToastMessage", "disabled={Boolean(busyAction)}"]);
+  requireTokens(path, ['presentation="editor"', "useToastMessage"]);
   forbidTokens(path, ["window.prompt"]);
 }
+requireTokens("components/enterprise/professional/enterprise-human-resources-workspace.tsx", ["disabled={saving}"]);
 requireTokens("components/enterprise/professional/enterprise-time-attendance-workspace.tsx", [
+  "disabled={Boolean(busyAction)}",
   '"SCHEDULES"',
   '"ATTENDANCE"',
   "/work-schedules",
@@ -129,6 +131,7 @@ requireTokens("components/enterprise/professional/enterprise-time-attendance-wor
   "DEFAULT_REJECTION_AUDIT_COMMENT",
 ]);
 requireTokens("components/enterprise/professional/enterprise-payroll-operations-workspace.tsx", [
+  "disabled={Boolean(busyAction)}",
   "bonusReason_",
   "deductionReason_",
   "DEFAULT_PAYROLL_REJECTION_AUDIT_COMMENT",
