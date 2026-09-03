@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
+import {
+  enterpriseDocumentVisibilityWhere,
+  enterprisePurchaseVisibilityWhere,
+  getEnterpriseProcurementAccess,
+} from "@/lib/enterprise/procurement/access";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -17,14 +22,31 @@ export async function GET(req: Request, { params }: Params) {
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode, action: "read" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const [budgetAccess, documentAccess] = await Promise.all([
+  const [budgetAccess, documentAccess, procurementAccess] = await Promise.all([
     moduleCode === "PROJECTS_SERVICES"
       ? getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "FINANCE_BUDGETS", action: "read" })
       : Promise.resolve(null),
     moduleCode !== "ASSETS_MAINTENANCE"
-      ? getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "DOCUMENTS", action: "read" })
+      ? getEnterpriseProcurementAccess({ session, organizationId, moduleCode: "DOCUMENTS", action: "read" })
+      : Promise.resolve(null),
+    moduleCode === "ASSETS_MAINTENANCE"
+      ? getEnterpriseProcurementAccess({ session, organizationId, moduleCode: "SUPPLIERS_PURCHASES", action: "read" })
       : Promise.resolve(null),
   ]);
+  const documentVisibility = documentAccess
+    ? await enterpriseDocumentVisibilityWhere({
+        organizationId,
+        userId: session.userId,
+        canSeeAll: documentAccess.canSeeAll,
+      })
+    : null;
+  const purchaseVisibility = procurementAccess
+    ? enterprisePurchaseVisibilityWhere({
+        organizationId,
+        userId: session.userId,
+        canSeeAll: procurementAccess.canSeeAll,
+      })
+    : null;
 
   const base = await Promise.all([
     prisma.organizationMember.findMany({
@@ -96,16 +118,25 @@ export async function GET(req: Request, { params }: Params) {
             select: { id: true, reference: true, title: true, status: true, currency: true, periodStart: true, periodEnd: true },
           })
         : Promise.resolve([]),
-      documentAccess
+      documentVisibility
         ? prisma.enterpriseDocument.findMany({
-            where: { organizationId, archivedAt: null, status: { notIn: ["ARCHIVED", "DELETED"] } },
+            where: { ...documentVisibility, status: { notIn: ["ARCHIVED", "DELETED"] } },
             orderBy: { updatedAt: "desc" },
             take: 1000,
             select: { id: true, title: true, documentType: true, status: true, visibility: true },
           })
         : Promise.resolve([]),
     ]);
-    payload = { ...payload, parties, contracts, projects, budgets, documents, canReadBudgets: Boolean(budgetAccess), canReadDocuments: Boolean(documentAccess) };
+    payload = {
+      ...payload,
+      parties,
+      contracts,
+      projects,
+      budgets,
+      documents,
+      canReadBudgets: Boolean(budgetAccess),
+      canReadDocuments: Boolean(documentAccess),
+    };
   }
 
   if (moduleCode === "ASSETS_MAINTENANCE") {
@@ -116,26 +147,40 @@ export async function GET(req: Request, { params }: Params) {
         take: 3000,
         select: { id: true, warehouseId: true, code: true, name: true, warehouse: { select: { siteId: true } } },
       }),
-      prisma.enterpriseSupplier.findMany({
-        where: { organizationId, status: "ACTIVE", archivedAt: null },
-        orderBy: { legalName: "asc" },
-        take: 1000,
-        select: { id: true, legalName: true, displayName: true },
-      }),
+      procurementAccess
+        ? prisma.enterpriseSupplier.findMany({
+            where: { organizationId, status: "ACTIVE", archivedAt: null },
+            orderBy: { legalName: "asc" },
+            take: 1000,
+            select: { id: true, legalName: true, displayName: true },
+          })
+        : Promise.resolve([]),
       prisma.enterpriseAssetCategory.findMany({
         where: { organizationId, archivedAt: null, status: "ACTIVE" },
         orderBy: { name: "asc" },
         take: 1000,
         select: { id: true, code: true, name: true },
       }),
-      prisma.enterprisePurchase.findMany({
-        where: { organizationId, archivedAt: null, status: { in: ["ORDERED", "PARTIALLY_RECEIVED", "RECEIVED", "CLOSED"] } },
-        orderBy: { createdAt: "desc" },
-        take: 1000,
-        select: { id: true, reference: true, title: true, supplierId: true, status: true, currency: true, totalAmount: true },
-      }),
+      purchaseVisibility
+        ? prisma.enterprisePurchase.findMany({
+            where: {
+              ...purchaseVisibility,
+              status: { in: ["ORDERED", "PARTIALLY_RECEIVED", "RECEIVED", "CLOSED"] },
+            },
+            orderBy: { createdAt: "desc" },
+            take: 1000,
+            select: { id: true, reference: true, title: true, supplierId: true, status: true, currency: true, totalAmount: true },
+          })
+        : Promise.resolve([]),
     ]);
-    payload = { ...payload, locations, suppliers, assetCategories, purchases };
+    payload = {
+      ...payload,
+      locations,
+      suppliers,
+      assetCategories,
+      purchases,
+      canReadProcurement: Boolean(procurementAccess),
+    };
   }
 
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "projects-assets-lookups", moduleCode } });
