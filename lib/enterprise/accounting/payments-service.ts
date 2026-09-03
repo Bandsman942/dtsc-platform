@@ -32,17 +32,36 @@ export async function createEnterprisePayment(organizationId: string, actorUserI
       const expected = input.methodType === "CASH" ? "CASH" : input.methodType === "MOBILE_MONEY" ? "MOBILE_MONEY" : null;
       if (expected && account.accountType !== expected) throw new EnterpriseAccountingError("PAYMENT_METHOD_ACCOUNT_MISMATCH", 409);
     }
+    if (input.businessPartyId && input.employeeId) throw new EnterpriseAccountingError("PAYMENT_COUNTERPARTY_AMBIGUOUS", 409);
     if (input.businessPartyId) {
       const party = await tx.enterpriseBusinessParty.findFirst({ where: { id: input.businessPartyId, organizationId, status: "ACTIVE", archivedAt: null } });
       if (!party) throw new EnterpriseAccountingError("PAYMENT_PARTY_INVALID", 409);
     }
-    if (input.payrollRunId) {
-      const payroll = await tx.enterprisePayrollRun.findFirst({ where: { id: input.payrollRunId, organizationId, status: "APPROVED" } });
-      if (!payroll) throw new EnterpriseAccountingError("PAYROLL_RUN_NOT_PAYABLE", 409);
+    if (input.employeeId) {
+      const employee = await tx.enterpriseEmployee.findFirst({ where: { id: input.employeeId, organizationId, employmentStatus: "ACTIVE", archivedAt: null }, select: { id: true } });
+      if (!employee) throw new EnterpriseAccountingError("PAYMENT_EMPLOYEE_INVALID", 409);
     }
-    const payment = await tx.enterprisePayment.create({ data: { organizationId, number: financeReference("PAY"), direction: input.direction, paymentType: input.paymentType, methodType: input.methodType, paymentMethodId: input.paymentMethodId || null, financialAccountId: input.financialAccountId || null, businessPartyId: input.businessPartyId || null, employeeId: input.employeeId || null, payrollRunId: input.payrollRunId || null, currencyCode: input.currencyCode, amount, unallocatedAmount: amount, paymentDate: input.paymentDate, reference: input.reference || null, maskedExternalReference: input.maskedExternalReference || null, initiatedByUserId: actorUserId, idempotencyKey: input.idempotencyKey || null } });
+
+    if (input.paymentType === "PAYROLL_PAYMENT" && !input.payrollRunId) throw new EnterpriseAccountingError("PAYROLL_RUN_REQUIRED", 409);
+    if (input.payrollRunId && input.paymentType !== "PAYROLL_PAYMENT") throw new EnterpriseAccountingError("PAYROLL_PAYMENT_TYPE_REQUIRED", 409);
+    if (input.payrollRunId) {
+      if (input.direction !== "OUTBOUND") throw new EnterpriseAccountingError("PAYROLL_PAYMENT_DIRECTION_INVALID", 409);
+      if (input.businessPartyId || input.employeeId) throw new EnterpriseAccountingError("PAYROLL_PAYMENT_COUNTERPARTY_INVALID", 409);
+      const payroll = await tx.enterprisePayrollRun.findFirst({ where: { id: input.payrollRunId, organizationId, status: "APPROVED", archivedAt: null }, select: { id: true, netAmount: true, currency: true } });
+      if (!payroll) throw new EnterpriseAccountingError("PAYROLL_RUN_NOT_PAYABLE", 409);
+      if (payroll.currency !== input.currencyCode) throw new EnterpriseAccountingError("PAYROLL_PAYMENT_CURRENCY_MISMATCH", 409);
+      const activePayments = await tx.enterprisePayment.aggregate({
+        where: { organizationId, payrollRunId: payroll.id, status: { notIn: ["CANCELLED", "REVERSED"] } },
+        _sum: { amount: true },
+      });
+      const alreadyCommitted = activePayments._sum.amount || new Prisma.Decimal(0);
+      if (alreadyCommitted.plus(amount).greaterThan(payroll.netAmount)) throw new EnterpriseAccountingError("PAYROLL_PAYMENT_EXCEEDS_REMAINING", 409);
+    }
+
+    const unallocatedAmount = input.paymentType === "PAYROLL_PAYMENT" ? new Prisma.Decimal(0) : amount;
+    const payment = await tx.enterprisePayment.create({ data: { organizationId, number: financeReference("PAY"), direction: input.direction, paymentType: input.paymentType, methodType: input.methodType, paymentMethodId: input.paymentMethodId || null, financialAccountId: input.financialAccountId || null, businessPartyId: input.businessPartyId || null, employeeId: input.employeeId || null, payrollRunId: input.payrollRunId || null, currencyCode: input.currencyCode, amount, unallocatedAmount, paymentDate: input.paymentDate, reference: input.reference || null, maskedExternalReference: input.maskedExternalReference || null, initiatedByUserId: actorUserId, idempotencyKey: input.idempotencyKey || null } });
     await addPaymentEvent(tx, organizationId, payment.id, actorUserId, "CREATED", "Payment created");
-    await publishFinanceEvent(tx, { organizationId, entityType: "EnterprisePayment", entityId: payment.id, eventType: "PAYMENT_CREATED", summary: `Payment ${payment.number} created`, actorUserId, toStatus: "DRAFT", metadataJson: { amount: amount.toFixed(), currency: payment.currencyCode, direction: payment.direction } });
+    await publishFinanceEvent(tx, { organizationId, entityType: "EnterprisePayment", entityId: payment.id, eventType: "PAYMENT_CREATED", summary: `Payment ${payment.number} created`, actorUserId, toStatus: "DRAFT", metadataJson: { amount: amount.toFixed(), currency: payment.currencyCode, direction: payment.direction, payrollRunId: payment.payrollRunId } });
     return payment;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
