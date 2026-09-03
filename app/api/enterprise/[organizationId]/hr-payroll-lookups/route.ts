@@ -18,7 +18,7 @@ export async function GET(req: Request, { params }: Params) {
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode, action: "read" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const [members, employees, departments, positions, sites, approval] = await Promise.all([
+  const [members, employees, departments, positions, sites, financeConfiguration, financialAccountCurrencies, approval] = await Promise.all([
     prisma.organizationMember.findMany({
       where: { organizationId, status: "ACTIVE", removedAt: null },
       orderBy: { user: { name: "asc" } },
@@ -34,11 +34,14 @@ export async function GET(req: Request, { params }: Params) {
     prisma.enterpriseDepartment.findMany({ where: { organizationId, isActive: true }, orderBy: [{ sortOrder: "asc" }, { labelFr: "asc" }], take: 500, select: { id: true, departmentCode: true, labelFr: true, labelEn: true } }),
     prisma.enterprisePosition.findMany({ where: { organizationId, isActive: true }, orderBy: [{ hierarchyLevel: "asc" }, { labelFr: "asc" }], take: 1000, select: { id: true, positionCode: true, labelFr: true, labelEn: true, departmentId: true } }),
     prisma.enterpriseSite.findMany({ where: { organizationId, status: "ACTIVE", archivedAt: null }, orderBy: { name: "asc" }, take: 500, select: { id: true, code: true, name: true, siteType: true } }),
+    prisma.enterpriseFinanceConfiguration.findUnique({ where: { organizationId }, select: { functionalCurrencyCode: true, presentationCurrencyCode: true } }),
+    prisma.enterpriseFinancialAccount.findMany({ where: { organizationId, status: "ACTIVE", archivedAt: null }, distinct: ["currencyCode"], take: 50, select: { currencyCode: true } }),
     listEnterpriseApprovalCandidates({ organizationId, requesterUserId: session.userId, moduleCode }).catch(() => ({ candidates: [], selfApprovalOverrideAvailable: false })),
   ]);
 
   const mappedMembers = members.map((member) => ({ id: member.userId, membershipId: member.id, label: member.user.name || member.user.email, email: member.user.email, role: member.role, positionCode: member.positionCode, positionTitle: member.positionTitle }));
   const approvers = approval.candidates.filter((candidate) => candidate.userId !== session.userId);
+  const currencies = [...new Set([financeConfiguration?.functionalCurrencyCode, financeConfiguration?.presentationCurrencyCode, ...financialAccountCurrencies.map((item) => item.currencyCode)].filter((value): value is string => Boolean(value)).map((value) => value.toUpperCase()))].sort();
   let modulePayload: Record<string, unknown> = {};
 
   if (moduleCode === "TIME_ATTENDANCE") {
@@ -50,15 +53,10 @@ export async function GET(req: Request, { params }: Params) {
   }
 
   if (moduleCode === "PAYROLL_OPERATIONS") {
-    const [payrollPeriods, financeConfiguration, financialAccountCurrencies] = await Promise.all([
-      prisma.enterprisePayrollPeriod.findMany({ where: { organizationId }, orderBy: { periodStart: "desc" }, take: 250, select: { id: true, code: true, name: true, status: true, periodStart: true, periodEnd: true, payDate: true } }),
-      prisma.enterpriseFinanceConfiguration.findUnique({ where: { organizationId }, select: { functionalCurrencyCode: true, presentationCurrencyCode: true } }),
-      prisma.enterpriseFinancialAccount.findMany({ where: { organizationId, status: "ACTIVE", archivedAt: null }, distinct: ["currencyCode"], take: 50, select: { currencyCode: true } }),
-    ]);
-    const currencies = [...new Set([financeConfiguration?.functionalCurrencyCode, financeConfiguration?.presentationCurrencyCode, ...financialAccountCurrencies.map((item) => item.currencyCode)].filter((value): value is string => Boolean(value)).map((value) => value.toUpperCase()))].sort();
-    modulePayload = { payrollPeriods, currencies };
+    const payrollPeriods = await prisma.enterprisePayrollPeriod.findMany({ where: { organizationId }, orderBy: { periodStart: "desc" }, take: 250, select: { id: true, code: true, name: true, status: true, periodStart: true, periodEnd: true, payDate: true } });
+    modulePayload = { payrollPeriods };
   }
 
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "hr-payroll-lookups", moduleCode } });
-  return NextResponse.json({ members: mappedMembers, employees, departments, positions, sites, approvers, ...modulePayload });
+  return NextResponse.json({ members: mappedMembers, employees, departments, positions, sites, approvers, currencies, ...modulePayload });
 }
