@@ -19,6 +19,7 @@ type ContractCreateInput = z.infer<typeof employmentContractCreateSchema>;
 type ContractUpdateInput = z.infer<typeof employmentContractUpdateSchema>;
 type ContractDecisionInput = z.infer<typeof employmentContractDecisionSchema>;
 type ContractReferenceInput = Pick<ContractCreateInput, "jobTitle" | "departmentId" | "siteId">;
+type ContractDateInput = Pick<ContractCreateInput, "startDate" | "endDate" | "probationEndDate">;
 
 async function resolveContractReferences(tx: Prisma.TransactionClient, organizationId: string, input: ContractReferenceInput) {
   const position = input.jobTitle
@@ -43,7 +44,7 @@ async function resolveContractReferences(tx: Prisma.TransactionClient, organizat
   return { position, departmentId: department?.id || position?.departmentId || null, siteId: site?.id || null };
 }
 
-function ensureContractDates(input: Pick<ContractCreateInput, "startDate" | "endDate" | "probationEndDate">) {
+function ensureContractDates(input: ContractDateInput) {
   if (input.endDate && input.endDate < input.startDate) throw new EnterpriseDomainError("EMPLOYMENT_CONTRACT_DATE_RANGE_INVALID", 409);
   if (input.probationEndDate && input.probationEndDate < input.startDate) throw new EnterpriseDomainError("EMPLOYMENT_CONTRACT_PROBATION_INVALID", 409);
   if (input.endDate && input.probationEndDate && input.probationEndDate > input.endDate) throw new EnterpriseDomainError("EMPLOYMENT_CONTRACT_PROBATION_INVALID", 409);
@@ -119,7 +120,7 @@ export async function updateEnterpriseEmploymentContract(
   actorUserId: string,
   input: ContractUpdateInput,
 ) {
-  ensureContractDates(input as ContractCreateInput);
+  ensureContractDates(input);
   return prisma.$transaction(async (tx) => {
     const contract = await tx.enterpriseEmploymentContract.findFirst({
       where: {
