@@ -62,7 +62,7 @@ async function resolveCommercialCagContext(context: AiExecutionContext) {
 
 const billingCatalogBuilder: AiCagBuilderDefinition = {
   code: "billing-catalog",
-  version: "3",
+  version: async () => (await getPublishedBillingCatalog()).releaseId,
   build: async () => formatPublishedBillingCatalogForAi(await getPublishedBillingCatalog()),
 };
 
