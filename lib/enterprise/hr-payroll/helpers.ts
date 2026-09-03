@@ -4,6 +4,12 @@ import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { assertEnterpriseApprovalCandidate, assertEnterpriseApprovalDecision } from "@/lib/enterprise/approval-assignment";
 import { enqueueWorkflowDomainEvent } from "@/lib/enterprise/workflows/domain-events";
 
+const STRICT_INDEPENDENT_APPROVAL_MODULES = new Set([
+  "HUMAN_RESOURCES",
+  "TIME_ATTENDANCE",
+  "PAYROLL_OPERATIONS",
+]);
+
 export function hrReference(prefix: string) {
   return `${prefix}-${Date.now().toString(36).toUpperCase()}-${randomUUID().slice(0, 6).toUpperCase()}`;
 }
@@ -22,6 +28,12 @@ function normalizeApprovalError(error: unknown) {
   return new EnterpriseDomainError(code, Number.isFinite(status) ? status : 403);
 }
 
+function assertStrictIndependentApproval(moduleCode: string | undefined, requesterUserId: string, approverUserId: string) {
+  if (moduleCode && STRICT_INDEPENDENT_APPROVAL_MODULES.has(moduleCode) && requesterUserId === approverUserId) {
+    throw new EnterpriseDomainError("SELF_APPROVAL_FORBIDDEN", 409);
+  }
+}
+
 export async function assertOrganizationApprover(
   _tx: Prisma.TransactionClient,
   organizationId: string,
@@ -29,6 +41,7 @@ export async function assertOrganizationApprover(
   requesterUserId: string,
   moduleCode?: string,
 ) {
+  assertStrictIndependentApproval(moduleCode, requesterUserId, approverUserId);
   if (!moduleCode) {
     if (approverUserId === requesterUserId) throw new EnterpriseDomainError("SELF_APPROVAL_FORBIDDEN", 409);
     return;
@@ -53,6 +66,7 @@ export async function assertOrganizationApprovalDecision({
   actorUserId: string;
   moduleCode: string;
 }) {
+  assertStrictIndependentApproval(moduleCode, requesterUserId, actorUserId);
   try {
     return await assertEnterpriseApprovalDecision({ organizationId, requesterUserId, approverUserId, actorUserId, moduleCode });
   } catch (error) {
