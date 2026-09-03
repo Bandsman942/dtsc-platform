@@ -48,6 +48,7 @@ type Member = {
   label: string;
   email: string;
   role: string;
+  positionCode: string | null;
   positionTitle: string | null;
 };
 
@@ -132,6 +133,7 @@ export function EnterpriseHumanResourcesWorkspace({ organizationId, organization
   const [detail, setDetail] = useState<Contract | null>(null);
   const [decision, setDecision] = useState<DecisionState | null>(null);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
+  const [selectedOrganizationMemberId, setSelectedOrganizationMemberId] = useState("");
   const [selectedContractType, setSelectedContractType] = useState("EMPLOYMENT");
   const [selectedPositionCode, setSelectedPositionCode] = useState("");
   const [selectedDepartmentId, setSelectedDepartmentId] = useState("");
@@ -183,20 +185,44 @@ export function EnterpriseHumanResourcesWorkspace({ organizationId, organization
     const linkedMembershipIds = new Set(lookups.employees.map((employee) => employee.organizationMemberId).filter(Boolean));
     return lookups.members.filter((member) => !linkedMembershipIds.has(member.membershipId));
   }, [lookups.employees, lookups.members]);
+  const contractCandidateItems = useMemo(() => [
+    ...lookups.employees.map((employee) => ({ id: `employee:${employee.id}`, label: `${employee.displayName} · ${employee.employeeNumber}` })),
+    ...membersWithoutHrRecord.map((member) => ({ id: `member:${member.membershipId}`, label: `${member.label} · ${locale === "en" ? "Company administration" : "Administration entreprise"}` })),
+  ], [lookups.employees, membersWithoutHrRecord, locale]);
+  const selectedCollaboratorRef = selectedEmployeeId
+    ? `employee:${selectedEmployeeId}`
+    : selectedOrganizationMemberId
+      ? `member:${selectedOrganizationMemberId}`
+      : "";
 
-  function applyEmployeeAssignment(employeeId: string) {
-    setSelectedEmployeeId(employeeId);
-    const employee = lookups.employees.find((item) => item.id === employeeId);
-    if (!employee) {
-      setSelectedPositionCode("");
-      setSelectedDepartmentId("");
+  function applyCollaboratorSelection(value: string) {
+    if (value.startsWith("employee:")) {
+      const employeeId = value.slice("employee:".length);
+      setSelectedEmployeeId(employeeId);
+      setSelectedOrganizationMemberId("");
+      const employee = lookups.employees.find((item) => item.id === employeeId);
+      const position = lookups.positions.find((item) => item.id === employee?.positionId);
+      setSelectedPositionCode(position?.positionCode || "");
+      setSelectedDepartmentId(employee?.departmentId || position?.departmentId || "");
+      setSelectedSiteId(employee?.siteId || "");
+      return;
+    }
+    if (value.startsWith("member:")) {
+      const membershipId = value.slice("member:".length);
+      setSelectedEmployeeId("");
+      setSelectedOrganizationMemberId(membershipId);
+      const member = lookups.members.find((item) => item.membershipId === membershipId);
+      const position = lookups.positions.find((item) => item.positionCode === member?.positionCode);
+      setSelectedPositionCode(position?.positionCode || "");
+      setSelectedDepartmentId(position?.departmentId || "");
       setSelectedSiteId("");
       return;
     }
-    const position = lookups.positions.find((item) => item.id === employee.positionId);
-    setSelectedPositionCode(position?.positionCode || "");
-    setSelectedDepartmentId(employee.departmentId || position?.departmentId || "");
-    setSelectedSiteId(employee.siteId || "");
+    setSelectedEmployeeId("");
+    setSelectedOrganizationMemberId("");
+    setSelectedPositionCode("");
+    setSelectedDepartmentId("");
+    setSelectedSiteId("");
   }
 
   function openCreate() {
@@ -204,6 +230,7 @@ export function EnterpriseHumanResourcesWorkspace({ organizationId, organization
     setError("");
     setNotice("");
     setSelectedEmployeeId("");
+    setSelectedOrganizationMemberId("");
     setSelectedContractType("EMPLOYMENT");
     setSelectedPositionCode("");
     setSelectedDepartmentId("");
@@ -216,6 +243,7 @@ export function EnterpriseHumanResourcesWorkspace({ organizationId, organization
     setError("");
     setNotice("");
     setSelectedEmployeeId(contract.employeeId);
+    setSelectedOrganizationMemberId("");
     setSelectedContractType(canonicalContractType(contract.contractType));
     setSelectedPositionCode(contract.jobTitle || "");
     setSelectedDepartmentId(contract.departmentId || "");
@@ -224,7 +252,7 @@ export function EnterpriseHumanResourcesWorkspace({ organizationId, organization
   }
 
   function validateContractForm(data: FormData) {
-    if (!editing && !selectedEmployeeId) return locale === "en" ? "Select an active HR employee record before creating the contract." : "Sélectionnez un dossier collaborateur RH actif avant de créer le contrat.";
+    if (!editing && !selectedEmployeeId && !selectedOrganizationMemberId) return locale === "en" ? "Select an active collaborator from Company administration." : "Sélectionnez un collaborateur actif d’Administration entreprise.";
     if (!CONTRACT_TYPES.includes(selectedContractType as (typeof CONTRACT_TYPES)[number])) return locale === "en" ? "Choose a supported contract type." : "Choisissez un type de contrat pris en charge.";
     if (!String(data.get("approverUserId") || "").trim()) return locale === "en" ? "Choose a separate authorized approver." : "Choisissez un validateur indépendant autorisé.";
     const startDate = String(data.get("startDate") || "");
@@ -253,7 +281,7 @@ export function EnterpriseHumanResourcesWorkspace({ organizationId, organization
     }
     setSaving(true);
     const payload = {
-      ...(editing ? {} : { employeeId: selectedEmployeeId }),
+      ...(editing ? {} : selectedEmployeeId ? { employeeId: selectedEmployeeId } : { organizationMemberId: selectedOrganizationMemberId }),
       contractType: selectedContractType,
       startDate: String(data.get("startDate") || ""),
       endDate: String(data.get("endDate") || "") || null,
@@ -341,7 +369,7 @@ export function EnterpriseHumanResourcesWorkspace({ organizationId, organization
       <ModuleMetrics label="RH">
         <ModuleMetric label={locale === "en" ? "Active contracts" : "Contrats actifs"} value={collection.metrics.active || 0} />
         <ModuleMetric label={locale === "en" ? "Pending approval" : "En attente de validation"} value={collection.metrics.pendingApproval || 0} />
-        <ModuleMetric label={locale === "en" ? "Active employees" : "Collaborateurs actifs"} value={lookups.employees.length} />
+        <ModuleMetric label={locale === "en" ? "Company collaborators" : "Collaborateurs entreprise"} value={lookups.members.length} />
       </ModuleMetrics>
       <ModuleToolbar
         controls={<ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setPage(1); }} items={[
@@ -379,12 +407,12 @@ export function EnterpriseHumanResourcesWorkspace({ organizationId, organization
               />)}
             </BusinessList>
             <ProfessionalPager pagination={collection.pagination} onPageChange={setPage} locale={locale} />
-          </> : <EmptyState compact title={locale === "en" ? "No contract" : "Aucun contrat"} description={locale === "en" ? "Create a contract from an active employee record." : "Créez un contrat depuis un dossier collaborateur actif."} />}
+          </> : <EmptyState compact title={locale === "en" ? "No contract" : "Aucun contrat"} description={locale === "en" ? "Create a contract for an active collaborator from Company administration." : "Créez un contrat pour un collaborateur actif d’Administration entreprise."} />}
         </ModuleSection> : <ModuleSection title={t("hr.orgSection")} description={locale === "en" ? "Department grouping uses canonical HR department identifiers." : "Le regroupement par département utilise les identifiants RH canoniques."}>
           {grouped.length ? <div className="grid gap-4 md:grid-cols-2">{grouped.map(([departmentId, employees]) => <div key={departmentId} className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
             <h3 className="font-black text-dtsc-ink">{departmentId === "NONE" ? (locale === "en" ? "No department" : "Sans département") : label(lookups.departments.find((item) => item.id === departmentId))}</h3>
             <div className="mt-3 grid gap-2">{employees.map((employee) => <div key={employee.id} className="flex items-center gap-2 rounded-xl bg-dtsc-soft px-3 py-2 text-sm"><UsersRound className="h-4 w-4 text-dtsc-blue" /><span className="font-bold">{employee.displayName}</span><span className="ml-auto text-xs text-dtsc-muted">{label(lookups.positions.find((item) => item.id === employee.positionId), employee.employeeNumber)}</span></div>)}</div>
-          </div>)}</div> : <EmptyState compact title={locale === "en" ? "No active employee" : "Aucun collaborateur actif"} description={locale === "en" ? "Add employee records first." : "Ajoutez d’abord les dossiers collaborateurs."} />}
+          </div>)}</div> : <EmptyState compact title={locale === "en" ? "No initialized HR record" : "Aucun dossier RH initialisé"} description={locale === "en" ? "An HR record is initialized when a contract is submitted for an active Company administration collaborator." : "Un dossier RH est initialisé lors de la soumission d’un contrat pour un collaborateur actif d’Administration entreprise."} />}
         </ModuleSection>}
         <ProfessionalHelp moduleCode="HUMAN_RESOURCES" />
       </ModuleContent>
@@ -393,26 +421,26 @@ export function EnterpriseHumanResourcesWorkspace({ organizationId, organization
         open={formOpen}
         onClose={() => { if (!saving) { setFormOpen(false); setEditing(null); } }}
         title={editing ? (locale === "en" ? "Edit contract" : "Modifier le contrat") : t("hr.newContractDialog")}
-        description={locale === "en" ? "Choose an active HR record. Its current assignment is prefilled and every reference is revalidated by the server." : "Choisissez un dossier RH actif. Son affectation actuelle est préremplie et chaque référence est revalidée par le serveur."}
+        description={locale === "en" ? "Choose an active collaborator from Company administration. If no HR record exists yet, it is initialized only when you submit this contract." : "Choisissez un collaborateur actif d’Administration entreprise. S’il n’a pas encore de dossier RH, celui-ci est initialisé uniquement lors de la soumission de ce contrat."}
         presentation="editor"
         className="h-[96dvh] max-w-5xl"
       >
         <form key={editing?.id || "new"} onSubmit={saveContract} className="grid gap-6">
           {error ? <ProfessionalError message={error} /> : null}
-          {!editing && lookups.employees.length === 0 ? <ProfessionalError message={locale === "en"
-            ? `No active HR employee record is available. Create or link an employee record in “Employees & collaborators” first${membersWithoutHrRecord.length ? ` (${membersWithoutHrRecord.length} active member${membersWithoutHrRecord.length === 1 ? "" : "s"} still without an HR record)` : ""}.`
-            : `Aucun dossier collaborateur RH actif n’est disponible. Créez ou liez d’abord le collaborateur dans « Employés et collaborateurs »${membersWithoutHrRecord.length ? ` (${membersWithoutHrRecord.length} membre${membersWithoutHrRecord.length === 1 ? "" : "s"} actif${membersWithoutHrRecord.length === 1 ? "" : "s"} sans dossier RH)` : ""}.`} /> : null}
+          {!editing && contractCandidateItems.length === 0 ? <ProfessionalError message={locale === "en"
+            ? "No active collaborator is available. Invite the person from Company administration → Collaborators and wait until the invitation is accepted before creating a contract."
+            : "Aucun collaborateur actif n’est disponible. Invitez la personne depuis Administration entreprise → Collaborateurs et attendez l’acceptation de l’invitation avant de créer son contrat."} /> : null}
           {lookups.approvers.length === 0 ? <ProfessionalError message={locale === "en" ? "No independent approver is available. Another active member must receive approval permission for Human Resources before this contract can be submitted." : "Aucun validateur indépendant n’est disponible. Un autre membre actif doit recevoir le droit d’approuver Ressources humaines avant de pouvoir soumettre ce contrat."} /> : null}
 
-          <ProfessionalFormSection title={locale === "en" ? "Employee & assignment" : "Collaborateur & affectation"} description={locale === "en" ? "Selecting the employee prefills the canonical current assignment. You can review it before submission." : "La sélection du collaborateur préremplit son affectation RH canonique actuelle. Vous pouvez la contrôler avant l’envoi."}>
-            <Field label={locale === "en" ? "Employee" : "Collaborateur"} required help={locale === "en" ? "Only active HR employee records can receive an employment contract. Organization members without an HR record must first be created or linked in Employees & collaborators." : "Seuls les dossiers RH actifs peuvent recevoir un contrat de travail. Un membre de l’entreprise sans dossier RH doit d’abord être créé ou lié dans Employés et collaborateurs."}>
+          <ProfessionalFormSection title={locale === "en" ? "Employee & assignment" : "Collaborateur & affectation"} description={locale === "en" ? "Active Company administration collaborators are eligible. Existing HR records are reused; missing HR records are initialized transactionally when the contract is submitted." : "Les collaborateurs actifs d’Administration entreprise sont éligibles. Les dossiers RH existants sont réutilisés ; un dossier manquant est initialisé transactionnellement lors de la soumission du contrat."}>
+            <Field label={locale === "en" ? "Employee" : "Collaborateur"} required help={locale === "en" ? "The source is Company administration → Collaborators. Accepting an invitation only grants company membership; submitting this contract explicitly initializes the HR record when needed." : "La source est Administration entreprise → Collaborateurs. Accepter une invitation donne seulement accès à l’entreprise ; la soumission de ce contrat initialise explicitement le dossier RH lorsqu’il manque."}>
               <NativeSelect
-                name="employeeId"
+                name="collaboratorRef"
                 disabled={Boolean(editing)}
-                value={selectedEmployeeId}
-                onChange={applyEmployeeAssignment}
+                value={selectedCollaboratorRef}
+                onChange={applyCollaboratorSelection}
                 required
-                items={[{ id: "", label: lookups.employees.length ? (locale === "en" ? "Select an active employee" : "Choisir un collaborateur actif") : (locale === "en" ? "No active HR employee record" : "Aucun dossier RH actif") }, ...lookups.employees.map((employee) => ({ id: employee.id, label: `${employee.displayName} · ${employee.employeeNumber}` }))]}
+                items={[{ id: "", label: contractCandidateItems.length ? (locale === "en" ? "Select an active collaborator" : "Choisir un collaborateur actif") : (locale === "en" ? "No active collaborator" : "Aucun collaborateur actif") }, ...contractCandidateItems]}
               />
             </Field>
             <Field label={locale === "en" ? "Contract type" : "Type de contrat"} required>
@@ -449,7 +477,7 @@ export function EnterpriseHumanResourcesWorkspace({ organizationId, organization
 
           <div className="sticky bottom-0 flex flex-wrap justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             <Button type="button" variant="outline" disabled={saving} onClick={() => { setFormOpen(false); setEditing(null); }}>{locale === "en" ? "Cancel" : "Annuler"}</Button>
-            <Button type="submit" disabled={saving || (!editing && lookups.employees.length === 0) || lookups.approvers.length === 0} aria-busy={saving}>{saving ? (locale === "en" ? "Saving…" : "Enregistrement…") : (locale === "en" ? "Save & submit" : "Enregistrer & soumettre")}</Button>
+            <Button type="submit" disabled={saving || (!editing && contractCandidateItems.length === 0) || lookups.approvers.length === 0} aria-busy={saving}>{saving ? (locale === "en" ? "Saving…" : "Enregistrement…") : (locale === "en" ? "Save & submit" : "Enregistrer & soumettre")}</Button>
           </div>
         </form>
       </Dialog>
