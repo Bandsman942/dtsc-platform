@@ -1,4 +1,9 @@
 {
-  "version": 7,
-  "overrides": []
+  "version": 8,
+  "overrides": [
+    {
+      "code": "AI_ASSISTANT",
+      "minimumPlan": "STARTER"
+    }
+  ]
 }

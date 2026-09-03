@@ -1,5 +1,6 @@
 import { canAccessEnterpriseModule } from "@/lib/enterprise-sector-templates";
 import { listNavigableEnterpriseModules } from "@/lib/enterprise/module-access";
+import { getEnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
 import { getOrganizationEntitlements } from "@/lib/billing/entitlements";
 import { prisma } from "@/lib/prisma";
 import type { SessionPayload } from "@/lib/session";
@@ -17,6 +18,11 @@ export type EnterpriseAiAccess = {
   sectorCode: string | null;
   role: string;
   planCode: string;
+  offerName: string;
+  subscriptionStatus: string;
+  dailyMessageLimit: number;
+  dailyTokenLimit: number;
+  maxKnowledgeSources: number;
   limits: NonNullable<Awaited<ReturnType<typeof getOrganizationEntitlements>>>["limits"];
   assistantId: string;
   canChat: boolean;
@@ -41,6 +47,52 @@ function isManagerRole(role: string) {
 
 function isAdminRole(role: string) {
   return ENTERPRISE_AI_ADMIN_ROLES.has(role);
+}
+
+async function provisionEssentialAiModuleIfMissing(
+  organizationId: string,
+  entitlements: NonNullable<Awaited<ReturnType<typeof getOrganizationEntitlements>>>,
+) {
+  if (!entitlements.subscriptionActive || entitlements.planCode !== "STARTER") return;
+  const definition = getEnterpriseModuleDefinition(ENTERPRISE_AI_MODULE_CODE);
+  if (!definition || definition.minimumPlan !== "STARTER") return;
+
+  const current = await prisma.enterpriseModule.findUnique({
+    where: { organizationId_moduleCode: { organizationId, moduleCode: ENTERPRISE_AI_MODULE_CODE } },
+    select: { id: true },
+  });
+  // A row that already exists is authoritative for tenant enablement. In
+  // particular, never turn a deliberately disabled module back on from a read path.
+  if (current) return;
+
+  await prisma.enterpriseModule.create({
+    data: {
+      organizationId,
+      sectorId: null,
+      moduleCode: definition.code,
+      labelFr: definition.labelFr,
+      labelEn: definition.labelEn,
+      descriptionFr: definition.descriptionFr,
+      descriptionEn: definition.descriptionEn,
+      moduleCategory: definition.domain,
+      icon: definition.iconKey,
+      isEnabled: true,
+      isCore: true,
+      sourceTemplateId: null,
+      requiresPlanLevel: definition.minimumPlan,
+      sortOrder: definition.navigationOrder,
+    },
+  }).catch((error) => {
+    // Concurrent first access can race on the organization/module unique key.
+    // Re-read instead of broadening the write or mutating an existing tenant row.
+    return prisma.enterpriseModule.findUnique({
+      where: { organizationId_moduleCode: { organizationId, moduleCode: ENTERPRISE_AI_MODULE_CODE } },
+      select: { id: true },
+    }).then((row) => {
+      if (!row) throw error;
+      return row;
+    });
+  });
 }
 
 export async function ensureEnterpriseAiAssistant(organizationId: string, userId?: string | null) {
@@ -79,12 +131,16 @@ export async function getEnterpriseAiAccess(session: SessionPayload, organizatio
     return null;
   }
 
+  const entitlements = await getOrganizationEntitlements(organizationId);
+  if (!entitlements || entitlements.isDtscInternal) return null;
+  await provisionEssentialAiModuleIfMissing(organizationId, entitlements);
+
   const allowed = await canAccessEnterpriseModule(session.userId, organizationId, ENTERPRISE_AI_MODULE_CODE, enterpriseActionFor(action));
   if (!allowed) {
     return null;
   }
 
-  const [membership, organization, entitlements, assistant, settings] = await Promise.all([
+  const [membership, organization, assistant, settings] = await Promise.all([
     prisma.organizationMember.findFirst({
       where: {
         organizationId,
@@ -100,12 +156,11 @@ export async function getEnterpriseAiAccess(session: SessionPayload, organizatio
       where: { id: organizationId, status: "ACTIVE", deletedAt: null, organizationType: "CLIENT" },
       select: { id: true, name: true, sectorCode: true },
     }),
-    getOrganizationEntitlements(organizationId),
     ensureEnterpriseAiAssistant(organizationId, session.userId),
     prisma.enterpriseAiSetting.findUnique({ where: { organizationId } }),
   ]);
 
-  if (!membership || !organization || !entitlements || !assistant || (settings?.enabled === false && action !== "settings")) {
+  if (!membership || !organization || !assistant || (settings?.enabled === false && action !== "settings")) {
     return null;
   }
 
@@ -130,6 +185,11 @@ export async function getEnterpriseAiAccess(session: SessionPayload, organizatio
     sectorCode: organization.sectorCode,
     role: membership.role,
     planCode: entitlements.planCode,
+    offerName: entitlements.offerName || "Aucune offre organisation active",
+    subscriptionStatus: entitlements.subscriptionStatus,
+    dailyMessageLimit: entitlements.dailyMessageLimit,
+    dailyTokenLimit: entitlements.dailyTokenLimit,
+    maxKnowledgeSources: entitlements.maxDocuments,
     limits: entitlements.limits,
     assistantId: assistant.id,
     canChat: true,

@@ -1,5 +1,6 @@
 import type { AiExecutionContext } from "@/lib/ai/context-engine";
 import { getCanonicalAiUsageLimits } from "@/lib/billing/ai-usage-limits";
+import { formatPublishedBillingCatalogForAi, getPublishedBillingCatalog } from "@/lib/billing/commercial-catalog";
 
 export type AiCagPack = {
   code: string;
@@ -59,21 +60,30 @@ async function resolveCommercialCagContext(context: AiExecutionContext) {
   });
 }
 
+const billingCatalogBuilder: AiCagBuilderDefinition = {
+  code: "billing-catalog",
+  version: async () => (await getPublishedBillingCatalog()).releaseId,
+  build: async () => formatPublishedBillingCatalogForAi(await getPublishedBillingCatalog()),
+};
+
 const organizationBuilder: AiCagBuilderDefinition = {
   code: "organization",
   version: async (context) => {
     const commercial = await resolveCommercialCagContext(context);
-    return `2:${commercial.planId || "none"}:${commercial.subscriptionStatus}:${commercial.source}`;
+    return `3:${commercial.planId || "none"}:${commercial.subscriptionStatus}:${commercial.source}:${commercial.dailyMessageLimit}:${commercial.dailyTokenLimit}:${commercial.maxDocuments}`;
   },
   build: async (context) => {
-    if (!context.organization || !context.membership) return "Aucune organisation active.";
     const commercial = await resolveCommercialCagContext(context);
-    return `Organisation active: ${context.organization.name} (${context.organization.id}). Secteur: ${context.organization.sectorCode || "GENERAL"}. Rôle: ${context.membership.role}. Offre commerciale: ${commercial.planName}. Niveau de capacité: ${commercial.capabilityLabel} (${commercial.planCode}). Statut d'abonnement: ${commercial.subscriptionStatus}. Modules lisibles: ${context.activeModuleCodes.join(", ") || "aucun"}.`;
+    const quotaContext = `Offre commerciale: ${commercial.planName}. Niveau de capacité: ${commercial.capabilityLabel}. Statut d'abonnement: ${commercial.subscriptionStatus}. Quotas effectifs: ${commercial.dailyMessageLimit.toLocaleString("fr-FR")} messages IA/jour, ${commercial.dailyTokenLimit.toLocaleString("fr-FR")} tokens/jour et ${commercial.maxDocuments.toLocaleString("fr-FR")} sources de connaissance IA.`;
+    if (!context.organization || !context.membership) {
+      return `Contexte commercial personnel. ${quotaContext}`;
+    }
+    return `Organisation active: ${context.organization.name} (${context.organization.id}). Secteur: ${context.organization.sectorCode || "GENERAL"}. Rôle: ${context.membership.role}. ${quotaContext} Modules lisibles: ${context.activeModuleCodes.join(", ") || "aucun"}.`;
   },
 };
 
 export async function buildAiCagPack(context: AiExecutionContext): Promise<AiCagPack> {
-  const packs = [await cached(context, organizationBuilder)];
+  const packs = [await cached(context, billingCatalogBuilder), await cached(context, organizationBuilder)];
   const sectorBuilder = context.organization?.sectorCode ? sectorBuilders.get(context.organization.sectorCode) : null;
   if (sectorBuilder) packs.push(await cached(context, sectorBuilder));
   return {
