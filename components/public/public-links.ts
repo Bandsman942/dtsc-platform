@@ -8,6 +8,7 @@ export const publicLinks: PublicLink[] = [
   { href: "/", label: "Accueil" },
   { href: "/services", label: "Services" },
   { href: "/solutions", label: "Solutions" },
+  { href: "/tarifs", label: "Tarifs" },
   { href: "/secteurs", label: "Secteurs" },
   { href: "/projets", label: "Projets" },
   { href: "/ressources", label: "Ressources" },
