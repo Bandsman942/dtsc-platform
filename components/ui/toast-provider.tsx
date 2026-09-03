@@ -103,7 +103,7 @@ export function ToastProvider() {
     <div
       aria-live="polite"
       aria-atomic="false"
-      className="pointer-events-none fixed inset-x-0 top-[max(0.75rem,env(safe-area-inset-top))] z-[1600] flex flex-col items-center gap-3 px-3 sm:inset-x-auto sm:right-4 sm:top-4 sm:w-[min(24rem,calc(100vw-2rem))] sm:items-stretch"
+      className="pointer-events-none fixed inset-x-0 top-[max(0.75rem,env(safe-area-inset-top))] z-[1200] flex flex-col items-center gap-3 px-3 sm:inset-x-auto sm:right-4 sm:top-4 sm:w-[min(24rem,calc(100vw-2rem))] sm:items-stretch"
     >
       {renderedToasts.map((toast) => {
         const config = toneConfig[toast.tone];
