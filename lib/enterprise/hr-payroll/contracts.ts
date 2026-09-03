@@ -50,12 +50,87 @@ function ensureContractDates(input: ContractDateInput) {
   if (input.endDate && input.probationEndDate && input.probationEndDate > input.endDate) throw new EnterpriseDomainError("EMPLOYMENT_CONTRACT_PROBATION_INVALID", 409);
 }
 
+function splitMemberDisplayName(name: string, email: string) {
+  const displayName = name.trim() || email;
+  const parts = displayName.split(/\s+/).filter(Boolean);
+  return {
+    displayName,
+    firstName: parts[0] || displayName,
+    lastName: parts.slice(1).join(" "),
+  };
+}
+
+async function resolveOrInitializeContractEmployee(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  actorUserId: string,
+  input: ContractCreateInput,
+) {
+  if (input.employeeId) {
+    const employee = await assertActiveCustomerEmployee(tx, organizationId, input.employeeId);
+    return { employee, initializedFromMembership: false };
+  }
+
+  if (!input.organizationMemberId) throw new EnterpriseDomainError("ORGANIZATION_MEMBER_NOT_FOUND", 404);
+  const member = await tx.organizationMember.findFirst({
+    where: { id: input.organizationMemberId, organizationId, status: "ACTIVE", removedAt: null },
+    select: {
+      id: true,
+      positionId: true,
+      positionCode: true,
+      user: { select: { name: true, email: true } },
+    },
+  });
+  if (!member) throw new EnterpriseDomainError("ORGANIZATION_MEMBER_NOT_FOUND", 404);
+
+  const memberPosition = member.positionId
+    ? await tx.enterprisePosition.findFirst({ where: { id: member.positionId, organizationId, isActive: true }, select: { id: true, positionCode: true, departmentId: true } })
+    : member.positionCode
+      ? await tx.enterprisePosition.findFirst({ where: { organizationId, positionCode: member.positionCode, isActive: true }, select: { id: true, positionCode: true, departmentId: true } })
+      : null;
+  const identity = splitMemberDisplayName(member.user.name, member.user.email);
+  const provisionalEmployeeNumber = hrReference("EMP");
+  const employee = await tx.enterpriseEmployee.upsert({
+    where: { organizationId_organizationMemberId: { organizationId, organizationMemberId: member.id } },
+    update: {},
+    create: {
+      organizationId,
+      employeeNumber: provisionalEmployeeNumber,
+      organizationMemberId: member.id,
+      firstName: identity.firstName,
+      lastName: identity.lastName,
+      displayName: identity.displayName,
+      workEmail: member.user.email.toLowerCase(),
+      positionId: memberPosition?.id || null,
+      positionCode: memberPosition?.positionCode || null,
+      departmentId: memberPosition?.departmentId || null,
+      hireDate: input.startDate,
+      createdByUserId: actorUserId,
+    },
+  });
+  if (employee.archivedAt || employee.employmentStatus !== "ACTIVE") throw new EnterpriseDomainError("EMPLOYEE_NOT_ACTIVE", 409);
+  const initializedFromMembership = employee.employeeNumber === provisionalEmployeeNumber;
+  if (initializedFromMembership) {
+    await publishHrEvent(tx, {
+      organizationId,
+      entityType: "EnterpriseEmployee",
+      entityId: employee.id,
+      eventType: "EMPLOYEE_INITIALIZED_FROM_MEMBERSHIP",
+      summary: `Dossier RH ${employee.employeeNumber} initialisé depuis Administration entreprise`,
+      actorUserId,
+      toStatus: employee.employmentStatus,
+      metadataJson: { organizationMemberId: member.id, source: "EMPLOYMENT_CONTRACT", hireDate: input.startDate.toISOString() },
+    });
+  }
+  return { employee, initializedFromMembership };
+}
+
 export async function createEnterpriseEmploymentContract(organizationId: string, actorUserId: string, input: ContractCreateInput) {
   ensureContractDates(input);
   return prisma.$transaction(async (tx) => {
-    const employee = await assertActiveCustomerEmployee(tx, organizationId, input.employeeId);
     await assertOrganizationApprover(tx, organizationId, input.approverUserId, actorUserId, "HUMAN_RESOURCES");
     const references = await resolveContractReferences(tx, organizationId, input);
+    const { employee, initializedFromMembership } = await resolveOrInitializeContractEmployee(tx, organizationId, actorUserId, input);
 
     const activeContract = await tx.enterpriseEmploymentContract.findFirst({
       where: { organizationId, employeeId: employee.id, status: "ACTIVE", archivedAt: null },
@@ -108,7 +183,13 @@ export async function createEnterpriseEmploymentContract(organizationId: string,
       summary: `Contrat ${contract.reference} soumis`,
       actorUserId,
       toStatus: "PENDING_APPROVAL",
-      metadataJson: { positionId: references.position?.id || null, departmentId: references.departmentId, siteId: references.siteId },
+      metadataJson: {
+        positionId: references.position?.id || null,
+        departmentId: references.departmentId,
+        siteId: references.siteId,
+        organizationMemberId: input.organizationMemberId || null,
+        employeeInitializedFromMembership: initializedFromMembership,
+      },
     });
     return contract;
   });

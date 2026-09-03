@@ -20,6 +20,7 @@ requirePaths([
   "app/api/enterprise/[organizationId]/leave-requests/[requestId]/cancel/route.ts",
   "app/api/enterprise/[organizationId]/payroll-runs/route.ts",
   "app/api/enterprise/[organizationId]/payroll-runs/[payrollRunId]/decision/route.ts",
+  "app/api/enterprise/invitations/[id]/route.ts",
 ]);
 
 requireTokens("lib/enterprise/hr-payroll/helpers.ts", [
@@ -41,6 +42,11 @@ requireTokens("lib/enterprise/hr-payroll/schemas.ts", [
   '"CONSULTING"',
   '"INTERNSHIP"',
   "contractType: z.enum(EMPLOYMENT_CONTRACT_TYPES)",
+  "organizationMemberId: z.string().trim().min(1).optional().nullable()",
+  "const hasEmployee = Boolean(value.employeeId)",
+  "const hasMember = Boolean(value.organizationMemberId)",
+  "if (hasEmployee === hasMember)",
+  'omit({ employeeId: true, organizationMemberId: true })',
   "LEAVE_TYPES",
   "leaveType: z.enum(LEAVE_TYPES)",
   "entry.workDate < value.periodStart",
@@ -53,10 +59,36 @@ requireTokens("lib/enterprise/hr-payroll/contracts.ts", [
   "EMPLOYMENT_CONTRACT_UPDATED_RESUBMITTED",
   'status: "SUPERSEDED"',
   "resolveContractReferences",
+  "resolveOrInitializeContractEmployee",
+  "organizationMember.findFirst",
+  'status: "ACTIVE"',
+  "removedAt: null",
+  "enterpriseEmployee.upsert",
+  "organizationId_organizationMemberId",
+  "hireDate: input.startDate",
+  "EMPLOYEE_INITIALIZED_FROM_MEMBERSHIP",
+  'source: "EMPLOYMENT_CONTRACT"',
   "enterprisePosition.findFirst",
   "EMPLOYMENT_CONTRACT_POSITION_DEPARTMENT_MISMATCH",
   "positionId: position?.id || null",
   "positionCode: position?.positionCode || null",
+]);
+
+requireTokens("lib/enterprise/common/http.ts", [
+  "ORGANIZATION_MEMBER_NOT_FOUND",
+  "EMPLOYEE_NOT_ACTIVE",
+  "EMPLOYMENT_CONTRACT_POSITION_NOT_FOUND",
+  "Administration entreprise",
+]);
+
+requireTokens("app/api/enterprise/invitations/[id]/route.ts", [
+  'data: { status: "ACTIVE", joinedAt: now, removedAt: null }',
+  'action: "ENTERPRISE_INVITATION_ACCEPTED"',
+]);
+forbidTokens("app/api/enterprise/invitations/[id]/route.ts", [
+  "enterpriseEmployee.create",
+  "enterpriseEmployee.upsert",
+  "EnterpriseEmployee",
 ]);
 
 requireTokens("lib/enterprise/hr-payroll/timesheets.ts", [
@@ -113,6 +145,10 @@ for (const path of [
 requireTokens("app/api/enterprise/[organizationId]/hr-payroll-lookups/route.ts", [
   "listEnterpriseApprovalCandidates",
   "candidate.userId !== session.userId",
+  "organizationMember.findMany",
+  'status: "ACTIVE"',
+  "removedAt: null",
+  "positionCode: true",
   "enterpriseEmployee.findMany",
   'employmentStatus: "ACTIVE"',
   "enterprisePosition.findMany",
@@ -184,16 +220,21 @@ requireTokens("components/enterprise/professional/enterprise-human-resources-wor
   't("hr.newContractDialog")',
   't("hr.orgSection")',
   "CONTRACT_TYPES",
-  "applyEmployeeAssignment",
+  "applyCollaboratorSelection",
+  "selectedOrganizationMemberId",
+  "contractCandidateItems",
+  '`member:${member.membershipId}`',
+  "Administration entreprise",
   "selectedPositionCode",
   "selectedDepartmentId",
   "selectedSiteId",
   "membersWithoutHrRecord",
-  "Aucun dossier collaborateur RH actif",
   "Aucun validateur indépendant",
 ]);
 forbidTokens("components/enterprise/professional/enterprise-human-resources-workspace.tsx", [
   'contractType: String(data.get("contractType") || "EMPLOYEE")',
+  "Employés et collaborateurs",
+  "Aucun dossier collaborateur RH actif n’est disponible",
 ]);
 
 requireTokens("components/enterprise/professional/enterprise-time-attendance-workspace.tsx", [
@@ -260,4 +301,4 @@ forbidTokens("app/api/enterprise/[organizationId]/employment-contracts/[contract
 forbidTokens("app/api/enterprise/[organizationId]/payroll-runs/[payrollRunId]/decision/route.ts", ['moduleCode: "PAYROLL_OPERATIONS", action: "manage"']);
 forbidTokens("lib/enterprise/hr-payroll/payroll.ts", ["status: \"PAID\"", "financialTransaction.create", "ledger", "bankAccount"]);
 
-success("enterprise HR, time/attendance and operational payroll boundaries #562/#564");
+success("enterprise HR, time/attendance and operational payroll boundaries #562/#564/#566");
