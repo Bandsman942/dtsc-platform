@@ -163,6 +163,7 @@ requireTokens("components/enterprise/professional/enterprise-payroll-operations-
   "disabled={Boolean(busyAction)}",
   "bonusReason_",
   "deductionReason_",
+  "run.canDecide",
   "DEFAULT_PAYROLL_REJECTION_AUDIT_COMMENT",
   "DEFAULT_PAYROLL_APPROVAL_AUDIT_COMMENT",
   "FINANCE_PAYMENTS?payrollRunId=",
