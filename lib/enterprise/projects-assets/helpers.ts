@@ -53,19 +53,49 @@ export async function assertProjectRelations(
     businessPartyId?: string | null;
     contractId?: string | null;
     ownerUserId?: string | null;
+    departmentId?: string | null;
     siteId?: string | null;
+    budgetId?: string | null;
+    documentId?: string | null;
     memberEmployeeIds?: string[];
   },
 ) {
-  const [party, contract, site] = await Promise.all([
+  const [party, contract, department, site, budget, document] = await Promise.all([
     input.businessPartyId
-      ? tx.enterpriseBusinessParty.findFirst({ where: { id: input.businessPartyId, organizationId, archivedAt: null }, select: { id: true } })
+      ? tx.enterpriseBusinessParty.findFirst({
+          where: {
+            id: input.businessPartyId,
+            organizationId,
+            archivedAt: null,
+            status: "ACTIVE",
+            roles: { some: { status: "ACTIVE", archivedAt: null, roleCode: { in: ["CUSTOMER", "PROSPECT"] } } },
+          },
+          select: { id: true },
+        })
       : Promise.resolve(null),
     input.contractId
-      ? tx.enterpriseContract.findFirst({ where: { id: input.contractId, organizationId, archivedAt: null }, select: { id: true, businessPartyId: true } })
+      ? tx.enterpriseContract.findFirst({
+          where: { id: input.contractId, organizationId, archivedAt: null, status: { in: ["APPROVED", "ACTIVE"] } },
+          select: { id: true, businessPartyId: true },
+        })
+      : Promise.resolve(null),
+    input.departmentId
+      ? tx.enterpriseDepartment.findFirst({ where: { id: input.departmentId, organizationId, isActive: true }, select: { id: true } })
       : Promise.resolve(null),
     input.siteId
       ? tx.enterpriseSite.findFirst({ where: { id: input.siteId, organizationId, archivedAt: null, status: "ACTIVE" }, select: { id: true } })
+      : Promise.resolve(null),
+    input.budgetId
+      ? tx.enterpriseBudget.findFirst({
+          where: { id: input.budgetId, organizationId, archivedAt: null, status: { notIn: ["CLOSED", "CANCELLED"] } },
+          select: { id: true },
+        })
+      : Promise.resolve(null),
+    input.documentId
+      ? tx.enterpriseDocument.findFirst({
+          where: { id: input.documentId, organizationId, archivedAt: null, status: { notIn: ["ARCHIVED", "DELETED"] } },
+          select: { id: true },
+        })
       : Promise.resolve(null),
   ]);
   if (input.businessPartyId && !party) throw new EnterpriseDomainError("BUSINESS_PARTY_NOT_FOUND", 404);
@@ -73,7 +103,10 @@ export async function assertProjectRelations(
   if (contract && input.businessPartyId && contract.businessPartyId !== input.businessPartyId) {
     throw new EnterpriseDomainError("PROJECT_CONTRACT_PARTY_MISMATCH", 409);
   }
+  if (input.departmentId && !department) throw new EnterpriseDomainError("DEPARTMENT_NOT_FOUND", 404);
   if (input.siteId && !site) throw new EnterpriseDomainError("SITE_NOT_FOUND", 404);
+  if (input.budgetId && !budget) throw new EnterpriseDomainError("BUDGET_NOT_FOUND", 404);
+  if (input.documentId && !document) throw new EnterpriseDomainError("DOCUMENT_NOT_FOUND", 404);
   if (input.ownerUserId) await assertActiveOrganizationMember(tx, organizationId, input.ownerUserId);
 
   const employeeIds = [...new Set(input.memberEmployeeIds || [])];
@@ -83,4 +116,6 @@ export async function assertProjectRelations(
     });
     if (count !== employeeIds.length) throw new EnterpriseDomainError("PROJECT_MEMBER_EMPLOYEE_NOT_FOUND", 404);
   }
+
+  return { party, contract, department, site, budget, document };
 }

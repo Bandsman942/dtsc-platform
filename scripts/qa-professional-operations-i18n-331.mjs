@@ -49,14 +49,17 @@ for (const key of [
 const files = {
   inventory: read("components/enterprise/professional/enterprise-inventory-operations-workspace.tsx"),
   sites: read("components/enterprise/professional/enterprise-sites-workspace.tsx"),
-  projects: read("components/enterprise/professional/enterprise-projects-deliverables-workspace.tsx"),
-  assets: read("components/enterprise/professional/enterprise-assets-maintenance-workspace.tsx"),
+  projectsRouter: read("components/enterprise/professional/enterprise-projects-deliverables-workspace.tsx"),
+  projects: read("components/enterprise/professional/enterprise-projects-services-workspace.tsx"),
+  deliverables: read("components/enterprise/professional/enterprise-time-deliverables-workspace.tsx"),
+  assetsRouter: read("components/enterprise/professional/enterprise-assets-maintenance-workspace.tsx"),
+  assets: read("components/enterprise/professional/enterprise-assets-maintenance-workspace-v2.tsx"),
   helper: read("components/enterprise/professional/professional-erp-i18n.ts"),
   i18n: read("lib/i18n.ts"),
   runner: read("scripts/run-regression-qa-ci.mjs"),
 };
 
-for (const [scope, content] of Object.entries({ inventory: files.inventory, sites: files.sites, projects: files.projects, assets: files.assets })) {
+for (const [scope, content] of Object.entries({ inventory: files.inventory, sites: files.sites, projects: files.projects, deliverables: files.deliverables, assets: files.assets })) {
   need(content, "useProfessionalErpLocale", scope);
   need(content, "professionalErpT", scope);
   reject(content, 'toLocaleDateString("fr-FR")', scope);
@@ -65,6 +68,10 @@ for (const [scope, content] of Object.entries({ inventory: files.inventory, site
   reject(content, "const INVENTORY_STATUS_LABELS", scope);
   reject(content, "const CONDITION_LABELS", scope);
 }
+
+need(files.projectsRouter, "EnterpriseProjectsServicesWorkspace", "routeur projets/livrables");
+need(files.projectsRouter, "EnterpriseTimeDeliverablesWorkspace", "routeur projets/livrables");
+need(files.assetsRouter, "EnterpriseAssetsMaintenanceWorkspaceV2", "routeur actifs");
 
 need(files.i18n, "professionalErpOperationsFr", "registre i18n");
 need(files.i18n, "professionalErpOperationsEn", "registre i18n");
@@ -92,14 +99,15 @@ for (const marker of [
   "/sites", "/warehouses", "/storage-locations", '"PATCH"', "revision: edit.revision", "<details",
 ]) need(files.sites, marker, "sites — invariants");
 
+const projectContract = `${files.projects}\n${files.deliverables}`;
 for (const marker of [
-  "/projects", "/deliverables/", '"SUBMIT"', '"ACCEPT"', '"REQUEST_CHANGES"', '"REJECT"',
-  "revision: deliverable.revision", 'role: "MEMBER"', "allocationPercent: 100",
-]) need(files.projects, marker, "projets — invariants");
+  "/projects", "/deliverables", '"SUBMIT"', '"ACCEPT"', '"REQUEST_CHANGES"', '"REJECT"',
+  "revision: review.item.revision", 'role: "MEMBER"', "allocationPercent: 100",
+]) need(projectContract, marker, "projets — invariants");
 
 for (const marker of [
   "/assets", "/assignments", "/asset-assignments/", "/maintenance", "/incidents", "/asset-maintenance/", "/asset-incidents/",
-  '"START"', '"COMPLETE"', '"CANCEL"', "revision: item.revision", "revision: active.revision",
+  '"START"', '"COMPLETE"', '"CANCEL"', "revision: review.item.revision", "revision: active.revision",
 ]) need(files.assets, marker, "actifs — invariants");
 
 need(files.runner, "qa-professional-operations-i18n-331.mjs", "Regression QA");
@@ -108,4 +116,4 @@ if (failures.length) {
   console.error(failures.map((failure) => `FAIL ${failure}`).join("\n"));
   process.exit(1);
 }
-console.log(`Professional ERP operations i18n #331 — PASS (${frKeys.length} clés FR/EN, invariants métier préservés).`);
+console.log(`Professional ERP operations i18n #331 — PASS (${frKeys.length} clés FR/EN, invariants métier préservés via workspaces professionnels délégués).`);

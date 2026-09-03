@@ -19,6 +19,10 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "PROJECTS_SERVICES", action: "read" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const [writeAccess, manageAccess] = await Promise.all([
+    getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "PROJECTS_SERVICES", action: "write" }),
+    getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "PROJECTS_SERVICES", action: "manage" }),
+  ]);
   const url = new URL(req.url);
   const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
   const pageSize = Math.min(100, Math.max(5, Number(url.searchParams.get("pageSize") || 25) || 25));
@@ -30,7 +34,7 @@ export async function GET(req: Request, { params }: Params) {
     ...(status ? { status } : {}),
     ...(search ? { OR: [{ reference: { contains: search, mode: "insensitive" } }, { name: { contains: search, mode: "insensitive" } }] } : {}),
   };
-  const [items, total, active, overdue, risks] = await Promise.all([
+  const [rawItems, total, active, overdue, risks] = await Promise.all([
     prisma.enterpriseProject.findMany({
       where,
       orderBy: [{ status: "asc" }, { targetEndDate: "asc" }, { updatedAt: "desc" }],
@@ -43,8 +47,29 @@ export async function GET(req: Request, { params }: Params) {
     prisma.enterpriseProject.count({ where: { organizationId, archivedAt: null, targetEndDate: { lt: new Date() }, status: { notIn: ["COMPLETED", "CLOSED", "CANCELLED"] } } }),
     prisma.enterpriseProjectRisk.count({ where: { organizationId, status: "OPEN", severity: { in: ["HIGH", "CRITICAL"] } } }),
   ]);
+  const projectIds = rawItems.map((item) => item.id);
+  const acceptedByProject = projectIds.length
+    ? await prisma.enterpriseProjectDeliverable.groupBy({
+        by: ["projectId"],
+        where: { organizationId, projectId: { in: projectIds }, status: "ACCEPTED" },
+        _count: { _all: true },
+      })
+    : [];
+  const acceptedMap = new Map(acceptedByProject.map((item) => [item.projectId, item._count._all]));
+  const items = rawItems.map((item) => ({
+    ...item,
+    progressPercent: item._count.deliverables > 0
+      ? Math.round(((acceptedMap.get(item.id) || 0) / item._count.deliverables) * 100)
+      : item.progressPercent,
+  }));
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "projects", page } });
-  return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { active, overdue, highRisks: risks }, canManage: access.canManage });
+  return NextResponse.json({
+    items,
+    pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) },
+    metrics: { active, overdue, highRisks: risks },
+    canWrite: Boolean(writeAccess),
+    canManage: Boolean(manageAccess),
+  });
 }
 
 export async function POST(req: Request, { params }: Params) {

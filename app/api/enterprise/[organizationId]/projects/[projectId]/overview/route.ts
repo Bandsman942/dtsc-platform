@@ -25,6 +25,10 @@ export async function GET(req: Request, { params }: Params) {
     },
   });
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const accepted = project.deliverables.filter((item) => item.status === "ACCEPTED").length;
+  const progressPercent = project.deliverables.length > 0
+    ? Math.round((accepted / project.deliverables.length) * 100)
+    : project.progressPercent;
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "project-overview", projectId } });
-  return NextResponse.json({ project, canManage: access.canManage });
+  return NextResponse.json({ project: { ...project, progressPercent }, canManage: access.canManage });
 }

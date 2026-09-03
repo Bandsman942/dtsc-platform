@@ -17,6 +17,9 @@ import { decideEnterprisePayrollRun } from "@/lib/enterprise/hr-payroll/payroll"
 import { decideEnterpriseTimesheet } from "@/lib/enterprise/hr-payroll/timesheets";
 import { decideEnterpriseInventoryCount, decideEnterpriseStockTransfer } from "@/lib/enterprise/inventory/service";
 import { decideEnterpriseStockAdjustment } from "@/lib/enterprise/inventory/adjustment-service";
+import { cancelEnterpriseProjectMilestoneApproval } from "@/lib/enterprise/projects-assets/milestone-approval-cancel";
+import { ensureProjectMilestoneApprovalSubmissionVersion, recordProjectMilestoneApprovalDecision } from "@/lib/enterprise/projects-assets/milestone-approval-coordination";
+import { decideEnterpriseProjectMilestone } from "@/lib/enterprise/projects-assets/project-controls";
 import { decideEnterprisePurchaseApproval } from "@/lib/enterprise/procurement/purchase-service";
 import { notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
@@ -40,7 +43,14 @@ async function targetRevision(organizationId: string, approval: CurrentApproval)
   if (approval.targetEntityType === "EnterpriseStockTransfer") return (await prisma.enterpriseStockTransfer.findFirst({ where: { id: approval.targetEntityId, organizationId, archivedAt: null }, select: { revision: true } }))?.revision ?? null;
   if (approval.targetEntityType === "EnterpriseInventoryCount") return (await prisma.enterpriseInventoryCount.findFirst({ where: { id: approval.targetEntityId, organizationId, archivedAt: null }, select: { revision: true } }))?.revision ?? null;
   if (approval.targetEntityType === "EnterpriseStockAdjustment") return (await prisma.enterpriseStockAdjustment.findFirst({ where: { id: approval.targetEntityId, organizationId }, select: { revision: true } }))?.revision ?? null;
+  if (approval.targetEntityType === "EnterpriseProjectMilestone") return (await prisma.enterpriseProjectMilestone.findFirst({ where: { id: approval.targetEntityId, organizationId }, select: { revision: true } }))?.revision ?? null;
   return null;
+}
+
+async function reviewVersion(organizationId: string, current: CurrentApproval) {
+  return current.targetEntityType === "EnterpriseProjectMilestone"
+    ? ensureProjectMilestoneApprovalSubmissionVersion({ organizationId, approvalId: current.id, actorUserId: current.requestedByUserId })
+    : ensureApprovalSubmissionVersion({ organizationId, approvalId: current.id, actorUserId: current.requestedByUserId });
 }
 
 async function decideDomainApproval(organizationId: string, current: CurrentApproval, actorUserId: string, data: { action: "APPROVE" | "REJECT" | "CANCEL"; revision: number; decisionComment?: string }, canManage: boolean) {
@@ -48,10 +58,13 @@ async function decideDomainApproval(organizationId: string, current: CurrentAppr
   if (current.targetEntityType === "EnterprisePurchase") return decideEnterprisePurchaseApproval(args);
   if (current.targetEntityType === "EnterpriseBudget") return decideEnterpriseBudgetApproval(args);
   if (current.targetEntityType === "EnterpriseExpense") return decideEnterpriseExpenseApproval(args);
+  if (current.targetEntityType === "EnterpriseProjectMilestone" && data.action === "CANCEL") {
+    return cancelEnterpriseProjectMilestoneApproval({ organizationId, approvalId: current.id, actorUserId, approvalRevision: data.revision, canManage });
+  }
   if (data.action === "CANCEL") return decideAssignedEnterpriseApproval(args);
 
   const revision = await targetRevision(organizationId, current);
-  const revisionedTargets = ["EnterpriseAccountTransfer", "EnterpriseLeaveRequest", "EnterpriseEmploymentContract", "EnterpriseTimesheet", "EnterprisePayrollRun", "EnterpriseStockTransfer", "EnterpriseInventoryCount", "EnterpriseStockAdjustment"];
+  const revisionedTargets = ["EnterpriseAccountTransfer", "EnterpriseLeaveRequest", "EnterpriseEmploymentContract", "EnterpriseTimesheet", "EnterprisePayrollRun", "EnterpriseStockTransfer", "EnterpriseInventoryCount", "EnterpriseStockAdjustment", "EnterpriseProjectMilestone"];
   if (revisionedTargets.includes(current.targetEntityType) && revision === null) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "L’objet métier lié à cette validation est introuvable.");
   if (current.targetEntityType === "EnterpriseAccountTransfer") return data.action === "APPROVE" ? approveAssignedAccountTransfer(organizationId, current.targetEntityId, actorUserId, revision!) : rejectAssignedAccountTransfer(organizationId, current.targetEntityId, actorUserId, revision!, data.decisionComment || "");
   if (current.targetEntityType === "EnterpriseLeaveRequest") return decideEnterpriseLeaveRequest(organizationId, current.targetEntityId, actorUserId, { decision: data.action, revision: revision!, comment: data.decisionComment });
@@ -61,6 +74,7 @@ async function decideDomainApproval(organizationId: string, current: CurrentAppr
   if (current.targetEntityType === "EnterpriseStockTransfer") return decideEnterpriseStockTransfer(organizationId, current.targetEntityId, actorUserId, { decision: data.action, revision: revision!, comment: data.decisionComment });
   if (current.targetEntityType === "EnterpriseInventoryCount") return decideEnterpriseInventoryCount(organizationId, current.targetEntityId, actorUserId, { decision: data.action, revision: revision!, comment: data.decisionComment });
   if (current.targetEntityType === "EnterpriseStockAdjustment") return decideEnterpriseStockAdjustment(organizationId, current.targetEntityId, actorUserId, { decision: data.action, revision: revision!, comment: data.decisionComment });
+  if (current.targetEntityType === "EnterpriseProjectMilestone") return decideEnterpriseProjectMilestone(organizationId, current.targetEntityId, actorUserId, { decision: data.action, revision: revision!, comment: data.decisionComment });
   return decideAssignedEnterpriseApproval(args);
 }
 
@@ -82,7 +96,7 @@ export async function POST(req: Request, { params }: Params) {
       if (current.status !== "PENDING") throw new ApprovalCoordinationError("INVALID_STATE", 409, "Cette validation n’est plus en attente de revue.");
       if (current.revision !== data.revision) throw new ApprovalCoordinationError("VERSION_MISMATCH", 409, "Cette validation a changé. Actualisez avant de préparer la revue.");
       if (!access.canManage && current.approverUserId !== session.userId && current.requestedByUserId !== session.userId) throw new ApprovalCoordinationError("FORBIDDEN", 403, "Vous ne pouvez pas préparer la revue de cette validation.");
-      const version = await ensureApprovalSubmissionVersion({ organizationId, approvalId: id, actorUserId: current.requestedByUserId });
+      const version = await reviewVersion(organizationId, current);
       await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_APPROVAL_REVIEW_PREPARED", entity: "EnterpriseApproval", entityId: id, request: req, metadata: { organizationId, submissionVersionId: version.id, versionNumber: version.versionNumber } });
       await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "approvals", approvalId: id, action } });
       return NextResponse.json({ ok: true, submissionVersion: version });
@@ -101,11 +115,15 @@ export async function POST(req: Request, { params }: Params) {
     if (data.action === "REJECT" && !(data.decisionComment || "").trim()) throw new ApprovalCoordinationError("REJECTION_REASON_REQUIRED", 400, "Un motif est obligatoire pour rejeter une validation.");
     if (["APPROVE", "REJECT"].includes(data.action)) {
       if (current.approverUserId !== session.userId) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
-      const version = await ensureApprovalSubmissionVersion({ organizationId, approvalId: id, actorUserId: current.requestedByUserId });
+      const version = await reviewVersion(organizationId, current);
       if (!data.reviewedVersionId || data.reviewedVersionId !== version.id) throw new ApprovalCoordinationError("APPROVAL_REVIEW_REQUIRED", 409, "Ouvrez la validation et relisez la version soumise avant de prendre une décision.");
     }
     await decideDomainApproval(organizationId, current, session.userId, data, access.canManage);
-    if (data.action === "APPROVE" || data.action === "REJECT") await recordApprovalDecision({ organizationId, approvalId: id, actorUserId: session.userId, decision: data.action, reason: data.decisionComment, idempotencyKey: typeof payload?.idempotencyKey === "string" ? payload.idempotencyKey : null });
+    if (data.action === "APPROVE" || data.action === "REJECT") {
+      const decisionArgs = { organizationId, approvalId: id, actorUserId: session.userId, decision: data.action, reason: data.decisionComment, idempotencyKey: typeof payload?.idempotencyKey === "string" ? payload.idempotencyKey : null };
+      if (current.targetEntityType === "EnterpriseProjectMilestone") await recordProjectMilestoneApprovalDecision(decisionArgs);
+      else await recordApprovalDecision(decisionArgs);
+    }
     const approval = await prisma.enterpriseApproval.findFirst({ where: { id, organizationId, archivedAt: null } });
     if (current.requestedByUserId !== session.userId) await notifyUser({ userId: current.requestedByUserId, organizationId, type: "ENTERPRISE_APPROVAL", title: data.action === "APPROVE" ? "Validation approuvée" : data.action === "REJECT" ? "Validation rejetée" : "Validation annulée", body: data.decisionComment || "Une décision a été prise sur votre demande de validation.", targetUrl: workCoordinationDeepLink("APPROVAL", id) });
     await writeAuditLog({ userId: session.userId, action: `ENTERPRISE_APPROVAL_${data.action}`, entity: "EnterpriseApproval", entityId: id, request: req, metadata: { organizationId, targetEntityType: current.targetEntityType, targetEntityId: current.targetEntityId, fromStatus: current.status, toStatus: approval?.status, reviewedVersionId: data.reviewedVersionId || null } });

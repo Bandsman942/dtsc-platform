@@ -23,6 +23,22 @@ const DELIVERABLE_TRANSITIONS: Record<string, string[]> = {
   CHANGES_REQUESTED: ["SUBMIT"],
   SUBMITTED: ["ACCEPT", "REQUEST_CHANGES", "REJECT"],
 };
+const PROJECT_EDITABLE_STATUSES = new Set(["DRAFT", "PLANNED", "ACTIVE", "IN_PROGRESS", "AT_RISK", "BLOCKED"]);
+
+function assertProjectEditable(status: string) {
+  if (!PROJECT_EDITABLE_STATUSES.has(status)) throw new EnterpriseDomainError("PROJECT_NOT_EDITABLE", 409);
+}
+
+function assertDateInsideProject(
+  project: { startDate: Date | null; targetEndDate: Date | null },
+  dueDate: Date | null | undefined,
+  beforeCode: string,
+  afterCode: string,
+) {
+  if (!dueDate) return;
+  if (project.startDate && dueDate < project.startDate) throw new EnterpriseDomainError(beforeCode, 409);
+  if (project.targetEndDate && dueDate > project.targetEndDate) throw new EnterpriseDomainError(afterCode, 409);
+}
 
 export async function createEnterpriseProject(
   organizationId: string,
@@ -38,13 +54,19 @@ export async function createEnterpriseProject(
   }
 
   return prisma.$transaction(async (tx) => {
-    await assertProjectRelations(tx, organizationId, {
+    const relations = await assertProjectRelations(tx, organizationId, {
       businessPartyId: input.businessPartyId,
       contractId: input.contractId,
       ownerUserId: input.ownerUserId,
+      departmentId: input.departmentId,
       siteId: input.siteId,
+      budgetId: input.budgetId,
       memberEmployeeIds: employeeIds,
     });
+    const businessPartyId = input.businessPartyId || relations.contract?.businessPartyId || null;
+    if (input.projectType === "CLIENT" && !businessPartyId) {
+      throw new EnterpriseDomainError("PROJECT_CLIENT_REQUIRED", 400);
+    }
     const project = await tx.enterpriseProject.create({
       data: {
         organizationId,
@@ -53,7 +75,7 @@ export async function createEnterpriseProject(
         description: input.description || null,
         projectType: input.projectType,
         status: "DRAFT",
-        businessPartyId: input.businessPartyId || null,
+        businessPartyId,
         contractId: input.contractId || null,
         ownerUserId: input.ownerUserId || actorUserId,
         departmentId: input.departmentId || null,
@@ -85,6 +107,9 @@ export async function createEnterpriseProject(
       summary: `Projet ${project.reference} créé`,
       actorUserId,
       toStatus: "DRAFT",
+      metadataJson: input.contractId && !input.businessPartyId && businessPartyId
+        ? { businessPartyDerivedFromContract: true }
+        : undefined,
     });
     return project;
   });
@@ -99,10 +124,9 @@ export async function createEnterpriseProjectMilestone(
   return prisma.$transaction(async (tx) => {
     const project = await tx.enterpriseProject.findFirst({ where: { id: projectId, organizationId, archivedAt: null } });
     if (!project) throw new EnterpriseDomainError("PROJECT_NOT_FOUND", 404);
+    assertProjectEditable(project.status);
     if (input.ownerUserId) await assertProjectRelations(tx, organizationId, { ownerUserId: input.ownerUserId });
-    if (project.targetEndDate && input.dueDate && input.dueDate > project.targetEndDate) {
-      throw new EnterpriseDomainError("MILESTONE_AFTER_PROJECT_END", 409);
-    }
+    assertDateInsideProject(project, input.dueDate, "MILESTONE_BEFORE_PROJECT_START", "MILESTONE_AFTER_PROJECT_END");
     const milestone = await tx.enterpriseProjectMilestone.create({
       data: {
         organizationId,
@@ -138,11 +162,21 @@ export async function createEnterpriseProjectDeliverable(
   return prisma.$transaction(async (tx) => {
     const project = await tx.enterpriseProject.findFirst({ where: { id: projectId, organizationId, archivedAt: null } });
     if (!project) throw new EnterpriseDomainError("PROJECT_NOT_FOUND", 404);
+    assertProjectEditable(project.status);
+    let milestoneDueDate: Date | null = null;
     if (input.milestoneId) {
       const milestone = await tx.enterpriseProjectMilestone.findFirst({ where: { id: input.milestoneId, organizationId, projectId } });
       if (!milestone) throw new EnterpriseDomainError("PROJECT_MILESTONE_NOT_FOUND", 404);
+      milestoneDueDate = milestone.dueDate;
     }
-    if (input.ownerUserId) await assertProjectRelations(tx, organizationId, { ownerUserId: input.ownerUserId });
+    await assertProjectRelations(tx, organizationId, {
+      ownerUserId: input.ownerUserId,
+      documentId: input.documentId,
+    });
+    assertDateInsideProject(project, input.dueDate, "DELIVERABLE_BEFORE_PROJECT_START", "DELIVERABLE_AFTER_PROJECT_END");
+    if (milestoneDueDate && input.dueDate && input.dueDate > milestoneDueDate) {
+      throw new EnterpriseDomainError("DELIVERABLE_AFTER_MILESTONE", 409);
+    }
     const deliverable = await tx.enterpriseProjectDeliverable.create({
       data: {
         organizationId,
@@ -179,13 +213,20 @@ export async function transitionEnterpriseProjectDeliverable(
   return prisma.$transaction(async (tx) => {
     const deliverable = await tx.enterpriseProjectDeliverable.findFirst({
       where: { id: deliverableId, organizationId },
+      include: { project: { select: { status: true } } },
     });
     if (!deliverable) throw new EnterpriseDomainError("PROJECT_DELIVERABLE_NOT_FOUND", 404);
+    if (["CANCELLED", "CLOSED"].includes(deliverable.project.status)) {
+      throw new EnterpriseDomainError("PROJECT_NOT_EDITABLE", 409);
+    }
     if (!(DELIVERABLE_TRANSITIONS[deliverable.status] || []).includes(input.action)) {
       throw new EnterpriseDomainError("DELIVERABLE_TRANSITION_INVALID", 409);
     }
-    if (["ACCEPT", "REJECT"].includes(input.action) && deliverable.createdByUserId === actorUserId) {
+    if (["ACCEPT", "REQUEST_CHANGES", "REJECT"].includes(input.action) && deliverable.createdByUserId === actorUserId) {
       throw new EnterpriseDomainError("SELF_APPROVAL_FORBIDDEN", 409);
+    }
+    if (["REQUEST_CHANGES", "REJECT"].includes(input.action) && (!input.comment || input.comment.trim().length < 3)) {
+      throw new EnterpriseDomainError("DELIVERABLE_REVIEW_COMMENT_REQUIRED", 400);
     }
     const statusByAction = {
       SUBMIT: "SUBMITTED",
@@ -229,9 +270,11 @@ export async function createEnterpriseProjectRisk(
   input: RiskCreateInput,
 ) {
   return prisma.$transaction(async (tx) => {
-    const project = await tx.enterpriseProject.findFirst({ where: { id: projectId, organizationId, archivedAt: null }, select: { id: true, reference: true } });
+    const project = await tx.enterpriseProject.findFirst({ where: { id: projectId, organizationId, archivedAt: null }, select: { id: true, reference: true, status: true, startDate: true, targetEndDate: true } });
     if (!project) throw new EnterpriseDomainError("PROJECT_NOT_FOUND", 404);
+    assertProjectEditable(project.status);
     if (input.ownerUserId) await assertProjectRelations(tx, organizationId, { ownerUserId: input.ownerUserId });
+    assertDateInsideProject(project, input.dueDate, "PROJECT_RISK_BEFORE_START", "PROJECT_RISK_AFTER_END");
     const risk = await tx.enterpriseProjectRisk.create({
       data: {
         organizationId,
@@ -261,9 +304,11 @@ export async function createEnterpriseProjectIssue(
   input: IssueCreateInput,
 ) {
   return prisma.$transaction(async (tx) => {
-    const project = await tx.enterpriseProject.findFirst({ where: { id: projectId, organizationId, archivedAt: null }, select: { id: true, reference: true } });
+    const project = await tx.enterpriseProject.findFirst({ where: { id: projectId, organizationId, archivedAt: null }, select: { id: true, reference: true, status: true, startDate: true, targetEndDate: true } });
     if (!project) throw new EnterpriseDomainError("PROJECT_NOT_FOUND", 404);
+    assertProjectEditable(project.status);
     if (input.ownerUserId) await assertProjectRelations(tx, organizationId, { ownerUserId: input.ownerUserId });
+    assertDateInsideProject(project, input.dueDate, "PROJECT_ISSUE_BEFORE_START", "PROJECT_ISSUE_AFTER_END");
     const issue = await tx.enterpriseProjectIssue.create({
       data: {
         organizationId,

@@ -29,7 +29,11 @@ type ProfessionalErpSupplementKey =
   | "inventory.adjustmentKind"
   | "inventory.rejectionReason"
   | "inventory.decisionComment";
-export type ProfessionalErpKey = BaseProfessionalErpKey | ProfessionalErpSupplementKey;
+type ProfessionalErpAliasKey =
+  | "assets.plannedAt"
+  | "assets.dueAt"
+  | "assets.occurredAt";
+export type ProfessionalErpKey = BaseProfessionalErpKey | ProfessionalErpSupplementKey | ProfessionalErpAliasKey;
 
 export function useProfessionalErpLocale(): ProfessionalErpLocale {
   const locale = useAppLocale();
@@ -106,6 +110,12 @@ const professionalSupplements: Record<ProfessionalErpLocale, Record<Professional
   },
 };
 
+const professionalAliases: Record<ProfessionalErpAliasKey, BaseProfessionalErpKey> = {
+  "assets.plannedAt": "assets.plannedDate",
+  "assets.dueAt": "assets.dueDate",
+  "assets.occurredAt": "assets.incidentDate",
+};
+
 const siteTypeSupplements = {
   fr: {
     ESTABLISHMENT: "Établissement",
@@ -121,6 +131,17 @@ const siteTypeSupplements = {
   },
 } as const;
 
+const projectStatusSupplements = {
+  fr: {
+    APPROVED: "Approuvé",
+    RESOLVED: "Résolu",
+  },
+  en: {
+    APPROVED: "Approved",
+    RESOLVED: "Resolved",
+  },
+} as const;
+
 export type ProfessionalErpApprovalMessageCode = keyof typeof approvalMessages.fr;
 
 export function professionalErpApprovalMessage(locale: ProfessionalErpLocale, code: string | null | undefined) {
@@ -129,9 +150,12 @@ export function professionalErpApprovalMessage(locale: ProfessionalErpLocale, co
 }
 
 export function professionalErpT(locale: ProfessionalErpLocale, key: ProfessionalErpKey, values?: Record<string, string | number>) {
-  let text = key in professionalSupplements[locale]
-    ? professionalSupplements[locale][key as ProfessionalErpSupplementKey]
-    : translateProfessionalErp(locale, key as BaseProfessionalErpKey);
+  const alias = professionalAliases[key as ProfessionalErpAliasKey];
+  let text = alias
+    ? translateProfessionalErp(locale, alias)
+    : key in professionalSupplements[locale]
+      ? professionalSupplements[locale][key as ProfessionalErpSupplementKey]
+      : translateProfessionalErp(locale, key as BaseProfessionalErpKey);
   if (!values) return text;
   for (const [name, value] of Object.entries(values)) text = text.replaceAll(`{{${name}}}`, String(value));
   return text;
@@ -180,6 +204,10 @@ export function professionalErpEnumLabel(
 ) {
   if (group === "siteType") {
     const supplemented = siteTypeSupplements[locale][value as keyof typeof siteTypeSupplements.fr];
+    if (supplemented) return supplemented;
+  }
+  if (group === "projectStatus") {
+    const supplemented = projectStatusSupplements[locale][value as keyof typeof projectStatusSupplements.fr];
     if (supplemented) return supplemented;
   }
   const key = `${group}.${value}` as BaseProfessionalErpKey;

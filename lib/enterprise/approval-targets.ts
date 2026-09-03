@@ -25,6 +25,7 @@ export const ENTERPRISE_APPROVAL_MODULE_BY_TARGET: Readonly<Record<string, strin
   EnterpriseEmploymentContract: "HUMAN_RESOURCES",
   EnterpriseTimesheet: "TIME_ATTENDANCE",
   EnterprisePayrollRun: "PAYROLL_OPERATIONS",
+  EnterpriseProjectMilestone: "PROJECTS_SERVICES",
 };
 
 export function enterpriseApprovalModuleForTarget(targetEntityType: string) {
@@ -58,5 +59,6 @@ export function enterpriseApprovalTargetDeepLink(targetEntityType: string, targe
   if (targetEntityType === "EnterpriseEmploymentContract") return `/enterprise-modules/HUMAN_RESOURCES?contract=${id}`;
   if (targetEntityType === "EnterpriseTimesheet") return `/enterprise-modules/TIME_ATTENDANCE?timesheet=${id}`;
   if (targetEntityType === "EnterprisePayrollRun") return `/enterprise-modules/PAYROLL_OPERATIONS?payroll=${id}`;
+  if (targetEntityType === "EnterpriseProjectMilestone") return `/enterprise-modules/PROJECTS_SERVICES?milestone=${id}`;
   return `/enterprise-modules/VALIDATIONS${approvalId ? `?approval=${encodeURIComponent(approvalId)}` : ""}`;
 }

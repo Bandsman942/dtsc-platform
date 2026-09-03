@@ -3,6 +3,10 @@ import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
 import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
+import {
+  canAccessEnterpriseDocument,
+  getEnterpriseProcurementAccess,
+} from "@/lib/enterprise/procurement/access";
 import { createEnterpriseProjectDeliverable } from "@/lib/enterprise/projects-assets/projects";
 import { projectDeliverableCreateSchema } from "@/lib/enterprise/projects-assets/schemas";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
@@ -17,10 +21,31 @@ export async function POST(req: Request, { params }: Params) {
   const limited = await rateLimit(getRateLimitKey(req, `enterprise-project-deliverable:${session.userId}`), 150, 3600000);
   if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   const { organizationId, projectId } = await params;
-  const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "PROJECTS_SERVICES", action: "write" });
-  if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const [projectAccess, deliverablesAccess] = await Promise.all([
+    getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "PROJECTS_SERVICES", action: "write" }),
+    getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "TIME_DELIVERABLES", action: "write" }),
+  ]);
+  if (!projectAccess && !deliverablesAccess) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = projectDeliverableCreateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+
+  if (parsed.data.documentId) {
+    const documentAccess = await getEnterpriseProcurementAccess({
+      session,
+      organizationId,
+      moduleCode: "DOCUMENTS",
+      action: "read",
+    });
+    if (!documentAccess) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const document = await canAccessEnterpriseDocument({
+      organizationId,
+      userId: session.userId,
+      canManage: documentAccess.canManage,
+      documentId: parsed.data.documentId,
+    });
+    if (!document) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   try {
     const deliverable = await createEnterpriseProjectDeliverable(organizationId, projectId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_PROJECT_DELIVERABLE_CREATED", entity: "EnterpriseProjectDeliverable", entityId: deliverable.id, request: req, metadata: { organizationId, projectId } });
