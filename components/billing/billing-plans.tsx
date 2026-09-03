@@ -113,9 +113,9 @@ export function BillingPlans({
                 {plan.priceUsd > 0 && <span className={`text-sm font-semibold ${active ? "text-slate-300" : "text-dtsc-muted"}`}> / mois</span>}
               </p>
               <ul className={`mt-5 space-y-2 text-sm ${active ? "text-slate-300" : "text-dtsc-muted"}`}>
-                <li>{plan.dailyMessageLimit} messages / jour</li>
+                <li>{plan.dailyMessageLimit} messages IA / jour</li>
                 <li>{plan.dailyTokenLimit.toLocaleString("fr-FR")} tokens / jour</li>
-                <li>{plan.maxDocuments} document(s) autorisé(s)</li>
+                <li>{plan.maxDocuments} source(s) de connaissance IA</li>
               </ul>
               <Button
                 className={`mt-auto rounded-xl ${active ? "bg-cyan-300 text-[#001736] hover:bg-cyan-200" : "bg-[#002b5b] text-white hover:bg-[#001736]"}`}
