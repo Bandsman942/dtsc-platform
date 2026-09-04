@@ -11,13 +11,11 @@ import {
   type EnterpriseFinanceModuleCode,
 } from "@/lib/enterprise/accounting/constants";
 import { ensureCanonicalFinanceModulesForOrganization } from "@/lib/enterprise/finance-modules";
-import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
+import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
 import { getEnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
 import { requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
 import { translateEnterpriseFinance } from "@/lib/i18n";
 import { prisma } from "@/lib/prisma";
-
-const MANAGER_ROLES = new Set(["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE", "MANAGER"]);
 
 export async function EnterpriseFinanceModulePage({ moduleCode }: { moduleCode: EnterpriseFinanceModuleCode }) {
   const user = await requireUser();
@@ -26,19 +24,18 @@ export async function EnterpriseFinanceModulePage({ moduleCode }: { moduleCode: 
   if (!session || !organizationId) redirect("/dashboard");
 
   await ensureCanonicalFinanceModulesForOrganization({ organizationId });
-  const [access, membership, organization] = await Promise.all([
-    resolveEnterpriseModuleAccess({ userId: user.id, organizationId, moduleCode, action: "read" }),
+  const [capabilities, membership, organization] = await Promise.all([
+    resolveEnterpriseModuleCapabilities({ userId: user.id, organizationId, moduleCode }),
     requireEnterpriseMembership(session, organizationId),
     prisma.organization.findFirst({
       where: { id: organizationId, status: "ACTIVE", deletedAt: null, organizationType: "CLIENT" },
       select: { name: true, logoUrl: true },
     }),
   ]);
-  if (!access.allowed || !membership || !organization) notFound();
+  if (!capabilities.canRead || !membership || !organization) notFound();
 
-  const definition = access.definition || getEnterpriseModuleDefinition(moduleCode);
+  const definition = capabilities.definition || getEnterpriseModuleDefinition(moduleCode);
   if (!definition || definition.code !== moduleCode || definition.routeKind !== "DEDICATED_CORE") notFound();
-  const canManage = MANAGER_ROLES.has(membership.role);
   const locale = user.locale === "en" ? "en" : "fr";
   const t = (key: Parameters<typeof translateEnterpriseFinance>[1]) => translateEnterpriseFinance(locale, key);
 
@@ -62,7 +59,7 @@ export async function EnterpriseFinanceModulePage({ moduleCode }: { moduleCode: 
           organizationName={organization.name}
           definition={definition}
           locale={user.locale}
-          canManage={canManage}
+          canManage={capabilities.canManage}
         />
       ) : OPERATIONAL_FINANCE_MODULE_CODES.includes(
         moduleCode as (typeof OPERATIONAL_FINANCE_MODULE_CODES)[number],
@@ -72,7 +69,11 @@ export async function EnterpriseFinanceModulePage({ moduleCode }: { moduleCode: 
           organizationName={organization.name}
           definition={definition}
           locale={user.locale}
-          canManage={canManage}
+          canCreate={capabilities.canCreate}
+          canSubmit={capabilities.canSubmit}
+          canWrite={capabilities.canWrite}
+          canApprove={capabilities.canApprove}
+          canManage={capabilities.canManage}
         />
       ) : (
         <EnterpriseAdvancedFinanceWorkspace
@@ -81,7 +82,7 @@ export async function EnterpriseFinanceModulePage({ moduleCode }: { moduleCode: 
           organizationLogoUrl={organization.logoUrl}
           definition={definition}
           locale={user.locale}
-          canManage={canManage}
+          canManage={capabilities.canManage}
         />
       )}
     </AppShell>
