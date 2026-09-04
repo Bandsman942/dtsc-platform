@@ -15,7 +15,10 @@ export async function getEnterpriseFinanceAccess({
   moduleCode: "FINANCE_BUDGETS" | "REPORTS" | "VALIDATIONS";
   action: EnterpriseCoreV2Action;
 }) {
-  if (moduleCode === "VALIDATIONS") return getEnterpriseCoreV2Access({ session, organizationId, moduleCode, action });
+  if (moduleCode === "VALIDATIONS") {
+    const access = await getEnterpriseCoreV2Access({ session, organizationId, moduleCode, action });
+    return access ? { ...access, canSubmit: access.capabilities.canSubmit } : null;
+  }
   const membership = await requireEnterpriseMembership(session, organizationId);
   if (!membership) return null;
   const capabilities = await resolveEnterpriseModuleCapabilities({ userId: session.userId, organizationId, moduleCode });
