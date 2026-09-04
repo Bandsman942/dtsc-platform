@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 export type ServerPagination = { page: number; pageSize: number; total: number; pageCount: number };
-export type ServerCollectionMeta = { canManage?: boolean; currentUserId?: string; metrics?: Record<string, number> };
+export type ServerCollectionMeta = { canManage?: boolean; canCreate?: boolean; currentUserId?: string; metrics?: Record<string, number>; latestGeneratedAt?: string | null };
 
 export function useEnterpriseV2Collection<T>({ endpoint, params, refreshKey = 0 }: { endpoint: string; params: URLSearchParams; refreshKey?: number }) {
   const [items, setItems] = useState<T[]>([]);
@@ -21,7 +21,7 @@ export function useEnterpriseV2Collection<T>({ endpoint, params, refreshKey = 0 
     if (response.ok && body?.items && body.pagination) {
       setItems(body.items);
       setPagination(body.pagination);
-      setMeta({ canManage: body.canManage, currentUserId: body.currentUserId, metrics: body.metrics });
+      setMeta({ canManage: body.canManage, canCreate: body.canCreate, currentUserId: body.currentUserId, metrics: body.metrics, latestGeneratedAt: body.latestGeneratedAt });
     } else {
       setError(body?.message || "LOAD_FAILED");
     }
