@@ -283,6 +283,8 @@ jobs:
           exit 1
       - name: Authenticated ERP browser acceptance
         run: pnpm e2e:erp-professional
+      - name: Hotfix 574 Finance owner acceptance
+        run: pnpm exec playwright test tests/e2e/hotfix-574-finance-owner.spec.mjs
       - name: Stop application
         if: always()
         run: |
