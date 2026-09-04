@@ -34,6 +34,10 @@ const core = read("lib/enterprise/enterprise-core.ts");
 ok(core.includes("EnterpriseCoreRecord"), "Legacy EnterpriseCoreRecord must stay readable for compatibility.");
 ok(constants.includes("DEDICATED_CORE_RECORD_TYPES"), "Dedicated domains must be centralized for legacy write blocking.");
 
+const financeAccess = includes("lib/enterprise/finance/access.ts", ["resolveEnterpriseModuleCapabilities", "capabilities.canRead", "capabilities.canSubmit", "capabilities.canWrite", "capabilities.canApprove", "capabilities.canManage"]);
+ok(financeAccess.includes("canSeeAll: capabilities.canApprove || capabilities.canManage"), "Finance approvers/managers must be able to read the records they are responsible for.");
+ok(!financeAccess.includes("ENTERPRISE_MANAGER_ROLES"), "Finance access must derive capabilities from the canonical module access contract, not from a parallel manager-role shortcut.");
+
 const money = includes("lib/enterprise/finance/money.ts", ["Prisma.Decimal", "toDecimalPlaces(2", "assertSameCurrency"]);
 ok(!money.includes("Math.round") && !money.includes("toFixed(2) as number"), "Financial truth must not use JavaScript floating-point rounding.");
 
@@ -97,8 +101,14 @@ for (const route of [
 
 const budgetRoute = read("app/api/enterprise/[organizationId]/budgets/route.ts");
 const expenseRoute = read("app/api/enterprise/[organizationId]/expenses/route.ts");
-ok(budgetRoute.includes("capabilities") && budgetRoute.includes("canCreateRevision") && budgetRoute.includes("canFreeze"), "Budget list must expose server-derived action capabilities.");
-ok(expenseRoute.includes("capabilities") && expenseRoute.includes("canSubmit") && expenseRoute.includes("canReopen"), "Expense list must expose server-derived action capabilities.");
+const budgetActionRoute = read("app/api/enterprise/[organizationId]/budgets/[id]/actions/route.ts");
+const expenseActionRoute = read("app/api/enterprise/[organizationId]/expenses/[id]/actions/route.ts");
+const reportGenerateRoute = read("app/api/enterprise/[organizationId]/reports/generate/route.ts");
+ok(budgetRoute.includes("capabilities") && budgetRoute.includes("canCreateRevision") && budgetRoute.includes("canFreeze") && budgetRoute.includes("access.canSubmit"), "Budget list must expose permission-aware server-derived action capabilities.");
+ok(expenseRoute.includes("capabilities") && expenseRoute.includes("canSubmit") && expenseRoute.includes("canReopen") && expenseRoute.includes("access.canSubmit"), "Expense list must expose permission-aware server-derived action capabilities.");
+ok(budgetRoute.includes('action: "submit"') && expenseRoute.includes('action: "submit"') && reportGenerateRoute.includes('action: "submit"'), "Budget, expense and report creation must use the canonical create/submit capability instead of requiring update permission.");
+ok(budgetActionRoute.includes("BUDGET_MANAGEMENT_ACTIONS") && budgetActionRoute.includes('? "manage" : "submit"'), "Budget management transitions must require manage while owner workflow transitions require submit.");
+ok(expenseActionRoute.includes('parsed.data.action === "ARCHIVE" ? "manage" : "submit"'), "Expense archival must require manage while owner workflow transitions require submit.");
 
 const financeEntry = read("components/enterprise/core-v2/enterprise-finance-workspace.tsx");
 const financeWorkspace = read("components/enterprise/core-v2/enterprise-finance-workspace-hotfix.tsx");
@@ -157,4 +167,4 @@ ok(!/\bBPMN\b/.test(changedFinanceFiles) && !/model\s+.*WorkflowEngine/.test(cha
 ok(!/general ledger|bank reconciliation|double-entry/i.test(changedFinanceFiles), "Sprint 8 must not implement general-ledger or bank-reconciliation logic.");
 
 if (failures.length) { console.error("Enterprise finance/reporting QA failed:\n- " + failures.join("\n- ")); process.exit(1); }
-console.log("Enterprise finance/reporting QA passed: dedicated Decimal-safe finance sources, purchase/expense consistency, stale-link replacement, shared approvals, authoritative overview counts, searchable tenant references, server action capabilities, immutable report snapshots, mobile editor forms, legacy isolation and production-only delivery verified.");
+console.log("Enterprise finance/reporting QA passed: dedicated Decimal-safe finance sources, purchase/expense consistency, stale-link replacement, shared approvals, authoritative overview counts, capability-based RBAC, action-level permission boundaries, searchable tenant references, immutable report snapshots, mobile editor forms, legacy isolation and production-only delivery verified.");
