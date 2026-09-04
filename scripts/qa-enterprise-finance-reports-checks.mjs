@@ -131,7 +131,18 @@ ok(!financeWorkspace.includes("pageSize=100&status=ACTIVE") && !financeWorkspace
 ok(financeReferenceSelect.includes("pageSize") && financeReferenceSelect.includes("search") && financeReferenceSelect.includes("organizationId"), "Finance reference selector must search paginated tenant-scoped endpoints.");
 
 ok(overviewWorkspace.includes("/finance/overview-summary") && overviewWorkspace.includes("invoicesToPost") && overviewWorkspace.includes("pendingApprovals"), "Finance overview must use the authoritative server summary and render the repaired KPIs.");
-ok(!overviewWorkspace.includes("pageSize=100") && !overviewWorkspace.includes("lastErrorMessage"), "Finance overview must not derive global KPIs from a partial client page or leak raw projection errors.");
+ok(
+  !overviewWorkspace.includes("pageSize=100")
+    && overviewWorkspace.includes('state: "error", value: null')
+    && overviewWorkspace.includes('value.state === "error"')
+    && overviewWorkspace.includes("degradedMetrics")
+    && overviewWorkspace.includes('financeT(locale, "metricsUnavailable")')
+    && overviewWorkspace.includes('setProjectionError(financeT(locale, "projectionHealthUnavailable"))')
+    && !overviewWorkspace.includes("setProjectionError(projectionsBody")
+    && !overviewWorkspace.includes("projection.lastErrorMessage")
+    && !overviewWorkspace.includes("item.lastErrorMessage"),
+  "Finance overview must use authoritative KPIs, expose unavailable metrics explicitly and never render raw projection errors.",
+);
 ok(overviewWorkspace.includes('presentation="editor"') && overviewWorkspace.includes('useToastMessage(error, "error")'), "Finance overview configuration must follow editor and explicit error-toast contracts.");
 
 ok(
