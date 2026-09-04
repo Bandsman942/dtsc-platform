@@ -56,9 +56,16 @@ ok(expense.includes('existing.status !== "DRAFT"'), "Approved or pending expense
 ok(expense.includes("documentIds"), "Expenses must support EnterpriseDocument evidence links.");
 ok(expense.includes("enterpriseEntityLink.deleteMany") && expense.includes("SUPPORTING_DOCUMENT") && expense.includes("REALIZES_PURCHASE"), "Expense updates must replace obsolete active cross-module links instead of accumulating contradictory links.");
 
-const reports = includes("lib/enterprise/finance/report-service.ts", ["BUDGET_VS_ACTUAL", "EXPENSE_SUMMARY", "PROCUREMENT_SUMMARY", "schemaVersion", "snapshotJson", "groupBy", "take: 500", "currencyBuckets"]);
+const reports = includes("lib/enterprise/finance/report-service.ts", ["BUDGET_VS_ACTUAL", "EXPENSE_SUMMARY", "PROCUREMENT_SUMMARY", "schemaVersion", "snapshotJson", "groupBy", "take: 500", "currencyBuckets", "resolveReportSourceScope", "resolveEnterpriseModuleCapabilities", "enterpriseBudgetVisibilityWhere", "enterpriseExpenseVisibilityWhere", "enterprisePurchaseVisibilityWhere", "REPORT_FINANCE_SOURCE_FORBIDDEN", "REPORT_PROCUREMENT_SOURCE_FORBIDDEN"]);
 ok(!reports.includes("USD + EUR") && !reports.includes("exchangeRate"), "Sprint 8 reports must not implement or fake FX aggregation.");
 ok(reports.includes("enterpriseBudgetCommitment.groupBy") && reports.includes("enterpriseExpense.groupBy") && reports.includes("enterprisePurchase.groupBy"), "Reports must derive real server aggregates from dedicated tables.");
+ok(reports.includes("purchase: purchaseWhere"), "Procurement report receipt counts must remain inside the same visible purchase scope.");
+ok(reports.includes("where: { ...scope.budget, id: input.budgetId }"), "An explicitly selected report budget must be revalidated against the caller's visible budget scope.");
+
+const financeSummary = includes("lib/enterprise/finance/summary-service.ts", ["enterpriseBudgetVisibilityWhere", "enterpriseExpenseVisibilityWhere", "budgetScope", "budgetLine: { budget: budgetScope }"]);
+ok(financeSummary.includes("userId: string, canSeeAll: boolean"), "Finance summary must receive the caller visibility context instead of aggregating the whole tenant by default.");
+const financeSummaryRoute = includes("app/api/enterprise/[organizationId]/finance-summary/route.ts", ["session.userId", "access.canSeeAll", "getEnterpriseFinanceSummary"]);
+ok(financeSummaryRoute.includes("getEnterpriseFinanceSummary(organizationId, session.userId, access.canSeeAll)"), "Finance summary route must propagate the authenticated caller visibility into server aggregates.");
 
 const overviewSummary = includes("lib/enterprise/finance/overview-summary-service.ts", ["unallocatedAmount: { gt: 0 }", "enterpriseSupplierInvoice.count", "enterpriseSalesInvoice.count", "enterpriseApproval.count", "FINANCE_APPROVAL_TARGETS"]);
 ok(!overviewSummary.includes("groupBy") && !overviewSummary.includes("exchangeRate"), "Finance overview readiness KPIs must remain exact counts and must not invent cross-currency totals.");
@@ -167,4 +174,4 @@ ok(!/\bBPMN\b/.test(changedFinanceFiles) && !/model\s+.*WorkflowEngine/.test(cha
 ok(!/general ledger|bank reconciliation|double-entry/i.test(changedFinanceFiles), "Sprint 8 must not implement general-ledger or bank-reconciliation logic.");
 
 if (failures.length) { console.error("Enterprise finance/reporting QA failed:\n- " + failures.join("\n- ")); process.exit(1); }
-console.log("Enterprise finance/reporting QA passed: dedicated Decimal-safe finance sources, purchase/expense consistency, stale-link replacement, shared approvals, authoritative overview counts, capability-based RBAC, action-level permission boundaries, searchable tenant references, immutable report snapshots, mobile editor forms, legacy isolation and production-only delivery verified.");
+console.log("Enterprise finance/reporting QA passed: dedicated Decimal-safe finance sources, purchase/expense consistency, stale-link replacement, shared approvals, authoritative overview counts, capability-based RBAC, action-level permission boundaries, visibility-scoped aggregates and snapshots, searchable tenant references, immutable report snapshots, mobile editor forms, legacy isolation and production-only delivery verified.");
