@@ -97,6 +97,26 @@ export async function POST(req: Request, { params }: Params) {
   if (!auth.ok) return auth.response;
   const parsed = paymentCreateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+
+  if (parsed.data.paymentType === "CUSTOMER_PAYMENT" || parsed.data.paymentType === "SUPPLIER_PAYMENT") {
+    const expectedDirection = parsed.data.paymentType === "CUSTOMER_PAYMENT" ? "INBOUND" : "OUTBOUND";
+    const expectedRole = parsed.data.paymentType === "CUSTOMER_PAYMENT" ? "CUSTOMER" : "SUPPLIER";
+    if (parsed.data.direction !== expectedDirection || !parsed.data.businessPartyId || parsed.data.employeeId || parsed.data.payrollRunId) {
+      return NextResponse.json({ error: "PAYMENT_COUNTERPARTY_INVALID", message: parsed.data.paymentType === "CUSTOMER_PAYMENT" ? "Un encaissement client doit cibler un client actif et être entrant." : "Un paiement fournisseur doit cibler un fournisseur actif et être sortant." }, { status: 409 });
+    }
+    const party = await prisma.enterpriseBusinessParty.findFirst({
+      where: {
+        id: parsed.data.businessPartyId,
+        organizationId,
+        status: "ACTIVE",
+        archivedAt: null,
+        roles: { some: { roleCode: expectedRole, status: "ACTIVE", archivedAt: null } },
+      },
+      select: { id: true },
+    });
+    if (!party) return NextResponse.json({ error: "PAYMENT_COUNTERPARTY_INVALID", message: "Le tiers sélectionné ne correspond pas au type de paiement dans cette entreprise." }, { status: 409 });
+  }
+
   try {
     const payment = await createEnterprisePayment(organizationId, auth.session.userId, parsed.data);
     await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_PAYMENT_CREATED", entity: "EnterprisePayment", entityId: payment.id, request: req, metadata: { organizationId, number: payment.number, amount: payment.amount.toFixed(), currency: payment.currencyCode, direction: payment.direction, paymentType: payment.paymentType } });
