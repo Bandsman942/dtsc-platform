@@ -10,6 +10,7 @@ import { financeEnumLabel, financeMetricLabel, type FinanceLocale } from "@/comp
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useToastMessage } from "@/components/ui/use-toast-message";
 import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
@@ -17,38 +18,20 @@ import { translateEnterpriseFinance, type EnterpriseFinanceKey } from "@/lib/i18
 
 type ReadinessDiagnostic = { code: string; severity: "BLOCKER" | "WARNING"; ready: boolean; labelFr: string; labelEn: string; messageFr: string; messageEn: string; actionFr?: string; actionEn?: string; actionKind: "CONFIGURATION" | "LINK" | "NONE"; actionHref?: string };
 type Readiness = { version?: number; configuration?: { functionalCurrencyCode?: string; presentationCurrencyCode?: string | null; inventoryValuationMethod?: string; reconciliationTolerance?: string | number; automaticPostingEnabled?: boolean; revision?: number } | null; diagnostics?: ReadinessDiagnostic[]; ready?: boolean; status?: string; blockers?: string[]; warnings?: string[] };
-type SourceState = "success" | "empty" | "error";
-type MetricRead = { state: SourceState; total: number | null; items: Array<{ unallocatedAmount?: string | number; status?: string }>; message?: string };
-type MetricValue = { state: SourceState; value: number | null; message?: string };
+type MetricValue = { state: "success" | "empty" | "error"; value: number | null; message?: string };
 type Summary = { openReceivables: MetricValue; openPayables: MetricValue; unallocatedPayments: MetricValue; openCashSessions: MetricValue; pendingReconciliations: MetricValue; invoicesToPost: MetricValue; pendingApprovals: MetricValue };
+type OverviewSummaryPayload = { openReceivables: number; openPayables: number; unallocatedPayments: number; openCashSessions: number; pendingReconciliations: number; invoicesToPost: number; pendingApprovals: number; invoiceBreakdown?: { sales: number; suppliers: number }; message?: string; error?: string };
 type ProjectionItem = { id: string; eventType: string; sourceEntityType: string; sourceEntityId: string; targetModule: string; targetEntityType?: string | null; targetEntityId?: string | null; status: string; attemptCount: number; lastErrorCode?: string | null; lastErrorMessage?: string | null; updatedAt: string; sourceDeepLink?: string | null; targetDeepLink?: string | null };
 type ProjectionHealth = { items: ProjectionItem[]; metrics: Record<string, number>; pagination: { total: number } };
 
 const unavailableMetric = (): MetricValue => ({ state: "error", value: null });
+const metric = (value: number): MetricValue => ({ state: value === 0 ? "empty" : "success", value });
 const EMPTY_SUMMARY: Summary = { openReceivables: unavailableMetric(), openPayables: unavailableMetric(), unallocatedPayments: unavailableMetric(), openCashSessions: unavailableMetric(), pendingReconciliations: unavailableMetric(), invoicesToPost: unavailableMetric(), pendingApprovals: unavailableMetric() };
 const EMPTY_PROJECTION_HEALTH: ProjectionHealth = { items: [], metrics: {}, pagination: { total: 0 } };
 const financeT = (locale: FinanceLocale, key: EnterpriseFinanceKey) => translateEnterpriseFinance(locale, key);
 
-async function totalFor(url: string): Promise<MetricRead> {
-  try {
-    const response = await fetch(url, { cache: "no-store" });
-    const body = await response.json().catch(() => null) as { pagination?: { total?: number }; items?: Array<{ unallocatedAmount?: string | number; status?: string }>; message?: string; error?: string } | null;
-    if (!response.ok || !body) return { state: "error", total: null, items: [], message: body?.message || body?.error || `HTTP ${response.status}` };
-    const total = Number(body.pagination?.total || 0);
-    return { state: total === 0 ? "empty" : "success", total, items: body.items || [] };
-  } catch (error) {
-    return { state: "error", total: null, items: [], message: error instanceof Error ? error.message : "READ_FAILED" };
-  }
-}
-
-function metricFrom(read: MetricRead, value = read.total): MetricValue {
-  if (read.state === "error") return { state: "error", value: null, message: read.message };
-  const number = Number(value || 0);
-  return { state: number === 0 ? "empty" : "success", value: number, message: read.message };
-}
-
-function metricDisplay(metric: MetricValue, locale: FinanceLocale): ReactNode {
-  return metric.state === "error" ? <span className="text-sm font-black text-amber-700 dark:text-amber-300">{financeT(locale, "unavailable")}</span> : metric.value;
+function metricDisplay(value: MetricValue, locale: FinanceLocale): ReactNode {
+  return value.state === "error" ? <span className="text-sm font-black text-amber-700 dark:text-amber-300">{financeT(locale, "unavailable")}</span> : value.value;
 }
 
 function DiagnosticCard({ diagnostic, locale, canManage, openConfiguration }: { diagnostic: ReadinessDiagnostic; locale: FinanceLocale; canManage: boolean; openConfiguration: () => void }) {
@@ -74,39 +57,47 @@ export function EnterpriseFinanceOverviewWorkspace({ organizationId, organizatio
   const [projectionError, setProjectionError] = useState("");
   const [retryingProjectionId, setRetryingProjectionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [configurationOpen, setConfigurationOpen] = useState(false);
   const [requestedConfiguration, setRequestedConfiguration] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  useToastMessage(message, "success");
+  useToastMessage(error, "error");
 
   const load = useCallback(async () => {
     setLoading(true); setError(""); setProjectionError("");
     try {
-      const [readinessResponse, receivables, payables, payments, cash, reconciliations, approvedInvoices, pendingPayments, projectionsResponse] = await Promise.all([
+      const [readinessResponse, summaryResponse, projectionsResponse] = await Promise.all([
         fetch(`/api/enterprise/${organizationId}/finance/configuration`, { cache: "no-store" }),
-        totalFor(`/api/enterprise/${organizationId}/receivables?page=1&pageSize=1&status=OPEN`),
-        totalFor(`/api/enterprise/${organizationId}/payables?page=1&pageSize=1&status=OPEN`),
-        totalFor(`/api/enterprise/${organizationId}/payments?page=1&pageSize=100&status=CONFIRMED`),
-        totalFor(`/api/enterprise/${organizationId}/cash-sessions?page=1&pageSize=1&status=OPEN`),
-        totalFor(`/api/enterprise/${organizationId}/reconciliations?page=1&pageSize=1&status=SUBMITTED`),
-        totalFor(`/api/enterprise/${organizationId}/sales-invoices?page=1&pageSize=1&status=APPROVED`),
-        totalFor(`/api/enterprise/${organizationId}/payments?page=1&pageSize=1&status=PENDING_APPROVAL`),
+        fetch(`/api/enterprise/${organizationId}/finance/overview-summary`, { cache: "no-store" }).catch(() => null),
         fetch(`/api/enterprise/${organizationId}/erp-projections?page=1&pageSize=20`, { cache: "no-store" }).catch(() => null),
       ]);
       const body = await readinessResponse.json().catch(() => null) as Readiness & { message?: string; error?: string } | null;
       if (!readinessResponse.ok || !body) throw new Error(body?.message || body?.error || financeT(locale, "financeReadinessLoadFailed"));
       setReadiness(body);
-      setSummary({
-        openReceivables: metricFrom(receivables), openPayables: metricFrom(payables),
-        unallocatedPayments: metricFrom(payments, payments.state === "error" ? null : payments.items.filter((item) => Number(item.unallocatedAmount || 0) > 0).length),
-        openCashSessions: metricFrom(cash), pendingReconciliations: metricFrom(reconciliations), invoicesToPost: metricFrom(approvedInvoices), pendingApprovals: metricFrom(pendingPayments),
-      });
+
+      if (!summaryResponse) setSummary(EMPTY_SUMMARY);
+      else {
+        const summaryBody = await summaryResponse.json().catch(() => null) as OverviewSummaryPayload | null;
+        if (!summaryResponse.ok || !summaryBody) setSummary(EMPTY_SUMMARY);
+        else setSummary({
+          openReceivables: metric(summaryBody.openReceivables),
+          openPayables: metric(summaryBody.openPayables),
+          unallocatedPayments: metric(summaryBody.unallocatedPayments),
+          openCashSessions: metric(summaryBody.openCashSessions),
+          pendingReconciliations: metric(summaryBody.pendingReconciliations),
+          invoicesToPost: metric(summaryBody.invoicesToPost),
+          pendingApprovals: metric(summaryBody.pendingApprovals),
+        });
+      }
+
       if (!projectionsResponse) {
         setProjectionHealth(EMPTY_PROJECTION_HEALTH); setProjectionError(financeT(locale, "projectionHealthUnavailable"));
       } else {
         const projectionsBody = await projectionsResponse.json().catch(() => null) as (ProjectionHealth & { message?: string; error?: string }) | null;
         if (!projectionsResponse.ok || !projectionsBody) {
-          setProjectionHealth(EMPTY_PROJECTION_HEALTH); setProjectionError(projectionsBody?.message || projectionsBody?.error || financeT(locale, "projectionHealthUnavailable"));
+          setProjectionHealth(EMPTY_PROJECTION_HEALTH); setProjectionError(financeT(locale, "projectionHealthUnavailable"));
         } else setProjectionHealth(projectionsBody);
       }
     } catch (loadError) { setError(loadError instanceof Error ? loadError.message : financeT(locale, "financeReadinessLoadFailed")); }
@@ -124,7 +115,7 @@ export function EnterpriseFinanceOverviewWorkspace({ organizationId, organizatio
   const blockerDiagnostics = diagnostics.filter((diagnostic) => diagnostic.severity === "BLOCKER");
   const completedBlockers = blockerDiagnostics.filter((diagnostic) => diagnostic.ready).length;
   const percentage = blockerDiagnostics.length ? Math.round((completedBlockers / blockerDiagnostics.length) * 100) : 0;
-  const degradedMetrics = Object.values(summary).filter((metric) => metric.state === "error").length;
+  const degradedMetrics = Object.values(summary).filter((value) => value.state === "error").length;
 
   async function retryProjection(projectionId: string) {
     setRetryingProjectionId(projectionId); setMessage(""); setError("");
@@ -138,11 +129,12 @@ export function EnterpriseFinanceOverviewWorkspace({ organizationId, organizatio
   }
 
   async function saveConfiguration(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); const form = new FormData(event.currentTarget); setMessage(""); setError("");
+    event.preventDefault(); const form = new FormData(event.currentTarget); setMessage(""); setError(""); setSaving(true);
     try {
       await financeMutation(`/api/enterprise/${organizationId}/finance/configuration`, { functionalCurrencyCode: String(form.get("functionalCurrencyCode") || "USD").toUpperCase(), presentationCurrencyCode: String(form.get("presentationCurrencyCode") || "").toUpperCase() || null, inventoryValuationMethod: String(form.get("inventoryValuationMethod") || "WEIGHTED_AVERAGE"), reconciliationTolerance: String(form.get("reconciliationTolerance") || "0.01"), automaticPostingEnabled: form.get("automaticPostingEnabled") === "on", revision: readiness?.configuration?.revision || undefined }, "PATCH");
       setConfigurationOpen(false); setMessage(financeT(locale, "financeConfigurationSaved")); await load();
     } catch (saveError) { setError(saveError instanceof Error ? saveError.message : financeT(locale, "saveFailed")); }
+    finally { setSaving(false); }
   }
 
   const remainingPrerequisites = blockerDiagnostics.length - completedBlockers;
@@ -157,7 +149,7 @@ export function EnterpriseFinanceOverviewWorkspace({ organizationId, organizatio
   return <ModuleWorkspace>
     <ModuleHeader eyebrow={`${financeT(locale, "financeReadiness")} · ${organizationName}`} title={financeT(locale, "financeOverviewTitle")} description={locale === "en" ? definition.descriptionEn : definition.descriptionFr} count={`${percentage}%`} primaryAction={canManage ? <Button onClick={() => setConfigurationOpen(true)}><Settings2 className="h-4 w-4" />{financeT(locale, "configureFinance")}</Button> : undefined} secondaryActions={<ReloadButton onClick={() => void load()} locale={locale} loading={loading} />} />
     <ModuleMetrics label={financeT(locale, "financeMetrics")}>
-      <ModuleMetric label={financeMetricLabel("openReceivables", locale)} value={metricDisplay(summary.openReceivables, locale)} /><ModuleMetric label={financeMetricLabel("openPayables", locale)} value={metricDisplay(summary.openPayables, locale)} /><ModuleMetric label={financeMetricLabel("unallocatedPayments", locale)} value={metricDisplay(summary.unallocatedPayments, locale)} /><ModuleMetric label={financeMetricLabel("openCashSessions", locale)} value={metricDisplay(summary.openCashSessions, locale)} /><ModuleMetric label={financeMetricLabel("pendingReconciliations", locale)} value={metricDisplay(summary.pendingReconciliations, locale)} /><ModuleMetric label={financeMetricLabel("pendingApprovals", locale)} value={metricDisplay(summary.pendingApprovals, locale)} />
+      <ModuleMetric label={financeMetricLabel("openReceivables", locale)} value={metricDisplay(summary.openReceivables, locale)} /><ModuleMetric label={financeMetricLabel("openPayables", locale)} value={metricDisplay(summary.openPayables, locale)} /><ModuleMetric label={financeMetricLabel("unallocatedPayments", locale)} value={metricDisplay(summary.unallocatedPayments, locale)} /><ModuleMetric label={financeMetricLabel("openCashSessions", locale)} value={metricDisplay(summary.openCashSessions, locale)} /><ModuleMetric label={financeMetricLabel("pendingReconciliations", locale)} value={metricDisplay(summary.pendingReconciliations, locale)} /><ModuleMetric label={financeMetricLabel("invoicesToPost", locale)} value={metricDisplay(summary.invoicesToPost, locale)} /><ModuleMetric label={financeMetricLabel("pendingApprovals", locale)} value={metricDisplay(summary.pendingApprovals, locale)} />
     </ModuleMetrics>
     <ModuleContent>
       {message ? <div role="status" className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-bold text-emerald-800 dark:text-emerald-200">{message}</div> : null}
@@ -170,13 +162,13 @@ export function EnterpriseFinanceOverviewWorkspace({ organizationId, organizatio
         </ModuleSection>
         <ModuleSection title={financeT(locale, "recommendedActions")}><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{actions.map((action) => <Link key={action.href} href={action.href} className="rounded-xl border border-dtsc-border p-4 hover:bg-dtsc-soft"><p className="text-2xl font-black text-dtsc-blue">{metricDisplay(action.metric, locale)}</p><p className="mt-1 font-black text-dtsc-ink">{action.label}</p></Link>)}</div></ModuleSection>
         <ModuleSection title={financeT(locale, "crossModuleContinuity")} description={financeT(locale, "crossModuleContinuityDescription")}>
-          {projectionError ? <ProfessionalError message={projectionError} /> : <><div className="grid gap-3 sm:grid-cols-3"><article className="rounded-xl border border-dtsc-border p-4"><p className="text-xs font-black uppercase text-dtsc-muted">{financeT(locale, "completed")}</p><p className="mt-1 text-2xl font-black text-emerald-600">{projectionHealth.metrics.COMPLETED || 0}</p></article><article className="rounded-xl border border-dtsc-border p-4"><p className="text-xs font-black uppercase text-dtsc-muted">{financeT(locale, "retryNeeded")}</p><p className="mt-1 text-2xl font-black text-amber-600">{(projectionHealth.metrics.FAILED || 0) + (projectionHealth.metrics.DEAD || 0)}</p></article><article className="rounded-xl border border-dtsc-border p-4"><p className="text-xs font-black uppercase text-dtsc-muted">{financeT(locale, "observedTotal")}</p><p className="mt-1 text-2xl font-black text-dtsc-blue">{projectionHealth.pagination.total}</p></article></div><div className="mt-4 grid gap-3">{projectionHealth.items.filter((item) => ["FAILED", "DEAD"].includes(item.status)).length ? projectionHealth.items.filter((item) => ["FAILED", "DEAD"].includes(item.status)).map((item) => <article key={item.id} className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4"><div className="flex flex-wrap items-start gap-3"><Network className="mt-0.5 h-5 w-5 text-amber-700" /><div className="min-w-0 flex-1"><p className="font-black text-dtsc-ink">{item.eventType}</p><p className="mt-1 text-sm text-dtsc-muted">{item.lastErrorMessage || financeT(locale, "projectionAwaitingRetry")}</p><div className="mt-2 flex flex-wrap gap-3 text-xs font-bold">{item.sourceDeepLink ? <Link className="text-dtsc-blue underline" href={item.sourceDeepLink}>{financeT(locale, "openSource")}</Link> : null}{item.targetDeepLink ? <Link className="text-dtsc-blue underline" href={item.targetDeepLink}>{financeT(locale, "openTarget")}</Link> : null}<span className="text-dtsc-muted">{financeT(locale, "attempts")}: {item.attemptCount}</span></div></div>{canManage ? <Button type="button" variant="outline" disabled={retryingProjectionId === item.id} onClick={() => void retryProjection(item.id)}><RotateCcw className="h-4 w-4" />{financeT(locale, "retry")}</Button> : null}</div></article>) : <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 text-sm font-bold text-emerald-800 dark:text-emerald-200">{financeT(locale, "noFailedProjection")}</div>}</div></>}
+          {projectionError ? <ProfessionalError message={projectionError} /> : <><div className="grid gap-3 sm:grid-cols-3"><article className="rounded-xl border border-dtsc-border p-4"><p className="text-xs font-black uppercase text-dtsc-muted">{financeT(locale, "completed")}</p><p className="mt-1 text-2xl font-black text-emerald-600">{projectionHealth.metrics.COMPLETED || 0}</p></article><article className="rounded-xl border border-dtsc-border p-4"><p className="text-xs font-black uppercase text-dtsc-muted">{financeT(locale, "retryNeeded")}</p><p className="mt-1 text-2xl font-black text-amber-600">{(projectionHealth.metrics.FAILED || 0) + (projectionHealth.metrics.DEAD || 0)}</p></article><article className="rounded-xl border border-dtsc-border p-4"><p className="text-xs font-black uppercase text-dtsc-muted">{financeT(locale, "observedTotal")}</p><p className="mt-1 text-2xl font-black text-dtsc-blue">{projectionHealth.pagination.total}</p></article></div><div className="mt-4 grid gap-3">{projectionHealth.items.filter((item) => ["FAILED", "DEAD"].includes(item.status)).length ? projectionHealth.items.filter((item) => ["FAILED", "DEAD"].includes(item.status)).map((item) => <article key={item.id} className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4"><div className="flex flex-wrap items-start gap-3"><Network className="mt-0.5 h-5 w-5 text-amber-700" /><div className="min-w-0 flex-1"><p className="font-black text-dtsc-ink">{financeT(locale, "crossModuleContinuity")}</p><p className="mt-1 text-sm text-dtsc-muted">{financeT(locale, "projectionAwaitingRetry")}</p><div className="mt-2 flex flex-wrap gap-3 text-xs font-bold">{item.sourceDeepLink ? <Link className="text-dtsc-blue underline" href={item.sourceDeepLink}>{financeT(locale, "openSource")}</Link> : null}{item.targetDeepLink ? <Link className="text-dtsc-blue underline" href={item.targetDeepLink}>{financeT(locale, "openTarget")}</Link> : null}<span className="text-dtsc-muted">{financeT(locale, "attempts")}: {item.attemptCount}</span></div></div>{canManage ? <Button type="button" variant="outline" disabled={retryingProjectionId === item.id} onClick={() => void retryProjection(item.id)}><RotateCcw className="h-4 w-4" />{financeT(locale, "retry")}</Button> : null}</div></article>) : <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 text-sm font-bold text-emerald-800 dark:text-emerald-200">{financeT(locale, "noFailedProjection")}</div>}</div></>}
         </ModuleSection>
         <ProfessionalHelp moduleCode="FINANCE_OVERVIEW" />
       </>}
     </ModuleContent>
-    <Dialog open={configurationOpen} onClose={() => setConfigurationOpen(false)} title={financeT(locale, "financeConfiguration")} description={requestedConfiguration === "currency" ? financeT(locale, "functionalCurrencyShopDescription") : financeT(locale, "configurationRevisionDescription")} className="h-[94dvh] max-w-4xl">
-      <form onSubmit={saveConfiguration} className="grid gap-6"><ProfessionalFormSection title={financeT(locale, "currenciesAndMethod")}><Field label={financeT(locale, "functionalCurrency")}><Input name="functionalCurrencyCode" defaultValue={readiness?.configuration?.functionalCurrencyCode || "USD"} maxLength={3} required /></Field><Field label={financeT(locale, "presentationCurrency")}><Input name="presentationCurrencyCode" defaultValue={readiness?.configuration?.presentationCurrencyCode || ""} maxLength={3} /></Field><Field label={financeT(locale, "inventoryValuation")}><NativeSelect name="inventoryValuationMethod" defaultValue={readiness?.configuration?.inventoryValuationMethod || "WEIGHTED_AVERAGE"} items={[{ id: "WEIGHTED_AVERAGE", label: financeEnumLabel("WEIGHTED_AVERAGE", locale) }, { id: "FIFO", label: financeEnumLabel("FIFO", locale) }]} required /></Field><Field label={financeT(locale, "reconciliationTolerance")}><Input name="reconciliationTolerance" inputMode="decimal" defaultValue={String(readiness?.configuration?.reconciliationTolerance || "0.01")} required /></Field></ProfessionalFormSection><ProfessionalFormSection title={financeT(locale, "posting")}><Field label={financeT(locale, "automation")}><label className="flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border px-3"><input name="automaticPostingEnabled" type="checkbox" defaultChecked={Boolean(readiness?.configuration?.automaticPostingEnabled)} />{financeT(locale, "automaticPostingAfterApprovals")}</label></Field></ProfessionalFormSection><div className="sticky bottom-0 flex justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface py-3"><Button type="button" variant="outline" onClick={() => setConfigurationOpen(false)}>{financeT(locale, "cancel")}</Button><Button type="submit">{financeT(locale, "save")}</Button></div></form>
+    <Dialog open={configurationOpen} onClose={() => setConfigurationOpen(false)} title={financeT(locale, "financeConfiguration")} description={requestedConfiguration === "currency" ? financeT(locale, "functionalCurrencyShopDescription") : financeT(locale, "configurationRevisionDescription")} presentation="editor" className="max-w-4xl">
+      <form onSubmit={saveConfiguration} className="grid gap-6"><ProfessionalFormSection title={financeT(locale, "currenciesAndMethod")}><Field label={financeT(locale, "functionalCurrency")}><Input name="functionalCurrencyCode" defaultValue={readiness?.configuration?.functionalCurrencyCode || "USD"} maxLength={3} required /></Field><Field label={financeT(locale, "presentationCurrency")}><Input name="presentationCurrencyCode" defaultValue={readiness?.configuration?.presentationCurrencyCode || ""} maxLength={3} /></Field><Field label={financeT(locale, "inventoryValuation")}><NativeSelect name="inventoryValuationMethod" defaultValue={readiness?.configuration?.inventoryValuationMethod || "WEIGHTED_AVERAGE"} items={[{ id: "WEIGHTED_AVERAGE", label: financeEnumLabel("WEIGHTED_AVERAGE", locale) }, { id: "FIFO", label: financeEnumLabel("FIFO", locale) }]} required /></Field><Field label={financeT(locale, "reconciliationTolerance")}><Input name="reconciliationTolerance" inputMode="decimal" defaultValue={String(readiness?.configuration?.reconciliationTolerance || "0.01")} required /></Field></ProfessionalFormSection><ProfessionalFormSection title={financeT(locale, "posting")}><Field label={financeT(locale, "automation")}><label className="flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border px-3"><input name="automaticPostingEnabled" type="checkbox" defaultChecked={Boolean(readiness?.configuration?.automaticPostingEnabled)} />{financeT(locale, "automaticPostingAfterApprovals")}</label></Field></ProfessionalFormSection><div className="sticky bottom-0 flex justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface py-3"><Button type="button" variant="outline" disabled={saving} onClick={() => setConfigurationOpen(false)}>{financeT(locale, "cancel")}</Button><Button type="submit" disabled={saving}>{financeT(locale, "save")}</Button></div></form>
     </Dialog>
   </ModuleWorkspace>;
 }
