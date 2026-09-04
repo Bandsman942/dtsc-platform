@@ -66,9 +66,9 @@ export async function GET(req: Request, { params }: Params) {
       ...item,
       budgetStatus: item.budgetLineId ? "BUDGETED" : "UNBUDGETED",
       capabilities: {
-        canSubmit: canOwn && item.status === "DRAFT",
-        canCancel: canOwn && item.status === "DRAFT",
-        canReopen: canOwn && item.status === "REJECTED",
+        canSubmit: access.canSubmit && canOwn && item.status === "DRAFT",
+        canCancel: access.canSubmit && canOwn && item.status === "DRAFT",
+        canReopen: access.canSubmit && canOwn && item.status === "REJECTED",
       },
     };
   });
@@ -84,7 +84,7 @@ export async function POST(req: Request, { params }: Params) {
   const limited = await rateLimit(getRateLimitKey(req, `enterprise-expenses:${session.userId}`), 100, 60 * 60 * 1000);
   if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   const { organizationId } = await params;
-  const access = await getEnterpriseFinanceAccess({ session, organizationId, moduleCode: "FINANCE_BUDGETS", action: "write" });
+  const access = await getEnterpriseFinanceAccess({ session, organizationId, moduleCode: "FINANCE_BUDGETS", action: "submit" });
   if (!access?.canCreate) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = enterpriseExpenseCreateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Dépense invalide." }, { status: 400 });
