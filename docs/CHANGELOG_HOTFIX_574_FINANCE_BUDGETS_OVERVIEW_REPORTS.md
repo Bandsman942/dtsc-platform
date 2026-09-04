@@ -21,7 +21,9 @@ Remettre `FINANCE_BUDGETS`, `FINANCE_OVERVIEW` et `REPORTS` au même niveau de c
 - la création d’une dépense vérifiait `achat.fournisseur === dépense.fournisseur`, mais cette contrainte n’était pas réappliquée de façon équivalente après modification de l’achat source ;
 - une modification de dépense pouvait laisser des `EnterpriseEntityLink` actifs représentant des relations devenues obsolètes ;
 - un justificatif était validé principalement par appartenance au tenant et non par visibilité documentaire effective de l’utilisateur Finance ;
-- l’interface déduisait encore plusieurs actions depuis les statuts alors que le serveur doit rester l’autorité des capacités.
+- l’interface déduisait encore plusieurs actions depuis les statuts alors que le serveur doit rester l’autorité des capacités ;
+- `FINANCE_BUDGETS` et `REPORTS` conservaient une résolution d’accès parallèle basée sur les rôles manager, au lieu du contrat canonique `resolveEnterpriseModuleCapabilities` utilisé par les modules ERP récemment stabilisés ;
+- les transitions sensibles `FREEZE`, `CREATE_REVISION`, `CLOSE` et `ARCHIVE` d’un budget traversaient la route avec la même permission `submit` qu’une soumission normale, alors que l’UI les présentait comme des actions de gestion.
 
 ### Vue d’ensemble financière
 
@@ -37,7 +39,8 @@ Remettre `FINANCE_BUDGETS`, `FINANCE_OVERVIEW` et `REPORTS` au même niveau de c
 - le compteur « publiés » et la date du « dernier rapport » pouvaient être dérivés de la page courante au lieu des métriques serveur globales ;
 - certaines capacités d’action restaient déduites localement ;
 - les formulaires génération / vue sauvegardée n’étaient pas alignés sur le contrat `editor` récent ;
-- les états de mutation ne distinguaient pas toujours clairement `loading`, succès et erreur.
+- les états de mutation ne distinguaient pas toujours clairement `loading`, succès et erreur ;
+- la génération utilisait l’action d’accès `write` alors qu’elle correspond fonctionnellement à la capacité canonique de création/soumission.
 
 ## Corrections
 
@@ -48,6 +51,16 @@ Remettre `FINANCE_BUDGETS`, `FINANCE_OVERVIEW` et `REPORTS` au même niveau de c
 - les dépenses réappliquent les invariants achat/fournisseur/budget/devise sur création, modification et soumission ;
 - les liens actifs `SUPPLIER`, `REALIZES_PURCHASE`, `BUDGET_CONSUMPTION` et `SUPPORTING_DOCUMENT` sont rafraîchis pour représenter l’état courant sans supprimer l’historique audité porté par les événements ;
 - les justificatifs sont revalidés dans le même `organizationId` et selon la visibilité documentaire effective de l’utilisateur.
+
+### Accès et capacités Finance
+
+- `getEnterpriseFinanceAccess` dérive désormais lecture, création, soumission, écriture, approbation et gestion via `resolveEnterpriseModuleCapabilities` ;
+- les approbateurs et gestionnaires autorisés peuvent voir les budgets/dépenses/rapports nécessaires à leur responsabilité via `canApprove || canManage`, sans élargir l’accès des simples lecteurs ;
+- les capacités d’action renvoyées par les listes Budget/Dépense tiennent compte de `canSubmit` en plus du statut et de l’ownership ;
+- création Budget, création Dépense et génération de Rapport utilisent la capacité canonique `submit/create` ;
+- `FREEZE`, `CREATE_REVISION`, `CLOSE` et `ARCHIVE` Budget exigent désormais `manage` côté backend ;
+- l’archivage d’une Dépense exige `manage`, tandis que les transitions de workflow du propriétaire restent bornées par `submit` ;
+- l’UI n’est plus la seule barrière séparant les actions courantes des actions de gestion.
 
 ### Lookups Finance
 
@@ -77,9 +90,10 @@ Remettre `FINANCE_BUDGETS`, `FINANCE_OVERVIEW` et `REPORTS` au même niveau de c
 Les corrections conservent ou renforcent :
 
 - session et membership actifs ;
-- entitlement / permission module ;
+- entitlement / permission module via le registre canonique de capacités ;
 - isolation `organizationId` ;
 - ownership / visibilité ;
+- permissions d’action distinctes pour soumission et gestion ;
 - `isSameOriginRequest` sur mutations ;
 - validation Zod ;
 - `await rateLimit` ;
@@ -101,6 +115,9 @@ Aucune modification de schéma Prisma et aucune migration ajoutée.
 - résumé financier serveur ;
 - absence de calcul KPI sur fenêtre client ;
 - capacités serveur des workspaces ;
+- résolution RBAC par `resolveEnterpriseModuleCapabilities` ;
+- visibilité des approbateurs/gestionnaires ;
+- séparation `submit` / `manage` des transitions sensibles ;
 - lookups paginés/recherchables ;
 - formulaires `editor` ;
 - absence d’agrégation multi-devise fictive.
@@ -111,7 +128,7 @@ La gate ciblée reste intégrée à la régression canonique du repository.
 
 - Dette créée : aucune visée.
 - Dette maintenue : aucune dette matérielle nécessaire au hotfix n’est volontairement masquée.
-- Dette remboursée : lookups tronqués, incohérence achat/fournisseur après édition, liens actifs contradictoires, métriques Overview partielles et capacités UI non autoritaires.
+- Dette remboursée : lookups tronqués, incohérence achat/fournisseur après édition, liens actifs contradictoires, métriques Overview partielles, capacités UI non autoritaires, résolution RBAC Finance parallèle et permission backend trop large sur les transitions de gestion Budget.
 - Dette reportée : aucune à ce stade.
 
 ## Validation attendue avant merge
