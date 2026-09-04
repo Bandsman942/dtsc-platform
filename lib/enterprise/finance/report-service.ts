@@ -3,7 +3,10 @@ import { Prisma } from "@prisma/client";
 import type { z } from "zod";
 import { EnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
 import { ENTERPRISE_REPORT_TYPES } from "@/lib/enterprise/finance/constants";
+import { enterpriseBudgetVisibilityWhere, enterpriseExpenseVisibilityWhere } from "@/lib/enterprise/finance/access";
 import { enterpriseMoney, enterpriseMoneyZero } from "@/lib/enterprise/finance/money";
+import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
+import { enterprisePurchaseVisibilityWhere } from "@/lib/enterprise/procurement/access";
 import { addEnterpriseOperationalEvent, createEnterpriseLink, nullable, requireEnterpriseSourceReference } from "@/lib/enterprise/procurement/shared";
 import type { enterpriseReportActionSchema, enterpriseReportGenerateSchema } from "@/lib/enterprise/finance/validators";
 import { prisma } from "@/lib/prisma";
@@ -12,6 +15,11 @@ import { calculateBudgetMetrics, getReportCatalogEntry, getReportMetricCodes } f
 type ReportGenerateInput = z.infer<typeof enterpriseReportGenerateSchema>;
 type ReportActionInput = z.infer<typeof enterpriseReportActionSchema>;
 type Tx = Prisma.TransactionClient;
+type ReportSourceScope = {
+  budget: Prisma.EnterpriseBudgetWhereInput;
+  expense: Prisma.EnterpriseExpenseWhereInput;
+  purchase: Prisma.EnterprisePurchaseWhereInput;
+};
 
 function reportReference() {
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -27,7 +35,25 @@ function periodWhere(periodStart?: string | null, periodEnd?: string | null) {
   return { start, end };
 }
 
-async function budgetVsActualSnapshot(tx: Tx, organizationId: string, input: ReportGenerateInput) {
+async function resolveReportSourceScope(organizationId: string, actorUserId: string, reportType: ReportGenerateInput["reportType"]): Promise<ReportSourceScope> {
+  const needsFinance = ["BUDGET_VS_ACTUAL", "EXPENSE_SUMMARY", "FINANCE_OVERVIEW"].includes(reportType);
+  const needsProcurement = ["PROCUREMENT_SUMMARY", "FINANCE_OVERVIEW"].includes(reportType);
+  const [financeCapabilities, procurementCapabilities] = await Promise.all([
+    resolveEnterpriseModuleCapabilities({ userId: actorUserId, organizationId, moduleCode: "FINANCE_BUDGETS" }),
+    resolveEnterpriseModuleCapabilities({ userId: actorUserId, organizationId, moduleCode: "SUPPLIERS_PURCHASES" }),
+  ]);
+  if (needsFinance && !financeCapabilities.canRead) throw new EnterpriseCoreV2Error("Vous n’avez pas accès aux données financières nécessaires à ce rapport.", 403, "REPORT_FINANCE_SOURCE_FORBIDDEN");
+  if (needsProcurement && !procurementCapabilities.canRead) throw new EnterpriseCoreV2Error("Vous n’avez pas accès aux données d’achats nécessaires à ce rapport.", 403, "REPORT_PROCUREMENT_SOURCE_FORBIDDEN");
+  const financeCanSeeAll = financeCapabilities.canApprove || financeCapabilities.canManage;
+  const procurementCanSeeAll = procurementCapabilities.canApprove || procurementCapabilities.canManage;
+  return {
+    budget: enterpriseBudgetVisibilityWhere({ organizationId, userId: actorUserId, canSeeAll: financeCanSeeAll }),
+    expense: enterpriseExpenseVisibilityWhere({ organizationId, userId: actorUserId, canSeeAll: financeCanSeeAll }),
+    purchase: enterprisePurchaseVisibilityWhere({ organizationId, userId: actorUserId, canSeeAll: procurementCanSeeAll }),
+  };
+}
+
+async function budgetVsActualSnapshot(tx: Tx, organizationId: string, input: ReportGenerateInput, scope: ReportSourceScope) {
   const { start, end } = periodWhere(input.periodStart, input.periodEnd);
   const where: Prisma.EnterpriseBudgetLineWhereInput = {
     organizationId,
@@ -35,8 +61,7 @@ async function budgetVsActualSnapshot(tx: Tx, organizationId: string, input: Rep
     ...(input.category ? { category: input.category } : {}),
     ...(input.budgetId ? { budgetId: input.budgetId } : {}),
     budget: {
-      organizationId,
-      archivedAt: null,
+      ...scope.budget,
       ...(input.currency ? { currency: input.currency } : {}),
       ...(start ? { periodEnd: { gte: start } } : {}),
       ...(end ? { periodStart: { lte: end } } : {}),
@@ -76,9 +101,9 @@ async function budgetVsActualSnapshot(tx: Tx, organizationId: string, input: Rep
   return { schema: "budget-vs-actual/v1", truncated: totalLineCount > lines.length, totalLineCount, currencies: [...currencyBuckets.entries()].map(([currency, value]) => ({ currency, planned: moneyString(value.planned), committed: moneyString(value.committedRemaining), actual: moneyString(value.actual), available: moneyString(value.available), utilizationPercent: value.planned.gt(0) ? value.actual.div(value.planned).mul(100).toDecimalPlaces(2).toNumber() : 0 })), lines: detail };
 }
 
-async function expenseSummarySnapshot(tx: Tx, organizationId: string, input: ReportGenerateInput) {
+async function expenseSummarySnapshot(tx: Tx, organizationId: string, input: ReportGenerateInput, scope: ReportSourceScope) {
   const { start, end } = periodWhere(input.periodStart, input.periodEnd);
-  const where: Prisma.EnterpriseExpenseWhereInput = { organizationId, archivedAt: null, status: "APPROVED", ...(input.currency ? { currency: input.currency } : {}), ...(input.departmentId ? { departmentId: input.departmentId } : {}), ...(input.supplierId ? { supplierId: input.supplierId } : {}), ...(input.budgetId ? { budgetLine: { budgetId: input.budgetId } } : {}), ...(input.category ? { category: input.category } : {}), ...(start || end ? { expenseDate: { ...(start ? { gte: start } : {}), ...(end ? { lte: end } : {}) } } : {}) };
+  const where: Prisma.EnterpriseExpenseWhereInput = { ...scope.expense, status: "APPROVED", ...(input.currency ? { currency: input.currency } : {}), ...(input.departmentId ? { departmentId: input.departmentId } : {}), ...(input.supplierId ? { supplierId: input.supplierId } : {}), ...(input.budgetId ? { budgetLine: { budgetId: input.budgetId } } : {}), ...(input.category ? { category: input.category } : {}), ...(start || end ? { expenseDate: { ...(start ? { gte: start } : {}), ...(end ? { lte: end } : {}) } } : {}) };
   const [byCurrency, byCategory, byDepartment, bySupplier, unbudgeted] = await Promise.all([
     tx.enterpriseExpense.groupBy({ by: ["currency"], where, _sum: { amount: true }, _count: { _all: true }, orderBy: { currency: "asc" } }),
     tx.enterpriseExpense.groupBy({ by: ["currency", "category"], where, _sum: { amount: true }, _count: { _all: true }, orderBy: [{ currency: "asc" }, { category: "asc" }] }),
@@ -92,14 +117,14 @@ async function expenseSummarySnapshot(tx: Tx, organizationId: string, input: Rep
   return { schema: "expense-summary/v1", currencies: byCurrency.map((item) => ({ currency: item.currency, amount: moneyString(item._sum.amount || 0), count: item._count._all })), byCategory: byCategory.map((item) => ({ currency: item.currency, category: item.category || "UNCATEGORIZED", amount: moneyString(item._sum.amount || 0), count: item._count._all })), byDepartment: byDepartment.map((item) => ({ currency: item.currency, departmentId: item.departmentId, amount: moneyString(item._sum.amount || 0), count: item._count._all })), bySupplier: bySupplier.map((item) => ({ currency: item.currency, supplierId: item.supplierId, supplier: item.supplierId ? supplierMap.get(item.supplierId) || null : null, amount: moneyString(item._sum.amount || 0), count: item._count._all })), unbudgeted: unbudgeted.map((item) => ({ currency: item.currency, amount: moneyString(item._sum.amount || 0), count: item._count._all })) };
 }
 
-async function procurementSummarySnapshot(tx: Tx, organizationId: string, input: ReportGenerateInput) {
+async function procurementSummarySnapshot(tx: Tx, organizationId: string, input: ReportGenerateInput, scope: ReportSourceScope) {
   const { start, end } = periodWhere(input.periodStart, input.periodEnd);
-  const purchaseWhere: Prisma.EnterprisePurchaseWhereInput = { organizationId, archivedAt: null, ...(input.currency ? { currency: input.currency } : {}), ...(input.departmentId ? { departmentId: input.departmentId } : {}), ...(input.supplierId ? { supplierId: input.supplierId } : {}), ...(start || end ? { createdAt: { ...(start ? { gte: start } : {}), ...(end ? { lte: end } : {}) } } : {}) };
+  const purchaseWhere: Prisma.EnterprisePurchaseWhereInput = { ...scope.purchase, ...(input.currency ? { currency: input.currency } : {}), ...(input.departmentId ? { departmentId: input.departmentId } : {}), ...(input.supplierId ? { supplierId: input.supplierId } : {}), ...(start || end ? { createdAt: { ...(start ? { gte: start } : {}), ...(end ? { lte: end } : {}) } } : {}) };
   const [byStatus, bySupplier, unbudgeted, receipts] = await Promise.all([
     tx.enterprisePurchase.groupBy({ by: ["currency", "status"], where: purchaseWhere, _sum: { totalAmount: true }, _count: { _all: true }, orderBy: [{ currency: "asc" }, { status: "asc" }] }),
     tx.enterprisePurchase.groupBy({ by: ["currency", "supplierId"], where: purchaseWhere, _sum: { totalAmount: true }, _count: { _all: true }, orderBy: [{ currency: "asc" }, { supplierId: "asc" }], take: 200 }),
     tx.enterprisePurchase.groupBy({ by: ["currency"], where: { ...purchaseWhere, budgetLineId: null }, _sum: { totalAmount: true }, _count: { _all: true } }),
-    tx.enterprisePurchaseReceipt.count({ where: { organizationId, ...(start || end ? { receivedAt: { ...(start ? { gte: start } : {}), ...(end ? { lte: end } : {}) } } : {}) } }),
+    tx.enterprisePurchaseReceipt.count({ where: { organizationId, purchase: purchaseWhere, ...(start || end ? { receivedAt: { ...(start ? { gte: start } : {}), ...(end ? { lte: end } : {}) } } : {}) } }),
   ]);
   const supplierIds = bySupplier.map((item) => item.supplierId).filter((id): id is string => Boolean(id));
   const suppliers = supplierIds.length ? await tx.enterpriseSupplier.findMany({ where: { organizationId, id: { in: supplierIds } }, select: { id: true, legalName: true, displayName: true } }) : [];
@@ -107,29 +132,30 @@ async function procurementSummarySnapshot(tx: Tx, organizationId: string, input:
   return { schema: "procurement-summary/v1", byStatus: byStatus.map((item) => ({ currency: item.currency, status: item.status, amount: moneyString(item._sum.totalAmount || 0), count: item._count._all })), bySupplier: bySupplier.map((item) => ({ currency: item.currency, supplierId: item.supplierId, supplier: item.supplierId ? supplierMap.get(item.supplierId) || null : null, amount: moneyString(item._sum.totalAmount || 0), count: item._count._all })), unbudgeted: unbudgeted.map((item) => ({ currency: item.currency, amount: moneyString(item._sum.totalAmount || 0), count: item._count._all })), receiptCount: receipts };
 }
 
-async function financeOverviewSnapshot(tx: Tx, organizationId: string, input: ReportGenerateInput) {
-  const [budget, expenses, procurement] = await Promise.all([budgetVsActualSnapshot(tx, organizationId, input), expenseSummarySnapshot(tx, organizationId, input), procurementSummarySnapshot(tx, organizationId, input)]);
+async function financeOverviewSnapshot(tx: Tx, organizationId: string, input: ReportGenerateInput, scope: ReportSourceScope) {
+  const [budget, expenses, procurement] = await Promise.all([budgetVsActualSnapshot(tx, organizationId, input, scope), expenseSummarySnapshot(tx, organizationId, input, scope), procurementSummarySnapshot(tx, organizationId, input, scope)]);
   return { schema: "finance-overview/v1", budgetCurrencies: budget.currencies, expenseCurrencies: expenses.currencies, procurementByStatus: procurement.byStatus, unbudgetedExpenses: expenses.unbudgeted, unbudgetedPurchases: procurement.unbudgeted };
 }
 
-async function buildSnapshot(tx: Tx, organizationId: string, input: ReportGenerateInput) {
-  if (input.reportType === "BUDGET_VS_ACTUAL") return budgetVsActualSnapshot(tx, organizationId, input);
-  if (input.reportType === "EXPENSE_SUMMARY") return expenseSummarySnapshot(tx, organizationId, input);
-  if (input.reportType === "PROCUREMENT_SUMMARY") return procurementSummarySnapshot(tx, organizationId, input);
-  if (input.reportType === "FINANCE_OVERVIEW") return financeOverviewSnapshot(tx, organizationId, input);
+async function buildSnapshot(tx: Tx, organizationId: string, input: ReportGenerateInput, scope: ReportSourceScope) {
+  if (input.reportType === "BUDGET_VS_ACTUAL") return budgetVsActualSnapshot(tx, organizationId, input, scope);
+  if (input.reportType === "EXPENSE_SUMMARY") return expenseSummarySnapshot(tx, organizationId, input, scope);
+  if (input.reportType === "PROCUREMENT_SUMMARY") return procurementSummarySnapshot(tx, organizationId, input, scope);
+  if (input.reportType === "FINANCE_OVERVIEW") return financeOverviewSnapshot(tx, organizationId, input, scope);
   throw new EnterpriseCoreV2Error("Type de rapport non pris en charge.", 400, "INVALID_REPORT_TYPE");
 }
 
 export async function generateEnterpriseReport(organizationId: string, actorUserId: string, input: ReportGenerateInput) {
   if (!ENTERPRISE_REPORT_TYPES.includes(input.reportType)) throw new EnterpriseCoreV2Error("Type de rapport non pris en charge.", 400, "INVALID_REPORT_TYPE");
+  const scope = await resolveReportSourceScope(organizationId, actorUserId, input.reportType);
   return prisma.$transaction(async (tx) => {
     const source = await requireEnterpriseSourceReference(tx, organizationId, input);
     if (input.budgetId) {
-      const budget = await tx.enterpriseBudget.findFirst({ where: { id: input.budgetId, organizationId, archivedAt: null }, select: { id: true, currency: true } });
-      if (!budget) throw new EnterpriseCoreV2Error("Le budget du rapport n’appartient pas à cette entreprise.", 400, "INVALID_REPORT_BUDGET");
+      const budget = await tx.enterpriseBudget.findFirst({ where: { ...scope.budget, id: input.budgetId }, select: { id: true, currency: true } });
+      if (!budget) throw new EnterpriseCoreV2Error("Le budget du rapport n’est pas accessible dans votre contexte actuel.", 400, "INVALID_REPORT_BUDGET");
       if (input.currency && budget.currency !== input.currency) throw new EnterpriseCoreV2Error("Le filtre de devise ne correspond pas au budget sélectionné.", 400, "REPORT_CURRENCY_MISMATCH");
     }
-    const rawSnapshot = await buildSnapshot(tx, organizationId, input);
+    const rawSnapshot = await buildSnapshot(tx, organizationId, input, scope);
     const generatedAt = new Date();
     const catalog = getReportCatalogEntry(input.reportType);
     const metricCodes = getReportMetricCodes(input.reportType);
