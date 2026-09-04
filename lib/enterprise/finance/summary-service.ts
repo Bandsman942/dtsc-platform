@@ -1,17 +1,21 @@
 import { prisma } from "@/lib/prisma";
+import { enterpriseBudgetVisibilityWhere, enterpriseExpenseVisibilityWhere } from "@/lib/enterprise/finance/access";
 import { enterpriseMoney, enterpriseMoneyZero } from "@/lib/enterprise/finance/money";
 
-export async function getEnterpriseFinanceSummary(organizationId: string) {
-  const currencyRows = await prisma.enterpriseBudget.findMany({ where: { organizationId, archivedAt: null }, distinct: ["currency"], select: { currency: true }, orderBy: { currency: "asc" }, take: 50 });
-  const expenseCurrencyRows = await prisma.enterpriseExpense.findMany({ where: { organizationId, archivedAt: null }, distinct: ["currency"], select: { currency: true }, orderBy: { currency: "asc" }, take: 50 });
+export async function getEnterpriseFinanceSummary(organizationId: string, userId: string, canSeeAll: boolean) {
+  const budgetVisibility = enterpriseBudgetVisibilityWhere({ organizationId, userId, canSeeAll });
+  const expenseVisibility = enterpriseExpenseVisibilityWhere({ organizationId, userId, canSeeAll });
+  const currencyRows = await prisma.enterpriseBudget.findMany({ where: budgetVisibility, distinct: ["currency"], select: { currency: true }, orderBy: { currency: "asc" }, take: 50 });
+  const expenseCurrencyRows = await prisma.enterpriseExpense.findMany({ where: { ...expenseVisibility, budgetLineId: null }, distinct: ["currency"], select: { currency: true }, orderBy: { currency: "asc" }, take: 50 });
   const currencies = [...new Set([...currencyRows, ...expenseCurrencyRows].map((item) => item.currency))].sort();
   const buckets = await Promise.all(currencies.map(async (currency) => {
+    const budgetScope = { ...budgetVisibility, currency, status: "ACTIVE" };
     const [activeBudgets, planned, commitments, actual, unbudgeted] = await Promise.all([
-      prisma.enterpriseBudget.count({ where: { organizationId, currency, status: "ACTIVE", archivedAt: null } }),
-      prisma.enterpriseBudgetLine.aggregate({ where: { organizationId, budget: { currency, status: "ACTIVE", archivedAt: null } }, _sum: { plannedAmount: true } }),
-      prisma.enterpriseBudgetCommitment.aggregate({ where: { organizationId, budgetLine: { budget: { currency, status: "ACTIVE", archivedAt: null } } }, _sum: { committedAmount: true, realizedAmount: true, releasedAmount: true } }),
-      prisma.enterpriseExpense.aggregate({ where: { organizationId, currency, status: "APPROVED", archivedAt: null, budgetLineId: { not: null } }, _sum: { amount: true } }),
-      prisma.enterpriseExpense.aggregate({ where: { organizationId, currency, status: "APPROVED", archivedAt: null, budgetLineId: null }, _sum: { amount: true }, _count: { _all: true } }),
+      prisma.enterpriseBudget.count({ where: budgetScope }),
+      prisma.enterpriseBudgetLine.aggregate({ where: { organizationId, budget: budgetScope }, _sum: { plannedAmount: true } }),
+      prisma.enterpriseBudgetCommitment.aggregate({ where: { organizationId, budgetLine: { budget: budgetScope } }, _sum: { committedAmount: true, realizedAmount: true, releasedAmount: true } }),
+      prisma.enterpriseExpense.aggregate({ where: { organizationId, currency, status: "APPROVED", archivedAt: null, budgetLine: { budget: budgetScope } }, _sum: { amount: true } }),
+      prisma.enterpriseExpense.aggregate({ where: { ...expenseVisibility, currency, status: "APPROVED", budgetLineId: null }, _sum: { amount: true }, _count: { _all: true } }),
     ]);
     const plannedAmount = enterpriseMoney(planned._sum.plannedAmount || 0);
     const committed = enterpriseMoney(commitments._sum.committedAmount || 0);

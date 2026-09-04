@@ -19,7 +19,10 @@ const bridge = read("lib/enterprise/core-v2/approval-assignment-service.ts");
 const purchase = read("lib/enterprise/procurement/purchase-service.ts");
 const budget = read("lib/enterprise/finance/budget-service.ts");
 const expense = read("lib/enterprise/finance/expense-service.ts");
-const financeUi = read("components/enterprise/core-v2/enterprise-finance-workspace.tsx");
+const financeUi = [
+  read("components/enterprise/core-v2/enterprise-finance-workspace.tsx"),
+  read("components/enterprise/core-v2/enterprise-finance-workspace-hotfix.tsx"),
+].join("\n");
 const hrHelpers = read("lib/enterprise/hr-payroll/helpers.ts");
 const hrRegression = read("scripts/qa-enterprise-hr-payroll-checks.mjs");
 const rolesRoute = read("app/api/enterprise/[organizationId]/administration/roles/route.ts");

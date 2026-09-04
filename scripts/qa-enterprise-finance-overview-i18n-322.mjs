@@ -78,18 +78,49 @@ for (const literal of [
 
 for (const contract of [
   "/finance/configuration",
+  "/finance/overview-summary",
+  "/erp-projections?page=1&pageSize=20",
+  "/erp-projections/${projectionId}/retry",
+  "automaticPostingEnabled",
+  "inventoryValuationMethod",
+  "reconciliationTolerance",
+  "invoicesToPost",
+  "pendingApprovals",
+]) check(overview.includes(contract), `Finance overview business contract must remain intact: ${contract}`);
+
+for (const obsoleteClientAggregate of [
   "/receivables?page=1&pageSize=1&status=OPEN",
   "/payables?page=1&pageSize=1&status=OPEN",
   "/payments?page=1&pageSize=100&status=CONFIRMED",
   "/cash-sessions?page=1&pageSize=1&status=OPEN",
   "/reconciliations?page=1&pageSize=1&status=SUBMITTED",
   "/sales-invoices?page=1&pageSize=1&status=APPROVED",
-  "/erp-projections?page=1&pageSize=20",
-  "/erp-projections/${projectionId}/retry",
-  "automaticPostingEnabled",
-  "inventoryValuationMethod",
-  "reconciliationTolerance",
-]) check(overview.includes(contract), `Finance overview business contract must remain intact: ${contract}`);
+]) check(!overview.includes(obsoleteClientAggregate), `Finance overview must not reconstruct global KPIs from partial client collections: ${obsoleteClientAggregate}`);
+
+const overviewRoute = read("app/api/enterprise/[organizationId]/finance/overview-summary/route.ts");
+for (const contract of [
+  "authorizeFinanceRequest",
+  '"FINANCE_OVERVIEW"',
+  '"view"',
+  "getEnterpriseFinanceOverviewSummary",
+  "writeApiLog",
+]) check(overviewRoute.includes(contract), `Finance overview summary route must preserve the authoritative access/audit contract: ${contract}`);
+
+const overviewSummary = read("lib/enterprise/finance/overview-summary-service.ts");
+for (const contract of [
+  "enterpriseReceivable.count",
+  "enterprisePayable.count",
+  "enterprisePayment.count",
+  "enterpriseCashSession.count",
+  "enterpriseReconciliationSession.count",
+  "enterpriseSalesInvoice.count",
+  "enterpriseSupplierInvoice.count",
+  "enterpriseApproval.count",
+  "unallocatedAmount: { gt: 0 }",
+  "salesInvoicesToPost + supplierInvoicesToPost",
+  "FINANCE_APPROVAL_TARGETS",
+]) check(overviewSummary.includes(contract), `Finance overview authoritative summary must preserve exact server counts: ${contract}`);
+check(!overviewSummary.includes("take: 100") && !overviewSummary.includes("pageSize"), "Finance overview server summary must not derive global KPIs from a paginated sample");
 
 const runner = read("scripts/run-regression-qa-ci.mjs");
 check(runner.includes("qa-enterprise-finance-overview-i18n-322.mjs"), "#322 QA must be integrated into Regression QA");
@@ -99,4 +130,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log("Issue #322 Enterprise Finance overview i18n QA passed: canonical FR/EN copy, locale-aware module description, server diagnostics, Finance endpoints and accounting configuration contracts remain intact.");
+console.log("Issue #322 Enterprise Finance overview i18n QA passed: canonical FR/EN copy, locale-aware module description, audited authoritative server KPIs, no partial client aggregation, Finance endpoints and accounting configuration contracts remain intact.");

@@ -14,7 +14,9 @@ type EnterpriseCoordinationSupplementKey =
   | "documents.archiveReview"
   | "documents.archiveReason"
   | "documents.archiveReasonHelp"
-  | "documents.sourceUnavailable";
+  | "documents.sourceUnavailable"
+  | "reports.actionFailed"
+  | "reports.loadFailed";
 export type EnterpriseCoreKey = BaseEnterpriseCoreKey | EnterpriseProcurementCoreKey | EnterpriseCoordinationSupplementKey;
 
 const procurementFragments = { fr: enterpriseProcurementFr, en: enterpriseProcurementEn } as const;
@@ -32,6 +34,8 @@ const coordinationSupplements: Record<"fr" | "en", Record<EnterpriseCoordination
     "documents.archiveReason": "Motif professionnel",
     "documents.archiveReasonHelp": "Expliquez brièvement pourquoi ce document doit être retiré des documents actifs.",
     "documents.sourceUnavailable": "La source de ce document ne possède pas de module canonique reconnu. Le document n’a pas été créé.",
+    "reports.actionFailed": "Cette action n’a pas pu être terminée. Vérifiez les informations puis réessayez.",
+    "reports.loadFailed": "Le rapport n’a pas pu être chargé. Actualisez la liste puis réessayez.",
   },
   en: {
     "meetings.action.reason": "Professional reason",
@@ -45,6 +49,8 @@ const coordinationSupplements: Record<"fr" | "en", Record<EnterpriseCoordination
     "documents.archiveReason": "Business reason",
     "documents.archiveReasonHelp": "Briefly explain why this document should be removed from active documents.",
     "documents.sourceUnavailable": "This document source has no recognized canonical module. The document was not created.",
+    "reports.actionFailed": "This action could not be completed. Check the information and try again.",
+    "reports.loadFailed": "The report could not be loaded. Refresh the list and try again.",
   },
 };
 

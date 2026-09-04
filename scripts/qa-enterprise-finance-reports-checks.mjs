@@ -34,6 +34,10 @@ const core = read("lib/enterprise/enterprise-core.ts");
 ok(core.includes("EnterpriseCoreRecord"), "Legacy EnterpriseCoreRecord must stay readable for compatibility.");
 ok(constants.includes("DEDICATED_CORE_RECORD_TYPES"), "Dedicated domains must be centralized for legacy write blocking.");
 
+const financeAccess = includes("lib/enterprise/finance/access.ts", ["resolveEnterpriseModuleCapabilities", "capabilities.canRead", "capabilities.canSubmit", "capabilities.canWrite", "capabilities.canApprove", "capabilities.canManage"]);
+ok(financeAccess.includes("canSeeAll: capabilities.canApprove || capabilities.canManage"), "Finance approvers/managers must be able to read the records they are responsible for.");
+ok(!financeAccess.includes("ENTERPRISE_MANAGER_ROLES"), "Finance access must derive capabilities from the canonical module access contract, not from a parallel manager-role shortcut.");
+
 const money = includes("lib/enterprise/finance/money.ts", ["Prisma.Decimal", "toDecimalPlaces(2", "assertSameCurrency"]);
 ok(!money.includes("Math.round") && !money.includes("toFixed(2) as number"), "Financial truth must not use JavaScript floating-point rounding.");
 
@@ -47,13 +51,26 @@ ok(!purchase.includes("pharmacyStockMovement.create"), "Common purchase finance 
 const budget = includes("lib/enterprise/finance/budget-service.ts", ["PENDING_APPROVAL", "ACTIVE", "EnterpriseApproval", "assertEnterpriseApprovalCandidate", "assertEnterpriseApprovalDecision", "REVISION_CONFLICT", "ENTERPRISE_BUDGET_APPROVED", "ENTERPRISE_BUDGET_REJECTED"]);
 ok(budget.includes('existing.status !== "DRAFT"'), "Budget edits must be limited to DRAFT.");
 
-const expense = includes("lib/enterprise/finance/expense-service.ts", ["amountVarianceReason", "EnterpriseApproval", "assertEnterpriseApprovalCandidate", "assertEnterpriseApprovalDecision", "BUDGET_CURRENCY_MISMATCH", "applyExpenseCommitmentRealization", "budgetImpactAppliedAt", "ENTERPRISE_EXPENSE_APPROVED"]);
+const expense = includes("lib/enterprise/finance/expense-service.ts", ["amountVarianceReason", "EnterpriseApproval", "assertEnterpriseApprovalCandidate", "assertEnterpriseApprovalDecision", "BUDGET_CURRENCY_MISMATCH", "applyExpenseCommitmentRealization", "budgetImpactAppliedAt", "ENTERPRISE_EXPENSE_APPROVED", "EXPENSE_PURCHASE_SUPPLIER_MISMATCH", "refreshExpenseLinks"]);
 ok(expense.includes('existing.status !== "DRAFT"'), "Approved or pending expenses must not be editable through normal PATCH.");
-ok(expense.includes("documentIds"), "Expenses must support private EnterpriseDocument evidence links.");
+ok(expense.includes("documentIds"), "Expenses must support EnterpriseDocument evidence links.");
+ok(expense.includes("enterpriseEntityLink.deleteMany") && expense.includes("SUPPORTING_DOCUMENT") && expense.includes("REALIZES_PURCHASE"), "Expense updates must replace obsolete active cross-module links instead of accumulating contradictory links.");
 
-const reports = includes("lib/enterprise/finance/report-service.ts", ["BUDGET_VS_ACTUAL", "EXPENSE_SUMMARY", "PROCUREMENT_SUMMARY", "schemaVersion", "snapshotJson", "groupBy", "take: 500", "currencyBuckets"]);
+const reports = includes("lib/enterprise/finance/report-service.ts", ["BUDGET_VS_ACTUAL", "EXPENSE_SUMMARY", "PROCUREMENT_SUMMARY", "schemaVersion", "snapshotJson", "groupBy", "take: 500", "currencyBuckets", "resolveReportSourceScope", "resolveEnterpriseModuleCapabilities", "enterpriseBudgetVisibilityWhere", "enterpriseExpenseVisibilityWhere", "enterprisePurchaseVisibilityWhere", "REPORT_FINANCE_SOURCE_FORBIDDEN", "REPORT_PROCUREMENT_SOURCE_FORBIDDEN"]);
 ok(!reports.includes("USD + EUR") && !reports.includes("exchangeRate"), "Sprint 8 reports must not implement or fake FX aggregation.");
 ok(reports.includes("enterpriseBudgetCommitment.groupBy") && reports.includes("enterpriseExpense.groupBy") && reports.includes("enterprisePurchase.groupBy"), "Reports must derive real server aggregates from dedicated tables.");
+ok(reports.includes("purchase: purchaseWhere"), "Procurement report receipt counts must remain inside the same visible purchase scope.");
+ok(reports.includes("where: { ...scope.budget, id: input.budgetId }"), "An explicitly selected report budget must be revalidated against the caller's visible budget scope.");
+
+const financeSummary = includes("lib/enterprise/finance/summary-service.ts", ["enterpriseBudgetVisibilityWhere", "enterpriseExpenseVisibilityWhere", "budgetScope", "budgetLine: { budget: budgetScope }"]);
+ok(financeSummary.includes("userId: string, canSeeAll: boolean"), "Finance summary must receive the caller visibility context instead of aggregating the whole tenant by default.");
+const financeSummaryRoute = includes("app/api/enterprise/[organizationId]/finance-summary/route.ts", ["session.userId", "access.canSeeAll", "getEnterpriseFinanceSummary"]);
+ok(financeSummaryRoute.includes("getEnterpriseFinanceSummary(organizationId, session.userId, access.canSeeAll)"), "Finance summary route must propagate the authenticated caller visibility into server aggregates.");
+
+const overviewSummary = includes("lib/enterprise/finance/overview-summary-service.ts", ["unallocatedAmount: { gt: 0 }", "enterpriseSupplierInvoice.count", "enterpriseSalesInvoice.count", "enterpriseApproval.count", "FINANCE_APPROVAL_TARGETS"]);
+ok(!overviewSummary.includes("groupBy") && !overviewSummary.includes("exchangeRate"), "Finance overview readiness KPIs must remain exact counts and must not invent cross-currency totals.");
+const overviewRoute = includes("app/api/enterprise/[organizationId]/finance/overview-summary/route.ts", ["authorizeFinanceRequest", '"FINANCE_OVERVIEW"', "getEnterpriseFinanceOverviewSummary", "writeApiLog"]);
+ok(overviewRoute.includes('"view"'), "Finance overview summary must require FINANCE_OVERVIEW read access.");
 
 const shared = read("lib/enterprise/procurement/shared.ts");
 for (const entityType of ["EnterpriseBudget", "EnterpriseBudgetLine", "EnterpriseExpense", "EnterpriseReport"]) ok(shared.includes(`entityType === "${entityType}"`), `EntityLink same-tenant validation missing ${entityType}`);
@@ -86,19 +103,59 @@ for (const route of [
   "app/api/enterprise/[organizationId]/budget-lines/route.ts",
 ]) {
   const content = read(route);
-  ok(content.includes("pageSize") && content.includes("search") || route.endsWith("budget-lines/route.ts"), `${route}: server pagination/search expected.`);
+  ok((content.includes("pageSize") && content.includes("search")) || route.endsWith("budget-lines/route.ts"), `${route}: server pagination/search expected.`);
 }
 
-const financeWorkspace = read("components/enterprise/core-v2/enterprise-finance-workspace.tsx");
+const budgetRoute = read("app/api/enterprise/[organizationId]/budgets/route.ts");
+const expenseRoute = read("app/api/enterprise/[organizationId]/expenses/route.ts");
+const budgetActionRoute = read("app/api/enterprise/[organizationId]/budgets/[id]/actions/route.ts");
+const expenseActionRoute = read("app/api/enterprise/[organizationId]/expenses/[id]/actions/route.ts");
+const reportGenerateRoute = read("app/api/enterprise/[organizationId]/reports/generate/route.ts");
+ok(budgetRoute.includes("capabilities") && budgetRoute.includes("canCreateRevision") && budgetRoute.includes("canFreeze") && budgetRoute.includes("access.canSubmit"), "Budget list must expose permission-aware server-derived action capabilities.");
+ok(expenseRoute.includes("capabilities") && expenseRoute.includes("canSubmit") && expenseRoute.includes("canReopen") && expenseRoute.includes("access.canSubmit"), "Expense list must expose permission-aware server-derived action capabilities.");
+ok(budgetRoute.includes('action: "submit"') && expenseRoute.includes('action: "submit"') && reportGenerateRoute.includes('action: "submit"'), "Budget, expense and report creation must use the canonical create/submit capability instead of requiring update permission.");
+ok(budgetActionRoute.includes("BUDGET_MANAGEMENT_ACTIONS") && budgetActionRoute.includes('? "manage" : "submit"'), "Budget management transitions must require manage while owner workflow transitions require submit.");
+ok(expenseActionRoute.includes('parsed.data.action === "ARCHIVE" ? "manage" : "submit"'), "Expense archival must require manage while owner workflow transitions require submit.");
+
+const financeEntry = read("components/enterprise/core-v2/enterprise-finance-workspace.tsx");
+const financeWorkspace = read("components/enterprise/core-v2/enterprise-finance-workspace-hotfix.tsx");
+const financeReferenceSelect = read("components/enterprise/core-v2/finance-reference-select.tsx");
 const reportsWorkspace = read("components/enterprise/core-v2/enterprise-reports-workspace.tsx");
+const overviewWorkspace = read("components/enterprise/professional/enterprise-finance-overview-workspace.tsx");
+ok(financeEntry.includes("EnterpriseFinanceWorkspaceHotfix") && financeEntry.includes('"use client"'), "FINANCE_BUDGETS entry point must route through the hotfix workspace without losing the client boundary.");
 ok(financeWorkspace.includes("BusinessList") && financeWorkspace.includes("Planifié") && financeWorkspace.includes("Disponible"), "Finance workspace must use the mobile-first business list and budget position UI.");
-ok(financeWorkspace.includes("Justificatif") && financeWorkspace.includes("purchaseId"), "Expense UI must expose purchase and supporting-document integration.");
+ok(financeWorkspace.includes("FinanceReferenceSelect") && financeWorkspace.includes('presentation="editor"'), "Finance forms must use searchable references and the mobile editor dialog contract.");
+ok(financeWorkspace.includes('useToastMessage(message, "success")') && financeWorkspace.includes('useToastMessage(errorMessage, "error")'), "Finance workspace must keep success and error feedback on distinct global toast channels.");
+ok(financeWorkspace.includes("busyAction") && financeWorkspace.includes("disabled={busy}"), "Finance mutations must expose busy/disabled states against double submission.");
+ok(!financeWorkspace.includes("pageSize=100&status=ACTIVE") && !financeWorkspace.includes("pageSize=100"), "Finance reference selectors must not rely on the first 100 records.");
+ok(financeReferenceSelect.includes("pageSize") && financeReferenceSelect.includes("search") && financeReferenceSelect.includes("organizationId"), "Finance reference selector must search paginated tenant-scoped endpoints.");
+
+ok(overviewWorkspace.includes("/finance/overview-summary") && overviewWorkspace.includes("invoicesToPost") && overviewWorkspace.includes("pendingApprovals"), "Finance overview must use the authoritative server summary and render the repaired KPIs.");
+ok(
+  !overviewWorkspace.includes("pageSize=100")
+    && overviewWorkspace.includes('state: "error", value: null')
+    && overviewWorkspace.includes('value.state === "error"')
+    && overviewWorkspace.includes("degradedMetrics")
+    && overviewWorkspace.includes('financeT(locale, "metricsUnavailable")')
+    && overviewWorkspace.includes('setProjectionError(financeT(locale, "projectionHealthUnavailable"))')
+    && !overviewWorkspace.includes("setProjectionError(projectionsBody")
+    && !overviewWorkspace.includes("projection.lastErrorMessage")
+    && !overviewWorkspace.includes("item.lastErrorMessage"),
+  "Finance overview must use authoritative KPIs, expose unavailable metrics explicitly and never render raw projection errors.",
+);
+ok(overviewWorkspace.includes('presentation="editor"') && overviewWorkspace.includes('useToastMessage(error, "error")'), "Finance overview configuration must follow editor and explicit error-toast contracts.");
+
 ok(
   reportsWorkspace.includes("BusinessList")
     && (reportsWorkspace.includes("Export CSV") || reportsWorkspace.includes('t("reports.action.export")'))
     && reportsWorkspace.includes("/reports/${item.id}/export"),
   "Reports workspace must use the DTSC business list and lightweight export.",
 );
+ok(reportsWorkspace.includes("item.capabilities?.canPublish") && reportsWorkspace.includes("reports.meta.metrics?.published") && reportsWorkspace.includes("reports.meta.latestGeneratedAt"), "Reports UI must consume server capabilities and server-wide summary metadata instead of current-page approximations.");
+ok(reportsWorkspace.includes('useToastMessage(errorMessage, "error")') && reportsWorkspace.includes('presentation="editor"'), "Reports forms must preserve input on errors, use global error feedback and editor dialogs.");
+const reportsRoute = read("app/api/enterprise/[organizationId]/reports/route.ts");
+ok(reportsRoute.includes("capabilities") && reportsRoute.includes("latestGeneratedAt") && reportsRoute.includes("publishedCount"), "Reports route must expose item capabilities and global report summary metadata.");
+
 const moduleWorkspace = read("components/enterprise/enterprise-module-workspace.tsx");
 for (const component of ["EnterpriseFinanceWorkspace", "EnterpriseReportsWorkspace"]) ok(moduleWorkspace.includes(component), `Dedicated Sprint 8 workspace missing: ${component}`);
 
@@ -127,5 +184,5 @@ const changedFinanceFiles = [financeSchema, migration, budget, expense, commitme
 ok(!/\bBPMN\b/.test(changedFinanceFiles) && !/model\s+.*WorkflowEngine/.test(changedFinanceFiles), "Sprint 8 must not implement the Sprint 9 Workflow Engine/BPMN domain.");
 ok(!/general ledger|bank reconciliation|double-entry/i.test(changedFinanceFiles), "Sprint 8 must not implement general-ledger or bank-reconciliation logic.");
 
-if (failures.length) { console.error("Enterprise finance/reporting Sprint 8 QA failed:\n- " + failures.join("\n- ")); process.exit(1); }
-console.log("Enterprise finance/reporting Sprint 8 QA passed: dedicated models, Decimal-safe budget controls, purchase commitments, atomic approvals through the shared assignment contract, tenant guards, server-derived currency-separated snapshots, legacy isolation and production-only Vercel policy verified.");
+if (failures.length) { console.error("Enterprise finance/reporting QA failed:\n- " + failures.join("\n- ")); process.exit(1); }
+console.log("Enterprise finance/reporting QA passed: dedicated Decimal-safe finance sources, purchase/expense consistency, stale-link replacement, shared approvals, authoritative overview counts, capability-based RBAC, action-level permission boundaries, visibility-scoped aggregates and snapshots, searchable tenant references, immutable report snapshots, mobile editor forms, legacy isolation and production-only delivery verified.");

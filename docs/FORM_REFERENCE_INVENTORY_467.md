@@ -87,7 +87,7 @@ Aucune exception n’est acceptée par défaut. Les exceptions ci-dessous existe
 | Fichier | Champ | Justification et validation serveur |
 |---|---|---|
 | `components/enterprise/core-v2/enterprise-documents-workspace.tsx` | `category` | Catégorie documentaire personnalisable ; `lib/enterprise/procurement/validators.ts` la valide comme texte optionnel borné, sans enum ni table de catégories. |
-| `components/enterprise/core-v2/enterprise-finance-workspace.tsx` | `category` | Catégorie de dépense / ligne budgétaire personnalisable ; `lib/enterprise/finance/validators.ts` utilise un texte optionnel borné, sans référentiel canonique. |
+| `components/enterprise/core-v2/enterprise-finance-workspace-hotfix.tsx` | `category` | Catégorie de dépense / ligne budgétaire personnalisable dans l’implémentation Finance active ; `lib/enterprise/finance/validators.ts` utilise un texte optionnel borné, sans référentiel canonique. |
 | `components/enterprise/core-v2/enterprise-reports-workspace.tsx` | `category` | Catégorie de rapport personnalisable ; le validateur Finance accepte un texte optionnel borné et aucune taxonomie de rapports canonique n’existe. |
 | `components/enterprise/core-v2/enterprise-suppliers-workspace.tsx` | `category` | Classification fournisseur propre à l’entreprise ; `supplierBase.category` est un texte optionnel borné, sans source canonique. |
 | `components/enterprise/professional/enterprise-catalog-workspace.tsx` | `category` | Catégorie de famille d’unité de mesure configurable ; le schéma `unitOfMeasureCreateSchema` accepte une chaîne bornée et le modèle ne possède pas de registre séparé de familles d’unités. |

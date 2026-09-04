@@ -7,5 +7,13 @@ import { getEnterpriseFinanceSummary } from "@/lib/enterprise/finance/summary-se
 type Params = { params: Promise<{ organizationId: string }> };
 
 export async function GET(req: Request, { params }: Params) {
-  const startedAt = Date.now(); const session = await getSession(); if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 }); const { organizationId } = await params; const access = await getEnterpriseFinanceAccess({ session, organizationId, moduleCode: "FINANCE_BUDGETS", action: "read" }); if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 }); const summary = await getEnterpriseFinanceSummary(organizationId); await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "finance-summary" } }); return NextResponse.json(summary);
+  const startedAt = Date.now();
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { organizationId } = await params;
+  const access = await getEnterpriseFinanceAccess({ session, organizationId, moduleCode: "FINANCE_BUDGETS", action: "read" });
+  if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const summary = await getEnterpriseFinanceSummary(organizationId, session.userId, access.canSeeAll);
+  await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "finance-summary" } });
+  return NextResponse.json(summary);
 }
