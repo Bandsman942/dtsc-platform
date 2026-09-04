@@ -82,7 +82,7 @@ export function OrganizationBillingPlans({
             <option value="ORANGE">Orange Money</option>
           </select>
         </label>
-        <p className="text-xs leading-5 text-dtsc-muted md:col-span-2">
+        <p className="text-xs font-medium leading-5 text-dtsc-ink md:col-span-2">
           L’abonnement, le paiement, la facture entreprise et l’impact sur le chiffre d’affaires sont appliqués une seule fois à partir de la référence de paiement validée.
         </p>
       </div>
@@ -93,16 +93,16 @@ export function OrganizationBillingPlans({
             const active = plan.id === activePlanId;
             return (
               <article key={plan.id} className={`flex min-w-0 flex-col rounded-2xl border p-4 ${active ? "border-cyan-400 bg-cyan-400/10" : "border-dtsc-border bg-dtsc-surface"}`}>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-cyan-700 dark:text-cyan-300"><Building2 className="h-4 w-4" /> Offre entreprise</p>
-                    <h3 className="mt-2 break-words text-lg font-black text-dtsc-ink">{plan.name}</h3>
+                <div className="flex min-w-0 items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-cyan-700 dark:text-cyan-300"><Building2 className="h-4 w-4 shrink-0" /> Offre entreprise</p>
+                    <h3 className="mt-2 break-normal text-lg font-black leading-tight text-dtsc-ink">{plan.name}</h3>
                   </div>
                   {active ? <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" /> : null}
                 </div>
-                <p className="mt-2 text-sm leading-6 text-dtsc-muted">{plan.description}</p>
-                <p className="mt-4 text-2xl font-black text-dtsc-ink">{plan.priceUsd.toFixed(2)} USD <span className="text-xs font-bold text-dtsc-muted">/ mois</span></p>
-                <div className="mt-3 grid gap-1 text-xs font-semibold text-dtsc-muted">
+                <p className="mt-3 text-sm font-medium leading-6 text-dtsc-ink">{plan.description}</p>
+                <p className="mt-4 text-2xl font-black text-dtsc-ink">{plan.priceUsd.toFixed(2)} USD <span className="text-xs font-bold text-dtsc-ink">/ mois</span></p>
+                <div className="mt-3 grid gap-1 text-xs font-semibold leading-5 text-dtsc-ink">
                   <span>{plan.dailyMessageLimit.toLocaleString("fr-FR")} messages IA/jour</span>
                   <span>{plan.dailyTokenLimit.toLocaleString("fr-FR")} tokens/jour</span>
                   <span>{plan.maxDocuments.toLocaleString("fr-FR")} sources de connaissance IA</span>
@@ -116,7 +116,7 @@ export function OrganizationBillingPlans({
           })}
         </div>
       ) : (
-        <p className="rounded-xl border border-dtsc-border bg-dtsc-page p-4 text-sm font-semibold text-dtsc-muted">Aucune offre entreprise active n’est actuellement publiée.</p>
+        <p className="rounded-xl border border-dtsc-border bg-dtsc-page p-4 text-sm font-semibold text-dtsc-ink">Aucune offre entreprise active n’est actuellement publiée.</p>
       )}
     </div>
   );
