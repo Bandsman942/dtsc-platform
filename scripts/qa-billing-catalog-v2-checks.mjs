@@ -21,8 +21,11 @@ const planLimits = read("lib/billing/plan-limits.ts");
 const commercialOverrides = JSON.parse(read("lib/enterprise/module-registry-commercial-overrides.json"));
 const pricingPage = read("app/tarifs/page.tsx");
 const billingPage = read("app/billing/page.tsx");
+const personalBillingCards = read("components/billing/billing-plans.tsx");
+const organizationBillingCards = read("components/billing/organization-billing-plans.tsx");
 const consoleBilling = read("lib/console/console-billing.ts");
 const billingManager = read("components/admin/billing-plan-manager.tsx");
+const adminBillingRoute = read("app/api/admin/billing-plans/[id]/route.ts");
 const cagRegistry = read("lib/ai/cag-registry.ts");
 const personalChat = read("app/api/chat/v2/route.ts");
 const publicAgent = read("app/api/public/dtsc-agent/route.ts");
@@ -62,8 +65,25 @@ containsAll(catalog, [
   "formatPublishedBillingCatalogForAi",
 ], "catalogue commercial");
 for (const id of expected.keys()) expect(catalog.includes(`"${id}"`), `catalogue commercial: offre ${id} absente`);
+containsAll(catalog, [
+  "name: plan.name",
+  "description: plan.description",
+  "positioningFr: plan.description",
+  "name: offer.name",
+  "description: offer.description",
+  "${offer.name}: ${offer.description}",
+], "catalogue administré");
+expect(!catalog.includes("positioningFr: copy.positioningFr"), "catalogue administré: une description codée en dur ne doit plus remplacer BillingPlan.description");
 containsAll(catalogApi, ["getPublishedBillingCatalog", 'dynamic = "force-dynamic"', '"Cache-Control": "no-store"'], "API catalogue public");
 expect(!catalogApi.includes("max-age"), "API catalogue public: une ancienne révision ne doit pas rester publiquement cachée");
+
+containsAll(adminBillingRoute, [
+  "name: parsed.data.name",
+  "description: parsed.data.description",
+  "tx.billingPlanVersion.create",
+  "name: next.name",
+  "description: next.description",
+], "mutation offre administrée");
 
 containsAll(planLimits, [
   "maxMonthlyCallMinutes: 300",
@@ -94,10 +114,38 @@ containsAll(entitlements, [
 ], "projection des limites");
 expect(!entitlements.includes("maxDocuments: documents"), "projection des limites: le quota de sources IA ne doit jamais remplacer les documents métier");
 
-containsAll(pricingPage, ["getPublishedBillingCatalog", "catalog.offers.filter", "sources de connaissance IA", "documents métier", "storageLabel"], "site public /tarifs");
-containsAll(billingPage, ["getPublishedBillingCatalog", "catalog.releaseId", "Sources de connaissance IA", "Documents métier", "Sources IA"], "/billing");
-containsAll(consoleBilling, ["getPublishedBillingCatalog({ includeInactive: true })", "publishedById", "catalogReleaseId", "aiModeFr"], "Console DTSC");
-containsAll(billingManager, ["catalogReleaseId", "sources de connaissance IA", "documents métier", "aiModeFr", "Modules autorisés par le niveau de capacité"], "Console DTSC UI");
+containsAll(pricingPage, ["getPublishedBillingCatalog", "catalog.offers.filter", "sources de connaissance IA", "documents métier", "storageLabel", "offer.positioningFr"], "site public /tarifs");
+containsAll(billingPage, ["getPublishedBillingCatalog", "catalog.releaseId", "Sources de connaissance IA", "Documents métier", "Sources IA", "description: plan.positioningFr"], "/billing");
+containsAll(consoleBilling, ["getPublishedBillingCatalog({ includeInactive: true })", "publishedById", "catalogReleaseId", "aiModeFr", "publishedOffer?.positioningFr || plan.description"], "Console DTSC");
+containsAll(billingManager, [
+  "catalogReleaseId",
+  "sources de connaissance IA",
+  "documents métier",
+  "aiModeFr",
+  "Modules autorisés par le niveau de capacité",
+  "flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between",
+  "flex w-full items-center justify-between gap-2 sm:w-auto sm:shrink-0 sm:justify-end",
+  "whitespace-nowrap rounded-full",
+  "Nom de l’offre commerciale",
+  "Publié partout où cette offre est affichée.",
+  "Cette description devient le texte principal des cartes Abonnement et Tarifs.",
+], "Console DTSC UI");
+expect(!billingManager.includes('className="flex items-start justify-between gap-3"'), "Console DTSC UI: l’ancien header mobile écrasant ne doit plus être utilisé pour les cartes d’offres");
+
+containsAll(personalBillingCards, [
+  "min-h-full min-w-0 flex-col",
+  "min-w-0 flex-1",
+  "break-normal text-xl",
+  "text-sm font-medium leading-6",
+  "space-y-2 text-sm font-semibold leading-6",
+], "cartes abonnement personnel");
+expect(!personalBillingCards.includes('active ? "text-slate-300" : "text-dtsc-muted"'), "cartes abonnement personnel: contraste secondaire insuffisant interdit");
+containsAll(organizationBillingCards, [
+  "min-w-0 flex-1",
+  "break-normal text-lg",
+  "text-sm font-medium leading-6 text-dtsc-ink",
+  "text-xs font-semibold leading-5 text-dtsc-ink",
+], "cartes abonnement organisation");
 
 containsAll(cagRegistry, [
   "getPublishedBillingCatalog",
