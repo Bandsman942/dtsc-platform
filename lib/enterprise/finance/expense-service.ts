@@ -79,6 +79,41 @@ async function createExpenseLinks(tx: Tx, organizationId: string, expenseId: str
   if (data.source) await createEnterpriseLink(tx, { organizationId, sourceModule: data.source.sourceModule, sourceEntityType: data.source.sourceEntityType, sourceEntityId: data.source.sourceEntityId, targetModule: "FINANCE_BUDGETS", targetEntityType: "EnterpriseExpense", targetEntityId: expenseId, linkType: "GENERATED", createdById: actorUserId });
 }
 
+async function refreshExpenseLinks(
+  tx: Tx,
+  organizationId: string,
+  expenseId: string,
+  actorUserId: string,
+  data: {
+    refreshSupplier: boolean;
+    refreshPurchase: boolean;
+    refreshBudget: boolean;
+    refreshDocuments: boolean;
+    supplierId?: string | null;
+    purchaseId?: string | null;
+    budgetId?: string | null;
+    documentIds?: string[];
+  },
+) {
+  const linkTypes = [
+    ...(data.refreshSupplier ? ["SUPPLIER"] : []),
+    ...(data.refreshPurchase ? ["REALIZES_PURCHASE"] : []),
+    ...(data.refreshBudget ? ["BUDGET_CONSUMPTION"] : []),
+    ...(data.refreshDocuments ? ["SUPPORTING_DOCUMENT"] : []),
+  ];
+  if (linkTypes.length) {
+    await tx.enterpriseEntityLink.deleteMany({
+      where: { organizationId, targetEntityType: "EnterpriseExpense", targetEntityId: expenseId, linkType: { in: linkTypes } },
+    });
+  }
+  await createExpenseLinks(tx, organizationId, expenseId, actorUserId, {
+    supplierId: data.refreshSupplier ? data.supplierId : undefined,
+    purchaseId: data.refreshPurchase ? data.purchaseId : undefined,
+    budgetId: data.refreshBudget ? data.budgetId : undefined,
+    documentIds: data.refreshDocuments ? data.documentIds : undefined,
+  });
+}
+
 export async function createEnterpriseExpense(organizationId: string, actorUserId: string, input: EnterpriseExpenseCreateInput) {
   return prisma.$transaction(async (tx) => {
     await requireActiveEnterpriseMember(tx, organizationId, actorUserId);
@@ -137,6 +172,7 @@ export async function updateEnterpriseExpense(organizationId: string, expenseId:
 
     const purchase = input.purchaseId !== undefined ? await requirePurchase(tx, organizationId, input.purchaseId) : await requirePurchase(tx, organizationId, existing.purchaseId);
     const supplier = input.supplierId !== undefined ? await requireSupplier(tx, organizationId, input.supplierId) : await requireSupplier(tx, organizationId, existing.supplierId);
+    if (purchase?.supplierId && supplier?.id && purchase.supplierId !== supplier.id) throw new EnterpriseCoreV2Error("Le fournisseur de la dépense doit correspondre à l’achat source.", 400, "EXPENSE_PURCHASE_SUPPLIER_MISMATCH");
     const nextBudgetLineId = input.budgetLineId !== undefined ? nullable(input.budgetLineId) : (purchase?.budgetLineId || existing.budgetLineId);
     if (purchase?.budgetLineId && nextBudgetLineId && purchase.budgetLineId !== nextBudgetLineId) throw new EnterpriseCoreV2Error("La dépense ne peut pas viser une autre ligne budgétaire que son achat source.", 400, "EXPENSE_PURCHASE_BUDGET_MISMATCH");
     const budgetLine = await requireBudgetLine(tx, organizationId, nextBudgetLineId);
@@ -170,7 +206,16 @@ export async function updateEnterpriseExpense(organizationId: string, expenseId:
     if (updated.count !== 1) throw new EnterpriseCoreV2Error("La dépense a été modifiée par un autre utilisateur.", 409, "REVISION_CONFLICT");
     const refreshed = await tx.enterpriseExpense.findFirst({ where: { id: expenseId, organizationId }, include: { supplier: true, purchase: true, budgetLine: { include: { budget: true } } } });
     if (!refreshed) throw new EnterpriseCoreV2Error("Dépense introuvable.", 404, "EXPENSE_NOT_FOUND");
-    await createExpenseLinks(tx, organizationId, expenseId, actorUserId, { supplierId: refreshed.supplierId, purchaseId: refreshed.purchaseId, budgetId: refreshed.budgetLine?.budgetId, documentIds });
+    await refreshExpenseLinks(tx, organizationId, expenseId, actorUserId, {
+      refreshSupplier: input.supplierId !== undefined || input.purchaseId !== undefined,
+      refreshPurchase: input.purchaseId !== undefined,
+      refreshBudget: input.budgetLineId !== undefined || input.purchaseId !== undefined,
+      refreshDocuments: input.documentIds !== undefined,
+      supplierId: refreshed.supplierId,
+      purchaseId: refreshed.purchaseId,
+      budgetId: refreshed.budgetLine?.budgetId,
+      documentIds,
+    });
     await addEnterpriseOperationalEvent(tx, { organizationId, entityType: "EnterpriseExpense", entityId: expenseId, eventType: "ENTERPRISE_EXPENSE_UPDATED", summary: "Dépense mise à jour.", actorUserId, fromStatus: "DRAFT", toStatus: "DRAFT" });
     return refreshed;
   });
@@ -193,6 +238,8 @@ export async function createEnterpriseExpenseApproval({ organizationId, expenseI
     await requireActiveEnterpriseMember(tx, organizationId, approverUserId);
     if (expense.purchaseId) {
       const purchase = await requirePurchase(tx, organizationId, expense.purchaseId);
+      const supplier = await requireSupplier(tx, organizationId, expense.supplierId);
+      if (purchase?.supplierId && supplier?.id && purchase.supplierId !== supplier.id) throw new EnterpriseCoreV2Error("Le fournisseur de la dépense doit correspondre à l’achat source.", 400, "EXPENSE_PURCHASE_SUPPLIER_MISMATCH");
       if (purchase && !expense.amount.eq(purchase.totalAmount) && !nullable(expense.amountVarianceReason)) throw new EnterpriseCoreV2Error("Le motif d’écart avec l’achat source est obligatoire.", 400, "EXPENSE_VARIANCE_REASON_REQUIRED");
     }
     if (expense.budgetLineId) await getBudgetLinePosition(tx, organizationId, expense.budgetLineId);
