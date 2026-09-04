@@ -46,7 +46,7 @@ const globallyControlledInputNames = new Set(["currency", "currencyCode", "unit"
 // n'existe dans le modèle courant. Elles restent explicites, bornées par fichier et documentées.
 const documentedFreeTextExceptions = new Map([
   ["components/enterprise/core-v2/enterprise-documents-workspace.tsx", new Set(["category"])],
-  ["components/enterprise/core-v2/enterprise-finance-workspace.tsx", new Set(["category"])],
+  ["components/enterprise/core-v2/enterprise-finance-workspace-hotfix.tsx", new Set(["category"])],
   ["components/enterprise/core-v2/enterprise-reports-workspace.tsx", new Set(["category"])],
   ["components/enterprise/core-v2/enterprise-suppliers-workspace.tsx", new Set(["category"])],
   ["components/enterprise/professional/enterprise-catalog-workspace.tsx", new Set(["category"])],
