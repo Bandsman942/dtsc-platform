@@ -7,13 +7,20 @@ import { EnterpriseFinancePaymentsTreasuryWorkspace } from "@/components/enterpr
 import { EnterpriseFinanceTreasuryWorkspace } from "@/components/enterprise/professional/enterprise-finance-treasury-workspace";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
 
+export type EnterpriseOperationalFinanceCapabilities = {
+  canCreate: boolean;
+  canSubmit: boolean;
+  canWrite: boolean;
+  canApprove: boolean;
+  canManage: boolean;
+};
+
 export function EnterpriseOperationalFinanceWorkspace(props: {
   organizationId: string;
   organizationName: string;
   definition: EnterpriseModuleDefinition;
   locale?: string | null;
-  canManage: boolean;
-}) {
+} & EnterpriseOperationalFinanceCapabilities) {
   if (props.definition.code === "FINANCE_OVERVIEW") return <EnterpriseFinanceOverviewWorkspace {...props} />;
   if (["FINANCE_RECEIVABLES", "FINANCE_PAYABLES"].includes(props.definition.code)) return <EnterpriseFinanceInvoicesWorkspace {...props} />;
   if (props.definition.code === "FINANCE_PAYMENTS") return <EnterpriseFinancePaymentsTreasuryWorkspace {...props} />;
