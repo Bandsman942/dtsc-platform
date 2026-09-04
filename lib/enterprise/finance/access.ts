@@ -25,9 +25,7 @@ export async function getEnterpriseFinanceAccess({
       ? capabilities.canSubmit
       : action === "write"
         ? capabilities.canWrite
-        : action === "approve"
-          ? capabilities.canApprove
-          : capabilities.canManage;
+        : capabilities.canManage;
   if (!actionAllowed) return null;
   return {
     membership,
