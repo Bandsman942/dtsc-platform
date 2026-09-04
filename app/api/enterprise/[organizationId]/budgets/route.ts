@@ -54,9 +54,9 @@ export async function GET(req: Request, { params }: Params) {
       availableAmount: position.available,
       lineCount: position.lines.length,
       capabilities: {
-        canSubmit: canOwn && budget.status === "DRAFT",
-        canCancel: canOwn && budget.status === "DRAFT",
-        canReopen: canOwn && ["REJECTED", "CORRECTION_REQUESTED"].includes(budget.status),
+        canSubmit: access.canSubmit && canOwn && budget.status === "DRAFT",
+        canCancel: access.canSubmit && canOwn && budget.status === "DRAFT",
+        canReopen: access.canSubmit && canOwn && ["REJECTED", "CORRECTION_REQUESTED"].includes(budget.status),
         canFreeze: access.canManage && budget.status === "ACTIVE",
         canCreateRevision: access.canManage && ["ACTIVE", "FROZEN", "CLOSED"].includes(budget.status),
         canClose: access.canManage && ["ACTIVE", "FROZEN"].includes(budget.status),
@@ -76,7 +76,7 @@ export async function POST(req: Request, { params }: Params) {
   const limited = await rateLimit(getRateLimitKey(req, `enterprise-budgets:${session.userId}`), 80, 60 * 60 * 1000);
   if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   const { organizationId } = await params;
-  const access = await getEnterpriseFinanceAccess({ session, organizationId, moduleCode: "FINANCE_BUDGETS", action: "write" });
+  const access = await getEnterpriseFinanceAccess({ session, organizationId, moduleCode: "FINANCE_BUDGETS", action: "submit" });
   if (!access?.canCreate) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = enterpriseBudgetCreateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Budget invalide." }, { status: 400 });
