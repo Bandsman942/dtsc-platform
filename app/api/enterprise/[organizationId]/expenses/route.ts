@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { normalizeEnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
 import { enterpriseExpenseVisibilityWhere, getEnterpriseFinanceAccess } from "@/lib/enterprise/finance/access";
+import { validateFinanceDocumentIds } from "@/lib/enterprise/finance/document-visibility";
 import { createEnterpriseExpense } from "@/lib/enterprise/finance/expense-service";
 import { enterpriseExpenseCreateSchema } from "@/lib/enterprise/finance/validators";
 import { prisma } from "@/lib/prisma";
@@ -87,8 +88,10 @@ export async function POST(req: Request, { params }: Params) {
   if (!access?.canCreate) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = enterpriseExpenseCreateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Dépense invalide." }, { status: 400 });
+  const documents = await validateFinanceDocumentIds(organizationId, session.userId, parsed.data.documentIds || []);
+  if (!documents.ok) return NextResponse.json({ error: "INVALID_EXPENSE_DOCUMENT", message: "Un justificatif n’est pas accessible dans votre contexte actuel." }, { status: 400 });
   try {
-    const expense = await createEnterpriseExpense(organizationId, session.userId, parsed.data);
+    const expense = await createEnterpriseExpense(organizationId, session.userId, { ...parsed.data, documentIds: documents.ids });
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_EXPENSE_CREATED", entity: "EnterpriseExpense", entityId: expense.id, request: req, metadata: { organizationId, reference: expense.reference, budgetStatus: expense.budgetLineId ? "BUDGETED" : "UNBUDGETED" } });
     await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "expenses" } });
     return NextResponse.json({ ok: true, expense }, { status: 201 });
