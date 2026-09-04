@@ -112,13 +112,13 @@ export function BillingPlans({
                 {plan.priceUsd === 0 ? "Gratuit" : `${plan.priceUsd}$`}
                 {plan.priceUsd > 0 && <span className={`text-sm font-bold ${active ? "text-slate-100" : "text-dtsc-ink"}`}> / mois</span>}
               </p>
-              <ul className={`mt-5 space-y-2 text-sm font-semibold leading-6 ${active ? "text-slate-100" : "text-dtsc-ink"}`}>
+              <ul className={`mb-6 mt-5 space-y-2 text-sm font-semibold leading-6 ${active ? "text-slate-100" : "text-dtsc-ink"}`}>
                 <li>{plan.dailyMessageLimit} messages IA / jour</li>
                 <li>{plan.dailyTokenLimit.toLocaleString("fr-FR")} tokens / jour</li>
                 <li>{plan.maxDocuments} source(s) de connaissance IA</li>
               </ul>
               <Button
-                className={`mt-6 rounded-xl ${active ? "bg-cyan-300 text-[#001736] hover:bg-cyan-200" : "bg-[#002b5b] text-white hover:bg-[#001736]"}`}
+                className={`mt-auto rounded-xl ${active ? "bg-cyan-300 text-[#001736] hover:bg-cyan-200" : "bg-[#002b5b] text-white hover:bg-[#001736]"}`}
                 disabled={isPending || active || (plan.priceUsd > 0 && !paymentAvailable)}
                 onClick={() => checkout(plan.id, plan.priceUsd)}
               >
