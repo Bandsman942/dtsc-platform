@@ -30,42 +30,40 @@ export async function GET(req: Request, { params }: Params) {
   });
   if (!reconciliation) return NextResponse.json({ error: "RECONCILIATION_NOT_FOUND", message: "Le rapprochement demandé est introuvable." }, { status: 404 });
 
-  const bankStatement = reconciliation.bankStatementId
-    ? await prisma.enterpriseBankStatement.findFirst({
-        where: { id: reconciliation.bankStatementId, organizationId },
-        select: {
-          id: true,
-          reference: true,
-          statementDate: true,
-          periodStart: true,
-          periodEnd: true,
-          currencyCode: true,
-          openingBalance: true,
-          closingBalance: true,
-          status: true,
-        },
-      })
-    : null;
-  const statementLines = reconciliation.bankStatementId
-    ? await prisma.enterpriseBankStatementLine.findMany({
-        where: { organizationId, bankStatementId: reconciliation.bankStatementId },
-        orderBy: [{ lineNumber: "asc" }, { transactionDate: "asc" }],
-      })
-    : [];
+  const [bankStatement, statementLines, pendingApproval] = await Promise.all([
+    reconciliation.bankStatementId
+      ? prisma.enterpriseBankStatement.findFirst({
+          where: { id: reconciliation.bankStatementId, organizationId },
+          select: { id: true, reference: true, statementDate: true, periodStart: true, periodEnd: true, currencyCode: true, openingBalance: true, closingBalance: true, status: true },
+        })
+      : Promise.resolve(null),
+    reconciliation.bankStatementId
+      ? prisma.enterpriseBankStatementLine.findMany({
+          where: { organizationId, bankStatementId: reconciliation.bankStatementId },
+          orderBy: [{ lineNumber: "asc" }, { transactionDate: "asc" }],
+        })
+      : Promise.resolve([]),
+    prisma.enterpriseApproval.findFirst({
+      where: { organizationId, targetEntityType: "EnterpriseReconciliationSession", targetEntityId: reconciliation.id, status: "PENDING", archivedAt: null },
+      select: { approverUserId: true },
+    }),
+  ]);
+  const assigned = pendingApproval?.approverUserId === auth.session.userId;
+  const capabilities = auth.access.capabilities;
 
-  await writeApiLog({
-    request: req,
-    statusCode: 200,
-    userId: auth.session.userId,
-    startedAt,
-    metadata: { organizationId, domain: "reconciliation-detail", reconciliationId: sessionId },
-  });
+  await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "reconciliation-detail", reconciliationId: sessionId } });
   return NextResponse.json({
     reconciliation: {
       ...reconciliation,
       differenceAmount: reconciliation.reconciledDifference,
       bankStatement,
       statementLines,
+      capabilities: {
+        canMatch: Boolean(capabilities.canManage && ["DRAFT", "IN_PROGRESS"].includes(reconciliation.status)),
+        canSubmit: Boolean(capabilities.canSubmit && ["DRAFT", "IN_PROGRESS"].includes(reconciliation.status) && reconciliation.preparedByUserId === auth.session.userId),
+        canApprove: Boolean(capabilities.canApprove && reconciliation.status === "PENDING_VALIDATION" && assigned),
+        canReject: Boolean(capabilities.canApprove && reconciliation.status === "PENDING_VALIDATION" && assigned),
+      },
     },
   });
 }
