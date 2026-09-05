@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { ArrowRightLeft } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
-import { EnterpriseAccountingWorkspace } from "@/components/enterprise/professional/enterprise-accounting-workspace";
 import { EnterpriseAdvancedFinanceWorkspace } from "@/components/enterprise/professional/enterprise-advanced-finance-workspace";
+import { EnterpriseFinanceAccountingWorkspaceHotfix } from "@/components/enterprise/professional/enterprise-finance-accounting-workspace-hotfix";
+import { EnterpriseFinanceAdvancedWorkspaceHotfix } from "@/components/enterprise/professional/enterprise-finance-advanced-workspace-hotfix";
 import { EnterpriseOperationalFinanceWorkspace } from "@/components/enterprise/professional/enterprise-operational-finance-workspace";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
@@ -16,6 +17,8 @@ import { getEnterpriseModuleDefinition } from "@/lib/enterprise/module-registry"
 import { requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
 import { translateEnterpriseFinance } from "@/lib/i18n";
 import { prisma } from "@/lib/prisma";
+
+const DOWNSTREAM_FINANCE_HOTFIX = ["FINANCE_TAX", "FINANCE_CLOSE", "FINANCE_STATEMENTS", "FINANCE_ASSETS"] as const;
 
 export async function EnterpriseFinanceModulePage({ moduleCode }: { moduleCode: EnterpriseFinanceModuleCode }) {
   const user = await requireUser();
@@ -38,6 +41,13 @@ export async function EnterpriseFinanceModulePage({ moduleCode }: { moduleCode: 
   if (!definition || definition.code !== moduleCode || definition.routeKind !== "DEDICATED_CORE") notFound();
   const locale = user.locale === "en" ? "en" : "fr";
   const t = (key: Parameters<typeof translateEnterpriseFinance>[1]) => translateEnterpriseFinance(locale, key);
+  const capabilityProps = {
+    canCreate: capabilities.canCreate,
+    canSubmit: capabilities.canSubmit,
+    canWrite: capabilities.canWrite,
+    canApprove: capabilities.canApprove,
+    canManage: capabilities.canManage,
+  };
 
   return (
     <AppShell user={user}>
@@ -54,26 +64,29 @@ export async function EnterpriseFinanceModulePage({ moduleCode }: { moduleCode: 
       ) : null}
 
       {moduleCode === "FINANCE_ACCOUNTING" ? (
-        <EnterpriseAccountingWorkspace
+        <EnterpriseFinanceAccountingWorkspaceHotfix
           organizationId={organizationId}
           organizationName={organization.name}
           definition={definition}
           locale={user.locale}
-          canManage={capabilities.canManage}
+          {...capabilityProps}
         />
-      ) : OPERATIONAL_FINANCE_MODULE_CODES.includes(
-        moduleCode as (typeof OPERATIONAL_FINANCE_MODULE_CODES)[number],
-      ) ? (
+      ) : DOWNSTREAM_FINANCE_HOTFIX.includes(moduleCode as (typeof DOWNSTREAM_FINANCE_HOTFIX)[number]) ? (
+        <EnterpriseFinanceAdvancedWorkspaceHotfix
+          organizationId={organizationId}
+          organizationName={organization.name}
+          organizationLogoUrl={organization.logoUrl}
+          definition={definition}
+          locale={user.locale}
+          {...capabilityProps}
+        />
+      ) : OPERATIONAL_FINANCE_MODULE_CODES.includes(moduleCode as (typeof OPERATIONAL_FINANCE_MODULE_CODES)[number]) ? (
         <EnterpriseOperationalFinanceWorkspace
           organizationId={organizationId}
           organizationName={organization.name}
           definition={definition}
           locale={user.locale}
-          canCreate={capabilities.canCreate}
-          canSubmit={capabilities.canSubmit}
-          canWrite={capabilities.canWrite}
-          canApprove={capabilities.canApprove}
-          canManage={capabilities.canManage}
+          {...capabilityProps}
         />
       ) : (
         <EnterpriseAdvancedFinanceWorkspace
