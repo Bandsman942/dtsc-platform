@@ -44,7 +44,9 @@ hasAll(treasuryUi, [
   "capabilities?.canApprove",
   "capabilities?.canReject",
   "capabilities?.canConfirm",
+  'label: `${t("financialAccounts")} ${collection.pagination.total}`',
 ], "Treasury hotfix");
+ok(!treasuryUi.includes('label: `${t("financialAccounts")} ${collection.items.length}`'), "Treasury hotfix: financial-account tab count must never be page-bound");
 
 hasAll(cashUi, [
   "fetchOperationalFinanceRecord",
