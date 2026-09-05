@@ -38,6 +38,7 @@ const supplierTransitionRoute = read("app/api/enterprise/[organizationId]/suppli
 const financeToolContract = read("lib/ai/tools/finance-contract.ts");
 const aiAuthorize = read("lib/ai/tools/authorize.ts");
 const financeExecutor = read("lib/ai/tools/executors/finance.ts");
+const regressionAdapter = read("scripts/qa-regression-checks.mjs");
 const pkg = JSON.parse(read("package.json"));
 
 ok(modulePage.includes("resolveEnterpriseModuleCapabilities") && !modulePage.includes("MANAGER_ROLES"), "Finance UI derives capabilities from the canonical module-access resolver, not a local manager-role shortcut.");
@@ -97,8 +98,8 @@ ok(financeToolContract.includes('FINANCE_PAYMENTS_READ') && financeToolContract.
 ok(aiAuthorize.includes("getEnterpriseAiAccess") && aiAuthorize.includes("resolveEnterpriseModuleAccess"), "AI tool authorization keeps AI entitlement plus effective module access gates.");
 ok(financeExecutor.includes("enterpriseReceivable") && financeExecutor.includes("enterprisePayable") && financeExecutor.includes("enterprisePayment") && financeExecutor.includes("currencyCode"), "AI Finance executors read canonical Finance tables and preserve currency dimensions.");
 
-ok(pkg.scripts?.["qa:hotfix-576-finance"] === "node scripts/qa-hotfix-576-finance-receivables-payables-payments.mjs", "package.json exposes the targeted hotfix QA command.");
-ok(String(pkg.scripts?.["qa:regression"] || "").includes("qa-hotfix-576-finance-receivables-payables-payments.mjs"), "Hotfix 576 QA is part of qa:regression.");
+ok(String(pkg.scripts?.["qa:regression"] || "").includes("qa-regression-checks.mjs"), "package.json keeps the regression adapter in qa:regression.");
+ok(regressionAdapter.includes('await import("./qa-hotfix-576-finance-receivables-payables-payments.mjs")'), "Hotfix 576 QA is wired into the regression adapter and therefore into qa:regression.");
 
 if (process.exitCode) {
   console.error("\nHotfix #576 Finance regression gate failed.");
