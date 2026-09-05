@@ -16,12 +16,14 @@ export async function GET(req: Request, { params }: Params) {
 
   const { page, pageSize, search } = financeListParams(req);
   const url = new URL(req.url);
+  const recordId = url.searchParams.get("recordId")?.trim() || undefined;
   const chartId = url.searchParams.get("chartId") || undefined;
   const accountType = url.searchParams.get("accountType") || undefined;
   const requestedStatus = url.searchParams.get("status") || undefined;
   const where = {
     organizationId,
     archivedAt: null,
+    ...(recordId ? { id: recordId } : {}),
     ...(chartId ? { chartId } : {}),
     ...(accountType ? { accountType } : {}),
     ...(requestedStatus === "ACTIVE" ? { isActive: true } : requestedStatus === "INACTIVE" ? { isActive: false } : {}),
@@ -35,14 +37,14 @@ export async function GET(req: Request, { params }: Params) {
     prisma.enterpriseLedgerAccount.findMany({
       where,
       orderBy: { code: "asc" },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
+      skip: recordId ? 0 : (page - 1) * pageSize,
+      take: recordId ? 1 : pageSize,
       include: { chart: true, parent: true, group: true, _count: { select: { children: true, journalLines: true, accountMappings: true } } },
     }),
     prisma.enterpriseLedgerAccount.count({ where }),
   ]);
-  await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "ledger-accounts", page, chartId: chartId || null } });
-  return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } });
+  await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "ledger-accounts", page, chartId: chartId || null, recordId: recordId || null } });
+  return NextResponse.json({ items, pagination: { page: recordId ? 1 : page, pageSize: recordId ? 1 : pageSize, total, pageCount: recordId ? 1 : Math.max(1, Math.ceil(total / pageSize)) } });
 }
 
 export async function POST(req: Request, { params }: Params) {
