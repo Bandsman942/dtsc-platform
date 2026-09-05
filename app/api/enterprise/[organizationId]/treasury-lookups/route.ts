@@ -118,11 +118,11 @@ export async function GET(req: Request, { params }: Params) {
             organizationId,
             financialAccountId: parentId,
             status: "CONFIRMED",
-            ...(search ? { OR: [{ number: { contains: search, mode: "insensitive" } }, { externalReference: { contains: search, mode: "insensitive" } }, { purpose: { contains: search, mode: "insensitive" } }] } : {}),
+            ...(search ? { OR: [{ number: { contains: search, mode: "insensitive" } }, { reference: { contains: search, mode: "insensitive" } }] } : {}),
           },
           orderBy: [{ paymentDate: "desc" }, { createdAt: "desc" }],
           take,
-          select: { id: true, number: true, paymentType: true, direction: true, currencyCode: true, amount: true, externalReference: true },
+          select: { id: true, number: true, paymentType: true, direction: true, currencyCode: true, amount: true, reference: true },
         });
       }
     } else if (kind === "treasury-transaction") {
