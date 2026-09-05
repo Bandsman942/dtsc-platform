@@ -1,3 +1,4 @@
+import "./qa-hotfix-578-procurement-link-parity.mjs";
 import { forbidTokens, requirePaths, requireTokens, success } from "./qa-enterprise-common-domain-lib.mjs";
 
 const registry = "lib/enterprise/accounting/posting-registry-final.ts";
@@ -10,6 +11,7 @@ const assets = "lib/enterprise/accounting/asset-accounting-service.ts";
 const health = "lib/enterprise/accounting/sector-adapters/health.ts";
 const pharmacy = "lib/enterprise/accounting/sector-adapters/pharmacy.ts";
 const supplierPartyConstraintRepair = "prisma/migrations/20260905114000_repair_supplier_party_link_constraints/migration.sql";
+const procurementLinkConstraintRepair = "prisma/migrations/20260905133000_repair_procurement_erp_link_constraints/migration.sql";
 
 requirePaths([
   registry,
@@ -22,6 +24,7 @@ requirePaths([
   health,
   pharmacy,
   supplierPartyConstraintRepair,
+  procurementLinkConstraintRepair,
   "tests/e2e/accounting-onboarding.spec.mjs",
   "tests/e2e/accounting-z-close-protection.spec.mjs",
   "tests/e2e/erp-cross-module-finance.spec.mjs",
@@ -102,6 +105,15 @@ requireTokens(supplierPartyConstraintRepair, [
   "GROUP BY \"organizationId\", \"supplierId\"",
   "GROUP BY \"organizationId\", \"businessPartyId\"",
   "reconcile them before applying #576",
+]);
+requireTokens(procurementLinkConstraintRepair, [
+  "EnterprisePurchaseOperationalLink_organizationId_purchaseId_key",
+  "EnterprisePurchaseItemCatalogLink_organizationId_purchaseItemId_key",
+  "EnterprisePurchaseReceiptOperationalLink_organizationId_purchaseReceiptId_key",
+  "EnterprisePurchaseReceiptOperationalLink_organizationId_idempotencyKey_key",
+  "EnterprisePurchaseReceiptItemStockLink_organizationId_purchaseReceiptItemId_key",
+  "EnterprisePurchaseReceiptItemStockLink_organizationId_stockMovementId_key",
+  "reconcile them before applying #578",
 ]);
 forbidTokens(health, [
   "enterpriseJournalEntry.create",
