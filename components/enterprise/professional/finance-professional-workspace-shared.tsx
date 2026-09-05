@@ -13,13 +13,14 @@ import { financeDate, financeEnumLabel, financeMoney, financeStatusLabel, financ
 export type FinancePagination = { page: number; pageSize: number; total: number; pageCount: number };
 export type FinanceRecord = {
   id: string; status?: string; revision?: number; number?: string; reference?: string; code?: string; name?: string; title?: string; currencyCode?: string;
-  amount?: string | number; unallocatedAmount?: string | number; grandTotal?: string | number; outstandingAmount?: string | number; operationalBalance?: string | number;
-  availableBalance?: string | number; openingAmount?: string | number; countedClosingAmount?: string | number | null; invoiceDate?: string; paymentDate?: string;
+  amount?: string | number; unallocatedAmount?: string | number; grandTotal?: string | number; outstandingAmount?: string | number; originalAmount?: string | number; operationalBalance?: string | number;
+  availableBalance?: string | number; openingAmount?: string | number; countedClosingAmount?: string | number | null; invoiceDate?: string; creditDate?: string; dueDate?: string | null; paymentDate?: string;
   transferDate?: string; statementDate?: string; openedAt?: string; createdAt?: string; updatedAt?: string; businessPartyId?: string | null; supplierId?: string | null;
+  salesInvoiceId?: string; supplierInvoiceId?: string;
   [key: string]: unknown;
 };
 
-type FinanceCollectionPayload<T extends FinanceRecord> = { items: T[]; pagination: FinancePagination; metrics?: Record<string, number>; message?: string; error?: string };
+type FinanceCollectionPayload<T extends FinanceRecord> = { items: T[]; pagination: FinancePagination; metrics?: Record<string, unknown>; message?: string; error?: string };
 export type FinanceLookupParty = { id: string; code?: string; legalName: string; displayName?: string | null; roles?: Array<{ roleCode: string }> };
 export type FinanceLookupSupplier = { id: string; legalName: string; displayName?: string | null };
 export type FinanceLookupMember = { id: string; label: string; email?: string; role?: string; positionTitle?: string | null };
@@ -44,7 +45,7 @@ function apiError(body: { error?: string } | null, fallbackCode = "FINANCE_OPERA
 export function useFinanceCollection<T extends FinanceRecord>({ endpoint, page, pageSize = 25, search, status, refreshKey }: { endpoint: string; page: number; pageSize?: number; search?: string; status?: string; refreshKey: number }) {
   const [items, setItems] = useState<T[]>([]);
   const [pagination, setPagination] = useState<FinancePagination>({ page: 1, pageSize, total: 0, pageCount: 1 });
-  const [metrics, setMetrics] = useState<Record<string, number>>({});
+  const [metrics, setMetrics] = useState<Record<string, unknown>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const query = useMemo(() => {
@@ -130,7 +131,7 @@ export function financeRecordAmount(item: FinanceRecord, locale: FinanceLocale) 
   if (value === undefined || value === null) return null;
   return financeMoney(value, String(item.currencyCode || "USD"), locale);
 }
-export function financeRecordDate(item: FinanceRecord, locale: FinanceLocale) { return financeDate(item.invoiceDate || item.paymentDate || item.transferDate || item.statementDate || item.openedAt || item.createdAt || item.updatedAt, locale); }
+export function financeRecordDate(item: FinanceRecord, locale: FinanceLocale) { return financeDate(item.invoiceDate || item.creditDate || item.dueDate || item.paymentDate || item.transferDate || item.statementDate || item.openedAt || item.createdAt || item.updatedAt, locale); }
 export function financeRecordDescription(item: FinanceRecord, locale: FinanceLocale) {
   const parts: string[] = [];
   const direction = typeof item.direction === "string" ? financeEnumLabel(item.direction, locale) : "";
@@ -160,10 +161,24 @@ export function FinancePaginationControls({ pagination, page, onPage, locale }: 
 export function FinanceDetailGrid({ children }: { children: ReactNode }) { return <dl className="grid gap-3 rounded-xl border-y border-dtsc-border py-4 sm:grid-cols-2 lg:grid-cols-3">{children}</dl>; }
 export function FinanceDetailValue({ label, children }: { label: string; children: ReactNode }) { return <div className="min-w-0"><dt className="text-xs font-black uppercase text-dtsc-muted">{label}</dt><dd className="mt-1 break-words text-sm font-semibold text-dtsc-ink">{children}</dd></div>; }
 
-const ENTITY_TYPE_BY_MODULE: Record<string, string> = { FINANCE_RECEIVABLES: "EnterpriseSalesInvoice", FINANCE_PAYABLES: "EnterpriseSupplierInvoice", FINANCE_PAYMENTS: "EnterprisePayment", FINANCE_TREASURY: "EnterpriseFinancialAccount", FINANCE_CASH: "EnterpriseCashSession", FINANCE_BANK: "EnterpriseBankStatement", FINANCE_RECONCILIATION: "EnterpriseReconciliationSession" };
+const ENTITY_TYPE_BY_MODULE: Record<string, string> = { FINANCE_PAYMENTS: "EnterprisePayment", FINANCE_TREASURY: "EnterpriseFinancialAccount", FINANCE_CASH: "EnterpriseCashSession", FINANCE_BANK: "EnterpriseBankStatement", FINANCE_RECONCILIATION: "EnterpriseReconciliationSession" };
+
+export function financeCollaborationEntityType(moduleCode: string, record: FinanceRecord) {
+  if (moduleCode === "FINANCE_RECEIVABLES") {
+    if (record.creditDate && record.salesInvoiceId) return "EnterpriseSalesCreditNote";
+    if (record.originalAmount !== undefined && record.salesInvoiceId) return "EnterpriseReceivable";
+    return "EnterpriseSalesInvoice";
+  }
+  if (moduleCode === "FINANCE_PAYABLES") {
+    if (record.creditDate && record.supplierInvoiceId) return "EnterpriseSupplierCreditNote";
+    if (record.originalAmount !== undefined && record.supplierInvoiceId) return "EnterprisePayable";
+    return "EnterpriseSupplierInvoice";
+  }
+  return ENTITY_TYPE_BY_MODULE[moduleCode] || null;
+}
 
 export function FinanceCollaboration({ organizationId, moduleCode, record, locale }: { organizationId: string; moduleCode: string; record: FinanceRecord; locale: FinanceLocale }) {
-  const entityType = ENTITY_TYPE_BY_MODULE[moduleCode];
+  const entityType = financeCollaborationEntityType(moduleCode, record);
   if (!entityType) return null;
   const sourceReference = financeRecordTitle(record, locale);
   return <><section className="border-t border-dtsc-border pt-5"><h3 className="font-black text-dtsc-ink">{locale === "fr" ? "Documents financiers" : "Financial documents"}</h3><p className="mt-1 text-sm leading-6 text-dtsc-muted">{locale === "fr" ? "Les justificatifs sont téléversés dans le stockage privé commun, versionnés et liés à cette opération." : "Supporting documents are uploaded to shared private storage, versioned and linked to this operation."}</p><Link className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border px-4 text-sm font-black text-dtsc-blue" href={`/enterprise-modules/DOCUMENTS?sourceEntityType=${encodeURIComponent(entityType)}&sourceEntityId=${encodeURIComponent(record.id)}&sourceReference=${encodeURIComponent(sourceReference)}&action=upload`}><FileUp className="h-4 w-4" />{locale === "fr" ? "Téléverser ou ouvrir les documents liés" : "Upload or open linked documents"}</Link></section><ProfessionalWorkflowComments endpoint={`/api/enterprise/${organizationId}/finance-comments/${encodeURIComponent(entityType)}/${encodeURIComponent(record.id)}`} title={locale === "fr" ? "Commentaires financiers" : "Finance comments"} description={locale === "fr" ? "Les décisions structurées restent dans le workflow ; ce fil sert aux précisions, demandes de correction et justifications." : "Structured decisions remain in the workflow; this thread is for clarifications, correction requests and explanations."} /></>;
