@@ -38,7 +38,7 @@ export async function GET(req: Request, { params }: Params) {
     ] } : {}),
   };
 
-  const [items, total, inbound, outbound, unallocated] = await Promise.all([
+  const [items, total, inboundByCurrency, outboundByCurrency, unallocatedByCurrency] = await Promise.all([
     prisma.enterprisePayment.findMany({
       where,
       orderBy: [{ paymentDate: "desc" }, { createdAt: "desc" }],
@@ -47,9 +47,24 @@ export async function GET(req: Request, { params }: Params) {
       include: { _count: { select: { allocations: true, events: true } } },
     }),
     prisma.enterprisePayment.count({ where }),
-    prisma.enterprisePayment.aggregate({ where: { organizationId, status: { in: ["CONFIRMED", "RECONCILED"] }, direction: "INBOUND" }, _sum: { amount: true } }),
-    prisma.enterprisePayment.aggregate({ where: { organizationId, status: { in: ["CONFIRMED", "RECONCILED"] }, direction: "OUTBOUND" }, _sum: { amount: true } }),
-    prisma.enterprisePayment.aggregate({ where: { organizationId, status: { in: ["CONFIRMED", "RECONCILED"] } }, _sum: { unallocatedAmount: true } }),
+    prisma.enterprisePayment.groupBy({
+      by: ["currencyCode"],
+      where: { organizationId, status: { in: ["CONFIRMED", "RECONCILED"] }, direction: "INBOUND" },
+      _sum: { amount: true },
+      _count: { _all: true },
+    }),
+    prisma.enterprisePayment.groupBy({
+      by: ["currencyCode"],
+      where: { organizationId, status: { in: ["CONFIRMED", "RECONCILED"] }, direction: "OUTBOUND" },
+      _sum: { amount: true },
+      _count: { _all: true },
+    }),
+    prisma.enterprisePayment.groupBy({
+      by: ["currencyCode"],
+      where: { organizationId, status: { in: ["CONFIRMED", "RECONCILED"] }, unallocatedAmount: { gt: 0 } },
+      _sum: { unallocatedAmount: true },
+      _count: { _all: true },
+    }),
   ]);
 
   const assignedApprovals = items.length ? await prisma.enterpriseApproval.findMany({
@@ -82,11 +97,7 @@ export async function GET(req: Request, { params }: Params) {
   return NextResponse.json({
     items: resultItems,
     pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) },
-    metrics: {
-      inbound: inbound._sum.amount || new Prisma.Decimal(0),
-      outbound: outbound._sum.amount || new Prisma.Decimal(0),
-      unallocated: unallocated._sum.unallocatedAmount || new Prisma.Decimal(0),
-    },
+    metrics: { inboundByCurrency, outboundByCurrency, unallocatedByCurrency },
   });
 }
 
