@@ -47,8 +47,9 @@ check(!modulePage.includes("Taux de change et consolidation multi-devise"), "Fin
 check(!modulePage.includes("Exchange rates and multi-currency consolidation"), "Finance module entry must not keep the English exchange-rate title inline");
 for (const contract of [
   "ensureCanonicalFinanceModulesForOrganization",
-  "resolveEnterpriseModuleAccess",
+  "resolveEnterpriseModuleCapabilities",
   "requireEnterpriseMembership",
+  "capabilities.canRead",
   'moduleCode === "FINANCE_ACCOUNTING"',
   "EnterpriseOperationalFinanceWorkspace",
   "EnterpriseAdvancedFinanceWorkspace",
@@ -130,4 +131,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log("Issue #322 Enterprise Finance overview i18n QA passed: canonical FR/EN copy, locale-aware module description, audited authoritative server KPIs, no partial client aggregation, Finance endpoints and accounting configuration contracts remain intact.");
+console.log("Issue #322 Enterprise Finance overview i18n QA passed: canonical FR/EN copy, capability-based module access, locale-aware module description, audited authoritative server KPIs, no partial client aggregation, Finance endpoints and accounting configuration contracts remain intact.");

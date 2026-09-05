@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { postApprovedSupplierCreditNote } from "@/lib/enterprise/accounting/accounting-document-approval-orchestration";
+import { assertSupplierCreditNoteStillPostable } from "@/lib/enterprise/accounting/credit-note-posting-preflight";
 import { authorizeFinanceRequest, financeErrorResponse } from "@/lib/enterprise/accounting/http";
 import { revisionSchema } from "@/lib/enterprise/accounting/schemas";
 import { z } from "zod";
@@ -16,6 +17,7 @@ export async function POST(req: Request, { params }: Params) {
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
   try {
+    await assertSupplierCreditNoteStillPostable(organizationId, creditNoteId, parsed.data.revision);
     const creditNote = await postApprovedSupplierCreditNote(organizationId, creditNoteId, auth.session.userId, parsed.data.revision);
     await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_SUPPLIER_CREDIT_NOTE_POSTED", entity: "EnterpriseSupplierCreditNote", entityId: creditNoteId, request: req, metadata: { organizationId } });
     await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "supplier-credit-notes", action: "post" } });
