@@ -13,10 +13,13 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_TREASURY", "view");
   if (!auth.ok) return auth.response;
+  const url = new URL(req.url);
   const { page, pageSize, search, status } = financeListParams(req);
+  const recordId = url.searchParams.get("recordId")?.trim() || undefined;
   const where: Prisma.EnterpriseFinancialAccountWhereInput = {
     organizationId,
     archivedAt: null,
+    ...(recordId ? { id: recordId } : {}),
     ...(status ? { status } : {}),
     ...(search ? {
       OR: [
@@ -27,12 +30,12 @@ export async function GET(req: Request, { params }: Params) {
       ],
     } : {}),
   };
-  const [items, total] = await Promise.all([
+  const [rawItems, total] = await Promise.all([
     prisma.enterpriseFinancialAccount.findMany({
       where,
       orderBy: [{ accountType: "asc" }, { code: "asc" }],
-      skip: (page - 1) * pageSize,
-      take: pageSize,
+      skip: recordId ? 0 : (page - 1) * pageSize,
+      take: recordId ? 1 : pageSize,
       select: {
         id: true,
         code: true,
@@ -55,8 +58,16 @@ export async function GET(req: Request, { params }: Params) {
     }),
     prisma.enterpriseFinancialAccount.count({ where }),
   ]);
-  await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "financial-accounts" } });
-  return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } });
+  const capabilities = auth.access.capabilities;
+  const items = rawItems.map((item) => ({
+    ...item,
+    capabilities: {
+      canEdit: Boolean(capabilities.canWrite),
+      canArchive: Boolean(capabilities.canManage),
+    },
+  }));
+  await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "financial-accounts", recordId: recordId || null } });
+  return NextResponse.json({ items, pagination: { page: recordId ? 1 : page, pageSize: recordId ? 1 : pageSize, total, pageCount: recordId ? 1 : Math.max(1, Math.ceil(total / pageSize)) } });
 }
 
 export async function POST(req: Request, { params }: Params) {
