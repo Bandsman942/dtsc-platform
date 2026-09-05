@@ -134,10 +134,15 @@ export async function confirmReconciliationMatch(organizationId: string, session
       where: { id: input.bankStatementLineId, organizationId, bankStatement: { financialAccountId: session.financialAccountId }, reconciliationStatus: "UNMATCHED" },
     }) : null;
     const transaction = input.treasuryTransactionId ? await tx.enterpriseTreasuryTransaction.findFirst({
-      where: { id: input.treasuryTransactionId, organizationId, financialAccountId: session.financialAccountId, reconciliationStatus: "UNRECONCILED" },
+      where: { id: input.treasuryTransactionId, organizationId, financialAccountId: session.financialAccountId, status: "CONFIRMED", reconciliationStatus: "UNRECONCILED" },
     }) : null;
-    const payment = input.paymentId ? await tx.enterprisePayment.findFirst({
-      where: { id: input.paymentId, organizationId, financialAccountId: session.financialAccountId, status: "CONFIRMED" },
+    if (input.treasuryTransactionId && !transaction) throw new EnterpriseAccountingError("RECONCILIATION_TRANSACTION_INVALID", 409);
+    if (input.paymentId && transaction && transaction.paymentId !== input.paymentId) {
+      throw new EnterpriseAccountingError("RECONCILIATION_MATCH_TARGET_CONFLICT", 409);
+    }
+    const resolvedPaymentId = input.paymentId || transaction?.paymentId || null;
+    const payment = resolvedPaymentId ? await tx.enterprisePayment.findFirst({
+      where: { id: resolvedPaymentId, organizationId, financialAccountId: session.financialAccountId, status: "CONFIRMED" },
     }) : null;
     const journalEntry = input.journalEntryId ? await tx.enterpriseJournalEntry.findFirst({
       where: { id: input.journalEntryId, organizationId, status: "POSTED", lines: { some: { ledgerAccountId: session.financialAccount.ledgerAccountId } } },
@@ -145,8 +150,8 @@ export async function confirmReconciliationMatch(organizationId: string, session
     }) : null;
 
     if (input.bankStatementLineId && !line) throw new EnterpriseAccountingError("RECONCILIATION_BANK_LINE_INVALID", 409);
-    if (input.treasuryTransactionId && !transaction) throw new EnterpriseAccountingError("RECONCILIATION_TRANSACTION_INVALID", 409);
     if (input.paymentId && !payment) throw new EnterpriseAccountingError("RECONCILIATION_PAYMENT_INVALID", 409);
+    if (transaction?.paymentId && !payment) throw new EnterpriseAccountingError("RECONCILIATION_LINKED_PAYMENT_INVALID", 409);
     if (input.journalEntryId && !journalEntry) throw new EnterpriseAccountingError("RECONCILIATION_JOURNAL_ENTRY_INVALID", 409);
     if (!line && !transaction && !payment && !journalEntry) throw new EnterpriseAccountingError("RECONCILIATION_MATCH_TARGET_REQUIRED", 409);
     if (line) {
