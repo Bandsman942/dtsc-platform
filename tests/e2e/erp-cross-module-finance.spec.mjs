@@ -180,6 +180,47 @@ test.describe.serial("ERP cross-module Finance acceptance", () => {
       update: { status: "ACTIVE", archivedAt: null },
       create: { organizationId, legalName: "Cross Module Supplier E2E", displayName: "Cross Module Supplier", normalizedName: "cross module supplier e2e", status: "ACTIVE", createdByUserId: adminUserId },
     });
+    const supplierParty = await prisma.enterpriseBusinessParty.upsert({
+      where: { organizationId_code: { organizationId, code: "E2E-CROSS-MODULE-SUPPLIER" } },
+      update: { status: "ACTIVE", archivedAt: null },
+      create: {
+        organizationId,
+        partyType: "ORGANIZATION",
+        legalName: "Cross Module Supplier E2E",
+        displayName: "Cross Module Supplier",
+        normalizedName: "cross module supplier e2e",
+        code: "E2E-CROSS-MODULE-SUPPLIER",
+        status: "ACTIVE",
+        createdByUserId: adminUserId,
+      },
+    });
+    await prisma.enterpriseBusinessPartyRole.upsert({
+      where: {
+        organizationId_businessPartyId_roleCode: {
+          organizationId,
+          businessPartyId: supplierParty.id,
+          roleCode: "SUPPLIER",
+        },
+      },
+      update: { status: "ACTIVE", archivedAt: null },
+      create: {
+        organizationId,
+        businessPartyId: supplierParty.id,
+        roleCode: "SUPPLIER",
+        status: "ACTIVE",
+        createdByUserId: adminUserId,
+      },
+    });
+    await prisma.enterpriseSupplierPartyLink.upsert({
+      where: { organizationId_supplierId: { organizationId, supplierId: supplier.id } },
+      update: { businessPartyId: supplierParty.id, archivedAt: null },
+      create: {
+        organizationId,
+        supplierId: supplier.id,
+        businessPartyId: supplierParty.id,
+        createdByUserId: adminUserId,
+      },
+    });
     const selectedExpenseAccount = await prisma.enterpriseLedgerAccount.findFirst({
       where: { organizationId, code: "6588", isActive: true, archivedAt: null, allowDirectPosting: true, accountType: { in: ["EXPENSE", "OTHER_EXPENSE"] } },
     });
@@ -207,12 +248,13 @@ test.describe.serial("ERP cross-module Finance acceptance", () => {
     expect(first.response.ok(), JSON.stringify(first.body)).toBeTruthy();
     const posted = await prisma.enterpriseSupplierInvoice.findUniqueOrThrow({ where: { id: invoice.id } });
     expect(posted.status).toBe("POSTED");
+    expect(posted.businessPartyId).toBe(supplierParty.id);
     const posting = await assertBalancedPosting({ postingEvent: "SUPPLIER_INVOICE_POSTED", sourceEntityType: "EnterpriseSupplierInvoice", sourceEntityId: invoice.id });
     const selectedExpenseLine = posting.lines.find((line) => line.ledgerAccountId === selectedExpenseAccount.id);
     expect(selectedExpenseLine, "Supplier posting must debit the explicitly selected expense account").toBeTruthy();
     expect(Number(selectedExpenseLine.debit)).toBe(40);
     expect(Number(selectedExpenseLine.credit)).toBe(0);
-    expect(await prisma.enterprisePayable.count({ where: { organizationId, supplierInvoiceId: invoice.id } })).toBe(1);
+    expect(await prisma.enterprisePayable.count({ where: { organizationId, supplierInvoiceId: invoice.id, businessPartyId: supplierParty.id } })).toBe(1);
 
     const second = await post(authenticatedPage, `/api/enterprise/${organizationId}/supplier-invoices/${invoice.id}/transition`, { action: "POST", revision: posted.revision });
     expect(second.response.ok(), JSON.stringify(second.body)).toBeTruthy();
