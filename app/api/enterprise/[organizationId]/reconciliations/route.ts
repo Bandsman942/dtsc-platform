@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { authorizeFinanceRequest, financeErrorResponse, financeListParams } from "@/lib/enterprise/accounting/http";
@@ -13,8 +14,21 @@ export async function GET(req: Request, { params }: Params) {
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_RECONCILIATION", "view");
   if (!auth.ok) return auth.response;
 
-  const { page, pageSize, status } = financeListParams(req);
-  const where = { organizationId, ...(status ? { status } : {}) };
+  const url = new URL(req.url);
+  const { page, pageSize, search, status } = financeListParams(req);
+  const recordId = url.searchParams.get("recordId")?.trim() || undefined;
+  const where: Prisma.EnterpriseReconciliationSessionWhereInput = {
+    organizationId,
+    ...(recordId ? { id: recordId } : {}),
+    ...(status ? { status } : {}),
+    ...(search ? {
+      OR: [
+        { financialAccount: { code: { contains: search, mode: "insensitive" } } },
+        { financialAccount: { name: { contains: search, mode: "insensitive" } } },
+        { bankStatementId: { contains: search, mode: "insensitive" } },
+      ],
+    } : {}),
+  };
   const [rawItems, total] = await Promise.all([
     prisma.enterpriseReconciliationSession.findMany({
       where,
@@ -29,18 +43,37 @@ export async function GET(req: Request, { params }: Params) {
     prisma.enterpriseReconciliationSession.count({ where }),
   ]);
   const statementIds = [...new Set(rawItems.map((item) => item.bankStatementId).filter(Boolean) as string[])];
-  const statements = await prisma.enterpriseBankStatement.findMany({
+  const statements = statementIds.length ? await prisma.enterpriseBankStatement.findMany({
     where: { organizationId, id: { in: statementIds } },
     select: { id: true, reference: true, statementDate: true, periodStart: true, periodEnd: true, currencyCode: true, closingBalance: true },
-  });
+  }) : [];
+  const ids = rawItems.map((item) => item.id);
+  const approvals = ids.length ? await prisma.enterpriseApproval.findMany({
+    where: {
+      organizationId,
+      targetEntityType: "EnterpriseReconciliationSession",
+      targetEntityId: { in: ids },
+      status: "PENDING",
+      archivedAt: null,
+    },
+    select: { targetEntityId: true, approverUserId: true, requestedByUserId: true },
+  }) : [];
+  const assignedIds = new Set(approvals.filter((approval) => approval.approverUserId === auth.session.userId).map((approval) => approval.targetEntityId));
   const statementById = new Map(statements.map((statement) => [statement.id, statement]));
+  const capabilities = auth.access.capabilities;
   const items = rawItems.map((item) => ({
     ...item,
     differenceAmount: item.reconciledDifference,
     bankStatement: item.bankStatementId ? statementById.get(item.bankStatementId) || null : null,
+    capabilities: {
+      canMatch: capabilities.canManage && item.status === "OPEN",
+      canSubmit: capabilities.canSubmit && item.status === "OPEN",
+      canApprove: capabilities.canApprove && item.status === "PENDING_VALIDATION" && assignedIds.has(item.id),
+      canReject: capabilities.canApprove && item.status === "PENDING_VALIDATION" && assignedIds.has(item.id),
+    },
   }));
 
-  await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "reconciliations" } });
+  await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "reconciliations", hasSearch: Boolean(search), recordId: recordId || null } });
   return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } });
 }
 
