@@ -223,7 +223,11 @@ export function EnterpriseFinanceTreasuryWorkspaceHotfix(props: Props) {
   const selectedAccount = tab === "accounts" ? detail as Account | null : null;
   const selectedTransfer = tab === "transfers" ? detail as Transfer | null : null;
   const selectedHistory = tab === "history" ? detail as HistoryItem | null : null;
-  const tabItems = [{ id: "accounts", label: t("accounts") }, { id: "transfers", label: t("transfers") }, { id: "history", label: t("history") }];
+  const tabItems = [
+    { id: "accounts", label: `${t("financialAccounts")} ${collection.pagination.total}` },
+    { id: "transfers", label: t("transfers") },
+    { id: "history", label: t("history") },
+  ];
   const sectionTitle = tab === "accounts" ? t("financialAccounts") : tab === "transfers" ? t("transferList") : t("historyTitle");
   const placeholder = tab === "accounts" ? t("searchAccounts") : tab === "transfers" ? t("searchTransfers") : t("searchHistory");
 
