@@ -16,7 +16,9 @@ export async function GET(req: Request, { params }: Params) {
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_ASSETS", "view");
   if (!auth.ok) return auth.response;
 
+  const url = new URL(req.url);
   const { page, pageSize, status, search } = financeListParams(req);
+  const recordId = url.searchParams.get("recordId")?.trim() || undefined;
   const assetMatches = search
     ? await prisma.enterpriseAsset.findMany({
         where: {
@@ -34,6 +36,7 @@ export async function GET(req: Request, { params }: Params) {
 
   const where: Prisma.EnterpriseAssetAccountingProfileWhereInput = {
     organizationId,
+    ...(recordId ? { id: recordId } : {}),
     ...(status ? { status } : {}),
     ...(search ? { assetId: { in: assetMatches.map((item) => item.id) } } : {}),
   };
@@ -41,8 +44,8 @@ export async function GET(req: Request, { params }: Params) {
     prisma.enterpriseAssetAccountingProfile.findMany({
       where,
       orderBy: [{ status: "asc" }, { inServiceDate: "desc" }],
-      skip: (page - 1) * pageSize,
-      take: pageSize,
+      skip: recordId ? 0 : (page - 1) * pageSize,
+      take: recordId ? 1 : pageSize,
       include: {
         schedules: { orderBy: { scheduledDate: "asc" }, take: 240 },
         disposals: { orderBy: { disposalDate: "desc" }, take: 5 },
@@ -89,18 +92,27 @@ export async function GET(req: Request, { params }: Params) {
       : Promise.resolve([]),
   ]);
   const assetById = new Map(assets.map((asset) => [asset.id, asset]));
+  const capabilities = auth.access.capabilities;
+  const items = profiles.map((profile) => ({
+    ...profile,
+    asset: assetById.get(profile.assetId) || null,
+    capabilities: {
+      canRunDepreciation: Boolean(capabilities.canManage && profile.status === "ACTIVE"),
+      canDispose: Boolean(capabilities.canManage && profile.status === "ACTIVE" && profile.disposals.length === 0),
+    },
+  }));
 
   await writeApiLog({
     request: req,
     statusCode: 200,
     userId: auth.session.userId,
     startedAt,
-    metadata: { organizationId, domain: "asset-accounting", page },
+    metadata: { organizationId, domain: "asset-accounting", page, recordId: recordId || null },
   });
   return NextResponse.json({
-    items: profiles.map((profile) => ({ ...profile, asset: assetById.get(profile.assetId) || null })),
+    items,
     availableAssets,
-    pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) },
+    pagination: { page: recordId ? 1 : page, pageSize: recordId ? 1 : pageSize, total, pageCount: recordId ? 1 : Math.max(1, Math.ceil(total / pageSize)) },
   });
 }
 
