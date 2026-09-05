@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { authorizeFinanceRequest, financeErrorResponse, financeListParams } from "@/lib/enterprise/accounting/http";
@@ -13,8 +14,21 @@ export async function GET(req: Request, { params }: Params) {
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_CASH", "view");
   if (!auth.ok) return auth.response;
 
-  const { page, pageSize, status } = financeListParams(req);
-  const where = { organizationId, ...(status ? { status } : {}) };
+  const url = new URL(req.url);
+  const { page, pageSize, search, status } = financeListParams(req);
+  const recordId = url.searchParams.get("recordId")?.trim() || undefined;
+  const where: Prisma.EnterpriseCashSessionWhereInput = {
+    organizationId,
+    ...(recordId ? { id: recordId } : {}),
+    ...(status ? { status } : {}),
+    ...(search ? {
+      OR: [
+        { financialAccount: { code: { contains: search, mode: "insensitive" } } },
+        { financialAccount: { name: { contains: search, mode: "insensitive" } } },
+        { financialAccount: { currencyCode: { contains: search, mode: "insensitive" } } },
+      ],
+    } : {}),
+  };
   const [rawItems, total] = await Promise.all([
     prisma.enterpriseCashSession.findMany({
       where,
@@ -28,12 +42,30 @@ export async function GET(req: Request, { params }: Params) {
     }),
     prisma.enterpriseCashSession.count({ where }),
   ]);
+  const ids = rawItems.map((item) => item.id);
+  const approvals = ids.length ? await prisma.enterpriseApproval.findMany({
+    where: {
+      organizationId,
+      targetEntityType: "EnterpriseCashSession",
+      targetEntityId: { in: ids },
+      status: "PENDING",
+      archivedAt: null,
+    },
+    select: { targetEntityId: true, approverUserId: true, requestedByUserId: true },
+  }) : [];
+  const assignedIds = new Set(approvals.filter((approval) => approval.approverUserId === auth.session.userId).map((approval) => approval.targetEntityId));
+  const capabilities = auth.access.capabilities;
   const items = rawItems.map((item) => ({
     ...item,
     theoreticalClosingAmount: item.expectedClosingAmount,
+    capabilities: {
+      canClose: capabilities.canManage && item.status === "OPEN",
+      canApprove: capabilities.canApprove && item.status === "PENDING_VALIDATION" && assignedIds.has(item.id),
+      canReject: capabilities.canApprove && item.status === "PENDING_VALIDATION" && assignedIds.has(item.id),
+    },
   }));
 
-  await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "cash-sessions" } });
+  await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "cash-sessions", hasSearch: Boolean(search), recordId: recordId || null } });
   return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } });
 }
 
