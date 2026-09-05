@@ -69,11 +69,19 @@ type InvoiceRecord = FinanceRecord & {
   capabilities?: RecordCapabilities;
   threeWayMatch?: { status?: string; quantityVariance?: string | number; priceVariance?: string | number; totalVariance?: string | number; overrideReason?: string | null } | null;
 };
-type InvoiceLine = { key: string; description: string; quantity: string; unitPrice: string; discountAmount: string; expenseAccountId: string };
+type InvoiceLine = {
+  key: string;
+  catalogItemId: string;
+  description: string;
+  quantity: string;
+  unitPrice: string;
+  discountAmount: string;
+  expenseAccountId: string;
+};
 type ActionTarget = { record: InvoiceRecord; action: string; kind: "invoice" | "credit" };
 
 const copy = (locale: FinanceLocale, key: EnterpriseFinanceKey) => translateEnterpriseFinance(locale, key);
-const newLine = (index: number): InvoiceLine => ({ key: `invoice-${Date.now()}-${index}`, description: "", quantity: "1", unitPrice: "0", discountAmount: "0", expenseAccountId: "" });
+const newLine = (index: number): InvoiceLine => ({ key: `invoice-${Date.now()}-${index}`, catalogItemId: "", description: "", quantity: "1", unitPrice: "0", discountAmount: "0", expenseAccountId: "" });
 
 function availableRecordActions(record: InvoiceRecord, isReceivables: boolean, locale: FinanceLocale, kind: "invoice" | "credit") {
   const caps = record.capabilities || {};
@@ -159,6 +167,10 @@ export function EnterpriseFinanceInvoicesWorkspaceHotfix(props: Props) {
     setSelectedPurchaseId("");
   }
 
+  function updateLine(key: string, patch: Partial<InvoiceLine>) {
+    setLines((current) => current.map((item) => item.key === key ? { ...item, ...patch } : item));
+  }
+
   async function createInvoice(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -169,6 +181,7 @@ export function EnterpriseFinanceInvoicesWorkspaceHotfix(props: Props) {
       currencyCode: String(form.get("currencyCode") || "USD").toUpperCase(),
       projectId: String(form.get("projectId") || "") || undefined,
       items: lines.map((line) => ({
+        catalogItemId: line.catalogItemId || undefined,
         description: line.description,
         quantity: line.quantity,
         unitPrice: line.unitPrice,
@@ -190,6 +203,8 @@ export function EnterpriseFinanceInvoicesWorkspaceHotfix(props: Props) {
       businessPartyId: selectedSupplierPartyId || undefined,
       purchaseId: String(form.get("purchaseId") || "") || undefined,
       purchaseReceiptId: String(form.get("purchaseReceiptId") || "") || undefined,
+      expenseId: String(form.get("expenseId") || "") || undefined,
+      assetId: String(form.get("assetId") || "") || undefined,
     };
     try {
       await financeMutation(`/api/enterprise/${organizationId}/${isReceivables ? "sales-invoices" : "supplier-invoices"}`, payload);
@@ -293,6 +308,8 @@ export function EnterpriseFinanceInvoicesWorkspaceHotfix(props: Props) {
             <Field label={t("supplier")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_PAYABLES" kind="supplier" name="supplierId" label={t("supplier")} locale={rawLocale} required disabled={busy} onOptionChange={(option) => { setSelectedSupplierId(option?.id || ""); setSelectedSupplierPartyId(option?.businessPartyId || ""); setSelectedPurchaseId(""); }} /></Field>
             <Field label={t("sourcePurchaseOrder")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_PAYABLES" kind="purchase" name="purchaseId" label={t("sourcePurchaseOrder")} locale={rawLocale} parentId={selectedSupplierId} disabled={busy} onOptionChange={(option) => setSelectedPurchaseId(option?.id || "")} /></Field>
             <Field label={t("sourceReceipt")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_PAYABLES" kind="purchase-receipt" name="purchaseReceiptId" label={t("sourceReceipt")} locale={rawLocale} parentId={selectedPurchaseId} disabled={busy} /></Field>
+            <Field label={locale === "en" ? "Approved expense" : "Dépense approuvée"}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_PAYABLES" kind="expense" name="expenseId" label={locale === "en" ? "approved expense" : "dépense approuvée"} locale={rawLocale} parentId={selectedSupplierId} disabled={busy} /></Field>
+            <Field label={locale === "en" ? "Related asset" : "Actif lié"}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_PAYABLES" kind="asset" name="assetId" label={locale === "en" ? "related asset" : "actif lié"} locale={rawLocale} parentId={selectedSupplierId} disabled={busy} /></Field>
           </>}
           <Field label={t("project")}><FinanceReferenceSelect organizationId={organizationId} moduleCode={moduleCode} kind="project" name="projectId" label={t("project")} locale={rawLocale} disabled={busy} /></Field>
         </ProfessionalFormSection>
@@ -304,11 +321,12 @@ export function EnterpriseFinanceInvoicesWorkspaceHotfix(props: Props) {
         </ProfessionalFormSection>
         <ProfessionalFormSection title={t("invoiceLines")}>
           <div className="grid gap-3 md:col-span-2">{lines.map((line, index) => <div key={line.key} className="grid gap-3 rounded-xl border border-dtsc-border p-3 md:grid-cols-12">
-            <div className="md:col-span-5"><Field label={`${t("description")} ${index + 1}`}><Input value={line.description} onChange={(event) => setLines((current) => current.map((item) => item.key === line.key ? { ...item, description: event.target.value } : item))} required disabled={busy} /></Field></div>
-            {!isReceivables ? <div className="md:col-span-3"><Field label={t("expense")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_PAYABLES" kind="expense-account" name={`expenseAccount-${line.key}`} label={t("expense")} locale={rawLocale} disabled={busy} onOptionChange={(option) => setLines((current) => current.map((item) => item.key === line.key ? { ...item, expenseAccountId: option?.id || "" } : item))} /></Field></div> : null}
-            <div className="md:col-span-2"><Field label={t("quantityShort")}><Input type="number" min="0.000001" step="0.000001" value={line.quantity} onChange={(event) => setLines((current) => current.map((item) => item.key === line.key ? { ...item, quantity: event.target.value } : item))} required disabled={busy} /></Field></div>
-            <div className="md:col-span-2"><Field label={t("price")}><Input type="number" min="0" step="0.01" value={line.unitPrice} onChange={(event) => setLines((current) => current.map((item) => item.key === line.key ? { ...item, unitPrice: event.target.value } : item))} required disabled={busy} /></Field></div>
-            <div className="md:col-span-2"><Field label={t("discount")}><Input type="number" min="0" step="0.01" value={line.discountAmount} onChange={(event) => setLines((current) => current.map((item) => item.key === line.key ? { ...item, discountAmount: event.target.value } : item))} disabled={busy} /></Field></div>
+            <div className="md:col-span-4"><Field label={`${t("productOrService")} ${index + 1}`}><FinanceReferenceSelect organizationId={organizationId} moduleCode={moduleCode} kind="catalog-item" name={`catalog-${line.key}`} label={t("productOrService")} locale={rawLocale} disabled={busy} onOptionChange={(option) => updateLine(line.key, { catalogItemId: option?.id || "", ...(option ? { description: option.label, unitPrice: option.amount !== null && option.amount !== undefined ? String(option.amount) : line.unitPrice } : {}) })} /></Field></div>
+            <div className="md:col-span-4"><Field label={`${t("description")} ${index + 1}`}><Input value={line.description} onChange={(event) => updateLine(line.key, { description: event.target.value })} required disabled={busy} /></Field></div>
+            {!isReceivables ? <div className="md:col-span-4"><Field label={t("expense")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_PAYABLES" kind="expense-account" name={`expenseAccount-${line.key}`} label={t("expense")} locale={rawLocale} disabled={busy} onOptionChange={(option) => updateLine(line.key, { expenseAccountId: option?.id || "" })} /></Field></div> : null}
+            <div className="md:col-span-2"><Field label={t("quantityShort")}><Input type="number" min="0.000001" step="0.000001" value={line.quantity} onChange={(event) => updateLine(line.key, { quantity: event.target.value })} required disabled={busy} /></Field></div>
+            <div className="md:col-span-2"><Field label={t("price")}><Input type="number" min="0" step="0.01" value={line.unitPrice} onChange={(event) => updateLine(line.key, { unitPrice: event.target.value })} required disabled={busy} /></Field></div>
+            <div className="md:col-span-2"><Field label={t("discount")}><Input type="number" min="0" step="0.01" value={line.discountAmount} onChange={(event) => updateLine(line.key, { discountAmount: event.target.value })} disabled={busy} /></Field></div>
             <div className="flex items-end md:col-span-2"><Button type="button" variant="outline" disabled={busy || lines.length === 1} onClick={() => setLines((current) => current.filter((item) => item.key !== line.key))}>{t("remove")}</Button></div>
           </div>)}<Button type="button" variant="outline" disabled={busy} onClick={() => setLines((current) => [...current, newLine(current.length)])}><Plus className="h-4 w-4" />{t("addLine")}</Button></div>
         </ProfessionalFormSection>
