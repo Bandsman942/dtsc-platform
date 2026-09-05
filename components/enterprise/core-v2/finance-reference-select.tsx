@@ -203,7 +203,6 @@ export function FinanceReferenceSelect({
 
   useEffect(() => {
     setSelected(null);
-    onOptionChange?.(null);
   }, [kind, moduleCode, parentId]);
 
   useEffect(() => {
