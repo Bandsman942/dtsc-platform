@@ -112,6 +112,13 @@ hasAll(treasuryService, [
   "RECONCILIATION_JOURNAL_ENTRY_INVALID",
   "RECONCILIATION_AMOUNT_EXCEEDS_BANK_LINE",
 ], "reconciliation target validation");
+hasAll(treasuryService, [
+  "transaction.paymentId !== input.paymentId",
+  "const resolvedPaymentId = input.paymentId || transaction?.paymentId || null",
+  "RECONCILIATION_LINKED_PAYMENT_INVALID",
+  "paymentId: payment?.id || null",
+  'data: { status: "RECONCILED", reconciledAt: new Date(), revision: { increment: 1 } }',
+], "reconciliation payment propagation");
 
 for (const [tool, moduleCode] of [
   ["FINANCE_TREASURY_READ", "FINANCE_TREASURY"],
