@@ -20,6 +20,8 @@ const financeFiles = [
   "components/enterprise/professional/enterprise-advanced-finance-workspace.tsx",
   "components/enterprise/professional/enterprise-exchange-rates-workspace.tsx",
   "components/enterprise/professional/enterprise-accounting-workspace.tsx",
+  "components/enterprise/professional/enterprise-finance-accounting-workspace-hotfix.tsx",
+  "components/enterprise/professional/enterprise-finance-advanced-workspace-hotfix.tsx",
   "components/enterprise/professional/enterprise-accounting-onboarding-panel.tsx",
 ];
 for (const file of financeFiles) if (!exists(file)) fail(`Finance UX: fichier requis absent ${file}`);
@@ -69,15 +71,15 @@ if (exists(onboarding)) {
   for (const forbidden of ["bootstrap non officiel", "unofficial bootstrap", "REGULATORY_STATEMENT_MAPPING_NOT_VALIDATED"]) if (content.includes(forbidden)) fail(`Finance UX: jargon de gouvernance historique affiché au client (${forbidden})`);
 }
 
-const accountingWorkspace = "components/enterprise/professional/enterprise-accounting-workspace.tsx";
+const accountingWorkspace = "components/enterprise/professional/enterprise-finance-accounting-workspace-hotfix.tsx";
 if (exists(accountingWorkspace)) {
   const content = read(accountingWorkspace);
-  for (const token of ["EnterpriseAccountingOnboardingPanel", "ProfessionalTabs", '"setup"', "ForegroundToast"]) {
-    if (!content.includes(token)) fail(`Finance UX: workspace Comptabilité incomplet (${token})`);
+  for (const token of ["EnterpriseAccountingOnboardingPanel", "ProfessionalTabs", '"setup"', "useToastMessage", "FinanceAccountingReferenceSelect"]) {
+    if (!content.includes(token)) fail(`Finance UX: workspace Comptabilité hotfix incomplet (${token})`);
   }
   const setupIndex = content.indexOf('{ id: "setup"');
   const overviewIndex = content.indexOf('{ id: "overview"');
-  if (setupIndex < 0 || overviewIndex < 0 || setupIndex > overviewIndex) fail("Finance UX: Mise en service doit rester le premier sous-bloc du workspace Comptabilité");
+  if (setupIndex < 0 || overviewIndex < 0 || setupIndex > overviewIndex) fail("Finance UX: Mise en service doit rester le premier sous-bloc du workspace Comptabilité hotfix");
 }
 
 for (const file of financeFiles) {
@@ -91,11 +93,19 @@ for (const file of financeFiles) {
 const modulePage = "components/enterprise/enterprise-finance-module-page.tsx";
 if (exists(modulePage)) {
   const content = read(modulePage);
-  for (const token of ["OPERATIONAL_FINANCE_MODULE_CODES", "EnterpriseOperationalFinanceWorkspace", "EnterpriseAdvancedFinanceWorkspace", "EnterpriseAccountingWorkspace"]) {
+  for (const token of [
+    "OPERATIONAL_FINANCE_MODULE_CODES",
+    "EnterpriseOperationalFinanceWorkspace",
+    "EnterpriseAdvancedFinanceWorkspace",
+    "EnterpriseFinanceAccountingWorkspaceHotfix",
+    "EnterpriseFinanceAdvancedWorkspaceHotfix",
+    "DOWNSTREAM_FINANCE_HOTFIX",
+  ]) {
     if (!content.includes(token)) fail(`Finance UX: routeur Finance incomplet (${token})`);
   }
   if (content.includes("EnterpriseAccountingOnboardingPanel")) fail("Finance UX: le routeur Finance ne doit plus rendre Mise en service avant le workspace Comptabilité");
-  if (!content.includes('moduleCode === "FINANCE_ACCOUNTING"')) fail("Finance UX: FINANCE_ACCOUNTING doit être routé explicitement vers son workspace dédié");
+  if (!content.includes('moduleCode === "FINANCE_ACCOUNTING"')) fail("Finance UX: FINANCE_ACCOUNTING doit être routé explicitement vers son workspace hotfix dédié");
+  if (!content.includes('"FINANCE_TAX", "FINANCE_CLOSE", "FINANCE_STATEMENTS", "FINANCE_ASSETS"')) fail("Finance UX: les quatre modules Finance aval doivent rester routés vers le workspace hotfix avancé");
 }
 
 const guidePath = "lib/user-guides/accounting-onboarding-guide.ts";
@@ -118,4 +128,4 @@ if (failures.length) {
   for (const failure of failures) console.error(`- ${failure}`);
   process.exit(1);
 }
-console.log("QA Finance client UX/i18n: OK — client-safe messages, dedicated accounting workspace, guide and FR/EN contracts enforced");
+console.log("QA Finance client UX/i18n: OK — client-safe messages, hotfix accounting/downstream workspaces, guide and FR/EN contracts enforced");
