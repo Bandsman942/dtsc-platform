@@ -32,7 +32,7 @@ export async function GET(req: Request, { params }: Params) {
       orderBy: [{ creditDate: "desc" }, { createdAt: "desc" }],
       skip: (page - 1) * pageSize,
       take: pageSize,
-      include: { supplierInvoice: true, items: true },
+      include: { supplierInvoice: true },
     }),
     prisma.enterpriseSupplierCreditNote.count({ where }),
   ]);
