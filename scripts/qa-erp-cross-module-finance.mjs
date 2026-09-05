@@ -9,6 +9,7 @@ const inventory = "lib/enterprise/accounting/inventory-accounting-service.ts";
 const assets = "lib/enterprise/accounting/asset-accounting-service.ts";
 const health = "lib/enterprise/accounting/sector-adapters/health.ts";
 const pharmacy = "lib/enterprise/accounting/sector-adapters/pharmacy.ts";
+const supplierPartyConstraintRepair = "prisma/migrations/20260905114000_repair_supplier_party_link_constraints/migration.sql";
 
 requirePaths([
   registry,
@@ -20,6 +21,7 @@ requirePaths([
   assets,
   health,
   pharmacy,
+  supplierPartyConstraintRepair,
   "tests/e2e/accounting-onboarding.spec.mjs",
   "tests/e2e/accounting-z-close-protection.spec.mjs",
   "tests/e2e/erp-cross-module-finance.spec.mjs",
@@ -92,6 +94,14 @@ requireTokens(pharmacy, [
   "commonEvent: \"INVENTORY_RECEIPT_VALUED\"",
   "PHARMACY_SUPPLIER_INVOICE_POSTED",
   "commonEvent: \"SUPPLIER_INVOICE_POSTED\"",
+]);
+requireTokens(supplierPartyConstraintRepair, [
+  "EnterpriseSupplierPartyLink_organizationId_supplierId_key",
+  "EnterpriseSupplierPartyLink_organizationId_businessPartyId_key",
+  "EnterpriseSupplierPartyLink_organizationId_migrationKey_key",
+  "GROUP BY \"organizationId\", \"supplierId\"",
+  "GROUP BY \"organizationId\", \"businessPartyId\"",
+  "reconcile them before applying #576",
 ]);
 forbidTokens(health, [
   "enterpriseJournalEntry.create",
