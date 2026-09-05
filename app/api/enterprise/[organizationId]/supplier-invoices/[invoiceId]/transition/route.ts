@@ -10,6 +10,7 @@ import {
 } from "@/lib/enterprise/accounting/accounting-invoice-approval-orchestration";
 import { assignedSupplierInvoiceTransitionSchema } from "@/lib/enterprise/accounting/accounting-approval-schemas";
 import { transitionSupplierInvoice } from "@/lib/enterprise/accounting/payables-service";
+import { ensureSupplierInvoicePartyBeforePosting } from "@/lib/enterprise/accounting/supplier-party-convergence";
 
 type Params = { params: Promise<{ organizationId: string; invoiceId: string }> };
 
@@ -30,6 +31,8 @@ export async function POST(req: Request, { params }: Params) {
   if (!auth.ok) return auth.response;
 
   try {
+    if (parsed.data.action === "POST") await ensureSupplierInvoicePartyBeforePosting(organizationId, invoiceId);
+
     const invoice = parsed.data.action === "SUBMIT"
       ? await submitSupplierInvoiceForAssignedReview(organizationId, invoiceId, auth.session.userId, parsed.data)
       : parsed.data.action === "REVIEW"
