@@ -1,3 +1,4 @@
+import "./qa-hotfix-582-finance-accounting-tax-close-statements-assets.mjs";
 import "./qa-accounting-framework-registry.mjs";
 import "./qa-syscohada-source-provenance.mjs";
 import "./qa-syscohada-dataset-pipeline.mjs";
