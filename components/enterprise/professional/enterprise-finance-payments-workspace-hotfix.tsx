@@ -201,7 +201,7 @@ export function EnterpriseFinancePaymentsWorkspaceHotfix(props: Props) {
         payableId: allocationTarget.direction === "OUTBOUND" ? targetId : undefined,
         amount: String(form.get("amount") || "0"),
       });
-      setAllocationTarget(null); setDetail(null); setRefreshKey((value) => value + 1); setMessage(t("allocationSaved"));
+      setAllocationTarget(null); setDetail(null); setRefreshKey((value) => value + 1); setMessage(t("paymentAllocated"));
     } catch (error) {
       setErrorMessage(safeFinanceError(error, t("allocationFailed")));
     } finally { setBusy(false); }
@@ -209,7 +209,7 @@ export function EnterpriseFinancePaymentsWorkspaceHotfix(props: Props) {
 
   const tabs = [
     { id: "all", label: t("allPayments") },
-    { id: "inbound", label: t("collections") },
+    { id: "inbound", label: t("receipts") },
     { id: "outbound", label: t("disbursements") },
     { id: "unallocated", label: t("unallocated") },
     { id: "approvals", label: t("toApprove") },
@@ -217,14 +217,14 @@ export function EnterpriseFinancePaymentsWorkspaceHotfix(props: Props) {
 
   return <ModuleWorkspace>
     <ModuleHeader
-      eyebrow={`${t("paymentsEyebrow")} · ${organizationName}`}
-      title={t("paymentsTitle")}
+      eyebrow={`${t("paymentsAllocationsEyebrow")} · ${organizationName}`}
+      title={t("professionalPaymentsTitle")}
       description={locale === "en" ? definition.descriptionEn : definition.descriptionFr}
       count={`${collection.pagination.total}`}
       primaryAction={canCreate ? <Button onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" />{t("newPayment")}</Button> : undefined}
     />
     <ModuleMetrics label={t("financeCycleMetrics")}>
-      <ModuleMetric label={t("collections")} value={summary?.inboundCount || 0} />
+      <ModuleMetric label={t("receipts")} value={summary?.inboundCount || 0} />
       <ModuleMetric label={t("disbursements")} value={summary?.outboundCount || 0} />
       <ModuleMetric label={t("unallocated")} value={summary?.unallocatedCount || 0} />
       <ModuleMetric label={t("toApprove")} value={summary?.pendingApprovalCount || 0} />
@@ -236,14 +236,14 @@ export function EnterpriseFinancePaymentsWorkspaceHotfix(props: Props) {
     />
     <ModuleContent>
       {summaryError ? <ProfessionalError message={summaryError} /> : null}
-      <ModuleSection title={tabs.find((item) => item.id === tab)?.label || ""} description={t("paymentsSectionDescription")}>
+      <ModuleSection title={tabs.find((item) => item.id === tab)?.label || ""} description={t("paymentSectionDescription")}>
         {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : <FinanceRecordList items={collection.items} locale={locale} emptyTitle={t("noItemInView")} emptyDescription={t("professionalFormOrFilters")} onOpen={(record) => setDetail(record as Payment)} />}
         <FinancePaginationControls pagination={collection.pagination} page={page} onPage={setPage} locale={locale} />
       </ModuleSection>
       <ProfessionalHelp moduleCode="FINANCE_PAYMENTS" />
     </ModuleContent>
 
-    <Dialog open={createOpen} onClose={() => { if (!busy) { setCreateOpen(false); resetCreate(); } }} title={t("newPayment")} description={t("paymentCreationDescription")} presentation="editor" className="max-w-4xl">
+    <Dialog open={createOpen} onClose={() => { if (!busy) { setCreateOpen(false); resetCreate(); } }} title={t("newPayment")} description={t("amountsAccountsControlled")} presentation="editor" className="max-w-4xl">
       <form onSubmit={createPayment} className="grid gap-6">
         <ProfessionalFormSection title={t("paymentNature")}>
           <Field label={t("type")}><NativeSelect name="paymentType" value={paymentType} onChange={changePaymentType} required disabled={busy} items={["CUSTOMER_PAYMENT", "SUPPLIER_PAYMENT", "PAYROLL_PAYMENT", "EXPENSE_REIMBURSEMENT", "TAX_PAYMENT", "REFUND", "OTHER"].map((id) => ({ id, label: financeEnumLabel(id, locale) }))} /></Field>
@@ -251,13 +251,13 @@ export function EnterpriseFinancePaymentsWorkspaceHotfix(props: Props) {
           <Field label={t("method")}><NativeSelect name="methodType" defaultValue="BANK_TRANSFER" required disabled={busy} items={["BANK_TRANSFER", "CASH", "MOBILE_MONEY", "CARD", "CHEQUE", "OTHER"].map((id) => ({ id, label: financeEnumLabel(id, locale) }))} /></Field>
           <Field label={t("financialAccount")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_PAYMENTS" kind="financial-account" name="financialAccountId" label={t("financialAccount")} locale={rawLocale} required disabled={busy} onOptionChange={(option) => { if (option?.currency) setCurrencyCode(option.currency); }} /></Field>
         </ProfessionalFormSection>
-        <ProfessionalFormSection title={t("counterparty")}>
+        <ProfessionalFormSection title={t("partyOrEmployee")}>
           {paymentType === "CUSTOMER_PAYMENT" ? <Field label={t("customer")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_PAYMENTS" kind="customer" name="customerReference" label={t("customer")} locale={rawLocale} required disabled={busy} onOptionChange={(option) => setBusinessPartyId(option?.businessPartyId || option?.id || "")} /></Field> : null}
           {paymentType === "SUPPLIER_PAYMENT" ? <Field label={t("supplier")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_PAYMENTS" kind="supplier" name="supplierReference" label={t("supplier")} locale={rawLocale} required disabled={busy} onOptionChange={(option) => setBusinessPartyId(option?.businessPartyId || "")} /></Field> : null}
           {paymentType === "EXPENSE_REIMBURSEMENT" ? <Field label={t("employee")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_PAYMENTS" kind="employee" name="employeeId" label={t("employee")} locale={rawLocale} required disabled={busy} /></Field> : null}
           {paymentType === "PAYROLL_PAYMENT" ? <Field label={t("payroll")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_PAYMENTS" kind="payroll-run" name="payrollRunId" label={t("payroll")} locale={rawLocale} required disabled={busy} onOptionChange={(option) => { if (option?.currency) setCurrencyCode(option.currency); }} /></Field> : null}
         </ProfessionalFormSection>
-        <ProfessionalFormSection title={t("amountAndReference")}>
+        <ProfessionalFormSection title={t("amountAndReferences")}>
           <Field label={t("amount")}><Input name="amount" type="number" min="0.01" step="0.01" required disabled={busy} /></Field>
           <Field label={t("currency")}><Input name="currencyCode" value={currencyCode} onChange={(event) => setCurrencyCode(event.target.value.toUpperCase())} maxLength={3} required disabled={busy} /></Field>
           <Field label={t("date")}><Input name="paymentDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required disabled={busy} /></Field>
@@ -278,7 +278,7 @@ export function EnterpriseFinancePaymentsWorkspaceHotfix(props: Props) {
           <FinanceDetailValue label={t("unallocated")}>{financeMoney(detail.unallocatedAmount, detail.currencyCode, locale)}</FinanceDetailValue>
           <FinanceDetailValue label={t("date")}>{detail.paymentDate}</FinanceDetailValue>
         </FinanceDetailGrid>
-        <div data-responsive-actions>{paymentActions(detail, locale).map(({ action, label, icon: Icon, destructive }) => <Button key={action} variant={destructive ? "destructive" : "outline"} disabled={busy} onClick={() => setActionTarget({ record: detail, action, label })}><Icon className="h-4 w-4" />{label}</Button>)}{detail.capabilities?.canAllocate ? <Button variant="outline" disabled={busy} onClick={() => setAllocationTarget(detail)}><CircleDollarSign className="h-4 w-4" />{t("allocate")}</Button> : null}</div>
+        <div data-responsive-actions>{paymentActions(detail, locale).map(({ action, label, icon: Icon, destructive }) => <Button key={action} variant={destructive ? "destructive" : "outline"} disabled={busy} onClick={() => setActionTarget({ record: detail, action, label })}><Icon className="h-4 w-4" />{label}</Button>)}{detail.capabilities?.canAllocate ? <Button variant="outline" disabled={busy} onClick={() => setAllocationTarget(detail)}><CircleDollarSign className="h-4 w-4" />{t("allocatePayment")}</Button> : null}</div>
         <FinanceCollaboration organizationId={organizationId} moduleCode="FINANCE_PAYMENTS" record={detail} locale={locale} />
       </div> : null}
     </Dialog>
@@ -291,12 +291,12 @@ export function EnterpriseFinancePaymentsWorkspaceHotfix(props: Props) {
       </form> : null}
     </Dialog>
 
-    <Dialog open={Boolean(allocationTarget)} onClose={() => { if (!busy) setAllocationTarget(null); }} title={t("allocatePayment")} description={t("allocationServerControls")} presentation="editor" className="max-w-2xl">
+    <Dialog open={Boolean(allocationTarget)} onClose={() => { if (!busy) setAllocationTarget(null); }} title={t("allocatePayment")} description={t("paymentSectionDescription")} presentation="editor" className="max-w-2xl">
       {allocationTarget ? <form onSubmit={allocate} className="grid gap-4">
         <Field label={t("type")}><NativeSelect name="targetType" disabled defaultValue={allocationTarget.direction === "INBOUND" ? "receivable" : "payable"} items={[{ id: allocationTarget.direction === "INBOUND" ? "receivable" : "payable", label: allocationTarget.direction === "INBOUND" ? t("customerReceivable") : t("supplierPayable") }]} /></Field>
         <FinanceBalanceTargetSelect organizationId={organizationId} direction={allocationTarget.direction} businessPartyId={allocationTarget.businessPartyId} currencyCode={allocationTarget.currencyCode} locale={locale} />
         <Field label={t("amount")}><Input name="amount" type="number" min="0.01" step="0.01" max={String(allocationTarget.unallocatedAmount)} defaultValue={String(allocationTarget.unallocatedAmount)} required disabled={busy} /></Field>
-        <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => setAllocationTarget(null)}>{t("cancel")}</Button><Button type="submit" disabled={busy}>{t("allocate")}</Button></div>
+        <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => setAllocationTarget(null)}>{t("cancel")}</Button><Button type="submit" disabled={busy}>{t("allocatePayment")}</Button></div>
       </form> : null}
     </Dialog>
   </ModuleWorkspace>;
