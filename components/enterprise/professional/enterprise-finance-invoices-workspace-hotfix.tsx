@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { CheckCircle2, FileMinus2, Plus, Send, ShieldCheck, XCircle } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
+import { FinanceReferenceSelect } from "@/components/enterprise/core-v2/finance-reference-select";
 import { EnterpriseApproverSelect } from "@/components/enterprise/enterprise-approver-select";
 import {
   FinanceCollaboration,
@@ -12,7 +13,6 @@ import {
   FinancePaginationControls,
   FinanceRecordList,
   financeMutation,
-  useFinanceLookups,
   type FinanceRecord,
 } from "@/components/enterprise/professional/finance-professional-workspace-shared";
 import { useOperationalFinanceCollection, fetchOperationalFinanceRecord } from "@/components/enterprise/professional/use-operational-finance-collection";
@@ -59,9 +59,12 @@ type RecordCapabilities = {
 type InvoiceRecord = FinanceRecord & {
   createdByUserId?: string;
   invoiceDate?: string;
+  creditDate?: string;
   dueDate?: string | null;
   grandTotal?: string | number;
   outstandingAmount?: string | number;
+  salesInvoiceId?: string;
+  supplierInvoiceId?: string;
   items?: Array<{ id: string; description: string; quantity: string | number; unitPrice: string | number; discountAmount?: string | number }>;
   capabilities?: RecordCapabilities;
   threeWayMatch?: { status?: string; quantityVariance?: string | number; priceVariance?: string | number; totalVariance?: string | number; overrideReason?: string | null } | null;
@@ -69,26 +72,20 @@ type InvoiceRecord = FinanceRecord & {
 type InvoiceLine = { key: string; description: string; quantity: string; unitPrice: string; discountAmount: string; expenseAccountId: string };
 type ActionTarget = { record: InvoiceRecord; action: string; kind: "invoice" | "credit" };
 
-type FinanceSourceLookups = {
-  salesOrders?: Array<{ id: string; reference: string; title: string; businessPartyId: string }>;
-  fulfillments?: Array<{ id: string; reference: string; salesOrderId: string }>;
-  commercialContracts?: Array<{ id: string; reference: string; title: string; businessPartyId?: string | null }>;
-  purchases?: Array<{ id: string; reference: string; title: string; supplierId?: string | null }>;
-  purchaseReceipts?: Array<{ id: string; reference: string; purchaseId: string }>;
-  expenseAccounts?: Array<{ id: string; code: string; nameFr: string; nameEn: string }>;
-};
-
 const copy = (locale: FinanceLocale, key: EnterpriseFinanceKey) => translateEnterpriseFinance(locale, key);
 const newLine = (index: number): InvoiceLine => ({ key: `invoice-${Date.now()}-${index}`, description: "", quantity: "1", unitPrice: "0", discountAmount: "0", expenseAccountId: "" });
 
-function availableInvoiceActions(record: InvoiceRecord, isReceivables: boolean, locale: FinanceLocale) {
+function availableRecordActions(record: InvoiceRecord, isReceivables: boolean, locale: FinanceLocale, kind: "invoice" | "credit") {
   const caps = record.capabilities || {};
   const actions: Array<{ action: string; label: string; icon: typeof Send; destructive?: boolean }> = [];
   if (caps.canSubmit) actions.push({ action: "SUBMIT", label: copy(locale, "actionSubmit"), icon: Send });
-  if (!isReceivables && caps.canReview) actions.push({ action: "REVIEW", label: locale === "en" ? "Review" : "Revoir", icon: CheckCircle2 });
+  if (kind === "invoice" && !isReceivables && caps.canReview) actions.push({ action: "REVIEW", label: locale === "en" ? "Review" : "Revoir", icon: CheckCircle2 });
   if (caps.canApprove) actions.push({ action: "APPROVE", label: copy(locale, "actionApprove"), icon: CheckCircle2 });
-  if (!isReceivables && caps.canReject) actions.push({ action: "REJECT", label: copy(locale, "actionReject"), icon: XCircle, destructive: true });
-  if (caps.canPost) actions.push({ action: isReceivables ? "ISSUE" : "POST", label: isReceivables ? copy(locale, "actionIssueAndPost") : copy(locale, "post"), icon: ShieldCheck });
+  if (caps.canReject && (kind === "credit" || !isReceivables)) actions.push({ action: "REJECT", label: copy(locale, "actionReject"), icon: XCircle, destructive: true });
+  if (caps.canPost) {
+    const action = kind === "credit" ? "POST" : isReceivables ? "ISSUE" : "POST";
+    actions.push({ action, label: action === "ISSUE" ? copy(locale, "actionIssueAndPost") : copy(locale, "post"), icon: ShieldCheck });
+  }
   return actions;
 }
 
@@ -111,6 +108,7 @@ export function EnterpriseFinanceInvoicesWorkspaceHotfix(props: Props) {
   const [lines, setLines] = useState<InvoiceLine[]>([newLine(0)]);
   const [selectedPartyId, setSelectedPartyId] = useState("");
   const [selectedSupplierId, setSelectedSupplierId] = useState("");
+  const [selectedSupplierPartyId, setSelectedSupplierPartyId] = useState("");
   const [selectedOrderId, setSelectedOrderId] = useState("");
   const [selectedPurchaseId, setSelectedPurchaseId] = useState("");
   const [busy, setBusy] = useState(false);
@@ -136,20 +134,18 @@ export function EnterpriseFinanceInvoicesWorkspaceHotfix(props: Props) {
   }, [status, tab]);
   const collection = useOperationalFinanceCollection<InvoiceRecord>({ endpoint, page, search, status: effectiveStatus, filters, refreshKey });
   const { summary, error: summaryError } = useOperationalFinanceSummary(organizationId, moduleCode, refreshKey);
-  const lookupData = useFinanceLookups(organizationId, moduleCode, refreshKey);
-  const sources = lookupData.lookups as typeof lookupData.lookups & FinanceSourceLookups;
-  const salesOrders = (sources.salesOrders || []).filter((item) => !selectedPartyId || item.businessPartyId === selectedPartyId);
-  const fulfillments = (sources.fulfillments || []).filter((item) => !selectedOrderId || item.salesOrderId === selectedOrderId);
-  const contracts = (sources.commercialContracts || []).filter((item) => !selectedPartyId || item.businessPartyId === selectedPartyId);
-  const purchases = (sources.purchases || []).filter((item) => !selectedSupplierId || item.supplierId === selectedSupplierId);
-  const receipts = (sources.purchaseReceipts || []).filter((item) => !selectedPurchaseId || item.purchaseId === selectedPurchaseId);
-  const expenseAccounts = sources.expenseAccounts || [];
 
   useEffect(() => {
-    const deepId = searchParams.get(isReceivables ? "invoiceId" : "supplierInvoiceId");
+    const invoiceKey = isReceivables ? "invoiceId" : "supplierInvoiceId";
+    const creditKey = isReceivables ? "creditNoteId" : "supplierCreditNoteId";
+    const invoiceId = searchParams.get(invoiceKey);
+    const creditId = searchParams.get(creditKey);
+    const deepId = creditId || invoiceId;
     if (!deepId) return;
-    const directEndpoint = `/api/enterprise/${organizationId}/${isReceivables ? "sales-invoices" : "supplier-invoices"}`;
-    fetchOperationalFinanceRecord<InvoiceRecord>(directEndpoint, deepId)
+    const directName = creditId
+      ? (isReceivables ? "sales-credit-notes" : "supplier-credit-notes")
+      : (isReceivables ? "sales-invoices" : "supplier-invoices");
+    fetchOperationalFinanceRecord<InvoiceRecord>(`/api/enterprise/${organizationId}/${directName}`, deepId)
       .then((record) => { if (record) setDetail(record); })
       .catch((error) => setErrorMessage(safeFinanceError(error, t("financeDetails"))));
   }, [isReceivables, organizationId, searchParams]);
@@ -158,6 +154,7 @@ export function EnterpriseFinanceInvoicesWorkspaceHotfix(props: Props) {
     setLines([newLine(0)]);
     setSelectedPartyId("");
     setSelectedSupplierId("");
+    setSelectedSupplierPartyId("");
     setSelectedOrderId("");
     setSelectedPurchaseId("");
   }
@@ -190,12 +187,13 @@ export function EnterpriseFinanceInvoicesWorkspaceHotfix(props: Props) {
     } : {
       ...common,
       supplierId: String(form.get("supplierId") || ""),
+      businessPartyId: selectedSupplierPartyId || undefined,
       purchaseId: String(form.get("purchaseId") || "") || undefined,
       purchaseReceiptId: String(form.get("purchaseReceiptId") || "") || undefined,
     };
     try {
       await financeMutation(`/api/enterprise/${organizationId}/${isReceivables ? "sales-invoices" : "supplier-invoices"}`, payload);
-      setCreateOpen(false); resetCreate(); setRefreshKey((v) => v + 1); setMessage(t("invoiceSavedDraft"));
+      setCreateOpen(false); resetCreate(); setRefreshKey((value) => value + 1); setMessage(t("invoiceSavedDraft"));
     } catch (error) {
       setErrorMessage(safeFinanceError(error, t("creationFailed")));
     } finally { setBusy(false); }
@@ -218,7 +216,7 @@ export function EnterpriseFinanceInvoicesWorkspaceHotfix(props: Props) {
     setBusy(true); setErrorMessage("");
     try {
       await financeMutation(path, payload);
-      setActionTarget(null); setDetail(null); setRefreshKey((v) => v + 1); setMessage(t("invoiceWorkflowUpdated"));
+      setActionTarget(null); setDetail(null); setRefreshKey((value) => value + 1); setMessage(t("invoiceWorkflowUpdated"));
     } catch (error) {
       setErrorMessage(safeFinanceError(error, t("transitionFailed")));
     } finally { setBusy(false); }
@@ -236,7 +234,7 @@ export function EnterpriseFinanceInvoicesWorkspaceHotfix(props: Props) {
         creditDate: String(form.get("creditDate") || ""),
         items: creditTarget.items.map((item) => ({ description: item.description, quantity: String(item.quantity), unitPrice: String(item.unitPrice), discountAmount: String(item.discountAmount || 0) })),
       });
-      setCreditTarget(null); setDetail(null); setTab("credits"); setRefreshKey((v) => v + 1); setMessage(t("creditNoteCreated"));
+      setCreditTarget(null); setDetail(null); setTab("credits"); setRefreshKey((value) => value + 1); setMessage(t("creditNoteCreated"));
     } catch (error) {
       setErrorMessage(safeFinanceError(error, t("creditNoteCreationFailed")));
     } finally { setBusy(false); }
@@ -248,6 +246,8 @@ export function EnterpriseFinanceInvoicesWorkspaceHotfix(props: Props) {
     { id: "invoices", label: t("supplierInvoices") }, { id: "balances", label: t("payables") }, { id: "credits", label: t("supplierCreditNotes") }, { id: "to-approve", label: t("toApprove") }, { id: "to-pay", label: t("toPay") }, { id: "overdue", label: t("overdue") },
   ];
   const pendingCount = isReceivables ? summary?.pendingApprovalCount || 0 : summary?.pendingDecisionCount || 0;
+  const detailKind: "invoice" | "credit" = endpointName.includes("credit-notes") || Boolean(detail?.creditDate) ? "credit" : "invoice";
+  const detailHasWorkflow = detailKind === "credit" || endpointName.includes("invoices");
 
   return <ModuleWorkspace>
     <ModuleHeader
@@ -270,7 +270,6 @@ export function EnterpriseFinanceInvoicesWorkspaceHotfix(props: Props) {
     />
     <ModuleContent>
       {summaryError ? <ProfessionalError message={summaryError} /> : null}
-      {lookupData.error ? <ProfessionalError message={lookupData.error} /> : null}
       <ModuleSection title={tabs.find((item) => item.id === tab)?.label || ""} description={t(isReceivables ? "receivablesSectionDescription" : "payablesSectionDescription")}>
         {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : tab === "ageing" ? (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{[
@@ -286,34 +285,34 @@ export function EnterpriseFinanceInvoicesWorkspaceHotfix(props: Props) {
       <form onSubmit={createInvoice} className="grid gap-6">
         <ProfessionalFormSection title={t("partyAndSource")}>
           {isReceivables ? <>
-            <Field label={t("customer")}><NativeSelect name="businessPartyId" value={selectedPartyId} onChange={setSelectedPartyId} required items={lookupData.lookups.parties.map((party) => ({ id: party.id, label: `${party.code || ""} ${party.displayName || party.legalName}`.trim() }))} /></Field>
-            <Field label={t("sourceOrder")}><NativeSelect name="salesOrderId" value={selectedOrderId} onChange={setSelectedOrderId} items={salesOrders.map((item) => ({ id: item.id, label: `${item.reference} · ${item.title}` }))} /></Field>
-            <Field label={t("sourceFulfillment")}><NativeSelect name="fulfillmentId" items={fulfillments.map((item) => ({ id: item.id, label: item.reference }))} /></Field>
-            <Field label={t("sourceContract")}><NativeSelect name="contractId" items={contracts.map((item) => ({ id: item.id, label: `${item.reference} · ${item.title}` }))} /></Field>
+            <Field label={t("customer")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_RECEIVABLES" kind="customer" name="businessPartyId" label={t("customer")} locale={rawLocale} required disabled={busy} onOptionChange={(option) => { setSelectedPartyId(option?.id || ""); setSelectedOrderId(""); }} /></Field>
+            <Field label={t("sourceOrder")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_RECEIVABLES" kind="sales-order" name="salesOrderId" label={t("sourceOrder")} locale={rawLocale} parentId={selectedPartyId} disabled={busy} onOptionChange={(option) => setSelectedOrderId(option?.id || "")} /></Field>
+            <Field label={t("sourceFulfillment")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_RECEIVABLES" kind="fulfillment" name="fulfillmentId" label={t("sourceFulfillment")} locale={rawLocale} parentId={selectedOrderId} disabled={busy} /></Field>
+            <Field label={t("sourceContract")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_RECEIVABLES" kind="contract" name="contractId" label={t("sourceContract")} locale={rawLocale} parentId={selectedPartyId} disabled={busy} /></Field>
           </> : <>
-            <Field label={t("supplier")}><NativeSelect name="supplierId" value={selectedSupplierId} onChange={setSelectedSupplierId} required items={lookupData.lookups.suppliers.map((supplier) => ({ id: supplier.id, label: supplier.displayName || supplier.legalName }))} /></Field>
-            <Field label={t("sourcePurchaseOrder")}><NativeSelect name="purchaseId" value={selectedPurchaseId} onChange={setSelectedPurchaseId} items={purchases.map((item) => ({ id: item.id, label: `${item.reference} · ${item.title}` }))} /></Field>
-            <Field label={t("sourceReceipt")}><NativeSelect name="purchaseReceiptId" items={receipts.map((item) => ({ id: item.id, label: item.reference }))} /></Field>
+            <Field label={t("supplier")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_PAYABLES" kind="supplier" name="supplierId" label={t("supplier")} locale={rawLocale} required disabled={busy} onOptionChange={(option) => { setSelectedSupplierId(option?.id || ""); setSelectedSupplierPartyId(option?.businessPartyId || ""); setSelectedPurchaseId(""); }} /></Field>
+            <Field label={t("sourcePurchaseOrder")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_PAYABLES" kind="purchase" name="purchaseId" label={t("sourcePurchaseOrder")} locale={rawLocale} parentId={selectedSupplierId} disabled={busy} onOptionChange={(option) => setSelectedPurchaseId(option?.id || "")} /></Field>
+            <Field label={t("sourceReceipt")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_PAYABLES" kind="purchase-receipt" name="purchaseReceiptId" label={t("sourceReceipt")} locale={rawLocale} parentId={selectedPurchaseId} disabled={busy} /></Field>
           </>}
-          <Field label={t("project")}><NativeSelect name="projectId" items={lookupData.lookups.projects.map((project) => ({ id: project.id, label: `${project.reference} · ${project.name}` }))} /></Field>
+          <Field label={t("project")}><FinanceReferenceSelect organizationId={organizationId} moduleCode={moduleCode} kind="project" name="projectId" label={t("project")} locale={rawLocale} disabled={busy} /></Field>
         </ProfessionalFormSection>
         <ProfessionalFormSection title={t("datesAndTerms")}>
-          <Field label={t("invoiceDate")}><Input name="invoiceDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required /></Field>
-          <Field label={t("dueDate")}><Input name="dueDate" type="date" /></Field>
-          <Field label={t("currency")}><Input name="currencyCode" defaultValue="USD" maxLength={3} required /></Field>
-          {isReceivables ? <Field label={t("paymentTerms")}><Input name="paymentTerms" /></Field> : null}
+          <Field label={t("invoiceDate")}><Input name="invoiceDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required disabled={busy} /></Field>
+          <Field label={t("dueDate")}><Input name="dueDate" type="date" disabled={busy} /></Field>
+          <Field label={t("currency")}><Input name="currencyCode" defaultValue="USD" maxLength={3} required disabled={busy} /></Field>
+          {isReceivables ? <Field label={t("paymentTerms")}><Input name="paymentTerms" disabled={busy} /></Field> : null}
         </ProfessionalFormSection>
         <ProfessionalFormSection title={t("invoiceLines")}>
           <div className="grid gap-3 md:col-span-2">{lines.map((line, index) => <div key={line.key} className="grid gap-3 rounded-xl border border-dtsc-border p-3 md:grid-cols-12">
-            <div className="md:col-span-5"><Field label={`${t("description")} ${index + 1}`}><Input value={line.description} onChange={(event) => setLines((current) => current.map((item) => item.key === line.key ? { ...item, description: event.target.value } : item))} required /></Field></div>
-            {!isReceivables ? <div className="md:col-span-3"><Field label={t("expense")}><NativeSelect value={line.expenseAccountId} onChange={(value) => setLines((current) => current.map((item) => item.key === line.key ? { ...item, expenseAccountId: value } : item))} items={expenseAccounts.map((account) => ({ id: account.id, label: `${account.code} · ${locale === "fr" ? account.nameFr : account.nameEn}` }))} /></Field></div> : null}
-            <div className="md:col-span-2"><Field label={t("quantityShort")}><Input type="number" min="0.000001" step="0.000001" value={line.quantity} onChange={(event) => setLines((current) => current.map((item) => item.key === line.key ? { ...item, quantity: event.target.value } : item))} required /></Field></div>
-            <div className="md:col-span-2"><Field label={t("price")}><Input type="number" min="0" step="0.01" value={line.unitPrice} onChange={(event) => setLines((current) => current.map((item) => item.key === line.key ? { ...item, unitPrice: event.target.value } : item))} required /></Field></div>
-            <div className="md:col-span-2"><Field label={t("discount")}><Input type="number" min="0" step="0.01" value={line.discountAmount} onChange={(event) => setLines((current) => current.map((item) => item.key === line.key ? { ...item, discountAmount: event.target.value } : item))} /></Field></div>
+            <div className="md:col-span-5"><Field label={`${t("description")} ${index + 1}`}><Input value={line.description} onChange={(event) => setLines((current) => current.map((item) => item.key === line.key ? { ...item, description: event.target.value } : item))} required disabled={busy} /></Field></div>
+            {!isReceivables ? <div className="md:col-span-3"><Field label={t("expense")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_PAYABLES" kind="expense-account" name={`expenseAccount-${line.key}`} label={t("expense")} locale={rawLocale} disabled={busy} onOptionChange={(option) => setLines((current) => current.map((item) => item.key === line.key ? { ...item, expenseAccountId: option?.id || "" } : item))} /></Field></div> : null}
+            <div className="md:col-span-2"><Field label={t("quantityShort")}><Input type="number" min="0.000001" step="0.000001" value={line.quantity} onChange={(event) => setLines((current) => current.map((item) => item.key === line.key ? { ...item, quantity: event.target.value } : item))} required disabled={busy} /></Field></div>
+            <div className="md:col-span-2"><Field label={t("price")}><Input type="number" min="0" step="0.01" value={line.unitPrice} onChange={(event) => setLines((current) => current.map((item) => item.key === line.key ? { ...item, unitPrice: event.target.value } : item))} required disabled={busy} /></Field></div>
+            <div className="md:col-span-2"><Field label={t("discount")}><Input type="number" min="0" step="0.01" value={line.discountAmount} onChange={(event) => setLines((current) => current.map((item) => item.key === line.key ? { ...item, discountAmount: event.target.value } : item))} disabled={busy} /></Field></div>
             <div className="flex items-end md:col-span-2"><Button type="button" variant="outline" disabled={busy || lines.length === 1} onClick={() => setLines((current) => current.filter((item) => item.key !== line.key))}>{t("remove")}</Button></div>
           </div>)}<Button type="button" variant="outline" disabled={busy} onClick={() => setLines((current) => [...current, newLine(current.length)])}><Plus className="h-4 w-4" />{t("addLine")}</Button></div>
         </ProfessionalFormSection>
-        {isReceivables ? <ProfessionalFormSection title={t("notes")}><Field label={t("internalNotes")}><textarea name="notes" rows={4} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2" /></Field></ProfessionalFormSection> : null}
+        {isReceivables ? <ProfessionalFormSection title={t("notes")}><Field label={t("internalNotes")}><textarea name="notes" rows={4} disabled={busy} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 disabled:opacity-60" /></Field></ProfessionalFormSection> : null}
         <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => { setCreateOpen(false); resetCreate(); }}>{t("cancel")}</Button><Button type="submit" disabled={busy}>{busy ? (locale === "en" ? "Saving…" : "Enregistrement…") : t("saveDraft")}</Button></div>
       </form>
     </Dialog>
@@ -322,12 +321,12 @@ export function EnterpriseFinanceInvoicesWorkspaceHotfix(props: Props) {
       {detail ? <div className="grid gap-5">
         <div className="flex flex-wrap gap-2">{detail.status ? <StatusBadge tone={financeStatusTone(detail.status)}>{financeStatusLabel(detail.status, locale)}</StatusBadge> : null}{detail.currencyCode ? <StatusBadge>{String(detail.currencyCode)}</StatusBadge> : null}</div>
         <FinanceDetailGrid>
-          <FinanceDetailValue label={t("date")}>{financeDate(detail.invoiceDate || detail.dueDate || detail.createdAt, locale)}</FinanceDetailValue>
+          <FinanceDetailValue label={t("date")}>{financeDate(detail.invoiceDate || detail.creditDate || detail.dueDate || detail.createdAt, locale)}</FinanceDetailValue>
           <FinanceDetailValue label={t("total")}>{financeMoney(detail.grandTotal ?? detail.originalAmount, String(detail.currencyCode || "USD"), locale)}</FinanceDetailValue>
           {detail.outstandingAmount !== undefined ? <FinanceDetailValue label={t("outstanding")}>{financeMoney(detail.outstandingAmount, String(detail.currencyCode || "USD"), locale)}</FinanceDetailValue> : null}
           {detail.dueDate ? <FinanceDetailValue label={t("dueDate")}>{financeDate(detail.dueDate, locale)}</FinanceDetailValue> : null}
         </FinanceDetailGrid>
-        {endpointName.includes("invoices") ? <div data-responsive-actions>{availableInvoiceActions(detail, isReceivables, locale).map(({ action, label, icon: Icon, destructive }) => <Button key={action} disabled={busy} variant={destructive ? "destructive" : "outline"} onClick={() => setActionTarget({ record: detail, action, kind: "invoice" })}><Icon className="h-4 w-4" />{label}</Button>)}{detail.capabilities?.canCreateCredit ? <Button variant="outline" disabled={busy} onClick={() => setCreditTarget(detail)}><FileMinus2 className="h-4 w-4" />{t("createCreditNote")}</Button> : null}</div> : null}
+        {detailHasWorkflow ? <div data-responsive-actions>{availableRecordActions(detail, isReceivables, locale, detailKind).map(({ action, label, icon: Icon, destructive }) => <Button key={action} disabled={busy} variant={destructive ? "destructive" : "outline"} onClick={() => setActionTarget({ record: detail, action, kind: detailKind })}><Icon className="h-4 w-4" />{label}</Button>)}{detailKind === "invoice" && detail.capabilities?.canCreateCredit ? <Button variant="outline" disabled={busy} onClick={() => setCreditTarget(detail)}><FileMinus2 className="h-4 w-4" />{t("createCreditNote")}</Button> : null}</div> : null}
         <FinanceCollaboration organizationId={organizationId} moduleCode={moduleCode} record={detail} locale={locale} />
       </div> : null}
     </Dialog>
@@ -337,13 +336,13 @@ export function EnterpriseFinanceInvoicesWorkspaceHotfix(props: Props) {
         {actionTarget.action === "SUBMIT" && actionTarget.kind === "invoice" && isReceivables && canSubmit ? <EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_RECEIVABLES" locale={rawLocale} /> : null}
         {actionTarget.action === "SUBMIT" && actionTarget.kind === "invoice" && !isReceivables && canSubmit ? <><EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_PAYABLES" locale={rawLocale} name="reviewerUserId" label={locale === "en" ? "Reviewer" : "Responsable de revue"} /><EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_PAYABLES" locale={rawLocale} name="approverUserId" label={locale === "en" ? "Final approver" : "Approbateur final"} /></> : null}
         {actionTarget.action === "SUBMIT" && actionTarget.kind === "credit" ? <EnterpriseApproverSelect organizationId={organizationId} moduleCode={moduleCode} locale={rawLocale} /> : null}
-        {actionTarget.action !== "POST" && actionTarget.action !== "ISSUE" ? <Field label={t("decisionReasonComment")}><textarea name="reason" rows={4} minLength={actionTarget.action === "REJECT" ? 4 : undefined} required={actionTarget.action === "REJECT"} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2" /></Field> : null}
+        {actionTarget.action !== "POST" && actionTarget.action !== "ISSUE" ? <Field label={t("decisionReasonComment")}><textarea name="reason" rows={4} minLength={actionTarget.action === "REJECT" ? 4 : undefined} required={actionTarget.action === "REJECT"} disabled={busy} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 disabled:opacity-60" /></Field> : null}
         <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => setActionTarget(null)}>{t("cancel")}</Button><Button type="submit" disabled={busy || (actionTarget.action === "APPROVE" && !canApprove) || (["POST", "ISSUE"].includes(actionTarget.action) && !canManage)}>{busy ? (locale === "en" ? "Processing…" : "Traitement…") : t("confirmAction")}</Button></div>
       </form> : null}
     </Dialog>
 
     <Dialog open={Boolean(creditTarget)} onClose={() => { if (!busy) setCreditTarget(null); }} title={t("createCreditNote")} description={t("creditNoteKeepsOriginal")} presentation="editor" className="max-w-2xl">
-      {creditTarget ? <form onSubmit={createCredit} className="grid gap-4"><Field label={t("creditDate")}><Input name="creditDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required /></Field><Field label={t("detailedReason")}><textarea name="reason" minLength={8} rows={4} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2" required /></Field><div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => setCreditTarget(null)}>{t("cancel")}</Button><Button type="submit" disabled={busy}>{t("createCreditNote")}</Button></div></form> : null}
+      {creditTarget ? <form onSubmit={createCredit} className="grid gap-4"><Field label={t("creditDate")}><Input name="creditDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required disabled={busy} /></Field><Field label={t("detailedReason")}><textarea name="reason" minLength={8} rows={4} required disabled={busy} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 disabled:opacity-60" /></Field><div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => setCreditTarget(null)}>{t("cancel")}</Button><Button type="submit" disabled={busy}>{t("createCreditNote")}</Button></div></form> : null}
     </Dialog>
   </ModuleWorkspace>;
 }
