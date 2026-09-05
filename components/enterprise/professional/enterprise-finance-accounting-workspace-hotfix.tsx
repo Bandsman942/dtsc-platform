@@ -9,7 +9,8 @@ import { AssignedApprovalSubmitPanel } from "@/components/enterprise/professiona
 import { ProfessionalError, ProfessionalFormSection, ProfessionalHelp, ProfessionalLoading, ProfessionalSearch, ProfessionalTabs } from "@/components/enterprise/professional/professional-erp-ui";
 import { financeDate, financeEnumLabel, financeMoney, financeStatusLabel, financeStatusTone, safeFinanceError, type FinanceLocale } from "@/components/enterprise/professional/finance-professional-ui";
 import { financeMutation, type FinanceRecord } from "@/components/enterprise/professional/finance-professional-workspace-shared";
-import { getAccountingActionCopy, getAccountingWorkspaceCopy } from "@/lib/enterprise/accounting/accounting-workspace-copy";
+import { getAccountingActionCopy } from "@/lib/enterprise/accounting/accounting-action-copy";
+import { getAccountingWorkspaceCopy } from "@/lib/enterprise/accounting/accounting-workspace-copy";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
