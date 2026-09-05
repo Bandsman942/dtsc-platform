@@ -52,7 +52,11 @@ export const accountTransferSchema = accountTransferBaseSchema.extend({
   { message: "Transfer accounts must differ" },
 );
 
-export const transferTransitionSchema = z.object({ action: z.enum(["APPROVE", "CONFIRM"]), revision });
+export const transferTransitionSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("APPROVE"), revision }),
+  z.object({ action: z.literal("REJECT"), revision, reason: z.string().trim().min(4).max(1000) }),
+  z.object({ action: z.literal("CONFIRM"), revision }),
+]);
 export const cashSessionOpenSchema = z.object({ financialAccountId: id, openingAmount: amount, siteId: id.optional() });
 export const cashCloseSchema = z.object({ countedClosingAmount: amount, closingReason: z.string().trim().min(3).max(1000).optional(), counts: z.array(z.object({ denomination: amount, quantity: z.coerce.number().int().nonnegative().max(1000000) })).max(100), revision });
 export const cashValidateSchema = z.object({ approve: z.boolean(), reason: z.string().trim().min(3).max(1000).optional(), revision }).superRefine((v, ctx) => { if (!v.approve && !v.reason) ctx.addIssue({ code: "custom", path: ["reason"], message: "Reason required" }); });
