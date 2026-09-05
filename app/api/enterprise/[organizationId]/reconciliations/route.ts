@@ -17,15 +17,19 @@ export async function GET(req: Request, { params }: Params) {
   const url = new URL(req.url);
   const { page, pageSize, search, status } = financeListParams(req);
   const recordId = url.searchParams.get("recordId")?.trim() || undefined;
+  const statusFilter: Prisma.EnterpriseReconciliationSessionWhereInput = status === "OPEN"
+    ? { status: { in: ["DRAFT", "IN_PROGRESS"] } }
+    : status ? { status } : {};
   const where: Prisma.EnterpriseReconciliationSessionWhereInput = {
     organizationId,
     ...(recordId ? { id: recordId } : {}),
-    ...(status ? { status } : {}),
+    ...statusFilter,
     ...(search ? {
       OR: [
+        { number: { contains: search, mode: "insensitive" } },
         { financialAccount: { code: { contains: search, mode: "insensitive" } } },
         { financialAccount: { name: { contains: search, mode: "insensitive" } } },
-        { bankStatementId: { contains: search, mode: "insensitive" } },
+        { bankStatement: { reference: { contains: search, mode: "insensitive" } } },
       ],
     } : {}),
   };
@@ -33,8 +37,8 @@ export async function GET(req: Request, { params }: Params) {
     prisma.enterpriseReconciliationSession.findMany({
       where,
       orderBy: { createdAt: "desc" },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
+      skip: recordId ? 0 : (page - 1) * pageSize,
+      take: recordId ? 1 : pageSize,
       include: {
         financialAccount: { select: { id: true, code: true, name: true, currencyCode: true } },
         _count: { select: { matches: true } },
@@ -49,13 +53,7 @@ export async function GET(req: Request, { params }: Params) {
   }) : [];
   const ids = rawItems.map((item) => item.id);
   const approvals = ids.length ? await prisma.enterpriseApproval.findMany({
-    where: {
-      organizationId,
-      targetEntityType: "EnterpriseReconciliationSession",
-      targetEntityId: { in: ids },
-      status: "PENDING",
-      archivedAt: null,
-    },
+    where: { organizationId, targetEntityType: "EnterpriseReconciliationSession", targetEntityId: { in: ids }, status: "PENDING", archivedAt: null },
     select: { targetEntityId: true, approverUserId: true, requestedByUserId: true },
   }) : [];
   const assignedIds = new Set(approvals.filter((approval) => approval.approverUserId === auth.session.userId).map((approval) => approval.targetEntityId));
@@ -66,15 +64,15 @@ export async function GET(req: Request, { params }: Params) {
     differenceAmount: item.reconciledDifference,
     bankStatement: item.bankStatementId ? statementById.get(item.bankStatementId) || null : null,
     capabilities: {
-      canMatch: capabilities.canManage && item.status === "OPEN",
-      canSubmit: capabilities.canSubmit && item.status === "OPEN",
-      canApprove: capabilities.canApprove && item.status === "PENDING_VALIDATION" && assignedIds.has(item.id),
-      canReject: capabilities.canApprove && item.status === "PENDING_VALIDATION" && assignedIds.has(item.id),
+      canMatch: Boolean(capabilities.canManage && ["DRAFT", "IN_PROGRESS"].includes(item.status)),
+      canSubmit: Boolean(capabilities.canSubmit && ["DRAFT", "IN_PROGRESS"].includes(item.status) && item.preparedByUserId === auth.session.userId),
+      canApprove: Boolean(capabilities.canApprove && item.status === "PENDING_VALIDATION" && assignedIds.has(item.id)),
+      canReject: Boolean(capabilities.canApprove && item.status === "PENDING_VALIDATION" && assignedIds.has(item.id)),
     },
   }));
 
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "reconciliations", hasSearch: Boolean(search), recordId: recordId || null } });
-  return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } });
+  return NextResponse.json({ items, pagination: { page: recordId ? 1 : page, pageSize: recordId ? 1 : pageSize, total, pageCount: recordId ? 1 : Math.max(1, Math.ceil(total / pageSize)) } });
 }
 
 export async function POST(req: Request, { params }: Params) {
