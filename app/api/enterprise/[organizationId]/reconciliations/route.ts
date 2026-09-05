@@ -29,7 +29,6 @@ export async function GET(req: Request, { params }: Params) {
         { number: { contains: search, mode: "insensitive" } },
         { financialAccount: { code: { contains: search, mode: "insensitive" } } },
         { financialAccount: { name: { contains: search, mode: "insensitive" } } },
-        { bankStatement: { reference: { contains: search, mode: "insensitive" } } },
       ],
     } : {}),
   };
