@@ -20,7 +20,7 @@ export type FinanceRecord = {
   [key: string]: unknown;
 };
 
-type FinanceCollectionPayload<T extends FinanceRecord> = { items: T[]; pagination: FinancePagination; metrics?: Record<string, unknown>; message?: string; error?: string };
+type FinanceCollectionPayload<T extends FinanceRecord> = { items: T[]; pagination: FinancePagination; metrics?: Record<string, number>; message?: string; error?: string };
 export type FinanceLookupParty = { id: string; code?: string; legalName: string; displayName?: string | null; roles?: Array<{ roleCode: string }> };
 export type FinanceLookupSupplier = { id: string; legalName: string; displayName?: string | null };
 export type FinanceLookupMember = { id: string; label: string; email?: string; role?: string; positionTitle?: string | null };
@@ -45,7 +45,7 @@ function apiError(body: { error?: string } | null, fallbackCode = "FINANCE_OPERA
 export function useFinanceCollection<T extends FinanceRecord>({ endpoint, page, pageSize = 25, search, status, refreshKey }: { endpoint: string; page: number; pageSize?: number; search?: string; status?: string; refreshKey: number }) {
   const [items, setItems] = useState<T[]>([]);
   const [pagination, setPagination] = useState<FinancePagination>({ page: 1, pageSize, total: 0, pageCount: 1 });
-  const [metrics, setMetrics] = useState<Record<string, unknown>>({});
+  const [metrics, setMetrics] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const query = useMemo(() => {
