@@ -25,7 +25,10 @@ type ReferenceKind =
   | "member"
   | "site"
   | "currency"
-  | "bank-statement";
+  | "bank-statement"
+  | "reconciliation-payment"
+  | "treasury-transaction"
+  | "journal-entry";
 
 type OperationalFinanceModuleCode =
   | "FINANCE_RECEIVABLES"
@@ -55,7 +58,7 @@ const OPERATIONAL_KINDS = new Set<ReferenceKind>([
   "customer", "supplier", "sales-order", "fulfillment", "contract", "purchase", "purchase-receipt", "project", "expense", "asset", "catalog-item", "financial-account", "payroll-run", "employee", "expense-account",
 ]);
 const TREASURY_MODULES = new Set<OperationalFinanceModuleCode>(["FINANCE_TREASURY", "FINANCE_CASH", "FINANCE_BANK", "FINANCE_RECONCILIATION"]);
-const TREASURY_KINDS = new Set<ReferenceKind>(["financial-account", "ledger-account", "member", "site", "currency", "bank-statement"]);
+const TREASURY_KINDS = new Set<ReferenceKind>(["financial-account", "ledger-account", "member", "site", "currency", "bank-statement", "reconciliation-payment", "treasury-transaction", "journal-entry"]);
 
 function endpointFor(
   organizationId: string,
@@ -116,6 +119,9 @@ function mapOptions(kind: ReferenceKind, items: unknown[], locale?: string | nul
   if (kind === "site") return (items as Array<{ id: string; code: string; name: string }>).map((item) => ({ id: item.id, label: `${item.code} · ${item.name}` }));
   if (kind === "currency") return (items as Array<{ id: string; code: string; name: string }>).map((item) => ({ id: item.code, label: `${item.code} · ${item.name}`, currency: item.code }));
   if (kind === "bank-statement") return (items as Array<{ id: string; reference: string; currencyCode: string; financialAccountId: string; statementDate: string }>).map((item) => ({ id: item.id, label: `${item.reference} · ${item.currencyCode} · ${new Date(item.statementDate).toLocaleDateString(en ? "en" : "fr")}`, currency: item.currencyCode, financialAccountId: item.financialAccountId }));
+  if (kind === "reconciliation-payment") return (items as Array<{ id: string; number: string; paymentType: string; direction: string; currencyCode: string; amount: string | number; externalReference?: string | null }>).map((item) => ({ id: item.id, label: `${item.number} · ${item.paymentType} · ${item.currencyCode} ${item.amount}${item.externalReference ? ` · ${item.externalReference}` : ""}`, currency: item.currencyCode, amount: item.amount }));
+  if (kind === "treasury-transaction") return (items as Array<{ id: string; reference?: string | null; transactionType: string; direction: string; currencyCode: string; amount: string | number; transactionDate: string }>).map((item) => ({ id: item.id, label: `${item.reference || item.id} · ${item.transactionType} · ${item.currencyCode} ${item.amount} · ${new Date(item.transactionDate).toLocaleDateString(en ? "en" : "fr")}`, currency: item.currencyCode, amount: item.amount }));
+  if (kind === "journal-entry") return (items as Array<{ id: string; number: string; reference?: string | null; description: string; accountingDate: string; functionalCurrencyCode: string; totalDebit: string | number }>).map((item) => ({ id: item.id, label: `${item.number}${item.reference ? ` · ${item.reference}` : ""} · ${item.description} · ${item.functionalCurrencyCode} ${item.totalDebit}`, currency: item.functionalCurrencyCode, amount: item.totalDebit }));
   return [];
 }
 
