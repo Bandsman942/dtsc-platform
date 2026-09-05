@@ -14,9 +14,12 @@ export async function GET(req: Request, { params }: Params) {
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_TREASURY", "view");
   if (!auth.ok) return auth.response;
 
+  const url = new URL(req.url);
   const { page, pageSize, search, status } = financeListParams(req);
+  const recordId = url.searchParams.get("recordId")?.trim() || undefined;
   const where: Prisma.EnterpriseAccountTransferWhereInput = {
     organizationId,
+    ...(recordId ? { id: recordId } : {}),
     ...(status ? { status } : {}),
     ...(search ? { number: { contains: search, mode: "insensitive" } } : {}),
   };
@@ -24,8 +27,8 @@ export async function GET(req: Request, { params }: Params) {
     prisma.enterpriseAccountTransfer.findMany({
       where,
       orderBy: [{ transferDate: "desc" }, { createdAt: "desc" }],
-      skip: (page - 1) * pageSize,
-      take: pageSize,
+      skip: recordId ? 0 : (page - 1) * pageSize,
+      take: recordId ? 1 : pageSize,
     }),
     prisma.enterpriseAccountTransfer.count({ where }),
   ]);
@@ -38,12 +41,7 @@ export async function GET(req: Request, { params }: Params) {
     }),
     transferIds.length
       ? prisma.enterpriseApproval.findMany({
-          where: {
-            organizationId,
-            targetEntityType: "EnterpriseAccountTransfer",
-            targetEntityId: { in: transferIds },
-            archivedAt: null,
-          },
+          where: { organizationId, targetEntityType: "EnterpriseAccountTransfer", targetEntityId: { in: transferIds }, archivedAt: null },
           orderBy: [{ requestedAt: "desc" }, { createdAt: "desc" }],
           select: { id: true, targetEntityId: true, requestedByUserId: true, approverUserId: true, status: true },
         })
@@ -52,13 +50,13 @@ export async function GET(req: Request, { params }: Params) {
   const approvalByTransferId = new Map<string, (typeof approvals)[number]>();
   for (const approval of approvals) if (!approvalByTransferId.has(approval.targetEntityId)) approvalByTransferId.set(approval.targetEntityId, approval);
   const approverUserIds = [...new Set(approvals.map((approval) => approval.approverUserId))];
-  const approvers = approverUserIds.length
-    ? await prisma.user.findMany({ where: { id: { in: approverUserIds } }, select: { id: true, name: true } })
-    : [];
+  const approvers = approverUserIds.length ? await prisma.user.findMany({ where: { id: { in: approverUserIds } }, select: { id: true, name: true } }) : [];
   const approverNameById = new Map(approvers.map((user) => [user.id, user.name]));
   const accountById = new Map(accounts.map((account) => [account.id, account]));
+  const capabilities = auth.access.capabilities;
   const items = rawItems.map((item) => {
     const approval = approvalByTransferId.get(item.id);
+    const assigned = approval?.status === "PENDING" && approval.approverUserId === auth.session.userId;
     return {
       ...item,
       sourceFinancialAccount: accountById.get(item.sourceFinancialAccountId) || null,
@@ -69,13 +67,18 @@ export async function GET(req: Request, { params }: Params) {
         approverName: approverNameById.get(approval.approverUserId) || "—",
         requestedByUserId: approval.requestedByUserId,
         status: approval.status,
-        canAct: approval.status === "PENDING" && approval.approverUserId === auth.session.userId,
+        canAct: assigned,
       } : null,
+      capabilities: {
+        canApprove: Boolean(capabilities.canApprove && item.status === "DRAFT" && assigned),
+        canReject: Boolean(capabilities.canApprove && item.status === "DRAFT" && assigned),
+        canConfirm: Boolean(capabilities.canWrite && item.status === "APPROVED"),
+      },
     };
   });
 
-  await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "account-transfers" } });
-  return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } });
+  await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "account-transfers", recordId: recordId || null } });
+  return NextResponse.json({ items, pagination: { page: recordId ? 1 : page, pageSize: recordId ? 1 : pageSize, total, pageCount: recordId ? 1 : Math.max(1, Math.ceil(total / pageSize)) } });
 }
 
 export async function POST(req: Request, { params }: Params) {

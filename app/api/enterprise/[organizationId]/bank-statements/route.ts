@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { authorizeFinanceRequest, financeErrorResponse, financeListParams } from "@/lib/enterprise/accounting/http";
@@ -13,8 +14,22 @@ export async function GET(req: Request, { params }: Params) {
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_BANK", "view");
   if (!auth.ok) return auth.response;
 
-  const { page, pageSize, status } = financeListParams(req);
-  const where = { organizationId, ...(status ? { status } : {}) };
+  const url = new URL(req.url);
+  const { page, pageSize, search, status } = financeListParams(req);
+  const recordId = url.searchParams.get("recordId")?.trim() || undefined;
+  const where: Prisma.EnterpriseBankStatementWhereInput = {
+    organizationId,
+    ...(recordId ? { id: recordId } : {}),
+    ...(status ? { status } : {}),
+    ...(search ? {
+      OR: [
+        { reference: { contains: search, mode: "insensitive" } },
+        { currencyCode: { contains: search, mode: "insensitive" } },
+        { financialAccount: { code: { contains: search, mode: "insensitive" } } },
+        { financialAccount: { name: { contains: search, mode: "insensitive" } } },
+      ],
+    } : {}),
+  };
   const [items, total] = await Promise.all([
     prisma.enterpriseBankStatement.findMany({
       where,
@@ -28,7 +43,7 @@ export async function GET(req: Request, { params }: Params) {
     }),
     prisma.enterpriseBankStatement.count({ where }),
   ]);
-  await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "bank-statements" } });
+  await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "bank-statements", hasSearch: Boolean(search), recordId: recordId || null } });
   return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } });
 }
 

@@ -140,7 +140,8 @@ export function financeClientLocale(preferred?: FinanceLocale): FinanceLocale {
   return "fr";
 }
 
-export function financeStatusLabel(status: string, locale: FinanceLocale = "fr") {
+export function financeStatusLabel(status?: string, locale: FinanceLocale = "fr") {
+  if (!status) return locale === "fr" ? "Statut à vérifier" : "Status to review";
   return STATUS_LABELS[locale][status] || (locale === "fr" ? "Statut à vérifier" : "Status to review");
 }
 
@@ -152,7 +153,8 @@ export function financeEnumLabel(value: string, locale: FinanceLocale = "fr") {
   return ENUM_LABELS[locale][value] || (locale === "fr" ? "Autre catégorie" : "Other category");
 }
 
-export function financeStatusTone(status: string): StatusBadgeTone {
+export function financeStatusTone(status?: string): StatusBadgeTone {
+  if (!status) return "neutral";
   if (/REJECTED|CANCELLED|VOID|FAILED|OVERDUE|DISPUTED|LOCKED|BLOCKED/i.test(status)) return "danger";
   if (/SUBMITTED|PENDING|IN_REVIEW|PARTIALLY|SOFT_CLOSED|CLOSING|UNALLOCATED|UNMATCHED/i.test(status)) return "warning";
   if (/APPROVED|ISSUED|POSTED|PAID|CONFIRMED|ALLOCATED|RECONCILED|VALIDATED|CLOSED|COMPLETED|EXECUTED|ACTIVE|IMPORTED|READY|PUBLISHED|MATCHED/i.test(status)) return "success";

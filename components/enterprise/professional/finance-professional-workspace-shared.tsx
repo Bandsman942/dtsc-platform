@@ -159,7 +159,7 @@ export function FinancePaginationControls({ pagination, page, onPage, locale }: 
 }
 
 export function FinanceDetailGrid({ children }: { children: ReactNode }) { return <dl className="grid gap-3 rounded-xl border-y border-dtsc-border py-4 sm:grid-cols-2 lg:grid-cols-3">{children}</dl>; }
-export function FinanceDetailValue({ label, children }: { label: string; children: ReactNode }) { return <div className="min-w-0"><dt className="text-xs font-black uppercase text-dtsc-muted">{label}</dt><dd className="mt-1 break-words text-sm font-semibold text-dtsc-ink">{children}</dd></div>; }
+export function FinanceDetailValue({ label, children, value }: { label: string; children?: ReactNode; value?: ReactNode }) { return <div className="min-w-0"><dt className="text-xs font-black uppercase text-dtsc-muted">{label}</dt><dd className="mt-1 break-words text-sm font-semibold text-dtsc-ink">{children ?? value ?? "—"}</dd></div>; }
 
 const ENTITY_TYPE_BY_MODULE: Record<string, string> = { FINANCE_PAYMENTS: "EnterprisePayment", FINANCE_TREASURY: "EnterpriseFinancialAccount", FINANCE_CASH: "EnterpriseCashSession", FINANCE_BANK: "EnterpriseBankStatement", FINANCE_RECONCILIATION: "EnterpriseReconciliationSession" };
 
