@@ -92,9 +92,17 @@ ok(sharedWorkspace.includes('return "EnterpriseReceivable"') && sharedWorkspace.
 ok(summaryService.includes("FINANCE_RECEIVABLES") && summaryService.includes("FINANCE_PAYABLES") && summaryService.includes("FINANCE_PAYMENTS"), "Operational Finance summary covers the three hotfix modules from server data.");
 ok(operationalLookups.includes("enterprisePayrollRun.findMany") && operationalLookups.includes('status: "APPROVED"') && operationalLookups.includes("id: run.id"), "Payments expose approved payroll runs, not bare payroll periods.");
 
-ok(financeToolContract.includes('FINANCE_RECEIVABLES_READ') && financeToolContract.includes('requiredModuleCodes: ["FINANCE_RECEIVABLES"]'), "Receivables AI read tool requires the receivables module entitlement.");
-ok(financeToolContract.includes('FINANCE_PAYABLES_READ') && financeToolContract.includes('requiredModuleCodes: ["FINANCE_PAYABLES"]'), "Payables AI read tool requires the payables module entitlement.");
-ok(financeToolContract.includes('FINANCE_PAYMENTS_READ') && financeToolContract.includes('requiredModuleCodes: ["FINANCE_PAYMENTS"]'), "Payments AI read tool requires the payments module entitlement.");
+for (const [toolCode, moduleCode, label] of [
+  ["FINANCE_RECEIVABLES_READ", "FINANCE_RECEIVABLES", "Receivables"],
+  ["FINANCE_PAYABLES_READ", "FINANCE_PAYABLES", "Payables"],
+  ["FINANCE_PAYMENTS_READ", "FINANCE_PAYMENTS", "Payments"],
+]) {
+  ok(
+    financeToolContract.includes(`code: "${toolCode}", moduleCode: "${moduleCode}"`) &&
+      financeToolContract.includes("requiredModuleCodes: [spec.moduleCode]"),
+    `${label} AI read tool requires its canonical module entitlement.`,
+  );
+}
 ok(aiAuthorize.includes("getEnterpriseAiAccess") && aiAuthorize.includes("resolveEnterpriseModuleAccess"), "AI tool authorization keeps AI entitlement plus effective module access gates.");
 ok(financeExecutor.includes("enterpriseReceivable") && financeExecutor.includes("enterprisePayable") && financeExecutor.includes("enterprisePayment") && financeExecutor.includes("currencyCode"), "AI Finance executors read canonical Finance tables and preserve currency dimensions.");
 
