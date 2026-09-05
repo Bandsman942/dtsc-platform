@@ -85,7 +85,7 @@ function exactParam(tab: TabKey) {
 }
 
 export function EnterpriseFinanceAccountingWorkspaceHotfix(props: Props) {
-  const { organizationId, organizationName, definition, locale: rawLocale, canCreate, canSubmit, canWrite, canApprove, canManage } = props;
+  const { organizationId, organizationName, definition, locale: rawLocale, canCreate, canWrite, canManage } = props;
   const locale: FinanceLocale = rawLocale === "en" ? "en" : "fr";
   const copy = getAccountingWorkspaceCopy(locale);
   const actions = getAccountingActionCopy(locale);
