@@ -41,7 +41,7 @@ export async function GET(req: Request, { params }: Params) {
           organizationId,
           status: "ACTIVE",
           archivedAt: null,
-          ...(requestedModule === "FINANCE_CASH" ? { accountType: { in: ["CASH", "MOBILE_MONEY"] } } : {}),
+          ...(requestedModule === "FINANCE_CASH" ? { accountType: "CASH" } : {}),
           ...(requestedModule === "FINANCE_BANK" ? { accountType: "BANK" } : {}),
           ...(parentId ? { currencyCode: parentId.toUpperCase() } : {}),
           ...(search ? { OR: [{ code: { contains: search, mode: "insensitive" } }, { name: { contains: search, mode: "insensitive" } }, { currencyCode: { contains: search, mode: "insensitive" } }, { maskedReference: { contains: search, mode: "insensitive" } }] } : {}),
@@ -85,7 +85,7 @@ export async function GET(req: Request, { params }: Params) {
       });
     } else if (kind === "currency") {
       items = await prisma.enterpriseCurrency.findMany({
-        where: { isActive: true, OR: [{ organizationId }, { organizationId: null }], ...(search ? { OR: [{ organizationId }, { organizationId: null }], code: { contains: search, mode: "insensitive" } } : {}) },
+        where: { isActive: true, OR: [{ organizationId }, { organizationId: null }], ...(search ? { code: { contains: search, mode: "insensitive" } } : {}) },
         orderBy: { code: "asc" }, take,
         select: { id: true, code: true, name: true, symbol: true, precision: true },
       });
