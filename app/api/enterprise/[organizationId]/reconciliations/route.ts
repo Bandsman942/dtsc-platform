@@ -83,6 +83,18 @@ export async function POST(req: Request, { params }: Params) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
 
   try {
+    if (parsed.data.bankStatementId) {
+      const importReady = await prisma.enterpriseBankStatement.findFirst({
+        where: {
+          id: parsed.data.bankStatementId,
+          organizationId,
+          financialAccountId: parsed.data.financialAccountId,
+          status: "IMPORTED",
+        },
+        select: { id: true },
+      });
+      if (!importReady) return NextResponse.json({ error: "RECONCILIATION_STATEMENT_NOT_READY", message: "Le relevé bancaire doit être complètement importé avant le rapprochement." }, { status: 409 });
+    }
     const session = await createReconciliationSession(organizationId, auth.session.userId, parsed.data);
     await writeAuditLog({
       userId: auth.session.userId,
