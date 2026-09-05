@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { authorizeFinanceRequest, financeErrorResponse, financeListParams } from "@/lib/enterprise/accounting/http";
+import { assertSalesInvoiceSources } from "@/lib/enterprise/accounting/invoice-source-validation";
 import { createSalesInvoice } from "@/lib/enterprise/accounting/receivables-service";
 import { salesInvoiceCreateSchema } from "@/lib/enterprise/accounting/schemas";
 import { prisma } from "@/lib/prisma";
@@ -57,7 +58,7 @@ export async function GET(req: Request, { params }: Params) {
       canSubmit: capabilities.canSubmit && item.status === "DRAFT" && item.createdByUserId === auth.session.userId,
       canApprove: capabilities.canApprove && item.status === "PENDING_APPROVAL" && assignedIds.has(item.id),
       canPost: capabilities.canManage && item.status === "APPROVED",
-      canCreateCredit: capabilities.canCreate && ["ISSUED", "PARTIALLY_PAID", "PAID"].includes(item.status),
+      canCreateCredit: capabilities.canCreate && ["ISSUED", "PARTIALLY_PAID", "PAID", "OVERDUE"].includes(item.status),
     },
   }));
 
@@ -73,6 +74,7 @@ export async function POST(req: Request, { params }: Params) {
   const parsed = salesInvoiceCreateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
   try {
+    await prisma.$transaction((tx) => assertSalesInvoiceSources(tx, organizationId, parsed.data));
     const invoice = await createSalesInvoice(organizationId, auth.session.userId, parsed.data);
     await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_SALES_INVOICE_CREATED", entity: "EnterpriseSalesInvoice", entityId: invoice.id, request: req, metadata: { organizationId, number: invoice.number, total: invoice.grandTotal.toFixed(), currency: invoice.currencyCode } });
     await writeApiLog({ request: req, statusCode: 201, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "sales-invoices" } });
