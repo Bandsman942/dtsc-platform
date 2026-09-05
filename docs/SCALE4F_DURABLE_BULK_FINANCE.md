@@ -1,6 +1,6 @@
 # SCALE-4F — Imports/exports durables Finance
 
-Issue : #515  
+Issue : #515
 Baseline : `main@2f2089b37cb97e3a5de80ca73ae121e9fbb7e5a0`
 
 ## Objectif
