@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { authorizeFinanceRequest, financeErrorResponse, financeListParams } from "@/lib/enterprise/accounting/http";
+import { assertSupplierInvoiceSources } from "@/lib/enterprise/accounting/invoice-source-validation";
 import { createSupplierInvoice } from "@/lib/enterprise/accounting/payables-service";
 import { supplierInvoiceCreateSchema } from "@/lib/enterprise/accounting/schemas";
 import { prisma } from "@/lib/prisma";
@@ -73,6 +74,7 @@ export async function POST(req: Request, { params }: Params) {
   const parsed = supplierInvoiceCreateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
   try {
+    await prisma.$transaction((tx) => assertSupplierInvoiceSources(tx, organizationId, parsed.data));
     const invoice = await createSupplierInvoice(organizationId, auth.session.userId, parsed.data);
     await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_SUPPLIER_INVOICE_CREATED", entity: "EnterpriseSupplierInvoice", entityId: invoice.id, request: req, metadata: { organizationId, number: invoice.number, total: invoice.grandTotal.toFixed(), currency: invoice.currencyCode } });
     await writeApiLog({ request: req, statusCode: 201, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "supplier-invoices" } });
