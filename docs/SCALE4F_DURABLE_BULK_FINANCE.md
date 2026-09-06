@@ -48,7 +48,7 @@ Le worker est appelé par `/api/internal/enterprise-bulk/process?batch=2`, prot�
 ### Seuil interactif
 
 ```text
-1 à 250 lignes     → import synchrone existant
+1 à 250 lignes      → import synchrone existant
 251 à 10 000 lignes → job durable
 ```
 
@@ -58,10 +58,13 @@ Le seuil est explicite et versionné dans `ENTERPRISE_BULK_LIMITS`.
 
 Avant de créer le job, le serveur revalide :
 
-- organisation active et permission `FINANCE_BANK:create` via la frontière Finance existante ;
+- same-origin et rate-limit via la frontière Finance canonique ;
+- organisation active et permission `FINANCE_BANK:create` ;
 - compte bancaire/Mobile Money actif du même tenant ;
 - devise du relevé égale à celle du compte ;
 - référence de relevé non déjà importée.
+
+Les erreurs CSV exploitables sont détectées avant enqueue : le parseur client identifie la ligne en erreur, et le schéma Zod serveur revalide l’intégralité du payload.
 
 Les 10 000 lignes ne sont **pas** stockées dans `EnterpriseDomainEvent.payloadJson`. Le payload complet est placé dans le stockage Supabase privé existant sous :
 
@@ -69,24 +72,28 @@ Les 10 000 lignes ne sont **pas** stockées dans `EnterpriseDomainEvent.payloadJ
 enterprise-bulk/<organizationId>/bank-statement-import/...
 ```
 
-Le DomainEvent ne contient que les métadonnées nécessaires, le chemin privé et le nombre de lignes attendu.
+Le DomainEvent ne contient que les métadonnées nécessaires, le chemin privé, le nombre de lignes attendu et un digest SHA-256 du contenu normalisé.
 
 ### Traitement par chunks
 
 Le worker :
 
-1. revalide le compte, le tenant, la devise et le payload staging ;
-2. crée le relevé avec état `IMPORTING` ;
-3. insère les lignes par chunks de 500 ;
-4. utilise `createMany({ skipDuplicates: true })` avec la contrainte unique existante `(organizationId, bankStatementId, lineNumber)` ;
-5. recompte les lignes ;
-6. ne passe le relevé à `IMPORTED` qu’après égalité exacte avec `expectedLineCount` ;
-7. publie `BANK_STATEMENT_IMPORTED` une seule fois ;
-8. supprime le staging privé après succès.
+1. revalide au moment du traitement le membership actif, l’entreprise, l’entitlement/module et la capacité `FINANCE_BANK` du demandeur ;
+2. télécharge le staging privé tenant-scoped et vérifie son SHA-256 avant toute écriture ;
+3. revalide le compte, le tenant, la devise et le schéma du payload ;
+4. crée ou reprend le relevé avec état `IMPORTING` / `IMPORT_FAILED` ;
+5. insère les lignes par chunks de 500 ;
+6. utilise `createMany({ skipDuplicates: true })` avec la contrainte unique existante `(organizationId, bankStatementId, lineNumber)` ;
+7. recompte les lignes ;
+8. ne passe le relevé à `IMPORTED` qu’après égalité exacte avec `expectedLineCount` ;
+9. publie `BANK_STATEMENT_IMPORTED` une seule fois ;
+10. supprime le staging privé après succès.
 
 Ainsi, un crash après plusieurs chunks peut être repris sans dupliquer les lignes déjà écrites.
 
-Une erreur terminale laisse le relevé partiel en `IMPORT_FAILED`. La création d’un rapprochement exige désormais explicitement un relevé `IMPORTED`, donc aucun rapprochement ne peut consommer un import incomplet.
+Pour un job `DEAD`, un resubmit ne réactive le même job que si le payload est strictement identique au payload initial (digest, compte, référence, devise et nombre de lignes). Un payload différent est refusé. Si le staging privé a déjà été purgé, il est reconstruit uniquement à partir de ce payload identique vérifié.
+
+Une erreur terminale laisse le relevé partiel en `IMPORT_FAILED`. La création d’un rapprochement exige explicitement un relevé `IMPORTED`, donc aucun rapprochement ne peut consommer un import incomplet.
 
 ### UX
 
@@ -96,7 +103,8 @@ Le workspace Banque conserve le formulaire #580/#583 déjà validé. Un bridge c
 - Import en cours ;
 - Nouvelle tentative prévue ;
 - Import terminé ;
-- Import échoué.
+- Import partiellement terminé lorsque des lignes sont présentes mais que le job est terminal ;
+- Import échoué lorsqu’aucune importation exploitable n’a abouti.
 
 Le job est conservé dans `sessionStorage` uniquement comme pointeur UX ; le serveur reste la source de vérité. L’utilisateur peut quitter le module et revenir. Le polling est borné et l’interface fournit une actualisation manuelle après la fenêtre automatique.
 
@@ -105,8 +113,8 @@ Le job est conservé dans `sessionStorage` uniquement comme pointeur UX ; le ser
 ### Seuil interactif
 
 ```text
-0 à 500 lignes  → CSV synchrone
-501 à 5 000 lignes → job durable
+0 à 500 lignes       → CSV synchrone
+501 à 5 000 lignes   → job durable
 ```
 
 Un gros export ne retombe jamais silencieusement sur un export HTTP synchrone si la file ou le stockage n’est pas disponible.
@@ -140,7 +148,7 @@ Aucune URL publique n’est créée. Le téléchargement passe toujours par une 
 - expiration ;
 - approbation sensible encore valide si nécessaire.
 
-L’artefact expire après 24 h et le worker purge les artefacts expirés en best effort. Le téléchargement reste `Cache-Control: private, no-store`.
+L’artefact expire après 24 h et le worker purge les artefacts expirés en best effort. Le téléchargement reste `Cache-Control: private, no-store`. Dès qu’un artefact est expiré ou purgé, l’URL de téléchargement est retirée du statut serveur et de l’état UI.
 
 Le CSV neutralise également les préfixes de formule (`=`, `+`, `@`, `-` hors nombre) avant exposition à un tableur.
 
@@ -198,15 +206,19 @@ Le gate protège notamment :
 - les chunks de 500 ;
 - `SKIP LOCKED`, lease, retry, `DEAD` ;
 - `skipDuplicates` ;
+- same-origin et rate-limit à la création ;
+- revalidation de la capacité Finance au worker ;
+- digest SHA-256 du staging et reprise `DEAD` uniquement pour un payload identique ;
 - `IMPORTING → IMPORTED` et `IMPORT_FAILED` ;
+- état UX partiel FR/EN et erreurs CSV avec numéro de ligne ;
 - blocage du rapprochement sur relevé incomplet ;
 - artefacts privés et sans `getPublicUrl` ;
 - revalidation Governance/approval au worker et au download ;
-- expiration/purge ;
+- expiration/purge et suppression du lien UI expiré ;
 - cron uniquement depuis la politique Vercel actuelle ;
 - suivi UX durable.
 
-La CI doit encore prouver sur le HEAD final : Prisma generate, migrations scratch/parité, type-check, `qa:regression`, lint et build. Les tests E2E propriétaire restent requis avant merge.
+La CI doit prouver sur le HEAD final : Prisma generate, migrations scratch/parité, type-check, `qa:regression`, lint et build. Les tests E2E propriétaire restent requis avant merge.
 
 ## Rollback
 
