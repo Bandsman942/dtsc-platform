@@ -45,14 +45,17 @@ const queue = requireTokens("lib/enterprise/bulk-jobs/queue.ts", [
   "finance:bank-statement-import:",
   "createHash",
   "sourceDigest",
+  "stageNormalizedBankInput",
   "P2002",
   "BANK_STATEMENT_REFERENCE_ALREADY_EXISTS",
-  "BANK_STATEMENT_RETRY_STAGING_EXPIRED",
+  "BANK_STATEMENT_RETRY_PAYLOAD_UNVERIFIED",
   "BANK_STATEMENT_RETRY_PAYLOAD_MISMATCH",
   'existing.processingStatus !== "DEAD"',
   "allowFailedResume: true",
   'statement.status === "IMPORT_FAILED"',
   "previous.sourceDigest !== sourceDigest",
+  "previous.stagingPath",
+  "restoredStaging",
   "expectedLineCount",
   "stagingPath",
 ]);
@@ -183,4 +186,4 @@ if (failures.length) {
   for (const failure of failures) console.error(`- ${failure}`);
   process.exit(1);
 }
-console.log("QA SCALE-4F durable bulk Finance: OK — canonical DomainEvent queue, bounded bank imports, private expiring audit artifacts, tenant/RBAC and dead-job resume contracts enforced");
+console.log("QA SCALE-4F durable bulk Finance: OK — canonical DomainEvent queue, bounded bank imports, private expiring audit artifacts, tenant/RBAC and verified dead-job resume contracts enforced");
