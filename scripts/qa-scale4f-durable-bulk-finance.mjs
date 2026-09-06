@@ -84,6 +84,12 @@ const worker = requireTokens("lib/enterprise/bulk-jobs/worker.ts", [
   "BANK_STATEMENT_LINE_COUNT_INCOMPLETE",
   "status: \"IMPORTED\"",
   "BANK_STATEMENT_IMPORTED",
+  "resolveEnterpriseModuleCapabilities",
+  'moduleCode: "FINANCE_BANK"',
+  "capabilities.canCreate",
+  "BANK_STATEMENT_IMPORT_ACCESS_REVOKED",
+  "stagedSourceDigest",
+  "BANK_STATEMENT_STAGING_DIGEST_MISMATCH",
   "requireEnterpriseGovernanceAccess",
   "AUDIT_EXPORT_APPROVAL_REVOKED",
   "artifactExpiresAt",
@@ -100,8 +106,17 @@ const bankRoute = requireTokens("app/api/enterprise/[organizationId]/bank-statem
   "queued: true",
   "statusUrl",
   "mode: \"synchronous\"",
+  "mutation: true",
+  "limit: 20",
 ]);
 if (!bankRoute.includes("parsed.data.lines.length > ENTERPRISE_BULK_LIMITS.bankStatementSyncMaxLines")) fail("SCALE-4F: le seuil sync/async bancaire doit être explicite");
+
+requireTokens("lib/enterprise/accounting/http.ts", [
+  "isSameOriginRequest",
+  "getRateLimitKey",
+  "rateLimit",
+  "options?.mutation",
+]);
 
 requireTokens("app/api/enterprise/[organizationId]/bank-statement-imports/[jobId]/route.ts", [
   "organizationId, eventType: BANK_STATEMENT_IMPORT_EVENT_TYPE",
@@ -165,6 +180,8 @@ requireTokens("components/enterprise/professional/enterprise-finance-cash-bank-r
   "MAX_POLLS",
   "Le traitement est durable",
   "The processing is durable",
+  "Import partiellement terminé",
+  "Import partially completed",
 ]);
 requireTokens("components/enterprise/enterprise-admin-audit-panel-durable.tsx", [
   "sessionStorage",
@@ -186,4 +203,4 @@ if (failures.length) {
   for (const failure of failures) console.error(`- ${failure}`);
   process.exit(1);
 }
-console.log("QA SCALE-4F durable bulk Finance: OK — canonical DomainEvent queue, bounded bank imports, private expiring audit artifacts, tenant/RBAC and verified dead-job resume contracts enforced");
+console.log("QA SCALE-4F durable bulk Finance: OK — canonical DomainEvent queue, bounded bank imports, private expiring audit artifacts, worker reauthorization, tenant/RBAC and verified dead-job resume contracts enforced");
