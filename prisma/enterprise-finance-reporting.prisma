@@ -65,7 +65,7 @@ model EnterpriseBudgetLine {
   quantity          Decimal?                     @db.Decimal(18, 4)
   unitCode          String?
   hypothesis        String?
-  plannedAmount  Decimal @db.Decimal(18, 2)
+  plannedAmount     Decimal                      @db.Decimal(18, 2)
   forecastAmount    Decimal?                     @db.Decimal(18, 2)
   createdAt         DateTime                     @default(now())
   updatedAt         DateTime                     @updatedAt
@@ -213,6 +213,8 @@ model EnterpriseReport {
   sourceEntityType          String?
   sourceEntityId            String?
   schemaVersion             Int      @default(1)
+  generationKey             String?
+  calculationVersion        Int      @default(1)
   filtersJson               Json?
   snapshotJson              Json
   revision                  Int      @default(1)
@@ -222,11 +224,13 @@ model EnterpriseReport {
 
   @@unique([organizationId, id])
   @@unique([organizationId, reference])
+  @@unique([organizationId, generationKey])
   @@index([organizationId, reportType, generatedAt])
   @@index([organizationId, status])
   @@index([organizationId, generatedByUserId, generatedAt])
   @@index([organizationId, currency, generatedAt])
   @@index([organizationId, freshnessAt])
+  @@index([organizationId, calculationVersion, generatedAt])
   @@index([archivedAt])
 }
 
