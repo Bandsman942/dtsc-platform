@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import type { z } from "zod";
+import { ENTERPRISE_BULK_LIMITS } from "@/lib/enterprise/bulk-jobs/constants";
 import { EnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
 import { ENTERPRISE_REPORT_TYPES } from "@/lib/enterprise/finance/constants";
 import { enterpriseBudgetVisibilityWhere, enterpriseExpenseVisibilityWhere } from "@/lib/enterprise/finance/access";
@@ -187,6 +188,10 @@ export async function generateEnterpriseReport(organizationId: string, actorUser
     if (source) await createEnterpriseLink(tx, { organizationId, sourceModule: source.sourceModule, sourceEntityType: source.sourceEntityType, sourceEntityId: source.sourceEntityId, targetModule: "REPORTS", targetEntityType: "EnterpriseReport", targetEntityId: report.id, linkType: "REPORT_SOURCE", createdById: actorUserId });
     await addEnterpriseOperationalEvent(tx, { organizationId, entityType: "EnterpriseReport", entityId: report.id, eventType: "ENTERPRISE_REPORT_GENERATED", summary: "Rapport généré depuis les données ERP réelles.", actorUserId, toStatus: "GENERATED", metadata: { reportType: report.reportType, schemaVersion: report.schemaVersion, calculationVersion, freshnessAt: generatedAt.toISOString(), metricCodes } });
     return report;
+  }, {
+    maxWait: ENTERPRISE_BULK_LIMITS.financeReportTransactionMaxWaitMs,
+    timeout: ENTERPRISE_BULK_LIMITS.financeReportTransactionTimeoutMs,
+    isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
   });
 }
 
