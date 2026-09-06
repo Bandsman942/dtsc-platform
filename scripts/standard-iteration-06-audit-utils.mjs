@@ -64,13 +64,21 @@ const profiles = {
     has("components/enterprise/enterprise-administration-module.tsx", "EnterpriseConfigurationChecklistPanel");
     has("components/enterprise/enterprise-administration-module.tsx", "EnterprisePendingActionsPanel");
     lacks("components/enterprise/enterprise-administration-module.tsx", "Modules sectoriels");
-    has("components/enterprise/enterprise-admin-hotfix-panels.tsx", "BRAND_COLORS");
-    has("components/enterprise/enterprise-admin-hotfix-panels.tsx", "type=\"file\"");
-    has("components/enterprise/enterprise-admin-hotfix-panels.tsx", "Bloquer temporairement un accès");
-    has("components/enterprise/enterprise-admin-hotfix-panels.tsx", "fullScreen");
-    has("components/enterprise/enterprise-admin-hotfix-panels.tsx", "useFormSubmissionGuard");
-    has("components/enterprise/enterprise-admin-hotfix-panels.tsx", "aria-busy");
-    has("components/enterprise/enterprise-admin-hotfix-panels.tsx", "disabled:cursor-wait");
+
+    const publicPanels = "components/enterprise/enterprise-admin-hotfix-panels.tsx";
+    const legacyPanels = "components/enterprise/enterprise-admin-hotfix-panels-legacy.tsx";
+    has(publicPanels, "enterprise-admin-hotfix-panels-legacy");
+    has(publicPanels, "enterprise-admin-audit-panel-durable");
+    for (const marker of [
+      "BRAND_COLORS",
+      "type=\"file\"",
+      "Bloquer temporairement un accès",
+      "fullScreen",
+      "useFormSubmissionGuard",
+      "aria-busy",
+      "disabled:cursor-wait",
+    ]) has(legacyPanels, marker);
+
     has("lib/enterprise/enterprise-admin-loader.ts", "configurationChecklist");
     has("lib/enterprise/enterprise-admin-loader.ts", "pendingActions");
     has("lib/enterprise/enterprise-admin-loader.ts", "FINANCE_ACCOUNTS");
