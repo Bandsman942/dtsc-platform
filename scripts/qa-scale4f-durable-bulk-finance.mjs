@@ -137,6 +137,7 @@ requireTokens("app/api/enterprise/[organizationId]/reconciliations/route.ts", [
 ]);
 
 const auditRoute = requireTokens("app/api/enterprise/[organizationId]/administration/audit/export/route.ts", [
+  "isSameOriginRequest",
   "sensitiveExportApproval",
   "AUDIT_EXPORT_APPROVAL_REQUIRED",
   "auditExportSyncMaxRows",
@@ -210,4 +211,4 @@ if (failures.length) {
   for (const failure of failures) console.error(`- ${failure}`);
   process.exit(1);
 }
-console.log("QA SCALE-4F durable bulk Finance: OK — canonical DomainEvent queue, bounded bank imports, private expiring audit artifacts, worker reauthorization, tenant/RBAC, line diagnostics and verified dead-job resume contracts enforced");
+console.log("QA SCALE-4F durable bulk Finance: OK — canonical DomainEvent queue, bounded bank imports, private expiring audit artifacts, same-origin creation, worker reauthorization, tenant/RBAC, line diagnostics and verified dead-job resume contracts enforced");
