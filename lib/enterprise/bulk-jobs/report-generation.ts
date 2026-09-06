@@ -26,7 +26,6 @@ function payloadFor(job: FinanceReportClaimedJob) {
     || payload.kind !== "FINANCE_REPORT_GENERATION"
     || !payload.actorUserId
     || !payload.requestDigest
-    || payload.entityId !== undefined
     || job.entityId !== payload.requestDigest
     || payload.calculationVersion !== ENTERPRISE_BULK_LIMITS.financeReportCalculationVersion
   ) {
@@ -73,7 +72,7 @@ export async function processFinanceReportGenerationJob(job: FinanceReportClaime
   }
 
   const startedAt = Date.now();
-  let report;
+  let report: Awaited<ReturnType<typeof generateEnterpriseReport>>;
   try {
     report = await generateEnterpriseReport(job.organizationId, payload.actorUserId, parsed.data, {
       generationKey: payload.requestDigest,
