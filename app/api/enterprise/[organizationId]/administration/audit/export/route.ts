@@ -7,6 +7,7 @@ import { enqueueAuditExport, enterpriseBulkJobStatus } from "@/lib/enterprise/bu
 import { requireEnterpriseGovernanceAccess } from "@/lib/enterprise/governance/access";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
+import { isSameOriginRequest } from "@/lib/request-security";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -17,6 +18,7 @@ function cell(value: unknown) {
 }
 
 export async function GET(req: Request, { params }: Params) {
+  if (!isSameOriginRequest(req)) return NextResponse.json({ error: "FORBIDDEN", message: "Cette action doit être lancée depuis DTSC Platform." }, { status: 403 });
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
   const limited = await rateLimit(getRateLimitKey(req, `enterprise-audit-export:${session.userId}`), 10, 60 * 60 * 1000);
