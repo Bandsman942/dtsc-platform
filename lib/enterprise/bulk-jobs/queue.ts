@@ -30,7 +30,7 @@ export type BankStatementImportJobPayload = {
   closingBalance: string;
   privateDocumentId: string | null;
   expectedLineCount: number;
-  stagingPath: string;
+  stagingPath: string | null;
   stagingSize: number;
   sourceDigest: string;
   requestedAt: string;
@@ -122,6 +122,16 @@ async function validateBankStatementQueueInput(
   if (!resumable) throw new EnterpriseAccountingError("BANK_STATEMENT_REFERENCE_ALREADY_EXISTS", 409, { statementId: statement.id, status: statement.status });
 }
 
+async function stageNormalizedBankInput(organizationId: string, reference: string, normalized: ReturnType<typeof normalizeBankInput>) {
+  return uploadEnterpriseBulkArtifact({
+    organizationId,
+    category: "bank-statement-import",
+    filename: `bank-statement-${reference}.json`,
+    contentType: "application/json; charset=utf-8",
+    body: JSON.stringify({ version: 1, input: normalized }),
+  });
+}
+
 export async function enqueueBankStatementImport(organizationId: string, actorUserId: string, input: BankStatementInput) {
   if (!isEnterpriseBulkStorageConfigured()) throw new EnterpriseAccountingError("BANK_STATEMENT_BULK_STORAGE_NOT_CONFIGURED", 503);
   const idempotencyKey = bankImportIdempotencyKey(organizationId, input.financialAccountId, input.reference);
@@ -133,8 +143,8 @@ export async function enqueueBankStatementImport(organizationId: string, actorUs
 
   if (existing?.processingStatus === "DEAD") {
     const previous = bankJobPayload(existing.payloadJson);
-    if (!previous?.stagingPath || !previous.sourceDigest) {
-      throw new EnterpriseAccountingError("BANK_STATEMENT_RETRY_STAGING_EXPIRED", 410, { jobId: existing.id });
+    if (!previous?.sourceDigest) {
+      throw new EnterpriseAccountingError("BANK_STATEMENT_RETRY_PAYLOAD_UNVERIFIED", 409, { jobId: existing.id });
     }
     if (
       previous.financialAccountId !== normalized.financialAccountId
@@ -146,12 +156,17 @@ export async function enqueueBankStatementImport(organizationId: string, actorUs
       throw new EnterpriseAccountingError("BANK_STATEMENT_RETRY_PAYLOAD_MISMATCH", 409, { jobId: existing.id });
     }
     await validateBankStatementQueueInput(organizationId, input, { allowFailedResume: true });
+    const restoredStaging = previous.stagingPath
+      ? { path: previous.stagingPath, size: previous.stagingSize || 0 }
+      : await stageNormalizedBankInput(organizationId, normalized.reference, normalized);
     return prisma.enterpriseDomainEvent.update({
       where: { id: existing.id },
       data: {
         payloadJson: {
           ...previous,
           actorUserId,
+          stagingPath: restoredStaging.path,
+          stagingSize: restoredStaging.size,
           requestedAt: new Date().toISOString(),
         } as Prisma.InputJsonValue,
         processingStatus: "PENDING",
@@ -166,13 +181,7 @@ export async function enqueueBankStatementImport(organizationId: string, actorUs
   }
 
   await validateBankStatementQueueInput(organizationId, input);
-  const staging = await uploadEnterpriseBulkArtifact({
-    organizationId,
-    category: "bank-statement-import",
-    filename: `bank-statement-${input.reference}.json`,
-    contentType: "application/json; charset=utf-8",
-    body: JSON.stringify({ version: 1, input: normalized }),
-  });
+  const staging = await stageNormalizedBankInput(organizationId, normalized.reference, normalized);
   const payload: BankStatementImportJobPayload = {
     version: 1,
     kind: "BANK_STATEMENT_IMPORT",
