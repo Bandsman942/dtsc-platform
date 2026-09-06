@@ -37,7 +37,9 @@ const processor = read("lib/enterprise/bulk-jobs/report-generation.ts");
 for (const token of ['moduleCode: "REPORTS"', "capabilities.canCreate", "enterpriseReportGenerateSchema.safeParse", "generationKey: payload.requestDigest", "generateEnterpriseReport", 'error.code === "P2002"', "persistResult", "durationMs", "REPORT_DURABLE_GENERATION"] ) {
   ok(processor.includes(token), `SCALE-4G: worker report processor missing ${token}.`);
 }
-ok(processor.indexOf("enterpriseReport.findFirst") < processor.indexOf("generateEnterpriseReport"), "SCALE-4G: worker must recover an already committed snapshot before recalculating.");
+const committedLookup = processor.indexOf("const existing = await prisma.enterpriseReport.findFirst");
+const calculationCall = processor.indexOf("report = await generateEnterpriseReport");
+ok(committedLookup >= 0 && calculationCall >= 0 && committedLookup < calculationCall, "SCALE-4G: worker must recover an already committed snapshot before recalculating.");
 ok(!processor.includes("snapshotJson") && !processor.includes("console.log"), "SCALE-4G: worker diagnostics must not log or persist financial snapshot contents outside EnterpriseReport.");
 
 const worker = read("lib/enterprise/bulk-jobs/worker.ts");
@@ -71,7 +73,13 @@ for (const token of ["FINANCE_REPORT_GENERATION_EVENT_TYPE", "organizationId", "
   ok(statusRoute.includes(token), `SCALE-4G: tenant-scoped job status route missing ${token}.`);
 }
 ok(!statusRoute.includes("snapshotJson"), "SCALE-4G: job status endpoint must not expose financial snapshot content.");
-ok(!statusRoute.includes("lastError:"), "SCALE-4G: raw worker error codes must not be returned as a status payload field.");
+ok(
+  statusRoute.includes("lastError: true")
+    && statusRoute.includes("failureMessage(job.lastError)")
+    && !statusRoute.includes("lastError: job.lastError")
+    && !statusRoute.includes('lastError: status'),
+  "SCALE-4G: worker error codes may be read internally for human mapping but must not be returned as a raw status payload field.",
+);
 
 const workspace = read("components/enterprise/core-v2/enterprise-reports-workspace.tsx");
 for (const token of ["REPORT_GENERATION_POLL_MS", "REPORT_GENERATION_MAX_POLLS", "sessionStorage", "generationStorageKey", "generationStatusUrl", "reports.generationQueued", "reports.generationProcessing", "reports.generationRetrying", "reports.generationReady", "reports.generationFailed", "reports.generationLeaveHint"] ) {
