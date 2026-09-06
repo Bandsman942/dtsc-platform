@@ -19,10 +19,11 @@ ok(count(workflowSchema, "model EnterpriseDomainEvent {") === 1, "SCALE-4G: the 
 ok(!schema.includes("model EnterpriseReportJob") && !workflowSchema.includes("model EnterpriseReportJob"), "SCALE-4G: no second report jobs table is allowed.");
 
 const constants = read("lib/enterprise/bulk-jobs/constants.ts");
-for (const token of ["FINANCE_REPORT_GENERATION_REQUESTED", "EnterpriseReportGeneration", "financeReportCalculationVersion", "financeReportFreshnessMs", "financeReportExportSyncMaxRows"]) {
+for (const token of ["FINANCE_REPORT_GENERATION_REQUESTED", "EnterpriseReportGeneration", "financeReportCalculationVersion", "financeReportFreshnessMs", "financeReportExportSyncMaxRows", "financeReportTransactionMaxWaitMs", "financeReportTransactionTimeoutMs", "financeReportObservabilityWindowMs", "financeReportDurationSampleSize"]) {
   ok(constants.includes(token), `SCALE-4G: constants missing ${token}.`);
 }
 ok(constants.includes("5 * 60 * 1000") && constants.includes("financeReportExportSyncMaxRows: 500"), "SCALE-4G: report freshness and synchronous export budgets must be explicit and bounded.");
+ok(constants.includes("financeReportTransactionTimeoutMs: 90_000") && constants.includes("workerLeaseSeconds: 240") && constants.includes("workerBatchSize: 2"), "SCALE-4G: report transaction budget must remain below the worker lease even for the canonical two-job batch.");
 
 const queue = read("lib/enterprise/bulk-jobs/queue.ts");
 for (const token of ["FinanceReportGenerationJobPayload", "enqueueFinanceReportGeneration", "FINANCE_REPORT_GENERATION_EVENT_TYPE", "requestDigest", "freshnessBucket", "calculationVersion", "actorUserId", "enterpriseDomainEvent.create"] ) {
@@ -46,10 +47,18 @@ ok(worker.includes("processFinanceReportGenerationJob(job)"), "SCALE-4G: canonic
 ok(worker.includes("error instanceof EnterpriseCoreV2Error") && worker.includes("error.status >= 500"), "SCALE-4G: business 4xx report failures must be terminal while server failures remain retryable.");
 
 const reportService = read("lib/enterprise/finance/report-service.ts");
-for (const token of ["BUDGET_VS_ACTUAL", "EXPENSE_SUMMARY", "PROCUREMENT_SUMMARY", "FINANCE_OVERVIEW", "Prisma.Decimal", "resolveEnterpriseModuleCapabilities", "generationKey", "calculationVersion", "snapshotJson"] ) {
+for (const token of ["BUDGET_VS_ACTUAL", "EXPENSE_SUMMARY", "PROCUREMENT_SUMMARY", "FINANCE_OVERVIEW", "Prisma.Decimal", "resolveEnterpriseModuleCapabilities", "generationKey", "calculationVersion", "snapshotJson", "financeReportTransactionMaxWaitMs", "financeReportTransactionTimeoutMs", "Prisma.TransactionIsolationLevel.RepeatableRead"] ) {
   ok(reportService.includes(token), `SCALE-4G: report service lost required Finance contract ${token}.`);
 }
 ok(reportService.includes("enterpriseBudgetVisibilityWhere") && reportService.includes("enterpriseExpenseVisibilityWhere") && reportService.includes("enterprisePurchaseVisibilityWhere"), "SCALE-4G: worker calculation must still revalidate source visibility.");
+
+const observability = read("lib/enterprise/bulk-jobs/report-observability.ts");
+for (const token of ["FINANCE_REPORT_GENERATION_EVENT_TYPE", "completedLast24h", "deadLast24h", "terminalFailureRate", "averageDurationMs", "durationSampleSize", "financeReportObservabilityWindowMs"] ) {
+  ok(observability.includes(token), `SCALE-4G: Finance report observability missing ${token}.`);
+}
+ok(!observability.includes("snapshotJson") && !observability.includes("amount"), "SCALE-4G: report observability must not expose financial result data.");
+const workerRoute = read("app/api/internal/enterprise-bulk/process/route.ts");
+ok(workerRoute.includes("getFinanceReportQueueObservability") && workerRoute.includes("financeReports"), "SCALE-4G: protected worker endpoint must surface Finance report duration/failure observability.");
 
 const generateRoute = read("app/api/enterprise/[organizationId]/reports/generate/route.ts");
 for (const token of ["isSameOriginRequest", "await rateLimit", 'moduleCode: "REPORTS"', 'action: "submit"', "enterpriseReportGenerateSchema.safeParse", "enqueueFinanceReportGeneration", "enterpriseBulkJobStatus", "statusUrl", "status: 202"] ) {
@@ -80,6 +89,7 @@ const exportRoute = read("app/api/enterprise/[organizationId]/reports/[id]/expor
 ok(exportRoute.includes("financeReportExportSyncMaxRows") && exportRoute.includes("REPORT_EXPORT_REQUIRES_DURABLE_JOB"), "SCALE-4G: report CSV route must fail closed beyond the interactive row budget.");
 ok(exportRoute.includes("/^[=+@]/") && exportRoute.includes("/^-[^\\d.,]/"), "SCALE-4G: report CSV export must neutralize spreadsheet formula injection.");
 ok(exportRoute.includes('"Cache-Control": "private, no-store"'), "SCALE-4G: report exports must remain private and non-cacheable.");
+ok(reportService.includes("take: 500") && constants.includes("financeReportExportSyncMaxRows: 500"), "SCALE-4G: current detailed report snapshots and direct export must share the same bounded 500-row ceiling.");
 
 const ownerE2e = read("tests/e2e/hotfix-574-finance-owner.spec.mjs");
 ok(ownerE2e.includes("waitForDurableReport") && ownerE2e.includes("generateResponse.status()).toBe(202)") && ownerE2e.includes('completed.status).toBe("COMPLETED")'), "SCALE-4G: historical owner E2E must follow durable generation to completion.");
@@ -91,4 +101,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log("PASS SCALE-4G durable Finance reports: canonical queue, crash-safe idempotence, worker isolation, tenant status, bounded UX and export contracts are protected.");
+console.log("PASS SCALE-4G durable Finance reports: canonical queue, crash-safe idempotence, bounded consistent transactions, tenant status, observability, nonblocking UX and bounded export contracts are protected.");
