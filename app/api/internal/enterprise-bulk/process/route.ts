@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { ENTERPRISE_BULK_LIMITS } from "@/lib/enterprise/bulk-jobs/constants";
+import { getFinanceReportQueueObservability } from "@/lib/enterprise/bulk-jobs/report-observability";
 import { processPendingEnterpriseBulkJobs } from "@/lib/enterprise/bulk-jobs/worker";
 
 export const runtime = "nodejs";
@@ -32,6 +33,7 @@ async function handle(request: NextRequest) {
     : ENTERPRISE_BULK_LIMITS.workerBatchSize;
   const startedAt = Date.now();
   const result = await processPendingEnterpriseBulkJobs({ batchSize });
+  const financeReports = await getFinanceReportQueueObservability();
   return NextResponse.json({
     ok: true,
     durationMs: Date.now() - startedAt,
@@ -43,6 +45,7 @@ async function handle(request: NextRequest) {
     purged: result.purged,
     queueBefore: result.queueBefore,
     queueAfter: result.queueAfter,
+    financeReports,
     saturated: result.saturated,
   });
 }
