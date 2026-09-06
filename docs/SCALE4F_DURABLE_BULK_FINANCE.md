@@ -123,6 +123,7 @@ Un gros export ne retombe jamais silencieusement sur un export HTTP synchrone si
 
 La requête initiale conserve :
 
+- same-origin ;
 - session ;
 - rate limit ;
 - `requireEnterpriseGovernanceAccess` ;
