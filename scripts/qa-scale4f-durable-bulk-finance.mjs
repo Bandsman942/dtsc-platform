@@ -43,12 +43,21 @@ const queue = requireTokens("lib/enterprise/bulk-jobs/queue.ts", [
   "isEnterpriseBulkStorageConfigured",
   "enterprise:audit-export:",
   "finance:bank-statement-import:",
+  "createHash",
+  "sourceDigest",
   "P2002",
   "BANK_STATEMENT_REFERENCE_ALREADY_EXISTS",
+  "BANK_STATEMENT_RETRY_STAGING_EXPIRED",
+  "BANK_STATEMENT_RETRY_PAYLOAD_MISMATCH",
+  'existing.processingStatus !== "DEAD"',
+  "allowFailedResume: true",
+  'statement.status === "IMPORT_FAILED"',
+  "previous.sourceDigest !== sourceDigest",
   "expectedLineCount",
   "stagingPath",
 ]);
 if (/payloadJson:\s*\{[^}]*lines:/s.test(queue)) fail("SCALE-4F: les lignes de relevé ne doivent pas être stockées directement dans EnterpriseDomainEvent.payloadJson");
+if (queue.includes("deleteEnterpriseBulkArtifact({ organizationId, path: previous.stagingPath")) fail("SCALE-4F: une reprise DEAD ne doit pas supprimer son staging canonique avant retraitement");
 
 const storage = requireTokens("lib/enterprise/bulk-jobs/storage.ts", [
   "enterprise-bulk/${organizationId}/",
@@ -174,4 +183,4 @@ if (failures.length) {
   for (const failure of failures) console.error(`- ${failure}`);
   process.exit(1);
 }
-console.log("QA SCALE-4F durable bulk Finance: OK — canonical DomainEvent queue, bounded bank imports, private expiring audit artifacts, tenant/RBAC and retry contracts enforced");
+console.log("QA SCALE-4F durable bulk Finance: OK — canonical DomainEvent queue, bounded bank imports, private expiring audit artifacts, tenant/RBAC and dead-job resume contracts enforced");
