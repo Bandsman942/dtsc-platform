@@ -43,17 +43,25 @@ function tx(locale: string | null | undefined, fr: string, en: string) {
   return locale === "en" ? en : fr;
 }
 
-function statusTone(status: ImportJob["status"]) {
-  if (status === "COMPLETED") return "success" as const;
-  if (status === "DEAD") return "danger" as const;
+function isPartialImport(job: ImportJob) {
+  return job.status === "DEAD"
+    && Boolean(job.expectedLineCount)
+    && Boolean(job.importedLineCount)
+    && Number(job.importedLineCount) < Number(job.expectedLineCount);
+}
+
+function statusTone(job: ImportJob) {
+  if (job.status === "COMPLETED") return "success" as const;
+  if (job.status === "DEAD" && !isPartialImport(job)) return "danger" as const;
   return "warning" as const;
 }
 
-function statusLabel(locale: string | null | undefined, status: ImportJob["status"]) {
-  if (status === "QUEUED") return tx(locale, "En attente", "Queued");
-  if (status === "PROCESSING") return tx(locale, "Import en cours", "Importing");
-  if (status === "FAILED") return tx(locale, "Nouvelle tentative prévue", "Retry scheduled");
-  if (status === "DEAD") return tx(locale, "Import échoué", "Import failed");
+function statusLabel(locale: string | null | undefined, job: ImportJob) {
+  if (job.status === "QUEUED") return tx(locale, "En attente", "Queued");
+  if (job.status === "PROCESSING") return tx(locale, "Import en cours", "Importing");
+  if (job.status === "FAILED") return tx(locale, "Nouvelle tentative prévue", "Retry scheduled");
+  if (isPartialImport(job)) return tx(locale, "Import partiellement terminé", "Import partially completed");
+  if (job.status === "DEAD") return tx(locale, "Import échoué", "Import failed");
   return tx(locale, "Import terminé", "Import completed");
 }
 
@@ -145,7 +153,7 @@ export function EnterpriseFinanceCashBankReconciliationWorkspaceHotfix(props: Pr
           <div className="min-w-0">
             <p className="font-black text-dtsc-ink">{tx(locale, "Import de relevé bancaire", "Bank statement import")}</p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <StatusBadge tone={statusTone(showJob.status)}>{statusLabel(locale, showJob.status)}</StatusBadge>
+              <StatusBadge tone={statusTone(showJob)}>{statusLabel(locale, showJob)}</StatusBadge>
               {showJob.expectedLineCount ? <span className="text-xs font-bold text-dtsc-muted">{showJob.importedLineCount || 0}/{showJob.expectedLineCount} {tx(locale, "lignes", "lines")}</span> : null}
               {showJob.progressPercent !== undefined ? <span className="text-xs font-bold text-dtsc-muted">{showJob.progressPercent}%</span> : null}
             </div>
