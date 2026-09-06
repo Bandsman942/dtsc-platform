@@ -12,10 +12,13 @@ const financeFiles = [
   "components/enterprise/enterprise-finance-module-page.tsx",
   "components/enterprise/professional/finance-professional-ui.ts",
   "components/enterprise/professional/finance-professional-workspace-shared.tsx",
+  "components/enterprise/professional/finance-professional-workspace-shared-legacy.tsx",
   "components/enterprise/professional/enterprise-finance-overview-workspace.tsx",
   "components/enterprise/professional/enterprise-finance-invoices-workspace.tsx",
   "components/enterprise/professional/enterprise-finance-payments-treasury-workspace.tsx",
   "components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-workspace.tsx",
+  "components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-workspace-hotfix.tsx",
+  "components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-workspace-hotfix-legacy.tsx",
   "components/enterprise/professional/enterprise-operational-finance-workspace.tsx",
   "components/enterprise/professional/enterprise-advanced-finance-workspace.tsx",
   "components/enterprise/professional/enterprise-exchange-rates-workspace.tsx",
@@ -41,11 +44,20 @@ if (exists(ui)) {
 }
 
 const shared = "components/enterprise/professional/finance-professional-workspace-shared.tsx";
-if (exists(shared)) {
-  const content = read(shared);
+const sharedLegacy = "components/enterprise/professional/finance-professional-workspace-shared-legacy.tsx";
+if (exists(shared) && exists(sharedLegacy)) {
+  const wrapper = read(shared);
+  const content = `${wrapper}\n${read(sharedLegacy)}`;
   for (const token of ["apiError", "safeFinanceError", "financeStatusLabel", "financeEnumLabel", "FinanceLocale"]) if (!content.includes(token)) fail(`Finance UX: workspace partagé incomplet (${token})`);
+  for (const token of ["finance-professional-workspace-shared-legacy", "dtsc:finance-durable-job", "CustomEvent", "body.queued"]) if (!wrapper.includes(token)) fail(`Finance UX: bridge durable incomplet (${token})`);
   if (/body\?\.message\s*\|\|\s*body\?\.error|body\.message\s*\|\|\s*body\.error/.test(content)) fail("Finance UX: les helpers partagés ne doivent pas privilégier un message backend brut");
   if (/throw new Error\(body\?\.message/.test(content)) fail("Finance UX: les mutations partagées ne doivent pas propager body.message au client");
+}
+
+const bankWrapper = "components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-workspace-hotfix.tsx";
+if (exists(bankWrapper)) {
+  const content = read(bankWrapper);
+  for (const token of ["hotfix-legacy", "sessionStorage", "statusUrl", "progressPercent", "MAX_POLLS", "Le traitement est durable", "The processing is durable"]) if (!content.includes(token)) fail(`Finance UX: suivi durable Banque incomplet (${token})`);
 }
 
 const onboarding = "components/enterprise/professional/enterprise-accounting-onboarding-panel.tsx";
@@ -128,4 +140,4 @@ if (failures.length) {
   for (const failure of failures) console.error(`- ${failure}`);
   process.exit(1);
 }
-console.log("QA Finance client UX/i18n: OK — client-safe messages, hotfix accounting/downstream workspaces, guide and FR/EN contracts enforced");
+console.log("QA Finance client UX/i18n: OK — client-safe messages, durable Finance wrappers, hotfix accounting/downstream workspaces, guide and FR/EN contracts enforced");

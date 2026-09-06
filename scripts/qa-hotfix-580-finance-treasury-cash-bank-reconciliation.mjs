@@ -9,7 +9,9 @@ const hasAll = (source, tokens, scope) => {
 
 const operational = read("components/enterprise/professional/enterprise-operational-finance-workspace.tsx");
 const treasuryUi = read("components/enterprise/professional/enterprise-finance-treasury-workspace-hotfix.tsx");
-const cashUi = read("components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-workspace-hotfix.tsx");
+const cashWrapper = read("components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-workspace-hotfix.tsx");
+const cashLegacy = read("components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-workspace-hotfix-legacy.tsx");
+const cashUi = `${cashWrapper}\n${cashLegacy}`;
 const referenceUi = read("components/enterprise/core-v2/finance-reference-select.tsx");
 const accountsRoute = read("app/api/enterprise/[organizationId]/financial-accounts/route.ts");
 const transfersRoute = read("app/api/enterprise/[organizationId]/account-transfers/route.ts");
@@ -34,6 +36,14 @@ for (const [name, source] of [["Treasury hotfix", treasuryUi], ["Cash/Bank/Recon
   hasAll(source, ['presentation="editor"', "useToastMessage", "disabled={busy}", "FinanceReferenceSelect"], name);
   ok(!source.includes("MANAGER_ROLES"), `${name}: local role grants are forbidden`);
 }
+
+hasAll(cashWrapper, [
+  "enterprise-finance-cash-bank-reconciliation-workspace-hotfix-legacy",
+  "dtsc:finance-durable-job",
+  "sessionStorage",
+  "progressPercent",
+  "MAX_POLLS",
+], "Cash/Bank durable wrapper");
 
 hasAll(treasuryUi, [
   "fetchOperationalFinanceRecord",
@@ -77,6 +87,8 @@ hasAll(reconciliationRoute, [
   'status: { in: ["DRAFT", "IN_PROGRESS"] }',
   "item.preparedByUserId === auth.session.userId",
   'item.status === "PENDING_VALIDATION" && assignedIds.has(item.id)',
+  'status: "IMPORTED"',
+  "RECONCILIATION_STATEMENT_NOT_READY",
 ], "reconciliation state/capability contract");
 hasAll(reconciliationDetail, ["pendingApproval", "approverUserId === auth.session.userId", "canMatch", "canSubmit", "canApprove", "canReject"], "reconciliation exact deep link capabilities");
 

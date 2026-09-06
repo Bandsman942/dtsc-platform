@@ -16,7 +16,9 @@ const modulePage = read("components/enterprise/enterprise-finance-module-page.ts
 const operationalWorkspace = read("components/enterprise/professional/enterprise-operational-finance-workspace.tsx");
 const invoiceWorkspace = read("components/enterprise/professional/enterprise-finance-invoices-workspace-hotfix.tsx");
 const paymentWorkspace = read("components/enterprise/professional/enterprise-finance-payments-workspace-hotfix.tsx");
-const sharedWorkspace = read("components/enterprise/professional/finance-professional-workspace-shared.tsx");
+const sharedBridge = read("components/enterprise/professional/finance-professional-workspace-shared.tsx");
+const sharedLegacy = read("components/enterprise/professional/finance-professional-workspace-shared-legacy.tsx");
+const sharedWorkspace = `${sharedBridge}\n${sharedLegacy}`;
 const referenceSelect = read("components/enterprise/core-v2/finance-reference-select.tsx");
 const receivablesRoute = read("app/api/enterprise/[organizationId]/receivables/route.ts");
 const payablesRoute = read("app/api/enterprise/[organizationId]/payables/route.ts");
@@ -43,6 +45,7 @@ const pkg = JSON.parse(read("package.json"));
 
 ok(modulePage.includes("resolveEnterpriseModuleCapabilities") && !modulePage.includes("MANAGER_ROLES"), "Finance UI derives capabilities from the canonical module-access resolver, not a local manager-role shortcut.");
 ok(operationalWorkspace.includes("EnterpriseFinanceInvoicesWorkspaceHotfix") && operationalWorkspace.includes("EnterpriseFinancePaymentsWorkspaceHotfix"), "The three operational Finance modules route through the hotfix workspaces.");
+ok(sharedBridge.includes("finance-professional-workspace-shared-legacy") && sharedBridge.includes("dtsc:finance-durable-job"), "Finance shared helpers preserve the canonical legacy implementation behind the durable mutation bridge.");
 
 for (const [name, source] of [["receivables", receivablesRoute], ["payables", payablesRoute]]) {
   ok(source.includes('url.searchParams.get("overdue")') && source.includes('url.searchParams.get("ageBucket")'), `${name}: overdue and ageing filters are server-side.`);
