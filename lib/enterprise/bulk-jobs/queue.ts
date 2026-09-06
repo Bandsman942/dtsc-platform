@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import type { z } from "zod";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
@@ -32,6 +32,7 @@ export type BankStatementImportJobPayload = {
   expectedLineCount: number;
   stagingPath: string;
   stagingSize: number;
+  sourceDigest: string;
   requestedAt: string;
 };
 
@@ -86,7 +87,22 @@ function normalizeBankInput(input: BankStatementInput) {
   };
 }
 
-async function validateBankStatementQueueInput(organizationId: string, input: BankStatementInput) {
+function bankInputDigest(normalized: ReturnType<typeof normalizeBankInput>) {
+  return createHash("sha256").update(JSON.stringify(normalized)).digest("hex");
+}
+
+function bankJobPayload(value: Prisma.JsonValue | null) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const payload = value as unknown as Partial<BankStatementImportJobPayload>;
+  if (payload.version !== 1 || payload.kind !== "BANK_STATEMENT_IMPORT") return null;
+  return payload;
+}
+
+async function validateBankStatementQueueInput(
+  organizationId: string,
+  input: BankStatementInput,
+  { allowFailedResume = false }: { allowFailedResume?: boolean } = {},
+) {
   const [account, statement] = await Promise.all([
     prisma.enterpriseFinancialAccount.findFirst({
       where: { id: input.financialAccountId, organizationId, accountType: { in: ["BANK", "MOBILE_MONEY"] }, status: "ACTIVE" },
@@ -94,21 +110,62 @@ async function validateBankStatementQueueInput(organizationId: string, input: Ba
     }),
     prisma.enterpriseBankStatement.findFirst({
       where: { organizationId, reference: input.reference },
-      select: { id: true, status: true },
+      select: { id: true, status: true, financialAccountId: true, currencyCode: true },
     }),
   ]);
   if (!account || account.currencyCode !== input.currencyCode) throw new EnterpriseAccountingError("BANK_STATEMENT_ACCOUNT_INVALID", 409);
-  if (statement) throw new EnterpriseAccountingError("BANK_STATEMENT_REFERENCE_ALREADY_EXISTS", 409, { statementId: statement.id, status: statement.status });
+  if (!statement) return;
+  const resumable = allowFailedResume
+    && statement.status === "IMPORT_FAILED"
+    && statement.financialAccountId === input.financialAccountId
+    && statement.currencyCode === input.currencyCode;
+  if (!resumable) throw new EnterpriseAccountingError("BANK_STATEMENT_REFERENCE_ALREADY_EXISTS", 409, { statementId: statement.id, status: statement.status });
 }
 
 export async function enqueueBankStatementImport(organizationId: string, actorUserId: string, input: BankStatementInput) {
   if (!isEnterpriseBulkStorageConfigured()) throw new EnterpriseAccountingError("BANK_STATEMENT_BULK_STORAGE_NOT_CONFIGURED", 503);
-  await validateBankStatementQueueInput(organizationId, input);
   const idempotencyKey = bankImportIdempotencyKey(organizationId, input.financialAccountId, input.reference);
   const existing = await prisma.enterpriseDomainEvent.findUnique({ where: { idempotencyKey } });
   if (existing && existing.processingStatus !== "DEAD") return existing;
 
   const normalized = normalizeBankInput(input);
+  const sourceDigest = bankInputDigest(normalized);
+
+  if (existing?.processingStatus === "DEAD") {
+    const previous = bankJobPayload(existing.payloadJson);
+    if (!previous?.stagingPath || !previous.sourceDigest) {
+      throw new EnterpriseAccountingError("BANK_STATEMENT_RETRY_STAGING_EXPIRED", 410, { jobId: existing.id });
+    }
+    if (
+      previous.financialAccountId !== normalized.financialAccountId
+      || previous.reference !== normalized.reference
+      || previous.currencyCode !== normalized.currencyCode
+      || previous.expectedLineCount !== normalized.lines.length
+      || previous.sourceDigest !== sourceDigest
+    ) {
+      throw new EnterpriseAccountingError("BANK_STATEMENT_RETRY_PAYLOAD_MISMATCH", 409, { jobId: existing.id });
+    }
+    await validateBankStatementQueueInput(organizationId, input, { allowFailedResume: true });
+    return prisma.enterpriseDomainEvent.update({
+      where: { id: existing.id },
+      data: {
+        payloadJson: {
+          ...previous,
+          actorUserId,
+          requestedAt: new Date().toISOString(),
+        } as Prisma.InputJsonValue,
+        processingStatus: "PENDING",
+        attemptCount: 0,
+        availableAt: new Date(),
+        lockedAt: null,
+        lockedBy: null,
+        processedAt: null,
+        lastError: null,
+      },
+    });
+  }
+
+  await validateBankStatementQueueInput(organizationId, input);
   const staging = await uploadEnterpriseBulkArtifact({
     organizationId,
     category: "bank-statement-import",
@@ -132,26 +189,9 @@ export async function enqueueBankStatementImport(organizationId: string, actorUs
     expectedLineCount: normalized.lines.length,
     stagingPath: staging.path,
     stagingSize: staging.size,
+    sourceDigest,
     requestedAt: new Date().toISOString(),
   };
-
-  if (existing?.processingStatus === "DEAD") {
-    const previous = existing.payloadJson as BankStatementImportJobPayload | null;
-    if (previous?.stagingPath) await deleteEnterpriseBulkArtifact({ organizationId, path: previous.stagingPath }).catch(() => undefined);
-    return prisma.enterpriseDomainEvent.update({
-      where: { id: existing.id },
-      data: {
-        payloadJson: payload as unknown as Prisma.InputJsonValue,
-        processingStatus: "PENDING",
-        attemptCount: 0,
-        availableAt: new Date(),
-        lockedAt: null,
-        lockedBy: null,
-        processedAt: null,
-        lastError: null,
-      },
-    });
-  }
 
   try {
     return await prisma.enterpriseDomainEvent.create({
