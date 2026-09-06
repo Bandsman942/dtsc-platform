@@ -30,7 +30,7 @@ export type BankStatementImportJobPayload = {
   closingBalance: string;
   privateDocumentId: string | null;
   expectedLineCount: number;
-  stagingPath: string | null;
+  stagingPath: string;
   stagingSize: number;
   sourceDigest: string;
   requestedAt: string;
