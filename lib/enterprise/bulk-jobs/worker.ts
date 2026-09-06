@@ -1,10 +1,11 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { writeAuditLog } from "@/lib/audit";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { bankStatementSchema } from "@/lib/enterprise/accounting/treasury-schemas";
 import { requireEnterpriseGovernanceAccess } from "@/lib/enterprise/governance/access";
+import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
 import {
   AUDIT_EXPORT_EVENT_TYPE,
   BANK_STATEMENT_IMPORT_EVENT_TYPE,
@@ -53,7 +54,7 @@ function asObject(value: Prisma.JsonValue | null): Record<string, unknown> {
 
 function bankPayload(job: ClaimedJob) {
   const payload = asObject(job.payloadJson) as BankStatementImportJobPayload;
-  if (payload.version !== 1 || payload.kind !== "BANK_STATEMENT_IMPORT" || !payload.actorUserId || !payload.stagingPath || !payload.reference) {
+  if (payload.version !== 1 || payload.kind !== "BANK_STATEMENT_IMPORT" || !payload.actorUserId || !payload.stagingPath || !payload.reference || !payload.sourceDigest) {
     throw new EnterpriseBulkWorkerError("BANK_STATEMENT_JOB_PAYLOAD_INVALID", false);
   }
   return payload;
@@ -165,6 +166,13 @@ function stagingInput(raw: unknown) {
   return { ...input, privateDocumentId: input.privateDocumentId || undefined, lines };
 }
 
+function stagedSourceDigest(raw: unknown) {
+  const object = raw && typeof raw === "object" && !Array.isArray(raw) ? raw as Record<string, unknown> : {};
+  const input = object.input && typeof object.input === "object" && !Array.isArray(object.input) ? object.input : null;
+  if (!input) return null;
+  return createHash("sha256").update(JSON.stringify(input)).digest("hex");
+}
+
 async function markBankStatementFailed(job: ClaimedJob) {
   if (job.eventType !== BANK_STATEMENT_IMPORT_EVENT_TYPE) return;
   const payload = bankPayload(job);
@@ -176,6 +184,13 @@ async function markBankStatementFailed(job: ClaimedJob) {
 
 async function processBankStatement(job: ClaimedJob) {
   const payload = bankPayload(job);
+  const capabilities = await resolveEnterpriseModuleCapabilities({
+    userId: payload.actorUserId,
+    organizationId: job.organizationId,
+    moduleCode: "FINANCE_BANK",
+  });
+  if (!capabilities.canCreate) throw new EnterpriseBulkWorkerError("BANK_STATEMENT_IMPORT_ACCESS_REVOKED", false);
+
   const existing = await prisma.enterpriseBankStatement.findFirst({
     where: { organizationId: job.organizationId, reference: payload.reference },
     include: { _count: { select: { lines: true } } },
@@ -193,6 +208,9 @@ async function processBankStatement(job: ClaimedJob) {
   let stagedJson: unknown;
   try { stagedJson = JSON.parse(stagedText); }
   catch { throw new EnterpriseBulkWorkerError("BANK_STATEMENT_STAGING_JSON_INVALID", false); }
+  if (stagedSourceDigest(stagedJson) !== payload.sourceDigest) {
+    throw new EnterpriseBulkWorkerError("BANK_STATEMENT_STAGING_DIGEST_MISMATCH", false);
+  }
   const parsed = bankStatementSchema.safeParse(stagingInput(stagedJson));
   if (!parsed.success) throw new EnterpriseBulkWorkerError("BANK_STATEMENT_STAGING_SCHEMA_INVALID", false);
   const input = parsed.data;
