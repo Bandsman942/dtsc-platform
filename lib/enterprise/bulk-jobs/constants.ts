@@ -12,6 +12,7 @@ export const ENTERPRISE_BULK_LIMITS = {
   auditExportSyncMaxRows: 500,
   auditExportMaxRows: 5_000,
   financeReportCalculationVersion: 1,
+  financeReportFreshnessMs: 5 * 60 * 1000,
   financeReportExportSyncMaxRows: 500,
   artifactTtlMs: 24 * 60 * 60 * 1000,
   workerBatchSize: 2,
