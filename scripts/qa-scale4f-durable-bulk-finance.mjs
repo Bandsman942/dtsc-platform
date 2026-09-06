@@ -118,6 +118,12 @@ requireTokens("lib/enterprise/accounting/http.ts", [
   "options?.mutation",
 ]);
 
+requireTokens("components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-workspace-hotfix-legacy.tsx", [
+  "parseBankCsv",
+  "rowIndex + 2",
+  'tFinance(locale, "lineIncomplete")',
+]);
+
 requireTokens("app/api/enterprise/[organizationId]/bank-statement-imports/[jobId]/route.ts", [
   "organizationId, eventType: BANK_STATEMENT_IMPORT_EVENT_TYPE",
   "expectedLineCount",
@@ -190,6 +196,7 @@ requireTokens("components/enterprise/enterprise-admin-audit-panel-durable.tsx", 
   "MAX_POLLS",
   "private",
   "limited time",
+  "downloadUrl: body.job.downloadUrl || null",
 ]);
 
 const totalLines = 10_000;
@@ -203,4 +210,4 @@ if (failures.length) {
   for (const failure of failures) console.error(`- ${failure}`);
   process.exit(1);
 }
-console.log("QA SCALE-4F durable bulk Finance: OK — canonical DomainEvent queue, bounded bank imports, private expiring audit artifacts, worker reauthorization, tenant/RBAC and verified dead-job resume contracts enforced");
+console.log("QA SCALE-4F durable bulk Finance: OK — canonical DomainEvent queue, bounded bank imports, private expiring audit artifacts, worker reauthorization, tenant/RBAC, line diagnostics and verified dead-job resume contracts enforced");
