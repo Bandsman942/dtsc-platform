@@ -111,7 +111,7 @@ export function EnterpriseAdministrationAuditPanel(props: Props) {
       rowCount: body.job.rowCount,
       truncated: body.job.truncated,
       expiresAt: body.job.expiresAt,
-      downloadUrl: body.job.downloadUrl || current.downloadUrl,
+      downloadUrl: body.job.downloadUrl || null,
       errorCode: body.job.errorCode || null,
     };
     setJob(next);
