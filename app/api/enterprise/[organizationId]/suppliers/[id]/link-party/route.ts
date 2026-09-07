@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
-import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
+import { normalizeEnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
 import { supplierPartyLinkSchema } from "@/lib/enterprise/procurement/common-domain-adapter";
 import { convergeEnterpriseSupplierParty } from "@/lib/enterprise/procurement/supplier-party-link-service";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
@@ -28,6 +28,8 @@ export async function POST(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, supplierId, domain: "supplier-party-links" } });
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
-    return enterpriseDomainErrorResponse(error, "SUPPLIER_PARTY_LINK_FAILED", req);
+    const normalized = normalizeEnterpriseCoreV2Error(error);
+    await writeApiLog({ request: req, statusCode: normalized.status, userId: session.userId, startedAt, metadata: { organizationId, supplierId, domain: "supplier-party-links", error: normalized.code } });
+    return NextResponse.json({ error: normalized.code, message: normalized.message }, { status: normalized.status });
   }
 }
