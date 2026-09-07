@@ -102,6 +102,7 @@ for (const marker of ["model EnterpriseSupplierPartyLink", "@@unique([organizati
 for (const marker of ['presentation="editor"', 'form="customer-create-form"', "ProfessionalFormSection", "ProfessionalError"]) {
   ok(customerWorkspace.includes(marker), `UX Tiers: contrat formulaire DTSC manquant ${marker}.`);
 }
+ok(customerWorkspace.includes('useToastMessage(message, "error")'), "UX Tiers: toute erreur de mutation doit aussi remonter dans le toast global sans fermer le formulaire.");
 
 ok(aiContract.includes('code: "ERP_CUSTOMERS_READ"') && aiContract.includes('moduleCode: "CRM_CUSTOMERS"'), "IA: ERP_CUSTOMERS_READ doit rester lié statiquement à CRM_CUSTOMERS.");
 ok(aiContract.includes('code: "ERP_PROCUREMENT_READ"') && aiContract.includes('moduleCode: "SUPPLIERS_PURCHASES"'), "IA: ERP_PROCUREMENT_READ doit rester lié statiquement à SUPPLIERS_PURCHASES.");
