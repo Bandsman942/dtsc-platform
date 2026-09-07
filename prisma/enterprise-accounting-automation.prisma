@@ -81,3 +81,20 @@ model EnterpriseAccountingAutomationRun {
   @@index([organizationId, reversalDate, status])
   @@index([organizationId, journalEntryId])
 }
+
+model EnterpriseAssetDisposalAccountingSettlement {
+  id                      String   @id @default(cuid())
+  organizationId          String
+  assetDisposalId         String
+  proceedsLedgerAccountId String?
+  gainLedgerAccountId     String?
+  lossLedgerAccountId     String?
+  reason                  String
+  createdByUserId         String
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, assetDisposalId])
+  @@index([organizationId, proceedsLedgerAccountId])
+}
