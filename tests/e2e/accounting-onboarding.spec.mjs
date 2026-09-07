@@ -34,7 +34,7 @@ async function setupPayload(page) {
 function blockerCodes(payload) { return new Set((payload?.readiness?.blockers || []).map((item) => item.code)); }
 async function openAccountingSetup(page, locale = "fr") {
   const configureLabel = locale === "en" ? "Configure" : "Configurer";
-  const setupHeading = locale === "en" ? "Accounting setup" : "Mise en service comptable";
+  const setupHeading = locale === "en" ? "Accounting onboarding" : "Mise en service comptable";
   const configure = page.getByRole("button", { name: configureLabel, exact: true });
   await expect(configure).toBeVisible();
   await configure.click();
