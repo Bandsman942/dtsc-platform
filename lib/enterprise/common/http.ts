@@ -12,11 +12,35 @@ const BUSINESS_ERROR_MESSAGES: Record<string, { fr: string; en: string }> = {
   BUSINESS_PARTY_NOT_FOUND: { fr: "Le tiers sélectionné est introuvable ou n’est plus actif. Actualisez la liste puis réessayez.", en: "The selected business party is unavailable or inactive. Refresh the list and try again." },
   UNIT_OF_MEASURE_NOT_FOUND: { fr: "L’unité de mesure sélectionnée n’est plus disponible. Actualisez le catalogue puis choisissez-en une autre.", en: "The selected unit is no longer available. Refresh the catalog and choose another one." },
   CATALOG_CATEGORY_NOT_FOUND: { fr: "La catégorie sélectionnée n’est plus disponible. Actualisez la liste puis réessayez.", en: "The selected category is no longer available. Refresh the list and try again." },
+  CATALOG_PARENT_CATEGORY_NOT_FOUND: { fr: "La catégorie parente sélectionnée n’est plus disponible. Actualisez la liste puis réessayez.", en: "The selected parent category is no longer available. Refresh the list and try again." },
   CATALOG_ITEM_NOT_FOUND: { fr: "Un produit ou service sélectionné est introuvable ou inactif. Actualisez le catalogue puis réessayez.", en: "A selected product or service is unavailable or inactive. Refresh the catalog and try again." },
+  SITE_NOT_FOUND: { fr: "Le site sélectionné est introuvable ou inactif. Actualisez les sites puis réessayez.", en: "The selected site is unavailable or inactive. Refresh sites and try again." },
+  SITE_MANAGER_NOT_MEMBER: { fr: "Le responsable du site n’est plus un collaborateur actif de cette entreprise. Actualisez les collaborateurs puis réessayez.", en: "The site manager is no longer an active member of this organization. Refresh members and try again." },
+  WAREHOUSE_NOT_FOUND: { fr: "L’entrepôt sélectionné est introuvable ou inactif. Actualisez les entrepôts puis réessayez.", en: "The selected warehouse is unavailable or inactive. Refresh warehouses and try again." },
+  WAREHOUSE_MANAGER_NOT_MEMBER: { fr: "Le responsable de l’entrepôt n’est plus un collaborateur actif de cette entreprise. Actualisez les collaborateurs puis réessayez.", en: "The warehouse manager is no longer an active member of this organization. Refresh members and try again." },
+  STORAGE_LOCATION_NOT_FOUND: { fr: "L’emplacement de stockage sélectionné est introuvable ou inactif. Actualisez les emplacements puis réessayez.", en: "The selected storage location is unavailable or inactive. Refresh storage locations and try again." },
+  PARENT_STORAGE_LOCATION_NOT_FOUND: { fr: "L’emplacement parent sélectionné est introuvable ou incohérent avec cet entrepôt. Actualisez les emplacements puis réessayez.", en: "The selected parent storage location is unavailable or inconsistent with this warehouse. Refresh storage locations and try again." },
   OPPORTUNITY_NOT_FOUND: { fr: "L’opportunité sélectionnée est introuvable. Actualisez le CRM puis réessayez.", en: "The selected opportunity was not found. Refresh CRM and try again." },
+  REVISION_CONFLICT: { fr: "Cette fiche a été modifiée par un autre utilisateur. Actualisez-la avant de réessayer.", en: "This record was changed by another user. Refresh it before trying again." },
   SELF_APPROVAL_FORBIDDEN: { fr: "Vous ne pouvez pas valider votre propre demande. Choisissez un autre approbateur autorisé.", en: "You cannot approve your own request. Select another authorized approver." },
   CONTRACT_APPROVER_NOT_MEMBER: { fr: "L’approbateur sélectionné n’est plus un collaborateur actif de cette entreprise.", en: "The selected approver is no longer an active member of this organization." },
   LEAD_DUPLICATE_PARTY_REQUIRES_SELECTION: { fr: "Une fiche similaire existe déjà. Sélectionnez-la ou confirmez explicitement la création d’une nouvelle fiche.", en: "A similar record already exists. Select it or explicitly confirm creation of a new record." },
+};
+
+const PLAIN_DOMAIN_ERROR_STATUS: Record<string, number> = {
+  BUSINESS_PARTY_NOT_FOUND: 404,
+  UNIT_OF_MEASURE_NOT_FOUND: 404,
+  CATALOG_CATEGORY_NOT_FOUND: 404,
+  CATALOG_PARENT_CATEGORY_NOT_FOUND: 404,
+  CATALOG_ITEM_NOT_FOUND: 404,
+  SITE_NOT_FOUND: 404,
+  WAREHOUSE_NOT_FOUND: 404,
+  STORAGE_LOCATION_NOT_FOUND: 404,
+  PARENT_STORAGE_LOCATION_NOT_FOUND: 404,
+  OPPORTUNITY_NOT_FOUND: 404,
+  SITE_MANAGER_NOT_MEMBER: 409,
+  WAREHOUSE_MANAGER_NOT_MEMBER: 409,
+  REVISION_CONFLICT: 409,
 };
 
 const DUPLICATE_ERRORS: Record<string, { code: string; fr: string; en: string }> = {
@@ -36,8 +60,9 @@ function reportUnexpectedEnterpriseError(error: unknown, fallbackCode: string, r
   const errorName = error instanceof Error ? error.name : typeof error;
   const prismaCode = error instanceof Prisma.PrismaClientKnownRequestError ? error.code : null;
   const requestPath = request ? new URL(request.url).pathname : null;
+  const requestId = request?.headers.get("x-request-id") || request?.headers.get("x-vercel-id") || request?.headers.get("cf-ray") || null;
   // Do not log the raw Prisma message here: validation errors can contain form values.
-  console.error("[enterprise-domain] unexpected operation failure", { fallbackCode, errorName, prismaCode, requestPath });
+  console.error("[enterprise-domain] unexpected operation failure", { fallbackCode, errorName, prismaCode, requestPath, requestId });
 }
 
 export function enterpriseDomainErrorResponse(error: unknown, fallbackCode = "ENTERPRISE_OPERATION_FAILED", request?: Request) {
@@ -46,6 +71,12 @@ export function enterpriseDomainErrorResponse(error: unknown, fallbackCode = "EN
     const safeMessage = BUSINESS_ERROR_MESSAGES[error.code]?.[locale]
       || (locale === "en" ? "The operation cannot be completed with the current information. Check the form and try again." : "L’opération ne peut pas être terminée avec les informations actuelles. Vérifiez le formulaire puis réessayez.");
     return NextResponse.json({ error: error.code, message: safeMessage }, { status: error.status });
+  }
+  if (error instanceof Error && BUSINESS_ERROR_MESSAGES[error.message]) {
+    return NextResponse.json({
+      error: error.message,
+      message: BUSINESS_ERROR_MESSAGES[error.message][locale],
+    }, { status: PLAIN_DOMAIN_ERROR_STATUS[error.message] || 400 });
   }
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
     const duplicate = DUPLICATE_ERRORS[fallbackCode];
