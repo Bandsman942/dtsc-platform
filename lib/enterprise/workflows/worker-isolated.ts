@@ -1,5 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
+import {
+  AUDIT_EXPORT_EVENT_TYPE,
+  BANK_STATEMENT_IMPORT_EVENT_TYPE,
+  FINANCE_REPORT_GENERATION_EVENT_TYPE,
+} from "@/lib/enterprise/bulk-jobs/constants";
 import { enqueueCrossModuleProjections } from "@/lib/enterprise/cross-module/projection-queue";
 import { WORKFLOW_LIMITS } from "@/lib/enterprise/workflows/constants";
 import { processWorkflowDomainEvent, resumeWaitingRuns } from "@/lib/enterprise/workflows/engine";
@@ -34,10 +39,48 @@ async function getWorkflowQueueSnapshot(): Promise<WorkflowQueueSnapshot> {
   try {
     const [row] = await prisma.$queryRaw<QueueSnapshotRow[]>(Prisma.sql`
       SELECT
-        COUNT(*) FILTER (WHERE "eventType" <> ${WEB_PUSH_DOMAIN_EVENT_TYPE} AND "eventType" <> ${ADMIN_BROADCAST_EMAIL_DELIVERY_EVENT_TYPE} AND "eventType" <> ${KNOWLEDGE_INDEX_EVENT_TYPE} AND "processingStatus" IN ('PENDING', 'FAILED') AND "availableAt" <= NOW() AND ("lockedAt" IS NULL OR "lockedAt" < ${leaseBefore})) AS "ready",
-        COUNT(*) FILTER (WHERE "eventType" <> ${WEB_PUSH_DOMAIN_EVENT_TYPE} AND "eventType" <> ${ADMIN_BROADCAST_EMAIL_DELIVERY_EVENT_TYPE} AND "eventType" <> ${KNOWLEDGE_INDEX_EVENT_TYPE} AND "processingStatus" = 'PROCESSING' AND "lockedAt" IS NOT NULL AND "lockedAt" >= ${leaseBefore}) AS "processing",
-        COUNT(*) FILTER (WHERE "eventType" <> ${WEB_PUSH_DOMAIN_EVENT_TYPE} AND "eventType" <> ${ADMIN_BROADCAST_EMAIL_DELIVERY_EVENT_TYPE} AND "eventType" <> ${KNOWLEDGE_INDEX_EVENT_TYPE} AND "processingStatus" = 'DEAD') AS "dead",
-        MIN("availableAt") FILTER (WHERE "eventType" <> ${WEB_PUSH_DOMAIN_EVENT_TYPE} AND "eventType" <> ${ADMIN_BROADCAST_EMAIL_DELIVERY_EVENT_TYPE} AND "eventType" <> ${KNOWLEDGE_INDEX_EVENT_TYPE} AND "processingStatus" IN ('PENDING', 'FAILED') AND "availableAt" <= NOW() AND ("lockedAt" IS NULL OR "lockedAt" < ${leaseBefore})) AS "oldestReadyAt"
+        COUNT(*) FILTER (
+          WHERE "eventType" <> ${WEB_PUSH_DOMAIN_EVENT_TYPE}
+            AND "eventType" <> ${ADMIN_BROADCAST_EMAIL_DELIVERY_EVENT_TYPE}
+            AND "eventType" <> ${KNOWLEDGE_INDEX_EVENT_TYPE}
+            AND "eventType" <> ${BANK_STATEMENT_IMPORT_EVENT_TYPE}
+            AND "eventType" <> ${AUDIT_EXPORT_EVENT_TYPE}
+            AND "eventType" <> ${FINANCE_REPORT_GENERATION_EVENT_TYPE}
+            AND "processingStatus" IN ('PENDING', 'FAILED')
+            AND "availableAt" <= NOW()
+            AND ("lockedAt" IS NULL OR "lockedAt" < ${leaseBefore})
+        ) AS "ready",
+        COUNT(*) FILTER (
+          WHERE "eventType" <> ${WEB_PUSH_DOMAIN_EVENT_TYPE}
+            AND "eventType" <> ${ADMIN_BROADCAST_EMAIL_DELIVERY_EVENT_TYPE}
+            AND "eventType" <> ${KNOWLEDGE_INDEX_EVENT_TYPE}
+            AND "eventType" <> ${BANK_STATEMENT_IMPORT_EVENT_TYPE}
+            AND "eventType" <> ${AUDIT_EXPORT_EVENT_TYPE}
+            AND "eventType" <> ${FINANCE_REPORT_GENERATION_EVENT_TYPE}
+            AND "processingStatus" = 'PROCESSING'
+            AND "lockedAt" IS NOT NULL
+            AND "lockedAt" >= ${leaseBefore}
+        ) AS "processing",
+        COUNT(*) FILTER (
+          WHERE "eventType" <> ${WEB_PUSH_DOMAIN_EVENT_TYPE}
+            AND "eventType" <> ${ADMIN_BROADCAST_EMAIL_DELIVERY_EVENT_TYPE}
+            AND "eventType" <> ${KNOWLEDGE_INDEX_EVENT_TYPE}
+            AND "eventType" <> ${BANK_STATEMENT_IMPORT_EVENT_TYPE}
+            AND "eventType" <> ${AUDIT_EXPORT_EVENT_TYPE}
+            AND "eventType" <> ${FINANCE_REPORT_GENERATION_EVENT_TYPE}
+            AND "processingStatus" = 'DEAD'
+        ) AS "dead",
+        MIN("availableAt") FILTER (
+          WHERE "eventType" <> ${WEB_PUSH_DOMAIN_EVENT_TYPE}
+            AND "eventType" <> ${ADMIN_BROADCAST_EMAIL_DELIVERY_EVENT_TYPE}
+            AND "eventType" <> ${KNOWLEDGE_INDEX_EVENT_TYPE}
+            AND "eventType" <> ${BANK_STATEMENT_IMPORT_EVENT_TYPE}
+            AND "eventType" <> ${AUDIT_EXPORT_EVENT_TYPE}
+            AND "eventType" <> ${FINANCE_REPORT_GENERATION_EVENT_TYPE}
+            AND "processingStatus" IN ('PENDING', 'FAILED')
+            AND "availableAt" <= NOW()
+            AND ("lockedAt" IS NULL OR "lockedAt" < ${leaseBefore})
+        ) AS "oldestReadyAt"
       FROM "EnterpriseDomainEvent"
     `);
     const oldestReadyAt = row?.oldestReadyAt ? new Date(row.oldestReadyAt) : null;
@@ -57,6 +100,9 @@ async function claimPendingEvents(workerId: string, batchSize: number) {
       WHERE "eventType" <> ${WEB_PUSH_DOMAIN_EVENT_TYPE}
         AND "eventType" <> ${ADMIN_BROADCAST_EMAIL_DELIVERY_EVENT_TYPE}
         AND "eventType" <> ${KNOWLEDGE_INDEX_EVENT_TYPE}
+        AND "eventType" <> ${BANK_STATEMENT_IMPORT_EVENT_TYPE}
+        AND "eventType" <> ${AUDIT_EXPORT_EVENT_TYPE}
+        AND "eventType" <> ${FINANCE_REPORT_GENERATION_EVENT_TYPE}
         AND "processingStatus" IN ('PENDING', 'FAILED')
         AND "availableAt" <= NOW()
         AND ("lockedAt" IS NULL OR "lockedAt" < ${leaseBefore})
