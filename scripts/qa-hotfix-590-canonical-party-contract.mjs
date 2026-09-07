@@ -8,6 +8,9 @@ const ok = (condition, message) => { if (!condition) failures.push(message); };
 const masterService = read("lib/enterprise/master-data/service.ts");
 const businessPartyRoute = read("app/api/enterprise/[organizationId]/business-parties/route.ts");
 const commonHttp = read("lib/enterprise/common/http.ts");
+const crmLeads = read("lib/enterprise/crm-sales/leads.ts");
+const contractsService = read("lib/enterprise/crm-sales/contracts.ts");
+const invoiceSourceValidation = read("lib/enterprise/accounting/invoice-source-validation.ts");
 const supplierService = read("lib/enterprise/procurement/supplier-service.ts");
 const supplierNormalization = read("lib/enterprise/procurement/supplier-normalization.ts");
 const supplierSync = read("lib/enterprise/procurement/supplier-party-sync.ts");
@@ -46,6 +49,18 @@ ok(commonHttp.includes("Do not log the raw Prisma message"), "Erreurs: le garde-
 ok(commonHttp.includes("PLAIN_DOMAIN_ERROR_STATUS") && commonHttp.includes("REVISION_CONFLICT"), "Erreurs: les erreurs métier historiques à code texte doivent rester actionnables.");
 ok(commonHttp.includes('request?.headers.get("x-request-id")') && commonHttp.includes('request?.headers.get("x-vercel-id")'), "Erreurs: la corrélation sûre des défauts internes doit être conservée.");
 
+const leadConversion = between(crmLeads, "export async function convertEnterpriseLead", "\n}");
+ok(leadConversion.includes("enterpriseBusinessParty") && leadConversion.includes("businessPartyId: party.id"), "CRM: une conversion de lead doit résoudre/créer le tiers canonique.");
+ok(leadConversion.includes('roleCode: "CUSTOMER"'), "CRM: le tiers converti doit porter le rôle CUSTOMER.");
+ok(!leadConversion.includes("enterpriseSupplier"), "CRM: convertir un lead ne doit jamais créer implicitement un fournisseur.");
+
+const supplierContractPath = between(contractsService, 'selectionId.startsWith(CONTRACT_COUNTERPARTY_PREFIXES.supplier)', 'selectionId.startsWith(CONTRACT_COUNTERPARTY_PREFIXES.member)');
+ok(supplierContractPath.includes("enterpriseSupplierPartyLink") && supplierContractPath.includes("businessPartyId"), "Contrats: un fournisseur lié doit résoudre la contrepartie canonique.");
+ok(supplierContractPath.includes("organizationId"), "Contrats: la résolution fournisseur/tiers doit rester bornée au tenant.");
+const salesInvoiceSources = between(invoiceSourceValidation, "export async function assertSalesInvoiceSources", "export async function assertSupplierInvoiceSources");
+ok(salesInvoiceSources.includes("businessPartyId: input.businessPartyId"), "Finance: commandes et contrats de vente doivent être validés sur la même contrepartie canonique.");
+ok(salesInvoiceSources.includes("organizationId"), "Finance: les références de contrepartie doivent rester bornées au tenant.");
+
 for (const marker of ["ensureSupplierCanonicalPartyTx", "syncCanonicalPartyFromSupplierTx", "syncSupplierRoleStatusTx", "enterpriseSupplierPartyLink"]) {
   ok((supplierService + supplierSync).includes(marker), `Procurement: convergence canonique manquante ${marker}.`);
 }
@@ -63,6 +78,7 @@ ok(supplierSync.includes("SUPPLIER_PARTY_IDENTITY_CONFLICT"), "Procurement: les 
 ok(supplierSync.includes("assertCandidateType"), "Procurement: le type personne/organisation doit être validé avant rattachement canonique.");
 ok(supplierSync.includes("reactivatedLink") && supplierSync.includes("SUPPLIER_PARTY_ARCHIVED"), "Procurement: les liens archivés doivent être guéris sans contourner un tiers archivé.");
 ok(supplierSync.includes("where: { organizationId, supplierId: supplier.id }") && !supplierSync.includes("supplierId: supplier.id, archivedAt: null"), "Procurement: la recherche du lien 1:1 doit inclure les lignes archivées pour éviter P2002.");
+ok(supplierSync.includes("where: { organizationId, archivedAt: null, ...where }"), "Multi-tenant: la recherche de candidats fournisseur/tiers doit être bornée par organizationId.");
 ok(supplierLinkService.includes("publishOperationsEvent") && supplierLinkService.includes('eventType: "SUPPLIER_PARTY_LINKED"'), "Procurement: la convergence manuelle doit conserver l’événement opérationnel de liaison.");
 ok(supplierLinkRoute.includes("normalizeEnterpriseCoreV2Error"), "Procurement: les conflits de convergence doivent conserver leur statut et message métier sûrs.");
 ok(backfill.includes("supplierRoleStatus"), "Backfill: le statut doit être porté par le rôle SUPPLIER.");
@@ -99,4 +115,4 @@ if (failures.length) {
   for (const failure of failures) console.error(`FAIL HOTFIX #590: ${failure}`);
   process.exit(1);
 }
-console.log("PASS HOTFIX #590: Tiers, Procurement, RBAC, IA, Prisma et UX respectent le contrat canonique.");
+console.log("PASS HOTFIX #590: Tiers, CRM, Contrats, Finance, Procurement, RBAC, IA, Prisma et UX respectent le contrat canonique.");
