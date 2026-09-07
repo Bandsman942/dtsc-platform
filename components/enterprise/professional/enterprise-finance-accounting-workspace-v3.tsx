@@ -1,15 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { AlertTriangle, BookOpenCheck, CheckCircle2, ChevronRight, FilePlus2, Plus, RotateCcw, Search, Settings2 } from "lucide-react";
+import { AlertTriangle, BookOpenCheck, ChevronRight, FilePlus2, Plus, RotateCcw, Search } from "lucide-react";
 import { AccountingCompactTable, type AccountingCompactColumn } from "@/components/enterprise/professional/accounting-compact-table";
 import { AccountingJournalWorkbench } from "@/components/enterprise/professional/accounting-journal-workbench";
 import { AssignedApprovalSubmitPanel } from "@/components/enterprise/professional/assigned-approval-submit-panel";
 import { EnterpriseAccountingOnboardingPanel } from "@/components/enterprise/professional/enterprise-accounting-onboarding-panel";
 import { FinanceAccountingReferenceSelect } from "@/components/enterprise/core-v2/finance-accounting-reference-select";
 import { ProfessionalError, ProfessionalLoading } from "@/components/enterprise/professional/professional-erp-ui";
-import { financeDate, financeMoney, financeStatusLabel, financeStatusTone, safeFinanceError, type FinanceLocale } from "@/components/enterprise/professional/finance-professional-ui";
+import { financeDate, financeEnumLabel, financeMoney, financeStatusLabel, financeStatusTone, safeFinanceError, type FinanceLocale } from "@/components/enterprise/professional/finance-professional-ui";
 import { financeMutation } from "@/components/enterprise/professional/finance-professional-workspace-shared";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -56,8 +57,15 @@ type JournalEntry = AnyRow & {
 type LedgerRow = AnyRow & {
   ledgerAccount?: { code?: string; nameFr?: string; nameEn?: string; accountType?: string };
   journalEntry?: {
-    id?: string; number?: string; accountingDate?: string; reference?: string | null; description?: string;
-    functionalCurrencyCode?: string; sourceModule?: string | null; sourceEntityType?: string | null; sourceEntityId?: string | null;
+    id?: string;
+    number?: string;
+    accountingDate?: string;
+    reference?: string | null;
+    description?: string;
+    functionalCurrencyCode?: string;
+    sourceModule?: string | null;
+    sourceEntityType?: string | null;
+    sourceEntityId?: string | null;
     journal?: { code?: string; nameFr?: string; nameEn?: string };
     fiscalPeriod?: { code?: string };
   };
@@ -68,17 +76,27 @@ type LedgerRow = AnyRow & {
   transactionAmount?: string | number | null;
 };
 type TrialRow = AnyRow & {
-  code?: string; nameFr?: string; nameEn?: string; accountType?: string;
+  code?: string;
+  nameFr?: string;
+  nameEn?: string;
+  accountType?: string;
   functionalCurrencyCode?: string | null;
-  openingBalance?: string | number; periodDebit?: string | number; periodCredit?: string | number; closingBalance?: string | number;
+  openingBalance?: string | number;
+  periodDebit?: string | number;
+  periodCredit?: string | number;
+  closingBalance?: string | number;
 };
 type OverviewPayload = { metrics?: Record<string, number>; charts?: Record<string, unknown>; range?: string };
 type ListPayload<T = AnyRow> = { items?: T[]; pagination?: Pagination; functionalCurrencyCode?: string | null; period?: { dateFrom?: string | null; dateTo?: string | null } };
-type EntryTracePayload = { entry?: JournalEntry & { lines?: LedgerRow[]; sourceModule?: string | null; sourceEntityId?: string | null }; sourceLink?: { labelFr: string; labelEn: string; href: string; moduleCode: string } | null };
-
+type EntryTracePayload = {
+  entry?: JournalEntry & { lines?: LedgerRow[]; sourceModule?: string | null; sourceEntityId?: string | null };
+  sourceLink?: { labelFr: string; labelEn: string; href: string; moduleCode: string } | null;
+};
 type ConfigFormState = { open: boolean; kind: ConfigCreatable | null };
 
 const EMPTY_PAGINATION: Pagination = { page: 1, pageSize: 25, total: 0, pageCount: 1 };
+const ACCOUNT_TYPES = ["ASSET", "LIABILITY", "EQUITY", "REVENUE", "EXPENSE", "OTHER_INCOME", "OTHER_EXPENSE"] as const;
+const JOURNAL_TYPES = ["GENERAL", "SALES", "PURCHASES", "BANK", "CASH", "MOBILE_MONEY", "PAYROLL", "INVENTORY", "ASSETS", "ADJUSTMENT", "OPENING"] as const;
 
 function rawText(value: unknown) { return value === null || value === undefined ? "" : String(value); }
 function rowText(row: AnyRow, key: string) { return rawText(row[key]); }
@@ -86,9 +104,10 @@ function localizedName(row: AnyRow, locale: FinanceLocale) { return locale === "
 function dateQueryValue(date: string, end = false) { return date ? `${date}T${end ? "23:59:59.999" : "00:00:00.000"}Z` : ""; }
 
 export function EnterpriseFinanceAccountingWorkspaceV3(props: Props) {
-  const { organizationId, organizationName, definition, locale: rawLocale, canCreate, canWrite, canManage } = props;
+  const { organizationId, organizationName, definition, locale: rawLocale, canCreate, canManage } = props;
   const locale: FinanceLocale = rawLocale === "en" ? "en" : "fr";
   const en = locale === "en";
+  const searchParams = useSearchParams();
   const [space, setSpace] = useState<Space>("home");
   const [reviewView, setReviewView] = useState<ReviewView>("ledger");
   const [configureView, setConfigureView] = useState<ConfigureView>("setup");
@@ -120,10 +139,24 @@ export function EnterpriseFinanceAccountingWorkspaceV3(props: Props) {
   }, []);
 
   useEffect(() => {
+    const legacyTab = searchParams.get("tab");
+    if (!legacyTab) return;
+    if (legacyTab === "entries") setSpace("post");
+    else if (legacyTab === "ledger" || legacyTab === "trial" || legacyTab === "anomalies") {
+      setSpace("review");
+      setReviewView(legacyTab === "ledger" ? "ledger" : legacyTab === "trial" ? "trial" : "anomalies");
+    } else if (["setup", "charts", "accounts", "years", "periods", "journals", "rules"].includes(legacyTab)) {
+      setSpace("configure");
+      setConfigureView(legacyTab as ConfigureView);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
     async function load() {
-      setLoading(true); setErrorMessage("");
+      setLoading(true);
+      setErrorMessage("");
       try {
         if (space === "home") {
           const response = await fetch(`/api/enterprise/${organizationId}/accounting-professional?view=overview&range=90&page=1&pageSize=25`, { cache: "no-store", signal: controller.signal });
@@ -163,8 +196,15 @@ export function EnterpriseFinanceAccountingWorkspaceV3(props: Props) {
         if (!cancelled) { setRows(body.items || []); setEntries([]); setPagination(body.pagination || EMPTY_PAGINATION); }
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") return;
-        if (!cancelled) { setRows([]); setEntries([]); setPagination(EMPTY_PAGINATION); setErrorMessage(safeFinanceError(error, en ? "Accounting data is temporarily unavailable." : "Les données comptables sont momentanément indisponibles.", locale)); }
-      } finally { if (!cancelled) setLoading(false); }
+        if (!cancelled) {
+          setRows([]);
+          setEntries([]);
+          setPagination(EMPTY_PAGINATION);
+          setErrorMessage(safeFinanceError(error, en ? "Accounting data is temporarily unavailable." : "Les données comptables sont momentanément indisponibles.", locale));
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     }
     void load();
     return () => { cancelled = true; controller.abort(); };
@@ -180,22 +220,36 @@ export function EnterpriseFinanceAccountingWorkspaceV3(props: Props) {
         if (!response.ok) throw new Error(body.message || body.error || "ENTRY_TRACE_FAILED");
         if (!cancelled) setEntryTrace(body);
       })
-      .catch((error) => { if (!cancelled) setErrorMessage(safeFinanceError(error, en ? "The journal entry could not be opened." : "L’écriture n’a pas pu être ouverte.", locale)); });
+      .catch((error) => {
+        if (!cancelled) setErrorMessage(safeFinanceError(error, en ? "The journal entry could not be opened." : "L’écriture n’a pas pu être ouverte.", locale));
+      });
     return () => { cancelled = true; };
   }, [detailEntryId, en, locale, organizationId]);
 
   function chooseSpace(next: Space) {
-    setSpace(next); setPage(1); setSearch(""); setDateFrom(""); setDateTo(""); setRows([]); setEntries([]); setErrorMessage("");
+    setSpace(next);
+    setPage(1);
+    setSearch("");
+    setDateFrom("");
+    setDateTo("");
+    setRows([]);
+    setEntries([]);
+    setErrorMessage("");
   }
 
   async function submitApproval(approverUserId: string) {
     if (!approvalTarget) return;
-    setBusy(true); setErrorMessage("");
+    setBusy(true);
+    setErrorMessage("");
     try {
       await financeMutation(`/api/enterprise/${organizationId}/journal-entries/${approvalTarget.id}/transition`, { action: "SUBMIT", approverUserId, revision: approvalTarget.revision }, "POST");
-      setApprovalTarget(null); reload(en ? "Journal entry submitted for approval." : "Écriture soumise pour validation.");
-    } catch (error) { setErrorMessage(safeFinanceError(error, en ? "Submission failed." : "La soumission a échoué.", locale)); }
-    finally { setBusy(false); }
+      setApprovalTarget(null);
+      reload(en ? "Journal entry submitted for approval." : "Écriture soumise pour validation.");
+    } catch (error) {
+      setErrorMessage(safeFinanceError(error, en ? "Submission failed." : "La soumission a échoué.", locale));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function executeAction(event: FormEvent<HTMLFormElement>) {
@@ -204,17 +258,28 @@ export function EnterpriseFinanceAccountingWorkspaceV3(props: Props) {
     const form = new FormData(event.currentTarget);
     const reason = String(form.get("reason") || "").trim();
     const accountingDate = String(form.get("accountingDate") || "").trim();
-    setBusy(true); setErrorMessage("");
+    setBusy(true);
+    setErrorMessage("");
     try {
       if (actionTarget.action === "REVERSE") {
         await financeMutation(`/api/enterprise/${organizationId}/journal-entries/${actionTarget.entry.id}/reverse`, { reason, accountingDate }, "POST");
       } else {
         await financeMutation(`/api/enterprise/${organizationId}/journal-entries/${actionTarget.entry.id}/transition`, { action: actionTarget.action, reason: reason || undefined, revision: actionTarget.entry.revision }, "POST");
       }
-      const label = actionTarget.action === "APPROVE" ? (en ? "Journal entry approved." : "Écriture approuvée.") : actionTarget.action === "REJECT" ? (en ? "Journal entry rejected." : "Écriture rejetée.") : actionTarget.action === "POST" ? (en ? "Journal entry posted." : "Écriture comptabilisée.") : (en ? "Journal entry reversed." : "Écriture contrepassée.");
-      setActionTarget(null); reload(label);
-    } catch (error) { setErrorMessage(safeFinanceError(error, en ? "Accounting action failed." : "L’action comptable a échoué.", locale)); }
-    finally { setBusy(false); }
+      const label = actionTarget.action === "APPROVE"
+        ? (en ? "Journal entry approved." : "Écriture approuvée.")
+        : actionTarget.action === "REJECT"
+          ? (en ? "Journal entry rejected." : "Écriture rejetée.")
+          : actionTarget.action === "POST"
+            ? (en ? "Journal entry posted." : "Écriture comptabilisée.")
+            : (en ? "Journal entry reversed." : "Écriture contrepassée.");
+      setActionTarget(null);
+      reload(label);
+    } catch (error) {
+      setErrorMessage(safeFinanceError(error, en ? "Accounting action failed." : "L’action comptable a échoué.", locale));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function createConfig(event: FormEvent<HTMLFormElement>) {
@@ -223,16 +288,21 @@ export function EnterpriseFinanceAccountingWorkspaceV3(props: Props) {
     if (!kind) return;
     const form = new FormData(event.currentTarget);
     const base = `/api/enterprise/${organizationId}`;
-    setBusy(true); setErrorMessage("");
+    setBusy(true);
+    setErrorMessage("");
     try {
       if (kind === "charts") await financeMutation(`${base}/charts-of-accounts`, { code: String(form.get("code") || ""), nameFr: String(form.get("nameFr") || ""), nameEn: String(form.get("nameEn") || "") });
       if (kind === "accounts") await financeMutation(`${base}/ledger-accounts`, { chartId: String(form.get("chartId") || ""), code: String(form.get("code") || ""), nameFr: String(form.get("nameFr") || ""), nameEn: String(form.get("nameEn") || ""), accountType: String(form.get("accountType") || "ASSET"), currencyCode: String(form.get("currencyCode") || "") || undefined, allowDirectPosting: form.get("allowDirectPosting") === "on", isControlAccount: false, isSystemAccount: false });
       if (kind === "years") await financeMutation(`${base}/fiscal-years`, { code: String(form.get("code") || ""), startDate: String(form.get("startDate") || ""), endDate: String(form.get("endDate") || "") });
       if (kind === "periods") await financeMutation(`${base}/fiscal-periods`, { fiscalYearId: String(form.get("fiscalYearId") || ""), code: String(form.get("code") || ""), startDate: String(form.get("startDate") || ""), endDate: String(form.get("endDate") || "") });
       if (kind === "journals") await financeMutation(`${base}/journals`, { code: String(form.get("code") || ""), nameFr: String(form.get("nameFr") || ""), nameEn: String(form.get("nameEn") || ""), journalType: String(form.get("journalType") || "GENERAL"), sequencePrefix: String(form.get("sequencePrefix") || "") || undefined, requiresApproval: form.get("requiresApproval") === "on" });
-      setConfigForm({ open: false, kind: null }); reload(en ? "Accounting configuration saved." : "Configuration comptable enregistrée.");
-    } catch (error) { setErrorMessage(safeFinanceError(error, en ? "Configuration could not be saved." : "La configuration n’a pas pu être enregistrée.", locale)); }
-    finally { setBusy(false); }
+      setConfigForm({ open: false, kind: null });
+      reload(en ? "Accounting configuration saved." : "Configuration comptable enregistrée.");
+    } catch (error) {
+      setErrorMessage(safeFinanceError(error, en ? "Configuration could not be saved." : "La configuration n’a pas pu être enregistrée.", locale));
+    } finally {
+      setBusy(false);
+    }
   }
 
   const spaceOptions = [
@@ -245,12 +315,12 @@ export function EnterpriseFinanceAccountingWorkspaceV3(props: Props) {
   const metricCards = useMemo(() => {
     const metrics = overview.metrics || {};
     return [
-      [en ? "Draft entries" : "Écritures brouillon", Number(metrics.draftEntries || 0)],
-      [en ? "Pending approval" : "À valider", Number(metrics.pendingApproval || 0)],
-      [en ? "Posted entries" : "Comptabilisées", Number(metrics.postedEntries || 0)],
-      [en ? "Posting failures" : "Échecs de comptabilisation", Number(metrics.failedPostings || 0)],
-      [en ? "Open periods" : "Périodes ouvertes", Number(metrics.openPeriods || 0)],
-      [en ? "Active posting rules" : "Règles actives", Number(metrics.activePostingRules || 0)],
+      [en ? "Draft entries" : "Écritures brouillon", Number(metrics.draftEntries || 0), "post"],
+      [en ? "Pending approval" : "À valider", Number(metrics.pendingApproval || 0), "post"],
+      [en ? "Posted entries" : "Comptabilisées", Number(metrics.postedEntries || 0), "review"],
+      [en ? "Posting failures" : "Échecs de comptabilisation", Number(metrics.failedPostings || 0), "anomalies"],
+      [en ? "Open periods" : "Périodes ouvertes", Number(metrics.openPeriods || 0), "configure"],
+      [en ? "Active posting rules" : "Règles actives", Number(metrics.activePostingRules || 0), "rules"],
     ] as const;
   }, [en, overview.metrics]);
 
@@ -292,25 +362,29 @@ export function EnterpriseFinanceAccountingWorkspaceV3(props: Props) {
 
   const anomalyColumns: AccountingCompactColumn<AnyRow>[] = [
     { key: "reference", label: en ? "Reference" : "Référence", render: (row) => <span className="font-black">{rowText(row, "reference") || "—"}</span> },
-    { key: "event", label: en ? "Posting event" : "Événement", render: (row) => rowText(row, "postingEvent") || "—" },
-    { key: "error", label: en ? "Control" : "Contrôle", render: (row) => rowText(row, "errorCode") || "—" },
+    { key: "event", label: en ? "Posting event" : "Événement", render: (row) => financeEnumLabel(rowText(row, "postingEvent"), locale) || "—" },
+    { key: "error", label: en ? "Control" : "Contrôle", render: (row) => financeEnumLabel(rowText(row, "errorCode"), locale) || (en ? "Action required" : "Action requise") },
     { key: "created", label: en ? "Detected" : "Détectée", render: (row) => financeDate(rowText(row, "createdAt"), locale) },
     { key: "status", label: en ? "Status" : "Statut", render: (row) => <StatusBadge label={financeStatusLabel(rowText(row, "status"), locale)} tone="danger" /> },
   ];
 
   const configColumns: AccountingCompactColumn<AnyRow>[] = [
-    { key: "code", label: en ? "Code" : "Code", render: (row) => <span className="font-black">{rowText(row, "code") || rowText(row, "mappingKey") || "—"}</span> },
-    { key: "name", label: en ? "Label" : "Libellé", cellClassName: "max-w-[28rem] truncate", render: (row) => localizedName(row, locale) || rowText(row, "description") || rowText(row, "sourceModule") || "—" },
-    { key: "type", label: en ? "Type" : "Type", render: (row) => rowText(row, "accountType") || rowText(row, "journalType") || rowText(row, "templateCode") || "—" },
-    { key: "status", label: en ? "Status" : "Statut", render: (row) => <StatusBadge label={financeStatusLabel(rowText(row, "status") || (row.isActive === false ? "INACTIVE" : "ACTIVE"), locale)} tone={financeStatusTone(rowText(row, "status") || (row.isActive === false ? "INACTIVE" : "ACTIVE"))} /> },
+    { key: "code", label: en ? "Code" : "Code", render: (row) => <span className="font-black">{rowText(row, "code") || (rowText(row, "mappingKey") ? financeEnumLabel(rowText(row, "mappingKey"), locale) : "—")}</span> },
+    { key: "name", label: en ? "Label" : "Libellé", cellClassName: "max-w-[28rem] truncate", render: (row) => localizedName(row, locale) || rowText(row, "description") || (rowText(row, "sourceModule") ? financeEnumLabel(rowText(row, "sourceModule"), locale) : "—") },
+    { key: "type", label: en ? "Type" : "Type", render: (row) => financeEnumLabel(rowText(row, "accountType") || rowText(row, "journalType") || rowText(row, "templateCode"), locale) || "—" },
+    { key: "status", label: en ? "Status" : "Statut", render: (row) => {
+      const status = rowText(row, "status") || (row.isActive === false ? "INACTIVE" : "ACTIVE");
+      return <StatusBadge label={financeStatusLabel(status, locale)} tone={financeStatusTone(status)} />;
+    } },
   ];
 
   const hasToolbar = space !== "home" && !(space === "configure" && configureView === "setup");
+  const workspaceTitle = en ? definition.labelEn || definition.labelFr : definition.labelFr || definition.labelEn;
 
   return <ModuleWorkspace className="mx-auto w-full max-w-[1600px] px-4 sm:px-6 lg:px-8">
     <ModuleHeader
       eyebrow={organizationName}
-      title={definition.labelFr || (en ? "Accounting" : "Comptabilité")}
+      title={workspaceTitle}
       description={en ? "A compact professional general-ledger workspace: post, review, control and configure from one accounting truth." : "Un espace de grand livre compact et professionnel : comptabiliser, consulter, contrôler et configurer depuis une seule vérité comptable."}
       primaryAction={canCreate ? <Button type="button" onClick={() => { setSpace("post"); setWorkbenchOpen(true); }}><FilePlus2 className="mr-2 h-4 w-4" />{en ? "New entry" : "Nouvelle écriture"}</Button> : null}
     />
@@ -332,7 +406,7 @@ export function EnterpriseFinanceAccountingWorkspaceV3(props: Props) {
 
     <ModuleContent className="space-y-5">
       {space === "home" ? <div className="space-y-5">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">{metricCards.map(([label, value]) => <button type="button" key={label} onClick={() => label.includes(en ? "failure" : "Échec") ? chooseSpace("review") : label.includes(en ? "Draft" : "brouillon") || label.includes(en ? "Pending" : "valider") ? chooseSpace("post") : undefined} className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"><span className="block text-xs font-black uppercase tracking-[0.05em] text-dtsc-muted">{label}</span><strong className="mt-2 block text-2xl font-black tabular-nums text-dtsc-ink">{value}</strong></button>)}</div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">{metricCards.map(([label, value, target]) => <button type="button" key={label} onClick={() => { if (target === "anomalies") { chooseSpace("review"); setReviewView("anomalies"); } else if (target === "rules") { chooseSpace("configure"); setConfigureView("rules"); } else if (target === "configure") { chooseSpace("configure"); setConfigureView("periods"); } else chooseSpace(target); }} className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"><span className="block text-xs font-black uppercase tracking-[0.05em] text-dtsc-muted">{label}</span><strong className="mt-2 block text-2xl font-black tabular-nums text-dtsc-ink">{value}</strong></button>)}</div>
         <div className="grid gap-4 lg:grid-cols-2"><section className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-5"><div className="flex items-start gap-3"><BookOpenCheck className="mt-0.5 h-5 w-5 text-cyan-600" /><div><h2 className="font-black text-dtsc-ink">{en ? "Accounting work queue" : "File de travail comptable"}</h2><p className="mt-1 text-sm leading-6 text-dtsc-muted">{en ? "Create entries, route them for independent approval, post them and inspect their source trace without leaving the ledger." : "Créez les écritures, affectez leur validation indépendante, comptabilisez-les et remontez à leur source sans quitter le grand livre."}</p><Button type="button" className="mt-4" onClick={() => chooseSpace("post")}>{en ? "Open work queue" : "Ouvrir la file"}<ChevronRight className="ml-2 h-4 w-4" /></Button></div></div></section><section className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-5"><div className="flex items-start gap-3"><AlertTriangle className="mt-0.5 h-5 w-5 text-amber-600" /><div><h2 className="font-black text-dtsc-ink">{en ? "Controls and close readiness" : "Contrôles et préparation de clôture"}</h2><p className="mt-1 text-sm leading-6 text-dtsc-muted">{en ? "Review failed postings and the underlying ledger before financial close. Close remains managed by its dedicated entitlement." : "Analysez les échecs de comptabilisation et le grand livre avant la clôture. La clôture reste protégée par son entitlement dédié."}</p><Button type="button" variant="outline" className="mt-4" onClick={() => { chooseSpace("review"); setReviewView("anomalies"); }}>{en ? "Review anomalies" : "Voir les anomalies"}<ChevronRight className="ml-2 h-4 w-4" /></Button></div></div></section></div>
       </div> : null}
 
@@ -340,7 +414,7 @@ export function EnterpriseFinanceAccountingWorkspaceV3(props: Props) {
 
       {space === "review" ? loading ? <ProfessionalLoading /> : reviewView === "ledger" ? <AccountingCompactTable rows={rows as LedgerRow[]} columns={ledgerColumns} rowKey={(row) => row.id} emptyLabel={en ? "No ledger movement in this scope." : "Aucun mouvement de grand livre sur ce périmètre."} minWidth="min-w-[1180px]" /> : reviewView === "trial" ? <AccountingCompactTable rows={rows as TrialRow[]} columns={trialColumns} rowKey={(row) => row.id} emptyLabel={en ? "No balance in this scope." : "Aucun solde sur ce périmètre."} minWidth="min-w-[860px]" /> : <AccountingCompactTable rows={rows} columns={anomalyColumns} rowKey={(row) => row.id} emptyLabel={en ? "No posting anomaly." : "Aucune anomalie de comptabilisation."} minWidth="min-w-[820px]" /> : null}
 
-      {space === "configure" ? configureView === "setup" ? <EnterpriseAccountingOnboardingPanel organizationId={organizationId} locale={rawLocale} /> : loading ? <ProfessionalLoading /> : <AccountingCompactTable rows={rows} columns={configColumns} rowKey={(row) => row.id} emptyLabel={en ? "No configuration item in this scope." : "Aucun élément de configuration sur ce périmètre."} minWidth="min-w-[760px]" /> : null}
+      {space === "configure" ? configureView === "setup" ? <EnterpriseAccountingOnboardingPanel organizationId={organizationId} locale={rawLocale} canManage={canManage} /> : loading ? <ProfessionalLoading /> : <AccountingCompactTable rows={rows} columns={configColumns} rowKey={(row) => row.id} emptyLabel={en ? "No configuration item in this scope." : "Aucun élément de configuration sur ce périmètre."} minWidth="min-w-[760px]" /> : null}
 
       {pagination.pageCount > 1 && space !== "home" && !(space === "configure" && configureView === "setup") ? <div className="flex items-center justify-between gap-3 rounded-xl border border-dtsc-border bg-dtsc-page/60 px-3 py-2 text-xs font-bold text-dtsc-muted"><Button type="button" variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>{en ? "Previous" : "Précédent"}</Button><span className="tabular-nums">{en ? "Page" : "Page"} {page} / {pagination.pageCount}</span><Button type="button" variant="outline" size="sm" disabled={page >= pagination.pageCount} onClick={() => setPage((value) => Math.min(pagination.pageCount, value + 1))}>{en ? "Next" : "Suivant"}</Button></div> : null}
     </ModuleContent>
@@ -353,6 +427,15 @@ export function EnterpriseFinanceAccountingWorkspaceV3(props: Props) {
 
     <Dialog open={Boolean(detailEntryId)} onClose={() => setDetailEntryId(null)} title={en ? "Journal entry trace" : "Traçabilité de l’écriture"} presentation="editor" className="h-[94dvh] max-w-[min(1180px,calc(100vw-1rem))]">{!entryTrace?.entry ? <ProfessionalLoading /> : <div className="grid gap-4"><div className="grid gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page/60 p-4 sm:grid-cols-2 lg:grid-cols-4"><div><span className="text-xs font-black uppercase text-dtsc-muted">{en ? "Entry" : "Écriture"}</span><strong className="mt-1 block text-dtsc-ink">{entryTrace.entry.number || "—"}</strong></div><div><span className="text-xs font-black uppercase text-dtsc-muted">{en ? "Date" : "Date"}</span><strong className="mt-1 block text-dtsc-ink">{financeDate(entryTrace.entry.accountingDate || "", locale)}</strong></div><div><span className="text-xs font-black uppercase text-dtsc-muted">{en ? "Status" : "Statut"}</span><div className="mt-1"><StatusBadge label={financeStatusLabel(entryTrace.entry.status || "", locale)} tone={financeStatusTone(entryTrace.entry.status || "")} /></div></div><div><span className="text-xs font-black uppercase text-dtsc-muted">{en ? "Source" : "Source"}</span>{entryTrace.sourceLink ? <Link href={entryTrace.sourceLink.href} className="mt-1 inline-flex items-center font-black text-dtsc-blue hover:underline">{en ? entryTrace.sourceLink.labelEn : entryTrace.sourceLink.labelFr}<ChevronRight className="ml-1 h-4 w-4" /></Link> : <span className="mt-1 block text-sm font-semibold text-dtsc-muted">{en ? "No authorized source link" : "Aucun lien source autorisé"}</span>}</div></div><AccountingCompactTable rows={(entryTrace.entry.lines || []) as LedgerRow[]} columns={ledgerColumns.filter((column) => !["date", "entry", "journal", "period"].includes(column.key))} rowKey={(row) => row.id} emptyLabel={en ? "No journal line." : "Aucune ligne comptable."} minWidth="min-w-[760px]" /></div>}</Dialog>
 
-    <Dialog open={configForm.open} onClose={() => !busy && setConfigForm({ open: false, kind: null })} title={en ? "Accounting configuration" : "Configuration comptable"} presentation="editor" className="h-[94dvh] max-w-3xl"><form onSubmit={createConfig} className="grid gap-4">{configForm.kind === "accounts" ? <FinanceAccountingReferenceSelect organizationId={organizationId} moduleCode="FINANCE_ACCOUNTING" kind="chart" name="chartId" label={en ? "Chart of accounts" : "Plan comptable"} locale={rawLocale} required disabled={busy} status="ACTIVE" /> : null}{configForm.kind === "periods" ? <FinanceAccountingReferenceSelect organizationId={organizationId} moduleCode="FINANCE_ACCOUNTING" kind="fiscal-year" name="fiscalYearId" label={en ? "Fiscal year" : "Exercice"} locale={rawLocale} required disabled={busy} /> : null}{configForm.kind === "accounts" || configForm.kind === "charts" || configForm.kind === "years" || configForm.kind === "periods" || configForm.kind === "journals" ? <label className="grid gap-2 text-sm font-bold text-dtsc-ink">{en ? "Code" : "Code"}<Input name="code" required maxLength={40} disabled={busy} /></label> : null}{configForm.kind === "charts" || configForm.kind === "accounts" || configForm.kind === "journals" ? <><label className="grid gap-2 text-sm font-bold text-dtsc-ink">{en ? "French label" : "Libellé français"}<Input name="nameFr" required maxLength={180} disabled={busy} /></label><label className="grid gap-2 text-sm font-bold text-dtsc-ink">{en ? "English label" : "Libellé anglais"}<Input name="nameEn" required maxLength={180} disabled={busy} /></label></> : null}{configForm.kind === "years" || configForm.kind === "periods" ? <><label className="grid gap-2 text-sm font-bold text-dtsc-ink">{en ? "Start date" : "Date de début"}<Input name="startDate" type="date" required disabled={busy} /></label><label className="grid gap-2 text-sm font-bold text-dtsc-ink">{en ? "End date" : "Date de fin"}<Input name="endDate" type="date" required disabled={busy} /></label></> : null}{configForm.kind === "accounts" ? <><label className="grid gap-2 text-sm font-bold text-dtsc-ink">{en ? "Account type" : "Type de compte"}<select name="accountType" defaultValue="ASSET" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3" disabled={busy}>{["ASSET", "LIABILITY", "EQUITY", "REVENUE", "EXPENSE", "OTHER_INCOME", "OTHER_EXPENSE"].map((value) => <option key={value} value={value}>{value}</option>)}</select></label><FinanceAccountingReferenceSelect organizationId={organizationId} moduleCode="FINANCE_ACCOUNTING" kind="currency" name="currencyCode" label={en ? "Account currency (optional)" : "Devise du compte (facultatif)"} locale={rawLocale} disabled={busy} /><label className="flex min-h-11 items-center gap-2 text-sm font-bold text-dtsc-ink"><input type="checkbox" name="allowDirectPosting" defaultChecked />{en ? "Allow direct manual posting" : "Autoriser la saisie manuelle directe"}</label></> : null}{configForm.kind === "journals" ? <><label className="grid gap-2 text-sm font-bold text-dtsc-ink">{en ? "Journal type" : "Type de journal"}<select name="journalType" defaultValue="GENERAL" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3" disabled={busy}>{["GENERAL", "SALES", "PURCHASES", "BANK", "CASH", "MOBILE_MONEY", "PAYROLL", "INVENTORY", "ASSETS", "ADJUSTMENT", "OPENING"].map((value) => <option key={value} value={value}>{value}</option>)}</select></label><label className="grid gap-2 text-sm font-bold text-dtsc-ink">{en ? "Sequence prefix" : "Préfixe de séquence"}<Input name="sequencePrefix" maxLength={20} disabled={busy} /></label><label className="flex min-h-11 items-center gap-2 text-sm font-bold text-dtsc-ink"><input type="checkbox" name="requiresApproval" />{en ? "Require independent approval" : "Exiger une validation indépendante"}</label></> : null}<div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => setConfigForm({ open: false, kind: null })}>{en ? "Cancel" : "Annuler"}</Button><Button type="submit" disabled={busy}>{busy ? (en ? "Saving…" : "Enregistrement…") : (en ? "Save" : "Enregistrer")}</Button></div></form></Dialog>
+    <Dialog open={configForm.open} onClose={() => !busy && setConfigForm({ open: false, kind: null })} title={en ? "Accounting configuration" : "Configuration comptable"} presentation="editor" className="h-[94dvh] max-w-3xl"><form onSubmit={createConfig} className="grid gap-4">
+      {configForm.kind === "accounts" ? <FinanceAccountingReferenceSelect organizationId={organizationId} moduleCode="FINANCE_ACCOUNTING" kind="chart" name="chartId" label={en ? "Chart of accounts" : "Plan comptable"} locale={rawLocale} required disabled={busy} status="ACTIVE" /> : null}
+      {configForm.kind === "periods" ? <FinanceAccountingReferenceSelect organizationId={organizationId} moduleCode="FINANCE_ACCOUNTING" kind="fiscal-year" name="fiscalYearId" label={en ? "Fiscal year" : "Exercice"} locale={rawLocale} required disabled={busy} /> : null}
+      {configForm.kind ? <label className="grid gap-2 text-sm font-bold text-dtsc-ink">{en ? "Code" : "Code"}<Input name="code" required maxLength={40} disabled={busy} /></label> : null}
+      {configForm.kind === "charts" || configForm.kind === "accounts" || configForm.kind === "journals" ? <><label className="grid gap-2 text-sm font-bold text-dtsc-ink">{en ? "French label" : "Libellé français"}<Input name="nameFr" required maxLength={180} disabled={busy} /></label><label className="grid gap-2 text-sm font-bold text-dtsc-ink">{en ? "English label" : "Libellé anglais"}<Input name="nameEn" required maxLength={180} disabled={busy} /></label></> : null}
+      {configForm.kind === "years" || configForm.kind === "periods" ? <><label className="grid gap-2 text-sm font-bold text-dtsc-ink">{en ? "Start date" : "Date de début"}<Input name="startDate" type="date" required disabled={busy} /></label><label className="grid gap-2 text-sm font-bold text-dtsc-ink">{en ? "End date" : "Date de fin"}<Input name="endDate" type="date" required disabled={busy} /></label></> : null}
+      {configForm.kind === "accounts" ? <><label className="grid gap-2 text-sm font-bold text-dtsc-ink">{en ? "Account type" : "Type de compte"}<select name="accountType" defaultValue="ASSET" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3" disabled={busy}>{ACCOUNT_TYPES.map((value) => <option key={value} value={value}>{financeEnumLabel(value, locale)}</option>)}</select></label><FinanceAccountingReferenceSelect organizationId={organizationId} moduleCode="FINANCE_ACCOUNTING" kind="currency" name="currencyCode" label={en ? "Account currency (optional)" : "Devise du compte (facultatif)"} locale={rawLocale} disabled={busy} /><label className="flex min-h-11 items-center gap-2 text-sm font-bold text-dtsc-ink"><input type="checkbox" name="allowDirectPosting" defaultChecked />{en ? "Allow direct manual posting" : "Autoriser la saisie manuelle directe"}</label></> : null}
+      {configForm.kind === "journals" ? <><label className="grid gap-2 text-sm font-bold text-dtsc-ink">{en ? "Journal type" : "Type de journal"}<select name="journalType" defaultValue="GENERAL" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3" disabled={busy}>{JOURNAL_TYPES.map((value) => <option key={value} value={value}>{financeEnumLabel(value, locale)}</option>)}</select></label><label className="grid gap-2 text-sm font-bold text-dtsc-ink">{en ? "Sequence prefix" : "Préfixe de séquence"}<Input name="sequencePrefix" maxLength={20} disabled={busy} /></label><label className="flex min-h-11 items-center gap-2 text-sm font-bold text-dtsc-ink"><input type="checkbox" name="requiresApproval" />{en ? "Require independent approval" : "Exiger une validation indépendante"}</label></> : null}
+      <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => setConfigForm({ open: false, kind: null })}>{en ? "Cancel" : "Annuler"}</Button><Button type="submit" disabled={busy}>{busy ? (en ? "Saving…" : "Enregistrement…") : (en ? "Save" : "Enregistrer")}</Button></div>
+    </form></Dialog>
   </ModuleWorkspace>;
 }
