@@ -47,6 +47,7 @@ export function EnterpriseCustomersWorkspace({ organizationId, organizationName,
   const [success, setSuccess] = useState("");
   const [warning, setWarning] = useState("");
   const [busy, setBusy] = useState(false);
+  useToastMessage(message, "error");
   useToastMessage(success, "success");
   useToastMessage(warning, "warning");
 
