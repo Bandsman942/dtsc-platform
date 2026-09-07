@@ -233,15 +233,14 @@ export async function GET(req: Request, { params }: Params) {
       select: { id: true, status: true, catalogItem: { select: { id: true, code: true, sku: true, name: true } } },
     });
   } else if (kind === "asset") {
-    const existingProfiles = await prisma.enterpriseAssetAccountingProfile.findMany({
-      where: { organizationId },
-      select: { assetId: true },
-    });
+    const excludedAssetIds = moduleCode === "FINANCE_ASSETS"
+      ? (await prisma.enterpriseAssetAccountingProfile.findMany({ where: { organizationId }, select: { assetId: true } })).map((profile) => profile.assetId)
+      : [];
     items = await prisma.enterpriseAsset.findMany({
       where: {
         organizationId,
         archivedAt: null,
-        id: { notIn: existingProfiles.map((profile) => profile.assetId) },
+        ...(excludedAssetIds.length ? { id: { notIn: excludedAssetIds } } : {}),
         status: { notIn: ["DISPOSED", "ARCHIVED", "CANCELLED"] },
         ...(search ? { OR: [
           { code: { contains: search, mode: "insensitive" } },
