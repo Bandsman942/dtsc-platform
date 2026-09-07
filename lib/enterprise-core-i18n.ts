@@ -1,8 +1,11 @@
 import enterpriseProcurementFr from "@/locales/enterprise-procurement.fr.json";
 import enterpriseProcurementEn from "@/locales/enterprise-procurement.en.json";
+import enterpriseSupplierOnboardingFr from "@/locales/enterprise-supplier-onboarding.fr.json";
+import enterpriseSupplierOnboardingEn from "@/locales/enterprise-supplier-onboarding.en.json";
 import { translateEnterpriseCore, type EnterpriseCoreKey as BaseEnterpriseCoreKey } from "@/lib/i18n";
 
 type EnterpriseProcurementCoreKey = keyof typeof enterpriseProcurementFr;
+type EnterpriseSupplierOnboardingKey = keyof typeof enterpriseSupplierOnboardingFr;
 type EnterpriseCoordinationSupplementKey =
   | "meetings.action.reason"
   | "meetings.action.reason.required"
@@ -24,9 +27,10 @@ type EnterpriseCoordinationSupplementKey =
   | "reports.generationReady"
   | "reports.generationFailed"
   | "reports.generationLeaveHint";
-export type EnterpriseCoreKey = BaseEnterpriseCoreKey | EnterpriseProcurementCoreKey | EnterpriseCoordinationSupplementKey;
+export type EnterpriseCoreKey = BaseEnterpriseCoreKey | EnterpriseProcurementCoreKey | EnterpriseSupplierOnboardingKey | EnterpriseCoordinationSupplementKey;
 
 const procurementFragments = { fr: enterpriseProcurementFr, en: enterpriseProcurementEn } as const;
+const supplierOnboardingFragments = { fr: enterpriseSupplierOnboardingFr, en: enterpriseSupplierOnboardingEn } as const;
 
 const coordinationSupplements: Record<"fr" | "en", Record<EnterpriseCoordinationSupplementKey, string>> = {
   fr: {
@@ -78,9 +82,17 @@ const coordinationSupplements: Record<"fr" | "en", Record<EnterpriseCoordination
 export function enterpriseCoreT(locale: string | null | undefined, key: EnterpriseCoreKey, vars?: Record<string, string | number>) {
   const normalizedLocale = locale === "en" ? "en" : "fr";
   const procurementDictionary = procurementFragments[normalizedLocale];
+  const supplierOnboardingDictionary = supplierOnboardingFragments[normalizedLocale];
   const procurementTemplate = procurementDictionary[key as EnterpriseProcurementCoreKey];
+  const supplierOnboardingTemplate = supplierOnboardingDictionary[key as EnterpriseSupplierOnboardingKey];
   const supplementalTemplate = coordinationSupplements[normalizedLocale][key as EnterpriseCoordinationSupplementKey];
-  const template = typeof procurementTemplate === "string" ? procurementTemplate : typeof supplementalTemplate === "string" ? supplementalTemplate : translateEnterpriseCore(locale, key as BaseEnterpriseCoreKey);
+  const template = typeof procurementTemplate === "string"
+    ? procurementTemplate
+    : typeof supplierOnboardingTemplate === "string"
+      ? supplierOnboardingTemplate
+      : typeof supplementalTemplate === "string"
+        ? supplementalTemplate
+        : translateEnterpriseCore(locale, key as BaseEnterpriseCoreKey);
   if (!vars) return template;
   return template.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(vars[name] ?? ""));
 }
