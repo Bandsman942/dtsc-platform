@@ -143,13 +143,13 @@ if (exists(modulePage)) {
 const compactTable = "components/enterprise/professional/accounting-compact-table.tsx";
 if (exists(compactTable)) {
   const content = read(compactTable);
-  for (const token of ["sticky", "tabular-nums", "overflow-x-auto", "whitespace-nowrap", "text-xs"]) if (!content.includes(token)) fail(`Finance UX: tableau comptable compact incomplet (${token})`);
+  for (const token of ["sticky top-0", "tabular-nums", "overflow-x-auto", "whitespace-nowrap", "text-[12px]", "sm:text-[13px]"]) if (!content.includes(token)) fail(`Finance UX: tableau comptable compact incomplet (${token})`);
 }
 
 const workbench = "components/enterprise/professional/accounting-journal-workbench.tsx";
 if (exists(workbench)) {
   const content = read(workbench);
-  for (const token of ["FinanceAccountingReferenceSelect", "totalDebit", "totalCredit", "balanced", 'presentation="editor"', "useToastMessage"]) if (!content.includes(token)) fail(`Finance UX: Journal Workbench incomplet (${token})`);
+  for (const token of ["FinanceAccountingReferenceSelect", "totals.debit", "totals.credit", "totals.balanced", 'presentation="editor"', "useToastMessage"]) if (!content.includes(token)) fail(`Finance UX: Journal Workbench incomplet (${token})`);
 }
 
 const guidePath = "lib/user-guides/accounting-onboarding-guide.ts";
