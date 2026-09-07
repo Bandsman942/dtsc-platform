@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { normalizeEnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
 import { getEnterpriseProcurementAccess } from "@/lib/enterprise/procurement/access";
 import { createEnterpriseSupplier } from "@/lib/enterprise/procurement/supplier-service";
 import { enterpriseSupplierCreateSchema } from "@/lib/enterprise/procurement/validators";
@@ -82,7 +83,12 @@ export async function POST(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "suppliers" } });
     return NextResponse.json({ ok: true, supplier }, { status: 201 });
   } catch (error) {
-    const duplicate = error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
-    return NextResponse.json({ error: duplicate ? "SUPPLIER_DUPLICATE" : "SUPPLIER_CREATE_FAILED", message: duplicate ? "Un fournisseur portant ce nom normalisé existe déjà dans cette entreprise." : "Création du fournisseur impossible." }, { status: duplicate ? 409 : 400 });
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      await writeApiLog({ request: req, statusCode: 409, userId: session.userId, startedAt, metadata: { organizationId, domain: "suppliers", error: "SUPPLIER_DUPLICATE" } });
+      return NextResponse.json({ error: "SUPPLIER_DUPLICATE", message: "Un fournisseur équivalent existe déjà dans cette entreprise. Ouvrez la fiche existante ou corrigez les informations uniques." }, { status: 409 });
+    }
+    const normalized = normalizeEnterpriseCoreV2Error(error);
+    await writeApiLog({ request: req, statusCode: normalized.status, userId: session.userId, startedAt, metadata: { organizationId, domain: "suppliers", error: normalized.code } });
+    return NextResponse.json({ error: normalized.code, message: normalized.message }, { status: normalized.status });
   }
 }
