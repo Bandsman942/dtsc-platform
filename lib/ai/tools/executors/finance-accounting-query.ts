@@ -1,4 +1,4 @@
-import type { AiToolExecutor } from "@/lib/ai/tools/types";
+import type { AiToolExecutor, AiToolRuntimeContext } from "@/lib/ai/tools/types";
 import {
   getAccountingAnomalies,
   getAccountingGeneralLedger,
@@ -10,6 +10,14 @@ import { prisma } from "@/lib/prisma";
 type FinanceAccountingReadArgs = { periodDays?: number; limit?: number };
 
 const MAX_QUERY_ROWS = 25;
+
+function requireOrganization(context: AiToolRuntimeContext) {
+  const organizationId = context.organizationId || context.session.activeOrganizationId || null;
+  if (!organizationId || context.session.activeContext !== "ORGANIZATION" || context.session.activeOrganizationId !== organizationId) {
+    throw new Error("ORGANIZATION_CONTEXT_REQUIRED");
+  }
+  return organizationId;
+}
 
 function period(args: FinanceAccountingReadArgs) {
   const periodDays = Math.min(366, Math.max(1, args.periodDays || 30));
@@ -33,8 +41,7 @@ function objectData(value: unknown): Record<string, unknown> {
  */
 export const FINANCE_ACCOUNTING_QUERY_AI_EXECUTORS: Record<string, AiToolExecutor> = {
   FINANCE_ACCOUNTING_READ: async ({ args, context }) => {
-    const organizationId = context.organizationId;
-    if (!organizationId) throw new Error("ORGANIZATION_CONTEXT_REQUIRED");
+    const organizationId = requireOrganization(context);
     const window = period((args || {}) as FinanceAccountingReadArgs);
     const filters = {
       dateFrom: window.start,
