@@ -204,7 +204,7 @@ test.describe.serial("Accounting onboarding and production-readiness UX", () => 
     await openAccountingSetup(page, "en");
     await expect(page.getByText(/prepare accounting in order/i)).toBeVisible();
     await expect(page.getByLabel("Reference / version")).toHaveValue(defaultTemplateReference);
-    await expect(page.getByText("Professional accounting", { exact: false }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Accounting", exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 2)).toBeFalsy();
   });
 });
