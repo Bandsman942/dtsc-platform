@@ -46,6 +46,8 @@ for (const route of [onboardingRoute, optionsRoute]) {
 }
 ok(optionsRoute.includes("organizationId") && optionsRoute.includes('status: "ACTIVE"') && optionsRoute.includes("archivedAt: null"), "Sélecteur: les options doivent être bornées au tenant et aux tiers actifs.");
 ok(optionsRoute.includes("supplierId") && optionsRoute.includes("supplierLinkArchived"), "Sélecteur: un tiers déjà fournisseur doit être identifiable sans contournement du lien 1:1.");
+ok(optionsRoute.includes("selector response only exposes what is needed"), "Sélecteur: le principe de minimisation de données Procurement doit rester explicite.");
+ok(!optionsRoute.includes("primaryPhone: true") && !optionsRoute.includes("taxIdentifier: true") && !optionsRoute.includes("registrationId: true") && !optionsRoute.includes("roles: {"), "Sélecteur: ne pas exposer téléphone, fiscalité ou rôles CRM dans le payload de sélection Procurement.");
 ok(supplierRoute.includes('moduleCode: "SUPPLIERS_PURCHASES"'), "Compatibilité: la liste fournisseur historique garde son entitlement Procurement.");
 
 ok(aiContract.includes('code: "ERP_CUSTOMERS_READ"') && aiContract.includes('moduleCode: "CRM_CUSTOMERS"'), "IA: ERP_CUSTOMERS_READ doit rester borné à CRM_CUSTOMERS.");
@@ -61,4 +63,4 @@ if (failures.length) {
   for (const failure of failures) console.error(`FAIL #592: ${failure}`);
   process.exit(1);
 }
-console.log("PASS #592: formulaire fournisseur unifié sur le tiers canonique, RBAC Procurement, multi-tenant, IA et i18n verrouillés.");
+console.log("PASS #592: formulaire fournisseur unifié sur le tiers canonique, RBAC Procurement, multi-tenant, minimisation des données, IA et i18n verrouillés.");
