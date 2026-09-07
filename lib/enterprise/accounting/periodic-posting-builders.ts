@@ -83,6 +83,10 @@ export const buildAssetDisposalPosting: PostingBuilder = async (tx, input) => {
     include: { profile: true },
   });
   if (!disposal) throw new EnterpriseAccountingError("ASSET_DISPOSAL_NOT_POSTABLE", 409);
+  const settlement = await tx.enterpriseAssetDisposalAccountingSettlement.findUnique({
+    where: { organizationId_assetDisposalId: { organizationId: input.organizationId, assetDisposalId: disposal.id } },
+  });
+  if (!settlement) throw new EnterpriseAccountingError("ASSET_DISPOSAL_SETTLEMENT_REQUIRED", 409);
 
   const profile = disposal.profile;
   const lines: PostingLineDraft[] = [
@@ -105,11 +109,9 @@ export const buildAssetDisposalPosting: PostingBuilder = async (tx, input) => {
   ];
 
   if (disposal.proceeds.gt(0)) {
-    if (!disposal.proceedsLedgerAccountId) {
-      throw new EnterpriseAccountingError("ASSET_DISPOSAL_PROCEEDS_ACCOUNT_REQUIRED", 409);
-    }
+    if (!settlement.proceedsLedgerAccountId) throw new EnterpriseAccountingError("ASSET_DISPOSAL_PROCEEDS_ACCOUNT_REQUIRED", 409);
     lines.push({
-      accountMappingKey: `ACCOUNT_ID:${disposal.proceedsLedgerAccountId}`,
+      accountMappingKey: `ACCOUNT_ID:${settlement.proceedsLedgerAccountId}`,
       description: `Asset disposal proceeds ${profile.assetId}`,
       debit: disposal.proceeds,
       transactionCurrencyCode: disposal.currencyCode,
@@ -119,8 +121,9 @@ export const buildAssetDisposalPosting: PostingBuilder = async (tx, input) => {
   }
 
   if (disposal.gainLoss.gt(0)) {
+    if (!settlement.gainLedgerAccountId) throw new EnterpriseAccountingError("ASSET_DISPOSAL_GAIN_ACCOUNT_REQUIRED", 409);
     lines.push({
-      accountMappingKey: "ASSET_DISPOSAL_GAIN",
+      accountMappingKey: `ACCOUNT_ID:${settlement.gainLedgerAccountId}`,
       description: `Asset disposal gain ${profile.assetId}`,
       credit: disposal.gainLoss,
       transactionCurrencyCode: disposal.currencyCode,
@@ -128,9 +131,10 @@ export const buildAssetDisposalPosting: PostingBuilder = async (tx, input) => {
       assetId: profile.assetId,
     });
   } else if (disposal.gainLoss.lt(0)) {
+    if (!settlement.lossLedgerAccountId) throw new EnterpriseAccountingError("ASSET_DISPOSAL_LOSS_ACCOUNT_REQUIRED", 409);
     const loss = disposal.gainLoss.abs();
     lines.push({
-      accountMappingKey: "ASSET_DISPOSAL_LOSS",
+      accountMappingKey: `ACCOUNT_ID:${settlement.lossLedgerAccountId}`,
       description: `Asset disposal loss ${profile.assetId}`,
       debit: loss,
       transactionCurrencyCode: disposal.currencyCode,
