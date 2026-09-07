@@ -21,6 +21,10 @@ import {
   buildPayrollPosting,
   buildSupplierCreditNotePosting,
 } from "@/lib/enterprise/accounting/domain-posting-builders";
+import {
+  buildAccountingAutomationPosting,
+  buildAssetDisposalPosting,
+} from "@/lib/enterprise/accounting/periodic-posting-builders";
 import { buildHealthWriteOffPosting } from "@/lib/enterprise/accounting/sector-adapters/health";
 import { buildPharmacySectorInventoryPosting } from "@/lib/enterprise/accounting/sector-adapters/pharmacy";
 import { buildRetailPosReturnPosting } from "@/lib/enterprise/accounting/sector-adapters/retail-return";
@@ -55,9 +59,16 @@ export const ENTERPRISE_POSTING_REGISTRY: Record<PostingEvent, PostingBuilder> =
   INVENTORY_ISSUE_VALUED: (tx, input) => buildInventoryAccountingPosting(tx, input, "ISSUE"),
   ASSET_CAPITALIZED: buildAssetCapitalizationPosting,
   ASSET_DEPRECIATION_POSTED: buildDepreciationPosting,
+  ASSET_DISPOSAL_POSTED: buildAssetDisposalPosting,
   CASH_VARIANCE_POSTED: buildCashVariancePosting,
   BANK_CHARGE_POSTED: buildBankChargePosting,
   OPENING_BALANCE_POSTED: buildOpeningBalancePosting,
+  ACCOUNTING_RECURRING_POSTED: buildAccountingAutomationPosting,
+  ACCOUNTING_ACCRUAL_POSTED: buildAccountingAutomationPosting,
+  ACCOUNTING_DEFERRAL_POSTED: buildAccountingAutomationPosting,
+  ACCOUNTING_ALLOCATION_POSTED: buildAccountingAutomationPosting,
+  ACCOUNTING_FX_REVALUATION_POSTED: buildAccountingAutomationPosting,
+  ACCOUNTING_YEAR_END_POSTED: buildAccountingAutomationPosting,
   RETAIL_POS_SALE_POSTED: buildRetailPosSalePosting,
   RETAIL_POS_SALE_REVERSED: buildRetailPosSaleReversalPosting,
   RETAIL_POS_RETURN_POSTED: buildRetailPosReturnPosting,
