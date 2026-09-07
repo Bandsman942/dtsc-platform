@@ -45,6 +45,8 @@ Quand une période fiscale est sélectionnée, la période fournit par défaut l
 
 Les filtres disponibles couvrent période/dates, compte, journal, tiers, projet, département, site, actif, article de stock, source et devise.
 
+Le contrat HTTP détaillé est documenté dans `docs/ACCOUNTING_598_API_CONTRACT.md`.
+
 ## Navigation vers les documents sources
 
 `accounting-source-link-registry.ts` traduit les sources connues en libellés métier. Avant d’exposer un lien, `resolveEnterpriseModuleAccess` revalide l’accès `read` de l’utilisateur au module cible dans la même organisation.
