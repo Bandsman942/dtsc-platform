@@ -1,5 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
+import {
+  AUDIT_EXPORT_EVENT_TYPE,
+  BANK_STATEMENT_IMPORT_EVENT_TYPE,
+  FINANCE_REPORT_GENERATION_EVENT_TYPE,
+} from "@/lib/enterprise/bulk-jobs/constants";
 import { WORKFLOW_LIMITS } from "@/lib/enterprise/workflows/constants";
 import { processWorkflowDomainEvent, resumeWaitingRuns } from "@/lib/enterprise/workflows/engine";
 import { processCrossModuleProjections, processPendingCrossModuleProjections } from "@/lib/enterprise/cross-module/projection-service";
@@ -43,6 +48,9 @@ export async function getWorkflowQueueSnapshot(): Promise<WorkflowQueueSnapshot>
           WHERE "eventType" <> ${WEB_PUSH_DOMAIN_EVENT_TYPE}
             AND "eventType" <> ${ADMIN_BROADCAST_EMAIL_DELIVERY_EVENT_TYPE}
             AND "eventType" <> ${KNOWLEDGE_INDEX_EVENT_TYPE}
+            AND "eventType" <> ${BANK_STATEMENT_IMPORT_EVENT_TYPE}
+            AND "eventType" <> ${AUDIT_EXPORT_EVENT_TYPE}
+            AND "eventType" <> ${FINANCE_REPORT_GENERATION_EVENT_TYPE}
             AND "processingStatus" IN ('PENDING', 'FAILED')
             AND "availableAt" <= NOW()
             AND ("lockedAt" IS NULL OR "lockedAt" < ${leaseBefore})
@@ -51,6 +59,9 @@ export async function getWorkflowQueueSnapshot(): Promise<WorkflowQueueSnapshot>
           WHERE "eventType" <> ${WEB_PUSH_DOMAIN_EVENT_TYPE}
             AND "eventType" <> ${ADMIN_BROADCAST_EMAIL_DELIVERY_EVENT_TYPE}
             AND "eventType" <> ${KNOWLEDGE_INDEX_EVENT_TYPE}
+            AND "eventType" <> ${BANK_STATEMENT_IMPORT_EVENT_TYPE}
+            AND "eventType" <> ${AUDIT_EXPORT_EVENT_TYPE}
+            AND "eventType" <> ${FINANCE_REPORT_GENERATION_EVENT_TYPE}
             AND "processingStatus" = 'PROCESSING'
             AND "lockedAt" IS NOT NULL
             AND "lockedAt" >= ${leaseBefore}
@@ -59,12 +70,18 @@ export async function getWorkflowQueueSnapshot(): Promise<WorkflowQueueSnapshot>
           WHERE "eventType" <> ${WEB_PUSH_DOMAIN_EVENT_TYPE}
             AND "eventType" <> ${ADMIN_BROADCAST_EMAIL_DELIVERY_EVENT_TYPE}
             AND "eventType" <> ${KNOWLEDGE_INDEX_EVENT_TYPE}
+            AND "eventType" <> ${BANK_STATEMENT_IMPORT_EVENT_TYPE}
+            AND "eventType" <> ${AUDIT_EXPORT_EVENT_TYPE}
+            AND "eventType" <> ${FINANCE_REPORT_GENERATION_EVENT_TYPE}
             AND "processingStatus" = 'DEAD'
         ) AS "dead",
         MIN("availableAt") FILTER (
           WHERE "eventType" <> ${WEB_PUSH_DOMAIN_EVENT_TYPE}
             AND "eventType" <> ${ADMIN_BROADCAST_EMAIL_DELIVERY_EVENT_TYPE}
             AND "eventType" <> ${KNOWLEDGE_INDEX_EVENT_TYPE}
+            AND "eventType" <> ${BANK_STATEMENT_IMPORT_EVENT_TYPE}
+            AND "eventType" <> ${AUDIT_EXPORT_EVENT_TYPE}
+            AND "eventType" <> ${FINANCE_REPORT_GENERATION_EVENT_TYPE}
             AND "processingStatus" IN ('PENDING', 'FAILED')
             AND "availableAt" <= NOW()
             AND ("lockedAt" IS NULL OR "lockedAt" < ${leaseBefore})
@@ -107,6 +124,9 @@ async function claimPendingEvents(workerId: string, batchSize: number) {
       WHERE "eventType" <> ${WEB_PUSH_DOMAIN_EVENT_TYPE}
         AND "eventType" <> ${ADMIN_BROADCAST_EMAIL_DELIVERY_EVENT_TYPE}
         AND "eventType" <> ${KNOWLEDGE_INDEX_EVENT_TYPE}
+        AND "eventType" <> ${BANK_STATEMENT_IMPORT_EVENT_TYPE}
+        AND "eventType" <> ${AUDIT_EXPORT_EVENT_TYPE}
+        AND "eventType" <> ${FINANCE_REPORT_GENERATION_EVENT_TYPE}
         AND "processingStatus" IN ('PENDING', 'FAILED')
         AND "availableAt" <= NOW()
         AND ("lockedAt" IS NULL OR "lockedAt" < ${leaseBefore})
