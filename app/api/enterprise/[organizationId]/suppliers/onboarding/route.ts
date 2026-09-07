@@ -41,7 +41,18 @@ export async function POST(req: Request, { params }: Params) {
       metadata: { organizationId, businessPartyId: result.party.id, mode: parsed.data.mode, status: result.supplier.status },
     });
     await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "supplier-onboarding", mode: parsed.data.mode } });
-    return NextResponse.json({ ok: true, supplier: result.supplier, party: result.party }, { status: 201 });
+    return NextResponse.json({
+      ok: true,
+      supplier: result.supplier,
+      // The client only needs the canonical identity reference for follow-up UI
+      // actions. Contacts, addresses, fiscal data and roles remain server-side.
+      party: {
+        id: result.party.id,
+        partyType: result.party.partyType,
+        legalName: result.party.legalName,
+        displayName: result.party.displayName,
+      },
+    }, { status: 201 });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       await writeApiLog({ request: req, statusCode: 409, userId: session.userId, startedAt, metadata: { organizationId, domain: "supplier-onboarding", error: "SUPPLIER_DUPLICATE" } });
