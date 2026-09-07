@@ -41,6 +41,8 @@ export async function GET(req: Request, { params }: Params) {
       orderBy: [{ legalName: "asc" }, { createdAt: "asc" }],
       skip: (page - 1) * pageSize,
       take: pageSize,
+      // Procurement may locate a canonical party by stronger identifiers, but the
+      // selector response only exposes what is needed to identify the row in UI.
       select: {
         id: true,
         code: true,
@@ -48,10 +50,6 @@ export async function GET(req: Request, { params }: Params) {
         legalName: true,
         displayName: true,
         primaryEmail: true,
-        primaryPhone: true,
-        taxIdentifier: true,
-        registrationId: true,
-        roles: { where: { archivedAt: null }, select: { roleCode: true, status: true } },
       },
     }),
     prisma.enterpriseBusinessParty.count({ where }),
