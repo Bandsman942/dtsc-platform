@@ -10,7 +10,7 @@ const includes = (file, snippets) => { const content = read(file); for (const sn
 
 const financeSchema = read("prisma/enterprise-finance-reporting.prisma");
 for (const model of ["EnterpriseBudget", "EnterpriseBudgetLine", "EnterpriseBudgetCommitment", "EnterpriseExpense", "EnterpriseReport"]) ok(financeSchema.includes(`model ${model} {`), `Missing Sprint 8 Prisma model ${model}`);
-ok(financeSchema.includes("plannedAmount  Decimal") && financeSchema.includes("amount                   Decimal"), "Budget and expense money must use Prisma Decimal fields.");
+ok(/^\s*plannedAmount\s+Decimal\s+@db\.Decimal\(18,\s*2\)\s*$/m.test(financeSchema) && /^\s*amount\s+Decimal\s+@db\.Decimal\(18,\s*2\)\s*$/m.test(financeSchema), "Budget and expense money must use Prisma Decimal fields.");
 ok(financeSchema.includes("@@unique([organizationId, reference])"), "Sprint 8 references must be unique inside an organization.");
 ok(financeSchema.includes("@@unique([organizationId, sourceEntityType, sourceEntityId])"), "Commitment sources must be idempotent per organization.");
 ok(financeSchema.includes("snapshotJson") && financeSchema.includes("schemaVersion") && financeSchema.includes("revision"), "Reports need versioned immutable snapshots and optimistic revision.");
@@ -20,7 +20,7 @@ ok(procurementSchema.includes("budgetLineId") && procurementSchema.includes("Ent
 ok(procurementSchema.includes("expenses        EnterpriseExpense[]"), "EnterprisePurchase must support multiple expenses.");
 
 const migration = read("prisma/migrations/20260729211500_add_enterprise_finance_reporting/migration.sql");
-for (const table of ["EnterpriseBudget", "EnterpriseBudgetLine", "EnterpriseBudgetCommitment", "EnterpriseExpense", "EnterpriseReport"]) ok(migration.includes(`CREATE TABLE "${table}"`), `Sprint 8 migration missing ${table}`);
+for (const table of ["EnterpriseBudget", "EnterpriseBudgetLine", "EnterpriseBudgetCommitment", "EnterpriseExpense", "EnterpriseReport"]) ok(migration.includes(`CREATE TABLE \"${table}\"`), `Sprint 8 migration missing ${table}`);
 ok(migration.includes('ALTER TABLE "EnterprisePurchase" ADD COLUMN "budgetLineId" TEXT'), "Sprint 8 migration must add the purchase budget allocation structurally.");
 ok(!/DROP\s+(TABLE|COLUMN)/i.test(migration), "Sprint 8 migration must be additive and keep legacy finance data.");
 ok(exists("prisma/migrations/20260729212000_add_enterprise_report_revision/migration.sql"), "Report optimistic revision migration is missing.");
