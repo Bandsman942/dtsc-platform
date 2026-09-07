@@ -1,7 +1,7 @@
 # SCALE-5A — Tenant-scoped read cache / Finance Overview
 
-Issue : #586  
-Parent : #358  
+Issue : #586
+Parent : #358
 Programme : #352
 
 ## Objectif
