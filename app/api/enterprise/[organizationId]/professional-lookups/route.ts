@@ -266,7 +266,7 @@ export async function GET(req: Request, { params }: Params) {
     departments,
     positions,
     employees,
-    parties: moduleCode === "CONTRACTS" ? contractParties : parties,
+    parties: moduleCode === "CONTRACTS" ? contractParties : moduleCode === "CRM_PIPELINE" ? [] : parties,
     categories,
     units,
     sites,
