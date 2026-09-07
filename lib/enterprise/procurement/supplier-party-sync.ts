@@ -76,6 +76,21 @@ function assertCandidateType(candidate: { partyType: string }, expectedType: str
   }
 }
 
+async function upsertSupplierRole(
+  tx: Tx,
+  organizationId: string,
+  businessPartyId: string,
+  actorUserId: string,
+  supplierStatus: string,
+) {
+  const roleStatus = supplierRoleStatus(supplierStatus);
+  await tx.enterpriseBusinessPartyRole.upsert({
+    where: { organizationId_businessPartyId_roleCode: { organizationId, businessPartyId, roleCode: "SUPPLIER" } },
+    update: { status: roleStatus, archivedAt: null },
+    create: { organizationId, businessPartyId, roleCode: "SUPPLIER", status: roleStatus, createdByUserId: actorUserId },
+  });
+}
+
 async function findCanonicalCandidate(tx: Tx, organizationId: string, supplier: SupplierIdentity) {
   const expectedType = expectedPartyType(supplier.supplierType);
   const strongSelectors: Array<{ where: Prisma.EnterpriseBusinessPartyWhereInput; reason: string }> = [];
@@ -161,34 +176,55 @@ async function createCanonicalContactsAndAddress(tx: Tx, organizationId: string,
 }
 
 export async function ensureSupplierCanonicalPartyTx(tx: Tx, organizationId: string, actorUserId: string, supplier: SupplierIdentity) {
-  const existingLink = await tx.enterpriseSupplierPartyLink.findFirst({
-    where: { organizationId, supplierId: supplier.id, archivedAt: null },
+  // The 1:1 uniqueness constraints include archived links. Always inspect the
+  // durable row first so a stale archived link is healed instead of causing P2002.
+  const storedLink = await tx.enterpriseSupplierPartyLink.findFirst({
+    where: { organizationId, supplierId: supplier.id },
   });
-  if (existingLink) {
-    const party = await tx.enterpriseBusinessParty.findFirst({ where: { id: existingLink.businessPartyId, organizationId, archivedAt: null } });
-    if (!party) throw new EnterpriseCoreV2Error("Le lien fournisseur pointe vers un tiers indisponible. Contactez le support DTSC.", 409, "SUPPLIER_PARTY_LINK_BROKEN");
-    const roleStatus = supplierRoleStatus(supplier.status);
-    await tx.enterpriseBusinessPartyRole.upsert({
-      where: { organizationId_businessPartyId_roleCode: { organizationId, businessPartyId: party.id, roleCode: "SUPPLIER" } },
-      update: { status: roleStatus, archivedAt: null },
-      create: { organizationId, businessPartyId: party.id, roleCode: "SUPPLIER", status: roleStatus, createdByUserId: actorUserId },
+  if (storedLink) {
+    const party = await tx.enterpriseBusinessParty.findFirst({
+      where: { id: storedLink.businessPartyId, organizationId, archivedAt: null },
     });
-    return { party, link: existingLink, createdParty: false, createdLink: false };
+    if (!party) {
+      throw new EnterpriseCoreV2Error(
+        "Le lien fournisseur pointe vers un tiers indisponible. Corrigez ou restaurez la fiche Tiers avant de réessayer.",
+        409,
+        "SUPPLIER_PARTY_LINK_BROKEN",
+      );
+    }
+    assertCandidateType(party, expectedPartyType(supplier.supplierType));
+    const link = storedLink.archivedAt
+      ? await tx.enterpriseSupplierPartyLink.update({
+          where: { id: storedLink.id },
+          data: { archivedAt: null, revision: { increment: 1 } },
+        })
+      : storedLink;
+    await upsertSupplierRole(tx, organizationId, party.id, actorUserId, supplier.status);
+    return { party, link, createdParty: false, createdLink: false, reactivatedLink: Boolean(storedLink.archivedAt) };
   }
 
   const migrationKey = `supplier:${supplier.id}`;
-  let party = await tx.enterpriseBusinessParty.findFirst({ where: { organizationId, migrationKey, archivedAt: null } });
+  const migrationParty = await tx.enterpriseBusinessParty.findFirst({ where: { organizationId, migrationKey } });
+  if (migrationParty?.archivedAt) {
+    throw new EnterpriseCoreV2Error(
+      "Le tiers historique de ce fournisseur est archivé. Restaurez ou corrigez cette fiche avant de relancer la convergence.",
+      409,
+      "SUPPLIER_PARTY_ARCHIVED",
+    );
+  }
+
+  let party = migrationParty || null;
   let createdParty = false;
   if (party) assertCandidateType(party, expectedPartyType(supplier.supplierType));
   if (!party) party = await findCanonicalCandidate(tx, organizationId, supplier);
 
   if (party) {
     const occupied = await tx.enterpriseSupplierPartyLink.findFirst({
-      where: { organizationId, businessPartyId: party.id, archivedAt: null },
+      where: { organizationId, businessPartyId: party.id },
     });
     if (occupied && occupied.supplierId !== supplier.id) {
       throw new EnterpriseCoreV2Error(
-        "Ce tiers est déjà rattaché à un autre fournisseur. Ouvrez Tiers et clients pour résoudre le doublon avant de réessayer.",
+        "Ce tiers est déjà rattaché à un autre fournisseur, y compris dans l’historique. Ouvrez Tiers et clients pour résoudre le doublon avant de réessayer.",
         409,
         "SUPPLIER_PARTY_ALREADY_LINKED",
       );
@@ -216,12 +252,7 @@ export async function ensureSupplierCanonicalPartyTx(tx: Tx, organizationId: str
     await createCanonicalContactsAndAddress(tx, organizationId, actorUserId, supplier, party.id);
   }
 
-  const roleStatus = supplierRoleStatus(supplier.status);
-  await tx.enterpriseBusinessPartyRole.upsert({
-    where: { organizationId_businessPartyId_roleCode: { organizationId, businessPartyId: party.id, roleCode: "SUPPLIER" } },
-    update: { status: roleStatus, archivedAt: null },
-    create: { organizationId, businessPartyId: party.id, roleCode: "SUPPLIER", status: roleStatus, createdByUserId: actorUserId },
-  });
+  await upsertSupplierRole(tx, organizationId, party.id, actorUserId, supplier.status);
 
   const link = await tx.enterpriseSupplierPartyLink.create({
     data: {
@@ -251,7 +282,7 @@ export async function ensureSupplierCanonicalPartyTx(tx: Tx, organizationId: str
     });
   }
 
-  return { party, link, createdParty, createdLink: true };
+  return { party, link, createdParty, createdLink: true, reactivatedLink: false };
 }
 
 export async function syncCanonicalPartyFromSupplierTx(
@@ -337,11 +368,6 @@ export async function syncCanonicalPartyFromSupplierTx(
 
 export async function syncSupplierRoleStatusTx(tx: Tx, organizationId: string, actorUserId: string, supplier: SupplierIdentity, status: string) {
   const { party } = await ensureSupplierCanonicalPartyTx(tx, organizationId, actorUserId, supplier);
-  const roleStatus = supplierRoleStatus(status);
-  await tx.enterpriseBusinessPartyRole.upsert({
-    where: { organizationId_businessPartyId_roleCode: { organizationId, businessPartyId: party.id, roleCode: "SUPPLIER" } },
-    update: { status: roleStatus, archivedAt: null },
-    create: { organizationId, businessPartyId: party.id, roleCode: "SUPPLIER", status: roleStatus, createdByUserId: actorUserId },
-  });
+  await upsertSupplierRole(tx, organizationId, party.id, actorUserId, status);
   return party.id;
 }
