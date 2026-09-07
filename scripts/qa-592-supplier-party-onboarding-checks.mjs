@@ -36,7 +36,7 @@ ok(onboardingService.includes("enterpriseBusinessParty.create") && onboardingSer
 ok(onboardingService.includes("enterpriseSupplier.create") && onboardingService.includes("enterpriseSupplierPartyLink.create"), "Onboarding: extension Procurement et lien 1:1 doivent être créés atomiquement.");
 ok(onboardingService.includes("prisma.$transaction") && onboardingService.includes("requireActiveEnterpriseMember"), "Onboarding: la création doit rester transactionnelle et liée à un membre actif.");
 ok(onboardingService.includes("assertNoCanonicalDuplicate") && onboardingService.includes("SUPPLIER_PARTY_ALREADY_EXISTS"), "Onboarding: un nouveau fournisseur ne doit pas dupliquer silencieusement un tiers existant.");
-ok(onboardingService.includes("SUPPLIER_PARTY_ALREADY_LINKED") && onboardingService.includes("supplierLinkArchived" ) === false, "Onboarding: le service doit refuser un tiers déjà lié, y compris historique.");
+ok(onboardingService.includes("SUPPLIER_PARTY_ALREADY_LINKED") && onboardingService.includes("occupied.archivedAt") && onboardingService.includes("relation fournisseur historique"), "Onboarding: le service doit refuser un tiers déjà lié, y compris historique.");
 ok(onboardingService.includes("where: { id: businessPartyId, organizationId, archivedAt: null, status: \"ACTIVE\" }"), "Multi-tenant: le tiers sélectionné doit être revalidé dans le même tenant et actif.");
 ok(onboardingService.includes("normalizeEnterpriseSupplierName(party.legalName)"), "Source de vérité: le snapshot fournisseur doit dériver son nom du tiers canonique.");
 
