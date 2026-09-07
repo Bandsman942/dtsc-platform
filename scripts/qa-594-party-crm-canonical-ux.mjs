@@ -54,7 +54,13 @@ ok(!legacyLeadRoute.includes("createEnterpriseLead("), "Compatibilité: aucune r
 ok(partyOptionsRoute.includes('moduleCode: "CRM_PIPELINE"') && partyOptionsRoute.includes('action: "read"'), "Sélecteur CRM: l’accès doit rester CRM_PIPELINE read.");
 ok(partyOptionsRoute.includes("organizationId") && partyOptionsRoute.includes('status: "ACTIVE"') && partyOptionsRoute.includes("archivedAt: null"), "Sélecteur CRM: les options doivent être tenant-scoped et actives.");
 ok(partyOptionsRoute.includes('roleCode: { in: ["PROSPECT", "CUSTOMER"] }'), "Sélecteur CRM: les tiers sans rôle commercial ne doivent pas être proposés.");
-ok(!partyOptionsRoute.includes("taxIdentifier: true") && !partyOptionsRoute.includes("registrationId: true") && !partyOptionsRoute.includes("roles: {"), "Sélecteur CRM: ne pas exposer fiscalité ni rôles non nécessaires dans le payload de sélection.");
+const partyOptionsSelectStart = partyOptionsRoute.indexOf("    select: {");
+const partyOptionsSelectEnd = partyOptionsSelectStart >= 0 ? partyOptionsRoute.indexOf("\n    },\n  });", partyOptionsSelectStart) : -1;
+const partyOptionsSelect = partyOptionsSelectStart >= 0 && partyOptionsSelectEnd > partyOptionsSelectStart
+  ? partyOptionsRoute.slice(partyOptionsSelectStart, partyOptionsSelectEnd)
+  : "";
+ok(Boolean(partyOptionsSelect), "Sélecteur CRM: la projection de réponse explicite doit rester identifiable.");
+ok(!partyOptionsSelect.includes("taxIdentifier") && !partyOptionsSelect.includes("registrationId") && !partyOptionsSelect.includes("roles:"), "Sélecteur CRM: la projection de réponse ne doit exposer ni fiscalité ni rôles non nécessaires; le filtre serveur sur les rôles commerciaux reste autorisé.");
 ok(professionalLookups.includes('moduleCode === "CRM_PIPELINE" ? [] : parties'), "Minimisation: le lookup générique CRM ne doit plus exposer toute la liste des tiers.");
 
 ok(customerWorkspace.includes("BusinessPartyCommercialPanel"), "Tiers 360: la fiche canonique doit intégrer la vue commerciale permission-bound.");
