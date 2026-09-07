@@ -1,4 +1,5 @@
 import fs from "node:fs";
+await import("./qa-prisma-canonical-party-runtime.mjs");
 
 const failures = [];
 const read = (path) => fs.readFileSync(path, "utf8");
