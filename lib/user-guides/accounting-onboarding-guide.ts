@@ -54,7 +54,7 @@ const FR: ContextualUserGuide = {
 const EN: ContextualUserGuide = {
   code: "FINANCE_ACCOUNTING_ONBOARDING",
   title: "Accounting setup and operations guide",
-  summary: "Start with DTSC’s default SYSCOHADA chart, complete setup, then use the Home, Post, Review and Configure areas of the Accounting workspace.",
+  summary: "Start with DTSC’s default SYSCOHADA chart, follow the server-driven setup, then use the Home, Post, Review and Configure areas of the Accounting workspace.",
   audience: "Enterprise administrators, Finance owners and authorized accountants",
   updatedAt: "2026-09-07",
   capabilities: [
