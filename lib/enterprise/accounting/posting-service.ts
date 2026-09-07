@@ -11,14 +11,18 @@ import type { PostingDocument, PostingLineDraft } from "@/lib/enterprise/account
 import { resolveSemanticPostingAccount } from "@/lib/enterprise/accounting/semantic-account-resolver";
 import { ensureSystemFiscalCalendarForDateTx } from "@/lib/enterprise/accounting/system-accounting-continuity";
 
+export type BusinessPostingInput = {
+  postingEvent: PostingEvent;
+  sourceEntityType: string;
+  sourceEntityId: string;
+  postingVersion?: number;
+};
+
 function postingSemanticRequirements(document: PostingDocument) {
   const keys = new Set<string>();
   for (const line of document.lines) {
     if (!line.accountMappingKey.startsWith("ACCOUNT_ID:")) keys.add(line.accountMappingKey);
   }
-  // Functional balance mappings are conditional by design. They are resolved
-  // only if currency conversion creates an actual functional residual, so a
-  // perfectly balanced FX transfer must not be blocked by unused gain/loss keys.
   return [...keys];
 }
 
@@ -99,9 +103,7 @@ async function prepareFunctionalLines(
 
   if (!totalDebit.equals(totalCredit) && input.functionalBalanceMappings) {
     const debitShortfall = totalDebit.lt(totalCredit);
-    const difference = money(
-      debitShortfall ? totalCredit.minus(totalDebit) : totalDebit.minus(totalCredit),
-    );
+    const difference = money(debitShortfall ? totalCredit.minus(totalDebit) : totalDebit.minus(totalCredit));
     const mappingKey = debitShortfall
       ? input.functionalBalanceMappings.debitShortfall
       : input.functionalBalanceMappings.creditShortfall;
@@ -140,132 +142,39 @@ async function prepareFunctionalLines(
   return { lines: prepared, totalDebit, totalCredit };
 }
 
-export async function postBusinessEvent(
+/**
+ * Canonical posting primitive for callers that already own a Prisma transaction.
+ * It must never start a nested transaction. All mandatory business effects and the
+ * journal projection therefore share the caller transaction and roll back together.
+ */
+export async function postBusinessEventTx(
+  tx: Prisma.TransactionClient,
   organizationId: string,
   actorUserId: string,
-  input: {
-    postingEvent: PostingEvent;
-    sourceEntityType: string;
-    sourceEntityId: string;
-    postingVersion?: number;
-  },
+  input: BusinessPostingInput,
 ) {
   const version = input.postingVersion || 1;
   const stableKey = idempotencyKey({ organizationId, ...input, postingVersion: version });
-  try {
-    return await prisma.$transaction(async (tx) => {
-      await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${stableKey}))`);
-      const existingBatch = await tx.enterprisePostingBatch.findUnique({
-        where: { organizationId_idempotencyKey: { organizationId, idempotencyKey: stableKey } },
-      });
-      if (existingBatch?.status === "COMPLETED") {
-        const existingEntry = await tx.enterpriseJournalEntry.findFirst({ where: { organizationId, idempotencyKey: stableKey }, include: { lines: true } });
-        if (!existingEntry) throw new EnterpriseAccountingError("POSTING_BATCH_ENTRY_MISSING", 409);
-        return { batch: existingBatch, entry: existingEntry, idempotent: true };
-      }
-      if (existingBatch?.status === "PROCESSING") throw new EnterpriseAccountingError("POSTING_ALREADY_PROCESSING", 409);
-      const batch = existingBatch
-        ? await tx.enterprisePostingBatch.update({ where: { id: existingBatch.id }, data: { status: "PROCESSING", errorCode: null, errorMessage: null } })
-        : await tx.enterprisePostingBatch.create({
-            data: {
-              organizationId,
-              reference: financeReference("POST"),
-              postingEvent: input.postingEvent,
-              sourceEntityType: input.sourceEntityType,
-              sourceEntityId: input.sourceEntityId,
-              postingVersion: version,
-              idempotencyKey: stableKey,
-              status: "PROCESSING",
-              createdByUserId: actorUserId,
-            },
-          });
-      const builder = getPostingBuilderV2(input.postingEvent);
-      const document = await builder(tx, { organizationId, sourceEntityType: input.sourceEntityType, sourceEntityId: input.sourceEntityId });
-      if (document.organizationId !== organizationId || document.sourceEntityId !== input.sourceEntityId) {
-        throw new EnterpriseAccountingError("POSTING_SOURCE_SCOPE_MISMATCH", 409);
-      }
+  await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${stableKey}))`);
+  const existingBatch = await tx.enterprisePostingBatch.findUnique({
+    where: { organizationId_idempotencyKey: { organizationId, idempotencyKey: stableKey } },
+  });
+  if (existingBatch?.status === "COMPLETED") {
+    const existingEntry = await tx.enterpriseJournalEntry.findFirst({
+      where: { organizationId, idempotencyKey: stableKey },
+      include: { lines: true, journal: true, fiscalPeriod: true },
+    });
+    if (!existingEntry) throw new EnterpriseAccountingError("POSTING_BATCH_ENTRY_MISSING", 409);
+    return { batch: existingBatch, entry: existingEntry, idempotent: true };
+  }
+  if (existingBatch?.status === "PROCESSING") throw new EnterpriseAccountingError("POSTING_ALREADY_PROCESSING", 409);
 
-      // The system-managed hidden ledger receives a deterministic calendar-year
-      // calendar only while that DTSC system chart remains active. Existing
-      // customer-managed fiscal years are never reopened or replaced.
-      await ensureSystemFiscalCalendarForDateTx(tx, organizationId, actorUserId, document.accountingDate);
-
-      const configuration = await assertFinanceReady(tx, organizationId, {
-        asOf: document.accountingDate,
-        requiredMappingKeys: postingSemanticRequirements(document),
-        requiredJournalTypes: [document.journalType],
-      });
-      const [period, journal] = await Promise.all([
-        getPostingPeriod(tx, organizationId, document.accountingDate, { allowSoftClosed: true }),
-        tx.enterpriseJournal.findFirst({ where: { organizationId, journalType: document.journalType, isActive: true }, orderBy: { createdAt: "asc" } }),
-      ]);
-      if (!journal) throw new EnterpriseAccountingError("POSTING_JOURNAL_REQUIRED", 409, { journalType: document.journalType });
-      const prepared = await prepareFunctionalLines(tx, {
-        organizationId,
-        sourceEntityType: input.sourceEntityType,
-        sourceEntityId: input.sourceEntityId,
-        accountingDate: document.accountingDate,
-        functionalCurrencyCode: configuration.functionalCurrencyCode,
-        lines: document.lines,
-        functionalBalanceMappings: document.functionalBalanceMappings,
-      });
-      const entry = await tx.enterpriseJournalEntry.create({
-        data: {
-          organizationId,
-          number: financeReference(journal.sequencePrefix || journal.code || "JE"),
-          journalId: journal.id,
-          fiscalPeriodId: period.id,
-          accountingDate: document.accountingDate,
-          documentDate: document.documentDate || null,
-          reference: document.reference || null,
-          description: document.description,
-          sourceModule: document.sourceModule,
-          sourceEntityType: document.sourceEntityType,
-          sourceEntityId: document.sourceEntityId,
-          postingEvent: input.postingEvent,
-          postingVersion: version,
-          idempotencyKey: stableKey,
-          status: "POSTED",
-          totalDebit: prepared.totalDebit,
-          totalCredit: prepared.totalCredit,
-          functionalCurrencyCode: configuration.functionalCurrencyCode,
-          preparedByUserId: actorUserId,
-          approvedByUserId: actorUserId,
-          postedByUserId: actorUserId,
-          postedAt: new Date(),
-          lines: { create: prepared.lines },
-        },
-        include: { lines: true, journal: true, fiscalPeriod: true },
-      });
-      const completedBatch = await tx.enterprisePostingBatch.update({ where: { id: batch.id }, data: { status: "COMPLETED", completedAt: new Date() } });
-      await publishFinanceEvent(tx, {
-        organizationId,
-        entityType: input.sourceEntityType,
-        entityId: input.sourceEntityId,
-        eventType: input.postingEvent,
-        summary: `${input.postingEvent} posted as ${entry.number}`,
-        actorUserId,
-        toStatus: "POSTED",
-        metadataJson: { journalEntryId: entry.id, postingVersion: version, total: prepared.totalDebit.toFixed(), currency: configuration.functionalCurrencyCode },
-      });
-      return { batch: completedBatch, entry, idempotent: false };
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
-  } catch (error) {
-    const accountingError = error instanceof EnterpriseAccountingError ? error : null;
-    const errorCode = accountingError?.code || "POSTING_FAILED";
-    const errorMessage = accountingError
-      ? JSON.stringify(accountingError.details || {}).slice(0, 500)
-      : error instanceof Error
-        ? error.message.slice(0, 500)
-        : "Unknown posting error";
-
-    const updated = await prisma.enterprisePostingBatch.updateMany({
-      where: { organizationId, idempotencyKey: stableKey, status: { not: "COMPLETED" } },
-      data: { status: "FAILED", errorCode, errorMessage, completedAt: null },
-    }).catch(() => ({ count: 0 }));
-
-    if (!updated.count) {
-      await prisma.enterprisePostingBatch.create({
+  const batch = existingBatch
+    ? await tx.enterprisePostingBatch.update({
+        where: { id: existingBatch.id },
+        data: { status: "PROCESSING", errorCode: null, errorMessage: null, completedAt: null },
+      })
+    : await tx.enterprisePostingBatch.create({
         data: {
           organizationId,
           reference: financeReference("POST"),
@@ -274,13 +183,147 @@ export async function postBusinessEvent(
           sourceEntityId: input.sourceEntityId,
           postingVersion: version,
           idempotencyKey: stableKey,
-          status: "FAILED",
-          errorCode,
-          errorMessage,
+          status: "PROCESSING",
           createdByUserId: actorUserId,
         },
-      }).catch(() => undefined);
-    }
+      });
+
+  const builder = getPostingBuilderV2(input.postingEvent);
+  const document = await builder(tx, {
+    organizationId,
+    sourceEntityType: input.sourceEntityType,
+    sourceEntityId: input.sourceEntityId,
+  });
+  if (document.organizationId !== organizationId || document.sourceEntityId !== input.sourceEntityId) {
+    throw new EnterpriseAccountingError("POSTING_SOURCE_SCOPE_MISMATCH", 409);
+  }
+
+  await ensureSystemFiscalCalendarForDateTx(tx, organizationId, actorUserId, document.accountingDate);
+  const configuration = await assertFinanceReady(tx, organizationId, {
+    asOf: document.accountingDate,
+    requiredMappingKeys: postingSemanticRequirements(document),
+    requiredJournalTypes: [document.journalType],
+  });
+  const [period, journal] = await Promise.all([
+    getPostingPeriod(tx, organizationId, document.accountingDate, { allowSoftClosed: true }),
+    tx.enterpriseJournal.findFirst({
+      where: { organizationId, journalType: document.journalType, isActive: true },
+      orderBy: { createdAt: "asc" },
+    }),
+  ]);
+  if (!journal) throw new EnterpriseAccountingError("POSTING_JOURNAL_REQUIRED", 409, { journalType: document.journalType });
+
+  const prepared = await prepareFunctionalLines(tx, {
+    organizationId,
+    sourceEntityType: input.sourceEntityType,
+    sourceEntityId: input.sourceEntityId,
+    accountingDate: document.accountingDate,
+    functionalCurrencyCode: configuration.functionalCurrencyCode,
+    lines: document.lines,
+    functionalBalanceMappings: document.functionalBalanceMappings,
+  });
+  const entry = await tx.enterpriseJournalEntry.create({
+    data: {
+      organizationId,
+      number: financeReference(journal.sequencePrefix || journal.code || "JE"),
+      journalId: journal.id,
+      fiscalPeriodId: period.id,
+      accountingDate: document.accountingDate,
+      documentDate: document.documentDate || null,
+      reference: document.reference || null,
+      description: document.description,
+      sourceModule: document.sourceModule,
+      sourceEntityType: document.sourceEntityType,
+      sourceEntityId: document.sourceEntityId,
+      postingEvent: input.postingEvent,
+      postingVersion: version,
+      idempotencyKey: stableKey,
+      status: "POSTED",
+      totalDebit: prepared.totalDebit,
+      totalCredit: prepared.totalCredit,
+      functionalCurrencyCode: configuration.functionalCurrencyCode,
+      preparedByUserId: actorUserId,
+      approvedByUserId: actorUserId,
+      postedByUserId: actorUserId,
+      postedAt: new Date(),
+      lines: { create: prepared.lines },
+    },
+    include: { lines: true, journal: true, fiscalPeriod: true },
+  });
+  const completedBatch = await tx.enterprisePostingBatch.update({
+    where: { id: batch.id },
+    data: { status: "COMPLETED", completedAt: new Date() },
+  });
+  await publishFinanceEvent(tx, {
+    organizationId,
+    entityType: input.sourceEntityType,
+    entityId: input.sourceEntityId,
+    eventType: input.postingEvent,
+    summary: `${input.postingEvent} posted as ${entry.number}`,
+    actorUserId,
+    toStatus: "POSTED",
+    metadataJson: {
+      journalEntryId: entry.id,
+      postingVersion: version,
+      total: prepared.totalDebit.toFixed(),
+      currency: configuration.functionalCurrencyCode,
+    },
+  });
+  return { batch: completedBatch, entry, idempotent: false };
+}
+
+async function persistPostingFailure(
+  organizationId: string,
+  actorUserId: string,
+  input: BusinessPostingInput,
+  error: unknown,
+) {
+  const version = input.postingVersion || 1;
+  const stableKey = idempotencyKey({ organizationId, ...input, postingVersion: version });
+  const accountingError = error instanceof EnterpriseAccountingError ? error : null;
+  const errorCode = accountingError?.code || "POSTING_FAILED";
+  const errorMessage = accountingError
+    ? JSON.stringify(accountingError.details || {}).slice(0, 500)
+    : error instanceof Error
+      ? error.message.slice(0, 500)
+      : "Unknown posting error";
+
+  const updated = await prisma.enterprisePostingBatch.updateMany({
+    where: { organizationId, idempotencyKey: stableKey, status: { not: "COMPLETED" } },
+    data: { status: "FAILED", errorCode, errorMessage, completedAt: null },
+  }).catch(() => ({ count: 0 }));
+
+  if (!updated.count) {
+    await prisma.enterprisePostingBatch.create({
+      data: {
+        organizationId,
+        reference: financeReference("POST"),
+        postingEvent: input.postingEvent,
+        sourceEntityType: input.sourceEntityType,
+        sourceEntityId: input.sourceEntityId,
+        postingVersion: version,
+        idempotencyKey: stableKey,
+        status: "FAILED",
+        errorCode,
+        errorMessage,
+        createdByUserId: actorUserId,
+      },
+    }).catch(() => undefined);
+  }
+}
+
+export async function postBusinessEvent(
+  organizationId: string,
+  actorUserId: string,
+  input: BusinessPostingInput,
+) {
+  try {
+    return await prisma.$transaction(
+      (tx) => postBusinessEventTx(tx, organizationId, actorUserId, input),
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 },
+    );
+  } catch (error) {
+    await persistPostingFailure(organizationId, actorUserId, input, error);
     throw error;
   }
 }
