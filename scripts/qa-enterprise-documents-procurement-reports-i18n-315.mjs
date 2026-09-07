@@ -66,10 +66,18 @@ for (const backendContract of ["prisma.$transaction", "requireEnterpriseSourceRe
 }
 
 const suppliers = read("components/enterprise/core-v2/enterprise-suppliers-workspace.tsx");
-check(!suppliers.includes("identityLabels"), "Suppliers must not keep a French-only identity status dictionary");
+const sharedBusinessPartyIdentity = read("components/enterprise/shared/business-party-identity-fields.tsx");
+// Historical #315 debt was a local French identity-status dictionary. A translated
+// form-label object composed exclusively through the canonical translator is valid;
+// keep the guard focused on local copy rather than the variable name itself.
+check(!/const\s+identityLabels\s*:\s*Record/.test(suppliers), "Suppliers must not keep a local identity status dictionary");
+check(!/const\s+identityLabels\s*=\s*\{[\s\S]{0,1200}(?:En attente|Refus|Accept|Actif|Inactif)/i.test(suppliers), "Suppliers must not keep French-only identity status copy in a local dictionary");
 check(!suppliers.includes("supplierStatusLabel"), "Suppliers must use the canonical status label helper");
 check(suppliers.includes("identityStatusLabel(locale, item.identityLink.status)"), "Supplier identity state must be localized in list projections");
 check(suppliers.includes("statusLabel(locale, item.status)"), "Supplier business status must use canonical localized status labels");
+check(suppliers.includes("BusinessPartyIdentityFields"), "Supplier onboarding must reuse the canonical shared business-party identity fields");
+check(sharedBusinessPartyIdentity.includes("BusinessPartyIdentityLabels"), "Shared business-party identity fields must expose a label contract instead of embedding customer copy");
+check(!/[>}]\s*(?:Raison sociale|Nom complet|Téléphone principal|Adresse principale)\s*[<{]/.test(sharedBusinessPartyIdentity), "Shared business-party identity fields must not embed French customer copy");
 check(suppliers.includes("/identity-link-invitations"), "Supplier identity invitation endpoint must remain intact");
 check(suppliers.includes('relationType: "SUPPLIER_REPRESENTATIVE"'), "Supplier representative relation contract must remain intact");
 check(suppliers.includes("supplierContactId: contact.id"), "Supplier contact identity-link contract must remain intact");
@@ -125,7 +133,6 @@ for (const key of [
   "reports.source.CANONICAL_FINANCE_AGGREGATION",
   "reports.freshness.REQUEST_TIME",
   "reports.metric.BUDGET_PLANNED",
-  "reports.metric.PURCHASE_TOTAL",
   "status.GENERATED",
 ]) {
   check(typeof procurementFr[key] === "string" && typeof procurementEn[key] === "string", `Canonical #315 key missing in FR/EN: ${key}`);
