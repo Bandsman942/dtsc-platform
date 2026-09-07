@@ -28,30 +28,10 @@ export const financialAccountUpdateSchema = z.object({
   revision,
 }).refine((value) => Object.keys(value).some((key) => key !== "revision"), { message: "At least one editable field is required" });
 
-export const financialAccountArchiveSchema = z.object({
-  reason: z.string().trim().min(4).max(1000),
-  revision,
-});
-
-const accountTransferBaseSchema = z.object({
-  sourceFinancialAccountId: id,
-  targetFinancialAccountId: id,
-  sourceAmount: positiveAmount,
-  transferDate: date,
-});
-
-export const accountTransferPreviewSchema = accountTransferBaseSchema.refine(
-  (value) => value.sourceFinancialAccountId !== value.targetFinancialAccountId,
-  { message: "Transfer accounts must differ" },
-);
-
-export const accountTransferSchema = accountTransferBaseSchema.extend({
-  approverUserId: id,
-}).refine(
-  (value) => value.sourceFinancialAccountId !== value.targetFinancialAccountId,
-  { message: "Transfer accounts must differ" },
-);
-
+export const financialAccountArchiveSchema = z.object({ reason: z.string().trim().min(4).max(1000), revision });
+const accountTransferBaseSchema = z.object({ sourceFinancialAccountId: id, targetFinancialAccountId: id, sourceAmount: positiveAmount, transferDate: date });
+export const accountTransferPreviewSchema = accountTransferBaseSchema.refine((value) => value.sourceFinancialAccountId !== value.targetFinancialAccountId, { message: "Transfer accounts must differ" });
+export const accountTransferSchema = accountTransferBaseSchema.extend({ approverUserId: id }).refine((value) => value.sourceFinancialAccountId !== value.targetFinancialAccountId, { message: "Transfer accounts must differ" });
 export const transferTransitionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("APPROVE"), revision }),
   z.object({ action: z.literal("REJECT"), revision, reason: z.string().trim().min(4).max(1000) }),
@@ -71,4 +51,13 @@ export const inventoryReceiptValuationSchema = z.object({ unitCost: amount, curr
 export const inventoryIssueValuationSchema = z.object({ currencyCode: currency });
 export const expensePostingSchema = z.object({ accountingTreatment: z.enum(["DIRECT_EXPENSE", "EMPLOYEE_REIMBURSEMENT", "PETTY_CASH"]), revision });
 export const assetProfileSchema = z.object({ capitalizationSourceType: z.string().trim().min(2).max(80), capitalizationSourceId: id.optional(), currencyCode: currency, originalCost: amount, residualValue: amount, usefulLifeMonths: z.coerce.number().int().min(1).max(1200), inServiceDate: date, assetAccountId: id, accumulatedDepreciationAccountId: id, depreciationExpenseAccountId: id });
-export const assetDisposalSchema = z.object({ disposalDate: date, proceedsAmount: amount, proceedsCurrencyCode: currency, reason: z.string().trim().min(3).max(1000) });
+export const assetDisposalSchema = z.object({
+  disposalDate: date,
+  proceedsAmount: amount,
+  proceedsCurrencyCode: currency,
+  reason: z.string().trim().min(3).max(1000),
+  proceedsLedgerAccountId: id.nullable().optional(),
+  gainLedgerAccountId: id.nullable().optional(),
+  lossLedgerAccountId: id.nullable().optional(),
+});
+export const assetDisposalApproveSchema = z.object({ revision });
