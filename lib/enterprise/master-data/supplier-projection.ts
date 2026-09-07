@@ -1,8 +1,5 @@
+import { normalizeEnterpriseSupplierName } from "@/lib/enterprise/procurement/supplier-normalization";
 import { prisma } from "@/lib/prisma";
-
-function normalizeSupplierSnapshotName(value: string) {
-  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
-}
 
 export async function refreshLinkedSupplierSnapshotFromParty(
   organizationId: string,
@@ -24,7 +21,7 @@ export async function refreshLinkedSupplierSnapshotFromParty(
       data: {
         legalName: party.legalName,
         displayName: party.displayName,
-        normalizedName: normalizeSupplierSnapshotName(party.legalName),
+        normalizedName: normalizeEnterpriseSupplierName(party.legalName),
         email: party.primaryEmail,
         phone: party.primaryPhone,
         taxIdentifier: party.taxIdentifier,
