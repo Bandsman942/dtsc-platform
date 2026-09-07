@@ -44,6 +44,8 @@ function queryFilters(url: URL): AccountingQueryFilters {
     projectId: url.searchParams.get("projectId")?.trim() || undefined,
     departmentId: url.searchParams.get("departmentId")?.trim() || undefined,
     siteId: url.searchParams.get("siteId")?.trim() || undefined,
+    assetId: url.searchParams.get("assetId")?.trim() || undefined,
+    inventoryItemId: url.searchParams.get("inventoryItemId")?.trim() || undefined,
     sourceModule: url.searchParams.get("sourceModule")?.trim() || undefined,
     sourceEntityType: url.searchParams.get("sourceEntityType")?.trim() || undefined,
     currencyCode: url.searchParams.get("currencyCode")?.trim().toUpperCase() || undefined,
@@ -65,6 +67,9 @@ export async function GET(req: Request, { params }: Params) {
 
   try {
     const filters = queryFilters(url);
+    if (filters.dateFrom && filters.dateTo && filters.dateFrom > filters.dateTo) {
+      return NextResponse.json({ error: "VALIDATION_ERROR", message: "La date de début doit précéder la date de fin." }, { status: 400 });
+    }
     let data: unknown;
 
     if (view === "general-ledger") {
