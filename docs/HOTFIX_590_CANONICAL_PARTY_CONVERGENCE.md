@@ -18,6 +18,7 @@ Le gestionnaire d'erreur transformait ensuite cette erreur interne en HTTP 400 a
 - maintien de `organizationId` sur l'objet `EnterpriseBusinessParty` parent ;
 - conservation de la transaction et de l'événement opérationnel ;
 - formulaire existant conservé sur le shell DTSC `Dialog presentation="editor"`, avec `ProfessionalFormSection`, footer partagé et `ProfessionalError` ;
+- une erreur de mutation conserve le formulaire et ses valeurs, reste visible localement et remonte aussi via le provider de toast global avec une tonalité d'erreur, conformément à `docs/FORM_UX_CONTRACT.md` ;
 - une erreur interne retourne désormais HTTP 500 avec un message humain, conserve la saisie et n'accuse plus les champs obligatoires ;
 - les erreurs métier historiques encore émises sous forme de codes `Error("...")` gardent un statut et un message actionnables au lieu d'être confondues avec un défaut serveur ;
 - les défauts inattendus journalisent uniquement un code, le type d'erreur, le chemin et une corrélation de requête disponible ; aucune erreur Prisma brute, stack, payload ou valeur saisie n'est ajoutée aux logs ou réponses client.
@@ -112,6 +113,7 @@ Le contrôle runtime vérifie dans le DMMF du Prisma Client généré les modèl
 - RBAC des modules Tiers et Procurement ;
 - relation 1:1 fournisseur/tiers ;
 - shell de formulaire DTSC ;
+- feedback d'erreur double couche : erreur locale + toast global ;
 - contrats IA statiques et réautorisation par module.
 
 ## Rollback
@@ -121,7 +123,7 @@ Revert des commits #590. Ne supprimer ni tiers ni liens déjà créés. `Enterpr
 ## Dette de contribution
 
 - Dette créée : Aucune visée.
-- Dette remboursée : nested create Prisma invalide ; erreur utilisateur trompeuse ; création fournisseur hors tiers canonique ; statut fournisseur contaminant potentiellement l'identité partagée ; absence de garde runtime Prisma ; route de liaison fournisseur utilisant une logique parallèle ; rapprochement fournisseur ambigu ; normalisation divergente de la projection ; conflit des liens archivés masqué par une contrainte unique.
+- Dette remboursée : nested create Prisma invalide ; erreur utilisateur trompeuse ; création fournisseur hors tiers canonique ; statut fournisseur contaminant potentiellement l'identité partagée ; absence de garde runtime Prisma ; route de liaison fournisseur utilisant une logique parallèle ; rapprochement fournisseur ambigu ; normalisation divergente de la projection ; conflit des liens archivés masqué par une contrainte unique ; absence de toast global d'erreur sur le formulaire Tiers.
 - Dette maintenue : `EnterpriseSupplier` demeure comme extension/snapshot opérationnel et compatibilité historique ; sa suppression physique est hors scope et non nécessaire à la source de vérité canonique.
 - Dette reportée : Aucune sans Issue dédiée.
 
