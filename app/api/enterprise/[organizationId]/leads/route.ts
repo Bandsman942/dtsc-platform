@@ -4,8 +4,8 @@ import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
 import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
+import { createCanonicalLeadFromLegacyInput } from "@/lib/enterprise/crm-sales/canonical-lead-onboarding";
 import { leadCreateSchema } from "@/lib/enterprise/crm-sales/schemas";
-import { createEnterpriseLead } from "@/lib/enterprise/crm-sales/service";
 import { notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
@@ -42,7 +42,7 @@ export async function GET(req: Request, { params }: Params) {
     prisma.enterpriseLead.count({ where: { organizationId, archivedAt: null, status: "LOST" } }),
   ]);
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "leads", page } });
-  return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { fresh, qualified, converted, lost }, canManage: access.canManage });
+  return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { fresh, qualified, converted, lost }, canManage: access.canManage, canWrite: access.canWrite });
 }
 
 export async function POST(req: Request, { params }: Params) {
@@ -58,11 +58,11 @@ export async function POST(req: Request, { params }: Params) {
   const parsed = leadCreateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Lead invalide." }, { status: 400 });
   try {
-    const lead = await createEnterpriseLead(organizationId, session.userId, parsed.data);
+    const lead = await createCanonicalLeadFromLegacyInput(organizationId, session.userId, parsed.data);
     await Promise.allSettled([
       ...(parsed.data.ownerUserId && parsed.data.ownerUserId !== session.userId ? [notifyUser({ userId: parsed.data.ownerUserId, organizationId, type: "ENTERPRISE_CRM", title: "Nouveau prospect affecté", body: lead.displayName || lead.legalName, targetUrl: `/enterprise-modules/CRM_PIPELINE?lead=${encodeURIComponent(lead.id)}&section=next-action`, idempotencyKey: `lead-assigned:${lead.id}` })] : []),
-      writeAuditLog({ userId: session.userId, action: "ENTERPRISE_LEAD_CREATED", entity: "EnterpriseLead", entityId: lead.id, request: req, metadata: { organizationId } }),
-      writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "leads" } }),
+      writeAuditLog({ userId: session.userId, action: "ENTERPRISE_LEAD_CREATED", entity: "EnterpriseLead", entityId: lead.id, request: req, metadata: { organizationId, businessPartyId: lead.businessPartyId, canonicalParty: true } }),
+      writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "leads", canonicalParty: true } }),
     ]);
     return NextResponse.json({ ok: true, lead }, { status: 201 });
   } catch (error) {
