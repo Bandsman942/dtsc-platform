@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { writeApiLog } from "@/lib/audit";
 import { authorizeFinanceRequest, financeErrorResponse } from "@/lib/enterprise/accounting/http";
-import { getEnterpriseFinanceOverviewSummary } from "@/lib/enterprise/finance/overview-summary-service";
+import { getEnterpriseFinanceOverviewSummaryCached } from "@/lib/enterprise/finance/overview-summary-service";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -11,15 +11,23 @@ export async function GET(req: Request, { params }: Params) {
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_OVERVIEW", "view");
   if (!auth.ok) return auth.response;
   try {
-    const summary = await getEnterpriseFinanceOverviewSummary(organizationId);
+    const summary = await getEnterpriseFinanceOverviewSummaryCached(organizationId);
     await writeApiLog({
       request: req,
       statusCode: 200,
       userId: auth.session.userId,
       startedAt,
-      metadata: { organizationId, domain: "finance-overview-summary" },
+      metadata: {
+        organizationId,
+        domain: "finance-overview-summary",
+        readSource: summary.telemetry.source,
+        cacheLookupMs: summary.telemetry.lookupDurationMs,
+        dbLoaderMs: summary.telemetry.loaderDurationMs,
+        cacheWriteAvailable: summary.telemetry.cacheWriteAvailable,
+        redisReason: summary.telemetry.redisReason,
+      },
     });
-    return NextResponse.json(summary);
+    return NextResponse.json(summary.value);
   } catch (error) {
     return financeErrorResponse(error, "FINANCE_OVERVIEW_SUMMARY_FAILED");
   }
