@@ -14,6 +14,10 @@ function reference(prefix) {
   return `${prefix}-${Date.now().toString(36).toUpperCase()}-${randomUUID().slice(0, 6).toUpperCase()}`;
 }
 
+function supplierRoleStatus(status) {
+  return ["ACTIVE", "PROSPECT"].includes(status) ? "ACTIVE" : "INACTIVE";
+}
+
 async function main() {
   const suppliers = await prisma.enterpriseSupplier.findMany({
     where: {
@@ -44,7 +48,7 @@ async function main() {
         party = await tx.enterpriseBusinessParty.create({
           data: {
             organizationId: supplier.organizationId,
-            partyType: "ORGANIZATION",
+            partyType: supplier.supplierType === "PERSON" ? "PERSON" : "ORGANIZATION",
             legalName: supplier.legalName,
             displayName: supplier.displayName,
             normalizedName: normalizeName(supplier.legalName),
@@ -54,12 +58,15 @@ async function main() {
             registrationId: supplier.registrationId,
             primaryEmail: supplier.email,
             primaryPhone: supplier.phone,
-            status: supplier.status === "SUSPENDED" ? "INACTIVE" : "ACTIVE",
+            // Supplier suspension is a Procurement state. It must not disable the
+            // shared party when the same party is also a customer or partner.
+            status: "ACTIVE",
             notes: supplier.notes,
             createdByUserId: supplier.createdByUserId,
           },
         });
       }
+      const roleStatus = supplierRoleStatus(supplier.status);
       await tx.enterpriseBusinessPartyRole.upsert({
         where: {
           organizationId_businessPartyId_roleCode: {
@@ -68,11 +75,12 @@ async function main() {
             roleCode: "SUPPLIER",
           },
         },
-        update: { status: "ACTIVE", archivedAt: null },
+        update: { status: roleStatus, archivedAt: null },
         create: {
           organizationId: supplier.organizationId,
           businessPartyId: party.id,
           roleCode: "SUPPLIER",
+          status: roleStatus,
           createdByUserId: supplier.createdByUserId,
         },
       });
