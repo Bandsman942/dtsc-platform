@@ -63,28 +63,50 @@ async function uniqueCandidate(
   return matches[0] || null;
 }
 
+function assertCandidateType(candidate: { partyType: string }, expectedType: string) {
+  if (candidate.partyType !== expectedType) {
+    throw new EnterpriseCoreV2Error(
+      "Un tiers correspondant existe déjà avec une nature différente (personne/organisation). Corrigez la fiche canonique avant de rattacher ce fournisseur.",
+      409,
+      "SUPPLIER_PARTY_TYPE_MISMATCH",
+    );
+  }
+}
+
 async function findCanonicalCandidate(tx: Tx, organizationId: string, supplier: SupplierIdentity) {
   const expectedType = expectedPartyType(supplier.supplierType);
-  const selectors: Array<{ where: Prisma.EnterpriseBusinessPartyWhereInput; reason: string }> = [];
-  if (supplier.taxIdentifier) selectors.push({ where: { taxIdentifier: supplier.taxIdentifier }, reason: "identifiant fiscal" });
-  if (supplier.registrationId) selectors.push({ where: { registrationId: supplier.registrationId }, reason: "numéro d’enregistrement" });
+  const strongSelectors: Array<{ where: Prisma.EnterpriseBusinessPartyWhereInput; reason: string }> = [];
+  if (supplier.taxIdentifier) strongSelectors.push({ where: { taxIdentifier: supplier.taxIdentifier }, reason: "identifiant fiscal" });
+  if (supplier.registrationId) strongSelectors.push({ where: { registrationId: supplier.registrationId }, reason: "numéro d’enregistrement" });
   const email = normalizedEmail(supplier.email);
-  if (email) selectors.push({ where: { primaryEmail: email }, reason: "adresse e-mail" });
-  selectors.push({ where: { normalizedName: normalizeCanonicalBusinessPartyName(supplier.legalName) }, reason: "nom" });
+  if (email) strongSelectors.push({ where: { primaryEmail: email }, reason: "adresse e-mail" });
 
-  for (const selector of selectors) {
+  const strongMatches: Array<{ candidate: Awaited<ReturnType<typeof uniqueCandidate>>; reason: string }> = [];
+  for (const selector of strongSelectors) {
     const candidate = await uniqueCandidate(tx, organizationId, selector.where, selector.reason);
     if (!candidate) continue;
-    if (candidate.partyType !== expectedType) {
-      throw new EnterpriseCoreV2Error(
-        "Un tiers correspondant existe déjà avec une nature différente (personne/organisation). Corrigez la fiche canonique avant de rattacher ce fournisseur.",
-        409,
-        "SUPPLIER_PARTY_TYPE_MISMATCH",
-      );
-    }
-    return candidate;
+    assertCandidateType(candidate, expectedType);
+    strongMatches.push({ candidate, reason: selector.reason });
   }
-  return null;
+
+  const strongIds = new Set(strongMatches.map(({ candidate }) => candidate!.id));
+  if (strongIds.size > 1) {
+    throw new EnterpriseCoreV2Error(
+      "Les identifiants du fournisseur correspondent à plusieurs tiers différents. Corrigez les doublons ou les informations d’identité avant de réessayer.",
+      409,
+      "SUPPLIER_PARTY_IDENTITY_CONFLICT",
+    );
+  }
+  if (strongMatches.length) return strongMatches[0].candidate;
+
+  const nameCandidate = await uniqueCandidate(
+    tx,
+    organizationId,
+    { normalizedName: normalizeCanonicalBusinessPartyName(supplier.legalName) },
+    "nom",
+  );
+  if (nameCandidate) assertCandidateType(nameCandidate, expectedType);
+  return nameCandidate;
 }
 
 async function createCanonicalContactsAndAddress(tx: Tx, organizationId: string, actorUserId: string, supplier: SupplierIdentity, businessPartyId: string) {
@@ -142,12 +164,19 @@ export async function ensureSupplierCanonicalPartyTx(tx: Tx, organizationId: str
   if (existingLink) {
     const party = await tx.enterpriseBusinessParty.findFirst({ where: { id: existingLink.businessPartyId, organizationId, archivedAt: null } });
     if (!party) throw new EnterpriseCoreV2Error("Le lien fournisseur pointe vers un tiers indisponible. Contactez le support DTSC.", 409, "SUPPLIER_PARTY_LINK_BROKEN");
+    const roleStatus = supplierRoleStatus(supplier.status);
+    await tx.enterpriseBusinessPartyRole.upsert({
+      where: { organizationId_businessPartyId_roleCode: { organizationId, businessPartyId: party.id, roleCode: "SUPPLIER" } },
+      update: { status: roleStatus, archivedAt: null },
+      create: { organizationId, businessPartyId: party.id, roleCode: "SUPPLIER", status: roleStatus, createdByUserId: actorUserId },
+    });
     return { party, link: existingLink, createdParty: false, createdLink: false };
   }
 
   const migrationKey = `supplier:${supplier.id}`;
   let party = await tx.enterpriseBusinessParty.findFirst({ where: { organizationId, migrationKey, archivedAt: null } });
   let createdParty = false;
+  if (party) assertCandidateType(party, expectedPartyType(supplier.supplierType));
   if (!party) party = await findCanonicalCandidate(tx, organizationId, supplier);
 
   if (party) {
