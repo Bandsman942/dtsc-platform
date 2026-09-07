@@ -1,4 +1,5 @@
 import { EnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
+import { publishOperationsEvent } from "@/lib/enterprise/projects-assets/helpers";
 import { prisma } from "@/lib/prisma";
 import { ensureSupplierCanonicalPartyTx } from "@/lib/enterprise/procurement/supplier-party-sync";
 
@@ -34,6 +35,15 @@ export async function convergeEnterpriseSupplierParty(
         averageLeadTimeDays: input.averageLeadTimeDays ?? null,
         revision: { increment: 1 },
       },
+    });
+    await publishOperationsEvent(tx, {
+      organizationId,
+      entityType: "EnterpriseSupplier",
+      entityId: supplier.id,
+      eventType: "SUPPLIER_PARTY_LINKED",
+      summary: `Fournisseur ${supplier.legalName} lié au tiers ${convergence.party.code}`,
+      actorUserId,
+      metadataJson: { businessPartyId: convergence.party.id, supplierPartyLinkId: link.id },
     });
     return { link, idempotent: false };
   });
