@@ -34,14 +34,12 @@ async function setupPayload(page) {
 function blockerCodes(payload) { return new Set((payload?.readiness?.blockers || []).map((item) => item.code)); }
 async function openAccountingSetup(page, locale = "fr") {
   const configureLabel = locale === "en" ? "Configure" : "Configurer";
-  const setupLabel = locale === "en" ? "Setup" : "Mise en service";
+  const setupHeading = locale === "en" ? "Accounting setup" : "Mise en service comptable";
   const configure = page.getByRole("button", { name: configureLabel, exact: true });
   await expect(configure).toBeVisible();
   await configure.click();
   await expect(configure).toHaveAttribute("aria-current", "page");
-  const setup = page.getByRole("button", { name: setupLabel, exact: true });
-  await expect(setup).toBeVisible();
-  await setup.click();
+  await expect(page.getByRole("heading", { name: setupHeading, exact: true })).toBeVisible();
 }
 
 // Contract tokens intentionally kept visible for CI governance:
