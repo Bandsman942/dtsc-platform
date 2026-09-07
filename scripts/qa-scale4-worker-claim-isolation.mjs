@@ -56,7 +56,7 @@ for (const literal of [
   "ENTERPRISE_AUDIT_EXPORT_REQUESTED",
   "FINANCE_REPORT_GENERATION_REQUESTED",
 ]) {
-  ok(!workflowConstants.includes(`\"${literal}\"`), `SCALE-4 claim isolation: technical bulk event ${literal} must not become a workflow business trigger.`);
+  ok(!workflowConstants.includes(`"${literal}"`), `SCALE-4 claim isolation: technical bulk event ${literal} must not become a workflow business trigger.`);
 }
 
 ok(pushWorker.includes("WEB_PUSH_DOMAIN_EVENT_TYPE") && pushWorker.includes("FOR UPDATE SKIP LOCKED"), "SCALE-4 claim isolation: Web Push must keep its dedicated claim.");
