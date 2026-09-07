@@ -82,3 +82,4 @@ await import("./qa-hotfix-576-finance-owner-e2e-contract.mjs");
 await import("./qa-hotfix-578-procurement-link-parity.mjs");
 await import("./qa-scale4g-durable-finance-reports.mjs");
 await import("./qa-scale4-worker-claim-isolation.mjs");
+await import("./qa-hotfix-590-canonical-party-contract.mjs");
