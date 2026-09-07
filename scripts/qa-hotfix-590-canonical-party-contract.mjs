@@ -10,6 +10,7 @@ const businessPartyRoute = read("app/api/enterprise/[organizationId]/business-pa
 const commonHttp = read("lib/enterprise/common/http.ts");
 const supplierService = read("lib/enterprise/procurement/supplier-service.ts");
 const supplierSync = read("lib/enterprise/procurement/supplier-party-sync.ts");
+const supplierLinkService = read("lib/enterprise/procurement/supplier-party-link-service.ts");
 const supplierRoute = read("app/api/enterprise/[organizationId]/suppliers/route.ts");
 const supplierLinkRoute = read("app/api/enterprise/[organizationId]/suppliers/[id]/link-party/route.ts");
 const backfill = read("scripts/backfill-enterprise-supplier-parties.mjs");
@@ -49,6 +50,9 @@ ok(supplierSync.includes("enterpriseBusinessParty.create"), "Procurement: créat
 ok(supplierSync.includes("enterpriseSupplierPartyLink.create"), "Procurement: lien fournisseur/tiers absent.");
 ok(supplierSync.includes('status: "ACTIVE"'), "Procurement: un nouveau tiers canonique doit exister indépendamment de l’état Procurement.");
 ok(!supplierSync.includes('supplier.status === "SUSPENDED" ? "INACTIVE"'), "Procurement: la suspension fournisseur ne doit pas désactiver le tiers partagé.");
+ok(supplierSync.includes("SUPPLIER_PARTY_IDENTITY_CONFLICT"), "Procurement: les identifiants forts contradictoires doivent refuser une fusion arbitraire.");
+ok(supplierSync.includes("assertCandidateType"), "Procurement: le type personne/organisation doit être validé avant rattachement canonique.");
+ok(supplierLinkService.includes("publishOperationsEvent") && supplierLinkService.includes('eventType: "SUPPLIER_PARTY_LINKED"'), "Procurement: la convergence manuelle doit conserver l’événement opérationnel de liaison.");
 ok(backfill.includes("supplierRoleStatus"), "Backfill: le statut doit être porté par le rôle SUPPLIER.");
 ok(backfill.includes('status: "ACTIVE"'), "Backfill: le tiers partagé ne doit pas être désactivé par Procurement.");
 
