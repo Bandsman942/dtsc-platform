@@ -21,8 +21,8 @@ const BUSINESS_ERROR_MESSAGES: Record<string, { fr: string; en: string }> = {
 
 const DUPLICATE_ERRORS: Record<string, { code: string; fr: string; en: string }> = {
   BUSINESS_PARTY_CREATE_FAILED: { code: "BUSINESS_PARTY_DUPLICATE", fr: "Un tiers avec le même code ou les mêmes informations uniques existe déjà.", en: "A business party with the same code or unique information already exists." },
-  CATALOG_ITEM_CREATE_FAILED: { code: "CATALOG_ITEM_DUPLICATE", fr: "Un produit ou service avec le même code ou SKU existe déjà dans ce catalogue.", en: "A product or service with the same code or SKU already exists in this catalog." },
-  LEAD_CREATE_FAILED: { code: "LEAD_DUPLICATE", fr: "Un prospect avec les mêmes informations uniques existe déjà dans le pipeline.", en: "A lead with the same unique information already exists in the pipeline." },
+  CATALOG_ITEM_CREATE_FAILED: { code: "CATALOG_ITEM_DUPLICATE", fr: "Un produit ou service avec le même code ou SKU existe déjà dans ce catalogue.", en: "A product or service with the same code or SKU exists in this catalog." },
+  LEAD_CREATE_FAILED: { code: "LEAD_DUPLICATE", fr: "Un prospect avec les mêmes informations uniques existe déjà dans le pipeline.", en: "A lead with the same unique information exists in the pipeline." },
   OPPORTUNITY_CREATE_FAILED: { code: "OPPORTUNITY_DUPLICATE", fr: "Une opportunité avec la même référence existe déjà.", en: "An opportunity with the same reference already exists." },
   QUOTE_CREATE_FAILED: { code: "QUOTE_DUPLICATE", fr: "Un devis avec le même numéro existe déjà.", en: "A quote with the same number already exists." },
   CONTRACT_CREATE_FAILED: { code: "CONTRACT_DUPLICATE", fr: "Un contrat avec le même numéro existe déjà.", en: "A contract with the same number already exists." },
@@ -30,6 +30,14 @@ const DUPLICATE_ERRORS: Record<string, { code: string; fr: string; en: string }>
 
 function requestLocale(request?: Request) {
   return request?.headers.get("accept-language")?.toLowerCase().startsWith("en") ? "en" : "fr";
+}
+
+function reportUnexpectedEnterpriseError(error: unknown, fallbackCode: string, request?: Request) {
+  const errorName = error instanceof Error ? error.name : typeof error;
+  const prismaCode = error instanceof Prisma.PrismaClientKnownRequestError ? error.code : null;
+  const requestPath = request ? new URL(request.url).pathname : null;
+  // Do not log the raw Prisma message here: validation errors can contain form values.
+  console.error("[enterprise-domain] unexpected operation failure", { fallbackCode, errorName, prismaCode, requestPath });
 }
 
 export function enterpriseDomainErrorResponse(error: unknown, fallbackCode = "ENTERPRISE_OPERATION_FAILED", request?: Request) {
@@ -46,5 +54,11 @@ export function enterpriseDomainErrorResponse(error: unknown, fallbackCode = "EN
       message: duplicate?.[locale] || (locale === "en" ? "A record with the same unique information already exists. Check existing records before trying again." : "Une fiche portant les mêmes informations uniques existe déjà. Vérifiez les fiches existantes avant de réessayer."),
     }, { status: 409 });
   }
-  return NextResponse.json({ error: fallbackCode, message: locale === "en" ? "The operation could not be completed. Your entries were kept; check the required fields and try again." : "L’opération n’a pas pu être terminée. Vos saisies sont conservées ; vérifiez les champs obligatoires puis réessayez." }, { status: 400 });
+  reportUnexpectedEnterpriseError(error, fallbackCode, request);
+  return NextResponse.json({
+    error: fallbackCode,
+    message: locale === "en"
+      ? "The service could not save this operation right now. Your entries were kept. Please try again shortly or contact support if the problem persists."
+      : "Le service n’a pas pu enregistrer cette opération pour le moment. Vos saisies sont conservées. Réessayez dans quelques instants ou contactez le support si le problème persiste.",
+  }, { status: 500 });
 }
