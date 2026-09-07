@@ -3,12 +3,13 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
+import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
 import { businessPartyCreateSchema, businessPartyUpdateSchema } from "@/lib/enterprise/master-data/schemas";
 import { createEnterpriseBusinessParty, updateEnterpriseBusinessParty } from "@/lib/enterprise/master-data/service";
+import { refreshLinkedSupplierSnapshotFromParty } from "@/lib/enterprise/master-data/supplier-projection";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
-import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -95,7 +96,6 @@ export async function POST(req: Request, { params }: Params) {
   }
 }
 
-
 export async function PATCH(req: Request, { params }: Params) {
   const startedAt = Date.now();
   if (!isSameOriginRequest(req)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -110,12 +110,19 @@ export async function PATCH(req: Request, { params }: Params) {
   if (!entityId || !parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.success ? "Référence manquante." : parsed.error.issues[0]?.message || "Tiers invalide." }, { status: 400 });
   try {
     const entity = await updateEnterpriseBusinessParty(organizationId, entityId, session.userId, parsed.data);
-    await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_BUSINESS_PARTY_UPDATED", entity: "EnterpriseBusinessParty", entityId, request: req, metadata: { organizationId } });
-    await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, action: "update" } });
+    // BusinessParty is the source of truth. Procurement keeps a derived supplier
+    // snapshot for operational compatibility, refreshed without granting any
+    // additional Procurement access to the caller.
+    await Promise.allSettled([
+      refreshLinkedSupplierSnapshotFromParty(organizationId, entityId, session.userId),
+      writeAuditLog({ userId: session.userId, action: "ENTERPRISE_BUSINESS_PARTY_UPDATED", entity: "EnterpriseBusinessParty", entityId, request: req, metadata: { organizationId } }),
+      writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, action: "update" } }),
+    ]);
     return NextResponse.json({ ok: true, entity });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "UPDATE_FAILED";
-    const conflict = message === "REVISION_CONFLICT";
-    return NextResponse.json({ error: message, message: conflict ? "L’élément a été modifié par un autre utilisateur. Actualisez avant de réessayer." : "Modification impossible." }, { status: conflict ? 409 : 400 });
+    if (error instanceof Error && error.message === "REVISION_CONFLICT") {
+      return NextResponse.json({ error: "REVISION_CONFLICT", message: "L’élément a été modifié par un autre utilisateur. Actualisez avant de réessayer." }, { status: 409 });
+    }
+    return enterpriseDomainErrorResponse(error, "BUSINESS_PARTY_UPDATE_FAILED", req);
   }
 }
