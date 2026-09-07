@@ -20,7 +20,7 @@ ok(procurementSchema.includes("budgetLineId") && procurementSchema.includes("Ent
 ok(procurementSchema.includes("expenses        EnterpriseExpense[]"), "EnterprisePurchase must support multiple expenses.");
 
 const migration = read("prisma/migrations/20260729211500_add_enterprise_finance_reporting/migration.sql");
-for (const table of ["EnterpriseBudget", "EnterpriseBudgetLine", "EnterpriseBudgetCommitment", "EnterpriseExpense", "EnterpriseReport"]) ok(migration.includes(`CREATE TABLE \"${table}\"`), `Sprint 8 migration missing ${table}`);
+for (const table of ["EnterpriseBudget", "EnterpriseBudgetLine", "EnterpriseBudgetCommitment", "EnterpriseExpense", "EnterpriseReport"]) ok(migration.includes(`CREATE TABLE "${table}"`), `Sprint 8 migration missing ${table}`);
 ok(migration.includes('ALTER TABLE "EnterprisePurchase" ADD COLUMN "budgetLineId" TEXT'), "Sprint 8 migration must add the purchase budget allocation structurally.");
 ok(!/DROP\s+(TABLE|COLUMN)/i.test(migration), "Sprint 8 migration must be additive and keep legacy finance data.");
 ok(exists("prisma/migrations/20260729212000_add_enterprise_report_revision/migration.sql"), "Report optimistic revision migration is missing.");
