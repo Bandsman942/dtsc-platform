@@ -5,7 +5,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { currencyChoices, Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { commercialHotfixCopy } from "@/components/enterprise/professional/commercial-hotfix-copy";
 import { ProfessionalError, ProfessionalFormSection, professionalMutation } from "@/components/enterprise/professional/professional-erp-ui";
-import { professionalErpDate, professionalErpEnumLabel, professionalErpMoney, professionalErpT } from "@/components/enterprise/professional/professional-erp-i18n";
+import { professionalErpDate, professionalErpEnumLabel, professionalErpMoney, professionalErpT, type ProfessionalErpLocale } from "@/components/enterprise/professional/professional-erp-i18n";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -63,7 +63,7 @@ export function BusinessPartyCommercialPanel({
 }: {
   organizationId: string;
   businessPartyId: string;
-  locale: string;
+  locale: ProfessionalErpLocale;
 }) {
   const t = (key: Parameters<typeof professionalErpT>[1], values?: Record<string, string | number>) => professionalErpT(locale, key, values);
   const hotfix = commercialHotfixCopy(locale);
