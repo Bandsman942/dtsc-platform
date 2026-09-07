@@ -1,0 +1,83 @@
+model EnterpriseAccountingAutomationTemplate {
+  id                String   @id @default(cuid())
+  organizationId    String
+  code              String
+  nameFr            String
+  nameEn            String
+  automationType    String
+  journalType       String   @default("ADJUSTMENT")
+  currencyCode      String
+  frequency         String   @default("MONTHLY")
+  startDate         DateTime
+  endDate           DateTime?
+  nextRunAt         DateTime?
+  autoReverse       Boolean  @default(false)
+  reversalDelayDays Int      @default(1)
+  status            String   @default("ACTIVE")
+  createdByUserId   String
+  updatedByUserId   String?
+  revision          Int      @default(1)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  lines             EnterpriseAccountingAutomationTemplateLine[]
+  runs              EnterpriseAccountingAutomationRun[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code])
+  @@index([organizationId, automationType, status])
+  @@index([organizationId, nextRunAt, status])
+}
+
+model EnterpriseAccountingAutomationTemplateLine {
+  id                   String   @id @default(cuid())
+  organizationId       String
+  templateId           String
+  lineNumber           Int
+  accountMappingKey    String
+  description          String
+  direction            String
+  amount               Decimal  @db.Decimal(20, 6)
+  businessPartyId      String?
+  projectId            String?
+  departmentId         String?
+  siteId               String?
+  assetId              String?
+  inventoryItemId      String?
+  allocationWeight     Decimal? @db.Decimal(20, 8)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  template             EnterpriseAccountingAutomationTemplate @relation(fields: [organizationId, templateId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, templateId, lineNumber])
+  @@index([organizationId, templateId])
+}
+
+model EnterpriseAccountingAutomationRun {
+  id                     String   @id @default(cuid())
+  organizationId         String
+  templateId             String?
+  runType                String
+  runKey                 String
+  accountingDate         DateTime
+  reversalDate           DateTime?
+  status                 String   @default("PENDING")
+  payloadJson            Json
+  journalEntryId         String?
+  reversalJournalEntryId String?
+  sourceReference        String?
+  errorCode              String?
+  errorMessage           String?
+  createdByUserId        String
+  completedAt            DateTime?
+  reversedAt             DateTime?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  template               EnterpriseAccountingAutomationTemplate? @relation(fields: [organizationId, templateId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, runKey])
+  @@index([organizationId, runType, status, accountingDate])
+  @@index([organizationId, reversalDate, status])
+  @@index([organizationId, journalEntryId])
+}
