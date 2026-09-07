@@ -18,9 +18,9 @@ export async function reverseJournalEntry(
       include: { lines: true, journal: true },
     });
     if (!original) throw new EnterpriseAccountingError("JOURNAL_ENTRY_NOT_FOUND", 404);
-    if (original.status === "REVERSED") {
-      const existing = await tx.enterpriseJournalReversal.findFirst({ where: { organizationId, originalEntryId } });
-      if (!existing) throw new EnterpriseAccountingError("JOURNAL_REVERSAL_INCONSISTENT", 409);
+
+    const existing = await tx.enterpriseJournalReversal.findFirst({ where: { organizationId, originalEntryId } });
+    if (existing) {
       return tx.enterpriseJournalEntry.findFirstOrThrow({ where: { id: existing.reversalEntryId, organizationId }, include: { lines: true } });
     }
     if (original.status !== "POSTED") throw new EnterpriseAccountingError("ONLY_POSTED_ENTRY_CAN_BE_REVERSED", 409);
@@ -81,7 +81,10 @@ export async function reverseJournalEntry(
     await tx.enterpriseJournalReversal.create({
       data: { organizationId, originalEntryId: original.id, reversalEntryId: reversal.id, reason: input.reason, requestedByUserId: actorUserId, approvedByUserId: actorUserId },
     });
-    await tx.enterpriseJournalEntry.update({ where: { id: original.id }, data: { status: "REVERSED", reversedAt: new Date(), revision: { increment: 1 } } });
+    // A reversal does not remove the original event from the ledger. Both the
+    // original POSTED entry and the opposite POSTED entry remain reportable;
+    // reversedAt is the lifecycle marker preventing a second reversal.
+    await tx.enterpriseJournalEntry.update({ where: { id: original.id }, data: { reversedAt: new Date(), revision: { increment: 1 } } });
     await publishFinanceEvent(tx, {
       organizationId,
       entityType: "EnterpriseJournalEntry",
@@ -90,8 +93,8 @@ export async function reverseJournalEntry(
       summary: `Journal entry ${original.number} reversed by ${reversal.number}`,
       actorUserId,
       fromStatus: "POSTED",
-      toStatus: "REVERSED",
-      metadataJson: { reversalEntryId: reversal.id, reason: input.reason.slice(0, 500) },
+      toStatus: "POSTED",
+      metadataJson: { reversalEntryId: reversal.id, reason: input.reason.slice(0, 500), reversed: true },
     });
     return reversal;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
