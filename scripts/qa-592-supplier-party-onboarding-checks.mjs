@@ -48,6 +48,8 @@ ok(optionsRoute.includes("organizationId") && optionsRoute.includes('status: "AC
 ok(optionsRoute.includes("supplierId") && optionsRoute.includes("supplierLinkArchived"), "Sélecteur: un tiers déjà fournisseur doit être identifiable sans contournement du lien 1:1.");
 ok(optionsRoute.includes("selector response only exposes what is needed"), "Sélecteur: le principe de minimisation de données Procurement doit rester explicite.");
 ok(!optionsRoute.includes("primaryPhone: true") && !optionsRoute.includes("taxIdentifier: true") && !optionsRoute.includes("registrationId: true") && !optionsRoute.includes("roles: {"), "Sélecteur: ne pas exposer téléphone, fiscalité ou rôles CRM dans le payload de sélection Procurement.");
+ok(!onboardingRoute.includes("party: result.party") && onboardingRoute.includes("Contacts, addresses, fiscal data and roles remain server-side"), "Onboarding: la réponse Procurement ne doit pas renvoyer la fiche tiers complète après création/rattachement.");
+ok(onboardingRoute.includes("id: result.party.id") && onboardingRoute.includes("legalName: result.party.legalName") && onboardingRoute.includes("displayName: result.party.displayName"), "Onboarding: la réponse doit conserver uniquement la référence d’identité nécessaire aux actions UI suivantes.");
 ok(supplierRoute.includes('moduleCode: "SUPPLIERS_PURCHASES"'), "Compatibilité: la liste fournisseur historique garde son entitlement Procurement.");
 
 ok(aiContract.includes('code: "ERP_CUSTOMERS_READ"') && aiContract.includes('moduleCode: "CRM_CUSTOMERS"'), "IA: ERP_CUSTOMERS_READ doit rester borné à CRM_CUSTOMERS.");
