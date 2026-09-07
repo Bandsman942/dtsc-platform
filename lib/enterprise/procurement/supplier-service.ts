@@ -2,6 +2,7 @@ import type { z } from "zod";
 import { EnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
 import { prisma } from "@/lib/prisma";
 import { addEnterpriseOperationalEvent, nullable, requireActiveEnterpriseMember } from "@/lib/enterprise/procurement/shared";
+import { normalizeEnterpriseSupplierName } from "@/lib/enterprise/procurement/supplier-normalization";
 import {
   ensureSupplierCanonicalPartyTx,
   syncCanonicalPartyFromSupplierTx,
@@ -14,14 +15,12 @@ import type {
   enterpriseSupplierUpdateSchema,
 } from "@/lib/enterprise/procurement/validators";
 
+export { normalizeEnterpriseSupplierName } from "@/lib/enterprise/procurement/supplier-normalization";
+
 type SupplierCreateInput = z.infer<typeof enterpriseSupplierCreateSchema>;
 type SupplierUpdateInput = z.infer<typeof enterpriseSupplierUpdateSchema>;
 type SupplierActionInput = z.infer<typeof enterpriseSupplierActionSchema>;
 type SupplierContactInput = z.infer<typeof enterpriseSupplierContactCreateSchema>;
-
-export function normalizeEnterpriseSupplierName(value: string) {
-  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
-}
 
 function canonicalSharedChanges(input: SupplierUpdateInput) {
   return {
@@ -36,6 +35,10 @@ function canonicalSharedChanges(input: SupplierUpdateInput) {
     ...(input.city !== undefined ? { city: nullable(input.city) } : {}),
     ...(input.country !== undefined ? { country: nullable(input.country) } : {}),
   };
+}
+
+function supplierPartyType(value: string | null | undefined) {
+  return value === "PERSON" ? "PERSON" : "ORGANIZATION";
 }
 
 export async function createEnterpriseSupplier(organizationId: string, actorUserId: string, input: SupplierCreateInput) {
@@ -83,6 +86,13 @@ export async function updateEnterpriseSupplier(organizationId: string, supplierI
     // Converge legacy suppliers on first mutation. Matching an already existing
     // canonical party can increment the supplier snapshot revision once.
     const convergence = await ensureSupplierCanonicalPartyTx(tx, organizationId, actorUserId, existing);
+    if (input.supplierType !== undefined && supplierPartyType(input.supplierType) !== convergence.party.partyType) {
+      throw new EnterpriseCoreV2Error(
+        "La nature personne/organisation appartient au tiers canonique et ne peut pas être modifiée depuis Fournisseurs. Corrigez la fiche Tiers avant de réessayer.",
+        409,
+        "SUPPLIER_PARTY_TYPE_CHANGE_FORBIDDEN",
+      );
+    }
     const expectedRevision = input.revision + (convergence.createdLink && !convergence.createdParty ? 1 : 0);
     const updated = await tx.enterpriseSupplier.updateMany({
       where: { id: supplierId, organizationId, revision: expectedRevision, archivedAt: null },
