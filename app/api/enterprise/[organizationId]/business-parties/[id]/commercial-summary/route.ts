@@ -39,7 +39,14 @@ export async function GET(req: Request, { params }: Params) {
 
   const party = await prisma.enterpriseBusinessParty.findFirst({
     where: { id, organizationId, archivedAt: null },
-    select: { id: true, status: true },
+    select: {
+      id: true,
+      status: true,
+      roles: {
+        where: { status: "ACTIVE", archivedAt: null, roleCode: { in: ["PROSPECT", "CUSTOMER"] } },
+        select: { roleCode: true },
+      },
+    },
   });
   if (!party) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -94,6 +101,7 @@ export async function GET(req: Request, { params }: Params) {
     available: true,
     canWrite: Boolean(pipelineAccess.canWrite || pipelineAccess.canManage),
     partyActive: party.status === "ACTIVE",
+    commercialEligible: party.roles.length > 0,
     lead,
     opportunities,
   });
