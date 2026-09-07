@@ -71,14 +71,12 @@ export async function createEnterpriseBusinessParty(organizationId: string, acto
         createdByUserId: actorUserId,
         roles: {
           create: [...new Set(input.roles)].map((roleCode) => ({
-            organizationId,
             roleCode,
             createdByUserId: actorUserId,
           })),
         },
         contacts: {
           create: input.contacts.map((contact, index) => ({
-            organizationId,
             contactType: contact.contactType,
             label: contact.label || null,
             value: contact.value,
@@ -89,7 +87,6 @@ export async function createEnterpriseBusinessParty(organizationId: string, acto
         },
         addresses: {
           create: input.addresses.map((address, index) => ({
-            organizationId,
             addressType: address.addressType,
             label: address.label || null,
             line1: address.line1,

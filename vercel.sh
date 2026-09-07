@@ -14,6 +14,10 @@ if [ "${VERCEL_GIT_COMMIT_REF:-}" != "main" ]; then
   exit 0
 fi
 
+echo "Regenerating and validating the canonical Prisma runtime contract..."
+pnpm prisma:generate
+node scripts/qa-prisma-canonical-party-runtime.mjs
+
 echo "Applying production Prisma migrations..."
 migration_attempt=1
 migration_max_attempts=4

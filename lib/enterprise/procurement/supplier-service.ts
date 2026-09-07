@@ -2,6 +2,12 @@ import type { z } from "zod";
 import { EnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
 import { prisma } from "@/lib/prisma";
 import { addEnterpriseOperationalEvent, nullable, requireActiveEnterpriseMember } from "@/lib/enterprise/procurement/shared";
+import { normalizeEnterpriseSupplierName } from "@/lib/enterprise/procurement/supplier-normalization";
+import {
+  ensureSupplierCanonicalPartyTx,
+  syncCanonicalPartyFromSupplierTx,
+  syncSupplierRoleStatusTx,
+} from "@/lib/enterprise/procurement/supplier-party-sync";
 import type {
   enterpriseSupplierActionSchema,
   enterpriseSupplierContactCreateSchema,
@@ -9,13 +15,30 @@ import type {
   enterpriseSupplierUpdateSchema,
 } from "@/lib/enterprise/procurement/validators";
 
+export { normalizeEnterpriseSupplierName } from "@/lib/enterprise/procurement/supplier-normalization";
+
 type SupplierCreateInput = z.infer<typeof enterpriseSupplierCreateSchema>;
 type SupplierUpdateInput = z.infer<typeof enterpriseSupplierUpdateSchema>;
 type SupplierActionInput = z.infer<typeof enterpriseSupplierActionSchema>;
 type SupplierContactInput = z.infer<typeof enterpriseSupplierContactCreateSchema>;
 
-export function normalizeEnterpriseSupplierName(value: string) {
-  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
+function canonicalSharedChanges(input: SupplierUpdateInput) {
+  return {
+    ...(input.legalName !== undefined ? { legalName: input.legalName } : {}),
+    ...(input.displayName !== undefined ? { displayName: nullable(input.displayName) } : {}),
+    ...(input.email !== undefined ? { email: nullable(input.email) } : {}),
+    ...(input.phone !== undefined ? { phone: nullable(input.phone) } : {}),
+    ...(input.taxIdentifier !== undefined ? { taxIdentifier: nullable(input.taxIdentifier) } : {}),
+    ...(input.registrationId !== undefined ? { registrationId: nullable(input.registrationId) } : {}),
+    ...(input.notes !== undefined ? { notes: nullable(input.notes) } : {}),
+    ...(input.addressLine !== undefined ? { addressLine: nullable(input.addressLine) } : {}),
+    ...(input.city !== undefined ? { city: nullable(input.city) } : {}),
+    ...(input.country !== undefined ? { country: nullable(input.country) } : {}),
+  };
+}
+
+function supplierPartyType(value: string | null | undefined) {
+  return value === "PERSON" ? "PERSON" : "ORGANIZATION";
 }
 
 export async function createEnterpriseSupplier(organizationId: string, actorUserId: string, input: SupplierCreateInput) {
@@ -40,8 +63,18 @@ export async function createEnterpriseSupplier(organizationId: string, actorUser
       notes: nullable(input.notes),
       createdByUserId: actorUserId,
     } });
-    await addEnterpriseOperationalEvent(tx, { organizationId, entityType: "EnterpriseSupplier", entityId: supplier.id, eventType: "ENTERPRISE_SUPPLIER_CREATED", summary: "Fournisseur créé.", actorUserId, toStatus: supplier.status });
-    return supplier;
+    const canonical = await ensureSupplierCanonicalPartyTx(tx, organizationId, actorUserId, supplier);
+    await addEnterpriseOperationalEvent(tx, {
+      organizationId,
+      entityType: "EnterpriseSupplier",
+      entityId: supplier.id,
+      eventType: "ENTERPRISE_SUPPLIER_CREATED",
+      summary: "Fournisseur créé et rattaché au tiers canonique.",
+      actorUserId,
+      toStatus: supplier.status,
+      metadata: { businessPartyId: canonical.party.id, supplierPartyLinkId: canonical.link.id },
+    });
+    return tx.enterpriseSupplier.findUniqueOrThrow({ where: { id: supplier.id } });
   });
 }
 
@@ -49,8 +82,20 @@ export async function updateEnterpriseSupplier(organizationId: string, supplierI
   return prisma.$transaction(async (tx) => {
     const existing = await tx.enterpriseSupplier.findFirst({ where: { id: supplierId, organizationId, archivedAt: null } });
     if (!existing) throw new EnterpriseCoreV2Error("Fournisseur introuvable.", 404, "SUPPLIER_NOT_FOUND");
+
+    // Converge legacy suppliers on first mutation. Matching an already existing
+    // canonical party can increment the supplier snapshot revision once.
+    const convergence = await ensureSupplierCanonicalPartyTx(tx, organizationId, actorUserId, existing);
+    if (input.supplierType !== undefined && supplierPartyType(input.supplierType) !== convergence.party.partyType) {
+      throw new EnterpriseCoreV2Error(
+        "La nature personne/organisation appartient au tiers canonique et ne peut pas être modifiée depuis Fournisseurs. Corrigez la fiche Tiers avant de réessayer.",
+        409,
+        "SUPPLIER_PARTY_TYPE_CHANGE_FORBIDDEN",
+      );
+    }
+    const expectedRevision = input.revision + (convergence.createdLink && !convergence.createdParty ? 1 : 0);
     const updated = await tx.enterpriseSupplier.updateMany({
-      where: { id: supplierId, organizationId, revision: input.revision, archivedAt: null },
+      where: { id: supplierId, organizationId, revision: expectedRevision, archivedAt: null },
       data: {
         ...(input.legalName !== undefined ? { legalName: input.legalName, normalizedName: normalizeEnterpriseSupplierName(input.legalName) } : {}),
         ...(input.displayName !== undefined ? { displayName: nullable(input.displayName) } : {}),
@@ -70,7 +115,19 @@ export async function updateEnterpriseSupplier(organizationId: string, supplierI
       },
     });
     if (updated.count !== 1) throw new EnterpriseCoreV2Error("Le fournisseur a été modifié par un autre utilisateur.", 409, "REVISION_CONFLICT");
-    await addEnterpriseOperationalEvent(tx, { organizationId, entityType: "EnterpriseSupplier", entityId: supplierId, eventType: "ENTERPRISE_SUPPLIER_UPDATED", summary: "Fournisseur mis à jour.", actorUserId, fromStatus: existing.status, toStatus: existing.status });
+    const current = await tx.enterpriseSupplier.findUniqueOrThrow({ where: { id: supplierId } });
+    await syncCanonicalPartyFromSupplierTx(tx, organizationId, actorUserId, current, canonicalSharedChanges(input));
+    await addEnterpriseOperationalEvent(tx, {
+      organizationId,
+      entityType: "EnterpriseSupplier",
+      entityId: supplierId,
+      eventType: "ENTERPRISE_SUPPLIER_UPDATED",
+      summary: "Fournisseur et tiers canonique mis à jour.",
+      actorUserId,
+      fromStatus: existing.status,
+      toStatus: existing.status,
+      metadata: { businessPartyId: convergence.party.id },
+    });
     return tx.enterpriseSupplier.findUnique({ where: { id: supplierId } });
   });
 }
@@ -98,13 +155,17 @@ export async function transitionEnterpriseSupplier(organizationId: string, suppl
     const existing = await tx.enterpriseSupplier.findFirst({ where: { id: supplierId, organizationId, archivedAt: null } });
     if (!existing) throw new EnterpriseCoreV2Error("Fournisseur introuvable.", 404, "SUPPLIER_NOT_FOUND");
     if (!transition.from.includes(existing.status)) throw new EnterpriseCoreV2Error("Cette transition fournisseur n’est pas autorisée.", 409, "INVALID_SUPPLIER_TRANSITION");
+    const convergence = await ensureSupplierCanonicalPartyTx(tx, organizationId, actorUserId, existing);
+    const expectedRevision = input.revision + (convergence.createdLink && !convergence.createdParty ? 1 : 0);
     const updated = await tx.enterpriseSupplier.updateMany({
-      where: { id: supplierId, organizationId, status: existing.status, revision: input.revision, archivedAt: null },
+      where: { id: supplierId, organizationId, status: existing.status, revision: expectedRevision, archivedAt: null },
       data: { status: transition.to, ...(transition.archive ? { archivedAt: new Date() } : {}), notes: input.reason ? `${existing.notes ? `${existing.notes}\n` : ""}${input.reason}` : existing.notes, updatedByUserId: actorUserId, revision: { increment: 1 } },
     });
     if (updated.count !== 1) throw new EnterpriseCoreV2Error("Le fournisseur a changé simultanément.", 409, "REVISION_CONFLICT");
+    const current = await tx.enterpriseSupplier.findUniqueOrThrow({ where: { id: supplierId } });
+    await syncSupplierRoleStatusTx(tx, organizationId, actorUserId, current, transition.to);
     const eventType = input.action === "SUSPEND" ? "ENTERPRISE_SUPPLIER_SUSPENDED" : input.action === "ARCHIVE" ? "ENTERPRISE_SUPPLIER_ARCHIVED" : "ENTERPRISE_SUPPLIER_UPDATED";
-    await addEnterpriseOperationalEvent(tx, { organizationId, entityType: "EnterpriseSupplier", entityId: supplierId, eventType, summary: input.reason || `Action ${input.action} appliquée au fournisseur.`, actorUserId, fromStatus: existing.status, toStatus: transition.to });
+    await addEnterpriseOperationalEvent(tx, { organizationId, entityType: "EnterpriseSupplier", entityId: supplierId, eventType, summary: input.reason || `Action ${input.action} appliquée au fournisseur.`, actorUserId, fromStatus: existing.status, toStatus: transition.to, metadata: { businessPartyId: convergence.party.id } });
     return tx.enterpriseSupplier.findUnique({ where: { id: supplierId } });
   });
 }

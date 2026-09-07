@@ -12,17 +12,41 @@ const BUSINESS_ERROR_MESSAGES: Record<string, { fr: string; en: string }> = {
   BUSINESS_PARTY_NOT_FOUND: { fr: "Le tiers sélectionné est introuvable ou n’est plus actif. Actualisez la liste puis réessayez.", en: "The selected business party is unavailable or inactive. Refresh the list and try again." },
   UNIT_OF_MEASURE_NOT_FOUND: { fr: "L’unité de mesure sélectionnée n’est plus disponible. Actualisez le catalogue puis choisissez-en une autre.", en: "The selected unit is no longer available. Refresh the catalog and choose another one." },
   CATALOG_CATEGORY_NOT_FOUND: { fr: "La catégorie sélectionnée n’est plus disponible. Actualisez la liste puis réessayez.", en: "The selected category is no longer available. Refresh the list and try again." },
+  CATALOG_PARENT_CATEGORY_NOT_FOUND: { fr: "La catégorie parente sélectionnée n’est plus disponible. Actualisez la liste puis réessayez.", en: "The selected parent category is no longer available. Refresh the list and try again." },
   CATALOG_ITEM_NOT_FOUND: { fr: "Un produit ou service sélectionné est introuvable ou inactif. Actualisez le catalogue puis réessayez.", en: "A selected product or service is unavailable or inactive. Refresh the catalog and try again." },
+  SITE_NOT_FOUND: { fr: "Le site sélectionné est introuvable ou inactif. Actualisez les sites puis réessayez.", en: "The selected site is unavailable or inactive. Refresh sites and try again." },
+  SITE_MANAGER_NOT_MEMBER: { fr: "Le responsable du site n’est plus un collaborateur actif de cette entreprise. Actualisez les collaborateurs puis réessayez.", en: "The site manager is no longer an active member of this organization. Refresh members and try again." },
+  WAREHOUSE_NOT_FOUND: { fr: "L’entrepôt sélectionné est introuvable ou inactif. Actualisez les entrepôts puis réessayez.", en: "The selected warehouse is unavailable or inactive. Refresh warehouses and try again." },
+  WAREHOUSE_MANAGER_NOT_MEMBER: { fr: "Le responsable de l’entrepôt n’est plus un collaborateur actif de cette entreprise. Actualisez les collaborateurs puis réessayez.", en: "The warehouse manager is no longer an active member of this organization. Refresh members and try again." },
+  STORAGE_LOCATION_NOT_FOUND: { fr: "L’emplacement de stockage sélectionné est introuvable ou inactif. Actualisez les emplacements puis réessayez.", en: "The selected storage location is unavailable or inactive. Refresh storage locations and try again." },
+  PARENT_STORAGE_LOCATION_NOT_FOUND: { fr: "L’emplacement parent sélectionné est introuvable ou incohérent avec cet entrepôt. Actualisez les emplacements puis réessayez.", en: "The selected parent storage location is unavailable or inconsistent with this warehouse. Refresh storage locations and try again." },
   OPPORTUNITY_NOT_FOUND: { fr: "L’opportunité sélectionnée est introuvable. Actualisez le CRM puis réessayez.", en: "The selected opportunity was not found. Refresh CRM and try again." },
+  REVISION_CONFLICT: { fr: "Cette fiche a été modifiée par un autre utilisateur. Actualisez-la avant de réessayer.", en: "This record was changed by another user. Refresh it before trying again." },
   SELF_APPROVAL_FORBIDDEN: { fr: "Vous ne pouvez pas valider votre propre demande. Choisissez un autre approbateur autorisé.", en: "You cannot approve your own request. Select another authorized approver." },
   CONTRACT_APPROVER_NOT_MEMBER: { fr: "L’approbateur sélectionné n’est plus un collaborateur actif de cette entreprise.", en: "The selected approver is no longer an active member of this organization." },
   LEAD_DUPLICATE_PARTY_REQUIRES_SELECTION: { fr: "Une fiche similaire existe déjà. Sélectionnez-la ou confirmez explicitement la création d’une nouvelle fiche.", en: "A similar record already exists. Select it or explicitly confirm creation of a new record." },
 };
 
+const PLAIN_DOMAIN_ERROR_STATUS: Record<string, number> = {
+  BUSINESS_PARTY_NOT_FOUND: 404,
+  UNIT_OF_MEASURE_NOT_FOUND: 404,
+  CATALOG_CATEGORY_NOT_FOUND: 404,
+  CATALOG_PARENT_CATEGORY_NOT_FOUND: 404,
+  CATALOG_ITEM_NOT_FOUND: 404,
+  SITE_NOT_FOUND: 404,
+  WAREHOUSE_NOT_FOUND: 404,
+  STORAGE_LOCATION_NOT_FOUND: 404,
+  PARENT_STORAGE_LOCATION_NOT_FOUND: 404,
+  OPPORTUNITY_NOT_FOUND: 404,
+  SITE_MANAGER_NOT_MEMBER: 409,
+  WAREHOUSE_MANAGER_NOT_MEMBER: 409,
+  REVISION_CONFLICT: 409,
+};
+
 const DUPLICATE_ERRORS: Record<string, { code: string; fr: string; en: string }> = {
   BUSINESS_PARTY_CREATE_FAILED: { code: "BUSINESS_PARTY_DUPLICATE", fr: "Un tiers avec le même code ou les mêmes informations uniques existe déjà.", en: "A business party with the same code or unique information already exists." },
-  CATALOG_ITEM_CREATE_FAILED: { code: "CATALOG_ITEM_DUPLICATE", fr: "Un produit ou service avec le même code ou SKU existe déjà dans ce catalogue.", en: "A product or service with the same code or SKU already exists in this catalog." },
-  LEAD_CREATE_FAILED: { code: "LEAD_DUPLICATE", fr: "Un prospect avec les mêmes informations uniques existe déjà dans le pipeline.", en: "A lead with the same unique information already exists in the pipeline." },
+  CATALOG_ITEM_CREATE_FAILED: { code: "CATALOG_ITEM_DUPLICATE", fr: "Un produit ou service avec le même code ou SKU existe déjà dans ce catalogue.", en: "A product or service with the same code or SKU exists in this catalog." },
+  LEAD_CREATE_FAILED: { code: "LEAD_DUPLICATE", fr: "Un prospect avec les mêmes informations uniques existe déjà dans le pipeline.", en: "A lead with the same unique information exists in the pipeline." },
   OPPORTUNITY_CREATE_FAILED: { code: "OPPORTUNITY_DUPLICATE", fr: "Une opportunité avec la même référence existe déjà.", en: "An opportunity with the same reference already exists." },
   QUOTE_CREATE_FAILED: { code: "QUOTE_DUPLICATE", fr: "Un devis avec le même numéro existe déjà.", en: "A quote with the same number already exists." },
   CONTRACT_CREATE_FAILED: { code: "CONTRACT_DUPLICATE", fr: "Un contrat avec le même numéro existe déjà.", en: "A contract with the same number already exists." },
@@ -32,12 +56,27 @@ function requestLocale(request?: Request) {
   return request?.headers.get("accept-language")?.toLowerCase().startsWith("en") ? "en" : "fr";
 }
 
+function reportUnexpectedEnterpriseError(error: unknown, fallbackCode: string, request?: Request) {
+  const errorName = error instanceof Error ? error.name : typeof error;
+  const prismaCode = error instanceof Prisma.PrismaClientKnownRequestError ? error.code : null;
+  const requestPath = request ? new URL(request.url).pathname : null;
+  const requestId = request?.headers.get("x-request-id") || request?.headers.get("x-vercel-id") || request?.headers.get("cf-ray") || null;
+  // Do not log the raw Prisma message here: validation errors can contain form values.
+  console.error("[enterprise-domain] unexpected operation failure", { fallbackCode, errorName, prismaCode, requestPath, requestId });
+}
+
 export function enterpriseDomainErrorResponse(error: unknown, fallbackCode = "ENTERPRISE_OPERATION_FAILED", request?: Request) {
   const locale = requestLocale(request);
   if (error instanceof EnterpriseDomainError) {
     const safeMessage = BUSINESS_ERROR_MESSAGES[error.code]?.[locale]
       || (locale === "en" ? "The operation cannot be completed with the current information. Check the form and try again." : "L’opération ne peut pas être terminée avec les informations actuelles. Vérifiez le formulaire puis réessayez.");
     return NextResponse.json({ error: error.code, message: safeMessage }, { status: error.status });
+  }
+  if (error instanceof Error && BUSINESS_ERROR_MESSAGES[error.message]) {
+    return NextResponse.json({
+      error: error.message,
+      message: BUSINESS_ERROR_MESSAGES[error.message][locale],
+    }, { status: PLAIN_DOMAIN_ERROR_STATUS[error.message] || 400 });
   }
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
     const duplicate = DUPLICATE_ERRORS[fallbackCode];
@@ -46,5 +85,11 @@ export function enterpriseDomainErrorResponse(error: unknown, fallbackCode = "EN
       message: duplicate?.[locale] || (locale === "en" ? "A record with the same unique information already exists. Check existing records before trying again." : "Une fiche portant les mêmes informations uniques existe déjà. Vérifiez les fiches existantes avant de réessayer."),
     }, { status: 409 });
   }
-  return NextResponse.json({ error: fallbackCode, message: locale === "en" ? "The operation could not be completed. Your entries were kept; check the required fields and try again." : "L’opération n’a pas pu être terminée. Vos saisies sont conservées ; vérifiez les champs obligatoires puis réessayez." }, { status: 400 });
+  reportUnexpectedEnterpriseError(error, fallbackCode, request);
+  return NextResponse.json({
+    error: fallbackCode,
+    message: locale === "en"
+      ? "The service could not save this operation right now. Your entries were kept. Please try again shortly or contact support if the problem persists."
+      : "Le service n’a pas pu enregistrer cette opération pour le moment. Vos saisies sont conservées. Réessayez dans quelques instants ou contactez le support si le problème persiste.",
+  }, { status: 500 });
 }
