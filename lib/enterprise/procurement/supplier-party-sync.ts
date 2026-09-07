@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { EnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
 import { operationsReference } from "@/lib/enterprise/projects-assets/helpers";
+import { normalizeEnterpriseSupplierName } from "@/lib/enterprise/procurement/supplier-normalization";
 
 type Tx = Prisma.TransactionClient;
 
@@ -63,6 +64,8 @@ async function uniqueCandidate(
   return matches[0] || null;
 }
 
+type CanonicalCandidate = NonNullable<Awaited<ReturnType<typeof uniqueCandidate>>>;
+
 function assertCandidateType(candidate: { partyType: string }, expectedType: string) {
   if (candidate.partyType !== expectedType) {
     throw new EnterpriseCoreV2Error(
@@ -81,15 +84,15 @@ async function findCanonicalCandidate(tx: Tx, organizationId: string, supplier: 
   const email = normalizedEmail(supplier.email);
   if (email) strongSelectors.push({ where: { primaryEmail: email }, reason: "adresse e-mail" });
 
-  const strongMatches: Array<{ candidate: Awaited<ReturnType<typeof uniqueCandidate>>; reason: string }> = [];
+  const strongMatches: CanonicalCandidate[] = [];
   for (const selector of strongSelectors) {
     const candidate = await uniqueCandidate(tx, organizationId, selector.where, selector.reason);
     if (!candidate) continue;
     assertCandidateType(candidate, expectedType);
-    strongMatches.push({ candidate, reason: selector.reason });
+    strongMatches.push(candidate);
   }
 
-  const strongIds = new Set(strongMatches.map(({ candidate }) => candidate!.id));
+  const strongIds = new Set(strongMatches.map((candidate) => candidate.id));
   if (strongIds.size > 1) {
     throw new EnterpriseCoreV2Error(
       "Les identifiants du fournisseur correspondent à plusieurs tiers différents. Corrigez les doublons ou les informations d’identité avant de réessayer.",
@@ -97,7 +100,7 @@ async function findCanonicalCandidate(tx: Tx, organizationId: string, supplier: 
       "SUPPLIER_PARTY_IDENTITY_CONFLICT",
     );
   }
-  if (strongMatches.length) return strongMatches[0].candidate;
+  if (strongMatches.length) return strongMatches[0];
 
   const nameCandidate = await uniqueCandidate(
     tx,
@@ -237,7 +240,7 @@ export async function ensureSupplierCanonicalPartyTx(tx: Tx, organizationId: str
       data: {
         legalName: party.legalName,
         displayName: party.displayName,
-        normalizedName: normalizeCanonicalBusinessPartyName(party.legalName),
+        normalizedName: normalizeEnterpriseSupplierName(party.legalName),
         email: party.primaryEmail,
         phone: party.primaryPhone,
         taxIdentifier: party.taxIdentifier,
