@@ -32,6 +32,15 @@ async function setupPayload(page) {
   return result.body;
 }
 function blockerCodes(payload) { return new Set((payload?.readiness?.blockers || []).map((item) => item.code)); }
+async function openAccountingSetup(page, locale = "fr") {
+  const configureLabel = locale === "en" ? "Configure" : "Configurer";
+  const setupHeading = locale === "en" ? "Accounting onboarding" : "Mise en service comptable";
+  const configure = page.getByRole("button", { name: configureLabel, exact: true });
+  await expect(configure).toBeVisible();
+  await configure.click();
+  await expect(configure).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("heading", { name: setupHeading, exact: true })).toBeVisible();
+}
 
 // Contract tokens intentionally kept visible for CI governance:
 // SALES_INVOICE_POSTED enterprisePostingBatch APPLY_SAFE_TEMPLATE_UPGRADE
@@ -60,9 +69,7 @@ test.describe.serial("Accounting onboarding and production-readiness UX", () => 
     await page.goto(accountingPath);
     await page.waitForURL((url) => url.pathname === accountingPath, { timeout: 30_000 });
 
-    const setupTab = page.getByRole("button", { name: "Mise en service comptable", exact: true });
-    await expect(setupTab).toBeVisible();
-    await expect(setupTab).toHaveAttribute("aria-pressed", "true");
+    await openAccountingSetup(page, "fr");
     await expect(page.getByRole("paragraph").filter({ hasText: "Aucun plan comptable n’est encore sélectionné." })).toBeVisible();
     await expect(page.getByLabel("Référentiel / version")).toHaveValue(defaultTemplateReference);
     await expect(page.getByLabel("Plan de l’entreprise")).toHaveValue("");
@@ -116,6 +123,7 @@ test.describe.serial("Accounting onboarding and production-readiness UX", () => 
     expect(afterOpening.has("OPEN_FISCAL_PERIOD_REQUIRED")).toBeFalsy();
 
     await page.reload();
+    await openAccountingSetup(page, "fr");
     await expect(page.getByText("Prêt pour la comptabilisation", { exact: true })).toBeVisible();
     const activate = page.getByRole("button", { name: "Activer le plan comptable" });
     await expect(activate).toBeEnabled();
@@ -193,11 +201,10 @@ test.describe.serial("Accounting onboarding and production-readiness UX", () => 
     await prisma.user.update({ where: { id: adminUserId }, data: { locale: "en" } });
     await page.context().clearCookies(); await signIn(page);
     await page.setViewportSize({ width: 768, height: 1024 }); await page.goto(accountingPath);
-    const setupTab = page.getByRole("button", { name: "Accounting setup", exact: true });
-    await expect(setupTab).toBeVisible();
+    await openAccountingSetup(page, "en");
     await expect(page.getByText(/prepare accounting in order/i)).toBeVisible();
     await expect(page.getByLabel("Reference / version")).toHaveValue(defaultTemplateReference);
-    await expect(page.getByText("Professional accounting", { exact: false }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Accounting", exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 2)).toBeFalsy();
   });
 });

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { validateAccountingDimensions } from "@/lib/enterprise/accounting/accounting-dimension-validation";
 import { authorizeFinanceRequest, financeErrorResponse, financeListParams } from "@/lib/enterprise/accounting/http";
 import { createJournalEntryDraft, listJournalEntries } from "@/lib/enterprise/accounting/journal-service";
 import { journalEntryCreateSchema } from "@/lib/enterprise/accounting/schemas";
@@ -73,6 +74,7 @@ export async function POST(req: Request, { params }: Params) {
   const parsed = journalEntryCreateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
   try {
+    await validateAccountingDimensions(prisma, organizationId, parsed.data.lines);
     const entry = await createJournalEntryDraft(organizationId, auth.session.userId, parsed.data);
     await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_JOURNAL_ENTRY_CREATED", entity: "EnterpriseJournalEntry", entityId: entry.id, request: req, metadata: { organizationId, number: entry.number, totalDebit: entry.totalDebit.toFixed(), currency: entry.functionalCurrencyCode } });
     await writeApiLog({ request: req, statusCode: 201, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "journal-entries" } });

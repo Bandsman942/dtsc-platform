@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowRightLeft } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import { EnterpriseAdvancedFinanceWorkspace } from "@/components/enterprise/professional/enterprise-advanced-finance-workspace";
-import { EnterpriseFinanceAccountingWorkspaceHotfix } from "@/components/enterprise/professional/enterprise-finance-accounting-workspace-hotfix";
+import { EnterpriseFinanceAccountingWorkspaceV3 } from "@/components/enterprise/professional/enterprise-finance-accounting-workspace-v3";
 import { EnterpriseFinanceAdvancedWorkspaceHotfix } from "@/components/enterprise/professional/enterprise-finance-advanced-workspace-hotfix";
 import { EnterpriseOperationalFinanceWorkspace } from "@/components/enterprise/professional/enterprise-operational-finance-workspace";
 import { AppShell } from "@/components/layout/app-shell";
@@ -64,7 +64,7 @@ export async function EnterpriseFinanceModulePage({ moduleCode }: { moduleCode: 
       ) : null}
 
       {moduleCode === "FINANCE_ACCOUNTING" ? (
-        <EnterpriseFinanceAccountingWorkspaceHotfix
+        <EnterpriseFinanceAccountingWorkspaceV3
           organizationId={organizationId}
           organizationName={organization.name}
           definition={definition}

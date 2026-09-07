@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { assertIndependentActor } from "@/lib/enterprise/accounting/access";
 import { convertToFunctionalCurrency, getFinanceConfiguration } from "@/lib/enterprise/accounting/currency";
+import { validateAccountingDimensions } from "@/lib/enterprise/accounting/accounting-dimension-validation";
 import { assertActiveClientOrganization, financeReference, money, publishFinanceEvent, sumDecimals } from "@/lib/enterprise/accounting/helpers";
 import { assertPeriodMatchesEntry } from "@/lib/enterprise/accounting/periods";
 import type { journalEntryCreateSchema } from "@/lib/enterprise/accounting/schemas";
@@ -51,6 +52,7 @@ export async function createJournalEntryDraft(
     if (!journal) throw new EnterpriseAccountingError("JOURNAL_NOT_FOUND", 404);
     await assertPeriodMatchesEntry(tx, organizationId, input.fiscalPeriodId, input.accountingDate, { allowSoftClosed: true });
     await assertAccountsPostable(tx, organizationId, input.lines.map((line) => line.ledgerAccountId), { manualEntry: !input.sourceEntityId });
+    await validateAccountingDimensions(tx, organizationId, input.lines);
 
     const transactionCurrency = input.lines.find((line) => line.transactionCurrencyCode)?.transactionCurrencyCode || configuration.functionalCurrencyCode;
     const conversion = await convertToFunctionalCurrency(tx, {
@@ -197,6 +199,7 @@ export async function postJournalEntry(organizationId: string, entryId: string, 
     if (entry.status !== "APPROVED") throw new EnterpriseAccountingError("JOURNAL_ENTRY_NOT_APPROVED", 409);
     await assertPeriodMatchesEntry(tx, organizationId, entry.fiscalPeriodId, entry.accountingDate, { allowSoftClosed: true });
     await assertAccountsPostable(tx, organizationId, entry.lines.map((line) => line.ledgerAccountId), { manualEntry: !entry.sourceEntityId });
+    await validateAccountingDimensions(tx, organizationId, entry.lines);
     const totals = validateBalancedLines(entry.lines);
     if (!totals.debit.equals(entry.totalDebit) || !totals.credit.equals(entry.totalCredit)) {
       throw new EnterpriseAccountingError("JOURNAL_ENTRY_TOTALS_CHANGED", 409);

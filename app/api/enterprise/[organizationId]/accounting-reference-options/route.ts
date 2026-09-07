@@ -17,6 +17,11 @@ type ReferenceKind =
   | "fiscal-period"
   | "journal"
   | "ledger-account"
+  | "business-party"
+  | "project"
+  | "department"
+  | "site"
+  | "inventory-item"
   | "asset"
   | "currency";
 
@@ -33,12 +38,17 @@ const KINDS = new Set<ReferenceKind>([
   "fiscal-period",
   "journal",
   "ledger-account",
+  "business-party",
+  "project",
+  "department",
+  "site",
+  "inventory-item",
   "asset",
   "currency",
 ]);
 
 function permitted(moduleCode: SupportedModule, kind: ReferenceKind) {
-  if (moduleCode === "FINANCE_ACCOUNTING") return ["chart", "fiscal-year", "fiscal-period", "journal", "ledger-account", "currency"].includes(kind);
+  if (moduleCode === "FINANCE_ACCOUNTING") return ["chart", "fiscal-year", "fiscal-period", "journal", "ledger-account", "business-party", "project", "department", "site", "inventory-item", "asset", "currency"].includes(kind);
   if (moduleCode === "FINANCE_TAX") return ["ledger-account", "currency"].includes(kind);
   if (moduleCode === "FINANCE_CLOSE") return ["fiscal-period"].includes(kind);
   if (moduleCode === "FINANCE_STATEMENTS") return ["currency"].includes(kind);
@@ -139,16 +149,98 @@ export async function GET(req: Request, { params }: Params) {
       take,
       select: { id: true, code: true, nameFr: true, nameEn: true, accountType: true, currencyCode: true, chartId: true, allowDirectPosting: true },
     });
-  } else if (kind === "asset") {
-    const existingProfiles = await prisma.enterpriseAssetAccountingProfile.findMany({
-      where: { organizationId },
-      select: { assetId: true },
+  } else if (kind === "business-party") {
+    items = await prisma.enterpriseBusinessParty.findMany({
+      where: {
+        organizationId,
+        status: "ACTIVE",
+        archivedAt: null,
+        ...(search ? { OR: [
+          { code: { contains: search, mode: "insensitive" } },
+          { legalName: { contains: search, mode: "insensitive" } },
+          { displayName: { contains: search, mode: "insensitive" } },
+        ] } : {}),
+      },
+      orderBy: [{ displayName: "asc" }, { legalName: "asc" }],
+      take,
+      select: { id: true, code: true, legalName: true, displayName: true, partyType: true },
     });
+  } else if (kind === "project") {
+    items = await prisma.enterpriseProject.findMany({
+      where: {
+        organizationId,
+        archivedAt: null,
+        status: { notIn: ["CANCELLED", "ARCHIVED"] },
+        ...(search ? { OR: [
+          { reference: { contains: search, mode: "insensitive" } },
+          { name: { contains: search, mode: "insensitive" } },
+        ] } : {}),
+      },
+      orderBy: { name: "asc" },
+      take,
+      select: { id: true, reference: true, name: true, status: true },
+    });
+  } else if (kind === "department") {
+    items = await prisma.enterpriseDepartment.findMany({
+      where: {
+        organizationId,
+        isActive: true,
+        ...(search ? { OR: [
+          { departmentCode: { contains: search, mode: "insensitive" } },
+          { labelFr: { contains: search, mode: "insensitive" } },
+          { labelEn: { contains: search, mode: "insensitive" } },
+        ] } : {}),
+      },
+      orderBy: [{ sortOrder: "asc" }, { labelFr: "asc" }],
+      take,
+      select: { id: true, departmentCode: true, labelFr: true, labelEn: true },
+    });
+  } else if (kind === "site") {
+    items = await prisma.enterpriseSite.findMany({
+      where: {
+        organizationId,
+        status: "ACTIVE",
+        archivedAt: null,
+        ...(search ? { OR: [
+          { code: { contains: search, mode: "insensitive" } },
+          { name: { contains: search, mode: "insensitive" } },
+          { city: { contains: search, mode: "insensitive" } },
+        ] } : {}),
+      },
+      orderBy: { name: "asc" },
+      take,
+      select: { id: true, code: true, name: true, siteType: true, city: true, countryCode: true },
+    });
+  } else if (kind === "inventory-item") {
+    items = await prisma.enterpriseInventoryItem.findMany({
+      where: {
+        organizationId,
+        status: "ACTIVE",
+        archivedAt: null,
+        catalogItem: {
+          organizationId,
+          status: "ACTIVE",
+          archivedAt: null,
+          ...(search ? { OR: [
+            { code: { contains: search, mode: "insensitive" } },
+            { sku: { contains: search, mode: "insensitive" } },
+            { name: { contains: search, mode: "insensitive" } },
+          ] } : {}),
+        },
+      },
+      orderBy: { updatedAt: "desc" },
+      take,
+      select: { id: true, status: true, catalogItem: { select: { id: true, code: true, sku: true, name: true } } },
+    });
+  } else if (kind === "asset") {
+    const excludedAssetIds = moduleCode === "FINANCE_ASSETS"
+      ? (await prisma.enterpriseAssetAccountingProfile.findMany({ where: { organizationId }, select: { assetId: true } })).map((profile) => profile.assetId)
+      : [];
     items = await prisma.enterpriseAsset.findMany({
       where: {
         organizationId,
         archivedAt: null,
-        id: { notIn: existingProfiles.map((profile) => profile.assetId) },
+        ...(excludedAssetIds.length ? { id: { notIn: excludedAssetIds } } : {}),
         status: { notIn: ["DISPOSED", "ARCHIVED", "CANCELLED"] },
         ...(search ? { OR: [
           { code: { contains: search, mode: "insensitive" } },

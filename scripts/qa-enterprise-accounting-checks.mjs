@@ -1,4 +1,5 @@
 import "./qa-hotfix-582-finance-accounting-tax-close-statements-assets.mjs";
+import "./qa-accounting-598-gl-workbench.mjs";
 import "./qa-scale4f-durable-bulk-finance.mjs";
 import "./qa-accounting-framework-registry.mjs";
 import "./qa-syscohada-source-provenance.mjs";
@@ -13,6 +14,9 @@ requirePaths([
   "prisma/enterprise-accounting.prisma",
   "lib/enterprise/accounting/posting-service.ts",
   "lib/enterprise/accounting/journal-service.ts",
+  "lib/enterprise/accounting/accounting-dimension-validation.ts",
+  "lib/enterprise/accounting/accounting-query-service.ts",
+  "lib/enterprise/accounting/accounting-source-link-registry.ts",
   "lib/enterprise/accounting/reversal-service.ts",
   "lib/enterprise/accounting/chart-template-registry.ts",
   "lib/enterprise/accounting/chart-template-application-service.ts",
@@ -27,10 +31,16 @@ requirePaths([
   "lib/enterprise/accounting/templates/generic-small-business.v1.json",
   "lib/enterprise/accounting/templates/syscohada/source-manifest.json",
   "lib/enterprise/accounting/templates/syscohada/dataset-schema.v1.json",
+  "lib/ai/tools/executors/finance-accounting-query.ts",
+  "components/enterprise/professional/accounting-compact-table.tsx",
+  "components/enterprise/professional/accounting-journal-workbench.tsx",
+  "components/enterprise/professional/enterprise-finance-accounting-workspace-v3.tsx",
+  "app/api/enterprise/[organizationId]/accounting-query/route.ts",
   "scripts/accounting/verify-syscohada-source.mjs",
   "scripts/accounting/syscohada-dataset-lib.mjs",
   "scripts/accounting/build-syscohada-dataset.mjs",
   "lib/enterprise/module-registry-finance.json",
+  "scripts/qa-accounting-598-gl-workbench.mjs",
   "scripts/qa-finance-client-ux.mjs",
   "scripts/qa-erp-stabilization-final.mjs",
   "scripts/qa-erp-stabilization-finance-readiness.mjs",
@@ -40,7 +50,8 @@ requirePaths([
   "scripts/qa-erp-cross-module-finance.mjs",
 ]);
 requireTokens("lib/enterprise/accounting/posting-service.ts", ["Prisma.Decimal", "POSTING_NOT_BALANCED", "pg_advisory_xact_lock", "TransactionIsolationLevel.Serializable", "idempotencyKey", "status: \"POSTED\"", "resolveSemanticPostingAccount"]);
-requireTokens("lib/enterprise/accounting/journal-service.ts", ["POSTED_ENTRY_IMMUTABLE", "JOURNAL_ENTRY_UNBALANCED", "assertPeriodMatchesEntry", "JOURNAL_ENTRY_SELF_APPROVAL_FORBIDDEN"]);
+requireTokens("lib/enterprise/accounting/journal-service.ts", ["POSTED_ENTRY_IMMUTABLE", "JOURNAL_ENTRY_UNBALANCED", "assertPeriodMatchesEntry", "JOURNAL_ENTRY_SELF_APPROVAL_FORBIDDEN", "validateAccountingDimensions"]);
+requireTokens("lib/enterprise/accounting/accounting-query-service.ts", ["getAccountingGeneralLedger", "getAccountingTrialBalance", "openingBalance", "closingBalance", "status: \"POSTED\""]);
 requireTokens("lib/enterprise/accounting/reversal-service.ts", ["JOURNAL_ENTRY_REVERSED", "reversalOfEntryId", "reversedAt"]);
 requireTokens("lib/enterprise/accounting/chart-template-registry.ts", ["ACCOUNTING_FRAMEWORKS", "CHART_TEMPLATES", "OHADA_AUDCIF", "DEFAULT_ACCOUNTING_TEMPLATE_REFERENCE", "STATEMENT_NORMAL_BALANCES", "validateChartTemplate", "validateRegisteredChartTemplates", "deepFreeze"]);
 requireTokens("lib/enterprise/accounting/chart-template-application-service.ts", ["CHART_TEMPLATE_NOT_APPLICABLE", "status: \"POSTED\"", "TransactionIsolationLevel.Serializable", "adoptDraftChartTemplate", "chartTemplateReference(template)"]);
