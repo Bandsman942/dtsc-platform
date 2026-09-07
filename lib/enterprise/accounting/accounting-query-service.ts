@@ -13,6 +13,8 @@ export type AccountingQueryFilters = {
   projectId?: string | null;
   departmentId?: string | null;
   siteId?: string | null;
+  assetId?: string | null;
+  inventoryItemId?: string | null;
   sourceModule?: string | null;
   sourceEntityType?: string | null;
   currencyCode?: string | null;
@@ -22,6 +24,7 @@ export type AccountingQueryFilters = {
 type AccountingQueryDb = Pick<
   PrismaClient,
   | "enterpriseFinanceConfiguration"
+  | "enterpriseFiscalPeriod"
   | "enterpriseJournalEntry"
   | "enterpriseJournalLine"
   | "enterpriseLedgerAccount"
@@ -46,13 +49,25 @@ function dateFilter(filters: AccountingQueryFilters): Prisma.DateTimeFilter | un
 
 function postedEntryWhere(filters: AccountingQueryFilters): Prisma.EnterpriseJournalEntryWhereInput {
   return {
-    status: filters.status || "POSTED",
+    status: "POSTED",
     ...(dateFilter(filters) ? { accountingDate: dateFilter(filters) } : {}),
     ...(filters.fiscalPeriodId ? { fiscalPeriodId: filters.fiscalPeriodId } : {}),
     ...(filters.journalId ? { journalId: filters.journalId } : {}),
     ...(filters.sourceModule ? { sourceModule: filters.sourceModule } : {}),
     ...(filters.sourceEntityType ? { sourceEntityType: filters.sourceEntityType } : {}),
     ...(filters.currencyCode ? { functionalCurrencyCode: filters.currencyCode } : {}),
+  };
+}
+
+function dimensionLineWhere(filters: AccountingQueryFilters): Prisma.EnterpriseJournalLineWhereInput {
+  return {
+    ...(filters.ledgerAccountId ? { ledgerAccountId: filters.ledgerAccountId } : {}),
+    ...(filters.businessPartyId ? { businessPartyId: filters.businessPartyId } : {}),
+    ...(filters.projectId ? { projectId: filters.projectId } : {}),
+    ...(filters.departmentId ? { departmentId: filters.departmentId } : {}),
+    ...(filters.siteId ? { siteId: filters.siteId } : {}),
+    ...(filters.assetId ? { assetId: filters.assetId } : {}),
+    ...(filters.inventoryItemId ? { inventoryItemId: filters.inventoryItemId } : {}),
   };
 }
 
@@ -65,11 +80,7 @@ export async function getAccountingGeneralLedger(
   const search = filters.search?.trim() || "";
   const where: Prisma.EnterpriseJournalLineWhereInput = {
     organizationId,
-    ...(filters.ledgerAccountId ? { ledgerAccountId: filters.ledgerAccountId } : {}),
-    ...(filters.businessPartyId ? { businessPartyId: filters.businessPartyId } : {}),
-    ...(filters.projectId ? { projectId: filters.projectId } : {}),
-    ...(filters.departmentId ? { departmentId: filters.departmentId } : {}),
-    ...(filters.siteId ? { siteId: filters.siteId } : {}),
+    ...dimensionLineWhere(filters),
     journalEntry: { organizationId, ...postedEntryWhere(filters) },
     ...(search
       ? {
@@ -149,41 +160,50 @@ export async function getAccountingTrialBalance(
   filters: AccountingQueryFilters = {},
 ) {
   const { page, pageSize } = pageValues(filters);
-  const dateFrom = filters.dateFrom || null;
-  const dateTo = filters.dateTo || null;
   const search = filters.search?.trim() || "";
+  const requestedPeriod = filters.fiscalPeriodId
+    ? await db.enterpriseFiscalPeriod.findFirst({
+        where: { organizationId, id: filters.fiscalPeriodId },
+        select: { id: true, startDate: true, endDate: true },
+      })
+    : null;
 
-  const baseEntryWhere: Prisma.EnterpriseJournalEntryWhereInput = {
+  if (filters.fiscalPeriodId && !requestedPeriod) {
+    return {
+      items: [],
+      period: { dateFrom: filters.dateFrom || null, dateTo: filters.dateTo || null },
+      functionalCurrencyCode: filters.currencyCode || null,
+      pagination: { page, pageSize, total: 0, pageCount: 1 },
+    };
+  }
+
+  const dateFrom = filters.dateFrom || requestedPeriod?.startDate || null;
+  const dateTo = filters.dateTo || requestedPeriod?.endDate || null;
+  const sharedEntryWhere: Prisma.EnterpriseJournalEntryWhereInput = {
     organizationId,
     status: "POSTED",
-    ...(filters.fiscalPeriodId ? { fiscalPeriodId: filters.fiscalPeriodId } : {}),
     ...(filters.journalId ? { journalId: filters.journalId } : {}),
     ...(filters.sourceModule ? { sourceModule: filters.sourceModule } : {}),
+    ...(filters.sourceEntityType ? { sourceEntityType: filters.sourceEntityType } : {}),
     ...(filters.currencyCode ? { functionalCurrencyCode: filters.currencyCode } : {}),
   };
+  const lineDimensions = dimensionLineWhere(filters);
 
   const openingWhere: Prisma.EnterpriseJournalLineWhereInput = {
     organizationId,
-    ...(filters.ledgerAccountId ? { ledgerAccountId: filters.ledgerAccountId } : {}),
-    ...(filters.businessPartyId ? { businessPartyId: filters.businessPartyId } : {}),
-    ...(filters.projectId ? { projectId: filters.projectId } : {}),
-    ...(filters.departmentId ? { departmentId: filters.departmentId } : {}),
-    ...(filters.siteId ? { siteId: filters.siteId } : {}),
+    ...lineDimensions,
     journalEntry: {
-      ...baseEntryWhere,
+      ...sharedEntryWhere,
       ...(dateFrom ? { accountingDate: { lt: dateFrom } } : { accountingDate: { lt: new Date(0) } }),
     },
   };
 
   const movementWhere: Prisma.EnterpriseJournalLineWhereInput = {
     organizationId,
-    ...(filters.ledgerAccountId ? { ledgerAccountId: filters.ledgerAccountId } : {}),
-    ...(filters.businessPartyId ? { businessPartyId: filters.businessPartyId } : {}),
-    ...(filters.projectId ? { projectId: filters.projectId } : {}),
-    ...(filters.departmentId ? { departmentId: filters.departmentId } : {}),
-    ...(filters.siteId ? { siteId: filters.siteId } : {}),
+    ...lineDimensions,
     journalEntry: {
-      ...baseEntryWhere,
+      ...sharedEntryWhere,
+      ...(filters.fiscalPeriodId ? { fiscalPeriodId: filters.fiscalPeriodId } : {}),
       ...((dateFrom || dateTo)
         ? {
             accountingDate: {
