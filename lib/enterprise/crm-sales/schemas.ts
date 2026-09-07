@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { businessPartyCreateSchema } from "@/lib/enterprise/master-data/schemas";
 
 export const leadCreateSchema = z.object({
   partyType: z.enum(["PERSON", "ORGANIZATION"]).default("PERSON"),
@@ -17,6 +18,31 @@ export const leadCreateSchema = z.object({
   nextAction: z.string().trim().max(500).optional().nullable(),
   nextActionAt: z.coerce.date().optional().nullable(),
 });
+
+export const leadProcessSchema = leadCreateSchema.pick({
+  companyName: true,
+  source: true,
+  ownerUserId: true,
+  departmentId: true,
+  expectedValue: true,
+  currency: true,
+  notes: true,
+  nextAction: true,
+  nextActionAt: true,
+});
+
+export const leadCanonicalOnboardingSchema = z.discriminatedUnion("mode", [
+  z.object({
+    mode: z.literal("EXISTING"),
+    businessPartyId: z.string().trim().min(1),
+    lead: leadProcessSchema,
+  }),
+  z.object({
+    mode: z.literal("NEW"),
+    party: businessPartyCreateSchema.omit({ roles: true }),
+    lead: leadProcessSchema,
+  }),
+]);
 
 export const leadTransitionSchema = z.object({
   targetStatus: z.enum(["CONTACTED", "QUALIFIED", "LOST", "ARCHIVED"]),
