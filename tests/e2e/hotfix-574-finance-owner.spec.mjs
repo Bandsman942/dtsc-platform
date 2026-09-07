@@ -45,6 +45,20 @@ async function setNamedControl(container, name, value) {
   else await control.fill(value);
 }
 
+async function waitForDurableReport(request, statusUrl, timeoutMs = 90_000) {
+  const deadline = Date.now() + timeoutMs;
+  let latest = null;
+  while (Date.now() < deadline) {
+    const response = await request.get(`${baseUrl}${statusUrl}`);
+    expect(response.ok(), await response.text()).toBeTruthy();
+    latest = await response.json();
+    if (latest?.job?.status === "COMPLETED") return latest.job;
+    if (latest?.job?.status === "DEAD") throw new Error(latest?.job?.message || "Durable report generation failed.");
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  throw new Error(`Durable report generation did not complete in ${timeoutMs}ms: ${JSON.stringify(latest)}`);
+}
+
 async function assertHealthyMobilePage(page, pageErrors) {
   await expect(page.getByText("Application error: a client-side exception has occurred")).toHaveCount(0);
   expect(pageErrors).toEqual([]);
@@ -192,13 +206,23 @@ test.describe.serial("Hotfix #574 — OWNER_E2E Finance budgets, overview and re
       );
       await reportDialog.getByRole("button", { name: /Générer le snapshot|Generate snapshot/i }).click();
       const generateResponse = await generatePromise;
-      expect(generateResponse.ok(), await generateResponse.text()).toBeTruthy();
-      await expect(page.getByText(reportTitle, { exact: false }).first()).toBeVisible();
+      expect(generateResponse.status()).toBe(202);
+      const accepted = await generateResponse.json();
+      expect(accepted?.queued).toBeTruthy();
+      expect(accepted?.job?.statusUrl).toContain(`/api/enterprise/${organizationId}/reports/generations/`);
+
+      const completed = await waitForDurableReport(page.context().request, accepted.job.statusUrl);
+      expect(completed.status).toBe("COMPLETED");
+      expect(completed.report?.id).toBeTruthy();
+      await expect(page.getByText(/Le rapport est prêt|The report is ready/i).first()).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByText(reportTitle, { exact: false }).first()).toBeVisible({ timeout: 10_000 });
 
       const stored = await prisma.enterpriseReport.findFirst({ where: { organizationId, title: reportTitle } });
       expect(stored).toBeTruthy();
       expect(stored.status).toBe("GENERATED");
       expect(stored.schemaVersion).toBeGreaterThanOrEqual(1);
+      expect(stored.calculationVersion).toBeGreaterThanOrEqual(1);
+      expect(stored.generationKey).toBeTruthy();
       expect(stored.snapshotJson).toBeTruthy();
       await assertHealthyMobilePage(page, pageErrors);
     } finally {

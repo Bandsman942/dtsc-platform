@@ -4,15 +4,18 @@ import { writeAuditLog } from "@/lib/audit";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { bankStatementSchema } from "@/lib/enterprise/accounting/treasury-schemas";
-import { requireEnterpriseGovernanceAccess } from "@/lib/enterprise/governance/access";
-import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
 import {
   AUDIT_EXPORT_EVENT_TYPE,
   BANK_STATEMENT_IMPORT_EVENT_TYPE,
   ENTERPRISE_BULK_LIMITS,
+  FINANCE_REPORT_GENERATION_EVENT_TYPE,
 } from "@/lib/enterprise/bulk-jobs/constants";
 import type { AuditExportJobPayload, BankStatementImportJobPayload } from "@/lib/enterprise/bulk-jobs/queue";
+import { processFinanceReportGenerationJob } from "@/lib/enterprise/bulk-jobs/report-generation";
 import { deleteEnterpriseBulkArtifact, downloadEnterpriseBulkArtifact, uploadEnterpriseBulkArtifact } from "@/lib/enterprise/bulk-jobs/storage";
+import { EnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
+import { requireEnterpriseGovernanceAccess } from "@/lib/enterprise/governance/access";
+import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
 import { prisma } from "@/lib/prisma";
 
 type ClaimedJob = {
@@ -72,7 +75,7 @@ async function recoverStaleJobs() {
   const staleBefore = new Date(Date.now() - ENTERPRISE_BULK_LIMITS.workerLeaseSeconds * 1000);
   return prisma.enterpriseDomainEvent.updateMany({
     where: {
-      eventType: { in: [BANK_STATEMENT_IMPORT_EVENT_TYPE, AUDIT_EXPORT_EVENT_TYPE] },
+      eventType: { in: [BANK_STATEMENT_IMPORT_EVENT_TYPE, AUDIT_EXPORT_EVENT_TYPE, FINANCE_REPORT_GENERATION_EVENT_TYPE] },
       processingStatus: "PROCESSING",
       lockedAt: { lt: staleBefore },
     },
@@ -93,22 +96,22 @@ export async function getEnterpriseBulkQueueSnapshot() {
     const [row] = await prisma.$queryRaw<QueueSnapshotRow[]>(Prisma.sql`
       SELECT
         COUNT(*) FILTER (
-          WHERE "eventType" IN (${BANK_STATEMENT_IMPORT_EVENT_TYPE}, ${AUDIT_EXPORT_EVENT_TYPE})
+          WHERE "eventType" IN (${BANK_STATEMENT_IMPORT_EVENT_TYPE}, ${AUDIT_EXPORT_EVENT_TYPE}, ${FINANCE_REPORT_GENERATION_EVENT_TYPE})
             AND "processingStatus" IN ('PENDING','FAILED')
             AND "availableAt" <= NOW()
             AND ("lockedAt" IS NULL OR "lockedAt" < ${leaseBefore})
         ) AS "ready",
         COUNT(*) FILTER (
-          WHERE "eventType" IN (${BANK_STATEMENT_IMPORT_EVENT_TYPE}, ${AUDIT_EXPORT_EVENT_TYPE})
+          WHERE "eventType" IN (${BANK_STATEMENT_IMPORT_EVENT_TYPE}, ${AUDIT_EXPORT_EVENT_TYPE}, ${FINANCE_REPORT_GENERATION_EVENT_TYPE})
             AND "processingStatus" = 'PROCESSING'
             AND "lockedAt" >= ${leaseBefore}
         ) AS "processing",
         COUNT(*) FILTER (
-          WHERE "eventType" IN (${BANK_STATEMENT_IMPORT_EVENT_TYPE}, ${AUDIT_EXPORT_EVENT_TYPE})
+          WHERE "eventType" IN (${BANK_STATEMENT_IMPORT_EVENT_TYPE}, ${AUDIT_EXPORT_EVENT_TYPE}, ${FINANCE_REPORT_GENERATION_EVENT_TYPE})
             AND "processingStatus" = 'DEAD'
         ) AS "dead",
         MIN("availableAt") FILTER (
-          WHERE "eventType" IN (${BANK_STATEMENT_IMPORT_EVENT_TYPE}, ${AUDIT_EXPORT_EVENT_TYPE})
+          WHERE "eventType" IN (${BANK_STATEMENT_IMPORT_EVENT_TYPE}, ${AUDIT_EXPORT_EVENT_TYPE}, ${FINANCE_REPORT_GENERATION_EVENT_TYPE})
             AND "processingStatus" IN ('PENDING','FAILED')
             AND "availableAt" <= NOW()
         ) AS "oldestReadyAt"
@@ -135,7 +138,7 @@ async function claimJobs(workerId: string, batchSize: number) {
     SET "processingStatus"='PROCESSING', "lockedAt"=NOW(), "lockedBy"=${workerId}, "attemptCount"="attemptCount"+1, "updatedAt"=NOW()
     WHERE "id" IN (
       SELECT "id" FROM "EnterpriseDomainEvent"
-      WHERE "eventType" IN (${BANK_STATEMENT_IMPORT_EVENT_TYPE}, ${AUDIT_EXPORT_EVENT_TYPE})
+      WHERE "eventType" IN (${BANK_STATEMENT_IMPORT_EVENT_TYPE}, ${AUDIT_EXPORT_EVENT_TYPE}, ${FINANCE_REPORT_GENERATION_EVENT_TYPE})
         AND "processingStatus" IN ('PENDING','FAILED')
         AND "availableAt" <= NOW()
         AND ("lockedAt" IS NULL OR "lockedAt" < ${leaseBefore})
@@ -372,6 +375,7 @@ async function processAuditExport(job: ClaimedJob) {
 async function dispatch(job: ClaimedJob) {
   if (job.eventType === BANK_STATEMENT_IMPORT_EVENT_TYPE) return processBankStatement(job);
   if (job.eventType === AUDIT_EXPORT_EVENT_TYPE) return processAuditExport(job);
+  if (job.eventType === FINANCE_REPORT_GENERATION_EVENT_TYPE) return processFinanceReportGenerationJob(job);
   throw new EnterpriseBulkWorkerError("ENTERPRISE_BULK_EVENT_UNSUPPORTED", false);
 }
 
@@ -384,9 +388,19 @@ async function settle(job: ClaimedJob, workerId: string) {
     });
     return "processed" as const;
   } catch (error) {
-    const retryable = error instanceof EnterpriseBulkWorkerError ? error.retryable : true;
+    const retryable = error instanceof EnterpriseBulkWorkerError
+      ? error.retryable
+      : error instanceof EnterpriseCoreV2Error
+        ? error.status >= 500
+        : true;
     const terminal = !retryable || job.attemptCount >= ENTERPRISE_BULK_LIMITS.maxAttempts;
-    const code = error instanceof EnterpriseBulkWorkerError ? error.code : error instanceof EnterpriseAccountingError ? error.code : "ENTERPRISE_BULK_UNEXPECTED_FAILURE";
+    const code = error instanceof EnterpriseBulkWorkerError
+      ? error.code
+      : error instanceof EnterpriseAccountingError
+        ? error.code
+        : error instanceof EnterpriseCoreV2Error
+          ? error.code
+          : "ENTERPRISE_BULK_UNEXPECTED_FAILURE";
     if (terminal) await markBankStatementFailed(job).catch(() => undefined);
     await prisma.enterpriseDomainEvent.updateMany({
       where: { id: job.id, processingStatus: "PROCESSING", lockedBy: workerId },

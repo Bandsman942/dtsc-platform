@@ -10,7 +10,7 @@ const includes = (file, snippets) => { const content = read(file); for (const sn
 
 const financeSchema = read("prisma/enterprise-finance-reporting.prisma");
 for (const model of ["EnterpriseBudget", "EnterpriseBudgetLine", "EnterpriseBudgetCommitment", "EnterpriseExpense", "EnterpriseReport"]) ok(financeSchema.includes(`model ${model} {`), `Missing Sprint 8 Prisma model ${model}`);
-ok(financeSchema.includes("plannedAmount  Decimal") && financeSchema.includes("amount                   Decimal"), "Budget and expense money must use Prisma Decimal fields.");
+ok(/^\s*plannedAmount\s+Decimal\s+@db\.Decimal\(18,\s*2\)\s*$/m.test(financeSchema) && /^\s*amount\s+Decimal\s+@db\.Decimal\(18,\s*2\)\s*$/m.test(financeSchema), "Budget and expense money must use Prisma Decimal fields.");
 ok(financeSchema.includes("@@unique([organizationId, reference])"), "Sprint 8 references must be unique inside an organization.");
 ok(financeSchema.includes("@@unique([organizationId, sourceEntityType, sourceEntityId])"), "Commitment sources must be idempotent per organization.");
 ok(financeSchema.includes("snapshotJson") && financeSchema.includes("schemaVersion") && financeSchema.includes("revision"), "Reports need versioned immutable snapshots and optimistic revision.");

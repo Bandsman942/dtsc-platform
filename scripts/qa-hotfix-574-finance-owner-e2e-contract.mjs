@@ -15,8 +15,9 @@ if (fs.existsSync(specPath)) {
   expect(spec.includes("/finance/overview-summary"), "Hotfix #574 OWNER_E2E must verify the authoritative Finance overview summary.");
   expect(spec.includes("/budgets") && spec.includes("/expenses"), "Hotfix #574 OWNER_E2E must exercise real budget and expense mutations.");
   expect(spec.includes("/reports/generate"), "Hotfix #574 OWNER_E2E must exercise real report generation.");
+  expect(spec.includes("/reports/generations/") && spec.includes("waitForDurableReport") && spec.includes("202"), "Hotfix #574 OWNER_E2E must follow durable report generation to completion instead of assuming synchronous persistence.");
   expect(spec.includes("width: 390") && spec.includes("scrollWidth") && spec.includes("pageerror"), "Hotfix #574 OWNER_E2E must retain mobile overflow and client-exception checks.");
-  expect(spec.includes("snapshotJson") && spec.includes('status).toBe("GENERATED")'), "Hotfix #574 OWNER_E2E must verify the persisted immutable report snapshot contract.");
+  expect(spec.includes("snapshotJson") && spec.includes('status).toBe("GENERATED")') && spec.includes("generationKey") && spec.includes("calculationVersion"), "Hotfix #574 OWNER_E2E must verify the persisted immutable and idempotent report snapshot contract.");
 }
 
 const workflow = read(".github/workflows/quality-gates.yml");
@@ -32,4 +33,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log("PASS Hotfix #574 Finance OWNER_E2E contract: dedicated FINANCE_BUDGETS, FINANCE_OVERVIEW and REPORTS browser acceptance remains manual, functional and regression-protected.");
+console.log("PASS Hotfix #574 Finance OWNER_E2E contract: dedicated FINANCE_BUDGETS, FINANCE_OVERVIEW and durable REPORTS browser acceptance remains manual, functional and regression-protected.");

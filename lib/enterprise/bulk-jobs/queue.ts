@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import type { z } from "zod";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { bankStatementSchema } from "@/lib/enterprise/accounting/treasury-schemas";
+import { enterpriseReportGenerateSchema } from "@/lib/enterprise/finance/validators";
 import { prisma } from "@/lib/prisma";
 import {
   AUDIT_EXPORT_ENTITY_TYPE,
@@ -10,11 +11,14 @@ import {
   BANK_STATEMENT_IMPORT_ENTITY_TYPE,
   BANK_STATEMENT_IMPORT_EVENT_TYPE,
   ENTERPRISE_BULK_LIMITS,
+  FINANCE_REPORT_GENERATION_ENTITY_TYPE,
+  FINANCE_REPORT_GENERATION_EVENT_TYPE,
   type EnterpriseBulkJobStatus,
 } from "@/lib/enterprise/bulk-jobs/constants";
 import { deleteEnterpriseBulkArtifact, isEnterpriseBulkStorageConfigured, uploadEnterpriseBulkArtifact } from "@/lib/enterprise/bulk-jobs/storage";
 
 type BankStatementInput = z.infer<typeof bankStatementSchema>;
+type FinanceReportInput = z.infer<typeof enterpriseReportGenerateSchema>;
 
 export type BankStatementImportJobPayload = {
   version: 1;
@@ -49,6 +53,20 @@ export type AuditExportJobPayload = {
   rowCount?: number;
   truncated?: boolean;
   purgedAt?: string | null;
+};
+
+export type FinanceReportGenerationJobPayload = {
+  version: 1;
+  kind: "FINANCE_REPORT_GENERATION";
+  actorUserId: string;
+  calculationVersion: number;
+  freshnessBucket: number;
+  requestDigest: string;
+  requestedAt: string;
+  input: FinanceReportInput;
+  resultReportId?: string | null;
+  completedAt?: string | null;
+  durationMs?: number | null;
 };
 
 export function enterpriseBulkJobStatus(processingStatus: string): EnterpriseBulkJobStatus {
@@ -89,6 +107,32 @@ function normalizeBankInput(input: BankStatementInput) {
 
 function bankInputDigest(normalized: ReturnType<typeof normalizeBankInput>) {
   return createHash("sha256").update(JSON.stringify(normalized)).digest("hex");
+}
+
+function normalizeFinanceReportInput(input: FinanceReportInput): FinanceReportInput {
+  return {
+    reportType: input.reportType,
+    title: input.title.trim(),
+    description: input.description || "",
+    periodStart: input.periodStart || "",
+    periodEnd: input.periodEnd || "",
+    currency: input.currency || "",
+    departmentId: input.departmentId || "",
+    supplierId: input.supplierId || "",
+    budgetId: input.budgetId || "",
+    category: input.category || "",
+    sourceModule: input.sourceModule || "",
+    sourceEntityType: input.sourceEntityType || "",
+    sourceEntityId: input.sourceEntityId || "",
+  };
+}
+
+function financeReportRequestIdentity(organizationId: string, actorUserId: string, input: FinanceReportInput, now = Date.now()) {
+  const calculationVersion = ENTERPRISE_BULK_LIMITS.financeReportCalculationVersion;
+  const freshnessBucket = Math.floor(now / ENTERPRISE_BULK_LIMITS.financeReportFreshnessMs);
+  const normalized = normalizeFinanceReportInput(input);
+  const requestDigest = createHash("sha256").update(JSON.stringify({ organizationId, actorUserId, calculationVersion, freshnessBucket, input: normalized })).digest("hex");
+  return { calculationVersion, freshnessBucket, normalized, requestDigest, idempotencyKey: `finance:report-generation:${organizationId}:${requestDigest}` };
 }
 
 function bankJobPayload(value: Prisma.JsonValue | null) {
@@ -261,4 +305,62 @@ export async function enqueueAuditExport({
       availableAt: new Date(),
     },
   });
+}
+
+export async function enqueueFinanceReportGeneration(organizationId: string, actorUserId: string, input: FinanceReportInput) {
+  const identity = financeReportRequestIdentity(organizationId, actorUserId, input);
+  const existing = await prisma.enterpriseDomainEvent.findUnique({ where: { idempotencyKey: identity.idempotencyKey } });
+  if (existing && existing.processingStatus !== "DEAD") return existing;
+
+  const requestedAt = new Date().toISOString();
+  const payload: FinanceReportGenerationJobPayload = {
+    version: 1,
+    kind: "FINANCE_REPORT_GENERATION",
+    actorUserId,
+    calculationVersion: identity.calculationVersion,
+    freshnessBucket: identity.freshnessBucket,
+    requestDigest: identity.requestDigest,
+    requestedAt,
+    input: identity.normalized,
+    resultReportId: null,
+    completedAt: null,
+    durationMs: null,
+  };
+
+  if (existing?.processingStatus === "DEAD") {
+    return prisma.enterpriseDomainEvent.update({
+      where: { id: existing.id },
+      data: {
+        payloadJson: payload as unknown as Prisma.InputJsonValue,
+        processingStatus: "PENDING",
+        attemptCount: 0,
+        availableAt: new Date(),
+        lockedAt: null,
+        lockedBy: null,
+        processedAt: null,
+        lastError: null,
+      },
+    });
+  }
+
+  try {
+    return await prisma.enterpriseDomainEvent.create({
+      data: {
+        organizationId,
+        eventType: FINANCE_REPORT_GENERATION_EVENT_TYPE,
+        entityType: FINANCE_REPORT_GENERATION_ENTITY_TYPE,
+        entityId: identity.requestDigest,
+        payloadJson: payload as unknown as Prisma.InputJsonValue,
+        idempotencyKey: identity.idempotencyKey,
+        processingStatus: "PENDING",
+        availableAt: new Date(),
+      },
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const raced = await prisma.enterpriseDomainEvent.findUnique({ where: { idempotencyKey: identity.idempotencyKey } });
+      if (raced) return raced;
+    }
+    throw error;
+  }
 }

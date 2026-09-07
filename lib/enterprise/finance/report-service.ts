@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import type { z } from "zod";
+import { ENTERPRISE_BULK_LIMITS } from "@/lib/enterprise/bulk-jobs/constants";
 import { EnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
 import { ENTERPRISE_REPORT_TYPES } from "@/lib/enterprise/finance/constants";
 import { enterpriseBudgetVisibilityWhere, enterpriseExpenseVisibilityWhere } from "@/lib/enterprise/finance/access";
@@ -19,6 +20,10 @@ type ReportSourceScope = {
   budget: Prisma.EnterpriseBudgetWhereInput;
   expense: Prisma.EnterpriseExpenseWhereInput;
   purchase: Prisma.EnterprisePurchaseWhereInput;
+};
+type ReportGenerationOptions = {
+  generationKey?: string | null;
+  calculationVersion?: number;
 };
 
 function reportReference() {
@@ -145,7 +150,7 @@ async function buildSnapshot(tx: Tx, organizationId: string, input: ReportGenera
   throw new EnterpriseCoreV2Error("Type de rapport non pris en charge.", 400, "INVALID_REPORT_TYPE");
 }
 
-export async function generateEnterpriseReport(organizationId: string, actorUserId: string, input: ReportGenerateInput) {
+export async function generateEnterpriseReport(organizationId: string, actorUserId: string, input: ReportGenerateInput, options: ReportGenerationOptions = {}) {
   if (!ENTERPRISE_REPORT_TYPES.includes(input.reportType)) throw new EnterpriseCoreV2Error("Type de rapport non pris en charge.", 400, "INVALID_REPORT_TYPE");
   const scope = await resolveReportSourceScope(organizationId, actorUserId, input.reportType);
   return prisma.$transaction(async (tx) => {
@@ -159,6 +164,7 @@ export async function generateEnterpriseReport(organizationId: string, actorUser
     const generatedAt = new Date();
     const catalog = getReportCatalogEntry(input.reportType);
     const metricCodes = getReportMetricCodes(input.reportType);
+    const calculationVersion = options.calculationVersion || 1;
     const snapshot = {
       meta: {
         reportCode: input.reportType,
@@ -171,16 +177,21 @@ export async function generateEnterpriseReport(organizationId: string, actorUser
         unitCode: input.currency ? `CURRENCY:${input.currency}` : "MIXED_OR_CONTEXTUAL",
         roundingPolicyCode: "HALF_UP_2",
         metricDefinitionCodes: metricCodes,
+        calculationVersion,
         missingValuesPolicy: "NULL_IS_NOT_ZERO",
       },
       data: rawSnapshot,
     };
     const filters = { periodStart: input.periodStart || null, periodEnd: input.periodEnd || null, currency: input.currency || null, departmentId: input.departmentId || null, supplierId: input.supplierId || null, budgetId: input.budgetId || null, category: input.category || null };
-    const report = await tx.enterpriseReport.create({ data: { organizationId, reference: reportReference(), title: input.title, description: nullable(input.description), reportType: input.reportType, status: "GENERATED", periodStart: dateOrUndefined(input.periodStart) || null, periodEnd: dateOrUndefined(input.periodEnd) || null, currency: nullable(input.currency), unitCode: input.currency ? `CURRENCY:${input.currency}` : null, roundingPolicyCode: "HALF_UP_2", sourcePolicyCode: catalog?.sourcePolicyCode || "CANONICAL_ENTERPRISE_DATA", metricDefinitionCodesJson: metricCodes as Prisma.InputJsonValue, freshnessAt: generatedAt, generatedByUserId: actorUserId, generatedAt, sourceModule: source?.sourceModule || null, sourceEntityType: source?.sourceEntityType || null, sourceEntityId: source?.sourceEntityId || null, schemaVersion: 1, filtersJson: filters as Prisma.InputJsonValue, snapshotJson: snapshot as unknown as Prisma.InputJsonValue } });
+    const report = await tx.enterpriseReport.create({ data: { organizationId, reference: reportReference(), title: input.title, description: nullable(input.description), reportType: input.reportType, status: "GENERATED", periodStart: dateOrUndefined(input.periodStart) || null, periodEnd: dateOrUndefined(input.periodEnd) || null, currency: nullable(input.currency), unitCode: input.currency ? `CURRENCY:${input.currency}` : null, roundingPolicyCode: "HALF_UP_2", sourcePolicyCode: catalog?.sourcePolicyCode || "CANONICAL_ENTERPRISE_DATA", metricDefinitionCodesJson: metricCodes as Prisma.InputJsonValue, freshnessAt: generatedAt, generatedByUserId: actorUserId, generatedAt, sourceModule: source?.sourceModule || null, sourceEntityType: source?.sourceEntityType || null, sourceEntityId: source?.sourceEntityId || null, schemaVersion: 1, generationKey: nullable(options.generationKey), calculationVersion, filtersJson: filters as Prisma.InputJsonValue, snapshotJson: snapshot as unknown as Prisma.InputJsonValue } });
     if (input.budgetId) await createEnterpriseLink(tx, { organizationId, sourceModule: "FINANCE_BUDGETS", sourceEntityType: "EnterpriseBudget", sourceEntityId: input.budgetId, targetModule: "REPORTS", targetEntityType: "EnterpriseReport", targetEntityId: report.id, linkType: "REPORT_SOURCE", createdById: actorUserId });
     if (source) await createEnterpriseLink(tx, { organizationId, sourceModule: source.sourceModule, sourceEntityType: source.sourceEntityType, sourceEntityId: source.sourceEntityId, targetModule: "REPORTS", targetEntityType: "EnterpriseReport", targetEntityId: report.id, linkType: "REPORT_SOURCE", createdById: actorUserId });
-    await addEnterpriseOperationalEvent(tx, { organizationId, entityType: "EnterpriseReport", entityId: report.id, eventType: "ENTERPRISE_REPORT_GENERATED", summary: "Rapport généré depuis les données ERP réelles.", actorUserId, toStatus: "GENERATED", metadata: { reportType: report.reportType, schemaVersion: report.schemaVersion, freshnessAt: generatedAt.toISOString(), metricCodes } });
+    await addEnterpriseOperationalEvent(tx, { organizationId, entityType: "EnterpriseReport", entityId: report.id, eventType: "ENTERPRISE_REPORT_GENERATED", summary: "Rapport généré depuis les données ERP réelles.", actorUserId, toStatus: "GENERATED", metadata: { reportType: report.reportType, schemaVersion: report.schemaVersion, calculationVersion, freshnessAt: generatedAt.toISOString(), metricCodes } });
     return report;
+  }, {
+    maxWait: ENTERPRISE_BULK_LIMITS.financeReportTransactionMaxWaitMs,
+    timeout: ENTERPRISE_BULK_LIMITS.financeReportTransactionTimeoutMs,
+    isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
   });
 }
 

@@ -80,3 +80,4 @@ await import("./qa-hotfix-574-finance-owner-e2e-contract.mjs");
 await import("./qa-hotfix-576-finance-receivables-payables-payments.mjs");
 await import("./qa-hotfix-576-finance-owner-e2e-contract.mjs");
 await import("./qa-hotfix-578-procurement-link-parity.mjs");
+await import("./qa-scale4g-durable-finance-reports.mjs");

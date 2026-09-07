@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { ENTERPRISE_BULK_LIMITS } from "@/lib/enterprise/bulk-jobs/constants";
 import { enterpriseReportVisibilityWhere, getEnterpriseFinanceAccess } from "@/lib/enterprise/finance/access";
 import { prisma } from "@/lib/prisma";
 import { buildEnterpriseProfessionalReport } from "@/lib/reporting/enterprise-professional-report";
@@ -15,7 +16,8 @@ const REPORT_TYPE_LABELS: Record<string, string> = {
 };
 
 function cell(value: unknown) {
-  const text = value === null || value === undefined ? "" : String(value);
+  let text = value === null || value === undefined ? "" : String(value);
+  if (/^[=+@]/.test(text) || /^-[^\d.,]/.test(text)) text = `'${text}`;
   return `"${text.replaceAll('"', '""')}"`;
 }
 
@@ -48,6 +50,13 @@ export async function GET(req: Request, { params }: Params) {
     snapshot: report.snapshotJson,
     filters: report.filtersJson,
   });
+  if (model.rows.length > ENTERPRISE_BULK_LIMITS.financeReportExportSyncMaxRows) {
+    await writeApiLog({ request: req, statusCode: 409, userId: session.userId, startedAt, metadata: { organizationId, domain: "reports", reportId: id, export: "csv", reason: "sync_bound" } });
+    return NextResponse.json({
+      error: "REPORT_EXPORT_REQUIRES_DURABLE_JOB",
+      message: "Cet export dépasse la limite interactive autorisée et doit être généré en traitement différé.",
+    }, { status: 409, headers: { "Cache-Control": "private, no-store" } });
+  }
   const freshness = (report.freshnessAt || report.generatedAt).toLocaleString("fr-FR");
 
   const metadata: Array<[string, string]> = [
@@ -76,9 +85,9 @@ export async function GET(req: Request, { params }: Params) {
     request: req,
     reasonCode: "REPORT_EXPORT_CSV",
     riskLevel: "MEDIUM",
-    metadata: { format: "CSV", reportType: report.reportType, filters: report.filtersJson },
+    metadata: { format: "CSV", reportType: report.reportType, rowCount: model.rows.length, filters: report.filtersJson },
   });
-  await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "reports", reportId: id, export: "csv" } });
+  await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "reports", reportId: id, export: "csv", rowCount: model.rows.length } });
   return new NextResponse(`\ufeff${csv}`, {
     status: 200,
     headers: {
