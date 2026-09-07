@@ -3,7 +3,8 @@ import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
 import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
-import { linkEnterpriseSupplierToBusinessParty, supplierPartyLinkSchema } from "@/lib/enterprise/procurement/common-domain-adapter";
+import { supplierPartyLinkSchema } from "@/lib/enterprise/procurement/common-domain-adapter";
+import { convergeEnterpriseSupplierParty } from "@/lib/enterprise/procurement/supplier-party-link-service";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 
@@ -22,9 +23,11 @@ export async function POST(req: Request, { params }: Params) {
   const parsed = supplierPartyLinkSchema.safeParse({ ...body, supplierId });
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
   try {
-    const result = await linkEnterpriseSupplierToBusinessParty(organizationId, session.userId, parsed.data);
+    const result = await convergeEnterpriseSupplierParty(organizationId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_SUPPLIER_PARTY_LINKED", entity: "EnterpriseSupplierPartyLink", entityId: result.link.id, request: req, metadata: { organizationId, supplierId, idempotent: result.idempotent } });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, supplierId, domain: "supplier-party-links" } });
     return NextResponse.json({ ok: true, ...result });
-  } catch (error) { return enterpriseDomainErrorResponse(error, "SUPPLIER_PARTY_LINK_FAILED"); }
+  } catch (error) {
+    return enterpriseDomainErrorResponse(error, "SUPPLIER_PARTY_LINK_FAILED", req);
+  }
 }
