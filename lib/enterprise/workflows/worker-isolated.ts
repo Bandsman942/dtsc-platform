@@ -6,6 +6,7 @@ import {
   FINANCE_REPORT_GENERATION_EVENT_TYPE,
 } from "@/lib/enterprise/bulk-jobs/constants";
 import { enqueueCrossModuleProjections } from "@/lib/enterprise/cross-module/projection-queue";
+import { invalidateFinanceOverviewReadCacheForEvents } from "@/lib/enterprise/finance/overview-read-cache";
 import { WORKFLOW_LIMITS } from "@/lib/enterprise/workflows/constants";
 import { processWorkflowDomainEvent, resumeWaitingRuns } from "@/lib/enterprise/workflows/engine";
 import { safeWorkflowFailureMessage } from "@/lib/enterprise/workflows/errors";
@@ -14,7 +15,7 @@ import { ADMIN_BROADCAST_EMAIL_DELIVERY_EVENT_TYPE } from "@/lib/mail/broadcast-
 import { prisma } from "@/lib/prisma";
 import { WEB_PUSH_DOMAIN_EVENT_TYPE } from "@/lib/push/constants";
 
-type ClaimedEvent = { id: string; attemptCount: number };
+type ClaimedEvent = { id: string; attemptCount: number; organizationId: string; eventType: string };
 type QueueSnapshotRow = { ready: bigint | number | string; processing: bigint | number | string; dead: bigint | number | string; oldestReadyAt: Date | null };
 
 type WorkflowQueueSnapshot = {
@@ -110,7 +111,7 @@ async function claimPendingEvents(workerId: string, batchSize: number) {
       LIMIT ${batchSize}
       FOR UPDATE SKIP LOCKED
     )
-    RETURNING "id", "attemptCount"
+    RETURNING "id", "attemptCount", "organizationId", "eventType"
   `);
 }
 
@@ -119,12 +120,14 @@ export async function processPendingWorkflowEventsIsolated({ batchSize = WORKFLO
   const queueBefore = await getWorkflowQueueSnapshot();
   const claimed = await claimPendingEvents(workerId, safeBatchSize);
   const results: Array<{ id: string; status: string; error?: string; projectionQueued?: number }> = [];
+  const processedEvents: Array<{ organizationId: string; eventType: string }> = [];
 
   for (const event of claimed) {
     try {
       const projectionQueue = await enqueueCrossModuleProjections(event.id);
       await processWorkflowDomainEvent(event.id);
-      await prisma.enterpriseDomainEvent.updateMany({ where: { id: event.id, processingStatus: "PROCESSING", lockedBy: workerId }, data: { processingStatus: "PROCESSED", processedAt: new Date(), lockedAt: null, lockedBy: null, lastError: null } });
+      const settled = await prisma.enterpriseDomainEvent.updateMany({ where: { id: event.id, processingStatus: "PROCESSING", lockedBy: workerId }, data: { processingStatus: "PROCESSED", processedAt: new Date(), lockedAt: null, lockedBy: null, lastError: null } });
+      if (settled.count === 1) processedEvents.push({ organizationId: event.organizationId, eventType: event.eventType });
       results.push({ id: event.id, status: "PROCESSED", projectionQueued: projectionQueue.queued });
     } catch (error) {
       const failure = safeWorkflowFailureMessage(error);
@@ -135,6 +138,7 @@ export async function processPendingWorkflowEventsIsolated({ batchSize = WORKFLO
     }
   }
 
+  const financeOverviewCacheInvalidation = await invalidateFinanceOverviewReadCacheForEvents(processedEvents).catch(() => ({ attempted: 0, redisAvailable: false, redisReason: "ERROR" as const }));
   const resumedRuns = await resumeWaitingRuns();
   const queueAfter = await getWorkflowQueueSnapshot();
   return {
@@ -142,6 +146,7 @@ export async function processPendingWorkflowEventsIsolated({ batchSize = WORKFLO
     claimed: claimed.length,
     results,
     resumedRuns: resumedRuns.map((run) => ({ id: run.id, status: run.status })),
+    financeOverviewCacheInvalidation,
     queueBefore,
     queueAfter,
     saturated: claimed.length === safeBatchSize && queueAfter.available && (queueAfter.ready || 0) > 0,
