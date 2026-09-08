@@ -36,16 +36,21 @@ requireSource("shared", source.shared.includes('notifyToast(pendingMessage, "war
 requireSource("shared", source.shared.includes("return null;") && source.shared.includes("Keep the stable idempotency key"), "PENDING doit conserver la clé d'idempotence et laisser le formulaire réessayable");
 requireSource("shared", source.shared.includes("retailMutationOutcomeMessage"), "les messages outcome ne sont pas localisés côté client");
 
-for (const [name, route] of [["mobile-money", source.mobileMoney], ["telco", source.telco]]) {
+for (const [name, route, atomicWrapper] of [
+  ["mobile-money", source.mobileMoney, "createMobileMoneyTransactionWithPosting"],
+  ["telco", source.telco, "createTelcoTopupWithPosting"],
+]) {
   requireSource(name, route.includes('retailFailureOutcome("RETAIL_PROVIDER_FAILED"'), "un échec provider n'utilise pas FAILURE");
   requireSource(name, route.includes('retailPendingOutcome("RETAIL_PROVIDER_PENDING"'), "un provider en attente n'utilise pas PENDING");
   requireSource(name, route.includes("failed ? 422 : pending ? 202"), "les statuts provider FAILED/PENDING ne sont pas 422/202");
   requireSource(name, !route.includes('connected.operation.status === "FAILED" ? 200 : 202'), "le legacy HTTP 200 + ok:false est revenu");
-  requireSource(name, route.includes('retailPendingOutcome("RETAIL_ACCOUNTING_PENDING"'), "l'échec de posting après commit métier n'est pas représenté comme PENDING");
+  requireSource(name, route.includes(atomicWrapper), "le flux manuel n'utilise pas le wrapper métier + trésorerie + posting atomique");
+  requireSource(name, !route.includes('retailPendingOutcome("RETAIL_ACCOUNTING_PENDING"'), "le flux manuel peut encore exposer un PENDING comptable post-commit au lieu de rollbacker atomiquement");
 }
 
-requireSource("mobile-money-fx", source.mobileMoneyFx.includes("retailPendingOutcome(diagnostic.messageCode"), "le transfert FX peut encore retourner un faux échec après commit métier");
-requireSource("mobile-money-fx", source.mobileMoneyFx.includes('status: "PENDING"'), "le statut comptable pending du FX n'est pas explicite");
+requireSource("mobile-money-fx", source.mobileMoneyFx.includes("createMobileMoneyFxTransferWithPosting"), "le transfert FX n'utilise pas le wrapper métier + trésorerie + posting atomique");
+requireSource("mobile-money-fx", !source.mobileMoneyFx.includes("retailPendingOutcome(diagnostic.messageCode"), "le transfert FX peut encore exposer un PENDING comptable post-commit");
+requireSource("mobile-money-fx", !source.mobileMoneyFx.includes('status: "PENDING"'), "le transfert FX conserve encore un état comptable PENDING incompatible avec le rollback atomique");
 requireSource("mobile-money-fx", source.mobileMoneyFx.includes("retailSuccessOutcome"), "le succès FX n'est pas explicitement contractuel");
 
 requireSource("http", source.http.includes("retailFailureOutcome"), "retailErrorResponse n'encode pas FAILURE");
@@ -58,6 +63,6 @@ if (failures.length) {
 }
 
 console.log("PASS qa-520-retail-mutation-outcome-contract");
-console.log("- SUCCESS/PENDING/FAILURE est explicite côté API et client");
+console.log("- SUCCESS/PENDING/FAILURE reste explicite côté API et client pour les opérations réellement asynchrones");
 console.log("- HTTP 200 + ok:false ne peut plus produire un toast succès dans le workspace Retail partagé");
-console.log("- les phases comptables post-commit utilisent PENDING et conservent l'idempotence pour la reprise");
+console.log("- Mobile Money manuel, FX et Telco SUCCESS ne peuvent plus exposer ACCOUNTING_PENDING après un commit métier: métier, trésorerie et posting sont atomiques");
