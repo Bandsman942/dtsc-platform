@@ -95,7 +95,7 @@ export async function getBusinessSubtypeSelection(organizationId: string) {
     const profile = await getRetailBusinessProfile(organizationId);
     return {
       sectorCode: organization.sectorCode,
-      businessSubtypeCode: profile.businessSubtypeCode,
+      businessSubtypeCode: profile?.businessSubtypeCode ?? null,
       selectionVersion: BUSINESS_SUBTYPE_SELECTION_VERSION,
       source: "RETAIL_COMPATIBILITY",
       compatibilityFallback: true,
