@@ -10,21 +10,21 @@ Une incohérence inverse existait aussi sur les connecteurs opérateur : certain
 
 ## Contrat opposable
 
-Toute mutation Retail utilise désormais trois outcomes :
+Toute mutation Retail utilise trois outcomes :
 
 - `SUCCESS` : opération finalisée, HTTP 2xx hors 202, `ok:true`, toast succès ;
-- `PENDING` : opération ou phase secondaire encore à finaliser, HTTP 202, `ok:true`, toast warning, clé d’idempotence conservée ;
+- `PENDING` : opération ou phase réellement asynchrone encore à finaliser, HTTP 202, `ok:true`, toast warning, clé d’idempotence conservée ;
 - `FAILURE` : opération principale non réalisée, HTTP non-2xx, `ok:false`, toast erreur.
 
 Un body `ok:false` ne peut jamais être interprété comme un succès, même si un endpoint legacy utilisait par erreur un HTTP 2xx.
 
-## Comptabilisation après commit métier
+## Comptabilisation et évolution #602
 
-Le hotfix ne prétend pas qu’un transfert déjà durable a échoué lorsque seule la phase comptable reste incomplète. Les flux Mobile Money FX, Mobile Money manuel et Télécom manuel renvoient alors `PENDING` avec le code de message `RETAIL_ACCOUNTING_PENDING`.
+Le contrat initial de #520 permettait à Mobile Money FX, Mobile Money manuel et Télécom manuel de renvoyer `PENDING` avec un code `RETAIL_ACCOUNTING_PENDING` lorsque le métier/Trésorerie avait déjà été durablement validé mais que la comptabilisation échouait ensuite.
 
-Le client garde la clé d’idempotence et laisse le formulaire réessayable. Une nouvelle tentative retrouve l’objet déjà créé et retente la comptabilisation sans rejouer les mouvements de soldes.
+Depuis #602, ce comportement n’est plus autorisé pour ces trois flux manuels : métier, Trésorerie et posting comptable sont exécutés dans une transaction atomique commune. Si le posting échoue, la tentative locale entière est rollbackée ; la route ne doit donc plus exposer un `ACCOUNTING_PENDING` post-commit pour ces créations manuelles.
 
-La convergence future vers une atomicité métier + posting est suivie séparément dans #521.
+Les codes et messages `RETAIL_ACCOUNTING_PENDING*` restent disponibles pour les parcours historiques/retry et autres flux qui conservent volontairement une phase comptable séparée. Les opérations CONNECTED conservent également `PENDING` lorsqu’un provider externe est réellement en attente, car un effet externe ne peut pas être rollbacké par la transaction PostgreSQL locale.
 
 ## Connecteurs opérateur
 
@@ -47,12 +47,14 @@ Le gate permanent `scripts/qa-520-retail-mutation-outcome-contract.mjs` vérifie
 - la présence des trois outcomes ;
 - l’interdiction du legacy `HTTP 200 + ok:false` pour provider FAILED ;
 - l’interprétation client de `ok:false`, `FAILURE`, `PENDING` et HTTP 202 ;
-- le toast warning pour `PENDING` ;
-- la conservation de l’idempotence ;
-- le contrat pending de la comptabilisation Mobile Money/Telco.
+- le toast warning pour les opérations réellement `PENDING` ;
+- la conservation de l’idempotence côté client ;
+- le maintien de `PENDING` pour les providers externes asynchrones ;
+- l’interdiction de `RETAIL_ACCOUNTING_PENDING` sur les routes manuelles Mobile Money/Telco et du statut comptable `PENDING` sur le transfert FX désormais atomique ;
+- l’utilisation des wrappers atomiques introduits par #602.
 
 Ce gate est intégré à `scripts/run-regression-qa-ci.mjs`.
 
 ## Rollback
 
-Revert applicatif uniquement. Aucune migration Prisma ni modification de données n’est introduite par #520.
+#520 n’introduisait aucune migration Prisma. #602 reste également un changement applicatif sans migration : un rollback se fait par revert des wrappers transactionnels/routes/QA/documentation, avec conservation des finalizers historiques utilisés par les parcours explicitement hors cutover.
