@@ -5,12 +5,13 @@ import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { parseInitialAdminInvitation } from "@/lib/console/client-organization-create-invitation";
 import { CONSOLE_CAPABILITIES } from "@/lib/console/console-capabilities";
 import { applyCanonicalSectorTemplateToOrganization } from "@/lib/enterprise/sector-template-application";
+import {
+  getBusinessSubtypeForSector,
+  normalizeBusinessSubtypeCode,
+} from "@/lib/enterprise/business-subtype-registry";
 import { RETAIL_SECTOR_CODE } from "@/lib/enterprise/retail/constants";
 import { syncRetailOnboardingProvisioning } from "@/lib/enterprise/retail/provisioning";
-import {
-  getRetailBusinessSubtype,
-  normalizeRetailBusinessSubtypeCode,
-} from "@/lib/enterprise/retail/subtype-registry";
+import { normalizeRetailBusinessSubtypeCode } from "@/lib/enterprise/retail/subtype-registry";
 import { canManageClientOrganizations, isDtscInternalSession } from "@/lib/organizations";
 import { notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
@@ -57,16 +58,6 @@ export async function POST(req: Request) {
   const rawSubtype = rawBody && typeof rawBody === "object" && typeof (rawBody as Record<string, unknown>).businessSubtypeCode === "string"
     ? String((rawBody as Record<string, unknown>).businessSubtypeCode).trim()
     : "";
-  const normalizedSubtype = normalizeRetailBusinessSubtypeCode(rawSubtype);
-  if (rawSubtype && !getRetailBusinessSubtype(normalizedSubtype)) {
-    await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt, metadata: { action: "client_organization_invalid_retail_subtype" } });
-    return NextResponse.json({
-      error: "Invalid retail subtype",
-      reasonCode: "RETAIL_BUSINESS_SUBTYPE_INVALID",
-      field: "businessSubtypeCode",
-      message: "Le sous-type Commerce retail sélectionné n’est pas disponible. Choisissez une option proposée par DTSC Platform.",
-    }, { status: 400 });
-  }
 
   const parsed = enterpriseOrganizationCreateSchema.safeParse(rawBody);
   const parsedAdminInvitation = parseInitialAdminInvitation(rawBody);
@@ -117,16 +108,46 @@ export async function POST(req: Request) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Invalid sector", message: "Le secteur d'activité sélectionné est introuvable ou inactif." }, { status: 400 });
   }
-  if (rawSubtype && sector?.code !== RETAIL_SECTOR_CODE) {
-    await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt, metadata: { action: "client_organization_retail_subtype_without_retail_sector" } });
+
+  const normalizedSubtype = normalizeBusinessSubtypeCode(rawSubtype);
+  const businessSubtype = rawSubtype && sector
+    ? getBusinessSubtypeForSector(sector.code, rawSubtype)
+    : null;
+  if (rawSubtype && !businessSubtype) {
+    const legacyRetailReasonCode = sector?.code === RETAIL_SECTOR_CODE
+      ? "RETAIL_BUSINESS_SUBTYPE_INVALID"
+      : normalizedSubtype === "SHOP"
+        ? "RETAIL_BUSINESS_SUBTYPE_SECTOR_MISMATCH"
+        : null;
+    const reasonCode = legacyRetailReasonCode || "BUSINESS_SUBTYPE_INVALID_OR_SECTOR_MISMATCH";
+    const message = legacyRetailReasonCode === "RETAIL_BUSINESS_SUBTYPE_INVALID"
+      ? "Le sous-type Commerce retail sélectionné n’est pas disponible. Choisissez une option proposée par DTSC Platform."
+      : legacyRetailReasonCode === "RETAIL_BUSINESS_SUBTYPE_SECTOR_MISMATCH"
+        ? "Le sous-type Commerce retail ne peut être utilisé qu’avec le secteur Commerce retail."
+        : "Le sous-secteur sélectionné n’est pas disponible pour ce secteur.";
+    await writeApiLog({
+      request: req,
+      statusCode: 400,
+      userId: session.userId,
+      startedAt,
+      metadata: {
+        action: "client_organization_invalid_business_subtype",
+        sectorCode: sector?.code || null,
+        reasonCode,
+      },
+    });
     return NextResponse.json({
-      error: "Retail subtype not applicable",
-      reasonCode: "RETAIL_BUSINESS_SUBTYPE_SECTOR_MISMATCH",
+      error: "Invalid business subtype",
+      reasonCode,
       field: "businessSubtypeCode",
-      message: "Le sous-type Commerce retail ne peut être utilisé qu’avec le secteur Commerce retail.",
+      message,
     }, { status: 400 });
   }
-  const businessSubtypeCode = sector?.code === RETAIL_SECTOR_CODE ? normalizedSubtype : null;
+
+  const businessSubtypeCode = businessSubtype?.code || null;
+  const retailBusinessSubtypeCode = sector?.code === RETAIL_SECTOR_CODE
+    ? normalizeRetailBusinessSubtypeCode(businessSubtypeCode)
+    : null;
 
   const organization = await prisma.$transaction(async (tx) => {
     const created = await tx.organization.create({
@@ -207,16 +228,16 @@ export async function POST(req: Request) {
       sectorId: sector.id,
       actorUserId: session.userId,
       mode: "merge",
-      businessSubtypeCode,
+      businessSubtypeCode: retailBusinessSubtypeCode,
     });
   } else if (sector?.code === RETAIL_SECTOR_CODE) {
-    // Persist an explicit subtype decision even when DTSC postpones template
-    // application. `null` is meaningful here: it means generic Retail.
+    // Persist the existing Retail subtype decision while the generic organization
+    // classification storage is introduced later in #605. `null` means general Retail.
     await syncRetailOnboardingProvisioning({
       organizationId: organization.id,
       sectorCode: sector.code,
       actorUserId: session.userId,
-      businessSubtypeCode,
+      businessSubtypeCode: retailBusinessSubtypeCode,
     });
   }
 

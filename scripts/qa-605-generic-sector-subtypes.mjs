@@ -10,6 +10,7 @@ function check(condition, message) {
 const genericRegistry = read("lib/enterprise/business-subtype-registry.ts");
 const retailRegistry = read("lib/enterprise/retail/subtype-registry.ts");
 const sectorTemplateRoute = read("app/api/admin/sector-templates/route.ts");
+const createOrganizationRoute = read("app/api/admin/client-organizations/route.ts");
 const architectureDoc = read("docs/ERP_SECTOR_SUBTYPE_ARCHITECTURE.md");
 
 check(
@@ -59,6 +60,22 @@ check(
 check(
   !sectorTemplateRoute.includes("getRetailBusinessSubtype"),
   "Administration template preview must not validate classification through the Retail-only registry",
+);
+check(
+  createOrganizationRoute.includes("getBusinessSubtypeForSector") && createOrganizationRoute.includes("normalizeBusinessSubtypeCode"),
+  "Company creation must validate the selected subtype through the generic registry",
+);
+check(
+  createOrganizationRoute.includes("BUSINESS_SUBTYPE_INVALID_OR_SECTOR_MISMATCH"),
+  "Company creation must expose a generic invalid sector/subtype reason code",
+);
+check(
+  createOrganizationRoute.includes("RETAIL_BUSINESS_SUBTYPE_INVALID") && createOrganizationRoute.includes("RETAIL_BUSINESS_SUBTYPE_SECTOR_MISMATCH"),
+  "Company creation must preserve Retail reason-code compatibility during the cutover",
+);
+check(
+  createOrganizationRoute.includes("normalizeRetailBusinessSubtypeCode(businessSubtypeCode)"),
+  "Retail provisioning must remain behind its compatibility adapter during the generic cutover",
 );
 check(
   architectureDoc.includes("TAILORING_APPAREL") && architectureDoc.includes("PLANNED"),
