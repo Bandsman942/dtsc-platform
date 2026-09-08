@@ -90,6 +90,8 @@ async function main() {
     "DOCUMENTS",
     "SALES_QUOTES_ORDERS",
     "SUPPLIERS_PURCHASES",
+    "FINANCE_OVERVIEW",
+    "FINANCE_TREASURY",
   ];
   for (const [index, moduleCode] of enabledModules.entries()) {
     await prisma.enterpriseModule.upsert({
