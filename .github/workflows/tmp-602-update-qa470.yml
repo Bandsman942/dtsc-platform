@@ -1,0 +1,40 @@
+name: Temporary #602 update QA470
+
+on:
+  push:
+    branches:
+      - feat/602-accounting-atomic-retail-posting
+    paths:
+      - .github/workflows/tmp-602-update-qa470.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: feat/602-accounting-atomic-retail-posting
+      - name: Evolve #470 manual Telco accounting contract to atomic posting
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/qa-470-shop-history-telco-posting.mjs')
+          s = p.read_text()
+          old = 'requireText("telcoRoute", "finalizeTelcoTopupAccounting", "finalizer Telco manuel");'
+          new = '''requireText("telcoRoute", "createTelcoTopupWithPosting", "posting Telco manuel atomique");\nforbidText("telcoRoute", "finalizeTelcoTopupAccounting", "le Telco manuel ne doit pas revenir au finalizer deux-phases");'''
+          if old not in s:
+              raise SystemExit('Telco manual #470 marker not found')
+          p.write_text(s.replace(old, new))
+          PY
+      - name: Commit QA evolution
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add scripts/qa-470-shop-history-telco-posting.mjs
+          git commit -m "test(retail): evolve #470 for atomic Telco posting"
+          git push origin HEAD:feat/602-accounting-atomic-retail-posting
