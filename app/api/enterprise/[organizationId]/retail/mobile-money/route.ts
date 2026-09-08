@@ -4,11 +4,10 @@ import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { prepareCommercialMobileMoney } from "@/lib/enterprise/retail/commercial-guardrails";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { authorizeRetailRequest, retailErrorResponse, retailListParams } from "@/lib/enterprise/retail/http";
-import { finalizeMobileMoneyAccounting } from "@/lib/enterprise/retail/mobile-money-accounting";
 import { retailFailureOutcome, retailPendingOutcome, retailSuccessOutcome } from "@/lib/enterprise/retail/mutation-outcome";
 import { createConnectedMobileMoneyOperation } from "@/lib/enterprise/retail/operator-orchestration";
 import { mobileMoneyCreateSchema } from "@/lib/enterprise/retail/schemas";
-import { createMobileMoneyTransaction } from "@/lib/enterprise/retail/service";
+import { createMobileMoneyTransactionWithPosting } from "@/lib/enterprise/retail/service";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -89,23 +88,14 @@ export async function POST(req: Request, { params }: Params) {
       );
     }
 
-    const result = await createMobileMoneyTransaction(organizationId, auth.session.userId, prepared.input);
-    try {
-      const accounting = await finalizeMobileMoneyAccounting(organizationId, auth.session.userId, result.transaction.id);
-      const statusCode = result.idempotent ? 200 : 201;
-      await Promise.allSettled([
-        writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_MOBILE_MONEY_CONFIRMED", entity: "EnterpriseMobileMoneyTransaction", entityId: result.transaction.id, request: req, metadata: { organizationId, number: result.transaction.number, providerCode: result.transaction.providerCode, transactionType: result.transaction.transactionType, amount: result.transaction.principalAmount.toFixed(), currency: result.transaction.currencyCode, externalReference: result.transaction.externalReference, idempotent: result.idempotent, mode: "MANUAL", journalEntryId: accounting.entry.id } }),
-        writeApiLog({ request: req, statusCode, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "mobile-money", action: "create", mode: "MANUAL", journalEntryId: accounting.entry.id, outcome: "SUCCESS" } }),
-      ]);
-      return NextResponse.json(retailSuccessOutcome({ mode: "MANUAL", ...result, accounting: { journalEntryId: accounting.entry.id, idempotent: accounting.idempotent } }), { status: statusCode });
-    } catch (accountingError) {
-      await Promise.allSettled([
-        writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_MOBILE_MONEY_ACCOUNTING_PENDING", entity: "EnterpriseMobileMoneyTransaction", entityId: result.transaction.id, request: req, metadata: { organizationId, number: result.transaction.number, providerCode: result.transaction.providerCode, transactionType: result.transaction.transactionType, amount: result.transaction.principalAmount.toFixed(), currency: result.transaction.currencyCode, idempotent: result.idempotent, mode: "MANUAL", accountingPending: true } }),
-        writeApiLog({ request: req, statusCode: 202, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "mobile-money", action: "create", mode: "MANUAL", outcome: "PENDING", accountingPending: true } }),
-      ]);
-      void accountingError;
-      return NextResponse.json(retailPendingOutcome("RETAIL_ACCOUNTING_PENDING", { mode: "MANUAL", ...result, accounting: { status: "PENDING" } }), { status: 202 });
-    }
+    const result = await createMobileMoneyTransactionWithPosting(organizationId, auth.session.userId, prepared.input);
+    const accounting = result.accounting;
+    const statusCode = result.idempotent ? 200 : 201;
+    await Promise.allSettled([
+      writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_MOBILE_MONEY_CONFIRMED", entity: "EnterpriseMobileMoneyTransaction", entityId: result.transaction.id, request: req, metadata: { organizationId, number: result.transaction.number, providerCode: result.transaction.providerCode, transactionType: result.transaction.transactionType, amount: result.transaction.principalAmount.toFixed(), currency: result.transaction.currencyCode, externalReference: result.transaction.externalReference, idempotent: result.idempotent, mode: "MANUAL", journalEntryId: accounting.entry.id } }),
+      writeApiLog({ request: req, statusCode, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "mobile-money", action: "create", mode: "MANUAL", journalEntryId: accounting.entry.id, outcome: "SUCCESS" } }),
+    ]);
+    return NextResponse.json(retailSuccessOutcome({ mode: "MANUAL", ...result, accounting: { journalEntryId: accounting.entry.id, idempotent: accounting.idempotent } }), { status: statusCode });
   } catch (error) {
     return retailErrorResponse(error, "MOBILE_MONEY_CREATE_FAILED");
   }
