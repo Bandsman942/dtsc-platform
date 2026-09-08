@@ -8,6 +8,11 @@ import { prisma } from "@/lib/prisma";
 
 export const BUSINESS_SUBTYPE_SELECTION_VERSION = 1;
 
+type BusinessSubtypeSelectionDb = Pick<
+  typeof prisma,
+  "organization" | "enterpriseBusinessSubtypeSelection"
+>;
+
 export type PersistBusinessSubtypeSelectionInput = {
   organizationId: string;
   sectorCode: string;
@@ -22,7 +27,7 @@ export async function persistBusinessSubtypeSelection({
   businessSubtypeCode,
   actorUserId = null,
   source = "DTSC_ADMIN",
-}: PersistBusinessSubtypeSelectionInput) {
+}: PersistBusinessSubtypeSelectionInput, db: BusinessSubtypeSelectionDb = prisma) {
   const normalizedSectorCode = sectorCode.trim().toUpperCase();
   if (!normalizedSectorCode) {
     throw new Error("BUSINESS_SUBTYPE_SECTOR_REQUIRED");
@@ -31,7 +36,7 @@ export async function persistBusinessSubtypeSelection({
     throw new Error("BUSINESS_SUBTYPE_INVALID_OR_SECTOR_MISMATCH");
   }
 
-  const organization = await prisma.organization.findFirst({
+  const organization = await db.organization.findFirst({
     where: {
       id: organizationId,
       deletedAt: null,
@@ -43,7 +48,7 @@ export async function persistBusinessSubtypeSelection({
     throw new Error("BUSINESS_SUBTYPE_ORGANIZATION_SECTOR_MISMATCH");
   }
 
-  return prisma.enterpriseBusinessSubtypeSelection.upsert({
+  return db.enterpriseBusinessSubtypeSelection.upsert({
     where: { organizationId },
     update: {
       sectorCode: normalizedSectorCode,
