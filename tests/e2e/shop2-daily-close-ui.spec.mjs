@@ -18,7 +18,7 @@ async function signIn(page) {
       organizationId,
       next: "/enterprise-modules/RETAIL_DAILY_CLOSE",
     },
-    headers: { origin: baseUrl, referer: `${baseUrl}/auth/sign-in` },
+    headers: { origin: baseUrl, referer: `${baseUrl}/auth/sign-in`, "x-forwarded-for": "203.0.113.64" },
   });
   const body = await response.json().catch(() => null);
   expect(response.ok(), `Daily-close sign-in failed: ${JSON.stringify(body)}`).toBeTruthy();
@@ -73,6 +73,7 @@ test.describe.serial("Shop 2.0 daily close workspace", () => {
     await expect(page.getByRole("link", { name: "Trésorerie" })).toHaveAttribute("href", "/enterprise-modules/FINANCE_TREASURY");
 
     if (createdClose) {
+      await page.getByRole("button", { name: /^Historique des clôtures/ }).click();
       await expect(page.getByText(createdClose.number, { exact: true })).toBeVisible();
       await expect(page.getByText("Soumise", { exact: true }).first()).toBeVisible();
     }
