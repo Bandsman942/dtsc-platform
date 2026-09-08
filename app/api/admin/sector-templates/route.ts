@@ -3,9 +3,11 @@ import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
 import { getSectorTemplatePreview } from "@/lib/enterprise-sector-templates";
 import {
-  getRetailBusinessSubtype,
-  normalizeRetailBusinessSubtypeCode,
-} from "@/lib/enterprise/retail/subtype-registry";
+  getBusinessSubtypeForSector,
+  listBusinessSubtypesForSector,
+} from "@/lib/enterprise/business-subtype-registry";
+import { RETAIL_SECTOR_CODE } from "@/lib/enterprise/retail/constants";
+import { normalizeRetailBusinessSubtypeCode } from "@/lib/enterprise/retail/subtype-registry";
 import { canManageClientOrganizations } from "@/lib/organizations";
 
 export async function GET(req: Request) {
@@ -27,23 +29,53 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Missing sector" }, { status: 400 });
   }
 
+  const basePreview = await getSectorTemplatePreview(sectorId);
+  if (!basePreview) {
+    await writeApiLog({ request: req, statusCode: 404, userId: session.userId, startedAt });
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   const requestedSubtype = searchParams.get("businessSubtypeCode")?.trim() || "";
-  const businessSubtypeCode = normalizeRetailBusinessSubtypeCode(requestedSubtype);
-  if (requestedSubtype && !getRetailBusinessSubtype(businessSubtypeCode)) {
-    await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
+  const businessSubtype = requestedSubtype
+    ? getBusinessSubtypeForSector(basePreview.sector.code, requestedSubtype)
+    : null;
+  if (requestedSubtype && !businessSubtype) {
+    await writeApiLog({
+      request: req,
+      statusCode: 400,
+      userId: session.userId,
+      startedAt,
+      metadata: {
+        action: "sector_template_invalid_business_subtype",
+        sectorCode: basePreview.sector.code,
+      },
+    });
     return NextResponse.json({
-      error: "Invalid retail subtype",
-      message: "Le sous-type Commerce retail sélectionné n’est pas disponible.",
-      reasonCode: "RETAIL_BUSINESS_SUBTYPE_INVALID",
+      error: "Invalid business subtype",
+      message: "Le sous-secteur sélectionné n’est pas disponible pour ce secteur.",
+      reasonCode: "BUSINESS_SUBTYPE_INVALID_OR_SECTOR_MISMATCH",
     }, { status: 400 });
   }
 
-  const preview = await getSectorTemplatePreview(sectorId, { businessSubtypeCode });
+  // Retail keeps its historical module-scope adapter during the generic cutover.
+  // Other sectors receive no active subtype until their runtime contract is implemented.
+  const retailBusinessSubtypeCode = basePreview.sector.code === RETAIL_SECTOR_CODE
+    ? normalizeRetailBusinessSubtypeCode(businessSubtype?.code || null)
+    : null;
+  const preview = await getSectorTemplatePreview(sectorId, { businessSubtypeCode: retailBusinessSubtypeCode });
   if (!preview) {
     await writeApiLog({ request: req, statusCode: 404, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  const businessSubtypes = listBusinessSubtypesForSector(preview.sector.code).map((subtype) => ({
+    code: subtype.code,
+    labelFr: subtype.labelFr,
+    labelEn: subtype.labelEn,
+    descriptionFr: subtype.descriptionFr,
+    descriptionEn: subtype.descriptionEn,
+  }));
+
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
-  return NextResponse.json({ preview });
+  return NextResponse.json({ preview, businessSubtypes });
 }

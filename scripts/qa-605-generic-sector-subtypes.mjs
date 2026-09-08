@@ -9,6 +9,7 @@ function check(condition, message) {
 
 const genericRegistry = read("lib/enterprise/business-subtype-registry.ts");
 const retailRegistry = read("lib/enterprise/retail/subtype-registry.ts");
+const sectorTemplateRoute = read("app/api/admin/sector-templates/route.ts");
 const architectureDoc = read("docs/ERP_SECTOR_SUBTYPE_ARCHITECTURE.md");
 
 check(
@@ -42,6 +43,22 @@ check(
 check(
   !retailRegistry.includes("tailoring workshop"),
   "Tailoring must no longer be documented as a future Retail subtype",
+);
+check(
+  sectorTemplateRoute.includes("getBusinessSubtypeForSector") && sectorTemplateRoute.includes("listBusinessSubtypesForSector"),
+  "Administration template preview must resolve subtype metadata through the generic registry",
+);
+check(
+  sectorTemplateRoute.includes("BUSINESS_SUBTYPE_INVALID_OR_SECTOR_MISMATCH"),
+  "Administration template preview must reject an invalid sector/subtype pair with a generic reason code",
+);
+check(
+  sectorTemplateRoute.includes("businessSubtypes"),
+  "Administration template preview must expose the active subtype options for the selected sector",
+);
+check(
+  !sectorTemplateRoute.includes("getRetailBusinessSubtype"),
+  "Administration template preview must not validate classification through the Retail-only registry",
 );
 check(
   architectureDoc.includes("TAILORING_APPAREL") && architectureDoc.includes("PLANNED"),
