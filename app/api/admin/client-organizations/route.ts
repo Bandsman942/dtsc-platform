@@ -209,6 +209,16 @@ export async function POST(req: Request) {
       });
     }
 
+    if (sector) {
+      await persistBusinessSubtypeSelection({
+        organizationId: created.id,
+        sectorCode: sector.code,
+        businessSubtypeCode,
+        actorUserId: session.userId,
+        source: "DTSC_ADMIN",
+      }, tx);
+    }
+
     return created;
   });
 
@@ -231,23 +241,14 @@ export async function POST(req: Request) {
       mode: "merge",
       businessSubtypeCode,
     });
-  } else if (sector) {
-    await persistBusinessSubtypeSelection({
+  } else if (sector?.code === RETAIL_SECTOR_CODE) {
+    // Retail keeps its historical settings mirror during the generic cutover.
+    await syncRetailOnboardingProvisioning({
       organizationId: organization.id,
       sectorCode: sector.code,
-      businessSubtypeCode,
       actorUserId: session.userId,
-      source: "DTSC_ADMIN",
+      businessSubtypeCode: retailBusinessSubtypeCode,
     });
-    if (sector.code === RETAIL_SECTOR_CODE) {
-      // Retail keeps its historical settings mirror during the generic cutover.
-      await syncRetailOnboardingProvisioning({
-        organizationId: organization.id,
-        sectorCode: sector.code,
-        actorUserId: session.userId,
-        businessSubtypeCode: retailBusinessSubtypeCode,
-      });
-    }
   }
 
   await writeAuditLog({
