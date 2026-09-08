@@ -71,6 +71,7 @@ test.describe.serial("Shop 2.0 daily close workspace", () => {
     await page.getByRole("button", { name: /^Caisse & passage vers Finance/ }).click();
     await expect(page.getByRole("link", { name: "Gestion de caisse" })).toHaveAttribute("href", "/enterprise-modules/FINANCE_CASH");
     await expect(page.getByRole("link", { name: "Trésorerie" })).toHaveAttribute("href", "/enterprise-modules/FINANCE_TREASURY");
+    await page.getByRole("button", { name: "Retour au module" }).click();
 
     if (createdClose) {
       await page.getByRole("button", { name: /^Historique des clôtures/ }).click();
