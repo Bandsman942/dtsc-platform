@@ -271,7 +271,7 @@ async function signIn(page, moduleCode = "MOBILE_MONEY_AGENCY") {
       organizationId,
       next: `/enterprise-modules/${moduleCode}`,
     },
-    headers: { origin: baseUrl, referer: `${baseUrl}/auth/sign-in` },
+    headers: { origin: baseUrl, referer: `${baseUrl}/auth/sign-in`, "x-forwarded-for": "203.0.113.62" },
   });
   const body = await response.json().catch(() => null);
   expect(response.ok(), `Atomic Retail E2E sign-in failed: ${JSON.stringify(body)}`).toBeTruthy();
@@ -281,16 +281,12 @@ async function signIn(page, moduleCode = "MOBILE_MONEY_AGENCY") {
 }
 
 async function browserPost(page, path, data) {
-  return page.evaluate(async ({ path: requestPath, payload }) => {
-    const response = await fetch(requestPath, {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const body = await response.json().catch(() => null);
-    return { ok: response.ok, status: response.status, body };
-  }, { path, payload: data });
+  const response = await page.context().request.post(`${baseUrl}${path}`, {
+    data,
+    headers: { origin: baseUrl, referer: `${baseUrl}${page.url().startsWith(baseUrl) ? new URL(page.url()).pathname : "/enterprise-modules/MOBILE_MONEY_AGENCY"}` },
+  });
+  const body = await response.json().catch(() => null);
+  return { ok: response.ok(), status: response.status(), body };
 }
 
 async function ensureOpenTill(page) {
