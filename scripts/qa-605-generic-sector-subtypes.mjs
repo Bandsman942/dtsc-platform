@@ -15,6 +15,7 @@ const retailRegistry = read("lib/enterprise/retail/subtype-registry.ts");
 const canonicalTemplateApplication = read("lib/enterprise/sector-template-application.ts");
 const sectorTemplateRoute = read("app/api/admin/sector-templates/route.ts");
 const createOrganizationRoute = read("app/api/admin/client-organizations/route.ts");
+const updateOrganizationRoute = read("app/api/admin/client-organizations/[id]/route.ts");
 const createPanel = read("components/admin/client-organizations-panel.tsx");
 const clientCopy = read("lib/console/client-organizations-i18n.ts");
 const regression = read("scripts/qa-regression-checks.mjs");
@@ -47,6 +48,10 @@ check(
     subtypeSelection.includes("getBusinessSubtypeSelection") &&
     subtypeSelection.includes("BUSINESS_SUBTYPE_ORGANIZATION_SECTOR_MISMATCH"),
   "Subtype selection service must validate organization/sector and expose canonical reads/writes",
+);
+check(
+  subtypeSelection.includes("BusinessSubtypeSelectionDb") && subtypeSelection.includes("db.enterpriseBusinessSubtypeSelection.upsert"),
+  "Subtype persistence must support the caller transaction for atomic sector/classification updates",
 );
 check(
   subtypeSelection.includes("getRetailBusinessProfile") && subtypeSelection.includes("RETAIL_COMPATIBILITY"),
@@ -130,6 +135,17 @@ check(
 check(
   createOrganizationRoute.includes("syncRetailOnboardingProvisioning") && createOrganizationRoute.includes("retailBusinessSubtypeCode"),
   "Retail provisioning must remain behind its compatibility mirror during the generic cutover",
+);
+check(
+  updateOrganizationRoute.includes("sectorChanged") &&
+    updateOrganizationRoute.includes("persistBusinessSubtypeSelection") &&
+    updateOrganizationRoute.includes("businessSubtypeCode: null") &&
+    updateOrganizationRoute.includes("}, tx)"),
+  "Changing an existing company sector must atomically reset a stale subtype selection",
+);
+check(
+  updateOrganizationRoute.includes("subtypeReset: sectorChanged"),
+  "Sector-change audit must record whether the subtype classification was reset",
 );
 check(
   createPanel.includes("businessSubtypeOptions") && createPanel.includes("selectedBusinessSubtypeCode"),
