@@ -405,7 +405,7 @@ export async function reverseMobileMoneyTransaction(organizationId: string, tran
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 });
 }
 
-async function createTelcoTopupTx(
+export async function createTelcoTopupTx(
   tx: Prisma.TransactionClient,
   organizationId: string,
   actorUserId: string,
