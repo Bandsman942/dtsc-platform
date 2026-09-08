@@ -36,7 +36,7 @@ async function signIn(page) {
       organizationId,
       next: "/enterprise-modules/RETAIL_POS",
     },
-    headers: { origin: baseUrl, referer: `${baseUrl}/auth/sign-in` },
+    headers: { origin: baseUrl, referer: `${baseUrl}/auth/sign-in`, "x-forwarded-for": "203.0.113.63" },
   });
   const body = await response.json().catch(() => null);
   expect(response.ok(), `Shop 2 customer/payments sign-in failed: ${JSON.stringify(body)}`).toBeTruthy();
