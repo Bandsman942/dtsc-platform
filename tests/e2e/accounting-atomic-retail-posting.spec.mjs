@@ -13,7 +13,7 @@ const fixture = {
   bankAccountId: "",
   mobileCdfAccountId: "",
   mobileUsdAccountId: "",
-  telcoCdfAccountId: "",
+  telcoUsdAccountId: "",
   mobileProviderId: "",
   telcoProviderId: "",
 };
@@ -144,19 +144,37 @@ async function prepareFixture() {
   if (!organization) throw new Error(`Atomic Retail E2E requires organization ${organizationId}`);
 
   const finance = await prisma.enterpriseFinanceConfiguration.findUnique({ where: { organizationId } });
-  if (!finance || finance.readinessStatus !== "READY" || finance.functionalCurrencyCode !== "CDF") {
-    throw new Error("Atomic Retail E2E requires READY Finance configuration with CDF functional currency");
+  if (!finance || finance.readinessStatus !== "READY" || finance.functionalCurrencyCode !== "USD") {
+    throw new Error("Atomic Retail E2E requires the canonical Shop 2 READY Finance fixture in USD");
+  }
+
+  for (const [index, moduleCode] of ["MOBILE_MONEY_AGENCY", "TELCO_TOPUPS"].entries()) {
+    await prisma.enterpriseModule.upsert({
+      where: { organizationId_moduleCode: { organizationId, moduleCode } },
+      update: { isEnabled: true, requiresPlanLevel: "STARTER" },
+      create: {
+        organizationId,
+        moduleCode,
+        labelFr: moduleCode,
+        labelEn: moduleCode,
+        moduleCategory: "SHOP2_E2E",
+        isEnabled: true,
+        isCore: false,
+        requiresPlanLevel: "STARTER",
+        sortOrder: 980 + index,
+      },
+    });
   }
 
   const [cashAccount, bankAccount] = await Promise.all([
     prisma.enterpriseFinancialAccount.findFirst({
-      where: { organizationId, code: "SHOP2-E2E-CASH", accountType: "CASH", currencyCode: "CDF", status: "ACTIVE", archivedAt: null },
+      where: { organizationId, code: "SHOP2-E2E-CASH", accountType: "CASH", currencyCode: "USD", status: "ACTIVE", archivedAt: null },
     }),
     prisma.enterpriseFinancialAccount.findFirst({
-      where: { organizationId, code: "SHOP2-E2E-BANK", accountType: "BANK", currencyCode: "CDF", status: "ACTIVE", archivedAt: null },
+      where: { organizationId, code: "SHOP2-E2E-BANK", accountType: "BANK", currencyCode: "USD", status: "ACTIVE", archivedAt: null },
     }),
   ]);
-  if (!cashAccount || !bankAccount) throw new Error("Atomic Retail E2E requires seeded CDF cash and bank accounts");
+  if (!cashAccount || !bankAccount) throw new Error("Atomic Retail E2E requires seeded USD cash and bank accounts");
   fixture.cashAccountId = cashAccount.id;
   fixture.bankAccountId = bankAccount.id;
 
@@ -170,20 +188,20 @@ async function prepareFixture() {
   });
   if (!mobileParent) throw new Error("Atomic Retail E2E requires active MOBILE_MONEY ledger parent");
 
-  const [mobileCdfLedger, mobileUsdLedger, telcoCdfLedger] = await Promise.all([
+  const [mobileCdfLedger, mobileUsdLedger, telcoUsdLedger] = await Promise.all([
     ensureLedgerChild(mobileParent, "E2E-MM-AFRI-CDF", "Wallet Afrimoney E2E CDF", "E2E Afrimoney CDF wallet", "CDF"),
     ensureLedgerChild(mobileParent, "E2E-MM-AFRI-USD", "Wallet Afrimoney E2E USD", "E2E Afrimoney USD wallet", "USD"),
-    ensureLedgerChild(mobileParent, "E2E-TELCO-AFRICELL-CDF", "Float Africell E2E CDF", "E2E Africell CDF float", "CDF"),
+    ensureLedgerChild(mobileParent, "E2E-TELCO-AFRICELL-USD", "Float Africell E2E USD", "E2E Africell USD float", "USD"),
   ]);
 
-  const [mobileCdf, mobileUsd, telcoCdf] = await Promise.all([
+  const [mobileCdf, mobileUsd, telcoUsd] = await Promise.all([
     ensureFinancialAccount({ code: "E2E-MM-AFRI-CDF", name: "E2E Afrimoney CDF", currencyCode: "CDF", ledgerAccountId: mobileCdfLedger.id }),
     ensureFinancialAccount({ code: "E2E-MM-AFRI-USD", name: "E2E Afrimoney USD", currencyCode: "USD", ledgerAccountId: mobileUsdLedger.id }),
-    ensureFinancialAccount({ code: "E2E-TELCO-AFRICELL-CDF", name: "E2E Africell CDF", currencyCode: "CDF", ledgerAccountId: telcoCdfLedger.id }),
+    ensureFinancialAccount({ code: "E2E-TELCO-AFRICELL-USD", name: "E2E Africell USD", currencyCode: "USD", ledgerAccountId: telcoUsdLedger.id }),
   ]);
   fixture.mobileCdfAccountId = mobileCdf.id;
   fixture.mobileUsdAccountId = mobileUsd.id;
-  fixture.telcoCdfAccountId = telcoCdf.id;
+  fixture.telcoUsdAccountId = telcoUsd.id;
 
   const [mobileProvider, telcoProvider] = await Promise.all([
     ensureProvider("AFRIMONEY", "Afrimoney", "MOBILE_MONEY"),
@@ -200,7 +218,7 @@ async function prepareFixture() {
   await Promise.all([
     mapProviderAccount(mobileProvider, "MOBILE_MONEY_FLOAT", "CDF", mobileCdf.id),
     mapProviderAccount(mobileProvider, "MOBILE_MONEY_FLOAT", "USD", mobileUsd.id),
-    mapProviderAccount(telcoProvider, "TELCO_FLOAT", "CDF", telcoCdf.id),
+    mapProviderAccount(telcoProvider, "TELCO_FLOAT", "USD", telcoUsd.id),
   ]);
 
   const rateDate = new Date("2026-01-01T00:00:00.000Z");
@@ -335,8 +353,8 @@ test.describe.serial("Accounting atomic Retail browser acceptance", () => {
       providerCode: "AFRIMONEY",
       transactionType: "DEPOSIT",
       customerPhone: "+243810006020",
-      currencyCode: "CDF",
-      principalAmount: 28_000,
+      currencyCode: "USD",
+      principalAmount: 10,
       customerFeeAmount: 0,
       providerCommissionAmount: 0,
       feeCollectionMode: "NONE",
@@ -344,7 +362,7 @@ test.describe.serial("Accounting atomic Retail browser acceptance", () => {
       externalReference: `E2E-602-MM-${stamp}`,
       idempotencyKey: mobileKey,
     };
-    const mobileBefore = await accountBalance(fixture.mobileCdfAccountId);
+    const mobileBefore = await accountBalance(fixture.mobileUsdAccountId);
     const mobile = await browserPost(page, `/api/enterprise/${organizationId}/retail/mobile-money`, mobilePayload);
     expect(mobile.status, JSON.stringify(mobile.body)).toBe(201);
     expect(mobile.body?.outcome).toBe("SUCCESS");
@@ -354,7 +372,7 @@ test.describe.serial("Accounting atomic Retail browser acceptance", () => {
     const mobileEntry = await postedEntry("EnterpriseMobileMoneyTransaction", mobileId);
     expect(mobileEntry).toBeTruthy();
     expectBalanced(mobileEntry, "Manual Mobile Money");
-    expect(await accountBalance(fixture.mobileCdfAccountId)).toBeCloseTo(mobileBefore - 28_000, 5);
+    expect(await accountBalance(fixture.mobileUsdAccountId)).toBeCloseTo(mobileBefore - 10, 5);
 
     const mobileRetry = await browserPost(page, `/api/enterprise/${organizationId}/retail/mobile-money`, mobilePayload);
     expect(mobileRetry.status, JSON.stringify(mobileRetry.body)).toBe(200);
@@ -362,18 +380,18 @@ test.describe.serial("Accounting atomic Retail browser acceptance", () => {
     expect(mobileRetry.body?.idempotent).toBe(true);
     expect(await prisma.enterpriseMobileMoneyTransaction.count({ where: { organizationId, idempotencyKey: mobileKey } })).toBe(1);
     expect(await prisma.enterpriseJournalEntry.count({ where: { organizationId, sourceEntityType: "EnterpriseMobileMoneyTransaction", sourceEntityId: mobileId } })).toBe(1);
-    expect(await accountBalance(fixture.mobileCdfAccountId)).toBeCloseTo(mobileBefore - 28_000, 5);
+    expect(await accountBalance(fixture.mobileUsdAccountId)).toBeCloseTo(mobileBefore - 10, 5);
 
     const fxKey = `e2e-602-fx-${stamp}`;
     const fxPayload = {
       providerCode: "AFRIMONEY",
-      sourceCurrencyCode: "CDF",
-      targetCurrencyCode: "USD",
-      sourceAmount: 28_000,
+      sourceCurrencyCode: "USD",
+      targetCurrencyCode: "CDF",
+      sourceAmount: 10,
       idempotencyKey: fxKey,
     };
-    const cdfBeforeFx = await accountBalance(fixture.mobileCdfAccountId);
     const usdBeforeFx = await accountBalance(fixture.mobileUsdAccountId);
+    const cdfBeforeFx = await accountBalance(fixture.mobileCdfAccountId);
     const fx = await browserPost(page, `/api/enterprise/${organizationId}/retail/mobile-money/fx`, fxPayload);
     expect(fx.status, JSON.stringify(fx.body)).toBe(201);
     expect(fx.body?.outcome).toBe("SUCCESS");
@@ -382,8 +400,8 @@ test.describe.serial("Accounting atomic Retail browser acceptance", () => {
     const fxEntry = await postedEntry("EnterpriseMobileMoneyFxTransfer", fxId);
     expect(fxEntry).toBeTruthy();
     expectBalanced(fxEntry, "Manual Mobile Money FX");
-    expect(await accountBalance(fixture.mobileCdfAccountId)).toBeCloseTo(cdfBeforeFx - 28_000, 5);
-    expect(await accountBalance(fixture.mobileUsdAccountId)).toBeCloseTo(usdBeforeFx + 10, 5);
+    expect(await accountBalance(fixture.mobileUsdAccountId)).toBeCloseTo(usdBeforeFx - 10, 5);
+    expect(await accountBalance(fixture.mobileCdfAccountId)).toBeCloseTo(cdfBeforeFx + 28_000, 5);
 
     const fxRetry = await browserPost(page, `/api/enterprise/${organizationId}/retail/mobile-money/fx`, fxPayload);
     expect(fxRetry.status, JSON.stringify(fxRetry.body)).toBe(200);
@@ -391,8 +409,8 @@ test.describe.serial("Accounting atomic Retail browser acceptance", () => {
     expect(fxRetry.body?.idempotent).toBe(true);
     expect(await prisma.enterpriseMobileMoneyFxTransfer.count({ where: { organizationId, idempotencyKey: fxKey } })).toBe(1);
     expect(await prisma.enterpriseJournalEntry.count({ where: { organizationId, sourceEntityType: "EnterpriseMobileMoneyFxTransfer", sourceEntityId: fxId } })).toBe(1);
-    expect(await accountBalance(fixture.mobileCdfAccountId)).toBeCloseTo(cdfBeforeFx - 28_000, 5);
-    expect(await accountBalance(fixture.mobileUsdAccountId)).toBeCloseTo(usdBeforeFx + 10, 5);
+    expect(await accountBalance(fixture.mobileUsdAccountId)).toBeCloseTo(usdBeforeFx - 10, 5);
+    expect(await accountBalance(fixture.mobileCdfAccountId)).toBeCloseTo(cdfBeforeFx + 28_000, 5);
 
     await page.goto("/enterprise-modules/TELCO_TOPUPS");
     await page.waitForURL((url) => url.pathname.includes("/enterprise-modules/TELCO_TOPUPS"), { timeout: 30_000 });
@@ -401,15 +419,15 @@ test.describe.serial("Accounting atomic Retail browser acceptance", () => {
       providerCode: "AFRICELL",
       destinationPhone: "+243810006021",
       offerLabel: "E2E Atomic bundle",
-      currencyCode: "CDF",
-      saleAmount: 1_000,
-      operatorCost: 900,
+      currencyCode: "USD",
+      saleAmount: 10,
+      operatorCost: 9,
       tenderFinancialAccountId: fixture.bankAccountId,
       externalReference: `E2E-602-TELCO-${stamp}`,
       status: "SUCCESS",
       idempotencyKey: telcoKey,
     };
-    const telcoBefore = await accountBalance(fixture.telcoCdfAccountId);
+    const telcoBefore = await accountBalance(fixture.telcoUsdAccountId);
     const telco = await browserPost(page, `/api/enterprise/${organizationId}/retail/telco-topups`, telcoPayload);
     expect(telco.status, JSON.stringify(telco.body)).toBe(201);
     expect(telco.body?.outcome).toBe("SUCCESS");
@@ -419,7 +437,7 @@ test.describe.serial("Accounting atomic Retail browser acceptance", () => {
     const telcoEntry = await postedEntry("EnterpriseTelcoTopup", telcoId);
     expect(telcoEntry).toBeTruthy();
     expectBalanced(telcoEntry, "Manual Telco topup");
-    expect(await accountBalance(fixture.telcoCdfAccountId)).toBeCloseTo(telcoBefore - 900, 5);
+    expect(await accountBalance(fixture.telcoUsdAccountId)).toBeCloseTo(telcoBefore - 9, 5);
 
     const telcoRetry = await browserPost(page, `/api/enterprise/${organizationId}/retail/telco-topups`, telcoPayload);
     expect(telcoRetry.status, JSON.stringify(telcoRetry.body)).toBe(200);
@@ -427,7 +445,7 @@ test.describe.serial("Accounting atomic Retail browser acceptance", () => {
     expect(telcoRetry.body?.idempotent).toBe(true);
     expect(await prisma.enterpriseTelcoTopup.count({ where: { organizationId, idempotencyKey: telcoKey } })).toBe(1);
     expect(await prisma.enterpriseJournalEntry.count({ where: { organizationId, sourceEntityType: "EnterpriseTelcoTopup", sourceEntityId: telcoId } })).toBe(1);
-    expect(await accountBalance(fixture.telcoCdfAccountId)).toBeCloseTo(telcoBefore - 900, 5);
+    expect(await accountBalance(fixture.telcoUsdAccountId)).toBeCloseTo(telcoBefore - 9, 5);
 
     await page.goto("/enterprise-modules/MOBILE_MONEY_AGENCY");
     const period = await prisma.enterpriseFiscalPeriod.findFirstOrThrow({
@@ -448,12 +466,12 @@ test.describe.serial("Accounting atomic Retail browser acceptance", () => {
     const rollbackKey = `e2e-602-rollback-${stamp}`;
     const rollbackPayload = {
       ...mobilePayload,
-      principalAmount: 5_000,
+      principalAmount: 5,
       externalReference: `E2E-602-ROLLBACK-${stamp}`,
       idempotencyKey: rollbackKey,
     };
     const rollbackCashBefore = await accountBalance(fixture.cashAccountId);
-    const rollbackFloatBefore = await accountBalance(fixture.mobileCdfAccountId);
+    const rollbackFloatBefore = await accountBalance(fixture.mobileUsdAccountId);
 
     try {
       await prisma.enterpriseFiscalPeriod.update({
@@ -473,7 +491,7 @@ test.describe.serial("Accounting atomic Retail browser acceptance", () => {
       expect(await prisma.enterpriseJournalEntry.count({ where: { organizationId, sourceEntityType: "EnterpriseMobileMoneyTransaction", reference: rollbackPayload.externalReference } })).toBe(0);
       expect(await prisma.enterprisePostingBatch.count({ where: { organizationId, sourceEntityType: "EnterpriseMobileMoneyTransaction", sourceEntityId: { startsWith: "e2e-602-rollback" } } })).toBe(0);
       expect(await accountBalance(fixture.cashAccountId)).toBeCloseTo(rollbackCashBefore, 5);
-      expect(await accountBalance(fixture.mobileCdfAccountId)).toBeCloseTo(rollbackFloatBefore, 5);
+      expect(await accountBalance(fixture.mobileUsdAccountId)).toBeCloseTo(rollbackFloatBefore, 5);
     } finally {
       await prisma.enterpriseFiscalPeriod.update({
         where: { id: period.id },
