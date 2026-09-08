@@ -51,7 +51,8 @@ requireText("telcoAdapter", 'accountMappingKey: "SERVICE_REVENUE"', "marge Telco
 requireText("telcoAdapter", "debit: source.topup.operatorCost", "reversal float Telco");
 requireText("telcoAdapter", "credit: source.topup.saleAmount", "reversal encaissement Telco");
 forbidText("telcoAdapter", 'accountMappingKey: "7', "aucun compte SYSCOHADA en dur dans l'adapter Telco");
-requireText("telcoRoute", "finalizeTelcoTopupAccounting", "finalizer Telco manuel");
+requireText("telcoRoute", "createTelcoTopupWithPosting", "posting Telco manuel atomique");
+forbidText("telcoRoute", "finalizeTelcoTopupAccounting", "le Telco manuel ne doit pas revenir au finalizer deux-phases");
 requireText("telcoReverse", "finalizeTelcoTopupReversalAccounting", "finalizer reversal Telco");
 requireText("orchestration", "await finalizeTelcoTopupAccounting", "finalizer Telco connecté");
 requireText("telcoAccounting", 'postingEvent: "RETAIL_TELCO_TOPUP_POSTED"', "posting Telco commun");
