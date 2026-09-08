@@ -58,16 +58,29 @@ export async function GET(req: Request) {
   }
 
   // Retail keeps its historical module-scope adapter during the generic cutover.
-  // Other sectors receive no active subtype until their runtime contract is implemented.
+  // Other sectors receive no specialized module filtering until their runtime
+  // implementation is promoted in its own iteration.
   const retailBusinessSubtypeCode = basePreview.sector.code === RETAIL_SECTOR_CODE
     ? normalizeRetailBusinessSubtypeCode(businessSubtype?.code || null)
     : null;
-  const preview = await getSectorTemplatePreview(sectorId, { businessSubtypeCode: retailBusinessSubtypeCode });
-  if (!preview) {
+  const sectorPreview = await getSectorTemplatePreview(sectorId, { businessSubtypeCode: retailBusinessSubtypeCode });
+  if (!sectorPreview) {
     await writeApiLog({ request: req, statusCode: 404, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  const preview = {
+    ...sectorPreview,
+    businessSubtype: businessSubtype
+      ? {
+          code: businessSubtype.code,
+          labelFr: businessSubtype.labelFr,
+          labelEn: businessSubtype.labelEn,
+          descriptionFr: businessSubtype.descriptionFr,
+          descriptionEn: businessSubtype.descriptionEn,
+        }
+      : null,
+  };
   const businessSubtypes = listBusinessSubtypesForSector(preview.sector.code).map((subtype) => ({
     code: subtype.code,
     labelFr: subtype.labelFr,
