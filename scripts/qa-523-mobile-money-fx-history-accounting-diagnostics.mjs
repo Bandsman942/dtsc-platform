@@ -32,10 +32,11 @@ requireSource("dashboard", source.dashboard.includes('accountingStatus: posted ?
 requireSource("dashboard", source.dashboard.includes("accountingBlockerCode"), "le blocker comptable FX n'est pas exposé dans le modèle d'historique");
 requireSource("dashboard", !source.dashboard.includes("finalizeMobileMoneyFxAccounting"), "un GET d'historique ne doit jamais déclencher de comptabilisation");
 
-requireSource("fx", source.fx.includes("retailAccountingPendingDiagnostic(accountingError)"), "la cause comptable est encore détruite ou ignorée dans la route FX");
-requireSource("fx", source.fx.includes("accountingErrorCode: diagnostic.errorCode"), "le diagnostic comptable n'est pas audité de façon sûre");
-requireSource("fx", source.fx.includes("blockerCode: diagnostic.errorCode") && source.fx.includes("actionHref: diagnostic.actionHref"), "la réponse PENDING n'expose pas un diagnostic actionnable");
-requireSource("fx", !source.fx.includes("void accountingError"), "le code d'erreur comptable est encore explicitement jeté");
+requireSource("fx", source.fx.includes("createMobileMoneyFxTransferWithPosting"), "la création FX ne passe pas par le wrapper métier + Trésorerie + posting atomique");
+requireSource("fx", source.fx.includes("journalEntryId: accounting.entry.id"), "le succès FX n'audite pas l'écriture effectivement postée");
+requireSource("fx", source.fx.includes('accounting: { status: "POSTED"') && source.fx.includes("retailSuccessOutcome"), "une création FX réussie n'expose pas explicitement son statut comptable POSTED");
+requireSource("fx", !source.fx.includes("retailAccountingPendingDiagnostic") && !source.fx.includes("retailPendingOutcome("), "la création FX peut encore exposer un diagnostic PENDING post-commit au lieu de rollbacker atomiquement");
+requireSource("fx", source.fx.includes('retailErrorResponse(error, "MOBILE_MONEY_FX_CREATE_FAILED")'), "un échec atomique FX n'est pas renvoyé via l'enveloppe FAILURE canonique");
 
 requireSource("retry", source.retry.includes("finalizeMobileMoneyFxAccounting(organizationId, auth.session.userId, transfer.id)"), "la reprise ne réutilise pas le posting idempotent du transfert existant");
 requireSource("retry", source.retry.includes("where: { id: transferId, organizationId }"), "la reprise comptable n'est pas strictement tenant-scoped");
@@ -46,7 +47,7 @@ requireSource("retry", !source.retry.includes("createMobileMoneyFxTransfer"), "l
 requireSource("retry", !source.retry.includes("operationalBalance"), "la reprise comptable ne doit jamais modifier directement les soldes wallet");
 requireSource("retry", !source.retry.includes("retailErrorResponse"), "une erreur de posting non classée après transfert durable ne doit pas redevenir un faux FAILURE global");
 
-requireSource("workspace", source.workspace.includes('startsWith("FX_CONVERSION_PENDING:")'), "l'historique ne détecte pas les conversions en attente de comptabilisation");
+requireSource("workspace", source.workspace.includes('startsWith("FX_CONVERSION_PENDING:")'), "l'historique ne détecte pas les conversions historiques en attente de comptabilisation");
 requireSource("workspace", source.workspace.includes("/retail/mobile-money/fx/${item.id}/accounting"), "l'action de finalisation comptable n'appelle pas l'endpoint dédié");
 requireSource("workspace", source.workspace.includes('accountingRetry: "Finaliser la comptabilisation"') && source.workspace.includes('accountingRetry: "Finalize accounting"'), "l'action de reprise n'est pas bilingue");
 requireSource("workspace", source.workspace.includes("{ idempotent: false }"), "l'action de reprise doit appeler l'endpoint dédié sans générer une seconde clé de transfert côté client");
@@ -86,8 +87,8 @@ if (failures.length) {
 }
 
 console.log("PASS qa-523-mobile-money-fx-history-accounting-diagnostics");
-console.log("- les conversions FX durables sont visibles dans l'historique Mobile Money");
-console.log("- statut métier et statut comptable restent distincts dans le payload FX sans modifier le socle Retail partagé");
-console.log("- le blocker comptable réel est conservé et traduit sans exposer la stack");
-console.log("- la reprise comptable est tenant-scoped, idempotente et ne rejoue jamais le transfert wallet");
+console.log("- les nouvelles conversions FX sont métier + Trésorerie + posting atomiques et n'exposent plus de PENDING comptable post-commit");
+console.log("- les conversions FX historiques restent visibles avec statut métier et comptable distincts");
+console.log("- le blocker comptable historique reste conservé et traduit sans exposer la stack");
+console.log("- la reprise comptable d'un transfert durable existant reste tenant-scoped, idempotente et ne rejoue jamais le transfert wallet");
 console.log("- le GET d'historique reste strictement en lecture seule");

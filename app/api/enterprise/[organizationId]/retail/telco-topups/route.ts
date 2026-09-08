@@ -7,8 +7,7 @@ import { authorizeRetailRequest, retailErrorResponse, retailListParams } from "@
 import { retailFailureOutcome, retailPendingOutcome, retailSuccessOutcome } from "@/lib/enterprise/retail/mutation-outcome";
 import { createConnectedTelcoTopupOperation } from "@/lib/enterprise/retail/operator-orchestration";
 import { telcoTopupCreateSchema } from "@/lib/enterprise/retail/schemas";
-import { createTelcoTopup } from "@/lib/enterprise/retail/service";
-import { finalizeTelcoTopupAccounting } from "@/lib/enterprise/retail/telco-accounting";
+import { createTelcoTopupWithPosting } from "@/lib/enterprise/retail/service";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -89,7 +88,7 @@ export async function POST(req: Request, { params }: Params) {
       );
     }
 
-    const result = await createTelcoTopup(organizationId, auth.session.userId, prepared.input);
+    const result = await createTelcoTopupWithPosting(organizationId, auth.session.userId, prepared.input);
     if (result.topup.status !== "SUCCESS") {
       const statusCode = result.idempotent ? 200 : 201;
       await Promise.allSettled([
@@ -118,58 +117,32 @@ export async function POST(req: Request, { params }: Params) {
       return NextResponse.json(retailSuccessOutcome({ mode: "MANUAL", ...result, accounting: null }), { status: statusCode });
     }
 
-    try {
-      const accounting = await finalizeTelcoTopupAccounting(organizationId, auth.session.userId, result.topup.id);
-      const statusCode = result.idempotent ? 200 : 201;
-      await Promise.allSettled([
-        writeAuditLog({
-          userId: auth.session.userId,
-          action: "ENTERPRISE_TELCO_TOPUP_RECORDED",
-          entity: "EnterpriseTelcoTopup",
-          entityId: result.topup.id,
-          request: req,
-          metadata: {
-            organizationId,
-            number: result.topup.number,
-            providerCode: result.topup.providerCode,
-            status: result.topup.status,
-            saleAmount: result.topup.saleAmount.toFixed(),
-            operatorCost: result.topup.operatorCost.toFixed(),
-            margin: result.topup.marginAmount.toFixed(),
-            externalReference: result.topup.externalReference,
-            idempotent: result.idempotent,
-            mode: "MANUAL",
-            journalEntryId: accounting.entry.id,
-          },
-        }),
-        writeApiLog({ request: req, statusCode, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "telco-topups", action: "create", mode: "MANUAL", outcome: "SUCCESS", journalEntryId: accounting.entry.id } }),
-      ]);
-      return NextResponse.json(retailSuccessOutcome({ mode: "MANUAL", ...result, accounting: { journalEntryId: accounting.entry.id, idempotent: accounting.idempotent } }), { status: statusCode });
-    } catch (accountingError) {
-      await Promise.allSettled([
-        writeAuditLog({
-          userId: auth.session.userId,
-          action: "ENTERPRISE_TELCO_TOPUP_ACCOUNTING_PENDING",
-          entity: "EnterpriseTelcoTopup",
-          entityId: result.topup.id,
-          request: req,
-          metadata: {
-            organizationId,
-            number: result.topup.number,
-            providerCode: result.topup.providerCode,
-            status: result.topup.status,
-            saleAmount: result.topup.saleAmount.toFixed(),
-            currency: result.topup.currencyCode,
-            idempotent: result.idempotent,
-            mode: "MANUAL",
-            accountingPending: true,
-          },
-        }),
-        writeApiLog({ request: req, statusCode: 202, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "telco-topups", action: "create", mode: "MANUAL", outcome: "PENDING", accountingPending: true } }),
-      ]);
-      void accountingError;
-      return NextResponse.json(retailPendingOutcome("RETAIL_ACCOUNTING_PENDING", { mode: "MANUAL", ...result, accounting: { status: "PENDING" } }), { status: 202 });
-    }
+    const accounting = result.accounting;
+    const statusCode = result.idempotent ? 200 : 201;
+    await Promise.allSettled([
+      writeAuditLog({
+        userId: auth.session.userId,
+        action: "ENTERPRISE_TELCO_TOPUP_RECORDED",
+        entity: "EnterpriseTelcoTopup",
+        entityId: result.topup.id,
+        request: req,
+        metadata: {
+          organizationId,
+          number: result.topup.number,
+          providerCode: result.topup.providerCode,
+          status: result.topup.status,
+          saleAmount: result.topup.saleAmount.toFixed(),
+          operatorCost: result.topup.operatorCost.toFixed(),
+          margin: result.topup.marginAmount.toFixed(),
+          externalReference: result.topup.externalReference,
+          idempotent: result.idempotent,
+          mode: "MANUAL",
+          journalEntryId: accounting?.entry.id || null,
+        },
+      }),
+      writeApiLog({ request: req, statusCode, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "telco-topups", action: "create", mode: "MANUAL", outcome: "SUCCESS", journalEntryId: accounting?.entry.id || null } }),
+    ]);
+    return NextResponse.json(retailSuccessOutcome({ mode: "MANUAL", ...result, accounting: accounting ? { journalEntryId: accounting.entry.id, idempotent: accounting.idempotent } : null }), { status: statusCode });
   } catch (error) {
     return retailErrorResponse(error, "TELCO_TOPUP_CREATE_FAILED");
   }

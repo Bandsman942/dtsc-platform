@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
-import { postBusinessEvent } from "@/lib/enterprise/accounting/posting-service";
+import { ensureMobileMoneyTransactionLedgerMappingTx } from "@/lib/enterprise/accounting/mobile-money-ledger-provisioning";
+import { postBusinessEvent, postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
 import { money, publishFinanceEvent, sumDecimals } from "@/lib/enterprise/accounting/helpers";
 import { publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
 import { applyStockMovementTx } from "@/lib/enterprise/inventory/service";
@@ -335,31 +336,54 @@ async function getRetailProviderTx(tx: Prisma.TransactionClient, organizationId:
   return provider;
 }
 
+async function createMobileMoneyTransactionTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  actorUserId: string,
+  input: MobileMoneyInput,
+) {
+  await assertRetailOrganization(tx, organizationId);
+  await ensureRetailConfigurationTx(tx, organizationId, actorUserId);
+  const existing = await tx.enterpriseMobileMoneyTransaction.findFirst({ where: { organizationId, idempotencyKey: input.idempotencyKey } });
+  if (existing) return { transaction: existing, idempotent: true };
+  const provider = await getRetailProviderTx(tx, organizationId, input.providerCode);
+  if (!["MOBILE_MONEY", "BOTH"].includes(provider.providerType)) throw new EnterpriseRetailError("RETAIL_PROVIDER_NOT_FOUND", 409, { providerCode: input.providerCode });
+  const cashAccount = await assertFinancialAccount(tx, organizationId, input.cashAccountId, input.currencyCode, ["CASH"]);
+  const resolvedFloatAccount = await resolveMobileMoneyFloatAccountTx(tx, organizationId, provider, input.currencyCode);
+  const floatAccount = resolvedFloatAccount.account;
+  if (cashAccount.id === floatAccount.id) throw new EnterpriseRetailError("RETAIL_FINANCIAL_ACCOUNT_INVALID", 409);
+  const cashSession = await assertOpenCashSession(tx, organizationId, cashAccount.id, actorUserId);
+  const principal = decimal(input.principalAmount);
+  const cashFee = input.feeCollectionMode === "CASH" ? decimal(input.customerFeeAmount || 0) : decimal(0);
+  const cashEffect = input.transactionType === "DEPOSIT" ? principal.plus(cashFee) : principal.negated().plus(cashFee);
+  const floatEffect = input.transactionType === "DEPOSIT" ? principal.negated() : principal;
+  const occurredAt = input.occurredAt || new Date();
+  const number = retailReference("MM");
+  const transaction = await tx.enterpriseMobileMoneyTransaction.create({ data: { organizationId, number, providerCode: provider.providerCode, transactionType: input.transactionType, customerPhone: input.customerPhone, currencyCode: input.currencyCode, principalAmount: principal, customerFeeAmount: decimal(input.customerFeeAmount || 0), providerCommissionAmount: decimal(input.providerCommissionAmount || 0), feeCollectionMode: input.feeCollectionMode, cashAccountId: cashAccount.id, floatAccountId: floatAccount.id, cashEffectAmount: cashEffect, floatEffectAmount: floatEffect, externalReference: input.externalReference || null, occurredAt, agentUserId: actorUserId, idempotencyKey: input.idempotencyKey } });
+  await applyAccountEffectTx(tx, { organizationId, actorUserId, account: cashAccount, effect: cashEffect, transactionType: `MOBILE_MONEY_${input.transactionType}_CASH`, reference: number, transactionDate: occurredAt, cashSessionId: cashSession.id, cashReason: `${provider.label} ${input.transactionType}` });
+  await applyAccountEffectTx(tx, { organizationId, actorUserId, account: floatAccount, effect: floatEffect, transactionType: `MOBILE_MONEY_${input.transactionType}_FLOAT`, reference: number, transactionDate: occurredAt });
+  await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseMobileMoneyTransaction", entityId: transaction.id, eventType: `MOBILE_MONEY_${input.transactionType}_CONFIRMED`, summary: `${provider.label} ${input.transactionType} ${number}`, actorUserId, toStatus: "CONFIRMED", metadataJson: { principal: principal.toFixed(), customerFee: transaction.customerFeeAmount.toFixed(), providerCommission: transaction.providerCommissionAmount.toFixed(), currency: input.currencyCode, cashAccountId: cashAccount.id, floatAccountId: floatAccount.id } });
+  return { transaction, idempotent: false };
+}
+
 export async function createMobileMoneyTransaction(organizationId: string, actorUserId: string, input: MobileMoneyInput) {
+  return prisma.$transaction(
+    (tx) => createMobileMoneyTransactionTx(tx, organizationId, actorUserId, input),
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 },
+  );
+}
+
+export async function createMobileMoneyTransactionWithPosting(organizationId: string, actorUserId: string, input: MobileMoneyInput) {
   return prisma.$transaction(async (tx) => {
-    await assertRetailOrganization(tx, organizationId);
-    await ensureRetailConfigurationTx(tx, organizationId, actorUserId);
-    const existing = await tx.enterpriseMobileMoneyTransaction.findFirst({ where: { organizationId, idempotencyKey: input.idempotencyKey } });
-    if (existing) return { transaction: existing, idempotent: true };
-    const provider = await getRetailProviderTx(tx, organizationId, input.providerCode);
-    if (!["MOBILE_MONEY", "BOTH"].includes(provider.providerType)) throw new EnterpriseRetailError("RETAIL_PROVIDER_NOT_FOUND", 409, { providerCode: input.providerCode });
-    const cashAccount = await assertFinancialAccount(tx, organizationId, input.cashAccountId, input.currencyCode, ["CASH"]);
-    const resolvedFloatAccount = await resolveMobileMoneyFloatAccountTx(tx, organizationId, provider, input.currencyCode);
-    const floatAccount = resolvedFloatAccount.account;
-    if (cashAccount.id === floatAccount.id) throw new EnterpriseRetailError("RETAIL_FINANCIAL_ACCOUNT_INVALID", 409);
-    const cashSession = await assertOpenCashSession(tx, organizationId, cashAccount.id, actorUserId);
-    const principal = decimal(input.principalAmount);
-    const cashFee = input.feeCollectionMode === "CASH" ? decimal(input.customerFeeAmount || 0) : decimal(0);
-    const cashEffect = input.transactionType === "DEPOSIT" ? principal.plus(cashFee) : principal.negated().plus(cashFee);
-    const floatEffect = input.transactionType === "DEPOSIT" ? principal.negated() : principal;
-    const occurredAt = input.occurredAt || new Date();
-    const number = retailReference("MM");
-    const transaction = await tx.enterpriseMobileMoneyTransaction.create({ data: { organizationId, number, providerCode: provider.providerCode, transactionType: input.transactionType, customerPhone: input.customerPhone, currencyCode: input.currencyCode, principalAmount: principal, customerFeeAmount: decimal(input.customerFeeAmount || 0), providerCommissionAmount: decimal(input.providerCommissionAmount || 0), feeCollectionMode: input.feeCollectionMode, cashAccountId: cashAccount.id, floatAccountId: floatAccount.id, cashEffectAmount: cashEffect, floatEffectAmount: floatEffect, externalReference: input.externalReference || null, occurredAt, agentUserId: actorUserId, idempotencyKey: input.idempotencyKey } });
-    await applyAccountEffectTx(tx, { organizationId, actorUserId, account: cashAccount, effect: cashEffect, transactionType: `MOBILE_MONEY_${input.transactionType}_CASH`, reference: number, transactionDate: occurredAt, cashSessionId: cashSession.id, cashReason: `${provider.label} ${input.transactionType}` });
-    await applyAccountEffectTx(tx, { organizationId, actorUserId, account: floatAccount, effect: floatEffect, transactionType: `MOBILE_MONEY_${input.transactionType}_FLOAT`, reference: number, transactionDate: occurredAt });
-    await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseMobileMoneyTransaction", entityId: transaction.id, eventType: `MOBILE_MONEY_${input.transactionType}_CONFIRMED`, summary: `${provider.label} ${input.transactionType} ${number}`, actorUserId, toStatus: "CONFIRMED", metadataJson: { principal: principal.toFixed(), customerFee: transaction.customerFeeAmount.toFixed(), providerCommission: transaction.providerCommissionAmount.toFixed(), currency: input.currencyCode, cashAccountId: cashAccount.id, floatAccountId: floatAccount.id } });
-    return { transaction, idempotent: false };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 });
+    const result = await createMobileMoneyTransactionTx(tx, organizationId, actorUserId, input);
+    await ensureMobileMoneyTransactionLedgerMappingTx(tx, organizationId, actorUserId, result.transaction.id);
+    const accounting = await postBusinessEventTx(tx, organizationId, actorUserId, {
+      postingEvent: "RETAIL_MOBILE_MONEY_POSTED",
+      sourceEntityType: "EnterpriseMobileMoneyTransaction",
+      sourceEntityId: result.transaction.id,
+    });
+    return { ...result, accounting };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
 }
 
 export async function reverseMobileMoneyTransaction(organizationId: string, transactionId: string, actorUserId: string, input: RetailSaleReverseInput) {
@@ -381,36 +405,59 @@ export async function reverseMobileMoneyTransaction(organizationId: string, tran
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 });
 }
 
+export async function createTelcoTopupTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  actorUserId: string,
+  input: TelcoTopupInput,
+) {
+  await assertRetailOrganization(tx, organizationId);
+  await ensureRetailConfigurationTx(tx, organizationId, actorUserId);
+  const existing = await tx.enterpriseTelcoTopup.findFirst({ where: { organizationId, idempotencyKey: input.idempotencyKey } });
+  if (existing) return { topup: existing, idempotent: true };
+  const provider = await getRetailProviderTx(tx, organizationId, input.providerCode);
+  if (!["TELCO", "BOTH"].includes(provider.providerType)) throw new EnterpriseRetailError("RETAIL_PROVIDER_NOT_FOUND", 409, { providerCode: input.providerCode });
+  const catalogItem = input.catalogItemId
+    ? await tx.enterpriseCatalogItem.findFirst({ where: { id: input.catalogItemId, organizationId, status: "ACTIVE", archivedAt: null }, select: { id: true, currency: true } })
+    : null;
+  if (input.catalogItemId && !catalogItem) throw new EnterpriseRetailError("RETAIL_CATALOG_ITEM_INVALID", 409, { catalogItemId: input.catalogItemId });
+  const tenderAccount = await assertFinancialAccount(tx, organizationId, input.tenderFinancialAccountId, input.currencyCode, ["CASH", "MOBILE_MONEY", "BANK", "CLEARING"]);
+  if (catalogItem?.currency && catalogItem.currency !== tenderAccount.currencyCode) throw new EnterpriseRetailError("RETAIL_CURRENCY_MISMATCH", 409, { catalogItemId: catalogItem.id });
+  const operatorFloatAccount = (await resolveTelcoFloatAccountTx(tx, organizationId, provider, tenderAccount.currencyCode)).account;
+  if (tenderAccount.id === operatorFloatAccount.id) throw new EnterpriseRetailError("RETAIL_FINANCIAL_ACCOUNT_INVALID", 409);
+  const cashSession = tenderAccount.accountType === "CASH" ? await assertOpenCashSession(tx, organizationId, tenderAccount.id, actorUserId) : null;
+  const saleAmount = decimal(input.saleAmount);
+  const operatorCost = decimal(input.operatorCost);
+  const marginAmount = money(saleAmount.minus(operatorCost));
+  const occurredAt = input.occurredAt || new Date();
+  const number = retailReference("TEL");
+  const topup = await tx.enterpriseTelcoTopup.create({ data: { organizationId, number, providerCode: provider.providerCode, destinationPhone: input.destinationPhone, catalogItemId: input.catalogItemId || null, offerLabel: input.offerLabel, currencyCode: input.currencyCode, saleAmount, operatorCost, marginAmount, tenderFinancialAccountId: tenderAccount.id, operatorFloatAccountId: operatorFloatAccount.id, externalReference: input.externalReference || null, status: input.status, failureReason: input.failureReason || null, occurredAt, agentUserId: actorUserId, idempotencyKey: input.idempotencyKey } });
+  if (input.status === "SUCCESS") {
+    await applyAccountEffectTx(tx, { organizationId, actorUserId, account: tenderAccount, effect: saleAmount, transactionType: "TELCO_TOPUP_TENDER", reference: number, transactionDate: occurredAt, cashSessionId: cashSession?.id, cashReason: `${provider.label} ${input.offerLabel}` });
+    await applyAccountEffectTx(tx, { organizationId, actorUserId, account: operatorFloatAccount, effect: operatorCost.negated(), transactionType: "TELCO_TOPUP_FLOAT", reference: number, transactionDate: occurredAt });
+    await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseTelcoTopup", entityId: topup.id, eventType: "TELCO_TOPUP_SUCCESS", summary: `Recharge ${number} réussie`, actorUserId, toStatus: "SUCCESS", metadataJson: { saleAmount: saleAmount.toFixed(), operatorCost: operatorCost.toFixed(), margin: marginAmount.toFixed(), currency: input.currencyCode } });
+  }
+  return { topup, idempotent: false };
+}
+
 export async function createTelcoTopup(organizationId: string, actorUserId: string, input: TelcoTopupInput) {
+  return prisma.$transaction(
+    (tx) => createTelcoTopupTx(tx, organizationId, actorUserId, input),
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 },
+  );
+}
+
+export async function createTelcoTopupWithPosting(organizationId: string, actorUserId: string, input: TelcoTopupInput) {
   return prisma.$transaction(async (tx) => {
-    await assertRetailOrganization(tx, organizationId);
-    await ensureRetailConfigurationTx(tx, organizationId, actorUserId);
-    const existing = await tx.enterpriseTelcoTopup.findFirst({ where: { organizationId, idempotencyKey: input.idempotencyKey } });
-    if (existing) return { topup: existing, idempotent: true };
-    const provider = await getRetailProviderTx(tx, organizationId, input.providerCode);
-    if (!["TELCO", "BOTH"].includes(provider.providerType)) throw new EnterpriseRetailError("RETAIL_PROVIDER_NOT_FOUND", 409, { providerCode: input.providerCode });
-    const catalogItem = input.catalogItemId
-      ? await tx.enterpriseCatalogItem.findFirst({ where: { id: input.catalogItemId, organizationId, status: "ACTIVE", archivedAt: null }, select: { id: true, currency: true } })
-      : null;
-    if (input.catalogItemId && !catalogItem) throw new EnterpriseRetailError("RETAIL_CATALOG_ITEM_INVALID", 409, { catalogItemId: input.catalogItemId });
-    const tenderAccount = await assertFinancialAccount(tx, organizationId, input.tenderFinancialAccountId, input.currencyCode, ["CASH", "MOBILE_MONEY", "BANK", "CLEARING"]);
-    if (catalogItem?.currency && catalogItem.currency !== tenderAccount.currencyCode) throw new EnterpriseRetailError("RETAIL_CURRENCY_MISMATCH", 409, { catalogItemId: catalogItem.id });
-    const operatorFloatAccount = (await resolveTelcoFloatAccountTx(tx, organizationId, provider, tenderAccount.currencyCode)).account;
-    if (tenderAccount.id === operatorFloatAccount.id) throw new EnterpriseRetailError("RETAIL_FINANCIAL_ACCOUNT_INVALID", 409);
-    const cashSession = tenderAccount.accountType === "CASH" ? await assertOpenCashSession(tx, organizationId, tenderAccount.id, actorUserId) : null;
-    const saleAmount = decimal(input.saleAmount);
-    const operatorCost = decimal(input.operatorCost);
-    const marginAmount = money(saleAmount.minus(operatorCost));
-    const occurredAt = input.occurredAt || new Date();
-    const number = retailReference("TEL");
-    const topup = await tx.enterpriseTelcoTopup.create({ data: { organizationId, number, providerCode: provider.providerCode, destinationPhone: input.destinationPhone, catalogItemId: input.catalogItemId || null, offerLabel: input.offerLabel, currencyCode: input.currencyCode, saleAmount, operatorCost, marginAmount, tenderFinancialAccountId: tenderAccount.id, operatorFloatAccountId: operatorFloatAccount.id, externalReference: input.externalReference || null, status: input.status, failureReason: input.failureReason || null, occurredAt, agentUserId: actorUserId, idempotencyKey: input.idempotencyKey } });
-    if (input.status === "SUCCESS") {
-      await applyAccountEffectTx(tx, { organizationId, actorUserId, account: tenderAccount, effect: saleAmount, transactionType: "TELCO_TOPUP_TENDER", reference: number, transactionDate: occurredAt, cashSessionId: cashSession?.id, cashReason: `${provider.label} ${input.offerLabel}` });
-      await applyAccountEffectTx(tx, { organizationId, actorUserId, account: operatorFloatAccount, effect: operatorCost.negated(), transactionType: "TELCO_TOPUP_FLOAT", reference: number, transactionDate: occurredAt });
-      await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseTelcoTopup", entityId: topup.id, eventType: "TELCO_TOPUP_SUCCESS", summary: `Recharge ${number} réussie`, actorUserId, toStatus: "SUCCESS", metadataJson: { saleAmount: saleAmount.toFixed(), operatorCost: operatorCost.toFixed(), margin: marginAmount.toFixed(), currency: input.currencyCode } });
-    }
-    return { topup, idempotent: false };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 });
+    const result = await createTelcoTopupTx(tx, organizationId, actorUserId, input);
+    if (result.topup.status !== "SUCCESS") return { ...result, accounting: null };
+    const accounting = await postBusinessEventTx(tx, organizationId, actorUserId, {
+      postingEvent: "RETAIL_TELCO_TOPUP_POSTED",
+      sourceEntityType: "EnterpriseTelcoTopup",
+      sourceEntityId: result.topup.id,
+    });
+    return { ...result, accounting };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
 }
 
 export async function reverseTelcoTopup(organizationId: string, topupId: string, actorUserId: string, input: RetailSaleReverseInput) {

@@ -145,40 +145,87 @@ async function ensureWalletSubledgerTx(
   return child;
 }
 
+export async function ensureMobileMoneyTransactionLedgerMappingTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  actorUserId: string,
+  transactionId: string,
+) {
+  const transaction = await tx.enterpriseMobileMoneyTransaction.findFirst({
+    where: { id: transactionId, organizationId },
+    select: {
+      id: true,
+      providerCode: true,
+      currencyCode: true,
+      floatAccountId: true,
+      occurredAt: true,
+    },
+  });
+  if (!transaction) throw new EnterpriseAccountingError("RETAIL_MOBILE_MONEY_NOT_POSTABLE", 409);
+  const provider = await tx.enterpriseRetailProvider.findFirst({
+    where: { organizationId, providerCode: transaction.providerCode, isActive: true },
+    select: { providerCode: true, label: true },
+  });
+  if (!provider) throw new EnterpriseAccountingError("RETAIL_MOBILE_MONEY_FINANCIAL_ACCOUNTS_INVALID", 409);
+
+  const ledger = await ensureWalletSubledgerTx(tx, {
+    organizationId,
+    actorUserId,
+    financialAccountId: transaction.floatAccountId,
+    providerCode: provider.providerCode,
+    providerLabel: provider.label,
+    currencyCode: transaction.currencyCode,
+    accountingDate: transaction.occurredAt,
+  });
+  return { ledgerAccountId: ledger.id };
+}
+
 export async function ensureMobileMoneyTransactionLedgerMapping(
   organizationId: string,
   actorUserId: string,
   transactionId: string,
 ) {
-  return prisma.$transaction(async (tx) => {
-    const transaction = await tx.enterpriseMobileMoneyTransaction.findFirst({
-      where: { id: transactionId, organizationId },
-      select: {
-        id: true,
-        providerCode: true,
-        currencyCode: true,
-        floatAccountId: true,
-        occurredAt: true,
-      },
-    });
-    if (!transaction) throw new EnterpriseAccountingError("RETAIL_MOBILE_MONEY_NOT_POSTABLE", 409);
-    const provider = await tx.enterpriseRetailProvider.findFirst({
-      where: { organizationId, providerCode: transaction.providerCode, isActive: true },
-      select: { providerCode: true, label: true },
-    });
-    if (!provider) throw new EnterpriseAccountingError("RETAIL_MOBILE_MONEY_FINANCIAL_ACCOUNTS_INVALID", 409);
+  return prisma.$transaction(
+    (tx) => ensureMobileMoneyTransactionLedgerMappingTx(tx, organizationId, actorUserId, transactionId),
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 },
+  );
+}
 
-    const ledger = await ensureWalletSubledgerTx(tx, {
-      organizationId,
-      actorUserId,
-      financialAccountId: transaction.floatAccountId,
-      providerCode: provider.providerCode,
-      providerLabel: provider.label,
-      currencyCode: transaction.currencyCode,
-      accountingDate: transaction.occurredAt,
-    });
-    return { ledgerAccountId: ledger.id };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
+export async function ensureMobileMoneyFxLedgerMappingsTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  actorUserId: string,
+  transferId: string,
+) {
+  const transfer = await tx.enterpriseMobileMoneyFxTransfer.findFirst({
+    where: { id: transferId, organizationId },
+  });
+  if (!transfer) throw new EnterpriseAccountingError("RETAIL_MOBILE_MONEY_FX_NOT_POSTABLE", 409);
+  const provider = await tx.enterpriseRetailProvider.findFirst({
+    where: { id: transfer.providerId, organizationId, isActive: true },
+    select: { providerCode: true, label: true },
+  });
+  if (!provider) throw new EnterpriseAccountingError("RETAIL_MOBILE_MONEY_FX_ACCOUNTS_INVALID", 409);
+
+  const source = await ensureWalletSubledgerTx(tx, {
+    organizationId,
+    actorUserId,
+    financialAccountId: transfer.sourceFloatAccountId,
+    providerCode: provider.providerCode,
+    providerLabel: provider.label,
+    currencyCode: transfer.sourceCurrencyCode,
+    accountingDate: transfer.occurredAt,
+  });
+  const target = await ensureWalletSubledgerTx(tx, {
+    organizationId,
+    actorUserId,
+    financialAccountId: transfer.targetFloatAccountId,
+    providerCode: provider.providerCode,
+    providerLabel: provider.label,
+    currencyCode: transfer.targetCurrencyCode,
+    accountingDate: transfer.occurredAt,
+  });
+  return { sourceLedgerAccountId: source.id, targetLedgerAccountId: target.id };
 }
 
 export async function ensureMobileMoneyFxLedgerMappings(
@@ -186,35 +233,8 @@ export async function ensureMobileMoneyFxLedgerMappings(
   actorUserId: string,
   transferId: string,
 ) {
-  return prisma.$transaction(async (tx) => {
-    const transfer = await tx.enterpriseMobileMoneyFxTransfer.findFirst({
-      where: { id: transferId, organizationId },
-    });
-    if (!transfer) throw new EnterpriseAccountingError("RETAIL_MOBILE_MONEY_FX_NOT_POSTABLE", 409);
-    const provider = await tx.enterpriseRetailProvider.findFirst({
-      where: { id: transfer.providerId, organizationId, isActive: true },
-      select: { providerCode: true, label: true },
-    });
-    if (!provider) throw new EnterpriseAccountingError("RETAIL_MOBILE_MONEY_FX_ACCOUNTS_INVALID", 409);
-
-    const source = await ensureWalletSubledgerTx(tx, {
-      organizationId,
-      actorUserId,
-      financialAccountId: transfer.sourceFloatAccountId,
-      providerCode: provider.providerCode,
-      providerLabel: provider.label,
-      currencyCode: transfer.sourceCurrencyCode,
-      accountingDate: transfer.occurredAt,
-    });
-    const target = await ensureWalletSubledgerTx(tx, {
-      organizationId,
-      actorUserId,
-      financialAccountId: transfer.targetFloatAccountId,
-      providerCode: provider.providerCode,
-      providerLabel: provider.label,
-      currencyCode: transfer.targetCurrencyCode,
-      accountingDate: transfer.occurredAt,
-    });
-    return { sourceLedgerAccountId: source.id, targetLedgerAccountId: target.id };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
+  return prisma.$transaction(
+    (tx) => ensureMobileMoneyFxLedgerMappingsTx(tx, organizationId, actorUserId, transferId),
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 },
+  );
 }

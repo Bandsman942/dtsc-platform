@@ -86,11 +86,20 @@ async function assertExternalReferenceAvailable(
   kind: "MOBILE_MONEY" | "TELCO",
   providerCode: string,
   externalReference: string,
+  idempotencyKey: string,
 ) {
   const existing = kind === "MOBILE_MONEY"
-    ? await prisma.enterpriseMobileMoneyTransaction.findFirst({ where: { organizationId, providerCode, externalReference }, select: { id: true } })
-    : await prisma.enterpriseTelcoTopup.findFirst({ where: { organizationId, providerCode, externalReference }, select: { id: true } });
-  if (existing) throw new EnterpriseRetailError("RETAIL_EXTERNAL_REFERENCE_DUPLICATE", 409, { providerCode });
+    ? await prisma.enterpriseMobileMoneyTransaction.findFirst({
+        where: { organizationId, providerCode, externalReference },
+        select: { id: true, idempotencyKey: true },
+      })
+    : await prisma.enterpriseTelcoTopup.findFirst({
+        where: { organizationId, providerCode, externalReference },
+        select: { id: true, idempotencyKey: true },
+      });
+  if (existing && existing.idempotencyKey !== idempotencyKey) {
+    throw new EnterpriseRetailError("RETAIL_EXTERNAL_REFERENCE_DUPLICATE", 409, { providerCode });
+  }
 }
 
 async function resolveRetailProviderExecutionMode(
@@ -117,7 +126,7 @@ export async function prepareCommercialMobileMoney(organizationId: string, input
   const country = await organizationCountry(organizationId);
   const customerPhone = normalizeRetailPhone(input.customerPhone, country);
   if (executionMode === "MANUAL" && requestedExternalReference) {
-    await assertExternalReferenceAvailable(organizationId, "MOBILE_MONEY", input.providerCode, requestedExternalReference);
+    await assertExternalReferenceAvailable(organizationId, "MOBILE_MONEY", input.providerCode, requestedExternalReference, input.idempotencyKey);
   }
   return {
     executionMode,
@@ -137,7 +146,7 @@ export async function prepareCommercialTelcoTopup(organizationId: string, input:
   const country = await organizationCountry(organizationId);
   const destinationPhone = normalizeRetailPhone(input.destinationPhone, country);
   if (executionMode === "MANUAL" && requestedExternalReference) {
-    await assertExternalReferenceAvailable(organizationId, "TELCO", input.providerCode, requestedExternalReference);
+    await assertExternalReferenceAvailable(organizationId, "TELCO", input.providerCode, requestedExternalReference, input.idempotencyKey);
   }
   return {
     executionMode,

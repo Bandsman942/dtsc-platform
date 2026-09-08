@@ -111,7 +111,8 @@ for (const event of ["RETAIL_MOBILE_MONEY_POSTED", "RETAIL_MOBILE_MONEY_REVERSED
 const manualRoute = read("app/api/enterprise/[organizationId]/retail/mobile-money/route.ts");
 const reverseRoute = read("app/api/enterprise/[organizationId]/retail/mobile-money/[transactionId]/reverse/route.ts");
 const orchestration = read("lib/enterprise/retail/operator-orchestration.ts");
-check(manualRoute.includes("finalizeMobileMoneyAccounting"), "Manual Mobile Money operations must finalize accounting");
+check(hasAll(manualRoute, ["createMobileMoneyTransactionWithPosting", '"MOBILE_MONEY_AGENCY", "submit"']), "Manual Mobile Money operations must enforce submit RBAC and commit business, Treasury and accounting atomically");
+check(!manualRoute.includes("finalizeMobileMoneyAccounting"), "Manual Mobile Money operations must not return to two-phase accounting finalization");
 check(reverseRoute.includes("finalizeMobileMoneyReversalAccounting"), "Mobile Money reversals must finalize accounting reversal");
 check(orchestration.includes("finalizeMobileMoneyAccounting"), "Connected provider confirmation/reconciliation must converge on the same accounting finalizer");
 
@@ -120,7 +121,8 @@ const fxRoute = read("app/api/enterprise/[organizationId]/retail/mobile-money/fx
 const fxReverseRoute = read("app/api/enterprise/[organizationId]/retail/mobile-money/fx/[transferId]/reverse/route.ts");
 const retailCashCloseRoute = read("app/api/enterprise/[organizationId]/retail/cash-sessions/[sessionId]/close/route.ts");
 check(hasAll(accountsRoute, ['"MOBILE_MONEY_AGENCY", "read"', '"MOBILE_MONEY_AGENCY", "manage"', "mobileMoneyProviderAccountUpsertSchema"]), "Wallet mapping API must enforce read/manage access and schema validation");
-check(hasAll(fxRoute, ['"MOBILE_MONEY_AGENCY", "read"', '"MOBILE_MONEY_AGENCY", "manage"', "mobileMoneyFxPreviewSchema", "mobileMoneyFxTransferSchema", "finalizeMobileMoneyFxAccounting"]), "FX preview/transfer API must enforce RBAC, validation and accounting");
+check(hasAll(fxRoute, ['"MOBILE_MONEY_AGENCY", "read"', '"MOBILE_MONEY_AGENCY", "manage"', "mobileMoneyFxPreviewSchema", "mobileMoneyFxTransferSchema", "createMobileMoneyFxTransferWithPosting"]), "FX preview/transfer API must enforce RBAC, validation and atomic accounting");
+check(!fxRoute.includes("finalizeMobileMoneyFxAccounting"), "FX transfer API must not return to two-phase accounting finalization");
 check(hasAll(fxReverseRoute, ['"MOBILE_MONEY_AGENCY", "manage"', "mobileMoneyFxReverseSchema", "finalizeMobileMoneyFxReversalAccounting"]), "FX reversal API must enforce manage RBAC, validation and accounting reversal");
 check(hasAll(retailCashCloseRoute, [
   '"MOBILE_MONEY_AGENCY", "submit"',
