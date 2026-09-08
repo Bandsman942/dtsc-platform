@@ -1,0 +1,42 @@
+name: Temporary #602 Telco contract fix
+
+on:
+  push:
+    branches:
+      - feat/602-accounting-atomic-retail-posting
+    paths:
+      - .github/workflows/tmp-602-fix-telco-contract.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: feat/602-accounting-atomic-retail-posting
+          fetch-depth: 0
+      - name: Preserve canonical Telco create block contract
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('lib/enterprise/retail/service.ts')
+          source = path.read_text()
+          old = 'async function createTelcoTopupTx(\n'
+          new = 'export async function createTelcoTopupTx(\n'
+          if source.count(old) != 1:
+              raise SystemExit(f'Expected exactly one Telco Tx helper, found {source.count(old)}')
+          path.write_text(source.replace(old, new, 1))
+          PY
+          git diff --check
+      - name: Commit source correction
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/enterprise/retail/service.ts
+          git commit -m "fix(retail): preserve Telco multicurrency QA contract"
+          git push origin HEAD:feat/602-accounting-atomic-retail-posting
