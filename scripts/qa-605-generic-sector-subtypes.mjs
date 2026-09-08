@@ -9,6 +9,7 @@ function check(condition, message) {
 
 const genericRegistry = read("lib/enterprise/business-subtype-registry.ts");
 const retailRegistry = read("lib/enterprise/retail/subtype-registry.ts");
+const canonicalTemplateApplication = read("lib/enterprise/sector-template-application.ts");
 const sectorTemplateRoute = read("app/api/admin/sector-templates/route.ts");
 const createOrganizationRoute = read("app/api/admin/client-organizations/route.ts");
 const architectureDoc = read("docs/ERP_SECTOR_SUBTYPE_ARCHITECTURE.md");
@@ -44,6 +45,18 @@ check(
 check(
   !retailRegistry.includes("tailoring workshop"),
   "Tailoring must no longer be documented as a future Retail subtype",
+);
+check(
+  canonicalTemplateApplication.includes("type BusinessSubtypeCode") && canonicalTemplateApplication.includes("getBusinessSubtypeForSector"),
+  "Canonical template application must accept and validate the generic subtype contract",
+);
+check(
+  canonicalTemplateApplication.includes("normalizeRetailBusinessSubtypeCode"),
+  "Canonical template application must keep Retail behind a compatibility adapter during cutover",
+);
+check(
+  canonicalTemplateApplication.includes("BUSINESS_SUBTYPE_INVALID_OR_SECTOR_MISMATCH"),
+  "Canonical template application must fail closed for an invalid sector/subtype pair",
 );
 check(
   sectorTemplateRoute.includes("getBusinessSubtypeForSector") && sectorTemplateRoute.includes("listBusinessSubtypesForSector"),
