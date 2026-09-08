@@ -8,10 +8,16 @@ function check(condition, message) {
 }
 
 const genericRegistry = read("lib/enterprise/business-subtype-registry.ts");
+const subtypeSelection = read("lib/enterprise/business-subtype-selection.ts");
+const subtypeModel = read("prisma/enterprise-business-subtypes.prisma");
+const subtypeMigration = read("prisma/migrations/20260909002000_generic_business_subtype_selection/migration.sql");
 const retailRegistry = read("lib/enterprise/retail/subtype-registry.ts");
 const canonicalTemplateApplication = read("lib/enterprise/sector-template-application.ts");
 const sectorTemplateRoute = read("app/api/admin/sector-templates/route.ts");
 const createOrganizationRoute = read("app/api/admin/client-organizations/route.ts");
+const createPanel = read("components/admin/client-organizations-panel.tsx");
+const clientCopy = read("lib/console/client-organizations-i18n.ts");
+const regression = read("scripts/qa-regression-checks.mjs");
 const architectureDoc = read("docs/ERP_SECTOR_SUBTYPE_ARCHITECTURE.md");
 
 check(
@@ -29,6 +35,33 @@ check(
 check(
   genericRegistry.includes("listBusinessSubtypesForSector") && genericRegistry.includes("getBusinessSubtypeForSector"),
   "Generic registry must expose sector-scoped subtype resolution",
+);
+check(
+  subtypeModel.includes("model EnterpriseBusinessSubtypeSelection") &&
+    subtypeModel.includes("organizationId      String   @unique") &&
+    subtypeModel.includes("businessSubtypeCode String?"),
+  "Prisma must persist one optional generic subtype selection per organization",
+);
+check(
+  subtypeSelection.includes("persistBusinessSubtypeSelection") &&
+    subtypeSelection.includes("getBusinessSubtypeSelection") &&
+    subtypeSelection.includes("BUSINESS_SUBTYPE_ORGANIZATION_SECTOR_MISMATCH"),
+  "Subtype selection service must validate organization/sector and expose canonical reads/writes",
+);
+check(
+  subtypeSelection.includes("getRetailBusinessProfile") && subtypeSelection.includes("RETAIL_COMPATIBILITY"),
+  "Generic subtype selection read must preserve historical Retail compatibility during cutover",
+);
+check(
+  subtypeMigration.includes('CREATE TABLE "EnterpriseBusinessSubtypeSelection"') &&
+    subtypeMigration.includes("businessSubtypeSelectionVersion") &&
+    subtypeMigration.includes("ELSE 'SHOP'") &&
+    subtypeMigration.includes("ON CONFLICT (\"organizationId\") DO NOTHING"),
+  "Additive migration must backfill explicit/general Retail and legacy Shop idempotently",
+);
+check(
+  !subtypeMigration.includes("DROP TABLE") && !subtypeMigration.includes("DROP COLUMN"),
+  "Subtype migration must remain additive",
 );
 check(
   retailRegistry.includes('@/lib/enterprise/business-subtype-registry'),
@@ -51,6 +84,10 @@ check(
   "Canonical template application must accept and validate the generic subtype contract",
 );
 check(
+  canonicalTemplateApplication.includes("getBusinessSubtypeSelection") && canonicalTemplateApplication.includes("persistBusinessSubtypeSelection"),
+  "Canonical template application must reuse persisted generic classification",
+);
+check(
   canonicalTemplateApplication.includes("normalizeRetailBusinessSubtypeCode"),
   "Canonical template application must keep Retail behind a compatibility adapter during cutover",
 );
@@ -67,8 +104,8 @@ check(
   "Administration template preview must reject an invalid sector/subtype pair with a generic reason code",
 );
 check(
-  sectorTemplateRoute.includes("businessSubtypes"),
-  "Administration template preview must expose the active subtype options for the selected sector",
+  sectorTemplateRoute.includes("businessSubtypes") && sectorTemplateRoute.includes("businessSubtype: businessSubtype"),
+  "Administration template preview must expose active subtype options and generic selected subtype metadata",
 );
 check(
   !sectorTemplateRoute.includes("getRetailBusinessSubtype"),
@@ -79,6 +116,10 @@ check(
   "Company creation must validate the selected subtype through the generic registry",
 );
 check(
+  createOrganizationRoute.includes("persistBusinessSubtypeSelection") && createOrganizationRoute.includes('source: "DTSC_ADMIN"'),
+  "Company creation must persist classification even when template application is deferred",
+);
+check(
   createOrganizationRoute.includes("BUSINESS_SUBTYPE_INVALID_OR_SECTOR_MISMATCH"),
   "Company creation must expose a generic invalid sector/subtype reason code",
 );
@@ -87,16 +128,40 @@ check(
   "Company creation must preserve Retail reason-code compatibility during the cutover",
 );
 check(
-  createOrganizationRoute.includes("normalizeRetailBusinessSubtypeCode(businessSubtypeCode)"),
-  "Retail provisioning must remain behind its compatibility adapter during the generic cutover",
+  createOrganizationRoute.includes("syncRetailOnboardingProvisioning") && createOrganizationRoute.includes("retailBusinessSubtypeCode"),
+  "Retail provisioning must remain behind its compatibility mirror during the generic cutover",
+);
+check(
+  createPanel.includes("businessSubtypeOptions") && createPanel.includes("selectedBusinessSubtypeCode"),
+  "Administration DTSC must keep generic subtype state driven by the selected sector",
+);
+check(
+  createPanel.includes('name="businessSubtypeCode"') && createPanel.includes("body?.businessSubtypes"),
+  "Administration DTSC must populate the subtype combobox from the template API",
+);
+check(
+  !createPanel.includes("RETAIL_SECTOR_CODE") && !createPanel.includes("selectedRetailSubtypeCode") && !createPanel.includes("RETAIL_SUBTYPE_OPTIONS"),
+  "Administration DTSC must not contain a Retail-only subtype branch anymore",
+);
+check(
+  createPanel.includes('t("businessSubtypeLabel")') && clientCopy.includes("businessSubtypeLabel") && clientCopy.includes("fr: {") && clientCopy.includes("en: {"),
+  "Generic subtype form copy must use the FR/EN Console dictionary",
+);
+check(
+  regression.includes('qa-605-generic-sector-subtypes.mjs'),
+  "Generic subtype QA must remain wired into the canonical regression gate",
 );
 check(
   architectureDoc.includes("TAILORING_APPAREL") && architectureDoc.includes("PLANNED"),
   "Architecture documentation must keep Tailoring planned until Manufacturing is implemented",
 );
 check(
-  architectureDoc.includes("Aucune donnée n’est migrée dans cette slice"),
-  "Slice A rollback/data boundary must be documented",
+  architectureDoc.includes("20260909002000_generic_business_subtype_selection") && architectureDoc.includes("Retail historique sans marqueur #512"),
+  "Architecture documentation must describe the additive migration and legacy Shop backfill",
+);
+check(
+  architectureDoc.includes("Aucune donnée métier du tenant n’est supprimée ou transformée par #605"),
+  "Rollback/data boundary must state that business data remains untouched",
 );
 
 if (failures.length) {
