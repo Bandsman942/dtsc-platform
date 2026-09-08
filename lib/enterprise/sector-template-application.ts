@@ -6,6 +6,10 @@ import {
   getBusinessSubtypeForSector,
   type BusinessSubtypeCode,
 } from "@/lib/enterprise/business-subtype-registry";
+import {
+  getBusinessSubtypeSelection,
+  persistBusinessSubtypeSelection,
+} from "@/lib/enterprise/business-subtype-selection";
 import { ensureCanonicalCommonModulesForOrganization } from "@/lib/enterprise/common-modules";
 import {
   getEnterpriseModuleDefinition,
@@ -14,7 +18,7 @@ import {
   normalizeEnterpriseModuleCode,
 } from "@/lib/enterprise/module-registry";
 import { RETAIL_SECTOR_CODE } from "@/lib/enterprise/retail/constants";
-import { getRetailBusinessProfile, syncRetailOnboardingProvisioning } from "@/lib/enterprise/retail/provisioning";
+import { syncRetailOnboardingProvisioning } from "@/lib/enterprise/retail/provisioning";
 import { normalizeRetailBusinessSubtypeCode } from "@/lib/enterprise/retail/subtype-registry";
 import { prisma } from "@/lib/prisma";
 
@@ -43,11 +47,13 @@ export async function applyCanonicalSectorTemplateToOrganization({
     throw new Error("BUSINESS_SUBTYPE_INVALID_OR_SECTOR_MISMATCH");
   }
 
-  const existingRetailProfile = businessSubtypeCode === undefined && targetSector.code === RETAIL_SECTOR_CODE
-    ? await getRetailBusinessProfile(organizationId)
+  const existingSelection = businessSubtypeCode === undefined
+    ? await getBusinessSubtypeSelection(organizationId)
     : null;
-  const resolvedBusinessSubtypeCode: BusinessSubtypeCode | null | undefined = businessSubtypeCode === undefined
-    ? existingRetailProfile?.businessSubtypeCode
+  const resolvedBusinessSubtypeCode: BusinessSubtypeCode | null = businessSubtypeCode === undefined
+    ? existingSelection?.sectorCode === targetSector.code
+      ? existingSelection.businessSubtypeCode
+      : null
     : businessSubtypeCode;
   const retailSubtypeForApply = targetSector.code === RETAIL_SECTOR_CODE
     ? normalizeRetailBusinessSubtypeCode(resolvedBusinessSubtypeCode)
@@ -66,6 +72,13 @@ export async function applyCanonicalSectorTemplateToOrganization({
     actorUserId,
     businessSubtypeCode: result.businessSubtypeCode,
   });
+  const subtypeSelection = await persistBusinessSubtypeSelection({
+    organizationId,
+    sectorCode: result.sectorCode,
+    businessSubtypeCode: resolvedBusinessSubtypeCode,
+    actorUserId,
+    source: "SECTOR_TEMPLATE",
+  });
   const commonModules = await ensureCanonicalCommonModulesForOrganization({ organizationId });
   const organization = await prisma.organization.findFirst({
     where: { id: organizationId, deletedAt: null },
@@ -82,7 +95,8 @@ export async function applyCanonicalSectorTemplateToOrganization({
   if (!organization) {
     return {
       ...result,
-      businessSubtypeCode: resolvedBusinessSubtypeCode ?? result.businessSubtypeCode,
+      businessSubtypeCode: resolvedBusinessSubtypeCode,
+      subtypeSelection,
       commonModuleCount: commonModules.length,
       retailProvisioning,
     };
@@ -141,7 +155,8 @@ export async function applyCanonicalSectorTemplateToOrganization({
 
   return {
     ...result,
-    businessSubtypeCode: resolvedBusinessSubtypeCode ?? result.businessSubtypeCode,
+    businessSubtypeCode: resolvedBusinessSubtypeCode,
+    subtypeSelection,
     commonModuleCount: commonModules.length,
     retailProvisioning,
     registryNormalization: {
