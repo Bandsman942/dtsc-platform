@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { requireConsoleCapability } from "@/lib/admin-api";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { applyCanonicalSectorTemplateToOrganization } from "@/lib/enterprise/sector-template-application";
+import { persistBusinessSubtypeSelection } from "@/lib/enterprise/business-subtype-selection";
 import { CONSOLE_CAPABILITIES } from "@/lib/console/console-capabilities";
 import { canManageClientOrganizations, isDtscInternalSession } from "@/lib/organizations";
 import { notifyUser, notifyUsers } from "@/lib/notifications";
@@ -193,32 +194,47 @@ export async function PATCH(req: Request, { params }: Params) {
         return NextResponse.json({ error: "Slug already exists", message: "Ce slug d'entreprise existe déjà." }, { status: 409 });
       }
     }
-    await prisma.organization.update({
-      where: { id },
-      data: data.action === "set_status"
-        ? { status: data.status || organization.status }
-        : {
-            name: data.name || organization.name,
-            slug: nextSlug,
-            sectorId: data.sectorId ? sector?.id || null : organization.sectorId,
-            sectorCode: data.sectorId ? sector?.code || null : organization.sectorCode,
-            sector: data.sectorId ? sector?.labelFr || null : data.industry ?? organization.sector,
-            industry: data.sectorId ? sector?.labelFr || null : data.industry ?? organization.industry,
-            country: data.country ?? organization.country,
-            city: data.city ?? organization.city,
-            email: data.email ?? organization.email,
-            phone: data.phone ?? organization.phone,
-            address: data.address ?? organization.address,
-            timezone: data.timezone || organization.timezone,
-            notes: data.notes ?? organization.notes,
-            status: data.status || organization.status,
-          },
-    });
+
+    const organizationUpdateData = data.action === "set_status"
+      ? { status: data.status || organization.status }
+      : {
+          name: data.name || organization.name,
+          slug: nextSlug,
+          sectorId: data.sectorId ? sector?.id || null : organization.sectorId,
+          sectorCode: data.sectorId ? sector?.code || null : organization.sectorCode,
+          sector: data.sectorId ? sector?.labelFr || null : data.industry ?? organization.sector,
+          industry: data.sectorId ? sector?.labelFr || null : data.industry ?? organization.industry,
+          country: data.country ?? organization.country,
+          city: data.city ?? organization.city,
+          email: data.email ?? organization.email,
+          phone: data.phone ?? organization.phone,
+          address: data.address ?? organization.address,
+          timezone: data.timezone || organization.timezone,
+          notes: data.notes ?? organization.notes,
+          status: data.status || organization.status,
+        };
+    const sectorChanged = data.action !== "set_status" && Boolean(sector && sector.code !== organization.sectorCode);
+
+    if (sectorChanged && sector) {
+      await prisma.$transaction(async (tx) => {
+        await tx.organization.update({ where: { id }, data: organizationUpdateData });
+        await persistBusinessSubtypeSelection({
+          organizationId: id,
+          sectorCode: sector.code,
+          businessSubtypeCode: null,
+          actorUserId: session.userId,
+          source: "DTSC_ADMIN",
+        }, tx);
+      });
+    } else {
+      await prisma.organization.update({ where: { id }, data: organizationUpdateData });
+    }
+
     if (data.action === "set_status" && data.status && data.status !== organization.status) {
       const adminIds = await prisma.organizationAdminGrant.findMany({ where: { organizationId: id, status: "ACTIVE", revokedAt: null }, select: { userId: true } });
       await notifyUsers({ userIds: adminIds.map((grant) => grant.userId), title: `Statut de ${organization.name} modifié`, body: `${organization.status} → ${data.status}. ${data.reason || "Contactez le support DTSC pour toute précision."}`, type: "ORGANIZATION_STATUS", targetUrl: "/company", organizationId: id }).catch(() => null);
     }
-    await writeAuditLog({ userId: session.userId, action: data.action === "set_status" ? "CLIENT_ORGANIZATION_STATUS_CHANGED" : "CLIENT_ORGANIZATION_UPDATED", entity: "Organization", entityId: id, reasonCode: capability.reasonCode, riskLevel: data.action === "set_status" ? "HIGH" : "MEDIUM", request: req, before: { status: organization.status, name: organization.name }, after: { status: data.status || organization.status, name: data.name || organization.name }, metadata: { status: data.status, reason: data.reason || null } });
+    await writeAuditLog({ userId: session.userId, action: data.action === "set_status" ? "CLIENT_ORGANIZATION_STATUS_CHANGED" : "CLIENT_ORGANIZATION_UPDATED", entity: "Organization", entityId: id, reasonCode: capability.reasonCode, riskLevel: data.action === "set_status" ? "HIGH" : "MEDIUM", request: req, before: { status: organization.status, name: organization.name, sectorCode: organization.sectorCode }, after: { status: data.status || organization.status, name: data.name || organization.name, sectorCode: sectorChanged ? sector?.code || null : organization.sectorCode }, metadata: { status: data.status, reason: data.reason || null, subtypeReset: sectorChanged } });
   }
 
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
