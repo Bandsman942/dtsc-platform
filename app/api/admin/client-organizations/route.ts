@@ -9,6 +9,7 @@ import {
   getBusinessSubtypeForSector,
   normalizeBusinessSubtypeCode,
 } from "@/lib/enterprise/business-subtype-registry";
+import { persistBusinessSubtypeSelection } from "@/lib/enterprise/business-subtype-selection";
 import { RETAIL_SECTOR_CODE } from "@/lib/enterprise/retail/constants";
 import { syncRetailOnboardingProvisioning } from "@/lib/enterprise/retail/provisioning";
 import { normalizeRetailBusinessSubtypeCode } from "@/lib/enterprise/retail/subtype-registry";
@@ -228,17 +229,25 @@ export async function POST(req: Request) {
       sectorId: sector.id,
       actorUserId: session.userId,
       mode: "merge",
-      businessSubtypeCode: retailBusinessSubtypeCode,
+      businessSubtypeCode,
     });
-  } else if (sector?.code === RETAIL_SECTOR_CODE) {
-    // Persist the existing Retail subtype decision while the generic organization
-    // classification storage is introduced later in #605. `null` means general Retail.
-    await syncRetailOnboardingProvisioning({
+  } else if (sector) {
+    await persistBusinessSubtypeSelection({
       organizationId: organization.id,
       sectorCode: sector.code,
+      businessSubtypeCode,
       actorUserId: session.userId,
-      businessSubtypeCode: retailBusinessSubtypeCode,
+      source: "DTSC_ADMIN",
     });
+    if (sector.code === RETAIL_SECTOR_CODE) {
+      // Retail keeps its historical settings mirror during the generic cutover.
+      await syncRetailOnboardingProvisioning({
+        organizationId: organization.id,
+        sectorCode: sector.code,
+        actorUserId: session.userId,
+        businessSubtypeCode: retailBusinessSubtypeCode,
+      });
+    }
   }
 
   await writeAuditLog({
