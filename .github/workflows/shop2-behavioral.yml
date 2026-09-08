@@ -28,6 +28,7 @@ on:
       - "prisma/enterprise-inventory.prisma"
       - "prisma/enterprise-crm-sales.prisma"
       - "prisma/migrations/**"
+      - "tests/e2e/accounting-atomic-retail-posting.spec.mjs"
       - "tests/e2e/shop2-retail.spec.mjs"
       - "tests/e2e/shop2-commercial.spec.mjs"
       - "tests/e2e/shop2-customer-payments.spec.mjs"
@@ -184,7 +185,7 @@ jobs:
           cat /tmp/dtsc-shop2-next.log
           exit 1
       - name: Shop 2 POS behavioral acceptance
-        run: pnpm exec playwright test tests/e2e/shop2-retail.spec.mjs tests/e2e/shop2-commercial.spec.mjs tests/e2e/shop2-customer-payments.spec.mjs tests/e2e/shop2-customer-value-ui.spec.mjs tests/e2e/shop2-daily-close-ui.spec.mjs tests/e2e/shop2-final-coherence-ui.spec.mjs tests/e2e/shop2-z-global.spec.mjs
+        run: pnpm exec playwright test tests/e2e/shop2-retail.spec.mjs tests/e2e/shop2-commercial.spec.mjs tests/e2e/shop2-customer-payments.spec.mjs tests/e2e/shop2-customer-value-ui.spec.mjs tests/e2e/shop2-daily-close-ui.spec.mjs tests/e2e/shop2-final-coherence-ui.spec.mjs tests/e2e/shop2-z-global.spec.mjs tests/e2e/accounting-atomic-retail-posting.spec.mjs
       - name: Stop application and Redis REST proxy
         if: always()
         run: |
