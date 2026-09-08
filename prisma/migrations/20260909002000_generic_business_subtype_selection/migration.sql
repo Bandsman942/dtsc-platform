@@ -1,5 +1,8 @@
 -- Iteration #605: persist the organization sector/sub-sector decision in a generic table.
 -- The code registry remains the authority for which sector/sub-sector pairs are valid.
+-- organizationId integrity is enforced by tenant-scoped application validation; no
+-- hidden Prisma relation is introduced because the multi-file model intentionally
+-- keeps this classification record independent from the large Organization model.
 
 CREATE TABLE "EnterpriseBusinessSubtypeSelection" (
     "id" TEXT NOT NULL,
@@ -23,10 +26,6 @@ CREATE INDEX "EnterpriseBusinessSubtypeSelection_sectorCode_businessSubtypeCode_
 
 CREATE INDEX "EnterpriseBusinessSubtypeSelection_selectedByUserId_updatedAt_idx"
     ON "EnterpriseBusinessSubtypeSelection"("selectedByUserId", "updatedAt");
-
-ALTER TABLE "EnterpriseBusinessSubtypeSelection"
-    ADD CONSTRAINT "EnterpriseBusinessSubtypeSelection_organizationId_fkey"
-    FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- Cut over existing organizations without changing their effective behavior.
 -- Retail configurations created after hotfix #512 already carry an explicit marker.
