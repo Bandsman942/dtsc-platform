@@ -368,12 +368,12 @@ export async function consumeProductionMaterial(organizationId: string, orderId:
       idempotencyKey: input.idempotencyKey,
       reason: manufacturingNullable(input.notes) || `Consommation ${order.reference}`,
     });
-    const status = nextConsumed.gte(requirement.requiredQuantity) ? "CONSUMED" : "PARTIALLY_CONSUMED";
     const changed = await tx.enterpriseProductionMaterialRequirement.updateMany({
       where: { id: requirement.id, organizationId, revision: requirement.revision },
-      data: { consumedQuantity: nextConsumed, status, shortageQuantity: manufacturingDecimal(0), revision: { increment: 1 } },
+      data: { consumedQuantity: nextConsumed, revision: { increment: 1 } },
     });
     if (changed.count !== 1) throw new ManufacturingConflictError();
+    await refreshMaterialRequirementsTx(tx, organizationId, order.id);
     const execution = await tx.enterpriseProductionExecution.create({ data: {
       organizationId,
       productionOrderId: order.id,
@@ -592,7 +592,7 @@ export async function createShortagePurchase(organizationId: string, actorUserId
   const purchase = await createEnterprisePurchase(organizationId, actorUserId, {
     title: `Réapprovisionnement production ${order.reference}`,
     description: `Pénuries matières générées depuis l’ordre ${order.reference}.`,
-    priority: order.priority === "CRITICAL" ? "URGENT" : order.priority === "HIGH" ? "HIGH" : "NORMAL",
+    priority: order.priority === "CRITICAL" ? "CRITICAL" : order.priority === "HIGH" ? "HIGH" : "NORMAL",
     supplierId: manufacturingNullable(input.supplierId) || "",
     buyerUserId: manufacturingNullable(input.buyerUserId) || "",
     departmentId: "",
