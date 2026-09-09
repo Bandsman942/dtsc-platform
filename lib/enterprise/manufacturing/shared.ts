@@ -153,8 +153,8 @@ export async function requireManufacturingSalesOrderLine(
   if (!orderId && !itemId) return null;
   if (!orderId || !itemId) throw new ManufacturingDomainError("La commande client et sa ligne doivent être renseignées ensemble.", 400, "MANUFACTURING_SALES_SOURCE_INCOMPLETE");
   const line = await tx.enterpriseSalesOrderItem.findFirst({
-    where: { id: itemId, organizationId, orderId, order: { organizationId, archivedAt: null, status: { notIn: ["CANCELLED"] } } },
-    select: { id: true, orderId: true, catalogItemId: true, quantity: true, fulfilledQuantity: true },
+    where: { id: itemId, organizationId, salesOrderId: orderId, salesOrder: { organizationId, archivedAt: null, status: { notIn: ["CANCELLED"] } } },
+    select: { id: true, salesOrderId: true, catalogItemId: true, quantityOrdered: true, quantityFulfilled: true },
   });
   if (!line) throw new ManufacturingDomainError("La ligne de commande client n’appartient pas à cette entreprise.", 400, "MANUFACTURING_SALES_SOURCE_INVALID");
   if (outputCatalogItemId && line.catalogItemId && line.catalogItemId !== outputCatalogItemId) {
