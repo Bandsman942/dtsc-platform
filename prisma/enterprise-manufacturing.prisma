@@ -90,8 +90,8 @@ model EnterpriseManufacturingRoutingOperation {
   qualityChecks        EnterpriseProductionQualityCheck[]
 
   @@unique([organizationId, id])
-  @@unique([organizationId, routingId, sequence])
-  @@unique([organizationId, routingId, code])
+  @@unique([organizationId, routingId, sequence], map: "EnterpriseMfgRoutingOp_org_routing_sequence_key")
+  @@unique([organizationId, routingId, code], map: "EnterpriseMfgRoutingOp_org_routing_code_key")
   @@index([organizationId, workCenterId])
 }
 
