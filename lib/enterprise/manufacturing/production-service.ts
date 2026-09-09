@@ -516,7 +516,7 @@ export async function createProductionScrap(organizationId: string, actorUserId:
     if (requirementId && !requirement) throw new ManufacturingDomainError("Le besoin matière lié au rebut est introuvable.", 404, "PRODUCTION_SCRAP_REQUIREMENT_INVALID");
     if (requirement && requirement.catalogItemId !== input.catalogItemId) throw new ManufacturingDomainError("Le composant rebuté ne correspond pas au besoin matière sélectionné.", 409, "PRODUCTION_SCRAP_ITEM_MISMATCH");
     let inventoryItemId = manufacturingNullable(input.inventoryItemId) || requirement?.inventoryItemId || null;
-    let warehouseId = manufacturingNullable(input.warehouseId) || requirement?.warehouseId || null;
+    const warehouseId = manufacturingNullable(input.warehouseId) || requirement?.warehouseId || null;
     let stockMovementId: string | null = null;
     if (input.affectsInventory) {
       if (!inventoryItemId) inventoryItemId = (await requireManufacturingInventoryItem(tx, organizationId, input.catalogItemId)).id;
