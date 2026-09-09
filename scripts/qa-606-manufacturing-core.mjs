@@ -85,9 +85,29 @@ check(!/\bDROP\s+(TABLE|COLUMN|TYPE|INDEX)\b/i.test(migration), "Manufacturing m
 includesAll(migration, ["EnterpriseProductionOrder", "EnterpriseBillOfMaterial", "EnterpriseManufacturingRouting", "PRODUCTION_ORDERS", "RAW_MATERIALS", "FINISHED_PRODUCTS", '"defaultEnabled"=false'], "additive migration and placeholder cutover");
 
 includesAll(inventoryConstants, ["PRODUCTION_CONSUMPTION", "PRODUCTION_OUTPUT", "PRODUCTION_SCRAP"], "common Inventory movement vocabulary");
-includesAll(shared, ["organizationId", "requireManufacturingCatalogItem", "requireManufacturingInventoryItem", "requireManufacturingSalesOrderLine", "requireManufacturingEmployee", "requireManufacturingTimesheetEntry", "requireManufacturingAsset", "Serializable", "salesOrderId", "quantityOrdered", "quantityFulfilled"], "cross-domain tenant validation");
+includesAll(shared, [
+  "organizationId",
+  "requireManufacturingCatalogItem",
+  "requireManufacturingInventoryItem",
+  "enterpriseCatalogItem",
+  "enterpriseInventoryItem",
+  "requireManufacturingSalesOrderLine",
+  "requireManufacturingEmployee",
+  "requireManufacturingTimesheetEntry",
+  "requireManufacturingAsset",
+  "Serializable",
+  "salesOrderId",
+  "quantityOrdered",
+  "quantityFulfilled",
+], "cross-domain tenant validation");
 excludesAll(shared, ["fulfilledQuantity", "select: { id: true, orderId:"], "no legacy sales-order field names");
-includesAll(definitions, ["enterpriseCatalogItem", "enterpriseInventoryItem", "enterpriseManufacturingWorkCenter", "enterpriseBillOfMaterial", "enterpriseManufacturingRouting"], "definition service canonical references");
+includesAll(definitions, [
+  "requireManufacturingCatalogItem",
+  "requireManufacturingInventoryItem",
+  "enterpriseManufacturingWorkCenter",
+  "enterpriseBillOfMaterial",
+  "enterpriseManufacturingRouting",
+], "definition service canonical references");
 includesAll(production, [
   "applyStockMovementTx",
   'movementType: "PRODUCTION_CONSUMPTION"',
