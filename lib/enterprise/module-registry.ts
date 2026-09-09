@@ -1,60 +1,62 @@
-import baseRegistryData from "@/lib/enterprise/module-registry-data.json";
+import registryData from "@/lib/enterprise/module-registry-data.json";
 import commonDomainRegistryData from "@/lib/enterprise/module-registry-common-domains.json";
 import financeRegistryData from "@/lib/enterprise/module-registry-finance.json";
 import manufacturingRegistryData from "@/lib/enterprise/module-registry-manufacturing.json";
 import retailRegistryData from "@/lib/enterprise/module-registry-retail.json";
 import sectorConvergenceRegistryData from "@/lib/enterprise/module-registry-sector-convergence.json";
 import finalCleanupRegistryData from "@/lib/enterprise/module-registry-final-cleanup.json";
-import commercialOverrideRegistryData from "@/lib/enterprise/module-registry-commercial-overrides.json";
+import commercialRegistryData from "@/lib/enterprise/module-registry-commercial-overrides.json";
+import type { SaasPlanCode } from "@/lib/billing/plans";
 
-export const ENTERPRISE_MODULE_IMPLEMENTATION_STATUSES = ["ACTIVE", "BETA", "PLANNED", "HIDDEN"] as const;
-export type EnterpriseModuleImplementationStatus = (typeof ENTERPRISE_MODULE_IMPLEMENTATION_STATUSES)[number];
+export type EnterpriseModuleImplementationStatus =
+  | "ACTIVE"
+  | "BETA"
+  | "PLANNED"
+  | "DEPRECATED"
+  | "HIDDEN"
+  | "RETIRED";
 
-export const ENTERPRISE_MODULE_DOMAINS = [
-  "OPERATIONS",
-  "COMMERCIAL",
-  "PROCUREMENT_INVENTORY",
-  "HUMAN_RESOURCES",
-  "PROJECTS_ASSETS",
-  "FINANCE",
-  "INTELLIGENCE",
-  "ADMINISTRATION",
-  "SECTOR_HEALTH",
-  "SECTOR_PHARMACY",
-  "SECTOR_MANUFACTURING",
-] as const;
-export type EnterpriseModuleDomain = (typeof ENTERPRISE_MODULE_DOMAINS)[number];
+export type EnterpriseModuleDomain =
+  | "OPERATIONS"
+  | "COMMERCIAL"
+  | "PROCUREMENT_INVENTORY"
+  | "FINANCE"
+  | "HUMAN_RESOURCES"
+  | "PROJECTS_ASSETS"
+  | "DOCUMENTS"
+  | "ANALYTICS"
+  | "SECTOR_HEALTH"
+  | "SECTOR_PHARMACY"
+  | "SECTOR_MANUFACTURING"
+  | "INTELLIGENCE"
+  | "ADMINISTRATION";
 
-export const ENTERPRISE_MODULE_NAVIGATION_GROUPS = [
-  "OPERATIONS",
-  "COMMERCIAL",
-  "PROCUREMENT_RESOURCES",
-  "HUMAN_RESOURCES",
-  "PROJECTS_ASSETS",
-  "FINANCE",
-  "SECTOR_HEALTH",
-  "SECTOR_PHARMACY",
-  "SECTOR_MANUFACTURING",
-  "INTELLIGENCE",
-  "ADMINISTRATION",
-] as const;
-export type EnterpriseModuleNavigationGroup = (typeof ENTERPRISE_MODULE_NAVIGATION_GROUPS)[number];
+export type EnterpriseModuleNavigationGroup =
+  | "OPERATIONS"
+  | "PROCUREMENT_RESOURCES"
+  | "FINANCE"
+  | "INTELLIGENCE"
+  | "SECTOR_HEALTH"
+  | "SECTOR_PHARMACY"
+  | "SECTOR_MANUFACTURING"
+  | "ADMINISTRATION"
+  | "COMMERCIAL"
+  | "HUMAN_RESOURCES"
+  | "PROJECTS_ASSETS";
 
-export const ENTERPRISE_MODULE_ROUTE_KINDS = [
-  "DEDICATED_CORE",
-  "SECTOR_HEALTH",
-  "SECTOR_PHARMACY",
-  "ADMIN_SECTION",
-  "AI_SERVICE",
-  "HIDDEN",
-] as const;
-export type EnterpriseModuleRouteKind = (typeof ENTERPRISE_MODULE_ROUTE_KINDS)[number];
+export type EnterpriseModuleRouteKind =
+  | "DEDICATED_CORE"
+  | "SECTOR_HEALTH"
+  | "SECTOR_PHARMACY"
+  | "ADMIN_SECTION"
+  | "AI_SERVICE"
+  | "HIDDEN";
 
-export const ENTERPRISE_MODULE_ACCESS_POLICIES = ["POSITION_PERMISSION", "MEMBERSHIP", "ADMIN_ONLY", "EXPLICIT_DENY"] as const;
-export type EnterpriseModuleAccessPolicy = (typeof ENTERPRISE_MODULE_ACCESS_POLICIES)[number];
-
-export const ENTERPRISE_MODULE_PLAN_LEVELS = ["STARTER", "BUSINESS", "ENTERPRISE"] as const;
-export type EnterpriseModulePlanLevel = (typeof ENTERPRISE_MODULE_PLAN_LEVELS)[number];
+export type EnterpriseModuleAccessPolicy =
+  | "MEMBERSHIP"
+  | "POSITION_PERMISSION"
+  | "ADMIN_ONLY"
+  | "EXPLICIT_DENY";
 
 export type EnterpriseModuleDefinition = {
   code: string;
@@ -69,118 +71,191 @@ export type EnterpriseModuleDefinition = {
   iconKey: string;
   routeKind: EnterpriseModuleRouteKind;
   routePath?: string;
-  workspaceKey: string;
+  workspaceKey: string | null;
   permissionPrefixes: string[];
   accessPolicy: EnterpriseModuleAccessPolicy;
-  minimumPlan: EnterpriseModulePlanLevel;
+  minimumPlan: SaasPlanCode;
   requiresActiveSubscription: boolean;
-  applicableSectors: "ALL" | string[];
+  applicableSectors: string[] | "ALL";
   dependencies: string[];
   aliases?: string[];
   legacyCodes?: string[];
   qaContract?: string;
 };
 
-type RegistryFile = { version: number; modules: EnterpriseModuleDefinition[] };
-type RegistryOverride = Partial<EnterpriseModuleDefinition> & { code: string };
-type RegistryOverrideFile = { version: number; overrides: RegistryOverride[] };
+type EnterpriseModuleCommercialOverride = {
+  code: string;
+  minimumPlan: SaasPlanCode;
+};
 
-const baseRegistry = baseRegistryData as RegistryFile;
-const commonRegistry = commonDomainRegistryData as RegistryFile;
-const financeRegistry = financeRegistryData as RegistryFile;
-const manufacturingRegistry = manufacturingRegistryData as RegistryFile;
-const retailRegistry = retailRegistryData as RegistryFile;
-const convergenceRegistry = sectorConvergenceRegistryData as RegistryFile;
-const cleanupRegistry = finalCleanupRegistryData as RegistryOverrideFile;
-const commercialOverrideRegistry = commercialOverrideRegistryData as RegistryOverrideFile;
+export const ENTERPRISE_MODULE_REGISTRY_VERSION = Math.max(
+  registryData.version,
+  commonDomainRegistryData.version,
+  financeRegistryData.version,
+  manufacturingRegistryData.version,
+  retailRegistryData.version,
+  sectorConvergenceRegistryData.version,
+  finalCleanupRegistryData.version,
+  commercialRegistryData.version,
+);
 
-const CANONICAL_MODULE_DEFINITIONS = [
-  ...baseRegistry.modules,
-  ...commonRegistry.modules,
-  ...financeRegistry.modules,
-  ...manufacturingRegistry.modules,
-  ...retailRegistry.modules,
-].map((definition) => {
-  const convergence = convergenceRegistry.modules.find((candidate) => candidate.code === definition.code);
-  const cleaned = cleanupRegistry.overrides.find((candidate) => candidate.code === definition.code);
-  const commercial = commercialOverrideRegistry.overrides.find((candidate) => candidate.code === definition.code);
-  return { ...definition, ...(convergence || {}), ...(cleaned || {}), ...(commercial || {}) };
-});
+const sectorOverrides = new Map(
+  sectorConvergenceRegistryData.overrides.map((override) => [override.code, override]),
+);
+const finalCleanupOverrides = new Map(
+  finalCleanupRegistryData.overrides.map((override) => [override.code, override]),
+);
+const commercialOverrides = new Map<string, EnterpriseModuleCommercialOverride>(
+  (commercialRegistryData.overrides as EnterpriseModuleCommercialOverride[]).map((override) => [override.code, override]),
+);
 
-for (const convergence of convergenceRegistry.modules) {
-  if (!CANONICAL_MODULE_DEFINITIONS.some((definition) => definition.code === convergence.code)) {
-    const cleaned = cleanupRegistry.overrides.find((candidate) => candidate.code === convergence.code);
-    const commercial = commercialOverrideRegistry.overrides.find((candidate) => candidate.code === convergence.code);
-    CANONICAL_MODULE_DEFINITIONS.push({ ...convergence, ...(cleaned || {}), ...(commercial || {}) });
-  }
+function applySectorConvergenceOverride(definition: EnterpriseModuleDefinition): EnterpriseModuleDefinition {
+  const override = sectorOverrides.get(definition.code);
+  if (!override) return definition;
+  return {
+    ...definition,
+    dependencies: [...new Set(override.dependencies)],
+    permissionPrefixes: [...new Set(override.permissionPrefixes)],
+  };
 }
 
-function normalizeCode(value: string) {
-  return value.trim().toUpperCase();
+function applyFinalCleanupOverride(definition: EnterpriseModuleDefinition): EnterpriseModuleDefinition {
+  const override = finalCleanupOverrides.get(definition.code);
+  if (!override) return definition;
+  return {
+    ...definition,
+    implementationStatus: override.implementationStatus as EnterpriseModuleImplementationStatus,
+    routeKind: override.routeKind as EnterpriseModuleRouteKind,
+    workspaceKey: override.workspaceKey,
+    permissionPrefixes: [...override.permissionPrefixes],
+    accessPolicy: override.accessPolicy as EnterpriseModuleAccessPolicy,
+    dependencies: [...override.dependencies],
+  };
 }
 
-const definitionsByCode = new Map<string, EnterpriseModuleDefinition>();
-const aliasesToCanonical = new Map<string, string>();
-
-for (const definition of CANONICAL_MODULE_DEFINITIONS) {
-  const canonicalCode = normalizeCode(definition.code);
-  if (definitionsByCode.has(canonicalCode)) {
-    throw new Error(`DUPLICATE_ENTERPRISE_MODULE_CODE:${canonicalCode}`);
-  }
-  definitionsByCode.set(canonicalCode, { ...definition, code: canonicalCode });
+function applyCommercialOverride(definition: EnterpriseModuleDefinition): EnterpriseModuleDefinition {
+  const override = commercialOverrides.get(definition.code);
+  if (!override) return definition;
+  return {
+    ...definition,
+    minimumPlan: override.minimumPlan,
+  };
 }
 
-for (const definition of definitionsByCode.values()) {
-  for (const alias of [...(definition.aliases || []), ...(definition.legacyCodes || [])]) {
-    const normalizedAlias = normalizeCode(alias);
-    const existing = aliasesToCanonical.get(normalizedAlias);
-    if (existing && existing !== definition.code) {
-      throw new Error(`DUPLICATE_ENTERPRISE_MODULE_ALIAS:${normalizedAlias}`);
-    }
-    aliasesToCanonical.set(normalizedAlias, definition.code);
-  }
+export const ENTERPRISE_MODULE_REGISTRY = [
+  ...registryData.modules,
+  ...commonDomainRegistryData.modules,
+  ...financeRegistryData.modules,
+  ...manufacturingRegistryData.modules,
+  ...retailRegistryData.modules,
+].map((definition) =>
+  applyCommercialOverride(
+    applyFinalCleanupOverride(
+      applySectorConvergenceOverride(definition as EnterpriseModuleDefinition),
+    ),
+  ),
+);
+
+const definitionByCode = new Map<string, EnterpriseModuleDefinition>();
+const canonicalCodeByAlias = new Map<string, string>();
+
+for (const definition of ENTERPRISE_MODULE_REGISTRY) {
+  definitionByCode.set(definition.code, definition);
+  for (const alias of definition.aliases || []) canonicalCodeByAlias.set(alias, definition.code);
+  for (const legacyCode of definition.legacyCodes || []) canonicalCodeByAlias.set(legacyCode, definition.code);
 }
 
-export const ENTERPRISE_MODULE_REGISTRY = Array.from(definitionsByCode.values());
+export const ENTERPRISE_ADMIN_SECTION_CODES = new Set(
+  ENTERPRISE_MODULE_REGISTRY.filter((definition) => definition.routeKind === "ADMIN_SECTION").map((definition) => definition.code),
+);
+
+export const ENTERPRISE_IMPLEMENTED_STATUSES = new Set<EnterpriseModuleImplementationStatus>(["ACTIVE", "BETA"]);
 
 export function normalizeEnterpriseModuleCode(moduleCode: string) {
-  const normalized = normalizeCode(moduleCode);
-  return aliasesToCanonical.get(normalized) || normalized;
+  const normalized = moduleCode.trim().toUpperCase();
+  return canonicalCodeByAlias.get(normalized) || normalized;
 }
 
 export function getEnterpriseModuleDefinition(moduleCode: string) {
-  return definitionsByCode.get(normalizeEnterpriseModuleCode(moduleCode)) || null;
+  return definitionByCode.get(normalizeEnterpriseModuleCode(moduleCode)) || null;
 }
 
-export function listEnterpriseModuleDefinitions(options?: { statuses?: EnterpriseModuleImplementationStatus[]; sectorCode?: string | null }) {
-  const statuses = options?.statuses ? new Set(options.statuses) : null;
-  const sectorCode = options?.sectorCode?.trim().toUpperCase() || null;
-  return ENTERPRISE_MODULE_REGISTRY.filter((definition) => {
-    if (statuses && !statuses.has(definition.implementationStatus)) return false;
-    if (!sectorCode || definition.applicableSectors === "ALL") return true;
-    return definition.applicableSectors.includes(sectorCode);
-  });
+export function getCanonicalEnterpriseModuleCode(moduleCode: string) {
+  return getEnterpriseModuleDefinition(moduleCode)?.code || null;
+}
+
+export function isEnterpriseModuleKnown(moduleCode: string) {
+  return Boolean(getEnterpriseModuleDefinition(moduleCode));
 }
 
 export function isEnterpriseModuleImplemented(moduleCode: string) {
   const definition = getEnterpriseModuleDefinition(moduleCode);
-  return definition ? definition.implementationStatus === "ACTIVE" || definition.implementationStatus === "BETA" : false;
+  return Boolean(definition && ENTERPRISE_IMPLEMENTED_STATUSES.has(definition.implementationStatus));
 }
 
-export function isEnterpriseModuleNavigable(moduleCodeOrDefinition: string | EnterpriseModuleDefinition) {
-  const definition = typeof moduleCodeOrDefinition === "string" ? getEnterpriseModuleDefinition(moduleCodeOrDefinition) : moduleCodeOrDefinition;
-  if (!definition || !isEnterpriseModuleImplemented(definition.code)) return false;
-  if (definition.routeKind === "HIDDEN" || definition.accessPolicy === "EXPLICIT_DENY") return false;
-  if (!definition.routePath || !definition.workspaceKey) return false;
-  return true;
-}
-
-export function isEnterpriseModuleSectorCompatible(moduleCodeOrDefinition: string | EnterpriseModuleDefinition, sectorCode?: string | null) {
-  const definition = typeof moduleCodeOrDefinition === "string" ? getEnterpriseModuleDefinition(moduleCodeOrDefinition) : moduleCodeOrDefinition;
-  if (!definition) return false;
+export function isEnterpriseModuleSectorCompatible(definition: EnterpriseModuleDefinition, sectorCode: string | null | undefined) {
   if (definition.applicableSectors === "ALL") return true;
-  const normalizedSector = sectorCode?.trim().toUpperCase();
-  return Boolean(normalizedSector && definition.applicableSectors.includes(normalizedSector));
+  return Boolean(sectorCode && definition.applicableSectors.includes(sectorCode));
+}
+
+export function isEnterpriseModuleNavigable(definition: EnterpriseModuleDefinition) {
+  return (
+    ENTERPRISE_IMPLEMENTED_STATUSES.has(definition.implementationStatus) &&
+    definition.routeKind !== "ADMIN_SECTION" &&
+    definition.routeKind !== "HIDDEN" &&
+    Boolean(definition.routePath && definition.workspaceKey)
+  );
+}
+
+export function resolveEnterpriseModuleRoute(moduleCode: string) {
+  const definition = getEnterpriseModuleDefinition(moduleCode);
+  if (!definition || !definition.routePath) return null;
+  return {
+    canonicalCode: definition.code,
+    definition,
+    path: definition.routePath,
+    redirectedFromAlias: normalizeEnterpriseModuleCode(moduleCode) !== moduleCode.trim().toUpperCase(),
+  };
+}
+
+export function getEnterpriseAdminLegacyRedirect(moduleCode: string) {
+  const definition = getEnterpriseModuleDefinition(moduleCode);
+  return definition?.routeKind === "ADMIN_SECTION" ? definition.routePath || null : null;
+}
+
+export function getEnterpriseModuleAliases() {
+  return new Map(canonicalCodeByAlias);
+}
+
+export function listEnterpriseModuleDefinitions(options?: {
+  statuses?: EnterpriseModuleImplementationStatus[];
+  sectorCode?: string | null;
+  routeKinds?: EnterpriseModuleRouteKind[];
+}) {
+  return ENTERPRISE_MODULE_REGISTRY.filter((definition) => {
+    if (options?.statuses && !options.statuses.includes(definition.implementationStatus)) return false;
+    if (options?.routeKinds && !options.routeKinds.includes(definition.routeKind)) return false;
+    if (options && "sectorCode" in options && !isEnterpriseModuleSectorCompatible(definition, options.sectorCode)) return false;
+    return true;
+  });
+}
+
+export function getEnterpriseModuleGroupLabel(group: EnterpriseModuleNavigationGroup, locale?: string | null) {
+  const english = locale === "en";
+  const labels: Record<EnterpriseModuleNavigationGroup, { fr: string; en: string }> = {
+    OPERATIONS: { fr: "Opérations", en: "Operations" },
+    PROCUREMENT_RESOURCES: { fr: "Achats & ressources", en: "Procurement & resources" },
+    FINANCE: { fr: "Finances", en: "Finance" },
+    INTELLIGENCE: { fr: "Intelligence", en: "Intelligence" },
+    SECTOR_HEALTH: { fr: "Santé", en: "Health sector" },
+    SECTOR_PHARMACY: { fr: "Pharmacie", en: "Pharmacy sector" },
+    SECTOR_MANUFACTURING: { fr: "Production", en: "Manufacturing" },
+    ADMINISTRATION: { fr: "Administration", en: "Administration" },
+    COMMERCIAL: { fr: "Ventes & relation client", en: "Sales & customer relations" },
+    HUMAN_RESOURCES: { fr: "Ressources humaines", en: "Human resources" },
+    PROJECTS_ASSETS: { fr: "Projets & actifs", en: "Projects & assets" },
+  };
+  return english ? labels[group].en : labels[group].fr;
 }
 
 export function getEnterpriseModuleLabel(definition: EnterpriseModuleDefinition, locale?: string | null) {
@@ -189,33 +264,4 @@ export function getEnterpriseModuleLabel(definition: EnterpriseModuleDefinition,
 
 export function getEnterpriseModuleDescription(definition: EnterpriseModuleDefinition, locale?: string | null) {
   return locale === "en" ? definition.descriptionEn : definition.descriptionFr;
-}
-
-export function getEnterpriseNavigationGroupLabel(group: EnterpriseModuleNavigationGroup, locale?: string | null) {
-  const english = locale === "en";
-  const labels: Record<EnterpriseModuleNavigationGroup, [string, string]> = {
-    OPERATIONS: ["Opérations", "Operations"],
-    COMMERCIAL: ["Commercial", "Commercial"],
-    PROCUREMENT_RESOURCES: ["Achats, stocks & ressources", "Procurement, inventory & resources"],
-    HUMAN_RESOURCES: ["Ressources humaines", "Human resources"],
-    PROJECTS_ASSETS: ["Projets & actifs", "Projects & assets"],
-    FINANCE: ["Finance", "Finance"],
-    SECTOR_HEALTH: ["Santé", "Health"],
-    SECTOR_PHARMACY: ["Pharmacie", "Pharmacy"],
-    SECTOR_MANUFACTURING: ["Production", "Manufacturing"],
-    INTELLIGENCE: ["Intelligence & IA", "Intelligence & AI"],
-    ADMINISTRATION: ["Administration", "Administration"],
-  };
-  return labels[group][english ? 1 : 0];
-}
-
-export function resolveEnterpriseModuleRoute(moduleCode: string) {
-  const definition = getEnterpriseModuleDefinition(moduleCode);
-  if (!definition || !isEnterpriseModuleNavigable(definition)) return null;
-  return { definition, canonicalCode: definition.code, path: definition.routePath as string };
-}
-
-export function getEnterpriseAdminLegacyRedirect(moduleCode: string) {
-  const definition = getEnterpriseModuleDefinition(moduleCode);
-  return definition?.routeKind === "ADMIN_SECTION" ? definition.routePath || "/enterprise-admin" : null;
 }
