@@ -6,10 +6,13 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const failures = [];
 const check = (condition, message) => { if (!condition) failures.push(message); };
 
+const genericSubtypes = read("lib/enterprise/business-subtype-registry.ts");
 const subtypes = read("lib/enterprise/retail/subtype-registry.ts");
 for (const marker of ["SHOP", "RETAIL_BUSINESS_SUBTYPES", "retailSubtypeAllowsModule", "RETAIL_MODULE_CODES"]) {
-  check(subtypes.includes(marker), `Retail subtype registry missing ${marker}`);
+  check(subtypes.includes(marker), `Retail subtype adapter missing ${marker}`);
 }
+check(genericSubtypes.includes('sectorCode: "COMMERCE_RETAIL"') && genericSubtypes.includes('code: "SHOP"'), "Generic subtype registry must preserve COMMERCE_RETAIL -> SHOP");
+check(genericSubtypes.includes('implementationStatus: "ACTIVE"'), "SHOP must remain an active generic business subtype");
 
 const templates = read("lib/enterprise-sector-templates.ts");
 check(templates.includes("businessSubtypeCode"), "Sector template application must carry retail subtype");
@@ -18,13 +21,19 @@ check(templates.includes("excludedModuleCodes"), "Leaving a subtype must disable
 
 const createRoute = read("app/api/admin/client-organizations/route.ts");
 for (const marker of ["RETAIL_BUSINESS_SUBTYPE_INVALID", "RETAIL_BUSINESS_SUBTYPE_SECTOR_MISMATCH", "businessSubtypeCode", "applyCanonicalSectorTemplateToOrganization"]) {
-  check(createRoute.includes(marker), `Company creation route missing ${marker}`);
+  check(createRoute.includes(marker), `Company creation route missing Retail compatibility marker ${marker}`);
 }
+check(createRoute.includes("persistBusinessSubtypeSelection"), "Company creation must persist the generic subtype decision");
+
+const templateRoute = read("app/api/admin/sector-templates/route.ts");
+check(templateRoute.includes("listBusinessSubtypesForSector"), "Company form options must come from the generic sector/subtype resolver");
 
 const createPanel = read("components/admin/client-organizations-panel.tsx");
-for (const marker of ["Sous-type de commerce retail", "ReferenceCombobox", "Commerce retail général", "businessSubtypeCode"]) {
-  check(createPanel.includes(marker), `Company form missing ${marker}`);
+for (const marker of ["businessSubtypeOptions", "selectedBusinessSubtypeCode", "ReferenceCombobox", "businessSubtypeCode"]) {
+  check(createPanel.includes(marker), `Generic company subtype form missing ${marker}`);
 }
+check(!createPanel.includes("RETAIL_SECTOR_CODE"), "Company form must not branch on the Retail sector constant anymore");
+check(!createPanel.includes("selectedRetailSubtypeCode"), "Company form must not keep Retail-only subtype state");
 
 const clientToast = read("lib/client-toast.ts");
 for (const marker of ['notifyToast(description: string, tone?: ToastTone)', 'durationMs: tone === "error" ? 7000 : undefined']) {
@@ -67,4 +76,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log("Hotfix #512 QA passed: Retail subtype isolation and DTSC form feedback contracts are present.");
+console.log("Hotfix #512 QA passed: Shop compatibility and generic subtype isolation preserve DTSC form feedback contracts.");

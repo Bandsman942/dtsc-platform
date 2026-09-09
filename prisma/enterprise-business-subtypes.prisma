@@ -1,0 +1,14 @@
+model EnterpriseBusinessSubtypeSelection {
+  id                  String   @id @default(cuid())
+  organizationId      String   @unique
+  sectorCode          String
+  businessSubtypeCode String?
+  selectionVersion    Int      @default(1)
+  source              String   @default("DTSC_ADMIN")
+  selectedByUserId    String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([sectorCode, businessSubtypeCode])
+  @@index([selectedByUserId, updatedAt])
+}

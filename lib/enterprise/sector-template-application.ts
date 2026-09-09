@@ -2,6 +2,14 @@ import {
   applySectorTemplateToOrganization,
   type ApplySectorTemplateMode,
 } from "@/lib/enterprise-sector-templates";
+import {
+  getBusinessSubtypeForSector,
+  type BusinessSubtypeCode,
+} from "@/lib/enterprise/business-subtype-registry";
+import {
+  getBusinessSubtypeSelection,
+  persistBusinessSubtypeSelection,
+} from "@/lib/enterprise/business-subtype-selection";
 import { ensureCanonicalCommonModulesForOrganization } from "@/lib/enterprise/common-modules";
 import {
   getEnterpriseModuleDefinition,
@@ -9,8 +17,9 @@ import {
   isEnterpriseModuleSectorCompatible,
   normalizeEnterpriseModuleCode,
 } from "@/lib/enterprise/module-registry";
-import { getRetailBusinessProfile, syncRetailOnboardingProvisioning } from "@/lib/enterprise/retail/provisioning";
-import type { RetailBusinessSubtypeCode } from "@/lib/enterprise/retail/subtype-registry";
+import { RETAIL_SECTOR_CODE } from "@/lib/enterprise/retail/constants";
+import { syncRetailOnboardingProvisioning } from "@/lib/enterprise/retail/provisioning";
+import { normalizeRetailBusinessSubtypeCode } from "@/lib/enterprise/retail/subtype-registry";
 import { prisma } from "@/lib/prisma";
 
 export async function applyCanonicalSectorTemplateToOrganization({
@@ -24,24 +33,51 @@ export async function applyCanonicalSectorTemplateToOrganization({
   sectorId: string;
   actorUserId: string;
   mode?: ApplySectorTemplateMode;
-  businessSubtypeCode?: RetailBusinessSubtypeCode | null;
+  businessSubtypeCode?: BusinessSubtypeCode | null;
 }) {
-  const existingRetailProfile = businessSubtypeCode === undefined ? await getRetailBusinessProfile(organizationId) : null;
-  const subtypeForApply = businessSubtypeCode === undefined
-    ? existingRetailProfile?.businessSubtypeCode
+  const targetSector = await prisma.businessSector.findFirst({
+    where: { id: sectorId, isActive: true },
+    select: { code: true },
+  });
+  if (!targetSector) {
+    throw new Error("SECTOR_TEMPLATE_NOT_FOUND");
+  }
+
+  if (businessSubtypeCode && !getBusinessSubtypeForSector(targetSector.code, businessSubtypeCode)) {
+    throw new Error("BUSINESS_SUBTYPE_INVALID_OR_SECTOR_MISMATCH");
+  }
+
+  const existingSelection = businessSubtypeCode === undefined
+    ? await getBusinessSubtypeSelection(organizationId)
+    : null;
+  const resolvedBusinessSubtypeCode: BusinessSubtypeCode | null = businessSubtypeCode === undefined
+    ? existingSelection?.sectorCode === targetSector.code
+      ? existingSelection.businessSubtypeCode
+      : null
     : businessSubtypeCode;
+  const retailSubtypeForApply = targetSector.code === RETAIL_SECTOR_CODE
+    ? normalizeRetailBusinessSubtypeCode(resolvedBusinessSubtypeCode)
+    : null;
+
   const result = await applySectorTemplateToOrganization({
     organizationId,
     sectorId,
     actorUserId,
     mode,
-    businessSubtypeCode: subtypeForApply,
+    businessSubtypeCode: retailSubtypeForApply,
   });
   const retailProvisioning = await syncRetailOnboardingProvisioning({
     organizationId,
     sectorCode: result.sectorCode,
     actorUserId,
     businessSubtypeCode: result.businessSubtypeCode,
+  });
+  const subtypeSelection = await persistBusinessSubtypeSelection({
+    organizationId,
+    sectorCode: result.sectorCode,
+    businessSubtypeCode: resolvedBusinessSubtypeCode,
+    actorUserId,
+    source: "SECTOR_TEMPLATE",
   });
   const commonModules = await ensureCanonicalCommonModulesForOrganization({ organizationId });
   const organization = await prisma.organization.findFirst({
@@ -57,7 +93,13 @@ export async function applyCanonicalSectorTemplateToOrganization({
     },
   });
   if (!organization) {
-    return { ...result, commonModuleCount: commonModules.length, retailProvisioning };
+    return {
+      ...result,
+      businessSubtypeCode: resolvedBusinessSubtypeCode,
+      subtypeSelection,
+      commonModuleCount: commonModules.length,
+      retailProvisioning,
+    };
   }
 
   const moduleIdsToDisable = new Set<string>();
@@ -113,6 +155,8 @@ export async function applyCanonicalSectorTemplateToOrganization({
 
   return {
     ...result,
+    businessSubtypeCode: resolvedBusinessSubtypeCode,
+    subtypeSelection,
     commonModuleCount: commonModules.length,
     retailProvisioning,
     registryNormalization: {

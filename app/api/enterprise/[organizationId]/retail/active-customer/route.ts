@@ -34,10 +34,13 @@ export async function GET(req: Request, { params }: Params) {
   if (!auth.ok) return auth.response;
   const permissions = await getRetailCustomerPaymentPermissions(auth.session.userId, organizationId);
   if (!permissions.canReadCustomers) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const customer = await getCustomer(organizationId, getRetailActiveCustomerIdFromCookieHeader(req.headers.get("cookie"), organizationId));
-  await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-active-customer", action: "get", selected: Boolean(customer) } });
-  const response = NextResponse.json({ customer });
-  return customer ? response : clearCookie(response);
+  const activeCustomerId = getRetailActiveCustomerIdFromCookieHeader(req.headers.get("cookie"), organizationId);
+  const customer = await getCustomer(organizationId, activeCustomerId);
+  await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-active-customer", action: "get", selected: Boolean(customer), requestedSelection: Boolean(activeCustomerId) } });
+  // GET is deliberately side-effect free. A stale read that started before a
+  // POST selection must never clear the newer active-customer cookie when it
+  // finishes later. Cookie mutation is owned only by POST and DELETE.
+  return NextResponse.json({ customer });
 }
 
 export async function POST(req: Request, { params }: Params) {

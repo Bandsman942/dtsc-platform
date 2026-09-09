@@ -1,4 +1,5 @@
-import { RETAIL_MODULE_CODES, type RetailModuleCode } from "@/lib/enterprise/retail/constants";
+import { BUSINESS_SUBTYPES, normalizeBusinessSubtypeCode } from "@/lib/enterprise/business-subtype-registry";
+import { RETAIL_MODULE_CODES, RETAIL_SECTOR_CODE, type RetailModuleCode } from "@/lib/enterprise/retail/constants";
 
 export const RETAIL_BUSINESS_SUBTYPE_CODES = ["SHOP"] as const;
 export type RetailBusinessSubtypeCode = (typeof RETAIL_BUSINESS_SUBTYPE_CODES)[number];
@@ -12,21 +13,23 @@ export type RetailBusinessSubtypeDefinition = {
   moduleCodes: readonly RetailModuleCode[];
 };
 
+const SHOP_BUSINESS_SUBTYPE = BUSINESS_SUBTYPES.find(
+  (subtype) => subtype.sectorCode === RETAIL_SECTOR_CODE && subtype.code === "SHOP",
+)!;
+
 /**
- * Canonical retail business-subtype registry.
+ * Retail compatibility adapter over the canonical cross-sector subtype registry.
  *
- * `COMMERCE_RETAIL` remains the generic sector. A subtype only adds the modules
- * listed here on top of the generic retail template. Future retail businesses
- * (fashion shop, hair salon, tailoring workshop, etc.) must be registered here
- * instead of adding one-off conditions to the company creation form.
+ * Classification metadata is owned by `business-subtype-registry.ts`; Retail keeps
+ * ownership of the Shop module scope and historical runtime compatibility contract.
  */
 export const RETAIL_BUSINESS_SUBTYPES: readonly RetailBusinessSubtypeDefinition[] = [
   {
     code: "SHOP",
-    labelFr: "Shop",
-    labelEn: "Shop",
-    descriptionFr: "Commerce de détail avec point de vente, clôture Retail et extensions opérateur déjà disponibles dans DTSC Platform.",
-    descriptionEn: "Retail shop with point of sale, Retail close and operator extensions already available in DTSC Platform.",
+    labelFr: SHOP_BUSINESS_SUBTYPE.labelFr,
+    labelEn: SHOP_BUSINESS_SUBTYPE.labelEn,
+    descriptionFr: SHOP_BUSINESS_SUBTYPE.descriptionFr,
+    descriptionEn: SHOP_BUSINESS_SUBTYPE.descriptionEn,
     // Preserve the existing Shop surface exactly. Mobile Money and Telco remain
     // optional at runtime through module enablement, entitlement and provider setup.
     moduleCodes: RETAIL_MODULE_CODES,
@@ -42,12 +45,13 @@ export function listRetailBusinessSubtypes() {
 }
 
 export function isRetailBusinessSubtypeCode(value: string | null | undefined): value is RetailBusinessSubtypeCode {
-  return Boolean(value && RETAIL_BUSINESS_SUBTYPE_CODES.includes(value as RetailBusinessSubtypeCode));
+  const normalized = normalizeBusinessSubtypeCode(value);
+  return normalized === "SHOP";
 }
 
 export function normalizeRetailBusinessSubtypeCode(value: string | null | undefined): RetailBusinessSubtypeCode | null {
-  const normalized = value?.trim().toUpperCase() || "";
-  return isRetailBusinessSubtypeCode(normalized) ? normalized : null;
+  const normalized = normalizeBusinessSubtypeCode(value);
+  return normalized === "SHOP" ? normalized : null;
 }
 
 export function getRetailBusinessSubtype(value: string | null | undefined) {

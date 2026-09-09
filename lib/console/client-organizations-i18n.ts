@@ -30,6 +30,11 @@ const dictionaries = {
     sendInvitation: "Envoyer l’invitation",
     sendingInvitation: "Envoi en cours…",
     acceptanceHint: "L’administrateur devra accepter explicitement l’invitation avant que son accès administrateur devienne actif.",
+    businessSubtypeLabel: "Sous-secteur métier",
+    businessSubtypeHint: "Laissez vide pour le modèle général du secteur. Un sous-secteur ajoute uniquement les capacités métier déjà disponibles pour cette spécialisation.",
+    businessSubtypeEmpty: "Aucun sous-secteur — secteur général",
+    businessSubtypeSelectedHint: "Le socle du secteur sera combiné avec les capacités du sous-secteur sélectionné.",
+    businessSubtypeGeneralHint: "Seul le socle général du secteur sera appliqué.",
   },
   en: {
     actionSaved: "Action saved.",
@@ -60,6 +65,11 @@ const dictionaries = {
     sendInvitation: "Send invitation",
     sendingInvitation: "Sending…",
     acceptanceHint: "The administrator must explicitly accept the invitation before administrator access becomes active.",
+    businessSubtypeLabel: "Business subtype",
+    businessSubtypeHint: "Leave empty for the sector's general template. A subtype only adds business capabilities already available for that specialization.",
+    businessSubtypeEmpty: "No subtype — general sector",
+    businessSubtypeSelectedHint: "The sector foundation will be combined with the selected subtype capabilities.",
+    businessSubtypeGeneralHint: "Only the sector's general foundation will be applied.",
   },
 } as const;
 
