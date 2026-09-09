@@ -24,6 +24,7 @@ export type AiToolDefinition = {
 
 import { ERP_AI_TOOL_DEFINITIONS } from "@/lib/ai/tools/erp-contract";
 import { FINANCE_AI_TOOL_DEFINITIONS } from "@/lib/ai/tools/finance-contract";
+import { MANUFACTURING_AI_TOOL_DEFINITIONS } from "@/lib/ai/tools/manufacturing-contract";
 
 const EMPTY_OBJECT = { type: "object", additionalProperties: false } as const;
 const OBJECT_OUTPUT = { type: "object" } as const;
@@ -61,6 +62,7 @@ const STATIC_AI_TOOL_REGISTRY: AiToolDefinition[] = [
   pharmacyReadTool({ code: "PHARMACY_DOCUMENTS_SUMMARY_READ", label: "ai.tools.pharmacyDocuments.label", description: "ai.tools.pharmacyDocuments.description", modules: ["DOCUMENTS"] }),
   ...FINANCE_AI_TOOL_DEFINITIONS,
   ...ERP_AI_TOOL_DEFINITIONS,
+  ...MANUFACTURING_AI_TOOL_DEFINITIONS,
   {
     code: "TASK_DRAFT_PREPARE",
     labelKey: "ai.tools.taskDraft.label",
