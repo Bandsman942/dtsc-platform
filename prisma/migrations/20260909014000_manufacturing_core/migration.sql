@@ -242,8 +242,8 @@ CREATE INDEX "EnterpriseManufacturingRouting_organizationId_catalogItemId_status
 CREATE INDEX "EnterpriseManufacturingRouting_organizationId_status_updatedAt_idx" ON "EnterpriseManufacturingRouting"("organizationId", "status", "updatedAt");
 CREATE INDEX "EnterpriseManufacturingRouting_archivedAt_idx" ON "EnterpriseManufacturingRouting"("archivedAt");
 CREATE UNIQUE INDEX "EnterpriseManufacturingRoutingOperation_organizationId_id_key" ON "EnterpriseManufacturingRoutingOperation"("organizationId", "id");
-CREATE UNIQUE INDEX "EnterpriseManufacturingRoutingOperation_organizationId_routingId_sequence_key" ON "EnterpriseManufacturingRoutingOperation"("organizationId", "routingId", "sequence");
-CREATE UNIQUE INDEX "EnterpriseManufacturingRoutingOperation_organizationId_routingId_code_key" ON "EnterpriseManufacturingRoutingOperation"("organizationId", "routingId", "code");
+CREATE UNIQUE INDEX "EnterpriseMfgRoutingOp_org_routing_sequence_key" ON "EnterpriseManufacturingRoutingOperation"("organizationId", "routingId", "sequence");
+CREATE UNIQUE INDEX "EnterpriseMfgRoutingOp_org_routing_code_key" ON "EnterpriseManufacturingRoutingOperation"("organizationId", "routingId", "code");
 CREATE INDEX "EnterpriseManufacturingRoutingOperation_organizationId_workCenterId_idx" ON "EnterpriseManufacturingRoutingOperation"("organizationId", "workCenterId");
 CREATE UNIQUE INDEX "EnterpriseBillOfMaterial_organizationId_id_key" ON "EnterpriseBillOfMaterial"("organizationId", "id");
 CREATE UNIQUE INDEX "EnterpriseBillOfMaterial_organizationId_code_version_key" ON "EnterpriseBillOfMaterial"("organizationId", "code", "version");
@@ -361,7 +361,7 @@ WITH latest AS (
 )
 INSERT INTO "SectorTemplatePosition" ("id","templateId","positionCode","labelFr","labelEn","departmentCode","hierarchyLevel","descriptionFr","descriptionEn","defaultPermissionsJson","isKeyPosition","sortOrder","createdAt","updatedAt")
 SELECT 'mfg-stp-' || md5(latest."id" || ':' || positions."code"), latest."id", positions."code", positions."labelFr", positions."labelEn", positions."departmentCode", positions."hierarchyLevel", positions."labelFr", positions."labelEn", positions."permissions", positions."isKeyPosition", positions."hierarchyLevel", CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-FROM latest CROSS JOIN positions
+FROM latest CROSS JOIN positions p
 ON CONFLICT ("templateId","positionCode") DO UPDATE SET "labelFr"=EXCLUDED."labelFr", "labelEn"=EXCLUDED."labelEn", "departmentCode"=EXCLUDED."departmentCode", "hierarchyLevel"=EXCLUDED."hierarchyLevel", "defaultPermissionsJson"=EXCLUDED."defaultPermissionsJson", "isKeyPosition"=EXCLUDED."isKeyPosition", "sortOrder"=EXCLUDED."sortOrder", "updatedAt"=CURRENT_TIMESTAMP;
 
 WITH latest AS (
