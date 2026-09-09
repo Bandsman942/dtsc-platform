@@ -4,6 +4,7 @@ import {
   MANUFACTURING_DEFINITION_STATUSES,
   MANUFACTURING_WORK_CENTER_STATUSES,
   PRODUCTION_ORDER_PRIORITIES,
+  PRODUCTION_QUALITY_CHECK_TYPES,
   PRODUCTION_QUALITY_RESULTS,
 } from "@/lib/enterprise/manufacturing/constants";
 
@@ -186,7 +187,7 @@ export const manufacturingExecutionRecordSchema = z.object({
 export const manufacturingQualityCheckSchema = z.object({
   productionOrderId: z.string().trim().min(1).max(180),
   routingOperationId: optionalId,
-  checkType: z.string().trim().min(2).max(120),
+  checkType: z.enum(PRODUCTION_QUALITY_CHECK_TYPES),
   result: z.enum(PRODUCTION_QUALITY_RESULTS),
   quantityChecked: quantity,
   quantityAccepted: z.coerce.number().nonnegative().max(1_000_000_000).default(0),
