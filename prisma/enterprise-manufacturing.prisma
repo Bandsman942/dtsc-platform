@@ -1,0 +1,306 @@
+model EnterpriseManufacturingConfiguration {
+  id                         String   @id @default(cuid())
+  organizationId             String   @unique
+  defaultMaterialWarehouseId String?
+  defaultOutputWarehouseId   String?
+  qualityRequiredByDefault   Boolean  @default(true)
+  allowOverproduction        Boolean  @default(false)
+  settingsJson               Json?
+  revision                   Int      @default(1)
+  createdByUserId            String
+  updatedByUserId            String?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
+model EnterpriseManufacturingWorkCenter {
+  id             String   @id @default(cuid())
+  organizationId String
+  code           String
+  name           String
+  description    String?
+  siteId         String?
+  assetId        String?
+  status         String   @default("ACTIVE")
+  capacityPerDay Decimal? @db.Decimal(18, 3)
+  capacityUnit   String?
+  costRate       Decimal? @db.Decimal(18, 2)
+  currency       String?
+  createdByUserId String
+  updatedByUserId String?
+  revision       Int      @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  archivedAt     DateTime?
+  routingOperations EnterpriseManufacturingRoutingOperation[]
+  executions     EnterpriseProductionExecution[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code])
+  @@index([organizationId, status, name])
+  @@index([organizationId, siteId, status])
+  @@index([organizationId, assetId, status])
+  @@index([archivedAt])
+}
+
+model EnterpriseManufacturingRouting {
+  id              String   @id @default(cuid())
+  organizationId  String
+  code            String
+  name            String
+  description     String?
+  catalogItemId   String?
+  version         Int      @default(1)
+  status          String   @default("DRAFT")
+  createdByUserId String
+  updatedByUserId String?
+  revision        Int      @default(1)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  archivedAt      DateTime?
+  operations      EnterpriseManufacturingRoutingOperation[]
+  productionOrders EnterpriseProductionOrder[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code, version])
+  @@index([organizationId, catalogItemId, status])
+  @@index([organizationId, status, updatedAt])
+  @@index([archivedAt])
+}
+
+model EnterpriseManufacturingRoutingOperation {
+  id                   String   @id @default(cuid())
+  organizationId       String
+  routingId            String
+  sequence             Int
+  code                 String
+  name                 String
+  workCenterId         String?
+  setupMinutes         Int      @default(0)
+  standardMinutes      Int?
+  requiresQualityCheck Boolean  @default(false)
+  instructions         String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  routing              EnterpriseManufacturingRouting @relation(fields: [organizationId, routingId], references: [organizationId, id], onDelete: Cascade)
+  workCenter           EnterpriseManufacturingWorkCenter? @relation(fields: [organizationId, workCenterId], references: [organizationId, id], onDelete: Restrict)
+  executions           EnterpriseProductionExecution[]
+  qualityChecks        EnterpriseProductionQualityCheck[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, routingId, sequence], map: "EnterpriseMfgRoutingOp_org_routing_sequence_key")
+  @@unique([organizationId, routingId, code], map: "EnterpriseMfgRoutingOp_org_routing_code_key")
+  @@index([organizationId, workCenterId])
+}
+
+model EnterpriseBillOfMaterial {
+  id              String   @id @default(cuid())
+  organizationId  String
+  code            String
+  name            String
+  catalogItemId   String
+  version         Int      @default(1)
+  outputQuantity  Decimal  @db.Decimal(18, 3)
+  status          String   @default("DRAFT")
+  effectiveFrom   DateTime?
+  effectiveUntil  DateTime?
+  notes           String?
+  createdByUserId String
+  updatedByUserId String?
+  revision        Int      @default(1)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  archivedAt      DateTime?
+  lines           EnterpriseBillOfMaterialLine[]
+  productionOrders EnterpriseProductionOrder[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code, version])
+  @@index([organizationId, catalogItemId, status])
+  @@index([organizationId, status, effectiveFrom])
+  @@index([archivedAt])
+}
+
+model EnterpriseBillOfMaterialLine {
+  id              String   @id @default(cuid())
+  organizationId  String
+  bomId           String
+  catalogItemId   String
+  quantity        Decimal  @db.Decimal(18, 3)
+  scrapRate       Decimal  @default(0) @db.Decimal(8, 4)
+  issueMethod     String   @default("MANUAL")
+  sequence        Int      @default(0)
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  bom             EnterpriseBillOfMaterial @relation(fields: [organizationId, bomId], references: [organizationId, id], onDelete: Cascade)
+  requirements    EnterpriseProductionMaterialRequirement[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, bomId, sequence])
+  @@index([organizationId, bomId, catalogItemId])
+  @@index([organizationId, catalogItemId])
+}
+
+model EnterpriseProductionOrder {
+  id                  String   @id @default(cuid())
+  organizationId      String
+  reference           String
+  title               String
+  bomId               String
+  routingId           String?
+  outputCatalogItemId String
+  salesOrderId        String?
+  salesOrderItemId    String?
+  materialWarehouseId String
+  outputWarehouseId   String
+  status              String   @default("DRAFT")
+  priority            String   @default("NORMAL")
+  plannedQuantity     Decimal  @db.Decimal(18, 3)
+  producedQuantity    Decimal  @default(0) @db.Decimal(18, 3)
+  scrappedQuantity    Decimal  @default(0) @db.Decimal(18, 3)
+  plannedStartAt      DateTime?
+  plannedEndAt        DateTime?
+  actualStartAt       DateTime?
+  actualEndAt         DateTime?
+  requestedByUserId   String
+  approverUserId      String?
+  submittedAt         DateTime?
+  approvedAt          DateTime?
+  rejectedAt          DateTime?
+  rejectionReason     String?
+  cancelledAt         DateTime?
+  cancellationReason  String?
+  notes               String?
+  idempotencyKey      String?
+  revision            Int      @default(1)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  archivedAt          DateTime?
+  bom                 EnterpriseBillOfMaterial @relation(fields: [organizationId, bomId], references: [organizationId, id], onDelete: Restrict)
+  routing             EnterpriseManufacturingRouting? @relation(fields: [organizationId, routingId], references: [organizationId, id], onDelete: Restrict)
+  requirements        EnterpriseProductionMaterialRequirement[]
+  executions          EnterpriseProductionExecution[]
+  qualityChecks       EnterpriseProductionQualityCheck[]
+  scraps              EnterpriseProductionScrap[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, reference])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, status, plannedStartAt])
+  @@index([organizationId, outputCatalogItemId, status])
+  @@index([organizationId, salesOrderId, status])
+  @@index([organizationId, materialWarehouseId, status])
+  @@index([organizationId, outputWarehouseId, status])
+  @@index([archivedAt])
+}
+
+model EnterpriseProductionMaterialRequirement {
+  id                String   @id @default(cuid())
+  organizationId    String
+  productionOrderId String
+  bomLineId         String
+  catalogItemId     String
+  inventoryItemId   String
+  warehouseId       String
+  requiredQuantity  Decimal  @db.Decimal(18, 3)
+  consumedQuantity  Decimal  @default(0) @db.Decimal(18, 3)
+  shortageQuantity  Decimal  @default(0) @db.Decimal(18, 3)
+  status            String   @default("PLANNED")
+  purchaseId        String?
+  revision          Int      @default(1)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  productionOrder   EnterpriseProductionOrder @relation(fields: [organizationId, productionOrderId], references: [organizationId, id], onDelete: Cascade)
+  bomLine           EnterpriseBillOfMaterialLine @relation(fields: [organizationId, bomLineId], references: [organizationId, id], onDelete: Restrict)
+  scraps            EnterpriseProductionScrap[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, productionOrderId, bomLineId])
+  @@index([organizationId, productionOrderId, status])
+  @@index([organizationId, inventoryItemId, warehouseId])
+  @@index([organizationId, purchaseId, status])
+}
+
+model EnterpriseProductionExecution {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  productionOrderId  String
+  routingOperationId String?
+  workCenterId       String?
+  employeeId         String?
+  assetId            String?
+  timesheetEntryId   String?
+  executionType      String
+  quantityCompleted  Decimal? @db.Decimal(18, 3)
+  minutesWorked      Int?
+  startedAt          DateTime?
+  endedAt            DateTime?
+  notes              String?
+  idempotencyKey     String
+  createdByUserId    String
+  createdAt          DateTime @default(now())
+  productionOrder    EnterpriseProductionOrder @relation(fields: [organizationId, productionOrderId], references: [organizationId, id], onDelete: Cascade)
+  routingOperation   EnterpriseManufacturingRoutingOperation? @relation(fields: [organizationId, routingOperationId], references: [organizationId, id], onDelete: Restrict)
+  workCenter         EnterpriseManufacturingWorkCenter? @relation(fields: [organizationId, workCenterId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, productionOrderId, createdAt])
+  @@index([organizationId, employeeId, createdAt])
+  @@index([organizationId, assetId, createdAt])
+  @@index([organizationId, timesheetEntryId])
+}
+
+model EnterpriseProductionQualityCheck {
+  id                  String   @id @default(cuid())
+  organizationId      String
+  productionOrderId   String
+  routingOperationId  String?
+  checkType           String
+  result              String
+  quantityChecked     Decimal  @db.Decimal(18, 3)
+  quantityAccepted    Decimal  @default(0) @db.Decimal(18, 3)
+  quantityRejected    Decimal  @default(0) @db.Decimal(18, 3)
+  notes               String?
+  inspectedByUserId   String
+  inspectedEmployeeId String?
+  revision            Int      @default(1)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  productionOrder     EnterpriseProductionOrder @relation(fields: [organizationId, productionOrderId], references: [organizationId, id], onDelete: Cascade)
+  routingOperation    EnterpriseManufacturingRoutingOperation? @relation(fields: [organizationId, routingOperationId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, productionOrderId, result, createdAt])
+  @@index([organizationId, inspectedEmployeeId, createdAt])
+}
+
+model EnterpriseProductionScrap {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  productionOrderId     String
+  materialRequirementId String?
+  catalogItemId         String
+  inventoryItemId       String?
+  warehouseId           String?
+  quantity              Decimal  @db.Decimal(18, 3)
+  reasonCode            String
+  notes                 String?
+  affectsInventory      Boolean  @default(false)
+  stockMovementId       String?
+  idempotencyKey        String
+  createdByUserId       String
+  occurredAt            DateTime @default(now())
+  createdAt             DateTime @default(now())
+  productionOrder       EnterpriseProductionOrder @relation(fields: [organizationId, productionOrderId], references: [organizationId, id], onDelete: Cascade)
+  materialRequirement   EnterpriseProductionMaterialRequirement? @relation(fields: [organizationId, materialRequirementId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, productionOrderId, occurredAt])
+  @@index([organizationId, catalogItemId, occurredAt])
+  @@index([organizationId, reasonCode, occurredAt])
+}

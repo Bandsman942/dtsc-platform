@@ -3,6 +3,7 @@ import { AI_TOOL_REGISTRY, type AiToolDefinition } from "@/lib/ai/tool-registry"
 import { authorizeAiTool } from "@/lib/ai/tools/authorize";
 import { ERP_AI_TOOL_DESCRIPTIONS } from "@/lib/ai/tools/erp-contract";
 import { FINANCE_AI_TOOL_DESCRIPTIONS } from "@/lib/ai/tools/finance-contract";
+import { MANUFACTURING_AI_TOOL_DESCRIPTIONS } from "@/lib/ai/tools/manufacturing-contract";
 import type { AiToolRuntimeContext } from "@/lib/ai/tools/types";
 import type { AiAgentBudget } from "@/lib/ai/agent/types";
 
@@ -18,6 +19,7 @@ const TOOL_DESCRIPTIONS: Record<string, string> = {
   PHARMACY_DOCUMENTS_SUMMARY_READ: "Lire une synthèse des documents et éléments de conformité pharmacie autorisés.",
   ...FINANCE_AI_TOOL_DESCRIPTIONS,
   ...ERP_AI_TOOL_DESCRIPTIONS,
+  ...MANUFACTURING_AI_TOOL_DESCRIPTIONS,
   TASK_DRAFT_PREPARE: "Préparer un brouillon de tâche DTSC sans créer la tâche finale.",
   SUPPORT_TICKET_CREATE: "Créer un ticket support DTSC uniquement après confirmation humaine structurelle.",
   DTSC_CONTACT_EMAIL_SEND: "Envoyer un message à DTSC uniquement après confirmation humaine structurelle.",

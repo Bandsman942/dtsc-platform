@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { AssistantImmersiveWorkspaceShell } from "@/components/chat/assistant-immersive-workspace-shell";
 import { EnterpriseAiWorkspaceV2 } from "@/components/enterprise/enterprise-ai-workspace-v2";
+import { EnterpriseManufacturingWorkspace } from "@/components/enterprise/manufacturing/enterprise-manufacturing-workspace";
 import { EnterpriseAssetsMaintenanceWorkspace } from "@/components/enterprise/professional/enterprise-assets-maintenance-workspace";
 import { EnterpriseCatalogWorkspace } from "@/components/enterprise/professional/enterprise-catalog-workspace";
 import { EnterpriseContractsWorkspace } from "@/components/enterprise/professional/enterprise-contracts-workspace";
@@ -18,6 +19,7 @@ import { EnterpriseModuleWorkspace } from "@/components/enterprise/enterprise-mo
 import { EnterpriseSectorModuleWorkspace } from "@/components/enterprise/enterprise-sector-module-workspace";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
+import { MANUFACTURING_MODULE_CODES, type ManufacturingModuleCode } from "@/lib/enterprise/manufacturing/constants";
 import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
 import {
   getEnterpriseAdminLegacyRedirect,
@@ -111,6 +113,20 @@ export default async function EnterpriseModulePage({ params }: Params) {
   }
 
   if (definition.routeKind !== "DEDICATED_CORE") notFound();
+
+  if (MANUFACTURING_MODULE_CODES.includes(definition.code as ManufacturingModuleCode)) {
+    return (
+      <AppShell user={user}>
+        <EnterpriseManufacturingWorkspace
+          organizationId={organizationId}
+          organizationName={organization.name}
+          definition={definition}
+          initialFocus={definition.code as ManufacturingModuleCode}
+          locale={user.locale}
+        />
+      </AppShell>
+    );
+  }
 
   if (definition.code === "CRM_CUSTOMERS") {
     return <AppShell user={user}><EnterpriseCustomersWorkspace organizationId={organizationId} organizationName={organization.name} definition={definition} /></AppShell>;

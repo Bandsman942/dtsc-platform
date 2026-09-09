@@ -1,6 +1,7 @@
 import registryData from "@/lib/enterprise/module-registry-data.json";
 import commonDomainRegistryData from "@/lib/enterprise/module-registry-common-domains.json";
 import financeRegistryData from "@/lib/enterprise/module-registry-finance.json";
+import manufacturingRegistryData from "@/lib/enterprise/module-registry-manufacturing.json";
 import retailRegistryData from "@/lib/enterprise/module-registry-retail.json";
 import sectorConvergenceRegistryData from "@/lib/enterprise/module-registry-sector-convergence.json";
 import finalCleanupRegistryData from "@/lib/enterprise/module-registry-final-cleanup.json";
@@ -26,6 +27,7 @@ export type EnterpriseModuleDomain =
   | "ANALYTICS"
   | "SECTOR_HEALTH"
   | "SECTOR_PHARMACY"
+  | "SECTOR_MANUFACTURING"
   | "INTELLIGENCE"
   | "ADMINISTRATION";
 
@@ -36,6 +38,7 @@ export type EnterpriseModuleNavigationGroup =
   | "INTELLIGENCE"
   | "SECTOR_HEALTH"
   | "SECTOR_PHARMACY"
+  | "SECTOR_MANUFACTURING"
   | "ADMINISTRATION"
   | "COMMERCIAL"
   | "HUMAN_RESOURCES"
@@ -89,6 +92,7 @@ export const ENTERPRISE_MODULE_REGISTRY_VERSION = Math.max(
   registryData.version,
   commonDomainRegistryData.version,
   financeRegistryData.version,
+  manufacturingRegistryData.version,
   retailRegistryData.version,
   sectorConvergenceRegistryData.version,
   finalCleanupRegistryData.version,
@@ -142,6 +146,7 @@ export const ENTERPRISE_MODULE_REGISTRY = [
   ...registryData.modules,
   ...commonDomainRegistryData.modules,
   ...financeRegistryData.modules,
+  ...manufacturingRegistryData.modules,
   ...retailRegistryData.modules,
 ].map((definition) =>
   applyCommercialOverride(
@@ -244,6 +249,7 @@ export function getEnterpriseModuleGroupLabel(group: EnterpriseModuleNavigationG
     INTELLIGENCE: { fr: "Intelligence", en: "Intelligence" },
     SECTOR_HEALTH: { fr: "Santé", en: "Health sector" },
     SECTOR_PHARMACY: { fr: "Pharmacie", en: "Pharmacy sector" },
+    SECTOR_MANUFACTURING: { fr: "Production", en: "Manufacturing" },
     ADMINISTRATION: { fr: "Administration", en: "Administration" },
     COMMERCIAL: { fr: "Ventes & relation client", en: "Sales & customer relations" },
     HUMAN_RESOURCES: { fr: "Ressources humaines", en: "Human resources" },

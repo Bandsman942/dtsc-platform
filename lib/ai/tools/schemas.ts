@@ -9,6 +9,10 @@ import {
   FINANCE_AI_TOOL_INPUT_SCHEMAS,
   FINANCE_AI_TOOL_OUTPUT_SCHEMAS,
 } from "@/lib/ai/tools/finance-contract";
+import {
+  MANUFACTURING_AI_TOOL_INPUT_SCHEMAS,
+  MANUFACTURING_AI_TOOL_OUTPUT_SCHEMAS,
+} from "@/lib/ai/tools/manufacturing-contract";
 
 const emptyInput = z.object({}).strict();
 const pharmacyResult = z.object({
@@ -32,6 +36,7 @@ export const AI_TOOL_INPUT_SCHEMAS = {
   PHARMACY_DOCUMENTS_SUMMARY_READ: emptyInput,
   ...FINANCE_AI_TOOL_INPUT_SCHEMAS,
   ...ERP_AI_TOOL_INPUT_SCHEMAS,
+  ...MANUFACTURING_AI_TOOL_INPUT_SCHEMAS,
   TASK_DRAFT_PREPARE: z.object({ title: z.string().trim().min(1).max(180), description: z.string().trim().max(4000).optional() }).strict(),
   SUPPORT_TICKET_CREATE: z.object({ subject: z.string().trim().min(3).max(180), message: z.string().trim().min(10).max(8000), priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]) }).strict(),
   DTSC_CONTACT_EMAIL_SEND: z.object({ subject: z.string().trim().min(3).max(180), message: z.string().trim().min(10).max(8000) }).strict(),
@@ -54,6 +59,7 @@ export const AI_TOOL_OUTPUT_SCHEMAS = {
   PHARMACY_DOCUMENTS_SUMMARY_READ: pharmacyResult,
   ...FINANCE_AI_TOOL_OUTPUT_SCHEMAS,
   ...ERP_AI_TOOL_OUTPUT_SCHEMAS,
+  ...MANUFACTURING_AI_TOOL_OUTPUT_SCHEMAS,
   TASK_DRAFT_PREPARE: z.object({ title: z.string(), description: z.string().nullable(), status: z.literal("DRAFT") }),
   SUPPORT_TICKET_CREATE: z.object({ ticketId: z.string(), status: z.string() }),
   DTSC_CONTACT_EMAIL_SEND: z.object({ contactMessageId: z.string(), sent: z.boolean() }),
