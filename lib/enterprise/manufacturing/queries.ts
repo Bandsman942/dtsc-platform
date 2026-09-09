@@ -20,7 +20,7 @@ export async function getManufacturingReferences(organizationId: string) {
     }),
     prisma.enterpriseSalesOrder.findMany({
       where: { organizationId, archivedAt: null, status: { notIn: ["CANCELLED", "CLOSED"] } },
-      select: { id: true, reference: true, title: true, status: true, currency: true, items: { select: { id: true, catalogItemId: true, description: true, quantity: true, fulfilledQuantity: true } } },
+      select: { id: true, reference: true, title: true, status: true, currency: true, items: { select: { id: true, catalogItemId: true, description: true, quantityOrdered: true, quantityFulfilled: true } } },
       orderBy: { createdAt: "desc" },
       take: 100,
     }),
