@@ -31,16 +31,16 @@ const contract = read("docs/ENTERPRISE_FORM_UX_CONTRACT.md");
 const inventory = read("docs/FORM_REFERENCE_INVENTORY_467.md");
 
 expect("shared Input resolves controlled reference kinds", input.includes("controlledReferenceKind") && input.includes("<ReferenceSelect"));
-expect("canonical controlled references include stable and discovered type fields", catalog.includes('currency: "currency"') && catalog.includes('unit: "unit"') && catalog.includes('currencyCode: "currency"') && catalog.includes('unitCode: "unit"') && catalog.includes('paymentMethod: "paymentMethod"') && catalog.includes('requestType: "requestType"') && catalog.includes('linkedEntityType: "linkedEntityType"') && catalog.includes('pharmacyType: "pharmacyType"') && catalog.includes('incidentType: "assetIncidentType"'));
+expect("canonical controlled references include stable and discovered type fields", catalog.includes('currency: "currency"') && catalog.includes('unit: "unit"') && catalog.includes('currencyCode: "currency"') && catalog.includes('unitCode: "unit"') && catalog.includes('paymentMethod: "paymentMethod"') && catalog.includes('requestType: "requestType"') && catalog.includes('linkedEntityType: "linkedEntityType"') && catalog.includes('pharmacyType: "pharmacyType"') && catalog.includes('incidentType: "assetIncidentType"') && catalog.includes('checkType: "manufacturingQualityCheckType"'));
 expect("reference selector is a real select", referenceSelect.includes("<select") && referenceSelect.includes("data-dtsc-controlled-reference"));
-expect("reference selector is bilingual", referenceSelect.includes("document.documentElement.lang") && catalog.includes('fr: "Dollar américain (USD)"') && catalog.includes('en: "US dollar (USD)"') && catalog.includes('fr: "Virement bancaire"'));
+expect("reference selector is bilingual", referenceSelect.includes("document.documentElement.lang") && catalog.includes('fr: "Dollar américain (USD)"') && catalog.includes('en: "US dollar (USD)"') && catalog.includes('fr: "Virement bancaire"') && catalog.includes('fr: "Contrôle final"') && catalog.includes('en: "Final inspection"'));
 expect("reference selector preserves historical values", referenceSelect.includes("historicalValue") && referenceSelect.includes("Valeur existante"));
 expect("FormField can provide automatic reference help", formField.includes("referenceFieldHelp") && formField.includes("effectiveHint"));
 expect("ERP Field shares the canonical reference catalog", erpUi.includes('from "@/lib/forms/reference-catalog"') && erpUi.includes("export { currencyChoices, unitChoices }"));
 expect("form contract requires controlled statuses/types/categories", contract.includes("Les statuts, priorités, types et catégories utilisent des valeurs contrôlées."));
 
 const sourceFiles = [...walk("components"), ...walk("app")];
-const globallyControlledInputNames = new Set(["currency", "currencyCode", "unit", "unitCode", "paymentMethod", "requestType", "linkedEntityType", "pharmacyType", "incidentType"]);
+const globallyControlledInputNames = new Set(["currency", "currencyCode", "unit", "unitCode", "paymentMethod", "requestType", "linkedEntityType", "pharmacyType", "incidentType", "checkType"]);
 
 // Ces exceptions sont des taxonomies réellement configurables : aucun référentiel canonique
 // n'existe dans le modèle courant. Elles restent explicites, bornées par fichier et documentées.
