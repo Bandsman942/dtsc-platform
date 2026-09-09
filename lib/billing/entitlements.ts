@@ -4,6 +4,7 @@ import { getPlanUsageLimits, type OrganizationUsageLimits } from "@/lib/billing/
 import { normalizePlanRequirement, planMeetsRequirement, SAAS_PLANS, type SaasPlanCode } from "@/lib/billing/plans";
 import {
   getEnterpriseModuleDefinition,
+  isEnterpriseModuleBusinessSubtypeCompatible,
   isEnterpriseModuleImplemented,
   isEnterpriseModuleSectorCompatible,
   normalizeEnterpriseModuleCode,
@@ -21,6 +22,7 @@ export type EntitlementDecision = {
     | "MODULE_NOT_FOUND"
     | "MODULE_NOT_IMPLEMENTED"
     | "SECTOR_INCOMPATIBLE"
+    | "BUSINESS_SUBTYPE_INCOMPATIBLE"
     | "ADMIN_SECTION_ONLY";
   message: string;
   requiredPlan?: SaasPlanCode;
@@ -110,10 +112,12 @@ export function isSubscriptionActive(subscription?: { status?: string | null; ex
 function registryDecision({
   moduleCode,
   sectorCode,
+  businessSubtypeCode,
   fallbackRequiredPlan,
 }: {
   moduleCode: string;
   sectorCode: string | null;
+  businessSubtypeCode: string | null;
   fallbackRequiredPlan?: SaasPlanCode | null;
 }): {
   canonicalCode: string | null;
@@ -154,6 +158,14 @@ function registryDecision({
       implementationStatus: definition.implementationStatus,
       requiredPlan,
       denial: { allowed: false, code: "SECTOR_INCOMPATIBLE", message: "Ce module n'est pas compatible avec le secteur de l'entreprise active.", requiredPlan },
+    };
+  }
+  if (!isEnterpriseModuleBusinessSubtypeCompatible(definition, businessSubtypeCode)) {
+    return {
+      canonicalCode: definition.code,
+      implementationStatus: definition.implementationStatus,
+      requiredPlan,
+      denial: { allowed: false, code: "BUSINESS_SUBTYPE_INCOMPATIBLE", message: "Ce module n'est pas compatible avec le sous-secteur de l'entreprise active.", requiredPlan },
     };
   }
   return {
@@ -210,19 +222,28 @@ export async function getOrganizationEntitlements(organizationId: string | null 
     };
   }
 
-  const organization = await prisma.organization.findFirst({
-    where: { id: commercialContext.organizationId, deletedAt: null, organizationType: "CLIENT" },
-    select: {
-      id: true,
-      status: true,
-      organizationType: true,
-      sectorCode: true,
-      enterpriseModules: {
-        select: { id: true, moduleCode: true, isEnabled: true, isCore: true, requiresPlanLevel: true },
+  const [organization, subtypeSelection] = await Promise.all([
+    prisma.organization.findFirst({
+      where: { id: commercialContext.organizationId, deletedAt: null, organizationType: "CLIENT" },
+      select: {
+        id: true,
+        status: true,
+        organizationType: true,
+        sectorCode: true,
+        enterpriseModules: {
+          select: { id: true, moduleCode: true, isEnabled: true, isCore: true, requiresPlanLevel: true },
+        },
       },
-    },
-  });
+    }),
+    prisma.enterpriseBusinessSubtypeSelection.findUnique({
+      where: { organizationId: commercialContext.organizationId },
+      select: { sectorCode: true, businessSubtypeCode: true },
+    }),
+  ]);
   if (!organization) return null;
+  const businessSubtypeCode = subtypeSelection?.sectorCode === organization.sectorCode
+    ? subtypeSelection.businessSubtypeCode
+    : null;
 
   const planCode = commercialContext.capabilityCode;
   const subscriptionActive = commercialContext.subscriptionActive;
@@ -232,6 +253,7 @@ export async function getOrganizationEntitlements(organizationId: string | null 
     const registry = registryDecision({
       moduleCode: enterpriseModule.moduleCode,
       sectorCode: organization.sectorCode,
+      businessSubtypeCode,
       fallbackRequiredPlan: configuredPlan,
     });
     const requiredPlan = registry.requiredPlan;
@@ -337,52 +359,4 @@ export async function canUseFeature(organizationId: string | null | undefined, f
     requiredPlan: entitlement.requiredPlan,
     requiresActiveSubscription: entitlement.requiresActiveSubscription,
   });
-}
-
-export async function canUseModule(organizationId: string | null | undefined, moduleCode: string): Promise<EntitlementDecision> {
-  const canonicalCode = normalizeEnterpriseModuleCode(moduleCode);
-  const definition = getEnterpriseModuleDefinition(canonicalCode);
-  if (!definition) {
-    return { allowed: false, code: "MODULE_NOT_FOUND", message: "Ce code module est absent du registre canonique." };
-  }
-  if (!isEnterpriseModuleImplemented(definition.code) || definition.routeKind === "HIDDEN") {
-    return { allowed: false, code: "MODULE_NOT_IMPLEMENTED", message: "Ce module n'est pas encore disponible dans DTSC Platform.", requiredPlan: definition.minimumPlan };
-  }
-  if (definition.routeKind === "ADMIN_SECTION") {
-    return { allowed: false, code: "ADMIN_SECTION_ONLY", message: "Cette fonction appartient à l'administration entreprise.", requiredPlan: definition.minimumPlan };
-  }
-
-  const entitlements = await getOrganizationEntitlements(organizationId);
-  if (!entitlements) {
-    return { allowed: false, code: "ORGANIZATION_INACTIVE", message: "Aucun espace organisation actif." };
-  }
-  if (!isEnterpriseModuleSectorCompatible(definition, entitlements.sectorCode)) {
-    return { allowed: false, code: "SECTOR_INCOMPATIBLE", message: "Ce module n'est pas compatible avec le secteur de l'entreprise active.", requiredPlan: definition.minimumPlan };
-  }
-  if (entitlements.isDtscInternal) {
-    return { allowed: true, code: "OK", message: "Accès autorisé.", requiredPlan: "ENTERPRISE" };
-  }
-
-  const candidates = entitlements.modules.filter((item) => normalizeEnterpriseModuleCode(item.moduleCode) === canonicalCode);
-  const enterpriseModule = candidates.find((item) => item.moduleCode === canonicalCode) || candidates[0];
-  if (!enterpriseModule) {
-    return { allowed: false, code: "MODULE_NOT_FOUND", message: "Ce module n'est pas configuré pour cette organisation." };
-  }
-  return {
-    allowed: enterpriseModule.allowed,
-    code: enterpriseModule.code,
-    message: enterpriseModule.message,
-    requiredPlan: enterpriseModule.requiredPlan,
-  };
-}
-
-export async function assertCanUseModule(organizationId: string | null | undefined, moduleCode: string) {
-  const decision = await canUseModule(organizationId, moduleCode);
-  if (!decision.allowed) throw new SaasEntitlementError(decision);
-  return decision;
-}
-
-export async function getOrganizationUsageLimits(organizationId: string | null | undefined): Promise<OrganizationUsageLimits | null> {
-  const entitlements = await getOrganizationEntitlements(organizationId);
-  return entitlements?.limits || null;
 }
