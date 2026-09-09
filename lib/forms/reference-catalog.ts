@@ -1,3 +1,5 @@
+import { PRODUCTION_QUALITY_CHECK_TYPES } from "@/lib/enterprise/manufacturing/constants";
+
 export type ReferenceChoice = { id: string; label: string };
 
 type LocalizedReferenceChoice = {
@@ -12,7 +14,7 @@ export const LEGAL_LINK_ENTITY_TYPE_CODES = ["PROJECT", "SUPPLIER", "CLIENT", "E
 export const PHARMACY_TYPE_CODES = ["OFFICINE", "CLINIC_INTERNAL", "HOSPITAL", "DEPOT", "WHOLESALE", "MOBILE", "OTHER"] as const;
 export const ASSET_INCIDENT_TYPE_CODES = ["DAMAGE"] as const;
 
-export type ControlledReferenceKind = "currency" | "unit" | "paymentMethod" | "requestType" | "linkedEntityType" | "pharmacyType" | "assetIncidentType";
+export type ControlledReferenceKind = "currency" | "unit" | "paymentMethod" | "requestType" | "linkedEntityType" | "pharmacyType" | "assetIncidentType" | "manufacturingQualityCheckType";
 
 const CURRENCY_OPTIONS: readonly LocalizedReferenceChoice[] = [
   { id: "USD", fr: "Dollar américain (USD)", en: "US dollar (USD)" },
@@ -96,6 +98,16 @@ const ASSET_INCIDENT_TYPE_OPTIONS: readonly LocalizedReferenceChoice[] = [
   { id: "DAMAGE", fr: "Dommage matériel", en: "Asset damage" },
 ] as const;
 
+const MANUFACTURING_QUALITY_CHECK_TYPE_LABELS: Record<(typeof PRODUCTION_QUALITY_CHECK_TYPES)[number], { fr: string; en: string }> = {
+  INCOMING: { fr: "Contrôle à réception", en: "Incoming inspection" },
+  IN_PROCESS: { fr: "Contrôle en cours de production", en: "In-process inspection" },
+  FINAL: { fr: "Contrôle final", en: "Final inspection" },
+};
+const MANUFACTURING_QUALITY_CHECK_TYPE_OPTIONS: readonly LocalizedReferenceChoice[] = PRODUCTION_QUALITY_CHECK_TYPES.map((id) => ({
+  id,
+  ...MANUFACTURING_QUALITY_CHECK_TYPE_LABELS[id],
+}));
+
 const CONTROLLED_REFERENCE_FIELDS: Readonly<Record<string, ControlledReferenceKind>> = {
   currency: "currency",
   currencyCode: "currency",
@@ -106,6 +118,7 @@ const CONTROLLED_REFERENCE_FIELDS: Readonly<Record<string, ControlledReferenceKi
   linkedEntityType: "linkedEntityType",
   pharmacyType: "pharmacyType",
   incidentType: "assetIncidentType",
+  checkType: "manufacturingQualityCheckType",
 };
 
 const GENERIC_FIELD_HELP = {
@@ -121,6 +134,7 @@ const GENERIC_FIELD_HELP = {
     linkedEntityType: "Choisissez la nature de l’élément métier lié ; la référence associée reste l’identifiant de cet élément.",
     pharmacyType: "Choisissez le type d’établissement pharmaceutique déjà supporté par les paramètres Pharmacie.",
     incidentType: "Choisissez un type d’incident d’actif supporté. Les anciennes valeurs restent affichables sans devenir de nouveaux choix.",
+    checkType: "Choisissez le moment du contrôle qualité : à réception, en cours de production ou en contrôle final.",
   },
   en: {
     currency: "Choose the currency used to record and display amounts. A controlled choice prevents invalid or inconsistent currency codes.",
@@ -134,6 +148,7 @@ const GENERIC_FIELD_HELP = {
     linkedEntityType: "Choose the business entity kind being linked; the associated reference remains that entity's identifier.",
     pharmacyType: "Choose a pharmacy establishment type already supported by Pharmacy settings.",
     incidentType: "Choose a supported asset incident type. Historical values remain readable without becoming new choices.",
+    checkType: "Choose when the quality inspection occurs: incoming, in-process, or final inspection.",
   },
 } as const;
 
@@ -239,6 +254,7 @@ export function controlledReferenceChoices(kind: ControlledReferenceKind, locale
   if (kind === "requestType") return localize(REQUEST_TYPE_OPTIONS, locale);
   if (kind === "linkedEntityType") return localize(LEGAL_LINK_ENTITY_TYPE_OPTIONS, locale);
   if (kind === "pharmacyType") return localize(PHARMACY_TYPE_OPTIONS, locale);
+  if (kind === "manufacturingQualityCheckType") return localize(MANUFACTURING_QUALITY_CHECK_TYPE_OPTIONS, locale);
   return localize(ASSET_INCIDENT_TYPE_OPTIONS, locale);
 }
 
