@@ -42,6 +42,8 @@ export async function enterpriseSourceEntityExists(tx: ProcurementTransaction, o
   if (entityType === "EnterpriseExpense") return Boolean(await tx.enterpriseExpense.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
   if (entityType === "EnterpriseReport") return Boolean(await tx.enterpriseReport.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
   if (entityType === "EnterpriseActivityRequest") return Boolean(await tx.enterpriseActivityRequest.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
+  if (entityType === "EnterpriseProductionOrder") return Boolean(await tx.enterpriseProductionOrder.findFirst({ where: { id: entityId, organizationId, archivedAt: null }, select: { id: true } }));
+  if (entityType === "EnterpriseProductionMaterialRequirement") return Boolean(await tx.enterpriseProductionMaterialRequirement.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
   if (entityType === "PharmacySupplier") return Boolean(await tx.pharmacySupplier.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
   if (entityType === "PharmacyPurchaseOrder") return Boolean(await tx.pharmacyPurchaseOrder.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
   if (entityType === "PharmacyReceipt") return Boolean(await tx.pharmacyReceipt.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
