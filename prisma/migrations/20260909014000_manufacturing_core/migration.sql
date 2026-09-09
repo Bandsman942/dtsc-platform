@@ -361,7 +361,7 @@ WITH latest AS (
 )
 INSERT INTO "SectorTemplatePosition" ("id","templateId","positionCode","labelFr","labelEn","departmentCode","hierarchyLevel","descriptionFr","descriptionEn","defaultPermissionsJson","isKeyPosition","sortOrder","createdAt","updatedAt")
 SELECT 'mfg-stp-' || md5(latest."id" || ':' || positions."code"), latest."id", positions."code", positions."labelFr", positions."labelEn", positions."departmentCode", positions."hierarchyLevel", positions."labelFr", positions."labelEn", positions."permissions", positions."isKeyPosition", positions."hierarchyLevel", CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-FROM latest CROSS JOIN positions p
+FROM latest CROSS JOIN positions
 ON CONFLICT ("templateId","positionCode") DO UPDATE SET "labelFr"=EXCLUDED."labelFr", "labelEn"=EXCLUDED."labelEn", "departmentCode"=EXCLUDED."departmentCode", "hierarchyLevel"=EXCLUDED."hierarchyLevel", "defaultPermissionsJson"=EXCLUDED."defaultPermissionsJson", "isKeyPosition"=EXCLUDED."isKeyPosition", "sortOrder"=EXCLUDED."sortOrder", "updatedAt"=CURRENT_TIMESTAMP;
 
 WITH latest AS (
