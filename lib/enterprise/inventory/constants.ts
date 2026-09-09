@@ -9,6 +9,9 @@ export const STOCK_MOVEMENT_TYPES = [
   "RETURN_OUT",
   "COUNT_CORRECTION",
   "OPENING_BALANCE",
+  "PRODUCTION_CONSUMPTION",
+  "PRODUCTION_OUTPUT",
+  "PRODUCTION_SCRAP",
 ] as const;
 
 export const STOCK_DIRECTIONS = ["IN", "OUT"] as const;
