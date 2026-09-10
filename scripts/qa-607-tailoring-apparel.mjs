@@ -23,6 +23,7 @@ const validators = read("lib/enterprise/tailoring/validators.ts");
 const service = read("lib/enterprise/tailoring/service.ts");
 const queries = read("lib/enterprise/tailoring/queries.ts");
 const api = read("app/api/enterprise/[organizationId]/tailoring/route.ts");
+const access = read("lib/enterprise/tailoring/access.ts");
 const http = read("lib/enterprise/tailoring/http.ts");
 const workspace = read("components/enterprise/tailoring/enterprise-tailoring-workspace.tsx");
 const page = read("app/enterprise-tailoring/[moduleCode]/page.tsx");
@@ -48,27 +49,38 @@ for (const code of moduleCodes) {
 }
 includesAll(moduleRegistry, ["module-registry-tailoring.json", "applicableBusinessSubtypes", "isEnterpriseModuleBusinessSubtypeCompatible"], "canonical module registry subtype support");
 includesAll(moduleAccess, ["businessSubtypeCode", "BUSINESS_SUBTYPE_INCOMPATIBLE", "isEnterpriseModuleBusinessSubtypeCompatible"], "runtime subtype access gate");
-includesAll(entitlements, ["businessSubtypeCode", "BUSINESS_SUBTYPE_INCOMPATIBLE", "isEnterpriseModuleBusinessSubtypeCompatible", "canUseModule", "assertCanUseModule", "getOrganizationUsageLimits"], "commercial entitlement subtype gate without helper regression");
+includesAll(entitlements, ["businessSubtypeCode", "BUSINESS_SUBTYPE_INCOMPATIBLE", "isEnterpriseModuleBusinessSubtypeCompatible", "canUseModule", "assertCanUseModule", "getOrganizationUsageLimits"], "commercial entitlement subtype gate and legacy helpers");
 
 for (const model of [
   "EnterpriseTailoringConfiguration", "EnterpriseTailoringMeasurementProfile", "EnterpriseTailoringMeasurementValue", "EnterpriseTailoringStyle",
   "EnterpriseTailoringSizeGrade", "EnterpriseTailoringSizeGradeRule", "EnterpriseTailoringMaterialProfile", "EnterpriseTailoringCuttingPlan",
   "EnterpriseTailoringFitting", "EnterpriseTailoringAlteration", "EnterpriseTailoringGarmentBundle", "EnterpriseTailoringFinishingRecord",
 ]) check(schema.includes(`model ${model} {`), `Prisma model missing: ${model}`);
-includesAll(schema, ["businessPartyId", "catalogItemId", "bomId", "routingId", "productionOrderId", "materialRequirementId", "qualityCheckId", "employeeId", "workCenterId", "@@unique([organizationId, id])"], "canonical references and tenant-aware keys");
+includesAll(schema, [
+  "businessPartyId", "catalogItemId", "bomId", "routingId", "productionOrderId", "materialRequirementId", "qualityCheckId",
+  "measuredByEmployeeId", "fittedByEmployeeId", "assignedEmployeeId", "completedByEmployeeId", "currentWorkCenterId", "@@unique([organizationId, id])",
+], "canonical references and tenant-aware keys");
 excludesAll(schema, ["TailoringCustomer", "TailoringStock", "TailoringSupplier", "TailoringSale", "TailoringPurchase", "TailoringInvoice", "TailoringPayment", "TailoringEmployee"], "no parallel ERP masters");
 check(!/\bDROP\s+(TABLE|COLUMN|TYPE|INDEX)\b/i.test(migration), "Tailoring migration must remain additive");
 includesAll(migration, ["EnterpriseTailoringMeasurementProfile", "EnterpriseTailoringCuttingPlan", "EnterpriseTailoringFitting", "EnterpriseTailoringFinishingRecord"], "Tailoring additive migration");
 
-includesAll(provisioning, ["TAILORING_MODULE_CODES", "TAILORING_BUSINESS_SUBTYPE_CODE", "enterpriseTailoringConfiguration", "enterpriseModule.upsert", "enterprisePosition.upsert"], "Couture provisioning");
-includesAll(templateApplication, ["syncTailoringOnboardingProvisioning", "TAILORING_BUSINESS_SUBTYPE_CODE"], "sector template Tailoring provisioning");
-includesAll(organizationCreate, ["TAILORING_APPAREL", "tailoringForcesSectorTemplate", "applyCanonicalSectorTemplateToOrganization"], "admin creation must force Manufacturing template for Couture");
+includesAll(provisioning, [
+  "TAILORING_MODULE_CODES", "TAILORING_BUSINESS_SUBTYPE_CODE", "enterpriseTailoringConfiguration", "enterpriseModule.upsert",
+  "enterprisePosition.findUnique", "enterprisePosition.create",
+], "Couture provisioning");
+includesAll(templateApplication, ["syncTailoringOnboardingProvisioning", "businessSubtypeCode: resolvedBusinessSubtypeCode"], "sector template Tailoring provisioning");
+includesAll(organizationCreate, ["TAILORING_BUSINESS_SUBTYPE_CODE", "requiresCanonicalSectorTemplate", "applyCanonicalSectorTemplateToOrganization", "sectorTemplateForcedBySubtype"], "admin creation must force Manufacturing template for Couture");
 
-includesAll(shared, ["assertTailoringOrganization", "getBusinessSubtypeSelection", "TAILORING_BUSINESS_SUBTYPE_CODE", "requireTailoringCustomer", "enterpriseBusinessParty", "requireTailoringCatalogItem", "enterpriseCatalogItem", "requireTailoringProductionOrder", "enterpriseProductionOrder", "requireTailoringQualityCheck", "enterpriseProductionQualityCheck", "Serializable"], "tenant-scoped canonical reference validation");
+includesAll(shared, [
+  "assertTailoringOrganization", "enterpriseBusinessSubtypeSelection.findUnique", "TAILORING_BUSINESS_SUBTYPE_CODE", "requireTailoringCustomer",
+  "enterpriseBusinessParty", "requireTailoringCatalogItem", "requireManufacturingCatalogItem", "requireTailoringProductionOrder", "enterpriseProductionOrder",
+  "requireTailoringQualityCheck", "enterpriseProductionQualityCheck", "withTailoringSerializable",
+], "tenant-scoped canonical reference validation");
 includesAll(validators, ["TAILORING_MEASUREMENT_CODES", "TAILORING_GARMENT_TYPES", "TAILORING_GRAIN_DIRECTIONS", "TAILORING_ALTERATION_TYPES", "TAILORING_ALTERATION_AREAS", "tailoringFinishingSchema"], "controlled Tailoring validators");
-includesAll(service, ["ADJUSTMENTS_REQUIRED", "TAILORING_FITTING_REQUIRES_ADJUSTMENTS", "QUALITY", "PASS", "READY_FOR_DELIVERY", "addEnterpriseOperationalEvent"], "Tailoring workflow invariants and audit");
+includesAll(service, ["ADJUSTMENTS_REQUIRED", "TAILORING_ALTERATION_FITTING_REQUIRED", "QUALITY", "PASS", "READY_FOR_DELIVERY", "addEnterpriseOperationalEvent"], "Tailoring workflow invariants and audit");
 includesAll(queries, ["organizationId", "take: 1000", "getTailoringOverview", "getTailoringModuleData", "getTailoringReferences"], "bounded tenant-scoped reads");
-includesAll(http, ["isSameOriginRequest", "rateLimit", "activeOrganizationId !== organizationId", "resolveEnterpriseModuleAccess"], "Tailoring HTTP security");
+includesAll(http, ["isSameOriginRequest", "rateLimit", "activeOrganizationId !== organizationId", "getTailoringAccess"], "Tailoring HTTP security delegation");
+includesAll(access, ["resolveEnterpriseModuleAccess", "organizationId", "moduleCode", 'action: "write"', 'action: "approve"', 'action: "manage"'], "Tailoring canonical module access");
 includesAll(api, ["authorizeTailoringRequest", "writeAuditLog", "writeApiLog", "CRM_CUSTOMERS", "CATALOG", "INVENTORY_LOGISTICS", "PRODUCTION_ORDERS", "MATERIAL_REQUIREMENTS", "HUMAN_RESOURCES", "QUALITY_CONTROL"], "Tailoring API cross-domain authorization");
 
 includesAll(page, ["EnterpriseTailoringWorkspace", "TAILORING_MODULE_CODES", "resolveEnterpriseModuleCapabilities", 'workspaceKey !== "ENTERPRISE_TAILORING"'], "dedicated Tailoring page access");
