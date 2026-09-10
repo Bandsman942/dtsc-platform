@@ -86,7 +86,9 @@ includesAll(api, ["authorizeTailoringRequest", "writeAuditLog", "writeApiLog", "
 includesAll(page, ["EnterpriseTailoringWorkspace", "TAILORING_MODULE_CODES", "resolveEnterpriseModuleCapabilities", 'workspaceKey !== "ENTERPRISE_TAILORING"'], "dedicated Tailoring page access");
 includesAll(workspace, ["ModuleWorkspace", "ModuleMetrics", "ProfessionalTabs", "ProfessionalHelp", "CREATE_MEASUREMENT_PROFILE", "CREATE_STYLE", "CREATE_SIZE_GRADE", "CREATE_MATERIAL_PROFILE", "CREATE_CUTTING_PLAN", "COMPLETE_FITTING", "CREATE_ALTERATION", "CREATE_GARMENT_BUNDLE", "UPSERT_FINISHING"], "functional Tailoring workspace");
 includesAll(workspace, ["NativeSelect", "tailoringMeasurementCodeChoices", "tailoringGarmentTypeChoices", "tailoringAlterationTypeChoices", "tailoringFinishingStatusChoices"], "controlled reference/form choices");
-includesAll(copy, ["fr: {", "en: {", "canonicalHint", "physicalWasteHint", "deliveryHint"], "FR/EN Tailoring copy");
+includesAll(workspace, ["useToastMessage(message);", "copy.markerLength", "copy.markerEfficiency"], "Tailoring mutation feedback and cutting labels");
+excludesAll(workspace, ["useToastMessage(message || mutationError)"], "Tailoring error must not be duplicated in toast and inline feedback");
+includesAll(copy, ["fr: {", "en: {", "canonicalHint", "physicalWasteHint", "deliveryHint", 'markerLength: "Longueur du placement (cm)"', 'markerLength: "Marker length (cm)"'], "FR/EN Tailoring copy");
 includesAll(options, ["tailoringMeasurementCodeChoices", "tailoringGarmentTypeChoices", "tailoringAlterationAreaChoices", "tailoringGrainDirectionChoices"], "localized enum options");
 
 const aiCodes = [
@@ -103,7 +105,8 @@ includesAll(aiExecutors, ["TAILORING_AI_TOOL_EXECUTORS", "...TAILORING_AI_TOOL_E
 includesAll(aiAgent, ["TAILORING_AI_TOOL_DESCRIPTIONS", "...TAILORING_AI_TOOL_DESCRIPTIONS"], "AI Agent Tailoring descriptions");
 
 check(regression.includes("qa-607-tailoring-apparel.mjs"), "Tailoring QA must be wired into canonical regression");
-includesAll(docs, ["TAILORING_APPAREL", "CRM", "Catalog", "Inventory", "Manufacturing", "sur mesure", "prêt-à-porter", "mixte", "rollback"], "Tailoring architecture documentation");
+includesAll(docs, ["TAILORING_APPAREL", "CRM", "Catalog", "Inventory", "Manufacturing", "sur mesure", "prêt-à-porter", "mixte", "rollback", "20260910003000_tailoring_apparel_core"], "Tailoring architecture documentation");
+excludesAll(docs, ["20260910001000_tailoring_apparel"], "Tailoring documentation must not reference the obsolete migration name");
 
 if (failures.length) {
   console.error(`qa-607-tailoring-apparel: ${failures.length} failure(s)`);
