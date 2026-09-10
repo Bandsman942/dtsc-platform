@@ -25,7 +25,9 @@ export type AiToolDefinition = {
 import { ERP_AI_TOOL_DEFINITIONS } from "@/lib/ai/tools/erp-contract";
 import { FINANCE_AI_TOOL_DEFINITIONS } from "@/lib/ai/tools/finance-contract";
 import { MANUFACTURING_AI_TOOL_DEFINITIONS } from "@/lib/ai/tools/manufacturing-contract";
+import { MANUFACTURING_AI_ACTION_DEFINITIONS } from "@/lib/ai/tools/manufacturing-action-contract";
 import { TAILORING_AI_TOOL_DEFINITIONS } from "@/lib/ai/tools/tailoring-contract";
+import { TAILORING_AI_ACTION_DEFINITIONS } from "@/lib/ai/tools/tailoring-action-contract";
 
 const EMPTY_OBJECT = { type: "object", additionalProperties: false } as const;
 const OBJECT_OUTPUT = { type: "object" } as const;
@@ -64,7 +66,9 @@ const STATIC_AI_TOOL_REGISTRY: AiToolDefinition[] = [
   ...FINANCE_AI_TOOL_DEFINITIONS,
   ...ERP_AI_TOOL_DEFINITIONS,
   ...MANUFACTURING_AI_TOOL_DEFINITIONS,
+  ...MANUFACTURING_AI_ACTION_DEFINITIONS,
   ...TAILORING_AI_TOOL_DEFINITIONS,
+  ...TAILORING_AI_ACTION_DEFINITIONS,
   {
     code: "TASK_DRAFT_PREPARE",
     labelKey: "ai.tools.taskDraft.label",
