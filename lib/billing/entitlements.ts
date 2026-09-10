@@ -360,3 +360,51 @@ export async function canUseFeature(organizationId: string | null | undefined, f
     requiresActiveSubscription: entitlement.requiresActiveSubscription,
   });
 }
+
+export async function canUseModule(organizationId: string | null | undefined, moduleCode: string): Promise<EntitlementDecision> {
+  const canonicalCode = normalizeEnterpriseModuleCode(moduleCode);
+  const definition = getEnterpriseModuleDefinition(canonicalCode);
+  if (!definition) {
+    return { allowed: false, code: "MODULE_NOT_FOUND", message: "Ce code module est absent du registre canonique." };
+  }
+  if (!isEnterpriseModuleImplemented(definition.code) || definition.routeKind === "HIDDEN") {
+    return { allowed: false, code: "MODULE_NOT_IMPLEMENTED", message: "Ce module n'est pas encore disponible dans DTSC Platform.", requiredPlan: definition.minimumPlan };
+  }
+  if (definition.routeKind === "ADMIN_SECTION") {
+    return { allowed: false, code: "ADMIN_SECTION_ONLY", message: "Cette fonction appartient à l'administration entreprise.", requiredPlan: definition.minimumPlan };
+  }
+
+  const entitlements = await getOrganizationEntitlements(organizationId);
+  if (!entitlements) {
+    return { allowed: false, code: "ORGANIZATION_INACTIVE", message: "Aucun espace organisation actif." };
+  }
+  if (!isEnterpriseModuleSectorCompatible(definition, entitlements.sectorCode)) {
+    return { allowed: false, code: "SECTOR_INCOMPATIBLE", message: "Ce module n'est pas compatible avec le secteur de l'entreprise active.", requiredPlan: definition.minimumPlan };
+  }
+  if (entitlements.isDtscInternal) {
+    return { allowed: true, code: "OK", message: "Accès autorisé.", requiredPlan: "ENTERPRISE" };
+  }
+
+  const candidates = entitlements.modules.filter((item) => normalizeEnterpriseModuleCode(item.moduleCode) === canonicalCode);
+  const enterpriseModule = candidates.find((item) => item.moduleCode === canonicalCode) || candidates[0];
+  if (!enterpriseModule) {
+    return { allowed: false, code: "MODULE_NOT_FOUND", message: "Ce module n'est pas configuré pour cette organisation." };
+  }
+  return {
+    allowed: enterpriseModule.allowed,
+    code: enterpriseModule.code,
+    message: enterpriseModule.message,
+    requiredPlan: enterpriseModule.requiredPlan,
+  };
+}
+
+export async function assertCanUseModule(organizationId: string | null | undefined, moduleCode: string) {
+  const decision = await canUseModule(organizationId, moduleCode);
+  if (!decision.allowed) throw new SaasEntitlementError(decision);
+  return decision;
+}
+
+export async function getOrganizationUsageLimits(organizationId: string | null | undefined): Promise<OrganizationUsageLimits | null> {
+  const entitlements = await getOrganizationEntitlements(organizationId);
+  return entitlements?.limits || null;
+}
