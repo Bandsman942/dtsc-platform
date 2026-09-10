@@ -14,7 +14,7 @@ const tailoringRegistry = read("lib/enterprise/module-registry-tailoring.json");
 const moduleAccess = read("lib/enterprise/module-access.ts");
 const entitlements = read("lib/billing/entitlements.ts");
 const schema = read("prisma/enterprise-tailoring.prisma");
-const migration = read("prisma/migrations/20260910001000_tailoring_apparel/migration.sql");
+const migration = read("prisma/migrations/20260910003000_tailoring_apparel_core/migration.sql");
 const provisioning = read("lib/enterprise/tailoring/provisioning.ts");
 const templateApplication = read("lib/enterprise/sector-template-application.ts");
 const organizationCreate = read("app/api/admin/client-organizations/route.ts");
@@ -48,7 +48,7 @@ for (const code of moduleCodes) {
 }
 includesAll(moduleRegistry, ["module-registry-tailoring.json", "applicableBusinessSubtypes", "isEnterpriseModuleBusinessSubtypeCompatible"], "canonical module registry subtype support");
 includesAll(moduleAccess, ["businessSubtypeCode", "BUSINESS_SUBTYPE_INCOMPATIBLE", "isEnterpriseModuleBusinessSubtypeCompatible"], "runtime subtype access gate");
-includesAll(entitlements, ["businessSubtypeCode", "BUSINESS_SUBTYPE_INCOMPATIBLE", "isEnterpriseModuleBusinessSubtypeCompatible"], "commercial entitlement subtype gate");
+includesAll(entitlements, ["businessSubtypeCode", "BUSINESS_SUBTYPE_INCOMPATIBLE", "isEnterpriseModuleBusinessSubtypeCompatible", "canUseModule", "assertCanUseModule", "getOrganizationUsageLimits"], "commercial entitlement subtype gate without helper regression");
 
 for (const model of [
   "EnterpriseTailoringConfiguration", "EnterpriseTailoringMeasurementProfile", "EnterpriseTailoringMeasurementValue", "EnterpriseTailoringStyle",
