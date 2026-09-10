@@ -149,7 +149,7 @@ Les formulaires restent ouverts avec leurs valeurs lorsqu’une mutation échoue
 
 ## 12. Migration
 
-La migration `20260910001000_tailoring_apparel` est additive. Elle crée uniquement les extensions Couture et leurs relations internes tenant-aware.
+La migration `20260910003000_tailoring_apparel_core` est additive. Elle crée uniquement les extensions Couture et leurs relations internes tenant-aware.
 
 Elle ne supprime ni ne réécrit aucune migration historique et ne transforme aucune donnée métier existante.
 
@@ -159,7 +159,7 @@ Le **rollback applicatif** consiste à désactiver les modules Couture, revenir 
 
 Il ne faut pas :
 
-- réécrire la migration `20260910001000_tailoring_apparel` ;
+- réécrire la migration `20260910003000_tailoring_apparel_core` ;
 - supprimer les tables en urgence ;
 - effacer les mensurations, plans de coupe, essayages ou historiques de retouches déjà créés ;
 - modifier les données CRM, Catalog, Inventory ou Manufacturing pour simuler un retour arrière.
