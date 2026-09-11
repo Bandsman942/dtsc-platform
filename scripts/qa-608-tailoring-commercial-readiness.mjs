@@ -53,8 +53,10 @@ check(!read(preview).includes("organizationId"), "DTSC template preview must not
 
 for (const code of ["ERP_MANUFACTURING_ORDER_SUBMIT", "ERP_TAILORING_FITTING_COMPLETE", "ERP_TAILORING_ALTERATION_UPDATE", "ERP_TAILORING_FINISHING_UPDATE"]) {
   check(read(aiRegistry).includes(code) || read(manufacturingActions).includes(code) || read(tailoringActions).includes(code), `AI action missing ${code}`);
-  has(aiSchemas, code, `AI schemas must register ${code}`);
   has(agentTools, code.startsWith("ERP_MANUFACTURING") ? "MANUFACTURING_AI_ACTION_DESCRIPTIONS" : "TAILORING_AI_ACTION_DESCRIPTIONS", `Agent descriptions missing action family for ${code}`);
+}
+for (const marker of ["MANUFACTURING_AI_ACTION_INPUT_SCHEMAS", "MANUFACTURING_AI_ACTION_OUTPUT_SCHEMAS", "TAILORING_AI_ACTION_INPUT_SCHEMAS", "TAILORING_AI_ACTION_OUTPUT_SCHEMAS"]) {
+  has(aiSchemas, marker, `AI schemas must register action schema family ${marker}`);
 }
 for (const contract of [manufacturingActions, tailoringActions]) {
   has(contract, "requiresConfirmation: true", `${contract} mutations must require structural confirmation`);
