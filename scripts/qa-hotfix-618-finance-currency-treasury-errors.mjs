@@ -21,6 +21,9 @@ hasAll(currencyService, [
   "enterpriseFinancialAccount.count",
   "enterpriseExchangeRate.count",
   "organizationId",
+  'currencyChoices("fr")',
+  "BUILT_IN_CURRENCY_CODES.has(code)",
+  "builtin:${currency.code}",
 ], "service devise canonique");
 
 const currencyRoute = read("app/api/enterprise/[organizationId]/currencies/route.ts");
@@ -56,7 +59,7 @@ hasAll(accountService, [
 ], "comptes Trésorerie");
 
 const sharedMutation = read("components/enterprise/professional/finance-professional-workspace-shared.tsx");
-hasAll(sharedMutation, ["FinanceApiError", "clientMessage", "details", "response.status"], "contrat erreur mutation Finance");
+hasAll(sharedMutation, ["FinanceApiError", "clientMessage", "details", "response.status", "body?.queued"], "contrat erreur mutation Finance");
 fail(sharedMutation.includes("legacyFinanceMutation(endpoint, payload, method)"), "le bridge mutation ne doit plus jeter message/details backend");
 
 const financeUi = read("components/enterprise/professional/finance-professional-ui.ts");
