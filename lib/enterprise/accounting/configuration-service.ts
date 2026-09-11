@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ensureDefaultSystemAccountingBaselineTx } from "@/lib/enterprise/accounting/chart-template-application-service";
+import { assertEnterpriseCurrencyActiveTx, listEnterpriseCurrencies } from "@/lib/enterprise/accounting/currency-service";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { assertActiveClientOrganization, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { assertFunctionalCurrencyMutable } from "@/lib/enterprise/accounting/currency";
@@ -31,10 +32,26 @@ const POSTING_GLOBAL_BLOCKERS = new Set([
 ]);
 
 export async function getFinanceReadiness(organizationId: string) {
-  const readiness = await getEnterpriseFinanceReadiness(organizationId, { mode: "SETUP" });
+  const [readiness, configuredCurrencies] = await Promise.all([
+    getEnterpriseFinanceReadiness(organizationId, { mode: "SETUP" }),
+    listEnterpriseCurrencies(organizationId),
+  ]);
+  const currencyOptions = configuredCurrencies.map((currency) => ({
+    code: currency.code,
+    name: currency.name,
+    symbol: currency.symbol,
+    precision: currency.precision,
+    configured: true,
+  }));
+  const knownCodes = new Set(currencyOptions.map((currency) => currency.code));
+  for (const code of [readiness.configuration?.functionalCurrencyCode, readiness.configuration?.presentationCurrencyCode]) {
+    if (code && !knownCodes.has(code)) currencyOptions.push({ code, name: code, symbol: null, precision: 2, configured: false });
+  }
+  currencyOptions.sort((left, right) => left.code.localeCompare(right.code));
   return {
     version: readiness.version,
     configuration: readiness.configuration,
+    currencies: currencyOptions,
     chart: readiness.chart,
     diagnostics: readiness.diagnostics,
     blockers: readiness.blockers.map((diagnostic) => diagnostic.code),
@@ -72,6 +89,12 @@ export async function upsertFinanceConfiguration(
   return prisma.$transaction(async (tx) => {
     await assertActiveClientOrganization(tx, organizationId);
     const existing = await tx.enterpriseFinanceConfiguration.findUnique({ where: { organizationId } });
+    if (!existing || existing.functionalCurrencyCode !== input.functionalCurrencyCode) {
+      await assertEnterpriseCurrencyActiveTx(tx, organizationId, input.functionalCurrencyCode);
+    }
+    if (input.presentationCurrencyCode && (!existing || existing.presentationCurrencyCode !== input.presentationCurrencyCode)) {
+      await assertEnterpriseCurrencyActiveTx(tx, organizationId, input.presentationCurrencyCode);
+    }
     if (existing && existing.functionalCurrencyCode !== input.functionalCurrencyCode) {
       await assertFunctionalCurrencyMutable(tx, organizationId);
     }

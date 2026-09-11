@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import type { z } from "zod";
+import { assertEnterpriseCurrencyActiveTx } from "@/lib/enterprise/accounting/currency-service";
 import { prisma } from "@/lib/prisma";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { assertActiveClientOrganization, financeReference, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
@@ -49,6 +50,7 @@ export async function createManagedFinancialAccount(
   return prisma.$transaction(async (tx) => {
     await assertActiveClientOrganization(tx, organizationId);
     await assertAccountRelations(tx, organizationId, input);
+    await assertEnterpriseCurrencyActiveTx(tx, organizationId, input.currencyCode);
 
     const ledger = await tx.enterpriseLedgerAccount.findFirst({
       where: { id: input.ledgerAccountId, organizationId, isActive: true, archivedAt: null },
@@ -152,7 +154,12 @@ export async function archiveManagedFinancialAccount(
     if (!existing) throw new EnterpriseAccountingError("TREASURY_ACCOUNT_NOT_FOUND", 404);
     if (existing.revision !== input.revision) throw new EnterpriseAccountingError("TREASURY_ACCOUNT_CONFLICT", 409, { currentRevision: existing.revision });
     if (!existing.operationalBalance.isZero() || !existing.reconciledBalance.isZero() || (existing.availableBalance && !existing.availableBalance.isZero())) {
-      throw new EnterpriseAccountingError("TREASURY_ACCOUNT_BALANCE_NOT_ZERO", 409);
+      throw new EnterpriseAccountingError("TREASURY_ACCOUNT_BALANCE_NOT_ZERO", 409, {
+        currencyCode: existing.currencyCode,
+        operationalBalance: existing.operationalBalance.toFixed(),
+        reconciledBalance: existing.reconciledBalance.toFixed(),
+        availableBalance: existing.availableBalance?.toFixed() ?? null,
+      });
     }
 
     const [activeCashSessions, pendingTransfers] = await Promise.all([
@@ -167,8 +174,8 @@ export async function archiveManagedFinancialAccount(
         },
       }),
     ]);
-    if (activeCashSessions > 0) throw new EnterpriseAccountingError("TREASURY_ACCOUNT_ACTIVE_CASH_SESSION", 409);
-    if (pendingTransfers > 0) throw new EnterpriseAccountingError("TREASURY_ACCOUNT_PENDING_TRANSFER", 409);
+    if (activeCashSessions > 0) throw new EnterpriseAccountingError("TREASURY_ACCOUNT_ACTIVE_CASH_SESSION", 409, { activeCashSessions });
+    if (pendingTransfers > 0) throw new EnterpriseAccountingError("TREASURY_ACCOUNT_PENDING_TRANSFER", 409, { pendingTransfers });
 
     const archived = await tx.enterpriseFinancialAccount.update({
       where: { id: existing.id },

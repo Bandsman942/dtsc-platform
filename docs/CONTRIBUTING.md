@@ -4,7 +4,60 @@ Statut : **obligatoire avant toute contribution**
 
 Ce document définit le contrat humain de contribution au repository `Bandsman942/dtsc-platform`. Il s'applique aux propriétaires du repository, collaborateurs, reviewers, agents IA, scripts de maintenance et contributeurs externes. Une contribution ne doit pas être ouverte, fusionnée ou livrée en Production si elle ne respecte pas ce contrat.
 
-Les règles durables de code restent également définies dans `AGENTS.md`. La gouvernance détaillée de livraison vit dans `docs/DELIVERY_GOVERNANCE.md`. En cas de contradiction, la règle la plus restrictive et la plus récente sur `main` prévaut.
+Les règles durables de code restent également définies dans `AGENTS.md`. La gouvernance détaillée de livraison vit dans `docs/DELIVERY_GOVERNANCE.md`. Les contrats spécialisés du repo complètent ce document : architecture ERP, formulaires, responsive, sécurité, abonnements/entitlements, IA, Finance, secteurs, QA et runbooks. En cas de contradiction, la règle la plus restrictive et la plus récente sur `main` prévaut.
+
+## 0. Préflight opposable avant le premier changement
+
+Une contribution ne commence pas par l'édition d'un fichier. Avant le premier changement de code ou de documentation produit, le contributeur établit le contrat de livraison réel du travail.
+
+Le préflight obligatoire est :
+
+1. lire `AGENTS.md`, `docs/CONTRIBUTING.md` et les éventuels `AGENTS.md` scoped du chemin touché ;
+2. vérifier le SHA réel du dernier `main` et partir de ce SHA ;
+3. créer ou identifier l'Issue réelle avec critères d'acceptation, risques, labels structurés et milestone si requis ;
+4. créer une branche conforme incluant le numéro d'Issue ;
+5. lire `.github/PULL_REQUEST_TEMPLATE.md` **avant de coder** et préparer dès le début les éléments qui devront être prouvés dans la PR : scope, hors-scope, dette, Prisma, sécurité, validation, E2E, risques, rollback, documentation et release note ;
+6. identifier les sources de vérité et contrats déjà existants du domaine avant d'ajouter une table, une API, un helper, un composant, une erreur, un entitlement ou une source i18n ;
+7. identifier les QA ciblées et les workflows CI qui devront prouver le changement ;
+8. décider explicitement si `OWNER_E2E` est requis et définir le parcours avant l'implémentation ;
+9. vérifier l'impact abonnement/entitlement/module/IA lorsque le travail touche un module ERP ou une capacité commerciale ;
+10. vérifier les obligations documentation/changelog/runbook/rollback du domaine.
+
+### Carte des contrats du repository à consulter selon le scope
+
+Le contributeur ne doit pas supposer qu'un fichier visible est isolé. Les dépendances de gouvernance suivantes sont à rechercher et lire lorsqu'elles sont concernées :
+
+- `.github/PULL_REQUEST_TEMPLATE.md` et `scripts/github/validate-pr-governance.mjs` pour le contrat de PR ;
+- `docs/DELIVERY_GOVERNANCE.md` et `scripts/qa-delivery-governance.mjs` pour les gates de livraison ;
+- `docs/TECHNICAL_DOCUMENTATION.md`, `docs/ERP_FINAL_ARCHITECTURE.md` et `docs/ERP_FINAL_OPERATIONAL_RUNBOOK.md` pour l'architecture et l'exploitation ERP ;
+- `lib/enterprise/module-registry*`, les resolvers d'accès/entitlements et les QA de registre pour tout module ERP ;
+- les contrats d'abonnement/capabilities et les resolvers d'accès avant toute activation de module ou capacité IA ;
+- les gateways/outils IA, règles de permission et documents IA lorsqu'une capacité est lisible ou actionnable par un assistant ;
+- `docs/FORM_UX_CONTRACT.md` pour tout formulaire ;
+- `docs/RESPONSIVE_UI_CONTRACT.md` pour toute UI matérielle ;
+- les catalogues i18n canoniques du domaine pour toute chaîne client ;
+- les services/erreurs canoniques du domaine pour toute mutation ou message métier ;
+- les scripts `qa:*` du `package.json`, les tests E2E et les workflows GitHub applicables pour les preuves ;
+- les documents métier spécialisés, notamment Finance/Comptabilité/Trésorerie, Health, Pharmacy, Retail/Shop, Manufacturing et autres secteurs touchés.
+
+Si un contrat existe déjà, il doit être étendu ou réutilisé. Une nouvelle source parallèle créée faute d'avoir cherché l'existante est une dette de contribution.
+
+### Contrat de PR préparé dès le début
+
+Le contenu de la future PR n'est pas un rapport rédigé après coup. Dès le démarrage, le contributeur doit pouvoir répondre à :
+
+- quelle Issue la PR ferme ;
+- quel est son objectif unique ;
+- qu'est-ce qui est explicitement hors scope ;
+- quelle dette elle crée, maintient, rembourse ou reporte ;
+- quelles données/migrations/backfills elle touche ;
+- quels contrôles de sécurité/RBAC/multi-tenant s'appliquent ;
+- quels secrets/variables d'environnement changent ou ne changent pas ;
+- quelles preuves automatiques et E2E sont nécessaires ;
+- quels risques et quel rollback sont prévus ;
+- quels documents doivent être modifiés.
+
+Une PR dont ces réponses n'étaient pas identifiables avant le développement est un signal de scope mal borné.
 
 ## 1. Principe cardinal : partir du vrai dernier `main`
 
@@ -136,7 +189,7 @@ Le titre de PR doit être Conventional Commit compatible.
 La PR doit :
 
 - fermer une Issue avec `Closes #N`, `Fixes #N` ou `Resolves #N` ;
-- contenir toutes les sections du template officiel ;
+- contenir toutes les sections de `.github/PULL_REQUEST_TEMPLATE.md` ;
 - porter les labels structurés ;
 - porter un milestone si son impact est matériel ;
 - décrire le rollback ;
@@ -145,6 +198,8 @@ La PR doit :
 - remplir le registre de dette ;
 - fournir une matrice de preuves ;
 - déclarer explicitement la lecture du présent document.
+
+Le template de PR doit être lu dès le préflight et non découvert à la fin de l'implémentation. Les sections non encore prouvées restent explicitement `NOT_EXECUTED` plutôt que d'être omises.
 
 La déclaration obligatoire est :
 
@@ -202,6 +257,7 @@ Avant merge, refaire une comparaison du **diff final** avec le dernier `main` et
 - documentation ;
 - lockfile ;
 - changements d'accès ou d'entitlement ;
+- changements de registre module, plan/capability ou permission IA si le module est exposé à l'assistant ;
 - chaînes et composants visibles ajoutés depuis la dernière review.
 
 ### Un test ne se neutralise jamais
@@ -226,6 +282,7 @@ Si un test est devenu faux ou fragile, corriger **le contrat du test** pour mesu
 - Ne jamais supprimer dans la même release la dernière utilisation applicative d'une donnée et son stockage physique sans stratégie de cutover explicite.
 - Les migrations et backfills doivent être tenant-safe, idempotents lorsque nécessaire et documentés.
 - Une colonne/table nouvelle sans consommation applicative réelle est une dette et n'est pas ajoutée « pour plus tard ».
+- Avant de créer un nouveau modèle, rechercher explicitement le modèle/service canonique déjà existant et les éventuels objets legacy `READ_ONLY` ou contrats de compatibilité.
 
 ## 10. Sécurité, RBAC et multi-tenant
 
@@ -233,9 +290,13 @@ Aucune PR ne peut considérer l'UI comme barrière de sécurité.
 
 Toute donnée d'entreprise doit rester isolée par organisation. Les références fournies par le client sont revalidées côté serveur. Les routes sensibles conservent les contrôles de session, contexte, membership, entitlement, permission, ownership/visibilité, same-origin, validation, rate limit, transaction et audit applicables.
 
+Lorsqu'un module ERP ou une capacité commerciale change, vérifier aussi le registre canonique du module, son statut actif, le plan/entitlement, les dépendances et les permissions. Un bouton ou une route ne doit jamais rendre accessible une capacité que le resolver canonique refuserait.
+
+Un rôle global n'accorde jamais implicitement l'accès à une donnée privée cliente. Un rôle `MANAGER` n'est pas automatiquement un administrateur entreprise si le contrat métier ne le prévoit pas.
+
 Aucun secret ne doit être ajouté dans le code, les logs, captures, fixtures, migrations, documents ou réponses client.
 
-Pour l'IA, une nouvelle intégration provider ou modèle doit être **fail-closed** : un provider inconnu n'obtient jamais implicitement la confiance d'un runtime local.
+Pour l'IA, une nouvelle intégration provider ou modèle doit être **fail-closed** : un provider inconnu n'obtient jamais implicitement la confiance d'un runtime local. Les assistants respectent les mêmes entitlements, permissions, limites de contexte et barrières multi-tenant que l'ERP.
 
 Un deep link, badge, bouton masqué ou donnée déjà présente côté client ne constitue jamais une autorisation.
 
@@ -251,6 +312,19 @@ Une contribution utilisateur doit préserver :
 - états hover, focus-visible, active/pressed, loading et disabled cohérents ;
 - libellés métier sans codes techniques exposés ;
 - guides utilisateur et documentation de domaine lorsque le comportement change.
+
+### Contrat des erreurs client
+
+Le backend reste l'autorité sur la cause métier. Lorsqu'une API renvoie un code d'erreur métier sûr, un message client sûr et éventuellement des `details` structurés non sensibles :
+
+- le client ne jette pas le code ou le message utile au profit d'un fallback générique ;
+- les erreurs connues utilisent le catalogue i18n canonique lorsqu'il existe ;
+- un message serveur déjà humain peut servir de fallback uniquement s'il est explicitement sûr pour le client ;
+- Prisma, SQL, stack traces, routes internes, payloads, identifiants tenant, secrets et erreurs brutes de provider ne sont jamais exposés ;
+- le message indique l'action corrective lorsqu'elle existe ;
+- les détails utiles, par exemple révision courante, solde bloquant ou précondition, restent structurés et ne sont pas concaténés depuis une exception brute.
+
+Une mutation métier refusée n'est pas un « échec générique » lorsque le backend connaît la précondition exacte.
 
 ### Composant partagé avant workaround local
 
@@ -354,6 +428,8 @@ Un test qui vérifie seulement qu'une classe existe ne prouve pas qu'un bouton t
 
 Pour un changement de shell/navigation mobile, l'E2E doit couvrir au minimum : Chrome/Samsung Internet compatible, PWA si applicable, swipe/scroll, changement de contexte, contenu long et clavier si un formulaire est impliqué.
 
+Lorsque `OWNER_E2E` est requis par l'Issue ou le risque produit, la PR reste non mergeable tant que le propriétaire ne l'a pas confirmé explicitement. L'absence de Preview Vercel ne transforme pas une inspection statique en E2E.
+
 ## 15. Performance et coût transverse
 
 Une contribution ne doit pas ajouter silencieusement du travail global à chaque page privée.
@@ -406,7 +482,7 @@ Issue
 → Release
 ```
 
-Il est interdit de faire `vercel --prod` depuis une branche feature ou de considérer une Preview comme une preuve Production.
+Les commits de branche/PR restent sur GitHub et ne doivent pas déclencher de Preview Vercel dans la politique actuelle. Il est interdit de faire `vercel --prod` depuis une branche feature ou de considérer une Preview comme une preuve Production.
 
 Après merge, vérifier que le déploiement Production pointe sur le SHA fusionné attendu avant de fermer un travail dont le critère exige une preuve Production.
 
@@ -424,8 +500,11 @@ Les agents IA suivent exactement le même contrat que les humains.
 
 Ils doivent notamment :
 
-- lire `AGENTS.md` et `docs/CONTRIBUTING.md` avant d'écrire ;
+- lire `AGENTS.md`, `docs/CONTRIBUTING.md` et les contrats scoped avant d'écrire ;
 - inspecter le dernier `main` réel ;
+- créer/identifier l'Issue et la branche conforme avant le code ;
+- lire `.github/PULL_REQUEST_TEMPLATE.md` et préparer le contrat/matrice de preuves dès le début ;
+- rechercher les sources de vérité, registres, entitlements et QA existants avant d'en créer de nouveaux ;
 - ne pas supposer qu'une branche historique est à jour ;
 - ne pas inventer qu'un test, build, migration, E2E ou déploiement a réussi ;
 - remplir honnêtement la matrice de preuves ;
@@ -442,11 +521,15 @@ Une limitation d'outil ou de réseau n'autorise pas à déclarer une étape réu
 
 - [ ] J'ai lu `AGENTS.md` et les fichiers scoped applicables.
 - [ ] J'ai lu `docs/CONTRIBUTING.md`.
-- [ ] J'ai identifié l'Issue à traiter.
+- [ ] J'ai identifié l'Issue à traiter et ses labels/milestone applicables.
 - [ ] J'ai vérifié le dernier SHA de `main`.
 - [ ] Ma branche respecte le format officiel.
-- [ ] Mon scope est clair et borné.
-- [ ] J'ai identifié les contrats impactés : sécurité, données, i18n, UI, mobile, performance, documentation.
+- [ ] J'ai lu `.github/PULL_REQUEST_TEMPLATE.md` et préparé le contrat de PR.
+- [ ] Mon scope et mon hors-scope sont clairs et bornés.
+- [ ] J'ai identifié les sources de vérité et objets legacy/compatibilité existants.
+- [ ] J'ai vérifié registre module, abonnement/entitlement, permissions et IA si concernés.
+- [ ] J'ai identifié les contrats impactés : sécurité, données, i18n, UI, mobile, performance, documentation et erreurs client.
+- [ ] J'ai identifié les QA/workflows applicables et si `OWNER_E2E` est requis.
 
 ### Avant d'ouvrir la PR
 
@@ -461,6 +544,7 @@ Une limitation d'outil ou de réseau n'autorise pas à déclarer une étape réu
 - [ ] Si UI : j'ai vérifié i18n, tailles mobiles, actions, dark mode et accessibilité applicables.
 - [ ] Si formulaire : j'ai vérifié `docs/FORM_UX_CONTRACT.md`, succès/échec, conservation de la saisie, feedback et références tenant-scoped applicables.
 - [ ] Si shell/global : j'ai vérifié le coût des requêtes/pollings/subscriptions ajoutés.
+- [ ] Le contrat d'erreur client conserve les causes métier utiles sans exposer de détail sensible.
 - [ ] La PR ferme une Issue réelle.
 - [ ] Les labels et le milestone sont corrects.
 - [ ] J'ai coché la déclaration de lecture de `docs/CONTRIBUTING.md`.
@@ -494,12 +578,12 @@ Quand deux chemins sont possibles, choisir celui qui préserve le mieux :
 1. l'intégrité du dernier `main` ;
 2. la sécurité et l'isolation multi-tenant ;
 3. une seule source de vérité ;
-4. l'absence de dette silencieuse ;
-5. la traçabilité ;
-6. la reproductibilité des migrations, tests et builds ;
-7. la capacité de rollback ;
-8. l'i18n, le responsive et l'accessibilité ;
-9. la lisibilité du diff ;
-10. la simplicité de la future maintenance.
+4. le registre canonique, les entitlements et permissions existants ;
+5. l'absence de dette silencieuse ;
+6. la traçabilité ;
+7. la reproductibilité des migrations, tests et builds ;
+8. la capacité de rollback ;
+9. l'i18n, le responsive et l'accessibilité ;
+10. la lisibilité du diff et la simplicité de la future maintenance.
 
 Une PR rapide mais difficile à auditer coûte plus cher qu'une PR propre. La gouvernance existe précisément pour éviter de transformer la livraison en séance d'archéologie Git — ou en collection de petites dettes devenues soudain très grandes.

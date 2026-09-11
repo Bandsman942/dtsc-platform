@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { writeApiLog } from "@/lib/audit";
+import { listEnterpriseCurrencies } from "@/lib/enterprise/accounting/currency-service";
 import { authorizeFinanceRequest } from "@/lib/enterprise/accounting/http";
 import type { EnterpriseFinanceModuleCode } from "@/lib/enterprise/accounting/constants";
 import { prisma } from "@/lib/prisma";
@@ -94,12 +95,13 @@ export async function GET(req: Request, { params }: Params) {
         select: { id: true, code: true, name: true },
       });
     } else if (kind === "currency") {
-      items = await prisma.enterpriseCurrency.findMany({
-        where: { isActive: true, OR: [{ organizationId }, { organizationId: null }], ...(search ? { code: { contains: search, mode: "insensitive" } } : {}) },
-        orderBy: { code: "asc" },
-        take,
-        select: { id: true, code: true, name: true, symbol: true, precision: true },
-      });
+      items = (await listEnterpriseCurrencies(organizationId, { search })).slice(0, take).map((currency) => ({
+        id: currency.id,
+        code: currency.code,
+        name: currency.name,
+        symbol: currency.symbol,
+        precision: currency.precision,
+      }));
     } else if (kind === "bank-statement") {
       items = await prisma.enterpriseBankStatement.findMany({
         where: {
@@ -164,15 +166,16 @@ export async function GET(req: Request, { params }: Params) {
 
   // Backward-compatible aggregate payload for the legacy Treasury workspace while #580 rolls out.
   if (requestedModule !== "FINANCE_TREASURY") return NextResponse.json({ error: "Bad request" }, { status: 400 });
-  const [accounts, ledgerAccounts, currencies, members, sites] = await Promise.all([
+  const [accounts, ledgerAccounts, configuredCurrencies, members, sites] = await Promise.all([
     prisma.enterpriseFinancialAccount.findMany({ where: { organizationId, status: "ACTIVE", archivedAt: null }, orderBy: [{ accountType: "asc" }, { code: "asc" }], take: 500, select: { id: true, code: true, name: true, accountType: true, currencyCode: true, operationalBalance: true, availableBalance: true, status: true, revision: true } }),
     prisma.enterpriseLedgerAccount.findMany({ where: { organizationId, isActive: true, archivedAt: null, accountSubtype: { in: ["CASH", "BANK", "MOBILE_MONEY", "CLEARING"] } }, orderBy: { code: "asc" }, take: 1000, select: { id: true, code: true, nameFr: true, nameEn: true, accountType: true, accountSubtype: true, currencyCode: true } }),
-    prisma.enterpriseCurrency.findMany({ where: { isActive: true, OR: [{ organizationId }, { organizationId: null }] }, orderBy: { code: "asc" }, take: 500, select: { code: true, name: true, symbol: true, precision: true } }),
+    listEnterpriseCurrencies(organizationId),
     prisma.organizationMember.findMany({ where: { organizationId, status: "ACTIVE", removedAt: null }, orderBy: { user: { name: "asc" } }, take: 1000, select: { userId: true, role: true, positionTitle: true, user: { select: { name: true, email: true } } } }),
     prisma.enterpriseSite.findMany({ where: { organizationId, status: "ACTIVE", archivedAt: null }, orderBy: { name: "asc" }, take: 500, select: { id: true, code: true, name: true } }),
   ]);
   const currencyByCode = new Map<string, { code: string; name: string; symbol: string | null; precision: number }>();
-  for (const currency of currencies) currencyByCode.set(currency.code, currency);
+  for (const currency of configuredCurrencies) currencyByCode.set(currency.code, { code: currency.code, name: currency.name, symbol: currency.symbol, precision: currency.precision });
+  // Compatibility only: keep existing account currencies visible until the company registry is repaired.
   for (const account of accounts) if (!currencyByCode.has(account.currencyCode)) currencyByCode.set(account.currencyCode, { code: account.currencyCode, name: account.currencyCode, symbol: null, precision: 2 });
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "treasury-lookups" } });
   return NextResponse.json({ accounts, ledgerAccounts, currencies: [...currencyByCode.values()].sort((a, b) => a.code.localeCompare(b.code)), members: members.map((member) => ({ id: member.userId, label: member.user.name || member.user.email, email: member.user.email, role: member.role, positionTitle: member.positionTitle })), sites });
