@@ -4,7 +4,9 @@
 
 Les taux de change sont une capacité Finance transverse. Aucun secteur, y compris Shop, ne doit maintenir sa propre table ou sa propre logique de conversion.
 
-La source canonique est `EnterpriseExchangeRate`. Les écritures financières qui utilisent une conversion conservent le taux utilisé dans `EnterpriseExchangeRateSnapshot` et/ou dans les lignes comptables concernées.
+La source canonique des taux est `EnterpriseExchangeRate`. La source canonique des devises disponibles est `EnterpriseCurrency`, résolue par `lib/enterprise/accounting/currency-service.ts`. Les écritures financières qui utilisent une conversion conservent le taux utilisé dans `EnterpriseExchangeRateSnapshot` et/ou dans les lignes comptables concernées.
+
+Voir également `docs/FINANCE_CURRENCY_REFERENTIAL.md`.
 
 ## 2. Règle fondamentale
 
@@ -31,6 +33,8 @@ Exemple :
 `1 USD = 2 850 CDF`
 
 La paire inverse ne doit pas nécessairement être saisie. Si aucun taux direct n’existe mais que la paire inverse est disponible, DTSC peut calculer `1 / rate` et marque la résolution comme `INVERSE`.
+
+La création d’un nouveau taux exige que la devise source et la devise cible soient actives dans le référentiel effectif de l’entreprise. Un code historique encore présent dans un compte, une configuration ou un ancien taux reste lisible pour audit, mais ne peut pas servir à une nouvelle publication tant qu’il n’a pas été ajouté ou réactivé dans le référentiel.
 
 ## 4. Date d’effet et historique
 
@@ -69,9 +73,11 @@ L’administration des taux utilise le module `FINANCE_TREASURY` et exige :
 - transaction sérialisable lors de la création/désactivation ;
 - audit de la création et de la désactivation.
 
+La sélection des devises ne constitue jamais une validation suffisante côté client : le serveur revalide la paire contre le référentiel canonique de l’entreprise.
+
 ## 7. Interface
 
-Chemin :
+Chemin des taux :
 
 `Finance > Trésorerie > Taux de change et consolidation multi-devise`
 
@@ -79,7 +85,15 @@ Route :
 
 `/enterprise-modules/FINANCE_TREASURY/exchange-rates`
 
-L’écran affiche :
+Le référentiel des devises est administré depuis :
+
+`Finance > Vue d’ensemble > Référentiel des devises`
+
+Route :
+
+`/enterprise-modules/FINANCE_OVERVIEW/currencies`
+
+L’écran Taux de change affiche :
 
 - devise fonctionnelle ;
 - devise de présentation ;
