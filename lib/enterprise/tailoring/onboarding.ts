@@ -37,6 +37,12 @@ export type TailoringCanonicalOperatingMode = (typeof TAILORING_OPERATING_MODES)
 export type TailoringBusinessOperatingMode = keyof typeof BUSINESS_MODE_TO_CANONICAL;
 type ReadinessDb = Prisma.TransactionClient | typeof prisma;
 
+type TailoringReadinessSelection = {
+  operatingMode?: string | null;
+  preferredSiteId?: string | null;
+  preferredWarehouseId?: string | null;
+};
+
 const optionalId = z.string().trim().min(1).max(180).optional().nullable().or(z.literal(""));
 export const tailoringOnboardingSelectionSchema = z.object({
   operatingMode: z.enum([
@@ -117,7 +123,7 @@ function onboardingDeepLink(code: TailoringOnboardingStep) {
 async function computeTailoringReadinessWithDb(
   db: ReadinessDb,
   organizationId: string,
-  selection: Pick<TailoringOnboardingSelection, "operatingMode" | "preferredSiteId" | "preferredWarehouseId"> = {},
+  selection: TailoringReadinessSelection = {},
 ) {
   const organization = await assertTailoringOnboardingTenant(db, organizationId);
   const [
