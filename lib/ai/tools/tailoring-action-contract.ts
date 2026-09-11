@@ -88,7 +88,7 @@ export const TAILORING_AI_ACTION_DEFINITIONS: AiToolDefinition[] = TAILORING_AI_
   requiredPermissions: ["ENTERPRISE_AI.TOOLS.MUTATE", `enterprise.${MODULE_BY_TOOL[code].toLowerCase()}.write`],
   minimumPlan: "BUSINESS",
   allowedAssistantCodes: ["ENTERPRISE_GENERAL"],
-  mode: code === "ERP_TAILORING_FINISHING_UPDATE" ? "SENSITIVE_MUTATE" : "MUTATE",
+  mode: "MUTATE",
   requiresConfirmation: true,
   idempotent: true,
   auditLevel: "SENSITIVE",
