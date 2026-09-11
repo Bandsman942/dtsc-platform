@@ -90,3 +90,4 @@ await import("./qa-hotfix-590-canonical-party-contract.mjs");
 await import("./qa-592-supplier-party-onboarding-checks.mjs");
 await import("./qa-594-party-crm-canonical-ux.mjs");
 await import("./qa-602-atomic-retail-posting.mjs");
+await import("./qa-hotfix-618-finance-currency-treasury-errors.mjs");
