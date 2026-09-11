@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { assertEnterpriseCurrencyActiveTx, listEnterpriseCurrencies } from "@/lib/enterprise/accounting/currency-service";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { prisma } from "@/lib/prisma";
 import type { exchangeRateCreateSchema } from "@/lib/enterprise/accounting/exchange-rate-schemas";
@@ -30,11 +31,7 @@ export async function getEnterpriseExchangeRateConfiguration(organizationId: str
         updatedAt: true,
       },
     }),
-    prisma.enterpriseCurrency.findMany({
-      where: { isActive: true, OR: [{ organizationId }, { organizationId: null }] },
-      orderBy: { code: "asc" },
-      select: { code: true, name: true, symbol: true, precision: true },
-    }),
+    listEnterpriseCurrencies(organizationId),
     prisma.enterpriseFinancialAccount.findMany({
       where: { organizationId, status: "ACTIVE", archivedAt: null },
       distinct: ["currencyCode"],
@@ -42,6 +39,7 @@ export async function getEnterpriseExchangeRateConfiguration(organizationId: str
     }),
   ]);
 
+  // Keep historical/current codes readable even if a legacy tenant has not yet repaired its registry.
   const knownCodes = new Set<string>();
   for (const currency of currencies) knownCodes.add(currency.code);
   for (const account of accountCurrencies) knownCodes.add(account.currencyCode);
@@ -60,6 +58,7 @@ export async function getEnterpriseExchangeRateConfiguration(organizationId: str
       name: currencyMeta.get(code)?.name || code,
       symbol: currencyMeta.get(code)?.symbol || null,
       precision: currencyMeta.get(code)?.precision ?? 2,
+      configured: currencyMeta.has(code),
     })),
     rates,
   };
@@ -70,6 +69,8 @@ export async function createEnterpriseExchangeRate(organizationId: string, userI
     const sourceCurrencyCode = input.sourceCurrencyCode.toUpperCase();
     const targetCurrencyCode = input.targetCurrencyCode.toUpperCase();
     if (sourceCurrencyCode === targetCurrencyCode) throw new EnterpriseAccountingError("FINANCE_EXCHANGE_RATE_PAIR_INVALID", 400);
+    await assertEnterpriseCurrencyActiveTx(tx, organizationId, sourceCurrencyCode);
+    await assertEnterpriseCurrencyActiveTx(tx, organizationId, targetCurrencyCode);
     const rate = new Prisma.Decimal(input.rate);
     if (rate.lte(0)) throw new EnterpriseAccountingError("FINANCE_EXCHANGE_RATE_INVALID", 400);
 
