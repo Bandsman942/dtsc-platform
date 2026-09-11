@@ -52,7 +52,7 @@ export async function financeMutation(endpoint: string, payload: unknown, method
       status: response.status,
     });
   }
-  if (body?.queued && body.job?.id && body.job.statusUrl && typeof window !== "undefined") {
+  if (body && body.queued && body.job?.id && body.job.statusUrl && typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent(FINANCE_DURABLE_JOB_EVENT, {
       detail: {
         endpoint,
