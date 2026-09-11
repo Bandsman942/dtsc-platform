@@ -118,8 +118,8 @@ export function EnterpriseFinanceOverviewWorkspace({ organizationId, organizatio
   const completedBlockers = blockerDiagnostics.filter((diagnostic) => diagnostic.ready).length;
   const percentage = blockerDiagnostics.length ? Math.round((completedBlockers / blockerDiagnostics.length) * 100) : 0;
   const degradedMetrics = Object.values(summary).filter((value) => value.state === "error").length;
-  const currencyChoices = (readiness?.currencies || []).map((currency) => ({ id: currency.code, label: `${currency.code} · ${currency.name}${currency.configured === false ? ` · ${locale === "fr" ? "à ajouter au référentiel" : "add to registry"}` : ""}` }));
-  const presentationCurrencyChoices = [{ id: "", label: locale === "fr" ? "Aucune devise de présentation" : "No presentation currency" }, ...currencyChoices];
+  const currencyChoices = (readiness?.currencies || []).map((currency) => ({ id: currency.code, label: `${currency.code} · ${currency.name}${currency.configured === false ? ` · ${translateEnterpriseCurrency(locale, "legacyCode")}` : ""}` }));
+  const presentationCurrencyChoices = [{ id: "", label: translateEnterpriseCurrency(locale, "noPresentationCurrency") }, ...currencyChoices];
 
   async function retryProjection(projectionId: string) {
     setRetryingProjectionId(projectionId); setMessage(""); setError("");
