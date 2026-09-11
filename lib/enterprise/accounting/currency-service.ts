@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { assertActiveClientOrganization } from "@/lib/enterprise/accounting/helpers";
+import { currencyChoices } from "@/lib/forms/reference-catalog";
 import { prisma } from "@/lib/prisma";
 
 export type EnterpriseCurrencyScope = "GLOBAL" | "ORGANIZATION";
@@ -28,9 +29,28 @@ type CurrencyWriteInput = {
 
 type CurrencyUpdateInput = Partial<Omit<CurrencyWriteInput, "code">> & { isActive?: boolean };
 
+type BuiltInCurrency = {
+  code: string;
+  name: string;
+};
+
 function normalizeCode(code: string) {
   return code.trim().toUpperCase();
 }
+
+function stripCurrencyCode(label: string, code: string) {
+  return label.replace(new RegExp(`\\s*\\(${code}\\)\\s*$`, "i"), "").trim() || code;
+}
+
+// Reuse the repository's controlled currency catalogue as the immutable DTSC baseline.
+// Persisted global rows can override its metadata/status, and organization rows override both.
+const BUILT_IN_CURRENCIES: readonly BuiltInCurrency[] = Object.freeze(
+  currencyChoices("fr").map((choice) => ({
+    code: normalizeCode(choice.id),
+    name: stripCurrencyCode(choice.label, normalizeCode(choice.id)),
+  })),
+);
+const BUILT_IN_CURRENCY_CODES = new Set(BUILT_IN_CURRENCIES.map((currency) => currency.code));
 
 function currencyMatchesSearch(currency: EffectiveEnterpriseCurrency, search?: string) {
   const query = search?.trim().toLocaleLowerCase();
@@ -90,6 +110,20 @@ export async function listEnterpriseCurrencies(
   ]);
 
   const resolved = new Map<string, EffectiveEnterpriseCurrency>();
+  for (const currency of BUILT_IN_CURRENCIES) {
+    resolved.set(currency.code, {
+      id: `builtin:${currency.code}`,
+      code: currency.code,
+      name: currency.name,
+      symbol: null,
+      precision: 2,
+      roundingMode: "HALF_UP",
+      isActive: true,
+      scope: "GLOBAL",
+      canManage: false,
+      isInUse: usedCodes.has(currency.code),
+    });
+  }
   for (const row of rows.filter((item) => item.organizationId === null)) {
     const code = normalizeCode(row.code);
     resolved.set(code, {
@@ -142,10 +176,15 @@ export async function assertEnterpriseCurrencyActiveTx(
     return;
   }
   const globalCurrency = await tx.enterpriseCurrency.findFirst({
-    where: { organizationId: null, code, isActive: true },
-    select: { id: true },
+    where: { organizationId: null, code },
+    select: { id: true, isActive: true },
   });
-  if (!globalCurrency) throw new EnterpriseAccountingError("FINANCE_CURRENCY_NOT_CONFIGURED", 409, { currencyCode: code });
+  if (globalCurrency) {
+    if (!globalCurrency.isActive) throw new EnterpriseAccountingError("FINANCE_CURRENCY_INACTIVE", 409, { currencyCode: code });
+    return;
+  }
+  if (BUILT_IN_CURRENCY_CODES.has(code)) return;
+  throw new EnterpriseAccountingError("FINANCE_CURRENCY_NOT_CONFIGURED", 409, { currencyCode: code });
 }
 
 export async function createEnterpriseCurrency(
