@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { writeApiLog } from "@/lib/audit";
+import { listEnterpriseCurrencies } from "@/lib/enterprise/accounting/currency-service";
 import { authorizeFinanceRequest } from "@/lib/enterprise/accounting/http";
 import type { EnterpriseFinanceModuleCode } from "@/lib/enterprise/accounting/constants";
 import { prisma } from "@/lib/prisma";
@@ -253,19 +254,13 @@ export async function GET(req: Request, { params }: Params) {
       select: { id: true, code: true, name: true, serialNumber: true, status: true, currency: true, indicativeValue: true, acquisitionDate: true },
     });
   } else if (kind === "currency") {
-    items = await prisma.enterpriseCurrency.findMany({
-      where: {
-        isActive: true,
-        OR: [{ organizationId }, { organizationId: null }],
-        ...(search ? { AND: [{ OR: [
-          { code: { contains: search, mode: "insensitive" } },
-          { name: { contains: search, mode: "insensitive" } },
-        ] }] } : {}),
-      },
-      orderBy: { code: "asc" },
-      take,
-      select: { id: true, code: true, name: true, symbol: true, precision: true },
-    });
+    items = (await listEnterpriseCurrencies(organizationId, { search })).slice(0, take).map((currency) => ({
+      id: currency.id,
+      code: currency.code,
+      name: currency.name,
+      symbol: currency.symbol,
+      precision: currency.precision,
+    }));
   }
 
   await writeApiLog({
