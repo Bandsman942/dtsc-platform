@@ -52,15 +52,14 @@ export async function financeMutation(endpoint: string, payload: unknown, method
       status: response.status,
     });
   }
-  const result = body || {};
-  if (result.queued && result.job?.id && result.job.statusUrl && typeof window !== "undefined") {
+  if (body?.queued && body.job?.id && body.job.statusUrl && typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent(FINANCE_DURABLE_JOB_EVENT, {
       detail: {
         endpoint,
-        mode: result.mode || "durable",
-        job: result.job,
+        mode: body.mode || "durable",
+        job: body.job,
       },
     }));
   }
-  return result;
+  return body || {};
 }
