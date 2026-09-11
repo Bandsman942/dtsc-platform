@@ -448,7 +448,7 @@ Une limitation d'outil ou de réseau impose `NOT_EXECUTED` jusqu'à preuve CI/Pr
 - [ ] Regression QA est verte.
 - [ ] QA ciblées sont vertes.
 - [ ] Lint et build sont verts.
-- [ ] Les E2E requis sont réellement confirmés.
+- [ ] Les E2E requis sont réellement verts/confirmés.
 - [ ] Aucune conversation de review bloquante ne reste ouverte.
 - [ ] Le diff final contre le dernier `main` reste cohérent avec l'Issue.
 - [ ] Aucune dette silencieuse n'a été introduite depuis la première review.
