@@ -59,7 +59,7 @@ hasAll(accountService, [
 ], "comptes Trésorerie");
 
 const sharedMutation = read("components/enterprise/professional/finance-professional-workspace-shared.tsx");
-hasAll(sharedMutation, ["FinanceApiError", "clientMessage", "details", "response.status", "body?.queued"], "contrat erreur mutation Finance");
+hasAll(sharedMutation, ["FinanceApiError", "clientMessage", "details", "response.status", "body.queued"], "contrat erreur mutation Finance");
 fail(sharedMutation.includes("legacyFinanceMutation(endpoint, payload, method)"), "le bridge mutation ne doit plus jeter message/details backend");
 
 const financeUi = read("components/enterprise/professional/finance-professional-ui.ts");
