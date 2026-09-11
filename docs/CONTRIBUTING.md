@@ -4,7 +4,60 @@ Statut : **obligatoire avant toute contribution**
 
 Ce document définit le contrat humain de contribution au repository `Bandsman942/dtsc-platform`. Il s'applique aux propriétaires du repository, collaborateurs, reviewers, agents IA, scripts de maintenance et contributeurs externes. Une contribution ne doit pas être ouverte, fusionnée ou livrée en Production si elle ne respecte pas ce contrat.
 
-Les règles durables de code restent également définies dans `AGENTS.md`. La gouvernance détaillée de livraison vit dans `docs/DELIVERY_GOVERNANCE.md`. En cas de contradiction, la règle la plus restrictive et la plus récente sur `main` prévaut.
+Les règles durables de code restent également définies dans `AGENTS.md`. La gouvernance détaillée de livraison vit dans `docs/DELIVERY_GOVERNANCE.md`. Les contrats spécialisés du repo complètent ce document : architecture ERP, formulaires, responsive, sécurité, abonnements/entitlements, IA, Finance, secteurs, QA et runbooks. En cas de contradiction, la règle la plus restrictive et la plus récente sur `main` prévaut.
+
+## 0. Préflight opposable avant le premier changement
+
+Une contribution ne commence pas par l'édition d'un fichier. Avant le premier changement de code ou de documentation produit, le contributeur doit établir le contrat de livraison réel du travail.
+
+Le préflight obligatoire est :
+
+1. lire `AGENTS.md`, `docs/CONTRIBUTING.md` et les éventuels `AGENTS.md` scoped du chemin touché ;
+2. vérifier le SHA réel du dernier `main` et partir de ce SHA ;
+3. créer ou identifier l'Issue réelle avec critères d'acceptation, risques, labels structurés et milestone si requis ;
+4. créer une branche conforme incluant le numéro d'Issue ;
+5. lire `.github/PULL_REQUEST_TEMPLATE.md` **avant de coder** et préparer dès le début les éléments qui devront être prouvés dans la PR : scope, hors-scope, dette, Prisma, sécurité, validation, E2E, risques, rollback, documentation et release note ;
+6. identifier les sources de vérité et contrats déjà existants du domaine avant d'ajouter une table, une API, un helper, un composant, une erreur, un entitlement ou une source i18n ;
+7. identifier les QA ciblées et les workflows CI qui devront prouver le changement ;
+8. décider explicitement si `OWNER_E2E` est requis et définir le parcours avant l'implémentation ;
+9. vérifier l'impact abonnement/entitlement/module/IA lorsque le travail touche un module ERP ou une capacité commerciale ;
+10. vérifier les obligations documentation/changelog/runbook/rollback du domaine.
+
+### Carte des contrats du repository à consulter selon le scope
+
+Le contributeur ne doit pas supposer qu'un fichier visible est isolé. Les dépendances de gouvernance suivantes sont à rechercher et lire lorsqu'elles sont concernées :
+
+- `.github/PULL_REQUEST_TEMPLATE.md` et `scripts/github/validate-pr-governance.mjs` pour le contrat de PR ;
+- `docs/DELIVERY_GOVERNANCE.md` et `scripts/qa-delivery-governance.mjs` pour les gates de livraison ;
+- `docs/TECHNICAL_DOCUMENTATION.md`, `docs/ERP_FINAL_ARCHITECTURE.md` et `docs/ERP_FINAL_OPERATIONAL_RUNBOOK.md` pour l'architecture et l'exploitation ERP ;
+- `lib/enterprise/module-registry*`, les resolvers d'accès/entitlements et les QA de registre pour tout module ERP ;
+- les contrats d'abonnement/capabilities et les resolvers d'accès avant toute activation de module ou capacité IA ;
+- les gateways/outils IA, règles de permission et documents IA lorsqu'une capacité est lisible ou actionnable par un assistant ;
+- `docs/FORM_UX_CONTRACT.md` pour tout formulaire ;
+- `docs/RESPONSIVE_UI_CONTRACT.md` pour toute UI matérielle ;
+- les catalogues i18n canoniques du domaine pour toute chaîne client ;
+- les services/erreurs canoniques du domaine pour toute mutation ou message métier ;
+- les scripts `qa:*` du `package.json`, les tests E2E et les workflows GitHub applicables pour les preuves ;
+- les documents métier spécialisés, notamment Finance/Comptabilité/Trésorerie, Health, Pharmacy, Retail/Shop, Manufacturing et autres secteurs touchés.
+
+Si un contrat existe déjà, il doit être étendu ou réutilisé. Une nouvelle source parallèle créée faute d'avoir cherché l'existante est une dette de contribution.
+
+### Contrat de PR préparé dès le début
+
+Le contenu de la future PR n'est pas un rapport rédigé après coup. Dès le démarrage, le contributeur doit pouvoir répondre à :
+
+- quelle Issue la PR ferme ;
+- quel est son objectif unique ;
+- qu'est-ce qui est explicitement hors scope ;
+- quelle dette elle crée, maintient, rembourse ou reporte ;
+- quelles données/migrations/backfills elle touche ;
+- quels contrôles de sécurité/RBAC/multi-tenant s'appliquent ;
+- quels secrets/variables d'environnement changent ou ne changent pas ;
+- quelles preuves automatiques et E2E sont nécessaires ;
+- quels risques et quel rollback sont prévus ;
+- quels documents doivent être modifiés.
+
+Une PR dont ces réponses n'étaient pas identifiables avant le développement est un signal de scope mal borné.
 
 ## 1. Principe cardinal : partir du vrai dernier `main`
 
@@ -29,7 +82,7 @@ Lorsqu'une ancienne branche doit être réintégrée après plusieurs évolution
 - comparer ensuite `main...HEAD` et vérifier explicitement les suppressions, renommages, migrations et fichiers de QA ;
 - toute suppression d'un fichier récent de `main` doit être intentionnelle, documentée et justifiée.
 
-**Interdit :** recréer un commit à partir de l'arbre complet d'une branche historique puis le poser au-dessus du `main` courant. Cette méthode peut supprimer silencieusement des fichiers ajoutés entre-temps.
+**Interdit :** recréer un commit à partir de l'arbre complet d'une branche historique puis le poser au-dessus du `main` courant.
 
 ## 2. Une Issue avant le code
 
@@ -85,7 +138,7 @@ ci(delivery): enforce PR acknowledgement
 
 Les messages vagues comme `update`, `fix stuff`, `changes`, `final`, `work` ou `misc` ne sont pas acceptables.
 
-Un commit doit représenter une intention compréhensible et ne doit jamais cacher une suppression de tests, une migration réécrite ou une modification hors scope.
+Un commit représente une intention compréhensible et ne cache jamais une suppression de tests, une migration réécrite ou une modification hors scope.
 
 ## 5. Scope d'une PR et budget de dette
 
@@ -118,16 +171,14 @@ Une **dette de contribution** est toute simplification ou incohérence introduit
 
 La règle est : **aucune nouvelle dette silencieuse**.
 
-Toute PR doit remplir le registre `## Dette de contribution` du template :
+Toute PR remplit le registre `## Dette de contribution` du template :
 
-- **Dette créée** : doit être `Aucune` par défaut. Si elle n'est pas nulle, elle doit être indispensable, bornée, expliquée et liée à une Issue dédiée ;
-- **Dette maintenue** : dette préexistante rencontrée et volontairement non modifiée ; si elle est matérielle pour le domaine touché, elle doit être liée à une Issue ;
-- **Dette remboursée** : dette réellement supprimée par la PR ;
-- **Dette reportée** : aucune dette reportée ne peut rester sans numéro d'Issue et critère de reprise.
+- **Dette créée** : `Aucune` par défaut ; sinon indispensable, bornée, expliquée et liée à une Issue ;
+- **Dette maintenue** : dette préexistante volontairement non modifiée ; Issue si matérielle ;
+- **Dette remboursée** : dette réellement supprimée ;
+- **Dette reportée** : aucune dette reportée sans numéro d'Issue et critère de reprise.
 
-Un `TODO`, `FIXME`, compat bridge, fallback temporaire ou allowlist de dette ajouté dans le diff doit donc soit disparaître avant merge, soit avoir une Issue explicite.
-
-Si un problème transversal hors scope est découvert et n'est pas nécessaire pour livrer correctement l'objectif courant, créer une Issue séparée plutôt que de l'enfouir dans le code.
+Un `TODO`, `FIXME`, compat bridge, fallback temporaire ou allowlist de dette ajouté dans le diff disparaît avant merge ou possède une Issue explicite.
 
 ## 6. Contrat de Pull Request
 
@@ -136,7 +187,7 @@ Le titre de PR doit être Conventional Commit compatible.
 La PR doit :
 
 - fermer une Issue avec `Closes #N`, `Fixes #N` ou `Resolves #N` ;
-- contenir toutes les sections du template officiel ;
+- contenir **toutes** les sections de `.github/PULL_REQUEST_TEMPLATE.md` ;
 - porter les labels structurés ;
 - porter un milestone si son impact est matériel ;
 - décrire le rollback ;
@@ -152,45 +203,43 @@ La déclaration obligatoire est :
 - [x] J'ai lu et respecté `docs/CONTRIBUTING.md`.
 ```
 
-Une case non cochée est un refus de la gate de gouvernance.
+Une case non cochée est un refus de la gate de gouvernance. Ne pas ouvrir une PR volontairement incomplète sur ces sections : utiliser `NOT_EXECUTED` pour les preuves non encore disponibles plutôt que d'omettre le contrat.
 
 ## 7. Matrice de preuves : ne jamais confondre exécution et intention
 
-Chaque contrôle matériel cité dans une PR reçoit un état de preuve explicite. Les états autorisés sont :
+Chaque contrôle matériel cité dans une PR reçoit un état de preuve explicite :
 
-- `LOCAL_EXECUTED` : commande ou scénario réellement exécuté dans l'environnement du contributeur, avec résultat disponible ;
-- `CI_PROVEN` : résultat réellement produit par la CI du SHA/PR concerné ;
-- `OWNER_E2E` : scénario E2E exécuté et confirmé explicitement par le propriétaire/acceptance prévue par le contrat ;
+- `LOCAL_EXECUTED` : réellement exécuté dans l'environnement du contributeur ;
+- `CI_PROVEN` : réellement produit par la CI du SHA/PR concerné ;
+- `OWNER_E2E` : scénario E2E réellement exécuté et confirmé par le propriétaire ;
 - `NOT_EXECUTED` : contrôle non exécuté à ce stade.
 
 `À faire`, `normalement vert`, `devrait passer`, `inspecté`, `semble correct` ou l'absence d'état ne sont pas des preuves.
 
-Une inspection statique peut expliquer une décision, mais elle ne remplace jamais un build, un test navigateur, un E2E ou une preuve Production lorsque ceux-ci sont exigés.
+Une inspection statique peut expliquer une décision, mais ne remplace jamais un build, un test navigateur, un E2E ou une preuve Production lorsqu'ils sont exigés.
 
-Il est interdit de déclarer `LOCAL_EXECUTED`, `CI_PROVEN`, `OWNER_E2E`, `READY`, `déployé`, `vert` ou équivalent si l'événement correspondant n'a pas réellement eu lieu.
-
-La matrice de PR doit au minimum nommer :
+La matrice de PR nomme au minimum :
 
 ```text
 Contrôle | Statut | Preuve
 ```
 
-Les contrôles requis mais non encore exécutés restent `NOT_EXECUTED` jusqu'à obtention de la preuve. Une PR ne devient pas mergeable par simple changement de texte : les checks GitHub restent l'autorité automatique.
+Les checks GitHub restent l'autorité automatique.
 
 ## 8. Validation avant PR et avant merge
 
-Exécuter les contrôles applicables à la contribution, dans cet ordre logique :
+Exécuter les contrôles applicables dans cet ordre logique :
 
 1. `git diff --check`, `git diff --cached --check` et contrôle des suppressions inattendues ;
 2. installation avec lockfile intact ;
-3. `pnpm prisma:generate` si Prisma existe dans le projet ;
+3. `pnpm prisma:generate` si Prisma existe ;
 4. migrations depuis une base propre lorsqu'elles sont concernées ;
 5. `pnpm type-check` ;
 6. QA ciblées du domaine ;
-7. `pnpm qa:regression` ou la gate de régression canonique ;
+7. `pnpm qa:regression` ;
 8. `pnpm lint` ;
 9. `pnpm build` ;
-10. E2E/acceptance spécialisés lorsque le chemin modifié les déclenche ou lorsqu'ils sont requis par le contrat de l'Issue.
+10. E2E/acceptance spécialisés lorsque requis.
 
 La CI GitHub est la preuve opposable lorsque l'environnement local ne permet pas l'exécution complète.
 
@@ -201,192 +250,122 @@ Avant merge, refaire une comparaison du **diff final** avec le dernier `main` et
 - scripts QA ;
 - documentation ;
 - lockfile ;
-- changements d'accès ou d'entitlement ;
+- changements d'accès, de registre module, de plan ou d'entitlement ;
+- outils/permissions IA si le module est exposé à l'assistant ;
 - chaînes et composants visibles ajoutés depuis la dernière review.
 
 ### Un test ne se neutralise jamais
 
-Il est interdit de :
+Il est interdit de supprimer un test parce qu'il échoue, commenter une assertion, transformer un échec en warning pour obtenir du vert, contourner une gate, exclure artificiellement le nouveau code de la QA ou baisser arbitrairement une contrainte de sécurité.
 
-- supprimer un test parce qu'il échoue ;
-- commenter une assertion ;
-- transformer un échec en warning pour obtenir du vert ;
-- contourner un gate obligatoire ;
-- exclure artificiellement le nouveau code de la QA ;
-- baisser arbitrairement une contrainte de sécurité pour satisfaire la CI.
-
-Si un test est devenu faux ou fragile, corriger **le contrat du test** pour mesurer le comportement réel, documenter la raison et conserver ou renforcer la couverture.
+Si un test est devenu faux ou fragile, corriger son contrat pour mesurer le comportement réel, documenter la raison et conserver ou renforcer la couverture.
 
 ## 9. Prisma et migrations
 
-- Une modification de schéma Prisma doit avoir sa migration SQL correspondante.
+- Toute modification de schéma Prisma a sa migration SQL correspondante.
 - Une migration déjà fusionnée/appliquée ne se réécrit pas.
 - Privilégier les migrations additives et compatibles.
 - Tester `prisma migrate deploy` depuis une base vide lorsque le domaine le requiert.
 - Ne jamais supprimer dans la même release la dernière utilisation applicative d'une donnée et son stockage physique sans stratégie de cutover explicite.
-- Les migrations et backfills doivent être tenant-safe, idempotents lorsque nécessaire et documentés.
+- Les migrations et backfills sont tenant-safe, idempotents lorsque nécessaire et documentés.
 - Une colonne/table nouvelle sans consommation applicative réelle est une dette et n'est pas ajoutée « pour plus tard ».
+- Avant de créer un nouveau modèle, rechercher explicitement le modèle/service canonique déjà existant et les éventuels objets legacy `READ_ONLY`.
 
-## 10. Sécurité, RBAC et multi-tenant
+## 10. Sécurité, RBAC, entitlements et multi-tenant
 
 Aucune PR ne peut considérer l'UI comme barrière de sécurité.
 
-Toute donnée d'entreprise doit rester isolée par organisation. Les références fournies par le client sont revalidées côté serveur. Les routes sensibles conservent les contrôles de session, contexte, membership, entitlement, permission, ownership/visibilité, same-origin, validation, rate limit, transaction et audit applicables.
+Toute donnée d'entreprise reste isolée par organisation. Les références fournies par le client sont revalidées côté serveur. Les routes sensibles conservent les contrôles applicables : session, contexte, membership, organisation attendue, module actif, entitlement/abonnement, permission, ownership/visibilité, same-origin, validation Zod, `await rateLimit`, transaction, `ApiLog` et `AuditLog`.
 
-Aucun secret ne doit être ajouté dans le code, les logs, captures, fixtures, migrations, documents ou réponses client.
+Un rôle global n'accorde jamais implicitement l'accès à une donnée privée cliente. Un `MANAGER` n'est pas automatiquement admin entreprise.
 
-Pour l'IA, une nouvelle intégration provider ou modèle doit être **fail-closed** : un provider inconnu n'obtient jamais implicitement la confiance d'un runtime local.
+Toute nouvelle capacité d'un module vérifie le contrat commercial existant : registre canonique, statut du module, plan/entitlement, dépendances et permissions. Ne pas rendre un bouton ou une route accessible si le resolver canonique refuserait la capacité.
 
-Un deep link, badge, bouton masqué ou donnée déjà présente côté client ne constitue jamais une autorisation.
+Pour l'IA, les mêmes permissions, entitlements et limites de contexte s'appliquent. Une intégration provider ou modèle est **fail-closed** ; un assistant ne devient jamais un bypass des règles ERP.
 
-## 11. Contrat UX, composants et langage client
+Aucun secret ne doit être ajouté dans le code, logs, captures, fixtures, migrations, documents ou réponses client.
 
-Une contribution utilisateur doit préserver :
+## 11. Contrat des erreurs client
 
-- FR/EN lorsqu'ils sont supportés par la surface ;
-- mobile, tablette et desktop ;
-- mode clair/sombre lorsque concerné ;
-- accessibilité clavier et cibles tactiles ;
-- safe areas et clavier mobile ;
-- états hover, focus-visible, active/pressed, loading et disabled cohérents ;
-- libellés métier sans codes techniques exposés ;
-- guides utilisateur et documentation de domaine lorsque le comportement change.
+Le backend reste l'autorité sur la cause métier. Lorsqu'une API renvoie un code d'erreur métier sûr, un message client sûr et éventuellement des `details` non sensibles :
+
+- le client ne doit pas jeter le code ou le message utile au profit d'un fallback générique ;
+- les erreurs connues doivent être traduites via le catalogue canonique lorsqu'il existe ;
+- un message serveur déjà humain peut servir de fallback uniquement s'il est explicitement sûr pour le client ;
+- Prisma, stack traces, SQL, route interne, payload, identifiants tenant, secrets et erreurs brutes de provider ne sont jamais exposés ;
+- le message indique l'action corrective lorsqu'elle existe ;
+- les détails utiles (ex. révision courante, solde bloquant, précondition) doivent être structurés et non concaténés depuis une exception brute.
+
+Une mutation métier refusée n'est pas un « échec générique » lorsque le backend connaît la précondition exacte.
+
+## 12. Contrat UX, composants et langage client
+
+Une contribution utilisateur préserve : FR/EN, mobile/tablette/desktop, clair/sombre, accessibilité clavier, cibles tactiles, safe areas, clavier mobile, états hover/focus/pressed/loading/disabled, libellés métier et guides utilisateur applicables.
 
 ### Composant partagé avant workaround local
 
-Lorsqu'un défaut apparaît sur plusieurs écrans ou provient d'une primitive partagée, corriger la primitive ou le contrat partagé avant de multiplier des classes CSS locales.
-
-Un contournement local est acceptable uniquement si la différence est réellement spécifique au métier et documentée. `overflow-x-hidden` n'est pas une correction de composant trop large.
-
-Pour une action mobile :
-
-- aucun libellé ne doit déborder d'une hauteur fixe ;
-- une CTA principale doit rester courte et compréhensible ;
-- les actions secondaires nombreuses utilisent divulgation progressive/menu ;
-- la cible tactile reste adaptée ;
-- l'utilisateur reçoit un effet visuel au hover/focus/press lorsque le dispositif le permet.
+Lorsqu'un défaut apparaît sur plusieurs écrans ou provient d'une primitive partagée, corriger la primitive ou le contrat partagé avant de multiplier des classes CSS locales. `overflow-x-hidden` n'est pas une correction d'un composant trop large.
 
 ### Formulaires DTSC — contrat obligatoire
 
-Tout formulaire nouveau ou modifié doit respecter `docs/FORM_UX_CONTRACT.md`. Ce document est la référence détaillée des règles de formulaire et complète le présent contrat.
+Tout formulaire nouveau ou modifié respecte `docs/FORM_UX_CONTRACT.md`.
 
 Au minimum :
 
-- toute relation métier existante utilise une combobox/select de référence alimentée par la source canonique du domaine plutôt qu'un identifiant ou texte libre ;
-- les options sont bornées au contexte autorisé et toute référence client est revalidée côté serveur dans le même `organizationId`, avec membership, module, entitlement, permission et statut applicables ;
-- le formulaire contient uniquement les champs utiles à l'action et fournit une aide contextuelle lorsque le champ est ambigu ou dépend d'une configuration ;
-- toute action visible possède un état perceptible `pressed/loading/disabled` et un résultat explicite ; aucun bouton placeholder ou muet n'est autorisé ;
-- une mutation réussie produit un toast global de succès au premier plan, puis seulement après succès backend confirmé le formulaire peut être fermé ou réinitialisé ;
-- une mutation en erreur produit un toast global d'erreur métier, conserve le formulaire ouvert et préserve les valeurs saisies ; une erreur locale complète le toast lorsqu'elle aide à corriger le champ ou la précondition ;
-- les toasts doivent rester au-dessus des dialogs, sheets/drawers et overlays applicatifs ; ne pas créer un système de toast local concurrent si le provider global répond au besoin ;
-- aucun message visible ne doit exposer Prisma, route API, stack trace, enum brut, provider error brute, `organizationId`, payload ou jargon interne lorsqu'un équivalent métier existe ;
-- mobile, clavier, safe areas, accessibilité, FR/EN et clair/sombre sont vérifiés selon les contrats applicables.
+- toute relation métier existante utilise une combobox/select alimentée par la source canonique plutôt qu'un identifiant ou texte libre ;
+- les options sont bornées au contexte autorisé et toute référence est revalidée côté serveur dans le même `organizationId` ;
+- chaque champ a une aide contextuelle lorsqu'il dépend d'une configuration ;
+- toute action visible a un état perceptible et un résultat explicite ;
+- succès : toast global après succès backend confirmé ;
+- erreur : toast métier, formulaire ouvert et saisie préservée ;
+- aucun message visible n'expose jargon interne ou détail technique sensible ;
+- mobile, clavier, safe areas, accessibilité, FR/EN et clair/sombre sont vérifiés.
 
-Une PR qui touche un formulaire doit inclure dans sa QA ciblée au moins un scénario de succès, un scénario d'échec conservant la saisie et, lorsqu'une référence tenant-scoped existe, un rejet serveur de référence invalide/hors tenant.
+Une PR qui touche un formulaire inclut une QA de succès, une QA d'échec conservant la saisie et, lorsqu'une référence tenant-scoped existe, un rejet serveur de référence invalide/hors tenant.
 
 ### Langage client humain
 
-Tout texte visible par un client parle de son métier, de son action ou de la conséquence utile. Les détails d'implémentation restent dans les logs/diagnostics protégés.
+Tout texte visible parle du métier, de l'action ou de la conséquence utile. Un message d'erreur visible explique ce que l'utilisateur peut faire ensuite lorsqu'une action corrective existe.
 
-Ne pas exposer inutilement : noms de tables/Prisma, routes API, enums bruts, stack traces, provider errors brutes, `organizationId`, `tenant`, `membership`, `payload`, `webhook`, noms de composants ou concepts internes lorsqu'un équivalent métier existe.
+## 13. Contrat i18n — aucune nouvelle chaîne utilisateur orpheline
 
-Un message d'erreur visible doit expliquer ce que l'utilisateur peut faire ensuite lorsqu'une action corrective existe.
+Sur une surface FR/EN, toute nouvelle chaîne utilisateur vient de la source i18n canonique du domaine ou d'un dictionnaire partagé raccordé aux deux langues : titres, descriptions, CTA, menus, placeholders, empty states, erreurs/succès, labels accessibles, statuts/enums, dates/heures localisées.
 
-## 12. Contrat i18n — aucune nouvelle chaîne utilisateur orpheline
+Interdit : ajouter une chaîne FR dans un TSX puis prévoir EN « plus tard », multiplier des ternaires locaux alors qu'un catalogue existe, ou localiser visuellement sans localiser l'accessibilité.
 
-Sur une surface FR/EN, toute nouvelle chaîne utilisateur modifiable par la langue doit provenir de la source i18n canonique du domaine ou d'un dictionnaire partagé explicitement raccordé aux deux langues.
-
-Sont concernés notamment :
-
-- titres, descriptions, CTA, menus ;
-- placeholders ;
-- empty states ;
-- erreurs/succès ;
-- `aria-label`, `title` et textes de lecteurs d'écran ;
-- labels de statuts/enums ;
-- dates et heures localisées.
-
-Interdit dans une nouvelle contribution FR/EN :
-
-- ajouter une chaîne française directement dans un TSX puis prévoir l'anglais « plus tard » ;
-- ajouter un ternaire local `locale === "en" ? ... : ...` lorsque le domaine possède déjà une source i18n ;
-- utiliser `fr-FR` ou `en-US` en dur pour un affichage dépendant de la préférence utilisateur ;
-- faire traduire visuellement le texte tout en laissant les labels accessibles dans une autre langue.
-
-Les noms propres, marques, codes techniques non rendus et données utilisateur ne sont pas des chaînes i18n.
-
-Le changement de langue doit produire une interface cohérente après le mécanisme de persistance/refresh prévu par l'application. Une page moitié FR moitié EN est une régression.
-
-## 13. Contrat mobile, responsive et gestes
+## 14. Contrat mobile, responsive et gestes
 
 Toute modification UI matérielle respecte `docs/RESPONSIVE_UI_CONTRACT.md` et les `AGENTS.md` scoped.
 
-Les largeurs minimales de recette sont : **320, 360, 375, 390, 414, 768 et 1024 px**.
+Largeurs minimales de recette : **320, 360, 375, 390, 414, 768 et 1024 px**.
 
-Vérifier lorsque la surface est concernée :
+Vérifier selon la surface : absence de scroll global, libellés non coupés, navigation non masquante, clavier/safe areas, PWA si applicable, clair/sombre, FR/EN, états vides/chargement/erreur et interactions tactiles.
 
-- absence de scroll horizontal global ;
-- titres, boutons, identifiants et badges non coupés ;
-- barre de navigation ne masquant pas le contenu ;
-- clavier mobile et safe areas ;
-- PWA standalone ;
-- clair/sombre ;
-- FR/EN ;
-- empty/loading/error states ;
-- interactions tactiles.
+Les gestes de navigation n'interceptent jamais un geste démarré dans un formulaire, contrôle, dialog, éditeur, carrousel ou rail horizontal.
 
-Les navigations gestuelles ne doivent jamais intercepter un geste démarré dans un formulaire, un contrôle, un dialog, un éditeur, un carrousel ou un rail horizontal. Les zones de bord réservées au navigateur/système sont protégées.
+## 15. QA visuelle et E2E — un grep ne voit pas un bouton cassé
 
-Une navigation primaire ne doit pas être dupliquée simultanément dans deux barres mobiles sans justification produit explicite.
+Les audits statiques protègent un contrat de code mais ne constituent pas une validation visuelle.
 
-## 14. QA visuelle et E2E — un grep ne voit pas un bouton cassé
+Une PR UI matérielle fournit : QA automatisée du contrat, validation navigateur/E2E des parcours critiques, largeurs/langues/thèmes pertinents et preuve attachée selon la matrice.
 
-Les audits statiques restent utiles pour protéger un contrat de code, mais ils ne constituent pas à eux seuls une validation visuelle.
+Lorsque `OWNER_E2E` est requis par l'Issue ou le risque produit, la PR reste non mergeable tant que le propriétaire ne l'a pas confirmé explicitement. L'absence de Preview Vercel ne transforme pas une inspection statique en E2E.
 
-Une PR `area:ui`, `area:ux` ou `area:mobile` avec impact matériel doit fournir :
+## 16. Performance et coût transverse
 
-1. une QA automatisée du contrat lorsque celui-ci est automatisable ;
-2. une validation rendue navigateur/E2E des parcours visuellement critiques ;
-3. les largeurs/langues/thèmes pertinents ;
-4. une preuve attachée à la PR/Issue selon la matrice de preuves.
+Toute nouvelle requête, subscription, polling, timer ou provider monté globalement documente pourquoi le niveau global est nécessaire, fréquence, coût/bornes, arrière-plan, échec/fallback et alternative locale évaluée.
 
-Un test qui vérifie seulement qu'une classe existe ne prouve pas qu'un bouton tient réellement sur 320 px. À l'inverse, un screenshot isolé ne remplace pas les contrôles d'accès ou la QA structurelle. Les deux niveaux se complètent.
+Les listes et agrégats restent paginés/bornés. Un polling plus fréquent ne masque jamais une dette de synchronisation.
 
-Pour un changement de shell/navigation mobile, l'E2E doit couvrir au minimum : Chrome/Samsung Internet compatible, PWA si applicable, swipe/scroll, changement de contexte, contenu long et clavier si un formulaire est impliqué.
-
-## 15. Performance et coût transverse
-
-Une contribution ne doit pas ajouter silencieusement du travail global à chaque page privée.
-
-Toute nouvelle requête, subscription, polling, timer ou provider monté dans `AppShell`, layout racine, middleware ou composant global doit documenter :
-
-- pourquoi le niveau global est nécessaire ;
-- fréquence et déclencheurs ;
-- coût approximatif et bornes ;
-- comportement en arrière-plan ;
-- stratégie d'échec/fallback ;
-- alternative locale évaluée.
-
-Un polling plus fréquent ne doit jamais être utilisé pour masquer l'absence de synchronisation sans Issue/plan de convergence.
-
-Les listes et agrégats restent paginés/bornés. Ne pas charger plus de données « au cas où ».
-
-## 16. Documentation
+## 17. Documentation
 
 La documentation est modifiée dans la même contribution que le contrat qu'elle décrit.
 
-Mettre à jour selon le scope :
+Mettre à jour selon le scope : documentation technique, contrat métier/domaine, guide utilisateur FR/EN, changelog, checklist QA/E2E et runbook/rollback.
 
-- documentation technique ;
-- contrat métier/domaine ;
-- guide utilisateur FR/EN ;
-- changelog ;
-- checklist QA/E2E ;
-- runbook/rollback si l'exploitation change.
+Une documentation décrivant une fonctionnalité non livrée est une dette documentaire.
 
-Une documentation décrivant une fonctionnalité non livrée est une dette documentaire et n'est pas acceptée.
-
-## 17. Production
+## 18. Production
 
 La Production provient uniquement de `main`.
 
@@ -406,64 +385,60 @@ Issue
 → Release
 ```
 
-Il est interdit de faire `vercel --prod` depuis une branche feature ou de considérer une Preview comme une preuve Production.
+Les commits de branche/PR restent sur GitHub et ne doivent pas déclencher de Preview Vercel dans la politique actuelle. Il est interdit de faire `vercel --prod` depuis une branche feature ou de considérer une Preview comme preuve Production.
 
-Après merge, vérifier que le déploiement Production pointe sur le SHA fusionné attendu avant de fermer un travail dont le critère exige une preuve Production.
+Après merge, vérifier que le déploiement Production pointe sur le SHA fusionné attendu lorsque le critère exige une preuve Production.
 
-## 18. Rollback
+## 19. Rollback
 
-Toute PR matérielle doit expliquer comment revenir au dernier état sain.
+Toute PR matérielle explique comment revenir au dernier état sain.
 
-Un rollback ne consiste pas à réécrire `main`. Utiliser une PR/hotfix traçable ou le mécanisme de rollback Production autorisé, puis documenter la preuve.
+Un rollback ne réécrit pas `main`. Utiliser une PR/hotfix traçable ou le mécanisme de rollback Production autorisé. Une migration additive peut rester physiquement présente lors d'un rollback applicatif ; cette décision doit être explicite.
 
-Une migration additive peut parfois rester physiquement présente lors d'un rollback applicatif ; cette décision doit être explicitée au lieu d'inventer un rollback destructif.
+## 20. Règles particulières pour les agents IA
 
-## 19. Règles particulières pour les agents IA
+Les agents IA suivent exactement le même contrat que les humains. Ils doivent notamment :
 
-Les agents IA suivent exactement le même contrat que les humains.
-
-Ils doivent notamment :
-
-- lire `AGENTS.md` et `docs/CONTRIBUTING.md` avant d'écrire ;
+- lire les contrats avant d'écrire ;
 - inspecter le dernier `main` réel ;
-- ne pas supposer qu'une branche historique est à jour ;
+- créer/identifier l'Issue et la branche conforme avant le code ;
+- lire le template de PR et préparer la matrice de preuves dès le début ;
 - ne pas inventer qu'un test, build, migration, E2E ou déploiement a réussi ;
-- remplir honnêtement la matrice de preuves ;
-- distinguer clairement preuve exécutée, inspection statique et hypothèse ;
-- préférer une nouvelle branche propre depuis `main` lorsqu'une ancienne branche est fortement divergente ;
+- distinguer preuve exécutée, inspection statique et hypothèse ;
 - ne jamais fusionner une PR dont les gates requis sont rouges ou dont le contrat de l'Issue n'est pas satisfait ;
 - ne pas cacher une limitation d'outil derrière une formulation ambiguë.
 
-Une limitation d'outil ou de réseau n'autorise pas à déclarer une étape réussie. Dans ce cas, la preuve CI/Production doit être attendue ou l'étape marquée explicitement `NOT_EXECUTED`.
+Une limitation d'outil ou de réseau impose `NOT_EXECUTED` jusqu'à preuve CI/Production.
 
-## 20. Checklist contributeur
+## 21. Checklist contributeur
 
 ### Avant de coder
 
-- [ ] J'ai lu `AGENTS.md` et les fichiers scoped applicables.
-- [ ] J'ai lu `docs/CONTRIBUTING.md`.
-- [ ] J'ai identifié l'Issue à traiter.
+- [ ] J'ai lu `AGENTS.md`, `docs/CONTRIBUTING.md` et les fichiers scoped applicables.
 - [ ] J'ai vérifié le dernier SHA de `main`.
+- [ ] L'Issue réelle existe avec labels/milestone applicables.
 - [ ] Ma branche respecte le format officiel.
-- [ ] Mon scope est clair et borné.
-- [ ] J'ai identifié les contrats impactés : sécurité, données, i18n, UI, mobile, performance, documentation.
+- [ ] J'ai lu `.github/PULL_REQUEST_TEMPLATE.md` et préparé le contrat de PR.
+- [ ] Mon scope et mon hors-scope sont clairs.
+- [ ] J'ai identifié les sources de vérité existantes et objets legacy.
+- [ ] J'ai identifié module registry, abonnement/entitlement, permissions et IA si concernés.
+- [ ] J'ai identifié i18n, formulaire, responsive, erreurs et documentation applicables.
+- [ ] J'ai identifié les QA/workflows et si `OWNER_E2E` est requis.
 
 ### Avant d'ouvrir la PR
 
-- [ ] Le diff par rapport au dernier `main` ne supprime rien d'inattendu.
+- [ ] Le diff contre le dernier `main` ne supprime rien d'inattendu.
 - [ ] Mes commits sont Conventional Commits.
 - [ ] Les migrations historiques sont intactes.
-- [ ] Les QA ciblées et générales applicables ont été exécutées ou sont explicitement `NOT_EXECUTED` en attente de CI.
-- [ ] J'ai documenté sécurité, multi-tenant, migrations, risques et rollback.
-- [ ] J'ai rempli **Dette créée / maintenue / remboursée / reportée**.
-- [ ] Toute dette reportée est liée à une Issue.
-- [ ] J'ai rempli la matrice de preuves sans présenter une inspection comme une exécution.
-- [ ] Si UI : j'ai vérifié i18n, tailles mobiles, actions, dark mode et accessibilité applicables.
-- [ ] Si formulaire : j'ai vérifié `docs/FORM_UX_CONTRACT.md`, succès/échec, conservation de la saisie, feedback et références tenant-scoped applicables.
-- [ ] Si shell/global : j'ai vérifié le coût des requêtes/pollings/subscriptions ajoutés.
-- [ ] La PR ferme une Issue réelle.
-- [ ] Les labels et le milestone sont corrects.
-- [ ] J'ai coché la déclaration de lecture de `docs/CONTRIBUTING.md`.
+- [ ] Les QA applicables sont exécutées ou honnêtement `NOT_EXECUTED`.
+- [ ] Sécurité, multi-tenant, données, migrations, risques et rollback sont documentés.
+- [ ] Dette créée / maintenue / remboursée / reportée est remplie.
+- [ ] Toute dette reportée a une Issue.
+- [ ] La matrice de preuves est remplie sans présenter une inspection comme une exécution.
+- [ ] UI/formulaire : i18n, mobile, dark mode, accessibilité, succès/échec et conservation de saisie sont couverts.
+- [ ] Le contrat d'erreur client conserve les causes métier utiles sans exposer de détail sensible.
+- [ ] La PR ferme l'Issue et possède labels/milestone corrects.
+- [ ] La déclaration de lecture de `docs/CONTRIBUTING.md` est cochée.
 
 ### Avant merge
 
@@ -473,33 +448,33 @@ Une limitation d'outil ou de réseau n'autorise pas à déclarer une étape réu
 - [ ] Regression QA est verte.
 - [ ] QA ciblées sont vertes.
 - [ ] Lint et build sont verts.
-- [ ] Les E2E requis sont réellement verts/confirmés, pas simplement prévus.
+- [ ] Les E2E requis sont réellement confirmés.
 - [ ] Aucune conversation de review bloquante ne reste ouverte.
-- [ ] Le diff final contre le dernier `main` est toujours cohérent avec l'Issue.
-- [ ] Aucune nouvelle dette silencieuse n'a été introduite depuis la première review.
+- [ ] Le diff final contre le dernier `main` reste cohérent avec l'Issue.
+- [ ] Aucune dette silencieuse n'a été introduite depuis la première review.
 
 ### Après merge
 
 - [ ] Le SHA de `main` est le SHA attendu.
 - [ ] Le déploiement Vercel Production du SHA attendu est READY lorsque requis.
 - [ ] Les preuves sont attachées à l'Issue/PR.
-- [ ] La Release est créée lorsque le workflow de livraison l'exige.
-- [ ] L'Issue n'est fermée qu'après satisfaction de ses critères d'acceptation.
-- [ ] Toute Issue de dette explicitement reportée reste ouverte et traçable.
+- [ ] La Release est créée lorsque le workflow l'exige.
+- [ ] L'Issue n'est fermée qu'après satisfaction des critères.
+- [ ] Toute dette reportée reste ouverte et traçable.
 
-## 21. Règle de décision
+## 22. Règle de décision
 
 Quand deux chemins sont possibles, choisir celui qui préserve le mieux :
 
 1. l'intégrité du dernier `main` ;
 2. la sécurité et l'isolation multi-tenant ;
 3. une seule source de vérité ;
-4. l'absence de dette silencieuse ;
-5. la traçabilité ;
-6. la reproductibilité des migrations, tests et builds ;
-7. la capacité de rollback ;
-8. l'i18n, le responsive et l'accessibilité ;
-9. la lisibilité du diff ;
-10. la simplicité de la future maintenance.
+4. le registre canonique, les entitlements et permissions existants ;
+5. l'absence de dette silencieuse ;
+6. la traçabilité ;
+7. la reproductibilité des migrations, tests et builds ;
+8. la capacité de rollback ;
+9. l'i18n, le responsive et l'accessibilité ;
+10. la lisibilité du diff et la maintenance future.
 
 Une PR rapide mais difficile à auditer coûte plus cher qu'une PR propre. La gouvernance existe précisément pour éviter de transformer la livraison en séance d'archéologie Git — ou en collection de petites dettes devenues soudain très grandes.
