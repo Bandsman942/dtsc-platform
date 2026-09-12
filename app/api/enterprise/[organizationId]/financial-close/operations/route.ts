@@ -44,7 +44,12 @@ export async function GET(req: Request, { params }: Params) {
         totalDebit: true,
         totalCredit: true,
         sourceEntityId: true,
-        reversalEntry: { select: { id: true, number: true, accountingDate: true, status: true } },
+        reversalRecordsAsOriginal: {
+          select: {
+            reversalEntry: { select: { id: true, number: true, accountingDate: true, status: true } },
+          },
+          take: 1,
+        },
       },
       orderBy: [{ accountingDate: "desc" }, { createdAt: "desc" }],
       take: 30,
