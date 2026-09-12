@@ -87,9 +87,9 @@ CREATE INDEX "EnterprisePeriodicAccountingExecution_organizationId_templateId_ac
 CREATE INDEX "EnterprisePeriodicAccountingExecution_organizationId_fiscalPeriodId_status_idx" ON "EnterprisePeriodicAccountingExecution"("organizationId", "fiscalPeriodId", "status");
 
 ALTER TABLE "EnterprisePeriodicAccountingTemplateLine"
-  ADD CONSTRAINT "EnterprisePeriodicAccountingTemplateLine_template_fkey"
+  ADD CONSTRAINT "EnterprisePeriodicAccountingTemplateLine_organizationId_te_fkey"
   FOREIGN KEY ("organizationId", "templateId") REFERENCES "EnterprisePeriodicAccountingTemplate"("organizationId", "id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 ALTER TABLE "EnterprisePeriodicAccountingExecution"
-  ADD CONSTRAINT "EnterprisePeriodicAccountingExecution_template_fkey"
+  ADD CONSTRAINT "EnterprisePeriodicAccountingExecution_organizationId_templ_fkey"
   FOREIGN KEY ("organizationId", "templateId") REFERENCES "EnterprisePeriodicAccountingTemplate"("organizationId", "id") ON DELETE RESTRICT ON UPDATE CASCADE;
