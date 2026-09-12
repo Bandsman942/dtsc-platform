@@ -14,6 +14,9 @@ const servicePath = "lib/enterprise/accounting/periodic-accounting-service.ts";
 const schemasPath = "lib/enterprise/accounting/periodic-accounting-schemas.ts";
 const reversalPath = "lib/enterprise/accounting/reversal-service.ts";
 const panelPath = "components/enterprise/professional/periodic-accounting-panel.tsx";
+const pageComponentPath = "components/enterprise/enterprise-periodic-accounting-page.tsx";
+const pageRoutePath = "app/enterprise-modules/FINANCE_ACCOUNTING/periodic-accounting/page.tsx";
+const financePagePath = "components/enterprise/enterprise-finance-module-page.tsx";
 const docsPath = "docs/ACCOUNTING_625_PERIODIC.md";
 const apiPaths = [
   "app/api/enterprise/[organizationId]/periodic-accounting/route.ts",
@@ -21,7 +24,7 @@ const apiPaths = [
   "app/api/enterprise/[organizationId]/periodic-accounting/[templateId]/versions/route.ts",
   "app/api/enterprise/[organizationId]/periodic-accounting/[templateId]/execute/route.ts",
 ];
-for (const file of [schemaPath, migrationPath, servicePath, schemasPath, reversalPath, panelPath, docsPath, ...apiPaths]) check(exists(file), `Missing Accounting C4 file ${file}`);
+for (const file of [schemaPath, migrationPath, servicePath, schemasPath, reversalPath, panelPath, pageComponentPath, pageRoutePath, financePagePath, docsPath, ...apiPaths]) check(exists(file), `Missing Accounting C4 file ${file}`);
 
 const schema = read(schemaPath);
 containsAll(schema, [
@@ -95,6 +98,13 @@ containsAll(transitionRoute, ['"approve"', '"submit"', '"manage"'], "Periodic tr
 const panel = read(panelPath);
 containsAll(panel, ["Comptabilité périodique", "Periodic accounting", "RECURRING", "ACCRUAL", "DEFERRAL", "ALLOCATION", "/periodic-accounting", "autoReverse"], "Periodic workspace panel");
 check(!panel.includes("window.prompt"), "Periodic workspace must not use window.prompt");
+
+const pageComponent = read(pageComponentPath);
+containsAll(pageComponent, ["PeriodicAccountingPanel", 'moduleCode: "FINANCE_ACCOUNTING"', "resolveEnterpriseModuleCapabilities", "canCreate={capabilities.canCreate}", "canSubmit={capabilities.canSubmit}", "canApprove={capabilities.canApprove}", "canManage={capabilities.canManage}"], "Periodic Accounting page capability contract");
+const pageRoute = read(pageRoutePath);
+check(pageRoute.includes("EnterprisePeriodicAccountingPage"), "Accounting periodic route must render the protected periodic page");
+const financePage = read(financePagePath);
+containsAll(financePage, ["CalendarClock", "/enterprise-modules/FINANCE_ACCOUNTING/periodic-accounting", "Comptabilité périodique", "Periodic accounting"], "Accounting module navigation to periodic workspace");
 
 const parity = read("scripts/qa-enterprise-finance-migration-parity.mjs");
 check(parity.includes("enterprise-accounting-periodic.prisma"), "Finance migration parity must include the C4 schema");
