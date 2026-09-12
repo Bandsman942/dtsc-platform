@@ -1,0 +1,85 @@
+model EnterprisePeriodicAccountingTemplate {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  code               String
+  version            Int      @default(1)
+  nameFr             String
+  nameEn             String
+  operationType      String
+  journalId          String
+  cadence            String   @default("MONTHLY")
+  startDate          DateTime
+  endDate            DateTime?
+  defaultAmount      Decimal  @db.Decimal(20, 6)
+  currencyCode       String
+  autoReverse        Boolean  @default(false)
+  reversalPolicy     String?
+  status             String   @default("DRAFT")
+  requiresApproval   Boolean  @default(false)
+  createdByUserId    String
+  approvedByUserId   String?
+  activatedAt        DateTime?
+  deactivatedAt      DateTime?
+  revision           Int      @default(1)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  lines              EnterprisePeriodicAccountingTemplateLine[]
+  executions         EnterprisePeriodicAccountingExecution[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code, version])
+  @@index([organizationId, code, status])
+  @@index([organizationId, status, startDate, endDate])
+}
+
+model EnterprisePeriodicAccountingTemplateLine {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  templateId         String
+  position           Int
+  ledgerAccountId    String
+  side               String
+  allocationPercent  Decimal  @db.Decimal(9, 6)
+  description        String?
+  businessPartyId    String?
+  projectId          String?
+  departmentId       String?
+  siteId             String?
+  assetId            String?
+  inventoryItemId    String?
+  analyticReference  String?
+  createdAt          DateTime @default(now())
+  template           EnterprisePeriodicAccountingTemplate @relation(fields: [organizationId, templateId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, templateId, position])
+  @@index([organizationId, ledgerAccountId])
+  @@index([organizationId, businessPartyId])
+  @@index([organizationId, projectId])
+}
+
+model EnterprisePeriodicAccountingExecution {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  templateId         String
+  templateVersion    Int
+  occurrenceKey      String
+  fiscalPeriodId     String
+  accountingDate     DateTime
+  amount             Decimal  @db.Decimal(20, 6)
+  currencyCode       String
+  status             String   @default("POSTED")
+  journalEntryId     String?
+  reversalEntryId    String?
+  requestedByUserId  String
+  executedAt         DateTime?
+  createdAt          DateTime @default(now())
+  template           EnterprisePeriodicAccountingTemplate @relation(fields: [organizationId, templateId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, occurrenceKey])
+  @@unique([organizationId, journalEntryId])
+  @@unique([organizationId, reversalEntryId])
+  @@index([organizationId, templateId, accountingDate])
+  @@index([organizationId, fiscalPeriodId, status])
+}
