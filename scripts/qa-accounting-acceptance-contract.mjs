@@ -31,7 +31,7 @@ requireTokens(onboarding, [
   "SALES_INVOICE_POSTED", "enterprisePostingBatch", "APPLY_SAFE_TEMPLATE_UPGRADE", "server RBAC rejects a non-member", "English tablet onboarding",
 ]);
 requireTokens(c5, [
-  "Promise.all", "FX_CLOSING_REVALUATION_POSTED", "EnterpriseExchangeRateSnapshot", "CLOSING:DIRECT:",
+  "Promise.all", "FX_CLOSING_REVALUATION_POSTED", "enterpriseExchangeRateSnapshot", "CLOSING:DIRECT:",
   "FINANCE_PERIOD_CLOSED", "c5-other-tenant", "ASSET_DISPOSAL_POSTED", 'toBe("DISPOSED")', 'toBe("CANCELLED")',
   "YEAR_END_CLOSED", "RETAINED_EARNINGS", "pnlBalance", "retainedOpening", "yearEndRetry",
 ]);
