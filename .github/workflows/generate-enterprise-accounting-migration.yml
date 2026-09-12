@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "prisma/enterprise-accounting.prisma"
+      - "prisma/enterprise-accounting-periodic.prisma"
       - "prisma/enterprise-finance-reporting.prisma"
       - ".github/workflows/generate-enterprise-accounting-migration.yml"
 
