@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRightLeft } from "lucide-react";
+import { ArrowRightLeft, CalendarClock } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import { EnterpriseAdvancedFinanceWorkspace } from "@/components/enterprise/professional/enterprise-advanced-finance-workspace";
 import { EnterpriseFinanceAccountingWorkspaceV3 } from "@/components/enterprise/professional/enterprise-finance-accounting-workspace-v3";
@@ -59,6 +59,18 @@ export async function EnterpriseFinanceModulePage({ moduleCode }: { moduleCode: 
               <span className="mt-1 block text-xs font-semibold text-dtsc-muted">{t("exchangeRatesDescription")}</span>
             </span>
             <ArrowRightLeft className="h-5 w-5 shrink-0 text-cyan-600" />
+          </Link>
+        </div>
+      ) : null}
+
+      {moduleCode === "FINANCE_ACCOUNTING" ? (
+        <div className="mx-auto mb-4 w-full max-w-[1600px] px-4 sm:px-6 lg:px-8">
+          <Link href="/enterprise-modules/FINANCE_ACCOUNTING/periodic-accounting" className="flex min-w-0 items-center justify-between gap-4 rounded-2xl border border-dtsc-blue/30 bg-dtsc-blue/10 px-4 py-3 text-dtsc-ink transition hover:border-dtsc-blue/60">
+            <span className="min-w-0">
+              <span className="block text-sm font-black">{locale === "en" ? "Periodic accounting" : "Comptabilité périodique"}</span>
+              <span className="mt-1 block text-xs font-semibold text-dtsc-muted">{locale === "en" ? "Recurring entries, accruals, deferrals, allocations and controlled auto-reversal." : "Écritures récurrentes, accruals, étalements, allocations et contrepassation automatique contrôlée."}</span>
+            </span>
+            <CalendarClock className="h-5 w-5 shrink-0 text-dtsc-blue" />
           </Link>
         </div>
       ) : null}
