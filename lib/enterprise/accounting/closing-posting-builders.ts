@@ -17,6 +17,20 @@ const MONETARY_ACCOUNT_SUBTYPES = [
   "CLEARING",
 ] as const;
 
+// Some monetary balances intentionally have no dedicated account subtype in the
+// immutable baseline. Resolve their eligibility through active semantic mappings
+// instead of treating every untyped asset/liability as monetary.
+const MONETARY_SEMANTIC_KEYS = [
+  "BORROWINGS",
+  "CUSTOMER_ADVANCES",
+  "SUPPLIER_ADVANCES",
+  "EMPLOYEE_PAYABLE",
+  "PAYROLL_WITHHOLDING_PAYABLE",
+  "SOCIAL_SECURITY_PAYABLE",
+  "ACCRUED_RECEIVABLES",
+  "ACCRUED_PAYABLES",
+] as const;
+
 function parseFxSourceId(sourceEntityId: string) {
   const separator = sourceEntityId.lastIndexOf(":");
   if (separator <= 0 || separator === sourceEntityId.length - 1) {
@@ -95,7 +109,19 @@ export const buildClosingFxRevaluationPosting: PostingBuilder = async (tx, input
       AND e."accountingDate" <= ${period.endDate}
       AND l."transactionCurrencyCode" = ${currencyCode}
       AND l."transactionAmount" IS NOT NULL
-      AND a."accountSubtype" IN (${Prisma.join([...MONETARY_ACCOUNT_SUBTYPES])})
+      AND (
+        a."accountSubtype" IN (${Prisma.join([...MONETARY_ACCOUNT_SUBTYPES])})
+        OR EXISTS (
+          SELECT 1
+          FROM "EnterpriseAccountMapping" m
+          WHERE m."organizationId" = a."organizationId"
+            AND m."ledgerAccountId" = a.id
+            AND m."mappingKey" IN (${Prisma.join([...MONETARY_SEMANTIC_KEYS])})
+            AND m."isActive" = TRUE
+            AND (m."effectiveFrom" IS NULL OR m."effectiveFrom" <= ${period.endDate})
+            AND (m."effectiveTo" IS NULL OR m."effectiveTo" >= ${period.endDate})
+        )
+      )
     GROUP BY
       l."ledgerAccountId",
       l."businessPartyId",
