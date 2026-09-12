@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { money, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
-import { postBusinessEvent } from "@/lib/enterprise/accounting/posting-service";
+import { postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
 
 function addMonthsUtc(date: Date, months: number) {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, 1));
@@ -25,14 +25,21 @@ export async function createAssetAccountingProfile(
     depreciationExpenseAccountId: string;
   },
 ) {
-  const profile = await prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx) => {
     const asset = await tx.enterpriseAsset.findFirst({ where: { id: assetId, organizationId, archivedAt: null } });
     if (!asset) throw new EnterpriseAccountingError("ASSET_NOT_FOUND", 404);
 
     const existing = await tx.enterpriseAssetAccountingProfile.findUnique({
       where: { organizationId_assetId: { organizationId, assetId } },
     });
-    if (existing) return existing;
+    if (existing) {
+      const posting = await postBusinessEventTx(tx, organizationId, actorUserId, {
+        postingEvent: "ASSET_CAPITALIZED",
+        sourceEntityType: "EnterpriseAssetAccountingProfile",
+        sourceEntityId: existing.id,
+      });
+      return { profile: existing, posting };
+    }
 
     const accountIds = [input.assetAccountId, input.accumulatedDepreciationAccountId, input.depreciationExpenseAccountId];
     const accounts = await tx.enterpriseLedgerAccount.findMany({
@@ -46,7 +53,7 @@ export async function createAssetAccountingProfile(
       throw new EnterpriseAccountingError("ASSET_DEPRECIATION_PARAMETERS_INVALID", 400);
     }
 
-    const created = await tx.enterpriseAssetAccountingProfile.create({
+    const profile = await tx.enterpriseAssetAccountingProfile.create({
       data: {
         organizationId,
         assetId: asset.id,
@@ -79,13 +86,13 @@ export async function createAssetAccountingProfile(
       const periodCode = `${scheduledDate.getUTCFullYear()}-${String(scheduledDate.getUTCMonth() + 1).padStart(2, "0")}`;
       schedules.push({
         organizationId,
-        assetAccountingProfileId: created.id,
+        assetAccountingProfileId: profile.id,
         periodCode,
         scheduledDate,
         openingNetBookValue,
         depreciationAmount: amount,
         closingNetBookValue,
-        idempotencyKey: `${organizationId}:asset-depreciation:${created.id}:${periodCode}`,
+        idempotencyKey: `${organizationId}:asset-depreciation:${profile.id}:${periodCode}`,
       });
     }
 
@@ -93,7 +100,7 @@ export async function createAssetAccountingProfile(
     await publishFinanceEvent(tx, {
       organizationId,
       entityType: "EnterpriseAssetAccountingProfile",
-      entityId: created.id,
+      entityId: profile.id,
       eventType: "ASSET_ACCOUNTING_PROFILE_CREATED",
       summary: `Asset ${asset.code} accounting profile created`,
       actorUserId,
@@ -105,19 +112,17 @@ export async function createAssetAccountingProfile(
         currency: input.currencyCode,
       },
     });
-    return created;
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 });
-
-  const posting = await postBusinessEvent(organizationId, actorUserId, {
-    postingEvent: "ASSET_CAPITALIZED",
-    sourceEntityType: "EnterpriseAssetAccountingProfile",
-    sourceEntityId: profile.id,
-  });
-  return { profile, posting };
+    const posting = await postBusinessEventTx(tx, organizationId, actorUserId, {
+      postingEvent: "ASSET_CAPITALIZED",
+      sourceEntityType: "EnterpriseAssetAccountingProfile",
+      sourceEntityId: profile.id,
+    });
+    return { profile, posting };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
 }
 
 export async function postAssetDepreciation(organizationId: string, scheduleId: string, actorUserId: string) {
-  const approved = await prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseAssetDepreciationSchedule" WHERE id = ${scheduleId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const schedule = await tx.enterpriseAssetDepreciationSchedule.findFirst({
       where: { id: scheduleId, organizationId },
@@ -125,50 +130,48 @@ export async function postAssetDepreciation(organizationId: string, scheduleId: 
     });
     if (!schedule) throw new EnterpriseAccountingError("ASSET_DEPRECIATION_SCHEDULE_NOT_FOUND", 404);
     if (schedule.status === "POSTED") return schedule;
-    if (schedule.status !== "PLANNED" || schedule.profile.status !== "ACTIVE") {
+    if (!["PLANNED", "APPROVED"].includes(schedule.status) || schedule.profile.status !== "ACTIVE") {
       throw new EnterpriseAccountingError("ASSET_DEPRECIATION_NOT_ELIGIBLE", 409);
     }
-    return tx.enterpriseAssetDepreciationSchedule.update({ where: { id: schedule.id }, data: { status: "APPROVED" } });
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
-  if (approved.status === "POSTED") return approved;
-  const posting = await postBusinessEvent(organizationId, actorUserId, {
-    postingEvent: "ASSET_DEPRECIATION_POSTED",
-    sourceEntityType: "EnterpriseAssetDepreciationSchedule",
-    sourceEntityId: approved.id,
-  });
-
-  return prisma.$transaction(async (tx) => {
-    await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseAssetDepreciationSchedule" WHERE id = ${approved.id} AND "organizationId" = ${organizationId} FOR UPDATE`);
-    const current = await tx.enterpriseAssetDepreciationSchedule.findFirstOrThrow({ where: { id: approved.id, organizationId } });
-    if (current.status === "POSTED") return current;
-
-    await tx.enterpriseAssetDepreciationEntry.create({
-      data: {
+    const posting = await postBusinessEventTx(tx, organizationId, actorUserId, {
+      postingEvent: "ASSET_DEPRECIATION_POSTED",
+      sourceEntityType: "EnterpriseAssetDepreciationSchedule",
+      sourceEntityId: schedule.id,
+    });
+    await tx.enterpriseAssetDepreciationEntry.upsert({
+      where: {
+        organizationId_depreciationScheduleId: {
+          organizationId,
+          depreciationScheduleId: schedule.id,
+        },
+      },
+      update: {},
+      create: {
         organizationId,
-        depreciationScheduleId: current.id,
+        depreciationScheduleId: schedule.id,
         journalEntryId: posting.entry.id,
-        amount: current.depreciationAmount,
+        amount: schedule.depreciationAmount,
         postedByUserId: actorUserId,
       },
     });
     const posted = await tx.enterpriseAssetDepreciationSchedule.update({
-      where: { id: current.id },
+      where: { id: schedule.id },
       data: { status: "POSTED", journalEntryId: posting.entry.id, postedAt: new Date() },
     });
     await publishFinanceEvent(tx, {
       organizationId,
       entityType: "EnterpriseAssetDepreciationSchedule",
-      entityId: current.id,
+      entityId: schedule.id,
       eventType: "ASSET_DEPRECIATION_POSTED",
-      summary: `Asset depreciation ${current.periodCode} posted`,
+      summary: `Asset depreciation ${schedule.periodCode} posted`,
       actorUserId,
-      fromStatus: current.status,
+      fromStatus: schedule.status,
       toStatus: "POSTED",
-      metadataJson: { journalEntryId: posting.entry.id, amount: current.depreciationAmount.toFixed() },
+      metadataJson: { journalEntryId: posting.entry.id, amount: schedule.depreciationAmount.toFixed() },
     });
     return posted;
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
 }
 
 export async function runDueAssetDepreciation(organizationId: string, actorUserId: string, throughDate: Date) {

@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { idempotencyKey, money, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { valueInventoryIssue } from "@/lib/enterprise/accounting/inventory-accounting-service";
-import { postBusinessEvent } from "@/lib/enterprise/accounting/posting-service";
+import { postBusinessEvent, postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
 import { prisma } from "@/lib/prisma";
 
 async function getRetailSaleAccountingSource(organizationId: string, saleId: string) {
@@ -96,7 +96,7 @@ export async function valueRetailInventoryReturn(
   stockMovementId: string,
   actorUserId: string,
 ) {
-  const event = await prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseStockMovement" WHERE id = ${stockMovementId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const movement = await tx.enterpriseStockMovement.findFirst({
       where: {
@@ -143,71 +143,73 @@ export async function valueRetailInventoryReturn(
       postingEvent: "RETAIL_POS_INVENTORY_RETURN",
       postingVersion: 1,
     });
-    const existing = await tx.enterpriseInventoryAccountingEvent.findUnique({
+    let event = await tx.enterpriseInventoryAccountingEvent.findUnique({
       where: { organizationId_idempotencyKey: { organizationId, idempotencyKey: stableKey } },
     });
-    if (existing) return existing;
 
-    const totalCost = money(movement.quantity.times(originalIssue.unitCost));
-    await tx.enterpriseInventoryCostLayer.create({
-      data: {
+    if (!event) {
+      const totalCost = money(movement.quantity.times(originalIssue.unitCost));
+      await tx.enterpriseInventoryCostLayer.create({
+        data: {
+          organizationId,
+          inventoryItemId: movement.inventoryItemId,
+          warehouseId: movement.warehouseId,
+          sourceMovementId: movement.id,
+          valuationMethod: "WEIGHTED_AVERAGE",
+          quantity: movement.quantity,
+          remainingQuantity: movement.quantity,
+          unitCost: originalIssue.unitCost,
+          totalCost,
+          currencyCode: originalIssue.currencyCode,
+          effectiveAt: movement.occurredAt,
+        },
+      });
+      event = await tx.enterpriseInventoryAccountingEvent.create({
+        data: {
+          organizationId,
+          inventoryItemId: movement.inventoryItemId,
+          stockMovementId: movement.id,
+          eventType: "RETAIL_RETURN",
+          quantity: movement.quantity,
+          unitCost: originalIssue.unitCost,
+          totalCost,
+          currencyCode: originalIssue.currencyCode,
+          idempotencyKey: stableKey,
+          status: "APPROVED",
+        },
+      });
+      await publishFinanceEvent(tx, {
         organizationId,
-        inventoryItemId: movement.inventoryItemId,
-        warehouseId: movement.warehouseId,
-        sourceMovementId: movement.id,
-        valuationMethod: "WEIGHTED_AVERAGE",
-        quantity: movement.quantity,
-        remainingQuantity: movement.quantity,
-        unitCost: originalIssue.unitCost,
-        totalCost,
-        currencyCode: originalIssue.currencyCode,
-        effectiveAt: movement.occurredAt,
-      },
-    });
-    const created = await tx.enterpriseInventoryAccountingEvent.create({
-      data: {
-        organizationId,
-        inventoryItemId: movement.inventoryItemId,
-        stockMovementId: movement.id,
-        eventType: "RETAIL_RETURN",
-        quantity: movement.quantity,
-        unitCost: originalIssue.unitCost,
-        totalCost,
-        currencyCode: originalIssue.currencyCode,
-        idempotencyKey: stableKey,
-        status: "APPROVED",
-      },
-    });
-    await publishFinanceEvent(tx, {
-      organizationId,
-      entityType: "EnterpriseInventoryAccountingEvent",
-      entityId: created.id,
-      eventType: "RETAIL_POS_INVENTORY_RETURN",
-      summary: `Retail inventory return ${movement.sourceEntityId}:${movement.sourceLineId}`,
-      actorUserId,
-      toStatus: "APPROVED",
-      metadataJson: {
-        stockMovementId: movement.id,
-        originalStockMovementId: originalMovement.id,
-        quantity: movement.quantity.toFixed(),
-        unitCost: originalIssue.unitCost.toFixed(),
-        totalCost: totalCost.toFixed(),
-        currency: originalIssue.currencyCode,
-      },
-    });
-    return created;
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 });
+        entityType: "EnterpriseInventoryAccountingEvent",
+        entityId: event.id,
+        eventType: "RETAIL_POS_INVENTORY_RETURN",
+        summary: `Retail inventory return ${movement.sourceEntityId}:${movement.sourceLineId}`,
+        actorUserId,
+        toStatus: "APPROVED",
+        metadataJson: {
+          stockMovementId: movement.id,
+          originalStockMovementId: originalMovement.id,
+          quantity: movement.quantity.toFixed(),
+          unitCost: originalIssue.unitCost.toFixed(),
+          totalCost: totalCost.toFixed(),
+          currency: originalIssue.currencyCode,
+        },
+      });
+    }
 
-  const posting = await postBusinessEvent(organizationId, actorUserId, {
-    postingEvent: "RETAIL_POS_INVENTORY_RETURN",
-    sourceEntityType: "EnterpriseInventoryAccountingEvent",
-    sourceEntityId: event.id,
-  });
-  const updated = await prisma.enterpriseInventoryAccountingEvent.update({
-    where: { id: event.id },
-    data: { status: "POSTED", journalEntryId: posting.entry.id },
-  });
-  return { event: updated, posting };
+    const posting = await postBusinessEventTx(tx, organizationId, actorUserId, {
+      postingEvent: "RETAIL_POS_INVENTORY_RETURN",
+      sourceEntityType: "EnterpriseInventoryAccountingEvent",
+      sourceEntityId: event.id,
+    });
+    const postedEvent = event.status === "POSTED" && event.journalEntryId === posting.entry.id
+      ? event
+      : await tx.enterpriseInventoryAccountingEvent.update({
+          where: { id: event.id },
+          data: { status: "POSTED", journalEntryId: posting.entry.id },
+        });
+    return { event: postedEvent, posting };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
 }
 
 export async function finalizeRetailReturnAccounting(
