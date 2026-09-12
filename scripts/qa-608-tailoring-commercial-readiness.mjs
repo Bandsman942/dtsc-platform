@@ -72,7 +72,7 @@ has(aiExecutors, "TAILORING_AI_ACTION_EXECUTORS", "Tailoring action executors mu
 const readiness = JSON.parse(read(readinessRegistry));
 const profile = readiness.profiles.find((item) => item.sectorCode === "MANUFACTURING" && item.businessProfileCode === "TAILORING_APPAREL");
 check(Boolean(profile), "Commercial readiness registry must include MANUFACTURING -> TAILORING_APPAREL");
-check(profile?.commercializationStatus === "READY", "Tailoring must stay READY until CI + OWNER_E2E prove COMMERCIAL_READY");
+check(profile?.commercializationStatus === "COMMERCIAL_READY", "Tailoring must be COMMERCIAL_READY after CI_PROVEN + OWNER_E2E");
 check(profile?.releaseCriteria?.includes("OWNER_END_TO_END_ACCEPTANCE"), "Tailoring promotion must require owner E2E");
 check(profile?.releaseCriteria?.includes("NO_COMMON_ERP_DUPLICATION"), "Tailoring readiness must enforce canonical ERP reuse");
 
