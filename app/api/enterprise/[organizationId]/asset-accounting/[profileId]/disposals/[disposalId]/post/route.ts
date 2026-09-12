@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { c5FinanceErrorResponse } from "@/lib/enterprise/accounting/c5-error-response";
 import { assetDisposalPostingSchema } from "@/lib/enterprise/accounting/closing-operations-schemas";
 import { finalizeAssetDisposal } from "@/lib/enterprise/accounting/closing-operations-service";
-import { authorizeFinanceRequest, financeErrorResponse } from "@/lib/enterprise/accounting/http";
+import { authorizeFinanceRequest } from "@/lib/enterprise/accounting/http";
 
 type Params = { params: Promise<{ organizationId: string; profileId: string; disposalId: string }> };
 
@@ -27,6 +28,6 @@ export async function POST(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "asset-disposal-posting" } });
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
-    return financeErrorResponse(error, "ASSET_DISPOSAL_POSTING_FAILED");
+    return c5FinanceErrorResponse(error, "ASSET_DISPOSAL_POSTING_FAILED");
   }
 }
