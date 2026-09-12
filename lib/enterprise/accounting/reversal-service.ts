@@ -5,7 +5,7 @@ import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { financeReference, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { getPostingPeriod } from "@/lib/enterprise/accounting/periods";
 
-export type JournalReversalAuthorization = "USER" | "APPROVED_PERIODIC_TEMPLATE";
+export type JournalReversalAuthorization = "USER" | "APPROVED_PERIODIC_TEMPLATE" | "SYSTEM_CLOSING";
 
 export async function reverseJournalEntryTx(
   tx: Prisma.TransactionClient,
@@ -68,7 +68,6 @@ export async function reverseJournalEntryTx(
       reversalOfEntryId: original.id,
       lines: {
         create: original.lines.map((line) => ({
-          organizationId,
           ledgerAccountId: line.ledgerAccountId,
           businessPartyId: line.businessPartyId,
           projectId: line.projectId,

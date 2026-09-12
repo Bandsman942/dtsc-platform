@@ -21,6 +21,11 @@ import {
   buildPayrollPosting,
   buildSupplierCreditNotePosting,
 } from "@/lib/enterprise/accounting/domain-posting-builders";
+import {
+  buildAssetDisposalPosting,
+  buildClosingFxRevaluationPosting,
+  buildYearEndClosingPosting,
+} from "@/lib/enterprise/accounting/closing-posting-builders";
 import { buildHealthWriteOffPosting } from "@/lib/enterprise/accounting/sector-adapters/health";
 import { buildPharmacySectorInventoryPosting } from "@/lib/enterprise/accounting/sector-adapters/pharmacy";
 import { buildRetailPosReturnPosting } from "@/lib/enterprise/accounting/sector-adapters/retail-return";
@@ -55,6 +60,9 @@ export const ENTERPRISE_POSTING_REGISTRY: Record<PostingEvent, PostingBuilder> =
   INVENTORY_ISSUE_VALUED: (tx, input) => buildInventoryAccountingPosting(tx, input, "ISSUE"),
   ASSET_CAPITALIZED: buildAssetCapitalizationPosting,
   ASSET_DEPRECIATION_POSTED: buildDepreciationPosting,
+  ASSET_DISPOSAL_POSTED: buildAssetDisposalPosting,
+  FX_CLOSING_REVALUATION_POSTED: buildClosingFxRevaluationPosting,
+  YEAR_END_CLOSED: buildYearEndClosingPosting,
   CASH_VARIANCE_POSTED: buildCashVariancePosting,
   BANK_CHARGE_POSTED: buildBankChargePosting,
   OPENING_BALANCE_POSTED: buildOpeningBalancePosting,

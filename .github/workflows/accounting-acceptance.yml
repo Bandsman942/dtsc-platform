@@ -17,8 +17,14 @@ on:
       - "app/api/enterprise/**/fiscal-years/**"
       - "app/api/enterprise/**/fiscal-periods/**"
       - "app/enterprise-modules/FINANCE_ACCOUNTING/**"
+      - "app/enterprise-modules/FINANCE_CLOSE/**"
+      - "app/enterprise-modules/FINANCE_ASSETS/**"
       - "components/enterprise/enterprise-finance-module-page.tsx"
+      - "components/enterprise/enterprise-closing-operations-page.tsx"
+      - "components/enterprise/enterprise-asset-disposals-page.tsx"
       - "components/enterprise/professional/enterprise-accounting-onboarding-panel.tsx"
+      - "components/enterprise/professional/closing-operations-panel.tsx"
+      - "components/enterprise/professional/asset-disposal-panel.tsx"
       - "lib/enterprise/accounting/**"
       - "lib/enterprise/sector-convergence/**"
       - "lib/user-guides/accounting-onboarding-guide.ts"
@@ -29,11 +35,13 @@ on:
       - "scripts/seed-erp-professional-e2e.mjs"
       - "scripts/qa-accounting-program-150-155.mjs"
       - "scripts/qa-accounting-acceptance-contract.mjs"
+      - "scripts/qa-accounting-626-closing.mjs"
       - "scripts/qa-erp-cross-module-finance.mjs"
       - "scripts/ci-upstash-redis-rest-proxy.mjs"
       - "scripts/qa-ci-auth-rate-limit-provisioning.mjs"
       - "tests/e2e/accounting-onboarding.spec.mjs"
       - "tests/e2e/erp-cross-module-finance.spec.mjs"
+      - "tests/e2e/accounting-c5-closing.spec.mjs"
       - "tests/e2e/accounting-z-close-protection.spec.mjs"
       - "playwright.config.mjs"
       - ".github/workflows/accounting-acceptance.yml"
@@ -47,7 +55,7 @@ concurrency:
 
 jobs:
   acceptance:
-    name: Accounting onboarding, cross-module posting, close & history protection
+    name: Accounting onboarding, cross-module posting, C5 close, history protection
     runs-on: ubuntu-latest
     timeout-minutes: 50
     services:
@@ -133,6 +141,7 @@ jobs:
         run: |
           node scripts/qa-accounting-program-150-155.mjs
           node scripts/qa-accounting-acceptance-contract.mjs
+          node scripts/qa-accounting-626-closing.mjs
           node scripts/qa-erp-cross-module-finance.mjs
           node scripts/qa-ci-auth-rate-limit-provisioning.mjs
       - name: Build production application
@@ -166,6 +175,11 @@ jobs:
         run: |
           set -o pipefail
           pnpm exec playwright test tests/e2e/erp-cross-module-finance.spec.mjs --workers=1 2>&1 | tee /tmp/dtsc-erp-cross-module-playwright.log
+      - name: Accounting C5 closing acceptance
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm exec playwright test tests/e2e/accounting-c5-closing.spec.mjs --workers=1 2>&1 | tee /tmp/dtsc-accounting-c5-playwright.log
       - name: Reset isolated Redis state before close acceptance
         run: |
           curl --fail --silent --show-error \
@@ -218,5 +232,6 @@ jobs:
             /tmp/dtsc-accounting-next-close.log
             /tmp/dtsc-accounting-onboarding-playwright.log
             /tmp/dtsc-erp-cross-module-playwright.log
+            /tmp/dtsc-accounting-c5-playwright.log
             /tmp/dtsc-accounting-close-playwright.log
             /tmp/dtsc-ci-redis-rest.log

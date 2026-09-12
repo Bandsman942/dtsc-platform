@@ -3,6 +3,7 @@ import "./qa-accounting-598-gl-workbench.mjs";
 import "./qa-accounting-622-atomicity.mjs";
 import "./qa-accounting-624-pos-atomicity.mjs";
 import "./qa-accounting-625-periodic.mjs";
+import "./qa-accounting-626-closing.mjs";
 import "./qa-scale4f-durable-bulk-finance.mjs";
 import "./qa-accounting-framework-registry.mjs";
 import "./qa-syscohada-source-provenance.mjs";
@@ -24,6 +25,10 @@ requirePaths([
   "lib/enterprise/accounting/reversal-service.ts",
   "lib/enterprise/accounting/periodic-accounting-service.ts",
   "lib/enterprise/accounting/periodic-accounting-schemas.ts",
+  "lib/enterprise/accounting/closing-posting-builders.ts",
+  "lib/enterprise/accounting/closing-operations-service.ts",
+  "lib/enterprise/accounting/closing-operations-schemas.ts",
+  "lib/enterprise/accounting/c5-semantic-aliases.ts",
   "lib/enterprise/accounting/chart-template-registry.ts",
   "lib/enterprise/accounting/chart-template-application-service.ts",
   "lib/enterprise/accounting/semantic-account-registry.ts",
@@ -44,6 +49,8 @@ requirePaths([
   "components/enterprise/professional/enterprise-finance-accounting-workspace-v3.tsx",
   "app/api/enterprise/[organizationId]/accounting-query/route.ts",
   "app/api/enterprise/[organizationId]/periodic-accounting/route.ts",
+  "app/api/enterprise/[organizationId]/financial-close/fx-revaluation/route.ts",
+  "app/api/enterprise/[organizationId]/financial-close/year-end/route.ts",
   "scripts/accounting/verify-syscohada-source.mjs",
   "scripts/accounting/syscohada-dataset-lib.mjs",
   "scripts/accounting/build-syscohada-dataset.mjs",
@@ -52,6 +59,7 @@ requirePaths([
   "scripts/qa-accounting-622-atomicity.mjs",
   "scripts/qa-accounting-624-pos-atomicity.mjs",
   "scripts/qa-accounting-625-periodic.mjs",
+  "scripts/qa-accounting-626-closing.mjs",
   "scripts/qa-finance-client-ux.mjs",
   "scripts/qa-erp-stabilization-final.mjs",
   "scripts/qa-erp-stabilization-finance-readiness.mjs",
@@ -65,6 +73,7 @@ requireTokens("lib/enterprise/accounting/journal-service.ts", ["POSTED_ENTRY_IMM
 requireTokens("lib/enterprise/accounting/accounting-query-service.ts", ["getAccountingGeneralLedger", "getAccountingTrialBalance", "openingBalance", "closingBalance", "LEDGER_BEARING_ENTRY_STATUSES", "REVERSED"]);
 requireTokens("lib/enterprise/accounting/reversal-service.ts", ["JOURNAL_ENTRY_REVERSED", "reversalOfEntryId", "reversedAt", "reverseJournalEntryTx"]);
 requireTokens("lib/enterprise/accounting/periodic-accounting-service.ts", ["EnterprisePeriodicAccountingTemplate", "occurrenceKey", "reverseJournalEntryTx", "validateAccountingDimensions", "TransactionIsolationLevel.Serializable"]);
+requireTokens("lib/enterprise/accounting/closing-operations-service.ts", ["FX_CLOSING_REVALUATION_POSTED", "YEAR_END_CLOSED", "ASSET_DISPOSAL_POSTED", "SYSTEM_CLOSING", "TransactionIsolationLevel.Serializable"]);
 requireTokens("lib/enterprise/accounting/chart-template-registry.ts", ["ACCOUNTING_FRAMEWORKS", "CHART_TEMPLATES", "OHADA_AUDCIF", "DEFAULT_ACCOUNTING_TEMPLATE_REFERENCE", "STATEMENT_NORMAL_BALANCES", "validateChartTemplate", "validateRegisteredChartTemplates", "deepFreeze"]);
 requireTokens("lib/enterprise/accounting/chart-template-application-service.ts", ["CHART_TEMPLATE_NOT_APPLICABLE", "status: \"POSTED\"", "TransactionIsolationLevel.Serializable", "adoptDraftChartTemplate", "chartTemplateReference(template)"]);
 requireTokens("lib/enterprise/accounting/semantic-account-resolver.ts", ["accountingDate", "effectiveFrom", "effectiveTo", "POSTING_ACCOUNT_TYPE_INCOMPATIBLE"]);

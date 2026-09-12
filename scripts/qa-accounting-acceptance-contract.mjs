@@ -14,6 +14,7 @@ const requireTokens = (file, tokens) => {
 };
 
 const onboarding = "tests/e2e/accounting-onboarding.spec.mjs";
+const c5 = "tests/e2e/accounting-c5-closing.spec.mjs";
 const close = "tests/e2e/accounting-z-close-protection.spec.mjs";
 const workflow = ".github/workflows/accounting-acceptance.yml";
 const templatePath = "lib/enterprise/accounting/templates/syscohada/syscohada.bootstrap.v0.1.0.json";
@@ -22,15 +23,26 @@ const strictPositivePostingFiles = [
   "lib/enterprise/accounting/domain-posting-builders.ts",
   "lib/enterprise/accounting/sector-adapters/pharmacy.ts",
 ];
-for (const file of [onboarding, close, workflow, templatePath, ...strictPositivePostingFiles]) requireFile(file);
+for (const file of [onboarding, c5, close, workflow, templatePath, ...strictPositivePostingFiles]) requireFile(file);
 
 requireTokens(onboarding, [
   "390", "768", "OHADA_SYSCOHADA@0.1.0", "FUNCTIONAL_CURRENCY_REQUIRED", "OPEN_FISCAL_PERIOD_REQUIRED",
   "ACCOUNTING_TEMPLATE_PRODUCTION_READY", "BALANCE_SHEET", "INCOME_STATEMENT", "IS_SALES_GOODS", "normalBalance",
   "SALES_INVOICE_POSTED", "enterprisePostingBatch", "APPLY_SAFE_TEMPLATE_UPGRADE", "server RBAC rejects a non-member", "English tablet onboarding",
 ]);
+requireTokens(c5, [
+  "Promise.all", "FX_CLOSING_REVALUATION_POSTED", "enterpriseExchangeRateSnapshot", "CLOSING:DIRECT:",
+  "FINANCE_PERIOD_CLOSED", "c5-other-tenant", "ASSET_DISPOSAL_POSTED", 'toBe("DISPOSED")', 'toBe("CANCELLED")',
+  "YEAR_END_CLOSED", "RETAINED_EARNINGS", "pnlBalance", "retainedOpening", "yearEndRetry",
+]);
 requireTokens(close, ["financial-close", 'action: "SUBMIT"', 'action: "APPROVE"', 'action: "CLOSE"', 'toBe("CLOSED")', "FINANCE_PERIOD_CLOSED", "blockedEntryCount", "originalSnapshot", "historical.lines"]);
-requireTokens(workflow, ["Accounting onboarding & production-like acceptance", "pgvector/pgvector:pg16", "pnpm prisma:deploy", "node scripts/seed-erp-professional-e2e.mjs", "node scripts/qa-accounting-program-150-155.mjs", "node scripts/qa-accounting-acceptance-contract.mjs", "pnpm build", "playwright install --with-deps chromium", "pnpm exec next start", "accounting-onboarding.spec.mjs", "accounting-z-close-protection.spec.mjs"]);
+requireTokens(workflow, [
+  "Accounting onboarding & production-like acceptance", "pgvector/pgvector:pg16", "pnpm prisma:deploy",
+  "node scripts/seed-erp-professional-e2e.mjs", "node scripts/qa-accounting-program-150-155.mjs",
+  "node scripts/qa-accounting-acceptance-contract.mjs", "node scripts/qa-accounting-626-closing.mjs", "pnpm build",
+  "playwright install --with-deps chromium", "pnpm exec next start", "accounting-onboarding.spec.mjs",
+  "accounting-c5-closing.spec.mjs", "accounting-z-close-protection.spec.mjs",
+]);
 
 if (exists(workflow)) {
   const content = read(workflow);
