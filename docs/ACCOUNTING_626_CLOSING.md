@@ -22,7 +22,7 @@ Ils passent tous par le moteur canonique de posting et conservent son idempotenc
 
 ## Réévaluation FX de clôture
 
-Le traitement reçoit une période et une devise étrangère. Il ne réévalue que les comptes monétaires pris en charge par C5. Les écritures `POSTED` et les originaux ensuite `REVERSED` restent dans l’historique utilisé pour le calcul ; leur contrepassation séparée neutralise ensuite l’impact au bon moment.
+Le traitement reçoit une période et une devise étrangère. Il ne réévalue que les comptes monétaires pris en charge par C5. L’éligibilité combine les sous-types monétaires canoniques et certains mappings monétaires actifs à la date de clôture (`BORROWINGS`, avances, dettes sociales/salariales et accruals), sans assimiler automatiquement tout actif ou passif non typé à un poste monétaire. Les écritures `POSTED` et les originaux ensuite `REVERSED` restent dans l’historique utilisé pour le calcul ; leur contrepassation séparée neutralise ensuite l’impact au bon moment.
 
 Pour chaque solde monétaire concerné, le service :
 
@@ -36,15 +36,17 @@ Pour chaque solde monétaire concerné, le service :
 
 Si aucune période suivante ouverte n’existe, le traitement est refusé avec `FX_REVALUATION_NEXT_OPEN_PERIOD_REQUIRED`. Il n’existe donc pas d’écriture FX partielle sans contrepassation future contrôlée.
 
+Les opérations C5 utilisent des transactions `Serializable` avec retry borné des conflits PostgreSQL/Prisma de sérialisation ou d’unicité (`P2034` / `P2002`). Cela permet à deux appels concurrents équivalents de converger vers la même écriture idempotente au lieu d’exposer une erreur de concurrence à l’utilisateur.
+
 ## Clôture annuelle et report à nouveau
 
 La clôture annuelle agrège les soldes des comptes de produits et charges de l’exercice et les solde vers le mapping sémantique `RETAINED_EARNINGS`.
 
 Le grand livre DTSC étant continu, C5 ne recrée pas artificiellement les soldes du bilan dans un faux journal d’ouverture. Les actifs, passifs et capitaux propres continuent naturellement dans le GL ; seule la performance de l’exercice est transférée vers le report à nouveau.
 
-Le traitement exige un exercice suivant ouvert afin de préserver la continuité opérationnelle. L’absence d’exercice/période suivante utilisable est bloquée par `YEAR_END_NEXT_OPEN_FISCAL_YEAR_REQUIRED`.
+Le traitement exige un exercice suivant ouvert avec au moins une période ouverte afin de préserver la continuité opérationnelle. L’absence d’exercice/période suivante utilisable est bloquée par `YEAR_END_NEXT_OPEN_FISCAL_YEAR_REQUIRED`.
 
-Un retry du même événement ne doit pas créer une seconde écriture de clôture : l’idempotence reste celle du moteur `EnterprisePostingBatch`/`EnterpriseJournalEntry`.
+Un retry du même événement ne crée pas une seconde écriture de clôture : l’idempotence reste celle du moteur `EnterprisePostingBatch`/`EnterpriseJournalEntry`.
 
 ## Cession d’actif
 
@@ -58,13 +60,13 @@ L’écriture de cession :
 - comptabilise le gain ou la perte résiduelle ;
 - conserve l’identifiant de l’actif comme dimension de la ligne quand applicable.
 
-La base historique de l’actif reste en devise fonctionnelle selon le profil comptable. Le produit de cession peut être exprimé dans une autre devise et utilise le moteur de conversion/snapshot à la date de cession.
+La valeur brute et les amortissements sont relus dans le grand livre en devise fonctionnelle afin de ne jamais recalculer silencieusement la base historique. Le brouillon de cession utilise actuellement **la devise du profil comptable de l’actif** pour son produit ; cette devise peut elle-même être différente de la devise fonctionnelle de l’entreprise. Dans ce cas, le moteur convertit le produit et snapshotte le taux applicable à la date de cession. L’interface affiche donc cette devise en lecture seule au lieu de suggérer qu’une devise arbitraire différente du profil peut être choisie.
 
 Après posting réussi :
 
 - le brouillon passe à `POSTED` avec son `journalEntryId` ;
 - le profil comptable passe à `DISPOSED` ;
-- les échéances d’amortissement futures encore planifiées sont marquées `CANCELLED` ;
+- les échéances d’amortissement non postées à compter de la date de cession, date incluse, sont marquées `CANCELLED` ;
 - les amortissements déjà `POSTED` ne sont jamais supprimés ni réécrits.
 
 ## Gain/perte de cession
@@ -81,7 +83,7 @@ La contrepassation C5 s’exécute dans la même transaction sérialisable que l
 
 ## Permissions et multi-tenant
 
-Les routes sont tenant-scoped par `organizationId`.
+Les routes sont tenant-scoped par `organizationId` et chaque transaction C5 revalide l’entreprise cliente active avant mutation.
 
 - lecture de l’espace Opérations de clôture : `FINANCE_CLOSE:view` ;
 - réévaluation FX / year-end : `FINANCE_CLOSE:close` ;
@@ -89,6 +91,8 @@ Les routes sont tenant-scoped par `organizationId`.
 - comptabilisation d’une cession : `FINANCE_ASSETS:post`.
 
 Les pages serveur revalident session active, membership, entreprise cliente active, entitlement et capacité du module. Les API restent l’autorité finale même lorsque l’UI masque une action non autorisée.
+
+Les erreurs C5 connues restent spécifiques : période suivante manquante, exercice non clôturable, base comptable de cession incohérente, conflit de révision ou mapping absent ne sont pas remplacés par un message générique.
 
 ## Interfaces
 
@@ -110,7 +114,7 @@ L’écran permet de :
 L’écran permet de :
 
 - préparer un brouillon de cession pour un actif éligible ;
-- saisir date, produit, devise et motif ;
+- saisir date, produit et motif, la devise étant héritée du profil comptable ;
 - consulter valeur brute, amortissements cumulés, VNC et gain/perte ;
 - comptabiliser le brouillon ;
 - constater l’écriture finale et l’arrêt des amortissements futurs.
@@ -134,23 +138,28 @@ Restent hors #626 :
 - réévaluation d’actifs non monétaires ;
 - réécriture de la baseline SYSCOHADA 0.1.0.
 
-## QA permanente
+## QA permanente et acceptance production-like
 
 `scripts/qa-accounting-626-closing.mjs` verrouille notamment :
 
 - les trois événements C5 ;
 - les builders et services canoniques ;
-- la sélection des postes monétaires ;
+- la sélection des postes monétaires par sous-type et mapping effectif ;
 - l’utilisation des snapshots de taux ;
 - le report à nouveau ;
 - le reversal système lié ;
-- le posting final de cession ;
+- le retry borné de concurrence ;
+- le posting final de cession et l’annulation des échéances futures ;
+- les erreurs backend spécifiques ;
 - l’absence de numéros de compte réglementaires hardcodés dans les builders ;
 - les routes RBAC ;
 - les deux interfaces et leurs pages protégées ;
-- les liens d’accès depuis les modules Finance.
+- les liens d’accès depuis les modules Finance ;
+- la présence du scénario C5 dans le workflow production-like.
 
-La QA #626 est intégrée à `scripts/qa-enterprise-accounting-checks.mjs`, donc à la chaîne de régression Accounting.
+`tests/e2e/accounting-c5-closing.spec.mjs` s’exécute dans le workflow `Accounting onboarding & production-like acceptance` contre PostgreSQL reconstruit depuis zéro et l’application Next.js buildée puis démarrée avec `next start`. Il couvre notamment la concurrence FX, l’idempotence, le snapshot du taux, le reversal, la période fermée, l’isolation tenant, la cession d’actif, le year-end et la réconciliation des P&L avec le report à nouveau.
+
+La QA #626 est également intégrée à `scripts/qa-enterprise-accounting-checks.mjs`, donc à la chaîne de régression Accounting.
 
 ## Parcours OWNER_E2E #626
 
