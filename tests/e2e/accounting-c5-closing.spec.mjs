@@ -72,7 +72,6 @@ async function createPostedEntry({
       postedAt: new Date(),
       lines: {
         create: lines.map((line) => ({
-          organizationId,
           ledgerAccountId: line.ledgerAccountId,
           businessPartyId: line.businessPartyId || null,
           projectId: line.projectId || null,
