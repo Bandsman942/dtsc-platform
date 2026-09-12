@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
-import { publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
+import { assertActiveClientOrganization, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
 import { reverseJournalEntryTx } from "@/lib/enterprise/accounting/reversal-service";
 
@@ -9,12 +9,34 @@ function fxSourceId(fiscalPeriodId: string, currencyCode: string) {
   return `${fiscalPeriodId}:${currencyCode.trim().toUpperCase()}`;
 }
 
+function prismaErrorCode(error: unknown) {
+  return typeof error === "object" && error && "code" in error
+    ? String((error as { code?: unknown }).code || "")
+    : "";
+}
+
+async function c5SerializableRetry<T>(work: () => Promise<T>, maxAttempts = 3): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await work();
+    } catch (error) {
+      lastError = error;
+      const code = prismaErrorCode(error);
+      if (!["P2034", "P2002"].includes(code) || attempt === maxAttempts) throw error;
+      await new Promise((resolve) => setTimeout(resolve, attempt * 25));
+    }
+  }
+  throw lastError;
+}
+
 export async function runClosingFxRevaluation(
   organizationId: string,
   actorUserId: string,
   input: { fiscalPeriodId: string; currencyCode: string },
 ) {
-  return prisma.$transaction(async (tx) => {
+  return c5SerializableRetry(() => prisma.$transaction(async (tx) => {
+    await assertActiveClientOrganization(tx, organizationId);
     const period = await tx.enterpriseFiscalPeriod.findFirst({
       where: { id: input.fiscalPeriodId, organizationId },
       include: { fiscalYear: true },
@@ -67,7 +89,7 @@ export async function runClosingFxRevaluation(
       },
     });
     return { period, posting, reversal, nextPeriod };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 }));
 }
 
 export async function closeFiscalYearWithRetainedEarnings(
@@ -75,7 +97,8 @@ export async function closeFiscalYearWithRetainedEarnings(
   fiscalYearId: string,
   actorUserId: string,
 ) {
-  return prisma.$transaction(async (tx) => {
+  return c5SerializableRetry(() => prisma.$transaction(async (tx) => {
+    await assertActiveClientOrganization(tx, organizationId);
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseFiscalYear" WHERE id = ${fiscalYearId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const fiscalYear = await tx.enterpriseFiscalYear.findFirst({
       where: { id: fiscalYearId, organizationId },
@@ -148,7 +171,7 @@ export async function closeFiscalYearWithRetainedEarnings(
       },
     });
     return { fiscalYear: closedYear, posting, nextYear };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 }));
 }
 
 export async function finalizeAssetDisposal(
@@ -158,7 +181,8 @@ export async function finalizeAssetDisposal(
   actorUserId: string,
   input: { revision: number },
 ) {
-  return prisma.$transaction(async (tx) => {
+  return c5SerializableRetry(() => prisma.$transaction(async (tx) => {
+    await assertActiveClientOrganization(tx, organizationId);
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseAssetDisposal" WHERE id = ${disposalId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const disposal = await tx.enterpriseAssetDisposal.findFirst({
       where: { id: disposalId, organizationId, assetAccountingProfileId: profileId },
@@ -197,7 +221,7 @@ export async function finalizeAssetDisposal(
       where: {
         organizationId,
         assetAccountingProfileId: disposal.profile.id,
-        scheduledDate: { gt: disposal.disposalDate },
+        scheduledDate: { gte: disposal.disposalDate },
         status: { in: ["PLANNED", "APPROVED"] },
       },
       data: { status: "CANCELLED" },
@@ -222,5 +246,5 @@ export async function finalizeAssetDisposal(
       },
     });
     return { disposal: posted, entry: posting.entry, idempotent: posting.idempotent };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 }));
 }
