@@ -245,7 +245,7 @@ test.describe.serial("Accounting C5 closing FX, year-end and asset disposal", ()
       actorUserId: admin.id,
       lines: [
         { ledgerAccountId: cashAccount.id, debit: 50000, transactionCurrencyCode: "USD", transactionAmount: 100, exchangeRate: 500, functionalAmount: 50000 },
-        { ledgerAccountId: clearingAccount.id, credit: 50000, transactionCurrencyCode: "XAF", transactionAmount: 50000, exchangeRate: 1, functionalAmount: 50000 },
+        { ledgerAccountId: assetAccount.id, credit: 50000, transactionCurrencyCode: "XAF", transactionAmount: 50000, exchangeRate: 1, functionalAmount: 50000 },
       ],
     });
 
