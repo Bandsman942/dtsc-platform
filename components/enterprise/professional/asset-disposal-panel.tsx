@@ -47,7 +47,8 @@ export function AssetDisposalPanel({ organizationId, locale, canManage }: Props)
     asset: "Asset",
     date: "Disposal date",
     proceeds: "Proceeds",
-    currency: "Proceeds currency",
+    currency: "Asset profile currency",
+    currencyHelp: "The draft uses the asset accounting profile currency. DTSC converts it to functional currency at the disposal date when needed.",
     reason: "Reason",
     saveDraft: "Create draft",
     post: "Post disposal",
@@ -70,7 +71,8 @@ export function AssetDisposalPanel({ organizationId, locale, canManage }: Props)
     asset: "Actif",
     date: "Date de cession",
     proceeds: "Produit de cession",
-    currency: "Devise du produit",
+    currency: "Devise du profil d’actif",
+    currencyHelp: "Le brouillon utilise la devise du profil comptable de l’actif. DTSC la convertit en devise fonctionnelle à la date de cession si nécessaire.",
     reason: "Motif",
     saveDraft: "Créer le brouillon",
     post: "Comptabiliser la cession",
@@ -172,10 +174,10 @@ export function AssetDisposalPanel({ organizationId, locale, canManage }: Props)
     {formOpen ? <form className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 sm:p-5" onSubmit={createDraft}>
       <h3 className="font-black text-dtsc-ink">{copy.newDraft}</h3>
       <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <label className="space-y-1 text-sm font-bold text-dtsc-ink"><span>{copy.asset}</span><select className="h-10 w-full rounded-lg border border-dtsc-border bg-dtsc-surface px-3" value={profileId} onChange={(event) => { const id = event.target.value; setProfileId(id); const profile = profiles.find((item) => item.id === id); if (profile?.currencyCode) setProceedsCurrencyCode(profile.currencyCode); }} disabled={busy}>{availableProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.asset?.code || profile.id} · {profile.asset?.name || ""}</option>)}</select></label>
+        <label className="space-y-1 text-sm font-bold text-dtsc-ink"><span>{copy.asset}</span><select className="h-10 w-full rounded-lg border border-dtsc-border bg-dtsc-surface px-3" value={profileId} onChange={(event) => { const id = event.target.value; setProfileId(id); const profile = profiles.find((item) => item.id === id); setProceedsCurrencyCode(profile?.currencyCode || "USD"); }} disabled={busy}>{availableProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.asset?.code || profile.id} · {profile.asset?.name || ""}</option>)}</select></label>
         <label className="space-y-1 text-sm font-bold text-dtsc-ink"><span>{copy.date}</span><Input type="date" value={disposalDate} onChange={(event) => setDisposalDate(event.target.value)} required /></label>
         <label className="space-y-1 text-sm font-bold text-dtsc-ink"><span>{copy.proceeds}</span><Input type="number" min="0" step="0.01" value={proceedsAmount} onChange={(event) => setProceedsAmount(event.target.value)} required /></label>
-        <label className="space-y-1 text-sm font-bold text-dtsc-ink"><span>{copy.currency}</span><Input value={proceedsCurrencyCode} maxLength={3} onChange={(event) => setProceedsCurrencyCode(event.target.value.toUpperCase())} required /></label>
+        <label className="space-y-1 text-sm font-bold text-dtsc-ink"><span>{copy.currency}</span><Input value={proceedsCurrencyCode} readOnly aria-readonly="true" /><span className="block text-xs font-normal leading-5 text-dtsc-muted">{copy.currencyHelp}</span></label>
         <label className="space-y-1 text-sm font-bold text-dtsc-ink md:col-span-2"><span>{copy.reason}</span><Input value={reason} onChange={(event) => setReason(event.target.value)} minLength={3} required /></label>
       </div>
       <div className="mt-4 flex flex-wrap gap-2"><Button type="submit" disabled={busy || !selectedProfile}>{copy.saveDraft}</Button><Button type="button" variant="outline" disabled={busy} onClick={() => setFormOpen(false)}>{copy.cancel}</Button></div>
