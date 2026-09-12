@@ -12,7 +12,7 @@ const has = (file, token, message = `${file} missing ${token}`) => check(read(fi
 const onboarding = "lib/enterprise/tailoring/onboarding.ts";
 const onboardingRoute = "app/api/enterprise/[organizationId]/tailoring/onboarding/route.ts";
 const readinessUi = "components/enterprise/tailoring/tailoring-commercial-readiness.tsx";
-const workspace = "components/enterprise/tailoring/enterprise-tailoring-workspace.tsx";
+const tailoringPage = "app/enterprise-tailoring/[moduleCode]/page.tsx";
 const preview = "lib/enterprise/tailoring/template-preview.ts";
 const adminPreviewRoute = "app/api/admin/sector-templates/route.ts";
 const aiRegistry = "lib/ai/tool-registry.ts";
@@ -24,7 +24,7 @@ const tailoringActions = "lib/ai/tools/tailoring-action-contract.ts";
 const readinessRegistry = "lib/enterprise/sector-onboarding-readiness.json";
 const migration = "prisma/migrations/20260910174000_tailoring_commercial_readiness/migration.sql";
 
-for (const file of [onboarding, onboardingRoute, readinessUi, preview, manufacturingActions, tailoringActions, migration, "docs/user-guides/TAILORING_APPAREL_FR.md", "docs/user-guides/TAILORING_APPAREL_EN.md"]) {
+for (const file of [onboarding, onboardingRoute, readinessUi, tailoringPage, preview, manufacturingActions, tailoringActions, migration, "docs/user-guides/TAILORING_APPAREL_FR.md", "docs/user-guides/TAILORING_APPAREL_EN.md"]) {
   check(exists(file), `#608 required file missing: ${file}`);
 }
 
@@ -45,10 +45,12 @@ has(onboardingRoute, "mutate: true", "Onboarding POST must use same-origin/rate-
 has(onboardingRoute, "writeAuditLog", "Onboarding mutations must be audited");
 
 for (const marker of ["Mise en service Couture", "Tailoring setup", "/tailoring/onboarding", "8", "SUR_MESURE", "PRET_A_PORTER", "MIXTE"]) has(readinessUi, marker);
-has(workspace, "TailoringCommercialReadiness", "Tailoring overview must render commercial readiness");
+has(tailoringPage, "TailoringCommercialReadiness", "Tailoring overview route must render commercial readiness");
+has(tailoringPage, 'canonicalModuleCode === "TAILORING_OVERVIEW"', "Tailoring readiness must only mount on the overview module");
 
 for (const layer of ["ERP_COMMON", "MANUFACTURING_CORE", "TAILORING_APPAREL"]) has(preview, layer, `Three-layer DTSC preview missing ${layer}`);
-has(adminPreviewRoute, "getTailoringTemplateLayers", "Admin sector preview must expose Tailoring three-layer metadata");
+has(adminPreviewRoute, "buildTailoringTemplateLayers", "Admin sector preview must build Tailoring three-layer metadata");
+has(adminPreviewRoute, "tailoringLayerSummaryModules", "Admin sector preview must expose Tailoring layer summaries without tenant data");
 check(!read(preview).includes("organizationId"), "DTSC template preview must not read tenant organization data");
 
 for (const code of ["ERP_MANUFACTURING_ORDER_SUBMIT", "ERP_TAILORING_FITTING_COMPLETE", "ERP_TAILORING_ALTERATION_UPDATE", "ERP_TAILORING_FINISHING_UPDATE"]) {
