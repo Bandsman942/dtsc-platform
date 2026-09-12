@@ -5,6 +5,7 @@ import {
   BANK_STATEMENT_IMPORT_EVENT_TYPE,
   FINANCE_REPORT_GENERATION_EVENT_TYPE,
 } from "@/lib/enterprise/bulk-jobs/constants";
+import { invalidateEnterpriseFinanceOverviewSummaryCacheForDomainEvent } from "@/lib/enterprise/finance/overview-summary-service";
 import { WORKFLOW_LIMITS } from "@/lib/enterprise/workflows/constants";
 import { processWorkflowDomainEvent, resumeWaitingRuns } from "@/lib/enterprise/workflows/engine";
 import { processCrossModuleProjections, processPendingCrossModuleProjections } from "@/lib/enterprise/cross-module/projection-service";
@@ -14,7 +15,7 @@ import { ADMIN_BROADCAST_EMAIL_DELIVERY_EVENT_TYPE } from "@/lib/mail/broadcast-
 import { prisma } from "@/lib/prisma";
 import { WEB_PUSH_DOMAIN_EVENT_TYPE } from "@/lib/push/constants";
 
-type ClaimedEvent = { id: string; attemptCount: number };
+type ClaimedEvent = { id: string; attemptCount: number; organizationId: string; entityType: string };
 type QueueSnapshotRow = {
   ready: bigint | number | string;
   processing: bigint | number | string;
@@ -134,7 +135,7 @@ async function claimPendingEvents(workerId: string, batchSize: number) {
       LIMIT ${batchSize}
       FOR UPDATE SKIP LOCKED
     )
-    RETURNING "id", "attemptCount"
+    RETURNING "id", "attemptCount", "organizationId", "entityType"
   `);
 }
 
@@ -147,6 +148,10 @@ export async function processPendingWorkflowEvents({ batchSize = WORKFLOW_LIMITS
     try {
       const projectionResult = await processCrossModuleProjections(event.id);
       await processWorkflowDomainEvent(event.id);
+      await invalidateEnterpriseFinanceOverviewSummaryCacheForDomainEvent({
+        organizationId: event.organizationId,
+        entityType: event.entityType,
+      });
       await prisma.enterpriseDomainEvent.updateMany({ where: { id: event.id, processingStatus: "PROCESSING", lockedBy: workerId }, data: { processingStatus: "PROCESSED", processedAt: new Date(), lockedAt: null, lockedBy: null, lastError: null } });
       results.push({ id: event.id, status: "PROCESSED", projectionFailures: projectionResult.failures });
     } catch (error) {
