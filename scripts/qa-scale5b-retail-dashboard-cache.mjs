@@ -95,7 +95,7 @@ requireTokens("worker", worker, [
   "entityType: event.entityType",
 ]);
 check(
-  worker.indexOf("processWorkflowDomainEvent(event.id)") < worker.indexOf("invalidateCommercialRetailDashboardCacheForDomainEvent"),
+  worker.indexOf("processWorkflowDomainEvent(event.id)") < worker.indexOf("invalidateCommercialRetailDashboardCacheForDomainEvent({"),
   "SCALE-5B: l'invalidation Retail doit intervenir après le traitement métier de l'événement.",
 );
 
