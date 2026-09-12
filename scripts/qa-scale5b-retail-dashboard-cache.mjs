@@ -9,6 +9,10 @@ const dashboard = read("lib/enterprise/retail/commercial-dashboard.ts");
 const route = read("app/api/enterprise/[organizationId]/retail/dashboard/route.ts");
 const worker = read("lib/enterprise/workflows/worker.ts");
 const cache = read("lib/scalability/tenant-read-cache.ts");
+const observability = read("lib/scalability/production-observability.ts");
+const ctoDashboard = read("components/admin/cto-scalability-dashboard.tsx");
+const ctoLauncher = read("components/admin/cto-scalability-floating-action.tsx");
+const adminSection = read("app/admin/[section]/page.tsx");
 const regression = read("scripts/qa-regression-checks.mjs");
 const docs = read("docs/SCALABILITY_SCALE5B_RETAIL_DASHBOARD_CACHE.md");
 
@@ -107,6 +111,36 @@ requireTokens("cache foundation", cache, [
 ]);
 check(!cache.includes("NEXT_PUBLIC_"), "SCALE-5B: aucun secret Redis ne doit devenir public.");
 
+requireTokens("CTO observability", observability, [
+  'domain\' = \'retail-dashboard'.replace("domain\\'", "domain'"),
+  "retailOrganizationHits",
+  "retailOrganizationMisses",
+  "retailOrganizationFallbacks",
+  "retailPeriodHits",
+  "retailPeriodMisses",
+  "retailPeriodFallbacks",
+  "retailPeriodBypasses",
+  "readCache:",
+]);
+check(!ctoDashboard.includes("organizationId") && !ctoDashboard.includes("userId"), "SCALE-5B: le dashboard CTO ne doit jamais exposer les identifiants tenant/utilisateur.");
+requireTokens("CTO UI", ctoDashboard, [
+  "snapshot.readCache",
+  't("financeOverviewCache")',
+  't("retailOrganizationCache")',
+  't("retailPeriodCache")',
+  't("cacheHitRate")',
+  't("cacheFallback")',
+  't("cacheBypass")',
+]);
+requireTokens("shared scalability launcher", ctoLauncher, [
+  "useFloatingAction",
+  'id: "cto-scalability"',
+  "order: 8",
+  'router.push("/admin/cto/scalability")',
+]);
+check(adminSection.includes("<CtoScalabilityFloatingAction"), "SCALE-5B: le CTO doit enregistrer Scalabilité dans le hub flottant commun.");
+check(!adminSection.includes('href="/admin/cto/scalability"'), "SCALE-5B: aucun bouton flottant Scalabilité indépendant ne doit revenir.");
+
 requireTokens("documentation", docs, [
   "SCALE-5B",
   "organisation / période / utilisateur",
@@ -114,6 +148,8 @@ requireTokens("documentation", docs, [
   "15 secondes",
   "60 secondes",
   "BYPASS",
+  "CTO",
+  "FloatingActionHub",
   "OWNER_E2E",
   "Rollback",
 ]);
