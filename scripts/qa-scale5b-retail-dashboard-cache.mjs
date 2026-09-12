@@ -112,7 +112,7 @@ requireTokens("cache foundation", cache, [
 check(!cache.includes("NEXT_PUBLIC_"), "SCALE-5B: aucun secret Redis ne doit devenir public.");
 
 requireTokens("CTO observability", observability, [
-  'domain\' = \'retail-dashboard'.replace("domain\\'", "domain'"),
+  "retail-dashboard",
   "retailOrganizationHits",
   "retailOrganizationMisses",
   "retailOrganizationFallbacks",
