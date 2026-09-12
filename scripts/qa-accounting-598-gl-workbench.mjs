@@ -134,7 +134,9 @@ hasAll(queryService, [
   "getAccountingTrialBalance",
   "getAccountingEntryTrace",
   "getAccountingAnomalies",
-  'status: "POSTED"',
+  "LEDGER_BEARING_ENTRY_STATUSES",
+  '["POSTED", "REVERSED"] as const',
+  "status: { in: [...LEDGER_BEARING_ENTRY_STATUSES] }",
   "openingBalance",
   "periodDebit",
   "periodCredit",
@@ -145,7 +147,7 @@ hasAll(queryService, [
   "inventoryItemId",
   "MAX_PAGE_SIZE = 100",
 ], "canonical accounting query service");
-ok(!queryService.includes('status: filters.status || "POSTED"'), "General ledger status must not be client-overridable away from POSTED");
+ok(!queryService.includes('status: filters.status || "POSTED"'), "General ledger status must not be client-overridable away from canonical ledger-bearing statuses");
 hasAll(queryRoute, [
   '"FINANCE_ACCOUNTING", "view"',
   "getAccountingGeneralLedger",
@@ -196,4 +198,4 @@ if (failures.length) {
   console.error(`Accounting #598 QA failed:\n- ${failures.join("\n- ")}`);
   process.exit(1);
 }
-console.log("Accounting #598 QA: OK — tenant dimensions, posted GL/trial, compact workbench, permission-aware source links and shared read-only AI queries enforced");
+console.log("Accounting #598 QA: OK — tenant dimensions, ledger-bearing GL/trial history, compact workbench, permission-aware source links and shared read-only AI queries enforced");
