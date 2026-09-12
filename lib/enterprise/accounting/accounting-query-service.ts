@@ -32,6 +32,7 @@ type AccountingQueryDb = Pick<
 >;
 
 const MAX_PAGE_SIZE = 100;
+export const LEDGER_BEARING_ENTRY_STATUSES = ["POSTED", "REVERSED"] as const;
 
 function pageValues(filters: AccountingQueryFilters) {
   const page = Math.max(1, filters.page || 1);
@@ -49,7 +50,7 @@ function dateFilter(filters: AccountingQueryFilters): Prisma.DateTimeFilter | un
 
 function postedEntryWhere(filters: AccountingQueryFilters): Prisma.EnterpriseJournalEntryWhereInput {
   return {
-    status: "POSTED",
+    status: { in: [...LEDGER_BEARING_ENTRY_STATUSES] },
     ...(dateFilter(filters) ? { accountingDate: dateFilter(filters) } : {}),
     ...(filters.fiscalPeriodId ? { fiscalPeriodId: filters.fiscalPeriodId } : {}),
     ...(filters.journalId ? { journalId: filters.journalId } : {}),
@@ -181,7 +182,7 @@ export async function getAccountingTrialBalance(
   const dateTo = filters.dateTo || requestedPeriod?.endDate || null;
   const sharedEntryWhere: Prisma.EnterpriseJournalEntryWhereInput = {
     organizationId,
-    status: "POSTED",
+    status: { in: [...LEDGER_BEARING_ENTRY_STATUSES] },
     ...(filters.journalId ? { journalId: filters.journalId } : {}),
     ...(filters.sourceModule ? { sourceModule: filters.sourceModule } : {}),
     ...(filters.sourceEntityType ? { sourceEntityType: filters.sourceEntityType } : {}),
