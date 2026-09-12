@@ -78,7 +78,7 @@
       "sectorCode": "MANUFACTURING",
       "templateVersion": 2,
       "businessProfileCode": "TAILORING_APPAREL",
-      "commercializationStatus": "READY",
+      "commercializationStatus": "COMMERCIAL_READY",
       "enforce": true,
       "minimumOperationalPlan": "BUSINESS",
       "requiredModules": [
