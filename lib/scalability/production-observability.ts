@@ -1,5 +1,7 @@
 import { getDatabaseConnectionPolicy } from "@/lib/database-connection-policy";
 import { prisma } from "@/lib/prisma";
+import { RATE_LIMIT_POLICY_PROFILES, RATE_LIMIT_POLICY_RULES } from "@/lib/rate-limit-policy";
+import { RATE_LIMIT_FALLBACK_TELEMETRY_FLUSH_MS } from "@/lib/scalability/rate-limit-fallback-observability";
 import {
   getRedisObservabilitySnapshot,
   REDIS_OBSERVABILITY_METRICS,
@@ -41,6 +43,28 @@ type Scale2DbPathRow = {
   callSettingsDbCount: number;
 };
 
+type QueueRow = {
+  ready: number;
+  processing: number;
+  dead: number;
+  oldestReadyAt: Date | null;
+};
+
+type ReadCacheRow = {
+  financeRequests: number;
+  financeHits: number;
+  financeMisses: number;
+  financeFallbacks: number;
+  retailRequests: number;
+  retailOrganizationHits: number;
+  retailOrganizationMisses: number;
+  retailOrganizationFallbacks: number;
+  retailPeriodHits: number;
+  retailPeriodMisses: number;
+  retailPeriodFallbacks: number;
+  retailPeriodBypasses: number;
+};
+
 function finiteMetric(value: number | null | undefined) {
   return typeof value === "number" && Number.isFinite(value) ? Math.round(value * 100) / 100 : null;
 }
@@ -67,7 +91,7 @@ export async function getProductionObservabilitySnapshot(windowHours: number) {
   await prisma.$queryRaw`SELECT 1`;
   const dbProbeLatencyMs = performance.now() - dbProbeStartedAt;
 
-  const [apiRows, aiRows, dbConnectionRows, scale2Rows, redisSnapshot] = await Promise.all([
+  const [apiRows, aiRows, dbConnectionRows, scale2Rows, queueRows, readCacheRows, redisSnapshot] = await Promise.all([
     prisma.$queryRaw<ApiLatencyRow[]>`
       SELECT
         COUNT(*)::int AS "sampleCount",
@@ -138,6 +162,68 @@ export async function getProductionObservabilitySnapshot(windowHours: number) {
       FROM "ApiLog"
       WHERE "createdAt" >= ${since}
     `,
+    prisma.$queryRaw<QueueRow[]>`
+      SELECT
+        COUNT(*) FILTER (
+          WHERE "processingStatus" IN ('PENDING', 'FAILED')
+            AND "availableAt" <= now()
+        )::int AS "ready",
+        COUNT(*) FILTER (WHERE "processingStatus" = 'PROCESSING')::int AS "processing",
+        COUNT(*) FILTER (WHERE "processingStatus" = 'DEAD')::int AS "dead",
+        MIN("availableAt") FILTER (
+          WHERE "processingStatus" IN ('PENDING', 'FAILED')
+            AND "availableAt" <= now()
+        ) AS "oldestReadyAt"
+      FROM "EnterpriseDomainEvent"
+    `,
+    prisma.$queryRaw<ReadCacheRow[]>`
+      SELECT
+        COUNT(*) FILTER (WHERE "metadata"->>'domain' = 'finance-overview-summary')::int AS "financeRequests",
+        COUNT(*) FILTER (
+          WHERE "metadata"->>'domain' = 'finance-overview-summary'
+            AND "metadata"->>'readSource' = 'HIT'
+        )::int AS "financeHits",
+        COUNT(*) FILTER (
+          WHERE "metadata"->>'domain' = 'finance-overview-summary'
+            AND "metadata"->>'readSource' = 'MISS'
+        )::int AS "financeMisses",
+        COUNT(*) FILTER (
+          WHERE "metadata"->>'domain' = 'finance-overview-summary'
+            AND "metadata"->>'readSource' = 'FALLBACK'
+        )::int AS "financeFallbacks",
+        COUNT(*) FILTER (WHERE "metadata"->>'domain' = 'retail-dashboard')::int AS "retailRequests",
+        COUNT(*) FILTER (
+          WHERE "metadata"->>'domain' = 'retail-dashboard'
+            AND "metadata"->'retailCache'->>'organization' = 'HIT'
+        )::int AS "retailOrganizationHits",
+        COUNT(*) FILTER (
+          WHERE "metadata"->>'domain' = 'retail-dashboard'
+            AND "metadata"->'retailCache'->>'organization' = 'MISS'
+        )::int AS "retailOrganizationMisses",
+        COUNT(*) FILTER (
+          WHERE "metadata"->>'domain' = 'retail-dashboard'
+            AND "metadata"->'retailCache'->>'organization' = 'FALLBACK'
+        )::int AS "retailOrganizationFallbacks",
+        COUNT(*) FILTER (
+          WHERE "metadata"->>'domain' = 'retail-dashboard'
+            AND "metadata"->'retailCache'->>'period' = 'HIT'
+        )::int AS "retailPeriodHits",
+        COUNT(*) FILTER (
+          WHERE "metadata"->>'domain' = 'retail-dashboard'
+            AND "metadata"->'retailCache'->>'period' = 'MISS'
+        )::int AS "retailPeriodMisses",
+        COUNT(*) FILTER (
+          WHERE "metadata"->>'domain' = 'retail-dashboard'
+            AND "metadata"->'retailCache'->>'period' = 'FALLBACK'
+        )::int AS "retailPeriodFallbacks",
+        COUNT(*) FILTER (
+          WHERE "metadata"->>'domain' = 'retail-dashboard'
+            AND "metadata"->'retailCache'->>'period' = 'BYPASS'
+        )::int AS "retailPeriodBypasses"
+      FROM "ApiLog"
+      WHERE "createdAt" >= ${since}
+        AND "metadata"->>'domain' IN ('finance-overview-summary', 'retail-dashboard')
+    `,
     getRedisObservabilitySnapshot(windowHours),
   ]);
 
@@ -158,10 +244,27 @@ export async function getProductionObservabilitySnapshot(windowHours: number) {
     callFallbackCount: 0,
     callSettingsDbCount: 0,
   };
+  const queue = queueRows[0] ?? { ready: 0, processing: 0, dead: 0, oldestReadyAt: null };
+  const readCache = readCacheRows[0] ?? {
+    financeRequests: 0,
+    financeHits: 0,
+    financeMisses: 0,
+    financeFallbacks: 0,
+    retailRequests: 0,
+    retailOrganizationHits: 0,
+    retailOrganizationMisses: 0,
+    retailOrganizationFallbacks: 0,
+    retailPeriodHits: 0,
+    retailPeriodMisses: 0,
+    retailPeriodFallbacks: 0,
+    retailPeriodBypasses: 0,
+  };
   const presenceRedisLeaseCount = redisSnapshot.metrics[REDIS_OBSERVABILITY_METRICS.presenceLeaseRedis] || 0;
   const presenceRedisReadCount = redisSnapshot.metrics[REDIS_OBSERVABILITY_METRICS.presenceReadRedis] || 0;
   const callRedisReadCount = redisSnapshot.metrics[REDIS_OBSERVABILITY_METRICS.callInboxReadRedis] || 0;
   const callRedisPublishCount = redisSnapshot.metrics[REDIS_OBSERVABILITY_METRICS.callPublishRedis] || 0;
+  const oldestReadyAgeMs = queue.oldestReadyAt ? Math.max(0, generatedAt.getTime() - new Date(queue.oldestReadyAt).getTime()) : null;
+  const profileCount = (profile: (typeof RATE_LIMIT_POLICY_RULES)[number]["profile"]) => RATE_LIMIT_POLICY_RULES.filter((rule) => rule.profile === profile).length;
 
   return {
     generatedAt: generatedAt.toISOString(),
@@ -230,6 +333,52 @@ export async function getProductionObservabilitySnapshot(windowHours: number) {
         settingsDbLoadCount: scale2.callSettingsDbCount,
         redisFirstRate: ratio(callRedisReadCount, callRedisReadCount + scale2.callFallbackCount),
         dbReadRate: ratio(scale2.callDbReconciliationCount, callRedisReadCount + scale2.callFallbackCount),
+      },
+    },
+    rateLimit: {
+      source: "Canonical rate-limit policy registry + Redis live status; degraded fallback events remain aggregated in runtime telemetry",
+      distributedStatus: redisSnapshot.status,
+      defaultFailureMode: RATE_LIMIT_POLICY_PROFILES.availabilityBalanced.failureMode,
+      fallbackAggregationWindowMs: RATE_LIMIT_FALLBACK_TELEMETRY_FLUSH_MS,
+      policyRules: {
+        total: RATE_LIMIT_POLICY_RULES.length,
+        securityCritical: profileCount("security-critical"),
+        costCritical: profileCount("cost-critical"),
+        availabilityBalanced: profileCount("availability-balanced"),
+        availabilityFirst: profileCount("availability-first"),
+      },
+    },
+    queues: {
+      source: "EnterpriseDomainEvent durable queue",
+      ready: queue.ready,
+      processing: queue.processing,
+      dead: queue.dead,
+      oldestReadyAgeMs,
+    },
+    readCache: {
+      source: "Aggregated ApiLog read-source metadata; tenant and user identifiers are not returned",
+      finance: {
+        requests: readCache.financeRequests,
+        hit: readCache.financeHits,
+        miss: readCache.financeMisses,
+        fallback: readCache.financeFallbacks,
+        hitRate: ratio(readCache.financeHits, readCache.financeHits + readCache.financeMisses + readCache.financeFallbacks),
+      },
+      retail: {
+        requests: readCache.retailRequests,
+        organization: {
+          hit: readCache.retailOrganizationHits,
+          miss: readCache.retailOrganizationMisses,
+          fallback: readCache.retailOrganizationFallbacks,
+          hitRate: ratio(readCache.retailOrganizationHits, readCache.retailOrganizationHits + readCache.retailOrganizationMisses + readCache.retailOrganizationFallbacks),
+        },
+        period: {
+          hit: readCache.retailPeriodHits,
+          miss: readCache.retailPeriodMisses,
+          fallback: readCache.retailPeriodFallbacks,
+          bypass: readCache.retailPeriodBypasses,
+          hitRate: ratio(readCache.retailPeriodHits, readCache.retailPeriodHits + readCache.retailPeriodMisses + readCache.retailPeriodFallbacks),
+        },
       },
     },
   };

@@ -1,12 +1,10 @@
-import { Prisma } from "@prisma/client";
-import { getRetailAccountingReadiness } from "@/lib/enterprise/retail/accounting-readiness";
-import { getRetailMetricsByCurrency } from "@/lib/enterprise/retail/commercial-guardrails";
-import { getRetailExchangeRateReadiness } from "@/lib/enterprise/retail/fx-reporting";
-import { getMobileMoneyProviderAccountConfiguration } from "@/lib/enterprise/retail/mobile-money-multicurrency-service";
-import { getTelcoProviderAccountConfiguration } from "@/lib/enterprise/retail/telco-multicurrency-service";
-import { getCanonicalRetailReadiness } from "@/lib/enterprise/retail/self-service-onboarding";
 import type { RetailModuleCode } from "@/lib/enterprise/retail/constants";
-import { prisma } from "@/lib/prisma";
+import {
+  getRetailDashboardOrganizationProjection,
+  getRetailDashboardPeriodProjection,
+  getRetailDashboardUserProjection,
+  type RetailDashboardReadSource,
+} from "@/lib/enterprise/retail/commercial-dashboard-projections";
 
 function phoneForList(value: string) {
   if (value.length <= 7) return value;
@@ -37,91 +35,35 @@ const READINESS_LABELS: Record<string, string> = {
   RETAIL_CONFIGURATION: "Paramètres du Shop actifs",
 };
 
-export async function getCommercialRetailDashboard(
+type RetailDashboardCacheSources = {
+  organization: RetailDashboardReadSource;
+  period: RetailDashboardReadSource;
+  user: "BYPASS";
+};
+
+export async function getCommercialRetailDashboardRead(
   organizationId: string,
   userId: string,
   from?: Date,
   to?: Date,
-  moduleCode?: RetailModuleCode,
+  moduleCode: RetailModuleCode = "RETAIL_POS",
 ) {
   const dateFrom = from || new Date(new Date().setHours(0, 0, 0, 0));
   const dateTo = to || new Date();
-  const dateFilter = { gte: dateFrom, lte: dateTo };
-  const includePos = !moduleCode || moduleCode === "RETAIL_POS";
-  const includeMobileMoney = !moduleCode || moduleCode === "MOBILE_MONEY_AGENCY";
-  const includeTelco = !moduleCode || moduleCode === "TELCO_TOPUPS";
-  const includeClose = !moduleCode || moduleCode === "RETAIL_DAILY_CLOSE";
-  const includeCatalog = includeTelco;
+  const cacheDefaultRange = !from && !to;
 
-  const [
-    configuration,
-    providers,
-    accounts,
-    warehouses,
-    catalogItems,
-    inventoryItems,
-    sales,
-    mobileMoney,
-    topups,
-    closes,
-    cashSessionsRaw,
-    metricsByCurrency,
-    fxReadiness,
-    accountingReadiness,
-    canonicalReadiness,
-    mobileMoneyConfiguration,
-    telcoConfiguration,
-  ] = await Promise.all([
-    prisma.enterpriseRetailConfiguration.findUnique({ where: { organizationId } }),
-    prisma.enterpriseRetailProvider.findMany({ where: { organizationId, isActive: true }, orderBy: [{ providerType: "asc" }, { label: "asc" }] }),
-    prisma.enterpriseFinancialAccount.findMany({ where: { organizationId, status: "ACTIVE", archivedAt: null, accountType: { in: ["CASH", "MOBILE_MONEY", "BANK", "CLEARING"] } }, orderBy: [{ accountType: "asc" }, { name: "asc" }], select: { id: true, code: true, name: true, accountType: true, currencyCode: true, operationalBalance: true, siteId: true } }),
-    includePos
-      ? prisma.enterpriseWarehouse.findMany({ where: { organizationId, status: "ACTIVE", archivedAt: null }, orderBy: { name: "asc" }, include: { site: { select: { id: true, name: true } }, storageLocations: { where: { status: "ACTIVE", archivedAt: null }, select: { id: true, code: true, name: true } } } })
-      : Promise.resolve([]),
-    includeCatalog
-      ? prisma.enterpriseCatalogItem.findMany({ where: { organizationId, status: "ACTIVE", archivedAt: null }, orderBy: { name: "asc" }, take: 400, select: { id: true, code: true, sku: true, name: true, itemType: true, indicativeSalePrice: true, indicativeCost: true, currency: true, trackInventory: true } })
-      : Promise.resolve([]),
-    Promise.resolve([]),
-    includePos
-      ? prisma.enterpriseRetailSale.findMany({ where: { organizationId, soldAt: dateFilter }, orderBy: { soldAt: "desc" }, take: 100, include: { lines: true, tenders: true } })
-      : Promise.resolve([]),
-    includeMobileMoney
-      ? prisma.enterpriseMobileMoneyTransaction.findMany({ where: { organizationId, occurredAt: dateFilter }, orderBy: { occurredAt: "desc" }, take: 100 })
-      : Promise.resolve([]),
-    includeTelco
-      ? prisma.enterpriseTelcoTopup.findMany({ where: { organizationId, occurredAt: dateFilter }, orderBy: { occurredAt: "desc" }, take: 100 })
-      : Promise.resolve([]),
-    includeClose
-      ? prisma.enterpriseRetailDailyClose.findMany({ where: { organizationId, businessDate: dateFilter }, orderBy: { businessDate: "desc" }, take: 30, include: { lines: true } })
-      : Promise.resolve([]),
-    prisma.enterpriseCashSession.findMany({
-      where: { organizationId, cashierUserId: userId, status: { in: ["OPEN", "CLOSING", "PENDING_VALIDATION"] } },
-      orderBy: { openedAt: "desc" },
-      take: 12,
-      include: {
-        financialAccount: { select: { id: true, code: true, name: true, currencyCode: true, operationalBalance: true } },
-        movements: { select: { direction: true, amount: true } },
-        _count: { select: { movements: true, counts: true, discrepancies: true } },
-      },
-    }),
-    getRetailMetricsByCurrency(organizationId, dateFrom, dateTo, moduleCode),
-    getRetailExchangeRateReadiness(organizationId, dateTo),
-    includePos ? getRetailAccountingReadiness(organizationId, dateTo) : Promise.resolve(null),
-    getCanonicalRetailReadiness(organizationId),
-    includeMobileMoney ? getMobileMoneyProviderAccountConfiguration(organizationId) : Promise.resolve(null),
-    includeTelco ? getTelcoProviderAccountConfiguration(organizationId) : Promise.resolve(null),
+  const [organizationRead, periodRead, userProjection] = await Promise.all([
+    getRetailDashboardOrganizationProjection(organizationId, moduleCode),
+    getRetailDashboardPeriodProjection(organizationId, dateFrom, dateTo, moduleCode, cacheDefaultRange),
+    getRetailDashboardUserProjection(organizationId, userId),
   ]);
 
-  const cashSessions = cashSessionsRaw.map((session) => {
-    const expectedCurrentAmount = session.movements.reduce(
-      (balance, movement) => movement.direction === "INBOUND" ? balance.plus(movement.amount) : balance.minus(movement.amount),
-      new Prisma.Decimal(session.openingAmount),
-    );
-    const { movements, ...sessionWithoutMovements } = session;
-    void movements;
-    return { ...sessionWithoutMovements, expectedCurrentAmount: expectedCurrentAmount.toFixed() };
-  });
-  const cashSession = cashSessions.find((session) => session.status === "OPEN") || cashSessions[0] || null;
+  const organization = organizationRead.value;
+  const period = periodRead.value;
+  const canonicalReadiness = organization.canonicalReadiness;
+  const fxReadiness = period.fxReadiness;
+  const mobileMoneyConfiguration = organization.mobileMoneyConfiguration;
+  const telcoConfiguration = organization.telcoConfiguration;
 
   const readinessItems = canonicalReadiness.items.map((item) => ({
     code: item.code,
@@ -143,20 +85,20 @@ export async function getCommercialRetailDashboard(
       && telcoConfiguration.providers.every((provider) => provider.ready),
   );
 
-  return {
-    configuration,
-    providers,
-    accounts,
-    warehouses,
-    catalogItems,
-    inventoryItems,
-    cashSession,
-    cashSessions,
+  const dashboard = {
+    configuration: organization.configuration,
+    providers: organization.providers,
+    accounts: organization.accounts,
+    warehouses: organization.warehouses,
+    catalogItems: organization.catalogItems,
+    inventoryItems: organization.inventoryItems,
+    cashSession: userProjection.cashSession,
+    cashSessions: userProjection.cashSessions,
     mobileMoneyConfiguration,
     telcoConfiguration,
-    metricsByCurrency,
+    metricsByCurrency: period.metricsByCurrency,
     fxReadiness,
-    accountingReadiness,
+    accountingReadiness: period.accountingReadiness,
     reportingReadiness,
     readiness: {
       items: readinessItems,
@@ -167,11 +109,29 @@ export async function getCommercialRetailDashboard(
       readyForTelco: canonicalReadiness.ready && allTelcoProvidersReady,
     },
     recent: {
-      sales,
-      mobileMoney: mobileMoney.map((item) => ({ ...item, customerPhoneMasked: phoneForList(item.customerPhone) })),
-      topups: topups.map((item) => ({ ...item, destinationPhoneMasked: phoneForList(item.destinationPhone) })),
-      closes,
+      sales: period.sales,
+      mobileMoney: period.mobileMoney.map((item) => ({ ...item, customerPhoneMasked: phoneForList(item.customerPhone) })),
+      topups: period.topups.map((item) => ({ ...item, destinationPhoneMasked: phoneForList(item.destinationPhone) })),
+      closes: period.closes,
     },
-    range: { from: dateFrom.toISOString(), to: dateTo.toISOString() },
+    range: period.range,
   };
+
+  const cacheSources: RetailDashboardCacheSources = {
+    organization: organizationRead.source,
+    period: periodRead.source,
+    user: "BYPASS",
+  };
+
+  return { dashboard, cacheSources };
+}
+
+export async function getCommercialRetailDashboard(
+  organizationId: string,
+  userId: string,
+  from?: Date,
+  to?: Date,
+  moduleCode: RetailModuleCode = "RETAIL_POS",
+) {
+  return (await getCommercialRetailDashboardRead(organizationId, userId, from, to, moduleCode)).dashboard;
 }

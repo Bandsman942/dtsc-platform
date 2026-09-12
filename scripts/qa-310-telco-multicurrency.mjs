@@ -61,7 +61,9 @@ const closeRoute = read("app/api/enterprise/[organizationId]/retail/telco-topups
 check(hasAll(closeRoute, ['"TELCO_TOPUPS", "submit"', "cashCloseSchema", "submitCashSessionClose", 'moduleCode: "TELCO_TOPUPS"']), "Telco cash close must reuse the canonical Finance close under Telco RBAC");
 
 const dashboard = read("lib/enterprise/retail/commercial-dashboard.ts");
-check(hasAll(dashboard, ["getTelcoProviderAccountConfiguration", "telcoConfiguration", "allTelcoProvidersReady", "readyForTelco: canonicalReadiness.ready && allTelcoProvidersReady", "cashSessions"]), "Telco dashboard must expose multi-currency configuration, concurrent tills and readiness");
+const dashboardProjections = read("lib/enterprise/retail/commercial-dashboard-projections.ts");
+check(hasAll(dashboardProjections, ["getTelcoProviderAccountConfiguration", "getRetailDashboardUserProjection", "enterpriseCashSession.findMany", "expectedCurrentAmount"]), "Telco dashboard projections must preserve provider configuration and current-user till loading");
+check(hasAll(dashboard, ["telcoConfiguration", "allTelcoProvidersReady", "readyForTelco: canonicalReadiness.ready && allTelcoProvidersReady", "cashSessions: userProjection.cashSessions"]), "Telco dashboard must expose multi-currency configuration, concurrent tills and readiness");
 
 const dashboardRoute = read("app/api/enterprise/[organizationId]/retail/dashboard/route.ts");
 check(dashboardRoute.includes("telcoConfiguration: dashboard.telcoConfiguration"), "Scoped TELCO_TOPUPS dashboard response must preserve the Telco configuration it computes");
