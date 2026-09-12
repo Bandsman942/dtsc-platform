@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "purpose": "Opposable onboarding and commercialization gate for DTSC sector templates.",
   "genericCriteria": [
     "ACTIVE_SECTOR",
@@ -73,6 +73,79 @@
         "HISTORICAL_FX_CONSOLIDATION",
         "IN_APP_ONBOARDING_GUIDE"
       ]
+    },
+    {
+      "sectorCode": "MANUFACTURING",
+      "templateVersion": 2,
+      "businessProfileCode": "TAILORING_APPAREL",
+      "commercializationStatus": "COMMERCIAL_READY",
+      "enforce": true,
+      "minimumOperationalPlan": "BUSINESS",
+      "requiredModules": [
+        "CRM_CUSTOMERS",
+        "CATALOG",
+        "SITES_WAREHOUSES",
+        "INVENTORY_LOGISTICS",
+        "HUMAN_RESOURCES",
+        "FINANCE_ACCOUNTING",
+        "MANUFACTURING_OVERVIEW",
+        "BILL_OF_MATERIALS",
+        "PRODUCTION_ORDERS",
+        "PRODUCTION_ROUTINGS",
+        "WORK_CENTERS",
+        "MATERIAL_REQUIREMENTS",
+        "PRODUCTION_EXECUTION",
+        "QUALITY_CONTROL",
+        "SCRAP_WASTE",
+        "PRODUCTION_REPORTS",
+        "TAILORING_OVERVIEW",
+        "TAILORING_MEASUREMENTS",
+        "TAILORING_STYLES_PATTERNS",
+        "TAILORING_SIZE_GRADING",
+        "TAILORING_MATERIAL_PROFILES",
+        "TAILORING_CUTTING_PLANS",
+        "TAILORING_FITTINGS",
+        "TAILORING_ALTERATIONS",
+        "TAILORING_GARMENT_TRACKING",
+        "TAILORING_FINISHING"
+      ],
+      "requiredDepartments": ["PRODUCTION", "QUALITY"],
+      "requiredPositions": [
+        "PRODUCTION_MANAGER",
+        "PRODUCTION_PLANNER",
+        "PRODUCTION_OPERATOR",
+        "QUALITY_CONTROLLER",
+        "TAILORING_WORKSHOP_MANAGER",
+        "TAILORING_CUTTER",
+        "TAILORING_SEWER",
+        "TAILORING_FITTER",
+        "TAILORING_QUALITY_CONTROLLER"
+      ],
+      "requiredOperationalModules": [
+        "PRODUCTION_ORDERS",
+        "PRODUCTION_EXECUTION",
+        "TAILORING_CUTTING_PLANS",
+        "TAILORING_FITTINGS",
+        "TAILORING_GARMENT_TRACKING",
+        "TAILORING_FINISHING"
+      ],
+      "requiredGuideCodes": ["TAILORING_APPAREL_FR", "TAILORING_APPAREL_EN"],
+      "releaseCriteria": [
+        "THREE_LAYER_DTSC_PREVIEW",
+        "TENANT_SELF_SERVICE_ONBOARDING",
+        "EIGHT_STEP_READINESS",
+        "NO_COMMON_ERP_DUPLICATION",
+        "TAILORING_OPERATING_MODES",
+        "MANUFACTURING_CANONICAL_INVENTORY",
+        "FINANCE_READINESS_REUSE",
+        "AI_READ_TOOLS",
+        "AI_CONFIRMED_MUTATIONS",
+        "AI_MODULE_ACCESS_RESOLVER",
+        "FR_EN_USER_GUIDES",
+        "RESPONSIVE_TAILORING_WORKSPACE",
+        "OWNER_END_TO_END_ACCEPTANCE"
+      ],
+      "commercialReadyPromotionRule": "Promote READY to COMMERCIAL_READY only after CI_PROVEN cross-module acceptance and OWNER_E2E for the DTSC creation -> invitation -> onboarding -> order -> production -> delivery -> finance path."
     }
   ]
 }

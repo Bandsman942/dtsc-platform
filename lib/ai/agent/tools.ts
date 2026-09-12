@@ -4,7 +4,9 @@ import { authorizeAiTool } from "@/lib/ai/tools/authorize";
 import { ERP_AI_TOOL_DESCRIPTIONS } from "@/lib/ai/tools/erp-contract";
 import { FINANCE_AI_TOOL_DESCRIPTIONS } from "@/lib/ai/tools/finance-contract";
 import { MANUFACTURING_AI_TOOL_DESCRIPTIONS } from "@/lib/ai/tools/manufacturing-contract";
+import { MANUFACTURING_AI_ACTION_DESCRIPTIONS } from "@/lib/ai/tools/manufacturing-action-contract";
 import { TAILORING_AI_TOOL_DESCRIPTIONS } from "@/lib/ai/tools/tailoring-contract";
+import { TAILORING_AI_ACTION_DESCRIPTIONS } from "@/lib/ai/tools/tailoring-action-contract";
 import type { AiToolRuntimeContext } from "@/lib/ai/tools/types";
 import type { AiAgentBudget } from "@/lib/ai/agent/types";
 
@@ -21,7 +23,9 @@ const TOOL_DESCRIPTIONS: Record<string, string> = {
   ...FINANCE_AI_TOOL_DESCRIPTIONS,
   ...ERP_AI_TOOL_DESCRIPTIONS,
   ...MANUFACTURING_AI_TOOL_DESCRIPTIONS,
+  ...MANUFACTURING_AI_ACTION_DESCRIPTIONS,
   ...TAILORING_AI_TOOL_DESCRIPTIONS,
+  ...TAILORING_AI_ACTION_DESCRIPTIONS,
   TASK_DRAFT_PREPARE: "Préparer un brouillon de tâche DTSC sans créer la tâche finale.",
   SUPPORT_TICKET_CREATE: "Créer un ticket support DTSC uniquement après confirmation humaine structurelle.",
   DTSC_CONTACT_EMAIL_SEND: "Envoyer un message à DTSC uniquement après confirmation humaine structurelle.",

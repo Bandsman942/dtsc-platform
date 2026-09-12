@@ -1,0 +1,22 @@
+model EnterpriseTailoringOnboardingRun {
+  id                   String   @id @default(cuid())
+  organizationId       String   @unique
+  status               String   @default("IN_PROGRESS")
+  currentStep          String   @default("IDENTITY")
+  operatingMode        String   @default("MIXED")
+  preferredSiteId      String?
+  preferredWarehouseId String?
+  readinessJson        Json?
+  blockedReason        String?
+  revision             Int      @default(1)
+  startedAt            DateTime @default(now())
+  completedAt          DateTime?
+  createdByUserId      String
+  updatedByUserId      String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  archivedAt           DateTime?
+
+  @@index([organizationId, status, updatedAt])
+  @@index([organizationId, archivedAt, updatedAt])
+}

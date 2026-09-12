@@ -8,6 +8,10 @@ import {
 } from "@/lib/enterprise/business-subtype-registry";
 import { RETAIL_SECTOR_CODE } from "@/lib/enterprise/retail/constants";
 import { normalizeRetailBusinessSubtypeCode } from "@/lib/enterprise/retail/subtype-registry";
+import {
+  buildTailoringTemplateLayers,
+  tailoringLayerSummaryModules,
+} from "@/lib/enterprise/tailoring/template-preview";
 import { canManageClientOrganizations } from "@/lib/organizations";
 
 export async function GET(req: Request) {
@@ -58,8 +62,8 @@ export async function GET(req: Request) {
   }
 
   // Retail keeps its historical module-scope adapter during the generic cutover.
-  // Other sectors receive no specialized module filtering until their runtime
-  // implementation is promoted in its own iteration.
+  // Other sector/subtype specializations expose their additive layer metadata
+  // without changing the canonical sector template engine.
   const retailBusinessSubtypeCode = basePreview.sector.code === RETAIL_SECTOR_CODE
     ? normalizeRetailBusinessSubtypeCode(businessSubtype?.code || null)
     : null;
@@ -69,6 +73,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  const layers = buildTailoringTemplateLayers(sectorPreview, businessSubtype?.code || null);
   const preview = {
     ...sectorPreview,
     businessSubtype: businessSubtype
@@ -80,6 +85,11 @@ export async function GET(req: Request) {
           descriptionEn: businessSubtype.descriptionEn,
         }
       : null,
+    // The current Administration DTSC panel already renders preview.modules.
+    // For Couture, present the requested three-layer summary there while the
+    // full structured layer/module details stay available in `layers`.
+    modules: layers ? tailoringLayerSummaryModules(layers) : sectorPreview.modules,
+    layers,
   };
   const businessSubtypes = listBusinessSubtypesForSector(preview.sector.code).map((subtype) => ({
     code: subtype.code,

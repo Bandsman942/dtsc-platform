@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { EnterpriseTailoringWorkspace } from "@/components/enterprise/tailoring/enterprise-tailoring-workspace";
+import { TailoringCommercialReadiness } from "@/components/enterprise/tailoring/tailoring-commercial-readiness";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
 import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
@@ -38,13 +39,18 @@ export default async function EnterpriseTailoringPage({ params }: Params) {
 
   return (
     <AppShell user={user}>
-      <EnterpriseTailoringWorkspace
-        organizationId={organizationId}
-        organizationName={organization.name}
-        definition={capabilities.definition}
-        initialFocus={canonicalModuleCode as TailoringModuleCode}
-        locale={user.locale}
-      />
+      <div className="space-y-4">
+        {canonicalModuleCode === "TAILORING_OVERVIEW" ? (
+          <TailoringCommercialReadiness organizationId={organizationId} locale={user.locale} />
+        ) : null}
+        <EnterpriseTailoringWorkspace
+          organizationId={organizationId}
+          organizationName={organization.name}
+          definition={capabilities.definition}
+          initialFocus={canonicalModuleCode as TailoringModuleCode}
+          locale={user.locale}
+        />
+      </div>
     </AppShell>
   );
 }
