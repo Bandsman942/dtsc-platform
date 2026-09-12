@@ -7,7 +7,7 @@ requirePaths([
   "prisma/enterprise-accounting.prisma",
 ]);
 requireTokens("lib/enterprise/accounting/statements-service.ts", [
-  "e.status = 'POSTED'",
+  "status IN ('POSTED', 'REVERSED')",
   "trialBalance",
   "generalLedger",
   "incomeStatement",
@@ -34,4 +34,4 @@ requireTokens("prisma/enterprise-accounting.prisma", [
   "snapshotJson",
   "publishedAt",
 ]);
-success("enterprise financial statements and snapshots");
+success("enterprise financial statements and snapshots retain POSTED + REVERSED ledger history");
