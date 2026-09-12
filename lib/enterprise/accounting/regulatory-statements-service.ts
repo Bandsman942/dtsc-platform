@@ -73,7 +73,7 @@ export async function generateRegulatoryStatement(
     FROM "EnterpriseLedgerAccount" a
     JOIN "EnterpriseJournalLine" l ON l."ledgerAccountId" = a.id AND l."organizationId" = a."organizationId"
     JOIN "EnterpriseJournalEntry" e ON e.id = l."journalEntryId" AND e."organizationId" = l."organizationId"
-      AND e.status = 'POSTED' AND e."accountingDate" BETWEEN ${input.periodStart} AND ${input.periodEnd}
+      AND e.status IN ('POSTED', 'REVERSED') AND e."accountingDate" BETWEEN ${input.periodStart} AND ${input.periodEnd}
     WHERE a."organizationId" = ${organizationId} AND a.code IN (${Prisma.join(accountCodes)})
     GROUP BY a.code
   `);
@@ -105,6 +105,6 @@ export async function generateRegulatoryStatement(
     periodStart: input.periodStart,
     periodEnd: input.periodEnd,
     lines,
-    traceability: "statement line -> account codes -> posted journal entries",
+    traceability: "statement line -> account codes -> ledger-bearing journal entries (POSTED or REVERSED originals)",
   };
 }
