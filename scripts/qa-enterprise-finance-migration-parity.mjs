@@ -6,13 +6,16 @@ if (!shadowDatabaseUrl) {
   throw new Error("SHADOW_DATABASE_URL is required for Finance migration parity checks");
 }
 
-const accountingSchema = readFileSync("prisma/enterprise-accounting.prisma", "utf8");
+const accountingSchemas = [
+  "prisma/enterprise-accounting.prisma",
+  "prisma/enterprise-accounting-periodic.prisma",
+].map((path) => readFileSync(path, "utf8")).join("\n");
 const financeModels = new Set(
-  [...accountingSchema.matchAll(/^model\s+(\w+)\s*\{/gm)].map((match) => match[1]),
+  [...accountingSchemas.matchAll(/^model\s+(\w+)\s*\{/gm)].map((match) => match[1]),
 );
 financeModels.add("EnterpriseFinancialStatementSnapshot");
 
-if (financeModels.size < 40) {
+if (financeModels.size < 43) {
   throw new Error(`Finance parity scope is unexpectedly small: ${financeModels.size} models`);
 }
 
@@ -53,5 +56,5 @@ if (affectedModels.length > 0) {
 }
 
 console.log(
-  `✓ Finance migration parity: ${financeModels.size} Iteration 3 models are unaffected by the remaining repository-wide historical drift.`,
+  `✓ Finance migration parity: ${financeModels.size} Finance models, including Accounting C4 periodic models, are aligned with migrations.`,
 );

@@ -40,7 +40,7 @@ export async function calculateFinancialCloseChecklist(organizationId: string, f
       SELECT a.id AS "accountId", COALESCE(SUM(l.debit - l.credit), 0) AS balance
       FROM "EnterpriseLedgerAccount" a
       LEFT JOIN "EnterpriseJournalLine" l ON l."ledgerAccountId" = a.id AND l."organizationId" = a."organizationId"
-      LEFT JOIN "EnterpriseJournalEntry" e ON e.id = l."journalEntryId" AND e."organizationId" = l."organizationId" AND e.status = 'POSTED' AND e."accountingDate" <= ${period.endDate}
+      LEFT JOIN "EnterpriseJournalEntry" e ON e.id = l."journalEntryId" AND e."organizationId" = l."organizationId" AND e.status IN ('POSTED', 'REVERSED') AND e."accountingDate" <= ${period.endDate}
       WHERE a."organizationId" = ${organizationId} AND a."accountSubtype" = 'CLEARING'
       GROUP BY a.id
       HAVING ABS(COALESCE(SUM(CASE WHEN e.id IS NOT NULL THEN l.debit - l.credit ELSE 0 END), 0)) > 0.000001

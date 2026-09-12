@@ -11,6 +11,7 @@ requireTokens("lib/enterprise/accounting/close-service.ts", [
   "openCashSessions",
   "pendingReconciliations",
   "unresolvedClearingAccounts",
+  "e.status IN ('POSTED', 'REVERSED')",
   "FINANCIAL_CLOSE_SELF_APPROVAL_FORBIDDEN",
   "FINANCIAL_CLOSE_SELF_REOPEN_FORBIDDEN",
   "status: \"CLOSED\"",
@@ -32,4 +33,4 @@ requireTokens("app/api/enterprise/[organizationId]/financial-close/[closeId]/tra
   'parsed.data.action === "REOPEN"',
   "writeAuditLog",
 ]);
-success("enterprise financial close controls and assigned approval boundaries");
+success("enterprise financial close controls, assigned approval boundaries and POSTED + REVERSED clearing history");

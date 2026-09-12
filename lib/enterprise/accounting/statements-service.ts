@@ -26,7 +26,7 @@ async function trialBalance(organizationId: string, periodStart: Date, periodEnd
     FROM "EnterpriseLedgerAccount" a
     LEFT JOIN "EnterpriseJournalLine" l ON l."ledgerAccountId" = a.id AND l."organizationId" = a."organizationId"
     LEFT JOIN "EnterpriseJournalEntry" e ON e.id = l."journalEntryId" AND e."organizationId" = l."organizationId"
-      AND e.status = 'POSTED' AND e."accountingDate" BETWEEN ${periodStart} AND ${periodEnd}
+      AND e.status IN ('POSTED', 'REVERSED') AND e."accountingDate" BETWEEN ${periodStart} AND ${periodEnd}
     WHERE a."organizationId" = ${organizationId} AND a."archivedAt" IS NULL
     GROUP BY a.id, a.code, a."nameFr", a."nameEn", a."accountType", a."accountSubtype"
     ORDER BY a.code ASC
@@ -40,7 +40,7 @@ async function generalLedger(organizationId: string, periodStart: Date, periodEn
     INNER JOIN "EnterpriseJournalEntry" e ON e.id = l."journalEntryId" AND e."organizationId" = l."organizationId"
     INNER JOIN "EnterpriseJournal" j ON j.id = e."journalId" AND j."organizationId" = e."organizationId"
     INNER JOIN "EnterpriseLedgerAccount" a ON a.id = l."ledgerAccountId" AND a."organizationId" = l."organizationId"
-    WHERE l."organizationId" = ${organizationId} AND e.status = 'POSTED' AND e."accountingDate" BETWEEN ${periodStart} AND ${periodEnd}
+    WHERE l."organizationId" = ${organizationId} AND e.status IN ('POSTED', 'REVERSED') AND e."accountingDate" BETWEEN ${periodStart} AND ${periodEnd}
     ORDER BY e."accountingDate" ASC, e.number ASC, l."createdAt" ASC
     LIMIT 50000
   `);
@@ -52,7 +52,7 @@ async function journalSummary(organizationId: string, periodStart: Date, periodE
     FROM "EnterpriseJournalEntry" e
     INNER JOIN "EnterpriseJournal" j ON j.id = e."journalId" AND j."organizationId" = e."organizationId"
     INNER JOIN "EnterpriseJournalLine" l ON l."journalEntryId" = e.id AND l."organizationId" = e."organizationId"
-    WHERE e."organizationId" = ${organizationId} AND e.status = 'POSTED' AND e."accountingDate" BETWEEN ${periodStart} AND ${periodEnd}
+    WHERE e."organizationId" = ${organizationId} AND e.status IN ('POSTED', 'REVERSED') AND e."accountingDate" BETWEEN ${periodStart} AND ${periodEnd}
     GROUP BY j.code, j."journalType"
     ORDER BY j.code
   `);
