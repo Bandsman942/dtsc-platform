@@ -4,6 +4,8 @@
 
 SCALE-5B prolonge SCALE-5A sans mettre en cache une réponse Retail hétérogène. Le dashboard Shop est séparé en trois couches reconstructibles : **organisation / période / utilisateur**. PostgreSQL reste l'unique source canonique ; Redis REST reste une optimisation éphémère et best-effort.
 
+Ce lot étend aussi le contrat d'observabilité du programme : toute capacité de scalabilité backend disposant d'un signal fiable doit être représentée dans **Administration DTSC > CTO > Scalabilité**. Le raccourci Scalabilité rejoint le même `FloatingActionHub` que la **Boîte à outils professionnelle** afin d'éviter deux boutons flottants concurrents.
+
 ## Diagnostic traité
 
 Avant SCALE-5B, `getCommercialRetailDashboard()` regroupait jusqu'à environ 17 loaders/requêtes dans un seul `Promise.all` : configuration Retail, providers, comptes, warehouses, catalogue, ventes, Mobile Money, topups, clôtures, métriques, readiness et sessions de caisse utilisateur.
@@ -79,7 +81,7 @@ Deux familles sont suivies :
 
 L'invalidation utilise `Promise.allSettled()` et `invalidateTenantReadCache()`. Une panne Redis ou une invalidation échouée ne doit donc jamais transformer un événement métier correctement traité en échec métier. Les TTL de 15/60 secondes restent le filet de sécurité de fraîcheur.
 
-## Observabilité
+## Observabilité Retail
 
 La route `/api/enterprise/[organizationId]/retail/dashboard` conserve les mêmes contrôles session/module/RBAC avant toute lecture de projection.
 
@@ -91,17 +93,45 @@ period: HIT | MISS | FALLBACK | BYPASS
 user: BYPASS
 ```
 
-sont écrites uniquement dans les métadonnées `ApiLog` sous `retailCache`. Elles ne sont pas ajoutées au payload métier et ne sont pas affichées à l'utilisateur.
+sont écrites uniquement dans les métadonnées `ApiLog` sous `retailCache`. Elles ne sont pas ajoutées au payload métier.
+
+## Administration DTSC > CTO > Scalabilité
+
+`getProductionObservabilitySnapshot()` agrège désormais les capacités de scalabilité déjà livrées et opérables sans retourner d'identifiant tenant/utilisateur ni de secret :
+
+- **SCALE-0/1** : débit et latences API, taux d'erreur, probe PostgreSQL, connexions, pooling et requêtes longues ;
+- **SCALE-2** : Redis live, présence Redis-first, appels/reconciliation/fallbacks ;
+- **SCALE-3** : registre canonique des politiques de rate-limit, état de la distribution Redis et fenêtre d'agrégation de la télémétrie dégradée ;
+- **SCALE-4** : pression agrégée de la file durable `EnterpriseDomainEvent` avec `ready`, `processing`, `dead` et âge du plus ancien événement prêt ;
+- **SCALE-5A** : lectures `finance-overview-summary` avec HIT/MISS/FALLBACK et taux de HIT ;
+- **SCALE-5B** : lectures Retail organisation/période avec HIT/MISS/FALLBACK/BYPASS et taux de HIT.
+
+Les fenêtres UI restent 1 h, 24 h et 7 jours. Les métriques sans échantillon restent explicitement `Non mesuré` et les signaux dégradés sont affichés `À surveiller`.
+
+Le dashboard CTO reste protégé par `CONSOLE_CAPABILITIES.SECURITY_READ`, en FR/EN et responsive. Les métadonnées sont agrégées : `organizationId`, `userId`, clés Redis et DSN ne sont jamais renvoyés à la vue.
+
+### Launcher harmonisé
+
+L'ancien bouton flottant Scalabilité indépendant dans `app/admin/[section]/page.tsx` est supprimé. `CtoScalabilityFloatingAction` s'enregistre dans le `FloatingActionHub` partagé :
+
+```text
+agent mode            order 5
+CTO Scalabilité       order 8
+boîte à outils pro    order 10
+```
+
+L'action n'est enregistrée que dans la section CTO et uniquement après la décision `SECURITY_READ`. Le bouton flottant commun conserve donc une seule surface visuelle pour les actions rapides.
 
 ## Sécurité et isolation
 
 - aucune clé cache globale Retail ;
-- `organizationId` obligatoire ;
+- `organizationId` obligatoire dans les clés du cache ;
 - séparation par module ;
 - aucun `userId`, session de caisse ou mouvement de caisse dans une valeur cache partagée ;
 - aucun secret Redis côté client et aucun `NEXT_PUBLIC_*` ;
 - JSON invalide, Redis absent, timeout ou erreur => fallback PostgreSQL ;
-- PostgreSQL reste l'autorité unique et toutes les projections sont reconstructibles.
+- PostgreSQL reste l'autorité unique et toutes les projections sont reconstructibles ;
+- les métriques CTO sont agrégées et secret-free.
 
 ## Mesure attendue
 
@@ -110,7 +140,8 @@ Sur une deuxième lecture identique de la fenêtre par défaut :
 - la projection organisation peut être `HIT` et évite ses loaders PostgreSQL ;
 - la projection période peut être `HIT` et évite ses loaders PostgreSQL ;
 - la lecture de session de caisse utilisateur reste exécutée ;
-- une plage historique personnalisée ne crée aucune nouvelle famille de clés et reste `BYPASS`.
+- une plage historique personnalisée ne crée aucune nouvelle famille de clés et reste `BYPASS` ;
+- les compteurs agrégés correspondants deviennent visibles dans le dashboard CTO.
 
 SCALE-5B réduit donc le coût des lectures répétées sans sacrifier l'isolation user-specific.
 
@@ -125,7 +156,11 @@ SCALE-5B réduit donc le coût des lectures répétées sans sacrifier l'isolati
 - l'autorisation avant lecture des projections ;
 - la télémétrie `ApiLog` sans exposition dans le payload ;
 - l'invalidation worker best-effort tenant-scoped ;
-- la conservation de la fondation `tenant-read-cache.ts` de SCALE-5A.
+- la conservation de la fondation `tenant-read-cache.ts` de SCALE-5A ;
+- la présence des compteurs SCALE-5 dans le snapshot et dans l'UI CTO ;
+- l'enregistrement Scalabilité dans le `FloatingActionHub` commun et l'absence de bouton flottant indépendant.
+
+`scripts/qa-scale0d-console-dashboard.mjs` devient aussi le contrat transverse de visibilité : il exige que les signaux SCALE-2/3/4/5 livrés restent représentés dans le dashboard CTO et que la Boîte à outils professionnelle partage le même hub flottant.
 
 Les gates Shop existantes restent applicables parce que le contrat HTTP fonctionnel du dashboard ne change pas.
 
@@ -138,7 +173,10 @@ Avant merge :
 3. effectuer une mutation Retail pertinente puis vérifier le rafraîchissement du dashboard dans la fenêtre de fraîcheur ;
 4. tester une plage `from/to` personnalisée et vérifier le résultat correct ;
 5. répéter une lecture sur une seconde organisation pour vérifier l'absence de pollution croisée ;
-6. vérifier `RETAIL_POS`, `MOBILE_MONEY_AGENCY`, `TELCO_TOPUPS` et `RETAIL_DAILY_CLOSE` selon les modules disponibles.
+6. vérifier `RETAIL_POS`, `MOBILE_MONEY_AGENCY`, `TELCO_TOPUPS` et `RETAIL_DAILY_CLOSE` selon les modules disponibles ;
+7. ouvrir **Administration DTSC > CTO > Scalabilité** en FR et EN et vérifier les cartes API, PostgreSQL, IA, Redis, rate-limit, files/workers et caches/projections ;
+8. vérifier sur desktop et mobile que le raccourci Scalabilité apparaît dans le même bouton flottant que **Boîte à outils professionnelle**, sans second bouton flottant ;
+9. vérifier qu'aucune donnée tenant/user, clé Redis ou DSN n'est affichée.
 
 `OWNER_E2E` reste `NOT_EXECUTED` tant que le propriétaire ne l'a pas confirmé explicitement.
 
@@ -149,6 +187,8 @@ Aucune migration ni backfill. Le cache ne devient jamais une source de vérité 
 ## Rollback
 
 Le rollback applicatif consiste à retirer les wrappers de cache et à recomposer les trois couches depuis PostgreSQL. Les clés Redis expirent naturellement ; aucune donnée métier ne doit être restaurée.
+
+Pour l'UI CTO, le rollback peut retirer les nouvelles cartes et l'enregistrement du launcher sans modifier les autorisations ni les données métier. Les métriques restent dérivées de sources canoniques et ne nécessitent aucun rollback de données.
 
 ## Hors scope
 
