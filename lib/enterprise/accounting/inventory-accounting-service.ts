@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { idempotencyKey, money, publishFinanceEvent, sumDecimals } from "@/lib/enterprise/accounting/helpers";
-import { postBusinessEvent } from "@/lib/enterprise/accounting/posting-service";
+import { postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
 
 function movementLabel(movement: { id: string; sourceEntityType: string | null; sourceEntityId: string | null }) {
   return movement.sourceEntityType && movement.sourceEntityId
@@ -16,7 +16,7 @@ export async function valueInventoryReceipt(
   actorUserId: string,
   input: { unitCost: string; currencyCode: string },
 ) {
-  const event = await prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseStockMovement" WHERE id = ${stockMovementId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const movement = await tx.enterpriseStockMovement.findFirst({
       where: { id: stockMovementId, organizationId, direction: "IN", quantity: { gt: 0 } },
@@ -39,69 +39,71 @@ export async function valueInventoryReceipt(
       postingEvent: "INVENTORY_RECEIPT_VALUED",
       postingVersion: 1,
     });
-    const existing = await tx.enterpriseInventoryAccountingEvent.findUnique({
+    let event = await tx.enterpriseInventoryAccountingEvent.findUnique({
       where: { organizationId_idempotencyKey: { organizationId, idempotencyKey: stableKey } },
     });
-    if (existing) return existing;
 
-    await tx.enterpriseInventoryCostLayer.create({
-      data: {
+    if (!event) {
+      await tx.enterpriseInventoryCostLayer.create({
+        data: {
+          organizationId,
+          inventoryItemId: movement.inventoryItemId,
+          warehouseId: movement.warehouseId,
+          sourceMovementId: movement.id,
+          valuationMethod: "WEIGHTED_AVERAGE",
+          quantity: movement.quantity,
+          remainingQuantity: movement.quantity,
+          unitCost,
+          totalCost,
+          currencyCode: input.currencyCode,
+          effectiveAt: movement.occurredAt,
+        },
+      });
+      event = await tx.enterpriseInventoryAccountingEvent.create({
+        data: {
+          organizationId,
+          inventoryItemId: movement.inventoryItemId,
+          stockMovementId: movement.id,
+          eventType: "RECEIPT",
+          quantity: movement.quantity,
+          unitCost,
+          totalCost,
+          currencyCode: input.currencyCode,
+          idempotencyKey: stableKey,
+          status: "APPROVED",
+        },
+      });
+      await publishFinanceEvent(tx, {
         organizationId,
-        inventoryItemId: movement.inventoryItemId,
-        warehouseId: movement.warehouseId,
-        sourceMovementId: movement.id,
-        valuationMethod: "WEIGHTED_AVERAGE",
-        quantity: movement.quantity,
-        remainingQuantity: movement.quantity,
-        unitCost,
-        totalCost,
-        currencyCode: input.currencyCode,
-        effectiveAt: movement.occurredAt,
-      },
-    });
-    const created = await tx.enterpriseInventoryAccountingEvent.create({
-      data: {
-        organizationId,
-        inventoryItemId: movement.inventoryItemId,
-        stockMovementId: movement.id,
-        eventType: "RECEIPT",
-        quantity: movement.quantity,
-        unitCost,
-        totalCost,
-        currencyCode: input.currencyCode,
-        idempotencyKey: stableKey,
-        status: "APPROVED",
-      },
-    });
-    await publishFinanceEvent(tx, {
-      organizationId,
-      entityType: "EnterpriseInventoryAccountingEvent",
-      entityId: created.id,
-      eventType: "INVENTORY_RECEIPT_VALUED",
-      summary: `Inventory receipt ${movementLabel(movement)} valued`,
-      actorUserId,
-      toStatus: "APPROVED",
-      metadataJson: {
-        stockMovementId: movement.id,
-        quantity: movement.quantity.toFixed(),
-        unitCost: unitCost.toFixed(),
-        totalCost: totalCost.toFixed(),
-        currency: input.currencyCode,
-      },
-    });
-    return created;
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 });
+        entityType: "EnterpriseInventoryAccountingEvent",
+        entityId: event.id,
+        eventType: "INVENTORY_RECEIPT_VALUED",
+        summary: `Inventory receipt ${movementLabel(movement)} valued`,
+        actorUserId,
+        toStatus: "APPROVED",
+        metadataJson: {
+          stockMovementId: movement.id,
+          quantity: movement.quantity.toFixed(),
+          unitCost: unitCost.toFixed(),
+          totalCost: totalCost.toFixed(),
+          currency: input.currencyCode,
+        },
+      });
+    }
 
-  const posting = await postBusinessEvent(organizationId, actorUserId, {
-    postingEvent: "INVENTORY_RECEIPT_VALUED",
-    sourceEntityType: "EnterpriseInventoryAccountingEvent",
-    sourceEntityId: event.id,
-  });
-  await prisma.enterpriseInventoryAccountingEvent.update({
-    where: { id: event.id },
-    data: { status: "POSTED", journalEntryId: posting.entry.id },
-  });
-  return { event, posting };
+    const posting = await postBusinessEventTx(tx, organizationId, actorUserId, {
+      postingEvent: "INVENTORY_RECEIPT_VALUED",
+      sourceEntityType: "EnterpriseInventoryAccountingEvent",
+      sourceEntityId: event.id,
+    });
+    const postedEvent = event.status === "POSTED" && event.journalEntryId === posting.entry.id
+      ? event
+      : await tx.enterpriseInventoryAccountingEvent.update({
+          where: { id: event.id },
+          data: { status: "POSTED", journalEntryId: posting.entry.id },
+        });
+    return { event: postedEvent, posting };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
 }
 
 export async function valueInventoryIssue(
@@ -110,7 +112,7 @@ export async function valueInventoryIssue(
   actorUserId: string,
   input: { currencyCode: string },
 ) {
-  const event = await prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseStockMovement" WHERE id = ${stockMovementId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const movement = await tx.enterpriseStockMovement.findFirst({
       where: { id: stockMovementId, organizationId, direction: "OUT", quantity: { gt: 0 } },
@@ -129,84 +131,86 @@ export async function valueInventoryIssue(
       postingEvent: "INVENTORY_ISSUE_VALUED",
       postingVersion: 1,
     });
-    const existing = await tx.enterpriseInventoryAccountingEvent.findUnique({
+    let event = await tx.enterpriseInventoryAccountingEvent.findUnique({
       where: { organizationId_idempotencyKey: { organizationId, idempotencyKey: stableKey } },
     });
-    if (existing) return existing;
 
-    const layers = await tx.enterpriseInventoryCostLayer.findMany({
-      where: {
+    if (!event) {
+      const layers = await tx.enterpriseInventoryCostLayer.findMany({
+        where: {
+          organizationId,
+          inventoryItemId: movement.inventoryItemId,
+          warehouseId: movement.warehouseId,
+          currencyCode: input.currencyCode,
+          remainingQuantity: { gt: 0 },
+        },
+        orderBy: { effectiveAt: "asc" },
+      });
+      const availableQuantity = sumDecimals(layers.map((layer) => layer.remainingQuantity));
+      const issueQuantity = movement.quantity;
+      if (issueQuantity.greaterThan(availableQuantity)) {
+        throw new EnterpriseAccountingError("INVENTORY_ACCOUNTING_NEGATIVE_STOCK_FORBIDDEN", 409, {
+          available: availableQuantity.toFixed(),
+          requested: issueQuantity.toFixed(),
+        });
+      }
+      if (!availableQuantity.isPositive()) throw new EnterpriseAccountingError("INVENTORY_COST_LAYER_REQUIRED", 409);
+
+      const availableValue = sumDecimals(layers.map((layer) => layer.remainingQuantity.times(layer.unitCost)));
+      const weightedUnitCost = money(availableValue.dividedBy(availableQuantity));
+      const totalCost = money(issueQuantity.times(weightedUnitCost));
+      const remainingRatio = availableQuantity.minus(issueQuantity).dividedBy(availableQuantity);
+
+      for (const layer of layers) {
+        const nextQuantity = layer.remainingQuantity.times(remainingRatio).toDecimalPlaces(3, Prisma.Decimal.ROUND_HALF_UP);
+        await tx.enterpriseInventoryCostLayer.update({ where: { id: layer.id }, data: { remainingQuantity: nextQuantity } });
+      }
+
+      event = await tx.enterpriseInventoryAccountingEvent.create({
+        data: {
+          organizationId,
+          inventoryItemId: movement.inventoryItemId,
+          stockMovementId: movement.id,
+          eventType: "ISSUE",
+          quantity: issueQuantity,
+          unitCost: weightedUnitCost,
+          totalCost,
+          currencyCode: input.currencyCode,
+          idempotencyKey: stableKey,
+          status: "APPROVED",
+        },
+      });
+      await publishFinanceEvent(tx, {
         organizationId,
-        inventoryItemId: movement.inventoryItemId,
-        warehouseId: movement.warehouseId,
-        currencyCode: input.currencyCode,
-        remainingQuantity: { gt: 0 },
-      },
-      orderBy: { effectiveAt: "asc" },
-    });
-    const availableQuantity = sumDecimals(layers.map((layer) => layer.remainingQuantity));
-    const issueQuantity = movement.quantity;
-    if (issueQuantity.greaterThan(availableQuantity)) {
-      throw new EnterpriseAccountingError("INVENTORY_ACCOUNTING_NEGATIVE_STOCK_FORBIDDEN", 409, {
-        available: availableQuantity.toFixed(),
-        requested: issueQuantity.toFixed(),
+        entityType: "EnterpriseInventoryAccountingEvent",
+        entityId: event.id,
+        eventType: "INVENTORY_ISSUE_VALUED",
+        summary: `Inventory issue ${movementLabel(movement)} valued`,
+        actorUserId,
+        toStatus: "APPROVED",
+        metadataJson: {
+          stockMovementId: movement.id,
+          quantity: issueQuantity.toFixed(),
+          unitCost: weightedUnitCost.toFixed(),
+          totalCost: totalCost.toFixed(),
+          currency: input.currencyCode,
+        },
       });
     }
-    if (!availableQuantity.isPositive()) throw new EnterpriseAccountingError("INVENTORY_COST_LAYER_REQUIRED", 409);
 
-    const availableValue = sumDecimals(layers.map((layer) => layer.remainingQuantity.times(layer.unitCost)));
-    const weightedUnitCost = money(availableValue.dividedBy(availableQuantity));
-    const totalCost = money(issueQuantity.times(weightedUnitCost));
-    const remainingRatio = availableQuantity.minus(issueQuantity).dividedBy(availableQuantity);
-
-    for (const layer of layers) {
-      const nextQuantity = layer.remainingQuantity.times(remainingRatio).toDecimalPlaces(3, Prisma.Decimal.ROUND_HALF_UP);
-      await tx.enterpriseInventoryCostLayer.update({ where: { id: layer.id }, data: { remainingQuantity: nextQuantity } });
-    }
-
-    const created = await tx.enterpriseInventoryAccountingEvent.create({
-      data: {
-        organizationId,
-        inventoryItemId: movement.inventoryItemId,
-        stockMovementId: movement.id,
-        eventType: "ISSUE",
-        quantity: issueQuantity,
-        unitCost: weightedUnitCost,
-        totalCost,
-        currencyCode: input.currencyCode,
-        idempotencyKey: stableKey,
-        status: "APPROVED",
-      },
+    const posting = await postBusinessEventTx(tx, organizationId, actorUserId, {
+      postingEvent: "INVENTORY_ISSUE_VALUED",
+      sourceEntityType: "EnterpriseInventoryAccountingEvent",
+      sourceEntityId: event.id,
     });
-    await publishFinanceEvent(tx, {
-      organizationId,
-      entityType: "EnterpriseInventoryAccountingEvent",
-      entityId: created.id,
-      eventType: "INVENTORY_ISSUE_VALUED",
-      summary: `Inventory issue ${movementLabel(movement)} valued`,
-      actorUserId,
-      toStatus: "APPROVED",
-      metadataJson: {
-        stockMovementId: movement.id,
-        quantity: issueQuantity.toFixed(),
-        unitCost: weightedUnitCost.toFixed(),
-        totalCost: totalCost.toFixed(),
-        currency: input.currencyCode,
-      },
-    });
-    return created;
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 });
-
-  const posting = await postBusinessEvent(organizationId, actorUserId, {
-    postingEvent: "INVENTORY_ISSUE_VALUED",
-    sourceEntityType: "EnterpriseInventoryAccountingEvent",
-    sourceEntityId: event.id,
-  });
-  await prisma.enterpriseInventoryAccountingEvent.update({
-    where: { id: event.id },
-    data: { status: "POSTED", journalEntryId: posting.entry.id },
-  });
-  return { event, posting };
+    const postedEvent = event.status === "POSTED" && event.journalEntryId === posting.entry.id
+      ? event
+      : await tx.enterpriseInventoryAccountingEvent.update({
+          where: { id: event.id },
+          data: { status: "POSTED", journalEntryId: posting.entry.id },
+        });
+    return { event: postedEvent, posting };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
 }
 
 export async function getInventoryValuation(organizationId: string, input?: { warehouseId?: string; inventoryItemId?: string }) {

@@ -1,5 +1,6 @@
 import "./qa-hotfix-582-finance-accounting-tax-close-statements-assets.mjs";
 import "./qa-accounting-598-gl-workbench.mjs";
+import "./qa-accounting-622-atomicity.mjs";
 import "./qa-scale4f-durable-bulk-finance.mjs";
 import "./qa-accounting-framework-registry.mjs";
 import "./qa-syscohada-source-provenance.mjs";
@@ -41,6 +42,7 @@ requirePaths([
   "scripts/accounting/build-syscohada-dataset.mjs",
   "lib/enterprise/module-registry-finance.json",
   "scripts/qa-accounting-598-gl-workbench.mjs",
+  "scripts/qa-accounting-622-atomicity.mjs",
   "scripts/qa-finance-client-ux.mjs",
   "scripts/qa-erp-stabilization-final.mjs",
   "scripts/qa-erp-stabilization-finance-readiness.mjs",
