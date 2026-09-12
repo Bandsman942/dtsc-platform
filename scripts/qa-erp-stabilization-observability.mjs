@@ -6,8 +6,10 @@ const financeEn = "locales/enterprise-finance.en.json";
 const projections = "app/api/enterprise/[organizationId]/erp-projections/route.ts";
 const overviewSummaryRoute = "app/api/enterprise/[organizationId]/finance/overview-summary/route.ts";
 const overviewSummaryService = "lib/enterprise/finance/overview-summary-service.ts";
+const tenantReadCache = "lib/scalability/tenant-read-cache.ts";
+const workflowWorker = "lib/enterprise/workflows/worker.ts";
 
-requirePaths([overview, financeFr, financeEn, projections, overviewSummaryRoute, overviewSummaryService]);
+requirePaths([overview, financeFr, financeEn, projections, overviewSummaryRoute, overviewSummaryService, tenantReadCache, workflowWorker]);
 requireTokens(overview, [
   'type MetricValue = { state: "success" | "empty" | "error"; value: number | null',
   'state: "error", value: null',
@@ -38,7 +40,8 @@ requireTokens(overviewSummaryRoute, [
   "authorizeFinanceRequest",
   '"FINANCE_OVERVIEW"',
   '"view"',
-  "getEnterpriseFinanceOverviewSummary",
+  "getEnterpriseFinanceOverviewSummaryCached",
+  "readSource",
 ]);
 requireTokens(overviewSummaryService, [
   "enterpriseReceivable.count",
@@ -49,6 +52,33 @@ requireTokens(overviewSummaryService, [
   "enterpriseSalesInvoice.count",
   "enterpriseSupplierInvoice.count",
   "enterpriseApproval.count",
+  "withTenantReadCache",
+  'projection: "finance-overview-summary"',
+  'schemaVersion: "v1"',
+  "ttlSeconds: 30",
+  "isEnterpriseFinanceOverviewSummary",
+  "invalidateEnterpriseFinanceOverviewSummaryCacheForDomainEvent",
+  "FINANCE_OVERVIEW_INVALIDATION_ENTITY_TYPES",
+]);
+requireTokens(tenantReadCache, [
+  "TENANT_READ_CACHE_TIMEOUT_MS = 250",
+  "input.organizationId",
+  'source: "HIT"',
+  '"MISS"',
+  '"FALLBACK"',
+  '["GET", key]',
+  '["SET", key, JSON.stringify(value), "EX"',
+  'input.validate(parsed)',
+  '["DEL", key]',
+  "fallbackReason",
+  "recordTenantReadCacheMetric",
+]);
+forbidTokens(tenantReadCache, ["NEXT_PUBLIC_", "@/lib/prisma"]);
+requireTokens(workflowWorker, [
+  "invalidateEnterpriseFinanceOverviewSummaryCacheForDomainEvent",
+  'RETURNING "id", "attemptCount", "organizationId", "entityType"',
+  "organizationId: event.organizationId",
+  "entityType: event.entityType",
 ]);
 requireTokens(projections, [
   "clientSafeProjectionMessage",
@@ -60,4 +90,4 @@ forbidTokens(projections, [
   "...item,",
 ]);
 
-success("ERP stabilization degraded-state observability");
+success("ERP stabilization degraded-state observability + SCALE-5A tenant read cache");
