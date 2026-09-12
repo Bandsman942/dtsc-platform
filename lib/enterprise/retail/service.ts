@@ -5,6 +5,7 @@ import { postBusinessEvent, postBusinessEventTx } from "@/lib/enterprise/account
 import { money, publishFinanceEvent, sumDecimals } from "@/lib/enterprise/accounting/helpers";
 import { publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
 import { applyStockMovementTx } from "@/lib/enterprise/inventory/service";
+import { finalizeRetailSaleAccountingTx, finalizeRetailSaleReversalAccountingTx } from "@/lib/enterprise/retail/accounting";
 import { RETAIL_PROFILE_CODE, RETAIL_SECTOR_CODE } from "@/lib/enterprise/retail/constants";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { resolveMobileMoneyFloatAccountTx } from "@/lib/enterprise/retail/mobile-money-multicurrency-service";
@@ -156,7 +157,10 @@ export async function createRetailSale(organizationId: string, actorUserId: stri
     await assertRetailOrganization(tx, organizationId);
     await ensureRetailConfigurationTx(tx, organizationId, actorUserId);
     const existing = await tx.enterpriseRetailSale.findFirst({ where: { organizationId, idempotencyKey: input.idempotencyKey }, include: { lines: true, tenders: true } });
-    if (existing) return { sale: existing, idempotent: true };
+    if (existing) {
+      await finalizeRetailSaleAccountingTx(tx, organizationId, actorUserId, existing.id);
+      return { sale: existing, idempotent: true };
+    }
 
     const catalogItemIds = Array.from(new Set(input.lines.map((line) => line.catalogItemId)));
     const tenderAccountIds = Array.from(new Set(input.tenders.map((tender) => tender.financialAccountId)));
@@ -288,8 +292,9 @@ export async function createRetailSale(organizationId: string, actorUserId: stri
     }
 
     await publishEnterpriseEvent(tx, { organizationId, entityType: "EnterpriseRetailSale", entityId: sale.id, eventType: "RETAIL_POS_SALE_COMPLETED", summary: `Ticket ${sale.number} terminé`, actorUserId, toStatus: "COMPLETED", metadataJson: { total: sale.grandTotal.toFixed(), currency: sale.currencyCode, lineCount: sale.lines.length } });
+    await finalizeRetailSaleAccountingTx(tx, organizationId, actorUserId, sale.id);
     return { sale, idempotent: false };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
 }
 
 export async function reverseRetailSale(organizationId: string, saleId: string, actorUserId: string, input: RetailSaleReverseInput) {
@@ -298,7 +303,10 @@ export async function reverseRetailSale(organizationId: string, saleId: string, 
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseRetailSale" WHERE id = ${saleId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const sale = await tx.enterpriseRetailSale.findFirst({ where: { id: saleId, organizationId }, include: { lines: true, tenders: true } });
     if (!sale) throw new EnterpriseRetailError("RETAIL_SALE_NOT_FOUND", 404);
-    if (sale.status === "REVERSED") return sale;
+    if (sale.status === "REVERSED") {
+      await finalizeRetailSaleReversalAccountingTx(tx, organizationId, actorUserId, sale.id);
+      return sale;
+    }
     if (sale.status !== "COMPLETED" || sale.revision !== input.revision) throw new EnterpriseRetailError("RETAIL_SALE_ALREADY_REVERSED", 409);
 
     for (const line of sale.lines) {
@@ -326,8 +334,9 @@ export async function reverseRetailSale(organizationId: string, saleId: string, 
     await tx.enterpriseRetailTender.updateMany({ where: { organizationId, saleId: sale.id, status: "CONFIRMED" }, data: { status: "REVERSED" } });
     const updated = await tx.enterpriseRetailSale.update({ where: { id: sale.id }, data: { status: "REVERSED", reversalReason: input.reason, reversedAt: new Date(), reversedByUserId: actorUserId, revision: { increment: 1 } } });
     await publishEnterpriseEvent(tx, { organizationId, entityType: "EnterpriseRetailSale", entityId: sale.id, eventType: "RETAIL_POS_SALE_REVERSED", summary: `Ticket ${sale.number} annulé`, actorUserId, fromStatus: "COMPLETED", toStatus: "REVERSED", metadataJson: { reason: input.reason.slice(0, 500) } });
+    await finalizeRetailSaleReversalAccountingTx(tx, organizationId, actorUserId, sale.id);
     return updated;
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
 }
 
 async function getRetailProviderTx(tx: Prisma.TransactionClient, organizationId: string, providerCode: string) {
