@@ -5,9 +5,18 @@ requirePaths([
   "lib/enterprise/accounting/closing-operations-service.ts",
   "lib/enterprise/accounting/closing-operations-schemas.ts",
   "lib/enterprise/accounting/c5-semantic-aliases.ts",
+  "app/api/enterprise/[organizationId]/financial-close/operations/route.ts",
   "app/api/enterprise/[organizationId]/financial-close/fx-revaluation/route.ts",
   "app/api/enterprise/[organizationId]/financial-close/year-end/route.ts",
   "app/api/enterprise/[organizationId]/asset-accounting/[profileId]/disposals/[disposalId]/post/route.ts",
+  "components/enterprise/professional/closing-operations-panel.tsx",
+  "components/enterprise/professional/asset-disposal-panel.tsx",
+  "components/enterprise/enterprise-closing-operations-page.tsx",
+  "components/enterprise/enterprise-asset-disposals-page.tsx",
+  "app/enterprise-modules/FINANCE_CLOSE/operations/page.tsx",
+  "app/enterprise-modules/FINANCE_ASSETS/disposals/page.tsx",
+  "components/enterprise/enterprise-finance-module-page.tsx",
+  "docs/ACCOUNTING_626_CLOSING.md",
 ]);
 
 requireTokens("lib/enterprise/accounting/constants.ts", [
@@ -55,6 +64,13 @@ requireTokens("lib/enterprise/accounting/journal-template-registry.ts", [
   "YEAR_END_CLOSED",
   "ASSET_DISPOSAL_POSTED",
 ]);
+requireTokens("app/api/enterprise/[organizationId]/financial-close/operations/route.ts", [
+  '"FINANCE_CLOSE", "view"',
+  "listEnterpriseCurrencies",
+  "reversalRecordsAsOriginal",
+  "FX_CLOSING_REVALUATION_POSTED",
+  "YEAR_END_CLOSED",
+]);
 requireTokens("app/api/enterprise/[organizationId]/financial-close/fx-revaluation/route.ts", [
   '"FINANCE_CLOSE", "close"',
   "closingFxRevaluationSchema.safeParse",
@@ -70,8 +86,37 @@ requireTokens("app/api/enterprise/[organizationId]/asset-accounting/[profileId]/
   "assetDisposalPostingSchema.safeParse",
   "writeAuditLog",
 ]);
+requireTokens("components/enterprise/professional/closing-operations-panel.tsx", [
+  "Closing operations",
+  "Opérations de clôture",
+  "/financial-close/fx-revaluation",
+  "/financial-close/year-end",
+  "reversalRecordsAsOriginal",
+]);
+requireTokens("components/enterprise/professional/asset-disposal-panel.tsx", [
+  "Asset disposals",
+  "Cessions d’actifs",
+  "/disposals/${disposal.id}/post",
+  "canManage",
+]);
+requireTokens("components/enterprise/enterprise-closing-operations-page.tsx", [
+  'moduleCode: "FINANCE_CLOSE"',
+  "resolveEnterpriseModuleCapabilities",
+  "canManage={capabilities.canManage}",
+]);
+requireTokens("components/enterprise/enterprise-asset-disposals-page.tsx", [
+  'moduleCode: "FINANCE_ASSETS"',
+  "resolveEnterpriseModuleCapabilities",
+  "canManage={capabilities.canManage}",
+]);
+requireTokens("components/enterprise/enterprise-finance-module-page.tsx", [
+  "/enterprise-modules/FINANCE_CLOSE/operations",
+  "/enterprise-modules/FINANCE_ASSETS/disposals",
+]);
 
 forbidTokens("lib/enterprise/accounting/closing-operations-service.ts", ["prisma.$transaction(async (tx) => {\n    return prisma.$transaction", "deleteMany({"]);
 forbidTokens("lib/enterprise/accounting/closing-posting-builders.ts", ["accountCode:", '"121"', '"675"', '"776"']);
+forbidTokens("components/enterprise/professional/closing-operations-panel.tsx", ["window.prompt", "window.confirm"]);
+forbidTokens("components/enterprise/professional/asset-disposal-panel.tsx", ["window.prompt", "window.confirm"]);
 
-success("Accounting C5 FX, year-end and asset-disposal closing contracts");
+success("Accounting C5 FX, year-end, asset-disposal and UI contracts");
