@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRightLeft, CalendarClock } from "lucide-react";
+import { ArchiveRestore, ArrowRightLeft, BookCheck, CalendarClock } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import { EnterpriseAdvancedFinanceWorkspace } from "@/components/enterprise/professional/enterprise-advanced-finance-workspace";
 import { EnterpriseFinanceAccountingWorkspaceV3 } from "@/components/enterprise/professional/enterprise-finance-accounting-workspace-v3";
@@ -71,6 +71,30 @@ export async function EnterpriseFinanceModulePage({ moduleCode }: { moduleCode: 
               <span className="mt-1 block text-xs font-semibold text-dtsc-muted">{locale === "en" ? "Recurring entries, accruals, deferrals, allocations and controlled auto-reversal." : "Écritures récurrentes, accruals, étalements, allocations et contrepassation automatique contrôlée."}</span>
             </span>
             <CalendarClock className="h-5 w-5 shrink-0 text-dtsc-blue" />
+          </Link>
+        </div>
+      ) : null}
+
+      {moduleCode === "FINANCE_CLOSE" ? (
+        <div className="mx-auto mb-4 w-full max-w-[1600px] px-4 sm:px-6 lg:px-8">
+          <Link href="/enterprise-modules/FINANCE_CLOSE/operations" className="flex min-w-0 items-center justify-between gap-4 rounded-2xl border border-dtsc-blue/30 bg-dtsc-blue/10 px-4 py-3 text-dtsc-ink transition hover:border-dtsc-blue/60">
+            <span className="min-w-0">
+              <span className="block text-sm font-black">{locale === "en" ? "Closing operations" : "Opérations de clôture"}</span>
+              <span className="mt-1 block text-xs font-semibold text-dtsc-muted">{locale === "en" ? "Closing FX revaluation, linked reversal and fiscal year close into retained earnings." : "Réévaluation FX de clôture, contrepassation liée et clôture annuelle vers le report à nouveau."}</span>
+            </span>
+            <BookCheck className="h-5 w-5 shrink-0 text-dtsc-blue" />
+          </Link>
+        </div>
+      ) : null}
+
+      {moduleCode === "FINANCE_ASSETS" ? (
+        <div className="mx-auto mb-4 w-full max-w-[1600px] px-4 sm:px-6 lg:px-8">
+          <Link href="/enterprise-modules/FINANCE_ASSETS/disposals" className="flex min-w-0 items-center justify-between gap-4 rounded-2xl border border-dtsc-blue/30 bg-dtsc-blue/10 px-4 py-3 text-dtsc-ink transition hover:border-dtsc-blue/60">
+            <span className="min-w-0">
+              <span className="block text-sm font-black">{locale === "en" ? "Asset disposals" : "Cessions d’actifs"}</span>
+              <span className="mt-1 block text-xs font-semibold text-dtsc-muted">{locale === "en" ? "Prepare and post audited asset derecognition with proceeds and gain or loss." : "Préparez et comptabilisez la sortie auditée des actifs avec produit et gain ou perte."}</span>
+            </span>
+            <ArchiveRestore className="h-5 w-5 shrink-0 text-dtsc-blue" />
           </Link>
         </div>
       ) : null}
