@@ -68,7 +68,6 @@ export async function reverseJournalEntryTx(
       reversalOfEntryId: original.id,
       lines: {
         create: original.lines.map((line) => ({
-          organizationId,
           ledgerAccountId: line.ledgerAccountId,
           businessPartyId: line.businessPartyId,
           projectId: line.projectId,
