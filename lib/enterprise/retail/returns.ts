@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
 import { applyStockMovementTx } from "@/lib/enterprise/inventory/service";
+import { finalizeRetailReturnAccountingTx } from "@/lib/enterprise/retail/accounting";
 import type { retailReturnCreateSchema, retailReturnDecisionSchema } from "@/lib/enterprise/retail/commercial-schemas";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { prisma } from "@/lib/prisma";
@@ -284,8 +285,11 @@ export async function decideRetailReturn(
       },
     });
     if (!retailReturn) throw new EnterpriseRetailError("RETAIL_RETURN_NOT_FOUND", 404);
-    if (retailReturn.status === "COMPLETED" && input.decision === "APPROVE") return { retailReturn, idempotent: true };
-    if (retailReturn.status === "REJECTED" && input.decision === "REJECT") return { retailReturn, idempotent: true };
+    if (retailReturn.status === "COMPLETED" && input.decision === "APPROVE") {
+      const accounting = await finalizeRetailReturnAccountingTx(tx, organizationId, actorUserId, retailReturn.id);
+      return { retailReturn, idempotent: true, accounting };
+    }
+    if (retailReturn.status === "REJECTED" && input.decision === "REJECT") return { retailReturn, idempotent: true, accounting: null };
     if (retailReturn.status !== "PENDING_APPROVAL" || retailReturn.revision !== input.revision) throw new EnterpriseRetailError("RETAIL_RETURN_CONFLICT", 409);
     if (retailReturn.requestedByUserId === actorUserId) throw new EnterpriseRetailError("RETAIL_RETURN_SELF_APPROVAL_FORBIDDEN", 403);
 
@@ -302,7 +306,7 @@ export async function decideRetailReturn(
         toStatus: "REJECTED",
         metadataJson: { reason: input.reason || null },
       });
-      return { retailReturn: rejected, idempotent: false };
+      return { retailReturn: rejected, idempotent: false, accounting: null };
     }
 
     for (const line of retailReturn.lines) {
@@ -404,6 +408,7 @@ export async function decideRetailReturn(
       toStatus: "COMPLETED",
       metadataJson: { saleId: retailReturn.saleId, lineCount: completed.lines.length, total: completed.grandTotal.toFixed(), currency: completed.currencyCode },
     });
-    return { retailReturn: completed, idempotent: false };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 });
+    const accounting = await finalizeRetailReturnAccountingTx(tx, organizationId, actorUserId, completed.id);
+    return { retailReturn: completed, idempotent: false, accounting };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
 }
