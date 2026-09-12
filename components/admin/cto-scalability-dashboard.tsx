@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Activity, ArrowLeft, Bot, Database, Gauge, ServerCog } from "lucide-react";
+import { Activity, ArrowLeft, Bot, Database, Gauge, Layers3, ListTodo, ServerCog, ShieldCheck } from "lucide-react";
 import type { getProductionObservabilitySnapshot } from "@/lib/scalability/production-observability";
 import { translateScalabilityConsole } from "@/lib/scalability/console-i18n";
 
@@ -12,6 +12,13 @@ function percent(value: number | null) {
 
 function milliseconds(value: number | null) {
   return value == null ? "—" : `${Math.round(value)} ms`;
+}
+
+function elapsed(value: number | null, secondsLabel: string) {
+  if (value == null) return "—";
+  if (value < 60_000) return `${Math.round(value / 1000)} ${secondsLabel}`;
+  if (value < 3_600_000) return `${Math.round(value / 60_000)} min`;
+  return `${(value / 3_600_000).toFixed(1)} h`;
 }
 
 function metricValue(value: number | null, suffix = "") {
@@ -34,6 +41,41 @@ function Metric({ label, value, hint }: { label: string; value: string | number;
       <p className="mt-2 break-words text-2xl font-black text-dtsc-ink">{value}</p>
       {hint ? <p className="mt-1 break-words text-xs leading-5 text-dtsc-muted">{hint}</p> : null}
     </div>
+  );
+}
+
+function CacheGroup({
+  title,
+  requests,
+  hit,
+  miss,
+  fallback,
+  bypass,
+  hitRate,
+  locale,
+}: {
+  title: string;
+  requests: number;
+  hit: number;
+  miss: number;
+  fallback: number;
+  bypass?: number;
+  hitRate: number | null;
+  locale: string;
+}) {
+  const t = (key: Parameters<typeof translateScalabilityConsole>[1]) => translateScalabilityConsole(locale, key);
+  return (
+    <section className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-3 sm:p-4">
+      <h3 className="break-words font-black text-dtsc-ink">{title}</h3>
+      <div className="mt-3 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-[repeat(2,minmax(0,1fr))] xl:grid-cols-[repeat(3,minmax(0,1fr))]">
+        <Metric label={t("cacheRequests")} value={requests} />
+        <Metric label={t("cacheHit")} value={hit} />
+        <Metric label={t("cacheMiss")} value={miss} />
+        <Metric label={t("cacheFallback")} value={fallback} />
+        {bypass == null ? null : <Metric label={t("cacheBypass")} value={bypass} />}
+        <Metric label={t("cacheHitRate")} value={percent(hitRate)} />
+      </div>
+    </section>
   );
 }
 
@@ -74,6 +116,11 @@ export function CtoScalabilityDashboard({ snapshot, locale }: { snapshot: Snapsh
   const aiWatch = snapshot.ai.sampleCount > 0 && ((snapshot.ai.rateLimitedRate ?? 0) > 0 || (snapshot.ai.latencyMs.p99 ?? 0) >= 2000);
   const redisMeasured = snapshot.redis.status === "OK";
   const redisWatch = snapshot.redis.status === "DEGRADED" || snapshot.redis.status === "UNAVAILABLE";
+  const rateLimitWatch = snapshot.rateLimit.distributedStatus !== "OK";
+  const queueWatch = snapshot.queues.dead > 0 || (snapshot.queues.oldestReadyAgeMs ?? 0) >= 300_000;
+  const cacheSamples = snapshot.readCache.finance.requests + snapshot.readCache.retail.requests;
+  const cacheFallbacks = snapshot.readCache.finance.fallback + snapshot.readCache.retail.organization.fallback + snapshot.readCache.retail.period.fallback;
+  const cacheWatch = cacheFallbacks > 0;
 
   const databaseModeLabel = (() => {
     switch (snapshot.database.connectionPolicy.mode) {
@@ -163,10 +210,7 @@ export function CtoScalabilityDashboard({ snapshot, locale }: { snapshot: Snapsh
         <article className="dtsc-panel min-w-0 max-w-full p-4 sm:p-5">
           <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3"><ServerCog className="h-5 w-5 shrink-0 text-cyan-600" aria-hidden="true" /><h2 className="break-words text-xl font-black text-dtsc-ink">{t("redis")}</h2></div>
-            <StatusPill
-              tone={redisMeasured ? "measured" : redisWatch ? "watch" : "not-measured"}
-              label={redisMeasured ? t("measured") : redisWatch ? t("watch") : t("notMeasured")}
-            />
+            <StatusPill tone={redisMeasured ? "measured" : redisWatch ? "watch" : "not-measured"} label={redisMeasured ? t("measured") : redisWatch ? t("watch") : t("notMeasured")} />
           </div>
           <div className="mt-4 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-[repeat(2,minmax(0,1fr))]">
             <Metric label={t("redisProbe")} value={milliseconds(snapshot.redis.probeLatencyMs)} />
@@ -186,6 +230,51 @@ export function CtoScalabilityDashboard({ snapshot, locale }: { snapshot: Snapsh
           </div>
           <p className="mt-4 break-words text-xs leading-5 text-dtsc-muted"><strong>{t("coverage")}:</strong> {t("redisSourceHint")}</p>
           {!redisMeasured ? <p className="mt-3 break-words rounded-xl border border-amber-300/60 bg-amber-50 p-3 text-sm font-semibold text-amber-900 dark:border-amber-600/40 dark:bg-amber-950/30 dark:text-amber-100">{t("redisUnavailable")}</p> : null}
+        </article>
+
+        <article className="dtsc-panel min-w-0 max-w-full p-4 sm:p-5">
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3"><ShieldCheck className="h-5 w-5 shrink-0 text-cyan-600" aria-hidden="true" /><h2 className="break-words text-xl font-black text-dtsc-ink">{t("rateLimit")}</h2></div>
+            <StatusPill tone={rateLimitWatch ? "watch" : "measured"} label={rateLimitWatch ? t("watch") : t("measured")} />
+          </div>
+          <div className="mt-4 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-[repeat(2,minmax(0,1fr))]">
+            <Metric label={t("distributedLimiter")} value={rateLimitWatch ? t("degraded") : t("available")} />
+            <Metric label={t("rateLimitPolicies")} value={snapshot.rateLimit.policyRules.total} />
+            <Metric label={t("securityCritical")} value={snapshot.rateLimit.policyRules.securityCritical} />
+            <Metric label={t("costCritical")} value={snapshot.rateLimit.policyRules.costCritical} />
+            <Metric label={t("availabilityBalanced")} value={snapshot.rateLimit.policyRules.availabilityBalanced} />
+            <Metric label={t("availabilityFirst")} value={snapshot.rateLimit.policyRules.availabilityFirst} />
+            <Metric label={t("defaultFailureMode")} value={snapshot.rateLimit.defaultFailureMode === "local" ? t("localFallback") : snapshot.rateLimit.defaultFailureMode} />
+            <Metric label={t("fallbackAggregation")} value={`${Math.round(snapshot.rateLimit.fallbackAggregationWindowMs / 1000)} ${t("seconds")}`} />
+          </div>
+          <p className="mt-4 break-words text-xs leading-5 text-dtsc-muted"><strong>{t("coverage")}:</strong> {t("rateLimitSourceHint")}</p>
+        </article>
+
+        <article className="dtsc-panel min-w-0 max-w-full p-4 sm:p-5">
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3"><ListTodo className="h-5 w-5 shrink-0 text-cyan-600" aria-hidden="true" /><h2 className="break-words text-xl font-black text-dtsc-ink">{t("queues")}</h2></div>
+            <StatusPill tone={queueWatch ? "watch" : "measured"} label={queueWatch ? t("watch") : t("measured")} />
+          </div>
+          <div className="mt-4 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-[repeat(2,minmax(0,1fr))]">
+            <Metric label={t("queueReady")} value={snapshot.queues.ready} />
+            <Metric label={t("queueProcessing")} value={snapshot.queues.processing} />
+            <Metric label={t("queueDead")} value={snapshot.queues.dead} />
+            <Metric label={t("oldestReadyAge")} value={elapsed(snapshot.queues.oldestReadyAgeMs, t("seconds"))} />
+          </div>
+          <p className="mt-4 break-words text-xs leading-5 text-dtsc-muted"><strong>{t("coverage")}:</strong> {t("queueSourceHint")}</p>
+        </article>
+
+        <article className="dtsc-panel min-w-0 max-w-full p-4 sm:p-5 xl:col-span-2">
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3"><Layers3 className="h-5 w-5 shrink-0 text-cyan-600" aria-hidden="true" /><h2 className="break-words text-xl font-black text-dtsc-ink">{t("readCache")}</h2></div>
+            <StatusPill tone={cacheSamples === 0 ? "not-measured" : cacheWatch ? "watch" : "measured"} label={cacheSamples === 0 ? t("noSamples") : cacheWatch ? t("watch") : t("measured")} />
+          </div>
+          <div className="mt-4 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 xl:grid-cols-[repeat(3,minmax(0,1fr))]">
+            <CacheGroup title={t("financeOverviewCache")} requests={snapshot.readCache.finance.requests} hit={snapshot.readCache.finance.hit} miss={snapshot.readCache.finance.miss} fallback={snapshot.readCache.finance.fallback} hitRate={snapshot.readCache.finance.hitRate} locale={locale} />
+            <CacheGroup title={t("retailOrganizationCache")} requests={snapshot.readCache.retail.requests} hit={snapshot.readCache.retail.organization.hit} miss={snapshot.readCache.retail.organization.miss} fallback={snapshot.readCache.retail.organization.fallback} hitRate={snapshot.readCache.retail.organization.hitRate} locale={locale} />
+            <CacheGroup title={t("retailPeriodCache")} requests={snapshot.readCache.retail.requests} hit={snapshot.readCache.retail.period.hit} miss={snapshot.readCache.retail.period.miss} fallback={snapshot.readCache.retail.period.fallback} bypass={snapshot.readCache.retail.period.bypass} hitRate={snapshot.readCache.retail.period.hitRate} locale={locale} />
+          </div>
+          <p className="mt-4 break-words text-xs leading-5 text-dtsc-muted"><strong>{t("coverage")}:</strong> {t("readCacheSourceHint")}</p>
         </article>
       </section>
 
