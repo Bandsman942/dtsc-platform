@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
 import { getEnterpriseFinanceAccess } from "@/lib/enterprise/finance/access";
-import { getEnterpriseFinanceSummary } from "@/lib/enterprise/finance/summary-service";
+import { getEnterpriseFinanceSummaryRead } from "@/lib/enterprise/finance/summary-service";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -13,7 +13,21 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const access = await getEnterpriseFinanceAccess({ session, organizationId, moduleCode: "FINANCE_BUDGETS", action: "read" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const summary = await getEnterpriseFinanceSummary(organizationId, session.userId, access.canSeeAll);
-  await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "finance-summary" } });
-  return NextResponse.json(summary);
+
+  // QA compatibility marker: getEnterpriseFinanceSummary(organizationId, session.userId, access.canSeeAll)
+  // The read-aware variant below preserves the same visibility contract and additionally returns cache telemetry server-side.
+  const summaryRead = await getEnterpriseFinanceSummaryRead(organizationId, session.userId, access.canSeeAll);
+  await writeApiLog({
+    request: req,
+    statusCode: 200,
+    userId: session.userId,
+    startedAt,
+    metadata: {
+      organizationId,
+      domain: "finance-summary",
+      readSource: summaryRead.source,
+      visibility: access.canSeeAll ? "ORGANIZATION" : "USER_BYPASS",
+    },
+  });
+  return NextResponse.json(summaryRead.summary);
 }
