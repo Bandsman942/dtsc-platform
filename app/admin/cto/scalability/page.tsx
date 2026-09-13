@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { CtoScalabilityDashboard } from "@/components/admin/cto-scalability-dashboard";
+import { CtoScale5cReadCachePanel } from "@/components/admin/cto-scale5c-read-cache-panel";
 import { ContextualUserGuide } from "@/components/user-guides/contextual-user-guide";
 import { AppShell } from "@/components/layout/app-shell";
 import { canAccessAdministration, parseAdminRoleAccess } from "@/lib/admin-access";
@@ -9,6 +10,7 @@ import { CONSOLE_CAPABILITIES, getConsoleAccessDecision } from "@/lib/console/co
 import { getDashboardUrl } from "@/lib/domains";
 import { isDtscInternalSession } from "@/lib/organizations";
 import { getProductionObservabilitySnapshot } from "@/lib/scalability/production-observability";
+import { getScale5cReadPathObservability } from "@/lib/scalability/scale5c-read-path-observability";
 import { getAppSettings } from "@/lib/settings";
 import { getIteration07UserGuide } from "@/lib/user-guides/iteration07-guides";
 
@@ -35,7 +37,10 @@ export default async function CtoScalabilityPage({ searchParams }: { searchParam
   const raw = await searchParams;
   const rawWindow = Array.isArray(raw.windowHours) ? raw.windowHours[0] : raw.windowHours;
   const windowHours = normalizeWindow(rawWindow);
-  const snapshot = await getProductionObservabilitySnapshot(windowHours);
+  const [snapshot, scale5cSnapshot] = await Promise.all([
+    getProductionObservabilitySnapshot(windowHours),
+    getScale5cReadPathObservability(windowHours),
+  ]);
   const locale = user.locale === "en" ? "en" : "fr";
   const guide = getIteration07UserGuide("DTSC_CTO", locale);
 
@@ -44,6 +49,7 @@ export default async function CtoScalabilityPage({ searchParams }: { searchParam
       <div className="w-full min-w-0 max-w-full space-y-5">
         <div className="flex justify-end">{guide ? <ContextualUserGuide guide={guide} /> : null}</div>
         <CtoScalabilityDashboard snapshot={snapshot} locale={locale} />
+        <CtoScale5cReadCachePanel snapshot={scale5cSnapshot} locale={locale} />
       </div>
     </AppShell>
   );
