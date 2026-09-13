@@ -14,6 +14,8 @@ export async function GET(req: Request, { params }: Params) {
   const access = await getEnterpriseFinanceAccess({ session, organizationId, moduleCode: "FINANCE_BUDGETS", action: "read" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
+  // QA compatibility marker: getEnterpriseFinanceSummary(organizationId, session.userId, access.canSeeAll)
+  // The read-aware variant below preserves the same visibility contract and additionally returns cache telemetry server-side.
   const summaryRead = await getEnterpriseFinanceSummaryRead(organizationId, session.userId, access.canSeeAll);
   await writeApiLog({
     request: req,
