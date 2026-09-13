@@ -6,6 +6,7 @@ import {
   FINANCE_REPORT_GENERATION_EVENT_TYPE,
 } from "@/lib/enterprise/bulk-jobs/constants";
 import { invalidateEnterpriseFinanceOverviewSummaryCacheForDomainEvent } from "@/lib/enterprise/finance/overview-summary-service";
+import { invalidateCommercialRetailDashboardCacheForDomainEvent } from "@/lib/enterprise/retail/commercial-dashboard-projections";
 import { WORKFLOW_LIMITS } from "@/lib/enterprise/workflows/constants";
 import { processWorkflowDomainEvent, resumeWaitingRuns } from "@/lib/enterprise/workflows/engine";
 import { processCrossModuleProjections, processPendingCrossModuleProjections } from "@/lib/enterprise/cross-module/projection-service";
@@ -148,10 +149,16 @@ export async function processPendingWorkflowEvents({ batchSize = WORKFLOW_LIMITS
     try {
       const projectionResult = await processCrossModuleProjections(event.id);
       await processWorkflowDomainEvent(event.id);
-      await invalidateEnterpriseFinanceOverviewSummaryCacheForDomainEvent({
-        organizationId: event.organizationId,
-        entityType: event.entityType,
-      });
+      await Promise.all([
+        invalidateEnterpriseFinanceOverviewSummaryCacheForDomainEvent({
+          organizationId: event.organizationId,
+          entityType: event.entityType,
+        }),
+        invalidateCommercialRetailDashboardCacheForDomainEvent({
+          organizationId: event.organizationId,
+          entityType: event.entityType,
+        }),
+      ]);
       await prisma.enterpriseDomainEvent.updateMany({ where: { id: event.id, processingStatus: "PROCESSING", lockedBy: workerId }, data: { processingStatus: "PROCESSED", processedAt: new Date(), lockedAt: null, lockedBy: null, lastError: null } });
       results.push({ id: event.id, status: "PROCESSED", projectionFailures: projectionResult.failures });
     } catch (error) {

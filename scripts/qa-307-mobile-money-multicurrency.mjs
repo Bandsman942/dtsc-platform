@@ -218,14 +218,19 @@ const page = read("app/enterprise-modules/retail-page.tsx");
 check(page.includes("<MobileMoneyAgencyWorkspace"), "MOBILE_MONEY_AGENCY must use the specialized multi-currency workspace");
 
 const dashboard = read("lib/enterprise/retail/commercial-dashboard.ts");
-check(hasAll(dashboard, [
+const dashboardProjections = read("lib/enterprise/retail/commercial-dashboard-projections.ts");
+check(hasAll(dashboardProjections, [
   "getMobileMoneyProviderAccountConfiguration",
-  "providers.every((provider) => provider.ready)",
+  "getRetailDashboardUserProjection",
   "enterpriseCashSession.findMany",
   "cashSessionsRaw.map",
   "expectedCurrentAmount",
-  "cashSessions,",
-]), "Mobile Money readiness and dashboard must expose every active cashier till with an expected live balance without regressing provider readiness");
+]), "Mobile Money dashboard projections must preserve provider configuration and every current-user till with live expected balance");
+check(hasAll(dashboard, [
+  "mobileMoneyConfiguration.providers.every((provider) => provider.ready)",
+  "cashSessions: userProjection.cashSessions",
+  "readyForMobileMoney: canonicalReadiness.ready && allMobileMoneyProvidersReady",
+]), "Mobile Money readiness and dashboard must preserve provider readiness while exposing current-user cash sessions");
 
 const domainDoc = read("docs/ERP_RETAIL_TELCO_MOBILE_MONEY.md");
 check(hasAll(domainDoc, [

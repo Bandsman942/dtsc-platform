@@ -31,13 +31,19 @@ expect(mobileCss.includes("overflow-wrap: anywhere"), "Immersive collaborator co
 // 2. Shop: one canonical setup readiness and actionable deep links.
 const onboarding = read("lib/enterprise/retail/self-service-onboarding.ts");
 const commercialDashboard = read("lib/enterprise/retail/commercial-dashboard.ts");
+const commercialDashboardProjections = read("lib/enterprise/retail/commercial-dashboard-projections.ts");
 const readinessLinks = read("lib/enterprise/retail/readiness-deep-links.ts");
 const readinessUi = read("components/enterprise/professional/retail-global-readiness.tsx");
 expect(onboarding.includes("getCanonicalRetailReadiness"), "Shop must expose one canonical readiness resolver");
 expect(onboarding.includes("getRetailReadinessDeepLink"), "Canonical Shop readiness items must include their configuration destination");
 expect(onboarding.includes("catalogCount > 0 &&"), "Inventory readiness must not be complete before the catalog exists");
-expect(commercialDashboard.includes("getCanonicalRetailReadiness"), "Commercial Shop dashboard must consume canonical onboarding readiness");
+expect(
+  commercialDashboard.includes("getRetailDashboardOrganizationProjection")
+    && commercialDashboardProjections.includes("getCanonicalRetailReadiness"),
+  "Commercial Shop dashboard must consume canonical onboarding readiness through its organization projection",
+);
 expect(!commercialDashboard.includes("const readiness = ["), "Commercial Shop dashboard must not rebuild a competing base readiness checklist");
+expect(!commercialDashboardProjections.includes("const readiness = ["), "Commercial Shop dashboard projections must not rebuild a competing base readiness checklist");
 for (const code of ["COUNTRY_PACK", "FUNCTIONAL_CURRENCY", "SITE", "WAREHOUSE", "CASH_ACCOUNT", "CATALOG", "INVENTORY_LINKS", "TEAM", "ACCOUNTING", "RETAIL_CONFIGURATION"]) {
   expect(readinessLinks.includes(`${code}:`), `Shop readiness deep-link catalog must cover ${code}`);
 }

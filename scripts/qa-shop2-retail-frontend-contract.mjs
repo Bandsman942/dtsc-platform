@@ -9,6 +9,7 @@ const check = (condition, message) => { if (!condition) failures.push(message); 
 const pos = read("components/enterprise/professional/retail-pos-workspace.tsx");
 const shared = read("components/enterprise/professional/retail-workspace-shared.tsx");
 const dashboard = read("lib/enterprise/retail/commercial-dashboard.ts");
+const dashboardProjections = read("lib/enterprise/retail/commercial-dashboard-projections.ts");
 const searchRoute = read("app/api/enterprise/[organizationId]/retail/products/search/route.ts");
 
 for (const marker of [
@@ -36,8 +37,9 @@ check(pos.includes("customerFacingError"), "POS product search errors must use c
 check(shared.includes("RetailErpLinks"), "Retail workspace must expose ERP continuity links");
 check(!fs.existsSync(path.join(root, "components/enterprise/professional/enterprise-retail-shop-workspace.tsx")), "Retired monolithic Retail workspace must not return");
 
-check(dashboard.includes("const includeCatalog = includeTelco;"), "RETAIL_POS dashboard must not bootstrap the 400-item catalog after server search cutover");
-check(!dashboard.includes("includePos\n      ? prisma.enterpriseInventoryItem.findMany"), "RETAIL_POS dashboard must not load the full inventory balance graph");
+check(dashboardProjections.includes("const includeCatalog = includeTelco;"), "RETAIL_POS dashboard must not bootstrap the 400-item catalog after server search cutover");
+check(!dashboard.includes("enterpriseCatalogItem.findMany"), "RETAIL_POS dashboard composer must not own a bootstrap catalog query");
+check(!dashboardProjections.includes("includePos\n      ? prisma.enterpriseInventoryItem.findMany"), "RETAIL_POS dashboard must not load the full inventory balance graph");
 
 for (const marker of ["pageSize", "quantityOnHand", "quantityReserved", "warehouseId", "organizationId"]) {
   check(searchRoute.includes(marker), `Server POS product search contract missing ${marker}`);
