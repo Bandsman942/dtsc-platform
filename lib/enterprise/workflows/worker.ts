@@ -6,6 +6,7 @@ import {
   FINANCE_REPORT_GENERATION_EVENT_TYPE,
 } from "@/lib/enterprise/bulk-jobs/constants";
 import { invalidateEnterpriseFinanceOverviewSummaryCacheForDomainEvent } from "@/lib/enterprise/finance/overview-summary-service";
+import { invalidateEnterpriseFinanceSummaryCacheForDomainEvent } from "@/lib/enterprise/finance/summary-service";
 import { invalidateCommercialRetailDashboardCacheForDomainEvent } from "@/lib/enterprise/retail/commercial-dashboard-projections";
 import { WORKFLOW_LIMITS } from "@/lib/enterprise/workflows/constants";
 import { processWorkflowDomainEvent, resumeWaitingRuns } from "@/lib/enterprise/workflows/engine";
@@ -151,6 +152,10 @@ export async function processPendingWorkflowEvents({ batchSize = WORKFLOW_LIMITS
       await processWorkflowDomainEvent(event.id);
       await Promise.all([
         invalidateEnterpriseFinanceOverviewSummaryCacheForDomainEvent({
+          organizationId: event.organizationId,
+          entityType: event.entityType,
+        }),
+        invalidateEnterpriseFinanceSummaryCacheForDomainEvent({
           organizationId: event.organizationId,
           entityType: event.entityType,
         }),
