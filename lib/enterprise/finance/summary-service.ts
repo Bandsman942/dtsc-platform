@@ -33,12 +33,14 @@ function isFinanceSummary(value: unknown): value is FinanceSummary {
     if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false;
     const row = entry as Record<string, unknown>;
     return typeof row.currency === "string"
+      && typeof row.activeBudgets === "number"
       && Number.isInteger(row.activeBudgets)
       && typeof row.plannedAmount === "string"
       && typeof row.committedAmount === "string"
       && typeof row.actualAmount === "string"
       && typeof row.availableAmount === "string"
       && typeof row.unbudgetedExpenseAmount === "string"
+      && typeof row.unbudgetedExpenseCount === "number"
       && Number.isInteger(row.unbudgetedExpenseCount);
   });
 }
