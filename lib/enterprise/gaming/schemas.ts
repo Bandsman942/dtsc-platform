@@ -114,7 +114,11 @@ export const gamingBookingTransitionSchema = z.object({
   scheduledEndAt: z.coerce.date().optional(),
   playerCount: z.coerce.number().int().min(1).max(16).optional(),
   notes: optionalNotes,
+  serviceCatalogItemId: optionalEntityId,
 }).superRefine((value, ctx) => {
+  if (value.action === "CONVERT" && !value.serviceCatalogItemId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["serviceCatalogItemId"], message: "Sélectionnez le service catalogue à facturer avant de démarrer la session réservée." });
+  }
   if (value.action !== "UPDATE") return;
   const hasEditableField = [
     value.stationId,
