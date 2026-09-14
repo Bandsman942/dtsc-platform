@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { AlertTriangle, BookOpenCheck, ChevronRight, FilePlus2, Plus, RotateCcw, Search } from "lucide-react";
+import { Field } from "@/components/enterprise/core-v2/erp-v2-ui";
+import { FinanceAccountingReferenceSelect } from "@/components/enterprise/core-v2/finance-accounting-reference-select";
 import { AccountingCompactTable, type AccountingCompactColumn } from "@/components/enterprise/professional/accounting-compact-table";
 import { AccountingJournalWorkbench } from "@/components/enterprise/professional/accounting-journal-workbench";
+import { AccountingRecordDetail, type AccountingRecordDetailKind } from "@/components/enterprise/professional/accounting-record-detail";
 import { AssignedApprovalSubmitPanel } from "@/components/enterprise/professional/assigned-approval-submit-panel";
 import { EnterpriseAccountingOnboardingPanel } from "@/components/enterprise/professional/enterprise-accounting-onboarding-panel";
-import { FinanceAccountingReferenceSelect } from "@/components/enterprise/core-v2/finance-accounting-reference-select";
 import { ProfessionalError, ProfessionalLoading } from "@/components/enterprise/professional/professional-erp-ui";
 import { financeDate, financeEnumLabel, financeMoney, financeStatusLabel, financeStatusTone, safeFinanceError, type FinanceLocale } from "@/components/enterprise/professional/finance-professional-ui";
 import { financeMutation } from "@/components/enterprise/professional/finance-professional-workspace-shared";
@@ -16,6 +18,8 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useToastMessage } from "@/components/ui/use-toast-message";
+import { type BusinessContextAction } from "@/components/workspace/context-actions";
+import { FullscreenEntityDetail } from "@/components/workspace/fullscreen-entity-detail";
 import { ModuleContent, ModuleHeader, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
@@ -93,10 +97,12 @@ type EntryTracePayload = {
   sourceLink?: { labelFr: string; labelEn: string; href: string; moduleCode: string } | null;
 };
 type ConfigFormState = { open: boolean; kind: ConfigCreatable | null };
+type RecordDetailState = { kind: AccountingRecordDetailKind; row: AnyRow } | null;
 
 const EMPTY_PAGINATION: Pagination = { page: 1, pageSize: 25, total: 0, pageCount: 1 };
 const ACCOUNT_TYPES = ["ASSET", "LIABILITY", "EQUITY", "REVENUE", "EXPENSE", "OTHER_INCOME", "OTHER_EXPENSE"] as const;
 const JOURNAL_TYPES = ["GENERAL", "SALES", "PURCHASES", "BANK", "CASH", "MOBILE_MONEY", "PAYROLL", "INVENTORY", "ASSETS", "ADJUSTMENT", "OPENING"] as const;
+const FULLSCREEN_FORM_CLASS = "h-[100dvh] w-screen max-w-none rounded-none sm:h-[94dvh] sm:w-auto sm:max-w-3xl sm:rounded-3xl";
 
 function rawText(value: unknown) { return value === null || value === undefined ? "" : String(value); }
 function rowText(row: AnyRow, key: string) { return rawText(row[key]); }
@@ -123,7 +129,9 @@ export function EnterpriseFinanceAccountingWorkspaceV3(props: Props) {
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [detailEntryId, setDetailEntryId] = useState<string | null>(null);
+  const [detailEntryRefreshKey, setDetailEntryRefreshKey] = useState(0);
   const [entryTrace, setEntryTrace] = useState<EntryTracePayload | null>(null);
+  const [recordDetail, setRecordDetail] = useState<RecordDetailState>(null);
   const [approvalTarget, setApprovalTarget] = useState<JournalEntry | null>(null);
   const [actionTarget, setActionTarget] = useState<{ entry: JournalEntry; action: "APPROVE" | "REJECT" | "POST" | "REVERSE" } | null>(null);
   const [configForm, setConfigForm] = useState<ConfigFormState>({ open: false, kind: null });
@@ -224,7 +232,7 @@ export function EnterpriseFinanceAccountingWorkspaceV3(props: Props) {
         if (!cancelled) setErrorMessage(safeFinanceError(error, en ? "The journal entry could not be opened." : "L’écriture n’a pas pu être ouverte.", locale));
       });
     return () => { cancelled = true; };
-  }, [detailEntryId, en, locale, organizationId]);
+  }, [detailEntryId, detailEntryRefreshKey, en, locale, organizationId]);
 
   function chooseSpace(next: Space) {
     setSpace(next);
@@ -234,6 +242,7 @@ export function EnterpriseFinanceAccountingWorkspaceV3(props: Props) {
     setDateTo("");
     setRows([]);
     setEntries([]);
+    setRecordDetail(null);
     setErrorMessage("");
   }
 
@@ -254,7 +263,7 @@ export function EnterpriseFinanceAccountingWorkspaceV3(props: Props) {
 
   async function executeAction(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!actionTarget) return;
+    if (!actionTarget || busy) return;
     const form = new FormData(event.currentTarget);
     const reason = String(form.get("reason") || "").trim();
     const accountingDate = String(form.get("accountingDate") || "").trim();
@@ -285,7 +294,7 @@ export function EnterpriseFinanceAccountingWorkspaceV3(props: Props) {
   async function createConfig(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const kind = configForm.kind;
-    if (!kind) return;
+    if (!kind || busy) return;
     const form = new FormData(event.currentTarget);
     const base = `/api/enterprise/${organizationId}`;
     setBusy(true);
@@ -325,25 +334,18 @@ export function EnterpriseFinanceAccountingWorkspaceV3(props: Props) {
   }, [en, overview.metrics]);
 
   const entryColumns: AccountingCompactColumn<JournalEntry>[] = [
-    { key: "number", label: en ? "Entry" : "Écriture", render: (row) => <button type="button" className="font-black text-dtsc-blue hover:underline" onClick={() => setDetailEntryId(row.id)}>{row.number || row.reference || "—"}</button> },
+    { key: "number", label: en ? "Entry" : "Écriture", render: (row) => <span className="font-black text-dtsc-blue">{row.number || row.reference || "—"}</span> },
     { key: "date", label: en ? "Date" : "Date", render: (row) => financeDate(row.accountingDate || "", locale) },
     { key: "journal", label: en ? "Journal" : "Journal", render: (row) => row.journal?.code || "—" },
     { key: "period", label: en ? "Period" : "Période", render: (row) => row.fiscalPeriod?.code || "—" },
     { key: "description", label: en ? "Description" : "Libellé", cellClassName: "max-w-[22rem] truncate", render: (row) => row.description || "—" },
     { key: "debit", label: en ? "Debit" : "Débit", numeric: true, render: (row) => financeMoney(row.totalDebit || 0, row.functionalCurrencyCode || "", locale) },
     { key: "status", label: en ? "Status" : "Statut", render: (row) => <StatusBadge tone={financeStatusTone(row.status || "")}>{financeStatusLabel(row.status || "", locale)}</StatusBadge> },
-    { key: "actions", label: en ? "Actions" : "Actions", cellClassName: "whitespace-nowrap", render: (row) => <div className="flex justify-end gap-1">
-      {row.capabilities?.canSubmit ? <Button type="button" size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={() => setApprovalTarget(row)}>{en ? "Submit" : "Soumettre"}</Button> : null}
-      {row.capabilities?.canApprove ? <Button type="button" size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={() => setActionTarget({ entry: row, action: "APPROVE" })}>{en ? "Approve" : "Approuver"}</Button> : null}
-      {row.capabilities?.canReject ? <Button type="button" size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={() => setActionTarget({ entry: row, action: "REJECT" })}>{en ? "Reject" : "Rejeter"}</Button> : null}
-      {row.capabilities?.canPost ? <Button type="button" size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={() => setActionTarget({ entry: row, action: "POST" })}>{en ? "Post" : "Comptabiliser"}</Button> : null}
-      {row.capabilities?.canReverse ? <Button type="button" size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={() => setActionTarget({ entry: row, action: "REVERSE" })}>{en ? "Reverse" : "Contrepasser"}</Button> : null}
-    </div> },
   ];
 
   const ledgerColumns: AccountingCompactColumn<LedgerRow>[] = [
     { key: "date", label: en ? "Date" : "Date", render: (row) => financeDate(row.journalEntry?.accountingDate || "", locale) },
-    { key: "entry", label: en ? "Entry" : "Écriture", render: (row) => <button type="button" className="font-black text-dtsc-blue hover:underline" onClick={() => row.journalEntry?.id && setDetailEntryId(row.journalEntry.id)}>{row.journalEntry?.number || "—"}</button> },
+    { key: "entry", label: en ? "Entry" : "Écriture", render: (row) => <span className="font-black text-dtsc-blue">{row.journalEntry?.number || "—"}</span> },
     { key: "account", label: en ? "Account" : "Compte", render: (row) => <span className="font-bold">{row.ledgerAccount?.code || "—"} · {locale === "en" ? row.ledgerAccount?.nameEn || row.ledgerAccount?.nameFr : row.ledgerAccount?.nameFr || row.ledgerAccount?.nameEn}</span> },
     { key: "description", label: en ? "Description" : "Libellé", cellClassName: "max-w-[24rem] truncate", render: (row) => row.description || row.journalEntry?.description || "—" },
     { key: "journal", label: en ? "Journal" : "Journal", render: (row) => row.journalEntry?.journal?.code || "—" },
@@ -373,13 +375,24 @@ export function EnterpriseFinanceAccountingWorkspaceV3(props: Props) {
     { key: "name", label: en ? "Label" : "Libellé", cellClassName: "max-w-[28rem] truncate", render: (row) => localizedName(row, locale) || rowText(row, "description") || (rowText(row, "sourceModule") ? financeEnumLabel(rowText(row, "sourceModule"), locale) : "—") },
     { key: "type", label: en ? "Type" : "Type", render: (row) => financeEnumLabel(rowText(row, "accountType") || rowText(row, "journalType") || rowText(row, "templateCode"), locale) || "—" },
     { key: "status", label: en ? "Status" : "Statut", render: (row) => {
-      const status = rowText(row, "status") || (row.isActive === false ? "INACTIVE" : "ACTIVE");
-      return <StatusBadge tone={financeStatusTone(status)}>{financeStatusLabel(status, locale)}</StatusBadge>;
+      const currentStatus = rowText(row, "status") || (row.isActive === false ? "INACTIVE" : "ACTIVE");
+      return <StatusBadge tone={financeStatusTone(currentStatus)}>{financeStatusLabel(currentStatus, locale)}</StatusBadge>;
     } },
   ];
 
+  const entryDetailActions: BusinessContextAction[] = entryTrace?.entry ? [
+    ...(entryTrace.entry.capabilities?.canSubmit ? [{ id: "submit", label: en ? "Submit for approval" : "Soumettre pour validation", onSelect: () => { setDetailEntryId(null); setApprovalTarget(entryTrace.entry || null); } }] : []),
+    ...(entryTrace.entry.capabilities?.canApprove ? [{ id: "approve", label: en ? "Approve" : "Approuver", onSelect: () => { setDetailEntryId(null); setActionTarget({ entry: entryTrace.entry as JournalEntry, action: "APPROVE" }); } }] : []),
+    ...(entryTrace.entry.capabilities?.canReject ? [{ id: "reject", label: en ? "Reject" : "Rejeter", destructive: true, onSelect: () => { setDetailEntryId(null); setActionTarget({ entry: entryTrace.entry as JournalEntry, action: "REJECT" }); } }] : []),
+    ...(entryTrace.entry.capabilities?.canPost ? [{ id: "post", label: en ? "Post" : "Comptabiliser", onSelect: () => { setDetailEntryId(null); setActionTarget({ entry: entryTrace.entry as JournalEntry, action: "POST" }); } }] : []),
+    ...(entryTrace.entry.capabilities?.canReverse ? [{ id: "reverse", label: en ? "Reverse" : "Contrepasser", destructive: true, separatorBefore: true, onSelect: () => { setDetailEntryId(null); setActionTarget({ entry: entryTrace.entry as JournalEntry, action: "REVERSE" }); } }] : []),
+    { id: "refresh", label: en ? "Refresh" : "Actualiser", icon: RotateCcw, separatorBefore: true, onSelect: () => setDetailEntryRefreshKey((value) => value + 1) },
+  ] : [];
+
   const hasToolbar = space !== "home" && !(space === "configure" && configureView === "setup");
   const workspaceTitle = en ? definition.labelEn || definition.labelFr : definition.labelFr || definition.labelEn;
+  const configureOptions = (["setup", "charts", "accounts", "years", "periods", "journals", "rules"] as ConfigureView[]);
+  const reviewOptions = (["ledger", "trial", "anomalies"] as ReviewView[]);
 
   return <ModuleWorkspace className="mx-auto w-full max-w-[1600px] px-4 sm:px-6 lg:px-8">
     <ModuleHeader
@@ -390,15 +403,15 @@ export function EnterpriseFinanceAccountingWorkspaceV3(props: Props) {
     />
 
     <nav aria-label={en ? "Accounting workspace" : "Espace Comptabilité"} className="grid grid-cols-2 gap-2 rounded-2xl border border-dtsc-border bg-dtsc-page/70 p-2 sm:grid-cols-4">
-      {spaceOptions.map((option) => <button key={option.id} type="button" onClick={() => chooseSpace(option.id)} aria-current={space === option.id ? "page" : undefined} className={`min-h-11 rounded-xl px-3 text-sm font-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 ${space === option.id ? "bg-dtsc-blue text-white shadow-sm" : "bg-dtsc-surface text-dtsc-ink hover:bg-dtsc-soft"}`}>{option.label}</button>)}
+      {spaceOptions.map((option) => <button key={option.id} type="button" onClick={() => chooseSpace(option.id)} aria-current={space === option.id ? "page" : undefined} className={`min-h-11 min-w-0 rounded-xl px-3 text-sm font-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 ${space === option.id ? "bg-dtsc-blue text-white shadow-sm" : "bg-dtsc-surface text-dtsc-ink hover:bg-dtsc-soft"}`}>{option.label}</button>)}
     </nav>
 
-    {space === "review" ? <div className="flex gap-2 overflow-x-auto pb-1">{(["ledger", "trial", "anomalies"] as ReviewView[]).map((view) => <Button key={view} type="button" size="sm" variant={reviewView === view ? "default" : "outline"} onClick={() => { setReviewView(view); setPage(1); }}>{view === "ledger" ? (en ? "General ledger" : "Grand livre") : view === "trial" ? (en ? "Trial balance" : "Balance") : (en ? "Anomalies" : "Anomalies")}</Button>)}</div> : null}
-    {space === "configure" ? <div className="flex gap-2 overflow-x-auto pb-1">{(["setup", "charts", "accounts", "years", "periods", "journals", "rules"] as ConfigureView[]).map((view) => <Button key={view} type="button" size="sm" variant={configureView === view ? "default" : "outline"} onClick={() => { setConfigureView(view); setPage(1); setSearch(""); }}>{view === "setup" ? (en ? "Setup" : "Mise en service") : view === "charts" ? (en ? "Charts" : "Plans") : view === "accounts" ? (en ? "Accounts" : "Comptes") : view === "years" ? (en ? "Fiscal years" : "Exercices") : view === "periods" ? (en ? "Periods" : "Périodes") : view === "journals" ? (en ? "Journals" : "Journaux") : (en ? "Posting rules" : "Règles")}</Button>)}</div> : null}
+    {space === "review" ? <div data-horizontal-rail data-no-group-swipe className="flex w-full min-w-0 max-w-full snap-x snap-mandatory gap-2 overflow-x-auto overscroll-x-contain pb-2">{reviewOptions.map((view) => <Button key={view} type="button" size="sm" variant={reviewView === view ? "default" : "outline"} className="min-h-11 min-w-[8rem] shrink-0 snap-start whitespace-normal px-3 py-2 text-center leading-tight" onClick={() => { setReviewView(view); setPage(1); setRecordDetail(null); }}>{view === "ledger" ? (en ? "General ledger" : "Grand livre") : view === "trial" ? (en ? "Trial balance" : "Balance") : (en ? "Anomalies" : "Anomalies")}</Button>)}</div> : null}
+    {space === "configure" ? <div data-horizontal-rail data-no-group-swipe className="flex w-full min-w-0 max-w-full snap-x snap-mandatory gap-2 overflow-x-auto overscroll-x-contain pb-2">{configureOptions.map((view) => <Button key={view} type="button" size="sm" variant={configureView === view ? "default" : "outline"} className="min-h-11 min-w-[8.5rem] shrink-0 snap-start whitespace-normal px-3 py-2 text-center leading-tight" onClick={() => { setConfigureView(view); setPage(1); setSearch(""); setRecordDetail(null); }}>{view === "setup" ? (en ? "Setup" : "Mise en service") : view === "charts" ? (en ? "Charts" : "Plans") : view === "accounts" ? (en ? "Accounts" : "Comptes") : view === "years" ? (en ? "Fiscal years" : "Exercices") : view === "periods" ? (en ? "Periods" : "Périodes") : view === "journals" ? (en ? "Journals" : "Journaux") : (en ? "Posting rules" : "Règles")}</Button>)}</div> : null}
 
     {hasToolbar ? <ModuleToolbar
       search={<label className="relative block min-w-0"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-dtsc-muted" /><Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder={en ? "Search…" : "Rechercher…"} className="pl-9" /></label>}
-      controls={<div className="flex flex-wrap items-end gap-2">{space === "review" && reviewView !== "anomalies" ? <><label className="grid gap-1 text-xs font-bold text-dtsc-muted">{en ? "From" : "Du"}<Input type="date" value={dateFrom} onChange={(event) => { setDateFrom(event.target.value); setPage(1); }} className="h-10 w-40" /></label><label className="grid gap-1 text-xs font-bold text-dtsc-muted">{en ? "To" : "Au"}<Input type="date" value={dateTo} onChange={(event) => { setDateTo(event.target.value); setPage(1); }} className="h-10 w-40" /></label></> : null}<Button type="button" variant="outline" size="sm" onClick={() => reload()}><RotateCcw className="mr-1.5 h-4 w-4" />{en ? "Refresh" : "Actualiser"}</Button>{space === "configure" && configureView !== "setup" && configureView !== "rules" && ((configureView === "charts" && canManage) || (configureView !== "charts" && canCreate)) ? <Button type="button" size="sm" onClick={() => setConfigForm({ open: true, kind: configureView as ConfigCreatable })}><Plus className="mr-1.5 h-4 w-4" />{en ? "Create" : "Créer"}</Button> : null}</div>}
+      controls={<div className="flex min-w-0 flex-wrap items-end gap-2">{space === "review" && reviewView !== "anomalies" ? <><label className="grid min-w-0 gap-1 text-xs font-bold text-dtsc-muted">{en ? "From" : "Du"}<Input type="date" value={dateFrom} onChange={(event) => { setDateFrom(event.target.value); setPage(1); }} className="h-10 w-full min-w-0 sm:w-40" /></label><label className="grid min-w-0 gap-1 text-xs font-bold text-dtsc-muted">{en ? "To" : "Au"}<Input type="date" value={dateTo} onChange={(event) => { setDateTo(event.target.value); setPage(1); }} className="h-10 w-full min-w-0 sm:w-40" /></label></> : null}<Button type="button" variant="outline" size="sm" onClick={() => reload()}><RotateCcw className="mr-1.5 h-4 w-4" />{en ? "Refresh" : "Actualiser"}</Button>{space === "configure" && configureView !== "setup" && configureView !== "rules" && ((configureView === "charts" && canManage) || (configureView !== "charts" && canCreate)) ? <Button type="button" size="sm" onClick={() => setConfigForm({ open: true, kind: configureView as ConfigCreatable })}><Plus className="mr-1.5 h-4 w-4" />{en ? "Create" : "Créer"}</Button> : null}</div>}
       summary={pagination.total ? `${pagination.total} ${en ? "record(s)" : "élément(s)"}` : undefined}
     /> : null}
 
@@ -410,32 +423,74 @@ export function EnterpriseFinanceAccountingWorkspaceV3(props: Props) {
         <div className="grid gap-4 lg:grid-cols-2"><section className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-5"><div className="flex items-start gap-3"><BookOpenCheck className="mt-0.5 h-5 w-5 text-cyan-600" /><div><h2 className="font-black text-dtsc-ink">{en ? "Accounting work queue" : "File de travail comptable"}</h2><p className="mt-1 text-sm leading-6 text-dtsc-muted">{en ? "Create entries, route them for independent approval, post them and inspect their source trace without leaving the ledger." : "Créez les écritures, affectez leur validation indépendante, comptabilisez-les et remontez à leur source sans quitter le grand livre."}</p><Button type="button" className="mt-4" onClick={() => chooseSpace("post")}>{en ? "Open work queue" : "Ouvrir la file"}<ChevronRight className="ml-2 h-4 w-4" /></Button></div></div></section><section className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-5"><div className="flex items-start gap-3"><AlertTriangle className="mt-0.5 h-5 w-5 text-amber-600" /><div><h2 className="font-black text-dtsc-ink">{en ? "Controls and close readiness" : "Contrôles et préparation de clôture"}</h2><p className="mt-1 text-sm leading-6 text-dtsc-muted">{en ? "Review failed postings and the underlying ledger before financial close. Close remains managed by its dedicated entitlement." : "Analysez les échecs de comptabilisation et le grand livre avant la clôture. La clôture reste protégée par son entitlement dédié."}</p><Button type="button" variant="outline" className="mt-4" onClick={() => { chooseSpace("review"); setReviewView("anomalies"); }}>{en ? "Review anomalies" : "Voir les anomalies"}<ChevronRight className="ml-2 h-4 w-4" /></Button></div></div></section></div>
       </div> : null}
 
-      {space === "post" ? loading ? <ProfessionalLoading /> : <AccountingCompactTable rows={entries} columns={entryColumns} rowKey={(row) => row.id} emptyLabel={en ? "No journal entry matches these filters." : "Aucune écriture ne correspond à ces filtres."} minWidth="min-w-[1160px]" /> : null}
+      {space === "post" ? loading ? <ProfessionalLoading /> : <AccountingCompactTable rows={entries} columns={entryColumns} rowKey={(row) => row.id} onRowClick={(row) => setDetailEntryId(row.id)} emptyLabel={en ? "No journal entry matches these filters." : "Aucune écriture ne correspond à ces filtres."} minWidth="min-w-[980px]" /> : null}
 
-      {space === "review" ? loading ? <ProfessionalLoading /> : reviewView === "ledger" ? <AccountingCompactTable rows={rows as LedgerRow[]} columns={ledgerColumns} rowKey={(row) => row.id} emptyLabel={en ? "No ledger movement in this scope." : "Aucun mouvement de grand livre sur ce périmètre."} minWidth="min-w-[1180px]" /> : reviewView === "trial" ? <AccountingCompactTable rows={rows as TrialRow[]} columns={trialColumns} rowKey={(row) => row.id} emptyLabel={en ? "No balance in this scope." : "Aucun solde sur ce périmètre."} minWidth="min-w-[860px]" /> : <AccountingCompactTable rows={rows} columns={anomalyColumns} rowKey={(row) => row.id} emptyLabel={en ? "No posting anomaly." : "Aucune anomalie de comptabilisation."} minWidth="min-w-[820px]" /> : null}
+      {space === "review" ? loading ? <ProfessionalLoading /> : reviewView === "ledger" ? <AccountingCompactTable rows={rows as LedgerRow[]} columns={ledgerColumns} rowKey={(row) => row.id} onRowClick={(row) => row.journalEntry?.id && setDetailEntryId(row.journalEntry.id)} emptyLabel={en ? "No ledger movement in this scope." : "Aucun mouvement de grand livre sur ce périmètre."} minWidth="min-w-[1180px]" /> : reviewView === "trial" ? <AccountingCompactTable rows={rows as TrialRow[]} columns={trialColumns} rowKey={(row) => row.id} onRowClick={(row) => setRecordDetail({ kind: "trial", row })} emptyLabel={en ? "No balance in this scope." : "Aucun solde sur ce périmètre."} minWidth="min-w-[860px]" /> : <AccountingCompactTable rows={rows} columns={anomalyColumns} rowKey={(row) => row.id} onRowClick={(row) => setRecordDetail({ kind: "anomalies", row })} emptyLabel={en ? "No posting anomaly." : "Aucune anomalie de comptabilisation."} minWidth="min-w-[820px]" /> : null}
 
-      {space === "configure" ? configureView === "setup" ? <EnterpriseAccountingOnboardingPanel organizationId={organizationId} locale={rawLocale} canManage={canManage} /> : loading ? <ProfessionalLoading /> : <AccountingCompactTable rows={rows} columns={configColumns} rowKey={(row) => row.id} emptyLabel={en ? "No configuration item in this scope." : "Aucun élément de configuration sur ce périmètre."} minWidth="min-w-[760px]" /> : null}
+      {space === "configure" ? configureView === "setup" ? <EnterpriseAccountingOnboardingPanel organizationId={organizationId} locale={rawLocale} canManage={canManage} /> : loading ? <ProfessionalLoading /> : <AccountingCompactTable rows={rows} columns={configColumns} rowKey={(row) => row.id} onRowClick={(row) => setRecordDetail({ kind: configureView as AccountingRecordDetailKind, row })} emptyLabel={en ? "No configuration item in this scope." : "Aucun élément de configuration sur ce périmètre."} minWidth="min-w-[760px]" /> : null}
 
       {pagination.pageCount > 1 && space !== "home" && !(space === "configure" && configureView === "setup") ? <div className="flex items-center justify-between gap-3 rounded-xl border border-dtsc-border bg-dtsc-page/60 px-3 py-2 text-xs font-bold text-dtsc-muted"><Button type="button" variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>{en ? "Previous" : "Précédent"}</Button><span className="tabular-nums">{en ? "Page" : "Page"} {page} / {pagination.pageCount}</span><Button type="button" variant="outline" size="sm" disabled={page >= pagination.pageCount} onClick={() => setPage((value) => Math.min(pagination.pageCount, value + 1))}>{en ? "Next" : "Suivant"}</Button></div> : null}
     </ModuleContent>
 
     <AccountingJournalWorkbench open={workbenchOpen} organizationId={organizationId} locale={rawLocale} onClose={() => setWorkbenchOpen(false)} onCreated={() => reload()} />
 
-    <Dialog open={Boolean(approvalTarget)} onClose={() => !busy && setApprovalTarget(null)} title={en ? "Submit journal entry" : "Soumettre l’écriture"} presentation="editor" className="h-[92dvh] max-w-2xl">{approvalTarget ? <AssignedApprovalSubmitPanel organizationId={organizationId} moduleCode="FINANCE_ACCOUNTING" locale={rawLocale} submitting={busy} onSubmit={submitApproval} onCancel={() => setApprovalTarget(null)} /> : null}</Dialog>
+    <Dialog open={Boolean(approvalTarget)} onClose={() => !busy && setApprovalTarget(null)} title={en ? "Submit journal entry" : "Soumettre l’écriture"} presentation="editor" className={FULLSCREEN_FORM_CLASS}>{approvalTarget ? <div className="p-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-5"><AssignedApprovalSubmitPanel organizationId={organizationId} moduleCode="FINANCE_ACCOUNTING" locale={rawLocale} submitting={busy} onSubmit={submitApproval} onCancel={() => setApprovalTarget(null)} /></div> : null}</Dialog>
 
-    <Dialog open={Boolean(actionTarget)} onClose={() => !busy && setActionTarget(null)} title={actionTarget?.action === "APPROVE" ? (en ? "Approve journal entry" : "Approuver l’écriture") : actionTarget?.action === "REJECT" ? (en ? "Reject journal entry" : "Rejeter l’écriture") : actionTarget?.action === "POST" ? (en ? "Post journal entry" : "Comptabiliser l’écriture") : (en ? "Reverse journal entry" : "Contrepasser l’écriture")} presentation="editor" className="h-[90dvh] max-w-2xl">{actionTarget ? <form onSubmit={executeAction} className="grid gap-4"><div className="rounded-xl border border-dtsc-border bg-dtsc-page/70 p-4"><p className="font-black text-dtsc-ink">{actionTarget.entry.number || actionTarget.entry.reference}</p><p className="mt-1 text-sm text-dtsc-muted">{actionTarget.entry.description}</p></div>{actionTarget.action === "REVERSE" ? <label className="grid gap-2 text-sm font-bold text-dtsc-ink">{en ? "Reversal date" : "Date de contrepassation"}<Input type="date" name="accountingDate" required disabled={busy} defaultValue={new Date().toISOString().slice(0, 10)} /></label> : null}{actionTarget.action === "REJECT" || actionTarget.action === "REVERSE" ? <label className="grid gap-2 text-sm font-bold text-dtsc-ink">{en ? "Reason" : "Motif"}<textarea name="reason" required minLength={actionTarget.action === "REVERSE" ? 8 : 4} maxLength={1000} disabled={busy} className="min-h-32 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-cyan-400" /></label> : null}<div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => setActionTarget(null)}>{en ? "Cancel" : "Annuler"}</Button><Button type="submit" disabled={busy}>{busy ? (en ? "Processing…" : "Traitement…") : (en ? "Confirm" : "Confirmer")}</Button></div></form> : null}</Dialog>
+    <Dialog open={Boolean(actionTarget)} onClose={() => !busy && setActionTarget(null)} title={actionTarget?.action === "APPROVE" ? (en ? "Approve journal entry" : "Approuver l’écriture") : actionTarget?.action === "REJECT" ? (en ? "Reject journal entry" : "Rejeter l’écriture") : actionTarget?.action === "POST" ? (en ? "Post journal entry" : "Comptabiliser l’écriture") : (en ? "Reverse journal entry" : "Contrepasser l’écriture")} presentation="editor" className={FULLSCREEN_FORM_CLASS}>{actionTarget ? <form onSubmit={executeAction} className="grid min-w-0 gap-4 p-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-5"><div className="rounded-xl border border-dtsc-border bg-dtsc-page/70 p-4"><p className="font-black text-dtsc-ink">{actionTarget.entry.number || actionTarget.entry.reference}</p><p className="mt-1 text-sm text-dtsc-muted">{actionTarget.entry.description}</p></div>{actionTarget.action === "REVERSE" ? <Field label={en ? "Reversal date" : "Date de contrepassation"} help={en ? "Posting date used for the reversal entry." : "Date comptable utilisée pour l’écriture de contrepassation."}><Input type="date" name="accountingDate" required disabled={busy} defaultValue={new Date().toISOString().slice(0, 10)} /></Field> : null}{actionTarget.action === "REJECT" || actionTarget.action === "REVERSE" ? <Field label={en ? "Reason" : "Motif"} help={en ? "Explain the business reason recorded in the audit trail." : "Expliquez le motif métier conservé dans la piste d’audit."}><textarea name="reason" required minLength={actionTarget.action === "REVERSE" ? 8 : 4} maxLength={1000} disabled={busy} className="min-h-32 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 md:text-sm" /></Field> : null}<div data-responsive-actions className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => setActionTarget(null)}>{en ? "Cancel" : "Annuler"}</Button><Button type="submit" disabled={busy}>{busy ? (en ? "Processing…" : "Traitement…") : (en ? "Confirm" : "Confirmer")}</Button></div></form> : null}</Dialog>
 
-    <Dialog open={Boolean(detailEntryId)} onClose={() => setDetailEntryId(null)} title={en ? "Journal entry trace" : "Traçabilité de l’écriture"} presentation="editor" className="h-[94dvh] max-w-[min(1180px,calc(100vw-1rem))]">{!entryTrace?.entry ? <ProfessionalLoading /> : <div className="grid gap-4"><div className="grid gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page/60 p-4 sm:grid-cols-2 lg:grid-cols-4"><div><span className="text-xs font-black uppercase text-dtsc-muted">{en ? "Entry" : "Écriture"}</span><strong className="mt-1 block text-dtsc-ink">{entryTrace.entry.number || "—"}</strong></div><div><span className="text-xs font-black uppercase text-dtsc-muted">{en ? "Date" : "Date"}</span><strong className="mt-1 block text-dtsc-ink">{financeDate(entryTrace.entry.accountingDate || "", locale)}</strong></div><div><span className="text-xs font-black uppercase text-dtsc-muted">{en ? "Status" : "Statut"}</span><div className="mt-1"><StatusBadge tone={financeStatusTone(entryTrace.entry.status || "")}>{financeStatusLabel(entryTrace.entry.status || "", locale)}</StatusBadge></div></div><div><span className="text-xs font-black uppercase text-dtsc-muted">{en ? "Source" : "Source"}</span>{entryTrace.sourceLink ? <Link href={entryTrace.sourceLink.href} className="mt-1 inline-flex items-center font-black text-dtsc-blue hover:underline">{en ? entryTrace.sourceLink.labelEn : entryTrace.sourceLink.labelFr}<ChevronRight className="ml-1 h-4 w-4" /></Link> : <span className="mt-1 block text-sm font-semibold text-dtsc-muted">{en ? "No authorized source link" : "Aucun lien source autorisé"}</span>}</div></div><AccountingCompactTable rows={(entryTrace.entry.lines || []) as LedgerRow[]} columns={ledgerColumns.filter((column) => !["date", "entry", "journal", "period"].includes(column.key))} rowKey={(row) => row.id} emptyLabel={en ? "No journal line." : "Aucune ligne comptable."} minWidth="min-w-[760px]" /></div>}</Dialog>
+    <FullscreenEntityDetail
+      open={Boolean(detailEntryId)}
+      onClose={() => setDetailEntryId(null)}
+      title={entryTrace?.entry ? `${entryTrace.entry.number || entryTrace.entry.reference || (en ? "Journal entry" : "Écriture")}` : (en ? "Journal entry trace" : "Traçabilité de l’écriture")}
+      description={en ? "Full accounting trace and authorized contextual actions." : "Traçabilité comptable complète et actions contextuelles autorisées."}
+      actions={entryDetailActions}
+      actionLabel={en ? "Journal entry actions" : "Actions de l’écriture"}
+    >
+      {!entryTrace?.entry ? <ProfessionalLoading /> : <div className="grid min-w-0 gap-4"><div className="grid min-w-0 gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page/60 p-4 sm:grid-cols-2 lg:grid-cols-4"><div><span className="text-xs font-black uppercase text-dtsc-muted">{en ? "Entry" : "Écriture"}</span><strong className="mt-1 block break-words text-dtsc-ink">{entryTrace.entry.number || "—"}</strong></div><div><span className="text-xs font-black uppercase text-dtsc-muted">{en ? "Date" : "Date"}</span><strong className="mt-1 block text-dtsc-ink">{financeDate(entryTrace.entry.accountingDate || "", locale)}</strong></div><div><span className="text-xs font-black uppercase text-dtsc-muted">{en ? "Status" : "Statut"}</span><div className="mt-1"><StatusBadge tone={financeStatusTone(entryTrace.entry.status || "")}>{financeStatusLabel(entryTrace.entry.status || "", locale)}</StatusBadge></div></div><div><span className="text-xs font-black uppercase text-dtsc-muted">{en ? "Source" : "Source"}</span>{entryTrace.sourceLink ? <Link href={entryTrace.sourceLink.href} className="mt-1 inline-flex items-center font-black text-dtsc-blue hover:underline">{en ? entryTrace.sourceLink.labelEn : entryTrace.sourceLink.labelFr}<ChevronRight className="ml-1 h-4 w-4" /></Link> : <span className="mt-1 block text-sm font-semibold text-dtsc-muted">{en ? "No authorized source link" : "Aucun lien source autorisé"}</span>}</div></div><AccountingCompactTable rows={(entryTrace.entry.lines || []) as LedgerRow[]} columns={ledgerColumns.filter((column) => !["date", "entry", "journal", "period"].includes(column.key))} rowKey={(row) => row.id} emptyLabel={en ? "No journal line." : "Aucune ligne comptable."} minWidth="min-w-[760px]" /></div>}
+    </FullscreenEntityDetail>
 
-    <Dialog open={configForm.open} onClose={() => !busy && setConfigForm({ open: false, kind: null })} title={en ? "Accounting configuration" : "Configuration comptable"} presentation="editor" className="h-[94dvh] max-w-3xl"><form onSubmit={createConfig} className="grid gap-4">
-      {configForm.kind === "accounts" ? <FinanceAccountingReferenceSelect organizationId={organizationId} moduleCode="FINANCE_ACCOUNTING" kind="chart" name="chartId" label={en ? "Chart of accounts" : "Plan comptable"} locale={rawLocale} required disabled={busy} status="ACTIVE" /> : null}
-      {configForm.kind === "periods" ? <FinanceAccountingReferenceSelect organizationId={organizationId} moduleCode="FINANCE_ACCOUNTING" kind="fiscal-year" name="fiscalYearId" label={en ? "Fiscal year" : "Exercice"} locale={rawLocale} required disabled={busy} /> : null}
-      {configForm.kind ? <label className="grid gap-2 text-sm font-bold text-dtsc-ink">{en ? "Code" : "Code"}<Input name="code" required maxLength={40} disabled={busy} /></label> : null}
-      {configForm.kind === "charts" || configForm.kind === "accounts" || configForm.kind === "journals" ? <><label className="grid gap-2 text-sm font-bold text-dtsc-ink">{en ? "French label" : "Libellé français"}<Input name="nameFr" required maxLength={180} disabled={busy} /></label><label className="grid gap-2 text-sm font-bold text-dtsc-ink">{en ? "English label" : "Libellé anglais"}<Input name="nameEn" required maxLength={180} disabled={busy} /></label></> : null}
-      {configForm.kind === "years" || configForm.kind === "periods" ? <><label className="grid gap-2 text-sm font-bold text-dtsc-ink">{en ? "Start date" : "Date de début"}<Input name="startDate" type="date" required disabled={busy} /></label><label className="grid gap-2 text-sm font-bold text-dtsc-ink">{en ? "End date" : "Date de fin"}<Input name="endDate" type="date" required disabled={busy} /></label></> : null}
-      {configForm.kind === "accounts" ? <><label className="grid gap-2 text-sm font-bold text-dtsc-ink">{en ? "Account type" : "Type de compte"}<select name="accountType" defaultValue="ASSET" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3" disabled={busy}>{ACCOUNT_TYPES.map((value) => <option key={value} value={value}>{financeEnumLabel(value, locale)}</option>)}</select></label><FinanceAccountingReferenceSelect organizationId={organizationId} moduleCode="FINANCE_ACCOUNTING" kind="currency" name="currencyCode" label={en ? "Account currency (optional)" : "Devise du compte (facultatif)"} locale={rawLocale} disabled={busy} /><label className="flex min-h-11 items-center gap-2 text-sm font-bold text-dtsc-ink"><input type="checkbox" name="allowDirectPosting" defaultChecked />{en ? "Allow direct manual posting" : "Autoriser la saisie manuelle directe"}</label></> : null}
-      {configForm.kind === "journals" ? <><label className="grid gap-2 text-sm font-bold text-dtsc-ink">{en ? "Journal type" : "Type de journal"}<select name="journalType" defaultValue="GENERAL" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3" disabled={busy}>{JOURNAL_TYPES.map((value) => <option key={value} value={value}>{financeEnumLabel(value, locale)}</option>)}</select></label><label className="grid gap-2 text-sm font-bold text-dtsc-ink">{en ? "Sequence prefix" : "Préfixe de séquence"}<Input name="sequencePrefix" maxLength={20} disabled={busy} /></label><label className="flex min-h-11 items-center gap-2 text-sm font-bold text-dtsc-ink"><input type="checkbox" name="requiresApproval" />{en ? "Require independent approval" : "Exiger une validation indépendante"}</label></> : null}
-      <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => setConfigForm({ open: false, kind: null })}>{en ? "Cancel" : "Annuler"}</Button><Button type="submit" disabled={busy}>{busy ? (en ? "Saving…" : "Enregistrement…") : (en ? "Save" : "Enregistrer")}</Button></div>
-    </form></Dialog>
+    <AccountingRecordDetail
+      organizationId={organizationId}
+      locale={rawLocale}
+      kind={recordDetail?.kind || null}
+      record={recordDetail?.row || null}
+      canManage={canManage}
+      onClose={() => setRecordDetail(null)}
+      onChanged={(success) => reload(success)}
+      onError={setErrorMessage}
+    />
+
+    <Dialog open={configForm.open} onClose={() => !busy && setConfigForm({ open: false, kind: null })} title={configForm.kind ? configFormTitle(configForm.kind, en) : (en ? "Accounting configuration" : "Configuration comptable")} description={en ? "Complete only the fields persisted by the selected accounting object. References are constrained to this company." : "Renseignez uniquement les champs réellement persistés par l’objet comptable choisi. Les références sont limitées à cette entreprise."} presentation="editor" className={FULLSCREEN_FORM_CLASS}>
+      <form onSubmit={createConfig} className="grid min-w-0 gap-5 p-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-5">
+        {configForm.kind === "accounts" ? <FormReferenceField label={en ? "Chart of accounts" : "Plan comptable"} help={en ? "Choose an active chart owned by this company." : "Choisissez un plan comptable actif appartenant à cette entreprise."}><FinanceAccountingReferenceSelect organizationId={organizationId} moduleCode="FINANCE_ACCOUNTING" kind="chart" name="chartId" label={en ? "Chart of accounts" : "Plan comptable"} locale={rawLocale} required disabled={busy} status="ACTIVE" /></FormReferenceField> : null}
+        {configForm.kind === "periods" ? <FormReferenceField label={en ? "Fiscal year" : "Exercice"} help={en ? "Choose the fiscal year that will own this period." : "Choisissez l’exercice auquel cette période sera rattachée."}><FinanceAccountingReferenceSelect organizationId={organizationId} moduleCode="FINANCE_ACCOUNTING" kind="fiscal-year" name="fiscalYearId" label={en ? "Fiscal year" : "Exercice"} locale={rawLocale} required disabled={busy} /></FormReferenceField> : null}
+        {configForm.kind ? <Field label={en ? "Code" : "Code"} help={configCodeHelp(configForm.kind, en)}><Input name="code" required maxLength={40} disabled={busy} /></Field> : null}
+        {configForm.kind === "charts" || configForm.kind === "accounts" || configForm.kind === "journals" ? <><Field label={en ? "French label" : "Libellé français"} help={en ? "Business label shown in the French interface." : "Libellé métier affiché dans l’interface française."}><Input name="nameFr" required maxLength={180} disabled={busy} /></Field><Field label={en ? "English label" : "Libellé anglais"} help={en ? "Business label shown in the English interface." : "Libellé métier affiché dans l’interface anglaise."}><Input name="nameEn" required maxLength={180} disabled={busy} /></Field></> : null}
+        {configForm.kind === "years" || configForm.kind === "periods" ? <div className="grid min-w-0 gap-4 sm:grid-cols-2"><Field label={en ? "Start date" : "Date de début"} help={configForm.kind === "years" ? (en ? "First day of the fiscal year." : "Premier jour de l’exercice comptable.") : (en ? "First day included in the accounting period." : "Premier jour inclus dans la période comptable.")}><Input name="startDate" type="date" required disabled={busy} /></Field><Field label={en ? "End date" : "Date de fin"} help={configForm.kind === "years" ? (en ? "Last day of the fiscal year." : "Dernier jour de l’exercice comptable.") : (en ? "Last day included in the accounting period." : "Dernier jour inclus dans la période comptable.")}><Input name="endDate" type="date" required disabled={busy} /></Field></div> : null}
+        {configForm.kind === "accounts" ? <><Field label={en ? "Account type" : "Type de compte"} help={en ? "Controls the accounting nature and compatible postings." : "Détermine la nature comptable et les comptabilisations compatibles."}><select name="accountType" defaultValue="ASSET" className="h-11 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-base md:text-sm" disabled={busy}>{ACCOUNT_TYPES.map((value) => <option key={value} value={value}>{financeEnumLabel(value, locale)}</option>)}</select></Field><FormReferenceField label={en ? "Account currency (optional)" : "Devise du compte (facultatif)"} help={en ? "Leave empty to use the accounting functional currency." : "Laissez vide pour utiliser la devise fonctionnelle de la comptabilité."}><FinanceAccountingReferenceSelect organizationId={organizationId} moduleCode="FINANCE_ACCOUNTING" kind="currency" name="currencyCode" label={en ? "Account currency (optional)" : "Devise du compte (facultatif)"} locale={rawLocale} disabled={busy} /></FormReferenceField><label className="flex min-h-11 items-center gap-3 rounded-xl border border-dtsc-border bg-dtsc-page/60 px-3 text-sm font-bold text-dtsc-ink"><input type="checkbox" name="allowDirectPosting" defaultChecked disabled={busy} />{en ? "Allow direct manual posting" : "Autoriser la saisie manuelle directe"}</label></> : null}
+        {configForm.kind === "journals" ? <><Field label={en ? "Journal type" : "Type de journal"} help={en ? "Choose the operational family used by this journal." : "Choisissez la famille opérationnelle utilisée par ce journal."}><select name="journalType" defaultValue="GENERAL" className="h-11 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-base md:text-sm" disabled={busy}>{JOURNAL_TYPES.map((value) => <option key={value} value={value}>{financeEnumLabel(value, locale)}</option>)}</select></Field><Field label={en ? "Sequence prefix" : "Préfixe de séquence"} help={en ? "Optional readable prefix used by the journal numbering sequence." : "Préfixe lisible facultatif utilisé par la séquence de numérotation du journal."}><Input name="sequencePrefix" maxLength={20} disabled={busy} /></Field><label className="flex min-h-11 items-center gap-3 rounded-xl border border-dtsc-border bg-dtsc-page/60 px-3 text-sm font-bold text-dtsc-ink"><input type="checkbox" name="requiresApproval" disabled={busy} />{en ? "Require independent approval" : "Exiger une validation indépendante"}</label></> : null}
+        <div data-responsive-actions className="flex min-w-0 flex-wrap justify-end gap-2 border-t border-dtsc-border pt-4"><Button type="button" variant="outline" disabled={busy} onClick={() => setConfigForm({ open: false, kind: null })}>{en ? "Cancel" : "Annuler"}</Button><Button type="submit" disabled={busy}>{busy ? (en ? "Saving…" : "Enregistrement…") : (en ? "Save" : "Enregistrer")}</Button></div>
+      </form>
+    </Dialog>
   </ModuleWorkspace>;
+}
+
+function configFormTitle(kind: ConfigCreatable, en: boolean) {
+  if (kind === "charts") return en ? "Create chart of accounts" : "Créer un plan comptable";
+  if (kind === "accounts") return en ? "Create ledger account" : "Créer un compte comptable";
+  if (kind === "years") return en ? "Create fiscal year" : "Créer un exercice comptable";
+  if (kind === "periods") return en ? "Create accounting period" : "Créer une période comptable";
+  return en ? "Create journal" : "Créer un journal";
+}
+
+function configCodeHelp(kind: ConfigCreatable, en: boolean) {
+  if (kind === "years") return en ? "Readable fiscal-year code, for example 2026." : "Code lisible de l’exercice, par exemple 2026.";
+  if (kind === "periods") return en ? "Readable period code, for example 2026-01." : "Code lisible de la période, par exemple 2026-01.";
+  if (kind === "journals") return en ? "Stable journal code, for example BANK or SALES." : "Code stable du journal, par exemple BANQUE ou VENTES.";
+  if (kind === "accounts") return en ? "Account number defined by the selected chart." : "Numéro du compte défini dans le plan comptable sélectionné.";
+  return en ? "Stable code used to identify this chart." : "Code stable utilisé pour identifier ce plan comptable.";
+}
+
+function FormReferenceField({ label, help, children }: { label: string; help: string; children: ReactNode }) {
+  return <div className="grid min-w-0 gap-1.5"><span className="text-xs font-black uppercase text-dtsc-muted">{label}<span aria-hidden="true" className="ml-1 text-red-500">*</span></span>{children}<p className="break-words text-sm leading-6 text-dtsc-muted">{help}</p></div>;
 }
