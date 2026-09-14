@@ -3,13 +3,21 @@ import path from "node:path";
 
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
+const readJson = (file) => JSON.parse(read(file));
 
 const subtypeRegistry = read("lib/enterprise/business-subtype-registry.ts");
 const moduleRegistry = read("lib/enterprise/module-registry.ts");
 const moduleOrder = read("lib/enterprise/module-order.ts");
 const gamingDomain = read("lib/enterprise/gaming/domain.ts");
-const gamingRegistryRaw = read("lib/enterprise/module-registry-gaming.json");
-const gamingRegistry = JSON.parse(gamingRegistryRaw);
+const gamingRegistry = readJson("lib/enterprise/module-registry-gaming.json");
+const canonicalRegistries = [
+  readJson("lib/enterprise/module-registry-data.json"),
+  readJson("lib/enterprise/module-registry-common-domains.json"),
+  readJson("lib/enterprise/module-registry-finance.json"),
+  readJson("lib/enterprise/module-registry-manufacturing.json"),
+  readJson("lib/enterprise/module-registry-tailoring.json"),
+  readJson("lib/enterprise/module-registry-retail.json"),
+];
 const prismaSchema = read("prisma/enterprise-gaming.prisma");
 const migration = read("prisma/migrations/20260914163000_gaming_lounge_foundation/migration.sql");
 const docs = read("docs/ERP_GAMING_LOUNGE.md");
@@ -74,6 +82,12 @@ const expectedModules = [
   "GAMING_REPORTS",
 ];
 
+const existingCodes = new Set(canonicalRegistries.flatMap((registry) => (registry.modules || []).map((item) => item.code)));
+for (const code of expectedModules) {
+  check(!existingCodes.has(code), `gaming module code collides with an existing canonical module: ${code}`);
+}
+const allCodes = new Set([...existingCodes, ...expectedModules]);
+
 check(gamingRegistry.version === 1, "gaming module registry version must start at 1");
 check(gamingRegistry.modules.length === expectedModules.length, "gaming module registry must contain exactly the foundation module set");
 for (const code of expectedModules) {
@@ -88,7 +102,26 @@ for (const code of expectedModules) {
   check(definition.applicableSectors?.length === 1 && definition.applicableSectors[0] === "HOSPITALITY_EVENTS", `${code} sector scope invalid`);
   check(definition.applicableBusinessSubtypes?.length === 1 && definition.applicableBusinessSubtypes[0] === "GAMING_LOUNGE", `${code} subtype scope invalid`);
   check(definition.qaContract === "enterprise-gaming-lounge", `${code} QA contract missing`);
+  for (const dependency of definition.dependencies || []) {
+    check(allCodes.has(dependency), `${code} references unknown canonical dependency ${dependency}`);
+  }
 }
+
+const gamingAdjacency = new Map(gamingRegistry.modules.map((definition) => [definition.code, (definition.dependencies || []).filter((dependency) => expectedModules.includes(dependency))]));
+const visiting = new Set();
+const visited = new Set();
+function visit(code, stack = []) {
+  if (visiting.has(code)) {
+    errors.push(`gaming dependency cycle: ${[...stack, code].join(" -> ")}`);
+    return;
+  }
+  if (visited.has(code)) return;
+  visiting.add(code);
+  for (const dependency of gamingAdjacency.get(code) || []) visit(dependency, [...stack, code]);
+  visiting.delete(code);
+  visited.add(code);
+}
+for (const code of expectedModules) visit(code);
 
 includesAll(
   prismaSchema,
@@ -133,6 +166,7 @@ includesAll(
   ],
   "additive gaming migration",
 );
+check(!/\bDROP\s+(TABLE|COLUMN|TYPE|INDEX)\b/i.test(migration), "Gaming Lounge migration must remain additive");
 
 includesAll(
   docs,
