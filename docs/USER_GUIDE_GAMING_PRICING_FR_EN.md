@@ -28,11 +28,21 @@ Exemple : deux règles actives compatibles avec priorité 100 seront départagé
 
 Utilisez **Simuler un tarif**. Choisissez service, poste, durée et joueurs. Le résultat indique la règle retenue et le montant estimé. Cette action ne crée aucune session, facture, vente ou transaction financière.
 
+La date/heure de simulation est facultative. Si elle n’est pas renseignée, le serveur utilise l’instant courant. Elle est utile pour tester à l’avance une plage horaire ou un jour particulier.
+
 ### Démarrer une session tarifée
 
 Dans **Sessions de jeu**, choisissez un poste, un service catalogue, une durée et le nombre de joueurs. **Calculer le tarif** permet de visualiser le montant avant le démarrage.
 
 Au démarrage, le serveur recalcule le tarif dans la même transaction que la session. Le résultat est stocké en snapshot. Le montant aperçu dans le navigateur n’est donc jamais l’autorité métier.
+
+### Démarrer une session depuis une réservation
+
+Dans **Réservations Gaming**, enregistrez d’abord l’arrivée du joueur. Sur une réservation `CHECKED_IN`, choisissez **Démarrer la session**.
+
+Le dialogue demande alors le service actif du Catalogue à utiliser. Cliquez **Calculer le tarif** : la simulation reprend automatiquement le poste, la durée réservée et le nombre de joueurs de la réservation. Le démarrage reste bloqué tant qu’aucun aperçu valide n’a été obtenu.
+
+Lors de la conversion, le serveur recalcule le tarif dans la même transaction que la création de la session et le passage de la réservation à `CONVERTED`. La session conserve `bookingId`, le service, la règle tarifaire, le snapshot, la devise et le montant estimé. Aucun paiement n’est créé à cette étape.
 
 ### Modifier un tarif pendant une session
 
@@ -74,11 +84,21 @@ The server never chooses a price based on browser display order. It filters comp
 
 Use **Simulate price**. Select service, station, duration, and player count. The result shows the selected rule and quoted amount. Simulation creates no session, sale, invoice, payment, or treasury movement.
 
+Simulation date/time is optional. If omitted, the server uses the current instant. Set it only when testing a future weekday or pricing time window.
+
 ### Start a priced session
 
 In **Gaming sessions**, select a station, catalog service, duration, and player count. **Calculate price** previews the quote.
 
 At start, the server recalculates pricing in the same transaction as the session and stores an immutable snapshot. The browser preview is never the business authority.
+
+### Start a session from a booking
+
+In **Gaming bookings**, check the player in first. On a `CHECKED_IN` booking, choose **Start session**.
+
+The dialog asks for the active shared Catalog service. Choose **Calculate price**: the simulation automatically uses the booking station, reserved duration, and player count. Start remains disabled until a valid preview has been produced.
+
+On conversion, the server recalculates pricing in the same transaction that creates the session and moves the booking to `CONVERTED`. The session keeps `bookingId`, service, pricing rule, snapshot, currency, and quoted amount. No payment is created at this stage.
 
 ### Change pricing during a session
 
