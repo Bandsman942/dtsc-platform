@@ -78,6 +78,7 @@ await import("./qa-605-generic-sector-subtypes.mjs");
 await import("./qa-606-manufacturing-core.mjs");
 await import("./qa-607-tailoring-apparel.mjs");
 await import("./qa-608-tailoring-commercial-readiness.mjs");
+await import("./qa-639-gaming-lounge-foundation.mjs");
 await import("./qa-erp-accounting-approvals-511.mjs");
 await import("./qa-billing-catalog-v2-checks.mjs");
 await import("./qa-hotfix-574-finance-owner-e2e-contract.mjs");
