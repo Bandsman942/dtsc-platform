@@ -13,7 +13,7 @@ function safeEqual(left: string, right: string) {
 }
 
 function authorize(request: NextRequest) {
-  const accepted = [process.env.CRON_SECRET, process.env.WORKFLOW_WORKER_SECRET, process.env.REPORT_SCHEDULE_WORKER_SECRET]
+  const accepted = [process.env.CRON_SECRET, process.env.WORKFLOW_WORKER_SECRET]
     .filter((value): value is string => Boolean(value));
   if (!accepted.length) return { ok: false, status: 503, message: "Report schedule worker is not configured." };
   const authorization = request.headers.get("authorization") || "";
