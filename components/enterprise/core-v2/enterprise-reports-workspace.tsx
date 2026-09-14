@@ -1,10 +1,11 @@
 "use client";
 
-import { Archive, Download, Eye, FileBarChart2, Plus, Send } from "lucide-react";
+import { Archive, Download, Eye, FileBarChart2, FileSpreadsheet, FileText, Plus, RotateCcw, Send } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { ContextActions, type BusinessContextAction } from "@/components/workspace/context-actions";
 import { EmptyState } from "@/components/workspace/empty-state";
+import { FullscreenEntityDetail } from "@/components/workspace/fullscreen-entity-detail";
 import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
 import { ModuleSection } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
@@ -18,6 +19,8 @@ import { enterpriseV2Mutation, useEnterpriseV2Collection } from "@/components/en
 import { ProfessionalReportView } from "@/components/reports/professional-report-view";
 import { enterpriseCoreT, type EnterpriseCoreKey } from "@/lib/enterprise-core-i18n";
 import { buildEnterpriseProfessionalReport } from "@/lib/reporting/enterprise-professional-report";
+import { downloadProfessionalCsv, downloadProfessionalXlsx } from "@/lib/reporting/professional-export";
+import { downloadProfessionalPdfV2 } from "@/lib/reporting/professional-pdf-v2";
 
 type LegacyRecord = { id: string; title: string; description: string | null; status: string; updatedAt: string };
 type ReportItem = { id: string; reference: string; title: string; description: string | null; reportType: string; status: string; periodStart: string | null; periodEnd: string | null; currency: string | null; unitCode: string | null; sourcePolicyCode: string | null; metricDefinitionCodesJson: unknown; freshnessAt: string | null; generatedByUserId: string; generatedAt: string; schemaVersion: number; revision: number; capabilities?: { canPublish?: boolean; canArchive?: boolean } };
@@ -77,6 +80,7 @@ export function EnterpriseReportsWorkspace({ organizationId, organizationName, o
   const [createOpen, setCreateOpen] = useState(false);
   const [saveViewOpen, setSaveViewOpen] = useState(false);
   const [detail, setDetail] = useState<ReportDetail | null>(null);
+  const [catalogDetail, setCatalogDetail] = useState<ReportCatalogItem | null>(null);
   const [catalog, setCatalog] = useState<ReportCatalogItem[]>([]);
   const [metrics, setMetrics] = useState<MetricDefinitionItem[]>([]);
   const [views, setViews] = useState<SavedReportView[]>([]);
@@ -179,6 +183,12 @@ export function EnterpriseReportsWorkspace({ organizationId, organizationName, o
     setSearch(typeof filters.search === "string" ? filters.search : ""); setType(typeof filters.type === "string" ? filters.type : view.reportType); setStatus(typeof filters.status === "string" ? filters.status : ""); setPage(1);
   }
 
+  function generateFromCatalog(item: ReportCatalogItem) {
+    setNewReportType(item.code);
+    setCatalogDetail(null);
+    setCreateOpen(true);
+  }
+
   async function generate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (busy || generationStatusUrl || !newReportType) return;
     setMessage(""); setErrorMessage(""); setBusy(true);
@@ -194,7 +204,7 @@ export function EnterpriseReportsWorkspace({ organizationId, organizationName, o
     finally { setBusy(false); }
   }
 
-  async function runAction(item: ReportItem, action: "PUBLISH" | "ARCHIVE") {
+  async function runAction(item: Pick<ReportItem, "id" | "revision" | "capabilities">, action: "PUBLISH" | "ARCHIVE") {
     if (busyActionId) return; setMessage(""); setErrorMessage(""); setBusyActionId(item.id);
     try { await enterpriseV2Mutation(`/api/enterprise/${organizationId}/reports/${item.id}/actions`, "POST", { action, revision: item.revision }); setDetail(null); setRefreshKey((value) => value + 1); setMessage(t("reports.updated")); }
     catch (error) { setErrorMessage(error instanceof Error && !error.message.includes("ACTION_FAILED") ? error.message : humanActionError); }
@@ -216,15 +226,29 @@ export function EnterpriseReportsWorkspace({ organizationId, organizationName, o
     ...(item.capabilities?.canArchive ? [{ id: "archive", label: t("reports.action.archive"), icon: Archive, destructive: true, separatorBefore: true, disabled: busyActionId === item.id, onSelect: () => void runAction(item, "ARCHIVE") }] : []),
   ];
 
+  const catalogActions: BusinessContextAction[] = catalogDetail ? [
+    ...(canCreate ? [{ id: "generate", label: t("reports.generateReport"), icon: FileBarChart2, disabled: Boolean(generationStatusUrl), onSelect: () => generateFromCatalog(catalogDetail) }] : []),
+    { id: "refresh", label: locale === "en" ? "Refresh catalog" : "Actualiser le catalogue", icon: RotateCcw, separatorBefore: canCreate, onSelect: () => setRefreshKey((value) => value + 1) },
+  ] : [];
+
+  const reportDetailActions: BusinessContextAction[] = detail && detailModel ? [
+    { id: "csv", label: "CSV", icon: Download, onSelect: () => downloadProfessionalCsv(detailModel) },
+    { id: "xlsx", label: "Excel", icon: FileSpreadsheet, onSelect: () => downloadProfessionalXlsx(detailModel) },
+    { id: "pdf", label: "PDF", icon: FileText, onSelect: () => downloadProfessionalPdfV2(detailModel) },
+    ...(detail.report.capabilities?.canPublish ? [{ id: "publish", label: t("reports.action.publish"), icon: Send, separatorBefore: true, disabled: busyActionId === detail.report.id, onSelect: () => void runAction(detail.report, "PUBLISH") }] : []),
+    ...(detail.report.capabilities?.canArchive ? [{ id: "archive", label: t("reports.action.archive"), icon: Archive, destructive: true, separatorBefore: true, disabled: busyActionId === detail.report.id, onSelect: () => void runAction(detail.report, "ARCHIVE") }] : []),
+  ] : [];
+
   const publishedTotal = reports.meta.metrics?.published ?? 0;
   const latestGeneratedAt = reports.meta.latestGeneratedAt;
   const supports = (filter: string) => selectedCatalog?.supportedFilters?.includes(filter) ?? false;
+  const catalogMetrics = catalogDetail ? metrics.filter((metric) => catalogDetail.code === "FINANCE_OVERVIEW" || metric.supportedFilters.some((filter) => catalogDetail.supportedFilters.includes(filter))) : [];
 
   return <div className="grid min-w-0 max-w-full gap-6">
     <ModuleMetrics label={t("reports.indicators")}><ModuleMetric label={t("reports.metric.reports")} value={reports.pagination.total} /><ModuleMetric label={t("reports.metric.published")} value={publishedTotal} /><ModuleMetric label={t("reports.metric.latest")} value={latestGeneratedAt ? formatEnterpriseDate(latestGeneratedAt, locale) : "—"} /><ModuleMetric label={t("reports.metric.savedViews")} value={views.length} /></ModuleMetrics>
 
     <ModuleSection title={t("reports.catalog.title")} description={t("reports.catalog.description")} count={`${catalog.length}`}>
-      <BusinessList ariaLabel={t("reports.catalog.aria")}>{catalog.map((item) => <BusinessListItem key={item.code} title={reportTypeLabel(locale, item.code)} status={<StatusBadge tone="info">{reportFamilyLabel(locale, item.family)}</StatusBadge>} meta={`${reportSourceLabel(locale, item.sourcePolicyCode)} · ${reportFreshnessLabel(locale, item.freshnessPolicyCode)}`} description={`${t("reports.catalog.metrics")}: ${metrics.filter((metric) => item.code === "FINANCE_OVERVIEW" || metric.supportedFilters.some((filter) => item.supportedFilters.includes(filter))).slice(0, 6).map((metric) => reportMetricLabel(locale, metric.code)).join(", ") || "—"} · ${t("reports.catalog.formats")}: ${item.formatCodes.join(", ")}`} />)}</BusinessList>
+      <BusinessList ariaLabel={t("reports.catalog.aria")}>{catalog.map((item) => <BusinessListItem key={item.code} title={reportTypeLabel(locale, item.code)} status={<StatusBadge tone="info">{reportFamilyLabel(locale, item.family)}</StatusBadge>} meta={`${reportSourceLabel(locale, item.sourcePolicyCode)} · ${reportFreshnessLabel(locale, item.freshnessPolicyCode)}`} description={`${t("reports.catalog.metrics")}: ${metrics.filter((metric) => item.code === "FINANCE_OVERVIEW" || metric.supportedFilters.some((filter) => item.supportedFilters.includes(filter))).slice(0, 6).map((metric) => reportMetricLabel(locale, metric.code)).join(", ") || "—"} · ${t("reports.catalog.formats")}: ${item.formatCodes.join(", ")}`} onOpen={() => setCatalogDetail(item)} />)}</BusinessList>
     </ModuleSection>
 
     {views.length ? <ModuleSection title={t("reports.saved.title")} description={t("reports.saved.description")} count={`${views.length}`}><BusinessList ariaLabel={t("reports.saved.aria")}>{views.map((view) => <BusinessListItem key={view.id} title={view.name} status={<StatusBadge tone={view.isFavorite ? "success" : "neutral"}>{view.isFavorite ? t("reports.saved.favorite") : reportVisibilityLabel(locale, view.visibility)}</StatusBadge>} meta={reportTypeLabel(locale, view.reportType)} description={`${view.isDefault ? `${t("reports.saved.default")} · ` : ""}${formatEnterpriseDate(view.updatedAt, locale)}`} onOpen={() => applyView(view)} />)}</BusinessList></ModuleSection> : null}
@@ -241,13 +265,13 @@ export function EnterpriseReportsWorkspace({ organizationId, organizationName, o
 
     {legacyRecords.length ? <ModuleSection title={t("reports.historical.title")} description={t("reports.historical.description")}><BusinessList ariaLabel={t("reports.historical.aria")}>{legacyRecords.map((item) => <BusinessListItem key={item.id} title={item.title} status={<StatusBadge>{t("reports.historyBadge")}</StatusBadge>} description={item.description || statusLabel(locale, item.status)} />)}</BusinessList></ModuleSection> : null}
 
-    <Dialog open={saveViewOpen} onClose={() => setSaveViewOpen(false)} title={t("reports.save.title")} presentation="editor"><form onSubmit={saveView} className="grid gap-4"><Field label={t("reports.save.name")}><Input name="name" required /></Field><Field label={t("reports.save.reportType")}><NativeSelect name="reportType" required defaultValue={type || catalog[0]?.code || ""} items={reportTypeChoices} /></Field><Field label={t("reports.save.visibility")}><NativeSelect name="visibility" defaultValue="PERSONAL" items={[{ id: "PERSONAL", label: t("reports.save.personal") }, ...(canManage ? [{ id: "ORGANIZATION", label: t("reports.save.organization") }] : [])]} /></Field><label className="flex min-h-11 items-center gap-2 text-sm font-bold"><input type="checkbox" name="isDefault" />{t("reports.save.default")}</label><label className="flex min-h-11 items-center gap-2 text-sm font-bold"><input type="checkbox" name="isFavorite" />{t("reports.save.favorite")}</label><Button type="submit" disabled={busy || !catalog.length}>{t("reports.saveView")}</Button></form></Dialog>
+    <Dialog open={saveViewOpen} onClose={() => setSaveViewOpen(false)} title={t("reports.save.title")} presentation="editor"><form onSubmit={saveView} className="grid gap-4 p-3 sm:p-5"><Field label={t("reports.save.name")}><Input name="name" required /></Field><Field label={t("reports.save.reportType")}><NativeSelect name="reportType" required defaultValue={type || catalog[0]?.code || ""} items={reportTypeChoices} /></Field><Field label={t("reports.save.visibility")}><NativeSelect name="visibility" defaultValue="PERSONAL" items={[{ id: "PERSONAL", label: t("reports.save.personal") }, ...(canManage ? [{ id: "ORGANIZATION", label: t("reports.save.organization") }] : [])]} /></Field><label className="flex min-h-11 items-center gap-2 text-sm font-bold"><input type="checkbox" name="isDefault" />{t("reports.save.default")}</label><label className="flex min-h-11 items-center gap-2 text-sm font-bold"><input type="checkbox" name="isFavorite" />{t("reports.save.favorite")}</label><Button type="submit" disabled={busy || !catalog.length}>{t("reports.saveView")}</Button></form></Dialog>
 
     <Dialog open={createOpen} onClose={() => { if (!busy) setCreateOpen(false); }} title={t("reports.generate.title")} presentation="editor" className="h-[100dvh] w-screen max-w-none rounded-none sm:h-auto sm:w-auto sm:max-w-4xl sm:rounded-3xl">
-      <form onSubmit={generate} className="grid min-w-0 gap-5">
+      <form onSubmit={generate} className="grid min-w-0 gap-5 p-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-5">
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label={t("reports.generate.reportTitle")}><Input name="title" required defaultValue={generationDraft.title || ""} /></Field>
-          <Field label={t("reports.generate.reportType")}><NativeSelect name="reportType" required value={newReportType} onChange={setNewReportType} items={reportTypeChoices} /></Field>
+          <Field label={t("reports.generate.reportTitle")} help={locale === "en" ? "Give the archived report a business-readable title." : "Donnez au rapport archivé un titre compréhensible par les utilisateurs métier."}><Input name="title" required defaultValue={generationDraft.title || ""} /></Field>
+          <Field label={t("reports.generate.reportType")} help={locale === "en" ? "The selected catalog definition controls available filters and indicators." : "La définition du catalogue sélectionnée détermine les filtres et indicateurs disponibles."}><NativeSelect name="reportType" required value={newReportType} onChange={setNewReportType} items={reportTypeChoices} /></Field>
         </div>
         {selectedCatalog ? <section className="grid min-w-0 gap-4 rounded-2xl border border-dtsc-border bg-dtsc-page p-4"><div className="grid gap-4 md:grid-cols-2">
           {supports("period") ? <><Field label={t("reports.generate.periodStart")}><Input name="periodStart" type="date" defaultValue={generationDraft.periodStart || ""} /></Field><Field label={t("reports.generate.periodEnd")}><Input name="periodEnd" type="date" defaultValue={generationDraft.periodEnd || ""} /></Field></> : null}
@@ -257,11 +281,46 @@ export function EnterpriseReportsWorkspace({ organizationId, organizationName, o
           {supports("budgetId") ? <Field label={t("reports.schedule.budget")}><NativeSelect name="budgetId" defaultValue={generationDraft.budgetId || ""} items={generationOptions.budgets} /></Field> : null}
           {supports("category") ? <Field label={t("reports.generate.category")}><NativeSelect name="category" defaultValue={generationDraft.category || ""} items={generationOptions.categories} /></Field> : null}
         </div></section> : null}
-        <Field label={t("reports.generate.description")}><textarea name="description" defaultValue={generationDraft.description || ""} className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm" /></Field>
+        <Field label={t("reports.generate.description")} help={locale === "en" ? "Optional context stored with the report." : "Contexte facultatif conservé avec le rapport."}><textarea name="description" defaultValue={generationDraft.description || ""} className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-base md:text-sm" /></Field>
         <Button type="submit" disabled={busy || Boolean(generationStatusUrl) || !newReportType}><FileBarChart2 className="h-4 w-4" />{t("reports.generate.submit")}</Button>
       </form>
     </Dialog>
 
-    <Dialog open={Boolean(detail)} onClose={() => setDetail(null)} title={detail ? `${detail.report.reference} · ${detail.report.title}` : ""} presentation="editor" className="h-[100dvh] w-screen max-w-none rounded-none sm:h-[96dvh] sm:w-auto sm:max-w-6xl sm:rounded-3xl">{detail && detailModel ? <div className="grid min-w-0 gap-5"><ProfessionalReportView model={detailModel} locale={locale} logoUrl={organizationLogoUrl} />{detail.events.length ? <section className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4"><h3 className="font-black text-dtsc-ink">{t("history")}</h3><div className="mt-3 grid gap-2 text-sm text-dtsc-muted">{detail.events.slice(0, 10).map((event) => <p key={event.id}>{formatEnterpriseDate(event.createdAt, locale)} · {event.summary}</p>)}</div></section> : null}</div> : null}</Dialog>
+    <FullscreenEntityDetail
+      open={Boolean(catalogDetail)}
+      onClose={() => setCatalogDetail(null)}
+      title={catalogDetail ? reportTypeLabel(locale, catalogDetail.code) : ""}
+      description={catalogDetail ? t(catalogDetail.descriptionKey as EnterpriseCoreKey) : undefined}
+      actions={catalogActions}
+      actionLabel={t("reports.actions")}
+    >
+      {catalogDetail ? <div className="grid min-w-0 gap-5">
+        <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <CatalogFact label={locale === "en" ? "Family" : "Famille"} value={reportFamilyLabel(locale, catalogDetail.family)} />
+          <CatalogFact label={locale === "en" ? "Source" : "Source"} value={reportSourceLabel(locale, catalogDetail.sourcePolicyCode)} />
+          <CatalogFact label={locale === "en" ? "Freshness" : "Fraîcheur"} value={reportFreshnessLabel(locale, catalogDetail.freshnessPolicyCode)} />
+          <CatalogFact label={t("reports.catalog.formats")} value={catalogDetail.formatCodes.join(", ")} />
+        </div>
+        <section className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 sm:p-5">
+          <h3 className="font-black text-dtsc-ink">{t("reports.catalog.metrics")}</h3>
+          <div className="mt-3 flex min-w-0 flex-wrap gap-2">{catalogMetrics.length ? catalogMetrics.map((metric) => <span key={metric.code} className="max-w-full rounded-full border border-dtsc-border bg-dtsc-soft px-3 py-2 text-xs font-bold text-dtsc-ink">{reportMetricLabel(locale, metric.code)}</span>) : <span className="text-sm text-dtsc-muted">—</span>}</div>
+        </section>
+        {canCreate ? <p className="rounded-xl border border-cyan-400/30 bg-cyan-400/5 p-4 text-sm leading-6 text-dtsc-muted">{locale === "en" ? "Use the … menu to generate this report. The generation form will only expose filters supported by this catalog definition." : "Utilisez le menu … pour générer ce rapport. Le formulaire n’affichera que les filtres réellement supportés par cette définition du catalogue."}</p> : null}
+      </div> : null}
+    </FullscreenEntityDetail>
+
+    <FullscreenEntityDetail
+      open={Boolean(detail)}
+      onClose={() => setDetail(null)}
+      title={detail ? `${detail.report.reference} · ${detail.report.title}` : ""}
+      actions={reportDetailActions}
+      actionLabel={t("reports.actions")}
+    >
+      {detail && detailModel ? <div className="grid min-w-0 gap-5"><ProfessionalReportView model={detailModel} locale={locale} logoUrl={organizationLogoUrl} />{detail.events.length ? <section className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4"><h3 className="font-black text-dtsc-ink">{t("history")}</h3><div className="mt-3 grid gap-2 text-sm text-dtsc-muted">{detail.events.slice(0, 10).map((event) => <p key={event.id}>{formatEnterpriseDate(event.createdAt, locale)} · {event.summary}</p>)}</div></section> : null}</div> : null}
+    </FullscreenEntityDetail>
   </div>;
+}
+
+function CatalogFact({ label, value }: { label: string; value: string }) {
+  return <div className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page/60 p-4"><span className="text-xs font-black uppercase tracking-[0.05em] text-dtsc-muted">{label}</span><strong className="mt-1 block break-words text-sm text-dtsc-ink">{value || "—"}</strong></div>;
 }
