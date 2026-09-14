@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
   BarChart3,
@@ -359,10 +360,10 @@ export function ProfessionalReportView({
                         {hasDrillDown ? (
                           <td className="whitespace-nowrap px-3 py-2">
                             {deepLink ? (
-                              <a href={deepLink} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-dtsc-border px-2.5 text-xs font-bold text-dtsc-blue hover:bg-dtsc-soft">
+                              <Link href={deepLink} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-dtsc-border px-2.5 text-xs font-bold text-dtsc-blue hover:bg-dtsc-soft">
                                 <ExternalLink className="h-3.5 w-3.5" />
                                 {en ? "Open" : "Explorer"}
-                              </a>
+                              </Link>
                             ) : <span className="text-xs text-dtsc-muted">—</span>}
                           </td>
                         ) : null}
