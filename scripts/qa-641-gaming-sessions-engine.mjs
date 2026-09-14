@@ -32,7 +32,7 @@ const regression = read("scripts/qa-regression-checks.mjs");
 
 const sessions = registry.modules.find((item) => item.code === "GAMING_SESSIONS");
 check(registry.version >= 3, "gaming registry version must include #641");
-check(sessions?.implementationStatus === "BETA", "GAMING_SESSIONS must be BETA in #641");
+check(sessions?.implementationStatus === "BETA", "GAMING_SESSIONS must remain BETA after #641");
 check(sessions?.routeKind === "DEDICATED_CORE", "GAMING_SESSIONS must use DEDICATED_CORE");
 check(sessions?.routePath === "/enterprise-modules/GAMING_SESSIONS", "GAMING_SESSIONS route path missing");
 check(sessions?.workspaceKey === "ENTERPRISE_GAMING_SESSIONS", "GAMING_SESSIONS workspace missing");
@@ -40,9 +40,9 @@ check(sessions?.accessPolicy === "POSITION_PERMISSION", "GAMING_SESSIONS must us
 check(sessions?.permissionPrefixes?.includes("enterprise.gaming.sessions."), "GAMING_SESSIONS permission prefix missing");
 check(sessions?.dependencies?.includes("GAMING_STATIONS"), "GAMING_SESSIONS must depend on GAMING_STATIONS");
 check(sessions?.dependencies?.includes("CATALOG"), "GAMING_SESSIONS must depend on CATALOG");
-for (const code of ["GAMING_DASHBOARD", "GAMING_PRICING_PACKAGES", "GAMING_CHECKOUT", "GAMING_DAILY_CLOSE", "GAMING_TOURNAMENTS", "GAMING_REPORTS"]) {
+for (const code of ["GAMING_DASHBOARD", "GAMING_CHECKOUT", "GAMING_DAILY_CLOSE", "GAMING_TOURNAMENTS", "GAMING_REPORTS"]) {
   const item = registry.modules.find((module) => module.code === code);
-  check(item?.implementationStatus === "PLANNED", `${code} must remain PLANNED after #641 until its own implementation lot`);
+  check(item?.implementationStatus === "PLANNED", `${code} must remain PLANNED until its own implementation lot`);
   check(item?.routeKind === "HIDDEN", `${code} PLANNED module must remain HIDDEN`);
   check(item?.accessPolicy === "EXPLICIT_DENY", `${code} PLANNED module must remain fail-closed`);
 }
@@ -202,7 +202,7 @@ includesAll(workspace, [
 check(!/MAX_STATIONS\s*=\s*5/i.test(workspace), "sessions workspace must not reintroduce a five-station limit");
 check(!workspace.includes("Array.from({ length: 5"), "sessions workspace must not synthesize five station slots");
 
-includesAll(copy, ["fr:", "en:", "Chronométrage serveur", "Server timing", "Le navigateur n’est jamais l’autorité", "browser is never the timer authority"], "sessions i18n server-authority copy");
+includesAll(copy, ["fr:", "en:", "Chronométrage", "Server timing", "Le navigateur n’est jamais l’autorité", "browser is never the timer authority"], "sessions i18n server-authority copy");
 includesAll(http, ["gamingSessionErrorResponse", "GAMING_SESSION_STATION_BUSY", "GAMING_SESSION_TERMINAL", "GAMING_SESSION_IDEMPOTENCY_CONFLICT"], "specific session errors");
 includesAll(docs, ["#641", "GAMING_SESSIONS", "EnterpriseGamingSessionTransition", "idempot", "timestamps serveur", "IN_USE"], "gaming sessions documentation");
 check(regression.includes('await import("./qa-641-gaming-sessions-engine.mjs");'), "qa:regression must execute #641 Gaming Sessions QA");

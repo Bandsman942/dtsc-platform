@@ -29,7 +29,7 @@ const regression = read("scripts/qa-regression-checks.mjs");
 
 const bookings = registry.modules.find((item) => item.code === "GAMING_BOOKINGS");
 check(registry.version >= 4, "gaming registry version must include #642");
-check(bookings?.implementationStatus === "BETA", "GAMING_BOOKINGS must be BETA in #642");
+check(bookings?.implementationStatus === "BETA", "GAMING_BOOKINGS must remain BETA after #642");
 check(bookings?.routeKind === "DEDICATED_CORE", "GAMING_BOOKINGS must use DEDICATED_CORE");
 check(bookings?.routePath === "/enterprise-modules/GAMING_BOOKINGS", "GAMING_BOOKINGS route missing");
 check(bookings?.workspaceKey === "ENTERPRISE_GAMING_BOOKINGS", "GAMING_BOOKINGS workspace missing");
@@ -38,11 +38,11 @@ check(bookings?.permissionPrefixes?.includes("enterprise.gaming.bookings."), "GA
 for (const dependency of ["GAMING_STATIONS", "GAMING_SESSIONS", "CRM_CUSTOMERS"]) {
   check(bookings?.dependencies?.includes(dependency), `GAMING_BOOKINGS dependency missing ${dependency}`);
 }
-for (const code of ["GAMING_DASHBOARD", "GAMING_PRICING_PACKAGES", "GAMING_CHECKOUT", "GAMING_DAILY_CLOSE", "GAMING_TOURNAMENTS", "GAMING_REPORTS"]) {
+for (const code of ["GAMING_DASHBOARD", "GAMING_CHECKOUT", "GAMING_DAILY_CLOSE", "GAMING_TOURNAMENTS", "GAMING_REPORTS"]) {
   const item = registry.modules.find((module) => module.code === code);
-  check(item?.implementationStatus === "PLANNED", `${code} must remain PLANNED in #642`);
-  check(item?.routeKind === "HIDDEN", `${code} must remain HIDDEN in #642`);
-  check(item?.accessPolicy === "EXPLICIT_DENY", `${code} must remain fail-closed in #642`);
+  check(item?.implementationStatus === "PLANNED", `${code} must remain PLANNED until its own implementation lot`);
+  check(item?.routeKind === "HIDDEN", `${code} PLANNED module must remain HIDDEN`);
+  check(item?.accessPolicy === "EXPLICIT_DENY", `${code} PLANNED module must remain fail-closed`);
 }
 
 includesAll(domain, [

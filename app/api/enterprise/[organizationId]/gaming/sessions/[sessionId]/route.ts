@@ -36,7 +36,15 @@ export async function PATCH(req: Request, { params }: Params) {
       entity: "EnterpriseGamingSession",
       entityId: sessionId,
       request: req,
-      metadata: { organizationId, idempotent: result.idempotent, transition: parsed.data.action },
+      metadata: {
+        organizationId,
+        idempotent: result.idempotent,
+        transition: parsed.data.action,
+        pricingRuleId: result.session.pricingRuleId,
+        currency: result.session.currency,
+        quotedAmount: result.session.quotedAmount?.toString() || null,
+        finalAmount: result.session.finalAmount?.toString() || null,
+      },
     });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "gaming-sessions", transition: parsed.data.action } });
     return NextResponse.json({ ok: true, ...result });

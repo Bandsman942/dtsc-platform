@@ -5,6 +5,12 @@ const optionalNotes = z.string().trim().max(4000).optional().nullable();
 const optionalEntityId = z.string().trim().min(1).max(191).optional().nullable();
 const idempotencyKey = z.string().trim().min(8).max(160);
 const maxBookingDurationMs = 24 * 60 * 60 * 1000;
+const pricingAmount = z.coerce.number().finite().positive().max(1_000_000_000);
+const optionalPricingAmount = pricingAmount.optional().nullable();
+const currencyCode = z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/, "La devise doit utiliser un code ISO à 3 lettres.");
+const optionalMinuteOfDay = z.coerce.number().int().min(0).max(1439).optional().nullable();
+const optionalDate = z.coerce.date().optional().nullable();
+const optionalPlayerLimit = z.coerce.number().int().min(1).max(16).optional().nullable();
 
 export const gamingStationCreateSchema = z.object({
   assetId: z.string().trim().min(1),
@@ -50,7 +56,19 @@ export const gamingSessionStartSchema = z.object({
   idempotencyKey,
   businessPartyId: optionalEntityId,
   serviceCatalogItemId: optionalEntityId,
+  playerCount: z.coerce.number().int().min(1).max(16).default(1),
   pauseBillable: z.boolean().default(false),
+  priceOverrideAmount: optionalPricingAmount,
+  priceOverrideReason: z.string().trim().min(8).max(500).optional().nullable(),
+}).superRefine((value, ctx) => {
+  const hasOverrideAmount = value.priceOverrideAmount !== undefined && value.priceOverrideAmount !== null;
+  const hasOverrideReason = Boolean(value.priceOverrideReason?.trim());
+  if (hasOverrideAmount !== hasOverrideReason) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["priceOverrideReason"], message: "Un montant dérogatoire exige un motif, et inversement." });
+  }
+  if (hasOverrideAmount && !value.serviceCatalogItemId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["serviceCatalogItemId"], message: "Sélectionnez un service catalogue avant d’appliquer une dérogation tarifaire." });
+  }
 });
 
 export const gamingSessionTransitionSchema = z.object({
@@ -96,7 +114,11 @@ export const gamingBookingTransitionSchema = z.object({
   scheduledEndAt: z.coerce.date().optional(),
   playerCount: z.coerce.number().int().min(1).max(16).optional(),
   notes: optionalNotes,
+  serviceCatalogItemId: optionalEntityId,
 }).superRefine((value, ctx) => {
+  if (value.action === "CONVERT" && !value.serviceCatalogItemId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["serviceCatalogItemId"], message: "Sélectionnez le service catalogue à facturer avant de démarrer la session réservée." });
+  }
   if (value.action !== "UPDATE") return;
   const hasEditableField = [
     value.stationId,
@@ -116,5 +138,100 @@ export const gamingBookingTransitionSchema = z.object({
     } else if (durationMs > maxBookingDurationMs) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["scheduledEndAt"], message: "Une réservation ne peut pas dépasser 24 heures." });
     }
+  }
+});
+
+const pricingRuleFields = {
+  code: z.string().trim().min(1).max(60),
+  serviceCatalogItemId: z.string().trim().min(1).max(191),
+  stationId: optionalEntityId,
+  pricingMode: z.enum(["FIXED_DURATION", "PER_MINUTE", "PER_HOUR", "PACKAGE"]),
+  amount: pricingAmount,
+  currency: currencyCode,
+  durationMinutes: z.coerce.number().int().min(1).max(24 * 60).optional().nullable(),
+  billingIncrementMinutes: z.coerce.number().int().min(1).max(24 * 60).optional().nullable(),
+  validFrom: optionalDate,
+  validUntil: optionalDate,
+  dayOfWeekMask: z.coerce.number().int().min(1).max(127).optional().nullable(),
+  startMinuteOfDay: optionalMinuteOfDay,
+  endMinuteOfDay: optionalMinuteOfDay,
+  priority: z.coerce.number().int().min(0).max(10000).default(100),
+  consoleFamily: z.string().trim().min(1).max(80).optional().nullable(),
+  minPlayers: optionalPlayerLimit,
+  maxPlayers: optionalPlayerLimit,
+  label: optionalShortText,
+  status: z.enum(["DRAFT", "ACTIVE", "INACTIVE"]).default("DRAFT"),
+} as const;
+
+function validatePricingRule(value: {
+  pricingMode?: "FIXED_DURATION" | "PER_MINUTE" | "PER_HOUR" | "PACKAGE";
+  durationMinutes?: number | null;
+  validFrom?: Date | null;
+  validUntil?: Date | null;
+  startMinuteOfDay?: number | null;
+  endMinuteOfDay?: number | null;
+  minPlayers?: number | null;
+  maxPlayers?: number | null;
+}, ctx: z.RefinementCtx) {
+  if ((value.pricingMode === "FIXED_DURATION" || value.pricingMode === "PACKAGE") && !value.durationMinutes) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["durationMinutes"], message: "Une durée est requise pour un forfait ou une durée fixe." });
+  }
+  const hasStart = value.startMinuteOfDay !== undefined && value.startMinuteOfDay !== null;
+  const hasEnd = value.endMinuteOfDay !== undefined && value.endMinuteOfDay !== null;
+  if (hasStart !== hasEnd) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["endMinuteOfDay"], message: "La plage horaire exige une heure de début et une heure de fin." });
+  }
+  if (value.validFrom && value.validUntil && value.validUntil.getTime() <= value.validFrom.getTime()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["validUntil"], message: "La fin de validité doit être postérieure au début." });
+  }
+  if (value.minPlayers && value.maxPlayers && value.minPlayers > value.maxPlayers) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["maxPlayers"], message: "Le maximum de joueurs doit être supérieur ou égal au minimum." });
+  }
+}
+
+export const gamingPricingRuleCreateSchema = z.object(pricingRuleFields).superRefine(validatePricingRule);
+
+export const gamingPricingRuleUpdateSchema = z.object({
+  action: z.enum(["UPDATE", "ACTIVATE", "DEACTIVATE", "ARCHIVE"]),
+  revision: z.coerce.number().int().positive(),
+  code: pricingRuleFields.code.optional(),
+  serviceCatalogItemId: pricingRuleFields.serviceCatalogItemId.optional(),
+  stationId: optionalEntityId,
+  pricingMode: pricingRuleFields.pricingMode.optional(),
+  amount: pricingAmount.optional(),
+  currency: currencyCode.optional(),
+  durationMinutes: pricingRuleFields.durationMinutes,
+  billingIncrementMinutes: pricingRuleFields.billingIncrementMinutes,
+  validFrom: optionalDate,
+  validUntil: optionalDate,
+  dayOfWeekMask: pricingRuleFields.dayOfWeekMask,
+  startMinuteOfDay: optionalMinuteOfDay,
+  endMinuteOfDay: optionalMinuteOfDay,
+  priority: z.coerce.number().int().min(0).max(10000).optional(),
+  consoleFamily: pricingRuleFields.consoleFamily,
+  minPlayers: optionalPlayerLimit,
+  maxPlayers: optionalPlayerLimit,
+  label: optionalShortText,
+}).superRefine((value, ctx) => {
+  if (value.action === "UPDATE") {
+    const hasEditableField = Object.entries(value).some(([key, candidate]) => key !== "action" && key !== "revision" && candidate !== undefined);
+    if (!hasEditableField) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["action"], message: "Au moins une information tarifaire doit être modifiée." });
+  }
+  validatePricingRule(value, ctx);
+});
+
+export const gamingPricingSimulationSchema = z.object({
+  serviceCatalogItemId: z.string().trim().min(1).max(191),
+  stationId: z.string().trim().min(1).max(191),
+  durationMinutes: z.coerce.number().int().min(1).max(24 * 60),
+  playerCount: z.coerce.number().int().min(1).max(16).default(1),
+  startAt: optionalDate,
+  priceOverrideAmount: optionalPricingAmount,
+  priceOverrideReason: z.string().trim().min(8).max(500).optional().nullable(),
+}).superRefine((value, ctx) => {
+  const hasOverrideAmount = value.priceOverrideAmount !== undefined && value.priceOverrideAmount !== null;
+  const hasOverrideReason = Boolean(value.priceOverrideReason?.trim());
+  if (hasOverrideAmount !== hasOverrideReason) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["priceOverrideReason"], message: "Un montant dérogatoire exige un motif, et inversement." });
   }
 });

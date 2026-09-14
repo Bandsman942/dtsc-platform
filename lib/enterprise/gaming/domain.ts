@@ -38,6 +38,14 @@ export const GAMING_BOOKING_PERMISSIONS = [
 ] as const;
 export type GamingBookingPermission = (typeof GAMING_BOOKING_PERMISSIONS)[number];
 
+export const GAMING_PRICING_PERMISSIONS = [
+  "enterprise.gaming.pricing.read",
+  "enterprise.gaming.pricing.create",
+  "enterprise.gaming.pricing.update",
+  "enterprise.gaming.pricing.manage",
+] as const;
+export type GamingPricingPermission = (typeof GAMING_PRICING_PERMISSIONS)[number];
+
 export const GAMING_STATION_STATUSES = [
   "AVAILABLE",
   "IN_USE",
@@ -96,6 +104,12 @@ export const GAMING_PRICING_MODES = [
   "PACKAGE",
 ] as const;
 export type GamingPricingMode = (typeof GAMING_PRICING_MODES)[number];
+
+export const GAMING_PRICING_RULE_STATUSES = ["DRAFT", "ACTIVE", "INACTIVE"] as const;
+export type GamingPricingRuleStatus = (typeof GAMING_PRICING_RULE_STATUSES)[number];
+
+export const GAMING_PRICING_RULE_ACTIONS = ["UPDATE", "ACTIVATE", "DEACTIVATE", "ARCHIVE"] as const;
+export type GamingPricingRuleAction = (typeof GAMING_PRICING_RULE_ACTIONS)[number];
 
 function normalizeCode(value: string | null | undefined) {
   return value?.trim().toUpperCase() || "";

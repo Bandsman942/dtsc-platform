@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "modules": [
     {
       "code": "GAMING_DASHBOARD",
@@ -96,22 +96,23 @@
       "code": "GAMING_PRICING_PACKAGES",
       "labelFr": "Tarifs & forfaits Gaming",
       "labelEn": "Gaming pricing & packages",
-      "descriptionFr": "Règles de durée, forfaits et créneaux appliquées aux services du catalogue commun.",
-      "descriptionEn": "Duration, package and time-slot rules applied to services from the shared catalog.",
+      "descriptionFr": "Règles serveur de durée, forfait, poste, créneau et groupe appliquées aux services du catalogue commun, avec snapshot tarifaire des sessions.",
+      "descriptionEn": "Server-side duration, package, station, time-slot, and group rules applied to shared catalog services with session pricing snapshots.",
       "domain": "SECTOR_HOSPITALITY",
-      "implementationStatus": "PLANNED",
+      "implementationStatus": "BETA",
       "navigationGroup": "SECTOR_HOSPITALITY",
       "navigationOrder": 150,
       "iconKey": "badge-dollar-sign",
-      "routeKind": "HIDDEN",
-      "workspaceKey": null,
-      "permissionPrefixes": ["enterprise.gaming.pricing.", "enterprise.gaming."],
-      "accessPolicy": "EXPLICIT_DENY",
+      "routeKind": "DEDICATED_CORE",
+      "routePath": "/enterprise-modules/GAMING_PRICING_PACKAGES",
+      "workspaceKey": "ENTERPRISE_GAMING_PRICING_PACKAGES",
+      "permissionPrefixes": ["enterprise.gaming.pricing."],
+      "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "BUSINESS",
       "requiresActiveSubscription": true,
       "applicableSectors": ["HOSPITALITY_EVENTS"],
       "applicableBusinessSubtypes": ["GAMING_LOUNGE"],
-      "dependencies": ["CATALOG", "GAMING_STATIONS"],
+      "dependencies": ["CATALOG", "GAMING_STATIONS", "GAMING_SESSIONS"],
       "qaContract": "enterprise-gaming-lounge"
     },
     {

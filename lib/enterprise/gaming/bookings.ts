@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { EnterpriseDomainConflictError, EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { GAMING_BOOKING_STATUSES } from "@/lib/enterprise/gaming/domain";
+import { resolveGamingPricingQuoteTx } from "@/lib/enterprise/gaming/pricing";
 import type { gamingBookingCreateSchema, gamingBookingTransitionSchema } from "@/lib/enterprise/gaming/schemas";
 import { prisma } from "@/lib/prisma";
 import type { z } from "zod";
@@ -459,12 +460,22 @@ export async function transitionGamingBooking(
       } else if (input.action === "CONVERT") {
         if (booking.status !== "CHECKED_IN") throw new EnterpriseDomainError("GAMING_BOOKING_CONVERT_INVALID", 409);
         if (booking.session) throw new EnterpriseDomainError("GAMING_BOOKING_SESSION_EXISTS", 409);
+        if (!input.serviceCatalogItemId) throw new EnterpriseDomainError("GAMING_BOOKING_PRICING_SERVICE_REQUIRED", 400);
 
         await lockBookingStations(tx, organizationId, [booking.stationId]);
         await assertCustomer(tx, organizationId, booking.businessPartyId);
         await assertStationReadyForConversion(tx, organizationId, booking.stationId);
 
         const minutes = durationMinutes(booking.scheduledStartAt, booking.scheduledEndAt);
+        const pricing = await resolveGamingPricingQuoteTx({
+          tx,
+          organizationId,
+          serviceCatalogItemId: input.serviceCatalogItemId,
+          stationId: booking.stationId,
+          durationMinutes: minutes,
+          playerCount: booking.playerCount,
+          startAt: now,
+        });
         const sessionKey = `BOOKING:${input.idempotencyKey}`;
         const session = await tx.enterpriseGamingSession.create({
           data: {
@@ -473,11 +484,16 @@ export async function transitionGamingBooking(
             stationId: booking.stationId,
             bookingId: booking.id,
             businessPartyId: booking.businessPartyId,
+            serviceCatalogItemId: input.serviceCatalogItemId,
+            pricingRuleId: pricing.rule.id,
             status: "ACTIVE",
             startedAt: now,
             expectedEndAt: new Date(now.getTime() + minutes * 60_000),
             pausedSeconds: 0,
             timingPolicyJson: { pauseBillable: false, initialDurationMinutes: minutes, authority: "SERVER", source: "BOOKING", contractVersion: 1 },
+            pricingSnapshotJson: pricing.snapshot,
+            currency: pricing.currency,
+            quotedAmount: pricing.quotedAmount,
             idempotencyKey: sessionKey,
             createdByUserId: actorUserId,
           },
@@ -492,13 +508,29 @@ export async function transitionGamingBooking(
             fromStatus: null,
             toStatus: "ACTIVE",
             actorUserId,
-            metadataJson: { stationId: booking.stationId, bookingId: booking.id, durationMinutes: minutes },
+            metadataJson: {
+              stationId: booking.stationId,
+              bookingId: booking.id,
+              durationMinutes: minutes,
+              serviceCatalogItemId: input.serviceCatalogItemId,
+              pricingRuleId: pricing.rule.id,
+              currency: pricing.currency,
+              quotedAmount: pricing.quotedAmount.toFixed(2),
+            },
           },
         });
 
         nextStatus = "CONVERTED";
         data = { ...data, status: "CONVERTED", convertedAt: now };
-        metadata = { sessionId: session.id, sessionReference: session.reference, durationMinutes: minutes };
+        metadata = {
+          sessionId: session.id,
+          sessionReference: session.reference,
+          durationMinutes: minutes,
+          serviceCatalogItemId: input.serviceCatalogItemId,
+          pricingRuleId: pricing.rule.id,
+          currency: pricing.currency,
+          quotedAmount: pricing.quotedAmount.toFixed(2),
+        };
       }
 
       const updated = await tx.enterpriseGamingBooking.updateMany({
