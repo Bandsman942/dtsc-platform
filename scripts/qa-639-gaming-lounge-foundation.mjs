@@ -6,6 +6,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 
 const subtypeRegistry = read("lib/enterprise/business-subtype-registry.ts");
 const moduleRegistry = read("lib/enterprise/module-registry.ts");
+const moduleOrder = read("lib/enterprise/module-order.ts");
 const gamingDomain = read("lib/enterprise/gaming/domain.ts");
 const gamingRegistryRaw = read("lib/enterprise/module-registry-gaming.json");
 const gamingRegistry = JSON.parse(gamingRegistryRaw);
@@ -55,6 +56,10 @@ includesAll(
     "gamingRegistryData.version",
   ],
   "canonical module registry integration",
+);
+check(
+  moduleOrder.includes("SECTOR_HOSPITALITY: 70"),
+  "SECTOR_HOSPITALITY must have a typed canonical navigation order",
 );
 
 const expectedModules = [
