@@ -228,7 +228,7 @@ export function EnterpriseReportsWorkspace({ organizationId, organizationName, o
 
   const catalogActions: BusinessContextAction[] = catalogDetail ? [
     ...(canCreate ? [{ id: "generate", label: t("reports.generateReport"), icon: FileBarChart2, disabled: Boolean(generationStatusUrl), onSelect: () => generateFromCatalog(catalogDetail) }] : []),
-    { id: "refresh", label: locale === "en" ? "Refresh catalog" : "Actualiser le catalogue", icon: RotateCcw, separatorBefore: canCreate, onSelect: () => setRefreshKey((value) => value + 1) },
+    { id: "refresh", label: t("reports.catalog.refresh"), icon: RotateCcw, separatorBefore: canCreate, onSelect: () => setRefreshKey((value) => value + 1) },
   ] : [];
 
   const reportDetailActions: BusinessContextAction[] = detail && detailModel ? [
@@ -270,8 +270,8 @@ export function EnterpriseReportsWorkspace({ organizationId, organizationName, o
     <Dialog open={createOpen} onClose={() => { if (!busy) setCreateOpen(false); }} title={t("reports.generate.title")} presentation="editor" className="h-[100dvh] w-screen max-w-none rounded-none sm:h-auto sm:w-auto sm:max-w-4xl sm:rounded-3xl">
       <form onSubmit={generate} className="grid min-w-0 gap-5 p-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-5">
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label={t("reports.generate.reportTitle")} help={locale === "en" ? "Give the archived report a business-readable title." : "Donnez au rapport archivé un titre compréhensible par les utilisateurs métier."}><Input name="title" required defaultValue={generationDraft.title || ""} /></Field>
-          <Field label={t("reports.generate.reportType")} help={locale === "en" ? "The selected catalog definition controls available filters and indicators." : "La définition du catalogue sélectionnée détermine les filtres et indicateurs disponibles."}><NativeSelect name="reportType" required value={newReportType} onChange={setNewReportType} items={reportTypeChoices} /></Field>
+          <Field label={t("reports.generate.reportTitle")} help={t("reports.generate.reportTitleHelp")}><Input name="title" required defaultValue={generationDraft.title || ""} /></Field>
+          <Field label={t("reports.generate.reportType")} help={t("reports.generate.reportTypeHelp")}><NativeSelect name="reportType" required value={newReportType} onChange={setNewReportType} items={reportTypeChoices} /></Field>
         </div>
         {selectedCatalog ? <section className="grid min-w-0 gap-4 rounded-2xl border border-dtsc-border bg-dtsc-page p-4"><div className="grid gap-4 md:grid-cols-2">
           {supports("period") ? <><Field label={t("reports.generate.periodStart")}><Input name="periodStart" type="date" defaultValue={generationDraft.periodStart || ""} /></Field><Field label={t("reports.generate.periodEnd")}><Input name="periodEnd" type="date" defaultValue={generationDraft.periodEnd || ""} /></Field></> : null}
@@ -281,7 +281,7 @@ export function EnterpriseReportsWorkspace({ organizationId, organizationName, o
           {supports("budgetId") ? <Field label={t("reports.schedule.budget")}><NativeSelect name="budgetId" defaultValue={generationDraft.budgetId || ""} items={generationOptions.budgets} /></Field> : null}
           {supports("category") ? <Field label={t("reports.generate.category")}><NativeSelect name="category" defaultValue={generationDraft.category || ""} items={generationOptions.categories} /></Field> : null}
         </div></section> : null}
-        <Field label={t("reports.generate.description")} help={locale === "en" ? "Optional context stored with the report." : "Contexte facultatif conservé avec le rapport."}><textarea name="description" defaultValue={generationDraft.description || ""} className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-base md:text-sm" /></Field>
+        <Field label={t("reports.generate.description")} help={t("reports.generate.descriptionHelp")}><textarea name="description" defaultValue={generationDraft.description || ""} className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-base md:text-sm" /></Field>
         <Button type="submit" disabled={busy || Boolean(generationStatusUrl) || !newReportType}><FileBarChart2 className="h-4 w-4" />{t("reports.generate.submit")}</Button>
       </form>
     </Dialog>
@@ -296,16 +296,16 @@ export function EnterpriseReportsWorkspace({ organizationId, organizationName, o
     >
       {catalogDetail ? <div className="grid min-w-0 gap-5">
         <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <CatalogFact label={locale === "en" ? "Family" : "Famille"} value={reportFamilyLabel(locale, catalogDetail.family)} />
-          <CatalogFact label={locale === "en" ? "Source" : "Source"} value={reportSourceLabel(locale, catalogDetail.sourcePolicyCode)} />
-          <CatalogFact label={locale === "en" ? "Freshness" : "Fraîcheur"} value={reportFreshnessLabel(locale, catalogDetail.freshnessPolicyCode)} />
+          <CatalogFact label={t("reports.detail.family")} value={reportFamilyLabel(locale, catalogDetail.family)} />
+          <CatalogFact label={t("reports.detail.source")} value={reportSourceLabel(locale, catalogDetail.sourcePolicyCode)} />
+          <CatalogFact label={t("reports.detail.freshness")} value={reportFreshnessLabel(locale, catalogDetail.freshnessPolicyCode)} />
           <CatalogFact label={t("reports.catalog.formats")} value={catalogDetail.formatCodes.join(", ")} />
         </div>
         <section className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 sm:p-5">
           <h3 className="font-black text-dtsc-ink">{t("reports.catalog.metrics")}</h3>
           <div className="mt-3 flex min-w-0 flex-wrap gap-2">{catalogMetrics.length ? catalogMetrics.map((metric) => <span key={metric.code} className="max-w-full rounded-full border border-dtsc-border bg-dtsc-soft px-3 py-2 text-xs font-bold text-dtsc-ink">{reportMetricLabel(locale, metric.code)}</span>) : <span className="text-sm text-dtsc-muted">—</span>}</div>
         </section>
-        {canCreate ? <p className="rounded-xl border border-cyan-400/30 bg-cyan-400/5 p-4 text-sm leading-6 text-dtsc-muted">{locale === "en" ? "Use the … menu to generate this report. The generation form will only expose filters supported by this catalog definition." : "Utilisez le menu … pour générer ce rapport. Le formulaire n’affichera que les filtres réellement supportés par cette définition du catalogue."}</p> : null}
+        {canCreate ? <p className="rounded-xl border border-cyan-400/30 bg-cyan-400/5 p-4 text-sm leading-6 text-dtsc-muted">{t("reports.catalog.generateHint")}</p> : null}
       </div> : null}
     </FullscreenEntityDetail>
 
