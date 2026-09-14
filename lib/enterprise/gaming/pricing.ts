@@ -373,12 +373,12 @@ export async function createGamingPricingRule(organizationId: string, actorUserI
   }
 }
 
-async function loadGamingPricingRule(organizationId: string, ruleId: string) {
+async function loadGamingPricingRule(organizationId: string, ruleId: string, includeArchived = false) {
   const rule = await prisma.enterpriseGamingPricingRule.findFirst({
     where: { id: ruleId, organizationId },
     include: { station: { select: { id: true, stationCode: true, displayName: true, consoleFamily: true, maxPlayers: true } } },
   });
-  if (!rule || rule.archivedAt) throw new EnterpriseDomainError("GAMING_PRICING_RULE_NOT_FOUND", 404);
+  if (!rule || (!includeArchived && rule.archivedAt)) throw new EnterpriseDomainError("GAMING_PRICING_RULE_NOT_FOUND", 404);
   const catalogService = await prisma.enterpriseCatalogItem.findFirst({
     where: { id: rule.serviceCatalogItemId, organizationId },
     select: { id: true, code: true, name: true, itemType: true, status: true, currency: true, indicativeSalePrice: true },
@@ -472,7 +472,7 @@ export async function updateGamingPricingRule(organizationId: string, ruleId: st
       });
       if (changed.count !== 1) throw new EnterpriseDomainConflictError();
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-    return loadGamingPricingRule(organizationId, ruleId);
+    return loadGamingPricingRule(organizationId, ruleId, input.action === "ARCHIVE");
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") throw new EnterpriseDomainError("GAMING_PRICING_CODE_DUPLICATE", 409);
     throw error;
