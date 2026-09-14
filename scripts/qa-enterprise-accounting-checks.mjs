@@ -1,3 +1,4 @@
+import "./qa-hotfix-636-fullscreen-details.mjs";
 import "./qa-hotfix-582-finance-accounting-tax-close-statements-assets.mjs";
 import "./qa-accounting-598-gl-workbench.mjs";
 import "./qa-accounting-622-atomicity.mjs";
@@ -67,6 +68,7 @@ requirePaths([
   "scripts/qa-erp-stabilization-rbac.mjs",
   "scripts/qa-erp-stabilization-observability.mjs",
   "scripts/qa-erp-cross-module-finance.mjs",
+  "scripts/qa-hotfix-636-fullscreen-details.mjs",
 ]);
 requireTokens("lib/enterprise/accounting/posting-service.ts", ["Prisma.Decimal", "POSTING_NOT_BALANCED", "pg_advisory_xact_lock", "TransactionIsolationLevel.Serializable", "idempotencyKey", "status: \"POSTED\"", "resolveSemanticPostingAccount"]);
 requireTokens("lib/enterprise/accounting/journal-service.ts", ["POSTED_ENTRY_IMMUTABLE", "JOURNAL_ENTRY_UNBALANCED", "assertPeriodMatchesEntry", "JOURNAL_ENTRY_SELF_APPROVAL_FORBIDDEN", "validateAccountingDimensions"]);
