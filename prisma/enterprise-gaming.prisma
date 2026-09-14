@@ -107,34 +107,37 @@ model EnterpriseGamingPricingRule {
 }
 
 model EnterpriseGamingSession {
-  id                  String   @id @default(cuid())
-  organizationId      String
-  reference           String
-  stationId           String
-  bookingId           String?
-  businessPartyId     String?
+  id                   String   @id @default(cuid())
+  organizationId       String
+  reference            String
+  stationId            String
+  bookingId            String?
+  businessPartyId      String?
   serviceCatalogItemId String?
-  pricingRuleId       String?
-  status              String   @default("WAITING")
-  startedAt           DateTime?
-  expectedEndAt       DateTime?
-  endedAt             DateTime?
-  pausedSeconds       Int      @default(0)
-  billableSeconds     Int?
-  pricingSnapshotJson Json?
-  currency            String?
-  quotedAmount        Decimal? @db.Decimal(18, 2)
-  finalAmount         Decimal? @db.Decimal(18, 2)
-  idempotencyKey      String?
-  revision            Int      @default(1)
-  createdByUserId     String
-  updatedByUserId     String?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-  archivedAt          DateTime?
-  station             EnterpriseGamingStationProfile @relation(fields: [organizationId, stationId], references: [organizationId, id], onDelete: Restrict)
-  booking             EnterpriseGamingBooking? @relation("GamingBookingSession", fields: [organizationId, bookingId], references: [organizationId, id], onDelete: Restrict)
-  pricingRule         EnterpriseGamingPricingRule? @relation(fields: [organizationId, pricingRuleId], references: [organizationId, id], onDelete: Restrict)
+  pricingRuleId        String?
+  status               String   @default("WAITING")
+  startedAt            DateTime?
+  expectedEndAt        DateTime?
+  pausedAt              DateTime?
+  endedAt              DateTime?
+  pausedSeconds        Int      @default(0)
+  billableSeconds      Int?
+  timingPolicyJson     Json?
+  pricingSnapshotJson  Json?
+  currency             String?
+  quotedAmount         Decimal? @db.Decimal(18, 2)
+  finalAmount          Decimal? @db.Decimal(18, 2)
+  idempotencyKey       String?
+  revision             Int      @default(1)
+  createdByUserId      String
+  updatedByUserId      String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  archivedAt           DateTime?
+  station              EnterpriseGamingStationProfile @relation(fields: [organizationId, stationId], references: [organizationId, id], onDelete: Restrict)
+  booking              EnterpriseGamingBooking? @relation("GamingBookingSession", fields: [organizationId, bookingId], references: [organizationId, id], onDelete: Restrict)
+  pricingRule          EnterpriseGamingPricingRule? @relation(fields: [organizationId, pricingRuleId], references: [organizationId, id], onDelete: Restrict)
+  transitions          EnterpriseGamingSessionTransition[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, reference], map: "GamingSession_org_reference_key")
@@ -145,4 +148,23 @@ model EnterpriseGamingSession {
   @@index([organizationId, status, endedAt])
   @@index([organizationId, serviceCatalogItemId, status])
   @@index([archivedAt])
+}
+
+model EnterpriseGamingSessionTransition {
+  id             String   @id @default(cuid())
+  organizationId String
+  sessionId      String
+  action         String
+  idempotencyKey String
+  fromStatus     String?
+  toStatus       String
+  actorUserId    String
+  metadataJson   Json?
+  occurredAt     DateTime @default(now())
+  session        EnterpriseGamingSession @relation(fields: [organizationId, sessionId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, idempotencyKey], map: "GamingSessionTransition_org_idempotency_key")
+  @@index([organizationId, sessionId, occurredAt])
+  @@index([organizationId, action, occurredAt])
 }
