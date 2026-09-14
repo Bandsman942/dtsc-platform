@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
-import { getEnterpriseGamingBookingAccess, getEnterpriseGamingSessionAccess, getEnterpriseGamingStationAccess } from "@/lib/enterprise/gaming/access";
+import { getEnterpriseGamingBookingAccess, getEnterpriseGamingPricingAccess, getEnterpriseGamingSessionAccess, getEnterpriseGamingStationAccess } from "@/lib/enterprise/gaming/access";
 import { transitionGamingBooking } from "@/lib/enterprise/gaming/bookings";
 import { gamingBookingErrorResponse } from "@/lib/enterprise/gaming/http";
 import { gamingBookingTransitionSchema } from "@/lib/enterprise/gaming/schemas";
@@ -23,15 +23,24 @@ export async function PATCH(req: Request, { params }: Params) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
 
   const { organizationId, bookingId } = await params;
-  const [bookingAccess, stationAccess, crmAccess, sessionAccess] = await Promise.all([
+  const converting = parsed.data.action === "CONVERT";
+  const [bookingAccess, stationAccess, crmAccess, sessionAccess, pricingAccess, catalogAccess] = await Promise.all([
     getEnterpriseGamingBookingAccess({ session, organizationId, action: "write" }),
     getEnterpriseGamingStationAccess({ session, organizationId, action: "read" }),
     getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "CRM_CUSTOMERS", action: "read" }),
-    parsed.data.action === "CONVERT"
+    converting
       ? getEnterpriseGamingSessionAccess({ session, organizationId, action: "submit" })
       : Promise.resolve(true),
+    converting
+      ? getEnterpriseGamingPricingAccess({ session, organizationId, action: "read" })
+      : Promise.resolve(true),
+    converting
+      ? getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "CATALOG", action: "read" })
+      : Promise.resolve(true),
   ]);
-  if (!bookingAccess || !stationAccess || !crmAccess || !sessionAccess) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!bookingAccess || !stationAccess || !crmAccess || !sessionAccess || !pricingAccess || !catalogAccess) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   try {
     const result = await transitionGamingBooking(organizationId, bookingId, session.userId, parsed.data);
@@ -41,7 +50,14 @@ export async function PATCH(req: Request, { params }: Params) {
       entity: "EnterpriseGamingBooking",
       entityId: bookingId,
       request: req,
-      metadata: { organizationId, action: parsed.data.action, status: result.booking.status, idempotent: result.idempotent, sessionId: result.booking.session?.id || null },
+      metadata: {
+        organizationId,
+        action: parsed.data.action,
+        status: result.booking.status,
+        idempotent: result.idempotent,
+        sessionId: result.booking.session?.id || null,
+        serviceCatalogItemId: parsed.data.action === "CONVERT" ? parsed.data.serviceCatalogItemId || null : null,
+      },
     });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "gaming-bookings", action: parsed.data.action } });
     return NextResponse.json({ ok: true, ...result });
