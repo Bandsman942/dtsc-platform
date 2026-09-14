@@ -4,6 +4,7 @@ const optionalShortText = z.string().trim().max(240).optional().nullable();
 const optionalNotes = z.string().trim().max(4000).optional().nullable();
 const optionalEntityId = z.string().trim().min(1).max(191).optional().nullable();
 const idempotencyKey = z.string().trim().min(8).max(160);
+const maxBookingDurationMs = 24 * 60 * 60 * 1000;
 
 export const gamingStationCreateSchema = z.object({
   assetId: z.string().trim().min(1),
@@ -77,8 +78,11 @@ export const gamingBookingCreateSchema = z.object({
   status: z.enum(["DRAFT", "CONFIRMED"]).default("CONFIRMED"),
   idempotencyKey,
 }).superRefine((value, ctx) => {
-  if (value.scheduledEndAt <= value.scheduledStartAt) {
+  const durationMs = value.scheduledEndAt.getTime() - value.scheduledStartAt.getTime();
+  if (durationMs <= 0) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["scheduledEndAt"], message: "La fin du créneau doit être postérieure au début." });
+  } else if (durationMs > maxBookingDurationMs) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["scheduledEndAt"], message: "Une réservation ne peut pas dépasser 24 heures." });
   }
 });
 
@@ -105,7 +109,12 @@ export const gamingBookingTransitionSchema = z.object({
   if (!hasEditableField) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["action"], message: "Au moins une information de la réservation doit être modifiée." });
   }
-  if (value.scheduledStartAt && value.scheduledEndAt && value.scheduledEndAt <= value.scheduledStartAt) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["scheduledEndAt"], message: "La fin du créneau doit être postérieure au début." });
+  if (value.scheduledStartAt && value.scheduledEndAt) {
+    const durationMs = value.scheduledEndAt.getTime() - value.scheduledStartAt.getTime();
+    if (durationMs <= 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["scheduledEndAt"], message: "La fin du créneau doit être postérieure au début." });
+    } else if (durationMs > maxBookingDurationMs) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["scheduledEndAt"], message: "Une réservation ne peut pas dépasser 24 heures." });
+    }
   }
 });
