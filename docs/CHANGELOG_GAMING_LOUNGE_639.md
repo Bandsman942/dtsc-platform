@@ -1,6 +1,6 @@
 # Changelog — Gaming Lounge foundation #639
 
-Parent : #638  
+Parent : #638
 Pull Request : #647
 
 ## Ajouté
