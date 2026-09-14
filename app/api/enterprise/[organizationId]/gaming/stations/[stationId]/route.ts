@@ -2,10 +2,12 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
+import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { getEnterpriseGamingStationAccess } from "@/lib/enterprise/gaming/access";
 import { gamingStationErrorResponse } from "@/lib/enterprise/gaming/http";
 import { gamingStationUpdateSchema } from "@/lib/enterprise/gaming/schemas";
 import { updateGamingStation } from "@/lib/enterprise/gaming/stations";
+import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 
@@ -33,6 +35,14 @@ export async function PATCH(req: Request, { params }: Params) {
   if (!gamingAccess || !assetAccess) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   try {
+    if (parsed.data.action === "BLOCK" || parsed.data.action === "SET_AVAILABLE") {
+      const liveSession = await prisma.enterpriseGamingSession.findFirst({
+        where: { organizationId, stationId, archivedAt: null, status: { in: ["ACTIVE", "PAUSED"] } },
+        select: { id: true },
+      });
+      if (liveSession) throw new EnterpriseDomainError("GAMING_STATION_HAS_LIVE_SESSION", 409);
+    }
+
     const station = await updateGamingStation(organizationId, stationId, session.userId, parsed.data);
     await writeAuditLog({
       userId: session.userId,
