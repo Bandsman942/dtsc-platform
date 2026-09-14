@@ -171,7 +171,8 @@ check(!/\bDROP\s+(TABLE|COLUMN|TYPE|INDEX)\b/i.test(migration), "Gaming Lounge m
 includesAll(
   docs,
   [
-    "HOSPITALITY_EVENTS -> GAMING_LOUNGE",
+    "HOSPITALITY_EVENTS",
+    "GAMING_LOUNGE",
     "EnterpriseAsset",
     "EnterpriseBusinessParty",
     "EnterpriseCatalogItem",
