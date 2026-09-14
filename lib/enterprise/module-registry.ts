@@ -3,6 +3,7 @@ import commonDomainRegistryData from "@/lib/enterprise/module-registry-common-do
 import financeRegistryData from "@/lib/enterprise/module-registry-finance.json";
 import manufacturingRegistryData from "@/lib/enterprise/module-registry-manufacturing.json";
 import tailoringRegistryData from "@/lib/enterprise/module-registry-tailoring.json";
+import gamingRegistryData from "@/lib/enterprise/module-registry-gaming.json";
 import retailRegistryData from "@/lib/enterprise/module-registry-retail.json";
 import sectorConvergenceRegistryData from "@/lib/enterprise/module-registry-sector-convergence.json";
 import finalCleanupRegistryData from "@/lib/enterprise/module-registry-final-cleanup.json";
@@ -29,6 +30,7 @@ export type EnterpriseModuleDomain =
   | "SECTOR_HEALTH"
   | "SECTOR_PHARMACY"
   | "SECTOR_MANUFACTURING"
+  | "SECTOR_HOSPITALITY"
   | "INTELLIGENCE"
   | "ADMINISTRATION";
 
@@ -40,6 +42,7 @@ export type EnterpriseModuleNavigationGroup =
   | "SECTOR_HEALTH"
   | "SECTOR_PHARMACY"
   | "SECTOR_MANUFACTURING"
+  | "SECTOR_HOSPITALITY"
   | "ADMINISTRATION"
   | "COMMERCIAL"
   | "HUMAN_RESOURCES"
@@ -96,6 +99,7 @@ export const ENTERPRISE_MODULE_REGISTRY_VERSION = Math.max(
   financeRegistryData.version,
   manufacturingRegistryData.version,
   tailoringRegistryData.version,
+  gamingRegistryData.version,
   retailRegistryData.version,
   sectorConvergenceRegistryData.version,
   finalCleanupRegistryData.version,
@@ -151,6 +155,7 @@ export const ENTERPRISE_MODULE_REGISTRY = [
   ...financeRegistryData.modules,
   ...manufacturingRegistryData.modules,
   ...tailoringRegistryData.modules,
+  ...gamingRegistryData.modules,
   ...retailRegistryData.modules,
 ].map((definition) =>
   applyCommercialOverride(
@@ -262,6 +267,7 @@ export function getEnterpriseModuleGroupLabel(group: EnterpriseModuleNavigationG
     SECTOR_HEALTH: { fr: "Santé", en: "Health sector" },
     SECTOR_PHARMACY: { fr: "Pharmacie", en: "Pharmacy sector" },
     SECTOR_MANUFACTURING: { fr: "Production", en: "Manufacturing" },
+    SECTOR_HOSPITALITY: { fr: "Loisirs & événements", en: "Hospitality & leisure" },
     ADMINISTRATION: { fr: "Administration", en: "Administration" },
     COMMERCIAL: { fr: "Ventes & relation client", en: "Sales & customer relations" },
     HUMAN_RESOURCES: { fr: "Ressources humaines", en: "Human resources" },
