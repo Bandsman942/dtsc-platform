@@ -25,10 +25,10 @@ function objectValue(value: unknown): Record<string, unknown> {
 function countArrayEvidence(value: unknown, depth = 0): number {
   if (depth > 5 || value == null) return 0;
   if (Array.isArray(value)) {
-    return value.length + value.reduce((sum, item) => sum + countArrayEvidence(item, depth + 1), 0);
+    return value.length + value.reduce<number>((sum, item) => sum + countArrayEvidence(item, depth + 1), 0);
   }
   if (typeof value === "object") {
-    return Object.values(value as Record<string, unknown>).reduce((sum, item) => sum + countArrayEvidence(item, depth + 1), 0);
+    return Object.values(value as Record<string, unknown>).reduce<number>((sum, item) => sum + countArrayEvidence(item, depth + 1), 0);
   }
   return 0;
 }
