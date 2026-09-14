@@ -40,6 +40,20 @@ function periodWhere(periodStart?: string | null, periodEnd?: string | null) {
   return { start, end };
 }
 
+function listLength(value: unknown) {
+  return Array.isArray(value) ? value.length : 0;
+}
+
+function reportHasUsableData(reportType: ReportGenerateInput["reportType"], snapshot: Record<string, unknown>) {
+  if (reportType === "BUDGET_VS_ACTUAL") return Number(snapshot.totalLineCount || 0) > 0 || listLength(snapshot.lines) > 0;
+  if (reportType === "EXPENSE_SUMMARY") return listLength(snapshot.currencies) > 0;
+  if (reportType === "PROCUREMENT_SUMMARY") return listLength(snapshot.byStatus) > 0;
+  if (reportType === "FINANCE_OVERVIEW") {
+    return listLength(snapshot.budgetCurrencies) > 0 || listLength(snapshot.expenseCurrencies) > 0 || listLength(snapshot.procurementByStatus) > 0;
+  }
+  return false;
+}
+
 async function resolveReportSourceScope(organizationId: string, actorUserId: string, reportType: ReportGenerateInput["reportType"]): Promise<ReportSourceScope> {
   const needsFinance = ["BUDGET_VS_ACTUAL", "EXPENSE_SUMMARY", "FINANCE_OVERVIEW"].includes(reportType);
   const needsProcurement = ["PROCUREMENT_SUMMARY", "FINANCE_OVERVIEW"].includes(reportType);
@@ -56,6 +70,24 @@ async function resolveReportSourceScope(organizationId: string, actorUserId: str
     expense: enterpriseExpenseVisibilityWhere({ organizationId, userId: actorUserId, canSeeAll: financeCanSeeAll }),
     purchase: enterprisePurchaseVisibilityWhere({ organizationId, userId: actorUserId, canSeeAll: procurementCanSeeAll }),
   };
+}
+
+async function validateReportReferences(tx: Tx, organizationId: string, input: ReportGenerateInput, scope: ReportSourceScope) {
+  const [department, supplier, budget] = await Promise.all([
+    input.departmentId
+      ? tx.enterpriseDepartment.findFirst({ where: { id: input.departmentId, organizationId, isActive: true }, select: { id: true } })
+      : Promise.resolve(null),
+    input.supplierId
+      ? tx.enterpriseSupplier.findFirst({ where: { id: input.supplierId, organizationId, archivedAt: null, status: { not: "ARCHIVED" } }, select: { id: true } })
+      : Promise.resolve(null),
+    input.budgetId
+      ? tx.enterpriseBudget.findFirst({ where: { ...scope.budget, id: input.budgetId }, select: { id: true, currency: true } })
+      : Promise.resolve(null),
+  ]);
+  if (input.departmentId && !department) throw new EnterpriseCoreV2Error("Le département sélectionné n’est pas disponible dans cette entreprise.", 400, "INVALID_REPORT_DEPARTMENT");
+  if (input.supplierId && !supplier) throw new EnterpriseCoreV2Error("Le fournisseur sélectionné n’est pas disponible dans cette entreprise.", 400, "INVALID_REPORT_SUPPLIER");
+  if (input.budgetId && !budget) throw new EnterpriseCoreV2Error("Le budget du rapport n’est pas accessible dans votre contexte actuel.", 400, "INVALID_REPORT_BUDGET");
+  if (input.currency && budget && budget.currency !== input.currency) throw new EnterpriseCoreV2Error("Le filtre de devise ne correspond pas au budget sélectionné.", 400, "REPORT_CURRENCY_MISMATCH");
 }
 
 async function budgetVsActualSnapshot(tx: Tx, organizationId: string, input: ReportGenerateInput, scope: ReportSourceScope) {
@@ -100,10 +132,46 @@ async function budgetVsActualSnapshot(tx: Tx, organizationId: string, input: Rep
     const metrics = calculateBudgetMetrics({ planned, committed: committedRemaining, actual });
     const available = metrics.available;
     const bucket = currencyBuckets.get(line.budget.currency) || { planned: enterpriseMoneyZero(), committedRemaining: enterpriseMoneyZero(), actual: enterpriseMoneyZero(), available: enterpriseMoneyZero() };
-    bucket.planned = bucket.planned.add(planned).toDecimalPlaces(2); bucket.committedRemaining = bucket.committedRemaining.add(committedRemaining).toDecimalPlaces(2); bucket.actual = bucket.actual.add(actual).toDecimalPlaces(2); bucket.available = bucket.available.add(available).toDecimalPlaces(2); currencyBuckets.set(line.budget.currency, bucket);
-    return { budgetId: line.budget.id, budgetReference: line.budget.reference, budgetTitle: line.budget.title, budgetStatus: line.budget.status, budgetLineId: line.id, code: line.code, name: line.name, category: line.category, departmentId: line.departmentId, currency: line.budget.currency, planned: moneyString(planned), committed: moneyString(committedRemaining), actual: moneyString(actual), available: moneyString(available), variance: moneyString(metrics.variance), utilizationPercent: metrics.consumptionRate.toNumber(), deepLink: `/enterprise-modules/FINANCE_BUDGETS?budgetId=${encodeURIComponent(line.budget.id)}&lineId=${encodeURIComponent(line.id)}` };
+    bucket.planned = bucket.planned.add(planned).toDecimalPlaces(2);
+    bucket.committedRemaining = bucket.committedRemaining.add(committedRemaining).toDecimalPlaces(2);
+    bucket.actual = bucket.actual.add(actual).toDecimalPlaces(2);
+    bucket.available = bucket.available.add(available).toDecimalPlaces(2);
+    currencyBuckets.set(line.budget.currency, bucket);
+    return {
+      budgetId: line.budget.id,
+      budgetReference: line.budget.reference,
+      budgetTitle: line.budget.title,
+      budgetStatus: line.budget.status,
+      budgetLineId: line.id,
+      code: line.code,
+      name: line.name,
+      category: line.category,
+      departmentId: line.departmentId,
+      currency: line.budget.currency,
+      planned: moneyString(planned),
+      committed: moneyString(committedRemaining),
+      actual: moneyString(actual),
+      available: moneyString(available),
+      variance: moneyString(metrics.variance),
+      utilizationPercent: metrics.consumptionRate.toNumber(),
+      deepLink: `/enterprise-modules/FINANCE_BUDGETS?budgetId=${encodeURIComponent(line.budget.id)}&lineId=${encodeURIComponent(line.id)}`,
+    };
   });
-  return { schema: "budget-vs-actual/v1", truncated: totalLineCount > lines.length, totalLineCount, currencies: [...currencyBuckets.entries()].map(([currency, value]) => ({ currency, planned: moneyString(value.planned), committed: moneyString(value.committedRemaining), actual: moneyString(value.actual), available: moneyString(value.available), utilizationPercent: value.planned.gt(0) ? value.actual.div(value.planned).mul(100).toDecimalPlaces(2).toNumber() : 0 })), lines: detail };
+  return {
+    schema: "budget-vs-actual/v2",
+    truncated: totalLineCount > lines.length,
+    totalLineCount,
+    currencies: [...currencyBuckets.entries()].map(([currency, value]) => ({
+      currency,
+      planned: moneyString(value.planned),
+      committed: moneyString(value.committedRemaining),
+      actual: moneyString(value.actual),
+      available: moneyString(value.available),
+      variance: moneyString(value.planned.sub(value.actual).toDecimalPlaces(2)),
+      utilizationPercent: value.planned.gt(0) ? value.actual.div(value.planned).mul(100).toDecimalPlaces(2).toNumber() : 0,
+    })),
+    lines: detail,
+  };
 }
 
 async function expenseSummarySnapshot(tx: Tx, organizationId: string, input: ReportGenerateInput, scope: ReportSourceScope) {
@@ -155,12 +223,15 @@ export async function generateEnterpriseReport(organizationId: string, actorUser
   const scope = await resolveReportSourceScope(organizationId, actorUserId, input.reportType);
   return prisma.$transaction(async (tx) => {
     const source = await requireEnterpriseSourceReference(tx, organizationId, input);
-    if (input.budgetId) {
-      const budget = await tx.enterpriseBudget.findFirst({ where: { ...scope.budget, id: input.budgetId }, select: { id: true, currency: true } });
-      if (!budget) throw new EnterpriseCoreV2Error("Le budget du rapport n’est pas accessible dans votre contexte actuel.", 400, "INVALID_REPORT_BUDGET");
-      if (input.currency && budget.currency !== input.currency) throw new EnterpriseCoreV2Error("Le filtre de devise ne correspond pas au budget sélectionné.", 400, "REPORT_CURRENCY_MISMATCH");
-    }
+    await validateReportReferences(tx, organizationId, input, scope);
     const rawSnapshot = await buildSnapshot(tx, organizationId, input, scope);
+    if (!reportHasUsableData(input.reportType, rawSnapshot as unknown as Record<string, unknown>)) {
+      throw new EnterpriseCoreV2Error(
+        "Aucune donnée exploitable ne correspond au périmètre sélectionné. Modifiez la période ou les filtres avant de générer le rapport.",
+        422,
+        "REPORT_NO_DATA",
+      );
+    }
     const generatedAt = new Date();
     const catalog = getReportCatalogEntry(input.reportType);
     const metricCodes = getReportMetricCodes(input.reportType);

@@ -1,0 +1,55 @@
+model EnterpriseReportSchedule {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  createdByUserId       String
+  name                  String
+  reportType            String
+  reportTitle           String
+  reportDescription     String?
+  frequency             String
+  timeZone              String   @default("UTC")
+  hour                  Int
+  minute                Int      @default(0)
+  dayOfWeek             Int?
+  dayOfMonth            Int?
+  filtersJson           Json?
+  deliveryChannelsJson  Json
+  recipientEmailsJson   Json?
+  isEnabled             Boolean  @default(true)
+  nextRunAt             DateTime
+  lastEnqueuedAt        DateTime?
+  lastCompletedAt       DateTime?
+  revision              Int      @default(1)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  archivedAt            DateTime?
+  runs                  EnterpriseReportScheduleRun[]
+
+  @@unique([organizationId, id])
+  @@index([organizationId, isEnabled, nextRunAt])
+  @@index([organizationId, reportType, archivedAt])
+  @@index([organizationId, createdByUserId, archivedAt])
+}
+
+model EnterpriseReportScheduleRun {
+  id                String   @id @default(cuid())
+  organizationId    String
+  scheduleId        String
+  generationEventId String?
+  reportId          String?
+  dueAt             DateTime
+  status            String   @default("QUEUED")
+  deliveryStatus    String   @default("ARCHIVE_PENDING")
+  errorCode         String?
+  enqueuedAt        DateTime @default(now())
+  completedAt       DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  schedule          EnterpriseReportSchedule @relation(fields: [organizationId, scheduleId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, scheduleId, dueAt])
+  @@index([organizationId, scheduleId, status])
+  @@index([organizationId, generationEventId])
+  @@index([organizationId, reportId])
+  @@index([organizationId, status, createdAt])
+}

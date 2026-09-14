@@ -10,15 +10,18 @@ type BuildInput = {
   reportType: string;
   reportTypeLabel: string;
   generatedAt: string;
+  generatedByLabel?: string | null;
   periodStart?: string | null;
   periodEnd?: string | null;
   currency?: string | null;
   snapshot: unknown;
   filters?: unknown;
+  filterLabels?: Record<string, string> | null;
 };
 
 const FR = {
   generated: "Généré",
+  by: "par",
   period: "Période",
   currency: "Devise",
   category: "Catégorie",
@@ -58,6 +61,7 @@ const FR = {
 
 const EN = {
   generated: "Generated",
+  by: "by",
   period: "Period",
   currency: "Currency",
   category: "Category",
@@ -113,6 +117,12 @@ function date(value: string | null | undefined, locale?: string | null) {
   if (Number.isNaN(parsed.getTime())) return value;
   return new Intl.DateTimeFormat(isEnglish(locale) ? "en-GB" : "fr-FR", { dateStyle: "medium" }).format(parsed);
 }
+function dateTime(value: string | null | undefined, locale?: string | null) {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return new Intl.DateTimeFormat(isEnglish(locale) ? "en-GB" : "fr-FR", { dateStyle: "medium", timeStyle: "short" }).format(parsed);
+}
 function status(value: unknown, en: boolean) {
   const key = String(value || "");
   const labels: Record<string, [string, string]> = {
@@ -121,10 +131,12 @@ function status(value: unknown, en: boolean) {
   };
   return labels[key]?.[en ? 1 : 0] || key.replace(/_/g, " ").toLowerCase().replace(/^./, (char) => char.toUpperCase());
 }
-function filterRows(filters: unknown, locale?: string | null) {
+function filterRows(filters: unknown, filterLabels: Record<string, string> | null | undefined, locale?: string | null) {
   const en = isEnglish(locale); const t = en ? EN : FR; const source = record(filters);
-  const labels: Record<string, string> = { periodStart: t.period, periodEnd: en ? "Period end" : "Fin de période", currency: t.currency, departmentId: t.department, supplierId: t.supplier, budgetId: t.budget, category: t.category };
-  return Object.entries(source).filter(([key, value]) => labels[key] && value != null && value !== "").map(([key, value]) => ({ label: labels[key], value: key.toLowerCase().includes("period") ? date(String(value), locale) : text(value) }));
+  const labels: Record<string, string> = { currency: t.currency, departmentId: t.department, supplierId: t.supplier, budgetId: t.budget, category: t.category };
+  return Object.entries(source)
+    .filter(([key, value]) => labels[key] && value != null && value !== "")
+    .map(([key, value]) => ({ label: labels[key], value: filterLabels?.[key] || text(value) }));
 }
 function noDataInsight(locale?: string | null): ProfessionalReportInsight { const t = isEnglish(locale) ? EN : FR; return { title: t.noDataTitle, body: t.noDataBody, tone: "info" }; }
 function multiCurrencyInsight(locale?: string | null): ProfessionalReportInsight { const t = isEnglish(locale) ? EN : FR; return { title: t.multiCurrencyTitle, body: t.multiCurrencyBody, tone: "info" }; }
@@ -133,14 +145,15 @@ export function buildEnterpriseProfessionalReport(input: BuildInput): Profession
   const en = isEnglish(input.locale); const t = en ? EN : FR;
   const envelope = record(input.snapshot); const data = record(envelope.data || input.snapshot);
   const schema = String(data.schema || "");
-  const filters = filterRows(input.filters, input.locale);
-  if (input.periodStart || input.periodEnd) filters.unshift({ label: t.period, value: `${date(input.periodStart, input.locale)} → ${date(input.periodEnd, input.locale)}` });
+  const filters = filterRows(input.filters, input.filterLabels, input.locale);
+  if (input.periodStart || input.periodEnd) filters.unshift({ label: t.period, value: `${date(input.periodStart, input.locale)} – ${date(input.periodEnd, input.locale)}` });
   if (input.currency && !filters.some((item) => item.label === t.currency)) filters.push({ label: t.currency, value: input.currency });
+  const generated = `${t.generated}: ${dateTime(input.generatedAt, input.locale)}${input.generatedByLabel ? ` · ${t.by} ${input.generatedByLabel}` : ""}`;
   const base = {
     title: input.title,
     subtitle: `${input.reportTypeLabel} · ${input.reference}`,
     organizationName: input.organizationName || "DTSC Platform",
-    generatedLabel: `${t.generated}: ${date(input.generatedAt, input.locale)}`,
+    generatedLabel: generated,
     filenameBase: `${input.reference}-${input.title}`,
     filters,
     accentHex: "#087EA4",
@@ -163,20 +176,24 @@ export function buildEnterpriseProfessionalReport(input: BuildInput): Profession
       { label: t.committed, value: number(first.committed), displayValue: money(first.committed, singleCurrency, input.locale) },
       { label: t.available, value: number(first.available), displayValue: money(first.available, singleCurrency, input.locale) },
     ] : currencies.map((item) => ({ label: text(item.currency), value: number(item.utilizationPercent), displayValue: pct(item.utilizationPercent, input.locale) }));
+    const totalLineCount = number(data.totalLineCount || lines.length);
     return { ...base,
+      filters: [...filters, { label: t.lines, value: String(totalLineCount) }],
       kpis: singleCurrency ? [
         { label: t.planned, value: money(first.planned, singleCurrency, input.locale), numericValue: number(first.planned) },
-        { label: t.actual, value: money(first.actual, singleCurrency, input.locale), numericValue: number(first.actual), comparison: `${pct(first.utilizationPercent, input.locale)} ${en ? "of planned" : "du planifié"}` },
+        { label: t.actual, value: money(first.actual, singleCurrency, input.locale), numericValue: number(first.actual) },
+        { label: t.variance, value: money(first.variance ?? number(first.planned) - number(first.actual), singleCurrency, input.locale), numericValue: number(first.variance ?? number(first.planned) - number(first.actual)) },
+        { label: t.utilization, value: pct(first.utilizationPercent, input.locale), numericValue: number(first.utilizationPercent) },
         { label: t.committed, value: money(first.committed, singleCurrency, input.locale), numericValue: number(first.committed) },
         { label: t.available, value: money(first.available, singleCurrency, input.locale), numericValue: number(first.available) },
       ] : [
-        { label: t.lines, value: text(data.totalLineCount, "0"), numericValue: number(data.totalLineCount) },
+        { label: t.lines, value: String(totalLineCount), numericValue: totalLineCount },
         { label: t.currencies, value: String(currencies.length), numericValue: currencies.length },
-        { label: t.period, value: input.periodStart || input.periodEnd ? `${date(input.periodStart, input.locale)} → ${date(input.periodEnd, input.locale)}` : (en ? "All available" : "Toutes disponibles") },
+        { label: t.period, value: input.periodStart || input.periodEnd ? `${date(input.periodStart, input.locale)} – ${date(input.periodEnd, input.locale)}` : (en ? "All available" : "Toutes disponibles") },
       ],
       chartTitle: singleCurrency ? (en ? `Budget position · ${singleCurrency}` : `Position budgétaire · ${singleCurrency}`) : (en ? "Utilization by currency (%)" : "Utilisation par devise (%)"), chart,
-      columns: [{ key: "budget", label: t.budget }, { key: "line", label: t.line }, { key: "currency", label: t.currency }, { key: "planned", label: t.planned }, { key: "actual", label: t.actual }, { key: "available", label: t.available }, { key: "utilization", label: t.utilization }],
-      rows: lines.map((item) => ({ budget: text(item.budgetTitle || item.budgetReference), line: text(item.name || item.code), currency: text(item.currency), planned: money(item.planned, text(item.currency, ""), input.locale), actual: money(item.actual, text(item.currency, ""), input.locale), available: money(item.available, text(item.currency, ""), input.locale), utilization: pct(item.utilizationPercent, input.locale) })), insights };
+      columns: [{ key: "budget", label: t.budget }, { key: "line", label: t.line }, { key: "category", label: t.category }, { key: "currency", label: t.currency }, { key: "planned", label: t.planned }, { key: "committed", label: t.committed }, { key: "actual", label: t.actual }, { key: "variance", label: t.variance }, { key: "available", label: t.available }, { key: "utilization", label: t.utilization }],
+      rows: lines.map((item) => ({ budget: text(item.budgetTitle || item.budgetReference), line: text(item.name || item.code), category: text(item.category), currency: text(item.currency), planned: money(item.planned, text(item.currency, ""), input.locale), committed: money(item.committed, text(item.currency, ""), input.locale), actual: money(item.actual, text(item.currency, ""), input.locale), variance: money(item.variance, text(item.currency, ""), input.locale), available: money(item.available, text(item.currency, ""), input.locale), utilization: pct(item.utilizationPercent, input.locale), __deepLink: typeof item.deepLink === "string" ? item.deepLink : null })), insights };
   }
 
   if (schema.startsWith("expense-summary")) {

@@ -12,6 +12,7 @@ export async function GET(_req: Request, { params }: Params) {
   const access = await getEnterpriseFinanceAccess({ session, organizationId, moduleCode: "REPORTS", action: "read" });
   if (!access) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
   return NextResponse.json({
+    catalog: ENTERPRISE_REPORT_CATALOG,
     reports: ENTERPRISE_REPORT_CATALOG,
     metrics: ENTERPRISE_METRIC_DEFINITIONS,
     generatedAt: new Date().toISOString(),
