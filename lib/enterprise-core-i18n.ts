@@ -27,6 +27,12 @@ type EnterpriseCoordinationSupplementKey =
   | "reports.generationReady"
   | "reports.generationFailed"
   | "reports.generationLeaveHint"
+  | "reports.catalog.refresh"
+  | "reports.catalog.generateHint"
+  | "reports.generate.reportTitleHelp"
+  | "reports.generate.reportTypeHelp"
+  | "reports.generate.descriptionHelp"
+  | "reports.detail.family"
   | "reports.schedule.title"
   | "reports.schedule.description"
   | "reports.schedule.new"
@@ -111,6 +117,12 @@ const coordinationSupplements: Record<"fr" | "en", Record<EnterpriseCoordination
     "reports.generationReady": "Le rapport est prêt.",
     "reports.generationFailed": "La génération du rapport a échoué. Vérifiez les paramètres puis réessayez.",
     "reports.generationLeaveHint": "Vous pouvez quitter ce module et revenir plus tard : le suivi sera conservé.",
+    "reports.catalog.refresh": "Actualiser le catalogue",
+    "reports.catalog.generateHint": "Utilisez le menu … pour générer ce rapport. Le formulaire n’affichera que les filtres réellement supportés par cette définition du catalogue.",
+    "reports.generate.reportTitleHelp": "Donnez au rapport archivé un titre compréhensible par les utilisateurs métier.",
+    "reports.generate.reportTypeHelp": "La définition du catalogue sélectionnée détermine les filtres et indicateurs disponibles.",
+    "reports.generate.descriptionHelp": "Contexte facultatif conservé avec le rapport.",
+    "reports.detail.family": "Famille",
     "reports.schedule.title": "Rapports planifiés",
     "reports.schedule.description": "Générez et archivez automatiquement les rapports récurrents sans recréer les filtres à chaque période.",
     "reports.schedule.new": "Nouvelle planification",
@@ -190,6 +202,12 @@ const coordinationSupplements: Record<"fr" | "en", Record<EnterpriseCoordination
     "reports.generationReady": "The report is ready.",
     "reports.generationFailed": "Report generation failed. Check the parameters and try again.",
     "reports.generationLeaveHint": "You can leave this module and return later; progress tracking will be preserved.",
+    "reports.catalog.refresh": "Refresh catalog",
+    "reports.catalog.generateHint": "Use the … menu to generate this report. The generation form will only expose filters supported by this catalog definition.",
+    "reports.generate.reportTitleHelp": "Give the archived report a business-readable title.",
+    "reports.generate.reportTypeHelp": "The selected catalog definition controls available filters and indicators.",
+    "reports.generate.descriptionHelp": "Optional context stored with the report.",
+    "reports.detail.family": "Family",
     "reports.schedule.title": "Scheduled reports",
     "reports.schedule.description": "Generate and archive recurring reports automatically without rebuilding the same filters each period.",
     "reports.schedule.new": "New schedule",
