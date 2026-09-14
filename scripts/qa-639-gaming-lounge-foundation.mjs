@@ -12,7 +12,7 @@ const gamingRegistry = JSON.parse(gamingRegistryRaw);
 const prismaSchema = read("prisma/enterprise-gaming.prisma");
 const migration = read("prisma/migrations/20260914163000_gaming_lounge_foundation/migration.sql");
 const docs = read("docs/ERP_GAMING_LOUNGE.md");
-const packageJson = read("package.json");
+const regressionAdapter = read("scripts/qa-regression-checks.mjs");
 
 const errors = [];
 const check = (condition, message) => {
@@ -148,13 +148,9 @@ includesAll(
   "gaming architecture documentation",
 );
 
-includesAll(
-  packageJson,
-  [
-    '"qa:gaming-lounge-foundation": "node scripts/qa-639-gaming-lounge-foundation.mjs"',
-    "node scripts/qa-639-gaming-lounge-foundation.mjs",
-  ],
-  "package QA wiring",
+check(
+  regressionAdapter.includes('await import("./qa-639-gaming-lounge-foundation.mjs");'),
+  "qa:regression adapter must execute the Gaming Lounge foundation QA",
 );
 
 if (errors.length) {
