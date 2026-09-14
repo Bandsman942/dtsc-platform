@@ -2,6 +2,8 @@ import { z } from "zod";
 
 const optionalShortText = z.string().trim().max(240).optional().nullable();
 const optionalNotes = z.string().trim().max(4000).optional().nullable();
+const optionalEntityId = z.string().trim().min(1).max(191).optional().nullable();
+const idempotencyKey = z.string().trim().min(8).max(160);
 
 export const gamingStationCreateSchema = z.object({
   assetId: z.string().trim().min(1),
@@ -38,5 +40,29 @@ export const gamingStationUpdateSchema = z.object({
       path: ["action"],
       message: "Au moins une information du poste doit être modifiée.",
     });
+  }
+});
+
+export const gamingSessionStartSchema = z.object({
+  stationId: z.string().trim().min(1).max(191),
+  durationMinutes: z.coerce.number().int().min(1).max(24 * 60),
+  idempotencyKey,
+  businessPartyId: optionalEntityId,
+  serviceCatalogItemId: optionalEntityId,
+  pauseBillable: z.boolean().default(false),
+});
+
+export const gamingSessionTransitionSchema = z.object({
+  action: z.enum(["PAUSE", "RESUME", "EXTEND", "TRANSFER", "END"]),
+  revision: z.coerce.number().int().positive(),
+  idempotencyKey,
+  extensionMinutes: z.coerce.number().int().min(1).max(12 * 60).optional(),
+  targetStationId: z.string().trim().min(1).max(191).optional(),
+}).superRefine((value, ctx) => {
+  if (value.action === "EXTEND" && value.extensionMinutes === undefined) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["extensionMinutes"], message: "La durée de prolongation est requise." });
+  }
+  if (value.action === "TRANSFER" && !value.targetStationId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["targetStationId"], message: "Le poste de destination est requis." });
   }
 });
