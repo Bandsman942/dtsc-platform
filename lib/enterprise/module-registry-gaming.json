@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "modules": [
     {
       "code": "GAMING_DASHBOARD",
@@ -73,22 +73,23 @@
       "code": "GAMING_BOOKINGS",
       "labelFr": "Réservations Gaming",
       "labelEn": "Gaming bookings",
-      "descriptionFr": "Réservations de postes et créneaux liées aux clients du CRM commun lorsqu’ils sont identifiés.",
-      "descriptionEn": "Station and time-slot bookings linked to shared CRM customers when identified.",
+      "descriptionFr": "Réservations de postes et créneaux liées aux clients du CRM commun lorsqu’ils sont identifiés, avec conversion contrôlée en session.",
+      "descriptionEn": "Station and time-slot bookings linked to shared CRM customers when identified, with controlled conversion into sessions.",
       "domain": "SECTOR_HOSPITALITY",
-      "implementationStatus": "PLANNED",
+      "implementationStatus": "BETA",
       "navigationGroup": "SECTOR_HOSPITALITY",
       "navigationOrder": 140,
       "iconKey": "calendar-clock",
-      "routeKind": "HIDDEN",
-      "workspaceKey": null,
-      "permissionPrefixes": ["enterprise.gaming.bookings.", "enterprise.gaming."],
-      "accessPolicy": "EXPLICIT_DENY",
+      "routeKind": "DEDICATED_CORE",
+      "routePath": "/enterprise-modules/GAMING_BOOKINGS",
+      "workspaceKey": "ENTERPRISE_GAMING_BOOKINGS",
+      "permissionPrefixes": ["enterprise.gaming.bookings."],
+      "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "BUSINESS",
       "requiresActiveSubscription": true,
       "applicableSectors": ["HOSPITALITY_EVENTS"],
       "applicableBusinessSubtypes": ["GAMING_LOUNGE"],
-      "dependencies": ["GAMING_STATIONS", "CRM_CUSTOMERS"],
+      "dependencies": ["GAMING_STATIONS", "GAMING_SESSIONS", "CRM_CUSTOMERS"],
       "qaContract": "enterprise-gaming-lounge"
     },
     {

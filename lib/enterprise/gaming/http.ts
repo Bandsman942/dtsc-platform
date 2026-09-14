@@ -34,6 +34,27 @@ const sessionMessages: Record<string, { fr: string; en: string }> = {
   GAMING_SESSION_TRANSFER_INVALID: { fr: "Choisissez un autre poste disponible pour transférer la session.", en: "Select another available station to transfer the session." },
 };
 
+const bookingMessages: Record<string, { fr: string; en: string }> = {
+  GAMING_BOOKING_NOT_FOUND: { fr: "Cette réservation est introuvable ou n’est plus accessible.", en: "This booking could not be found or is no longer accessible." },
+  GAMING_BOOKING_STATION_NOT_FOUND: { fr: "Le poste sélectionné est introuvable dans cette entreprise.", en: "The selected station could not be found in this organization." },
+  GAMING_BOOKING_STATION_UNAVAILABLE: { fr: "Ce poste ne peut pas recevoir cette réservation car son actif est archivé, sorti du parc ou le poste est hors service.", en: "This station cannot receive the booking because its asset is archived, disposed, or the station is out of service." },
+  GAMING_BOOKING_PLAYER_CAPACITY: { fr: "Le nombre de joueurs dépasse la capacité du poste sélectionné. Choisissez un autre poste ou réduisez le nombre de joueurs.", en: "The player count exceeds the selected station capacity. Choose another station or reduce the player count." },
+  GAMING_BOOKING_CUSTOMER_NOT_FOUND: { fr: "Le client sélectionné n’existe pas ou n’est pas actif dans cette entreprise.", en: "The selected customer does not exist or is not active in this organization." },
+  GAMING_BOOKING_SCHEDULE_INVALID: { fr: "Le créneau de réservation est invalide ou dépasse 24 heures. Corrigez les heures de début et de fin.", en: "The booking time slot is invalid or longer than 24 hours. Correct the start and end times." },
+  GAMING_BOOKING_CONFLICT: { fr: "Ce poste est déjà réservé sur tout ou partie de ce créneau. Choisissez un autre horaire ou un autre poste.", en: "This station already has a booking that overlaps this time slot. Choose another time or station." },
+  GAMING_BOOKING_IDEMPOTENCY_CONFLICT: { fr: "Cette commande a déjà été utilisée pour une autre réservation. Actualisez puis réessayez.", en: "This command key was already used for another booking. Refresh and try again." },
+  GAMING_BOOKING_TERMINAL: { fr: "Cette réservation est déjà annulée, marquée absente ou convertie et ne peut plus être modifiée.", en: "This booking is already cancelled, marked no-show, or converted and can no longer be changed." },
+  GAMING_BOOKING_CONFIRM_INVALID: { fr: "Seul un brouillon peut être confirmé.", en: "Only a draft booking can be confirmed." },
+  GAMING_BOOKING_CHECK_IN_INVALID: { fr: "Seule une réservation confirmée peut être enregistrée à l’arrivée.", en: "Only a confirmed booking can be checked in." },
+  GAMING_BOOKING_NO_SHOW_INVALID: { fr: "Seule une réservation confirmée peut être marquée comme absence.", en: "Only a confirmed booking can be marked as a no-show." },
+  GAMING_BOOKING_CANCEL_INVALID: { fr: "Cette réservation ne peut plus être annulée dans son état actuel.", en: "This booking can no longer be cancelled in its current state." },
+  GAMING_BOOKING_CONVERT_INVALID: { fr: "Enregistrez d’abord l’arrivée du joueur avant de convertir la réservation en session.", en: "Check the player in before converting the booking into a session." },
+  GAMING_BOOKING_SESSION_EXISTS: { fr: "Cette réservation a déjà été convertie en session. Ouvrez la session existante.", en: "This booking has already been converted into a session. Open the existing session." },
+  GAMING_BOOKING_STATION_BUSY: { fr: "Le poste est actuellement occupé ou indisponible. Libérez-le ou choisissez un autre poste avant de démarrer la session réservée.", en: "The station is currently occupied or unavailable. Free it or choose another station before starting the booked session." },
+  GAMING_BOOKING_STATION_INCIDENT: { fr: "Un incident majeur est ouvert sur ce poste. Résolvez-le avant de convertir la réservation en session.", en: "A major incident is open on this station. Resolve it before converting the booking into a session." },
+  GAMING_BOOKING_STATION_MAINTENANCE: { fr: "Une maintenance est en cours sur ce poste. Terminez-la avant de convertir la réservation en session.", en: "Maintenance is in progress on this station. Complete it before converting the booking into a session." },
+};
+
 function localizedMessage(messages: Record<string, { fr: string; en: string }>, error: unknown, request: Request) {
   if (error instanceof EnterpriseDomainError && messages[error.code]) {
     const locale = request.headers.get("accept-language")?.toLowerCase().startsWith("en") ? "en" : "fr";
@@ -48,4 +69,8 @@ export function gamingStationErrorResponse(error: unknown, request: Request) {
 
 export function gamingSessionErrorResponse(error: unknown, request: Request) {
   return localizedMessage(sessionMessages, error, request) || enterpriseDomainErrorResponse(error, "GAMING_SESSION_SAVE_FAILED", request);
+}
+
+export function gamingBookingErrorResponse(error: unknown, request: Request) {
+  return localizedMessage(bookingMessages, error, request) || enterpriseDomainErrorResponse(error, "GAMING_BOOKING_SAVE_FAILED", request);
 }

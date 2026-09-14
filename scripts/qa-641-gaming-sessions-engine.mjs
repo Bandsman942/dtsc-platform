@@ -40,11 +40,11 @@ check(sessions?.accessPolicy === "POSITION_PERMISSION", "GAMING_SESSIONS must us
 check(sessions?.permissionPrefixes?.includes("enterprise.gaming.sessions."), "GAMING_SESSIONS permission prefix missing");
 check(sessions?.dependencies?.includes("GAMING_STATIONS"), "GAMING_SESSIONS must depend on GAMING_STATIONS");
 check(sessions?.dependencies?.includes("CATALOG"), "GAMING_SESSIONS must depend on CATALOG");
-for (const code of ["GAMING_DASHBOARD", "GAMING_BOOKINGS", "GAMING_PRICING_PACKAGES", "GAMING_CHECKOUT", "GAMING_DAILY_CLOSE", "GAMING_TOURNAMENTS", "GAMING_REPORTS"]) {
+for (const code of ["GAMING_DASHBOARD", "GAMING_PRICING_PACKAGES", "GAMING_CHECKOUT", "GAMING_DAILY_CLOSE", "GAMING_TOURNAMENTS", "GAMING_REPORTS"]) {
   const item = registry.modules.find((module) => module.code === code);
-  check(item?.implementationStatus === "PLANNED", `${code} must remain PLANNED in #641`);
-  check(item?.routeKind === "HIDDEN", `${code} must remain HIDDEN in #641`);
-  check(item?.accessPolicy === "EXPLICIT_DENY", `${code} must remain fail-closed in #641`);
+  check(item?.implementationStatus === "PLANNED", `${code} must remain PLANNED after #641 until its own implementation lot`);
+  check(item?.routeKind === "HIDDEN", `${code} PLANNED module must remain HIDDEN`);
+  check(item?.accessPolicy === "EXPLICIT_DENY", `${code} PLANNED module must remain fail-closed`);
 }
 
 includesAll(domain, [

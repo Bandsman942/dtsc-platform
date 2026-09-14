@@ -5,11 +5,12 @@
 - Programme : #638
 - Fondation fusionnée : #639
 - Postes de jeu fusionnés : #640
-- Lot courant : #641 — moteur de sessions minutées, concurrence et occupation
+- Sessions fusionnées : #641
+- Lot courant : #642 — réservations, joueurs et conversion en session
 - Secteur canonique : `HOSPITALITY_EVENTS`
 - Sous-secteur : `GAMING_LOUNGE`
 - Classification du sous-secteur : `PLANNED` jusqu’au lot d’onboarding #646
-- Modules fonctionnels isolés : `GAMING_STATIONS` et `GAMING_SESSIONS` en `BETA`
+- Modules fonctionnels isolés : `GAMING_STATIONS`, `GAMING_SESSIONS` et `GAMING_BOOKINGS` en `BETA`
 - Statut commercial global : non `COMMERCIAL_READY`
 
 Le sous-secteur reste volontairement **fail-closed** pour l’onboarding commercial normal jusqu’à #646. Les lots intermédiaires rendent uniquement les capacités réellement implémentées `BETA`, sans promouvoir prématurément l’ensemble du Gaming Lounge.
@@ -27,7 +28,7 @@ DTSC Platform ne modélise pas ce métier comme un second Shop ni comme un CRUD 
 | Console, TV, manette, onduleur, équipement | `EnterpriseAsset` / `ASSETS_MAINTENANCE` |
 | Client/joueur identifié | `EnterpriseBusinessParty` / `CRM_CUSTOMERS` |
 | Service vendu et prix de référence | `EnterpriseCatalogItem` / `CATALOG` |
-| Site physique | `EnterpriseSite` / `SITES_WAREHOUSES` |
+| Site physique | `EnterpriseSite` porté par l’`EnterpriseAsset` du poste |
 | Snacks/accessoires physiques | `CATALOG` + `INVENTORY_LOGISTICS` |
 | Fournisseurs/achats | `SUPPLIERS_PURCHASES` |
 | Facturation/créance | Finance commune / `FINANCE_RECEIVABLES` |
@@ -35,7 +36,7 @@ DTSC Platform ne modélise pas ce métier comme un second Shop ni comme un CRUD 
 | Compte, caisse, banque, Mobile Money | `FINANCE_TREASURY` |
 | Rapports | framework `REPORTS` |
 
-Interdictions durables : aucun `GamingAsset`, `GamingCustomer`, `GamingCatalog`, `GamingPayment`, `GamingCashAccount` ni stock Gaming parallèle.
+Interdictions durables : aucun `GamingAsset`, `GamingCustomer`, `GamingCatalog`, `GamingPayment`, `GamingCashAccount` ni stock Gaming parallèle. Une réservation Gaming ne possède pas non plus un second `siteId` : le site est toujours dérivé de l’actif canonique du poste.
 
 ## Classification
 
@@ -46,7 +47,7 @@ HOSPITALITY_EVENTS
 
 `GAMING_LOUNGE` reste `PLANNED` pendant #639 à #645. Le helper générique d’onboarding continue donc de l’exclure par défaut. Le passage du sous-secteur à `ACTIVE` appartient à #646 et exige runtime minimal, onboarding, permissions, activités, guides et preuves QA/OWNER_E2E de commercial readiness.
 
-## Registre de modules après #641
+## Registre de modules après #642
 
 Le registre `lib/enterprise/module-registry-gaming.json` est fusionné dans le registre canonique.
 
@@ -70,7 +71,17 @@ Le registre `lib/enterprise/module-registry-gaming.json` est fusionné dans le r
 - dépendances `GAMING_STATIONS` et `CATALOG` ;
 - plan minimum `BUSINESS` avec abonnement actif.
 
-Les autres modules restent `PLANNED`, `HIDDEN`, sans workspace et avec `EXPLICIT_DENY` jusqu’à leurs lots respectifs : `GAMING_DASHBOARD`, `GAMING_BOOKINGS`, `GAMING_PRICING_PACKAGES`, `GAMING_CHECKOUT`, `GAMING_DAILY_CLOSE`, `GAMING_TOURNAMENTS`, `GAMING_REPORTS`.
+### `GAMING_BOOKINGS`
+
+- `implementationStatus: BETA` ;
+- route `/enterprise-modules/GAMING_BOOKINGS` ;
+- workspace `ENTERPRISE_GAMING_BOOKINGS` ;
+- `POSITION_PERMISSION` ;
+- prefix `enterprise.gaming.bookings.` ;
+- dépendances `GAMING_STATIONS`, `GAMING_SESSIONS` et `CRM_CUSTOMERS` ;
+- plan minimum `BUSINESS` avec abonnement actif.
+
+Les autres modules restent `PLANNED`, `HIDDEN`, sans workspace et avec `EXPLICIT_DENY` jusqu’à leurs lots respectifs : `GAMING_DASHBOARD`, `GAMING_PRICING_PACKAGES`, `GAMING_CHECKOUT`, `GAMING_DAILY_CLOSE`, `GAMING_TOURNAMENTS`, `GAMING_REPORTS`.
 
 La connaissance d’un code module ne donne jamais un droit : le resolver canonique conserve membership, secteur/sous-secteur, module tenant, dépendances, entitlement et permissions.
 
@@ -104,89 +115,137 @@ Le workspace peut utiliser un intervalle JavaScript uniquement pour **projeter v
 
 La politique #641 supporte le snapshot `pauseBillable`. Par défaut, le temps de pause n’est pas facturable. Lors d’une reprise, le serveur cumule la pause et décale `expectedEndAt` lorsque la pause n’est pas facturable. Le moteur #643 utilisera ces données pour la tarification sans réinventer le temps.
 
-## Machine d’état #641
-
-Le catalogue de statuts reste :
+## Machine d’état Sessions #641
 
 ```text
 WAITING | ACTIVE | PAUSED | ENDED | TO_CHECKOUT | PAID | CANCELLED
 ```
 
-#641 rend opérationnelles les transitions suivantes :
+Transitions opérationnelles : `START`, `PAUSE`, `RESUME`, `EXTEND`, `TRANSFER`, `END`. Une session `ENDED`, `TO_CHECKOUT`, `PAID` ou `CANCELLED` est terminale pour les mutations #641. #644 ajoutera les transitions financières nécessaires sans réécrire l’historique de temps.
 
-- `START` → crée une session directement `ACTIVE` sur un poste disponible ;
-- `PAUSE` : `ACTIVE → PAUSED` et fixe `pausedAt` côté serveur ;
-- `RESUME` : `PAUSED → ACTIVE`, cumule la pause et recalcule la fin prévue selon le snapshot ;
-- `EXTEND` : ajoute des minutes à `expectedEndAt` sans réécrire le passé ;
-- `TRANSFER` : déplace une session live vers un autre poste réellement disponible ;
-- `END` : `ACTIVE|PAUSED → ENDED`, fixe `endedAt`, `pausedSeconds` et `billableSeconds`.
+## Journal Sessions et idempotence
 
-Une session `ENDED`, `TO_CHECKOUT`, `PAID` ou `CANCELLED` est terminale pour les mutations #641. #644 ajoutera les transitions financières nécessaires sans réécrire l’historique de temps.
+`EnterpriseGamingSessionTransition` journalise chaque commande avec `organizationId`, session, action, `idempotencyKey`, statut avant/après, acteur, métadonnées et timestamp serveur.
 
-## Journal de transitions et idempotence
+La paire `(organizationId, idempotencyKey)` est unique. Un retry renvoie le résultat déjà produit au lieu de dupliquer une session ou une transition.
 
-#641 ajoute `EnterpriseGamingSessionTransition` comme journal des commandes de session. Chaque entrée conserve :
+## Concurrence Sessions et double occupation
 
-- `organizationId` ;
-- session ;
-- action ;
-- `idempotencyKey` ;
-- statut avant/après ;
-- acteur ;
-- métadonnées de transition ;
-- timestamp serveur.
+La prévention de double occupation ne repose pas sur React :
 
-La paire `(organizationId, idempotencyKey)` est unique. Un retry de démarrage ou de transition renvoie le résultat déjà produit au lieu de dupliquer la session ou l’action. Réutiliser la même clé pour une autre session est un conflit explicite.
+1. transactions Prisma en isolation `Serializable` ;
+2. index partiel PostgreSQL `GamingSession_one_live_per_station_key` interdisant deux sessions `ACTIVE/PAUSED` sur le même poste ;
+3. `revision` + statut attendu pour empêcher les transitions stale.
 
-Le démarrage conserve également l’`idempotencyKey` sur `EnterpriseGamingSession`, ce qui protège la création elle-même avant même la lecture du journal.
+La session reste la source de vérité de l’occupation et la projection SQL maintient `IN_USE` sur le poste pendant une session live.
 
-## Concurrence et double occupation
+## #642 — réservations Gaming : source de vérité légère
 
-La prévention de double occupation ne repose pas sur un contrôle React.
+`EnterpriseGamingBooking` représente uniquement le contrat métier spécifique à la réservation :
 
-Trois niveaux se complètent :
+- référence Gaming ;
+- poste ;
+- créneau `scheduledStartAt` / `scheduledEndAt` ;
+- client CRM facultatif ;
+- nombre de joueurs ;
+- statut et timestamps de cycle de vie ;
+- notes ;
+- révision et idempotence.
 
-1. les mutations utilisent une transaction Prisma en isolation `Serializable` ;
-2. l’index partiel de fondation `GamingSession_one_live_per_station_key` interdit en PostgreSQL deux sessions non archivées `ACTIVE/PAUSED` sur `(organizationId, stationId)` ;
-3. les mutations utilisent `revision` + statut attendu pour empêcher une transition stale.
+Le modèle **ne duplique pas** :
 
-Une requête concurrente perdante reçoit une erreur métier `GAMING_SESSION_STATION_BUSY` ou un conflit de révision, jamais une deuxième session valide.
+- le client : `businessPartyId` référence le CRM commun ;
+- le site : il est dérivé de `EnterpriseGamingStationProfile.assetId → EnterpriseAsset.site` ;
+- la console : elle reste un `EnterpriseAsset` ;
+- le paiement/acompte : #642 ne crée aucun `GamingPayment`, aucune caisse et aucune écriture financière.
 
-## Projection d’occupation sur les postes
+Un **joueur occasionnel** est représenté par une réservation dont `businessPartyId` est absent. Cela permet de réserver un poste sans créer artificiellement un client CRM. Dès qu’un client est sélectionné, le serveur recharge le `EnterpriseBusinessParty` avec le même `organizationId`, vérifie qu’il est actif et possède un rôle `CUSTOMER` actif.
 
-La session reste la source de vérité de l’occupation. Une projection SQL maintient le statut opérationnel du poste :
+## Machine d’état Réservations #642
 
-- insertion d’une session `ACTIVE/PAUSED` → poste `IN_USE` ;
-- transfert → ancien poste libéré, nouveau poste `IN_USE` ;
-- fin → poste libéré si aucune autre session live ne le référence.
+```text
+DRAFT → CONFIRMED → CHECKED_IN → CONVERTED
+  │          │             │
+  └──────────┴─────────────┴→ CANCELLED
+             └──────────────→ NO_SHOW
+```
 
-Un garde DB interdit de passer manuellement un poste `IN_USE` vers un autre statut tant qu’une session `ACTIVE/PAUSED` existe encore. La route Stations réalise aussi un contrôle métier préalable afin de retourner un message humain plutôt qu’une erreur SQL.
+Contrat :
 
-Les incidents et maintenances Asset gardent leur priorité d’affichage : un actif archivé/sorti, un incident majeur ou une maintenance en cours rend le poste indisponible. Une nouvelle session vérifie ces blocages dans le même tenant avant démarrage ou transfert.
+- `DRAFT` : créneau préparé, ne bloque pas encore le planning ;
+- `CONFIRMED` : réservation ferme, le créneau bloque les autres réservations du même poste ;
+- `CHECKED_IN` : arrivée du joueur enregistrée, le créneau reste bloquant ;
+- `CONVERTED` : réservation convertie en une seule session ;
+- `NO_SHOW` : historique conservé, créneau libéré ;
+- `CANCELLED` : historique conservé, créneau libéré.
 
-## Références cross-domain
+`NO_SHOW`, `CANCELLED` et `CONVERTED` sont terminaux pour #642.
 
-Un démarrage peut référencer un joueur/client identifié et un service de catalogue, mais jamais via une confiance aveugle dans un UUID reçu :
+## Créneaux et garde de conflit #642
 
-- `businessPartyId` est rechargé avec le même `organizationId`, doit être actif et avoir un rôle `CUSTOMER` actif ;
-- `serviceCatalogItemId` est rechargé avec le même `organizationId` et doit être actif ;
-- le poste est rechargé dans le même tenant et son actif canonique est vérifié.
+Un créneau doit avoir une fin strictement postérieure au début et ne peut pas dépasser **24 heures**, afin de rester compatible avec le contrat du moteur Sessions.
 
-Une référence valide appartenant à un autre tenant est traitée comme introuvable.
+Le conflit n’est jamais décidé uniquement par l’interface. Trois protections se complètent :
 
-## API et sécurité #641
+1. service transactionnel en isolation `Serializable` ;
+2. verrou PostgreSQL transactionnel par `(organizationId, stationId)` avec `pg_advisory_xact_lock` ;
+3. trigger DB `EnterpriseGamingBooking_conflict_guard`, qui refuse tout chevauchement entre réservations non archivées `CONFIRMED/CHECKED_IN` du même poste.
 
-Le contrat serveur est :
+Le chevauchement canonique est :
+
+```text
+existing.start < new.end
+AND existing.end > new.start
+```
+
+Deux créneaux adjacents sont donc autorisés, tandis qu’un chevauchement même partiel est refusé. La modification d’une réservation confirmée passe par la même garde. Les mutations utilisent aussi `revision` + statut attendu pour détecter une modification concurrente.
+
+## Journal Réservations et idempotence #642
+
+`EnterpriseGamingBookingTransition` journalise :
+
+- `CREATE` ;
+- `UPDATE` ;
+- `CONFIRM` ;
+- `CHECK_IN` ;
+- `NO_SHOW` ;
+- `CANCEL` ;
+- `CONVERT`.
+
+Chaque commande possède une `idempotencyKey` unique dans l’organisation. Rejouer la même intention ne crée ni deuxième réservation, ni deuxième transition.
+
+## Conversion réservation → session #642
+
+La conversion n’est autorisée qu’après `CHECK_IN` et exige simultanément les droits d’écriture Bookings et de démarrage Sessions.
+
+La conversion se fait dans **une seule transaction** :
+
+1. recharge de la réservation dans le même tenant ;
+2. vérification de la révision et du statut `CHECKED_IN` ;
+3. revalidation du client CRM éventuel ;
+4. verrou du poste ;
+5. vérification du poste, de l’actif, des incidents majeurs, de la maintenance et de l’absence de session live ;
+6. création d’une `EnterpriseGamingSession` `ACTIVE` avec `bookingId` ;
+7. création de la transition Sessions `START` ;
+8. passage de la réservation à `CONVERTED` et journalisation `CONVERT`.
+
+L’unicité `(organizationId, bookingId)` sur `EnterpriseGamingSession` garantit qu’une réservation ne peut produire qu’une seule session, y compris sous retry concurrent.
+
+La session créée utilise le temps serveur de la conversion comme `startedAt`. Sa durée initiale reprend la durée du créneau réservé, avec `timingPolicyJson.authority = SERVER` et `source = BOOKING`. #642 ne calcule aucun montant : #643 reste l’autorité future pour la tarification.
+
+## API et sécurité #642
+
+Contrat serveur :
 
 ```text
 session DTSC
 → activeOrganizationId
 → membership actif
 → HOSPITALITY_EVENTS / GAMING_LOUNGE
-→ GAMING_SESSIONS BETA + module tenant
-→ dépendances GAMING_STATIONS / CATALOG
+→ GAMING_BOOKINGS BETA + module tenant
+→ dépendances GAMING_STATIONS / GAMING_SESSIONS / CRM_CUSTOMERS
 → entitlement
-→ enterprise.gaming.sessions.*
+→ enterprise.gaming.bookings.*
 → revalidation cross-domain same-tenant
 → same-origin sur mutation
 → Zod
@@ -197,42 +256,54 @@ session DTSC
 → ApiLog + AuditLog
 ```
 
-Routes #641 :
+Routes #642 :
 
-- `GET/POST /api/enterprise/[organizationId]/gaming/sessions` ;
-- `PATCH /api/enterprise/[organizationId]/gaming/sessions/[sessionId]`.
+- `GET/POST /api/enterprise/[organizationId]/gaming/bookings` ;
+- `PATCH /api/enterprise/[organizationId]/gaming/bookings/[bookingId]`.
 
-Les erreurs métier Gaming sont localisées FR/EN : poste occupé, maintenance, incident, client/service introuvable, session terminale, mauvaise transition et conflit d’idempotence.
+Une conversion exige en plus `enterprise.gaming.sessions.*` via le resolver canonique de `GAMING_SESSIONS`.
 
-## Workspace Sessions
+Les erreurs métier sont localisées FR/EN : client introuvable, capacité joueurs, créneau invalide, conflit de réservation, poste indisponible, incident, maintenance, session existante, transition invalide, conflit d’idempotence et révision concurrente.
+
+## Workspace Réservations #642
 
 Le workspace dédié fournit :
 
-- KPI sessions actives/en pause/terminées/à encaisser ;
+- KPI brouillons/confirmées/arrivées/converties ;
 - recherche et filtres serveur ;
 - pagination ;
-- cartes responsive par session/poste ;
-- détail plein écran et historique récent des transitions ;
-- démarrage sur poste disponible ;
-- pause, reprise, prolongation, transfert et fin ;
-- projection visuelle du temps issue de `serverNow` ;
-- resynchronisation bornée toutes les 30 secondes ;
-- clés d’idempotence générées par intention utilisateur.
+- vue **Liste** ;
+- vue **Calendrier/agenda** groupée par jour à partir des résultats paginés ;
+- création et modification ;
+- recherche paginée des clients du CRM ;
+- option explicite **joueur occasionnel** ;
+- détail plein écran avec site dérivé de l’actif et historique des transitions ;
+- confirmation, check-in, no-show, annulation et conversion en session ;
+- dialogs mobile-safe, feedback succès/erreur et conservation du formulaire en cas d’échec.
 
-La liste des postes disponibles est paginée : le moteur ne réintroduit aucune limite fixe de cinq consoles.
+La vue agenda n’est qu’une projection d’interface : l’autorité sur les conflits reste le serveur et la base de données. La pagination des postes ne réintroduit aucune limite fixe de cinq consoles.
+
+## Références cross-domain
+
+Toutes les références reçues du client sont revalidées :
+
+- station : même `organizationId`, profil non archivé et actif canonique valide ;
+- client : même `organizationId`, `EnterpriseBusinessParty` actif avec rôle `CUSTOMER` ;
+- site : jamais fourni par le client pour une réservation, toujours lu depuis l’actif ;
+- session : créée dans le même tenant et liée à la réservation par `bookingId`.
+
+Une référence valide appartenant à une autre entreprise est traitée comme introuvable.
 
 ## Finance et tarification
 
-#641 calcule le **temps facturable**, pas le prix final. Il ne crée ni facture, ni paiement, ni mouvement de trésorerie.
-
-#643 appliquera les règles tarifaires et snapshots de prix ; #644 transformera ensuite une session terminée en objets commerciaux/financiers communs. Une session payée/clôturée ne devra jamais être réécrite.
+#642 ne crée **aucun acompte, paiement, facture, mouvement de trésorerie ou prix final**. Les éventuels acomptes futurs devront utiliser les modules Finance communs. #643 appliquera les règles tarifaires et snapshots de prix ; #644 réalisera checkout, paiements, reçus et clôture.
 
 ## Programme d’implémentation
 
 - #639 — fondation canonique du sous-secteur — fusionné ;
 - #640 — postes de jeu intégrés aux Actifs & maintenance — fusionné, `GAMING_STATIONS` BETA ;
-- #641 — moteur de sessions minutées, concurrence et occupation — `GAMING_SESSIONS` BETA ;
-- #642 — réservations, joueurs et conversion en session ;
+- #641 — moteur de sessions minutées, concurrence et occupation — fusionné, `GAMING_SESSIONS` BETA ;
+- #642 — réservations, joueurs et conversion en session — `GAMING_BOOKINGS` BETA ;
 - #643 — tarification, forfaits et calcul serveur ;
 - #644 — checkout, paiements, reçus et clôture Gaming ;
 - #645 — tournois, maintenance intégrée, reporting et DTSC AI ;
@@ -240,38 +311,39 @@ La liste des postes disponibles est paginée : le moteur ne réintroduit aucune 
 
 ## QA
 
-`qa-639-gaming-lounge-foundation.mjs` protège toujours la classification, le registre canonique, les sources de vérité et la migration de fondation sans figer les futurs lots à `PLANNED`.
+`qa-639-gaming-lounge-foundation.mjs` protège la classification, le registre canonique, les sources de vérité et la migration de fondation.
 
 `qa-640-gaming-stations-assets.mjs` protège le parc Asset canonique, l’absence de plafond à cinq, les APIs Stations, la sécurité et le workspace.
 
-`qa-641-gaming-sessions-engine.mjs` protège notamment :
+`qa-641-gaming-sessions-engine.mjs` protège le moteur Sessions, l’autorité temporelle serveur, la concurrence, l’idempotence et la projection `IN_USE` sans figer les lots futurs déjà implémentés.
 
-- `GAMING_SESSIONS=BETA` et fail-closed des modules non encore livrés ;
+`qa-642-gaming-bookings.mjs` protège notamment :
+
+- `GAMING_BOOKINGS=BETA` et fail-closed des modules non encore livrés ;
 - permissions/access/entitlement ;
-- `pausedAt`, `timingPolicyJson` et `EnterpriseGamingSessionTransition` ;
-- unicité d’idempotence ;
-- index DB contre double occupation ;
-- transactions `Serializable` ;
-- revalidation client/catalogue/poste same-tenant ;
-- pause/reprise/prolongation/transfert/fin ;
-- calcul du temps facturable serveur ;
-- projection `IN_USE` et garde des mutations Stations ;
+- `EnterpriseGamingBookingTransition` et les timestamps de cycle de vie ;
+- créneaux valides et durée maximale de 24 h ;
+- garde DB de chevauchement et verrou advisory ;
+- transactions `Serializable`, révision et idempotence ;
+- CRM canonique et joueur occasionnel sans `GamingCustomer` ;
+- site dérivé de l’actif, sans `siteId` Gaming parallèle ;
+- conversion atomique en une seule session ;
 - same-origin/Zod/rate-limit/audit ;
-- workspace FR/EN et projection temporelle ;
+- vues Liste/Calendrier, FR/EN, détail et formulaires mobile-safe ;
 - absence de limite fixe de cinq ;
 - branchement à `qa:regression`.
 
-#641 est user-facing et exige un `OWNER_E2E` avant merge : cinq postes disponibles, plusieurs sessions simultanées, pause/reprise, prolongation, transfert, fin, retry idempotent et scénario négatif de double démarrage du même poste.
+#642 est user-facing et exige un `OWNER_E2E` avant merge : réservation avec client CRM, réservation joueur occasionnel, conflit de créneau, modification, check-in, conversion en session, retry idempotent, no-show, annulation, site dérivé de l’actif, mobile/desktop FR/EN clair/sombre et parc supérieur à cinq postes.
 
 ## Rollback
 
-Pour #641 :
+Pour #642 :
 
-- repasser `GAMING_SESSIONS` en `PLANNED/HIDDEN/EXPLICIT_DENY` et retirer route/workspace/API de sessions ;
-- bloquer les nouveaux démarrages ;
-- conserver toutes les sessions et transitions déjà persistées ;
-- conserver les postes et actifs ;
+- repasser `GAMING_BOOKINGS` en `PLANNED/HIDDEN/EXPLICIT_DENY` et retirer route/workspace/API de réservation ;
+- bloquer les nouvelles réservations et conversions ;
+- conserver toutes les réservations, transitions et sessions déjà créées ;
+- conserver les postes, clients CRM et actifs ;
 - ne supprimer ni réécrire les migrations historiques ;
-- les sessions terminées restent auditables même si le module est désactivé.
+- les réservations terminées restent auditables même si le module est désactivé.
 
 Le reste du domaine Gaming demeure fail-closed jusqu’à ses lots respectifs.

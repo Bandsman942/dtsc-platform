@@ -30,6 +30,14 @@ export const GAMING_SESSION_PERMISSIONS = [
 ] as const;
 export type GamingSessionPermission = (typeof GAMING_SESSION_PERMISSIONS)[number];
 
+export const GAMING_BOOKING_PERMISSIONS = [
+  "enterprise.gaming.bookings.read",
+  "enterprise.gaming.bookings.create",
+  "enterprise.gaming.bookings.update",
+  "enterprise.gaming.bookings.manage",
+] as const;
+export type GamingBookingPermission = (typeof GAMING_BOOKING_PERMISSIONS)[number];
+
 export const GAMING_STATION_STATUSES = [
   "AVAILABLE",
   "IN_USE",
@@ -69,6 +77,17 @@ export const GAMING_BOOKING_STATUSES = [
   "CONVERTED",
 ] as const;
 export type GamingBookingStatus = (typeof GAMING_BOOKING_STATUSES)[number];
+
+export const GAMING_BOOKING_ACTIONS = [
+  "CREATE",
+  "UPDATE",
+  "CONFIRM",
+  "CHECK_IN",
+  "NO_SHOW",
+  "CANCEL",
+  "CONVERT",
+] as const;
+export type GamingBookingAction = (typeof GAMING_BOOKING_ACTIONS)[number];
 
 export const GAMING_PRICING_MODES = [
   "FIXED_DURATION",
