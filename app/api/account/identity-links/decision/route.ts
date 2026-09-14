@@ -25,15 +25,6 @@ const decisionSchema = z.object({
   reason: z.string().trim().min(3).max(500).optional(),
 });
 
-function requireAccountReference(linkId?: string, revision?: number) {
-  if (!linkId || !revision) {
-    throw new Error("IDENTITY_LINK_REFERENCE_REQUIRED");
-  }
-  return { linkId, revision };
-}
-
-type Params = never;
-
 export async function POST(req: Request) {
   const startedAt = Date.now();
   let userId: string | undefined;
@@ -132,13 +123,6 @@ export async function POST(req: Request) {
     await writeApiLog({ request: req, statusCode: 200, userId, startedAt });
     return NextResponse.json({ ok: true });
   } catch (error) {
-    if (error instanceof Error && error.message === "IDENTITY_LINK_REFERENCE_REQUIRED") {
-      await writeApiLog({ request: req, statusCode: 400, userId, startedAt });
-      return NextResponse.json(
-        { error: "IDENTITY_LINK_REFERENCE_REQUIRED", message: "Actualisez la relation avant de réessayer." },
-        { status: 400 },
-      );
-    }
     const response = identityLinkErrorResponse(error);
     await writeApiLog({ request: req, statusCode: response.status, userId, startedAt });
     return response;
