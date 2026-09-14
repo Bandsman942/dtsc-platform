@@ -110,7 +110,7 @@ DRAFT → CONFIRMED → CHECKED_IN → CONVERTED
              └──────────────→ NO_SHOW
 ```
 
-La conversion réservation → session est atomique et l’unicité `(organizationId, bookingId)` empêche deux sessions pour une même réservation.
+La conversion réservation → session est atomique et l’unicité `(organizationId, bookingId)` empêche deux sessions pour une même réservation. Depuis #643, cette conversion exige aussi un service du Catalogue et passe par le même moteur tarifaire serveur avant de créer la session.
 
 ## #643 — Tarifs et forfaits : pas de catalogue parallèle
 
@@ -170,6 +170,14 @@ Pour un forfait/durée fixe, le montant final reste le montant forfaitaire snaps
 
 Un retry idempotent de `START` renvoie la session existante et ne rerésout pas le tarif.
 
+### Conversion Réservation → Session tarifée
+
+Une réservation `CHECKED_IN` ne peut plus être convertie en session sans service tarifable. Le workspace Réservations charge les services actifs du Catalogue, simule le tarif avec le poste, la durée du créneau et `playerCount`, puis n’autorise le démarrage qu’après un aperçu valide.
+
+Au moment de `CONVERT`, le serveur **recalcule** le tarif dans la même transaction `Serializable` qui crée `EnterpriseGamingSession`, écrit la transition `START` et passe la réservation à `CONVERTED`. La session reçoit `bookingId`, `serviceCatalogItemId`, `pricingRuleId`, `pricingSnapshotJson`, `currency` et `quotedAmount`. L’aperçu client n’est donc jamais l’autorité finale.
+
+Le retry conserve les invariants d’idempotence #642 : une réservation ne peut produire qu’une session et la même commande ne duplique ni session ni conversion.
+
 ## Dérogations tarifaires
 
 Une dérogation exige simultanément :
@@ -185,7 +193,9 @@ Le motif, le montant et l’utilisateur sont conservés dans le snapshot. Le dé
 
 `POST /api/enterprise/[organizationId]/gaming/pricing/simulate` applique exactement le moteur de résolution serveur, mais ne crée ni session, ni vente, ni facture, ni paiement, ni mouvement de trésorerie.
 
-Cette simulation est utilisée dans l’administration Pricing et dans le formulaire de démarrage Sessions pour afficher le montant estimé avant démarrage.
+La date de simulation est optionnelle. Lorsqu’elle est absente, le serveur utilise l’instant courant ; une valeur vide ne doit jamais être coercée vers le 1er janvier 1970.
+
+Cette simulation est utilisée dans l’administration Pricing, dans le formulaire de démarrage Sessions et dans le dialogue de conversion d’une Réservation `CHECKED_IN`.
 
 ## API #643
 
@@ -197,7 +207,7 @@ POST      /api/enterprise/[organizationId]/gaming/pricing/simulate
 
 Les mutations imposent same-origin, Zod, `await rateLimit`, membership, entitlement, permissions, validation cross-domain, `AuditLog` et `ApiLog`.
 
-Activation, désactivation, archivage et dérogation nécessitent `manage`. Création/modification suivent les capacités du module. Le catalogue et les postes sont lus via leurs modules canoniques.
+Activation, désactivation, archivage et dérogation nécessitent `manage`. Création/modification suivent les capacités du module. Le catalogue et les postes sont lus via leurs modules canoniques. La conversion d’une réservation exige, en plus des droits Booking/Session, la lecture de `GAMING_PRICING_PACKAGES` et `CATALOG`.
 
 ## UI #643
 
@@ -216,11 +226,13 @@ Le workspace `Tarifs & forfaits Gaming` fournit :
 
 Le workspace Sessions ajoute sélection du service, nombre de joueurs, aperçu tarifaire, dérogation conditionnelle et affichage `quotedAmount` / `finalAmount`.
 
+Le workspace Réservations ajoute, au moment de `CHECKED_IN → CONVERTED`, sélection paginée du service Catalogue, aperçu tarifaire serveur et blocage du démarrage tant qu’aucun aperçu valide n’a été obtenu.
+
 ## Limite du lot #643
 
 #643 ne crée aucune créance, facture, vente, ligne de paiement, caisse, banque, Mobile Money ni mouvement de trésorerie. Le montant d’une session est un **résultat tarifaire**, pas encore un encaissement. Checkout et Finance appartiennent à #644.
 
-La conversion Booking → Session introduite en #642 reste compatible ; lorsqu’une session est démarrée avec un service tarifable, elle reçoit le snapshot #643. Les futurs écrans de réservation pourront prévisualiser le tarif sans créer une nouvelle source commerciale.
+Le moteur Pricing s’applique aux nouvelles sessions qu’elles soient démarrées directement ou converties depuis une réservation. Il ne transforme jamais ce montant en paiement : #644 reste l’unique lot chargé du checkout et des flux Finance communs.
 
 ## Programme d’implémentation
 
@@ -239,9 +251,9 @@ La conversion Booking → Session introduite en #642 reste compatible ; lorsqu�
 - `qa-640-gaming-stations-assets.mjs` protège `EnterpriseAsset`, extensibilité >5 et UX Stations ;
 - `qa-641-gaming-sessions-engine.mjs` protège timestamps serveur, concurrence, idempotence et `IN_USE` ;
 - `qa-642-gaming-bookings.mjs` protège CRM, conflits, conversion et historique Booking ;
-- `qa-643-gaming-pricing.mjs` protège catalogue/service canonique, devises Finance, résolution serveur, snapshot, simulation, dérogations, UI et absence d’écriture Finance #644.
+- `qa-643-gaming-pricing.mjs` protège catalogue/service canonique, devises Finance, résolution serveur, snapshot, simulation, conversion Booking tarifée, dérogations, UI et absence d’écriture Finance #644.
 
-#643 exige un `OWNER_E2E` avant merge, couvrant au minimum : 30 minutes, 1 heure, forfait 3 h, frontière de créneau, ciblage poste/groupe, priorité déterministe, changement du tarif après démarrage, fin de session depuis le snapshot, devise inactive, dérogation autorisée/refusée, idempotence, mobile/desktop, FR/EN et parc supérieur à cinq postes.
+#643 exige un `OWNER_E2E` avant merge, couvrant au minimum : 30 minutes, 1 heure, forfait 3 h, frontière de créneau, ciblage poste/groupe, priorité déterministe, changement du tarif après démarrage, fin de session depuis le snapshot, conversion d’une réservation avec aperçu tarifaire, devise inactive, dérogation autorisée/refusée, idempotence, mobile/desktop, FR/EN et parc supérieur à cinq postes.
 
 ## Rollback
 
@@ -249,6 +261,7 @@ Pour #643 :
 
 - repasser `GAMING_PRICING_PACKAGES` en `PLANNED/HIDDEN/EXPLICIT_DENY` ;
 - bloquer création/modification/activation des règles et la simulation ;
+- bloquer les nouveaux démarrages tarifés et conversions Booking nécessitant Pricing ;
 - conserver les règles existantes et tous les snapshots déjà stockés dans les sessions ;
 - ne supprimer aucun service du catalogue, aucune session et aucune migration historique ;
 - les sessions déjà tarifées restent auditables et conservent `quotedAmount` / `finalAmount`.
