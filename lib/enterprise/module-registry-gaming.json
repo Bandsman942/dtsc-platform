@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "modules": [
     {
       "code": "GAMING_DASHBOARD",
@@ -53,14 +53,15 @@
       "descriptionFr": "Sessions minutées sur postes de jeu, pilotées par timestamps serveur et transitions contrôlées.",
       "descriptionEn": "Timed station sessions governed by server timestamps and controlled transitions.",
       "domain": "SECTOR_HOSPITALITY",
-      "implementationStatus": "PLANNED",
+      "implementationStatus": "BETA",
       "navigationGroup": "SECTOR_HOSPITALITY",
       "navigationOrder": 130,
       "iconKey": "timer",
-      "routeKind": "HIDDEN",
-      "workspaceKey": null,
-      "permissionPrefixes": ["enterprise.gaming.sessions.", "enterprise.gaming."],
-      "accessPolicy": "EXPLICIT_DENY",
+      "routeKind": "DEDICATED_CORE",
+      "routePath": "/enterprise-modules/GAMING_SESSIONS",
+      "workspaceKey": "ENTERPRISE_GAMING_SESSIONS",
+      "permissionPrefixes": ["enterprise.gaming.sessions."],
+      "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "BUSINESS",
       "requiresActiveSubscription": true,
       "applicableSectors": ["HOSPITALITY_EVENTS"],
