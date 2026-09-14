@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { EnterpriseDomainConflictError, EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { GAMING_SESSION_STATUSES } from "@/lib/enterprise/gaming/domain";
+import { finalAmountFromGamingPricingSnapshot, resolveGamingPricingQuoteTx } from "@/lib/enterprise/gaming/pricing";
 import type { gamingSessionStartSchema, gamingSessionTransitionSchema } from "@/lib/enterprise/gaming/schemas";
 import { prisma } from "@/lib/prisma";
 import type { z } from "zod";
@@ -94,9 +95,10 @@ async function assertOptionalReferences(tx: Tx, organizationId: string, input: P
   if (serviceCatalogItemId) {
     const catalogItem = await tx.enterpriseCatalogItem.findFirst({
       where: { id: serviceCatalogItemId, organizationId, archivedAt: null, status: "ACTIVE" },
-      select: { id: true },
+      select: { id: true, itemType: true },
     });
     if (!catalogItem) throw new EnterpriseDomainError("GAMING_SESSION_CATALOG_ITEM_NOT_FOUND", 404);
+    if (catalogItem.itemType !== "SERVICE") throw new EnterpriseDomainError("GAMING_SESSION_CATALOG_ITEM_NOT_SERVICE", 409);
   }
 }
 
@@ -143,6 +145,7 @@ async function assertStationReady(tx: Tx, organizationId: string, stationId: str
 function sessionInclude() {
   return {
     station: { select: { id: true, stationCode: true, displayName: true, consoleFamily: true, maxPlayers: true } },
+    pricingRule: { select: { id: true, code: true, pricingMode: true, amount: true, currency: true } },
     transitions: {
       orderBy: { occurredAt: "desc" as const },
       take: 8,
@@ -151,14 +154,30 @@ function sessionInclude() {
   };
 }
 
+async function catalogServiceMap(organizationId: string, serviceIds: Array<string | null>) {
+  const ids = [...new Set(serviceIds.filter((id): id is string => Boolean(id)))];
+  if (!ids.length) return new Map<string, { id: string; code: string; name: string }>();
+  const services = await prisma.enterpriseCatalogItem.findMany({
+    where: { organizationId, id: { in: ids } },
+    select: { id: true, code: true, name: true },
+  });
+  return new Map(services.map((service) => [service.id, service]));
+}
+
 async function loadSessionResult(organizationId: string, sessionId: string) {
   const session = await prisma.enterpriseGamingSession.findFirst({
     where: { id: sessionId, organizationId, archivedAt: null },
     include: sessionInclude(),
   });
   if (!session) throw new EnterpriseDomainError("GAMING_SESSION_NOT_FOUND", 404);
+  const services = await catalogServiceMap(organizationId, [session.serviceCatalogItemId]);
   const serverNow = new Date();
-  return { ...session, timing: timingProjection(session, serverNow), serverNow: serverNow.toISOString() };
+  return {
+    ...session,
+    catalogService: session.serviceCatalogItemId ? services.get(session.serviceCatalogItemId) || null : null,
+    timing: timingProjection(session, serverNow),
+    serverNow: serverNow.toISOString(),
+  };
 }
 
 export async function listGamingSessions({
@@ -207,10 +226,15 @@ export async function listGamingSessions({
     }),
   ]);
 
+  const services = await catalogServiceMap(organizationId, items.map((item) => item.serviceCatalogItemId));
   const serverNow = new Date();
   const metrics = Object.fromEntries(grouped.map((row) => [row.status, row._count._all])) as Record<string, number>;
   return {
-    items: items.map((item) => ({ ...item, timing: timingProjection(item, serverNow) })),
+    items: items.map((item) => ({
+      ...item,
+      catalogService: item.serviceCatalogItemId ? services.get(item.serviceCatalogItemId) || null : null,
+      timing: timingProjection(item, serverNow),
+    })),
     serverNow: serverNow.toISOString(),
     pagination: { page: safePage, pageSize: safePageSize, total, pageCount: Math.max(1, Math.ceil(total / safePageSize)) },
     metrics: {
@@ -223,12 +247,20 @@ export async function listGamingSessions({
   };
 }
 
-export async function startGamingSession(organizationId: string, actorUserId: string, input: StartInput) {
+export async function startGamingSession(
+  organizationId: string,
+  actorUserId: string,
+  input: StartInput,
+  options: { canOverridePricing?: boolean } = {},
+) {
   const existing = await prisma.enterpriseGamingSession.findFirst({
     where: { organizationId, idempotencyKey: input.idempotencyKey },
     select: { id: true },
   });
   if (existing) return { session: await loadSessionResult(organizationId, existing.id), idempotent: true };
+
+  const hasOverride = input.priceOverrideAmount !== undefined && input.priceOverrideAmount !== null;
+  if (hasOverride && !options.canOverridePricing) throw new EnterpriseDomainError("GAMING_PRICING_OVERRIDE_FORBIDDEN", 403);
 
   try {
     const createdId = await prisma.$transaction(async (tx) => {
@@ -242,13 +274,41 @@ export async function startGamingSession(organizationId: string, actorUserId: st
       await assertStationReady(tx, organizationId, input.stationId);
 
       const now = new Date();
+      const serviceCatalogItemId = nullableId(input.serviceCatalogItemId);
+      let pricing: Awaited<ReturnType<typeof resolveGamingPricingQuoteTx>> | null = null;
+      if (serviceCatalogItemId) {
+        try {
+          pricing = await resolveGamingPricingQuoteTx({
+            tx,
+            organizationId,
+            serviceCatalogItemId,
+            stationId: input.stationId,
+            durationMinutes: input.durationMinutes,
+            playerCount: input.playerCount,
+            startAt: now,
+            overrideAmount: input.priceOverrideAmount,
+            overrideReason: input.priceOverrideReason,
+            overrideByUserId: hasOverride ? actorUserId : null,
+          });
+        } catch (error) {
+          if (error instanceof EnterpriseDomainError && error.code === "GAMING_PRICING_NO_MATCH") {
+            throw new EnterpriseDomainError("GAMING_SESSION_PRICING_REQUIRED", 409);
+          }
+          throw error;
+        }
+      }
+
       const session = await tx.enterpriseGamingSession.create({
         data: {
           organizationId,
           reference: `GS-${Date.now().toString(36).toUpperCase()}-${randomUUID().slice(0, 6).toUpperCase()}`,
           stationId: input.stationId,
           businessPartyId: nullableId(input.businessPartyId),
-          serviceCatalogItemId: nullableId(input.serviceCatalogItemId),
+          serviceCatalogItemId,
+          pricingRuleId: pricing?.rule.id || null,
+          pricingSnapshotJson: pricing?.snapshot as Prisma.InputJsonValue | undefined,
+          currency: pricing?.currency || null,
+          quotedAmount: pricing?.quotedAmount || null,
           status: "ACTIVE",
           startedAt: now,
           expectedEndAt: addMinutes(now, input.durationMinutes),
@@ -273,7 +333,16 @@ export async function startGamingSession(organizationId: string, actorUserId: st
           fromStatus: null,
           toStatus: "ACTIVE",
           actorUserId,
-          metadataJson: { stationId: input.stationId, durationMinutes: input.durationMinutes },
+          metadataJson: {
+            stationId: input.stationId,
+            durationMinutes: input.durationMinutes,
+            playerCount: input.playerCount,
+            serviceCatalogItemId,
+            pricingRuleId: pricing?.rule.id || null,
+            currency: pricing?.currency || null,
+            quotedAmount: pricing?.quotedAmount.toFixed(2) || null,
+            pricingOverride: hasOverride,
+          },
         },
       });
       return session.id;
@@ -369,6 +438,7 @@ export async function transitionGamingSession(
         const totalPausedSeconds = session.pausedSeconds + openPauseSeconds;
         const elapsedSeconds = secondsBetween(session.startedAt, now);
         const billableSeconds = Math.max(0, elapsedSeconds - (pauseBillable(session.timingPolicyJson) ? 0 : totalPausedSeconds));
+        const finalPricing = finalAmountFromGamingPricingSnapshot(session.pricingSnapshotJson, billableSeconds);
         nextStatus = "ENDED";
         data = {
           ...data,
@@ -377,8 +447,16 @@ export async function transitionGamingSession(
           pausedAt: null,
           pausedSeconds: totalPausedSeconds,
           billableSeconds,
+          ...(finalPricing ? { finalAmount: finalPricing.amount, currency: finalPricing.currency } : {}),
         };
-        metadata = { elapsedSeconds, pausedSeconds: totalPausedSeconds, billableSeconds };
+        metadata = {
+          elapsedSeconds,
+          pausedSeconds: totalPausedSeconds,
+          billableSeconds,
+          currency: finalPricing?.currency || session.currency,
+          finalAmount: finalPricing?.amount.toFixed(2) || null,
+          pricingAuthority: finalPricing ? "SNAPSHOT" : null,
+        };
       }
 
       const updated = await tx.enterpriseGamingSession.updateMany({
