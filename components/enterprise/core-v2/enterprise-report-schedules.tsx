@@ -53,6 +53,12 @@ function frequencyLabel(locale: string | null | undefined, value: string) {
   return enterpriseCoreT(locale, `reports.schedule.frequency.${value}` as EnterpriseCoreKey);
 }
 
+function deliveryStatusLabel(locale: string | null | undefined, value: string) {
+  const allowed = new Set(["ARCHIVE_PENDING", "ARCHIVED", "ARCHIVED_EMAIL_SENT", "EMAIL_UNAVAILABLE", "EMAIL_FAILED", "FAILED"]);
+  const normalized = allowed.has(value) ? value : "FAILED";
+  return enterpriseCoreT(locale, `reports.schedule.deliveryStatus.${normalized}` as EnterpriseCoreKey);
+}
+
 function dayItems(locale: string | null | undefined) {
   return [0, 1, 2, 3, 4, 5, 6].map((id) => ({ id: String(id), label: enterpriseCoreT(locale, `reports.schedule.weekday.${id}` as EnterpriseCoreKey) }));
 }
@@ -86,7 +92,7 @@ export function EnterpriseReportSchedules({ organizationId, canManage, locale, c
     setEmailConfigured(Boolean(body.emailDeliveryConfigured));
   }
 
-  useEffect(() => { void load(); }, [organizationId]);
+  useEffect(() => { if (canManage) void load(); }, [organizationId, canManage]);
   useEffect(() => { if (!catalog.some((item) => item.code === reportType) && catalog[0]) setReportType(catalog[0].code); }, [catalog, reportType]);
 
   const selectedCatalog = catalog.find((item) => item.code === reportType);
@@ -94,7 +100,7 @@ export function EnterpriseReportSchedules({ organizationId, canManage, locale, c
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy) return;
+    if (busy || !canManage) return;
     setBusy(true); setError(""); setMessage("");
     const form = new FormData(event.currentTarget);
     const recipients = String(form.get("recipientEmails") || "").split(/[;,\n]/).map((value) => value.trim()).filter(Boolean);
@@ -131,7 +137,7 @@ export function EnterpriseReportSchedules({ organizationId, canManage, locale, c
   }
 
   async function transition(schedule: Schedule, action: "ENABLE" | "DISABLE" | "ARCHIVE") {
-    if (busy) return;
+    if (busy || !canManage) return;
     setBusy(true); setError(""); setMessage("");
     try {
       await enterpriseV2Mutation(`/api/enterprise/${organizationId}/reports/schedules/${schedule.id}`, "PATCH", { action, revision: schedule.revision });
@@ -141,12 +147,14 @@ export function EnterpriseReportSchedules({ organizationId, canManage, locale, c
     } finally { setBusy(false); }
   }
 
+  if (!canManage) return null;
+
   return <>
     <ModuleSection
       title={t("reports.schedule.title")}
       description={t("reports.schedule.description")}
       count={`${items.length}`}
-      action={canManage ? <Button variant="outline" onClick={() => setOpen(true)}><Plus className="h-4 w-4" />{t("reports.schedule.new")}</Button> : null}
+      action={<Button variant="outline" onClick={() => setOpen(true)}><Plus className="h-4 w-4" />{t("reports.schedule.new")}</Button>}
     >
       {items.length ? <BusinessList ariaLabel={t("reports.schedule.title")}>
         {items.map((schedule) => <BusinessListItem
@@ -154,14 +162,14 @@ export function EnterpriseReportSchedules({ organizationId, canManage, locale, c
           title={schedule.name}
           status={<StatusBadge tone={schedule.isEnabled ? "success" : "neutral"}>{schedule.isEnabled ? t("reports.schedule.active") : t("reports.schedule.paused")}</StatusBadge>}
           meta={`${reportTypeLabel(locale, schedule.reportType)} · ${frequencyLabel(locale, schedule.frequency)} · ${schedule.timeZone}`}
-          description={`${t("reports.schedule.nextRun")}: ${formatEnterpriseDate(schedule.nextRunAt, locale)}${schedule.runs[0] ? ` · ${t("reports.schedule.lastRun")}: ${schedule.runs[0].deliveryStatus}` : ""}`}
-          actions={canManage ? <div className="flex flex-wrap gap-2">
+          description={`${t("reports.schedule.nextRun")}: ${formatEnterpriseDate(schedule.nextRunAt, locale)}${schedule.runs[0] ? ` · ${t("reports.schedule.lastRun")}: ${deliveryStatusLabel(locale, schedule.runs[0].deliveryStatus)}` : ""}`}
+          actions={<div className="flex flex-wrap gap-2">
             <Button size="sm" variant="outline" disabled={busy} onClick={() => void transition(schedule, schedule.isEnabled ? "DISABLE" : "ENABLE")}>
               {schedule.isEnabled ? <PauseCircle className="h-4 w-4" /> : <PlayCircle className="h-4 w-4" />}
               {schedule.isEnabled ? t("reports.schedule.pause") : t("reports.schedule.resume")}
             </Button>
             <Button size="sm" variant="outline" disabled={busy} onClick={() => void transition(schedule, "ARCHIVE")}><Archive className="h-4 w-4" />{t("reports.schedule.archive")}</Button>
-          </div> : undefined}
+          </div>}
         />)}
       </BusinessList> : <EmptyState compact title={t("reports.schedule.empty")} description={t("reports.schedule.emptyDescription")} />}
     </ModuleSection>
