@@ -191,9 +191,10 @@ export function EnterpriseGamingBookingsWorkspace({
       .then(async (response) => {
         const body = await response.json().catch(() => null) as { items?: CatalogService[]; pagination?: Pagination; message?: string; error?: string } | null;
         if (!response.ok || !body?.items || !body.pagination) throw new Error(body?.message || body?.error || copy.loadServicesFailed);
-        setConversionServices(body.items);
+        const items = body.items;
+        setConversionServices(items);
         setConversionPagination(body.pagination);
-        setConversionServiceId((current) => current && body.items.some((service) => service.id === current) ? current : body.items[0]?.id || "");
+        setConversionServiceId((current) => current && items.some((service) => service.id === current) ? current : items[0]?.id || "");
         setConversionQuote(null);
       })
       .catch((error: unknown) => {
