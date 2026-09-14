@@ -422,7 +422,7 @@ export function EnterpriseGamingSessionsWorkspace({
   );
 }
 
-function SessionDetail({ item, timing, copy, locale }: { item: SessionItem; timing: SessionItem["timing"]; copy: ReturnType<typeof gamingSessionsCopy>; locale: string }) {
+function SessionDetail({ item, timing, copy, locale }: { item: SessionItem; timing: SessionItem["timing"]; copy: ReturnType<typeof gamingSessionsCopy>; locale: string | null | undefined }) {
   const formatDate = (value: string | null) => value ? new Date(value).toLocaleString(locale === "en" ? "en" : "fr") : "—";
   return (
     <div className="grid min-w-0 gap-5">
