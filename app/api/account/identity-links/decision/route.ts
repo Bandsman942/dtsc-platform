@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import {
+  acceptAccountBoundEnterpriseIdentityInvitation,
+  refuseAccountBoundEnterpriseIdentityInvitation,
+} from "@/lib/enterprise/identity-links/account-invitation-decision-service";
+import {
   identityLinkErrorResponse,
   requireIdentityLinkSession,
 } from "@/lib/enterprise/identity-links/http";
@@ -20,6 +24,15 @@ const decisionSchema = z.object({
   revision: z.number().int().positive().optional(),
   reason: z.string().trim().min(3).max(500).optional(),
 });
+
+function requireAccountReference(linkId?: string, revision?: number) {
+  if (!linkId || !revision) {
+    throw new Error("IDENTITY_LINK_REFERENCE_REQUIRED");
+  }
+  return { linkId, revision };
+}
+
+type Params = never;
 
 export async function POST(req: Request) {
   const startedAt = Date.now();
@@ -50,26 +63,43 @@ export async function POST(req: Request) {
 
     let entityId: string | undefined;
     if (parsed.data.action === "ACCEPT") {
-      if (!parsed.data.token) {
+      if (parsed.data.token) {
+        const link = await acceptEnterpriseIdentityInvitation({ token: parsed.data.token, userId: session.userId });
+        entityId = link?.id;
+      } else if (parsed.data.linkId && parsed.data.revision) {
+        const link = await acceptAccountBoundEnterpriseIdentityInvitation({
+          linkId: parsed.data.linkId,
+          userId: session.userId,
+          revision: parsed.data.revision,
+        });
+        entityId = link?.id || parsed.data.linkId;
+      } else {
         return NextResponse.json(
-          { error: "IDENTITY_LINK_TOKEN_REQUIRED", message: "Le lien d’invitation est incomplet." },
+          { error: "IDENTITY_LINK_REFERENCE_REQUIRED", message: "Actualisez l’invitation avant de l’accepter." },
           { status: 400 },
         );
       }
-      const link = await acceptEnterpriseIdentityInvitation({ token: parsed.data.token, userId: session.userId });
-      entityId = link?.id;
     } else if (parsed.data.action === "REFUSE") {
-      if (!parsed.data.token) {
+      if (parsed.data.token) {
+        await refuseEnterpriseIdentityInvitation({
+          token: parsed.data.token,
+          userId: session.userId,
+          reason: parsed.data.reason,
+        });
+      } else if (parsed.data.linkId && parsed.data.revision) {
+        await refuseAccountBoundEnterpriseIdentityInvitation({
+          linkId: parsed.data.linkId,
+          userId: session.userId,
+          revision: parsed.data.revision,
+          reason: parsed.data.reason,
+        });
+        entityId = parsed.data.linkId;
+      } else {
         return NextResponse.json(
-          { error: "IDENTITY_LINK_TOKEN_REQUIRED", message: "Le lien d’invitation est incomplet." },
+          { error: "IDENTITY_LINK_REFERENCE_REQUIRED", message: "Actualisez l’invitation avant de la refuser." },
           { status: 400 },
         );
       }
-      await refuseEnterpriseIdentityInvitation({
-        token: parsed.data.token,
-        userId: session.userId,
-        reason: parsed.data.reason,
-      });
     } else {
       if (!parsed.data.linkId || !parsed.data.revision) {
         return NextResponse.json(
@@ -93,12 +123,22 @@ export async function POST(req: Request) {
       action: `ENTERPRISE_IDENTITY_USER_${parsed.data.action}`,
       entity: "EnterpriseIdentityLink",
       entityId,
-      metadata: { reasonProvided: Boolean(parsed.data.reason) },
+      metadata: {
+        reasonProvided: Boolean(parsed.data.reason),
+        decisionChannel: parsed.data.token ? "PRIVATE_TOKEN" : "ACCOUNT_RELATION_DETAIL",
+      },
       request: req,
     });
     await writeApiLog({ request: req, statusCode: 200, userId, startedAt });
     return NextResponse.json({ ok: true });
   } catch (error) {
+    if (error instanceof Error && error.message === "IDENTITY_LINK_REFERENCE_REQUIRED") {
+      await writeApiLog({ request: req, statusCode: 400, userId, startedAt });
+      return NextResponse.json(
+        { error: "IDENTITY_LINK_REFERENCE_REQUIRED", message: "Actualisez la relation avant de réessayer." },
+        { status: 400 },
+      );
+    }
     const response = identityLinkErrorResponse(error);
     await writeApiLog({ request: req, statusCode: response.status, userId, startedAt });
     return response;
