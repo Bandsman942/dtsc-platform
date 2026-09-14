@@ -28,7 +28,7 @@ const sessionMessages: Record<string, { fr: string; en: string }> = {
   GAMING_SESSION_CATALOG_ITEM_NOT_SERVICE: { fr: "L’article sélectionné n’est pas un service du catalogue. Choisissez un service actif.", en: "The selected catalog item is not a service. Choose an active service." },
   GAMING_SESSION_PRICING_REQUIRED: { fr: "Aucun tarif Gaming actif ne correspond à ce service, ce poste et ce créneau. Configurez un tarif ou choisissez une autre offre.", en: "No active Gaming price matches this service, station, and time slot. Configure pricing or select another offer." },
   GAMING_SESSION_IDEMPOTENCY_CONFLICT: { fr: "Cette commande a déjà été utilisée pour une autre opération. Actualisez puis réessayez.", en: "This command key was already used for another operation. Refresh and try again." },
-  GAMING_SESSION_TERMINAL: { fr: "Cette session est déjà terminée ou clôturée et ne peut plus être modifiée.", en: "This session is already ended or closed and can no longer be changed." },
+  GAMING_SESSION_TERMINAL: { fr: "Cette session est déjà terminée ou clôturée et ne peut plus être modifiée.", en: "This gaming session is already ended or closed and can no longer be changed." },
   GAMING_SESSION_NOT_ACTIVE: { fr: "Seule une session en cours peut être mise en pause.", en: "Only an active session can be paused." },
   GAMING_SESSION_NOT_PAUSED: { fr: "Seule une session en pause peut être reprise.", en: "Only a paused session can be resumed." },
   GAMING_SESSION_NOT_LIVE: { fr: "Cette action exige une session en cours ou en pause.", en: "This action requires an active or paused session." },
@@ -51,6 +51,7 @@ const bookingMessages: Record<string, { fr: string; en: string }> = {
   GAMING_BOOKING_NO_SHOW_INVALID: { fr: "Seule une réservation confirmée peut être marquée comme absence.", en: "Only a confirmed booking can be marked as a no-show." },
   GAMING_BOOKING_CANCEL_INVALID: { fr: "Cette réservation ne peut plus être annulée dans son état actuel.", en: "This booking can no longer be cancelled in its current state." },
   GAMING_BOOKING_CONVERT_INVALID: { fr: "Enregistrez d’abord l’arrivée du joueur avant de convertir la réservation en session.", en: "Check the player in before converting the booking into a session." },
+  GAMING_BOOKING_PRICING_SERVICE_REQUIRED: { fr: "Sélectionnez le service du Catalogue commun à facturer avant de démarrer la session réservée.", en: "Select the shared Catalog service to price before starting the booked session." },
   GAMING_BOOKING_SESSION_EXISTS: { fr: "Cette réservation a déjà été convertie en session. Ouvrez la session existante.", en: "This booking has already been converted into a session. Open the existing session." },
   GAMING_BOOKING_STATION_BUSY: { fr: "Le poste est actuellement occupé ou indisponible. Libérez-le ou choisissez un autre poste avant de démarrer la session réservée.", en: "The station is currently occupied or unavailable. Free it or choose another station before starting the booked session." },
   GAMING_BOOKING_STATION_INCIDENT: { fr: "Un incident majeur est ouvert sur ce poste. Résolvez-le avant de convertir la réservation en session.", en: "A major incident is open on this station. Resolve it before converting the booking into a session." },
@@ -88,7 +89,7 @@ export function gamingSessionErrorResponse(error: unknown, request: Request) {
 }
 
 export function gamingBookingErrorResponse(error: unknown, request: Request) {
-  return localizedMessage(bookingMessages, error, request) || enterpriseDomainErrorResponse(error, "GAMING_BOOKING_SAVE_FAILED", request);
+  return localizedMessage(bookingMessages, error, request) || localizedMessage(pricingMessages, error, request) || enterpriseDomainErrorResponse(error, "GAMING_BOOKING_SAVE_FAILED", request);
 }
 
 export function gamingPricingErrorResponse(error: unknown, request: Request) {
