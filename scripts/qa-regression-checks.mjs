@@ -30,42 +30,12 @@ const canonicalLaboratoryAssertion = 'containsAll(healthLaboratoryWorkspace, ["L
 const obsoleteEnterpriseAdminAssertion = 'containsAll(enterpriseAdminPage, [\'activeContext === "ORGANIZATION"\', "canManageEnterpriseAdministration(session.userId, organizationId)", \'canUseFeature(organizationId, "enterprise-admin")\', "getEnterpriseAdministrationDataset(organizationId)"])';
 const canonicalEnterpriseAdminAssertion = 'containsAll(enterpriseAdminPage, [\'activeContext === "ORGANIZATION"\', "requireEnterpriseMembership", "resolveEnterpriseModuleAccess", \'moduleCode: "ADMIN_DASHBOARD"\', \'action: "manage"\', "!membership || !adminAccess?.allowed", \'canUseFeature(organizationId, "enterprise-admin")\', "getEnterpriseAdministrationDataset(organizationId, user.id, administrationLocale)"])';
 
-let migratedSource = replaceExactlyOnce(
-  legacySource,
-  obsoleteAppointmentAssertion,
-  canonicalAppointmentAssertion,
-  "Rendez-vous historique",
-);
-migratedSource = replaceExactlyOnce(
-  migratedSource,
-  obsoleteConsultationAssertion,
-  canonicalConsultationAssertion,
-  "Consultations historique",
-);
-migratedSource = replaceExactlyOnce(
-  migratedSource,
-  obsoleteMedicalRecordsAssertion,
-  canonicalMedicalRecordsAssertion,
-  "Dossiers médicaux historique",
-);
-migratedSource = replaceExactlyOnce(
-  migratedSource,
-  obsoleteStaffAssertion,
-  canonicalStaffAssertion,
-  "Équipe médicale historique",
-);
-migratedSource = replaceExactlyOnce(
-  migratedSource,
-  obsoleteLaboratoryAssertion,
-  canonicalLaboratoryAssertion,
-  "Laboratoire historique",
-);
-migratedSource = replaceExactlyOnce(
-  migratedSource,
-  obsoleteEnterpriseAdminAssertion,
-  canonicalEnterpriseAdminAssertion,
-  "Enterprise Admin historique",
-);
+let migratedSource = replaceExactlyOnce(legacySource, obsoleteAppointmentAssertion, canonicalAppointmentAssertion, "Rendez-vous historique");
+migratedSource = replaceExactlyOnce(migratedSource, obsoleteConsultationAssertion, canonicalConsultationAssertion, "Consultations historique");
+migratedSource = replaceExactlyOnce(migratedSource, obsoleteMedicalRecordsAssertion, canonicalMedicalRecordsAssertion, "Dossiers médicaux historique");
+migratedSource = replaceExactlyOnce(migratedSource, obsoleteStaffAssertion, canonicalStaffAssertion, "Équipe médicale historique");
+migratedSource = replaceExactlyOnce(migratedSource, obsoleteLaboratoryAssertion, canonicalLaboratoryAssertion, "Laboratoire historique");
+migratedSource = replaceExactlyOnce(migratedSource, obsoleteEnterpriseAdminAssertion, canonicalEnterpriseAdminAssertion, "Enterprise Admin historique");
 
 const sourceUrl = `data:text/javascript;base64,${Buffer.from(migratedSource, "utf8").toString("base64")}`;
 await import(sourceUrl);
@@ -80,6 +50,7 @@ await import("./qa-607-tailoring-apparel.mjs");
 await import("./qa-608-tailoring-commercial-readiness.mjs");
 await import("./qa-639-gaming-lounge-foundation.mjs");
 await import("./qa-640-gaming-stations-assets.mjs");
+await import("./qa-641-gaming-sessions-engine.mjs");
 await import("./qa-erp-accounting-approvals-511.mjs");
 await import("./qa-billing-catalog-v2-checks.mjs");
 await import("./qa-hotfix-574-finance-owner-e2e-contract.mjs");
