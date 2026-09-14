@@ -221,7 +221,7 @@ export const gamingPricingSimulationSchema = z.object({
   stationId: z.string().trim().min(1).max(191),
   durationMinutes: z.coerce.number().int().min(1).max(24 * 60),
   playerCount: z.coerce.number().int().min(1).max(16).default(1),
-  startAt: z.coerce.date().optional(),
+  startAt: optionalDate,
   priceOverrideAmount: optionalPricingAmount,
   priceOverrideReason: z.string().trim().min(8).max(500).optional().nullable(),
 }).superRefine((value, ctx) => {
