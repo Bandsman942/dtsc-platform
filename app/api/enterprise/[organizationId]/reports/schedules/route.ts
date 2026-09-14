@@ -15,11 +15,11 @@ export async function GET(req: Request, { params }: Params) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { organizationId } = await params;
-  const access = await getEnterpriseFinanceAccess({ session, organizationId, moduleCode: "REPORTS", action: "read" });
-  if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const access = await getEnterpriseFinanceAccess({ session, organizationId, moduleCode: "REPORTS", action: "manage" });
+  if (!access?.canManage) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const schedules = await listEnterpriseReportSchedules(organizationId);
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "report-schedules" } });
-  return NextResponse.json({ items: schedules, canManage: access.canManage, emailDeliveryConfigured: isReportEmailDeliveryConfigured() });
+  return NextResponse.json({ items: schedules, canManage: true, emailDeliveryConfigured: isReportEmailDeliveryConfigured() });
 }
 
 export async function POST(req: Request, { params }: Params) {
