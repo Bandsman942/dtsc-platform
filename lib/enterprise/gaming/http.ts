@@ -25,6 +25,8 @@ const sessionMessages: Record<string, { fr: string; en: string }> = {
   GAMING_SESSION_STATION_BUSY: { fr: "Ce poste est déjà occupé par une autre session. Actualisez le tableau et choisissez un poste disponible.", en: "This station is already occupied by another session. Refresh the board and select an available station." },
   GAMING_SESSION_CUSTOMER_NOT_FOUND: { fr: "Le client sélectionné n’existe pas ou n’est pas actif dans cette entreprise.", en: "The selected customer does not exist or is not active in this organization." },
   GAMING_SESSION_CATALOG_ITEM_NOT_FOUND: { fr: "Le service du catalogue sélectionné n’existe pas ou n’est pas actif dans cette entreprise.", en: "The selected catalog service does not exist or is not active in this organization." },
+  GAMING_SESSION_CATALOG_ITEM_NOT_SERVICE: { fr: "L’article sélectionné n’est pas un service du catalogue. Choisissez un service actif.", en: "The selected catalog item is not a service. Choose an active service." },
+  GAMING_SESSION_PRICING_REQUIRED: { fr: "Aucun tarif Gaming actif ne correspond à ce service, ce poste et ce créneau. Configurez un tarif ou choisissez une autre offre.", en: "No active Gaming price matches this service, station, and time slot. Configure pricing or select another offer." },
   GAMING_SESSION_IDEMPOTENCY_CONFLICT: { fr: "Cette commande a déjà été utilisée pour une autre opération. Actualisez puis réessayez.", en: "This command key was already used for another operation. Refresh and try again." },
   GAMING_SESSION_TERMINAL: { fr: "Cette session est déjà terminée ou clôturée et ne peut plus être modifiée.", en: "This session is already ended or closed and can no longer be changed." },
   GAMING_SESSION_NOT_ACTIVE: { fr: "Seule une session en cours peut être mise en pause.", en: "Only an active session can be paused." },
@@ -55,6 +57,20 @@ const bookingMessages: Record<string, { fr: string; en: string }> = {
   GAMING_BOOKING_STATION_MAINTENANCE: { fr: "Une maintenance est en cours sur ce poste. Terminez-la avant de convertir la réservation en session.", en: "Maintenance is in progress on this station. Complete it before converting the booking into a session." },
 };
 
+const pricingMessages: Record<string, { fr: string; en: string }> = {
+  GAMING_PRICING_RULE_NOT_FOUND: { fr: "Cette règle tarifaire est introuvable ou a été archivée.", en: "This pricing rule could not be found or was archived." },
+  GAMING_PRICING_CODE_DUPLICATE: { fr: "Ce code tarifaire existe déjà. Choisissez un autre code.", en: "This pricing code already exists. Choose another code." },
+  GAMING_PRICING_SERVICE_NOT_FOUND: { fr: "Le service sélectionné n’existe pas ou n’est pas actif dans le catalogue de cette entreprise.", en: "The selected service does not exist or is not active in this organization catalog." },
+  GAMING_PRICING_SERVICE_NOT_SERVICE: { fr: "L’article sélectionné n’est pas un service. Les offres Gaming doivent référencer un service du catalogue commun.", en: "The selected catalog item is not a service. Gaming offers must reference a service from the shared catalog." },
+  GAMING_PRICING_STATION_NOT_FOUND: { fr: "Le poste sélectionné n’existe pas dans cette entreprise.", en: "The selected station does not exist in this organization." },
+  GAMING_PRICING_CURRENCY_INVALID: { fr: "La devise sélectionnée n’est pas active dans le référentiel Finance de cette entreprise.", en: "The selected currency is not active in this organization Finance currency registry." },
+  GAMING_PRICING_RULE_INVALID: { fr: "La règle tarifaire est incohérente. Vérifiez durée, créneau, joueurs et période de validité.", en: "The pricing rule is inconsistent. Check duration, time slot, players, and validity dates." },
+  GAMING_PRICING_NO_MATCH: { fr: "Aucun tarif Gaming actif ne correspond à cette simulation.", en: "No active Gaming pricing rule matches this simulation." },
+  GAMING_PRICING_OVERRIDE_REASON_REQUIRED: { fr: "Une dérogation tarifaire exige un motif explicite.", en: "A pricing override requires an explicit reason." },
+  GAMING_PRICING_OVERRIDE_FORBIDDEN: { fr: "Vous n’avez pas le droit d’appliquer une dérogation tarifaire.", en: "You are not allowed to apply a pricing override." },
+  GAMING_PRICING_TERMINAL: { fr: "Cette règle est archivée et ne peut plus être modifiée.", en: "This rule is archived and can no longer be changed." },
+};
+
 function localizedMessage(messages: Record<string, { fr: string; en: string }>, error: unknown, request: Request) {
   if (error instanceof EnterpriseDomainError && messages[error.code]) {
     const locale = request.headers.get("accept-language")?.toLowerCase().startsWith("en") ? "en" : "fr";
@@ -68,9 +84,13 @@ export function gamingStationErrorResponse(error: unknown, request: Request) {
 }
 
 export function gamingSessionErrorResponse(error: unknown, request: Request) {
-  return localizedMessage(sessionMessages, error, request) || enterpriseDomainErrorResponse(error, "GAMING_SESSION_SAVE_FAILED", request);
+  return localizedMessage(sessionMessages, error, request) || localizedMessage(pricingMessages, error, request) || enterpriseDomainErrorResponse(error, "GAMING_SESSION_SAVE_FAILED", request);
 }
 
 export function gamingBookingErrorResponse(error: unknown, request: Request) {
   return localizedMessage(bookingMessages, error, request) || enterpriseDomainErrorResponse(error, "GAMING_BOOKING_SAVE_FAILED", request);
+}
+
+export function gamingPricingErrorResponse(error: unknown, request: Request) {
+  return localizedMessage(pricingMessages, error, request) || enterpriseDomainErrorResponse(error, "GAMING_PRICING_SAVE_FAILED", request);
 }
