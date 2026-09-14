@@ -50,6 +50,13 @@ for (const marker of ["isSameOriginRequest", "reportScheduleUpdateSchema.safePar
   expect(scheduleActionPath, scheduleAction, marker, `mutation planification protégée: ${marker}`);
 }
 
+const scheduleUiPath = "components/enterprise/core-v2/enterprise-report-schedules.tsx";
+const scheduleUi = read(scheduleUiPath);
+expect(scheduleUiPath, scheduleUi, "if (canManage) void load()", "aucun chargement des destinataires sans capacité manage");
+expect(scheduleUiPath, scheduleUi, "if (!canManage) return null", "surface de planification masquée aux non-gestionnaires");
+expect(scheduleUiPath, scheduleUi, "deliveryStatusLabel", "statuts de livraison projetés vers des libellés métier");
+forbid(scheduleUiPath, scheduleUi, "schedule.runs[0].deliveryStatus}`", "aucun code technique de livraison affiché directement");
+
 const scheduleServicePath = "lib/enterprise/reporting/schedule-service.ts";
 const scheduleService = read(scheduleServicePath);
 expect(scheduleServicePath, scheduleService, "enqueueFinanceReportGeneration", "réutilisation de la file canonique de génération");
@@ -57,6 +64,12 @@ expect(scheduleServicePath, scheduleService, "generationEventId", "liaison de l�
 expect(scheduleServicePath, scheduleService, "REPORT_EMAIL_DELIVERY_UNAVAILABLE", "échec explicite lorsque l’e-mail n’est pas configuré");
 expect(scheduleServicePath, scheduleService, "organizationId", "isolation tenant des planifications");
 forbid(scheduleServicePath, scheduleService, /create\s*\(\s*\{[\s\S]{0,200}EnterpriseDomainEvent/i, "aucune deuxième file de jobs créée dans le service de planification");
+
+const workerPath = "app/api/internal/report-schedules/process/route.ts";
+const worker = read(workerPath);
+expect(workerPath, worker, "process.env.CRON_SECRET", "secret cron existant réutilisé");
+expect(workerPath, worker, "process.env.WORKFLOW_WORKER_SECRET", "secret worker existant accepté");
+forbid(workerPath, worker, "REPORT_SCHEDULE_WORKER_SECRET", "aucune nouvelle variable secrète dédiée inutile");
 
 const schedulingSchemaPath = "prisma/enterprise-report-scheduling.prisma";
 const schedulingSchema = read(schedulingSchemaPath);
@@ -127,9 +140,23 @@ expect(cronPath, cron, "/api/internal/report-schedules/process?batch=20", "worke
 
 const i18nPath = "lib/enterprise-core-i18n.ts";
 const i18n = read(i18nPath);
-for (const key of ["reports.schedule.title", "reports.schedule.emailUnavailable", "reports.schedule.frequency.DAILY", "reports.schedule.period.CUSTOM"]) {
+for (const key of [
+  "reports.schedule.title",
+  "reports.schedule.emailUnavailable",
+  "reports.schedule.frequency.DAILY",
+  "reports.schedule.period.CUSTOM",
+  "reports.schedule.deliveryStatus.ARCHIVE_PENDING",
+  "reports.schedule.deliveryStatus.ARCHIVED_EMAIL_SENT",
+  "reports.schedule.deliveryStatus.EMAIL_FAILED",
+]) {
   const count = i18n.split(`\"${key}\"`).length - 1;
   if (count < 3) failures.push(`${i18nPath}: contrat absent — clé ${key} doit exister dans le type, FR et EN`);
+}
+
+const docsPath = "docs/REPORTING_2_634.md";
+const docs = read(docsPath);
+for (const marker of ["## IA DTSC — analyse de rapport", "## Migration", "## OWNER_E2E requis", "## Rollback", "## Release note"]) {
+  expect(docsPath, docs, marker, `documentation obligatoire: ${marker}`);
 }
 
 if (failures.length) {
