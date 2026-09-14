@@ -1,0 +1,148 @@
+model EnterpriseGamingConfiguration {
+  id              String   @id @default(cuid())
+  organizationId  String   @unique
+  settingsJson    Json?
+  revision        Int      @default(1)
+  createdByUserId String
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
+model EnterpriseGamingStationProfile {
+  id              String   @id @default(cuid())
+  organizationId  String
+  assetId         String
+  stationCode     String
+  displayName     String?
+  consoleFamily   String?
+  maxPlayers      Int      @default(2)
+  sortOrder       Int      @default(0)
+  status          String   @default("AVAILABLE")
+  notes           String?
+  revision        Int      @default(1)
+  createdByUserId String
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  archivedAt      DateTime?
+  sessions        EnterpriseGamingSession[]
+  bookings        EnterpriseGamingBooking[]
+  pricingRules    EnterpriseGamingPricingRule[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, assetId], map: "GamingStation_org_asset_key")
+  @@unique([organizationId, stationCode], map: "GamingStation_org_code_key")
+  @@index([organizationId, status, sortOrder])
+  @@index([organizationId, consoleFamily, status])
+  @@index([archivedAt])
+}
+
+model EnterpriseGamingBooking {
+  id                String   @id @default(cuid())
+  organizationId    String
+  reference         String
+  stationId         String
+  businessPartyId   String?
+  scheduledStartAt  DateTime
+  scheduledEndAt    DateTime
+  playerCount       Int      @default(1)
+  status            String   @default("DRAFT")
+  notes             String?
+  idempotencyKey    String?
+  revision          Int      @default(1)
+  createdByUserId   String
+  updatedByUserId   String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  archivedAt        DateTime?
+  station           EnterpriseGamingStationProfile @relation(fields: [organizationId, stationId], references: [organizationId, id], onDelete: Restrict)
+  session           EnterpriseGamingSession? @relation("GamingBookingSession")
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, reference], map: "GamingBooking_org_reference_key")
+  @@unique([organizationId, idempotencyKey], map: "GamingBooking_org_idempotency_key")
+  @@index([organizationId, stationId, status, scheduledStartAt])
+  @@index([organizationId, businessPartyId, status])
+  @@index([organizationId, status, scheduledStartAt])
+  @@index([archivedAt])
+}
+
+model EnterpriseGamingPricingRule {
+  id                      String   @id @default(cuid())
+  organizationId          String
+  code                    String
+  serviceCatalogItemId    String
+  stationId               String?
+  pricingMode             String
+  amount                  Decimal  @db.Decimal(18, 2)
+  currency                String
+  durationMinutes         Int?
+  billingIncrementMinutes Int?
+  validFrom               DateTime?
+  validUntil              DateTime?
+  dayOfWeekMask           Int?
+  startMinuteOfDay        Int?
+  endMinuteOfDay          Int?
+  priority                Int      @default(100)
+  status                  String   @default("DRAFT")
+  ruleJson                Json?
+  revision                Int      @default(1)
+  createdByUserId         String
+  updatedByUserId         String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  archivedAt              DateTime?
+  station                 EnterpriseGamingStationProfile? @relation(fields: [organizationId, stationId], references: [organizationId, id], onDelete: Restrict)
+  sessions                EnterpriseGamingSession[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code], map: "GamingPricingRule_org_code_key")
+  @@index([organizationId, serviceCatalogItemId, status])
+  @@index([organizationId, stationId, status])
+  @@index([organizationId, status, validFrom])
+  @@index([archivedAt])
+}
+
+model EnterpriseGamingSession {
+  id                  String   @id @default(cuid())
+  organizationId      String
+  reference           String
+  stationId           String
+  bookingId           String?
+  businessPartyId     String?
+  serviceCatalogItemId String?
+  pricingRuleId       String?
+  status              String   @default("WAITING")
+  startedAt           DateTime?
+  expectedEndAt       DateTime?
+  endedAt             DateTime?
+  pausedSeconds       Int      @default(0)
+  billableSeconds     Int?
+  pricingSnapshotJson Json?
+  currency            String?
+  quotedAmount        Decimal? @db.Decimal(18, 2)
+  finalAmount         Decimal? @db.Decimal(18, 2)
+  idempotencyKey      String?
+  revision            Int      @default(1)
+  createdByUserId     String
+  updatedByUserId     String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  archivedAt          DateTime?
+  station             EnterpriseGamingStationProfile @relation(fields: [organizationId, stationId], references: [organizationId, id], onDelete: Restrict)
+  booking             EnterpriseGamingBooking? @relation("GamingBookingSession", fields: [organizationId, bookingId], references: [organizationId, id], onDelete: Restrict)
+  pricingRule         EnterpriseGamingPricingRule? @relation(fields: [organizationId, pricingRuleId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, reference], map: "GamingSession_org_reference_key")
+  @@unique([organizationId, bookingId], map: "GamingSession_org_booking_key")
+  @@unique([organizationId, idempotencyKey], map: "GamingSession_org_idempotency_key")
+  @@index([organizationId, stationId, status, startedAt])
+  @@index([organizationId, businessPartyId, status])
+  @@index([organizationId, status, endedAt])
+  @@index([organizationId, serviceCatalogItemId, status])
+  @@index([archivedAt])
+}
