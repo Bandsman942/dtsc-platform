@@ -152,8 +152,10 @@ includesAll(workspace, [
   "/assets/${incidentFor.asset.id}/incidents",
   "/enterprise-modules/ASSETS_MAINTENANCE",
   'action: "ARCHIVE"',
-  'action: "BLOCK"',
-  'action: "SET_AVAILABLE"',
+  'action: "BLOCK" | "SET_AVAILABLE"',
+  'stationTransition(station, "BLOCK")',
+  'stationTransition(station, "SET_AVAILABLE")',
+  "action,\n        revision: station.revision",
   "useToastMessage",
 ], "station workspace UX");
 
