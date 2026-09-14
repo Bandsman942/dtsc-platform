@@ -9,9 +9,7 @@ ALTER TABLE "EnterpriseGamingBooking"
   ADD CONSTRAINT "EnterpriseGamingBooking_schedule_check"
     CHECK ("scheduledEndAt" > "scheduledStartAt"),
   ADD CONSTRAINT "EnterpriseGamingBooking_player_count_check"
-    CHECK ("playerCount" >= 1 AND "playerCount" <= 16),
-  ADD CONSTRAINT "EnterpriseGamingBooking_status_check"
-    CHECK ("status" IN ('DRAFT', 'CONFIRMED', 'CHECKED_IN', 'NO_SHOW', 'CANCELLED', 'CONVERTED'));
+    CHECK ("playerCount" >= 1 AND "playerCount" <= 16);
 
 CREATE TABLE "EnterpriseGamingBookingTransition" (
   "id" TEXT NOT NULL,
