@@ -1,4 +1,4 @@
-# PR #634 — Reporting 2.0 evidence
+# Issue #634 / PR #635 — Reporting 2.0 evidence
 
 Ce document suit la convention de preuve de `docs/CONTRIBUTING.md`. Une inspection de code ou l’ajout d’un script QA ne vaut pas exécution.
 
