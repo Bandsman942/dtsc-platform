@@ -16,17 +16,21 @@ const access = read("lib/enterprise/gaming/access.ts");
 const schemas = read("lib/enterprise/gaming/schemas.ts");
 const pricing = read("lib/enterprise/gaming/pricing.ts");
 const sessions = read("lib/enterprise/gaming/sessions.ts");
+const bookings = read("lib/enterprise/gaming/bookings.ts");
 const http = read("lib/enterprise/gaming/http.ts");
 const pricingRoute = read("app/api/enterprise/[organizationId]/gaming/pricing/route.ts");
 const pricingMutationRoute = read("app/api/enterprise/[organizationId]/gaming/pricing/[ruleId]/route.ts");
 const simulationRoute = read("app/api/enterprise/[organizationId]/gaming/pricing/simulate/route.ts");
 const sessionsRoute = read("app/api/enterprise/[organizationId]/gaming/sessions/route.ts");
 const sessionMutationRoute = read("app/api/enterprise/[organizationId]/gaming/sessions/[sessionId]/route.ts");
+const bookingMutationRoute = read("app/api/enterprise/[organizationId]/gaming/bookings/[bookingId]/route.ts");
 const pricingPage = read("app/enterprise-modules/GAMING_PRICING_PACKAGES/page.tsx");
 const pricingWorkspace = read("components/enterprise/gaming/enterprise-gaming-pricing-workspace.tsx");
 const pricingCopy = read("components/enterprise/gaming/gaming-pricing-i18n.ts");
 const sessionsWorkspace = read("components/enterprise/gaming/enterprise-gaming-sessions-workspace.tsx");
 const sessionsCopy = read("components/enterprise/gaming/gaming-sessions-i18n.ts");
+const bookingsWorkspace = read("components/enterprise/gaming/enterprise-gaming-bookings-workspace.tsx");
+const bookingsCopy = read("components/enterprise/gaming/gaming-bookings-i18n.ts");
 const prismaSchema = read("prisma/enterprise-gaming.prisma");
 const foundationMigration = read("prisma/migrations/20260914163000_gaming_lounge_foundation/migration.sql");
 const docs = read("docs/ERP_GAMING_LOUNGE.md");
@@ -65,6 +69,7 @@ includesAll(schemas, [
   "gamingPricingRuleUpdateSchema",
   "gamingPricingSimulationSchema",
   "startAt: optionalDate",
+  'value.action === "CONVERT" && !value.serviceCatalogItemId',
   "FIXED_DURATION",
   "PER_MINUTE",
   "PER_HOUR",
@@ -136,11 +141,24 @@ includesAll(sessions, [
 ], "session pricing integration");
 check(!sessions.includes("finalAmountFromGamingPricingRule"), "session END must not re-rate from the current pricing rule");
 
+includesAll(bookings, [
+  "resolveGamingPricingQuoteTx",
+  "serviceCatalogItemId: input.serviceCatalogItemId",
+  "pricingRuleId: pricing.rule.id",
+  "pricingSnapshotJson: pricing.snapshot",
+  "currency: pricing.currency",
+  "quotedAmount: pricing.quotedAmount",
+  'source: "BOOKING"',
+], "priced booking conversion");
+check(!bookings.includes("enterpriseSale.create"), "booking conversion must not create a sale in #643");
+check(!bookings.includes("enterprisePayment.create"), "booking conversion must not create a payment in #643");
+
 includesAll(pricingRoute, ["getEnterpriseGamingPricingAccess", 'moduleCode: "CATALOG"', "getEnterpriseGamingStationAccess", "gamingPricingRuleCreateSchema", "createGamingPricingRule", "listGamingPricingRules", "writeAuditLog", "writeApiLog", "await rateLimit", "isSameOriginRequest"], "pricing collection API");
 includesAll(pricingMutationRoute, ["gamingPricingRuleUpdateSchema", 'parsed.data.action === "ACTIVATE"', 'parsed.data.action === "ARCHIVE"', 'action: privilegedAction ? "manage" : "write"', "updateGamingPricingRule", "writeAuditLog"], "pricing lifecycle API");
 includesAll(simulationRoute, ["gamingPricingSimulationSchema", "simulateGamingPricing", "getEnterpriseGamingPricingAccess", "getEnterpriseGamingSessionAccess", "ENTERPRISE_GAMING_PRICING_OVERRIDE_SIMULATED", "writeApiLog"], "pricing simulation API");
 includesAll(sessionsRoute, ["getEnterpriseGamingPricingAccess", "canOverridePricing", "priceOverrideAmount", "priceOverrideReason", "pricingRuleId", "quotedAmount"], "priced session start API");
 includesAll(sessionMutationRoute, ["pricingRuleId", "quotedAmount", "finalAmount"], "session final pricing audit");
+includesAll(bookingMutationRoute, ["getEnterpriseGamingPricingAccess", 'moduleCode: "CATALOG"', 'parsed.data.action === "CONVERT"', "serviceCatalogItemId"], "priced booking conversion API");
 
 includesAll(pricingPage, ["resolveEnterpriseModuleCapabilities", 'moduleCode: "GAMING_PRICING_PACKAGES"', "EnterpriseGamingPricingWorkspace", "AppShell"], "pricing module page");
 includesAll(pricingWorkspace, [
@@ -163,11 +181,13 @@ includesAll(pricingWorkspace, [
   'className="h-[92dvh]"',
 ], "pricing workspace UX");
 includesAll(sessionsWorkspace, ["/gaming/pricing/simulate", "serviceCatalogItemId", "playerCount", "priceOverrideAmount", "priceOverrideReason", "quotedAmount", "finalAmount", "formatEnterpriseAmount"], "session price preview UX");
-check(!/MAX_STATIONS\s*=\s*5/i.test(pricingWorkspace + sessionsWorkspace), "pricing/session UI must not impose a five-station limit");
+includesAll(bookingsWorkspace, ["/gaming/pricing/simulate", "conversionServiceId", "conversionQuote", "serviceCatalogItemId", "formatEnterpriseAmount", "itemType=SERVICE", "BookingConversionDialog"], "booked session price preview UX");
+check(!/MAX_STATIONS\s*=\s*5/i.test(pricingWorkspace + sessionsWorkspace + bookingsWorkspace), "pricing/session UI must not impose a five-station limit");
 
 includesAll(pricingCopy, ["Tarifs & forfaits Gaming", "Gaming pricing & packages", "Simulation tarifaire serveur", "Server pricing simulation"], "pricing FR EN copy");
 includesAll(sessionsCopy, ["Aperçu tarifaire", "Pricing preview", "Montant final", "Final amount"], "sessions pricing FR EN copy");
-includesAll(http, ["gamingPricingErrorResponse", "GAMING_PRICING_CURRENCY_INVALID", "GAMING_PRICING_OVERRIDE_FORBIDDEN", "GAMING_SESSION_PRICING_REQUIRED"], "pricing business errors");
+includesAll(bookingsCopy, ["Session tarifée", "Priced session", "Service du Catalogue", "Catalog service"], "booking conversion pricing copy");
+includesAll(http, ["gamingPricingErrorResponse", "GAMING_PRICING_CURRENCY_INVALID", "GAMING_PRICING_OVERRIDE_FORBIDDEN", "GAMING_SESSION_PRICING_REQUIRED", "GAMING_BOOKING_PRICING_SERVICE_REQUIRED", "localizedMessage(pricingMessages, error, request)"], "pricing business errors");
 includesAll(docs, ["#643", "GAMING_PRICING_PACKAGES", "EnterpriseCatalogItem", "snapshot", "devise", "simulation"], "gaming pricing documentation");
 check(regression.includes('await import("./qa-643-gaming-pricing.mjs");'), "qa:regression must execute #643 Gaming Pricing QA");
 
