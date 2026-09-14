@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { CalendarClock, CheckCircle2, LogIn, Pencil, Play, Plus, UserX, XCircle } from "lucide-react";
-import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
+import { Field, NativeSelect, formatEnterpriseAmount } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { gamingBookingsCopy } from "@/components/enterprise/gaming/gaming-bookings-i18n";
 import { ProfessionalError, ProfessionalFormSection, ProfessionalLoading, ProfessionalSearch, ProfessionalTabs, professionalMutation, useProfessionalCollection } from "@/components/enterprise/professional/professional-erp-ui";
 import { useAppLocale } from "@/components/i18n/locale-provider";
@@ -45,6 +45,8 @@ type BookingItem = {
 };
 type Station = { id: string; stationCode: string; displayName: string | null; consoleFamily: string | null; effectiveStatus: string; maxPlayers?: number };
 type Customer = { id: string; code: string; legalName: string; displayName: string | null; primaryEmail?: string | null };
+type CatalogService = { id: string; code: string; name: string; itemType: string; status?: string };
+type PricingQuote = { pricingRuleId: string; pricingRuleCode: string; currency: string; quotedAmount: string; service: { id: string; code: string; name: string } };
 type Pagination = { page: number; pageSize: number; total: number; pageCount: number };
 type Filter = "ALL" | BookingStatus;
 type ViewMode = "LIST" | "CALENDAR";
@@ -110,6 +112,14 @@ export function EnterpriseGamingBookingsWorkspace({
   const [customerLoading, setCustomerLoading] = useState(false);
   const [customerError, setCustomerError] = useState("");
 
+  const [conversionServices, setConversionServices] = useState<CatalogService[]>([]);
+  const [conversionServiceId, setConversionServiceId] = useState("");
+  const [conversionServicePage, setConversionServicePage] = useState(1);
+  const [conversionPagination, setConversionPagination] = useState<Pagination>({ page: 1, pageSize: 20, total: 0, pageCount: 1 });
+  const [conversionLoading, setConversionLoading] = useState(false);
+  const [conversionError, setConversionError] = useState("");
+  const [conversionQuote, setConversionQuote] = useState<PricingQuote | null>(null);
+
   useToastMessage(message, "error");
   useToastMessage(success, "success");
 
@@ -127,6 +137,7 @@ export function EnterpriseGamingBookingsWorkspace({
   });
 
   const lookupOpen = createOpen || Boolean(editFor);
+  const conversionOpen = confirmState?.kind === "CONVERT";
 
   useEffect(() => {
     if (!lookupOpen) return;
@@ -171,6 +182,28 @@ export function EnterpriseGamingBookingsWorkspace({
     return () => controller.abort();
   }, [copy.loadCustomersFailed, customerPage, customerSearch, lookupOpen, organizationId, refreshKey]);
 
+  useEffect(() => {
+    if (!conversionOpen) return;
+    const controller = new AbortController();
+    setConversionLoading(true);
+    setConversionError("");
+    fetch(`/api/enterprise/${organizationId}/catalog?page=${conversionServicePage}&pageSize=20&itemType=SERVICE&status=ACTIVE`, { cache: "no-store", signal: controller.signal })
+      .then(async (response) => {
+        const body = await response.json().catch(() => null) as { items?: CatalogService[]; pagination?: Pagination; message?: string; error?: string } | null;
+        if (!response.ok || !body?.items || !body.pagination) throw new Error(body?.message || body?.error || copy.loadServicesFailed);
+        setConversionServices(body.items);
+        setConversionPagination(body.pagination);
+        setConversionServiceId((current) => current && body.items.some((service) => service.id === current) ? current : body.items[0]?.id || "");
+        setConversionQuote(null);
+      })
+      .catch((error: unknown) => {
+        if ((error as { name?: string })?.name === "AbortError") return;
+        setConversionError(error instanceof Error ? error.message : copy.loadServicesFailed);
+      })
+      .finally(() => setConversionLoading(false));
+    return () => controller.abort();
+  }, [conversionOpen, conversionServicePage, copy.loadServicesFailed, organizationId]);
+
   const calendarGroups = useMemo(() => {
     const formatter = new Intl.DateTimeFormat(locale === "en" ? "en" : "fr", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
     const sorted = [...collection.items].sort((a, b) => new Date(a.scheduledStartAt).getTime() - new Date(b.scheduledStartAt).getTime());
@@ -197,10 +230,18 @@ export function EnterpriseGamingBookingsWorkspace({
     setSuccess("");
   }
 
+  function resetConversion() {
+    setConversionServicePage(1);
+    setConversionServiceId("");
+    setConversionQuote(null);
+    setConversionError("");
+  }
+
   function refreshAndClose() {
     setDetail(null);
     setEditFor(null);
     setConfirmState(null);
+    resetConversion();
     setRefreshKey((value) => value + 1);
   }
 
@@ -276,8 +317,33 @@ export function EnterpriseGamingBookingsWorkspace({
     }
   }
 
+  async function previewConversionPrice() {
+    if (!confirmState || confirmState.kind !== "CONVERT" || !conversionServiceId) return;
+    resetFeedback();
+    setBusy(true);
+    setConversionQuote(null);
+    try {
+      const body = await professionalMutation(`/api/enterprise/${organizationId}/gaming/pricing/simulate`, {
+        serviceCatalogItemId: conversionServiceId,
+        stationId: confirmState.item.stationId,
+        durationMinutes: minutesBetween(confirmState.item.scheduledStartAt, confirmState.item.scheduledEndAt),
+        playerCount: confirmState.item.playerCount,
+      }) as { quote?: PricingQuote };
+      if (!body.quote) throw new Error(copy.previewRequired);
+      setConversionQuote(body.quote);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : copy.previewRequired);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function runCommand() {
     if (!confirmState) return;
+    if (confirmState.kind === "CONVERT" && (!conversionServiceId || !conversionQuote || conversionQuote.service.id !== conversionServiceId)) {
+      setMessage(copy.previewRequired);
+      return;
+    }
     resetFeedback();
     setBusy(true);
     try {
@@ -285,6 +351,7 @@ export function EnterpriseGamingBookingsWorkspace({
         action: confirmState.kind,
         revision: confirmState.item.revision,
         idempotencyKey: newCommandKey(),
+        ...(confirmState.kind === "CONVERT" ? { serviceCatalogItemId: conversionServiceId } : {}),
       }, "PATCH");
       const successByKind = {
         CONFIRM: copy.confirmedSuccess,
@@ -309,7 +376,7 @@ export function EnterpriseGamingBookingsWorkspace({
       { id: "edit", label: copy.edit, icon: Pencil, hidden: !collection.canWrite || !editable, disabled: busy, onSelect: () => { setDetail(null); resetFeedback(); setStationPage(1); setCustomerPage(1); setCustomerSearch(""); setEditFor(item); } },
       { id: "confirm", label: copy.confirm, icon: CheckCircle2, hidden: !collection.canWrite || item.status !== "DRAFT", disabled: busy, onSelect: () => { setDetail(null); setConfirmState({ kind: "CONFIRM", item }); } },
       { id: "check-in", label: copy.checkIn, icon: LogIn, hidden: !collection.canWrite || item.status !== "CONFIRMED", disabled: busy, onSelect: () => { setDetail(null); setConfirmState({ kind: "CHECK_IN", item }); } },
-      { id: "convert", label: copy.convert, icon: Play, hidden: !collection.canWrite || item.status !== "CHECKED_IN", disabled: busy, onSelect: () => { setDetail(null); setConfirmState({ kind: "CONVERT", item }); } },
+      { id: "convert", label: copy.convert, icon: Play, hidden: !collection.canWrite || item.status !== "CHECKED_IN", disabled: busy, onSelect: () => { setDetail(null); resetFeedback(); resetConversion(); setConfirmState({ kind: "CONVERT", item }); } },
       { id: "no-show", label: copy.markNoShow, icon: UserX, hidden: !collection.canWrite || item.status !== "CONFIRMED", disabled: busy, separatorBefore: true, onSelect: () => { setDetail(null); setConfirmState({ kind: "NO_SHOW", item }); } },
       { id: "cancel", label: copy.cancelBooking, icon: XCircle, hidden: !collection.canWrite || !cancellable, disabled: busy, destructive: true, onSelect: () => { setDetail(null); setConfirmState({ kind: "CANCEL", item }); } },
     ];
@@ -450,7 +517,25 @@ export function EnterpriseGamingBookingsWorkspace({
         /> : null}
       </Dialog>
 
-      <BookingCommandDialog state={confirmState} copy={copy} busy={busy} onClose={() => !busy && setConfirmState(null)} onConfirm={() => void runCommand()} />
+      <BookingCommandDialog state={confirmState?.kind === "CONVERT" ? null : confirmState} copy={copy} busy={busy} onClose={() => !busy && setConfirmState(null)} onConfirm={() => void runCommand()} />
+      <BookingConversionDialog
+        item={conversionOpen ? confirmState?.item || null : null}
+        copy={copy}
+        locale={locale}
+        busy={busy}
+        services={conversionServices}
+        selectedServiceId={conversionServiceId}
+        setSelectedServiceId={(value) => { setConversionServiceId(value); setConversionQuote(null); setMessage(""); }}
+        loading={conversionLoading}
+        error={conversionError || message}
+        quote={conversionQuote}
+        page={conversionServicePage}
+        pagination={conversionPagination}
+        setPage={setConversionServicePage}
+        onPreview={() => void previewConversionPrice()}
+        onClose={() => { if (!busy) { setConfirmState(null); resetConversion(); setMessage(""); } }}
+        onConfirm={() => void runCommand()}
+      />
     </ModuleWorkspace>
   );
 }
@@ -577,6 +662,85 @@ function BookingCommandDialog({ state, copy, busy, onClose, onConfirm }: { state
   return (
     <Dialog open onClose={onClose} title={config.title} description={config.description} footer={<><Button variant="secondary" disabled={busy} onClick={onClose}>{copy.close}</Button><Button variant={config.destructive ? "destructive" : "default"} disabled={busy} onClick={onConfirm}>{config.label}</Button></>}>
       <div className="p-4 text-sm font-bold text-dtsc-ink sm:p-5">{state.item.reference} · {state.item.station.stationCode}</div>
+    </Dialog>
+  );
+}
+
+function BookingConversionDialog({
+  item,
+  copy,
+  locale,
+  busy,
+  services,
+  selectedServiceId,
+  setSelectedServiceId,
+  loading,
+  error,
+  quote,
+  page,
+  pagination,
+  setPage,
+  onPreview,
+  onClose,
+  onConfirm,
+}: {
+  item: BookingItem | null;
+  copy: ReturnType<typeof gamingBookingsCopy>;
+  locale: string | null | undefined;
+  busy: boolean;
+  services: CatalogService[];
+  selectedServiceId: string;
+  setSelectedServiceId: (value: string) => void;
+  loading: boolean;
+  error: string;
+  quote: PricingQuote | null;
+  page: number;
+  pagination: Pagination;
+  setPage: (value: number | ((current: number) => number)) => void;
+  onPreview: () => void;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <Dialog
+      open={Boolean(item)}
+      onClose={onClose}
+      title={copy.convertTitle}
+      description={copy.convertDescription}
+      className="h-[92dvh]"
+      footer={<>
+        <Button variant="secondary" disabled={busy} onClick={onClose}>{copy.close}</Button>
+        <Button variant="secondary" disabled={busy || loading || !selectedServiceId} onClick={onPreview}>{copy.previewPrice}</Button>
+        <Button disabled={busy || !quote || quote.service.id !== selectedServiceId} onClick={onConfirm}>{copy.convertAction}</Button>
+      </>}
+    >
+      {item ? (
+        <div className="grid gap-5 p-4 sm:p-5">
+          {error ? <ProfessionalError message={error} /> : null}
+          <div className="rounded-2xl border border-dtsc-border bg-dtsc-soft/50 p-4 text-sm font-bold text-dtsc-ink">
+            {item.reference} · {item.station.stationCode} · {copy.minutes(minutesBetween(item.scheduledStartAt, item.scheduledEndAt))} · {item.playerCount} {copy.players.toLowerCase()}
+          </div>
+          {loading ? <ProfessionalLoading rows={2} /> : services.length ? (
+            <ProfessionalFormSection title={copy.pricingPreview} description={copy.convertDescription}>
+              <Field label={copy.catalogService} required>
+                <NativeSelect value={selectedServiceId} onChange={setSelectedServiceId} required items={services.map((service) => ({ id: service.id, label: `${service.code} · ${service.name}` }))} />
+              </Field>
+            </ProfessionalFormSection>
+          ) : <div className="text-sm font-bold text-dtsc-muted">{copy.noServices}</div>}
+          <div className="flex min-w-0 items-center justify-between gap-2">
+            <Button type="button" variant="secondary" disabled={page <= 1 || loading} onClick={() => setPage((value) => Math.max(1, value - 1))}>{copy.previous}</Button>
+            <span className="text-xs font-bold text-dtsc-muted">{copy.catalogService} · {copy.page(pagination.page, pagination.pageCount)}</span>
+            <Button type="button" variant="secondary" disabled={page >= pagination.pageCount || loading} onClick={() => setPage((value) => Math.min(pagination.pageCount, value + 1))}>{copy.next}</Button>
+          </div>
+          {quote ? (
+            <div className="rounded-2xl border border-dtsc-border bg-dtsc-soft p-4">
+              <div className="text-xs font-black uppercase tracking-wide text-dtsc-muted">{copy.estimatedAmount}</div>
+              <div className="mt-2 text-2xl font-black text-dtsc-ink">{formatEnterpriseAmount(quote.quotedAmount, quote.currency, locale)}</div>
+              <div className="mt-1 text-sm font-bold text-dtsc-muted">{copy.selectedPricingRule}: {quote.pricingRuleCode} · {quote.service.name}</div>
+            </div>
+          ) : null}
+        </div>
+      ) : <div />}
     </Dialog>
   );
 }
