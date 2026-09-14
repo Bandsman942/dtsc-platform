@@ -12,7 +12,7 @@ async function getEnterpriseGamingModuleAccess({
 }: {
   session: SessionPayload;
   organizationId: string;
-  moduleCode: "GAMING_STATIONS" | "GAMING_SESSIONS";
+  moduleCode: "GAMING_STATIONS" | "GAMING_SESSIONS" | "GAMING_BOOKINGS";
   action: GamingAccessAction;
 }) {
   const membership = await requireEnterpriseMembership(session, organizationId);
@@ -65,4 +65,16 @@ export function getEnterpriseGamingSessionAccess({
   action: GamingAccessAction;
 }) {
   return getEnterpriseGamingModuleAccess({ session, organizationId, moduleCode: "GAMING_SESSIONS", action });
+}
+
+export function getEnterpriseGamingBookingAccess({
+  session,
+  organizationId,
+  action,
+}: {
+  session: SessionPayload;
+  organizationId: string;
+  action: GamingAccessAction;
+}) {
+  return getEnterpriseGamingModuleAccess({ session, organizationId, moduleCode: "GAMING_BOOKINGS", action });
 }
