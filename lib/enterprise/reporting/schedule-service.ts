@@ -15,6 +15,8 @@ type ScheduleUpdateInput = z.infer<typeof reportScheduleUpdateSchema>;
 type ScheduleRunWithSchedule = Prisma.EnterpriseReportScheduleRunGetPayload<{ include: { schedule: true } }>;
 type LocalParts = { year: number; month: number; day: number; hour: number; minute: number; second: number };
 
+const REPORT_DELIVERY_LEASE_MS = 10 * 60 * 1000;
+
 function asObject(value: Prisma.JsonValue | null | undefined): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
@@ -171,15 +173,40 @@ function generationPayload(value: Prisma.JsonValue | null) {
   return payload.kind === "FINANCE_REPORT_GENERATION" && payload.version === 1 ? payload : null;
 }
 
+async function recoverStaleDeliveries() {
+  const staleBefore = new Date(Date.now() - REPORT_DELIVERY_LEASE_MS);
+  return prisma.enterpriseReportScheduleRun.updateMany({
+    where: { status: "DELIVERING", updatedAt: { lt: staleBefore } },
+    data: { status: "QUEUED", errorCode: "REPORT_DELIVERY_STALE_LEASE_RECOVERED" },
+  });
+}
+
+async function failQueuedRun(run: ScheduleRunWithSchedule, errorCode: string) {
+  await prisma.enterpriseReportScheduleRun.updateMany({
+    where: { id: run.id, organizationId: run.organizationId, status: "QUEUED" },
+    data: { status: "FAILED", deliveryStatus: "FAILED", errorCode, completedAt: new Date() },
+  });
+}
+
 async function deliverCompletedRun(run: ScheduleRunWithSchedule) {
   if (!run.generationEventId) return;
   const event = await prisma.enterpriseDomainEvent.findFirst({ where: { id: run.generationEventId, organizationId: run.organizationId }, select: { processingStatus: true, payloadJson: true } });
   if (!event) return;
-  if (event.processingStatus === "DEAD") { await prisma.enterpriseReportScheduleRun.update({ where: { id: run.id }, data: { status: "FAILED", deliveryStatus: "FAILED", errorCode: "REPORT_GENERATION_FAILED", completedAt: new Date() } }); return; }
+  if (event.processingStatus === "DEAD") { await failQueuedRun(run, "REPORT_GENERATION_FAILED"); return; }
   if (event.processingStatus !== "PROCESSED") return;
-  const payload = generationPayload(event.payloadJson); const reportId = payload?.resultReportId || null; if (!reportId) return;
+
+  const payload = generationPayload(event.payloadJson);
+  const reportId = payload?.resultReportId || null;
+  if (!reportId) { await failQueuedRun(run, "REPORT_GENERATION_RESULT_MISSING"); return; }
   const report = await prisma.enterpriseReport.findFirst({ where: { id: reportId, organizationId: run.organizationId }, select: { id: true, reference: true, title: true, reportType: true, generatedAt: true } });
-  if (!report) return;
+  if (!report) { await failQueuedRun(run, "REPORT_GENERATED_RECORD_MISSING"); return; }
+
+  const claimed = await prisma.enterpriseReportScheduleRun.updateMany({
+    where: { id: run.id, organizationId: run.organizationId, status: "QUEUED" },
+    data: { status: "DELIVERING", errorCode: null },
+  });
+  if (claimed.count !== 1) return;
+
   const channels = asStringArray(run.schedule.deliveryChannelsJson);
   let deliveryStatus = "ARCHIVED"; let runStatus = "COMPLETED"; let errorCode: string | null = null;
   if (channels.includes("EMAIL")) {
@@ -191,18 +218,20 @@ async function deliverCompletedRun(run: ScheduleRunWithSchedule) {
       else { deliveryStatus = "EMAIL_FAILED"; runStatus = "DELIVERY_FAILED"; errorCode = "REPORT_EMAIL_DELIVERY_FAILED"; }
     }
   }
+
   const completedAt = new Date();
   await prisma.$transaction([
-    prisma.enterpriseReportScheduleRun.update({ where: { id: run.id }, data: { reportId: report.id, status: runStatus, deliveryStatus, errorCode, completedAt } }),
-    prisma.enterpriseReportSchedule.update({ where: { id: run.schedule.id }, data: { lastCompletedAt: completedAt } }),
+    prisma.enterpriseReportScheduleRun.updateMany({ where: { id: run.id, organizationId: run.organizationId, status: "DELIVERING" }, data: { reportId: report.id, status: runStatus, deliveryStatus, errorCode, completedAt } }),
+    prisma.enterpriseReportSchedule.updateMany({ where: { id: run.schedule.id, organizationId: run.organizationId }, data: { lastCompletedAt: completedAt } }),
   ]);
 }
 
 export async function processEnterpriseReportSchedules({ batchSize = 20 }: { batchSize?: number } = {}) {
   const safeBatch = Math.max(1, Math.min(50, Math.trunc(batchSize)));
+  const recoveredDeliveries = await recoverStaleDeliveries();
   const due = await prisma.enterpriseReportSchedule.findMany({ where: { isEnabled: true, archivedAt: null, nextRunAt: { lte: new Date() } }, orderBy: { nextRunAt: "asc" }, take: safeBatch, include: { runs: { orderBy: { createdAt: "desc" }, take: 1 } } });
   let enqueued = 0; for (const schedule of due) if (await enqueueDueSchedule(schedule)) enqueued += 1;
   const pending = await prisma.enterpriseReportScheduleRun.findMany({ where: { status: "QUEUED", generationEventId: { not: null } }, orderBy: { createdAt: "asc" }, take: safeBatch * 2, include: { schedule: true } });
   for (const run of pending) await deliverCompletedRun(run);
-  return { due: due.length, enqueued, reconciled: pending.length };
+  return { due: due.length, enqueued, reconciled: pending.length, recoveredDeliveries: recoveredDeliveries.count };
 }
