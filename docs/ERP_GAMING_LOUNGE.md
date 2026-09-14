@@ -90,7 +90,7 @@ Le contrat durable est :
 
 ## #641 — moteur de sessions : autorité temporelle serveur
 
-Le navigateur n’est jamais l’autorité métier du chronomètre. `EnterpriseGamingSession` persiste les timestamps qui expliquent la durée :
+Le navigateur n’est jamais l’autorité métier du chronomètre. `EnterpriseGamingSession` persiste les **timestamps serveur** qui expliquent la durée :
 
 - `startedAt` ;
 - `expectedEndAt` ;
