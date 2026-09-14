@@ -125,7 +125,7 @@ export function AccountingRecordDetail({
   const revision = Number(record.revision || 0);
 
   async function openFiscalYear() {
-    if (kind !== "years" || status !== "DRAFT" || !revision || busy) return;
+    if (!record || kind !== "years" || status !== "DRAFT" || !revision || busy) return;
     setBusy(true);
     try {
       await financeMutation(`/api/enterprise/${organizationId}/fiscal-years/${record.id}/open`, { revision }, "POST");
