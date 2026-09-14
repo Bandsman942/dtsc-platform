@@ -51,6 +51,11 @@ model EnterpriseGamingBooking {
   playerCount       Int      @default(1)
   status            String   @default("DRAFT")
   notes             String?
+  confirmedAt       DateTime?
+  checkedInAt       DateTime?
+  noShowAt          DateTime?
+  cancelledAt       DateTime?
+  convertedAt       DateTime?
   idempotencyKey    String?
   revision          Int      @default(1)
   createdByUserId   String
@@ -60,6 +65,7 @@ model EnterpriseGamingBooking {
   archivedAt        DateTime?
   station           EnterpriseGamingStationProfile @relation(fields: [organizationId, stationId], references: [organizationId, id], onDelete: Restrict)
   session           EnterpriseGamingSession? @relation("GamingBookingSession")
+  transitions       EnterpriseGamingBookingTransition[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, reference], map: "GamingBooking_org_reference_key")
@@ -68,6 +74,25 @@ model EnterpriseGamingBooking {
   @@index([organizationId, businessPartyId, status])
   @@index([organizationId, status, scheduledStartAt])
   @@index([archivedAt])
+}
+
+model EnterpriseGamingBookingTransition {
+  id             String   @id @default(cuid())
+  organizationId String
+  bookingId      String
+  action         String
+  idempotencyKey String
+  fromStatus     String?
+  toStatus       String
+  actorUserId    String
+  metadataJson   Json?
+  occurredAt     DateTime @default(now())
+  booking        EnterpriseGamingBooking @relation(fields: [organizationId, bookingId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, idempotencyKey], map: "GamingBookingTransition_org_idempotency_key")
+  @@index([organizationId, bookingId, occurredAt])
+  @@index([organizationId, action, occurredAt])
 }
 
 model EnterpriseGamingPricingRule {
