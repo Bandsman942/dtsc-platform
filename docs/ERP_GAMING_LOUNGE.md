@@ -3,13 +3,15 @@
 ## Statut
 
 - Programme : #638
-- Fondation : #639
+- Fondation fusionnée : #639
+- Lot courant : #640 — postes de jeu intégrés aux Actifs & maintenance
 - Secteur canonique : `HOSPITALITY_EVENTS`
 - Sous-secteur : `GAMING_LOUNGE`
-- Statut de classification pendant #639 : `PLANNED`
-- Statut commercial : non évalué / non commercialisable pendant #639
+- Classification du sous-secteur : `PLANNED` jusqu’au lot d’onboarding #646
+- Premier module fonctionnel : `GAMING_STATIONS` en `BETA` à partir de #640
+- Statut commercial global : non `COMMERCIAL_READY`
 
-Le sous-secteur reste volontairement **fail-closed** pendant la fondation. Il ne doit pas être sélectionnable comme sous-secteur actif ni produire de navigation utilisable tant que les modules minimums n’ont pas leur modèle/service/route/workspace/permission/entitlement/QA réels.
+Le sous-secteur reste volontairement **fail-closed** pour les parcours d’onboarding normaux jusqu’à #646. Les lots intermédiaires peuvent rendre une capacité réelle `BETA` afin de la valider de façon isolée sans prétendre que tout le Gaming Lounge est commercialisable.
 
 ## Objectif métier
 
@@ -24,7 +26,7 @@ Un Gaming Lounge vend principalement du temps d’utilisation de postes physique
 - incidents et maintenance ;
 - reporting et analyse IA autorisée.
 
-DTSC Platform ne doit pas modéliser ce métier comme un second Shop ni comme un ensemble de CRUD génériques. Le Gaming Lounge complète les domaines ERP communs sans les dupliquer.
+DTSC Platform ne modélise pas ce métier comme un second Shop ni comme un ensemble de CRUD génériques. Le domaine Gaming complète les domaines ERP communs sans les dupliquer.
 
 ## Sources de vérité
 
@@ -52,16 +54,28 @@ HOSPITALITY_EVENTS
 └── GAMING_LOUNGE
 ```
 
-Dans #639, `GAMING_LOUNGE` est déclaré `PLANNED`. Le helper générique `listBusinessSubtypesForSector()` exclut les sous-secteurs `PLANNED` par défaut ; il reste donc non sélectionnable dans les parcours normaux.
+`GAMING_LOUNGE` reste `PLANNED` pendant les lots #639 à #645. Le helper générique `listBusinessSubtypesForSector()` exclut les sous-secteurs `PLANNED` par défaut ; le sous-secteur ne devient donc pas prématurément sélectionnable dans l’onboarding commercial.
 
-Le passage à `ACTIVE` appartient au lot #646 et exige que le runtime minimal, l’onboarding, les permissions et les preuves QA/OWNER_E2E soient disponibles.
+Le passage de la classification à `ACTIVE` appartient à #646 et exige le runtime minimal, l’onboarding, les permissions, les activités, les guides et les preuves QA/OWNER_E2E de commercial readiness.
 
-## Registre de modules
+## Registre de modules après #640
 
-Le registre `lib/enterprise/module-registry-gaming.json` est fusionné dans le registre canonique. Pendant #639, tous les modules suivants restent `PLANNED`, `HIDDEN`, sans workspace et avec `EXPLICIT_DENY` :
+Le registre `lib/enterprise/module-registry-gaming.json` est fusionné dans le registre canonique.
+
+`GAMING_STATIONS` est la seule capacité fonctionnelle du lot #640 :
+
+- `implementationStatus: BETA` ;
+- `routeKind: DEDICATED_CORE` ;
+- route `/enterprise-modules/GAMING_STATIONS` ;
+- workspace `ENTERPRISE_GAMING_STATIONS` ;
+- `accessPolicy: POSITION_PERMISSION` ;
+- permission prefix `enterprise.gaming.stations.` ;
+- dépendances `ASSETS_MAINTENANCE` et `SITES_WAREHOUSES` ;
+- plan minimum `BUSINESS` avec abonnement actif.
+
+Les huit autres modules restent strictement `PLANNED`, `HIDDEN`, sans workspace et avec `EXPLICIT_DENY` :
 
 - `GAMING_DASHBOARD` ;
-- `GAMING_STATIONS` ;
 - `GAMING_SESSIONS` ;
 - `GAMING_BOOKINGS` ;
 - `GAMING_PRICING_PACKAGES` ;
@@ -70,87 +84,104 @@ Le registre `lib/enterprise/module-registry-gaming.json` est fusionné dans le r
 - `GAMING_TOURNAMENTS` ;
 - `GAMING_REPORTS`.
 
-Connaître le code d’un module ne donne donc aucun accès. Le contrat d’accès générique renvoie `MODULE_NOT_IMPLEMENTED` tant que le statut n’est pas `ACTIVE` ou `BETA`.
+La connaissance d’un code module ne donne jamais un droit. Le resolver canonique conserve les contrôles membership, secteur/sous-secteur, module tenant, dépendances, entitlement et permission.
 
-## Modèle de données de fondation
+## Parc de postes #640 : extensible, jamais limité à cinq
 
-Le schéma multi-fichiers ajoute `prisma/enterprise-gaming.prisma`.
+Le scénario de lancement prévoit cinq PlayStations, mais ce chiffre décrit uniquement le parc initial du premier Gaming Lounge. Il ne constitue **aucune limite produit ni technique**.
 
-### `EnterpriseGamingConfiguration`
+Le contrat durable est :
 
-Configuration tenant-scoped du domaine Gaming. Aucun solde, compte ou règle financière parallèle n’y est stocké.
+1. une organisation peut ajouter une sixième console puis autant de postes supplémentaires que son exploitation le nécessite ;
+2. toutes les stations suivent le même flux : `EnterpriseAsset` canonique → `EnterpriseGamingStationProfile` → board Gaming ;
+3. aucun tableau de cinq slots, quota à cinq, `MAX_STATIONS=5` ou validation équivalente n’est autorisé ;
+4. la croissance du parc est absorbée par pagination, recherche et filtres serveur bornés ;
+5. archiver un profil Gaming ne supprime jamais l’actif ni son historique maintenance ;
+6. le nombre de postes n’est pas stocké dans une configuration globale : il correspond au nombre réel de profils actifs du tenant.
 
-### `EnterpriseGamingStationProfile`
+Le test OWNER_E2E de #640 doit explicitement créer/associer cinq postes puis ajouter une sixième station sans migration, changement de code ni configuration spéciale.
 
-Extension d’un actif commun. Le champ `assetId` référence logiquement un `EnterpriseAsset` et doit être revalidé côté service avec le même `organizationId` avant toute écriture.
+## `EnterpriseGamingStationProfile`
 
-La paire `(organizationId, assetId)` est unique : un actif ne peut pas devenir deux stations Gaming dans le même tenant.
+Le profil Gaming est une **extension** d’un actif commun, pas un actif parallèle. Il persiste uniquement les métadonnées propres à l’exploitation Gaming :
 
-Statuts prévus :
+- `stationCode` ;
+- nom d’affichage ;
+- famille/type de console ;
+- nombre maximum de joueurs ;
+- ordre d’affichage ;
+- état Gaming manuel ;
+- notes ;
+- révision et archivage.
 
-- `AVAILABLE` ;
-- `IN_USE` ;
-- `RESERVED` ;
-- `MAINTENANCE` ;
-- `OUT_OF_SERVICE`.
+Le `site`, le numéro de série, la catégorie, l’état physique, les incidents et la maintenance proviennent toujours de `EnterpriseAsset` et de ses domaines canoniques.
 
-### `EnterpriseGamingBooking`
+La paire `(organizationId, assetId)` est unique : un actif ne peut pas représenter deux postes Gaming dans le même tenant. `stationCode` est également unique dans le tenant.
 
-Réservation d’une station sur un créneau. `businessPartyId` reste une référence vers le CRM commun et sera revalidée par le service #642.
+## État effectif d’un poste
 
-La base impose au minimum :
+Le statut affiché par le board ne fait pas confiance uniquement au profil Gaming. Il est dérivé côté serveur :
 
-- fin strictement postérieure au début ;
-- nombre de joueurs positif ;
-- références/idempotency keys uniques dans le tenant.
+1. actif archivé ou `DISPOSED` → `OUT_OF_SERVICE` ;
+2. incident Asset ouvert `HIGH` ou `CRITICAL` → `OUT_OF_SERVICE` ;
+3. maintenance Asset `IN_PROGRESS` → `MAINTENANCE` ;
+4. sinon le statut Gaming du profil s’applique.
 
-La détection complète des chevauchements appartient au service transactionnel #642.
+Cela évite qu’un poste soit présenté “Disponible” alors que sa console est réellement en panne ou en maintenance.
 
-### `EnterpriseGamingPricingRule`
+Dans #640, les opérateurs peuvent mettre manuellement un poste hors service ou le rendre disponible. `IN_USE` et `RESERVED` sont réservés aux moteurs transactionnels #641 et #642. Une remise à `AVAILABLE` est refusée tant qu’un blocage canonique Asset subsiste.
 
-Règle spécifique au temps de jeu. `serviceCatalogItemId` doit désigner un service du catalogue commun de la même organisation ; il ne crée pas un catalogue Gaming.
+## Création et sélection des actifs
 
-Modes prévus :
+Le formulaire Gaming ne demande jamais de saisir un `assetId` brut. Il utilise une sélection alimentée par l’API de candidats :
 
-- `FIXED_DURATION` ;
-- `PER_MINUTE` ;
-- `PER_HOUR` ;
-- `PACKAGE`.
+- même `organizationId` ;
+- actif non archivé ;
+- actif non `DISPOSED` ;
+- actif qui n’a jamais déjà été projeté comme station Gaming ;
+- recherche et pagination serveur ;
+- aucune limite basée sur le nombre initial de PlayStations.
 
-Le moteur de résolution déterministe et les dérogations commerciales appartiennent à #643.
+La mutation recharge toujours l’actif côté serveur dans le même tenant avant de créer le profil.
 
-### `EnterpriseGamingSession`
+## Incidents et maintenance
 
-Objet métier représentant l’utilisation réelle d’une station.
+#640 ne crée ni `GamingIncident` ni `GamingMaintenance`.
 
-Statuts de fondation :
+Le bouton **Signaler un incident** appelle la route canonique Asset `/assets/[assetId]/incidents`. Le détail Gaming affiche les blocages issus de `EnterpriseAssetIncident` et `EnterpriseAssetMaintenance`.
 
-- `WAITING` ;
-- `ACTIVE` ;
-- `PAUSED` ;
-- `ENDED` ;
-- `TO_CHECKOUT` ;
-- `PAID` ;
-- `CANCELLED`.
+L’archivage d’un poste est refusé lorsqu’une session live/en attente ou une réservation confirmée/check-in le référence. Cette protection prépare les lots #641/#642 sans supprimer leur historique.
 
-Invariants :
+## Modèles de fondation conservés
 
-1. les timestamps serveur sont l’autorité ; le navigateur ne possède jamais le temps facturable ;
-2. `pausedSeconds` et `billableSeconds` sont persistés/validés côté serveur ;
-3. `pricingSnapshotJson`, la devise et les montants permettent d’expliquer une session historique sans relire seulement le tarif courant ;
+Le schéma `prisma/enterprise-gaming.prisma` contient :
+
+- `EnterpriseGamingConfiguration` ;
+- `EnterpriseGamingStationProfile` ;
+- `EnterpriseGamingBooking` ;
+- `EnterpriseGamingPricingRule` ;
+- `EnterpriseGamingSession`.
+
+#640 ne nécessite pas de nouvelle table : il consomme le modèle station déjà introduit par #639. La migration de fondation reste additive et son historique n’est pas réécrit.
+
+### Sessions
+
+Les invariants préparés par #639 restent applicables :
+
+1. les timestamps serveur sont l’autorité ;
+2. `pausedSeconds` et `billableSeconds` sont validés côté serveur ;
+3. `pricingSnapshotJson`, devise et montants expliquent l’historique ;
 4. `idempotencyKey` prépare les transitions rejouables ;
-5. une réservation ne peut convertir qu’une seule session via l’unicité `(organizationId, bookingId)` ;
-6. l’index SQL partiel `GamingSession_one_live_per_station_key` interdit deux sessions `ACTIVE`/`PAUSED` non archivées sur la même station.
+5. une réservation ne convertit qu’une session ;
+6. l’index `GamingSession_one_live_per_station_key` interdit deux sessions `ACTIVE`/`PAUSED` simultanées sur une station.
 
-L’index partiel est un garde-fou de base. Le moteur #641 doit tout de même utiliser une transaction, une clé d’idempotence et des erreurs métier déterministes.
+Le moteur transactionnel complet appartient à #641.
 
-## Isolation multi-tenant
+## Isolation multi-tenant et sécurité
 
-Toutes les entités Gaming portent `organizationId`.
+Toutes les entités Gaming portent `organizationId`. Les références cross-domain telles que `assetId`, `businessPartyId` et `serviceCatalogItemId` sont rechargées côté service dans le même tenant ; une clé valide d’une autre organisation est traitée comme introuvable.
 
-Les relations internes Gaming utilisent des clés composées contenant `organizationId`. Les références cross-domain telles que `assetId`, `businessPartyId` et `serviceCatalogItemId` sont volontairement rechargées côté service avec le même tenant conformément aux règles Prisma DTSC ; une clé valide appartenant à une autre organisation doit être traitée comme introuvable.
-
-Le futur contrat serveur suit :
+Le contrat serveur des stations suit :
 
 ```text
 session
@@ -158,30 +189,31 @@ session
 → membership actif
 → organisation cliente active
 → HOSPITALITY_EVENTS + GAMING_LOUNGE
-→ module Gaming actif
+→ GAMING_STATIONS BETA + module tenant activé
+→ dépendances ASSETS_MAINTENANCE / SITES_WAREHOUSES
 → entitlement
-→ permission
-→ propriété/visibilité de l’objet
-→ same-origin
+→ permission enterprise.gaming.stations.*
+→ revalidation Asset same-tenant
+→ same-origin sur mutation
 → Zod
 → await rateLimit
-→ transaction/idempotence
+→ révision optimiste
 → ApiLog
 → AuditLog
 ```
 
-Un rôle global DTSC n’accorde aucun accès automatique aux données Gaming privées d’un client.
+Un rôle global DTSC n’accorde aucun accès automatique aux données privées d’un client.
 
 ## Finance et devises
 
 Le domaine Gaming ne maintient aucun solde. Les montants à encaisser seront transformés par #644 en objets commerciaux/financiers communs.
 
-Une devise est conservée sur le snapshot de session/tarif pour expliquer le montant historique. Des montants de devises différentes ne doivent jamais être additionnés directement dans les dashboards ou clôtures.
+Une devise est conservée sur le snapshot de session/tarif pour expliquer l’historique. Des montants de devises différentes ne doivent jamais être additionnés directement sans conversion explicite.
 
 ## Programme d’implémentation
 
-- #639 — fondation canonique du sous-secteur et contrat de données ;
-- #640 — postes de jeu intégrés aux Actifs & maintenance ;
+- #639 — fondation canonique du sous-secteur et contrat de données — fusionné ;
+- #640 — postes de jeu intégrés aux Actifs & maintenance — module `GAMING_STATIONS` BETA ;
 - #641 — moteur de sessions minutées, concurrence et occupation ;
 - #642 — réservations, joueurs et conversion en session ;
 - #643 — tarification, forfaits et calcul serveur ;
@@ -189,23 +221,38 @@ Une devise est conservée sur le snapshot de session/tarif pour expliquer le mon
 - #645 — tournois, maintenance intégrée, reporting et DTSC AI ;
 - #646 — onboarding, activités, guides, QA et commercial readiness.
 
-## QA #639
+## QA
 
-Le contrat ciblé `scripts/qa-639-gaming-lounge-foundation.mjs` vérifie notamment :
+`qa-639-gaming-lounge-foundation.mjs` continue de protéger :
 
-- classification `PLANNED` ;
-- portée sectorielle/sous-sectorielle ;
-- intégration au registre canonique ;
-- modules strictement `PLANNED + HIDDEN + EXPLICIT_DENY` ;
-- présence des modèles tenant-scoped ;
-- absence de sources communes dupliquées ;
-- migration additive et index anti double-session live ;
-- documentation et branchement dans `qa:regression`.
+- classification du sous-secteur ;
+- sources de vérité uniques ;
+- modèles et migration de fondation ;
+- registre canonique ;
+- absence de sources Asset/Customer/Catalog/Payment/Cash parallèles ;
+- dépendances et absence de cycles.
 
-La CI doit aussi prouver Prisma generate, migrations depuis base vide, type-check, lint, `qa:enterprise-module-registry`, `qa:erp-commercial-readiness`, `qa:erp-i18n`, `qa:regression` et build selon `docs/CONTRIBUTING.md`.
+`qa-640-gaming-stations-assets.mjs` ajoute :
 
-`OWNER_E2E` n’est pas requis pour #639 parce qu’aucune surface utilisateur n’est activée. Il devient requis pour les lots fonctionnels suivants et obligatoire avant `COMMERCIAL_READY`.
+- `GAMING_STATIONS=BETA` et les huit autres modules fail-closed ;
+- permission/access/entitlement contract ;
+- revalidation `EnterpriseAsset` same-tenant ;
+- statut effectif basé sur incidents/maintenance canoniques ;
+- API paginées, same-origin/Zod/rate-limit/audit ;
+- board dynamique et détail plein écran ;
+- incident envoyé à la route Asset existante ;
+- interdiction explicite d’un plafond de cinq stations ;
+- branchement dans `qa:regression`.
+
+#640 est user-facing et son contrat exige `OWNER_E2E`. Une CI verte ne remplace pas ce scénario propriétaire.
 
 ## Rollback
 
-#639 n’active aucun parcours client. Un rollback applicatif retire classification/registre/helpers. Si la migration a déjà été appliquée, les tables additives peuvent rester inutilisées jusqu’à correction/reprise ; aucune migration historique n’est réécrite et aucune suppression de données n’est nécessaire.
+Pour #640 :
+
+- repasser `GAMING_STATIONS` en fail-closed et retirer sa route/workspace ;
+- conserver les profils stations déjà créés afin de ne pas effacer l’historique ;
+- conserver tous les `EnterpriseAsset`, incidents et maintenances ;
+- ne réécrire aucune migration historique.
+
+Le reste du domaine Gaming demeure `PLANNED` jusqu’à ses lots respectifs.

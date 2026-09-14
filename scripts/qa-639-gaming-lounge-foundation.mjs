@@ -47,6 +47,7 @@ includesAll(
     'GAMING_SECTOR_CODE = "HOSPITALITY_EVENTS"',
     'GAMING_BUSINESS_SUBTYPE_CODE = "GAMING_LOUNGE"',
     "isGamingLoungeSubtype",
+    "GAMING_STATION_PERMISSIONS",
     "GAMING_STATION_STATUSES",
     "GAMING_SESSION_STATUSES",
     "GAMING_BOOKING_STATUSES",
@@ -88,16 +89,24 @@ for (const code of expectedModules) {
 }
 const allCodes = new Set([...existingCodes, ...expectedModules]);
 
-check(gamingRegistry.version === 1, "gaming module registry version must start at 1");
+check(gamingRegistry.version === 2, "gaming module registry version must reflect the #640 stations beta contract");
 check(gamingRegistry.modules.length === expectedModules.length, "gaming module registry must contain exactly the foundation module set");
 for (const code of expectedModules) {
   const definition = gamingRegistry.modules.find((item) => item.code === code);
   check(Boolean(definition), `gaming registry missing ${code}`);
   if (!definition) continue;
-  check(definition.implementationStatus === "PLANNED", `${code} must remain PLANNED in #639`);
-  check(definition.routeKind === "HIDDEN", `${code} must remain HIDDEN in #639`);
-  check(definition.workspaceKey === null, `${code} must not have a workspace in #639`);
-  check(definition.accessPolicy === "EXPLICIT_DENY", `${code} must fail closed in #639`);
+  if (code === "GAMING_STATIONS") {
+    check(definition.implementationStatus === "BETA", "GAMING_STATIONS must be BETA after #640");
+    check(definition.routeKind === "DEDICATED_CORE", "GAMING_STATIONS must use a dedicated core route after #640");
+    check(definition.routePath === "/enterprise-modules/GAMING_STATIONS", "GAMING_STATIONS route path missing after #640");
+    check(definition.workspaceKey === "ENTERPRISE_GAMING_STATIONS", "GAMING_STATIONS workspace key missing after #640");
+    check(definition.accessPolicy === "POSITION_PERMISSION", "GAMING_STATIONS must use POSITION_PERMISSION after #640");
+  } else {
+    check(definition.implementationStatus === "PLANNED", `${code} must remain PLANNED after #640`);
+    check(definition.routeKind === "HIDDEN", `${code} must remain HIDDEN after #640`);
+    check(definition.workspaceKey === null, `${code} must remain without workspace after #640`);
+    check(definition.accessPolicy === "EXPLICIT_DENY", `${code} must remain fail-closed after #640`);
+  }
   check(definition.domain === "SECTOR_HOSPITALITY", `${code} must use SECTOR_HOSPITALITY`);
   check(definition.applicableSectors?.length === 1 && definition.applicableSectors[0] === "HOSPITALITY_EVENTS", `${code} sector scope invalid`);
   check(definition.applicableBusinessSubtypes?.length === 1 && definition.applicableBusinessSubtypes[0] === "GAMING_LOUNGE", `${code} subtype scope invalid`);

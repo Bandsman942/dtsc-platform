@@ -14,6 +14,14 @@ export const GAMING_MODULE_CODES = [
 ] as const;
 export type GamingModuleCode = (typeof GAMING_MODULE_CODES)[number];
 
+export const GAMING_STATION_PERMISSIONS = [
+  "enterprise.gaming.stations.read",
+  "enterprise.gaming.stations.create",
+  "enterprise.gaming.stations.update",
+  "enterprise.gaming.stations.manage",
+] as const;
+export type GamingStationPermission = (typeof GAMING_STATION_PERMISSIONS)[number];
+
 export const GAMING_STATION_STATUSES = [
   "AVAILABLE",
   "IN_USE",
