@@ -38,7 +38,11 @@ export async function GET(req: Request, { params }: Params) {
     budgetId ? prisma.enterpriseBudget.findFirst({ where: { id: budgetId, organizationId }, select: { id: true, reference: true, title: true } }) : Promise.resolve(null),
   ]);
 
-  const { sourcePolicyCode: _sourcePolicyCode, metricDefinitionCodesJson: _metricDefinitionCodesJson, generationKey: _generationKey, ...clientReport } = report;
+  const { sourcePolicyCode, metricDefinitionCodesJson, generationKey, ...clientReport } = report;
+  // These fields are intentionally read-and-dropped so internal reporting metadata never reaches the client payload.
+  void sourcePolicyCode;
+  void metricDefinitionCodesJson;
+  void generationKey;
   const filterReferences = {
     department: department ? { id: department.id, labelFr: department.labelFr, labelEn: department.labelEn } : null,
     supplier: supplier ? { id: supplier.id, label: supplier.displayName || supplier.legalName } : null,
