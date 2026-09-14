@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
-import { getEnterpriseGamingSessionAccess, getEnterpriseGamingStationAccess } from "@/lib/enterprise/gaming/access";
+import { getEnterpriseGamingPricingAccess, getEnterpriseGamingSessionAccess, getEnterpriseGamingStationAccess } from "@/lib/enterprise/gaming/access";
 import { gamingSessionErrorResponse } from "@/lib/enterprise/gaming/http";
 import { gamingSessionStartSchema } from "@/lib/enterprise/gaming/schemas";
 import { listGamingSessions, startGamingSession } from "@/lib/enterprise/gaming/sessions";
@@ -16,9 +16,10 @@ export async function GET(req: Request, { params }: Params) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { organizationId } = await params;
-  const [gamingAccess, stationAccess] = await Promise.all([
+  const [gamingAccess, stationAccess, pricingAccess] = await Promise.all([
     getEnterpriseGamingSessionAccess({ session, organizationId, action: "read" }),
     getEnterpriseGamingStationAccess({ session, organizationId, action: "read" }),
+    getEnterpriseGamingPricingAccess({ session, organizationId, action: "read" }),
   ]);
   if (!gamingAccess || !stationAccess) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
@@ -38,7 +39,13 @@ export async function GET(req: Request, { params }: Params) {
     startedAt,
     metadata: { organizationId, domain: "gaming-sessions", page: result.pagination.page },
   });
-  return NextResponse.json({ ...result, canWrite: gamingAccess.canWrite, canManage: gamingAccess.canManage });
+  return NextResponse.json({
+    ...result,
+    canWrite: gamingAccess.canWrite,
+    canManage: gamingAccess.canManage,
+    canReadPricing: Boolean(pricingAccess),
+    canOverridePricing: Boolean(pricingAccess?.canManage),
+  });
 }
 
 export async function POST(req: Request, { params }: Params) {
@@ -53,25 +60,41 @@ export async function POST(req: Request, { params }: Params) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
 
   const { organizationId } = await params;
-  const [gamingAccess, stationAccess, catalogAccess, crmAccess] = await Promise.all([
+  const wantsOverride = parsed.data.priceOverrideAmount !== undefined && parsed.data.priceOverrideAmount !== null;
+  const [gamingAccess, stationAccess, catalogAccess, crmAccess, pricingAccess] = await Promise.all([
     getEnterpriseGamingSessionAccess({ session, organizationId, action: "submit" }),
     getEnterpriseGamingStationAccess({ session, organizationId, action: "read" }),
     getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "CATALOG", action: "read" }),
     parsed.data.businessPartyId
       ? getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "CRM_CUSTOMERS", action: "read" })
       : Promise.resolve(true),
+    wantsOverride
+      ? getEnterpriseGamingPricingAccess({ session, organizationId, action: "manage" })
+      : getEnterpriseGamingPricingAccess({ session, organizationId, action: "read" }),
   ]);
-  if (!gamingAccess || !stationAccess || !catalogAccess || !crmAccess) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!gamingAccess || !stationAccess || !catalogAccess || !crmAccess || (wantsOverride && !pricingAccess)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   try {
-    const result = await startGamingSession(organizationId, session.userId, parsed.data);
+    const result = await startGamingSession(organizationId, session.userId, parsed.data, { canOverridePricing: Boolean(pricingAccess?.canManage) });
     await writeAuditLog({
       userId: session.userId,
       action: result.idempotent ? "ENTERPRISE_GAMING_SESSION_START_REPLAYED" : "ENTERPRISE_GAMING_SESSION_STARTED",
       entity: "EnterpriseGamingSession",
       entityId: result.session.id,
       request: req,
-      metadata: { organizationId, stationId: result.session.stationId, idempotent: result.idempotent },
+      metadata: {
+        organizationId,
+        stationId: result.session.stationId,
+        serviceCatalogItemId: result.session.serviceCatalogItemId,
+        pricingRuleId: result.session.pricingRuleId,
+        currency: result.session.currency,
+        quotedAmount: result.session.quotedAmount?.toString() || null,
+        priceOverride: wantsOverride,
+        priceOverrideReason: wantsOverride ? parsed.data.priceOverrideReason : null,
+        idempotent: result.idempotent,
+      },
     });
     await writeApiLog({ request: req, statusCode: result.idempotent ? 200 : 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "gaming-sessions" } });
     return NextResponse.json({ ok: true, ...result }, { status: result.idempotent ? 200 : 201 });
