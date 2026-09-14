@@ -30,12 +30,42 @@ const canonicalLaboratoryAssertion = 'containsAll(healthLaboratoryWorkspace, ["L
 const obsoleteEnterpriseAdminAssertion = 'containsAll(enterpriseAdminPage, [\'activeContext === "ORGANIZATION"\', "canManageEnterpriseAdministration(session.userId, organizationId)", \'canUseFeature(organizationId, "enterprise-admin")\', "getEnterpriseAdministrationDataset(organizationId)"])';
 const canonicalEnterpriseAdminAssertion = 'containsAll(enterpriseAdminPage, [\'activeContext === "ORGANIZATION"\', "requireEnterpriseMembership", "resolveEnterpriseModuleAccess", \'moduleCode: "ADMIN_DASHBOARD"\', \'action: "manage"\', "!membership || !adminAccess?.allowed", \'canUseFeature(organizationId, "enterprise-admin")\', "getEnterpriseAdministrationDataset(organizationId, user.id, administrationLocale)"])';
 
-let migratedSource = replaceExactlyOnce(legacySource, obsoleteAppointmentAssertion, canonicalAppointmentAssertion, "Rendez-vous historique");
-migratedSource = replaceExactlyOnce(migratedSource, obsoleteConsultationAssertion, canonicalConsultationAssertion, "Consultations historique");
-migratedSource = replaceExactlyOnce(migratedSource, obsoleteMedicalRecordsAssertion, canonicalMedicalRecordsAssertion, "Dossiers médicaux historique");
-migratedSource = replaceExactlyOnce(migratedSource, obsoleteStaffAssertion, canonicalStaffAssertion, "Équipe médicale historique");
-migratedSource = replaceExactlyOnce(migratedSource, obsoleteLaboratoryAssertion, canonicalLaboratoryAssertion, "Laboratoire historique");
-migratedSource = replaceExactlyOnce(migratedSource, obsoleteEnterpriseAdminAssertion, canonicalEnterpriseAdminAssertion, "Enterprise Admin historique");
+let migratedSource = replaceExactlyOnce(
+  legacySource,
+  obsoleteAppointmentAssertion,
+  canonicalAppointmentAssertion,
+  "Rendez-vous historique",
+);
+migratedSource = replaceExactlyOnce(
+  migratedSource,
+  obsoleteConsultationAssertion,
+  canonicalConsultationAssertion,
+  "Consultations historique",
+);
+migratedSource = replaceExactlyOnce(
+  migratedSource,
+  obsoleteMedicalRecordsAssertion,
+  canonicalMedicalRecordsAssertion,
+  "Dossiers médicaux historique",
+);
+migratedSource = replaceExactlyOnce(
+  migratedSource,
+  obsoleteStaffAssertion,
+  canonicalStaffAssertion,
+  "Équipe médicale historique",
+);
+migratedSource = replaceExactlyOnce(
+  migratedSource,
+  obsoleteLaboratoryAssertion,
+  canonicalLaboratoryAssertion,
+  "Laboratoire historique",
+);
+migratedSource = replaceExactlyOnce(
+  migratedSource,
+  obsoleteEnterpriseAdminAssertion,
+  canonicalEnterpriseAdminAssertion,
+  "Enterprise Admin historique",
+);
 
 const sourceUrl = `data:text/javascript;base64,${Buffer.from(migratedSource, "utf8").toString("base64")}`;
 await import(sourceUrl);
