@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { BadgeDollarSign, Calculator, Pencil, PlayCircle, Power, PowerOff, Plus, Trash2 } from "lucide-react";
+import { BadgeDollarSign, Calculator, Pencil, PlayCircle, PowerOff, Plus, Trash2 } from "lucide-react";
 import { Field, NativeSelect, formatEnterpriseAmount } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { gamingPricingCopy } from "@/components/enterprise/gaming/gaming-pricing-i18n";
 import { ProfessionalError, ProfessionalFormSection, ProfessionalLoading, ProfessionalSearch, ProfessionalTabs, professionalMutation, useProfessionalCollection } from "@/components/enterprise/professional/professional-erp-ui";
@@ -300,7 +300,7 @@ export function EnterpriseGamingPricingWorkspace({
         description={locale === "en" ? definition.descriptionEn : definition.descriptionFr}
         count={copy.ruleCount(collection.pagination.total)}
         primaryAction={collection.canWrite ? <Button onClick={openCreate}><Plus className="h-4 w-4" />{copy.newRule}</Button> : undefined}
-        secondaryAction={<Button variant="secondary" onClick={() => { resetFeedback(); setSimulation(null); setServicePage(1); setStationPage(1); setSimulateOpen(true); }}><Calculator className="h-4 w-4" />{copy.simulate}</Button>}
+        secondaryActions={<Button variant="secondary" onClick={() => { resetFeedback(); setSimulation(null); setServicePage(1); setStationPage(1); setSimulateOpen(true); }}><Calculator className="h-4 w-4" />{copy.simulate}</Button>}
       />
 
       <ModuleMetrics label={copy.metricsLabel}>
