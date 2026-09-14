@@ -77,7 +77,13 @@ type EnterpriseCoordinationSupplementKey =
   | "reports.schedule.weekday.3"
   | "reports.schedule.weekday.4"
   | "reports.schedule.weekday.5"
-  | "reports.schedule.weekday.6";
+  | "reports.schedule.weekday.6"
+  | "reports.schedule.deliveryStatus.ARCHIVE_PENDING"
+  | "reports.schedule.deliveryStatus.ARCHIVED"
+  | "reports.schedule.deliveryStatus.ARCHIVED_EMAIL_SENT"
+  | "reports.schedule.deliveryStatus.EMAIL_UNAVAILABLE"
+  | "reports.schedule.deliveryStatus.EMAIL_FAILED"
+  | "reports.schedule.deliveryStatus.FAILED";
 export type EnterpriseCoreKey = BaseEnterpriseCoreKey | EnterpriseProcurementCoreKey | EnterpriseSupplierOnboardingKey | EnterpriseCoordinationSupplementKey;
 
 const procurementFragments = { fr: enterpriseProcurementFr, en: enterpriseProcurementEn } as const;
@@ -156,6 +162,12 @@ const coordinationSupplements: Record<"fr" | "en", Record<EnterpriseCoordination
     "reports.schedule.weekday.4": "Jeudi",
     "reports.schedule.weekday.5": "Vendredi",
     "reports.schedule.weekday.6": "Samedi",
+    "reports.schedule.deliveryStatus.ARCHIVE_PENDING": "Archivage en attente",
+    "reports.schedule.deliveryStatus.ARCHIVED": "Archivé dans DTSC Platform",
+    "reports.schedule.deliveryStatus.ARCHIVED_EMAIL_SENT": "Archivé et envoyé par e-mail",
+    "reports.schedule.deliveryStatus.EMAIL_UNAVAILABLE": "Archivé · e-mail indisponible",
+    "reports.schedule.deliveryStatus.EMAIL_FAILED": "Archivé · envoi e-mail échoué",
+    "reports.schedule.deliveryStatus.FAILED": "Livraison échouée",
   },
   en: {
     "meetings.action.reason": "Professional reason",
@@ -229,6 +241,12 @@ const coordinationSupplements: Record<"fr" | "en", Record<EnterpriseCoordination
     "reports.schedule.weekday.4": "Thursday",
     "reports.schedule.weekday.5": "Friday",
     "reports.schedule.weekday.6": "Saturday",
+    "reports.schedule.deliveryStatus.ARCHIVE_PENDING": "Archive pending",
+    "reports.schedule.deliveryStatus.ARCHIVED": "Archived in DTSC Platform",
+    "reports.schedule.deliveryStatus.ARCHIVED_EMAIL_SENT": "Archived and sent by email",
+    "reports.schedule.deliveryStatus.EMAIL_UNAVAILABLE": "Archived · email unavailable",
+    "reports.schedule.deliveryStatus.EMAIL_FAILED": "Archived · email delivery failed",
+    "reports.schedule.deliveryStatus.FAILED": "Delivery failed",
   },
 };
 
