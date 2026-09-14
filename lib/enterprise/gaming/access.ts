@@ -2,16 +2,18 @@ import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-acc
 import { requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
 import type { SessionPayload } from "@/lib/session";
 
-export type GamingStationAction = "read" | "submit" | "write" | "manage";
+export type GamingAccessAction = "read" | "submit" | "write" | "manage";
 
-export async function getEnterpriseGamingStationAccess({
+async function getEnterpriseGamingModuleAccess({
   session,
   organizationId,
+  moduleCode,
   action,
 }: {
   session: SessionPayload;
   organizationId: string;
-  action: GamingStationAction;
+  moduleCode: "GAMING_STATIONS" | "GAMING_SESSIONS";
+  action: GamingAccessAction;
 }) {
   const membership = await requireEnterpriseMembership(session, organizationId);
   if (!membership) return null;
@@ -19,7 +21,7 @@ export async function getEnterpriseGamingStationAccess({
   const capabilities = await resolveEnterpriseModuleCapabilities({
     userId: session.userId,
     organizationId,
-    moduleCode: "GAMING_STATIONS",
+    moduleCode,
   });
 
   const allowed = action === "read"
@@ -39,4 +41,28 @@ export async function getEnterpriseGamingStationAccess({
     canWrite: capabilities.canWrite,
     canManage: capabilities.canManage,
   };
+}
+
+export function getEnterpriseGamingStationAccess({
+  session,
+  organizationId,
+  action,
+}: {
+  session: SessionPayload;
+  organizationId: string;
+  action: GamingAccessAction;
+}) {
+  return getEnterpriseGamingModuleAccess({ session, organizationId, moduleCode: "GAMING_STATIONS", action });
+}
+
+export function getEnterpriseGamingSessionAccess({
+  session,
+  organizationId,
+  action,
+}: {
+  session: SessionPayload;
+  organizationId: string;
+  action: GamingAccessAction;
+}) {
+  return getEnterpriseGamingModuleAccess({ session, organizationId, moduleCode: "GAMING_SESSIONS", action });
 }
