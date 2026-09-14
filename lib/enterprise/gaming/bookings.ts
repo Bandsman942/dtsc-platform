@@ -12,6 +12,7 @@ type Tx = Prisma.TransactionClient;
 
 const blockingStatuses = ["CONFIRMED", "CHECKED_IN"] as const;
 const terminalStatuses = ["NO_SHOW", "CANCELLED", "CONVERTED"] as const;
+const maxBookingDurationMs = 24 * 60 * 60 * 1000;
 
 const bookingInclude = {
   station: {
@@ -50,8 +51,16 @@ function nullableId(value: string | null | undefined) {
   return trimmed || null;
 }
 
+function assertSchedule(start: Date, end: Date) {
+  const durationMs = end.getTime() - start.getTime();
+  if (durationMs <= 0 || durationMs > maxBookingDurationMs) {
+    throw new EnterpriseDomainError("GAMING_BOOKING_SCHEDULE_INVALID", 400);
+  }
+}
+
 function durationMinutes(start: Date, end: Date) {
-  return Math.max(1, Math.ceil((end.getTime() - start.getTime()) / 60_000));
+  assertSchedule(start, end);
+  return Math.ceil((end.getTime() - start.getTime()) / 60_000);
 }
 
 async function lockBookingStations(tx: Tx, organizationId: string, stationIds: string[]) {
@@ -291,6 +300,7 @@ export async function createGamingBooking(organizationId: string, actorUserId: s
       });
       if (retry) return retry.id;
 
+      assertSchedule(input.scheduledStartAt, input.scheduledEndAt);
       const businessPartyId = nullableId(input.businessPartyId);
       await assertCustomer(tx, organizationId, businessPartyId);
       await assertBookableStation(tx, organizationId, input.stationId, input.playerCount);
@@ -403,7 +413,7 @@ export async function transitionGamingBooking(
         const playerCount = input.playerCount ?? booking.playerCount;
         const customerProvided = Object.prototype.hasOwnProperty.call(input, "businessPartyId");
         const businessPartyId = customerProvided ? nullableId(input.businessPartyId) : booking.businessPartyId;
-        if (scheduledEndAt <= scheduledStartAt) throw new EnterpriseDomainError("GAMING_BOOKING_SCHEDULE_INVALID", 400);
+        assertSchedule(scheduledStartAt, scheduledEndAt);
 
         await assertCustomer(tx, organizationId, businessPartyId);
         await assertBookableStation(tx, organizationId, stationId, playerCount);
@@ -424,6 +434,7 @@ export async function transitionGamingBooking(
         metadata = { stationId, scheduledStartAt: scheduledStartAt.toISOString(), scheduledEndAt: scheduledEndAt.toISOString(), playerCount };
       } else if (input.action === "CONFIRM") {
         if (booking.status !== "DRAFT") throw new EnterpriseDomainError("GAMING_BOOKING_CONFIRM_INVALID", 409);
+        assertSchedule(booking.scheduledStartAt, booking.scheduledEndAt);
         await assertCustomer(tx, organizationId, booking.businessPartyId);
         await assertBookableStation(tx, organizationId, booking.stationId, booking.playerCount);
         await lockBookingStations(tx, organizationId, [booking.stationId]);
@@ -432,6 +443,7 @@ export async function transitionGamingBooking(
         data = { ...data, status: "CONFIRMED", confirmedAt: now };
       } else if (input.action === "CHECK_IN") {
         if (booking.status !== "CONFIRMED") throw new EnterpriseDomainError("GAMING_BOOKING_CHECK_IN_INVALID", 409);
+        assertSchedule(booking.scheduledStartAt, booking.scheduledEndAt);
         await lockBookingStations(tx, organizationId, [booking.stationId]);
         await assertNoConflict(tx, organizationId, booking.stationId, booking.scheduledStartAt, booking.scheduledEndAt, booking.id);
         nextStatus = "CHECKED_IN";
