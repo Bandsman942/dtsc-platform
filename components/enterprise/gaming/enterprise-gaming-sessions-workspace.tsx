@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { ArrowRightLeft, Clock3, Pause, Play, Plus, Square, TimerReset } from "lucide-react";
-import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
+import { ArrowRightLeft, Calculator, Clock3, Pause, Play, Plus, Square, TimerReset } from "lucide-react";
+import { Field, NativeSelect, formatEnterpriseAmount } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { gamingSessionsCopy } from "@/components/enterprise/gaming/gaming-sessions-i18n";
 import { ProfessionalError, ProfessionalFormSection, ProfessionalLoading, ProfessionalSearch, ProfessionalTabs, professionalMutation, useProfessionalCollection } from "@/components/enterprise/professional/professional-erp-ui";
 import { useAppLocale } from "@/components/i18n/locale-provider";
@@ -24,6 +24,8 @@ type SessionItem = {
   id: string;
   reference: string;
   stationId: string;
+  serviceCatalogItemId: string | null;
+  pricingRuleId: string | null;
   status: SessionStatus;
   startedAt: string | null;
   expectedEndAt: string | null;
@@ -32,15 +34,23 @@ type SessionItem = {
   pausedSeconds: number;
   billableSeconds: number | null;
   timingPolicyJson: { pauseBillable?: boolean } | null;
+  pricingSnapshotJson: unknown;
+  currency: string | null;
+  quotedAmount: string | null;
+  finalAmount: string | null;
   revision: number;
   station: { id: string; stationCode: string; displayName: string | null; consoleFamily: string | null; maxPlayers: number };
+  pricingRule: { id: string; code: string; pricingMode: string; amount: string; currency: string } | null;
+  catalogService: { id: string; code: string; name: string } | null;
   transitions: SessionTransition[];
   timing: { elapsedSeconds: number; pausedSeconds: number; billableSeconds: number; remainingSeconds: number | null };
 };
-type SessionExtra = { serverNow?: string };
+type SessionExtra = { serverNow?: string; canReadPricing?: boolean; canOverridePricing?: boolean };
 type Station = { id: string; stationCode: string; displayName: string | null; consoleFamily: string | null; effectiveStatus: string };
+type CatalogService = { id: string; code: string; name: string; itemType: string };
 type Pagination = { page: number; pageSize: number; total: number; pageCount: number };
 type Filter = "ALL" | SessionStatus;
+type Quote = { pricingRuleId: string; pricingRuleCode: string; currency: string; quotedAmount: string; service: { id: string; code: string; name: string }; station: { id: string; stationCode: string } };
 
 function statusTone(status: SessionStatus): StatusBadgeTone {
   if (status === "ACTIVE") return "success";
@@ -94,6 +104,19 @@ export function EnterpriseGamingSessionsWorkspace({
   const [stationPagination, setStationPagination] = useState<Pagination>({ page: 1, pageSize: 20, total: 0, pageCount: 1 });
   const [stationLoading, setStationLoading] = useState(false);
   const [stationError, setStationError] = useState("");
+  const [servicePage, setServicePage] = useState(1);
+  const [services, setServices] = useState<CatalogService[]>([]);
+  const [servicePagination, setServicePagination] = useState<Pagination>({ page: 1, pageSize: 20, total: 0, pageCount: 1 });
+  const [serviceLoading, setServiceLoading] = useState(false);
+  const [serviceError, setServiceError] = useState("");
+
+  const [selectedStationId, setSelectedStationId] = useState("");
+  const [selectedServiceId, setSelectedServiceId] = useState("");
+  const [durationMinutes, setDurationMinutes] = useState(60);
+  const [playerCount, setPlayerCount] = useState(1);
+  const [overrideAmount, setOverrideAmount] = useState("");
+  const [overrideReason, setOverrideReason] = useState("");
+  const [quote, setQuote] = useState<Quote | null>(null);
 
   useToastMessage(message, "error");
   useToastMessage(success, "success");
@@ -148,6 +171,27 @@ export function EnterpriseGamingSessionsWorkspace({
     return () => controller.abort();
   }, [copy.loadStationsFailed, createOpen, organizationId, refreshKey, stationPage, transferFor]);
 
+  useEffect(() => {
+    if (!createOpen) return;
+    const controller = new AbortController();
+    const query = new URLSearchParams({ page: String(servicePage), pageSize: "20", itemType: "SERVICE", status: "ACTIVE" });
+    setServiceLoading(true);
+    setServiceError("");
+    fetch(`/api/enterprise/${organizationId}/catalog?${query.toString()}`, { cache: "no-store", signal: controller.signal })
+      .then(async (response) => {
+        const body = await response.json().catch(() => null) as { items?: CatalogService[]; pagination?: Pagination; message?: string; error?: string } | null;
+        if (!response.ok || !body?.items || !body.pagination) throw new Error(body?.message || body?.error || copy.loadServicesFailed);
+        setServices(body.items);
+        setServicePagination(body.pagination);
+      })
+      .catch((error: unknown) => {
+        if ((error as { name?: string })?.name === "AbortError") return;
+        setServiceError(error instanceof Error ? error.message : copy.loadServicesFailed);
+      })
+      .finally(() => setServiceLoading(false));
+    return () => controller.abort();
+  }, [copy.loadServicesFailed, createOpen, organizationId, servicePage]);
+
   const projectedDelta = useMemo(() => Math.max(0, Math.floor((Date.now() - anchorClientMs) / 1000)), [anchorClientMs, tick]);
 
   function projectedTiming(item: SessionItem) {
@@ -175,12 +219,49 @@ export function EnterpriseGamingSessionsWorkspace({
     setSuccess("");
   }
 
+  function openCreate() {
+    resetFeedback();
+    setStationPage(1);
+    setServicePage(1);
+    setSelectedStationId("");
+    setSelectedServiceId("");
+    setDurationMinutes(60);
+    setPlayerCount(1);
+    setOverrideAmount("");
+    setOverrideReason("");
+    setQuote(null);
+    setCreateOpen(true);
+  }
+
   function refreshAndClose() {
     setDetail(null);
     setExtendFor(null);
     setTransferFor(null);
     setEndFor(null);
     setRefreshKey((value) => value + 1);
+  }
+
+  async function previewPrice() {
+    resetFeedback();
+    setQuote(null);
+    if (!selectedStationId || !selectedServiceId) return;
+    setBusy(true);
+    try {
+      const response = await professionalMutation(`/api/enterprise/${organizationId}/gaming/pricing/simulate`, {
+        stationId: selectedStationId,
+        serviceCatalogItemId: selectedServiceId,
+        durationMinutes,
+        playerCount,
+        ...(overrideAmount ? { priceOverrideAmount: Number(overrideAmount), priceOverrideReason: overrideReason } : {}),
+      }) as { quote?: Quote };
+      if (!response.quote) throw new Error("PRICING_RESULT_MISSING");
+      setQuote(response.quote);
+      setSuccess(copy.quoteReady);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : copy.calculatePrice);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function startSession(event: FormEvent<HTMLFormElement>) {
@@ -190,13 +271,18 @@ export function EnterpriseGamingSessionsWorkspace({
     setBusy(true);
     try {
       await professionalMutation(`/api/enterprise/${organizationId}/gaming/sessions`, {
-        stationId: String(form.get("stationId") || ""),
-        durationMinutes: Number(form.get("durationMinutes") || 60),
+        stationId: selectedStationId,
+        serviceCatalogItemId: selectedServiceId,
+        durationMinutes,
+        playerCount,
         pauseBillable: form.get("pauseBillable") === "on",
+        ...(overrideAmount ? { priceOverrideAmount: Number(overrideAmount), priceOverrideReason: overrideReason } : {}),
         idempotencyKey: newCommandKey(),
       });
       setCreateOpen(false);
       setStationPage(1);
+      setServicePage(1);
+      setQuote(null);
       setSuccess(copy.started);
       setRefreshKey((value) => value + 1);
     } catch (error) {
@@ -313,7 +399,7 @@ export function EnterpriseGamingSessionsWorkspace({
         title={copy.title}
         description={locale === "en" ? definition.descriptionEn : definition.descriptionFr}
         count={copy.sessionCount(collection.pagination.total)}
-        primaryAction={collection.canWrite ? <Button onClick={() => { resetFeedback(); setStationPage(1); setCreateOpen(true); }}><Plus className="h-4 w-4" />{copy.newSession}</Button> : undefined}
+        primaryAction={collection.canWrite ? <Button onClick={openCreate}><Plus className="h-4 w-4" />{copy.newSession}</Button> : undefined}
       />
 
       <ModuleMetrics label={copy.metricsLabel}>
@@ -341,6 +427,7 @@ export function EnterpriseGamingSessionsWorkspace({
               <BusinessList ariaLabel={copy.sectionTitle} className="grid gap-3 divide-y-0 border-0 bg-transparent sm:grid-cols-2 xl:grid-cols-3">
                 {collection.items.map((item) => {
                   const timing = projectedTiming(item);
+                  const displayAmount = item.finalAmount || item.quotedAmount;
                   return (
                     <BusinessListItem
                       key={item.id}
@@ -349,7 +436,7 @@ export function EnterpriseGamingSessionsWorkspace({
                       title={item.station.displayName || item.station.stationCode}
                       status={<StatusBadge tone={statusTone(item.status)}>{copy.status[item.status] || item.status}</StatusBadge>}
                       meta={`${item.reference} · ${copy.remaining}: ${formatSeconds(timing.remainingSeconds)}`}
-                      description={`${copy.elapsed}: ${formatSeconds(timing.elapsedSeconds)} · ${copy.billable}: ${formatSeconds(timing.billableSeconds)}`}
+                      description={`${copy.elapsed}: ${formatSeconds(timing.elapsedSeconds)} · ${copy.billable}: ${formatSeconds(timing.billableSeconds)}${displayAmount && item.currency ? ` · ${item.finalAmount ? copy.finalAmount : copy.quotedAmount}: ${formatEnterpriseAmount(displayAmount, item.currency, locale)}` : ""}`}
                       onOpen={() => { resetFeedback(); setDetail(item); }}
                       openLabel={`${copy.detailTitle} ${item.reference}`}
                     />
@@ -377,23 +464,43 @@ export function EnterpriseGamingSessionsWorkspace({
         {detail ? <SessionDetail item={detail} timing={projectedTiming(detail)} copy={copy} locale={locale} /> : null}
       </FullscreenEntityDetail>
 
-      <Dialog open={createOpen} onClose={() => !busy && setCreateOpen(false)} title={copy.createTitle} description={copy.createDescription} className="h-[92dvh]" footer={<><Button variant="secondary" disabled={busy} onClick={() => setCreateOpen(false)}>{copy.cancel}</Button><Button form="gaming-session-start" type="submit" disabled={busy || !stations.length}>{copy.save}</Button></>}>
+      <Dialog open={createOpen} onClose={() => !busy && setCreateOpen(false)} title={copy.createTitle} description={copy.createDescription} className="h-[92dvh]" footer={<><Button variant="secondary" disabled={busy} onClick={() => setCreateOpen(false)}>{copy.cancel}</Button><Button form="gaming-session-start" type="submit" disabled={busy || !selectedStationId || !selectedServiceId}>{copy.save}</Button></>}>
         <form id="gaming-session-start" onSubmit={startSession} className="grid gap-5 p-4 sm:p-5">
           {message ? <ProfessionalError message={message} /> : null}
           <ProfessionalFormSection title={copy.availableStations} description={copy.createDescription}>
             {stationError ? <div className="md:col-span-2"><ProfessionalError message={stationError} /></div> : null}
             {stationLoading ? <div className="md:col-span-2"><ProfessionalLoading rows={2} /></div> : stations.length ? (
-              <Field label={copy.station} required><NativeSelect name="stationId" required items={stations.map((station) => ({ id: station.id, label: `${station.stationCode} · ${station.displayName || station.consoleFamily || "PlayStation"}` }))} /></Field>
+              <Field label={copy.station} required><NativeSelect value={selectedStationId} onChange={(value) => { setSelectedStationId(value); setQuote(null); }} required items={stations.map((station) => ({ id: station.id, label: `${station.stationCode} · ${station.displayName || station.consoleFamily || "PlayStation"}` }))} /></Field>
             ) : <div className="md:col-span-2 text-sm font-bold text-dtsc-muted">{copy.noAvailableStation}</div>}
-            <Field label={copy.duration} required><Input name="durationMinutes" type="number" min={1} max={1440} defaultValue={60} required /></Field>
+            {serviceError ? <div className="md:col-span-2"><ProfessionalError message={serviceError} /></div> : null}
+            {serviceLoading ? <div className="md:col-span-2"><ProfessionalLoading rows={2} /></div> : services.length ? (
+              <Field label={copy.catalogService} required><NativeSelect value={selectedServiceId} onChange={(value) => { setSelectedServiceId(value); setQuote(null); }} required items={services.map((service) => ({ id: service.id, label: `${service.code} · ${service.name}` }))} /></Field>
+            ) : <div className="md:col-span-2 text-sm font-bold text-dtsc-muted">{copy.noCatalogService}</div>}
+            <Field label={copy.duration} required><Input value={durationMinutes} onChange={(event) => { setDurationMinutes(Number(event.target.value || 1)); setQuote(null); }} type="number" min={1} max={1440} required /></Field>
+            <Field label={copy.playerCount} required><Input value={playerCount} onChange={(event) => { setPlayerCount(Number(event.target.value || 1)); setQuote(null); }} type="number" min={1} max={16} required /></Field>
             <label className="flex min-h-11 items-center gap-3 rounded-xl border border-dtsc-border px-3 py-2 text-sm font-bold text-dtsc-ink md:col-span-2">
               <input name="pauseBillable" type="checkbox" className="h-4 w-4" />
               <span><span className="block">{copy.pauseBillable}</span><span className="block font-medium text-dtsc-muted">{copy.pauseBillableHelp}</span></span>
             </label>
-            <div className="flex min-w-0 items-center justify-between gap-2 md:col-span-2">
-              <Button type="button" variant="secondary" disabled={stationPage <= 1 || stationLoading} onClick={() => setStationPage((value) => Math.max(1, value - 1))}>{copy.previous}</Button>
-              <span className="text-xs font-bold text-dtsc-muted">{copy.page(stationPagination.page, stationPagination.pageCount)}</span>
-              <Button type="button" variant="secondary" disabled={stationPage >= stationPagination.pageCount || stationLoading} onClick={() => setStationPage((value) => Math.min(stationPagination.pageCount, value + 1))}>{copy.next}</Button>
+            {collection.extra.canOverridePricing ? <>
+              <Field label={copy.overrideAmount} help={copy.overrideHelp}><Input value={overrideAmount} onChange={(event) => { setOverrideAmount(event.target.value); setQuote(null); }} type="number" min="0.01" step="0.01" /></Field>
+              <Field label={copy.overrideReason}><Input value={overrideReason} onChange={(event) => { setOverrideReason(event.target.value); setQuote(null); }} maxLength={500} /></Field>
+            </> : null}
+            <div className="grid gap-3 md:col-span-2">
+              <Button type="button" variant="secondary" disabled={busy || !selectedStationId || !selectedServiceId} onClick={() => void previewPrice()}><Calculator className="h-4 w-4" />{copy.calculatePrice}</Button>
+              {quote ? <div className="rounded-2xl border border-dtsc-border bg-dtsc-soft p-4"><div className="text-xs font-black uppercase tracking-wide text-dtsc-muted">{copy.pricePreview}</div><div className="mt-1 text-xl font-black text-dtsc-ink">{formatEnterpriseAmount(quote.quotedAmount, quote.currency, locale)}</div><div className="mt-1 text-sm font-bold text-dtsc-muted">{copy.pricingRule}: {quote.pricingRuleCode}</div></div> : null}
+            </div>
+            <div className="grid gap-3 md:col-span-2 sm:grid-cols-2">
+              <div className="flex min-w-0 items-center justify-between gap-2">
+                <Button type="button" variant="secondary" disabled={stationPage <= 1 || stationLoading} onClick={() => setStationPage((value) => Math.max(1, value - 1))}>{copy.previous}</Button>
+                <span className="text-xs font-bold text-dtsc-muted">{copy.station} · {copy.page(stationPagination.page, stationPagination.pageCount)}</span>
+                <Button type="button" variant="secondary" disabled={stationPage >= stationPagination.pageCount || stationLoading} onClick={() => setStationPage((value) => Math.min(stationPagination.pageCount, value + 1))}>{copy.next}</Button>
+              </div>
+              <div className="flex min-w-0 items-center justify-between gap-2">
+                <Button type="button" variant="secondary" disabled={servicePage <= 1 || serviceLoading} onClick={() => setServicePage((value) => Math.max(1, value - 1))}>{copy.previous}</Button>
+                <span className="text-xs font-bold text-dtsc-muted">{copy.catalogService} · {copy.page(servicePagination.page, servicePagination.pageCount)}</span>
+                <Button type="button" variant="secondary" disabled={servicePage >= servicePagination.pageCount || serviceLoading} onClick={() => setServicePage((value) => Math.min(servicePagination.pageCount, value + 1))}>{copy.next}</Button>
+              </div>
             </div>
           </ProfessionalFormSection>
         </form>
@@ -416,7 +523,7 @@ export function EnterpriseGamingSessionsWorkspace({
       </Dialog>
 
       <Dialog open={Boolean(endFor)} onClose={() => !busy && setEndFor(null)} title={copy.endTitle} description={copy.endDescription} footer={<><Button variant="secondary" disabled={busy} onClick={() => setEndFor(null)}>{copy.cancel}</Button><Button variant="destructive" disabled={busy} onClick={() => void endSession()}>{copy.confirmEnd}</Button></>}>
-        <div className="p-4 text-sm font-bold text-dtsc-ink sm:p-5">{endFor ? `${endFor.reference} · ${endFor.station.stationCode}` : null}</div>
+        <div className="p-4 text-sm font-bold text-dtsc-ink sm:p-5">{endFor ? `${endFor.reference} · ${endFor.station.stationCode}${endFor.quotedAmount && endFor.currency ? ` · ${copy.quotedAmount}: ${formatEnterpriseAmount(endFor.quotedAmount, endFor.currency, locale)}` : ""}` : null}</div>
       </Dialog>
     </ModuleWorkspace>
   );
@@ -428,6 +535,10 @@ function SessionDetail({ item, timing, copy, locale }: { item: SessionItem; timi
     <div className="grid min-w-0 gap-5">
       <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-3">
         <Detail label={copy.station} value={`${item.station.stationCode} · ${item.station.displayName || item.station.consoleFamily || "—"}`} />
+        <Detail label={copy.catalogService} value={item.catalogService ? `${item.catalogService.code} · ${item.catalogService.name}` : "—"} />
+        <Detail label={copy.pricingRule} value={item.pricingRule?.code || "—"} />
+        <Detail label={copy.quotedAmount} value={item.quotedAmount && item.currency ? formatEnterpriseAmount(item.quotedAmount, item.currency, locale) : "—"} />
+        <Detail label={copy.finalAmount} value={item.finalAmount && item.currency ? formatEnterpriseAmount(item.finalAmount, item.currency, locale) : "—"} />
         <Detail label={copy.remaining} value={formatSeconds(timing.remainingSeconds)} />
         <Detail label={copy.elapsed} value={formatSeconds(timing.elapsedSeconds)} />
         <Detail label={copy.billable} value={formatSeconds(timing.billableSeconds)} />
