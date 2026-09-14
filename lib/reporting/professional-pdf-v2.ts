@@ -1,6 +1,5 @@
 import type { ProfessionalReportExportModel } from "@/lib/reporting/professional-export";
 
-const textEncoder = new TextEncoder();
 const CP1252: Record<string, number> = { "€": 128, "‚": 130, "ƒ": 131, "„": 132, "…": 133, "†": 134, "‡": 135, "ˆ": 136, "‰": 137, "Š": 138, "‹": 139, "Œ": 140, "Ž": 142, "‘": 145, "’": 146, "“": 147, "”": 148, "•": 149, "–": 150, "—": 151, "˜": 152, "™": 153, "š": 154, "›": 155, "œ": 156, "ž": 158, "Ÿ": 159 };
 
 type PdfPage = { width: number; height: number; commands: string[] };
