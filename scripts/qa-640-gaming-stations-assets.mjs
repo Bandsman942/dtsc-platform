@@ -33,9 +33,15 @@ check(stations?.accessPolicy === "POSITION_PERMISSION", "GAMING_STATIONS must us
 check(stations?.dependencies?.includes("ASSETS_MAINTENANCE"), "GAMING_STATIONS must depend on ASSETS_MAINTENANCE");
 check(stations?.dependencies?.includes("SITES_WAREHOUSES"), "GAMING_STATIONS must depend on SITES_WAREHOUSES");
 for (const item of registry.modules.filter((item) => item.code !== "GAMING_STATIONS")) {
-  check(item.implementationStatus === "PLANNED", `${item.code} must remain PLANNED in #640`);
-  check(item.routeKind === "HIDDEN", `${item.code} must remain HIDDEN in #640`);
-  check(item.accessPolicy === "EXPLICIT_DENY", `${item.code} must remain fail-closed in #640`);
+  if (item.implementationStatus === "PLANNED") {
+    check(item.routeKind === "HIDDEN", `${item.code} PLANNED module must remain HIDDEN`);
+    check(item.accessPolicy === "EXPLICIT_DENY", `${item.code} PLANNED module must remain fail-closed`);
+  } else {
+    check(["BETA", "ACTIVE"].includes(item.implementationStatus), `${item.code} implemented status must be BETA or ACTIVE`);
+    check(item.routeKind === "DEDICATED_CORE", `${item.code} implemented module must use DEDICATED_CORE`);
+    check(Boolean(item.workspaceKey), `${item.code} implemented module must have a workspace`);
+    check(item.accessPolicy === "POSITION_PERMISSION", `${item.code} implemented module must use position permissions`);
+  }
 }
 
 includesAll(domain, [
@@ -159,15 +165,7 @@ includesAll(workspace, [
   "useToastMessage",
 ], "station workspace UX");
 
-includesAll(copy, [
-  "fr:",
-  "en:",
-  "Une sixième console",
-  "A sixth console",
-  "sans limite fixe",
-  "without a fixed limit",
-], "station i18n and extensibility copy");
-
+includesAll(copy, ["fr:", "en:", "Une sixième console", "A sixth console", "sans limite fixe", "without a fixed limit"], "station i18n and extensibility copy");
 includesAll(docs, ["#640", "GAMING_STATIONS", "EnterpriseAsset"], "gaming architecture docs");
 check(regression.includes('await import("./qa-640-gaming-stations-assets.mjs");'), "qa:regression must execute #640 Gaming Stations QA");
 
