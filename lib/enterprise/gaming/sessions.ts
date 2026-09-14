@@ -331,7 +331,7 @@ export async function transitionGamingSession(
       const now = new Date();
       let nextStatus = session.status;
       let metadata: Prisma.InputJsonValue = {};
-      let data: Prisma.EnterpriseGamingSessionUpdateManyMutationInput = {
+      let data: Prisma.EnterpriseGamingSessionUncheckedUpdateManyInput = {
         updatedByUserId: actorUserId,
         revision: { increment: 1 },
       };
