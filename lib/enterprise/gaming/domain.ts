@@ -22,6 +22,14 @@ export const GAMING_STATION_PERMISSIONS = [
 ] as const;
 export type GamingStationPermission = (typeof GAMING_STATION_PERMISSIONS)[number];
 
+export const GAMING_SESSION_PERMISSIONS = [
+  "enterprise.gaming.sessions.read",
+  "enterprise.gaming.sessions.create",
+  "enterprise.gaming.sessions.update",
+  "enterprise.gaming.sessions.manage",
+] as const;
+export type GamingSessionPermission = (typeof GAMING_SESSION_PERMISSIONS)[number];
+
 export const GAMING_STATION_STATUSES = [
   "AVAILABLE",
   "IN_USE",
@@ -41,6 +49,16 @@ export const GAMING_SESSION_STATUSES = [
   "CANCELLED",
 ] as const;
 export type GamingSessionStatus = (typeof GAMING_SESSION_STATUSES)[number];
+
+export const GAMING_SESSION_ACTIONS = [
+  "START",
+  "PAUSE",
+  "RESUME",
+  "EXTEND",
+  "TRANSFER",
+  "END",
+] as const;
+export type GamingSessionAction = (typeof GAMING_SESSION_ACTIONS)[number];
 
 export const GAMING_BOOKING_STATUSES = [
   "DRAFT",
