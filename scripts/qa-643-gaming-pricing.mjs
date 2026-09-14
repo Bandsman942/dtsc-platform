@@ -64,6 +64,7 @@ includesAll(schemas, [
   "gamingPricingRuleCreateSchema",
   "gamingPricingRuleUpdateSchema",
   "gamingPricingSimulationSchema",
+  "startAt: optionalDate",
   "FIXED_DURATION",
   "PER_MINUTE",
   "PER_HOUR",
