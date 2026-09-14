@@ -1,7 +1,7 @@
 export const BUSINESS_SUBTYPE_IMPLEMENTATION_STATUSES = ["ACTIVE", "PLANNED"] as const;
 export type BusinessSubtypeImplementationStatus = (typeof BUSINESS_SUBTYPE_IMPLEMENTATION_STATUSES)[number];
 
-export const BUSINESS_SUBTYPE_CODES = ["SHOP", "TAILORING_APPAREL"] as const;
+export const BUSINESS_SUBTYPE_CODES = ["SHOP", "TAILORING_APPAREL", "GAMING_LOUNGE"] as const;
 export type BusinessSubtypeCode = (typeof BUSINESS_SUBTYPE_CODES)[number];
 
 export type BusinessSubtypeDefinition = {
@@ -40,6 +40,15 @@ export const BUSINESS_SUBTYPES = [
     descriptionFr: "Sous-secteur Manufacturing pour les ateliers de couture, la confection sur mesure, le prêt-à-porter et les activités mixtes, intégré au moteur Manufacturing et aux sources ERP communes.",
     descriptionEn: "Manufacturing subtype for tailoring workshops, made-to-measure, ready-to-wear and mixed apparel operations, integrated with Manufacturing Core and shared ERP sources.",
     implementationStatus: "ACTIVE",
+  },
+  {
+    sectorCode: "HOSPITALITY_EVENTS",
+    code: "GAMING_LOUNGE",
+    labelFr: "Salle de jeux / Gaming Lounge",
+    labelEn: "Gaming lounge",
+    descriptionFr: "Sous-secteur loisirs pour salles de jeux, consoles et e-sport vendant du temps d’utilisation de postes, avec réservations, sessions, tarification, encaissement et maintenance intégrés aux sources ERP communes.",
+    descriptionEn: "Leisure subtype for gaming lounges, consoles and e-sport businesses selling station usage time, with bookings, sessions, pricing, checkout and maintenance integrated with shared ERP sources.",
+    implementationStatus: "PLANNED",
   },
 ] as const satisfies readonly BusinessSubtypeDefinition[];
 
