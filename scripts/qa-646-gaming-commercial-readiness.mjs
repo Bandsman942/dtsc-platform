@@ -21,6 +21,7 @@ const dashboardPage = read("app/enterprise-modules/GAMING_DASHBOARD/page.tsx");
 const readinessUi = read("components/enterprise/gaming/gaming-commercial-readiness.tsx");
 const readinessE2e = read("tests/e2e/issue-646-gaming-commercial-readiness.spec.mjs");
 const readiness = readJson("lib/enterprise/sector-onboarding-readiness.json");
+const genericReadinessQa = read("scripts/qa-sector-onboarding-commercial-readiness.mjs");
 const guideFr = read("docs/user-guides/GAMING_LOUNGE_FR.md");
 const guideEn = read("docs/user-guides/GAMING_LOUNGE_EN.md");
 const aiGaming = read("lib/ai/tools/executors/gaming.ts");
@@ -88,8 +89,13 @@ includesAll(readinessE2e, [
 ], "Gaming responsive browser acceptance");
 
 const gamingProfile = readiness.profiles.find((profile) => profile.businessProfileCode === "GAMING_LOUNGE");
-check(readiness.version >= 5, "Sector onboarding readiness version must include Gaming");
+check(readiness.version >= 6, "Sector onboarding readiness version must include subtype-aware commercialization");
+check(gamingProfile?.scope === "BUSINESS_SUBTYPE", "Gaming readiness must be scoped as BUSINESS_SUBTYPE");
 check(gamingProfile?.sectorCode === "HOSPITALITY_EVENTS", "Gaming readiness sector mismatch");
+check(gamingProfile?.businessSubtypeCode === "GAMING_LOUNGE", "Gaming readiness subtype mismatch");
+check(gamingProfile?.runtimeProvisioningFile === "lib/enterprise/gaming/provisioning.ts", "Gaming readiness provisioning file missing");
+check(gamingProfile?.runtimeProvisioningMarker === "syncGamingOnboardingProvisioning", "Gaming readiness provisioning marker missing");
+check(gamingProfile?.dedicatedQaFile === "scripts/qa-646-gaming-commercial-readiness.mjs", "Gaming readiness dedicated QA binding missing");
 check(gamingProfile?.commercializationStatus === "COMMERCIAL_READY", "Gaming target commercialization status must be COMMERCIAL_READY");
 check(gamingProfile?.enforce === true, "Gaming readiness must be enforced");
 check(gamingProfile?.minimumOperationalPlan === "BUSINESS", "Gaming minimum plan must be BUSINESS");
@@ -99,6 +105,14 @@ check(gamingProfile?.requiredGuideCodes?.includes("GAMING_LOUNGE_FR"), "Gaming F
 check(gamingProfile?.requiredGuideCodes?.includes("GAMING_LOUNGE_EN"), "Gaming EN guide code missing");
 check(String(gamingProfile?.commercialReadyPromotionRule || "").includes("OWNER_E2E"), "Gaming COMMERCIAL_READY promotion must require OWNER_E2E");
 check(String(gamingProfile?.commercialReadyPromotionRule || "").includes("exact final head"), "Gaming COMMERCIAL_READY promotion must bind to exact final head");
+includesAll(genericReadinessQa, [
+  'profile.scope === "BUSINESS_SUBTYPE"',
+  'profileScope(profile) === "SECTOR_TEMPLATE"',
+  "activeBusinessSubtypePairs",
+  "runtimeProvisioningMarker",
+  "dedicatedQaFile",
+  "moduleAllowsBusinessSubtype",
+], "subtype-aware generic commercial readiness gate");
 
 includesAll(guideFr, ["DTSC", "Gaming Lounge", "5", "Actifs", "Finance", "DTSC AI", "OWNER_E2E", "320/360/375/390/414"], "Gaming guide FR");
 includesAll(guideEn, ["DTSC", "Gaming Lounge", "5", "Assets", "Finance", "DTSC AI", "OWNER_E2E", "320/360/375/390/414"], "Gaming guide EN");
