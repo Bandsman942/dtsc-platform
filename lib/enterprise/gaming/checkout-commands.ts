@@ -56,7 +56,7 @@ export async function commandGamingCheckout(
       return { ...snapshot, idempotent: true };
     }
     requireCheckoutRevision(snapshot.checkout.revision, input.revision);
-    let invoice = snapshot.invoice;
+    let invoice = { id: snapshot.invoice.id, status: snapshot.invoice.status, revision: snapshot.invoice.revision };
     if (invoice.status === "PENDING_APPROVAL") {
       invoice = await approveSalesInvoiceAssignedApproval(
         organizationId,

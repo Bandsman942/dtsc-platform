@@ -335,7 +335,10 @@ export async function prepareGamingCheckout(organizationId: string, actorUserId:
 
       for (const line of trackedExtras) {
         const inventoryItem = inventoryByCatalogId.get(line.item.id)!;
-        const invoiceItem = invoice.items.find((item) => item.catalogItemId === line.item.id);
+        const invoiceItem = await tx.enterpriseSalesInvoiceItem.findFirst({
+          where: { organizationId, salesInvoiceId: invoice.id, catalogItemId: line.item.id },
+          select: { id: true },
+        });
         if (!invoiceItem) throw new EnterpriseGamingCheckoutError("GAMING_CHECKOUT_INVOICE_LINE_MISSING", 409);
         await applyStockMovementTx(tx, organizationId, actorUserId, {
           inventoryItemId: inventoryItem.id,

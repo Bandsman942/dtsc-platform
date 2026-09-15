@@ -126,7 +126,7 @@ export async function restockGamingCheckoutTx(
       warehouseId: movement.warehouseId,
       storageLocationId: movement.storageLocationId,
       stockLotId: movement.stockLotId,
-      movementType: "CUSTOMER_RETURN",
+      movementType: "RETURN_IN",
       direction: "IN",
       quantity: Number(movement.quantity),
       sourceEntityType: "EnterpriseGamingCheckout",

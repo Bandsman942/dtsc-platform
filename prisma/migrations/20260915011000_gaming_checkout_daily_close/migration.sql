@@ -73,11 +73,13 @@ CREATE UNIQUE INDEX "GamingCheckout_org_reference_key" ON "EnterpriseGamingCheck
 CREATE UNIQUE INDEX "GamingCheckout_org_session_key" ON "EnterpriseGamingCheckout"("organizationId", "sessionId");
 CREATE UNIQUE INDEX "GamingCheckout_org_invoice_key" ON "EnterpriseGamingCheckout"("organizationId", "salesInvoiceId");
 CREATE UNIQUE INDEX "GamingCheckout_org_idempotency_key" ON "EnterpriseGamingCheckout"("organizationId", "idempotencyKey");
+CREATE UNIQUE INDEX "EnterpriseGamingCheckout_organizationId_id_key" ON "EnterpriseGamingCheckout"("organizationId", "id");
 CREATE INDEX "EnterpriseGamingCheckout_organizationId_status_createdAt_idx" ON "EnterpriseGamingCheckout"("organizationId", "status", "createdAt");
 CREATE INDEX "EnterpriseGamingCheckout_organizationId_refundRequestedAt_idx" ON "EnterpriseGamingCheckout"("organizationId", "refundRequestedAt");
 
 CREATE UNIQUE INDEX "GamingDailyClose_org_reference_key" ON "EnterpriseGamingDailyClose"("organizationId", "reference");
 CREATE UNIQUE INDEX "GamingDailyClose_org_idempotency_key" ON "EnterpriseGamingDailyClose"("organizationId", "idempotencyKey");
+CREATE UNIQUE INDEX "EnterpriseGamingDailyClose_organizationId_id_key" ON "EnterpriseGamingDailyClose"("organizationId", "id");
 CREATE UNIQUE INDEX "GamingDailyClose_org_date_global_active_key"
   ON "EnterpriseGamingDailyClose"("organizationId", "businessDate")
   WHERE "siteId" IS NULL AND "status" IN ('SUBMITTED', 'VALIDATED');
@@ -87,6 +89,7 @@ CREATE UNIQUE INDEX "GamingDailyClose_org_date_site_active_key"
 CREATE INDEX "EnterpriseGamingDailyClose_organizationId_businessDate_status_idx" ON "EnterpriseGamingDailyClose"("organizationId", "businessDate", "status");
 CREATE INDEX "EnterpriseGamingDailyClose_organizationId_siteId_businessDate_idx" ON "EnterpriseGamingDailyClose"("organizationId", "siteId", "businessDate");
 
+CREATE UNIQUE INDEX "EnterpriseGamingDailyCloseLine_organizationId_id_key" ON "EnterpriseGamingDailyCloseLine"("organizationId", "id");
 CREATE UNIQUE INDEX "GamingDailyCloseLine_scope_key" ON "EnterpriseGamingDailyCloseLine"("organizationId", "dailyCloseId", "financialAccountId", "methodType");
 CREATE INDEX "EnterpriseGamingDailyCloseLine_organizationId_dailyCloseId_idx" ON "EnterpriseGamingDailyCloseLine"("organizationId", "dailyCloseId");
 CREATE INDEX "EnterpriseGamingDailyCloseLine_organizationId_financialAccountId_currencyCode_idx" ON "EnterpriseGamingDailyCloseLine"("organizationId", "financialAccountId", "currencyCode");
