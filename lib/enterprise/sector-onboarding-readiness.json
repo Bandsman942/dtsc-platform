@@ -1,6 +1,6 @@
 {
-  "version": 5,
-  "purpose": "Opposable onboarding and commercialization gate for DTSC sector templates.",
+  "version": 6,
+  "purpose": "Opposable onboarding and commercialization gate for DTSC sector templates and business subtypes.",
   "genericCriteria": [
     "ACTIVE_SECTOR",
     "ACTIVE_TEMPLATE",
@@ -17,6 +17,7 @@
   ],
   "profiles": [
     {
+      "scope": "SECTOR_TEMPLATE",
       "sectorCode": "COMMERCE_RETAIL",
       "templateVersion": 2,
       "businessProfileCode": "RETAIL_CORE",
@@ -75,9 +76,14 @@
       ]
     },
     {
+      "scope": "BUSINESS_SUBTYPE",
       "sectorCode": "MANUFACTURING",
       "templateVersion": 2,
       "businessProfileCode": "TAILORING_APPAREL",
+      "businessSubtypeCode": "TAILORING_APPAREL",
+      "runtimeProvisioningFile": "lib/enterprise/tailoring/provisioning.ts",
+      "runtimeProvisioningMarker": "syncTailoringOnboardingProvisioning",
+      "dedicatedQaFile": "scripts/qa-608-tailoring-commercial-readiness.mjs",
       "commercializationStatus": "COMMERCIAL_READY",
       "enforce": true,
       "minimumOperationalPlan": "BUSINESS",
@@ -148,9 +154,14 @@
       "commercialReadyPromotionRule": "Promote READY to COMMERCIAL_READY only after CI_PROVEN cross-module acceptance and OWNER_E2E for the DTSC creation -> invitation -> onboarding -> order -> production -> delivery -> finance path."
     },
     {
+      "scope": "BUSINESS_SUBTYPE",
       "sectorCode": "HOSPITALITY_EVENTS",
       "templateVersion": 1,
       "businessProfileCode": "GAMING_LOUNGE",
+      "businessSubtypeCode": "GAMING_LOUNGE",
+      "runtimeProvisioningFile": "lib/enterprise/gaming/provisioning.ts",
+      "runtimeProvisioningMarker": "syncGamingOnboardingProvisioning",
+      "dedicatedQaFile": "scripts/qa-646-gaming-commercial-readiness.mjs",
       "commercializationStatus": "COMMERCIAL_READY",
       "enforce": true,
       "minimumOperationalPlan": "BUSINESS",
