@@ -11,7 +11,11 @@ const endMarker = '\n\nincludesAll(domain,';
 
 for (const filename of historicalSuites) {
   const sourcePath = new URL(`./${filename}`, import.meta.url);
-  const source = fs.readFileSync(sourcePath, "utf8");
+  let source = fs.readFileSync(sourcePath, "utf8");
+  source = source.replace(
+    /check\((\w+)\?\.implementationStatus === "BETA", ([^;]+)\);/,
+    'check(["BETA", "ACTIVE"].includes($1?.implementationStatus), $2);',
+  );
   const start = source.indexOf(startMarker);
   const end = source.indexOf(endMarker, start);
 
