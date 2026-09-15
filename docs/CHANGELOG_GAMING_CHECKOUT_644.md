@@ -14,7 +14,7 @@
 - Les sessions anonymes utilisent un tiers système `EnterpriseBusinessParty` walk-in sans donnée personnelle ; les clients identifiés restent dans `CRM_CUSTOMERS`.
 - Les snacks/accessoires viennent du Catalogue commun. Seuls les produits `trackInventory` génèrent une sortie Inventory `SALE_FULFILLMENT`; le temps de jeu ne décrémente jamais le stock.
 - Un entrepôt actif est obligatoire pour les produits suivis, doit respecter le site du poste lorsqu’il est défini et aucun lot n’est choisi automatiquement pour un article `lotTracking`.
-- L’annulation avant émission restitue les produits suivis via `CUSTOMER_RETURN` et ne modifie pas silencieusement un mouvement confirmé.
+- L’annulation avant émission restitue les produits suivis via le mouvement Inventory canonique `RETURN_IN` et ne modifie pas silencieusement un mouvement confirmé.
 - Le remboursement payé passe par un `EnterprisePayment` sortant `REFUND`, inverse les allocations client, contre-passe les écritures d’allocation, crée un avoir exact depuis les montants historiques de facture, confirme le remboursement dans Trésorerie et restitue les produits physiques.
 - Le posting `CUSTOMER_REFUND_CONFIRMED` est enregistré dans le registre comptable ; le chemin Gaming n’écrit pas directement une comptabilité parallèle.
 - `EnterpriseGamingDailyClose` / `EnterpriseGamingDailyCloseLine` fournissent un snapshot opérationnel de clôture par site, compte financier, moyen de paiement et devise.
@@ -33,6 +33,19 @@ Migration additive :
 `prisma/migrations/20260915011000_gaming_checkout_daily_close/migration.sql`
 
 Elle crée uniquement les projections Gaming nécessaires au lien Checkout et au snapshot Daily Close. Les tables Finance, Trésorerie, Caisse, Catalogue et Inventory restent les sources de vérité existantes.
+
+Les contraintes composites `(organizationId, id)` requises par les relations multi-tenant sont matérialisées dans la migration pour `EnterpriseGamingCheckout`, `EnterpriseGamingDailyClose` et `EnterpriseGamingDailyCloseLine`, conformément au schéma Prisma.
+
+## Durcissement CI
+
+Le premier passage CI a détecté puis permis de corriger avant fusion :
+
+- la contrainte unique composite manquante nécessaire à la FK de `EnterpriseGamingDailyCloseLine` ;
+- l’utilisation d’un libellé de mouvement Inventory hors enum canonique, remplacé par `RETURN_IN` ;
+- deux incompatibilités de typage lors des transitions de facture Finance ;
+- la lecture typée des lignes de facture pour les sorties Inventory.
+
+Ces corrections n’ajoutent aucun domaine parallèle et ne modifient pas le périmètre fonctionnel de #644.
 
 ## Non livré dans #644
 
