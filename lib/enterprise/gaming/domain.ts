@@ -46,6 +46,22 @@ export const GAMING_PRICING_PERMISSIONS = [
 ] as const;
 export type GamingPricingPermission = (typeof GAMING_PRICING_PERMISSIONS)[number];
 
+export const GAMING_CHECKOUT_PERMISSIONS = [
+  "enterprise.gaming.checkout.read",
+  "enterprise.gaming.checkout.create",
+  "enterprise.gaming.checkout.update",
+  "enterprise.gaming.checkout.manage",
+] as const;
+export type GamingCheckoutPermission = (typeof GAMING_CHECKOUT_PERMISSIONS)[number];
+
+export const GAMING_CLOSE_PERMISSIONS = [
+  "enterprise.gaming.close.read",
+  "enterprise.gaming.close.create",
+  "enterprise.gaming.close.update",
+  "enterprise.gaming.close.manage",
+] as const;
+export type GamingClosePermission = (typeof GAMING_CLOSE_PERMISSIONS)[number];
+
 export const GAMING_STATION_STATUSES = [
   "AVAILABLE",
   "IN_USE",
@@ -73,6 +89,7 @@ export const GAMING_SESSION_ACTIONS = [
   "EXTEND",
   "TRANSFER",
   "END",
+  "CHECKOUT_PAID",
 ] as const;
 export type GamingSessionAction = (typeof GAMING_SESSION_ACTIONS)[number];
 
@@ -110,6 +127,31 @@ export type GamingPricingRuleStatus = (typeof GAMING_PRICING_RULE_STATUSES)[numb
 
 export const GAMING_PRICING_RULE_ACTIONS = ["UPDATE", "ACTIVATE", "DEACTIVATE", "ARCHIVE"] as const;
 export type GamingPricingRuleAction = (typeof GAMING_PRICING_RULE_ACTIONS)[number];
+
+export const GAMING_CHECKOUT_STATUSES = [
+  "INVOICE_PENDING",
+  "AWAITING_PAYMENT",
+  "PARTIALLY_PAID",
+  "PAID",
+  "REFUND_PENDING",
+  "REFUNDED",
+  "CANCELLED",
+] as const;
+export type GamingCheckoutStatus = (typeof GAMING_CHECKOUT_STATUSES)[number];
+
+export const GAMING_CHECKOUT_ACTIONS = [
+  "PREPARE",
+  "APPROVE_INVOICE",
+  "ADD_PAYMENT",
+  "APPROVE_PAYMENT",
+  "CANCEL",
+  "REQUEST_REFUND",
+  "APPROVE_REFUND",
+] as const;
+export type GamingCheckoutAction = (typeof GAMING_CHECKOUT_ACTIONS)[number];
+
+export const GAMING_DAILY_CLOSE_STATUSES = ["SUBMITTED", "VALIDATED", "REJECTED"] as const;
+export type GamingDailyCloseStatus = (typeof GAMING_DAILY_CLOSE_STATUSES)[number];
 
 function normalizeCode(value: string | null | undefined) {
   return value?.trim().toUpperCase() || "";

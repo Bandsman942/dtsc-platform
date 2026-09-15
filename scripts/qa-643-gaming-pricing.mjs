@@ -45,7 +45,7 @@ check(module?.workspaceKey === "ENTERPRISE_GAMING_PRICING_PACKAGES", "pricing wo
 check(module?.accessPolicy === "POSITION_PERMISSION", "pricing must use POSITION_PERMISSION");
 check(module?.permissionPrefixes?.includes("enterprise.gaming.pricing."), "pricing permission prefix missing");
 for (const dependency of ["CATALOG", "GAMING_STATIONS", "GAMING_SESSIONS"]) check(module?.dependencies?.includes(dependency), `pricing dependency missing ${dependency}`);
-for (const code of ["GAMING_DASHBOARD", "GAMING_CHECKOUT", "GAMING_DAILY_CLOSE", "GAMING_TOURNAMENTS", "GAMING_REPORTS"]) {
+for (const code of ["GAMING_DASHBOARD", "GAMING_TOURNAMENTS", "GAMING_REPORTS"]) {
   const item = registry.modules.find((candidate) => candidate.code === code);
   check(item?.implementationStatus === "PLANNED", `${code} must remain PLANNED after #643`);
   check(item?.routeKind === "HIDDEN", `${code} must remain HIDDEN after #643`);

@@ -4,6 +4,7 @@ import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseGamingSessionAccess, getEnterpriseGamingStationAccess } from "@/lib/enterprise/gaming/access";
 import { gamingSessionErrorResponse } from "@/lib/enterprise/gaming/http";
 import { gamingSessionTransitionSchema } from "@/lib/enterprise/gaming/schemas";
+import { promoteEndedGamingSessionToCheckout } from "@/lib/enterprise/gaming/session-checkout-state";
 import { transitionGamingSession } from "@/lib/enterprise/gaming/sessions";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -30,6 +31,12 @@ export async function PATCH(req: Request, { params }: Params) {
 
   try {
     const result = await transitionGamingSession(organizationId, sessionId, session.userId, parsed.data);
+    const checkoutState = parsed.data.action === "END"
+      ? await promoteEndedGamingSessionToCheckout(organizationId, sessionId, session.userId, parsed.data.idempotencyKey)
+      : null;
+    const responseSession = checkoutState?.status === "TO_CHECKOUT"
+      ? { ...result.session, status: "TO_CHECKOUT", revision: checkoutState.revision ?? result.session.revision }
+      : result.session;
     await writeAuditLog({
       userId: session.userId,
       action: `ENTERPRISE_GAMING_SESSION_${parsed.data.action}${result.idempotent ? "_REPLAYED" : ""}`,
@@ -44,10 +51,11 @@ export async function PATCH(req: Request, { params }: Params) {
         currency: result.session.currency,
         quotedAmount: result.session.quotedAmount?.toString() || null,
         finalAmount: result.session.finalAmount?.toString() || null,
+        readyToCheckout: checkoutState?.status === "TO_CHECKOUT",
       },
     });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "gaming-sessions", transition: parsed.data.action } });
-    return NextResponse.json({ ok: true, ...result });
+    return NextResponse.json({ ok: true, ...result, session: responseSession });
   } catch (error) {
     return gamingSessionErrorResponse(error, req);
   }
