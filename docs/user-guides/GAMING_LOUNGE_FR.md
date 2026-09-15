@@ -55,17 +55,33 @@ Les participants identifiés viennent du CRM commun. Les éventuels frais d’en
 
 L’Assistant IA entreprise peut résumer les performances Gaming uniquement à partir des sources que l’utilisateur a déjà le droit de lire. L’outil `ERP_GAMING_PERFORMANCE_READ` est en lecture seule. Il ne contourne ni le plan, ni les modules, ni les permissions, ni les droits Finance/Actifs. Il présente des observations factuelles et ne transforme pas une corrélation en causalité.
 
-## Accès, rôles et sécurité
+## Accès et permissions
 
 Les rôles Gaming recommandés servent de point de départ. Un poste n’obtient que les permissions explicitement provisionnées. Un rôle DTSC global ne donne aucun accès automatique aux données privées d’un tenant Gaming Lounge.
 
+L’accès dépend de l’entreprise active, de l’abonnement, des modules activés et du rôle ou poste de l’utilisateur. La mise en service Gaming est réservée aux administrateurs autorisés du tenant, car elle agrège des signaux de configuration provenant des Sites, Actifs, RH, Catalogue, Finance et modules Gaming.
+
+L’Assistant IA entreprise ne peut lire les performances Gaming que si l’utilisateur courant possède lui-même les accès nécessaires. Il ne peut pas contourner le résolveur d’accès aux modules, l’abonnement, le contexte d’organisation actif ou les permissions Finance/Actifs.
+
+## Statuts, validations et traçabilité
+
+Réservations, sessions, checkouts, clôtures, tournois et profils de postes suivent leurs transitions métier autorisées. Les révisions optimistes, clés d’idempotence, transactions sérialisables et contraintes de base de données protègent les opérations sensibles contre les doubles soumissions et les conflits concurrents selon leur domaine.
+
+Les incidents et maintenances restent traçables dans Actifs. Les factures, paiements, allocations, comptes financiers et mouvements restent traçables dans Finance. Les rapports persistent dans le framework Reports commun. Les mutations importantes produisent les traces d’audit prévues par leurs contrats.
+
+La readiness commerciale distingue l’état technique des modules de la preuve de commercialisation. `COMMERCIAL_READY` n’est admissible que sur le head final ayant passé la CI et après `OWNER_E2E` du parcours création DTSC → invitation → onboarding → 5 postes → réservation → session → paiement → clôture → panne/maintenance → rapport/IA.
+
+## Sécurité et confidentialité
+
 Toutes les mutations sensibles suivent les contrats DTSC : organisation active, membership, sous-secteur compatible, module actif, entitlement, permission, same-origin, validation Zod, rate limit, révision/idempotence et audit selon le flux.
+
+Toutes les références inter-modules sont limitées à la même entreprise. Les clients restent dans CRM, les services dans Catalogue, les équipements et maintenances dans Actifs, les données financières dans Finance et les rapports dans Reports. L’Administration DTSC configure secteur, sous-secteur, template et abonnement sans lire les données opérationnelles privées du tenant.
+
+Les montants de devises différentes ne sont jamais additionnés implicitement. CDF, USD et les autres devises restent séparées tant qu’une conversion FX explicite, gouvernée par Finance, n’est pas disponible.
 
 ## Readiness commerciale
 
-`COMMERCIAL_READY` n’est pas une déclaration marketing automatique. Le statut est admissible uniquement sur le head final ayant passé la CI et après `OWNER_E2E` du parcours : création DTSC → invitation → onboarding → 5 postes → réservation → session → paiement → clôture → panne/maintenance → rapport/IA.
-
-Le produit doit rester utilisable en FR/EN, clair/sombre, mobile 320/360/375/390/414, tablette et desktop.
+Le produit doit rester utilisable en FR/EN, clair/sombre, mobile 320/360/375/390/414, tablette et desktop. La checklist est recalculée depuis les données réelles et renvoie l’utilisateur vers le module propriétaire lorsqu’une configuration manque ; elle ne fabrique pas de données de démonstration pour masquer un état incomplet.
 
 ## Dépannage
 
