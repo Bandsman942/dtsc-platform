@@ -1,0 +1,43 @@
+"use client";
+
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { BarChart3, Download, Plus } from "lucide-react";
+import { Field, NativeSelect, formatEnterpriseDate } from "@/components/enterprise/core-v2/erp-v2-ui";
+import { ProfessionalError, ProfessionalLoading, professionalMutation } from "@/components/enterprise/professional/professional-erp-ui";
+import { useAppLocale } from "@/components/i18n/locale-provider";
+import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
+import { useToastMessage } from "@/components/ui/use-toast-message";
+import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
+import { EmptyState } from "@/components/workspace/empty-state";
+import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
+import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
+import { StatusBadge } from "@/components/workspace/status-badge";
+import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
+
+type ReportType = "GAMING_STATION_UTILIZATION" | "GAMING_REVENUE" | "GAMING_OFF_PEAK" | "GAMING_INCIDENTS_MAINTENANCE" | "GAMING_BOOKINGS_NO_SHOW";
+type ReportItem = { id: string; reference: string; title: string; description: string | null; reportType: ReportType; status: string; periodStart: string | null; periodEnd: string | null; currency: string | null; freshnessAt: string | null; generatedAt: string };
+type Collection = { items: ReportItem[]; pagination: { page: number; pageSize: number; total: number; pageCount: number }; canCreate: boolean; canManage: boolean };
+
+const reportTypes: ReportType[] = ["GAMING_STATION_UTILIZATION", "GAMING_REVENUE", "GAMING_OFF_PEAK", "GAMING_INCIDENTS_MAINTENANCE", "GAMING_BOOKINGS_NO_SHOW"];
+
+export function EnterpriseGamingReportsWorkspace({ organizationId, organizationName, definition }: { organizationId: string; organizationName: string; definition: EnterpriseModuleDefinition }) {
+  const locale = useAppLocale(); const en = locale === "en";
+  const [page, setPage] = useState(1); const [filter, setFilter] = useState("ALL"); const [refreshKey, setRefreshKey] = useState(0);
+  const [data, setData] = useState<Collection | null>(null); const [loading, setLoading] = useState(true); const [error, setError] = useState(""); const [success, setSuccess] = useState(""); const [dialog, setDialog] = useState(false); const [busy, setBusy] = useState(false);
+  useToastMessage(error, "error"); useToastMessage(success, "success");
+  const query = useMemo(() => { const params = new URLSearchParams({ page: String(page), pageSize: "20" }); if (filter !== "ALL") params.set("type", filter); return params.toString(); }, [filter, page]);
+  useEffect(() => { let cancelled = false; setLoading(true); setError(""); fetch(`/api/enterprise/${organizationId}/gaming/reports?${query}`, { cache: "no-store" }).then(async (response) => { const body = await response.json().catch(() => null) as (Collection & { message?: string; error?: string }) | null; if (!response.ok || !body) throw new Error(body?.message || body?.error || "LOAD_FAILED"); return body; }).then((body) => { if (!cancelled) setData(body); }).catch((cause) => { if (!cancelled) setError(cause instanceof Error ? cause.message : "LOAD_FAILED"); }).finally(() => { if (!cancelled) setLoading(false); }); return () => { cancelled = true; }; }, [organizationId, query, refreshKey]);
+  const label = (type: ReportType) => ({ GAMING_STATION_UTILIZATION: en ? "Station utilization" : "Utilisation des postes", GAMING_REVENUE: en ? "Gaming billing by currency" : "Facturation Gaming par devise", GAMING_OFF_PEAK: en ? "Off-peak periods" : "Périodes creuses", GAMING_INCIDENTS_MAINTENANCE: en ? "Incidents & maintenance" : "Incidents & maintenance", GAMING_BOOKINGS_NO_SHOW: en ? "Bookings & no-show" : "Réservations & absences" }[type]);
+  async function generate(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const form = new FormData(event.currentTarget); setBusy(true); setError(""); setSuccess(""); try { await professionalMutation(`/api/enterprise/${organizationId}/gaming/reports`, { reportType: String(form.get("reportType")), periodDays: Number(form.get("periodDays") || 30), idempotencyKey: `gaming-report:${crypto.randomUUID()}` }); setDialog(false); setSuccess(en ? "Report generated." : "Rapport généré."); setRefreshKey((value) => value + 1); } catch (cause) { setError(cause instanceof Error ? cause.message : "GENERATION_FAILED"); } finally { setBusy(false); } }
+  return <ModuleWorkspace>
+    <ModuleHeader eyebrow="Gaming Lounge" title={en ? "Gaming reports" : "Rapports Gaming"} description={`${en ? definition.descriptionEn : definition.descriptionFr} · ${organizationName}`} count={data?.pagination.total || 0} primaryAction={data?.canCreate ? <Button onClick={() => setDialog(true)}><Plus className="h-4 w-4" />{en ? "Generate report" : "Générer un rapport"}</Button> : undefined} />
+    <ModuleMetrics><ModuleMetric label={en ? "Generated reports" : "Rapports générés"} value={data?.pagination.total || 0} icon={<BarChart3 className="h-4 w-4" />} /><ModuleMetric label={en ? "Report families" : "Familles de rapports"} value={reportTypes.length} /></ModuleMetrics>
+    <ModuleToolbar controls={<div className="w-64"><NativeSelect value={filter} onChange={(value) => { setFilter(value); setPage(1); }} items={[{ id: "ALL", label: en ? "All reports" : "Tous les rapports" }, ...reportTypes.map((type) => ({ id: type, label: label(type) }))]} /></div>} summary={data ? `${en ? "Page" : "Page"} ${data.pagination.page}/${data.pagination.pageCount}` : undefined} />
+    <ModuleContent><ModuleSection title={en ? "Generated snapshots" : "Snapshots générés"} description={en ? "Every snapshot uses canonical ERP sources and keeps currencies separated." : "Chaque snapshot utilise les sources ERP canoniques et conserve les devises séparées."} defaultOpen>
+      {loading ? <ProfessionalLoading /> : error && !data ? <ProfessionalError message={error} /> : !data?.items.length ? <EmptyState title={en ? "No Gaming report generated yet." : "Aucun rapport Gaming généré pour le moment."} /> : <BusinessList>{data.items.map((item) => <BusinessListItem key={item.id} title={item.title} meta={`${item.reference} · ${item.periodStart ? formatEnterpriseDate(item.periodStart, locale) : "—"} → ${item.periodEnd ? formatEnterpriseDate(item.periodEnd, locale) : "—"}`} description={item.description || label(item.reportType)} status={<StatusBadge tone={item.status === "PUBLISHED" ? "success" : "info"}>{item.status}</StatusBadge>} actions={<a className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-dtsc-border px-3 text-xs font-black" href={`/api/enterprise/${organizationId}/reports/${item.id}/export`}><Download className="h-4 w-4" />CSV</a>} />)}</BusinessList>}
+      <div className="mt-4 flex justify-end gap-2"><Button variant="outline" disabled={page <= 1 || loading} onClick={() => setPage((value) => Math.max(1, value - 1))}>{en ? "Previous" : "Précédent"}</Button><Button variant="outline" disabled={!data || page >= data.pagination.pageCount || loading} onClick={() => setPage((value) => value + 1)}>{en ? "Next" : "Suivant"}</Button></div>
+    </ModuleSection></ModuleContent>
+    <Dialog open={dialog} onClose={() => setDialog(false)} title={en ? "Generate a Gaming report" : "Générer un rapport Gaming"} className="max-w-2xl"><form className="grid gap-5" onSubmit={generate}><Field label={en ? "Report" : "Rapport"} required><NativeSelect name="reportType" defaultValue="GAMING_STATION_UTILIZATION" items={reportTypes.map((type) => ({ id: type, label: label(type) }))} /></Field><Field label={en ? "Period" : "Période"} required><NativeSelect name="periodDays" defaultValue="30" items={[{ id: "7", label: en ? "Last 7 days" : "7 derniers jours" }, { id: "30", label: en ? "Last 30 days" : "30 derniers jours" }, { id: "90", label: en ? "Last 90 days" : "90 derniers jours" }, { id: "365", label: en ? "Last 365 days" : "365 derniers jours" }]} /></Field><p className="text-sm text-dtsc-muted">{en ? "Revenue/billing reports require Finance access. Incident reports require Assets & maintenance access." : "Les rapports financiers exigent l’accès Finance. Les rapports d’incidents exigent l’accès Actifs & maintenance."}</p><div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setDialog(false)}>{en ? "Cancel" : "Annuler"}</Button><Button type="submit" disabled={busy}>{busy ? (en ? "Generating…" : "Génération…") : (en ? "Generate" : "Générer")}</Button></div></form></Dialog>
+  </ModuleWorkspace>;
+}
