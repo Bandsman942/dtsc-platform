@@ -44,9 +44,10 @@ Le premier passage CI a détecté puis permis de corriger avant fusion :
 - l’utilisation d’un libellé de mouvement Inventory hors enum canonique, remplacé par `RETURN_IN` ;
 - deux incompatibilités de typage lors des transitions de facture Finance ;
 - la lecture typée des lignes de facture pour les sorties Inventory ;
-- les assertions QA #644 devenues obsolètes ont été réalignées sur le primitive partagé `revision`, le mouvement Inventory canonique `RETURN_IN`, les contraintes composites réelles et le chemin UX effectif d’approbation du remboursement.
+- les assertions QA #644 devenues obsolètes ont été réalignées sur le primitive partagé `revision`, le mouvement Inventory canonique `RETURN_IN`, les contraintes composites réelles et le chemin UX effectif d’approbation du remboursement ;
+- le type local `Pagination` inutilisé du workspace Checkout a été supprimé afin de rétablir le lint strict et les builds Next.js de production.
 
-Ces corrections n’ajoutent aucun domaine parallèle et ne modifient pas le périmètre fonctionnel de #644.
+Ces corrections n’ajoutent aucun domaine parallèle et ne modifient pas le périmètre fonctionnel de #644. Les preuves automatiques finales restent rattachées à la PR #653 et sont distinctes de la validation manuelle `OWNER_E2E #644`.
 
 ## Non livré dans #644
 
