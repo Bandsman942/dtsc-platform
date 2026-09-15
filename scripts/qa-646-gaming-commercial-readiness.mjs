@@ -106,7 +106,7 @@ check(gamingProfile?.requiredGuideCodes?.includes("GAMING_LOUNGE_EN"), "Gaming E
 check(String(gamingProfile?.commercialReadyPromotionRule || "").includes("OWNER_E2E"), "Gaming COMMERCIAL_READY promotion must require OWNER_E2E");
 check(String(gamingProfile?.commercialReadyPromotionRule || "").includes("exact final head"), "Gaming COMMERCIAL_READY promotion must bind to exact final head");
 includesAll(genericReadinessQa, [
-  'profile.scope === "BUSINESS_SUBTYPE"',
+  'profileScope(profile) === "BUSINESS_SUBTYPE"',
   'profileScope(profile) === "SECTOR_TEMPLATE"',
   "activeBusinessSubtypePairs",
   "runtimeProvisioningMarker",
