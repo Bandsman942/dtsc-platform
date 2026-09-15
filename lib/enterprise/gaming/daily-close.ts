@@ -172,7 +172,6 @@ export async function createGamingDailyClose(
             select: { id: true, reference: true, status: true, sessionId: true },
           })
         : [];
-      const dayCheckoutRefs = new Set(dayCheckouts.map((checkout) => checkout.reference));
 
       const dayPayments = await tx.enterprisePayment.findMany({
         where: {
@@ -186,10 +185,27 @@ export async function createGamingDailyClose(
           ],
         },
       });
+      const candidateCheckoutRefs = uniqueValues(
+        dayPayments
+          .map((payment) => baseCheckoutReference(payment.reference))
+          .filter((reference): reference is string => Boolean(reference)),
+      );
+      const financialCheckouts = candidateCheckoutRefs.length
+        ? await tx.enterpriseGamingCheckout.findMany({
+            where: {
+              organizationId,
+              reference: { in: candidateCheckoutRefs },
+              ...(stationIds ? { session: { stationId: { in: stationIds } } } : {}),
+            },
+            select: { reference: true },
+          })
+        : [];
+      const financialCheckoutRefs = new Set(financialCheckouts.map((checkout) => checkout.reference));
       const relevantPayments = dayPayments.filter((payment) => {
         const reference = baseCheckoutReference(payment.reference);
-        return Boolean(reference && dayCheckoutRefs.has(reference));
+        return Boolean(reference && financialCheckoutRefs.has(reference));
       });
+
       const paymentIds = relevantPayments.map((payment) => payment.id);
       const cashMovements = paymentIds.length
         ? await tx.enterpriseCashMovement.findMany({
