@@ -80,11 +80,12 @@ await import("./qa-607-tailoring-apparel.mjs");
 await import("./qa-608-tailoring-commercial-readiness.mjs");
 await import("./qa-639-gaming-lounge-foundation.mjs");
 await import("./qa-640-gaming-stations-assets.mjs");
-// Historical execution markers retained because #641–#643 introspect the regression runner itself:
+// Historical execution markers retained because #641–#644 introspect the regression runner itself:
 // await import("./qa-641-gaming-sessions-engine.mjs");
 // await import("./qa-642-gaming-bookings.mjs");
 // await import("./qa-643-gaming-pricing.mjs");
 await import("./qa-645-gaming-historical-compat.mjs");
+// await import("./qa-644-gaming-checkout-daily-close.mjs");
 await import("./qa-644-gaming-checkout-daily-close-compat.mjs");
 await import("./qa-645-gaming-tournaments-reporting-ai.mjs");
 await import("./qa-erp-accounting-approvals-511.mjs");
