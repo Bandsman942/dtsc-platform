@@ -28,7 +28,12 @@ CREATE TABLE "EnterpriseGamingDailyClose" (
     "reference" TEXT NOT NULL,
     "businessDate" TIMESTAMP(3) NOT NULL,
     "siteId" TEXT,
+    "timezone" TEXT NOT NULL DEFAULT 'UTC',
     "status" TEXT NOT NULL DEFAULT 'SUBMITTED',
+    "endedSessionCount" INTEGER NOT NULL DEFAULT 0,
+    "paidSessionCount" INTEGER NOT NULL DEFAULT 0,
+    "pendingCheckoutCount" INTEGER NOT NULL DEFAULT 0,
+    "refundedCheckoutCount" INTEGER NOT NULL DEFAULT 0,
     "submittedByUserId" TEXT NOT NULL,
     "validatedByUserId" TEXT,
     "submittedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -53,6 +58,9 @@ CREATE TABLE "EnterpriseGamingDailyCloseLine" (
     "currencyCode" TEXT NOT NULL,
     "cashSessionId" TEXT,
     "paymentCount" INTEGER NOT NULL DEFAULT 0,
+    "refundCount" INTEGER NOT NULL DEFAULT 0,
+    "inboundAmount" DECIMAL(20,6) NOT NULL DEFAULT 0,
+    "refundAmount" DECIMAL(20,6) NOT NULL DEFAULT 0,
     "expectedAmount" DECIMAL(20,6) NOT NULL,
     "declaredAmount" DECIMAL(20,6) NOT NULL,
     "differenceAmount" DECIMAL(20,6) NOT NULL,
@@ -98,6 +106,10 @@ ALTER TABLE "EnterpriseGamingDailyClose"
   ADD CONSTRAINT "EnterpriseGamingDailyClose_status_check"
   CHECK ("status" IN ('SUBMITTED','VALIDATED','REJECTED'));
 
+ALTER TABLE "EnterpriseGamingDailyClose"
+  ADD CONSTRAINT "EnterpriseGamingDailyClose_counts_check"
+  CHECK ("endedSessionCount" >= 0 AND "paidSessionCount" >= 0 AND "pendingCheckoutCount" >= 0 AND "refundedCheckoutCount" >= 0);
+
 ALTER TABLE "EnterpriseGamingDailyCloseLine"
   ADD CONSTRAINT "EnterpriseGamingDailyCloseLine_amounts_check"
-  CHECK ("paymentCount" >= 0 AND "expectedAmount" >= 0 AND "declaredAmount" >= 0);
+  CHECK ("paymentCount" >= 0 AND "refundCount" >= 0 AND "inboundAmount" >= 0 AND "refundAmount" >= 0);
