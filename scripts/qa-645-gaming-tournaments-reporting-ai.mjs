@@ -98,6 +98,7 @@ includesAll(analytics, [
   "enterpriseSalesInvoice.findMany",
   "financialByCurrency",
   "averageBasket",
+  "assetDeepLink",
 ], "gaming analytics");
 check(!analytics.includes("exchangeRate"), "dashboard must not silently convert currencies");
 check(!analytics.includes("functionalCurrency"), "dashboard must not aggregate currencies through functional currency");
@@ -143,7 +144,7 @@ for (const [page, workspace, name] of [
   includesAll(page, ["resolveEnterpriseModuleCapabilities", "activeContext", "organizationId", "AppShell"], `${name} page guard`);
   includesAll(workspace, ["useAppLocale", "ModuleWorkspace", "ModuleHeader", "ModuleContent"], `${name} workspace UX`);
 }
-includesAll(dashboardWorkspace, ["financialByCurrency", "Les devises restent séparées", "ASSETS_MAINTENANCE"], "dashboard financial/asset UX");
+includesAll(dashboardWorkspace, ["financialByCurrency", "Les devises restent séparées", "assetDeepLink"], "dashboard financial/asset UX");
 includesAll(tournamentWorkspace, ["businessPartyId", "invoiceApproverUserId", "ASSETS_MAINTENANCE", "CHECK_IN", "SET_RESULT", "RELEASE"], "tournament UI workflow");
 includesAll(reportsWorkspace, ["GAMING_REVENUE", "GAMING_INCIDENTS_MAINTENANCE", "/reports/${item.id}/export"], "report UI/export");
 
