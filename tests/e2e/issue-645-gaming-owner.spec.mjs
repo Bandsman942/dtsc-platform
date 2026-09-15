@@ -197,6 +197,7 @@ test.describe.serial("Issue #645 Gaming OWNER_E2E", () => {
     const assetDialog = page.locator('div[role="dialog"]').filter({ hasText: "E2E-GAME-645 · Poste Gaming OWNER E2E #645" });
     await expect(assetDialog).toBeVisible();
     await expect(assetDialog.getByRole("heading", { name: "E2E-GAME-645 · Poste Gaming OWNER E2E #645", exact: true })).toBeVisible();
+    await assetDialog.getByRole("button", { name: "Incidents", exact: true }).click();
     await expect(assetDialog.getByText("OWNER E2E #645 incident Gaming", { exact: false })).toBeVisible();
   });
 
