@@ -7,11 +7,12 @@
 - Postes de jeu fusionnés : #640
 - Sessions fusionnées : #641
 - Réservations fusionnées : #642
-- Lot courant : #643 — tarification, forfaits et calcul serveur
+- Tarification fusionnée : #643
+- Lot courant : #644 — checkout, paiements, reçus et clôture Gaming
 - Secteur canonique : `HOSPITALITY_EVENTS`
 - Sous-secteur : `GAMING_LOUNGE`
 - Classification du sous-secteur : `PLANNED` jusqu’au lot d’onboarding #646
-- Modules fonctionnels isolés en `BETA` : `GAMING_STATIONS`, `GAMING_SESSIONS`, `GAMING_BOOKINGS`, `GAMING_PRICING_PACKAGES`
+- Modules fonctionnels isolés en `BETA` : `GAMING_STATIONS`, `GAMING_SESSIONS`, `GAMING_BOOKINGS`, `GAMING_PRICING_PACKAGES`, `GAMING_CHECKOUT`, `GAMING_DAILY_CLOSE`
 - Statut commercial global : non `COMMERCIAL_READY`
 
 Le sous-secteur reste **fail-closed** pour l’onboarding commercial normal jusqu’à #646. Chaque lot ne promeut en `BETA` que le module réellement implémenté et prouvé.
@@ -32,12 +33,17 @@ DTSC Platform ne modélise pas ce métier comme un second Shop ni comme un ERP p
 | Prix de référence commercial | `EnterpriseCatalogPrice` / `CATALOG` |
 | Devise autorisée | `EnterpriseCurrency` + service Finance canonique |
 | Site physique et timezone | `EnterpriseSite` porté par l’`EnterpriseAsset` du poste |
-| Facturation/créance | Finance commune / `FINANCE_RECEIVABLES` |
-| Paiement | `FINANCE_PAYMENTS` |
-| Compte, caisse, banque, Mobile Money | `FINANCE_TREASURY` |
+| Facture client | `EnterpriseSalesInvoice` / `FINANCE_RECEIVABLES` |
+| Créance | `EnterpriseReceivable` / `FINANCE_RECEIVABLES` |
+| Paiement / remboursement | `EnterprisePayment` / `FINANCE_PAYMENTS` |
+| Allocation paiement-créance | `EnterprisePaymentAllocation` / `FINANCE_PAYMENTS` |
+| Compte, caisse, banque, Mobile Money | `EnterpriseFinancialAccount` / `FINANCE_TREASURY` |
+| Session de caisse | `EnterpriseCashSession` / `FINANCE_CASH` |
+| Mouvement réel de trésorerie | `EnterpriseTreasuryTransaction` / Finance commune |
+| Stock de snacks/accessoires | `EnterpriseInventoryItem` + mouvements Inventory communs |
 | Rapports | framework `REPORTS` |
 
-Interdictions durables : aucun `GamingAsset`, `GamingCustomer`, `GamingCatalog`, `GamingCurrency`, `GamingPayment`, `GamingCashAccount` ni stock Gaming parallèle. Une réservation Gaming ne possède pas non plus un second `siteId` : le site est dérivé de l’actif canonique du poste.
+Interdictions durables : aucun `GamingAsset`, `GamingCustomer`, `GamingCatalog`, `GamingCurrency`, `GamingPayment`, `GamingCashAccount`, `GamingInvoice` ni stock Gaming parallèle. Une réservation Gaming ne possède pas non plus un second `siteId` : le site est dérivé de l’actif canonique du poste.
 
 Toutes les références cross-domain sont revalidées avec le même `organizationId`. Un UUID valide appartenant à un autre tenant est traité comme introuvable.
 
@@ -50,7 +56,7 @@ HOSPITALITY_EVENTS
 
 `GAMING_LOUNGE` reste `PLANNED` pendant #639 à #645. Son passage à `ACTIVE` appartient à #646 et exige runtime, onboarding, permissions, activités, guides, QA et OWNER_E2E de commercial readiness.
 
-## Registre de modules après #643
+## Registre de modules après #644
 
 ### `GAMING_STATIONS`
 - `BETA`, route `/enterprise-modules/GAMING_STATIONS` ;
@@ -77,7 +83,21 @@ HOSPITALITY_EVENTS
 - dépendances `CATALOG`, `GAMING_STATIONS`, `GAMING_SESSIONS` ;
 - plan minimum `BUSINESS`, abonnement actif, `POSITION_PERMISSION`.
 
-Restent `PLANNED`, `HIDDEN`, `EXPLICIT_DENY` jusqu’à leurs propres lots : `GAMING_DASHBOARD`, `GAMING_CHECKOUT`, `GAMING_DAILY_CLOSE`, `GAMING_TOURNAMENTS`, `GAMING_REPORTS`.
+### `GAMING_CHECKOUT`
+- `BETA`, route `/enterprise-modules/GAMING_CHECKOUT` ;
+- workspace `ENTERPRISE_GAMING_CHECKOUT` ;
+- permission prefix `enterprise.gaming.checkout.` ;
+- dépendances `GAMING_SESSIONS`, `FINANCE_RECEIVABLES`, `FINANCE_PAYMENTS`, `FINANCE_TREASURY`, `CATALOG` ;
+- plan minimum `BUSINESS`, abonnement actif, `POSITION_PERMISSION`.
+
+### `GAMING_DAILY_CLOSE`
+- `BETA`, route `/enterprise-modules/GAMING_DAILY_CLOSE` ;
+- workspace `ENTERPRISE_GAMING_DAILY_CLOSE` ;
+- permission prefix `enterprise.gaming.close.` ;
+- dépendances `GAMING_CHECKOUT`, `FINANCE_TREASURY`, `FINANCE_CASH` ;
+- plan minimum `BUSINESS`, abonnement actif, `POSITION_PERMISSION`.
+
+Restent `PLANNED`, `HIDDEN`, `EXPLICIT_DENY` jusqu’à leurs propres lots : `GAMING_DASHBOARD`, `GAMING_TOURNAMENTS`, `GAMING_REPORTS`.
 
 ## #640 — parc extensible, jamais limité à cinq
 
@@ -116,123 +136,197 @@ La conversion réservation → session est atomique et l’unicité `(organizati
 
 Le service vendu reste un `EnterpriseCatalogItem` actif avec `itemType = SERVICE`. `EnterpriseGamingPricingRule` ne remplace pas le catalogue : il porte seulement les conditions spécifiques au Gaming Lounge.
 
-Une règle peut cibler :
+Une règle peut cibler : tous les postes ou un poste précis, une famille de console, un minimum/maximum de joueurs, une durée fixe, un masque de jours, une plage horaire y compris traversant minuit, une période de validité et une priorité explicite.
 
-- tous les postes ou un poste précis ;
-- une famille de console ;
-- un minimum/maximum de joueurs ;
-- une durée fixe ;
-- un masque de jours de semaine ;
-- une plage horaire, y compris traversant minuit ;
-- une période de validité ;
-- une priorité explicite.
+Modes disponibles : `FIXED_DURATION`, `PER_MINUTE`, `PER_HOUR`, `PACKAGE`.
 
-Modes disponibles :
+`FIXED_DURATION` et `PACKAGE` portent un montant forfaitaire pour la durée configurée. `PER_MINUTE` et `PER_HOUR` utilisent un incrément de facturation et un arrondi serveur. Tous les montants sont calculés avec `Prisma.Decimal`.
 
-```text
-FIXED_DURATION
-PER_MINUTE
-PER_HOUR
-PACKAGE
-```
+### Résolution déterministe côté serveur
 
-`FIXED_DURATION` et `PACKAGE` portent un montant forfaitaire pour la durée configurée. `PER_MINUTE` et `PER_HOUR` utilisent un incrément de facturation et un arrondi serveur. Tous les montants sont calculés avec `Prisma.Decimal` et arrondis à deux décimales.
+`resolveGamingPricingQuoteTx` est l’autorité tarifaire. Le serveur recharge le service et le poste same-tenant, dérive la timezone du site, filtre les règles `ACTIVE`, applique poste/famille/joueurs/jour/créneau/durée, départage par priorité puis spécificité, valide la devise Finance et calcule le montant. Il ne somme jamais deux devises et ne choisit jamais une devise inventée par le client.
 
-## Résolution déterministe côté serveur
+### Snapshot tarifaire immuable
 
-`resolveGamingPricingQuoteTx` est l’autorité tarifaire. Pour un service, un poste, un instant, une durée et un nombre de joueurs, le serveur :
+Quand une session démarre, la résolution tarifaire s’exécute dans la même transaction. Sont persistés `pricingRuleId`, `pricingSnapshotJson`, `currency` et `quotedAmount`. À `END`, `finalAmountFromGamingPricingSnapshot` calcule `finalAmount` depuis le snapshot et `billableSeconds`, sans relire la règle courante.
 
-1. recharge le `EnterpriseCatalogItem` same-tenant et vérifie `SERVICE` + `ACTIVE` ;
-2. recharge le poste et sa capacité joueurs ;
-3. dérive la timezone du `EnterpriseSite` lié à l’`EnterpriseAsset` du poste, avec fallback contrôlé `UTC` ;
-4. filtre uniquement les règles `ACTIVE`, non archivées, valides à cet instant ;
-5. applique poste, famille de console, groupe de joueurs, jour, plage horaire et durée fixe/forfait ;
-6. départage d’abord par `priority` croissante, puis par spécificité décroissante, puis par `code`/`id` pour un résultat stable ;
-7. valide la devise par `assertEnterpriseCurrencyActiveTx` du domaine Finance ;
-8. calcule le montant côté serveur.
+La conversion réservation → session utilise le même moteur côté serveur. Le retry de `START` ou de conversion ne rerésout pas le tarif et ne duplique pas la session.
 
-Le serveur ne somme jamais deux devises et ne choisit jamais une devise inventée par le client.
+### Dérogations tarifaires
 
-## Snapshot tarifaire immuable de session
+Une dérogation exige `enterprise.gaming.pricing.manage`, un montant et un motif explicite. Montant, motif et acteur sont conservés dans le snapshot et audités.
 
-Quand une session démarre avec un service catalogue, la résolution tarifaire s’exécute **dans la même transaction** que la création de la session. Sont persistés :
+### Simulation sans vente
 
-- `pricingRuleId` ;
-- `pricingSnapshotJson` ;
-- `currency` ;
-- `quotedAmount`.
+`POST /api/enterprise/[organizationId]/gaming/pricing/simulate` applique le moteur sans créer session, vente, facture, paiement ou mouvement de trésorerie.
 
-Le snapshot contient notamment code de règle, service, poste, famille de console, joueurs, mode, montant unitaire, incrément, durée demandée, timezone, jour/minute locale, priorité et éventuelle dérogation.
+## #644 — Checkout : la Finance commune reste l’autorité
 
-À `END`, `finalAmountFromGamingPricingSnapshot` calcule `finalAmount` depuis `billableSeconds` et le snapshot. Il **ne recharge pas la règle courante**. Modifier ou désactiver un tarif après le démarrage d’une session ne change donc jamais son historique.
+Une session tarifée terminée et possédant un `finalAmount` positif passe de `ENDED` à `TO_CHECKOUT` via `promoteEndedGamingSessionToCheckout`. Cette promotion est verrouillée, idempotente et journalisée par une transition `READY_TO_CHECKOUT`. Les anciennes sessions `ENDED` restent acceptées par le checkout pour compatibilité historique.
 
-Pour un forfait/durée fixe, le montant final reste le montant forfaitaire snapshotté. Pour les modes minute/heure, le montant final utilise le temps réellement facturable et l’incrément figé dans le snapshot.
+`EnterpriseGamingCheckout` n’est **pas** une facture ni une caisse : il ne contient que le lien opérationnel Gaming entre `sessionId` et `salesInvoiceId`, son état, sa clé d’idempotence et les métadonnées de remboursement.
 
-Un retry idempotent de `START` renvoie la session existante et ne rerésout pas le tarif.
-
-### Conversion Réservation → Session tarifée
-
-Une réservation `CHECKED_IN` ne peut plus être convertie en session sans service tarifable. Le workspace Réservations charge les services actifs du Catalogue, simule le tarif avec le poste, la durée du créneau et `playerCount`, puis n’autorise le démarrage qu’après un aperçu valide.
-
-Au moment de `CONVERT`, le serveur **recalcule** le tarif dans la même transaction `Serializable` qui crée `EnterpriseGamingSession`, écrit la transition `START` et passe la réservation à `CONVERTED`. La session reçoit `bookingId`, `serviceCatalogItemId`, `pricingRuleId`, `pricingSnapshotJson`, `currency` et `quotedAmount`. L’aperçu client n’est donc jamais l’autorité finale.
-
-Le retry conserve les invariants d’idempotence #642 : une réservation ne peut produire qu’une session et la même commande ne duplique ni session ni conversion.
-
-## Dérogations tarifaires
-
-Une dérogation exige simultanément :
-
-- permission `enterprise.gaming.pricing.manage` ;
-- montant dérogatoire ;
-- motif explicite ;
-- service catalogue sélectionné.
-
-Le motif, le montant et l’utilisateur sont conservés dans le snapshot. Le démarrage de session est audité avec la règle, la devise, le montant et l’indicateur de dérogation. Une simulation de dérogation autorisée génère également une trace d’audit.
-
-## Simulation sans vente
-
-`POST /api/enterprise/[organizationId]/gaming/pricing/simulate` applique exactement le moteur de résolution serveur, mais ne crée ni session, ni vente, ni facture, ni paiement, ni mouvement de trésorerie.
-
-La date de simulation est optionnelle. Lorsqu’elle est absente, le serveur utilise l’instant courant ; une valeur vide ne doit jamais être coercée vers le 1er janvier 1970.
-
-Cette simulation est utilisée dans l’administration Pricing, dans le formulaire de démarrage Sessions et dans le dialogue de conversion d’une Réservation `CHECKED_IN`.
-
-## API #643
+Le workflow normal est :
 
 ```text
-GET/POST  /api/enterprise/[organizationId]/gaming/pricing
-PATCH     /api/enterprise/[organizationId]/gaming/pricing/[ruleId]
-POST      /api/enterprise/[organizationId]/gaming/pricing/simulate
+Session TO_CHECKOUT
+  → EnterpriseSalesInvoice PENDING_APPROVAL
+  → validation Finance indépendante
+  → facture ISSUED + EnterpriseReceivable
+  → un ou plusieurs EnterprisePayment
+  → confirmation + EnterprisePaymentAllocation
+  → invoice/checkout/session PAID
+  → reçu Gaming réconcilié
 ```
 
-Les mutations imposent same-origin, Zod, `await rateLimit`, membership, entitlement, permissions, validation cross-domain, `AuditLog` et `ApiLog`.
+Les états du checkout sont :
 
-Activation, désactivation, archivage et dérogation nécessitent `manage`. Création/modification suivent les capacités du module. Le catalogue et les postes sont lus via leurs modules canoniques. La conversion d’une réservation exige, en plus des droits Booking/Session, la lecture de `GAMING_PRICING_PACKAGES` et `CATALOG`.
+```text
+INVOICE_PENDING
+  → AWAITING_PAYMENT
+  → PARTIALLY_PAID
+  → PAID
+  → REFUND_PENDING
+  → REFUNDED
 
-## UI #643
+INVOICE_PENDING → CANCELLED
+```
 
-Le workspace `Tarifs & forfaits Gaming` fournit :
+### Client identifié ou walk-in
 
-- KPI actifs/brouillons/inactifs ;
-- recherche, filtres, pagination ;
-- création/modification ;
-- activation, désactivation, archivage ;
-- sélection paginée des services du catalogue et des postes ;
-- devises provenant du référentiel Finance ;
-- ciblage durée/jour/créneau/famille/joueurs/priorité ;
-- simulation serveur sans vente ;
+Si la session référence un client, il doit rester un `EnterpriseBusinessParty` actif avec rôle `CUSTOMER`. Une session anonyme utilise un **tiers système canonique** `SYSTEM:GAMING:WALK_IN_CUSTOMER` sans donnée personnelle, nécessaire uniquement comme contrepartie comptable. Aucun `GamingCustomer` parallèle n’est créé.
+
+### Facture et paiement exactement une fois
+
+La préparation du checkout utilise transaction `Serializable`, verrou de session, unicité par session et `idempotencyKey`. Un retry renvoie le checkout existant au lieu de créer une seconde facture.
+
+La facture est une `EnterpriseSalesInvoice` commune soumise au workflow d’approbation Finance. L’émission produit la créance commune. Les paiements utilisent exclusivement `createEnterprisePayment`, le workflow d’approbation Paiements, `transitionEnterprisePayment` et `allocateEnterprisePayment`.
+
+Les paiements fractionnés sont autorisés. Avant de créer un nouveau paiement, le serveur soustrait du solde disponible les paiements déjà préparés ou confirmés afin qu’un double clic ou deux moyens de paiement concurrents ne puissent pas dépasser la créance. La clé stable `gaming-checkout:<checkoutId>:payment:<idempotencyKey>` protège les retries.
+
+Cash, Mobile Money, banque, carte, chèque et autres moyens respectent les validations Finance existantes. Un compte financier doit être actif et de devise compatible. Un paiement CASH exige une session de caisse ouverte selon les règles Finance.
+
+### Reçu Gaming réconcilié
+
+Le reçu n’est pas un document financier parallèle. `getGamingCheckoutReceipt` projette : session, facture, lignes de facture, allocations confirmées, paiements confirmés/réconciliés, remboursements et avoirs. Les montants encaissés sont donc toujours traçables jusqu’à `EnterprisePayment` et `EnterprisePaymentAllocation`.
+
+## #644 — Snacks, accessoires et Inventory commun
+
+Le temps de jeu est la ligne `SERVICE` de la session et **ne décrémente jamais le stock**.
+
+Des produits physiques du Catalogue peuvent être ajoutés au même checkout. Le serveur exige un `EnterpriseCatalogPrice` de vente actif dans la devise de la session. Pour un produit `trackInventory = true`, il exige un `EnterpriseInventoryItem` actif et un entrepôt canonique ; si le poste est rattaché à un site, l’entrepôt doit appartenir au même site.
+
+La sortie utilise `applyStockMovementTx` avec :
+
+- `movementType = SALE_FULFILLMENT` ;
+- `direction = OUT` ;
+- `sourceEntityType = EnterpriseGamingCheckout` ;
+- une clé d’idempotence stable par ligne.
+
+Le checkout ne choisit jamais silencieusement un lot. Si `lotTracking = true`, le flux est refusé tant qu’aucun choix explicite de lot n’est supporté par le contrat.
+
+Une annulation avant émission ou un remboursement confirmé crée le mouvement inverse `CUSTOMER_RETURN` dans Inventory, sans modifier silencieusement l’historique de la sortie initiale.
+
+## #644 — Annulation et remboursement inverse
+
+Une annulation directe n’est autorisée que tant que la facture n’a pas été émise. Elle annule l’approbation/facture en attente, restitue les produits suivis en stock et marque checkout/session `CANCELLED`.
+
+Une opération déjà payée passe par le workflow de remboursement :
+
+1. un `EnterprisePayment` sortant `REFUND` est créé et soumis à un approbateur indépendant ;
+2. les allocations client confirmées sont inversées ;
+3. les écritures d’allocation sont contrepassées par `reverseJournalEntryTx` avec autorisation `DOMAIN_INVERSE` ;
+4. un avoir client exact est construit depuis les **montants historiques** des lignes de la facture puis comptabilisé ;
+5. le remboursement est confirmé dans Finance, produit `EnterpriseTreasuryTransaction` sortant et, pour Cash, le mouvement de caisse correspondant ;
+6. le posting `CUSTOMER_REFUND_CONFIRMED` est exécuté par le registre comptable ;
+7. les produits physiques sont restockés ;
+8. le checkout passe à `REFUNDED`.
+
+Le demandeur du remboursement ne peut pas l’approuver lui-même. Le chemin Gaming n’écrit jamais directement une seconde trésorerie ou une seconde comptabilité.
+
+## #644 — Clôture journalière Gaming
+
+`EnterpriseGamingDailyClose` et `EnterpriseGamingDailyCloseLine` sont des **snapshots opérationnels de rapprochement**. Ils ne remplacent ni `EnterpriseCashSession`, ni les comptes financiers, ni les paiements.
+
+La journée métier est calculée avec la timezone du `EnterpriseSite`. La date sélectionnée est transformée en bornes UTC correspondant à minuit → minuit local. Sans site, le fallback contrôlé est `UTC`.
+
+Deux axes temporels sont volontairement distincts :
+
+- les compteurs `endedSessionCount`, `paidSessionCount`, `pendingCheckoutCount`, `refundedCheckoutCount` décrivent les sessions dont `endedAt` tombe dans cette journée métier ;
+- les lignes financières sélectionnent les `EnterprisePayment` dont **`paymentDate`** tombe dans cette journée, même si la session a été terminée un jour antérieur.
+
+Cette séparation garantit qu’un paiement tardif ou un remboursement effectué aujourd’hui pour un checkout d’hier apparaît dans la clôture financière d’aujourd’hui.
+
+Pour chaque couple `financialAccountId + methodType`, une ligne conserve :
+
+- la `currencyCode` du compte ;
+- le nombre et montant des encaissements entrants ;
+- le nombre et montant des remboursements sortants ;
+- `expectedAmount = inboundAmount - refundAmount` ;
+- le montant déclaré ;
+- l’écart ;
+- le motif d’écart ;
+- la session de caisse réelle lorsqu’elle est univoque.
+
+Aucune conversion FX n’est effectuée et aucun total cross-currency n’est produit. CDF, USD ou toute autre devise restent sur des lignes séparées.
+
+Tout écart non nul exige un motif. La personne qui soumet une clôture ne peut pas la valider elle-même. Les statuts sont `SUBMITTED`, `VALIDATED`, `REJECTED`.
+
+La concurrence est protégée à deux niveaux : verrou advisory par organisation/site/journée et index partiels uniques `GamingDailyClose_org_date_global_active_key` / `GamingDailyClose_org_date_site_active_key`. Une même journée ne peut donc pas recevoir deux clôtures actives concurrentes pour le même périmètre.
+
+## API #644
+
+```text
+GET/POST  /api/enterprise/[organizationId]/gaming/checkouts
+GET/PATCH /api/enterprise/[organizationId]/gaming/checkouts/[checkoutId]
+GET       /api/enterprise/[organizationId]/gaming/checkouts/[checkoutId]/receipt
+GET/POST  /api/enterprise/[organizationId]/gaming/daily-closes
+GET/PATCH /api/enterprise/[organizationId]/gaming/daily-closes/[closeId]
+```
+
+Toutes les mutations imposent same-origin, Zod, `await rateLimit`, membership, entitlement, permissions Gaming, permissions des modules Finance/Inventory réellement touchés, `AuditLog` et `ApiLog`.
+
+Le module Gaming ne contourne pas Finance : approuver/émettre une facture exige les capacités `FINANCE_RECEIVABLES`, créer/soumettre/approuver/confirmer un paiement exige `FINANCE_PAYMENTS`, et la clôture exige la lecture des domaines Paiements/Trésorerie/Caisse. Un remboursement comportant des produits physiques exige également l’écriture Inventory.
+
+## UI #644
+
+`Encaissement Gaming` fournit :
+
+- liste, filtres, KPI et pagination ;
+- sélection d’une session `TO_CHECKOUT` ou historique `ENDED` facturable ;
+- approbateur Finance de facture ;
+- produits physiques optionnels du Catalogue et entrepôt commun ;
+- validation/émission facture ;
+- paiements fractionnés ;
+- sélection des comptes financiers réels ;
+- approbateurs Paiements ;
+- reçu réconcilié ;
+- annulation avant émission ;
+- demande et approbation de remboursement ;
 - dialogs mobile-safe `92dvh` ;
 - FR/EN.
 
-Le workspace Sessions ajoute sélection du service, nombre de joueurs, aperçu tarifaire, dérogation conditionnelle et affichage `quotedAmount` / `finalAmount`.
+`Clôture Gaming` fournit :
 
-Le workspace Réservations ajoute, au moment de `CHECKED_IN → CONVERTED`, sélection paginée du service Catalogue, aperçu tarifaire serveur et blocage du démarrage tant qu’aucun aperçu valide n’a été obtenu.
+- liste, filtres, KPI et pagination ;
+- choix journée/site ;
+- déclarations par compte financier et moyen de paiement ;
+- affichage séparé par devise ;
+- entrant, remboursements, attendu, déclaré, écart ;
+- validation/rejet indépendant ;
+- détail plein écran ;
+- dialogs mobile-safe `92dvh` ;
+- FR/EN.
 
-## Limite du lot #643
+## Persistance et migration #644
 
-#643 ne crée aucune créance, facture, vente, ligne de paiement, caisse, banque, Mobile Money ni mouvement de trésorerie. Le montant d’une session est un **résultat tarifaire**, pas encore un encaissement. Checkout et Finance appartiennent à #644.
+Migration additive :
 
-Le moteur Pricing s’applique aux nouvelles sessions qu’elles soient démarrées directement ou converties depuis une réservation. Il ne transforme jamais ce montant en paiement : #644 reste l’unique lot chargé du checkout et des flux Finance communs.
+```text
+prisma/migrations/20260915011000_gaming_checkout_daily_close/migration.sql
+```
+
+Elle ajoute uniquement `EnterpriseGamingCheckout`, `EnterpriseGamingDailyClose`, `EnterpriseGamingDailyCloseLine`, leurs index, contraintes d’état, FK Gaming nécessaires et guards d’unicité de clôture. Elle ne modifie ni ne remplace les tables Finance/Inventory existantes.
 
 ## Programme d’implémentation
 
@@ -240,8 +334,8 @@ Le moteur Pricing s’applique aux nouvelles sessions qu’elles soient démarr�
 - #640 — postes / Actifs & maintenance — fusionné ;
 - #641 — sessions minutées — fusionné ;
 - #642 — réservations / joueurs — fusionné ;
-- #643 — tarification, forfaits et calcul serveur — lot courant ;
-- #644 — checkout, paiements, reçus et clôture ;
+- #643 — tarification, forfaits et calcul serveur — fusionné ;
+- #644 — checkout, paiements, reçus et clôture — lot courant ;
 - #645 — tournois, maintenance intégrée, reporting et DTSC AI ;
 - #646 — onboarding, activités, guides, QA et commercial readiness.
 
@@ -251,19 +345,19 @@ Le moteur Pricing s’applique aux nouvelles sessions qu’elles soient démarr�
 - `qa-640-gaming-stations-assets.mjs` protège `EnterpriseAsset`, extensibilité >5 et UX Stations ;
 - `qa-641-gaming-sessions-engine.mjs` protège timestamps serveur, concurrence, idempotence et `IN_USE` ;
 - `qa-642-gaming-bookings.mjs` protège CRM, conflits, conversion et historique Booking ;
-- `qa-643-gaming-pricing.mjs` protège catalogue/service canonique, devises Finance, résolution serveur, snapshot, simulation, conversion Booking tarifée, dérogations, UI et absence d’écriture Finance #644.
+- `qa-643-gaming-pricing.mjs` protège catalogue/service canonique, devises Finance, résolution serveur, snapshot et simulation ;
+- `qa-644-gaming-checkout-daily-close.mjs` protège Finance/Inventory canoniques, idempotence, paiements fractionnés, reçu, inverses remboursement, timezone, `paymentDate`, séparation des devises, clôture maker/checker, APIs, UI et absence de caisse Gaming parallèle.
 
-#643 exige un `OWNER_E2E` avant merge, couvrant au minimum : 30 minutes, 1 heure, forfait 3 h, frontière de créneau, ciblage poste/groupe, priorité déterministe, changement du tarif après démarrage, fin de session depuis le snapshot, conversion d’une réservation avec aperçu tarifaire, devise inactive, dérogation autorisée/refusée, idempotence, mobile/desktop, FR/EN et parc supérieur à cinq postes.
+#644 exige un `OWNER_E2E` avant merge couvrant au minimum : END → `TO_CHECKOUT`, checkout/retry, client CRM et walk-in, Cash, Mobile Money, paiement fractionné, dépassement interdit, reçu, Inventory physique, annulation, remboursement/inverses, paiement tardif, timezone de site, clôture par devise, écart motivé, validation indépendante, mobile/desktop, FR/EN et parc supérieur à cinq postes.
 
 ## Rollback
 
-Pour #643 :
+Pour #644 :
 
-- repasser `GAMING_PRICING_PACKAGES` en `PLANNED/HIDDEN/EXPLICIT_DENY` ;
-- bloquer création/modification/activation des règles et la simulation ;
-- bloquer les nouveaux démarrages tarifés et conversions Booking nécessitant Pricing ;
-- conserver les règles existantes et tous les snapshots déjà stockés dans les sessions ;
-- ne supprimer aucun service du catalogue, aucune session et aucune migration historique ;
-- les sessions déjà tarifées restent auditables et conservent `quotedAmount` / `finalAmount`.
+- repasser `GAMING_CHECKOUT` et `GAMING_DAILY_CLOSE` en `PLANNED/HIDDEN/EXPLICIT_DENY` ;
+- bloquer les nouveaux checkouts, paiements déclenchés depuis Gaming et nouvelles clôtures ;
+- conserver toutes les factures, créances, paiements, allocations, mouvements de trésorerie, avoirs, écritures comptables et mouvements Inventory déjà confirmés ;
+- conserver les snapshots `EnterpriseGamingCheckout` / `EnterpriseGamingDailyClose` pour audit ;
+- ne supprimer aucune migration ni donnée financière historique.
 
 Le reste du domaine Gaming demeure fail-closed jusqu’à ses lots respectifs.
