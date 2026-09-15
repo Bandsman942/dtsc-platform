@@ -1,7 +1,11 @@
 import fs from "node:fs";
 
 const sourcePath = new URL("./qa-644-gaming-checkout-daily-close.mjs", import.meta.url);
-const source = fs.readFileSync(sourcePath, "utf8");
+let source = fs.readFileSync(sourcePath, "utf8");
+source = source.replace(
+  'check(module?.implementationStatus === "BETA", `${code} must be BETA`);',
+  'check(["BETA", "ACTIVE"].includes(module?.implementationStatus), `${code} must remain implemented (BETA or ACTIVE after #646)`);',
+);
 const startMarker = 'for (const code of ["GAMING_DASHBOARD", "GAMING_TOURNAMENTS", "GAMING_REPORTS"]) {';
 const endMarker = '\n\nincludesAll(domain,';
 const start = source.indexOf(startMarker);
