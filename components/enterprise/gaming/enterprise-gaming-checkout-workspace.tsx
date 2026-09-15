@@ -20,7 +20,6 @@ import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registr
 
 type CheckoutStatus = "INVOICE_PENDING" | "AWAITING_PAYMENT" | "PARTIALLY_PAID" | "PAID" | "REFUND_PENDING" | "REFUNDED" | "CANCELLED";
 type PaymentMethod = "CASH" | "BANK_TRANSFER" | "CARD" | "MOBILE_MONEY" | "CHEQUE" | "OTHER";
-type Pagination = { page: number; pageSize: number; total: number; pageCount: number };
 type SessionOption = { id: string; reference: string; status: string; currency: string | null; finalAmount: string | null; station: { stationCode: string; displayName: string | null } };
 type Candidate = { userId: string; name: string; positionTitle: string | null; email: string };
 type Account = { id: string; code: string; name: string; accountType: string; currencyCode: string; status: string; siteId: string | null };
