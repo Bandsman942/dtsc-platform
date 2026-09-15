@@ -38,7 +38,7 @@ check(bookings?.permissionPrefixes?.includes("enterprise.gaming.bookings."), "GA
 for (const dependency of ["GAMING_STATIONS", "GAMING_SESSIONS", "CRM_CUSTOMERS"]) {
   check(bookings?.dependencies?.includes(dependency), `GAMING_BOOKINGS dependency missing ${dependency}`);
 }
-for (const code of ["GAMING_DASHBOARD", "GAMING_CHECKOUT", "GAMING_DAILY_CLOSE", "GAMING_TOURNAMENTS", "GAMING_REPORTS"]) {
+for (const code of ["GAMING_DASHBOARD", "GAMING_TOURNAMENTS", "GAMING_REPORTS"]) {
   const item = registry.modules.find((module) => module.code === code);
   check(item?.implementationStatus === "PLANNED", `${code} must remain PLANNED until its own implementation lot`);
   check(item?.routeKind === "HIDDEN", `${code} PLANNED module must remain HIDDEN`);
