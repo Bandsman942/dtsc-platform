@@ -1,22 +1,30 @@
 import type { LucideIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { isValidElement, type ReactElement, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
+
+function renderEmptyStateIcon(icon: LucideIcon | ReactElement | undefined) {
+  if (!icon) return null;
+  if (isValidElement(icon)) return icon;
+  const Icon = icon as LucideIcon;
+  return <Icon className="mx-auto h-6 w-6 text-dtsc-muted" aria-hidden="true" />;
+}
 
 export function EmptyState({
   title,
   description,
-  icon: Icon,
+  icon,
   action,
   compact = false,
   className,
 }: {
   title: ReactNode;
   description?: ReactNode;
-  icon?: LucideIcon;
+  icon?: LucideIcon | ReactElement;
   action?: ReactNode;
   compact?: boolean;
   className?: string;
 }) {
+  const renderedIcon = renderEmptyStateIcon(icon);
   return (
     <div
       data-workspace-empty-state
@@ -26,8 +34,8 @@ export function EmptyState({
         className,
       )}
     >
-      {Icon ? <Icon className="mx-auto h-6 w-6 text-dtsc-muted" aria-hidden="true" /> : null}
-      <div className={cn("text-sm font-extrabold text-dtsc-ink sm:text-base", Icon ? "mt-2.5" : "")}>{title}</div>
+      {renderedIcon}
+      <div className={cn("text-sm font-extrabold text-dtsc-ink sm:text-base", renderedIcon ? "mt-2.5" : "")}>{title}</div>
       {description ? <div className="mx-auto mt-1.5 max-w-xl text-sm leading-6 text-dtsc-muted">{description}</div> : null}
       {action ? <div className="mt-4 flex justify-center">{action}</div> : null}
     </div>
