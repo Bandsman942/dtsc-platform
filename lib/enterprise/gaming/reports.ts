@@ -146,6 +146,14 @@ export async function generateGamingReport({ organizationId, userId, reportType,
   if (reportType === "GAMING_INCIDENTS_MAINTENANCE") rows = await incidentsMaintenance(organizationId, periodStart, periodEnd);
   if (reportType === "GAMING_BOOKINGS_NO_SHOW") rows = await bookingsNoShow(organizationId, periodStart, periodEnd);
   const currencyValues = reportType === "GAMING_REVENUE" ? [...new Set(rows.map((row) => String(row.currency || "")).filter(Boolean))] : [];
+  const snapshot = {
+    data: {
+      schema: `${reportType.toLowerCase()}-v1`,
+      rows,
+      rowCount: rows.length,
+      separatedCurrencies: reportType === "GAMING_REVENUE",
+    },
+  } as unknown as Prisma.InputJsonValue;
   const report = await prisma.enterpriseReport.create({
     data: {
       organizationId,
@@ -168,7 +176,7 @@ export async function generateGamingReport({ organizationId, userId, reportType,
       generationKey,
       calculationVersion: 1,
       filtersJson: { periodDays },
-      snapshotJson: { data: { schema: `${reportType.toLowerCase()}-v1`, rows, rowCount: rows.length, separatedCurrencies: reportType === "GAMING_REVENUE" } },
+      snapshotJson: snapshot,
     },
   });
   return { report, idempotent: false };
