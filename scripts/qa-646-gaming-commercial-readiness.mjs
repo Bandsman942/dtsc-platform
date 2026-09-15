@@ -19,6 +19,7 @@ const onboarding = read("lib/enterprise/gaming/onboarding.ts");
 const onboardingRoute = read("app/api/enterprise/[organizationId]/gaming/onboarding/route.ts");
 const dashboardPage = read("app/enterprise-modules/GAMING_DASHBOARD/page.tsx");
 const readinessUi = read("components/enterprise/gaming/gaming-commercial-readiness.tsx");
+const readinessE2e = read("tests/e2e/issue-646-gaming-commercial-readiness.spec.mjs");
 const readiness = readJson("lib/enterprise/sector-onboarding-readiness.json");
 const guideFr = read("docs/user-guides/GAMING_LOUNGE_FR.md");
 const guideEn = read("docs/user-guides/GAMING_LOUNGE_EN.md");
@@ -75,10 +76,16 @@ includesAll(onboardingRoute, ["getEnterpriseGamingDashboardAccess", "ENTERPRISE_
 includesAll(dashboardPage, ["GamingCommercialReadiness", "EnterpriseGamingDashboardWorkspace", "resolveEnterpriseModuleCapabilities"], "Gaming dashboard setup composition");
 includesAll(readinessUi, [
   'data-testid="gaming-commercial-readiness"',
-  "320/360/375/390/414",
   "GAMING_MANAGER", "GAMING_OPERATOR_CASHIER", "GAMING_TECHNICIAN", "GAMING_FINANCE_ACCOUNTANT",
   "/gaming/onboarding", "useAppLocale", "Save and recheck", "Enregistrer et revérifier",
-], "Gaming responsive bilingual readiness UI");
+], "Gaming bilingual readiness UI");
+includesAll(readinessE2e, [
+  "[320, 360, 375, 390, 414]",
+  'colorScheme: "dark"',
+  'data-testid="gaming-commercial-readiness"',
+  "scrollWidth - document.documentElement.clientWidth",
+  "1440",
+], "Gaming responsive browser acceptance");
 
 const gamingProfile = readiness.profiles.find((profile) => profile.businessProfileCode === "GAMING_LOUNGE");
 check(readiness.version >= 5, "Sector onboarding readiness version must include Gaming");
@@ -93,9 +100,8 @@ check(gamingProfile?.requiredGuideCodes?.includes("GAMING_LOUNGE_EN"), "Gaming E
 check(String(gamingProfile?.commercialReadyPromotionRule || "").includes("OWNER_E2E"), "Gaming COMMERCIAL_READY promotion must require OWNER_E2E");
 check(String(gamingProfile?.commercialReadyPromotionRule || "").includes("exact final head"), "Gaming COMMERCIAL_READY promotion must bind to exact final head");
 
-for (const [content, label] of [[guideFr, "FR"], [guideEn, "EN"]]) {
-  includesAll(content, ["DTSC", "Gaming Lounge", "5", "Assets", "Finance", "DTSC AI", "OWNER_E2E", "320/360/375/390/414"], `Gaming guide ${label}`);
-}
+includesAll(guideFr, ["DTSC", "Gaming Lounge", "5", "Actifs", "Finance", "DTSC AI", "OWNER_E2E", "320/360/375/390/414"], "Gaming guide FR");
+includesAll(guideEn, ["DTSC", "Gaming Lounge", "5", "Assets", "Finance", "DTSC AI", "OWNER_E2E", "320/360/375/390/414"], "Gaming guide EN");
 includesAll(aiContract, ["ERP_GAMING_PERFORMANCE_READ"], "Gaming AI contract retained");
 includesAll(aiGaming, ["FACTUAL_OBSERVATIONS_ONLY_NO_CAUSAL_INFERENCE", "financialByCurrency", "getEnterpriseGamingDashboardAccess"], "Gaming AI boundaries retained");
 check(!aiGaming.includes("create("), "Gaming AI must remain read-only at commercial readiness");
