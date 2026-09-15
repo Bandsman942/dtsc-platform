@@ -27,7 +27,7 @@ export async function GET(req: Request, { params }: Params) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { organizationId } = await params;
   const access = await getEnterpriseGamingDashboardAccess({ session, organizationId, action: "manage" });
-  if (!access || !ENTERPRISE_ADMIN_ROLES.has(session.role)) return forbidden();
+  if (!access || !ENTERPRISE_ADMIN_ROLES.has(access.membership.role)) return forbidden();
   try {
     const state = await getGamingSelfServiceOnboarding(organizationId);
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "gaming-onboarding", action: "read" } });
@@ -46,7 +46,7 @@ export async function POST(req: Request, { params }: Params) {
   if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   const { organizationId } = await params;
   const access = await getEnterpriseGamingDashboardAccess({ session, organizationId, action: "manage" });
-  if (!access || !ENTERPRISE_ADMIN_ROLES.has(session.role)) return forbidden();
+  if (!access || !ENTERPRISE_ADMIN_ROLES.has(access.membership.role)) return forbidden();
   const parsed = gamingOnboardingSelectionSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt, metadata: { organizationId, domain: "gaming-onboarding", action: "invalid" } });
