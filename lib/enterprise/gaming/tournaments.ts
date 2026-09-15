@@ -289,7 +289,7 @@ export async function registerGamingTournamentParticipant(organizationId: string
             paymentTerms: "Tournament registration",
             notes: `Gaming tournament ${tournament.reference}`,
             createdByUserId: actorUserId,
-            items: { create: [{ organizationId, catalogItemId: fee.item.id, description: fee.item.name, quantity: money(1), unitPrice: fee.net, discountAmount: money(0), netAmount: fee.net, taxCodeId: fee.taxCodeId, taxAmount: fee.tax, totalAmount: fee.total }] },
+            items: { create: [{ catalogItemId: fee.item.id, description: fee.item.name, quantity: money(1), unitPrice: fee.net, discountAmount: money(0), netAmount: fee.net, taxCodeId: fee.taxCodeId, taxAmount: fee.tax, totalAmount: fee.total }] },
           },
         });
         salesInvoiceId = invoice.id;
@@ -333,7 +333,7 @@ export async function commandGamingTournamentRegistration(organizationId: string
       return tx.enterpriseGamingTournamentRegistration.update({ where: { id: registration.id }, data: { status: "DISQUALIFIED", disqualifiedAt: new Date(), resultLabel: clean(input.reason) || registration.resultLabel, updatedByUserId: actorUserId, revision: { increment: 1 } } });
     }
     if (input.action === "SET_RESULT") {
-      if (!['CHECKED_IN','DISQUALIFIED'].includes(registration.status)) throw new EnterpriseGamingTournamentError("GAMING_TOURNAMENT_RESULT_INVALID", 409);
+      if (!["CHECKED_IN", "DISQUALIFIED"].includes(registration.status)) throw new EnterpriseGamingTournamentError("GAMING_TOURNAMENT_RESULT_INVALID", 409);
       return tx.enterpriseGamingTournamentRegistration.update({ where: { id: registration.id }, data: { status: "COMPLETED", resultRank: input.resultRank || null, resultLabel: clean(input.resultLabel), completedAt: new Date(), updatedByUserId: actorUserId, revision: { increment: 1 } } });
     }
     throw new EnterpriseGamingTournamentError("GAMING_TOURNAMENT_REGISTRATION_ACTION_INVALID", 400);
