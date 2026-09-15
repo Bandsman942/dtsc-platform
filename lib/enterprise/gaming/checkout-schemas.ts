@@ -4,6 +4,7 @@ const id = z.string().trim().min(1).max(191);
 const idempotencyKey = z.string().trim().min(8).max(160);
 const money = z.coerce.number().finite().positive().max(1_000_000_000);
 const nonNegativeMoney = z.coerce.number().finite().min(0).max(1_000_000_000);
+const paymentMethod = z.enum(["CASH", "BANK_TRANSFER", "CARD", "MOBILE_MONEY", "CHEQUE", "OTHER"]);
 
 export const gamingCheckoutPrepareSchema = z.object({
   sessionId: id,
@@ -26,7 +27,7 @@ export const gamingCheckoutInvoiceDecisionSchema = z.object({
 export const gamingCheckoutPaymentCreateSchema = z.object({
   action: z.literal("ADD_PAYMENT"),
   paymentApproverUserId: id,
-  methodType: z.enum(["CASH", "BANK_TRANSFER", "CARD", "MOBILE_MONEY", "CHEQUE", "OTHER"]),
+  methodType: paymentMethod,
   financialAccountId: id,
   amount: money,
   reference: z.string().trim().max(160).optional().nullable(),
@@ -51,6 +52,12 @@ export const gamingCheckoutRefundRequestSchema = z.object({
   action: z.literal("REQUEST_REFUND"),
   revision: z.coerce.number().int().positive(),
   reason: z.string().trim().min(8).max(1000),
+  methodType: paymentMethod,
+  financialAccountId: id,
+  refundApproverUserId: id,
+  reference: z.string().trim().max(160).optional().nullable(),
+  maskedExternalReference: z.string().trim().max(160).optional().nullable(),
+  idempotencyKey,
 });
 
 export const gamingCheckoutRefundDecisionSchema = z.object({
@@ -75,7 +82,7 @@ export const gamingDailyCloseCreateSchema = z.object({
   idempotencyKey,
   declarations: z.array(z.object({
     financialAccountId: id,
-    methodType: z.enum(["CASH", "BANK_TRANSFER", "CARD", "MOBILE_MONEY", "CHEQUE", "OTHER"]),
+    methodType: paymentMethod,
     declaredAmount: nonNegativeMoney,
     varianceReason: z.string().trim().max(1000).optional().nullable(),
   })).min(1).max(100),
