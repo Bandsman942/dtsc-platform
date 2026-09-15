@@ -31,6 +31,7 @@ model EnterpriseGamingStationProfile {
   sessions        EnterpriseGamingSession[]
   bookings        EnterpriseGamingBooking[]
   pricingRules    EnterpriseGamingPricingRule[]
+  tournamentAssignments EnterpriseGamingTournamentStation[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, assetId], map: "GamingStation_org_asset_key")
@@ -280,4 +281,112 @@ model EnterpriseGamingDailyCloseLine {
   @@index([organizationId, dailyCloseId])
   @@index([organizationId, financialAccountId, currencyCode])
   @@index([organizationId, cashSessionId])
+}
+
+model EnterpriseGamingTournament {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  reference          String
+  title              String
+  description        String?
+  siteId             String?
+  entryCatalogItemId String?
+  tournamentFormat   String   @default("SINGLE_ELIMINATION")
+  status             String   @default("DRAFT")
+  registrationOpensAt DateTime?
+  registrationClosesAt DateTime?
+  startsAt           DateTime
+  endsAt             DateTime
+  maxParticipants    Int?
+  notes              String?
+  idempotencyKey     String?
+  revision           Int      @default(1)
+  createdByUserId    String
+  updatedByUserId    String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  archivedAt         DateTime?
+  registrations      EnterpriseGamingTournamentRegistration[]
+  stationAssignments EnterpriseGamingTournamentStation[]
+  transitions        EnterpriseGamingTournamentTransition[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, reference], map: "GamingTournament_org_reference_key")
+  @@unique([organizationId, idempotencyKey], map: "GamingTournament_org_idempotency_key")
+  @@index([organizationId, status, startsAt])
+  @@index([organizationId, siteId, startsAt])
+  @@index([organizationId, entryCatalogItemId])
+  @@index([archivedAt])
+}
+
+model EnterpriseGamingTournamentRegistration {
+  id               String   @id @default(cuid())
+  organizationId   String
+  tournamentId     String
+  businessPartyId  String
+  salesInvoiceId   String?
+  status           String   @default("REGISTERED")
+  seedNumber       Int?
+  resultRank       Int?
+  resultLabel      String?
+  checkedInAt      DateTime?
+  withdrawnAt      DateTime?
+  disqualifiedAt   DateTime?
+  completedAt      DateTime?
+  idempotencyKey   String
+  revision         Int      @default(1)
+  createdByUserId  String
+  updatedByUserId  String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  tournament       EnterpriseGamingTournament @relation(fields: [organizationId, tournamentId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, tournamentId, businessPartyId], map: "GamingTournamentRegistration_participant_key")
+  @@unique([organizationId, salesInvoiceId], map: "GamingTournamentRegistration_invoice_key")
+  @@unique([organizationId, idempotencyKey], map: "GamingTournamentRegistration_idempotency_key")
+  @@index([organizationId, tournamentId, status])
+  @@index([organizationId, businessPartyId, status])
+}
+
+model EnterpriseGamingTournamentStation {
+  id              String   @id @default(cuid())
+  organizationId  String
+  tournamentId    String
+  stationId       String
+  slotStartAt     DateTime
+  slotEndAt       DateTime
+  label           String?
+  status          String   @default("ASSIGNED")
+  revision        Int      @default(1)
+  createdByUserId String
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  tournament      EnterpriseGamingTournament @relation(fields: [organizationId, tournamentId], references: [organizationId, id], onDelete: Restrict)
+  station         EnterpriseGamingStationProfile @relation(fields: [organizationId, stationId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, tournamentId, stationId], map: "GamingTournamentStation_assignment_key")
+  @@index([organizationId, stationId, status, slotStartAt, slotEndAt])
+  @@index([organizationId, tournamentId, status])
+}
+
+model EnterpriseGamingTournamentTransition {
+  id             String   @id @default(cuid())
+  organizationId String
+  tournamentId   String
+  action         String
+  idempotencyKey String
+  fromStatus     String?
+  toStatus       String
+  actorUserId    String
+  metadataJson   Json?
+  occurredAt     DateTime @default(now())
+  tournament     EnterpriseGamingTournament @relation(fields: [organizationId, tournamentId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, idempotencyKey], map: "GamingTournamentTransition_org_idempotency_key")
+  @@index([organizationId, tournamentId, occurredAt])
+  @@index([organizationId, action, occurredAt])
 }

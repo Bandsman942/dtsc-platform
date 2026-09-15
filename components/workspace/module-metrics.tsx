@@ -11,7 +11,7 @@ export function ModuleMetrics({ children, className, label = "Indicateurs" }: { 
   );
 }
 
-export function ModuleMetric({ label, value, hint, className }: { label: ReactNode; value: ReactNode; hint?: ReactNode; className?: string }) {
+export function ModuleMetric({ label, value, hint, icon, className }: { label: ReactNode; value: ReactNode; hint?: ReactNode; icon?: ReactNode; className?: string }) {
   return (
     <div
       data-workspace-metric
@@ -20,7 +20,10 @@ export function ModuleMetric({ label, value, hint, className }: { label: ReactNo
         className,
       )}
     >
-      <div className="text-[0.66rem] font-black uppercase tracking-[0.13em] text-dtsc-muted sm:text-[0.7rem]">{label}</div>
+      <div className="flex min-w-0 items-center gap-1.5 text-[0.66rem] font-black uppercase tracking-[0.13em] text-dtsc-muted sm:text-[0.7rem]">
+        {icon ? <span className="shrink-0" aria-hidden="true">{icon}</span> : null}
+        <span className="min-w-0">{label}</span>
+      </div>
       <div className="mt-1.5 text-2xl font-black leading-none tracking-[-0.025em] text-dtsc-ink">{value}</div>
       {hint ? <div className="mt-1.5 text-xs font-semibold leading-4 text-dtsc-muted">{hint}</div> : null}
     </div>

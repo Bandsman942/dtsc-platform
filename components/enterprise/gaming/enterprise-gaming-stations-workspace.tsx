@@ -264,7 +264,7 @@ export function EnterpriseGamingStationsWorkspace({
       { id: "available", label: copy.makeAvailable, icon: CheckCircle2, hidden: !collection.canWrite || station.effectiveStatus === "AVAILABLE", disabled: Boolean(station.blockers.incident || station.blockers.maintenance), onSelect: () => void stationTransition(station, "SET_AVAILABLE") },
       { id: "block", label: copy.block, icon: ShieldAlert, hidden: !collection.canWrite || station.status === "OUT_OF_SERVICE", onSelect: () => void stationTransition(station, "BLOCK") },
       { id: "incident", label: copy.reportIncident, icon: ShieldAlert, hidden: !collection.extra.canReportIncident, onSelect: () => { setDetail(null); setIncidentFor(station); } },
-      { id: "asset", label: copy.openAssets, icon: ExternalLink, onSelect: () => { window.location.href = "/enterprise-modules/ASSETS_MAINTENANCE"; } },
+      { id: "asset", label: copy.openAssets, icon: ExternalLink, onSelect: () => { window.location.href = `/enterprise-modules/ASSETS_MAINTENANCE?assetId=${encodeURIComponent(station.assetId)}`; } },
       { id: "archive", label: copy.archive, icon: Archive, destructive: true, separatorBefore: true, hidden: !collection.canManage, onSelect: () => { setDetail(null); setArchiveFor(station); } },
     ];
   }
