@@ -194,8 +194,10 @@ test.describe.serial("Issue #645 Gaming OWNER_E2E", () => {
 
   test("deep-link Actifs ouvre directement l’actif Gaming ciblé", async () => {
     await page.goto(`${baseUrl}/enterprise-modules/ASSETS_MAINTENANCE?assetId=${encodeURIComponent(assetId)}`, { waitUntil: "networkidle" });
-    await expect(page.getByText("E2E-GAME-645 · Poste Gaming OWNER E2E #645", { exact: true })).toBeVisible();
-    await expect(page.getByText("OWNER E2E #645 incident Gaming", { exact: false })).toBeVisible();
+    const assetDialog = page.getByRole("dialog");
+    await expect(assetDialog).toBeVisible();
+    await expect(assetDialog.getByRole("heading", { name: "E2E-GAME-645 · Poste Gaming OWNER E2E #645", exact: true })).toBeVisible();
+    await expect(assetDialog.getByText("OWNER E2E #645 incident Gaming", { exact: false })).toBeVisible();
   });
 
   test("rapport canonique EnterpriseReport et exportable", async () => {
