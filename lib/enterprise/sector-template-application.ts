@@ -11,6 +11,7 @@ import {
   persistBusinessSubtypeSelection,
 } from "@/lib/enterprise/business-subtype-selection";
 import { ensureCanonicalCommonModulesForOrganization } from "@/lib/enterprise/common-modules";
+import { syncGamingOnboardingProvisioning } from "@/lib/enterprise/gaming/provisioning";
 import {
   getEnterpriseModuleDefinition,
   isEnterpriseModuleBusinessSubtypeCompatible,
@@ -87,6 +88,12 @@ export async function applyCanonicalSectorTemplateToOrganization({
     businessSubtypeCode: resolvedBusinessSubtypeCode,
     actorUserId,
   });
+  const gamingProvisioning = await syncGamingOnboardingProvisioning({
+    organizationId,
+    sectorCode: result.sectorCode,
+    businessSubtypeCode: resolvedBusinessSubtypeCode,
+    actorUserId,
+  });
   const commonModules = await ensureCanonicalCommonModulesForOrganization({ organizationId });
   const organization = await prisma.organization.findFirst({
     where: { id: organizationId, deletedAt: null },
@@ -108,6 +115,7 @@ export async function applyCanonicalSectorTemplateToOrganization({
       commonModuleCount: commonModules.length,
       retailProvisioning,
       tailoringProvisioning,
+      gamingProvisioning,
     };
   }
 
@@ -171,6 +179,7 @@ export async function applyCanonicalSectorTemplateToOrganization({
     commonModuleCount: commonModules.length,
     retailProvisioning,
     tailoringProvisioning,
+    gamingProvisioning,
     registryNormalization: {
       disabledModuleCount: moduleIdsToDisable.size,
       disabledActivityBlockCount: activityBlockIdsToDisable.size,
