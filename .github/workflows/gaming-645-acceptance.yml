@@ -21,6 +21,7 @@ on:
       - "scripts/qa-645-gaming-tournaments-reporting-ai.mjs"
       - "tests/e2e/issue-645-gaming-owner.spec.mjs"
       - "tests/e2e/issue-645-gaming-ai.spec.ts"
+      - "tests/e2e/stubs/**"
       - "playwright.config.mjs"
       - ".github/workflows/gaming-645-acceptance.yml"
 
@@ -145,6 +146,8 @@ jobs:
           pnpm exec playwright test tests/e2e/issue-645-gaming-owner.spec.mjs --workers=1 2>&1 | tee /tmp/dtsc-gaming-645-browser-playwright.log
       - name: Gaming DTSC AI Tool Gateway acceptance
         shell: bash
+        env:
+          NODE_PATH: ${{ github.workspace }}/tests/e2e/stubs
         run: |
           set -o pipefail
           pnpm exec playwright test tests/e2e/issue-645-gaming-ai.spec.ts --workers=1 2>&1 | tee /tmp/dtsc-gaming-645-ai-playwright.log
