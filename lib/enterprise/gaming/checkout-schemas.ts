@@ -3,7 +3,7 @@ import { z } from "zod";
 const id = z.string().trim().min(1).max(191);
 const idempotencyKey = z.string().trim().min(8).max(160);
 const money = z.coerce.number().finite().positive().max(1_000_000_000);
-const nonNegativeMoney = z.coerce.number().finite().min(0).max(1_000_000_000);
+const signedMoney = z.coerce.number().finite().min(-1_000_000_000).max(1_000_000_000);
 const paymentMethod = z.enum(["CASH", "BANK_TRANSFER", "CARD", "MOBILE_MONEY", "CHEQUE", "OTHER"]);
 
 export const gamingCheckoutPrepareSchema = z.object({
@@ -83,7 +83,7 @@ export const gamingDailyCloseCreateSchema = z.object({
   declarations: z.array(z.object({
     financialAccountId: id,
     methodType: paymentMethod,
-    declaredAmount: nonNegativeMoney,
+    declaredAmount: signedMoney,
     varianceReason: z.string().trim().max(1000).optional().nullable(),
   })).min(1).max(100),
 });
