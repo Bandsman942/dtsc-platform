@@ -6,6 +6,7 @@ const COMMON_ERP_ASSISTANT_CODES = [
 ] as const;
 
 const RETAIL_ERP_ASSISTANT_CODES = ["ENTERPRISE_GENERAL", "SHOP_ASSISTANT"] as const;
+const GAMING_ERP_ASSISTANT_CODES = ["ENTERPRISE_GENERAL"] as const;
 
 const RETAIL_ERP_MODULE_CODES = new Set([
   "RETAIL_POS",
@@ -14,14 +15,22 @@ const RETAIL_ERP_MODULE_CODES = new Set([
   "RETAIL_DAILY_CLOSE",
 ]);
 
+const GAMING_ERP_MODULE_CODES = new Set([
+  "GAMING_DASHBOARD",
+  "GAMING_REPORTS",
+  "GAMING_TOURNAMENTS",
+]);
+
 export function assistantCodesForErpModule(moduleCode: string): string[] {
-  return RETAIL_ERP_MODULE_CODES.has(moduleCode)
-    ? [...RETAIL_ERP_ASSISTANT_CODES]
-    : [...COMMON_ERP_ASSISTANT_CODES];
+  if (RETAIL_ERP_MODULE_CODES.has(moduleCode)) return [...RETAIL_ERP_ASSISTANT_CODES];
+  if (GAMING_ERP_MODULE_CODES.has(moduleCode)) return [...GAMING_ERP_ASSISTANT_CODES];
+  return [...COMMON_ERP_ASSISTANT_CODES];
 }
 
 export const ERP_ASSISTANT_POLICY = {
   common: [...COMMON_ERP_ASSISTANT_CODES],
   retail: [...RETAIL_ERP_ASSISTANT_CODES],
+  gaming: [...GAMING_ERP_ASSISTANT_CODES],
   retailModules: [...RETAIL_ERP_MODULE_CODES],
+  gamingModules: [...GAMING_ERP_MODULE_CODES],
 };

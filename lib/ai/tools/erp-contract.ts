@@ -28,6 +28,7 @@ export const ERP_AI_READ_SPECS = [
   { code: "ERP_MOBILE_MONEY_READ", moduleCode: "MOBILE_MONEY_AGENCY", label: "Agence Mobile Money", description: "Lire les transactions Mobile Money autorisées avec montants, devises, frais, commissions et statuts." },
   { code: "ERP_TELCO_READ", moduleCode: "TELCO_TOPUPS", label: "Télécom & forfaits", description: "Lire les transactions Télécom autorisées avec montants, coûts, marges et statuts." },
   { code: "ERP_RETAIL_CLOSE_READ", moduleCode: "RETAIL_DAILY_CLOSE", label: "Clôture magasin", description: "Lire les clôtures magasin autorisées, écarts et montants utiles." },
+  { code: "ERP_GAMING_PERFORMANCE_READ", moduleCode: "GAMING_DASHBOARD", label: "Performance Gaming", description: "Lire une synthèse factuelle de la performance Gaming autorisée : occupation, sessions, réservations, tournois, maintenance et facturation séparée par devise quand les permissions associées l’autorisent." },
 ] as const;
 
 export type ErpAiReadToolCode = (typeof ERP_AI_READ_SPECS)[number]["code"];

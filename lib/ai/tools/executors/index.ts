@@ -4,6 +4,7 @@ import { ERP_AI_TOOL_EXECUTORS } from "@/lib/ai/tools/executors/erp";
 import { FINANCE_AI_TOOL_EXECUTORS } from "@/lib/ai/tools/executors/finance";
 import { FINANCE_ACCOUNTING_QUERY_AI_EXECUTORS } from "@/lib/ai/tools/executors/finance-accounting-query";
 import { FORM_IMPORT_AI_TOOL_EXECUTORS } from "@/lib/ai/tools/executors/form-import";
+import { GAMING_AI_TOOL_EXECUTORS } from "@/lib/ai/tools/executors/gaming";
 import { MANUFACTURING_AI_TOOL_EXECUTORS } from "@/lib/ai/tools/executors/manufacturing";
 import { MANUFACTURING_AI_ACTION_EXECUTORS } from "@/lib/ai/tools/executors/manufacturing-actions";
 import { REPORT_ANALYSIS_AI_TOOL_EXECUTORS } from "@/lib/ai/tools/executors/report-analysis";
@@ -19,6 +20,7 @@ const AI_TOOL_EXECUTORS: Record<string, AiToolExecutor> = {
   ...FINANCE_AI_TOOL_EXECUTORS,
   ...FINANCE_ACCOUNTING_QUERY_AI_EXECUTORS,
   ...ERP_AI_TOOL_EXECUTORS,
+  ...GAMING_AI_TOOL_EXECUTORS,
   ...REPORT_ANALYSIS_AI_TOOL_EXECUTORS,
   ...MANUFACTURING_AI_TOOL_EXECUTORS,
   ...MANUFACTURING_AI_ACTION_EXECUTORS,
