@@ -106,53 +106,16 @@ CREATE UNIQUE INDEX "GamingTournamentTransition_org_idempotency_key" ON "Enterpr
 CREATE INDEX "EnterpriseGamingTournamentTransition_organizationId_tournamentId_occurredAt_idx" ON "EnterpriseGamingTournamentTransition"("organizationId", "tournamentId", "occurredAt");
 CREATE INDEX "EnterpriseGamingTournamentTransition_organizationId_action_occurredAt_idx" ON "EnterpriseGamingTournamentTransition"("organizationId", "action", "occurredAt");
 
-ALTER TABLE "EnterpriseGamingTournamentRegistration"
-  ADD CONSTRAINT "EnterpriseGamingTournamentRegistration_org_tournament_fkey"
-  FOREIGN KEY ("organizationId", "tournamentId")
-  REFERENCES "EnterpriseGamingTournament"("organizationId", "id")
-  ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "EnterpriseGamingTournamentRegistration" ADD CONSTRAINT "EnterpriseGamingTournamentRegistration_org_tournament_fkey" FOREIGN KEY ("organizationId", "tournamentId") REFERENCES "EnterpriseGamingTournament"("organizationId", "id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "EnterpriseGamingTournamentStation" ADD CONSTRAINT "EnterpriseGamingTournamentStation_org_tournament_fkey" FOREIGN KEY ("organizationId", "tournamentId") REFERENCES "EnterpriseGamingTournament"("organizationId", "id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "EnterpriseGamingTournamentStation" ADD CONSTRAINT "EnterpriseGamingTournamentStation_org_station_fkey" FOREIGN KEY ("organizationId", "stationId") REFERENCES "EnterpriseGamingStationProfile"("organizationId", "id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "EnterpriseGamingTournamentTransition" ADD CONSTRAINT "EnterpriseGamingTournamentTransition_org_tournament_fkey" FOREIGN KEY ("organizationId", "tournamentId") REFERENCES "EnterpriseGamingTournament"("organizationId", "id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
-ALTER TABLE "EnterpriseGamingTournamentStation"
-  ADD CONSTRAINT "EnterpriseGamingTournamentStation_org_tournament_fkey"
-  FOREIGN KEY ("organizationId", "tournamentId")
-  REFERENCES "EnterpriseGamingTournament"("organizationId", "id")
-  ON DELETE RESTRICT ON UPDATE CASCADE;
-
-ALTER TABLE "EnterpriseGamingTournamentStation"
-  ADD CONSTRAINT "EnterpriseGamingTournamentStation_org_station_fkey"
-  FOREIGN KEY ("organizationId", "stationId")
-  REFERENCES "EnterpriseGamingStationProfile"("organizationId", "id")
-  ON DELETE RESTRICT ON UPDATE CASCADE;
-
-ALTER TABLE "EnterpriseGamingTournamentTransition"
-  ADD CONSTRAINT "EnterpriseGamingTournamentTransition_org_tournament_fkey"
-  FOREIGN KEY ("organizationId", "tournamentId")
-  REFERENCES "EnterpriseGamingTournament"("organizationId", "id")
-  ON DELETE RESTRICT ON UPDATE CASCADE;
-
-ALTER TABLE "EnterpriseGamingTournament"
-  ADD CONSTRAINT "EnterpriseGamingTournament_status_check"
-  CHECK ("status" IN ('DRAFT','REGISTRATION_OPEN','REGISTRATION_CLOSED','IN_PROGRESS','COMPLETED','CANCELLED'));
-ALTER TABLE "EnterpriseGamingTournament"
-  ADD CONSTRAINT "EnterpriseGamingTournament_format_check"
-  CHECK ("tournamentFormat" IN ('SINGLE_ELIMINATION','DOUBLE_ELIMINATION','ROUND_ROBIN','LEAGUE','CUSTOM'));
-ALTER TABLE "EnterpriseGamingTournament"
-  ADD CONSTRAINT "EnterpriseGamingTournament_dates_check"
-  CHECK ("endsAt" > "startsAt" AND ("registrationClosesAt" IS NULL OR "registrationClosesAt" <= "startsAt") AND ("registrationOpensAt" IS NULL OR "registrationClosesAt" IS NULL OR "registrationOpensAt" < "registrationClosesAt"));
-ALTER TABLE "EnterpriseGamingTournament"
-  ADD CONSTRAINT "EnterpriseGamingTournament_max_participants_check"
-  CHECK ("maxParticipants" IS NULL OR "maxParticipants" > 1);
-
-ALTER TABLE "EnterpriseGamingTournamentRegistration"
-  ADD CONSTRAINT "EnterpriseGamingTournamentRegistration_status_check"
-  CHECK ("status" IN ('REGISTERED','CHECKED_IN','WITHDRAWN','DISQUALIFIED','COMPLETED'));
-ALTER TABLE "EnterpriseGamingTournamentRegistration"
-  ADD CONSTRAINT "EnterpriseGamingTournamentRegistration_rank_check"
-  CHECK ("seedNumber" IS NULL OR "seedNumber" > 0) AND CHECK ("resultRank" IS NULL OR "resultRank" > 0);
-
-ALTER TABLE "EnterpriseGamingTournamentStation"
-  ADD CONSTRAINT "EnterpriseGamingTournamentStation_status_check"
-  CHECK ("status" IN ('ASSIGNED','RELEASED'));
-ALTER TABLE "EnterpriseGamingTournamentStation"
-  ADD CONSTRAINT "EnterpriseGamingTournamentStation_dates_check"
-  CHECK ("slotEndAt" > "slotStartAt");
+ALTER TABLE "EnterpriseGamingTournament" ADD CONSTRAINT "EnterpriseGamingTournament_status_check" CHECK ("status" IN ('DRAFT','REGISTRATION_OPEN','REGISTRATION_CLOSED','IN_PROGRESS','COMPLETED','CANCELLED'));
+ALTER TABLE "EnterpriseGamingTournament" ADD CONSTRAINT "EnterpriseGamingTournament_format_check" CHECK ("tournamentFormat" IN ('SINGLE_ELIMINATION','DOUBLE_ELIMINATION','ROUND_ROBIN','LEAGUE','CUSTOM'));
+ALTER TABLE "EnterpriseGamingTournament" ADD CONSTRAINT "EnterpriseGamingTournament_dates_check" CHECK ("endsAt" > "startsAt" AND ("registrationClosesAt" IS NULL OR "registrationClosesAt" <= "startsAt") AND ("registrationOpensAt" IS NULL OR "registrationClosesAt" IS NULL OR "registrationOpensAt" < "registrationClosesAt"));
+ALTER TABLE "EnterpriseGamingTournament" ADD CONSTRAINT "EnterpriseGamingTournament_max_participants_check" CHECK ("maxParticipants" IS NULL OR "maxParticipants" > 1);
+ALTER TABLE "EnterpriseGamingTournamentRegistration" ADD CONSTRAINT "EnterpriseGamingTournamentRegistration_status_check" CHECK ("status" IN ('REGISTERED','CHECKED_IN','WITHDRAWN','DISQUALIFIED','COMPLETED'));
+ALTER TABLE "EnterpriseGamingTournamentRegistration" ADD CONSTRAINT "EnterpriseGamingTournamentRegistration_rank_check" CHECK (("seedNumber" IS NULL OR "seedNumber" > 0) AND ("resultRank" IS NULL OR "resultRank" > 0));
+ALTER TABLE "EnterpriseGamingTournamentStation" ADD CONSTRAINT "EnterpriseGamingTournamentStation_status_check" CHECK ("status" IN ('ASSIGNED','RELEASED'));
+ALTER TABLE "EnterpriseGamingTournamentStation" ADD CONSTRAINT "EnterpriseGamingTournamentStation_dates_check" CHECK ("slotEndAt" > "slotStartAt");
