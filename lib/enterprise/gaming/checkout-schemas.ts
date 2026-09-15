@@ -2,6 +2,7 @@ import { z } from "zod";
 
 const id = z.string().trim().min(1).max(191);
 const idempotencyKey = z.string().trim().min(8).max(160);
+const revision = z.coerce.number().int().positive();
 const money = z.coerce.number().finite().positive().max(1_000_000_000);
 const signedMoney = z.coerce.number().finite().min(-1_000_000_000).max(1_000_000_000);
 const paymentMethod = z.enum(["CASH", "BANK_TRANSFER", "CARD", "MOBILE_MONEY", "CHEQUE", "OTHER"]);
@@ -20,12 +21,13 @@ export const gamingCheckoutPrepareSchema = z.object({
 
 export const gamingCheckoutInvoiceDecisionSchema = z.object({
   action: z.literal("APPROVE_INVOICE"),
-  revision: z.coerce.number().int().positive(),
+  revision,
   reason: z.string().trim().max(1000).optional(),
 });
 
 export const gamingCheckoutPaymentCreateSchema = z.object({
   action: z.literal("ADD_PAYMENT"),
+  revision,
   paymentApproverUserId: id,
   methodType: paymentMethod,
   financialAccountId: id,
@@ -38,19 +40,19 @@ export const gamingCheckoutPaymentCreateSchema = z.object({
 export const gamingCheckoutPaymentDecisionSchema = z.object({
   action: z.literal("APPROVE_PAYMENT"),
   paymentId: id,
-  revision: z.coerce.number().int().positive(),
+  revision,
   reason: z.string().trim().max(1000).optional(),
 });
 
 export const gamingCheckoutCancelSchema = z.object({
   action: z.literal("CANCEL"),
-  revision: z.coerce.number().int().positive(),
+  revision,
   reason: z.string().trim().min(8).max(1000),
 });
 
 export const gamingCheckoutRefundRequestSchema = z.object({
   action: z.literal("REQUEST_REFUND"),
-  revision: z.coerce.number().int().positive(),
+  revision,
   reason: z.string().trim().min(8).max(1000),
   methodType: paymentMethod,
   financialAccountId: id,
@@ -62,7 +64,7 @@ export const gamingCheckoutRefundRequestSchema = z.object({
 
 export const gamingCheckoutRefundDecisionSchema = z.object({
   action: z.literal("APPROVE_REFUND"),
-  revision: z.coerce.number().int().positive(),
+  revision,
   reason: z.string().trim().min(8).max(1000),
 });
 
@@ -90,7 +92,7 @@ export const gamingDailyCloseCreateSchema = z.object({
 
 export const gamingDailyCloseDecisionSchema = z.object({
   action: z.enum(["VALIDATE", "REJECT"]),
-  revision: z.coerce.number().int().positive(),
+  revision,
   reason: z.string().trim().min(8).max(1000).optional(),
 }).superRefine((value, ctx) => {
   if (value.action === "REJECT" && !value.reason) {
