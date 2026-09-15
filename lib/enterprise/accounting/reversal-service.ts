@@ -5,7 +5,7 @@ import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { financeReference, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { getPostingPeriod } from "@/lib/enterprise/accounting/periods";
 
-export type JournalReversalAuthorization = "USER" | "APPROVED_PERIODIC_TEMPLATE" | "SYSTEM_CLOSING";
+export type JournalReversalAuthorization = "USER" | "APPROVED_PERIODIC_TEMPLATE" | "SYSTEM_CLOSING" | "DOMAIN_INVERSE";
 
 export async function reverseJournalEntryTx(
   tx: Prisma.TransactionClient,
@@ -101,7 +101,7 @@ export async function reverseJournalEntryTx(
     actorUserId,
     fromStatus: "POSTED",
     toStatus: "REVERSED",
-    metadataJson: { reversalEntryId: reversal.id, reason: input.reason.slice(0, 500) },
+    metadataJson: { reversalEntryId: reversal.id, reason: input.reason.slice(0, 500), authorization: options?.authorization || "USER" },
   });
   return reversal;
 }
