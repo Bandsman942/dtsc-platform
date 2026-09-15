@@ -248,8 +248,6 @@ export function EnterpriseGamingCheckoutWorkspace({ organizationId, organization
   const labels = { CASH: "Cash", MOBILE_MONEY: "Mobile Money", CARD: "Card", BANK_TRANSFER: "Bank transfer", CHEQUE: "Cheque", OTHER: "Other" } as const;
   const activeInvoiceCurrency = detail?.invoice?.currencyCode || "";
   const compatibleAccounts = (lookups?.accounts || []).filter((account) => !activeInvoiceCurrency || account.currencyCode === activeInvoiceCurrency);
-  const selectedWarehouseId = typeof document !== "undefined" ? undefined : undefined;
-  void selectedWarehouseId;
 
   return (
     <ModuleWorkspace>
@@ -264,7 +262,7 @@ export function EnterpriseGamingCheckoutWorkspace({ organizationId, organization
         { id: "ALL", label: copy.all }, { id: "INVOICE_PENDING", label: copy.invoicePending }, { id: "AWAITING_PAYMENT", label: copy.awaitingPayment }, { id: "PARTIALLY_PAID", label: copy.partiallyPaid }, { id: "PAID", label: copy.paid }, { id: "REFUND_PENDING", label: copy.refundPending }, { id: "REFUNDED", label: copy.refunded },
       ]} />} summary={`${copy.page} ${collection.pagination.page}/${collection.pagination.pageCount}`} />
       <ModuleContent>
-        <ModuleSection title={copy.title} description={definition.descriptionFr} count={collection.pagination.total} defaultOpen>
+        <ModuleSection title={copy.title} description={locale === "en" ? definition.descriptionEn : definition.descriptionFr} count={collection.pagination.total} defaultOpen>
           {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : collection.items.length === 0 ? <EmptyState title={copy.empty} /> : <BusinessList>{collection.items.map((item) => <BusinessListItem key={item.id} title={item.reference} status={<StatusBadge tone={tone(item.status)}>{statusLabel(item.status, copy)}</StatusBadge>} meta={`${copy.session}: ${item.session.reference} · ${copy.station}: ${item.session.station.displayName || item.session.station.stationCode}`} description={item.invoice ? `${item.invoice.number} · ${formatEnterpriseAmount(item.invoice.grandTotal, item.invoice.currencyCode, locale)} · ${copy.outstanding}: ${formatEnterpriseAmount(item.invoice.outstandingAmount, item.invoice.currencyCode, locale)}` : undefined} onOpen={() => void openDetail(item)} openLabel={`${copy.detail} ${item.reference}`} />)}</BusinessList>}
           <div className="mt-4 flex justify-end gap-2"><Button variant="outline" disabled={page <= 1 || collection.loading} onClick={() => setPage((value) => Math.max(1, value - 1))}>{copy.previous}</Button><Button variant="outline" disabled={page >= collection.pagination.pageCount || collection.loading} onClick={() => setPage((value) => value + 1)}>{copy.next}</Button></div>
         </ModuleSection>
@@ -282,7 +280,7 @@ export function EnterpriseGamingCheckoutWorkspace({ organizationId, organization
           <div className="flex flex-wrap gap-2">
             {detail.checkout.status === "INVOICE_PENDING" && detail.canManage ? <Button onClick={() => void mutate({ action: "APPROVE_INVOICE", revision: detail.checkout.revision })}>{copy.approveInvoice}</Button> : null}
             {["AWAITING_PAYMENT", "PARTIALLY_PAID"].includes(detail.checkout.status) && detail.canWrite ? <Button onClick={() => void openAction("payment")}><CreditCard className="h-4 w-4" />{copy.addPayment}</Button> : null}
-            {detail.checkout.status === "PAID" ? <Button variant="outline" onClick={() => void loadReceipt()}><ReceiptText className="h-4 w-4" />{copy.receipt}</Button> : null}
+            {["PAID", "REFUND_PENDING", "REFUNDED"].includes(detail.checkout.status) ? <Button variant="outline" onClick={() => void loadReceipt()}><ReceiptText className="h-4 w-4" />{copy.receipt}</Button> : null}
             {detail.checkout.status === "PAID" && detail.canManage ? <Button variant="outline" onClick={() => void openAction("refund")}><RotateCcw className="h-4 w-4" />{copy.requestRefund}</Button> : null}
             {detail.checkout.status === "REFUND_PENDING" && detail.canManage ? <Button onClick={() => void openAction("approveRefund")}>{copy.approveRefund}</Button> : null}
             {detail.checkout.status === "INVOICE_PENDING" && detail.canManage ? <Button variant="outline" onClick={() => void openAction("cancel")}><X className="h-4 w-4" />{copy.cancel}</Button> : null}
