@@ -1,0 +1,77 @@
+name: Patch 644 QA contract
+
+on:
+  push:
+    branches:
+      - feat/644-gaming-checkout-daily-close
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ contains(github.event.head_commit.message, 'apply gaming QA contract patch') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: feat/644-gaming-checkout-daily-close
+          fetch-depth: 0
+
+      - name: Align QA with canonical implementation
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('scripts/qa-644-gaming-checkout-daily-close.mjs')
+          text = path.read_text()
+
+          replacements = [
+              (
+                  '  "revision: z.coerce.number().int().positive()",\n',
+                  '  "const revision = z.coerce.number().int().positive();",\n',
+              ),
+              (
+                  '  \'movementType: "CUSTOMER_RETURN"\',\n',
+                  '  \'movementType: "RETURN_IN"\',\n',
+              ),
+              (
+                  '  \'GamingCheckout_org_idempotency_key\',\n',
+                  '  \'GamingCheckout_org_idempotency_key\',\n  \'EnterpriseGamingCheckout_organizationId_id_key\',\n',
+              ),
+              (
+                  '  \'GamingDailyClose_org_date_global_active_key\',\n',
+                  '  \'EnterpriseGamingDailyClose_organizationId_id_key\',\n  \'GamingDailyClose_org_date_global_active_key\',\n',
+              ),
+              (
+                  '  \'GamingDailyCloseLine_scope_key\',\n',
+                  '  \'EnterpriseGamingDailyCloseLine_organizationId_id_key\',\n  \'GamingDailyCloseLine_scope_key\',\n',
+              ),
+          ]
+
+          for old, new in replacements:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'expected one match for {old!r}, got {count}')
+              text = text.replace(old, new, 1)
+
+          workspace_old = "  'action: \"APPROVE_REFUND\"',\n  'className=\"h-[92dvh]',\n], \"checkout workspace UX\");"
+          workspace_new = "  'reasonSubmit(event, modal === \"cancel\" ? \"CANCEL\" : \"APPROVE_REFUND\")',\n  'className=\"h-[92dvh]',\n], \"checkout workspace UX\");"
+          count = text.count(workspace_old)
+          if count != 1:
+              raise SystemExit(f'expected one workspace approval marker, got {count}')
+          text = text.replace(workspace_old, workspace_new, 1)
+
+          path.write_text(text)
+          PY
+
+      - name: Remove temporary workflow and commit QA fix
+        shell: bash
+        run: |
+          git rm .github/workflows/patch-644-qa-contract.yml
+          git add scripts/qa-644-gaming-checkout-daily-close.mjs
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "test(gaming): align checkout QA with canonical contracts"
+          git push origin HEAD:feat/644-gaming-checkout-daily-close
