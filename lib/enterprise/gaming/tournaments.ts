@@ -94,7 +94,7 @@ export async function createGamingTournament(organizationId: string, actorUserId
   assertDates(input.startsAt, input.endsAt, input.registrationOpensAt, input.registrationClosesAt);
   try {
     const tournament = await prisma.$transaction(async (tx) => {
-      await tx.$queryRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`${organizationId}:gaming-tournament:${input.idempotencyKey}`})::bigint)`);
+      await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`${organizationId}:gaming-tournament:${input.idempotencyKey}`})::bigint)`);
       const retry = await tx.enterpriseGamingTournament.findFirst({ where: { organizationId, idempotencyKey: input.idempotencyKey } });
       if (retry) return retry;
       await validateReferencesTx(tx, organizationId, clean(input.siteId), clean(input.entryCatalogItemId));
@@ -254,7 +254,7 @@ export async function registerGamingTournamentParticipant(organizationId: string
   if (existing) return { registration: existing, idempotent: true };
   try {
     const registration = await prisma.$transaction(async (tx) => {
-      await tx.$queryRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`${organizationId}:gaming-tournament-registration:${tournamentId}:${input.businessPartyId}`})::bigint)`);
+      await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`${organizationId}:gaming-tournament-registration:${tournamentId}:${input.businessPartyId}`})::bigint)`);
       const retry = await tx.enterpriseGamingTournamentRegistration.findFirst({ where: { organizationId, OR: [{ idempotencyKey: input.idempotencyKey }, { tournamentId, businessPartyId: input.businessPartyId }] } });
       if (retry) return retry;
       const tournament = await tx.enterpriseGamingTournament.findFirst({ where: { id: tournamentId, organizationId, archivedAt: null } });
@@ -342,7 +342,7 @@ export async function commandGamingTournamentRegistration(organizationId: string
 
 export async function assignGamingTournamentStation(organizationId: string, tournamentId: string, actorUserId: string, input: StationInput) {
   return prisma.$transaction(async (tx) => {
-    await tx.$queryRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`${organizationId}:gaming-tournament-station:${input.stationId}`})::bigint)`);
+    await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`${organizationId}:gaming-tournament-station:${input.stationId}`})::bigint)`);
     const tournament = await tx.enterpriseGamingTournament.findFirst({ where: { id: tournamentId, organizationId, archivedAt: null } });
     if (!tournament) throw new EnterpriseGamingTournamentError("GAMING_TOURNAMENT_NOT_FOUND", 404);
     if (["COMPLETED", "CANCELLED"].includes(tournament.status)) throw new EnterpriseGamingTournamentError("GAMING_TOURNAMENT_STATION_ASSIGNMENT_CLOSED", 409);
