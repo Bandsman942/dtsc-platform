@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "purpose": "Opposable onboarding and commercialization gate for DTSC sector templates.",
   "genericCriteria": [
     "ACTIVE_SECTOR",
@@ -146,6 +146,72 @@
         "OWNER_END_TO_END_ACCEPTANCE"
       ],
       "commercialReadyPromotionRule": "Promote READY to COMMERCIAL_READY only after CI_PROVEN cross-module acceptance and OWNER_E2E for the DTSC creation -> invitation -> onboarding -> order -> production -> delivery -> finance path."
+    },
+    {
+      "sectorCode": "HOSPITALITY_EVENTS",
+      "templateVersion": 1,
+      "businessProfileCode": "GAMING_LOUNGE",
+      "commercializationStatus": "COMMERCIAL_READY",
+      "enforce": true,
+      "minimumOperationalPlan": "BUSINESS",
+      "requiredModules": [
+        "CRM_CUSTOMERS",
+        "CATALOG",
+        "SITES_WAREHOUSES",
+        "ASSETS_MAINTENANCE",
+        "HUMAN_RESOURCES",
+        "FINANCE_RECEIVABLES",
+        "FINANCE_PAYMENTS",
+        "FINANCE_TREASURY",
+        "REPORTS",
+        "AI_ASSISTANT",
+        "GAMING_DASHBOARD",
+        "GAMING_STATIONS",
+        "GAMING_SESSIONS",
+        "GAMING_BOOKINGS",
+        "GAMING_PRICING_PACKAGES",
+        "GAMING_CHECKOUT",
+        "GAMING_DAILY_CLOSE",
+        "GAMING_TOURNAMENTS",
+        "GAMING_REPORTS"
+      ],
+      "requiredDepartments": [],
+      "requiredPositions": [
+        "GAMING_MANAGER",
+        "GAMING_OPERATOR_CASHIER",
+        "GAMING_TECHNICIAN",
+        "GAMING_FINANCE_ACCOUNTANT"
+      ],
+      "requiredOperationalModules": [
+        "GAMING_STATIONS",
+        "GAMING_SESSIONS",
+        "GAMING_BOOKINGS",
+        "GAMING_PRICING_PACKAGES",
+        "GAMING_CHECKOUT",
+        "GAMING_DAILY_CLOSE",
+        "GAMING_TOURNAMENTS",
+        "GAMING_DASHBOARD",
+        "GAMING_REPORTS"
+      ],
+      "requiredGuideCodes": ["GAMING_LOUNGE_FR", "GAMING_LOUNGE_EN"],
+      "releaseCriteria": [
+        "THREE_LAYER_DTSC_PREVIEW",
+        "TENANT_SELF_SERVICE_ONBOARDING",
+        "EIGHT_STEP_READINESS",
+        "FIVE_STATION_LAUNCH_BASELINE_WITHOUT_PRODUCT_CAP",
+        "CANONICAL_ASSET_MAINTENANCE",
+        "CANONICAL_CRM_CATALOG_FINANCE",
+        "SERVER_AUTHORITATIVE_SESSIONS_AND_PRICING",
+        "IDEMPOTENT_BOOKING_CHECKOUT_CLOSE",
+        "MULTI_CURRENCY_SEPARATION",
+        "GAMING_ACTIVITY_BLOCKS_CANONICAL_ROUTING",
+        "GAMING_RECOMMENDED_RBAC",
+        "AI_PERMISSION_SCOPED_READS",
+        "FR_EN_USER_GUIDES",
+        "RESPONSIVE_320_360_375_390_414_TABLET_DESKTOP",
+        "OWNER_END_TO_END_ACCEPTANCE"
+      ],
+      "commercialReadyPromotionRule": "Promote Gaming Lounge to COMMERCIAL_READY only after CI_PROVEN on the exact final head and OWNER_E2E for DTSC creation -> invitation -> onboarding -> 5 stations -> booking -> session -> payment -> daily close -> breakdown/maintenance -> report/AI."
     }
   ]
 }
