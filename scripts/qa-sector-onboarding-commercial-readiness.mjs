@@ -216,7 +216,7 @@ try {
       assess(exists(declaration.runtimeProvisioningFile), `runtime provisioning file missing: ${declaration.runtimeProvisioningFile}`);
       if (exists(declaration.runtimeProvisioningFile)) {
         const provisioning = read(declaration.runtimeProvisioningFile);
-        if (subtypeCode) assess(provisioning.includes(subtypeCode), `runtime provisioning does not bind subtype ${subtypeCode}`);
+        if (declaration.runtimeProvisioningMarker) assess(provisioning.includes(declaration.runtimeProvisioningMarker), `runtime provisioning file does not define ${declaration.runtimeProvisioningMarker}`);
         for (const positionCode of declaration.runtimeProvisionedPositions || []) assess(provisioning.includes(positionCode), `runtime provisioned position missing: ${positionCode}`);
       }
     }
