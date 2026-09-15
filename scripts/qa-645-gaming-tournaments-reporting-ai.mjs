@@ -32,7 +32,7 @@ const aiPolicy = read("lib/ai/tools/erp-assistant-policy.ts");
 const aiGaming = read("lib/ai/tools/executors/gaming.ts");
 const aiExecutors = read("lib/ai/tools/executors/index.ts");
 const prismaSchema = read("prisma/enterprise-gaming.prisma");
-const migration = read("prisma/migrations/20260915110000_gaming_tournaments/migration.sql");
+const migration = read("prisma/migrations/20260915143000_gaming_tournaments_reporting/migration.sql");
 const docs = read("docs/ISSUE_645_GAMING_TOURNAMENTS_REPORTING_AI.md");
 
 check(registry.version >= 7, "gaming registry version must include #645");
