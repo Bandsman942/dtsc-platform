@@ -116,6 +116,8 @@ jobs:
         run: pnpm qa:regression
       - name: Type-check
         run: pnpm type-check
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
       - name: Build production application
         shell: bash
         run: |
