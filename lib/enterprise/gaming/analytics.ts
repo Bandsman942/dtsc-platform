@@ -27,7 +27,6 @@ export async function getGamingDashboardSnapshot(organizationId: string, options
     orderBy: [{ sortOrder: "asc" }, { stationCode: "asc" }],
     select: { id: true, assetId: true, stationCode: true, displayName: true, status: true },
   });
-  const stationIds = stations.map((station) => station.id);
   const assetIds = stations.map((station) => station.assetId);
 
   const [activeSessions, sessionAggregate, sessionsByStatus, bookingsByStatus, upcomingTournaments] = await Promise.all([
