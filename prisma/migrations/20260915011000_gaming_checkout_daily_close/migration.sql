@@ -78,6 +78,12 @@ CREATE INDEX "EnterpriseGamingCheckout_organizationId_refundRequestedAt_idx" ON 
 
 CREATE UNIQUE INDEX "GamingDailyClose_org_reference_key" ON "EnterpriseGamingDailyClose"("organizationId", "reference");
 CREATE UNIQUE INDEX "GamingDailyClose_org_idempotency_key" ON "EnterpriseGamingDailyClose"("organizationId", "idempotencyKey");
+CREATE UNIQUE INDEX "GamingDailyClose_org_date_global_active_key"
+  ON "EnterpriseGamingDailyClose"("organizationId", "businessDate")
+  WHERE "siteId" IS NULL AND "status" IN ('SUBMITTED', 'VALIDATED');
+CREATE UNIQUE INDEX "GamingDailyClose_org_date_site_active_key"
+  ON "EnterpriseGamingDailyClose"("organizationId", "businessDate", "siteId")
+  WHERE "siteId" IS NOT NULL AND "status" IN ('SUBMITTED', 'VALIDATED');
 CREATE INDEX "EnterpriseGamingDailyClose_organizationId_businessDate_status_idx" ON "EnterpriseGamingDailyClose"("organizationId", "businessDate", "status");
 CREATE INDEX "EnterpriseGamingDailyClose_organizationId_siteId_businessDate_idx" ON "EnterpriseGamingDailyClose"("organizationId", "siteId", "businessDate");
 
