@@ -192,6 +192,12 @@ test.describe.serial("Issue #645 Gaming OWNER_E2E", () => {
     expect(dashboard.stations?.some((item) => item.assetId === assetId && String(item.assetDeepLink).includes(assetId))).toBeTruthy();
   });
 
+  test("deep-link Actifs ouvre directement l’actif Gaming ciblé", async () => {
+    await page.goto(`${baseUrl}/enterprise-modules/ASSETS_MAINTENANCE?assetId=${encodeURIComponent(assetId)}`, { waitUntil: "networkidle" });
+    await expect(page.getByText("E2E-GAME-645 · Poste Gaming OWNER E2E #645", { exact: true })).toBeVisible();
+    await expect(page.getByText("OWNER E2E #645 incident Gaming", { exact: false })).toBeVisible();
+  });
+
   test("rapport canonique EnterpriseReport et exportable", async () => {
     const generated = await post(`/api/enterprise/${organizationId}/gaming/reports`, {
       reportType: "GAMING_STATION_UTILIZATION",
