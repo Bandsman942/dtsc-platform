@@ -10,6 +10,7 @@ import {
   normalizeBusinessSubtypeCode,
 } from "@/lib/enterprise/business-subtype-registry";
 import { persistBusinessSubtypeSelection } from "@/lib/enterprise/business-subtype-selection";
+import { GAMING_BUSINESS_SUBTYPE_CODE } from "@/lib/enterprise/gaming/domain";
 import { RETAIL_SECTOR_CODE } from "@/lib/enterprise/retail/constants";
 import { syncRetailOnboardingProvisioning } from "@/lib/enterprise/retail/provisioning";
 import { normalizeRetailBusinessSubtypeCode } from "@/lib/enterprise/retail/subtype-registry";
@@ -234,7 +235,7 @@ export async function POST(req: Request) {
     }).catch(() => null);
   }
 
-  const requiresCanonicalSectorTemplate = businessSubtypeCode === TAILORING_BUSINESS_SUBTYPE_CODE;
+  const requiresCanonicalSectorTemplate = businessSubtypeCode === TAILORING_BUSINESS_SUBTYPE_CODE || businessSubtypeCode === GAMING_BUSINESS_SUBTYPE_CODE;
   if (sector && (data.applySectorTemplate || requiresCanonicalSectorTemplate)) {
     await applyCanonicalSectorTemplateToOrganization({
       organizationId: organization.id,
@@ -244,7 +245,6 @@ export async function POST(req: Request) {
       businessSubtypeCode,
     });
   } else if (sector?.code === RETAIL_SECTOR_CODE) {
-    // Retail keeps its historical settings mirror during the generic cutover.
     await syncRetailOnboardingProvisioning({
       organizationId: organization.id,
       sectorCode: sector.code,
