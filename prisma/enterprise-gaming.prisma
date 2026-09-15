@@ -144,8 +144,8 @@ model EnterpriseGamingSession {
   startedAt            DateTime?
   expectedEndAt        DateTime?
   pausedAt              DateTime?
-  endedAt              DateTime?
-  pausedSeconds        Int      @default(0)
+  endedAt               DateTime?
+  pausedSeconds         Int      @default(0)
   billableSeconds      Int?
   timingPolicyJson     Json?
   pricingSnapshotJson  Json?
@@ -163,6 +163,7 @@ model EnterpriseGamingSession {
   booking              EnterpriseGamingBooking? @relation("GamingBookingSession", fields: [organizationId, bookingId], references: [organizationId, id], onDelete: Restrict)
   pricingRule          EnterpriseGamingPricingRule? @relation(fields: [organizationId, pricingRuleId], references: [organizationId, id], onDelete: Restrict)
   transitions          EnterpriseGamingSessionTransition[]
+  checkout             EnterpriseGamingCheckout?
 
   @@unique([organizationId, id])
   @@unique([organizationId, reference], map: "GamingSession_org_reference_key")
@@ -192,4 +193,83 @@ model EnterpriseGamingSessionTransition {
   @@unique([organizationId, idempotencyKey], map: "GamingSessionTransition_org_idempotency_key")
   @@index([organizationId, sessionId, occurredAt])
   @@index([organizationId, action, occurredAt])
+}
+
+model EnterpriseGamingCheckout {
+  id                        String   @id @default(cuid())
+  organizationId            String
+  reference                 String
+  sessionId                 String
+  salesInvoiceId            String
+  status                    String   @default("INVOICE_PENDING")
+  idempotencyKey            String
+  refundRequestedAt         DateTime?
+  refundRequestedByUserId   String?
+  refundReason              String?
+  refundedAt                DateTime?
+  createdByUserId           String
+  updatedByUserId           String?
+  revision                  Int      @default(1)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+  session                   EnterpriseGamingSession @relation(fields: [organizationId, sessionId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, reference], map: "GamingCheckout_org_reference_key")
+  @@unique([organizationId, sessionId], map: "GamingCheckout_org_session_key")
+  @@unique([organizationId, salesInvoiceId], map: "GamingCheckout_org_invoice_key")
+  @@unique([organizationId, idempotencyKey], map: "GamingCheckout_org_idempotency_key")
+  @@index([organizationId, status, createdAt])
+  @@index([organizationId, refundRequestedAt])
+}
+
+model EnterpriseGamingDailyClose {
+  id                String   @id @default(cuid())
+  organizationId    String
+  reference         String
+  businessDate      DateTime
+  siteId            String?
+  status            String   @default("SUBMITTED")
+  submittedByUserId String
+  validatedByUserId String?
+  submittedAt       DateTime @default(now())
+  validatedAt       DateTime?
+  rejectedAt        DateTime?
+  rejectionReason   String?
+  notes             String?
+  idempotencyKey    String
+  revision          Int      @default(1)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  lines             EnterpriseGamingDailyCloseLine[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, reference], map: "GamingDailyClose_org_reference_key")
+  @@unique([organizationId, idempotencyKey], map: "GamingDailyClose_org_idempotency_key")
+  @@index([organizationId, businessDate, status])
+  @@index([organizationId, siteId, businessDate])
+}
+
+model EnterpriseGamingDailyCloseLine {
+  id                   String   @id @default(cuid())
+  organizationId       String
+  dailyCloseId         String
+  financialAccountId   String
+  methodType           String
+  accountType          String
+  currencyCode         String
+  cashSessionId        String?
+  paymentCount         Int      @default(0)
+  expectedAmount       Decimal  @db.Decimal(20, 6)
+  declaredAmount       Decimal  @db.Decimal(20, 6)
+  differenceAmount     Decimal  @db.Decimal(20, 6)
+  varianceReason       String?
+  createdAt            DateTime @default(now())
+  dailyClose           EnterpriseGamingDailyClose @relation(fields: [organizationId, dailyCloseId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, dailyCloseId, financialAccountId, methodType], map: "GamingDailyCloseLine_scope_key")
+  @@index([organizationId, dailyCloseId])
+  @@index([organizationId, financialAccountId, currencyCode])
+  @@index([organizationId, cashSessionId])
 }
