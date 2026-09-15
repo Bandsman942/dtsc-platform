@@ -1,0 +1,44 @@
+name: Patch 644 ERP inventory documentation
+
+on:
+  push:
+    branches:
+      - feat/644-gaming-checkout-daily-close
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ contains(github.event.head_commit.message, 'align checkout inventory documentation') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: feat/644-gaming-checkout-daily-close
+          fetch-depth: 0
+
+      - name: Align canonical Inventory movement label
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('docs/ERP_GAMING_LOUNGE.md')
+          text = path.read_text()
+          old = 'Une annulation avant émission ou un remboursement confirmé crée le mouvement inverse `CUSTOMER_RETURN` dans Inventory, sans modifier silencieusement l’historique de la sortie initiale.'
+          new = 'Une annulation avant émission ou un remboursement confirmé crée le mouvement inverse `RETURN_IN` dans Inventory, sans modifier silencieusement l’historique de la sortie initiale.'
+          count = text.count(old)
+          if count != 1:
+              raise SystemExit(f'expected exactly one obsolete Inventory label, got {count}')
+          path.write_text(text.replace(old, new, 1))
+          PY
+
+      - name: Remove temporary workflow and commit fix
+        shell: bash
+        run: |
+          git rm .github/workflows/patch-644-erp-doc.yml
+          git add docs/ERP_GAMING_LOUNGE.md
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "docs(gaming): align erp inventory return"
+          git push origin HEAD:feat/644-gaming-checkout-daily-close
