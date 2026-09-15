@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { AlertTriangle, CheckCircle2, Eye, PackageCheck, Plus, RotateCcw, Wrench, XCircle } from "lucide-react";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import {
@@ -79,6 +79,7 @@ export function EnterpriseAssetsMaintenanceWorkspaceV2({ organizationId, organiz
   const [reviewComment, setReviewComment] = useState("");
   const [busyAction, setBusyAction] = useState("");
   const [message, setMessage] = useState("");
+  const deepLinkAssetIdRef = useRef<string | null>(null);
   useToastMessage(message);
 
   useEffect(() => {
@@ -92,6 +93,23 @@ export function EnterpriseAssetsMaintenanceWorkspaceV2({ organizationId, organiz
       .catch((error) => { if (active) setMessage(error instanceof Error ? error.message : t("assets.selectorsUnavailable")); });
     return () => { active = false; };
   }, [organizationId, locale, refreshKey]);
+
+  useEffect(() => {
+    const assetId = new URLSearchParams(window.location.search).get("assetId")?.trim() || "";
+    if (!assetId || deepLinkAssetIdRef.current === assetId) return;
+    deepLinkAssetIdRef.current = assetId;
+    let active = true;
+    void fetch(`/api/enterprise/${organizationId}/assets/${encodeURIComponent(assetId)}/overview`, { cache: "no-store" })
+      .then(async (response) => {
+        const body = await response.json().catch(() => null) as { asset?: AssetOverview; message?: string } | null;
+        if (!response.ok || !body?.asset) throw new Error(body?.message || (locale === "en" ? "Unable to open the requested asset." : "Impossible d’ouvrir l’actif demandé."));
+        if (active) setOverview(body.asset);
+      })
+      .catch((error) => {
+        if (active) setMessage(error instanceof Error ? error.message : (locale === "en" ? "Unable to open the requested asset." : "Impossible d’ouvrir l’actif demandé."));
+      });
+    return () => { active = false; };
+  }, [organizationId, locale]);
 
   const params = useMemo(() => { const value = new URLSearchParams({ page: String(page), pageSize: "25" }); if (search.trim()) value.set("search", search.trim()); if (status) value.set("status", status); return value; }, [page, search, status]);
   const assets = useProfessionalCollection<AssetListItem>({ endpoint: `/api/enterprise/${organizationId}/assets`, params, refreshKey });
