@@ -1,0 +1,82 @@
+name: Patch 644 CI blockers
+
+on:
+  push:
+    branches:
+      - feat/644-gaming-checkout-daily-close
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: contains(github.event.head_commit.message, 'chore(ci): apply #644 deterministic blockers patch')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: feat/644-gaming-checkout-daily-close
+          fetch-depth: 0
+
+      - name: Apply deterministic source fixes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected exactly one match, got {count}")
+              p.write_text(text.replace(old, new, 1))
+
+          migration = "prisma/migrations/20260915011000_gaming_checkout_daily_close/migration.sql"
+          replace_once(
+              migration,
+              'CREATE UNIQUE INDEX "GamingCheckout_org_idempotency_key" ON "EnterpriseGamingCheckout"("organizationId", "idempotencyKey");\n',
+              'CREATE UNIQUE INDEX "GamingCheckout_org_idempotency_key" ON "EnterpriseGamingCheckout"("organizationId", "idempotencyKey");\nCREATE UNIQUE INDEX "EnterpriseGamingCheckout_organizationId_id_key" ON "EnterpriseGamingCheckout"("organizationId", "id");\n',
+          )
+          replace_once(
+              migration,
+              'CREATE UNIQUE INDEX "GamingDailyClose_org_idempotency_key" ON "EnterpriseGamingDailyClose"("organizationId", "idempotencyKey");\n',
+              'CREATE UNIQUE INDEX "GamingDailyClose_org_idempotency_key" ON "EnterpriseGamingDailyClose"("organizationId", "idempotencyKey");\nCREATE UNIQUE INDEX "EnterpriseGamingDailyClose_organizationId_id_key" ON "EnterpriseGamingDailyClose"("organizationId", "id");\n',
+          )
+          replace_once(
+              migration,
+              'CREATE UNIQUE INDEX "GamingDailyCloseLine_scope_key" ON "EnterpriseGamingDailyCloseLine"("organizationId", "dailyCloseId", "financialAccountId", "methodType");\n',
+              'CREATE UNIQUE INDEX "EnterpriseGamingDailyCloseLine_organizationId_id_key" ON "EnterpriseGamingDailyCloseLine"("organizationId", "id");\nCREATE UNIQUE INDEX "GamingDailyCloseLine_scope_key" ON "EnterpriseGamingDailyCloseLine"("organizationId", "dailyCloseId", "financialAccountId", "methodType");\n',
+          )
+
+          replace_once(
+              "lib/enterprise/gaming/checkout-common.ts",
+              '      movementType: "CUSTOMER_RETURN",\n',
+              '      movementType: "RETURN_IN",\n',
+          )
+
+          replace_once(
+              "lib/enterprise/gaming/checkout-commands.ts",
+              '    let invoice = snapshot.invoice;\n',
+              '    let invoice = { id: snapshot.invoice.id, status: snapshot.invoice.status, revision: snapshot.invoice.revision };\n',
+          )
+
+          replace_once(
+              "lib/enterprise/gaming/checkout-service.ts",
+              '        const invoiceItem = invoice.items.find((item) => item.catalogItemId === line.item.id);\n',
+              '        const invoiceItem = await tx.enterpriseSalesInvoiceItem.findFirst({\n          where: { organizationId, salesInvoiceId: invoice.id, catalogItemId: line.item.id },\n          select: { id: true },\n        });\n',
+          )
+          PY
+
+      - name: Remove temporary workflow and commit fixes
+        shell: bash
+        run: |
+          git rm .github/workflows/patch-644-ci-blockers.yml
+          git add prisma/migrations/20260915011000_gaming_checkout_daily_close/migration.sql \
+            lib/enterprise/gaming/checkout-common.ts \
+            lib/enterprise/gaming/checkout-commands.ts \
+            lib/enterprise/gaming/checkout-service.ts
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "fix(gaming): resolve checkout CI blockers"
+          git push origin HEAD:feat/644-gaming-checkout-daily-close
