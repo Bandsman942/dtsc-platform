@@ -77,8 +77,8 @@ includesAll(tournaments, [
   "createAccountingApprovalAssignment",
   "publishFinanceEvent",
   "enterpriseAsset.findFirst",
-  "enterpriseAssetIncident",
-  "enterpriseAssetMaintenance",
+  "incidents:",
+  "maintenanceRecords:",
   "GAMING_TOURNAMENT_STATION_CONFLICT",
   "Prisma.TransactionIsolationLevel.Serializable",
 ], "tournament canonical domains");
