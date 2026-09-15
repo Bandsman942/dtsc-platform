@@ -1,8 +1,8 @@
-# User guide — Gaming Lounge
+# Guide utilisateur — Gaming Lounge
 
-**DTSC guide contract v2**
+**Contrat de guide DTSC v2**
 
-## Purpose and scope
+## Objectif et périmètre
 
 `HOSPITALITY_EVENTS -> GAMING_LOUNGE` supports gaming lounges, console rooms and e-sport operations without parallel master data. Customers remain in CRM, services in Catalog, sites in Sites, PlayStations/TVs/controllers/UPS devices in Assets & maintenance, payments/accounts in Finance, physical goods in Inventory, and reports in the shared Reports framework.
 
@@ -55,19 +55,35 @@ Identified participants come from shared CRM. Entry fees, when applicable, use F
 
 The enterprise AI assistant can summarize Gaming performance only from sources the current user is already allowed to read. `ERP_GAMING_PERFORMANCE_READ` is read-only. It cannot bypass the plan, enabled modules, permissions, Finance rights or Assets rights. It reports factual observations and does not turn correlation into causation.
 
-## Access, roles and security
+## Accès et permissions
 
 Recommended Gaming positions are a starting point. Each position receives only explicitly provisioned permissions. A global DTSC role does not automatically grant access to private Gaming Lounge tenant data.
 
+Access depends on the active organization, subscription, enabled modules and the user's role or position. Gaming setup is restricted to authorized tenant administrators because readiness aggregates configuration signals from Sites, Assets, HR, Catalog, Finance and Gaming modules.
+
+The Enterprise AI assistant may read Gaming performance only when the current user has the same access. It cannot bypass the module access resolver, subscription entitlements, active organization context, or Finance/Assets permissions.
+
+## Statuts, validations et traçabilité
+
+Bookings, sessions, checkouts, daily closes, tournaments and station profiles follow their authorized business transitions. Optimistic revisions, idempotency keys, serializable transactions and database constraints protect sensitive operations from duplicate submissions and concurrent conflicts according to each domain contract.
+
+Incidents and maintenance remain traceable in Assets. Invoices, payments, allocations, financial accounts and money movements remain traceable in Finance. Reports persist in the shared Reports framework. Important mutations produce the audit traces required by their contracts.
+
+Commercial readiness is distinct from technical module status. `COMMERCIAL_READY` is admissible only on the exact final head that passed CI and after `OWNER_E2E` for the path: DTSC creation → invitation → onboarding → 5 stations → booking → session → payment → daily close → breakdown/maintenance → report/AI.
+
+## Sécurité et confidentialité
+
 Sensitive mutations follow DTSC contracts: active organization, membership, compatible subtype, enabled module, entitlement, permission, same-origin checks, Zod validation, rate limits, revision/idempotency and audit where required.
+
+Every cross-module reference is tenant-scoped. Customers remain in CRM, services in Catalog, equipment and maintenance in Assets, financial data in Finance and reports in Reports. DTSC Administration configures sector, subtype, template and subscription without reading private tenant operational data.
+
+Amounts in different currencies are never added implicitly. CDF, USD and other currencies remain separate unless an explicit Finance-governed FX conversion is available.
 
 ## Commercial readiness
 
-`COMMERCIAL_READY` is not an automatic marketing label. It is admissible only on the exact final head that passed CI and after `OWNER_E2E` for: DTSC creation → invitation → onboarding → 5 stations → booking → session → payment → daily close → breakdown/maintenance → report/AI.
+The product must remain usable in FR/EN, light/dark, mobile 320/360/375/390/414, tablet and desktop. The checklist is recalculated from real organization data and routes incomplete steps to the owning canonical module; it does not manufacture demo records to hide missing configuration.
 
-The product must remain usable in FR/EN, light/dark, mobile 320/360/375/390/414, tablet and desktop.
-
-## Troubleshooting
+## Dépannage
 
 - **A checklist step remains incomplete**: open its deep link and complete the data in the canonical module.
 - **A station is missing**: check the asset, organization scope, status and whether another Gaming profile already references it.
