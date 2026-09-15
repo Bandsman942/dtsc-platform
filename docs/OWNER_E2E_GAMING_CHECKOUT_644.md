@@ -77,7 +77,7 @@ Préparer une entreprise `HOSPITALITY_EVENTS / GAMING_LOUNGE` possédant :
 ## 8 — Annulation avant émission
 
 28. Préparer un checkout avec un produit suivi puis l’annuler avant émission avec un motif valide.
-29. Vérifier : facture en attente annulée, checkout/session `CANCELLED`, sortie Inventory compensée par un `CUSTOMER_RETURN`, aucune transaction financière confirmée créée.
+29. Vérifier : facture en attente annulée, checkout/session `CANCELLED`, sortie Inventory compensée par un `RETURN_IN`, aucune transaction financière confirmée créée.
 30. Rejouer l’annulation : aucun second retour Inventory ne doit apparaître.
 
 ## 9 — Remboursement complet et inverses Finance
