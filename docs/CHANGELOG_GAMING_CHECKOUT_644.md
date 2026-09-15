@@ -43,7 +43,8 @@ Le premier passage CI a détecté puis permis de corriger avant fusion :
 - la contrainte unique composite manquante nécessaire à la FK de `EnterpriseGamingDailyCloseLine` ;
 - l’utilisation d’un libellé de mouvement Inventory hors enum canonique, remplacé par `RETURN_IN` ;
 - deux incompatibilités de typage lors des transitions de facture Finance ;
-- la lecture typée des lignes de facture pour les sorties Inventory.
+- la lecture typée des lignes de facture pour les sorties Inventory ;
+- les assertions QA #644 devenues obsolètes ont été réalignées sur le primitive partagé `revision`, le mouvement Inventory canonique `RETURN_IN`, les contraintes composites réelles et le chemin UX effectif d’approbation du remboursement.
 
 Ces corrections n’ajoutent aucun domaine parallèle et ne modifient pas le périmètre fonctionnel de #644.
 
