@@ -224,24 +224,29 @@ model EnterpriseGamingCheckout {
 }
 
 model EnterpriseGamingDailyClose {
-  id                String   @id @default(cuid())
-  organizationId    String
-  reference         String
-  businessDate      DateTime
-  siteId            String?
-  status            String   @default("SUBMITTED")
-  submittedByUserId String
-  validatedByUserId String?
-  submittedAt       DateTime @default(now())
-  validatedAt       DateTime?
-  rejectedAt        DateTime?
-  rejectionReason   String?
-  notes             String?
-  idempotencyKey    String
-  revision          Int      @default(1)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  lines             EnterpriseGamingDailyCloseLine[]
+  id                   String   @id @default(cuid())
+  organizationId       String
+  reference            String
+  businessDate         DateTime
+  siteId               String?
+  timezone             String   @default("UTC")
+  status               String   @default("SUBMITTED")
+  endedSessionCount    Int      @default(0)
+  paidSessionCount     Int      @default(0)
+  pendingCheckoutCount Int      @default(0)
+  refundedCheckoutCount Int     @default(0)
+  submittedByUserId    String
+  validatedByUserId    String?
+  submittedAt          DateTime @default(now())
+  validatedAt          DateTime?
+  rejectedAt           DateTime?
+  rejectionReason      String?
+  notes                String?
+  idempotencyKey       String
+  revision             Int      @default(1)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  lines                EnterpriseGamingDailyCloseLine[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, reference], map: "GamingDailyClose_org_reference_key")
@@ -260,6 +265,9 @@ model EnterpriseGamingDailyCloseLine {
   currencyCode         String
   cashSessionId        String?
   paymentCount         Int      @default(0)
+  refundCount          Int      @default(0)
+  inboundAmount        Decimal  @default(0) @db.Decimal(20, 6)
+  refundAmount         Decimal  @default(0) @db.Decimal(20, 6)
   expectedAmount       Decimal  @db.Decimal(20, 6)
   declaredAmount       Decimal  @db.Decimal(20, 6)
   differenceAmount     Decimal  @db.Decimal(20, 6)
