@@ -225,7 +225,7 @@ La sortie utilise `applyStockMovementTx` avec :
 
 Le checkout ne choisit jamais silencieusement un lot. Si `lotTracking = true`, le flux est refusé tant qu’aucun choix explicite de lot n’est supporté par le contrat.
 
-Une annulation avant émission ou un remboursement confirmé crée le mouvement inverse `CUSTOMER_RETURN` dans Inventory, sans modifier silencieusement l’historique de la sortie initiale.
+Une annulation avant émission ou un remboursement confirmé crée le mouvement inverse `RETURN_IN` dans Inventory, sans modifier silencieusement l’historique de la sortie initiale.
 
 ## #644 — Annulation et remboursement inverse
 
