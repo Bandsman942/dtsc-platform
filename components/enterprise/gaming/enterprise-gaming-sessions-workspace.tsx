@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { ArrowRightLeft, Calculator, Clock3, Pause, Play, Plus, Square, TimerReset } from "lucide-react";
+import { ArrowRightLeft, Calculator, Clock3, ExternalLink, Pause, Play, Plus, Square, TimerReset } from "lucide-react";
 import { Field, NativeSelect, formatEnterpriseAmount } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { gamingSessionsCopy } from "@/components/enterprise/gaming/gaming-sessions-i18n";
+import { gamingStationsCopy } from "@/components/enterprise/gaming/gaming-stations-i18n";
 import { ProfessionalError, ProfessionalFormSection, ProfessionalLoading, ProfessionalSearch, ProfessionalTabs, professionalMutation, useProfessionalCollection } from "@/components/enterprise/professional/professional-erp-ui";
 import { useAppLocale } from "@/components/i18n/locale-provider";
 import { Button } from "@/components/ui/button";
@@ -46,7 +47,7 @@ type SessionItem = {
   timing: { elapsedSeconds: number; pausedSeconds: number; billableSeconds: number; remainingSeconds: number | null };
 };
 type SessionExtra = { serverNow?: string; canReadPricing?: boolean; canOverridePricing?: boolean };
-type Station = { id: string; stationCode: string; displayName: string | null; consoleFamily: string | null; effectiveStatus: string };
+type Station = { id: string; assetId?: string; stationCode: string; displayName: string | null; consoleFamily: string | null; effectiveStatus: string };
 type CatalogService = { id: string; code: string; name: string; itemType: string };
 type Pagination = { page: number; pageSize: number; total: number; pageCount: number };
 type Filter = "ALL" | SessionStatus;
@@ -84,6 +85,7 @@ export function EnterpriseGamingSessionsWorkspace({
 }) {
   const locale = useAppLocale();
   const copy = gamingSessionsCopy(locale);
+  const stationCopy = gamingStationsCopy(locale);
   const [filter, setFilter] = useState<Filter>("ALL");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -373,6 +375,22 @@ export function EnterpriseGamingSessionsWorkspace({
     }
   }
 
+  async function openStationAsset(item: SessionItem) {
+    resetFeedback();
+    setBusy(true);
+    try {
+      const query = new URLSearchParams({ page: "1", pageSize: "20", search: item.station.stationCode });
+      const response = await fetch(`/api/enterprise/${organizationId}/gaming/stations?${query.toString()}`, { cache: "no-store" });
+      const body = await response.json().catch(() => null) as { items?: Station[]; message?: string; error?: string } | null;
+      const station = body?.items?.find((candidate) => candidate.id === item.stationId);
+      if (!response.ok || !station?.assetId) throw new Error(body?.message || body?.error || copy.loadStationsFailed);
+      window.location.href = `/enterprise-modules/ASSETS_MAINTENANCE?assetId=${encodeURIComponent(station.assetId)}`;
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : copy.loadStationsFailed);
+      setBusy(false);
+    }
+  }
+
   function actions(item: SessionItem) {
     const live = item.status === "ACTIVE" || item.status === "PAUSED";
     return [
@@ -380,6 +398,7 @@ export function EnterpriseGamingSessionsWorkspace({
       { id: "resume", label: copy.resume, icon: Play, hidden: !collection.canWrite || item.status !== "PAUSED", disabled: busy, onSelect: () => void transition(item, "RESUME") },
       { id: "extend", label: copy.extend, icon: TimerReset, hidden: !collection.canWrite || !live, disabled: busy, onSelect: () => { setDetail(null); setExtendFor(item); } },
       { id: "transfer", label: copy.transfer, icon: ArrowRightLeft, hidden: !collection.canWrite || !live, disabled: busy, onSelect: () => { setDetail(null); setStationPage(1); setTransferFor(item); } },
+      { id: "asset", label: stationCopy.openAssets, icon: ExternalLink, disabled: busy, onSelect: () => void openStationAsset(item) },
       { id: "end", label: copy.end, icon: Square, destructive: true, separatorBefore: true, hidden: !collection.canWrite || !live, disabled: busy, onSelect: () => { setDetail(null); setEndFor(item); } },
     ];
   }
