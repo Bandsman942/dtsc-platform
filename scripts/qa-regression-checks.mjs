@@ -88,6 +88,7 @@ await import("./qa-645-gaming-historical-compat.mjs");
 // await import("./qa-644-gaming-checkout-daily-close.mjs");
 await import("./qa-644-gaming-checkout-daily-close-compat.mjs");
 await import("./qa-645-gaming-tournaments-reporting-ai.mjs");
+await import("./qa-646-gaming-commercial-readiness.mjs");
 await import("./qa-erp-accounting-approvals-511.mjs");
 await import("./qa-billing-catalog-v2-checks.mjs");
 await import("./qa-hotfix-574-finance-owner-e2e-contract.mjs");

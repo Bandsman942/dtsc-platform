@@ -45,7 +45,7 @@ for (const [code, routePath, workspaceKey, prefix] of [
   ["GAMING_REPORTS", "/enterprise-modules/GAMING_REPORTS", "ENTERPRISE_GAMING_REPORTS", "enterprise.gaming.reports."],
 ]) {
   const item = registry.modules.find((candidate) => candidate.code === code);
-  check(item?.implementationStatus === "BETA", `${code} must be BETA`);
+  check(["BETA", "ACTIVE"].includes(item?.implementationStatus), `${code} must remain implemented (BETA or ACTIVE after #646)`);
   check(item?.routeKind === "DEDICATED_CORE", `${code} must be DEDICATED_CORE`);
   check(item?.routePath === routePath, `${code} route path missing`);
   check(item?.workspaceKey === workspaceKey, `${code} workspace key missing`);
@@ -150,22 +150,9 @@ for (const [page, workspace, name] of [
 includesAll(dashboardWorkspace, ["financialByCurrency", "Les devises restent séparées", "assetDeepLink"], "dashboard financial/asset UX");
 includesAll(tournamentWorkspace, ["businessPartyId", "invoiceApproverUserId", "ASSETS_MAINTENANCE", "CHECK_IN", "SET_RESULT", "RELEASE"], "tournament UI workflow");
 includesAll(reportsWorkspace, ["GAMING_REVENUE", "GAMING_INCIDENTS_MAINTENANCE", "/reports/${item.id}/export"], "report UI/export");
-includesAll(stationsWorkspace, [
-  "ASSETS_MAINTENANCE?assetId=",
-  "encodeURIComponent(station.assetId)",
-], "station to Assets deep-link");
-includesAll(sessionsWorkspace, [
-  "gamingStationsCopy",
-  "openStationAsset",
-  "candidate.id === item.stationId",
-  "ASSETS_MAINTENANCE?assetId=",
-], "session to Assets deep-link");
-includesAll(assetsWorkspace, [
-  'new URLSearchParams(window.location.search).get("assetId")',
-  "deepLinkAssetIdRef",
-  "/assets/${encodeURIComponent(assetId)}/overview",
-  "setOverview(body.asset)",
-], "Assets targeted deep-link consumer");
+includesAll(stationsWorkspace, ["ASSETS_MAINTENANCE?assetId=", "encodeURIComponent(station.assetId)"], "station to Assets deep-link");
+includesAll(sessionsWorkspace, ["gamingStationsCopy", "openStationAsset", "candidate.id === item.stationId", "ASSETS_MAINTENANCE?assetId="], "session to Assets deep-link");
+includesAll(assetsWorkspace, ['new URLSearchParams(window.location.search).get("assetId")', "deepLinkAssetIdRef", "/assets/${encodeURIComponent(assetId)}/overview", "setOverview(body.asset)"], "Assets targeted deep-link consumer");
 
 includesAll(aiContract, ["ERP_GAMING_PERFORMANCE_READ", 'moduleCode: "GAMING_DASHBOARD"'], "Gaming AI contract");
 includesAll(aiPolicy, ["GAMING_ERP_ASSISTANT_CODES", '"ENTERPRISE_GENERAL"', '"GAMING_DASHBOARD"'], "Gaming AI assistant policy");

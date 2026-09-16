@@ -25,7 +25,7 @@ const docs = read("docs/ERP_GAMING_LOUNGE.md");
 const regression = read("scripts/qa-regression-checks.mjs");
 
 const stations = registry.modules.find((item) => item.code === "GAMING_STATIONS");
-check(stations?.implementationStatus === "BETA", "GAMING_STATIONS must be BETA");
+check(["BETA", "ACTIVE"].includes(stations?.implementationStatus), "GAMING_STATIONS must remain implemented (BETA or ACTIVE after #646)");
 check(stations?.routeKind === "DEDICATED_CORE", "GAMING_STATIONS must use DEDICATED_CORE");
 check(stations?.routePath === "/enterprise-modules/GAMING_STATIONS", "GAMING_STATIONS route path missing");
 check(stations?.workspaceKey === "ENTERPRISE_GAMING_STATIONS", "GAMING_STATIONS workspace key missing");

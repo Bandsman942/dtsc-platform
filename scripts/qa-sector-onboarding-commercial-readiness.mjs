@@ -16,18 +16,48 @@ const check = (condition, message, hard = true) => {
 };
 const githubAnnotationValue = (value) => String(value).replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
 
-function canonicalModuleCodes() {
+function canonicalModuleDefinitions() {
   const directory = path.join(root, "lib/enterprise");
-  const codes = new Set();
+  const definitions = new Map();
   for (const name of fs.readdirSync(directory).filter((name) => /^module-registry.*\.json$/.test(name))) {
     try {
       const parsed = JSON.parse(fs.readFileSync(path.join(directory, name), "utf8"));
-      if (Array.isArray(parsed.modules)) for (const definition of parsed.modules) if (definition?.code) codes.add(definition.code);
+      if (Array.isArray(parsed.modules)) {
+        for (const definition of parsed.modules) {
+          if (definition?.code) definitions.set(definition.code, definition);
+        }
+      }
     } catch {
       // Invalid JSON is caught by build/type gates.
     }
   }
-  return codes;
+  return definitions;
+}
+
+function activeBusinessSubtypePairs() {
+  const source = read("lib/enterprise/business-subtype-registry.ts");
+  const pairs = new Set();
+  const pattern = /\{\s*sectorCode:\s*"([^"]+)"[\s\S]*?code:\s*"([^"]+)"[\s\S]*?implementationStatus:\s*"([^"]+)"[\s\S]*?\}/g;
+  for (const match of source.matchAll(pattern)) {
+    if (match[3] === "ACTIVE") pairs.add(`${match[1]}:${match[2]}`);
+  }
+  return pairs;
+}
+
+function profileScope(profile) {
+  return profile?.scope === "BUSINESS_SUBTYPE" ? "BUSINESS_SUBTYPE" : "SECTOR_TEMPLATE";
+}
+
+function moduleAllowsSector(definition, sectorCode) {
+  const sectors = definition?.applicableSectors;
+  if (!sectors || sectors === "ALL") return true;
+  return Array.isArray(sectors) && sectors.includes(sectorCode);
+}
+
+function moduleAllowsBusinessSubtype(definition, businessSubtypeCode) {
+  const subtypes = definition?.applicableBusinessSubtypes;
+  if (!subtypes || subtypes === "ALL" || (Array.isArray(subtypes) && subtypes.length === 0)) return true;
+  return Array.isArray(subtypes) && subtypes.includes(businessSubtypeCode);
 }
 
 function staticShopReleaseChecks() {
@@ -98,7 +128,11 @@ function staticShopReleaseChecks() {
 }
 
 try {
-  const registryCodes = canonicalModuleCodes();
+  const registryDefinitions = canonicalModuleDefinitions();
+  const registryCodes = new Set(registryDefinitions.keys());
+  const activeSubtypePairs = activeBusinessSubtypePairs();
+  const templateApplication = read("lib/enterprise/sector-template-application.ts");
+  const regressionRunner = read("scripts/qa-regression-checks.mjs");
   const activeTemplates = await prisma.$queryRawUnsafe(`
     SELECT t."id", t."version", t."label", s."code" AS "sectorCode", s."isActive" AS "sectorActive"
     FROM "SectorTemplate" t
@@ -110,7 +144,11 @@ try {
   await prisma.enterpriseExchangeRateSnapshot.count();
 
   for (const template of activeTemplates) {
-    const declaration = manifest.profiles.find((profile) => profile.sectorCode === template.sectorCode && Number(profile.templateVersion) === Number(template.version));
+    const declaration = manifest.profiles.find((profile) =>
+      profileScope(profile) === "SECTOR_TEMPLATE"
+      && profile.sectorCode === template.sectorCode
+      && Number(profile.templateVersion) === Number(template.version)
+    );
     const hard = Boolean(declaration?.enforce || declaration?.commercializationStatus === "COMMERCIAL_READY");
     const [modules, departments, positions] = await Promise.all([
       prisma.$queryRawUnsafe(`SELECT "moduleCode", "requiresPlanLevel", "defaultEnabled" FROM "SectorTemplateModule" WHERE "templateId" = $1 ORDER BY "sortOrder"`, template.id),
@@ -144,12 +182,60 @@ try {
         assess(module?.requiresPlanLevel === declaration.minimumOperationalPlan, `${code} must require ${declaration.minimumOperationalPlan}`);
       }
     }
-    results.push({ sectorCode: template.sectorCode, templateVersion: Number(template.version), declaredStatus: declaration?.commercializationStatus || "NOT_DECLARED", enforced: hard, issues: localIssues });
+    results.push({ scope: "SECTOR_TEMPLATE", sectorCode: template.sectorCode, templateVersion: Number(template.version), profileCode: declaration?.businessProfileCode || null, declaredStatus: declaration?.commercializationStatus || "NOT_DECLARED", enforced: hard, issues: localIssues });
     for (const issue of localIssues) check(false, `${template.sectorCode} v${template.version}: ${issue}`, hard);
-    if (!declaration) warnings.push(`${template.sectorCode} v${template.version}: active template is structurally checked but not declared for commercialization.`);
+    if (!declaration) warnings.push(`${template.sectorCode} v${template.version}: active template is structurally checked but not declared for sector-level commercialization.`);
   }
 
-  const shop = manifest.profiles.find((profile) => profile.sectorCode === "COMMERCE_RETAIL" && profile.enforce);
+  for (const declaration of manifest.profiles.filter((profile) => profileScope(profile) === "BUSINESS_SUBTYPE")) {
+    const hard = Boolean(declaration.enforce || declaration.commercializationStatus === "COMMERCIAL_READY");
+    const localIssues = [];
+    const assess = (condition, message) => { if (!condition) localIssues.push(message); };
+    const activeSectorTemplate = activeTemplates.find((template) => template.sectorCode === declaration.sectorCode && template.sectorActive);
+    const subtypeCode = declaration.businessSubtypeCode;
+
+    assess(Boolean(activeSectorTemplate), "parent sector has no active template");
+    assess(Boolean(subtypeCode), "businessSubtypeCode is required for BUSINESS_SUBTYPE scope");
+    if (subtypeCode) assess(activeSubtypePairs.has(`${declaration.sectorCode}:${subtypeCode}`), `business subtype is not ACTIVE in canonical registry: ${subtypeCode}`);
+
+    for (const code of declaration.requiredModules || []) {
+      assess(registryCodes.has(code), `required canonical module missing: ${code}`);
+    }
+    for (const code of declaration.requiredOperationalModules || []) {
+      const definition = registryDefinitions.get(code);
+      assess(Boolean(definition), `operational module missing from canonical registry: ${code}`);
+      if (!definition) continue;
+      assess(definition.implementationStatus === "ACTIVE", `${code} must be ACTIVE`);
+      assess(definition.minimumPlan === declaration.minimumOperationalPlan, `${code} must require ${declaration.minimumOperationalPlan}`);
+      assess(moduleAllowsSector(definition, declaration.sectorCode), `${code} is not compatible with sector ${declaration.sectorCode}`);
+      if (subtypeCode) assess(moduleAllowsBusinessSubtype(definition, subtypeCode), `${code} is not compatible with business subtype ${subtypeCode}`);
+    }
+
+    assess(Boolean(declaration.runtimeProvisioningFile), "runtimeProvisioningFile is required for BUSINESS_SUBTYPE scope");
+    if (declaration.runtimeProvisioningFile) {
+      assess(exists(declaration.runtimeProvisioningFile), `runtime provisioning file missing: ${declaration.runtimeProvisioningFile}`);
+      if (exists(declaration.runtimeProvisioningFile)) {
+        const provisioning = read(declaration.runtimeProvisioningFile);
+        if (declaration.runtimeProvisioningMarker) assess(provisioning.includes(declaration.runtimeProvisioningMarker), `runtime provisioning file does not define ${declaration.runtimeProvisioningMarker}`);
+        for (const positionCode of declaration.runtimeProvisionedPositions || []) assess(provisioning.includes(positionCode), `runtime provisioned position missing: ${positionCode}`);
+      }
+    }
+    assess(Boolean(declaration.runtimeProvisioningMarker), "runtimeProvisioningMarker is required for BUSINESS_SUBTYPE scope");
+    if (declaration.runtimeProvisioningMarker) assess(templateApplication.includes(declaration.runtimeProvisioningMarker), `sector template application does not invoke ${declaration.runtimeProvisioningMarker}`);
+
+    assess(Boolean(declaration.dedicatedQaFile), "dedicatedQaFile is required for BUSINESS_SUBTYPE scope");
+    if (declaration.dedicatedQaFile) {
+      assess(exists(declaration.dedicatedQaFile), `dedicated QA file missing: ${declaration.dedicatedQaFile}`);
+      const qaBasename = path.basename(declaration.dedicatedQaFile);
+      assess(regressionRunner.includes(qaBasename), `regression runner does not execute ${qaBasename}`);
+    }
+    for (const guideCode of declaration.requiredGuideCodes || []) assess(exists(`docs/user-guides/${guideCode}.md`), `user guide missing: ${guideCode}`);
+
+    results.push({ scope: "BUSINESS_SUBTYPE", sectorCode: declaration.sectorCode, templateVersion: Number(declaration.templateVersion), profileCode: declaration.businessProfileCode || subtypeCode || null, declaredStatus: declaration.commercializationStatus || "NOT_DECLARED", enforced: hard, issues: localIssues });
+    for (const issue of localIssues) check(false, `${declaration.sectorCode} -> ${subtypeCode || declaration.businessProfileCode}: ${issue}`, hard);
+  }
+
+  const shop = manifest.profiles.find((profile) => profileScope(profile) === "SECTOR_TEMPLATE" && profile.sectorCode === "COMMERCE_RETAIL" && profile.enforce);
   check(Boolean(shop), "COMMERCE_RETAIL must have an enforced commercialization declaration while Shop is the product priority.");
   check(shop?.commercializationStatus === "COMMERCIAL_READY", "COMMERCE_RETAIL must remain COMMERCIAL_READY after explicit owner acceptance.");
   staticShopReleaseChecks();
@@ -160,7 +246,12 @@ try {
 }
 
 console.log("\nDTSC sector onboarding commercial-readiness report");
-for (const result of results) console.log(`- ${result.sectorCode} v${result.templateVersion}: ${result.enforced ? "ENFORCED" : "OBSERVED"} · ${result.declaredStatus} · ${result.issues.length ? `${result.issues.length} issue(s)` : "structural checks OK"}`);
+for (const result of results) {
+  const target = result.scope === "BUSINESS_SUBTYPE"
+    ? `${result.sectorCode} -> ${result.profileCode}`
+    : `${result.sectorCode} v${result.templateVersion}`;
+  console.log(`- ${target}: ${result.scope} · ${result.enforced ? "ENFORCED" : "OBSERVED"} · ${result.declaredStatus} · ${result.issues.length ? `${result.issues.length} issue(s)` : "structural checks OK"}`);
+}
 for (const warning of warnings) console.warn(`WARN: ${warning}`);
 if (failures.length) {
   console.error("\nSector onboarding commercial-readiness QA failed:");
@@ -170,4 +261,4 @@ if (failures.length) {
   }
   process.exit(1);
 }
-console.log("\nSector onboarding commercial-readiness QA passed. COMMERCE_RETAIL satisfies the enforced COMMERCIAL_READY onboarding contract with dedicated POS, Mobile Money, Telco and daily-close workspaces.");
+console.log("\nSector onboarding commercial-readiness QA passed. Sector templates and business subtypes are evaluated with separate canonical contracts.");

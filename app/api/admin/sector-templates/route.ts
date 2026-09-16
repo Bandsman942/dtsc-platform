@@ -6,6 +6,7 @@ import {
   getBusinessSubtypeForSector,
   listBusinessSubtypesForSector,
 } from "@/lib/enterprise/business-subtype-registry";
+import { buildGamingTemplateLayers, gamingLayerSummaryModules } from "@/lib/enterprise/gaming/template-preview";
 import { RETAIL_SECTOR_CODE } from "@/lib/enterprise/retail/constants";
 import { normalizeRetailBusinessSubtypeCode } from "@/lib/enterprise/retail/subtype-registry";
 import {
@@ -61,9 +62,6 @@ export async function GET(req: Request) {
     }, { status: 400 });
   }
 
-  // Retail keeps its historical module-scope adapter during the generic cutover.
-  // Other sector/subtype specializations expose their additive layer metadata
-  // without changing the canonical sector template engine.
   const retailBusinessSubtypeCode = basePreview.sector.code === RETAIL_SECTOR_CODE
     ? normalizeRetailBusinessSubtypeCode(businessSubtype?.code || null)
     : null;
@@ -73,7 +71,14 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const layers = buildTailoringTemplateLayers(sectorPreview, businessSubtype?.code || null);
+  const tailoringLayers = buildTailoringTemplateLayers(sectorPreview, businessSubtype?.code || null);
+  const gamingLayers = buildGamingTemplateLayers(sectorPreview, businessSubtype?.code || null);
+  const layers = tailoringLayers || gamingLayers;
+  const summaryModules = tailoringLayers
+    ? tailoringLayerSummaryModules(tailoringLayers)
+    : gamingLayers
+      ? gamingLayerSummaryModules(gamingLayers)
+      : sectorPreview.modules;
   const preview = {
     ...sectorPreview,
     businessSubtype: businessSubtype
@@ -85,10 +90,7 @@ export async function GET(req: Request) {
           descriptionEn: businessSubtype.descriptionEn,
         }
       : null,
-    // The current Administration DTSC panel already renders preview.modules.
-    // For Couture, present the requested three-layer summary there while the
-    // full structured layer/module details stay available in `layers`.
-    modules: layers ? tailoringLayerSummaryModules(layers) : sectorPreview.modules,
+    modules: summaryModules,
     layers,
   };
   const businessSubtypes = listBusinessSubtypesForSector(preview.sector.code).map((subtype) => ({

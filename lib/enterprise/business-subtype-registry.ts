@@ -48,7 +48,7 @@ export const BUSINESS_SUBTYPES = [
     labelEn: "Gaming lounge",
     descriptionFr: "Sous-secteur loisirs pour salles de jeux, consoles et e-sport vendant du temps d’utilisation de postes, avec réservations, sessions, tarification, encaissement et maintenance intégrés aux sources ERP communes.",
     descriptionEn: "Leisure subtype for gaming lounges, consoles and e-sport businesses selling station usage time, with bookings, sessions, pricing, checkout and maintenance integrated with shared ERP sources.",
-    implementationStatus: "PLANNED",
+    implementationStatus: "ACTIVE",
   },
 ] as const satisfies readonly BusinessSubtypeDefinition[];
 

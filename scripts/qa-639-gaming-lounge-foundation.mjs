@@ -31,7 +31,8 @@ const includesAll = (content, markers, label) => {
   for (const marker of markers) check(content.includes(marker), `${label}: missing ${marker}`);
 };
 
-includesAll(subtypeRegistry, ['"GAMING_LOUNGE"', 'sectorCode: "HOSPITALITY_EVENTS"', 'implementationStatus: "PLANNED"'], "planned business subtype");
+includesAll(subtypeRegistry, ['"GAMING_LOUNGE"', 'sectorCode: "HOSPITALITY_EVENTS"'], "Gaming business subtype");
+check(/code:\s*"GAMING_LOUNGE"[\s\S]*?implementationStatus:\s*"(?:PLANNED|ACTIVE)"/.test(subtypeRegistry), "Gaming subtype must stay registered and may be ACTIVE only after the final readiness iteration");
 includesAll(gamingDomain, [
   'GAMING_SECTOR_CODE = "HOSPITALITY_EVENTS"',
   'GAMING_BUSINESS_SUBTYPE_CODE = "GAMING_LOUNGE"',
@@ -68,7 +69,7 @@ for (const code of expectedModules) {
   if (!definition) continue;
 
   if (code === "GAMING_STATIONS") {
-    check(definition.implementationStatus === "BETA", "GAMING_STATIONS must remain BETA after #640");
+    check(["BETA", "ACTIVE"].includes(definition.implementationStatus), "GAMING_STATIONS must remain implemented after #640/#646");
     check(definition.routePath === "/enterprise-modules/GAMING_STATIONS", "GAMING_STATIONS route path missing after #640");
     check(definition.workspaceKey === "ENTERPRISE_GAMING_STATIONS", "GAMING_STATIONS workspace key missing after #640");
   }
