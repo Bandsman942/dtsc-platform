@@ -35,7 +35,9 @@ const salesCreditTransitionRoute = read("app/api/enterprise/[organizationId]/sal
 const salesCreditPostRoute = read("app/api/enterprise/[organizationId]/sales-credit-notes/[creditNoteId]/post/route.ts");
 const supplierCreditTransitionRoute = read("app/api/enterprise/[organizationId]/supplier-credit-notes/[creditNoteId]/transition/route.ts");
 const supplierCreditPostRoute = read("app/api/enterprise/[organizationId]/supplier-credit-notes/[creditNoteId]/post/route.ts");
-const cashReconciliationWorkspace = read("components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-workspace.tsx");
+const cashWorkspace = read("components/enterprise/professional/enterprise-finance-cash-workspace.tsx");
+const cashCountFields = read("components/enterprise/professional/cash-physical-count-fields.tsx");
+const cashReconciliationWorkspace = read("components/enterprise/professional/enterprise-finance-bank-reconciliation-workspace.tsx");
 
 for (const target of [
   "EnterpriseJournalEntry",
@@ -91,8 +93,8 @@ assert(cashCloseRoute.includes("submitCashSessionCloseForAssignedValidation") &&
 assert(reconciliationRoute.includes("submitReconciliationForAssignedValidation") && reconciliationRoute.includes("decideReconciliationAssignedValidation"), "rapprochement possède soumission puis validation explicite");
 assert(operations.includes('status: "PENDING_VALIDATION"'), "les opérations préparées attendent une décision explicite");
 assert(
-  cashReconciliationWorkspace.includes('moduleCode="FINANCE_CASH"')
-    && cashReconciliationWorkspace.includes('approverUserId: String(form.get("approverUserId") || "")'),
+  cashCountFields.includes('moduleCode="FINANCE_CASH"')
+    && cashWorkspace.includes('approverUserId: String(form.get("approverUserId") || "")'),
   "clôture de caisse exige un validateur sélectionné dans l’UI",
 );
 assert(
