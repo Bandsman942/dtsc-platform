@@ -377,7 +377,7 @@ export function ClientOrganizationsPanel({
             />
             {filteredSectors.length > 0 && (
               <div className="mt-2 max-h-56 max-w-full overflow-y-auto rounded-2xl border border-dtsc-border bg-[color-mix(in_srgb,var(--dtsc-surface)_88%,transparent)] p-2 shadow-[0_18px_55px_rgba(0,23,54,0.14)] backdrop-blur-xl">
-                {filteredSectors.slice(0, 8).map((sector) => {
+                {filteredSectors.map((sector) => {
                   const active = selectedSectorId === sector.id;
                   return (
                     <button
