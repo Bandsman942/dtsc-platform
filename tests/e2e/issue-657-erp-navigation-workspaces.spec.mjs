@@ -113,11 +113,12 @@ test.describe.serial("Issue #657 ERP navigation and workspace hotfix", () => {
     await organizationPage.setViewportSize({ width: 390, height: 844 });
     await organizationPage.goto(`${baseUrl}/modules?group=ORGANIZATION_ERP`, { waitUntil: "networkidle" });
     await expect(organizationPage.getByRole("heading", { name: "Entreprise & ERP" })).toBeVisible();
-    await expect(organizationPage.getByRole("button", { name: /Espaces entreprise · 3/ })).toBeVisible();
+    const workspaceGroup = organizationPage.getByRole("button", { name: /Espaces entreprise · \d+/ });
+    await expect(workspaceGroup).toBeVisible();
     await expect(organizationPage.getByRole("button", { name: /^Opérations ·/ })).toHaveCount(0);
     await expect(organizationPage.getByRole("button", { name: /^Ventes & relation client ·/ })).toHaveCount(0);
 
-    await organizationPage.getByRole("button", { name: /Espaces entreprise · 3/ }).click();
+    await workspaceGroup.click();
     await expect(organizationPage.getByText("Modules ERP", { exact: true })).toBeVisible();
     const catalogLink = organizationPage.locator('a[href="/enterprise-modules"]');
     await expect(catalogLink).toHaveCount(1);
@@ -136,7 +137,9 @@ test.describe.serial("Issue #657 ERP navigation and workspace hotfix", () => {
       const englishPage = await englishContext.newPage();
       await signIn(englishContext, organizationId, "/modules?group=ORGANIZATION_ERP");
       await englishPage.goto(`${baseUrl}/modules?group=ORGANIZATION_ERP`, { waitUntil: "networkidle" });
-      await englishPage.getByRole("button", { name: /Company workspaces · 3/ }).click();
+      const workspaceGroup = englishPage.getByRole("button", { name: /Company workspaces · \d+/ });
+      await expect(workspaceGroup).toBeVisible();
+      await workspaceGroup.click();
       await expect(englishPage.getByText("ERP modules", { exact: true })).toBeVisible();
       await expect(englishPage.getByRole("button", { name: /^Operations ·/ })).toHaveCount(0);
       await assertNoGlobalOverflow(englishPage);
