@@ -7,6 +7,7 @@ import {
   type EnterpriseModuleImplementationStatus,
   type EnterpriseModuleNavigationGroup,
 } from "@/lib/enterprise/module-registry";
+import { getEnterpriseWorkspaceArchetype, type EnterpriseWorkspaceArchetype } from "@/lib/enterprise/workspace-archetypes";
 
 export type EnterpriseNavigationModule = {
   code: string;
@@ -18,6 +19,7 @@ export type EnterpriseNavigationModule = {
   navigationGroup: EnterpriseModuleNavigationGroup;
   navigationGroupLabel: string;
   navigationOrder: number;
+  workspaceArchetype: EnterpriseWorkspaceArchetype;
   isCore: boolean;
   icon: string | null;
   href: string;
@@ -49,6 +51,7 @@ export async function getEnterpriseNavigationModules(
       navigationGroup: definition.navigationGroup,
       navigationGroupLabel: getEnterpriseModuleGroupLabel(definition.navigationGroup, locale),
       navigationOrder: definition.navigationOrder,
+      workspaceArchetype: getEnterpriseWorkspaceArchetype(definition),
       isCore: definition.routeKind === "DEDICATED_CORE" || definition.routeKind === "AI_SERVICE",
       icon: definition.iconKey,
       href: definition.routePath,
