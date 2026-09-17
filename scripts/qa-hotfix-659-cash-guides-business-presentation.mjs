@@ -27,6 +27,11 @@ const guideContract = read("lib/user-guides/canonical-guide.ts");
 const guideRegistry = read("lib/user-guides/enterprise-guide-registry.ts");
 const guideRenderer = read("components/user-guides/contextual-user-guide.tsx");
 const helpPage = read("app/help/enterprise/page.tsx");
+const packageJson = read("package.json");
+const browserAcceptance = read("tests/e2e/issue-659-cash-guides-business-presentation.spec.mjs");
+const acceptanceWorkflow = read(".github/workflows/hotfix-659-cash-guides-business-presentation.yml");
+const ownerE2E = read("docs/OWNER_E2E_659_CASH_GUIDES_BUSINESS_PRESENTATION.md");
+
 
 for (const [label, source, moduleCode] of [
   ["Mobile Money", mobileCloseRoute, "MOBILE_MONEY_AGENCY"],
@@ -88,6 +93,34 @@ expect(hasAll(guideRegistry, ["COMMON_ENTERPRISE_USER_GUIDES", "FINANCE_USER_GUI
 expect(hasAll(guideRenderer, ["CanonicalUserGuide", 'presentation?: "dialog" | "inline"', 'data-canonical-user-guide={guide.code}']), "renderer ContextualUserGuide sert le mode contextuel et le centre d'aide");
 expect(hasAll(helpPage, ["getCanonicalEnterpriseUserGuide", "ContextualUserGuide", 'presentation="inline"']), "centre d'aide ERP utilise le renderer canonique");
 expect(!helpPage.includes("FINANCE_USER_GUIDES") && !helpPage.includes("SECTOR_USER_GUIDES") && !helpPage.includes("const GUIDES"), "page d'aide ne maintient plus ses registres/renderers concurrents");
+
+
+expect(hasAll(packageJson, [
+  '"qa:hotfix-659": "node scripts/qa-hotfix-659-cash-guides-business-presentation.mjs"',
+  "qa-hotfix-659-cash-guides-business-presentation.mjs",
+]), "QA #659 est exposée directement et injectée dans qa:regression");
+expect(hasAll(browserAcceptance, [
+  "FINANCE_CASH",
+  "approval-candidates?moduleCode=FINANCE_CASH",
+  'targetEntityType: "EnterpriseCashSession"',
+  "EnterpriseCashSession",
+  "Cash close",
+  "320, 360, 375, 390, 414, 768, 1024",
+]), "E2E #659 couvre clôture assignée, file des validations, anti-jargon et matrice responsive");
+expect(hasAll(acceptanceWorkflow, [
+  "Hotfix #659 browser acceptance",
+  "pnpm qa:hotfix-659",
+  "pnpm qa:regression",
+  "pnpm type-check",
+  "pnpm lint",
+  "pnpm build",
+  "seed-shop2-behavioral-e2e.mjs",
+]), "workflow #659 prouve QA, build et E2E sur base propre");
+expect(hasAll(ownerE2E, [
+  "E2E #659 bon",
+  "NOT_EXECUTED",
+  "320, 360, 375, 390, 414, 768 et 1024",
+]), "OWNER_E2E #659 reste explicitement manuel et non exécuté avant validation propriétaire");
 
 const failed = checks.filter((check) => !check.ok);
 for (const check of checks) console.log(`${check.ok ? "PASS" : "FAIL"} #659 ${check.label}`);
