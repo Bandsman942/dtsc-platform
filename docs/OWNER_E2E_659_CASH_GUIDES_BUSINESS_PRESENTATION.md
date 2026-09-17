@@ -1,6 +1,6 @@
 # OWNER_E2E — Hotfix #659 caisse, guides et langage commercial
 
-Issue : #659  
+Issue : #659
 Branche : `fix/659-cash-guides-business-presentation`
 
 ## Objectif
