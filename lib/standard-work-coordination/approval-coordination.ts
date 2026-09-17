@@ -129,6 +129,27 @@ async function approvalTargetSnapshot(tx: Prisma.TransactionClient, organization
     const item = await tx.enterpriseAccountTransfer.findFirst({ where: { id: entityId, organizationId }, select: { id: true, number: true, status: true, sourceAmount: true, sourceCurrencyCode: true, targetAmount: true, targetCurrencyCode: true, revision: true, updatedAt: true } });
     if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Transfert source introuvable."); return serializeSnapshot(item);
   }
+  if (entityType === "EnterpriseCashSession") {
+    const item = await tx.enterpriseCashSession.findFirst({
+      where: { id: entityId, organizationId },
+      select: {
+        id: true,
+        number: true,
+        status: true,
+        openingAmount: true,
+        expectedClosingAmount: true,
+        countedClosingAmount: true,
+        discrepancyAmount: true,
+        closingReason: true,
+        cashierUserId: true,
+        submittedAt: true,
+        revision: true,
+        financialAccount: { select: { code: true, name: true, currencyCode: true } },
+        counts: { select: { denomination: true, quantity: true, amount: true } },
+      },
+    });
+    if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Clôture de caisse source introuvable."); return serializeSnapshot(item);
+  }
   if (entityType === "EnterpriseLeaveRequest") {
     const item = await tx.enterpriseLeaveRequest.findFirst({ where: { id: entityId, organizationId, archivedAt: null }, select: { id: true, reference: true, leaveType: true, startDate: true, endDate: true, status: true, revision: true, updatedAt: true } });
     if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Congé source introuvable."); return serializeSnapshot(item);
