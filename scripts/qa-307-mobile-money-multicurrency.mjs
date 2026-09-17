@@ -181,7 +181,9 @@ check(!workspace.includes("window.confirm"), "The #306 confirmation contract mus
 check(!workspace.includes("() => providers.filter"), "Eligible Mobile Money providers must not reintroduce an unstable providers useMemo dependency");
 
 const cashManager = read("components/enterprise/professional/mobile-money-cash-session-manager.tsx");
-check(hasAll(cashManager, [
+const cashCountFields = read("components/enterprise/professional/cash-physical-count-fields.tsx");
+const cashCloseUi = `${cashManager}\n${cashCountFields}`;
+check(hasAll(cashCloseUi, [
   'translateRetailWorkspace("fr", "cashSessionTitle")',
   'translateRetailWorkspace("en", "cashSessionTitle")',
   'translateRetailWorkspace("fr", "cashSessionRecommended")',
