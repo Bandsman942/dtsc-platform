@@ -37,6 +37,7 @@ export async function GET(req: Request, { params }: Params) {
       take: pageSize,
       include: {
         financialAccount: { select: { id: true, code: true, name: true, currencyCode: true } },
+        movements: { select: { direction: true, amount: true } },
         _count: { select: { movements: true, counts: true, discrepancies: true } },
       },
     }),
@@ -55,15 +56,22 @@ export async function GET(req: Request, { params }: Params) {
   }) : [];
   const assignedIds = new Set(approvals.filter((approval) => approval.approverUserId === auth.session.userId).map((approval) => approval.targetEntityId));
   const capabilities = auth.access.capabilities;
-  const items = rawItems.map((item) => ({
-    ...item,
-    theoreticalClosingAmount: item.expectedClosingAmount,
-    capabilities: {
-      canClose: capabilities.canManage && item.status === "OPEN",
-      canApprove: capabilities.canApprove && item.status === "PENDING_VALIDATION" && assignedIds.has(item.id),
-      canReject: capabilities.canApprove && item.status === "PENDING_VALIDATION" && assignedIds.has(item.id),
-    },
-  }));
+  const items = rawItems.map(({ movements, ...item }) => {
+    const expectedCurrentAmount = movements.reduce(
+      (totalAmount, movement) => movement.direction === "INBOUND" ? totalAmount.plus(movement.amount) : totalAmount.minus(movement.amount),
+      new Prisma.Decimal(item.openingAmount),
+    );
+    return {
+      ...item,
+      expectedCurrentAmount,
+      theoreticalClosingAmount: item.expectedClosingAmount ?? expectedCurrentAmount,
+      capabilities: {
+        canClose: capabilities.canManage && item.status === "OPEN",
+        canApprove: capabilities.canApprove && item.status === "PENDING_VALIDATION" && assignedIds.has(item.id),
+        canReject: capabilities.canApprove && item.status === "PENDING_VALIDATION" && assignedIds.has(item.id),
+      },
+    };
+  });
 
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "cash-sessions", hasSearch: Boolean(search), recordId: recordId || null } });
   return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } });
