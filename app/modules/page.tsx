@@ -107,7 +107,7 @@ export default async function ModulesHubPage({ searchParams }: { searchParams: P
     requestedModuleDenied = true;
   }
 
-  const standardSubgroups: HubSubgroup[] = group.subgroups.map((subgroup) => {
+  const subgroups: HubSubgroup[] = group.subgroups.map((subgroup) => {
     const codes = subgroup.standardModuleCodes.filter(standardCodeAllowed);
     const modules = listStandardNavigationItems({ includeCodes: codes, locale: user.locale }).map((item) => ({
       code: item.code,
@@ -124,36 +124,6 @@ export default async function ModulesHubPage({ searchParams }: { searchParams: P
     };
   }).filter((subgroup) => subgroup.modules.length > 0);
 
-  const enterpriseSubgroups: HubSubgroup[] = [];
-  if (requestedGroup === "ORGANIZATION_ERP" && organizationId && enterpriseModules.length > 0) {
-    const grouped = new Map<string, typeof enterpriseModules>();
-    for (const enterpriseModule of enterpriseModules) {
-      const current = grouped.get(enterpriseModule.navigationGroup) || [];
-      current.push(enterpriseModule);
-      grouped.set(enterpriseModule.navigationGroup, current);
-    }
-    for (const [code, modules] of grouped.entries()) {
-      const label = modules[0]?.navigationGroupLabel || code;
-      enterpriseSubgroups.push({
-        code: `ERP_${code}`,
-        label,
-        description: user.locale === "en"
-          ? "Modules available for the active company workspace."
-          : "Modules disponibles pour l’espace entreprise actif.",
-        modules: modules
-          .sort((left, right) => left.navigationOrder - right.navigationOrder)
-          .map((enterpriseModule) => ({
-            code: enterpriseModule.code,
-            label: enterpriseModule.label,
-            description: enterpriseModule.description,
-            href: enterpriseModule.href,
-            meta: enterpriseModule.navigationGroupLabel,
-          })),
-      });
-    }
-  }
-
-  const subgroups = [...standardSubgroups, ...enterpriseSubgroups];
   const visibleGroups = MODULE_NAVIGATION_GROUPS.filter((item) => item.code !== "DTSC_INTERNAL" || canOpenInternalGroup);
   const GroupIcon = ICON_BY_GROUP[group.code];
   const isEnglish = user.locale === "en";
@@ -200,7 +170,7 @@ export default async function ModulesHubPage({ searchParams }: { searchParams: P
             <div className="min-w-0">
               <p className="text-xs font-black uppercase tracking-[0.14em] text-cyan-600">{isEnglish ? "Available in this workspace" : "Disponible dans cet espace"}</p>
               <p className="mt-1 break-words text-sm leading-6 text-dtsc-muted">
-                {isEnglish ? "Open a subgroup to see the modules available in your current workspace." : "Dépliez un sous-groupe pour voir les modules disponibles dans votre espace de travail actuel."}
+                {isEnglish ? "Open a subgroup to see the destinations available in your current workspace." : "Dépliez un sous-groupe pour voir les destinations disponibles dans votre espace de travail actuel."}
               </p>
             </div>
           </div>
