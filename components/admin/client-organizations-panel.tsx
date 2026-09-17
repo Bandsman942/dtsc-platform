@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Building2, CreditCard, Edit3, Layers3, ShieldCheck, Trash2 } from "lucide-react";
+import { useAppLocale } from "@/components/i18n/locale-provider";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -94,8 +95,9 @@ export function ClientOrganizationsPanel({
   sectors: BusinessSectorOption[];
 }) {
   const router = useRouter();
+  const appLocale = useAppLocale();
+  const locale: ClientOrganizationsLocale = appLocale === "en" ? "en" : "fr";
   const [message, setMessage] = useState("");
-  const [locale, setLocale] = useState<ClientOrganizationsLocale>("fr");
   const [selectedSectorId, setSelectedSectorId] = useState("");
   const [selectedBusinessSubtypeCode, setSelectedBusinessSubtypeCode] = useState("");
   const [businessSubtypeOptions, setBusinessSubtypeOptions] = useState<BusinessSubtypeOption[]>([]);
@@ -123,10 +125,6 @@ export function ClientOrganizationsPanel({
     return sectors.filter((sector) => `${sector.labelFr} ${sector.labelEn} ${sector.code}`.toLowerCase().includes(query));
   }, [sectorQuery, sectors]);
   const t = (key: Parameters<typeof translateClientOrganizations>[1]) => translateClientOrganizations(locale, key);
-
-  useEffect(() => {
-    setLocale(document.documentElement.lang === "en" ? "en" : "fr");
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
