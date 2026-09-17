@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { enterpriseApprovalTargetLabel } from "@/lib/enterprise/approval-targets";
 import { workCoordinationDeepLink } from "@/lib/standard-work-coordination/deep-links";
 
 export type UnifiedCalendarEvent = {
@@ -238,12 +239,13 @@ export async function loadUnifiedWorkCalendar(input: UnifiedCalendarInput) {
   }
 
   for (const approval of approvals) {
+    const targetLabel = enterpriseApprovalTargetLabel(approval.targetEntityType, "fr");
     events.push({
       id: `approval:${approval.id}`,
       sourceType: "EnterpriseApproval",
       sourceId: approval.id,
-      title: `Validation · ${approval.targetEntityType}`,
-      description: `Décision attendue sur ${approval.targetEntityType} ${approval.targetEntityId}`,
+      title: `Validation · ${targetLabel}`,
+      description: `Décision attendue : ${targetLabel.toLocaleLowerCase("fr")}.`,
       startsAt: approval.requestedAt,
       endsAt: plusMinutes(approval.requestedAt, 30),
       allDay: false,
@@ -289,8 +291,8 @@ export async function loadUnifiedWorkCalendar(input: UnifiedCalendarInput) {
       id: `workflow:${run.id}`,
       sourceType: "EnterpriseWorkflowRun",
       sourceId: run.id,
-      title: `Workflow · ${run.sourceEntityType}`,
-      description: `Instance liée à ${run.sourceEntityType} ${run.sourceEntityId}`,
+      title: "Workflow en cours",
+      description: "Instance de workflow liée à une opération métier.",
       startsAt,
       endsAt: plusMinutes(startsAt, 30),
       allDay: false,
