@@ -126,10 +126,10 @@ check(!fxRoute.includes("finalizeMobileMoneyFxAccounting"), "FX transfer API mus
 check(hasAll(fxReverseRoute, ['"MOBILE_MONEY_AGENCY", "manage"', "mobileMoneyFxReverseSchema", "finalizeMobileMoneyFxReversalAccounting"]), "FX reversal API must enforce manage RBAC, validation and accounting reversal");
 check(hasAll(retailCashCloseRoute, [
   '"MOBILE_MONEY_AGENCY", "submit"',
-  "cashCloseSchema",
-  "submitCashSessionClose",
+  "assignedCashCloseSchema",
+  "submitCashSessionCloseForAssignedValidation",
   "ENTERPRISE_RETAIL_CASH_SESSION_SUBMITTED",
-]), "Mobile Money agents must be able to submit each owned till close through Retail RBAC while reusing the Finance close engine");
+]), "Mobile Money agents must submit each owned till close through Retail RBAC and the canonical assigned Finance close engine");
 
 const retailHttp = read("lib/enterprise/retail/http.ts");
 check(hasAll(retailHttp, [
