@@ -19,7 +19,7 @@ export type EnterpriseNavigationModule = {
   navigationGroup: EnterpriseModuleNavigationGroup;
   navigationGroupLabel: string;
   navigationOrder: number;
-  workspaceArchetype: EnterpriseWorkspaceArchetype;
+  workspaceArchetype?: EnterpriseWorkspaceArchetype;
   isCore: boolean;
   icon: string | null;
   href: string;
