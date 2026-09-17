@@ -66,8 +66,18 @@ export function isStandardModuleKnown(moduleCode: string) { return Boolean(getSt
 export function isStandardModuleVisible(definition: StandardModuleDefinition) { return STANDARD_MODULE_VISIBLE_STATUSES.has(definition.implementationStatus); }
 export function isStandardModuleNavigable(definition: StandardModuleDefinition) { return isStandardModuleVisible(definition) && Boolean(definition.routePath); }
 export function listStandardModuleDefinitions(options?: { family?: StandardModuleFamily; host?: StandardModuleHost; navigationGroup?: string; statuses?: StandardModuleImplementationStatus[] }) { return STANDARD_MODULE_REGISTRY.filter((definition) => { if (options?.family && definition.family !== options.family) return false; if (options?.host && definition.host !== options.host) return false; if (options?.navigationGroup && definition.navigationGroup !== options.navigationGroup) return false; if (options?.statuses && !options.statuses.includes(definition.implementationStatus)) return false; return true; }).sort((left, right) => left.navigationOrder - right.navigationOrder); }
-export function getStandardModuleLabel(definition: StandardModuleDefinition, locale?: string | null) { return locale === "en" ? definition.labelEn : definition.labelFr; }
-export function getStandardModuleDescription(definition: StandardModuleDefinition, locale?: string | null) { return locale === "en" ? definition.descriptionEn : definition.descriptionFr; }
+export function getStandardModuleLabel(definition: StandardModuleDefinition, locale?: string | null) {
+  if (definition.code === "ENTERPRISE_MODULES_SUBSCRIPTION") return locale === "en" ? "ERP modules" : "Modules ERP";
+  return locale === "en" ? definition.labelEn : definition.labelFr;
+}
+export function getStandardModuleDescription(definition: StandardModuleDefinition, locale?: string | null) {
+  if (definition.code === "ENTERPRISE_MODULES_SUBSCRIPTION") {
+    return locale === "en"
+      ? "Open the ERP modules available for the active company workspace."
+      : "Ouvrir les modules ERP disponibles dans l’espace entreprise actif.";
+  }
+  return locale === "en" ? definition.descriptionEn : definition.descriptionFr;
+}
 export function assertStandardModuleRegistryIntegrity() {
   const failures: string[] = []; const codes = new Set<string>(); const aliases = new Set<string>();
   for (const definition of STANDARD_MODULE_REGISTRY) {
