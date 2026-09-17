@@ -67,6 +67,9 @@ const files = {
   documentLinks: "app/api/enterprise/[organizationId]/documents/[id]/links/route.ts",
   procurementShared: "lib/enterprise/procurement/shared.ts",
   guides: "app/help/enterprise/page.tsx",
+  guideRegistry: "lib/user-guides/enterprise-guide-registry.ts",
+  canonicalGuide: "lib/user-guides/canonical-guide.ts",
+  contextualGuide: "components/user-guides/contextual-user-guide.tsx",
   voiceComposer: "components/chat/VoiceConversationComposer.tsx",
   collaborationMedia: "lib/collaboration-media.ts",
   voiceRoute: "app/api/collaborators/groups/[id]/voice/route.ts",
@@ -233,8 +236,10 @@ const checks = {
     for (const marker of ["EnterpriseContract", "EnterpriseProject", "EnterpriseAsset", "CROSS_TENANT_LINK_DENIED"]) need(content.procurementShared, marker, "Validation tenant des liens");
   },
   guides() {
-    for (const moduleCode of ["CONTRACTS", ...iterationModules]) need(content.guides, `${moduleCode}:`, `Guide dédié ${moduleCode}`);
-    for (const marker of ["Avant de commencer", "Procédure pas à pas", "Statuts et workflow", "Contrôles et confidentialité", "Dépannage"]) need(content.guides, marker, "Structure des guides");
+    for (const moduleCode of ["CONTRACTS", ...iterationModules]) need(content.guideRegistry, `${moduleCode}:`, `Guide dédié ${moduleCode}`);
+    for (const marker of ["Avant de commencer", "Procédure pas à pas", "Statuts et workflow", "Contrôles et confidentialité", "Dépannage"]) need(content.canonicalGuide, marker, "Structure canonique des guides");
+    for (const marker of ["getCanonicalEnterpriseUserGuide", "ContextualUserGuide"]) need(content.guides, marker, "Centre d’aide canonique");
+    for (const marker of ["guide.capabilities", "searchPlaceholder", "guide.limitations"]) need(content.contextualGuide, marker, "Renderer canonique des guides");
     need(content.professionalUi, "/help/enterprise?module=", "Lien guide contextuel");
   },
   voice() {
