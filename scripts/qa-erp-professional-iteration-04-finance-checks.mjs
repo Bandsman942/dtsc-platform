@@ -31,6 +31,7 @@ const files = {
   invoices: "components/enterprise/professional/enterprise-finance-invoices-workspace.tsx",
   payments: "components/enterprise/professional/enterprise-finance-payments-treasury-workspace.tsx",
   cash: "components/enterprise/professional/enterprise-finance-cash-workspace.tsx",
+  cashCount: "components/enterprise/professional/cash-physical-count-fields.tsx",
   cashBank: "components/enterprise/professional/enterprise-finance-bank-reconciliation-workspace.tsx",
   shared: "components/enterprise/professional/finance-professional-workspace-shared.tsx",
   professionalUi: "components/enterprise/professional/professional-erp-ui.tsx",
@@ -122,8 +123,8 @@ const checks = {
       { key: "cashCloseAssistant", fr: "Assistant de clôture de caisse", en: "Cash-close assistant", renderMarker: '"cashCloseAssistant"' },
       { key: "physicalCount", fr: "Comptage physique", en: "Physical count", renderMarker: '"physicalCount"' },
       { key: "independentValidation", fr: "Validation indépendante", en: "Independent validation", renderMarker: '"independentValidation"' },
-    ]) needLocalized({ component: content.cash, ...localized, scope: "Caisse professionnelle" });
-    for (const marker of ["PENDING_VALIDATION", "countedClosingAmount", "/cash-sessions/${closeTarget.id}/close", "/cash-sessions/${validateTarget.id}/validate"]) need(content.cash, marker, "Caisse professionnelle");
+    ]) needLocalized({ component: content.cash + content.cashCount, ...localized, scope: "Caisse professionnelle" });
+    for (const marker of ["PENDING_VALIDATION", "countedClosingAmount", "/cash-sessions/${closeTarget.id}/close", "/cash-sessions/${validateTarget.id}/validate"]) need(content.cash + content.cashCount, marker, "Caisse professionnelle");
   },
   bank() {
     for (const localized of [
@@ -150,7 +151,7 @@ const checks = {
     reject(content.language, "metricLabel(\"", "Libellés automatiques interdits");
   },
   mobile() {
-    for (const marker of ["h-[94dvh]", "h-[96dvh]", "inputMode=\"decimal\"", "sticky bottom-0", "data-responsive-actions"]) need(content.overview + content.invoices + content.payments + content.cash + content.cashBank, marker, "Finance mobile");
+    for (const marker of ["h-[94dvh]", "h-[96dvh]", "inputMode=\"decimal\"", "sticky bottom-0", "data-responsive-actions"]) need(content.overview + content.invoices + content.payments + content.cash + content.cashCount + content.cashBank, marker, "Finance mobile");
   },
   deeplinks() {
     for (const marker of ["useSearchParams", "invoiceId", "paymentId", "cashSessionId", "statementId", "reconciliationId"]) need(content.invoices + content.payments + content.cash + content.cashBank, marker, "Liens profonds Finance");
