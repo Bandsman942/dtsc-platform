@@ -5,7 +5,7 @@ const prisma = new PrismaClient();
 const baseUrl = process.env.E2E_BASE_URL || "http://127.0.0.1:3000";
 const organizationId = process.env.E2E_ORGANIZATION_ID || "e2e-erp-professional-org";
 const adminEmail = process.env.E2E_ADMIN_EMAIL || "erp-admin@example.test";
-const adminPassword = process.env.E2E_ADMIN_PASSWORD || "E2eAdmin2026!";
+const adminPassword = process.env.E2E_ADMIN_PASSWORD;
 const dtscOrganizationId = "dtsc-internal";
 let internalContext;
 let internalPage;
@@ -41,6 +41,7 @@ async function prepareAccess() {
 }
 
 async function signIn(context, workspaceId, next) {
+  if (!adminPassword) throw new Error("E2E_ADMIN_PASSWORD is required for issue #657 browser acceptance.");
   const response = await context.request.post(`${baseUrl}/api/auth/sign-in`, {
     data: { email: adminEmail, password: adminPassword, organizationId: workspaceId, next },
     headers: { origin: baseUrl, referer: `${baseUrl}/auth/sign-in` },
@@ -58,6 +59,15 @@ async function openCreateCompany(page) {
 async function assertNoGlobalOverflow(page) {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1);
+}
+
+async function getCanonicalErpCatalogLink(page, label, openLabel) {
+  const catalogItem = page.getByRole("listitem").filter({ hasText: label });
+  await expect(catalogItem).toHaveCount(1);
+  const catalogLink = catalogItem.getByRole("link", { name: openLabel, exact: true });
+  await expect(catalogLink).toHaveCount(1);
+  await expect(catalogLink).toHaveAttribute("href", /\/enterprise-modules$/);
+  return catalogLink;
 }
 
 test.describe.serial("Issue #657 ERP navigation and workspace hotfix", () => {
@@ -115,13 +125,12 @@ test.describe.serial("Issue #657 ERP navigation and workspace hotfix", () => {
     await expect(organizationPage.getByRole("heading", { name: "Entreprise & ERP" })).toBeVisible();
     const workspaceGroup = organizationPage.locator("summary").filter({ hasText: /^Espaces entreprise · \d+$/ });
     await expect(workspaceGroup).toBeVisible();
-    await expect(organizationPage.getByRole("button", { name: /^Opérations ·/ })).toHaveCount(0);
-    await expect(organizationPage.getByRole("button", { name: /^Ventes & relation client ·/ })).toHaveCount(0);
+    await expect(organizationPage.locator("summary").filter({ hasText: /^Opérations · \d+$/ })).toHaveCount(0);
+    await expect(organizationPage.locator("summary").filter({ hasText: /^Ventes & relation client · \d+$/ })).toHaveCount(0);
 
     await workspaceGroup.click();
     await expect(organizationPage.getByText("Modules ERP", { exact: true })).toBeVisible();
-    const catalogLink = organizationPage.locator('a[href="/enterprise-modules"]');
-    await expect(catalogLink).toHaveCount(1);
+    const catalogLink = await getCanonicalErpCatalogLink(organizationPage, "Modules ERP", "Ouvrir");
     await catalogLink.click();
     await expect(organizationPage).toHaveURL(/\/enterprise-modules$/);
     await expect(organizationPage.getByRole("heading", { name: "Modules ERP" })).toBeVisible();
@@ -141,9 +150,11 @@ test.describe.serial("Issue #657 ERP navigation and workspace hotfix", () => {
       await expect(workspaceGroup).toBeVisible();
       await workspaceGroup.click();
       await expect(englishPage.getByText("ERP modules", { exact: true })).toBeVisible();
-      await expect(englishPage.getByRole("button", { name: /^Operations ·/ })).toHaveCount(0);
+      await expect(englishPage.locator("summary").filter({ hasText: /^Operations · \d+$/ })).toHaveCount(0);
       await assertNoGlobalOverflow(englishPage);
-      await englishPage.locator('a[href="/enterprise-modules"]').click();
+      const catalogLink = await getCanonicalErpCatalogLink(englishPage, "ERP modules", "Open");
+      await catalogLink.click();
+      await expect(englishPage).toHaveURL(/\/enterprise-modules$/);
       await expect(englishPage.getByRole("heading", { name: "ERP modules" })).toBeVisible();
     } finally {
       await englishContext.close();
