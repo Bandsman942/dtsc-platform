@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
+import { validateCashSessionAssignedApproval } from "@/lib/enterprise/accounting/accounting-operations-approval-orchestration";
 import { approveAssignedAccountTransfer, rejectAssignedAccountTransfer } from "@/lib/enterprise/accounting/treasury-approval-service";
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { getEnterpriseCoreV2Access } from "@/lib/enterprise/core-v2/access";
@@ -36,6 +37,7 @@ const prepareReviewSchema = z.object({ action: z.literal("PREPARE_REVIEW"), revi
 
 async function targetRevision(organizationId: string, approval: CurrentApproval) {
   if (approval.targetEntityType === "EnterpriseAccountTransfer") return (await prisma.enterpriseAccountTransfer.findFirst({ where: { id: approval.targetEntityId, organizationId }, select: { revision: true } }))?.revision ?? null;
+  if (approval.targetEntityType === "EnterpriseCashSession") return (await prisma.enterpriseCashSession.findFirst({ where: { id: approval.targetEntityId, organizationId }, select: { revision: true } }))?.revision ?? null;
   if (approval.targetEntityType === "EnterpriseLeaveRequest") return (await prisma.enterpriseLeaveRequest.findFirst({ where: { id: approval.targetEntityId, organizationId, archivedAt: null }, select: { revision: true } }))?.revision ?? null;
   if (approval.targetEntityType === "EnterpriseEmploymentContract") return (await prisma.enterpriseEmploymentContract.findFirst({ where: { id: approval.targetEntityId, organizationId, archivedAt: null }, select: { revision: true } }))?.revision ?? null;
   if (approval.targetEntityType === "EnterpriseTimesheet") return (await prisma.enterpriseTimesheet.findFirst({ where: { id: approval.targetEntityId, organizationId, archivedAt: null }, select: { revision: true } }))?.revision ?? null;
@@ -64,9 +66,10 @@ async function decideDomainApproval(organizationId: string, current: CurrentAppr
   if (data.action === "CANCEL") return decideAssignedEnterpriseApproval(args);
 
   const revision = await targetRevision(organizationId, current);
-  const revisionedTargets = ["EnterpriseAccountTransfer", "EnterpriseLeaveRequest", "EnterpriseEmploymentContract", "EnterpriseTimesheet", "EnterprisePayrollRun", "EnterpriseStockTransfer", "EnterpriseInventoryCount", "EnterpriseStockAdjustment", "EnterpriseProjectMilestone"];
+  const revisionedTargets = ["EnterpriseAccountTransfer", "EnterpriseCashSession", "EnterpriseLeaveRequest", "EnterpriseEmploymentContract", "EnterpriseTimesheet", "EnterprisePayrollRun", "EnterpriseStockTransfer", "EnterpriseInventoryCount", "EnterpriseStockAdjustment", "EnterpriseProjectMilestone"];
   if (revisionedTargets.includes(current.targetEntityType) && revision === null) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "L’objet métier lié à cette validation est introuvable.");
   if (current.targetEntityType === "EnterpriseAccountTransfer") return data.action === "APPROVE" ? approveAssignedAccountTransfer(organizationId, current.targetEntityId, actorUserId, revision!) : rejectAssignedAccountTransfer(organizationId, current.targetEntityId, actorUserId, revision!, data.decisionComment || "");
+  if (current.targetEntityType === "EnterpriseCashSession") return validateCashSessionAssignedApproval(organizationId, current.targetEntityId, actorUserId, { approve: data.action === "APPROVE", reason: data.decisionComment, revision: revision! });
   if (current.targetEntityType === "EnterpriseLeaveRequest") return decideEnterpriseLeaveRequest(organizationId, current.targetEntityId, actorUserId, { decision: data.action, revision: revision!, comment: data.decisionComment });
   if (current.targetEntityType === "EnterpriseEmploymentContract") return decideEnterpriseEmploymentContract(organizationId, current.targetEntityId, actorUserId, { decision: data.action, revision: revision!, comment: data.decisionComment });
   if (current.targetEntityType === "EnterpriseTimesheet") return decideEnterpriseTimesheet(organizationId, current.targetEntityId, actorUserId, { decision: data.action, revision: revision!, comment: data.decisionComment });

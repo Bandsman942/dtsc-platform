@@ -8,9 +8,23 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useAppLocale } from "@/components/i18n/locale-provider";
 import { translate } from "@/lib/i18n";
-import type { ContextualUserGuide } from "@/lib/user-guides/iteration04-guides";
+import type { CanonicalUserGuide } from "@/lib/user-guides/canonical-guide";
 
-export function ContextualUserGuide({ guide, compact = false, open: controlledOpen, onOpenChange, hideTrigger = false }: { guide: ContextualUserGuide; compact?: boolean; open?: boolean; onOpenChange?: (open: boolean) => void; hideTrigger?: boolean }) {
+export function ContextualUserGuide({
+  guide,
+  compact = false,
+  open: controlledOpen,
+  onOpenChange,
+  hideTrigger = false,
+  presentation = "dialog",
+}: {
+  guide: CanonicalUserGuide;
+  compact?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideTrigger?: boolean;
+  presentation?: "dialog" | "inline";
+}) {
   const locale = useAppLocale() || "fr";
   const t = (key: string) => translate(locale, key);
   const [internalOpen, setInternalOpen] = useState(false);
@@ -30,6 +44,89 @@ export function ContextualUserGuide({ guide, compact = false, open: controlledOp
         .includes(normalizedQuery),
     );
   }, [guide.steps, normalizedQuery]);
+
+  const content = (
+    <div className="min-h-0 min-w-0 space-y-5 overflow-y-auto pr-1" data-canonical-user-guide={guide.code}>
+      {presentation === "inline" ? (
+        <section className="min-w-0 border-l-4 border-cyan-400 pl-4">
+          <p className="break-words text-2xl font-black text-dtsc-ink">{guide.title}</p>
+          <p className="mt-2 max-w-4xl break-words text-sm leading-6 text-dtsc-muted">{guide.summary}</p>
+        </section>
+      ) : null}
+
+      <div className="grid min-w-0 gap-3 sm:grid-cols-3">
+        <GuideMetric label={t("userGuides.common.audience")} value={guide.audience} />
+        <GuideMetric label={t("userGuides.common.guideCode")} value={guide.code} />
+        <GuideMetric label={t("userGuides.common.lastUpdated")} value={formatGuideDate(guide.updatedAt, locale)} icon={<Clock3 className="h-4 w-4" />} />
+      </div>
+
+      <section className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
+        <h3 className="font-black text-dtsc-ink">{t("userGuides.common.capabilities")}</h3>
+        <div className="mt-3 grid min-w-0 gap-2 md:grid-cols-2">
+          {guide.capabilities.map((capability) => (
+            <div key={capability} className="flex min-w-0 items-start gap-2 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm leading-6 text-dtsc-muted">
+              <CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-emerald-600" />
+              <span className="min-w-0 break-words">{capability}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <label className="relative block min-w-0">
+        <span className="sr-only">{t("userGuides.common.searchLabel")}</span>
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-dtsc-muted" />
+        <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("userGuides.common.searchPlaceholder")} className="h-11 rounded-xl bg-dtsc-surface pl-10" />
+      </label>
+
+      <Accordion>
+        {visibleSteps.map((step, index) => (
+          <AccordionItem key={`${guide.code}-${step.title}`} title={`${index + 1}. ${step.title}`} defaultOpen={index === 0 && !normalizedQuery}>
+            <div className="space-y-3 text-sm leading-6 text-dtsc-muted">
+              <p>{step.description}</p>
+              {step.actions?.length ? (
+                <ol className="grid gap-2">
+                  {step.actions.map((action, actionIndex) => (
+                    <li key={action} className="flex min-w-0 items-start gap-3 rounded-xl border border-dtsc-border bg-dtsc-page p-3">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-cyan-400/15 text-xs font-black text-cyan-700">{actionIndex + 1}</span>
+                      <span className="min-w-0 break-words">{action}</span>
+                    </li>
+                  ))}
+                </ol>
+              ) : null}
+              {step.cautions?.length ? (
+                <div className="space-y-2">
+                  {step.cautions.map((caution) => (
+                    <div key={caution} className="flex min-w-0 items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-amber-800 dark:text-amber-200">
+                      <CircleAlert className="mt-1 h-4 w-4 shrink-0" />
+                      <span className="min-w-0 break-words">{caution}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </AccordionItem>
+        ))}
+      </Accordion>
+
+      {!visibleSteps.length ? (
+        <p className="rounded-2xl border border-dashed border-dtsc-border bg-dtsc-page p-6 text-center text-sm text-dtsc-muted">{t("userGuides.common.noResult")}</p>
+      ) : null}
+
+      {guide.limitations?.length ? (
+        <section className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4">
+          <div className="flex items-center gap-2 text-amber-800 dark:text-amber-200">
+            <CircleAlert className="h-5 w-5" />
+            <h3 className="font-black">{t("userGuides.common.limitations")}</h3>
+          </div>
+          <div className="mt-3 space-y-2 text-sm leading-6 text-amber-900 dark:text-amber-100">
+            {guide.limitations.map((limitation) => <p key={limitation}>{limitation}</p>)}
+          </div>
+        </section>
+      ) : null}
+    </div>
+  );
+
+  if (presentation === "inline") return content;
 
   return (
     <>
@@ -56,77 +153,7 @@ export function ContextualUserGuide({ guide, compact = false, open: controlledOp
         description={guide.summary}
         className="h-[94dvh] max-w-5xl"
       >
-        <div className="min-h-0 min-w-0 space-y-5 overflow-y-auto pr-1">
-          <div className="grid min-w-0 gap-3 sm:grid-cols-3">
-            <GuideMetric label={t("userGuides.common.audience")} value={guide.audience} />
-            <GuideMetric label={t("userGuides.common.guideCode")} value={guide.code} />
-            <GuideMetric label={t("userGuides.common.lastUpdated")} value={formatGuideDate(guide.updatedAt, locale)} icon={<Clock3 className="h-4 w-4" />} />
-          </div>
-
-          <section className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
-            <h3 className="font-black text-dtsc-ink">{t("userGuides.common.capabilities")}</h3>
-            <div className="mt-3 grid min-w-0 gap-2 md:grid-cols-2">
-              {guide.capabilities.map((capability) => (
-                <div key={capability} className="flex min-w-0 items-start gap-2 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm leading-6 text-dtsc-muted">
-                  <CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-emerald-600" />
-                  <span className="min-w-0 break-words">{capability}</span>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <label className="relative block min-w-0">
-            <span className="sr-only">{t("userGuides.common.searchLabel")}</span>
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-dtsc-muted" />
-            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("userGuides.common.searchPlaceholder")} className="h-11 rounded-xl bg-dtsc-surface pl-10" />
-          </label>
-
-          <Accordion>
-            {visibleSteps.map((step, index) => (
-              <AccordionItem key={`${guide.code}-${step.title}`} title={`${index + 1}. ${step.title}`} defaultOpen={index === 0 && !normalizedQuery}>
-                <div className="space-y-3 text-sm leading-6 text-dtsc-muted">
-                  <p>{step.description}</p>
-                  {step.actions?.length ? (
-                    <ol className="grid gap-2">
-                      {step.actions.map((action, actionIndex) => (
-                        <li key={action} className="flex min-w-0 items-start gap-3 rounded-xl border border-dtsc-border bg-dtsc-page p-3">
-                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-cyan-400/15 text-xs font-black text-cyan-700">{actionIndex + 1}</span>
-                          <span className="min-w-0 break-words">{action}</span>
-                        </li>
-                      ))}
-                    </ol>
-                  ) : null}
-                  {step.cautions?.length ? (
-                    <div className="space-y-2">
-                      {step.cautions.map((caution) => (
-                        <div key={caution} className="flex min-w-0 items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-amber-800 dark:text-amber-200">
-                          <CircleAlert className="mt-1 h-4 w-4 shrink-0" />
-                          <span className="min-w-0 break-words">{caution}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              </AccordionItem>
-            ))}
-          </Accordion>
-
-          {!visibleSteps.length ? (
-            <p className="rounded-2xl border border-dashed border-dtsc-border bg-dtsc-page p-6 text-center text-sm text-dtsc-muted">{t("userGuides.common.noResult")}</p>
-          ) : null}
-
-          {guide.limitations?.length ? (
-            <section className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4">
-              <div className="flex items-center gap-2 text-amber-800 dark:text-amber-200">
-                <CircleAlert className="h-5 w-5" />
-                <h3 className="font-black">{t("userGuides.common.limitations")}</h3>
-              </div>
-              <div className="mt-3 space-y-2 text-sm leading-6 text-amber-900 dark:text-amber-100">
-                {guide.limitations.map((limitation) => <p key={limitation}>{limitation}</p>)}
-              </div>
-            </section>
-          ) : null}
-        </div>
+        {content}
       </Dialog>
     </>
   );

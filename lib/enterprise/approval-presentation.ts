@@ -1,4 +1,9 @@
 import { getEnterpriseModuleDefinition, normalizeEnterpriseModuleCode } from "@/lib/enterprise/module-registry";
+import {
+  enterpriseApprovalModuleForTarget,
+  enterpriseApprovalTargetDeepLink,
+  enterpriseApprovalTargetLabel,
+} from "@/lib/enterprise/approval-targets";
 import { prisma } from "@/lib/prisma";
 
 export type PendingApprovalReference = {
@@ -108,9 +113,7 @@ export async function resolveEnterpriseApprovalPresentations(
   for (const item of transfers) {
     map.set(`EnterpriseAccountTransfer:${item.id}`, presentation({
       title: english ? `Transfer ${item.number}` : `Transfert ${item.number}`,
-      description: english
-        ? `${item.sourceAmount.toFixed()} ${item.sourceCurrencyCode} → ${item.targetAmount.toFixed()} ${item.targetCurrencyCode}`
-        : `${item.sourceAmount.toFixed()} ${item.sourceCurrencyCode} → ${item.targetAmount.toFixed()} ${item.targetCurrencyCode}`,
+      description: `${item.sourceAmount.toFixed()} ${item.sourceCurrencyCode} → ${item.targetAmount.toFixed()} ${item.targetCurrencyCode}`,
       sourceModuleCode: "FINANCE_TREASURY",
       actionUrl: `/enterprise-modules/FINANCE_TREASURY?transfer=${encodeURIComponent(item.id)}`,
       priority: "HIGH",
@@ -153,11 +156,13 @@ export async function resolveEnterpriseApprovalPresentations(
   for (const approval of approvals) {
     const key = `${approval.targetEntityType}:${approval.targetEntityId}`;
     if (!map.has(key)) {
+      const targetLabel = enterpriseApprovalTargetLabel(approval.targetEntityType, english ? "en" : "fr");
+      const sourceModuleCode = enterpriseApprovalModuleForTarget(approval.targetEntityType) || "VALIDATIONS";
       map.set(key, presentation({
-        title: english ? "Approval pending" : "Validation en attente",
-        description: english ? "A pending approval needs a decision before the related process can continue." : "Une validation est en attente avant que le traitement associé puisse continuer.",
-        sourceModuleCode: "VALIDATIONS",
-        actionUrl: `/enterprise-modules/VALIDATIONS?approval=${encodeURIComponent(approval.id)}`,
+        title: english ? `${targetLabel} to approve` : `${targetLabel} à valider`,
+        description: english ? `A decision is required for this ${targetLabel.toLocaleLowerCase("en")}.` : `Une décision est requise pour cette opération : ${targetLabel.toLocaleLowerCase("fr")}.`,
+        sourceModuleCode,
+        actionUrl: enterpriseApprovalTargetDeepLink(approval.targetEntityType, approval.targetEntityId, approval.id),
         priority: "HIGH",
       }, english));
     }

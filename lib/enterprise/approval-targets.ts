@@ -28,8 +28,44 @@ export const ENTERPRISE_APPROVAL_MODULE_BY_TARGET: Readonly<Record<string, strin
   EnterpriseProjectMilestone: "PROJECTS_SERVICES",
 };
 
+const ENTERPRISE_APPROVAL_TARGET_LABELS: Readonly<Record<string, { fr: string; en: string }>> = {
+  EnterpriseAccountTransfer: { fr: "Transfert de trésorerie", en: "Treasury transfer" },
+  EnterpriseJournalEntry: { fr: "Écriture comptable", en: "Journal entry" },
+  EnterprisePayment: { fr: "Paiement", en: "Payment" },
+  EnterpriseSalesInvoice: { fr: "Facture client", en: "Customer invoice" },
+  EnterpriseSupplierInvoiceReview: { fr: "Revue de facture fournisseur", en: "Supplier invoice review" },
+  EnterpriseSupplierInvoiceApproval: { fr: "Facture fournisseur", en: "Supplier invoice" },
+  EnterpriseFinancialClose: { fr: "Clôture financière", en: "Financial close" },
+  EnterpriseCashSession: { fr: "Clôture de caisse", en: "Cash close" },
+  EnterpriseReconciliationSession: { fr: "Rapprochement financier", en: "Financial reconciliation" },
+  EnterpriseOpeningBalanceApproval: { fr: "Solde d’ouverture", en: "Opening balance" },
+  EnterpriseSalesCreditNoteApproval: { fr: "Avoir client", en: "Customer credit note" },
+  EnterpriseSupplierCreditNoteApproval: { fr: "Avoir fournisseur", en: "Supplier credit note" },
+  EnterpriseRequest: { fr: "Demande interne", en: "Internal request" },
+  EnterpriseTask: { fr: "Tâche ou opération", en: "Task or operation" },
+  EnterpriseMeeting: { fr: "Réunion", en: "Meeting" },
+  EnterprisePurchase: { fr: "Achat", en: "Purchase" },
+  EnterpriseStockTransfer: { fr: "Transfert de stock", en: "Stock transfer" },
+  EnterpriseInventoryCount: { fr: "Inventaire", en: "Inventory count" },
+  EnterpriseStockAdjustment: { fr: "Ajustement de stock", en: "Stock adjustment" },
+  EnterpriseBudget: { fr: "Budget", en: "Budget" },
+  EnterpriseExpense: { fr: "Dépense", en: "Expense" },
+  PharmacyQualityIncident: { fr: "Incident qualité pharmacie", en: "Pharmacy quality incident" },
+  EnterpriseLeaveRequest: { fr: "Demande de congé", en: "Leave request" },
+  EnterpriseEmploymentContract: { fr: "Contrat de travail", en: "Employment contract" },
+  EnterpriseTimesheet: { fr: "Feuille de temps", en: "Timesheet" },
+  EnterprisePayrollRun: { fr: "Cycle de paie", en: "Payroll run" },
+  EnterpriseProjectMilestone: { fr: "Jalon de projet", en: "Project milestone" },
+};
+
 export function enterpriseApprovalModuleForTarget(targetEntityType: string) {
   return ENTERPRISE_APPROVAL_MODULE_BY_TARGET[targetEntityType] || null;
+}
+
+export function enterpriseApprovalTargetLabel(targetEntityType: string, locale?: string | null) {
+  const label = ENTERPRISE_APPROVAL_TARGET_LABELS[targetEntityType];
+  if (!label) return locale === "en" ? "Business approval" : "Validation métier";
+  return locale === "en" ? label.en : label.fr;
 }
 
 export function enterpriseApprovalTargetDeepLink(targetEntityType: string, targetEntityId: string, approvalId?: string | null) {
