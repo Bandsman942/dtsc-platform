@@ -16,6 +16,7 @@ const physicalCount = read("components/enterprise/professional/cash-physical-cou
 const mobileManager = read("components/enterprise/professional/mobile-money-cash-session-manager.tsx");
 const financeCash = read("components/enterprise/professional/enterprise-finance-cash-workspace.tsx");
 const financeRouter = read("components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-workspace.tsx");
+const operationalFinanceRouter = read("components/enterprise/professional/enterprise-operational-finance-workspace.tsx");
 const accountingApproval = read("lib/enterprise/accounting/accounting-approval-service.ts");
 const approvalActions = read("app/api/enterprise/[organizationId]/approvals/[id]/actions/route.ts");
 const approvalCoordination = read("lib/standard-work-coordination/approval-coordination.ts");
@@ -60,6 +61,12 @@ expect(hasAll(physicalCount, [
 expect(hasAll(mobileManager, ["CashPhysicalCountFields", "cashCountsFromForm", "approverUserId", "closeError", "notifyToast"]), "Mobile Money/Télécom réutilisent le comptage canonique et exigent le validateur");
 expect(hasAll(financeCash, ["CashPhysicalCountFields", "cashCountsFromForm", "approverUserId", 'moduleCode="FINANCE_CASH"']), "Finance Caisse réutilise exactement le même comptage canonique");
 expect(hasAll(financeRouter, ['definition.code === "FINANCE_CASH"', "EnterpriseFinanceCashWorkspace", "EnterpriseFinanceBankReconciliationWorkspace"]), "routeur Finance isole Caisse sans casser Banque/Rapprochement");
+expect(hasAll(operationalFinanceRouter, [
+  'props.definition.code === "FINANCE_CASH"',
+  "<EnterpriseFinanceCashWorkspace {...props} />",
+  "EnterpriseFinanceCashBankReconciliationWorkspace",
+]), "dispatcher Finance opérationnelle branche réellement Caisse sur le workspace spécialisé");
+expect(!operationalFinanceRouter.includes("EnterpriseFinanceCashBankReconciliationWorkspaceHotfix"), "dispatcher Finance opérationnelle ne réactive plus l’ancien wrapper combiné");
 expect(hasAll(cashCollectionRoute, ["movements: { select: { direction: true, amount: true } }", "expectedCurrentAmount", "theoreticalClosingAmount: item.expectedClosingAmount ?? expectedCurrentAmount"]), "la caisse ouverte expose un théorique courant calculé depuis les mouvements serveur");
 
 expect(hasAll(accountingApproval, [
