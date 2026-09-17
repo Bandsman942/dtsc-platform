@@ -146,7 +146,8 @@ for (const targetType of [
   expect(has(presentation, targetType), `centre des actions présente ${targetType}`);
 }
 expect(has(presentation, "/enterprise-modules/FINANCE_TREASURY?transfer="), "deep-link transfert vers Trésorerie");
-expect(has(presentation, "/enterprise-modules/VALIDATIONS?approval="), "fallback de validation reste actionnable");
+expect(has(presentation, "enterpriseApprovalTargetDeepLink"), "présentation des validations délègue les deep-links au registre canonique");
+expect(has(approvalTargets, "/enterprise-modules/VALIDATIONS") && has(approvalTargets, "?approval="), "fallback canonique de validation reste actionnable");
 
 // Les contrôles comptables restants sont explicitement classés : une validation humaine
 // non encore affectée est reprise par #511, tandis qu'une exécution/posting/réversibilité
