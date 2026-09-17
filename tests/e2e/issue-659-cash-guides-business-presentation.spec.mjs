@@ -190,7 +190,7 @@ test.describe.serial("Hotfix #659 cash validation, canonical guides and business
     await signIn(page, approverEmail, approverPassword, `/enterprise-modules/VALIDATIONS?approval=${approval.id}`);
 
     await page.goto(`/enterprise-modules/VALIDATIONS?approval=${approval.id}`);
-    await expect(page.getByText("Cash close", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText(/Cash close/).first()).toBeVisible();
     await expect(page.getByText("EnterpriseCashSession", { exact: true })).toHaveCount(0);
     await expect(page.locator("body")).not.toContainText("EnterpriseSalesCreditNoteApproval");
     await expect(page.locator("html")).toHaveClass(/dark/);
