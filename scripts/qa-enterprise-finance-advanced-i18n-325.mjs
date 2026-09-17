@@ -3,13 +3,17 @@ import process from "node:process";
 
 const frPath = "locales/enterprise-finance.fr.json";
 const enPath = "locales/enterprise-finance.en.json";
-const cashPath = "components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-workspace.tsx";
+const cashPath = "components/enterprise/professional/enterprise-finance-cash-workspace.tsx";
+const bankReconciliationPath = "components/enterprise/professional/enterprise-finance-bank-reconciliation-workspace.tsx";
 const advancedPath = "components/enterprise/professional/enterprise-advanced-finance-workspace.tsx";
 const onboardingPath = "components/enterprise/professional/enterprise-accounting-onboarding-panel.tsx";
 
 const fr = JSON.parse(fs.readFileSync(frPath, "utf8"));
 const en = JSON.parse(fs.readFileSync(enPath, "utf8"));
-const cash = fs.readFileSync(cashPath, "utf8");
+const cash = [
+  fs.readFileSync(cashPath, "utf8"),
+  fs.readFileSync(bankReconciliationPath, "utf8"),
+].join("\n");
 const advanced = fs.readFileSync(advancedPath, "utf8");
 const onboarding = fs.readFileSync(onboardingPath, "utf8");
 
