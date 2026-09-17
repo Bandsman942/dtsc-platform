@@ -8,6 +8,7 @@ const includesAll = (source, tokens) => tokens.every((token) => source.includes(
 const clientOrganizations = read("components/admin/client-organizations-panel.tsx");
 const moduleHub = read("app/modules/page.tsx");
 const standardRegistry = read("lib/modules/standard-module-registry.ts");
+const standardRegistryData = read("lib/modules/standard-module-registry-data.json");
 const navigation = read("lib/enterprise/enterprise-navigation.ts");
 const archetypes = read("lib/enterprise/workspace-archetypes.ts");
 const subtypeRegistry = read("lib/enterprise/business-subtype-registry.ts");
@@ -28,7 +29,7 @@ check(includesAll(subtypeRegistry, ['sectorCode: "MANUFACTURING"', 'code: "TAILO
 check(!moduleHub.includes("enterpriseSubgroups"), "Grouped module hub no longer builds a second ERP catalog");
 check(!moduleHub.includes("ERP_${code}"), "Grouped module hub no longer injects ERP navigation groups");
 check(includesAll(moduleHub, ["ENTERPRISE_MODULES_SUBSCRIPTION", "getEnterpriseNavigationModules", "enterpriseDestination", "redirect(enterpriseDestination.href)"]), "Grouped module hub keeps the canonical ERP catalog entry and authorized deep-link resolution");
-check(includesAll(standardRegistry, ['definition.code === "ENTERPRISE_MODULES_SUBSCRIPTION"', '"Modules ERP"', '"ERP modules"', '"/enterprise-modules"']), "The ERP catalog entry has a single clear public label and canonical destination");
+check(includesAll(standardRegistry, ['definition.code === "ENTERPRISE_MODULES_SUBSCRIPTION"', '"Modules ERP"', '"ERP modules"']) && includesAll(standardRegistryData, ['"code": "ENTERPRISE_MODULES_SUBSCRIPTION"', '"routePath": "/enterprise-modules"']), "The ERP catalog entry has a single clear public label and canonical destination");
 
 const archetypeNames = [
   "STANDARD_PROFESSIONAL_ERP",
