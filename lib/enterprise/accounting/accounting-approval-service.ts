@@ -6,6 +6,7 @@ import {
 } from "@/lib/enterprise/approval-assignment";
 import type { EnterpriseFinanceModuleCode } from "@/lib/enterprise/accounting/constants";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
+import { enqueueWebPushNotification } from "@/lib/push/queue";
 
 export const ACCOUNTING_APPROVAL_MODULE_BY_TARGET: Readonly<Record<string, EnterpriseFinanceModuleCode>> = {
   EnterpriseJournalEntry: "FINANCE_ACCOUNTING",
@@ -31,6 +32,24 @@ function mapAssignmentError(error: unknown) {
   if (code === "WRONG_APPROVER" || code === "APPROVER_PERMISSION_DENIED") return new EnterpriseAccountingError("ACCOUNTING_APPROVER_NOT_ALLOWED", 403);
   if (code === "SELF_APPROVAL_FORBIDDEN") return new EnterpriseAccountingError("ACCOUNTING_SELF_APPROVAL_FORBIDDEN", 403);
   return error instanceof Error ? error : new EnterpriseAccountingError("ACCOUNTING_APPROVAL_FAILED", 409);
+}
+
+async function createAccountingApprovalNotification(
+  tx: Prisma.TransactionClient,
+  input: { approvalId: string; organizationId: string; approverUserId: string },
+) {
+  const notification = await tx.notification.create({
+    data: {
+      userId: input.approverUserId,
+      organizationId: input.organizationId,
+      type: "ENTERPRISE_APPROVAL",
+      title: "Validation financière requise",
+      body: "Une opération financière vous a été attribuée et attend votre décision.",
+      targetUrl: `/enterprise-modules/VALIDATIONS?approval=${encodeURIComponent(input.approvalId)}`,
+    },
+  });
+  await enqueueWebPushNotification(tx, { notificationId: notification.id, organizationId: input.organizationId });
+  return notification.id;
 }
 
 export async function assertAccountingApprovalCandidate(input: {
@@ -79,7 +98,7 @@ export async function createAccountingApprovalAssignment(
   });
   if (existing) throw new EnterpriseAccountingError("ACCOUNTING_APPROVAL_ALREADY_PENDING", 409);
 
-  return tx.enterpriseApproval.create({
+  const approval = await tx.enterpriseApproval.create({
     data: {
       organizationId: input.organizationId,
       targetEntityType: input.targetEntityType,
@@ -89,6 +108,14 @@ export async function createAccountingApprovalAssignment(
       status: initialStatus,
     },
   });
+  if (initialStatus === "PENDING") {
+    await createAccountingApprovalNotification(tx, {
+      approvalId: approval.id,
+      organizationId: input.organizationId,
+      approverUserId: input.approverUserId,
+    });
+  }
+  return approval;
 }
 
 export async function activateQueuedAccountingApproval(
@@ -103,7 +130,7 @@ export async function activateQueuedAccountingApproval(
       status: "QUEUED",
       archivedAt: null,
     },
-    select: { id: true, revision: true },
+    select: { id: true, revision: true, approverUserId: true },
   });
   if (!queued) throw new EnterpriseAccountingError("ACCOUNTING_QUEUED_APPROVAL_NOT_FOUND", 409);
   const updated = await tx.enterpriseApproval.updateMany({
@@ -111,6 +138,11 @@ export async function activateQueuedAccountingApproval(
     data: { status: "PENDING", requestedAt: new Date(), revision: { increment: 1 } },
   });
   if (updated.count !== 1) throw new EnterpriseAccountingError("ACCOUNTING_APPROVAL_CONFLICT", 409);
+  await createAccountingApprovalNotification(tx, {
+    approvalId: queued.id,
+    organizationId: input.organizationId,
+    approverUserId: queued.approverUserId,
+  });
   return queued.id;
 }
 
