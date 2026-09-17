@@ -1,4 +1,4 @@
-name: Hotfix #659 cash, guides and business presentation
+name: "Hotfix #659 cash, guides and business presentation"
 
 on:
   workflow_dispatch:
@@ -145,7 +145,7 @@ jobs:
           done
           cat /tmp/dtsc-hotfix-659-next.log
           exit 1
-      - name: Hotfix #659 browser acceptance
+      - name: "Hotfix #659 browser acceptance"
         shell: bash
         run: |
           set -o pipefail
