@@ -78,7 +78,18 @@ test.describe.serial("Hotfix #659 cash validation, canonical guides and business
       },
     });
 
-    for (const [index, moduleCode] of ["FINANCE_TREASURY", "FINANCE_CASH", "VALIDATIONS"].entries()) {
+    for (const [index, moduleCode] of [
+      "CRM_CUSTOMERS",
+      "SALES_QUOTES_ORDERS",
+      "SUPPLIERS_PURCHASES",
+      "FINANCE_OVERVIEW",
+      "FINANCE_RECEIVABLES",
+      "FINANCE_PAYABLES",
+      "FINANCE_TREASURY",
+      "FINANCE_PAYMENTS",
+      "FINANCE_CASH",
+      "VALIDATIONS",
+    ].entries()) {
       await enableModule(moduleCode, index);
     }
 
