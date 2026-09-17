@@ -10,6 +10,45 @@ La hiérarchie de référence reste :
 
 Les migrations ne modifient pas les modèles Prisma, les règles de domaine, les endpoints ni les permissions serveur sauf correction explicitement indispensable et documentée.
 
+## Contrat canonique des workspaces ERP depuis #657
+
+Le registre technique `routeKind` ne suffit pas à décrire l'expérience utilisateur : `DEDICATED_CORE` regroupe plusieurs formes de travail différentes. Le contrat UX autorise désormais exactement cinq archétypes, résolus par `lib/enterprise/workspace-archetypes.ts` :
+
+1. `STANDARD_PROFESSIONAL_ERP` — modules ERP communs, Finance, Health et Pharmacy lorsqu'ils n'ont pas besoin d'un shell transactionnel ou de suite intégrée ;
+2. `INTEGRATED_BUSINESS_SUITE` — suites dont plusieurs codes modules travaillent dans un même moteur avec un focus métier, actuellement Manufacturing et Tailoring ;
+3. `TRANSACTIONAL_WORKSPACE` — opérations temps réel ou de guichet, actuellement Retail et Gaming ;
+4. `ADMINISTRATION_GOVERNANCE` — administration, identité, consentements, rôles, permissions, modules et paramètres ;
+5. `AI_IMMERSIVE` — expérience conversationnelle/agentique de l'IA entreprise.
+
+Un sixième archétype ne peut pas être introduit implicitement par un nouveau composant. Il exige une décision d'architecture explicite, une mise à jour du résolveur, de cette documentation et de la QA transverse.
+
+Ces archétypes ne rendent pas les métiers identiques. Ils uniformisent leur grammaire d'interface. Sauf justification documentée, un workspace ERP utilise les primitives communes :
+
+- `ModuleWorkspace` ;
+- `ModuleHeader` ;
+- `ModuleMetrics` lorsque des indicateurs réels existent ;
+- `ModuleToolbar` ou un contrôle de liste équivalent ;
+- `ModuleContent` ;
+- `ModuleSection` ;
+- `BusinessList` / détail métier / actions contextuelles ;
+- les primitives `professional-erp-ui` pour onglets, recherche, formulaires, aide, chargement, erreurs et mutations lorsque pertinentes.
+
+Les suites Manufacturing/Tailoring, les workspaces transactionnels Retail/Gaming et l'IA immersive restent spécialisés. Leur logique métier ne doit pas être aplatie dans un CRUD générique. Health conserve ses écrans cliniques dédiés et son pont de migration `SectorWorkspaceFrame`, mais ce pont ne doit pas devenir un nouveau shell pour du code neuf.
+
+## Navigation ERP canonique depuis #657
+
+`/modules?group=ORGANIZATION_ERP` est un hub de navigation de haut niveau. Il ne doit pas ré-énumérer le catalogue ERP détaillé. L'entrée publique `Modules ERP` ouvre le catalogue canonique `/enterprise-modules`, qui reste la seule surface de découverte détaillée des modules métier autorisés.
+
+La séparation des responsabilités est :
+
+- `Entreprise & ERP` : navigation de haut niveau ;
+- `Modules ERP` (`/enterprise-modules`) : consulter et ouvrir les modules disponibles ;
+- `Administration entreprise > Modules` : activer, désactiver ou administrer les modules selon les droits ;
+- `Administration entreprise > Abonnement & limites` : consulter les contraintes du plan ;
+- `Offre & abonnement` : gestion commerciale de l'abonnement.
+
+Les deep-links vers un code module restent résolus côté serveur par le registre et les capacités réelles ; retirer le doublon visuel ne doit jamais contourner permissions, secteur, sous-type, dépendances ou abonnement.
+
 ## Ordre de généralisation
 
 1. COO / opérations
@@ -67,6 +106,8 @@ La migration repose sur `EnterpriseModuleWorkspace` et `EnterpriseCoreWorkspace`
 - menus contextuels déclaratifs ;
 - états vides différenciés ;
 - conservation de `ListControls + useSmartList`.
+
+Les workspaces Finance spécialisés peuvent conserver leurs renderers comptables et opérationnels distincts, mais ils appartiennent à l'archétype `STANDARD_PROFESSIONAL_ERP` et doivent converger sur le même shell, les mêmes erreurs lisibles, les mêmes formulaires guidés et les mêmes comportements responsive.
 
 L'isolation `organizationId` et la visibilité créée/demandée/assignée/validée pour les non-managers restent serveur.
 
@@ -135,4 +176,4 @@ La migration UI ne crée aucune permission.
 
 Lorsqu'un ensemble de rôles ou modules partage déjà un moteur de présentation et de mutations, généraliser le composant partagé avant de créer des variantes par rôle.
 
-Une variante métier n'est justifiée que par des différences de données, de workflow ou de permissions réelles.
+Une variante métier n'est justifiée que par des différences de données, de workflow ou de permissions réelles. Une différence purement visuelle n'autorise pas un nouveau shell.
