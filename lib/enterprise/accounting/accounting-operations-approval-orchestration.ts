@@ -208,6 +208,70 @@ export async function submitCashSessionCloseForAssignedValidation(
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
+export async function assignCashSessionApproverRecovery(
+  organizationId: string,
+  sessionId: string,
+  actorUserId: string,
+  input: { revision: number; approverUserId: string },
+) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseCashSession" WHERE id = ${sessionId} AND "organizationId" = ${organizationId} FOR UPDATE`);
+    const session = await tx.enterpriseCashSession.findFirst({
+      where: { id: sessionId, organizationId },
+      select: { id: true, number: true, cashierUserId: true, status: true, revision: true },
+    });
+    if (!session) throw new EnterpriseAccountingError("CASH_SESSION_NOT_FOUND", 404);
+    if (session.status !== "PENDING_VALIDATION" || session.revision !== input.revision) {
+      throw new EnterpriseAccountingError("CASH_SESSION_CONFLICT", 409);
+    }
+
+    const existingApproval = await tx.enterpriseApproval.findFirst({
+      where: {
+        organizationId,
+        targetEntityType: "EnterpriseCashSession",
+        targetEntityId: session.id,
+        status: { in: ["PENDING", "QUEUED"] },
+        archivedAt: null,
+      },
+      select: { id: true, approverUserId: true },
+    });
+    if (existingApproval) {
+      throw new EnterpriseAccountingError("ACCOUNTING_APPROVAL_ALREADY_PENDING", 409, {
+        targetEntityType: "EnterpriseCashSession",
+        targetEntityId: session.id,
+      });
+    }
+
+    const approval = await createAccountingApprovalAssignment(tx, {
+      organizationId,
+      targetEntityType: "EnterpriseCashSession",
+      targetEntityId: session.id,
+      requesterUserId: session.cashierUserId,
+      approverUserId: input.approverUserId,
+    });
+    const updated = await tx.enterpriseCashSession.update({
+      where: { id: session.id },
+      data: { revision: { increment: 1 } },
+    });
+    await publishFinanceEvent(tx, {
+      organizationId,
+      entityType: "EnterpriseCashSession",
+      entityId: session.id,
+      eventType: "CASH_SESSION_APPROVER_ASSIGNED",
+      summary: `Cash session ${session.number} approver assigned`,
+      actorUserId,
+      fromStatus: "PENDING_VALIDATION",
+      toStatus: "PENDING_VALIDATION",
+      metadataJson: {
+        approvalId: approval.id,
+        approverUserId: input.approverUserId,
+        recovery: true,
+      },
+    });
+    return { session: updated, approval };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
 export async function validateCashSessionAssignedApproval(
   organizationId: string,
   sessionId: string,
