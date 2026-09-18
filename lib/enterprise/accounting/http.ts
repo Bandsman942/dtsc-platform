@@ -101,6 +101,14 @@ const FINANCE_ERROR_MESSAGES: Record<string, string> = {
   TRANSFER_SELF_APPROVAL_FORBIDDEN: "L’auto-validation n’est pas autorisée pour ce transfert. Un administrateur entreprise peut l’autoriser uniquement lorsqu’aucun autre validateur n’est disponible.",
   TRANSFER_APPROVAL_CONFLICT: "La validation de ce transfert a changé entre-temps. Rechargez les données avant de recommencer.",
   TRANSFER_CONFLICT: "Ce transfert a changé entre-temps. Rechargez les données avant de recommencer.",
+  CASH_SESSION_NOT_FOUND: "Cette session de caisse n’existe pas dans cette entreprise.",
+  CASH_SESSION_CONFLICT: "Cette caisse a changé entre-temps. Rechargez les données avant de recommencer.",
+  ACCOUNTING_APPROVER_NOT_ELIGIBLE: "Le validateur sélectionné n’est plus autorisé pour cette clôture. Choisissez un validateur proposé par DTSC.",
+  ACCOUNTING_APPROVAL_NOT_ASSIGNED: "Aucun validateur n’est encore affecté à cette clôture. Affectez-en un avant de prendre une décision.",
+  ACCOUNTING_APPROVAL_ALREADY_PENDING: "Cette clôture possède déjà un validateur actif. Rechargez les données pour voir l’affectation actuelle.",
+  ACCOUNTING_APPROVER_NOT_ALLOWED: "Cette clôture est affectée à un autre validateur autorisé.",
+  ACCOUNTING_SELF_APPROVAL_FORBIDDEN: "L’auto-validation n’est pas autorisée pour cette clôture. Choisissez un autre validateur autorisé.",
+  CASH_SESSION_APPROVER_ASSIGNMENT_FAILED: "Le validateur n’a pas pu être affecté à cette clôture. Rechargez les données puis réessayez.",
   FINANCE_DUPLICATE: "Une donnée identique existe déjà dans cette entreprise.",
 };
 
