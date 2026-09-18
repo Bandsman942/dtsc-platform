@@ -64,9 +64,9 @@ expect(hasAll(financeRouter, ['definition.code === "FINANCE_CASH"', "EnterpriseF
 expect(hasAll(operationalFinanceRouter, [
   'props.definition.code === "FINANCE_CASH"',
   "<EnterpriseFinanceCashWorkspace {...props} />",
-  "EnterpriseFinanceCashBankReconciliationWorkspace",
-]), "dispatcher Finance opérationnelle branche réellement Caisse sur le workspace spécialisé");
-expect(!operationalFinanceRouter.includes("EnterpriseFinanceCashBankReconciliationWorkspaceHotfix"), "dispatcher Finance opérationnelle ne réactive plus l’ancien wrapper combiné");
+  "EnterpriseFinanceCashBankReconciliationWorkspaceHotfix",
+  '["FINANCE_BANK", "FINANCE_RECONCILIATION"]',
+]), "dispatcher Finance opérationnelle branche réellement Caisse sur le workspace spécialisé tout en conservant le hotfix Banque/Rapprochement");
 expect(hasAll(cashCollectionRoute, ["movements: { select: { direction: true, amount: true } }", "expectedCurrentAmount", "theoreticalClosingAmount: item.expectedClosingAmount ?? expectedCurrentAmount"]), "la caisse ouverte expose un théorique courant calculé depuis les mouvements serveur");
 
 expect(hasAll(accountingApproval, [
