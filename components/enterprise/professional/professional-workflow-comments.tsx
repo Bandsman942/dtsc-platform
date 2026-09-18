@@ -99,7 +99,7 @@ export function ProfessionalWorkflowComments({ endpoint, title, description, col
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <h3 id={titleId} className="text-base font-black text-dtsc-ink sm:text-lg">{title ?? t("workflow.title")}</h3>
+          <span id={titleId} className="text-base font-black text-dtsc-ink sm:text-lg">{title ?? t("workflow.title")}</span>
           {!loading ? <span className="rounded-full bg-dtsc-soft px-2 py-0.5 text-xs font-black text-dtsc-muted">{comments.length}</span> : null}
         </div>
         <p className="mt-1 text-sm leading-6 text-dtsc-muted">{description ?? t("workflow.description")}</p>
