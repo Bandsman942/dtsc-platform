@@ -7,6 +7,10 @@ import { prisma } from "@/lib/prisma";
 const ENTITY_MODULE = {
   EnterpriseSalesInvoice: "FINANCE_RECEIVABLES",
   EnterpriseSupplierInvoice: "FINANCE_PAYABLES",
+  EnterpriseSalesCreditNote: "FINANCE_RECEIVABLES",
+  EnterpriseSupplierCreditNote: "FINANCE_PAYABLES",
+  EnterpriseReceivable: "FINANCE_RECEIVABLES",
+  EnterprisePayable: "FINANCE_PAYABLES",
   EnterprisePayment: "FINANCE_PAYMENTS",
   EnterpriseFinancialAccount: "FINANCE_TREASURY",
   EnterpriseCashSession: "FINANCE_CASH",
@@ -30,6 +34,14 @@ async function financeEntityExists(organizationId: string, entityType: FinanceEn
       return Boolean(await prisma.enterpriseSalesInvoice.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
     case "EnterpriseSupplierInvoice":
       return Boolean(await prisma.enterpriseSupplierInvoice.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
+    case "EnterpriseSalesCreditNote":
+      return Boolean(await prisma.enterpriseSalesCreditNote.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
+    case "EnterpriseSupplierCreditNote":
+      return Boolean(await prisma.enterpriseSupplierCreditNote.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
+    case "EnterpriseReceivable":
+      return Boolean(await prisma.enterpriseReceivable.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
+    case "EnterprisePayable":
+      return Boolean(await prisma.enterprisePayable.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
     case "EnterprisePayment":
       return Boolean(await prisma.enterprisePayment.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
     case "EnterpriseFinancialAccount":

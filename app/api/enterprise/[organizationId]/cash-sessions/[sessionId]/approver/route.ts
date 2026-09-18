@@ -5,7 +5,7 @@ import { assignCashSessionApproverRecovery } from "@/lib/enterprise/accounting/a
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { listEnterpriseApprovalCandidates } from "@/lib/enterprise/approval-assignment";
 import { prisma } from "@/lib/prisma";
-import { authorizeFinanceRequest, financeErrorResponse } from "@/lib/enterprise/accounting/http";
+import { authorizeFinanceRequest, financeErrorResponse, financeValidationErrorResponse } from "@/lib/enterprise/accounting/http";
 
 type Params = { params: Promise<{ organizationId: string; sessionId: string }> };
 
@@ -60,12 +60,7 @@ export async function POST(req: Request, { params }: Params) {
   if (!auth.ok) return auth.response;
 
   const parsed = assignCashSessionApproverSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: "Invalid payload", message: parsed.error.issues[0]?.message || "Sélectionnez un validateur autorisé puis réessayez." },
-      { status: 400 },
-    );
-  }
+  if (!parsed.success) return financeValidationErrorResponse(parsed.error);
 
   try {
     const result = await assignCashSessionApproverRecovery(

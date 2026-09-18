@@ -5,7 +5,7 @@ import {
   decideOpeningBalanceAssignedApproval,
   submitOpeningBalanceForAssignedApproval,
 } from "@/lib/enterprise/accounting/accounting-document-approval-orchestration";
-import { authorizeFinanceRequest, financeErrorResponse } from "@/lib/enterprise/accounting/http";
+import { authorizeFinanceRequest, financeErrorResponse, financeValidationErrorResponse } from "@/lib/enterprise/accounting/http";
 
 type Params = { params: Promise<{ organizationId: string; openingId: string }> };
 
@@ -13,7 +13,7 @@ export async function POST(req: Request, { params }: Params) {
   const startedAt = Date.now();
   const { organizationId, openingId } = await params;
   const parsed = assignedDocumentTransitionSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) return financeValidationErrorResponse(parsed.error);
   const permissionAction = parsed.data.action === "SUBMIT" ? "submit" : "approve";
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_ACCOUNTING", permissionAction, { mutation: true, limit: 30 });
   if (!auth.ok) return auth.response;

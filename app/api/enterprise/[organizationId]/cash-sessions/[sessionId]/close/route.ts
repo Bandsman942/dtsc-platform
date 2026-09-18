@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { authorizeFinanceRequest, financeErrorResponse } from "@/lib/enterprise/accounting/http";
+import { authorizeFinanceRequest, financeErrorResponse, financeValidationErrorResponse } from "@/lib/enterprise/accounting/http";
 import { submitCashSessionCloseForAssignedValidation } from "@/lib/enterprise/accounting/accounting-operations-approval-orchestration";
 import { assignedCashCloseSchema } from "@/lib/enterprise/accounting/accounting-approval-schemas";
 
@@ -12,7 +12,7 @@ export async function POST(req: Request, { params }: Params) {
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_CASH", "close", { mutation: true, limit: 30 });
   if (!auth.ok) return auth.response;
   const parsed = assignedCashCloseSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) return financeValidationErrorResponse(parsed.error);
   try {
     const session = await submitCashSessionCloseForAssignedValidation(organizationId, sessionId, auth.session.userId, parsed.data);
     await writeAuditLog({

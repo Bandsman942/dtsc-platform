@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { ZodError } from "zod";
 import { getSession } from "@/lib/auth";
 import { getEnterpriseAccountingAccess } from "@/lib/enterprise/accounting/access";
 import type { EnterpriseFinanceAction, EnterpriseFinanceModuleCode } from "@/lib/enterprise/accounting/constants";
@@ -8,6 +9,22 @@ import { isSameOriginRequest } from "@/lib/request-security";
 
 const FINANCE_ERROR_MESSAGES: Record<string, string> = {
   FINANCE_PERIOD_CLOSED: "Cette période financière est fermée. Choisissez une période ouverte ou demandez une réouverture autorisée.",
+  FINANCE_INPUT_INVALID: "Certaines informations sont invalides ou incomplètes. Corrigez les champs signalés puis réessayez.",
+  FINANCE_DECISION_REASON_TOO_SHORT: "Le motif de cette décision doit contenir au moins 4 caractères.",
+  FINANCE_DECISION_REASON_TOO_LONG: "Le motif de cette décision ne peut pas dépasser 1 000 caractères.",
+  PAYMENT_NOT_FOUND: "Ce paiement n’existe pas ou n’est plus disponible dans cette entreprise.",
+  PAYMENT_REVISION_CONFLICT: "Ce paiement a changé entre-temps. Actualisez les données avant de réessayer.",
+  PAYMENT_TRANSITION_INVALID: "Cette action n’est pas autorisée dans l’état actuel du paiement. Actualisez le paiement puis vérifiez son statut.",
+  PAYMENT_SUBMITTER_MISMATCH: "Seule la personne qui a préparé ce paiement peut le soumettre à validation.",
+  PAYMENT_CANCEL_ACTOR_FORBIDDEN: "Seule la personne qui a préparé ce paiement peut l’annuler tant qu’il est en cours de validation.",
+  SALES_INVOICE_NOT_FOUND: "Cette facture client n’existe pas ou n’est plus disponible dans cette entreprise.",
+  SALES_INVOICE_REVISION_CONFLICT: "Cette facture client a changé entre-temps. Actualisez les données avant de réessayer.",
+  SALES_INVOICE_TRANSITION_INVALID: "Cette action n’est pas autorisée dans l’état actuel de la facture. Actualisez la facture puis vérifiez son statut.",
+  SALES_INVOICE_SUBMITTER_MISMATCH: "Seule la personne qui a préparé cette facture peut la soumettre à validation.",
+  CASH_REJECTION_REASON_REQUIRED: "Indiquez un motif de refus d’au moins 4 caractères.",
+  CASH_COUNT_TOTAL_MISMATCH: "Le total du comptage physique ne correspond pas au montant de clôture saisi. Vérifiez les coupures et quantités.",
+  CASH_DISCREPANCY_REASON_REQUIRED: "Un motif est obligatoire lorsqu’un écart de caisse est constaté.",
+  ACCOUNTING_APPROVAL_CONFLICT: "Cette validation a déjà changé. Actualisez les données avant de prendre une nouvelle décision.",
   JOURNAL_ENTRY_UNBALANCED: "Le total des débits doit être égal au total des crédits avant la comptabilisation.",
   POSTING_RULE_NOT_FOUND: "Aucune règle comptable active ne correspond à cette opération. Vérifiez la configuration Finance.",
   POSTING_MAPPING_MISSING: "Un compte comptable requis n’est pas configuré pour cette opération.",
@@ -112,6 +129,35 @@ const FINANCE_ERROR_MESSAGES: Record<string, string> = {
   FINANCE_DUPLICATE: "Une donnée identique existe déjà dans cette entreprise.",
 };
 
+function financeServerErrorMessage(code: string) {
+  if (FINANCE_ERROR_MESSAGES[code]) return FINANCE_ERROR_MESSAGES[code];
+  if (code.includes("REVISION_CONFLICT") || code.endsWith("_CONFLICT")) {
+    return "Cette opération a changé entre-temps. Actualisez les données avant de réessayer.";
+  }
+  if (code.includes("TRANSITION_INVALID") || code.endsWith("_NOT_SUBMITTED")) {
+    return "Cette action n’est pas autorisée dans l’état actuel de l’opération. Actualisez les données puis vérifiez son statut.";
+  }
+  if (code.includes("SUBMITTER_MISMATCH")) {
+    return "Seule la personne qui a préparé cette opération peut la soumettre à l’étape suivante.";
+  }
+  if (code.includes("REJECTION_REASON_REQUIRED")) {
+    return "Indiquez un motif de refus d’au moins 4 caractères.";
+  }
+  if (code.endsWith("_NOT_FOUND")) {
+    return "L’élément financier demandé est introuvable ou n’est plus disponible.";
+  }
+  if (code.includes("FORBIDDEN")) {
+    return "Vous ne disposez pas de l’autorisation nécessaire pour cette action.";
+  }
+  if (code.includes("REQUIRED")) {
+    return "Une information ou une configuration requise manque pour terminer cette opération.";
+  }
+  if (code.includes("INVALID")) {
+    return "Certaines informations de cette opération sont invalides ou ne correspondent plus à son contexte.";
+  }
+  return "L’opération financière n’a pas pu être terminée. Vérifiez les données et le statut de l’opération.";
+}
+
 export async function authorizeFinanceRequest(
   req: Request,
   organizationId: string,
@@ -129,13 +175,35 @@ export async function authorizeFinanceRequest(
   return { ok: true as const, session, access };
 }
 
+export function financeValidationErrorResponse(error: ZodError, fallbackCode = "FINANCE_INPUT_INVALID") {
+  const firstIssue = error.issues[0];
+  const field = firstIssue?.path?.length ? String(firstIssue.path[0]) : undefined;
+  const reasonTooShort = field === "reason" && (
+    firstIssue?.code === "invalid_type"
+    || firstIssue?.code === "too_small"
+    || firstIssue?.code === "custom"
+  );
+  const reasonTooLong = field === "reason" && firstIssue?.code === "too_big";
+  const code = reasonTooLong
+    ? "FINANCE_DECISION_REASON_TOO_LONG"
+    : reasonTooShort
+      ? "FINANCE_DECISION_REASON_TOO_SHORT"
+      : fallbackCode;
+  const message = FINANCE_ERROR_MESSAGES[code] || FINANCE_ERROR_MESSAGES.FINANCE_INPUT_INVALID;
+  const fieldErrors = error.issues.slice(0, 12).map((issue) => ({
+    field: issue.path.length ? issue.path.map(String).join(".") : "form",
+    validation: issue.code,
+  }));
+  return NextResponse.json({ error: code, message, details: { fieldErrors } }, { status: 400 });
+}
+
 export function financeErrorResponse(error: unknown, fallback = "FINANCE_OPERATION_FAILED") {
   if (error instanceof EnterpriseAccountingError) {
-    return NextResponse.json({ error: error.code, message: FINANCE_ERROR_MESSAGES[error.code] || "L’opération financière n’a pas pu être terminée. Vérifiez les données et le statut de la période.", details: error.details }, { status: error.status });
+    return NextResponse.json({ error: error.code, message: financeServerErrorMessage(error.code), details: error.details }, { status: error.status });
   }
   if (error && typeof error === "object" && "code" in error && error.code === "P2002") return NextResponse.json({ error: "FINANCE_DUPLICATE", message: FINANCE_ERROR_MESSAGES.FINANCE_DUPLICATE }, { status: 409 });
   console.error(fallback, error);
-  return NextResponse.json({ error: fallback, message: FINANCE_ERROR_MESSAGES[fallback] || "Une erreur interne a empêché l’opération financière. Aucune donnée comptable ne doit être considérée comme validée." }, { status: 500 });
+  return NextResponse.json({ error: fallback, message: financeServerErrorMessage(fallback), details: undefined }, { status: 500 });
 }
 
 export function financeListParams(req: Request) {

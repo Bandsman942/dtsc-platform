@@ -74,6 +74,24 @@ const ENUM_LABELS: Record<FinanceLocale, Record<string, string>> = {
 export const FINANCE_ERROR_MESSAGES: Record<FinanceLocale, Record<string, string>> = {
   fr: {
     PAYMENT_ALLOCATION_EXCEEDS_UNALLOCATED: "Le montant affecté dépasse la partie encore disponible de ce paiement.",
+    FINANCE_INPUT_INVALID: "Certaines informations sont invalides ou incomplètes. Corrigez les champs signalés puis réessayez.",
+    FINANCE_DECISION_REASON_TOO_SHORT: "Le motif de cette décision doit contenir au moins 4 caractères.",
+    FINANCE_DECISION_REASON_TOO_LONG: "Le motif de cette décision ne peut pas dépasser 1 000 caractères.",
+    PAYMENT_NOT_FOUND: "Ce paiement n’existe pas ou n’est plus disponible dans cette entreprise.",
+    PAYMENT_REVISION_CONFLICT: "Ce paiement a changé entre-temps. Actualisez les données avant de réessayer.",
+    PAYMENT_TRANSITION_INVALID: "Cette action n’est pas autorisée dans l’état actuel du paiement. Actualisez le paiement puis vérifiez son statut.",
+    PAYMENT_SUBMITTER_MISMATCH: "Seule la personne qui a préparé ce paiement peut le soumettre à validation.",
+    PAYMENT_CANCEL_ACTOR_FORBIDDEN: "Seule la personne qui a préparé ce paiement peut l’annuler tant qu’il est en cours de validation.",
+    SALES_INVOICE_NOT_FOUND: "Cette facture client n’existe pas ou n’est plus disponible dans cette entreprise.",
+    SALES_INVOICE_REVISION_CONFLICT: "Cette facture client a changé entre-temps. Actualisez les données avant de réessayer.",
+    SALES_INVOICE_TRANSITION_INVALID: "Cette action n’est pas autorisée dans l’état actuel de la facture. Actualisez la facture puis vérifiez son statut.",
+    SALES_INVOICE_SUBMITTER_MISMATCH: "Seule la personne qui a préparé cette facture peut la soumettre à validation.",
+    CASH_SESSION_NOT_FOUND: "Cette session de caisse n’existe pas ou n’est plus disponible.",
+    CASH_SESSION_CONFLICT: "Cette caisse a changé entre-temps. Actualisez les données avant de réessayer.",
+    CASH_REJECTION_REASON_REQUIRED: "Indiquez un motif de refus d’au moins 4 caractères.",
+    CASH_COUNT_TOTAL_MISMATCH: "Le total du comptage physique ne correspond pas au montant de clôture saisi.",
+    CASH_DISCREPANCY_REASON_REQUIRED: "Un motif est obligatoire lorsqu’un écart de caisse est constaté.",
+    ACCOUNTING_APPROVAL_CONFLICT: "Cette validation a déjà changé. Actualisez les données avant de prendre une nouvelle décision.",
     FINANCE_PERIOD_CLOSED: "Cette période financière est fermée. Choisissez une période ouverte ou demandez une réouverture autorisée.",
     SELF_APPROVAL_FORBIDDEN: "Une autre personne autorisée doit approuver cette opération.",
     ACCOUNTING_SELF_APPROVAL_FORBIDDEN: "Vous ne pouvez pas valider votre propre opération. Affectez-la à une autre personne autorisée.",
@@ -131,6 +149,24 @@ export const FINANCE_ERROR_MESSAGES: Record<FinanceLocale, Record<string, string
   },
   en: {
     PAYMENT_ALLOCATION_EXCEEDS_UNALLOCATED: "The allocated amount exceeds the remaining available payment amount.",
+    FINANCE_INPUT_INVALID: "Some information is invalid or incomplete. Correct the highlighted fields and try again.",
+    FINANCE_DECISION_REASON_TOO_SHORT: "The reason for this decision must contain at least 4 characters.",
+    FINANCE_DECISION_REASON_TOO_LONG: "The reason for this decision cannot exceed 1,000 characters.",
+    PAYMENT_NOT_FOUND: "This payment does not exist or is no longer available in this company.",
+    PAYMENT_REVISION_CONFLICT: "This payment changed in the meantime. Refresh the data before trying again.",
+    PAYMENT_TRANSITION_INVALID: "This action is not allowed in the payment’s current state. Refresh the payment and check its status.",
+    PAYMENT_SUBMITTER_MISMATCH: "Only the person who prepared this payment can submit it for approval.",
+    PAYMENT_CANCEL_ACTOR_FORBIDDEN: "Only the person who prepared this payment can cancel it while approval is pending.",
+    SALES_INVOICE_NOT_FOUND: "This customer invoice does not exist or is no longer available in this company.",
+    SALES_INVOICE_REVISION_CONFLICT: "This customer invoice changed in the meantime. Refresh the data before trying again.",
+    SALES_INVOICE_TRANSITION_INVALID: "This action is not allowed in the invoice’s current state. Refresh the invoice and check its status.",
+    SALES_INVOICE_SUBMITTER_MISMATCH: "Only the person who prepared this invoice can submit it for approval.",
+    CASH_SESSION_NOT_FOUND: "This cash session does not exist or is no longer available.",
+    CASH_SESSION_CONFLICT: "This cash session changed in the meantime. Refresh the data before trying again.",
+    CASH_REJECTION_REASON_REQUIRED: "Enter a rejection reason with at least 4 characters.",
+    CASH_COUNT_TOTAL_MISMATCH: "The physical cash count does not match the closing amount entered.",
+    CASH_DISCREPANCY_REASON_REQUIRED: "A reason is required when a cash discrepancy exists.",
+    ACCOUNTING_APPROVAL_CONFLICT: "This approval changed in the meantime. Refresh the data before deciding again.",
     FINANCE_PERIOD_CLOSED: "This finance period is closed. Choose an open period or request an authorized reopening.",
     SELF_APPROVAL_FORBIDDEN: "Another authorized person must approve this operation.",
     ACCOUNTING_SELF_APPROVAL_FORBIDDEN: "You cannot approve your own operation. Assign it to another authorized person.",
@@ -249,19 +285,33 @@ function extractFinanceErrorCode(error: unknown): string | null {
   return null;
 }
 
+function extractSafeFinanceClientMessage(error: unknown) {
+  if (!error || typeof error !== "object") return null;
+  const value = error as { name?: unknown; clientMessage?: unknown };
+  if (value.name !== "FinanceApiError" || typeof value.clientMessage !== "string") return null;
+  const message = value.clientMessage.trim();
+  return message.length > 0 && message.length <= 1200 ? message : null;
+}
+
 export function financeErrorMessage(error: unknown, locale?: FinanceLocale, fallback?: string) {
   const resolvedLocale = financeClientLocale(locale);
   const code = extractFinanceErrorCode(error);
   if (code && FINANCE_ERROR_MESSAGES[resolvedLocale][code]) return FINANCE_ERROR_MESSAGES[resolvedLocale][code];
   if (code?.includes("REVISION_CONFLICT") || code?.endsWith("_CONFLICT")) return resolvedLocale === "fr" ? "Cette donnée a changé entre-temps. Actualisez la page avant de réessayer." : "This record changed in the meantime. Refresh the page before trying again.";
+  if (code?.includes("TRANSITION_INVALID") || code?.endsWith("_NOT_SUBMITTED")) return resolvedLocale === "fr" ? "Cette action n’est pas autorisée dans l’état actuel de l’opération. Actualisez les données puis vérifiez son statut." : "This action is not allowed in the operation’s current state. Refresh the data and check its status.";
+  if (code?.includes("SUBMITTER_MISMATCH")) return resolvedLocale === "fr" ? "Seule la personne qui a préparé cette opération peut la soumettre à l’étape suivante." : "Only the person who prepared this operation can submit it to the next step.";
+  if (code?.includes("REJECTION_REASON_REQUIRED")) return resolvedLocale === "fr" ? "Indiquez un motif de refus d’au moins 4 caractères." : "Enter a rejection reason with at least 4 characters.";
   if (code?.includes("SELF_APPROVAL_FORBIDDEN")) return resolvedLocale === "fr" ? "Une autre personne autorisée doit valider cette opération." : "Another authorized person must validate this operation.";
   if (code?.includes("PERIOD_CLOSED") || code?.includes("PERIOD_LOCKED")) return resolvedLocale === "fr" ? "La période choisie est fermée. Utilisez une période ouverte ou demandez une réouverture autorisée." : "The selected period is closed. Use an open period or request an authorized reopening.";
   if (code?.includes("MAPPING") && (code.includes("MISSING") || code.includes("NOT_FOUND"))) return resolvedLocale === "fr" ? "La configuration comptable de cette opération est incomplète. Complétez les comptes associés puis réessayez." : "The accounting setup for this operation is incomplete. Complete the related accounts and try again.";
   if (code?.endsWith("_NOT_FOUND")) return resolvedLocale === "fr" ? "L’élément financier demandé est introuvable ou n’est plus disponible." : "The requested finance record could not be found or is no longer available.";
   if (code?.includes("NOT_POSTABLE") || code?.includes("NOT_ELIGIBLE")) return resolvedLocale === "fr" ? "Cette opération n’est pas encore dans un état permettant sa comptabilisation." : "This operation is not yet in a state that allows posting.";
+  const safeServerMessage = extractSafeFinanceClientMessage(error);
+  if (resolvedLocale === "fr" && safeServerMessage) return safeServerMessage;
   if (code?.includes("REQUIRED")) return resolvedLocale === "fr" ? "Une information ou une configuration requise manque pour terminer cette opération." : "Required information or configuration is missing to complete this operation.";
   if (code?.includes("FORBIDDEN") || code === "FORBIDDEN" || code === "UNAUTHORIZED") return resolvedLocale === "fr" ? "Vous ne disposez pas de l’autorisation nécessaire pour cette action." : "You do not have the permission required for this action.";
   if (code?.includes("INVALID") || code === "INVALID_PAYLOAD") return resolvedLocale === "fr" ? "Certaines informations saisies sont à corriger avant de continuer." : "Some entered information must be corrected before continuing.";
+  if (resolvedLocale === "en" && safeServerMessage && /\b(the|this|that|cannot|must|missing|required|invalid|failed|not|only|select|choose|enter|refresh)\b/i.test(safeServerMessage)) return safeServerMessage;
   if (fallback) return fallback;
   return resolvedLocale === "fr" ? "L’opération financière n’a pas pu être terminée. Vérifiez les informations puis réessayez." : "The finance operation could not be completed. Review the information and try again.";
 }

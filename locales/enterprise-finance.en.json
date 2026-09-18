@@ -556,5 +556,15 @@
   "cashApproverRecoveryHelp": "Select an authorized Finance approver. The count, variance, and audit history of this till will remain unchanged.",
   "confirmCashApproverAssignment": "Confirm assignment",
   "cashApproverAssigned": "The approver has been assigned. The close is now available in the approval queue.",
-  "cashApproverAssignmentFailed": "Unable to assign an approver to this close."
+  "cashApproverAssignmentFailed": "Unable to assign an approver to this close.",
+  "financeCollaborationTitle": "Documents and collaboration",
+  "financialDocuments": "Financial documents",
+  "financialDocumentsDescription": "Keep private, versioned supporting documents linked to this operation in one place.",
+  "financialDocumentsPrivacy": "Private storage · controlled access",
+  "viewLinkedDocuments": "View documents",
+  "addLinkedDocument": "Add document",
+  "financeConversation": "Finance conversation",
+  "financeConversationDescription": "Exchange clarifications, correction requests and explanations without mixing these messages with structured workflow decisions.",
+  "decisionCommentOptionalHint": "Optional comment for an approval. A reason of at least 4 characters is required for a rejection or sensitive cancellation.",
+  "rejectionReasonMinimumHint": "Reason required: at least 4 characters."
 }

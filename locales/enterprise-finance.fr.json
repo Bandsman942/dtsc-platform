@@ -556,5 +556,15 @@
   "cashApproverRecoveryHelp": "Choisissez un validateur Finance autorisé. Le comptage, l’écart et l’historique de cette caisse resteront inchangés.",
   "confirmCashApproverAssignment": "Confirmer l’affectation",
   "cashApproverAssigned": "Le validateur a été affecté. La clôture est maintenant disponible dans la file des validations.",
-  "cashApproverAssignmentFailed": "Impossible d’affecter le validateur à cette clôture."
+  "cashApproverAssignmentFailed": "Impossible d’affecter le validateur à cette clôture.",
+  "financeCollaborationTitle": "Documents et collaboration",
+  "financialDocuments": "Documents financiers",
+  "financialDocumentsDescription": "Centralisez les justificatifs privés, versionnés et reliés à cette opération.",
+  "financialDocumentsPrivacy": "Stockage privé · accès contrôlé",
+  "viewLinkedDocuments": "Voir les documents",
+  "addLinkedDocument": "Ajouter un document",
+  "financeConversation": "Conversation financière",
+  "financeConversationDescription": "Échangez des précisions, demandes de correction et justifications sans mélanger ces messages avec les décisions structurées du workflow.",
+  "decisionCommentOptionalHint": "Commentaire facultatif pour une approbation. Un motif d’au moins 4 caractères est obligatoire pour un refus ou une annulation sensible.",
+  "rejectionReasonMinimumHint": "Motif obligatoire : au moins 4 caractères."
 }

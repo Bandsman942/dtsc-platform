@@ -263,6 +263,7 @@ export function EnterpriseFinanceInvoicesWorkspaceHotfix(props: Props) {
   const pendingCount = isReceivables ? summary?.pendingApprovalCount || 0 : summary?.pendingDecisionCount || 0;
   const detailKind: "invoice" | "credit" = endpointName.includes("credit-notes") || Boolean(detail?.creditDate) ? "credit" : "invoice";
   const detailHasWorkflow = detailKind === "credit" || endpointName.includes("invoices");
+  const actionRequiresReason = Boolean(actionTarget && ["REJECT", "CANCEL", "VOID"].includes(actionTarget.action));
 
   return <ModuleWorkspace>
     <ModuleHeader
@@ -354,7 +355,7 @@ export function EnterpriseFinanceInvoicesWorkspaceHotfix(props: Props) {
         {actionTarget.action === "SUBMIT" && actionTarget.kind === "invoice" && isReceivables && canSubmit ? <EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_RECEIVABLES" locale={rawLocale} /> : null}
         {actionTarget.action === "SUBMIT" && actionTarget.kind === "invoice" && !isReceivables && canSubmit ? <><EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_PAYABLES" locale={rawLocale} name="reviewerUserId" label={locale === "en" ? "Reviewer" : "Responsable de revue"} /><EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_PAYABLES" locale={rawLocale} name="approverUserId" label={locale === "en" ? "Final approver" : "Approbateur final"} /></> : null}
         {actionTarget.action === "SUBMIT" && actionTarget.kind === "credit" ? <EnterpriseApproverSelect organizationId={organizationId} moduleCode={moduleCode} locale={rawLocale} /> : null}
-        {actionTarget.action !== "POST" && actionTarget.action !== "ISSUE" ? <Field label={t("decisionReasonComment")}><textarea name="reason" rows={4} minLength={actionTarget.action === "REJECT" ? 4 : undefined} required={actionTarget.action === "REJECT"} disabled={busy} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 disabled:opacity-60" /></Field> : null}
+        {actionTarget.action !== "POST" && actionTarget.action !== "ISSUE" ? <Field label={t("decisionReasonComment")}><textarea name="reason" rows={4} minLength={actionRequiresReason ? 4 : undefined} required={actionRequiresReason} disabled={busy} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 disabled:opacity-60" /><p className="mt-2 text-xs leading-5 text-dtsc-muted">{t(actionRequiresReason ? "rejectionReasonMinimumHint" : "decisionCommentOptionalHint")}</p></Field> : null}
         <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => setActionTarget(null)}>{t("cancel")}</Button><Button type="submit" disabled={busy || (actionTarget.action === "APPROVE" && !canApprove) || (["POST", "ISSUE"].includes(actionTarget.action) && !canManage)}>{busy ? (locale === "en" ? "Processing…" : "Traitement…") : t("confirmAction")}</Button></div>
       </form> : null}
     </Dialog>

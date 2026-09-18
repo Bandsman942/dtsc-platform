@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Eye, FileUp, RefreshCcw } from "lucide-react";
+import { ChevronDown, Eye, FilePlus2, FolderOpen, RefreshCcw } from "lucide-react";
 import { ProfessionalWorkflowComments } from "@/components/enterprise/professional/professional-workflow-comments";
 import { Button } from "@/components/ui/button";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { EmptyState } from "@/components/workspace/empty-state";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import { financeDate, financeEnumLabel, financeMoney, financeStatusLabel, financeStatusTone, safeFinanceError, type FinanceLocale } from "@/components/enterprise/professional/finance-professional-ui";
+import { translateEnterpriseFinance, type EnterpriseFinanceKey } from "@/lib/i18n";
 
 export type FinancePagination = { page: number; pageSize: number; total: number; pageCount: number };
 export type FinanceRecord = {
@@ -38,8 +39,24 @@ export type BankStatementLookup = { id: string; reference: string; currencyCode:
 
 const EMPTY_LOOKUPS: FinanceOperationalLookups = { parties: [], suppliers: [], members: [], sites: [], employees: [], payrollPeriods: [], projects: [] };
 
-function apiError(body: { error?: string } | null, fallbackCode = "FINANCE_OPERATION_FAILED") {
-  return new Error(body?.error || fallbackCode);
+function apiError(
+  body: { error?: string; message?: string; details?: unknown } | null,
+  fallbackCode = "FINANCE_OPERATION_FAILED",
+  status = 500,
+) {
+  const code = body?.error || fallbackCode;
+  const error = new Error(code) as Error & {
+    code: string;
+    clientMessage: string | null;
+    details: unknown;
+    status: number;
+  };
+  error.name = "FinanceApiError";
+  error.code = code;
+  error.clientMessage = typeof body?.message === "string" && body.message.trim() ? body.message.trim() : null;
+  error.details = body?.details;
+  error.status = status;
+  return error;
 }
 
 export function useFinanceCollection<T extends FinanceRecord>({ endpoint, page, pageSize = 25, search, status, refreshKey }: { endpoint: string; page: number; pageSize?: number; search?: string; status?: string; refreshKey: number }) {
@@ -60,7 +77,7 @@ export function useFinanceCollection<T extends FinanceRecord>({ endpoint, page, 
     try {
       const response = await fetch(`${endpoint}?${query}`, { cache: "no-store" });
       const body = await response.json().catch(() => null) as FinanceCollectionPayload<T> | null;
-      if (!response.ok || !body?.items || !body.pagination) throw apiError(body, "FINANCE_COLLECTION_READ_FAILED");
+      if (!response.ok || !body?.items || !body.pagination) throw apiError(body, "FINANCE_COLLECTION_READ_FAILED", response.status);
       setItems(body.items); setPagination(body.pagination); setMetrics(body.metrics || {});
     } catch (loadError) {
       setItems([]);
@@ -73,8 +90,8 @@ export function useFinanceCollection<T extends FinanceRecord>({ endpoint, page, 
 
 async function readCollection<T>(endpoint: string): Promise<T[]> {
   const response = await fetch(endpoint, { cache: "no-store" });
-  const body = await response.json().catch(() => null) as { items?: T[]; error?: string } | null;
-  if (!response.ok || !body) throw apiError(body, "FINANCE_LOOKUP_READ_FAILED");
+  const body = await response.json().catch(() => null) as { items?: T[]; error?: string; message?: string; details?: unknown } | null;
+  if (!response.ok || !body) throw apiError(body, "FINANCE_LOOKUP_READ_FAILED", response.status);
   return body.items || [];
 }
 
@@ -91,8 +108,8 @@ export function useFinanceLookups(organizationId: string, moduleCode: string, re
   useEffect(() => {
     let active = true; setError("");
     const operational = fetch(`/api/enterprise/${organizationId}/operational-lookups?module=${encodeURIComponent(moduleCode)}`, { cache: "no-store" }).then(async (response) => {
-      const body = await response.json().catch(() => null) as FinanceOperationalLookups & { error?: string } | null;
-      if (!response.ok || !body) throw apiError(body, "FINANCE_LOOKUP_READ_FAILED");
+      const body = await response.json().catch(() => null) as FinanceOperationalLookups & { error?: string; message?: string; details?: unknown } | null;
+      if (!response.ok || !body) throw apiError(body, "FINANCE_LOOKUP_READ_FAILED", response.status);
       return body;
     });
     const work: Array<Promise<unknown>> = [operational, readCollection<FinanceAccountLookup>(`/api/enterprise/${organizationId}/financial-accounts?page=1&pageSize=200&status=ACTIVE`)];
@@ -181,7 +198,54 @@ export function FinanceCollaboration({ organizationId, moduleCode, record, local
   const entityType = financeCollaborationEntityType(moduleCode, record);
   if (!entityType) return null;
   const sourceReference = financeRecordTitle(record, locale);
-  return <><section className="border-t border-dtsc-border pt-5"><h3 className="font-black text-dtsc-ink">{locale === "fr" ? "Documents financiers" : "Financial documents"}</h3><p className="mt-1 text-sm leading-6 text-dtsc-muted">{locale === "fr" ? "Les justificatifs sont téléversés dans le stockage privé commun, versionnés et liés à cette opération." : "Supporting documents are uploaded to shared private storage, versioned and linked to this operation."}</p><Link className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border px-4 text-sm font-black text-dtsc-blue" href={`/enterprise-modules/DOCUMENTS?sourceEntityType=${encodeURIComponent(entityType)}&sourceEntityId=${encodeURIComponent(record.id)}&sourceReference=${encodeURIComponent(sourceReference)}&action=upload`}><FileUp className="h-4 w-4" />{locale === "fr" ? "Téléverser ou ouvrir les documents liés" : "Upload or open linked documents"}</Link></section><ProfessionalWorkflowComments endpoint={`/api/enterprise/${organizationId}/finance-comments/${encodeURIComponent(entityType)}/${encodeURIComponent(record.id)}`} title={locale === "fr" ? "Commentaires financiers" : "Finance comments"} description={locale === "fr" ? "Les décisions structurées restent dans le workflow ; ce fil sert aux précisions, demandes de correction et justifications." : "Structured decisions remain in the workflow; this thread is for clarifications, correction requests and explanations."} /></>;
+  const t = (key: EnterpriseFinanceKey) => translateEnterpriseFinance(locale, key);
+  const documentQuery = `sourceEntityType=${encodeURIComponent(entityType)}&sourceEntityId=${encodeURIComponent(record.id)}&sourceReference=${encodeURIComponent(sourceReference)}`;
+  const documentsHref = `/enterprise-modules/DOCUMENTS?${documentQuery}`;
+  const uploadHref = `${documentsHref}&action=upload`;
+
+  return (
+    <section className="grid min-w-0 gap-3 border-t border-dtsc-border pt-5" aria-label={t("financeCollaborationTitle")}>
+      <div className="min-w-0">
+        <h3 className="text-base font-black text-dtsc-ink sm:text-lg">{t("financeCollaborationTitle")}</h3>
+      </div>
+
+      <details className="group min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface shadow-sm">
+        <summary className="flex min-h-16 cursor-pointer list-none items-start gap-3 rounded-2xl p-4 transition-colors hover:bg-dtsc-soft/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-dtsc-blue/40 [&::-webkit-details-marker]:hidden">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-dtsc-blue/10 text-dtsc-blue">
+            <FolderOpen className="h-5 w-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-base font-black text-dtsc-ink">{t("financialDocuments")}</span>
+            <span className="mt-1 block text-sm leading-6 text-dtsc-muted">{t("financialDocumentsDescription")}</span>
+          </span>
+          <ChevronDown className="mt-2 h-5 w-5 shrink-0 text-dtsc-muted transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="border-t border-dtsc-border px-3 pb-4 pt-3 sm:px-4">
+          <div className="mb-3 inline-flex min-h-8 items-center rounded-full bg-dtsc-soft px-3 text-xs font-black text-dtsc-muted">
+            {t("financialDocumentsPrivacy")}
+          </div>
+          <div data-responsive-actions>
+            <Link className="inline-flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-xl border border-dtsc-border px-4 py-2 text-center text-sm font-black text-dtsc-blue transition-colors hover:bg-dtsc-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-dtsc-blue/40" href={documentsHref}>
+              <FolderOpen className="h-4 w-4 shrink-0" />
+              <span className="break-words">{t("viewLinkedDocuments")}</span>
+            </Link>
+            <Link className="inline-flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-xl bg-dtsc-blue px-4 py-2 text-center text-sm font-black text-white transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-dtsc-blue/40" href={uploadHref}>
+              <FilePlus2 className="h-4 w-4 shrink-0" />
+              <span className="break-words">{t("addLinkedDocument")}</span>
+            </Link>
+          </div>
+        </div>
+      </details>
+
+      <ProfessionalWorkflowComments
+        endpoint={`/api/enterprise/${organizationId}/finance-comments/${encodeURIComponent(entityType)}/${encodeURIComponent(record.id)}`}
+        title={t("financeConversation")}
+        description={t("financeConversationDescription")}
+        collapsible
+        defaultOpen={false}
+      />
+    </section>
+  );
 }
 
 export function ReloadButton({ onClick, locale, loading }: { onClick: () => void; locale: FinanceLocale; loading?: boolean }) {
