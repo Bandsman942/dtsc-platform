@@ -291,5 +291,6 @@
   "cashSessionMovements": "mouvements",
   "dailyCloseIndependentApprover": "Validation indépendante des caisses",
   "dailyCloseIndependentApproverHelp": "Le validateur sélectionné recevra chaque caisse incluse dans cette clôture. Il devra disposer du droit Finance Caisse.",
-  "dailyCloseApproverRequired": "Choisissez le validateur Finance qui contrôlera les caisses sélectionnées avant de soumettre la clôture."
+  "dailyCloseApproverRequired": "Choisissez le validateur Finance qui contrôlera les caisses sélectionnées avant de soumettre la clôture.",
+  "cashSessionManageApproval": "Gérer la validation"
 }
