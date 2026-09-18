@@ -11,6 +11,7 @@ const FINANCE_ERROR_MESSAGES: Record<string, string> = {
   FINANCE_PERIOD_CLOSED: "Cette période financière est fermée. Choisissez une période ouverte ou demandez une réouverture autorisée.",
   FINANCE_INPUT_INVALID: "Certaines informations sont invalides ou incomplètes. Corrigez les champs signalés puis réessayez.",
   FINANCE_DECISION_REASON_TOO_SHORT: "Le motif de cette décision doit contenir au moins 4 caractères.",
+  FINANCE_DECISION_REASON_TOO_LONG: "Le motif de cette décision ne peut pas dépasser 1 000 caractères.",
   PAYMENT_NOT_FOUND: "Ce paiement n’existe pas ou n’est plus disponible dans cette entreprise.",
   PAYMENT_REVISION_CONFLICT: "Ce paiement a changé entre-temps. Actualisez les données avant de réessayer.",
   PAYMENT_TRANSITION_INVALID: "Cette action n’est pas autorisée dans l’état actuel du paiement. Actualisez le paiement puis vérifiez son statut.",
@@ -177,8 +178,17 @@ export async function authorizeFinanceRequest(
 export function financeValidationErrorResponse(error: ZodError, fallbackCode = "FINANCE_INPUT_INVALID") {
   const firstIssue = error.issues[0];
   const field = firstIssue?.path?.length ? String(firstIssue.path[0]) : undefined;
-  const reasonInvalid = field === "reason";
-  const code = reasonInvalid ? "FINANCE_DECISION_REASON_TOO_SHORT" : fallbackCode;
+  const reasonTooShort = field === "reason" && (
+    firstIssue?.code === "invalid_type"
+    || firstIssue?.code === "too_small"
+    || firstIssue?.code === "custom"
+  );
+  const reasonTooLong = field === "reason" && firstIssue?.code === "too_big";
+  const code = reasonTooLong
+    ? "FINANCE_DECISION_REASON_TOO_LONG"
+    : reasonTooShort
+      ? "FINANCE_DECISION_REASON_TOO_SHORT"
+      : fallbackCode;
   const message = FINANCE_ERROR_MESSAGES[code] || FINANCE_ERROR_MESSAGES.FINANCE_INPUT_INVALID;
   const fieldErrors = error.issues.slice(0, 12).map((issue) => ({
     field: issue.path.length ? issue.path.map(String).join(".") : "form",
