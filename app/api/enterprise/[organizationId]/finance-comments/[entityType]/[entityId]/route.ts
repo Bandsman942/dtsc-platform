@@ -9,6 +9,8 @@ const ENTITY_MODULE = {
   EnterpriseSupplierInvoice: "FINANCE_PAYABLES",
   EnterpriseSalesCreditNote: "FINANCE_RECEIVABLES",
   EnterpriseSupplierCreditNote: "FINANCE_PAYABLES",
+  EnterpriseReceivable: "FINANCE_RECEIVABLES",
+  EnterprisePayable: "FINANCE_PAYABLES",
   EnterprisePayment: "FINANCE_PAYMENTS",
   EnterpriseFinancialAccount: "FINANCE_TREASURY",
   EnterpriseCashSession: "FINANCE_CASH",
@@ -36,6 +38,10 @@ async function financeEntityExists(organizationId: string, entityType: FinanceEn
       return Boolean(await prisma.enterpriseSalesCreditNote.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
     case "EnterpriseSupplierCreditNote":
       return Boolean(await prisma.enterpriseSupplierCreditNote.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
+    case "EnterpriseReceivable":
+      return Boolean(await prisma.enterpriseReceivable.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
+    case "EnterprisePayable":
+      return Boolean(await prisma.enterprisePayable.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
     case "EnterprisePayment":
       return Boolean(await prisma.enterprisePayment.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
     case "EnterpriseFinancialAccount":
