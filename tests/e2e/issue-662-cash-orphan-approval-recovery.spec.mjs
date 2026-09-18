@@ -80,6 +80,11 @@ test.describe.serial("Hotfix #662 orphan cash approval recovery", () => {
 
     for (const [index, moduleCode] of [
       "CRM_CUSTOMERS",
+      "CATALOG",
+      "SITES_WAREHOUSES",
+      "INVENTORY_LOGISTICS",
+      "RETAIL_POS",
+      "RETAIL_DAILY_CLOSE",
       "SALES_QUOTES_ORDERS",
       "SUPPLIERS_PURCHASES",
       "FINANCE_OVERVIEW",
