@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { ensureMobileMoneyTransactionLedgerMappingTx } from "@/lib/enterprise/accounting/mobile-money-ledger-provisioning";
+import { createAccountingApprovalAssignment, decideAccountingApproval, requireAccountingApprovalDecision } from "@/lib/enterprise/accounting/accounting-approval-service";
 import { postBusinessEvent, postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
 import { money, publishFinanceEvent, sumDecimals } from "@/lib/enterprise/accounting/helpers";
 import { publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
@@ -513,10 +514,29 @@ export async function createRetailDailyClose(organizationId: string, actorUserId
         if (!countTotal.equals(declared)) throw new EnterpriseRetailError("RETAIL_CASH_COUNT_TOTAL_MISMATCH", 409, { financialAccountId: account.id, countTotal: countTotal.toFixed(), declared: declared.toFixed() });
         const difference = money(declared.minus(expected));
         if (!difference.isZero() && !line.varianceReason) throw new EnterpriseRetailError("RETAIL_VARIANCE_REASON_REQUIRED", 409, { financialAccountId: account.id, difference: difference.toFixed() });
+        if (!input.approverUserId) throw new EnterpriseRetailError("RETAIL_CLOSE_APPROVER_REQUIRED", 400);
+        const approval = await createAccountingApprovalAssignment(tx, {
+          organizationId,
+          targetEntityType: "EnterpriseCashSession",
+          targetEntityId: cashSession.id,
+          requesterUserId: actorUserId,
+          approverUserId: input.approverUserId,
+        });
         await tx.enterpriseCashCount.deleteMany({ where: { organizationId, cashSessionId: cashSession.id } });
         if (line.denominations.length) await tx.enterpriseCashCount.createMany({ data: line.denominations.map((count) => ({ organizationId, cashSessionId: cashSession.id, denomination: decimal(count.denomination), quantity: count.quantity, amount: decimal(count.denomination).times(count.quantity), countedByUserId: actorUserId })) });
         if (!difference.isZero()) await tx.enterpriseCashDiscrepancy.create({ data: { organizationId, cashSessionId: cashSession.id, amount: difference, reason: line.varianceReason as string, createdByUserId: actorUserId } });
         await tx.enterpriseCashSession.update({ where: { id: cashSession.id }, data: { status: "PENDING_VALIDATION", expectedClosingAmount: expected, countedClosingAmount: declared, discrepancyAmount: difference, closingReason: line.varianceReason || null, submittedAt: new Date(), revision: { increment: 1 } } });
+        await publishFinanceEvent(tx, {
+          organizationId,
+          entityType: "EnterpriseCashSession",
+          entityId: cashSession.id,
+          eventType: "CASH_SESSION_SUBMITTED",
+          summary: `Cash session ${cashSession.number} submitted from daily close`,
+          actorUserId,
+          fromStatus: "OPEN",
+          toStatus: "PENDING_VALIDATION",
+          metadataJson: { approvalId: approval.id, approverUserId: input.approverUserId, dailyClose: true },
+        });
         preparedLines.push({ financialAccountId: account.id, accountType: account.accountType, currencyCode: account.currencyCode, cashSessionId: cashSession.id, systemClosingBalance: expected, declaredBalance: declared, differenceAmount: difference, varianceReason: line.varianceReason || null, countDetailsJson: line.denominations as Prisma.InputJsonValue });
       } else {
         const expected = money(account.operationalBalance);
@@ -542,12 +562,52 @@ export async function decideRetailDailyClose(organizationId: string, closeId: st
     const discrepancyIds: string[] = [];
     for (const line of close.lines.filter((item) => item.cashSessionId)) {
       const cashSession = await tx.enterpriseCashSession.findFirst({ where: { id: line.cashSessionId as string, organizationId }, include: { discrepancies: true } });
-      if (!cashSession || cashSession.status !== "PENDING_VALIDATION" || cashSession.cashierUserId !== close.submittedByUserId) throw new EnterpriseRetailError("RETAIL_CLOSE_CONFLICT", 409, { cashSessionId: line.cashSessionId });
+      if (!cashSession || cashSession.cashierUserId !== close.submittedByUserId) throw new EnterpriseRetailError("RETAIL_CLOSE_CONFLICT", 409, { cashSessionId: line.cashSessionId });
+
+      if (cashSession.status !== "PENDING_VALIDATION") {
+        const alreadyDecided = (input.decision === "APPROVE" && cashSession.status === "CLOSED")
+          || (input.decision === "REJECT" && cashSession.status === "REJECTED");
+        if (alreadyDecided) continue;
+        throw new EnterpriseRetailError("RETAIL_CLOSE_CONFLICT", 409, { cashSessionId: line.cashSessionId });
+      }
+
+      const { approval, decision } = await requireAccountingApprovalDecision({
+        organizationId,
+        targetEntityType: "EnterpriseCashSession",
+        targetEntityId: cashSession.id,
+        actorUserId,
+      });
+      await decideAccountingApproval(tx, {
+        organizationId,
+        approvalId: approval.id,
+        approvalRevision: approval.revision,
+        actorUserId,
+        status: input.decision === "APPROVE" ? "APPROVED" : "REJECTED",
+        decisionComment: input.reason,
+        selfApprovalOverride: decision.selfApprovalOverride,
+      });
       if (input.decision === "APPROVE") {
         await tx.enterpriseCashDiscrepancy.updateMany({ where: { organizationId, cashSessionId: cashSession.id, status: "PENDING" }, data: { status: "APPROVED", approvedByUserId: actorUserId } });
         discrepancyIds.push(...cashSession.discrepancies.filter((item) => !item.amount.isZero()).map((item) => item.id));
       }
-      await tx.enterpriseCashSession.update({ where: { id: cashSession.id }, data: input.decision === "APPROVE" ? { status: "CLOSED", validatedByUserId: actorUserId, validatedAt: new Date(), revision: { increment: 1 } } : { status: "REJECTED", rejectedAt: new Date(), revision: { increment: 1 } } });
+      const nextCashStatus = input.decision === "APPROVE" ? "CLOSED" : "REJECTED";
+      await tx.enterpriseCashSession.update({
+        where: { id: cashSession.id },
+        data: input.decision === "APPROVE"
+          ? { status: nextCashStatus, validatedByUserId: actorUserId, validatedAt: new Date(), rejectedAt: null, revision: { increment: 1 } }
+          : { status: nextCashStatus, validatedByUserId: actorUserId, validatedAt: null, rejectedAt: new Date(), revision: { increment: 1 } },
+      });
+      await publishFinanceEvent(tx, {
+        organizationId,
+        entityType: "EnterpriseCashSession",
+        entityId: cashSession.id,
+        eventType: input.decision === "APPROVE" ? "CASH_SESSION_CLOSED" : "CASH_SESSION_REJECTED",
+        summary: `Cash session ${cashSession.number}: ${nextCashStatus}`,
+        actorUserId,
+        fromStatus: "PENDING_VALIDATION",
+        toStatus: nextCashStatus,
+        metadataJson: { approvalId: approval.id, dailyClose: true, ...(input.reason ? { reason: input.reason.slice(0, 500) } : {}) },
+      });
     }
     const nextStatus = input.decision === "APPROVE" ? "APPROVED" : "REJECTED";
     const updated = await tx.enterpriseRetailDailyClose.update({ where: { id: close.id }, data: { status: nextStatus, validatedByUserId: actorUserId, validatedAt: input.decision === "APPROVE" ? new Date() : null, rejectedAt: input.decision === "REJECT" ? new Date() : null, rejectionReason: input.decision === "REJECT" ? input.reason || null : null, revision: { increment: 1 } } });
