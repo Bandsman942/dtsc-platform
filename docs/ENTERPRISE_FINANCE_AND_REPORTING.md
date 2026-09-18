@@ -401,3 +401,12 @@ prisma migrate deploy on empty PostgreSQL
 ```
 
 After merge, only `main` triggers the unique Vercel Production path, which runs `prisma migrate deploy` before `pnpm build`.
+
+
+## Hotfix #664 — contrat de décision et collaboration Finance
+
+Les décisions humaines Finance utilisent un contrat commun : un commentaire positif peut être omis ou rester bref, tandis qu’un refus ou une action destructive explicitement configurée comme telle conserve un motif minimal. Les routes de workflow normalisent les erreurs Zod avec un code métier stable et un message client sûr ; le client privilégie le catalogue Finance puis le message serveur explicitement transporté par `FinanceApiError`.
+
+La surface `FinanceCollaboration` est partagée entre les objets Finance. Elle expose Documents et Conversation sous forme de sections repliables, conserve les deep links privés vers `DOCUMENTS`, borne le fil de discussion et garantit la cohérence des types supportés côté API, y compris factures, avoirs, créances/dettes ouvertes, paiements, comptes, caisse, banque et rapprochement.
+
+Aucun composant client ne décide de l’autorité d’approbation : l’affectation `EnterpriseApproval`, les permissions, le tenant, la séparation des fonctions, le statut et la révision restent vérifiés côté serveur.
