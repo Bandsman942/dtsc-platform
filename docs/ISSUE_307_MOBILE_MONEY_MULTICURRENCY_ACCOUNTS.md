@@ -88,7 +88,7 @@ Chaque caisse `OPEN` dispose de son propre panneau de comptage :
 - écart estimé ;
 - motif obligatoire côté UI en présence d’un écart.
 
-La soumission passe par une route Retail protégée par le droit `MOBILE_MONEY_AGENCY / submit`, mais cette route délègue le traitement à `submitCashSessionClose(...)`. Le serveur :
+La soumission passe par une route Retail protégée par le droit `MOBILE_MONEY_AGENCY / submit`, mais cette route délègue le traitement à `submitCashSessionCloseForAssignedValidation(...)`. Le validateur est choisi parmi les candidats autorisés de `FINANCE_CASH` puis revalidé côté serveur. Le serveur :
 
 1. verrouille la session ;
 2. vérifie qu’elle appartient bien à l’utilisateur ;
@@ -97,9 +97,10 @@ La soumission passe par une route Retail protégée par le droit `MOBILE_MONEY_A
 5. vérifie que la somme des coupures correspond au total compté ;
 6. exige un motif si le compté diffère du théorique ;
 7. persiste le comptage et l’éventuelle anomalie ;
-8. passe la session en `PENDING_VALIDATION`.
+8. crée atomiquement l’`EnterpriseApproval` affectée au validateur sélectionné ;
+9. passe la session en `PENDING_VALIDATION`.
 
-L’approbation/rejet reste ensuite assurée par le workflow Finance canonique `validateCashSession(...)`. Le hotfix ne duplique pas cette logique et ne donne pas au cashier un droit d’auto-approbation.
+L’approbation/rejet reste ensuite assurée par le workflow Finance canonique `validateCashSessionAssignedApproval(...)`. Le cashier ne peut pas auto-valider sa clôture et une caisse en attente ne peut plus être créée sans validation affectée. Le hotfix #662 ajoute en plus une récupération explicite et auditée pour les anciennes sessions déjà `PENDING_VALIDATION` qui avaient été créées avant ce contrat.
 
 L’utilisateur peut donc, par exemple, clôturer sa caisse CDF, la voir passer « En attente d’approbation », puis clôturer sa caisse USD séparément.
 
@@ -232,7 +233,7 @@ Le gate `scripts/qa-307-mobile-money-multicurrency.mjs` protège notamment :
 - chargement de toutes les sessions actives dans le dashboard Retail ;
 - sélecteur de caisse CDF/USD et invalidation du brouillon lors de la bascule ;
 - comptage et clôture séparés ;
-- réutilisation de `submitCashSessionClose(...)` et passage en `PENDING_VALIDATION` ;
+- réutilisation de `submitCashSessionCloseForAssignedValidation(...)` et passage en `PENDING_VALIDATION` ;
 - transfert FX même opérateur avec taux Finance, snapshot, verrouillage et balance ;
 - Treasury et comptabilité ;
 - reversal ;
