@@ -2,6 +2,20 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-09-18 — Hotfix #664 : validations et collaboration Finance
+
+### Corrigé
+
+- Les approbations Finance acceptent désormais un commentaire facultatif court comme « Ok » ; les refus et actions destructives qui exigent une justification gardent une règle explicite de motif.
+- Les erreurs de validation et de transition des paiements, factures, caisse et workflows Finance utilisent des codes stables et des messages métier précis au lieu de fallbacks génériques.
+- Les commentaires financiers prennent en charge les avoirs ainsi que les créances/dettes ouvertes déjà exposés par le composant partagé.
+
+### Amélioré
+
+- La zone **Documents et collaboration** devient une surface partagée repliable avec deux actions documentaires distinctes et une conversation financière compacte, scrollable et adaptée au clavier mobile.
+- Les conversations affichent compteur, auteur, date, initiales, messages différenciés et éditeur multiligne, avec retour d’erreur global et local.
+- La QA #664 protège le contrat commun et reste intégrée à la régression ; la validation OWNER E2E demeure obligatoire avant merge.
+
 ## 2026-08-10 — DTSC AI 08/08 : Agent Runtime contrôlé
 
 ### Ajouté
