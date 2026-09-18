@@ -307,10 +307,11 @@ export function financeErrorMessage(error: unknown, locale?: FinanceLocale, fall
   if (code?.endsWith("_NOT_FOUND")) return resolvedLocale === "fr" ? "L’élément financier demandé est introuvable ou n’est plus disponible." : "The requested finance record could not be found or is no longer available.";
   if (code?.includes("NOT_POSTABLE") || code?.includes("NOT_ELIGIBLE")) return resolvedLocale === "fr" ? "Cette opération n’est pas encore dans un état permettant sa comptabilisation." : "This operation is not yet in a state that allows posting.";
   const safeServerMessage = extractSafeFinanceClientMessage(error);
-  if (safeServerMessage) return safeServerMessage;
+  if (resolvedLocale === "fr" && safeServerMessage) return safeServerMessage;
   if (code?.includes("REQUIRED")) return resolvedLocale === "fr" ? "Une information ou une configuration requise manque pour terminer cette opération." : "Required information or configuration is missing to complete this operation.";
   if (code?.includes("FORBIDDEN") || code === "FORBIDDEN" || code === "UNAUTHORIZED") return resolvedLocale === "fr" ? "Vous ne disposez pas de l’autorisation nécessaire pour cette action." : "You do not have the permission required for this action.";
   if (code?.includes("INVALID") || code === "INVALID_PAYLOAD") return resolvedLocale === "fr" ? "Certaines informations saisies sont à corriger avant de continuer." : "Some entered information must be corrected before continuing.";
+  if (resolvedLocale === "en" && safeServerMessage && /\b(the|this|that|cannot|must|missing|required|invalid|failed|not|only|select|choose|enter|refresh)\b/i.test(safeServerMessage)) return safeServerMessage;
   if (fallback) return fallback;
   return resolvedLocale === "fr" ? "L’opération financière n’a pas pu être terminée. Vérifiez les informations puis réessayez." : "The finance operation could not be completed. Review the information and try again.";
 }
