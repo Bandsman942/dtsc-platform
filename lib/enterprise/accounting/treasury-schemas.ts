@@ -59,7 +59,11 @@ export const transferTransitionSchema = z.discriminatedUnion("action", [
 ]);
 export const cashSessionOpenSchema = z.object({ financialAccountId: id, openingAmount: amount, siteId: id.optional() });
 export const cashCloseSchema = z.object({ countedClosingAmount: amount, closingReason: z.string().trim().min(3).max(1000).optional(), counts: z.array(z.object({ denomination: amount, quantity: z.coerce.number().int().nonnegative().max(1000000) })).max(100), revision });
-export const cashValidateSchema = z.object({ approve: z.boolean(), reason: z.string().trim().min(3).max(1000).optional(), revision }).superRefine((v, ctx) => { if (!v.approve && !v.reason) ctx.addIssue({ code: "custom", path: ["reason"], message: "Reason required" }); });
+export const cashValidateSchema = z.object({ approve: z.boolean(), reason: z.string().trim().min(1).max(1000).optional(), revision }).superRefine((value, ctx) => {
+  if (!value.approve && (!value.reason || value.reason.length < 4)) {
+    ctx.addIssue({ code: "custom", path: ["reason"], message: "Le motif de refus doit contenir au moins 4 caractères." });
+  }
+});
 export const bankStatementSchema = z.object({ financialAccountId: id, reference: z.string().trim().min(1).max(120), statementDate: date, periodStart: date, periodEnd: date, currencyCode: currency, openingBalance: amount, closingBalance: amount, privateDocumentId: id.optional(), lines: z.array(z.object({ transactionDate: date, valueDate: date.optional(), description: z.string().trim().min(1).max(500), reference: z.string().trim().max(200).optional(), counterparty: z.string().trim().max(200).optional(), debit: amount.default("0"), credit: amount.default("0"), runningBalance: amount.optional() })).min(1).max(10000) });
 export const reconciliationCreateSchema = z.object({ financialAccountId: id, bankStatementId: id.optional(), periodStart: date, periodEnd: date });
 export const reconciliationMatchSchema = z.object({ bankStatementLineId: id.optional(), paymentId: id.optional(), treasuryTransactionId: id.optional(), journalEntryId: id.optional(), matchedAmount: amount }).refine((v) => Boolean(v.bankStatementLineId || v.paymentId || v.treasuryTransactionId || v.journalEntryId));
