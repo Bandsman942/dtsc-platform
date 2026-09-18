@@ -1,6 +1,6 @@
 "use client";
 
-import { EnterpriseFinanceCashBankReconciliationWorkspace } from "@/components/enterprise/professional/enterprise-finance-bank-reconciliation-workspace";
+import { EnterpriseFinanceCashBankReconciliationWorkspaceHotfix } from "@/components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-workspace-hotfix";
 import { EnterpriseFinanceCashWorkspace } from "@/components/enterprise/professional/enterprise-finance-cash-workspace";
 import { EnterpriseFinanceInvoicesWorkspaceHotfix } from "@/components/enterprise/professional/enterprise-finance-invoices-workspace-hotfix";
 import { EnterpriseFinanceOverviewWorkspace } from "@/components/enterprise/professional/enterprise-finance-overview-workspace";
@@ -27,6 +27,6 @@ export function EnterpriseOperationalFinanceWorkspace(props: {
   if (props.definition.code === "FINANCE_PAYMENTS") return <EnterpriseFinancePaymentsWorkspaceHotfix {...props} />;
   if (props.definition.code === "FINANCE_TREASURY") return <EnterpriseFinanceTreasuryWorkspaceHotfix {...props} />;
   if (props.definition.code === "FINANCE_CASH") return <EnterpriseFinanceCashWorkspace {...props} />;
-  if (["FINANCE_BANK", "FINANCE_RECONCILIATION"].includes(props.definition.code)) return <EnterpriseFinanceCashBankReconciliationWorkspace {...props} />;
+  if (["FINANCE_BANK", "FINANCE_RECONCILIATION"].includes(props.definition.code)) return <EnterpriseFinanceCashBankReconciliationWorkspaceHotfix {...props} />;
   return null;
 }
