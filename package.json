@@ -301,7 +301,8 @@
     "qa:standard-ai-tool-tenant-isolation": "node scripts/qa-standard-ai-tool-tenant-isolation.mjs",
     "qa:hotfix-659": "node scripts/qa-hotfix-659-cash-guides-business-presentation.mjs",
     "qa:hotfix-662": "node scripts/qa-hotfix-662-cash-orphan-approval-recovery.mjs",
-    "qa:hotfix-664": "node scripts/qa-hotfix-664-finance-approval-collaboration.mjs"
+    "qa:hotfix-664": "node scripts/qa-hotfix-664-finance-approval-collaboration.mjs",
+    "e2e:hotfix-664": "playwright test tests/e2e/issue-664-finance-approval-collaboration.spec.mjs"
   },
   "dependencies": {
     "@ai-sdk/gateway": "2.0.27",
