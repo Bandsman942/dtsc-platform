@@ -49,26 +49,49 @@ export async function GET(req: Request, { params }: Params) {
       organizationId,
       targetEntityType: "EnterpriseCashSession",
       targetEntityId: { in: ids },
-      status: "PENDING",
+      status: { in: ["PENDING", "QUEUED"] },
       archivedAt: null,
     },
-    select: { targetEntityId: true, approverUserId: true, requestedByUserId: true },
+    select: { id: true, targetEntityId: true, approverUserId: true, requestedByUserId: true, status: true },
   }) : [];
-  const assignedIds = new Set(approvals.filter((approval) => approval.approverUserId === auth.session.userId).map((approval) => approval.targetEntityId));
+  const approvalBySessionId = new Map(approvals.map((approval) => [approval.targetEntityId, approval]));
+  const approverUserIds = [...new Set(approvals.map((approval) => approval.approverUserId))];
+  const approverMembers = approverUserIds.length ? await prisma.organizationMember.findMany({
+    where: { organizationId, userId: { in: approverUserIds }, status: "ACTIVE", removedAt: null },
+    select: { userId: true, positionTitle: true, user: { select: { name: true, email: true } } },
+  }) : [];
+  const approverLabelByUserId = new Map(approverMembers.map((member) => [
+    member.userId,
+    member.positionTitle
+      ? `${member.user.name || member.user.email} · ${member.positionTitle}`
+      : member.user.name || member.user.email,
+  ]));
   const capabilities = auth.access.capabilities;
   const items = rawItems.map(({ movements, ...item }) => {
     const expectedCurrentAmount = movements.reduce(
       (totalAmount, movement) => movement.direction === "INBOUND" ? totalAmount.plus(movement.amount) : totalAmount.minus(movement.amount),
       new Prisma.Decimal(item.openingAmount),
     );
+    const approval = approvalBySessionId.get(item.id);
+    const assignedToCurrentUser = approval?.status === "PENDING" && approval.approverUserId === auth.session.userId;
     return {
       ...item,
       expectedCurrentAmount,
       theoreticalClosingAmount: item.expectedClosingAmount ?? expectedCurrentAmount,
+      approval: approval ? {
+        assigned: true,
+        status: approval.status,
+        approverLabel: approverLabelByUserId.get(approval.approverUserId) || null,
+      } : {
+        assigned: false,
+        status: null,
+        approverLabel: null,
+      },
       capabilities: {
         canClose: capabilities.canManage && item.status === "OPEN",
-        canApprove: capabilities.canApprove && item.status === "PENDING_VALIDATION" && assignedIds.has(item.id),
-        canReject: capabilities.canApprove && item.status === "PENDING_VALIDATION" && assignedIds.has(item.id),
+        canAssignApprover: capabilities.canManage && item.status === "PENDING_VALIDATION" && !approval,
+        canApprove: capabilities.canApprove && item.status === "PENDING_VALIDATION" && assignedToCurrentUser,
+        canReject: capabilities.canApprove && item.status === "PENDING_VALIDATION" && assignedToCurrentUser,
       },
     };
   });

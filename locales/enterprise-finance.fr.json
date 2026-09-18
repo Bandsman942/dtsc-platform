@@ -549,5 +549,12 @@
   "requestedActionCouldNotComplete": "L’action demandée n’a pas pu être terminée.",
   "officialChartApplied": "Plan officiel appliqué au brouillon de l’entreprise.",
   "recommendedJournalsConfigured": "Journaux recommandés configurés.",
-  "chartActivated": "Plan comptable activé."
+  "chartActivated": "Plan comptable activé.",
+  "cashAwaitingAssignedApprover": "Cette clôture attend la décision du validateur affecté.",
+  "cashApproverMissing": "Cette clôture historique n’a pas encore de validateur affecté. Un gestionnaire Caisse autorisé peut en désigner un sans modifier le comptage.",
+  "assignCashApprover": "Affecter un validateur",
+  "cashApproverRecoveryHelp": "Choisissez un validateur Finance autorisé. Le comptage, l’écart et l’historique de cette caisse resteront inchangés.",
+  "confirmCashApproverAssignment": "Confirmer l’affectation",
+  "cashApproverAssigned": "Le validateur a été affecté. La clôture est maintenant disponible dans la file des validations.",
+  "cashApproverAssignmentFailed": "Impossible d’affecter le validateur à cette clôture."
 }

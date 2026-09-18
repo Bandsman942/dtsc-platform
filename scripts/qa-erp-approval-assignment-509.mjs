@@ -42,6 +42,7 @@ const payables = read("lib/enterprise/accounting/payables-service.ts");
 const receivables = read("lib/enterprise/accounting/receivables-service.ts");
 const supplierCredits = read("lib/enterprise/accounting/supplier-credit-notes-service.ts");
 const treasuryControls = read("lib/enterprise/accounting/treasury-service.ts");
+const cashApprovalControls = read("lib/enterprise/accounting/accounting-operations-approval-orchestration.ts");
 
 expect(has(assignment, 'status: "ACTIVE", removedAt: null'), "candidats limités aux memberships actifs");
 expect(has(assignment, 'action: "approve"'), "permission approve résolue côté serveur");
@@ -184,7 +185,8 @@ expect(has(opening, "approveAndPostOpeningBalance"), "solde d’ouverture combin
 expect(has(receivables, "approveAndPostSalesCreditNote"), "avoir client combiné reste inventorié avant découpage #511");
 expect(has(supplierCredits, "approveAndPostSupplierCreditNote"), "avoir fournisseur combiné reste inventorié avant découpage #511");
 expect(has(payables, "SUPPLIER_INVOICE_SELF_REVIEW_FORBIDDEN") && has(payables, "SUPPLIER_INVOICE_SELF_APPROVAL_FORBIDDEN"), "facture fournisseur conserve ses deux barrières jusqu’au workflow multi-étapes #511");
-expect(has(treasuryControls, "CASH_SESSION_SELF_VALIDATION_FORBIDDEN"), "validation de caisse reste fail-closed avant affectation explicite #511");
+expect(has(cashApprovalControls, "createAccountingApprovalAssignment") && has(cashApprovalControls, "requireAccountingApprovalDecision") && has(cashApprovalControls, 'targetEntityType: "EnterpriseCashSession"'), "validation de caisse reste fail-closed avant affectation explicite #511");
+expect(!has(treasuryControls, "export async function validateCashSession("), "ancien bypass de décision caisse non affectée reste supprimé");
 expect(has(treasuryControls, "RECONCILIATION_SELF_APPROVAL_FORBIDDEN"), "rapprochement reste fail-closed avant affectation explicite #511");
 
 const failed = checks.filter((check) => !check.ok);

@@ -7,6 +7,7 @@ import { useAppLocale } from "@/components/i18n/locale-provider";
 import { Field, formatEnterpriseDate } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { ProfessionalError, ProfessionalLoading } from "@/components/enterprise/professional/professional-erp-ui";
 import { ContextualUserGuide } from "@/components/user-guides/contextual-user-guide";
+import { EnterpriseApproverSelect } from "@/components/enterprise/enterprise-approver-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
@@ -69,6 +70,7 @@ type DailyClose = {
   revision: number;
   notes?: string | null;
   lines: DailyCloseLine[];
+  capabilities?: { canApprove?: boolean; canReject?: boolean };
 };
 
 type Dashboard = {
@@ -228,6 +230,11 @@ export function RetailDailyCloseWorkspace({
       setMessage(translateRetailWorkspace(locale, "dailyCloseSelectAtLeastOneAccountToClose"));
       return;
     }
+    const approverUserId = String(form.get("approverUserId") || "").trim();
+    if (lines.some((line) => line.accountType === "CASH") && !approverUserId) {
+      setMessage(translateRetailWorkspace(locale, "dailyCloseApproverRequired"));
+      return;
+    }
     const businessDate = String(form.get("businessDate") || new Date().toISOString().slice(0, 10));
     await post(
       "daily-close-submit",
@@ -235,6 +242,7 @@ export function RetailDailyCloseWorkspace({
       {
         businessDate: new Date(`${businessDate}T12:00:00`).toISOString(),
         notes: String(form.get("notes") || "").trim() || null,
+        approverUserId: approverUserId || undefined,
         lines,
       },
       translateRetailWorkspace(locale, "dailyCloseCloseSubmittedForIndependentReview"),
@@ -407,6 +415,19 @@ export function RetailDailyCloseWorkspace({
                     </div>
                   ))}
                 </div>
+                {cashAccounts.length ? (
+                  <div className="grid min-w-0 gap-2 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
+                    <EnterpriseApproverSelect
+                      organizationId={organizationId}
+                      moduleCode="FINANCE_CASH"
+                      locale={locale}
+                      label={translateRetailWorkspace(locale, "dailyCloseIndependentApprover")}
+                      required={false}
+                      disabled={Boolean(busyAction)}
+                    />
+                    <p className="text-xs font-semibold text-dtsc-muted">{translateRetailWorkspace(locale, "dailyCloseIndependentApproverHelp")}</p>
+                  </div>
+                ) : null}
                 <Button className="w-fit" disabled={Boolean(busyAction) || !dashboard.access.canWrite || !closeAccounts.length}>
                   <ClipboardCheck className="h-4 w-4" />{busyAction === "daily-close-submit" ? (translateRetailWorkspace(locale, "dailyCloseSubmitting")) : (translateRetailWorkspace(locale, "dailyCloseSubmitForReview"))}
                 </Button>
@@ -434,10 +455,10 @@ export function RetailDailyCloseWorkspace({
                         status={<StatusBadge tone={statusTone(item.status)}>{customerFacingStatusLabel(item.status, locale)}</StatusBadge>}
                         meta={`${formatEnterpriseDate(item.businessDate, locale)} · ${varianceLines.length ? `${varianceLines.length} ${translateRetailWorkspace(locale, "dailyCloseVarianceS")}` : (translateRetailWorkspace(locale, "dailyCloseNoVariance"))}`}
                         description={description}
-                        actions={dashboard.access.canManage && item.status === "SUBMITTED" ? (
+                        actions={item.status === "SUBMITTED" && (item.capabilities?.canApprove || item.capabilities?.canReject) ? (
                           <div data-responsive-actions>
-                            <Button size="sm" disabled={Boolean(busyAction)} onClick={() => void decide(item, "APPROVE")}><CheckCircle2 className="h-4 w-4" />{translateRetailWorkspace(locale, "dailyCloseApprove")}</Button>
-                            <Button size="sm" variant="outline" disabled={Boolean(busyAction)} onClick={() => void decide(item, "REJECT")}><XCircle className="h-4 w-4" />{translateRetailWorkspace(locale, "dailyCloseReject")}</Button>
+                            {item.capabilities?.canApprove ? <Button size="sm" disabled={Boolean(busyAction)} onClick={() => void decide(item, "APPROVE")}><CheckCircle2 className="h-4 w-4" />{translateRetailWorkspace(locale, "dailyCloseApprove")}</Button> : null}
+                            {item.capabilities?.canReject ? <Button size="sm" variant="outline" disabled={Boolean(busyAction)} onClick={() => void decide(item, "REJECT")}><XCircle className="h-4 w-4" />{translateRetailWorkspace(locale, "dailyCloseReject")}</Button> : null}
                           </div>
                         ) : undefined}
                       />

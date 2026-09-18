@@ -22,6 +22,7 @@ type Props = {
   disabled?: boolean;
   defaultValue?: string;
   className?: string;
+  candidatesEndpoint?: string;
 };
 
 function tx(locale: string | null | undefined, fr: string, en: string) {
@@ -38,6 +39,7 @@ export function EnterpriseApproverSelect({
   disabled = false,
   defaultValue = "",
   className = "min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm text-dtsc-ink",
+  candidatesEndpoint,
 }: Props) {
   const selectId = useId();
   const [candidates, setCandidates] = useState<Candidate[]>([]);
@@ -50,7 +52,8 @@ export function EnterpriseApproverSelect({
     setLoading(true);
     setError("");
     setValue(defaultValue);
-    fetch(`/api/enterprise/${organizationId}/approval-candidates?moduleCode=${encodeURIComponent(moduleCode)}`, { cache: "no-store" })
+    const endpoint = candidatesEndpoint || `/api/enterprise/${organizationId}/approval-candidates?moduleCode=${encodeURIComponent(moduleCode)}`;
+    fetch(endpoint, { cache: "no-store" })
       .then(async (response) => {
         const body = await response.json().catch(() => null) as { candidates?: Candidate[]; message?: string } | null;
         if (!response.ok) throw new Error(body?.message || tx(locale, "Impossible de charger les validateurs.", "Unable to load approvers."));
@@ -68,7 +71,7 @@ export function EnterpriseApproverSelect({
       })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [defaultValue, locale, moduleCode, organizationId]);
+  }, [candidatesEndpoint, defaultValue, locale, moduleCode, organizationId]);
 
   const optionLabel = useMemo(() => (candidate: Candidate) => {
     const suffix = candidate.selfApprovalOverride

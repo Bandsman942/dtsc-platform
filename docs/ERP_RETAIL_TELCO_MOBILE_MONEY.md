@@ -392,6 +392,8 @@ Dans un Shop où elle est activée, elle conserve :
 - interdiction d’auto-validation ;
 - posting Finance des écarts approuvés.
 
+Toute ligne de type caisse exige désormais un validateur `FINANCE_CASH` explicite. La soumission crée l’`EnterpriseApproval` de chaque session de caisse dans la même transaction avant son passage en `PENDING_VALIDATION`. La décision d’une caisse reste réservée au validateur affecté. Une ancienne session déjà en attente sans affectation peut être récupérée depuis le module **Caisse** par un gestionnaire autorisé, qui lui affecte un validateur sans modifier le comptage, l’écart ou l’historique.
+
 Les devises sont conservées séparément.
 
 ## Reporting multi-devise et FX

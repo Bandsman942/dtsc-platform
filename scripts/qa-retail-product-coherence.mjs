@@ -39,6 +39,7 @@ const sharedWorkspace = read("components/enterprise/professional/retail-workspac
 const activeCustomer = read("components/enterprise/professional/retail-active-customer-bar.tsx");
 const paymentFollowup = read("components/enterprise/professional/retail-payment-followup.tsx");
 const dailyClose = read("components/enterprise/professional/retail-daily-close-workspace.tsx");
+const dailyCloseRoute = read("app/api/enterprise/[organizationId]/retail/daily-close/route.ts");
 const retailWorkspaceFr = read("locales/retail-workspace.fr.json");
 const retailWorkspaceEn = read("locales/retail-workspace.en.json");
 const commercial = read("components/enterprise/professional/retail-commercial-workspace.tsx");
@@ -125,7 +126,8 @@ for (const forbidden of [
   ">{line.accountType}<",
   "EnterpriseRetailShopWorkspace",
 ]) check(!dailyClose.includes(forbidden), `Retail daily close customer UI still contains a raw/internal rendering marker: ${forbidden}`);
-check(dailyClose.includes('dashboard.access.canManage && item.status === "SUBMITTED"'), "Retail daily close must preserve independent review actions only for manage-capable users.");
+check(containsAll(dailyClose, ['item.capabilities?.canApprove', 'item.capabilities?.canReject']) && containsAll(dailyCloseRoute, ['const canManage = auth.access.canManage && item.status === "SUBMITTED"', 'cashApproverById', 'canApprove', 'canReject']), "Retail daily close must preserve independent review actions only for manage-capable users and the assigned cash approver.");
+check(!dailyClose.includes('dashboard.access.canManage && item.status === "SUBMITTED"'), "Retail daily close UI must not infer decision authority from manage access alone.");
 check(dailyClose.includes('pageSize: "50"'), "Retail daily close history must remain bounded instead of loading all closes.");
 
 for (const marker of [

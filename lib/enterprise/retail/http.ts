@@ -40,6 +40,13 @@ const ERROR_MESSAGES: Record<string, string> = {
   RETAIL_CLOSE_NOT_FOUND: "La clôture demandée est introuvable.",
   RETAIL_CLOSE_CONFLICT: "La clôture ou une session de caisse liée a changé d’état.",
   RETAIL_CLOSE_SELF_VALIDATION_FORBIDDEN: "La personne ayant soumis la clôture ne peut pas la valider.",
+  RETAIL_CLOSE_APPROVER_REQUIRED: "Choisissez le validateur Finance qui contrôlera les caisses de cette clôture.",
+  ACCOUNTING_APPROVER_NOT_ELIGIBLE: "Le validateur sélectionné n’est plus autorisé pour ces caisses. Choisissez un validateur proposé par DTSC.",
+  ACCOUNTING_APPROVAL_NOT_ASSIGNED: "Une caisse de cette clôture n’a pas encore de validateur affecté. Affectez-en un depuis le module Caisse avant de décider la clôture.",
+  ACCOUNTING_APPROVAL_ALREADY_PENDING: "Une validation active existe déjà pour cette caisse. Rechargez les données pour voir l’affectation actuelle.",
+  ACCOUNTING_APPROVER_NOT_ALLOWED: "Une caisse de cette clôture est affectée à un autre validateur.",
+  ACCOUNTING_SELF_APPROVAL_FORBIDDEN: "L’auto-validation n’est pas autorisée pour cette caisse. Un autre validateur doit intervenir.",
+
   RETAIL_CASH_COUNT_TOTAL_MISMATCH: "Le total des coupures doit correspondre au montant de caisse déclaré.",
   RETAIL_VARIANCE_REASON_REQUIRED: "Tout écart de caisse ou de float doit être justifié avant soumission.",
   CASH_ACCOUNT_INVALID: "Le compte choisi n’est pas une caisse active de cette entreprise.",
