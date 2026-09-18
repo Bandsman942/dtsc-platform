@@ -75,18 +75,21 @@ check(hasAll(treasuryService, [
   'status: { in: ["OPEN", "CLOSING", "PENDING_VALIDATION"] }',
   "CASH_SESSION_ALREADY_ACTIVE",
 ]), "Cash opening must prevent duplicates only on the same cash account while allowing the same cashier to hold other account sessions concurrently");
-check(hasAll(treasuryService, [
-  "submitCashSessionClose",
+const cashApprovalOrchestration = read("lib/enterprise/accounting/accounting-operations-approval-orchestration.ts");
+check(hasAll(cashApprovalOrchestration, [
+  "submitCashSessionCloseForAssignedValidation",
+  "createAccountingApprovalAssignment",
   'status: "PENDING_VALIDATION"',
   "CASH_COUNT_TOTAL_MISMATCH",
   "CASH_DISCREPANCY_REASON_REQUIRED",
-]), "End-of-day till closes must reuse the canonical counted close and independent validation workflow");
-check(hasAll(treasuryService, [
-  "validateCashSession",
-  "assertIndependentActor",
-  "CASH_SESSION_SELF_VALIDATION_FORBIDDEN",
+]), "End-of-day till closes must use the canonical assigned counted close and independent validation workflow");
+check(hasAll(cashApprovalOrchestration, [
+  "validateCashSessionAssignedApproval",
+  "requireAccountingApprovalDecision",
+  "decideAccountingApproval",
   'const status = input.approve ? "CLOSED" : "REJECTED"',
-]), "Cash approval must remain independent and preserve the canonical close/reject workflow");
+]), "Cash approval must remain assigned, independent and preserve the canonical close/reject workflow");
+check(!treasuryService.includes("submitCashSessionClose(") && !treasuryService.includes("export async function validateCashSession("), "Legacy unassigned cash close and validation services must stay removed");
 
 const accounting = read("lib/enterprise/accounting/sector-adapters/retail-mobile-money.ts");
 check(hasAll(accounting, [
