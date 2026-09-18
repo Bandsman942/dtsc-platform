@@ -288,5 +288,8 @@
   "cashSessionKeepCDFAndUSDTillsOpenInParallelForCashTopUps": "Gardez les caisses CDF et USD ouvertes en parallèle pour les recharges en espèces et changez de devise en un toucher.",
   "cashSessionNoCashTillIsOpenYouCanOpenOneForCashTelco": "Aucune caisse n’est ouverte. Vous pouvez en ouvrir une pour les recharges Télécom en espèces ; les comptes non-cash restent utilisables.",
   "cashSessionOpenAtLeastOneTillBeforeRecordingAMobileMoneyOperation": "Ouvrez au moins une caisse avant d’enregistrer une opération Mobile Money.",
-  "cashSessionMovements": "mouvements"
+  "cashSessionMovements": "mouvements",
+  "dailyCloseIndependentApprover": "Validation indépendante des caisses",
+  "dailyCloseIndependentApproverHelp": "Le validateur sélectionné recevra chaque caisse incluse dans cette clôture. Il devra disposer du droit Finance Caisse.",
+  "dailyCloseApproverRequired": "Choisissez le validateur Finance qui contrôlera les caisses sélectionnées avant de soumettre la clôture."
 }
