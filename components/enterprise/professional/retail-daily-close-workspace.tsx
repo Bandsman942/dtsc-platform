@@ -70,6 +70,7 @@ type DailyClose = {
   revision: number;
   notes?: string | null;
   lines: DailyCloseLine[];
+  capabilities?: { canApprove?: boolean; canReject?: boolean };
 };
 
 type Dashboard = {
@@ -454,10 +455,10 @@ export function RetailDailyCloseWorkspace({
                         status={<StatusBadge tone={statusTone(item.status)}>{customerFacingStatusLabel(item.status, locale)}</StatusBadge>}
                         meta={`${formatEnterpriseDate(item.businessDate, locale)} · ${varianceLines.length ? `${varianceLines.length} ${translateRetailWorkspace(locale, "dailyCloseVarianceS")}` : (translateRetailWorkspace(locale, "dailyCloseNoVariance"))}`}
                         description={description}
-                        actions={dashboard.access.canManage && item.status === "SUBMITTED" ? (
+                        actions={item.status === "SUBMITTED" && (item.capabilities?.canApprove || item.capabilities?.canReject) ? (
                           <div data-responsive-actions>
-                            <Button size="sm" disabled={Boolean(busyAction)} onClick={() => void decide(item, "APPROVE")}><CheckCircle2 className="h-4 w-4" />{translateRetailWorkspace(locale, "dailyCloseApprove")}</Button>
-                            <Button size="sm" variant="outline" disabled={Boolean(busyAction)} onClick={() => void decide(item, "REJECT")}><XCircle className="h-4 w-4" />{translateRetailWorkspace(locale, "dailyCloseReject")}</Button>
+                            {item.capabilities?.canApprove ? <Button size="sm" disabled={Boolean(busyAction)} onClick={() => void decide(item, "APPROVE")}><CheckCircle2 className="h-4 w-4" />{translateRetailWorkspace(locale, "dailyCloseApprove")}</Button> : null}
+                            {item.capabilities?.canReject ? <Button size="sm" variant="outline" disabled={Boolean(busyAction)} onClick={() => void decide(item, "REJECT")}><XCircle className="h-4 w-4" />{translateRetailWorkspace(locale, "dailyCloseReject")}</Button> : null}
                           </div>
                         ) : undefined}
                       />
