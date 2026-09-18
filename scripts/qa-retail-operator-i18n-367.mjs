@@ -46,7 +46,7 @@ for (const file of targets) {
 }
 
 const daily = read(targets[0]);
-for (const marker of ["customerFacingFinancialAccountType", "customerFacingStatusLabel", "/retail/daily-close", "idempotencyKey", 'dashboard.access.canManage && item.status === "SUBMITTED"', 'pageSize: "50"', '/enterprise-modules/FINANCE_CASH', '/enterprise-modules/FINANCE_TREASURY']) check(daily.includes(marker), `Daily close contract lost marker: ${marker}`);
+for (const marker of ["customerFacingFinancialAccountType", "customerFacingStatusLabel", "/retail/daily-close", "idempotencyKey", "item.capabilities?.canApprove", "item.capabilities?.canReject", 'pageSize: "50"', '/enterprise-modules/FINANCE_CASH', '/enterprise-modules/FINANCE_TREASURY']) check(daily.includes(marker), `Daily close contract lost marker: ${marker}`);
 check(!/function moneyValue\(/.test(daily), "Daily close must use the shared locale-aware Retail money formatter.");
 
 const operator = read(targets[1]);
