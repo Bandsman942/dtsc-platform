@@ -148,11 +148,8 @@ export async function authorizeFinanceRequest(
 export function financeValidationErrorResponse(error: ZodError, fallbackCode = "FINANCE_INPUT_INVALID") {
   const firstIssue = error.issues[0];
   const field = firstIssue?.path?.length ? String(firstIssue.path[0]) : undefined;
-  const reasonTooShort = field === "reason" && (
-    firstIssue?.code === "too_small"
-    || /4 caractères|at least 4/i.test(firstIssue?.message || "")
-  );
-  const code = reasonTooShort ? "FINANCE_DECISION_REASON_TOO_SHORT" : fallbackCode;
+  const reasonInvalid = field === "reason";
+  const code = reasonInvalid ? "FINANCE_DECISION_REASON_TOO_SHORT" : fallbackCode;
   const message = FINANCE_ERROR_MESSAGES[code] || FINANCE_ERROR_MESSAGES.FINANCE_INPUT_INVALID;
   const fieldErrors = error.issues.slice(0, 12).map((issue) => ({
     field: issue.path.length ? issue.path.map(String).join(".") : "form",
