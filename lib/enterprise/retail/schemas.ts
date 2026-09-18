@@ -104,6 +104,7 @@ export const retailDailyCloseCreateSchema = z.object({
   businessDate: z.coerce.date(),
   siteId: id.optional().nullable(),
   notes: z.string().trim().max(2000).optional().nullable(),
+  approverUserId: id.optional(),
   idempotencyKey,
   lines: z.array(z.object({
     financialAccountId: id,
@@ -112,6 +113,14 @@ export const retailDailyCloseCreateSchema = z.object({
     varianceReason: z.string().trim().max(1000).optional().nullable(),
     denominations: z.array(z.object({ denomination: positiveMoney, quantity: z.coerce.number().int().nonnegative().max(1_000_000) })).max(40).optional().default([]),
   })).min(1).max(30),
+}).superRefine((input, ctx) => {
+  if (input.lines.some((line) => line.accountType === "CASH") && !input.approverUserId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["approverUserId"],
+      message: "Choisissez le validateur Finance qui contrôlera les caisses de cette clôture.",
+    });
+  }
 });
 
 export const retailDailyCloseDecisionSchema = z.object({
