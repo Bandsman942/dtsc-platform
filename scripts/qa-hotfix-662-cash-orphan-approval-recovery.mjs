@@ -134,9 +134,13 @@ expect(hasAll(browserAcceptance, [
   "Affecter un validateur",
   "Valider la clôture",
   "CLOSED",
+  "CATALOG",
+  "SITES_WAREHOUSES",
+  "INVENTORY_LOGISTICS",
+  "RETAIL_POS",
   "RETAIL_DAILY_CLOSE",
   "approverUserId",
-]), "browser acceptance covers orphan recovery, assigned decision and new Shop daily close");
+]), "browser acceptance covers orphan recovery, assigned decision, Shop dependency graph and new daily close");
 expect(hasAll(acceptanceWorkflow, [
   "Hotfix #662",
   "pnpm qa:hotfix-662",
