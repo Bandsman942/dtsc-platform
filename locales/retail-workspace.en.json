@@ -291,5 +291,6 @@
   "cashSessionMovements": "movements",
   "dailyCloseIndependentApprover": "Independent cash approval",
   "dailyCloseIndependentApproverHelp": "The selected approver will receive each till included in this close and must have Finance Cash approval permission.",
-  "dailyCloseApproverRequired": "Select the Finance approver who will review the selected tills before submitting the close."
+  "dailyCloseApproverRequired": "Select the Finance approver who will review the selected tills before submitting the close.",
+  "cashSessionManageApproval": "Manage approval"
 }
