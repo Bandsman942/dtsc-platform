@@ -29,6 +29,7 @@ import { financeMoney, financeStatusLabel, financeStatusTone, safeFinanceError, 
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useToastMessage } from "@/components/ui/use-toast-message";
 import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
@@ -71,6 +72,10 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
   const [assignTarget, setAssignTarget] = useState<CashSession | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [cashDecision, setCashDecision] = useState("true");
+  useToastMessage(message, "success");
+  useToastMessage(error, "error");
 
   const effectiveStatus = status || (tab === "pending" ? "PENDING_VALIDATION" : tab === "open" ? "OPEN" : tab === "closed" ? "CLOSED" : "");
   const collection = useFinanceCollection<CashSession>({ endpoint: `/api/enterprise/${organizationId}/cash-sessions`, page, search, status: effectiveStatus, refreshKey });
@@ -94,6 +99,7 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
   async function openCashSession(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    setBusy(true); setMessage(""); setError("");
     try {
       await financeMutation(`/api/enterprise/${organizationId}/cash-sessions`, {
         financialAccountId: String(form.get("financialAccountId") || ""),
@@ -105,7 +111,7 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
       setMessage(t("cashSessionOpened"));
     } catch (cashError) {
       setError(safeFinanceError(cashError, t("openingFailed")));
-    }
+    } finally { setBusy(false); }
   }
 
   async function closeCashSession(event: FormEvent<HTMLFormElement>) {
@@ -113,6 +119,7 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
     if (!closeTarget) return;
     const form = new FormData(event.currentTarget);
     const currency = String(closeTarget.financialAccount?.currencyCode || "USD");
+    setBusy(true); setMessage(""); setError("");
     try {
       await financeMutation(`/api/enterprise/${organizationId}/cash-sessions/${closeTarget.id}/close`, {
         countedClosingAmount: String(form.get("countedClosingAmount") || "0"),
@@ -127,13 +134,14 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
       setMessage(t("cashCloseSubmitted"));
     } catch (cashError) {
       setError(safeFinanceError(cashError, t("closeFailed")));
-    }
+    } finally { setBusy(false); }
   }
 
   async function assignCashSessionApprover(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!assignTarget) return;
     const form = new FormData(event.currentTarget);
+    setBusy(true); setMessage(""); setError("");
     try {
       await financeMutation(`/api/enterprise/${organizationId}/cash-sessions/${assignTarget.id}/approver`, {
         revision: assignTarget.revision,
@@ -145,13 +153,14 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
       setMessage(t("cashApproverAssigned"));
     } catch (cashError) {
       setError(safeFinanceError(cashError, t("cashApproverAssignmentFailed")));
-    }
+    } finally { setBusy(false); }
   }
 
   async function validateCashSession(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!validateTarget) return;
     const form = new FormData(event.currentTarget);
+    setBusy(true); setMessage(""); setError("");
     try {
       await financeMutation(`/api/enterprise/${organizationId}/cash-sessions/${validateTarget.id}/validate`, {
         approve: form.get("approve") === "true",
@@ -164,7 +173,7 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
       setMessage(t("cashDecisionRecorded"));
     } catch (cashError) {
       setError(safeFinanceError(cashError, t("validationFailed")));
-    }
+    } finally { setBusy(false); }
   }
 
   const openCount = collection.items.filter((item) => item.status === "OPEN").length;
@@ -203,11 +212,11 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
     <Dialog open={createOpen} onClose={() => setCreateOpen(false)} title={t("openCashSessionTitle")} className="h-[94dvh] max-w-3xl">
       <form onSubmit={openCashSession} className="grid gap-5">
         <ProfessionalFormSection title={t("opening")}>
-          <Field label={t("cashAccount")}><NativeSelect name="financialAccountId" required items={cashAccounts.map((account) => ({ id: account.id, label: `${account.code} · ${account.name} · ${account.currencyCode}` }))} /></Field>
-          <Field label={t("site")}><NativeSelect name="siteId" items={lookupData.lookups.sites.map((site) => ({ id: site.id, label: `${site.code} · ${site.name}` }))} /></Field>
-          <Field label={t("openingAmount")}><Input name="openingAmount" type="number" inputMode="decimal" min="0" step="0.01" required /></Field>
+          <Field label={t("cashAccount")}><NativeSelect name="financialAccountId" required disabled={busy} items={cashAccounts.map((account) => ({ id: account.id, label: `${account.code} · ${account.name} · ${account.currencyCode}` }))} /></Field>
+          <Field label={t("site")}><NativeSelect name="siteId" disabled={busy} items={lookupData.lookups.sites.map((site) => ({ id: site.id, label: `${site.code} · ${site.name}` }))} /></Field>
+          <Field label={t("openingAmount")}><Input name="openingAmount" type="number" inputMode="decimal" min="0" step="0.01" required disabled={busy} /></Field>
         </ProfessionalFormSection>
-        <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>{t("cancel")}</Button><Button type="submit"><Banknote className="h-4 w-4" />{t("confirmOpening")}</Button></div>
+        <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => setCreateOpen(false)}>{t("cancel")}</Button><Button type="submit" disabled={busy}><Banknote className="h-4 w-4" />{t("confirmOpening")}</Button></div>
       </form>
     </Dialog>
 
@@ -228,12 +237,12 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
                 : t("cashApproverMissing")}
             </p>
             <div data-responsive-actions>
-              {detail.capabilities?.canAssignApprover ? <Button onClick={() => setAssignTarget(detail)}><ShieldCheck className="h-4 w-4" />{t("assignCashApprover")}</Button> : null}
-              {detail.capabilities?.canApprove ? <Button onClick={() => setValidateTarget(detail)}><ShieldCheck className="h-4 w-4" />{t("validateClose")}</Button> : null}
+              {detail.capabilities?.canAssignApprover ? <Button disabled={busy} onClick={() => setAssignTarget(detail)}><ShieldCheck className="h-4 w-4" />{t("assignCashApprover")}</Button> : null}
+              {detail.capabilities?.canApprove ? <Button disabled={busy} onClick={() => { setCashDecision("true"); setValidateTarget(detail); }}><ShieldCheck className="h-4 w-4" />{t("validateClose")}</Button> : null}
             </div>
           </div>
         ) : null}
-        {detail.capabilities?.canClose ? <Button onClick={() => setCloseTarget(detail)}><LockKeyhole className="h-4 w-4" />{t("closeCashSession")}</Button> : null}
+        {detail.capabilities?.canClose ? <Button disabled={busy} onClick={() => setCloseTarget(detail)}><LockKeyhole className="h-4 w-4" />{t("closeCashSession")}</Button> : null}
         <FinanceCollaboration organizationId={organizationId} moduleCode="FINANCE_CASH" record={detail} locale={locale} />
       </div> : null}
     </Dialog>
@@ -247,7 +256,7 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
           locale={locale}
         />
         <p className="text-sm text-dtsc-muted">{t("cashCloseSod")}</p>
-        <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" onClick={() => setCloseTarget(null)}>{t("cancel")}</Button><Button type="submit">{t("submitClose")}</Button></div>
+        <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => setCloseTarget(null)}>{t("cancel")}</Button><Button type="submit" disabled={busy}>{t("submitClose")}</Button></div>
       </form> : null}
     </Dialog>
 
@@ -261,15 +270,18 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
           label={t("independentApproval")}
           candidatesEndpoint={`/api/enterprise/${organizationId}/cash-sessions/${assignTarget.id}/approver`}
         />
-        <div data-responsive-actions><Button type="button" variant="outline" onClick={() => setAssignTarget(null)}>{t("cancel")}</Button><Button type="submit"><ShieldCheck className="h-4 w-4" />{t("confirmCashApproverAssignment")}</Button></div>
+        <div data-responsive-actions><Button type="button" variant="outline" disabled={busy} onClick={() => setAssignTarget(null)}>{t("cancel")}</Button><Button type="submit" disabled={busy}><ShieldCheck className="h-4 w-4" />{t("confirmCashApproverAssignment")}</Button></div>
       </form> : null}
     </Dialog>
 
     <Dialog open={Boolean(validateTarget)} onClose={() => setValidateTarget(null)} title={t("independentValidation")} className="max-w-xl">
       {validateTarget ? <form onSubmit={validateCashSession} className="grid gap-4">
-        <Field label={t("decision")}><NativeSelect name="approve" required items={[{ id: "true", label: t("approveClose") }, { id: "false", label: t("rejectRequestCorrection") }]} /></Field>
-        <Field label={t("decisionReasonComment")}><textarea name="reason" rows={4} className="w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base" /></Field>
-        <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" onClick={() => setValidateTarget(null)}>{t("cancel")}</Button><Button type="submit">{t("saveDecision")}</Button></div>
+        <Field label={t("decision")}><NativeSelect name="approve" value={cashDecision} onChange={setCashDecision} required disabled={busy} items={[{ id: "true", label: t("approveClose") }, { id: "false", label: t("rejectRequestCorrection") }]} /></Field>
+        <Field label={t("decisionReasonComment")}>
+          <textarea name="reason" rows={4} minLength={cashDecision === "false" ? 4 : undefined} required={cashDecision === "false"} disabled={busy} className="w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base disabled:opacity-60" />
+          <p className="mt-2 text-xs leading-5 text-dtsc-muted">{t(cashDecision === "false" ? "rejectionReasonMinimumHint" : "decisionCommentOptionalHint")}</p>
+        </Field>
+        <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => setValidateTarget(null)}>{t("cancel")}</Button><Button type="submit" disabled={busy}>{t("saveDecision")}</Button></div>
       </form> : null}
     </Dialog>
   </ModuleWorkspace>;
