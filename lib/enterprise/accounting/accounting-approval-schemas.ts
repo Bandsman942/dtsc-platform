@@ -61,6 +61,7 @@ export const assignedFinancialCloseTransitionSchema = z.discriminatedUnion("acti
 ]);
 
 export const assignedCashCloseSchema = cashCloseSchema.extend({ approverUserId: id });
+export const assignCashSessionApproverSchema = z.object({ revision, approverUserId: id });
 
 export const assignedReconciliationTransitionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("SUBMIT"), revision, approverUserId: id, reason }),
