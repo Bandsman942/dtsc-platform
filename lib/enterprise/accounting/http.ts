@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { ZodError } from "zod";
 import { getSession } from "@/lib/auth";
 import { getEnterpriseAccountingAccess } from "@/lib/enterprise/accounting/access";
 import type { EnterpriseFinanceAction, EnterpriseFinanceModuleCode } from "@/lib/enterprise/accounting/constants";
@@ -8,6 +9,21 @@ import { isSameOriginRequest } from "@/lib/request-security";
 
 const FINANCE_ERROR_MESSAGES: Record<string, string> = {
   FINANCE_PERIOD_CLOSED: "Cette période financière est fermée. Choisissez une période ouverte ou demandez une réouverture autorisée.",
+  FINANCE_INPUT_INVALID: "Certaines informations sont invalides ou incomplètes. Corrigez les champs signalés puis réessayez.",
+  FINANCE_DECISION_REASON_TOO_SHORT: "Le motif de cette décision doit contenir au moins 4 caractères.",
+  PAYMENT_NOT_FOUND: "Ce paiement n’existe pas ou n’est plus disponible dans cette entreprise.",
+  PAYMENT_REVISION_CONFLICT: "Ce paiement a changé entre-temps. Actualisez les données avant de réessayer.",
+  PAYMENT_TRANSITION_INVALID: "Cette action n’est pas autorisée dans l’état actuel du paiement. Actualisez le paiement puis vérifiez son statut.",
+  PAYMENT_SUBMITTER_MISMATCH: "Seule la personne qui a préparé ce paiement peut le soumettre à validation.",
+  PAYMENT_CANCEL_ACTOR_FORBIDDEN: "Seule la personne qui a préparé ce paiement peut l’annuler tant qu’il est en cours de validation.",
+  SALES_INVOICE_NOT_FOUND: "Cette facture client n’existe pas ou n’est plus disponible dans cette entreprise.",
+  SALES_INVOICE_REVISION_CONFLICT: "Cette facture client a changé entre-temps. Actualisez les données avant de réessayer.",
+  SALES_INVOICE_TRANSITION_INVALID: "Cette action n’est pas autorisée dans l’état actuel de la facture. Actualisez la facture puis vérifiez son statut.",
+  SALES_INVOICE_SUBMITTER_MISMATCH: "Seule la personne qui a préparé cette facture peut la soumettre à validation.",
+  CASH_REJECTION_REASON_REQUIRED: "Indiquez un motif de refus d’au moins 4 caractères.",
+  CASH_COUNT_TOTAL_MISMATCH: "Le total du comptage physique ne correspond pas au montant de clôture saisi. Vérifiez les coupures et quantités.",
+  CASH_DISCREPANCY_REASON_REQUIRED: "Un motif est obligatoire lorsqu’un écart de caisse est constaté.",
+  ACCOUNTING_APPROVAL_CONFLICT: "Cette validation a déjà changé. Actualisez les données avant de prendre une nouvelle décision.",
   JOURNAL_ENTRY_UNBALANCED: "Le total des débits doit être égal au total des crédits avant la comptabilisation.",
   POSTING_RULE_NOT_FOUND: "Aucune règle comptable active ne correspond à cette opération. Vérifiez la configuration Finance.",
   POSTING_MAPPING_MISSING: "Un compte comptable requis n’est pas configuré pour cette opération.",
@@ -127,6 +143,22 @@ export async function authorizeFinanceRequest(
   const access = await getEnterpriseAccountingAccess({ session, organizationId, moduleCode, action });
   if (!access) return { ok: false as const, response: NextResponse.json({ error: "Forbidden", message: "Vous ne disposez pas de la permission Finance nécessaire pour cette action." }, { status: 403 }) };
   return { ok: true as const, session, access };
+}
+
+export function financeValidationErrorResponse(error: ZodError, fallbackCode = "FINANCE_INPUT_INVALID") {
+  const firstIssue = error.issues[0];
+  const field = firstIssue?.path?.length ? String(firstIssue.path[0]) : undefined;
+  const reasonTooShort = field === "reason" && (
+    firstIssue?.code === "too_small"
+    || /4 caractères|at least 4/i.test(firstIssue?.message || "")
+  );
+  const code = reasonTooShort ? "FINANCE_DECISION_REASON_TOO_SHORT" : fallbackCode;
+  const message = FINANCE_ERROR_MESSAGES[code] || FINANCE_ERROR_MESSAGES.FINANCE_INPUT_INVALID;
+  const fieldErrors = error.issues.slice(0, 12).map((issue) => ({
+    field: issue.path.length ? issue.path.map(String).join(".") : "form",
+    validation: issue.code,
+  }));
+  return NextResponse.json({ error: code, message, details: { fieldErrors } }, { status: 400 });
 }
 
 export function financeErrorResponse(error: unknown, fallback = "FINANCE_OPERATION_FAILED") {
