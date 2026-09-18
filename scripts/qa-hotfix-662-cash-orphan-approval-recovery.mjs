@@ -100,8 +100,7 @@ expect(hasAll(retailService, [
   "approverUserId: input.approverUserId",
   "requireAccountingApprovalDecision",
   "decideAccountingApproval",
-  'eventType: "CASH_SESSION_CLOSED"',
-  'eventType: "CASH_SESSION_REJECTED"',
+  'input.decision === "APPROVE" ? "CASH_SESSION_CLOSED" : "CASH_SESSION_REJECTED"',
 ]), "Shop daily close creates and decides canonical cash approvals");
 expect(retailService.indexOf("createAccountingApprovalAssignment") < retailService.indexOf('status: "PENDING_VALIDATION"', retailService.indexOf("export async function createRetailDailyClose")), "Shop daily close assigns approval before the cash session enters pending validation");
 
