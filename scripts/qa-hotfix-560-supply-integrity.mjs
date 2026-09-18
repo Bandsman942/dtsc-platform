@@ -26,7 +26,12 @@ requireTokens("lib/enterprise/approval-targets.ts", ["EnterpriseStockTransfer: \
 requireTokens("lib/standard-work-coordination/approval-coordination.ts", ["EnterpriseStockTransfer", "EnterpriseInventoryCount", "EnterpriseStockAdjustment", "approvedByUserId: approverUserId"]);
 requireTokens("app/api/enterprise/[organizationId]/approvals/[id]/actions/route.ts", ["decideEnterpriseStockTransfer", "decideEnterpriseInventoryCount", "decideEnterpriseStockAdjustment", "APPROVAL_REVIEW_REQUIRED"]);
 requireTokens("app/api/enterprise/[organizationId]/approvals/route.ts", ["EnterpriseStockTransfer", "EnterpriseInventoryCount", "EnterpriseStockAdjustment"]);
-requireTokens("components/enterprise/core-v2/enterprise-approvals-workspace.tsx", ["approvals.target.stockTransfer", "approvals.target.inventoryCount", "approvals.target.stockAdjustment", "ApprovalCoordinationPanel"]);
+requireTokens("components/enterprise/core-v2/enterprise-approvals-workspace.tsx", ["canonicalApprovalTargetLabel", "ApprovalCoordinationPanel"]);
+requireTokens("lib/enterprise/approval-targets.ts", [
+  'EnterpriseStockTransfer: { fr: "Transfert de stock", en: "Stock transfer" }',
+  'EnterpriseInventoryCount: { fr: "Inventaire", en: "Inventory count" }',
+  'EnterpriseStockAdjustment: { fr: "Ajustement de stock", en: "Stock adjustment" }',
+]);
 
 requireTokens("components/enterprise/professional/professional-erp-i18n.ts", ["common.loadFailed", "common.loading", "common.page"]);
 requireTokens("components/enterprise/professional/enterprise-inventory-operations-workspace.tsx", ["stock-adjustments", "presentation=\"editor\"", "SUBMITTED", "expectedQuantity"]);

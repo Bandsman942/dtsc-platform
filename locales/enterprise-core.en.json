@@ -296,5 +296,6 @@
   "requests.coordination.event.ENTERPRISE_REQUEST_RESPOND": "Requester response",
   "requests.coordination.event.ENTERPRISE_REQUEST_RESOLVE": "Request resolved",
   "requests.coordination.event.ENTERPRISE_REQUEST_CLOSE": "Request closed",
-  "requests.coordination.event.ENTERPRISE_REQUEST_REOPEN": "Request reopened"
+  "requests.coordination.event.ENTERPRISE_REQUEST_REOPEN": "Request reopened",
+  "approvals.all.business.contexts": "All business contexts"
 }

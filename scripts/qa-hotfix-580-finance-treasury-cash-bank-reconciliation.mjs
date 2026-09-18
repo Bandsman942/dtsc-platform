@@ -27,9 +27,11 @@ const financeContract = read("lib/ai/tools/finance-contract.ts");
 
 hasAll(operational, [
   "EnterpriseFinanceTreasuryWorkspaceHotfix",
+  "EnterpriseFinanceCashWorkspace",
   "EnterpriseFinanceCashBankReconciliationWorkspaceHotfix",
   'props.definition.code === "FINANCE_TREASURY"',
-  '["FINANCE_CASH", "FINANCE_BANK", "FINANCE_RECONCILIATION"]',
+  'props.definition.code === "FINANCE_CASH"',
+  '["FINANCE_BANK", "FINANCE_RECONCILIATION"]',
 ], "operational routing");
 
 for (const [name, source] of [["Treasury hotfix", treasuryUi], ["Cash/Bank/Reconciliation hotfix", cashUi]]) {

@@ -1,6 +1,7 @@
 "use client";
 
 import { enterpriseCoreT } from "@/lib/enterprise-core-i18n";
+import { enterpriseApprovalTargetLabel as canonicalApprovalTargetLabel } from "@/lib/enterprise/approval-targets";
 import { Eye } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -21,6 +22,36 @@ import { useEnterpriseV2Collection } from "@/components/enterprise/core-v2/use-e
 type Approval = { id: string; targetEntityType: string; targetEntityId: string; requestedByUserId: string; approverUserId: string; status: string; requestedAt: string; decidedAt: string | null; decisionComment: string | null; revision: number; target: { title: string; priority?: string | null; status?: string | null } | null };
 type LegacyRecord = { id: string; title: string; description: string | null; status: string; updatedAt: string };
 
+const APPROVAL_TARGET_TYPES = [
+  "EnterpriseRequest",
+  "EnterpriseTask",
+  "EnterpriseMeeting",
+  "EnterprisePurchase",
+  "EnterpriseStockTransfer",
+  "EnterpriseInventoryCount",
+  "EnterpriseStockAdjustment",
+  "EnterpriseBudget",
+  "EnterpriseExpense",
+  "EnterpriseAccountTransfer",
+  "EnterpriseJournalEntry",
+  "EnterprisePayment",
+  "EnterpriseSalesInvoice",
+  "EnterpriseSupplierInvoiceReview",
+  "EnterpriseSupplierInvoiceApproval",
+  "EnterpriseFinancialClose",
+  "EnterpriseCashSession",
+  "EnterpriseReconciliationSession",
+  "EnterpriseOpeningBalanceApproval",
+  "EnterpriseSalesCreditNoteApproval",
+  "EnterpriseSupplierCreditNoteApproval",
+  "EnterpriseLeaveRequest",
+  "EnterpriseEmploymentContract",
+  "EnterpriseTimesheet",
+  "EnterprisePayrollRun",
+  "EnterpriseProjectMilestone",
+  "PharmacyQualityIncident",
+] as const;
+
 export function EnterpriseApprovalsWorkspace({ organizationId, locale, legacyRecords = [] }: { organizationId: string; locale?: string | null; legacyRecords?: LegacyRecord[] }) {
   const searchParams = useSearchParams(); const deepLinkedApprovalId = searchParams.get("approval");
   const [queue, setQueue] = useState("pending"); const [entityType, setEntityType] = useState(""); const [search, setSearch] = useState(""); const [page, setPage] = useState(1); const [refreshKey, setRefreshKey] = useState(0); const [detail, setDetail] = useState<Approval | null>(null); const [deepLinkResolved, setDeepLinkResolved] = useState(false); const [message, setMessage] = useState("");
@@ -38,23 +69,14 @@ export function EnterpriseApprovalsWorkspace({ organizationId, locale, legacyRec
       .then(({ response, body }) => { if (response.ok && body?.approval) setDetail({ ...body.approval, target: null }); else setMessage(body?.message || enterpriseCoreT(locale, "approvals.this.approval.is.unavailable")); setDeepLinkResolved(true); });
   }, [collection.items, collection.loading, deepLinkResolved, deepLinkedApprovalId, locale, organizationId]);
 
-  const targetChoices = [
-    { id: "EnterpriseRequest", label: enterpriseCoreT(locale, "requests.requests") },
-    { id: "EnterpriseTask", label: enterpriseCoreT(locale, "tasks.ariaLabel") },
-    { id: "EnterpriseMeeting", label: enterpriseCoreT(locale, "meetings.meetings") },
-    { id: "EnterprisePurchase", label: enterpriseCoreT(locale, "approvals.target.purchase") },
-    { id: "EnterpriseStockTransfer", label: enterpriseCoreT(locale, "approvals.target.stockTransfer") },
-    { id: "EnterpriseInventoryCount", label: enterpriseCoreT(locale, "approvals.target.inventoryCount") },
-    { id: "EnterpriseStockAdjustment", label: enterpriseCoreT(locale, "approvals.target.stockAdjustment") },
-    { id: "PharmacyQualityIncident", label: enterpriseCoreT(locale, "approvals.pharmacy.incidents") },
-  ];
+  const targetChoices = APPROVAL_TARGET_TYPES.map((targetType) => ({ id: targetType, label: approvalTargetLabel(locale, targetType) }));
 
   return <div className="grid min-w-0 gap-5">
     <ModuleMetrics label={enterpriseCoreT(locale, "approvals.approval.indicators")}><ModuleMetric label={enterpriseCoreT(locale, "approvals.queue")} value={collection.pagination.total} /><ModuleMetric label={enterpriseCoreT(locale, "approvals.pending.here")} value={collection.items.filter((item) => item.status === "PENDING").length} /><ModuleMetric label={enterpriseCoreT(locale, "approvals.corrections")} value={collection.items.filter((item) => item.status === "CORRECTION_REQUESTED").length} /><ModuleMetric label={enterpriseCoreT(locale, "tasks.historicalMetric")} value={legacyRecords.length} /></ModuleMetrics>
     <ModuleSection title={enterpriseCoreT(locale, "approvals.approval.queue")} description={enterpriseCoreT(locale, "approvals.the.default.view.prioritizes.decisions.assigned.to.you")} count={`${collection.pagination.total}`}>
       <div className="grid gap-2 border-y border-dtsc-border py-3 md:grid-cols-3">
         <div className="flex min-w-0 gap-2 overflow-x-auto"><Button variant={queue === "pending" ? "default" : "outline"} onClick={() => { setQueue("pending"); setPage(1); }} className="shrink-0">{enterpriseCoreT(locale, "status.PENDING")}</Button><Button variant={queue === "corrections" ? "default" : "outline"} onClick={() => { setQueue("corrections"); setPage(1); }} className="shrink-0">{enterpriseCoreT(locale, "approvals.corrections")}</Button><Button variant={queue === "treated" ? "default" : "outline"} onClick={() => { setQueue("treated"); setPage(1); }} className="shrink-0">{enterpriseCoreT(locale, "approvals.processed")}</Button></div>
-        <NativeSelect value={entityType} onChange={(value) => { setEntityType(value); setPage(1); }} items={targetChoices} />
+        <NativeSelect value={entityType} onChange={(value) => { setEntityType(value); setPage(1); }} items={[{ id: "", label: enterpriseCoreT(locale, "approvals.all.business.contexts") }, ...targetChoices]} />
         <Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder={enterpriseCoreT(locale, "approvals.search.context")} />
       </div>
       {collection.loading ? <p className="py-8 text-center text-sm text-dtsc-muted">{enterpriseCoreT(locale, "common.loading")}</p> : collection.items.length ? <BusinessList ariaLabel={enterpriseCoreT(locale, "approvals.approvals")}>{collection.items.map((approval) => <BusinessListItem key={approval.id} title={approval.target?.title || approvalTargetLabel(locale, approval.targetEntityType)} status={<StatusBadge tone={statusTone(approval.status)}>{statusLabel(locale, approval.status)}</StatusBadge>} meta={`${approvalTargetLabel(locale, approval.targetEntityType)} · ${formatEnterpriseDate(approval.requestedAt, locale)}`} description={approval.decisionComment || (approval.status === "PENDING" ? enterpriseCoreT(locale, "approvals.decision.required") : enterpriseCoreT(locale, "meetings.decision.recorded"))} onOpen={() => setDetail(approval)} openLabel={enterpriseCoreT(locale, "approvals.open.approval")} actions={<ContextActions label={enterpriseCoreT(locale, "approvals.approval.actions")} actions={approvalActions(approval, locale, setDetail)} />} />)}</BusinessList> : <EmptyState compact title={enterpriseCoreT(locale, "approvals.no.approvals")} description={collection.error || enterpriseCoreT(locale, "approvals.nothing.to.process.in.this.view")} />}
@@ -66,17 +88,7 @@ export function EnterpriseApprovalsWorkspace({ organizationId, locale, legacyRec
 }
 
 function approvalTargetLabel(locale: string | null | undefined, entityType: string) {
-  if (entityType === "EnterpriseRequest") return enterpriseCoreT(locale, "requests.requests");
-  if (entityType === "EnterpriseTask") return enterpriseCoreT(locale, "tasks.ariaLabel");
-  if (entityType === "EnterpriseMeeting") return enterpriseCoreT(locale, "meetings.meetings");
-  if (entityType === "EnterprisePurchase") return enterpriseCoreT(locale, "approvals.target.purchase");
-  if (entityType === "EnterpriseStockTransfer") return enterpriseCoreT(locale, "approvals.target.stockTransfer");
-  if (entityType === "EnterpriseInventoryCount") return enterpriseCoreT(locale, "approvals.target.inventoryCount");
-  if (entityType === "EnterpriseStockAdjustment") return enterpriseCoreT(locale, "approvals.target.stockAdjustment");
-  if (entityType === "EnterpriseBudget") return enterpriseCoreT(locale, "approvals.target.budget");
-  if (entityType === "EnterpriseExpense") return enterpriseCoreT(locale, "approvals.target.expense");
-  if (entityType === "PharmacyQualityIncident") return enterpriseCoreT(locale, "approvals.pharmacy.incidents");
-  return entityType;
+  return canonicalApprovalTargetLabel(entityType, locale);
 }
 
 function approvalActions(approval: Approval, locale: string | null | undefined, detail: (item: Approval) => void): BusinessContextAction[] { return [{ id: "open", label: approval.status === "PENDING" ? enterpriseCoreT(locale, "approvals.open.approval") : enterpriseCoreT(locale, "common.open"), icon: Eye, onSelect: () => detail(approval) }]; }

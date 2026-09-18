@@ -296,5 +296,6 @@
   "requests.coordination.event.ENTERPRISE_REQUEST_RESPOND": "Réponse du demandeur",
   "requests.coordination.event.ENTERPRISE_REQUEST_RESOLVE": "Demande résolue",
   "requests.coordination.event.ENTERPRISE_REQUEST_CLOSE": "Demande clôturée",
-  "requests.coordination.event.ENTERPRISE_REQUEST_REOPEN": "Demande rouverte"
+  "requests.coordination.event.ENTERPRISE_REQUEST_REOPEN": "Demande rouverte",
+  "approvals.all.business.contexts": "Tous les contextes métier"
 }

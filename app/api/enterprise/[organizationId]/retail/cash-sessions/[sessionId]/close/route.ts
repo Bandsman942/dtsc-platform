@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { submitCashSessionClose } from "@/lib/enterprise/accounting/treasury-service";
-import { cashCloseSchema } from "@/lib/enterprise/accounting/treasury-schemas";
+import { submitCashSessionCloseForAssignedValidation } from "@/lib/enterprise/accounting/accounting-operations-approval-orchestration";
+import { assignedCashCloseSchema } from "@/lib/enterprise/accounting/accounting-approval-schemas";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
 
 type Params = { params: Promise<{ organizationId: string; sessionId: string }> };
@@ -12,7 +12,7 @@ export async function POST(req: Request, { params }: Params) {
   const auth = await authorizeRetailRequest(req, organizationId, "MOBILE_MONEY_AGENCY", "submit", { mutation: true, limit: 30 });
   if (!auth.ok) return auth.response;
 
-  const parsed = cashCloseSchema.safeParse(await req.json().catch(() => null));
+  const parsed = assignedCashCloseSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json(
       { error: "Invalid payload", message: parsed.error.issues[0]?.message || "Clôture de caisse invalide." },
@@ -21,7 +21,7 @@ export async function POST(req: Request, { params }: Params) {
   }
 
   try {
-    const session = await submitCashSessionClose(organizationId, sessionId, auth.session.userId, parsed.data);
+    const session = await submitCashSessionCloseForAssignedValidation(organizationId, sessionId, auth.session.userId, parsed.data);
     await writeAuditLog({
       userId: auth.session.userId,
       action: "ENTERPRISE_RETAIL_CASH_SESSION_SUBMITTED",

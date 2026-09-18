@@ -30,7 +30,9 @@ const files = {
   overview: "components/enterprise/professional/enterprise-finance-overview-workspace.tsx",
   invoices: "components/enterprise/professional/enterprise-finance-invoices-workspace.tsx",
   payments: "components/enterprise/professional/enterprise-finance-payments-treasury-workspace.tsx",
-  cashBank: "components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-workspace.tsx",
+  cash: "components/enterprise/professional/enterprise-finance-cash-workspace.tsx",
+  cashCount: "components/enterprise/professional/cash-physical-count-fields.tsx",
+  cashBank: "components/enterprise/professional/enterprise-finance-bank-reconciliation-workspace.tsx",
   shared: "components/enterprise/professional/finance-professional-workspace-shared.tsx",
   professionalUi: "components/enterprise/professional/professional-erp-ui.tsx",
   language: "components/enterprise/professional/finance-professional-ui.ts",
@@ -45,6 +47,9 @@ const files = {
   readiness: "lib/enterprise/module-commercial-readiness-iteration-04.json",
   financeGuides: "lib/enterprise/finance-user-guides.ts",
   helpCenter: "app/help/enterprise/page.tsx",
+  guideRegistry: "lib/user-guides/enterprise-guide-registry.ts",
+  canonicalGuide: "lib/user-guides/canonical-guide.ts",
+  contextualGuide: "components/user-guides/contextual-user-guide.tsx",
   manualE2e: "docs/MANUAL_E2E_ERP_PROFESSIONALIZATION_ITERATION_04.md",
   commercialAcceptance: "docs/ERP_ITERATION_04_COMMERCIAL_ACCEPTANCE.md",
   navigation: "lib/navigation/company-relationships.ts",
@@ -118,8 +123,8 @@ const checks = {
       { key: "cashCloseAssistant", fr: "Assistant de clôture de caisse", en: "Cash-close assistant", renderMarker: '"cashCloseAssistant"' },
       { key: "physicalCount", fr: "Comptage physique", en: "Physical count", renderMarker: '"physicalCount"' },
       { key: "independentValidation", fr: "Validation indépendante", en: "Independent validation", renderMarker: '"independentValidation"' },
-    ]) needLocalized({ component: content.cashBank, ...localized, scope: "Caisse professionnelle" });
-    for (const marker of ["PENDING_VALIDATION", "countedClosingAmount", "/cash-sessions/${closeTarget.id}/close", "/cash-sessions/${validateTarget.id}/validate"]) need(content.cashBank, marker, "Caisse professionnelle");
+    ]) needLocalized({ component: content.cash + content.cashCount, ...localized, scope: "Caisse professionnelle" });
+    for (const marker of ["PENDING_VALIDATION", "countedClosingAmount", "/cash-sessions/${closeTarget.id}/close", "/cash-sessions/${validateTarget.id}/validate"]) need(content.cash + content.cashCount, marker, "Caisse professionnelle");
   },
   bank() {
     for (const localized of [
@@ -146,10 +151,10 @@ const checks = {
     reject(content.language, "metricLabel(\"", "Libellés automatiques interdits");
   },
   mobile() {
-    for (const marker of ["h-[94dvh]", "h-[96dvh]", "inputMode=\"decimal\"", "sticky bottom-0", "data-responsive-actions"]) need(content.overview + content.invoices + content.payments + content.cashBank, marker, "Finance mobile");
+    for (const marker of ["h-[94dvh]", "h-[96dvh]", "inputMode=\"decimal\"", "sticky bottom-0", "data-responsive-actions"]) need(content.overview + content.invoices + content.payments + content.cash + content.cashCount + content.cashBank, marker, "Finance mobile");
   },
   deeplinks() {
-    for (const marker of ["useSearchParams", "invoiceId", "paymentId", "cashSessionId", "statementId", "reconciliationId"]) need(content.invoices + content.payments + content.cashBank, marker, "Liens profonds Finance");
+    for (const marker of ["useSearchParams", "invoiceId", "paymentId", "cashSessionId", "statementId", "reconciliationId"]) need(content.invoices + content.payments + content.cash + content.cashBank, marker, "Liens profonds Finance");
     for (const marker of ["sourceEntityType", "sourceEntityId", "action=upload"]) need(content.shared, marker, "Liens documents Finance");
   },
   security() {
@@ -161,11 +166,14 @@ const checks = {
     for (const marker of ["CREATE TABLE \"EnterpriseFinanceComment\"", "EnterpriseFinanceComment_scope_idx", "EnterpriseFinanceComment_author_idx"]) need(content.migration, marker, "Migration additive Finance");
   },
   guides() {
-    need(content.helpCenter, "FINANCE_USER_GUIDES", "Centre d’aide Finance");
+    need(content.guideRegistry, "FINANCE_USER_GUIDES", "Registre canonique des guides Finance");
+    need(content.helpCenter, "getCanonicalEnterpriseUserGuide", "Centre d’aide Finance");
+    need(content.helpCenter, "ContextualUserGuide", "Centre d’aide rendu par le composant canonique");
     need(content.professionalUi, "Guide utilisateur", "Accès aux guides depuis les modules");
     need(content.professionalUi, "/help/enterprise?module=", "Lien contextuel des guides");
     for (const code of modules) need(content.financeGuides, `${code}: {`, `Guide utilisateur ${code}`);
-    for (const marker of ["Avant de commencer", "Procédure pas à pas", "Statuts et workflow", "Contrôles et confidentialité", "Dépannage"]) need(content.helpCenter, marker, "Structure du centre d’aide");
+    for (const marker of ["Avant de commencer", "Procédure pas à pas", "Statuts et workflow", "Contrôles et confidentialité", "Dépannage"]) need(content.canonicalGuide, marker, "Structure canonique du centre d’aide");
+    for (const marker of ["guide.capabilities", "searchPlaceholder", "guide.limitations"]) need(content.contextualGuide, marker, "Renderer canonique du centre d’aide");
     for (const marker of ["format CSV réellement supporté", "auto-approbation", "période fermée", "allocations", "clôture", "suggestion ambiguë"]) need(content.financeGuides, marker, "Contenu métier des guides Finance");
   },
   readiness() {

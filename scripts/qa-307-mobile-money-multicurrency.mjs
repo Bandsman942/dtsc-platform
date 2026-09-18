@@ -126,10 +126,10 @@ check(!fxRoute.includes("finalizeMobileMoneyFxAccounting"), "FX transfer API mus
 check(hasAll(fxReverseRoute, ['"MOBILE_MONEY_AGENCY", "manage"', "mobileMoneyFxReverseSchema", "finalizeMobileMoneyFxReversalAccounting"]), "FX reversal API must enforce manage RBAC, validation and accounting reversal");
 check(hasAll(retailCashCloseRoute, [
   '"MOBILE_MONEY_AGENCY", "submit"',
-  "cashCloseSchema",
-  "submitCashSessionClose",
+  "assignedCashCloseSchema",
+  "submitCashSessionCloseForAssignedValidation",
   "ENTERPRISE_RETAIL_CASH_SESSION_SUBMITTED",
-]), "Mobile Money agents must be able to submit each owned till close through Retail RBAC while reusing the Finance close engine");
+]), "Mobile Money agents must submit each owned till close through Retail RBAC and the canonical assigned Finance close engine");
 
 const retailHttp = read("lib/enterprise/retail/http.ts");
 check(hasAll(retailHttp, [
@@ -181,7 +181,9 @@ check(!workspace.includes("window.confirm"), "The #306 confirmation contract mus
 check(!workspace.includes("() => providers.filter"), "Eligible Mobile Money providers must not reintroduce an unstable providers useMemo dependency");
 
 const cashManager = read("components/enterprise/professional/mobile-money-cash-session-manager.tsx");
-check(hasAll(cashManager, [
+const cashCountFields = read("components/enterprise/professional/cash-physical-count-fields.tsx");
+const cashCloseUi = `${cashManager}\n${cashCountFields}`;
+check(hasAll(cashCloseUi, [
   'translateRetailWorkspace("fr", "cashSessionTitle")',
   'translateRetailWorkspace("en", "cashSessionTitle")',
   'translateRetailWorkspace("fr", "cashSessionRecommended")',

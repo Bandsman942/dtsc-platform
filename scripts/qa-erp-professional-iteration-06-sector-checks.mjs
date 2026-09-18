@@ -45,6 +45,8 @@ const healthFinanceQa = read("scripts/qa-health-financial-convergence-checks.mjs
 const pharmacyCoreQa = read("scripts/qa-pharmacy-core-convergence-checks.mjs");
 const pharmacyFinanceQa = read("scripts/qa-pharmacy-financial-convergence-checks.mjs");
 const helpPage = read("app/help/enterprise/page.tsx");
+const guideRegistry = read("lib/user-guides/enterprise-guide-registry.ts");
+const canonicalGuide = read("lib/user-guides/canonical-guide.ts");
 const sectorGuides = read("lib/enterprise/sector-user-guides.ts");
 const sectorWorkspace = read("components/enterprise/enterprise-sector-module-workspace.tsx");
 
@@ -175,7 +177,10 @@ const checks = {
   },
 
   guides() {
-    need(helpPage, "SECTOR_USER_GUIDES", "Centre d’aide sectoriel");
+    need(guideRegistry, "SECTOR_USER_GUIDES", "Registre canonique des guides sectoriels");
+    need(helpPage, "getCanonicalEnterpriseUserGuide", "Centre d’aide sectoriel canonique");
+    need(helpPage, "ContextualUserGuide", "Renderer canonique du centre d’aide");
+    need(canonicalGuide, "toCanonicalEnterpriseUserGuide", "Adaptateur canonique des guides sectoriels");
     need(helpPage, "Modules et parcours liés", "Liens entre guides et modules");
     need(helpPage, "Revenir au module", "Retour du guide vers le module");
     need(sectorWorkspace, "ProfessionalHelp", "Accès au guide dans les workspaces sectoriels");

@@ -58,7 +58,12 @@ const accountRoute = read("app/api/enterprise/[organizationId]/retail/telco-topu
 check(hasAll(accountRoute, ['"TELCO_TOPUPS", "read"', '"TELCO_TOPUPS", "manage"', "telcoProviderAccountUpsertSchema", "upsertTelcoProviderAccount"]), "Telco account mapping API must enforce read/manage RBAC and validation");
 
 const closeRoute = read("app/api/enterprise/[organizationId]/retail/telco-topups/cash-sessions/[sessionId]/close/route.ts");
-check(hasAll(closeRoute, ['"TELCO_TOPUPS", "submit"', "cashCloseSchema", "submitCashSessionClose", 'moduleCode: "TELCO_TOPUPS"']), "Telco cash close must reuse the canonical Finance close under Telco RBAC");
+check(hasAll(closeRoute, [
+  '"TELCO_TOPUPS", "submit"',
+  "assignedCashCloseSchema",
+  "submitCashSessionCloseForAssignedValidation",
+  'moduleCode: "TELCO_TOPUPS"',
+]), "Telco cash close must reuse the canonical assigned Finance close under Telco RBAC");
 
 const dashboard = read("lib/enterprise/retail/commercial-dashboard.ts");
 const dashboardProjections = read("lib/enterprise/retail/commercial-dashboard-projections.ts");
