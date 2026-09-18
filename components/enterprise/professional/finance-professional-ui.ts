@@ -296,16 +296,19 @@ export function financeErrorMessage(error: unknown, locale?: FinanceLocale, fall
   const code = extractFinanceErrorCode(error);
   if (code && FINANCE_ERROR_MESSAGES[resolvedLocale][code]) return FINANCE_ERROR_MESSAGES[resolvedLocale][code];
   if (code?.includes("REVISION_CONFLICT") || code?.endsWith("_CONFLICT")) return resolvedLocale === "fr" ? "Cette donnée a changé entre-temps. Actualisez la page avant de réessayer." : "This record changed in the meantime. Refresh the page before trying again.";
+  if (code?.includes("TRANSITION_INVALID") || code?.endsWith("_NOT_SUBMITTED")) return resolvedLocale === "fr" ? "Cette action n’est pas autorisée dans l’état actuel de l’opération. Actualisez les données puis vérifiez son statut." : "This action is not allowed in the operation’s current state. Refresh the data and check its status.";
+  if (code?.includes("SUBMITTER_MISMATCH")) return resolvedLocale === "fr" ? "Seule la personne qui a préparé cette opération peut la soumettre à l’étape suivante." : "Only the person who prepared this operation can submit it to the next step.";
+  if (code?.includes("REJECTION_REASON_REQUIRED")) return resolvedLocale === "fr" ? "Indiquez un motif de refus d’au moins 4 caractères." : "Enter a rejection reason with at least 4 characters.";
   if (code?.includes("SELF_APPROVAL_FORBIDDEN")) return resolvedLocale === "fr" ? "Une autre personne autorisée doit valider cette opération." : "Another authorized person must validate this operation.";
   if (code?.includes("PERIOD_CLOSED") || code?.includes("PERIOD_LOCKED")) return resolvedLocale === "fr" ? "La période choisie est fermée. Utilisez une période ouverte ou demandez une réouverture autorisée." : "The selected period is closed. Use an open period or request an authorized reopening.";
   if (code?.includes("MAPPING") && (code.includes("MISSING") || code.includes("NOT_FOUND"))) return resolvedLocale === "fr" ? "La configuration comptable de cette opération est incomplète. Complétez les comptes associés puis réessayez." : "The accounting setup for this operation is incomplete. Complete the related accounts and try again.";
   if (code?.endsWith("_NOT_FOUND")) return resolvedLocale === "fr" ? "L’élément financier demandé est introuvable ou n’est plus disponible." : "The requested finance record could not be found or is no longer available.";
   if (code?.includes("NOT_POSTABLE") || code?.includes("NOT_ELIGIBLE")) return resolvedLocale === "fr" ? "Cette opération n’est pas encore dans un état permettant sa comptabilisation." : "This operation is not yet in a state that allows posting.";
+  const safeServerMessage = extractSafeFinanceClientMessage(error);
+  if (safeServerMessage) return safeServerMessage;
   if (code?.includes("REQUIRED")) return resolvedLocale === "fr" ? "Une information ou une configuration requise manque pour terminer cette opération." : "Required information or configuration is missing to complete this operation.";
   if (code?.includes("FORBIDDEN") || code === "FORBIDDEN" || code === "UNAUTHORIZED") return resolvedLocale === "fr" ? "Vous ne disposez pas de l’autorisation nécessaire pour cette action." : "You do not have the permission required for this action.";
   if (code?.includes("INVALID") || code === "INVALID_PAYLOAD") return resolvedLocale === "fr" ? "Certaines informations saisies sont à corriger avant de continuer." : "Some entered information must be corrected before continuing.";
-  const safeServerMessage = extractSafeFinanceClientMessage(error);
-  if (safeServerMessage) return safeServerMessage;
   if (fallback) return fallback;
   return resolvedLocale === "fr" ? "L’opération financière n’a pas pu être terminée. Vérifiez les informations puis réessayez." : "The finance operation could not be completed. Review the information and try again.";
 }
