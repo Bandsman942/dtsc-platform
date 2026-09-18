@@ -185,7 +185,7 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
       title={t("professionalCash")}
       description={locale === "en" ? definition.descriptionEn : definition.descriptionFr}
       count={`${collection.pagination.total}`}
-      primaryAction={canManage ? <Button onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" />{t("openCashSession")}</Button> : undefined}
+      primaryAction={canManage ? <Button disabled={busy} onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" />{t("openCashSession")}</Button> : undefined}
     />
     <ModuleMetrics label={t("operationalMetrics")}>
       <ModuleMetric label={t("total")} value={collection.pagination.total} />
@@ -254,6 +254,7 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
           currencyCode={String(closeTarget.financialAccount?.currencyCode || "USD")}
           expectedAmount={Number(closeTarget.theoreticalClosingAmount ?? closeTarget.openingAmount ?? 0)}
           locale={locale}
+          disabled={busy}
         />
         <p className="text-sm text-dtsc-muted">{t("cashCloseSod")}</p>
         <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => setCloseTarget(null)}>{t("cancel")}</Button><Button type="submit" disabled={busy}>{t("submitClose")}</Button></div>
@@ -269,6 +270,7 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
           locale={locale}
           label={t("independentApproval")}
           candidatesEndpoint={`/api/enterprise/${organizationId}/cash-sessions/${assignTarget.id}/approver`}
+          disabled={busy}
         />
         <div data-responsive-actions><Button type="button" variant="outline" disabled={busy} onClick={() => setAssignTarget(null)}>{t("cancel")}</Button><Button type="submit" disabled={busy}><ShieldCheck className="h-4 w-4" />{t("confirmCashApproverAssignment")}</Button></div>
       </form> : null}
