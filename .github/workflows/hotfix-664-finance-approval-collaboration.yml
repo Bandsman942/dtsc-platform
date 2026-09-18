@@ -28,6 +28,7 @@ on:
       - "scripts/qa-hotfix-664-finance-approval-collaboration.mjs"
       - "docs/HOTFIX_664_FINANCE_APPROVAL_COLLABORATION.md"
       - "docs/OWNER_E2E_664_FINANCE_APPROVAL_COLLABORATION.md"
+      - "tests/e2e/issue-664-finance-approval-collaboration.spec.mjs"
       - "package.json"
       - ".github/workflows/hotfix-664-finance-approval-collaboration.yml"
 
