@@ -6,7 +6,6 @@ const baseUrl = process.env.E2E_BASE_URL || "http://127.0.0.1:3000";
 const organizationId = process.env.E2E_ORGANIZATION_ID || "e2e-erp-professional-org";
 const adminEmail = (process.env.E2E_ADMIN_EMAIL || "erp-admin@example.test").toLowerCase();
 const approverEmail = (process.env.E2E_USER_EMAIL || "erp-user@example.test").toLowerCase();
-const adminPassword = process.env.E2E_ADMIN_PASSWORD;
 const approverPassword = process.env.E2E_USER_PASSWORD;
 
 let adminUser;
