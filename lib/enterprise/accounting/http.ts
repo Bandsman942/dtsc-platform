@@ -128,6 +128,35 @@ const FINANCE_ERROR_MESSAGES: Record<string, string> = {
   FINANCE_DUPLICATE: "Une donnée identique existe déjà dans cette entreprise.",
 };
 
+function financeServerErrorMessage(code: string) {
+  if (FINANCE_ERROR_MESSAGES[code]) return FINANCE_ERROR_MESSAGES[code];
+  if (code.includes("REVISION_CONFLICT") || code.endsWith("_CONFLICT")) {
+    return "Cette opération a changé entre-temps. Actualisez les données avant de réessayer.";
+  }
+  if (code.includes("TRANSITION_INVALID") || code.endsWith("_NOT_SUBMITTED")) {
+    return "Cette action n’est pas autorisée dans l’état actuel de l’opération. Actualisez les données puis vérifiez son statut.";
+  }
+  if (code.includes("SUBMITTER_MISMATCH")) {
+    return "Seule la personne qui a préparé cette opération peut la soumettre à l’étape suivante.";
+  }
+  if (code.includes("REJECTION_REASON_REQUIRED")) {
+    return "Indiquez un motif de refus d’au moins 4 caractères.";
+  }
+  if (code.endsWith("_NOT_FOUND")) {
+    return "L’élément financier demandé est introuvable ou n’est plus disponible.";
+  }
+  if (code.includes("FORBIDDEN")) {
+    return "Vous ne disposez pas de l’autorisation nécessaire pour cette action.";
+  }
+  if (code.includes("REQUIRED")) {
+    return "Une information ou une configuration requise manque pour terminer cette opération.";
+  }
+  if (code.includes("INVALID")) {
+    return "Certaines informations de cette opération sont invalides ou ne correspondent plus à son contexte.";
+  }
+  return "L’opération financière n’a pas pu être terminée. Vérifiez les données et le statut de l’opération.";
+}
+
 export async function authorizeFinanceRequest(
   req: Request,
   organizationId: string,
@@ -160,11 +189,11 @@ export function financeValidationErrorResponse(error: ZodError, fallbackCode = "
 
 export function financeErrorResponse(error: unknown, fallback = "FINANCE_OPERATION_FAILED") {
   if (error instanceof EnterpriseAccountingError) {
-    return NextResponse.json({ error: error.code, message: FINANCE_ERROR_MESSAGES[error.code] || "L’opération financière n’a pas pu être terminée. Vérifiez les données et le statut de la période.", details: error.details }, { status: error.status });
+    return NextResponse.json({ error: error.code, message: financeServerErrorMessage(error.code), details: error.details }, { status: error.status });
   }
   if (error && typeof error === "object" && "code" in error && error.code === "P2002") return NextResponse.json({ error: "FINANCE_DUPLICATE", message: FINANCE_ERROR_MESSAGES.FINANCE_DUPLICATE }, { status: 409 });
   console.error(fallback, error);
-  return NextResponse.json({ error: fallback, message: FINANCE_ERROR_MESSAGES[fallback] || "Une erreur interne a empêché l’opération financière. Aucune donnée comptable ne doit être considérée comme validée." }, { status: 500 });
+  return NextResponse.json({ error: fallback, message: financeServerErrorMessage(fallback), details: undefined }, { status: 500 });
 }
 
 export function financeListParams(req: Request) {
