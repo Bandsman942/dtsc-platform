@@ -9,6 +9,8 @@ requirePaths([
   "lib/enterprise/accounting/financial-account-service.ts",
   "lib/enterprise/accounting/treasury-transfer-service.ts",
   "lib/enterprise/accounting/treasury-approval-service.ts",
+  "lib/enterprise/accounting/accounting-approval-service.ts",
+  "lib/enterprise/accounting/accounting-operations-approval-orchestration.ts",
   "app/api/enterprise/[organizationId]/financial-accounts/route.ts",
   "app/api/enterprise/[organizationId]/account-transfers/route.ts",
   "app/api/enterprise/[organizationId]/account-transfers/[transferId]/transition/route.ts",
@@ -30,7 +32,6 @@ requireTokens("lib/enterprise/accounting/payments-service.ts", [
 requireTokens("lib/enterprise/accounting/treasury-service.ts", [
   "TransactionIsolationLevel.Serializable",
   "CASH_SESSION_ALREADY_ACTIVE",
-  "CASH_SESSION_SELF_VALIDATION_FORBIDDEN",
   "RECONCILIATION_SELF_APPROVAL_FORBIDDEN",
   "UNRECONCILED",
 ]);
@@ -81,6 +82,17 @@ requireTokens("lib/enterprise/accounting/treasury-approval-service.ts", [
   "TRANSFER_SELF_APPROVAL_FORBIDDEN",
   "approveAssignedAccountTransfer",
   "rejectAssignedAccountTransfer",
+]);
+requireTokens("lib/enterprise/accounting/accounting-approval-service.ts", [
+  "ACCOUNTING_SELF_APPROVAL_FORBIDDEN",
+  "assertEnterpriseApprovalDecision",
+  "createAccountingApprovalAssignment",
+]);
+requireTokens("lib/enterprise/accounting/accounting-operations-approval-orchestration.ts", [
+  "EnterpriseCashSession",
+  "requireAccountingApprovalDecision",
+  "decideAccountingApproval",
+  "validateCashSessionAssignedApproval",
 ]);
 
 const transferServiceSource = fs.readFileSync("lib/enterprise/accounting/treasury-transfer-service.ts", "utf8");
