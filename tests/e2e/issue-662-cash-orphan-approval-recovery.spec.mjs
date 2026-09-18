@@ -273,6 +273,7 @@ test.describe.serial("Hotfix #662 orphan cash approval recovery", () => {
     await signIn(page, adminEmail, adminPassword, "/enterprise-modules/RETAIL_DAILY_CLOSE");
 
     await page.goto("/enterprise-modules/RETAIL_DAILY_CLOSE");
+    await page.getByRole("button", { name: /Soumettre la clôture journalière/ }).click();
     await expect(page.getByRole("combobox", { name: "Validation indépendante des caisses" })).toBeVisible();
 
     const created = await post(
