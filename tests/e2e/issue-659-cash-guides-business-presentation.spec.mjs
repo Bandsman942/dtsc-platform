@@ -34,8 +34,18 @@ async function post(page, path, data) {
 }
 
 async function assertNoGlobalOverflow(page, width) {
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-  expect(overflow, `Hotfix #659 must not overflow globally at ${width}px`).toBeLessThanOrEqual(2);
+  await page.waitForLoadState("domcontentloaded");
+  await expect.poll(
+    async () => {
+      try {
+        return await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+      } catch (error) {
+        if (error instanceof Error && error.message.includes("Execution context was destroyed")) return Number.POSITIVE_INFINITY;
+        throw error;
+      }
+    },
+    { message: `Hotfix #659 must not overflow globally at ${width}px`, timeout: 5_000 },
+  ).toBeLessThanOrEqual(2);
 }
 
 async function enableModule(moduleCode, index) {
