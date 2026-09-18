@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useState, type FormEvent } from "react";
 import { ChevronDown, MessageCircle, Pencil, Send, Trash2, X } from "lucide-react";
 import { professionalErpDateTime, professionalErpT, useProfessionalErpLocale } from "@/components/enterprise/professional/professional-erp-i18n";
 import { Button } from "@/components/ui/button";
+import { useToastMessage } from "@/components/ui/use-toast-message";
 
 export type WorkflowComment = {
   id: string;
@@ -40,6 +41,7 @@ export function ProfessionalWorkflowComments({ endpoint, title, description, col
   const [error, setError] = useState("");
   const [editing, setEditing] = useState<WorkflowComment | null>(null);
   const [expanded, setExpanded] = useState(defaultOpen);
+  useToastMessage(error, "error");
 
   const load = useCallback(async () => {
     setLoading(true);
