@@ -1,7 +1,7 @@
 # Hotfix #664 — validations Finance, erreurs métier et collaboration partagée
 
-Date : 2026-09-18  
-Baseline : `main@f7616ac9fb0a6ce739867485817caf7eb1913239`  
+Date : 2026-09-18
+Baseline : `main@f7616ac9fb0a6ce739867485817caf7eb1913239`
 Issue : #664
 
 ## Problème
