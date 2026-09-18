@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState, type FormEvent } from "react";
 import { Banknote, CheckCircle2, CircleDollarSign, LockKeyhole, Plus } from "lucide-react";
 import { Field } from "@/components/enterprise/core-v2/erp-v2-ui";
@@ -80,6 +81,7 @@ const COPY = {
     openingAmountInvalid: "Le fond de caisse doit être un montant valide supérieur ou égal à zéro.",
     reasonRequired: "Expliquez l’écart de caisse avec un motif d’au moins 3 caractères avant de soumettre la clôture.",
     approverRequired: "Choisissez le validateur autorisé qui recevra cette clôture.",
+    manageApproval: translateRetailWorkspace("fr", "cashSessionManageApproval"),
   },
   en: {
     title: translateRetailWorkspace("en", "cashSessionTitle"),
@@ -113,6 +115,7 @@ const COPY = {
     openingAmountInvalid: "The opening float must be a valid amount greater than or equal to zero.",
     reasonRequired: "Explain the cash discrepancy with a reason of at least 3 characters before submitting the close.",
     approverRequired: "Select the authorized approver who will receive this cash close.",
+    manageApproval: translateRetailWorkspace("en", "cashSessionManageApproval"),
   },
 } as const;
 
@@ -269,7 +272,7 @@ export function MobileMoneyCashSessionManager({
         <div className="grid gap-3">
           {openSessions.map((session) => <CashCloseCard key={session.id} organizationId={organizationId} moduleCode={moduleCode} session={session} locale={locale} busyAction={busyAction} mutate={mutate} reload={reload} />)}
           {!openSessions.length ? <div className="rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm font-semibold text-dtsc-muted">{copy.nothingToClose}</div> : null}
-          {pendingSessions.map((session) => <div key={session.id} className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div className="min-w-0"><p className="break-words font-black text-dtsc-ink">{session.financialAccount.currencyCode} · {session.financialAccount.name}</p><p className="mt-1 text-xs font-semibold text-dtsc-muted">{copy.pendingDescription}</p></div><StatusBadge tone="warning">{copy.pending}</StatusBadge></div></div>)}
+          {pendingSessions.map((session) => <div key={session.id} className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div className="min-w-0"><p className="break-words font-black text-dtsc-ink">{session.financialAccount.currencyCode} · {session.financialAccount.name}</p><p className="mt-1 text-xs font-semibold text-dtsc-muted">{copy.pendingDescription}</p></div><div data-responsive-actions><StatusBadge tone="warning">{copy.pending}</StatusBadge><Button asChild size="sm" variant="outline"><Link href={`/enterprise-modules/FINANCE_CASH?cashSessionId=${encodeURIComponent(session.id)}`}>{copy.manageApproval}</Link></Button></div></div></div>)}
         </div>
       </ModuleSection>
     </div>
