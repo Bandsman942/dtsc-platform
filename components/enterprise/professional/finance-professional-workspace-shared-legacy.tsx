@@ -39,8 +39,24 @@ export type BankStatementLookup = { id: string; reference: string; currencyCode:
 
 const EMPTY_LOOKUPS: FinanceOperationalLookups = { parties: [], suppliers: [], members: [], sites: [], employees: [], payrollPeriods: [], projects: [] };
 
-function apiError(body: { error?: string } | null, fallbackCode = "FINANCE_OPERATION_FAILED") {
-  return new Error(body?.error || fallbackCode);
+function apiError(
+  body: { error?: string; message?: string; details?: unknown } | null,
+  fallbackCode = "FINANCE_OPERATION_FAILED",
+  status = 500,
+) {
+  const code = body?.error || fallbackCode;
+  const error = new Error(code) as Error & {
+    code: string;
+    clientMessage: string | null;
+    details: unknown;
+    status: number;
+  };
+  error.name = "FinanceApiError";
+  error.code = code;
+  error.clientMessage = typeof body?.message === "string" && body.message.trim() ? body.message.trim() : null;
+  error.details = body?.details;
+  error.status = status;
+  return error;
 }
 
 export function useFinanceCollection<T extends FinanceRecord>({ endpoint, page, pageSize = 25, search, status, refreshKey }: { endpoint: string; page: number; pageSize?: number; search?: string; status?: string; refreshKey: number }) {
@@ -61,7 +77,7 @@ export function useFinanceCollection<T extends FinanceRecord>({ endpoint, page, 
     try {
       const response = await fetch(`${endpoint}?${query}`, { cache: "no-store" });
       const body = await response.json().catch(() => null) as FinanceCollectionPayload<T> | null;
-      if (!response.ok || !body?.items || !body.pagination) throw apiError(body, "FINANCE_COLLECTION_READ_FAILED");
+      if (!response.ok || !body?.items || !body.pagination) throw apiError(body, "FINANCE_COLLECTION_READ_FAILED", response.status);
       setItems(body.items); setPagination(body.pagination); setMetrics(body.metrics || {});
     } catch (loadError) {
       setItems([]);
@@ -74,8 +90,8 @@ export function useFinanceCollection<T extends FinanceRecord>({ endpoint, page, 
 
 async function readCollection<T>(endpoint: string): Promise<T[]> {
   const response = await fetch(endpoint, { cache: "no-store" });
-  const body = await response.json().catch(() => null) as { items?: T[]; error?: string } | null;
-  if (!response.ok || !body) throw apiError(body, "FINANCE_LOOKUP_READ_FAILED");
+  const body = await response.json().catch(() => null) as { items?: T[]; error?: string; message?: string; details?: unknown } | null;
+  if (!response.ok || !body) throw apiError(body, "FINANCE_LOOKUP_READ_FAILED", response.status);
   return body.items || [];
 }
 
@@ -92,8 +108,8 @@ export function useFinanceLookups(organizationId: string, moduleCode: string, re
   useEffect(() => {
     let active = true; setError("");
     const operational = fetch(`/api/enterprise/${organizationId}/operational-lookups?module=${encodeURIComponent(moduleCode)}`, { cache: "no-store" }).then(async (response) => {
-      const body = await response.json().catch(() => null) as FinanceOperationalLookups & { error?: string } | null;
-      if (!response.ok || !body) throw apiError(body, "FINANCE_LOOKUP_READ_FAILED");
+      const body = await response.json().catch(() => null) as FinanceOperationalLookups & { error?: string; message?: string; details?: unknown } | null;
+      if (!response.ok || !body) throw apiError(body, "FINANCE_LOOKUP_READ_FAILED", response.status);
       return body;
     });
     const work: Array<Promise<unknown>> = [operational, readCollection<FinanceAccountLookup>(`/api/enterprise/${organizationId}/financial-accounts?page=1&pageSize=200&status=ACTIVE`)];
