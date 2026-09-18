@@ -199,7 +199,7 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
       summary={t("cashSectionDescription")}
     />
     <ModuleContent>
-      {message ? <div role="status" className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-bold text-emerald-800 dark:text-emerald-200">{message}</div> : null}
+      {message ? <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-bold text-emerald-800 dark:text-emerald-200">{message}</div> : null}
       {error ? <ProfessionalError message={error} /> : null}
       {lookupData.error ? <ProfessionalError message={lookupData.error} /> : null}
       <ModuleSection title={tabs.find((item) => item.id === tab)?.label || ""} description={t("cashSectionDescription")}>
