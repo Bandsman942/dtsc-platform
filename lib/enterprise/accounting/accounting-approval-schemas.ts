@@ -14,7 +14,7 @@ export const assignedJournalTransitionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("APPROVE"), revision, reason: optionalComment }),
   z.object({ action: z.literal("REJECT"), revision, reason: requiredReason }),
   z.object({ action: z.literal("POST"), revision, reason: optionalComment }),
-  z.object({ action: z.literal("CANCEL"), revision, reason: optionalComment }),
+  z.object({ action: z.literal("CANCEL"), revision, reason: requiredReason }),
 ]);
 
 export const assignedPaymentTransitionSchema = z.discriminatedUnion("action", [
@@ -22,16 +22,16 @@ export const assignedPaymentTransitionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("APPROVE"), revision, reason: optionalComment }),
   z.object({ action: z.literal("CONFIRM"), revision, reason: optionalComment }),
   z.object({ action: z.literal("RECONCILE"), revision, reason: optionalComment }),
-  z.object({ action: z.literal("CANCEL"), revision, reason: optionalComment }),
-  z.object({ action: z.literal("REVERSE"), revision, reason: optionalComment }),
+  z.object({ action: z.literal("CANCEL"), revision, reason: requiredReason }),
+  z.object({ action: z.literal("REVERSE"), revision, reason: requiredReason }),
 ]);
 
 export const assignedSalesInvoiceTransitionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("SUBMIT"), revision, approverUserId: id, reason: optionalComment }),
   z.object({ action: z.literal("APPROVE"), revision, reason: optionalComment }),
   z.object({ action: z.literal("ISSUE"), revision, reason: optionalComment }),
-  z.object({ action: z.literal("CANCEL"), revision, reason: optionalComment }),
-  z.object({ action: z.literal("VOID"), revision, reason: optionalComment }),
+  z.object({ action: z.literal("CANCEL"), revision, reason: requiredReason }),
+  z.object({ action: z.literal("VOID"), revision, reason: requiredReason }),
 ]);
 
 export const assignedSupplierInvoiceTransitionSchema = z.discriminatedUnion("action", [
@@ -40,13 +40,13 @@ export const assignedSupplierInvoiceTransitionSchema = z.discriminatedUnion("act
     revision,
     reviewerUserId: id,
     approverUserId: id,
-    reason,
+    reason: optionalComment,
   }),
   z.object({ action: z.literal("REVIEW"), revision, reason: optionalComment }),
   z.object({ action: z.literal("APPROVE"), revision, reason: optionalComment }),
   z.object({ action: z.literal("POST"), revision, reason: optionalComment }),
   z.object({ action: z.literal("REJECT"), revision, reason: requiredReason }),
-  z.object({ action: z.literal("CANCEL"), revision, reason: optionalComment }),
+  z.object({ action: z.literal("CANCEL"), revision, reason: requiredReason }),
 ]).superRefine((value, ctx) => {
   if (value.action === "SUBMIT" && value.reviewerUserId === value.approverUserId) {
     ctx.addIssue({ code: "custom", path: ["approverUserId"], message: "Reviewer and approver must be different" });
