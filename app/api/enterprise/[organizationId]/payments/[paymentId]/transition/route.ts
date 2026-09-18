@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { authorizeFinanceRequest, financeErrorResponse } from "@/lib/enterprise/accounting/http";
+import { authorizeFinanceRequest, financeErrorResponse, financeValidationErrorResponse } from "@/lib/enterprise/accounting/http";
 import {
   approvePaymentAssignedApproval,
   cancelPaymentPendingApproval,
@@ -15,7 +15,7 @@ export async function POST(req: Request, { params }: Params) {
   const startedAt = Date.now();
   const { organizationId, paymentId } = await params;
   const parsed = assignedPaymentTransitionSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) return financeValidationErrorResponse(parsed.error);
 
   const action = parsed.data.action === "APPROVE"
     ? "approve"
