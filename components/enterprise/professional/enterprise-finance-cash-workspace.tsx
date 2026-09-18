@@ -254,7 +254,13 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
     <Dialog open={Boolean(assignTarget)} onClose={() => setAssignTarget(null)} title={t("assignCashApprover")} className="max-w-xl">
       {assignTarget ? <form onSubmit={assignCashSessionApprover} className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4">
         <p className="text-sm font-semibold text-dtsc-muted">{t("cashApproverRecoveryHelp")}</p>
-        <EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_CASH" locale={locale} label={t("independentApproval")} />
+        <EnterpriseApproverSelect
+          organizationId={organizationId}
+          moduleCode="FINANCE_CASH"
+          locale={locale}
+          label={t("independentApproval")}
+          candidatesEndpoint={`/api/enterprise/${organizationId}/cash-sessions/${assignTarget.id}/approver`}
+        />
         <div data-responsive-actions><Button type="button" variant="outline" onClick={() => setAssignTarget(null)}>{t("cancel")}</Button><Button type="submit"><ShieldCheck className="h-4 w-4" />{t("confirmCashApproverAssignment")}</Button></div>
       </form> : null}
     </Dialog>
