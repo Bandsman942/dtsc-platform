@@ -5,6 +5,7 @@ import { Banknote, LockKeyhole, Plus, ShieldCheck } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { CashPhysicalCountFields, cashCountsFromForm } from "@/components/enterprise/professional/cash-physical-count-fields";
+import { EnterpriseApproverSelect } from "@/components/enterprise/enterprise-approver-select";
 import {
   FinanceCollaboration,
   FinanceDetailGrid,
@@ -44,6 +45,8 @@ type CashSession = FinanceRecord & {
   openedAt: string;
   closedAt?: string | null;
   revision: number;
+  approval?: { assigned: boolean; status: string | null; approverLabel: string | null };
+  capabilities?: { canClose?: boolean; canAssignApprover?: boolean; canApprove?: boolean; canReject?: boolean };
 };
 
 export function EnterpriseFinanceCashWorkspace({ organizationId, organizationName, definition, locale: requestedLocale, canManage }: {
@@ -65,6 +68,7 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
   const [createOpen, setCreateOpen] = useState(false);
   const [closeTarget, setCloseTarget] = useState<CashSession | null>(null);
   const [validateTarget, setValidateTarget] = useState<CashSession | null>(null);
+  const [assignTarget, setAssignTarget] = useState<CashSession | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -123,6 +127,24 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
       setMessage(t("cashCloseSubmitted"));
     } catch (cashError) {
       setError(safeFinanceError(cashError, t("closeFailed")));
+    }
+  }
+
+  async function assignCashSessionApprover(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!assignTarget) return;
+    const form = new FormData(event.currentTarget);
+    try {
+      await financeMutation(`/api/enterprise/${organizationId}/cash-sessions/${assignTarget.id}/approver`, {
+        revision: assignTarget.revision,
+        approverUserId: String(form.get("approverUserId") || ""),
+      });
+      setAssignTarget(null);
+      setDetail(null);
+      setRefreshKey((value) => value + 1);
+      setMessage(t("cashApproverAssigned"));
+    } catch (cashError) {
+      setError(safeFinanceError(cashError, t("cashApproverAssignmentFailed")));
     }
   }
 
@@ -198,8 +220,20 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
           {detail.countedClosingAmount !== undefined ? <FinanceDetailValue label={t("counted")}>{financeMoney(detail.countedClosingAmount, String(detail.financialAccount?.currencyCode || "USD"), locale)}</FinanceDetailValue> : null}
           {detail.discrepancyAmount !== undefined ? <FinanceDetailValue label={t("variance")}>{financeMoney(detail.discrepancyAmount, String(detail.financialAccount?.currencyCode || "USD"), locale)}</FinanceDetailValue> : null}
         </FinanceDetailGrid>
-        {canManage && detail.status === "OPEN" ? <Button onClick={() => setCloseTarget(detail)}><LockKeyhole className="h-4 w-4" />{t("closeCashSession")}</Button> : null}
-        {canManage && detail.status === "PENDING_VALIDATION" ? <Button onClick={() => setValidateTarget(detail)}><ShieldCheck className="h-4 w-4" />{t("validateClose")}</Button> : null}
+        {detail.status === "PENDING_VALIDATION" ? (
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 rounded-xl border border-dtsc-border bg-dtsc-page p-4">
+            <p className="break-words text-sm font-semibold text-dtsc-muted">
+              {detail.approval?.assigned
+                ? `${t("cashAwaitingAssignedApprover")}${detail.approval.approverLabel ? ` · ${detail.approval.approverLabel}` : ""}`
+                : t("cashApproverMissing")}
+            </p>
+            <div data-responsive-actions>
+              {detail.capabilities?.canAssignApprover ? <Button onClick={() => setAssignTarget(detail)}><ShieldCheck className="h-4 w-4" />{t("assignCashApprover")}</Button> : null}
+              {detail.capabilities?.canApprove ? <Button onClick={() => setValidateTarget(detail)}><ShieldCheck className="h-4 w-4" />{t("validateClose")}</Button> : null}
+            </div>
+          </div>
+        ) : null}
+        {detail.capabilities?.canClose ? <Button onClick={() => setCloseTarget(detail)}><LockKeyhole className="h-4 w-4" />{t("closeCashSession")}</Button> : null}
         <FinanceCollaboration organizationId={organizationId} moduleCode="FINANCE_CASH" record={detail} locale={locale} />
       </div> : null}
     </Dialog>
@@ -214,6 +248,14 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
         />
         <p className="text-sm text-dtsc-muted">{t("cashCloseSod")}</p>
         <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" onClick={() => setCloseTarget(null)}>{t("cancel")}</Button><Button type="submit">{t("submitClose")}</Button></div>
+      </form> : null}
+    </Dialog>
+
+    <Dialog open={Boolean(assignTarget)} onClose={() => setAssignTarget(null)} title={t("assignCashApprover")} className="max-w-xl">
+      {assignTarget ? <form onSubmit={assignCashSessionApprover} className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4">
+        <p className="text-sm font-semibold text-dtsc-muted">{t("cashApproverRecoveryHelp")}</p>
+        <EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_CASH" locale={locale} label={t("independentApproval")} />
+        <div data-responsive-actions><Button type="button" variant="outline" onClick={() => setAssignTarget(null)}>{t("cancel")}</Button><Button type="submit"><ShieldCheck className="h-4 w-4" />{t("confirmCashApproverAssignment")}</Button></div>
       </form> : null}
     </Dialog>
 
