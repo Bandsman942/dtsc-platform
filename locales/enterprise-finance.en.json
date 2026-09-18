@@ -549,5 +549,12 @@
   "requestedActionCouldNotComplete": "The requested action could not be completed.",
   "officialChartApplied": "Official chart applied to the company draft.",
   "recommendedJournalsConfigured": "Recommended journals configured.",
-  "chartActivated": "Chart of accounts activated."
+  "chartActivated": "Chart of accounts activated.",
+  "cashAwaitingAssignedApprover": "This close is waiting for the assigned approver’s decision.",
+  "cashApproverMissing": "This historical close does not have an assigned approver yet. An authorized Cash manager can assign one without changing the count.",
+  "assignCashApprover": "Assign an approver",
+  "cashApproverRecoveryHelp": "Select an authorized Finance approver. The count, variance, and audit history of this till will remain unchanged.",
+  "confirmCashApproverAssignment": "Confirm assignment",
+  "cashApproverAssigned": "The approver has been assigned. The close is now available in the approval queue.",
+  "cashApproverAssignmentFailed": "Unable to assign an approver to this close."
 }
