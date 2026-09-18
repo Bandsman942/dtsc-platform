@@ -288,5 +288,8 @@
   "cashSessionKeepCDFAndUSDTillsOpenInParallelForCashTopUps": "Keep CDF and USD tills open in parallel for cash top-ups and switch currency with one tap.",
   "cashSessionNoCashTillIsOpenYouCanOpenOneForCashTelco": "No cash till is open. You can open one for cash Telco top-ups; non-cash accounts remain available.",
   "cashSessionOpenAtLeastOneTillBeforeRecordingAMobileMoneyOperation": "Open at least one till before recording a Mobile Money operation.",
-  "cashSessionMovements": "movements"
+  "cashSessionMovements": "movements",
+  "dailyCloseIndependentApprover": "Independent cash approval",
+  "dailyCloseIndependentApproverHelp": "The selected approver will receive each till included in this close and must have Finance Cash approval permission.",
+  "dailyCloseApproverRequired": "Select the Finance approver who will review the selected tills before submitting the close."
 }
