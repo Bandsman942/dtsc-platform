@@ -35,6 +35,7 @@ export function ProfessionalWorkflowComments({ endpoint, title, description, col
   const locale = useProfessionalErpLocale();
   const t = useCallback((key: Parameters<typeof professionalErpT>[1]) => professionalErpT(locale, key), [locale]);
   const composerId = useId();
+  const titleId = useId();
   const [comments, setComments] = useState<WorkflowComment[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -98,7 +99,7 @@ export function ProfessionalWorkflowComments({ endpoint, title, description, col
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <h3 id="workflow-comments-title" className="text-base font-black text-dtsc-ink sm:text-lg">{title ?? t("workflow.title")}</h3>
+          <h3 id={titleId} className="text-base font-black text-dtsc-ink sm:text-lg">{title ?? t("workflow.title")}</h3>
           {!loading ? <span className="rounded-full bg-dtsc-soft px-2 py-0.5 text-xs font-black text-dtsc-muted">{comments.length}</span> : null}
         </div>
         <p className="mt-1 text-sm leading-6 text-dtsc-muted">{description ?? t("workflow.description")}</p>
@@ -153,11 +154,11 @@ export function ProfessionalWorkflowComments({ endpoint, title, description, col
   );
 
   if (!collapsible) {
-    return <section className="border-t border-dtsc-border pt-5" aria-labelledby="workflow-comments-title">{heading}{body}</section>;
+    return <section className="border-t border-dtsc-border pt-5" aria-labelledby={titleId}>{heading}{body}</section>;
   }
 
   return (
-    <section className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface shadow-sm" aria-labelledby="workflow-comments-title">
+    <section className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface shadow-sm" aria-labelledby={titleId}>
       <button
         type="button"
         className="flex w-full min-w-0 items-start gap-3 rounded-2xl p-4 text-left transition-colors hover:bg-dtsc-soft/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-dtsc-blue/40"
