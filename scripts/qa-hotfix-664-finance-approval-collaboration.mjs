@@ -18,6 +18,8 @@ const paymentsUi = read("components/enterprise/professional/enterprise-finance-p
 const invoicesUi = read("components/enterprise/professional/enterprise-finance-invoices-workspace-hotfix.tsx");
 const fr = json("locales/enterprise-finance.fr.json");
 const en = json("locales/enterprise-finance.en.json");
+const browserAcceptance = read("tests/e2e/issue-664-finance-approval-collaboration.spec.mjs");
+const workflow = read(".github/workflows/hotfix-664-finance-approval-collaboration.yml");
 const pkg = json("package.json");
 
 check(hasAll(approvalSchemas, [
@@ -144,6 +146,24 @@ for (const [locale, dictionary] of [["fr", fr], ["en", en]]) {
     "rejectionReasonMinimumHint",
   ]) check(Boolean(dictionary[key]), `Finance ${locale} dictionary contains ${key}`);
 }
+
+check(hasAll(browserAcceptance, [
+  "FINANCE_DECISION_REASON_TOO_SHORT",
+  'reason: "Ok"',
+  "Documents et collaboration",
+  "Conversation financière",
+  "Valider la clôture",
+  'persistedApproval.decisionComment',
+  "[320, 360, 375, 390, 414, 768, 1024]",
+]), "browser acceptance covers precise validation, short approval comment, shared collaboration and responsive widths");
+check(hasAll(workflow, [
+  'Hotfix #664',
+  "pnpm qa:hotfix-664",
+  "pnpm qa:regression",
+  "pnpm type-check",
+  "pnpm lint",
+  "pnpm build",
+]), "dedicated workflow executes the static, regression, type, lint and build gates");
 
 check(pkg.scripts?.["qa:hotfix-664"] === "node scripts/qa-hotfix-664-finance-approval-collaboration.mjs", "hotfix 664 QA has a direct package script");
 check(String(pkg.scripts?.["qa:regression"] || "").includes("qa-hotfix-664-finance-approval-collaboration.mjs"), "hotfix 664 QA is included in regression");
