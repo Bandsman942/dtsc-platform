@@ -73,6 +73,15 @@ check(hasAll(financeUi, [
   "CASH_SESSION_CONFLICT",
 ]), "client Finance errors preserve safe server detail after known-code mapping");
 
+check(hasAll(shared, [
+  'error.name = "FinanceApiError"',
+  "error.clientMessage",
+  "error.details",
+  "error.status = status",
+  'apiError(body, "FINANCE_COLLECTION_READ_FAILED", response.status)',
+  'apiError(body, "FINANCE_LOOKUP_READ_FAILED", response.status)',
+]), "Finance collection and lookup reads preserve safe backend message, details and HTTP status");
+
 check(hasAll(commentsRoute, [
   'EnterpriseSalesCreditNote: "FINANCE_RECEIVABLES"',
   'EnterpriseSupplierCreditNote: "FINANCE_PAYABLES"',
