@@ -8,7 +8,7 @@ import { createEnterpriseCatalogItem, updateEnterpriseCatalogItem } from "@/lib/
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
-import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
+import { enterpriseDomainErrorResponse, enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -67,7 +67,7 @@ export async function POST(req: Request, { params }: Params) {
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "CATALOG", action: "write" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = catalogItemCreateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Article invalide." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "CATALOG_ITEM_INPUT_INVALID", req);
   if (!(await catalogTaxCodeExists(organizationId, parsed.data.taxCode))) {
     return NextResponse.json({ error: "CATALOG_TAX_CODE_INVALID", message: "Sélectionnez un code taxe actif de cette entreprise." }, { status: 400 });
   }
@@ -96,7 +96,8 @@ export async function PATCH(req: Request, { params }: Params) {
   const raw = await req.json().catch(() => null) as (Record<string, unknown> & { itemId?: string }) | null;
   const entityId = typeof raw?.itemId === "string" ? raw.itemId : "";
   const parsed = catalogItemUpdateSchema.safeParse(raw);
-  if (!entityId || !parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.success ? "Référence manquante." : parsed.error.issues[0]?.message || "Article invalide." }, { status: 400 });
+  if (!entityId) return NextResponse.json({ error: "CATALOG_ITEM_REFERENCE_REQUIRED", message: "La référence de l’article est obligatoire." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "CATALOG_ITEM_UPDATE_INPUT_INVALID", req);
   if (!(await catalogTaxCodeExists(organizationId, parsed.data.taxCode))) {
     return NextResponse.json({ error: "CATALOG_TAX_CODE_INVALID", message: "Sélectionnez un code taxe actif de cette entreprise." }, { status: 400 });
   }
@@ -106,8 +107,6 @@ export async function PATCH(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, action: "update" } });
     return NextResponse.json({ ok: true, entity });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "UPDATE_FAILED";
-    const conflict = message === "REVISION_CONFLICT";
-    return NextResponse.json({ error: message, message: conflict ? "L’élément a été modifié par un autre utilisateur. Actualisez avant de réessayer." : "Modification impossible." }, { status: conflict ? 409 : 400 });
+    return enterpriseDomainErrorResponse(error, "CATALOG_ITEM_UPDATE_FAILED", req);
   }
 }
