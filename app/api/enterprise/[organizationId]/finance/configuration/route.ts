@@ -25,7 +25,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_OVERVIEW", "manage", { mutation: true, limit: 60 });
   if (!auth.ok) return auth.response;
   const parsed = financeConfigurationSchema.safeParse(await req.json().catch(() => null));
-  if (!p.success) return enterpriseValidationErrorResponse(p.error, "FINANCE_CONFIGURATION_INPUT_INVALID", req);
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "FINANCE_CONFIGURATION_INPUT_INVALID", req);
   try {
     const configuration = await upsertFinanceConfiguration(organizationId, auth.session.userId, parsed.data);
     const readiness = await refreshFinanceReadiness(organizationId, auth.session.userId);
