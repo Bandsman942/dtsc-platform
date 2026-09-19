@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getFinanceReadiness, refreshFinanceReadiness, upsertFinanceConfiguration } from "@/lib/enterprise/accounting/configuration-service";
 import { authorizeFinanceRequest, financeErrorResponse } from "@/lib/enterprise/accounting/http";
@@ -24,7 +25,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_OVERVIEW", "manage", { mutation: true, limit: 60 });
   if (!auth.ok) return auth.response;
   const parsed = financeConfigurationSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!p.success) return enterpriseValidationErrorResponse(p.error, "FINANCE_CONFIGURATION_INPUT_INVALID", req);
   try {
     const configuration = await upsertFinanceConfiguration(organizationId, auth.session.userId, parsed.data);
     const readiness = await refreshFinanceReadiness(organizationId, auth.session.userId);
