@@ -16,7 +16,7 @@ export async function PATCH(request: Request, { params }: Params) {
   if (parsed.data.action === "archive-view") {
     if (!(await canAccessPharmacyReports(session.userId, organizationId, "manage_views"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 }); await archiveSavedReportView(organizationId, id, session.userId);
   } else if (parsed.data.action === "create-snapshot") {
-    if (!(await canAccessPharmacyReports(session.userId, organizationId, "create_snapshot"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 }); const reportType = parsed.data.reportType; if (!reportType || !parsed.data.snapshotName) return NextResponse.json({ error: "Invalid payload", message: "Le nom et le type du snapshot sont obligatoires." }, { status: 400 });
+    if (!(await canAccessPharmacyReports(session.userId, organizationId, "create_snapshot"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 }); const reportType = parsed.data.reportType; if (!reportType || !parsed.data.snapshotName) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: "Le nom et le type du snapshot sont obligatoires." }, { status: 400 });
     const financial = await canAccessPharmacyReports(session.userId, organizationId, "view_financial"); const sensitive = await canAccessPharmacyReports(session.userId, organizationId, "view_sensitive"); const filters = parsed.data.filters || {}; const dataset = await getPharmacyReportsDataset(organizationId, filters, { financial, sensitive }); const reportSection = dataset.sections[reportTypeToSection(reportType)];
     await createPharmacyReportSnapshot(organizationId, session.userId, reportType, parsed.data.snapshotName, filters, reportSection, parsed.data.notes);
   } else {
