@@ -98,7 +98,7 @@ export function EnterpriseEmployeesIdentityWorkspace({ organizationId, organizat
 
   const departmentItems = [{ id: "", label: t("people.none") }, ...lookups.departments.map((item) => ({ id: item.id, label: lookupLabel(item, t("people.toComplete")) }))];
   const positionItems = [{ id: "", label: t("identity.positionUndefined") }, ...lookups.positions.map((item) => ({ id: item.id, label: lookupLabel(item, t("identity.position")) }))];
-  const currencies = lookups.currencies.length ? lookups.currencies : ["USD"];
+  const currencies = lookups.currencies;
 
   return <ModuleWorkspace>
     <ModuleHeader eyebrow={t("identity.eyebrow", { organization: organizationName })} title={t("identity.title")} description={`${locale === "en" ? definition.descriptionEn : definition.descriptionFr} ${t("identity.descriptionSuffix")}`} count={t("identity.count", { count: collection.pagination.total, suffix: collection.pagination.total === 1 ? "" : "s" })} primaryAction={collection.canManage ? <Button onClick={() => { setError(""); setCreateOpen(true); }} className="bg-dtsc-blue text-white"><Plus className="h-4 w-4" />{t("identity.newRecord")}</Button> : undefined} />
