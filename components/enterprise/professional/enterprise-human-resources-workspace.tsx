@@ -180,7 +180,7 @@ export function EnterpriseHumanResourcesWorkspace({ organizationId, organization
     id: approver.userId,
     label: `${approver.name || approver.email} · ${approver.positionTitle || professionalErpEnumLabel(locale, "role", approver.role)}`,
   }));
-  const currencies = lookups.currencies.length ? lookups.currencies : ["USD"];
+  const currencies = lookups.currencies;
   const membersWithoutHrRecord = useMemo(() => {
     const linkedMembershipIds = new Set(lookups.employees.map((employee) => employee.organizationMemberId).filter(Boolean));
     return lookups.members.filter((member) => !linkedMembershipIds.has(member.membershipId));
