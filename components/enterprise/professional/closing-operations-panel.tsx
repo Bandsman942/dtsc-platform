@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { BookCheck, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { financeDate, financeMoney, financeStatusLabel, financeStatusTone, safeFinanceError, type FinanceLocale } from "@/components/enterprise/professional/finance-professional-ui";
+import { professionalRequest } from "@/components/enterprise/professional/professional-erp-ui";
 import { StatusBadge } from "@/components/workspace/status-badge";
 
 type Period = { id: string; code: string; status: string; startDate: string; endDate: string; fiscalYear?: { id: string; code: string } | null };
@@ -34,10 +35,9 @@ type Payload = {
 type Props = { organizationId: string; locale: FinanceLocale; canManage: boolean };
 
 async function requestJson(url: string, fallback: string, options?: RequestInit) {
-  const response = await fetch(url, { cache: "no-store", ...options });
-  const body = await response.json().catch(() => null) as (Record<string, unknown> & { message?: string; error?: string }) | null;
-  if (!response.ok || !body) throw new Error(body?.message || body?.error || fallback);
-  return body;
+  const method = (options?.method || "GET") as "GET" | "POST" | "PATCH" | "DELETE";
+  const payload = typeof options?.body === "string" ? JSON.parse(options.body) : undefined;
+  return professionalRequest<Record<string, unknown>>(url, { method, payload, fallbackCode: "FINANCE_CLOSE_REQUEST_FAILED", fallbackMessage: fallback });
 }
 
 export function ClosingOperationsPanel({ organizationId, locale, canManage }: Props) {
