@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { listRetailPriceConditions, upsertRetailPriceCondition } from "@/lib/enterprise/retail/commercial-admin";
 import { retailPriceConditionUpsertSchema } from "@/lib/enterprise/retail/commercial-schemas";
@@ -29,7 +30,7 @@ export async function POST(req: Request, { params }: Params) {
   const permissions = await getRetailCommercialPermissions(auth.session.userId, organizationId);
   if (!permissions.canManagePricing) return NextResponse.json({ error: "Forbidden", message: "Vous n’êtes pas autorisé à administrer les règles de prix Retail." }, { status: 403 });
   const parsed = retailPriceConditionUpsertSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Règle de prix invalide." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "RETAIL_PRICING_CONDITIONS_INPUT_INVALID", req);
   try {
     const condition = await upsertRetailPriceCondition(organizationId, auth.session.userId, parsed.data);
     await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_RETAIL_PRICE_CONDITION_UPSERTED", entity: "EnterpriseRetailPriceCondition", entityId: condition.id, request: req, metadata: { organizationId, catalogPriceId: condition.catalogPriceId, siteId: condition.siteId, priority: condition.priority, active: condition.isActive } });
