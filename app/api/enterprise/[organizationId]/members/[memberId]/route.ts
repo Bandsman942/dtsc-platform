@@ -43,7 +43,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const parsed = enterpriseMemberUpdateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Invalid payload", message: "Mise à jour du collaborateur invalide." }, { status: 400 });
+    return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: "Mise à jour du collaborateur invalide." }, { status: 400 });
   }
   const data = parsed.data;
   const member = await prisma.organizationMember.findFirst({
