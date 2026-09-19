@@ -25,7 +25,7 @@ export async function POST(req: Request, { params }: Params) {
   if (!meeting) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (!access.canManage && meeting.organizerUserId !== session.userId) return NextResponse.json({ error: "Forbidden", message: "Seul l’organisateur ou un responsable peut consigner une décision." }, { status: 403 });
   const parsed = enterpriseMeetingDecisionCreateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Décision invalide." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message || "Décision invalide." }, { status: 400 });
   try {
     const decision = await createEnterpriseMeetingDecision({ organizationId, meetingId: id, actorUserId: session.userId, title: parsed.data.title, description: parsed.data.description || undefined });
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_MEETING_DECISION_CREATED", entity: "EnterpriseMeetingDecision", entityId: decision.id, request: req, metadata: { organizationId, meetingId: id } });
