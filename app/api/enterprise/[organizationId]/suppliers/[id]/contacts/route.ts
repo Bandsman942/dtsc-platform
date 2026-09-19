@@ -16,7 +16,7 @@ export async function POST(req: Request, { params }: Params) {
   const session = await getSession(); if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const limited = await rateLimit(getRateLimitKey(req, `enterprise-supplier-contact:${session.userId}`), 100, 60 * 60 * 1000); if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   const { organizationId, id } = await params; const access = await getEnterpriseProcurementAccess({ session, organizationId, moduleCode: "SUPPLIERS_PURCHASES", action: "write" }); if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const parsed = enterpriseSupplierContactCreateSchema.safeParse(await req.json().catch(() => null)); if (!p.success) return enterpriseValidationErrorResponse(p.error, "SUPPLIER_CONTACT_INPUT_INVALID", req);
+  const parsed = enterpriseSupplierContactCreateSchema.safeParse(await req.json().catch(() => null)); if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "SUPPLIER_CONTACT_INPUT_INVALID", req);
   try {
     const contact = await addEnterpriseSupplierContact(organizationId, id, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_SUPPLIER_CONTACT_CREATED", entity: "EnterpriseSupplier", entityId: id, request: req, metadata: { organizationId, contactId: contact.id } });
