@@ -14,7 +14,7 @@ export async function POST(req: Request, { params }: Params) {
   const auth = await authorizeSectorConvergenceRequest(req, organizationId, { mutation: true, limit: 30 });
   if (!auth.ok) return auth.response;
   const parsed = retrySyncSchema.safeParse(await req.json().catch(() => null));
-  if (!p.success) return enterpriseValidationErrorResponse(p.error, "SECTOR_CONVERGENCE_RETRY_INPUT_INVALID", req);
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "SECTOR_CONVERGENCE_RETRY_INPUT_INVALID", req);
   try {
     const state = await retrySectorSync(organizationId, parsed.data.syncStateId, parsed.data.expectedStatus);
     await writeAuditLog({ userId: auth.session.userId, action: "SECTOR_CONVERGENCE_RETRY_QUEUED", entity: "EnterpriseSectorSyncState", entityId: state.id, request: req, metadata: { organizationId } });
