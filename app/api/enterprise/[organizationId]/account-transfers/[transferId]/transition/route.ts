@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { authorizeFinanceRequest, financeErrorResponse } from "@/lib/enterprise/accounting/http";
+import { authorizeFinanceRequest, financeErrorResponse, financeValidationErrorResponse } from "@/lib/enterprise/accounting/http";
 import { approveAssignedAccountTransfer, rejectAssignedAccountTransfer } from "@/lib/enterprise/accounting/treasury-approval-service";
 import { confirmTreasuryTransfer } from "@/lib/enterprise/accounting/treasury-transfer-service";
 import { transferTransitionSchema } from "@/lib/enterprise/accounting/treasury-schemas";
@@ -11,7 +11,7 @@ export async function POST(req: Request, { params }: Params) {
   const startedAt = Date.now();
   const { organizationId, transferId } = await params;
   const parsed = transferTransitionSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) return financeValidationErrorResponse(parsed.error, "ACCOUNT_TRANSFER_TRANSITION_INPUT_INVALID");
   const permissionAction = parsed.data.action === "CONFIRM" ? "pay" : "approve";
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_TREASURY", permissionAction, { mutation: true, limit: 60 });
   if (!auth.ok) return auth.response;

@@ -33,7 +33,7 @@ export async function POST(req: Request, { params }: Params) {
   const access = await getEnterpriseFinanceAccess({ session, organizationId, moduleCode: "REPORTS", action: "manage" });
   if (!access?.canManage) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = reportScheduleCreateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Planification invalide." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message || "Planification invalide." }, { status: 400 });
   try {
     const schedule = await createEnterpriseReportSchedule(organizationId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, organizationId, action: "ENTERPRISE_REPORT_SCHEDULE_CREATED", entity: "EnterpriseReportSchedule", entityId: schedule.id, request: req, reasonCode: "REPORT_SCHEDULE_MANAGEMENT", riskLevel: "MEDIUM", metadata: { reportType: schedule.reportType, frequency: schedule.frequency } });

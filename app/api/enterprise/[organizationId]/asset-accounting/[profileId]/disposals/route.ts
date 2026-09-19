@@ -13,7 +13,7 @@ export async function POST(req: Request, { params }: Params) {
   if (!auth.ok) return auth.response;
 
   const parsed = assetDisposalSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message }, { status: 400 });
 
   try {
     const disposal = await disposeEnterpriseAsset(organizationId, profileId, auth.session.userId, parsed.data);

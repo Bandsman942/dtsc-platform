@@ -47,7 +47,7 @@ export async function PATCH(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, fiscalYearId, domain: "fiscal-year-detail" } });
     return NextResponse.json({ ok: true, item });
   } catch (error) {
-    const code = error instanceof Error ? error.message : "";
+    const code = error instanceof Error && /^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : "";
     if (code === "NOT_FOUND") return NextResponse.json({ error: "FISCAL_YEAR_NOT_FOUND", message: "Cet exercice n’existe pas dans votre entreprise." }, { status: 404 });
     if (code === "NOT_EDITABLE") return NextResponse.json({ error: "FISCAL_YEAR_NOT_EDITABLE", message: "Un exercice déjà ouvert ou clôturé ne peut plus être redaté. Créez un nouvel exercice ou utilisez le workflow de clôture approprié." }, { status: 409 });
     if (code === "REVISION_CONFLICT") return NextResponse.json({ error: "FISCAL_YEAR_REVISION_CONFLICT", message: "Cet exercice a été modifié depuis votre dernière lecture. Actualisez les données avant de réessayer." }, { status: 409 });

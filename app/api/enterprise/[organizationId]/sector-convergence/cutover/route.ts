@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { authorizeSectorConvergenceRequest } from "@/lib/enterprise/sector-convergence/access";
 import { asSectorConvergenceError } from "@/lib/enterprise/sector-convergence/errors";
@@ -14,7 +15,7 @@ export async function POST(req: Request, { params }: Params) {
   const auth = await authorizeSectorConvergenceRequest(req, organizationId, { mutation: true, limit: 12 });
   if (!auth.ok) return auth.response;
   const parsed = cutoverSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "SECTOR_CONVERGENCE_CUTOVER_INPUT_INVALID", req);
   try {
     const state = await transitionSectorCutover({ organizationId, ...parsed.data, featureFlag: parsed.data.featureFlag as SectorConvergenceFlag, actorUserId: auth.session.userId });
     await writeAuditLog({ userId: auth.session.userId, action: `SECTOR_CUTOVER_${parsed.data.action}`, entity: "EnterpriseSectorCutoverState", entityId: state.id, request: req, metadata: { organizationId, sector: parsed.data.sector, domainCode: parsed.data.domainCode, featureFlag: parsed.data.featureFlag, reason: parsed.data.reason } });

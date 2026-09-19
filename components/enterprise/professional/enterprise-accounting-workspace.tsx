@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNo
 import { BarChart3, BookOpen, Ellipsis, Plus, RefreshCw, Save, Search, Trash2 } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { EnterpriseAccountingOnboardingPanel } from "@/components/enterprise/professional/enterprise-accounting-onboarding-panel";
-import { ProfessionalFormSection, ProfessionalLoading, ProfessionalTabs } from "@/components/enterprise/professional/professional-erp-ui";
+import { ProfessionalFormSection, ProfessionalLoading, ProfessionalTabs, professionalRequest } from "@/components/enterprise/professional/professional-erp-ui";
 import { financeDate, financeEnumLabel, financeMoney, financeStatusLabel, financeStatusTone, safeFinanceError, type FinanceLocale } from "@/components/enterprise/professional/finance-professional-ui";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -55,10 +55,14 @@ function inputDate(value: unknown) {
 }
 
 async function requestJson(url: string, fallback: string, options?: RequestInit) {
-  const response = await fetch(url, { cache: "no-store", ...options });
-  const body = await response.json().catch(() => null) as ({ message?: string; error?: string } & Record<string, unknown>) | null;
-  if (!response.ok || !body) throw new Error(body?.message || body?.error || fallback);
-  return body;
+  const method = (options?.method || "GET") as "GET" | "POST" | "PATCH" | "DELETE";
+  const payload = typeof options?.body === "string" ? JSON.parse(options.body) : undefined;
+  return professionalRequest<Record<string, unknown>>(url, {
+    method,
+    payload,
+    fallbackCode: "ACCOUNTING_OPERATION_FAILED",
+    fallbackMessage: fallback,
+  });
 }
 
 function endpointFor(tab: TabKey, range: string) {

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { z } from "zod";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
@@ -38,7 +39,7 @@ export async function POST(req: Request, { params }: Params) {
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "write", { mutation: true, limit: 120 });
   if (!auth.ok) return auth.response;
   const parsed = createSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: "Commande omnicanale invalide." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "RETAIL_OMNICHANNEL_ORDERS_INPUT_INVALID", req);
   try {
     const result = await createRetailOmnichannelOrder(organizationId, auth.session.userId, parsed.data);
     await writeAuditLog({

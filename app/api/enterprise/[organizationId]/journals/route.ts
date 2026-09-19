@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { authorizeFinanceRequest, financeErrorResponse, financeListParams } from "@/lib/enterprise/accounting/http";
+import { authorizeFinanceRequest, financeErrorResponse, financeListParams, financeValidationErrorResponse } from "@/lib/enterprise/accounting/http";
 import { createJournal } from "@/lib/enterprise/accounting/master-service";
 import { journalCreateSchema } from "@/lib/enterprise/accounting/schemas";
 import { prisma } from "@/lib/prisma";
@@ -27,6 +27,6 @@ export async function GET(req: Request, { params }: Params) {
 export async function POST(req: Request, { params }: Params) {
   const startedAt = Date.now(); const { organizationId } = await params;
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_ACCOUNTING", "create", { mutation: true }); if (!auth.ok) return auth.response;
-  const parsed = journalCreateSchema.safeParse(await req.json().catch(() => null)); if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  const parsed = journalCreateSchema.safeParse(await req.json().catch(() => null)); if (!parsed.success) return financeValidationErrorResponse(parsed.error, "JOURNAL_INPUT_INVALID");
   try { const journal = await createJournal(organizationId, auth.session.userId, parsed.data); await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_JOURNAL_CREATED", entity: "EnterpriseJournal", entityId: journal.id, request: req, metadata: { organizationId, code: journal.code } }); await writeApiLog({ request: req, statusCode: 201, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "journals" } }); return NextResponse.json({ ok: true, journal }, { status: 201 }); } catch (error) { return financeErrorResponse(error, "JOURNAL_CREATE_FAILED"); }
 }

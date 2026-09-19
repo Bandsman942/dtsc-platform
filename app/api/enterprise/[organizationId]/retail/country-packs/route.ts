@@ -30,7 +30,7 @@ export async function POST(req: Request, { params }: Params) {
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "manage", { mutation: true, limit: 60 });
   if (!auth.ok) return auth.response;
   const parsed = activationSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: "Configuration country pack invalide." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: "Configuration country pack invalide." }, { status: 400 });
   try {
     const activation = await activateRetailCountryPack({
       organizationId,

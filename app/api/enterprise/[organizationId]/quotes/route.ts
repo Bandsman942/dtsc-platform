@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
-import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
+import { enterpriseDomainErrorResponse, enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { quoteCreateSchema } from "@/lib/enterprise/crm-sales/schemas";
 import { createEnterpriseQuote } from "@/lib/enterprise/crm-sales/service";
 import { prisma } from "@/lib/prisma";
@@ -81,7 +81,7 @@ export async function POST(req: Request, { params }: Params) {
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "SALES_QUOTES_ORDERS", action: "write" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = quoteCreateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Devis invalide." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "QUOTE_INPUT_INVALID", req);
   try {
     const quote = await createEnterpriseQuote(organizationId, session.userId, parsed.data);
     await Promise.allSettled([

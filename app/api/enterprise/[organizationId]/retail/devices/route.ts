@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { listRetailDeviceProfiles, upsertRetailDeviceProfile } from "@/lib/enterprise/retail/customer-payments";
 import { retailDeviceProfileUpsertSchema } from "@/lib/enterprise/retail/customer-payments-schemas";
@@ -25,7 +26,7 @@ export async function POST(req: Request, { params }: Params) {
   const permissions = await getRetailCustomerPaymentPermissions(auth.session.userId, organizationId);
   if (!permissions.canManageDevices) return NextResponse.json({ error: "Forbidden", message: "Votre fonction ne permet pas de configurer les périphériques POS." }, { status: 403 });
   const parsed = retailDeviceProfileUpsertSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Périphérique POS invalide." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "RETAIL_DEVICE_INPUT_INVALID", req);
   try {
     const device = await upsertRetailDeviceProfile(organizationId, auth.session.userId, parsed.data);
     await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_RETAIL_DEVICE_UPSERTED", entity: "EnterpriseRetailDeviceProfile", entityId: device.id, request: req, metadata: { organizationId, siteId: device.siteId, code: device.code, deviceType: device.deviceType, connectionMode: device.connectionMode, status: device.status } });

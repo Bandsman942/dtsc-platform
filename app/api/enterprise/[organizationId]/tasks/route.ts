@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { enterpriseTaskVisibilityWhere, getEnterpriseCoreV2Access } from "@/lib/enterprise/core-v2/access";
@@ -77,7 +78,7 @@ export async function POST(req: Request, { params }: Params) {
   const access = await getEnterpriseCoreV2Access({ session, organizationId, moduleCode: "TASKS_OPERATIONS", action: "submit" });
   if (!access?.canCreate) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = enterpriseTaskCreateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Vérifiez les informations de la tâche." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "TASKS_INPUT_INVALID", req);
 
   try {
     const data = parsed.data;

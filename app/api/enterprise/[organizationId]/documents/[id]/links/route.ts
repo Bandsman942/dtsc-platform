@@ -50,7 +50,7 @@ export async function POST(req: Request, { params }: Params) {
   const document = await canAccessEnterpriseDocument({ organizationId, userId: session.userId, canManage: access.canManage, documentId: id });
   if (!document || (!access.canManage && document.createdByUserId !== session.userId && document.ownerUserId !== session.userId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = targetSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Lien invalide." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message || "Lien invalide." }, { status: 400 });
   try {
     const link = await prisma.$transaction((tx) => createEnterpriseLink(tx, {
       organizationId,
@@ -68,7 +68,7 @@ export async function POST(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "documents", documentId: id, targetEntityType: parsed.data.targetEntityType } });
     return NextResponse.json({ ok: true, link });
   } catch (error) {
-    await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt, metadata: { organizationId, domain: "documents", documentId: id, error: error instanceof Error ? error.message : "unknown" } });
-    return NextResponse.json({ error: "DOCUMENT_LINK_FAILED", message: error instanceof Error ? error.message : "Impossible de créer ce lien." }, { status: 400 });
+    await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt, metadata: { organizationId, domain: "documents", documentId: id, error: error instanceof Error && /^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : "unknown" } });
+    return NextResponse.json({ error: "DOCUMENT_LINK_FAILED", message: error instanceof Error && /^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : "Impossible de créer ce lien." }, { status: 400 });
   }
 }

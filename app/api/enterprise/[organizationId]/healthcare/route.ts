@@ -114,7 +114,7 @@ export async function POST(req: Request, { params }: Params) {
   const organization = await assertHealthcareOrganization(organizationId);
   if (!organization) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const parsed = enterpriseHealthcareRecordSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID" }, { status: 400 });
   const data = parsed.data;
   const access = await resolveEnterpriseModuleAccess({
     userId: session.userId,

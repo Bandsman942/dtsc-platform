@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { authorizeFinanceRequest, financeErrorResponse, financeListParams } from "@/lib/enterprise/accounting/http";
 import { creditNoteCreateSchema } from "@/lib/enterprise/accounting/schemas";
@@ -70,7 +71,7 @@ export async function POST(req: Request, { params }: Params) {
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_PAYABLES", "create", { mutation: true });
   if (!auth.ok) return auth.response;
   const parsed = creditNoteCreateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "SUPPLIER_CREDIT_NOTES_INPUT_INVALID", req);
   try {
     const creditNote = await createSupplierCreditNote(organizationId, auth.session.userId, parsed.data);
     await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_SUPPLIER_CREDIT_NOTE_CREATED", entity: "EnterpriseSupplierCreditNote", entityId: creditNote.id, request: req, metadata: { organizationId, number: creditNote.number, total: creditNote.grandTotal.toFixed(), currency: creditNote.currencyCode } });

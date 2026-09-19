@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { authorizeFinanceRequest, financeErrorResponse, financeListParams } from "@/lib/enterprise/accounting/http";
+import { authorizeFinanceRequest, financeErrorResponse, financeListParams, financeValidationErrorResponse } from "@/lib/enterprise/accounting/http";
 import { createFiscalPeriod } from "@/lib/enterprise/accounting/master-service";
 import { fiscalPeriodCreateSchema } from "@/lib/enterprise/accounting/schemas";
 import { prisma } from "@/lib/prisma";
@@ -30,6 +30,6 @@ export async function GET(req: Request, { params }: Params) {
 export async function POST(req: Request, { params }: Params) {
   const startedAt = Date.now(); const { organizationId } = await params;
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_ACCOUNTING", "create", { mutation: true, limit: 80 }); if (!auth.ok) return auth.response;
-  const parsed = fiscalPeriodCreateSchema.safeParse(await req.json().catch(() => null)); if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  const parsed = fiscalPeriodCreateSchema.safeParse(await req.json().catch(() => null)); if (!parsed.success) return financeValidationErrorResponse(parsed.error, "FISCAL_PERIOD_INPUT_INVALID");
   try { const period = await createFiscalPeriod(organizationId, auth.session.userId, parsed.data); await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_FISCAL_PERIOD_CREATED", entity: "EnterpriseFiscalPeriod", entityId: period.id, request: req, metadata: { organizationId, code: period.code } }); await writeApiLog({ request: req, statusCode: 201, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "fiscal-periods" } }); return NextResponse.json({ ok: true, period }, { status: 201 }); } catch (error) { return financeErrorResponse(error, "FISCAL_PERIOD_CREATE_FAILED"); }
 }

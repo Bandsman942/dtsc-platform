@@ -57,7 +57,7 @@ export async function POST(req: Request, { params }: Params) {
   const access = await getHealthAppointmentAccess({ session, organizationId, action: "submit" });
   if (!access?.canCreate) return NextResponse.json({ error: "Forbidden", message: "Vous n’avez pas la permission de créer un rendez-vous." }, { status: 403 });
   const parsed = healthAppointmentCreateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: "Vérifiez le patient, la date et le motif du rendez-vous." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: "Vérifiez le patient, la date et le motif du rendez-vous." }, { status: 400 });
   const data = parsed.data;
   const references = await validateHealthAppointmentReferences(organizationId, data);
   if (references.error) return NextResponse.json({ error: "Invalid reference", message: references.error }, { status: 400 });

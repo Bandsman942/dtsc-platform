@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { z } from "zod";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { authorizeSectorConvergenceRequest } from "@/lib/enterprise/sector-convergence/access";
@@ -48,7 +49,7 @@ export async function POST(req: Request, { params }: Params) {
   const auth = await authorizeSectorConvergenceRequest(req, organizationId, { mutation: true, limit: 60 });
   if (!auth.ok) return auth.response;
   const parsed = healthActionSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "SECTOR_CONVERGENCE_HEALTH_INPUT_INVALID", req);
   try {
     const input = parsed.data;
     const result = input.action === "MAP_PATIENT_FINANCE"

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { z } from "zod";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { authorizeFinanceRequest, financeErrorResponse } from "@/lib/enterprise/accounting/http";
@@ -18,7 +19,7 @@ export async function POST(req: Request, { params }: Params) {
   if (!auth.ok) return auth.response;
 
   const parsed = threeWayMatchOverrideSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "SUPPLIER_INVOICES_THREE_WAY_MATCH_OVERRIDE_INPUT_INVALID", req);
 
   try {
     const match = await overrideThreeWayMatch(organizationId, invoiceId, auth.session.userId, parsed.data);

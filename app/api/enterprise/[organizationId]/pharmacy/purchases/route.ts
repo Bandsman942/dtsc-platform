@@ -31,7 +31,7 @@ export async function POST(request: Request, { params }: Params) {
   const { organizationId } = await params;
   if (!(await canAccessPharmacyPurchases(session.userId, organizationId, "create"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = purchaseCreateSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Données achats invalides." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message || "Données achats invalides." }, { status: 400 });
   const referenceError = await validatePurchaseReferences(organizationId, parsed.data);
   if (referenceError) return NextResponse.json({ error: "Invalid reference", message: referenceError }, { status: 400 });
   try {

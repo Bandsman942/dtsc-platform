@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
@@ -57,7 +58,7 @@ export async function POST(req: Request, { params }: Params) {
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "SITES_WAREHOUSES", action: "write" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = storageLocationCreateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Emplacement invalide." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "STORAGE_LOCATION_CREATE_INPUT_INVALID", req);
   try {
     const location = await createEnterpriseStorageLocation(organizationId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_STORAGE_LOCATION_CREATED", entity: "EnterpriseStorageLocation", entityId: location.id, request: req, metadata: { organizationId, warehouseId: parsed.data.warehouseId } });
@@ -80,7 +81,8 @@ export async function PATCH(req: Request, { params }: Params) {
   const raw = await req.json().catch(() => null) as (Record<string, unknown> & { locationId?: string }) | null;
   const entityId = typeof raw?.locationId === "string" ? raw.locationId : "";
   const parsed = storageLocationUpdateSchema.safeParse(raw);
-  if (!entityId || !parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.success ? "Référence manquante." : parsed.error.issues[0]?.message || "Emplacement invalide." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "STORAGE_LOCATION_UPDATE_INPUT_INVALID", req);
+  if (!entityId) return NextResponse.json({ error: "STORAGE_LOCATION_REFERENCE_REQUIRED", message: "Référence manquante." }, { status: 400 });
   try {
     if (parsed.data.status === "INACTIVE") await prisma.$transaction((tx) => assertStorageLocationCanBecomeInactive(tx, organizationId, entityId), { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     const entity = await updateEnterpriseStorageLocation(organizationId, entityId, session.userId, parsed.data);
@@ -89,9 +91,9 @@ export async function PATCH(req: Request, { params }: Params) {
     return NextResponse.json({ ok: true, entity });
   } catch (error) {
     const integrityMessage = locationIntegrityMessage(error);
-    if (integrityMessage) return NextResponse.json({ error: error instanceof Error ? error.message : "STORAGE_LOCATION_INTEGRITY_CONFLICT", message: integrityMessage }, { status: 409 });
-    const message = error instanceof Error ? error.message : "UPDATE_FAILED";
-    const conflict = message === "REVISION_CONFLICT";
-    return NextResponse.json({ error: message, message: conflict ? "L’élément a été modifié par un autre utilisateur. Actualisez avant de réessayer." : "Modification impossible." }, { status: conflict ? 409 : 400 });
+    if (integrityMessage) return NextResponse.json({ error: "STORAGE_LOCATION_INTEGRITY_CONFLICT", message: integrityMessage }, { status: 409 });
+    const conflict = error instanceof Error && error.message === "REVISION_CONFLICT";
+    const code = conflict ? "REVISION_CONFLICT" : "STORAGE_LOCATION_UPDATE_FAILED";
+    return NextResponse.json({ error: code, message: conflict ? "L’élément a été modifié par un autre utilisateur. Actualisez avant de réessayer." : "Modification impossible." }, { status: conflict ? 409 : 400 });
   }
 }

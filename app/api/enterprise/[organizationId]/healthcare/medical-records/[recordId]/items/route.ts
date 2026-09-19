@@ -25,7 +25,7 @@ export async function POST(req: Request, { params }: Params) {
   const ctx = await context(req, params);
   if (ctx.response) return ctx.response;
   const parsed = healthMedicalRecordItemSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: "L’élément médical est incomplet ou invalide." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: "L’élément médical est incomplet ou invalide." }, { status: 400 });
   if (parsed.data.entity === "confidential_note" && !ctx.access.canManageConfidentialNotes) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   try {
     const item = await createHealthMedicalRecordItem(ctx.organizationId, ctx.recordId, ctx.session.userId, parsed.data);
@@ -40,7 +40,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const ctx = await context(req, params);
   if (ctx.response) return ctx.response;
   const parsed = healthMedicalRecordItemActionSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID" }, { status: 400 });
   try {
     await transitionHealthMedicalRecordItem(ctx.organizationId, ctx.recordId, ctx.session.userId, parsed.data.entity, parsed.data.itemId, parsed.data.action, parsed.data.reason);
     await writeAuditLog({ userId: ctx.session.userId, action: `HEALTH_MEDICAL_RECORD_ITEM_${parsed.data.action.toUpperCase()}`, entity: "HealthMedicalRecord", entityId: ctx.recordId, request: req, metadata: { organizationId: ctx.organizationId, itemId: parsed.data.itemId } });

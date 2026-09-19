@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
-import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
+import { enterpriseDomainErrorResponse, enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { createEnterpriseAssetMaintenance } from "@/lib/enterprise/projects-assets/assets";
 import { assetMaintenanceCreateSchema } from "@/lib/enterprise/projects-assets/schemas";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
@@ -20,7 +20,7 @@ export async function POST(req: Request, { params }: Params) {
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "ASSETS_MAINTENANCE", action: "write" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = assetMaintenanceCreateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "ASSET_MAINTENANCE_INPUT_INVALID", req);
   try {
     const maintenance = await createEnterpriseAssetMaintenance(organizationId, assetId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_ASSET_MAINTENANCE_CREATED", entity: "EnterpriseAssetMaintenance", entityId: maintenance.id, request: req, metadata: { organizationId, assetId } });

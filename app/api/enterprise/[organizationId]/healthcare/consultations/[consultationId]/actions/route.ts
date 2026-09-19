@@ -32,7 +32,7 @@ export async function POST(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, moduleCode: "CONSULTATIONS", action: data.action } });
     return NextResponse.json({ ok: true, consultation });
   } catch (error) {
-    const code = error instanceof Error ? error.message : "ACTION_FAILED";
+    const code = error instanceof Error && /^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : "ACTION_FAILED";
     const messages: Record<string, string> = { CONSULTATION_NOT_FOUND: "Consultation introuvable.", INVALID_TRANSITION: "Cette transition de statut n’est pas autorisée.", REASON_REQUIRED: "Un motif est obligatoire pour cette action." };
     return NextResponse.json({ error: code, message: messages[code] || "Action impossible sur cette consultation." }, { status: code === "CONSULTATION_NOT_FOUND" ? 404 : 409 });
   }

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
-import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
+import { enterpriseDomainErrorResponse, enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { createEnterpriseProjectIssue } from "@/lib/enterprise/projects-assets/projects";
 import { projectIssueCreateSchema } from "@/lib/enterprise/projects-assets/schemas";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
@@ -20,7 +20,7 @@ export async function POST(req: Request, { params }: Params) {
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "PROJECTS_SERVICES", action: "write" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = projectIssueCreateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "PROJECT_ISSUE_INPUT_INVALID", req);
   try {
     const issue = await createEnterpriseProjectIssue(organizationId, projectId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_PROJECT_ISSUE_CREATED", entity: "EnterpriseProjectIssue", entityId: issue.id, request: req, metadata: { organizationId, projectId } });

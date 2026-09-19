@@ -75,7 +75,7 @@ export async function POST(req: Request, { params }: Params) {
   const access = await getEnterpriseProcurementAccess({ session, organizationId, moduleCode: "DOCUMENTS", action: "submit" });
   if (!access?.canCreate) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = enterpriseDocumentCreateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Document invalide." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message || "Document invalide." }, { status: 400 });
   try {
     const document = await createEnterpriseDocument(organizationId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_DOCUMENT_CREATED", entity: "EnterpriseDocument", entityId: document.id, request: req, metadata: { organizationId, documentType: document.documentType, visibility: document.visibility } });
@@ -83,7 +83,7 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ ok: true, document }, { status: 201 });
   } catch (error) {
     const duplicate = error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
-    await writeApiLog({ request: req, statusCode: duplicate ? 409 : 400, userId: session.userId, startedAt, metadata: { organizationId, domain: "documents", error: error instanceof Error ? error.message : "unknown" } });
-    return NextResponse.json({ error: "Document creation failed", message: duplicate ? "Un document identique existe déjà." : error instanceof Error ? error.message : "Création impossible." }, { status: duplicate ? 409 : 400 });
+    await writeApiLog({ request: req, statusCode: duplicate ? 409 : 400, userId: session.userId, startedAt, metadata: { organizationId, domain: "documents", error: error instanceof Error && /^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : "unknown" } });
+    return NextResponse.json({ error: "Document creation failed", message: duplicate ? "Un document identique existe déjà." : error instanceof Error && /^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : "Création impossible." }, { status: duplicate ? 409 : 400 });
   }
 }

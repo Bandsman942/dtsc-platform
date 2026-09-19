@@ -41,7 +41,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const limited = await rateLimit(getRateLimitKey(req, `enterprise-gaming-checkout-command:${session.userId}`), 180, 3_600_000);
   if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   const parsed = gamingCheckoutCommandSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message }, { status: 400 });
   const { organizationId, checkoutId } = await params;
   const action = parsed.data.action;
   const gamingAction = ["APPROVE_INVOICE", "APPROVE_PAYMENT", "CANCEL", "REQUEST_REFUND", "APPROVE_REFUND"].includes(action) ? "manage" : "write";

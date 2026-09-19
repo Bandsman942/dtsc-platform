@@ -114,7 +114,7 @@ export async function POST(req: Request, { params }: Params) {
   const { organizationId } = await params;
   if (!(await canAccessPharmacyBatches(session.userId, organizationId, "create"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = pharmacyBatchSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Lot invalide." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message || "Lot invalide." }, { status: 400 });
   const referenceError = await validateReferences(organizationId, parsed.data);
   if (referenceError) return NextResponse.json({ error: "Invalid reference", message: referenceError }, { status: 400 });
   try {

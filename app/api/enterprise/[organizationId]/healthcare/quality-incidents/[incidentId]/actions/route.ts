@@ -19,7 +19,7 @@ export async function POST(req: Request, { params }: Params) {
   const involved = incident.reportedById === session.userId || incident.assignedToId === session.userId;
   if ((!access.canViewAll && !involved) || (!access.canViewConfidential && (incident.confidentialityIncident || incident.restrictedAccess) && !involved)) return NextResponse.json({ error: "Forbidden", message: "Cet incident est confidentiel." }, { status: 403 });
   const parsed = healthQualityCorrectiveActionCreateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: "Une action corrective exige un responsable et une échéance valides." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: "Une action corrective exige un responsable et une échéance valides." }, { status: 400 });
   try {
     const record = await createHealthQualityCorrectiveAction(organizationId, incidentId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: "HEALTH_QUALITY_CORRECTIVE_ACTION_CREATED", entity: "HealthQualityCorrectiveAction", entityId: record.id, request: req, metadata: { organizationId, incidentId } });

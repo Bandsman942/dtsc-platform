@@ -59,7 +59,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const parsed = moduleToggleSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Invalid payload", message: "La demande de modification du module est invalide." }, { status: 400 });
+    return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: "La demande de modification du module est invalide." }, { status: 400 });
   }
 
   const enterpriseModule = await prisma.enterpriseModule.findFirst({ where: { id: moduleId, organizationId } });
@@ -120,7 +120,7 @@ export async function PATCH(req: Request, { params }: Params) {
   } catch (error) {
     if (error instanceof EnterpriseModuleConfigurationError) {
       await writeApiLog({ request: req, statusCode: error.status, userId: session.userId, startedAt, metadata: { code: error.code } });
-      return NextResponse.json({ error: error.code, message: error.message, details: error.details }, { status: error.status });
+      return NextResponse.json({ error: error.code, message: /^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : "L’opération n’a pas pu être terminée.", details: error.details }, { status: error.status });
     }
     throw error;
   }

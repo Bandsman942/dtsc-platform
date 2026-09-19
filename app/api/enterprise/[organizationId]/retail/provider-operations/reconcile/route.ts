@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { z } from "zod";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
@@ -22,7 +23,7 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Forbidden", message: "Votre fonction ne permet pas le rapprochement des opérations provider." }, { status: 403 });
   }
   const parsed = reconciliationSchema.safeParse(await req.json().catch(() => ({})));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Demande de rapprochement invalide." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "RETAIL_PROVIDER_OPERATIONS_RECONCILE_INPUT_INVALID", req);
   try {
     const results = await reconcileRetailProviderOperations(organizationId, parsed.data.operationId, parsed.data.limit);
     await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_RETAIL_PROVIDER_RECONCILIATION_RUN", entity: "EnterpriseRetailProviderOperation", entityId: parsed.data.operationId || organizationId, request: req, metadata: { organizationId, operationId: parsed.data.operationId || null, resultCount: results.length, finalizedCount: results.filter((item) => item.finalized).length } });

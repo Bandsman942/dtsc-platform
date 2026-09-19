@@ -31,7 +31,7 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Invalid request state", message: "Une tâche ne peut être créée depuis cette demande que lorsqu’elle est soumise, en revue ou approuvée." }, { status: 409 });
   }
   const parsed = enterpriseTaskCreateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Tâche invalide." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message || "Tâche invalide." }, { status: 400 });
   try {
     const data = parsed.data;
     const task = await createEnterpriseTask(organizationId, session.userId, {

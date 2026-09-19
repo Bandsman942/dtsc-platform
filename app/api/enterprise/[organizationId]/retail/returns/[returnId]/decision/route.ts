@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { finalizeRetailReturnAccounting } from "@/lib/enterprise/retail/accounting";
 import { retailReturnDecisionSchema } from "@/lib/enterprise/retail/commercial-schemas";
@@ -18,7 +19,7 @@ export async function POST(req: Request, { params }: Params) {
   const permissions = await getRetailCommercialPermissions(auth.session.userId, organizationId);
   if (!permissions.canManageRefunds) return NextResponse.json({ error: "Forbidden", message: "Vous n’êtes pas autorisé à valider les remboursements Retail." }, { status: 403 });
   const parsed = retailReturnDecisionSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Décision de retour invalide." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "RETAIL_RETURNS_DECISION_INPUT_INVALID", req);
   try {
     const result = await decideRetailReturn(organizationId, returnId, auth.session.userId, parsed.data);
     const accounting = parsed.data.decision === "APPROVE"

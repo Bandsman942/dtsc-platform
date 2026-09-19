@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
@@ -23,7 +24,7 @@ export async function PATCH(req: Request, { params }: Params) {
   if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   const { organizationId, id } = await params;
   const parsed = legacyMutationSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "LEGACY_CORE_MUTATION_INPUT_INVALID", req);
   const record = await prisma.enterpriseCoreRecord.findFirst({ where: { id, organizationId, archivedAt: null } });
   if (!record) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const access = await getEnterpriseCoreAccess({ session, organizationId, moduleCode: record.moduleCode, action: "submit" });

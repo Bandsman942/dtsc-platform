@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getRetailActiveCustomerIdFromCookieHeader } from "@/lib/enterprise/retail/active-customer";
 import { retailCommercialContextSchema } from "@/lib/enterprise/retail/commercial-schemas";
@@ -59,7 +60,7 @@ export async function POST(req: Request, { params }: Params) {
   const activeCustomerId = getRetailActiveCustomerIdFromCookieHeader(req.headers.get("cookie"), organizationId);
   const raw = rawObject ? { ...rawObject, ...(explicitCustomerId || activeCustomerId ? { customerBusinessPartyId: explicitCustomerId || activeCustomerId } : {}) } : originalRaw;
   const parsed = retailSaleCreateSchema.safeParse(raw);
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Ticket invalide." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "RETAIL_SALES_INPUT_INVALID", req);
   const commercialContext = retailCommercialContextSchema.safeParse(raw);
   if (!commercialContext.success) return NextResponse.json({ error: "Invalid commercial context", message: commercialContext.error.issues[0]?.message || "Contexte commercial invalide." }, { status: 400 });
   try {

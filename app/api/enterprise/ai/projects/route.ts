@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseAiAccess } from "@/lib/enterprise-ai/access";
@@ -26,7 +27,7 @@ export async function POST(req: Request) {
   const parsed = enterpriseAiProjectCreateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Invalid payload", message: "Nom de projet IA invalide." }, { status: 400 });
+    return enterpriseValidationErrorResponse(parsed.error, "ENTERPRISE_AI_PROJECT_CREATE_INPUT_INVALID", req);
   }
   const data = parsed.data;
   const access = await getEnterpriseAiAccess(session, data.organizationId, "chat");
@@ -73,7 +74,7 @@ export async function PATCH(req: Request) {
   const parsed = enterpriseAiProjectUpdateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Invalid payload", message: "Modification de projet IA invalide." }, { status: 400 });
+    return enterpriseValidationErrorResponse(parsed.error, "ENTERPRISE_AI_PROJECT_UPDATE_INPUT_INVALID", req);
   }
   const data = parsed.data;
   const access = await getEnterpriseAiAccess(session, data.organizationId, "chat");
@@ -144,7 +145,7 @@ export async function DELETE(req: Request) {
   const parsed = enterpriseAiProjectDeleteSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Invalid payload", message: "Suppression de projet IA invalide." }, { status: 400 });
+    return enterpriseValidationErrorResponse(parsed.error, "ENTERPRISE_AI_PROJECT_DELETE_INPUT_INVALID", req);
   }
   const data = parsed.data;
   const access = await getEnterpriseAiAccess(session, data.organizationId, "chat");

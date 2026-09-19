@@ -44,7 +44,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const existing = await prisma.pharmacyProduct.findFirst({ where: { id: productId, organizationId }, select: { id: true } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const parsed = pharmacyProductUpdateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Produit invalide." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message || "Produit invalide." }, { status: 400 });
   try {
     const product = await prisma.pharmacyProduct.update({ where: { id: productId }, data: updateData(parsed.data, session.userId) });
     await writeAuditLog({ userId: session.userId, action: "PHARMACY_PRODUCT_UPDATED", entity: "PharmacyProduct", entityId: product.id, request: req, metadata: { organizationId } });

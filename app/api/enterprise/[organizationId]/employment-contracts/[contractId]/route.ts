@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
-import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
+import { enterpriseDomainErrorResponse, enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { updateEnterpriseEmploymentContract } from "@/lib/enterprise/hr-payroll/contracts";
 import { employmentContractUpdateSchema } from "@/lib/enterprise/hr-payroll/schemas";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
@@ -28,12 +28,7 @@ export async function PATCH(req: Request, { params }: Params) {
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const parsed = employmentContractUpdateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: "Invalid payload", message: parsed.error.issues[0]?.message || "Contrat invalide." },
-      { status: 400 },
-    );
-  }
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "EMPLOYMENT_CONTRACT_UPDATE_INPUT_INVALID", req);
 
   try {
     const contract = await updateEnterpriseEmploymentContract(organizationId, contractId, session.userId, parsed.data);

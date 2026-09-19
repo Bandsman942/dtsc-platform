@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
-import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
+import { enterpriseDomainErrorResponse, enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { transitionEnterpriseProjectMilestone } from "@/lib/enterprise/projects-assets/project-controls";
 import { projectMilestoneTransitionSchema } from "@/lib/enterprise/projects-assets/schemas";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
@@ -21,7 +21,7 @@ export async function POST(req: Request, { params }: Params) {
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "PROJECTS_SERVICES", action: "write" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = projectMilestoneTransitionSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "PROJECT_MILESTONE_TRANSITION_INPUT_INVALID", req);
   try {
     const result = await transitionEnterpriseProjectMilestone(organizationId, projectId, milestoneId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: `ENTERPRISE_PROJECT_MILESTONE_${parsed.data.action}`, entity: "EnterpriseProjectMilestone", entityId: milestoneId, request: req, metadata: { organizationId, projectId, approvalId: result.approval?.id || null } });

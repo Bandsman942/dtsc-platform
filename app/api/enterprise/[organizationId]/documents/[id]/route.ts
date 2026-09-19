@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { normalizeEnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
@@ -44,7 +45,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const current = await canAccessEnterpriseDocument({ organizationId, userId: session.userId, canManage: access.canManage, documentId: id });
   if (!current || (!access.canManage && current.createdByUserId !== session.userId && current.ownerUserId !== session.userId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = enterpriseDocumentUpdateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Document invalide." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "DOCUMENT_UPDATE_INPUT_INVALID", req);
   try {
     const document = await updateEnterpriseDocument(organizationId, id, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_DOCUMENT_UPDATED", entity: "EnterpriseDocument", entityId: id, request: req, metadata: { organizationId } });
@@ -67,7 +68,7 @@ export async function DELETE(req: Request, { params }: Params) {
   const access = await getEnterpriseProcurementAccess({ session, organizationId, moduleCode: "DOCUMENTS", action: "manage" });
   if (!access?.canManage) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = enterpriseDocumentArchiveSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Document invalide." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "DOCUMENT_ARCHIVE_INPUT_INVALID", req);
   try {
     await archiveEnterpriseDocument(organizationId, id, session.userId, parsed.data.revision, parsed.data.reason);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_DOCUMENT_ARCHIVED", entity: "EnterpriseDocument", entityId: id, request: req, metadata: { organizationId, reason: parsed.data.reason } });
