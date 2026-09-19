@@ -19,7 +19,7 @@ export async function POST(req: Request, { params }: Params) {
   const limited = await rateLimit(getRateLimitKey(req, `enterprise-gaming-tournament-station:${session.userId}`), 180, 3_600_000);
   if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   const parsed = gamingTournamentStationSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message }, { status: 400 });
   const { organizationId, tournamentId } = await params;
   const [access, stationAccess, assetAccess] = await Promise.all([
     getEnterpriseGamingTournamentAccess({ session, organizationId, action: "write" }),
