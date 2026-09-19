@@ -46,7 +46,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const limited = await rateLimit(getRateLimitKey(req, `enterprise-gaming-daily-close-decision:${session.userId}`), 80, 3_600_000);
   if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   const parsed = gamingDailyCloseDecisionSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message }, { status: 400 });
   const { organizationId, closeId } = await params;
   const [gamingAccess, financeAccess] = await Promise.all([
     getEnterpriseGamingDailyCloseAccess({ session, organizationId, action: "manage" }),
