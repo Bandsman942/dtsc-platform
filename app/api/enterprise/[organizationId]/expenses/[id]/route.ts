@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { normalizeEnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
@@ -49,7 +50,7 @@ export async function PATCH(req: Request, { params }: Params) {
   if (!current) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (!access.canManage && current.createdByUserId !== session.userId && current.requestedByUserId !== session.userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = enterpriseExpenseUpdateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Dépense invalide." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "EXPENSE_UPDATE_INPUT_INVALID", req);
   let data = parsed.data;
   if (parsed.data.documentIds !== undefined) {
     const documents = await validateFinanceDocumentIds(organizationId, session.userId, parsed.data.documentIds);
