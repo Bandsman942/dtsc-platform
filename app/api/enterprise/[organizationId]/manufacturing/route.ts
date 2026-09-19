@@ -94,6 +94,8 @@ export async function GET(request: Request, { params }: Params) {
       linkedAccess(authorization.session.userId, organizationId, "SITES_WAREHOUSES"),
     ]);
     const references = referencesRaw ? {
+      businessDate: referencesRaw.businessDate,
+      functionalCurrencyCode: referencesRaw.functionalCurrencyCode,
       configuration: referencesRaw.configuration,
       catalogItems: catalogAccess.allowed ? referencesRaw.catalogItems : [],
       warehouses: siteAccess.allowed ? referencesRaw.warehouses : [],
