@@ -86,7 +86,7 @@ export async function PATCH(request: Request, { params }: Params) {
     await writeApiLog({ request, statusCode: 200, userId: session.userId, startedAt });
     return NextResponse.json({ ok: true });
   } catch (error) {
-    const code = error instanceof Error ? error.message : "UNKNOWN";
+    const code = error instanceof Error && /^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : "UNKNOWN";
     const messages: Record<string, string> = { COUNTED_AMOUNT_REQUIRED: "Le montant cash compté est obligatoire.", JUSTIFICATION_REQUIRED: "Une justification est obligatoire pour cet écart.", SESSION_NOT_OPEN: "La session n'est pas ouverte.", SESSION_NOT_CLOSED: "La session doit être clôturée avant soumission.", SESSION_NOT_PENDING: "La clôture n'est pas en attente de validation.", SELF_VALIDATION_FORBIDDEN: "Le caissier ne peut pas valider sa propre clôture.", REASON_REQUIRED: "Le motif est obligatoire.", PAYMENT_SESSION_CLOSED: "Un paiement lié à une session clôturée ne peut plus être annulé librement.", REFUND_NOT_VALIDATED: "Le remboursement doit être validé avant paiement.", REFUND_NOT_SUBMITTED: "Le remboursement n'est plus en attente de validation.", SALE_ALREADY_RESTOCKED: "Cette vente a déjà été remise en stock.", BATCH_NOT_FOUND: "Un lot de la vente est introuvable.", INVALID_ACTION: "Cette action n'est pas autorisée." };
     return NextResponse.json({ error: code, message: messages[code] || "Action de caisse impossible." }, { status: 400 });
   }
