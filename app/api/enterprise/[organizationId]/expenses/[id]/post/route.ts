@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { authorizeFinanceRequest, financeErrorResponse } from "@/lib/enterprise/accounting/http";
+import { authorizeFinanceRequest, financeErrorResponse, financeValidationErrorResponse } from "@/lib/enterprise/accounting/http";
 import { classifyAndPostExpense } from "@/lib/enterprise/accounting/payroll-expense-accounting-service";
 import { expensePostingSchema } from "@/lib/enterprise/accounting/treasury-schemas";
 
@@ -13,7 +13,7 @@ export async function POST(req: Request, { params }: Params) {
   if (!auth.ok) return auth.response;
 
   const parsed = expensePostingSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) return financeValidationErrorResponse(parsed.error, "EXPENSE_POSTING_INPUT_INVALID");
 
   try {
     const result = await classifyAndPostExpense(organizationId, id, auth.session.userId, parsed.data);
