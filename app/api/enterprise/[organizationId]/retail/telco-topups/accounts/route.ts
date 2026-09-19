@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { telcoProviderAccountUpsertSchema } from "@/lib/enterprise/retail/telco-multicurrency-schemas";
@@ -26,7 +27,7 @@ export async function POST(req: Request, { params }: Params) {
   const auth = await authorizeRetailRequest(req, organizationId, "TELCO_TOPUPS", "manage", { mutation: true, limit: 80 });
   if (!auth.ok) return auth.response;
   const parsed = telcoProviderAccountUpsertSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Configuration Télécom invalide." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "RETAIL_TELCO_TOPUPS_ACCOUNTS_INPUT_INVALID", req);
   try {
     const mapping = await upsertTelcoProviderAccount(organizationId, auth.session.userId, parsed.data);
     await writeAuditLog({
