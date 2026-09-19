@@ -27,7 +27,7 @@ export async function POST(req: Request, { params }: Params) {
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_ACCOUNTING", "create", { mutation: true, limit: 60 });
   if (!auth.ok) return auth.response;
   const parsed = periodicAccountingTemplateCreateSchema.safeParse(await req.json().catch(() => null));
-  if (!p.success) return enterpriseValidationErrorResponse(p.error, "PERIODIC_ACCOUNTING_INPUT_INVALID", req);
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "PERIODIC_ACCOUNTING_INPUT_INVALID", req);
   try {
     const template = await createPeriodicAccountingTemplate(organizationId, auth.session.userId, parsed.data);
     await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_PERIODIC_ACCOUNTING_TEMPLATE_CREATED", entity: "EnterprisePeriodicAccountingTemplate", entityId: template.id, request: req, metadata: { organizationId, code: template.code, version: template.version, operationType: template.operationType } });
