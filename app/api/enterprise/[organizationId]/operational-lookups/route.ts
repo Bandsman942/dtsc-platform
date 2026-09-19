@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
+import { formatEnterpriseBusinessDate, getEnterpriseBusinessContext } from "@/lib/enterprise/business-context";
 import { authorizeFinanceRequest } from "@/lib/enterprise/accounting/http";
 import type { EnterpriseFinanceModuleCode } from "@/lib/enterprise/accounting/constants";
 import { prisma } from "@/lib/prisma";
@@ -227,6 +228,9 @@ export async function GET(req: Request, { params }: Params) {
       }))
     : payrollPeriods;
 
+  const businessContext = await getEnterpriseBusinessContext(prisma, organizationId);
+  const businessDate = formatEnterpriseBusinessDate(new Date(), businessContext.timezone);
+
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "operational-lookups", moduleCode } });
   return NextResponse.json({
     members: members.map((member) => ({ id: member.userId, membershipId: member.id, label: member.user.name || member.user.email, email: member.user.email, role: member.role, positionTitle: member.positionTitle })),
@@ -250,5 +254,7 @@ export async function GET(req: Request, { params }: Params) {
     purchases,
     purchaseReceipts,
     expenseAccounts,
+    functionalCurrencyCode: businessContext.functionalCurrencyCode,
+    businessDate,
   });
 }
