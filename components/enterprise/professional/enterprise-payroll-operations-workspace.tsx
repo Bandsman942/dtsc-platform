@@ -165,7 +165,7 @@ export function EnterprisePayrollOperationsWorkspace({ organizationId, organizat
 
   const statusItems = [{ id: "", label: t("people.allStatuses") }, ...PAYROLL_STATUSES.map((id) => ({ id, label: professionalErpEnumLabel(locale, "payrollStatus", id) }))];
   const openPeriods = lookups.payrollPeriods.filter((period) => period.status === "OPEN");
-  const currencyItems = (lookups.currencies.length ? lookups.currencies : ["USD"]).map((id) => ({ id, label: id }));
+  const currencyItems = lookups.currencies.map((id) => ({ id, label: id }));
   const approverItems = [{ id: "", label: lookups.approvers.length ? (locale === "en" ? "Select an authorized approver" : "Choisir un validateur autorisé") : copy.noApprover }, ...lookups.approvers.map((member) => ({ id: member.userId, label: memberLabel(member) }))];
 
   async function mutate(action: string, endpoint: string, payload: unknown, success: string, fallback: string) {
@@ -303,7 +303,7 @@ export function EnterprisePayrollOperationsWorkspace({ organizationId, organizat
         {!openPeriods.length ? <ProfessionalError message={copy.noOpenPeriod} /> : null}
         <ProfessionalFormSection title={copy.periodCurrency} description={locale === "en" ? "The selected currency must match every active employment contract in the population." : "La devise choisie doit correspondre à chaque contrat de travail actif de la population."}>
           <Field label={t("payroll.openPeriodField")}><NativeSelect name="payrollPeriodId" required disabled={!openPeriods.length} items={[{ id: "", label: openPeriods.length ? t("people.select") : copy.noOpenPeriod }, ...openPeriods.map((period) => ({ id: period.id, label: `${period.code} · ${period.name}` }))]} /></Field>
-          <Field label={t("payroll.currency")}><NativeSelect name="currency" defaultValue={currencyItems[0]?.id || "USD"} required items={currencyItems} /></Field>
+          <Field label={t("payroll.currency")}><NativeSelect name="currency" defaultValue={currencyItems[0]?.id || ""} required disabled={!currencyItems.length} items={currencyItems} /></Field>
         </ProfessionalFormSection>
         <ProfessionalFormSection title={copy.population} description={copy.populationDescription}>
           <div className="md:col-span-2 flex flex-wrap gap-2"><Button type="button" variant="outline" disabled={!lookups.employees.length} onClick={() => setSelectedEmployees(lookups.employees.map((employee) => employee.id))}>{copy.selectAll}</Button><Button type="button" variant="outline" disabled={!selectedEmployees.length} onClick={() => setSelectedEmployees([])}>{copy.clearAll}</Button></div>
