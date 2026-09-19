@@ -4,6 +4,7 @@ import type { z } from "zod";
 import { assertEnterpriseApprovalCandidate, assertEnterpriseApprovalDecision } from "@/lib/enterprise/approval-assignment";
 import { prisma } from "@/lib/prisma";
 import { EnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
+import { resolveEnterpriseBusinessDate } from "@/lib/enterprise/business-context";
 import { ENTERPRISE_BUDGET_TRANSITIONS } from "@/lib/enterprise/finance/constants";
 import { enterpriseMoney } from "@/lib/enterprise/finance/money";
 import { getBudgetPosition } from "@/lib/enterprise/finance/commitments";
@@ -34,9 +35,8 @@ type BudgetLinePosition = BudgetPosition["lines"][number];
 type BudgetTransitionAction = keyof typeof ENTERPRISE_BUDGET_TRANSITIONS;
 type PreparedBudgetLine = Omit<Prisma.EnterpriseBudgetLineCreateManyInput, "organizationId" | "budgetId">;
 
-function budgetReference() {
-  const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  return `BUD-${date}-${randomUUID().slice(0, 8).toUpperCase()}`;
+function budgetReference(businessDate: string) {
+  return `BUD-${businessDate.replace(/-/g, "")}-${randomUUID().slice(0, 8).toUpperCase()}`;
 }
 
 function decimal(value: Prisma.Decimal.Value, scale = 2) {
@@ -114,7 +114,7 @@ export async function createEnterpriseBudget(organizationId: string, actorUserId
     const budget = await tx.enterpriseBudget.create({
       data: {
         organizationId,
-        reference: budgetReference(),
+        reference: budgetReference(await resolveEnterpriseBusinessDate(tx, organizationId)),
         title: input.title,
         description: nullable(input.description),
         status: "DRAFT",
@@ -304,7 +304,7 @@ async function createBudgetRevision(tx: Tx, organizationId: string, budgetId: st
   const revised = await tx.enterpriseBudget.create({
     data: {
       organizationId,
-      reference: budgetReference(),
+      reference: budgetReference(await resolveEnterpriseBusinessDate(tx, organizationId)),
       title: existing.title,
       description: existing.description,
       status: "DRAFT",
