@@ -10,6 +10,75 @@ import { cn } from "@/lib/utils";
 
 export type ProfessionalPagination = { page: number; pageSize: number; total: number; pageCount: number };
 
+export class ProfessionalApiError extends Error {
+  readonly code: string;
+  readonly clientMessage: string | null;
+  readonly details: unknown;
+  readonly status: number;
+
+  constructor({
+    code,
+    clientMessage,
+    details,
+    status,
+  }: {
+    code: string;
+    clientMessage: string | null;
+    details: unknown;
+    status: number;
+  }) {
+    super(clientMessage || code);
+    this.name = "ProfessionalApiError";
+    this.code = code;
+    this.clientMessage = clientMessage;
+    this.details = details;
+    this.status = status;
+  }
+}
+
+type ProfessionalRequestOptions = {
+  method?: "GET" | "POST" | "PATCH" | "DELETE";
+  payload?: unknown;
+  cache?: RequestCache;
+  fallbackCode?: string;
+  fallbackMessage?: string;
+};
+
+function professionalApiError(
+  body: { error?: string; message?: string; details?: unknown } | null,
+  status: number,
+  fallbackCode: string,
+  fallbackMessage?: string,
+) {
+  const code = typeof body?.error === "string" && body.error.trim() ? body.error.trim() : fallbackCode;
+  const clientMessage = typeof body?.message === "string" && body.message.trim()
+    ? body.message.trim()
+    : fallbackMessage?.trim() || null;
+  return new ProfessionalApiError({ code, clientMessage, details: body?.details, status });
+}
+
+export async function professionalRequest<T = Record<string, unknown>>(
+  endpoint: string,
+  options: ProfessionalRequestOptions = {},
+): Promise<T> {
+  const {
+    method = "GET",
+    payload,
+    cache = "no-store",
+    fallbackCode = method === "GET" ? "PROFESSIONAL_READ_FAILED" : "PROFESSIONAL_MUTATION_FAILED",
+    fallbackMessage,
+  } = options;
+  const response = await fetch(endpoint, {
+    method,
+    cache,
+    headers: payload === undefined ? undefined : { "content-type": "application/json" },
+    body: payload === undefined ? undefined : JSON.stringify(payload),
+  });
+  const body = await response.json().catch(() => null) as ({ error?: string; message?: string; details?: unknown } & Record<string, unknown>) | null;
+  if (!response.ok || !body) throw professionalApiError(body, response.status || 500, fallbackCode, fallbackMessage);
+  return body as T;
+}
+
 const professionalUiCopy = {
   fr: {
     loadFailed: "Chargement impossible.",
@@ -58,9 +127,18 @@ export function useProfessionalCollection<T, TExtra extends Record<string, unkno
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(`${endpoint}?${serializedParams}`, { cache: "no-store" });
-      const body = await response.json().catch(() => null) as (TExtra & { items?: T[]; pagination?: ProfessionalPagination; metrics?: Record<string, number>; canManage?: boolean; canWrite?: boolean; message?: string; error?: string }) | null;
-      if (!response.ok || !body?.items || !body.pagination) throw new Error(body?.message || body?.error || copy.loadFailed);
+      const body = await professionalRequest<TExtra & { items?: T[]; pagination?: ProfessionalPagination; metrics?: Record<string, number>; canManage?: boolean; canWrite?: boolean }>(
+        `${endpoint}?${serializedParams}`,
+        { fallbackCode: "PROFESSIONAL_COLLECTION_READ_FAILED", fallbackMessage: copy.loadFailed },
+      );
+      if (!body?.items || !body.pagination) {
+        throw new ProfessionalApiError({
+          code: "PROFESSIONAL_COLLECTION_INVALID",
+          clientMessage: copy.loadFailed,
+          details: null,
+          status: 502,
+        });
+      }
       setItems(body.items);
       setPagination(body.pagination);
       setMetrics(body.metrics || {});
@@ -82,14 +160,11 @@ export function useProfessionalCollection<T, TExtra extends Record<string, unkno
 }
 
 export async function professionalMutation(endpoint: string, payload: unknown, method: "POST" | "PATCH" | "DELETE" = "POST") {
-  const response = await fetch(endpoint, {
+  return professionalRequest<Record<string, unknown>>(endpoint, {
     method,
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(payload),
+    payload,
+    fallbackCode: "PROFESSIONAL_MUTATION_FAILED",
   });
-  const body = await response.json().catch(() => null) as { message?: string; error?: string; [key: string]: unknown } | null;
-  if (!response.ok) throw new Error(body?.message || body?.error || "ACTION_FAILED");
-  return body || {};
 }
 
 export function ProfessionalTabs<T extends string>({
