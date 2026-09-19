@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { telcoTopupReverseSchema } from "@/lib/enterprise/retail/schemas";
@@ -13,7 +14,7 @@ export async function POST(req: Request, { params }: Params) {
   const auth = await authorizeRetailRequest(req, organizationId, "TELCO_TOPUPS", "manage", { mutation: true, limit: 40 });
   if (!auth.ok) return auth.response;
   const parsed = telcoTopupReverseSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Annulation invalide." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "RETAIL_TELCO_TOPUPS_REVERSE_INPUT_INVALID", req);
   try {
     const topup = await reverseTelcoTopup(organizationId, topupId, auth.session.userId, parsed.data);
     const accounting = await finalizeTelcoTopupReversalAccounting(organizationId, auth.session.userId, topup.id);
