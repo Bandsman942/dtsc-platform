@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { UserStatus } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
@@ -32,7 +33,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const parsed = enterpriseInvitationResponseSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Invalid payload", message: "Action d'invitation invalide." }, { status: 400 });
+    return enterpriseValidationErrorResponse(parsed.error, "ENTERPRISE_INVITATION_RESPONSE_INPUT_INVALID", req);
   }
 
   const { id } = await params;
