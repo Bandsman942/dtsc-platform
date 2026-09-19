@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { enterpriseBulkJobStatus, enqueueFinanceReportGeneration } from "@/lib/enterprise/bulk-jobs/queue";
@@ -21,7 +22,7 @@ export async function POST(req: Request, { params }: Params) {
   const access = await getEnterpriseFinanceAccess({ session, organizationId, moduleCode: "REPORTS", action: "submit" });
   if (!access?.canCreate) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = enterpriseReportGenerateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Rapport invalide." }, { status: 400 });
+  if (!p.success) return enterpriseValidationErrorResponse(p.error, "REPORT_GENERATION_INPUT_INVALID", req);
 
   try {
     const job = await enqueueFinanceReportGeneration(organizationId, session.userId, parsed.data);
