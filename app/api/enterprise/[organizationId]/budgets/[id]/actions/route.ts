@@ -24,7 +24,7 @@ export async function POST(req: Request, { params }: Params) {
 
   const { organizationId, id } = await params;
   const parsed = enterpriseBudgetActionSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Action budgétaire invalide." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message || "Action budgétaire invalide." }, { status: 400 });
   const requiredAction = BUDGET_MANAGEMENT_ACTIONS.has(parsed.data.action) ? "manage" : "submit";
   const access = await getEnterpriseFinanceAccess({ session, organizationId, moduleCode: "FINANCE_BUDGETS", action: requiredAction });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });

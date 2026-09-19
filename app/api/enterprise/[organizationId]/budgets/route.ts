@@ -79,7 +79,7 @@ export async function POST(req: Request, { params }: Params) {
   const access = await getEnterpriseFinanceAccess({ session, organizationId, moduleCode: "FINANCE_BUDGETS", action: "submit" });
   if (!access?.canCreate) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = enterpriseBudgetCreateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Budget invalide." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message || "Budget invalide." }, { status: 400 });
   try {
     const position = await createEnterpriseBudget(organizationId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_BUDGET_CREATED", entity: "EnterpriseBudget", entityId: position.budget.id, request: req, metadata: { organizationId, reference: position.budget.reference, currency: position.budget.currency } });
