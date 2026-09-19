@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { ZodError } from "zod";
 import { NextResponse } from "next/server";
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 
@@ -69,6 +70,32 @@ function reportUnexpectedEnterpriseError(error: unknown, fallbackCode: string, r
   const requestId = request?.headers.get("x-request-id") || request?.headers.get("x-vercel-id") || request?.headers.get("cf-ray") || null;
   // Do not log the raw Prisma message here: validation errors can contain form values.
   console.error("[enterprise-domain] unexpected operation failure", { fallbackCode, errorName, prismaCode, requestPath, requestId });
+}
+
+export function enterpriseValidationErrorResponse(
+  error: ZodError,
+  code = "ENTERPRISE_INPUT_INVALID",
+  request?: Request,
+) {
+  const locale = requestLocale(request);
+  const firstIssue = error.issues[0];
+  const firstMessage = typeof firstIssue?.message === "string" ? firstIssue.message.trim() : "";
+  const looksFrench = /[àâçéèêëîïôùûüœ]|\b(?:doit|doivent|obligatoire|invalide|requis|requise|sélectionnez|renseignez)\b/i.test(firstMessage);
+  const message = firstMessage && (locale === "fr" || !looksFrench)
+    ? firstMessage
+    : locale === "en"
+      ? "Some information is invalid. Review the highlighted fields and try again."
+      : "Certaines informations sont invalides. Vérifiez les champs concernés puis réessayez.";
+  return NextResponse.json({
+    error: code,
+    message,
+    details: {
+      fieldErrors: error.issues.map((issue) => ({
+        field: issue.path.map(String).join(".") || "_root",
+        validation: issue.code,
+      })),
+    },
+  }, { status: 400 });
 }
 
 export function enterpriseDomainErrorResponse(error: unknown, fallbackCode = "ENTERPRISE_OPERATION_FAILED", request?: Request) {
