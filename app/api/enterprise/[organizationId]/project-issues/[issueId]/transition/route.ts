@@ -21,7 +21,7 @@ export async function POST(req: Request, { params }: Params) {
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "PROJECTS_SERVICES", action: "write" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = projectIssueTransitionSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message }, { status: 400 });
   try {
     const issue = await transitionEnterpriseProjectIssue(organizationId, issueId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: `ENTERPRISE_PROJECT_ISSUE_${parsed.data.action}`, entity: "EnterpriseProjectIssue", entityId: issueId, request: req, metadata: { organizationId } });
