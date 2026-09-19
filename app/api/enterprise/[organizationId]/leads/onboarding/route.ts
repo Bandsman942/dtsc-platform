@@ -25,7 +25,7 @@ export async function POST(req: Request, { params }: Params) {
 
   const parsed = leadCanonicalOnboardingSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Prospection invalide." }, { status: 400 });
+    return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message || "Prospection invalide." }, { status: 400 });
   }
 
   try {
