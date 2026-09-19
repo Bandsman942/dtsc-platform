@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { releaseEnterpriseInventoryReservation } from "@/lib/enterprise/inventory/reservations";
 import { inventoryReservationReleaseSchema } from "@/lib/enterprise/inventory/reservation-schemas";
@@ -12,7 +13,7 @@ export async function POST(req: Request, { params }: Params) {
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "submit", { mutation: true, limit: 240 });
   if (!auth.ok) return auth.response;
   const parsed = inventoryReservationReleaseSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Motif requis." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "RETAIL_INVENTORY_RESERVATIONS_RELEASE_INPUT_INVALID", req);
   try {
     const reservation = await releaseEnterpriseInventoryReservation(organizationId, reservationId, auth.session.userId, parsed.data.reason);
     await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_INVENTORY_RESERVATION_RELEASED", entity: "EnterpriseInventoryReservation", entityId: reservation.id, request: req, metadata: { organizationId, salesOrderId: reservation.salesOrderId, warehouseId: reservation.warehouseId, reason: parsed.data.reason } });
