@@ -22,7 +22,7 @@ export async function POST(req: Request, { params }: Params) {
   const access = await getEnterpriseFinanceAccess({ session, organizationId, moduleCode: "REPORTS", action: "submit" });
   if (!access?.canCreate) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = enterpriseReportGenerateSchema.safeParse(await req.json().catch(() => null));
-  if (!p.success) return enterpriseValidationErrorResponse(p.error, "REPORT_GENERATION_INPUT_INVALID", req);
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "REPORT_GENERATION_INPUT_INVALID", req);
 
   try {
     const job = await enqueueFinanceReportGeneration(organizationId, session.userId, parsed.data);
