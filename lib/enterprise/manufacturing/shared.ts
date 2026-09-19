@@ -15,9 +15,8 @@ export function manufacturingDecimal(value: Prisma.Decimal.Value = 0, places = 3
   return new Prisma.Decimal(value).toDecimalPlaces(places);
 }
 
-export function manufacturingReference(prefix: string) {
-  const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  return `${prefix}-${date}-${randomUUID().slice(0, 8).toUpperCase()}`;
+export function manufacturingReference(prefix: string, businessDate: string) {
+  return `${prefix}-${businessDate.replace(/-/g, "")}-${randomUUID().slice(0, 8).toUpperCase()}`;
 }
 
 export async function withManufacturingSerializable<T>(work: (tx: ManufacturingTransaction) => Promise<T>, maxAttempts = 3): Promise<T> {
