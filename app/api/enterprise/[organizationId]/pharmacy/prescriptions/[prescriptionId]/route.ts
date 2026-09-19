@@ -241,7 +241,7 @@ export async function PATCH(request: Request, { params }: Params) {
     await writeApiLog({ request, statusCode: 200, userId: session.userId, startedAt });
     return NextResponse.json({ ok: true, saleId });
   } catch (error) {
-    const code = error instanceof Error ? error.message : "UNKNOWN";
+    const code = error instanceof Error && /^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : "UNKNOWN";
     const messages: Record<string, string> = {
       PRODUCT_REQUIRED: "Sélectionnez un produit.",
       INVALID_LINE_PRODUCT: "La ligne ou le produit n'appartient pas à cette pharmacie.",

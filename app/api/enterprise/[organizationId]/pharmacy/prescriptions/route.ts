@@ -51,7 +51,7 @@ export async function POST(request: Request, { params }: Params) {
   const parsed = pharmacyPrescriptionSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json(
-      { error: "Invalid payload", message: parsed.error.issues[0]?.message || "Ordonnance invalide." },
+      { error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message || "Ordonnance invalide." },
       { status: 400 },
     );
   }
