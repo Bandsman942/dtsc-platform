@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { prepareFinancialClose } from "@/lib/enterprise/accounting/close-service";
-import { authorizeFinanceRequest, financeErrorResponse, financeListParams } from "@/lib/enterprise/accounting/http";
+import { authorizeFinanceRequest, financeErrorResponse, financeListParams, financeValidationErrorResponse } from "@/lib/enterprise/accounting/http";
 import { closePrepareSchema } from "@/lib/enterprise/accounting/treasury-schemas";
 import { prisma } from "@/lib/prisma";
 
@@ -73,7 +73,7 @@ export async function POST(req: Request, { params }: Params) {
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_CLOSE", "create", { mutation: true, limit: 20 });
   if (!auth.ok) return auth.response;
   const parsed = closePrepareSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) return financeValidationErrorResponse(parsed.error, "FINANCIAL_CLOSE_INPUT_INVALID");
   try {
     const close = await prepareFinancialClose(organizationId, parsed.data.fiscalPeriodId, auth.session.userId);
     await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_FINANCIAL_CLOSE_PREPARED", entity: "EnterpriseFinancialClose", entityId: close.id, request: req, metadata: { organizationId, fiscalPeriodId: close.fiscalPeriodId } });
