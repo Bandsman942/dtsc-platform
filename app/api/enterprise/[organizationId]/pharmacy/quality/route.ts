@@ -28,13 +28,13 @@ export async function POST(request: Request, { params }: Params) {
       await writeAuditLog({ userId: session.userId, action: `PHARMACY_QUALITY_${related.data.entityType.toUpperCase().replaceAll("-", "_")}_CREATED`, entity: related.data.entityType, entityId: record.id, request, metadata: { organizationId, incidentId: related.data.incidentId } });
       await writeApiLog({ request, statusCode: 201, userId: session.userId, startedAt }); return NextResponse.json({ ok: true, record }, { status: 201 });
     }
-    const parsed = pharmacyQualityIncidentSchema.safeParse(body); if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Incident invalide." }, { status: 400 });
+    const parsed = pharmacyQualityIncidentSchema.safeParse(body); if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message || "Incident invalide." }, { status: 400 });
     const referenceError = await validateQualityReferences(organizationId, parsed.data); if (referenceError) return NextResponse.json({ error: "Invalid reference", message: referenceError }, { status: 400 });
     const record = await createQualityIncident(organizationId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: "PHARMACY_QUALITY_INCIDENT_CREATED", entity: "PharmacyQualityIncident", entityId: record.id, request, metadata: { organizationId, incidentType: record.incidentType, criticality: record.criticality } });
     await writeApiLog({ request, statusCode: 201, userId: session.userId, startedAt }); return NextResponse.json({ ok: true, record }, { status: 201 });
   } catch (error) {
-    const duplicate = error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002"; const code = error instanceof Error ? error.message : "UNKNOWN";
+    const duplicate = error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002"; const code = error instanceof Error && /^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : "UNKNOWN";
     return NextResponse.json({ error: code, message: duplicate ? "Ce numéro existe déjà dans cette pharmacie." : code === "ASSIGNEE_INVALID" ? "Le responsable sélectionné est invalide." : code === "INCIDENT_NOT_FOUND" ? "L'incident est introuvable." : "Création impossible." }, { status: duplicate ? 409 : 400 });
   }
 }
