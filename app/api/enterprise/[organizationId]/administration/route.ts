@@ -127,7 +127,7 @@ export async function POST(req: Request, { params }: Params) {
   const parsed = enterpriseAdministrationMutationSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Invalid payload", message: "Les informations d'administration entreprise sont invalides." }, { status: 400 });
+    return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: "Les informations d'administration entreprise sont invalides." }, { status: 400 });
   }
 
   const data = parsed.data;
