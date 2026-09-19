@@ -288,7 +288,7 @@ function extractFinanceErrorCode(error: unknown): string | null {
 function extractSafeFinanceClientMessage(error: unknown) {
   if (!error || typeof error !== "object") return null;
   const value = error as { name?: unknown; clientMessage?: unknown };
-  if (value.name !== "FinanceApiError" || typeof value.clientMessage !== "string") return null;
+  if (!["FinanceApiError", "ProfessionalApiError"].includes(String(value.name)) || typeof value.clientMessage !== "string") return null;
   const message = value.clientMessage.trim();
   return message.length > 0 && message.length <= 1200 ? message : null;
 }
