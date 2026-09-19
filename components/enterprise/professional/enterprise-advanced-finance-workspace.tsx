@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { FinancialStatementReportDialog } from "@/components/reports/financial-statement-report-dialog";
 import { Input } from "@/components/ui/input";
 import { financeDate, financeEnumLabel, financeMoney, financeStatusLabel, financeStatusTone, safeFinanceError, type FinanceLocale } from "@/components/enterprise/professional/finance-professional-ui";
+import { professionalRequest } from "@/components/enterprise/professional/professional-erp-ui";
 import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
@@ -88,10 +89,12 @@ function endpointWithQuery(base: string, page: number, search: string, status: s
   return `${base}${separator}${params.toString()}`;
 }
 async function requestJson(endpoint: string, locale: FinanceLocale, method: "GET" | "POST" = "GET", body?: unknown) {
-  const response = await fetch(endpoint, { method, cache: "no-store", headers: body === undefined ? undefined : { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
-  const payload = await response.json().catch(() => null) as Record<string, unknown> | null;
-  if (!response.ok) throw new Error(String(payload?.message || payload?.error || ft(locale, "accountingActionFailed")));
-  return payload || {};
+  return professionalRequest<Record<string, unknown>>(endpoint, {
+    method,
+    payload: body,
+    fallbackCode: "ADVANCED_FINANCE_OPERATION_FAILED",
+    fallbackMessage: ft(locale, "accountingActionFailed"),
+  });
 }
 function today() { return new Date().toISOString().slice(0, 10); }
 
