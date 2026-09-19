@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { createRetailPaymentTransaction } from "@/lib/enterprise/retail/customer-payments";
 import { retailPaymentCreateSchema } from "@/lib/enterprise/retail/customer-payments-schemas";
@@ -34,7 +35,7 @@ export async function POST(req: Request, { params }: Params) {
   const permissions = await getRetailCustomerPaymentPermissions(auth.session.userId, organizationId);
   if (!permissions.canManagePayments) return NextResponse.json({ error: "Forbidden", message: "Votre fonction ne permet pas d’initier un paiement Retail." }, { status: 403 });
   const parsed = retailPaymentCreateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Paiement invalide." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "RETAIL_PAYMENTS_INPUT_INVALID", req);
   try {
     const result = await createRetailPaymentTransaction(organizationId, auth.session.userId, parsed.data);
     await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_RETAIL_PAYMENT_INITIATED", entity: "EnterpriseRetailPaymentTransaction", entityId: result.payment.id, request: req, metadata: { organizationId, providerId: result.payment.providerId, methodType: result.payment.methodType, amount: result.payment.amount.toString(), currencyCode: result.payment.currencyCode, saleId: result.payment.saleId, returnId: result.payment.returnId, idempotent: result.idempotent } });
