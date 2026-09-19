@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import type { Prisma } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
@@ -33,7 +34,7 @@ export async function POST(req: Request, { params }: Params) {
   const parsed = enterpriseAiConversationShareSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Invalid payload", message: "Partage IA invalide." }, { status: 400 });
+    return enterpriseValidationErrorResponse(parsed.error, "AI_CONVERSATION_SHARE_INPUT_INVALID", req);
   }
   const data = parsed.data;
   const access = await getEnterpriseAiAccess(session, data.organizationId, "read");
