@@ -78,7 +78,7 @@ export async function POST(req: Request, { params }: Params) {
   const access = await requireAccess(organizationId, contractId, session);
   if (!access) return NextResponse.json({ error: "Forbidden", message: "Vous ne participez pas à ce workflow contractuel." }, { status: 403 });
   const parsed = createSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: "Le commentaire doit contenir entre 1 et 4 000 caractères." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: "Le commentaire doit contenir entre 1 et 4 000 caractères." }, { status: 400 });
   const comment = await prisma.enterpriseOperationalComment.create({
     data: { organizationId, entityType: "EnterpriseContract", entityId: contractId, authorUserId: session.userId, content: parsed.data.content, visibility: "PARTICIPANTS" },
   });
@@ -96,7 +96,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const access = await requireAccess(organizationId, contractId, session);
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = updateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: "Modification de commentaire invalide." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: "Modification de commentaire invalide." }, { status: 400 });
   const updated = await prisma.enterpriseOperationalComment.updateMany({
     where: { id: parsed.data.commentId, organizationId, entityType: "EnterpriseContract", entityId: contractId, authorUserId: session.userId, deletedAt: null },
     data: { content: parsed.data.content },
@@ -116,7 +116,7 @@ export async function DELETE(req: Request, { params }: Params) {
   const access = await requireAccess(organizationId, contractId, session);
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = deleteSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID" }, { status: 400 });
   const removed = await prisma.enterpriseOperationalComment.updateMany({
     where: { id: parsed.data.commentId, organizationId, entityType: "EnterpriseContract", entityId: contractId, authorUserId: session.userId, deletedAt: null },
     data: { deletedAt: new Date() },

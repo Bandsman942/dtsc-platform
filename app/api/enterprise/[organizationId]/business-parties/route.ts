@@ -83,7 +83,7 @@ export async function POST(req: Request, { params }: Params) {
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "CRM_CUSTOMERS", action: "write" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = businessPartyCreateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Tiers invalide." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message || "Tiers invalide." }, { status: 400 });
   try {
     const party = await createEnterpriseBusinessParty(organizationId, session.userId, parsed.data);
     await Promise.allSettled([
@@ -107,7 +107,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const raw = await req.json().catch(() => null) as (Record<string, unknown> & { partyId?: string }) | null;
   const entityId = typeof raw?.partyId === "string" ? raw.partyId : "";
   const parsed = businessPartyUpdateSchema.safeParse(raw);
-  if (!entityId || !parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.success ? "Référence manquante." : parsed.error.issues[0]?.message || "Tiers invalide." }, { status: 400 });
+  if (!entityId || !parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.success ? "Référence manquante." : parsed.error.issues[0]?.message || "Tiers invalide." }, { status: 400 });
   try {
     const entity = await updateEnterpriseBusinessParty(organizationId, entityId, session.userId, parsed.data);
     // BusinessParty is the source of truth. Procurement keeps a derived supplier
