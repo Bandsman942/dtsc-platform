@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 import { ArrowLeft, Edit3, Plus, ShieldCheck } from "lucide-react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
-import { ProfessionalError, ProfessionalHelp, ProfessionalLoading } from "@/components/enterprise/professional/professional-erp-ui";
+import { ProfessionalError, ProfessionalHelp, ProfessionalLoading, professionalRequest } from "@/components/enterprise/professional/professional-erp-ui";
 import { financeDate, financeStatusTone, safeFinanceError, type FinanceLocale } from "@/components/enterprise/professional/finance-professional-ui";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -22,10 +22,11 @@ type RateFormDefaults = { sourceCurrencyCode: string; targetCurrencyCode: string
 const SOURCE_VALUES = ["MANUAL", "CENTRAL_BANK", "COMMERCIAL_BANK", "PROVIDER", "CONTRACTUAL", "IMPORTED"] as const;
 
 async function requestJson(endpoint: string, method: "GET" | "POST" | "PATCH" = "GET", body?: unknown) {
-  const response = await fetch(endpoint, { method, cache: "no-store", headers: body === undefined ? undefined : { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
-  const payload = await response.json().catch(() => null) as { message?: string; error?: string; [key: string]: unknown } | null;
-  if (!response.ok) throw new Error(payload?.error || payload?.message || "EXCHANGE_RATE_OPERATION_FAILED");
-  return payload || {};
+  return professionalRequest<Record<string, unknown>>(endpoint, {
+    method,
+    payload: body,
+    fallbackCode: "EXCHANGE_RATE_OPERATION_FAILED",
+  });
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
