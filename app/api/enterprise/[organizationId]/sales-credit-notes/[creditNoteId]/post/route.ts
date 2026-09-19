@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { postApprovedSalesCreditNote } from "@/lib/enterprise/accounting/accounting-document-approval-orchestration";
 import { assertSalesCreditNoteStillPostable } from "@/lib/enterprise/accounting/credit-note-posting-preflight";
@@ -15,7 +16,7 @@ export async function POST(req: Request, { params }: Params) {
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_RECEIVABLES", "post", { mutation: true, limit: 60 });
   if (!auth.ok) return auth.response;
   const parsed = schema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "SALES_CREDIT_NOTES_POST_INPUT_INVALID", req);
   try {
     await assertSalesCreditNoteStillPostable(organizationId, creditNoteId, parsed.data.revision);
     const creditNote = await postApprovedSalesCreditNote(organizationId, creditNoteId, auth.session.userId, parsed.data.revision);
