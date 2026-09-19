@@ -65,7 +65,7 @@ export async function POST(req: Request, { params }: Params) {
   const access = await getHealthPatientAccess({ session, organizationId, action: "submit" });
   if (!access?.canCreate) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = healthPatientCreateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: "Vérifiez les informations obligatoires du patient." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: "Vérifiez les informations obligatoires du patient." }, { status: 400 });
   const data = parsed.data;
   if (data.status === "ARCHIVED" || data.status === "DECEASED") {
     return NextResponse.json({ error: "Invalid initial status", message: "Un nouveau patient doit être enregistré actif ou inactif." }, { status: 400 });

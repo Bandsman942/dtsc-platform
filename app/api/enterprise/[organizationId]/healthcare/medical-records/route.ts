@@ -42,7 +42,7 @@ export async function POST(req: Request, { params }: Params) {
   const access = await getHealthMedicalRecordAccess({ session, organizationId, action: "submit" });
   if (!access?.canCreate) return NextResponse.json({ error: "Forbidden", message: "Vous n’avez pas la permission de créer un dossier médical." }, { status: 403 });
   const parsed = healthMedicalRecordCreateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: "Vérifiez le patient et la synthèse du dossier médical." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: "Vérifiez le patient et la synthèse du dossier médical." }, { status: 400 });
   if (!(await validateHealthMedicalRecordPatient(organizationId, parsed.data.patientId))) return NextResponse.json({ error: "Invalid patient", message: "Le patient sélectionné n’appartient pas à cette entreprise." }, { status: 400 });
   try {
     const record = await createHealthMedicalRecord(organizationId, session.userId, parsed.data);
