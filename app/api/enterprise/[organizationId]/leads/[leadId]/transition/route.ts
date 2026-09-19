@@ -22,7 +22,7 @@ export async function POST(req: Request, { params }: Params) {
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "CRM_PIPELINE", action: "write" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = leadTransitionSchema.safeParse(await req.json().catch(() => null));
-  if (!p.success) return enterpriseValidationErrorResponse(p.error, "LEAD_TRANSITION_INPUT_INVALID", req);
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "LEAD_TRANSITION_INPUT_INVALID", req);
   try {
     const lead = await transitionEnterpriseLead(organizationId, leadId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_LEAD_TRANSITIONED", entity: "EnterpriseLead", entityId: lead.id, request: req, metadata: { organizationId, targetStatus: parsed.data.targetStatus } });
