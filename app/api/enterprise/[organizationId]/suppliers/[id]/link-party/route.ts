@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
@@ -21,7 +22,7 @@ export async function POST(req: Request, { params }: Params) {
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const body = await req.json().catch(() => ({}));
   const parsed = supplierPartyLinkSchema.safeParse({ ...body, supplierId });
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "SUPPLIERS_LINK_PARTY_INPUT_INVALID", req);
   try {
     const result = await convergeEnterpriseSupplierParty(organizationId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_SUPPLIER_PARTY_LINKED", entity: "EnterpriseSupplierPartyLink", entityId: result.link.id, request: req, metadata: { organizationId, supplierId, idempotent: result.idempotent } });
