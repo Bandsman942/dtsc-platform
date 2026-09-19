@@ -15,7 +15,7 @@ import {
   type FinanceRecord,
 } from "@/components/enterprise/professional/finance-professional-workspace-shared";
 import { fetchOperationalFinanceRecord, useOperationalFinanceCollection } from "@/components/enterprise/professional/use-operational-finance-collection";
-import { ProfessionalError, ProfessionalFormSection, ProfessionalHelp, ProfessionalLoading, ProfessionalSearch, ProfessionalTabs } from "@/components/enterprise/professional/professional-erp-ui";
+import { ProfessionalError, ProfessionalFormSection, ProfessionalHelp, ProfessionalLoading, ProfessionalSearch, ProfessionalTabs, professionalRequest } from "@/components/enterprise/professional/professional-erp-ui";
 import { financeDate, financeEnumLabel, financeMoney, financeStatusLabel, financeStatusTone, safeFinanceError, type FinanceLocale } from "@/components/enterprise/professional/finance-professional-ui";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -104,10 +104,11 @@ type HistoryFilters = { accountId: string; transactionType: string; direction: s
 const EMPTY_HISTORY_FILTERS: HistoryFilters = { accountId: "", transactionType: "", direction: "", currencyCode: "", from: "", to: "" };
 
 async function requestJson(endpoint: string, payload: unknown) {
-  const response = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
-  const body = await response.json().catch(() => null) as { error?: string; message?: string; [key: string]: unknown } | null;
-  if (!response.ok) throw new Error(body?.message || body?.error || "TREASURY_OPERATION_FAILED");
-  return body || {};
+  return professionalRequest<Record<string, unknown>>(endpoint, {
+    method: "POST",
+    payload,
+    fallbackCode: "TREASURY_OPERATION_FAILED",
+  });
 }
 
 export function EnterpriseFinanceTreasuryWorkspaceHotfix(props: Props) {
