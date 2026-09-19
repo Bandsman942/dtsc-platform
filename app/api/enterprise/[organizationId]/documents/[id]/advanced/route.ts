@@ -61,7 +61,7 @@ export async function POST(req: Request, { params }: Params) {
   const document = await canAccessEnterpriseDocument({ organizationId, userId: session.userId, canManage: access.canManage, documentId: id });
   if (!document || (!access.canManage && document.createdByUserId !== session.userId && document.ownerUserId !== session.userId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = actionSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: "Action documentaire avancée invalide." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: "Action documentaire avancée invalide." }, { status: 400 });
 
   if (parsed.data.action === "INDEX") {
     const feature = getDocumentIndexFeatureStatus();

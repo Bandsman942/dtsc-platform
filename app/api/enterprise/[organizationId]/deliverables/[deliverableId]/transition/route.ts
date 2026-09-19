@@ -19,7 +19,7 @@ export async function POST(req: Request, { params }: Params) {
   const { organizationId, deliverableId } = await params;
   const payload = await req.json().catch(() => null);
   const parsed = projectDeliverableTransitionSchema.safeParse(payload);
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message }, { status: 400 });
   const action = ["ACCEPT", "REQUEST_CHANGES", "REJECT"].includes(parsed.data.action) ? "manage" : "write";
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "TIME_DELIVERABLES", action });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
