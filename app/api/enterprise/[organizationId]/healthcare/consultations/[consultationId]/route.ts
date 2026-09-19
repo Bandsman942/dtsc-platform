@@ -43,7 +43,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const access = await getHealthConsultationAccess({ session, organizationId, action: "write" });
   if (!access?.canUpdate || !access.canViewSensitive) return NextResponse.json({ error: "Forbidden", message: "Vous n’avez pas la permission de modifier cette consultation." }, { status: 403 });
   const parsed = healthConsultationUpdateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: "Les modifications de la consultation sont invalides." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: "Les modifications de la consultation sont invalides." }, { status: 400 });
   const refs = await validateHealthConsultationReferences(organizationId, parsed.data);
   if (refs.error && parsed.data.patientId) return NextResponse.json({ error: "Invalid reference", message: refs.error }, { status: 400 });
   try {
