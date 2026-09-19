@@ -7,6 +7,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import { financeMoney, financeStatusLabel, financeStatusTone, safeFinanceError, type FinanceLocale } from "@/components/enterprise/professional/finance-professional-ui";
+import { professionalRequest } from "@/components/enterprise/professional/professional-erp-ui";
 
 type Item = Record<string, unknown> & { id: string };
 type TemplateLine = {
@@ -49,10 +50,9 @@ const blankLines = (): TemplateLine[] => [
 ];
 
 async function requestJson(url: string, fallback: string, options?: RequestInit) {
-  const response = await fetch(url, { cache: "no-store", ...options });
-  const body = await response.json().catch(() => null) as (Record<string, unknown> & { message?: string; error?: string }) | null;
-  if (!response.ok || !body) throw new Error(body?.message || body?.error || fallback);
-  return body;
+  const method = (options?.method || "GET") as "GET" | "POST" | "PATCH" | "DELETE";
+  const payload = typeof options?.body === "string" ? JSON.parse(options.body) : undefined;
+  return professionalRequest<Record<string, unknown>>(url, { method, payload, fallbackCode: "PERIODIC_ACCOUNTING_REQUEST_FAILED", fallbackMessage: fallback });
 }
 
 function isoDate(value: unknown) {
