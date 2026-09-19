@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import { resolveEnterpriseBusinessDate } from "@/lib/enterprise/business-context";
 import {
   assertActiveManufacturingMember,
   manufacturingReference,
@@ -314,7 +315,7 @@ export async function createTailoringCuttingPlan(organizationId: string, actorUs
     const plan = await tx.enterpriseTailoringCuttingPlan.create({
       data: {
         organizationId,
-        reference: manufacturingReference("CUT"),
+        reference: manufacturingReference("CUT", await resolveEnterpriseBusinessDate(tx, organizationId)),
         productionOrderId: order.id,
         styleId,
         materialRequirementId: requirement?.id || null,
@@ -409,7 +410,7 @@ export async function createTailoringFitting(organizationId: string, actorUserId
     const fitting = await tx.enterpriseTailoringFitting.create({
       data: {
         organizationId,
-        reference: manufacturingReference("FIT"),
+        reference: manufacturingReference("FIT", await resolveEnterpriseBusinessDate(tx, organizationId)),
         productionOrderId: order.id,
         measurementProfileId,
         sequence: (latest?.sequence || 0) + 1,
@@ -541,7 +542,7 @@ export async function createTailoringGarmentBundle(organizationId: string, actor
     const bundle = await tx.enterpriseTailoringGarmentBundle.create({
       data: {
         organizationId,
-        bundleCode: manufacturingReference("GAR"),
+        bundleCode: manufacturingReference("GAR", await resolveEnterpriseBusinessDate(tx, organizationId)),
         productionOrderId: order.id,
         cuttingPlanId,
         sizeCode: tailoringNullable(input.sizeCode)?.toUpperCase() || null,

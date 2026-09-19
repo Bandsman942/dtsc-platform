@@ -1,6 +1,8 @@
 import { createEnterpriseCoreRecord, type EnterpriseCoreModuleCode } from "@/lib/enterprise/enterprise-core";
 import { isDedicatedCoreDomain } from "@/lib/enterprise/core-v2/constants";
 import { EnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
+import { requireEnterpriseFunctionalCurrency } from "@/lib/enterprise/business-context";
+import { prisma } from "@/lib/prisma";
 import { createEnterpriseRequest, createEnterpriseTask } from "@/lib/enterprise/core-v2/service";
 import { createEnterpriseDocument } from "@/lib/enterprise/procurement/document-service";
 import { createEnterprisePurchase } from "@/lib/enterprise/procurement/purchase-service";
@@ -48,7 +50,7 @@ export async function createEnterpriseOperationalObject({ organizationId, actorU
     return { kind: "SUPPLIER" as const, record: await createEnterpriseSupplier(organizationId, actorUserId, parsed.data) };
   }
   if (data.moduleCode === "SUPPLIERS_PURCHASES" && data.recordType === "PURCHASE") {
-    const parsed = enterprisePurchaseCreateSchema.safeParse({ title: data.title, description: data.description || "", priority: data.priority, supplierId: typeof data.metadata?.supplierId === "string" ? data.metadata.supplierId : "", buyerUserId: data.assignedToUserId || "", departmentId: data.departmentId || "", requestId: typeof data.metadata?.requestId === "string" ? data.metadata.requestId : "", currency: data.currency || "USD", expectedAt: data.dueAt?.toISOString() || "", sourceModule: data.sourceModule || "", sourceEntityType: data.sourceEntityType || "", sourceEntityId: data.sourceEntityId || "", items: Array.isArray(data.metadata?.items) ? data.metadata.items : [] });
+    const parsed = enterprisePurchaseCreateSchema.safeParse({ title: data.title, description: data.description || "", priority: data.priority, supplierId: typeof data.metadata?.supplierId === "string" ? data.metadata.supplierId : "", buyerUserId: data.assignedToUserId || "", departmentId: data.departmentId || "", requestId: typeof data.metadata?.requestId === "string" ? data.metadata.requestId : "", currency: data.currency || await requireEnterpriseFunctionalCurrency(prisma, organizationId), expectedAt: data.dueAt?.toISOString() || "", sourceModule: data.sourceModule || "", sourceEntityType: data.sourceEntityType || "", sourceEntityId: data.sourceEntityId || "", items: Array.isArray(data.metadata?.items) ? data.metadata.items : [] });
     if (!parsed.success) throw dedicatedPayloadError("PURCHASE");
     return { kind: "PURCHASE" as const, record: await createEnterprisePurchase(organizationId, actorUserId, parsed.data) };
   }

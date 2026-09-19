@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { assertAccountingApprovalCandidate, createAccountingApprovalAssignment } from "@/lib/enterprise/accounting/accounting-approval-service";
+import { resolveEnterpriseBusinessDate } from "@/lib/enterprise/business-context";
 import { assertEnterpriseCurrencyActiveTx } from "@/lib/enterprise/accounting/currency-service";
 import { financeReference, money, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import type {
@@ -29,9 +30,8 @@ export class EnterpriseGamingTournamentError extends Error {
   }
 }
 
-function reference() {
-  const day = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  return `GT-${day}-${randomUUID().slice(0, 8).toUpperCase()}`;
+function reference(businessDate: string) {
+  return `GT-${businessDate.replace(/-/g, "")}-${randomUUID().slice(0, 8).toUpperCase()}`;
 }
 
 function clean(value: string | null | undefined) {
@@ -101,7 +101,7 @@ export async function createGamingTournament(organizationId: string, actorUserId
       return tx.enterpriseGamingTournament.create({
         data: {
           organizationId,
-          reference: reference(),
+          reference: reference(await resolveEnterpriseBusinessDate(tx, organizationId)),
           title: input.title,
           description: clean(input.description),
           siteId: clean(input.siteId),

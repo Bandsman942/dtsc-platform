@@ -2,6 +2,26 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-09-19 — Hotfix #666 : sécurité des devises et dates métier ERP
+
+### Corrigé
+
+- Les nouveaux budgets, achats et réapprovisionnements Manufacturing n’inventent plus USD lorsqu’aucune devise n’est fournie.
+- Les dépenses et créations héritées qui nécessitent une devise fonctionnelle résolvent désormais la configuration Finance canonique et échouent proprement lorsqu’elle manque.
+- Les références datées de Procurement, Finance, Manufacturing, Tailoring et Gaming utilisent le fuseau de l’entreprise plutôt que le jour UTC du serveur.
+
+### Ajouté
+
+- Ajout du contexte métier canonique `lib/enterprise/business-context.ts` pour le fuseau, la date métier et la devise fonctionnelle.
+- Ajout d’un endpoint tenant-scoped de contexte métier et d’un hook client partagé pour les formulaires ERP.
+- Ajout de la QA `qa:hotfix-666` et d’une recette OWNER E2E dédiée.
+
+### Sécurisé
+
+- Les formulaires actifs Factures, Paiements, Achats, RH, Paie, Projets et Manufacturing ne proposent plus USD comme valeur de secours silencieuse.
+- Les erreurs de fuseau ou de devise fonctionnelle requise utilisent des codes métier sûrs et restent sans migration destructive.
+
+
 ## 2026-09-18 — Hotfix #664 : validations et collaboration Finance
 
 ### Corrigé

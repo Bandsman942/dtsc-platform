@@ -31,6 +31,8 @@ export type FinanceOperationalLookups = {
   parties: FinanceLookupParty[]; suppliers: FinanceLookupSupplier[]; members: FinanceLookupMember[]; sites: FinanceLookupSite[]; employees: FinanceLookupEmployee[];
   payrollPeriods: Array<{ id: string; code: string; name: string; status: string }>;
   projects: Array<{ id: string; reference: string; name: string; status: string }>;
+  functionalCurrencyCode?: string | null;
+  businessDate?: string;
 };
 export type FinanceAccountLookup = { id: string; code: string; name: string; accountType: string; currencyCode: string; maskedReference?: string | null; operationalBalance?: string | number; availableBalance?: string | number; status: string; revision: number };
 export type LedgerAccountLookup = { id: string; code: string; nameFr: string; nameEn: string; accountType: string };

@@ -219,7 +219,7 @@ export const manufacturingShortagePurchaseSchema = z.object({
   productionOrderId: z.string().trim().min(1).max(180),
   supplierId: optionalId,
   buyerUserId: optionalId,
-  currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/).default("USD"),
+  currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/),
   expectedAt: z.coerce.date().optional().nullable(),
   prices: z.array(z.object({
     requirementId: z.string().trim().min(1).max(180),

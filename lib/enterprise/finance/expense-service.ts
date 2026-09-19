@@ -7,6 +7,7 @@ import { EnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
 import { ENTERPRISE_EXPENSE_TRANSITIONS } from "@/lib/enterprise/finance/constants";
 import { applyExpenseCommitmentRealization, getBudgetLinePosition } from "@/lib/enterprise/finance/commitments";
 import { assertSameCurrency, enterpriseMoney } from "@/lib/enterprise/finance/money";
+import { requireEnterpriseFunctionalCurrency, resolveEnterpriseBusinessDate } from "@/lib/enterprise/business-context";
 import {
   addEnterpriseOperationalEvent,
   createEnterpriseLink,
@@ -27,9 +28,8 @@ export type EnterpriseExpenseActionInput = z.infer<typeof enterpriseExpenseActio
 
 type Tx = Prisma.TransactionClient;
 
-function expenseReference() {
-  const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  return `EXP-${date}-${randomUUID().slice(0, 8).toUpperCase()}`;
+function expenseReference(businessDate: string) {
+  return `EXP-${businessDate.replace(/-/g, "")}-${randomUUID().slice(0, 8).toUpperCase()}`;
 }
 
 function approvalError(error: unknown, fallback: string) {
@@ -125,7 +125,7 @@ export async function createEnterpriseExpense(organizationId: string, actorUserI
     const budgetLineId = nullable(input.budgetLineId) || purchase?.budgetLineId || null;
     if (purchase?.budgetLineId && budgetLineId && purchase.budgetLineId !== budgetLineId) throw new EnterpriseCoreV2Error("La dépense ne peut pas viser une autre ligne budgétaire que son achat source.", 400, "EXPENSE_PURCHASE_BUDGET_MISMATCH");
     const budgetLine = await requireBudgetLine(tx, organizationId, budgetLineId);
-    const currency = (input.currency || purchase?.currency || budgetLine?.budget.currency || "USD").toUpperCase();
+    const currency = (input.currency || purchase?.currency || budgetLine?.budget.currency || await requireEnterpriseFunctionalCurrency(tx, organizationId)).toUpperCase();
     if (purchase && !assertSameCurrency(purchase.currency, currency)) throw new EnterpriseCoreV2Error("La devise de la dépense doit correspondre à celle de l’achat.", 400, "EXPENSE_PURCHASE_CURRENCY_MISMATCH");
     if (budgetLine && !assertSameCurrency(budgetLine.budget.currency, currency)) throw new EnterpriseCoreV2Error("La devise de la dépense doit correspondre à celle du budget.", 400, "BUDGET_CURRENCY_MISMATCH");
     const expenseAmount = enterpriseMoney(input.amount ?? purchase?.totalAmount ?? 0);
@@ -137,7 +137,7 @@ export async function createEnterpriseExpense(organizationId: string, actorUserI
     const expense = await tx.enterpriseExpense.create({
       data: {
         organizationId,
-        reference: expenseReference(),
+        reference: expenseReference(await resolveEnterpriseBusinessDate(tx, organizationId)),
         title: input.title,
         description: nullable(input.description),
         status: "DRAFT",

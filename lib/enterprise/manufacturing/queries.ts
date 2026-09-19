@@ -1,7 +1,9 @@
+import { formatEnterpriseBusinessDate, getEnterpriseBusinessContext } from "@/lib/enterprise/business-context";
 import { prisma } from "@/lib/prisma";
 
 export async function getManufacturingReferences(organizationId: string) {
-  const [configuration, catalogItems, warehouses, salesOrders, employees, assets, approvedTimesheetEntries, suppliers, boms, routings, workCenters] = await Promise.all([
+  const [businessContext, configuration, catalogItems, warehouses, salesOrders, employees, assets, approvedTimesheetEntries, suppliers, boms, routings, workCenters] = await Promise.all([
+    getEnterpriseBusinessContext(prisma, organizationId),
     prisma.enterpriseManufacturingConfiguration.findUnique({ where: { organizationId } }),
     prisma.enterpriseCatalogItem.findMany({
       where: { organizationId, status: "ACTIVE", archivedAt: null },
@@ -68,7 +70,7 @@ export async function getManufacturingReferences(organizationId: string) {
     }),
   ]);
 
-  return { configuration, catalogItems, warehouses, salesOrders, employees, assets, approvedTimesheetEntries, suppliers, boms, routings, workCenters };
+  return { businessDate: formatEnterpriseBusinessDate(new Date(), businessContext.timezone), functionalCurrencyCode: businessContext.functionalCurrencyCode, configuration, catalogItems, warehouses, salesOrders, employees, assets, approvedTimesheetEntries, suppliers, boms, routings, workCenters };
 }
 
 export async function getManufacturingOverview(organizationId: string, periodDays = 30) {

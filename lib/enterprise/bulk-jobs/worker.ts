@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
+import { resolveEnterpriseBusinessDate } from "@/lib/enterprise/business-context";
 import { writeAuditLog } from "@/lib/audit";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
@@ -341,7 +342,7 @@ async function processAuditExport(job: ClaimedJob) {
   });
   const headers = ["createdAt", "userId", "action", "entity", "entityId", "result", "reasonCode", "riskLevel", "requestId", "metadata"];
   const csv = [headers.map(csvCell).join(","), ...rows.map((row) => [row.createdAt.toISOString(), row.userId, row.action, row.entity, row.entityId, row.result, row.reasonCode, row.riskLevel, row.requestId, row.metadata].map(csvCell).join(","))].join("\n");
-  const filename = `enterprise-audit-${job.organizationId}-${new Date().toISOString().slice(0, 10)}.csv`;
+  const filename = `enterprise-audit-${job.organizationId}-${await resolveEnterpriseBusinessDate(prisma, job.organizationId)}.csv`;
   const artifact = await uploadEnterpriseBulkArtifact({
     organizationId: job.organizationId,
     category: "audit-export",

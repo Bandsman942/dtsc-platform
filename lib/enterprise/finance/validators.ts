@@ -42,7 +42,7 @@ const budgetBase = z.object({
   description: optionalText(8000),
   periodStart: z.coerce.date(),
   periodEnd: z.coerce.date(),
-  currency: currency.default("USD"),
+  currency: currency,
   scenarioCode: z.enum(ENTERPRISE_BUDGET_SCENARIOS).default("BASE"),
   fiscalYearCode: optionalText(80),
   departmentId: optionalId,

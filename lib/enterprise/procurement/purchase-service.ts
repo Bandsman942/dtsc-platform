@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import type { z } from "zod";
 import { assertEnterpriseApprovalCandidate, assertEnterpriseApprovalDecision } from "@/lib/enterprise/approval-assignment";
 import { EnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
+import { resolveEnterpriseBusinessDate } from "@/lib/enterprise/business-context";
 import { createPurchaseBudgetCommitment, releasePurchaseBudgetCommitment } from "@/lib/enterprise/finance/commitments";
 import { assertSameCurrency } from "@/lib/enterprise/finance/money";
 import { postEnterprisePurchaseReceiptToInventoryTx } from "@/lib/enterprise/procurement/common-domain-adapter";
@@ -33,8 +34,8 @@ type PurchaseItemInput = PurchaseCreateInput["items"][number];
 type PurchaseItemCatalogLinkDraft = { catalogItemId: string; unitOfMeasureId: string; expectedItemType: string; sortOrder: number };
 
 function dateOrNull(value?: string | null) { return value ? new Date(value) : null; }
-function purchaseReference() { const date = new Date().toISOString().slice(0, 10).replace(/-/g, ""); return `PUR-${date}-${randomUUID().slice(0, 8).toUpperCase()}`; }
-function receiptReference() { const date = new Date().toISOString().slice(0, 10).replace(/-/g, ""); return `REC-${date}-${randomUUID().slice(0, 8).toUpperCase()}`; }
+function purchaseReference(businessDate: string) { return `PUR-${businessDate.replace(/-/g, "")}-${randomUUID().slice(0, 8).toUpperCase()}`; }
+function receiptReference(businessDate: string) { return `REC-${businessDate.replace(/-/g, "")}-${randomUUID().slice(0, 8).toUpperCase()}`; }
 function money(value: number | string | Prisma.Decimal) { return new Prisma.Decimal(value).toDecimalPlaces(2); }
 function quantity(value: number | string | Prisma.Decimal) { return new Prisma.Decimal(value).toDecimalPlaces(3); }
 
@@ -148,7 +149,7 @@ export async function createEnterprisePurchase(organizationId: string, actorUser
     const source = await requireEnterpriseSourceReference(tx, organizationId, input);
     const coordinates = await requirePurchaseCoordinates(tx, organizationId, input.siteId, input.destinationWarehouseId);
     const calculated = await preparePurchaseItems(tx, organizationId, input.items);
-    const purchase = await tx.enterprisePurchase.create({ data: { organizationId, reference: purchaseReference(), title: input.title, description: nullable(input.description), status: "DRAFT", priority: input.priority, supplierId: supplier?.id || null, requestedByUserId: actorUserId, buyerUserId: nullable(input.buyerUserId), departmentId: nullable(input.departmentId), requestId: request?.id || null, budgetLineId: budgetLine?.id || null, currency: input.currency, subtotalAmount: calculated.subtotalAmount, taxAmount: calculated.taxAmount, totalAmount: calculated.totalAmount, expectedAt: dateOrNull(input.expectedAt), sourceModule: source?.sourceModule || null, sourceEntityType: source?.sourceEntityType || null, sourceEntityId: source?.sourceEntityId || null, createdByUserId: actorUserId, items: { create: calculated.items } }, include: { items: true, supplier: true, budgetLine: { include: { budget: true } }, receipts: true } });
+    const purchase = await tx.enterprisePurchase.create({ data: { organizationId, reference: purchaseReference(await resolveEnterpriseBusinessDate(tx, organizationId)), title: input.title, description: nullable(input.description), status: "DRAFT", priority: input.priority, supplierId: supplier?.id || null, requestedByUserId: actorUserId, buyerUserId: nullable(input.buyerUserId), departmentId: nullable(input.departmentId), requestId: request?.id || null, budgetLineId: budgetLine?.id || null, currency: input.currency, subtotalAmount: calculated.subtotalAmount, taxAmount: calculated.taxAmount, totalAmount: calculated.totalAmount, expectedAt: dateOrNull(input.expectedAt), sourceModule: source?.sourceModule || null, sourceEntityType: source?.sourceEntityType || null, sourceEntityId: source?.sourceEntityId || null, createdByUserId: actorUserId, items: { create: calculated.items } }, include: { items: true, supplier: true, budgetLine: { include: { budget: true } }, receipts: true } });
     await syncPurchaseItemCatalogLinks(tx, organizationId, purchase.id, calculated.catalogLinks);
     await upsertPurchaseOperationalLink(tx, organizationId, purchase.id, actorUserId, coordinates, calculated.catalogLinks);
     await addEnterpriseOperationalEvent(tx, { organizationId, entityType: "EnterprisePurchase", entityId: purchase.id, eventType: "ENTERPRISE_PURCHASE_CREATED", summary: "Achat créé en brouillon.", actorUserId, toStatus: "DRAFT", metadata: { totalAmount: purchase.totalAmount.toString(), currency: purchase.currency, budgetStatus: budgetLine ? "BUDGETED" : "UNBUDGETED", siteId: coordinates.siteId, destinationWarehouseId: coordinates.destinationWarehouseId } });
@@ -308,7 +309,7 @@ export async function receiveEnterprisePurchase(organizationId: string, purchase
     const nextStatus = fullyReceived ? "RECEIVED" : "PARTIALLY_RECEIVED";
     const locked = await tx.enterprisePurchase.updateMany({ where: { id: purchaseId, organizationId, status: purchase.status, revision: input.revision, archivedAt: null }, data: { status: nextStatus, ...(fullyReceived ? { receivedAt: input.receivedAt } : {}), updatedByUserId: actorUserId, revision: { increment: 1 } } });
     if (locked.count !== 1) throw new EnterpriseCoreV2Error("Une autre réception a été enregistrée simultanément.", 409, "PURCHASE_RECEIPT_CONFLICT");
-    const receipt = await tx.enterprisePurchaseReceipt.create({ data: { organizationId, purchaseId, reference: receiptReference(), receivedAt: input.receivedAt, receivedByUserId: actorUserId, notes: nullable(input.notes), items: { create: input.items.map((item) => ({ organizationId, purchaseItemId: item.purchaseItemId, quantityReceived: quantity(item.quantityReceived) })) } }, include: { items: true } });
+    const receipt = await tx.enterprisePurchaseReceipt.create({ data: { organizationId, purchaseId, reference: receiptReference(await resolveEnterpriseBusinessDate(tx, organizationId)), receivedAt: input.receivedAt, receivedByUserId: actorUserId, notes: nullable(input.notes), items: { create: input.items.map((item) => ({ organizationId, purchaseItemId: item.purchaseItemId, quantityReceived: quantity(item.quantityReceived) })) } }, include: { items: true } });
     const projection = await postEnterprisePurchaseReceiptToInventoryTx(tx, organizationId, receipt.id, actorUserId, {
       warehouseId: nullable(input.warehouseId),
       storageLocationId: nullable(input.storageLocationId),

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { CheckCircle2, CircleDollarSign, Plus, Send, ShieldCheck, Undo2, XCircle } from "lucide-react";
 import { useSearchParams } from "next/navigation";
+import { useEnterpriseBusinessContext } from "@/components/enterprise/use-enterprise-business-context";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { FinanceReferenceSelect } from "@/components/enterprise/core-v2/finance-reference-select";
 import { EnterpriseApproverSelect } from "@/components/enterprise/enterprise-approver-select";
@@ -88,6 +89,7 @@ export function EnterpriseFinancePaymentsWorkspaceHotfix(props: Props) {
   const { organizationId, organizationName, definition, locale: rawLocale, canCreate, canSubmit, canApprove, canWrite, canManage } = props;
   const locale: FinanceLocale = rawLocale === "en" ? "en" : "fr";
   const t = (key: EnterpriseFinanceKey) => financeT(locale, key);
+  const { context: businessContext } = useEnterpriseBusinessContext(organizationId);
   const searchParams = useSearchParams();
   const [tab, setTab] = useState(searchParams.get("tab") || "all");
   const [search, setSearch] = useState("");
@@ -101,7 +103,7 @@ export function EnterpriseFinancePaymentsWorkspaceHotfix(props: Props) {
   const [paymentType, setPaymentType] = useState("CUSTOMER_PAYMENT");
   const [direction, setDirection] = useState("INBOUND");
   const [businessPartyId, setBusinessPartyId] = useState("");
-  const [currencyCode, setCurrencyCode] = useState("USD");
+  const [currencyCode, setCurrencyCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -124,6 +126,10 @@ export function EnterpriseFinancePaymentsWorkspaceHotfix(props: Props) {
   const { summary, error: summaryError } = useOperationalFinanceSummary(organizationId, "FINANCE_PAYMENTS", refreshKey);
 
   useEffect(() => {
+    if (!currencyCode && businessContext?.functionalCurrencyCode) setCurrencyCode(businessContext.functionalCurrencyCode);
+  }, [businessContext?.functionalCurrencyCode, currencyCode]);
+
+  useEffect(() => {
     const deepId = searchParams.get("paymentId");
     if (!deepId) return;
     fetchOperationalFinanceRecord<Payment>(`/api/enterprise/${organizationId}/payments`, deepId)
@@ -142,7 +148,7 @@ export function EnterpriseFinancePaymentsWorkspaceHotfix(props: Props) {
     setPaymentType("CUSTOMER_PAYMENT");
     setDirection("INBOUND");
     setBusinessPartyId("");
-    setCurrencyCode("USD");
+    setCurrencyCode(businessContext?.functionalCurrencyCode || "");
   }
 
   async function createPayment(event: FormEvent<HTMLFormElement>) {
@@ -260,7 +266,7 @@ export function EnterpriseFinancePaymentsWorkspaceHotfix(props: Props) {
         <ProfessionalFormSection title={t("amountAndReferences")}>
           <Field label={t("amount")}><Input name="amount" type="number" min="0.01" step="0.01" required disabled={busy} /></Field>
           <Field label={t("currency")}><Input name="currencyCode" value={currencyCode} onChange={(event) => setCurrencyCode(event.target.value.toUpperCase())} maxLength={3} required disabled={busy} /></Field>
-          <Field label={t("date")}><Input name="paymentDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required disabled={busy} /></Field>
+          <Field label={t("date")}><Input name="paymentDate" type="date" defaultValue={businessContext?.businessDate || ""} required disabled={busy} /></Field>
           <Field label={t("reference")}><Input name="reference" disabled={busy} /></Field>
           <Field label={t("externalReference")}><Input name="maskedExternalReference" disabled={busy} /></Field>
         </ProfessionalFormSection>

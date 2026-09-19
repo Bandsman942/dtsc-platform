@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
+import { resolveEnterpriseBusinessDate } from "@/lib/enterprise/business-context";
 import type { GamingReportType } from "@/lib/enterprise/gaming/report-schemas";
 import { prisma } from "@/lib/prisma";
 
@@ -10,9 +11,8 @@ function amount(value: unknown) {
   return Number.isFinite(parsed) ? Math.round(parsed * 100) / 100 : 0;
 }
 
-function reportReference() {
-  const day = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  return `GR-${day}-${randomUUID().slice(0, 8).toUpperCase()}`;
+function reportReference(businessDate: string) {
+  return `GR-${businessDate.replace(/-/g, "")}-${randomUUID().slice(0, 8).toUpperCase()}`;
 }
 
 const LABELS: Record<GamingReportType, string> = {
@@ -157,7 +157,7 @@ export async function generateGamingReport({ organizationId, userId, reportType,
   const report = await prisma.enterpriseReport.create({
     data: {
       organizationId,
-      reference: reportReference(),
+      reference: reportReference(await resolveEnterpriseBusinessDate(prisma, organizationId)),
       title: LABELS[reportType],
       description: `Rapport Gaming généré à partir des sources canoniques pour les ${periodDays} derniers jours.`,
       reportType,

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { CheckCircle2, FileMinus2, Plus, Send, ShieldCheck, XCircle } from "lucide-react";
 import { useSearchParams } from "next/navigation";
+import { useEnterpriseBusinessContext } from "@/components/enterprise/use-enterprise-business-context";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { FinanceReferenceSelect } from "@/components/enterprise/core-v2/finance-reference-select";
 import { EnterpriseApproverSelect } from "@/components/enterprise/enterprise-approver-select";
@@ -101,6 +102,7 @@ export function EnterpriseFinanceInvoicesWorkspaceHotfix(props: Props) {
   const { organizationId, organizationName, definition, locale: rawLocale, canCreate, canSubmit, canApprove, canManage } = props;
   const locale: FinanceLocale = rawLocale === "en" ? "en" : "fr";
   const t = (key: EnterpriseFinanceKey) => copy(locale, key);
+  const { context: businessContext } = useEnterpriseBusinessContext(organizationId);
   const moduleCode = definition.code as "FINANCE_RECEIVABLES" | "FINANCE_PAYABLES";
   const isReceivables = moduleCode === "FINANCE_RECEIVABLES";
   const searchParams = useSearchParams();
@@ -178,7 +180,7 @@ export function EnterpriseFinanceInvoicesWorkspaceHotfix(props: Props) {
     const common = {
       invoiceDate: String(form.get("invoiceDate") || ""),
       dueDate: String(form.get("dueDate") || "") || undefined,
-      currencyCode: String(form.get("currencyCode") || "USD").toUpperCase(),
+      currencyCode: String(form.get("currencyCode") || "").toUpperCase(),
       projectId: String(form.get("projectId") || "") || undefined,
       items: lines.map((line) => ({
         catalogItemId: line.catalogItemId || undefined,
@@ -315,9 +317,9 @@ export function EnterpriseFinanceInvoicesWorkspaceHotfix(props: Props) {
           <Field label={t("project")}><FinanceReferenceSelect organizationId={organizationId} moduleCode={moduleCode} kind="project" name="projectId" label={t("project")} locale={rawLocale} disabled={busy} /></Field>
         </ProfessionalFormSection>
         <ProfessionalFormSection title={t("datesAndTerms")}>
-          <Field label={t("invoiceDate")}><Input name="invoiceDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required disabled={busy} /></Field>
+          <Field label={t("invoiceDate")}><Input name="invoiceDate" type="date" defaultValue={businessContext?.businessDate || ""} required disabled={busy} /></Field>
           <Field label={t("dueDate")}><Input name="dueDate" type="date" disabled={busy} /></Field>
-          <Field label={t("currency")}><Input name="currencyCode" defaultValue="USD" maxLength={3} required disabled={busy} /></Field>
+          <Field label={t("currency")}><Input name="currencyCode" defaultValue={businessContext?.functionalCurrencyCode || ""} maxLength={3} required disabled={busy} /></Field>
           {isReceivables ? <Field label={t("paymentTerms")}><Input name="paymentTerms" disabled={busy} /></Field> : null}
         </ProfessionalFormSection>
         <ProfessionalFormSection title={t("invoiceLines")}>
@@ -361,7 +363,7 @@ export function EnterpriseFinanceInvoicesWorkspaceHotfix(props: Props) {
     </Dialog>
 
     <Dialog open={Boolean(creditTarget)} onClose={() => { if (!busy) setCreditTarget(null); }} title={t("createCreditNote")} description={t("creditNoteKeepsOriginal")} presentation="editor" className="max-w-2xl">
-      {creditTarget ? <form onSubmit={createCredit} className="grid gap-4"><Field label={t("creditDate")}><Input name="creditDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required disabled={busy} /></Field><Field label={t("detailedReason")}><textarea name="reason" minLength={8} rows={4} required disabled={busy} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 disabled:opacity-60" /></Field><div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => setCreditTarget(null)}>{t("cancel")}</Button><Button type="submit" disabled={busy}>{t("createCreditNote")}</Button></div></form> : null}
+      {creditTarget ? <form onSubmit={createCredit} className="grid gap-4"><Field label={t("creditDate")}><Input name="creditDate" type="date" defaultValue={businessContext?.businessDate || ""} required disabled={busy} /></Field><Field label={t("detailedReason")}><textarea name="reason" minLength={8} rows={4} required disabled={busy} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 disabled:opacity-60" /></Field><div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => setCreditTarget(null)}>{t("cancel")}</Button><Button type="submit" disabled={busy}>{t("createCreditNote")}</Button></div></form> : null}
     </Dialog>
   </ModuleWorkspace>;
 }

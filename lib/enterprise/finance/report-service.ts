@@ -7,6 +7,7 @@ import { ENTERPRISE_REPORT_TYPES } from "@/lib/enterprise/finance/constants";
 import { enterpriseBudgetVisibilityWhere, enterpriseExpenseVisibilityWhere } from "@/lib/enterprise/finance/access";
 import { enterpriseMoney, enterpriseMoneyZero } from "@/lib/enterprise/finance/money";
 import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
+import { resolveEnterpriseBusinessDate } from "@/lib/enterprise/business-context";
 import { enterprisePurchaseVisibilityWhere } from "@/lib/enterprise/procurement/access";
 import { addEnterpriseOperationalEvent, createEnterpriseLink, nullable, requireEnterpriseSourceReference } from "@/lib/enterprise/procurement/shared";
 import type { enterpriseReportActionSchema, enterpriseReportGenerateSchema } from "@/lib/enterprise/finance/validators";
@@ -26,9 +27,8 @@ type ReportGenerationOptions = {
   calculationVersion?: number;
 };
 
-function reportReference() {
-  const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  return `RPT-${date}-${randomUUID().slice(0, 8).toUpperCase()}`;
+function reportReference(businessDate: string) {
+  return `RPT-${businessDate.replace(/-/g, "")}-${randomUUID().slice(0, 8).toUpperCase()}`;
 }
 
 function dateOrUndefined(value?: string | null) { return value ? new Date(value) : undefined; }
@@ -254,7 +254,7 @@ export async function generateEnterpriseReport(organizationId: string, actorUser
       data: rawSnapshot,
     };
     const filters = { periodStart: input.periodStart || null, periodEnd: input.periodEnd || null, currency: input.currency || null, departmentId: input.departmentId || null, supplierId: input.supplierId || null, budgetId: input.budgetId || null, category: input.category || null };
-    const report = await tx.enterpriseReport.create({ data: { organizationId, reference: reportReference(), title: input.title, description: nullable(input.description), reportType: input.reportType, status: "GENERATED", periodStart: dateOrUndefined(input.periodStart) || null, periodEnd: dateOrUndefined(input.periodEnd) || null, currency: nullable(input.currency), unitCode: input.currency ? `CURRENCY:${input.currency}` : null, roundingPolicyCode: "HALF_UP_2", sourcePolicyCode: catalog?.sourcePolicyCode || "CANONICAL_ENTERPRISE_DATA", metricDefinitionCodesJson: metricCodes as Prisma.InputJsonValue, freshnessAt: generatedAt, generatedByUserId: actorUserId, generatedAt, sourceModule: source?.sourceModule || null, sourceEntityType: source?.sourceEntityType || null, sourceEntityId: source?.sourceEntityId || null, schemaVersion: 1, generationKey: nullable(options.generationKey), calculationVersion, filtersJson: filters as Prisma.InputJsonValue, snapshotJson: snapshot as unknown as Prisma.InputJsonValue } });
+    const report = await tx.enterpriseReport.create({ data: { organizationId, reference: reportReference(await resolveEnterpriseBusinessDate(tx, organizationId)), title: input.title, description: nullable(input.description), reportType: input.reportType, status: "GENERATED", periodStart: dateOrUndefined(input.periodStart) || null, periodEnd: dateOrUndefined(input.periodEnd) || null, currency: nullable(input.currency), unitCode: input.currency ? `CURRENCY:${input.currency}` : null, roundingPolicyCode: "HALF_UP_2", sourcePolicyCode: catalog?.sourcePolicyCode || "CANONICAL_ENTERPRISE_DATA", metricDefinitionCodesJson: metricCodes as Prisma.InputJsonValue, freshnessAt: generatedAt, generatedByUserId: actorUserId, generatedAt, sourceModule: source?.sourceModule || null, sourceEntityType: source?.sourceEntityType || null, sourceEntityId: source?.sourceEntityId || null, schemaVersion: 1, generationKey: nullable(options.generationKey), calculationVersion, filtersJson: filters as Prisma.InputJsonValue, snapshotJson: snapshot as unknown as Prisma.InputJsonValue } });
     if (input.budgetId) await createEnterpriseLink(tx, { organizationId, sourceModule: "FINANCE_BUDGETS", sourceEntityType: "EnterpriseBudget", sourceEntityId: input.budgetId, targetModule: "REPORTS", targetEntityType: "EnterpriseReport", targetEntityId: report.id, linkType: "REPORT_SOURCE", createdById: actorUserId });
     if (source) await createEnterpriseLink(tx, { organizationId, sourceModule: source.sourceModule, sourceEntityType: source.sourceEntityType, sourceEntityId: source.sourceEntityId, targetModule: "REPORTS", targetEntityType: "EnterpriseReport", targetEntityId: report.id, linkType: "REPORT_SOURCE", createdById: actorUserId });
     await addEnterpriseOperationalEvent(tx, { organizationId, entityType: "EnterpriseReport", entityId: report.id, eventType: "ENTERPRISE_REPORT_GENERATED", summary: "Rapport généré depuis les données ERP réelles.", actorUserId, toStatus: "GENERATED", metadata: { reportType: report.reportType, schemaVersion: report.schemaVersion, calculationVersion, freshnessAt: generatedAt.toISOString(), metricCodes } });
