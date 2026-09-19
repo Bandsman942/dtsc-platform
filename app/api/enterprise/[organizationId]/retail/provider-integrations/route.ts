@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { upsertRetailProviderIntegration } from "@/lib/enterprise/retail/customer-payments";
 import { retailProviderIntegrationUpsertSchema } from "@/lib/enterprise/retail/customer-payments-schemas";
@@ -34,7 +35,7 @@ export async function POST(req: Request, { params }: Params) {
   const permissions = await getRetailCustomerPaymentPermissions(auth.session.userId, organizationId);
   if (!permissions.canManageProviders) return NextResponse.json({ error: "Forbidden", message: "Votre fonction ne permet pas de configurer les providers Retail." }, { status: 403 });
   const parsed = retailProviderIntegrationUpsertSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Configuration provider invalide." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "RETAIL_PROVIDER_INTEGRATIONS_INPUT_INVALID", req);
   try {
     const integration = await upsertRetailProviderIntegration(organizationId, auth.session.userId, parsed.data);
     await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_RETAIL_PROVIDER_INTEGRATION_UPSERTED", entity: "EnterpriseRetailProviderIntegration", entityId: integration.id, request: req, metadata: { organizationId, providerId: integration.providerId, integrationMode: integration.integrationMode, adapterCode: integration.adapterCode, connectionStatus: integration.connectionStatus } });
