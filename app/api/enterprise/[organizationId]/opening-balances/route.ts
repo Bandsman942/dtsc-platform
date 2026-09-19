@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { openingBalanceSchema } from "@/lib/enterprise/accounting/finance-domain-schemas";
-import { authorizeFinanceRequest, financeErrorResponse, financeListParams } from "@/lib/enterprise/accounting/http";
+import { authorizeFinanceRequest, financeErrorResponse, financeListParams, financeValidationErrorResponse } from "@/lib/enterprise/accounting/http";
 import { createOpeningBalanceImport } from "@/lib/enterprise/accounting/opening-balance-service";
 import { prisma } from "@/lib/prisma";
 
@@ -36,7 +36,7 @@ export async function POST(req: Request, { params }: Params) {
   if (!auth.ok) return auth.response;
 
   const parsed = openingBalanceSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) return financeValidationErrorResponse(parsed.error, "OPENING_BALANCE_INPUT_INVALID");
 
   try {
     const opening = await createOpeningBalanceImport(organizationId, auth.session.userId, parsed.data);
