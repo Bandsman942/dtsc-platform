@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCoreAccess } from "@/lib/enterprise/enterprise-core-access";
@@ -66,7 +67,7 @@ export async function POST(req: Request, { params }: Params) {
   if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   const { organizationId } = await params;
   const parsed = enterpriseCoreCreateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: "Vérifiez les informations saisies." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "LEGACY_CORE_INPUT_INVALID", req);
   const data = parsed.data;
   if (!isEnterpriseCoreModuleCode(data.moduleCode)) return NextResponse.json({ error: "Invalid module" }, { status: 400 });
   const access = await getEnterpriseCoreAccess({ session, organizationId, moduleCode: data.moduleCode, action: "submit" });
