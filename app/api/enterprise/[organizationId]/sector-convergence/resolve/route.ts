@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { authorizeSectorConvergenceRequest } from "@/lib/enterprise/sector-convergence/access";
 import { asSectorConvergenceError } from "@/lib/enterprise/sector-convergence/errors";
@@ -13,7 +14,7 @@ export async function POST(req: Request, { params }: Params) {
   const auth = await authorizeSectorConvergenceRequest(req, organizationId, { mutation: true, limit: 20 });
   if (!auth.ok) return auth.response;
   const parsed = resolveSyncSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "SECTOR_CONVERGENCE_RESOLUTION_INPUT_INVALID", req);
   try {
     const state = await resolveSectorSync({ organizationId, ...parsed.data });
     await writeAuditLog({ userId: auth.session.userId, action: "SECTOR_CONVERGENCE_MANUAL_RESOLUTION_RECORDED", entity: "EnterpriseSectorSyncState", entityId: state.id, request: req, metadata: { organizationId, targetEntityType: parsed.data.targetEntityType, resolutionReason: parsed.data.resolutionReason } });
