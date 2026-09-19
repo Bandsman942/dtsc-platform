@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
 import { formatEnterpriseBusinessDate, getEnterpriseBusinessContext } from "@/lib/enterprise/business-context";
+import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -40,9 +41,6 @@ export async function GET(req: Request, { params }: Params) {
       startedAt,
       metadata: { organizationId, domain: "business-context", error: code },
     });
-    return NextResponse.json({
-      error: code,
-      message: "La date métier ou la devise fonctionnelle de cette entreprise doit être corrigée dans Administration entreprise.",
-    }, { status: 409 });
+    return enterpriseDomainErrorResponse(error, "ENTERPRISE_BUSINESS_CONTEXT_UNAVAILABLE", req);
   }
 }
