@@ -121,7 +121,7 @@ const purchaseBase = z.object({
   budgetLineId: optionalId,
   siteId: optionalId,
   destinationWarehouseId: optionalId,
-  currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/).default("USD"),
+  currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/),
   expectedAt: optionalDate,
   sourceModule: optionalText(120),
   sourceEntityType: optionalText(120),
