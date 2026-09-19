@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { canAccessPharmacyStock, type PharmacyStockAction } from "@/lib/pharmacy-stock-access";
@@ -39,19 +40,19 @@ export async function POST(req: Request, { params }: Params) {
   if (!limited.ok) return NextResponse.json({ error: "Too many requests", message: "Trop d'actions stock sur une courte période." }, { status: 429 });
   const { organizationId } = await params;
   const body = await req.json().catch(() => null) as Record<string, unknown> | null;
-  if (!body) return NextResponse.json({ error: "Invalid payload", message: "Requête stock invalide." }, { status: 400 });
+  if (!body) return NextResponse.json({ error: "PHARMACY_STOCK_INPUT_REQUIRED", message: "La requête stock est vide ou illisible." }, { status: 400 });
   const kind = typeof body?.kind === "string" ? body.kind : "";
   if (kind === "session") return createSession(req, organizationId, session.userId, body, startedAt);
   if (kind === "adjustment") return createAdjustment(req, organizationId, session.userId, body, startedAt);
   if (kind === "location") return createLocation(req, organizationId, session.userId, body, startedAt);
   if (kind === "action") return applyAction(req, organizationId, session.userId, body, startedAt);
-  return NextResponse.json({ error: "Invalid payload", message: "Action stock inconnue." }, { status: 400 });
+  return NextResponse.json({ error: "PHARMACY_STOCK_ACTION_UNKNOWN", message: "Choisissez une action stock disponible." }, { status: 400 });
 }
 
 async function createSession(req: Request, organizationId: string, userId: string, body: Record<string, unknown>, startedAt: number) {
   if (!(await canAccessPharmacyStock(userId, organizationId, "create"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = inventorySessionSchema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Session invalide." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "PHARMACY_INVENTORY_SESSION_INPUT_INVALID", req);
   if (!(await activeMember(organizationId, parsed.data.responsibleUserId))) return NextResponse.json({ error: "Invalid responsible", message: "Le responsable n'appartient pas à cette pharmacie." }, { status: 400 });
   if (parsed.data.departmentId) {
     const department = await prisma.enterpriseDepartment.findFirst({ where: { id: parsed.data.departmentId, organizationId, isActive: true }, select: { id: true } });
@@ -71,7 +72,7 @@ async function createSession(req: Request, organizationId: string, userId: strin
 async function createAdjustment(req: Request, organizationId: string, userId: string, body: Record<string, unknown>, startedAt: number) {
   if (!(await canAccessPharmacyStock(userId, organizationId, "adjust"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = stockAdjustmentSchema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Ajustement invalide." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "PHARMACY_STOCK_ADJUSTMENT_INPUT_INVALID", req);
   const batch = await batchInOrganization(organizationId, parsed.data.batchId);
   if (!batch || batch.productId !== parsed.data.productId) return NextResponse.json({ error: "Invalid batch", message: "Le lot n'appartient pas au produit ou à cette pharmacie." }, { status: 400 });
   if (parsed.data.inventorySessionId) {
@@ -91,7 +92,7 @@ async function createAdjustment(req: Request, organizationId: string, userId: st
 async function createLocation(req: Request, organizationId: string, userId: string, body: Record<string, unknown>, startedAt: number) {
   if (!(await canAccessPharmacyStock(userId, organizationId, "manage_locations"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = stockLocationSchema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Emplacement invalide." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "PHARMACY_STOCK_LOCATION_INPUT_INVALID", req);
   if (parsed.data.responsibleUserId && !(await activeMember(organizationId, parsed.data.responsibleUserId))) return NextResponse.json({ error: "Invalid responsible", message: "Le responsable n'appartient pas à cette pharmacie." }, { status: 400 });
   try {
     const saved = await prisma.pharmacyStockLocation.create({ data: { organizationId, ...parsed.data, parentLocationId: parsed.data.parentLocationId || null, responsibleUserId: parsed.data.responsibleUserId || null, description: parsed.data.description || null, createdById: userId, updatedById: userId } });
@@ -106,7 +107,7 @@ async function createLocation(req: Request, organizationId: string, userId: stri
 
 async function applyAction(req: Request, organizationId: string, userId: string, body: Record<string, unknown>, startedAt: number) {
   const parsed = stockActionSchema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: "Action stock invalide." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "PHARMACY_STOCK_ACTION_INPUT_INVALID", req);
   const data = parsed.data;
   if (data.entity === "session" && data.action === "generate-lines") {
     if (!(await canAccessPharmacyStock(userId, organizationId, "create"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
