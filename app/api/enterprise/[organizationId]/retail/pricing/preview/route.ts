@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog } from "@/lib/audit";
 import { previewRetailCommercialPricing } from "@/lib/enterprise/retail/commercial-engine";
 import { retailPricingPreviewSchema } from "@/lib/enterprise/retail/commercial-schemas";
@@ -12,7 +13,7 @@ export async function POST(req: Request, { params }: Params) {
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "submit", { mutation: true, limit: 1000 });
   if (!auth.ok) return auth.response;
   const parsed = retailPricingPreviewSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Aperçu tarifaire invalide." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "RETAIL_PRICING_PREVIEW_INPUT_INVALID", req);
   try {
     const preview = await previewRetailCommercialPricing(
       organizationId,
