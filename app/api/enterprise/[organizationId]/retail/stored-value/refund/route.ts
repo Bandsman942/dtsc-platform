@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { refundRetailStoredValue } from "@/lib/enterprise/retail/customer-payments";
 import { retailStoredValueRefundSchema } from "@/lib/enterprise/retail/customer-payments-schemas";
@@ -15,7 +16,7 @@ export async function POST(req: Request, { params }: Params) {
   const permissions = await getRetailCustomerPaymentPermissions(auth.session.userId, organizationId);
   if (!permissions.canRefundStoredValue) return NextResponse.json({ error: "Forbidden", message: "Votre fonction ne permet pas de recréditer un avoir ou une carte cadeau." }, { status: 403 });
   const parsed = retailStoredValueRefundSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Recrédit de valeur stockée invalide." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "RETAIL_STORED_VALUE_REFUND_INPUT_INVALID", req);
   try {
     const result = await refundRetailStoredValue(organizationId, auth.session.userId, parsed.data);
     await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_RETAIL_STORED_VALUE_REFUNDED", entity: "EnterpriseRetailStoredValueEntry", entityId: result.entry.id, request: req, metadata: { organizationId, accountId: result.account.id, amount: result.entry.amount.toString(), balance: result.account.balance.toString(), returnId: parsed.data.returnId || null, idempotent: result.idempotent } });
