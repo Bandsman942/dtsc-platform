@@ -14,7 +14,7 @@ export async function POST(req: Request, { params }: Params) {
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "manage", { mutation: true, limit: 40 });
   if (!auth.ok) return auth.response;
   const parsed = retailSaleReverseSchema.safeParse(await req.json().catch(() => null));
-  if (!p.success) return enterpriseValidationErrorResponse(p.error, "RETAIL_SALE_REVERSAL_INPUT_INVALID", req);
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "RETAIL_SALE_REVERSAL_INPUT_INVALID", req);
   try {
     const sale = await reverseRetailSale(organizationId, saleId, auth.session.userId, parsed.data);
     const accounting = await finalizeRetailSaleReversalAccounting(organizationId, auth.session.userId, sale.id);
