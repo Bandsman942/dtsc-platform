@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { resolveEnterpriseBusinessDate } from "@/lib/enterprise/business-context";
 import type { z } from "zod";
 import { assertEnterpriseApprovalCandidate, assertEnterpriseApprovalDecision } from "@/lib/enterprise/approval-assignment";
 import { applyStockMovementTx } from "@/lib/enterprise/inventory/service";
@@ -205,7 +206,7 @@ export async function createProductionOrder(organizationId: string, actorUserId:
     const order = await tx.enterpriseProductionOrder.create({
       data: {
         organizationId,
-        reference: manufacturingReference("MO"),
+        reference: manufacturingReference("MO", await resolveEnterpriseBusinessDate(tx, organizationId)),
         title: input.title,
         bomId: bom.id,
         routingId,
