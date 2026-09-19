@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { earnRetailLoyaltyPoints } from "@/lib/enterprise/retail/customer-payments";
 import { retailLoyaltyEarnSchema } from "@/lib/enterprise/retail/customer-payments-schemas";
@@ -15,7 +16,7 @@ export async function POST(req: Request, { params }: Params) {
   const permissions = await getRetailCustomerPaymentPermissions(auth.session.userId, organizationId);
   if (!permissions.canManageLoyalty) return NextResponse.json({ error: "Forbidden", message: "Votre fonction ne permet pas de créditer la fidélité manuellement." }, { status: 403 });
   const parsed = retailLoyaltyEarnSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Mouvement fidélité invalide." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "RETAIL_LOYALTY_EARN_INPUT_INVALID", req);
   try {
     const result = await earnRetailLoyaltyPoints(organizationId, auth.session.userId, parsed.data);
     await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_RETAIL_LOYALTY_EARNED", entity: "EnterpriseRetailLoyaltyEntry", entityId: result.entry.id, request: req, metadata: { organizationId, accountId: result.account.id, points: result.entry.points.toString(), idempotent: result.idempotent } });
