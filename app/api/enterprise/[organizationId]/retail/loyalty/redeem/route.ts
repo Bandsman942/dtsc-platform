@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { redeemRetailLoyaltyPoints } from "@/lib/enterprise/retail/customer-payments";
 import { retailLoyaltyRedeemSchema } from "@/lib/enterprise/retail/customer-payments-schemas";
@@ -16,7 +17,7 @@ export async function POST(req: Request, { params }: Params) {
   const permissions = await getRetailCustomerPaymentPermissions(auth.session.userId, organizationId);
   if (!permissions.canRedeemLoyalty) return NextResponse.json({ error: "Forbidden", message: "Votre fonction ne permet pas d’utiliser les points fidélité." }, { status: 403 });
   const parsed = retailLoyaltyRedeemSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Utilisation de points invalide." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "RETAIL_LOYALTY_REDEEM_INPUT_INVALID", req);
   try {
     const result = await withRetailTransactionRetry(() => redeemRetailLoyaltyPoints(organizationId, auth.session.userId, parsed.data), { maxAttempts: 3, baseDelayMs: 20 });
     await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_RETAIL_LOYALTY_REDEEMED", entity: "EnterpriseRetailLoyaltyEntry", entityId: result.entry.id, request: req, metadata: { organizationId, accountId: result.account.id, points: result.entry.points.toString(), idempotent: result.idempotent } });
