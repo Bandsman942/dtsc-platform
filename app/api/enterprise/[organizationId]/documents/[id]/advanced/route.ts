@@ -151,7 +151,7 @@ async function callProvider(endpoint: string, apiKey: string, payload: Record<st
 
 function safeInteger(value: unknown) { const number = Number(value); return Number.isInteger(number) && number >= 0 ? number : 0; }
 function safeString(value: unknown) { return typeof value === "string" && value.length <= 500 ? value : null; }
-function safeErrorMessage(error: unknown) { return error instanceof Error ? error.message.slice(0, 500) : "Unknown provider error"; }
+function safeErrorMessage(_error: unknown) { return "Provider request failed"; }
 function asJsonObject(value: unknown): Prisma.InputJsonObject {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return value as Prisma.InputJsonObject;
