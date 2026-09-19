@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseAiAccess } from "@/lib/enterprise-ai/access";
@@ -18,7 +19,7 @@ export async function GET(req: Request) {
   const parsed = enterpriseAiUsageQuerySchema.safeParse({ organizationId: url.searchParams.get("organizationId") || "" });
   if (!parsed.success) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Invalid query" }, { status: 400 });
+    return enterpriseValidationErrorResponse(parsed.error, "ENTERPRISE_AI_SETTINGS_QUERY_INVALID", req);
   }
   const access = (await getEnterpriseAiAccess(session, parsed.data.organizationId, "read")) || (await getEnterpriseAiAccess(session, parsed.data.organizationId, "settings"));
   if (!access) {
@@ -63,7 +64,7 @@ export async function PATCH(req: Request) {
   const parsed = enterpriseAiSettingsUpdateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Invalid payload", message: "Paramètres IA invalides." }, { status: 400 });
+    return enterpriseValidationErrorResponse(parsed.error, "ENTERPRISE_AI_SETTINGS_INPUT_INVALID", req);
   }
   const access = await getEnterpriseAiAccess(session, parsed.data.organizationId, "settings");
   if (!access || !access.canManageSettings) {
