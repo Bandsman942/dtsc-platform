@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { AssistantImmersiveWorkspaceShell } from "@/components/chat/assistant-immersive-workspace-shell";
-import { EnterpriseAiWorkspaceV2 } from "@/components/enterprise/enterprise-ai-workspace-v2";
+import { EnterpriseAiWorkspace } from "@/components/enterprise/enterprise-ai-workspace";
 import { EnterpriseManufacturingWorkspace } from "@/components/enterprise/manufacturing/enterprise-manufacturing-workspace";
 import { EnterpriseAssetsMaintenanceWorkspace } from "@/components/enterprise/professional/enterprise-assets-maintenance-workspace";
 import { EnterpriseCatalogWorkspace } from "@/components/enterprise/professional/enterprise-catalog-workspace";
@@ -73,7 +73,7 @@ export default async function EnterpriseModulePage({ params }: Params) {
     return (
       <AppShell user={user}>
         <AssistantImmersiveWorkspaceShell variant="enterprise">
-          <EnterpriseAiWorkspaceV2
+          <EnterpriseAiWorkspace
             organizationId={organizationId}
             organizationName={organization.name}
             sectorCode={organization.sectorCode}
