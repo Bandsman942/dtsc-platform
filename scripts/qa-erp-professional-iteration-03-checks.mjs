@@ -56,7 +56,7 @@ const files = {
   businessList: "components/workspace/business-list.tsx",
   mobileCss: "app/mobile-stability.css",
   commonAccess: "lib/enterprise/common/access.ts",
-  contracts: "components/enterprise/professional/enterprise-contracts-workspace-v2.tsx",
+  contracts: "components/enterprise/professional/enterprise-contracts-workspace.tsx",
   contractsFr: "locales/professional-erp-commercial.fr.json",
   contractsEn: "locales/professional-erp-commercial.en.json",
   contractRoute: "app/api/enterprise/[organizationId]/contracts/route.ts",
@@ -97,7 +97,7 @@ content.projects = [
 ].join("\n");
 content.assets = [
   content.assets,
-  read("components/enterprise/professional/enterprise-assets-maintenance-workspace-v2.tsx"),
+  read("components/enterprise/professional/enterprise-assets-maintenance-workspace.tsx"),
 ].join("\n");
 
 const iterationModules = [
