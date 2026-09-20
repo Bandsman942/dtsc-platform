@@ -5,7 +5,7 @@ const read = (path) => fs.readFileSync(path, "utf8");
 const resolver = read("components/chat/assistant-markdown.tsx");
 const conversationUi = read("components/chat/assistant-conversation-ui.tsx");
 const chatbot = read("components/chat/chat-workspace-v2.tsx");
-const enterpriseAssistant = read("components/enterprise/enterprise-ai-workspace-v2.tsx");
+const enterpriseAssistant = read("components/enterprise/enterprise-ai-workspace.tsx");
 const moduleHub = read("app/modules/page.tsx");
 
 const failures = [];
