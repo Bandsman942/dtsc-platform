@@ -71,7 +71,8 @@ for (const [scope, content] of Object.entries({ inventory: files.inventory, site
 
 need(files.projectsRouter, "EnterpriseProjectsServicesWorkspace", "routeur projets/livrables");
 need(files.projectsRouter, "EnterpriseTimeDeliverablesWorkspace", "routeur projets/livrables");
-need(files.assetsRouter, "EnterpriseAssetsMaintenanceWorkspaceV2", "routeur actifs");
+need(files.assetsBridge, 'from "@/components/enterprise/professional/enterprise-assets-maintenance-workspace"', "bridge actifs historique");
+reject(files.assets, "enterprise-assets-maintenance-workspace-v2", "workspace actifs canonique");
 
 need(files.i18n, "professionalErpOperationsFr", "registre i18n");
 need(files.i18n, "professionalErpOperationsEn", "registre i18n");
