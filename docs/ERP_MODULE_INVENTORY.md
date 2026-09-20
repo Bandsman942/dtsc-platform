@@ -94,6 +94,10 @@ Pharmacy : `MEDICINES_PRODUCTS`, `BATCH_EXPIRY`, `STOCK_INVENTORY`, `STOCK_RECEI
 
 `FINANCE_OVERVIEW`, `FINANCE_RECEIVABLES`, `FINANCE_PAYABLES`, `FINANCE_PAYMENTS`, `FINANCE_TREASURY`, `FINANCE_CASH`, `FINANCE_BANK`, `FINANCE_RECONCILIATION`, `FINANCE_ACCOUNTING`, `FINANCE_TAX`, `FINANCE_CLOSE`, `FINANCE_STATEMENTS`, `FINANCE_ASSETS` et `FINANCE_INVENTORY` restent soumis au registre, au membership, au plan, aux dépendances et aux permissions côté serveur.
 
+Dans le registre canonique, `dependencies` désigne uniquement les **prérequis bloquants** d’activation et d’accès. `recommendedIntegrations` décrit une relation métier utile mais **non bloquante** : elle n’active jamais automatiquement le module référencé, ne lui accorde aucun entitlement et ne contourne aucune permission. Une opération qui touche réellement ce module complémentaire doit toujours être autorisée séparément.
+
+Exemples Finance : `FINANCE_RECEIVABLES` exige `CRM_CUSTOMERS` mais peut facturer directement sans `SALES_QUOTES_ORDERS`; `FINANCE_PAYMENTS` exige `FINANCE_TREASURY` mais n’impose pas simultanément les sous-ledgers clients et fournisseurs ; `FINANCE_CLOSE` exige la Comptabilité mais peut fonctionner sans imposer Banque/Rapprochement à toutes les entreprises.
+
 Les chaînes respectent les frontières suivantes :
 
 ```text
