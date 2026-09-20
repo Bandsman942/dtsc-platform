@@ -16,7 +16,7 @@ on:
       - "app/api/enterprise/**/sales-credit-notes/**/transition/**"
       - "app/api/enterprise/**/supplier-credit-notes/**/transition/**"
       - "components/enterprise/professional/finance-professional-ui.ts"
-      - "components/enterprise/professional/finance-professional-workspace-shared-legacy.tsx"
+      - "components/enterprise/professional/finance-professional-workspace-core.tsx"
       - "components/enterprise/professional/professional-workflow-comments.tsx"
       - "components/enterprise/professional/enterprise-finance-cash-workspace.tsx"
       - "components/enterprise/professional/enterprise-finance-payments-workspace.tsx"
