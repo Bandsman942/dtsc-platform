@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
-import { EnterpriseFinanceCashBankReconciliationWorkspaceHotfix as LegacyWorkspace } from "@/components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-workspace-hotfix-legacy";
+import { EnterpriseFinanceCashBankReconciliationBase } from "@/components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-base";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
@@ -172,7 +172,7 @@ export function EnterpriseFinanceCashBankReconciliationWorkspace(props: Props) {
         </div>
         {showJob.expectedLineCount ? <div className="mt-3 h-2 overflow-hidden rounded-full bg-dtsc-page" aria-label={`${showJob.progressPercent || 0}%`}><div className="h-full rounded-full bg-[var(--dtsc-product-accent)] transition-[width]" style={{ width: `${showJob.progressPercent || 0}%` }} /></div> : null}
       </section> : null}
-      <LegacyWorkspace key={workspaceKey} {...props} />
+      <EnterpriseFinanceCashBankReconciliationBase key={workspaceKey} {...props} />
     </div>
   );
 }
