@@ -59,6 +59,7 @@ export type EnterpriseModuleConfigurationIssue = {
   moduleCode?: string;
   moduleLabel?: string;
   dependencyCodes?: string[];
+  recommendedIntegrationCodes?: string[];
   message: string;
 };
 
@@ -382,6 +383,23 @@ export async function listEnterpriseModuleConfigurationIssues(organizationId: st
         moduleLabel: definition.labelFr,
         dependencyCodes: inactiveDependencies,
         message: `Services préalables à activer : ${dependencyLabels.join(", ")}.`,
+      });
+    }
+
+    const inactiveRecommendedIntegrations = (definition.recommendedIntegrations || [])
+      .map(normalizeEnterpriseModuleCode)
+      .filter((integrationCode) => tenantModule.isEnabled && !enabledCanonicalCodes.has(integrationCode));
+    if (inactiveRecommendedIntegrations.length) {
+      const integrationLabels = inactiveRecommendedIntegrations.map(
+        (integrationCode) => getEnterpriseModuleDefinition(integrationCode)?.labelFr || "Service complémentaire",
+      );
+      issues.push({
+        code: "RECOMMENDED_INTEGRATION_INACTIVE",
+        severity: "WARNING",
+        moduleCode: canonicalCode,
+        moduleLabel: definition.labelFr,
+        recommendedIntegrationCodes: inactiveRecommendedIntegrations,
+        message: `Intégrations recommandées non actives : ${integrationLabels.join(", ")}. Le module reste utilisable sans elles.`,
       });
     }
   }

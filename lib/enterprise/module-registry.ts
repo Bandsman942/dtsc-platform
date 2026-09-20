@@ -83,6 +83,7 @@ export type EnterpriseModuleDefinition = {
   applicableSectors: string[] | "ALL";
   applicableBusinessSubtypes?: string[] | "ALL";
   dependencies: string[];
+  recommendedIntegrations?: string[];
   aliases?: string[];
   legacyCodes?: string[];
   qaContract?: string;
@@ -149,7 +150,7 @@ function applyCommercialOverride(definition: EnterpriseModuleDefinition): Enterp
   };
 }
 
-export const ENTERPRISE_MODULE_REGISTRY = [
+const sourceDefinitions = [
   ...registryData.modules,
   ...commonDomainRegistryData.modules,
   ...financeRegistryData.modules,
@@ -157,10 +158,20 @@ export const ENTERPRISE_MODULE_REGISTRY = [
   ...tailoringRegistryData.modules,
   ...gamingRegistryData.modules,
   ...retailRegistryData.modules,
-].map((definition) =>
+] as EnterpriseModuleDefinition[];
+
+const sourceDefinitionCodes = new Set<string>();
+for (const definition of sourceDefinitions) {
+  if (sourceDefinitionCodes.has(definition.code)) {
+    throw new Error(`Duplicate canonical enterprise module code: ${definition.code}`);
+  }
+  sourceDefinitionCodes.add(definition.code);
+}
+
+export const ENTERPRISE_MODULE_REGISTRY = sourceDefinitions.map((definition) =>
   applyCommercialOverride(
     applyFinalCleanupOverride(
-      applySectorConvergenceOverride(definition as EnterpriseModuleDefinition),
+      applySectorConvergenceOverride(definition),
     ),
   ),
 );
@@ -168,10 +179,23 @@ export const ENTERPRISE_MODULE_REGISTRY = [
 const definitionByCode = new Map<string, EnterpriseModuleDefinition>();
 const canonicalCodeByAlias = new Map<string, string>();
 
+for (const definition of ENTERPRISE_MODULE_REGISTRY) definitionByCode.set(definition.code, definition);
+
 for (const definition of ENTERPRISE_MODULE_REGISTRY) {
-  definitionByCode.set(definition.code, definition);
-  for (const alias of definition.aliases || []) canonicalCodeByAlias.set(alias, definition.code);
-  for (const legacyCode of definition.legacyCodes || []) canonicalCodeByAlias.set(legacyCode, definition.code);
+  for (const rawAlias of [...(definition.aliases || []), ...(definition.legacyCodes || [])]) {
+    const alias = rawAlias.trim().toUpperCase();
+    if (alias === definition.code) {
+      throw new Error(`Self-referencing enterprise module alias: ${alias}`);
+    }
+    if (definitionByCode.has(alias)) {
+      throw new Error(`Enterprise module alias collides with canonical code: ${alias}`);
+    }
+    const previousOwner = canonicalCodeByAlias.get(alias);
+    if (previousOwner && previousOwner !== definition.code) {
+      throw new Error(`Ambiguous enterprise module alias: ${alias} -> ${previousOwner} / ${definition.code}`);
+    }
+    canonicalCodeByAlias.set(alias, definition.code);
+  }
 }
 
 export const ENTERPRISE_ADMIN_SECTION_CODES = new Set(

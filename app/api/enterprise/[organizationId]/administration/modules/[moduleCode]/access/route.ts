@@ -109,6 +109,10 @@ export async function GET(req: Request, { params }: Params) {
     const dependency = getEnterpriseModuleDefinition(dependencyCode);
     return { code: dependencyCode, labelFr: dependency?.labelFr || "Service préalable", labelEn: dependency?.labelEn || "Required service" };
   });
+  const recommendedIntegrationLabels = (definition.recommendedIntegrations || []).map((integrationCode) => {
+    const integration = getEnterpriseModuleDefinition(integrationCode);
+    return { code: integrationCode, labelFr: integration?.labelFr || "Service complémentaire", labelEn: integration?.labelEn || "Recommended integration" };
+  });
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, moduleCode, rows: accessRows.length } });
   return NextResponse.json({
     module: {
@@ -122,6 +126,7 @@ export async function GET(req: Request, { params }: Params) {
       minimumPlan: definition.minimumPlan,
       routePath: definition.routePath || null,
       dependencies: dependencyLabels,
+      recommendedIntegrations: recommendedIntegrationLabels,
       activatedAt: enterpriseModule.createdAt.toISOString(),
       isEnabled: enterpriseModule.isEnabled,
     },

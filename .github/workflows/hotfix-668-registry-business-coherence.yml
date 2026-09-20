@@ -1,0 +1,134 @@
+name: "Hotfix #668 Registry & Business Coherence"
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "lib/enterprise/module-registry*.json"
+      - "lib/enterprise/module-registry.ts"
+      - "lib/enterprise/module-access.ts"
+      - "lib/enterprise/module-subscription-reconciliation.ts"
+      - "lib/enterprise/module-commercial-readiness.ts"
+      - "app/api/enterprise/**/administration/modules/**"
+      - "lib/ai/tools/authorize.ts"
+      - "scripts/qa-enterprise-module-registry-checks.mjs"
+      - "scripts/qa-hotfix-668-registry-business-coherence.mjs"
+      - "docs/HOTFIX_668_REGISTRY_BUSINESS_COHERENCE.md"
+      - "docs/OWNER_E2E_668_REGISTRY_BUSINESS_COHERENCE.md"
+      - "docs/ERP_MODULE_INVENTORY.md"
+      - "docs/CHANGELOG.md"
+      - "package.json"
+      - ".github/workflows/hotfix-668-registry-business-coherence.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hotfix-668-registry-business-coherence-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  acceptance:
+    name: Registry and business coherence acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: dtsc_hotfix_668_acceptance
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d dtsc_hotfix_668_acceptance"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dtsc_hotfix_668_acceptance?schema=public
+      AUTH_SECRET: hotfix-668-acceptance-auth-secret-with-more-than-thirty-two-characters-2026
+      APP_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_PUBLIC_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_CONSOLE_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_ACCOUNT_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_SUPPORT_URL: http://127.0.0.1:3000
+      DEFAULT_ADMIN_BOOTSTRAP_ENABLED: "false"
+      UPSTASH_REDIS_REST_URL: http://127.0.0.1:8079
+      UPSTASH_REDIS_REST_TOKEN: dtsc-hotfix-668-ci-${{ github.run_id }}-${{ github.run_attempt }}
+      CI_REDIS_REST_TOKEN: dtsc-hotfix-668-ci-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Start isolated Redis REST proxy
+        run: |
+          nohup node scripts/ci-upstash-redis-rest-proxy.mjs >/tmp/dtsc-hotfix-668-redis-rest.log 2>&1 &
+          echo $! >/tmp/dtsc-hotfix-668-redis-rest.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error -H "Authorization: Bearer ${CI_REDIS_REST_TOKEN}" http://127.0.0.1:8079/healthz >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/dtsc-hotfix-668-redis-rest.log
+          exit 1
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        run: pnpm prisma:generate
+      - name: Apply migrations from scratch
+        run: pnpm prisma:deploy
+      - name: Validate hotfix 668 registry contract
+        run: pnpm qa:hotfix-668
+      - name: Run regression QA
+        run: pnpm qa:regression
+      - name: Type-check
+        run: pnpm type-check
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+      - name: Lint
+        run: pnpm lint
+      - name: Build production application
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm build 2>&1 | tee /tmp/dtsc-hotfix-668-build.log
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+      - name: Stop Redis REST proxy
+        if: always()
+        run: |
+          if [ -f /tmp/dtsc-hotfix-668-redis-rest.pid ]; then kill "$(cat /tmp/dtsc-hotfix-668-redis-rest.pid)" || true; fi
+      - name: Upload hotfix #668 diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: hotfix-668-registry-business-coherence-diagnostics
+          if-no-files-found: ignore
+          path: |
+            /tmp/dtsc-hotfix-668-build.log
+            /tmp/dtsc-hotfix-668-redis-rest.log

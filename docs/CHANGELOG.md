@@ -2,6 +2,28 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-09-20 — Hotfix #668 : cohérence du registre et des dépendances métier ERP
+
+### Corrigé
+
+- Le code canonique `CONTRACTS` n’est plus défini deux fois : le module commercial actif reste l’unique définition canonique avec sa route et son workspace professionnels.
+- Les dépendances ERP distinguent désormais les prérequis bloquants des intégrations recommandées afin de ne plus empêcher des parcours supportés, notamment la facturation client directe.
+- Les relations Finance ont été réalignées : Trésorerie, Comptabilité, Caisse, Rapprochement, Paiements et Clôture n’imposent plus des modules complémentaires lorsque leur cœur métier sait fonctionner sans eux.
+
+### Ajouté
+
+- Ajout de `recommendedIntegrations` au registre canonique pour documenter les intégrations utiles sans les transformer en entitlement ni en activation implicite.
+- Ajout d’avertissements d’administration pour les intégrations recommandées inactives, sans bloquer l’accès au module cible.
+- Ajout de `qa:hotfix-668` et d’une gate globale détectant les codes canoniques dupliqués, aliases ambigus, routes/workspaces incohérents et relations de dépendance invalides.
+- Ajout du runbook OWNER_E2E #668.
+
+### Sécurisé
+
+- Le résolveur d’accès continue à bloquer uniquement sur les prérequis obligatoires et conserve les contrôles tenant, activation, abonnement, entitlement et permission du module cible.
+- Les intégrations recommandées ne sont jamais activées automatiquement et ne donnent aucun accès implicite à leurs modules.
+- Les outils IA Entreprise continuent à réutiliser le résolveur d’accès canonique et les contrôles de plan.
+- Aucun module n’est promu automatiquement en `COMMERCIAL_READY` et aucune migration Prisma n’est introduite.
+
 ## 2026-09-19 — Hotfix #667 : fondations ERP canoniques
 
 ### Corrigé

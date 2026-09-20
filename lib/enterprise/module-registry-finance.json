@@ -43,7 +43,14 @@
       "minimumPlan": "BUSINESS",
       "requiresActiveSubscription": true,
       "applicableSectors": "ALL",
-      "dependencies": ["FINANCE_OVERVIEW", "CRM_CUSTOMERS", "SALES_QUOTES_ORDERS"],
+      "dependencies": [
+        "CRM_CUSTOMERS"
+      ],
+      "recommendedIntegrations": [
+        "FINANCE_OVERVIEW",
+        "SALES_QUOTES_ORDERS",
+        "CONTRACTS"
+      ],
       "qaContract": "enterprise-receivables"
     },
     {
@@ -65,7 +72,12 @@
       "minimumPlan": "BUSINESS",
       "requiresActiveSubscription": true,
       "applicableSectors": "ALL",
-      "dependencies": ["FINANCE_OVERVIEW", "SUPPLIERS_PURCHASES"],
+      "dependencies": [
+        "SUPPLIERS_PURCHASES"
+      ],
+      "recommendedIntegrations": [
+        "FINANCE_OVERVIEW"
+      ],
       "qaContract": "enterprise-payables"
     },
     {
@@ -87,7 +99,13 @@
       "minimumPlan": "BUSINESS",
       "requiresActiveSubscription": true,
       "applicableSectors": "ALL",
-      "dependencies": ["FINANCE_RECEIVABLES", "FINANCE_PAYABLES", "FINANCE_TREASURY"],
+      "dependencies": [
+        "FINANCE_TREASURY"
+      ],
+      "recommendedIntegrations": [
+        "FINANCE_RECEIVABLES",
+        "FINANCE_PAYABLES"
+      ],
       "qaContract": "enterprise-treasury"
     },
     {
@@ -109,7 +127,10 @@
       "minimumPlan": "BUSINESS",
       "requiresActiveSubscription": true,
       "applicableSectors": "ALL",
-      "dependencies": ["FINANCE_OVERVIEW"],
+      "dependencies": [],
+      "recommendedIntegrations": [
+        "FINANCE_OVERVIEW"
+      ],
       "qaContract": "enterprise-treasury"
     },
     {
@@ -131,7 +152,12 @@
       "minimumPlan": "BUSINESS",
       "requiresActiveSubscription": true,
       "applicableSectors": "ALL",
-      "dependencies": ["FINANCE_TREASURY", "FINANCE_PAYMENTS"],
+      "dependencies": [
+        "FINANCE_TREASURY"
+      ],
+      "recommendedIntegrations": [
+        "FINANCE_PAYMENTS"
+      ],
       "qaContract": "enterprise-treasury"
     },
     {
@@ -175,7 +201,12 @@
       "minimumPlan": "ENTERPRISE",
       "requiresActiveSubscription": true,
       "applicableSectors": "ALL",
-      "dependencies": ["FINANCE_BANK", "FINANCE_PAYMENTS"],
+      "dependencies": [
+        "FINANCE_BANK"
+      ],
+      "recommendedIntegrations": [
+        "FINANCE_PAYMENTS"
+      ],
       "qaContract": "enterprise-treasury"
     },
     {
@@ -197,7 +228,10 @@
       "minimumPlan": "ENTERPRISE",
       "requiresActiveSubscription": true,
       "applicableSectors": "ALL",
-      "dependencies": ["FINANCE_OVERVIEW"],
+      "dependencies": [],
+      "recommendedIntegrations": [
+        "FINANCE_OVERVIEW"
+      ],
       "qaContract": "enterprise-accounting"
     },
     {
@@ -241,7 +275,12 @@
       "minimumPlan": "ENTERPRISE",
       "requiresActiveSubscription": true,
       "applicableSectors": "ALL",
-      "dependencies": ["FINANCE_ACCOUNTING", "FINANCE_RECONCILIATION"],
+      "dependencies": [
+        "FINANCE_ACCOUNTING"
+      ],
+      "recommendedIntegrations": [
+        "FINANCE_RECONCILIATION"
+      ],
       "qaContract": "enterprise-financial-close"
     },
     {

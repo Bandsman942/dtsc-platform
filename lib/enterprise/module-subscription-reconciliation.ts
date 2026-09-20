@@ -227,6 +227,7 @@ export async function activateEnterpriseModule({
   return {
     requestedModule: requestedDefinition.code,
     activatedModules: definitionsToEnable.map((definition) => definition.code),
+    recommendedIntegrations: [...(requestedDefinition.recommendedIntegrations || [])],
   };
 }
 

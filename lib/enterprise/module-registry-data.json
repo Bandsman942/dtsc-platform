@@ -1231,27 +1231,6 @@
       "qaContract": "enterprise-module-registry"
     },
     {
-      "code": "CONTRACTS",
-      "labelFr": "Contrats sectoriels futurs",
-      "labelEn": "Future sector contracts",
-      "descriptionFr": "Code historique partagé par plusieurs templates futurs; il reste masqué tant que sa frontière métier n’est pas tranchée.",
-      "descriptionEn": "Historical code shared by several future templates; hidden until its business boundary is resolved.",
-      "domain": "DOCUMENTS",
-      "implementationStatus": "HIDDEN",
-      "navigationGroup": "PROCUREMENT_RESOURCES",
-      "navigationOrder": 999,
-      "iconKey": "file-signature",
-      "routeKind": "HIDDEN",
-      "workspaceKey": null,
-      "permissionPrefixes": [],
-      "accessPolicy": "EXPLICIT_DENY",
-      "minimumPlan": "ENTERPRISE",
-      "requiresActiveSubscription": true,
-      "applicableSectors": ["INSURANCE", "PROFESSIONAL_SERVICES"],
-      "dependencies": [],
-      "qaContract": "enterprise-module-registry"
-    },
-    {
       "code": "PROGRAMS_PROJECTS",
       "labelFr": "Programmes & projets ONG",
       "labelEn": "NGO programs & projects",
