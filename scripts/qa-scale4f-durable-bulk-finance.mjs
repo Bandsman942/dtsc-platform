@@ -180,7 +180,7 @@ requireTokens("components/enterprise/professional/finance-professional-workspace
   "body.queued",
   "CustomEvent",
 ]);
-requireTokens("components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-workspace-hotfix.tsx", [
+requireTokens("components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-workspace.tsx", [
   "sessionStorage",
   "statusUrl",
   "progressPercent",
