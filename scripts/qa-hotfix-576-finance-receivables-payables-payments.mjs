@@ -14,8 +14,8 @@ const ok = (condition, message) => {
 
 const modulePage = read("components/enterprise/enterprise-finance-module-page.tsx");
 const operationalWorkspace = read("components/enterprise/professional/enterprise-operational-finance-workspace.tsx");
-const invoiceWorkspace = read("components/enterprise/professional/enterprise-finance-invoices-workspace-hotfix.tsx");
-const paymentWorkspace = read("components/enterprise/professional/enterprise-finance-payments-workspace-hotfix.tsx");
+const invoiceWorkspace = read("components/enterprise/professional/enterprise-finance-invoices-workspace.tsx");
+const paymentWorkspace = read("components/enterprise/professional/enterprise-finance-payments-workspace.tsx");
 const sharedBridge = read("components/enterprise/professional/finance-professional-workspace-shared.tsx");
 const sharedLegacy = read("components/enterprise/professional/finance-professional-workspace-shared-legacy.tsx");
 const sharedWorkspace = `${sharedBridge}\n${sharedLegacy}`;
@@ -44,7 +44,7 @@ const regressionAdapter = read("scripts/qa-regression-checks.mjs");
 const pkg = JSON.parse(read("package.json"));
 
 ok(modulePage.includes("resolveEnterpriseModuleCapabilities") && !modulePage.includes("MANAGER_ROLES"), "Finance UI derives capabilities from the canonical module-access resolver, not a local manager-role shortcut.");
-ok(operationalWorkspace.includes("EnterpriseFinanceInvoicesWorkspaceHotfix") && operationalWorkspace.includes("EnterpriseFinancePaymentsWorkspaceHotfix"), "The three operational Finance modules route through the hotfix workspaces.");
+ok(operationalWorkspace.includes("EnterpriseFinanceInvoicesWorkspace") && operationalWorkspace.includes("EnterpriseFinancePaymentsWorkspace"), "The three operational Finance modules route through the hotfix workspaces.");
 ok(sharedBridge.includes("finance-professional-workspace-shared-legacy") && sharedBridge.includes("dtsc:finance-durable-job"), "Finance shared helpers preserve the canonical legacy implementation behind the durable mutation bridge.");
 
 for (const [name, source] of [["receivables", receivablesRoute], ["payables", payablesRoute]]) {
