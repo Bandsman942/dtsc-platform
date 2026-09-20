@@ -117,7 +117,7 @@ if (exists(modulePage)) {
     "EnterpriseAdvancedFinanceWorkspace",
     "EnterpriseFinanceAccountingWorkspace",
     "EnterpriseFinanceAdvancedWorkspace",
-    "DOWNSTREAM_FINANCE_HOTFIX",
+    "DOWNSTREAM_FINANCE_MODULES",
   ]) {
     if (!content.includes(token)) fail(`Finance UX: routeur Finance incomplet (${token})`);
   }
