@@ -41,13 +41,13 @@ const expense = read("lib/enterprise/finance/expense-service.ts");
 lacks(expense, 'budgetLine?.budget.currency || "USD"', "Expense creation must not silently fall back to USD.");
 has(expense, "requireEnterpriseFunctionalCurrency", "Expense creation must use the canonical functional currency only as an explicit fallback.");
 
-const invoiceUi = read("components/enterprise/professional/enterprise-finance-invoices-workspace-hotfix.tsx");
+const invoiceUi = read("components/enterprise/professional/enterprise-finance-invoices-workspace.tsx");
 lacks(invoiceUi, 'defaultValue="USD"', "Active invoice UI must not suggest arbitrary USD.");
 lacks(invoiceUi, 'form.get("currencyCode") || "USD"', "Active invoice mutation must not inject arbitrary USD.");
 has(invoiceUi, "businessContext?.businessDate", "Active invoice UI must use the organization business date.");
 has(invoiceUi, "businessContext?.functionalCurrencyCode", "Active invoice UI must use the organization functional currency.");
 
-const paymentUi = read("components/enterprise/professional/enterprise-finance-payments-workspace-hotfix.tsx");
+const paymentUi = read("components/enterprise/professional/enterprise-finance-payments-workspace.tsx");
 lacks(paymentUi, 'useState("USD")', "Active payment UI must not initialize arbitrary USD.");
 lacks(paymentUi, 'setCurrencyCode("USD")', "Active payment UI must not reset to arbitrary USD.");
 has(paymentUi, "businessContext?.businessDate", "Active payment UI must use the organization business date.");
