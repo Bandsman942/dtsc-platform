@@ -10,8 +10,8 @@ const hasAll = (source, tokens, scope) => {
 const operational = read("components/enterprise/professional/enterprise-operational-finance-workspace.tsx");
 const treasuryUi = read("components/enterprise/professional/enterprise-finance-treasury-workspace.tsx");
 const cashWrapper = read("components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-workspace.tsx");
-const cashLegacy = read("components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-workspace-hotfix-legacy.tsx");
-const cashUi = `${cashWrapper}\n${cashLegacy}`;
+const cashBase = read("components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-base.tsx");
+const cashUi = `${cashWrapper}\n${cashBase}`;
 const referenceUi = read("components/enterprise/core-v2/finance-reference-select.tsx");
 const accountsRoute = read("app/api/enterprise/[organizationId]/financial-accounts/route.ts");
 const transfersRoute = read("app/api/enterprise/[organizationId]/account-transfers/route.ts");
@@ -40,7 +40,7 @@ for (const [name, source] of [["Treasury canonical", treasuryUi], ["Cash/Bank/Re
 }
 
 hasAll(cashWrapper, [
-  "enterprise-finance-cash-bank-reconciliation-workspace-hotfix-legacy",
+  "enterprise-finance-cash-bank-reconciliation-base",
   "dtsc:finance-durable-job",
   "sessionStorage",
   "progressPercent",
