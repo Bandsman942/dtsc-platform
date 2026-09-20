@@ -7,9 +7,22 @@ const root = process.cwd();
 const readJson = (relativePath) => JSON.parse(fs.readFileSync(path.join(root, relativePath), "utf8"));
 
 const registryData = readJson("lib/enterprise/module-registry-data.json");
-const modules = registryData.modules || [];
+const commonDomainRegistryData = readJson("lib/enterprise/module-registry-common-domains.json");
 const financeRegistryData = readJson("lib/enterprise/module-registry-finance.json");
+const manufacturingRegistryData = readJson("lib/enterprise/module-registry-manufacturing.json");
+const tailoringRegistryData = readJson("lib/enterprise/module-registry-tailoring.json");
+const gamingRegistryData = readJson("lib/enterprise/module-registry-gaming.json");
 const retailRegistryData = readJson("lib/enterprise/module-registry-retail.json");
+const registrySources = [
+  registryData,
+  commonDomainRegistryData,
+  financeRegistryData,
+  manufacturingRegistryData,
+  tailoringRegistryData,
+  gamingRegistryData,
+  retailRegistryData,
+];
+const sourceModules = registrySources.flatMap((source) => source.modules || []);
 const sectorConvergenceRegistryData = readJson("lib/enterprise/module-registry-sector-convergence.json");
 const finalCleanupRegistryData = readJson("lib/enterprise/module-registry-final-cleanup.json");
 const commercialRegistryData = readJson("lib/enterprise/module-registry-commercial-overrides.json");
@@ -45,6 +58,7 @@ function applyEffectiveOverrides(sourceDefinition) {
   return definition;
 }
 
+const modules = sourceModules.map(applyEffectiveOverrides);
 const effectiveFinanceModules = (financeRegistryData.modules || []).map(applyEffectiveOverrides);
 const effectiveRetailModules = (retailRegistryData.modules || []).map(applyEffectiveOverrides);
 const effectiveShopFinanceModules = [...effectiveFinanceModules, ...effectiveRetailModules];
@@ -72,6 +86,7 @@ for (const moduleDefinition of modules) {
 for (const moduleDefinition of modules) {
   for (const alias of [...(moduleDefinition.aliases || []), ...(moduleDefinition.legacyCodes || [])]) {
     fail(alias === moduleDefinition.code, `Alias auto-référent: ${alias}`);
+    fail(canonicalCodes.has(alias), `Alias en collision avec un code canonique: ${alias}`);
     const previousOwner = aliasOwners.get(alias);
     fail(Boolean(previousOwner && previousOwner !== moduleDefinition.code), `Alias ambigu ${alias}: ${previousOwner} / ${moduleDefinition.code}`);
     aliasOwners.set(alias, moduleDefinition.code);
@@ -109,8 +124,16 @@ for (const moduleDefinition of modules) {
   if (["PLANNED", "HIDDEN", "RETIRED"].includes(moduleDefinition.implementationStatus)) {
     fail(moduleDefinition.routeKind !== "HIDDEN", `${moduleDefinition.code}: module ${moduleDefinition.implementationStatus} rendu navigable`);
   }
-  for (const dependencyCode of moduleDefinition.dependencies || []) {
+  const blockingDependencies = moduleDefinition.dependencies || [];
+  const recommendedIntegrations = moduleDefinition.recommendedIntegrations || [];
+  for (const dependencyCode of blockingDependencies) {
     fail(!canonicalCodes.has(dependencyCode), `${moduleDefinition.code}: dépendance inconnue ${dependencyCode}`);
+    fail(dependencyCode === moduleDefinition.code, `${moduleDefinition.code}: dépendance auto-référente`);
+  }
+  for (const integrationCode of recommendedIntegrations) {
+    fail(!canonicalCodes.has(integrationCode), `${moduleDefinition.code}: intégration recommandée inconnue ${integrationCode}`);
+    fail(integrationCode === moduleDefinition.code, `${moduleDefinition.code}: intégration recommandée auto-référente`);
+    fail(blockingDependencies.includes(integrationCode), `${moduleDefinition.code}: ${integrationCode} ne peut pas être à la fois bloquante et recommandée`);
   }
   if (adminCodes.has(moduleDefinition.code)) {
     fail(moduleDefinition.routeKind !== "ADMIN_SECTION", `${moduleDefinition.code}: ancien module administratif encore autonome`);
@@ -164,19 +187,57 @@ function requireEffectiveShopFinanceModule(code) {
 }
 
 const financeOverview = requireEffectiveShopFinanceModule("FINANCE_OVERVIEW");
+const financeReceivables = requireEffectiveShopFinanceModule("FINANCE_RECEIVABLES");
+const financePayables = requireEffectiveShopFinanceModule("FINANCE_PAYABLES");
+const financePayments = requireEffectiveShopFinanceModule("FINANCE_PAYMENTS");
 const financeTreasury = requireEffectiveShopFinanceModule("FINANCE_TREASURY");
 const financeCash = requireEffectiveShopFinanceModule("FINANCE_CASH");
+const financeReconciliation = requireEffectiveShopFinanceModule("FINANCE_RECONCILIATION");
 const financeAccounting = requireEffectiveShopFinanceModule("FINANCE_ACCOUNTING");
+const financeClose = requireEffectiveShopFinanceModule("FINANCE_CLOSE");
 const retailPos = requireEffectiveShopFinanceModule("RETAIL_POS");
 const retailDailyClose = requireEffectiveShopFinanceModule("RETAIL_DAILY_CLOSE");
 
 if (financeOverview) fail(financeOverview.minimumPlan !== "BUSINESS", "Contrat Shop: FINANCE_OVERVIEW doit rester BUSINESS");
+if (financeReceivables) {
+  fail(!financeReceivables.dependencies?.includes("CRM_CUSTOMERS"), "Contrat Finance: Ventes & créances doit conserver Tiers & clients comme prérequis.");
+  fail(financeReceivables.dependencies?.includes("SALES_QUOTES_ORDERS"), "Contrat Finance: la facturation directe ne doit pas exiger Devis & commandes.");
+  fail(!financeReceivables.recommendedIntegrations?.includes("SALES_QUOTES_ORDERS"), "Contrat Finance: Devis & commandes doit rester une intégration recommandée de Ventes & créances.");
+}
+if (financePayables) {
+  fail(!financePayables.dependencies?.includes("SUPPLIERS_PURCHASES"), "Contrat Finance: Achats & dettes doit conserver le référentiel fournisseurs.");
+  fail(financePayables.dependencies?.includes("FINANCE_OVERVIEW"), "Contrat Finance: Achats & dettes ne doit pas dépendre du dashboard Finance.");
+}
+if (financePayments) {
+  fail(!financePayments.dependencies?.includes("FINANCE_TREASURY"), "Contrat Finance: Paiements doit conserver Trésorerie comme prérequis.");
+  fail(financePayments.dependencies?.includes("FINANCE_RECEIVABLES") || financePayments.dependencies?.includes("FINANCE_PAYABLES"), "Contrat Finance: Paiements ne doit pas exiger simultanément les sous-ledgers clients et fournisseurs.");
+  fail(!financePayments.recommendedIntegrations?.includes("FINANCE_RECEIVABLES") || !financePayments.recommendedIntegrations?.includes("FINANCE_PAYABLES"), "Contrat Finance: Créances et Dettes doivent rester des intégrations recommandées de Paiements.");
+}
 if (financeTreasury) {
   fail(financeTreasury.minimumPlan !== "BUSINESS", "Contrat Shop: FINANCE_TREASURY doit rester BUSINESS");
   fail(financeTreasury.dependencies?.includes("FINANCE_ACCOUNTING"), "Contrat Shop: Trésorerie BUSINESS ne doit pas dépendre du workspace FINANCE_ACCOUNTING ENTERPRISE");
-  fail(!financeTreasury.dependencies?.includes("FINANCE_OVERVIEW"), "Contrat Shop: Trésorerie doit conserver FINANCE_OVERVIEW comme fondation de configuration");
+  fail(financeTreasury.dependencies?.includes("FINANCE_OVERVIEW"), "Contrat Finance: Trésorerie ne doit pas dépendre du dashboard Finance.");
+  fail(!financeTreasury.recommendedIntegrations?.includes("FINANCE_OVERVIEW"), "Contrat Finance: Vue d’ensemble doit rester recommandée pour Trésorerie.");
 }
-if (financeCash) fail(financeCash.minimumPlan !== "BUSINESS", "Contrat Shop: FINANCE_CASH doit rester BUSINESS");
+if (financeCash) {
+  fail(financeCash.minimumPlan !== "BUSINESS", "Contrat Shop: FINANCE_CASH doit rester BUSINESS");
+  fail(!financeCash.dependencies?.includes("FINANCE_TREASURY"), "Contrat Finance: Caisse doit conserver Trésorerie comme prérequis.");
+  fail(financeCash.dependencies?.includes("FINANCE_PAYMENTS"), "Contrat Finance: Caisse doit fonctionner sans imposer le module Paiements.");
+  fail(!financeCash.recommendedIntegrations?.includes("FINANCE_PAYMENTS"), "Contrat Finance: Paiements doit rester recommandé pour Caisse.");
+}
+if (financeReconciliation) {
+  fail(!financeReconciliation.dependencies?.includes("FINANCE_BANK"), "Contrat Finance: Rapprochement doit conserver Banque comme prérequis.");
+  fail(financeReconciliation.dependencies?.includes("FINANCE_PAYMENTS"), "Contrat Finance: Rapprochement ne doit pas exiger Paiements.");
+}
+if (financeAccounting) {
+  fail(financeAccounting.dependencies?.includes("FINANCE_OVERVIEW"), "Contrat Finance: Comptabilité ne doit pas dépendre du dashboard Finance.");
+  fail(!financeAccounting.recommendedIntegrations?.includes("FINANCE_OVERVIEW"), "Contrat Finance: Vue d’ensemble doit rester recommandée pour Comptabilité.");
+}
+if (financeClose) {
+  fail(!financeClose.dependencies?.includes("FINANCE_ACCOUNTING"), "Contrat Finance: Clôture doit conserver Comptabilité comme prérequis.");
+  fail(financeClose.dependencies?.includes("FINANCE_RECONCILIATION"), "Contrat Finance: la Clôture ne doit pas exiger Rapprochement lorsque Banque n’est pas souscrite.");
+  fail(!financeClose.recommendedIntegrations?.includes("FINANCE_RECONCILIATION"), "Contrat Finance: Rapprochement doit rester recommandé pour Clôture.");
+}
 if (financeAccounting) fail(financeAccounting.minimumPlan !== "ENTERPRISE", "Contrat Shop: FINANCE_ACCOUNTING complet doit rester ENTERPRISE");
 if (retailPos) fail(retailPos.minimumPlan !== "BUSINESS", "Contrat Shop: RETAIL_POS doit rester BUSINESS");
 if (retailDailyClose) fail(retailDailyClose.minimumPlan !== "BUSINESS", "Contrat Shop: RETAIL_DAILY_CLOSE doit rester BUSINESS");
@@ -209,4 +270,4 @@ if (errors.length) {
   process.exit(1);
 }
 
-console.log(`Enterprise module registry QA OK: ${modules.length} définitions historiques, ${aliasOwners.size} alias, contrat Shop/Finance protégé.`);
+console.log(`Enterprise module registry QA OK: ${modules.length} définitions canoniques, ${aliasOwners.size} alias, relations bloquantes/recommandées et contrat Shop/Finance protégés.`);
