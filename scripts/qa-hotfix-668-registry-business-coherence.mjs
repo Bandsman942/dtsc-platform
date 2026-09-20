@@ -52,6 +52,12 @@ for (const definition of sourceDefinitions) {
   if (!existing) codeOwners.set(definition.code, definition.__file);
 }
 
+for (const workspaceKey of intentionallySharedWorkspaceKeys) {
+  const owners = definitions.filter((definition) => definition.workspaceKey === workspaceKey);
+  check(owners.length > 1, `${workspaceKey} must remain an intentional consolidated workspace.`);
+  check(new Set(owners.map((definition) => definition.routeKind)).size === 1, `${workspaceKey} owners must use one renderer contract.`);
+}
+
 check(sourceDefinitions.filter((definition) => definition.code === "CONTRACTS").length === 1, "CONTRACTS must have exactly one canonical definition.");
 const contracts = definitions.find((definition) => definition.code === "CONTRACTS");
 check(Boolean(contracts), "CONTRACTS canonical definition is missing.");
@@ -65,6 +71,7 @@ const canonicalCodes = new Set(definitions.map((definition) => definition.code))
 const aliasOwners = new Map();
 const routeOwners = new Map();
 const workspaceOwners = new Map();
+const intentionallySharedWorkspaceKeys = new Set(["ENTERPRISE_MANUFACTURING", "ENTERPRISE_TAILORING"]);
 const planLevels = { STARTER: 1, BUSINESS: 2, ENTERPRISE: 3 };
 const accessPolicies = new Set(["MEMBERSHIP", "POSITION_PERMISSION", "ADMIN_ONLY", "EXPLICIT_DENY"]);
 const activeStatuses = new Set(["ACTIVE", "BETA"]);
@@ -111,7 +118,12 @@ for (const definition of definitions) {
       check(!previousRoute || previousRoute === definition.code, `Route ${definition.routePath} is shared by ${previousRoute} and ${definition.code}.`);
       routeOwners.set(definition.routePath, definition.code);
       const previousWorkspace = workspaceOwners.get(definition.workspaceKey);
-      check(!previousWorkspace || previousWorkspace === definition.code, `Workspace ${definition.workspaceKey} is shared by ${previousWorkspace} and ${definition.code}.`);
+      check(
+        !previousWorkspace ||
+          previousWorkspace === definition.code ||
+          intentionallySharedWorkspaceKeys.has(definition.workspaceKey),
+        `Workspace ${definition.workspaceKey} is unexpectedly shared by ${previousWorkspace} and ${definition.code}.`,
+      );
       workspaceOwners.set(definition.workspaceKey, definition.code);
     }
   }
