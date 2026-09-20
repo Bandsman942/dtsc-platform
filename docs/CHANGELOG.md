@@ -2,6 +2,27 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-09-20 — Hotfix #669 : convergence UI, i18n et code ERP
+
+### Corrigé
+
+- Les workspaces actifs Tiers, Catalogue, CRM, Contrats, Actifs, IA Entreprise et Finance ne sont plus routés à travers des implémentations nommées `v2`, `v3` ou `hotfix` ; les anciens fichiers deviennent des bridges de compatibilité.
+- Les panneaux d’administration entreprise utilisent désormais un agrégateur et une base canoniques, sans dépendance runtime directe au fichier `legacy`.
+- Les bases internes Finance Banque/Rapprochement et helpers partagés utilisent des noms fonctionnels canoniques ; les anciens fichiers `legacy` ne contiennent plus d’implémentation propre.
+- Le workspace ERP commun n’impose plus `fr-FR` aux dates et heures et projette les statuts contrôlés par les libellés métier.
+
+### Amélioré
+
+- Les libellés de navigation du workspace commun réutilisent le catalogue i18n partagé au lieu de ternaires FR/EN locaux.
+- Comptabilité périodique, Opérations de clôture et Cessions d’actifs utilisent le catalogue Finance FR/EN canonique.
+- Les workspaces professionnels déplacés conservent les contrats responsive, formulaires plein écran, feedback et projection des enums existants.
+
+### Qualité
+
+- Ajout de `qa:hotfix-669`, intégré à la régression, pour interdire la réintroduction de workspaces suffixés dans les routeurs actifs et vérifier le sens des bridges de compatibilité.
+- Ajout d’un workflow CI dédié et d’une recette OWNER_E2E couvrant FR/EN, clair/sombre, clavier, safe areas et les largeurs 320 à 1024 px.
+- Aucune migration Prisma, aucun backfill et aucune modification d’entitlement ou de permission.
+
 ## 2026-09-20 — Hotfix #668 : cohérence du registre et des dépendances métier ERP
 
 ### Corrigé
