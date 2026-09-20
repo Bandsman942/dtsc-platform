@@ -5,8 +5,8 @@ const root = process.cwd();
 const failures = [];
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const files = [
-  "components/enterprise/professional/enterprise-customers-workspace-v2.tsx",
-  "components/enterprise/professional/enterprise-crm-workspace-v2.tsx",
+  "components/enterprise/professional/enterprise-customers-workspace.tsx",
+  "components/enterprise/professional/enterprise-crm-workspace.tsx",
   "components/enterprise/core-v2/enterprise-suppliers-workspace.tsx",
   "components/enterprise/professional/enterprise-employees-identity-workspace.tsx",
 ];
