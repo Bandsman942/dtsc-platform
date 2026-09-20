@@ -169,6 +169,7 @@ const collectEnd = subscriptionSource.indexOf("function moduleWriteData");
 const collectBody = collectStart >= 0 && collectEnd > collectStart ? subscriptionSource.slice(collectStart, collectEnd) : "";
 check(collectBody.includes("definition.dependencies"), "Subscription activation must recurse through required dependencies.");
 check(!collectBody.includes("recommendedIntegrations"), "Subscription activation must not auto-enable recommended integrations.");
+check(subscriptionSource.includes("recommendedIntegrations: [...(requestedDefinition.recommendedIntegrations || [])]"), "Subscription activation must report recommended integrations without activating them.");
 
 const adminAccessRoute = read("app/api/enterprise/[organizationId]/administration/modules/[moduleCode]/access/route.ts");
 check(adminAccessRoute.includes("recommendedIntegrations: recommendedIntegrationLabels"), "Administration API must distinguish recommended integrations from required dependencies.");
