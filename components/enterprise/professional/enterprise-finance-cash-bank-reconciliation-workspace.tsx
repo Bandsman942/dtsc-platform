@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
-import { EnterpriseFinanceCashBankReconciliationWorkspace as LegacyWorkspace } from "@/components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-workspace-hotfix-legacy";
+import { EnterpriseFinanceCashBankReconciliationWorkspaceHotfix as LegacyWorkspace } from "@/components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-workspace-hotfix-legacy";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
