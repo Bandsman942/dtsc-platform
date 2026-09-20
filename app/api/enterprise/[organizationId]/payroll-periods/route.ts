@@ -50,7 +50,7 @@ export async function POST(req: Request, { params }: Params) {
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "PAYROLL_OPERATIONS", action: "manage" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = payrollPeriodCreateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Période invalide." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message || "Période invalide." }, { status: 400 });
   try {
     const payrollPeriod = await createEnterprisePayrollPeriod(organizationId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_PAYROLL_PERIOD_CREATED", entity: "EnterprisePayrollPeriod", entityId: payrollPeriod.id, request: req, metadata: { organizationId } });

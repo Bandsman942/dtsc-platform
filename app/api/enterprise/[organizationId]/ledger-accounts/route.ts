@@ -53,7 +53,7 @@ export async function POST(req: Request, { params }: Params) {
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_ACCOUNTING", "create", { mutation: true });
   if (!auth.ok) return auth.response;
   const parsed = ledgerAccountCreateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message }, { status: 400 });
   try {
     const chart = await prisma.enterpriseChartOfAccounts.findFirst({ where: { id: parsed.data.chartId, organizationId } });
     if (!chart) return NextResponse.json({ error: "CHART_OF_ACCOUNTS_INVALID", message: "Plan comptable introuvable." }, { status: 409 });

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { normalizeEnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
@@ -22,7 +23,7 @@ export async function POST(req: Request, { params }: Params) {
 
   const { organizationId, id } = await params;
   const parsed = enterpriseExpenseActionSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Action de dépense invalide." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "EXPENSE_ACTION_INPUT_INVALID", req);
   const requiredAction = parsed.data.action === "ARCHIVE" ? "manage" : "submit";
   const access = await getEnterpriseFinanceAccess({ session, organizationId, moduleCode: "FINANCE_BUDGETS", action: requiredAction });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });

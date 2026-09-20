@@ -1,4 +1,5 @@
 import { after, NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseAiAccess } from "@/lib/enterprise-ai/access";
@@ -38,7 +39,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const parsed = enterpriseAiKnowledgeActionSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+    return enterpriseValidationErrorResponse(parsed.error, "AI_KNOWLEDGE_SOURCE_ACTION_INPUT_INVALID", req);
   }
   const access = await getEnterpriseAiAccess(session, parsed.data.organizationId, "source_manage");
   if (!access || !access.canManageSources) {

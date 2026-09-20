@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { retailOfflineSnapshotQuerySchema } from "@/lib/enterprise/retail/offline-schemas";
@@ -12,7 +13,7 @@ export async function POST(req: Request, { params }: Params) {
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "read", { mutation: true, limit: 60 });
   if (!auth.ok) return auth.response;
   const parsed = retailOfflineSnapshotQuerySchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Configuration offline invalide." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "RETAIL_OFFLINE_SNAPSHOT_INPUT_INVALID", req);
   try {
     const snapshot = await buildRetailOfflineSnapshot({ organizationId, actorUserId: auth.session.userId, ...parsed.data });
     await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_RETAIL_OFFLINE_SNAPSHOT_CREATED", entity: "EnterpriseRetailOfflineSnapshot", entityId: snapshot.version, request: req, metadata: { organizationId, siteId: parsed.data.siteId, warehouseId: parsed.data.warehouseId, currencyCode: parsed.data.currencyCode, itemCount: snapshot.catalog.returned, truncated: snapshot.catalog.truncated, saleEnabled: snapshot.policy.saleEnabled } });

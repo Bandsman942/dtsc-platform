@@ -1,4 +1,5 @@
 import { after, NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseAiAccess } from "@/lib/enterprise-ai/access";
@@ -125,12 +126,13 @@ export async function POST(req: Request) {
     confidentiality: formData?.get("confidentiality") || "INTERNAL",
     language: formData?.get("language") || "fr",
   });
-  if (!parsed.success || !(file instanceof File)) {
+  if (!parsed.success) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
-    return NextResponse.json(
-      { error: "Invalid payload", message: "Source IA invalide ou fichier manquant." },
-      { status: 400 }
-    );
+    return enterpriseValidationErrorResponse(parsed.error, "AI_KNOWLEDGE_SOURCE_UPLOAD_INPUT_INVALID", req);
+  }
+  if (!(file instanceof File)) {
+    await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
+    return NextResponse.json({ error: "AI_KNOWLEDGE_SOURCE_FILE_REQUIRED", message: "Sélectionnez un fichier à importer." }, { status: 400 });
   }
   const access = await getEnterpriseAiAccess(session, parsed.data.organizationId, "source_create");
   if (!access || !access.canUploadSources) {
@@ -231,16 +233,16 @@ export async function POST(req: Request) {
       { status: 202 }
     );
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Source preparation failed";
+    console.error("Enterprise AI source preparation failed", error);
     await writeApiLog({
       request: req,
       statusCode: 500,
       userId: session.userId,
       startedAt,
-      metadata: { organizationId: parsed.data.organizationId, message },
+      metadata: { organizationId: parsed.data.organizationId, reasonCode: "SOURCE_PREPARATION_FAILED" },
     });
     return NextResponse.json(
-      { error: "Source preparation failed", message: "La source n'a pas pu être préparée pour indexation." },
+      { error: "SOURCE_PREPARATION_FAILED", message: "La source n'a pas pu être préparée pour indexation." },
       { status: 500 }
     );
   }

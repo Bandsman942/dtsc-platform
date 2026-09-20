@@ -19,7 +19,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const involved = existing.responsibleUserId === session.userId || existing.incident.reportedById === session.userId || existing.incident.assignedToId === session.userId;
   if ((!access.canViewAll && !involved) || (!access.canViewConfidential && (existing.incident.confidentialityIncident || existing.incident.restrictedAccess) && !involved)) return NextResponse.json({ error: "Forbidden", message: "Cet incident est confidentiel." }, { status: 403 });
   const parsed = healthQualityCorrectiveActionUpdateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: "Action corrective invalide." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: "Action corrective invalide." }, { status: 400 });
   const allowed = parsed.data.action === "validate" || parsed.data.action === "reject" ? access.canValidateActions : access.canManageActions;
   if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   try {

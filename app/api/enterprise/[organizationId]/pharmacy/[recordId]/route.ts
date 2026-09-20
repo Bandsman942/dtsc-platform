@@ -100,7 +100,7 @@ export async function PATCH(req: Request, { params }: Params) {
   if (existing.moduleCode === "MEDICINES_PRODUCTS") return NextResponse.json({ error: "Dedicated product API required", message: "Utilisez le catalogue Produits & médicaments dédié." }, { status: 400 });
   if (!(await canAccessEnterpriseModule(session.userId, organizationId, existing.moduleCode, "write"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = enterprisePharmacyRecordUpdateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: "Les modifications pharmacie sont invalides." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: "Les modifications pharmacie sont invalides." }, { status: 400 });
   const data = parsed.data;
   const referenceError = await validateUpdateReferences(organizationId, data);
   if (referenceError) return NextResponse.json({ error: "Invalid reference", message: referenceError }, { status: 400 });

@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { authorizeFinanceRequest, financeErrorResponse, financeListParams } from "@/lib/enterprise/accounting/http";
 import { assertSupplierInvoiceSources } from "@/lib/enterprise/accounting/invoice-source-validation";
@@ -72,7 +73,7 @@ export async function POST(req: Request, { params }: Params) {
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_PAYABLES", "create", { mutation: true, limit: 100 });
   if (!auth.ok) return auth.response;
   const parsed = supplierInvoiceCreateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "SUPPLIER_INVOICES_INPUT_INVALID", req);
   try {
     await prisma.$transaction((tx) => assertSupplierInvoiceSources(tx, organizationId, parsed.data));
     const invoice = await createSupplierInvoice(organizationId, auth.session.userId, parsed.data);

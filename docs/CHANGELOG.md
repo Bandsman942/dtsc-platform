@@ -2,6 +2,26 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-09-19 — Hotfix #667 : fondations ERP canoniques
+
+### Corrigé
+
+- Les routes ERP actives ne retournent plus le libellé générique `Invalid payload` : les validations utilisent désormais des codes stables et des messages sûrs.
+- Le client professionnel conserve `code`, `clientMessage`, `details` et `status` au lieu de réduire les échecs à un simple `Error`.
+- Les panneaux Finance historiques délèguent leurs requêtes au client professionnel commun afin de préserver les erreurs structurées.
+- Les créations d’achat et le chat IA Entreprise ne propagent plus de message d’exception brut dans les réponses ou les métadonnées d’audit couvertes.
+
+### Ajouté
+
+- Ajout de `enterpriseValidationErrorResponse()` pour normaliser les erreurs Zod sans exposer les valeurs saisies.
+- Ajout de `ProfessionalApiError` et `professionalRequest()`.
+- Ajout de `qa:hotfix-667`, de la documentation du hotfix et de la recette OWNER_E2E dédiée.
+
+### Sécurisé
+
+- Les erreurs de champs retournent uniquement le chemin du champ et le type de validation.
+- Aucun changement de permission, d’entitlement ou de schéma Prisma.
+
 ## 2026-09-19 — Hotfix #666 : sécurité des devises et dates métier ERP
 
 ### Corrigé

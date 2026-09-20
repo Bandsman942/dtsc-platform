@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { finalizeRetailSaleReversalAccounting } from "@/lib/enterprise/retail/accounting";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
@@ -13,7 +14,7 @@ export async function POST(req: Request, { params }: Params) {
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "manage", { mutation: true, limit: 40 });
   if (!auth.ok) return auth.response;
   const parsed = retailSaleReverseSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Annulation invalide." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "RETAIL_SALE_REVERSAL_INPUT_INVALID", req);
   try {
     const sale = await reverseRetailSale(organizationId, saleId, auth.session.userId, parsed.data);
     const accounting = await finalizeRetailSaleReversalAccounting(organizationId, auth.session.userId, sale.id);

@@ -37,7 +37,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const access = await getHealthAppointmentAccess({ session, organizationId, action: "write" });
   if (!access?.canUpdate) return NextResponse.json({ error: "Forbidden", message: "Vous n’avez pas la permission de modifier ce rendez-vous." }, { status: 403 });
   const parsed = healthAppointmentUpdateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: "Les modifications du rendez-vous sont invalides." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: "Les modifications du rendez-vous sont invalides." }, { status: 400 });
   const data = parsed.data;
   const references = await validateHealthAppointmentReferences(organizationId, data);
   if (references.error) return NextResponse.json({ error: "Invalid reference", message: references.error }, { status: 400 });

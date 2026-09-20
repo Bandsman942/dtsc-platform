@@ -23,7 +23,7 @@ export async function POST(req: Request, { params }: Params) {
   const access = await getEnterpriseCoreV2Access({ session, organizationId, moduleCode: "INTERNAL_REQUESTS", action: "submit" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = enterpriseRequestActionSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: "L’action demandée est invalide." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: "L’action demandée est invalide." }, { status: 400 });
   const requestRecord = await prisma.enterpriseRequest.findFirst({ where: { id, organizationId, archivedAt: null } });
   if (!requestRecord) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const data = parsed.data;

@@ -44,7 +44,7 @@ export async function PATCH(request: Request, { params }: Params) {
     await writeApiLog({ request, statusCode: 200, userId: session.userId, startedAt });
     return NextResponse.json({ ok: true });
   } catch (error) {
-    const code = error instanceof Error ? error.message : "UNKNOWN";
+    const code = error instanceof Error && /^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : "UNKNOWN";
     const messages: Record<string, string> = { REASON_REQUIRED: "Le motif est obligatoire.", EVENT_NOT_SUBMITTED: "La déclaration doit être soumise avant validation.", EVENT_NOT_FOUND: "La déclaration est introuvable.", BATCH_REQUIRED: "Un lot est obligatoire.", BATCH_NOT_FOUND: "Le lot est introuvable.", NEGATIVE_STOCK: "Cette opération rendrait le stock négatif.", INVALID_ACTION: "Cette action n'est pas autorisée." };
     return NextResponse.json({ error: code, message: messages[code] || "Action impossible." }, { status: 400 });
   }

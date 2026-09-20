@@ -18,6 +18,7 @@ import {
   ProfessionalLoading,
   ProfessionalSearch,
   ProfessionalTabs,
+  professionalRequest,
 } from "@/components/enterprise/professional/professional-erp-ui";
 import {
   financeDate,
@@ -60,10 +61,11 @@ const EMPTY_LOOKUPS: LookupPayload = { accounts: [], ledgerAccounts: [], currenc
 const EMPTY_HISTORY_FILTERS: HistoryFilters = { accountId: "", transactionType: "", direction: "", currencyCode: "", from: "", to: "" };
 
 async function requestJson(endpoint: string, method: "GET" | "POST" | "PATCH" | "DELETE" = "GET", body?: unknown) {
-  const response = await fetch(endpoint, { method, cache: "no-store", headers: body === undefined ? undefined : { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
-  const payload = await response.json().catch(() => null) as { message?: string; error?: string; [key: string]: unknown } | null;
-  if (!response.ok) throw new Error(payload?.message || payload?.error || "TREASURY_OPERATION_FAILED");
-  return payload || {};
+  return professionalRequest<Record<string, unknown>>(endpoint, {
+    method,
+    payload: body,
+    fallbackCode: "TREASURY_OPERATION_FAILED",
+  });
 }
 
 const today = () => new Date().toISOString().slice(0, 10);

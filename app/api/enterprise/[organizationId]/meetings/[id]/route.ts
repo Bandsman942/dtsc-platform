@@ -40,7 +40,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const access = await getEnterpriseCoreV2Access({ session, organizationId, moduleCode: "MEETINGS", action: "submit" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = enterpriseMeetingUpdateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Modification invalide." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message || "Modification invalide." }, { status: 400 });
   const existing = await prisma.enterpriseMeeting.findFirst({ where: { id, organizationId, archivedAt: null }, include: { participants: true } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (!access.canManage && existing.organizerUserId !== session.userId) return NextResponse.json({ error: "Forbidden", message: "Seul l’organisateur ou un responsable peut modifier la réunion." }, { status: 403 });

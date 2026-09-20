@@ -39,7 +39,7 @@ export async function POST(req: Request, { params }: Params) {
   const formData = await req.formData().catch(() => null);
   const fileValue = formData?.get("file");
   const revisionValue = Number(formData?.get("revision"));
-  if (!(fileValue instanceof File) || !fileValue.size || !Number.isInteger(revisionValue) || revisionValue < 1) return NextResponse.json({ error: "Invalid payload", message: "Fichier et révision valides requis." }, { status: 400 });
+  if (!(fileValue instanceof File) || !fileValue.size || !Number.isInteger(revisionValue) || revisionValue < 1) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: "Fichier et révision valides requis." }, { status: 400 });
   const fileValidation = validateEnterpriseDocumentFile(fileValue);
   if (!fileValidation.ok) return NextResponse.json({ error: "Invalid file", message: fileValidation.message }, { status: fileValidation.status });
   try {
@@ -51,7 +51,7 @@ export async function POST(req: Request, { params }: Params) {
     const normalized = normalizeEnterpriseCoreV2Error(error);
     const message = error instanceof Error && error.message.startsWith("ENTERPRISE_DOCUMENT_") ? "Le stockage privé n’a pas pu enregistrer cette version." : normalized.message;
     const status = normalized.status === 500 && error instanceof Error && error.message.includes("SUPABASE") ? 503 : normalized.status;
-    await writeApiLog({ request: req, statusCode: status, userId: session.userId, startedAt, metadata: { organizationId, domain: "documents", documentId: id, error: error instanceof Error ? error.message : "unknown" } });
+    await writeApiLog({ request: req, statusCode: status, userId: session.userId, startedAt, metadata: { organizationId, domain: "documents", documentId: id, error: error instanceof Error && /^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : "unknown" } });
     return NextResponse.json({ error: normalized.code, message }, { status });
   }
 }

@@ -41,7 +41,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const access = await getEnterpriseCoreV2Access({ session, organizationId, moduleCode: "INTERNAL_REQUESTS", action: "submit" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = enterpriseRequestUpdateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Modification invalide." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message || "Modification invalide." }, { status: 400 });
   const existing = await prisma.enterpriseRequest.findFirst({ where: { id, organizationId, archivedAt: null } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (!canMutateOwnedObject({ canManage: access.canManage, userId: session.userId, relatedUserIds: [existing.requestedByUserId, existing.assignedToUserId] })) return NextResponse.json({ error: "Forbidden" }, { status: 403 });

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { normalizeEnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
@@ -20,7 +21,7 @@ export async function POST(req: Request, { params }: Params) {
   const { organizationId, id } = await params; const access = await getEnterpriseProcurementAccess({ session, organizationId, moduleCode: "SUPPLIERS_PURCHASES", action: "write" }); if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const current = await prisma.enterprisePurchase.findFirst({ where: { id, organizationId, archivedAt: null } }); if (!current) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (!access.canManage && current.buyerUserId !== session.userId) return NextResponse.json({ error: "Forbidden", message: "Seul l’acheteur désigné ou un responsable peut enregistrer une réception." }, { status: 403 });
-  const parsed = enterprisePurchaseReceiptSchema.safeParse(await req.json().catch(() => null)); if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Réception invalide." }, { status: 400 });
+  const parsed = enterprisePurchaseReceiptSchema.safeParse(await req.json().catch(() => null)); if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "PURCHASE_RECEIPT_INPUT_INVALID", req);
   try {
     const result = await receiveEnterprisePurchase(organizationId, id, session.userId, parsed.data);
     if (current.requestedByUserId !== session.userId) await notifyUser({ userId: current.requestedByUserId, organizationId, type: "ENTERPRISE_PURCHASE", title: result.purchase?.status === "RECEIVED" ? "Achat reçu" : "Réception partielle", body: current.title, targetUrl: "/enterprise-modules/SUPPLIERS_PURCHASES" });

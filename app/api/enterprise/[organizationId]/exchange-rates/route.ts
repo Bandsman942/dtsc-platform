@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { authorizeFinanceRequest, financeErrorResponse } from "@/lib/enterprise/accounting/http";
+import { authorizeFinanceRequest, financeErrorResponse, financeValidationErrorResponse } from "@/lib/enterprise/accounting/http";
 import { exchangeRateCreateSchema } from "@/lib/enterprise/accounting/exchange-rate-schemas";
 import { createEnterpriseExchangeRate, getEnterpriseExchangeRateConfiguration } from "@/lib/enterprise/accounting/exchange-rate-service";
 
@@ -26,7 +26,7 @@ export async function POST(req: Request, { params }: Params) {
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_TREASURY", "manage", { mutation: true, limit: 60 });
   if (!auth.ok) return auth.response;
   const parsed = exchangeRateCreateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Taux de change invalide." }, { status: 400 });
+  if (!parsed.success) return financeValidationErrorResponse(parsed.error, "EXCHANGE_RATE_INPUT_INVALID");
   try {
     const rate = await createEnterpriseExchangeRate(organizationId, auth.session.userId, parsed.data);
     await writeAuditLog({

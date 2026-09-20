@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { createRetailProviderOperation } from "@/lib/enterprise/retail/customer-payments";
 import { retailProviderOperationCreateSchema } from "@/lib/enterprise/retail/customer-payments-schemas";
@@ -33,7 +34,7 @@ export async function POST(req: Request, { params }: Params) {
   const permissions = await getRetailCustomerPaymentPermissions(auth.session.userId, organizationId);
   if (!permissions.canManageProviders) return NextResponse.json({ error: "Forbidden", message: "Votre fonction ne permet pas d’initier une opération provider." }, { status: 403 });
   const parsed = retailProviderOperationCreateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Opération provider invalide." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "RETAIL_PROVIDER_OPERATIONS_INPUT_INVALID", req);
   try {
     const result = await createRetailProviderOperation(organizationId, auth.session.userId, parsed.data);
     await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_RETAIL_PROVIDER_OPERATION_INITIATED", entity: "EnterpriseRetailProviderOperation", entityId: result.operation.id, request: req, metadata: { organizationId, providerId: result.operation.providerId, operationType: result.operation.operationType, sourceEntityType: result.operation.sourceEntityType, sourceEntityId: result.operation.sourceEntityId, idempotent: result.idempotent } });

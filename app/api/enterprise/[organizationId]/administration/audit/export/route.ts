@@ -66,8 +66,9 @@ export async function GET(req: Request, { params }: Params) {
         },
       }, { status: 202, headers: { "Cache-Control": "private, no-store" } });
     } catch (error) {
-      const code = error instanceof Error ? error.message.split(":", 1)[0] : "AUDIT_EXPORT_QUEUE_FAILED";
-      return NextResponse.json({ error: code, message: "L’export volumineux ne peut pas être préparé pour le moment." }, { status: code === "ENTERPRISE_BULK_STORAGE_NOT_CONFIGURED" ? 503 : 500 });
+      const storageNotConfigured = error instanceof Error && error.message.startsWith("ENTERPRISE_BULK_STORAGE_NOT_CONFIGURED");
+      const code = storageNotConfigured ? "ENTERPRISE_BULK_STORAGE_NOT_CONFIGURED" : "AUDIT_EXPORT_QUEUE_FAILED";
+      return NextResponse.json({ error: code, message: "L’export volumineux ne peut pas être préparé pour le moment." }, { status: storageNotConfigured ? 503 : 500 });
     }
   }
 

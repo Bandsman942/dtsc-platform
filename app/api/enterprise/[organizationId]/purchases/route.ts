@@ -1,7 +1,9 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { normalizeEnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
 import { enterprisePurchaseVisibilityWhere, getEnterpriseProcurementAccess } from "@/lib/enterprise/procurement/access";
 import { createEnterprisePurchase } from "@/lib/enterprise/procurement/purchase-service";
 import { enterprisePurchaseCreateSchema } from "@/lib/enterprise/procurement/validators";
@@ -24,7 +26,7 @@ export async function GET(req: Request, { params }: Params) {
 }
 
 export async function POST(req: Request, { params }: Params) {
-  const startedAt = Date.now(); if (!isSameOriginRequest(req)) return NextResponse.json({ error: "Forbidden" }, { status: 403 }); const session = await getSession(); if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 }); const limited = await rateLimit(getRateLimitKey(req, `enterprise-purchase-create:${session.userId}`), 80, 60 * 60 * 1000); if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 }); const { organizationId } = await params; const access = await getEnterpriseProcurementAccess({ session, organizationId, moduleCode: "SUPPLIERS_PURCHASES", action: "write" }); if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 }); const parsed = enterprisePurchaseCreateSchema.safeParse(await req.json().catch(() => null)); if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Achat invalide." }, { status: 400 });
+  const startedAt = Date.now(); if (!isSameOriginRequest(req)) return NextResponse.json({ error: "Forbidden" }, { status: 403 }); const session = await getSession(); if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 }); const limited = await rateLimit(getRateLimitKey(req, `enterprise-purchase-create:${session.userId}`), 80, 60 * 60 * 1000); if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 }); const { organizationId } = await params; const access = await getEnterpriseProcurementAccess({ session, organizationId, moduleCode: "SUPPLIERS_PURCHASES", action: "write" }); if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 }); const parsed = enterprisePurchaseCreateSchema.safeParse(await req.json().catch(() => null)); if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "PURCHASE_INPUT_INVALID", req);
   try { const purchase = await createEnterprisePurchase(organizationId, session.userId, parsed.data); await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_PURCHASE_CREATED", entity: "EnterprisePurchase", entityId: purchase.id, request: req, metadata: { organizationId, reference: purchase.reference, totalAmount: purchase.totalAmount.toString(), currency: purchase.currency, budgetLineId: purchase.budgetLineId } }); await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "purchases" } }); return NextResponse.json({ ok: true, purchase }, { status: 201 }); }
-  catch (error) { const duplicate = error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002"; return NextResponse.json({ error: duplicate ? "PURCHASE_DUPLICATE" : "PURCHASE_CREATE_FAILED", message: duplicate ? "La référence d’achat existe déjà." : error instanceof Error ? error.message : "Création de l’achat impossible." }, { status: duplicate ? 409 : 400 }); }
+  catch (error) { const normalized = normalizeEnterpriseCoreV2Error(error); return NextResponse.json({ error: normalized.code, message: normalized.message }, { status: normalized.status }); }
 }

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { issueRetailStoredValue, listRetailStoredValueAccounts } from "@/lib/enterprise/retail/customer-payments";
 import { retailStoredValueIssueSchema } from "@/lib/enterprise/retail/customer-payments-schemas";
@@ -28,7 +29,7 @@ export async function POST(req: Request, { params }: Params) {
   const permissions = await getRetailCustomerPaymentPermissions(auth.session.userId, organizationId);
   if (!permissions.canIssueStoredValue) return NextResponse.json({ error: "Forbidden", message: "Votre fonction ne permet pas d’émettre une carte cadeau ou un avoir." }, { status: 403 });
   const parsed = retailStoredValueIssueSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Émission de valeur stockée invalide." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "RETAIL_STORED_VALUE_INPUT_INVALID", req);
   try {
     const result = await issueRetailStoredValue(organizationId, auth.session.userId, parsed.data);
     await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_RETAIL_STORED_VALUE_ISSUED", entity: "EnterpriseRetailStoredValueAccount", entityId: result.account.id, request: req, metadata: { organizationId, accountType: result.account.accountType, displayCode: result.account.displayCode, amount: result.account.initialValue.toString(), currencyCode: result.account.currencyCode, customerBusinessPartyId: result.account.customerBusinessPartyId, idempotent: result.idempotent } });

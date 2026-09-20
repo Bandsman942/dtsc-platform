@@ -35,10 +35,10 @@ export async function PATCH(req: Request, { params }: Params) {
   const existing = await prisma.pharmacyBatch.findFirst({ where: { id: batchId, organizationId } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const parsed = pharmacyBatchUpdateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Lot invalide." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message || "Lot invalide." }, { status: 400 });
   const persistedStatus = ["ACTIVE", "QUARANTINED", "RECALLED", "BLOCKED", "CANCELLED"].includes(existing.status) ? existing.status : "ACTIVE";
   const merged = pharmacyBatchSchema.safeParse({ ...existing, status: persistedStatus, ...parsed.data });
-  if (!merged.success) return NextResponse.json({ error: "Invalid payload", message: merged.error.issues[0]?.message || "Modification incohérente." }, { status: 400 });
+  if (!merged.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: merged.error.issues[0]?.message || "Modification incohérente." }, { status: 400 });
   const product = await prisma.pharmacyProduct.findFirst({ where: { id: merged.data.productId, organizationId }, select: { id: true } });
   if (!product) return NextResponse.json({ error: "Invalid product", message: "Le produit sélectionné n'appartient pas à cette pharmacie." }, { status: 400 });
   const [supplier, purchaseOrder, receipt] = await Promise.all([

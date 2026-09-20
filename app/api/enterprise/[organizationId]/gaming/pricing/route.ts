@@ -48,7 +48,7 @@ export async function POST(req: Request, { params }: Params) {
   if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
 
   const parsed = gamingPricingRuleCreateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message }, { status: 400 });
 
   const { organizationId } = await params;
   const [pricingAccess, catalogAccess, stationAccess] = await Promise.all([

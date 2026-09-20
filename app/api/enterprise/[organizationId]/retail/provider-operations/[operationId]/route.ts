@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { transitionRetailProviderOperation } from "@/lib/enterprise/retail/customer-payments";
 import { retailProviderOperationTransitionSchema } from "@/lib/enterprise/retail/customer-payments-schemas";
@@ -15,7 +16,7 @@ export async function POST(req: Request, { params }: Params) {
   if (!auth.ok) return auth.response;
   const permissions = await getRetailCustomerPaymentPermissions(auth.session.userId, organizationId);
   const parsed = retailProviderOperationTransitionSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Transition provider invalide." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "RETAIL_PROVIDER_OPERATIONS_INPUT_INVALID", req);
   const reconciliation = parsed.data.status === "RECONCILED" || parsed.data.reconciled;
   if ((reconciliation && !permissions.canReconcileProviders) || (!reconciliation && !permissions.canManageProviders)) {
     return NextResponse.json({ error: "Forbidden", message: "Votre fonction ne permet pas cette transition provider." }, { status: 403 });

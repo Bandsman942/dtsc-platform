@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
-import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
+import { enterpriseDomainErrorResponse, enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { quoteConvertSchema } from "@/lib/enterprise/crm-sales/schemas";
 import { convertEnterpriseQuoteToOrder } from "@/lib/enterprise/crm-sales/service";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
@@ -21,7 +21,7 @@ export async function POST(req: Request, { params }: Params) {
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "SALES_QUOTES_ORDERS", action: "write" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = quoteConvertSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Conversion invalide." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "QUOTE_CONVERT_INPUT_INVALID", req);
   try {
     const order = await convertEnterpriseQuoteToOrder(organizationId, quoteId, session.userId, parsed.data.revision);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_QUOTE_CONVERTED", entity: "EnterpriseQuote", entityId: quoteId, request: req, metadata: { organizationId, salesOrderId: order.id } });

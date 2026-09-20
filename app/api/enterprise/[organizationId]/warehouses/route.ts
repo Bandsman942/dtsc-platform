@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { enterpriseDomainErrorResponse, enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
@@ -53,7 +54,7 @@ export async function POST(req: Request, { params }: Params) {
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "SITES_WAREHOUSES", action: "write" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = warehouseCreateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Entrepôt invalide." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "WAREHOUSE_INPUT_INVALID", req);
   try {
     const warehouse = await createEnterpriseWarehouse(organizationId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_WAREHOUSE_CREATED", entity: "EnterpriseWarehouse", entityId: warehouse.id, request: req, metadata: { organizationId, siteId: warehouse.siteId } });
@@ -76,7 +77,8 @@ export async function PATCH(req: Request, { params }: Params) {
   const raw = await req.json().catch(() => null) as (Record<string, unknown> & { warehouseId?: string }) | null;
   const entityId = typeof raw?.warehouseId === "string" ? raw.warehouseId : "";
   const parsed = warehouseUpdateSchema.safeParse(raw);
-  if (!entityId || !parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.success ? "Référence manquante." : parsed.error.issues[0]?.message || "Entrepôt invalide." }, { status: 400 });
+  if (!entityId) return NextResponse.json({ error: "WAREHOUSE_REFERENCE_REQUIRED", message: "La référence de l’entrepôt est obligatoire." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "WAREHOUSE_UPDATE_INPUT_INVALID", req);
   try {
     if (parsed.data.status === "INACTIVE") await prisma.$transaction((tx) => assertWarehouseCanBecomeInactive(tx, organizationId, entityId), { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     const entity = await updateEnterpriseWarehouse(organizationId, entityId, session.userId, parsed.data);
@@ -85,9 +87,7 @@ export async function PATCH(req: Request, { params }: Params) {
     return NextResponse.json({ ok: true, entity });
   } catch (error) {
     const integrityMessage = locationIntegrityMessage(error);
-    if (integrityMessage) return NextResponse.json({ error: error instanceof Error ? error.message : "WAREHOUSE_INTEGRITY_CONFLICT", message: integrityMessage }, { status: 409 });
-    const message = error instanceof Error ? error.message : "UPDATE_FAILED";
-    const conflict = message === "REVISION_CONFLICT";
-    return NextResponse.json({ error: message, message: conflict ? "L’élément a été modifié par un autre utilisateur. Actualisez avant de réessayer." : "Modification impossible." }, { status: conflict ? 409 : 400 });
+    if (integrityMessage) return NextResponse.json({ error: "WAREHOUSE_INTEGRITY_CONFLICT", message: integrityMessage }, { status: 409 });
+    return enterpriseDomainErrorResponse(error, "WAREHOUSE_UPDATE_FAILED", req);
   }
 }

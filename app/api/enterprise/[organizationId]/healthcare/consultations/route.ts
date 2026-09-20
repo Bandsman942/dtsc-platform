@@ -56,7 +56,7 @@ export async function POST(req: Request, { params }: Params) {
   const access = await getHealthConsultationAccess({ session, organizationId, action: "submit" });
   if (!access?.canCreate) return NextResponse.json({ error: "Forbidden", message: "Vous n’avez pas la permission de créer une consultation." }, { status: 403 });
   const parsed = healthConsultationCreateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: "Vérifiez le patient, le professionnel et le motif de consultation." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: "Vérifiez le patient, le professionnel et le motif de consultation." }, { status: 400 });
   const references = await validateHealthConsultationReferences(organizationId, parsed.data);
   if (references.error) return NextResponse.json({ error: "Invalid reference", message: references.error }, { status: 400 });
   try {

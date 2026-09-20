@@ -21,7 +21,7 @@ export async function GET(request: Request, { params }: Params) {
     await writeApiLog({ request, statusCode: 200, userId: session.userId, startedAt });
     return NextResponse.json(dataset);
   } catch (error) {
-    return NextResponse.json({ error: "LOAD_FAILED", message: error instanceof Error ? error.message : "Chargement impossible." }, { status: 400 });
+    return NextResponse.json({ error: "LOAD_FAILED", message: error instanceof Error && /^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : "Chargement impossible." }, { status: 400 });
   }
 }
 
@@ -35,7 +35,7 @@ export async function POST(request: Request, { params }: Params) {
   const { organizationId } = await params;
   if (!(await getPharmacyActivityAccess(session.userId, organizationId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = pharmacyActivityCreateSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: "Le formulaire contient des valeurs invalides." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: "Le formulaire contient des valeurs invalides." }, { status: 400 });
   try {
     const activity = await createPharmacyActivityRequest(organizationId, session.userId, parsed.data);
     const requestLike = ["REPLENISHMENT_REQUEST", "STOCK_ADJUSTMENT_REQUEST", "PHARMACIST_ADVICE_REQUEST", "DOCUMENT_REQUEST"].includes(parsed.data.activityType);
@@ -63,6 +63,6 @@ export async function POST(request: Request, { params }: Params) {
     await writeApiLog({ request, statusCode: 201, userId: session.userId, startedAt });
     return NextResponse.json({ ok: true, activity }, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ error: "CREATE_FAILED", message: error instanceof Error ? error.message : "Création impossible." }, { status: 400 });
+    return NextResponse.json({ error: "CREATE_FAILED", message: error instanceof Error && /^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : "Création impossible." }, { status: 400 });
   }
 }

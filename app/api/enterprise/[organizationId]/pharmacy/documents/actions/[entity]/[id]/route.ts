@@ -33,7 +33,7 @@ export async function PATCH(request: Request, { params }: Params) {
     }
     await writeAuditLog({ userId: session.userId, action: `PHARMACY_DOCUMENT_${entity.toUpperCase()}_UPDATED`, entity, entityId: id, request, metadata: { organizationId } }); await writeApiLog({ request, statusCode: 200, userId: session.userId, startedAt }); return NextResponse.json({ ok: true });
   } catch (error) {
-    const code = error instanceof Error ? error.message : "UNKNOWN"; const messages: Record<string, string> = { DOCUMENT_NOT_FOUND: "Le document est introuvable.", DOCUMENT_REQUIRED: "Sélectionnez un document pour résoudre ce manque.", REASON_REQUIRED: "Un motif est obligatoire.", INVALID_REFERENCE: "L'objet lié est invalide.", INVALID_ACTION: "Cette action n'est pas autorisée." };
+    const code = error instanceof Error && /^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : "UNKNOWN"; const messages: Record<string, string> = { DOCUMENT_NOT_FOUND: "Le document est introuvable.", DOCUMENT_REQUIRED: "Sélectionnez un document pour résoudre ce manque.", REASON_REQUIRED: "Un motif est obligatoire.", INVALID_REFERENCE: "L'objet lié est invalide.", INVALID_ACTION: "Cette action n'est pas autorisée." };
     return NextResponse.json({ error: code, message: messages[code] || "Action documentaire impossible." }, { status: 400 });
   }
 }

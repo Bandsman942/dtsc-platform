@@ -107,7 +107,7 @@ export async function POST(req: Request, { params }: Params) {
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_PAYMENTS", "create", { mutation: true, limit: 100 });
   if (!auth.ok) return auth.response;
   const parsed = paymentCreateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message }, { status: 400 });
 
   if (parsed.data.paymentType === "CUSTOMER_PAYMENT" || parsed.data.paymentType === "SUPPLIER_PAYMENT") {
     const expectedDirection = parsed.data.paymentType === "CUSTOMER_PAYMENT" ? "INBOUND" : "OUTBOUND";

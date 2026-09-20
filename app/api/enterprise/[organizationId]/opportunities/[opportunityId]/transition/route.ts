@@ -21,7 +21,7 @@ export async function POST(req: Request, { params }: Params) {
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "CRM_PIPELINE", action: "write" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = opportunityTransitionSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Transition invalide." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message || "Transition invalide." }, { status: 400 });
   try {
     const opportunity = await transitionEnterpriseOpportunity(organizationId, opportunityId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_OPPORTUNITY_TRANSITIONED", entity: "EnterpriseOpportunity", entityId: opportunity.id, request: req, metadata: { organizationId, targetStatus: parsed.data.targetStatus } });

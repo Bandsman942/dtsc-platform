@@ -49,7 +49,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const existing = await prisma.healthPatient.findFirst({ where: { id: patientId, organizationId } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const parsed = healthPatientUpdateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: "Les modifications du patient sont invalides." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: "Les modifications du patient sont invalides." }, { status: 400 });
   const data = parsed.data;
   if (existing.status === "ARCHIVED" && data.status !== "ACTIVE") return NextResponse.json({ error: "Archived patient", message: "Réactivez d’abord le patient archivé avant de modifier ses informations." }, { status: 409 });
   if ((data.status === "DECEASED" || data.status === "ARCHIVED") && !data.actionReason) return NextResponse.json({ error: "Reason required", message: "Un motif est obligatoire pour ce changement de statut." }, { status: 400 });

@@ -32,7 +32,7 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ ok: true, result });
   } catch (error) {
     if (error instanceof EnterpriseCrossModuleProjectionError) {
-      return NextResponse.json({ error: error.code, message: error.message }, { status: error.status });
+      return NextResponse.json({ error: error.code, message: /^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : "L’opération n’a pas pu être terminée." }, { status: error.status });
     }
     return financeErrorResponse(error, "ERP_CROSS_MODULE_PROJECTION_RETRY_FAILED");
   }

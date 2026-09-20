@@ -34,7 +34,7 @@ export async function PATCH(request: Request, { params }: Params) {
     if (entity !== "order") return NextResponse.json({ error: "Invalid entity", message: "Seules les commandes peuvent être modifiées par ce formulaire." }, { status: 400 });
     if (!(await canAccessPharmacyPurchases(session.userId, organizationId, "update"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     const parsedOrder = purchaseOrderInputSchema.safeParse(body);
-    if (!parsedOrder.success) return NextResponse.json({ error: "Invalid payload", message: parsedOrder.error.issues[0]?.message || "Commande fournisseur invalide." }, { status: 400 });
+    if (!parsedOrder.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsedOrder.error.issues[0]?.message || "Commande fournisseur invalide." }, { status: 400 });
     const referenceError = await validatePurchaseReferences(organizationId, parsedOrder.data);
     if (referenceError) return NextResponse.json({ error: "Invalid reference", message: referenceError }, { status: 400 });
     try {
@@ -43,7 +43,7 @@ export async function PATCH(request: Request, { params }: Params) {
       await writeApiLog({ request, statusCode: 200, userId: session.userId, startedAt });
       return NextResponse.json({ ok: true, record: order });
     } catch (error) {
-      const code = error instanceof Error ? error.message : "UNKNOWN";
+      const code = error instanceof Error && /^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : "UNKNOWN";
       const messages: Record<string, string> = { ORDER_NOT_FOUND: "Commande introuvable.", ORDER_LOCKED: "Une commande validée, commandée ou déjà réceptionnée ne peut plus être modifiée." };
       return NextResponse.json({ error: code, message: messages[code] || "Modification de commande impossible." }, { status: code === "ORDER_NOT_FOUND" ? 404 : 409 });
     }
@@ -98,7 +98,7 @@ export async function PATCH(request: Request, { params }: Params) {
     await writeApiLog({ request, statusCode: 200, userId: session.userId, startedAt });
     return NextResponse.json({ ok: true, receiptId });
   } catch (error) {
-    const code = error instanceof Error ? error.message : "UNKNOWN";
+    const code = error instanceof Error && /^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : "UNKNOWN";
     const messages: Record<string, string> = { REQUEST_NOT_CONVERTIBLE: "La demande doit être validée et avoir un fournisseur suggéré.", ORDER_NOT_RECEIVABLE: "Seule une commande validée, commandée ou partiellement reçue peut générer une réception.", ORDER_FULLY_RECEIVED: "Cette commande est déjà entièrement reçue." };
     return NextResponse.json({ error: code, message: messages[code] || "Action achats impossible." }, { status: 400 });
   }

@@ -12,7 +12,7 @@ export async function POST(req: Request, { params }: Params) {
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_ACCOUNTING", "post", { mutation: true, limit: 80 });
   if (!auth.ok) return auth.response;
   const parsed = periodicAccountingExecutionSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message }, { status: 400 });
   try {
     const result = await executePeriodicAccountingTemplate(organizationId, templateId, auth.session.userId, parsed.data);
     await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_PERIODIC_ACCOUNTING_EXECUTED", entity: "EnterprisePeriodicAccountingExecution", entityId: result.execution.id, request: req, metadata: { organizationId, templateId, journalEntryId: result.entry?.id || null, reversalEntryId: result.reversal?.id || null, idempotent: result.idempotent } });

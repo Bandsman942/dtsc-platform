@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCoreV2Access } from "@/lib/enterprise/core-v2/access";
@@ -23,7 +24,7 @@ export async function POST(req: Request, { params }: Params) {
   const access = await getEnterpriseCoreV2Access({ session, organizationId, moduleCode: "TASKS_OPERATIONS", action: "submit" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = enterpriseTaskActionSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: "L’action demandée est invalide." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "TASKS_ACTIONS_INPUT_INVALID", req);
   const task = await prisma.enterpriseTask.findFirst({ where: { id, organizationId, archivedAt: null } });
   if (!task) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const data = parsed.data;

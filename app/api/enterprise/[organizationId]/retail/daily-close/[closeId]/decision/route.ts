@@ -12,7 +12,7 @@ export async function POST(req: Request, { params }: Params) {
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_DAILY_CLOSE", "manage", { mutation: true, limit: 40 });
   if (!auth.ok) return auth.response;
   const parsed = retailDailyCloseDecisionSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Décision invalide." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message || "Décision invalide." }, { status: 400 });
   try {
     const close = await decideRetailDailyClose(organizationId, closeId, auth.session.userId, parsed.data);
     await writeAuditLog({ userId: auth.session.userId, action: parsed.data.decision === "APPROVE" ? "ENTERPRISE_RETAIL_DAILY_CLOSE_APPROVED" : "ENTERPRISE_RETAIL_DAILY_CLOSE_REJECTED", entity: "EnterpriseRetailDailyClose", entityId: close.id, request: req, metadata: { organizationId, number: close.number, decision: parsed.data.decision, reason: parsed.data.reason?.slice(0, 500) || null } });

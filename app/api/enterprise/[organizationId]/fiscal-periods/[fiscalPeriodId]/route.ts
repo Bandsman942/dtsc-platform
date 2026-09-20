@@ -49,7 +49,7 @@ export async function PATCH(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, fiscalPeriodId, domain: "fiscal-period-detail" } });
     return NextResponse.json({ ok: true, item });
   } catch (error) {
-    const code = error instanceof Error ? error.message : "";
+    const code = error instanceof Error && /^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : "";
     if (code === "NOT_FOUND") return NextResponse.json({ error: "FISCAL_PERIOD_NOT_FOUND", message: "Cette période n’existe pas dans votre entreprise." }, { status: 404 });
     if (code === "NOT_EDITABLE") return NextResponse.json({ error: "FISCAL_PERIOD_NOT_EDITABLE", message: "Cette période contient déjà des écritures, une clôture ou des soldes d’ouverture. Ses dates ne peuvent plus être modifiées ; utilisez les workflows de clôture ou réouverture prévus." }, { status: 409 });
     if (code === "REVISION_CONFLICT") return NextResponse.json({ error: "FISCAL_PERIOD_REVISION_CONFLICT", message: "Cette période a été modifiée. Actualisez les données avant de réessayer." }, { status: 409 });

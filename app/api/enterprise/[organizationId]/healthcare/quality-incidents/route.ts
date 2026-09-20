@@ -62,14 +62,14 @@ export async function POST(req: Request, { params }: Params) {
   const access = await getHealthQualityAccess({ session, organizationId, action: "submit" });
   if (!access?.canCreate) return NextResponse.json({ error: "Forbidden", message: "Vous n’avez pas la permission de signaler un incident." }, { status: 403 });
   const parsed = healthQualityIncidentCreateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: "Vérifiez le titre, la description, la gravité et les références sélectionnées." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: "Vérifiez le titre, la description, la gravité et les références sélectionnées." }, { status: 400 });
   if ((parsed.data.restrictedAccess || parsed.data.confidentialityIncident) && !access.canViewConfidential) return NextResponse.json({ error: "Forbidden", message: "Seuls les rôles autorisés peuvent classifier directement un incident comme confidentiel." }, { status: 403 });
   try {
     const record = await createHealthQualityIncident(organizationId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: "HEALTH_QUALITY_INCIDENT_REPORTED", entity: "HealthQualityIncident", entityId: record.id, request: req, metadata: { organizationId, incidentType: record.incidentType, criticality: record.initialCriticality } });
     return NextResponse.json({ ok: true, record, message: "Incident signalé avec succès." }, { status: 201 });
   } catch (error) {
-    const code = error instanceof Error ? error.message : "FAILED";
+    const code = error instanceof Error && /^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : "FAILED";
     return NextResponse.json({ error: code, message: code === "PATIENT_MISMATCH" ? "Les éléments liés ne correspondent pas au patient sélectionné." : "Une référence sélectionnée n’appartient pas à cette entreprise." }, { status: 409 });
   }
 }

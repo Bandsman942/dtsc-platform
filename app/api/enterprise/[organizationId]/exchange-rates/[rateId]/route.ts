@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { authorizeFinanceRequest, financeErrorResponse } from "@/lib/enterprise/accounting/http";
+import { authorizeFinanceRequest, financeErrorResponse, financeValidationErrorResponse } from "@/lib/enterprise/accounting/http";
 import { exchangeRateDeactivateSchema } from "@/lib/enterprise/accounting/exchange-rate-schemas";
 import { deactivateEnterpriseExchangeRate } from "@/lib/enterprise/accounting/exchange-rate-service";
 
@@ -12,7 +12,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_TREASURY", "manage", { mutation: true, limit: 60 });
   if (!auth.ok) return auth.response;
   const parsed = exchangeRateDeactivateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Motif invalide." }, { status: 400 });
+  if (!parsed.success) return financeValidationErrorResponse(parsed.error, "EXCHANGE_RATE_DEACTIVATE_INPUT_INVALID");
   try {
     const result = await deactivateEnterpriseExchangeRate(organizationId, rateId);
     await writeAuditLog({

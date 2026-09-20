@@ -42,7 +42,7 @@ export async function POST(req: Request, { params }: Params) {
   const auth = await authorizeRetailCashRequest(req, organizationId, "submit", true);
   if (!auth.ok) return auth.response;
   const parsed = cashSessionOpenSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Ouverture de caisse invalide." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message || "Ouverture de caisse invalide." }, { status: 400 });
   try {
     const session = await openCashSession(organizationId, auth.session.userId, parsed.data);
     await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_RETAIL_CASH_SESSION_OPENED", entity: "EnterpriseCashSession", entityId: session.id, request: req, metadata: { organizationId, financialAccountId: session.financialAccountId, openingAmount: session.openingAmount.toFixed(), moduleCode: auth.moduleCode } });

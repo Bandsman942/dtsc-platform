@@ -36,7 +36,7 @@ export async function PATCH(req: Request, { params }: Params) {
   if (!actionName) {
     if (!(await canAccessPharmacyReceipts(session.userId, organizationId, "update"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     const parsed = pharmacyReceiptUpdateSchema.safeParse(body);
-    if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Réception invalide." }, { status: 400 });
+    if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message || "Réception invalide." }, { status: 400 });
     const referenceError = await validateReceiptReferences(organizationId, parsed.data);
     if (referenceError) return NextResponse.json({ error: "Invalid reference", message: referenceError }, { status: 400 });
     try {

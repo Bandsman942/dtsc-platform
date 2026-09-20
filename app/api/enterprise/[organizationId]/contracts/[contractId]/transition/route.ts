@@ -23,7 +23,7 @@ export async function POST(req: Request, { params }: Params) {
   if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   const { organizationId, contractId } = await params;
   const parsed = contractTransitionSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Action contractuelle invalide." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message || "Action contractuelle invalide." }, { status: 400 });
 
   const isDecision = DECISION_ACTIONS.has(parsed.data.action);
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "CONTRACTS", action: isDecision ? "read" : "write" });

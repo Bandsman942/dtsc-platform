@@ -52,7 +52,7 @@ export async function POST(req: Request, { params }: Params) {
   if (!permissions.canReadCustomers) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const raw = await req.json().catch(() => null) as { customerBusinessPartyId?: unknown } | null;
   const customerId = typeof raw?.customerBusinessPartyId === "string" ? raw.customerBusinessPartyId.trim() : "";
-  if (!customerId) return NextResponse.json({ error: "Invalid payload", message: "Sélectionnez un client." }, { status: 400 });
+  if (!customerId) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: "Sélectionnez un client." }, { status: 400 });
   const customer = await getCustomer(organizationId, customerId);
   if (!customer) return NextResponse.json({ error: "RETAIL_CUSTOMER_INVALID", message: "Le client sélectionné n’est pas actif dans cette entreprise." }, { status: 409 });
   const response = NextResponse.json({ ok: true, customer });

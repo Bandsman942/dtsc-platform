@@ -13,7 +13,7 @@ export async function POST(req: Request, { params }: Params) {
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_ASSETS", "post", { mutation: true, limit: 20 });
   if (!auth.ok) return auth.response;
   const parsed = assetDisposalPostingSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message }, { status: 400 });
 
   try {
     const result = await finalizeAssetDisposal(organizationId, profileId, disposalId, auth.session.userId, parsed.data);

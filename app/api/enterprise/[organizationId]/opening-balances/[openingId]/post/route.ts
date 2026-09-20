@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { postApprovedOpeningBalance } from "@/lib/enterprise/accounting/accounting-document-approval-orchestration";
 import { openingBalancePostSchema } from "@/lib/enterprise/accounting/finance-domain-schemas";
-import { authorizeFinanceRequest, financeErrorResponse } from "@/lib/enterprise/accounting/http";
+import { authorizeFinanceRequest, financeErrorResponse, financeValidationErrorResponse } from "@/lib/enterprise/accounting/http";
 
 type Params = { params: Promise<{ organizationId: string; openingId: string }> };
 
@@ -12,7 +12,7 @@ export async function POST(req: Request, { params }: Params) {
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_ACCOUNTING", "post", { mutation: true, limit: 20 });
   if (!auth.ok) return auth.response;
   const parsed = openingBalancePostSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) return financeValidationErrorResponse(parsed.error, "OPENING_BALANCE_POST_INPUT_INVALID");
   try {
     const opening = await postApprovedOpeningBalance(organizationId, openingId, auth.session.userId, parsed.data.revision);
     await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_OPENING_BALANCE_POSTED", entity: "EnterpriseOpeningBalanceImport", entityId: openingId, request: req, metadata: { organizationId, journalEntryId: opening.journalEntryId } });

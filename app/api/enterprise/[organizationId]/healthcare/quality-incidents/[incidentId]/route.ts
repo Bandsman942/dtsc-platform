@@ -33,7 +33,7 @@ export async function PATCH(req: Request, { params }: Params) {
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (!visible(existing, session.userId, access)) return NextResponse.json({ error: "Forbidden", message: existing.confidentialityIncident ? "Cet incident est confidentiel." : "Vous n’avez pas la permission de consulter cet incident." }, { status: 403 });
   const body = await req.json().catch(() => null), actionParsed = healthQualityIncidentActionSchema.safeParse(body), updateParsed = healthQualityIncidentUpdateSchema.safeParse(body);
-  if (!actionParsed.success && !updateParsed.success) return NextResponse.json({ error: "Invalid payload", message: "Les informations de traitement sont invalides." }, { status: 400 });
+  if (!actionParsed.success && !updateParsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: "Les informations de traitement sont invalides." }, { status: 400 });
   const action = actionParsed.success ? actionParsed.data.action : "update";
   const allowed = action === "qualify" ? access.canQualify : action === "assign" ? access.canAssign : action === "investigate" ? access.canInvestigate : action === "close" ? access.canClose : action === "reopen" ? access.canReopen : action === "archive" ? access.canArchive : access.canUpdate;
   if (!allowed) return NextResponse.json({ error: "Forbidden", message: "Vous n’avez pas la permission pour cette action." }, { status: 403 });
@@ -43,7 +43,7 @@ export async function PATCH(req: Request, { params }: Params) {
     const messages: Record<string, string> = { qualify: "Incident qualifié avec succès.", investigate: "Investigation enregistrée avec succès.", close: "Incident clôturé avec succès.", reopen: "Incident rouvert avec succès.", archive: "Incident archivé avec succès.", assign: "Responsable assigné avec succès.", update: "Incident mis à jour avec succès." };
     return NextResponse.json({ ok: true, record, message: messages[action] });
   } catch (error) {
-    const code = error instanceof Error ? error.message : "FAILED";
+    const code = error instanceof Error && /^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : "FAILED";
     const messages: Record<string, string> = { LOCKED: "Cet incident est clôturé ou archivé et ne peut pas être modifié librement.", REASON_REQUIRED: "Une raison est obligatoire pour cette modification sensible.", OPEN_ACTIONS: "Des actions correctives restent ouvertes. Ajoutez une justification pour clôturer.", INVALID_TRANSITION: "Cette transition de statut n’est pas autorisée." };
     return NextResponse.json({ error: code, message: messages[code] || "Action impossible." }, { status: 409 });
   }

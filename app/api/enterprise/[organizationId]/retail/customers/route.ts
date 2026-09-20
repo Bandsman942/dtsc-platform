@@ -32,7 +32,7 @@ export async function POST(req: Request, { params }: Params) {
   const permissions = await getRetailCustomerPaymentPermissions(auth.session.userId, organizationId);
   if (!permissions.canManageCustomers) return NextResponse.json({ error: "Forbidden", message: "Votre fonction ne permet pas de modifier le profil Retail d’un client." }, { status: 403 });
   const parsed = retailCustomerProfileUpsertSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Profil client invalide." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message || "Profil client invalide." }, { status: 400 });
   try {
     const profile = await upsertRetailCustomerProfile(organizationId, auth.session.userId, parsed.data);
     await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_RETAIL_CUSTOMER_PROFILE_UPSERTED", entity: "EnterpriseRetailCustomerProfile", entityId: profile.id, request: req, metadata: { organizationId, businessPartyId: profile.businessPartyId, segmentCode: profile.segmentCode, priceListCode: profile.priceListCode, status: profile.status } });

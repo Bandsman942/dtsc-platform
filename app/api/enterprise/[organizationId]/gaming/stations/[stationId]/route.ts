@@ -24,7 +24,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const { organizationId, stationId } = await params;
   const parsed = gamingStationUpdateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+    return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message }, { status: 400 });
   }
 
   const requiredAction = parsed.data.action === "ARCHIVE" ? "manage" : "write";

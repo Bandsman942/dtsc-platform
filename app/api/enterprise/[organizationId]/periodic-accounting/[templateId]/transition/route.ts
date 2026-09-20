@@ -10,7 +10,7 @@ export async function POST(req: Request, { params }: Params) {
   const startedAt = Date.now();
   const { organizationId, templateId } = await params;
   const parsed = periodicAccountingTransitionSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message }, { status: 400 });
   const action = parsed.data.action === "APPROVE" ? "approve" : parsed.data.action === "SUBMIT" ? "submit" : "manage";
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_ACCOUNTING", action, { mutation: true, limit: 80 });
   if (!auth.ok) return auth.response;

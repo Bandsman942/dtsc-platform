@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import type { RetailModuleCode } from "@/lib/enterprise/retail/constants";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
@@ -30,7 +31,7 @@ export async function POST(req: Request, { params }: Params) {
   const auth = await authorizeRetailRequest(req, organizationId, moduleCode, "manage", { mutation: true, limit: 40 });
   if (!auth.ok) return auth.response;
   const parsed = retailProviderUpsertSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Opérateur invalide." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "RETAIL_PROVIDER_INPUT_INVALID", req);
   try {
     const provider = await upsertRetailProvider(organizationId, auth.session.userId, parsed.data);
     await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_RETAIL_PROVIDER_UPSERTED", entity: "EnterpriseRetailProvider", entityId: provider.id, request: req, metadata: { organizationId, providerCode: provider.providerCode, providerType: provider.providerType, moduleCode } });

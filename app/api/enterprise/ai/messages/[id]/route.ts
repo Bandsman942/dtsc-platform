@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseAiAccess } from "@/lib/enterprise-ai/access";
@@ -17,7 +18,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const limited = await rateLimit(getRateLimitKey(req, `enterprise-ai-message:${session.userId}`), 120, 60 * 60 * 1000);
   if (!limited.ok) return NextResponse.json({ error: "Too many requests", message: "Trop d'actions sur les messages IA." }, { status: 429 });
   const parsed = enterpriseAiMessageUpdateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: "Action de message invalide." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "ENTERPRISE_AI_MESSAGE_INPUT_INVALID", req);
   const data = parsed.data;
   const access = await getEnterpriseAiAccess(session, data.organizationId, "chat");
   if (!access) return NextResponse.json({ error: "Forbidden", message: "Accès IA Entreprise refusé." }, { status: 403 });

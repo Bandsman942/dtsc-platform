@@ -52,7 +52,7 @@ export async function POST(req: Request, { params }: Params) {
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_DAILY_CLOSE", "submit", { mutation: true, limit: 30 });
   if (!auth.ok) return auth.response;
   const parsed = retailDailyCloseCreateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Clôture invalide." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message || "Clôture invalide." }, { status: 400 });
   try {
     const result = await createRetailDailyClose(organizationId, auth.session.userId, parsed.data);
     await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_RETAIL_DAILY_CLOSE_SUBMITTED", entity: "EnterpriseRetailDailyClose", entityId: result.close.id, request: req, metadata: { organizationId, number: result.close.number, businessDate: result.close.businessDate.toISOString(), lineCount: result.close.lines.length, idempotent: result.idempotent } });

@@ -5,6 +5,7 @@ import { ArchiveRestore, Plus, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { financeDate, financeMoney, financeStatusLabel, financeStatusTone, safeFinanceError, type FinanceLocale } from "@/components/enterprise/professional/finance-professional-ui";
+import { professionalRequest } from "@/components/enterprise/professional/professional-erp-ui";
 import { StatusBadge } from "@/components/workspace/status-badge";
 
 type Disposal = {
@@ -31,10 +32,9 @@ type Profile = {
 type Props = { organizationId: string; locale: FinanceLocale; canManage: boolean };
 
 async function requestJson(url: string, fallback: string, options?: RequestInit) {
-  const response = await fetch(url, { cache: "no-store", ...options });
-  const body = await response.json().catch(() => null) as (Record<string, unknown> & { message?: string; error?: string }) | null;
-  if (!response.ok || !body) throw new Error(body?.message || body?.error || fallback);
-  return body;
+  const method = (options?.method || "GET") as "GET" | "POST" | "PATCH" | "DELETE";
+  const payload = typeof options?.body === "string" ? JSON.parse(options.body) : undefined;
+  return professionalRequest<Record<string, unknown>>(url, { method, payload, fallbackCode: "ASSET_DISPOSAL_REQUEST_FAILED", fallbackMessage: fallback });
 }
 
 export function AssetDisposalPanel({ organizationId, locale, canManage }: Props) {

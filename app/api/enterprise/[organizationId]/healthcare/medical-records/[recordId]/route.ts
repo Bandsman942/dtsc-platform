@@ -64,7 +64,7 @@ export async function PATCH(req: Request, { params }: Params) {
     await writeAuditLog({ userId: session.userId, action: actionParsed.success ? `HEALTH_MEDICAL_RECORD_${actionParsed.data.action.toUpperCase()}` : "HEALTH_MEDICAL_RECORD_UPDATED", entity: "HealthMedicalRecord", entityId: recordId, request: req, metadata: { organizationId } });
     return NextResponse.json({ ok: true, record });
   } catch (error) {
-    const code = error instanceof Error ? error.message : "UPDATE_FAILED";
+    const code = error instanceof Error && /^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : "UPDATE_FAILED";
     const message = code === "REASON_REQUIRED" ? "Un motif est obligatoire." : code === "RECORD_LOCKED" ? "Réactivez le dossier avant de le modifier." : "Modification du dossier médical impossible.";
     return NextResponse.json({ error: code, message }, { status: 409 });
   }

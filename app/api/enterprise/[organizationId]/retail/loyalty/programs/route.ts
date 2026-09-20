@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { listRetailLoyaltyPrograms, upsertRetailLoyaltyProgram } from "@/lib/enterprise/retail/customer-payments";
 import { retailLoyaltyProgramUpsertSchema } from "@/lib/enterprise/retail/customer-payments-schemas";
@@ -25,7 +26,7 @@ export async function POST(req: Request, { params }: Params) {
   const permissions = await getRetailCustomerPaymentPermissions(auth.session.userId, organizationId);
   if (!permissions.canManageLoyalty) return NextResponse.json({ error: "Forbidden", message: "Votre fonction ne permet pas d’administrer la fidélité." }, { status: 403 });
   const parsed = retailLoyaltyProgramUpsertSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Programme de fidélité invalide." }, { status: 400 });
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "RETAIL_LOYALTY_PROGRAMS_INPUT_INVALID", req);
   try {
     const program = await upsertRetailLoyaltyProgram(organizationId, auth.session.userId, parsed.data);
     await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_RETAIL_LOYALTY_PROGRAM_UPSERTED", entity: "EnterpriseRetailLoyaltyProgram", entityId: program.id, request: req, metadata: { organizationId, code: program.code, status: program.status, currencyCode: program.currencyCode } });

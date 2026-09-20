@@ -53,7 +53,7 @@ export async function POST(req: Request, { params }: Params) {
   const parsed = enterpriseMemberInviteSchema.safeParse(rawPayload);
   if (!parsed.success) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Invalid payload", message: "L'email ou le rôle est invalide." }, { status: 400 });
+    return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: "L'email ou le rôle est invalide." }, { status: 400 });
   }
 
   const [organization, targetUser, inviter, position, securityPolicy, pendingInvitations] = await Promise.all([
@@ -168,7 +168,7 @@ export async function POST(req: Request, { params }: Params) {
     message: parsed.data.message,
   }).catch((error) => ({
     sent: false,
-    reason: error instanceof Error ? error.message : "Enterprise invitation email failed",
+    reason: error instanceof Error && /^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : "Enterprise invitation email failed",
   }));
 
   await writeAuditLog({

@@ -21,7 +21,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const access = await getEnterpriseFinanceAccess({ session, organizationId, moduleCode: "REPORTS", action: "manage" });
   if (!access?.canManage) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = reportScheduleUpdateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Action invalide." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message || "Action invalide." }, { status: 400 });
   try {
     const schedule = await updateEnterpriseReportSchedule(organizationId, scheduleId, parsed.data);
     await writeAuditLog({ userId: session.userId, organizationId, action: `ENTERPRISE_REPORT_SCHEDULE_${parsed.data.action}`, entity: "EnterpriseReportSchedule", entityId: scheduleId, request: req, reasonCode: "REPORT_SCHEDULE_MANAGEMENT", riskLevel: "MEDIUM", metadata: { action: parsed.data.action } });

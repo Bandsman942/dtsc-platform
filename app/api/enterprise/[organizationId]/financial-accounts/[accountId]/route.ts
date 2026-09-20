@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { authorizeFinanceRequest, financeErrorResponse } from "@/lib/enterprise/accounting/http";
+import { authorizeFinanceRequest, financeErrorResponse, financeValidationErrorResponse } from "@/lib/enterprise/accounting/http";
 import {
   archiveManagedFinancialAccount,
   updateManagedFinancialAccount,
@@ -18,7 +18,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_TREASURY", "update", { mutation: true, limit: 60 });
   if (!auth.ok) return auth.response;
   const parsed = financialAccountUpdateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) return financeValidationErrorResponse(parsed.error, "FINANCIAL_ACCOUNT_UPDATE_INPUT_INVALID");
   try {
     const account = await updateManagedFinancialAccount(organizationId, accountId, auth.session.userId, parsed.data);
     await writeAuditLog({
@@ -42,7 +42,7 @@ export async function DELETE(req: Request, { params }: Params) {
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_TREASURY", "manage", { mutation: true, limit: 30 });
   if (!auth.ok) return auth.response;
   const parsed = financialAccountArchiveSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) return financeValidationErrorResponse(parsed.error, "FINANCIAL_ACCOUNT_ARCHIVE_INPUT_INVALID");
   try {
     const account = await archiveManagedFinancialAccount(organizationId, accountId, auth.session.userId, parsed.data);
     await writeAuditLog({

@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { authorizeFinanceRequest, financeErrorResponse, financeListParams } from "@/lib/enterprise/accounting/http";
+import { authorizeFinanceRequest, financeErrorResponse, financeListParams, financeValidationErrorResponse } from "@/lib/enterprise/accounting/http";
 import { createTreasuryTransfer } from "@/lib/enterprise/accounting/treasury-transfer-service";
 import { accountTransferSchema } from "@/lib/enterprise/accounting/treasury-schemas";
 import { prisma } from "@/lib/prisma";
@@ -87,7 +87,7 @@ export async function POST(req: Request, { params }: Params) {
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_TREASURY", "create", { mutation: true, limit: 60 });
   if (!auth.ok) return auth.response;
   const parsed = accountTransferSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) return financeValidationErrorResponse(parsed.error, "ACCOUNT_TRANSFER_INPUT_INVALID");
 
   try {
     const transfer = await createTreasuryTransfer(organizationId, auth.session.userId, parsed.data);

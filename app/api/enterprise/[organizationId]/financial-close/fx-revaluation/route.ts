@@ -3,7 +3,7 @@ import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { c5FinanceErrorResponse } from "@/lib/enterprise/accounting/c5-error-response";
 import { closingFxRevaluationSchema } from "@/lib/enterprise/accounting/closing-operations-schemas";
 import { runClosingFxRevaluation } from "@/lib/enterprise/accounting/closing-operations-service";
-import { authorizeFinanceRequest } from "@/lib/enterprise/accounting/http";
+import { authorizeFinanceRequest, financeValidationErrorResponse } from "@/lib/enterprise/accounting/http";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -13,7 +13,7 @@ export async function POST(req: Request, { params }: Params) {
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_CLOSE", "close", { mutation: true, limit: 20 });
   if (!auth.ok) return auth.response;
   const parsed = closingFxRevaluationSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) return financeValidationErrorResponse(parsed.error, "FINANCIAL_CLOSE_FX_INPUT_INVALID");
 
   try {
     const result = await runClosingFxRevaluation(organizationId, auth.session.userId, parsed.data);

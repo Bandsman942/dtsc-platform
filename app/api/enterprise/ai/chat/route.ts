@@ -465,13 +465,13 @@ export async function POST(req: Request) {
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Enterprise AI chat failed";
+    const errorName = error instanceof Error ? error.name : typeof error;
     await writeApiLog({
       request: req,
       statusCode: 500,
       userId: session.userId,
       startedAt,
-      metadata: { organizationId: data.organizationId, message },
+      metadata: { organizationId: data.organizationId, reasonCode: "UNKNOWN_PROVIDER_ERROR", errorName },
     });
     return NextResponse.json(
       {

@@ -132,7 +132,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const parsed = enterpriseHealthcareRecordUpdateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Invalid payload", message: "Les modifications santé sont invalides." }, { status: 400 });
+    return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: "Les modifications santé sont invalides." }, { status: 400 });
   }
 
   const data = parsed.data;
@@ -144,7 +144,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const nextRecordType = data.recordType || existingRecord.recordType;
   if (!isConsistentHealthcareRecord(nextModuleCode, nextRecordType)) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Invalid payload", message: "Le type choisi ne correspond pas au sous-module santé." }, { status: 400 });
+    return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: "Le type choisi ne correspond pas au sous-module santé." }, { status: 400 });
   }
 
   if (!(await canAccessEnterpriseModule(session.userId, organizationId, permissionModuleCode(nextModuleCode), "write"))) {
