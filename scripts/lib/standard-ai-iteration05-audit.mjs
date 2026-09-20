@@ -87,7 +87,7 @@ export function runStandardAiIteration05Audit(scope = "all") {
     guides: () => {
       requireText("lib/user-guides/iteration05-guides.ts", ["GLOBAL_CHATBOT", "ENTERPRISE_AI_ASSISTANT", "AI_FILES_AND_SOURCES", "COMMERCIAL_MATURITY_KANBAN"]);
       requireText("components/chat/chat-workspace-v2.tsx", ["ContextualUserGuide", "GLOBAL_CHATBOT"]);
-      requireText("components/enterprise/enterprise-ai-workspace-v2.tsx", ["ContextualUserGuide", "ENTERPRISE_AI_ASSISTANT"]);
+      requireText("components/enterprise/enterprise-ai-workspace.tsx", ["ContextualUserGuide", "ENTERPRISE_AI_ASSISTANT"]);
       requireText("components/user-guides/contextual-user-guide.tsx", ["useAppLocale", "translate", "userGuides.common.userGuide"]);
     },
     "commercial-maturity-kanban": () => {
