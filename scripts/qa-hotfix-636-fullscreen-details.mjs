@@ -19,7 +19,7 @@ const reportsPath = "components/enterprise/core-v2/enterprise-reports-workspace.
 const identityPath = "components/enterprise/identity-links/enterprise-identity-user-panel.tsx";
 const decisionRoutePath = "app/api/account/identity-links/decision/route.ts";
 const accountDecisionPath = "lib/enterprise/identity-links/account-invitation-decision-service.ts";
-const accountingPath = "components/enterprise/professional/enterprise-finance-accounting-workspace-v3.tsx";
+const accountingPath = "components/enterprise/professional/enterprise-finance-accounting-workspace.tsx";
 const accountingDetailPath = "components/enterprise/professional/accounting-record-detail.tsx";
 
 for (const relativePath of [detailPath, reportsPath, identityPath, decisionRoutePath, accountDecisionPath, accountingPath, accountingDetailPath]) {
