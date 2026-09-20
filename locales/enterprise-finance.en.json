@@ -566,5 +566,11 @@
   "financeConversation": "Finance conversation",
   "financeConversationDescription": "Exchange clarifications, correction requests and explanations without mixing these messages with structured workflow decisions.",
   "decisionCommentOptionalHint": "Optional comment for an approval. A reason of at least 4 characters is required for a rejection or sensitive cancellation.",
-  "rejectionReasonMinimumHint": "Reason required: at least 4 characters."
+  "rejectionReasonMinimumHint": "Reason required: at least 4 characters.",
+  "periodicAccountingTitle": "Periodic accounting",
+  "periodicAccountingDescription": "Recurring entries, accruals, deferrals, allocations and controlled automatic reversal.",
+  "closingOperationsTitle": "Closing operations",
+  "closingOperationsDescription": "Closing FX revaluation, linked reversal and fiscal year close into retained earnings.",
+  "assetDisposalsTitle": "Asset disposals",
+  "assetDisposalsDescription": "Prepare and post audited asset derecognition with proceeds and gain or loss."
 }
