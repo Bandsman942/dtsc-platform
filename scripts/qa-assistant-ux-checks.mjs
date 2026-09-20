@@ -25,7 +25,7 @@ const mobileChrome = read("components/layout/private-mobile-chrome-controller.ts
 const chatRoute = read("app/api/chat/v2/route.ts");
 const conversationsRoute = read("app/api/conversations/[id]/route.ts");
 const enterprisePage = read("app/enterprise-modules/[moduleCode]/page.tsx");
-const enterpriseWorkspace = read("components/enterprise/enterprise-ai-workspace-v2.tsx");
+const enterpriseWorkspace = read("components/enterprise/enterprise-ai-workspace.tsx");
 const enterpriseChat = read("app/api/enterprise/ai/chat/route.ts");
 const enterpriseContext = read("lib/enterprise-ai/context.ts");
 const agentRuntime = read("lib/ai/agent/runtime.ts");
@@ -104,7 +104,7 @@ assert(mobileChrome.includes("IMMERSIVE_ROOT_SELECTOR") && mobileChrome.includes
 assert(chatPage.includes('<AssistantImmersiveWorkspaceShell variant="chatbot">'), "Chatbot page must mount the immersive workspace shell");
 assert(enterprisePage.includes('<AssistantImmersiveWorkspaceShell variant="enterprise">'), "Enterprise assistant page must mount the immersive workspace shell");
 
-assert(enterprisePage.includes("EnterpriseAiWorkspaceV2") && enterprisePage.includes("listCatalogAiModelsForUi"), "Enterprise AI module must use the new workspace with the canonical model catalog");
+assert(enterprisePage.includes("EnterpriseAiWorkspace") && enterprisePage.includes("listCatalogAiModelsForUi"), "Enterprise AI module must use the new workspace with the canonical model catalog");
 assert(enterpriseWorkspace.includes('import { Streamdown } from "streamdown"') && enterpriseWorkspace.includes("<Streamdown"), "Enterprise assistant messages must use the existing rich streaming Markdown renderer");
 assert(enterpriseWorkspace.includes("Sources internes") && enterpriseWorkspace.includes("Outils métier"), "Enterprise assistant must expose only real internal sources and read tools");
 assert(enterpriseWorkspace.includes("asCitations") && enterpriseWorkspace.includes("feedbackValue") && enterpriseWorkspace.includes("ThumbsUp") && enterpriseWorkspace.includes("ThumbsDown"), "Enterprise assistant must render citations and persistent feedback controls");
