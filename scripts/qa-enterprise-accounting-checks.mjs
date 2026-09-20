@@ -47,7 +47,7 @@ requirePaths([
   "components/enterprise/professional/accounting-compact-table.tsx",
   "components/enterprise/professional/accounting-journal-workbench.tsx",
   "components/enterprise/professional/periodic-accounting-panel.tsx",
-  "components/enterprise/professional/enterprise-finance-accounting-workspace-v3.tsx",
+  "components/enterprise/professional/enterprise-finance-accounting-workspace.tsx",
   "app/api/enterprise/[organizationId]/accounting-query/route.ts",
   "app/api/enterprise/[organizationId]/periodic-accounting/route.ts",
   "app/api/enterprise/[organizationId]/financial-close/fx-revaluation/route.ts",
