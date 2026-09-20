@@ -1,11 +1,11 @@
 "use client";
 
-export * from "@/components/enterprise/professional/finance-professional-workspace-shared-legacy";
+export * from "@/components/enterprise/professional/finance-professional-workspace-core";
 
 export const FINANCE_DURABLE_JOB_EVENT = "dtsc:finance-durable-job";
 
 // Public bridge contract retained for historical Finance document deep links.
-// The rendering implementation is delegated to the legacy module re-exported above.
+// The rendering primitives live in the canonical Finance core re-exported above.
 export const FINANCE_DOCUMENT_UPLOAD_QUERY_CONTRACT = Object.freeze({
   sourceEntityType: "sourceEntityType",
   sourceEntityId: "sourceEntityId",
