@@ -32,6 +32,7 @@ export type EnterpriseModuleCommercialAssessment = {
   workspaceKey: string | null;
   minimumPlan: EnterpriseModuleDefinition["minimumPlan"];
   dependencies: string[];
+  recommendedIntegrations: string[];
   maturity: EnterpriseModuleCommercialMaturity;
   interfaceKind: EnterpriseModuleInterfaceKind;
   evaluatedAt: string;
@@ -154,6 +155,7 @@ export function getEnterpriseModuleCommercialAssessment(
     workspaceKey: definition.workspaceKey,
     minimumPlan: definition.minimumPlan,
     dependencies: [...definition.dependencies],
+    recommendedIntegrations: [...(definition.recommendedIntegrations || [])],
     maturity,
     interfaceKind: source.interfaceKind as EnterpriseModuleInterfaceKind,
     evaluatedAt: manifest.evaluatedAt,
