@@ -17,7 +17,7 @@ const financeFiles = [
   "components/enterprise/professional/enterprise-finance-invoices-workspace.tsx",
   "components/enterprise/professional/enterprise-finance-payments-treasury-workspace.tsx",
   "components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-workspace.tsx",
-  "components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-workspace-hotfix-legacy.tsx",
+  "components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-base.tsx",
   "components/enterprise/professional/enterprise-operational-finance-workspace.tsx",
   "components/enterprise/professional/enterprise-advanced-finance-workspace.tsx",
   "components/enterprise/professional/enterprise-exchange-rates-workspace.tsx",
