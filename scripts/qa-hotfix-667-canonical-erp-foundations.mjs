@@ -46,7 +46,7 @@ const requestWrappers = [
   "components/enterprise/professional/closing-operations-panel.tsx",
   "components/enterprise/professional/periodic-accounting-panel.tsx",
   "components/enterprise/professional/enterprise-exchange-rates-workspace.tsx",
-  "components/enterprise/professional/enterprise-finance-treasury-workspace-hotfix.tsx",
+  "components/enterprise/professional/enterprise-finance-treasury-workspace.tsx",
   "components/enterprise/professional/enterprise-finance-treasury-workspace.tsx",
   "components/enterprise/professional/enterprise-accounting-workspace.tsx",
   "components/enterprise/professional/enterprise-advanced-finance-workspace.tsx",
