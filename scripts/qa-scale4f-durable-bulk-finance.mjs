@@ -118,7 +118,7 @@ requireTokens("lib/enterprise/accounting/http.ts", [
   "options?.mutation",
 ]);
 
-requireTokens("components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-workspace-hotfix-legacy.tsx", [
+requireTokens("components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-base.tsx", [
   "parseBankCsv",
   "rowIndex + 2",
   'tFinance(locale, "lineIncomplete")',
