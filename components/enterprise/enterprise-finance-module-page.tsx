@@ -2,8 +2,8 @@ import Link from "next/link";
 import { ArchiveRestore, ArrowRightLeft, BookCheck, CalendarClock } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import { EnterpriseAdvancedFinanceWorkspace } from "@/components/enterprise/professional/enterprise-advanced-finance-workspace";
-import { EnterpriseFinanceAccountingWorkspaceV3 } from "@/components/enterprise/professional/enterprise-finance-accounting-workspace-v3";
-import { EnterpriseFinanceAdvancedWorkspaceHotfix } from "@/components/enterprise/professional/enterprise-finance-advanced-workspace-hotfix";
+import { EnterpriseFinanceAccountingWorkspace } from "@/components/enterprise/professional/enterprise-finance-accounting-workspace";
+import { EnterpriseFinanceAdvancedWorkspace } from "@/components/enterprise/professional/enterprise-finance-advanced-workspace";
 import { EnterpriseOperationalFinanceWorkspace } from "@/components/enterprise/professional/enterprise-operational-finance-workspace";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
@@ -100,7 +100,7 @@ export async function EnterpriseFinanceModulePage({ moduleCode }: { moduleCode: 
       ) : null}
 
       {moduleCode === "FINANCE_ACCOUNTING" ? (
-        <EnterpriseFinanceAccountingWorkspaceV3
+        <EnterpriseFinanceAccountingWorkspace
           organizationId={organizationId}
           organizationName={organization.name}
           definition={definition}
@@ -108,7 +108,7 @@ export async function EnterpriseFinanceModulePage({ moduleCode }: { moduleCode: 
           {...capabilityProps}
         />
       ) : DOWNSTREAM_FINANCE_HOTFIX.includes(moduleCode as (typeof DOWNSTREAM_FINANCE_HOTFIX)[number]) ? (
-        <EnterpriseFinanceAdvancedWorkspaceHotfix
+        <EnterpriseFinanceAdvancedWorkspace
           organizationId={organizationId}
           organizationName={organization.name}
           organizationLogoUrl={organization.logoUrl}
