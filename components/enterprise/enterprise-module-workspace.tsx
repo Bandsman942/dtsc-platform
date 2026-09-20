@@ -244,7 +244,7 @@ function humanizeBusinessCode(value: string) {
   return value
     .replaceAll("_", " ")
     .toLocaleLowerCase()
-    .replace(/(^|\s)\p{L}/gu, (letter) => letter.toLocaleUpperCase());
+    .replace(/(^|\s)\S/g, (segment) => segment.toLocaleUpperCase());
 }
 
 function resolveModuleItems(code: string, data: CoreData, records: SectorRecord[], locale?: string | null) {
