@@ -15,7 +15,7 @@ import {
   EnterpriseAdministrationSecurityPanel,
   EnterpriseConfigurationChecklistPanel,
   EnterprisePendingActionsPanel,
-} from "@/components/enterprise/enterprise-admin-hotfix-panels";
+} from "@/components/enterprise/enterprise-administration-panels";
 import { ContextualUserGuide } from "@/components/user-guides/contextual-user-guide";
 import {
   EnterpriseCalendarPanel,
