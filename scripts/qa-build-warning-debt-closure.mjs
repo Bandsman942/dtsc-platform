@@ -58,7 +58,7 @@ check(collaborators.includes("const callShell = callShellRef.current;"), "Fullsc
 check(collaborators.includes('const root = callShell?.querySelector<HTMLElement>(".dtsc-livekit-room");'), "Fullscreen call focus must use the stable shell snapshot.");
 check(!collaborators.includes('const root = callShellRef.current?.querySelector<HTMLElement>(".dtsc-livekit-room");'), "Fullscreen call effect must not dereference callShellRef.current during cleanup.");
 
-const enterpriseAi = read("components/enterprise/enterprise-ai-workspace-v2.tsx");
+const enterpriseAi = read("components/enterprise/enterprise-ai-workspace.tsx");
 check(enterpriseAi.includes("useCallback"), "Enterprise AI loaders must use stable callbacks.");
 check(enterpriseAi.includes("const refreshAll = useCallback"), "Enterprise AI refreshAll must be stable.");
 check(enterpriseAi.includes("const activeConversationIdRef = useRef<string | null>(null);"), "Enterprise AI must preserve the selected conversation across stable refreshes.");
