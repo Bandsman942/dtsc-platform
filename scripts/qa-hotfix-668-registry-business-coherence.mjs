@@ -45,6 +45,7 @@ function effective(source) {
 }
 
 const definitions = sourceDefinitions.map(effective);
+const intentionallySharedWorkspaceKeys = new Set(["ENTERPRISE_MANUFACTURING", "ENTERPRISE_TAILORING"]);
 const codeOwners = new Map();
 for (const definition of sourceDefinitions) {
   const existing = codeOwners.get(definition.code);
@@ -71,7 +72,6 @@ const canonicalCodes = new Set(definitions.map((definition) => definition.code))
 const aliasOwners = new Map();
 const routeOwners = new Map();
 const workspaceOwners = new Map();
-const intentionallySharedWorkspaceKeys = new Set(["ENTERPRISE_MANUFACTURING", "ENTERPRISE_TAILORING"]);
 const planLevels = { STARTER: 1, BUSINESS: 2, ENTERPRISE: 3 };
 const accessPolicies = new Set(["MEMBERSHIP", "POSITION_PERMISSION", "ADMIN_ONLY", "EXPLICIT_DENY"]);
 const activeStatuses = new Set(["ACTIVE", "BETA"]);
