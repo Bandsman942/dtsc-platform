@@ -18,7 +18,7 @@ import { requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
 import { translateEnterpriseFinance } from "@/lib/i18n";
 import { prisma } from "@/lib/prisma";
 
-const DOWNSTREAM_FINANCE_HOTFIX = ["FINANCE_TAX", "FINANCE_CLOSE", "FINANCE_STATEMENTS", "FINANCE_ASSETS"] as const;
+const DOWNSTREAM_FINANCE_MODULES = ["FINANCE_TAX", "FINANCE_CLOSE", "FINANCE_STATEMENTS", "FINANCE_ASSETS"] as const;
 
 export async function EnterpriseFinanceModulePage({ moduleCode }: { moduleCode: EnterpriseFinanceModuleCode }) {
   const user = await requireUser();
@@ -67,8 +67,8 @@ export async function EnterpriseFinanceModulePage({ moduleCode }: { moduleCode: 
         <div className="mx-auto mb-4 w-full max-w-[1600px] px-4 sm:px-6 lg:px-8">
           <Link href="/enterprise-modules/FINANCE_ACCOUNTING/periodic-accounting" className="flex min-w-0 items-center justify-between gap-4 rounded-2xl border border-dtsc-blue/30 bg-dtsc-blue/10 px-4 py-3 text-dtsc-ink transition hover:border-dtsc-blue/60">
             <span className="min-w-0">
-              <span className="block text-sm font-black">{locale === "en" ? "Periodic accounting" : "Comptabilité périodique"}</span>
-              <span className="mt-1 block text-xs font-semibold text-dtsc-muted">{locale === "en" ? "Recurring entries, accruals, deferrals, allocations and controlled auto-reversal." : "Écritures récurrentes, accruals, étalements, allocations et contrepassation automatique contrôlée."}</span>
+              <span className="block text-sm font-black">{t("periodicAccountingTitle")}</span>
+              <span className="mt-1 block text-xs font-semibold text-dtsc-muted">{t("periodicAccountingDescription")}</span>
             </span>
             <CalendarClock className="h-5 w-5 shrink-0 text-dtsc-blue" />
           </Link>
@@ -79,8 +79,8 @@ export async function EnterpriseFinanceModulePage({ moduleCode }: { moduleCode: 
         <div className="mx-auto mb-4 w-full max-w-[1600px] px-4 sm:px-6 lg:px-8">
           <Link href="/enterprise-modules/FINANCE_CLOSE/operations" className="flex min-w-0 items-center justify-between gap-4 rounded-2xl border border-dtsc-blue/30 bg-dtsc-blue/10 px-4 py-3 text-dtsc-ink transition hover:border-dtsc-blue/60">
             <span className="min-w-0">
-              <span className="block text-sm font-black">{locale === "en" ? "Closing operations" : "Opérations de clôture"}</span>
-              <span className="mt-1 block text-xs font-semibold text-dtsc-muted">{locale === "en" ? "Closing FX revaluation, linked reversal and fiscal year close into retained earnings." : "Réévaluation FX de clôture, contrepassation liée et clôture annuelle vers le report à nouveau."}</span>
+              <span className="block text-sm font-black">{t("closingOperationsTitle")}</span>
+              <span className="mt-1 block text-xs font-semibold text-dtsc-muted">{t("closingOperationsDescription")}</span>
             </span>
             <BookCheck className="h-5 w-5 shrink-0 text-dtsc-blue" />
           </Link>
@@ -91,8 +91,8 @@ export async function EnterpriseFinanceModulePage({ moduleCode }: { moduleCode: 
         <div className="mx-auto mb-4 w-full max-w-[1600px] px-4 sm:px-6 lg:px-8">
           <Link href="/enterprise-modules/FINANCE_ASSETS/disposals" className="flex min-w-0 items-center justify-between gap-4 rounded-2xl border border-dtsc-blue/30 bg-dtsc-blue/10 px-4 py-3 text-dtsc-ink transition hover:border-dtsc-blue/60">
             <span className="min-w-0">
-              <span className="block text-sm font-black">{locale === "en" ? "Asset disposals" : "Cessions d’actifs"}</span>
-              <span className="mt-1 block text-xs font-semibold text-dtsc-muted">{locale === "en" ? "Prepare and post audited asset derecognition with proceeds and gain or loss." : "Préparez et comptabilisez la sortie auditée des actifs avec produit et gain ou perte."}</span>
+              <span className="block text-sm font-black">{t("assetDisposalsTitle")}</span>
+              <span className="mt-1 block text-xs font-semibold text-dtsc-muted">{t("assetDisposalsDescription")}</span>
             </span>
             <ArchiveRestore className="h-5 w-5 shrink-0 text-dtsc-blue" />
           </Link>
@@ -107,7 +107,7 @@ export async function EnterpriseFinanceModulePage({ moduleCode }: { moduleCode: 
           locale={user.locale}
           {...capabilityProps}
         />
-      ) : DOWNSTREAM_FINANCE_HOTFIX.includes(moduleCode as (typeof DOWNSTREAM_FINANCE_HOTFIX)[number]) ? (
+      ) : DOWNSTREAM_FINANCE_MODULES.includes(moduleCode as (typeof DOWNSTREAM_FINANCE_MODULES)[number]) ? (
         <EnterpriseFinanceAdvancedWorkspace
           organizationId={organizationId}
           organizationName={organization.name}
