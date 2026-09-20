@@ -12,7 +12,7 @@ const financeFiles = [
   "components/enterprise/enterprise-finance-module-page.tsx",
   "components/enterprise/professional/finance-professional-ui.ts",
   "components/enterprise/professional/finance-professional-workspace-shared.tsx",
-  "components/enterprise/professional/finance-professional-workspace-shared-legacy.tsx",
+  "components/enterprise/professional/finance-professional-workspace-core.tsx",
   "components/enterprise/professional/enterprise-finance-overview-workspace.tsx",
   "components/enterprise/professional/enterprise-finance-invoices-workspace.tsx",
   "components/enterprise/professional/enterprise-finance-payments-treasury-workspace.tsx",
@@ -45,12 +45,12 @@ if (exists(ui)) {
 }
 
 const shared = "components/enterprise/professional/finance-professional-workspace-shared.tsx";
-const sharedLegacy = "components/enterprise/professional/finance-professional-workspace-shared-legacy.tsx";
-if (exists(shared) && exists(sharedLegacy)) {
+const sharedCore = "components/enterprise/professional/finance-professional-workspace-core.tsx";
+if (exists(shared) && exists(sharedCore)) {
   const wrapper = read(shared);
-  const content = `${wrapper}\n${read(sharedLegacy)}`;
+  const content = `${wrapper}\n${read(sharedCore)}`;
   for (const token of ["apiError", "safeFinanceError", "financeStatusLabel", "financeEnumLabel", "FinanceLocale"]) if (!content.includes(token)) fail(`Finance UX: workspace partagé incomplet (${token})`);
-  for (const token of ["finance-professional-workspace-shared-legacy", "dtsc:finance-durable-job", "CustomEvent", "body.queued"]) if (!wrapper.includes(token)) fail(`Finance UX: bridge durable incomplet (${token})`);
+  for (const token of ["finance-professional-workspace-core", "dtsc:finance-durable-job", "CustomEvent", "body.queued"]) if (!wrapper.includes(token)) fail(`Finance UX: bridge durable incomplet (${token})`);
   if (/body\?\.message\s*\|\|\s*body\?\.error|body\.message\s*\|\|\s*body\.error/.test(content)) fail("Finance UX: les helpers partagés ne doivent pas privilégier un message backend brut");
   if (/throw new Error\(body\?\.message/.test(content)) fail("Finance UX: les mutations partagées ne doivent pas propager body.message au client");
 }
