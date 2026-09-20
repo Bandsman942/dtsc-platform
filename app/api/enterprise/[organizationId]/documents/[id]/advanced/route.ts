@@ -92,7 +92,7 @@ export async function POST(req: Request, { params }: Params) {
       });
       await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_DOCUMENT_INDEXED", entity: "EnterpriseDocumentIndexState", entityId: updated.id, request: req, metadata: { organizationId, documentId: id, versionId: version.id, provider: updated.provider, chunkCount: updated.chunkCount } });
       return NextResponse.json({ ok: true, state: updated });
-    } catch (error) {
+    } catch {
       const failed = await prisma.enterpriseDocumentIndexState.update({ where: { id: state.id }, data: { status: "FAILED", errorCode: "PROVIDER_REQUEST_FAILED", errorMessage: safeErrorMessage() } });
       await writeApiLog({ request: req, statusCode: 502, userId: session.userId, startedAt, metadata: { organizationId, documentId: id, action: "INDEX", providerFailed: true } });
       return NextResponse.json({ error: "PROVIDER_REQUEST_FAILED", message: "Le fournisseur d'indexation n'a pas terminé l'opération.", state: failed }, { status: 502 });
@@ -129,7 +129,7 @@ export async function POST(req: Request, { params }: Params) {
     });
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_DOCUMENT_VERSIONS_COMPARED", entity: "EnterpriseDocumentVersionComparison", entityId: updated.id, request: req, metadata: { organizationId, documentId: id, leftVersionId: updated.leftVersionId, rightVersionId: updated.rightVersionId, provider: updated.provider } });
     return NextResponse.json({ ok: true, comparison: updated });
-  } catch (error) {
+  } catch {
     const failed = await prisma.enterpriseDocumentVersionComparison.update({ where: { id: comparison.id }, data: { status: "FAILED", errorCode: "PROVIDER_REQUEST_FAILED", errorMessage: safeErrorMessage() } });
     await writeApiLog({ request: req, statusCode: 502, userId: session.userId, startedAt, metadata: { organizationId, documentId: id, action: "COMPARE", providerFailed: true } });
     return NextResponse.json({ error: "PROVIDER_REQUEST_FAILED", message: "Le fournisseur de comparaison n'a pas terminé l'opération.", comparison: failed }, { status: 502 });
