@@ -17,17 +17,15 @@ const financeFiles = [
   "components/enterprise/professional/enterprise-finance-invoices-workspace.tsx",
   "components/enterprise/professional/enterprise-finance-payments-treasury-workspace.tsx",
   "components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-workspace.tsx",
-  "components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-workspace-hotfix.tsx",
   "components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-workspace-hotfix-legacy.tsx",
   "components/enterprise/professional/enterprise-operational-finance-workspace.tsx",
   "components/enterprise/professional/enterprise-advanced-finance-workspace.tsx",
   "components/enterprise/professional/enterprise-exchange-rates-workspace.tsx",
   "components/enterprise/professional/enterprise-accounting-workspace.tsx",
-  "components/enterprise/professional/enterprise-finance-accounting-workspace-hotfix.tsx",
-  "components/enterprise/professional/enterprise-finance-accounting-workspace-v3.tsx",
+  "components/enterprise/professional/enterprise-finance-accounting-workspace.tsx",
   "components/enterprise/professional/accounting-compact-table.tsx",
   "components/enterprise/professional/accounting-journal-workbench.tsx",
-  "components/enterprise/professional/enterprise-finance-advanced-workspace-hotfix.tsx",
+  "components/enterprise/professional/enterprise-finance-advanced-workspace.tsx",
   "components/enterprise/professional/enterprise-accounting-onboarding-panel.tsx",
 ];
 for (const file of financeFiles) if (!exists(file)) fail(`Finance UX: fichier requis absent ${file}`);
@@ -57,7 +55,7 @@ if (exists(shared) && exists(sharedLegacy)) {
   if (/throw new Error\(body\?\.message/.test(content)) fail("Finance UX: les mutations partagées ne doivent pas propager body.message au client");
 }
 
-const bankWrapper = "components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-workspace-hotfix.tsx";
+const bankWrapper = "components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-workspace.tsx";
 if (exists(bankWrapper)) {
   const content = read(bankWrapper);
   for (const token of ["hotfix-legacy", "sessionStorage", "statusUrl", "progressPercent", "MAX_POLLS", "Le traitement est durable", "The processing is durable"]) if (!content.includes(token)) fail(`Finance UX: suivi durable Banque incomplet (${token})`);
@@ -87,32 +85,20 @@ if (exists(onboarding)) {
 }
 
 const modulePage = "components/enterprise/enterprise-finance-module-page.tsx";
-const usesAccountingV3 = exists(modulePage) && read(modulePage).includes("EnterpriseFinanceAccountingWorkspaceV3");
-const accountingWorkspace = usesAccountingV3
-  ? "components/enterprise/professional/enterprise-finance-accounting-workspace-v3.tsx"
-  : "components/enterprise/professional/enterprise-finance-accounting-workspace-hotfix.tsx";
+const accountingWorkspace = "components/enterprise/professional/enterprise-finance-accounting-workspace.tsx";
 if (exists(accountingWorkspace)) {
   const content = read(accountingWorkspace);
-  if (usesAccountingV3) {
-    for (const token of [
-      "EnterpriseAccountingOnboardingPanel",
-      "AccountingCompactTable",
-      "AccountingJournalWorkbench",
-      "useToastMessage",
-      "FinanceAccountingReferenceSelect",
-      'type Space = "home" | "post" | "review" | "configure"',
-      'presentation="editor"',
-      "accounting-query",
-      "entry-trace",
-    ]) if (!content.includes(token)) fail(`Finance UX: workspace Comptabilité V3 incomplet (${token})`);
-  } else {
-    for (const token of ["EnterpriseAccountingOnboardingPanel", "ProfessionalTabs", '"setup"', "useToastMessage", "FinanceAccountingReferenceSelect"]) {
-      if (!content.includes(token)) fail(`Finance UX: workspace Comptabilité hotfix incomplet (${token})`);
-    }
-    const setupIndex = content.indexOf('{ id: "setup"');
-    const overviewIndex = content.indexOf('{ id: "overview"');
-    if (setupIndex < 0 || overviewIndex < 0 || setupIndex > overviewIndex) fail("Finance UX: Mise en service doit rester le premier sous-bloc du workspace Comptabilité hotfix");
-  }
+  for (const token of [
+    "EnterpriseAccountingOnboardingPanel",
+    "AccountingCompactTable",
+    "AccountingJournalWorkbench",
+    "useToastMessage",
+    "FinanceAccountingReferenceSelect",
+    'type Space = "home" | "post" | "review" | "configure"',
+    'presentation="editor"',
+    "accounting-query",
+    "entry-trace",
+  ]) if (!content.includes(token)) fail(`Finance UX: workspace Comptabilité canonique incomplet (${token})`);
 }
 
 for (const file of financeFiles) {
@@ -129,15 +115,16 @@ if (exists(modulePage)) {
     "OPERATIONAL_FINANCE_MODULE_CODES",
     "EnterpriseOperationalFinanceWorkspace",
     "EnterpriseAdvancedFinanceWorkspace",
-    "EnterpriseFinanceAccountingWorkspaceV3",
-    "EnterpriseFinanceAdvancedWorkspaceHotfix",
+    "EnterpriseFinanceAccountingWorkspace",
+    "EnterpriseFinanceAdvancedWorkspace",
     "DOWNSTREAM_FINANCE_HOTFIX",
   ]) {
     if (!content.includes(token)) fail(`Finance UX: routeur Finance incomplet (${token})`);
   }
+  if (content.includes("EnterpriseFinanceAccountingWorkspaceV3") || content.includes("EnterpriseFinanceAdvancedWorkspaceHotfix")) fail("Finance UX: le routeur Finance actif ne doit plus importer une variante v3/hotfix.");
   if (content.includes("EnterpriseAccountingOnboardingPanel")) fail("Finance UX: le routeur Finance ne doit plus rendre Mise en service avant le workspace Comptabilité");
   if (!content.includes('moduleCode === "FINANCE_ACCOUNTING"')) fail("Finance UX: FINANCE_ACCOUNTING doit être routé explicitement vers son workspace dédié");
-  if (!content.includes('"FINANCE_TAX", "FINANCE_CLOSE", "FINANCE_STATEMENTS", "FINANCE_ASSETS"')) fail("Finance UX: les quatre modules Finance aval doivent rester routés vers le workspace hotfix avancé");
+  if (!content.includes('"FINANCE_TAX", "FINANCE_CLOSE", "FINANCE_STATEMENTS", "FINANCE_ASSETS"')) fail("Finance UX: les quatre modules Finance aval doivent rester routés vers le workspace canonique avancé");
 }
 
 const compactTable = "components/enterprise/professional/accounting-compact-table.tsx";
@@ -172,4 +159,4 @@ if (failures.length) {
   for (const failure of failures) console.error(`- ${failure}`);
   process.exit(1);
 }
-console.log("QA Finance client UX/i18n: OK — client-safe messages, compact Accounting V3, durable Finance wrappers, guides and FR/EN contracts enforced");
+console.log("QA Finance client UX/i18n: OK — client-safe messages, canonical Finance workspaces, durable bridges, guides and FR/EN contracts enforced");
