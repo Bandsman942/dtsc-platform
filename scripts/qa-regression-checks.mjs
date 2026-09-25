@@ -105,3 +105,4 @@ await import("./qa-602-atomic-retail-posting.mjs");
 await import("./qa-hotfix-618-finance-currency-treasury-errors.mjs");
 await import("./qa-scale5b-retail-dashboard-cache.mjs");
 await import("./qa-scale5c-read-path-cache.mjs");
+await import("./qa-education-architecture-contract.mjs");
