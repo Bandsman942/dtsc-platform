@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Archive, CheckCircle2, Edit3, Plus, Send, ShieldCheck, XCircle } from "lucide-react";
+import { Archive, CheckCircle2, Edit3, Eye, Plus, Send, ShieldCheck, XCircle } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { FinanceReferenceSelect } from "@/components/enterprise/core-v2/finance-reference-select";
@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useToastMessage } from "@/components/ui/use-toast-message";
+import { ContextActions } from "@/components/workspace/context-actions";
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
@@ -221,6 +222,14 @@ export function EnterpriseFinanceTreasuryWorkspace(props: Props) {
     finally { setBusy(false); }
   }
 
+  function accountActions(account: Account) {
+    return <ContextActions label={`${t("actions")} · ${account.code}`} actions={[
+      { id: "details", label: t("details"), icon: Eye, onSelect: () => setDetail(account) },
+      { id: "edit", label: t("editAccount"), icon: Edit3, hidden: !account.capabilities?.canEdit, onSelect: () => setEditingAccount(account) },
+      { id: "archive", label: t("archive"), icon: Archive, destructive: true, separatorBefore: true, hidden: !account.capabilities?.canArchive, onSelect: () => setArchiveTarget(account) },
+    ]} />;
+  }
+
   const selectedAccount = tab === "accounts" ? detail as Account | null : null;
   const selectedTransfer = tab === "transfers" ? detail as Transfer | null : null;
   const selectedHistory = tab === "history" ? detail as HistoryItem | null : null;
@@ -237,7 +246,7 @@ export function EnterpriseFinanceTreasuryWorkspace(props: Props) {
     <ModuleToolbar search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={placeholder} />} controls={<div className="grid min-w-0 gap-2"><ProfessionalTabs value={tab} onChange={changeTab} items={tabItems} label={t("title")} />{tab !== "history" ? <NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={[{ id: "", label: t("allStatuses") }, ...["ACTIVE", "INACTIVE", "DRAFT", "APPROVED", "CONFIRMED"].map((id) => ({ id, label: financeStatusLabel(id, locale) }))]} /> : <div className="grid gap-2 md:grid-cols-3"><NativeSelect value={historyFilters.transactionType} onChange={(value) => { setHistoryFilters((current) => ({ ...current, transactionType: value })); setPage(1); }} items={[{ id: "", label: t("allTypes") }, ...["PAYMENT", "TRANSFER", "CASH", "ADJUSTMENT"].map((id) => ({ id, label: financeEnumLabel(id, locale) }))]} /><NativeSelect value={historyFilters.direction} onChange={(value) => { setHistoryFilters((current) => ({ ...current, direction: value })); setPage(1); }} items={[{ id: "", label: t("allDirections") }, { id: "INBOUND", label: t("inbound") }, { id: "OUTBOUND", label: t("outbound") }]} /><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_TREASURY" kind="financial-account" name="historyAccountId" label={t("account")} locale={rawLocale} onOptionChange={(option) => { setHistoryFilters((current) => ({ ...current, accountId: option?.id || "" })); setPage(1); }} /></div>}</div>} summary={tab === "history" ? t("historyDescription") : t("immutableStructure")} />
     <ModuleContent>
       <ModuleSection title={sectionTitle} description={tab === "history" ? t("historyDescription") : t("description")}>
-        {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : <FinanceRecordList items={collection.items} locale={locale} emptyTitle={t("noItems")} emptyDescription={t("noItemsDescription")} onOpen={(record) => setDetail(record)} />}
+        {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : <FinanceRecordList items={collection.items} locale={locale} emptyTitle={t("noItems")} emptyDescription={t("noItemsDescription")} onOpen={(record) => setDetail(record)} actions={tab === "accounts" ? (record) => accountActions(record as Account) : undefined} />}
         <FinancePaginationControls pagination={collection.pagination} page={page} onPage={setPage} locale={locale} />
       </ModuleSection>
       <ProfessionalHelp moduleCode="FINANCE_TREASURY" />
