@@ -74,6 +74,27 @@ Codes réservés par le programme #279 : EDUCATION_SETTINGS, ACADEMIC_STRUCTURE,
 
 Décision EDU-0 : **aucun de ces modules ne devient ACTIVE ou BETA par simple déclaration**. Chaque code reste conceptuellement PLANNED jusqu’à l’itération qui fournit modèle ou service, route, workspace, permission, entitlement et QA. Le registre canonique est étendu au fur et à mesure des itérations, sans carte active prématurée.
 
+## 6.1 Audit du template Education v1 existant
+
+La migration historique `20260527143000_enterprise_sector_templates` seed déjà un template Education v1 avec les modules : STUDENTS, TEACHERS, CLASSES, COURSES, ATTENDANCE, EXAMS_GRADES, SCHOOL_FEES, PARENTS_GUARDIANS, DISCIPLINE et ACADEMIC_REPORTS.
+
+Elle seed également les blocs d’activité REPORT_ABSENCE, SUBMIT_CLASS_REPORT, ENTER_GRADES, REQUEST_PARENT_MEETING, REPORT_DISCIPLINE_INCIDENT et REQUEST_ACADEMIC_VALIDATION.
+
+Décision de cutover EDU-0 : cette migration historique est immuable. Les noms v1 ne deviennent pas automatiquement des codes canoniques actifs. Les itérations suivantes créent une **nouvelle version de template additive** et gèrent explicitement les convergences :
+
+- STUDENTS → STUDENTS ;
+- TEACHERS → TEACHING_STAFF ;
+- CLASSES → ACADEMIC_STRUCTURE, avec classes/cohortes comme entités du domaine ;
+- COURSES → COURSES ;
+- ATTENDANCE → ATTENDANCE ;
+- EXAMS_GRADES → ASSESSMENTS + GRADES, donc pas d’alias automatique un-vers-plusieurs ;
+- SCHOOL_FEES → SCHOOL_FEES ;
+- PARENTS_GUARDIANS → GUARDIANS ;
+- DISCIPLINE → DISCIPLINE ;
+- ACADEMIC_REPORTS → ACADEMIC_REPORTING.
+
+Les anciens targetModuleCode des blocs d’activité ne doivent être réorientés qu’au moment où leur module canonique dispose d’un vrai resolver, workspace et QA. Aucun code v1 ne doit ouvrir un CRUD générique en contournant le registre canonique.
+
 ## 7. Capabilities et permissions
 
 Les permissions Education utiliseront des préfixes dédiés et des actions bornées : EDUCATION_SETTINGS:manage, ACADEMIC_STRUCTURE:read|write|manage, ADMISSIONS:read|write|decide, STUDENTS:read|write, ATTENDANCE:read|record|correct, ASSESSMENTS:read|write|publish, GRADES:read|record|correct|publish, SCHOOL_FEES:read|prepare, DISCIPLINE:read|write|review et ACADEMIC_REPORTING:read|export.
