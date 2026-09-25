@@ -1,8 +1,8 @@
 # DTSC Education — Contrat d’architecture EDU-0
 
-Statut : **opposable avant EDU-1**  
-Programme : #279  
-Itération : #280  
+Statut : **opposable avant EDU-1**
+Programme : #279
+Itération : #280
 Baseline : main@85a119cd9a55b800ae8364e16dcf25b02f2a9323
 
 Sources auditées EDU-0 : `docs/enterprise-sector-modules.md`, `lib/enterprise/module-registry.ts`, `prisma/schema.prisma` et la migration historique `prisma/migrations/20260527143000_enterprise_sector_templates/migration.sql`. Livraison suivie par la PR #677.
