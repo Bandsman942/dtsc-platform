@@ -1,7 +1,7 @@
 # SCALE-6 — AI concurrency, quotas and provider resilience
 
-Issue : #359  
-Parent : #352  
+Issue : #359
+Parent : #352
 Baseline : main@85a119cd9a55b800ae8364e16dcf25b02f2a9323
 
 ## Objectif
