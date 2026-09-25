@@ -65,7 +65,16 @@ ok(supplierCreditsRoute.includes("EnterpriseSupplierCreditNoteApproval") && supp
 
 ok(invoiceWorkspace.includes('kind="catalog-item"') && invoiceWorkspace.includes("catalogItemId"), "Invoice lines preserve the canonical catalog relationship.");
 ok(invoiceWorkspace.includes('kind="expense"') && invoiceWorkspace.includes('name="expenseId"') && invoiceWorkspace.includes('kind="asset"') && invoiceWorkspace.includes('name="assetId"'), "Supplier invoices preserve approved-expense and asset relations.");
-ok(invoiceWorkspace.includes('kind === "credit" ? "POST"') && invoiceWorkspace.includes("canReject") && invoiceWorkspace.includes("creditNoteId"), "Credit-note detail actions and deep links are complete.");
+ok(
+  invoiceWorkspace.includes("creditTransitionActions") &&
+    invoiceWorkspace.includes('status === "APPROVED"') &&
+    invoiceWorkspace.includes('{ action: "POST"') &&
+    invoiceWorkspace.includes("capabilityAllowsAction") &&
+    invoiceWorkspace.includes("canReject") &&
+    invoiceWorkspace.includes('"creditNoteId"') &&
+    invoiceWorkspace.includes('"supplierCreditNoteId"'),
+  "Credit-note detail actions and deep links are complete.",
+);
 ok(invoiceWorkspace.includes('presentation="editor"') && invoiceWorkspace.includes("useToastMessage") && invoiceWorkspace.includes("disabled={busy}"), "Invoice UX follows the editor/busy/toast contract.");
 ok(!invoiceWorkspace.includes("useFinanceLookups"), "Invoice hotfix no longer depends on capped bulk lookups.");
 
