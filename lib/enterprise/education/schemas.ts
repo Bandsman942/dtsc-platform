@@ -156,6 +156,11 @@ export function getEducationCreateSchema(resource: EducationResourceCode) {
   return schemas[resource];
 }
 
+export const educationCreateEnvelopeSchema = z.object({
+  resource: z.enum(["SETTINGS", "CAMPUS", "ACADEMIC_YEAR", "PERIOD", "LEVEL", "DEPARTMENT", "PROGRAM", "CLASS_GROUP", "SUBJECT", "COURSE_OFFERING", "CALENDAR_EVENT"]),
+  data: z.unknown(),
+});
+
 export const educationMutationSchema = z.object({
   resource: z.enum(["CAMPUS", "ACADEMIC_YEAR", "PERIOD", "LEVEL", "DEPARTMENT", "PROGRAM", "CLASS_GROUP", "SUBJECT", "COURSE_OFFERING", "CALENDAR_EVENT"]),
   action: z.enum(["UPDATE", "ARCHIVE", "ACTIVATE", "DEACTIVATE", "CLOSE"]),
