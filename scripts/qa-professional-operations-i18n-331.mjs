@@ -70,7 +70,6 @@ for (const [scope, content] of Object.entries({ inventory: files.inventory, site
 
 need(files.projectsRouter, "EnterpriseProjectsServicesWorkspace", "routeur projets/livrables");
 need(files.projectsRouter, "EnterpriseTimeDeliverablesWorkspace", "routeur projets/livrables");
-reject(files.assets, "enterprise-assets-maintenance-workspace-v2", "workspace actifs canonique");
 
 need(files.i18n, "professionalErpOperationsFr", "registre i18n");
 need(files.i18n, "professionalErpOperationsEn", "registre i18n");
