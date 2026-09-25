@@ -69,6 +69,10 @@ Permissions proposées par le template :
 
 L’API exige en plus le contexte d’entreprise actif, same-origin sur mutation et rate-limit.
 
+## Aucune suppression physique
+
+EDU-1 n’expose aucune suppression physique des référentiels académiques. Les suppressions fonctionnelles passent exclusivement par clôture ou archivage contrôlé.
+
 ## API
 
 - `GET /api/enterprise/:organizationId/education/structure` : snapshot de configuration ;
