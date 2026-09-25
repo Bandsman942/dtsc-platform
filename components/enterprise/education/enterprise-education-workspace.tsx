@@ -9,6 +9,7 @@ import { ModuleContent, ModuleHeader, ModuleToolbar, ModuleWorkspace } from "@/c
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { confirmSensitiveAction } from "@/lib/client-confirmation";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
 import type { EducationModuleCode, EducationResourceCode } from "@/lib/enterprise/education/constants";
 import { educationCopy, educationResourceLabel } from "@/lib/enterprise/education/i18n";
@@ -421,8 +422,26 @@ export function EnterpriseEducationWorkspace({
   }
 
   async function transition(item: ListItem, action: "ARCHIVE" | "ACTIVATE" | "DEACTIVATE" | "CLOSE") {
-    if (action === "ARCHIVE" && !window.confirm(t.archivedConfirm)) return;
-    if (action === "CLOSE" && !window.confirm(t.closeConfirm)) return;
+    if (action === "ARCHIVE") {
+      const confirmation = await confirmSensitiveAction({
+        title: lang === "en" ? `Archive ${educationResourceLabel(lang, resource)}` : `Archiver · ${educationResourceLabel(lang, resource)}`,
+        description: t.archivedConfirm,
+        confirmLabel: t.archive,
+        cancelLabel: t.cancel,
+        tone: "warning",
+      });
+      if (!confirmation.confirmed) return;
+    }
+    if (action === "CLOSE") {
+      const confirmation = await confirmSensitiveAction({
+        title: lang === "en" ? "Close academic period" : "Clôturer la période académique",
+        description: t.closeConfirm,
+        confirmLabel: t.close,
+        cancelLabel: t.cancel,
+        tone: "warning",
+      });
+      if (!confirmation.confirmed) return;
+    }
     setSaving(true);
     setError("");
     try {
