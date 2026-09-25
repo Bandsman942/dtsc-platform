@@ -333,7 +333,7 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
       <ProfessionalHelp moduleCode={moduleCode} />
     </ModuleContent>
 
-    <Dialog open={createOpen} onClose={() => { if (!busy) { setCreateOpen(false); resetCreate(); } }} title={t(isReceivables ? "newCustomerInvoice" : "newSupplierInvoice")} description={t("sourcesRevalidated")} presentation="editor" className="max-w-5xl">
+    <Dialog open={createOpen} onClose={() => { if (!busy) { setCreateOpen(false); resetCreate(); } }} title={t(isReceivables ? "newCustomerInvoice" : "newSupplierInvoice")} description={t("sourcesRevalidated")} presentation="editor" className="h-[96dvh] max-w-5xl">
       <form onSubmit={createInvoice} className="grid gap-6">
         <ProfessionalFormSection title={t("partyAndSource")}>
           {isReceivables ? <>
@@ -381,6 +381,7 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
           {detail.outstandingAmount !== undefined ? <FinanceDetailValue label={t("outstanding")}>{financeMoney(detail.outstandingAmount, String(detail.currencyCode || "USD"), locale)}</FinanceDetailValue> : null}
           {detail.dueDate ? <FinanceDetailValue label={t("dueDate")}>{financeDate(detail.dueDate, locale)}</FinanceDetailValue> : null}
         </FinanceDetailGrid>
+        {!isReceivables && detailKind === "invoice" && detail.threeWayMatch ? <section className="rounded-xl border border-dtsc-border p-4"><h3 className="font-black text-dtsc-ink">{t("poReceiptInvoiceControl")}</h3><div className="mt-3 grid gap-3 sm:grid-cols-3"><FinanceDetailValue label={t("quantity")}>{String(detail.threeWayMatch.quantityVariance ?? 0)}</FinanceDetailValue><FinanceDetailValue label={t("price")}>{String(detail.threeWayMatch.priceVariance ?? 0)}</FinanceDetailValue><FinanceDetailValue label={t("totalVariance")}>{String(detail.threeWayMatch.totalVariance ?? 0)}</FinanceDetailValue></div></section> : null}
         {detailHasWorkflow ? <div data-responsive-actions>{(detailKind === "credit" ? creditTransitionActions(detail.status, locale) : invoiceTransitionActions(detail.status, locale, isReceivables)).filter((action) => capabilityAllowsAction(detail, action.action)).map((action) => { const Icon = action.icon; return <Button key={action.action} disabled={busy} variant={action.destructive ? "destructive" : "outline"} onClick={() => setActionTarget({ record: detail, action: action.action, kind: detailKind })}><Icon className="h-4 w-4" />{action.label}</Button>; })}{detailKind === "invoice" && detail.capabilities?.canCreateCredit ? <Button variant="outline" disabled={busy} onClick={() => setCreditTarget(detail)}><FileMinus2 className="h-4 w-4" />{t("createCreditNote")}</Button> : null}</div> : null}
         <FinanceCollaboration organizationId={organizationId} moduleCode={moduleCode} record={detail} locale={locale} />
       </div> : null}
