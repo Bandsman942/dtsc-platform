@@ -10,7 +10,7 @@ const hasAll = (source, tokens, scope) => {
   for (const token of tokens) check(source.includes(token), `${scope}: missing ${token}`);
 };
 
-const compatibilityBridges = [
+const retiredCompatibilityBridges = [
   ["components/enterprise/professional/enterprise-customers-workspace-v2.tsx", "enterprise-customers-workspace"],
   ["components/enterprise/professional/enterprise-catalog-workspace-v2.tsx", "enterprise-catalog-workspace"],
   ["components/enterprise/professional/enterprise-crm-workspace-v2.tsx", "enterprise-crm-workspace"],
@@ -29,12 +29,8 @@ const compatibilityBridges = [
   ["components/enterprise/enterprise-admin-hotfix-panels-legacy.tsx", "enterprise-administration-panels-base"],
 ];
 
-for (const [file, canonicalTarget] of compatibilityBridges) {
-  check(exists(file), `Compatibility bridge missing: ${file}`);
-  if (!exists(file)) continue;
-  const source = read(file).trim();
-  check(source.includes(canonicalTarget), `${file} must point to ${canonicalTarget}`);
-  check(source.split(/\r?\n/).length <= 3, `${file} must remain a thin compatibility-only re-export`);
+for (const [file] of retiredCompatibilityBridges) {
+  check(!exists(file), `Retired compatibility bridge must be deleted: ${file}`);
 }
 
 const canonicalImplementations = [
@@ -171,4 +167,4 @@ if (failures.length) {
   for (const failure of failures) console.error(`- ${failure}`);
   process.exit(1);
 }
-console.log(`Hotfix #669 UI/i18n & Code Convergence QA passed with ${canonicalImplementations.length} canonical implementations and ${compatibilityBridges.length} compatibility-only bridges.`);
+console.log(`Hotfix #669 UI/i18n & Code Convergence QA passed with ${canonicalImplementations.length} canonical implementations and ${retiredCompatibilityBridges.length} retired bridges absent.`);
