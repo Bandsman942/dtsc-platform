@@ -1,1 +1,0 @@
-export { EnterpriseFinanceCashBankReconciliationBase as EnterpriseFinanceCashBankReconciliationWorkspaceHotfix } from "@/components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-base";
