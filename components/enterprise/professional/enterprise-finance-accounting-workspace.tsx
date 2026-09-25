@@ -102,7 +102,7 @@ type RecordDetailState = { kind: AccountingRecordDetailKind; row: AnyRow } | nul
 const EMPTY_PAGINATION: Pagination = { page: 1, pageSize: 25, total: 0, pageCount: 1 };
 const ACCOUNT_TYPES = ["ASSET", "LIABILITY", "EQUITY", "REVENUE", "EXPENSE", "OTHER_INCOME", "OTHER_EXPENSE"] as const;
 const JOURNAL_TYPES = ["GENERAL", "SALES", "PURCHASES", "BANK", "CASH", "MOBILE_MONEY", "PAYROLL", "INVENTORY", "ASSETS", "ADJUSTMENT", "OPENING"] as const;
-const FULLSCREEN_FORM_CLASS = "h-[100dvh] w-screen max-w-none rounded-none sm:h-[94dvh] sm:w-auto sm:max-w-3xl sm:rounded-3xl";
+const FULLSCREEN_FORM_CLASS = "h-[100dvh] w-full max-w-none rounded-none sm:h-[94dvh] sm:w-auto sm:max-w-3xl sm:rounded-3xl";
 
 function rawText(value: unknown) { return value === null || value === undefined ? "" : String(value); }
 function rowText(row: AnyRow, key: string) { return rawText(row[key]); }
