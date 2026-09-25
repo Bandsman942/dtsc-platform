@@ -1,8 +1,8 @@
 # DTSC Education — EDU-1 Structure académique, campus et paramètres
 
-Issue : #281  
-Parent : #279  
-Dépendance : EDU-0 #280 / PR #677  
+Issue : #281
+Parent : #279
+Dépendance : EDU-0 #280 / PR #677
 Baseline : `main@51fa9c77f464a4219e860e77eece0cc81dc88244`
 
 ## Portée livrée
