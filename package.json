@@ -76,6 +76,7 @@
     "backfill:health-service-catalog": "node scripts/backfill-health-service-catalog.mjs",
     "backfill:health-invoices": "node scripts/backfill-health-invoices.mjs",
     "backfill:health-payments": "node scripts/backfill-health-payments.mjs",
+    "qa:education-architecture": "node scripts/qa-education-architecture-contract.mjs",
     "qa:enterprise-module-registry": "node scripts/qa-enterprise-module-registry-checks.mjs",
     "qa:erp-module-experience": "node scripts/qa-erp-module-experience-checks.mjs",
     "qa:enterprise-master-data": "node scripts/qa-enterprise-master-data-checks.mjs",
