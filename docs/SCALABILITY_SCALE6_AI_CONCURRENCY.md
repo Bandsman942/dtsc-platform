@@ -2,7 +2,9 @@
 
 Issue : #359
 Parent : #352
-Baseline : main@85a119cd9a55b800ae8364e16dcf25b02f2a9323
+Baseline initiale : main@85a119cd9a55b800ae8364e16dcf25b02f2a9323
+
+Revalidation finale requise après EDU-0 : `main@51fa9c77f464a4219e860e77eece0cc81dc88244`.
 
 ## Objectif
 
