@@ -1,0 +1,301 @@
+model EnterpriseEducationInstitutionSettings {
+  id                 String   @id @default(cuid())
+  organizationId     String   @unique
+  institutionType    String   @default("SCHOOL")
+  legalName          String?
+  registrationCode  String?
+  timezone           String   @default("Africa/Kinshasa")
+  weekStartsOn       Int      @default(1)
+  defaultCampusId    String?
+  settingsJson       Json?
+  revision           Int      @default(1)
+  createdByUserId    String
+  updatedByUserId    String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
+model EnterpriseEducationCampus {
+  id              String   @id @default(cuid())
+  organizationId  String
+  code            String
+  name            String
+  shortName       String?
+  address         String?
+  city            String?
+  countryCode     String?
+  timezone        String?
+  status          String   @default("ACTIVE")
+  sortOrder       Int      @default(0)
+  revision        Int      @default(1)
+  createdByUserId String
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  archivedAt      DateTime?
+  departments     EnterpriseEducationDepartment[]
+  classGroups     EnterpriseEducationClassGroup[]
+  courseOfferings EnterpriseEducationCourseOffering[]
+  calendarEvents  EnterpriseEducationCalendarEvent[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code], map: "EducationCampus_org_code_key")
+  @@index([organizationId, status, sortOrder])
+  @@index([archivedAt])
+}
+
+model EnterpriseEducationAcademicYear {
+  id              String   @id @default(cuid())
+  organizationId  String
+  code            String
+  label           String
+  startDate       DateTime
+  endDate         DateTime
+  status          String   @default("DRAFT")
+  closedAt        DateTime?
+  revision        Int      @default(1)
+  createdByUserId String
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  archivedAt      DateTime?
+  periods         EnterpriseEducationAcademicPeriod[]
+  classGroups     EnterpriseEducationClassGroup[]
+  courseOfferings EnterpriseEducationCourseOffering[]
+  calendarEvents  EnterpriseEducationCalendarEvent[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code], map: "EducationAcademicYear_org_code_key")
+  @@index([organizationId, status, startDate])
+  @@index([organizationId, startDate, endDate])
+  @@index([archivedAt])
+}
+
+model EnterpriseEducationAcademicPeriod {
+  id              String   @id @default(cuid())
+  organizationId  String
+  academicYearId  String
+  code            String
+  label           String
+  periodType      String   @default("TERM")
+  sequence        Int      @default(1)
+  startDate       DateTime
+  endDate         DateTime
+  status          String   @default("DRAFT")
+  closedAt        DateTime?
+  revision        Int      @default(1)
+  createdByUserId String
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  archivedAt      DateTime?
+  academicYear    EnterpriseEducationAcademicYear @relation(fields: [organizationId, academicYearId], references: [organizationId, id], onDelete: Restrict)
+  courseOfferings EnterpriseEducationCourseOffering[]
+  calendarEvents  EnterpriseEducationCalendarEvent[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, academicYearId, code], map: "EducationAcademicPeriod_year_code_key")
+  @@index([organizationId, academicYearId, status, sequence])
+  @@index([organizationId, startDate, endDate])
+  @@index([archivedAt])
+}
+
+model EnterpriseEducationAcademicLevel {
+  id              String   @id @default(cuid())
+  organizationId  String
+  code            String
+  label           String
+  levelType       String   @default("GRADE")
+  sequence        Int      @default(0)
+  description     String?
+  status          String   @default("ACTIVE")
+  revision        Int      @default(1)
+  createdByUserId String
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  archivedAt      DateTime?
+  classGroups     EnterpriseEducationClassGroup[]
+  courseOfferings EnterpriseEducationCourseOffering[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code], map: "EducationAcademicLevel_org_code_key")
+  @@index([organizationId, status, sequence])
+  @@index([archivedAt])
+}
+
+model EnterpriseEducationDepartment {
+  id              String   @id @default(cuid())
+  organizationId  String
+  campusId        String?
+  code            String
+  name            String
+  description     String?
+  status          String   @default("ACTIVE")
+  sortOrder       Int      @default(0)
+  revision        Int      @default(1)
+  createdByUserId String
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  archivedAt      DateTime?
+  campus          EnterpriseEducationCampus? @relation(fields: [organizationId, campusId], references: [organizationId, id], onDelete: Restrict)
+  programs        EnterpriseEducationProgram[]
+  subjects        EnterpriseEducationSubject[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code], map: "EducationDepartment_org_code_key")
+  @@index([organizationId, campusId, status, sortOrder])
+  @@index([archivedAt])
+}
+
+model EnterpriseEducationProgram {
+  id              String   @id @default(cuid())
+  organizationId  String
+  departmentId    String?
+  code            String
+  name            String
+  description     String?
+  awardName       String?
+  durationPeriods Int?
+  status          String   @default("ACTIVE")
+  sortOrder       Int      @default(0)
+  revision        Int      @default(1)
+  createdByUserId String
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  archivedAt      DateTime?
+  department      EnterpriseEducationDepartment? @relation(fields: [organizationId, departmentId], references: [organizationId, id], onDelete: Restrict)
+  classGroups     EnterpriseEducationClassGroup[]
+  courseOfferings EnterpriseEducationCourseOffering[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code], map: "EducationProgram_org_code_key")
+  @@index([organizationId, departmentId, status, sortOrder])
+  @@index([archivedAt])
+}
+
+model EnterpriseEducationClassGroup {
+  id              String   @id @default(cuid())
+  organizationId  String
+  academicYearId  String
+  campusId        String
+  levelId         String
+  programId       String?
+  code            String
+  name            String
+  capacity        Int?
+  status          String   @default("ACTIVE")
+  sortOrder       Int      @default(0)
+  revision        Int      @default(1)
+  createdByUserId String
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  archivedAt      DateTime?
+  academicYear    EnterpriseEducationAcademicYear @relation(fields: [organizationId, academicYearId], references: [organizationId, id], onDelete: Restrict)
+  campus          EnterpriseEducationCampus @relation(fields: [organizationId, campusId], references: [organizationId, id], onDelete: Restrict)
+  level           EnterpriseEducationAcademicLevel @relation(fields: [organizationId, levelId], references: [organizationId, id], onDelete: Restrict)
+  program         EnterpriseEducationProgram? @relation(fields: [organizationId, programId], references: [organizationId, id], onDelete: Restrict)
+  courseOfferings EnterpriseEducationCourseOffering[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, academicYearId, code], map: "EducationClassGroup_year_code_key")
+  @@index([organizationId, campusId, academicYearId, status])
+  @@index([organizationId, levelId, programId, status])
+  @@index([archivedAt])
+}
+
+model EnterpriseEducationSubject {
+  id              String   @id @default(cuid())
+  organizationId  String
+  departmentId    String?
+  code            String
+  name            String
+  description     String?
+  creditHours     Int?
+  status          String   @default("ACTIVE")
+  sortOrder       Int      @default(0)
+  revision        Int      @default(1)
+  createdByUserId String
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  archivedAt      DateTime?
+  department      EnterpriseEducationDepartment? @relation(fields: [organizationId, departmentId], references: [organizationId, id], onDelete: Restrict)
+  courseOfferings EnterpriseEducationCourseOffering[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code], map: "EducationSubject_org_code_key")
+  @@index([organizationId, departmentId, status, sortOrder])
+  @@index([archivedAt])
+}
+
+model EnterpriseEducationCourseOffering {
+  id              String   @id @default(cuid())
+  organizationId  String
+  academicYearId  String
+  periodId        String?
+  campusId        String
+  subjectId       String
+  classGroupId    String?
+  programId       String?
+  levelId         String?
+  code            String
+  displayName     String?
+  deliveryMode    String   @default("IN_PERSON")
+  status          String   @default("DRAFT")
+  revision        Int      @default(1)
+  createdByUserId String
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  archivedAt      DateTime?
+  academicYear    EnterpriseEducationAcademicYear @relation(fields: [organizationId, academicYearId], references: [organizationId, id], onDelete: Restrict)
+  period          EnterpriseEducationAcademicPeriod? @relation(fields: [organizationId, periodId], references: [organizationId, id], onDelete: Restrict)
+  campus          EnterpriseEducationCampus @relation(fields: [organizationId, campusId], references: [organizationId, id], onDelete: Restrict)
+  subject         EnterpriseEducationSubject @relation(fields: [organizationId, subjectId], references: [organizationId, id], onDelete: Restrict)
+  classGroup      EnterpriseEducationClassGroup? @relation(fields: [organizationId, classGroupId], references: [organizationId, id], onDelete: Restrict)
+  program         EnterpriseEducationProgram? @relation(fields: [organizationId, programId], references: [organizationId, id], onDelete: Restrict)
+  level           EnterpriseEducationAcademicLevel? @relation(fields: [organizationId, levelId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, academicYearId, code], map: "EducationCourseOffering_year_code_key")
+  @@index([organizationId, campusId, academicYearId, status])
+  @@index([organizationId, periodId, subjectId, status])
+  @@index([organizationId, classGroupId, status])
+  @@index([archivedAt])
+}
+
+model EnterpriseEducationCalendarEvent {
+  id              String   @id @default(cuid())
+  organizationId  String
+  academicYearId  String
+  periodId        String?
+  campusId        String?
+  eventType       String   @default("ACADEMIC")
+  title           String
+  description     String?
+  startsAt        DateTime
+  endsAt          DateTime
+  allDay          Boolean  @default(false)
+  status          String   @default("ACTIVE")
+  revision        Int      @default(1)
+  createdByUserId String
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  archivedAt      DateTime?
+  academicYear    EnterpriseEducationAcademicYear @relation(fields: [organizationId, academicYearId], references: [organizationId, id], onDelete: Restrict)
+  period          EnterpriseEducationAcademicPeriod? @relation(fields: [organizationId, periodId], references: [organizationId, id], onDelete: Restrict)
+  campus          EnterpriseEducationCampus? @relation(fields: [organizationId, campusId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, academicYearId, startsAt, status])
+  @@index([organizationId, campusId, startsAt, status])
+  @@index([organizationId, periodId, startsAt])
+  @@index([archivedAt])
+}
