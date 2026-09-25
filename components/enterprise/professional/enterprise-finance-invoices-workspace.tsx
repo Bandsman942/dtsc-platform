@@ -81,21 +81,53 @@ type InvoiceLine = {
 };
 type ActionTarget = { record: InvoiceRecord; action: string; kind: "invoice" | "credit" };
 
-const copy = (locale: FinanceLocale, key: EnterpriseFinanceKey) => translateEnterpriseFinance(locale, key);
+const invoiceT = (locale: FinanceLocale, key: EnterpriseFinanceKey) => translateEnterpriseFinance(locale, key);
+const copy = invoiceT;
 const newLine = (index: number): InvoiceLine => ({ key: `invoice-${Date.now()}-${index}`, catalogItemId: "", description: "", quantity: "1", unitPrice: "0", discountAmount: "0", expenseAccountId: "" });
 
-function availableRecordActions(record: InvoiceRecord, isReceivables: boolean, locale: FinanceLocale, kind: "invoice" | "credit") {
+function actionLabel(action: string, locale: FinanceLocale) {
+  if (action === "SUBMIT") return invoiceT(locale, "actionSubmit");
+  if (action === "APPROVE") return invoiceT(locale, "actionApprove");
+  if (action === "REJECT") return invoiceT(locale, "actionReject");
+  if (action === "ISSUE") return invoiceT(locale, "actionIssueAndPost");
+  if (action === "POST") return invoiceT(locale, "post");
+  if (action === "REVIEW") return locale === "en" ? "Review" : "Revoir";
+  return action;
+}
+
+function invoiceTransitionActions(status: string | undefined, locale: FinanceLocale, isReceivables: boolean) {
+  if (status === "DRAFT" || status === "REJECTED") return [{ action: "SUBMIT", label: actionLabel("SUBMIT", locale), icon: Send }];
+  if (isReceivables && status === "PENDING_APPROVAL") return [{ action: "APPROVE", label: actionLabel("APPROVE", locale), icon: CheckCircle2 }];
+  if (!isReceivables && status === "PENDING_REVIEW") return [
+    { action: "REVIEW", label: actionLabel("REVIEW", locale), icon: CheckCircle2 },
+    { action: "REJECT", label: actionLabel("REJECT", locale), icon: XCircle, destructive: true },
+  ];
+  if (!isReceivables && status === "PENDING_APPROVAL") return [
+    { action: "APPROVE", label: actionLabel("APPROVE", locale), icon: CheckCircle2 },
+    { action: "REJECT", label: actionLabel("REJECT", locale), icon: XCircle, destructive: true },
+  ];
+  if (status === "APPROVED") return [{ action: isReceivables ? "ISSUE" : "POST", label: actionLabel(isReceivables ? "ISSUE" : "POST", locale), icon: ShieldCheck }];
+  return [];
+}
+
+function creditTransitionActions(status: string | undefined, locale: FinanceLocale) {
+  if (status === "DRAFT" || status === "REJECTED") return [{ action: "SUBMIT", label: actionLabel("SUBMIT", locale), icon: Send }];
+  if (status === "PENDING_APPROVAL") return [
+    { action: "APPROVE", label: actionLabel("APPROVE", locale), icon: CheckCircle2 },
+    { action: "REJECT", label: actionLabel("REJECT", locale), icon: XCircle, destructive: true },
+  ];
+  if (status === "APPROVED") return [{ action: "POST", label: actionLabel("POST", locale), icon: ShieldCheck }];
+  return [];
+}
+
+function capabilityAllowsAction(record: InvoiceRecord, action: string) {
   const caps = record.capabilities || {};
-  const actions: Array<{ action: string; label: string; icon: typeof Send; destructive?: boolean }> = [];
-  if (caps.canSubmit) actions.push({ action: "SUBMIT", label: copy(locale, "actionSubmit"), icon: Send });
-  if (kind === "invoice" && !isReceivables && caps.canReview) actions.push({ action: "REVIEW", label: locale === "en" ? "Review" : "Revoir", icon: CheckCircle2 });
-  if (caps.canApprove) actions.push({ action: "APPROVE", label: copy(locale, "actionApprove"), icon: CheckCircle2 });
-  if (caps.canReject && (kind === "credit" || !isReceivables)) actions.push({ action: "REJECT", label: copy(locale, "actionReject"), icon: XCircle, destructive: true });
-  if (caps.canPost) {
-    const action = kind === "credit" ? "POST" : isReceivables ? "ISSUE" : "POST";
-    actions.push({ action, label: action === "ISSUE" ? copy(locale, "actionIssueAndPost") : copy(locale, "post"), icon: ShieldCheck });
-  }
-  return actions;
+  if (action === "SUBMIT") return Boolean(caps.canSubmit);
+  if (action === "REVIEW") return Boolean(caps.canReview);
+  if (action === "APPROVE") return Boolean(caps.canApprove);
+  if (action === "REJECT") return Boolean(caps.canReject);
+  if (action === "POST" || action === "ISSUE") return Boolean(caps.canPost);
+  return false;
 }
 
 export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
@@ -220,16 +252,18 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
     event.preventDefault();
     if (!actionTarget) return;
     const form = new FormData(event.currentTarget);
-    const { action, kind, record } = actionTarget;
-    const baseName = kind === "credit" ? (isReceivables ? "sales-credit-notes" : "supplier-credit-notes") : (isReceivables ? "sales-invoices" : "supplier-invoices");
-    const path = kind === "credit" && action === "POST" ? `/api/enterprise/${organizationId}/${baseName}/${record.id}/post` : `/api/enterprise/${organizationId}/${baseName}/${record.id}/transition`;
-    const payload: Record<string, unknown> = { ...(kind === "credit" && action === "POST" ? {} : { action }), revision: record.revision, reason: String(form.get("reason") || "") || undefined };
-    if (action === "SUBMIT" && kind === "invoice" && isReceivables) payload.approverUserId = String(form.get("approverUserId") || "");
-    if (action === "SUBMIT" && kind === "invoice" && !isReceivables) {
+    const isCredit = actionTarget.kind === "credit";
+    const action = actionTarget.action;
+    const record = actionTarget.record;
+    const baseName = isCredit ? (isReceivables ? "sales-credit-notes" : "supplier-credit-notes") : (isReceivables ? "sales-invoices" : "supplier-invoices");
+    const path = isCredit && action === "POST" ? `/api/enterprise/${organizationId}/${baseName}/${record.id}/post` : `/api/enterprise/${organizationId}/${baseName}/${record.id}/transition`;
+    const payload: Record<string, unknown> = { ...(isCredit && action === "POST" ? {} : { action }), revision: record.revision, reason: String(form.get("reason") || "") || undefined };
+    if (action === "SUBMIT" && !isCredit && isReceivables) payload.approverUserId = String(form.get("approverUserId") || "");
+    if (action === "SUBMIT" && !isCredit && !isReceivables) {
       payload.reviewerUserId = String(form.get("reviewerUserId") || "");
       payload.approverUserId = String(form.get("approverUserId") || "");
     }
-    if (action === "SUBMIT" && kind === "credit") payload.approverUserId = String(form.get("approverUserId") || "");
+    if (action === "SUBMIT" && isCredit) payload.approverUserId = String(form.get("approverUserId") || "");
     setBusy(true); setErrorMessage("");
     try {
       await financeMutation(path, payload);
@@ -347,12 +381,12 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
           {detail.outstandingAmount !== undefined ? <FinanceDetailValue label={t("outstanding")}>{financeMoney(detail.outstandingAmount, String(detail.currencyCode || "USD"), locale)}</FinanceDetailValue> : null}
           {detail.dueDate ? <FinanceDetailValue label={t("dueDate")}>{financeDate(detail.dueDate, locale)}</FinanceDetailValue> : null}
         </FinanceDetailGrid>
-        {detailHasWorkflow ? <div data-responsive-actions>{availableRecordActions(detail, isReceivables, locale, detailKind).map(({ action, label, icon: Icon, destructive }) => <Button key={action} disabled={busy} variant={destructive ? "destructive" : "outline"} onClick={() => setActionTarget({ record: detail, action, kind: detailKind })}><Icon className="h-4 w-4" />{label}</Button>)}{detailKind === "invoice" && detail.capabilities?.canCreateCredit ? <Button variant="outline" disabled={busy} onClick={() => setCreditTarget(detail)}><FileMinus2 className="h-4 w-4" />{t("createCreditNote")}</Button> : null}</div> : null}
+        {detailHasWorkflow ? <div data-responsive-actions>{(detailKind === "credit" ? creditTransitionActions(detail.status, locale) : invoiceTransitionActions(detail.status, locale, isReceivables)).filter((action) => capabilityAllowsAction(detail, action.action)).map((action) => { const Icon = action.icon; return <Button key={action.action} disabled={busy} variant={action.destructive ? "destructive" : "outline"} onClick={() => setActionTarget({ record: detail, action: action.action, kind: detailKind })}><Icon className="h-4 w-4" />{action.label}</Button>; })}{detailKind === "invoice" && detail.capabilities?.canCreateCredit ? <Button variant="outline" disabled={busy} onClick={() => setCreditTarget(detail)}><FileMinus2 className="h-4 w-4" />{t("createCreditNote")}</Button> : null}</div> : null}
         <FinanceCollaboration organizationId={organizationId} moduleCode={moduleCode} record={detail} locale={locale} />
       </div> : null}
     </Dialog>
 
-    <Dialog open={Boolean(actionTarget)} onClose={() => { if (!busy) setActionTarget(null); }} title={actionTarget ? `${actionTarget.action} · ${String(actionTarget.record.number || actionTarget.record.reference || "")}` : ""} description={t("sodAndPeriodChecked")} presentation="editor" className="max-w-xl">
+    <Dialog open={Boolean(actionTarget)} onClose={() => { if (!busy) setActionTarget(null); }} title={actionTarget ? `${actionLabel(actionTarget.action, locale)} · ${String(actionTarget.record.number || actionTarget.record.reference || "")}` : ""} description={t("sodAndPeriodChecked")} presentation="editor" className="max-w-xl">
       {actionTarget ? <form onSubmit={transition} className="grid gap-4">
         {actionTarget.action === "SUBMIT" && actionTarget.kind === "invoice" && isReceivables && canSubmit ? <EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_RECEIVABLES" locale={rawLocale} /> : null}
         {actionTarget.action === "SUBMIT" && actionTarget.kind === "invoice" && !isReceivables && canSubmit ? <><EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_PAYABLES" locale={rawLocale} name="reviewerUserId" label={locale === "en" ? "Reviewer" : "Responsable de revue"} /><EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_PAYABLES" locale={rawLocale} name="approverUserId" label={locale === "en" ? "Final approver" : "Approbateur final"} /></> : null}
