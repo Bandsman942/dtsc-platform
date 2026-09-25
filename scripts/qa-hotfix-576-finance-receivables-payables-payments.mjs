@@ -14,11 +14,11 @@ const ok = (condition, message) => {
 
 const modulePage = read("components/enterprise/enterprise-finance-module-page.tsx");
 const operationalWorkspace = read("components/enterprise/professional/enterprise-operational-finance-workspace.tsx");
-const invoiceWorkspace = read("components/enterprise/professional/enterprise-finance-invoices-workspace-hotfix.tsx");
-const paymentWorkspace = read("components/enterprise/professional/enterprise-finance-payments-workspace-hotfix.tsx");
+const invoiceWorkspace = read("components/enterprise/professional/enterprise-finance-invoices-workspace.tsx");
+const paymentWorkspace = read("components/enterprise/professional/enterprise-finance-payments-workspace.tsx");
 const sharedBridge = read("components/enterprise/professional/finance-professional-workspace-shared.tsx");
-const sharedLegacy = read("components/enterprise/professional/finance-professional-workspace-shared-legacy.tsx");
-const sharedWorkspace = `${sharedBridge}\n${sharedLegacy}`;
+const sharedCore = read("components/enterprise/professional/finance-professional-workspace-core.tsx");
+const sharedWorkspace = `${sharedBridge}\n${sharedCore}`;
 const referenceSelect = read("components/enterprise/core-v2/finance-reference-select.tsx");
 const receivablesRoute = read("app/api/enterprise/[organizationId]/receivables/route.ts");
 const payablesRoute = read("app/api/enterprise/[organizationId]/payables/route.ts");
@@ -44,8 +44,8 @@ const regressionAdapter = read("scripts/qa-regression-checks.mjs");
 const pkg = JSON.parse(read("package.json"));
 
 ok(modulePage.includes("resolveEnterpriseModuleCapabilities") && !modulePage.includes("MANAGER_ROLES"), "Finance UI derives capabilities from the canonical module-access resolver, not a local manager-role shortcut.");
-ok(operationalWorkspace.includes("EnterpriseFinanceInvoicesWorkspaceHotfix") && operationalWorkspace.includes("EnterpriseFinancePaymentsWorkspaceHotfix"), "The three operational Finance modules route through the hotfix workspaces.");
-ok(sharedBridge.includes("finance-professional-workspace-shared-legacy") && sharedBridge.includes("dtsc:finance-durable-job"), "Finance shared helpers preserve the canonical legacy implementation behind the durable mutation bridge.");
+ok(operationalWorkspace.includes("EnterpriseFinanceInvoicesWorkspace") && operationalWorkspace.includes("EnterpriseFinancePaymentsWorkspace"), "The three operational Finance modules route through the hotfix workspaces.");
+ok(sharedBridge.includes("finance-professional-workspace-core") && sharedBridge.includes("dtsc:finance-durable-job"), "Finance shared helpers preserve the canonical legacy implementation behind the durable mutation bridge.");
 
 for (const [name, source] of [["receivables", receivablesRoute], ["payables", payablesRoute]]) {
   ok(source.includes('url.searchParams.get("overdue")') && source.includes('url.searchParams.get("ageBucket")'), `${name}: overdue and ageing filters are server-side.`);
@@ -65,7 +65,16 @@ ok(supplierCreditsRoute.includes("EnterpriseSupplierCreditNoteApproval") && supp
 
 ok(invoiceWorkspace.includes('kind="catalog-item"') && invoiceWorkspace.includes("catalogItemId"), "Invoice lines preserve the canonical catalog relationship.");
 ok(invoiceWorkspace.includes('kind="expense"') && invoiceWorkspace.includes('name="expenseId"') && invoiceWorkspace.includes('kind="asset"') && invoiceWorkspace.includes('name="assetId"'), "Supplier invoices preserve approved-expense and asset relations.");
-ok(invoiceWorkspace.includes('kind === "credit" ? "POST"') && invoiceWorkspace.includes("canReject") && invoiceWorkspace.includes("creditNoteId"), "Credit-note detail actions and deep links are complete.");
+ok(
+  invoiceWorkspace.includes("creditTransitionActions") &&
+    invoiceWorkspace.includes('status === "APPROVED"') &&
+    invoiceWorkspace.includes('{ action: "POST"') &&
+    invoiceWorkspace.includes("capabilityAllowsAction") &&
+    invoiceWorkspace.includes("canReject") &&
+    invoiceWorkspace.includes('"creditNoteId"') &&
+    invoiceWorkspace.includes('"supplierCreditNoteId"'),
+  "Credit-note detail actions and deep links are complete.",
+);
 ok(invoiceWorkspace.includes('presentation="editor"') && invoiceWorkspace.includes("useToastMessage") && invoiceWorkspace.includes("disabled={busy}"), "Invoice UX follows the editor/busy/toast contract.");
 ok(!invoiceWorkspace.includes("useFinanceLookups"), "Invoice hotfix no longer depends on capped bulk lookups.");
 

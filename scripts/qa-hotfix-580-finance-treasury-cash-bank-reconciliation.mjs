@@ -8,10 +8,10 @@ const hasAll = (source, tokens, scope) => {
 };
 
 const operational = read("components/enterprise/professional/enterprise-operational-finance-workspace.tsx");
-const treasuryUi = read("components/enterprise/professional/enterprise-finance-treasury-workspace-hotfix.tsx");
-const cashWrapper = read("components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-workspace-hotfix.tsx");
-const cashLegacy = read("components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-workspace-hotfix-legacy.tsx");
-const cashUi = `${cashWrapper}\n${cashLegacy}`;
+const treasuryUi = read("components/enterprise/professional/enterprise-finance-treasury-workspace.tsx");
+const cashWrapper = read("components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-workspace.tsx");
+const cashBase = read("components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-base.tsx");
+const cashUi = `${cashWrapper}\n${cashBase}`;
 const referenceUi = read("components/enterprise/core-v2/finance-reference-select.tsx");
 const accountsRoute = read("app/api/enterprise/[organizationId]/financial-accounts/route.ts");
 const transfersRoute = read("app/api/enterprise/[organizationId]/account-transfers/route.ts");
@@ -26,21 +26,21 @@ const transferSchema = read("lib/enterprise/accounting/treasury-schemas.ts");
 const financeContract = read("lib/ai/tools/finance-contract.ts");
 
 hasAll(operational, [
-  "EnterpriseFinanceTreasuryWorkspaceHotfix",
+  "EnterpriseFinanceTreasuryWorkspace",
   "EnterpriseFinanceCashWorkspace",
-  "EnterpriseFinanceCashBankReconciliationWorkspaceHotfix",
+  "EnterpriseFinanceCashBankReconciliationWorkspace",
   'props.definition.code === "FINANCE_TREASURY"',
   'props.definition.code === "FINANCE_CASH"',
   '["FINANCE_BANK", "FINANCE_RECONCILIATION"]',
 ], "operational routing");
 
-for (const [name, source] of [["Treasury hotfix", treasuryUi], ["Cash/Bank/Reconciliation hotfix", cashUi]]) {
+for (const [name, source] of [["Treasury canonical", treasuryUi], ["Cash/Bank/Reconciliation canonical", cashUi]]) {
   hasAll(source, ['presentation="editor"', "useToastMessage", "disabled={busy}", "FinanceReferenceSelect"], name);
   ok(!source.includes("MANAGER_ROLES"), `${name}: local role grants are forbidden`);
 }
 
 hasAll(cashWrapper, [
-  "enterprise-finance-cash-bank-reconciliation-workspace-hotfix-legacy",
+  "enterprise-finance-cash-bank-reconciliation-base",
   "dtsc:finance-durable-job",
   "sessionStorage",
   "progressPercent",
@@ -57,8 +57,8 @@ hasAll(treasuryUi, [
   "capabilities?.canReject",
   "capabilities?.canConfirm",
   'label: `${t("financialAccounts")} ${collection.pagination.total}`',
-], "Treasury hotfix");
-ok(!treasuryUi.includes('label: `${t("financialAccounts")} ${collection.items.length}`'), "Treasury hotfix: financial-account tab count must never be page-bound");
+], "Treasury canonical");
+ok(!treasuryUi.includes('label: `${t("financialAccounts")} ${collection.items.length}`'), "Treasury canonical: financial-account tab count must never be page-bound");
 
 hasAll(cashUi, [
   "fetchOperationalFinanceRecord",
@@ -74,7 +74,7 @@ hasAll(cashUi, [
   "capabilities?.canMatch",
   "capabilities?.canSubmit",
   "capabilities?.canApprove",
-], "Cash/Bank/Reconciliation hotfix");
+], "Cash/Bank/Reconciliation canonical");
 
 for (const [name, source] of [["cash", cashRoute], ["bank", bankRoute], ["reconciliation", reconciliationRoute]]) {
   hasAll(source, ["financeListParams(req)", "search", "recordId", "organizationId"], `${name} server list`);

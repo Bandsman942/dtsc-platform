@@ -37,8 +37,11 @@ requireTokens("app/api/enterprise/[organizationId]/operational-lookups/route.ts"
 ]);
 requireTokens("components/enterprise/professional/enterprise-finance-invoices-workspace.tsx", [
   "expenseAccountId",
-  "sources.expenseAccounts",
+  "FinanceReferenceSelect",
+  'moduleCode="FINANCE_PAYABLES"',
+  'kind="expense-account"',
   't("expense")',
+  'onOptionChange={(option) => updateLine(line.key, { expenseAccountId: option?.id || "" })}',
   "line.expenseAccountId ? line.expenseAccountId : undefined",
 ]);
 requireTokens("tests/e2e/erp-cross-module-finance.spec.mjs", [

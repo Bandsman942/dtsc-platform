@@ -360,7 +360,14 @@ check(
 
 check(
   "socle commun Enterprise: pages alimentées par les données réelles de l'organisation",
-  containsAll(enterpriseModuleWorkspace, ["Données actuelles de l'entreprise", "Collaborateurs actifs", "Départements actifs", "resolveModuleItems", "Aucune donnée n'est encore enregistrée"])
+  containsAll(enterpriseModuleWorkspace, [
+    "translateWorkspaceGeneralization",
+    'tw("currentCompanyData")',
+    'tw("activeCollaborators")',
+    'tw("activeDepartments")',
+    'tw("noCompanyDataDescription")',
+    "resolveModuleItems",
+  ])
     && !enterpriseModuleWorkspace.includes("Espace opérationnel")
 );
 

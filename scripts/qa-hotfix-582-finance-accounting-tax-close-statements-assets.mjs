@@ -6,11 +6,8 @@ const ok = (condition, message) => { if (!condition) failures.push(message); };
 const hasAll = (source, tokens, scope) => { for (const token of tokens) ok(source.includes(token), `${scope}: missing ${token}`); };
 
 const modulePage = read("components/enterprise/enterprise-finance-module-page.tsx");
-const accountingHotfix = read("components/enterprise/professional/enterprise-finance-accounting-workspace-hotfix.tsx");
-const accountingV3 = read("components/enterprise/professional/enterprise-finance-accounting-workspace-v3.tsx");
-const usesAccountingV3 = modulePage.includes("EnterpriseFinanceAccountingWorkspaceV3");
-const accountingUi = usesAccountingV3 ? accountingV3 : accountingHotfix;
-const advancedUi = read("components/enterprise/professional/enterprise-finance-advanced-workspace-hotfix.tsx");
+const accountingUi = read("components/enterprise/professional/enterprise-finance-accounting-workspace.tsx");
+const advancedUi = read("components/enterprise/professional/enterprise-finance-advanced-workspace.tsx");
 const referenceUi = read("components/enterprise/core-v2/finance-accounting-reference-select.tsx");
 const referenceRoute = read("app/api/enterprise/[organizationId]/accounting-reference-options/route.ts");
 const journalRoute = read("app/api/enterprise/[organizationId]/journal-entries/route.ts");
@@ -22,8 +19,8 @@ const financeContract = read("lib/ai/tools/finance-contract.ts");
 const docs = read("docs/HOTFIX_582_FINANCE_ACCOUNTING_TAX_CLOSE_STATEMENTS_ASSETS.md");
 
 hasAll(modulePage, [
-  usesAccountingV3 ? "EnterpriseFinanceAccountingWorkspaceV3" : "EnterpriseFinanceAccountingWorkspaceHotfix",
-  "EnterpriseFinanceAdvancedWorkspaceHotfix",
+  "EnterpriseFinanceAccountingWorkspace",
+  "EnterpriseFinanceAdvancedWorkspace",
   "canCreate: capabilities.canCreate",
   "canSubmit: capabilities.canSubmit",
   "canWrite: capabilities.canWrite",
@@ -37,42 +34,22 @@ ok(!advancedUi.includes("pageSize=500"), "downstream hotfix: fixed 500-record lo
 ok(!advancedUi.includes("pageSize=250"), "downstream hotfix: fixed 250-record lookup is forbidden");
 ok(!advancedUi.includes("MANAGER_ROLES"), "downstream hotfix: local role grants are forbidden");
 
-if (usesAccountingV3) {
-  hasAll(accountingUi, [
-    'presentation="editor"',
-    "useToastMessage",
-    "AccountingCompactTable",
-    "AccountingJournalWorkbench",
-    "FinanceAccountingReferenceSelect",
-    "EnterpriseAccountingOnboardingPanel",
-    "AssignedApprovalSubmitPanel",
-    "capabilities?.canSubmit",
-    "capabilities?.canApprove",
-    "capabilities?.canReject",
-    "capabilities?.canPost",
-    "capabilities?.canReverse",
-    "accounting-query",
-    "entry-trace",
-  ], "accounting v3 workflow UI");
-} else {
-  hasAll(accountingUi, [
-    'presentation="editor"',
-    "useToastMessage",
-    "disabled={busy}",
-    "FinanceAccountingReferenceSelect",
-    "EnterpriseAccountingOnboardingPanel",
-    "AssignedApprovalSubmitPanel",
-    "capabilities?.canSubmit",
-    "capabilities?.canApprove",
-    "capabilities?.canReject",
-    "capabilities?.canPost",
-    "capabilities?.canReverse",
-    "recordId",
-    'kind="ledger-account"',
-    'kind="fiscal-period"',
-    'kind="journal"',
-  ], "accounting hotfix workflow UI");
-}
+hasAll(accountingUi, [
+  'presentation="editor"',
+  "useToastMessage",
+  "AccountingCompactTable",
+  "AccountingJournalWorkbench",
+  "FinanceAccountingReferenceSelect",
+  "EnterpriseAccountingOnboardingPanel",
+  "AssignedApprovalSubmitPanel",
+  "capabilities?.canSubmit",
+  "capabilities?.canApprove",
+  "capabilities?.canReject",
+  "capabilities?.canPost",
+  "capabilities?.canReverse",
+  "accounting-query",
+  "entry-trace",
+], "canonical accounting workflow UI");
 ok(!accountingUi.includes("pageSize=500"), "accounting: fixed 500-record lookup is forbidden");
 ok(!accountingUi.includes("pageSize=250"), "accounting: fixed 250-record lookup is forbidden");
 ok(!accountingUi.includes("MANAGER_ROLES"), "accounting: local role grants are forbidden");
@@ -134,4 +111,4 @@ if (failures.length) {
   console.error(`Hotfix #582 QA failed:\n- ${failures.join("\n- ")}`);
   process.exit(1);
 }
-console.log(`Hotfix #582 Finance Accounting/Tax/Close/Statements/Assets QA: OK (${usesAccountingV3 ? "Accounting V3" : "Accounting hotfix"})`);
+console.log("Hotfix #582 Finance Accounting/Tax/Close/Statements/Assets QA: OK (canonical workspaces)");

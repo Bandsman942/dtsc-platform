@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Download, LoaderCircle, RefreshCw } from "lucide-react";
-import { EnterpriseAdministrationAuditPanel as LegacyEnterpriseAdministrationAuditPanel } from "@/components/enterprise/enterprise-admin-hotfix-panels-legacy";
+import { EnterpriseAdministrationAuditPanel as BaseEnterpriseAdministrationAuditPanel } from "@/components/enterprise/enterprise-administration-panels-base";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import type { EnterpriseAuditItem, EnterpriseMemberItem, EnterpriseModuleConfigurationIssue } from "@/lib/enterprise/enterprise-admin-types";
@@ -201,7 +201,7 @@ export function EnterpriseAdministrationAuditPanel(props: Props) {
           {job.truncated ? <p className="mt-2 text-xs font-bold text-amber-700 dark:text-amber-300">{tx(locale, "L’export atteint la limite opérationnelle autorisée. Affinez le périmètre avant un export plus ciblé.", "The export reached the allowed operational limit. Narrow the scope before requesting a more targeted export.")}</p> : null}
         </div> : null}
       </section>
-      <LegacyEnterpriseAdministrationAuditPanel {...props} />
+      <BaseEnterpriseAdministrationAuditPanel {...props} />
     </div>
   );
 }

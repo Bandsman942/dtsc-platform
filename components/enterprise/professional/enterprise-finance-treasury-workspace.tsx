@@ -1,306 +1,281 @@
 "use client";
 
-import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Archive, ArrowRightLeft, Edit3, Eye, Landmark, Plus, Power, ShieldCheck } from "lucide-react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Archive, CheckCircle2, Edit3, Eye, Plus, Send, ShieldCheck, XCircle } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
+import { FinanceReferenceSelect } from "@/components/enterprise/core-v2/finance-reference-select";
+import { EnterpriseApproverSelect } from "@/components/enterprise/enterprise-approver-select";
 import {
   FinanceDetailGrid,
   FinanceDetailValue,
   FinancePaginationControls,
   FinanceRecordList,
-  type FinancePagination,
+  financeMutation,
   type FinanceRecord,
 } from "@/components/enterprise/professional/finance-professional-workspace-shared";
-import {
-  ProfessionalError,
-  ProfessionalHelp,
-  ProfessionalLoading,
-  ProfessionalSearch,
-  ProfessionalTabs,
-  professionalRequest,
-} from "@/components/enterprise/professional/professional-erp-ui";
-import {
-  financeDate,
-  financeEnumLabel,
-  financeMoney,
-  financeStatusLabel,
-  financeStatusTone,
-  safeFinanceError,
-  type FinanceLocale,
-} from "@/components/enterprise/professional/finance-professional-ui";
+import { fetchOperationalFinanceRecord, useOperationalFinanceCollection } from "@/components/enterprise/professional/use-operational-finance-collection";
+import { ProfessionalError, ProfessionalFormSection, ProfessionalHelp, ProfessionalLoading, ProfessionalSearch, ProfessionalTabs, professionalRequest } from "@/components/enterprise/professional/professional-erp-ui";
+import { financeDate, financeEnumLabel, financeMoney, financeStatusLabel, financeStatusTone, safeFinanceError, type FinanceLocale } from "@/components/enterprise/professional/finance-professional-ui";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useToastMessage } from "@/components/ui/use-toast-message";
 import { ContextActions } from "@/components/workspace/context-actions";
-import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
-import { translateExchangeRate, type ExchangeRateCopyKey } from "@/lib/i18n/enterprise-exchange-rates";
 import { translateEnterpriseTreasury, type EnterpriseTreasuryCopyKey } from "@/lib/i18n/enterprise-treasury";
 
-type Props = { organizationId: string; organizationName: string; definition: EnterpriseModuleDefinition; locale?: string | null; canManage: boolean };
-type TreasuryTab = "accounts" | "transfers" | "history";
-type ApprovalCandidate = { userId: string; name: string; email: string; positionTitle: string | null; role: string; isRequester: boolean; selfApprovalOverride: boolean };
-type Account = FinanceRecord & { code: string; name: string; accountType: string; currencyCode: string; maskedReference?: string | null; openingBalance: string | number; operationalBalance: string | number; reconciledBalance: string | number; availableBalance?: string | number | null; ledgerAccountId: string; responsibleUserId?: string | null; siteId?: string | null; status: string; revision: number };
-type Transfer = FinanceRecord & { number: string; sourceFinancialAccountId: string; targetFinancialAccountId: string; sourceCurrencyCode: string; targetCurrencyCode: string; sourceAmount: string | number; targetAmount: string | number; exchangeRate?: string | number | null; transferDate: string; status: string; revision: number; sourceFinancialAccount?: { id: string; code: string; name: string; accountType: string; currencyCode: string } | null; targetFinancialAccount?: { id: string; code: string; name: string; accountType: string; currencyCode: string } | null; approval?: { id: string; approverUserId: string; approverName: string; requestedByUserId: string; status: string } | null };
-type HistoryItem = FinanceRecord & { transactionType: string; direction: string; currencyCode: string; amount: string | number; transactionDate: string; reference?: string | null; status: string; reconciliationStatus: string; financialAccount: { id: string; code: string; name: string; accountType: string; currencyCode: string }; payment?: { id: string; number: string; status: string; paymentType: string } | null; transfer?: { id: string; number: string; status: string; exchangeRate?: string | number | null } | null };
-type LookupPayload = {
-  accounts: Array<{ id: string; code: string; name: string; accountType: string; currencyCode: string; operationalBalance: string | number; availableBalance?: string | number | null; status: string; revision: number }>;
-  ledgerAccounts: Array<{ id: string; code: string; nameFr: string; nameEn: string; accountType: string; accountSubtype?: string | null; currencyCode?: string | null }>;
-  currencies: Array<{ code: string; name: string; symbol?: string | null; precision: number }>;
-  members: Array<{ id: string; label: string; email?: string; role?: string; positionTitle?: string | null }>;
-  sites: Array<{ id: string; code: string; name: string }>;
+type Props = {
+  organizationId: string;
+  organizationName: string;
+  definition: EnterpriseModuleDefinition;
+  locale?: string | null;
+  canCreate: boolean;
+  canSubmit: boolean;
+  canWrite: boolean;
+  canApprove: boolean;
+  canManage: boolean;
 };
-type TransferPreview = { sourceAccount: { id: string; code: string; name: string; accountType: string; currencyCode: string; operationalBalance: string }; targetAccount: { id: string; code: string; name: string; accountType: string; currencyCode: string; operationalBalance: string }; sourceAmount: string; targetAmount: string; transferDate: string; exchangeRate: { value: string; rateId: string | null; rateDate: string; source: string; direction: string } };
-type HistoryFilters = { accountId: string; transactionType: string; direction: string; currencyCode: string; from: string; to: string };
 
-const EMPTY_PAGINATION: FinancePagination = { page: 1, pageSize: 25, total: 0, pageCount: 1 };
-const EMPTY_LOOKUPS: LookupPayload = { accounts: [], ledgerAccounts: [], currencies: [], members: [], sites: [] };
+type AccountCapabilities = { canEdit?: boolean; canArchive?: boolean };
+type TransferCapabilities = { canApprove?: boolean; canReject?: boolean; canConfirm?: boolean };
+
+type Account = FinanceRecord & {
+  code: string;
+  name: string;
+  accountType: string;
+  currencyCode: string;
+  maskedReference?: string | null;
+  openingBalance: string | number;
+  operationalBalance: string | number;
+  reconciledBalance: string | number;
+  availableBalance?: string | number | null;
+  ledgerAccountId: string;
+  responsibleUserId?: string | null;
+  siteId?: string | null;
+  revision: number;
+  capabilities?: AccountCapabilities;
+};
+
+type Transfer = FinanceRecord & {
+  number: string;
+  sourceFinancialAccountId: string;
+  targetFinancialAccountId: string;
+  sourceCurrencyCode: string;
+  targetCurrencyCode: string;
+  sourceAmount: string | number;
+  targetAmount: string | number;
+  exchangeRate?: string | number | null;
+  transferDate: string;
+  revision: number;
+  sourceFinancialAccount?: { id: string; code: string; name: string; accountType: string; currencyCode: string } | null;
+  targetFinancialAccount?: { id: string; code: string; name: string; accountType: string; currencyCode: string } | null;
+  approval?: { id: string; approverUserId: string; approverName: string; status: string; canAct: boolean } | null;
+  capabilities?: TransferCapabilities;
+};
+
+type HistoryItem = FinanceRecord & {
+  transactionType: string;
+  direction: string;
+  currencyCode: string;
+  amount: string | number;
+  transactionDate: string;
+  reference?: string | null;
+  reconciliationStatus?: string | null;
+  financialAccount?: { id: string; code: string; name: string; accountType: string; currencyCode: string } | null;
+  payment?: { id: string; number: string; status: string; paymentType: string } | null;
+  transfer?: { id: string; number: string; status: string; exchangeRate?: string | number | null } | null;
+};
+
+type TransferPreview = {
+  sourceAccount: { id: string; code: string; name: string; accountType: string; currencyCode: string; operationalBalance: string };
+  targetAccount: { id: string; code: string; name: string; accountType: string; currencyCode: string; operationalBalance: string };
+  sourceAmount: string;
+  targetAmount: string;
+  transferDate: string;
+  exchangeRate: { value: string; rateId: string | null; rateDate: string; source: string; direction: string };
+};
+
+type TransferDraft = { sourceFinancialAccountId: string; targetFinancialAccountId: string; sourceAmount: string; transferDate: string };
+type TransferAction = { record: Transfer; action: "APPROVE" | "REJECT" | "CONFIRM" };
+
+type HistoryFilters = { accountId: string; transactionType: string; direction: string; currencyCode: string; from: string; to: string };
 const EMPTY_HISTORY_FILTERS: HistoryFilters = { accountId: "", transactionType: "", direction: "", currencyCode: "", from: "", to: "" };
 
-async function requestJson(endpoint: string, method: "GET" | "POST" | "PATCH" | "DELETE" = "GET", body?: unknown) {
+async function requestJson(endpoint: string, payload: unknown) {
   return professionalRequest<Record<string, unknown>>(endpoint, {
-    method,
-    payload: body,
+    method: "POST",
+    payload,
     fallbackCode: "TREASURY_OPERATION_FAILED",
   });
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
-
-export function EnterpriseFinanceTreasuryWorkspace({ organizationId, organizationName, locale: rawLocale, canManage }: Props) {
+export function EnterpriseFinanceTreasuryWorkspace(props: Props) {
+  const { organizationId, organizationName, definition, locale: rawLocale, canCreate } = props;
   const locale: FinanceLocale = rawLocale === "en" ? "en" : "fr";
-  const t = useCallback((key: EnterpriseTreasuryCopyKey) => translateEnterpriseTreasury(locale, key), [locale]);
-  const fxT = useCallback((key: ExchangeRateCopyKey) => translateExchangeRate(locale, key), [locale]);
-  const rateSourceLabel = useCallback((source: string, direction: string) => {
-    if (direction === "IDENTITY") return "—";
-    const keyBySource: Record<string, ExchangeRateCopyKey> = {
-      MANUAL: "manual",
-      CENTRAL_BANK: "centralBank",
-      COMMERCIAL_BANK: "commercialBank",
-      PROVIDER: "provider",
-      CONTRACTUAL: "contractual",
-      IMPORTED: "imported",
-    };
-    const key = keyBySource[source];
-    return key ? fxT(key) : source;
-  }, [fxT]);
-  const [tab, setTab] = useState<TreasuryTab>("accounts");
-  const [page, setPage] = useState(1);
+  const t = (key: EnterpriseTreasuryCopyKey) => translateEnterpriseTreasury(locale, key);
+  const searchParams = useSearchParams();
+  const [tab, setTab] = useState<"accounts" | "transfers" | "history">((searchParams.get("tab") as "accounts" | "transfers" | "history") || "accounts");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
-  const [historyFilters, setHistoryFilters] = useState<HistoryFilters>(EMPTY_HISTORY_FILTERS);
-  const [items, setItems] = useState<FinanceRecord[]>([]);
-  const [pagination, setPagination] = useState<FinancePagination>(EMPTY_PAGINATION);
-  const [lookups, setLookups] = useState<LookupPayload>(EMPTY_LOOKUPS);
-  const [loading, setLoading] = useState(true);
-  const [lookupLoading, setLookupLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const [page, setPage] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [selected, setSelected] = useState<FinanceRecord | null>(null);
-  const [accountDialog, setAccountDialog] = useState(false);
+  const [historyFilters, setHistoryFilters] = useState<HistoryFilters>(EMPTY_HISTORY_FILTERS);
+  const [detail, setDetail] = useState<FinanceRecord | null>(null);
+  const [accountOpen, setAccountOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
-  const [archiveAccount, setArchiveAccount] = useState<Account | null>(null);
-  const [transferDialog, setTransferDialog] = useState(false);
+  const [archiveTarget, setArchiveTarget] = useState<Account | null>(null);
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [sourceAccountId, setSourceAccountId] = useState("");
+  const [targetAccountId, setTargetAccountId] = useState("");
   const [transferPreview, setTransferPreview] = useState<TransferPreview | null>(null);
-  const [transferPayload, setTransferPayload] = useState<{ sourceFinancialAccountId: string; targetFinancialAccountId: string; sourceAmount: string; transferDate: string } | null>(null);
-  const [approvalCandidates, setApprovalCandidates] = useState<ApprovalCandidate[]>([]);
-  const [approversLoading, setApproversLoading] = useState(false);
-  const [selectedApproverUserId, setSelectedApproverUserId] = useState("");
+  const [transferDraft, setTransferDraft] = useState<TransferDraft | null>(null);
+  const [transferAction, setTransferAction] = useState<TransferAction | null>(null);
   const [accountType, setAccountType] = useState("CASH");
-  const [accountCurrency, setAccountCurrency] = useState("");
-  const listRequestVersion = useRef(0);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+  useToastMessage(message, "success");
+  useToastMessage(errorMessage, "error");
 
-  const loadLookups = useCallback(async () => {
-    setLookupLoading(true);
-    try { setLookups(await requestJson(`/api/enterprise/${organizationId}/treasury-lookups`) as unknown as LookupPayload); }
-    catch (loadError) { setError(safeFinanceError(loadError, t("loadError"), locale)); }
-    finally { setLookupLoading(false); }
-  }, [organizationId, t, locale]);
+  const endpoint = tab === "accounts" ? "financial-accounts" : tab === "transfers" ? "account-transfers" : "treasury-history";
+  const filters = useMemo<Record<string, string | boolean | undefined>>(() => tab === "history" ? historyFilters : {}, [historyFilters, tab]);
+  const collection = useOperationalFinanceCollection<FinanceRecord>({ endpoint: `/api/enterprise/${organizationId}/${endpoint}`, page, search, status, filters, refreshKey });
 
-  const loadApprovalCandidates = useCallback(async () => {
-    setApproversLoading(true);
-    setSelectedApproverUserId("");
-    try {
-      const payload = await requestJson(`/api/enterprise/${organizationId}/approval-candidates?moduleCode=FINANCE_TREASURY`);
-      setApprovalCandidates(Array.isArray(payload.candidates) ? payload.candidates as ApprovalCandidate[] : []);
-    } catch (loadError) {
-      setApprovalCandidates([]);
-      setError(safeFinanceError(loadError, t("operationError"), locale));
-    } finally {
-      setApproversLoading(false);
-    }
-  }, [organizationId, t, locale]);
+  useEffect(() => {
+    const accountId = searchParams.get("accountId");
+    const transferId = searchParams.get("transferId");
+    if (!accountId && !transferId) return;
+    const targetEndpoint = accountId ? "financial-accounts" : "account-transfers";
+    const id = accountId || transferId || "";
+    void fetchOperationalFinanceRecord<FinanceRecord>(`/api/enterprise/${organizationId}/${targetEndpoint}`, id)
+      .then((record) => { if (record) { setTab(accountId ? "accounts" : "transfers"); setDetail(record); } })
+      .catch((error) => setErrorMessage(safeFinanceError(error, t("loadError"), locale)));
+  }, [organizationId, searchParams]);
 
-  const listEndpoint = useMemo(() => {
-    const base = tab === "accounts" ? `/api/enterprise/${organizationId}/financial-accounts` : tab === "transfers" ? `/api/enterprise/${organizationId}/account-transfers` : `/api/enterprise/${organizationId}/treasury-history`;
-    const params = new URLSearchParams({ page: String(page), pageSize: "25" });
-    if (search.trim()) params.set("search", search.trim());
-    if (status) params.set("status", status);
-    if (tab === "history") for (const [key, value] of Object.entries(historyFilters)) if (value) params.set(key, value);
-    return `${base}?${params.toString()}`;
-  }, [historyFilters, organizationId, page, search, status, tab]);
+  function refresh(success: string) {
+    setDetail(null); setRefreshKey((value) => value + 1); setMessage(success);
+  }
 
-  const loadList = useCallback(async () => {
-    const requestVersion = ++listRequestVersion.current;
-    setLoading(true); setError("");
-    try {
-      const payload = await requestJson(listEndpoint);
-      if (requestVersion !== listRequestVersion.current) return;
-      setItems(Array.isArray(payload.items) ? payload.items as FinanceRecord[] : []);
-      setPagination((payload.pagination as FinancePagination | undefined) || EMPTY_PAGINATION);
-    } catch (loadError) {
-      if (requestVersion !== listRequestVersion.current) return;
-      setItems([]);
-      setPagination(EMPTY_PAGINATION);
-      setError(safeFinanceError(loadError, t("loadError"), locale));
-    } finally {
-      if (requestVersion === listRequestVersion.current) setLoading(false);
-    }
-  }, [listEndpoint, t, locale]);
-
-  useEffect(() => { void loadLookups(); }, [loadLookups, refreshKey]);
-  useEffect(() => { void loadList(); }, [loadList, refreshKey]);
-  useEffect(() => { if (transferDialog && !transferPreview) void loadApprovalCandidates(); }, [transferDialog, transferPreview, loadApprovalCandidates]);
-
-  const refresh = useCallback((message?: string) => { if (message) setNotice(message); setRefreshKey((value) => value + 1); }, []);
-  const changeTab = (next: TreasuryTab) => {
-    if (next === tab) return;
-    listRequestVersion.current += 1;
-    setLoading(true);
-    setItems([]);
-    setPagination(EMPTY_PAGINATION);
-    setTab(next);
-    setPage(1);
-    setSearch("");
-    setStatus("");
-    setHistoryFilters(EMPTY_HISTORY_FILTERS);
-    setSelected(null);
-  };
-  const accounts = lookups.accounts;
-  const accountChoices = accounts.map((account) => ({ id: account.id, label: `${account.code} · ${account.name} · ${financeEnumLabel(account.accountType, locale)} · ${account.currencyCode}` }));
-  const currencies = lookups.currencies.map((currency) => ({ id: currency.code, label: `${currency.code} · ${currency.name}` }));
-  const members = lookups.members.map((member) => ({ id: member.id, label: `${member.label}${member.positionTitle ? ` · ${member.positionTitle}` : ""}` }));
-  const sites = lookups.sites.map((site) => ({ id: site.id, label: `${site.code} · ${site.name}` }));
-  const approverChoices = approvalCandidates.map((candidate) => ({ id: candidate.userId, label: `${candidate.name}${candidate.positionTitle ? ` · ${candidate.positionTitle}` : ""}${candidate.selfApprovalOverride ? ` · ${t("selfValidator")}` : ""}` }));
-  const compatibleLedgers = lookups.ledgerAccounts.filter((account) => account.accountSubtype === accountType && (!account.currencyCode || !accountCurrency || account.currencyCode === accountCurrency));
-  const ledgers = compatibleLedgers.map((account) => ({ id: account.id, label: `${account.code} · ${locale === "fr" ? account.nameFr : account.nameEn}${account.currencyCode ? ` · ${account.currencyCode}` : ""}` }));
-  const accountTypes = ["CASH", "BANK", "MOBILE_MONEY", "CLEARING"].map((id) => ({ id, label: financeEnumLabel(id, locale) }));
+  function changeTab(next: string) {
+    setTab(next as "accounts" | "transfers" | "history"); setPage(1); setSearch(""); setStatus(""); setHistoryFilters(EMPTY_HISTORY_FILTERS); setDetail(null);
+  }
 
   async function createAccount(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); if (busy) return;
-    const form = new FormData(event.currentTarget); setBusy(true); setError(""); setNotice("");
+    event.preventDefault(); const form = new FormData(event.currentTarget); setBusy(true); setErrorMessage("");
     try {
-      await requestJson(`/api/enterprise/${organizationId}/financial-accounts`, "POST", { name: String(form.get("name") || ""), accountType: String(form.get("accountType") || ""), currencyCode: String(form.get("currencyCode") || ""), ledgerAccountId: String(form.get("ledgerAccountId") || ""), openingBalance: String(form.get("openingBalance") || "0"), maskedReference: String(form.get("maskedReference") || "") || undefined });
-      setAccountDialog(false); setAccountType("CASH"); setAccountCurrency(""); refresh(t("accountCreated"));
-    } catch (mutationError) { setError(safeFinanceError(mutationError, t("operationError"), locale)); }
+      await financeMutation(`/api/enterprise/${organizationId}/financial-accounts`, {
+        name: String(form.get("name") || ""), accountType: String(form.get("accountType") || "CASH"), currencyCode: String(form.get("currencyCode") || "").toUpperCase(), ledgerAccountId: String(form.get("ledgerAccountId") || ""), openingBalance: String(form.get("openingBalance") || "0"), maskedReference: String(form.get("maskedReference") || "") || undefined, responsibleUserId: String(form.get("responsibleUserId") || "") || undefined, siteId: String(form.get("siteId") || "") || undefined,
+      });
+      setAccountOpen(false); setAccountType("CASH"); refresh(t("accountCreated"));
+    } catch (error) { setErrorMessage(safeFinanceError(error, t("operationError"), locale)); }
     finally { setBusy(false); }
   }
 
   async function updateAccount(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); if (busy || !editingAccount) return;
-    const form = new FormData(event.currentTarget); setBusy(true); setError(""); setNotice("");
+    event.preventDefault(); if (!editingAccount) return; const form = new FormData(event.currentTarget); setBusy(true); setErrorMessage("");
     try {
-      await requestJson(`/api/enterprise/${organizationId}/financial-accounts/${editingAccount.id}`, "PATCH", { name: String(form.get("name") || ""), maskedReference: String(form.get("maskedReference") || "") || null, responsibleUserId: String(form.get("responsibleUserId") || "") || null, siteId: String(form.get("siteId") || "") || null, revision: editingAccount.revision });
+      await financeMutation(`/api/enterprise/${organizationId}/financial-accounts/${editingAccount.id}`, { name: String(form.get("name") || editingAccount.name), maskedReference: String(form.get("maskedReference") || "") || null, status: String(form.get("status") || editingAccount.status), revision: editingAccount.revision }, "PATCH");
       setEditingAccount(null); refresh(t("accountUpdated"));
-    } catch (mutationError) { setError(safeFinanceError(mutationError, t("operationError"), locale)); }
+    } catch (error) { setErrorMessage(safeFinanceError(error, t("operationError"), locale)); }
     finally { setBusy(false); }
   }
 
-  async function setAccountStatus(account: Account, nextStatus: "ACTIVE" | "INACTIVE") {
-    if (busy) return; setBusy(true); setError("");
-    try { await requestJson(`/api/enterprise/${organizationId}/financial-accounts/${account.id}`, "PATCH", { status: nextStatus, revision: account.revision }); refresh(t("accountUpdated")); }
-    catch (mutationError) { setError(safeFinanceError(mutationError, t("operationError"), locale)); }
-    finally { setBusy(false); }
-  }
-
-  async function archiveSelectedAccount(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); if (busy || !archiveAccount) return;
-    const form = new FormData(event.currentTarget); setBusy(true); setError("");
-    try { await requestJson(`/api/enterprise/${organizationId}/financial-accounts/${archiveAccount.id}`, "DELETE", { reason: String(form.get("reason") || ""), revision: archiveAccount.revision }); setArchiveAccount(null); setSelected(null); refresh(t("accountArchived")); }
-    catch (mutationError) { setError(safeFinanceError(mutationError, t("operationError"), locale)); }
+  async function archiveAccount(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); if (!archiveTarget) return; const form = new FormData(event.currentTarget); setBusy(true); setErrorMessage("");
+    try {
+      await financeMutation(`/api/enterprise/${organizationId}/financial-accounts/${archiveTarget.id}`, { reason: String(form.get("reason") || ""), revision: archiveTarget.revision }, "DELETE");
+      setArchiveTarget(null); refresh(t("accountArchived"));
+    } catch (error) { setErrorMessage(safeFinanceError(error, t("operationError"), locale)); }
     finally { setBusy(false); }
   }
 
   async function previewTransfer(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); if (busy || !selectedApproverUserId) return;
-    const form = new FormData(event.currentTarget);
-    const payload = { sourceFinancialAccountId: String(form.get("sourceFinancialAccountId") || ""), targetFinancialAccountId: String(form.get("targetFinancialAccountId") || ""), sourceAmount: String(form.get("sourceAmount") || ""), transferDate: String(form.get("transferDate") || "") };
-    setBusy(true); setError("");
-    try { const body = await requestJson(`/api/enterprise/${organizationId}/account-transfers/preview`, "POST", payload); setTransferPayload(payload); setTransferPreview(body.preview as TransferPreview); }
-    catch (mutationError) { setError(safeFinanceError(mutationError, t("operationError"), locale)); }
+    event.preventDefault(); const form = new FormData(event.currentTarget);
+    const draft = { sourceFinancialAccountId: sourceAccountId, targetFinancialAccountId: targetAccountId, sourceAmount: String(form.get("sourceAmount") || "0"), transferDate: String(form.get("transferDate") || "") };
+    setBusy(true); setErrorMessage("");
+    try {
+      const body = await requestJson(`/api/enterprise/${organizationId}/account-transfers/preview`, draft) as { preview?: TransferPreview };
+      if (!body.preview) throw new Error(t("operationError"));
+      setTransferDraft(draft); setTransferPreview(body.preview);
+    } catch (error) { setErrorMessage(safeFinanceError(error, t("operationError"), locale)); }
     finally { setBusy(false); }
   }
 
-  async function prepareTransfer() {
-    if (busy || !transferPayload || !selectedApproverUserId) return; setBusy(true); setError("");
-    try { await requestJson(`/api/enterprise/${organizationId}/account-transfers`, "POST", { ...transferPayload, approverUserId: selectedApproverUserId }); setTransferDialog(false); setTransferPreview(null); setTransferPayload(null); setSelectedApproverUserId(""); changeTab("transfers"); refresh(t("transferCreated")); }
-    catch (mutationError) { setError(safeFinanceError(mutationError, t("operationError"), locale)); }
+  async function createTransfer(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); if (!transferDraft) return; const form = new FormData(event.currentTarget); setBusy(true); setErrorMessage("");
+    try {
+      await financeMutation(`/api/enterprise/${organizationId}/account-transfers`, { ...transferDraft, approverUserId: String(form.get("approverUserId") || "") });
+      setTransferOpen(false); setTransferPreview(null); setTransferDraft(null); setSourceAccountId(""); setTargetAccountId(""); refresh(t("transferCreated"));
+    } catch (error) { setErrorMessage(safeFinanceError(error, t("operationError"), locale)); }
     finally { setBusy(false); }
   }
 
-  async function transitionTransfer(transfer: Transfer, action: "APPROVE" | "CONFIRM") {
-    if (busy) return; setBusy(true); setError("");
-    try { await requestJson(`/api/enterprise/${organizationId}/account-transfers/${transfer.id}/transition`, "POST", { action, revision: transfer.revision }); setSelected(null); refresh(); }
-    catch (mutationError) { setError(safeFinanceError(mutationError, t("operationError"), locale)); }
+  async function transitionTransfer(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); if (!transferAction) return; const form = new FormData(event.currentTarget); setBusy(true); setErrorMessage("");
+    try {
+      await financeMutation(`/api/enterprise/${organizationId}/account-transfers/${transferAction.record.id}/transition`, { action: transferAction.action, revision: transferAction.record.revision, ...(transferAction.action === "REJECT" ? { reason: String(form.get("reason") || "") } : {}) });
+      setTransferAction(null); refresh(transferAction.action === "CONFIRM" ? t("confirm") : transferAction.action === "APPROVE" ? t("approve") : t("operationError"));
+    } catch (error) { setErrorMessage(safeFinanceError(error, t("operationError"), locale)); }
     finally { setBusy(false); }
   }
 
   function accountActions(account: Account) {
     return <ContextActions label={`${t("actions")} · ${account.code}`} actions={[
-      { id: "details", label: t("details"), icon: Eye, onSelect: () => setSelected(account) },
-      { id: "edit", label: t("editAccount"), icon: Edit3, hidden: !canManage, onSelect: () => setEditingAccount(account) },
-      { id: "status", label: account.status === "ACTIVE" ? t("deactivate") : t("activate"), icon: Power, hidden: !canManage, onSelect: () => void setAccountStatus(account, account.status === "ACTIVE" ? "INACTIVE" : "ACTIVE") },
-      { id: "archive", label: t("archive"), icon: Archive, destructive: true, separatorBefore: true, hidden: !canManage, onSelect: () => setArchiveAccount(account) },
+      { id: "details", label: t("details"), icon: Eye, onSelect: () => setDetail(account) },
+      { id: "edit", label: t("editAccount"), icon: Edit3, hidden: !account.capabilities?.canEdit, onSelect: () => setEditingAccount(account) },
+      { id: "archive", label: t("archive"), icon: Archive, destructive: true, separatorBefore: true, hidden: !account.capabilities?.canArchive, onSelect: () => setArchiveTarget(account) },
     ]} />;
   }
 
-  const accountItems = items as Account[];
-  const transferItems = items as Transfer[];
-  const historyItems = items as HistoryItem[];
-  const statusChoices = tab === "accounts" ? ["ACTIVE", "INACTIVE"] : ["DRAFT", "APPROVED", "CONFIRMED", "CANCELLED"];
+  const selectedAccount = tab === "accounts" ? detail as Account | null : null;
+  const selectedTransfer = tab === "transfers" ? detail as Transfer | null : null;
+  const selectedHistory = tab === "history" ? detail as HistoryItem | null : null;
+  const tabItems = [
+    { id: "accounts", label: `${t("financialAccounts")} ${collection.pagination.total}` },
+    { id: "transfers", label: t("transfers") },
+    { id: "history", label: t("history") },
+  ];
+  const sectionTitle = tab === "accounts" ? t("financialAccounts") : tab === "transfers" ? t("transferList") : t("historyTitle");
+  const placeholder = tab === "accounts" ? t("searchAccounts") : tab === "transfers" ? t("searchTransfers") : t("searchHistory");
 
   return <ModuleWorkspace>
-    <ModuleHeader eyebrow={`${t("eyebrow")} · ${organizationName}`} title={t("title")} description={t("description")}
-      primaryAction={canManage ? <Button onClick={() => { setTransferDialog(true); setTransferPreview(null); setTransferPayload(null); setSelectedApproverUserId(""); }}><ArrowRightLeft className="h-4 w-4" />{t("newTransfer")}</Button> : undefined}
-      secondaryActions={<div className="flex flex-wrap gap-2">{canManage ? <Button variant="outline" onClick={() => setAccountDialog(true)}><Plus className="h-4 w-4" />{t("newAccount")}</Button> : null}<Link href="/enterprise-modules/FINANCE_TREASURY/exchange-rates"><Button variant="outline">{fxT("title")}</Button></Link></div>} />
+    <ModuleHeader eyebrow={`${t("eyebrow")} · ${organizationName}`} title={t("title")} description={locale === "en" ? definition.descriptionEn : definition.descriptionFr} count={`${collection.pagination.total}`} primaryAction={canCreate ? <div className="flex flex-wrap gap-2">{tab === "accounts" ? <Button onClick={() => setAccountOpen(true)}><Plus className="h-4 w-4" />{t("newAccount")}</Button> : tab === "transfers" ? <Button onClick={() => setTransferOpen(true)}><Send className="h-4 w-4" />{t("newTransfer")}</Button> : null}</div> : undefined} />
+    <ModuleToolbar search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={placeholder} />} controls={<div className="grid min-w-0 gap-2"><ProfessionalTabs value={tab} onChange={changeTab} items={tabItems} label={t("title")} />{tab !== "history" ? <NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={[{ id: "", label: t("allStatuses") }, ...["ACTIVE", "INACTIVE", "DRAFT", "APPROVED", "CONFIRMED"].map((id) => ({ id, label: financeStatusLabel(id, locale) }))]} /> : <div className="grid gap-2 md:grid-cols-3"><NativeSelect value={historyFilters.transactionType} onChange={(value) => { setHistoryFilters((current) => ({ ...current, transactionType: value })); setPage(1); }} items={[{ id: "", label: t("allTypes") }, ...["PAYMENT", "TRANSFER", "CASH", "ADJUSTMENT"].map((id) => ({ id, label: financeEnumLabel(id, locale) }))]} /><NativeSelect value={historyFilters.direction} onChange={(value) => { setHistoryFilters((current) => ({ ...current, direction: value })); setPage(1); }} items={[{ id: "", label: t("allDirections") }, { id: "INBOUND", label: t("inbound") }, { id: "OUTBOUND", label: t("outbound") }]} /><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_TREASURY" kind="financial-account" name="historyAccountId" label={t("account")} locale={rawLocale} onOptionChange={(option) => { setHistoryFilters((current) => ({ ...current, accountId: option?.id || "" })); setPage(1); }} /></div>}</div>} summary={tab === "history" ? t("historyDescription") : t("immutableStructure")} />
     <ModuleContent>
-      {notice ? <div role="status" className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-bold text-emerald-800 dark:text-emerald-200">{notice}</div> : null}
-      {error ? <ProfessionalError message={error} /> : null}
-      <ProfessionalTabs value={tab} onChange={changeTab} items={[{ id: "accounts", label: t("accounts") }, { id: "transfers", label: t("transfers") }, { id: "history", label: t("history") }]} />
-      <ModuleMetrics label={t("title")}><ModuleMetric label={t("activeAccounts")} value={accounts.length} /><ModuleMetric label={tab === "history" ? t("totalMovements") : t("pendingTransfers")} value={tab === "history" ? pagination.total : transferItems.filter((item) => !["CONFIRMED", "CANCELLED"].includes(item.status)).length} /><ModuleMetric label="Page" value={`${pagination.page}/${pagination.pageCount}`} /></ModuleMetrics>
-      <ModuleToolbar search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={tab === "accounts" ? t("searchAccounts") : tab === "transfers" ? t("searchTransfers") : t("searchHistory")} />}
-        controls={tab === "history" ? <div className="grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-6"><NativeSelect items={[{ id: "", label: t("allAccounts") }, ...accountChoices]} value={historyFilters.accountId} onChange={(value) => { setHistoryFilters((current) => ({ ...current, accountId: value })); setPage(1); }} /><NativeSelect items={[{ id: "", label: t("allTypes") }, { id: "TRANSFER", label: financeEnumLabel("TRANSFER", locale) }, { id: "PAYMENT", label: t("payment") }]} value={historyFilters.transactionType} onChange={(value) => { setHistoryFilters((current) => ({ ...current, transactionType: value })); setPage(1); }} /><NativeSelect items={[{ id: "", label: t("allDirections") }, { id: "INBOUND", label: t("inbound") }, { id: "OUTBOUND", label: t("outbound") }]} value={historyFilters.direction} onChange={(value) => { setHistoryFilters((current) => ({ ...current, direction: value })); setPage(1); }} /><NativeSelect items={[{ id: "", label: t("allCurrencies") }, ...currencies]} value={historyFilters.currencyCode} onChange={(value) => { setHistoryFilters((current) => ({ ...current, currencyCode: value })); setPage(1); }} /><Input type="date" aria-label={t("dateFrom")} value={historyFilters.from} onChange={(event) => { setHistoryFilters((current) => ({ ...current, from: event.target.value })); setPage(1); }} /><Input type="date" aria-label={t("dateTo")} value={historyFilters.to} onChange={(event) => { setHistoryFilters((current) => ({ ...current, to: event.target.value })); setPage(1); }} /></div>
-          : <NativeSelect items={[{ id: "", label: t("allStatuses") }, ...statusChoices.map((id) => ({ id, label: financeStatusLabel(id, locale) }))]} value={status} onChange={(value) => { setStatus(value); setPage(1); }} />} summary={`${pagination.total}`} />
-      <ModuleSection title={tab === "accounts" ? t("financialAccounts") : tab === "transfers" ? t("transferList") : t("historyTitle")} description={tab === "history" ? t("historyDescription") : undefined} count={pagination.total}>
-        {loading ? <ProfessionalLoading rows={5} /> : tab === "accounts" ? <FinanceRecordList items={accountItems} locale={locale} emptyTitle={t("noItems")} emptyDescription={t("noItemsDescription")} onOpen={setSelected} actions={(item) => accountActions(item)} /> : tab === "transfers" ? <FinanceRecordList items={transferItems} locale={locale} emptyTitle={t("noItems")} emptyDescription={t("noItemsDescription")} onOpen={setSelected} /> : historyItems.length ? <div className="grid gap-2">{historyItems.map((item) => <button key={item.id} type="button" onClick={() => setSelected(item)} className="grid min-w-0 gap-2 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-left transition hover:bg-dtsc-soft sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"><span className="min-w-0"><span className="flex flex-wrap items-center gap-2"><strong className="text-dtsc-ink">{item.financialAccount.code} · {item.financialAccount.name}</strong><StatusBadge tone={financeStatusTone(item.status)}>{financeStatusLabel(item.status, locale)}</StatusBadge></span><span className="mt-1 block text-xs font-semibold text-dtsc-muted">{financeDate(item.transactionDate, locale)} · {item.transactionType === "PAYMENT" ? t("payment") : financeEnumLabel(item.transactionType, locale)} · {item.direction === "INBOUND" ? t("inbound") : t("outbound")} · {item.reference || "—"}</span></span><strong className="text-dtsc-ink">{item.direction === "OUTBOUND" ? "−" : "+"}{financeMoney(item.amount, item.currencyCode, locale)}</strong></button>)}</div> : <p className="rounded-xl border border-dashed border-dtsc-border p-6 text-center text-sm font-semibold text-dtsc-muted">{t("noItemsDescription")}</p>}
-        <FinancePaginationControls pagination={pagination} page={page} onPage={setPage} locale={locale} />
+      <ModuleSection title={sectionTitle} description={tab === "history" ? t("historyDescription") : t("description")}>
+        {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : <FinanceRecordList items={collection.items} locale={locale} emptyTitle={t("noItems")} emptyDescription={t("noItemsDescription")} onOpen={(record) => setDetail(record)} actions={tab === "accounts" ? (record) => accountActions(record as Account) : undefined} />}
+        <FinancePaginationControls pagination={collection.pagination} page={page} onPage={setPage} locale={locale} />
       </ModuleSection>
       <ProfessionalHelp moduleCode="FINANCE_TREASURY" />
     </ModuleContent>
 
-    <Dialog open={accountDialog} onClose={() => setAccountDialog(false)} title={t("newAccount")} description={t("generatedCodeNotice")} className="h-[94dvh] w-[min(96vw,64rem)] max-w-4xl overflow-x-hidden">
-      <form onSubmit={createAccount} className="grid gap-5"><div className="rounded-xl border border-cyan-400/25 bg-cyan-400/10 p-3 text-sm font-semibold text-dtsc-muted"><ShieldCheck className="mr-2 inline h-4 w-4 text-cyan-600" />{t("generatedCodeNotice")}</div><div className="grid gap-4 md:grid-cols-2"><Field label={t("accountName")} help={t("accountNameHelp")} required><Input name="name" required minLength={2} maxLength={160} /></Field><Field label={t("accountType")} help={t("accountTypeHelp")} required><NativeSelect name="accountType" items={accountTypes} value={accountType} onChange={setAccountType} required /></Field><Field label={t("currency")} help={t("currencyHelp")} required><NativeSelect name="currencyCode" items={currencies} value={accountCurrency} onChange={setAccountCurrency} required disabled={lookupLoading || !currencies.length} /></Field><Field label={t("ledgerAccount")} help={ledgers.length ? t("ledgerAccountHelp") : t("ledgerUnavailable")} required><NativeSelect name="ledgerAccountId" items={ledgers} required disabled={!ledgers.length} /></Field><Field label={t("openingBalance")} help={t("openingBalanceHelp")} required><Input name="openingBalance" type="number" inputMode="decimal" step="0.000001" defaultValue="0" required /></Field>{accountType === "BANK" || accountType === "MOBILE_MONEY" ? <Field label={t("maskedReference")} help={t("maskedReferenceHelp")}><Input name="maskedReference" maxLength={120} placeholder="•••• 1234" /></Field> : null}</div><div className="sticky bottom-0 flex justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface/95 py-3"><Button type="button" variant="outline" onClick={() => setAccountDialog(false)}>{t("cancel")}</Button><Button type="submit" disabled={busy || !currencies.length || !ledgers.length}><Plus className="h-4 w-4" />{t("createAccount")}</Button></div></form>
+    <Dialog open={Boolean(detail)} onClose={() => { if (!busy) setDetail(null); }} title={t("details")} description={tab === "history" ? t("historyDescription") : t("description")} presentation="editor" className="max-w-4xl">
+      {selectedAccount ? <div className="grid gap-5"><div className="flex flex-wrap items-center gap-2"><StatusBadge tone={financeStatusTone(selectedAccount.status)}>{financeStatusLabel(selectedAccount.status, locale)}</StatusBadge>{selectedAccount.capabilities?.canEdit ? <Button variant="outline" onClick={() => setEditingAccount(selectedAccount)}><Edit3 className="h-4 w-4" />{t("editAccount")}</Button> : null}{selectedAccount.capabilities?.canArchive ? <Button variant="outline" onClick={() => setArchiveTarget(selectedAccount)}><Archive className="h-4 w-4" />{t("archive")}</Button> : null}</div><FinanceDetailGrid><FinanceDetailValue label={t("code")} value={selectedAccount.code} /><FinanceDetailValue label={t("accountName")} value={selectedAccount.name} /><FinanceDetailValue label={t("accountType")} value={financeEnumLabel(selectedAccount.accountType, locale)} /><FinanceDetailValue label={t("currency")} value={selectedAccount.currencyCode} /><FinanceDetailValue label={t("opening")} value={financeMoney(selectedAccount.openingBalance, selectedAccount.currencyCode, locale)} /><FinanceDetailValue label={t("operationalBalance")} value={financeMoney(selectedAccount.operationalBalance, selectedAccount.currencyCode, locale)} /><FinanceDetailValue label={t("reconciledBalance")} value={financeMoney(selectedAccount.reconciledBalance, selectedAccount.currencyCode, locale)} /><FinanceDetailValue label={t("maskedReference")} value={selectedAccount.maskedReference || "—"} /></FinanceDetailGrid></div> : null}
+      {selectedTransfer ? <div className="grid gap-5"><div className="flex flex-wrap items-center gap-2"><StatusBadge tone={financeStatusTone(selectedTransfer.status)}>{financeStatusLabel(selectedTransfer.status, locale)}</StatusBadge>{selectedTransfer.capabilities?.canApprove ? <Button onClick={() => setTransferAction({ record: selectedTransfer, action: "APPROVE" })}><CheckCircle2 className="h-4 w-4" />{t("approve")}</Button> : null}{selectedTransfer.capabilities?.canReject ? <Button variant="outline" onClick={() => setTransferAction({ record: selectedTransfer, action: "REJECT" })}><XCircle className="h-4 w-4" />{locale === "en" ? "Reject" : "Refuser"}</Button> : null}{selectedTransfer.capabilities?.canConfirm ? <Button onClick={() => setTransferAction({ record: selectedTransfer, action: "CONFIRM" })}><ShieldCheck className="h-4 w-4" />{t("confirm")}</Button> : null}</div><FinanceDetailGrid><FinanceDetailValue label={t("reference")} value={selectedTransfer.number} /><FinanceDetailValue label={t("sourceAccount")} value={selectedTransfer.sourceFinancialAccount ? `${selectedTransfer.sourceFinancialAccount.code} · ${selectedTransfer.sourceFinancialAccount.name}` : selectedTransfer.sourceFinancialAccountId} /><FinanceDetailValue label={t("targetAccount")} value={selectedTransfer.targetFinancialAccount ? `${selectedTransfer.targetFinancialAccount.code} · ${selectedTransfer.targetFinancialAccount.name}` : selectedTransfer.targetFinancialAccountId} /><FinanceDetailValue label={t("debit")} value={financeMoney(selectedTransfer.sourceAmount, selectedTransfer.sourceCurrencyCode, locale)} /><FinanceDetailValue label={t("credit")} value={financeMoney(selectedTransfer.targetAmount, selectedTransfer.targetCurrencyCode, locale)} /><FinanceDetailValue label={t("exchangeRate")} value={String(selectedTransfer.exchangeRate || "1")} /><FinanceDetailValue label={t("transferDate")} value={financeDate(selectedTransfer.transferDate, locale)} /><FinanceDetailValue label={t("validator")} value={selectedTransfer.approval?.approverName || "—"} /></FinanceDetailGrid></div> : null}
+      {selectedHistory ? <FinanceDetailGrid><FinanceDetailValue label={t("transactionType")} value={financeEnumLabel(selectedHistory.transactionType, locale)} /><FinanceDetailValue label={t("direction")} value={financeEnumLabel(selectedHistory.direction, locale)} /><FinanceDetailValue label={t("amount")} value={financeMoney(selectedHistory.amount, selectedHistory.currencyCode, locale)} /><FinanceDetailValue label={t("transferDate")} value={financeDate(selectedHistory.transactionDate, locale)} /><FinanceDetailValue label={t("reference")} value={selectedHistory.reference || "—"} /><FinanceDetailValue label={t("account")} value={selectedHistory.financialAccount ? `${selectedHistory.financialAccount.code} · ${selectedHistory.financialAccount.name}` : "—"} /></FinanceDetailGrid> : null}
     </Dialog>
 
-    <Dialog open={Boolean(editingAccount)} onClose={() => setEditingAccount(null)} title={t("editAccount")} description={t("editMutableOnly")} className="h-[94dvh] w-[min(96vw,56rem)] max-w-3xl overflow-x-hidden">
-      {editingAccount ? <form onSubmit={updateAccount} className="grid gap-5"><div className="rounded-xl border border-dtsc-border bg-dtsc-page p-4 text-sm leading-6 text-dtsc-muted"><strong className="text-dtsc-ink">{editingAccount.code}</strong><br />{t("immutableStructure")}</div><div className="grid gap-4 md:grid-cols-2"><Field label={t("accountName")} help={t("accountNameHelp")} required><Input name="name" defaultValue={editingAccount.name} required /></Field><Field label={t("maskedReference")} help={t("maskedReferenceHelp")}><Input name="maskedReference" defaultValue={editingAccount.maskedReference || ""} /></Field><Field label={t("responsible")} help={t("responsibleHelp")}><NativeSelect name="responsibleUserId" items={members} defaultValue={editingAccount.responsibleUserId || ""} /></Field><Field label={t("site")} help={t("siteHelp")}><NativeSelect name="siteId" items={sites} defaultValue={editingAccount.siteId || ""} /></Field></div><div className="sticky bottom-0 flex justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface/95 py-3"><Button type="button" variant="outline" onClick={() => setEditingAccount(null)}>{t("cancel")}</Button><Button type="submit" disabled={busy}>{t("save")}</Button></div></form> : null}
+    <Dialog open={accountOpen} onClose={() => { if (!busy) { setAccountOpen(false); setAccountType("CASH"); } }} title={t("newAccount")} description={t("generatedCodeNotice")} presentation="editor" className="max-w-4xl">
+      <form onSubmit={createAccount} className="grid gap-6"><ProfessionalFormSection title={t("accountDetails")}><Field label={t("accountName")} help={t("accountNameHelp")}><Input name="name" required maxLength={160} disabled={busy} /></Field><Field label={t("accountType")} help={t("accountTypeHelp")}><NativeSelect name="accountType" value={accountType} onChange={setAccountType} required disabled={busy} items={["CASH", "BANK", "MOBILE_MONEY", "CLEARING"].map((id) => ({ id, label: financeEnumLabel(id, locale) }))} /></Field><Field label={t("currency")} help={t("currencyHelp")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_TREASURY" kind="currency" name="currencyCode" label={t("currency")} locale={rawLocale} required disabled={busy} /></Field><Field label={t("ledgerAccount")} help={t("ledgerAccountHelp")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_TREASURY" kind="ledger-account" name="ledgerAccountId" label={t("ledgerAccount")} locale={rawLocale} parentId={accountType} required disabled={busy} /></Field><Field label={t("openingBalance")} help={t("openingBalanceHelp")}><Input name="openingBalance" type="number" step="0.01" defaultValue="0" required disabled={busy} /></Field><Field label={t("maskedReference")} help={t("maskedReferenceHelp")}><Input name="maskedReference" maxLength={120} disabled={busy} /></Field><Field label={t("responsible")} help={t("responsibleHelp")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_TREASURY" kind="member" name="responsibleUserId" label={t("responsible")} locale={rawLocale} disabled={busy} /></Field><Field label={t("site")} help={t("siteHelp")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_TREASURY" kind="site" name="siteId" label={t("site")} locale={rawLocale} disabled={busy} /></Field></ProfessionalFormSection><Button type="submit" disabled={busy}>{t("createAccount")}</Button></form>
     </Dialog>
 
-    <Dialog open={Boolean(archiveAccount)} onClose={() => setArchiveAccount(null)} title={t("archiveAccount")} description={t("archiveWarning")} className="w-[min(96vw,42rem)] max-w-xl overflow-x-hidden">{archiveAccount ? <form onSubmit={archiveSelectedAccount} className="grid gap-4"><Field label={t("archiveReason")} help={t("archiveReasonHelp")} required><Input name="reason" required minLength={4} maxLength={1000} /></Field><div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setArchiveAccount(null)}>{t("cancel")}</Button><Button type="submit" disabled={busy}><Archive className="h-4 w-4" />{t("archive")}</Button></div></form> : null}</Dialog>
-
-    <Dialog open={transferDialog} onClose={() => { setTransferDialog(false); setTransferPreview(null); setTransferPayload(null); setSelectedApproverUserId(""); }} title={transferPreview ? t("transferPreview") : t("newTransfer")} description={transferPreview ? t("transferPreviewHelp") : t("transferRateNotice")} className="h-[94dvh] w-[min(98vw,72rem)] max-w-5xl overflow-x-hidden">
-      {!transferPreview ? <form onSubmit={previewTransfer} className="grid gap-5"><div className="grid gap-4 md:grid-cols-2"><Field label={t("sourceAccount")} help={t("sourceAccountHelp")} required><NativeSelect name="sourceFinancialAccountId" items={accountChoices} required /></Field><Field label={t("targetAccount")} help={t("targetAccountHelp")} required><NativeSelect name="targetFinancialAccountId" items={accountChoices} required /></Field><Field label={t("sourceAmount")} help={t("sourceAmountHelp")} required><Input name="sourceAmount" type="number" inputMode="decimal" min="0.000001" step="0.000001" required /></Field><Field label={t("transferDate")} help={t("transferDateHelp")} required><Input name="transferDate" type="date" defaultValue={today()} required /></Field><Field label={t("validator")} help={approversLoading ? t("validatorLoading") : approvalCandidates.length ? t("validatorHelp") : t("validatorUnavailable")} required><NativeSelect name="approverUserId" items={[{ id: "", label: approversLoading ? t("validatorLoading") : t("validator") }, ...approverChoices]} value={selectedApproverUserId} onChange={setSelectedApproverUserId} required disabled={approversLoading || !approvalCandidates.length} /></Field></div><div className="rounded-xl border border-cyan-400/25 bg-cyan-400/10 p-4 text-sm font-semibold text-dtsc-muted"><ArrowRightLeft className="mr-2 inline h-4 w-4 text-cyan-600" />{approvalCandidates.length ? t("transferRateNotice") : t("validatorUnavailable")}</div><div className="sticky bottom-0 flex justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface/95 py-3"><Button type="button" variant="outline" onClick={() => setTransferDialog(false)}>{t("cancel")}</Button><Button type="submit" disabled={busy || accounts.length < 2 || approversLoading || !selectedApproverUserId}><Eye className="h-4 w-4" />{t("previewTransfer")}</Button></div></form> : <div className="grid gap-5"><div className="grid gap-3 sm:grid-cols-2"><article className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4"><p className="text-xs font-black uppercase text-dtsc-muted">{t("debit")}</p><p className="mt-2 text-lg font-black text-dtsc-ink">{transferPreview.sourceAccount.code} · {transferPreview.sourceAccount.name}</p><p className="mt-1 text-sm text-dtsc-muted">{financeEnumLabel(transferPreview.sourceAccount.accountType, locale)} · {financeMoney(transferPreview.sourceAmount, transferPreview.sourceAccount.currencyCode, locale)}</p></article><article className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4"><p className="text-xs font-black uppercase text-dtsc-muted">{t("credit")}</p><p className="mt-2 text-lg font-black text-dtsc-ink">{transferPreview.targetAccount.code} · {transferPreview.targetAccount.name}</p><p className="mt-1 text-sm text-dtsc-muted">{financeEnumLabel(transferPreview.targetAccount.accountType, locale)} · {financeMoney(transferPreview.targetAmount, transferPreview.targetAccount.currencyCode, locale)}</p></article></div><FinanceDetailGrid><FinanceDetailValue label={t("exchangeRate")}>1 {transferPreview.sourceAccount.currencyCode} = {transferPreview.exchangeRate.value} {transferPreview.targetAccount.currencyCode}</FinanceDetailValue><FinanceDetailValue label={t("rateDate")}>{financeDate(transferPreview.exchangeRate.rateDate, locale)}</FinanceDetailValue><FinanceDetailValue label={t("rateSource")}>{rateSourceLabel(transferPreview.exchangeRate.source, transferPreview.exchangeRate.direction)}</FinanceDetailValue><FinanceDetailValue label={t("transferDate")}>{financeDate(transferPreview.transferDate, locale)}</FinanceDetailValue><FinanceDetailValue label={t("validator")}>{approvalCandidates.find((candidate) => candidate.userId === selectedApproverUserId)?.name || "—"}</FinanceDetailValue></FinanceDetailGrid><div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm font-semibold text-dtsc-muted"><ShieldCheck className="mr-2 inline h-4 w-4 text-emerald-600" />{t("transferPreviewHelp")}</div><div className="sticky bottom-0 flex justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface/95 py-3"><Button type="button" variant="outline" onClick={() => setTransferPreview(null)}>{t("editTransfer")}</Button><Button type="button" disabled={busy} onClick={() => void prepareTransfer()}><ArrowRightLeft className="h-4 w-4" />{t("prepareTransfer")}</Button></div></div>}
+    <Dialog open={Boolean(editingAccount)} onClose={() => { if (!busy) setEditingAccount(null); }} title={t("editAccount")} description={t("editMutableOnly")} presentation="editor">
+      {editingAccount ? <form onSubmit={updateAccount} className="grid gap-5"><Field label={t("accountName")}><Input name="name" defaultValue={editingAccount.name} required maxLength={160} disabled={busy} /></Field><Field label={t("maskedReference")}><Input name="maskedReference" defaultValue={editingAccount.maskedReference || ""} maxLength={120} disabled={busy} /></Field><Field label={t("status")}><NativeSelect name="status" defaultValue={editingAccount.status} disabled={busy} items={[{ id: "ACTIVE", label: t("active") }, { id: "INACTIVE", label: t("inactive") }]} /></Field><Button type="submit" disabled={busy}>{t("save")}</Button></form> : null}
     </Dialog>
 
-    <Dialog open={Boolean(selected)} onClose={() => setSelected(null)} title={tab === "accounts" ? t("accountDetails") : tab === "transfers" ? t("transfer") : t("history")} className="h-[94dvh] w-[min(96vw,64rem)] max-w-4xl overflow-x-hidden">
-      {selected && tab === "accounts" ? (() => { const account = selected as Account; return <div className="grid gap-5"><FinanceDetailGrid><FinanceDetailValue label={t("code")}>{account.code}</FinanceDetailValue><FinanceDetailValue label={t("accountName")}>{account.name}</FinanceDetailValue><FinanceDetailValue label={t("accountType")}>{financeEnumLabel(account.accountType, locale)}</FinanceDetailValue><FinanceDetailValue label={t("currency")}>{account.currencyCode}</FinanceDetailValue><FinanceDetailValue label={t("opening")}>{financeMoney(account.openingBalance, account.currencyCode, locale)}</FinanceDetailValue><FinanceDetailValue label={t("operationalBalance")}>{financeMoney(account.operationalBalance, account.currencyCode, locale)}</FinanceDetailValue><FinanceDetailValue label={t("reconciledBalance")}>{financeMoney(account.reconciledBalance, account.currencyCode, locale)}</FinanceDetailValue><FinanceDetailValue label={t("status")}><StatusBadge tone={financeStatusTone(account.status)}>{financeStatusLabel(account.status, locale)}</StatusBadge></FinanceDetailValue></FinanceDetailGrid><div className="rounded-xl border border-dtsc-border bg-dtsc-page p-4 text-sm text-dtsc-muted"><Landmark className="mr-2 inline h-4 w-4" />{t("immutableStructure")}</div>{canManage ? <div className="flex justify-end">{accountActions(account)}</div> : null}</div>; })() : null}
-      {selected && tab === "transfers" ? (() => { const transfer = selected as Transfer; return <div className="grid gap-5"><FinanceDetailGrid><FinanceDetailValue label={t("reference")}>{transfer.number}</FinanceDetailValue><FinanceDetailValue label={t("sourceAccount")}>{transfer.sourceFinancialAccount?.name || transfer.sourceFinancialAccountId}</FinanceDetailValue><FinanceDetailValue label={t("targetAccount")}>{transfer.targetFinancialAccount?.name || transfer.targetFinancialAccountId}</FinanceDetailValue><FinanceDetailValue label={t("debit")}>{financeMoney(transfer.sourceAmount, transfer.sourceCurrencyCode, locale)}</FinanceDetailValue><FinanceDetailValue label={t("credit")}>{financeMoney(transfer.targetAmount, transfer.targetCurrencyCode, locale)}</FinanceDetailValue><FinanceDetailValue label={t("exchangeRate")}>{transfer.exchangeRate ? String(transfer.exchangeRate) : "1"}</FinanceDetailValue><FinanceDetailValue label={t("transferDate")}>{financeDate(transfer.transferDate, locale)}</FinanceDetailValue><FinanceDetailValue label={t("validator")}>{transfer.approval?.approverName || "—"}</FinanceDetailValue><FinanceDetailValue label={t("status")}><StatusBadge tone={financeStatusTone(transfer.status)}>{financeStatusLabel(transfer.status, locale)}</StatusBadge></FinanceDetailValue></FinanceDetailGrid>{canManage && transfer.status === "DRAFT" ? <Button disabled={busy} onClick={() => void transitionTransfer(transfer, "APPROVE")}>{t("approve")}</Button> : null}{canManage && transfer.status === "APPROVED" ? <Button disabled={busy} onClick={() => void transitionTransfer(transfer, "CONFIRM")}>{t("confirm")}</Button> : null}</div>; })() : null}
-      {selected && tab === "history" ? (() => { const movement = selected as HistoryItem; return <FinanceDetailGrid><FinanceDetailValue label={t("account")}>{movement.financialAccount.code} · {movement.financialAccount.name}</FinanceDetailValue><FinanceDetailValue label={t("transactionType")}>{movement.transactionType === "PAYMENT" ? t("payment") : financeEnumLabel(movement.transactionType, locale)}</FinanceDetailValue><FinanceDetailValue label={t("direction")}>{movement.direction === "INBOUND" ? t("inbound") : t("outbound")}</FinanceDetailValue><FinanceDetailValue label={t("amount")}>{financeMoney(movement.amount, movement.currencyCode, locale)}</FinanceDetailValue><FinanceDetailValue label={t("reference")}>{movement.reference || "—"}</FinanceDetailValue><FinanceDetailValue label={t("transfer")}>{movement.transfer?.number || "—"}</FinanceDetailValue><FinanceDetailValue label={t("payment")}>{movement.payment?.number || "—"}</FinanceDetailValue><FinanceDetailValue label={t("status")}><StatusBadge tone={financeStatusTone(movement.status)}>{financeStatusLabel(movement.status, locale)}</StatusBadge></FinanceDetailValue></FinanceDetailGrid>; })() : null}
+    <Dialog open={Boolean(archiveTarget)} onClose={() => { if (!busy) setArchiveTarget(null); }} title={t("archiveAccount")} description={t("archiveWarning")} presentation="editor">
+      <form onSubmit={archiveAccount} className="grid gap-5"><Field label={t("archiveReason")} help={t("archiveReasonHelp")}><Input name="reason" required minLength={4} maxLength={1000} disabled={busy} /></Field><Button type="submit" disabled={busy}>{t("archive")}</Button></form>
+    </Dialog>
+
+    <Dialog open={transferOpen} onClose={() => { if (!busy) { setTransferOpen(false); setTransferPreview(null); setTransferDraft(null); setSourceAccountId(""); setTargetAccountId(""); } }} title={t("newTransfer")} description={t("transferRateNotice")} presentation="editor" className="max-w-4xl">
+      {!transferPreview ? <form onSubmit={previewTransfer} className="grid gap-6"><ProfessionalFormSection title={t("transferPreview")}><Field label={t("sourceAccount")} help={t("sourceAccountHelp")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_TREASURY" kind="financial-account" name="sourceFinancialAccountId" label={t("sourceAccount")} locale={rawLocale} required disabled={busy} onOptionChange={(option) => setSourceAccountId(option?.id || "")} /></Field><Field label={t("targetAccount")} help={t("targetAccountHelp")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_TREASURY" kind="financial-account" name="targetFinancialAccountId" label={t("targetAccount")} locale={rawLocale} required disabled={busy} onOptionChange={(option) => setTargetAccountId(option?.id || "")} /></Field><Field label={t("sourceAmount")} help={t("sourceAmountHelp")}><Input name="sourceAmount" type="number" step="0.01" min="0.01" required disabled={busy} /></Field><Field label={t("transferDate")} help={t("transferDateHelp")}><Input name="transferDate" type="date" required disabled={busy} /></Field></ProfessionalFormSection><Button type="submit" disabled={busy || !sourceAccountId || !targetAccountId}>{t("previewTransfer")}</Button></form> : <form onSubmit={createTransfer} className="grid gap-6"><FinanceDetailGrid><FinanceDetailValue label={t("debit")} value={`${transferPreview.sourceAmount} ${transferPreview.sourceAccount.currencyCode}`} /><FinanceDetailValue label={t("credit")} value={`${transferPreview.targetAmount} ${transferPreview.targetAccount.currencyCode}`} /><FinanceDetailValue label={t("exchangeRate")} value={transferPreview.exchangeRate.value} /><FinanceDetailValue label={t("rateDate")} value={financeDate(transferPreview.exchangeRate.rateDate, locale)} /></FinanceDetailGrid><EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_TREASURY" locale={rawLocale} label={t("validator")} disabled={busy} /><div className="flex flex-wrap gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => { setTransferPreview(null); setTransferDraft(null); }}>{t("editTransfer")}</Button><Button type="submit" disabled={busy}>{t("prepareTransfer")}</Button></div></form>}
+    </Dialog>
+
+    <Dialog open={Boolean(transferAction)} onClose={() => { if (!busy) setTransferAction(null); }} title={transferAction?.action === "APPROVE" ? t("approve") : transferAction?.action === "CONFIRM" ? t("confirm") : (locale === "en" ? "Reject transfer" : "Refuser le transfert")} description={t("transferPreviewHelp")} presentation="editor">
+      <form onSubmit={transitionTransfer} className="grid gap-5">{transferAction?.action === "REJECT" ? <Field label={t("reason")}><Input name="reason" required minLength={4} maxLength={1000} disabled={busy} /></Field> : null}<Button type="submit" disabled={busy}>{transferAction?.action === "APPROVE" ? t("approve") : transferAction?.action === "CONFIRM" ? t("confirm") : (locale === "en" ? "Reject" : "Refuser")}</Button></form>
     </Dialog>
   </ModuleWorkspace>;
 }

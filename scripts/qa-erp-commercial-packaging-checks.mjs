@@ -8,11 +8,11 @@ const docs = [
   "docs/ERP_PROFESSIONAL_CONTRACTS.md",
 ];
 const workspaces = [
-  "components/enterprise/professional/enterprise-customers-workspace-v2.tsx",
-  "components/enterprise/professional/enterprise-catalog-workspace-v2.tsx",
+  "components/enterprise/professional/enterprise-customers-workspace.tsx",
+  "components/enterprise/professional/enterprise-catalog-workspace.tsx",
   "components/enterprise/professional/enterprise-sites-workspace.tsx",
-  "components/enterprise/professional/enterprise-crm-workspace-v2.tsx",
-  "components/enterprise/professional/enterprise-contracts-workspace-v2.tsx",
+  "components/enterprise/professional/enterprise-crm-workspace.tsx",
+  "components/enterprise/professional/enterprise-contracts-workspace.tsx",
 ];
 const failures = [];
 const businessPartyRoute = fs.readFileSync("app/api/enterprise/[organizationId]/business-parties/route.ts", "utf8");

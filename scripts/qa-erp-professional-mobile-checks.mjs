@@ -1,11 +1,11 @@
 import fs from "node:fs";
 
 const files = [
-  "enterprise-customers-workspace-v2.tsx",
-  "enterprise-catalog-workspace-v2.tsx",
+  "enterprise-customers-workspace.tsx",
+  "enterprise-catalog-workspace.tsx",
   "enterprise-sites-workspace.tsx",
-  "enterprise-crm-workspace-v2.tsx",
-  "enterprise-contracts-workspace-v2.tsx",
+  "enterprise-crm-workspace.tsx",
+  "enterprise-contracts-workspace.tsx",
 ];
 const failures = [];
 for (const name of files) {

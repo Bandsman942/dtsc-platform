@@ -21,7 +21,7 @@ const supplierLinkRoute = read("app/api/enterprise/[organizationId]/suppliers/[i
 const backfill = read("scripts/backfill-enterprise-supplier-parties.mjs");
 const partySchema = read("prisma/enterprise-master-data.prisma");
 const procurementLinks = read("prisma/enterprise-procurement-links.prisma");
-const customerWorkspace = read("components/enterprise/professional/enterprise-customers-workspace-v2.tsx");
+const customerWorkspace = read("components/enterprise/professional/enterprise-customers-workspace.tsx");
 const aiContract = read("lib/ai/tools/erp-contract.ts");
 const aiExecutor = read("lib/ai/tools/executors/erp.ts");
 

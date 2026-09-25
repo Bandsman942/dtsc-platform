@@ -65,10 +65,14 @@ const profiles = {
     has("components/enterprise/enterprise-administration-module.tsx", "EnterprisePendingActionsPanel");
     lacks("components/enterprise/enterprise-administration-module.tsx", "Modules sectoriels");
 
-    const publicPanels = "components/enterprise/enterprise-admin-hotfix-panels.tsx";
-    const legacyPanels = "components/enterprise/enterprise-admin-hotfix-panels-legacy.tsx";
-    has(publicPanels, "enterprise-admin-hotfix-panels-legacy");
+    const publicPanels = "components/enterprise/enterprise-administration-panels.tsx";
+    const basePanels = "components/enterprise/enterprise-administration-panels-base.tsx";
+    const hotfixBridge = "components/enterprise/enterprise-admin-hotfix-panels.tsx";
+    const legacyBridge = "components/enterprise/enterprise-admin-hotfix-panels-legacy.tsx";
+    has(publicPanels, "enterprise-administration-panels-base");
     has(publicPanels, "enterprise-admin-audit-panel-durable");
+    has(hotfixBridge, "enterprise-administration-panels");
+    has(legacyBridge, "enterprise-administration-panels-base");
     for (const marker of [
       "BRAND_COLORS",
       "type=\"file\"",
@@ -77,7 +81,7 @@ const profiles = {
       "useFormSubmissionGuard",
       "aria-busy",
       "disabled:cursor-wait",
-    ]) has(legacyPanels, marker);
+    ]) has(basePanels, marker);
 
     has("lib/enterprise/enterprise-admin-loader.ts", "configurationChecklist");
     has("lib/enterprise/enterprise-admin-loader.ts", "pendingActions");

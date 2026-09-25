@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { CheckCircle2, CircleDollarSign, FileMinus2, Plus, Send, ShieldCheck, XCircle } from "lucide-react";
+import { CheckCircle2, FileMinus2, Plus, Send, ShieldCheck, XCircle } from "lucide-react";
 import { useSearchParams } from "next/navigation";
+import { useEnterpriseBusinessContext } from "@/components/enterprise/use-enterprise-business-context";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
+import { FinanceReferenceSelect } from "@/components/enterprise/core-v2/finance-reference-select";
 import { EnterpriseApproverSelect } from "@/components/enterprise/enterprise-approver-select";
 import {
   FinanceCollaboration,
@@ -12,10 +14,10 @@ import {
   FinancePaginationControls,
   FinanceRecordList,
   financeMutation,
-  useFinanceCollection,
-  useFinanceLookups,
   type FinanceRecord,
 } from "@/components/enterprise/professional/finance-professional-workspace-shared";
+import { useOperationalFinanceCollection, fetchOperationalFinanceRecord } from "@/components/enterprise/professional/use-operational-finance-collection";
+import { useOperationalFinanceSummary } from "@/components/enterprise/professional/use-operational-finance-summary";
 import {
   ProfessionalError,
   ProfessionalFormSection,
@@ -24,24 +26,50 @@ import {
   ProfessionalSearch,
   ProfessionalTabs,
 } from "@/components/enterprise/professional/professional-erp-ui";
-import {
-  financeDate,
-  financeMoney,
-  financeStatusLabel,
-  financeStatusTone,
-  safeFinanceError,
-  type FinanceLocale,
-} from "@/components/enterprise/professional/finance-professional-ui";
+import { financeDate, financeMoney, financeStatusLabel, financeStatusTone, safeFinanceError, type FinanceLocale } from "@/components/enterprise/professional/finance-professional-ui";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
+import { useToastMessage } from "@/components/ui/use-toast-message";
 import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
 import { translateEnterpriseFinance, type EnterpriseFinanceKey } from "@/lib/i18n";
 
+type Props = {
+  organizationId: string;
+  organizationName: string;
+  definition: EnterpriseModuleDefinition;
+  locale?: string | null;
+  canCreate: boolean;
+  canSubmit: boolean;
+  canWrite: boolean;
+  canApprove: boolean;
+  canManage: boolean;
+};
+
+type RecordCapabilities = {
+  canSubmit?: boolean;
+  canReview?: boolean;
+  canApprove?: boolean;
+  canReject?: boolean;
+  canPost?: boolean;
+  canCreateCredit?: boolean;
+};
+type InvoiceRecord = FinanceRecord & {
+  createdByUserId?: string;
+  invoiceDate?: string;
+  creditDate?: string;
+  dueDate?: string | null;
+  grandTotal?: string | number;
+  outstandingAmount?: string | number;
+  salesInvoiceId?: string;
+  supplierInvoiceId?: string;
+  items?: Array<{ id: string; description: string; quantity: string | number; unitPrice: string | number; discountAmount?: string | number }>;
+  capabilities?: RecordCapabilities;
+  threeWayMatch?: { status?: string; quantityVariance?: string | number; priceVariance?: string | number; totalVariance?: string | number; overrideReason?: string | null } | null;
+};
 type InvoiceLine = {
   key: string;
   catalogItemId: string;
@@ -51,108 +79,11 @@ type InvoiceLine = {
   discountAmount: string;
   expenseAccountId: string;
 };
-type InvoiceItem = {
-  id: string;
-  description: string;
-  quantity: string | number;
-  unitPrice: string | number;
-  discountAmount?: string | number;
-  lineTotal?: string | number;
-};
-type Receivable = FinanceRecord & {
-  dueDate?: string | null;
-  originalAmount?: string | number;
-  allocatedAmount?: string | number;
-  salesInvoiceId?: string;
-};
-type Payable = FinanceRecord & {
-  dueDate?: string | null;
-  originalAmount?: string | number;
-  allocatedAmount?: string | number;
-  supplierInvoiceId?: string;
-};
-type Invoice = FinanceRecord & {
-  invoiceDate: string;
-  dueDate?: string | null;
-  subtotal: string | number;
-  discountTotal?: string | number;
-  taxTotal?: string | number;
-  grandTotal: string | number;
-  amountPaid?: string | number;
-  amountCredited?: string | number;
-  outstandingAmount: string | number;
-  paymentTerms?: string | null;
-  notes?: string | null;
-  items?: InvoiceItem[];
-  receivable?: Receivable | null;
-  payable?: Payable | null;
-  threeWayMatch?: {
-    status?: string;
-    matchedAt?: string | null;
-    quantityVariance?: string | number;
-    priceVariance?: string | number;
-    totalVariance?: string | number;
-    overrideReason?: string | null;
-  } | null;
-};
-type CatalogLookup = {
-  id: string;
-  code: string;
-  sku?: string | null;
-  name: string;
-  itemType: string;
-  currency?: string | null;
-  indicativeSalePrice?: string | number | null;
-  indicativeCost?: string | number | null;
-};
-type SalesOrderLookup = {
-  id: string;
-  reference: string;
-  title: string;
-  businessPartyId: string;
-  contractId?: string | null;
-  status: string;
-  currency?: string | null;
-  totalAmount?: string | number | null;
-};
-type FulfillmentLookup = { id: string; reference: string; salesOrderId: string; status: string; fulfilledAt?: string | null };
-type ContractLookup = {
-  id: string;
-  reference: string;
-  title: string;
-  businessPartyId?: string | null;
-  status: string;
-  currency?: string | null;
-  indicativeAmount?: string | number | null;
-};
-type PurchaseLookup = {
-  id: string;
-  reference: string;
-  title: string;
-  supplierId?: string | null;
-  status: string;
-  currency?: string | null;
-  totalAmount?: string | number | null;
-};
-type PurchaseReceiptLookup = { id: string; reference: string; purchaseId: string };
-type ExpenseAccountLookup = { id: string; code: string; nameFr: string; nameEn: string; accountType: string };
-type FinanceSourceLookups = {
-  catalogItems?: CatalogLookup[];
-  salesOrders?: SalesOrderLookup[];
-  fulfillments?: FulfillmentLookup[];
-  commercialContracts?: ContractLookup[];
-  purchases?: PurchaseLookup[];
-  purchaseReceipts?: PurchaseReceiptLookup[];
-  expenseAccounts?: ExpenseAccountLookup[];
-};
-type WorkflowActionTarget = { record: FinanceRecord; action: string; kind: "invoice" | "credit" };
-
-const MODULE_META: Record<"FINANCE_RECEIVABLES" | "FINANCE_PAYABLES", { titleKey: EnterpriseFinanceKey; eyebrowKey: EnterpriseFinanceKey }> = {
-  FINANCE_RECEIVABLES: { titleKey: "receivablesTitle", eyebrowKey: "receivablesEyebrow" },
-  FINANCE_PAYABLES: { titleKey: "payablesTitle", eyebrowKey: "payablesEyebrow" },
-};
+type ActionTarget = { record: InvoiceRecord; action: string; kind: "invoice" | "credit" };
 
 const invoiceT = (locale: FinanceLocale, key: EnterpriseFinanceKey) => translateEnterpriseFinance(locale, key);
+const copy = invoiceT;
+const newLine = (index: number): InvoiceLine => ({ key: `invoice-${Date.now()}-${index}`, catalogItemId: "", description: "", quantity: "1", unitPrice: "0", discountAmount: "0", expenseAccountId: "" });
 
 function actionLabel(action: string, locale: FinanceLocale) {
   if (action === "SUBMIT") return invoiceT(locale, "actionSubmit");
@@ -164,30 +95,16 @@ function actionLabel(action: string, locale: FinanceLocale) {
   return action;
 }
 
-function newLine(index: number): InvoiceLine {
-  return { key: `finance-line-${Date.now()}-${index}`, catalogItemId: "", description: "", quantity: "1", unitPrice: "0", discountAmount: "0", expenseAccountId: "" };
-}
-
-function ageBucket(dueDate?: string | null) {
-  if (!dueDate) return "TO_DUE";
-  const days = Math.floor((Date.now() - new Date(dueDate).getTime()) / 86_400_000);
-  if (days <= 0) return "TO_DUE";
-  if (days <= 30) return "D1_30";
-  if (days <= 60) return "D31_60";
-  if (days <= 90) return "D61_90";
-  return "D90_PLUS";
-}
-
 function invoiceTransitionActions(status: string | undefined, locale: FinanceLocale, isReceivables: boolean) {
-  if (status === "DRAFT") return [{ action: "SUBMIT", label: actionLabel("SUBMIT", locale), icon: Send }];
+  if (status === "DRAFT" || status === "REJECTED") return [{ action: "SUBMIT", label: actionLabel("SUBMIT", locale), icon: Send }];
   if (isReceivables && status === "PENDING_APPROVAL") return [{ action: "APPROVE", label: actionLabel("APPROVE", locale), icon: CheckCircle2 }];
   if (!isReceivables && status === "PENDING_REVIEW") return [
     { action: "REVIEW", label: actionLabel("REVIEW", locale), icon: CheckCircle2 },
-    { action: "REJECT", label: actionLabel("REJECT", locale), icon: XCircle },
+    { action: "REJECT", label: actionLabel("REJECT", locale), icon: XCircle, destructive: true },
   ];
   if (!isReceivables && status === "PENDING_APPROVAL") return [
     { action: "APPROVE", label: actionLabel("APPROVE", locale), icon: CheckCircle2 },
-    { action: "REJECT", label: actionLabel("REJECT", locale), icon: XCircle },
+    { action: "REJECT", label: actionLabel("REJECT", locale), icon: XCircle, destructive: true },
   ];
   if (status === "APPROVED") return [{ action: isReceivables ? "ISSUE" : "POST", label: actionLabel(isReceivables ? "ISSUE" : "POST", locale), icon: ShieldCheck }];
   return [];
@@ -197,133 +114,105 @@ function creditTransitionActions(status: string | undefined, locale: FinanceLoca
   if (status === "DRAFT" || status === "REJECTED") return [{ action: "SUBMIT", label: actionLabel("SUBMIT", locale), icon: Send }];
   if (status === "PENDING_APPROVAL") return [
     { action: "APPROVE", label: actionLabel("APPROVE", locale), icon: CheckCircle2 },
-    { action: "REJECT", label: actionLabel("REJECT", locale), icon: XCircle },
+    { action: "REJECT", label: actionLabel("REJECT", locale), icon: XCircle, destructive: true },
   ];
   if (status === "APPROVED") return [{ action: "POST", label: actionLabel("POST", locale), icon: ShieldCheck }];
   return [];
 }
 
-function DetailLineItems({ items, currencyCode, locale }: { items: InvoiceItem[]; currencyCode: string; locale: FinanceLocale }) {
-  return (
-    <BusinessList ariaLabel={invoiceT(locale, "invoiceLines")}>
-      {items.map((item) => (
-        <BusinessListItem
-          key={item.id}
-          title={item.description}
-          meta={`${item.quantity} × ${financeMoney(item.unitPrice, currencyCode, locale)}`}
-          status={<StatusBadge>{financeMoney(item.lineTotal ?? Number(item.quantity) * Number(item.unitPrice), currencyCode, locale)}</StatusBadge>}
-        />
-      ))}
-    </BusinessList>
-  );
+function capabilityAllowsAction(record: InvoiceRecord, action: string) {
+  const caps = record.capabilities || {};
+  if (action === "SUBMIT") return Boolean(caps.canSubmit);
+  if (action === "REVIEW") return Boolean(caps.canReview);
+  if (action === "APPROVE") return Boolean(caps.canApprove);
+  if (action === "REJECT") return Boolean(caps.canReject);
+  if (action === "POST" || action === "ISSUE") return Boolean(caps.canPost);
+  return false;
 }
 
-export function EnterpriseFinanceInvoicesWorkspace({
-  organizationId,
-  organizationName,
-  definition,
-  locale: requestedLocale,
-  canManage,
-}: {
-  organizationId: string;
-  organizationName: string;
-  definition: EnterpriseModuleDefinition;
-  locale?: string | null;
-  canManage: boolean;
-}) {
-  const locale: FinanceLocale = requestedLocale === "en" ? "en" : "fr";
-  const t = (key: EnterpriseFinanceKey) => invoiceT(locale, key);
+export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
+  const { organizationId, organizationName, definition, locale: rawLocale, canCreate, canSubmit, canApprove, canManage } = props;
+  const locale: FinanceLocale = rawLocale === "en" ? "en" : "fr";
+  const t = (key: EnterpriseFinanceKey) => copy(locale, key);
+  const { context: businessContext } = useEnterpriseBusinessContext(organizationId);
   const moduleCode = definition.code as "FINANCE_RECEIVABLES" | "FINANCE_PAYABLES";
   const isReceivables = moduleCode === "FINANCE_RECEIVABLES";
-  const meta = MODULE_META[moduleCode];
   const searchParams = useSearchParams();
   const [tab, setTab] = useState(searchParams.get("tab") || "invoices");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [detail, setDetail] = useState<FinanceRecord | null>(null);
+  const [detail, setDetail] = useState<InvoiceRecord | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
-  const [creditTarget, setCreditTarget] = useState<Invoice | null>(null);
-  const [actionTarget, setActionTarget] = useState<WorkflowActionTarget | null>(null);
+  const [actionTarget, setActionTarget] = useState<ActionTarget | null>(null);
+  const [creditTarget, setCreditTarget] = useState<InvoiceRecord | null>(null);
   const [lines, setLines] = useState<InvoiceLine[]>([newLine(0)]);
   const [selectedPartyId, setSelectedPartyId] = useState("");
   const [selectedSupplierId, setSelectedSupplierId] = useState("");
-  const [selectedSalesOrderId, setSelectedSalesOrderId] = useState("");
+  const [selectedSupplierPartyId, setSelectedSupplierPartyId] = useState("");
+  const [selectedOrderId, setSelectedOrderId] = useState("");
   const [selectedPurchaseId, setSelectedPurchaseId] = useState("");
+  const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+  useToastMessage(message, "success");
+  useToastMessage(errorMessage, "error");
 
-  const endpoint = useMemo(() => {
-    if (tab === "invoices") return isReceivables ? "sales-invoices" : "supplier-invoices";
+  const endpointName = useMemo(() => {
     if (tab === "credits") return isReceivables ? "sales-credit-notes" : "supplier-credit-notes";
+    if (tab === "invoices" || (!isReceivables && tab === "to-approve")) return isReceivables ? "sales-invoices" : "supplier-invoices";
     return isReceivables ? "receivables" : "payables";
   }, [isReceivables, tab]);
+  const endpoint = `/api/enterprise/${organizationId}/${endpointName}`;
+  const filters = useMemo<Record<string, string | boolean | undefined>>(() => ({
+    overdue: tab === "overdue" ? true : undefined,
+    workflowPending: !isReceivables && tab === "to-approve" ? true : undefined,
+  }), [isReceivables, tab]);
   const effectiveStatus = useMemo(() => {
     if (status) return status;
-    if (["overdue", "ageing", "to-pay"].includes(tab)) return "OPEN";
-    if (tab === "to-approve") return "PENDING_APPROVAL";
+    if (["ageing", "to-pay"].includes(tab)) return "OPEN";
     return "";
   }, [status, tab]);
-  const collection = useFinanceCollection<FinanceRecord>({
-    endpoint: `/api/enterprise/${organizationId}/${endpoint}`,
-    page,
-    search,
-    status: effectiveStatus,
-    refreshKey,
-  });
-  const lookupData = useFinanceLookups(organizationId, moduleCode, refreshKey);
-  const sources = lookupData.lookups as typeof lookupData.lookups & FinanceSourceLookups;
-  const catalogItems = sources.catalogItems || [];
-  const expenseAccounts = sources.expenseAccounts || [];
-  const salesOrders = (sources.salesOrders || []).filter((order) => !selectedPartyId || order.businessPartyId === selectedPartyId);
-  const fulfillments = (sources.fulfillments || []).filter((fulfillment) => !selectedSalesOrderId || fulfillment.salesOrderId === selectedSalesOrderId);
-  const contracts = (sources.commercialContracts || []).filter((contract) => !selectedPartyId || contract.businessPartyId === selectedPartyId);
-  const purchases = (sources.purchases || []).filter((purchase) => !selectedSupplierId || purchase.supplierId === selectedSupplierId);
-  const receipts = (sources.purchaseReceipts || []).filter((receipt) => !selectedPurchaseId || receipt.purchaseId === selectedPurchaseId);
-
-  const visibleItems = useMemo(() => tab === "overdue"
-    ? collection.items.filter((item) => ageBucket(String(item.dueDate || "")) !== "TO_DUE")
-    : collection.items, [collection.items, tab]);
+  const collection = useOperationalFinanceCollection<InvoiceRecord>({ endpoint, page, search, status: effectiveStatus, filters, refreshKey });
+  const { summary, error: summaryError } = useOperationalFinanceSummary(organizationId, moduleCode, refreshKey);
 
   useEffect(() => {
-    const deepId = searchParams.get(isReceivables ? "invoiceId" : "supplierInvoiceId");
+    const invoiceKey = isReceivables ? "invoiceId" : "supplierInvoiceId";
+    const creditKey = isReceivables ? "creditNoteId" : "supplierCreditNoteId";
+    const invoiceId = searchParams.get(invoiceKey);
+    const creditId = searchParams.get(creditKey);
+    const deepId = creditId || invoiceId;
     if (!deepId) return;
-    const found = collection.items.find((item) => item.id === deepId);
-    if (found) setDetail(found);
-  }, [collection.items, isReceivables, searchParams]);
+    const directName = creditId
+      ? (isReceivables ? "sales-credit-notes" : "supplier-credit-notes")
+      : (isReceivables ? "sales-invoices" : "supplier-invoices");
+    fetchOperationalFinanceRecord<InvoiceRecord>(`/api/enterprise/${organizationId}/${directName}`, deepId)
+      .then((record) => { if (record) setDetail(record); })
+      .catch((error) => setErrorMessage(safeFinanceError(error, t("financeDetails"))));
+  }, [isReceivables, organizationId, searchParams]);
 
-  function resetCreateForm() {
+  function resetCreate() {
     setLines([newLine(0)]);
     setSelectedPartyId("");
     setSelectedSupplierId("");
-    setSelectedSalesOrderId("");
+    setSelectedSupplierPartyId("");
+    setSelectedOrderId("");
     setSelectedPurchaseId("");
   }
 
-  function updateLine(key: string, field: keyof InvoiceLine, value: string) {
-    setLines((current) => current.map((line) => line.key === key ? { ...line, [field]: value } : line));
-  }
-
-  function selectCatalogItem(lineKey: string, catalogItemId: string) {
-    const catalogItem = catalogItems.find((item) => item.id === catalogItemId);
-    setLines((current) => current.map((line) => line.key === lineKey ? {
-      ...line,
-      catalogItemId,
-      description: catalogItem?.name || line.description,
-      unitPrice: String((isReceivables ? catalogItem?.indicativeSalePrice : catalogItem?.indicativeCost) ?? line.unitPrice),
-    } : line));
+  function updateLine(key: string, patch: Partial<InvoiceLine>) {
+    setLines((current) => current.map((item) => item.key === key ? { ...item, ...patch } : item));
   }
 
   async function createInvoice(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    setMessage("");
-    setError("");
+    setBusy(true); setMessage(""); setErrorMessage("");
     const common = {
       invoiceDate: String(form.get("invoiceDate") || ""),
       dueDate: String(form.get("dueDate") || "") || undefined,
-      currencyCode: String(form.get("currencyCode") || "USD").toUpperCase(),
+      currencyCode: String(form.get("currencyCode") || "").toUpperCase(),
       projectId: String(form.get("projectId") || "") || undefined,
       items: lines.map((line) => ({
         catalogItemId: line.catalogItemId || undefined,
@@ -345,6 +234,7 @@ export function EnterpriseFinanceInvoicesWorkspace({
     } : {
       ...common,
       supplierId: String(form.get("supplierId") || ""),
+      businessPartyId: selectedSupplierPartyId || undefined,
       purchaseId: String(form.get("purchaseId") || "") || undefined,
       purchaseReceiptId: String(form.get("purchaseReceiptId") || "") || undefined,
       expenseId: String(form.get("expenseId") || "") || undefined,
@@ -352,213 +242,163 @@ export function EnterpriseFinanceInvoicesWorkspace({
     };
     try {
       await financeMutation(`/api/enterprise/${organizationId}/${isReceivables ? "sales-invoices" : "supplier-invoices"}`, payload);
-      setCreateOpen(false);
-      resetCreateForm();
-      setRefreshKey((value) => value + 1);
-      setMessage(t("invoiceSavedDraft"));
-    } catch (createError) {
-      setError(safeFinanceError(createError, t("creationFailed")));
-    }
+      setCreateOpen(false); resetCreate(); setRefreshKey((value) => value + 1); setMessage(t("invoiceSavedDraft"));
+    } catch (error) {
+      setErrorMessage(safeFinanceError(error, t("creationFailed")));
+    } finally { setBusy(false); }
   }
 
-  async function transitionDocument(event: FormEvent<HTMLFormElement>) {
+  async function transition(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!actionTarget) return;
     const form = new FormData(event.currentTarget);
     const isCredit = actionTarget.kind === "credit";
     const action = actionTarget.action;
-    const base = `/api/enterprise/${organizationId}/${isCredit
-      ? (isReceivables ? "sales-credit-notes" : "supplier-credit-notes")
-      : (isReceivables ? "sales-invoices" : "supplier-invoices")}/${actionTarget.record.id}`;
-    const endpointPath = isCredit && action === "POST" ? `${base}/post` : `${base}/transition`;
-    const payload: Record<string, unknown> = {
-      ...(isCredit && action === "POST" ? {} : { action }),
-      reason: String(form.get("reason") || "") || undefined,
-      revision: actionTarget.record.revision,
-    };
-    if (action === "SUBMIT" && isCredit) {
-      payload.approverUserId = String(form.get("approverUserId") || "");
-    } else if (action === "SUBMIT" && isReceivables) {
-      payload.approverUserId = String(form.get("approverUserId") || "");
-    } else if (action === "SUBMIT") {
+    const record = actionTarget.record;
+    const baseName = isCredit ? (isReceivables ? "sales-credit-notes" : "supplier-credit-notes") : (isReceivables ? "sales-invoices" : "supplier-invoices");
+    const path = isCredit && action === "POST" ? `/api/enterprise/${organizationId}/${baseName}/${record.id}/post` : `/api/enterprise/${organizationId}/${baseName}/${record.id}/transition`;
+    const payload: Record<string, unknown> = { ...(isCredit && action === "POST" ? {} : { action }), revision: record.revision, reason: String(form.get("reason") || "") || undefined };
+    if (action === "SUBMIT" && !isCredit && isReceivables) payload.approverUserId = String(form.get("approverUserId") || "");
+    if (action === "SUBMIT" && !isCredit && !isReceivables) {
       payload.reviewerUserId = String(form.get("reviewerUserId") || "");
       payload.approverUserId = String(form.get("approverUserId") || "");
     }
+    if (action === "SUBMIT" && isCredit) payload.approverUserId = String(form.get("approverUserId") || "");
+    setBusy(true); setErrorMessage("");
     try {
-      await financeMutation(endpointPath, payload);
-      setActionTarget(null);
-      setDetail(null);
-      setRefreshKey((value) => value + 1);
-      setMessage(isCredit ? (locale === "en" ? "Credit note workflow updated." : "Workflow de l’avoir mis à jour.") : t("invoiceWorkflowUpdated"));
-    } catch (transitionError) {
-      setError(safeFinanceError(transitionError, t("transitionFailed")));
-    }
+      await financeMutation(path, payload);
+      setActionTarget(null); setDetail(null); setRefreshKey((value) => value + 1); setMessage(t("invoiceWorkflowUpdated"));
+    } catch (error) {
+      setErrorMessage(safeFinanceError(error, t("transitionFailed")));
+    } finally { setBusy(false); }
   }
 
-  async function createCreditNote(event: FormEvent<HTMLFormElement>) {
+  async function createCredit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!creditTarget) return;
+    if (!creditTarget?.items?.length) return;
     const form = new FormData(event.currentTarget);
+    setBusy(true); setErrorMessage("");
     try {
       await financeMutation(`/api/enterprise/${organizationId}/${isReceivables ? "sales-credit-notes" : "supplier-credit-notes"}`, {
         invoiceId: creditTarget.id,
         reason: String(form.get("reason") || ""),
         creditDate: String(form.get("creditDate") || ""),
-        items: (creditTarget.items || []).map((item) => ({
-          description: item.description,
-          quantity: String(item.quantity),
-          unitPrice: String(item.unitPrice),
-          discountAmount: String(item.discountAmount || 0),
-        })),
+        items: creditTarget.items.map((item) => ({ description: item.description, quantity: String(item.quantity), unitPrice: String(item.unitPrice), discountAmount: String(item.discountAmount || 0) })),
       });
-      setCreditTarget(null);
-      setDetail(null);
-      setTab("credits");
-      setRefreshKey((value) => value + 1);
-      setMessage(t("creditNoteCreated"));
-    } catch (creditError) {
-      setError(safeFinanceError(creditError, t("creditNoteCreationFailed")));
-    }
+      setCreditTarget(null); setDetail(null); setTab("credits"); setRefreshKey((value) => value + 1); setMessage(t("creditNoteCreated"));
+    } catch (error) {
+      setErrorMessage(safeFinanceError(error, t("creditNoteCreationFailed")));
+    } finally { setBusy(false); }
   }
 
   const tabs = isReceivables ? [
-    { id: "invoices", label: t("customerInvoices") },
-    { id: "balances", label: t("receivables") },
-    { id: "credits", label: t("creditNotes") },
-    { id: "ageing", label: t("dueDates") },
-    { id: "overdue", label: t("overdue") },
+    { id: "invoices", label: t("customerInvoices") }, { id: "balances", label: t("receivables") }, { id: "credits", label: t("creditNotes") }, { id: "ageing", label: t("dueDates") }, { id: "overdue", label: t("overdue") },
   ] : [
-    { id: "invoices", label: t("supplierInvoices") },
-    { id: "balances", label: t("payables") },
-    { id: "credits", label: t("supplierCreditNotes") },
-    { id: "to-approve", label: t("toApprove") },
-    { id: "to-pay", label: t("toPay") },
-    { id: "overdue", label: t("overdue") },
+    { id: "invoices", label: t("supplierInvoices") }, { id: "balances", label: t("payables") }, { id: "credits", label: t("supplierCreditNotes") }, { id: "to-approve", label: t("toApprove") }, { id: "to-pay", label: t("toPay") }, { id: "overdue", label: t("overdue") },
   ];
-  const openCount = collection.items.filter((item) => ["OPEN", "ISSUED", "PARTIALLY_PAID"].includes(String(item.status))).length;
-  const overdueCount = collection.items.filter((item) => ageBucket(String(item.dueDate || "")) !== "TO_DUE").length;
-  const approvalCount = collection.items.filter((item) => ["PENDING_REVIEW", "PENDING_APPROVAL"].includes(String(item.status))).length;
+  const pendingCount = isReceivables ? summary?.pendingApprovalCount || 0 : summary?.pendingDecisionCount || 0;
+  const detailKind: "invoice" | "credit" = endpointName.includes("credit-notes") || Boolean(detail?.creditDate) ? "credit" : "invoice";
+  const detailHasWorkflow = detailKind === "credit" || endpointName.includes("invoices");
+  const actionRequiresReason = Boolean(actionTarget && ["REJECT", "CANCEL", "VOID"].includes(actionTarget.action));
 
-  return (
-    <ModuleWorkspace>
-      <ModuleHeader
-        eyebrow={`${t(meta.eyebrowKey)} · ${organizationName}`}
-        title={t(meta.titleKey)}
-        description={locale === "en" ? definition.descriptionEn : definition.descriptionFr}
-        count={`${collection.pagination.total}`}
-        primaryAction={canManage ? <Button onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" />{t("newInvoice")}</Button> : undefined}
-      />
-      <ModuleMetrics label={t("financeCycleMetrics")}>
-        <ModuleMetric label={t("openItems")} value={openCount} />
-        <ModuleMetric label={t("overdue")} value={overdueCount} />
-        <ModuleMetric label={t("toApprove")} value={approvalCount} />
-        <ModuleMetric label={t("viewTotal")} value={collection.pagination.total} />
-      </ModuleMetrics>
-      <ModuleToolbar
-        search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("financeSearchPlaceholder")} />}
-        controls={<div className="grid min-w-0 gap-2"><ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setStatus(""); setPage(1); setDetail(null); }} items={tabs} label={t("financeViews")} /><NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={[{ id: "", label: t("allStatuses") }, ...["DRAFT", "PENDING_REVIEW", "PENDING_APPROVAL", "APPROVED", "REJECTED", "ISSUED", "POSTED", "PARTIALLY_PAID", "PAID", "OVERDUE", "CANCELLED"].map((id) => ({ id, label: financeStatusLabel(id, locale) }))]} /></div>}
-        summary={t("currenciesSeparated")}
-      />
-      <ModuleContent>
-        {message ? <div role="status" className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-bold text-emerald-800 dark:text-emerald-200">{message}</div> : null}
-        {error ? <ProfessionalError message={error} /> : null}
-        {lookupData.error ? <ProfessionalError message={lookupData.error} /> : null}
-        <ModuleSection title={tabs.find((item) => item.id === tab)?.label || ""} description={t(isReceivables ? "receivablesSectionDescription" : "payablesSectionDescription")}>
-          {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : tab === "ageing" ? (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{[
-              { id: "TO_DUE", label: t("notDue") },
-              { id: "D1_30", label: "1–30" },
-              { id: "D31_60", label: "31–60" },
-              { id: "D61_90", label: "61–90" },
-              { id: "D90_PLUS", label: t("over90Days") },
-            ].map((bucket) => {
-              const records = collection.items.filter((item) => ageBucket(String(item.dueDate || "")) === bucket.id);
-              return <article key={bucket.id} className="rounded-xl border border-dtsc-border p-4"><p className="text-xs font-black uppercase text-dtsc-muted">{bucket.label}</p><p className="mt-2 text-2xl font-black text-dtsc-ink">{records.length}</p><p className="mt-1 text-sm text-dtsc-muted">{t("records")}</p></article>;
-            })}</div>
-          ) : <FinanceRecordList items={visibleItems} locale={locale} emptyTitle={t("noItemInView")} emptyDescription={t("professionalFormOrFilters")} onOpen={setDetail} />}
-          <FinancePaginationControls pagination={collection.pagination} page={page} onPage={setPage} locale={locale} />
-        </ModuleSection>
-        <ProfessionalHelp moduleCode={moduleCode} />
-      </ModuleContent>
+  return <ModuleWorkspace>
+    <ModuleHeader
+      eyebrow={`${isReceivables ? t("receivablesEyebrow") : t("payablesEyebrow")} · ${organizationName}`}
+      title={t(isReceivables ? "receivablesTitle" : "payablesTitle")}
+      description={locale === "en" ? definition.descriptionEn : definition.descriptionFr}
+      count={`${collection.pagination.total}`}
+      primaryAction={canCreate ? <Button onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" />{t("newInvoice")}</Button> : undefined}
+    />
+    <ModuleMetrics label={t("financeCycleMetrics")}>
+      <ModuleMetric label={t("openItems")} value={summary?.openCount || 0} />
+      <ModuleMetric label={t("overdue")} value={summary?.overdueCount || 0} />
+      <ModuleMetric label={t("toApprove")} value={pendingCount} />
+      <ModuleMetric label={t("viewTotal")} value={collection.pagination.total} />
+    </ModuleMetrics>
+    <ModuleToolbar
+      search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("financeSearchPlaceholder")} />}
+      controls={<div className="grid min-w-0 gap-2"><ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setStatus(""); setPage(1); setDetail(null); }} items={tabs} label={t("financeViews")} /><NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={[{ id: "", label: t("allStatuses") }, ...["DRAFT", "PENDING_REVIEW", "PENDING_APPROVAL", "APPROVED", "REJECTED", "ISSUED", "POSTED", "PARTIALLY_PAID", "PAID", "CANCELLED"].map((id) => ({ id, label: financeStatusLabel(id, locale) }))]} /></div>}
+      summary={t("currenciesSeparated")}
+    />
+    <ModuleContent>
+      {summaryError ? <ProfessionalError message={summaryError} /> : null}
+      <ModuleSection title={tabs.find((item) => item.id === tab)?.label || ""} description={t(isReceivables ? "receivablesSectionDescription" : "payablesSectionDescription")}>
+        {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : tab === "ageing" ? (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{[
+            ["TO_DUE", t("notDue")], ["D1_30", "1–30"], ["D31_60", "31–60"], ["D61_90", "61–90"], ["D90_PLUS", t("over90Days")],
+          ].map(([id, label]) => <article key={id} className="rounded-xl border border-dtsc-border p-4"><p className="text-xs font-black uppercase text-dtsc-muted">{label}</p><p className="mt-2 text-2xl font-black text-dtsc-ink">{summary?.ageing?.[id as keyof NonNullable<typeof summary.ageing>] || 0}</p><p className="mt-1 text-sm text-dtsc-muted">{t("records")}</p></article>)}</div>
+        ) : <FinanceRecordList items={collection.items} locale={locale} emptyTitle={t("noItemInView")} emptyDescription={t("professionalFormOrFilters")} onOpen={(record) => setDetail(record as InvoiceRecord)} />}
+        {tab !== "ageing" ? <FinancePaginationControls pagination={collection.pagination} page={page} onPage={setPage} locale={locale} /> : null}
+      </ModuleSection>
+      <ProfessionalHelp moduleCode={moduleCode} />
+    </ModuleContent>
 
-      <Dialog open={createOpen} onClose={() => { setCreateOpen(false); resetCreateForm(); }} title={t(isReceivables ? "newCustomerInvoice" : "newSupplierInvoice")} description={t("sourcesRevalidated")} className="h-[96dvh] max-w-5xl">
-        <form onSubmit={createInvoice} className="grid gap-6">
-          <ProfessionalFormSection title={t("partyAndSource")}>
-            {isReceivables ? <>
-              <Field label={t("customer")}><NativeSelect name="businessPartyId" value={selectedPartyId} onChange={setSelectedPartyId} required items={lookupData.lookups.parties.map((party) => ({ id: party.id, label: `${party.code || ""} ${party.displayName || party.legalName}`.trim() }))} /></Field>
-              <Field label={t("sourceOrder")}><NativeSelect name="salesOrderId" value={selectedSalesOrderId} onChange={setSelectedSalesOrderId} items={salesOrders.map((order) => ({ id: order.id, label: `${order.reference} · ${order.title}` }))} /></Field>
-              <Field label={t("sourceFulfillment")}><NativeSelect name="fulfillmentId" items={fulfillments.map((fulfillment) => ({ id: fulfillment.id, label: `${fulfillment.reference} · ${financeStatusLabel(fulfillment.status, locale)}` }))} /></Field>
-              <Field label={t("sourceContract")}><NativeSelect name="contractId" items={contracts.map((contract) => ({ id: contract.id, label: `${contract.reference} · ${contract.title}` }))} /></Field>
-            </> : <>
-              <Field label={t("supplier")}><NativeSelect name="supplierId" value={selectedSupplierId} onChange={setSelectedSupplierId} required items={lookupData.lookups.suppliers.map((supplier) => ({ id: supplier.id, label: supplier.displayName || supplier.legalName }))} /></Field>
-              <Field label={t("sourcePurchaseOrder")}><NativeSelect name="purchaseId" value={selectedPurchaseId} onChange={setSelectedPurchaseId} items={purchases.map((purchase) => ({ id: purchase.id, label: `${purchase.reference} · ${purchase.title}` }))} /></Field>
-              <Field label={t("sourceReceipt")}><NativeSelect name="purchaseReceiptId" items={receipts.map((receipt) => ({ id: receipt.id, label: receipt.reference }))} /></Field>
-            </>}
-            <Field label={t("project")}><NativeSelect name="projectId" items={lookupData.lookups.projects.map((project) => ({ id: project.id, label: `${project.reference} · ${project.name}` }))} /></Field>
-          </ProfessionalFormSection>
-          <ProfessionalFormSection title={t("datesAndTerms")}>
-            <Field label={t("invoiceDate")}><Input name="invoiceDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required /></Field>
-            <Field label={t("dueDate")}><Input name="dueDate" type="date" /></Field>
-            <Field label={t("currency")}><Input name="currencyCode" defaultValue="USD" maxLength={3} required /></Field>
-            {isReceivables ? <Field label={t("paymentTerms")}><Input name="paymentTerms" /></Field> : null}
-          </ProfessionalFormSection>
-          <ProfessionalFormSection title={t("invoiceLines")}>
-            <div className="grid gap-3 md:col-span-2">
-              {lines.map((line, index) => (
-                <div key={line.key} className="grid gap-3 rounded-xl border border-dtsc-border p-3 md:grid-cols-12">
-                  <div className="md:col-span-4"><Field label={`${t("productOrService")} ${index + 1}`}><NativeSelect value={line.catalogItemId} onChange={(value) => selectCatalogItem(line.key, value)} items={catalogItems.map((item) => ({ id: item.id, label: `${item.code} · ${item.name}` }))} /></Field></div>
-                  <div className="md:col-span-4"><Field label={t("description")}><Input value={line.description} onChange={(event) => updateLine(line.key, "description", event.target.value)} required /></Field></div>
-                  {!isReceivables ? <div className="md:col-span-4"><Field label={t("expense")}><NativeSelect value={line.expenseAccountId} onChange={(value) => updateLine(line.key, "expenseAccountId", value)} items={expenseAccounts.map((account) => ({ id: account.id, label: `${account.code} · ${locale === "fr" ? account.nameFr : account.nameEn}` }))} /></Field></div> : null}
-                  <div className={isReceivables ? "md:col-span-1" : "md:col-span-3"}><Field label={t("quantityShort")}><Input value={line.quantity} onChange={(event) => updateLine(line.key, "quantity", event.target.value)} type="number" inputMode="decimal" min="0.000001" step="0.000001" required /></Field></div>
-                  <div className={isReceivables ? "md:col-span-1" : "md:col-span-3"}><Field label={t("price")}><Input value={line.unitPrice} onChange={(event) => updateLine(line.key, "unitPrice", event.target.value)} type="number" inputMode="decimal" min="0" step="0.01" required /></Field></div>
-                  <div className={isReceivables ? "md:col-span-1" : "md:col-span-3"}><Field label={t("discount")}><Input value={line.discountAmount} onChange={(event) => updateLine(line.key, "discountAmount", event.target.value)} type="number" inputMode="decimal" min="0" step="0.01" /></Field></div>
-                  <div className={`flex items-end ${isReceivables ? "md:col-span-1" : "md:col-span-3"}`}><Button type="button" variant="outline" disabled={lines.length === 1} onClick={() => setLines((current) => current.filter((item) => item.key !== line.key))}>{t("remove")}</Button></div>
-                </div>
-              ))}
-              <Button type="button" variant="outline" onClick={() => setLines((current) => [...current, newLine(current.length)])}><Plus className="h-4 w-4" />{t("addLine")}</Button>
-            </div>
-          </ProfessionalFormSection>
-          {isReceivables ? <ProfessionalFormSection title={t("notes")}><Field label={t("internalNotes")}><textarea name="notes" rows={4} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base" /></Field></ProfessionalFormSection> : null}
-          <div className="sticky bottom-0 flex justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface py-3"><Button type="button" variant="outline" onClick={() => { setCreateOpen(false); resetCreateForm(); }}>{t("cancel")}</Button><Button type="submit">{t("saveDraft")}</Button></div>
-        </form>
-      </Dialog>
+    <Dialog open={createOpen} onClose={() => { if (!busy) { setCreateOpen(false); resetCreate(); } }} title={t(isReceivables ? "newCustomerInvoice" : "newSupplierInvoice")} description={t("sourcesRevalidated")} presentation="editor" className="h-[96dvh] max-w-5xl">
+      <form onSubmit={createInvoice} className="grid gap-6">
+        <ProfessionalFormSection title={t("partyAndSource")}>
+          {isReceivables ? <>
+            <Field label={t("customer")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_RECEIVABLES" kind="customer" name="businessPartyId" label={t("customer")} locale={rawLocale} required disabled={busy} onOptionChange={(option) => { setSelectedPartyId(option?.id || ""); setSelectedOrderId(""); }} /></Field>
+            <Field label={t("sourceOrder")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_RECEIVABLES" kind="sales-order" name="salesOrderId" label={t("sourceOrder")} locale={rawLocale} parentId={selectedPartyId} disabled={busy} onOptionChange={(option) => setSelectedOrderId(option?.id || "")} /></Field>
+            <Field label={t("sourceFulfillment")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_RECEIVABLES" kind="fulfillment" name="fulfillmentId" label={t("sourceFulfillment")} locale={rawLocale} parentId={selectedOrderId} disabled={busy} /></Field>
+            <Field label={t("sourceContract")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_RECEIVABLES" kind="contract" name="contractId" label={t("sourceContract")} locale={rawLocale} parentId={selectedPartyId} disabled={busy} /></Field>
+          </> : <>
+            <Field label={t("supplier")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_PAYABLES" kind="supplier" name="supplierId" label={t("supplier")} locale={rawLocale} required disabled={busy} onOptionChange={(option) => { setSelectedSupplierId(option?.id || ""); setSelectedSupplierPartyId(option?.businessPartyId || ""); setSelectedPurchaseId(""); }} /></Field>
+            <Field label={t("sourcePurchaseOrder")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_PAYABLES" kind="purchase" name="purchaseId" label={t("sourcePurchaseOrder")} locale={rawLocale} parentId={selectedSupplierId} disabled={busy} onOptionChange={(option) => setSelectedPurchaseId(option?.id || "")} /></Field>
+            <Field label={t("sourceReceipt")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_PAYABLES" kind="purchase-receipt" name="purchaseReceiptId" label={t("sourceReceipt")} locale={rawLocale} parentId={selectedPurchaseId} disabled={busy} /></Field>
+            <Field label={locale === "en" ? "Approved expense" : "Dépense approuvée"}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_PAYABLES" kind="expense" name="expenseId" label={locale === "en" ? "approved expense" : "dépense approuvée"} locale={rawLocale} parentId={selectedSupplierId} disabled={busy} /></Field>
+            <Field label={locale === "en" ? "Related asset" : "Actif lié"}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_PAYABLES" kind="asset" name="assetId" label={locale === "en" ? "related asset" : "actif lié"} locale={rawLocale} parentId={selectedSupplierId} disabled={busy} /></Field>
+          </>}
+          <Field label={t("project")}><FinanceReferenceSelect organizationId={organizationId} moduleCode={moduleCode} kind="project" name="projectId" label={t("project")} locale={rawLocale} disabled={busy} /></Field>
+        </ProfessionalFormSection>
+        <ProfessionalFormSection title={t("datesAndTerms")}>
+          <Field label={t("invoiceDate")}><Input name="invoiceDate" type="date" defaultValue={businessContext?.businessDate || ""} required disabled={busy} /></Field>
+          <Field label={t("dueDate")}><Input name="dueDate" type="date" disabled={busy} /></Field>
+          <Field label={t("currency")}><Input name="currencyCode" defaultValue={businessContext?.functionalCurrencyCode || ""} maxLength={3} required disabled={busy} /></Field>
+          {isReceivables ? <Field label={t("paymentTerms")}><Input name="paymentTerms" disabled={busy} /></Field> : null}
+        </ProfessionalFormSection>
+        <ProfessionalFormSection title={t("invoiceLines")}>
+          <div className="grid gap-3 md:col-span-2">{lines.map((line, index) => <div key={line.key} className="grid gap-3 rounded-xl border border-dtsc-border p-3 md:grid-cols-12">
+            <div className="md:col-span-4"><Field label={`${t("productOrService")} ${index + 1}`}><FinanceReferenceSelect organizationId={organizationId} moduleCode={moduleCode} kind="catalog-item" name={`catalog-${line.key}`} label={t("productOrService")} locale={rawLocale} disabled={busy} onOptionChange={(option) => updateLine(line.key, { catalogItemId: option?.id || "", ...(option ? { description: option.label, unitPrice: option.amount !== null && option.amount !== undefined ? String(option.amount) : line.unitPrice } : {}) })} /></Field></div>
+            <div className="md:col-span-4"><Field label={`${t("description")} ${index + 1}`}><Input value={line.description} onChange={(event) => updateLine(line.key, { description: event.target.value })} required disabled={busy} /></Field></div>
+            {!isReceivables ? <div className="md:col-span-4"><Field label={t("expense")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_PAYABLES" kind="expense-account" name={`expenseAccount-${line.key}`} label={t("expense")} locale={rawLocale} disabled={busy} onOptionChange={(option) => updateLine(line.key, { expenseAccountId: option?.id || "" })} /></Field></div> : null}
+            <div className="md:col-span-2"><Field label={t("quantityShort")}><Input type="number" min="0.000001" step="0.000001" value={line.quantity} onChange={(event) => updateLine(line.key, { quantity: event.target.value })} required disabled={busy} /></Field></div>
+            <div className="md:col-span-2"><Field label={t("price")}><Input type="number" min="0" step="0.01" value={line.unitPrice} onChange={(event) => updateLine(line.key, { unitPrice: event.target.value })} required disabled={busy} /></Field></div>
+            <div className="md:col-span-2"><Field label={t("discount")}><Input type="number" min="0" step="0.01" value={line.discountAmount} onChange={(event) => updateLine(line.key, { discountAmount: event.target.value })} disabled={busy} /></Field></div>
+            <div className="flex items-end md:col-span-2"><Button type="button" variant="outline" disabled={busy || lines.length === 1} onClick={() => setLines((current) => current.filter((item) => item.key !== line.key))}>{t("remove")}</Button></div>
+          </div>)}<Button type="button" variant="outline" disabled={busy} onClick={() => setLines((current) => [...current, newLine(current.length)])}><Plus className="h-4 w-4" />{t("addLine")}</Button></div>
+        </ProfessionalFormSection>
+        {isReceivables ? <ProfessionalFormSection title={t("notes")}><Field label={t("internalNotes")}><textarea name="notes" rows={4} disabled={busy} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 disabled:opacity-60" /></Field></ProfessionalFormSection> : null}
+        <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => { setCreateOpen(false); resetCreate(); }}>{t("cancel")}</Button><Button type="submit" disabled={busy}>{busy ? (locale === "en" ? "Saving…" : "Enregistrement…") : t("saveDraft")}</Button></div>
+      </form>
+    </Dialog>
 
-      <Dialog open={Boolean(detail)} onClose={() => setDetail(null)} title={detail ? String(detail.number || detail.reference || t("financeDetails")) : ""} className="h-[94dvh] max-w-5xl">
-        {detail ? <div className="grid gap-5">
-          <div className="flex flex-wrap gap-2">{detail.status ? <StatusBadge tone={financeStatusTone(detail.status)}>{financeStatusLabel(detail.status, locale)}</StatusBadge> : null}{detail.currencyCode ? <StatusBadge>{String(detail.currencyCode)}</StatusBadge> : null}</div>
-          <FinanceDetailGrid>
-            <FinanceDetailValue label={t("date")}>{financeDate(detail.invoiceDate || detail.creditDate || detail.dueDate || detail.createdAt, locale)}</FinanceDetailValue>
-            <FinanceDetailValue label={t("total")}>{financeMoney(detail.grandTotal ?? detail.originalAmount, String(detail.currencyCode || "USD"), locale)}</FinanceDetailValue>
-            {detail.outstandingAmount !== undefined ? <FinanceDetailValue label={t("outstanding")}>{financeMoney(detail.outstandingAmount, String(detail.currencyCode || "USD"), locale)}</FinanceDetailValue> : null}
-            {detail.amountPaid !== undefined ? <FinanceDetailValue label={t("paidAmount")}>{financeMoney(detail.amountPaid, String(detail.currencyCode || "USD"), locale)}</FinanceDetailValue> : null}
-            {detail.dueDate ? <FinanceDetailValue label={t("dueDate")}>{financeDate(detail.dueDate, locale)}</FinanceDetailValue> : null}
-            {detail.revision ? <FinanceDetailValue label={t("revision")}>{t("version")} {detail.revision}</FinanceDetailValue> : null}
-          </FinanceDetailGrid>
-          {Array.isArray(detail.items) && detail.items.length ? <DetailLineItems items={detail.items as InvoiceItem[]} currencyCode={String(detail.currencyCode || "USD")} locale={locale} /> : null}
-          {!isReceivables && endpoint.includes("invoices") && (detail as Invoice).threeWayMatch ? <section className="rounded-xl border border-dtsc-border p-4"><h3 className="font-black text-dtsc-ink">{t("poReceiptInvoiceControl")}</h3><div className="mt-3 grid gap-3 sm:grid-cols-3"><FinanceDetailValue label={t("quantity")}>{String((detail as Invoice).threeWayMatch?.quantityVariance ?? 0)}</FinanceDetailValue><FinanceDetailValue label={t("price")}>{String((detail as Invoice).threeWayMatch?.priceVariance ?? 0)}</FinanceDetailValue><FinanceDetailValue label={t("totalVariance")}>{String((detail as Invoice).threeWayMatch?.totalVariance ?? 0)}</FinanceDetailValue></div></section> : null}
-          {endpoint.includes("invoices") && canManage ? <div data-responsive-actions>{invoiceTransitionActions(detail.status, locale, isReceivables).map((action) => { const Icon = action.icon; return <Button key={action.action} variant={action.action === "REJECT" ? "destructive" : "outline"} onClick={() => setActionTarget({ record: detail, action: action.action, kind: "invoice" })}><Icon className="h-4 w-4" />{action.label}</Button>; })}{["ISSUED", "POSTED", "PARTIALLY_PAID", "PAID"].includes(String(detail.status)) ? <Button variant="outline" onClick={() => setCreditTarget(detail as Invoice)}><FileMinus2 className="h-4 w-4" />{t("createCreditNote")}</Button> : null}</div> : null}
-          {endpoint.includes("credit-notes") && canManage ? <div data-responsive-actions>{creditTransitionActions(detail.status, locale).map((action) => { const Icon = action.icon; return <Button key={action.action} variant={action.action === "REJECT" ? "destructive" : "outline"} onClick={() => setActionTarget({ record: detail, action: action.action, kind: "credit" })}><Icon className="h-4 w-4" />{action.label}</Button>; })}</div> : null}
-          <FinanceCollaboration organizationId={organizationId} moduleCode={moduleCode} record={detail} locale={locale} />
-        </div> : null}
-      </Dialog>
+    <Dialog open={Boolean(detail)} onClose={() => setDetail(null)} title={detail ? String(detail.number || detail.reference || t("financeDetails")) : ""} presentation="editor" className="max-w-5xl">
+      {detail ? <div className="grid gap-5">
+        <div className="flex flex-wrap gap-2">{detail.status ? <StatusBadge tone={financeStatusTone(detail.status)}>{financeStatusLabel(detail.status, locale)}</StatusBadge> : null}{detail.currencyCode ? <StatusBadge>{String(detail.currencyCode)}</StatusBadge> : null}</div>
+        <FinanceDetailGrid>
+          <FinanceDetailValue label={t("date")}>{financeDate(detail.invoiceDate || detail.creditDate || detail.dueDate || detail.createdAt, locale)}</FinanceDetailValue>
+          <FinanceDetailValue label={t("total")}>{financeMoney(detail.grandTotal ?? detail.originalAmount, String(detail.currencyCode || "USD"), locale)}</FinanceDetailValue>
+          {detail.outstandingAmount !== undefined ? <FinanceDetailValue label={t("outstanding")}>{financeMoney(detail.outstandingAmount, String(detail.currencyCode || "USD"), locale)}</FinanceDetailValue> : null}
+          {detail.dueDate ? <FinanceDetailValue label={t("dueDate")}>{financeDate(detail.dueDate, locale)}</FinanceDetailValue> : null}
+        </FinanceDetailGrid>
+        {!isReceivables && detailKind === "invoice" && detail.threeWayMatch ? <section className="rounded-xl border border-dtsc-border p-4"><h3 className="font-black text-dtsc-ink">{t("poReceiptInvoiceControl")}</h3><div className="mt-3 grid gap-3 sm:grid-cols-3"><FinanceDetailValue label={t("quantity")}>{String(detail.threeWayMatch.quantityVariance ?? 0)}</FinanceDetailValue><FinanceDetailValue label={t("price")}>{String(detail.threeWayMatch.priceVariance ?? 0)}</FinanceDetailValue><FinanceDetailValue label={t("totalVariance")}>{String(detail.threeWayMatch.totalVariance ?? 0)}</FinanceDetailValue></div></section> : null}
+        {detailHasWorkflow ? <div data-responsive-actions>{(detailKind === "credit" ? creditTransitionActions(detail.status, locale) : invoiceTransitionActions(detail.status, locale, isReceivables)).filter((action) => capabilityAllowsAction(detail, action.action)).map((action) => { const Icon = action.icon; return <Button key={action.action} disabled={busy} variant={action.destructive ? "destructive" : "outline"} onClick={() => setActionTarget({ record: detail, action: action.action, kind: detailKind })}><Icon className="h-4 w-4" />{action.label}</Button>; })}{detailKind === "invoice" && detail.capabilities?.canCreateCredit ? <Button variant="outline" disabled={busy} onClick={() => setCreditTarget(detail)}><FileMinus2 className="h-4 w-4" />{t("createCreditNote")}</Button> : null}</div> : null}
+        <FinanceCollaboration organizationId={organizationId} moduleCode={moduleCode} record={detail} locale={locale} />
+      </div> : null}
+    </Dialog>
 
-      <Dialog open={Boolean(actionTarget)} onClose={() => setActionTarget(null)} title={actionTarget ? `${actionLabel(actionTarget.action, locale)} · ${String(actionTarget.record.number || actionTarget.record.reference || "")}` : ""} description={t("sodAndPeriodChecked")} className="max-w-xl">
-        {actionTarget ? <form onSubmit={transitionDocument} className="grid gap-4">
-          {actionTarget.action === "SUBMIT" && actionTarget.kind === "invoice" && isReceivables ? <EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_RECEIVABLES" locale={requestedLocale} /> : null}
-          {actionTarget.action === "SUBMIT" && actionTarget.kind === "invoice" && !isReceivables ? <>
-            <EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_PAYABLES" locale={requestedLocale} name="reviewerUserId" label={locale === "en" ? "Reviewer" : "Responsable de revue"} />
-            <EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_PAYABLES" locale={requestedLocale} name="approverUserId" label={locale === "en" ? "Final approver" : "Approbateur final"} />
-            <p className="text-sm text-dtsc-muted">{locale === "en" ? "The reviewer and final approver must be different people." : "Le responsable de revue et l’approbateur final doivent être deux personnes distinctes."}</p>
-          </> : null}
-          {actionTarget.action === "SUBMIT" && actionTarget.kind === "credit" ? <EnterpriseApproverSelect organizationId={organizationId} moduleCode={moduleCode} locale={requestedLocale} /> : null}
-          {actionTarget.action !== "POST" ? <Field label={t("decisionReasonComment")}><textarea name="reason" rows={4} minLength={actionTarget.action === "REJECT" ? 4 : undefined} required={actionTarget.action === "REJECT"} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base" /></Field> : null}
-          <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setActionTarget(null)}>{t("cancel")}</Button><Button type="submit">{t("confirmAction")}</Button></div>
-        </form> : null}
-      </Dialog>
+    <Dialog open={Boolean(actionTarget)} onClose={() => { if (!busy) setActionTarget(null); }} title={actionTarget ? `${actionLabel(actionTarget.action, locale)} · ${String(actionTarget.record.number || actionTarget.record.reference || "")}` : ""} description={t("sodAndPeriodChecked")} presentation="editor" className="max-w-xl">
+      {actionTarget ? <form onSubmit={transition} className="grid gap-4">
+        {actionTarget.action === "SUBMIT" && actionTarget.kind === "invoice" && isReceivables && canSubmit ? <EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_RECEIVABLES" locale={rawLocale} /> : null}
+        {actionTarget.action === "SUBMIT" && actionTarget.kind === "invoice" && !isReceivables && canSubmit ? <><EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_PAYABLES" locale={rawLocale} name="reviewerUserId" label={locale === "en" ? "Reviewer" : "Responsable de revue"} /><EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_PAYABLES" locale={rawLocale} name="approverUserId" label={locale === "en" ? "Final approver" : "Approbateur final"} /></> : null}
+        {actionTarget.action === "SUBMIT" && actionTarget.kind === "credit" ? <EnterpriseApproverSelect organizationId={organizationId} moduleCode={moduleCode} locale={rawLocale} /> : null}
+        {actionTarget.action !== "POST" && actionTarget.action !== "ISSUE" ? <Field label={t("decisionReasonComment")}><textarea name="reason" rows={4} minLength={actionRequiresReason ? 4 : undefined} required={actionRequiresReason} disabled={busy} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 disabled:opacity-60" /><p className="mt-2 text-xs leading-5 text-dtsc-muted">{t(actionRequiresReason ? "rejectionReasonMinimumHint" : "decisionCommentOptionalHint")}</p></Field> : null}
+        <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => setActionTarget(null)}>{t("cancel")}</Button><Button type="submit" disabled={busy || (actionTarget.action === "APPROVE" && !canApprove) || (["POST", "ISSUE"].includes(actionTarget.action) && !canManage)}>{busy ? (locale === "en" ? "Processing…" : "Traitement…") : t("confirmAction")}</Button></div>
+      </form> : null}
+    </Dialog>
 
-      <Dialog open={Boolean(creditTarget)} onClose={() => setCreditTarget(null)} title={t("createCreditNote")} description={t("creditNoteKeepsOriginal")} className="max-w-2xl">
-        {creditTarget ? <form onSubmit={createCreditNote} className="grid gap-4"><Field label={t("creditDate")}><Input name="creditDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required /></Field><Field label={t("detailedReason")}><textarea name="reason" minLength={8} rows={4} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base" required /></Field><p className="text-sm text-dtsc-muted">{t("creditNoteServerControls")}</p><div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setCreditTarget(null)}>{t("cancel")}</Button><Button type="submit"><CircleDollarSign className="h-4 w-4" />{t("createCreditNote")}</Button></div></form> : null}
-      </Dialog>
-    </ModuleWorkspace>
-  );
+    <Dialog open={Boolean(creditTarget)} onClose={() => { if (!busy) setCreditTarget(null); }} title={t("createCreditNote")} description={t("creditNoteKeepsOriginal")} presentation="editor" className="max-w-2xl">
+      {creditTarget ? <form onSubmit={createCredit} className="grid gap-4"><Field label={t("creditDate")}><Input name="creditDate" type="date" defaultValue={businessContext?.businessDate || ""} required disabled={busy} /></Field><Field label={t("detailedReason")}><textarea name="reason" minLength={8} rows={4} required disabled={busy} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 disabled:opacity-60" /></Field><div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => setCreditTarget(null)}>{t("cancel")}</Button><Button type="submit" disabled={busy}>{t("createCreditNote")}</Button></div></form> : null}
+    </Dialog>
+  </ModuleWorkspace>;
 }

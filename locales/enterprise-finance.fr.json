@@ -566,5 +566,11 @@
   "financeConversation": "Conversation financière",
   "financeConversationDescription": "Échangez des précisions, demandes de correction et justifications sans mélanger ces messages avec les décisions structurées du workflow.",
   "decisionCommentOptionalHint": "Commentaire facultatif pour une approbation. Un motif d’au moins 4 caractères est obligatoire pour un refus ou une annulation sensible.",
-  "rejectionReasonMinimumHint": "Motif obligatoire : au moins 4 caractères."
+  "rejectionReasonMinimumHint": "Motif obligatoire : au moins 4 caractères.",
+  "periodicAccountingTitle": "Comptabilité périodique",
+  "periodicAccountingDescription": "Écritures récurrentes, charges à payer, produits à recevoir, étalements, allocations et contrepassation automatique contrôlée.",
+  "closingOperationsTitle": "Opérations de clôture",
+  "closingOperationsDescription": "Réévaluation de change de clôture, contrepassation liée et clôture annuelle vers le report à nouveau.",
+  "assetDisposalsTitle": "Cessions d’actifs",
+  "assetDisposalsDescription": "Préparez et comptabilisez la sortie auditée des actifs avec produit de cession et gain ou perte."
 }

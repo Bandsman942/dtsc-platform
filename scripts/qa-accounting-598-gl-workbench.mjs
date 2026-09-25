@@ -8,7 +8,7 @@ const hasAll = (source, tokens, scope) => {
 };
 
 const modulePage = read("components/enterprise/enterprise-finance-module-page.tsx");
-const workspace = read("components/enterprise/professional/enterprise-finance-accounting-workspace-v3.tsx");
+const workspace = read("components/enterprise/professional/enterprise-finance-accounting-workspace.tsx");
 const compactTable = read("components/enterprise/professional/accounting-compact-table.tsx");
 const workbench = read("components/enterprise/professional/accounting-journal-workbench.tsx");
 const referenceSelect = read("components/enterprise/core-v2/finance-accounting-reference-select.tsx");
@@ -24,7 +24,7 @@ const financeContract = read("lib/ai/tools/finance-contract.ts");
 const formContract = read("docs/FORM_UX_CONTRACT.md");
 
 hasAll(modulePage, [
-  "EnterpriseFinanceAccountingWorkspaceV3",
+  "EnterpriseFinanceAccountingWorkspace",
   'moduleCode === "FINANCE_ACCOUNTING"',
   "canCreate: capabilities.canCreate",
   "canSubmit: capabilities.canSubmit",

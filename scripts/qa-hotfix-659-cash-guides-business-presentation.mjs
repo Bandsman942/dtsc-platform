@@ -60,13 +60,13 @@ expect(hasAll(physicalCount, [
 ]), "comptage physique canonique couvre coupures, total, écart et validateur FINANCE_CASH");
 expect(hasAll(mobileManager, ["CashPhysicalCountFields", "cashCountsFromForm", "approverUserId", "closeError", "notifyToast"]), "Mobile Money/Télécom réutilisent le comptage canonique et exigent le validateur");
 expect(hasAll(financeCash, ["CashPhysicalCountFields", "cashCountsFromForm", "approverUserId", 'moduleCode="FINANCE_CASH"']), "Finance Caisse réutilise exactement le même comptage canonique");
-expect(hasAll(financeRouter, ['definition.code === "FINANCE_CASH"', "EnterpriseFinanceCashWorkspace", "EnterpriseFinanceBankReconciliationWorkspace"]), "routeur Finance isole Caisse sans casser Banque/Rapprochement");
+expect(hasAll(financeRouter, ["EnterpriseFinanceCashBankReconciliationBase", 'definition.code !== "FINANCE_BANK"']) && !financeRouter.includes("EnterpriseFinanceCashWorkspace"), "routeur Banque/Rapprochement reste spécialisé et séparé de Caisse");
 expect(hasAll(operationalFinanceRouter, [
   'props.definition.code === "FINANCE_CASH"',
   "<EnterpriseFinanceCashWorkspace {...props} />",
-  "EnterpriseFinanceCashBankReconciliationWorkspaceHotfix",
+  "EnterpriseFinanceCashBankReconciliationWorkspace",
   '["FINANCE_BANK", "FINANCE_RECONCILIATION"]',
-]), "dispatcher Finance opérationnelle branche réellement Caisse sur le workspace spécialisé tout en conservant le hotfix Banque/Rapprochement");
+]), "dispatcher Finance opérationnelle branche Caisse et Banque/Rapprochement sur leurs workspaces canoniques distincts");
 expect(hasAll(cashCollectionRoute, ["movements: { select: { direction: true, amount: true } }", "expectedCurrentAmount", "theoreticalClosingAmount: item.expectedClosingAmount ?? expectedCurrentAmount"]), "la caisse ouverte expose un théorique courant calculé depuis les mouvements serveur");
 
 expect(hasAll(accountingApproval, [

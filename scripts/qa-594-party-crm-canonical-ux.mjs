@@ -4,8 +4,8 @@ const failures = [];
 const read = (path) => fs.readFileSync(path, "utf8");
 const ok = (condition, message) => { if (!condition) failures.push(message); };
 
-const crmWorkspace = read("components/enterprise/professional/enterprise-crm-workspace-v2.tsx");
-const customerWorkspace = read("components/enterprise/professional/enterprise-customers-workspace-v2.tsx");
+const crmWorkspace = read("components/enterprise/professional/enterprise-crm-workspace.tsx");
+const customerWorkspace = read("components/enterprise/professional/enterprise-customers-workspace.tsx");
 const commercialPanel = read("components/enterprise/professional/business-party-commercial-panel.tsx");
 const sharedIdentity = read("components/enterprise/shared/business-party-identity-fields.tsx");
 const schemas = read("lib/enterprise/crm-sales/schemas.ts");

@@ -52,8 +52,8 @@ const files = {
   projectsRouter: read("components/enterprise/professional/enterprise-projects-deliverables-workspace.tsx"),
   projects: read("components/enterprise/professional/enterprise-projects-services-workspace.tsx"),
   deliverables: read("components/enterprise/professional/enterprise-time-deliverables-workspace.tsx"),
-  assetsRouter: read("components/enterprise/professional/enterprise-assets-maintenance-workspace.tsx"),
-  assets: read("components/enterprise/professional/enterprise-assets-maintenance-workspace-v2.tsx"),
+  assets: read("components/enterprise/professional/enterprise-assets-maintenance-workspace.tsx"),
+  assetsBridge: read("components/enterprise/professional/enterprise-assets-maintenance-workspace-v2.tsx"),
   helper: read("components/enterprise/professional/professional-erp-i18n.ts"),
   i18n: read("lib/i18n.ts"),
   runner: read("scripts/run-regression-qa-ci.mjs"),
@@ -71,7 +71,8 @@ for (const [scope, content] of Object.entries({ inventory: files.inventory, site
 
 need(files.projectsRouter, "EnterpriseProjectsServicesWorkspace", "routeur projets/livrables");
 need(files.projectsRouter, "EnterpriseTimeDeliverablesWorkspace", "routeur projets/livrables");
-need(files.assetsRouter, "EnterpriseAssetsMaintenanceWorkspaceV2", "routeur actifs");
+need(files.assetsBridge, 'from "@/components/enterprise/professional/enterprise-assets-maintenance-workspace"', "bridge actifs historique");
+reject(files.assets, "enterprise-assets-maintenance-workspace-v2", "workspace actifs canonique");
 
 need(files.i18n, "professionalErpOperationsFr", "registre i18n");
 need(files.i18n, "professionalErpOperationsEn", "registre i18n");

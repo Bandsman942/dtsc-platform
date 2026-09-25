@@ -4,7 +4,7 @@ const failures = [];
 const read = (path) => fs.readFileSync(path, "utf8");
 const ok = (condition, message) => { if (!condition) failures.push(message); };
 
-const customerWorkspace = read("components/enterprise/professional/enterprise-customers-workspace-v2.tsx");
+const customerWorkspace = read("components/enterprise/professional/enterprise-customers-workspace.tsx");
 const supplierWorkspace = read("components/enterprise/core-v2/enterprise-suppliers-workspace.tsx");
 const sharedIdentity = read("components/enterprise/shared/business-party-identity-fields.tsx");
 const onboardingService = read("lib/enterprise/procurement/supplier-onboarding-service.ts");

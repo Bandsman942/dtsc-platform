@@ -21,7 +21,7 @@ requirePaths([
   "components/enterprise/professional/enterprise-project-control-actions.tsx",
   "components/enterprise/professional/enterprise-projects-services-workspace.tsx",
   "components/enterprise/professional/enterprise-time-deliverables-workspace.tsx",
-  "components/enterprise/professional/enterprise-assets-maintenance-workspace-v2.tsx",
+  "components/enterprise/professional/enterprise-assets-maintenance-workspace.tsx",
 ]);
 
 requireTokens("lib/enterprise/projects-assets/helpers.ts", [
@@ -183,7 +183,7 @@ requireTokens("components/enterprise/professional/enterprise-time-deliverables-w
   "item.canRequestChanges",
   "item.canReject",
 ]);
-requireTokens("components/enterprise/professional/enterprise-assets-maintenance-workspace-v2.tsx", [
+requireTokens("components/enterprise/professional/enterprise-assets-maintenance-workspace.tsx", [
   "ProfessionalPager",
   "presentation=\"editor\"",
   "useToastMessage",
@@ -195,6 +195,6 @@ requireTokens("components/enterprise/professional/enterprise-assets-maintenance-
 forbidTokens("components/enterprise/professional/enterprise-project-control-actions.tsx", ["window.prompt", "window.alert", "window.confirm"]);
 forbidTokens("components/enterprise/professional/enterprise-projects-services-workspace.tsx", ["window.prompt", "window.alert", "window.confirm"]);
 forbidTokens("components/enterprise/professional/enterprise-time-deliverables-workspace.tsx", ["window.prompt", "window.alert", "window.confirm"]);
-forbidTokens("components/enterprise/professional/enterprise-assets-maintenance-workspace-v2.tsx", ["window.prompt", "window.alert", "window.confirm"]);
+forbidTokens("components/enterprise/professional/enterprise-assets-maintenance-workspace.tsx", ["window.prompt", "window.alert", "window.confirm"]);
 requireTokens("components/enterprise/enterprise-common-domain-workspace.tsx", ["PROJECTS_SERVICES", "TIME_DELIVERABLES", "ASSETS_MAINTENANCE"]);
 success("enterprise project, deliverable and asset professional lifecycles");
