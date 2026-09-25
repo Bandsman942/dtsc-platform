@@ -14,6 +14,10 @@ function milliseconds(value: number | null) {
   return value == null ? "—" : `${Math.round(value)} ms`;
 }
 
+function usd(value: number | null) {
+  return value == null ? "—" : `${value.toFixed(value < 1 ? 4 : 2)}`;
+}
+
 function elapsed(value: number | null, secondsLabel: string) {
   if (value == null) return "—";
   if (value < 60_000) return `${Math.round(value / 1000)} ${secondsLabel}`;
@@ -113,7 +117,13 @@ export function CtoScalabilityDashboard({ snapshot, locale }: { snapshot: Snapsh
     snapshot.database.idleInTransactionConnections > 0 ||
     snapshot.database.longRunningQueries > 0 ||
     dbPolicyWatch;
-  const aiWatch = snapshot.ai.sampleCount > 0 && ((snapshot.ai.rateLimitedRate ?? 0) > 0 || (snapshot.ai.latencyMs.p99 ?? 0) >= 2000);
+  const aiCapacityWatch =
+    snapshot.ai.capacity.throttledAttempts > 0 ||
+    snapshot.ai.capacity.timeoutAttempts > 0 ||
+    snapshot.ai.capacity.providerUnavailableAttempts > 0;
+  const aiWatch = snapshot.ai.sampleCount > 0
+    ? ((snapshot.ai.rateLimitedRate ?? 0) > 0 || (snapshot.ai.latencyMs.p99 ?? 0) >= 2000 || aiCapacityWatch)
+    : aiCapacityWatch;
   const redisMeasured = snapshot.redis.status === "OK";
   const redisWatch = snapshot.redis.status === "DEGRADED" || snapshot.redis.status === "UNAVAILABLE";
   const rateLimitWatch = snapshot.rateLimit.distributedStatus !== "OK";
@@ -204,7 +214,47 @@ export function CtoScalabilityDashboard({ snapshot, locale }: { snapshot: Snapsh
             <Metric label={`${t("latency")} P99`} value={milliseconds(snapshot.ai.latencyMs.p99)} hint={t("targetCriticalP99")} />
             <Metric label={t("firstToken")} value={milliseconds(snapshot.ai.latencyMs.firstTokenP95)} />
             <Metric label={t("rateLimitRate")} value={percent(snapshot.ai.rateLimitedRate)} hint={`${t("rateLimited")}: ${snapshot.ai.rateLimitedCount}`} />
+            <Metric label={t("aiActiveAttempts")} value={snapshot.ai.capacity.activeAttempts} />
+            <Metric label={t("aiProviderAttempts")} value={snapshot.ai.capacity.attemptCount} />
+            <Metric label={t("aiThrottledAttempts")} value={snapshot.ai.capacity.throttledAttempts} />
+            <Metric label={t("aiTimeoutAttempts")} value={snapshot.ai.capacity.timeoutAttempts} />
+            <Metric label={t("aiUnavailableAttempts")} value={snapshot.ai.capacity.providerUnavailableAttempts} />
+            <Metric label={t("aiTotalTokens")} value={Math.round(snapshot.ai.usage.totalTokens).toLocaleString(locale === "en" ? "en-US" : "fr-FR")} />
+            <Metric label={t("aiEstimatedCostUsd")} value={usd(snapshot.ai.usage.estimatedCostUsd)} />
+            <Metric label={t("aiPricedCalls")} value={snapshot.ai.usage.pricedUsdCallCount} />
+            <Metric label={t("aiFallbacks")} value={snapshot.ai.usage.fallbackCount} />
+            <Metric
+              label={t("aiAgentBudgetStarter")}
+              value={`${snapshot.ai.budgets.agent.STARTER.maxSteps} / ${snapshot.ai.budgets.agent.STARTER.maxToolCalls} / ${snapshot.ai.budgets.agent.STARTER.maxTokens.toLocaleString()} / ${snapshot.ai.budgets.agent.STARTER.maxEstimatedCost}`}
+              hint={t("aiAgentBudgetHint")}
+            />
+            <Metric
+              label={t("aiAgentBudgetBusiness")}
+              value={`${snapshot.ai.budgets.agent.BUSINESS.maxSteps} / ${snapshot.ai.budgets.agent.BUSINESS.maxToolCalls} / ${snapshot.ai.budgets.agent.BUSINESS.maxTokens.toLocaleString()} / ${snapshot.ai.budgets.agent.BUSINESS.maxEstimatedCost}`}
+              hint={t("aiAgentBudgetHint")}
+            />
+            <Metric
+              label={t("aiAgentBudgetEnterprise")}
+              value={`${snapshot.ai.budgets.agent.ENTERPRISE.maxSteps} / ${snapshot.ai.budgets.agent.ENTERPRISE.maxToolCalls} / ${snapshot.ai.budgets.agent.ENTERPRISE.maxTokens.toLocaleString()} / ${snapshot.ai.budgets.agent.ENTERPRISE.maxEstimatedCost}`}
+              hint={t("aiAgentBudgetHint")}
+            />
+            <Metric
+              label={t("aiChatConcurrency")}
+              value={`${snapshot.ai.capacity.policy.plans.ENTERPRISE.CHAT.user} / ${snapshot.ai.capacity.policy.plans.ENTERPRISE.CHAT.organization} / ${snapshot.ai.capacity.policy.plans.ENTERPRISE.CHAT.provider}`}
+              hint={t("aiConcurrencyFormat")}
+            />
+            <Metric
+              label={t("aiAgentConcurrency")}
+              value={`${snapshot.ai.capacity.policy.plans.ENTERPRISE.AGENT.user} / ${snapshot.ai.capacity.policy.plans.ENTERPRISE.AGENT.organization} / ${snapshot.ai.capacity.policy.plans.ENTERPRISE.AGENT.provider}`}
+              hint={t("aiConcurrencyFormat")}
+            />
+            <Metric
+              label={t("aiEmbeddingConcurrency")}
+              value={`${snapshot.ai.capacity.policy.plans.ENTERPRISE.EMBEDDING.user} / ${snapshot.ai.capacity.policy.plans.ENTERPRISE.EMBEDDING.organization} / ${snapshot.ai.capacity.policy.plans.ENTERPRISE.EMBEDDING.provider}`}
+              hint={t("aiConcurrencyFormat")}
+            />
           </div>
+          <p className="mt-4 break-words text-xs leading-5 text-dtsc-muted"><strong>{t("coverage")}:</strong> {t("aiCapacityHint")}</p>
         </article>
 
         <article className="dtsc-panel min-w-0 max-w-full p-4 sm:p-5">
