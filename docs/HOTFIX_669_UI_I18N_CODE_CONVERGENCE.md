@@ -79,6 +79,15 @@ La validation rendue reste obligatoire aux largeurs 320, 360, 375, 390, 414, 768
 
 La CI dédiée exécute en plus Prisma generate, migrations depuis une base propre, régression complète, type-check, lint et build.
 
+### Réconciliation des QA historiques
+
+Deux gates historiques ont été ajustées sans diminuer leur couverture fonctionnelle :
+
+- **Hotfix #576** : l’assertion des actions/deep links d’avoirs ne recherche plus l’ancienne expression conditionnelle de l’implémentation suffixée. Elle vérifie désormais le contrat du workspace canonique : transitions d’avoirs, passage `APPROVED → POST`, contrôle des capacités et deep links client/fournisseur (`creditNoteId` / `supplierCreditNoteId`).
+- **Hotfix #659** : les assertions de routage ne supposent plus un routeur combiné Caisse + Banque/Rapprochement ni le nom `Hotfix`. Elles vérifient la séparation canonique effective : `FINANCE_CASH` vers son workspace Caisse et `FINANCE_BANK` / `FINANCE_RECONCILIATION` vers le workspace Banque/Rapprochement.
+
+Ces changements corrigent des assertions liées à une forme de code legacy devenue fausse après convergence ; ils ne suppriment aucun scénario, permission, contrôle métier ou gate de régression.
+
 ## Base de données
 
 - migration Prisma : aucune ;
