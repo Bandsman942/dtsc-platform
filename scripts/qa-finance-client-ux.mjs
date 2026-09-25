@@ -56,9 +56,13 @@ if (exists(shared) && exists(sharedCore)) {
 }
 
 const bankWrapper = "components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-workspace.tsx";
-if (exists(bankWrapper)) {
-  const content = read(bankWrapper);
-  for (const token of ["hotfix-legacy", "sessionStorage", "statusUrl", "progressPercent", "MAX_POLLS", "Le traitement est durable", "The processing is durable"]) if (!content.includes(token)) fail(`Finance UX: suivi durable Banque incomplet (${token})`);
+const bankBase = "components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-base.tsx";
+if (exists(bankWrapper) && exists(bankBase)) {
+  const wrapper = read(bankWrapper);
+  const base = read(bankBase);
+  for (const token of ["enterprise-finance-cash-bank-reconciliation-base", "sessionStorage", "statusUrl", "progressPercent", "MAX_POLLS", "Le traitement est durable", "The processing is durable"]) if (!wrapper.includes(token)) fail(`Finance UX: suivi durable Banque incomplet (${token})`);
+  for (const token of ["EnterpriseFinanceCashBankReconciliationBase", "FinanceReferenceSelect", "reconciliations", "bank-statements"]) if (!base.includes(token)) fail(`Finance UX: base Banque/Rapprochement canonique incomplète (${token})`);
+  if (wrapper.includes("hotfix-legacy")) fail("Finance UX: le wrapper Banque actif ne doit plus dépendre d’un chemin legacy.");
 }
 
 const onboarding = "components/enterprise/professional/enterprise-accounting-onboarding-panel.tsx";
