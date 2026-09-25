@@ -1,3 +1,4 @@
+import { getAiConcurrencyPolicySnapshot } from "@/lib/ai/concurrency";
 import { getDatabaseConnectionPolicy } from "@/lib/database-connection-policy";
 import { prisma } from "@/lib/prisma";
 import { RATE_LIMIT_POLICY_PROFILES, RATE_LIMIT_POLICY_RULES } from "@/lib/rate-limit-policy";
@@ -24,6 +25,14 @@ type AiLatencyRow = {
   p95Ms: number | null;
   p99Ms: number | null;
   firstTokenP95Ms: number | null;
+};
+
+type AiProviderCapacityRow = {
+  attemptCount: number;
+  activeCount: number;
+  throttledCount: number;
+  timeoutCount: number;
+  unavailableCount: number;
 };
 
 type DbConnectionRow = {
@@ -91,7 +100,9 @@ export async function getProductionObservabilitySnapshot(windowHours: number) {
   await prisma.$queryRaw`SELECT 1`;
   const dbProbeLatencyMs = performance.now() - dbProbeStartedAt;
 
-  const [apiRows, aiRows, dbConnectionRows, scale2Rows, queueRows, readCacheRows, redisSnapshot] = await Promise.all([
+  const activeAttemptSince = new Date(generatedAt.getTime() - 90_000);
+
+  const [apiRows, aiRows, aiProviderRows, dbConnectionRows, scale2Rows, queueRows, readCacheRows, redisSnapshot] = await Promise.all([
     prisma.$queryRaw<ApiLatencyRow[]>`
       SELECT
         COUNT(*)::int AS "sampleCount",
@@ -114,6 +125,16 @@ export async function getProductionObservabilitySnapshot(windowHours: number) {
         percentile_cont(0.99) WITHIN GROUP (ORDER BY "durationMs") FILTER (WHERE "durationMs" IS NOT NULL)::float8 AS "p99Ms",
         percentile_cont(0.95) WITHIN GROUP (ORDER BY "firstTokenLatencyMs") FILTER (WHERE "firstTokenLatencyMs" IS NOT NULL)::float8 AS "firstTokenP95Ms"
       FROM "AiModelCall"
+      WHERE "createdAt" >= ${since}
+    `,
+    prisma.$queryRaw<AiProviderCapacityRow[]>`
+      SELECT
+        COUNT(*)::int AS "attemptCount",
+        COUNT(*) FILTER (WHERE "status" = 'STARTED' AND "startedAt" >= ${activeAttemptSince})::int AS "activeCount",
+        COUNT(*) FILTER (WHERE "reasonCode" = 'RATE_LIMITED')::int AS "throttledCount",
+        COUNT(*) FILTER (WHERE "reasonCode" = 'TIMEOUT')::int AS "timeoutCount",
+        COUNT(*) FILTER (WHERE "reasonCode" = 'PROVIDER_UNAVAILABLE')::int AS "unavailableCount"
+      FROM "AiProviderAttempt"
       WHERE "createdAt" >= ${since}
     `,
     prisma.$queryRaw<DbConnectionRow[]>`
@@ -229,6 +250,7 @@ export async function getProductionObservabilitySnapshot(windowHours: number) {
 
   const api = apiRows[0] ?? { sampleCount: 0, p50Ms: null, p95Ms: null, p99Ms: null, serverErrorCount: 0 };
   const ai = aiRows[0] ?? { sampleCount: 0, successCount: 0, failedCount: 0, rateLimitedCount: 0, p50Ms: null, p95Ms: null, p99Ms: null, firstTokenP95Ms: null };
+  const aiProvider = aiProviderRows[0] ?? { attemptCount: 0, activeCount: 0, throttledCount: 0, timeoutCount: 0, unavailableCount: 0 };
   const database = dbConnectionRows[0] ?? {
     currentConnections: 0,
     activeConnections: 0,
@@ -310,6 +332,15 @@ export async function getProductionObservabilitySnapshot(windowHours: number) {
         p95: finiteMetric(ai.p95Ms),
         p99: finiteMetric(ai.p99Ms),
         firstTokenP95: finiteMetric(ai.firstTokenP95Ms),
+      },
+      capacity: {
+        source: "AiProviderAttempt + distributed AI concurrency admission",
+        activeAttempts: aiProvider.activeCount,
+        attemptCount: aiProvider.attemptCount,
+        throttledAttempts: aiProvider.throttledCount,
+        timeoutAttempts: aiProvider.timeoutCount,
+        providerUnavailableAttempts: aiProvider.unavailableCount,
+        policy: getAiConcurrencyPolicySnapshot(),
       },
     },
     redis: {
