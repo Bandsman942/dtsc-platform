@@ -299,7 +299,7 @@
       ],
       "qaContract": "assistant-ux",
       "evidence": [
-        "components/enterprise/enterprise-ai-workspace-v2.tsx",
+        "components/enterprise/enterprise-ai-workspace.tsx",
         "scripts/qa-assistant-ux-checks.mjs"
       ],
       "nextIteration": 6,

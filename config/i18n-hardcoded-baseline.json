@@ -161,7 +161,6 @@
     "components/enterprise/enterprise-module-workspace.tsx": 12,
     "components/enterprise/health-patients-workspace.tsx": 76,
     "components/enterprise/pharmacy-batches-workspace.tsx": 43,
-    "components/enterprise/enterprise-ai-workspace-v2.tsx": 53,
     "components/enterprise/enterprise-activities-panels.tsx": 17,
     "components/enterprise/pharmacy-purchases-workspace.tsx": 86,
     "components/enterprise/pharmacy-documents-workspace.tsx": 101,

@@ -2,6 +2,26 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-09-25 — Hotfix #670 : suppression des bridges ERP et certification finale
+
+### Supprimé
+
+- Suppression physique des 16 bridges de compatibilité `v2/v3/hotfix/legacy` devenus sans logique propre après la convergence #669.
+- Les workspaces Tiers, Catalogue, CRM, Contrats, Actifs, IA Entreprise, Comptabilité, Finance et Administration ne conservent plus de fichier de réexport historique sur le périmètre certifié.
+
+### Corrigé
+
+- Les QA commerciales, opérations, administration et maturité IA utilisent désormais directement les chemins canoniques.
+- La gate #669 vérifie maintenant que les bridges retirés restent absents au lieu d’exiger leur présence temporaire.
+- Le baseline i18n ne référence plus l’ancien bridge IA et la maturité commerciale IA pointe vers le workspace canonique.
+
+### Sécurisé
+
+- Ajout de `qa:hotfix-670`, intégré à la régression, pour bloquer toute référence active aux bridges supprimés.
+- La gate #670 protège les nouvelles additions contre un fallback USD métier arbitraire, une date métier UTC naïve, un nouveau `Invalid payload` générique et un nouveau bridge suffixé mince non documenté.
+- Les protections #666 (devise/date), #667 (erreurs structurées), #668 (registre), #669 (convergence UI/i18n) restent obligatoires.
+- Aucune migration Prisma, aucun backfill et aucune suppression de données.
+
 ## 2026-09-20 — Hotfix #669 : convergence UI, i18n et code ERP
 
 ### Corrigé

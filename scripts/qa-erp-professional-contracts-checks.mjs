@@ -19,10 +19,6 @@ const customers = read("components/enterprise/professional/enterprise-customers-
 const crm = read("components/enterprise/professional/enterprise-crm-workspace.tsx");
 const catalog = read("components/enterprise/professional/enterprise-catalog-workspace.tsx");
 const ui = read("components/enterprise/professional/enterprise-contracts-workspace.tsx");
-const customersBridge = read("components/enterprise/professional/enterprise-customers-workspace-v2.tsx");
-const crmBridge = read("components/enterprise/professional/enterprise-crm-workspace-v2.tsx");
-const catalogBridge = read("components/enterprise/professional/enterprise-catalog-workspace-v2.tsx");
-const contractsBridge = read("components/enterprise/professional/enterprise-contracts-workspace-v2.tsx");
 const sales = read("components/enterprise/professional/enterprise-sales-operations-workspace.tsx");
 const lookups = read("app/api/enterprise/[organizationId]/professional-lookups/route.ts");
 const catalogRoute = read("app/api/enterprise/[organizationId]/catalog/route.ts");
@@ -46,10 +42,6 @@ for (const marker of ["transitionEnterpriseContract", "enterpriseApproval", "rev
 for (const marker of ["contractTransitionSchema", "notifyUser", "section=validation"]) need(route, marker, "Route contrats");
 for (const marker of ["employee:", "supplier:", "member:", "contractParties", "businessPartyId", '"SALES_QUOTES_ORDERS"', "currencies", "taxCodes"]) need(lookups, marker, "Sélecteurs commerciaux");
 
-need(customersBridge, 'from "@/components/enterprise/professional/enterprise-customers-workspace"', "Bridge Tiers");
-need(crmBridge, 'from "@/components/enterprise/professional/enterprise-crm-workspace"', "Bridge CRM");
-need(catalogBridge, 'from "@/components/enterprise/professional/enterprise-catalog-workspace"', "Bridge Catalogue");
-need(contractsBridge, 'from "@/components/enterprise/professional/enterprise-contracts-workspace"', "Bridge Contrats");
 for (const [name, source] of [["Tiers", customers], ["CRM", crm], ["Catalogue", catalog], ["Contrats", ui]]) {
   if (/workspace-v2|workspace-v3|workspace-hotfix|workspace-legacy/.test(source)) failures.push(`${name}: l’implémentation canonique ne doit pas importer une variante suffixée.`);
 }
