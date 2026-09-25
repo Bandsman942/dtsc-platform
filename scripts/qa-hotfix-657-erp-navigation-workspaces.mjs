@@ -20,6 +20,7 @@ const retail = read("components/enterprise/professional/retail-workspace-shared.
 const gamingStations = read("components/enterprise/gaming/enterprise-gaming-stations-workspace.tsx");
 const sectorRouter = read("components/enterprise/enterprise-sector-module-workspace.tsx");
 const aiRouter = read("app/enterprise-modules/[moduleCode]/page.tsx");
+const aiBridge = read("components/enterprise/enterprise-ai-workspace-v2.tsx");
 
 check(clientOrganizations.includes("filteredSectors.map((sector)"), "Administration DTSC renders every filtered active sector");
 check(!clientOrganizations.includes("filteredSectors.slice("), "Administration DTSC has no arbitrary sector result cap");
@@ -50,7 +51,7 @@ check(includesAll(tailoring, ["ModuleWorkspace", "ModuleMetrics", "ProfessionalT
 check(includesAll(retail, ["ModuleWorkspace", "ModuleHeader", "ModuleToolbar", "ProfessionalTabs"]), "Retail remains a transactional workspace on shared primitives");
 check(includesAll(gamingStations, ["ModuleWorkspace", "ModuleHeader", "ModuleToolbar", "ProfessionalTabs"]), "Gaming remains a transactional workspace on shared primitives");
 check(includesAll(sectorRouter, ["EnterpriseSectorModuleWorkspace", "SECTOR_HEALTH", "SECTOR_PHARMACY", "ProfessionalHelp"]), "Health and Pharmacy keep dedicated business renderers inside the canonical sector router");
-check(includesAll(aiRouter, ["AssistantImmersiveWorkspaceShell", "EnterpriseAiWorkspaceV2", 'definition.routeKind === "AI_SERVICE"']), "Enterprise AI remains the dedicated immersive archetype");
+check(includesAll(aiRouter, ["AssistantImmersiveWorkspaceShell", "EnterpriseAiWorkspace", 'definition.routeKind === "AI_SERVICE"']) && includesAll(aiBridge, ["EnterpriseAiWorkspace", "enterprise-ai-workspace"]), "Enterprise AI remains the dedicated immersive archetype through its canonical workspace and compatibility bridge");
 
 const failed = checks.filter((item) => !item.condition);
 for (const item of checks) console.log(`${item.condition ? "PASS" : "FAIL"} ${item.message}`);
