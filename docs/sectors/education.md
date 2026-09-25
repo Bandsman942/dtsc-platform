@@ -5,6 +5,8 @@ Programme : #279
 Itération : #280  
 Baseline : main@85a119cd9a55b800ae8364e16dcf25b02f2a9323
 
+Sources auditées EDU-0 : `docs/enterprise-sector-modules.md`, `lib/enterprise/module-registry.ts`, `prisma/schema.prisma` et la migration historique `prisma/migrations/20260527143000_enterprise_sector_templates/migration.sql`. Livraison suivie par la PR #677.
+
 ## 1. Mission
 
 DTSC Education est une extension sectorielle de DTSC Platform pour écoles, instituts, centres de formation et universités. Elle consomme le Core et l’ERP commun au lieu de recréer un ERP parallèle.
