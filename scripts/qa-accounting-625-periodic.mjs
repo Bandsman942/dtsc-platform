@@ -17,6 +17,8 @@ const panelPath = "components/enterprise/professional/periodic-accounting-panel.
 const pageComponentPath = "components/enterprise/enterprise-periodic-accounting-page.tsx";
 const pageRoutePath = "app/enterprise-modules/FINANCE_ACCOUNTING/periodic-accounting/page.tsx";
 const financePagePath = "components/enterprise/enterprise-finance-module-page.tsx";
+const financeFrPath = "locales/enterprise-finance.fr.json";
+const financeEnPath = "locales/enterprise-finance.en.json";
 const docsPath = "docs/ACCOUNTING_625_PERIODIC.md";
 const apiPaths = [
   "app/api/enterprise/[organizationId]/periodic-accounting/route.ts",
@@ -24,7 +26,7 @@ const apiPaths = [
   "app/api/enterprise/[organizationId]/periodic-accounting/[templateId]/versions/route.ts",
   "app/api/enterprise/[organizationId]/periodic-accounting/[templateId]/execute/route.ts",
 ];
-for (const file of [schemaPath, migrationPath, servicePath, schemasPath, reversalPath, panelPath, pageComponentPath, pageRoutePath, financePagePath, docsPath, ...apiPaths]) check(exists(file), `Missing Accounting C4 file ${file}`);
+for (const file of [schemaPath, migrationPath, servicePath, schemasPath, reversalPath, panelPath, pageComponentPath, pageRoutePath, financePagePath, financeFrPath, financeEnPath, docsPath, ...apiPaths]) check(exists(file), `Missing Accounting C4 file ${file}`);
 
 const schema = read(schemaPath);
 containsAll(schema, [
@@ -104,7 +106,12 @@ containsAll(pageComponent, ["PeriodicAccountingPanel", 'moduleCode: "FINANCE_ACC
 const pageRoute = read(pageRoutePath);
 check(pageRoute.includes("EnterprisePeriodicAccountingPage"), "Accounting periodic route must render the protected periodic page");
 const financePage = read(financePagePath);
-containsAll(financePage, ["CalendarClock", "/enterprise-modules/FINANCE_ACCOUNTING/periodic-accounting", "Comptabilité périodique", "Periodic accounting"], "Accounting module navigation to periodic workspace");
+containsAll(financePage, ["CalendarClock", "/enterprise-modules/FINANCE_ACCOUNTING/periodic-accounting", 't("periodicAccountingTitle")'], "Accounting module navigation to periodic workspace");
+check(!financePage.includes(">Comptabilité périodique<") && !financePage.includes(">Periodic accounting<"), "Accounting module navigation must source periodic copy from the Finance catalogue.");
+const financeFr = JSON.parse(read(financeFrPath));
+const financeEn = JSON.parse(read(financeEnPath));
+check(financeFr.periodicAccountingTitle === "Comptabilité périodique", "Finance FR catalogue must preserve the periodic accounting label.");
+check(financeEn.periodicAccountingTitle === "Periodic accounting", "Finance EN catalogue must preserve the periodic accounting label.");
 
 const parity = read("scripts/qa-enterprise-finance-migration-parity.mjs");
 check(parity.includes("enterprise-accounting-periodic.prisma"), "Finance migration parity must include the C4 schema");
