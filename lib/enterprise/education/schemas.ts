@@ -22,6 +22,7 @@ export const educationSettingsSchema = z.object({
   timezone: z.string().trim().min(1).max(100).default("Africa/Kinshasa"),
   weekStartsOn: z.coerce.number().int().min(0).max(6).default(1),
   defaultCampusId: optionalId,
+  revision: z.coerce.number().int().positive().optional(),
 });
 
 export const educationCampusCreateSchema = z.object({
