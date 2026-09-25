@@ -127,6 +127,8 @@ export async function getEducationWorkspaceSnapshot(organizationId: string) {
     departments,
     programs,
     subjects,
+    periods,
+    classGroups,
   ] = await Promise.all([
     prisma.enterpriseEducationInstitutionSettings.findUnique({ where: { organizationId } }),
     prisma.enterpriseEducationCampus.count({ where: { organizationId, archivedAt: null } }),
@@ -145,11 +147,13 @@ export async function getEducationWorkspaceSnapshot(organizationId: string) {
     prisma.enterpriseEducationDepartment.findMany({ where: { organizationId, archivedAt: null }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }], take: 100, select: { id: true, code: true, name: true, campusId: true, status: true } }),
     prisma.enterpriseEducationProgram.findMany({ where: { organizationId, archivedAt: null }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }], take: 100, select: { id: true, code: true, name: true, departmentId: true, status: true } }),
     prisma.enterpriseEducationSubject.findMany({ where: { organizationId, archivedAt: null }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }], take: 100, select: { id: true, code: true, name: true, departmentId: true, status: true } }),
+    prisma.enterpriseEducationAcademicPeriod.findMany({ where: { organizationId, archivedAt: null }, orderBy: [{ academicYearId: "asc" }, { sequence: "asc" }], take: 100, select: { id: true, code: true, label: true, academicYearId: true, status: true } }),
+    prisma.enterpriseEducationClassGroup.findMany({ where: { organizationId, archivedAt: null }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }], take: 100, select: { id: true, code: true, name: true, academicYearId: true, campusId: true, levelId: true, programId: true, status: true } }),
   ]);
   return {
     settings,
     counts: { campusCount, yearCount, activeYearCount, periodCount, levelCount, programCount, classGroupCount, subjectCount, offeringCount, calendarCount },
-    references: { campuses, academicYears, levels, departments, programs, subjects },
+    references: { campuses, academicYears, periods, levels, departments, programs, classGroups, subjects },
     onboarding: {
       settings: Boolean(settings),
       campus: campusCount > 0,
