@@ -357,7 +357,7 @@ CROSS JOIN (
   VALUES
     ('education-v2-module-admissions', 'ADMISSIONS', 'Admissions', 'Admissions', 'Candidats, dossiers, décisions et conversion vers l’inscription.', 'Candidates, applications, decisions and conversion into enrollment.', 'clipboard-check', 240),
     ('education-v2-module-students', 'STUDENTS', 'Étudiants', 'Students', 'Registre étudiant, inscriptions, affectations et historique.', 'Student registry, enrollments, placements and history.', 'users', 250),
-    ('education-v2-module-guardians', 'GUARDIANS', 'Parents & tuteurs', 'Parents & guardians', 'Tuteurs, relations étudiant et préférences de contact.', 'Guardians, student relationships and contact preferences.', 'user-round-check', 260)
+    ('education-v2-module-guardians', 'GUARDIANS', 'Parents & tuteurs', 'Parents & guardians', 'Tuteurs, relations étudiant et préférences de contact.', 'Guardians, student relationships and contact preferences.', 'user-round', 260)
 ) AS module_data("id", "moduleCode", "labelFr", "labelEn", "descriptionFr", "descriptionEn", "icon", "sortOrder")
 ON CONFLICT ("templateId", "moduleCode") DO UPDATE SET
   "labelFr" = EXCLUDED."labelFr",
