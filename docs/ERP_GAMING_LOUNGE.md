@@ -328,6 +328,16 @@ prisma/migrations/20260915011000_gaming_checkout_daily_close/migration.sql
 
 Elle ajoute uniquement `EnterpriseGamingCheckout`, `EnterpriseGamingDailyClose`, `EnterpriseGamingDailyCloseLine`, leurs index, contraintes d’état, FK Gaming nécessaires et guards d’unicité de clôture. Elle ne modifie ni ne remplace les tables Finance/Inventory existantes.
 
+## Hotfix #690 — advisory locks Prisma, erreurs corrélables et toast unique
+
+Le hotfix #690 corrige une panne Production observée sur les réservations et l’encaissement Gaming, ainsi qu’un défaut latent de la clôture journalière. PostgreSQL `pg_advisory_xact_lock` renvoie `void` : les services Gaming ne doivent donc jamais l’exécuter avec `Prisma.$queryRaw`, qui tente de désérialiser une valeur de retour. Les verrous transactionnels utilisent `Prisma.$executeRaw` tout en conservant les transactions `Serializable`, les clés d’idempotence et les guards métier existants.
+
+La Quality Gate exécute aussi `scripts/qa-gaming-advisory-lock-runtime.mjs` sur PostgreSQL réel après `prisma:deploy`, afin de prouver le contrat Prisma/runtime et pas seulement la présence textuelle du verrou.
+
+Les erreurs Gaming inattendues restent volontairement non techniques côté client. Elles renvoient désormais une référence support corrélée aux logs serveur, sans exposer le message Prisma, le tenant ou le payload. Le workspace Réservations conserve l’erreur inline mais confie le toast global à un seul propriétaire afin d’éviter les notifications dupliquées.
+
+Aucune migration Prisma n’est requise par #690.
+
 ## Programme d’implémentation
 
 - #639 — fondation canonique — fusionné ;
