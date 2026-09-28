@@ -1,7 +1,7 @@
 # SCALE-7 — Staged load certification
 
-Issue: #360  
-Parent programme: #352  
+Issue: #360
+Parent programme: #352
 Depends on: #359 / SCALE-6
 
 ## Objective
