@@ -170,6 +170,7 @@ includesAll(checkoutService, [
   "assertAccountingApprovalCandidate",
   "createAccountingApprovalAssignment",
   "pg_advisory_xact_lock",
+  "tx.$executeRaw",
   "Prisma.TransactionIsolationLevel.Serializable",
   'status: "PENDING_APPROVAL"',
   "enterpriseSalesInvoice.create",
@@ -189,6 +190,7 @@ includesAll(checkoutService, [
   'status: "TO_CHECKOUT"',
   "GAMING_CHECKOUT_IDEMPOTENCY_CONFLICT",
 ], "checkout preparation");
+check(!/\$queryRaw[\s\S]{0,180}pg_advisory_xact_lock/.test(checkoutService), "checkout advisory lock must never use $queryRaw because PostgreSQL returns void");
 check(!checkoutService.includes("enterprisePayment.create"), "checkout preparation must not create a parallel/direct payment");
 check(!checkoutService.includes("EnterpriseGamingCatalog"), "checkout must reuse shared Catalog");
 check(!checkoutService.includes("EnterpriseGamingInventory"), "checkout must reuse shared Inventory");
@@ -263,6 +265,7 @@ includesAll(dailyClose, [
   "businessWindow",
   "zonedDateToUtc",
   "pg_advisory_xact_lock",
+  "tx.$executeRaw",
   'status: { in: ["SUBMITTED", "VALIDATED"] }',
   "endedAt: { gte: start, lt: end }",
   "paymentDate: { gte: start, lt: end }",
@@ -276,6 +279,7 @@ includesAll(dailyClose, [
   "GAMING_CLOSE_VARIANCE_REASON_REQUIRED",
   "GAMING_CLOSE_SELF_VALIDATION_FORBIDDEN",
 ], "daily close reconciliation");
+check(!/\$queryRaw[\s\S]{0,180}pg_advisory_xact_lock/.test(dailyClose), "daily-close advisory lock must never use $queryRaw because PostgreSQL returns void");
 check(!dailyClose.includes("exchangeRate"), "daily close must not silently convert currencies");
 check(!dailyClose.includes("functionalCurrency"), "daily close must not aggregate through functional currency");
 
