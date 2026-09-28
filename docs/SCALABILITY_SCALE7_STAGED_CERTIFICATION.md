@@ -91,10 +91,15 @@ Manual inputs:
 
 Required configuration:
 
-- repository variable `SCALE7_LOAD_BASE_URL`;
-- secret `SCALE7_AUTH_CONTEXTS_JSON`;
-- secret `SCALE7_CTO_SESSION_COOKIE`;
+- secret `SCALE7_AUTH_CONTEXTS_JSON` — always required; there is deliberately no single-session fallback;
 - secret `VERCEL_AUTOMATION_BYPASS_SECRET`.
+
+Governed fallbacks reduce duplicate Production configuration:
+
+- application origin: `SCALE7_LOAD_BASE_URL` overrides `SCALE1_LOAD_BASE_URL`; if neither repository variable exists, the canonical Production origin `https://app.dtsc-platform.com` is used;
+- CTO observability session: `SCALE7_CTO_SESSION_COOKIE` overrides the existing governed `SCALE1_CTO_SESSION_COOKIE`.
+
+These fallbacks do not weaken the workload topology. The dedicated SCALE-7 multi-tenant identity pool remains mandatory.
 
 No workflow runs on push, pull request or schedule.
 
