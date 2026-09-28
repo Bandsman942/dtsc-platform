@@ -1,3 +1,4 @@
+import { EDUCATION_USER_GUIDES } from "@/lib/enterprise/education-user-guides";
 import { FINANCE_USER_GUIDES, type FinanceUserGuide } from "@/lib/enterprise/finance-user-guides";
 import { SECTOR_USER_GUIDES, type SectorUserGuide } from "@/lib/enterprise/sector-user-guides";
 import {
@@ -142,7 +143,7 @@ const COMMON_ENTERPRISE_USER_GUIDES: Record<string, EnterpriseGuideSource> = {
 
 export function getEnterpriseGuideSource(code: string): EnterpriseGuideSource | null {
   const normalized = code.trim().toUpperCase();
-  return COMMON_ENTERPRISE_USER_GUIDES[normalized] || FINANCE_USER_GUIDES[normalized] || SECTOR_USER_GUIDES[normalized] || null;
+  return COMMON_ENTERPRISE_USER_GUIDES[normalized] || FINANCE_USER_GUIDES[normalized] || EDUCATION_USER_GUIDES[normalized] || SECTOR_USER_GUIDES[normalized] || null;
 }
 
 export function getCanonicalEnterpriseUserGuide(code: string, locale?: string | null): CanonicalUserGuide | null {
