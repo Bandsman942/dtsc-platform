@@ -401,4 +401,3 @@ Le seuil de cinq postes reste exclusivement une baseline d’onboarding/commerci
 La QA #696 vérifie la parité code/domaine/migration et lit la contrainte active directement dans PostgreSQL. L’acceptance Gaming renforce aussi le scénario #693 : démarrage réel de session → `END` → promotion `READY_TO_CHECKOUT` → préparation de facture, plus un scénario de compatibilité d’une ancienne session `ENDED` qui doit persister `CHECKOUT_OPEN`.
 
 Les erreurs inattendues de checkout utilisent désormais des messages contextualisés. Une `supportReference` sûre est conservée jusqu’à `ProfessionalApiError` et reste visible dans l’interface sans exposer SQL, stack Prisma, payload ou identifiant tenant.
-
