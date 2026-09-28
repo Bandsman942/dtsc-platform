@@ -162,6 +162,15 @@ export function setup() {
     if (preflight.status !== 200) {
       throw new Error(`Authenticated preflight failed with status ${preflight.status}`);
     }
+
+    const ownTenant = http.get(`${baseUrl}${identity.tenant.enterpriseReadPath}`, {
+      headers: headersFor(identity),
+      redirects: 0,
+      tags: { workload: "preflight-own-tenant" },
+    });
+    if (ownTenant.status < 200 || ownTenant.status >= 300) {
+      throw new Error(`Own-tenant preflight failed with status ${ownTenant.status}`);
+    }
   }
 
   for (const tenant of tenants) {
