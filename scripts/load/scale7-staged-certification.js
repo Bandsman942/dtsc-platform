@@ -71,8 +71,8 @@ if (new Set(identities.map((identity) => identity.sessionCookie)).size !== ident
 
 const aiPath = typeof authPool.aiPath === "string" ? authPool.aiPath : null;
 const aiPayload = authPool.aiPayload && typeof authPool.aiPayload === "object" ? authPool.aiPayload : null;
-if ((aiPath && !aiPayload) || (!aiPath && aiPayload)) {
-  throw new Error("SCALE-7 aiPath and aiPayload must be provided together");
+if (!aiPath || !aiPayload) {
+  throw new Error("SCALE-7 requires aiPath and aiPayload for the representative AI workload");
 }
 
 const tenantIsolationPass = new Rate("tenant_isolation_pass");
@@ -233,7 +233,7 @@ export default function () {
       redirects: 0,
       tags: { workload: label },
     });
-  } else if (draw < 0.99 || !aiPath) {
+  } else if (draw < 0.99) {
     label = "collaboration-read";
     response = http.get(`${baseUrl}${tenant.collaborationReadPath}`, {
       headers: headersFor(identity),
