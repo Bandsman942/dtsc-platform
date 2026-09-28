@@ -41,9 +41,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      BASE_URL: ${{ vars.SCALE7_LOAD_BASE_URL }}
+      BASE_URL: ${{ vars.SCALE7_LOAD_BASE_URL || vars.SCALE1_LOAD_BASE_URL || 'https://app.dtsc-platform.com' }}
       SCALE7_AUTH_CONTEXTS_JSON: ${{ secrets.SCALE7_AUTH_CONTEXTS_JSON }}
-      OBSERVABILITY_COOKIE: ${{ secrets.SCALE7_CTO_SESSION_COOKIE }}
+      OBSERVABILITY_COOKIE: ${{ secrets.SCALE7_CTO_SESSION_COOKIE || secrets.SCALE1_CTO_SESSION_COOKIE }}
       VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
       TARGET_VUS: ${{ github.event_name == 'workflow_dispatch' && inputs.target_vus || '' }}
       LOAD_PROFILE: ${{ github.event_name == 'workflow_dispatch' && inputs.load_profile || '' }}

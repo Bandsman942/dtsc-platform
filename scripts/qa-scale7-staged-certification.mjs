@@ -55,6 +55,10 @@ expect(workflow.includes("k6-version: 2.1.0"), "k6 must be pinned");
 expect(workflow.includes("actions/upload-artifact@v7"), "evidence artifact upload is required");
 expect(workflow.includes("retention-days: 90"), "SCALE-7 evidence retention must be explicit");
 expect(workflow.includes("api/admin/scalability/observability?windowHours=1"), "live CTO observability sampling is required");
+expect(workflow.includes("vars.SCALE7_LOAD_BASE_URL || vars.SCALE1_LOAD_BASE_URL || 'https://app.dtsc-platform.com'"), "SCALE-7 must reuse the governed Production origin before requiring a dedicated override");
+expect(workflow.includes("secrets.SCALE7_CTO_SESSION_COOKIE || secrets.SCALE1_CTO_SESSION_COOKIE"), "SCALE-7 must reuse the governed CTO observability session when no dedicated override exists");
+expect(workflow.includes("secrets.SCALE7_AUTH_CONTEXTS_JSON"), "SCALE-7 multi-tenant auth pool must remain dedicated");
+expect(!workflow.includes("SCALE1_LOAD_SESSION_COOKIE"), "SCALE-7 must not downgrade to the single-identity SCALE-1 load session");
 
 expect(profile.includes("SCALE7_AUTH_CONTEXTS_JSON"), "multi-tenant auth pool is required");
 expect(profile.includes("tenants.length < 2"), "at least two tenants must be enforced");
