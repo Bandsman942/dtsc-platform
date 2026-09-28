@@ -28,22 +28,36 @@ A stage is certified only when all required profiles have archived PASS evidence
 - a low-frequency real AI request path governed by SCALE-6;
 - explicit cross-tenant probes that must stay 403/404.
 
-The secret `SCALE7_AUTH_CONTEXTS_JSON` contains only operator-provided load-test contexts and is never written to artifacts or logs. Each context must provide:
+The secret `SCALE7_AUTH_CONTEXTS_JSON` contains an operator-provided pool of dedicated load-test identities. Paths are grouped by tenant to keep the secret compact and to avoid pretending that thousands of VUs are thousands of requests from one account.
 
 ```json
 {
-  "sessionCookie": "REDACTED",
-  "organizationId": "load-test-org-a",
-  "enterpriseReadPath": "/api/...",
-  "shopReadPath": "/api/...",
-  "collaborationReadPath": "/api/...",
   "aiPath": "/api/...",
   "aiPayload": {},
-  "isolationProbePath": "/api/...foreign-tenant..."
+  "tenants": [
+    {
+      "organizationId": "load-test-org-a",
+      "enterpriseReadPath": "/api/...",
+      "shopReadPath": "/api/...",
+      "collaborationReadPath": "/api/...",
+      "isolationProbePath": "/api/...foreign-tenant...",
+      "sessionCookies": ["REDACTED", "REDACTED"]
+    },
+    {
+      "organizationId": "load-test-org-b",
+      "enterpriseReadPath": "/api/...",
+      "shopReadPath": "/api/...",
+      "collaborationReadPath": "/api/...",
+      "isolationProbePath": "/api/...foreign-tenant...",
+      "sessionCookies": ["REDACTED", "REDACTED"]
+    }
+  ]
 }
 ```
 
-Use dedicated load-test organizations and data. Never point mutation-heavy scenarios at real customer records.
+The harness requires at least two distinct tenants and a unique authenticated identity pool sized to the stage: `max(8, ceil(targetVus / 100))`, therefore at least 8 / 10 / 25 / 50 identities for 500 / 1,000 / 2,500 / 5,000 VU. This prevents per-user limits from being measured as a fake platform bottleneck. The AI path is mandatory but intentionally represents about 1% of iterations so SCALE-6 user/organization/provider ceilings remain a governed subsystem rather than dominating the whole workload.
+
+Use dedicated load-test organizations and data. Never point the certification harness at real customer records.
 
 ## SLO gates
 
