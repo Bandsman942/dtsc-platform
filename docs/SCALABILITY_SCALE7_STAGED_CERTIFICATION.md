@@ -98,6 +98,15 @@ Required configuration:
 
 No workflow runs on push, pull request or schedule.
 
+### Owner-only Issue #360 trigger
+
+The repository OWNER may trigger the same bounded workflow by posting an exact command on Issue #360:
+
+- `RUN_SCALE7_500_RAMP`, `RUN_SCALE7_500_SOAK`, `RUN_SCALE7_500_SPIKE`;
+- the same form for `1000`, `2500` and `5000`.
+
+The workflow rejects non-OWNER authors, comments outside #360 and unsupported commands. It does not bypass the versioned progression gate. After an owner-triggered run it posts a `SCALE7_RESULT_JSON` secret-free summary back to #360 so the evidence can be archived through the normal PR/CI path.
+
 ## Archived certification registry
 
 GitHub Actions artifacts are the execution evidence. After a real run, download the sanitized `scale7-certification-report.json` and archive only its safe summary:
