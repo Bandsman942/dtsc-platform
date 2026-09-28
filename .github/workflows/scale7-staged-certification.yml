@@ -18,9 +18,12 @@ on:
         description: Type RUN_SCALE7_CERTIFICATION to authorize the bounded load run
         required: true
         type: string
+  issue_comment:
+    types: [created]
 
 permissions:
   contents: read
+  issues: write
 
 concurrency:
   group: scale7-certification
@@ -28,7 +31,13 @@ concurrency:
 
 jobs:
   staged-certification:
-    name: SCALE-7 ${{ inputs.target_vus }} VU · ${{ inputs.load_profile }}
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.number == 360 &&
+       github.event.comment.author_association == 'OWNER' &&
+       startsWith(github.event.comment.body, 'RUN_SCALE7_'))
+    name: SCALE-7 staged certification
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -36,18 +45,47 @@ jobs:
       SCALE7_AUTH_CONTEXTS_JSON: ${{ secrets.SCALE7_AUTH_CONTEXTS_JSON }}
       OBSERVABILITY_COOKIE: ${{ secrets.SCALE7_CTO_SESSION_COOKIE }}
       VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
-      TARGET_VUS: ${{ inputs.target_vus }}
-      LOAD_PROFILE: ${{ inputs.load_profile }}
+      TARGET_VUS: ${{ github.event_name == 'workflow_dispatch' && inputs.target_vus || '' }}
+      LOAD_PROFILE: ${{ github.event_name == 'workflow_dispatch' && inputs.load_profile || '' }}
       ARTIFACTS_DIR: artifacts
     steps:
-      - name: Validate manual certification contract
+      - name: Validate certification trigger contract
         shell: bash
         run: |
           set -euo pipefail
-          if [ "${{ inputs.confirmation }}" != "RUN_SCALE7_CERTIFICATION" ]; then
-            echo "::error::Confirmation must be RUN_SCALE7_CERTIFICATION."
-            exit 1
+          target="${TARGET_VUS:-}"
+          profile="${LOAD_PROFILE:-}"
+
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            if [ "${{ inputs.confirmation }}" != "RUN_SCALE7_CERTIFICATION" ]; then
+              echo "::error::Confirmation must be RUN_SCALE7_CERTIFICATION."
+              exit 1
+            fi
+          else
+            if [ "${{ github.event.issue.number }}" != "360" ] || [ "${{ github.event.comment.author_association }}" != "OWNER" ]; then
+              echo "::error::Only the repository OWNER may trigger SCALE-7 from Issue #360."
+              exit 1
+            fi
+            case "${{ github.event.comment.body }}" in
+              RUN_SCALE7_500_RAMP) target=500; profile=ramp ;;
+              RUN_SCALE7_500_SOAK) target=500; profile=soak ;;
+              RUN_SCALE7_500_SPIKE) target=500; profile=spike ;;
+              RUN_SCALE7_1000_RAMP) target=1000; profile=ramp ;;
+              RUN_SCALE7_1000_SOAK) target=1000; profile=soak ;;
+              RUN_SCALE7_1000_SPIKE) target=1000; profile=spike ;;
+              RUN_SCALE7_2500_RAMP) target=2500; profile=ramp ;;
+              RUN_SCALE7_2500_SOAK) target=2500; profile=soak ;;
+              RUN_SCALE7_2500_SPIKE) target=2500; profile=spike ;;
+              RUN_SCALE7_5000_RAMP) target=5000; profile=ramp ;;
+              RUN_SCALE7_5000_SOAK) target=5000; profile=soak ;;
+              RUN_SCALE7_5000_SPIKE) target=5000; profile=spike ;;
+              *) echo "::error::Unsupported SCALE-7 owner command."; exit 1 ;;
+            esac
           fi
+
+          echo "TARGET_VUS=${target}" >> "$GITHUB_ENV"
+          echo "LOAD_PROFILE=${profile}" >> "$GITHUB_ENV"
+
           for name in BASE_URL SCALE7_AUTH_CONTEXTS_JSON OBSERVABILITY_COOKIE VERCEL_AUTOMATION_BYPASS_SECRET; do
             if [ -z "${!name:-}" ]; then
               echo "::error::Required SCALE-7 configuration is missing: ${name}."
@@ -56,8 +94,8 @@ jobs:
           done
           echo "::add-mask::${VERCEL_AUTOMATION_BYPASS_SECRET}"
           case "$BASE_URL" in https://*) ;; *) echo "::error::SCALE7_LOAD_BASE_URL must use HTTPS."; exit 1 ;; esac
-          case "$TARGET_VUS" in 500|1000|2500|5000) ;; *) echo "::error::Invalid SCALE-7 stage."; exit 1 ;; esac
-          case "$LOAD_PROFILE" in ramp|soak|spike) ;; *) echo "::error::Invalid SCALE-7 profile."; exit 1 ;; esac
+          case "$target" in 500|1000|2500|5000) ;; *) echo "::error::Invalid SCALE-7 stage."; exit 1 ;; esac
+          case "$profile" in ramp|soak|spike) ;; *) echo "::error::Invalid SCALE-7 profile."; exit 1 ;; esac
 
       - name: Checkout
         uses: actions/checkout@v7
@@ -126,7 +164,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: scale7-${{ inputs.target_vus }}-${{ inputs.load_profile }}-${{ github.sha }}
+          name: scale7-${{ github.run_id }}-${{ github.sha }}
           if-no-files-found: error
           retention-days: 90
           path: |
@@ -149,3 +187,50 @@ jobs:
             exit 1
           fi
           echo "SCALE-7 ${TARGET_VUS} ${LOAD_PROFILE}: PASS"
+
+
+      - name: Publish owner-triggered sanitized result
+        if: always() && github.event_name == 'issue_comment'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ -f artifacts/scale7-certification-report.json ]; then
+            safe_json="$(jq -c '{
+              contract,
+              targetVus,
+              profile,
+              status,
+              generatedAt,
+              durationSeconds,
+              http: {
+                requestsPerSecond: .http.requestsPerSecond,
+                failedRate: .http.failedRate,
+                latencyMs: .http.latencyMs,
+                tenantIsolationRate: .http.tenantIsolationRate
+              },
+              infrastructure: {
+                maxDbConnectionUtilization: .infrastructure.maxDbConnectionUtilization,
+                redisStatuses: .infrastructure.redisStatuses,
+                maxAiActiveAttempts: .infrastructure.maxAiActiveAttempts,
+                maxAiThrottledAttempts: .infrastructure.maxAiThrottledAttempts
+              },
+              githubRunId,
+              gitSha,
+              evidence
+            }' artifacts/scale7-certification-report.json)"
+            status="$(jq -r '.status' artifacts/scale7-certification-report.json)"
+            body="$(printf 'SCALE-7 owner-triggered run completed — **%s**.\n\nSCALE7_RESULT_JSON\n\x60\x60\x60json\n%s\n\x60\x60\x60\n\nRun: \x60%s\x60 · SHA: \x60%s\x60. This summary is secret-free and contains no tenant/session/provider credential.' "$status" "$safe_json" "$GITHUB_RUN_ID" "$GITHUB_SHA")"
+          else
+            body="SCALE-7 owner-triggered run ended without a generated sanitized report — run \`${GITHUB_RUN_ID}\`, SHA \`${GITHUB_SHA}\`. No capacity conclusion is recorded."
+          fi
+          jq -n --arg body "$body" '{body:$body}' |
+            curl --fail --silent --show-error \
+              --request POST \
+              --header "Accept: application/vnd.github+json" \
+              --header "Authorization: Bearer ${GH_TOKEN}" \
+              --header "X-GitHub-Api-Version: 2022-11-28" \
+              --data-binary @- \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/issues/360/comments" \
+            > /dev/null
