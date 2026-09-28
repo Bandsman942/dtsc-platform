@@ -61,6 +61,10 @@ Every run enforces:
 
 The report additionally archives throughput, DB pressure, Redis state, queue state and AI concurrency/throttling signals.
 
+## Stage progression
+
+The workflow enforces progression from the versioned registry: `soak` requires a PASS `ramp` at the same stage, `spike` requires PASS `ramp` + `soak`, and 1,000/2,500/5,000 cannot start until the previous stage has PASS evidence for all three profiles.
+
 ## Execution
 
 Workflow: `.github/workflows/scale7-staged-certification.yml`
