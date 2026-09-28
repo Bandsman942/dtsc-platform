@@ -15,24 +15,31 @@ export class ProfessionalApiError extends Error {
   readonly clientMessage: string | null;
   readonly details: unknown;
   readonly status: number;
+  readonly supportReference: string | null;
 
   constructor({
     code,
     clientMessage,
     details,
     status,
+    supportReference = null,
   }: {
     code: string;
     clientMessage: string | null;
     details: unknown;
     status: number;
+    supportReference?: string | null;
   }) {
-    super(clientMessage || code);
+    const supportSuffix = supportReference && clientMessage && !clientMessage.includes(supportReference)
+      ? ` · Support: ${supportReference}`
+      : "";
+    super(`${clientMessage || code}${supportSuffix}`);
     this.name = "ProfessionalApiError";
     this.code = code;
     this.clientMessage = clientMessage;
     this.details = details;
     this.status = status;
+    this.supportReference = supportReference;
   }
 }
 
@@ -45,7 +52,7 @@ type ProfessionalRequestOptions = {
 };
 
 function professionalApiError(
-  body: { error?: string; message?: string; details?: unknown } | null,
+  body: { error?: string; message?: string; details?: unknown; supportReference?: string } | null,
   status: number,
   fallbackCode: string,
   fallbackMessage?: string,
@@ -54,7 +61,10 @@ function professionalApiError(
   const clientMessage = typeof body?.message === "string" && body.message.trim()
     ? body.message.trim()
     : fallbackMessage?.trim() || null;
-  return new ProfessionalApiError({ code, clientMessage, details: body?.details, status });
+  const supportReference = typeof body?.supportReference === "string" && body.supportReference.trim()
+    ? body.supportReference.trim()
+    : null;
+  return new ProfessionalApiError({ code, clientMessage, details: body?.details, status, supportReference });
 }
 
 export async function professionalRequest<T = Record<string, unknown>>(
@@ -74,7 +84,7 @@ export async function professionalRequest<T = Record<string, unknown>>(
     headers: payload === undefined ? undefined : { "content-type": "application/json" },
     body: payload === undefined ? undefined : JSON.stringify(payload),
   });
-  const body = await response.json().catch(() => null) as ({ error?: string; message?: string; details?: unknown } & Record<string, unknown>) | null;
+  const body = await response.json().catch(() => null) as ({ error?: string; message?: string; details?: unknown; supportReference?: string } & Record<string, unknown>) | null;
   if (!response.ok || !body) throw professionalApiError(body, response.status || 500, fallbackCode, fallbackMessage);
   return body as T;
 }
