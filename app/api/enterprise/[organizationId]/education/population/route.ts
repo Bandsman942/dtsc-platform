@@ -12,6 +12,7 @@ import {
 } from "@/lib/enterprise/education/admissions-service";
 import { authorizeEducationRequest, educationErrorResponse, educationListParams } from "@/lib/enterprise/education/http";
 import type { EducationModuleCode } from "@/lib/enterprise/education/constants";
+import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -32,13 +33,14 @@ export async function GET(req: Request, { params }: Params) {
 
   try {
     const input = educationListParams(req);
-    const [snapshot, result] = await Promise.all([
+    const [snapshot, result, capabilities] = await Promise.all([
       getEducationPopulationSnapshot(organizationId),
       moduleCode === "ADMISSIONS"
         ? listAdmissions(organizationId, input)
         : moduleCode === "STUDENTS"
           ? listStudents(organizationId, input)
           : listGuardians(organizationId, input),
+      resolveEnterpriseModuleCapabilities({ userId: auth.session.userId, organizationId, moduleCode }),
     ]);
     await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "education", moduleCode, action: "list" } });
     return NextResponse.json({
@@ -46,9 +48,9 @@ export async function GET(req: Request, { params }: Params) {
       snapshot,
       ...result,
       capabilities: {
-        canWrite: auth.access.canWrite,
-        canApprove: auth.access.canApprove,
-        canManage: auth.access.canAdminister,
+        canWrite: capabilities.canWrite,
+        canApprove: capabilities.canApprove,
+        canManage: capabilities.canManage,
       },
     });
   } catch (error) {
