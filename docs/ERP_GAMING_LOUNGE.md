@@ -376,3 +376,17 @@ Le contrat corrigé est :
 - la QA #690 interdit `$queryRaw(...pg_advisory_xact_lock...)` dans le domaine Gaming et exécute réellement un advisory transaction lock via Prisma/PostgreSQL lorsqu’une `DATABASE_URL` de CI est disponible.
 
 Le parcours OWNER_E2E requis après merge reste : réservation → check-in/session → fin de session → checkout/facture → paiement → clôture → rapports, avec Tournois vérifié en non-régression.
+
+## Hotfix #693 — création des lignes de facture au checkout
+
+Après #690, le checkout atteignait enfin la création de la facture Finance mais Prisma rejetait encore le nested create des lignes avec `PrismaClientValidationError: Unknown argument organizationId`.
+
+Le contrat correct est celui déjà utilisé par le service Finance canonique : `organizationId` reste sur `EnterpriseSalesInvoice`, tandis que les objets de `items.create` ne renseignent pas directement les champs relationnels `organizationId` / `salesInvoiceId`. Prisma les propage depuis la relation composite du parent.
+
+#693 ajoute deux preuves complémentaires :
+
+- une QA Prisma/PostgreSQL réelle qui crée une facture avec une ligne imbriquée et vérifie que l’`organizationId` du parent est bien propagé ;
+- un E2E API qui prépare deux checkouts Gaming complets jusqu’à `INVOICE_PENDING` / `PENDING_APPROVAL` : un client comptoir walk-in et un client CRM canonique.
+
+L’audit transverse a identifié la même forme de payload dans les convergences Santé et Pharmacie. Elle est suivie séparément par #694 afin que le P0 Gaming reste ciblé et réversible.
+
