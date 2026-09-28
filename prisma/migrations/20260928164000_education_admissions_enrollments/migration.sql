@@ -340,3 +340,172 @@ ALTER TABLE "EnterpriseEducationEnrollmentHistory"
   FOREIGN KEY ("organizationId", "enrollmentId")
   REFERENCES "EnterpriseEducationEnrollment"("organizationId", "id")
   ON DELETE RESTRICT ON UPDATE CASCADE;
+
+
+-- EDU-2 extends Education template v2 with admissions, students and guardians.
+WITH template AS (
+  SELECT t."id"
+  FROM "SectorTemplate" t
+  JOIN "BusinessSector" s ON s."id" = t."sectorId"
+  WHERE s."code" = 'EDUCATION' AND t."version" = 2
+)
+INSERT INTO "SectorTemplateModule"
+  ("id", "templateId", "moduleCode", "labelFr", "labelEn", "descriptionFr", "descriptionEn", "moduleCategory", "icon", "sortOrder", "defaultEnabled", "requiresPlanLevel", "createdAt", "updatedAt")
+SELECT module_data."id", template."id", module_data."moduleCode", module_data."labelFr", module_data."labelEn", module_data."descriptionFr", module_data."descriptionEn", 'SECTOR', module_data."icon", module_data."sortOrder", true, 'BUSINESS', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+FROM template
+CROSS JOIN (
+  VALUES
+    ('education-v2-module-admissions', 'ADMISSIONS', 'Admissions', 'Admissions', 'Candidats, dossiers, décisions et conversion vers l’inscription.', 'Candidates, applications, decisions and conversion into enrollment.', 'clipboard-check', 240),
+    ('education-v2-module-students', 'STUDENTS', 'Étudiants', 'Students', 'Registre étudiant, inscriptions, affectations et historique.', 'Student registry, enrollments, placements and history.', 'users', 250),
+    ('education-v2-module-guardians', 'GUARDIANS', 'Parents & tuteurs', 'Parents & guardians', 'Tuteurs, relations étudiant et préférences de contact.', 'Guardians, student relationships and contact preferences.', 'user-round-check', 260)
+) AS module_data("id", "moduleCode", "labelFr", "labelEn", "descriptionFr", "descriptionEn", "icon", "sortOrder")
+ON CONFLICT ("templateId", "moduleCode") DO UPDATE SET
+  "labelFr" = EXCLUDED."labelFr",
+  "labelEn" = EXCLUDED."labelEn",
+  "descriptionFr" = EXCLUDED."descriptionFr",
+  "descriptionEn" = EXCLUDED."descriptionEn",
+  "moduleCategory" = EXCLUDED."moduleCategory",
+  "icon" = EXCLUDED."icon",
+  "sortOrder" = EXCLUDED."sortOrder",
+  "defaultEnabled" = true,
+  "requiresPlanLevel" = 'BUSINESS',
+  "updatedAt" = CURRENT_TIMESTAMP;
+
+UPDATE "SectorTemplatePosition"
+SET "defaultPermissionsJson" = COALESCE("defaultPermissionsJson", '[]'::jsonb)
+  || '["enterprise.education.admissions.view","enterprise.education.admissions.create","enterprise.education.admissions.update","enterprise.education.admissions.approve","enterprise.education.admissions.manage","enterprise.education.students.view","enterprise.education.students.update","enterprise.education.students.manage","enterprise.education.guardians.view","enterprise.education.guardians.create","enterprise.education.guardians.update","enterprise.education.guardians.manage"]'::jsonb,
+    "updatedAt" = CURRENT_TIMESTAMP
+WHERE "templateId" = (SELECT t."id" FROM "SectorTemplate" t JOIN "BusinessSector" s ON s."id" = t."sectorId" WHERE s."code" = 'EDUCATION' AND t."version" = 2)
+  AND "positionCode" = 'EDUCATION_ADMIN';
+
+UPDATE "SectorTemplatePosition"
+SET "defaultPermissionsJson" = COALESCE("defaultPermissionsJson", '[]'::jsonb)
+  || '["enterprise.education.admissions.view","enterprise.education.admissions.create","enterprise.education.admissions.update","enterprise.education.admissions.approve","enterprise.education.students.view","enterprise.education.students.update","enterprise.education.guardians.view","enterprise.education.guardians.create","enterprise.education.guardians.update"]'::jsonb,
+    "updatedAt" = CURRENT_TIMESTAMP
+WHERE "templateId" = (SELECT t."id" FROM "SectorTemplate" t JOIN "BusinessSector" s ON s."id" = t."sectorId" WHERE s."code" = 'EDUCATION' AND t."version" = 2)
+  AND "positionCode" = 'ACADEMIC_MANAGER';
+
+UPDATE "SectorTemplatePosition"
+SET "defaultPermissionsJson" = COALESCE("defaultPermissionsJson", '[]'::jsonb)
+  || '["enterprise.education.admissions.view","enterprise.education.admissions.create","enterprise.education.admissions.update","enterprise.education.students.view","enterprise.education.students.update","enterprise.education.guardians.view","enterprise.education.guardians.create","enterprise.education.guardians.update"]'::jsonb,
+    "updatedAt" = CURRENT_TIMESTAMP
+WHERE "templateId" = (SELECT t."id" FROM "SectorTemplate" t JOIN "BusinessSector" s ON s."id" = t."sectorId" WHERE s."code" = 'EDUCATION' AND t."version" = 2)
+  AND "positionCode" = 'REGISTRAR';
+
+WITH template AS (
+  SELECT t."id"
+  FROM "SectorTemplate" t
+  JOIN "BusinessSector" s ON s."id" = t."sectorId"
+  WHERE s."code" = 'EDUCATION' AND t."version" = 2
+)
+INSERT INTO "SectorTemplateActivityBlock"
+  ("id", "templateId", "blockCode", "labelFr", "labelEn", "descriptionFr", "descriptionEn", "icon", "sortOrder", "defaultEnabled", "targetModuleCode", "createdAt", "updatedAt")
+SELECT block_data."id", template."id", block_data."code", block_data."labelFr", block_data."labelEn", block_data."descriptionFr", block_data."descriptionEn", block_data."icon", block_data."sortOrder", true, block_data."targetModuleCode", CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+FROM template
+CROSS JOIN (
+  VALUES
+    ('education-v2-block-admissions', 'MANAGE_ADMISSIONS', 'Gérer les admissions', 'Manage admissions', 'Étudier les candidatures et prendre les décisions d’admission.', 'Review applications and make admission decisions.', 'clipboard-check', 230, 'ADMISSIONS'),
+    ('education-v2-block-students', 'MANAGE_STUDENTS', 'Gérer les étudiants', 'Manage students', 'Suivre les inscriptions, affectations, transferts et retraits.', 'Track enrollments, placements, transfers and withdrawals.', 'users', 240, 'STUDENTS')
+) AS block_data("id", "code", "labelFr", "labelEn", "descriptionFr", "descriptionEn", "icon", "sortOrder", "targetModuleCode")
+ON CONFLICT ("templateId", "blockCode") DO UPDATE SET
+  "labelFr" = EXCLUDED."labelFr",
+  "labelEn" = EXCLUDED."labelEn",
+  "descriptionFr" = EXCLUDED."descriptionFr",
+  "descriptionEn" = EXCLUDED."descriptionEn",
+  "icon" = EXCLUDED."icon",
+  "sortOrder" = EXCLUDED."sortOrder",
+  "defaultEnabled" = true,
+  "targetModuleCode" = EXCLUDED."targetModuleCode",
+  "updatedAt" = CURRENT_TIMESTAMP;
+
+WITH education_modules AS (
+  SELECT stm.*
+  FROM "SectorTemplateModule" stm
+  JOIN "SectorTemplate" t ON t."id" = stm."templateId"
+  JOIN "BusinessSector" s ON s."id" = t."sectorId"
+  WHERE s."code" = 'EDUCATION' AND t."version" = 2
+    AND stm."moduleCode" IN ('ADMISSIONS', 'STUDENTS', 'GUARDIANS')
+)
+INSERT INTO "EnterpriseModule"
+  ("id", "organizationId", "sectorId", "moduleCode", "labelFr", "labelEn", "descriptionFr", "descriptionEn", "moduleCategory", "icon", "isEnabled", "isCore", "sourceTemplateId", "requiresPlanLevel", "sortOrder", "createdAt", "updatedAt")
+SELECT
+  'edu2-pop-' || md5(o."id" || ':' || em."moduleCode"),
+  o."id",
+  o."sectorId",
+  em."moduleCode",
+  em."labelFr",
+  em."labelEn",
+  em."descriptionFr",
+  em."descriptionEn",
+  em."moduleCategory",
+  em."icon",
+  true,
+  false,
+  em."id",
+  em."requiresPlanLevel",
+  em."sortOrder",
+  CURRENT_TIMESTAMP,
+  CURRENT_TIMESTAMP
+FROM "Organization" o
+CROSS JOIN education_modules em
+WHERE o."sectorCode" = 'EDUCATION' AND o."deletedAt" IS NULL
+ON CONFLICT ("organizationId", "moduleCode") DO UPDATE SET
+  "labelFr" = EXCLUDED."labelFr",
+  "labelEn" = EXCLUDED."labelEn",
+  "descriptionFr" = EXCLUDED."descriptionFr",
+  "descriptionEn" = EXCLUDED."descriptionEn",
+  "moduleCategory" = EXCLUDED."moduleCategory",
+  "icon" = EXCLUDED."icon",
+  "isEnabled" = true,
+  "isCore" = false,
+  "sourceTemplateId" = EXCLUDED."sourceTemplateId",
+  "requiresPlanLevel" = EXCLUDED."requiresPlanLevel",
+  "sortOrder" = EXCLUDED."sortOrder",
+  "updatedAt" = CURRENT_TIMESTAMP;
+
+WITH education_modules AS (
+  SELECT stm.*
+  FROM "SectorTemplateModule" stm
+  JOIN "SectorTemplate" t ON t."id" = stm."templateId"
+  JOIN "BusinessSector" s ON s."id" = t."sectorId"
+  WHERE s."code" = 'EDUCATION' AND t."version" = 2
+    AND stm."moduleCode" IN ('ADMISSIONS', 'STUDENTS', 'GUARDIANS')
+)
+INSERT INTO "EnterpriseAdminSection"
+  ("id", "organizationId", "moduleId", "sectionCode", "labelFr", "labelEn", "descriptionFr", "descriptionEn", "icon", "isEnabled", "requiredPermission", "sortOrder", "sourceTemplateId", "createdAt", "updatedAt")
+SELECT
+  'edu2-pop-admin-' || md5(o."id" || ':' || em."moduleCode"),
+  o."id",
+  m."id",
+  em."moduleCode",
+  em."labelFr",
+  em."labelEn",
+  em."descriptionFr",
+  em."descriptionEn",
+  em."icon",
+  true,
+  CASE em."moduleCode"
+    WHEN 'ADMISSIONS' THEN 'enterprise.education.admissions.view'
+    WHEN 'STUDENTS' THEN 'enterprise.education.students.view'
+    ELSE 'enterprise.education.guardians.view'
+  END,
+  em."sortOrder",
+  em."id",
+  CURRENT_TIMESTAMP,
+  CURRENT_TIMESTAMP
+FROM "Organization" o
+CROSS JOIN education_modules em
+JOIN "EnterpriseModule" m ON m."organizationId" = o."id" AND m."moduleCode" = em."moduleCode"
+WHERE o."sectorCode" = 'EDUCATION' AND o."deletedAt" IS NULL
+ON CONFLICT ("organizationId", "sectionCode") DO UPDATE SET
+  "moduleId" = EXCLUDED."moduleId",
+  "labelFr" = EXCLUDED."labelFr",
+  "labelEn" = EXCLUDED."labelEn",
+  "descriptionFr" = EXCLUDED."descriptionFr",
+  "descriptionEn" = EXCLUDED."descriptionEn",
+  "icon" = EXCLUDED."icon",
+  "isEnabled" = true,
+  "requiredPermission" = EXCLUDED."requiredPermission",
+  "sortOrder" = EXCLUDED."sortOrder",
+  "sourceTemplateId" = EXCLUDED."sourceTemplateId",
+  "updatedAt" = CURRENT_TIMESTAMP;
