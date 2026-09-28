@@ -281,7 +281,6 @@ function statusBadge(status?: string) {
 export function EnterpriseEducationWorkspace({
   organizationId,
   organizationName,
-  definition,
   initialFocus,
   locale,
 }: {
