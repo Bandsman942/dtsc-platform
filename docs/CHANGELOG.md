@@ -1021,3 +1021,10 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 - Added turn/tenant/tool/argument-hash-bound confirmations, single-use consumption and database-enforced idempotent execution claims.
 - Added responsive FR/EN confirmation UX and five dedicated AI06 QA commands plus regression integration.
 - Added additive Prisma persistence for `AiToolConfirmation` and `AiToolExecution`; no payment, accounting or clinical mutation is enabled by AI06.
+
+## SCALE-7 staged certification — in progress
+
+- Added manual ramp/soak/spike load profiles for 500, 1,000, 2,500 and 5,000 simultaneous users.
+- Added secret-free reports with API, PostgreSQL, Redis, queue, AI and tenant-isolation evidence.
+- Added enforced stage progression and a versioned certification registry consumed by the CTO scalability dashboard.
+- No capacity stage is marked certified until a real CI load run is archived.
