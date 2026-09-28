@@ -420,7 +420,7 @@ export function EnterpriseGamingBookingsWorkspace({
       />
 
       <ModuleContent>
-        {message && !createOpen && !editFor && !confirmState ? <ProfessionalError message={message} /> : null}
+        {message && !createOpen && !editFor && !confirmState ? <ProfessionalError message={message} toast={false} /> : null}
         <ModuleSection id="gaming-bookings-board" title={copy.sectionTitle} description={view === "CALENDAR" ? copy.calendarHelp : copy.sectionDescription} defaultOpen>
           {collection.loading ? <ProfessionalLoading /> : collection.error ? <ProfessionalError message={collection.error} /> : collection.items.length ? (
             <>
@@ -528,7 +528,8 @@ export function EnterpriseGamingBookingsWorkspace({
         selectedServiceId={conversionServiceId}
         setSelectedServiceId={(value) => { setConversionServiceId(value); setConversionQuote(null); setMessage(""); }}
         loading={conversionLoading}
-        error={conversionError || message}
+        error={conversionError}
+        mutationError={message}
         quote={conversionQuote}
         page={conversionServicePage}
         pagination={conversionPagination}
@@ -616,7 +617,7 @@ function BookingForm({
 }) {
   return (
     <form id={id} onSubmit={onSubmit} className="grid gap-5 p-4 sm:p-5">
-      {message ? <ProfessionalError message={message} /> : null}
+      {message ? <ProfessionalError message={message} toast={false} /> : null}
       <ProfessionalFormSection title={copy.slot} description={copy.sectionDescription}>
         {stationError ? <div className="md:col-span-2"><ProfessionalError message={stationError} /></div> : null}
         {stationLoading ? <div className="md:col-span-2"><ProfessionalLoading rows={2} /></div> : stations.length ? <Field label={copy.station} required><NativeSelect name="stationId" required defaultValue={defaultStationId} items={stations} /></Field> : <div className="md:col-span-2 text-sm font-bold text-dtsc-muted">{copy.noStations}</div>}
@@ -677,6 +678,7 @@ function BookingConversionDialog({
   setSelectedServiceId,
   loading,
   error,
+  mutationError,
   quote,
   page,
   pagination,
@@ -694,6 +696,7 @@ function BookingConversionDialog({
   setSelectedServiceId: (value: string) => void;
   loading: boolean;
   error: string;
+  mutationError: string;
   quote: PricingQuote | null;
   page: number;
   pagination: Pagination;
@@ -717,7 +720,7 @@ function BookingConversionDialog({
     >
       {item ? (
         <div className="grid gap-5 p-4 sm:p-5">
-          {error ? <ProfessionalError message={error} /> : null}
+          {error ? <ProfessionalError message={error} /> : mutationError ? <ProfessionalError message={mutationError} toast={false} /> : null}
           <div className="rounded-2xl border border-dtsc-border bg-dtsc-soft/50 p-4 text-sm font-bold text-dtsc-ink">
             {item.reference} · {item.station.stationCode} · {copy.minutes(minutesBetween(item.scheduledStartAt, item.scheduledEndAt))} · {item.playerCount} {copy.players.toLowerCase()}
           </div>
