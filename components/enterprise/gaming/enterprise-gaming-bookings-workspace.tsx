@@ -529,6 +529,7 @@ export function EnterpriseGamingBookingsWorkspace({
         setSelectedServiceId={(value) => { setConversionServiceId(value); setConversionQuote(null); setMessage(""); }}
         loading={conversionLoading}
         error={conversionError || message}
+        notifyError={Boolean(conversionError)}
         quote={conversionQuote}
         page={conversionServicePage}
         pagination={conversionPagination}
@@ -616,7 +617,7 @@ function BookingForm({
 }) {
   return (
     <form id={id} onSubmit={onSubmit} className="grid gap-5 p-4 sm:p-5">
-      {message ? <ProfessionalError message={message} /> : null}
+      {message ? <ProfessionalError message={message} notify={false} /> : null}
       <ProfessionalFormSection title={copy.slot} description={copy.sectionDescription}>
         {stationError ? <div className="md:col-span-2"><ProfessionalError message={stationError} /></div> : null}
         {stationLoading ? <div className="md:col-span-2"><ProfessionalLoading rows={2} /></div> : stations.length ? <Field label={copy.station} required><NativeSelect name="stationId" required defaultValue={defaultStationId} items={stations} /></Field> : <div className="md:col-span-2 text-sm font-bold text-dtsc-muted">{copy.noStations}</div>}
@@ -677,6 +678,7 @@ function BookingConversionDialog({
   setSelectedServiceId,
   loading,
   error,
+  notifyError,
   quote,
   page,
   pagination,
@@ -694,6 +696,7 @@ function BookingConversionDialog({
   setSelectedServiceId: (value: string) => void;
   loading: boolean;
   error: string;
+  notifyError: boolean;
   quote: PricingQuote | null;
   page: number;
   pagination: Pagination;
@@ -717,7 +720,7 @@ function BookingConversionDialog({
     >
       {item ? (
         <div className="grid gap-5 p-4 sm:p-5">
-          {error ? <ProfessionalError message={error} /> : null}
+          {error ? <ProfessionalError message={error} notify={notifyError} /> : null}
           <div className="rounded-2xl border border-dtsc-border bg-dtsc-soft/50 p-4 text-sm font-bold text-dtsc-ink">
             {item.reference} · {item.station.stationCode} · {copy.minutes(minutesBetween(item.scheduledStartAt, item.scheduledEndAt))} · {item.playerCount} {copy.players.toLowerCase()}
           </div>

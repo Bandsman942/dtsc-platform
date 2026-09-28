@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { financeErrorResponse } from "@/lib/enterprise/accounting/http";
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
-import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
+import { enterpriseDomainErrorResponse, enterpriseSupportReference } from "@/lib/enterprise/common/http";
 import { EnterpriseGamingCheckoutError } from "@/lib/enterprise/gaming/checkout";
 
 const messages: Record<string, { fr: string; en: string }> = {
@@ -66,7 +66,20 @@ export function gamingCheckoutErrorResponse(error: unknown, request: Request, fa
   }
   if (error instanceof EnterpriseAccountingError) return financeErrorResponse(error, fallback);
   if (error instanceof EnterpriseDomainError) return enterpriseDomainErrorResponse(error, fallback, request);
-  console.error(fallback, error);
+  const supportReference = enterpriseSupportReference(request);
+  const errorName = error instanceof Error ? error.name : typeof error;
+  const errorCode = error && typeof error === "object" && "code" in error ? String(error.code) : null;
+  console.error("[gaming] unexpected operation failure", {
+    fallback,
+    errorName,
+    errorCode,
+    requestPath: new URL(request.url).pathname,
+    supportReference,
+  });
   const language = locale(request);
-  return NextResponse.json({ error: fallback, message: language === "en" ? "An internal error prevented the Gaming operation." : "Une erreur interne a empêché l’opération Gaming." }, { status: 500 });
+  return NextResponse.json({
+    error: fallback,
+    message: language === "en" ? "An internal error prevented the Gaming operation." : "Une erreur interne a empêché l’opération Gaming.",
+    ...(supportReference ? { supportReference } : {}),
+  }, { status: 500 });
 }

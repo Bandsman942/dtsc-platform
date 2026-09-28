@@ -361,3 +361,18 @@ Pour #644 :
 - ne supprimer aucune migration ni donnée financière historique.
 
 Le reste du domaine Gaming demeure fail-closed jusqu’à ses lots respectifs.
+
+## Hotfix #690 — verrous Prisma Gaming et feedback d’erreur
+
+Le hotfix #690 corrige une régression Production commune aux réservations, à l’encaissement et à la clôture Gaming. Ces trois parcours utilisaient `$queryRaw` pour exécuter `SELECT pg_advisory_xact_lock(...)`. PostgreSQL renvoie `void` pour cette fonction ; Prisma 6.19.x tentait de désérialiser cette colonne et levait `P2010` avant la mutation métier.
+
+Le contrat corrigé est :
+
+- un advisory lock transactionnel sans résultat utilise `$executeRaw` ;
+- les transactions `Serializable`, l’idempotence et les guards de concurrence restent inchangés ;
+- aucune migration de schéma n’est nécessaire ;
+- la réservation conserve l’erreur inline mais n’émet plus deux fois le même toast global ;
+- les erreurs inattendues restent génériques côté client et peuvent inclure une `supportReference` corrélable aux logs, sans exposer de message Prisma, payload ou identifiant tenant ;
+- la QA #690 interdit `$queryRaw(...pg_advisory_xact_lock...)` dans le domaine Gaming et exécute réellement un advisory transaction lock via Prisma/PostgreSQL lorsqu’une `DATABASE_URL` de CI est disponible.
+
+Le parcours OWNER_E2E requis après merge reste : réservation → check-in/session → fin de session → checkout/facture → paiement → clôture → rapports, avec Tournois vérifié en non-régression.

@@ -247,8 +247,8 @@ export function ProfessionalHelp({ moduleCode }: { moduleCode: string }) {
   );
 }
 
-export function ProfessionalError({ message }: { message: string }) {
-  useToastMessage(message, "error");
+export function ProfessionalError({ message, notify = true }: { message: string; notify?: boolean }) {
+  useToastMessage(notify ? message : null, "error");
   return <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-bold text-red-700 dark:text-red-300">{message}</div>;
 }
 

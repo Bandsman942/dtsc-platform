@@ -63,11 +63,20 @@ function requestLocale(request?: Request) {
   return request?.headers.get("accept-language")?.toLowerCase().startsWith("en") ? "en" : "fr";
 }
 
+export function enterpriseSupportReference(request?: Request) {
+  const raw = request?.headers.get("x-request-id")
+    || request?.headers.get("x-vercel-id")
+    || request?.headers.get("cf-ray")
+    || "";
+  const normalized = raw.replace(/[^A-Za-z0-9:._/-]/g, "").slice(0, 160);
+  return normalized || null;
+}
+
 function reportUnexpectedEnterpriseError(error: unknown, fallbackCode: string, request?: Request) {
   const errorName = error instanceof Error ? error.name : typeof error;
   const prismaCode = error instanceof Prisma.PrismaClientKnownRequestError ? error.code : null;
   const requestPath = request ? new URL(request.url).pathname : null;
-  const requestId = request?.headers.get("x-request-id") || request?.headers.get("x-vercel-id") || request?.headers.get("cf-ray") || null;
+  const requestId = enterpriseSupportReference(request);
   // Do not log the raw Prisma message here: validation errors can contain form values.
   console.error("[enterprise-domain] unexpected operation failure", { fallbackCode, errorName, prismaCode, requestPath, requestId });
 }
@@ -119,10 +128,12 @@ export function enterpriseDomainErrorResponse(error: unknown, fallbackCode = "EN
     }, { status: 409 });
   }
   reportUnexpectedEnterpriseError(error, fallbackCode, request);
+  const supportReference = enterpriseSupportReference(request);
   return NextResponse.json({
     error: fallbackCode,
     message: locale === "en"
       ? "The service could not save this operation right now. Your entries were kept. Please try again shortly or contact support if the problem persists."
       : "Le service n’a pas pu enregistrer cette opération pour le moment. Vos saisies sont conservées. Réessayez dans quelques instants ou contactez le support si le problème persiste.",
+    ...(supportReference ? { supportReference } : {}),
   }, { status: 500 });
 }

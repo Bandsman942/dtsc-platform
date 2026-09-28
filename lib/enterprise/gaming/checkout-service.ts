@@ -122,7 +122,7 @@ export async function prepareGamingCheckout(organizationId: string, actorUserId:
   try {
     const createdId = await prisma.$transaction(async (tx) => {
       const lockKey = `${organizationId}:gaming-checkout:${input.sessionId}`;
-      await tx.$queryRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey})::bigint)`);
+      await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey})::bigint)`);
       await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseGamingSession" WHERE id = ${input.sessionId} AND "organizationId" = ${organizationId} FOR UPDATE`);
 
       const retryByKey = await tx.enterpriseGamingCheckout.findFirst({
