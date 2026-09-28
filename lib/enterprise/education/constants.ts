@@ -4,6 +4,9 @@ export const EDUCATION_MODULE_CODES = [
   "EDUCATION_SETTINGS",
   "ACADEMIC_STRUCTURE",
   "ACADEMIC_CALENDAR",
+  "ADMISSIONS",
+  "STUDENTS",
+  "GUARDIANS",
 ] as const;
 
 export type EducationModuleCode = (typeof EDUCATION_MODULE_CODES)[number];
