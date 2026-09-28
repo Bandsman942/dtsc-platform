@@ -88,7 +88,7 @@ export type GamingStationStatus = (typeof GAMING_STATION_STATUSES)[number];
 
 export const GAMING_SESSION_STATUSES = ["WAITING", "ACTIVE", "PAUSED", "ENDED", "TO_CHECKOUT", "PAID", "CANCELLED"] as const;
 export type GamingSessionStatus = (typeof GAMING_SESSION_STATUSES)[number];
-export const GAMING_SESSION_ACTIONS = ["START", "PAUSE", "RESUME", "EXTEND", "TRANSFER", "END", "CHECKOUT_PAID"] as const;
+export const GAMING_SESSION_ACTIONS = ["START", "PAUSE", "RESUME", "EXTEND", "TRANSFER", "END", "READY_TO_CHECKOUT", "CHECKOUT_OPEN", "CHECKOUT_PAID", "CHECKOUT_CANCELLED", "CHECKOUT_REFUNDED"] as const;
 export type GamingSessionAction = (typeof GAMING_SESSION_ACTIONS)[number];
 
 export const GAMING_BOOKING_STATUSES = ["DRAFT", "CONFIRMED", "CHECKED_IN", "NO_SHOW", "CANCELLED", "CONVERTED"] as const;
