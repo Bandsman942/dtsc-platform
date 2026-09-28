@@ -29,7 +29,7 @@ export async function GET(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "gaming-checkout-detail", checkoutId } });
     return NextResponse.json({ ...result, canWrite: checkoutAccess.canWrite, canManage: checkoutAccess.canManage });
   } catch (error) {
-    return gamingCheckoutErrorResponse(error, req);
+    return gamingCheckoutErrorResponse(error, req, "GAMING_CHECKOUT_READ_FAILED");
   }
 }
 
@@ -112,6 +112,6 @@ export async function PATCH(req: Request, { params }: Params) {
     ]);
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
-    return gamingCheckoutErrorResponse(error, req);
+    return gamingCheckoutErrorResponse(error, req, "GAMING_CHECKOUT_COMMAND_FAILED");
   }
 }
