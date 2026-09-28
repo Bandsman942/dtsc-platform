@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "modules": [
     {
       "code": "EDUCATION_SETTINGS",
@@ -95,6 +95,105 @@
         "CALENDAR"
       ],
       "qaContract": "enterprise-education-academic-structure"
+    },
+    {
+      "code": "ADMISSIONS",
+      "labelFr": "Admissions",
+      "labelEn": "Admissions",
+      "descriptionFr": "Candidats, dossiers d’admission, décisions et conversion contrôlée vers l’inscription.",
+      "descriptionEn": "Candidates, admission applications, decisions and controlled conversion into enrollment.",
+      "domain": "SECTOR_EDUCATION",
+      "implementationStatus": "ACTIVE",
+      "navigationGroup": "SECTOR_EDUCATION",
+      "navigationOrder": 140,
+      "iconKey": "clipboard-check",
+      "routeKind": "DEDICATED_CORE",
+      "routePath": "/enterprise-education/ADMISSIONS",
+      "workspaceKey": "ENTERPRISE_EDUCATION",
+      "permissionPrefixes": [
+        "enterprise.education.admissions.",
+        "enterprise.education."
+      ],
+      "accessPolicy": "POSITION_PERMISSION",
+      "minimumPlan": "BUSINESS",
+      "requiresActiveSubscription": true,
+      "applicableSectors": [
+        "EDUCATION"
+      ],
+      "dependencies": [
+        "ACADEMIC_STRUCTURE"
+      ],
+      "recommendedIntegrations": [
+        "DOCUMENTS"
+      ],
+      "qaContract": "enterprise-education-admissions"
+    },
+    {
+      "code": "STUDENTS",
+      "labelFr": "Étudiants",
+      "labelEn": "Students",
+      "descriptionFr": "Registre étudiant, inscriptions, affectations académiques, transferts, retraits et historique.",
+      "descriptionEn": "Student registry, enrollments, academic placements, transfers, withdrawals and history.",
+      "domain": "SECTOR_EDUCATION",
+      "implementationStatus": "ACTIVE",
+      "navigationGroup": "SECTOR_EDUCATION",
+      "navigationOrder": 150,
+      "iconKey": "users",
+      "routeKind": "DEDICATED_CORE",
+      "routePath": "/enterprise-education/STUDENTS",
+      "workspaceKey": "ENTERPRISE_EDUCATION",
+      "permissionPrefixes": [
+        "enterprise.education.students.",
+        "enterprise.education."
+      ],
+      "accessPolicy": "POSITION_PERMISSION",
+      "minimumPlan": "BUSINESS",
+      "requiresActiveSubscription": true,
+      "applicableSectors": [
+        "EDUCATION"
+      ],
+      "dependencies": [
+        "ADMISSIONS"
+      ],
+      "recommendedIntegrations": [
+        "DOCUMENTS"
+      ],
+      "qaContract": "enterprise-education-admissions"
+    },
+    {
+      "code": "GUARDIANS",
+      "labelFr": "Parents & tuteurs",
+      "labelEn": "Parents & guardians",
+      "descriptionFr": "Tuteurs, contacts, relations avec les étudiants et préférences de notification.",
+      "descriptionEn": "Guardians, contacts, student relationships and notification preferences.",
+      "domain": "SECTOR_EDUCATION",
+      "implementationStatus": "ACTIVE",
+      "navigationGroup": "SECTOR_EDUCATION",
+      "navigationOrder": 160,
+      "iconKey": "user-round-check",
+      "routeKind": "DEDICATED_CORE",
+      "routePath": "/enterprise-education/GUARDIANS",
+      "workspaceKey": "ENTERPRISE_EDUCATION",
+      "permissionPrefixes": [
+        "enterprise.education.guardians.",
+        "enterprise.education."
+      ],
+      "accessPolicy": "POSITION_PERMISSION",
+      "minimumPlan": "BUSINESS",
+      "requiresActiveSubscription": true,
+      "applicableSectors": [
+        "EDUCATION"
+      ],
+      "dependencies": [
+        "STUDENTS"
+      ],
+      "recommendedIntegrations": [
+        "DOCUMENTS"
+      ],
+      "legacyCodes": [
+        "PARENTS_GUARDIANS"
+      ],
+      "qaContract": "enterprise-education-admissions"
     }
   ]
 }
