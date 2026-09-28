@@ -173,7 +173,16 @@ export async function createAdmission(organizationId: string, userId: string, in
       data: {
         organizationId,
         candidateNumber: reference("CAND"),
-        ...input.candidate,
+        firstName: input.candidate.firstName,
+        lastName: input.candidate.lastName,
+        middleName: input.candidate.middleName || null,
+        preferredName: input.candidate.preferredName || null,
+        birthDate: input.candidate.birthDate || null,
+        sex: input.candidate.sex || null,
+        nationalityCode: input.candidate.nationalityCode || null,
+        email: input.candidate.email || null,
+        phone: input.candidate.phone || null,
+        ...(input.candidate.addressJson ? { addressJson: input.candidate.addressJson as Prisma.InputJsonValue } : {}),
         createdByUserId: userId,
       },
     });
