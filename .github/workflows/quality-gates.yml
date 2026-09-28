@@ -89,6 +89,8 @@ jobs:
         run: pnpm prisma:generate
       - name: Apply migrations for quality checks
         run: pnpm prisma:deploy
+      - name: Gaming advisory lock runtime QA
+        run: node scripts/qa-gaming-advisory-lock-runtime.mjs
       - name: Type check
         run: pnpm type-check
         env:
