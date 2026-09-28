@@ -49,6 +49,10 @@ Certification proceeds through four explicit stages:
 
 A stage is not considered passed unless its report records latency, error rate, throughput and relevant infrastructure saturation indicators.
 
+## SCALE-7 staged certification harness
+
+SCALE-7 / #360 owns the real 500 → 1,000 → 2,500 → 5,000 certification. The canonical harness is now documented in `docs/SCALABILITY_SCALE7_STAGED_CERTIFICATION.md` and uses a manually dispatched k6 workflow with ramp, soak and spike profiles, at least two authenticated tenant contexts, explicit cross-tenant denial probes and archived secret-free reports. Until those reports exist, the CTO dashboard must display the affected stages as `NOT_EXECUTED` rather than infer capacity from live observability.
+
 ## Workload families
 
 A production-like run must eventually mix representative authenticated workloads across:
