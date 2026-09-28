@@ -1,0 +1,100 @@
+{
+  "version": 1,
+  "modules": [
+    {
+      "code": "EDUCATION_SETTINGS",
+      "labelFr": "Paramètres Education",
+      "labelEn": "Education settings",
+      "descriptionFr": "Configuration de l’établissement, du campus principal, du fuseau horaire et des règles académiques de base.",
+      "descriptionEn": "Institution, primary campus, timezone and foundational academic settings.",
+      "domain": "SECTOR_EDUCATION",
+      "implementationStatus": "ACTIVE",
+      "navigationGroup": "SECTOR_EDUCATION",
+      "navigationOrder": 110,
+      "iconKey": "graduation-cap",
+      "routeKind": "DEDICATED_CORE",
+      "routePath": "/enterprise-education/EDUCATION_SETTINGS",
+      "workspaceKey": "ENTERPRISE_EDUCATION",
+      "permissionPrefixes": [
+        "enterprise.education.settings.",
+        "enterprise.education."
+      ],
+      "accessPolicy": "POSITION_PERMISSION",
+      "minimumPlan": "BUSINESS",
+      "requiresActiveSubscription": true,
+      "applicableSectors": [
+        "EDUCATION"
+      ],
+      "dependencies": [],
+      "recommendedIntegrations": [
+        "DOCUMENTS"
+      ],
+      "qaContract": "enterprise-education-academic-structure"
+    },
+    {
+      "code": "ACADEMIC_STRUCTURE",
+      "labelFr": "Structure académique",
+      "labelEn": "Academic structure",
+      "descriptionFr": "Campus, années, périodes, niveaux, filières, départements, classes, matières et offres de cours.",
+      "descriptionEn": "Campuses, academic years, periods, levels, programs, departments, classes, subjects and course offerings.",
+      "domain": "SECTOR_EDUCATION",
+      "implementationStatus": "ACTIVE",
+      "navigationGroup": "SECTOR_EDUCATION",
+      "navigationOrder": 120,
+      "iconKey": "school",
+      "routeKind": "DEDICATED_CORE",
+      "routePath": "/enterprise-education/ACADEMIC_STRUCTURE",
+      "workspaceKey": "ENTERPRISE_EDUCATION",
+      "permissionPrefixes": [
+        "enterprise.education.structure.",
+        "enterprise.education."
+      ],
+      "accessPolicy": "POSITION_PERMISSION",
+      "minimumPlan": "BUSINESS",
+      "requiresActiveSubscription": true,
+      "applicableSectors": [
+        "EDUCATION"
+      ],
+      "dependencies": [
+        "EDUCATION_SETTINGS"
+      ],
+      "recommendedIntegrations": [
+        "DOCUMENTS",
+        "HUMAN_RESOURCES"
+      ],
+      "qaContract": "enterprise-education-academic-structure"
+    },
+    {
+      "code": "ACADEMIC_CALENDAR",
+      "labelFr": "Calendrier académique",
+      "labelEn": "Academic calendar",
+      "descriptionFr": "Événements académiques tenant-aware, rattachés aux années, périodes et campus.",
+      "descriptionEn": "Tenant-aware academic events linked to academic years, periods and campuses.",
+      "domain": "SECTOR_EDUCATION",
+      "implementationStatus": "ACTIVE",
+      "navigationGroup": "SECTOR_EDUCATION",
+      "navigationOrder": 130,
+      "iconKey": "calendar-days",
+      "routeKind": "DEDICATED_CORE",
+      "routePath": "/enterprise-education/ACADEMIC_CALENDAR",
+      "workspaceKey": "ENTERPRISE_EDUCATION",
+      "permissionPrefixes": [
+        "enterprise.education.calendar.",
+        "enterprise.education."
+      ],
+      "accessPolicy": "POSITION_PERMISSION",
+      "minimumPlan": "BUSINESS",
+      "requiresActiveSubscription": true,
+      "applicableSectors": [
+        "EDUCATION"
+      ],
+      "dependencies": [
+        "ACADEMIC_STRUCTURE"
+      ],
+      "recommendedIntegrations": [
+        "CALENDAR"
+      ],
+      "qaContract": "enterprise-education-academic-structure"
+    }
+  ]
+}
