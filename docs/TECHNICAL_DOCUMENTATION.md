@@ -528,3 +528,7 @@ Documents détaillés :
 - `docs/STANDARD_AI_OBSERVABILITY_MODEL.md` ;
 - `docs/user-guides/AI_AGENT_MODE_FR.md` ;
 - `docs/user-guides/AI_AGENT_MODE_EN.md`.
+
+## SCALE-7 — staged capacity certification
+
+Issue #360 introduces a manual k6 certification harness for 500 / 1,000 / 2,500 / 5,000 simultaneous users. The workflow is never triggered automatically, uses at least two authenticated load-test tenants, samples the protected CTO observability endpoint, enforces tenant-isolation probes and archives sanitized GitHub Actions evidence. Versioned summaries in `data/scalability/scale7-certifications.json` are exposed separately from live telemetry in Administration DTSC → CTO → Scalabilité. Stage/profile progression is fail-closed; a higher stage cannot run before the prior stage has archived PASS evidence.

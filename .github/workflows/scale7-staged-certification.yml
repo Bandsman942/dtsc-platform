@@ -1,0 +1,151 @@
+name: SCALE-7 staged load certification
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_vus:
+        description: Certification stage
+        required: true
+        type: choice
+        options: ["500", "1000", "2500", "5000"]
+      load_profile:
+        description: Load profile
+        required: true
+        default: ramp
+        type: choice
+        options: [ramp, soak, spike]
+      confirmation:
+        description: Type RUN_SCALE7_CERTIFICATION to authorize the bounded load run
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scale7-certification
+  cancel-in-progress: false
+
+jobs:
+  staged-certification:
+    name: SCALE-7 ${{ inputs.target_vus }} VU · ${{ inputs.load_profile }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      BASE_URL: ${{ vars.SCALE7_LOAD_BASE_URL }}
+      SCALE7_AUTH_CONTEXTS_JSON: ${{ secrets.SCALE7_AUTH_CONTEXTS_JSON }}
+      OBSERVABILITY_COOKIE: ${{ secrets.SCALE7_CTO_SESSION_COOKIE }}
+      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+      TARGET_VUS: ${{ inputs.target_vus }}
+      LOAD_PROFILE: ${{ inputs.load_profile }}
+      ARTIFACTS_DIR: artifacts
+    steps:
+      - name: Validate manual certification contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ inputs.confirmation }}" != "RUN_SCALE7_CERTIFICATION" ]; then
+            echo "::error::Confirmation must be RUN_SCALE7_CERTIFICATION."
+            exit 1
+          fi
+          for name in BASE_URL SCALE7_AUTH_CONTEXTS_JSON OBSERVABILITY_COOKIE VERCEL_AUTOMATION_BYPASS_SECRET; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Required SCALE-7 configuration is missing: ${name}."
+              exit 1
+            fi
+          done
+          echo "::add-mask::${VERCEL_AUTOMATION_BYPASS_SECRET}"
+          case "$BASE_URL" in https://*) ;; *) echo "::error::SCALE7_LOAD_BASE_URL must use HTTPS."; exit 1 ;; esac
+          case "$TARGET_VUS" in 500|1000|2500|5000) ;; *) echo "::error::Invalid SCALE-7 stage."; exit 1 ;; esac
+          case "$LOAD_PROFILE" in ramp|soak|spike) ;; *) echo "::error::Invalid SCALE-7 profile."; exit 1 ;; esac
+
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Enforce staged progression
+        run: node scripts/load/verify-scale7-stage-progression.mjs
+
+      - name: Setup k6
+        uses: grafana/setup-k6-action@v1
+        with:
+          k6-version: 2.1.0
+
+      - name: Prepare evidence directory
+        run: mkdir -p artifacts
+
+      - name: Capture initial observability
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error             --header "Cookie: ${OBSERVABILITY_COOKIE}"             --header "x-vercel-protection-bypass: ${VERCEL_AUTOMATION_BYPASS_SECRET}"             "${BASE_URL%/}/api/admin/scalability/observability?windowHours=1"             | jq -c '{generatedAt:.snapshot.generatedAt,api:.snapshot.api,database:.snapshot.database,redis:.snapshot.redis,rateLimit:.snapshot.rateLimit,queues:.snapshot.queues,ai:.snapshot.ai}'             >> artifacts/scale7-observability.ndjson
+
+      - name: Run k6 and sample live infrastructure
+        id: load
+        shell: bash
+        run: |
+          set -euo pipefail
+          capture_snapshot() {
+            curl --fail --silent --show-error               --header "Cookie: ${OBSERVABILITY_COOKIE}"               --header "x-vercel-protection-bypass: ${VERCEL_AUTOMATION_BYPASS_SECRET}"               "${BASE_URL%/}/api/admin/scalability/observability?windowHours=1"               | jq -c '{generatedAt:.snapshot.generatedAt,api:.snapshot.api,database:.snapshot.database,redis:.snapshot.redis,rateLimit:.snapshot.rateLimit,queues:.snapshot.queues,ai:.snapshot.ai}'               >> artifacts/scale7-observability.ndjson
+          }
+          (
+            while true; do
+              capture_snapshot || echo "::warning::A SCALE-7 observability sample failed."
+              sleep 15
+            done
+          ) &
+          monitor_pid=$!
+
+          set +e
+          k6 run scripts/load/scale7-staged-certification.js
+          k6_status=$?
+          set -e
+
+          kill "$monitor_pid" 2>/dev/null || true
+          wait "$monitor_pid" 2>/dev/null || true
+          capture_snapshot || true
+          echo "k6_status=${k6_status}" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Build sanitized certification report
+        id: report
+        shell: bash
+        run: |
+          set +e
+          node scripts/load/build-scale7-certification-report.mjs
+          report_status=$?
+          set -e
+          echo "report_status=${report_status}" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload SCALE-7 evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: scale7-${{ inputs.target_vus }}-${{ inputs.load_profile }}-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 90
+          path: |
+            artifacts/scale7-k6-summary.json
+            artifacts/scale7-observability.ndjson
+            artifacts/scale7-certification-report.json
+            artifacts/scale7-certification-report.md
+
+      - name: Enforce SCALE-7 stage gates
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.load.outputs.k6_status }}" != "0" ]; then
+            echo "::error::k6 thresholds failed or the staged load did not complete."
+            exit 1
+          fi
+          if [ "${{ steps.report.outputs.report_status }}" != "0" ]; then
+            echo "::error::SCALE-7 sanitized certification gates failed."
+            exit 1
+          fi
+          echo "SCALE-7 ${TARGET_VUS} ${LOAD_PROFILE}: PASS"
