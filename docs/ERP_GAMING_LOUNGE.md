@@ -389,4 +389,3 @@ Le contrat correct est celui déjà utilisé par le service Finance canonique : 
 - un E2E API qui prépare deux checkouts Gaming complets jusqu’à `INVOICE_PENDING` / `PENDING_APPROVAL` : un client comptoir walk-in et un client CRM canonique.
 
 L’audit transverse a identifié la même forme de payload dans les convergences Santé et Pharmacie. Elle est suivie séparément par #694 afin que le P0 Gaming reste ciblé et réversible.
-
