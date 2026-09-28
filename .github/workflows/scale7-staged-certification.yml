@@ -67,6 +67,9 @@ jobs:
         with:
           node-version: 22
 
+      - name: Enforce staged progression
+        run: node scripts/load/verify-scale7-stage-progression.mjs
+
       - name: Setup k6
         uses: grafana/setup-k6-action@v1
         with:
