@@ -222,7 +222,7 @@ export function EnterpriseEducationPopulationWorkspace({
           classGroupId: form.classGroupId || null,
         });
       } else if ((modal.type === "TRANSFER" || modal.type === "REACTIVATE") && modal.item) {
-        const enrollment = modal.item.enrollments?.find((entry: Item) => modal.type === "TRANSFER" ? entry.status === "ACTIVE" : ["WITHDRAWN", "TRANSFERRED"].includes(entry.status)) || modal.item.enrollments?.[0];
+        const enrollment = modal.item.enrollments?.find((entry: Item) => modal.type === "TRANSFER" ? entry.status === "ACTIVE" : Boolean(entry.status && ["WITHDRAWN", "TRANSFERRED"].includes(entry.status))) || modal.item.enrollments?.[0];
         if (!enrollment) throw new Error(t.noEnrollment);
         await postJson(`/api/enterprise/${organizationId}/education/enrollments/${enrollment.id}/actions`, {
           action: modal.type,
