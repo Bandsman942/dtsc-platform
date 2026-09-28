@@ -68,7 +68,7 @@ async function lockBookingStations(tx: Tx, organizationId: string, stationIds: s
   const ids = [...new Set(stationIds.filter(Boolean))].sort();
   for (const stationId of ids) {
     const key = `${organizationId}:gaming-booking:${stationId}`;
-    await tx.$queryRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${key})::bigint)`);
+    await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${${1}})::bigint)`);
   }
 }
 
