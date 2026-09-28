@@ -6,6 +6,7 @@ const paths = {
   profile: "scripts/load/scale7-staged-certification.js",
   report: "scripts/load/build-scale7-certification-report.mjs",
   archive: "scripts/load/archive-scale7-certification.mjs",
+  progression: "scripts/load/verify-scale7-stage-progression.mjs",
   registry: "data/scalability/scale7-certifications.json",
   registryTs: "lib/scalability/scale7-certification-registry.ts",
   docs: "docs/SCALABILITY_SCALE7_STAGED_CERTIFICATION.md",
@@ -32,6 +33,7 @@ const all = [workflow, profile, report, archive, docs].join("\n");
 expect(/^on:\s*\n\s+workflow_dispatch:/m.test(workflow), "workflow_dispatch is required");
 expect(!/^\s+(push|pull_request|schedule):/m.test(workflow), "certification must never auto-run");
 expect(workflow.includes("RUN_SCALE7_CERTIFICATION"), "manual confirmation is missing");
+expect(workflow.includes("verify-scale7-stage-progression.mjs"), "staged progression gate is missing");
 for (const target of ["500", "1000", "2500", "5000"]) expect(workflow.includes(target), `workflow missing ${target} stage`);
 for (const mode of ["ramp", "soak", "spike"]) expect(workflow.includes(mode), `workflow missing ${mode} profile`);
 expect(workflow.includes("grafana/setup-k6-action@v1"), "official k6 setup action is required");
@@ -57,6 +59,7 @@ expect(report.includes("noDbConnectionExhaustion"), "report must gate DB exhaust
 expect(report.includes("redisNeverUnavailable"), "report must gate Redis availability");
 expect(report.includes('process.env.GITHUB_ACTIONS === "true" ? "CI_PROVEN" : "LOCAL_EXECUTED"'), "evidence state must reflect executor");
 expect(archive.includes("Only CI-proven reports"), "archive must reject non-CI reports");
+expect(archive.includes('report.evidence?.loadExecution !== "CI_PROVEN"'), "archive must verify CI_PROVEN evidence state");
 expect(docs.includes("500 → 1,000 → 2,500 → 5,000"), "staged progression must be documented");
 
 for (const forbidden of ["postgresql://", "postgres://", "password=", "NEXT_PUBLIC_DATABASE_URL"]) {
