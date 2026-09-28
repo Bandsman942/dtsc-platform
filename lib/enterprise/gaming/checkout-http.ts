@@ -58,6 +58,25 @@ function locale(req: Request): "fr" | "en" {
   return req.headers.get("accept-language")?.toLowerCase().startsWith("en") ? "en" : "fr";
 }
 
+const unexpectedMessages: Record<string, { fr: string; en: string }> = {
+  GAMING_CHECKOUT_PREPARE_FAILED: {
+    fr: "L’encaissement n’a pas pu être préparé à cause d’un incident interne. Les écritures de cette tentative ont été annulées avant validation. Réessayez ; si le problème persiste, communiquez la référence support.",
+    en: "The Gaming checkout could not be prepared because of an internal incident. This attempt was rolled back before validation. Try again; if the problem persists, provide the support reference.",
+  },
+  GAMING_CHECKOUT_COMMAND_FAILED: {
+    fr: "L’action demandée sur cet encaissement n’a pas pu être finalisée. Rechargez l’encaissement avant de réessayer ; si le problème persiste, communiquez la référence support.",
+    en: "The requested checkout action could not be completed. Reload the checkout before trying again; if the problem persists, provide the support reference.",
+  },
+  GAMING_CHECKOUT_READ_FAILED: {
+    fr: "Impossible de charger cet encaissement pour le moment. Réessayez ; si le problème persiste, communiquez la référence support.",
+    en: "This Gaming checkout cannot be loaded right now. Try again; if the problem persists, provide the support reference.",
+  },
+  GAMING_CHECKOUT_RECEIPT_FAILED: {
+    fr: "Le reçu Gaming n’a pas pu être chargé. Réessayez ; si le problème persiste, communiquez la référence support.",
+    en: "The Gaming receipt could not be loaded. Try again; if the problem persists, provide the support reference.",
+  },
+};
+
 export function gamingCheckoutErrorResponse(error: unknown, request: Request, fallback = "GAMING_CHECKOUT_OPERATION_FAILED") {
   if (error instanceof EnterpriseGamingCheckoutError) {
     const language = locale(request);
@@ -77,9 +96,14 @@ export function gamingCheckoutErrorResponse(error: unknown, request: Request, fa
     supportReference,
   });
   const language = locale(request);
+  const baseMessage = unexpectedMessages[fallback]?.[language]
+    || (language === "en"
+      ? "The Gaming operation could not be completed because of an internal incident. Try again; if the problem persists, provide the support reference."
+      : "L’opération Gaming n’a pas pu être terminée à cause d’un incident interne. Réessayez ; si le problème persiste, communiquez la référence support.");
+  const message = supportReference ? `${baseMessage} ${supportReference}` : baseMessage;
   return NextResponse.json({
     error: fallback,
-    message: language === "en" ? "An internal error prevented the Gaming operation." : "Une erreur interne a empêché l’opération Gaming.",
+    message,
     ...(supportReference ? { supportReference } : {}),
   }, { status: 500 });
 }
