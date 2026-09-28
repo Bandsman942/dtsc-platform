@@ -309,7 +309,8 @@
     "qa:hotfix-668": "node scripts/qa-hotfix-668-registry-business-coherence.mjs",
     "qa:hotfix-669": "node scripts/qa-hotfix-669-ui-i18n-code-convergence.mjs",
     "qa:hotfix-670": "node scripts/qa-hotfix-670-erp-deletion-certification.mjs",
-    "e2e:hotfix-664": "playwright test tests/e2e/issue-664-finance-approval-collaboration.spec.mjs"
+    "e2e:hotfix-664": "playwright test tests/e2e/issue-664-finance-approval-collaboration.spec.mjs",
+    "qa:scale7-staged-certification": "node scripts/qa-scale7-staged-certification.mjs"
   },
   "dependencies": {
     "@ai-sdk/gateway": "2.0.27",
