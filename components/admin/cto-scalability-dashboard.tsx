@@ -363,6 +363,8 @@ export function CtoScalabilityDashboard({ snapshot, locale }: { snapshot: Snapsh
                   <div className="mt-3 space-y-1 text-xs leading-5 text-dtsc-muted">
                     <p><strong>{t("certificationLatest")}:</strong> {new Intl.DateTimeFormat(locale === "en" ? "en" : "fr", { dateStyle: "medium", timeStyle: "short" }).format(new Date(latest.testedAt))}</p>
                     <p><strong>P95 / P99:</strong> {milliseconds(latest.p95Ms)} / {milliseconds(latest.p99Ms)} · <strong>{t("errorRate")}:</strong> {percent(latest.errorRate)} · <strong>{t("throughput")}:</strong> {metricValue(latest.requestsPerSecond, " req/s")}</p>
+                    <p><strong>{t("certificationDuration")}:</strong> {latest.durationSeconds == null ? "—" : elapsed(latest.durationSeconds * 1000, t("seconds"))} · <strong>{t("certificationDb")}:</strong> {percent(latest.dbConnectionUtilization)} · <strong>{t("certificationRedis")}:</strong> {latest.redisStatuses.join(", ") || "—"}</p>
+                    <p><strong>{t("certificationAi")}:</strong> {latest.aiActiveAttempts ?? "—"} / {latest.aiThrottledAttempts ?? "—"} <span className="text-dtsc-muted">({t("certificationAiFormat")})</span></p>
                     <p className="break-all"><strong>{t("certificationEvidence")}:</strong> {latest.evidenceRef}</p>
                   </div>
                 ) : <p className="mt-3 text-xs font-semibold text-dtsc-muted">{t("certificationNoEvidence")}</p>}
