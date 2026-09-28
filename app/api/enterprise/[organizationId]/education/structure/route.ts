@@ -3,7 +3,7 @@ import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http"
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { EDUCATION_MODULE_CODES, EDUCATION_RESOURCE_CODES, type EducationModuleCode, type EducationResourceCode } from "@/lib/enterprise/education/constants";
 import { authorizeEducationRequest, educationErrorResponse, educationListParams } from "@/lib/enterprise/education/http";
-import { educationCreateEnvelopeSchema, getEducationCreateSchema } from "@/lib/enterprise/education/schemas";
+import { educationCreateEnvelopeSchema, educationSettingsSchema, getEducationCreateSchema } from "@/lib/enterprise/education/schemas";
 import { createEducationResource, getEducationWorkspaceSnapshot, listEducationResource, saveEducationSettings } from "@/lib/enterprise/education/service";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -53,12 +53,12 @@ export async function POST(req: Request, { params }: Params) {
   try {
     let item;
     if (resource === "SETTINGS") {
-      const parsed = getEducationCreateSchema("SETTINGS").safeParse(envelope.data.data);
+      const parsed = educationSettingsSchema.safeParse(envelope.data.data);
       if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "EDUCATION_INPUT_INVALID", req);
       item = await saveEducationSettings(
         organizationId,
         auth.session.userId,
-        parsed.data as Parameters<typeof saveEducationSettings>[2],
+        parsed.data,
       );
     } else {
       const schema = getEducationCreateSchema(resource);
