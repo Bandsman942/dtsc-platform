@@ -55,7 +55,11 @@ export async function POST(req: Request, { params }: Params) {
     if (resource === "SETTINGS") {
       const parsed = getEducationCreateSchema("SETTINGS").safeParse(envelope.data.data);
       if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "EDUCATION_INPUT_INVALID", req);
-      item = await saveEducationSettings(organizationId, auth.session.userId, parsed.data);
+      item = await saveEducationSettings(
+        organizationId,
+        auth.session.userId,
+        parsed.data as Parameters<typeof saveEducationSettings>[2],
+      );
     } else {
       const schema = getEducationCreateSchema(resource);
       const parsed = schema.safeParse(envelope.data.data);
