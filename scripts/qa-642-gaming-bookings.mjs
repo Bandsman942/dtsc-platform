@@ -108,6 +108,7 @@ includesAll(service, [
   "Prisma.TransactionIsolationLevel.Serializable",
   "lockBookingStations",
   "pg_advisory_xact_lock",
+  "tx.$executeRaw",
   "assertNoConflict",
   "scheduledStartAt: { lt: scheduledEndAt }",
   "scheduledEndAt: { gt: scheduledStartAt }",
@@ -126,6 +127,7 @@ includesAll(service, [
   'error.code === "P2034"',
   'error.code === "P2002"',
 ], "transactional booking service");
+check(!/\$queryRaw[\s\S]{0,180}pg_advisory_xact_lock/.test(service), "booking advisory lock must never use $queryRaw because PostgreSQL returns void");
 check(!service.includes("EnterpriseGamingCustomer"), "booking service must not create a parallel customer model");
 check(!service.includes("GamingPayment"), "booking service must not create a parallel payment model");
 
