@@ -16,6 +16,8 @@ export type Scale7CertificationRecord = {
   tenantIsolationRate: number | null;
   dbConnectionUtilization: number | null;
   redisStatuses: string[];
+  aiActiveAttempts: number | null;
+  aiThrottledAttempts: number | null;
   githubRunId: string | null;
   gitSha: string | null;
   evidenceRef: string;
