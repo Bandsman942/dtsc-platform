@@ -251,7 +251,6 @@ export async function prepareGamingCheckout(organizationId: string, actorUserId:
           items: {
             create: [
               {
-                organizationId,
                 catalogItemId: service.id,
                 description: serviceDescription,
                 quantity: gamingMoney(1),
@@ -262,7 +261,6 @@ export async function prepareGamingCheckout(organizationId: string, actorUserId:
                 totalAmount: serviceAmount,
               },
               ...extraLines.map((line) => ({
-                organizationId,
                 catalogItemId: line.item.id,
                 description: line.item.name,
                 quantity: line.quantity,
