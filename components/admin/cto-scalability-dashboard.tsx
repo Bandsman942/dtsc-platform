@@ -329,6 +329,50 @@ export function CtoScalabilityDashboard({ snapshot, locale }: { snapshot: Snapsh
       </section>
 
       <section className="dtsc-panel min-w-0 max-w-full p-4 sm:p-5">
+        <div className="flex min-w-0 items-center gap-3"><Gauge className="h-5 w-5 shrink-0 text-cyan-600" aria-hidden="true" /><h2 className="break-words text-xl font-black text-dtsc-ink">{t("certification")}</h2></div>
+        <p className="mt-2 max-w-4xl break-words text-sm leading-6 text-dtsc-muted">{t("certificationDescription")}</p>
+        <div className="mt-4 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-[repeat(2,minmax(0,1fr))]">
+          {snapshot.certification.stages.map((stage) => {
+            const profileRecords = [stage.latestByProfile.ramp, stage.latestByProfile.soak, stage.latestByProfile.spike];
+            const latest = profileRecords.reduce((current, record) => {
+              if (!record) return current;
+              if (!current) return record;
+              return Date.parse(record.testedAt) > Date.parse(current.testedAt) ? record : current;
+            }, profileRecords[0] ?? null);
+            const tone: StatusTone = stage.status === "PASS" ? "measured" : stage.status === "FAIL" ? "watch" : "not-measured";
+            const statusLabel = stage.status === "PASS" ? t("certificationPass") : stage.status === "FAIL" ? t("certificationFail") : t("certificationPending");
+            return (
+              <article key={stage.targetVus} className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
+                <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+                  <div className="min-w-0"><p className="text-xs font-black uppercase tracking-[0.08em] text-dtsc-muted">{t("certificationStage")}</p><p className="mt-1 text-2xl font-black text-dtsc-ink">{stage.targetVus.toLocaleString(locale === "en" ? "en" : "fr")} VU</p></div>
+                  <StatusPill tone={tone} label={statusLabel} />
+                </div>
+                <div className="mt-3 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-[repeat(3,minmax(0,1fr))]">
+                  {([
+                    ["ramp", t("profileRamp"), stage.latestByProfile.ramp],
+                    ["soak", t("profileSoak"), stage.latestByProfile.soak],
+                    ["spike", t("profileSpike"), stage.latestByProfile.spike],
+                  ] as const).map(([profile, label, record]) => (
+                    <div key={profile} className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page p-3">
+                      <p className="break-words text-xs font-black text-dtsc-muted">{label}</p>
+                      <p className="mt-1 break-words text-sm font-black text-dtsc-ink">{record ? (record.status === "PASS" ? t("certificationPass") : t("certificationFail")) : t("certificationPending")}</p>
+                    </div>
+                  ))}
+                </div>
+                {latest ? (
+                  <div className="mt-3 space-y-1 text-xs leading-5 text-dtsc-muted">
+                    <p><strong>{t("certificationLatest")}:</strong> {new Intl.DateTimeFormat(locale === "en" ? "en" : "fr", { dateStyle: "medium", timeStyle: "short" }).format(new Date(latest.testedAt))}</p>
+                    <p><strong>P95 / P99:</strong> {milliseconds(latest.p95Ms)} / {milliseconds(latest.p99Ms)} · <strong>{t("errorRate")}:</strong> {percent(latest.errorRate)} · <strong>{t("throughput")}:</strong> {metricValue(latest.requestsPerSecond, " req/s")}</p>
+                    <p className="break-all"><strong>{t("certificationEvidence")}:</strong> {latest.evidenceRef}</p>
+                  </div>
+                ) : <p className="mt-3 text-xs font-semibold text-dtsc-muted">{t("certificationNoEvidence")}</p>}
+              </article>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="dtsc-panel min-w-0 max-w-full p-4 sm:p-5">
         <div className="flex min-w-0 items-center gap-3"><Gauge className="h-5 w-5 shrink-0 text-cyan-600" aria-hidden="true" /><h2 className="break-words text-xl font-black text-dtsc-ink">{t("target")}</h2></div>
         <div className="mt-4 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-[repeat(2,minmax(0,1fr))] lg:grid-cols-[repeat(4,minmax(0,1fr))]">
           {[t("targetApiP95"), t("targetCriticalP99"), t("targetErrorRate"), t("targetNoExhaustion")].map((target) => <div key={target} className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4"><p className="break-words font-black text-dtsc-ink">{target}</p></div>)}
