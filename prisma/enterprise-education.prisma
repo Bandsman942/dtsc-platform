@@ -39,6 +39,8 @@ model EnterpriseEducationCampus {
   classGroups     EnterpriseEducationClassGroup[]
   courseOfferings EnterpriseEducationCourseOffering[]
   calendarEvents  EnterpriseEducationCalendarEvent[]
+  admissionApplications EnterpriseEducationAdmissionApplication[]
+  enrollmentPlacements EnterpriseEducationEnrollmentPlacement[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, code], map: "EducationCampus_org_code_key")
@@ -65,6 +67,8 @@ model EnterpriseEducationAcademicYear {
   classGroups     EnterpriseEducationClassGroup[]
   courseOfferings EnterpriseEducationCourseOffering[]
   calendarEvents  EnterpriseEducationCalendarEvent[]
+  admissionApplications EnterpriseEducationAdmissionApplication[]
+  enrollments      EnterpriseEducationEnrollment[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, code], map: "EducationAcademicYear_org_code_key")
@@ -119,6 +123,8 @@ model EnterpriseEducationAcademicLevel {
   archivedAt      DateTime?
   classGroups     EnterpriseEducationClassGroup[]
   courseOfferings EnterpriseEducationCourseOffering[]
+  admissionApplications EnterpriseEducationAdmissionApplication[]
+  enrollmentPlacements EnterpriseEducationEnrollmentPlacement[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, code], map: "EducationAcademicLevel_org_code_key")
@@ -171,6 +177,8 @@ model EnterpriseEducationProgram {
   department      EnterpriseEducationDepartment? @relation(fields: [organizationId, departmentId], references: [organizationId, id], onDelete: Restrict)
   classGroups     EnterpriseEducationClassGroup[]
   courseOfferings EnterpriseEducationCourseOffering[]
+  admissionApplications EnterpriseEducationAdmissionApplication[]
+  enrollmentPlacements EnterpriseEducationEnrollmentPlacement[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, code], map: "EducationProgram_org_code_key")
@@ -201,6 +209,8 @@ model EnterpriseEducationClassGroup {
   level           EnterpriseEducationAcademicLevel @relation(fields: [organizationId, levelId], references: [organizationId, id], onDelete: Restrict)
   program         EnterpriseEducationProgram? @relation(fields: [organizationId, programId], references: [organizationId, id], onDelete: Restrict)
   courseOfferings EnterpriseEducationCourseOffering[]
+  admissionApplications EnterpriseEducationAdmissionApplication[]
+  enrollmentPlacements EnterpriseEducationEnrollmentPlacement[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, academicYearId, code], map: "EducationClassGroup_year_code_key")
@@ -298,4 +308,262 @@ model EnterpriseEducationCalendarEvent {
   @@index([organizationId, campusId, startsAt, status])
   @@index([organizationId, periodId, startsAt])
   @@index([archivedAt])
+}
+
+
+model EnterpriseEducationCandidate {
+  id                String   @id @default(cuid())
+  organizationId    String
+  candidateNumber   String
+  firstName         String
+  lastName          String
+  middleName        String?
+  preferredName     String?
+  birthDate         DateTime?
+  sex               String?
+  nationalityCode   String?
+  email             String?
+  phone             String?
+  addressJson       Json?
+  status            String   @default("ACTIVE")
+  revision          Int      @default(1)
+  createdByUserId   String
+  updatedByUserId   String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  archivedAt        DateTime?
+  applications      EnterpriseEducationAdmissionApplication[]
+  student           EnterpriseEducationStudent?
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, candidateNumber], map: "EducationCandidate_org_number_key")
+  @@index([organizationId, status, lastName, firstName])
+  @@index([organizationId, email])
+  @@index([organizationId, phone])
+  @@index([archivedAt])
+}
+
+model EnterpriseEducationAdmissionApplication {
+  id                String   @id @default(cuid())
+  organizationId    String
+  applicationNumber String
+  candidateId       String
+  academicYearId    String
+  campusId          String
+  programId         String?
+  levelId           String?
+  classGroupId      String?
+  status            String   @default("DRAFT")
+  submittedAt       DateTime?
+  reviewStartedAt   DateTime?
+  decidedAt         DateTime?
+  applicantNotes    String?
+  internalNotes     String?
+  revision          Int      @default(1)
+  createdByUserId   String
+  updatedByUserId   String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  archivedAt        DateTime?
+  candidate         EnterpriseEducationCandidate @relation(fields: [organizationId, candidateId], references: [organizationId, id], onDelete: Restrict)
+  academicYear      EnterpriseEducationAcademicYear @relation(fields: [organizationId, academicYearId], references: [organizationId, id], onDelete: Restrict)
+  campus            EnterpriseEducationCampus @relation(fields: [organizationId, campusId], references: [organizationId, id], onDelete: Restrict)
+  program           EnterpriseEducationProgram? @relation(fields: [organizationId, programId], references: [organizationId, id], onDelete: Restrict)
+  level             EnterpriseEducationAcademicLevel? @relation(fields: [organizationId, levelId], references: [organizationId, id], onDelete: Restrict)
+  classGroup        EnterpriseEducationClassGroup? @relation(fields: [organizationId, classGroupId], references: [organizationId, id], onDelete: Restrict)
+  decisions         EnterpriseEducationAdmissionDecision[]
+  enrollment        EnterpriseEducationEnrollment?
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, applicationNumber], map: "EducationAdmissionApplication_org_number_key")
+  @@index([organizationId, status, submittedAt])
+  @@index([organizationId, academicYearId, campusId, status])
+  @@index([organizationId, candidateId, createdAt])
+  @@index([archivedAt])
+}
+
+model EnterpriseEducationAdmissionDecision {
+  id                String   @id @default(cuid())
+  organizationId    String
+  applicationId     String
+  decision          String
+  reason            String?
+  decidedByUserId   String
+  decidedAt         DateTime @default(now())
+  createdAt         DateTime @default(now())
+  application       EnterpriseEducationAdmissionApplication @relation(fields: [organizationId, applicationId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, applicationId, decidedAt])
+  @@index([organizationId, decision, decidedAt])
+}
+
+model EnterpriseEducationStudent {
+  id                String   @id @default(cuid())
+  organizationId    String
+  studentNumber     String
+  sourceCandidateId String?
+  userId            String?
+  businessPartyId   String?
+  firstName         String
+  lastName          String
+  middleName        String?
+  preferredName     String?
+  birthDate         DateTime?
+  sex               String?
+  nationalityCode   String?
+  email             String?
+  phone             String?
+  status            String   @default("ACTIVE")
+  revision          Int      @default(1)
+  createdByUserId   String
+  updatedByUserId   String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  archivedAt        DateTime?
+  sourceCandidate   EnterpriseEducationCandidate? @relation(fields: [organizationId, sourceCandidateId], references: [organizationId, id], onDelete: Restrict)
+  guardians         EnterpriseEducationStudentGuardian[]
+  enrollments       EnterpriseEducationEnrollment[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, studentNumber], map: "EducationStudent_org_number_key")
+  @@unique([organizationId, sourceCandidateId], map: "EducationStudent_org_candidate_key")
+  @@index([organizationId, status, lastName, firstName])
+  @@index([organizationId, userId])
+  @@index([organizationId, businessPartyId])
+  @@index([archivedAt])
+}
+
+model EnterpriseEducationGuardian {
+  id                String   @id @default(cuid())
+  organizationId    String
+  guardianNumber    String
+  businessPartyId   String?
+  userId            String?
+  firstName         String
+  lastName          String
+  email             String?
+  phone             String?
+  preferredLanguage String?
+  status            String   @default("ACTIVE")
+  revision          Int      @default(1)
+  createdByUserId   String
+  updatedByUserId   String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  archivedAt        DateTime?
+  students          EnterpriseEducationStudentGuardian[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, guardianNumber], map: "EducationGuardian_org_number_key")
+  @@index([organizationId, status, lastName, firstName])
+  @@index([organizationId, businessPartyId])
+  @@index([organizationId, userId])
+  @@index([archivedAt])
+}
+
+model EnterpriseEducationStudentGuardian {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  studentId             String
+  guardianId            String
+  relationshipType      String
+  isPrimary             Boolean  @default(false)
+  isLegalGuardian       Boolean  @default(false)
+  isBillingContact      Boolean  @default(false)
+  isNotificationContact Boolean  @default(true)
+  effectiveFrom         DateTime @default(now())
+  effectiveUntil        DateTime?
+  revision              Int      @default(1)
+  createdByUserId       String
+  updatedByUserId       String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  archivedAt            DateTime?
+  student               EnterpriseEducationStudent @relation(fields: [organizationId, studentId], references: [organizationId, id], onDelete: Restrict)
+  guardian              EnterpriseEducationGuardian @relation(fields: [organizationId, guardianId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, studentId, guardianId], map: "EducationStudentGuardian_org_pair_key")
+  @@index([organizationId, studentId, isPrimary, archivedAt])
+  @@index([organizationId, guardianId, archivedAt])
+}
+
+model EnterpriseEducationEnrollment {
+  id                     String   @id @default(cuid())
+  organizationId         String
+  enrollmentNumber       String
+  studentId              String
+  academicYearId         String
+  admissionApplicationId String?
+  status                 String   @default("PENDING")
+  enrolledAt             DateTime?
+  withdrawnAt            DateTime?
+  completedAt            DateTime?
+  revision               Int      @default(1)
+  createdByUserId        String
+  updatedByUserId        String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  archivedAt             DateTime?
+  student                EnterpriseEducationStudent @relation(fields: [organizationId, studentId], references: [organizationId, id], onDelete: Restrict)
+  academicYear           EnterpriseEducationAcademicYear @relation(fields: [organizationId, academicYearId], references: [organizationId, id], onDelete: Restrict)
+  admissionApplication   EnterpriseEducationAdmissionApplication? @relation(fields: [organizationId, admissionApplicationId], references: [organizationId, id], onDelete: Restrict)
+  placements             EnterpriseEducationEnrollmentPlacement[]
+  history                EnterpriseEducationEnrollmentHistory[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, enrollmentNumber], map: "EducationEnrollment_org_number_key")
+  @@unique([organizationId, admissionApplicationId], map: "EducationEnrollment_org_application_key")
+  @@index([organizationId, studentId, academicYearId, status])
+  @@index([organizationId, academicYearId, status, createdAt])
+  @@index([archivedAt])
+}
+
+model EnterpriseEducationEnrollmentPlacement {
+  id              String   @id @default(cuid())
+  organizationId  String
+  enrollmentId    String
+  campusId        String
+  programId       String?
+  levelId         String
+  classGroupId    String?
+  placementReason String   @default("INITIAL")
+  effectiveFrom   DateTime
+  effectiveUntil  DateTime?
+  revision        Int      @default(1)
+  createdByUserId String
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  enrollment      EnterpriseEducationEnrollment @relation(fields: [organizationId, enrollmentId], references: [organizationId, id], onDelete: Restrict)
+  campus          EnterpriseEducationCampus @relation(fields: [organizationId, campusId], references: [organizationId, id], onDelete: Restrict)
+  program         EnterpriseEducationProgram? @relation(fields: [organizationId, programId], references: [organizationId, id], onDelete: Restrict)
+  level           EnterpriseEducationAcademicLevel @relation(fields: [organizationId, levelId], references: [organizationId, id], onDelete: Restrict)
+  classGroup      EnterpriseEducationClassGroup? @relation(fields: [organizationId, classGroupId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, enrollmentId, effectiveUntil])
+  @@index([organizationId, campusId, levelId, classGroupId])
+  @@index([organizationId, programId, effectiveUntil])
+}
+
+model EnterpriseEducationEnrollmentHistory {
+  id              String   @id @default(cuid())
+  organizationId  String
+  enrollmentId    String
+  eventType       String
+  previousStatus  String?
+  newStatus       String?
+  fromPlacementId String?
+  toPlacementId   String?
+  reason          String?
+  actorUserId     String
+  occurredAt      DateTime @default(now())
+  metadataJson    Json?
+  enrollment      EnterpriseEducationEnrollment @relation(fields: [organizationId, enrollmentId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, enrollmentId, occurredAt])
+  @@index([organizationId, eventType, occurredAt])
 }
