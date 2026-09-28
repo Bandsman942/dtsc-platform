@@ -24,6 +24,6 @@ export async function GET(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "gaming-checkout-receipt", checkoutId } });
     return NextResponse.json({ receipt });
   } catch (error) {
-    return gamingCheckoutErrorResponse(error, req);
+    return gamingCheckoutErrorResponse(error, req, "GAMING_CHECKOUT_RECEIPT_FAILED");
   }
 }
