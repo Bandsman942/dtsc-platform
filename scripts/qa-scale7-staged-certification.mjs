@@ -31,8 +31,22 @@ const docs = fs.readFileSync(paths.docs, "utf8");
 const all = [workflow, profile, report, archive, docs].join("\n");
 
 expect(/^on:\s*\n\s+workflow_dispatch:/m.test(workflow), "workflow_dispatch is required");
+expect(/^\s+issue_comment:\s*$/m.test(workflow), "owner issue_comment trigger is required");
 expect(!/^\s+(push|pull_request|schedule):/m.test(workflow), "certification must never auto-run");
 expect(workflow.includes("RUN_SCALE7_CERTIFICATION"), "manual confirmation is missing");
+expect(workflow.includes("github.event.issue.number == 360"), "issue trigger must be scoped to #360");
+expect(workflow.includes("github.event.comment.author_association == 'OWNER'"), "issue trigger must be OWNER-only");
+expect(workflow.includes("startsWith(github.event.comment.body, 'RUN_SCALE7_')"), "issue trigger must be command-scoped");
+expect(workflow.includes("OWNER_COMMAND:") && workflow.includes('case "${OWNER_COMMAND}" in'), "owner command must be passed through env before shell parsing");
+expect(workflow.includes("MANUAL_CONFIRMATION:") && workflow.includes('if [ "${MANUAL_CONFIRMATION}" != "RUN_SCALE7_CERTIFICATION" ]'), "manual confirmation must be passed through env before shell parsing");
+expect(!workflow.includes('case "${{ github.event.comment.body }}" in'), "raw issue comment must not be interpolated into shell");
+expect(workflow.includes("issues: write"), "issue result publication permission is required");
+expect(workflow.includes("SCALE7_RESULT_JSON"), "owner-triggered secret-free result marker is required");
+for (const target of ["500", "1000", "2500", "5000"]) {
+  for (const mode of ["RAMP", "SOAK", "SPIKE"]) {
+    expect(workflow.includes(`RUN_SCALE7_${target}_${mode}`), `missing owner command RUN_SCALE7_${target}_${mode}`);
+  }
+}
 expect(workflow.includes("verify-scale7-stage-progression.mjs"), "staged progression gate is missing");
 for (const target of ["500", "1000", "2500", "5000"]) expect(workflow.includes(target), `workflow missing ${target} stage`);
 for (const mode of ["ramp", "soak", "spike"]) expect(workflow.includes(mode), `workflow missing ${mode} profile`);
