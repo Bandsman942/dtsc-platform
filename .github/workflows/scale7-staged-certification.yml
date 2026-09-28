@@ -47,6 +47,8 @@ jobs:
       VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
       TARGET_VUS: ${{ github.event_name == 'workflow_dispatch' && inputs.target_vus || '' }}
       LOAD_PROFILE: ${{ github.event_name == 'workflow_dispatch' && inputs.load_profile || '' }}
+      MANUAL_CONFIRMATION: ${{ github.event_name == 'workflow_dispatch' && inputs.confirmation || '' }}
+      OWNER_COMMAND: ${{ github.event_name == 'issue_comment' && github.event.comment.body || '' }}
       ARTIFACTS_DIR: artifacts
     steps:
       - name: Validate certification trigger contract
@@ -57,7 +59,7 @@ jobs:
           profile="${LOAD_PROFILE:-}"
 
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
-            if [ "${{ inputs.confirmation }}" != "RUN_SCALE7_CERTIFICATION" ]; then
+            if [ "${MANUAL_CONFIRMATION}" != "RUN_SCALE7_CERTIFICATION" ]; then
               echo "::error::Confirmation must be RUN_SCALE7_CERTIFICATION."
               exit 1
             fi
@@ -66,7 +68,7 @@ jobs:
               echo "::error::Only the repository OWNER may trigger SCALE-7 from Issue #360."
               exit 1
             fi
-            case "${{ github.event.comment.body }}" in
+            case "${OWNER_COMMAND}" in
               RUN_SCALE7_500_RAMP) target=500; profile=ramp ;;
               RUN_SCALE7_500_SOAK) target=500; profile=soak ;;
               RUN_SCALE7_500_SPIKE) target=500; profile=spike ;;
