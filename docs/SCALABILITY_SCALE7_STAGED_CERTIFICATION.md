@@ -1,0 +1,101 @@
+# SCALE-7 — Staged load certification
+
+Issue: #360  
+Parent programme: #352  
+Depends on: #359 / SCALE-6
+
+## Objective
+
+Certify DTSC Platform progressively at **500 → 1,000 → 2,500 → 5,000 simultaneous users** without turning a target into an unsupported capacity claim.
+
+Each stage is tested with three explicit profiles:
+
+- `ramp`: progressive ramp-up plus bounded plateau;
+- `soak`: longer plateau for saturation/leak detection;
+- `spike`: fast rise/drop/re-rise resilience.
+
+A stage is certified only when all required profiles have archived PASS evidence for the relevant SHA/environment.
+
+## Workload contract
+
+`scripts/load/scale7-staged-certification.js` uses at least two authenticated tenant contexts and mixes:
+
+- dashboard reads;
+- notifications;
+- common enterprise/ERP reads;
+- Shop/Retail reads;
+- collaboration reads;
+- a low-frequency real AI request path governed by SCALE-6;
+- explicit cross-tenant probes that must stay 403/404.
+
+The secret `SCALE7_AUTH_CONTEXTS_JSON` contains only operator-provided load-test contexts and is never written to artifacts or logs. Each context must provide:
+
+```json
+{
+  "sessionCookie": "REDACTED",
+  "organizationId": "load-test-org-a",
+  "enterpriseReadPath": "/api/...",
+  "shopReadPath": "/api/...",
+  "collaborationReadPath": "/api/...",
+  "aiPath": "/api/...",
+  "aiPayload": {},
+  "isolationProbePath": "/api/...foreign-tenant..."
+}
+```
+
+Use dedicated load-test organizations and data. Never point mutation-heavy scenarios at real customer records.
+
+## SLO gates
+
+Every run enforces:
+
+- HTTP failure rate < 1%;
+- aggregate P95 < 1,000 ms;
+- aggregate P99 < 2,000 ms;
+- checks > 99%;
+- cross-tenant probe success = 100%;
+- PostgreSQL connection utilization < 80%;
+- no connection exhaustion;
+- no idle-in-transaction sessions;
+- Redis never observed as `UNAVAILABLE`.
+
+The report additionally archives throughput, DB pressure, Redis state, queue state and AI concurrency/throttling signals.
+
+## Execution
+
+Workflow: `.github/workflows/scale7-staged-certification.yml`
+
+Manual inputs:
+
+1. stage: 500 / 1,000 / 2,500 / 5,000;
+2. profile: ramp / soak / spike;
+3. exact confirmation: `RUN_SCALE7_CERTIFICATION`.
+
+Required configuration:
+
+- repository variable `SCALE7_LOAD_BASE_URL`;
+- secret `SCALE7_AUTH_CONTEXTS_JSON`;
+- secret `SCALE7_CTO_SESSION_COOKIE`;
+- secret `VERCEL_AUTOMATION_BYPASS_SECRET`.
+
+No workflow runs on push, pull request or schedule.
+
+## Archived certification registry
+
+GitHub Actions artifacts are the execution evidence. After a real run, download the sanitized `scale7-certification-report.json` and archive only its safe summary:
+
+```bash
+node scripts/load/archive-scale7-certification.mjs path/to/scale7-certification-report.json
+```
+
+This updates `data/scalability/scale7-certifications.json`. The versioned registry is intentionally secret-free and feeds **Administration DTSC → CTO → Scalabilité**, where archived certification is shown separately from live observability.
+
+The registry stores no cookie, DSN, tenant identifier, prompt, response body or provider secret.
+
+## Promotion rule
+
+Do not attempt a higher user stage until the prior stage has the required PASS evidence. A FAIL is an engineering signal, not something to bypass.
+
+## Rollback
+
+All SCALE-7 repository changes are additive application/QA/workflow/documentation changes. Rollback is a revert. No Prisma migration is introduced by this iteration.
