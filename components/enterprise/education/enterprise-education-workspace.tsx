@@ -226,7 +226,13 @@ function defaults(resource: EducationResourceCode) {
 
 function inputValue(value: unknown, type: FieldType | undefined) {
   if (value == null) return type === "checkbox" ? false : "";
-  if (type === "date") return new Date(String(value)).toISOString().slice(0, 10);
+  if (type === "date") {
+    const date = new Date(String(value));
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(date.getUTCDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
   if (type === "datetime-local") {
     const date = new Date(String(value));
     const offset = date.getTimezoneOffset() * 60_000;
