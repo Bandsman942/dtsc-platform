@@ -104,6 +104,7 @@ await import("./qa-594-party-crm-canonical-ux.mjs");
 await import("./qa-602-atomic-retail-posting.mjs");
 await import("./qa-hotfix-618-finance-currency-treasury-errors.mjs");
 await import("./qa-hotfix-690-gaming-advisory-lock.mjs");
+await import("./qa-hotfix-693-gaming-checkout-invoice.mjs");
 await import("./qa-scale5b-retail-dashboard-cache.mjs");
 await import("./qa-scale5c-read-path-cache.mjs");
 await import("./qa-scale6-ai-concurrency-resilience.mjs");
