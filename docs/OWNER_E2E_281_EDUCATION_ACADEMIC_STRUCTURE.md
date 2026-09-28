@@ -2,7 +2,7 @@
 
 Statut initial : **NOT_EXECUTED**.
 
-Tester uniquement le SHA final de la PR #679 après réussite complète des gates CI.
+Tester uniquement le SHA final de la PR #681 après réussite complète des gates CI.
 
 ## Préparation
 
