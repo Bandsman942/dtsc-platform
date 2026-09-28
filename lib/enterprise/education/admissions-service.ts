@@ -108,7 +108,7 @@ async function validatePlacementReferences(
 }
 
 export async function getEducationPopulationSnapshot(organizationId: string) {
-  const [admissionCount, pendingAdmissionCount, studentCount, activeEnrollmentCount, guardianCount, academicYears, campuses, programs, levels, classGroups] = await Promise.all([
+  const [admissionCount, pendingAdmissionCount, studentCount, activeEnrollmentCount, guardianCount, academicYears, campuses, programs, levels, classGroups, students, guardians] = await Promise.all([
     prisma.enterpriseEducationAdmissionApplication.count({ where: { organizationId, archivedAt: null } }),
     prisma.enterpriseEducationAdmissionApplication.count({ where: { organizationId, archivedAt: null, status: { in: ["SUBMITTED", "UNDER_REVIEW", "WAITLISTED"] } } }),
     prisma.enterpriseEducationStudent.count({ where: { organizationId, archivedAt: null } }),
@@ -119,10 +119,12 @@ export async function getEducationPopulationSnapshot(organizationId: string) {
     prisma.enterpriseEducationProgram.findMany({ where: { organizationId, archivedAt: null }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }], take: 100, select: { id: true, code: true, name: true, status: true } }),
     prisma.enterpriseEducationAcademicLevel.findMany({ where: { organizationId, archivedAt: null }, orderBy: [{ sequence: "asc" }, { label: "asc" }], take: 100, select: { id: true, code: true, label: true, status: true } }),
     prisma.enterpriseEducationClassGroup.findMany({ where: { organizationId, archivedAt: null }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }], take: 150, select: { id: true, code: true, name: true, academicYearId: true, campusId: true, levelId: true, programId: true, status: true } }),
+    prisma.enterpriseEducationStudent.findMany({ where: { organizationId, archivedAt: null }, orderBy: [{ lastName: "asc" }, { firstName: "asc" }], take: 200, select: { id: true, studentNumber: true, firstName: true, lastName: true, status: true } }),
+    prisma.enterpriseEducationGuardian.findMany({ where: { organizationId, archivedAt: null }, orderBy: [{ lastName: "asc" }, { firstName: "asc" }], take: 200, select: { id: true, guardianNumber: true, firstName: true, lastName: true, status: true } }),
   ]);
   return {
     counts: { admissionCount, pendingAdmissionCount, studentCount, activeEnrollmentCount, guardianCount },
-    references: { academicYears, campuses, programs, levels, classGroups },
+    references: { academicYears, campuses, programs, levels, classGroups, students, guardians },
   };
 }
 
