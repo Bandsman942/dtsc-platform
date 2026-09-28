@@ -36,7 +36,8 @@ function isRecord(value: unknown): value is Scale7CertificationRecord {
 }
 
 export function getScale7CertificationSnapshot() {
-  const records = Array.isArray(registry.records) ? registry.records.filter(isRecord) : [];
+  const rawRecords: unknown[] = Array.isArray(registry.records) ? registry.records as unknown[] : [];
+  const records = rawRecords.filter(isRecord);
   const stages = TARGETS.map((targetVus) => {
     const stageRecords = records
       .filter((record) => record.targetVus === targetVus)
