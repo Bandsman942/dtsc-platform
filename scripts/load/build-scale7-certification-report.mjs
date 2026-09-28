@@ -47,6 +47,18 @@ const summary = readJson(summaryPath);
 const samples = readNdjson(observabilityPath);
 const targetVus = Number.parseInt(process.env.TARGET_VUS || "0", 10);
 const profile = (process.env.LOAD_PROFILE || "").toLowerCase();
+
+let authTopology = { tenantCount: null, identityCount: null };
+try {
+  const parsed = JSON.parse(process.env.SCALE7_AUTH_CONTEXTS_JSON || "{}");
+  const tenants = Array.isArray(parsed.tenants) ? parsed.tenants : [];
+  authTopology = {
+    tenantCount: tenants.length,
+    identityCount: tenants.reduce((count, tenant) => count + (Array.isArray(tenant?.sessionCookies) ? tenant.sessionCookies.length : 0), 0),
+  };
+} catch {
+  authTopology = { tenantCount: null, identityCount: null };
+}
 const validStage = [500, 1000, 2500, 5000].includes(targetVus);
 const validProfile = ["ramp", "soak", "spike"].includes(profile);
 
@@ -119,6 +131,7 @@ const report = {
   targetVus,
   profile,
   durationSeconds,
+  authTopology,
   http,
   infrastructure,
   gates,
@@ -140,6 +153,7 @@ const markdown = [
   `- Git SHA: \`${report.gitSha || "unknown"}\``,
   `- Stage: **${targetVus} simultaneous users**`,
   `- Profile: **${profile || "unknown"}**`,
+  `- Tenants / identities: ${authTopology.tenantCount ?? "n/a"} / ${authTopology.identityCount ?? "n/a"}`,
   `- Duration: ${durationSeconds ?? "n/a"} s`,
   `- Requests: ${http.requests ?? "n/a"}`,
   `- Requests/s: ${http.requestsPerSecond ?? "n/a"}`,
