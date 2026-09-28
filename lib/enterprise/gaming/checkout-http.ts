@@ -4,6 +4,7 @@ import { financeErrorResponse } from "@/lib/enterprise/accounting/http";
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
 import { EnterpriseGamingCheckoutError } from "@/lib/enterprise/gaming/checkout";
+import { gamingUnexpectedErrorResponse } from "@/lib/enterprise/gaming/http";
 
 const messages: Record<string, { fr: string; en: string }> = {
   GAMING_CHECKOUT_NOT_FOUND: { fr: "Cet encaissement Gaming est introuvable.", en: "This Gaming checkout could not be found." },
@@ -66,7 +67,5 @@ export function gamingCheckoutErrorResponse(error: unknown, request: Request, fa
   }
   if (error instanceof EnterpriseAccountingError) return financeErrorResponse(error, fallback);
   if (error instanceof EnterpriseDomainError) return enterpriseDomainErrorResponse(error, fallback, request);
-  console.error(fallback, error);
-  const language = locale(request);
-  return NextResponse.json({ error: fallback, message: language === "en" ? "An internal error prevented the Gaming operation." : "Une erreur interne a empêché l’opération Gaming." }, { status: 500 });
+  return gamingUnexpectedErrorResponse(error, request, fallback);
 }
