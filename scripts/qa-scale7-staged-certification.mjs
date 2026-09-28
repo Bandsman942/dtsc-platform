@@ -42,9 +42,12 @@ expect(workflow.includes("actions/upload-artifact@v7"), "evidence artifact uploa
 expect(workflow.includes("retention-days: 90"), "SCALE-7 evidence retention must be explicit");
 expect(workflow.includes("api/admin/scalability/observability?windowHours=1"), "live CTO observability sampling is required");
 
-expect(profile.includes("SCALE7_AUTH_CONTEXTS_JSON"), "multi-tenant auth contexts are required");
-expect(profile.includes("contexts.length < 2"), "at least two contexts must be enforced");
-expect(profile.includes("new Set(contexts.map((context) => context.organizationId)).size < 2"), "distinct organizations must be enforced");
+expect(profile.includes("SCALE7_AUTH_CONTEXTS_JSON"), "multi-tenant auth pool is required");
+expect(profile.includes("tenants.length < 2"), "at least two tenants must be enforced");
+expect(profile.includes("minimumIdentityCount = Math.max(8, Math.ceil(targetVus / 100))"), "identity pool must scale with the target stage");
+expect(profile.includes("session cookies must be unique per load identity"), "load identities must use unique sessions");
+expect(profile.includes("new Set(tenants.map((tenant) => tenant.organizationId)).size !== tenants.length"), "distinct organizations must be enforced");
+expect(profile.includes("requires aiPath and aiPayload"), "representative AI workload must be mandatory");
 expect(profile.includes("tenant_isolation_pass"), "tenant-isolation metric is required");
 expect(profile.includes("isolation.status === 403 || isolation.status === 404"), "foreign-tenant access must be denied");
 expect(profile.includes('http_req_failed: ["rate<0.01"]'), "error-rate SLO is missing");
@@ -53,6 +56,7 @@ expect(profile.includes('checks: ["rate>0.99"]'), "check-rate SLO is missing");
 expect(profile.includes("ai-request"), "AI workload must be represented");
 expect(profile.includes("enterprise-read") && profile.includes("shop-read") && profile.includes("collaboration-read"), "business workload mix is incomplete");
 
+expect(report.includes("authTopology"), "report must archive tenant and identity counts without secrets");
 expect(report.includes("tenantIsolationPerfect"), "report must gate tenant isolation");
 expect(report.includes("dbConnectionUtilizationUnderEightyPercent"), "report must gate DB utilization");
 expect(report.includes("noDbConnectionExhaustion"), "report must gate DB exhaustion");
