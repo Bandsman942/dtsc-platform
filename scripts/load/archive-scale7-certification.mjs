@@ -18,7 +18,7 @@ if (!["ramp", "soak", "spike"].includes(report.profile) || !["PASS", "FAIL"].inc
   console.error("Report profile/status is invalid");
   process.exit(1);
 }
-if (!report.githubRunId || !report.gitSha) {
+if (report.evidence?.loadExecution !== "CI_PROVEN" || !report.githubRunId || !report.gitSha) {
   console.error("Only CI-proven reports with run id and git SHA may be archived");
   process.exit(1);
 }
@@ -37,6 +37,8 @@ const record = {
   tenantIsolationRate: report.http?.tenantIsolationRate ?? null,
   dbConnectionUtilization: report.infrastructure?.maxDbConnectionUtilization ?? null,
   redisStatuses: Array.isArray(report.infrastructure?.redisStatuses) ? report.infrastructure.redisStatuses : [],
+  aiActiveAttempts: report.infrastructure?.maxAiActiveAttempts ?? null,
+  aiThrottledAttempts: report.infrastructure?.maxAiThrottledAttempts ?? null,
   githubRunId: String(report.githubRunId),
   gitSha: report.gitSha,
   evidenceRef: `github-actions-run:${report.githubRunId}`,
