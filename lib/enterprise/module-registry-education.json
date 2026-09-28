@@ -170,7 +170,7 @@
       "implementationStatus": "ACTIVE",
       "navigationGroup": "SECTOR_EDUCATION",
       "navigationOrder": 160,
-      "iconKey": "user-round-check",
+      "iconKey": "user-round",
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-education/GUARDIANS",
       "workspaceKey": "ENTERPRISE_EDUCATION",
