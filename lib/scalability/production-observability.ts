@@ -4,6 +4,7 @@ import { getDatabaseConnectionPolicy } from "@/lib/database-connection-policy";
 import { prisma } from "@/lib/prisma";
 import { RATE_LIMIT_POLICY_PROFILES, RATE_LIMIT_POLICY_RULES } from "@/lib/rate-limit-policy";
 import { RATE_LIMIT_FALLBACK_TELEMETRY_FLUSH_MS } from "@/lib/scalability/rate-limit-fallback-observability";
+import { getScale7CertificationSnapshot } from "@/lib/scalability/scale7-certification-registry";
 import {
   getRedisObservabilitySnapshot,
   REDIS_OBSERVABILITY_METRICS,
@@ -303,6 +304,7 @@ export async function getProductionObservabilitySnapshot(windowHours: number) {
       hours: windowHours,
       since: since.toISOString(),
     },
+    certification: getScale7CertificationSnapshot(),
     api: {
       source: "ApiLog.durationMs",
       coverage: "Only routes that persist ApiLog entries are represented. Redis-only presence heartbeats and call-event polls intentionally do not write PostgreSQL ApiLog rows.",
