@@ -376,4 +376,3 @@ Le contrat corrigé est :
 - la QA #690 interdit `$queryRaw(...pg_advisory_xact_lock...)` dans le domaine Gaming et exécute réellement un advisory transaction lock via Prisma/PostgreSQL lorsqu’une `DATABASE_URL` de CI est disponible.
 
 Le parcours OWNER_E2E requis après merge reste : réservation → check-in/session → fin de session → checkout/facture → paiement → clôture → rapports, avec Tournois vérifié en non-régression.
-
