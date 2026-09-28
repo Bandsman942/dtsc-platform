@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { buildApplicationInterfaceContext } from "@/lib/ai/application-interface-context";
 import { getAiModelDefinition, getAiProviderDefinition, listAvailableAiModels } from "@/lib/ai/catalog";
 import { estimateAiCost } from "@/lib/ai/costs";
+import { acquireAiConcurrencyLease, releaseAiConcurrencyLease, withAiConcurrencyLease, type AiConcurrencyLease } from "@/lib/ai/concurrency";
 import { AiProviderError, toAiReasonCode } from "@/lib/ai/errors";
 import { getAiRuntimeHealth, type AiRuntimeHealth } from "@/lib/ai/health";
 import { completeAiProviderAttempt, observeAiProviderAttemptStream, startAiProviderAttempt } from "@/lib/ai/observability";
@@ -155,7 +156,35 @@ export async function routeAiStream(request: AiRouteRequest): Promise<AiStreamRe
       attemptIndex: index,
     });
 
+    let concurrencyLease: AiConcurrencyLease | null = null;
     try {
+      const admission = await acquireAiConcurrencyLease({
+        planCode: effectiveRequest.planCode || "STARTER",
+        userId: effectiveRequest.userId,
+        organizationId: effectiveRequest.organizationId,
+        providerCode: provider.code,
+        request: effectiveRequest,
+      });
+      if (!admission.acquired) {
+        const saturatedProvider = admission.saturatedScope === "PROVIDER";
+        const error = new AiProviderError({
+          reasonCode: "RATE_LIMITED",
+          message: "AI concurrency capacity is temporarily saturated",
+          statusCode: 429,
+          retryable: saturatedProvider,
+          providerCode: provider.code,
+          modelCode: model.code,
+        });
+        attempts.push({ providerCode: provider.code, modelCode: model.code, outcome: "FAILED", reasonCode: "RATE_LIMITED" });
+        await completeAiProviderAttempt({ attemptId: attempt?.id, status: "FAILED", reasonCode: "RATE_LIMITED", durationMs: Date.now() - attemptStartedAt });
+        if (saturatedProvider) {
+          lastError = error;
+          continue;
+        }
+        throw error;
+      }
+      concurrencyLease = admission;
+
       const providerStream = await createProviderEventStream({
         provider,
         model,
@@ -166,7 +195,9 @@ export async function routeAiStream(request: AiRouteRequest): Promise<AiStreamRe
         signal: effectiveRequest.signal,
         reasoningEffort: model.capabilities.reasoning ? effectiveRequest.reasoningEffort : "AUTO",
       });
-      const stream = observeAiProviderAttemptStream({ source: providerStream, attemptId: attempt?.id, startedAt: attemptStartedAt });
+      const observedStream = observeAiProviderAttemptStream({ source: providerStream, attemptId: attempt?.id, startedAt: attemptStartedAt });
+      const stream = withAiConcurrencyLease(observedStream, concurrencyLease);
+      concurrencyLease = null;
       attempts.push({ providerCode: provider.code, modelCode: model.code, outcome: "SUCCESS" });
       const requestedBypassed = Boolean(effectiveRequest.requestedModel && effectiveRequest.requestedModel !== model.code && effectiveRequest.requestedModel !== model.providerModelId);
       return {
@@ -179,10 +210,14 @@ export async function routeAiStream(request: AiRouteRequest): Promise<AiStreamRe
         attempts,
       };
     } catch (error) {
+      await releaseAiConcurrencyLease(concurrencyLease);
       lastError = error;
       const reasonCode = toAiReasonCode(error);
-      attempts.push({ providerCode: provider.code, modelCode: model.code, outcome: "FAILED", reasonCode });
-      await completeAiProviderAttempt({ attemptId: attempt?.id, status: reasonCode === "STREAM_INTERRUPTED" ? "CANCELLED" : "FAILED", reasonCode, durationMs: Date.now() - attemptStartedAt });
+      const alreadyRecordedAdmissionFailure = error instanceof AiProviderError && reasonCode === "RATE_LIMITED" && !concurrencyLease;
+      if (!alreadyRecordedAdmissionFailure) {
+        attempts.push({ providerCode: provider.code, modelCode: model.code, outcome: "FAILED", reasonCode });
+        await completeAiProviderAttempt({ attemptId: attempt?.id, status: reasonCode === "STREAM_INTERRUPTED" ? "CANCELLED" : "FAILED", reasonCode, durationMs: Date.now() - attemptStartedAt });
+      }
       if (!(error instanceof AiProviderError) || !error.retryable) throw error;
     }
   }

@@ -1,3 +1,5 @@
+import { SERVER_LIMITS as AI_AGENT_SERVER_LIMITS } from "@/lib/ai/agent/policy";
+import { getAiConcurrencyPolicySnapshot } from "@/lib/ai/concurrency";
 import { getDatabaseConnectionPolicy } from "@/lib/database-connection-policy";
 import { prisma } from "@/lib/prisma";
 import { RATE_LIMIT_POLICY_PROFILES, RATE_LIMIT_POLICY_RULES } from "@/lib/rate-limit-policy";
@@ -24,6 +26,18 @@ type AiLatencyRow = {
   p95Ms: number | null;
   p99Ms: number | null;
   firstTokenP95Ms: number | null;
+  totalTokens: number;
+  fallbackCount: number;
+  pricedUsdCallCount: number;
+  estimatedCostUsd: number;
+};
+
+type AiProviderCapacityRow = {
+  attemptCount: number;
+  activeCount: number;
+  throttledCount: number;
+  timeoutCount: number;
+  unavailableCount: number;
 };
 
 type DbConnectionRow = {
@@ -91,7 +105,9 @@ export async function getProductionObservabilitySnapshot(windowHours: number) {
   await prisma.$queryRaw`SELECT 1`;
   const dbProbeLatencyMs = performance.now() - dbProbeStartedAt;
 
-  const [apiRows, aiRows, dbConnectionRows, scale2Rows, queueRows, readCacheRows, redisSnapshot] = await Promise.all([
+  const activeAttemptSince = new Date(generatedAt.getTime() - 90_000);
+
+  const [apiRows, aiRows, aiProviderRows, dbConnectionRows, scale2Rows, queueRows, readCacheRows, redisSnapshot] = await Promise.all([
     prisma.$queryRaw<ApiLatencyRow[]>`
       SELECT
         COUNT(*)::int AS "sampleCount",
@@ -112,8 +128,22 @@ export async function getProductionObservabilitySnapshot(windowHours: number) {
         percentile_cont(0.50) WITHIN GROUP (ORDER BY "durationMs") FILTER (WHERE "durationMs" IS NOT NULL)::float8 AS "p50Ms",
         percentile_cont(0.95) WITHIN GROUP (ORDER BY "durationMs") FILTER (WHERE "durationMs" IS NOT NULL)::float8 AS "p95Ms",
         percentile_cont(0.99) WITHIN GROUP (ORDER BY "durationMs") FILTER (WHERE "durationMs" IS NOT NULL)::float8 AS "p99Ms",
-        percentile_cont(0.95) WITHIN GROUP (ORDER BY "firstTokenLatencyMs") FILTER (WHERE "firstTokenLatencyMs" IS NOT NULL)::float8 AS "firstTokenP95Ms"
+        percentile_cont(0.95) WITHIN GROUP (ORDER BY "firstTokenLatencyMs") FILTER (WHERE "firstTokenLatencyMs" IS NOT NULL)::float8 AS "firstTokenP95Ms",
+        COALESCE(SUM("totalTokens"), 0)::float8 AS "totalTokens",
+        COUNT(*) FILTER (WHERE "fallbackUsed" = true)::int AS "fallbackCount",
+        COUNT(*) FILTER (WHERE "estimatedCost" IS NOT NULL AND "costCurrency" = 'USD')::int AS "pricedUsdCallCount",
+        COALESCE(SUM("estimatedCost") FILTER (WHERE "costCurrency" = 'USD'), 0)::float8 AS "estimatedCostUsd"
       FROM "AiModelCall"
+      WHERE "createdAt" >= ${since}
+    `,
+    prisma.$queryRaw<AiProviderCapacityRow[]>`
+      SELECT
+        COUNT(*)::int AS "attemptCount",
+        COUNT(*) FILTER (WHERE "status" = 'STARTED' AND "startedAt" >= ${activeAttemptSince})::int AS "activeCount",
+        COUNT(*) FILTER (WHERE "reasonCode" = 'RATE_LIMITED')::int AS "throttledCount",
+        COUNT(*) FILTER (WHERE "reasonCode" = 'TIMEOUT')::int AS "timeoutCount",
+        COUNT(*) FILTER (WHERE "reasonCode" = 'PROVIDER_UNAVAILABLE')::int AS "unavailableCount"
+      FROM "AiProviderAttempt"
       WHERE "createdAt" >= ${since}
     `,
     prisma.$queryRaw<DbConnectionRow[]>`
@@ -228,7 +258,8 @@ export async function getProductionObservabilitySnapshot(windowHours: number) {
   ]);
 
   const api = apiRows[0] ?? { sampleCount: 0, p50Ms: null, p95Ms: null, p99Ms: null, serverErrorCount: 0 };
-  const ai = aiRows[0] ?? { sampleCount: 0, successCount: 0, failedCount: 0, rateLimitedCount: 0, p50Ms: null, p95Ms: null, p99Ms: null, firstTokenP95Ms: null };
+  const ai = aiRows[0] ?? { sampleCount: 0, successCount: 0, failedCount: 0, rateLimitedCount: 0, p50Ms: null, p95Ms: null, p99Ms: null, firstTokenP95Ms: null, totalTokens: 0, fallbackCount: 0, pricedUsdCallCount: 0, estimatedCostUsd: 0 };
+  const aiProvider = aiProviderRows[0] ?? { attemptCount: 0, activeCount: 0, throttledCount: 0, timeoutCount: 0, unavailableCount: 0 };
   const database = dbConnectionRows[0] ?? {
     currentConnections: 0,
     activeConnections: 0,
@@ -310,6 +341,25 @@ export async function getProductionObservabilitySnapshot(windowHours: number) {
         p95: finiteMetric(ai.p95Ms),
         p99: finiteMetric(ai.p99Ms),
         firstTokenP95: finiteMetric(ai.firstTokenP95Ms),
+      },
+      usage: {
+        totalTokens: finiteMetric(ai.totalTokens) ?? 0,
+        fallbackCount: ai.fallbackCount,
+        pricedUsdCallCount: ai.pricedUsdCallCount,
+        estimatedCostUsd: finiteMetric(ai.estimatedCostUsd),
+      },
+      budgets: {
+        source: "Canonical AI Agent server ceilings by SaaS plan",
+        agent: AI_AGENT_SERVER_LIMITS,
+      },
+      capacity: {
+        source: "AiProviderAttempt + distributed AI concurrency admission",
+        activeAttempts: aiProvider.activeCount,
+        attemptCount: aiProvider.attemptCount,
+        throttledAttempts: aiProvider.throttledCount,
+        timeoutAttempts: aiProvider.timeoutCount,
+        providerUnavailableAttempts: aiProvider.unavailableCount,
+        policy: getAiConcurrencyPolicySnapshot(),
       },
     },
     redis: {
