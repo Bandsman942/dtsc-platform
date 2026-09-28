@@ -34,7 +34,7 @@ export async function GET(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "gaming-checkout", page: result.pagination.page } });
     return NextResponse.json({ ...result, canWrite: gamingAccess.canWrite, canManage: gamingAccess.canManage });
   } catch (error) {
-    return gamingCheckoutErrorResponse(error, req);
+    return gamingCheckoutErrorResponse(error, req, "GAMING_CHECKOUT_READ_FAILED");
   }
 }
 
@@ -85,6 +85,6 @@ export async function POST(req: Request, { params }: Params) {
     ]);
     return NextResponse.json({ ok: true, ...result }, { status: result.idempotent ? 200 : 201 });
   } catch (error) {
-    return gamingCheckoutErrorResponse(error, req);
+    return gamingCheckoutErrorResponse(error, req, "GAMING_CHECKOUT_PREPARE_FAILED");
   }
 }
