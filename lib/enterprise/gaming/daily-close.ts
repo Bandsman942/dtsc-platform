@@ -124,7 +124,7 @@ export async function createGamingDailyClose(
   try {
     const close = await prisma.$transaction(async (tx) => {
       const lockKey = `${organizationId}:gaming-daily-close:${scopeKey}:${start.toISOString()}`;
-      await tx.$queryRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey})::bigint)`);
+      await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${${1}})::bigint)`);
       const retry = await tx.enterpriseGamingDailyClose.findFirst({
         where: { organizationId, idempotencyKey: input.idempotencyKey },
         include: { lines: true },
