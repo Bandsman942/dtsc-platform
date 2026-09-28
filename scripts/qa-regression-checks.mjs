@@ -107,3 +107,4 @@ await import("./qa-scale5b-retail-dashboard-cache.mjs");
 await import("./qa-scale5c-read-path-cache.mjs");
 await import("./qa-scale6-ai-concurrency-resilience.mjs");
 await import("./qa-education-architecture-contract.mjs");
+await import("./qa-education-academic-structure.mjs");
