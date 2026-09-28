@@ -48,6 +48,8 @@ expect(profile.includes("minimumIdentityCount = Math.max(8, Math.ceil(targetVus 
 expect(profile.includes("session cookies must be unique per load identity"), "load identities must use unique sessions");
 expect(profile.includes("new Set(tenants.map((tenant) => tenant.organizationId)).size !== tenants.length"), "distinct organizations must be enforced");
 expect(profile.includes("requires aiPath and aiPayload"), "representative AI workload must be mandatory");
+expect(profile.includes("preflight-own-tenant"), "each load identity must prove access to its own tenant");
+expect(profile.includes("Own-tenant preflight failed"), "own-tenant preflight must fail closed");
 expect(profile.includes("tenant_isolation_pass"), "tenant-isolation metric is required");
 expect(profile.includes("isolation.status === 403 || isolation.status === 404"), "foreign-tenant access must be denied");
 expect(profile.includes('http_req_failed: ["rate<0.01"]'), "error-rate SLO is missing");
