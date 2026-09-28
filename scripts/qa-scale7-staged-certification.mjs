@@ -37,6 +37,9 @@ expect(workflow.includes("RUN_SCALE7_CERTIFICATION"), "manual confirmation is mi
 expect(workflow.includes("github.event.issue.number == 360"), "issue trigger must be scoped to #360");
 expect(workflow.includes("github.event.comment.author_association == 'OWNER'"), "issue trigger must be OWNER-only");
 expect(workflow.includes("startsWith(github.event.comment.body, 'RUN_SCALE7_')"), "issue trigger must be command-scoped");
+expect(workflow.includes("OWNER_COMMAND:") && workflow.includes('case "${OWNER_COMMAND}" in'), "owner command must be passed through env before shell parsing");
+expect(workflow.includes("MANUAL_CONFIRMATION:") && workflow.includes('if [ "${MANUAL_CONFIRMATION}" != "RUN_SCALE7_CERTIFICATION" ]'), "manual confirmation must be passed through env before shell parsing");
+expect(!workflow.includes('case "${{ github.event.comment.body }}" in'), "raw issue comment must not be interpolated into shell");
 expect(workflow.includes("issues: write"), "issue result publication permission is required");
 expect(workflow.includes("SCALE7_RESULT_JSON"), "owner-triggered secret-free result marker is required");
 for (const target of ["500", "1000", "2500", "5000"]) {
