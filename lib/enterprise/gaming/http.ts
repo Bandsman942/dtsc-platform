@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
@@ -80,18 +82,54 @@ function localizedMessage(messages: Record<string, { fr: string; en: string }>, 
   return null;
 }
 
+function gamingSupportReference(request: Request) {
+  const candidate = request.headers.get("x-vercel-id")
+    || request.headers.get("cf-ray")
+    || request.headers.get("x-request-id");
+  const normalized = candidate?.replace(/[^a-zA-Z0-9:._-]/g, "").slice(0, 120) || "";
+  return normalized || `gaming-${randomUUID()}`;
+}
+
+export function gamingUnexpectedErrorResponse(error: unknown, request: Request, fallbackCode: string) {
+  const language = request.headers.get("accept-language")?.toLowerCase().startsWith("en") ? "en" : "fr";
+  const supportReference = gamingSupportReference(request);
+  const errorName = error instanceof Error ? error.name : typeof error;
+  const prismaCode = error instanceof Prisma.PrismaClientKnownRequestError ? error.code : null;
+  console.error("[gaming-domain] unexpected operation failure", {
+    fallbackCode,
+    errorName,
+    prismaCode,
+    requestPath: new URL(request.url).pathname,
+    supportReference,
+  });
+  const message = language === "en"
+    ? `An internal error prevented the Gaming operation. Retry, and if the problem persists give support reference ${supportReference}.`
+    : `Une erreur interne a empêché l’opération Gaming. Réessayez et, si le problème persiste, communiquez la référence support ${supportReference}.`;
+  return NextResponse.json({ error: fallbackCode, message, supportReference }, { status: 500 });
+}
+
+function gamingFallbackErrorResponse(error: unknown, request: Request, fallbackCode: string) {
+  if (
+    error instanceof EnterpriseDomainError
+    || (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002")
+  ) {
+    return enterpriseDomainErrorResponse(error, fallbackCode, request);
+  }
+  return gamingUnexpectedErrorResponse(error, request, fallbackCode);
+}
+
 export function gamingStationErrorResponse(error: unknown, request: Request) {
-  return localizedMessage(stationMessages, error, request) || enterpriseDomainErrorResponse(error, "GAMING_STATION_SAVE_FAILED", request);
+  return localizedMessage(stationMessages, error, request) || gamingFallbackErrorResponse(error, request, "GAMING_STATION_SAVE_FAILED");
 }
 
 export function gamingSessionErrorResponse(error: unknown, request: Request) {
-  return localizedMessage(sessionMessages, error, request) || localizedMessage(pricingMessages, error, request) || enterpriseDomainErrorResponse(error, "GAMING_SESSION_SAVE_FAILED", request);
+  return localizedMessage(sessionMessages, error, request) || localizedMessage(pricingMessages, error, request) || gamingFallbackErrorResponse(error, request, "GAMING_SESSION_SAVE_FAILED");
 }
 
 export function gamingBookingErrorResponse(error: unknown, request: Request) {
-  return localizedMessage(bookingMessages, error, request) || localizedMessage(pricingMessages, error, request) || enterpriseDomainErrorResponse(error, "GAMING_BOOKING_SAVE_FAILED", request);
+  return localizedMessage(bookingMessages, error, request) || localizedMessage(pricingMessages, error, request) || gamingFallbackErrorResponse(error, request, "GAMING_BOOKING_SAVE_FAILED");
 }
 
 export function gamingPricingErrorResponse(error: unknown, request: Request) {
-  return localizedMessage(pricingMessages, error, request) || enterpriseDomainErrorResponse(error, "GAMING_PRICING_SAVE_FAILED", request);
+  return localizedMessage(pricingMessages, error, request) || gamingFallbackErrorResponse(error, request, "GAMING_PRICING_SAVE_FAILED");
 }
