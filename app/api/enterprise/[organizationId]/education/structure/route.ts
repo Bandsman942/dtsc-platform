@@ -47,17 +47,27 @@ export async function POST(req: Request, { params }: Params) {
   if (!envelope.success) return enterpriseValidationErrorResponse(envelope.error, "EDUCATION_INPUT_INVALID", req);
 
   const resource = envelope.data.resource;
-  const schema = getEducationCreateSchema(resource);
-  const parsed = schema.safeParse(envelope.data.data);
-  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "EDUCATION_INPUT_INVALID", req);
-
   const auth = await authorizeEducationRequest(req, organizationId, resource, resource === "SETTINGS" ? "manage" : "write", { mutation: true, limit: 120 });
   if (!auth.ok) return auth.response;
 
   try {
-    const item = resource === "SETTINGS"
-      ? await saveEducationSettings(organizationId, auth.session.userId, parsed.data)
-      : await createEducationResource(organizationId, auth.session.userId, resource, parsed.data);
+    let item;
+    if (resource === "SETTINGS") {
+      const parsed = getEducationCreateSchema("SETTINGS").safeParse(envelope.data.data);
+      if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "EDUCATION_INPUT_INVALID", req);
+      item = await saveEducationSettings(organizationId, auth.session.userId, parsed.data);
+    } else {
+      const schema = getEducationCreateSchema(resource);
+      const parsed = schema.safeParse(envelope.data.data);
+      if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "EDUCATION_INPUT_INVALID", req);
+      item = await createEducationResource(
+        organizationId,
+        auth.session.userId,
+        resource,
+        parsed.data as Parameters<typeof createEducationResource>[3],
+      );
+    }
+
     await writeAuditLog({
       userId: auth.session.userId,
       organizationId,
@@ -70,7 +80,10 @@ export async function POST(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "education", action: "create", resource, moduleCode: auth.moduleCode } });
     return NextResponse.json({ ok: true, item });
   } catch (error) {
-    await writeApiLog({ request: req, statusCode: error instanceof Error ? 409 : 500, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "education", action: "create_failed", resource } });
+    const statusCode = error && typeof error === "object" && "status" in error && typeof (error as { status?: unknown }).status === "number"
+      ? (error as { status: number }).status
+      : 500;
+    await writeApiLog({ request: req, statusCode, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "education", action: "create_failed", resource } });
     return educationErrorResponse(error, "EDUCATION_CREATE_FAILED", req);
   }
 }
