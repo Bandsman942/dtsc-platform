@@ -606,7 +606,7 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
 
     await prisma.enterpriseCashSession.update({
       where: { id: cashSession.id },
-      data: { status: "CLOSED", closedAt: new Date(), expectedClosingAmount: 500, countedClosingAmount: 500, discrepancyAmount: 0 },
+      data: { status: "CLOSED", expectedClosingAmount: 500, countedClosingAmount: 500, discrepancyAmount: 0 },
     });
   });
 });
