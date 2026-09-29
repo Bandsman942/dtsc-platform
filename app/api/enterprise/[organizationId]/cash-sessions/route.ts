@@ -76,6 +76,7 @@ export async function GET(req: Request, { params }: Params) {
     const assignedToCurrentUser = approval?.status === "PENDING" && approval.approverUserId === auth.session.userId;
     return {
       ...item,
+      currencyCode: item.financialAccount.currencyCode,
       expectedCurrentAmount,
       theoreticalClosingAmount: item.expectedClosingAmount ?? expectedCurrentAmount,
       approval: approval ? {
