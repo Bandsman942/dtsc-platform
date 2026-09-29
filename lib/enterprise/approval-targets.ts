@@ -98,6 +98,5 @@ export function enterpriseApprovalTargetDeepLink(targetEntityType: string, targe
   if (targetEntityType === "EnterpriseTimesheet") return `/enterprise-modules/TIME_ATTENDANCE?timesheet=${id}`;
   if (targetEntityType === "EnterprisePayrollRun") return `/enterprise-modules/PAYROLL_OPERATIONS?payroll=${id}`;
   if (targetEntityType === "EnterpriseProjectMilestone") return `/enterprise-modules/PROJECTS_SERVICES?milestone=${id}`;
-  if (targetEntityType === "EnterpriseGamingDailyClose") return `/enterprise-modules/GAMING_DAILY_CLOSE?close=${id}`;
   return `/enterprise-modules/VALIDATIONS${approvalId ? `?approval=${encodeURIComponent(approvalId)}` : ""}`;
 }
