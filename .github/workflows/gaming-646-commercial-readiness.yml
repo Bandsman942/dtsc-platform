@@ -18,9 +18,11 @@ on:
       - "lib/enterprise/module-registry-gaming.json"
       - "scripts/qa-646-gaming-commercial-readiness.mjs"
       - "scripts/qa-hotfix-693-gaming-checkout-invoice.mjs"
+      - "scripts/qa-hotfix-696-gaming-session-transitions.mjs"
       - "scripts/qa-regression-checks.mjs"
       - "tests/e2e/issue-646-gaming-commercial-readiness.spec.mjs"
       - "tests/e2e/issue-693-gaming-checkout-invoice.spec.mjs"
+      - "prisma/migrations/20260928231500_gaming_session_transition_checkout_actions/migration.sql"
       - ".github/workflows/gaming-646-commercial-readiness.yml"
 
 permissions:
@@ -116,6 +118,8 @@ jobs:
         run: node scripts/qa-646-gaming-commercial-readiness.mjs
       - name: Validate hotfix 693 checkout invoice contract
         run: node scripts/qa-hotfix-693-gaming-checkout-invoice.mjs
+      - name: Validate hotfix 696 session transition contract
+        run: node scripts/qa-hotfix-696-gaming-session-transitions.mjs
       - name: Run regression QA
         run: pnpm qa:regression
       - name: Type-check
@@ -148,11 +152,11 @@ jobs:
         run: |
           set -o pipefail
           pnpm exec playwright test tests/e2e/issue-646-gaming-commercial-readiness.spec.mjs --workers=1 2>&1 | tee /tmp/dtsc-gaming-646-browser-playwright.log
-      - name: Gaming #693 checkout invoice acceptance
+      - name: Gaming #693/#696 checkout lifecycle acceptance
         shell: bash
         run: |
           set -o pipefail
-          pnpm exec playwright test tests/e2e/issue-693-gaming-checkout-invoice.spec.mjs --workers=1 2>&1 | tee /tmp/dtsc-gaming-693-checkout-playwright.log
+          pnpm exec playwright test tests/e2e/issue-693-gaming-checkout-invoice.spec.mjs --workers=1 2>&1 | tee /tmp/dtsc-gaming-696-checkout-lifecycle-playwright.log
       - name: Gaming #645 end-to-end regression
         shell: bash
         run: |
@@ -182,7 +186,7 @@ jobs:
             /tmp/dtsc-gaming-646-build.log
             /tmp/dtsc-gaming-646-next.log
             /tmp/dtsc-gaming-646-browser-playwright.log
-            /tmp/dtsc-gaming-693-checkout-playwright.log
+            /tmp/dtsc-gaming-696-checkout-lifecycle-playwright.log
             /tmp/dtsc-gaming-646-existing-browser.log
             /tmp/dtsc-gaming-646-ai-playwright.log
             /tmp/dtsc-gaming-646-redis-rest.log

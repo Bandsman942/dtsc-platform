@@ -389,3 +389,15 @@ Le contrat correct est celui déjà utilisé par le service Finance canonique : 
 - un E2E API qui prépare deux checkouts Gaming complets jusqu’à `INVOICE_PENDING` / `PENDING_APPROVAL` : un client comptoir walk-in et un client CRM canonique.
 
 L’audit transverse a identifié la même forme de payload dans les convergences Santé et Pharmacie. Elle est suivie séparément par #694 afin que le P0 Gaming reste ciblé et réversible.
+
+## Hotfix #696 — contrat des transitions Session → Checkout
+
+Le hotfix #696 corrige la divergence entre le code Gaming et la contrainte PostgreSQL `EnterpriseGamingSessionTransition_action_check`. La migration historique #641 autorisait uniquement `START`, `PAUSE`, `RESUME`, `EXTEND`, `TRANSFER` et `END`, alors que le workflow Checkout utilise aussi `READY_TO_CHECKOUT`, `CHECKOUT_OPEN`, `CHECKOUT_PAID`, `CHECKOUT_CANCELLED` et `CHECKOUT_REFUNDED`.
+
+La correction est portée par une nouvelle migration additive qui remplace uniquement la contrainte CHECK ; aucune migration historique n’est modifiée. `GAMING_SESSION_ACTIONS` devient la liste canonique de toutes les transitions réellement persistées.
+
+Le seuil de cinq postes reste exclusivement une baseline d’onboarding/commercial readiness (`launchBaseline: 5`). Il ne constitue pas une condition d’autorisation pour une session ou un encaissement.
+
+La QA #696 vérifie la parité code/domaine/migration et lit la contrainte active directement dans PostgreSQL. L’acceptance Gaming renforce aussi le scénario #693 : démarrage réel de session → `END` → promotion `READY_TO_CHECKOUT` → préparation de facture, plus un scénario de compatibilité d’une ancienne session `ENDED` qui doit persister `CHECKOUT_OPEN`.
+
+Les erreurs inattendues de checkout utilisent désormais des messages contextualisés. Une `supportReference` sûre est conservée jusqu’à `ProfessionalApiError` et reste visible dans l’interface sans exposer SQL, stack Prisma, payload ou identifiant tenant.

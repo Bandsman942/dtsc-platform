@@ -12,6 +12,7 @@ const assetId = "e2e-gaming-asset-693";
 const stationId = "e2e-gaming-station-693";
 const unitId = "e2e-gaming-uom-693";
 const serviceId = "e2e-gaming-service-693";
+const pricingRuleId = "e2e-gaming-pricing-696";
 let adminUserId = "";
 let approverUserId = "";
 let context;
@@ -190,6 +191,46 @@ async function prepareTenant() {
       createdByUserId: admin.id,
     },
   });
+
+  await prisma.enterpriseCurrency.upsert({
+    where: { organizationId_code: { organizationId, code: "CDF" } },
+    update: { name: "Franc congolais", symbol: "FC", precision: 2, isActive: true },
+    create: { organizationId, code: "CDF", name: "Franc congolais", symbol: "FC", precision: 2, isActive: true },
+  });
+
+  await prisma.enterpriseGamingPricingRule.upsert({
+    where: { organizationId_code: { organizationId, code: "E2E-FIXED-696" } },
+    update: {
+      serviceCatalogItemId: serviceId,
+      stationId,
+      pricingMode: "FIXED_DURATION",
+      amount: 500,
+      currency: "CDF",
+      durationMinutes: 10,
+      billingIncrementMinutes: 1,
+      priority: 1,
+      status: "ACTIVE",
+      archivedAt: null,
+      ruleJson: { contractVersion: 1, label: "Lifecycle #696", consoleFamily: null, minPlayers: null, maxPlayers: null },
+      updatedByUserId: admin.id,
+    },
+    create: {
+      id: pricingRuleId,
+      organizationId,
+      code: "E2E-FIXED-696",
+      serviceCatalogItemId: serviceId,
+      stationId,
+      pricingMode: "FIXED_DURATION",
+      amount: 500,
+      currency: "CDF",
+      durationMinutes: 10,
+      billingIncrementMinutes: 1,
+      priority: 1,
+      status: "ACTIVE",
+      ruleJson: { contractVersion: 1, label: "Lifecycle #696", consoleFamily: null, minPlayers: null, maxPlayers: null },
+      createdByUserId: admin.id,
+    },
+  });
 }
 
 async function signIn() {
@@ -200,24 +241,76 @@ async function signIn() {
   expect(response.ok(), await response.text()).toBeTruthy();
 }
 
-async function createEndedSession({ businessPartyId, suffix }) {
+async function startAndEndSession({ businessPartyId, suffix }) {
+  const start = await context.request.post(`${baseUrl}/api/enterprise/${organizationId}/gaming/sessions`, {
+    data: {
+      stationId,
+      durationMinutes: 10,
+      idempotencyKey: `e2e-696-start-${suffix}`,
+      businessPartyId,
+      serviceCatalogItemId: serviceId,
+      playerCount: 1,
+      pauseBillable: false,
+    },
+    headers: {
+      origin: baseUrl,
+      referer: `${baseUrl}/enterprise-modules/GAMING_SESSIONS`,
+    },
+  });
+  const started = await start.json().catch(() => null);
+  expect(start.status(), JSON.stringify(started)).toBe(201);
+  expect(started?.session?.status).toBe("ACTIVE");
+
+  const end = await context.request.patch(`${baseUrl}/api/enterprise/${organizationId}/gaming/sessions/${started.session.id}`, {
+    data: {
+      action: "END",
+      revision: started.session.revision,
+      idempotencyKey: `e2e-696-end-${suffix}`,
+    },
+    headers: {
+      origin: baseUrl,
+      referer: `${baseUrl}/enterprise-modules/GAMING_SESSIONS`,
+    },
+  });
+  const ended = await end.json().catch(() => null);
+  expect(end.status(), JSON.stringify(ended)).toBe(200);
+  expect(ended?.session?.status).toBe("TO_CHECKOUT");
+
+  const transitions = await prisma.enterpriseGamingSessionTransition.findMany({
+    where: { organizationId, sessionId: started.session.id },
+    select: { action: true },
+  });
+  expect(transitions.map((item) => item.action)).toEqual(expect.arrayContaining(["START", "END", "READY_TO_CHECKOUT"]));
+  return ended.session;
+}
+
+async function createLegacyEndedSession({ businessPartyId, suffix }) {
   const now = new Date();
   return prisma.enterpriseGamingSession.create({
     data: {
       organizationId,
-      reference: `GS-E2E-693-${suffix}`,
+      reference: `GS-E2E-696-LEGACY-${suffix}`,
       stationId,
       businessPartyId,
       serviceCatalogItemId: serviceId,
-      status: "TO_CHECKOUT",
+      pricingRuleId,
+      status: "ENDED",
       startedAt: new Date(now.getTime() - 10 * 60 * 1000),
+      expectedEndAt: now,
       endedAt: now,
       billableSeconds: 600,
-      pricingSnapshotJson: { serviceName: "Session Gaming QA #693" },
+      pricingSnapshotJson: {
+        contractVersion: 1,
+        authority: "SERVER",
+        pricingMode: "FIXED_DURATION",
+        currency: "CDF",
+        unitAmount: "500.00",
+        quotedAmount: "500.00",
+      },
       currency: "CDF",
       quotedAmount: 500,
       finalAmount: 500,
-      idempotencyKey: `e2e-693-session-${suffix}`,
+      idempotencyKey: `e2e-696-legacy-session-${suffix}`,
       createdByUserId: adminUserId,
       updatedByUserId: adminUserId,
     },
@@ -261,7 +354,7 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
 
   test("walk-in checkout creates Finance invoice and propagates tenant to invoice line", async () => {
     const suffix = `walkin-${Date.now()}`;
-    const session = await createEndedSession({ businessPartyId: null, suffix });
+    const session = await startAndEndSession({ businessPartyId: null, suffix });
     const result = await checkout(session.id, suffix);
 
     const walkIn = await prisma.enterpriseBusinessParty.findUnique({
@@ -291,8 +384,25 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
     expect(customer?.id).toBe(customerId);
 
     const suffix = `crm-${Date.now()}`;
-    const session = await createEndedSession({ businessPartyId: customerId, suffix });
+    const session = await startAndEndSession({ businessPartyId: customerId, suffix });
     const result = await checkout(session.id, suffix);
     expect(result.invoice.businessPartyId).toBe(customerId);
+  });
+
+  test("legacy ENDED session can open checkout and persist CHECKOUT_OPEN", async () => {
+    const suffix = `legacy-${Date.now()}`;
+    const session = await createLegacyEndedSession({ businessPartyId: null, suffix });
+    const result = await checkout(session.id, suffix);
+
+    const transition = await prisma.enterpriseGamingSessionTransition.findFirst({
+      where: {
+        organizationId,
+        sessionId: session.id,
+        action: "CHECKOUT_OPEN",
+      },
+      select: { id: true, fromStatus: true, toStatus: true },
+    });
+    expect(transition).toMatchObject({ fromStatus: "ENDED", toStatus: "TO_CHECKOUT" });
+    expect(result.checkout.status).toBe("INVOICE_PENDING");
   });
 });
