@@ -252,6 +252,8 @@ La journée métier est calculée avec la timezone du `EnterpriseSite`. La date 
 
 Le snapshot distingue explicitement les événements opérationnels et financiers, sans les confondre :
 
+Dans l’interface, ces indicateurs sont présentés sous les libellés **Sessions terminées**, **Sessions payées**, **Encaissements en attente** et **Remboursés**.
+
 - `endedSessionCount` compte les sessions dont `endedAt` tombe dans la journée métier ;
 - `paidSessionCount` compte les **sessions distinctes** reliées à un `EnterprisePayment` Gaming entrant `CUSTOMER_PAYMENT` confirmé ou rapproché dont `paymentDate` tombe dans la journée, même si la session s’est terminée auparavant ;
 - `refundedCheckoutCount` compte les **checkouts distincts** reliés à un `EnterprisePayment` Gaming sortant `REFUND` confirmé ou rapproché dont `paymentDate` tombe dans la journée ;
