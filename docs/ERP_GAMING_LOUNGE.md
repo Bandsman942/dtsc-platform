@@ -248,14 +248,17 @@ Le demandeur du remboursement ne peut pas l’approuver lui-même. Le chemin Gam
 
 `EnterpriseGamingDailyClose` et `EnterpriseGamingDailyCloseLine` sont des **snapshots opérationnels de rapprochement**. Ils ne remplacent ni `EnterpriseCashSession`, ni les comptes financiers, ni les paiements.
 
-La journée métier est calculée avec la timezone du `EnterpriseSite`. La date sélectionnée est transformée en bornes UTC correspondant à minuit → minuit local. Sans site, le fallback contrôlé est `UTC`.
+La journée métier est calculée avec la timezone du `EnterpriseSite` lorsqu’un site est choisi. Sans site, le fuseau canonique de l’entreprise fourni par `getEnterpriseBusinessContext()` s’applique ; la clôture ne retombe plus arbitrairement sur `UTC`. La date sélectionnée est transformée en bornes UTC correspondant à minuit → minuit dans ce fuseau.
 
-Deux axes temporels sont volontairement distincts :
+Les KPI et les lignes financières distinguent explicitement les **événements de la journée** de l’**état opérationnel encore ouvert au moment de la soumission** :
 
-- les compteurs `endedSessionCount`, `paidSessionCount`, `pendingCheckoutCount`, `refundedCheckoutCount` décrivent les sessions dont `endedAt` tombe dans cette journée métier ;
-- les lignes financières sélectionnent les `EnterprisePayment` dont **`paymentDate`** tombe dans cette journée, même si la session a été terminée un jour antérieur.
+- `endedSessionCount` compte les sessions dont `endedAt` tombe dans la journée métier ;
+- `paidSessionCount` déduplique par session les checkouts actuellement `PAID` ayant au moins un `EnterprisePayment` client entrant `CONFIRMED` ou `RECONCILED` dont `paymentDate` tombe dans la journée ; une session terminée antérieurement mais soldée aujourd’hui est donc comptée aujourd’hui ;
+- `pendingCheckoutCount` compte le backlog encore `INVOICE_PENDING`, `AWAITING_PAYMENT`, `PARTIALLY_PAID` ou `REFUND_PENDING` au moment de la soumission, pour les sessions déjà terminées avant la borne de fin de la journée sélectionnée et dans le même périmètre site ;
+- `refundedCheckoutCount` déduplique les checkouts actuellement `REFUNDED` ayant un paiement de remboursement sortant `CONFIRMED` ou `RECONCILED` dont `paymentDate` tombe dans la journée ;
+- les lignes financières continuent de sélectionner les `EnterprisePayment` canoniques du jour pour calculer encaissements, remboursements et net attendu.
 
-Cette séparation garantit qu’un paiement tardif ou un remboursement effectué aujourd’hui pour un checkout d’hier apparaît dans la clôture financière d’aujourd’hui.
+Cette séparation évite le faux `0` sur les paiements tardifs et remboursements du jour, tout en rendant visible le backlog réellement encore ouvert. Le snapshot est recalculé dans la transaction de création puis figé à la soumission ; les clôtures historiques déjà enregistrées ne sont pas réécrites automatiquement.
 
 Pour chaque couple `financialAccountId + methodType`, une ligne conserve :
 
