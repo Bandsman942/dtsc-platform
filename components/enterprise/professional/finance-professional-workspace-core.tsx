@@ -148,7 +148,10 @@ export function financeRecordTitle(item: FinanceRecord, locale: FinanceLocale) {
 export function financeRecordAmount(item: FinanceRecord, locale: FinanceLocale) {
   const value = item.outstandingAmount ?? item.unallocatedAmount ?? item.grandTotal ?? item.amount ?? item.operationalBalance ?? item.availableBalance ?? item.openingAmount;
   if (value === undefined || value === null) return null;
-  return financeMoney(value, String(item.currencyCode || "USD"), locale);
+  const financialAccount = item.financialAccount as { currencyCode?: string | null } | undefined;
+  const currencyCode = item.currencyCode?.trim() || financialAccount?.currencyCode?.trim() || "";
+  if (!currencyCode) return null;
+  return financeMoney(value, currencyCode, locale);
 }
 export function financeRecordDate(item: FinanceRecord, locale: FinanceLocale) { return financeDate(item.invoiceDate || item.creditDate || item.dueDate || item.paymentDate || item.transferDate || item.statementDate || item.openedAt || item.createdAt || item.updatedAt, locale); }
 export function financeRecordDescription(item: FinanceRecord, locale: FinanceLocale) {
