@@ -17,6 +17,7 @@ const pricingRuleId = "e2e-gaming-pricing-696";
 let cashAccountId = "";
 let adminUserId = "";
 let approverUserId = "";
+let crossDayPaidSessionId = "";
 let context;
 let approverContext;
 
@@ -606,6 +607,14 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
     expect(persistedSession.status).toBe("PAID");
     expect(paidTransition).toBeTruthy();
 
+    // #714: keep the payment on the current business day while moving the session end
+    // to the previous day. The daily close must still count this settled Gaming session.
+    crossDayPaidSessionId = persistedSession.id;
+    await prisma.enterpriseGamingSession.update({
+      where: { id: persistedSession.id },
+      data: { endedAt: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+    });
+
     await prisma.enterpriseCashSession.update({
       where: { id: cashSession.id },
       data: { status: "CLOSED", expectedClosingAmount: 500, countedClosingAmount: 500, discrepancyAmount: 0 },
@@ -669,6 +678,15 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
     expect(persisted.lines[0].declaredAmount.toFixed()).toBe("500");
     expect(persisted.lines[0].differenceAmount.toFixed()).toBe("0");
     expect(persisted.lines[0].varianceReason).toBeNull();
+
+    const crossDayPaidSession = await prisma.enterpriseGamingSession.findUniqueOrThrow({
+      where: { id: crossDayPaidSessionId },
+      select: { endedAt: true, status: true },
+    });
+    expect(crossDayPaidSession.status).toBe("PAID");
+    expect(crossDayPaidSession.endedAt?.getTime()).toBeLessThan(persisted.businessDate.getTime());
+    expect(persisted.paidSessionCount).toBeGreaterThanOrEqual(1);
+    expect(persisted.pendingCheckoutCount).toBeGreaterThanOrEqual(1);
 
     await prisma.enterpriseGamingDailyClose.update({
       where: { id: persisted.id },
