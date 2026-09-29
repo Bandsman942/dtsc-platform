@@ -41,7 +41,7 @@ for (const marker of [
 check(!workspace.includes("formatEnterpriseDate(detail.businessDate"), "#715 business day detail must not render a synthetic time.");
 
 for (const marker of [
-  'test("#706/#715 submits a coherent Gaming daily close snapshot"',
+  'test("#706 submits Gaming daily close; #715 keeps the snapshot KPIs coherent"',
   "latePaidSessionId",
   "latePaidCheckoutReference",
   'paymentType: "REFUND"',
