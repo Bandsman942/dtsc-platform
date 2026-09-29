@@ -56,7 +56,7 @@ for (const source of [financeHttp, financeUi]) {
 }
 
 for (const token of [
-  "#704 recovers a historical approved Gaming payment onto another authorized cashier and preserves CDF",
+  "#704 uses another authorized cashier and preserves CDF",
   "openResponse = await approverContext.request.post",
   "expect(openedPersisted.cashierUserId).toBe(approverUserId)",
   "expect(openedPersisted.cashierUserId).not.toBe(adminUserId)",
