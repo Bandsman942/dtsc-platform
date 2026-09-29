@@ -2,6 +2,29 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-09-29 — Hotfix #714 : convergence des KPI de clôture Gaming
+
+### Corrigé
+
+- `Sessions terminées` reste fondé sur les sessions dont `endedAt` appartient à la journée métier.
+- `Sessions payées` compte désormais les sessions Gaming soldées par un paiement confirmé/réconcilié de la journée, y compris lorsque la session s’est terminée un jour antérieur.
+- `Remboursés` suit les remboursements confirmés/réconciliés de la journée sur des checkouts effectivement remboursés.
+- `Encaissements en attente` devient le backlog Gaming encore non soldé au moment de la soumission, limité aux sessions déjà terminées avant la fin de la journée métier.
+- Les KPI et les lignes financières sont calculés dans la même transaction de soumission et utilisent le même périmètre Gaming/site.
+- Les KPI ne dépendent plus des seuls comptes financiers manuellement déclarés dans le formulaire de clôture.
+- La journée métier est affichée comme une date sans heure locale parasite dans le détail de clôture.
+
+### Données et sécurité
+
+- Aucun nouveau modèle Prisma, aucune migration et aucun backfill.
+- Les clôtures restent des snapshots immuables après soumission ; aucune actualisation asynchrone ne réécrit l’historique.
+- L’isolation `organizationId`, le scope site, les permissions Finance/Gaming et le workflow maker/checker #710 restent inchangés.
+
+### Qualité
+
+- Ajout de `qa:hotfix-714` à la régression canonique.
+- L’E2E Gaming couvre une session terminée la veille mais soldée par un paiement confirmé le jour de la clôture : le montant financier et `paidSessionCount` doivent converger.
+
 ## 2026-09-29 — Hotfix #710 : validateur assigné et détail de clôture Gaming responsive
 
 ### Corrigé
