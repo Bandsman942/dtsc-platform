@@ -2,6 +2,24 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-09-29 — Hotfix #708 : validateur assigné et détail responsive des clôtures Gaming
+
+### Corrigé
+
+- Une nouvelle clôture Gaming exige désormais un validateur autorisé choisi avant la soumission ; le soumissionnaire reste exclu de la décision.
+- L’assignation utilise le modèle canonique `EnterpriseApproval` avec la cible `EnterpriseGamingDailyClose`, sans nouvelle table ni migration.
+- Les anciennes clôtures déjà `SUBMITTED` sans validation assignée disposent d’un chemin de récupération : leur soumissionnaire peut choisir un validateur autorisé sans recréer la clôture.
+- Seul le validateur assigné peut valider ou rejeter ; la permission `approve`, le membership actif, le tenant et la révision sont revalidés côté serveur.
+- Une validation accepte un motif facultatif, y compris court. Un rejet exige au moins 8 caractères.
+- Les erreurs de formulaire et de décision ne renvoient plus les messages Zod bruts comme `Too small: expected string...` ; elles utilisent des messages métier FR/EN.
+- Le détail des lignes de clôture utilise des cartes lisibles sous le breakpoint desktop et une table desktop espacée avec scroll horizontal local borné.
+
+### Validation transverse
+
+- Le Centre des validations reconnaît désormais `EnterpriseGamingDailyClose`, versionne un snapshot de la clôture et délègue APPROVE/REJECT au service Gaming afin d’éviter toute divergence entre `EnterpriseApproval` et la clôture.
+- Ajout de `qa:hotfix-708` à la régression canonique et extension de l’E2E Gaming pour l’assignation, l’auto-validation interdite, la raison courte en validation, la récupération historique et le rejet à motif contrôlé.
+- Aucun changement du moteur de rapprochement #706, aucune migration Prisma et aucun backfill automatique.
+
 ## 2026-09-29 — Hotfix #706 : création des clôtures Gaming et erreur de soumission explicite
 
 ### Corrigé
