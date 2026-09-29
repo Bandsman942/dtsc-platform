@@ -22,7 +22,7 @@ type CheckoutStatus = "INVOICE_PENDING" | "AWAITING_PAYMENT" | "PARTIALLY_PAID" 
 type PaymentMethod = "CASH" | "BANK_TRANSFER" | "CARD" | "MOBILE_MONEY" | "CHEQUE" | "OTHER";
 type SessionOption = { id: string; reference: string; status: string; currency: string | null; finalAmount: string | null; station: { stationCode: string; displayName: string | null } };
 type Candidate = { userId: string; name: string; positionTitle: string | null; email: string };
-type Account = { id: string; code: string; name: string; accountType: string; currencyCode: string; status: string; siteId: string | null; hasOpenCashSessionForCurrentUser?: boolean | null };
+type Account = { id: string; code: string; name: string; accountType: string; currencyCode: string; status: string; siteId: string | null; hasOpenCashSessionForCurrentUser?: boolean | null; cashSessionStateForCurrentUser?: "OPEN" | "CLOSING" | "PENDING_VALIDATION" | "NONE" | null };
 type Product = { id: string; code: string; name: string; trackInventory: boolean; prices?: Array<{ amount: string; currency: string; status: string }> };
 type Warehouse = { id: string; code: string; name: string; siteId: string; storageLocations: Array<{ id: string; code: string; name: string; status: string }> };
 type CheckoutItem = {
@@ -259,6 +259,14 @@ export function EnterpriseGamingCheckoutWorkspace({ organizationId, organization
     return true;
   });
   const cashReady = paymentMethod !== "CASH" || paymentAccounts.length > 0;
+  const cashLifecycleStates = compatibleAccounts
+    .filter((account) => account.accountType === "CASH")
+    .map((account) => account.cashSessionStateForCurrentUser);
+  const cashReadinessMessage = cashLifecycleStates.includes("PENDING_VALIDATION")
+    ? copy.cashSessionPendingValidation
+    : cashLifecycleStates.includes("CLOSING")
+      ? copy.cashSessionClosing
+      : copy.openCashSessionRequired;
 
   return (
     <ModuleWorkspace>
@@ -316,7 +324,7 @@ export function EnterpriseGamingCheckoutWorkspace({ organizationId, organization
         <form className="grid gap-4 p-1" onSubmit={(event) => void paymentSubmit(event, modal === "refund")}>
           <Field label={copy.method} required><NativeSelect name="methodType" required value={paymentMethod} onChange={(value) => setPaymentMethod(value as PaymentMethod)} items={methods.map((method) => ({ id: method, label: labels[method] }))} /></Field>
           <Field label={copy.account} required><NativeSelect key={paymentMethod} name="financialAccountId" required items={paymentAccounts.map((account) => ({ id: account.id, label: `${account.code} · ${account.name} · ${account.currencyCode}` }))} /></Field>
-          {!cashReady ? <p role="alert" className="text-sm font-semibold text-dtsc-danger">{copy.openCashSessionRequired}</p> : null}
+          {!cashReady ? <p role="alert" className="text-sm font-semibold text-dtsc-danger">{cashReadinessMessage}</p> : null}
           {modal === "payment" ? <Field label={copy.amount} required><Input name="amount" type="number" min="0.01" step="0.01" required defaultValue={detail?.invoice?.outstandingAmount || ""} /></Field> : null}
           <Field label={modal === "refund" ? copy.refundApprover : copy.paymentApprover} required><NativeSelect name="approverUserId" required items={(lookups?.paymentApprovers || []).map((item) => ({ id: item.userId, label: `${item.name}${item.positionTitle ? ` · ${item.positionTitle}` : ""}` }))} /></Field>
           {modal === "refund" ? <Field label={copy.reason} required><Input name="reason" required minLength={8} /></Field> : null}
