@@ -459,3 +459,12 @@ Les récupérations et réaffectations conservent dans `EnterprisePaymentEvent` 
 Côté présentation, la collection `FINANCE_CASH` projette explicitement `currencyCode` depuis le compte financier. Le formatter partagé n’utilise plus `USD` comme fallback silencieux lorsqu’une devise est absente. Une caisse CDF s’affiche donc en CDF aussi bien dans la liste que dans son détail.
 
 Aucune migration Prisma n’est nécessaire. L’acceptance #704 reprend le scénario historique Gaming, ouvre la nouvelle caisse avec un utilisateur autorisé différent de l’initiateur du paiement, confirme le paiement puis vérifie mouvement Cash, allocation, facture, checkout et session Gaming `PAID`, ainsi que la devise CDF exposée par l’API des caisses.
+
+## Hotfix #706 — nested write de clôture Gaming
+
+La clôture Gaming conserve `EnterpriseGamingDailyClose` comme parent tenant-scoped et `EnterpriseGamingDailyCloseLine` comme snapshot de rapprochement par compte, méthode et devise. Le nested create ne fournit plus directement `organizationId` ni `dailyCloseId` sur les lignes : ces deux clés relationnelles sont propagées par Prisma depuis la relation composite du parent.
+
+Le builder de lignes est typé avec `Prisma.EnterpriseGamingDailyCloseLineCreateWithoutDailyCloseInput[]` afin qu’une réintroduction future de clés relationnelles incompatibles soit rejetée dès le type-check. Le serveur continue de recalculer `expectedAmount`, `declaredAmount` et `differenceAmount`; un motif reste obligatoire uniquement lorsque l’écart est non nul.
+
+Les erreurs inattendues de création utilisent `GAMING_DAILY_CLOSE_CREATE_FAILED` avec un message client FR/EN spécifique, une référence support corrélable et aucun détail Prisma/SQL exposé. Aucune migration n’est requise pour #706.
+
