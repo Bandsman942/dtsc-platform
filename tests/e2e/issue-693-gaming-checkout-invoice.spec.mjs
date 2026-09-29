@@ -620,9 +620,18 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
     expect(latePaidSessionId).toBeTruthy();
     expect(latePaidCheckoutReference).toBeTruthy();
 
+    const latePaidSession = await prisma.enterpriseGamingSession.findUniqueOrThrow({
+      where: { id: latePaidSessionId },
+      select: { startedAt: true, expectedEndAt: true, endedAt: true },
+    });
+    const shiftBackOneDay = (value) => value ? new Date(value.getTime() - 86_400_000) : null;
     await prisma.enterpriseGamingSession.update({
       where: { id: latePaidSessionId },
-      data: { endedAt: new Date(Date.now() - 86_400_000) },
+      data: {
+        startedAt: shiftBackOneDay(latePaidSession.startedAt),
+        expectedEndAt: shiftBackOneDay(latePaidSession.expectedEndAt),
+        endedAt: shiftBackOneDay(latePaidSession.endedAt),
+      },
     });
 
     const pendingSuffix = `close-pending-${Date.now()}`;
