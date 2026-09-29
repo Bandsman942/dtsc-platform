@@ -630,7 +630,7 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
     });
   });
 
-  test("#706/#710/#712 submits a coherent Gaming daily-close KPI snapshot", async () => {
+  test("#706 submits Gaming daily close; #710/#712 keep maker-checker and coherent KPI snapshot", async () => {
     expect(latePaidSessionId).toBeTruthy();
     expect(latePaidCheckoutId).toBeTruthy();
     expect(latePaidPaymentId).toBeTruthy();
