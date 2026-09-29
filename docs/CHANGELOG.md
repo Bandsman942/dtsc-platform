@@ -2,6 +2,22 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-09-29 — Hotfix #706 : création des clôtures Gaming et erreur de soumission explicite
+
+### Corrigé
+
+- La création d’une clôture Gaming ne transmet plus manuellement `organizationId` dans le nested create des lignes ; Prisma propage désormais les clés de la relation composite depuis la clôture parente.
+- Les lignes de clôture utilisent le type Prisma `EnterpriseGamingDailyCloseLineCreateWithoutDailyCloseInput`, ce qui transforme ce contrat en garde compile-time.
+- Une clôture sans écart peut être soumise avec un motif d’écart vide, conformément au contrat métier existant.
+- Le fallback `GAMING_DAILY_CLOSE_CREATE_FAILED` possède désormais un message FR/EN dédié indiquant qu’aucune nouvelle clôture n’a été créée avant validation et demandant de recharger puis réessayer.
+- Les détails Prisma restent exclusivement dans les logs protégés et la référence support reste corrélable côté client.
+
+### Sécurité et qualité
+
+- Aucun changement de schéma Prisma, aucune migration, aucun backfill et aucun assouplissement RBAC/multi-tenant.
+- Ajout de `qa:hotfix-706` dans la régression canonique pour empêcher le retour du payload nested invalide.
+- L’acceptance authentifiée vérifie la création réelle d’une clôture, la ligne CDF persistée, les montants attendu/déclaré et la propagation de `organizationId`.
+
 ## 2026-09-29 — Hotfix #704 : récupération Cash cross-caissier et devise de caisse canonique
 
 ### Corrigé

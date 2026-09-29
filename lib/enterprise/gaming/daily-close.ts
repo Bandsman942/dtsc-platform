@@ -221,7 +221,7 @@ export async function createGamingDailyClose(
         cashSessionIdsByPayment.set(movement.paymentId, ids);
       }
 
-      const lines = input.declarations.map((declaration) => {
+      const lines: Prisma.EnterpriseGamingDailyCloseLineCreateWithoutDailyCloseInput[] = input.declarations.map((declaration) => {
         const account = accountById.get(declaration.financialAccountId)!;
         const scoped = relevantPayments.filter((payment) => (
           payment.financialAccountId === account.id && payment.methodType === declaration.methodType
@@ -246,7 +246,6 @@ export async function createGamingDailyClose(
           linePaymentIds.flatMap((paymentId) => cashSessionIdsByPayment.get(paymentId) || []),
         );
         return {
-          organizationId,
           financialAccountId: account.id,
           methodType: declaration.methodType,
           accountType: account.accountType,
