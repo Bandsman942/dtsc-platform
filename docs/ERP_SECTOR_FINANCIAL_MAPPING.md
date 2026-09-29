@@ -111,6 +111,12 @@ The tuple is stored in `EnterpriseSectorSyncState` and, when a journal entry is 
 | Health patient/insurer open amounts | payer components and common receivable allocations |
 | Ledger and statements | posted `EnterpriseJournalEntry` lines only |
 
+## Nested common-invoice item contract
+
+Health and Pharmacy create `EnterpriseSalesInvoiceItem` records only through the parent `EnterpriseSalesInvoice.items.create` relation. The composite relation `[organizationId, salesInvoiceId]` is supplied by the parent invoice and must not be repeated inside the nested item payload.
+
+Sector adapters therefore use `Prisma.EnterpriseSalesInvoiceItemCreateWithoutSalesInvoiceInput` for their item projections. This keeps tenant and invoice linkage under the canonical parent relation and turns accidental reintroduction of `organizationId` or `salesInvoiceId` into a compile-time/QA failure.
+
 ## Anti-duplication controls
 
 - Unique sector extension per source object and common target.
