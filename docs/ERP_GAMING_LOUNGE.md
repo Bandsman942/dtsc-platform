@@ -439,3 +439,23 @@ Le contrat devient :
 La migration `20260929083000_payment_cash_session_binding` est additive. Elle ajoute la relation nullable, son index et sa contrainte, puis rattache uniquement les paiements Cash historiques pour lesquels un unique mouvement de caisse existant fournit déjà une preuve non ambiguë. Les paiements historiques `APPROVED` sans mouvement restent récupérés au moment de la confirmation.
 
 L’acceptance #700 couvre le cas réel : paiement Cash préparé, ancienne caisse passée en `PENDING_VALIDATION`, ouverture d’une nouvelle caisse autorisée, simulation d’un paiement historique sans rattachement, confirmation Finance, mouvement sur la nouvelle session, allocation unique et convergence facture/checkout/session Gaming vers `PAID`.
+
+
+## Hotfix #704 — récupération Cash cross-caissier et devise canonique
+
+Le hotfix #704 complète #700 pour les paiements historiques dont le caissier d’origine n’est plus celui qui tient la caisse actuellement ouverte.
+
+À la confirmation d’un paiement Cash, Finance résout désormais la session dans cet ordre :
+
+1. session déjà liée si elle est encore `OPEN` ;
+2. session `OPEN` du caissier historique sur le même compte ;
+3. session `OPEN` du confirmateur sur le même compte ;
+4. unique session `OPEN` compatible du même compte.
+
+Si plusieurs sessions compatibles subsistent au dernier niveau, aucune sélection arbitraire n’est effectuée : la confirmation retourne `PAYMENT_CASH_SESSION_AMBIGUOUS`. Le compte financier reste tenant-scoped et sa devise doit toujours correspondre à celle du paiement. La séparation initiateur / confirmateur reste inchangée.
+
+Les récupérations et réaffectations conservent dans `EnterprisePaymentEvent` la session et le caissier précédents lorsqu’ils existent, ainsi que la session et le caissier réellement utilisés.
+
+Côté présentation, la collection `FINANCE_CASH` projette explicitement `currencyCode` depuis le compte financier. Le formatter partagé n’utilise plus `USD` comme fallback silencieux lorsqu’une devise est absente. Une caisse CDF s’affiche donc en CDF aussi bien dans la liste que dans son détail.
+
+Aucune migration Prisma n’est nécessaire. L’acceptance #704 reprend le scénario historique Gaming, ouvre la nouvelle caisse avec un utilisateur autorisé différent de l’initiateur du paiement, confirme le paiement puis vérifie mouvement Cash, allocation, facture, checkout et session Gaming `PAID`, ainsi que la devise CDF exposée par l’API des caisses.
