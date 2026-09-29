@@ -189,28 +189,33 @@ export async function createGamingDailyClose(
               })).map((station) => station.id)
             : [])
         : null;
-      const sessionScope: Prisma.EnterpriseGamingSessionWhereInput = {
-        organizationId,
-        archivedAt: null,
-        endedAt: { gte: start, lt: end },
-        ...(stationIds ? { stationId: { in: stationIds } } : {}),
-      };
+      const sessionSiteScope = stationIds ? { stationId: { in: stationIds } } : {};
       const endedSessions = await tx.enterpriseGamingSession.findMany({
-        where: sessionScope,
-        select: { id: true, status: true },
+        where: {
+          organizationId,
+          archivedAt: null,
+          endedAt: { gte: start, lt: end },
+          ...sessionSiteScope,
+        },
+        select: { id: true },
       });
-      const endedSessionIds = endedSessions.map((session) => session.id);
-      const dayCheckouts = endedSessionIds.length
-        ? await tx.enterpriseGamingCheckout.findMany({
-            where: { organizationId, sessionId: { in: endedSessionIds } },
-            select: { id: true, reference: true, status: true, sessionId: true },
-          })
-        : [];
+
+      const pendingCheckoutStatuses = ["INVOICE_PENDING", "AWAITING_PAYMENT", "PARTIALLY_PAID", "REFUND_PENDING"];
+      const pendingCheckoutCount = await tx.enterpriseGamingCheckout.count({
+        where: {
+          organizationId,
+          status: { in: pendingCheckoutStatuses },
+          session: {
+            archivedAt: null,
+            endedAt: { lt: end },
+            ...sessionSiteScope,
+          },
+        },
+      });
 
       const dayPayments = await tx.enterprisePayment.findMany({
         where: {
           organizationId,
-          financialAccountId: { in: accountIds },
           status: { in: ["CONFIRMED", "RECONCILED"] },
           paymentDate: { gte: start, lt: end },
           OR: [
@@ -231,14 +236,33 @@ export async function createGamingDailyClose(
               reference: { in: candidateCheckoutRefs },
               ...(stationIds ? { session: { stationId: { in: stationIds } } } : {}),
             },
-            select: { reference: true },
+            select: { reference: true, status: true, sessionId: true },
           })
         : [];
-      const financialCheckoutRefs = new Set(financialCheckouts.map((checkout) => checkout.reference));
+      const checkoutByReference = new Map(financialCheckouts.map((checkout) => [checkout.reference, checkout]));
+      const financialCheckoutRefs = new Set(checkoutByReference.keys());
       const relevantPayments = dayPayments.filter((payment) => {
         const reference = baseCheckoutReference(payment.reference);
         return Boolean(reference && financialCheckoutRefs.has(reference));
       });
+      const paidSessionIds = new Set(
+        relevantPayments
+          .filter((payment) => payment.paymentType === "CUSTOMER_PAYMENT" && payment.direction === "INBOUND")
+          .map((payment) => baseCheckoutReference(payment.reference))
+          .filter((reference): reference is string => Boolean(reference))
+          .map((reference) => checkoutByReference.get(reference))
+          .filter((checkout) => checkout?.status === "PAID")
+          .map((checkout) => checkout!.sessionId),
+      );
+      const refundedSessionIds = new Set(
+        relevantPayments
+          .filter((payment) => payment.paymentType === "REFUND" && payment.direction === "OUTBOUND")
+          .map((payment) => baseCheckoutReference(payment.reference))
+          .filter((reference): reference is string => Boolean(reference))
+          .map((reference) => checkoutByReference.get(reference))
+          .filter((checkout) => checkout?.status === "REFUNDED")
+          .map((checkout) => checkout!.sessionId),
+      );
 
       const paymentIds = relevantPayments.map((payment) => payment.id);
       const cashMovements = paymentIds.length
@@ -305,9 +329,9 @@ export async function createGamingDailyClose(
           timezone,
           status: "SUBMITTED",
           endedSessionCount: endedSessions.length,
-          paidSessionCount: endedSessions.filter((session) => session.status === "PAID").length,
-          pendingCheckoutCount: dayCheckouts.filter((checkout) => ["INVOICE_PENDING", "AWAITING_PAYMENT", "PARTIALLY_PAID", "REFUND_PENDING"].includes(checkout.status)).length,
-          refundedCheckoutCount: dayCheckouts.filter((checkout) => checkout.status === "REFUNDED").length,
+          paidSessionCount: paidSessionIds.size,
+          pendingCheckoutCount,
+          refundedCheckoutCount: refundedSessionIds.size,
           submittedByUserId: actorUserId,
           approverUserId: input.approverUserId,
           notes: input.notes || null,
