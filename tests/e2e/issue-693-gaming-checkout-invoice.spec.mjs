@@ -34,6 +34,7 @@ const requiredModules = [
   "GAMING_STATIONS",
   "GAMING_SESSIONS",
   "GAMING_CHECKOUT",
+  "GAMING_DAILY_CLOSE",
 ];
 
 async function prepareTenant() {
@@ -609,6 +610,63 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
       where: { id: cashSession.id },
       data: { status: "CLOSED", expectedClosingAmount: 500, countedClosingAmount: 500, discrepancyAmount: 0 },
     });
+  });
+
+  test("#706 submits Gaming daily close and persists tenant-scoped nested lines", async () => {
+    const businessDate = new Date().toISOString().slice(0, 10);
+    const idempotencyKey = `e2e-706-close-${businessDate}`;
+
+    const previous = await prisma.enterpriseGamingDailyClose.findFirst({
+      where: { organizationId, idempotencyKey },
+      select: { id: true },
+    });
+    if (previous) {
+      await prisma.enterpriseGamingDailyCloseLine.deleteMany({
+        where: { organizationId, dailyCloseId: previous.id },
+      });
+      await prisma.enterpriseGamingDailyClose.delete({ where: { id: previous.id } });
+    }
+
+    const response = await context.request.post(
+      `${baseUrl}/api/enterprise/${organizationId}/gaming/daily-closes`,
+      {
+        data: {
+          businessDate,
+          siteId: null,
+          notes: "Hotfix #706 E2E",
+          idempotencyKey,
+          declarations: [{
+            financialAccountId: cashAccountId,
+            methodType: "CASH",
+            declaredAmount: 500,
+            varianceReason: null,
+          }],
+        },
+        headers: {
+          origin: baseUrl,
+          referer: `${baseUrl}/enterprise-modules/GAMING_DAILY_CLOSE`,
+        },
+      },
+    );
+    const body = await response.json().catch(() => null);
+    expect(response.status(), JSON.stringify(body)).toBe(201);
+    expect(body?.close?.status).toBe("SUBMITTED");
+    expect(body?.close?.lines).toHaveLength(1);
+
+    const persisted = await prisma.enterpriseGamingDailyClose.findUniqueOrThrow({
+      where: { id: body.close.id },
+      include: { lines: true },
+    });
+    expect(persisted.organizationId).toBe(organizationId);
+    expect(persisted.lines).toHaveLength(1);
+    expect(persisted.lines[0].organizationId).toBe(organizationId);
+    expect(persisted.lines[0].financialAccountId).toBe(cashAccountId);
+    expect(persisted.lines[0].currencyCode).toBe("CDF");
+    expect(persisted.lines[0].methodType).toBe("CASH");
+    expect(persisted.lines[0].expectedAmount.toFixed()).toBe("500");
+    expect(persisted.lines[0].declaredAmount.toFixed()).toBe("500");
+    expect(persisted.lines[0].differenceAmount.toFixed()).toBe("0");
+    expect(persisted.lines[0].varianceReason).toBeNull();
   });
 
   test("#700 reopens cash after pending close and recovers a historical approved Gaming payment; #704 uses another authorized cashier and preserves CDF", async () => {
