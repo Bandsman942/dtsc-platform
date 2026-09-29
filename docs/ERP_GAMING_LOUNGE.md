@@ -439,3 +439,21 @@ Le contrat devient :
 La migration `20260929083000_payment_cash_session_binding` est additive. Elle ajoute la relation nullable, son index et sa contrainte, puis rattache uniquement les paiements Cash historiques pour lesquels un unique mouvement de caisse existant fournit déjà une preuve non ambiguë. Les paiements historiques `APPROVED` sans mouvement restent récupérés au moment de la confirmation.
 
 L’acceptance #700 couvre le cas réel : paiement Cash préparé, ancienne caisse passée en `PENDING_VALIDATION`, ouverture d’une nouvelle caisse autorisée, simulation d’un paiement historique sans rattachement, confirmation Finance, mouvement sur la nouvelle session, allocation unique et convergence facture/checkout/session Gaming vers `PAID`.
+
+
+## Hotfix #702 — récupération Cash multi-caissier et devise de caisse
+
+Le hotfix #702 complète #700 pour les paiements historiques dont l’initiateur n’est plus le caissier qui possède aujourd’hui la session ouverte. La confirmation reste réservée à un acteur Finance autorisé et indépendant de l’initiateur, mais le rattachement de caisse n’est plus prisonnier du `initiatedByUserId` historique.
+
+La sélection d’une session `OPEN` du même `organizationId` et du même compte financier est déterministe :
+
+1. caisse ouverte de l’initiateur historique, si elle existe ;
+2. sinon caisse ouverte de l’acteur autorisé qui confirme ;
+3. sinon unique caisse ouverte restante sur le compte ;
+4. si plusieurs caisses restent possibles, refus explicite sans sélection arbitraire.
+
+La récupération conserve un événement Finance auditable avec l’initiateur historique, le caissier réellement rattaché, l’acteur de confirmation et la stratégie de sélection. La devise du compte doit aussi correspondre à celle du paiement.
+
+La liste `FINANCE_CASH` expose désormais explicitement la devise de la session depuis son compte financier. Le formatter partagé n’utilise plus USD comme fallback silencieux : une devise absente est traitée comme une donnée incomplète plutôt que présentée avec un symbole trompeur.
+
+Aucune migration n’est ajoutée par #702. L’acceptance requise couvre : paiement Gaming Cash historique `APPROVED` initié par un premier caissier, ancienne session non ouverte, nouvelle session `OPEN` appartenant à un autre utilisateur autorisé, confirmation, mouvement de caisse sur la nouvelle session, allocation unique, facture/checkout/session Gaming `PAID`, et affichage CDF cohérent dans la liste et le détail.
