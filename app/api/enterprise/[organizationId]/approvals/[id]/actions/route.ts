@@ -12,6 +12,8 @@ import { normalizeEnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors"
 import { enterpriseApprovalActionSchema } from "@/lib/enterprise/core-v2/validators";
 import { decideEnterpriseBudgetApproval } from "@/lib/enterprise/finance/budget-service";
 import { decideEnterpriseExpenseApproval } from "@/lib/enterprise/finance/expense-service";
+import { decideGamingDailyClose, EnterpriseGamingCheckoutError } from "@/lib/enterprise/gaming/checkout";
+import { gamingCheckoutErrorResponse } from "@/lib/enterprise/gaming/checkout-http";
 import { decideEnterpriseEmploymentContract } from "@/lib/enterprise/hr-payroll/contracts";
 import { decideEnterpriseLeaveRequest } from "@/lib/enterprise/hr-payroll/leave";
 import { decideEnterprisePayrollRun } from "@/lib/enterprise/hr-payroll/payroll";
@@ -38,6 +40,7 @@ const prepareReviewSchema = z.object({ action: z.literal("PREPARE_REVIEW"), revi
 async function targetRevision(organizationId: string, approval: CurrentApproval) {
   if (approval.targetEntityType === "EnterpriseAccountTransfer") return (await prisma.enterpriseAccountTransfer.findFirst({ where: { id: approval.targetEntityId, organizationId }, select: { revision: true } }))?.revision ?? null;
   if (approval.targetEntityType === "EnterpriseCashSession") return (await prisma.enterpriseCashSession.findFirst({ where: { id: approval.targetEntityId, organizationId }, select: { revision: true } }))?.revision ?? null;
+  if (approval.targetEntityType === "EnterpriseGamingDailyClose") return (await prisma.enterpriseGamingDailyClose.findFirst({ where: { id: approval.targetEntityId, organizationId }, select: { revision: true } }))?.revision ?? null;
   if (approval.targetEntityType === "EnterpriseLeaveRequest") return (await prisma.enterpriseLeaveRequest.findFirst({ where: { id: approval.targetEntityId, organizationId, archivedAt: null }, select: { revision: true } }))?.revision ?? null;
   if (approval.targetEntityType === "EnterpriseEmploymentContract") return (await prisma.enterpriseEmploymentContract.findFirst({ where: { id: approval.targetEntityId, organizationId, archivedAt: null }, select: { revision: true } }))?.revision ?? null;
   if (approval.targetEntityType === "EnterpriseTimesheet") return (await prisma.enterpriseTimesheet.findFirst({ where: { id: approval.targetEntityId, organizationId, archivedAt: null }, select: { revision: true } }))?.revision ?? null;
@@ -66,10 +69,11 @@ async function decideDomainApproval(organizationId: string, current: CurrentAppr
   if (data.action === "CANCEL") return decideAssignedEnterpriseApproval(args);
 
   const revision = await targetRevision(organizationId, current);
-  const revisionedTargets = ["EnterpriseAccountTransfer", "EnterpriseCashSession", "EnterpriseLeaveRequest", "EnterpriseEmploymentContract", "EnterpriseTimesheet", "EnterprisePayrollRun", "EnterpriseStockTransfer", "EnterpriseInventoryCount", "EnterpriseStockAdjustment", "EnterpriseProjectMilestone"];
+  const revisionedTargets = ["EnterpriseAccountTransfer", "EnterpriseCashSession", "EnterpriseGamingDailyClose", "EnterpriseLeaveRequest", "EnterpriseEmploymentContract", "EnterpriseTimesheet", "EnterprisePayrollRun", "EnterpriseStockTransfer", "EnterpriseInventoryCount", "EnterpriseStockAdjustment", "EnterpriseProjectMilestone"];
   if (revisionedTargets.includes(current.targetEntityType) && revision === null) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "L’objet métier lié à cette validation est introuvable.");
   if (current.targetEntityType === "EnterpriseAccountTransfer") return data.action === "APPROVE" ? approveAssignedAccountTransfer(organizationId, current.targetEntityId, actorUserId, revision!) : rejectAssignedAccountTransfer(organizationId, current.targetEntityId, actorUserId, revision!, data.decisionComment || "");
   if (current.targetEntityType === "EnterpriseCashSession") return validateCashSessionAssignedApproval(organizationId, current.targetEntityId, actorUserId, { approve: data.action === "APPROVE", reason: data.decisionComment, revision: revision! });
+  if (current.targetEntityType === "EnterpriseGamingDailyClose") return decideGamingDailyClose(organizationId, current.targetEntityId, actorUserId, { action: data.action === "APPROVE" ? "VALIDATE" : "REJECT", revision: revision!, reason: data.decisionComment || undefined } as Parameters<typeof decideGamingDailyClose>[3]);
   if (current.targetEntityType === "EnterpriseLeaveRequest") return decideEnterpriseLeaveRequest(organizationId, current.targetEntityId, actorUserId, { decision: data.action, revision: revision!, comment: data.decisionComment });
   if (current.targetEntityType === "EnterpriseEmploymentContract") return decideEnterpriseEmploymentContract(organizationId, current.targetEntityId, actorUserId, { decision: data.action, revision: revision!, comment: data.decisionComment });
   if (current.targetEntityType === "EnterpriseTimesheet") return decideEnterpriseTimesheet(organizationId, current.targetEntityId, actorUserId, { decision: data.action, revision: revision!, comment: data.decisionComment });
@@ -133,6 +137,7 @@ export async function POST(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "approvals", approvalId: id, action: data.action } });
     return NextResponse.json({ ok: true, approval });
   } catch (error) {
+    if (error instanceof EnterpriseGamingCheckoutError) return gamingCheckoutErrorResponse(error, req, "GAMING_DAILY_CLOSE_DECISION_FAILED");
     if (error instanceof ApprovalCoordinationError) { await writeApiLog({ request: req, statusCode: error.status, userId: session.userId, startedAt, metadata: { organizationId, domain: "approvals", approvalId: id, action, error: error.code } }); return NextResponse.json({ error: error.code, message: /^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : "L’opération n’a pas pu être terminée." }, { status: error.status }); }
     if (error instanceof EnterpriseDomainError || error instanceof EnterpriseAccountingError) { await writeApiLog({ request: req, statusCode: error.status, userId: session.userId, startedAt, metadata: { organizationId, domain: "approvals", approvalId: id, action, error: error.code } }); return NextResponse.json({ error: error.code, message: /^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : "L’opération n’a pas pu être terminée." }, { status: error.status }); }
     const normalized = normalizeEnterpriseCoreV2Error(error); await writeApiLog({ request: req, statusCode: normalized.status, userId: session.userId, startedAt, metadata: { organizationId, domain: "approvals", approvalId: id, action, error: normalized.code } }); return NextResponse.json({ error: normalized.code, message: normalized.message }, { status: normalized.status });
