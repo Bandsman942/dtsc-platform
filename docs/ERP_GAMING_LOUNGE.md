@@ -479,4 +479,3 @@ La migration #710 laisse `approverUserId` nullable uniquement pour préserver le
 Le contrat des motifs distingue désormais les décisions : `VALIDATE` accepte un motif facultatif sans longueur minimale, tandis que `REJECT` exige au moins 8 caractères. Les erreurs Zod brutes ne sont jamais renvoyées dans le toast utilisateur.
 
 Côté présentation, les lignes de rapprochement sont affichées en cartes sur mobile. À partir du breakpoint desktop, le tableau possède une largeur minimale suffisante, des paddings horizontaux et des en-têtes `whitespace-nowrap`, avec scroll horizontal local lorsque nécessaire.
-
