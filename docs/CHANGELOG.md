@@ -2,6 +2,24 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-09-29 — Hotfix #702 : récupération Cash multi-caissier et devise de caisse fiable
+
+### Corrigé
+
+- La confirmation d’un paiement Cash historique `APPROVED` n’exige plus exclusivement une caisse `OPEN` appartenant à l’initiateur historique du paiement.
+- La récupération choisit de façon déterministe la caisse de l’initiateur si elle existe, sinon celle de l’acteur autorisé qui confirme, sinon l’unique caisse ouverte compatible du compte ; plusieurs sessions restantes produisent un refus explicite au lieu d’un choix arbitraire.
+- Toute récupération ou réaffectation journalise l’initiateur historique, le caissier réellement utilisé, l’acteur de confirmation et la stratégie de sélection.
+- La confirmation Cash refuse explicitement une incompatibilité entre la devise du paiement et celle du compte financier.
+- Les listes de sessions de caisse exposent leur `currencyCode` réel depuis le compte financier ; une caisse CDF n’est plus affichée comme USD avant ouverture du détail.
+- Le formatter Finance partagé ne remplace plus silencieusement une devise absente par USD.
+
+### Sécurité et qualité
+
+- L’isolation `organizationId`, le compte financier et la devise restent obligatoires ; aucune session d’un autre tenant ou compte ne peut être utilisée.
+- L’indépendance initiateur / approbateur / confirmateur reste inchangée.
+- Aucun changement Prisma ni migration : le hotfix réutilise les relations de caisse ajoutées par #700.
+- La QA #702 et l’E2E Gaming couvrent le cas réel d’un ancien paiement initié par un caissier puis récupéré sur la caisse ouverte d’un autre utilisateur autorisé, jusqu’à la convergence `PAID`.
+
 ## 2026-09-29 — Hotfix #700 : rattachement des paiements Cash aux sessions et récupération historique
 
 ### Corrigé
