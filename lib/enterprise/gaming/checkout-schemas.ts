@@ -80,6 +80,7 @@ export const gamingCheckoutCommandSchema = z.discriminatedUnion("action", [
 export const gamingDailyCloseCreateSchema = z.object({
   businessDate: z.coerce.date(),
   siteId: id.optional().nullable(),
+  approverUserId: id,
   notes: z.string().trim().max(2000).optional().nullable(),
   idempotencyKey,
   declarations: z.array(z.object({
@@ -90,12 +91,19 @@ export const gamingDailyCloseCreateSchema = z.object({
   })).min(1).max(100),
 });
 
-export const gamingDailyCloseDecisionSchema = z.object({
-  action: z.enum(["VALIDATE", "REJECT"]),
+const gamingDailyCloseValidateSchema = z.object({
+  action: z.literal("VALIDATE"),
   revision,
-  reason: z.string().trim().min(8).max(1000).optional(),
-}).superRefine((value, ctx) => {
-  if (value.action === "REJECT" && !value.reason) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["reason"], message: "Un motif est obligatoire pour rejeter la clôture." });
-  }
+  reason: z.string().trim().max(1000).optional(),
 });
+
+const gamingDailyCloseRejectSchema = z.object({
+  action: z.literal("REJECT"),
+  revision,
+  reason: z.string().trim().min(8).max(1000),
+});
+
+export const gamingDailyCloseDecisionSchema = z.discriminatedUnion("action", [
+  gamingDailyCloseValidateSchema,
+  gamingDailyCloseRejectSchema,
+]);
