@@ -481,4 +481,3 @@ Le Centre des validations connaît la cible `EnterpriseGamingDailyClose`, produi
 Côté interface, le détail adopte une représentation en cartes sur mobile/tablette et une table desktop à largeurs minimales explicites, padding horizontal et scroll local borné. Les en-têtes longs FR/EN ne doivent plus se coller ni créer de débordement horizontal global.
 
 Aucune migration Prisma n’est introduite. Le hotfix réutilise `EnterpriseApproval`, conserve les règles de rapprochement #706 et ajoute `qa:hotfix-708` plus une acceptance authentifiée.
-
