@@ -74,6 +74,8 @@ const FINANCE_ERROR_MESSAGES: Record<string, string> = {
   OPEN_CASH_SESSION_REQUIRED: "Aucune caisse ouverte n’est disponible pour ce paiement en espèces. Ouvrez la caisse du compte sélectionné avec le caissier qui a initié le paiement, puis réessayez.",
   PAYMENT_NOT_APPROVED: "Ce paiement doit être approuvé avant sa confirmation. Rechargez-le et vérifiez son statut.",
   PAYMENT_SELF_CONFIRMATION_FORBIDDEN: "La personne qui a initié ce paiement ne peut pas le confirmer elle-même. Utilisez un autre utilisateur autorisé.",
+  PAYMENT_GAMING_SCOPE_INVALID: "Ce paiement ne correspond plus au client ou à la devise de l’encaissement Gaming lié. Rechargez les données avant de continuer.",
+  PAYMENT_GAMING_CONVERGENCE_FAILED: "Le paiement est confirmé, mais la mise à jour de l’encaissement Gaming n’a pas pu être terminée. Réessayez la confirmation pour relancer la synchronisation.",
   PAYMENT_COUNTERPARTY_AMBIGUOUS: "Un paiement ne peut pas cibler simultanément un tiers et un collaborateur.",
   PAYMENT_COUNTERPARTY_INVALID: "Le tiers sélectionné ne correspond pas au type ou au sens de ce paiement.",
   PAYMENT_EMPLOYEE_INVALID: "Le collaborateur sélectionné n’est plus actif dans cette entreprise.",
