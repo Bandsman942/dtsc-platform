@@ -14,7 +14,7 @@ const stationId = "e2e-gaming-station-693";
 const unitId = "e2e-gaming-uom-693";
 const serviceId = "e2e-gaming-service-693";
 const pricingRuleId = "e2e-gaming-pricing-696";
-const cashAccountId = `e2e-gaming-cash-698-${Date.now()}`;
+let cashAccountId = "";
 let adminUserId = "";
 let approverUserId = "";
 let context;
@@ -265,9 +265,8 @@ async function prepareTenant() {
     select: { id: true },
   });
   if (!ledger) throw new Error("Issue #698 requires the system Finance baseline to expose an active CASH ledger account.");
-  await prisma.enterpriseFinancialAccount.create({
+  const cashAccount = await prisma.enterpriseFinancialAccount.create({
     data: {
-      id: cashAccountId,
       organizationId,
       code: `G-CASH-698-${Date.now().toString(36).toUpperCase()}`,
       name: "Gaming cash E2E #698",
@@ -281,7 +280,9 @@ async function prepareTenant() {
       responsibleUserId: admin.id,
       status: "ACTIVE",
     },
+    select: { id: true },
   });
+  cashAccountId = cashAccount.id;
 }
 
 async function signInAs(targetContext, email, password, next = "/enterprise-modules/GAMING_CHECKOUT") {
@@ -609,4 +610,149 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
       data: { status: "CLOSED", expectedClosingAmount: 500, countedClosingAmount: 500, discrepancyAmount: 0 },
     });
   });
+
+  test("#700 reopens cash after pending close and recovers a historical approved Gaming payment", async () => {
+    const oldCashSession = await prisma.enterpriseCashSession.create({
+      data: {
+        organizationId,
+        number: `CASH-E2E-700-OLD-${Date.now().toString(36).toUpperCase()}`,
+        financialAccountId: cashAccountId,
+        cashierUserId: adminUserId,
+        status: "OPEN",
+        openingAmount: 0,
+      },
+    });
+
+    const suffix = `cash-recovery-${Date.now()}`;
+    const session = await startAndEndSession({ businessPartyId: customerId, suffix });
+    const prepared = await checkout(session.id, suffix);
+    const issued = await approveInvoice(prepared);
+
+    const addResponse = await context.request.patch(
+      `${baseUrl}/api/enterprise/${organizationId}/gaming/checkouts/${issued.checkout.id}`,
+      {
+        data: {
+          action: "ADD_PAYMENT",
+          revision: issued.checkout.revision,
+          paymentApproverUserId: approverUserId,
+          methodType: "CASH",
+          financialAccountId: cashAccountId,
+          amount: 500,
+          idempotencyKey: `e2e-700-cash-recovery-${suffix}`,
+        },
+        headers: {
+          origin: baseUrl,
+          referer: `${baseUrl}/enterprise-modules/GAMING_CHECKOUT`,
+        },
+      },
+    );
+    const added = await addResponse.json().catch(() => null);
+    expect(addResponse.ok(), JSON.stringify(added)).toBeTruthy();
+    expect(added?.payment?.status).toBe("PENDING_APPROVAL");
+
+    const initiallyBound = await prisma.enterprisePayment.findUniqueOrThrow({
+      where: { id: added.payment.id },
+      select: { cashSessionId: true },
+    });
+    expect(initiallyBound.cashSessionId).toBe(oldCashSession.id);
+
+    const approveResponse = await approverContext.request.post(
+      `${baseUrl}/api/enterprise/${organizationId}/payments/${added.payment.id}/transition`,
+      {
+        data: { action: "APPROVE", revision: added.payment.revision },
+        headers: {
+          origin: baseUrl,
+          referer: `${baseUrl}/enterprise-modules/FINANCE_PAYMENTS`,
+        },
+      },
+    );
+    const approved = await approveResponse.json().catch(() => null);
+    expect(approveResponse.ok(), JSON.stringify(approved)).toBeTruthy();
+    expect(approved?.payment?.status).toBe("APPROVED");
+
+    await prisma.enterpriseCashSession.update({
+      where: { id: oldCashSession.id },
+      data: {
+        status: "PENDING_VALIDATION",
+        submittedAt: new Date(),
+        expectedClosingAmount: 0,
+        countedClosingAmount: 0,
+        discrepancyAmount: 0,
+        revision: { increment: 1 },
+      },
+    });
+
+    // Simulate a payment created before #700, when EnterprisePayment had no durable cash-session binding.
+    await prisma.enterprisePayment.update({
+      where: { id: added.payment.id },
+      data: { cashSessionId: null },
+    });
+
+    const openResponse = await context.request.post(
+      `${baseUrl}/api/enterprise/${organizationId}/cash-sessions`,
+      {
+        data: {
+          financialAccountId: cashAccountId,
+          openingAmount: "0",
+        },
+        headers: {
+          origin: baseUrl,
+          referer: `${baseUrl}/enterprise-modules/FINANCE_CASH`,
+        },
+      },
+    );
+    const opened = await openResponse.json().catch(() => null);
+    expect(openResponse.status(), JSON.stringify(opened)).toBe(201);
+    expect(opened?.session?.status).toBe("OPEN");
+    expect(opened?.session?.id).not.toBe(oldCashSession.id);
+
+    const confirmResponse = await approverContext.request.post(
+      `${baseUrl}/api/enterprise/${organizationId}/payments/${added.payment.id}/transition`,
+      {
+        data: { action: "CONFIRM", revision: approved.payment.revision },
+        headers: {
+          origin: baseUrl,
+          referer: `${baseUrl}/enterprise-modules/FINANCE_PAYMENTS`,
+        },
+      },
+    );
+    const confirmed = await confirmResponse.json().catch(() => null);
+    expect(confirmResponse.ok(), JSON.stringify(confirmed)).toBeTruthy();
+    expect(confirmed?.payment?.status).toBe("CONFIRMED");
+
+    const [persistedPayment, movement, recoveryEvent, allocation, persistedInvoice, persistedCheckout, persistedSession] = await Promise.all([
+      prisma.enterprisePayment.findUniqueOrThrow({ where: { id: added.payment.id } }),
+      prisma.enterpriseCashMovement.findFirst({
+        where: { organizationId, paymentId: added.payment.id },
+      }),
+      prisma.enterprisePaymentEvent.findFirst({
+        where: { organizationId, paymentId: added.payment.id, eventType: "CASH_SESSION_RECOVERED" },
+      }),
+      prisma.enterprisePaymentAllocation.findFirst({
+        where: { organizationId, paymentId: added.payment.id, receivableId: issued.invoice.receivable.id, status: "CONFIRMED" },
+      }),
+      prisma.enterpriseSalesInvoice.findUniqueOrThrow({ where: { id: issued.invoice.id } }),
+      prisma.enterpriseGamingCheckout.findUniqueOrThrow({ where: { id: issued.checkout.id } }),
+      prisma.enterpriseGamingSession.findUniqueOrThrow({ where: { id: session.id } }),
+    ]);
+
+    expect(persistedPayment.cashSessionId).toBe(opened.session.id);
+    expect(movement?.cashSessionId).toBe(opened.session.id);
+    expect(recoveryEvent).toBeTruthy();
+    expect(allocation?.amount.toFixed()).toBe("500");
+    expect(persistedInvoice.status).toBe("PAID");
+    expect(persistedCheckout.status).toBe("PAID");
+    expect(persistedSession.status).toBe("PAID");
+
+    await prisma.enterpriseCashSession.update({
+      where: { id: opened.session.id },
+      data: {
+        status: "CLOSED",
+        expectedClosingAmount: 500,
+        countedClosingAmount: 500,
+        discrepancyAmount: 0,
+      },
+    });
+  });
+
 });

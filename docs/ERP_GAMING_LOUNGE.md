@@ -419,3 +419,23 @@ Les erreurs Finance `OPEN_CASH_SESSION_REQUIRED`, compte financier manquant/inva
 L’acceptance #698 couvre deux scénarios : refus d’un paiement Cash avant création lorsqu’aucune caisse n’est ouverte, puis parcours positif Gaming → approbation Finance externe → confirmation Finance → allocation → facture `PAID` → checkout `PAID` → session `PAID` avec transition `CHECKOUT_PAID`.
 
 Le seuil de cinq postes reste uniquement une baseline d’onboarding/commercial readiness et ne participe à aucune règle d’encaissement.
+
+
+## Hotfix #700 — rattachement paiement Cash ↔ session et récupération historique
+
+Le hotfix #700 ferme le verrou circulaire découvert après #698 entre la clôture de caisse et la confirmation tardive d’un paiement Gaming.
+
+Le contrat devient :
+
+- tout nouveau paiement `CASH` mémorise `cashSessionId` lorsqu’une session `OPEN` compatible existe au moment de sa création ;
+- `EnterprisePayment.cashSessionId` est une relation tenant-safe vers `EnterpriseCashSession` avec FK composite `organizationId + id` ;
+- une session `PENDING_VALIDATION` n’empêche plus le même caissier d’ouvrir la caisse suivante sur le même compte ; seules une session `OPEN` ou une session réellement `CLOSING` empêchent un doublon ;
+- à la confirmation, le moteur vérifie d’abord la session liée ; si elle n’est plus `OPEN`, il recherche une nouvelle session `OPEN` du même compte et du même caissier avant de produire le mouvement de caisse ;
+- un paiement historique sans `cashSessionId` est récupéré de la même manière et le rattachement est persisté avant confirmation ;
+- toute récupération ou réaffectation avant confirmation crée un `EnterprisePaymentEvent` (`CASH_SESSION_RECOVERED` ou `CASH_SESSION_REBOUND`) afin que l’historique reste auditable ;
+- une caisse en attente de validation, en clôture, fermée ou incohérente produit désormais un message métier distinct, au lieu du faux conseil générique « ouvrez une caisse » ;
+- la séparation initiateur / approbateur / confirmateur reste inchangée : le hotfix ne crée aucun passe-droit Finance.
+
+La migration `20260929083000_payment_cash_session_binding` est additive. Elle ajoute la relation nullable, son index et sa contrainte, puis rattache uniquement les paiements Cash historiques pour lesquels un unique mouvement de caisse existant fournit déjà une preuve non ambiguë. Les paiements historiques `APPROVED` sans mouvement restent récupérés au moment de la confirmation.
+
+L’acceptance #700 couvre le cas réel : paiement Cash préparé, ancienne caisse passée en `PENDING_VALIDATION`, ouverture d’une nouvelle caisse autorisée, simulation d’un paiement historique sans rattachement, confirmation Finance, mouvement sur la nouvelle session, allocation unique et convergence facture/checkout/session Gaming vers `PAID`.

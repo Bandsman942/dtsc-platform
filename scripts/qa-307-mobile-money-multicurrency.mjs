@@ -72,9 +72,10 @@ check(hasAll(retailService, [
 const treasuryService = read("lib/enterprise/accounting/treasury-service.ts");
 check(hasAll(treasuryService, [
   "organizationId, financialAccountId: account.id, cashierUserId",
-  'status: { in: ["OPEN", "CLOSING", "PENDING_VALIDATION"] }',
+  'status: { in: ["OPEN", "CLOSING"] }',
   "CASH_SESSION_ALREADY_ACTIVE",
-]), "Cash opening must prevent duplicates only on the same cash account while allowing the same cashier to hold other account sessions concurrently");
+]), "Cash opening must prevent duplicate OPEN/CLOSING sessions on the same account while allowing a submitted close to coexist with the next operational session");
+check(!treasuryService.includes('status: { in: ["OPEN", "CLOSING", "PENDING_VALIDATION"] }'), "A PENDING_VALIDATION cash close must not block opening the next operational cash session");
 const cashApprovalOrchestration = read("lib/enterprise/accounting/accounting-operations-approval-orchestration.ts");
 check(hasAll(cashApprovalOrchestration, [
   "submitCashSessionCloseForAssignedValidation",

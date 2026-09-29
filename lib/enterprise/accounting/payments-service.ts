@@ -20,17 +20,133 @@ async function addPaymentEvent(tx: Prisma.TransactionClient, organizationId: str
   await tx.enterprisePaymentEvent.create({ data: { organizationId, paymentId, actorUserId, eventType, summary, metadataJson } });
 }
 
+type CashSessionPayment = {
+  id: string;
+  organizationId: string;
+  financialAccountId: string | null;
+  initiatedByUserId: string;
+  cashSessionId: string | null;
+};
+
+async function resolveCashSessionForConfirmation(
+  tx: Prisma.TransactionClient,
+  payment: CashSessionPayment,
+  actorUserId: string,
+) {
+  if (!payment.financialAccountId) throw new EnterpriseAccountingError("PAYMENT_FINANCIAL_ACCOUNT_REQUIRED", 409);
+
+  const findOpenReplacement = () => tx.enterpriseCashSession.findFirst({
+    where: {
+      organizationId: payment.organizationId,
+      financialAccountId: payment.financialAccountId!,
+      cashierUserId: payment.initiatedByUserId,
+      status: "OPEN",
+    },
+    orderBy: { openedAt: "desc" },
+  });
+
+  if (payment.cashSessionId) {
+    const linked = await tx.enterpriseCashSession.findFirst({
+      where: {
+        id: payment.cashSessionId,
+        organizationId: payment.organizationId,
+        financialAccountId: payment.financialAccountId,
+        cashierUserId: payment.initiatedByUserId,
+      },
+    });
+    if (!linked) throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_INVALID", 409);
+
+    if (linked.status === "OPEN") return linked;
+
+    const replacement = await findOpenReplacement();
+    if (replacement) {
+      await tx.enterprisePayment.update({
+        where: { id: payment.id },
+        data: { cashSessionId: replacement.id, revision: { increment: 1 } },
+      });
+      await addPaymentEvent(
+        tx,
+        payment.organizationId,
+        payment.id,
+        actorUserId,
+        "CASH_SESSION_REBOUND",
+        "Cash session rebound before confirmation",
+        { previousCashSessionId: linked.id, cashSessionId: replacement.id, previousStatus: linked.status },
+      );
+      return replacement;
+    }
+
+    if (linked.status === "PENDING_VALIDATION") {
+      throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_PENDING_VALIDATION", 409);
+    }
+    if (linked.status === "CLOSING") {
+      throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_CLOSING", 409);
+    }
+    throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_CLOSED", 409);
+  }
+
+  const recovered = await findOpenReplacement();
+  if (recovered) {
+    await tx.enterprisePayment.update({
+      where: { id: payment.id },
+      data: { cashSessionId: recovered.id, revision: { increment: 1 } },
+    });
+    await addPaymentEvent(
+      tx,
+      payment.organizationId,
+      payment.id,
+      actorUserId,
+      "CASH_SESSION_RECOVERED",
+      "Historical cash session binding recovered before confirmation",
+      { cashSessionId: recovered.id },
+    );
+    return recovered;
+  }
+
+  const blocking = await tx.enterpriseCashSession.findFirst({
+    where: {
+      organizationId: payment.organizationId,
+      financialAccountId: payment.financialAccountId,
+      cashierUserId: payment.initiatedByUserId,
+      status: { in: ["PENDING_VALIDATION", "CLOSING"] },
+    },
+    orderBy: { openedAt: "desc" },
+    select: { status: true },
+  });
+  if (blocking?.status === "PENDING_VALIDATION") {
+    throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_PENDING_VALIDATION", 409);
+  }
+  if (blocking?.status === "CLOSING") {
+    throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_CLOSING", 409);
+  }
+  throw new EnterpriseAccountingError("OPEN_CASH_SESSION_REQUIRED", 409);
+}
+
 export async function createEnterprisePayment(organizationId: string, actorUserId: string, input: PaymentInput) {
   return prisma.$transaction(async (tx) => {
     await assertActiveClientOrganization(tx, organizationId);
     const amount = new Prisma.Decimal(input.amount);
     if (!amount.isPositive()) throw new EnterpriseAccountingError("PAYMENT_AMOUNT_INVALID", 400);
     if (["CASH", "BANK_TRANSFER", "MOBILE_MONEY", "CARD", "CHEQUE"].includes(input.methodType) && !input.financialAccountId) throw new EnterpriseAccountingError("PAYMENT_FINANCIAL_ACCOUNT_REQUIRED", 409);
+    let cashSessionId: string | null = null;
     if (input.financialAccountId) {
       const account = await tx.enterpriseFinancialAccount.findFirst({ where: { id: input.financialAccountId, organizationId, status: "ACTIVE", archivedAt: null } });
       if (!account || account.currencyCode !== input.currencyCode) throw new EnterpriseAccountingError("PAYMENT_FINANCIAL_ACCOUNT_INVALID", 409);
       const expected = input.methodType === "CASH" ? "CASH" : input.methodType === "MOBILE_MONEY" ? "MOBILE_MONEY" : null;
       if (expected && account.accountType !== expected) throw new EnterpriseAccountingError("PAYMENT_METHOD_ACCOUNT_MISMATCH", 409);
+      if (input.methodType === "CASH") {
+        const cashSession = await tx.enterpriseCashSession.findFirst({
+          where: {
+            organizationId,
+            financialAccountId: account.id,
+            cashierUserId: actorUserId,
+            status: "OPEN",
+          },
+          orderBy: { openedAt: "desc" },
+          select: { id: true },
+        });
+        cashSessionId = cashSession?.id || null;
+      }
     }
     if (input.businessPartyId && input.employeeId) throw new EnterpriseAccountingError("PAYMENT_COUNTERPARTY_AMBIGUOUS", 409);
     if (input.businessPartyId) {
@@ -59,9 +175,9 @@ export async function createEnterprisePayment(organizationId: string, actorUserI
     }
 
     const unallocatedAmount = input.paymentType === "PAYROLL_PAYMENT" ? new Prisma.Decimal(0) : amount;
-    const payment = await tx.enterprisePayment.create({ data: { organizationId, number: financeReference("PAY"), direction: input.direction, paymentType: input.paymentType, methodType: input.methodType, paymentMethodId: input.paymentMethodId || null, financialAccountId: input.financialAccountId || null, businessPartyId: input.businessPartyId || null, employeeId: input.employeeId || null, payrollRunId: input.payrollRunId || null, currencyCode: input.currencyCode, amount, unallocatedAmount, paymentDate: input.paymentDate, reference: input.reference || null, maskedExternalReference: input.maskedExternalReference || null, initiatedByUserId: actorUserId, idempotencyKey: input.idempotencyKey || null } });
+    const payment = await tx.enterprisePayment.create({ data: { organizationId, number: financeReference("PAY"), direction: input.direction, paymentType: input.paymentType, methodType: input.methodType, paymentMethodId: input.paymentMethodId || null, financialAccountId: input.financialAccountId || null, cashSessionId, businessPartyId: input.businessPartyId || null, employeeId: input.employeeId || null, payrollRunId: input.payrollRunId || null, currencyCode: input.currencyCode, amount, unallocatedAmount, paymentDate: input.paymentDate, reference: input.reference || null, maskedExternalReference: input.maskedExternalReference || null, initiatedByUserId: actorUserId, idempotencyKey: input.idempotencyKey || null } });
     await addPaymentEvent(tx, organizationId, payment.id, actorUserId, "CREATED", "Payment created");
-    await publishFinanceEvent(tx, { organizationId, entityType: "EnterprisePayment", entityId: payment.id, eventType: "PAYMENT_CREATED", summary: `Payment ${payment.number} created`, actorUserId, toStatus: "DRAFT", metadataJson: { amount: amount.toFixed(), currency: payment.currencyCode, direction: payment.direction, payrollRunId: payment.payrollRunId } });
+    await publishFinanceEvent(tx, { organizationId, entityType: "EnterprisePayment", entityId: payment.id, eventType: "PAYMENT_CREATED", summary: `Payment ${payment.number} created`, actorUserId, toStatus: "DRAFT", metadataJson: { amount: amount.toFixed(), currency: payment.currencyCode, direction: payment.direction, payrollRunId: payment.payrollRunId, cashSessionId: payment.cashSessionId } });
     return payment;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
@@ -112,17 +228,18 @@ async function confirmEnterprisePayment(organizationId: string, paymentId: strin
     if (!payment.financialAccountId) throw new EnterpriseAccountingError("PAYMENT_FINANCIAL_ACCOUNT_REQUIRED", 409);
     const account = await tx.enterpriseFinancialAccount.findFirst({ where: { id: payment.financialAccountId, organizationId, status: "ACTIVE", archivedAt: null } });
     if (!account) throw new EnterpriseAccountingError("PAYMENT_FINANCIAL_ACCOUNT_INVALID", 409);
+    let confirmedCashSessionId: string | null = null;
     if (payment.methodType === "CASH") {
-      const cashSession = await tx.enterpriseCashSession.findFirst({ where: { organizationId, financialAccountId: account.id, cashierUserId: payment.initiatedByUserId, status: "OPEN" } });
-      if (!cashSession) throw new EnterpriseAccountingError("OPEN_CASH_SESSION_REQUIRED", 409);
+      const cashSession = await resolveCashSessionForConfirmation(tx, payment, actorUserId);
+      confirmedCashSessionId = cashSession.id;
       await tx.enterpriseCashMovement.create({ data: { organizationId, cashSessionId: cashSession.id, paymentId: payment.id, movementType: payment.paymentType, direction: payment.direction, amount: payment.amount, currencyCode: payment.currencyCode, reference: payment.reference, createdByUserId: actorUserId } });
     }
     const signed = payment.direction === "INBOUND" ? payment.amount : payment.amount.negated();
     await tx.enterpriseTreasuryTransaction.create({ data: { organizationId, financialAccountId: account.id, paymentId: payment.id, transactionType: payment.paymentType, direction: payment.direction, currencyCode: payment.currencyCode, amount: payment.amount, transactionDate: payment.paymentDate, reference: payment.reference || payment.number, createdByUserId: actorUserId } });
     await tx.enterpriseFinancialAccount.update({ where: { id: account.id }, data: { operationalBalance: { increment: signed }, revision: { increment: 1 } } });
-    const updated = await tx.enterprisePayment.update({ where: { id: payment.id }, data: { status: "CONFIRMED", confirmedByUserId: actorUserId, confirmedAt: new Date(), revision: { increment: 1 } } });
+    const updated = await tx.enterprisePayment.update({ where: { id: payment.id }, data: { status: "CONFIRMED", cashSessionId: confirmedCashSessionId || payment.cashSessionId, confirmedByUserId: actorUserId, confirmedAt: new Date(), revision: { increment: 1 } } });
     await addPaymentEvent(tx, organizationId, payment.id, actorUserId, "CONFIRMED", "Payment confirmed");
-    await publishFinanceEvent(tx, { organizationId, entityType: "EnterprisePayment", entityId: payment.id, eventType: "PAYMENT_CONFIRMED", summary: `Payment ${payment.number} confirmed`, actorUserId, fromStatus: payment.status, toStatus: "CONFIRMED", metadataJson: { financialAccountId: account.id, amount: payment.amount.toFixed(), currency: payment.currencyCode } });
+    await publishFinanceEvent(tx, { organizationId, entityType: "EnterprisePayment", entityId: payment.id, eventType: "PAYMENT_CONFIRMED", summary: `Payment ${payment.number} confirmed`, actorUserId, fromStatus: payment.status, toStatus: "CONFIRMED", metadataJson: { financialAccountId: account.id, cashSessionId: confirmedCashSessionId || payment.cashSessionId, amount: payment.amount.toFixed(), currency: payment.currencyCode } });
     return updated;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   const postingEvent = paymentPostingEvent(confirmed.paymentType);
