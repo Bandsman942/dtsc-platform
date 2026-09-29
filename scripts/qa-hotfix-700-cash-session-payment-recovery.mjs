@@ -44,7 +44,7 @@ for (const token of [
   "PAYMENT_CASH_SESSION_PENDING_VALIDATION",
   "PAYMENT_CASH_SESSION_CLOSING",
   "PAYMENT_CASH_SESSION_CLOSED",
-  "cashSessionId: recovered.id",
+  "cashSessionId: replacement.session.id",
 ]) {
   if (!payments.includes(token)) fail("le moteur paiement doit couvrir " + token);
 }
