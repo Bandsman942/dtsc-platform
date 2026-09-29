@@ -18,6 +18,7 @@ const copy = read("components/enterprise/gaming/gaming-daily-close-i18n.ts");
 const http = read("lib/enterprise/gaming/checkout-http.ts");
 const approvalTargets = read("lib/enterprise/approval-targets.ts");
 const approvalActions = read("app/api/enterprise/[organizationId]/approvals/[id]/actions/route.ts");
+const approvalsRoute = read("app/api/enterprise/[organizationId]/approvals/route.ts");
 const approvalCoordination = read("lib/standard-work-coordination/approval-coordination.ts");
 const approvalsWorkspace = read("components/enterprise/core-v2/enterprise-approvals-workspace.tsx");
 const e2e = read("tests/e2e/issue-693-gaming-checkout-invoice.spec.mjs");
@@ -119,6 +120,12 @@ hasAll(approvalsWorkspace, [
   '"EnterpriseGamingDailyClose"',
   "canonicalApprovalTargetLabel",
 ], "validation center Gaming close UI");
+
+hasAll(approvalsRoute, [
+  "enterpriseGamingDailyClose.findMany",
+  '"EnterpriseGamingDailyClose"',
+  "item.reference",
+], "validation center Gaming close target summary");
 
 hasAll(e2e, [
   "#708 assigns a validator before submitting Gaming daily close",
