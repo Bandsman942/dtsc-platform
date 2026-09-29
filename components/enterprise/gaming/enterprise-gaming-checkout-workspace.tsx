@@ -22,7 +22,7 @@ type CheckoutStatus = "INVOICE_PENDING" | "AWAITING_PAYMENT" | "PARTIALLY_PAID" 
 type PaymentMethod = "CASH" | "BANK_TRANSFER" | "CARD" | "MOBILE_MONEY" | "CHEQUE" | "OTHER";
 type SessionOption = { id: string; reference: string; status: string; currency: string | null; finalAmount: string | null; station: { stationCode: string; displayName: string | null } };
 type Candidate = { userId: string; name: string; positionTitle: string | null; email: string };
-type Account = { id: string; code: string; name: string; accountType: string; currencyCode: string; status: string; siteId: string | null };
+type Account = { id: string; code: string; name: string; accountType: string; currencyCode: string; status: string; siteId: string | null; hasOpenCashSessionForCurrentUser?: boolean | null };
 type Product = { id: string; code: string; name: string; trackInventory: boolean; prices?: Array<{ amount: string; currency: string; status: string }> };
 type Warehouse = { id: string; code: string; name: string; siteId: string; storageLocations: Array<{ id: string; code: string; name: string; status: string }> };
 type CheckoutItem = {
@@ -104,6 +104,7 @@ export function EnterpriseGamingCheckoutWorkspace({ organizationId, organization
   const [lookups, setLookups] = useState<LookupState | null>(null);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [extras, setExtras] = useState<Array<{ catalogItemId: string; quantity: number }>>([]);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
 
   useToastMessage(message, "error");
   useToastMessage(success, "success");
@@ -148,7 +149,12 @@ export function EnterpriseGamingCheckoutWorkspace({ organizationId, organization
   }
 
   async function openCreate() { setMessage(""); await loadLookups(); setExtras([]); setModal("create"); }
-  async function openAction(next: Exclude<Modal, "create" | null>) { setMessage(""); await loadLookups(); setModal(next); }
+  async function openAction(next: Exclude<Modal, "create" | null>) {
+    setMessage("");
+    if (next === "payment" || next === "refund") setPaymentMethod("CASH");
+    await loadLookups();
+    setModal(next);
+  }
 
   async function openDetail(item: CheckoutItem) {
     setBusy(true);
@@ -247,6 +253,12 @@ export function EnterpriseGamingCheckoutWorkspace({ organizationId, organization
   const labels = { CASH: "Cash", MOBILE_MONEY: "Mobile Money", CARD: "Card", BANK_TRANSFER: "Bank transfer", CHEQUE: "Cheque", OTHER: "Other" } as const;
   const activeInvoiceCurrency = detail?.invoice?.currencyCode || "";
   const compatibleAccounts = (lookups?.accounts || []).filter((account) => !activeInvoiceCurrency || account.currencyCode === activeInvoiceCurrency);
+  const paymentAccounts = compatibleAccounts.filter((account) => {
+    if (paymentMethod === "CASH") return account.accountType === "CASH" && account.hasOpenCashSessionForCurrentUser === true;
+    if (paymentMethod === "MOBILE_MONEY") return account.accountType === "MOBILE_MONEY";
+    return true;
+  });
+  const cashReady = paymentMethod !== "CASH" || paymentAccounts.length > 0;
 
   return (
     <ModuleWorkspace>
@@ -284,7 +296,7 @@ export function EnterpriseGamingCheckoutWorkspace({ organizationId, organization
             {detail.checkout.status === "REFUND_PENDING" && detail.canManage ? <Button onClick={() => void openAction("approveRefund")}>{copy.approveRefund}</Button> : null}
             {detail.checkout.status === "INVOICE_PENDING" && detail.canManage ? <Button variant="outline" onClick={() => void openAction("cancel")}><X className="h-4 w-4" />{copy.cancel}</Button> : null}
           </div>
-          <div className="border-t border-dtsc-border pt-4"><h3 className="font-black">{copy.payments}</h3><div className="mt-3 grid gap-2">{detail.payments.filter((payment) => payment.paymentType === "CUSTOMER_PAYMENT").length ? detail.payments.filter((payment) => payment.paymentType === "CUSTOMER_PAYMENT").map((payment) => <div key={payment.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-dtsc-border py-2 text-sm"><span>{payment.number} · {labels[payment.methodType as PaymentMethod] || payment.methodType}</span><span className="font-black">{formatEnterpriseAmount(payment.amount, payment.currencyCode, locale)}</span>{payment.status === "PENDING_APPROVAL" && detail.canManage ? <Button size="sm" onClick={() => void mutate({ action: "APPROVE_PAYMENT", paymentId: payment.id, revision: detail.checkout.revision })}>{copy.approvePayment}</Button> : <StatusBadge tone={payment.status === "CONFIRMED" || payment.status === "RECONCILED" ? "success" : "warning"}>{payment.status}</StatusBadge>}</div>) : <p className="text-sm text-dtsc-muted">{copy.noPayments}</p>}</div></div>
+          <div className="border-t border-dtsc-border pt-4"><h3 className="font-black">{copy.payments}</h3><div className="mt-3 grid gap-2">{detail.payments.filter((payment) => payment.paymentType === "CUSTOMER_PAYMENT").length ? detail.payments.filter((payment) => payment.paymentType === "CUSTOMER_PAYMENT").map((payment) => <div key={payment.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-dtsc-border py-2 text-sm"><span>{payment.number} · {labels[payment.methodType as PaymentMethod] || payment.methodType}</span><span className="font-black">{formatEnterpriseAmount(payment.amount, payment.currencyCode, locale)}</span>{["PENDING_APPROVAL", "APPROVED"].includes(payment.status) && detail.canManage ? <Button size="sm" onClick={() => void mutate({ action: "APPROVE_PAYMENT", paymentId: payment.id, revision: detail.checkout.revision })}>{payment.status === "APPROVED" ? copy.confirmPayment : copy.approvePayment}</Button> : <StatusBadge tone={payment.status === "CONFIRMED" || payment.status === "RECONCILED" ? "success" : "warning"}>{payment.status}</StatusBadge>}</div>) : <p className="text-sm text-dtsc-muted">{copy.noPayments}</p>}</div></div>
           {busy ? <ProfessionalLoading rows={1} /> : null}
         </div> : null}
       </FullscreenEntityDetail>
@@ -302,13 +314,14 @@ export function EnterpriseGamingCheckoutWorkspace({ organizationId, organization
 
       <Dialog open={modal === "payment" || modal === "refund"} onClose={() => setModal(null)} title={modal === "refund" ? copy.requestRefund : copy.addPayment} className="h-[92dvh] max-w-xl">
         <form className="grid gap-4 p-1" onSubmit={(event) => void paymentSubmit(event, modal === "refund")}>
-          <Field label={copy.method} required><NativeSelect name="methodType" required items={methods.map((method) => ({ id: method, label: labels[method] }))} /></Field>
-          <Field label={copy.account} required><NativeSelect name="financialAccountId" required items={compatibleAccounts.map((account) => ({ id: account.id, label: `${account.code} · ${account.name} · ${account.currencyCode}` }))} /></Field>
+          <Field label={copy.method} required><NativeSelect name="methodType" required value={paymentMethod} onChange={(value) => setPaymentMethod(value as PaymentMethod)} items={methods.map((method) => ({ id: method, label: labels[method] }))} /></Field>
+          <Field label={copy.account} required><NativeSelect key={paymentMethod} name="financialAccountId" required items={paymentAccounts.map((account) => ({ id: account.id, label: `${account.code} · ${account.name} · ${account.currencyCode}` }))} /></Field>
+          {!cashReady ? <p role="alert" className="text-sm font-semibold text-dtsc-danger">{copy.openCashSessionRequired}</p> : null}
           {modal === "payment" ? <Field label={copy.amount} required><Input name="amount" type="number" min="0.01" step="0.01" required defaultValue={detail?.invoice?.outstandingAmount || ""} /></Field> : null}
           <Field label={modal === "refund" ? copy.refundApprover : copy.paymentApprover} required><NativeSelect name="approverUserId" required items={(lookups?.paymentApprovers || []).map((item) => ({ id: item.userId, label: `${item.name}${item.positionTitle ? ` · ${item.positionTitle}` : ""}` }))} /></Field>
           {modal === "refund" ? <Field label={copy.reason} required><Input name="reason" required minLength={8} /></Field> : null}
           <Field label={copy.reference}><Input name="reference" /></Field>
-          <Button type="submit" disabled={busy}>{copy.submit}</Button>
+          <Button type="submit" disabled={busy || !cashReady}>{copy.submit}</Button>
         </form>
       </Dialog>
 

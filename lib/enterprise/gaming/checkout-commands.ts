@@ -153,6 +153,21 @@ export async function commandGamingCheckout(
       });
     }
 
+    if (input.methodType === "CASH") {
+      const cashSession = await prisma.enterpriseCashSession.findFirst({
+        where: {
+          organizationId,
+          financialAccountId: input.financialAccountId,
+          cashierUserId: actorUserId,
+          status: "OPEN",
+        },
+        select: { id: true },
+      });
+      if (!cashSession) {
+        throw new EnterpriseGamingCheckoutError("GAMING_CHECKOUT_OPEN_CASH_SESSION_REQUIRED", 409);
+      }
+    }
+
     payment = await createEnterprisePayment(organizationId, actorUserId, {
       direction: "INBOUND",
       paymentType: "CUSTOMER_PAYMENT",

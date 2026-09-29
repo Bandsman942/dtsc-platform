@@ -8,6 +8,7 @@ import {
 } from "@/lib/enterprise/accounting/accounting-human-approval-orchestration";
 import { assignedPaymentTransitionSchema } from "@/lib/enterprise/accounting/accounting-approval-schemas";
 import { transitionEnterprisePayment } from "@/lib/enterprise/accounting/payments-service";
+import { convergeConfirmedGamingPayment } from "@/lib/enterprise/gaming/payment-convergence";
 
 type Params = { params: Promise<{ organizationId: string; paymentId: string }> };
 
@@ -37,6 +38,10 @@ export async function POST(req: Request, { params }: Params) {
         : parsed.data.action === "CANCEL"
           ? await cancelPaymentPendingApproval(organizationId, paymentId, auth.session.userId, parsed.data)
           : await transitionEnterprisePayment(organizationId, paymentId, auth.session.userId, parsed.data);
+
+    if (parsed.data.action === "CONFIRM" && ["CONFIRMED", "RECONCILED"].includes(payment.status)) {
+      await convergeConfirmedGamingPayment(organizationId, payment.id, auth.session.userId);
+    }
 
     await writeAuditLog({
       userId: auth.session.userId,

@@ -2,6 +2,7 @@ import { Prisma, type EnterpriseCrossModuleProjection } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { crossModuleDefinitionsFor, type CrossModuleEventDefinition, type CrossModuleProjectorCode } from "@/lib/enterprise/cross-module/event-catalog";
 import { buildEnterpriseObjectDeepLink } from "@/lib/enterprise/cross-module/deep-links";
+import { convergeConfirmedGamingPayment } from "@/lib/enterprise/gaming/payment-convergence";
 
 export class EnterpriseCrossModuleProjectionError extends Error {
   constructor(
@@ -202,6 +203,16 @@ async function projectHealthInvoice(tx: Prisma.TransactionClient, event: DomainE
   ]);
 }
 
+async function projectGamingPaymentContinuity(event: DomainEventRecord) {
+  const result = await convergeConfirmedGamingPayment(event.organizationId, event.entityId, eventActorUserId(event));
+  if (!result.matched) return [] as ProjectionTarget[];
+  return [{
+    targetEntityType: "EnterpriseGamingCheckout",
+    targetEntityId: result.checkoutId,
+    targetModule: "GAMING_CHECKOUT",
+  }] as ProjectionTarget[];
+}
+
 async function projectPharmacyInvoice(tx: Prisma.TransactionClient, event: DomainEventRecord) {
   const metadata = eventMetadata(event);
   const pharmacySaleId = metadataString(metadata, "pharmacySaleId");
@@ -217,6 +228,7 @@ async function executeProjector(tx: Prisma.TransactionClient, event: DomainEvent
     case "SALES_INVOICE_CONTINUITY": return projectSalesInvoice(tx, event);
     case "SUPPLIER_INVOICE_CONTINUITY": return projectSupplierInvoice(tx, event);
     case "PAYMENT_CONTINUITY": return projectPayment(tx, event);
+    case "GAMING_PAYMENT_CONTINUITY": return [] as ProjectionTarget[];
     case "PAYROLL_CONTINUITY": return projectPayroll(tx, event);
     case "PROJECT_BILLING_CONTINUITY": return projectDeliverable(tx, event);
     case "ASSET_ACCOUNTING_CONTINUITY": return projectAssetProfile(tx, event);
@@ -272,7 +284,9 @@ async function runProjection(projectionId: string, definition: CrossModuleEventD
     return { projection: failed, skipped: false, targets: [] as ProjectionTarget[], error: failure };
   }
   try {
-    const targets = await prisma.$transaction((tx) => executeProjector(tx, event, definition.projectorCode), { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    const targets = definition.projectorCode === "GAMING_PAYMENT_CONTINUITY"
+      ? await projectGamingPaymentContinuity(event)
+      : await prisma.$transaction((tx) => executeProjector(tx, event, definition.projectorCode), { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     const firstTarget = targets[0];
     const completed = await prisma.enterpriseCrossModuleProjection.update({
       where: { id: projection.id },

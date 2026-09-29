@@ -2,6 +2,7 @@ export type CrossModuleProjectorCode =
   | "SALES_INVOICE_CONTINUITY"
   | "SUPPLIER_INVOICE_CONTINUITY"
   | "PAYMENT_CONTINUITY"
+  | "GAMING_PAYMENT_CONTINUITY"
   | "PAYROLL_CONTINUITY"
   | "PROJECT_BILLING_CONTINUITY"
   | "ASSET_ACCOUNTING_CONTINUITY"
@@ -43,6 +44,14 @@ const DEFINITIONS: CrossModuleEventDefinition[] = [
     sourceModule: "FINANCE_PAYMENTS",
     targetModule: "FINANCE_TREASURY",
     projectorCode: "PAYMENT_CONTINUITY",
+  },
+  {
+    eventType: "PAYMENT_CONFIRMED",
+    canonicalEventType: "PAYMENT_CONFIRMED",
+    consumerCode: "gaming-checkout-payment-continuity",
+    sourceModule: "FINANCE_PAYMENTS",
+    targetModule: "GAMING_CHECKOUT",
+    projectorCode: "GAMING_PAYMENT_CONTINUITY",
   },
   {
     eventType: "PAYMENT_ALLOCATED",
