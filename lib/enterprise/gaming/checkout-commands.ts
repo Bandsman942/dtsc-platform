@@ -164,9 +164,7 @@ export async function commandGamingCheckout(
         select: { id: true },
       });
       if (!cashSession) {
-        throw new EnterpriseGamingCheckoutError("GAMING_CHECKOUT_OPEN_CASH_SESSION_REQUIRED", 409, {
-          financialAccountId: input.financialAccountId,
-        });
+        throw new EnterpriseGamingCheckoutError("GAMING_CHECKOUT_OPEN_CASH_SESSION_REQUIRED", 409);
       }
     }
 
