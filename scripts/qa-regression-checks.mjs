@@ -108,6 +108,7 @@ await import("./qa-hotfix-693-gaming-checkout-invoice.mjs");
 await import("./qa-hotfix-696-gaming-session-transitions.mjs");
 await import("./qa-hotfix-698-gaming-payment-convergence.mjs");
 await import("./qa-hotfix-700-cash-session-payment-recovery.mjs");
+await import("./qa-hotfix-704-cash-recovery-currency.mjs");
 await import("./qa-scale5b-retail-dashboard-cache.mjs");
 await import("./qa-scale5c-read-path-cache.mjs");
 await import("./qa-scale6-ai-concurrency-resilience.mjs");

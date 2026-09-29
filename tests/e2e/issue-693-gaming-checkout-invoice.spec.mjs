@@ -611,7 +611,7 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
     });
   });
 
-  test("#700 reopens cash after pending close and recovers a historical approved Gaming payment", async () => {
+  test("#700 reopens cash after pending close and recovers a historical approved Gaming payment; #704 uses another authorized cashier and preserves CDF", async () => {
     const oldCashSession = await prisma.enterpriseCashSession.create({
       data: {
         organizationId,
@@ -688,7 +688,8 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
       data: { cashSessionId: null },
     });
 
-    const openResponse = await context.request.post(
+    // #704: recover onto the confirming user's compatible OPEN cash session, even when the historical initiator differs.
+    const openResponse = await approverContext.request.post(
       `${baseUrl}/api/enterprise/${organizationId}/cash-sessions`,
       {
         data: {
@@ -705,6 +706,27 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
     expect(openResponse.status(), JSON.stringify(opened)).toBe(201);
     expect(opened?.session?.status).toBe("OPEN");
     expect(opened?.session?.id).not.toBe(oldCashSession.id);
+
+    const openedPersisted = await prisma.enterpriseCashSession.findUniqueOrThrow({
+      where: { id: opened.session.id },
+      select: { cashierUserId: true },
+    });
+    expect(openedPersisted.cashierUserId).toBe(approverUserId);
+    expect(openedPersisted.cashierUserId).not.toBe(adminUserId);
+
+    const cashListResponse = await approverContext.request.get(
+      `${baseUrl}/api/enterprise/${organizationId}/cash-sessions?recordId=${opened.session.id}`,
+      {
+        headers: {
+          origin: baseUrl,
+          referer: `${baseUrl}/enterprise-modules/FINANCE_CASH`,
+        },
+      },
+    );
+    const cashList = await cashListResponse.json().catch(() => null);
+    expect(cashListResponse.ok(), JSON.stringify(cashList)).toBeTruthy();
+    expect(cashList?.items?.[0]?.currencyCode).toBe("CDF");
+    expect(cashList?.items?.[0]?.financialAccount?.currencyCode).toBe("CDF");
 
     const confirmResponse = await approverContext.request.post(
       `${baseUrl}/api/enterprise/${organizationId}/payments/${added.payment.id}/transition`,
