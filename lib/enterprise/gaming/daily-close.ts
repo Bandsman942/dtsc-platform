@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { assertEnterpriseApprovalCandidate, assertEnterpriseApprovalDecision } from "@/lib/enterprise/approval-assignment";
+import { getEnterpriseBusinessContext } from "@/lib/enterprise/business-context";
 import {
   EnterpriseGamingCheckoutError,
   gamingMoney,
@@ -18,13 +19,13 @@ type CloseDecisionInput = z.infer<typeof gamingDailyCloseDecisionSchema>;
 type ApprovalAssignmentError = Error & { code?: string; statusCode?: number };
 type LocalParts = { year: number; month: number; day: number; hour: number; minute: number; second: number };
 
-function safeTimezone(value: string | null | undefined) {
-  const candidate = value?.trim() || "UTC";
+function safeTimezone(value: string | null | undefined, fallback: string) {
+  const candidate = value?.trim() || fallback;
   try {
     new Intl.DateTimeFormat("en-US", { timeZone: candidate }).format(new Date());
     return candidate;
   } catch {
-    return "UTC";
+    return fallback;
   }
 }
 
@@ -128,14 +129,17 @@ export async function createGamingDailyClose(
 
   await assertCloseApproverCandidate(organizationId, actorUserId, input.approverUserId);
 
-  const site = input.siteId
-    ? await prisma.enterpriseSite.findFirst({
-        where: { id: input.siteId, organizationId, status: "ACTIVE", archivedAt: null },
-        select: { id: true, timezone: true },
-      })
-    : null;
+  const [site, businessContext] = await Promise.all([
+    input.siteId
+      ? prisma.enterpriseSite.findFirst({
+          where: { id: input.siteId, organizationId, status: "ACTIVE", archivedAt: null },
+          select: { id: true, timezone: true },
+        })
+      : Promise.resolve(null),
+    getEnterpriseBusinessContext(prisma, organizationId),
+  ]);
   if (input.siteId && !site) throw new EnterpriseGamingCheckoutError("GAMING_CLOSE_SITE_INVALID", 409);
-  const timezone = safeTimezone(site?.timezone);
+  const timezone = safeTimezone(site?.timezone, businessContext.timezone);
   const { start, end } = businessWindow(input.businessDate, timezone);
   const scopeKey = input.siteId || "ALL";
 
@@ -197,15 +201,21 @@ export async function createGamingDailyClose(
       };
       const endedSessions = await tx.enterpriseGamingSession.findMany({
         where: sessionScope,
-        select: { id: true, status: true },
+        select: { id: true },
       });
-      const endedSessionIds = endedSessions.map((session) => session.id);
-      const dayCheckouts = endedSessionIds.length
-        ? await tx.enterpriseGamingCheckout.findMany({
-            where: { organizationId, sessionId: { in: endedSessionIds } },
-            select: { id: true, reference: true, status: true, sessionId: true },
-          })
-        : [];
+      const pendingCheckoutStatuses = ["INVOICE_PENDING", "AWAITING_PAYMENT", "PARTIALLY_PAID", "REFUND_PENDING"];
+      const pendingCheckouts = await tx.enterpriseGamingCheckout.findMany({
+        where: {
+          organizationId,
+          status: { in: pendingCheckoutStatuses },
+          session: {
+            archivedAt: null,
+            endedAt: { not: null, lt: end },
+            ...(stationIds ? { stationId: { in: stationIds } } : {}),
+          },
+        },
+        select: { id: true },
+      });
 
       const dayPayments = await tx.enterprisePayment.findMany({
         where: {
@@ -231,14 +241,29 @@ export async function createGamingDailyClose(
               reference: { in: candidateCheckoutRefs },
               ...(stationIds ? { session: { stationId: { in: stationIds } } } : {}),
             },
-            select: { reference: true },
+            select: { reference: true, sessionId: true, status: true },
           })
         : [];
-      const financialCheckoutRefs = new Set(financialCheckouts.map((checkout) => checkout.reference));
+      const financialCheckoutByReference = new Map(financialCheckouts.map((checkout) => [checkout.reference, checkout]));
       const relevantPayments = dayPayments.filter((payment) => {
         const reference = baseCheckoutReference(payment.reference);
-        return Boolean(reference && financialCheckoutRefs.has(reference));
+        return Boolean(reference && financialCheckoutByReference.has(reference));
       });
+      const paidSessionIds = new Set(
+        relevantPayments
+          .filter((payment) => payment.paymentType === "CUSTOMER_PAYMENT" && payment.direction === "INBOUND")
+          .map((payment) => baseCheckoutReference(payment.reference))
+          .map((reference) => reference ? financialCheckoutByReference.get(reference) : null)
+          .filter((checkout): checkout is NonNullable<typeof checkout> => Boolean(checkout && checkout.status === "PAID"))
+          .map((checkout) => checkout.sessionId),
+      );
+      const refundedCheckoutRefs = new Set(
+        relevantPayments
+          .filter((payment) => payment.paymentType === "REFUND" && payment.direction === "OUTBOUND")
+          .map((payment) => baseCheckoutReference(payment.reference))
+          .filter((reference): reference is string => Boolean(reference))
+          .filter((reference) => financialCheckoutByReference.get(reference)?.status === "REFUNDED"),
+      );
 
       const paymentIds = relevantPayments.map((payment) => payment.id);
       const cashMovements = paymentIds.length
@@ -305,9 +330,9 @@ export async function createGamingDailyClose(
           timezone,
           status: "SUBMITTED",
           endedSessionCount: endedSessions.length,
-          paidSessionCount: endedSessions.filter((session) => session.status === "PAID").length,
-          pendingCheckoutCount: dayCheckouts.filter((checkout) => ["INVOICE_PENDING", "AWAITING_PAYMENT", "PARTIALLY_PAID", "REFUND_PENDING"].includes(checkout.status)).length,
-          refundedCheckoutCount: dayCheckouts.filter((checkout) => checkout.status === "REFUNDED").length,
+          paidSessionCount: paidSessionIds.size,
+          pendingCheckoutCount: pendingCheckouts.length,
+          refundedCheckoutCount: refundedCheckoutRefs.size,
           submittedByUserId: actorUserId,
           approverUserId: input.approverUserId,
           notes: input.notes || null,
