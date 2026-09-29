@@ -445,6 +445,9 @@ export async function decideGamingDailyClose(
   actorUserId: string,
   input: CloseDecisionInput,
 ) {
+  if (input.action === "REJECT" && input.reason.trim().length < 8) {
+    throw new EnterpriseGamingCheckoutError("GAMING_CLOSE_REJECTION_REASON_TOO_SHORT", 400);
+  }
   const pendingApproval = await prisma.enterpriseApproval.findFirst({
     where: {
       organizationId,
