@@ -88,6 +88,16 @@ export async function convergePharmacySaleInvoice(
       const taxTotal = money(current.taxAmount || 0);
       const subtotal = money(current.totalAmount.plus(discountTotal).minus(taxTotal));
       if (subtotal.isNegative()) throw new EnterpriseSectorConvergenceError("PHARMACY_SALE_SUBTOTAL_INVALID", 409);
+      const invoiceItems: Prisma.EnterpriseSalesInvoiceItemCreateWithoutSalesInvoiceInput[] = current.lines.map((line) => ({
+        catalogItemId: catalogByProduct.get(line.productId),
+        description: `Pharmacy item ${line.productId}`,
+        quantity: line.quantity,
+        unitPrice: line.unitPrice,
+        discountAmount: money(line.quantity.times(line.unitPrice).minus(line.totalLine).greaterThan(0) ? line.quantity.times(line.unitPrice).minus(line.totalLine) : 0),
+        netAmount: money(line.totalLine),
+        taxAmount: money(0),
+        totalAmount: money(line.totalLine),
+      }));
       const invoice = await tx.enterpriseSalesInvoice.create({
         data: {
           organizationId,
@@ -103,19 +113,7 @@ export async function convergePharmacySaleInvoice(
           outstandingAmount: money(current.totalAmount),
           notes: `Pharmacy sale ${current.saleNumber}`,
           createdByUserId: actorUserId,
-          items: {
-            create: current.lines.map((line) => ({
-              organizationId,
-              catalogItemId: catalogByProduct.get(line.productId),
-              description: `Pharmacy item ${line.productId}`,
-              quantity: line.quantity,
-              unitPrice: line.unitPrice,
-              discountAmount: money(line.quantity.times(line.unitPrice).minus(line.totalLine).greaterThan(0) ? line.quantity.times(line.unitPrice).minus(line.totalLine) : 0),
-              netAmount: money(line.totalLine),
-              taxAmount: money(0),
-              totalAmount: money(line.totalLine),
-            })),
-          },
+          items: { create: invoiceItems },
         },
         include: { items: true },
       });
