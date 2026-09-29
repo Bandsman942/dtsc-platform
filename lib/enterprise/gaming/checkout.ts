@@ -12,6 +12,7 @@ export {
 export { commandGamingCheckout } from "@/lib/enterprise/gaming/checkout-commands";
 
 export {
+  assignGamingDailyCloseApprover,
   createGamingDailyClose,
   decideGamingDailyClose,
   getGamingDailyClose,
