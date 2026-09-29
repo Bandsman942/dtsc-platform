@@ -103,7 +103,19 @@ const gamingDailyCloseRejectSchema = z.object({
   reason: z.string().trim().min(8).max(1000),
 });
 
+const gamingDailyCloseApproverAssignmentSchema = z.object({
+  action: z.literal("ASSIGN_APPROVER"),
+  revision,
+  approverUserId: id,
+});
+
 export const gamingDailyCloseDecisionSchema = z.discriminatedUnion("action", [
   gamingDailyCloseValidateSchema,
   gamingDailyCloseRejectSchema,
+]);
+
+export const gamingDailyCloseCommandSchema = z.discriminatedUnion("action", [
+  gamingDailyCloseValidateSchema,
+  gamingDailyCloseRejectSchema,
+  gamingDailyCloseApproverAssignmentSchema,
 ]);
