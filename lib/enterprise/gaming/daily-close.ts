@@ -199,14 +199,6 @@ export async function createGamingDailyClose(
         where: sessionScope,
         select: { id: true, status: true },
       });
-      const endedSessionIds = endedSessions.map((session) => session.id);
-      const dayCheckouts = endedSessionIds.length
-        ? await tx.enterpriseGamingCheckout.findMany({
-            where: { organizationId, sessionId: { in: endedSessionIds } },
-            select: { id: true, reference: true, status: true, sessionId: true },
-          })
-        : [];
-
       const dayPayments = await tx.enterprisePayment.findMany({
         where: {
           organizationId,
@@ -231,13 +223,42 @@ export async function createGamingDailyClose(
               reference: { in: candidateCheckoutRefs },
               ...(stationIds ? { session: { stationId: { in: stationIds } } } : {}),
             },
-            select: { reference: true },
+            select: { reference: true, sessionId: true },
           })
         : [];
       const financialCheckoutRefs = new Set(financialCheckouts.map((checkout) => checkout.reference));
       const relevantPayments = dayPayments.filter((payment) => {
         const reference = baseCheckoutReference(payment.reference);
         return Boolean(reference && financialCheckoutRefs.has(reference));
+      });
+      const checkoutByReference = new Map(financialCheckouts.map((checkout) => [checkout.reference, checkout]));
+      const paidSessionIds = uniqueValues(
+        relevantPayments
+          .filter((payment) => payment.paymentType === "CUSTOMER_PAYMENT" && payment.direction === "INBOUND")
+          .map((payment) => {
+            const reference = baseCheckoutReference(payment.reference);
+            return reference ? checkoutByReference.get(reference)?.sessionId || null : null;
+          })
+          .filter((sessionId): sessionId is string => Boolean(sessionId)),
+      );
+      const refundedCheckoutRefs = uniqueValues(
+        relevantPayments
+          .filter((payment) => payment.paymentType === "REFUND" && payment.direction === "OUTBOUND")
+          .map((payment) => baseCheckoutReference(payment.reference))
+          .filter((reference): reference is string => Boolean(reference)),
+      );
+      const pendingCheckouts = await tx.enterpriseGamingCheckout.findMany({
+        where: {
+          organizationId,
+          status: { in: ["INVOICE_PENDING", "AWAITING_PAYMENT", "PARTIALLY_PAID", "REFUND_PENDING"] },
+          createdAt: { lt: end },
+          session: {
+            archivedAt: null,
+            endedAt: { not: null, lt: end },
+            ...(stationIds ? { stationId: { in: stationIds } } : {}),
+          },
+        },
+        select: { id: true },
       });
 
       const paymentIds = relevantPayments.map((payment) => payment.id);
@@ -305,9 +326,9 @@ export async function createGamingDailyClose(
           timezone,
           status: "SUBMITTED",
           endedSessionCount: endedSessions.length,
-          paidSessionCount: endedSessions.filter((session) => session.status === "PAID").length,
-          pendingCheckoutCount: dayCheckouts.filter((checkout) => ["INVOICE_PENDING", "AWAITING_PAYMENT", "PARTIALLY_PAID", "REFUND_PENDING"].includes(checkout.status)).length,
-          refundedCheckoutCount: dayCheckouts.filter((checkout) => checkout.status === "REFUNDED").length,
+          paidSessionCount: paidSessionIds.length,
+          pendingCheckoutCount: pendingCheckouts.length,
+          refundedCheckoutCount: refundedCheckoutRefs.length,
           submittedByUserId: actorUserId,
           approverUserId: input.approverUserId,
           notes: input.notes || null,
