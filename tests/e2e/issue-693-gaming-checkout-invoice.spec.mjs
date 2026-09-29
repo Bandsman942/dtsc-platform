@@ -14,7 +14,7 @@ const stationId = "e2e-gaming-station-693";
 const unitId = "e2e-gaming-uom-693";
 const serviceId = "e2e-gaming-service-693";
 const pricingRuleId = "e2e-gaming-pricing-696";
-const cashAccountId = `e2e-gaming-cash-698-${Date.now()}`;
+let cashAccountId = "";
 let adminUserId = "";
 let approverUserId = "";
 let context;
@@ -265,9 +265,8 @@ async function prepareTenant() {
     select: { id: true },
   });
   if (!ledger) throw new Error("Issue #698 requires the system Finance baseline to expose an active CASH ledger account.");
-  await prisma.enterpriseFinancialAccount.create({
+  const cashAccount = await prisma.enterpriseFinancialAccount.create({
     data: {
-      id: cashAccountId,
       organizationId,
       code: `G-CASH-698-${Date.now().toString(36).toUpperCase()}`,
       name: "Gaming cash E2E #698",
@@ -281,7 +280,9 @@ async function prepareTenant() {
       responsibleUserId: admin.id,
       status: "ACTIVE",
     },
+    select: { id: true },
   });
+  cashAccountId = cashAccount.id;
 }
 
 async function signInAs(targetContext, email, password, next = "/enterprise-modules/GAMING_CHECKOUT") {
