@@ -17,6 +17,9 @@ const pricingRuleId = "e2e-gaming-pricing-696";
 let cashAccountId = "";
 let adminUserId = "";
 let approverUserId = "";
+let latePaidSessionId = "";
+let latePaidCheckoutId = "";
+let latePaidPaymentId = "";
 let context;
 let approverContext;
 
@@ -296,6 +299,17 @@ async function signInAs(targetContext, email, password, next = "/enterprise-modu
 
 async function signIn() {
   await signInAs(context, adminEmail, adminPassword);
+}
+
+function businessDateKey(timeZone) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const value = (type) => parts.find((part) => part.type === type)?.value || "";
+  return `${value("year")}-${value("month")}-${value("day")}`;
 }
 
 async function startAndEndSession({ businessPartyId, suffix }) {
@@ -606,16 +620,138 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
     expect(persistedSession.status).toBe("PAID");
     expect(paidTransition).toBeTruthy();
 
+    latePaidSessionId = persistedSession.id;
+    latePaidCheckoutId = persistedCheckout.id;
+    latePaidPaymentId = persistedPayment.id;
+
     await prisma.enterpriseCashSession.update({
       where: { id: cashSession.id },
       data: { status: "CLOSED", expectedClosingAmount: 500, countedClosingAmount: 500, discrepancyAmount: 0 },
     });
   });
 
-  test("#706 submits Gaming daily close and persists tenant-scoped nested lines", async () => {
-    const businessDate = new Date().toISOString().slice(0, 10);
-    const idempotencyKey = `e2e-706-close-${businessDate}`;
+  test("#706/#710/#712 submits a coherent Gaming daily-close KPI snapshot", async () => {
+    expect(latePaidSessionId).toBeTruthy();
+    expect(latePaidCheckoutId).toBeTruthy();
+    expect(latePaidPaymentId).toBeTruthy();
 
+    const timezone = "Africa/Kinshasa";
+    const businessDate = businessDateKey(timezone);
+    const previousBusinessDay = new Date(`${businessDate}T12:00:00.000Z`);
+    previousBusinessDay.setUTCDate(previousBusinessDay.getUTCDate() - 1);
+
+    // #712: the session ended before the selected business day, but its canonical payment is confirmed today.
+    await prisma.enterpriseGamingSession.update({
+      where: { id: latePaidSessionId },
+      data: { endedAt: previousBusinessDay },
+    });
+    await prisma.enterprisePayment.update({
+      where: { id: latePaidPaymentId },
+      data: { paymentDate: new Date() },
+    });
+
+    // Build a second canonical checkout that is paid and fully refunded during the selected business day.
+    const refundSuffix = `refund-712-${Date.now()}`;
+    const refundSession = await startAndEndSession({ businessPartyId: customerId, suffix: refundSuffix });
+    const refundPrepared = await checkout(refundSession.id, refundSuffix);
+    const refundIssued = await approveInvoice(refundPrepared);
+
+    const addResponse = await context.request.patch(
+      `${baseUrl}/api/enterprise/${organizationId}/gaming/checkouts/${refundIssued.checkout.id}`,
+      {
+        data: {
+          action: "ADD_PAYMENT",
+          revision: refundIssued.checkout.revision,
+          paymentApproverUserId: approverUserId,
+          methodType: "OTHER",
+          financialAccountId: cashAccountId,
+          amount: 500,
+          idempotencyKey: `e2e-712-payment-${refundSuffix}`,
+        },
+        headers: {
+          origin: baseUrl,
+          referer: `${baseUrl}/enterprise-modules/GAMING_CHECKOUT`,
+        },
+      },
+    );
+    const added = await addResponse.json().catch(() => null);
+    expect(addResponse.ok(), JSON.stringify(added)).toBeTruthy();
+    expect(added?.payment?.status).toBe("PENDING_APPROVAL");
+
+    const approveResponse = await approverContext.request.post(
+      `${baseUrl}/api/enterprise/${organizationId}/payments/${added.payment.id}/transition`,
+      {
+        data: { action: "APPROVE", revision: added.payment.revision },
+        headers: {
+          origin: baseUrl,
+          referer: `${baseUrl}/enterprise-modules/FINANCE_PAYMENTS`,
+        },
+      },
+    );
+    const approved = await approveResponse.json().catch(() => null);
+    expect(approveResponse.ok(), JSON.stringify(approved)).toBeTruthy();
+
+    const confirmResponse = await approverContext.request.post(
+      `${baseUrl}/api/enterprise/${organizationId}/payments/${added.payment.id}/transition`,
+      {
+        data: { action: "CONFIRM", revision: approved.payment.revision },
+        headers: {
+          origin: baseUrl,
+          referer: `${baseUrl}/enterprise-modules/FINANCE_PAYMENTS`,
+        },
+      },
+    );
+    const confirmed = await confirmResponse.json().catch(() => null);
+    expect(confirmResponse.ok(), JSON.stringify(confirmed)).toBeTruthy();
+    expect(confirmed?.payment?.status).toBe("CONFIRMED");
+
+    const paidRefundCheckout = await prisma.enterpriseGamingCheckout.findUniqueOrThrow({
+      where: { id: refundIssued.checkout.id },
+    });
+    expect(paidRefundCheckout.status).toBe("PAID");
+
+    const refundRequestResponse = await context.request.patch(
+      `${baseUrl}/api/enterprise/${organizationId}/gaming/checkouts/${paidRefundCheckout.id}`,
+      {
+        data: {
+          action: "REQUEST_REFUND",
+          revision: paidRefundCheckout.revision,
+          reason: "Remboursement E2E hotfix #712",
+          methodType: "OTHER",
+          financialAccountId: cashAccountId,
+          refundApproverUserId: approverUserId,
+          idempotencyKey: `e2e-712-refund-${refundSuffix}`,
+        },
+        headers: {
+          origin: baseUrl,
+          referer: `${baseUrl}/enterprise-modules/GAMING_CHECKOUT`,
+        },
+      },
+    );
+    const refundRequested = await refundRequestResponse.json().catch(() => null);
+    expect(refundRequestResponse.ok(), JSON.stringify(refundRequested)).toBeTruthy();
+    expect(refundRequested?.checkout?.status).toBe("REFUND_PENDING");
+
+    const refundApproveResponse = await approverContext.request.patch(
+      `${baseUrl}/api/enterprise/${organizationId}/gaming/checkouts/${paidRefundCheckout.id}`,
+      {
+        data: {
+          action: "APPROVE_REFUND",
+          revision: refundRequested.checkout.revision,
+          reason: "Remboursement approuvé #712",
+        },
+        headers: {
+          origin: baseUrl,
+          referer: `${baseUrl}/enterprise-modules/GAMING_CHECKOUT`,
+        },
+      },
+    );
+    const refunded = await refundApproveResponse.json().catch(() => null);
+    expect(refundApproveResponse.ok(), JSON.stringify(refunded)).toBeTruthy();
+    expect(refunded?.checkout?.status).toBe("REFUNDED");
+    expect(["CONFIRMED", "RECONCILED"]).toContain(refunded?.refundPayment?.status);
+
+    const idempotencyKey = `e2e-712-close-${businessDate}`;
     const previous = await prisma.enterpriseGamingDailyClose.findFirst({
       where: { organizationId, idempotencyKey },
       select: { id: true },
@@ -634,14 +770,22 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
           businessDate,
           siteId: null,
           approverUserId,
-          notes: "Hotfix #706/#710 E2E",
+          notes: "Hotfix #706/#710/#712 E2E",
           idempotencyKey,
-          declarations: [{
-            financialAccountId: cashAccountId,
-            methodType: "CASH",
-            declaredAmount: 500,
-            varianceReason: null,
-          }],
+          declarations: [
+            {
+              financialAccountId: cashAccountId,
+              methodType: "CASH",
+              declaredAmount: 500,
+              varianceReason: null,
+            },
+            {
+              financialAccountId: cashAccountId,
+              methodType: "OTHER",
+              declaredAmount: 0,
+              varianceReason: null,
+            },
+          ],
         },
         headers: {
           origin: baseUrl,
@@ -652,7 +796,12 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
     const body = await response.json().catch(() => null);
     expect(response.status(), JSON.stringify(body)).toBe(201);
     expect(body?.close?.status).toBe("SUBMITTED");
-    expect(body?.close?.lines).toHaveLength(1);
+    expect(body?.close?.timezone).toBe(timezone);
+    expect(body?.close?.endedSessionCount).toBeGreaterThan(0);
+    expect(body?.close?.paidSessionCount).toBe(1);
+    expect(body?.close?.pendingCheckoutCount).toBeGreaterThan(0);
+    expect(body?.close?.refundedCheckoutCount).toBe(1);
+    expect(body?.close?.lines).toHaveLength(2);
 
     const persisted = await prisma.enterpriseGamingDailyClose.findUniqueOrThrow({
       where: { id: body.close.id },
@@ -660,15 +809,26 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
     });
     expect(persisted.organizationId).toBe(organizationId);
     expect(persisted.approverUserId).toBe(approverUserId);
-    expect(persisted.lines).toHaveLength(1);
-    expect(persisted.lines[0].organizationId).toBe(organizationId);
-    expect(persisted.lines[0].financialAccountId).toBe(cashAccountId);
-    expect(persisted.lines[0].currencyCode).toBe("CDF");
-    expect(persisted.lines[0].methodType).toBe("CASH");
-    expect(persisted.lines[0].expectedAmount.toFixed()).toBe("500");
-    expect(persisted.lines[0].declaredAmount.toFixed()).toBe("500");
-    expect(persisted.lines[0].differenceAmount.toFixed()).toBe("0");
-    expect(persisted.lines[0].varianceReason).toBeNull();
+    expect(persisted.timezone).toBe(timezone);
+    expect(persisted.paidSessionCount).toBe(1);
+    expect(persisted.pendingCheckoutCount).toBeGreaterThan(0);
+    expect(persisted.refundedCheckoutCount).toBe(1);
+    expect(persisted.lines).toHaveLength(2);
+    for (const line of persisted.lines) {
+      expect(line.organizationId).toBe(organizationId);
+      expect(line.financialAccountId).toBe(cashAccountId);
+      expect(line.currencyCode).toBe("CDF");
+      expect(line.differenceAmount.toFixed()).toBe("0");
+      expect(line.varianceReason).toBeNull();
+    }
+    const cashLine = persisted.lines.find((line) => line.methodType === "CASH");
+    const otherLine = persisted.lines.find((line) => line.methodType === "OTHER");
+    expect(cashLine?.expectedAmount.toFixed()).toBe("500");
+    expect(cashLine?.declaredAmount.toFixed()).toBe("500");
+    expect(otherLine?.inboundAmount.toFixed()).toBe("500");
+    expect(otherLine?.refundAmount.toFixed()).toBe("500");
+    expect(otherLine?.expectedAmount.toFixed()).toBe("0");
+    expect(otherLine?.declaredAmount.toFixed()).toBe("0");
 
     await prisma.enterpriseGamingDailyClose.update({
       where: { id: persisted.id },
