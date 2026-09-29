@@ -326,9 +326,9 @@ includesAll(closeRoute, [
 ], "daily close API");
 includesAll(closeDecisionRoute, [
   "getEnterpriseGamingDailyCloseAccess",
-  "gamingDailyCloseDecisionSchema",
+  "gamingDailyCloseCommandSchema",
   "decideGamingDailyClose",
-  'action: "manage"',
+  'accessAction = parsed.data.action === "ASSIGN_APPROVER" ? "submit" : "approve"',
   "isSameOriginRequest",
   "await rateLimit",
   "writeAuditLog",
