@@ -14,7 +14,7 @@ export async function openCashSession(organizationId: string, cashierUserId: str
   return prisma.$transaction(async (tx) => {
     const account = await tx.enterpriseFinancialAccount.findFirst({ where: { id: input.financialAccountId, organizationId, accountType: "CASH", status: "ACTIVE", archivedAt: null } });
     if (!account) throw new EnterpriseAccountingError("CASH_ACCOUNT_INVALID", 409);
-    const existing = await tx.enterpriseCashSession.findFirst({ where: { organizationId, financialAccountId: account.id, cashierUserId, status: { in: ["OPEN", "CLOSING", "PENDING_VALIDATION"] } } });
+    const existing = await tx.enterpriseCashSession.findFirst({ where: { organizationId, financialAccountId: account.id, cashierUserId, status: { in: ["OPEN", "CLOSING"] } } });
     if (existing) throw new EnterpriseAccountingError("CASH_SESSION_ALREADY_ACTIVE", 409, { sessionId: existing.id });
     const openingAmount = new Prisma.Decimal(input.openingAmount);
     const session = await tx.enterpriseCashSession.create({ data: { organizationId, number: financeReference("CASH"), financialAccountId: account.id, cashierUserId, siteId: input.siteId || account.siteId, openingAmount } });
