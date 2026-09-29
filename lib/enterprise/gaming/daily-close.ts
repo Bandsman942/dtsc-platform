@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
+import { assertEnterpriseApprovalCandidate, assertEnterpriseApprovalDecision } from "@/lib/enterprise/approval-assignment";
 import {
   EnterpriseGamingCheckoutError,
   gamingMoney,
@@ -83,6 +84,68 @@ function baseCheckoutReference(reference: string | null) {
   return reference.endsWith(":REFUND") ? reference.slice(0, -":REFUND".length) : reference;
 }
 
+function gamingApprovalError(error: unknown, mode: "assign" | "decide") {
+  const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
+  if (code === "SELF_APPROVAL_FORBIDDEN") return new EnterpriseGamingCheckoutError("GAMING_CLOSE_SELF_VALIDATION_FORBIDDEN", 403);
+  if (code === "WRONG_APPROVER") return new EnterpriseGamingCheckoutError("GAMING_CLOSE_WRONG_APPROVER", 403);
+  if (code === "APPROVER_PERMISSION_DENIED") return new EnterpriseGamingCheckoutError("GAMING_CLOSE_APPROVER_PERMISSION_DENIED", 403);
+  if (code === "APPROVER_NOT_ELIGIBLE") return new EnterpriseGamingCheckoutError("GAMING_CLOSE_APPROVER_NOT_ELIGIBLE", 403);
+  return error instanceof EnterpriseGamingCheckoutError
+    ? error
+    : new EnterpriseGamingCheckoutError(mode === "assign" ? "GAMING_CLOSE_APPROVER_NOT_ELIGIBLE" : "GAMING_CLOSE_WRONG_APPROVER", 403);
+}
+
+async function assertGamingCloseApprover(organizationId: string, requesterUserId: string, approverUserId: string) {
+  if (requesterUserId === approverUserId) {
+    throw new EnterpriseGamingCheckoutError("GAMING_CLOSE_SELF_VALIDATION_FORBIDDEN", 403);
+  }
+  try {
+    return await assertEnterpriseApprovalCandidate({
+      organizationId,
+      requesterUserId,
+      approverUserId,
+      moduleCode: "GAMING_DAILY_CLOSE",
+    });
+  } catch (error) {
+    throw gamingApprovalError(error, "assign");
+  }
+}
+
+async function assertGamingCloseDecision(
+  organizationId: string,
+  requesterUserId: string,
+  approverUserId: string,
+  actorUserId: string,
+) {
+  if (requesterUserId === actorUserId) {
+    throw new EnterpriseGamingCheckoutError("GAMING_CLOSE_SELF_VALIDATION_FORBIDDEN", 403);
+  }
+  try {
+    return await assertEnterpriseApprovalDecision({
+      organizationId,
+      requesterUserId,
+      approverUserId,
+      actorUserId,
+      moduleCode: "GAMING_DAILY_CLOSE",
+    });
+  } catch (error) {
+    throw gamingApprovalError(error, "decide");
+  }
+}
+
+async function approvalForGamingClose(organizationId: string, closeId: string) {
+  return prisma.enterpriseApproval.findFirst({
+    where: {
+      organizationId,
+      targetEntityType: "EnterpriseGamingDailyClose",
+      targetEntityId: closeId,
+      archivedAt: null,
+    },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, approverUserId: true, requestedByUserId: true, status: true, revision: true },
+  });
+}
+
 export async function createGamingDailyClose(
   organizationId: string,
   actorUserId: string,
@@ -92,7 +155,14 @@ export async function createGamingDailyClose(
     where: { organizationId, idempotencyKey: input.idempotencyKey },
     include: { lines: true },
   });
-  if (existingKey) return { close: existingKey, idempotent: true };
+  if (existingKey) {
+    const approval = await approvalForGamingClose(organizationId, existingKey.id);
+    return {
+      close: { ...existingKey, approverUserId: approval?.approverUserId || null, approvalStatus: approval?.status || null },
+      idempotent: true,
+    };
+  }
+  await assertGamingCloseApprover(organizationId, actorUserId, input.approverUserId);
 
   const site = input.siteId
     ? await prisma.enterpriseSite.findFirst({
@@ -129,7 +199,14 @@ export async function createGamingDailyClose(
         where: { organizationId, idempotencyKey: input.idempotencyKey },
         include: { lines: true },
       });
-      if (retry) return retry;
+      if (retry) {
+        const retryApproval = await tx.enterpriseApproval.findFirst({
+          where: { organizationId, targetEntityType: "EnterpriseGamingDailyClose", targetEntityId: retry.id, archivedAt: null },
+          orderBy: { createdAt: "desc" },
+          select: { approverUserId: true, status: true },
+        });
+        return { ...retry, approverUserId: retryApproval?.approverUserId || null, approvalStatus: retryApproval?.status || null };
+      }
       const duplicate = await tx.enterpriseGamingDailyClose.findFirst({
         where: {
           organizationId,
@@ -262,7 +339,7 @@ export async function createGamingDailyClose(
         };
       });
 
-      return tx.enterpriseGamingDailyClose.create({
+      const created = await tx.enterpriseGamingDailyClose.create({
         data: {
           organizationId,
           reference: `GDC-${Date.now().toString(36).toUpperCase()}-${randomUUID().slice(0, 6).toUpperCase()}`,
@@ -281,6 +358,17 @@ export async function createGamingDailyClose(
         },
         include: { lines: true },
       });
+      const approval = await tx.enterpriseApproval.create({
+        data: {
+          organizationId,
+          targetEntityType: "EnterpriseGamingDailyClose",
+          targetEntityId: created.id,
+          requestedByUserId: actorUserId,
+          approverUserId: input.approverUserId,
+          status: "PENDING",
+        },
+      });
+      return { ...created, approverUserId: approval.approverUserId, approvalStatus: approval.status };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
     return { close, idempotent: false };
   } catch (error) {
@@ -289,11 +377,66 @@ export async function createGamingDailyClose(
         where: { organizationId, idempotencyKey: input.idempotencyKey },
         include: { lines: true },
       });
-      if (retry) return { close: retry, idempotent: true };
+      if (retry) {
+        const approval = await approvalForGamingClose(organizationId, retry.id);
+        return {
+          close: { ...retry, approverUserId: approval?.approverUserId || null, approvalStatus: approval?.status || null },
+          idempotent: true,
+        };
+      }
       throw new EnterpriseGamingCheckoutError("GAMING_CLOSE_ALREADY_EXISTS", 409);
     }
     throw error;
   }
+}
+
+export async function assignGamingDailyCloseApprover(
+  organizationId: string,
+  closeId: string,
+  actorUserId: string,
+  input: { revision: number; approverUserId: string },
+) {
+  await assertGamingCloseApprover(organizationId, actorUserId, input.approverUserId);
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseGamingDailyClose" WHERE id = ${closeId} AND "organizationId" = ${organizationId} FOR UPDATE`);
+    const close = await tx.enterpriseGamingDailyClose.findFirst({
+      where: { id: closeId, organizationId },
+      include: { lines: true },
+    });
+    if (!close) throw new EnterpriseGamingCheckoutError("GAMING_CLOSE_NOT_FOUND", 404);
+    if (close.revision !== input.revision) {
+      throw new EnterpriseGamingCheckoutError("GAMING_CLOSE_REVISION_CONFLICT", 409, { currentRevision: close.revision });
+    }
+    if (close.status !== "SUBMITTED") throw new EnterpriseGamingCheckoutError("GAMING_CLOSE_ALREADY_DECIDED", 409);
+    if (close.submittedByUserId !== actorUserId) throw new EnterpriseGamingCheckoutError("GAMING_CLOSE_APPROVER_ASSIGNMENT_FORBIDDEN", 403);
+    const existing = await tx.enterpriseApproval.findFirst({
+      where: {
+        organizationId,
+        targetEntityType: "EnterpriseGamingDailyClose",
+        targetEntityId: close.id,
+        status: "PENDING",
+        archivedAt: null,
+      },
+      select: { id: true },
+    });
+    if (existing) throw new EnterpriseGamingCheckoutError("GAMING_CLOSE_APPROVER_ALREADY_ASSIGNED", 409);
+    const approval = await tx.enterpriseApproval.create({
+      data: {
+        organizationId,
+        targetEntityType: "EnterpriseGamingDailyClose",
+        targetEntityId: close.id,
+        requestedByUserId: close.submittedByUserId,
+        approverUserId: input.approverUserId,
+        status: "PENDING",
+      },
+    });
+    const updated = await tx.enterpriseGamingDailyClose.update({
+      where: { id: close.id },
+      data: { revision: { increment: 1 } },
+      include: { lines: true },
+    });
+    return { ...updated, approverUserId: approval.approverUserId, approvalStatus: approval.status };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
 export async function decideGamingDailyClose(
@@ -302,8 +445,27 @@ export async function decideGamingDailyClose(
   actorUserId: string,
   input: CloseDecisionInput,
 ) {
+  const pendingApproval = await prisma.enterpriseApproval.findFirst({
+    where: {
+      organizationId,
+      targetEntityType: "EnterpriseGamingDailyClose",
+      targetEntityId: closeId,
+      status: "PENDING",
+      archivedAt: null,
+    },
+    select: { id: true, requestedByUserId: true, approverUserId: true, revision: true },
+  });
+  if (!pendingApproval) throw new EnterpriseGamingCheckoutError("GAMING_CLOSE_APPROVAL_NOT_ASSIGNED", 409);
+  await assertGamingCloseDecision(
+    organizationId,
+    pendingApproval.requestedByUserId,
+    pendingApproval.approverUserId,
+    actorUserId,
+  );
+
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseGamingDailyClose" WHERE id = ${closeId} AND "organizationId" = ${organizationId} FOR UPDATE`);
+    await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseApproval" WHERE id = ${pendingApproval.id} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const close = await tx.enterpriseGamingDailyClose.findFirst({
       where: { id: closeId, organizationId },
       include: { lines: true },
@@ -316,19 +478,38 @@ export async function decideGamingDailyClose(
     if (close.submittedByUserId === actorUserId) {
       throw new EnterpriseGamingCheckoutError("GAMING_CLOSE_SELF_VALIDATION_FORBIDDEN", 403);
     }
+    const approvalUpdated = await tx.enterpriseApproval.updateMany({
+      where: {
+        id: pendingApproval.id,
+        organizationId,
+        approverUserId: actorUserId,
+        status: "PENDING",
+        revision: pendingApproval.revision,
+        archivedAt: null,
+      },
+      data: {
+        status: input.action === "VALIDATE" ? "APPROVED" : "REJECTED",
+        decidedAt: new Date(),
+        decisionComment: input.reason?.trim() || null,
+        revision: { increment: 1 },
+      },
+    });
+    if (approvalUpdated.count !== 1) throw new EnterpriseGamingCheckoutError("GAMING_CLOSE_APPROVAL_CONFLICT", 409);
+
     const nextStatus = input.action === "VALIDATE" ? "VALIDATED" : "REJECTED";
-    return tx.enterpriseGamingDailyClose.update({
+    const updated = await tx.enterpriseGamingDailyClose.update({
       where: { id: close.id },
       data: {
         status: nextStatus,
         validatedByUserId: actorUserId,
         validatedAt: input.action === "VALIDATE" ? new Date() : null,
         rejectedAt: input.action === "REJECT" ? new Date() : null,
-        rejectionReason: input.action === "REJECT" ? input.reason || null : null,
+        rejectionReason: input.action === "REJECT" ? input.reason : null,
         revision: { increment: 1 },
       },
       include: { lines: true },
     });
+    return { ...updated, approverUserId: pendingApproval.approverUserId, approvalStatus: input.action === "VALIDATE" ? "APPROVED" : "REJECTED" };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
@@ -358,8 +539,27 @@ export async function listGamingDailyCloses(
       _count: { _all: true },
     }),
   ]);
+  const approvals = items.length ? await prisma.enterpriseApproval.findMany({
+    where: {
+      organizationId,
+      targetEntityType: "EnterpriseGamingDailyClose",
+      targetEntityId: { in: items.map((item) => item.id) },
+      archivedAt: null,
+    },
+    orderBy: { createdAt: "desc" },
+    select: { targetEntityId: true, approverUserId: true, status: true },
+  }) : [];
+  const approvalByCloseId = new Map<string, { approverUserId: string; status: string }>();
+  for (const approval of approvals) {
+    if (!approvalByCloseId.has(approval.targetEntityId)) {
+      approvalByCloseId.set(approval.targetEntityId, { approverUserId: approval.approverUserId, status: approval.status });
+    }
+  }
   return {
-    items,
+    items: items.map((item) => {
+      const approval = approvalByCloseId.get(item.id);
+      return { ...item, approverUserId: approval?.approverUserId || null, approvalStatus: approval?.status || null };
+    }),
     pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) },
     metrics: Object.fromEntries(grouped.map((row) => [row.status, row._count._all])),
   };
@@ -371,5 +571,6 @@ export async function getGamingDailyClose(organizationId: string, closeId: strin
     include: { lines: true },
   });
   if (!close) throw new EnterpriseGamingCheckoutError("GAMING_CLOSE_NOT_FOUND", 404);
-  return close;
+  const approval = await approvalForGamingClose(organizationId, close.id);
+  return { ...close, approverUserId: approval?.approverUserId || null, approvalStatus: approval?.status || null };
 }
