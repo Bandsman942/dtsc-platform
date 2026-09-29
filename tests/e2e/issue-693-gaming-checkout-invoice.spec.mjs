@@ -641,9 +641,14 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
     previousBusinessDay.setUTCDate(previousBusinessDay.getUTCDate() - 1);
 
     // #712: the session ended before the selected business day, but its canonical payment is confirmed today.
+    const historicalStartedAt = new Date(previousBusinessDay.getTime() - 10 * 60 * 1000);
     await prisma.enterpriseGamingSession.update({
       where: { id: latePaidSessionId },
-      data: { endedAt: previousBusinessDay },
+      data: {
+        startedAt: historicalStartedAt,
+        expectedEndAt: previousBusinessDay,
+        endedAt: previousBusinessDay,
+      },
     });
     await prisma.enterprisePayment.update({
       where: { id: latePaidPaymentId },
