@@ -35,15 +35,82 @@ async function resolveCashSessionForConfirmation(
 ) {
   if (!payment.financialAccountId) throw new EnterpriseAccountingError("PAYMENT_FINANCIAL_ACCOUNT_REQUIRED", 409);
 
-  const findOpenReplacement = () => tx.enterpriseCashSession.findFirst({
-    where: {
-      organizationId: payment.organizationId,
-      financialAccountId: payment.financialAccountId!,
-      cashierUserId: payment.initiatedByUserId,
-      status: "OPEN",
-    },
-    orderBy: { openedAt: "desc" },
-  });
+  const baseOpenWhere = {
+    organizationId: payment.organizationId,
+    financialAccountId: payment.financialAccountId,
+    status: "OPEN" as const,
+  };
+
+  const findOpenReplacement = async () => {
+    const originalCashierSession = await tx.enterpriseCashSession.findFirst({
+      where: {
+        ...baseOpenWhere,
+        cashierUserId: payment.initiatedByUserId,
+      },
+      orderBy: { openedAt: "desc" },
+    });
+    if (originalCashierSession) {
+      return { session: originalCashierSession, strategy: "ORIGINAL_CASHIER" as const };
+    }
+
+    if (actorUserId !== payment.initiatedByUserId) {
+      const confirmingActorSession = await tx.enterpriseCashSession.findFirst({
+        where: {
+          ...baseOpenWhere,
+          cashierUserId: actorUserId,
+        },
+        orderBy: { openedAt: "desc" },
+      });
+      if (confirmingActorSession) {
+        return { session: confirmingActorSession, strategy: "CONFIRMING_ACTOR" as const };
+      }
+    }
+
+    const candidates = await tx.enterpriseCashSession.findMany({
+      where: baseOpenWhere,
+      orderBy: [{ openedAt: "desc" }, { id: "desc" }],
+      take: 2,
+    });
+    if (candidates.length === 1) {
+      return { session: candidates[0], strategy: "UNIQUE_ACCOUNT_SESSION" as const };
+    }
+    if (candidates.length > 1) {
+      throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_AMBIGUOUS", 409, {
+        openSessionCount: candidates.length,
+      });
+    }
+    return null;
+  };
+
+  const persistRecovery = async (
+    replacement: NonNullable<Awaited<ReturnType<typeof findOpenReplacement>>>,
+    eventType: "CASH_SESSION_RECOVERED" | "CASH_SESSION_REBOUND",
+    previous?: { id: string; status: string },
+  ) => {
+    await tx.enterprisePayment.update({
+      where: { id: payment.id },
+      data: { cashSessionId: replacement.session.id, revision: { increment: 1 } },
+    });
+    await addPaymentEvent(
+      tx,
+      payment.organizationId,
+      payment.id,
+      actorUserId,
+      eventType,
+      eventType === "CASH_SESSION_RECOVERED"
+        ? "Historical cash session binding recovered before confirmation"
+        : "Cash session rebound before confirmation",
+      {
+        cashSessionId: replacement.session.id,
+        recoveryCashierUserId: replacement.session.cashierUserId,
+        recoveredByUserId: actorUserId,
+        originalInitiatorUserId: payment.initiatedByUserId,
+        recoveryStrategy: replacement.strategy,
+        ...(previous ? { previousCashSessionId: previous.id, previousStatus: previous.status } : {}),
+      },
+    );
+    return replacement.session;
+  };
 
   if (payment.cashSessionId) {
     const linked = await tx.enterpriseCashSession.findFirst({
@@ -51,7 +118,6 @@ async function resolveCashSessionForConfirmation(
         id: payment.cashSessionId,
         organizationId: payment.organizationId,
         financialAccountId: payment.financialAccountId,
-        cashierUserId: payment.initiatedByUserId,
       },
     });
     if (!linked) throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_INVALID", 409);
@@ -60,20 +126,7 @@ async function resolveCashSessionForConfirmation(
 
     const replacement = await findOpenReplacement();
     if (replacement) {
-      await tx.enterprisePayment.update({
-        where: { id: payment.id },
-        data: { cashSessionId: replacement.id, revision: { increment: 1 } },
-      });
-      await addPaymentEvent(
-        tx,
-        payment.organizationId,
-        payment.id,
-        actorUserId,
-        "CASH_SESSION_REBOUND",
-        "Cash session rebound before confirmation",
-        { previousCashSessionId: linked.id, cashSessionId: replacement.id, previousStatus: linked.status },
-      );
-      return replacement;
+      return persistRecovery(replacement, "CASH_SESSION_REBOUND", { id: linked.id, status: linked.status });
     }
 
     if (linked.status === "PENDING_VALIDATION") {
@@ -87,20 +140,7 @@ async function resolveCashSessionForConfirmation(
 
   const recovered = await findOpenReplacement();
   if (recovered) {
-    await tx.enterprisePayment.update({
-      where: { id: payment.id },
-      data: { cashSessionId: recovered.id, revision: { increment: 1 } },
-    });
-    await addPaymentEvent(
-      tx,
-      payment.organizationId,
-      payment.id,
-      actorUserId,
-      "CASH_SESSION_RECOVERED",
-      "Historical cash session binding recovered before confirmation",
-      { cashSessionId: recovered.id },
-    );
-    return recovered;
+    return persistRecovery(recovered, "CASH_SESSION_RECOVERED");
   }
 
   const blocking = await tx.enterpriseCashSession.findFirst({
@@ -228,6 +268,12 @@ async function confirmEnterprisePayment(organizationId: string, paymentId: strin
     if (!payment.financialAccountId) throw new EnterpriseAccountingError("PAYMENT_FINANCIAL_ACCOUNT_REQUIRED", 409);
     const account = await tx.enterpriseFinancialAccount.findFirst({ where: { id: payment.financialAccountId, organizationId, status: "ACTIVE", archivedAt: null } });
     if (!account) throw new EnterpriseAccountingError("PAYMENT_FINANCIAL_ACCOUNT_INVALID", 409);
+    if (payment.methodType === "CASH" && account.currencyCode !== payment.currencyCode) {
+      throw new EnterpriseAccountingError("PAYMENT_CASH_ACCOUNT_CURRENCY_MISMATCH", 409, {
+        accountCurrencyCode: account.currencyCode,
+        paymentCurrencyCode: payment.currencyCode,
+      });
+    }
     let confirmedCashSessionId: string | null = null;
     if (payment.methodType === "CASH") {
       const cashSession = await resolveCashSessionForConfirmation(tx, payment, actorUserId);
