@@ -111,6 +111,7 @@ await import("./qa-hotfix-700-cash-session-payment-recovery.mjs");
 await import("./qa-hotfix-704-cash-recovery-currency.mjs");
 await import("./qa-hotfix-706-gaming-daily-close-create.mjs");
 await import("./qa-hotfix-710-gaming-close-approver-responsive.mjs");
+await import("./qa-hotfix-712-gaming-daily-close-kpis.mjs");
 await import("./qa-scale5b-retail-dashboard-cache.mjs");
 await import("./qa-scale5c-read-path-cache.mjs");
 await import("./qa-scale6-ai-concurrency-resilience.mjs");
