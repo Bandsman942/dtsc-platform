@@ -348,6 +348,19 @@ export async function decideGamingDailyClose(
       throw new EnterpriseGamingCheckoutError("GAMING_CLOSE_REVISION_CONFLICT", 409, { currentRevision: close.revision });
     }
     if (close.status !== "SUBMITTED") throw new EnterpriseGamingCheckoutError("GAMING_CLOSE_ALREADY_DECIDED", 409);
+    if (input.action === "ASSIGN_APPROVER") {
+      if (close.approverUserId) throw new EnterpriseGamingCheckoutError("GAMING_CLOSE_APPROVER_ALREADY_ASSIGNED", 409);
+      if (close.submittedByUserId !== actorUserId) throw new EnterpriseGamingCheckoutError("GAMING_CLOSE_APPROVER_ASSIGNMENT_FORBIDDEN", 403);
+      await assertCloseApproverCandidate(organizationId, actorUserId, input.approverUserId!);
+      return tx.enterpriseGamingDailyClose.update({
+        where: { id: close.id },
+        data: {
+          approverUserId: input.approverUserId!,
+          revision: { increment: 1 },
+        },
+        include: { lines: true },
+      });
+    }
     if (!close.approverUserId) throw new EnterpriseGamingCheckoutError("GAMING_CLOSE_APPROVER_NOT_ASSIGNED", 409);
     if (close.submittedByUserId === actorUserId) {
       throw new EnterpriseGamingCheckoutError("GAMING_CLOSE_SELF_VALIDATION_FORBIDDEN", 403);
