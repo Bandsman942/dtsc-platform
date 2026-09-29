@@ -467,4 +467,3 @@ La clôture Gaming conserve `EnterpriseGamingDailyClose` comme parent tenant-sco
 Le builder de lignes est typé avec `Prisma.EnterpriseGamingDailyCloseLineCreateWithoutDailyCloseInput[]` afin qu’une réintroduction future de clés relationnelles incompatibles soit rejetée dès le type-check. Le serveur continue de recalculer `expectedAmount`, `declaredAmount` et `differenceAmount`; un motif reste obligatoire uniquement lorsque l’écart est non nul.
 
 Les erreurs inattendues de création utilisent `GAMING_DAILY_CLOSE_CREATE_FAILED` avec un message client FR/EN spécifique, une référence support corrélable et aucun détail Prisma/SQL exposé. Aucune migration n’est requise pour #706.
-
