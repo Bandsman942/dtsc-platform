@@ -2,6 +2,25 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-09-30 — Hotfix #694 : convergence Finance Santé / Pharmacie
+
+### Corrigé
+
+- Les créations de factures communes Santé et Pharmacie ne transmettent plus manuellement `organizationId` dans les lignes `EnterpriseSalesInvoiceItem` créées en nested write.
+- La relation composite de la facture parente fournit désormais exclusivement `organizationId` et `salesInvoiceId`, conformément au contrat Prisma canonique déjà utilisé par les autres flux Finance.
+- Les projections de lignes utilisent `Prisma.EnterpriseSalesInvoiceItemCreateWithoutSalesInvoiceInput`, ce qui empêche compile-time la réintroduction des clés de relation dans le payload imbriqué.
+
+### Données et sécurité
+
+- Aucune migration, aucun backfill et aucune réécriture de facture existante.
+- Les contrôles `organizationId`, les extensions sectorielles, les mappings Catalogue/Business Party et les transactions sérialisables restent inchangés.
+- Le correctif retire uniquement deux champs invalides des nested writes ; aucune permission ni règle de confidentialité Santé/Pharmacie n’est assouplie.
+
+### Qualité
+
+- Ajout de `qa:hotfix-694` à la régression canonique.
+- Le gate vérifie Santé et Pharmacie, le type Prisma checked des lignes et la relation composite parent → lignes.
+
 ## 2026-09-29 — Hotfix #714 : convergence des KPI de clôture Gaming
 
 ### Corrigé

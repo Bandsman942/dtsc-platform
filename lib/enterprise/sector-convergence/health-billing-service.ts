@@ -56,6 +56,16 @@ export async function convergeHealthMedicalInvoice(
       if (!current) throw new EnterpriseSectorConvergenceError("HEALTH_MEDICAL_INVOICE_NOT_FOUND", 404);
       const itemTotal = money(sumDecimals(current.items.map((item) => item.totalAmount)));
       if (itemTotal.minus(current.totalAmount).abs().greaterThan(new Prisma.Decimal("0.01"))) throw new EnterpriseSectorConvergenceError("HEALTH_INVOICE_ITEM_TOTAL_MISMATCH", 409, { invoiceTotal: current.totalAmount.toFixed(), itemTotal: itemTotal.toFixed() });
+      const invoiceItems: Prisma.EnterpriseSalesInvoiceItemCreateWithoutSalesInvoiceInput[] = current.items.map((item) => ({
+        catalogItemId: catalogByService.get(item.serviceCatalogId!),
+        description: item.description,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        discountAmount: item.discountAmount,
+        netAmount: item.totalAmount,
+        taxAmount: 0,
+        totalAmount: item.totalAmount,
+      }));
       const invoice = await tx.enterpriseSalesInvoice.create({
         data: {
           organizationId,
@@ -72,19 +82,7 @@ export async function convergeHealthMedicalInvoice(
           outstandingAmount: money(current.totalAmount),
           notes: `Health billing ${current.invoiceNumber}`,
           createdByUserId: actorUserId,
-          items: {
-            create: current.items.map((item) => ({
-              organizationId,
-              catalogItemId: catalogByService.get(item.serviceCatalogId!),
-              description: item.description,
-              quantity: item.quantity,
-              unitPrice: item.unitPrice,
-              discountAmount: item.discountAmount,
-              netAmount: item.totalAmount,
-              taxAmount: 0,
-              totalAmount: item.totalAmount,
-            })),
-          },
+          items: { create: invoiceItems },
         },
         include: { items: true },
       });

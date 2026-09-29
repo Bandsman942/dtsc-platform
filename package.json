@@ -313,6 +313,7 @@
     "qa:hotfix-704": "node scripts/qa-hotfix-704-cash-recovery-currency.mjs",
     "qa:hotfix-706": "node scripts/qa-hotfix-706-gaming-daily-close-create.mjs",
     "qa:hotfix-710": "node scripts/qa-hotfix-710-gaming-close-approver-responsive.mjs",
+    "qa:hotfix-694": "node scripts/qa-hotfix-694-health-pharmacy-invoice-items.mjs",
     "qa:hotfix-714": "node scripts/qa-hotfix-714-gaming-close-kpi-convergence.mjs",
     "e2e:hotfix-664": "playwright test tests/e2e/issue-664-finance-approval-collaboration.spec.mjs",
     "qa:scale7-staged-certification": "node scripts/qa-scale7-staged-certification.mjs",
