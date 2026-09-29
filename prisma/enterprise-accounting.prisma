@@ -729,6 +729,7 @@ model EnterprisePayment {
   methodType               String
   paymentMethodId          String?
   financialAccountId       String?
+  cashSessionId            String?
   businessPartyId          String?
   employeeId               String?
   payrollRunId             String?
@@ -753,6 +754,7 @@ model EnterprisePayment {
   allocations              EnterprisePaymentAllocation[]
   events                   EnterprisePaymentEvent[]
   treasuryTransactions     EnterpriseTreasuryTransaction[]
+  cashSession              EnterpriseCashSession?         @relation(fields: [organizationId, cashSessionId], references: [organizationId, id], onDelete: Restrict)
 
   @@unique([organizationId, id])
   @@unique([organizationId, number])
@@ -760,6 +762,7 @@ model EnterprisePayment {
   @@index([organizationId, status, paymentDate])
   @@index([organizationId, businessPartyId, status])
   @@index([organizationId, financialAccountId])
+  @@index([organizationId, cashSessionId])
 }
 
 model EnterprisePaymentAllocation {
@@ -909,6 +912,7 @@ model EnterpriseCashSession {
   movements             EnterpriseCashMovement[]
   counts                EnterpriseCashCount[]
   discrepancies         EnterpriseCashDiscrepancy[]
+  payments              EnterprisePayment[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, number])
