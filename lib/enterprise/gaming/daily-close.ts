@@ -161,7 +161,7 @@ export async function createGamingDailyClose(
   if (existingKey) {
     const approval = await approvalForGamingClose(organizationId, existingKey.id);
     return {
-      close: { ...existingKey, approverUserId: approval?.approverUserId || null, approvalStatus: approval?.status || null },
+      close: { ...existingKey, approverUserId: approval?.status === "PENDING" ? approval.approverUserId : null, approvalStatus: approval?.status || null },
       idempotent: true,
     };
   }
@@ -208,7 +208,7 @@ export async function createGamingDailyClose(
           orderBy: { createdAt: "desc" },
           select: { approverUserId: true, status: true },
         });
-        return { ...retry, approverUserId: retryApproval?.approverUserId || null, approvalStatus: retryApproval?.status || null };
+        return { ...retry, approverUserId: retryApproval?.status === "PENDING" ? retryApproval.approverUserId : null, approvalStatus: retryApproval?.status || null };
       }
       const duplicate = await tx.enterpriseGamingDailyClose.findFirst({
         where: {
@@ -383,7 +383,7 @@ export async function createGamingDailyClose(
       if (retry) {
         const approval = await approvalForGamingClose(organizationId, retry.id);
         return {
-          close: { ...retry, approverUserId: approval?.approverUserId || null, approvalStatus: approval?.status || null },
+          close: { ...retry, approverUserId: approval?.status === "PENDING" ? approval.approverUserId : null, approvalStatus: approval?.status || null },
           idempotent: true,
         };
       }
@@ -564,7 +564,7 @@ export async function listGamingDailyCloses(
   return {
     items: items.map((item) => {
       const approval = approvalByCloseId.get(item.id);
-      return { ...item, approverUserId: approval?.approverUserId || null, approvalStatus: approval?.status || null };
+      return { ...item, approverUserId: approval?.status === "PENDING" ? approval.approverUserId : null, approvalStatus: approval?.status || null };
     }),
     pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) },
     metrics: Object.fromEntries(grouped.map((row) => [row.status, row._count._all])),
@@ -578,5 +578,5 @@ export async function getGamingDailyClose(organizationId: string, closeId: strin
   });
   if (!close) throw new EnterpriseGamingCheckoutError("GAMING_CLOSE_NOT_FOUND", 404);
   const approval = await approvalForGamingClose(organizationId, close.id);
-  return { ...close, approverUserId: approval?.approverUserId || null, approvalStatus: approval?.status || null };
+  return { ...close, approverUserId: approval?.status === "PENDING" ? approval.approverUserId : null, approvalStatus: approval?.status || null };
 }
