@@ -76,6 +76,10 @@ const unexpectedMessages: Record<string, { fr: string; en: string }> = {
     fr: "Le reçu Gaming n’a pas pu être chargé. Réessayez ; si le problème persiste, communiquez la référence support.",
     en: "The Gaming receipt could not be loaded. Try again; if the problem persists, provide the support reference.",
   },
+  GAMING_DAILY_CLOSE_CREATE_FAILED: {
+    fr: "La clôture Gaming n’a pas pu être enregistrée à cause d’un incident interne avant validation. Aucune nouvelle clôture n’a été créée. Rechargez les données puis réessayez ; si le problème persiste, communiquez la référence support.",
+    en: "The Gaming close could not be saved because of an internal incident before validation. No new close was created. Reload the data and try again; if the problem persists, provide the support reference.",
+  },
 };
 
 export function gamingCheckoutErrorResponse(error: unknown, request: Request, fallback = "GAMING_CHECKOUT_OPERATION_FAILED") {
