@@ -82,6 +82,10 @@ check(
   !workspace.includes('detail.status === "SUBMITTED" && collection.canManage'),
   "The old global manage-based decision buttons must not return.",
 );
+check(
+  workspace.includes("localDateInputValue") && !workspace.includes("new Date().toISOString().slice(0, 10)"),
+  "Gaming daily close must not reintroduce a naive UTC business-date default.",
+);
 
 hasAll(copy, [
   "Choisir un validateur",
