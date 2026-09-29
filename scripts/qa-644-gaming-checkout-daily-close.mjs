@@ -325,7 +325,7 @@ includesAll(closeDecisionRoute, [
   "getEnterpriseGamingDailyCloseAccess",
   "gamingDailyCloseDecisionSchema",
   "decideGamingDailyClose",
-  'action: "manage"',
+  'action: "approve"',
   "isSameOriginRequest",
   "await rateLimit",
   "writeAuditLog",
