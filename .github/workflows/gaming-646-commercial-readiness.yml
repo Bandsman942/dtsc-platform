@@ -19,6 +19,7 @@ on:
       - "scripts/qa-646-gaming-commercial-readiness.mjs"
       - "scripts/qa-hotfix-693-gaming-checkout-invoice.mjs"
       - "scripts/qa-hotfix-696-gaming-session-transitions.mjs"
+      - "scripts/qa-hotfix-698-gaming-payment-convergence.mjs"
       - "scripts/qa-regression-checks.mjs"
       - "tests/e2e/issue-646-gaming-commercial-readiness.spec.mjs"
       - "tests/e2e/issue-693-gaming-checkout-invoice.spec.mjs"
@@ -120,6 +121,8 @@ jobs:
         run: node scripts/qa-hotfix-693-gaming-checkout-invoice.mjs
       - name: Validate hotfix 696 session transition contract
         run: node scripts/qa-hotfix-696-gaming-session-transitions.mjs
+      - name: Validate hotfix 698 Gaming/Finance payment convergence
+        run: node scripts/qa-hotfix-698-gaming-payment-convergence.mjs
       - name: Run regression QA
         run: pnpm qa:regression
       - name: Type-check
@@ -152,7 +155,7 @@ jobs:
         run: |
           set -o pipefail
           pnpm exec playwright test tests/e2e/issue-646-gaming-commercial-readiness.spec.mjs --workers=1 2>&1 | tee /tmp/dtsc-gaming-646-browser-playwright.log
-      - name: Gaming #693/#696 checkout lifecycle acceptance
+      - name: Gaming #693/#696/#698 checkout and payment convergence acceptance
         shell: bash
         run: |
           set -o pipefail
