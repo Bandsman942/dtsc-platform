@@ -266,7 +266,7 @@ async function confirmEnterprisePayment(organizationId: string, paymentId: strin
     assertIndependentActor({ actorUserId, relatedUserIds: [payment.initiatedByUserId], errorCode: "PAYMENT_SELF_CONFIRMATION_FORBIDDEN" });
     if (!payment.financialAccountId) throw new EnterpriseAccountingError("PAYMENT_FINANCIAL_ACCOUNT_REQUIRED", 409);
     const account = await tx.enterpriseFinancialAccount.findFirst({ where: { id: payment.financialAccountId, organizationId, status: "ACTIVE", archivedAt: null } });
-    if (!account) throw new EnterpriseAccountingError("PAYMENT_FINANCIAL_ACCOUNT_INVALID", 409);
+    if (!account || account.currencyCode !== payment.currencyCode) throw new EnterpriseAccountingError("PAYMENT_FINANCIAL_ACCOUNT_INVALID", 409);
     let confirmedCashSessionId: string | null = null;
     if (payment.methodType === "CASH") {
       const cashSession = await resolveCashSessionForConfirmation(tx, payment, actorUserId);
