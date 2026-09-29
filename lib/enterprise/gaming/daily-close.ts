@@ -249,21 +249,28 @@ export async function createGamingDailyClose(
         const reference = baseCheckoutReference(payment.reference);
         return Boolean(reference && financialCheckoutByReference.has(reference));
       });
-      const paidSessionIds = new Set(
-        relevantPayments
-          .filter((payment) => payment.paymentType === "CUSTOMER_PAYMENT" && payment.direction === "INBOUND")
-          .map((payment) => baseCheckoutReference(payment.reference))
-          .map((reference) => reference ? financialCheckoutByReference.get(reference) : null)
-          .filter((checkout): checkout is NonNullable<typeof checkout> => Boolean(checkout && checkout.status === "PAID"))
-          .map((checkout) => checkout.sessionId),
-      );
-      const refundedCheckoutRefs = new Set(
-        relevantPayments
-          .filter((payment) => payment.paymentType === "REFUND" && payment.direction === "OUTBOUND")
-          .map((payment) => baseCheckoutReference(payment.reference))
-          .filter((reference): reference is string => Boolean(reference))
-          .filter((reference) => financialCheckoutByReference.get(reference)?.status === "REFUNDED"),
-      );
+      const paidSessionIds = new Set<string>();
+      const refundedCheckoutRefs = new Set<string>();
+      for (const payment of relevantPayments) {
+        const reference = baseCheckoutReference(payment.reference);
+        if (!reference) continue;
+        const checkout = financialCheckoutByReference.get(reference);
+        if (!checkout) continue;
+        if (
+          payment.paymentType === "CUSTOMER_PAYMENT"
+          && payment.direction === "INBOUND"
+          && checkout.status === "PAID"
+        ) {
+          paidSessionIds.add(checkout.sessionId);
+        }
+        if (
+          payment.paymentType === "REFUND"
+          && payment.direction === "OUTBOUND"
+          && checkout.status === "REFUNDED"
+        ) {
+          refundedCheckoutRefs.add(reference);
+        }
+      }
 
       const paymentIds = relevantPayments.map((payment) => payment.id);
       const cashMovements = paymentIds.length
