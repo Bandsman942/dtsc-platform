@@ -45,6 +45,11 @@ export async function convergeConfirmedGamingPayment(
       status: "CONFIRMED",
     },
   });
+  const hadAllocation = Boolean(allocation);
+
+  if (!allocation && payment.unallocatedAmount.isPositive() && !invoice.receivable.outstandingAmount.isPositive()) {
+    throw new EnterpriseAccountingError("PAYMENT_GAMING_CONVERGENCE_FAILED", 409, { checkoutId: checkout.id });
+  }
 
   if (!allocation && payment.unallocatedAmount.isPositive() && invoice.receivable.outstandingAmount.isPositive()) {
     const amount = Prisma.Decimal.min(payment.unallocatedAmount, invoice.receivable.outstandingAmount);
@@ -80,7 +85,7 @@ export async function convergeConfirmedGamingPayment(
   const state = await syncGamingCheckoutPaidState(organizationId, checkout.id, actorUserId);
   return {
     matched: true as const,
-    idempotent: Boolean(allocation && !payment.unallocatedAmount.isPositive()),
+    idempotent: hadAllocation,
     checkoutId: checkout.id,
     salesInvoiceId: invoice.id,
     receivableId: invoice.receivable.id,
