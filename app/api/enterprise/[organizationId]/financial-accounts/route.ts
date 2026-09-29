@@ -58,9 +58,22 @@ export async function GET(req: Request, { params }: Params) {
     }),
     prisma.enterpriseFinancialAccount.count({ where }),
   ]);
+  const openCashSessions = rawItems.some((item) => item.accountType === "CASH")
+    ? await prisma.enterpriseCashSession.findMany({
+      where: {
+        organizationId,
+        cashierUserId: auth.session.userId,
+        status: "OPEN",
+        financialAccountId: { in: rawItems.filter((item) => item.accountType === "CASH").map((item) => item.id) },
+      },
+      select: { financialAccountId: true },
+    })
+    : [];
+  const openCashAccountIds = new Set(openCashSessions.map((session) => session.financialAccountId));
   const capabilities = auth.access.capabilities;
   const items = rawItems.map((item) => ({
     ...item,
+    hasOpenCashSessionForCurrentUser: item.accountType === "CASH" ? openCashAccountIds.has(item.id) : null,
     capabilities: {
       canEdit: Boolean(capabilities.canWrite),
       canArchive: Boolean(capabilities.canManage),
