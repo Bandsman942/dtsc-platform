@@ -47,11 +47,11 @@ function localCalendarDate() {
   return `${value("year")}-${value("month")}-${value("day")}`;
 }
 
-function formatBusinessDate(value: string | Date, locale: string, timezone: string) {
+function formatBusinessDate(value: string | Date, locale: string | null | undefined, timezone: string | null | undefined) {
   const date = typeof value === "string" ? new Date(value) : value;
   return new Intl.DateTimeFormat(locale === "en" ? "en" : "fr", {
     dateStyle: "medium",
-    timeZone: timezone,
+    timeZone: timezone || "UTC",
   }).format(date);
 }
 
