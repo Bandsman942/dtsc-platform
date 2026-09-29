@@ -23,7 +23,7 @@ check(
 );
 
 const linesStart = dailyClose.indexOf("const lines: Prisma.EnterpriseGamingDailyCloseLineCreateWithoutDailyCloseInput[]");
-const createStart = dailyClose.indexOf("return tx.enterpriseGamingDailyClose.create", linesStart);
+const createStart = dailyClose.indexOf("enterpriseGamingDailyClose.create({", linesStart);
 const linesBlock = linesStart >= 0 && createStart > linesStart ? dailyClose.slice(linesStart, createStart) : "";
 
 check(linesBlock.length > 0, "Hotfix #706: unable to isolate the daily-close line builder.");
