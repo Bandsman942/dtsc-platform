@@ -2,6 +2,25 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-09-29 — Hotfix #712 : KPI de clôture Gaming cohérents avec les événements du jour
+
+### Corrigé
+
+- `Sessions terminées` reste fondé sur les sessions dont `endedAt` appartient à la journée métier.
+- `Sessions payées` compte désormais les sessions réellement `PAID` ayant un encaissement client confirmé/réconcilié dans la journée, même si la session s’est terminée antérieurement.
+- `Encaissements en attente` représente le backlog encore ouvert au moment de la soumission pour les sessions déjà terminées avant la fin de la journée sélectionnée.
+- `Remboursés` compte les checkouts effectivement remboursés dont le paiement de remboursement confirmé/réconcilié appartient à la journée.
+- Les paiements fractionnés et remboursements sont dédupliqués par session/checkout pour éviter le double comptage.
+- Sans site, le fuseau canonique de l’entreprise remplace le fallback UTC ; avec site, le fuseau du site reste prioritaire.
+- La journée métier est affichée comme une date calendaire sans heure parasite dans le détail de clôture.
+
+### Données, sécurité et qualité
+
+- Aucun changement de schéma Prisma, aucune migration et aucun backfill : les clôtures historiques déjà figées ne sont pas réécrites.
+- Les montants restent exclusivement calculés depuis `EnterprisePayment` ; aucune écriture Finance parallèle ni conversion FX n’est introduite.
+- L’isolation tenant/site, l’idempotence, le verrou advisory et le workflow maker/checker #710 restent inchangés.
+- La QA #712 et l’acceptance Gaming couvrent un paiement tardif d’une session historique, un backlog encore ouvert, un remboursement du jour et le fuseau entreprise.
+
 ## 2026-09-29 — Hotfix #710 : validateur assigné et détail de clôture Gaming responsive
 
 ### Corrigé
