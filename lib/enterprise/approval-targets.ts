@@ -26,6 +26,7 @@ export const ENTERPRISE_APPROVAL_MODULE_BY_TARGET: Readonly<Record<string, strin
   EnterpriseTimesheet: "TIME_ATTENDANCE",
   EnterprisePayrollRun: "PAYROLL_OPERATIONS",
   EnterpriseProjectMilestone: "PROJECTS_SERVICES",
+  EnterpriseGamingDailyClose: "GAMING_DAILY_CLOSE",
 };
 
 const ENTERPRISE_APPROVAL_TARGET_LABELS: Readonly<Record<string, { fr: string; en: string }>> = {
@@ -56,6 +57,7 @@ const ENTERPRISE_APPROVAL_TARGET_LABELS: Readonly<Record<string, { fr: string; e
   EnterpriseTimesheet: { fr: "Feuille de temps", en: "Timesheet" },
   EnterprisePayrollRun: { fr: "Cycle de paie", en: "Payroll run" },
   EnterpriseProjectMilestone: { fr: "Jalon de projet", en: "Project milestone" },
+  EnterpriseGamingDailyClose: { fr: "Clôture Gaming", en: "Gaming daily close" },
 };
 
 export function enterpriseApprovalModuleForTarget(targetEntityType: string) {
@@ -96,5 +98,6 @@ export function enterpriseApprovalTargetDeepLink(targetEntityType: string, targe
   if (targetEntityType === "EnterpriseTimesheet") return `/enterprise-modules/TIME_ATTENDANCE?timesheet=${id}`;
   if (targetEntityType === "EnterprisePayrollRun") return `/enterprise-modules/PAYROLL_OPERATIONS?payroll=${id}`;
   if (targetEntityType === "EnterpriseProjectMilestone") return `/enterprise-modules/PROJECTS_SERVICES?milestone=${id}`;
+  if (targetEntityType === "EnterpriseGamingDailyClose") return `/enterprise-modules/GAMING_DAILY_CLOSE?close=${id}`;
   return `/enterprise-modules/VALIDATIONS${approvalId ? `?approval=${encodeURIComponent(approvalId)}` : ""}`;
 }
