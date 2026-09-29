@@ -42,7 +42,7 @@ for (const marker of [
 
 check(access.includes('"approve"') && access.includes("capabilities.canApprove"), "#710 Gaming access must expose canonical approve capability.");
 check(collectionRoute.includes("canApprove: gamingAccess.canApprove"), "#710 collection API must expose approve capability.");
-check(decisionRoute.includes('action: "approve"'), "#710 decision route must require approve capability.");
+check(decisionRoute.includes('accessAction = parsed.data.action === "ASSIGN_APPROVER" ? "submit" : "approve"'), "#710 decision route must require approve capability outside historical assignment.");
 check(!decisionRoute.includes("parsed.error.issues[0]?.message"), "#710 decision API must not expose raw Zod messages.");
 check(!collectionRoute.includes("parsed.error.issues[0]?.message"), "#710 create API must not expose raw Zod messages.");
 
@@ -59,7 +59,7 @@ for (const marker of [
   "hidden overflow-x-auto md:block",
 ]) check(workspace.includes(marker), `#710 workspace missing ${marker}`);
 
-for (const marker of ["Validateur", "Approver", "d’au moins 8 caractères", "at least 8 characters"]) {
+for (const marker of ["Validateur", "Approver", "au moins 8 caractères", "at least 8 characters"]) {
   check(copy.includes(marker), `#710 i18n missing ${marker}`);
 }
 
