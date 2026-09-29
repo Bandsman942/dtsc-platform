@@ -52,7 +52,7 @@ for (const marker of [
 ]) check(docs.includes(marker), `#712 documentation missing ${marker}`);
 
 for (const marker of [
-  "#706/#710/#712 submits a coherent Gaming daily-close KPI snapshot",
+  "#706 submits Gaming daily close; #710/#712 keep maker-checker and coherent KPI snapshot",
   "latePaidSessionId",
   'methodType: "OTHER"',
   'action: "REQUEST_REFUND"',
