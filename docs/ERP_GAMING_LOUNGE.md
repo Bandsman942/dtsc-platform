@@ -467,3 +467,18 @@ La clôture Gaming conserve `EnterpriseGamingDailyClose` comme parent tenant-sco
 Le builder de lignes est typé avec `Prisma.EnterpriseGamingDailyCloseLineCreateWithoutDailyCloseInput[]` afin qu’une réintroduction future de clés relationnelles incompatibles soit rejetée dès le type-check. Le serveur continue de recalculer `expectedAmount`, `declaredAmount` et `differenceAmount`; un motif reste obligatoire uniquement lorsque l’écart est non nul.
 
 Les erreurs inattendues de création utilisent `GAMING_DAILY_CLOSE_CREATE_FAILED` avec un message client FR/EN spécifique, une référence support corrélable et aucun détail Prisma/SQL exposé. Aucune migration n’est requise pour #706.
+
+## Hotfix #708 — validation assignée des clôtures Gaming
+
+La clôture Gaming applique désormais une séparation stricte entre soumission et décision. Le formulaire de soumission charge les candidats via le contrat canonique `approval-candidates` pour `GAMING_DAILY_CLOSE` et exige un validateur différent du soumissionnaire. Le backend revalide le candidat avec la permission `approve` et crée dans la même transaction une `EnterpriseApproval` ciblant `EnterpriseGamingDailyClose`.
+
+La décision ne dépend plus d’un simple droit global `manage`. Pour valider ou rejeter, une `EnterpriseApproval` `PENDING` doit exister et être attribuée exactement à l’acteur courant. La clôture et la validation transverse sont décidées ensemble sous contrôle de révision. Une validation accepte un commentaire facultatif ; un rejet exige un motif d’au moins 8 caractères.
+
+Les clôtures `SUBMITTED` créées avant #708 et dépourvues d’assignation restent récupérables sans backfill arbitraire : leur soumissionnaire peut choisir explicitement un validateur autorisé. Ce chemin incrémente la révision et reste tenant-safe.
+
+Le Centre des validations connaît la cible `EnterpriseGamingDailyClose`, produit un snapshot versionné du rapprochement et redirige APPROVE/REJECT vers le service Gaming. Il ne maintient donc pas un second statut indépendant.
+
+Côté interface, le détail adopte une représentation en cartes sur mobile/tablette et une table desktop à largeurs minimales explicites, padding horizontal et scroll local borné. Les en-têtes longs FR/EN ne doivent plus se coller ni créer de débordement horizontal global.
+
+Aucune migration Prisma n’est introduite. Le hotfix réutilise `EnterpriseApproval`, conserve les règles de rapprochement #706 et ajoute `qa:hotfix-708` plus une acceptance authentifiée.
+
