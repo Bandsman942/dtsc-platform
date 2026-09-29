@@ -4,10 +4,10 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 const baseUrl = process.env.E2E_BASE_URL || "http://127.0.0.1:3000";
 const organizationId = process.env.E2E_ORGANIZATION_ID || "e2e-erp-professional-org";
-const adminEmail = process.env.E2E_ADMIN_EMAIL || "erp-admin@example.test";
-const adminPassword = process.env.E2E_ADMIN_PASSWORD || "E2eAdmin2026!";
-const approverEmail = process.env.E2E_USER_EMAIL || "erp-user@example.test";
-const approverPassword = process.env.E2E_USER_PASSWORD || "E2eUser2026!";
+const adminEmail = process.env.E2E_ADMIN_EMAIL || "";
+const adminPassword = process.env.E2E_ADMIN_PASSWORD || "";
+const approverEmail = process.env.E2E_USER_EMAIL || "";
+const approverPassword = process.env.E2E_USER_PASSWORD || "";
 const customerId = "e2e-baseline-business-party";
 const assetId = "e2e-gaming-asset-693";
 const stationId = "e2e-gaming-station-693";
@@ -752,6 +752,156 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
         countedClosingAmount: 500,
         discrepancyAmount: 0,
       },
+    });
+  });
+
+
+  test("#702 recovers an approved historical payment into a different authorized cashier session and exposes CDF on the cash list", async () => {
+    const oldCashSession = await prisma.enterpriseCashSession.create({
+      data: {
+        organizationId,
+        number: `CASH-E2E-702-OLD-${Date.now().toString(36).toUpperCase()}`,
+        financialAccountId: cashAccountId,
+        cashierUserId: adminUserId,
+        status: "OPEN",
+        openingAmount: 0,
+      },
+    });
+
+    const suffix = `cash-cross-cashier-${Date.now()}`;
+    const session = await startAndEndSession({ businessPartyId: customerId, suffix });
+    const prepared = await checkout(session.id, suffix);
+    const issued = await approveInvoice(prepared);
+
+    const addResponse = await context.request.patch(
+      `${baseUrl}/api/enterprise/${organizationId}/gaming/checkouts/${issued.checkout.id}`,
+      {
+        data: {
+          action: "ADD_PAYMENT",
+          revision: issued.checkout.revision,
+          paymentApproverUserId: approverUserId,
+          methodType: "CASH",
+          financialAccountId: cashAccountId,
+          amount: 500,
+          idempotencyKey: `e2e-702-cash-cross-cashier-${suffix}`,
+        },
+        headers: {
+          origin: baseUrl,
+          referer: `${baseUrl}/enterprise-modules/GAMING_CHECKOUT`,
+        },
+      },
+    );
+    const added = await addResponse.json().catch(() => null);
+    expect(addResponse.ok(), JSON.stringify(added)).toBeTruthy();
+
+    const approveResponse = await approverContext.request.post(
+      `${baseUrl}/api/enterprise/${organizationId}/payments/${added.payment.id}/transition`,
+      {
+        data: { action: "APPROVE", revision: added.payment.revision },
+        headers: {
+          origin: baseUrl,
+          referer: `${baseUrl}/enterprise-modules/FINANCE_PAYMENTS`,
+        },
+      },
+    );
+    const approved = await approveResponse.json().catch(() => null);
+    expect(approveResponse.ok(), JSON.stringify(approved)).toBeTruthy();
+    expect(approved?.payment?.status).toBe("APPROVED");
+
+    await prisma.enterpriseCashSession.update({
+      where: { id: oldCashSession.id },
+      data: {
+        status: "PENDING_VALIDATION",
+        submittedAt: new Date(),
+        expectedClosingAmount: 0,
+        countedClosingAmount: 0,
+        discrepancyAmount: 0,
+        revision: { increment: 1 },
+      },
+    });
+    await prisma.enterprisePayment.update({
+      where: { id: added.payment.id },
+      data: { cashSessionId: null },
+    });
+
+    const replacementSession = await prisma.enterpriseCashSession.create({
+      data: {
+        organizationId,
+        number: `CASH-E2E-702-NEW-${Date.now().toString(36).toUpperCase()}`,
+        financialAccountId: cashAccountId,
+        cashierUserId: approverUserId,
+        status: "OPEN",
+        openingAmount: 0,
+      },
+    });
+
+    const confirmResponse = await approverContext.request.post(
+      `${baseUrl}/api/enterprise/${organizationId}/payments/${added.payment.id}/transition`,
+      {
+        data: { action: "CONFIRM", revision: approved.payment.revision },
+        headers: {
+          origin: baseUrl,
+          referer: `${baseUrl}/enterprise-modules/FINANCE_PAYMENTS`,
+        },
+      },
+    );
+    const confirmed = await confirmResponse.json().catch(() => null);
+    expect(confirmResponse.ok(), JSON.stringify(confirmed)).toBeTruthy();
+    expect(confirmed?.payment?.status).toBe("CONFIRMED");
+
+    const [persistedPayment, movement, recoveryEvent] = await Promise.all([
+      prisma.enterprisePayment.findUniqueOrThrow({ where: { id: added.payment.id } }),
+      prisma.enterpriseCashMovement.findFirst({
+        where: { organizationId, paymentId: added.payment.id },
+      }),
+      prisma.enterprisePaymentEvent.findFirst({
+        where: { organizationId, paymentId: added.payment.id, eventType: "CASH_SESSION_RECOVERED" },
+      }),
+    ]);
+    expect(persistedPayment.cashSessionId).toBe(replacementSession.id);
+    expect(movement?.cashSessionId).toBe(replacementSession.id);
+    expect(recoveryEvent?.metadataJson).toMatchObject({
+      recoveryCashierUserId: approverUserId,
+      recoveredByUserId: approverUserId,
+      originalInitiatorUserId: adminUserId,
+      recoveryStrategy: "CONFIRMING_ACTOR",
+    });
+
+    const cashListResponse = await context.request.get(
+      `${baseUrl}/api/enterprise/${organizationId}/cash-sessions?recordId=${replacementSession.id}`,
+      {
+        headers: {
+          origin: baseUrl,
+          referer: `${baseUrl}/enterprise-modules/FINANCE_CASH`,
+        },
+      },
+    );
+    const cashList = await cashListResponse.json().catch(() => null);
+    expect(cashListResponse.ok(), JSON.stringify(cashList)).toBeTruthy();
+    expect(cashList?.items?.[0]?.currencyCode).toBe("CDF");
+    expect(cashList?.items?.[0]?.financialAccount?.currencyCode).toBe("CDF");
+
+    const [persistedInvoice, persistedCheckout, persistedGamingSession] = await Promise.all([
+      prisma.enterpriseSalesInvoice.findUniqueOrThrow({ where: { id: issued.invoice.id } }),
+      prisma.enterpriseGamingCheckout.findUniqueOrThrow({ where: { id: issued.checkout.id } }),
+      prisma.enterpriseGamingSession.findUniqueOrThrow({ where: { id: session.id } }),
+    ]);
+    expect(persistedInvoice.status).toBe("PAID");
+    expect(persistedCheckout.status).toBe("PAID");
+    expect(persistedGamingSession.status).toBe("PAID");
+
+    await prisma.enterpriseCashSession.update({
+      where: { id: replacementSession.id },
+      data: {
+        status: "CLOSED",
+        expectedClosingAmount: 500,
+        countedClosingAmount: 500,
+        discrepancyAmount: 0,
+      },
+    });
+    await prisma.enterpriseCashSession.update({
+      where: { id: oldCashSession.id },
+      data: { status: "CLOSED" },
     });
   });
 
