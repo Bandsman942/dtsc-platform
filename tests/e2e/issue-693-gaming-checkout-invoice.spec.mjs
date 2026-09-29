@@ -611,7 +611,7 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
     });
   });
 
-  test("#704 recovers a historical approved Gaming payment onto another authorized cashier and preserves CDF", async () => {
+  test("#700 reopens cash after pending close and recovers a historical approved Gaming payment; #704 uses another authorized cashier and preserves CDF", async () => {
     const oldCashSession = await prisma.enterpriseCashSession.create({
       data: {
         organizationId,
