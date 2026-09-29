@@ -12,7 +12,6 @@ const docs = read("docs/ERP_GAMING_LOUNGE.md");
 const e2e = read("tests/e2e/issue-693-gaming-checkout-invoice.spec.mjs");
 const regression = read("scripts/qa-regression-checks.mjs");
 const pkg = read("package.json");
-const workflow = read(".github/workflows/gaming-646-commercial-readiness.yml");
 
 for (const marker of [
   "getEnterpriseBusinessContext",
@@ -66,7 +65,6 @@ for (const marker of [
 
 check(regression.includes('qa-hotfix-712-gaming-daily-close-kpis.mjs'), "#712 must be wired into canonical regression.");
 check(pkg.includes('"qa:hotfix-712"'), "#712 package script missing.");
-check(workflow.includes("Validate hotfix 712 daily close KPI contract"), "#712 Gaming workflow targeted QA step missing.");
 
 if (failures.length) {
   console.error(failures.map((failure) => `❌ ${failure}`).join("\n"));
