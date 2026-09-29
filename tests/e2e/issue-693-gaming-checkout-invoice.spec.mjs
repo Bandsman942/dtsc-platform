@@ -607,12 +607,18 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
     expect(persistedSession.status).toBe("PAID");
     expect(paidTransition).toBeTruthy();
 
-    // #714: keep the payment on the current business day while moving the session end
-    // to the previous day. The daily close must still count this settled Gaming session.
+    // #714: keep the payment on the current business day while moving the full
+    // session window to the previous day. The daily close must still count this
+    // settled Gaming session without violating the session time-order contract.
     crossDayPaidSessionId = persistedSession.id;
+    const previousDayOffset = 24 * 60 * 60 * 1000;
     await prisma.enterpriseGamingSession.update({
       where: { id: persistedSession.id },
-      data: { endedAt: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+      data: {
+        startedAt: persistedSession.startedAt ? new Date(persistedSession.startedAt.getTime() - previousDayOffset) : null,
+        expectedEndAt: persistedSession.expectedEndAt ? new Date(persistedSession.expectedEndAt.getTime() - previousDayOffset) : null,
+        endedAt: persistedSession.endedAt ? new Date(persistedSession.endedAt.getTime() - previousDayOffset) : null,
+      },
     });
 
     await prisma.enterpriseCashSession.update({
