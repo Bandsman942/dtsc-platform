@@ -244,10 +244,11 @@ export async function createGamingDailyClose(
             select: { reference: true, sessionId: true, status: true },
           })
         : [];
+      const financialCheckoutRefs = new Set(financialCheckouts.map((checkout) => checkout.reference));
       const financialCheckoutByReference = new Map(financialCheckouts.map((checkout) => [checkout.reference, checkout]));
       const relevantPayments = dayPayments.filter((payment) => {
         const reference = baseCheckoutReference(payment.reference);
-        return Boolean(reference && financialCheckoutByReference.has(reference));
+        return Boolean(reference && financialCheckoutRefs.has(reference));
       });
       const paidSessionIds = new Set<string>();
       const refundedCheckoutRefs = new Set<string>();
