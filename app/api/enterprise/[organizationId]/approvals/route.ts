@@ -20,7 +20,7 @@ type ApprovalTargetSummary = { type: string; id: string; title: string; priority
 async function targetSummaries(organizationId: string, search = "") {
   const contains = search ? { contains: search, mode: "insensitive" as const } : undefined;
   const take = search ? 80 : 0;
-  const [tasks, requests, meetings, purchases, stockTransfers, inventoryCounts, stockAdjustments, budgets, expenses, incidents, projectMilestones] = await Promise.all([
+  const [tasks, requests, meetings, purchases, stockTransfers, inventoryCounts, stockAdjustments, budgets, expenses, incidents, projectMilestones, gamingDailyCloses] = await Promise.all([
     prisma.enterpriseTask.findMany({ where: { organizationId, archivedAt: null, ...(contains ? { title: contains } : {}) }, select: { id: true, title: true, priority: true, status: true }, take }),
     prisma.enterpriseRequest.findMany({ where: { organizationId, archivedAt: null, ...(contains ? { title: contains } : {}) }, select: { id: true, title: true, priority: true, status: true }, take }),
     prisma.enterpriseMeeting.findMany({ where: { organizationId, archivedAt: null, ...(contains ? { title: contains } : {}) }, select: { id: true, title: true, status: true }, take }),
@@ -39,6 +39,11 @@ async function targetSummaries(organizationId: string, search = "") {
       select: { id: true, reference: true, name: true, status: true, project: { select: { reference: true, name: true } } },
       take,
     }),
+    prisma.enterpriseGamingDailyClose.findMany({
+      where: { organizationId, ...(contains ? { reference: contains } : {}) },
+      select: { id: true, reference: true, status: true },
+      take,
+    }),
   ]);
   const map = new Map<string, ApprovalTargetSummary>();
   for (const item of tasks) map.set(`EnterpriseTask:${item.id}`, { type: "EnterpriseTask", ...item });
@@ -52,6 +57,7 @@ async function targetSummaries(organizationId: string, search = "") {
   for (const item of expenses) map.set(`EnterpriseExpense:${item.id}`, { type: "EnterpriseExpense", ...item });
   for (const item of incidents) map.set(`PharmacyQualityIncident:${item.id}`, { type: "PharmacyQualityIncident", ...item });
   for (const item of projectMilestones) map.set(`EnterpriseProjectMilestone:${item.id}`, { type: "EnterpriseProjectMilestone", id: item.id, title: `${item.project.reference} · ${item.project.name} / ${item.reference} · ${item.name}`, status: item.status });
+  for (const item of gamingDailyCloses) map.set(`EnterpriseGamingDailyClose:${item.id}`, { type: "EnterpriseGamingDailyClose", id: item.id, title: item.reference, status: item.status });
   return map;
 }
 
@@ -86,7 +92,7 @@ export async function GET(req: Request, { params }: Params) {
 
 async function resolveTargets(organizationId: string, approvals: Array<{ targetEntityType: string; targetEntityId: string }>) {
   const byType = new Map<string, string[]>(); for (const approval of approvals) byType.set(approval.targetEntityType, [...(byType.get(approval.targetEntityType) || []), approval.targetEntityId]);
-  const [tasks, requests, meetings, purchases, stockTransfers, inventoryCounts, stockAdjustments, budgets, expenses, incidents, projectMilestones] = await Promise.all([
+  const [tasks, requests, meetings, purchases, stockTransfers, inventoryCounts, stockAdjustments, budgets, expenses, incidents, projectMilestones, gamingDailyCloses] = await Promise.all([
     prisma.enterpriseTask.findMany({ where: { organizationId, id: { in: byType.get("EnterpriseTask") || [] } }, select: { id: true, title: true, priority: true, status: true } }),
     prisma.enterpriseRequest.findMany({ where: { organizationId, id: { in: byType.get("EnterpriseRequest") || [] } }, select: { id: true, title: true, priority: true, status: true } }),
     prisma.enterpriseMeeting.findMany({ where: { organizationId, id: { in: byType.get("EnterpriseMeeting") || [] } }, select: { id: true, title: true, status: true } }),
@@ -101,6 +107,10 @@ async function resolveTargets(organizationId: string, approvals: Array<{ targetE
       where: { organizationId, id: { in: byType.get("EnterpriseProjectMilestone") || [] } },
       select: { id: true, reference: true, name: true, status: true, project: { select: { reference: true, name: true } } },
     }),
+    prisma.enterpriseGamingDailyClose.findMany({
+      where: { organizationId, id: { in: byType.get("EnterpriseGamingDailyClose") || [] } },
+      select: { id: true, reference: true, status: true },
+    }),
   ]);
   const map = new Map<string, ApprovalTargetSummary>();
   for (const item of tasks) map.set(`EnterpriseTask:${item.id}`, { type: "EnterpriseTask", ...item });
@@ -114,6 +124,7 @@ async function resolveTargets(organizationId: string, approvals: Array<{ targetE
   for (const item of expenses) map.set(`EnterpriseExpense:${item.id}`, { type: "EnterpriseExpense", ...item });
   for (const item of incidents) map.set(`PharmacyQualityIncident:${item.id}`, { type: "PharmacyQualityIncident", ...item });
   for (const item of projectMilestones) map.set(`EnterpriseProjectMilestone:${item.id}`, { type: "EnterpriseProjectMilestone", id: item.id, title: `${item.project.reference} · ${item.project.name} / ${item.reference} · ${item.name}`, status: item.status });
+  for (const item of gamingDailyCloses) map.set(`EnterpriseGamingDailyClose:${item.id}`, { type: "EnterpriseGamingDailyClose", id: item.id, title: item.reference, status: item.status });
   return map;
 }
 
