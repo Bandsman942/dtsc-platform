@@ -90,9 +90,12 @@ function gamingApprovalError(error: unknown, mode: "assign" | "decide") {
   if (code === "WRONG_APPROVER") return new EnterpriseGamingCheckoutError("GAMING_CLOSE_WRONG_APPROVER", 403);
   if (code === "APPROVER_PERMISSION_DENIED") return new EnterpriseGamingCheckoutError("GAMING_CLOSE_APPROVER_PERMISSION_DENIED", 403);
   if (code === "APPROVER_NOT_ELIGIBLE") return new EnterpriseGamingCheckoutError("GAMING_CLOSE_APPROVER_NOT_ELIGIBLE", 403);
-  return error instanceof EnterpriseGamingCheckoutError
-    ? error
-    : new EnterpriseGamingCheckoutError(mode === "assign" ? "GAMING_CLOSE_APPROVER_NOT_ELIGIBLE" : "GAMING_CLOSE_WRONG_APPROVER", 403);
+  if (error instanceof EnterpriseGamingCheckoutError) return error;
+  if (error instanceof Error) return error;
+  return new EnterpriseGamingCheckoutError(
+    mode === "assign" ? "GAMING_CLOSE_APPROVER_NOT_ELIGIBLE" : "GAMING_CLOSE_WRONG_APPROVER",
+    403,
+  );
 }
 
 async function assertGamingCloseApprover(organizationId: string, requesterUserId: string, approverUserId: string) {
