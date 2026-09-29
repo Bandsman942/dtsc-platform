@@ -236,11 +236,35 @@ async function prepareTenant() {
     },
   });
 
+  const financeConfig = await context.request.patch(
+    `${baseUrl}/api/enterprise/${organizationId}/finance/configuration`,
+    {
+      data: {
+        functionalCurrencyCode: "CDF",
+        presentationCurrencyCode: "CDF",
+        inventoryValuationMethod: "WEIGHTED_AVERAGE",
+        reconciliationTolerance: "0.01",
+        automaticPostingEnabled: true,
+      },
+      headers: {
+        origin: baseUrl,
+        referer: `${baseUrl}/enterprise-modules/FINANCE_OVERVIEW`,
+      },
+    },
+  );
+  const financeConfigBody = await financeConfig.json().catch(() => null);
+  expect(financeConfig.ok(), JSON.stringify(financeConfigBody)).toBeTruthy();
+
   const ledger = await prisma.enterpriseLedgerAccount.findFirst({
-    where: { organizationId, isActive: true, archivedAt: null },
+    where: {
+      organizationId,
+      isActive: true,
+      archivedAt: null,
+      accountSubtype: "CASH",
+    },
     select: { id: true },
   });
-  if (!ledger) throw new Error("Issue #698 requires an active ledger account from the canonical Finance seed.");
+  if (!ledger) throw new Error("Issue #698 requires the system Finance baseline to expose an active CASH ledger account.");
   await prisma.enterpriseFinancialAccount.create({
     data: {
       id: cashAccountId,
@@ -391,10 +415,10 @@ async function approveInvoice(checkoutResult) {
 
 test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
   test.beforeAll(async ({ browser }) => {
-    await prepareTenant();
     context = await browser.newContext();
     approverContext = await browser.newContext();
     await signIn();
+    await prepareTenant();
     await signInAs(approverContext, approverEmail, approverPassword);
   });
 
