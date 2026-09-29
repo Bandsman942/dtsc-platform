@@ -102,7 +102,7 @@ includesAll(schemas, [
   "declaredAmount: signedMoney",
   "varianceReason",
   "gamingDailyCloseDecisionSchema",
-  'z.enum(["VALIDATE", "REJECT"])',
+  'z.enum(["VALIDATE", "REJECT", "ASSIGN_APPROVER"])',
 ], "checkout schemas");
 
 includesAll(prismaSchema, [
