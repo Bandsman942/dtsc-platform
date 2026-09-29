@@ -612,7 +612,7 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
     });
   });
 
-  test("#706 submits Gaming daily close and persists tenant-scoped nested lines", async () => {
+  test("#706 submits Gaming daily close; #708 assigns a validator before submitting Gaming daily close", async () => {
     const businessDate = new Date().toISOString().slice(0, 10);
     const idempotencyKey = `e2e-706-close-${businessDate}`;
 
@@ -621,6 +621,9 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
       select: { id: true },
     });
     if (previous) {
+      await prisma.enterpriseApproval.deleteMany({
+        where: { organizationId, targetEntityType: "EnterpriseGamingDailyClose", targetEntityId: previous.id },
+      });
       await prisma.enterpriseGamingDailyCloseLine.deleteMany({
         where: { organizationId, dailyCloseId: previous.id },
       });
@@ -633,7 +636,8 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
         data: {
           businessDate,
           siteId: null,
-          notes: "Hotfix #706 E2E",
+          approverUserId,
+          notes: "Hotfix #706/#708 E2E",
           idempotencyKey,
           declarations: [{
             financialAccountId: cashAccountId,
@@ -667,6 +671,159 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
     expect(persisted.lines[0].declaredAmount.toFixed()).toBe("500");
     expect(persisted.lines[0].differenceAmount.toFixed()).toBe("0");
     expect(persisted.lines[0].varianceReason).toBeNull();
+
+    const approval = await prisma.enterpriseApproval.findFirst({
+      where: {
+        organizationId,
+        targetEntityType: "EnterpriseGamingDailyClose",
+        targetEntityId: persisted.id,
+        status: "PENDING",
+      },
+    });
+    expect(approval?.requestedByUserId).toBe(adminUserId);
+    expect(approval?.approverUserId).toBe(approverUserId);
+
+    const selfDecision = await context.request.patch(
+      `${baseUrl}/api/enterprise/${organizationId}/gaming/daily-closes/${persisted.id}`,
+      {
+        data: { action: "VALIDATE", revision: persisted.revision, reason: "Parfait" },
+        headers: {
+          origin: baseUrl,
+          referer: `${baseUrl}/enterprise-modules/GAMING_DAILY_CLOSE`,
+        },
+      },
+    );
+    const selfDecisionBody = await selfDecision.json().catch(() => null);
+    expect(selfDecision.status(), JSON.stringify(selfDecisionBody)).toBe(403);
+    expect(selfDecisionBody?.error).toBe("GAMING_CLOSE_SELF_VALIDATION_FORBIDDEN");
+
+    const assignedDecision = await approverContext.request.patch(
+      `${baseUrl}/api/enterprise/${organizationId}/gaming/daily-closes/${persisted.id}`,
+      {
+        data: { action: "VALIDATE", revision: persisted.revision, reason: "Parfait" },
+        headers: {
+          origin: baseUrl,
+          referer: `${baseUrl}/enterprise-modules/GAMING_DAILY_CLOSE`,
+        },
+      },
+    );
+    const assignedDecisionBody = await assignedDecision.json().catch(() => null);
+    expect(assignedDecision.status(), JSON.stringify(assignedDecisionBody)).toBe(200);
+    expect(assignedDecisionBody?.close?.status).toBe("VALIDATED");
+
+    const decidedApproval = await prisma.enterpriseApproval.findUniqueOrThrow({ where: { id: approval.id } });
+    expect(decidedApproval.status).toBe("APPROVED");
+    expect(decidedApproval.decisionComment).toBe("Parfait");
+  });
+
+  test("#708 legacy submitted close can receive an assigned validator", async () => {
+    const businessDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const legacy = await prisma.enterpriseGamingDailyClose.create({
+      data: {
+        organizationId,
+        reference: `GDC-E2E-708-LEGACY-${Date.now().toString(36).toUpperCase()}`,
+        businessDate,
+        siteId: null,
+        timezone: "UTC",
+        status: "SUBMITTED",
+        submittedByUserId: adminUserId,
+        idempotencyKey: `e2e-708-legacy-${Date.now()}`,
+      },
+    });
+
+    const assignResponse = await context.request.patch(
+      `${baseUrl}/api/enterprise/${organizationId}/gaming/daily-closes/${legacy.id}`,
+      {
+        data: { action: "ASSIGN_APPROVER", revision: legacy.revision, approverUserId },
+        headers: {
+          origin: baseUrl,
+          referer: `${baseUrl}/enterprise-modules/GAMING_DAILY_CLOSE`,
+        },
+      },
+    );
+    const assigned = await assignResponse.json().catch(() => null);
+    expect(assignResponse.status(), JSON.stringify(assigned)).toBe(200);
+    expect(assigned?.close?.approverUserId).toBe(approverUserId);
+
+    const approval = await prisma.enterpriseApproval.findFirst({
+      where: {
+        organizationId,
+        targetEntityType: "EnterpriseGamingDailyClose",
+        targetEntityId: legacy.id,
+        status: "PENDING",
+      },
+    });
+    expect(approval?.approverUserId).toBe(approverUserId);
+    expect(approval?.requestedByUserId).toBe(adminUserId);
+  });
+
+  test("#708 rejection requires at least eight characters", async () => {
+    const futureDate = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const idempotencyKey = `e2e-708-reject-${futureDate}`;
+    const response = await context.request.post(
+      `${baseUrl}/api/enterprise/${organizationId}/gaming/daily-closes`,
+      {
+        data: {
+          businessDate: futureDate,
+          siteId: null,
+          approverUserId,
+          notes: "Hotfix #708 reject E2E",
+          idempotencyKey,
+          declarations: [{
+            financialAccountId: cashAccountId,
+            methodType: "CASH",
+            declaredAmount: 0,
+            varianceReason: null,
+          }],
+        },
+        headers: {
+          origin: baseUrl,
+          referer: `${baseUrl}/enterprise-modules/GAMING_DAILY_CLOSE`,
+        },
+      },
+    );
+    const body = await response.json().catch(() => null);
+    expect(response.status(), JSON.stringify(body)).toBe(201);
+
+    const shortReject = await approverContext.request.patch(
+      `${baseUrl}/api/enterprise/${organizationId}/gaming/daily-closes/${body.close.id}`,
+      {
+        data: { action: "REJECT", revision: body.close.revision, reason: "Non" },
+        headers: {
+          origin: baseUrl,
+          referer: `${baseUrl}/enterprise-modules/GAMING_DAILY_CLOSE`,
+        },
+      },
+    );
+    const shortBody = await shortReject.json().catch(() => null);
+    expect(shortReject.status(), JSON.stringify(shortBody)).toBe(400);
+    expect(shortBody?.error).toBe("GAMING_CLOSE_REJECTION_REASON_TOO_SHORT");
+    expect(shortBody?.message).not.toMatch(/Too small|expected string|characters/i);
+
+    const validReject = await approverContext.request.patch(
+      `${baseUrl}/api/enterprise/${organizationId}/gaming/daily-closes/${body.close.id}`,
+      {
+        data: { action: "REJECT", revision: body.close.revision, reason: "Données à revoir" },
+        headers: {
+          origin: baseUrl,
+          referer: `${baseUrl}/enterprise-modules/GAMING_DAILY_CLOSE`,
+        },
+      },
+    );
+    const rejected = await validReject.json().catch(() => null);
+    expect(validReject.status(), JSON.stringify(rejected)).toBe(200);
+    expect(rejected?.close?.status).toBe("REJECTED");
+
+    const approval = await prisma.enterpriseApproval.findFirst({
+      where: {
+        organizationId,
+        targetEntityType: "EnterpriseGamingDailyClose",
+        targetEntityId: body.close.id,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    expect(approval?.status).toBe("REJECTED");
+    expect(approval?.decisionComment).toBe("Données à revoir");
   });
 
   test("#700 reopens cash after pending close and recovers a historical approved Gaming payment; #704 uses another authorized cashier and preserves CDF", async () => {
