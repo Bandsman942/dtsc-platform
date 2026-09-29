@@ -419,4 +419,3 @@ Les erreurs Finance `OPEN_CASH_SESSION_REQUIRED`, compte financier manquant/inva
 L’acceptance #698 couvre deux scénarios : refus d’un paiement Cash avant création lorsqu’aucune caisse n’est ouverte, puis parcours positif Gaming → approbation Finance externe → confirmation Finance → allocation → facture `PAID` → checkout `PAID` → session `PAID` avec transition `CHECKOUT_PAID`.
 
 Le seuil de cinq postes reste uniquement une baseline d’onboarding/commercial readiness et ne participe à aucune règle d’encaissement.
-
