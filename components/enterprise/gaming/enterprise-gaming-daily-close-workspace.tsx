@@ -55,7 +55,7 @@ function calendarDateInTimezone(timeZone = "UTC") {
   }
 }
 
-function formatGamingBusinessDate(value: string | Date, locale: string, timeZone: string) {
+function formatGamingBusinessDate(value: string | Date, locale: string | null | undefined, timeZone: string) {
   return new Intl.DateTimeFormat(locale === "en" ? "en" : "fr", {
     dateStyle: "medium",
     timeZone,
