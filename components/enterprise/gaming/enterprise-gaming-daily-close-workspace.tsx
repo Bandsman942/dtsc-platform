@@ -2,7 +2,7 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import { CalendarCheck2, Plus, Trash2 } from "lucide-react";
-import { Field, NativeSelect, formatEnterpriseAmount, formatEnterpriseDate } from "@/components/enterprise/core-v2/erp-v2-ui";
+import { Field, NativeSelect, formatEnterpriseAmount } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { gamingDailyCloseCopy } from "@/components/enterprise/gaming/gaming-daily-close-i18n";
 import { ProfessionalError, ProfessionalLoading, ProfessionalTabs, professionalMutation, useProfessionalCollection } from "@/components/enterprise/professional/professional-erp-ui";
 import { useAppLocale } from "@/components/i18n/locale-provider";
@@ -45,6 +45,14 @@ function localCalendarDate() {
   }).formatToParts(new Date());
   const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value || "";
   return `${value("year")}-${value("month")}-${value("day")}`;
+}
+
+function formatBusinessDate(value: string | Date, locale: string, timezone: string) {
+  const date = typeof value === "string" ? new Date(value) : value;
+  return new Intl.DateTimeFormat(locale === "en" ? "en" : "fr", {
+    dateStyle: "medium",
+    timeZone: timezone,
+  }).format(date);
 }
 
 async function json<T>(url: string) {
@@ -175,7 +183,7 @@ export function EnterpriseGamingDailyCloseWorkspace({ organizationId, organizati
       </ModuleMetrics>
       <ModuleToolbar controls={<ProfessionalTabs value={filter} onChange={(value) => { setFilter(value); setPage(1); }} items={[{ id: "ALL", label: copy.all }, { id: "SUBMITTED", label: copy.submitted }, { id: "VALIDATED", label: copy.validated }, { id: "REJECTED", label: copy.rejected }]} />} summary={`${copy.page} ${collection.pagination.page}/${collection.pagination.pageCount}`} />
       <ModuleContent><ModuleSection title={copy.title} description={locale === "en" ? definition.descriptionEn : definition.descriptionFr} count={collection.pagination.total} defaultOpen>
-        {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : collection.items.length === 0 ? <EmptyState title={copy.empty} /> : <BusinessList>{collection.items.map((item) => <BusinessListItem key={item.id} title={item.reference} status={<StatusBadge tone={tone(item.status)}>{statusLabel(item.status)}</StatusBadge>} meta={`${copy.businessDate}: ${new Intl.DateTimeFormat(locale === "en" ? "en" : "fr", { dateStyle: "medium", timeZone: item.timezone }).format(new Date(item.businessDate))} · ${copy.timezone}: ${item.timezone}`} description={`${copy.sessionsEnded}: ${item.endedSessionCount} · ${copy.sessionsPaid}: ${item.paidSessionCount} · ${copy.pendingCheckout}: ${item.pendingCheckoutCount}`} onOpen={() => setDetail(item)} openLabel={`${copy.detail} ${item.reference}`} />)}</BusinessList>}
+        {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : collection.items.length === 0 ? <EmptyState title={copy.empty} /> : <BusinessList>{collection.items.map((item) => <BusinessListItem key={item.id} title={item.reference} status={<StatusBadge tone={tone(item.status)}>{statusLabel(item.status)}</StatusBadge>} meta={`${copy.businessDate}: ${formatBusinessDate(item.businessDate, locale, item.timezone)} · ${copy.timezone}: ${item.timezone}`} description={`${copy.sessionsEnded}: ${item.endedSessionCount} · ${copy.sessionsPaid}: ${item.paidSessionCount} · ${copy.pendingCheckout}: ${item.pendingCheckoutCount}`} onOpen={() => setDetail(item)} openLabel={`${copy.detail} ${item.reference}`} />)}</BusinessList>}
         <div className="mt-4 flex justify-end gap-2"><Button variant="outline" disabled={page <= 1 || collection.loading} onClick={() => setPage((value) => Math.max(1, value - 1))}>{copy.previous}</Button><Button variant="outline" disabled={page >= collection.pagination.pageCount || collection.loading} onClick={() => setPage((value) => value + 1)}>{copy.next}</Button></div>
       </ModuleSection></ModuleContent>
 
@@ -186,7 +194,7 @@ export function EnterpriseGamingDailyCloseWorkspace({ organizationId, organizati
           <div className="rounded-2xl border border-dtsc-border p-3 text-sm"><span className="font-black">{copy.assignedApprover}: </span>{candidates.find((candidate) => candidate.userId === detail.approverUserId)?.name || (detail.approverUserId ? copy.assignedApprover : copy.noApprover)}</div>
           {detail.status === "SUBMITTED" && !detail.approverUserId && detail.submittedByUserId === currentUserId && collection.canWrite ? <div className="flex flex-wrap gap-2"><Button onClick={() => void openAssignApprover()}>{copy.assignApprover}</Button></div> : null}
           {detail.status === "SUBMITTED" && Boolean(collection.extra.canApprove) && detail.approverUserId === currentUserId ? <div className="flex flex-wrap gap-2"><Button onClick={() => setModal("validate")}>{copy.validate}</Button><Button variant="outline" onClick={() => setModal("reject")}>{copy.reject}</Button></div> : detail.status === "SUBMITTED" && detail.approverUserId ? <p className="text-sm text-dtsc-muted">{copy.decisionReserved}</p> : null}
-          <p className="text-sm text-dtsc-muted">{copy.businessDate}: {formatEnterpriseDate(detail.businessDate, locale)} · {copy.timezone}: {detail.timezone}</p>
+          <p className="text-sm text-dtsc-muted">{copy.businessDate}: {formatBusinessDate(detail.businessDate, locale, detail.timezone)} · {copy.timezone}: {detail.timezone}</p>
         </div> : null}
       </FullscreenEntityDetail>
 
