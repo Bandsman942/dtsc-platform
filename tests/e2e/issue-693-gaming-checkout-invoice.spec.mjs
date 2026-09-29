@@ -670,10 +670,29 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
     expect(persisted.lines[0].differenceAmount.toFixed()).toBe("0");
     expect(persisted.lines[0].varianceReason).toBeNull();
 
+    await prisma.enterpriseGamingDailyClose.update({
+      where: { id: persisted.id },
+      data: { approverUserId: null },
+    });
+
+    const assignResponse = await context.request.patch(
+      `${baseUrl}/api/enterprise/${organizationId}/gaming/daily-closes/${persisted.id}`,
+      {
+        data: { action: "ASSIGN_APPROVER", revision: persisted.revision, approverUserId },
+        headers: {
+          origin: baseUrl,
+          referer: `${baseUrl}/enterprise-modules/GAMING_DAILY_CLOSE`,
+        },
+      },
+    );
+    const assignedClose = await assignResponse.json().catch(() => null);
+    expect(assignResponse.ok(), JSON.stringify(assignedClose)).toBeTruthy();
+    expect(assignedClose?.close?.approverUserId).toBe(approverUserId);
+
     const selfDecision = await context.request.patch(
       `${baseUrl}/api/enterprise/${organizationId}/gaming/daily-closes/${persisted.id}`,
       {
-        data: { action: "VALIDATE", revision: persisted.revision, reason: "Parfait" },
+        data: { action: "VALIDATE", revision: assignedClose.close.revision, reason: "Parfait" },
         headers: {
           origin: baseUrl,
           referer: `${baseUrl}/enterprise-modules/GAMING_DAILY_CLOSE`,
@@ -687,7 +706,7 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
     const assignedDecision = await approverContext.request.patch(
       `${baseUrl}/api/enterprise/${organizationId}/gaming/daily-closes/${persisted.id}`,
       {
-        data: { action: "VALIDATE", revision: persisted.revision, reason: "Parfait" },
+        data: { action: "VALIDATE", revision: assignedClose.close.revision, reason: "Parfait" },
         headers: {
           origin: baseUrl,
           referer: `${baseUrl}/enterprise-modules/GAMING_DAILY_CLOSE`,
