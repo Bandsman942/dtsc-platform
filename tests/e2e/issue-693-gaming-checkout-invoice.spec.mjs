@@ -416,6 +416,9 @@ async function approveInvoice(checkoutResult) {
 
 test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
   test.beforeAll(async ({ browser }) => {
+    if (!adminEmail || !adminPassword || !approverEmail || !approverPassword) {
+      throw new Error("Gaming E2E credentials must be provided through E2E_* environment variables.");
+    }
     context = await browser.newContext();
     approverContext = await browser.newContext();
     await signIn();
