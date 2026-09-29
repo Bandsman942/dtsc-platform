@@ -50,7 +50,7 @@ function localCalendarDate(timeZone?: string | null) {
   return `${value("year")}-${value("month")}-${value("day")}`;
 }
 
-function formatBusinessDate(value: string, locale: string, timeZone: string) {
+function formatBusinessDate(value: string, locale: string | null | undefined, timeZone: string) {
   return new Intl.DateTimeFormat(locale === "en" ? "en" : "fr", {
     dateStyle: "medium",
     timeZone,
