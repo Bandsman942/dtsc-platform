@@ -150,6 +150,43 @@ async function approvalTargetSnapshot(tx: Prisma.TransactionClient, organization
     });
     if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Clôture de caisse source introuvable."); return serializeSnapshot(item);
   }
+  if (entityType === "EnterpriseGamingDailyClose") {
+    const item = await tx.enterpriseGamingDailyClose.findFirst({
+      where: { id: entityId, organizationId },
+      select: {
+        id: true,
+        reference: true,
+        businessDate: true,
+        siteId: true,
+        timezone: true,
+        status: true,
+        endedSessionCount: true,
+        paidSessionCount: true,
+        pendingCheckoutCount: true,
+        refundedCheckoutCount: true,
+        submittedByUserId: true,
+        submittedAt: true,
+        notes: true,
+        revision: true,
+        updatedAt: true,
+        lines: {
+          select: {
+            financialAccountId: true,
+            methodType: true,
+            currencyCode: true,
+            inboundAmount: true,
+            refundAmount: true,
+            expectedAmount: true,
+            declaredAmount: true,
+            differenceAmount: true,
+            varianceReason: true,
+          },
+        },
+      },
+    });
+    if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Clôture Gaming source introuvable.");
+    return serializeSnapshot(item);
+  }
   if (entityType === "EnterpriseLeaveRequest") {
     const item = await tx.enterpriseLeaveRequest.findFirst({ where: { id: entityId, organizationId, archivedAt: null }, select: { id: true, reference: true, leaveType: true, startDate: true, endDate: true, status: true, revision: true, updatedAt: true } });
     if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Congé source introuvable."); return serializeSnapshot(item);
