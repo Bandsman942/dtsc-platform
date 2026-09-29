@@ -102,7 +102,10 @@ includesAll(schemas, [
   "declaredAmount: signedMoney",
   "varianceReason",
   "gamingDailyCloseDecisionSchema",
-  'z.enum(["VALIDATE", "REJECT"])',
+  "gamingDailyCloseCommandSchema",
+  'z.literal("VALIDATE")',
+  'z.literal("REJECT")',
+  'z.literal("ASSIGN_APPROVER")',
 ], "checkout schemas");
 
 includesAll(prismaSchema, [
@@ -375,6 +378,7 @@ includesAll(closeWorkspace, [
   "ProfessionalTabs",
   "useProfessionalCollection",
   "/gaming/daily-closes",
+  "/approval-candidates?moduleCode=GAMING_DAILY_CLOSE",
   "/financial-accounts",
   "/sites",
   "differenceAmount",
