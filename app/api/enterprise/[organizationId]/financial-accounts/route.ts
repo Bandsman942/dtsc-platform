@@ -58,27 +58,39 @@ export async function GET(req: Request, { params }: Params) {
     }),
     prisma.enterpriseFinancialAccount.count({ where }),
   ]);
-  const openCashSessions = rawItems.some((item) => item.accountType === "CASH")
+  const cashSessions = rawItems.some((item) => item.accountType === "CASH")
     ? await prisma.enterpriseCashSession.findMany({
       where: {
         organizationId,
         cashierUserId: auth.session.userId,
-        status: "OPEN",
+        status: { in: ["OPEN", "CLOSING", "PENDING_VALIDATION"] },
         financialAccountId: { in: rawItems.filter((item) => item.accountType === "CASH").map((item) => item.id) },
       },
-      select: { financialAccountId: true },
+      orderBy: { openedAt: "desc" },
+      select: { financialAccountId: true, status: true },
     })
     : [];
-  const openCashAccountIds = new Set(openCashSessions.map((session) => session.financialAccountId));
+  const cashSessionStateByAccountId = new Map<string, string>();
+  for (const session of cashSessions) {
+    if (!cashSessionStateByAccountId.has(session.financialAccountId)) {
+      cashSessionStateByAccountId.set(session.financialAccountId, session.status);
+    }
+  }
   const capabilities = auth.access.capabilities;
-  const items = rawItems.map((item) => ({
+  const items = rawItems.map((item) => {
+    const cashSessionState = item.accountType === "CASH"
+      ? cashSessionStateByAccountId.get(item.id) || "NONE"
+      : null;
+    return {
     ...item,
-    hasOpenCashSessionForCurrentUser: item.accountType === "CASH" ? openCashAccountIds.has(item.id) : null,
+    cashSessionStateForCurrentUser: cashSessionState,
+    hasOpenCashSessionForCurrentUser: item.accountType === "CASH" ? cashSessionState === "OPEN" : null,
     capabilities: {
       canEdit: Boolean(capabilities.canWrite),
       canArchive: Boolean(capabilities.canManage),
     },
-  }));
+  };
+  });
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "financial-accounts", recordId: recordId || null } });
   return NextResponse.json({ items, pagination: { page: recordId ? 1 : page, pageSize: recordId ? 1 : pageSize, total, pageCount: recordId ? 1 : Math.max(1, Math.ceil(total / pageSize)) } });
 }
