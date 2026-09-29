@@ -401,3 +401,22 @@ Le seuil de cinq postes reste exclusivement une baseline d’onboarding/commerci
 La QA #696 vérifie la parité code/domaine/migration et lit la contrainte active directement dans PostgreSQL. L’acceptance Gaming renforce aussi le scénario #693 : démarrage réel de session → `END` → promotion `READY_TO_CHECKOUT` → préparation de facture, plus un scénario de compatibilité d’une ancienne session `ENDED` qui doit persister `CHECKOUT_OPEN`.
 
 Les erreurs inattendues de checkout utilisent désormais des messages contextualisés. Une `supportReference` sûre est conservée jusqu’à `ProfessionalApiError` et reste visible dans l’interface sans exposer SQL, stack Prisma, payload ou identifiant tenant.
+
+## Hotfix #698 — convergence Paiements ↔ Gaming et prérequis caisse
+
+Le hotfix #698 corrige la rupture de continuité observée lorsqu’un paiement Gaming en espèces est approuvé dans le workflow commun mais reste impossible à confirmer ou à refléter dans l’encaissement Gaming.
+
+Le contrat métier devient explicite :
+
+- un paiement `CASH` ne peut être préparé depuis Gaming que si le compte financier sélectionné possède une `EnterpriseCashSession` `OPEN` pour le caissier qui initie le paiement ;
+- le référentiel des comptes financiers expose `hasOpenCashSessionForCurrentUser` afin que l’UI Gaming masque les comptes Cash non prêts et bloque l’envoi avec un message actionnable ;
+- un paiement `APPROVED` reste finalisable depuis Encaissement Gaming ; l’approbation depuis Validations ne coupe plus le parcours ;
+- lorsqu’un paiement Gaming est confirmé depuis Paiements professionnels, la convergence est déclenchée immédiatement : allocation à la créance, mise à jour de la facture, puis synchronisation du checkout et de la session ;
+- `PAYMENT_CONFIRMED` possède en plus un projecteur inter-modules `GAMING_PAYMENT_CONTINUITY` idempotent servant de filet de sécurité pour les confirmations provenant d’autres chemins Finance ou d’un replay de worker.
+
+Les erreurs Finance `OPEN_CASH_SESSION_REQUIRED`, compte financier manquant/invalide, incompatibilité moyen-compte, paiement non approuvé et auto-confirmation interdite disposent désormais de messages métier spécifiques en FR/EN au lieu du fallback générique « information ou configuration requise ».
+
+L’acceptance #698 couvre deux scénarios : refus d’un paiement Cash avant création lorsqu’aucune caisse n’est ouverte, puis parcours positif Gaming → approbation Finance externe → confirmation Finance → allocation → facture `PAID` → checkout `PAID` → session `PAID` avec transition `CHECKOUT_PAID`.
+
+Le seuil de cinq postes reste uniquement une baseline d’onboarding/commercial readiness et ne participe à aucune règle d’encaissement.
+
