@@ -37,6 +37,16 @@ function tone(status: CloseStatus): StatusBadgeTone {
   return "warning";
 }
 
+function localCalendarDate() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value || "";
+  return `${value("year")}-${value("month")}-${value("day")}`;
+}
+
 async function json<T>(url: string) {
   const response = await fetch(url, { cache: "no-store" });
   const body = await response.json().catch(() => null) as (T & { message?: string; error?: string }) | null;
@@ -181,7 +191,7 @@ export function EnterpriseGamingDailyCloseWorkspace({ organizationId, organizati
       </FullscreenEntityDetail>
 
       <Dialog open={modal === "create"} onClose={() => setModal(null)} title={copy.newClose} className="h-[92dvh] max-w-4xl">
-        <form className="grid gap-5 p-1" onSubmit={submitClose}><div className="grid gap-4 md:grid-cols-3"><Field label={copy.businessDate} required><Input name="businessDate" type="date" required defaultValue={new Date().toISOString().slice(0, 10)} /></Field><Field label={copy.site}><NativeSelect name="siteId" items={[{ id: "", label: copy.allSites }, ...sites.map((site) => ({ id: site.id, label: `${site.code} · ${site.name}${site.timezone ? ` · ${site.timezone}` : ""}` }))]} /></Field><Field label={copy.approver} required><NativeSelect value={approverUserId} onChange={setApproverUserId} items={[{ id: "", label: copy.selectApprover }, ...candidates.map((candidate) => ({ id: candidate.userId, label: `${candidate.name}${candidate.positionTitle ? ` · ${candidate.positionTitle}` : ""}` }))]} /></Field></div>{!lookupLoading && candidates.length === 0 ? <ProfessionalError message={copy.noApprover} /> : null}
+        <form className="grid gap-5 p-1" onSubmit={submitClose}><div className="grid gap-4 md:grid-cols-3"><Field label={copy.businessDate} required><Input name="businessDate" type="date" required defaultValue={localCalendarDate()} /></Field><Field label={copy.site}><NativeSelect name="siteId" items={[{ id: "", label: copy.allSites }, ...sites.map((site) => ({ id: site.id, label: `${site.code} · ${site.name}${site.timezone ? ` · ${site.timezone}` : ""}` }))]} /></Field><Field label={copy.approver} required><NativeSelect value={approverUserId} onChange={setApproverUserId} items={[{ id: "", label: copy.selectApprover }, ...candidates.map((candidate) => ({ id: candidate.userId, label: `${candidate.name}${candidate.positionTitle ? ` · ${candidate.positionTitle}` : ""}` }))]} /></Field></div>{!lookupLoading && candidates.length === 0 ? <ProfessionalError message={copy.noApprover} /> : null}
           <div className="border-t border-dtsc-border pt-4"><div className="flex items-center justify-between gap-2"><h3 className="font-black">{copy.declaration}</h3><Button type="button" variant="outline" size="sm" onClick={() => setDeclarations((lines) => [...lines, { financialAccountId: "", methodType: "CASH", declaredAmount: 0, varianceReason: "" }])}><Plus className="h-4 w-4" />{copy.addLine}</Button></div><div className="mt-3 grid gap-4">{declarations.map((line, index) => <div key={index} className="grid gap-3 rounded-2xl border border-dtsc-border p-3 md:grid-cols-2 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)_auto]"><Field label={copy.financialAccount} required><NativeSelect value={line.financialAccountId} onChange={(value) => setDeclarations((lines) => lines.map((item, itemIndex) => itemIndex === index ? { ...item, financialAccountId: value } : item))} items={accounts.map((account) => ({ id: account.id, label: `${account.code} · ${account.name} · ${account.currencyCode}` }))} /></Field><Field label={copy.method} required><NativeSelect value={line.methodType} onChange={(value) => setDeclarations((lines) => lines.map((item, itemIndex) => itemIndex === index ? { ...item, methodType: value as PaymentMethod } : item))} items={methods.map((method) => ({ id: method, label: labels[method] }))} /></Field><Field label={copy.declared} required><Input type="number" step="0.01" value={line.declaredAmount} onChange={(event) => setDeclarations((lines) => lines.map((item, itemIndex) => itemIndex === index ? { ...item, declaredAmount: Number(event.target.value) } : item))} /></Field><Field label={copy.varianceReason}><Input value={line.varianceReason} onChange={(event) => setDeclarations((lines) => lines.map((item, itemIndex) => itemIndex === index ? { ...item, varianceReason: event.target.value } : item))} /></Field><Button type="button" variant="outline" aria-label={copy.removeLine} onClick={() => setDeclarations((lines) => lines.filter((_, itemIndex) => itemIndex !== index))}><Trash2 className="h-4 w-4" /></Button></div>)}</div></div>
           <Field label={copy.notes}><Input name="notes" /></Field>{lookupLoading ? <ProfessionalLoading rows={1} /> : null}<Button type="submit" disabled={busy || lookupLoading || candidates.length === 0 || !approverUserId || declarations.every((line) => !line.financialAccountId)}>{copy.submit}</Button></form>
       </Dialog>
