@@ -53,6 +53,17 @@ const messages: Record<string, { fr: string; en: string }> = {
   GAMING_CLOSE_REVISION_CONFLICT: { fr: "Cette clôture a changé entre-temps. Rechargez-la avant de recommencer.", en: "This close changed in the meantime. Reload it before trying again." },
   GAMING_CLOSE_ALREADY_DECIDED: { fr: "Cette clôture a déjà été validée ou rejetée.", en: "This close has already been validated or rejected." },
   GAMING_CLOSE_SELF_VALIDATION_FORBIDDEN: { fr: "La personne qui soumet la clôture ne peut pas la valider elle-même.", en: "The person who submits the close cannot validate it themselves." },
+  GAMING_CLOSE_APPROVER_REQUIRED: { fr: "Choisissez un validateur autorisé différent du soumissionnaire avant de soumettre la clôture.", en: "Choose an authorized validator other than the submitter before submitting the close." },
+  GAMING_CLOSE_APPROVER_NOT_ELIGIBLE: { fr: "Le validateur sélectionné n’est plus autorisé à valider cette clôture. Choisissez un autre collaborateur autorisé.", en: "The selected validator is no longer allowed to validate this close. Choose another authorized colleague." },
+  GAMING_CLOSE_APPROVER_PERMISSION_DENIED: { fr: "Vous n’avez plus l’autorisation nécessaire pour valider cette clôture.", en: "You no longer have the permission required to validate this close." },
+  GAMING_CLOSE_WRONG_APPROVER: { fr: "Cette clôture est attribuée à un autre validateur. Seule la personne désignée peut prendre la décision.", en: "This close is assigned to another validator. Only the designated person can decide it." },
+  GAMING_CLOSE_APPROVAL_NOT_ASSIGNED: { fr: "Aucun validateur n’est encore attribué à cette clôture. Le soumissionnaire doit d’abord en choisir un.", en: "No validator is assigned to this close yet. The submitter must choose one first." },
+  GAMING_CLOSE_APPROVER_ASSIGNMENT_FORBIDDEN: { fr: "Seule la personne qui a soumis cette clôture peut lui attribuer un validateur.", en: "Only the person who submitted this close can assign its validator." },
+  GAMING_CLOSE_APPROVER_ALREADY_ASSIGNED: { fr: "Un validateur est déjà attribué à cette clôture. Rechargez le détail avant de continuer.", en: "A validator is already assigned to this close. Reload the details before continuing." },
+  GAMING_CLOSE_APPROVAL_CONFLICT: { fr: "La validation de cette clôture a changé entre-temps. Rechargez avant de continuer.", en: "This close approval changed in the meantime. Reload before continuing." },
+  GAMING_CLOSE_REJECTION_REASON_TOO_SHORT: { fr: "Le motif de rejet doit contenir au moins 8 caractères.", en: "The rejection reason must contain at least 8 characters." },
+  GAMING_CLOSE_DECISION_INVALID: { fr: "La décision demandée est invalide. Rechargez la clôture puis réessayez.", en: "The requested decision is invalid. Reload the close and try again." },
+  GAMING_CLOSE_SUBMISSION_INVALID: { fr: "La clôture contient une information invalide ou manquante. Vérifiez les champs obligatoires puis réessayez.", en: "The close contains invalid or missing information. Check the required fields and try again." },
 };
 
 function locale(req: Request): "fr" | "en" {
@@ -79,6 +90,10 @@ const unexpectedMessages: Record<string, { fr: string; en: string }> = {
   GAMING_DAILY_CLOSE_CREATE_FAILED: {
     fr: "La clôture Gaming n’a pas pu être enregistrée à cause d’un incident interne avant validation. Aucune nouvelle clôture n’a été créée. Rechargez les données puis réessayez ; si le problème persiste, communiquez la référence support.",
     en: "The Gaming close could not be saved because of an internal incident before validation. No new close was created. Reload the data and try again; if the problem persists, provide the support reference.",
+  },
+  GAMING_DAILY_CLOSE_DECISION_FAILED: {
+    fr: "La décision sur cette clôture Gaming n’a pas pu être enregistrée à cause d’un incident interne. Rechargez la clôture avant de réessayer ; si le problème persiste, communiquez la référence support.",
+    en: "The decision on this Gaming close could not be saved because of an internal incident. Reload the close before trying again; if the problem persists, provide the support reference.",
   },
 };
 
