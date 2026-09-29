@@ -2,6 +2,25 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-09-29 — Hotfix #704 : récupération Cash cross-caissier et devise de caisse canonique
+
+### Corrigé
+
+- Un paiement Cash historique déjà `APPROVED` peut désormais récupérer une session `OPEN` compatible du même compte même lorsque le caissier actuel diffère de l’initiateur historique.
+- La résolution reste déterministe : session liée ouverte, caisse du caissier historique, caisse du confirmateur, puis unique caisse ouverte compatible ; plusieurs caisses compatibles sans choix sûr produisent un refus explicite.
+- Les événements `CASH_SESSION_RECOVERED` et `CASH_SESSION_REBOUND` conservent les identifiants de session et de caissier utiles à l’audit.
+- La confirmation revalide la devise du compte financier par rapport au paiement.
+- Les sessions de caisse projettent explicitement la devise de leur compte financier dans les listes Finance.
+- Le formatter financier générique ne transforme plus silencieusement une devise inconnue en USD ; une caisse CDF reste affichée en CDF avant et après ouverture du détail.
+
+### Sécurité et qualité
+
+- Aucun contournement des règles d’indépendance Finance : l’initiateur ne peut toujours pas confirmer son propre paiement.
+- Aucune création automatique de caisse, aucune modification d’entitlement et aucune migration Prisma.
+- En cas de plusieurs caisses `OPEN` compatibles et sans préférence sûre, le serveur échoue en mode fail-closed.
+- L’E2E #704 couvre la récupération d’un paiement Gaming historique sur la caisse d’un autre utilisateur autorisé et la projection CDF dans la collection des caisses.
+- Ajout de `qa:hotfix-704` à la régression canonique.
+
 ## 2026-09-29 — Hotfix #700 : rattachement des paiements Cash aux sessions et récupération historique
 
 ### Corrigé
