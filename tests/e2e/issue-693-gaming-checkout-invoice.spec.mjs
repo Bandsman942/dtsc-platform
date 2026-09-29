@@ -17,6 +17,8 @@ const pricingRuleId = "e2e-gaming-pricing-696";
 let cashAccountId = "";
 let adminUserId = "";
 let approverUserId = "";
+let latePaidSessionId = "";
+let latePaidCheckoutReference = "";
 let context;
 let approverContext;
 
@@ -605,6 +607,8 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
     expect(persistedCheckout.status).toBe("PAID");
     expect(persistedSession.status).toBe("PAID");
     expect(paidTransition).toBeTruthy();
+    latePaidSessionId = persistedSession.id;
+    latePaidCheckoutReference = persistedCheckout.reference;
 
     await prisma.enterpriseCashSession.update({
       where: { id: cashSession.id },
@@ -612,9 +616,45 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
     });
   });
 
-  test("#706 submits Gaming daily close and persists tenant-scoped nested lines", async () => {
+  test("#706/#715 submits a coherent Gaming daily close snapshot", async () => {
+    expect(latePaidSessionId).toBeTruthy();
+    expect(latePaidCheckoutReference).toBeTruthy();
+
+    await prisma.enterpriseGamingSession.update({
+      where: { id: latePaidSessionId },
+      data: { endedAt: new Date(Date.now() - 86_400_000) },
+    });
+
+    const pendingSuffix = `close-pending-${Date.now()}`;
+    const pendingSession = await startAndEndSession({ businessPartyId: customerId, suffix: pendingSuffix });
+    const pendingPrepared = await checkout(pendingSession.id, pendingSuffix);
+    const pendingIssued = await approveInvoice(pendingPrepared);
+    expect(["AWAITING_PAYMENT", "PARTIALLY_PAID", "INVOICE_PENDING"]).toContain(pendingIssued.checkout.status);
+
+    await prisma.enterprisePayment.create({
+      data: {
+        organizationId,
+        number: `PAY-E2E-715-REFUND-${Date.now().toString(36).toUpperCase()}`,
+        direction: "OUTBOUND",
+        paymentType: "REFUND",
+        methodType: "CASH",
+        financialAccountId: cashAccountId,
+        currencyCode: "CDF",
+        amount: 100,
+        unallocatedAmount: 0,
+        paymentDate: new Date(),
+        reference: `${latePaidCheckoutReference}:REFUND`,
+        status: "CONFIRMED",
+        initiatedByUserId: approverUserId,
+        approvedByUserId: approverUserId,
+        confirmedByUserId: approverUserId,
+        confirmedAt: new Date(),
+        idempotencyKey: `e2e-715-refund-${Date.now()}`,
+      },
+    });
+
     const businessDate = new Date().toISOString().slice(0, 10);
-    const idempotencyKey = `e2e-706-close-${businessDate}`;
+    const idempotencyKey = `e2e-715-close-${businessDate}`;
 
     const previous = await prisma.enterpriseGamingDailyClose.findFirst({
       where: { organizationId, idempotencyKey },
@@ -634,12 +674,12 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
           businessDate,
           siteId: null,
           approverUserId,
-          notes: "Hotfix #706/#710 E2E",
+          notes: "Hotfix #706/#710/#715 E2E",
           idempotencyKey,
           declarations: [{
             financialAccountId: cashAccountId,
             methodType: "CASH",
-            declaredAmount: 500,
+            declaredAmount: 400,
             varianceReason: null,
           }],
         },
@@ -665,9 +705,15 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
     expect(persisted.lines[0].financialAccountId).toBe(cashAccountId);
     expect(persisted.lines[0].currencyCode).toBe("CDF");
     expect(persisted.lines[0].methodType).toBe("CASH");
-    expect(persisted.lines[0].expectedAmount.toFixed()).toBe("500");
-    expect(persisted.lines[0].declaredAmount.toFixed()).toBe("500");
+    expect(persisted.lines[0].inboundAmount.toFixed()).toBe("500");
+    expect(persisted.lines[0].refundAmount.toFixed()).toBe("100");
+    expect(persisted.lines[0].expectedAmount.toFixed()).toBe("400");
+    expect(persisted.lines[0].declaredAmount.toFixed()).toBe("400");
     expect(persisted.lines[0].differenceAmount.toFixed()).toBe("0");
+    expect(persisted.endedSessionCount).toBeGreaterThanOrEqual(1);
+    expect(persisted.paidSessionCount).toBeGreaterThanOrEqual(1);
+    expect(persisted.pendingCheckoutCount).toBeGreaterThanOrEqual(1);
+    expect(persisted.refundedCheckoutCount).toBeGreaterThanOrEqual(1);
     expect(persisted.lines[0].varianceReason).toBeNull();
 
     await prisma.enterpriseGamingDailyClose.update({
