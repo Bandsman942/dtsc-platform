@@ -1,5 +1,27 @@
 # Changelog DTSC Platform
 
+## 2026-09-29 — Hotfix #715 : KPI de clôture Gaming cohérents avec les événements financiers
+
+### Corrigé
+
+- `Sessions payées` est désormais calculé à partir des paiements Gaming entrants confirmés/rapprochés de la journée, par session distincte, même lorsqu’une session a été terminée un jour antérieur.
+- `Remboursés` est calculé à partir des remboursements Gaming sortants confirmés/rapprochés de la journée, par checkout distinct.
+- `Encaissements en attente` reflète le backlog de checkouts non soldés du périmètre au moment du snapshot au lieu de dépendre uniquement des sessions terminées le jour même.
+- `Sessions terminées` conserve sa sémantique opérationnelle basée sur `endedAt`.
+- Les KPI et les lignes financières sont calculés sous le même verrou et dans la même transaction sérialisable afin de figer un état cohérent.
+- La journée métier du détail est affichée comme une date calendaire sans heure artificielle ; le formulaire initialise la date selon le fuseau du site sélectionné, avec UTC pour le périmètre global.
+
+### Données et sécurité
+
+- Aucune migration et aucun backfill : les snapshots historiques restent inchangés.
+- Les paiements non Gaming sont exclus par la référence checkout canonique et l’isolation `organizationId`/site reste appliquée.
+- Les paiements fractionnés et remboursements multiples ne gonflent pas les KPI, qui sont dédupliqués par session ou checkout.
+
+### Qualité
+
+- Ajout de `qa:hotfix-715` à la régression canonique.
+- L’E2E Gaming couvre un paiement tardif, un remboursement de la journée, un checkout encore en attente et la persistance simultanée des quatre KPI avec les montants financiers.
+
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
 ## 2026-09-29 — Hotfix #710 : validateur assigné et détail de clôture Gaming responsive
