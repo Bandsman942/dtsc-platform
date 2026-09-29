@@ -48,6 +48,7 @@ hasAll(service, [
   "assignGamingDailyCloseApprover",
   "GAMING_CLOSE_APPROVAL_NOT_ASSIGNED",
   "GAMING_CLOSE_WRONG_APPROVER",
+  'approval?.status === "PENDING" ? approval.approverUserId : null',
 ], "assigned close service");
 
 hasAll(collectionRoute, [
