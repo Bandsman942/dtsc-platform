@@ -814,6 +814,7 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
     expect(persisted.pendingCheckoutCount).toBeGreaterThan(0);
     expect(persisted.refundedCheckoutCount).toBe(1);
     expect(persisted.lines).toHaveLength(2);
+    expect(persisted.lines[0].organizationId).toBe(organizationId);
     for (const line of persisted.lines) {
       expect(line.organizationId).toBe(organizationId);
       expect(line.financialAccountId).toBe(cashAccountId);
