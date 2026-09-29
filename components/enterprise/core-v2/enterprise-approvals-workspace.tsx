@@ -49,6 +49,7 @@ const APPROVAL_TARGET_TYPES = [
   "EnterpriseTimesheet",
   "EnterprisePayrollRun",
   "EnterpriseProjectMilestone",
+  "EnterpriseGamingDailyClose",
   "PharmacyQualityIncident",
 ] as const;
 
