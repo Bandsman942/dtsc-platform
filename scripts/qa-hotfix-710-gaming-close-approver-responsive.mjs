@@ -26,12 +26,16 @@ check(!/\bDROP\s+(TABLE|COLUMN|TYPE|INDEX)\b/i.test(migration), "#710 migration 
 check(schemas.includes("approverUserId: id"), "#710 create schema must require an approver.");
 check(schemas.includes('reason: z.string().trim().max(1000).optional()'), "#710 validation reason must not have a minimum length.");
 check(schemas.includes('value.action === "REJECT"') && schemas.includes("value.reason.length < 8"), "#710 rejection must keep the 8-character minimum.");
+check(schemas.includes('"ASSIGN_APPROVER"') && schemas.includes("GAMING_CLOSE_APPROVER_REQUIRED"), "#710 must support explicit recovery assignment for historical submitted closes.");
 
 for (const marker of [
   "assertEnterpriseApprovalCandidate",
   "assertEnterpriseApprovalDecision",
   'moduleCode: "GAMING_DAILY_CLOSE"',
   "GAMING_CLOSE_APPROVER_NOT_ASSIGNED",
+  "GAMING_CLOSE_APPROVER_ALREADY_ASSIGNED",
+  "GAMING_CLOSE_APPROVER_ASSIGNMENT_FORBIDDEN",
+  'input.action === "ASSIGN_APPROVER"',
   "GAMING_CLOSE_WRONG_APPROVER",
   "approverUserId: input.approverUserId",
 ]) check(service.includes(marker), `#710 service missing ${marker}`);
@@ -47,6 +51,8 @@ for (const marker of [
   "candidate.isRequester",
   "approverUserId",
   "collection.extra.canApprove",
+  "openAssignApprover",
+  'action: "ASSIGN_APPROVER"',
   'min-w-[1120px]',
   "whitespace-nowrap px-3 py-3",
   "md:hidden",
@@ -61,6 +67,7 @@ for (const marker of [
   "approverUserId,",
   'GAMING_CLOSE_SELF_VALIDATION_FORBIDDEN',
   'GAMING_CLOSE_REJECTION_REASON_TOO_SHORT',
+  'action: "ASSIGN_APPROVER"',
   'reason: "Parfait"',
 ]) check(e2e.includes(marker), `#710 E2E missing ${marker}`);
 
