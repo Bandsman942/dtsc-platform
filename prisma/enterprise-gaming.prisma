@@ -237,6 +237,7 @@ model EnterpriseGamingDailyClose {
   pendingCheckoutCount Int      @default(0)
   refundedCheckoutCount Int     @default(0)
   submittedByUserId    String
+  approverUserId       String?
   validatedByUserId    String?
   submittedAt          DateTime @default(now())
   validatedAt          DateTime?
