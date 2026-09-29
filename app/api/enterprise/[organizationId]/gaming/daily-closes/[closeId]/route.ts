@@ -50,14 +50,18 @@ export async function PATCH(req: Request, { params }: Params) {
     const language = req.headers.get("accept-language")?.toLowerCase().startsWith("en") ? "en" : "fr";
     const issue = parsed.error.issues[0];
     const rejectionReasonTooShort = issue?.message === "GAMING_CLOSE_REJECTION_REASON_TOO_SHORT";
+    const approverMissing = issue?.message === "GAMING_CLOSE_APPROVER_REQUIRED";
     const message = rejectionReasonTooShort
       ? (language === "en" ? "Enter a rejection reason of at least 8 characters." : "Saisissez un motif de rejet d’au moins 8 caractères.")
-      : (language === "en" ? "Check the decision information and try again." : "Vérifiez les informations de décision puis réessayez.");
-    return NextResponse.json({ error: rejectionReasonTooShort ? "GAMING_CLOSE_REJECTION_REASON_TOO_SHORT" : "ENTERPRISE_INPUT_INVALID", message }, { status: 400 });
+      : approverMissing
+        ? (language === "en" ? "Select an authorized approver." : "Sélectionnez un validateur autorisé.")
+        : (language === "en" ? "Check the decision information and try again." : "Vérifiez les informations de décision puis réessayez.");
+    return NextResponse.json({ error: rejectionReasonTooShort ? "GAMING_CLOSE_REJECTION_REASON_TOO_SHORT" : approverMissing ? "GAMING_CLOSE_APPROVER_REQUIRED" : "ENTERPRISE_INPUT_INVALID", message }, { status: 400 });
   }
   const { organizationId, closeId } = await params;
+  const accessAction = parsed.data.action === "ASSIGN_APPROVER" ? "submit" : "approve";
   const [gamingAccess, financeAccess] = await Promise.all([
-    getEnterpriseGamingDailyCloseAccess({ session, organizationId, action: "approve" }),
+    getEnterpriseGamingDailyCloseAccess({ session, organizationId, action: accessAction }),
     financeReadAccess(session, organizationId),
   ]);
   if (!gamingAccess || financeAccess.some((access) => !access)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
