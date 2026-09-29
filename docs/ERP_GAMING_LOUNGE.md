@@ -250,12 +250,15 @@ Le demandeur du remboursement ne peut pas l’approuver lui-même. Le chemin Gam
 
 La journée métier est calculée avec la timezone du `EnterpriseSite`. La date sélectionnée est transformée en bornes UTC correspondant à minuit → minuit local. Sans site, le fallback contrôlé est `UTC`.
 
-Deux axes temporels sont volontairement distincts :
+Le snapshot distingue explicitement les événements opérationnels et financiers, sans les confondre :
 
-- les compteurs `endedSessionCount`, `paidSessionCount`, `pendingCheckoutCount`, `refundedCheckoutCount` décrivent les sessions dont `endedAt` tombe dans cette journée métier ;
-- les lignes financières sélectionnent les `EnterprisePayment` dont **`paymentDate`** tombe dans cette journée, même si la session a été terminée un jour antérieur.
+- `endedSessionCount` compte les sessions dont `endedAt` tombe dans la journée métier ;
+- `paidSessionCount` compte les **sessions distinctes** reliées à un `EnterprisePayment` Gaming entrant `CUSTOMER_PAYMENT` confirmé ou rapproché dont `paymentDate` tombe dans la journée, même si la session s’est terminée auparavant ;
+- `refundedCheckoutCount` compte les **checkouts distincts** reliés à un `EnterprisePayment` Gaming sortant `REFUND` confirmé ou rapproché dont `paymentDate` tombe dans la journée ;
+- `pendingCheckoutCount` représente le backlog des checkouts encore `INVOICE_PENDING`, `AWAITING_PAYMENT`, `PARTIALLY_PAID` ou `REFUND_PENDING` au moment du snapshot, borné aux sessions déjà terminées avant la fin de la journée sélectionnée et au site choisi ;
+- les lignes financières utilisent le même ensemble de paiements Gaming confirmé/rapproché et la même fenêtre `paymentDate`, avec déduplication des KPI par session/checkout.
 
-Cette séparation garantit qu’un paiement tardif ou un remboursement effectué aujourd’hui pour un checkout d’hier apparaît dans la clôture financière d’aujourd’hui.
+Ainsi, un paiement tardif ou un remboursement effectué aujourd’hui pour un checkout d’hier apparaît à la fois dans la ligne financière de la journée et dans le KPI financier correspondant. `Sessions terminées` reste volontairement une métrique d’activité basée sur `endedAt`. Les KPI et les lignes sont calculés après le verrou de clôture dans la même transaction sérialisable, puis persistés comme un snapshot immuable.
 
 Pour chaque couple `financialAccountId + methodType`, une ligne conserve :
 
@@ -309,12 +312,12 @@ Le module Gaming ne contourne pas Finance : approuver/émettre une facture exige
 `Clôture Gaming` fournit :
 
 - liste, filtres, KPI et pagination ;
-- choix journée/site ;
+- choix journée/site avec date initiale calculée dans le fuseau du site (UTC pour le périmètre global) ;
 - déclarations par compte financier et moyen de paiement ;
 - affichage séparé par devise ;
 - entrant, remboursements, attendu, déclaré, écart ;
 - validation/rejet indépendant ;
-- détail plein écran ;
+- détail plein écran avec journée métier affichée comme date calendaire sans heure artificielle ;
 - dialogs mobile-safe `92dvh` ;
 - FR/EN.
 
