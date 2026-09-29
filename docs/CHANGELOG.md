@@ -2,6 +2,29 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-09-29 — Hotfix #710 : validateur assigné et détail de clôture Gaming responsive
+
+### Corrigé
+
+- Une nouvelle clôture Gaming exige désormais un validateur explicite issu des candidats autorisés du module `GAMING_DAILY_CLOSE`.
+- Le validateur désigné est persisté sur la clôture et seul cet utilisateur peut valider ou rejeter la décision, avec revalidation serveur de sa permission `approve`.
+- L’auto-validation du soumissionnaire reste interdite.
+- Les clôtures historiques déjà `SUBMITTED` sans validateur disposent d’un chemin de récupération : leur soumissionnaire peut désigner un validateur avant décision.
+- Le motif d’une validation reste facultatif et peut être court ; seul le rejet exige au moins 8 caractères.
+- Les erreurs de validation ne projettent plus les messages Zod techniques au client.
+- Le détail de clôture utilise des cartes sur mobile et un tableau desktop plus large, scrollable localement, avec espacements et en-têtes non compressés.
+
+### Données et sécurité
+
+- Migration additive `20260929143500_gaming_daily_close_assigned_approver` : ajout nullable de `approverUserId` pour compatibilité des clôtures historiques, plus index tenant/validateur/statut.
+- Aucun backfill arbitraire : les anciennes clôtures restent fail-closed jusqu’à affectation explicite par leur soumissionnaire.
+- L’isolation `organizationId`, les permissions module et la séparation maker/checker restent inchangées.
+
+### Qualité
+
+- Ajout de `qa:hotfix-710` à la régression canonique.
+- L’E2E Gaming couvre la persistance du validateur, la récupération d’une clôture historique sans validateur, le refus de l’auto-validation, la validation par l’utilisateur assigné avec le motif court « Parfait » et le rejet d’un motif de rejet trop court.
+
 ## 2026-09-29 — Hotfix #706 : création des clôtures Gaming et erreur de soumission explicite
 
 ### Corrigé

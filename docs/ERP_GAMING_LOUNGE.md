@@ -467,3 +467,15 @@ La clôture Gaming conserve `EnterpriseGamingDailyClose` comme parent tenant-sco
 Le builder de lignes est typé avec `Prisma.EnterpriseGamingDailyCloseLineCreateWithoutDailyCloseInput[]` afin qu’une réintroduction future de clés relationnelles incompatibles soit rejetée dès le type-check. Le serveur continue de recalculer `expectedAmount`, `declaredAmount` et `differenceAmount`; un motif reste obligatoire uniquement lorsque l’écart est non nul.
 
 Les erreurs inattendues de création utilisent `GAMING_DAILY_CLOSE_CREATE_FAILED` avec un message client FR/EN spécifique, une référence support corrélable et aucun détail Prisma/SQL exposé. Aucune migration n’est requise pour #706.
+
+## Hotfix #710 — validateur assigné et détail responsive
+
+La clôture Gaming applique désormais le contrat maker/checker dès la soumission. Le formulaire charge les candidats depuis `/api/enterprise/[organizationId]/approval-candidates?moduleCode=GAMING_DAILY_CLOSE`, exclut le soumissionnaire et exige un `approverUserId` avant création. Le backend revalide ce candidat avec le contrat canonique d’approbation et persiste l’affectation sur `EnterpriseGamingDailyClose`.
+
+Au moment de la décision, la route exige la capacité canonique `approve`, puis le service vérifie que l’acteur est exactement le validateur désigné et qu’il possède toujours cette permission. Le soumissionnaire ne peut pas décider sa propre clôture.
+
+La migration #710 laisse `approverUserId` nullable uniquement pour préserver les clôtures déjà soumises avant le hotfix. Ces enregistrements historiques restent fail-closed, mais leur soumissionnaire peut utiliser l’action `ASSIGN_APPROVER` pour désigner explicitement un validateur sans recréer la clôture ni contourner l’unicité de journée.
+
+Le contrat des motifs distingue désormais les décisions : `VALIDATE` accepte un motif facultatif sans longueur minimale, tandis que `REJECT` exige au moins 8 caractères. Les erreurs Zod brutes ne sont jamais renvoyées dans le toast utilisateur.
+
+Côté présentation, les lignes de rapprochement sont affichées en cartes sur mobile. À partir du breakpoint desktop, le tableau possède une largeur minimale suffisante, des paddings horizontaux et des en-têtes `whitespace-nowrap`, avec scroll horizontal local lorsque nécessaire.

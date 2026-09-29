@@ -37,7 +37,7 @@ export async function GET(req: Request, { params }: Params) {
       siteId: url.searchParams.get("siteId")?.trim() || undefined,
     });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "gaming-daily-close", page: result.pagination.page } });
-    return NextResponse.json({ ...result, canWrite: gamingAccess.canWrite, canManage: gamingAccess.canManage });
+    return NextResponse.json({ ...result, canWrite: gamingAccess.canWrite, canApprove: gamingAccess.canApprove, canManage: gamingAccess.canManage });
   } catch (error) {
     return gamingCheckoutErrorResponse(error, req, "GAMING_DAILY_CLOSE_LIST_FAILED");
   }
@@ -51,7 +51,15 @@ export async function POST(req: Request, { params }: Params) {
   const limited = await rateLimit(getRateLimitKey(req, `enterprise-gaming-daily-close-create:${session.userId}`), 80, 3_600_000);
   if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   const parsed = gamingDailyCloseCreateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) {
+    const language = req.headers.get("accept-language")?.toLowerCase().startsWith("en") ? "en" : "fr";
+    const issue = parsed.error.issues[0];
+    const approverMissing = issue?.path?.[0] === "approverUserId";
+    const message = approverMissing
+      ? (language === "en" ? "Select an authorized approver before submitting the Gaming close." : "Sélectionnez un validateur autorisé avant de soumettre la clôture Gaming.")
+      : (language === "en" ? "Check the close information and try again." : "Vérifiez les informations de la clôture puis réessayez.");
+    return NextResponse.json({ error: approverMissing ? "GAMING_CLOSE_APPROVER_REQUIRED" : "ENTERPRISE_INPUT_INVALID", message }, { status: 400 });
+  }
   const { organizationId } = await params;
   const [gamingAccess, paymentsAccess, treasuryAccess, cashAccess, sitesAccess] = await Promise.all([
     getEnterpriseGamingDailyCloseAccess({ session, organizationId, action: "submit" }),

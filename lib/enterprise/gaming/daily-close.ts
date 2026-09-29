@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
+import { assertEnterpriseApprovalCandidate, assertEnterpriseApprovalDecision } from "@/lib/enterprise/approval-assignment";
 import {
   EnterpriseGamingCheckoutError,
   gamingMoney,
@@ -14,6 +15,7 @@ import type { z } from "zod";
 
 type CloseCreateInput = z.infer<typeof gamingDailyCloseCreateSchema>;
 type CloseDecisionInput = z.infer<typeof gamingDailyCloseDecisionSchema>;
+type ApprovalAssignmentError = Error & { code?: string; statusCode?: number };
 type LocalParts = { year: number; month: number; day: number; hour: number; minute: number; second: number };
 
 function safeTimezone(value: string | null | undefined) {
@@ -83,6 +85,36 @@ function baseCheckoutReference(reference: string | null) {
   return reference.endsWith(":REFUND") ? reference.slice(0, -":REFUND".length) : reference;
 }
 
+function assignmentFailure(error: unknown, fallbackCode: string) {
+  const candidate = error as ApprovalAssignmentError;
+  const status = candidate?.statusCode || 403;
+  const code = candidate?.code || fallbackCode;
+  const mapped = code === "WRONG_APPROVER"
+    ? "GAMING_CLOSE_WRONG_APPROVER"
+    : code === "APPROVER_PERMISSION_DENIED"
+      ? "GAMING_CLOSE_APPROVER_PERMISSION_DENIED"
+      : code === "SELF_APPROVAL_FORBIDDEN"
+        ? "GAMING_CLOSE_SELF_VALIDATION_FORBIDDEN"
+        : "GAMING_CLOSE_APPROVER_NOT_ELIGIBLE";
+  return new EnterpriseGamingCheckoutError(mapped, status);
+}
+
+async function assertCloseApproverCandidate(organizationId: string, requesterUserId: string, approverUserId: string) {
+  if (requesterUserId === approverUserId) {
+    throw new EnterpriseGamingCheckoutError("GAMING_CLOSE_SELF_VALIDATION_FORBIDDEN", 403);
+  }
+  try {
+    await assertEnterpriseApprovalCandidate({
+      organizationId,
+      requesterUserId,
+      approverUserId,
+      moduleCode: "GAMING_DAILY_CLOSE",
+    });
+  } catch (error) {
+    throw assignmentFailure(error, "GAMING_CLOSE_APPROVER_NOT_ELIGIBLE");
+  }
+}
+
 export async function createGamingDailyClose(
   organizationId: string,
   actorUserId: string,
@@ -93,6 +125,8 @@ export async function createGamingDailyClose(
     include: { lines: true },
   });
   if (existingKey) return { close: existingKey, idempotent: true };
+
+  await assertCloseApproverCandidate(organizationId, actorUserId, input.approverUserId);
 
   const site = input.siteId
     ? await prisma.enterpriseSite.findFirst({
@@ -275,6 +309,7 @@ export async function createGamingDailyClose(
           pendingCheckoutCount: dayCheckouts.filter((checkout) => ["INVOICE_PENDING", "AWAITING_PAYMENT", "PARTIALLY_PAID", "REFUND_PENDING"].includes(checkout.status)).length,
           refundedCheckoutCount: dayCheckouts.filter((checkout) => checkout.status === "REFUNDED").length,
           submittedByUserId: actorUserId,
+          approverUserId: input.approverUserId,
           notes: input.notes || null,
           idempotencyKey: input.idempotencyKey,
           lines: { create: lines },
@@ -313,8 +348,33 @@ export async function decideGamingDailyClose(
       throw new EnterpriseGamingCheckoutError("GAMING_CLOSE_REVISION_CONFLICT", 409, { currentRevision: close.revision });
     }
     if (close.status !== "SUBMITTED") throw new EnterpriseGamingCheckoutError("GAMING_CLOSE_ALREADY_DECIDED", 409);
+    if (input.action === "ASSIGN_APPROVER") {
+      if (close.approverUserId) throw new EnterpriseGamingCheckoutError("GAMING_CLOSE_APPROVER_ALREADY_ASSIGNED", 409);
+      if (close.submittedByUserId !== actorUserId) throw new EnterpriseGamingCheckoutError("GAMING_CLOSE_APPROVER_ASSIGNMENT_FORBIDDEN", 403);
+      await assertCloseApproverCandidate(organizationId, actorUserId, input.approverUserId!);
+      return tx.enterpriseGamingDailyClose.update({
+        where: { id: close.id },
+        data: {
+          approverUserId: input.approverUserId!,
+          revision: { increment: 1 },
+        },
+        include: { lines: true },
+      });
+    }
+    if (!close.approverUserId) throw new EnterpriseGamingCheckoutError("GAMING_CLOSE_APPROVER_NOT_ASSIGNED", 409);
     if (close.submittedByUserId === actorUserId) {
       throw new EnterpriseGamingCheckoutError("GAMING_CLOSE_SELF_VALIDATION_FORBIDDEN", 403);
+    }
+    try {
+      await assertEnterpriseApprovalDecision({
+        organizationId,
+        requesterUserId: close.submittedByUserId,
+        approverUserId: close.approverUserId,
+        actorUserId,
+        moduleCode: "GAMING_DAILY_CLOSE",
+      });
+    } catch (error) {
+      throw assignmentFailure(error, "GAMING_CLOSE_WRONG_APPROVER");
     }
     const nextStatus = input.action === "VALIDATE" ? "VALIDATED" : "REJECTED";
     return tx.enterpriseGamingDailyClose.update({

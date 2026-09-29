@@ -633,7 +633,8 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
         data: {
           businessDate,
           siteId: null,
-          notes: "Hotfix #706 E2E",
+          approverUserId,
+          notes: "Hotfix #706/#710 E2E",
           idempotencyKey,
           declarations: [{
             financialAccountId: cashAccountId,
@@ -658,6 +659,7 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
       include: { lines: true },
     });
     expect(persisted.organizationId).toBe(organizationId);
+    expect(persisted.approverUserId).toBe(approverUserId);
     expect(persisted.lines).toHaveLength(1);
     expect(persisted.lines[0].organizationId).toBe(organizationId);
     expect(persisted.lines[0].financialAccountId).toBe(cashAccountId);
@@ -667,6 +669,69 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
     expect(persisted.lines[0].declaredAmount.toFixed()).toBe("500");
     expect(persisted.lines[0].differenceAmount.toFixed()).toBe("0");
     expect(persisted.lines[0].varianceReason).toBeNull();
+
+    await prisma.enterpriseGamingDailyClose.update({
+      where: { id: persisted.id },
+      data: { approverUserId: null },
+    });
+
+    const assignResponse = await context.request.patch(
+      `${baseUrl}/api/enterprise/${organizationId}/gaming/daily-closes/${persisted.id}`,
+      {
+        data: { action: "ASSIGN_APPROVER", revision: persisted.revision, approverUserId },
+        headers: {
+          origin: baseUrl,
+          referer: `${baseUrl}/enterprise-modules/GAMING_DAILY_CLOSE`,
+        },
+      },
+    );
+    const assignedClose = await assignResponse.json().catch(() => null);
+    expect(assignResponse.ok(), JSON.stringify(assignedClose)).toBeTruthy();
+    expect(assignedClose?.close?.approverUserId).toBe(approverUserId);
+
+    const selfDecision = await context.request.patch(
+      `${baseUrl}/api/enterprise/${organizationId}/gaming/daily-closes/${persisted.id}`,
+      {
+        data: { action: "VALIDATE", revision: assignedClose.close.revision, reason: "Parfait" },
+        headers: {
+          origin: baseUrl,
+          referer: `${baseUrl}/enterprise-modules/GAMING_DAILY_CLOSE`,
+        },
+      },
+    );
+    const selfDecisionBody = await selfDecision.json().catch(() => null);
+    expect(selfDecision.status(), JSON.stringify(selfDecisionBody)).toBe(403);
+    expect(selfDecisionBody?.error).toBe("GAMING_CLOSE_SELF_VALIDATION_FORBIDDEN");
+
+    const assignedDecision = await approverContext.request.patch(
+      `${baseUrl}/api/enterprise/${organizationId}/gaming/daily-closes/${persisted.id}`,
+      {
+        data: { action: "VALIDATE", revision: assignedClose.close.revision, reason: "Parfait" },
+        headers: {
+          origin: baseUrl,
+          referer: `${baseUrl}/enterprise-modules/GAMING_DAILY_CLOSE`,
+        },
+      },
+    );
+    const assignedDecisionBody = await assignedDecision.json().catch(() => null);
+    expect(assignedDecision.ok(), JSON.stringify(assignedDecisionBody)).toBeTruthy();
+    expect(assignedDecisionBody?.close?.status).toBe("VALIDATED");
+    expect(assignedDecisionBody?.close?.validatedByUserId).toBe(approverUserId);
+
+    const shortReject = await approverContext.request.patch(
+      `${baseUrl}/api/enterprise/${organizationId}/gaming/daily-closes/${persisted.id}`,
+      {
+        data: { action: "REJECT", revision: assignedDecisionBody.close.revision, reason: "Court" },
+        headers: {
+          origin: baseUrl,
+          referer: `${baseUrl}/enterprise-modules/GAMING_DAILY_CLOSE`,
+        },
+      },
+    );
+    const shortRejectBody = await shortReject.json().catch(() => null);
+    expect(shortReject.status(), JSON.stringify(shortRejectBody)).toBe(400);
+    expect(shortRejectBody?.error).toBe("GAMING_CLOSE_REJECTION_REASON_TOO_SHORT");
+    expect(shortRejectBody?.message).toMatch(/8 caractères|8 characters/i);
   });
 
   test("#700 reopens cash after pending close and recovers a historical approved Gaming payment; #704 uses another authorized cashier and preserves CDF", async () => {

@@ -80,6 +80,7 @@ export const gamingCheckoutCommandSchema = z.discriminatedUnion("action", [
 export const gamingDailyCloseCreateSchema = z.object({
   businessDate: z.coerce.date(),
   siteId: id.optional().nullable(),
+  approverUserId: id,
   notes: z.string().trim().max(2000).optional().nullable(),
   idempotencyKey,
   declarations: z.array(z.object({
@@ -91,11 +92,15 @@ export const gamingDailyCloseCreateSchema = z.object({
 });
 
 export const gamingDailyCloseDecisionSchema = z.object({
-  action: z.enum(["VALIDATE", "REJECT"]),
+  action: z.enum(["VALIDATE", "REJECT", "ASSIGN_APPROVER"]),
   revision,
-  reason: z.string().trim().min(8).max(1000).optional(),
+  reason: z.string().trim().max(1000).optional(),
+  approverUserId: id.optional(),
 }).superRefine((value, ctx) => {
-  if (value.action === "REJECT" && !value.reason) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["reason"], message: "Un motif est obligatoire pour rejeter la clôture." });
+  if (value.action === "REJECT" && (!value.reason || value.reason.length < 8)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["reason"], message: "GAMING_CLOSE_REJECTION_REASON_TOO_SHORT" });
+  }
+  if (value.action === "ASSIGN_APPROVER" && !value.approverUserId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["approverUserId"], message: "GAMING_CLOSE_APPROVER_REQUIRED" });
   }
 });

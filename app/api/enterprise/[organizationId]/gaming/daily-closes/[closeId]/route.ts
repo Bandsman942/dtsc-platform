@@ -46,10 +46,22 @@ export async function PATCH(req: Request, { params }: Params) {
   const limited = await rateLimit(getRateLimitKey(req, `enterprise-gaming-daily-close-decision:${session.userId}`), 80, 3_600_000);
   if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   const parsed = gamingDailyCloseDecisionSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) {
+    const language = req.headers.get("accept-language")?.toLowerCase().startsWith("en") ? "en" : "fr";
+    const issue = parsed.error.issues[0];
+    const rejectionReasonTooShort = issue?.message === "GAMING_CLOSE_REJECTION_REASON_TOO_SHORT";
+    const approverMissing = issue?.message === "GAMING_CLOSE_APPROVER_REQUIRED";
+    const message = rejectionReasonTooShort
+      ? (language === "en" ? "Enter a rejection reason of at least 8 characters." : "Saisissez un motif de rejet d’au moins 8 caractères.")
+      : approverMissing
+        ? (language === "en" ? "Select an authorized approver." : "Sélectionnez un validateur autorisé.")
+        : (language === "en" ? "Check the decision information and try again." : "Vérifiez les informations de décision puis réessayez.");
+    return NextResponse.json({ error: rejectionReasonTooShort ? "GAMING_CLOSE_REJECTION_REASON_TOO_SHORT" : approverMissing ? "GAMING_CLOSE_APPROVER_REQUIRED" : "ENTERPRISE_INPUT_INVALID", message }, { status: 400 });
+  }
   const { organizationId, closeId } = await params;
+  const accessAction = parsed.data.action === "ASSIGN_APPROVER" ? "submit" : "approve";
   const [gamingAccess, financeAccess] = await Promise.all([
-    getEnterpriseGamingDailyCloseAccess({ session, organizationId, action: "manage" }),
+    getEnterpriseGamingDailyCloseAccess({ session, organizationId, action: accessAction }),
     financeReadAccess(session, organizationId),
   ]);
   if (!gamingAccess || financeAccess.some((access) => !access)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });

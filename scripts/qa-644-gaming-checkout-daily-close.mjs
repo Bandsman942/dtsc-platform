@@ -102,7 +102,7 @@ includesAll(schemas, [
   "declaredAmount: signedMoney",
   "varianceReason",
   "gamingDailyCloseDecisionSchema",
-  'z.enum(["VALIDATE", "REJECT"])',
+  'z.enum(["VALIDATE", "REJECT", "ASSIGN_APPROVER"])',
 ], "checkout schemas");
 
 includesAll(prismaSchema, [
@@ -325,7 +325,7 @@ includesAll(closeDecisionRoute, [
   "getEnterpriseGamingDailyCloseAccess",
   "gamingDailyCloseDecisionSchema",
   "decideGamingDailyClose",
-  'action: "manage"',
+  'accessAction = parsed.data.action === "ASSIGN_APPROVER" ? "submit" : "approve"',
   "isSameOriginRequest",
   "await rateLimit",
   "writeAuditLog",

@@ -53,6 +53,14 @@ const messages: Record<string, { fr: string; en: string }> = {
   GAMING_CLOSE_REVISION_CONFLICT: { fr: "Cette clôture a changé entre-temps. Rechargez-la avant de recommencer.", en: "This close changed in the meantime. Reload it before trying again." },
   GAMING_CLOSE_ALREADY_DECIDED: { fr: "Cette clôture a déjà été validée ou rejetée.", en: "This close has already been validated or rejected." },
   GAMING_CLOSE_SELF_VALIDATION_FORBIDDEN: { fr: "La personne qui soumet la clôture ne peut pas la valider elle-même.", en: "The person who submits the close cannot validate it themselves." },
+  GAMING_CLOSE_APPROVER_REQUIRED: { fr: "Sélectionnez un validateur autorisé avant de soumettre la clôture Gaming.", en: "Select an authorized approver before submitting the Gaming close." },
+  GAMING_CLOSE_APPROVER_NOT_ELIGIBLE: { fr: "Le validateur sélectionné n’est plus autorisé à valider cette clôture. Choisissez un autre validateur.", en: "The selected approver is no longer authorized to approve this close. Choose another approver." },
+  GAMING_CLOSE_APPROVER_NOT_ASSIGNED: { fr: "Cette ancienne clôture n’a aucun validateur désigné. Elle doit être réaffectée avant décision.", en: "This historical close has no assigned approver. It must be reassigned before a decision." },
+  GAMING_CLOSE_APPROVER_ALREADY_ASSIGNED: { fr: "Cette clôture possède déjà un validateur désigné.", en: "This close already has an assigned approver." },
+  GAMING_CLOSE_APPROVER_ASSIGNMENT_FORBIDDEN: { fr: "Seule la personne qui a soumis cette ancienne clôture peut lui désigner un validateur.", en: "Only the person who submitted this historical close can assign its approver." },
+  GAMING_CLOSE_WRONG_APPROVER: { fr: "Seul le validateur désigné pour cette clôture peut la valider ou la rejeter.", en: "Only the approver assigned to this close can validate or reject it." },
+  GAMING_CLOSE_APPROVER_PERMISSION_DENIED: { fr: "Vous n’avez plus l’autorisation nécessaire pour décider cette clôture.", en: "You no longer have permission to decide this close." },
+  GAMING_CLOSE_REJECTION_REASON_TOO_SHORT: { fr: "Le motif de rejet doit contenir au moins 8 caractères.", en: "The rejection reason must contain at least 8 characters." },
 };
 
 function locale(req: Request): "fr" | "en" {

@@ -16,7 +16,7 @@ export default async function GamingDailyClosePage() {
   if (!organization) notFound();
   return (
     <AppShell user={user}>
-      <EnterpriseGamingDailyCloseWorkspace organizationId={organizationId} organizationName={organization.name} definition={capabilities.definition} />
+      <EnterpriseGamingDailyCloseWorkspace organizationId={organizationId} organizationName={organization.name} definition={capabilities.definition} currentUserId={user.id} />
     </AppShell>
   );
 }
