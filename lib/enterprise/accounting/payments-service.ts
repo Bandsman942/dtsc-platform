@@ -35,15 +35,46 @@ async function resolveCashSessionForConfirmation(
 ) {
   if (!payment.financialAccountId) throw new EnterpriseAccountingError("PAYMENT_FINANCIAL_ACCOUNT_REQUIRED", 409);
 
-  const findOpenReplacement = () => tx.enterpriseCashSession.findFirst({
-    where: {
-      organizationId: payment.organizationId,
-      financialAccountId: payment.financialAccountId!,
-      cashierUserId: payment.initiatedByUserId,
-      status: "OPEN",
-    },
-    orderBy: { openedAt: "desc" },
-  });
+  const findPreferredOpenReplacement = async () => {
+    const historicalCashierSession = await tx.enterpriseCashSession.findFirst({
+      where: {
+        organizationId: payment.organizationId,
+        financialAccountId: payment.financialAccountId!,
+        cashierUserId: payment.initiatedByUserId,
+        status: "OPEN",
+      },
+      orderBy: { openedAt: "desc" },
+    });
+    if (historicalCashierSession) return historicalCashierSession;
+
+    if (actorUserId !== payment.initiatedByUserId) {
+      const confirmingCashierSession = await tx.enterpriseCashSession.findFirst({
+        where: {
+          organizationId: payment.organizationId,
+          financialAccountId: payment.financialAccountId!,
+          cashierUserId: actorUserId,
+          status: "OPEN",
+        },
+        orderBy: { openedAt: "desc" },
+      });
+      if (confirmingCashierSession) return confirmingCashierSession;
+    }
+
+    const compatibleOpenSessions = await tx.enterpriseCashSession.findMany({
+      where: {
+        organizationId: payment.organizationId,
+        financialAccountId: payment.financialAccountId!,
+        status: "OPEN",
+      },
+      orderBy: { openedAt: "desc" },
+      take: 2,
+    });
+    if (compatibleOpenSessions.length === 1) return compatibleOpenSessions[0];
+    if (compatibleOpenSessions.length > 1) {
+      throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_AMBIGUOUS", 409);
+    }
+    return null;
+  };
 
   if (payment.cashSessionId) {
     const linked = await tx.enterpriseCashSession.findFirst({
@@ -51,14 +82,13 @@ async function resolveCashSessionForConfirmation(
         id: payment.cashSessionId,
         organizationId: payment.organizationId,
         financialAccountId: payment.financialAccountId,
-        cashierUserId: payment.initiatedByUserId,
       },
     });
     if (!linked) throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_INVALID", 409);
 
     if (linked.status === "OPEN") return linked;
 
-    const replacement = await findOpenReplacement();
+    const replacement = await findPreferredOpenReplacement();
     if (replacement) {
       await tx.enterprisePayment.update({
         where: { id: payment.id },
@@ -71,7 +101,13 @@ async function resolveCashSessionForConfirmation(
         actorUserId,
         "CASH_SESSION_REBOUND",
         "Cash session rebound before confirmation",
-        { previousCashSessionId: linked.id, cashSessionId: replacement.id, previousStatus: linked.status },
+        {
+          previousCashSessionId: linked.id,
+          previousCashierUserId: linked.cashierUserId,
+          cashSessionId: replacement.id,
+          cashierUserId: replacement.cashierUserId,
+          previousStatus: linked.status,
+        },
       );
       return replacement;
     }
@@ -85,7 +121,7 @@ async function resolveCashSessionForConfirmation(
     throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_CLOSED", 409);
   }
 
-  const recovered = await findOpenReplacement();
+  const recovered = await findPreferredOpenReplacement();
   if (recovered) {
     await tx.enterprisePayment.update({
       where: { id: payment.id },
@@ -98,7 +134,11 @@ async function resolveCashSessionForConfirmation(
       actorUserId,
       "CASH_SESSION_RECOVERED",
       "Historical cash session binding recovered before confirmation",
-      { cashSessionId: recovered.id },
+      {
+        historicalInitiatorUserId: payment.initiatedByUserId,
+        cashSessionId: recovered.id,
+        cashierUserId: recovered.cashierUserId,
+      },
     );
     return recovered;
   }
@@ -107,7 +147,6 @@ async function resolveCashSessionForConfirmation(
     where: {
       organizationId: payment.organizationId,
       financialAccountId: payment.financialAccountId,
-      cashierUserId: payment.initiatedByUserId,
       status: { in: ["PENDING_VALIDATION", "CLOSING"] },
     },
     orderBy: { openedAt: "desc" },
