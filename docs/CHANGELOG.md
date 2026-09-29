@@ -2,6 +2,23 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-09-29 — Hotfix #700 : rattachement des paiements Cash aux sessions et récupération historique
+
+### Corrigé
+
+- Les paiements Cash mémorisent désormais la session de caisse exacte lorsqu’elle est ouverte au moment de leur création.
+- Une ancienne caisse `PENDING_VALIDATION` ne bloque plus l’ouverture de la caisse suivante du même caissier et du même compte.
+- Les paiements historiques déjà `APPROVED` mais dépourvus de rattachement de caisse récupèrent automatiquement une session `OPEN` compatible à la confirmation.
+- Les paiements dont la caisse initiale a été clôturée ou mise en validation peuvent être réaffectés avant confirmation à la nouvelle session `OPEN`, avec historique auditable.
+- Les messages distinguent caisse absente, clôture en attente, clôture en cours, caisse fermée et rattachement invalide.
+
+### Données et sécurité
+
+- Migration additive `20260929083000_payment_cash_session_binding` : colonne nullable `cashSessionId`, FK composite tenant-safe et index.
+- Backfill limité aux paiements Cash possédant déjà un unique mouvement de caisse non ambigu.
+- Les règles d’indépendance initiateur / approbateur / confirmateur restent inchangées.
+- L’E2E #700 couvre la reprise d’un paiement Gaming historique jusqu’à facture, checkout et session `PAID`.
+
 ## 2026-09-25 — Hotfix #670 : suppression des bridges ERP et certification finale
 
 ### Supprimé
