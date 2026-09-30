@@ -104,7 +104,7 @@ Mobile Money and Telco extensions keep operator-specific operational state, whil
 |---|---|---|---|
 | `PHARMACY_SALE_INVOICED` | common sales invoice create/approve/issue | sale, customer party, mapped catalog items, unique invoice extension | revenue, tax and receivable |
 | `PHARMACY_CUSTOMER_PAYMENT_CONFIRMED` | common payment create/approve/confirm + allocation | Pharmacy payment, common invoice/receivable, payer, financial account | treasury debit and receivable credit |
-| `PHARMACY_REFUND_CONFIRMED` | common refund payment and optional sales credit note | original payment/allocation, invoice, reason | reverse treasury and/or receivable/revenue |
+| `PHARMACY_REFUND_CONFIRMED` | **cible canonique — runtime legacy incomplet, voir #728** : common refund payment and optional sales credit note | original payment/allocation, invoice, reason | reverse treasury and/or receivable/revenue |
 | `PHARMACY_PURCHASE_RECEIVED` | common purchase receipt link | supplier, purchase, mapped catalog lines | no supplier liability by itself |
 | `PHARMACY_SUPPLIER_INVOICE_POSTED` | common supplier invoice | mapped supplier/purchase/receipt | inventory or expense and payable |
 | `PHARMACY_STOCK_ISSUED` | inventory issue valuation service | source movement, product, lot, cost | cost of sales and inventory |
