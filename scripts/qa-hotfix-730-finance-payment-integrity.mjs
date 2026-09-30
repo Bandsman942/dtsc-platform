@@ -21,6 +21,7 @@ requireTokens(payments, [
   "payment.approvedByUserId",
   "PAYMENT_TREASURY_TRANSACTION_MISSING",
   "PAYMENT_TREASURY_TRANSACTION_INCONSISTENT",
+  "treasuryRow.amount.equals(payment.amount)",
   "PAYMENT_CASH_MOVEMENT_INCONSISTENT",
   "PAYMENT_JOURNAL_INCONSISTENT",
   "originalSignedAmount.negated()",
