@@ -175,6 +175,11 @@ jobs:
         run: |
           set -o pipefail
           pnpm exec playwright test tests/e2e/erp-cross-module-finance.spec.mjs --workers=1 2>&1 | tee /tmp/dtsc-erp-cross-module-playwright.log
+      - name: Hotfix 723 payment reversal integrity acceptance
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm exec playwright test tests/e2e/issue-723-finance-integrity.spec.mjs --workers=1 2>&1 | tee /tmp/dtsc-finance-723-playwright.log
       - name: Accounting C5 closing acceptance
         shell: bash
         run: |
