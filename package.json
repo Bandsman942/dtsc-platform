@@ -317,7 +317,8 @@
     "qa:hotfix-714": "node scripts/qa-hotfix-714-gaming-close-kpi-convergence.mjs",
     "e2e:hotfix-664": "playwright test tests/e2e/issue-664-finance-approval-collaboration.spec.mjs",
     "qa:scale7-staged-certification": "node scripts/qa-scale7-staged-certification.mjs",
-    "qa:education-academic-structure": "node scripts/qa-education-academic-structure.mjs"
+    "qa:education-academic-structure": "node scripts/qa-education-academic-structure.mjs",
+    "qa:education-admissions": "node scripts/qa-education-admissions.mjs"
   },
   "dependencies": {
     "@ai-sdk/gateway": "2.0.27",

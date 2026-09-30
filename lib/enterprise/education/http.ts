@@ -33,6 +33,46 @@ const ERROR_MESSAGES: Record<string, { fr: string; en: string }> = {
     fr: "Cette donnée académique est introuvable ou a déjà été archivée.",
     en: "This academic record was not found or has already been archived.",
   },
+  EDUCATION_USER_LINK_INVALID: {
+    fr: "Le compte DTSC sélectionné n’est pas un membre actif de cette entreprise.",
+    en: "The selected DTSC account is not an active member of this organization.",
+  },
+  EDUCATION_PARTY_LINK_INVALID: {
+    fr: "Le tiers sélectionné n’appartient pas à cette entreprise ou n’est plus actif.",
+    en: "The selected business party does not belong to this organization or is no longer active.",
+  },
+  EDUCATION_ADMISSION_NOT_FOUND: {
+    fr: "Ce dossier d’admission est introuvable.",
+    en: "This admission application was not found.",
+  },
+  EDUCATION_ADMISSION_LOCKED: {
+    fr: "Ce dossier n’est plus modifiable directement dans son état actuel.",
+    en: "This application can no longer be edited directly in its current state.",
+  },
+  EDUCATION_ADMISSION_STATE_INVALID: {
+    fr: "Cette transition n’est pas autorisée dans l’état actuel du dossier.",
+    en: "This transition is not allowed in the application’s current state.",
+  },
+  EDUCATION_ADMISSION_NOT_ACCEPTED: {
+    fr: "L’inscription ne peut être créée qu’après une décision d’admission acceptée.",
+    en: "Enrollment can only be created after an accepted admission decision.",
+  },
+  EDUCATION_STUDENT_NOT_FOUND: {
+    fr: "Cet étudiant est introuvable dans cette entreprise.",
+    en: "This student was not found in this organization.",
+  },
+  EDUCATION_GUARDIAN_NOT_FOUND: {
+    fr: "Ce parent ou tuteur est introuvable dans cette entreprise.",
+    en: "This parent or guardian was not found in this organization.",
+  },
+  EDUCATION_ENROLLMENT_NOT_FOUND: {
+    fr: "Cette inscription est introuvable dans cette entreprise.",
+    en: "This enrollment was not found in this organization.",
+  },
+  EDUCATION_ENROLLMENT_STATE_INVALID: {
+    fr: "Cette action n’est pas permise dans l’état actuel de l’inscription.",
+    en: "This action is not allowed in the enrollment’s current state.",
+  },
   REVISION_CONFLICT: {
     fr: "Cette fiche a été modifiée par une autre personne. Actualisez-la avant de réessayer.",
     en: "This record was changed by someone else. Refresh it before trying again.",
