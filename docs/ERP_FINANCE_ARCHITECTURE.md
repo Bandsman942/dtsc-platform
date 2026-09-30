@@ -79,6 +79,10 @@ A business event is posted through the single common posting engine. The stable 
 
 A `POSTED` or `REVERSED` journal entry is immutable. Correction uses a linked reversal or a new corrective entry. The original is never rewritten or deleted.
 
+Payment confirmation and posting are atomic: for posting-backed payment types, Treasury/Cash/balance effects and the canonical journal posting succeed in the same serializable transaction or the confirmation fails without persisting partial financial state. An idempotent retry on an already confirmed payment may repair a missing canonical posting but never duplicates it.
+
+Payment reversal is also symmetric. Every confirmed Treasury effect is reversed, the operational balance receives the exact opposite delta, Cash keeps the original movement and appends a compensating cash movement, and every posted journal entry sourced directly from the payment is reversed through the canonical reversal service. Confirmed allocations must be reversed first; no reversal silently deletes or rewrites financial history.
+
 ## Published statements
 
 A dynamic report is not a published financial statement. Publication creates an identifiable, timestamped, checksum-protected snapshot bound to its parameters. Later postings can change a new preview but never mutate the previously published version.
