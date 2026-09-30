@@ -283,8 +283,12 @@ export async function transitionEnterprisePayment(
           orderBy: { createdAt: "asc" },
         });
         const reversalAlreadyExists = movements.some((movement) => movement.movementType.endsWith("_REVERSAL"));
+        const originalMovements = movements.filter((item) => !item.movementType.endsWith("_REVERSAL"));
+        if (!reversalAlreadyExists && originalMovements.length !== 1) {
+          throw new EnterpriseAccountingError("PAYMENT_CASH_MOVEMENT_INCONSISTENT", 409, { count: originalMovements.length });
+        }
         if (!reversalAlreadyExists) {
-          for (const movement of movements.filter((item) => !item.movementType.endsWith("_REVERSAL"))) {
+          for (const movement of originalMovements) {
             await tx.enterpriseCashMovement.create({
               data: {
                 organizationId,
@@ -303,7 +307,7 @@ export async function transitionEnterprisePayment(
         }
       }
 
-      const journal = await tx.enterpriseJournalEntry.findFirst({
+      const journals = await tx.enterpriseJournalEntry.findMany({
         where: {
           organizationId,
           sourceEntityType: "EnterprisePayment",
@@ -311,7 +315,12 @@ export async function transitionEnterprisePayment(
           status: "POSTED",
         },
         select: { id: true },
+        take: 2,
       });
+      if (journals.length > 1) {
+        throw new EnterpriseAccountingError("PAYMENT_JOURNAL_INCONSISTENT", 409, { count: journals.length });
+      }
+      const journal = journals[0] || null;
       if (journal) {
         await reverseJournalEntryTx(
           tx,
