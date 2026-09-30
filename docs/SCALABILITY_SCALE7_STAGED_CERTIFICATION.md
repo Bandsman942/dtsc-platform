@@ -28,36 +28,26 @@ A stage is certified only when all required profiles have archived PASS evidence
 - a low-frequency real AI request path governed by SCALE-6;
 - explicit cross-tenant probes that must stay 403/404.
 
-The secret `SCALE7_AUTH_CONTEXTS_JSON` contains an operator-provided pool of dedicated load-test identities. Paths are grouped by tenant to keep the secret compact and to avoid pretending that thousands of VUs are thousands of requests from one account.
+By default, the workflow provisions its dedicated multi-tenant auth pool through **GitHub Actions OIDC**. No cookie secret is required for this path.
 
-```json
-{
-  "aiPath": "/api/...",
-  "aiPayload": {},
-  "tenants": [
-    {
-      "organizationId": "load-test-org-a",
-      "enterpriseReadPath": "/api/...",
-      "shopReadPath": "/api/...",
-      "collaborationReadPath": "/api/...",
-      "isolationProbePath": "/api/...foreign-tenant...",
-      "sessionCookies": ["REDACTED", "REDACTED"]
-    },
-    {
-      "organizationId": "load-test-org-b",
-      "enterpriseReadPath": "/api/...",
-      "shopReadPath": "/api/...",
-      "collaborationReadPath": "/api/...",
-      "isolationProbePath": "/api/...foreign-tenant...",
-      "sessionCookies": ["REDACTED", "REDACTED"]
-    }
-  ]
-}
-```
+The application accepts the provisioning request only when the OIDC token is cryptographically valid and all claims match the exact DTSC contract:
 
-The harness requires at least two distinct tenants and a unique authenticated identity pool sized to the stage: `max(8, ceil(targetVus / 100))`, therefore at least 8 / 10 / 25 / 50 identities for 500 / 1,000 / 2,500 / 5,000 VU. This prevents per-user limits from being measured as a fake platform bottleneck. The AI path is mandatory but intentionally represents about 1% of iterations so SCALE-6 user/organization/provider ceilings remain a governed subsystem rather than dominating the whole workload.
+- issuer `https://token.actions.githubusercontent.com`;
+- audience `dtsc-scale7`;
+- repository `Bandsman942/dtsc-platform`;
+- ref `refs/heads/main`;
+- workflow `.github/workflows/scale7-staged-certification.yml`;
+- event `issue_comment` or `workflow_dispatch`.
 
-Use dedicated load-test organizations and data. Never point the certification harness at real customer records.
+The managed pool uses two fixed synthetic organizations, no customer data, and synthetic identities that cannot authenticate with a product password. Sessions are signed by the application at run time and remain only in the GitHub Actions runner environment. The returned topology is never written to Issues, artifacts or the versioned certification registry.
+
+To avoid measuring per-user AI/rate-limit ceilings as if they were platform capacity, the governed pool is deliberately larger than the minimum contract: it uses approximately **10% of the VU target**, i.e. 50 / 100 / 250 / 500 unique sessions for 500 / 1,000 / 2,500 / 5,000 VU, split across the two synthetic tenants.
+
+An operator may still provide `SCALE7_AUTH_CONTEXTS_JSON` as an **operator override**. When present, the workflow uses it instead of OIDC provisioning. The same harness validation still requires at least two distinct tenants, unique sessions and the stage-specific minimum `max(8, ceil(targetVus / 100))`.
+
+The AI path remains mandatory and intentionally represents about 1% of iterations so SCALE-6 user/organization/provider ceilings remain a governed subsystem rather than dominating the whole workload.
+
+Use only the managed synthetic organizations or an equivalent dedicated operator pool. Never point the certification harness at real customer records.
 
 ## SLO gates
 
@@ -91,15 +81,19 @@ Manual inputs:
 
 Required configuration:
 
-- secret `SCALE7_AUTH_CONTEXTS_JSON` — always required; there is deliberately no single-session fallback;
-- secret `VERCEL_AUTOMATION_BYPASS_SECRET`.
+- secret `VERCEL_AUTOMATION_BYPASS_SECRET`;
+- a governed CTO observability session through `SCALE7_CTO_SESSION_COOKIE` or its SCALE-1 fallback.
+
+Optional configuration:
+
+- secret `SCALE7_AUTH_CONTEXTS_JSON` — operator override only. Without it, the workflow mints a GitHub Actions OIDC token and requests the managed synthetic pool from `/api/internal/scale7/auth-pool`.
 
 Governed fallbacks reduce duplicate Production configuration:
 
 - application origin: `SCALE7_LOAD_BASE_URL` overrides `SCALE1_LOAD_BASE_URL`; if neither repository variable exists, the canonical Production origin `https://app.dtsc-platform.com` is used;
 - CTO observability session: `SCALE7_CTO_SESSION_COOKIE` overrides the existing governed `SCALE1_CTO_SESSION_COOKIE`.
 
-These fallbacks do not weaken the workload topology. The dedicated SCALE-7 multi-tenant identity pool remains mandatory.
+These fallbacks do not weaken the workload topology. A dedicated SCALE-7 multi-tenant identity pool remains mandatory; it is either generated through the governed OIDC path or supplied explicitly by the operator override.
 
 No workflow runs on push, pull request or schedule.
 
