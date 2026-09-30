@@ -3,13 +3,13 @@ import { check, sleep } from "k6";
 import { Rate } from "k6/metrics";
 
 const rawBaseUrl = __ENV.BASE_URL;
-const rawAuthPool = __ENV.SCALE7_AUTH_CONTEXTS_JSON;
+const authPoolFile = __ENV.SCALE7_AUTH_CONTEXTS_FILE;\nconst rawAuthPool = authPoolFile ? open(authPoolFile) : __ENV.SCALE7_AUTH_CONTEXTS_JSON;
 const bypassSecret = __ENV.VERCEL_AUTOMATION_BYPASS_SECRET;
 const targetVus = Number.parseInt(__ENV.TARGET_VUS || "500", 10);
 const profile = (__ENV.LOAD_PROFILE || "ramp").toLowerCase();
 
 if (!rawBaseUrl) throw new Error("BASE_URL is required");
-if (!rawAuthPool) throw new Error("SCALE7_AUTH_CONTEXTS_JSON is required");
+if (!rawAuthPool) throw new Error("SCALE-7 requires SCALE7_AUTH_CONTEXTS_FILE or SCALE7_AUTH_CONTEXTS_JSON");
 if (!bypassSecret) throw new Error("VERCEL_AUTOMATION_BYPASS_SECRET is required");
 if (![500, 1000, 2500, 5000].includes(targetVus)) {
   throw new Error("TARGET_VUS must be one of 500, 1000, 2500 or 5000");
@@ -242,7 +242,7 @@ export default function () {
       redirects: 0,
       tags: { workload: label },
     });
-  } else if (draw < 0.99) {
+  } else if (draw < 1 - AI_WORKLOAD_RATE) {
     label = "collaboration-read";
     response = http.get(`${baseUrl}${tenant.collaborationReadPath}`, {
       headers: headersFor(identity),
@@ -251,7 +251,7 @@ export default function () {
     });
   } else {
     label = "ai-request";
-    response = http.post(`${baseUrl}${aiPath}`, JSON.stringify(aiPayload), {
+    response = http.post(`${baseUrl}${aiPath}`, JSON.stringify(tenant.aiPayload || sharedAiPayload), {
       headers: headersFor(identity, true),
       redirects: 0,
       tags: { workload: label },
