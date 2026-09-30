@@ -20,7 +20,7 @@ async function addPaymentEvent(tx: Prisma.TransactionClient, organizationId: str
   await tx.enterprisePaymentEvent.create({ data: { organizationId, paymentId, actorUserId, eventType, summary, metadataJson } });
 }
 
-const CASH_SESSION_BINDING_CUTOVER_AT = new Date("2026-09-29T08:30:00.000Z");
+// Cutover of migration 20260929083000_payment_cash_session_binding. Only pre-cutover rows may use automatic recovery.\nconst CASH_SESSION_BINDING_CUTOVER_AT = new Date("2026-09-29T08:30:00.000Z");
 
 type CashSessionPayment = {
   id: string;
