@@ -1063,27 +1063,6 @@
       "qaContract": "enterprise-module-registry"
     },
     {
-      "code": "STUDENTS",
-      "labelFr": "Élèves & étudiants",
-      "labelEn": "Students",
-      "descriptionFr": "Module Éducation planifié, non provisionnable.",
-      "descriptionEn": "Planned Education module, not provisionable.",
-      "domain": "HUMAN_RESOURCES",
-      "implementationStatus": "PLANNED",
-      "navigationGroup": "HUMAN_RESOURCES",
-      "navigationOrder": 10,
-      "iconKey": "users-round",
-      "routeKind": "HIDDEN",
-      "workspaceKey": null,
-      "permissionPrefixes": [],
-      "accessPolicy": "EXPLICIT_DENY",
-      "minimumPlan": "ENTERPRISE",
-      "requiresActiveSubscription": true,
-      "applicableSectors": ["EDUCATION"],
-      "dependencies": [],
-      "qaContract": "enterprise-module-registry"
-    },
-    {
       "code": "TEACHERS",
       "labelFr": "Enseignants",
       "labelEn": "Teachers",
