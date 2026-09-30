@@ -1,5 +1,7 @@
 ## 2026-09-30 — Finance #735 : audit historique des contrepassations de paiements
 
+> Outil préparatoire suivi par l’Issue #737 ; l’audit réel des données reste suivi par #735.
+
 ### Ajouté
 
 - Ajout d’un audit **strictement en lecture seule** pour vérifier les comptes financiers et les paiements `REVERSED` déjà persistés avant le hotfix #731.
