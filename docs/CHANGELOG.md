@@ -1,4 +1,16 @@
-# Changelog DTSC Platform
+# Changelog
+
+## 2026-09-30 — Hotfix #725 : convergence Finance transverse des secteurs
+
+- Les projections de facturation Health utilisent désormais le libellé contrôlé du catalogue commun au lieu de recopier la description libre d’une ligne médicale dans Finance.
+- Le contrat de confidentialité Health interdit explicitement diagnostic, symptômes, antécédents, allergies, prescription, résultats/interprétations de laboratoire et contenu documentaire dans les projections Finance.
+- Les factures communes issues de Pharmacy affichent le nom métier du catalogue commun au lieu d’un UUID produit technique.
+- Couture matérialise ses intégrations recommandées vers Ventes, Créances, Paiements et valorisation de stock sans recréer de source financière sectorielle ni transformer ces intégrations en dépendances bloquantes.
+- La matrice sectorielle documente désormais Gaming, Couture/Manufacturing et Retail en plus de Health/Pharmacy, ainsi que la symétrie obligatoire des inverses.
+- Ajout de `qa:hotfix-725` à la régression canonique et à l’acceptance Accounting.
+- L’audit a révélé une dette indépendante : les remboursements legacy Pharmacy peuvent encore être payés sans projection runtime complète vers Finance commun. Cette dette est isolée dans l’Issue #728 et ne doit pas être masquée par ce hotfix.
+- Aucun changement Prisma ni migration dans #725.
+ DTSC Platform
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
