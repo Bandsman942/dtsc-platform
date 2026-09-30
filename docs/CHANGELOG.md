@@ -1,4 +1,15 @@
-# Changelog DTSC Platform
+# Changelog
+
+## 2026-09-30 — Hotfix #723 : intégrité des contrepassations et posting des paiements
+
+- La confirmation des paiements adossés au moteur comptable exécute désormais le posting canonique dans la même transaction sérialisable que le paiement, la trésorerie, la caisse et le solde opérationnel.
+- Une répétition sur un paiement déjà confirmé réutilise le posting idempotent et peut réparer un posting historiquement absent sans créer une seconde écriture.
+- `REVERSE` compense le `operationalBalance` à partir des transactions Treasury réellement confirmées, renverse ces transactions et conserve un historique Cash immuable au moyen d’un mouvement compensateur `PAYMENT_REVERSAL`.
+- Les écritures comptables directement liées au paiement sont contrepassées avec `reverseJournalEntryTx` et l’autorisation de domaine ; aucune écriture `POSTED` n’est modifiée silencieusement.
+- Les allocations confirmées restent un blocage préalable à la contrepassation du paiement.
+- Aucun changement Prisma ni migration.
+- Ajout de `qa:hotfix-723` et d’un E2E Finance dédié ; OWNER_E2E reste requis avant merge.
+ DTSC Platform
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
