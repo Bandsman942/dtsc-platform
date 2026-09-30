@@ -3,7 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { assertIndependentActor } from "@/lib/enterprise/accounting/access";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { assertActiveClientOrganization, financeReference, money, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
-import { postBusinessEvent } from "@/lib/enterprise/accounting/posting-service";
+import { postBusinessEvent, postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
+import { reverseJournalEntryTx } from "@/lib/enterprise/accounting/reversal-service";
 import type { paymentCreateSchema } from "@/lib/enterprise/accounting/schemas";
 import type { z } from "zod";
 
@@ -247,7 +248,90 @@ export async function transitionEnterprisePayment(
       assertIndependentActor({ actorUserId, relatedUserIds: [payment.initiatedByUserId, payment.confirmedByUserId], errorCode: "PAYMENT_SELF_REVERSAL_FORBIDDEN" });
       const allocations = await tx.enterprisePaymentAllocation.count({ where: { organizationId, paymentId, status: "CONFIRMED" } });
       if (allocations > 0) throw new EnterpriseAccountingError("PAYMENT_ALLOCATIONS_MUST_BE_REVERSED_FIRST", 409);
-      await tx.enterpriseTreasuryTransaction.updateMany({ where: { organizationId, paymentId, status: "CONFIRMED" }, data: { status: "REVERSED", reversedAt: new Date() } });
+
+      const treasuryTransactions = await tx.enterpriseTreasuryTransaction.findMany({
+        where: { organizationId, paymentId, status: "CONFIRMED" },
+        orderBy: { createdAt: "asc" },
+      });
+      const balanceAdjustments = new Map<string, Prisma.Decimal>();
+      for (const treasuryTransaction of treasuryTransactions) {
+        const current = balanceAdjustments.get(treasuryTransaction.financialAccountId) || new Prisma.Decimal(0);
+        const reversalDelta = treasuryTransaction.direction === "INBOUND"
+          ? treasuryTransaction.amount.negated()
+          : treasuryTransaction.amount;
+        balanceAdjustments.set(treasuryTransaction.financialAccountId, current.plus(reversalDelta));
+      }
+      for (const [financialAccountId, adjustment] of balanceAdjustments) {
+        await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseFinancialAccount" WHERE id = ${financialAccountId} AND "organizationId" = ${organizationId} FOR UPDATE`);
+        const account = await tx.enterpriseFinancialAccount.findFirst({
+          where: { id: financialAccountId, organizationId, archivedAt: null },
+          select: { id: true, currencyCode: true },
+        });
+        if (!account) throw new EnterpriseAccountingError("PAYMENT_FINANCIAL_ACCOUNT_INVALID", 409);
+        const accountTransactions = treasuryTransactions.filter((item) => item.financialAccountId === financialAccountId);
+        if (accountTransactions.some((item) => item.currencyCode !== account.currencyCode)) {
+          throw new EnterpriseAccountingError("PAYMENT_FINANCIAL_ACCOUNT_INVALID", 409);
+        }
+        await tx.enterpriseFinancialAccount.update({
+          where: { id: account.id },
+          data: { operationalBalance: { increment: adjustment }, revision: { increment: 1 } },
+        });
+      }
+
+      const cashMovements = await tx.enterpriseCashMovement.findMany({
+        where: { organizationId, paymentId },
+        orderBy: { createdAt: "asc" },
+      });
+      for (const movement of cashMovements) {
+        const session = await tx.enterpriseCashSession.findFirst({
+          where: {
+            id: movement.cashSessionId,
+            organizationId,
+            financialAccountId: payment.financialAccountId || undefined,
+          },
+          select: { id: true },
+        });
+        if (!session) throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_INVALID", 409);
+        await tx.enterpriseCashMovement.create({
+          data: {
+            organizationId,
+            cashSessionId: movement.cashSessionId,
+            paymentId: payment.id,
+            movementType: "PAYMENT_REVERSAL",
+            direction: movement.direction === "INBOUND" ? "OUTBOUND" : "INBOUND",
+            amount: movement.amount,
+            currencyCode: movement.currencyCode,
+            reference: payment.reference || payment.number,
+            reason: input.reason || `Reversal of ${payment.number}`,
+            createdByUserId: actorUserId,
+          },
+        });
+      }
+
+      await tx.enterpriseTreasuryTransaction.updateMany({
+        where: { organizationId, paymentId, status: "CONFIRMED" },
+        data: { status: "REVERSED", reversedAt: new Date() },
+      });
+
+      const postedEntries = await tx.enterpriseJournalEntry.findMany({
+        where: {
+          organizationId,
+          sourceEntityType: "EnterprisePayment",
+          sourceEntityId: payment.id,
+          status: "POSTED",
+        },
+        select: { id: true },
+      });
+      for (const entry of postedEntries) {
+        await reverseJournalEntryTx(
+          tx,
+          organizationId,
+          entry.id,
+          actorUserId,
+          { reason: input.reason || `Payment ${payment.number} reversed`, accountingDate: new Date() },
+          { authorization: "DOMAIN_INVERSE" },
+        );
+      }
     }
     const updated = await tx.enterprisePayment.update({ where: { id: payment.id }, data: { status: transition.to, approvedByUserId: action === "APPROVE" ? actorUserId : payment.approvedByUserId, reconciledAt: action === "RECONCILE" ? new Date() : payment.reconciledAt, reversedAt: action === "REVERSE" ? new Date() : payment.reversedAt, reversalReason: action === "REVERSE" ? input.reason || null : payment.reversalReason, revision: { increment: 1 } } });
     await addPaymentEvent(tx, organizationId, payment.id, actorUserId, action, `Payment ${action}`, input.reason ? { reason: input.reason.slice(0, 500) } : undefined);
@@ -261,7 +345,17 @@ async function confirmEnterprisePayment(organizationId: string, paymentId: strin
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterprisePayment" WHERE id = ${paymentId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const payment = await tx.enterprisePayment.findFirst({ where: { id: paymentId, organizationId } });
     if (!payment) throw new EnterpriseAccountingError("PAYMENT_NOT_FOUND", 404);
-    if (["CONFIRMED", "RECONCILED"].includes(payment.status)) return payment;
+    if (["CONFIRMED", "RECONCILED"].includes(payment.status)) {
+      const existingPostingEvent = paymentPostingEvent(payment.paymentType);
+      if (existingPostingEvent) {
+        await postBusinessEventTx(tx, organizationId, actorUserId, {
+          postingEvent: existingPostingEvent,
+          sourceEntityType: "EnterprisePayment",
+          sourceEntityId: payment.id,
+        });
+      }
+      return payment;
+    }
     if (payment.status !== "APPROVED" || payment.revision !== revision) throw new EnterpriseAccountingError("PAYMENT_NOT_APPROVED", 409);
     assertIndependentActor({ actorUserId, relatedUserIds: [payment.initiatedByUserId], errorCode: "PAYMENT_SELF_CONFIRMATION_FORBIDDEN" });
     if (!payment.financialAccountId) throw new EnterpriseAccountingError("PAYMENT_FINANCIAL_ACCOUNT_REQUIRED", 409);
@@ -279,10 +373,16 @@ async function confirmEnterprisePayment(organizationId: string, paymentId: strin
     const updated = await tx.enterprisePayment.update({ where: { id: payment.id }, data: { status: "CONFIRMED", cashSessionId: confirmedCashSessionId || payment.cashSessionId, confirmedByUserId: actorUserId, confirmedAt: new Date(), revision: { increment: 1 } } });
     await addPaymentEvent(tx, organizationId, payment.id, actorUserId, "CONFIRMED", "Payment confirmed");
     await publishFinanceEvent(tx, { organizationId, entityType: "EnterprisePayment", entityId: payment.id, eventType: "PAYMENT_CONFIRMED", summary: `Payment ${payment.number} confirmed`, actorUserId, fromStatus: payment.status, toStatus: "CONFIRMED", metadataJson: { financialAccountId: account.id, cashSessionId: confirmedCashSessionId || payment.cashSessionId, amount: payment.amount.toFixed(), currency: payment.currencyCode } });
+    const postingEvent = paymentPostingEvent(updated.paymentType);
+    if (postingEvent) {
+      await postBusinessEventTx(tx, organizationId, actorUserId, {
+        postingEvent,
+        sourceEntityType: "EnterprisePayment",
+        sourceEntityId: updated.id,
+      });
+    }
     return updated;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-  const postingEvent = paymentPostingEvent(confirmed.paymentType);
-  if (postingEvent) await postBusinessEvent(organizationId, actorUserId, { postingEvent, sourceEntityType: "EnterprisePayment", sourceEntityId: confirmed.id });
   return confirmed;
 }
 
