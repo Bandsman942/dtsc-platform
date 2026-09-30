@@ -127,6 +127,7 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 - Ajout des registres étudiants et tuteurs, avec relations explicites et sans création automatique de compte ou de membership DTSC.
 - Ajout d’un historique effectif des affectations : les transferts clôturent l’ancien placement et créent le suivant sans réécriture silencieuse.
 - Ajout des modules Education `ADMISSIONS`, `STUDENTS` et `GUARDIANS`, de leurs permissions, guides FR/EN et workspaces dédiés.
+- Cutover canonique de `STUDENTS` : suppression du placeholder général `PLANNED/HIDDEN` afin que la définition Education active soit l’unique propriétaire du code, sans désactiver la protection anti-doublon du registre.
 
 ### Sécurisé
 
