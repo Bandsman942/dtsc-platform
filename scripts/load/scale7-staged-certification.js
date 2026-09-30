@@ -142,6 +142,7 @@ export const options = {
 function headersFor(identity, json = false) {
   return {
     Cookie: identity.sessionCookie,
+    Origin: baseUrl,
     "User-Agent": `DTSC-SCALE7/${targetVus}-${profile}`,
     "x-vercel-protection-bypass": bypassSecret,
     ...(json ? { "Content-Type": "application/json" } : {}),

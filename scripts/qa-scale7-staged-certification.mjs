@@ -11,6 +11,9 @@ const paths = {
   registryTs: "lib/scalability/scale7-certification-registry.ts",
   docs: "docs/SCALABILITY_SCALE7_STAGED_CERTIFICATION.md",
   runbook: "docs/OWNER_E2E_360_SCALE7_STAGED_CERTIFICATION.md",
+  oidc: "lib/scalability/github-actions-oidc.ts",
+  authPool: "lib/scalability/scale7-auth-pool.ts",
+  authRoute: "app/api/internal/scale7/auth-pool/route.ts",
 };
 
 function fail(message) {
@@ -28,7 +31,10 @@ const profile = fs.readFileSync(paths.profile, "utf8");
 const report = fs.readFileSync(paths.report, "utf8");
 const archive = fs.readFileSync(paths.archive, "utf8");
 const docs = fs.readFileSync(paths.docs, "utf8");
-const all = [workflow, profile, report, archive, docs].join("\n");
+const oidc = fs.readFileSync(paths.oidc, "utf8");
+const authPool = fs.readFileSync(paths.authPool, "utf8");
+const authRoute = fs.readFileSync(paths.authRoute, "utf8");
+const all = [workflow, profile, report, archive, docs, oidc, authPool, authRoute].join("\n");
 
 expect(/^on:\s*\n\s+workflow_dispatch:/m.test(workflow), "workflow_dispatch is required");
 expect(/^\s+issue_comment:\s*$/m.test(workflow), "owner issue_comment trigger is required");
@@ -57,7 +63,12 @@ expect(workflow.includes("retention-days: 90"), "SCALE-7 evidence retention must
 expect(workflow.includes("api/admin/scalability/observability?windowHours=1"), "live CTO observability sampling is required");
 expect(workflow.includes("vars.SCALE7_LOAD_BASE_URL || vars.SCALE1_LOAD_BASE_URL || 'https://app.dtsc-platform.com'"), "SCALE-7 must reuse the governed Production origin before requiring a dedicated override");
 expect(workflow.includes("secrets.SCALE7_CTO_SESSION_COOKIE || secrets.SCALE1_CTO_SESSION_COOKIE"), "SCALE-7 must reuse the governed CTO observability session when no dedicated override exists");
-expect(workflow.includes("secrets.SCALE7_AUTH_CONTEXTS_JSON"), "SCALE-7 multi-tenant auth pool must remain dedicated");
+expect(workflow.includes("secrets.SCALE7_AUTH_CONTEXTS_JSON"), "SCALE-7 must preserve the operator-provided auth pool override");
+expect(workflow.includes("id-token: write"), "SCALE-7 must request GitHub Actions OIDC only for governed auth-pool provisioning");
+expect(workflow.includes("audience=dtsc-scale7"), "SCALE-7 OIDC audience must be dedicated");
+expect(workflow.includes("if: env.SCALE7_AUTH_CONTEXTS_JSON == ''"), "SCALE-7 must provision the governed pool only when no operator override exists");
+expect(workflow.includes("/api/internal/scale7/auth-pool"), "SCALE-7 governed auth-pool endpoint is missing");
+expect(!workflow.includes("for name in BASE_URL SCALE7_AUTH_CONTEXTS_JSON"), "SCALE7_AUTH_CONTEXTS_JSON must no longer block preflight when governed OIDC provisioning is available");
 expect(!workflow.includes("SCALE1_LOAD_SESSION_COOKIE"), "SCALE-7 must not downgrade to the single-identity SCALE-1 load session");
 
 expect(profile.includes("SCALE7_AUTH_CONTEXTS_JSON"), "multi-tenant auth pool is required");
@@ -75,6 +86,41 @@ expect(profile.includes('"p(95)<1000"') && profile.includes('"p(99)<2000"'), "la
 expect(profile.includes('checks: ["rate>0.99"]'), "check-rate SLO is missing");
 expect(profile.includes("ai-request"), "AI workload must be represented");
 expect(profile.includes("enterprise-read") && profile.includes("shop-read") && profile.includes("collaboration-read"), "business workload mix is incomplete");
+expect(profile.includes("Origin: baseUrl"), "same-origin header is required for the real AI POST workload");
+
+for (const marker of [
+  'const ISSUER = "https://token.actions.githubusercontent.com"',
+  'const AUDIENCE = "dtsc-scale7"',
+  'const REPOSITORY = "Bandsman942/dtsc-platform"',
+  'const REF = "refs/heads/main"',
+  ".github/workflows/scale7-staged-certification.yml@",
+  'header.alg !== "RS256"',
+  "crypto.subtle.verify",
+]) expect(oidc.includes(marker), `OIDC verifier missing ${marker}`);
+
+for (const marker of [
+  '"scale7-load-org-a"',
+  '"scale7-load-org-b"',
+  "const MAX_IDENTITIES = 500",
+  "Math.ceil(targetVus / 10)",
+  'sectorCode: "COMMERCE_RETAIL"',
+  "resolveSaasPlanCode(plan) === \"ENTERPRISE\"",
+  "reconcileOrganizationModulesWithSubscription",
+  "createSessionToken",
+  'aiPath: "/api/chat/v2"',
+  "/retail/sales?page=1&pageSize=5",
+  "/tasks?page=1&pageSize=5",
+  "customerData: false",
+]) expect(authPool.includes(marker), `governed auth pool missing ${marker}`);
+expect(!authPool.includes("billingPlan.create"), "SCALE-7 must reuse the governed Enterprise offer instead of creating a shadow commercial plan");
+
+for (const marker of [
+  "verifyScale7GitHubActionsOidc",
+  "buildScale7SyntheticAuthPool",
+  '"Cache-Control": "private, no-store"',
+  "origin !== new URL(req.url).origin",
+]) expect(authRoute.includes(marker), `auth-pool route missing ${marker}`);
+expect(!authRoute.includes("getSession("), "SCALE-7 auth-pool endpoint must authenticate GitHub OIDC, not a product user session");
 
 expect(report.includes("authTopology"), "report must archive tenant and identity counts without secrets");
 expect(report.includes("tenantIsolationPerfect"), "report must gate tenant isolation");
@@ -85,6 +131,7 @@ expect(report.includes('process.env.GITHUB_ACTIONS === "true" ? "CI_PROVEN" : "L
 expect(archive.includes("Only CI-proven reports"), "archive must reject non-CI reports");
 expect(archive.includes('report.evidence?.loadExecution !== "CI_PROVEN"'), "archive must verify CI_PROVEN evidence state");
 expect(docs.includes("500 → 1,000 → 2,500 → 5,000"), "staged progression must be documented");
+expect(docs.includes("GitHub Actions OIDC") && docs.includes("operator override"), "governed OIDC auth-pool provisioning must be documented");
 
 for (const forbidden of ["postgresql://", "postgres://", "password=", "NEXT_PUBLIC_DATABASE_URL"]) {
   expect(!all.toLowerCase().includes(forbidden.toLowerCase()), `forbidden secret-like literal: ${forbidden}`);

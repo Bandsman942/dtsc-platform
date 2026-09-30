@@ -2,8 +2,10 @@
 
 ## Preconditions
 
-- dedicated load-test tenants exist and are isolated from real customer data;
-- `SCALE7_LOAD_BASE_URL`, `SCALE7_AUTH_CONTEXTS_JSON`, `SCALE7_CTO_SESSION_COOKIE` and `VERCEL_AUTOMATION_BYPASS_SECRET` are configured;
+- the governed GitHub Actions OIDC provisioning route is deployed on the Production SHA being certified;
+- the managed SCALE-7 tenants are synthetic and isolated from real customer data;
+- `VERCEL_AUTOMATION_BYPASS_SECRET` is present and a governed CTO session is available through `SCALE7_CTO_SESSION_COOKIE` or the SCALE-1 fallback;
+- `SCALE7_AUTH_CONTEXTS_JSON` is optional and used only when an operator intentionally overrides the managed OIDC pool;
 - the branch SHA under test is the intended SHA;
 - Console → CTO → Scalabilité is accessible with `SECURITY_READ`.
 
@@ -20,6 +22,7 @@ For each stage **500 → 1,000 → 2,500 → 5,000**:
 
 For every successful run:
 
+- confirm the workflow log reports the governed multi-tenant pool topology only as tenant/identity counts, never cookies;
 - retain the GitHub Actions artifact;
 - archive the sanitized report with `archive-scale7-certification.mjs`;
 - verify the dashboard displays the archived stage/profile without exposing secrets.

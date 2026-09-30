@@ -2,6 +2,25 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-09-30 — SCALE-7B : pool d’identités synthétiques gouverné par OIDC
+
+### Amélioré
+
+- Le workflow de certification SCALE-7 n’exige plus la création manuelle d’un secret contenant des dizaines ou centaines de cookies.
+- En l’absence d’override opérateur, GitHub Actions obtient un jeton OIDC à audience `dtsc-scale7` et l’application provisionne deux organisations synthétiques dédiées ainsi qu’un pool de 50 / 100 / 250 / 500 identités selon le palier.
+- Les sessions sont générées à la demande par DTSC Platform, restent dans l’environnement du runner et ne sont jamais archivées dans les artifacts, Issues ou rapports.
+- Les lectures de charge couvrent réellement ERP, Retail, Collaboration et IA, avec une sonde cross-tenant qui doit rester 403/404.
+
+### Sécurité
+
+- L’endpoint de provisioning vérifie la signature GitHub OIDC, l’issuer, l’audience, le repository, la branche `main`, le workflow exact et l’événement autorisé.
+- Les comptes synthétiques utilisent des emails réservés `.invalid`, aucun mot de passe produit valide et aucune donnée client.
+- Le secret historique `SCALE7_AUTH_CONTEXTS_JSON` reste accepté uniquement comme override explicite.
+
+### Qualité
+
+- Le contrat `qa:scale7-staged-certification` vérifie désormais le chemin OIDC, la topologie synthétique, le dimensionnement du pool et l’absence de création d’un plan commercial parallèle.
+
 ## 2026-09-30 — Hotfix #694 : convergence Finance Santé / Pharmacie
 
 ### Corrigé
