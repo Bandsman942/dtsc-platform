@@ -1,3 +1,23 @@
+## 2026-09-30 — Finance #735 : audit historique des contrepassations de paiements
+
+### Ajouté
+
+- Ajout d’un audit **strictement en lecture seule** pour vérifier les comptes financiers et les paiements `REVERSED` déjà persistés avant le hotfix #731.
+- L’audit recalcule `openingBalance + Treasury CONFIRMED` et compare le résultat à `operationalBalance`.
+- Il détecte les paiements inversés qui conservent une Treasury confirmée, une écriture source encore `POSTED` sans contrepassation, ou un mouvement Cash non compensé.
+- Chaque anomalie est classée `AUTO_REPAIR_SAFE`, `AMBIGUOUS` ou `NO_ACTION` en fonction de la cardinalité et de la cohérence des sources.
+- L’option `--organization=<id>` permet de limiter le rapport à un tenant et `--fail-on-findings` permet d’utiliser l’audit comme gate sans effectuer aucune écriture.
+
+### Sécurité
+
+- Aucun `create`, `update`, `upsert`, `delete` ni SQL d’écriture n’est autorisé dans le script d’audit.
+- Le rapport ne contient que des identifiants techniques, montants de contrôle et statuts nécessaires au diagnostic ; aucun nom client, libellé métier ou contenu clinique n’est projeté.
+- Aucune réparation automatique n’est exécutée : même `AUTO_REPAIR_SAFE` reste uniquement une classification de rapport.
+
+### Validation
+
+- Ajout de `qa:finance-historical-reversal-audit` à la régression canonique pour empêcher qu’une mutation soit introduite dans cet outil.
+
 ## 2026-09-30 — Hotfix #730 : intégrité transverse des paiements Finance
 
 ### Corrigé
