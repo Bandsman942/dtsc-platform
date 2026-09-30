@@ -1,3 +1,25 @@
+## 2026-09-30 — Hotfix #730 : intégrité transverse des paiements Finance
+
+### Corrigé
+
+- La confirmation d’un paiement et son posting comptable utilisent désormais la même transaction Prisma via `postBusinessEventTx` pour les événements postables.
+- Les nouveaux paiements `CASH` exigent une session de caisse `OPEN` au moment de leur création ; la récupération cross-caissier reste réservée aux paiements historiques déjà persistés sans liaison.
+- La confirmation applique une séparation maker/checker/settler : le confirmateur doit être distinct de l’initiateur et du validateur.
+- La contrepassation d’un paiement restaure le solde opérationnel du compte, inverse les transactions Treasury confirmées, ajoute des mouvements Cash compensateurs et contre-passe l’écriture comptable source dans la même transaction.
+- Une transaction Treasury manquante bloque désormais la contrepassation en mode fail-closed avec un message métier sûr.
+- La QA `qa:hotfix-730` protège l’atomicité, la séparation des fonctions et les contrats Finance canoniques utilisés par Gaming, Health et Pharmacy.
+
+### Données et sécurité
+
+- Aucune migration Prisma et aucun backfill.
+- Aucun entitlement ni permission élargi.
+- Isolation par `organizationId`, devise du compte, idempotence de posting et historique des écritures restent autoritatifs.
+- Aucun contenu clinique Health n’est ajouté aux événements Finance.
+
+### Validation
+
+- CI et OWNER_E2E restent à produire ; aucune preuve d’exécution n’est déclarée par inspection statique.
+
 # Changelog DTSC Platform
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
