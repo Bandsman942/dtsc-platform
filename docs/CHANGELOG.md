@@ -119,6 +119,29 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 - Les règles d’indépendance initiateur / approbateur / confirmateur restent inchangées.
 - L’E2E #700 couvre la reprise d’un paiement Gaming historique jusqu’à facture, checkout et session `PAID`.
 
+## 2026-09-28 — Education EDU-2 : admissions, étudiants et tuteurs
+
+### Ajouté
+
+- Ajout du cycle canonique candidat → dossier d’admission → étude → décision → inscription → affectation académique.
+- Ajout des registres étudiants et tuteurs, avec relations explicites et sans création automatique de compte ou de membership DTSC.
+- Ajout d’un historique effectif des affectations : les transferts clôturent l’ancien placement et créent le suivant sans réécriture silencieuse.
+- Ajout des modules Education `ADMISSIONS`, `STUDENTS` et `GUARDIANS`, de leurs permissions, guides FR/EN et workspaces dédiés.
+
+### Sécurisé
+
+- Toutes les références académiques sont revalidées par `organizationId` côté service.
+- Les liens optionnels vers `User` et `EnterpriseBusinessParty` sont validés dans le tenant actif et ne créent aucun membership.
+- Les pièces justificatives restent dans le domaine Documents commun ; aucune table de fichiers parallèle n’est introduite.
+- Les décisions d’admission utilisent une capacité d’approbation distincte de l’écriture normale.
+- Les inscriptions sont idempotentes et toutes les mutations sensibles utilisent les révisions optimistes.
+
+### Qualité
+
+- Migration Prisma additive `20260928164000_education_admissions_enrollments`.
+- Ajout de `qa:education-admissions`, intégré à la régression.
+- Ajout du runbook OWNER_E2E #282 couvrant workflow, multi-tenant, mobile, i18n, historique et non-régression.
+
 ## 2026-09-25 — Hotfix #670 : suppression des bridges ERP et certification finale
 
 ### Supprimé
