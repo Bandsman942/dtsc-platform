@@ -1,4 +1,16 @@
-# Changelog DTSC Platform
+# Changelog
+
+## 2026-09-30 — Hotfix #724 : séparation des fonctions Finance et récupération Cash strictement legacy
+
+- La confirmation d’un paiement exige désormais un troisième acteur : l’initiateur et l’approbateur ne peuvent pas confirmer le paiement qu’ils ont respectivement préparé ou approuvé.
+- Les remboursements client appliquent la même séparation approbateur / confirmateur.
+- Les capacités renvoyées par la liste Paiements masquent l’action de confirmation pour l’initiateur et l’approbateur ; le backend reste autoritaire.
+- Les paiements Cash récents ne peuvent plus emprunter automatiquement une autre session de caisse lorsqu’un rattachement manque ou que leur caisse liée est fermée.
+- La récupération et le rebinding cross-caissier restent disponibles uniquement pour les paiements antérieurs au cutover `20260929083000_payment_cash_session_binding`, avec audit de récupération.
+- Les messages Finance FR/EN distinguent explicitement conflit d’acteur et rattachement Cash récent manquant.
+- L’E2E Gaming/Finance utilise désormais trois identités distinctes et vérifie à la fois le refus de l’approbateur-confirmateur, le refus d’une récupération récente et la récupération historique #700/#704.
+- Aucun changement Prisma ni migration.
+ DTSC Platform
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
