@@ -15,7 +15,41 @@ import type { EducationModuleCode } from "@/lib/enterprise/education/constants";
 import { educationPopulationCopy, educationPopulationStatus, type EducationPopulationLanguage } from "@/lib/enterprise/education/population-i18n";
 
 type PopulationModule = Extract<EducationModuleCode, "ADMISSIONS" | "STUDENTS" | "GUARDIANS">;
-type Item = Record<string, any> & { id: string; status?: string; revision?: number };
+type PopulationRef = { name?: string; label?: string };
+type EnrollmentPlacement = {
+  campus?: PopulationRef;
+  program?: PopulationRef;
+  level?: PopulationRef;
+  classGroup?: PopulationRef;
+};
+type EnrollmentItem = {
+  id: string;
+  status?: string;
+  revision?: number;
+  enrollmentNumber?: string;
+  academicYear?: PopulationRef;
+  placements?: EnrollmentPlacement[];
+};
+type Item = {
+  id: string;
+  status?: string;
+  revision?: number;
+  applicationNumber?: string;
+  studentNumber?: string;
+  guardianNumber?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string | null;
+  phone?: string | null;
+  candidate?: { firstName?: string; lastName?: string } | null;
+  academicYear?: PopulationRef | null;
+  campus?: PopulationRef | null;
+  program?: PopulationRef | null;
+  level?: PopulationRef | null;
+  classGroup?: PopulationRef | null;
+  enrollments?: EnrollmentItem[];
+  students?: Array<{ student: Item }>;
+};
 type Pagination = { page: number; pageSize: number; total: number; totalPages: number; hasPreviousPage: boolean; hasNextPage: boolean };
 type Ref = { id: string; code?: string; name?: string; label?: string; studentNumber?: string; guardianNumber?: string; firstName?: string; lastName?: string; academicYearId?: string; campusId?: string; levelId?: string; programId?: string | null; status?: string };
 type Snapshot = {
