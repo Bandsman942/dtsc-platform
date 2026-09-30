@@ -10,13 +10,10 @@ import { writeAuditLog } from "@/lib/audit";
 import { resolvePostLoginRedirect } from "@/lib/post-login-redirect";
 
 export async function POST(req: Request) {
-  // Keep an aggregate source/IP ceiling to stop spray attacks while avoiding the
-  // previous eight-attempt shared-NAT lockout. A second, stricter bucket below
-  // remains scoped to the normalized account + source IP.
-  const sourceLimiter = await rateLimit(getRateLimitKey(req, "auth:sign-in:ip"), 64, 15 * 60 * 1000);
-  if (!sourceLimiter.ok) {
+  const limiter = await rateLimit(getRateLimitKey(req, "auth:sign-in"), 8, 15 * 60 * 1000);
+  if (!limiter.ok) {
     return NextResponse.json(
-      { error: "Trop de tentatives de connexion. Patientez quelques minutes puis réessayez.", resetAt: new Date(sourceLimiter.resetAt).toISOString() },
+      { error: "Trop de tentatives de connexion. Patientez quelques minutes puis réessayez.", resetAt: new Date(limiter.resetAt).toISOString() },
       { status: 429 }
     );
   }
@@ -31,17 +28,6 @@ export async function POST(req: Request) {
     return NextResponse.json(
       { error: "Chargez vos espaces puis choisissez celui dans lequel vous souhaitez continuer." },
       { status: 400 }
-    );
-  }
-  const accountLimiter = await rateLimit(
-    getRateLimitKey(req, `auth:sign-in:account:${body.data.email}`),
-    8,
-    15 * 60 * 1000,
-  );
-  if (!accountLimiter.ok) {
-    return NextResponse.json(
-      { error: "Trop de tentatives de connexion. Patientez quelques minutes puis réessayez.", resetAt: new Date(accountLimiter.resetAt).toISOString() },
-      { status: 429 },
     );
   }
   const payloadNext =
