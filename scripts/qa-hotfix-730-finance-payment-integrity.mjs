@@ -21,6 +21,8 @@ requireTokens(payments, [
   "payment.approvedByUserId",
   "PAYMENT_TREASURY_TRANSACTION_MISSING",
   "PAYMENT_TREASURY_TRANSACTION_INCONSISTENT",
+  "PAYMENT_CASH_MOVEMENT_INCONSISTENT",
+  "PAYMENT_JOURNAL_INCONSISTENT",
   "originalSignedAmount.negated()",
   'movementType: `${movement.movementType}_REVERSAL`',
   'authorization: "DOMAIN_INVERSE"',
