@@ -1,3 +1,4 @@
+import { pbkdf2Sync, randomBytes } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { PrismaClient } from "@prisma/client";
 
@@ -8,6 +9,8 @@ const adminEmail = process.env.E2E_ADMIN_EMAIL || "erp-admin@example.test";
 const adminPassword = process.env.E2E_ADMIN_PASSWORD || "E2eAdmin2026!";
 const approverEmail = process.env.E2E_USER_EMAIL || "erp-user@example.test";
 const approverPassword = process.env.E2E_USER_PASSWORD || "E2eUser2026!";
+const confirmerEmail = "erp-finance-confirmer@example.test";
+const confirmerPassword = "E2eConfirmer2026!";
 const customerId = "e2e-baseline-business-party";
 const assetId = "e2e-gaming-asset-693";
 const stationId = "e2e-gaming-station-693";
@@ -17,9 +20,18 @@ const pricingRuleId = "e2e-gaming-pricing-696";
 let cashAccountId = "";
 let adminUserId = "";
 let approverUserId = "";
+let confirmerUserId = "";
 let crossDayPaidSessionId = "";
 let context;
 let approverContext;
+let confirmerContext;
+
+function hashPassword(password) {
+  const iterations = 210_000;
+  const salt = randomBytes(16).toString("base64url");
+  const hash = pbkdf2Sync(password, salt, iterations, 32, "sha256").toString("base64url");
+  return `pbkdf2:${iterations}:${salt}:${hash}`;
+}
 
 const requiredModules = [
   "CRM_CUSTOMERS",
@@ -44,8 +56,30 @@ async function prepareTenant() {
     prisma.user.findUnique({ where: { email: approverEmail } }),
   ]);
   if (!admin || !approver) throw new Error("Issue #693 requires the canonical ERP authenticated seed.");
+  const confirmer = await prisma.user.upsert({
+    where: { email: confirmerEmail },
+    update: {
+      name: "Finance confirmer E2E",
+      passwordHash: hashPassword(confirmerPassword),
+      role: "CLIENT",
+      status: "ACTIVE",
+      locale: "fr",
+      startPage: "/dashboard",
+    },
+    create: {
+      id: "e2e-finance-confirmer-user-724",
+      name: "Finance confirmer E2E",
+      email: confirmerEmail,
+      passwordHash: hashPassword(confirmerPassword),
+      role: "CLIENT",
+      status: "ACTIVE",
+      locale: "fr",
+      startPage: "/dashboard",
+    },
+  });
   adminUserId = admin.id;
   approverUserId = approver.id;
+  confirmerUserId = confirmer.id;
 
   await prisma.organization.update({
     where: { id: organizationId },
@@ -66,6 +100,19 @@ async function prepareTenant() {
       id: "e2e-gaming-approver-membership-693",
       organizationId,
       userId: approver.id,
+      role: "ADMIN_ENTERPRISE",
+      status: "ACTIVE",
+      joinedAt: new Date(),
+    },
+  });
+
+  await prisma.organizationMember.upsert({
+    where: { organizationId_userId: { organizationId, userId: confirmer.id } },
+    update: { role: "ADMIN_ENTERPRISE", status: "ACTIVE", removedAt: null, joinedAt: new Date() },
+    create: {
+      id: "e2e-finance-confirmer-membership-724",
+      organizationId,
+      userId: confirmer.id,
       role: "ADMIN_ENTERPRISE",
       status: "ACTIVE",
       joinedAt: new Date(),
@@ -420,14 +467,17 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
   test.beforeAll(async ({ browser }) => {
     context = await browser.newContext();
     approverContext = await browser.newContext();
+    confirmerContext = await browser.newContext();
     await signIn();
     await prepareTenant();
     await signInAs(approverContext, approverEmail, approverPassword);
+    await signInAs(confirmerContext, confirmerEmail, confirmerPassword, "/enterprise-modules/FINANCE_PAYMENTS");
   });
 
   test.afterAll(async () => {
     await context?.close();
     await approverContext?.close();
+    await confirmerContext?.close();
     await prisma.$disconnect();
   });
 
@@ -571,7 +621,7 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
     expect(approveResponse.ok(), JSON.stringify(approved)).toBeTruthy();
     expect(approved?.payment?.status).toBe("APPROVED");
 
-    const confirmResponse = await approverContext.request.post(
+    const confirmResponse = await confirmerContext.request.post(
       `${baseUrl}/api/enterprise/${organizationId}/payments/${added.payment.id}/transition`,
       {
         data: { action: "CONFIRM", revision: approved.payment.revision },
@@ -832,11 +882,14 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
     // Simulate a payment created before #700, when EnterprisePayment had no durable cash-session binding.
     await prisma.enterprisePayment.update({
       where: { id: added.payment.id },
-      data: { cashSessionId: null },
+      data: {
+        cashSessionId: null,
+        createdAt: new Date("2026-09-28T12:00:00.000Z"),
+      },
     });
 
     // #704: recover onto the confirming user's compatible OPEN cash session, even when the historical initiator differs.
-    const openResponse = await approverContext.request.post(
+    const openResponse = await confirmerContext.request.post(
       `${baseUrl}/api/enterprise/${organizationId}/cash-sessions`,
       {
         data: {
@@ -858,8 +911,9 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
       where: { id: opened.session.id },
       select: { cashierUserId: true },
     });
-    expect(openedPersisted.cashierUserId).toBe(approverUserId);
+    expect(openedPersisted.cashierUserId).toBe(confirmerUserId);
     expect(openedPersisted.cashierUserId).not.toBe(adminUserId);
+    expect(openedPersisted.cashierUserId).not.toBe(approverUserId);
 
     const cashListResponse = await approverContext.request.get(
       `${baseUrl}/api/enterprise/${organizationId}/cash-sessions?recordId=${opened.session.id}`,
@@ -875,7 +929,7 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
     expect(cashList?.items?.[0]?.currencyCode).toBe("CDF");
     expect(cashList?.items?.[0]?.financialAccount?.currencyCode).toBe("CDF");
 
-    const confirmResponse = await approverContext.request.post(
+    const confirmResponse = await confirmerContext.request.post(
       `${baseUrl}/api/enterprise/${organizationId}/payments/${added.payment.id}/transition`,
       {
         data: { action: "CONFIRM", revision: approved.payment.revision },
