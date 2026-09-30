@@ -20,13 +20,20 @@ async function addPaymentEvent(tx: Prisma.TransactionClient, organizationId: str
   await tx.enterprisePaymentEvent.create({ data: { organizationId, paymentId, actorUserId, eventType, summary, metadataJson } });
 }
 
+const CASH_SESSION_BINDING_CUTOVER_AT = new Date("2026-09-29T08:30:00.000Z");
+
 type CashSessionPayment = {
   id: string;
   organizationId: string;
   financialAccountId: string | null;
   initiatedByUserId: string;
   cashSessionId: string | null;
+  createdAt: Date;
 };
+
+function isLegacyCashSessionBinding(payment: CashSessionPayment) {
+  return payment.createdAt < CASH_SESSION_BINDING_CUTOVER_AT;
+}
 
 async function resolveCashSessionForConfirmation(
   tx: Prisma.TransactionClient,
@@ -88,6 +95,16 @@ async function resolveCashSessionForConfirmation(
 
     if (linked.status === "OPEN") return linked;
 
+    if (!isLegacyCashSessionBinding(payment)) {
+      if (linked.status === "PENDING_VALIDATION") {
+        throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_PENDING_VALIDATION", 409);
+      }
+      if (linked.status === "CLOSING") {
+        throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_CLOSING", 409);
+      }
+      throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_CLOSED", 409);
+    }
+
     const replacement = await findPreferredOpenReplacement();
     if (replacement) {
       await tx.enterprisePayment.update({
@@ -100,13 +117,14 @@ async function resolveCashSessionForConfirmation(
         payment.id,
         actorUserId,
         "CASH_SESSION_REBOUND",
-        "Cash session rebound before confirmation",
+        "Legacy cash session rebound before confirmation",
         {
           previousCashSessionId: linked.id,
           previousCashierUserId: linked.cashierUserId,
           cashSessionId: replacement.id,
           cashierUserId: replacement.cashierUserId,
           previousStatus: linked.status,
+          legacyCutoverAt: CASH_SESSION_BINDING_CUTOVER_AT.toISOString(),
         },
       );
       return replacement;
@@ -119,6 +137,10 @@ async function resolveCashSessionForConfirmation(
       throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_CLOSING", 409);
     }
     throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_CLOSED", 409);
+  }
+
+  if (!isLegacyCashSessionBinding(payment)) {
+    throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_BINDING_REQUIRED", 409);
   }
 
   const recovered = await findPreferredOpenReplacement();
@@ -184,7 +206,8 @@ export async function createEnterprisePayment(organizationId: string, actorUserI
           orderBy: { openedAt: "desc" },
           select: { id: true },
         });
-        cashSessionId = cashSession?.id || null;
+        if (!cashSession) throw new EnterpriseAccountingError("OPEN_CASH_SESSION_REQUIRED", 409);
+        cashSessionId = cashSession.id;
       }
     }
     if (input.businessPartyId && input.employeeId) throw new EnterpriseAccountingError("PAYMENT_COUNTERPARTY_AMBIGUOUS", 409);
@@ -264,6 +287,9 @@ async function confirmEnterprisePayment(organizationId: string, paymentId: strin
     if (["CONFIRMED", "RECONCILED"].includes(payment.status)) return payment;
     if (payment.status !== "APPROVED" || payment.revision !== revision) throw new EnterpriseAccountingError("PAYMENT_NOT_APPROVED", 409);
     assertIndependentActor({ actorUserId, relatedUserIds: [payment.initiatedByUserId], errorCode: "PAYMENT_SELF_CONFIRMATION_FORBIDDEN" });
+    if (payment.approvedByUserId === actorUserId) {
+      throw new EnterpriseAccountingError("PAYMENT_APPROVER_CONFIRMATION_FORBIDDEN", 409);
+    }
     if (!payment.financialAccountId) throw new EnterpriseAccountingError("PAYMENT_FINANCIAL_ACCOUNT_REQUIRED", 409);
     const account = await tx.enterpriseFinancialAccount.findFirst({ where: { id: payment.financialAccountId, organizationId, status: "ACTIVE", archivedAt: null } });
     if (!account || account.currencyCode !== payment.currencyCode) throw new EnterpriseAccountingError("PAYMENT_FINANCIAL_ACCOUNT_INVALID", 409);
