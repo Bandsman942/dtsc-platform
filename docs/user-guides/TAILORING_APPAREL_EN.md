@@ -24,7 +24,9 @@ For made-to-measure work, create or select the customer in **CRM / Customers**, 
 
 Create the order in **Production orders**. Material requirements are derived from the BOM and use canonical inventory. Submit and approve the order according to permissions. Create a **cutting plan** linked to the production order and fabric. After cutting is completed, create garment bundles and move them through the workshop. Physical waste must be recorded through Manufacturing/Inventory flows; cutting never edits stock balances directly.
 
-For made-to-measure work, schedule a fitting. An `ADJUSTMENTS_REQUIRED` result allows an alteration to be created. Finishing status `READY` requires every finishing check plus a passing Manufacturing quality check. The garment bundle then becomes `READY_FOR_DELIVERY`. Sales, collection and accounting remain in the shared commercial and finance modules.
+For made-to-measure work, schedule a fitting. An `ADJUSTMENTS_REQUIRED` result allows an alteration to be created. Finishing status `READY` requires every finishing check plus a passing Manufacturing quality check. The garment bundle then becomes `READY_FOR_DELIVERY`.
+
+The financial path remains fully shared: manage the customer order in **Quotes & orders**; the production order may reference it without duplicating it; billing and the receivable stay in **Sales & receivables**; collection goes through **Payments** and then **Treasury**. Material purchases use **Purchases & payables**. Tailoring owns no parallel invoice, payment, cash account or accounting ledger.
 
 ## Accès et permissions
 

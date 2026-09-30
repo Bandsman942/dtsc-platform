@@ -170,7 +170,7 @@
       "routePath": "/enterprise-modules/FINANCE_BUDGETS",
       "workspaceKey": "ENTERPRISE_FINANCE",
       "permissionPrefixes": ["enterprise.finance.", "enterprise.budgets."],
-      "accessPolicy": "MEMBERSHIP",
+      "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "BUSINESS",
       "requiresActiveSubscription": true,
       "applicableSectors": "ALL",

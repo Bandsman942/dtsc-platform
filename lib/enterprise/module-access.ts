@@ -265,7 +265,11 @@ function resolveFromSnapshot(snapshot: EnterpriseAccessSnapshot, moduleCode: str
     return { allowed: true, code: "OK", message: "Accès autorisé.", canonicalCode: definition.code, definition, tenantModuleId: tenantModule.id, tenantModuleCode: tenantModule.moduleCode };
   }
 
-  const allowed = snapshot.permissions.length ? permissionsAllowAction(definition, snapshot.permissions, action) : roleAllowsAction(snapshot.role, action);
+  const allowed = definition.accessPolicy === "POSITION_PERMISSION"
+    ? permissionsAllowAction(definition, snapshot.permissions, action)
+    : snapshot.permissions.length
+      ? permissionsAllowAction(definition, snapshot.permissions, action)
+      : roleAllowsAction(snapshot.role, action);
   if (!allowed) return denied("PERMISSION_DENIED", "Votre fonction ne vous autorise pas à réaliser cette action.", definition, tenantModule);
 
   return { allowed: true, code: "OK", message: "Accès autorisé.", canonicalCode: definition.code, definition, tenantModuleId: tenantModule.id, tenantModuleCode: tenantModule.moduleCode };

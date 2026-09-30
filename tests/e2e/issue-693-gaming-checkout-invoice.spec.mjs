@@ -8,6 +8,8 @@ const adminEmail = process.env.E2E_ADMIN_EMAIL || "erp-admin@example.test";
 const adminPassword = process.env.E2E_ADMIN_PASSWORD || "E2eAdmin2026!";
 const approverEmail = process.env.E2E_USER_EMAIL || "erp-user@example.test";
 const approverPassword = process.env.E2E_USER_PASSWORD || "E2eUser2026!";
+const confirmerEmail = "erp-confirmer@example.test";
+const confirmerPassword = approverPassword;
 const customerId = "e2e-baseline-business-party";
 const assetId = "e2e-gaming-asset-693";
 const stationId = "e2e-gaming-station-693";
@@ -17,9 +19,11 @@ const pricingRuleId = "e2e-gaming-pricing-696";
 let cashAccountId = "";
 let adminUserId = "";
 let approverUserId = "";
+let confirmerUserId = "";
 let crossDayPaidSessionId = "";
 let context;
 let approverContext;
+let confirmerContext;
 
 const requiredModules = [
   "CRM_CUSTOMERS",
@@ -47,6 +51,29 @@ async function prepareTenant() {
   adminUserId = admin.id;
   approverUserId = approver.id;
 
+  const confirmer = await prisma.user.upsert({
+    where: { email: confirmerEmail },
+    update: {
+      name: "Confirmeur Finance ERP E2E",
+      passwordHash: approver.passwordHash,
+      role: "CLIENT",
+      status: "ACTIVE",
+      locale: "fr",
+      startPage: "/dashboard",
+    },
+    create: {
+      id: "e2e-erp-finance-confirmer-user",
+      name: "Confirmeur Finance ERP E2E",
+      email: confirmerEmail,
+      passwordHash: approver.passwordHash,
+      role: "CLIENT",
+      status: "ACTIVE",
+      locale: "fr",
+      startPage: "/dashboard",
+    },
+  });
+  confirmerUserId = confirmer.id;
+
   await prisma.organization.update({
     where: { id: organizationId },
     data: {
@@ -66,6 +93,19 @@ async function prepareTenant() {
       id: "e2e-gaming-approver-membership-693",
       organizationId,
       userId: approver.id,
+      role: "ADMIN_ENTERPRISE",
+      status: "ACTIVE",
+      joinedAt: new Date(),
+    },
+  });
+
+  await prisma.organizationMember.upsert({
+    where: { organizationId_userId: { organizationId, userId: confirmerUserId } },
+    update: { role: "ADMIN_ENTERPRISE", status: "ACTIVE", removedAt: null, joinedAt: new Date() },
+    create: {
+      id: "e2e-gaming-confirmer-membership-730",
+      organizationId,
+      userId: confirmerUserId,
       role: "ADMIN_ENTERPRISE",
       status: "ACTIVE",
       joinedAt: new Date(),
@@ -420,14 +460,17 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
   test.beforeAll(async ({ browser }) => {
     context = await browser.newContext();
     approverContext = await browser.newContext();
+    confirmerContext = await browser.newContext();
     await signIn();
     await prepareTenant();
     await signInAs(approverContext, approverEmail, approverPassword);
+    await signInAs(confirmerContext, confirmerEmail, confirmerPassword, "/enterprise-modules/FINANCE_PAYMENTS");
   });
 
   test.afterAll(async () => {
     await context?.close();
     await approverContext?.close();
+    await confirmerContext?.close();
     await prisma.$disconnect();
   });
 
@@ -571,7 +614,7 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
     expect(approveResponse.ok(), JSON.stringify(approved)).toBeTruthy();
     expect(approved?.payment?.status).toBe("APPROVED");
 
-    const confirmResponse = await approverContext.request.post(
+    const confirmResponse = await confirmerContext.request.post(
       `${baseUrl}/api/enterprise/${organizationId}/payments/${added.payment.id}/transition`,
       {
         data: { action: "CONFIRM", revision: approved.payment.revision },
@@ -836,7 +879,7 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
     });
 
     // #704: recover onto the confirming user's compatible OPEN cash session, even when the historical initiator differs.
-    const openResponse = await approverContext.request.post(
+    const openResponse = await confirmerContext.request.post(
       `${baseUrl}/api/enterprise/${organizationId}/cash-sessions`,
       {
         data: {
@@ -858,10 +901,11 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
       where: { id: opened.session.id },
       select: { cashierUserId: true },
     });
-    expect(openedPersisted.cashierUserId).toBe(approverUserId);
+    expect(openedPersisted.cashierUserId).toBe(confirmerUserId);
     expect(openedPersisted.cashierUserId).not.toBe(adminUserId);
+    expect(openedPersisted.cashierUserId).not.toBe(approverUserId);
 
-    const cashListResponse = await approverContext.request.get(
+    const cashListResponse = await confirmerContext.request.get(
       `${baseUrl}/api/enterprise/${organizationId}/cash-sessions?recordId=${opened.session.id}`,
       {
         headers: {
@@ -875,7 +919,7 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
     expect(cashList?.items?.[0]?.currencyCode).toBe("CDF");
     expect(cashList?.items?.[0]?.financialAccount?.currencyCode).toBe("CDF");
 
-    const confirmResponse = await approverContext.request.post(
+    const confirmResponse = await confirmerContext.request.post(
       `${baseUrl}/api/enterprise/${organizationId}/payments/${added.payment.id}/transition`,
       {
         data: { action: "CONFIRM", revision: approved.payment.revision },
