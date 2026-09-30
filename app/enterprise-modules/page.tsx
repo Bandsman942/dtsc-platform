@@ -8,6 +8,12 @@ import { ModuleContent, ModuleHeader, ModuleSection, ModuleWorkspace } from "@/c
 import { StatusBadge } from "@/components/workspace/status-badge";
 import { getSession, requireUser } from "@/lib/auth";
 import { getEnterpriseNavigationModules } from "@/lib/enterprise/enterprise-navigation";
+import {
+  FINANCE_NAVIGATION_SECTIONS,
+  getFinanceNavigationSectionCode,
+  getFinanceNavigationSectionDescription,
+  getFinanceNavigationSectionLabel,
+} from "@/lib/enterprise/finance-navigation-sections";
 
 export default async function EnterpriseModulesHubPage() {
   const user = await requireUser();
@@ -24,6 +30,30 @@ export default async function EnterpriseModulesHubPage() {
     groupModules.push(enterpriseModule);
     groupedModules.set(enterpriseModule.navigationGroupLabel, groupModules);
   }
+
+  const renderModuleList = (items: typeof modules, ariaLabel: string) => (
+    <BusinessList ariaLabel={ariaLabel}>
+      {items
+        .sort((left, right) => left.navigationOrder - right.navigationOrder)
+        .map((enterpriseModule) => (
+          <BusinessListItem
+            key={enterpriseModule.code}
+            title={enterpriseModule.label}
+            description={enterpriseModule.description}
+            status={<StatusBadge>{enterpriseModule.implementationStatus === "BETA" ? "Beta" : "Actif"}</StatusBadge>}
+            actions={(
+              <Link
+                href={enterpriseModule.href}
+                aria-label={`${user.locale === "en" ? "Open" : "Ouvrir"} ${enterpriseModule.label}`}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-dtsc-blue hover:bg-dtsc-soft"
+              >
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            )}
+          />
+        ))}
+    </BusinessList>
+  );
 
   return (
     <AppShell user={user}>
@@ -50,27 +80,33 @@ export default async function EnterpriseModulesHubPage() {
               count={`${groupModules.length}`}
               description={user.locale === "en" ? "Modules available in the active enterprise context." : "Modules disponibles dans le contexte de l’entreprise active."}
             >
-              <BusinessList ariaLabel={groupLabel}>
-                {groupModules
-                  .sort((left, right) => left.navigationOrder - right.navigationOrder)
-                  .map((enterpriseModule) => (
-                    <BusinessListItem
-                      key={enterpriseModule.code}
-                      title={enterpriseModule.label}
-                      description={enterpriseModule.description}
-                      status={<StatusBadge>{enterpriseModule.implementationStatus === "BETA" ? "Beta" : "Actif"}</StatusBadge>}
-                      actions={(
-                        <Link
-                          href={enterpriseModule.href}
-                          aria-label={`${user.locale === "en" ? "Open" : "Ouvrir"} ${enterpriseModule.label}`}
-                          className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-dtsc-blue hover:bg-dtsc-soft"
-                        >
-                          <ArrowRight className="h-4 w-4" />
-                        </Link>
-                      )}
-                    />
-                  ))}
-              </BusinessList>
+              {groupModules[0]?.navigationGroup === "FINANCE" ? (
+                <div className="space-y-5">
+                  {FINANCE_NAVIGATION_SECTIONS.map((section) => {
+                    const sectionModules = groupModules.filter(
+                      (enterpriseModule) => getFinanceNavigationSectionCode(enterpriseModule.code) === section.code,
+                    );
+                    if (!sectionModules.length) return null;
+                    const sectionLabel = getFinanceNavigationSectionLabel(section, user.locale);
+                    return (
+                      <section key={section.code} className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface/60 p-4 sm:p-5">
+                        <div className="mb-4 min-w-0">
+                          <div className="flex min-w-0 items-center justify-between gap-3">
+                            <h3 className="min-w-0 break-words text-sm font-black text-dtsc-ink">{sectionLabel}</h3>
+                            <span className="shrink-0 rounded-full bg-dtsc-soft px-2.5 py-1 text-xs font-black text-dtsc-muted">
+                              {sectionModules.length}
+                            </span>
+                          </div>
+                          <p className="mt-1 break-words text-sm leading-6 text-dtsc-muted">
+                            {getFinanceNavigationSectionDescription(section, user.locale)}
+                          </p>
+                        </div>
+                        {renderModuleList(sectionModules, sectionLabel)}
+                      </section>
+                    );
+                  })}
+                </div>
+              ) : renderModuleList(groupModules, groupLabel)}
             </ModuleSection>
           ))}
           {!modules.length ? (
