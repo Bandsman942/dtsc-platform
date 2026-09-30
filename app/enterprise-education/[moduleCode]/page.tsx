@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { EnterpriseEducationWorkspace } from "@/components/enterprise/education/enterprise-education-workspace";
+import { EnterpriseEducationPopulationWorkspace } from "@/components/enterprise/education/enterprise-education-population-workspace";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
 import { EDUCATION_MODULE_CODES, EDUCATION_SECTOR_CODE, type EducationModuleCode } from "@/lib/enterprise/education/constants";
@@ -42,15 +43,26 @@ export default async function EnterpriseEducationPage({ params }: Params) {
   });
   if (!organization) notFound();
 
+  const populationModule = canonicalModuleCode === "ADMISSIONS" || canonicalModuleCode === "STUDENTS" || canonicalModuleCode === "GUARDIANS";
+
   return (
     <AppShell user={user}>
-      <EnterpriseEducationWorkspace
-        organizationId={organizationId}
-        organizationName={organization.name}
-        definition={capabilities.definition}
-        initialFocus={canonicalModuleCode as EducationModuleCode}
-        locale={user.locale}
-      />
+      {populationModule ? (
+        <EnterpriseEducationPopulationWorkspace
+          organizationId={organizationId}
+          organizationName={organization.name}
+          initialFocus={canonicalModuleCode}
+          locale={user.locale}
+        />
+      ) : (
+        <EnterpriseEducationWorkspace
+          organizationId={organizationId}
+          organizationName={organization.name}
+          definition={capabilities.definition}
+          initialFocus={canonicalModuleCode as EducationModuleCode}
+          locale={user.locale}
+        />
+      )}
     </AppShell>
   );
 }
