@@ -80,6 +80,7 @@ const FINANCE_ERROR_MESSAGES: Record<string, string> = {
   PAYMENT_NOT_APPROVED: "Ce paiement doit être approuvé avant sa confirmation. Rechargez-le et vérifiez son statut.",
   PAYMENT_SELF_CONFIRMATION_FORBIDDEN: "La confirmation doit être effectuée par une troisième personne autorisée, différente de l’initiateur et du validateur du paiement.",
   PAYMENT_TREASURY_TRANSACTION_MISSING: "La transaction de trésorerie confirmée liée à ce paiement est introuvable. Faites vérifier l’historique financier avant de contrepasser le paiement.",
+  PAYMENT_TREASURY_TRANSACTION_INCONSISTENT: "Plusieurs transactions de trésorerie confirmées sont liées à ce paiement. La contrepassation est bloquée pour éviter une correction de solde incorrecte.",
   PAYMENT_GAMING_SCOPE_INVALID: "Ce paiement ne correspond plus au client ou à la devise de l’encaissement Gaming lié. Rechargez les données avant de continuer.",
   PAYMENT_GAMING_CONVERGENCE_FAILED: "Le paiement est confirmé, mais la mise à jour de l’encaissement Gaming n’a pas pu être terminée. Réessayez la confirmation pour relancer la synchronisation.",
   PAYMENT_COUNTERPARTY_AMBIGUOUS: "Un paiement ne peut pas cibler simultanément un tiers et un collaborateur.",
