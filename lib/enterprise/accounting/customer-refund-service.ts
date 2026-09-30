@@ -201,6 +201,9 @@ export async function confirmCustomerRefundPayment(
       relatedUserIds: [current.initiatedByUserId],
       errorCode: "REFUND_PAYMENT_SELF_CONFIRMATION_FORBIDDEN",
     });
+    if (current.approvedByUserId === actorUserId) {
+      throw new EnterpriseAccountingError("REFUND_PAYMENT_APPROVER_CONFIRMATION_FORBIDDEN", 409);
+    }
 
     const account = await tx.enterpriseFinancialAccount.findFirst({
       where: { id: current.financialAccountId, organizationId, status: "ACTIVE", archivedAt: null },
