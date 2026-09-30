@@ -18,6 +18,17 @@ for (const forbidden of [
   check(!source.includes(forbidden), `historical Finance audit must stay read-only: found ${forbidden}`);
 }
 
+for (const sensitiveProjection of [
+  "businessPartyId",
+  "employeeId",
+  "maskedExternalReference",
+  "primaryEmail",
+  "legalName",
+  "displayName",
+]) {
+  check(!source.includes(sensitiveProjection), `historical Finance audit must not project sensitive business fields: ${sensitiveProjection}`);
+}
+
 for (const required of [
   'mode: "READ_ONLY"',
   'status: "REVERSED"',
