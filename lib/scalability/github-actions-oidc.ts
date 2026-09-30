@@ -4,6 +4,8 @@ type GitHubOidcHeader = {
   typ?: string;
 };
 
+type GitHubJwk = JsonWebKey & { kid?: string };
+
 export type GitHubActionsScale7Claims = {
   iss: string;
   aud: string | string[];
@@ -52,7 +54,7 @@ async function verifyJwtSignature(token: string, header: GitHubOidcHeader) {
     headers: { Accept: "application/json" },
   });
   if (!jwksResponse.ok) return false;
-  const jwks = await jwksResponse.json() as { keys?: JsonWebKey[] };
+  const jwks = await jwksResponse.json() as { keys?: GitHubJwk[] };
   const jwk = jwks.keys?.find((candidate) => candidate.kid === header.kid && candidate.kty === "RSA");
   if (!jwk) return false;
 
