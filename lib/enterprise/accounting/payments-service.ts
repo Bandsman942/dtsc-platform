@@ -262,10 +262,20 @@ export async function transitionEnterprisePayment(
       }
       const confirmedTreasuryRows = await tx.enterpriseTreasuryTransaction.findMany({
         where: { organizationId, paymentId, status: "CONFIRMED" },
-        select: { id: true },
+        select: { id: true, financialAccountId: true, currencyCode: true, direction: true, amount: true },
+        take: 2,
       });
       if (!confirmedTreasuryRows.length) throw new EnterpriseAccountingError("PAYMENT_TREASURY_TRANSACTION_MISSING", 409);
-      if (confirmedTreasuryRows.length !== 1) throw new EnterpriseAccountingError("PAYMENT_TREASURY_TRANSACTION_INCONSISTENT", 409, { count: confirmedTreasuryRows.length });
+      const treasuryRow = confirmedTreasuryRows[0];
+      if (
+        confirmedTreasuryRows.length !== 1
+        || treasuryRow.financialAccountId !== payment.financialAccountId
+        || treasuryRow.currencyCode !== payment.currencyCode
+        || treasuryRow.direction !== payment.direction
+        || !treasuryRow.amount.equals(payment.amount)
+      ) {
+        throw new EnterpriseAccountingError("PAYMENT_TREASURY_TRANSACTION_INCONSISTENT", 409, { count: confirmedTreasuryRows.length });
+      }
 
       const originalSignedAmount = payment.direction === "INBOUND" ? payment.amount : payment.amount.negated();
       await tx.enterpriseTreasuryTransaction.updateMany({
