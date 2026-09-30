@@ -20,6 +20,7 @@ requireTokens(payments, [
   'if (!cashSession) throw new EnterpriseAccountingError("OPEN_CASH_SESSION_REQUIRED", 409)',
   "payment.approvedByUserId",
   "PAYMENT_TREASURY_TRANSACTION_MISSING",
+  "PAYMENT_TREASURY_TRANSACTION_INCONSISTENT",
   "originalSignedAmount.negated()",
   'movementType: `${movement.movementType}_REVERSAL`',
   'authorization: "DOMAIN_INVERSE"',
