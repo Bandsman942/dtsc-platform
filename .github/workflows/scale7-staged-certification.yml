@@ -24,6 +24,7 @@ on:
 permissions:
   contents: read
   issues: write
+  id-token: write
 
 concurrency:
   group: scale7-certification
@@ -88,7 +89,7 @@ jobs:
           echo "TARGET_VUS=${target}" >> "$GITHUB_ENV"
           echo "LOAD_PROFILE=${profile}" >> "$GITHUB_ENV"
 
-          for name in BASE_URL SCALE7_AUTH_CONTEXTS_JSON OBSERVABILITY_COOKIE VERCEL_AUTOMATION_BYPASS_SECRET; do
+          for name in BASE_URL OBSERVABILITY_COOKIE VERCEL_AUTOMATION_BYPASS_SECRET; do
             if [ -z "${!name:-}" ]; then
               echo "::error::Required SCALE-7 configuration is missing: ${name}."
               exit 1
@@ -106,6 +107,36 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: 22
+
+      - name: Provision governed multi-tenant auth pool when no operator override exists
+        if: env.SCALE7_AUTH_CONTEXTS_JSON == ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          oidc_url="${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=dtsc-scale7"
+          oidc_token="$(curl --fail --silent --show-error             --header "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}"             "${oidc_url}" | jq -r '.value')"
+          if [ -z "${oidc_token}" ] || [ "${oidc_token}" = "null" ]; then
+            echo "::error::GitHub Actions OIDC token could not be minted."
+            exit 1
+          fi
+          echo "::add-mask::${oidc_token}"
+
+          auth_pool="$(curl --fail --silent --show-error             --request POST             --header "Authorization: Bearer ${oidc_token}"             --header "Content-Type: application/json"             --header "Origin: ${BASE_URL%/}"             --header "x-vercel-protection-bypass: ${VERCEL_AUTOMATION_BYPASS_SECRET}"             --data "$(jq -nc --argjson target "${TARGET_VUS}" '{targetVus:$target}')"             "${BASE_URL%/}/api/internal/scale7/auth-pool")"
+
+          tenant_count="$(jq '.tenants | length' <<<"${auth_pool}")"
+          identity_count="$(jq '[.tenants[].sessionCookies[]] | length' <<<"${auth_pool}")"
+          if [ "${tenant_count}" -lt 2 ] || [ "${identity_count}" -lt 8 ]; then
+            echo "::error::Governed SCALE-7 auth pool is incomplete."
+            exit 1
+          fi
+
+          echo "::add-mask::${auth_pool}"
+          {
+            echo 'SCALE7_AUTH_CONTEXTS_JSON<<SCALE7_POOL_EOF'
+            echo "${auth_pool}"
+            echo 'SCALE7_POOL_EOF'
+          } >> "${GITHUB_ENV}"
+          echo "SCALE-7 governed auth pool ready: ${tenant_count} tenants / ${identity_count} synthetic identities."
 
       - name: Enforce staged progression
         run: node scripts/load/verify-scale7-stage-progression.mjs
