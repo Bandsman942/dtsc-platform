@@ -110,6 +110,7 @@ await import("./qa-hotfix-696-gaming-session-transitions.mjs");
 await import("./qa-hotfix-698-gaming-payment-convergence.mjs");
 await import("./qa-hotfix-700-cash-session-payment-recovery.mjs");
 await import("./qa-hotfix-704-cash-recovery-currency.mjs");
+await import("./qa-hotfix-725-sector-finance-convergence.mjs");
 await import("./qa-hotfix-706-gaming-daily-close-create.mjs");
 await import("./qa-hotfix-710-gaming-close-approver-responsive.mjs");
 await import("./qa-hotfix-714-gaming-close-kpi-convergence.mjs");
