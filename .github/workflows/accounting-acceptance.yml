@@ -37,6 +37,7 @@ on:
       - "scripts/qa-accounting-acceptance-contract.mjs"
       - "scripts/qa-accounting-626-closing.mjs"
       - "scripts/qa-erp-cross-module-finance.mjs"
+      - "scripts/qa-hotfix-725-sector-finance-convergence.mjs"
       - "scripts/ci-upstash-redis-rest-proxy.mjs"
       - "scripts/qa-ci-auth-rate-limit-provisioning.mjs"
       - "tests/e2e/accounting-onboarding.spec.mjs"
@@ -143,6 +144,7 @@ jobs:
           node scripts/qa-accounting-acceptance-contract.mjs
           node scripts/qa-accounting-626-closing.mjs
           node scripts/qa-erp-cross-module-finance.mjs
+          node scripts/qa-hotfix-725-sector-finance-convergence.mjs
           node scripts/qa-ci-auth-rate-limit-provisioning.mjs
       - name: Build production application
         shell: bash
