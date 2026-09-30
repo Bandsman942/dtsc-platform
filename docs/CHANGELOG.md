@@ -7,6 +7,7 @@
 - La confirmation applique une séparation maker/checker/settler : le confirmateur doit être distinct de l’initiateur et du validateur.
 - La contrepassation d’un paiement restaure le solde opérationnel du compte, inverse les transactions Treasury confirmées, ajoute des mouvements Cash compensateurs et contre-passe l’écriture comptable source dans la même transaction.
 - Une transaction Treasury manquante bloque désormais la contrepassation en mode fail-closed avec un message métier sûr.
+- La contrepassation échoue aussi en mode fail-closed lorsque les sources Treasury, Cash ou journal sont ambiguës (plusieurs impacts actifs pour le même paiement), afin d’éviter toute double compensation.
 - La QA `qa:hotfix-730` protège l’atomicité, la séparation des fonctions et les contrats Finance canoniques utilisés par Gaming, Health et Pharmacy.
 
 ### Données et sécurité
