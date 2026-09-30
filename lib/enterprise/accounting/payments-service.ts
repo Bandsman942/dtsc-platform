@@ -265,6 +265,7 @@ export async function transitionEnterprisePayment(
         select: { id: true },
       });
       if (!confirmedTreasuryRows.length) throw new EnterpriseAccountingError("PAYMENT_TREASURY_TRANSACTION_MISSING", 409);
+      if (confirmedTreasuryRows.length !== 1) throw new EnterpriseAccountingError("PAYMENT_TREASURY_TRANSACTION_INCONSISTENT", 409, { count: confirmedTreasuryRows.length });
 
       const originalSignedAmount = payment.direction === "INBOUND" ? payment.amount : payment.amount.negated();
       await tx.enterpriseTreasuryTransaction.updateMany({
