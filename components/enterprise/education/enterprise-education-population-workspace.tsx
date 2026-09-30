@@ -17,6 +17,10 @@ import { educationPopulationCopy, educationPopulationStatus, type EducationPopul
 type PopulationModule = Extract<EducationModuleCode, "ADMISSIONS" | "STUDENTS" | "GUARDIANS">;
 type PopulationRef = { name?: string; label?: string };
 type EnrollmentPlacement = {
+  campusId?: string;
+  programId?: string | null;
+  levelId?: string;
+  classGroupId?: string | null;
   campus?: PopulationRef;
   program?: PopulationRef;
   level?: PopulationRef;
@@ -35,6 +39,10 @@ type Item = {
   status?: string;
   revision?: number;
   applicationNumber?: string;
+  campusId?: string;
+  programId?: string | null;
+  levelId?: string;
+  classGroupId?: string | null;
   studentNumber?: string;
   guardianNumber?: string;
   firstName?: string;
@@ -143,7 +151,7 @@ export function EnterpriseEducationPopulationWorkspace({
   }, [load, t.loadError]);
 
   function openModal(type: ModalType, item?: Item, decision?: "ACCEPTED" | "REJECTED" | "WAITLISTED") {
-    const activeEnrollment = item?.enrollments?.find((entry: Item) => entry.status === "ACTIVE") || item?.enrollments?.[0];
+    const activeEnrollment = item?.enrollments?.find((entry: EnrollmentItem) => entry.status === "ACTIVE") || item?.enrollments?.[0];
     const placement = activeEnrollment?.placements?.[0];
     const defaults: Record<string, string | boolean> = {};
     if (type === "CREATE_ADMISSION") Object.assign(defaults, { firstName: "", lastName: "", middleName: "", email: "", phone: "", birthDate: "", academicYearId: "", campusId: "", programId: "", levelId: "", classGroupId: "", applicantNotes: "" });
@@ -185,7 +193,7 @@ export function EnterpriseEducationPopulationWorkspace({
   }
 
   async function completeEnrollment(item: Item) {
-    const enrollment = item.enrollments?.find((entry: Item) => entry.status === "ACTIVE") || item.enrollments?.[0];
+    const enrollment = item.enrollments?.find((entry: EnrollmentItem) => entry.status === "ACTIVE") || item.enrollments?.[0];
     if (!enrollment) return;
     const confirmation = await confirmSensitiveAction({
       title: lang === "en" ? "Complete enrollment" : "Terminer l’inscription",
@@ -256,7 +264,7 @@ export function EnterpriseEducationPopulationWorkspace({
           classGroupId: form.classGroupId || null,
         });
       } else if ((modal.type === "TRANSFER" || modal.type === "REACTIVATE") && modal.item) {
-        const enrollment = modal.item.enrollments?.find((entry: Item) => modal.type === "TRANSFER" ? entry.status === "ACTIVE" : Boolean(entry.status && ["WITHDRAWN", "TRANSFERRED"].includes(entry.status))) || modal.item.enrollments?.[0];
+        const enrollment = modal.item.enrollments?.find((entry: EnrollmentItem) => modal.type === "TRANSFER" ? entry.status === "ACTIVE" : Boolean(entry.status && ["WITHDRAWN", "TRANSFERRED"].includes(entry.status))) || modal.item.enrollments?.[0];
         if (!enrollment) throw new Error(t.noEnrollment);
         await postJson(`/api/enterprise/${organizationId}/education/enrollments/${enrollment.id}/actions`, {
           action: modal.type,
@@ -268,7 +276,7 @@ export function EnterpriseEducationPopulationWorkspace({
           reason: form.reason,
         });
       } else if (modal.type === "WITHDRAW" && modal.item) {
-        const enrollment = modal.item.enrollments?.find((entry: Item) => entry.status === "ACTIVE") || modal.item.enrollments?.[0];
+        const enrollment = modal.item.enrollments?.find((entry: EnrollmentItem) => entry.status === "ACTIVE") || modal.item.enrollments?.[0];
         if (!enrollment) throw new Error(t.noEnrollment);
         await postJson(`/api/enterprise/${organizationId}/education/enrollments/${enrollment.id}/actions`, {
           action: "WITHDRAW",
@@ -345,7 +353,7 @@ export function EnterpriseEducationPopulationWorkspace({
         {!loading && items.length > 0 ? (
           <BusinessList ariaLabel={t.titles[initialFocus]}>
             {items.map((item) => {
-              const activeEnrollment = item.enrollments?.find((entry: Item) => entry.status === "ACTIVE") || item.enrollments?.[0];
+              const activeEnrollment = item.enrollments?.find((entry: EnrollmentItem) => entry.status === "ACTIVE") || item.enrollments?.[0];
               const placement = activeEnrollment?.placements?.[0];
               const admissionMeta = [item.applicationNumber, item.academicYear?.label, item.campus?.name].filter(Boolean).join(" · ");
               const studentMeta = [item.studentNumber, activeEnrollment?.enrollmentNumber, activeEnrollment?.academicYear?.label].filter(Boolean).join(" · ");
@@ -354,7 +362,7 @@ export function EnterpriseEducationPopulationWorkspace({
                 ? [item.program?.name, item.level?.label, item.classGroup?.name].filter(Boolean).join(" · ")
                 : initialFocus === "STUDENTS"
                   ? [placement?.campus?.name, placement?.program?.name, placement?.level?.label, placement?.classGroup?.name].filter(Boolean).join(" · ")
-                  : item.students?.map((relation: Item) => studentTitle(relation.student)).join(", ");
+                  : item.students?.map((relation) => studentTitle(relation.student)).join(", ");
               return (
                 <BusinessListItem
                   key={item.id}
@@ -377,7 +385,7 @@ export function EnterpriseEducationPopulationWorkspace({
                         <Button size="sm" variant="outline" onClick={() => openModal("WITHDRAW", item)}>{t.withdraw}</Button>
                         <Button size="sm" variant="outline" onClick={() => completeEnrollment(item)}>{t.complete}</Button>
                       </> : null}
-                      {initialFocus === "STUDENTS" && activeEnrollment && ["WITHDRAWN", "TRANSFERRED"].includes(activeEnrollment.status) ? <Button size="sm" variant="outline" onClick={() => openModal("REACTIVATE", item)}>{t.reactivate}</Button> : null}
+                      {initialFocus === "STUDENTS" && activeEnrollment?.status && ["WITHDRAWN", "TRANSFERRED"].includes(activeEnrollment.status) ? <Button size="sm" variant="outline" onClick={() => openModal("REACTIVATE", item)}>{t.reactivate}</Button> : null}
                       {initialFocus === "STUDENTS" ? <Button size="sm" variant="outline" onClick={() => openModal("LINK_GUARDIAN", item)}>{t.linkGuardian}</Button> : null}
                     </div>
                   ) : undefined}
