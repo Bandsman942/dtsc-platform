@@ -15,30 +15,15 @@
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-tailoring/TAILORING_OVERVIEW",
       "workspaceKey": "ENTERPRISE_TAILORING",
-      "permissionPrefixes": [
-        "enterprise.tailoring.overview.",
-        "enterprise.tailoring."
-      ],
+      "permissionPrefixes": ["enterprise.tailoring.overview.", "enterprise.tailoring."],
       "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "BUSINESS",
       "requiresActiveSubscription": true,
-      "applicableSectors": [
-        "MANUFACTURING"
-      ],
-      "applicableBusinessSubtypes": [
-        "TAILORING_APPAREL"
-      ],
-      "dependencies": [
-        "MANUFACTURING_OVERVIEW",
-        "CRM_CUSTOMERS",
-        "CATALOG"
-      ],
-      "qaContract": "enterprise-tailoring-apparel",
-      "recommendedIntegrations": [
-        "SALES_QUOTES_ORDERS",
-        "FINANCE_RECEIVABLES",
-        "FINANCE_PAYMENTS"
-      ]
+      "applicableSectors": ["MANUFACTURING"],
+      "applicableBusinessSubtypes": ["TAILORING_APPAREL"],
+      "dependencies": ["MANUFACTURING_OVERVIEW", "CRM_CUSTOMERS", "CATALOG"],
+      "recommendedIntegrations": ["SALES_QUOTES_ORDERS", "FINANCE_RECEIVABLES", "FINANCE_PAYMENTS"],
+      "qaContract": "enterprise-tailoring-apparel"
     },
     {
       "code": "TAILORING_MEASUREMENTS",
@@ -54,23 +39,13 @@
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-tailoring/TAILORING_MEASUREMENTS",
       "workspaceKey": "ENTERPRISE_TAILORING",
-      "permissionPrefixes": [
-        "enterprise.tailoring.measurements.",
-        "enterprise.tailoring."
-      ],
+      "permissionPrefixes": ["enterprise.tailoring.measurements.", "enterprise.tailoring."],
       "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "BUSINESS",
       "requiresActiveSubscription": true,
-      "applicableSectors": [
-        "MANUFACTURING"
-      ],
-      "applicableBusinessSubtypes": [
-        "TAILORING_APPAREL"
-      ],
-      "dependencies": [
-        "TAILORING_OVERVIEW",
-        "CRM_CUSTOMERS"
-      ],
+      "applicableSectors": ["MANUFACTURING"],
+      "applicableBusinessSubtypes": ["TAILORING_APPAREL"],
+      "dependencies": ["TAILORING_OVERVIEW", "CRM_CUSTOMERS"],
       "qaContract": "enterprise-tailoring-apparel"
     },
     {
@@ -87,24 +62,13 @@
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-tailoring/TAILORING_STYLES_PATTERNS",
       "workspaceKey": "ENTERPRISE_TAILORING",
-      "permissionPrefixes": [
-        "enterprise.tailoring.styles.",
-        "enterprise.tailoring."
-      ],
+      "permissionPrefixes": ["enterprise.tailoring.styles.", "enterprise.tailoring."],
       "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "BUSINESS",
       "requiresActiveSubscription": true,
-      "applicableSectors": [
-        "MANUFACTURING"
-      ],
-      "applicableBusinessSubtypes": [
-        "TAILORING_APPAREL"
-      ],
-      "dependencies": [
-        "TAILORING_OVERVIEW",
-        "CATALOG",
-        "BILL_OF_MATERIALS"
-      ],
+      "applicableSectors": ["MANUFACTURING"],
+      "applicableBusinessSubtypes": ["TAILORING_APPAREL"],
+      "dependencies": ["TAILORING_OVERVIEW", "CATALOG", "BILL_OF_MATERIALS"],
       "qaContract": "enterprise-tailoring-apparel"
     },
     {
@@ -121,22 +85,13 @@
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-tailoring/TAILORING_SIZE_GRADING",
       "workspaceKey": "ENTERPRISE_TAILORING",
-      "permissionPrefixes": [
-        "enterprise.tailoring.grading.",
-        "enterprise.tailoring."
-      ],
+      "permissionPrefixes": ["enterprise.tailoring.grading.", "enterprise.tailoring."],
       "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "BUSINESS",
       "requiresActiveSubscription": true,
-      "applicableSectors": [
-        "MANUFACTURING"
-      ],
-      "applicableBusinessSubtypes": [
-        "TAILORING_APPAREL"
-      ],
-      "dependencies": [
-        "TAILORING_STYLES_PATTERNS"
-      ],
+      "applicableSectors": ["MANUFACTURING"],
+      "applicableBusinessSubtypes": ["TAILORING_APPAREL"],
+      "dependencies": ["TAILORING_STYLES_PATTERNS"],
       "qaContract": "enterprise-tailoring-apparel"
     },
     {
@@ -153,28 +108,15 @@
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-tailoring/TAILORING_MATERIAL_PROFILES",
       "workspaceKey": "ENTERPRISE_TAILORING",
-      "permissionPrefixes": [
-        "enterprise.tailoring.materials.",
-        "enterprise.tailoring."
-      ],
+      "permissionPrefixes": ["enterprise.tailoring.materials.", "enterprise.tailoring."],
       "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "BUSINESS",
       "requiresActiveSubscription": true,
-      "applicableSectors": [
-        "MANUFACTURING"
-      ],
-      "applicableBusinessSubtypes": [
-        "TAILORING_APPAREL"
-      ],
-      "dependencies": [
-        "TAILORING_OVERVIEW",
-        "CATALOG",
-        "INVENTORY_LOGISTICS"
-      ],
-      "qaContract": "enterprise-tailoring-apparel",
-      "recommendedIntegrations": [
-        "FINANCE_INVENTORY"
-      ]
+      "applicableSectors": ["MANUFACTURING"],
+      "applicableBusinessSubtypes": ["TAILORING_APPAREL"],
+      "dependencies": ["TAILORING_OVERVIEW", "CATALOG", "INVENTORY_LOGISTICS"],
+      "recommendedIntegrations": ["FINANCE_INVENTORY"],
+      "qaContract": "enterprise-tailoring-apparel"
     },
     {
       "code": "TAILORING_CUTTING_PLANS",
@@ -190,24 +132,13 @@
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-tailoring/TAILORING_CUTTING_PLANS",
       "workspaceKey": "ENTERPRISE_TAILORING",
-      "permissionPrefixes": [
-        "enterprise.tailoring.cutting.",
-        "enterprise.tailoring."
-      ],
+      "permissionPrefixes": ["enterprise.tailoring.cutting.", "enterprise.tailoring."],
       "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "BUSINESS",
       "requiresActiveSubscription": true,
-      "applicableSectors": [
-        "MANUFACTURING"
-      ],
-      "applicableBusinessSubtypes": [
-        "TAILORING_APPAREL"
-      ],
-      "dependencies": [
-        "PRODUCTION_ORDERS",
-        "MATERIAL_REQUIREMENTS",
-        "INVENTORY_LOGISTICS"
-      ],
+      "applicableSectors": ["MANUFACTURING"],
+      "applicableBusinessSubtypes": ["TAILORING_APPAREL"],
+      "dependencies": ["PRODUCTION_ORDERS", "MATERIAL_REQUIREMENTS", "INVENTORY_LOGISTICS"],
       "qaContract": "enterprise-tailoring-apparel"
     },
     {
@@ -224,23 +155,13 @@
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-tailoring/TAILORING_FITTINGS",
       "workspaceKey": "ENTERPRISE_TAILORING",
-      "permissionPrefixes": [
-        "enterprise.tailoring.fittings.",
-        "enterprise.tailoring."
-      ],
+      "permissionPrefixes": ["enterprise.tailoring.fittings.", "enterprise.tailoring."],
       "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "BUSINESS",
       "requiresActiveSubscription": true,
-      "applicableSectors": [
-        "MANUFACTURING"
-      ],
-      "applicableBusinessSubtypes": [
-        "TAILORING_APPAREL"
-      ],
-      "dependencies": [
-        "PRODUCTION_ORDERS",
-        "TAILORING_MEASUREMENTS"
-      ],
+      "applicableSectors": ["MANUFACTURING"],
+      "applicableBusinessSubtypes": ["TAILORING_APPAREL"],
+      "dependencies": ["PRODUCTION_ORDERS", "TAILORING_MEASUREMENTS"],
       "qaContract": "enterprise-tailoring-apparel"
     },
     {
@@ -257,24 +178,13 @@
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-tailoring/TAILORING_ALTERATIONS",
       "workspaceKey": "ENTERPRISE_TAILORING",
-      "permissionPrefixes": [
-        "enterprise.tailoring.alterations.",
-        "enterprise.tailoring."
-      ],
+      "permissionPrefixes": ["enterprise.tailoring.alterations.", "enterprise.tailoring."],
       "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "BUSINESS",
       "requiresActiveSubscription": true,
-      "applicableSectors": [
-        "MANUFACTURING"
-      ],
-      "applicableBusinessSubtypes": [
-        "TAILORING_APPAREL"
-      ],
-      "dependencies": [
-        "TAILORING_FITTINGS",
-        "PRODUCTION_EXECUTION",
-        "HUMAN_RESOURCES"
-      ],
+      "applicableSectors": ["MANUFACTURING"],
+      "applicableBusinessSubtypes": ["TAILORING_APPAREL"],
+      "dependencies": ["TAILORING_FITTINGS", "PRODUCTION_EXECUTION", "HUMAN_RESOURCES"],
       "qaContract": "enterprise-tailoring-apparel"
     },
     {
@@ -291,24 +201,13 @@
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-tailoring/TAILORING_GARMENT_TRACKING",
       "workspaceKey": "ENTERPRISE_TAILORING",
-      "permissionPrefixes": [
-        "enterprise.tailoring.garments.",
-        "enterprise.tailoring."
-      ],
+      "permissionPrefixes": ["enterprise.tailoring.garments.", "enterprise.tailoring."],
       "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "BUSINESS",
       "requiresActiveSubscription": true,
-      "applicableSectors": [
-        "MANUFACTURING"
-      ],
-      "applicableBusinessSubtypes": [
-        "TAILORING_APPAREL"
-      ],
-      "dependencies": [
-        "PRODUCTION_ORDERS",
-        "PRODUCTION_EXECUTION",
-        "TAILORING_CUTTING_PLANS"
-      ],
+      "applicableSectors": ["MANUFACTURING"],
+      "applicableBusinessSubtypes": ["TAILORING_APPAREL"],
+      "dependencies": ["PRODUCTION_ORDERS", "PRODUCTION_EXECUTION", "TAILORING_CUTTING_PLANS"],
       "qaContract": "enterprise-tailoring-apparel"
     },
     {
@@ -325,29 +224,15 @@
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-tailoring/TAILORING_FINISHING",
       "workspaceKey": "ENTERPRISE_TAILORING",
-      "permissionPrefixes": [
-        "enterprise.tailoring.finishing.",
-        "enterprise.tailoring."
-      ],
+      "permissionPrefixes": ["enterprise.tailoring.finishing.", "enterprise.tailoring."],
       "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "BUSINESS",
       "requiresActiveSubscription": true,
-      "applicableSectors": [
-        "MANUFACTURING"
-      ],
-      "applicableBusinessSubtypes": [
-        "TAILORING_APPAREL"
-      ],
-      "dependencies": [
-        "TAILORING_GARMENT_TRACKING",
-        "QUALITY_CONTROL"
-      ],
-      "qaContract": "enterprise-tailoring-apparel",
-      "recommendedIntegrations": [
-        "SALES_QUOTES_ORDERS",
-        "FINANCE_RECEIVABLES",
-        "FINANCE_PAYMENTS"
-      ]
+      "applicableSectors": ["MANUFACTURING"],
+      "applicableBusinessSubtypes": ["TAILORING_APPAREL"],
+      "dependencies": ["TAILORING_GARMENT_TRACKING", "QUALITY_CONTROL"],
+      "recommendedIntegrations": ["SALES_QUOTES_ORDERS", "FINANCE_RECEIVABLES", "FINANCE_PAYMENTS"],
+      "qaContract": "enterprise-tailoring-apparel"
     }
   ]
 }
