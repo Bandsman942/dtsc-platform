@@ -34,7 +34,15 @@ export async function convergeHealthMedicalInvoice(
   if (serviceIds.length !== source.items.length) throw new EnterpriseSectorConvergenceError("HEALTH_BILLING_CATALOG_ITEM_REQUIRED", 409);
   const serviceMappings = await prisma.healthServiceCatalogExtension.findMany({ where: { organizationId, healthBillingServiceCatalogId: { in: serviceIds } } });
   const catalogByService = new Map(serviceMappings.map((item) => [item.healthBillingServiceCatalogId, item.catalogItemId]));
-  const missing = source.items.filter((item) => !item.serviceCatalogId || !catalogByService.has(item.serviceCatalogId));
+  const catalogItems = await prisma.enterpriseCatalogItem.findMany({
+    where: { organizationId, id: { in: serviceMappings.map((item) => item.catalogItemId) }, archivedAt: null },
+    select: { id: true, name: true },
+  });
+  const catalogNameById = new Map(catalogItems.map((item) => [item.id, item.name]));
+  const missing = source.items.filter((item) => {
+    const catalogItemId = item.serviceCatalogId ? catalogByService.get(item.serviceCatalogId) : null;
+    return !catalogItemId || !catalogNameById.has(catalogItemId);
+  });
   if (missing.length) throw new EnterpriseSectorConvergenceError("HEALTH_SERVICE_CATALOG_MAPPING_REQUIRED", 409, { sourceItemIds: missing.map((item) => item.id) });
   if (!payerComponents.length) throw new EnterpriseSectorConvergenceError("HEALTH_PAYER_COMPONENT_REQUIRED", 409);
   const componentTotal = money(sumDecimals(payerComponents.map((component) => component.requestedAmount)));
@@ -58,7 +66,7 @@ export async function convergeHealthMedicalInvoice(
       if (itemTotal.minus(current.totalAmount).abs().greaterThan(new Prisma.Decimal("0.01"))) throw new EnterpriseSectorConvergenceError("HEALTH_INVOICE_ITEM_TOTAL_MISMATCH", 409, { invoiceTotal: current.totalAmount.toFixed(), itemTotal: itemTotal.toFixed() });
       const invoiceItems: Prisma.EnterpriseSalesInvoiceItemCreateWithoutSalesInvoiceInput[] = current.items.map((item) => ({
         catalogItemId: catalogByService.get(item.serviceCatalogId!),
-        description: item.description,
+        description: catalogNameById.get(catalogByService.get(item.serviceCatalogId!)!)!,
         quantity: item.quantity,
         unitPrice: item.unitPrice,
         discountAmount: item.discountAmount,
