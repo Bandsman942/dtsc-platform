@@ -111,6 +111,8 @@ Modules actifs :
 - `STUDENTS`;
 - `GUARDIANS`.
 
+Le code `STUDENTS` existait déjà dans le registre général comme placeholder Education `PLANNED/HIDDEN`. EDU-2 effectue le cutover canonique : ce placeholder est retiré de `module-registry-data.json` et l’unique définition `STUDENTS` devient celle de `module-registry-education.json`, active et routée vers le workspace Education. La protection runtime contre les codes canoniques dupliqués reste inchangée.
+
 Préfixes :
 
 - `enterprise.education.admissions.*`;
