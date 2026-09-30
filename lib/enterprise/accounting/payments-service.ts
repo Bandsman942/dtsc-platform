@@ -3,7 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { assertIndependentActor } from "@/lib/enterprise/accounting/access";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { assertActiveClientOrganization, financeReference, money, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
-import { postBusinessEvent } from "@/lib/enterprise/accounting/posting-service";
+import { postBusinessEvent, postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
+import { reverseJournalEntryTx } from "@/lib/enterprise/accounting/reversal-service";
 import type { paymentCreateSchema } from "@/lib/enterprise/accounting/schemas";
 import type { z } from "zod";
 
@@ -184,7 +185,8 @@ export async function createEnterprisePayment(organizationId: string, actorUserI
           orderBy: { openedAt: "desc" },
           select: { id: true },
         });
-        cashSessionId = cashSession?.id || null;
+        if (!cashSession) throw new EnterpriseAccountingError("OPEN_CASH_SESSION_REQUIRED", 409);
+        cashSessionId = cashSession.id;
       }
     }
     if (input.businessPartyId && input.employeeId) throw new EnterpriseAccountingError("PAYMENT_COUNTERPARTY_AMBIGUOUS", 409);
@@ -244,10 +246,101 @@ export async function transitionEnterprisePayment(
     if (!transition?.from.includes(payment.status)) throw new EnterpriseAccountingError("PAYMENT_TRANSITION_INVALID", 409);
     if (action === "APPROVE") assertIndependentActor({ actorUserId, relatedUserIds: [payment.initiatedByUserId], errorCode: "PAYMENT_SELF_APPROVAL_FORBIDDEN" });
     if (action === "REVERSE") {
-      assertIndependentActor({ actorUserId, relatedUserIds: [payment.initiatedByUserId, payment.confirmedByUserId], errorCode: "PAYMENT_SELF_REVERSAL_FORBIDDEN" });
+      assertIndependentActor({
+        actorUserId,
+        relatedUserIds: [payment.initiatedByUserId, payment.approvedByUserId, payment.confirmedByUserId],
+        errorCode: "PAYMENT_SELF_REVERSAL_FORBIDDEN",
+      });
       const allocations = await tx.enterprisePaymentAllocation.count({ where: { organizationId, paymentId, status: "CONFIRMED" } });
       if (allocations > 0) throw new EnterpriseAccountingError("PAYMENT_ALLOCATIONS_MUST_BE_REVERSED_FIRST", 409);
-      await tx.enterpriseTreasuryTransaction.updateMany({ where: { organizationId, paymentId, status: "CONFIRMED" }, data: { status: "REVERSED", reversedAt: new Date() } });
+      if (!payment.financialAccountId) throw new EnterpriseAccountingError("PAYMENT_FINANCIAL_ACCOUNT_REQUIRED", 409);
+      const account = await tx.enterpriseFinancialAccount.findFirst({
+        where: { id: payment.financialAccountId, organizationId },
+      });
+      if (!account || account.currencyCode !== payment.currencyCode) {
+        throw new EnterpriseAccountingError("PAYMENT_FINANCIAL_ACCOUNT_INVALID", 409);
+      }
+      const confirmedTreasuryRows = await tx.enterpriseTreasuryTransaction.findMany({
+        where: { organizationId, paymentId, status: "CONFIRMED" },
+        select: { id: true, financialAccountId: true, currencyCode: true, direction: true, amount: true },
+        take: 2,
+      });
+      if (!confirmedTreasuryRows.length) throw new EnterpriseAccountingError("PAYMENT_TREASURY_TRANSACTION_MISSING", 409);
+      const treasuryRow = confirmedTreasuryRows[0];
+      if (
+        confirmedTreasuryRows.length !== 1
+        || treasuryRow.financialAccountId !== payment.financialAccountId
+        || treasuryRow.currencyCode !== payment.currencyCode
+        || treasuryRow.direction !== payment.direction
+        || !treasuryRow.amount.equals(payment.amount)
+      ) {
+        throw new EnterpriseAccountingError("PAYMENT_TREASURY_TRANSACTION_INCONSISTENT", 409, { count: confirmedTreasuryRows.length });
+      }
+
+      const originalSignedAmount = payment.direction === "INBOUND" ? payment.amount : payment.amount.negated();
+      await tx.enterpriseTreasuryTransaction.updateMany({
+        where: { organizationId, paymentId, status: "CONFIRMED" },
+        data: { status: "REVERSED", reversedAt: new Date() },
+      });
+      await tx.enterpriseFinancialAccount.update({
+        where: { id: account.id },
+        data: { operationalBalance: { increment: originalSignedAmount.negated() }, revision: { increment: 1 } },
+      });
+
+      if (payment.methodType === "CASH") {
+        const movements = await tx.enterpriseCashMovement.findMany({
+          where: { organizationId, paymentId },
+          orderBy: { createdAt: "asc" },
+        });
+        const reversalAlreadyExists = movements.some((movement) => movement.movementType.endsWith("_REVERSAL"));
+        const originalMovements = movements.filter((item) => !item.movementType.endsWith("_REVERSAL"));
+        if (!reversalAlreadyExists && originalMovements.length !== 1) {
+          throw new EnterpriseAccountingError("PAYMENT_CASH_MOVEMENT_INCONSISTENT", 409, { count: originalMovements.length });
+        }
+        if (!reversalAlreadyExists) {
+          for (const movement of originalMovements) {
+            await tx.enterpriseCashMovement.create({
+              data: {
+                organizationId,
+                cashSessionId: movement.cashSessionId,
+                paymentId: payment.id,
+                movementType: `${movement.movementType}_REVERSAL`,
+                direction: movement.direction === "INBOUND" ? "OUTBOUND" : "INBOUND",
+                amount: movement.amount,
+                currencyCode: movement.currencyCode,
+                reference: movement.reference,
+                reason: input.reason || "Payment reversal",
+                createdByUserId: actorUserId,
+              },
+            });
+          }
+        }
+      }
+
+      const journals = await tx.enterpriseJournalEntry.findMany({
+        where: {
+          organizationId,
+          sourceEntityType: "EnterprisePayment",
+          sourceEntityId: payment.id,
+          status: "POSTED",
+        },
+        select: { id: true },
+        take: 2,
+      });
+      if (journals.length > 1) {
+        throw new EnterpriseAccountingError("PAYMENT_JOURNAL_INCONSISTENT", 409, { count: journals.length });
+      }
+      const journal = journals[0] || null;
+      if (journal) {
+        await reverseJournalEntryTx(
+          tx,
+          organizationId,
+          journal.id,
+          actorUserId,
+          { reason: input.reason || "Payment reversal", accountingDate: new Date() },
+          { authorization: "DOMAIN_INVERSE" },
+        );
+      }
     }
     const updated = await tx.enterprisePayment.update({ where: { id: payment.id }, data: { status: transition.to, approvedByUserId: action === "APPROVE" ? actorUserId : payment.approvedByUserId, reconciledAt: action === "RECONCILE" ? new Date() : payment.reconciledAt, reversedAt: action === "REVERSE" ? new Date() : payment.reversedAt, reversalReason: action === "REVERSE" ? input.reason || null : payment.reversalReason, revision: { increment: 1 } } });
     await addPaymentEvent(tx, organizationId, payment.id, actorUserId, action, `Payment ${action}`, input.reason ? { reason: input.reason.slice(0, 500) } : undefined);
@@ -263,7 +356,7 @@ async function confirmEnterprisePayment(organizationId: string, paymentId: strin
     if (!payment) throw new EnterpriseAccountingError("PAYMENT_NOT_FOUND", 404);
     if (["CONFIRMED", "RECONCILED"].includes(payment.status)) return payment;
     if (payment.status !== "APPROVED" || payment.revision !== revision) throw new EnterpriseAccountingError("PAYMENT_NOT_APPROVED", 409);
-    assertIndependentActor({ actorUserId, relatedUserIds: [payment.initiatedByUserId], errorCode: "PAYMENT_SELF_CONFIRMATION_FORBIDDEN" });
+    assertIndependentActor({ actorUserId, relatedUserIds: [payment.initiatedByUserId, payment.approvedByUserId], errorCode: "PAYMENT_SELF_CONFIRMATION_FORBIDDEN" });
     if (!payment.financialAccountId) throw new EnterpriseAccountingError("PAYMENT_FINANCIAL_ACCOUNT_REQUIRED", 409);
     const account = await tx.enterpriseFinancialAccount.findFirst({ where: { id: payment.financialAccountId, organizationId, status: "ACTIVE", archivedAt: null } });
     if (!account || account.currencyCode !== payment.currencyCode) throw new EnterpriseAccountingError("PAYMENT_FINANCIAL_ACCOUNT_INVALID", 409);
@@ -279,10 +372,16 @@ async function confirmEnterprisePayment(organizationId: string, paymentId: strin
     const updated = await tx.enterprisePayment.update({ where: { id: payment.id }, data: { status: "CONFIRMED", cashSessionId: confirmedCashSessionId || payment.cashSessionId, confirmedByUserId: actorUserId, confirmedAt: new Date(), revision: { increment: 1 } } });
     await addPaymentEvent(tx, organizationId, payment.id, actorUserId, "CONFIRMED", "Payment confirmed");
     await publishFinanceEvent(tx, { organizationId, entityType: "EnterprisePayment", entityId: payment.id, eventType: "PAYMENT_CONFIRMED", summary: `Payment ${payment.number} confirmed`, actorUserId, fromStatus: payment.status, toStatus: "CONFIRMED", metadataJson: { financialAccountId: account.id, cashSessionId: confirmedCashSessionId || payment.cashSessionId, amount: payment.amount.toFixed(), currency: payment.currencyCode } });
+    const postingEvent = paymentPostingEvent(updated.paymentType);
+    if (postingEvent) {
+      await postBusinessEventTx(tx, organizationId, actorUserId, {
+        postingEvent,
+        sourceEntityType: "EnterprisePayment",
+        sourceEntityId: updated.id,
+      });
+    }
     return updated;
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-  const postingEvent = paymentPostingEvent(confirmed.paymentType);
-  if (postingEvent) await postBusinessEvent(organizationId, actorUserId, { postingEvent, sourceEntityType: "EnterprisePayment", sourceEntityId: confirmed.id });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
   return confirmed;
 }
 

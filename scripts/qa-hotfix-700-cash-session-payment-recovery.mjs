@@ -50,9 +50,10 @@ for (const token of [
 }
 
 if (!payments.includes('input.methodType === "CASH"')
-  || !payments.includes('cashSessionId = cashSession?.id || null')
+  || !payments.includes('if (!cashSession) throw new EnterpriseAccountingError("OPEN_CASH_SESSION_REQUIRED", 409)')
+  || !payments.includes('cashSessionId = cashSession.id')
   || !payments.includes('cashSessionId, businessPartyId')) {
-  fail("les nouveaux paiements Cash doivent mémoriser la session ouverte exacte à la création");
+  fail("les nouveaux paiements Cash doivent exiger et mémoriser la session ouverte exacte à la création");
 }
 
 for (const code of [
