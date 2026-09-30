@@ -20,6 +20,7 @@ function all(source, markers) {
 const schema = read("prisma/enterprise-education.prisma");
 const migration = read("prisma/migrations/20260928164000_education_admissions_enrollments/migration.sql");
 const registry = read("lib/enterprise/module-registry-education.json");
+const coreRegistry = read("lib/enterprise/module-registry-data.json");
 const constants = read("lib/enterprise/education/constants.ts");
 const http = read("lib/enterprise/education/http.ts");
 const schemas = read("lib/enterprise/education/admissions-schemas.ts");
@@ -109,6 +110,13 @@ for (const code of ["ADMISSIONS", "STUDENTS", "GUARDIANS"]) {
   expect(registry.includes('"code": "' + code + '"'), "registry includes " + code);
   expect(constants.includes('"' + code + '"'), "Education module codes include " + code);
 }
+
+expect(!coreRegistry.includes('"code": "STUDENTS"'), "legacy PLANNED STUDENTS placeholder is removed when EDU-2 becomes canonical");
+expect(all(registry, [
+  '"code": "STUDENTS"',
+  '"implementationStatus": "ACTIVE"',
+  '"routePath": "/enterprise-education/STUDENTS"',
+]), "EDU-2 owns the single canonical STUDENTS definition");
 
 expect(all(registry, [
   '"implementationStatus": "ACTIVE"',
