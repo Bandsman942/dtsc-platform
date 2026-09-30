@@ -621,6 +621,20 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
     expect(approveResponse.ok(), JSON.stringify(approved)).toBeTruthy();
     expect(approved?.payment?.status).toBe("APPROVED");
 
+    const sameApproverConfirm = await approverContext.request.post(
+      `${baseUrl}/api/enterprise/${organizationId}/payments/${added.payment.id}/transition`,
+      {
+        data: { action: "CONFIRM", revision: approved.payment.revision },
+        headers: {
+          origin: baseUrl,
+          referer: `${baseUrl}/enterprise-modules/FINANCE_PAYMENTS`,
+        },
+      },
+    );
+    const sameApproverConfirmBody = await sameApproverConfirm.json().catch(() => null);
+    expect(sameApproverConfirm.status(), JSON.stringify(sameApproverConfirmBody)).toBe(409);
+    expect(sameApproverConfirmBody?.error).toBe("PAYMENT_APPROVER_CONFIRMATION_FORBIDDEN");
+
     const confirmResponse = await confirmerContext.request.post(
       `${baseUrl}/api/enterprise/${organizationId}/payments/${added.payment.id}/transition`,
       {
@@ -879,16 +893,15 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
       },
     });
 
-    // Simulate a payment created before #700, when EnterprisePayment had no durable cash-session binding.
+    // First remove the durable binding while keeping the payment recent: #724 must not
+    // treat a new payment as a legacy recovery candidate.
     await prisma.enterprisePayment.update({
       where: { id: added.payment.id },
-      data: {
-        cashSessionId: null,
-        createdAt: new Date("2026-09-28T12:00:00.000Z"),
-      },
+      data: { cashSessionId: null },
     });
 
-    // #704: recover onto the confirming user's compatible OPEN cash session, even when the historical initiator differs.
+    // #704: an independent confirming cashier opens a compatible session.
+    // #724 must still reject recovery until the fixture is explicitly historical.
     const openResponse = await confirmerContext.request.post(
       `${baseUrl}/api/enterprise/${organizationId}/cash-sessions`,
       {
@@ -928,6 +941,26 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
     expect(cashListResponse.ok(), JSON.stringify(cashList)).toBeTruthy();
     expect(cashList?.items?.[0]?.currencyCode).toBe("CDF");
     expect(cashList?.items?.[0]?.financialAccount?.currencyCode).toBe("CDF");
+
+    const modernRecoveryAttempt = await confirmerContext.request.post(
+      `${baseUrl}/api/enterprise/${organizationId}/payments/${added.payment.id}/transition`,
+      {
+        data: { action: "CONFIRM", revision: approved.payment.revision },
+        headers: {
+          origin: baseUrl,
+          referer: `${baseUrl}/enterprise-modules/FINANCE_PAYMENTS`,
+        },
+      },
+    );
+    const modernRecoveryBody = await modernRecoveryAttempt.json().catch(() => null);
+    expect(modernRecoveryAttempt.status(), JSON.stringify(modernRecoveryBody)).toBe(409);
+    expect(modernRecoveryBody?.error).toBe("PAYMENT_CASH_SESSION_BINDING_REQUIRED");
+
+    // Now simulate a payment created before the 2026-09-29 cash-session binding cutover.
+    await prisma.enterprisePayment.update({
+      where: { id: added.payment.id },
+      data: { createdAt: new Date("2026-09-28T12:00:00.000Z") },
+    });
 
     const confirmResponse = await confirmerContext.request.post(
       `${baseUrl}/api/enterprise/${organizationId}/payments/${added.payment.id}/transition`,
