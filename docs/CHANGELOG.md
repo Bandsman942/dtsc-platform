@@ -1,3 +1,25 @@
+## 2026-09-30 — Hotfix #732 : RBAC Finance budgets et convergence Couture
+
+### Corrigé
+
+- `FINANCE_BUDGETS` utilise désormais `POSITION_PERMISSION` dans le registre entreprise, en cohérence avec le resolver backend et le registre standard.
+- Le resolver `POSITION_PERMISSION` est désormais fail-closed : hors rôles administrateurs d’entreprise explicitement prévus, l’absence de permission position/rôle n’est plus remplacée par un fallback automatique `MEMBER`/`MANAGER`.
+- Le profil `TAILORING_APPAREL` BUSINESS matérialise désormais la chaîne commune `SALES_QUOTES_ORDERS` → `FINANCE_RECEIVABLES` / `FINANCE_PAYMENTS` / `FINANCE_TREASURY` et `SUPPLIERS_PURCHASES` → `FINANCE_PAYABLES`.
+- Le profil Couture ne requiert plus l'entitlement du workspace `FINANCE_ACCOUNTING` ENTERPRISE pour être opérationnel au niveau BUSINESS ; le moteur comptable commun reste l'autorité interne.
+- Les guides FR/EN décrivent explicitement la frontière : aucune facture, paiement, caisse ni comptabilité Couture parallèle.
+- Les E2E Gaming #698/#704 utilisent désormais un troisième acteur authentifié pour la confirmation Finance et la récupération Cash, conformément au maker/checker/settler livré par #731.
+- La QA `qa:hotfix-704` suit cette séparation des rôles et `qa:hotfix-732` verrouille la politique d'accès Budget et les contrats de convergence Finance sectoriels.
+
+### Données et sécurité
+
+- Aucune migration ni backfill.
+- Aucun droit Finance ajouté ; la politique devient plus restrictive et cohérente avec les capacités positionnelles.
+- Les sources Gaming, Health et Pharmacy communes restent inchangées.
+
+### Validation
+
+- CI et OWNER_E2E restent à produire sur le SHA rebasé ; aucune preuve antérieure n'est réutilisée sans réexécution.
+
 ## 2026-09-30 — Finance #735 : audit historique des contrepassations de paiements
 
 > Outil préparatoire suivi par l’Issue #737 ; l’audit réel des données reste suivi par #735.

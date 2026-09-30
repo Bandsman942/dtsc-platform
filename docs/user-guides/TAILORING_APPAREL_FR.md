@@ -24,7 +24,9 @@ Pour le sur-mesure, créez ou sélectionnez le client dans **CRM / Clients**, pu
 
 Créez ensuite l’ordre dans **Ordres de production**. Les besoins matières sont dérivés de la nomenclature et utilisent le stock canonique. Soumettez puis faites approuver l’ordre selon les permissions disponibles. Créez un plan de coupe lié à l’ordre et à la matière concernée. Après coupe terminée, créez les lots de vêtements et faites-les progresser dans l’atelier. Les pertes physiques doivent être enregistrées par les flux Manufacturing/Stock prévus ; la coupe ne modifie jamais directement un solde de stock.
 
-Pour le sur-mesure, planifiez un essayage. Un résultat `ADJUSTMENTS_REQUIRED` permet de créer une retouche. La finition `READY` exige toutes les cases de finition ainsi qu’un contrôle qualité Manufacturing conforme. Le lot passe alors à `READY_FOR_DELIVERY`. Les ventes, encaissements et écritures comptables restent pris en charge par les modules commerciaux et financiers communs.
+Pour le sur-mesure, planifiez un essayage. Un résultat `ADJUSTMENTS_REQUIRED` permet de créer une retouche. La finition `READY` exige toutes les cases de finition ainsi qu’un contrôle qualité Manufacturing conforme. Le lot passe alors à `READY_FOR_DELIVERY`.
+
+Le parcours financier reste entièrement commun : la commande client est gérée dans **Devis & commandes**, l’ordre de production peut la référencer sans la dupliquer, la facturation et la créance sont gérées dans **Ventes & créances**, et l’encaissement passe par **Paiements** puis **Trésorerie**. Les achats de matières utilisent **Achats & dettes**. Couture ne possède ni facture, ni paiement, ni caisse, ni comptabilité parallèle.
 
 ## Accès et permissions
 

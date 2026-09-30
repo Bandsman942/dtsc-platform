@@ -57,9 +57,10 @@ for (const source of [financeHttp, financeUi]) {
 
 for (const token of [
   "#704 uses another authorized cashier and preserves CDF",
-  "openResponse = await approverContext.request.post",
-  "expect(openedPersisted.cashierUserId).toBe(approverUserId)",
+  "openResponse = await confirmerContext.request.post",
+  "expect(openedPersisted.cashierUserId).toBe(confirmerUserId)",
   "expect(openedPersisted.cashierUserId).not.toBe(adminUserId)",
+  "expect(openedPersisted.cashierUserId).not.toBe(approverUserId)",
   'expect(cashList?.items?.[0]?.currencyCode).toBe("CDF")',
   "CASH_SESSION_RECOVERED",
   'expect(persistedCheckout.status).toBe("PAID")',
