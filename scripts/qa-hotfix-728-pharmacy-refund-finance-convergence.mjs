@@ -13,6 +13,7 @@ const cashRoute = read("app/api/enterprise/[organizationId]/pharmacy/cash/[entit
 const salesRoute = read("app/api/enterprise/[organizationId]/pharmacy/sales/[saleId]/route.ts");
 const commonRefund = read("lib/enterprise/accounting/customer-refund-service.ts");
 const payments = read("lib/enterprise/accounting/payments-service.ts");
+const paymentTransitionRoute = read("app/api/enterprise/[organizationId]/payments/[paymentId]/transition/route.ts");
 const receivables = read("lib/enterprise/accounting/receivables-service.ts");
 const assignedCredit = read("lib/enterprise/accounting/accounting-document-approval-orchestration.ts");
 const backfill = read("scripts/lib/sector-backfill-handlers.mjs");
@@ -83,6 +84,9 @@ for (const token of [
   "REFUND_SOURCE_AVAILABILITY_CONSUMED",
   "REFUND_AVAILABILITY_CONSUMED",
   "paymentAmounts",
+  "markCustomerRefundFinancialInverseReady",
+  "REFUND_FINANCIAL_INVERSE_READY",
+  "REFUND_FINANCIAL_INVERSE_NOT_READY",
 ]) check(commonRefund.includes(token), `bounded common refund primitive missing: ${token}`);
 
 check(
@@ -94,6 +98,12 @@ check(
   "Internal payment creation must support exact mapped Cash session binding",
 );
 check(
+  payments.includes("REFUND_SPECIALIZED_CONFIRMATION_REQUIRED")
+    && paymentTransitionRoute.includes("confirmCustomerRefundPayment")
+    && paymentTransitionRoute.includes('currentPayment?.paymentType === "REFUND"'),
+  "Generic Finance confirmation must route REFUND through the specialized customer-refund settlement",
+);
+check(
   payments.includes("reservedForRefund")
     && payments.includes("ALLOCATION_REVERSED_FOR_REFUND")
     && payments.includes("REFUND_AVAILABILITY_CONSUMED"),
@@ -101,6 +111,7 @@ check(
 );
 check(
   gamingCheckout.includes("consumeCustomerPaymentRefundAvailability")
+    && gamingCheckout.includes("markCustomerRefundFinancialInverseReady")
     && gamingCheckout.includes("refundReason, refund.id"),
   "Gaming full refunds must use the same source-payment reservation lifecycle",
 );
@@ -141,6 +152,8 @@ for (const token of [
   "PHARMACY_REFUND_SELF_SETTLEMENT_FORBIDDEN",
   "PAYMENT_ALLOCATION_EXCEEDS_UNALLOCATED",
   "sourcePaymentAfterRefund.unallocatedAmount",
+  "prematureFinanceConfirmation",
+  "REFUND_FINANCIAL_INVERSE_NOT_READY",
 ]) check(e2e.includes(token), `#728 E2E coverage missing: ${token}`);
 check(
   accountingWorkflow.includes("pharmacy-refund-finance-convergence.spec.mjs")
