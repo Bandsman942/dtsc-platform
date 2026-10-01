@@ -268,13 +268,13 @@ const PAYMENT_CONFIRMATION_COPY: Record<FinanceLocale, {
     readyTitle: "Confirmation disponible",
     blockedTitle: "Confirmation indisponible",
     noticeTitle: "Vérification avant confirmation",
-    readyDescription: "Vous pouvez confirmer ce paiement. Les contrôles de séparation des rôles et de rattachement caisse seront revérifiés par le serveur au moment de l’action.",
+    readyDescription: "Vous pouvez confirmer ce paiement. Les contrôles de séparation des rôles et de rattachement caisse seront revérifiés au moment de l’action.",
   },
   en: {
     readyTitle: "Confirmation available",
     blockedTitle: "Confirmation unavailable",
     noticeTitle: "Check before confirmation",
-    readyDescription: "You can confirm this payment. Role separation and cash-session binding will be checked again by the server when the action is submitted.",
+    readyDescription: "You can confirm this payment. Role separation and cash-session binding will be checked again when the action is submitted.",
   },
 };
 
