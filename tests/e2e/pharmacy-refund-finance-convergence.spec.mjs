@@ -398,6 +398,16 @@ test.describe.serial("Hotfix #728 Pharmacy refund Finance convergence", () => {
     expect(Number(preparedCredit.grandTotal)).toBe(40);
     expect(Number((await prisma.pharmacySale.findUniqueOrThrow({ where: { id: scenario.sale.id } })).refundedAmount || 0)).toBe(0);
 
+    const prematureFinanceConfirmation = await post(
+      settlerContext,
+      `/api/enterprise/${organizationId}/payments/${preparedPayment.id}/transition`,
+      { action: "CONFIRM", revision: preparedPayment.revision, reason: "Tentative avant inverse #728" },
+    );
+    expect(prematureFinanceConfirmation.response.status(), JSON.stringify(prematureFinanceConfirmation.body)).toBe(409);
+    expect(prematureFinanceConfirmation.body?.error).toBe("REFUND_FINANCIAL_INVERSE_NOT_READY");
+    expect((await prisma.enterprisePayment.findUniqueOrThrow({ where: { id: preparedPayment.id } })).status).toBe("APPROVED");
+    expect(await prisma.enterpriseTreasuryTransaction.count({ where: { organizationId, paymentId: preparedPayment.id } })).toBe(0);
+
     const validatorSettlement = await refundAction(validatorContext, scenario.refund.id, "mark-refund-paid");
     expect(validatorSettlement.response.status(), JSON.stringify(validatorSettlement.body)).toBe(409);
     expect(validatorSettlement.body?.error).toBe("PHARMACY_REFUND_SELF_SETTLEMENT_FORBIDDEN");
