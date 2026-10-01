@@ -33,6 +33,58 @@ const modules = [
   "FINANCE_ACCOUNTING",
 ];
 
+async function ensureCurrentFiscalPeriod(actorUserId) {
+  const now = new Date();
+  const current = await prisma.enterpriseFiscalPeriod.findFirst({
+    where: {
+      organizationId,
+      status: "OPEN",
+      startDate: { lte: now },
+      endDate: { gte: now },
+    },
+    select: { id: true },
+  });
+  if (current) return current.id;
+
+  const year = now.getUTCFullYear();
+  const month = now.getUTCMonth();
+  const monthCode = String(month + 1).padStart(2, "0");
+  const fiscalYearCode = `FY${year}-PH728`;
+  const periodCode = `${year}-${monthCode}-PH728`;
+  const fiscalYearStart = new Date(Date.UTC(year, 0, 1));
+  const fiscalYearEnd = new Date(Date.UTC(year + 1, 0, 1) - 1);
+  const periodStart = new Date(Date.UTC(year, month, 1));
+  const periodEnd = new Date(Date.UTC(year, month + 1, 1) - 1);
+
+  const fiscalYear = await prisma.enterpriseFiscalYear.upsert({
+    where: { organizationId_code: { organizationId, code: fiscalYearCode } },
+    update: { startDate: fiscalYearStart, endDate: fiscalYearEnd, status: "OPEN" },
+    create: {
+      organizationId,
+      code: fiscalYearCode,
+      startDate: fiscalYearStart,
+      endDate: fiscalYearEnd,
+      status: "OPEN",
+      createdByUserId: actorUserId,
+      openedAt: fiscalYearStart,
+    },
+  });
+  const period = await prisma.enterpriseFiscalPeriod.upsert({
+    where: { organizationId_code: { organizationId, code: periodCode } },
+    update: { fiscalYearId: fiscalYear.id, startDate: periodStart, endDate: periodEnd, status: "OPEN" },
+    create: {
+      organizationId,
+      fiscalYearId: fiscalYear.id,
+      code: periodCode,
+      startDate: periodStart,
+      endDate: periodEnd,
+      status: "OPEN",
+      createdByUserId: actorUserId,
+    },
+  });
+  return period.id;
+}
+
 async function signInAs(context, email, password) {
   const response = await context.request.post(`${baseUrl}/api/auth/sign-in`, {
     data: { email, password, organizationId, next: "/enterprise-modules/CASH_INVOICES_PAYMENTS" },
@@ -65,6 +117,7 @@ async function prepareTenant(browser) {
   if (!admin || !requester) throw new Error("#728 requires canonical ERP E2E users");
   adminUserId = admin.id;
   requesterUserId = requester.id;
+  await ensureCurrentFiscalPeriod(adminUserId);
 
   const settler = await prisma.user.upsert({
     where: { email: settlerEmail },
