@@ -58,7 +58,7 @@ Les codes suivants n’utilisent plus le workspace générique comme expérience
 | `FINANCE_RECEIVABLES` | Factures clients et créances |
 | `FINANCE_PAYABLES` | Factures fournisseurs et dettes |
 | `FINANCE_PAYMENTS` | Paiements, allocations et confirmations |
-| `FINANCE_TREASURY` | Comptes financiers, transferts et trésorerie |
+| `FINANCE_TREASURY` | Comptes financiers, financements, transferts et trésorerie |
 | `FINANCE_CASH` | Sessions de caisse, comptages et validation |
 | `FINANCE_BANK` | Relevés bancaires et lignes importées |
 | `FINANCE_RECONCILIATION` | Rapprochements et contrôles indépendants |
