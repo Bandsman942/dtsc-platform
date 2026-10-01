@@ -61,6 +61,7 @@ export const transferTransitionSchema = z.discriminatedUnion("action", [
 const fundingOperationBaseSchema = z.object({
   fundingType: z.enum(["CAPITAL_CONTRIBUTION", "SHAREHOLDER_ADVANCE", "LOAN_DRAW"]),
   financialAccountId: id,
+  cashSessionId: id.optional(),
   amount: positiveAmount,
   operationDate: date,
   reference: z.string().trim().max(160).optional(),
@@ -89,6 +90,7 @@ export const fundingOperationReverseSchema = z.object({
   revision,
   reason: z.string().trim().min(4).max(1000),
   accountingDate: date,
+  cashSessionId: id.optional(),
 });
 export const cashSessionOpenSchema = z.object({ financialAccountId: id, openingAmount: amount, siteId: id.optional() });
 export const cashCloseSchema = z.object({ countedClosingAmount: amount, closingReason: z.string().trim().min(3).max(1000).optional(), counts: z.array(z.object({ denomination: amount, quantity: z.coerce.number().int().nonnegative().max(1000000) })).max(100), revision });
