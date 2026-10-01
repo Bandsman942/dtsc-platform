@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type FormEvent } from "react";
-import { CreditCard, Plus, ReceiptText, RotateCcw, X } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Field, NativeSelect, formatEnterpriseAmount, formatEnterpriseDate } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { gamingCheckoutCopy } from "@/components/enterprise/gaming/gaming-checkout-i18n";
 import { ProfessionalError, ProfessionalLoading, ProfessionalSearch, ProfessionalTabs, professionalMutation, useProfessionalCollection } from "@/components/enterprise/professional/professional-erp-ui";
