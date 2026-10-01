@@ -103,7 +103,7 @@ export async function GET(req: Request, { params }: Params) {
       where: {
         organizationId,
         ...(status ? { status } : {}),
-        ...(search ? { code: { contains: search, mode: "insensitive" } } : {}),
+        ...(search ? { OR: [{ code: { contains: search, mode: "insensitive" } }, { label: { contains: search, mode: "insensitive" } }] } : {}),
       },
       orderBy: { startDate: "desc" },
       take,
@@ -115,7 +115,7 @@ export async function GET(req: Request, { params }: Params) {
         organizationId,
         ...(parentId ? { fiscalYearId: parentId } : {}),
         ...(status ? { status } : {}),
-        ...(search ? { code: { contains: search, mode: "insensitive" } } : {}),
+        ...(search ? { OR: [{ code: { contains: search, mode: "insensitive" } }, { label: { contains: search, mode: "insensitive" } }] } : {}),
       },
       orderBy: { startDate: "desc" },
       take,
