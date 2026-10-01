@@ -23,8 +23,17 @@ export async function GET(req: Request, { params }: Params) {
   if (!auth.ok) return auth.response;
   const item = await prisma.enterpriseFiscalPeriod.findFirst({ where: { id: fiscalPeriodId, organizationId }, include: { fiscalYear: true, closes: { orderBy: { createdAt: "desc" } }, _count: { select: { journalEntries: true, openingBalanceImports: true } } } });
   if (!item) return NextResponse.json({ error: "FISCAL_PERIOD_NOT_FOUND", message: "Cette période n’existe pas dans votre entreprise." }, { status: 404 });
+  const canManage = Boolean(auth.access.capabilities.canManage);
+  const unused = item._count.journalEntries === 0 && item._count.openingBalanceImports === 0 && item.closes.length === 0;
+  const projected = {
+    ...item,
+    capabilities: {
+      canEdit: canManage && item.status === "OPEN" && unused,
+      canDelete: canManage && item.status === "OPEN" && unused,
+    },
+  };
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, fiscalPeriodId, domain: "fiscal-period-detail" } });
-  return NextResponse.json({ item });
+  return NextResponse.json({ item: projected });
 }
 
 export async function PATCH(req: Request, { params }: Params) {
