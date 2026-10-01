@@ -4,6 +4,7 @@ import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { financeReference, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
 import { reverseJournalEntryTx } from "@/lib/enterprise/accounting/reversal-service";
+import { resolveCashSessionForConfirmation } from "@/lib/enterprise/accounting/payments-service";
 import { prisma } from "@/lib/prisma";
 
 function money(value: Prisma.Decimal.Value) {
@@ -493,11 +494,7 @@ export async function confirmCustomerRefundPayment(
 
     let cashSessionId: string | null = null;
     if (current.methodType === "CASH") {
-      const cashSession = await tx.enterpriseCashSession.findFirst({
-        where: { organizationId, financialAccountId: account.id, cashierUserId: current.initiatedByUserId, status: "OPEN" },
-        select: { id: true },
-      });
-      if (!cashSession) throw new EnterpriseAccountingError("OPEN_CASH_SESSION_REQUIRED", 409);
+      const cashSession = await resolveCashSessionForConfirmation(tx, current, actorUserId);
       cashSessionId = cashSession.id;
     }
 
