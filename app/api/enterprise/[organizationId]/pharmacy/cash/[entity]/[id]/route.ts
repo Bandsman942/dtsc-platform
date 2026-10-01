@@ -111,6 +111,7 @@ export async function PATCH(request: Request, { params }: Params) {
       PHARMACY_REFUND_SOURCE_PAYMENT_AMBIGUOUS: "Plusieurs paiements peuvent être remboursés. Sélectionnez explicitement le paiement d'origine.",
       PHARMACY_REFUND_CASH_MAPPING_REQUIRED: "La caisse Pharmacy n'est pas reliée à une caisse Finance commune.",
       PHARMACY_REFUND_COMMON_CASH_SESSION_NOT_OPEN: "La caisse Finance liée à ce remboursement n'est plus ouverte.",
+      PHARMACY_REFUND_REQUESTER_MUST_MATCH_CASHIER: "Pour un remboursement en espèces, le demandeur doit être le caissier de la session de caisse liée.",
       PHARMACY_REFUND_FINANCE_MAPPING_REQUIRED: "Le remboursement n'a pas encore été validé et préparé dans Finance.",
       PHARMACY_REFUND_FINANCE_ALREADY_PREPARED: "La préparation Finance de ce remboursement existe déjà. Reprenez la validation au lieu de rejeter la demande.",
       PHARMACY_REFUND_FINANCE_PERMISSION_REQUIRED: "Vous devez aussi disposer des droits Finance nécessaires pour préparer, valider ou payer ce remboursement.",
