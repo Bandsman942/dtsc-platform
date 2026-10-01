@@ -44,6 +44,7 @@ for (const token of [
   "PHARMACY_REFUND_SELF_VALIDATION_FORBIDDEN",
   "PHARMACY_REFUND_SELF_SETTLEMENT_FORBIDDEN",
   "PHARMACY_REFUND_SOURCE_PAYMENT_AMBIGUOUS",
+  "PHARMACY_REFUND_REQUESTER_MUST_MATCH_CASHIER",
   "pharmacyRefundExtension",
   "reverseCustomerPaymentAllocationsForRefundAmount",
   "prepareSalesCreditNoteForRefundAmount",
