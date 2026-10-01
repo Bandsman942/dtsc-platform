@@ -3,6 +3,7 @@ import { writeApiLog } from "@/lib/audit";
 import { listEnterpriseCurrencies } from "@/lib/enterprise/accounting/currency-service";
 import { authorizeFinanceRequest } from "@/lib/enterprise/accounting/http";
 import type { EnterpriseFinanceModuleCode } from "@/lib/enterprise/accounting/constants";
+import { SEMANTIC_ACCOUNT_REGISTRY } from "@/lib/enterprise/accounting/semantic-account-registry";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -24,7 +25,8 @@ type ReferenceKind =
   | "site"
   | "inventory-item"
   | "asset"
-  | "currency";
+  | "currency"
+  | "semantic-account";
 
 const MODULES = new Set<SupportedModule>([
   "FINANCE_ACCOUNTING",
@@ -46,10 +48,11 @@ const KINDS = new Set<ReferenceKind>([
   "inventory-item",
   "asset",
   "currency",
+  "semantic-account",
 ]);
 
 function permitted(moduleCode: SupportedModule, kind: ReferenceKind) {
-  if (moduleCode === "FINANCE_ACCOUNTING") return ["chart", "fiscal-year", "fiscal-period", "journal", "ledger-account", "business-party", "project", "department", "site", "inventory-item", "asset", "currency"].includes(kind);
+  if (moduleCode === "FINANCE_ACCOUNTING") return ["chart", "fiscal-year", "fiscal-period", "journal", "ledger-account", "business-party", "project", "department", "site", "inventory-item", "asset", "currency", "semantic-account"].includes(kind);
   if (moduleCode === "FINANCE_TAX") return ["ledger-account", "currency"].includes(kind);
   if (moduleCode === "FINANCE_CLOSE") return ["fiscal-period"].includes(kind);
   if (moduleCode === "FINANCE_STATEMENTS") return ["currency"].includes(kind);
@@ -253,6 +256,12 @@ export async function GET(req: Request, { params }: Params) {
       take,
       select: { id: true, code: true, name: true, serialNumber: true, status: true, currency: true, indicativeValue: true, acquisitionDate: true },
     });
+  } else if (kind === "semantic-account") {
+    items = SEMANTIC_ACCOUNT_REGISTRY
+      .filter((definition) => !definition.deprecated)
+      .filter((definition) => !search || definition.key.toLowerCase().includes(search.toLowerCase()) || definition.labelFr.toLowerCase().includes(search.toLowerCase()) || definition.labelEn.toLowerCase().includes(search.toLowerCase()))
+      .slice(0, take)
+      .map((definition) => ({ id: definition.key, code: definition.key, labelFr: definition.labelFr, labelEn: definition.labelEn, category: definition.category, domain: definition.domain, expectedAccountTypes: definition.expectedAccountTypes }));
   } else if (kind === "currency") {
     items = (await listEnterpriseCurrencies(organizationId, { search })).slice(0, take).map((currency) => ({
       id: currency.id,
