@@ -88,6 +88,8 @@ for (const token of [
   "markCustomerRefundFinancialInverseReady",
   "REFUND_FINANCIAL_INVERSE_READY",
   "REFUND_FINANCIAL_INVERSE_NOT_READY",
+  "REFUND_LEGACY_ALLOCATION_RECOVERY_AMBIGUOUS",
+  'recovery: "LEGACY_REVERSED_ALLOCATIONS"',
 ]) check(commonRefund.includes(token), `bounded common refund primitive missing: ${token}`);
 
 check(
