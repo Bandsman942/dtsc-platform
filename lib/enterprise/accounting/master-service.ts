@@ -121,7 +121,7 @@ export async function upsertAccountMapping(organizationId: string, actorUserId: 
   return prisma.$transaction(async (tx) => {
     const account = await tx.enterpriseLedgerAccount.findFirst({ where: { id: input.ledgerAccountId, organizationId, isActive: true, archivedAt: null } });
     if (!account) throw new EnterpriseAccountingError("ACCOUNT_MAPPING_LEDGER_INVALID", 409);
-    const mapping = await tx.enterpriseAccountMapping.create({ data: { organizationId, mappingKey: input.mappingKey, ledgerAccountId: account.id, sourceModule: input.sourceModule || null, sourceEntityType: input.sourceEntityType || null, effectiveFrom: input.effectiveFrom || null, effectiveTo: input.effectiveTo || null, createdByUserId: actorUserId } });
+    const mapping = await tx.enterpriseAccountMapping.create({ data: { organizationId, chartId: account.chartId, mappingKey: input.mappingKey, ledgerAccountId: account.id, sourceModule: input.sourceModule || null, sourceEntityType: input.sourceEntityType || null, effectiveFrom: input.effectiveFrom || null, effectiveTo: input.effectiveTo || null, createdByUserId: actorUserId } });
     await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseAccountMapping", entityId: mapping.id, eventType: "ACCOUNT_MAPPING_CREATED", summary: `Account mapping ${mapping.mappingKey} created`, actorUserId, toStatus: "ACTIVE", metadataJson: { ledgerAccountId: account.id } });
     return mapping;
   });
