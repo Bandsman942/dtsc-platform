@@ -7,6 +7,7 @@ import {
 } from "@/lib/enterprise/accounting/accounting-human-approval-orchestration";
 import {
   confirmCustomerRefundPayment,
+  consumeCustomerPaymentRefundAvailability,
   prepareSalesCreditNoteForRefundAmount,
   reverseCustomerPaymentAllocationsForRefundAmount,
 } from "@/lib/enterprise/accounting/customer-refund-service";
@@ -720,6 +721,7 @@ export async function settlePharmacyRefund(
   if (!["CONFIRMED", "RECONCILED"].includes(confirmedPayment.status)) {
     throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_COMMON_PAYMENT_NOT_CONFIRMED", 409, { status: confirmedPayment.status });
   }
+  await consumeCustomerPaymentRefundAvailability(organizationId, confirmedPayment.id, actorUserId);
 
   const refund = await prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "PharmacyRefund" WHERE id = ${source.id} AND "organizationId" = ${organizationId} FOR UPDATE`);
