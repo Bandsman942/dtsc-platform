@@ -101,11 +101,11 @@ async function resolveCashSessionForConfirmation(
       throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_CLOSED", 409);
     }
 
-    const replacementSession = await findPreferredOpenReplacement();
-    if (replacementSession) {
+    const replacement = await findPreferredOpenReplacement();
+    if (replacement) {
       await tx.enterprisePayment.update({
         where: { id: payment.id },
-        data: { cashSessionId: replacementSession.id, revision: { increment: 1 } },
+        data: { cashSessionId: replacement.id, revision: { increment: 1 } },
       });
       await addPaymentEvent(
         tx,
@@ -117,13 +117,13 @@ async function resolveCashSessionForConfirmation(
         {
           previousCashSessionId: linked.id,
           previousCashierUserId: linked.cashierUserId,
-          cashSessionId: replacementSession.id,
-          cashierUserId: replacementSession.cashierUserId,
+          cashSessionId: replacement.id,
+          cashierUserId: replacement.cashierUserId,
           previousStatus: linked.status,
           legacyCutoverAt: CASH_SESSION_BINDING_CUTOVER_AT.toISOString(),
         },
       );
-      return replacementSession;
+      return replacement;
     }
 
     if (linked.status === "PENDING_VALIDATION") throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_PENDING_VALIDATION", 409);
