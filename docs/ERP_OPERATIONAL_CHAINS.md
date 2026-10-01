@@ -223,6 +223,21 @@ La maintenance peut référencer un fournisseur, un responsable et un coût indi
 
 ## Invoice-to-Receivable-to-Payment
 
+## Funding-to-Treasury-to-Posting
+
+```text
+financement externe préparé
+  -> validateur indépendant affecté
+  -> APPROVED
+  -> confirmation par un troisième acteur
+  -> EnterpriseTreasuryTransaction(FUNDING, INBOUND)
+  -> solde opérationnel du compte financier augmenté
+  -> EnterpriseCashMovement si compte CASH
+  -> écriture comptable POSTED
+```
+
+Les sources économiques restent séparées : un apport en capital, une avance d'associé et un emprunt ne sont pas des ventes ; un encaissement client ne reconnaît pas une seconde fois le chiffre d'affaires ; un transfert interne ne crée aucune entrée nette pour l'entreprise. Une contrepassation crée des mouvements inverses et une contre-écriture liée sans modifier l'original.
+
 ```text
 facture client émise
   -> créance commune unique

@@ -48,6 +48,7 @@ export async function resolveEnterpriseApprovalPresentations(
 
   const [
     transfers,
+    fundings,
     tasks,
     requests,
     meetings,
@@ -63,6 +64,10 @@ export async function resolveEnterpriseApprovalPresentations(
     prisma.enterpriseAccountTransfer.findMany({
       where: { organizationId, id: { in: idsFor(approvals, "EnterpriseAccountTransfer") } },
       select: { id: true, number: true, sourceAmount: true, sourceCurrencyCode: true, targetAmount: true, targetCurrencyCode: true },
+    }),
+    prisma.enterpriseFundingOperation.findMany({
+      where: { organizationId, id: { in: idsFor(approvals, "EnterpriseFundingOperation") } },
+      select: { id: true, number: true, fundingType: true, amount: true, currencyCode: true, reference: true },
     }),
     prisma.enterpriseTask.findMany({
       where: { organizationId, id: { in: idsFor(approvals, "EnterpriseTask") }, archivedAt: null },
@@ -116,6 +121,20 @@ export async function resolveEnterpriseApprovalPresentations(
       description: `${item.sourceAmount.toFixed()} ${item.sourceCurrencyCode} → ${item.targetAmount.toFixed()} ${item.targetCurrencyCode}`,
       sourceModuleCode: "FINANCE_TREASURY",
       actionUrl: `/enterprise-modules/FINANCE_TREASURY?transfer=${encodeURIComponent(item.id)}`,
+      priority: "HIGH",
+    }, english));
+  }
+  for (const item of fundings) {
+    const typeLabel = item.fundingType === "CAPITAL_CONTRIBUTION"
+      ? (english ? "Capital contribution" : "Apport en capital")
+      : item.fundingType === "SHAREHOLDER_ADVANCE"
+        ? (english ? "Shareholder advance" : "Avance d’associé")
+        : (english ? "Loan proceeds" : "Emprunt reçu");
+    map.set(`EnterpriseFundingOperation:${item.id}`, presentation({
+      title: `${typeLabel} · ${item.number}`,
+      description: `${item.amount.toFixed()} ${item.currencyCode}${item.reference ? ` · ${item.reference}` : ""}`,
+      sourceModuleCode: "FINANCE_TREASURY",
+      actionUrl: `/enterprise-modules/FINANCE_TREASURY?tab=funding&fundingOperationId=${encodeURIComponent(item.id)}`,
       priority: "HIGH",
     }, english));
   }

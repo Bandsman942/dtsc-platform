@@ -33,6 +33,7 @@ const APPROVAL_TARGET_TYPES = [
   "EnterpriseBudget",
   "EnterpriseExpense",
   "EnterpriseAccountTransfer",
+  "EnterpriseFundingOperation",
   "EnterpriseJournalEntry",
   "EnterprisePayment",
   "EnterpriseSalesInvoice",

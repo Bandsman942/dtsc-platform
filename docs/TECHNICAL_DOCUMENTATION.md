@@ -532,3 +532,9 @@ Documents détaillés :
 ## SCALE-7 — staged capacity certification
 
 Issue #360 introduces a manual k6 certification harness for 500 / 1,000 / 2,500 / 5,000 simultaneous users. The workflow is never triggered automatically, uses at least two authenticated load-test tenants, samples the protected CTO observability endpoint, enforces tenant-isolation probes and archives sanitized GitHub Actions evidence. Versioned summaries in `data/scalability/scale7-certifications.json` are exposed separately from live telemetry in Administration DTSC → CTO → Scalabilité. Stage/profile progression is fail-closed; a higher stage cannot run before the prior stage has archived PASS evidence.
+
+## Hotfix #756 — financements communs
+
+Le domaine Finance commun inclut désormais `EnterpriseFundingOperation` pour les apports en capital, avances d'associés et emprunts reçus. Le service `lib/enterprise/accounting/funding-service.ts` orchestre approbation, confirmation, trésorerie, caisse et posting dans une transaction sérialisable. Les routes `funding-operations` sont protégées par `FINANCE_TREASURY`, same-origin, validation Zod, rate limit et audit via les primitives Finance communes.
+
+L'interface Trésorerie expose un onglet **Financements** construit sur les sélecteurs de références canoniques ; les validations transversales présentent et ouvrent l'opération précise. Les erreurs sont traduites et orientées action. Les rapports comptables continuent à dériver le chiffre d'affaires uniquement des écritures de produits `POSTED` : les événements de financement utilisent `EQUITY_CAPITAL`, `BORROWINGS` ou un compte de passif explicite, jamais un mapping de revenu.

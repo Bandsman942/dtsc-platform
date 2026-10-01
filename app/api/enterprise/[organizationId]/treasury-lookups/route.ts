@@ -16,13 +16,15 @@ type TreasuryReferenceKind =
   | "bank-statement"
   | "reconciliation-payment"
   | "treasury-transaction"
-  | "journal-entry";
+  | "journal-entry"
+  | "cash-session"
+  | "funding-counterpart-account";
 
 const MODULES = new Set<TreasuryModule>(["FINANCE_TREASURY", "FINANCE_CASH", "FINANCE_BANK", "FINANCE_RECONCILIATION"]);
-const KINDS = new Set<TreasuryReferenceKind>(["financial-account", "ledger-account", "member", "site", "currency", "bank-statement", "reconciliation-payment", "treasury-transaction", "journal-entry"]);
+const KINDS = new Set<TreasuryReferenceKind>(["financial-account", "ledger-account", "member", "site", "currency", "bank-statement", "reconciliation-payment", "treasury-transaction", "journal-entry", "cash-session", "funding-counterpart-account"]);
 
 function kindAllowed(moduleCode: TreasuryModule, kind: TreasuryReferenceKind) {
-  if (moduleCode === "FINANCE_TREASURY") return ["financial-account", "ledger-account", "member", "site", "currency"].includes(kind);
+  if (moduleCode === "FINANCE_TREASURY") return ["financial-account", "ledger-account", "member", "site", "currency", "cash-session", "funding-counterpart-account"].includes(kind);
   if (moduleCode === "FINANCE_CASH") return ["financial-account", "site"].includes(kind);
   if (moduleCode === "FINANCE_BANK") return ["financial-account", "currency"].includes(kind);
   return ["financial-account", "bank-statement", "reconciliation-payment", "treasury-transaction", "journal-entry"].includes(kind);
@@ -74,6 +76,29 @@ export async function GET(req: Request, { params }: Params) {
         take,
         select: { id: true, code: true, nameFr: true, nameEn: true, accountType: true, accountSubtype: true, currencyCode: true },
       });
+    } else if (kind === "funding-counterpart-account") {
+      items = await prisma.enterpriseLedgerAccount.findMany({
+        where: {
+          organizationId,
+          accountType: "LIABILITY",
+          isActive: true,
+          archivedAt: null,
+          allowDirectPosting: true,
+          ...(search ? { OR: [{ code: { contains: search, mode: "insensitive" } }, { nameFr: { contains: search, mode: "insensitive" } }, { nameEn: { contains: search, mode: "insensitive" } }] } : {}),
+        },
+        orderBy: { code: "asc" },
+        take,
+        select: { id: true, code: true, nameFr: true, nameEn: true, accountType: true, accountSubtype: true, currencyCode: true },
+      });
+    } else if (kind === "cash-session") {
+      if (parentId) {
+        items = await prisma.enterpriseCashSession.findMany({
+          where: { organizationId, financialAccountId: parentId, status: "OPEN" },
+          orderBy: { openedAt: "desc" },
+          take,
+          select: { id: true, number: true, status: true, openedAt: true, openingAmount: true, financialAccountId: true },
+        });
+      }
     } else if (kind === "member") {
       const members = await prisma.organizationMember.findMany({
         where: {

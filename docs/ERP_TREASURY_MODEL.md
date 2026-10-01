@@ -26,6 +26,16 @@ Un paiement non affecté est une avance. Il utilise les mappings `CUSTOMER_ADVAN
 
 ## Transferts
 
+## Financements externes
+
+Les financements externes sont portés par `EnterpriseFundingOperation` et restent distincts des paiements clients, des ventes et des transferts internes. Types canoniques : `CAPITAL_CONTRIBUTION`, `SHAREHOLDER_ADVANCE`, `LOAN_DRAW`.
+
+Cycle : `DRAFT -> APPROVED -> CONFIRMED`, avec validation affectée, confirmation par un acteur indépendant et correction d'une opération confirmée uniquement par contrepassation. La confirmation est atomique avec le mouvement de trésorerie, la variation du solde opérationnel, le mouvement de caisse éventuel et le posting comptable.
+
+Pour `CASH`, le financement exige une `EnterpriseCashSession` `OPEN` du même compte. Le `openingAmount` de la session reste un comptage physique d'ouverture et ne constitue jamais une entrée de financement.
+
+Comptabilisation : apport en capital vers `EQUITY_CAPITAL`, emprunt vers `BORROWINGS`, avance d'associé vers un compte de passif actif explicitement sélectionné dans le plan du tenant. Ces entrées ne sont jamais des produits et n'augmentent donc pas le chiffre d'affaires.
+
 Un transfert interne est atomique : sortie source, entrée destination, snapshot de taux si multidevise, puis écriture équilibrée. Une erreur annule toute la transaction. Les devises différentes ne sont jamais additionnées directement.
 
 ## Caisse

@@ -217,7 +217,7 @@ async function treasuryFlow(organizationId: string, args: FinanceReadArgs, accou
       where,
       orderBy: [{ transactionDate: "desc" }, { createdAt: "desc" }],
       take: limit,
-      select: { transactionType: true, direction: true, currencyCode: true, amount: true, transactionDate: true, reference: true, reconciliationStatus: true, financialAccount: { select: { code: true, name: true, accountType: true } } },
+      select: { transactionType: true, direction: true, currencyCode: true, amount: true, transactionDate: true, reference: true, reconciliationStatus: true, financialAccount: { select: { code: true, name: true, accountType: true } }, fundingOperation: { select: { number: true, fundingType: true, status: true } } },
     }),
   ]);
   return { periodStart: start, periodEnd: end, totals, items };

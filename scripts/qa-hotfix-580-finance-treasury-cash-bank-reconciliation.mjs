@@ -56,9 +56,11 @@ hasAll(treasuryUi, [
   "capabilities?.canApprove",
   "capabilities?.canReject",
   "capabilities?.canConfirm",
-  'label: `${t("financialAccounts")} ${collection.pagination.total}`',
+  'label: tab === "accounts" ? `${t("financialAccounts")} ${collection.pagination.total}` : t("financialAccounts")',
+  'label: tab === "funding" ? `${t("funding")} ${collection.pagination.total}` : t("funding")',
 ], "Treasury canonical");
-ok(!treasuryUi.includes('label: `${t("financialAccounts")} ${collection.items.length}`'), "Treasury canonical: financial-account tab count must never be page-bound");
+ok(!treasuryUi.includes('`${t("financialAccounts")} ${collection.items.length}`'), "Treasury canonical: financial-account tab count must never be page-bound");
+ok(!treasuryUi.includes('`${t("funding")} ${collection.items.length}`'), "Treasury canonical: funding tab count must never be page-bound");
 
 hasAll(cashUi, [
   "fetchOperationalFinanceRecord",
