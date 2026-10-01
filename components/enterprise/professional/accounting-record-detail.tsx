@@ -1,7 +1,7 @@
 "use client";
 
-import { RotateCcw, Unlock } from "lucide-react";
-import { useState } from "react";
+import { Archive, Pencil, RotateCcw, Trash2, Unlock } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { type BusinessContextAction } from "@/components/workspace/context-actions";
 import { FullscreenEntityDetail } from "@/components/workspace/fullscreen-entity-detail";
 import { StatusBadge } from "@/components/workspace/status-badge";
@@ -23,7 +23,13 @@ function booleanLabel(value: unknown, locale: FinanceLocale) {
 function objectCode(value: unknown) {
   if (!value || typeof value !== "object") return "";
   const record = value as Record<string, unknown>;
-  return text(record.code || record.reference || record.name);
+  const code = record.code || record.reference || record.name;
+  const label = record.label || record.nameFr || record.nameEn;
+  return [code, label].filter(Boolean).map(String).join(" · ");
+}
+
+function objectRecord(value: unknown) {
+  return value && typeof value === "object" ? value as Record<string, unknown> : null;
 }
 
 function titleFor(kind: AccountingRecordDetailKind, record: AccountingRecord, locale: FinanceLocale) {
@@ -51,7 +57,7 @@ function detailFields(kind: AccountingRecordDetailKind, record: AccountingRecord
     push(en ? "English label" : "Libellé anglais", record.nameEn);
   }
   if (kind === "charts") {
-    push(en ? "Template" : "Modèle", record.templateCode ? financeEnumLabel(String(record.templateCode), locale) : "—");
+    push(en ? "Chart origin" : "Origine du plan", record.templateCode ? financeEnumLabel(String(record.templateCode), locale) : (en ? "Custom chart" : "Plan personnalisé"));
   }
   if (kind === "accounts") {
     push(en ? "Account type" : "Type de compte", record.accountType ? financeEnumLabel(String(record.accountType), locale) : "—");
@@ -61,6 +67,7 @@ function detailFields(kind: AccountingRecordDetailKind, record: AccountingRecord
     fields.push({ label: en ? "System account" : "Compte système", value: booleanLabel(record.isSystemAccount, locale) });
   }
   if (kind === "years" || kind === "periods") {
+    push(en ? "Label" : "Libellé", record.label);
     push(en ? "Start date" : "Date de début", record.startDate ? financeDate(String(record.startDate), locale) : "—");
     push(en ? "End date" : "Date de fin", record.endDate ? financeDate(String(record.endDate), locale) : "—");
   }
@@ -75,10 +82,17 @@ function detailFields(kind: AccountingRecordDetailKind, record: AccountingRecord
     fields.push({ label: en ? "Independent approval required" : "Validation indépendante requise", value: booleanLabel(record.requiresApproval, locale) });
   }
   if (kind === "rules") {
-    push(en ? "Mapping" : "Correspondance", record.mappingKey ? financeEnumLabel(String(record.mappingKey), locale) : "—");
-    push(en ? "Source module" : "Module source", record.sourceModule ? financeEnumLabel(String(record.sourceModule), locale) : "—");
-    push(en ? "Posting event" : "Événement de comptabilisation", record.postingEvent ? financeEnumLabel(String(record.postingEvent), locale) : "—");
-    push(en ? "Description" : "Description", record.description);
+    const account = objectRecord(record.ledgerAccount);
+    const chart = objectRecord(account?.chart);
+    push(en ? "Rule" : "Règle", locale === "en" ? record.semanticLabelEn || record.semanticLabelFr : record.semanticLabelFr || record.semanticLabelEn);
+    push(en ? "Semantic key" : "Clé sémantique", record.mappingKey);
+    push(en ? "Domain" : "Domaine", record.domain ? financeEnumLabel(String(record.domain), locale) : "—");
+    push(en ? "Category" : "Catégorie", record.category ? financeEnumLabel(String(record.category), locale) : "—");
+    push(en ? "Target account" : "Compte cible", account ? `${text(account.code)} · ${text(locale === "en" ? account.nameEn || account.nameFr : account.nameFr || account.nameEn)}` : "—");
+    push(en ? "Chart" : "Plan comptable", chart ? `${text(chart.code)} · ${text(locale === "en" ? chart.nameEn || chart.nameFr : chart.nameFr || chart.nameEn)}` : "—");
+    push(en ? "Rule origin" : "Origine de la règle", record.templateManaged ? (en ? "Managed by the accounting template" : "Gérée par le template comptable") : (en ? "Manual custom-chart rule" : "Règle manuelle du plan personnalisé"));
+    push(en ? "Effective from" : "Effective à partir du", record.effectiveFrom ? financeDate(String(record.effectiveFrom), locale) : (en ? "No lower date bound" : "Sans date minimale"));
+    push(en ? "Effective until" : "Effective jusqu’au", record.effectiveTo ? financeDate(String(record.effectiveTo), locale) : (en ? "No end date" : "Sans date de fin"));
   }
   if (kind === "trial") {
     push(en ? "Account" : "Compte", `${text(record.code)} · ${text(locale === "en" ? record.nameEn || record.nameFr : record.nameFr || record.nameEn)}`);
@@ -106,6 +120,8 @@ export function AccountingRecordDetail({
   onClose,
   onChanged,
   onError,
+  onEdit,
+  onDelete,
 }: {
   organizationId: string;
   locale?: string | null;
@@ -115,20 +131,57 @@ export function AccountingRecordDetail({
   onClose: () => void;
   onChanged: (message?: string) => void;
   onError: (message: string) => void;
+  onEdit?: (kind: AccountingRecordDetailKind, record: AccountingRecord) => void;
+  onDelete?: (kind: AccountingRecordDetailKind, record: AccountingRecord) => void;
 }) {
   const locale: FinanceLocale = rawLocale === "en" ? "en" : "fr";
   const en = locale === "en";
   const [busy, setBusy] = useState(false);
-  if (!kind || !record) return null;
+  const [detailRecord, setDetailRecord] = useState<AccountingRecord | null>(record);
 
-  const status = String(record.status || (record.isActive === false ? "INACTIVE" : "ACTIVE"));
-  const revision = Number(record.revision || 0);
+  useEffect(() => { setDetailRecord(record); }, [record]);
+
+  const refreshRecord = useCallback(async () => {
+    if (!kind || !record) return;
+    const detailEndpoint = kind === "charts"
+      ? `charts-of-accounts/${currentRecord.id}`
+      : kind === "accounts"
+        ? `ledger-accounts/${currentRecord.id}`
+        : kind === "years"
+          ? `fiscal-years/${currentRecord.id}`
+          : kind === "periods"
+            ? `fiscal-periods/${currentRecord.id}`
+            : kind === "journals"
+              ? `journals/${currentRecord.id}`
+              : kind === "rules"
+                ? `account-mappings?recordId=${encodeURIComponent(currentRecord.id)}`
+                : null;
+    if (!detailEndpoint) { setDetailRecord(record); return; }
+    try {
+      const response = await fetch(`/api/enterprise/${organizationId}/${detailEndpoint}`, { cache: "no-store" });
+      const body = await response.json().catch(() => ({})) as { item?: AccountingRecord; items?: AccountingRecord[]; message?: string; error?: string };
+      if (!response.ok) throw new Error(body.message || body.error || "ACCOUNTING_DETAIL_FAILED");
+      const next = body.item || body.items?.[0] || null;
+      if (next) setDetailRecord(next);
+    } catch (error) {
+      onError(safeFinanceError(error, en ? "The accounting record could not be refreshed." : "La fiche comptable n’a pas pu être actualisée.", locale));
+    }
+  }, [en, kind, locale, onError, organizationId, record]);
+
+  useEffect(() => { void refreshRecord(); }, [refreshRecord]);
+
+  if (!kind || !record || !detailRecord) return null;
+
+  const currentRecord = detailRecord;
+  const status = String(currentRecord.status || (currentRecord.isActive === false ? "INACTIVE" : "ACTIVE"));
+  const revision = Number(currentRecord.revision || 0);
+  const capabilities = objectRecord(currentRecord.capabilities) || {};
 
   async function openFiscalYear() {
-    if (!record || kind !== "years" || status !== "DRAFT" || !revision || busy) return;
+    if (!currentRecord || kind !== "years" || status !== "DRAFT" || !revision || busy || capabilities.canOpen !== true) return;
     setBusy(true);
     try {
-      await financeMutation(`/api/enterprise/${organizationId}/fiscal-years/${record.id}/open`, { revision }, "POST");
+      await financeMutation(`/api/enterprise/${organizationId}/fiscal-years/${currentRecord.id}/open`, { revision }, "POST");
       onClose();
       onChanged(en ? "Fiscal year opened." : "Exercice comptable ouvert.");
     } catch (error) {
@@ -139,16 +192,26 @@ export function AccountingRecordDetail({
   }
 
   const actions: BusinessContextAction[] = [
-    ...(kind === "years" && status === "DRAFT" && canManage ? [{ id: "open-year", label: en ? "Open fiscal year" : "Ouvrir l’exercice", icon: Unlock, disabled: busy || !revision, onSelect: () => void openFiscalYear() }] : []),
-    { id: "refresh", label: en ? "Refresh" : "Actualiser", icon: RotateCcw, disabled: busy, separatorBefore: kind === "years" && status === "DRAFT" && canManage, onSelect: () => onChanged() },
+    ...(capabilities.canEdit === true && onEdit ? [{ id: "edit", label: en ? "Edit" : "Modifier", icon: Pencil, disabled: busy, onSelect: () => onEdit(kind, currentRecord) }] : []),
+    ...(kind === "years" && capabilities.canOpen === true ? [{ id: "open-year", label: en ? "Open fiscal year" : "Ouvrir l’exercice", icon: Unlock, disabled: busy || !revision, onSelect: () => void openFiscalYear() }] : []),
+    ...((capabilities.canDelete === true || capabilities.canDeactivate === true) && onDelete ? [{
+      id: "delete",
+      label: capabilities.canDeactivate === true ? (en ? "Deactivate" : "Désactiver") : (en ? "Delete" : "Supprimer"),
+      icon: capabilities.canDeactivate === true ? Archive : Trash2,
+      destructive: true,
+      separatorBefore: true,
+      disabled: busy,
+      onSelect: () => onDelete(kind, currentRecord),
+    }] : []),
+    { id: "refresh", label: en ? "Refresh" : "Actualiser", icon: RotateCcw, disabled: busy, separatorBefore: true, onSelect: () => void refreshRecord() },
   ];
 
-  const fields = detailFields(kind, record, locale);
+  const fields = detailFields(kind, currentRecord, locale);
   return (
     <FullscreenEntityDetail
       open
       onClose={onClose}
-      title={titleFor(kind, record, locale)}
+      title={titleFor(kind, currentRecord, locale)}
       description={en ? "Canonical accounting record. Actions are revalidated by the server." : "Fiche comptable canonique. Les actions sont revalidées par le serveur."}
       actions={actions}
       actionLabel={en ? "Accounting actions" : "Actions comptables"}
@@ -161,7 +224,7 @@ export function AccountingRecordDetail({
         <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {fields.map((field) => <div key={`${field.label}:${field.value}`} className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface p-4"><span className="text-xs font-black uppercase tracking-[0.05em] text-dtsc-muted">{field.label}</span><strong className="mt-1 block break-words text-sm leading-6 text-dtsc-ink">{field.value}</strong></div>)}
         </div>
-        {kind === "years" && status === "DRAFT" ? <p className="rounded-xl border border-cyan-400/30 bg-cyan-400/5 p-4 text-sm leading-6 text-dtsc-muted">{canManage ? (en ? "This fiscal year is still a draft. Use the … menu to open it after checking its dates and periods." : "Cet exercice est encore en brouillon. Utilisez le menu … pour l’ouvrir après avoir vérifié ses dates et ses périodes.") : (en ? "This fiscal year is still a draft. A user with accounting management permission must open it." : "Cet exercice est encore en brouillon. Un utilisateur disposant de la permission de gestion comptable doit l’ouvrir.")}</p> : null}
+        {kind === "years" && status === "DRAFT" ? <p className="rounded-xl border border-cyan-400/30 bg-cyan-400/5 p-4 text-sm leading-6 text-dtsc-muted">{capabilities.canOpen === true ? (en ? "This fiscal year is still a draft. Use the … menu to open it after checking its dates and periods." : "Cet exercice est encore en brouillon. Utilisez le menu … pour l’ouvrir après avoir vérifié ses dates et ses périodes.") : (en ? "This fiscal year is still a draft. A user with accounting management permission must open it." : "Cet exercice est encore en brouillon. Un utilisateur disposant de la permission de gestion comptable doit l’ouvrir.")}</p> : null}
       </div>
     </FullscreenEntityDetail>
   );
