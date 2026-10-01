@@ -85,6 +85,9 @@ expect(profile.includes("preflight-own-tenant"), "each load identity must prove 
 expect(profile.includes("Own-tenant preflight failed"), "own-tenant preflight must fail closed");
 expect(profile.includes("tenant_isolation_pass"), "tenant-isolation metric is required");
 expect(profile.includes("isolation.status === 403 || isolation.status === 404"), "foreign-tenant access must be denied");
+expect(profile.includes("const expectedIsolationStatuses = http.expectedStatuses(403, 404);"), "tenant-isolation 403/404 responses must be marked expected per request");
+expect((profile.match(/responseCallback: expectedIsolationStatuses/g) || []).length === 2, "exactly the setup and periodic tenant-isolation probes must use the expected-status callback");
+expect(!profile.includes("http.setResponseCallback("), "SCALE-7 must never globally mark 403/404 responses as expected");
 expect(profile.includes('http_req_failed: ["rate<0.01"]'), "error-rate SLO is missing");
 expect(profile.includes('"p(95)<1000"') && profile.includes('"p(99)<2000"'), "latency SLOs are missing");
 expect(profile.includes('checks: ["rate>0.99"]'), "check-rate SLO is missing");
