@@ -345,8 +345,10 @@ function decideAccess({
   return { allowed: true, code: "OK", message: "Accès autorisé.", requiredPlan };
 }
 
-export async function canUseFeature(organizationId: string | null | undefined, feature: SaasFeatureCode): Promise<EntitlementDecision> {
-  const entitlements = await getOrganizationEntitlements(organizationId);
+export function canUseFeatureFromEntitlements(
+  entitlements: OrganizationEntitlements | null,
+  feature: SaasFeatureCode,
+): EntitlementDecision {
   const entitlement = FEATURE_ENTITLEMENTS[feature];
   if (!entitlements) {
     return { allowed: false, code: "ORGANIZATION_INACTIVE", message: "Aucun espace organisation actif.", requiredPlan: entitlement.requiredPlan };
@@ -362,6 +364,10 @@ export async function canUseFeature(organizationId: string | null | undefined, f
     requiredPlan: entitlement.requiredPlan,
     requiresActiveSubscription: entitlement.requiresActiveSubscription,
   });
+}
+
+export async function canUseFeature(organizationId: string | null | undefined, feature: SaasFeatureCode): Promise<EntitlementDecision> {
+  return canUseFeatureFromEntitlements(await getOrganizationEntitlements(organizationId), feature);
 }
 
 export async function canUseModule(organizationId: string | null | undefined, moduleCode: string): Promise<EntitlementDecision> {
