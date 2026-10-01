@@ -28,6 +28,8 @@ A stage is certified only when all required profiles have archived PASS evidence
 - a low-frequency real AI request path governed by SCALE-6;
 - explicit cross-tenant probes that must stay 403/404.
 
+Cross-tenant 403/404 responses are security successes, not application failures. The harness therefore keeps `tenant_isolation_pass=1` and the explicit check, while using a request-scoped k6 `responseCallback` that marks only 403/404 as expected for those isolation probes. All other workload requests retain the default 2xx/3xx expected-status policy.
+
 By default, the workflow provisions its dedicated multi-tenant auth pool through **GitHub Actions OIDC**. No cookie secret is required for this path.
 
 The application accepts the provisioning request only when the OIDC token is cryptographically valid and all claims match the exact DTSC contract:
@@ -127,6 +129,12 @@ The registry stores no cookie, DSN, tenant identifier, prompt, response body or 
 ## Promotion rule
 
 Do not attempt a higher user stage until the prior stage has the required PASS evidence. A FAIL is an engineering signal, not something to bypass.
+
+### 500-ramp evidence and SCALE-7A remediation
+
+Production run `36899333815` on `main@576def53ee487e7ad2c94ad95c0f7a0a00de0228` reached 500 VU for the full ramp and produced a CI-proven FAIL: P95 1,502.52 ms, P99 5,079.16 ms, with PostgreSQL only at 43 / 901 connections max (4.77%), no idle-in-transaction and Redis `OK`. Runtime logs correlated the tail latency with Prisma `P2024` acquisition timeouts from the local five-connection pool.
+
+The same run also exposed a harness accounting defect: 1,158 successful isolation probes (403/404) were included in `http_req_failed`. Only 72 business checks failed. SCALE-7A #751 therefore corrects the isolation response classification and tests the next bounded Prisma pooled candidate, `connection_limit=9`, already allowed by #416. The 500-ramp must be rerun from Production after that change; 500-soak remains blocked until a real PASS is archived.
 
 ## Rollback
 
