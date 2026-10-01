@@ -83,6 +83,7 @@ for (const token of [
   "consumeCustomerPaymentRefundAvailability",
   "REFUND_SOURCE_AVAILABILITY_CONSUMED",
   "REFUND_AVAILABILITY_CONSUMED",
+  "consumeCustomerPaymentRefundAvailabilityTx",
   "paymentAmounts",
   "markCustomerRefundFinancialInverseReady",
   "REFUND_FINANCIAL_INVERSE_READY",
@@ -124,6 +125,17 @@ check(
 check(
   pharmacyCash.includes('status: "SUBMITTED"') && !pharmacyCash.includes('cashSettings.refundRequiresValidation ? "SUBMITTED" : "VALIDATED"'),
   "New Pharmacy monetary refunds must always require independent validation",
+);
+check(
+  pharmacyCash.includes('SELECT id FROM "PharmacySale"')
+    && pharmacyCash.includes('SELECT id FROM "PharmacyRefund"')
+    && pharmacyCash.includes("Prisma.TransactionIsolationLevel.Serializable"),
+  "Refund amount reservation and validation/restock must be serialized with row locks",
+);
+check(
+  pharmacyCash.includes("REFUND_CURRENCY_MISMATCH")
+    && workspace.includes('if (sale?.currency) change("currency", sale.currency)'),
+  "Refund currency must be bound to the selected Pharmacy sale on server and UI",
 );
 check(
   !cashRoute.includes('data: { status: "PAID", paidAt: new Date() }') && cashRoute.includes("settlePharmacyRefund"),
