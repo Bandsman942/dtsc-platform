@@ -104,6 +104,10 @@ Financial evidence uses the common private document system with structural entit
 13. Physical stock is not changed by an accounting valuation query.
 14. A depreciation or inventory accounting event cannot be posted twice for the same source and version.
 15. A company relationship, a global DTSC role or an unqualified manager role does not grant Finance access.
+16. A workflow payment uses three independent duties when approval is required: initiator, approver and confirmer are distinct actors.
+17. A new Cash payment is never confirmed without a durable `EnterpriseCashSession` binding created from an `OPEN` session.
+18. Automatic Cash-session recovery/rebinding is a compatibility path reserved to payments created before migration `20260929083000_payment_cash_session_binding`; post-cutover rows fail closed instead of borrowing another cashier's session.
+19. Multiple compatible Cash sessions remain ambiguous and fail closed; tenant, account or currency mismatches are never repaired heuristically.
 
 ## Commercial maturity
 
