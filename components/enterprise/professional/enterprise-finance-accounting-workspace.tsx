@@ -115,6 +115,12 @@ function inputDate(value: unknown) {
   const date = new Date(String(value));
   return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
 }
+function chartOriginLabel(templateCode: string, locale: FinanceLocale) {
+  if (!templateCode) return locale === "en" ? "Custom chart" : "Plan personnalisé";
+  if (templateCode.startsWith("OHADA_SYSCOHADA")) return "OHADA / SYSCOHADA";
+  return locale === "en" ? "Published accounting template" : "Template comptable publié";
+}
+
 function localizedName(row: AnyRow, locale: FinanceLocale) { return locale === "en" ? rowText(row, "nameEn") || rowText(row, "nameFr") : rowText(row, "nameFr") || rowText(row, "nameEn"); }
 function dateQueryValue(date: string, end = false) { return date ? `${date}T${end ? "23:59:59.999" : "00:00:00.000"}Z` : ""; }
 
@@ -440,7 +446,7 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
   const configColumns: AccountingCompactColumn<AnyRow>[] = configureView === "charts" ? [
     { key: "code", label: "Code", render: (row) => <span className="font-black">{rowText(row, "code") || "—"}</span> },
     { key: "name", label: en ? "Label" : "Libellé", cellClassName: "max-w-[28rem] truncate", render: (row) => localizedName(row, locale) || "—" },
-    { key: "origin", label: en ? "Chart origin" : "Origine du plan", render: (row) => rowText(row, "templateCode") ? financeEnumLabel(rowText(row, "templateCode"), locale) : (en ? "Custom chart" : "Plan personnalisé") },
+    { key: "origin", label: en ? "Chart origin" : "Origine du plan", render: (row) => chartOriginLabel(rowText(row, "templateCode"), locale) },
     statusColumn,
   ] : configureView === "accounts" ? [
     { key: "code", label: en ? "Account" : "Compte", render: (row) => <span className="font-black">{rowText(row, "code") || "—"}</span> },
