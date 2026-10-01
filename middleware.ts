@@ -11,6 +11,7 @@ const privateRoutes = ["/dashboard", "/chat", "/billing", "/company", "/calendar
 const adminRoutes = ["/admin"];
 const dtscInternalRoutes = ["/admin", "/activities"];
 const dtscInternalApiRoutes = ["/api/admin", "/api/activities"];
+const SCALE7_OIDC_OBSERVABILITY_PATH = "/api/admin/scalability/observability";
 const externalWebhookRoutes = ["/api/billing/maishapay/callback", "/api/webhooks/zoho/outgoing-mail"];
 const safeMethods = ["GET", "HEAD", "OPTIONS"];
 const DTSC_INTERNAL_ORGANIZATION_ID = "dtsc-internal";
@@ -31,6 +32,15 @@ function isStaticAsset(pathname: string) {
 
 function hasDtscInternalContext(session: Awaited<ReturnType<typeof verifySessionToken>>) {
   return session?.activeContext === "DTSC_INTERNAL" && session.activeOrganizationId === DTSC_INTERNAL_ORGANIZATION_ID;
+}
+
+function isScale7OidcObservabilityRequest(request: NextRequest) {
+  const authorization = request.headers.get("authorization");
+  return request.nextUrl.pathname === SCALE7_OIDC_OBSERVABILITY_PATH
+    && request.method === "GET"
+    && authorization?.startsWith("Bearer ") === true
+    && Boolean(request.headers.get("origin"))
+    && isSameOriginRequest(request);
 }
 
 function requestPathWithSearch(request: NextRequest) {
@@ -171,6 +181,9 @@ export async function middleware(request: NextRequest) {
 
   if (pathname.startsWith("/api/")) {
     if (isPathMatch(pathname, dtscInternalApiRoutes)) {
+      if (isScale7OidcObservabilityRequest(request)) {
+        return NextResponse.next();
+      }
       if (!session) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
