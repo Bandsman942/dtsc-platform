@@ -1,13 +1,21 @@
 import { Prisma } from "@prisma/client";
 import { financeReference, money, publishFinanceEvent, sumDecimals } from "@/lib/enterprise/accounting/helpers";
-import { createEnterprisePayment, transitionEnterprisePayment } from "@/lib/enterprise/accounting/payments-service";
+import { createEnterprisePayment } from "@/lib/enterprise/accounting/payments-service";
+import {
+  approvePaymentAssignedApproval,
+  submitPaymentForAssignedApproval,
+} from "@/lib/enterprise/accounting/accounting-human-approval-orchestration";
 import {
   confirmCustomerRefundPayment,
   prepareSalesCreditNoteForRefundAmount,
   reverseCustomerPaymentAllocationsForRefundAmount,
 } from "@/lib/enterprise/accounting/customer-refund-service";
-import { approveAndPostSalesCreditNote } from "@/lib/enterprise/accounting/receivables-service";
-import { postApprovedSalesCreditNote } from "@/lib/enterprise/accounting/accounting-document-approval-orchestration";
+import {
+  decideSalesCreditNoteAssignedApproval,
+  postApprovedSalesCreditNote,
+  submitSalesCreditNoteForAssignedApproval,
+} from "@/lib/enterprise/accounting/accounting-document-approval-orchestration";
+import { assertSalesCreditNoteStillPostable } from "@/lib/enterprise/accounting/credit-note-posting-preflight";
 import { prisma } from "@/lib/prisma";
 import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
 import { ensureCanonicalFinanceModulesForOrganization } from "@/lib/enterprise/finance-modules";
@@ -374,10 +382,11 @@ export async function convergePharmacyRefund(
     }
     await requireRefundFinanceCapabilities(organizationId, source.requestedById, {
       payments: ["canCreate", "canSubmit"],
+      receivables: ["canCreate", "canSubmit"],
     });
     await requireRefundFinanceCapabilities(organizationId, validatorUserId, {
       payments: ["canApprove"],
-      receivables: ["canCreate"],
+      receivables: ["canApprove"],
     });
 
     const saleMapping = await prisma.pharmacySalesExtension.findFirst({
@@ -471,19 +480,19 @@ export async function convergePharmacyRefund(
       });
     }
     if (refundPayment.status === "DRAFT") {
-      refundPayment = await transitionEnterprisePayment(
+      refundPayment = await submitPaymentForAssignedApproval(
         organizationId,
         refundPayment.id,
         source.requestedById,
-        { action: "SUBMIT", revision: refundPayment.revision, reason: source.reason },
+        { revision: refundPayment.revision, approverUserId: validatorUserId, reason: source.reason },
       );
     }
     if (refundPayment.status === "PENDING_APPROVAL") {
-      refundPayment = await transitionEnterprisePayment(
+      refundPayment = await approvePaymentAssignedApproval(
         organizationId,
         refundPayment.id,
         validatorUserId,
-        { action: "APPROVE", revision: refundPayment.revision, reason: source.reason },
+        { revision: refundPayment.revision, reason: source.reason },
       );
     }
     if (!["APPROVED", "CONFIRMED", "RECONCILED"].includes(refundPayment.status)) {
@@ -491,13 +500,32 @@ export async function convergePharmacyRefund(
     }
 
     const creditReason = `Pharmacy refund ${source.refundNumber}: ${source.reason}`.slice(0, 1000);
-    const creditNote = await prepareSalesCreditNoteForRefundAmount(
+    let creditNote = await prepareSalesCreditNoteForRefundAmount(
       organizationId,
       commonInvoice.id,
-      validatorUserId,
+      source.requestedById,
       creditReason,
       source.amount,
     );
+    if (creditNote.status === "DRAFT") {
+      creditNote = await submitSalesCreditNoteForAssignedApproval(
+        organizationId,
+        creditNote.id,
+        source.requestedById,
+        { revision: creditNote.revision, approverUserId: validatorUserId, reason: source.reason },
+      );
+    }
+    if (creditNote.status === "PENDING_APPROVAL") {
+      creditNote = await decideSalesCreditNoteAssignedApproval(
+        organizationId,
+        creditNote.id,
+        validatorUserId,
+        { action: "APPROVE", revision: creditNote.revision, reason: source.reason },
+      );
+    }
+    if (!["APPROVED", "POSTED"].includes(creditNote.status)) {
+      throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_CREDIT_NOTE_NOT_APPROVED", 409, { status: creditNote.status });
+    }
 
     const result = await prisma.$transaction(async (tx) => {
       const mapped = await tx.pharmacyRefundExtension.findFirst({
@@ -653,9 +681,8 @@ export async function settlePharmacyRefund(
       where: { id: extension.salesCreditNoteId, organizationId },
     });
     if (!credit) throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_CREDIT_NOTE_MAPPING_BROKEN", 409);
-    if (credit.status === "DRAFT") {
-      credit = await approveAndPostSalesCreditNote(organizationId, credit.id, actorUserId, credit.revision);
-    } else if (credit.status === "APPROVED") {
+    if (credit.status === "APPROVED") {
+      await assertSalesCreditNoteStillPostable(organizationId, credit.id, credit.revision);
       credit = await postApprovedSalesCreditNote(organizationId, credit.id, actorUserId, credit.revision);
     }
     if (credit.status !== "POSTED") {
