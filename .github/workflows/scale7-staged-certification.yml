@@ -44,7 +44,6 @@ jobs:
     env:
       BASE_URL: ${{ vars.SCALE7_LOAD_BASE_URL || vars.SCALE1_LOAD_BASE_URL || 'https://app.dtsc-platform.com' }}
       SCALE7_AUTH_CONTEXTS_JSON: ${{ secrets.SCALE7_AUTH_CONTEXTS_JSON }}
-      OBSERVABILITY_COOKIE: ${{ secrets.SCALE7_CTO_SESSION_COOKIE || secrets.SCALE1_CTO_SESSION_COOKIE }}
       VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
       TARGET_VUS: ${{ github.event_name == 'workflow_dispatch' && inputs.target_vus || '' }}
       LOAD_PROFILE: ${{ github.event_name == 'workflow_dispatch' && inputs.load_profile || '' }}
@@ -89,7 +88,7 @@ jobs:
           echo "TARGET_VUS=${target}" >> "$GITHUB_ENV"
           echo "LOAD_PROFILE=${profile}" >> "$GITHUB_ENV"
 
-          for name in BASE_URL OBSERVABILITY_COOKIE VERCEL_AUTOMATION_BYPASS_SECRET; do
+          for name in BASE_URL VERCEL_AUTOMATION_BYPASS_SECRET; do
             if [ -z "${!name:-}" ]; then
               echo "::error::Required SCALE-7 configuration is missing: ${name}."
               exit 1
@@ -153,16 +152,55 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error             --header "Cookie: ${OBSERVABILITY_COOKIE}"             --header "x-vercel-protection-bypass: ${VERCEL_AUTOMATION_BYPASS_SECRET}"             "${BASE_URL%/}/api/admin/scalability/observability?windowHours=1"             | jq -c '{generatedAt:.snapshot.generatedAt,api:.snapshot.api,database:.snapshot.database,redis:.snapshot.redis,rateLimit:.snapshot.rateLimit,queues:.snapshot.queues,ai:.snapshot.ai}'             >> artifacts/scale7-observability.ndjson
+          mint_scale7_oidc() {
+            local oidc_url="${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=dtsc-scale7"
+            local token
+            token="$(curl --fail --silent --show-error               --header "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}"               "${oidc_url}" | jq -r '.value')"
+            if [ -z "${token}" ] || [ "${token}" = "null" ]; then
+              return 1
+            fi
+            echo "::add-mask::${token}" >&2
+            printf '%s' "${token}"
+          }
+
+          oidc_token="$(mint_scale7_oidc)" || {
+            echo "::error::GitHub Actions OIDC token could not be minted for SCALE-7 observability."
+            exit 1
+          }
+
+          curl --fail --silent --show-error             --header "Authorization: Bearer ${oidc_token}"             --header "Origin: ${BASE_URL%/}"             --header "x-vercel-protection-bypass: ${VERCEL_AUTOMATION_BYPASS_SECRET}"             "${BASE_URL%/}/api/admin/scalability/observability?windowHours=1"             | jq -c '{generatedAt:.snapshot.generatedAt,api:.snapshot.api,database:.snapshot.database,redis:.snapshot.redis,rateLimit:.snapshot.rateLimit,queues:.snapshot.queues,ai:.snapshot.ai}'             >> artifacts/scale7-observability.ndjson
 
       - name: Run k6 and sample live infrastructure
         id: load
         shell: bash
         run: |
           set -euo pipefail
-          capture_snapshot() {
-            curl --fail --silent --show-error               --header "Cookie: ${OBSERVABILITY_COOKIE}"               --header "x-vercel-protection-bypass: ${VERCEL_AUTOMATION_BYPASS_SECRET}"               "${BASE_URL%/}/api/admin/scalability/observability?windowHours=1"               | jq -c '{generatedAt:.snapshot.generatedAt,api:.snapshot.api,database:.snapshot.database,redis:.snapshot.redis,rateLimit:.snapshot.rateLimit,queues:.snapshot.queues,ai:.snapshot.ai}'               >> artifacts/scale7-observability.ndjson
+          scale7_oidc_token=""
+          scale7_oidc_minted_at=0
+
+          refresh_scale7_oidc() {
+            local now oidc_url token
+            now="$(date +%s)"
+            if [ -n "${scale7_oidc_token}" ] && [ $((now - scale7_oidc_minted_at)) -lt 240 ]; then
+              return 0
+            fi
+
+            oidc_url="${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=dtsc-scale7"
+            token="$(curl --fail --silent --show-error               --header "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}"               "${oidc_url}" | jq -r '.value')" || return 1
+            if [ -z "${token}" ] || [ "${token}" = "null" ]; then
+              return 1
+            fi
+
+            echo "::add-mask::${token}" >&2
+            scale7_oidc_token="${token}"
+            scale7_oidc_minted_at="${now}"
           }
+
+          capture_snapshot() {
+            refresh_scale7_oidc || return 1
+            curl --fail --silent --show-error               --header "Authorization: Bearer ${scale7_oidc_token}"               --header "Origin: ${BASE_URL%/}"               --header "x-vercel-protection-bypass: ${VERCEL_AUTOMATION_BYPASS_SECRET}"               "${BASE_URL%/}/api/admin/scalability/observability?windowHours=1"               | jq -c '{generatedAt:.snapshot.generatedAt,api:.snapshot.api,database:.snapshot.database,redis:.snapshot.redis,rateLimit:.snapshot.rateLimit,queues:.snapshot.queues,ai:.snapshot.ai}'               >> artifacts/scale7-observability.ndjson
+          }
+
           (
             while true; do
               capture_snapshot || echo "::warning::A SCALE-7 observability sample failed."

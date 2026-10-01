@@ -1,3 +1,30 @@
+## 2026-10-01 — SCALE-7D #720 : observabilité de certification gouvernée par OIDC
+
+### Corrigé
+
+- Le provisioning GitHub Actions OIDC de SCALE-7, déjà livré par #721, est conservé comme autorité du pool synthétique multi-tenant.
+- La lecture `/api/admin/scalability/observability` accepte désormais le même OIDC **uniquement** pour le workflow officiel SCALE-7 sur `main`, avec audience, repository, ref, workflow, event et signature déjà vérifiés par le validateur canonique.
+- Le chemin humain Administration DTSC reste inchangé et continue d’exiger `SECURITY_READ`.
+- Le workflow SCALE-7 ne dépend plus de `SCALE7_CTO_SESSION_COOKIE` ni du fallback `SCALE1_CTO_SESSION_COOKIE`, qui peuvent expirer avant une certification.
+- Les snapshots initiaux et live utilisent un bearer OIDC court avec `Origin` exact ; pendant les profils longs, le token est renouvelé avant expiration.
+- Aucun token OIDC, cookie, tenant ou secret n’est ajouté aux artefacts de certification.
+
+### Preuve ayant motivé le correctif
+
+- Run Production `36701057542` : provisioning OIDC **SUCCESS**, pool **2 tenants / 50 identités**, progression 500-ramp autorisée.
+- Le même run s’est arrêté avant k6 sur un `401` du snapshot CTO hérité ; #720 supprime ce dernier prérequis humain.
+
+### Données et sécurité
+
+- Aucune migration Prisma, aucun backfill, aucun nouvel entitlement.
+- Aucun accès OIDC aux autres routes Administration DTSC.
+- `VERCEL_AUTOMATION_BYPASS_SECRET` reste inchangé et aucune nouvelle valeur secrète n’est requise.
+
+### Validation
+
+- `qa:scale7-staged-certification` protège l’authentification OIDC du pool **et** de l’observabilité.
+- La clôture de #720 exige un vrai run Production 500-ramp qui franchit provisioning + observabilité et atteint k6.
+
 ## 2026-10-01 — Hotfix #728 : remboursements Pharmacy vers Finance commun
 
 ### Corrigé

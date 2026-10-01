@@ -62,7 +62,9 @@ expect(workflow.includes("actions/upload-artifact@v7"), "evidence artifact uploa
 expect(workflow.includes("retention-days: 90"), "SCALE-7 evidence retention must be explicit");
 expect(workflow.includes("api/admin/scalability/observability?windowHours=1"), "live CTO observability sampling is required");
 expect(workflow.includes("vars.SCALE7_LOAD_BASE_URL || vars.SCALE1_LOAD_BASE_URL || 'https://app.dtsc-platform.com'"), "SCALE-7 must reuse the governed Production origin before requiring a dedicated override");
-expect(workflow.includes("secrets.SCALE7_CTO_SESSION_COOKIE || secrets.SCALE1_CTO_SESSION_COOKIE"), "SCALE-7 must reuse the governed CTO observability session when no dedicated override exists");
+expect(!workflow.includes("OBSERVABILITY_COOKIE"), "SCALE-7 observability must no longer depend on a human CTO session cookie");
+expect(workflow.includes('Authorization: Bearer ${oidc_token}') && workflow.includes('Origin: ${BASE_URL%/}'), "initial SCALE-7 observability must use governed OIDC with an exact Origin");
+expect(workflow.includes("refresh_scale7_oidc") && workflow.includes("scale7_oidc_minted_at") && workflow.includes("-lt 240"), "long SCALE-7 runs must renew the OIDC token before expiry");
 expect(workflow.includes("secrets.SCALE7_AUTH_CONTEXTS_JSON"), "SCALE-7 must preserve the operator-provided auth pool override");
 expect(workflow.includes("id-token: write"), "SCALE-7 must request GitHub Actions OIDC only for governed auth-pool provisioning");
 expect(workflow.includes("audience=dtsc-scale7"), "SCALE-7 OIDC audience must be dedicated");
@@ -121,6 +123,20 @@ for (const marker of [
   "origin !== new URL(req.url).origin",
 ]) expect(authRoute.includes(marker), `auth-pool route missing ${marker}`);
 expect(!authRoute.includes("getSession("), "SCALE-7 auth-pool endpoint must authenticate GitHub OIDC, not a product user session");
+
+const observabilityRoute = fs.readFileSync("app/api/admin/scalability/observability/route.ts", "utf8");
+for (const marker of [
+  "verifyScale7GitHubActionsOidc",
+  "requireConsoleCapability(CONSOLE_CAPABILITIES.SECURITY_READ)",
+  'authorization.startsWith("Bearer ")',
+  'origin !== new URL(request.url).origin',
+  '"SCALE7_GITHUB_OIDC"',
+  '"Cache-Control": "private, no-store"',
+]) expect(observabilityRoute.includes(marker), `SCALE-7 observability route missing ${marker}`);
+expect(
+  observabilityRoute.includes('Vary: "Cookie, Authorization, Origin"'),
+  "SCALE-7 observability responses must vary by human cookie and governed OIDC authorization",
+);
 
 expect(report.includes("authTopology"), "report must archive tenant and identity counts without secrets");
 expect(report.includes("tenantIsolationPerfect"), "report must gate tenant isolation");
