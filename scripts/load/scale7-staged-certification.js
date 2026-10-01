@@ -76,6 +76,7 @@ if (!aiPath || !aiPayload) {
 }
 
 const tenantIsolationPass = new Rate("tenant_isolation_pass");
+const expectedIsolationStatuses = http.expectedStatuses(403, 404);
 
 function rampStages(target) {
   const quarter = Math.max(50, Math.round(target * 0.25));
@@ -180,6 +181,7 @@ export function setup() {
       headers: headersFor(identity),
       redirects: 0,
       tags: { workload: "tenant-isolation" },
+      responseCallback: expectedIsolationStatuses,
     });
     const isolated = isolation.status === 403 || isolation.status === 404;
     tenantIsolationPass.add(isolated);
@@ -205,6 +207,7 @@ export default function () {
       headers: headersFor(identity),
       redirects: 0,
       tags: { workload: "tenant-isolation" },
+      responseCallback: expectedIsolationStatuses,
     });
     const isolated = isolation.status === 403 || isolation.status === 404;
     tenantIsolationPass.add(isolated);

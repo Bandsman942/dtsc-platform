@@ -151,6 +151,8 @@ When executed inside GitHub Actions, the report marks the load execution as `CI_
 
 The first pooled 500-VU baseline with `connection_limit=1` proved connection safety but failed latency badly: P95 ≈ 18 s, P99 ≈ 29 s, 0 % HTTP failures, 100 % checks and only 16 / 901 PostgreSQL connections observed. The tuning loop therefore keeps Neon pooled and raises only the application-side Prisma pool in small measured steps.
 
+Candidate `connection_limit=5` was then retained through #416 and later served as the baseline for the richer SCALE-7 500-ramp. Run `36899333815` on `main@576def53ee487e7ad2c94ad95c0f7a0a00de0228` reached 500 VU with PostgreSQL utilization only 43 / 901 (4.77%) and no idle-in-transaction pressure, but still produced Prisma `P2024` acquisition timeouts with P95 ≈ 1.50 s and P99 ≈ 5.08 s. #751 therefore tests `connection_limit=9`, the second and maximum candidate already authorized by #416. No candidate above 9 may be tested without a new explicit decision.
+
 1. Start from the current Production `main` and preserve Neon pooled.
 2. Deploy the candidate `connection_limit` only through the normal Issue → branch → PR → CI → merge → Production path.
 3. Wait for the Production deployment to be `READY` on the expected SHA.
