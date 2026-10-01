@@ -4,6 +4,8 @@ import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { canAccessPharmacyCash, type PharmacyCashAction } from "@/lib/pharmacy-cash-access";
 import { closeCashSession, generateInvoiceFromSale, generateReceiptForPayment, recalculateSalePaymentStatus, validateCashRefund } from "@/lib/pharmacy-cash";
 import { cashActionSchema } from "@/lib/pharmacy-cash-validators";
+import { settlePharmacyRefund } from "@/lib/enterprise/sector-convergence/pharmacy-finance-service";
+import { EnterpriseSectorConvergenceError } from "@/lib/enterprise/sector-convergence/errors";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -74,8 +76,7 @@ export async function PATCH(request: Request, { params }: Params) {
         if (!reason) throw new Error("REASON_REQUIRED");
         await prisma.pharmacyRefund.update({ where: { id }, data: { status: "REJECTED", rejectedById: session.userId, rejectedAt: new Date(), rejectionReason: reason } });
       } else if (data.action === "mark-refund-paid") {
-        if (refund.status !== "VALIDATED") throw new Error("REFUND_NOT_VALIDATED");
-        await prisma.pharmacyRefund.update({ where: { id }, data: { status: "PAID", paidAt: new Date() } });
+        await settlePharmacyRefund(organizationId, id, session.userId);
       } else throw new Error("INVALID_ACTION");
     } else if (entity === "discrepancy" && data.action === "resolve-discrepancy") {
       const discrepancy = await prisma.pharmacyCashDiscrepancy.findFirst({ where: { id, organizationId } });
@@ -87,7 +88,37 @@ export async function PATCH(request: Request, { params }: Params) {
     return NextResponse.json({ ok: true });
   } catch (error) {
     const code = error instanceof Error && /^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : "UNKNOWN";
-    const messages: Record<string, string> = { COUNTED_AMOUNT_REQUIRED: "Le montant cash compté est obligatoire.", JUSTIFICATION_REQUIRED: "Une justification est obligatoire pour cet écart.", SESSION_NOT_OPEN: "La session n'est pas ouverte.", SESSION_NOT_CLOSED: "La session doit être clôturée avant soumission.", SESSION_NOT_PENDING: "La clôture n'est pas en attente de validation.", SELF_VALIDATION_FORBIDDEN: "Le caissier ne peut pas valider sa propre clôture.", REASON_REQUIRED: "Le motif est obligatoire.", PAYMENT_SESSION_CLOSED: "Un paiement lié à une session clôturée ne peut plus être annulé librement.", REFUND_NOT_VALIDATED: "Le remboursement doit être validé avant paiement.", REFUND_NOT_SUBMITTED: "Le remboursement n'est plus en attente de validation.", SALE_ALREADY_RESTOCKED: "Cette vente a déjà été remise en stock.", BATCH_NOT_FOUND: "Un lot de la vente est introuvable.", INVALID_ACTION: "Cette action n'est pas autorisée." };
-    return NextResponse.json({ error: code, message: messages[code] || "Action de caisse impossible." }, { status: 400 });
+    const messages: Record<string, string> = {
+      COUNTED_AMOUNT_REQUIRED: "Le montant cash compté est obligatoire.",
+      JUSTIFICATION_REQUIRED: "Une justification est obligatoire pour cet écart.",
+      SESSION_NOT_OPEN: "La session n'est pas ouverte.",
+      SESSION_NOT_CLOSED: "La session doit être clôturée avant soumission.",
+      SESSION_NOT_PENDING: "La clôture n'est pas en attente de validation.",
+      SELF_VALIDATION_FORBIDDEN: "Le caissier ne peut pas valider sa propre clôture.",
+      REASON_REQUIRED: "Le motif est obligatoire.",
+      PAYMENT_SESSION_CLOSED: "Un paiement lié à une session clôturée ne peut plus être annulé librement.",
+      REFUND_NOT_VALIDATED: "Le remboursement doit être validé avant paiement.",
+      REFUND_NOT_SUBMITTED: "Le remboursement n'est plus en attente de validation.",
+      SALE_ALREADY_RESTOCKED: "Cette vente a déjà été remise en stock.",
+      BATCH_NOT_FOUND: "Un lot de la vente est introuvable.",
+      PHARMACY_REFUND_SELF_VALIDATION_FORBIDDEN: "Le demandeur du remboursement ne peut pas valider sa propre demande. Choisissez un autre validateur.",
+      PHARMACY_REFUND_SELF_SETTLEMENT_FORBIDDEN: "Le remboursement doit être payé par une troisième personne, différente du demandeur et du validateur.",
+      PHARMACY_REFUND_SALE_MAPPING_REQUIRED: "Cette vente n'est pas encore reliée à la facture Finance commune. Finalisez d'abord sa convergence.",
+      PHARMACY_REFUND_PAYMENT_MAPPING_REQUIRED: "Le paiement d'origine n'est pas encore relié au paiement Finance commun.",
+      PHARMACY_REFUND_SOURCE_PAYMENT_REQUIRED: "Aucun paiement d'origine déterministe n'a été trouvé. Une intervention manuelle est requise.",
+      PHARMACY_REFUND_SOURCE_PAYMENT_AMBIGUOUS: "Plusieurs paiements peuvent être remboursés. Sélectionnez explicitement le paiement d'origine.",
+      PHARMACY_REFUND_CASH_MAPPING_REQUIRED: "La caisse Pharmacy n'est pas reliée à une caisse Finance commune.",
+      PHARMACY_REFUND_COMMON_CASH_SESSION_NOT_OPEN: "La caisse Finance liée à ce remboursement n'est plus ouverte.",
+      PHARMACY_REFUND_FINANCE_MAPPING_REQUIRED: "Le remboursement n'a pas encore été validé et préparé dans Finance.",
+      REFUND_EXCEEDS_CONFIRMED_ALLOCATIONS: "Le montant demandé dépasse les encaissements confirmés encore remboursables.",
+      CREDIT_NOTE_EXCEEDS_REFUNDABLE_INVOICE: "Le montant de l'avoir dépasse le solde encore remboursable de la facture.",
+      CREDIT_NOTE_EXCEEDS_OPEN_RECEIVABLE: "L'avoir dépasse la créance ouverte après inversion de l'encaissement.",
+      PAYMENT_CASH_SESSION_PENDING_VALIDATION: "La caisse liée est en attente de validation et ne peut pas payer ce remboursement.",
+      PAYMENT_CASH_SESSION_CLOSING: "La caisse liée est en cours de clôture et ne peut pas payer ce remboursement.",
+      PAYMENT_CASH_SESSION_CLOSED: "La caisse liée est clôturée et ne peut pas payer ce remboursement.",
+      INVALID_ACTION: "Cette action n'est pas autorisée.",
+    };
+    const status = error instanceof EnterpriseSectorConvergenceError ? error.status : 400;
+    return NextResponse.json({ error: code, message: messages[code] || "Action de caisse impossible." }, { status });
   }
 }
