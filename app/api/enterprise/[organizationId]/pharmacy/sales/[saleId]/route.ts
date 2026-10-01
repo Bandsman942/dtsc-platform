@@ -136,81 +136,13 @@ export async function PATCH(req: Request, { params }: Params) {
     }
     await reverseSaleStockImpact(organizationId, saleId, session.userId, cancellationReason);
   } else if (data.action === "refund") {
-    const refundReason = data.reason;
-    const refundAmount = data.refundAmount;
-    if (!refundReason || refundAmount === undefined) {
-      return NextResponse.json(
-        { error: "Invalid refund", message: "Motif et montant obligatoires." },
-        { status: 400 },
-      );
-    }
-
-    await prisma.$transaction(async (tx) => {
-      const refund = await tx.pharmacySaleRefund.create({
-        data: {
-          organizationId,
-          saleId,
-          refundType: data.restockItems ? "RETURN_RESTOCK" : "REFUND_ONLY",
-          refundAmount,
-          restockItems: data.restockItems || false,
-          reason: refundReason,
-          validatedById: session.userId,
-          createdById: session.userId,
-        },
-      });
-
-      if (data.restockItems) {
-        for (const line of sale.lines) {
-          const batch = await tx.pharmacyBatch.findFirst({
-            where: { id: line.batchId, organizationId },
-          });
-          if (!batch) continue;
-
-          const before = Number(batch.availableQuantity);
-          const quantity = Number(line.quantity);
-          await tx.pharmacyBatch.update({
-            where: { id: batch.id },
-            data: { availableQuantity: before + quantity, updatedById: session.userId },
-          });
-          await tx.pharmacyStockMovement.create({
-            data: {
-              organizationId,
-              productId: line.productId,
-              batchId: line.batchId,
-              movementType: "RETURN_CUSTOMER",
-              direction: "IN",
-              quantity,
-              quantityBefore: before,
-              quantityAfter: before + quantity,
-              reason: refundReason,
-              relatedEntityType: "PharmacySaleRefund",
-              relatedEntityId: refund.id,
-              createdById: session.userId,
-            },
-          });
-          await tx.pharmacySaleRefundLine.create({
-            data: {
-              organizationId,
-              refundId: refund.id,
-              saleLineId: line.id,
-              productId: line.productId,
-              batchId: line.batchId,
-              quantityReturned: quantity,
-              restocked: true,
-            },
-          });
-        }
-      }
-
-      await tx.pharmacySale.update({
-        where: { id: saleId },
-        data: {
-          status: "REFUNDED",
-          refundedAmount: Number(sale.refundedAmount || 0) + refundAmount,
-          updatedById: session.userId,
-        },
-      });
-    });
+    return NextResponse.json(
+      {
+        error: "PHARMACY_REFUND_USE_CASH_WORKFLOW",
+        message: "Enregistrez le remboursement dans « Caisse, factures & paiements » afin de synchroniser l'avoir, la trésorerie et la comptabilité avant de marquer la vente remboursée.",
+      },
+      { status: 409 },
+    );
   }
 
   await writeAuditLog({
