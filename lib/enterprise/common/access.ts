@@ -6,11 +6,13 @@ export async function getEnterpriseCommonDomainAccess({
   organizationId,
   moduleCode,
   action = "read",
+  includeMutationCapabilities = true,
 }: {
   session: SessionPayload;
   organizationId: string;
   moduleCode: string;
   action?: EnterpriseModuleAction;
+  includeMutationCapabilities?: boolean;
 }) {
   const decision = await resolveEnterpriseModuleAccess({
     userId: session.userId,
@@ -20,17 +22,19 @@ export async function getEnterpriseCommonDomainAccess({
   });
   if (!decision.allowed) return null;
 
-  const [writeDecision, manageDecision] = await Promise.all([
-    action === "write" || action === "manage"
-      ? Promise.resolve(decision)
-      : resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode, action: "write" }),
-    action === "manage"
-      ? Promise.resolve(decision)
-      : resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode, action: "manage" }),
-  ]);
+  const [writeDecision, manageDecision] = includeMutationCapabilities
+    ? await Promise.all([
+        action === "write" || action === "manage"
+          ? Promise.resolve(decision)
+          : resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode, action: "write" }),
+        action === "manage"
+          ? Promise.resolve(decision)
+          : resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode, action: "manage" }),
+      ])
+    : [decision, decision];
 
-  const canAdminister = action === "manage" || manageDecision.allowed;
-  const canWrite = action === "write" || action === "manage" || writeDecision.allowed || canAdminister;
+  const canAdminister = action === "manage" || (includeMutationCapabilities && manageDecision.allowed);
+  const canWrite = action === "write" || action === "manage" || (includeMutationCapabilities && (writeDecision.allowed || canAdminister));
 
   return {
     decision,

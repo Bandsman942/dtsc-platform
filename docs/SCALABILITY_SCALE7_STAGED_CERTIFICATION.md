@@ -51,6 +51,8 @@ An operator may still provide `SCALE7_AUTH_CONTEXTS_JSON` as an **operator overr
 
 The AI path remains mandatory and intentionally represents about 1% of iterations so SCALE-6 user/organization/provider ceilings remain a governed subsystem rather than dominating the whole workload.
 
+For SCALE-7B, that 1% workload uses the canonical **Enterprise AI** route `POST /api/enterprise/ai/chat`, bound to the current synthetic tenant with `useKnowledge=false` and `useTools=false`. The previous `/api/chat/v2` path is a PERSONAL chatbot surface and therefore measured STARTER/personal admission ceilings instead of the Enterprise organization provisioned for SCALE-7; it is no longer used as the representative Enterprise AI capacity probe.
+
 Use only the managed synthetic organizations or an equivalent dedicated operator pool. Never point the certification harness at real customer records.
 
 ## SLO gates
@@ -68,6 +70,24 @@ Every run enforces:
 - Redis never observed as `UNAVAILABLE`.
 
 The report additionally archives throughput, DB pressure, Redis state, queue state and AI concurrency/throttling signals.
+
+## 500-ramp remediation baseline
+
+The Production run `36906230174` on `main@036f550c1c9c470e335aa02b558b3be97d602def` established the SCALE-7B baseline after the Prisma pooled candidate 9:
+
+- HTTP failure rate: 0.6218% — PASS;
+- checks: 99.376% — PASS;
+- tenant isolation: 100% — PASS;
+- P95: 1,190.43 ms — FAIL;
+- P99: 3,118.61 ms — FAIL;
+- Dashboard: 1,950.49 / 3,504.73 ms;
+- Shop/Retail: 1,206.44 / 2,598.60 ms;
+- Collaboration: 871.71 / 2,284.22 ms;
+- Enterprise: 725.13 / 1,776.83 ms;
+- PostgreSQL: 63 / 901 max connections (6.99%), no P2024, no idle-in-transaction;
+- Redis: OK.
+
+SCALE-7B keeps `connection_limit=9` and all SLOs unchanged. Its first remediation targets are therefore application read-path fan-out and the representative AI surface, not additional database pool growth.
 
 ## Stage progression
 

@@ -173,8 +173,13 @@ export async function buildScale7SyntheticAuthPool(targetVus: number) {
   }
 
   return {
-    aiPath: "/api/chat/v2",
-    aiPayload: { content: "Réponds uniquement par OK.", useKnowledge: false },
+    aiPath: "/api/enterprise/ai/chat",
+    aiPayload: {
+      content: "Réponds uniquement par OK.",
+      useKnowledge: false,
+      useTools: false,
+      reasoningEffort: "AUTO",
+    },
     tenants: ORGANIZATIONS.map((organization, index) => {
       const foreign = ORGANIZATIONS[(index + 1) % ORGANIZATIONS.length];
       return {

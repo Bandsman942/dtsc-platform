@@ -16,7 +16,7 @@ type Params = { params: Promise<{ organizationId: string }> };
 export async function GET(req: Request, { params }: Params) {
   const startedAt = Date.now();
   const { organizationId } = await params;
-  const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "read");
+  const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "read", { includeMutationCapabilities: false });
   if (!auth.ok) return auth.response;
   const { page, pageSize, status, search, from, to } = retailListParams(req);
   const where: Prisma.EnterpriseRetailSaleWhereInput = {

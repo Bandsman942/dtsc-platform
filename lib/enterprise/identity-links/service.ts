@@ -1018,6 +1018,32 @@ export async function listOrganizationIdentityLinks(organizationId: string) {
   }));
 }
 
+export async function listUserIdentityLinksForWorkspace(userId: string) {
+  const links = await prisma.enterpriseIdentityLink.findMany({
+    where: { userId },
+    orderBy: { createdAt: "desc" },
+    take: 200,
+    select: {
+      id: true,
+      organizationId: true,
+      status: true,
+      createdAt: true,
+    },
+  });
+  const organizationIds = [...new Set(links.map((link) => link.organizationId))];
+  const organizations = organizationIds.length
+    ? await prisma.organization.findMany({
+        where: { id: { in: organizationIds }, deletedAt: null },
+        select: { id: true, name: true, logoUrl: true },
+      })
+    : [];
+  const organizationById = new Map(organizations.map((organization) => [organization.id, organization]));
+  return links.map((link) => ({
+    ...link,
+    organization: organizationById.get(link.organizationId) || null,
+  }));
+}
+
 export async function listUserIdentityLinks(userId: string) {
   const links = await prisma.enterpriseIdentityLink.findMany({
     where: { userId },

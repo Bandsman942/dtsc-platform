@@ -1,3 +1,30 @@
+## 2026-10-01 — SCALE-7B #754 : réduction des read-paths 500-ramp et IA Entreprise représentative
+
+### Corrigé
+
+- Le Dashboard réutilise une seule lecture `OrganizationMember` pour les organisations actives, invitations et règles de visibilité des notifications, au lieu de relire trois fois le même périmètre utilisateur.
+- La projection des relations d’identité du Dashboard ne charge plus `EnterprisePersonIdentity` lorsque la page n’utilise que la relation et l’organisation.
+- La résolution des entitlements organisation parallélise contexte commercial, modules organisation et sous-type métier au lieu d’attendre le contexte commercial avant les autres lectures.
+- Le GET Retail ventes peut demander uniquement la décision `read`; il n’exécute plus les résolutions `write` et `manage` dont cette route ne consomme aucun résultat. Le comportement par défaut des autres routes reste inchangé.
+- SCALE-7 utilise désormais `POST /api/enterprise/ai/chat` avec l’`organizationId` du tenant synthétique courant, `useKnowledge=false`, `useTools=false` et raisonnement AUTO.
+- Le chatbot général `/api/chat/v2`, volontairement PERSONAL, n’est plus utilisé comme proxy de capacité IA Entreprise et ne mesure donc plus artificiellement les plafonds d’admission STARTER/personal.
+- Une QA dédiée `qa:scale7b-readpath-ai-latency` protège ces réductions de fan-out et reste incluse dans la régression canonique.
+
+### Preuve de départ
+
+- Run Production `36906230174` : 500 VU / 740 s / 35 704 requêtes.
+- HTTP 0.6218%, checks 99.376%, isolation 100%, DB 6.99%, Redis OK et aucun `P2024`.
+- P95 global 1 190.43 ms / P99 3 118.61 ms.
+- Dashboard 1 950.49 / 3 504.73 ms ; Retail 1 206.44 / 2 598.60 ms ; Collaboration 871.71 / 2 284.22 ms.
+- Les 222 échecs de checks correspondent aux requêtes IA non-2xx ; les lectures Dashboard/Notifications/Enterprise/Shop/Tasks n’ont pas d’échec fonctionnel.
+
+### Contraintes
+
+- Aucun SLO n’est abaissé.
+- `connection_limit=9` reste le maximum autorisé dans ce lot.
+- Aucun Preview Vercel.
+- Le 500-ramp Production doit être rejoué après merge + READY ; aucun 500-soak n’est autorisé avant PASS.
+
 ## 2026-10-01 — SCALE-7A #751 : métrique d’isolation correcte et candidat Prisma 9
 
 ### Corrigé
