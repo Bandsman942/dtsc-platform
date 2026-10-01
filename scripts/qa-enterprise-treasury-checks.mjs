@@ -149,7 +149,7 @@ requireTokens("components/enterprise/professional/enterprise-finance-treasury-wo
   "treasury-history",
   "useOperationalFinanceCollection",
   "fetchOperationalFinanceRecord",
-  'const endpoint = tab === "accounts" ? "financial-accounts" : tab === "transfers" ? "account-transfers" : "treasury-history"',
+  'const endpoint = tab === "accounts" ? "financial-accounts" : tab === "funding" ? "funding-operations" : tab === "transfers" ? "account-transfers" : "treasury-history"',
 ]);
 requireTokens("components/enterprise/professional/use-operational-finance-collection.ts", [
   "AbortController",
@@ -169,8 +169,8 @@ forbidTokens("components/enterprise/professional/enterprise-finance-treasury-wor
 
 const treasuryWorkspaceSource = fs.readFileSync("components/enterprise/professional/enterprise-finance-treasury-workspace.tsx", "utf8");
 const operationalCollectionSource = fs.readFileSync("components/enterprise/professional/use-operational-finance-collection.ts", "utf8");
-if (!treasuryWorkspaceSource.includes('setTab(next as "accounts" | "transfers" | "history")')) {
-  throw new Error("Treasury tab transition must keep the canonical tab state contract.");
+if (!treasuryWorkspaceSource.includes('setTab(next as "accounts" | "funding" | "transfers" | "history")')) {
+  throw new Error("Treasury tab transition must keep the canonical tab state contract, including funding.");
 }
 if (!operationalCollectionSource.includes("return () => controller.abort()") || !operationalCollectionSource.includes("signal: controller.signal")) {
   throw new Error("Operational Finance collection must abort obsolete list requests when endpoint/filter dependencies change.");
