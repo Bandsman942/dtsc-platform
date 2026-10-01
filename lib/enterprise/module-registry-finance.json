@@ -15,13 +15,17 @@
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-modules/FINANCE_OVERVIEW",
       "workspaceKey": "ENTERPRISE_FINANCE_OVERVIEW",
-      "permissionPrefixes": ["enterprise.finance.configuration."],
+      "permissionPrefixes": [
+        "enterprise.finance.configuration."
+      ],
       "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "BUSINESS",
       "requiresActiveSubscription": true,
       "applicableSectors": "ALL",
       "dependencies": [],
-      "aliases": ["FINANCE"],
+      "aliases": [
+        "FINANCE"
+      ],
       "qaContract": "enterprise-accounting"
     },
     {
@@ -38,7 +42,9 @@
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-modules/FINANCE_RECEIVABLES",
       "workspaceKey": "ENTERPRISE_RECEIVABLES",
-      "permissionPrefixes": ["enterprise.finance.receivables."],
+      "permissionPrefixes": [
+        "enterprise.finance.receivables."
+      ],
       "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "BUSINESS",
       "requiresActiveSubscription": true,
@@ -67,7 +73,9 @@
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-modules/FINANCE_PAYABLES",
       "workspaceKey": "ENTERPRISE_PAYABLES",
-      "permissionPrefixes": ["enterprise.finance.payables."],
+      "permissionPrefixes": [
+        "enterprise.finance.payables."
+      ],
       "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "BUSINESS",
       "requiresActiveSubscription": true,
@@ -94,7 +102,9 @@
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-modules/FINANCE_PAYMENTS",
       "workspaceKey": "ENTERPRISE_PAYMENTS",
-      "permissionPrefixes": ["enterprise.finance.payments."],
+      "permissionPrefixes": [
+        "enterprise.finance.payments."
+      ],
       "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "BUSINESS",
       "requiresActiveSubscription": true,
@@ -112,8 +122,8 @@
       "code": "FINANCE_TREASURY",
       "labelFr": "Trésorerie",
       "labelEn": "Treasury",
-      "descriptionFr": "Comptes financiers, soldes opérationnels et transferts atomiques.",
-      "descriptionEn": "Financial accounts, operational balances and atomic transfers.",
+      "descriptionFr": "Comptes financiers, financements externes, soldes opérationnels et transferts atomiques.",
+      "descriptionEn": "Financial accounts, external funding, operational balances and atomic transfers.",
       "domain": "FINANCE",
       "implementationStatus": "ACTIVE",
       "navigationGroup": "FINANCE",
@@ -122,7 +132,9 @@
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-modules/FINANCE_TREASURY",
       "workspaceKey": "ENTERPRISE_TREASURY",
-      "permissionPrefixes": ["enterprise.finance.treasury."],
+      "permissionPrefixes": [
+        "enterprise.finance.treasury."
+      ],
       "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "BUSINESS",
       "requiresActiveSubscription": true,
@@ -147,7 +159,9 @@
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-modules/FINANCE_CASH",
       "workspaceKey": "ENTERPRISE_CASH",
-      "permissionPrefixes": ["enterprise.finance.cash."],
+      "permissionPrefixes": [
+        "enterprise.finance.cash."
+      ],
       "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "BUSINESS",
       "requiresActiveSubscription": true,
@@ -174,12 +188,16 @@
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-modules/FINANCE_BANK",
       "workspaceKey": "ENTERPRISE_BANK",
-      "permissionPrefixes": ["enterprise.finance.bank."],
+      "permissionPrefixes": [
+        "enterprise.finance.bank."
+      ],
       "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "ENTERPRISE",
       "requiresActiveSubscription": true,
       "applicableSectors": "ALL",
-      "dependencies": ["FINANCE_TREASURY"],
+      "dependencies": [
+        "FINANCE_TREASURY"
+      ],
       "qaContract": "enterprise-treasury"
     },
     {
@@ -196,7 +214,9 @@
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-modules/FINANCE_RECONCILIATION",
       "workspaceKey": "ENTERPRISE_RECONCILIATION",
-      "permissionPrefixes": ["enterprise.finance.reconciliation."],
+      "permissionPrefixes": [
+        "enterprise.finance.reconciliation."
+      ],
       "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "ENTERPRISE",
       "requiresActiveSubscription": true,
@@ -223,7 +243,10 @@
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-modules/FINANCE_ACCOUNTING",
       "workspaceKey": "ENTERPRISE_ACCOUNTING",
-      "permissionPrefixes": ["enterprise.finance.accounts.", "enterprise.finance.journals."],
+      "permissionPrefixes": [
+        "enterprise.finance.accounts.",
+        "enterprise.finance.journals."
+      ],
       "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "ENTERPRISE",
       "requiresActiveSubscription": true,
@@ -248,12 +271,16 @@
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-modules/FINANCE_TAX",
       "workspaceKey": "ENTERPRISE_TAX",
-      "permissionPrefixes": ["enterprise.finance.tax."],
+      "permissionPrefixes": [
+        "enterprise.finance.tax."
+      ],
       "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "ENTERPRISE",
       "requiresActiveSubscription": true,
       "applicableSectors": "ALL",
-      "dependencies": ["FINANCE_ACCOUNTING"],
+      "dependencies": [
+        "FINANCE_ACCOUNTING"
+      ],
       "qaContract": "enterprise-accounting"
     },
     {
@@ -270,7 +297,9 @@
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-modules/FINANCE_CLOSE",
       "workspaceKey": "ENTERPRISE_FINANCIAL_CLOSE",
-      "permissionPrefixes": ["enterprise.finance.close."],
+      "permissionPrefixes": [
+        "enterprise.finance.close."
+      ],
       "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "ENTERPRISE",
       "requiresActiveSubscription": true,
@@ -297,12 +326,16 @@
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-modules/FINANCE_STATEMENTS",
       "workspaceKey": "ENTERPRISE_FINANCIAL_STATEMENTS",
-      "permissionPrefixes": ["enterprise.finance.statements."],
+      "permissionPrefixes": [
+        "enterprise.finance.statements."
+      ],
       "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "ENTERPRISE",
       "requiresActiveSubscription": true,
       "applicableSectors": "ALL",
-      "dependencies": ["FINANCE_ACCOUNTING"],
+      "dependencies": [
+        "FINANCE_ACCOUNTING"
+      ],
       "qaContract": "enterprise-financial-statements"
     },
     {
@@ -319,12 +352,17 @@
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-modules/FINANCE_ASSETS",
       "workspaceKey": "ENTERPRISE_ASSET_ACCOUNTING",
-      "permissionPrefixes": ["enterprise.finance.assets."],
+      "permissionPrefixes": [
+        "enterprise.finance.assets."
+      ],
       "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "ENTERPRISE",
       "requiresActiveSubscription": true,
       "applicableSectors": "ALL",
-      "dependencies": ["ASSETS_MAINTENANCE", "FINANCE_ACCOUNTING"],
+      "dependencies": [
+        "ASSETS_MAINTENANCE",
+        "FINANCE_ACCOUNTING"
+      ],
       "qaContract": "enterprise-accounting"
     },
     {
@@ -341,12 +379,17 @@
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-modules/FINANCE_INVENTORY",
       "workspaceKey": "ENTERPRISE_INVENTORY_ACCOUNTING",
-      "permissionPrefixes": ["enterprise.finance.inventory."],
+      "permissionPrefixes": [
+        "enterprise.finance.inventory."
+      ],
       "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "ENTERPRISE",
       "requiresActiveSubscription": true,
       "applicableSectors": "ALL",
-      "dependencies": ["INVENTORY_LOGISTICS", "FINANCE_ACCOUNTING"],
+      "dependencies": [
+        "INVENTORY_LOGISTICS",
+        "FINANCE_ACCOUNTING"
+      ],
       "qaContract": "enterprise-accounting"
     }
   ]
