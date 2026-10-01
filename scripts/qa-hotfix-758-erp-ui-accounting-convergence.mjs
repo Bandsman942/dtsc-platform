@@ -28,6 +28,8 @@ const financeUi = requireTokens("components/enterprise/professional/finance-prof
 ]);
 const accountingWorkspace = read("components/enterprise/professional/enterprise-finance-accounting-workspace.tsx");
 check(!accountingWorkspace.includes('rowText(row, "accountType") || rowText(row, "journalType") || rowText(row, "templateCode")'), "Accounting compact cards must not derive one fake Type field from unrelated properties.");
+check(accountingWorkspace.includes("chartOriginLabel"), "Chart origin must use a dedicated business label.");
+check(!accountingWorkspace.includes('financeEnumLabel(rowText(row, "templateCode")'), "Template references must never fall back to Other category.");
 check(accountingWorkspace.includes('configureView === "charts" ? ['), "Accounting lists must have per-entity columns.");
 check(accountingWorkspace.includes('configureView === "years" ? ['), "Fiscal years need their own compact field contract.");
 check(accountingWorkspace.includes('configureView === "periods" ? ['), "Fiscal periods need their own compact field contract.");
