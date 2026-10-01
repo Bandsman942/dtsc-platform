@@ -32,6 +32,12 @@ function objectRecord(value: unknown) {
   return value && typeof value === "object" ? value as Record<string, unknown> : null;
 }
 
+function chartOriginLabel(templateCode: string, locale: FinanceLocale) {
+  if (!templateCode) return locale === "en" ? "Custom chart" : "Plan personnalisé";
+  if (templateCode.startsWith("OHADA_SYSCOHADA")) return "OHADA / SYSCOHADA";
+  return locale === "en" ? "Published accounting template" : "Template comptable publié";
+}
+
 function titleFor(kind: AccountingRecordDetailKind, record: AccountingRecord, locale: FinanceLocale) {
   const en = locale === "en";
   const code = text(record.code || record.reference || record.mappingKey);
@@ -57,7 +63,7 @@ function detailFields(kind: AccountingRecordDetailKind, record: AccountingRecord
     push(en ? "English label" : "Libellé anglais", record.nameEn);
   }
   if (kind === "charts") {
-    push(en ? "Chart origin" : "Origine du plan", record.templateCode ? financeEnumLabel(String(record.templateCode), locale) : (en ? "Custom chart" : "Plan personnalisé"));
+    push(en ? "Chart origin" : "Origine du plan", chartOriginLabel(record.templateCode ? String(record.templateCode) : "", locale));
   }
   if (kind === "accounts") {
     push(en ? "Account type" : "Type de compte", record.accountType ? financeEnumLabel(String(record.accountType), locale) : "—");
