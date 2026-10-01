@@ -123,6 +123,7 @@ export async function createRefund(organizationId: string, userId: string, data:
 export async function validateCashRefund(organizationId: string, refundId: string, userId: string) {
   await convergePharmacyRefund(organizationId, refundId, userId, { bypassFeatureFlag: true });
   return prisma.$transaction(async (transaction) => {
+    await transaction.$executeRaw(Prisma.sql`SELECT id FROM "PharmacyRefund" WHERE id = ${refundId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const refund = await transaction.pharmacyRefund.findFirst({ where: { id: refundId, organizationId, status: "SUBMITTED" }, include: { sale: { include: { lines: true } } } });
     if (!refund) throw new Error("REFUND_NOT_SUBMITTED");
     if (refund.restockItems) {
