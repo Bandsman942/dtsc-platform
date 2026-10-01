@@ -3,8 +3,9 @@ import fs from "node:fs";
 const helperPath = "lib/scalability/production-observability.ts";
 const routePath = "app/api/admin/scalability/observability/route.ts";
 const redisObservabilityPath = "lib/scalability/redis-observability.ts";
+const middlewarePath = "middleware.ts";
 
-for (const path of [helperPath, routePath, redisObservabilityPath]) {
+for (const path of [helperPath, routePath, redisObservabilityPath, middlewarePath]) {
   if (!fs.existsSync(path)) {
     console.error(`FAIL: missing ${path}`);
     process.exit(1);
@@ -14,6 +15,7 @@ for (const path of [helperPath, routePath, redisObservabilityPath]) {
 const helper = fs.readFileSync(helperPath, "utf8");
 const route = fs.readFileSync(routePath, "utf8");
 const redisObservability = fs.readFileSync(redisObservabilityPath, "utf8");
+const middleware = fs.readFileSync(middlewarePath, "utf8");
 
 const checks = [
   [route.includes("requireConsoleCapability(CONSOLE_CAPABILITIES.SECURITY_READ)"), "endpoint must require SECURITY_READ"],
@@ -30,6 +32,9 @@ const checks = [
   [!redisObservability.includes("@/lib/prisma"), "Redis hot-path counters must not write PostgreSQL"],
   [!helper.includes("DATABASE_URL"), "helper must not expose DATABASE_URL"],
   [!route.includes("organizationId"), "admin snapshot must not expose tenant identifiers"],
+  [middleware.includes('const scale7OidcDelegatedAdminApiRoute = "/api/admin/scalability/observability"'), "middleware OIDC delegation must target only the observability route"],
+  [middleware.includes('isPathMatch(pathname, dtscInternalApiRoutes) && !delegatesScale7OidcToHandler'), "all other DTSC internal APIs must retain session protection"],
+  [!middleware.includes('pathname.startsWith("/api/admin/scalability")'), "middleware must not bypass an Admin prefix"],
 ];
 
 const failures = checks.filter(([ok]) => !ok).map(([, label]) => label);
