@@ -39,7 +39,7 @@ type Props = {
 type Space = "home" | "post" | "review" | "configure";
 type ReviewView = "ledger" | "trial" | "anomalies";
 type ConfigureView = "setup" | "charts" | "accounts" | "years" | "periods" | "journals" | "rules";
-type ConfigCreatable = Exclude<ConfigureView, "setup" | "rules">;
+type ConfigCreatable = Exclude<ConfigureView, "setup">;
 
 type Pagination = { page: number; pageSize: number; total: number; pageCount: number };
 type AnyRow = Record<string, unknown> & { id: string };
@@ -96,7 +96,7 @@ type EntryTracePayload = {
   entry?: JournalEntry & { lines?: LedgerRow[]; sourceModule?: string | null; sourceEntityId?: string | null };
   sourceLink?: { labelFr: string; labelEn: string; href: string; moduleCode: string } | null;
 };
-type ConfigFormState = { open: boolean; kind: ConfigCreatable | null };
+type ConfigFormState = { open: boolean; kind: ConfigCreatable | null; record?: AnyRow | null };
 type RecordDetailState = { kind: AccountingRecordDetailKind; row: AnyRow } | null;
 
 const EMPTY_PAGINATION: Pagination = { page: 1, pageSize: 25, total: 0, pageCount: 1 };
@@ -134,7 +134,9 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
   const [recordDetail, setRecordDetail] = useState<RecordDetailState>(null);
   const [approvalTarget, setApprovalTarget] = useState<JournalEntry | null>(null);
   const [actionTarget, setActionTarget] = useState<{ entry: JournalEntry; action: "APPROVE" | "REJECT" | "POST" | "REVERSE" } | null>(null);
-  const [configForm, setConfigForm] = useState<ConfigFormState>({ open: false, kind: null });
+  const [configForm, setConfigForm] = useState<ConfigFormState>({ open: false, kind: null, record: null });
+  const [configDelete, setConfigDelete] = useState<{ kind: AccountingRecordDetailKind; record: AnyRow } | null>(null);
+  const [selectedRuleChartId, setSelectedRuleChartId] = useState("");
   const [busy, setBusy] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -194,7 +196,7 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
           return;
         }
         if (configureView === "setup") { setRows([]); setPagination(EMPTY_PAGINATION); return; }
-        const endpoint = configureView === "rules" ? "accounting-professional?view=posting-rules" : configureView === "charts" ? "charts-of-accounts" : configureView === "accounts" ? "ledger-accounts" : configureView === "years" ? "fiscal-years" : configureView === "periods" ? "fiscal-periods" : "journals";
+        const endpoint = configureView === "rules" ? "account-mappings" : configureView === "charts" ? "charts-of-accounts" : configureView === "accounts" ? "ledger-accounts" : configureView === "years" ? "fiscal-years" : configureView === "periods" ? "fiscal-periods" : "journals";
         const separator = endpoint.includes("?") ? "&" : "?";
         const query = new URLSearchParams({ page: String(page), pageSize: "25" });
         if (search.trim()) query.set("search", search.trim());
@@ -440,7 +442,7 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
 
     {hasToolbar ? <ModuleToolbar
       search={<label className="relative block min-w-0"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-dtsc-muted" /><Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder={en ? "Search…" : "Rechercher…"} className="pl-9" /></label>}
-      controls={<div className="flex min-w-0 flex-wrap items-end gap-2">{space === "review" && reviewView !== "anomalies" ? <><label className="grid min-w-0 gap-1 text-xs font-bold text-dtsc-muted">{en ? "From" : "Du"}<Input type="date" value={dateFrom} onChange={(event) => { setDateFrom(event.target.value); setPage(1); }} className="h-10 w-full min-w-0 sm:w-40" /></label><label className="grid min-w-0 gap-1 text-xs font-bold text-dtsc-muted">{en ? "To" : "Au"}<Input type="date" value={dateTo} onChange={(event) => { setDateTo(event.target.value); setPage(1); }} className="h-10 w-full min-w-0 sm:w-40" /></label></> : null}<Button type="button" variant="outline" size="sm" onClick={() => reload()}><RotateCcw className="mr-1.5 h-4 w-4" />{en ? "Refresh" : "Actualiser"}</Button>{space === "configure" && configureView !== "setup" && configureView !== "rules" && ((configureView === "charts" && canManage) || (configureView !== "charts" && canCreate)) ? <Button type="button" size="sm" onClick={() => setConfigForm({ open: true, kind: configureView as ConfigCreatable })}><Plus className="mr-1.5 h-4 w-4" />{en ? "Create" : "Créer"}</Button> : null}</div>}
+      controls={<div className="flex min-w-0 flex-wrap items-end gap-2">{space === "review" && reviewView !== "anomalies" ? <><label className="grid min-w-0 gap-1 text-xs font-bold text-dtsc-muted">{en ? "From" : "Du"}<Input type="date" value={dateFrom} onChange={(event) => { setDateFrom(event.target.value); setPage(1); }} className="h-10 w-full min-w-0 sm:w-40" /></label><label className="grid min-w-0 gap-1 text-xs font-bold text-dtsc-muted">{en ? "To" : "Au"}<Input type="date" value={dateTo} onChange={(event) => { setDateTo(event.target.value); setPage(1); }} className="h-10 w-full min-w-0 sm:w-40" /></label></> : null}<Button type="button" variant="outline" size="sm" onClick={() => reload()}><RotateCcw className="mr-1.5 h-4 w-4" />{en ? "Refresh" : "Actualiser"}</Button>{space === "configure" && configureView !== "setup" && ((configureView === "charts" || configureView === "rules") ? canManage : canCreate) ? <Button type="button" size="sm" onClick={() => { setSelectedRuleChartId(""); setConfigForm({ open: true, kind: configureView as ConfigCreatable, record: null }); }}><Plus className="mr-1.5 h-4 w-4" />{configureView === "rules" ? (en ? "New rule" : "Nouvelle règle") : (en ? "Create" : "Créer")}</Button> : null}</div>}
       summary={pagination.total ? `${pagination.total} ${en ? "record(s)" : "élément(s)"}` : undefined}
     /> : null}
 
@@ -483,10 +485,21 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
       locale={rawLocale}
       kind={recordDetail?.kind || null}
       record={recordDetail?.row || null}
-      canManage={canManage}
       onClose={() => setRecordDetail(null)}
       onChanged={(success) => reload(success)}
       onError={setErrorMessage}
+      onEdit={(kind, record) => {
+        const row = record as AnyRow;
+        const account = row.ledgerAccount && typeof row.ledgerAccount === "object" ? row.ledgerAccount as Record<string, unknown> : null;
+        const chart = account?.chart && typeof account.chart === "object" ? account.chart as Record<string, unknown> : null;
+        setSelectedRuleChartId(kind === "rules" ? rawText(chart?.id) : "");
+        setRecordDetail(null);
+        setConfigForm({ open: true, kind: kind as ConfigCreatable, record: row });
+      }}
+      onDelete={(kind, record) => {
+        setRecordDetail(null);
+        setConfigDelete({ kind, record: record as AnyRow });
+      }}
     />
 
     <Dialog open={configForm.open} onClose={() => !busy && setConfigForm({ open: false, kind: null })} title={configForm.kind ? configFormTitle(configForm.kind, en) : (en ? "Accounting configuration" : "Configuration comptable")} description={en ? "Complete only the fields persisted by the selected accounting object. References are constrained to this company." : "Renseignez uniquement les champs réellement persistés par l’objet comptable choisi. Les références sont limitées à cette entreprise."} presentation="editor" className={FULLSCREEN_FORM_CLASS}>
