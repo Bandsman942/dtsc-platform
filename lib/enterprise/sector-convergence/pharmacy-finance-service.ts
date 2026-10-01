@@ -8,6 +8,7 @@ import {
 import {
   confirmCustomerRefundPayment,
   consumeCustomerPaymentRefundAvailability,
+  markCustomerRefundFinancialInverseReady,
   prepareSalesCreditNoteForRefundAmount,
   reverseCustomerPaymentAllocationsForRefundAmount,
 } from "@/lib/enterprise/accounting/customer-refund-service";
@@ -706,6 +707,12 @@ export async function settlePharmacyRefund(
     if (credit.status !== "POSTED") {
       throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_CREDIT_NOTE_NOT_POSTED", 409, { status: credit.status });
     }
+    await markCustomerRefundFinancialInverseReady(
+      organizationId,
+      refundPayment.id,
+      credit.id,
+      actorUserId,
+    );
   }
 
   let confirmedPayment = await prisma.enterprisePayment.findFirst({ where: { id: refundPayment.id, organizationId } });
