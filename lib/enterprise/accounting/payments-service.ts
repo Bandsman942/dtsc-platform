@@ -21,13 +21,22 @@ async function addPaymentEvent(tx: Prisma.TransactionClient, organizationId: str
   await tx.enterprisePaymentEvent.create({ data: { organizationId, paymentId, actorUserId, eventType, summary, metadataJson } });
 }
 
+// Cutover of migration 20260929083000_payment_cash_session_binding.
+// Only rows created before this point may use automatic Cash-session recovery/rebinding.
+const CASH_SESSION_BINDING_CUTOVER_AT = new Date("2026-09-29T08:30:00.000Z");
+
 type CashSessionPayment = {
   id: string;
   organizationId: string;
   financialAccountId: string | null;
   initiatedByUserId: string;
   cashSessionId: string | null;
+  createdAt: Date;
 };
+
+function isLegacyCashSessionBinding(payment: CashSessionPayment) {
+  return payment.createdAt < CASH_SESSION_BINDING_CUTOVER_AT;
+}
 
 async function resolveCashSessionForConfirmation(
   tx: Prisma.TransactionClient,
@@ -71,9 +80,7 @@ async function resolveCashSessionForConfirmation(
       take: 2,
     });
     if (compatibleOpenSessions.length === 1) return compatibleOpenSessions[0];
-    if (compatibleOpenSessions.length > 1) {
-      throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_AMBIGUOUS", 409);
-    }
+    if (compatibleOpenSessions.length > 1) throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_AMBIGUOUS", 409);
     return null;
   };
 
@@ -86,14 +93,19 @@ async function resolveCashSessionForConfirmation(
       },
     });
     if (!linked) throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_INVALID", 409);
-
     if (linked.status === "OPEN") return linked;
 
-    const replacement = await findPreferredOpenReplacement();
-    if (replacement) {
+    if (!isLegacyCashSessionBinding(payment)) {
+      if (linked.status === "PENDING_VALIDATION") throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_PENDING_VALIDATION", 409);
+      if (linked.status === "CLOSING") throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_CLOSING", 409);
+      throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_CLOSED", 409);
+    }
+
+    const replacementSession = await findPreferredOpenReplacement();
+    if (replacementSession) {
       await tx.enterprisePayment.update({
         where: { id: payment.id },
-        data: { cashSessionId: replacement.id, revision: { increment: 1 } },
+        data: { cashSessionId: replacementSession.id, revision: { increment: 1 } },
       });
       await addPaymentEvent(
         tx,
@@ -101,25 +113,26 @@ async function resolveCashSessionForConfirmation(
         payment.id,
         actorUserId,
         "CASH_SESSION_REBOUND",
-        "Cash session rebound before confirmation",
+        "Legacy cash session rebound before confirmation",
         {
           previousCashSessionId: linked.id,
           previousCashierUserId: linked.cashierUserId,
-          cashSessionId: replacement.id,
-          cashierUserId: replacement.cashierUserId,
+          cashSessionId: replacementSession.id,
+          cashierUserId: replacementSession.cashierUserId,
           previousStatus: linked.status,
+          legacyCutoverAt: CASH_SESSION_BINDING_CUTOVER_AT.toISOString(),
         },
       );
-      return replacement;
+      return replacementSession;
     }
 
-    if (linked.status === "PENDING_VALIDATION") {
-      throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_PENDING_VALIDATION", 409);
-    }
-    if (linked.status === "CLOSING") {
-      throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_CLOSING", 409);
-    }
+    if (linked.status === "PENDING_VALIDATION") throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_PENDING_VALIDATION", 409);
+    if (linked.status === "CLOSING") throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_CLOSING", 409);
     throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_CLOSED", 409);
+  }
+
+  if (!isLegacyCashSessionBinding(payment)) {
+    throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_BINDING_REQUIRED", 409);
   }
 
   const recovered = await findPreferredOpenReplacement();
@@ -139,6 +152,7 @@ async function resolveCashSessionForConfirmation(
         historicalInitiatorUserId: payment.initiatedByUserId,
         cashSessionId: recovered.id,
         cashierUserId: recovered.cashierUserId,
+        legacyCutoverAt: CASH_SESSION_BINDING_CUTOVER_AT.toISOString(),
       },
     );
     return recovered;
@@ -153,12 +167,8 @@ async function resolveCashSessionForConfirmation(
     orderBy: { openedAt: "desc" },
     select: { status: true },
   });
-  if (blocking?.status === "PENDING_VALIDATION") {
-    throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_PENDING_VALIDATION", 409);
-  }
-  if (blocking?.status === "CLOSING") {
-    throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_CLOSING", 409);
-  }
+  if (blocking?.status === "PENDING_VALIDATION") throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_PENDING_VALIDATION", 409);
+  if (blocking?.status === "CLOSING") throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_CLOSING", 409);
   throw new EnterpriseAccountingError("OPEN_CASH_SESSION_REQUIRED", 409);
 }
 
