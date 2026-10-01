@@ -538,3 +538,16 @@ Issue #360 introduces a manual k6 certification harness for 500 / 1,000 / 2,500 
 Le domaine Finance commun inclut désormais `EnterpriseFundingOperation` pour les apports en capital, avances d'associés et emprunts reçus. Le service `lib/enterprise/accounting/funding-service.ts` orchestre approbation, confirmation, trésorerie, caisse et posting dans une transaction sérialisable. Les routes `funding-operations` sont protégées par `FINANCE_TREASURY`, same-origin, validation Zod, rate limit et audit via les primitives Finance communes.
 
 L'interface Trésorerie expose un onglet **Financements** construit sur les sélecteurs de références canoniques ; les validations transversales présentent et ouvrent l'opération précise. Les erreurs sont traduites et orientées action. Les rapports comptables continuent à dériver le chiffre d'affaires uniquement des écritures de produits `POSTED` : les événements de financement utilisent `EQUITY_CAPITAL`, `BORROWINGS` ou un compte de passif explicite, jamais un mapping de revenu.
+
+## Hotfix #758 — convergence UI/Backend ERP
+
+Le shell ERP commun ne rend plus le bloc décoratif « Accès et responsabilités ». Les permissions restent autoritaires côté serveur.
+
+Comptabilité réutilise désormais un contrat unique entre création, liste compacte, détail et actions :
+- `label` persistant sur exercices/périodes ;
+- capabilities serveur sur Plan/Compte/Exercice/Période/Journal/Règle ;
+- menu contextuel `…` pour les actions globales autorisées ;
+- règles OHADA affichées à partir des mappings sémantiques installés ;
+- règles personnalisées créées via `EnterpriseAccountMapping` scoped par `chartId`.
+
+Les plein-écrans ERP Gaming mutables audités suivent le même contrat de menu contextuel pour les actions globales.
