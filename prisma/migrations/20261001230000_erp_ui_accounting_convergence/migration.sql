@@ -16,7 +16,7 @@ WHERE account."id" = mapping."ledgerAccountId"
 
 ALTER TABLE "EnterpriseAccountMapping" ALTER COLUMN "chartId" SET NOT NULL;
 
-DROP INDEX "EnterpriseAccountMapping_organizationId_mappingKey_effectiveF_key";
+DROP INDEX "EnterpriseAccountMapping_organizationId_mappingKey_effectiv_key";
 
 CREATE UNIQUE INDEX "EnterpriseAccountMapping_organizationId_chartId_mappingKey_effe_key"
 ON "EnterpriseAccountMapping"("organizationId", "chartId", "mappingKey", "effectiveFrom");
