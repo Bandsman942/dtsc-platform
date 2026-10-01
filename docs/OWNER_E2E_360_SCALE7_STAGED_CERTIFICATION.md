@@ -33,6 +33,7 @@ For every successful run:
 - HTTP error rate remains below 1%;
 - P95/P99 respect 1,000/2,000 ms;
 - tenant isolation remains 100%;
+- expected cross-tenant 403/404 probes are excluded from `http_req_failed` but remain mandatory in `tenant_isolation_pass` and checks;
 - no PostgreSQL exhaustion;
 - Redis never reaches UNAVAILABLE;
 - AI saturation remains bounded by SCALE-6 and does not destabilize ERP/Shop;
