@@ -113,6 +113,7 @@ export async function PATCH(request: Request, { params }: Params) {
       PHARMACY_REFUND_COMMON_CASH_SESSION_NOT_OPEN: "La caisse Finance liée à ce remboursement n'est plus ouverte.",
       PHARMACY_REFUND_FINANCE_MAPPING_REQUIRED: "Le remboursement n'a pas encore été validé et préparé dans Finance.",
       PHARMACY_REFUND_FINANCE_ALREADY_PREPARED: "La préparation Finance de ce remboursement existe déjà. Reprenez la validation au lieu de rejeter la demande.",
+      PHARMACY_REFUND_FINANCE_PERMISSION_REQUIRED: "Vous devez aussi disposer des droits Finance nécessaires pour préparer, valider ou payer ce remboursement.",
       REFUND_EXCEEDS_CONFIRMED_ALLOCATIONS: "Le montant demandé dépasse les encaissements confirmés encore remboursables.",
       CREDIT_NOTE_EXCEEDS_REFUNDABLE_INVOICE: "Le montant de l'avoir dépasse le solde encore remboursable de la facture.",
       CREDIT_NOTE_EXCEEDS_OPEN_RECEIVABLE: "L'avoir dépasse la créance ouverte après inversion de l'encaissement.",
