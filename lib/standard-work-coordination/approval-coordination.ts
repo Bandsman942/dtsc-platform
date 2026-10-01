@@ -89,6 +89,14 @@ async function ensureSubmissionVersionInTransaction(tx: Prisma.TransactionClient
 }
 
 async function approvalTargetSnapshot(tx: Prisma.TransactionClient, organizationId: string, entityType: string, entityId: string): Promise<Prisma.InputJsonValue> {
+  if (entityType === "EnterpriseFundingOperation") {
+    const item = await tx.enterpriseFundingOperation.findFirst({
+      where: { id: entityId, organizationId },
+      select: { id: true, number: true, fundingType: true, financialAccountId: true, cashSessionId: true, counterpartyLedgerAccountId: true, currencyCode: true, amount: true, operationDate: true, reference: true, description: true, status: true, revision: true, updatedAt: true },
+    });
+    if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Financement source introuvable.");
+    return serializeSnapshot(item);
+  }
   if (entityType === "EnterpriseTask") {
     const item = await tx.enterpriseTask.findFirst({ where: { id: entityId, organizationId }, select: { id: true, title: true, description: true, status: true, priority: true, assignedToUserId: true, startAt: true, dueAt: true, revision: true, updatedAt: true } });
     if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Tâche source introuvable."); return serializeSnapshot(item);
