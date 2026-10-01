@@ -118,7 +118,7 @@ export function EnterpriseFinanceFundingPanel({
     if (loading) return;
     void fetchOperationalFinanceRecord<FundingOperationRecord>(`/api/enterprise/${organizationId}/funding-operations`, initialRecordId)
       .then((record) => { if (record) setDetail(record); })
-      .catch((requestError) => setErrorMessage(safeFinanceError(requestError, t("operationError"), locale)))
+      .catch((requestError) => setErrorMessage(safeFinanceError(requestError, translateEnterpriseTreasury(locale, "operationError"), locale)))
       .finally(() => setDeepLinkResolved(true));
   }, [deepLinkResolved, initialRecordId, items, loading, locale, organizationId]);
 
