@@ -27,6 +27,11 @@ on:
       - "components/enterprise/professional/asset-disposal-panel.tsx"
       - "lib/enterprise/accounting/**"
       - "lib/enterprise/sector-convergence/**"
+      - "lib/pharmacy-cash.ts"
+      - "app/api/enterprise/**/pharmacy/cash/**"
+      - "app/api/enterprise/**/pharmacy/sales/**"
+      - "components/enterprise/pharmacy-cash-workspace.tsx"
+      - "prisma/enterprise-sector-convergence.prisma"
       - "lib/user-guides/accounting-onboarding-guide.ts"
       - "prisma/enterprise-accounting.prisma"
       - "prisma/enterprise-hr-payroll.prisma"
@@ -39,6 +44,7 @@ on:
       - "scripts/qa-erp-cross-module-finance.mjs"
       - "scripts/qa-hotfix-741-finance-stale-pr-cleanup.mjs"
       - "scripts/qa-hotfix-745-finance-ui-backend-convergence.mjs"
+      - "scripts/qa-hotfix-728-pharmacy-refund-finance-convergence.mjs"
       - "scripts/ci-upstash-redis-rest-proxy.mjs"
       - "scripts/qa-ci-auth-rate-limit-provisioning.mjs"
       - "tests/e2e/accounting-onboarding.spec.mjs"
@@ -147,6 +153,7 @@ jobs:
           node scripts/qa-erp-cross-module-finance.mjs
           node scripts/qa-hotfix-741-finance-stale-pr-cleanup.mjs
           node scripts/qa-hotfix-745-finance-ui-backend-convergence.mjs
+          node scripts/qa-hotfix-728-pharmacy-refund-finance-convergence.mjs
           node scripts/qa-ci-auth-rate-limit-provisioning.mjs
       - name: Build production application
         shell: bash
