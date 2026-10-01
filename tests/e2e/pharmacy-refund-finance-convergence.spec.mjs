@@ -294,7 +294,7 @@ async function createScenario(total, refundAmount, suffix) {
   });
   expect(created.response.status(), JSON.stringify(created.body)).toBe(201);
   let payment = created.body.payment;
-  const submitted = await post(requesterContext, `/api/enterprise/${organizationId}/payments/${payment.id}/transition`, { action: "SUBMIT", revision: payment.revision });
+  const submitted = await post(requesterContext, `/api/enterprise/${organizationId}/payments/${payment.id}/transition`, { action: "SUBMIT", revision: payment.revision, approverUserId: adminUserId });
   expect(submitted.response.ok(), JSON.stringify(submitted.body)).toBeTruthy();
   payment = submitted.body.payment;
   const approved = await post(validatorContext, `/api/enterprise/${organizationId}/payments/${payment.id}/transition`, { action: "APPROVE", revision: payment.revision });
@@ -394,7 +394,7 @@ test.describe.serial("Hotfix #728 Pharmacy refund Finance convergence", () => {
     expect(preparedPayment.cashSessionId).toBe(commonCashSessionId);
     expect(Number(preparedPayment.amount)).toBe(40);
     const preparedCredit = await prisma.enterpriseSalesCreditNote.findUniqueOrThrow({ where: { id: mapping.salesCreditNoteId } });
-    expect(preparedCredit.status).toBe("DRAFT");
+    expect(preparedCredit.status).toBe("APPROVED");
     expect(Number(preparedCredit.grandTotal)).toBe(40);
     expect(Number((await prisma.pharmacySale.findUniqueOrThrow({ where: { id: scenario.sale.id } })).refundedAmount || 0)).toBe(0);
 
