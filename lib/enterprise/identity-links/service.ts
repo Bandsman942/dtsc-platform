@@ -1024,6 +1024,7 @@ export async function listUserIdentityLinks(userId: string) {
     orderBy: { createdAt: "desc" },
     take: 200,
   });
+  if (!links.length) return [];
   const organizationIds = [...new Set(links.map((link) => link.organizationId))];
   const personIds = [...new Set(links.map((link) => link.personIdentityId))];
   const [organizations, people] = await Promise.all([
