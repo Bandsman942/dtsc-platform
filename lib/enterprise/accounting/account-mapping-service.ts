@@ -72,6 +72,7 @@ export async function createManualAccountMapping(
     const mapping = await tx.enterpriseAccountMapping.create({
       data: {
         organizationId,
+        chartId: account.chartId,
         mappingKey: input.mappingKey,
         ledgerAccountId: account.id,
         effectiveFrom: input.effectiveFrom || null,
@@ -109,7 +110,7 @@ export async function updateManualAccountMapping(
     if (current.ledgerAccount.chart.templateCode) {
       throw new EnterpriseAccountingError("ACCOUNT_MAPPING_TEMPLATE_MANAGED", 409, { templateReference: current.ledgerAccount.chart.templateCode });
     }
-    await assertManualMappingTarget(tx, organizationId, current.mappingKey, input.ledgerAccountId, current.ledgerAccount.chartId);
+    const { account } = await assertManualMappingTarget(tx, organizationId, current.mappingKey, input.ledgerAccountId, current.chartId);
     if (input.effectiveFrom && input.effectiveTo && input.effectiveTo < input.effectiveFrom) {
       throw new EnterpriseAccountingError("ACCOUNT_MAPPING_DATE_RANGE_INVALID", 409);
     }
