@@ -169,6 +169,7 @@ model EnterpriseLedgerAccount {
   openingBalanceLines    EnterpriseOpeningBalanceLine[]
   taxCodesPayable        EnterpriseTaxCode[] @relation("EnterpriseTaxCodePayableAccount")
   taxCodesRecoverable    EnterpriseTaxCode[] @relation("EnterpriseTaxCodeRecoverableAccount")
+  fundingCounterparts    EnterpriseFundingOperation[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, code])
@@ -828,6 +829,7 @@ model EnterpriseFinancialAccount {
   cashSessions          EnterpriseCashSession[]
   bankStatements        EnterpriseBankStatement[]
   reconciliationSessions EnterpriseReconciliationSession[]
+  fundingOperations      EnterpriseFundingOperation[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, code])
@@ -841,6 +843,7 @@ model EnterpriseTreasuryTransaction {
   financialAccountId    String
   paymentId             String?
   transferId            String?
+  fundingOperationId    String?
   transactionType       String
   direction             String
   currencyCode          String
@@ -855,10 +858,12 @@ model EnterpriseTreasuryTransaction {
   updatedAt             DateTime                   @updatedAt
   financialAccount      EnterpriseFinancialAccount @relation(fields: [organizationId, financialAccountId], references: [organizationId, id], onDelete: Restrict)
   payment               EnterprisePayment?          @relation(fields: [organizationId, paymentId], references: [organizationId, id], onDelete: Restrict)
+  fundingOperation      EnterpriseFundingOperation? @relation(fields: [organizationId, fundingOperationId], references: [organizationId, id], onDelete: Restrict)
 
   @@unique([organizationId, id])
   @@index([organizationId, financialAccountId, transactionDate])
   @@index([organizationId, paymentId])
+  @@index([organizationId, fundingOperationId])
   @@index([organizationId, reconciliationStatus])
 }
 
@@ -887,6 +892,47 @@ model EnterpriseAccountTransfer {
   @@index([organizationId, status, transferDate])
 }
 
+model EnterpriseFundingOperation {
+  id                       String                     @id @default(cuid())
+  organizationId           String
+  number                   String
+  fundingType              String
+  financialAccountId       String
+  cashSessionId            String?
+  counterpartyLedgerAccountId String?
+  currencyCode             String
+  amount                   Decimal                    @db.Decimal(20, 6)
+  operationDate            DateTime
+  reference                String?
+  description              String?
+  status                   String                     @default("DRAFT")
+  initiatedByUserId        String
+  approvedByUserId         String?
+  confirmedByUserId        String?
+  confirmedAt              DateTime?
+  reversedByUserId         String?
+  reversedAt               DateTime?
+  reversalReason           String?
+  idempotencyKey           String?
+  revision                 Int                        @default(1)
+  createdAt                DateTime                   @default(now())
+  updatedAt                DateTime                   @updatedAt
+  financialAccount         EnterpriseFinancialAccount @relation(fields: [organizationId, financialAccountId], references: [organizationId, id], onDelete: Restrict)
+  cashSession              EnterpriseCashSession?     @relation(fields: [organizationId, cashSessionId], references: [organizationId, id], onDelete: Restrict)
+  counterpartyLedgerAccount EnterpriseLedgerAccount?  @relation(fields: [organizationId, counterpartyLedgerAccountId], references: [organizationId, id], onDelete: Restrict)
+  treasuryTransactions     EnterpriseTreasuryTransaction[]
+  cashMovements            EnterpriseCashMovement[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, number])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, status, operationDate])
+  @@index([organizationId, financialAccountId])
+  @@index([organizationId, fundingType])
+  @@index([organizationId, cashSessionId])
+  @@index([organizationId, counterpartyLedgerAccountId])
+}
+
 model EnterpriseCashSession {
   id                    String                     @id @default(cuid())
   organizationId        String
@@ -913,6 +959,7 @@ model EnterpriseCashSession {
   counts                EnterpriseCashCount[]
   discrepancies         EnterpriseCashDiscrepancy[]
   payments              EnterprisePayment[]
+  fundingOperations      EnterpriseFundingOperation[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, number])
@@ -925,6 +972,7 @@ model EnterpriseCashMovement {
   organizationId String
   cashSessionId  String
   paymentId      String?
+  fundingOperationId String?
   movementType   String
   direction      String
   amount         Decimal               @db.Decimal(20, 6)
@@ -934,10 +982,12 @@ model EnterpriseCashMovement {
   createdByUserId String
   createdAt      DateTime              @default(now())
   cashSession    EnterpriseCashSession @relation(fields: [organizationId, cashSessionId], references: [organizationId, id], onDelete: Restrict)
+  fundingOperation EnterpriseFundingOperation? @relation(fields: [organizationId, fundingOperationId], references: [organizationId, id], onDelete: Restrict)
 
   @@unique([organizationId, id])
   @@index([organizationId, cashSessionId, createdAt])
   @@index([organizationId, paymentId])
+  @@index([organizationId, fundingOperationId])
 }
 
 model EnterpriseCashCount {
