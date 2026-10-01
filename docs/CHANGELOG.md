@@ -1,3 +1,38 @@
+## 2026-10-01 — Hotfix #728 : remboursements Pharmacy vers Finance commun
+
+### Corrigé
+
+- Les nouveaux remboursements monétaires Pharmacy restent `SUBMITTED` jusqu’à validation indépendante ; la configuration legacy ne peut plus auto-valider un remboursement monétaire.
+- La validation prépare un `EnterprisePayment` commun de type `REFUND`, direction `OUTBOUND`, lié durablement par `PharmacyRefundExtension`.
+- Le paiement, l’avoir, la facture, la créance, le tiers, la devise, le compte financier et la caisse restent dans le même tenant et utilisent les mappings communs existants.
+- Les remboursements CASH utilisent la caisse Finance exactement mappée à la caisse Pharmacy et échouent avant les inverses si elle n’est plus `OPEN`.
+- Les remboursements partiels inversent uniquement le montant réellement remboursé ; l’allocation restante est repostée avec une nouvelle version comptable au lieu de rouvrir toute la créance.
+- L’avoir est borné au montant encore remboursable et les deux chemins de posting refusent tout montant qui rendrait la créance négative.
+- Le statut Pharmacy `PAID` n’est écrit qu’après avoir posté et après confirmation du remboursement commun dans Treasury/Cash et `CUSTOMER_REFUND_CONFIRMED`.
+- Le parcours monétaire direct `PharmacySaleRefund` depuis Ventes est retiré et redirige vers **Caisse, factures & paiements**.
+- Les remboursements historiques sans lien déterministe vers la facture/paiement commun sont marqués `LEGACY_UNMAPPED` pour réconciliation manuelle ; aucun backfill n’invente leur histoire.
+- L’interface Pharmacy affiche l’état du paiement Finance commun et distingue validation de **Payer le remboursement**.
+- Les KPI de caisse ne comptabilisent comme remboursé que les remboursements réellement `PAID`.
+
+### Sécurité
+
+- Le demandeur, le validateur et le payeur sont séparés.
+- Les permissions Pharmacy n’accordent aucun droit Finance implicite : les capacités `FINANCE_PAYMENTS` / `FINANCE_RECEIVABLES` requises sont vérifiées avant les transitions communes.
+- Toutes les recherches et mappings sont bornés au même `organizationId`.
+
+### Données
+
+- Migration additive `20261001110000_pharmacy_refund_finance_convergence`.
+- Nouveau mapping durable `PharmacyRefundExtension`.
+- Aucune suppression de `PharmacyRefund` / `PharmacySaleRefund` et aucune réécriture des écritures `POSTED`.
+
+### Validation
+
+- Nouvelle QA ciblée : `qa:hotfix-728`.
+- Régression canonique et Accounting acceptance exécutent le contrat #728.
+- Un Playwright dédié couvre partiel, total, Cash fermé, retry, séparation des acteurs et isolation tenant.
+- OWNER_E2E reste requis avant merge.
+
 ## 2026-10-01 — Hotfix #745 : convergence UI/UX des garde-fous Finance
 
 ### Corrigé
