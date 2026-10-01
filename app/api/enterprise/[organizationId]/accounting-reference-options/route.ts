@@ -101,7 +101,7 @@ export async function GET(req: Request, { params }: Params) {
       },
       orderBy: { startDate: "desc" },
       take,
-      select: { id: true, code: true, startDate: true, endDate: true, status: true, revision: true },
+      select: { id: true, code: true, label: true, startDate: true, endDate: true, status: true, revision: true },
     });
   } else if (kind === "fiscal-period") {
     items = await prisma.enterpriseFiscalPeriod.findMany({
@@ -113,7 +113,7 @@ export async function GET(req: Request, { params }: Params) {
       },
       orderBy: { startDate: "desc" },
       take,
-      select: { id: true, code: true, fiscalYearId: true, startDate: true, endDate: true, status: true, revision: true, fiscalYear: { select: { code: true } } },
+      select: { id: true, code: true, label: true, fiscalYearId: true, startDate: true, endDate: true, status: true, revision: true, fiscalYear: { select: { code: true, label: true } } },
     });
   } else if (kind === "journal") {
     items = await prisma.enterpriseJournal.findMany({
