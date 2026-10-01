@@ -40,13 +40,14 @@ export function isLegacyCashSessionBinding(payment: CashSessionPayment) {
 
 type CashSessionConfirmationPreview = CashSessionPayment & {
   methodType: string;
-  cashSession?: { status: string } | null;
+  cashSession?: { status: string; financialAccountId: string } | null;
 };
 
 export function paymentCashSessionConfirmationBlocker(payment: CashSessionConfirmationPreview) {
   if (payment.methodType !== "CASH" || isLegacyCashSessionBinding(payment)) return null;
+  if (!payment.financialAccountId) return "PAYMENT_FINANCIAL_ACCOUNT_REQUIRED";
   if (!payment.cashSessionId) return "PAYMENT_CASH_SESSION_BINDING_REQUIRED";
-  if (!payment.cashSession) return "PAYMENT_CASH_SESSION_INVALID";
+  if (!payment.cashSession || payment.cashSession.financialAccountId !== payment.financialAccountId) return "PAYMENT_CASH_SESSION_INVALID";
   if (payment.cashSession.status === "OPEN") return null;
   if (payment.cashSession.status === "PENDING_VALIDATION") return "PAYMENT_CASH_SESSION_PENDING_VALIDATION";
   if (payment.cashSession.status === "CLOSING") return "PAYMENT_CASH_SESSION_CLOSING";
