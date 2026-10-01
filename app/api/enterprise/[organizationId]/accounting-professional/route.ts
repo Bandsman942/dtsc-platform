@@ -52,7 +52,7 @@ export async function GET(req: Request, { params }: Params) {
       prisma.enterpriseFiscalPeriod.count({ where: { organizationId, status: { in: ["OPEN", "SOFT_CLOSED"] } } }),
       prisma.enterpriseFiscalPeriod.count({ where: { organizationId, status: { in: ["CLOSED", "LOCKED"] } } }),
       prisma.enterpriseLedgerAccount.count({ where: { organizationId, isActive: false } }),
-      prisma.enterpriseAccountMapping.count({ where: { organizationId, isActive: true } }),
+      prisma.enterpriseAccountMapping.count({ where: { organizationId, isActive: true, chart: { status: "ACTIVE" } } }),
       prisma.enterpriseJournalEntry.groupBy({
         by: ["journalId", "functionalCurrencyCode"],
         where: { organizationId, ...entryDateFilter, status: "POSTED" },
