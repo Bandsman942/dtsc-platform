@@ -1,3 +1,27 @@
+## 2026-10-01 — Hotfix #745 : convergence UI/UX des garde-fous Finance
+
+### Corrigé
+
+- Le workspace **Paiements** reflète désormais avant clic les préconditions de confirmation calculées côté serveur.
+- Un initiateur ou validateur ne voit plus une confirmation présentée comme disponible ; le détail indique qu’une troisième personne autorisée est requise.
+- Un paiement CASH récent sans rattachement durable à une caisse, ou lié à une caisse fermée/en clôture/en attente de validation, expose un état bloqué avec une explication métier FR/EN.
+- Les paiements historiques antérieurs au cutover `20260929083000_payment_cash_session_binding` conservent la récupération #700/#704 et affichent un avertissement non bloquant lorsque la liaison doit être récupérée.
+- Le frontend ne recalcule pas le cutover : l’API renvoie `confirmation.ready`, `blockerCode` et `noticeCode` dérivés de la politique Finance serveur.
+- Les garde-fous backend restent obligatoires et continuent de valider la confirmation au moment de la mutation.
+- Les projections Health/Pharmacy conservent les libellés Catalog contrôlés introduits par #742.
+
+### Données
+
+- Aucune migration Prisma.
+- Aucun backfill.
+- Aucun changement d’autorité financière.
+
+### Validation
+
+- Nouvelle QA ciblée : `qa:hotfix-745`.
+- La QA est intégrée à la régression canonique, à Accounting acceptance et à Gaming Lounge.
+- OWNER_E2E reste requis avant merge.
+
 ## 2026-10-01 — Hotfix #741 : consolidation des anciennes PR Finance
 
 ### Corrigé
