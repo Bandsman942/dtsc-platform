@@ -346,7 +346,9 @@ export function financeMetricLabel(key: string, locale: FinanceLocale = "fr") {
 }
 
 export function financeEnumLabel(value: string, locale: FinanceLocale = "fr") {
-  return ENUM_LABELS[locale][value] || (locale === "fr" ? "Autre catégorie" : "Other category");
+  const normalized = value.trim();
+  if (!normalized) return "";
+  return ENUM_LABELS[locale][normalized] || (locale === "fr" ? "Autre catégorie" : "Other category");
 }
 
 export function financeStatusTone(status?: string): StatusBadgeTone {
