@@ -10,6 +10,7 @@ import {
 } from "@/lib/enterprise/accounting/accounting-human-approval-orchestration";
 import {
   confirmCustomerRefundPayment,
+  consumeCustomerPaymentRefundAvailability,
   createExactSalesCreditNoteForRefund,
   reverseCustomerPaymentAllocationsForRefund,
 } from "@/lib/enterprise/accounting/customer-refund-service";
@@ -453,7 +454,7 @@ export async function commandGamingCheckout(
     }
 
     const refundReason = snapshot.checkout.refundReason || input.reason;
-    await reverseCustomerPaymentAllocationsForRefund(organizationId, receivable.id, actorUserId, refundReason);
+    await reverseCustomerPaymentAllocationsForRefund(organizationId, receivable.id, actorUserId, refundReason, refund.id);
     const creditReason = `Gaming refund ${snapshot.checkout.reference}: ${refundReason}`;
     let credit = await prisma.enterpriseSalesCreditNote.findFirst({
       where: { organizationId, salesInvoiceId: snapshot.invoice.id, reason: creditReason },
@@ -484,6 +485,7 @@ export async function commandGamingCheckout(
     if (!["CONFIRMED", "RECONCILED"].includes(refund.status)) {
       throw new EnterpriseGamingCheckoutError("GAMING_CHECKOUT_REFUND_NOT_CONFIRMED", 409);
     }
+    await consumeCustomerPaymentRefundAvailability(organizationId, refund.id, actorUserId);
 
     await prisma.$transaction(async (tx) => {
       await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseGamingCheckout" WHERE id = ${checkoutId} AND "organizationId" = ${organizationId} FOR UPDATE`);
