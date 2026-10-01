@@ -95,6 +95,7 @@ export const FINANCE_ERROR_MESSAGES: Record<FinanceLocale, Record<string, string
     PAYMENT_SELF_CONFIRMATION_FORBIDDEN: "La confirmation doit être effectuée par une troisième personne autorisée, différente de l’initiateur et du validateur du paiement.",
     REFUND_PAYMENT_SELF_CONFIRMATION_FORBIDDEN: "La confirmation du remboursement doit être effectuée par une troisième personne autorisée, différente de l’initiateur et du validateur.",
     PAYMENT_CASH_SESSION_BINDING_REQUIRED: "Ce paiement en espèces récent n’est rattaché à aucune caisse. Créez-le depuis une caisse ouverte ou corrigez son rattachement avant de confirmer.",
+    PAYMENT_CASH_SESSION_LEGACY_RECOVERY: "Paiement historique : lors de la confirmation, le système vérifiera une caisse ouverte compatible et récupérera le rattachement si cela peut être fait sans ambiguïté.",
     PAYMENT_GAMING_SCOPE_INVALID: "Ce paiement ne correspond plus au client ou à la devise du checkout Gaming lié. Rechargez les données avant de continuer.",
     PAYMENT_GAMING_CONVERGENCE_FAILED: "Le paiement a été confirmé, mais la mise à jour de l’encaissement Gaming n’a pas pu être terminée. Réessayez la confirmation pour relancer la synchronisation.",
     SALES_INVOICE_NOT_FOUND: "Cette facture client n’existe pas ou n’est plus disponible dans cette entreprise.",
@@ -186,6 +187,7 @@ export const FINANCE_ERROR_MESSAGES: Record<FinanceLocale, Record<string, string
     PAYMENT_SELF_CONFIRMATION_FORBIDDEN: "Payment confirmation must be performed by a third authorized person, different from the initiator and approver.",
     REFUND_PAYMENT_SELF_CONFIRMATION_FORBIDDEN: "Refund confirmation must be performed by a third authorized person, different from the initiator and approver.",
     PAYMENT_CASH_SESSION_BINDING_REQUIRED: "This recent cash payment is not linked to a cash session. Create it from an open cash session or repair the binding before confirming.",
+    PAYMENT_CASH_SESSION_LEGACY_RECOVERY: "Historical payment: at confirmation time, the system will check for a compatible open cash session and recover the binding only when it can do so unambiguously.",
     PAYMENT_GAMING_SCOPE_INVALID: "This payment no longer matches the customer or currency of its linked Gaming checkout. Reload the data before continuing.",
     PAYMENT_GAMING_CONVERGENCE_FAILED: "The payment was confirmed, but the linked Gaming checkout could not be updated. Retry confirmation to resume synchronization.",
     SALES_INVOICE_NOT_FOUND: "This customer invoice does not exist or is no longer available in this company.",
@@ -255,6 +257,30 @@ export const FINANCE_ERROR_MESSAGES: Record<FinanceLocale, Record<string, string
     FINANCE_DUPLICATE: "An identical record already exists in this company."
   }
 };
+
+const PAYMENT_CONFIRMATION_COPY: Record<FinanceLocale, {
+  readyTitle: string;
+  blockedTitle: string;
+  noticeTitle: string;
+  readyDescription: string;
+}> = {
+  fr: {
+    readyTitle: "Confirmation disponible",
+    blockedTitle: "Confirmation indisponible",
+    noticeTitle: "Vérification avant confirmation",
+    readyDescription: "Vous pouvez confirmer ce paiement. Les contrôles de séparation des rôles et de rattachement caisse seront revérifiés par le serveur au moment de l’action.",
+  },
+  en: {
+    readyTitle: "Confirmation available",
+    blockedTitle: "Confirmation unavailable",
+    noticeTitle: "Check before confirmation",
+    readyDescription: "You can confirm this payment. Role separation and cash-session binding will be checked again by the server when the action is submitted.",
+  },
+};
+
+export function financePaymentConfirmationCopy(locale: FinanceLocale) {
+  return PAYMENT_CONFIRMATION_COPY[locale];
+}
 
 export function financeClientLocale(preferred?: FinanceLocale): FinanceLocale {
   if (preferred) return preferred;
