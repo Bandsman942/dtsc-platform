@@ -1,6 +1,10 @@
--- Hotfix #756: canonical enterprise funding operations.
--- Additive only: no existing finance row is rewritten.
+-- AlterTable
+ALTER TABLE "EnterpriseTreasuryTransaction" ADD COLUMN     "fundingOperationId" TEXT;
 
+-- AlterTable
+ALTER TABLE "EnterpriseCashMovement" ADD COLUMN     "fundingOperationId" TEXT;
+
+-- CreateTable
 CREATE TABLE "EnterpriseFundingOperation" (
     "id" TEXT NOT NULL,
     "organizationId" TEXT NOT NULL,
@@ -26,68 +30,51 @@ CREATE TABLE "EnterpriseFundingOperation" (
     "revision" INTEGER NOT NULL DEFAULT 1,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+
     CONSTRAINT "EnterpriseFundingOperation_pkey" PRIMARY KEY ("id")
 );
 
-ALTER TABLE "EnterpriseTreasuryTransaction" ADD COLUMN "fundingOperationId" TEXT;
-ALTER TABLE "EnterpriseCashMovement" ADD COLUMN "fundingOperationId" TEXT;
+-- CreateIndex
+CREATE INDEX "EnterpriseFundingOperation_organizationId_status_operationD_idx" ON "EnterpriseFundingOperation"("organizationId", "status", "operationDate");
 
-CREATE UNIQUE INDEX "EnterpriseFundingOperation_organizationId_id_key"
-ON "EnterpriseFundingOperation"("organizationId", "id");
+-- CreateIndex
+CREATE INDEX "EnterpriseFundingOperation_organizationId_financialAccountI_idx" ON "EnterpriseFundingOperation"("organizationId", "financialAccountId");
 
-CREATE UNIQUE INDEX "EnterpriseFundingOperation_organizationId_number_key"
-ON "EnterpriseFundingOperation"("organizationId", "number");
+-- CreateIndex
+CREATE INDEX "EnterpriseFundingOperation_organizationId_fundingType_idx" ON "EnterpriseFundingOperation"("organizationId", "fundingType");
 
-CREATE UNIQUE INDEX "EnterpriseFundingOperation_organizationId_idempotencyKey_key"
-ON "EnterpriseFundingOperation"("organizationId", "idempotencyKey");
+-- CreateIndex
+CREATE INDEX "EnterpriseFundingOperation_organizationId_cashSessionId_idx" ON "EnterpriseFundingOperation"("organizationId", "cashSessionId");
 
-CREATE INDEX "EnterpriseFundingOperation_organizationId_status_operationDate_idx"
-ON "EnterpriseFundingOperation"("organizationId", "status", "operationDate");
+-- CreateIndex
+CREATE INDEX "EnterpriseFundingOperation_organizationId_counterpartyLedge_idx" ON "EnterpriseFundingOperation"("organizationId", "counterpartyLedgerAccountId");
 
-CREATE INDEX "EnterpriseFundingOperation_organizationId_financialAccountId_idx"
-ON "EnterpriseFundingOperation"("organizationId", "financialAccountId");
+-- CreateIndex
+CREATE UNIQUE INDEX "EnterpriseFundingOperation_organizationId_id_key" ON "EnterpriseFundingOperation"("organizationId", "id");
 
-CREATE INDEX "EnterpriseFundingOperation_organizationId_fundingType_idx"
-ON "EnterpriseFundingOperation"("organizationId", "fundingType");
+-- CreateIndex
+CREATE UNIQUE INDEX "EnterpriseFundingOperation_organizationId_number_key" ON "EnterpriseFundingOperation"("organizationId", "number");
 
-CREATE INDEX "EnterpriseFundingOperation_organizationId_cashSessionId_idx"
-ON "EnterpriseFundingOperation"("organizationId", "cashSessionId");
+-- CreateIndex
+CREATE UNIQUE INDEX "EnterpriseFundingOperation_organizationId_idempotencyKey_key" ON "EnterpriseFundingOperation"("organizationId", "idempotencyKey");
 
-CREATE INDEX "EnterpriseFundingOperation_organizationId_counterpartyLedgerAccountId_idx"
-ON "EnterpriseFundingOperation"("organizationId", "counterpartyLedgerAccountId");
+-- CreateIndex
+CREATE INDEX "EnterpriseTreasuryTransaction_organizationId_fundingOperati_idx" ON "EnterpriseTreasuryTransaction"("organizationId", "fundingOperationId");
 
-CREATE INDEX "EnterpriseTreasuryTransaction_organizationId_fundingOperationId_idx"
-ON "EnterpriseTreasuryTransaction"("organizationId", "fundingOperationId");
+-- CreateIndex
+CREATE INDEX "EnterpriseCashMovement_organizationId_fundingOperationId_idx" ON "EnterpriseCashMovement"("organizationId", "fundingOperationId");
 
-CREATE INDEX "EnterpriseCashMovement_organizationId_fundingOperationId_idx"
-ON "EnterpriseCashMovement"("organizationId", "fundingOperationId");
+-- AddForeignKey
+ALTER TABLE "EnterpriseTreasuryTransaction" ADD CONSTRAINT "EnterpriseTreasuryTransaction_organizationId_fundingOperat_fkey" FOREIGN KEY ("organizationId", "fundingOperationId") REFERENCES "EnterpriseFundingOperation"("organizationId", "id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
-ALTER TABLE "EnterpriseFundingOperation"
-ADD CONSTRAINT "EnterpriseFundingOperation_financialAccount_fkey"
-FOREIGN KEY ("organizationId", "financialAccountId")
-REFERENCES "EnterpriseFinancialAccount"("organizationId", "id")
-ON DELETE RESTRICT ON UPDATE CASCADE;
+-- AddForeignKey
+ALTER TABLE "EnterpriseFundingOperation" ADD CONSTRAINT "EnterpriseFundingOperation_organizationId_financialAccount_fkey" FOREIGN KEY ("organizationId", "financialAccountId") REFERENCES "EnterpriseFinancialAccount"("organizationId", "id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
-ALTER TABLE "EnterpriseFundingOperation"
-ADD CONSTRAINT "EnterpriseFundingOperation_cashSession_fkey"
-FOREIGN KEY ("organizationId", "cashSessionId")
-REFERENCES "EnterpriseCashSession"("organizationId", "id")
-ON DELETE RESTRICT ON UPDATE CASCADE;
+-- AddForeignKey
+ALTER TABLE "EnterpriseFundingOperation" ADD CONSTRAINT "EnterpriseFundingOperation_organizationId_cashSessionId_fkey" FOREIGN KEY ("organizationId", "cashSessionId") REFERENCES "EnterpriseCashSession"("organizationId", "id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
-ALTER TABLE "EnterpriseFundingOperation"
-ADD CONSTRAINT "EnterpriseFundingOperation_counterpartyLedgerAccount_fkey"
-FOREIGN KEY ("organizationId", "counterpartyLedgerAccountId")
-REFERENCES "EnterpriseLedgerAccount"("organizationId", "id")
-ON DELETE RESTRICT ON UPDATE CASCADE;
+-- AddForeignKey
+ALTER TABLE "EnterpriseFundingOperation" ADD CONSTRAINT "EnterpriseFundingOperation_organizationId_counterpartyLedg_fkey" FOREIGN KEY ("organizationId", "counterpartyLedgerAccountId") REFERENCES "EnterpriseLedgerAccount"("organizationId", "id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
-ALTER TABLE "EnterpriseTreasuryTransaction"
-ADD CONSTRAINT "EnterpriseTreasuryTransaction_fundingOperation_fkey"
-FOREIGN KEY ("organizationId", "fundingOperationId")
-REFERENCES "EnterpriseFundingOperation"("organizationId", "id")
-ON DELETE RESTRICT ON UPDATE CASCADE;
-
-ALTER TABLE "EnterpriseCashMovement"
-ADD CONSTRAINT "EnterpriseCashMovement_fundingOperation_fkey"
-FOREIGN KEY ("organizationId", "fundingOperationId")
-REFERENCES "EnterpriseFundingOperation"("organizationId", "id")
-ON DELETE RESTRICT ON UPDATE CASCADE;
+-- AddForeignKey
+ALTER TABLE "EnterpriseCashMovement" ADD CONSTRAINT "EnterpriseCashMovement_organizationId_fundingOperationId_fkey" FOREIGN KEY ("organizationId", "fundingOperationId") REFERENCES "EnterpriseFundingOperation"("organizationId", "id") ON DELETE RESTRICT ON UPDATE CASCADE;
