@@ -79,6 +79,8 @@ const FINANCE_ERROR_MESSAGES: Record<string, string> = {
   PAYMENT_CASH_SESSION_CLOSED: "La caisse précédemment liée à ce paiement est fermée. Ouvrez une nouvelle caisse compatible sur le même compte puis réessayez.",
   PAYMENT_NOT_APPROVED: "Ce paiement doit être approuvé avant sa confirmation. Rechargez-le et vérifiez son statut.",
   PAYMENT_SELF_CONFIRMATION_FORBIDDEN: "La confirmation doit être effectuée par une troisième personne autorisée, différente de l’initiateur et du validateur du paiement.",
+  REFUND_PAYMENT_SELF_CONFIRMATION_FORBIDDEN: "La confirmation du remboursement doit être effectuée par une troisième personne autorisée, différente de l’initiateur et du validateur.",
+  PAYMENT_CASH_SESSION_BINDING_REQUIRED: "Ce paiement en espèces récent n’est rattaché à aucune caisse. Créez-le depuis une caisse ouverte ou corrigez son rattachement avant de confirmer.",
   PAYMENT_TREASURY_TRANSACTION_MISSING: "La transaction de trésorerie confirmée liée à ce paiement est introuvable. Faites vérifier l’historique financier avant de contrepasser le paiement.",
   PAYMENT_TREASURY_TRANSACTION_INCONSISTENT: "Plusieurs transactions de trésorerie confirmées sont liées à ce paiement. La contrepassation est bloquée pour éviter une correction de solde incorrecte.",
   PAYMENT_CASH_MOVEMENT_INCONSISTENT: "Les mouvements de caisse liés à ce paiement sont incomplets ou ambigus. La contrepassation est bloquée jusqu’à vérification de l’historique.",
