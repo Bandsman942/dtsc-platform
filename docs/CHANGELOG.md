@@ -7,12 +7,14 @@
 - Le chemin humain Administration DTSC reste inchangé et continue d’exiger `SECURITY_READ`.
 - Le workflow SCALE-7 ne dépend plus de `SCALE7_CTO_SESSION_COOKIE` ni du fallback `SCALE1_CTO_SESSION_COOKIE`, qui peuvent expirer avant une certification.
 - Les snapshots initiaux et live utilisent un bearer OIDC court avec `Origin` exact ; pendant les profils longs, le token est renouvelé avant expiration.
+- Le middleware DTSC délègue uniquement ce GET observabilité au handler lorsque bearer + Origin same-origin sont présents ; toute autre route `/api/admin/*` conserve l’exigence de session DTSC interne.
 - Aucun token OIDC, cookie, tenant ou secret n’est ajouté aux artefacts de certification.
 
 ### Preuve ayant motivé le correctif
 
 - Run Production `36701057542` : provisioning OIDC **SUCCESS**, pool **2 tenants / 50 identités**, progression 500-ramp autorisée.
 - Le même run s’est arrêté avant k6 sur un `401` du snapshot CTO hérité ; #720 supprime ce dernier prérequis humain.
+- Run post-merge `36894170660` sur `main@43aaaed299a2452284b5bd9c90154d209cf89548` : le bearer OIDC était bien minté mais le middleware interceptait encore `/api/admin/*` avant le handler ; le correctif résiduel délègue uniquement la route observabilité exacte.
 
 ### Données et sécurité
 
