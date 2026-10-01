@@ -16,6 +16,7 @@ export async function reverseCustomerPaymentAllocationsForRefund(
   receivableId: string,
   actorUserId: string,
   reason: string,
+  refundPaymentId?: string | null,
 ) {
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseReceivable" WHERE id = ${receivableId} AND "organizationId" = ${organizationId} FOR UPDATE`);
@@ -28,6 +29,7 @@ export async function reverseCustomerPaymentAllocationsForRefund(
 
     let reversedAmount = money(0);
     const paymentIds: string[] = [];
+    const paymentAmounts = new Map<string, Prisma.Decimal>();
     for (const allocation of receivable.paymentAllocations) {
       if (allocation.payment.direction !== "INBOUND" || allocation.payment.paymentType !== "CUSTOMER_PAYMENT") {
         throw new EnterpriseAccountingError("REFUND_ALLOCATION_NOT_CUSTOMER_PAYMENT", 409);
@@ -62,6 +64,10 @@ export async function reverseCustomerPaymentAllocationsForRefund(
       }
       reversedAmount = money(reversedAmount.plus(allocation.amount));
       paymentIds.push(allocation.paymentId);
+      paymentAmounts.set(
+        allocation.paymentId,
+        money((paymentAmounts.get(allocation.paymentId) || money(0)).plus(allocation.amount)),
+      );
       await tx.enterprisePaymentEvent.create({
         data: {
           organizationId,
@@ -73,6 +79,7 @@ export async function reverseCustomerPaymentAllocationsForRefund(
             allocationId: allocation.id,
             receivableId,
             amount: allocation.amount.toFixed(),
+            refundPaymentId: refundPaymentId || null,
             reason: reason.slice(0, 500),
           },
         },
@@ -95,6 +102,34 @@ export async function reverseCustomerPaymentAllocationsForRefund(
         revision: { increment: 1 },
       },
     });
+    if (refundPaymentId) {
+      const refundPayment = await tx.enterprisePayment.findFirst({
+        where: { id: refundPaymentId, organizationId, paymentType: "REFUND", direction: "OUTBOUND" },
+        select: { id: true },
+      });
+      if (!refundPayment) throw new EnterpriseAccountingError("REFUND_PAYMENT_INVALID", 409);
+      const existingReservation = await tx.enterprisePaymentEvent.findFirst({
+        where: { organizationId, paymentId: refundPayment.id, eventType: "REFUND_ALLOCATIONS_REVERSED" },
+        select: { id: true },
+      });
+      if (!existingReservation) {
+        await tx.enterprisePaymentEvent.create({
+          data: {
+            organizationId,
+            paymentId: refundPayment.id,
+            eventType: "REFUND_ALLOCATIONS_REVERSED",
+            summary: "Customer allocations reserved for refund",
+            actorUserId,
+            metadataJson: {
+              receivableId,
+              amount: reversedAmount.toFixed(),
+              paymentAmounts: [...paymentAmounts.entries()].map(([paymentId, value]) => ({ paymentId, amount: value.toFixed() })),
+              reason: reason.slice(0, 500),
+            },
+          },
+        });
+      }
+    }
     await publishFinanceEvent(tx, {
       organizationId,
       entityType: "EnterpriseReceivable",
@@ -102,7 +137,7 @@ export async function reverseCustomerPaymentAllocationsForRefund(
       eventType: "CUSTOMER_PAYMENT_ALLOCATIONS_REVERSED_FOR_REFUND",
       summary: `Customer payment allocations reversed for ${receivable.salesInvoice.number}`,
       actorUserId,
-      metadataJson: { amount: reversedAmount.toFixed(), paymentIds, reason: reason.slice(0, 500) },
+      metadataJson: { amount: reversedAmount.toFixed(), paymentIds, refundPaymentId: refundPaymentId || null, reason: reason.slice(0, 500) },
     });
     return { reversedAmount, paymentIds, idempotent: false };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
@@ -170,6 +205,7 @@ export async function reverseCustomerPaymentAllocationsForRefundAmount(
 
     let remaining = amount;
     const paymentIds: string[] = [];
+    const paymentAmounts = new Map<string, Prisma.Decimal>();
     for (const allocation of eligible) {
       if (remaining.isZero()) break;
       await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterprisePayment" WHERE id = ${allocation.paymentId} AND "organizationId" = ${organizationId} FOR UPDATE`);
@@ -244,6 +280,10 @@ export async function reverseCustomerPaymentAllocationsForRefundAmount(
         },
       });
       if (!paymentIds.includes(allocation.paymentId)) paymentIds.push(allocation.paymentId);
+      paymentAmounts.set(
+        allocation.paymentId,
+        money((paymentAmounts.get(allocation.paymentId) || money(0)).plus(reversalAmount)),
+      );
       remaining = money(remaining.minus(reversalAmount));
     }
 
@@ -272,7 +312,13 @@ export async function reverseCustomerPaymentAllocationsForRefundAmount(
         eventType: "REFUND_ALLOCATIONS_REVERSED",
         summary: "Customer allocations reversed for bounded refund",
         actorUserId,
-        metadataJson: { receivableId, amount: amount.toFixed(), paymentIds, reason: reason.slice(0, 500) },
+        metadataJson: {
+          receivableId,
+          amount: amount.toFixed(),
+          paymentIds,
+          paymentAmounts: [...paymentAmounts.entries()].map(([paymentId, value]) => ({ paymentId, amount: value.toFixed() })),
+          reason: reason.slice(0, 500),
+        },
       },
     });
     await publishFinanceEvent(tx, {
@@ -285,6 +331,107 @@ export async function reverseCustomerPaymentAllocationsForRefundAmount(
       metadataJson: { amount: amount.toFixed(), paymentIds, refundPaymentId, reason: reason.slice(0, 500) },
     });
     return { reversedAmount: amount, paymentIds, idempotent: false };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
+}
+
+export async function consumeCustomerPaymentRefundAvailability(
+  organizationId: string,
+  refundPaymentId: string,
+  actorUserId: string,
+) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterprisePayment" WHERE id = ${refundPaymentId} AND "organizationId" = ${organizationId} FOR UPDATE`);
+    const refundPayment = await tx.enterprisePayment.findFirst({
+      where: {
+        id: refundPaymentId,
+        organizationId,
+        paymentType: "REFUND",
+        direction: "OUTBOUND",
+        status: { in: ["CONFIRMED", "RECONCILED"] },
+      },
+    });
+    if (!refundPayment) throw new EnterpriseAccountingError("REFUND_PAYMENT_NOT_CONFIRMED", 409);
+
+    const alreadyConsumed = await tx.enterprisePaymentEvent.findFirst({
+      where: { organizationId, paymentId: refundPayment.id, eventType: "REFUND_SOURCE_AVAILABILITY_CONSUMED" },
+      select: { id: true },
+    });
+    if (alreadyConsumed) return { idempotent: true };
+
+    const reservation = await tx.enterprisePaymentEvent.findFirst({
+      where: { organizationId, paymentId: refundPayment.id, eventType: "REFUND_ALLOCATIONS_REVERSED" },
+      orderBy: { createdAt: "desc" },
+      select: { metadataJson: true },
+    });
+    const metadata = reservation?.metadataJson;
+    const paymentAmounts = metadata && typeof metadata === "object" && !Array.isArray(metadata)
+      ? (metadata as Prisma.JsonObject).paymentAmounts
+      : null;
+    if (!Array.isArray(paymentAmounts) || paymentAmounts.length === 0) {
+      throw new EnterpriseAccountingError("REFUND_SOURCE_RESERVATION_MISSING", 409);
+    }
+
+    const normalized = paymentAmounts.map((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) throw new EnterpriseAccountingError("REFUND_SOURCE_RESERVATION_INVALID", 409);
+      const value = item as Prisma.JsonObject;
+      const paymentId = typeof value.paymentId === "string" ? value.paymentId : "";
+      const amountValue = typeof value.amount === "string" || typeof value.amount === "number" ? value.amount : null;
+      if (!paymentId || amountValue === null) throw new EnterpriseAccountingError("REFUND_SOURCE_RESERVATION_INVALID", 409);
+      const amount = money(amountValue);
+      if (!amount.isPositive()) throw new EnterpriseAccountingError("REFUND_SOURCE_RESERVATION_INVALID", 409);
+      return { paymentId, amount };
+    });
+
+    for (const item of normalized) {
+      await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterprisePayment" WHERE id = ${item.paymentId} AND "organizationId" = ${organizationId} FOR UPDATE`);
+      const sourcePayment = await tx.enterprisePayment.findFirst({
+        where: {
+          id: item.paymentId,
+          organizationId,
+          direction: "INBOUND",
+          paymentType: "CUSTOMER_PAYMENT",
+          status: { in: ["CONFIRMED", "RECONCILED"] },
+        },
+      });
+      if (!sourcePayment || sourcePayment.unallocatedAmount.lessThan(item.amount)) {
+        throw new EnterpriseAccountingError("REFUND_SOURCE_AVAILABILITY_CONFLICT", 409, {
+          paymentId: item.paymentId,
+          requiredAmount: item.amount.toFixed(),
+          unallocatedAmount: sourcePayment?.unallocatedAmount.toFixed() || "0",
+        });
+      }
+      await tx.enterprisePayment.update({
+        where: { id: sourcePayment.id },
+        data: {
+          unallocatedAmount: money(sourcePayment.unallocatedAmount.minus(item.amount)),
+          revision: { increment: 1 },
+        },
+      });
+      await tx.enterprisePaymentEvent.create({
+        data: {
+          organizationId,
+          paymentId: sourcePayment.id,
+          eventType: "REFUND_AVAILABILITY_CONSUMED",
+          summary: "Reversed allocation availability consumed by confirmed refund",
+          actorUserId,
+          metadataJson: { refundPaymentId: refundPayment.id, amount: item.amount.toFixed() },
+        },
+      });
+    }
+
+    await tx.enterprisePaymentEvent.create({
+      data: {
+        organizationId,
+        paymentId: refundPayment.id,
+        eventType: "REFUND_SOURCE_AVAILABILITY_CONSUMED",
+        summary: "Customer payment availability consumed by refund",
+        actorUserId,
+        metadataJson: {
+          paymentAmounts: normalized.map((item) => ({ paymentId: item.paymentId, amount: item.amount.toFixed() })),
+        },
+      },
+    });
+    return { idempotent: false };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
 }
 
