@@ -133,7 +133,7 @@ function permissionsAllowAction(definition: EnterpriseModuleDefinition, permissi
 }
 
 async function getEnterpriseAccessSnapshot(userId: string, organizationId: string): Promise<EnterpriseAccessSnapshot | null> {
-  const [membership, tenantModules, entitlements, subtypeSelection] = await Promise.all([
+  const [membership, entitlements] = await Promise.all([
     prisma.organizationMember.findFirst({
       where: { userId, organizationId, status: "ACTIVE", removedAt: null },
       select: {
@@ -148,15 +148,7 @@ async function getEnterpriseAccessSnapshot(userId: string, organizationId: strin
         organization: { select: { id: true, status: true, deletedAt: true, organizationType: true, sectorCode: true, settingsJson: true } },
       },
     }),
-    prisma.enterpriseModule.findMany({
-      where: { organizationId },
-      select: { id: true, moduleCode: true, isEnabled: true },
-    }),
     getOrganizationEntitlements(organizationId),
-    prisma.enterpriseBusinessSubtypeSelection.findUnique({
-      where: { organizationId },
-      select: { sectorCode: true, businessSubtypeCode: true },
-    }),
   ]);
 
   if (!membership || membership.organization.deletedAt || membership.organization.status !== "ACTIVE" || membership.organization.organizationType !== "CLIENT") {
@@ -179,7 +171,7 @@ async function getEnterpriseAccessSnapshot(userId: string, organizationId: strin
 
   const tenantModuleByCanonicalCode = new Map<string, { id: string; moduleCode: string; isEnabled: boolean }>();
   const enabledCanonicalCodes = new Set<string>();
-  for (const tenantModule of tenantModules) {
+  for (const tenantModule of entitlements?.modules || []) {
     const canonicalCode = normalizeEnterpriseModuleCode(tenantModule.moduleCode);
     const current = tenantModuleByCanonicalCode.get(canonicalCode);
     if (!current || tenantModule.moduleCode === canonicalCode) tenantModuleByCanonicalCode.set(canonicalCode, tenantModule);
@@ -197,8 +189,8 @@ async function getEnterpriseAccessSnapshot(userId: string, organizationId: strin
 
   const inheritedRolePermissions = membership.organizationRoleAssignments.flatMap((assignment) => permissionList(assignment.role.permissionsJson));
   const permissions = Array.from(new Set([...permissionList(position?.permissionsJson), ...inheritedRolePermissions]));
-  const businessSubtypeCode = subtypeSelection?.sectorCode === membership.organization.sectorCode
-    ? subtypeSelection.businessSubtypeCode
+  const businessSubtypeCode = entitlements?.sectorCode === membership.organization.sectorCode
+    ? entitlements.businessSubtypeCode
     : null;
 
   return {
