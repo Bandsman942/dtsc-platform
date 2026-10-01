@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 
 const updateSchema = z.object({
   code: z.string().trim().min(2).max(30),
+  label: z.string().trim().min(2).max(160).nullish(),
   startDate: z.coerce.date(),
   endDate: z.coerce.date(),
   revision: z.coerce.number().int().positive(),
@@ -41,7 +42,7 @@ export async function PATCH(req: Request, { params }: Params) {
       const overlap = await tx.enterpriseFiscalYear.findFirst({ where: { organizationId, id: { not: year.id }, startDate: { lte: parsed.data.endDate }, endDate: { gte: parsed.data.startDate } } });
       if (overlap) throw new Error("OVERLAP");
       if (year.periods.some((period) => period.startDate < parsed.data.startDate || period.endDate > parsed.data.endDate)) throw new Error("PERIOD_OUTSIDE");
-      return tx.enterpriseFiscalYear.update({ where: { id: year.id }, data: { code: parsed.data.code, startDate: parsed.data.startDate, endDate: parsed.data.endDate, revision: { increment: 1 } } });
+      return tx.enterpriseFiscalYear.update({ where: { id: year.id }, data: { code: parsed.data.code, label: parsed.data.label || null, startDate: parsed.data.startDate, endDate: parsed.data.endDate, revision: { increment: 1 } } });
     });
     await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_FISCAL_YEAR_UPDATED", entity: "EnterpriseFiscalYear", entityId: item.id, request: req, metadata: { organizationId, code: item.code } });
     await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, fiscalYearId, domain: "fiscal-year-detail" } });
