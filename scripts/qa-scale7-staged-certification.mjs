@@ -155,7 +155,11 @@ expect(
   "DTSC internal API protection must remain the general authority",
 );
 expect(
-  middleware.indexOf("if (isScale7OidcObservabilityRequest(request))") < middleware.indexOf('if (!session) {'),
+  middleware.includes(`if (isPathMatch(pathname, dtscInternalApiRoutes)) {
+      if (isScale7OidcObservabilityRequest(request)) {
+        return NextResponse.next();
+      }
+      if (!session) {`),
   "the exact SCALE-7 observability delegation must occur before the normal DTSC session requirement",
 );
 expect(
