@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import type { z } from "zod";
 import type { cashCreateSchema } from "@/lib/pharmacy-cash-validators";
 import { prisma } from "@/lib/prisma";
