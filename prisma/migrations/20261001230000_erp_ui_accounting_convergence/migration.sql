@@ -18,7 +18,7 @@ ALTER TABLE "EnterpriseAccountMapping" ALTER COLUMN "chartId" SET NOT NULL;
 
 DROP INDEX "EnterpriseAccountMapping_organizationId_mappingKey_effectiv_key";
 
-CREATE UNIQUE INDEX "EnterpriseAccountMapping_organizationId_chartId_mappingKey_effe_key"
+CREATE UNIQUE INDEX "EnterpriseAccountMapping_organizationId_chartId_mappingKey__key"
 ON "EnterpriseAccountMapping"("organizationId", "chartId", "mappingKey", "effectiveFrom");
 
 CREATE INDEX "EnterpriseAccountMapping_organizationId_chartId_isActive_idx"
