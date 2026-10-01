@@ -1,6 +1,13 @@
 import { Prisma } from "@prisma/client";
 import { financeReference, money, publishFinanceEvent, sumDecimals } from "@/lib/enterprise/accounting/helpers";
-import { createEnterprisePayment } from "@/lib/enterprise/accounting/payments-service";
+import { createEnterprisePayment, transitionEnterprisePayment } from "@/lib/enterprise/accounting/payments-service";
+import {
+  confirmCustomerRefundPayment,
+  prepareSalesCreditNoteForRefundAmount,
+  reverseCustomerPaymentAllocationsForRefundAmount,
+} from "@/lib/enterprise/accounting/customer-refund-service";
+import { approveAndPostSalesCreditNote } from "@/lib/enterprise/accounting/receivables-service";
+import { postApprovedSalesCreditNote } from "@/lib/enterprise/accounting/accounting-document-approval-orchestration";
 import { prisma } from "@/lib/prisma";
 import { EnterpriseSectorConvergenceError } from "@/lib/enterprise/sector-convergence/errors";
 import { isSectorConvergenceEnabled, SECTOR_CONVERGENCE_FLAGS } from "@/lib/enterprise/sector-convergence/flags";
@@ -239,4 +246,405 @@ export async function convergePharmacyCashSession(
     return { extension, cashSession };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   return { ...result, idempotent: false };
+}
+
+
+async function markPharmacyRefundUnmapped(
+  organizationId: string,
+  syncStateId: string,
+  code: string,
+  details?: Record<string, unknown>,
+): Promise<never> {
+  await failSectorSync({
+    organizationId,
+    syncStateId,
+    status: "LEGACY_UNMAPPED",
+    errorCode: code,
+    errorMessage: details ? JSON.stringify(details).slice(0, 1000) : undefined,
+    requiresManualAction: true,
+  });
+  throw new EnterpriseSectorConvergenceError(code, 409, details);
+}
+
+async function resolvePharmacyRefundSourcePayment(
+  organizationId: string,
+  source: { saleId: string; paymentId: string | null },
+  syncStateId: string,
+) {
+  if (source.paymentId) {
+    const payment = await prisma.pharmacyPayment.findFirst({
+      where: { id: source.paymentId, organizationId, saleId: source.saleId, status: { in: ["PAID", "VALIDATED"] } },
+    });
+    if (!payment) return markPharmacyRefundUnmapped(organizationId, syncStateId, "PHARMACY_REFUND_SOURCE_PAYMENT_NOT_FOUND");
+    return payment;
+  }
+
+  const candidates = await prisma.pharmacyPayment.findMany({
+    where: { organizationId, saleId: source.saleId, status: { in: ["PAID", "VALIDATED"] } },
+    orderBy: [{ paymentDate: "desc" }, { id: "desc" }],
+    take: 2,
+  });
+  if (candidates.length !== 1) {
+    return markPharmacyRefundUnmapped(
+      organizationId,
+      syncStateId,
+      candidates.length ? "PHARMACY_REFUND_SOURCE_PAYMENT_AMBIGUOUS" : "PHARMACY_REFUND_SOURCE_PAYMENT_REQUIRED",
+      { candidateCount: candidates.length },
+    );
+  }
+  return candidates[0];
+}
+
+export async function convergePharmacyRefund(
+  organizationId: string,
+  pharmacyRefundId: string,
+  validatorUserId: string,
+  options: { bypassFeatureFlag?: boolean } = {},
+) {
+  if (!options.bypassFeatureFlag) await requirePharmacyFinanceFlag(organizationId);
+  const source = await prisma.pharmacyRefund.findFirst({ where: { id: pharmacyRefundId, organizationId } });
+  if (!source) throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_NOT_FOUND", 404);
+
+  const sync = await prisma.$transaction((tx) => beginSectorSync(
+    tx,
+    {
+      organizationId,
+      sector: "PHARMACY",
+      sourceEntityType: "PharmacyRefund",
+      sourceEntityId: source.id,
+      eventType: "PHARMACY_REFUND_FINANCE_CONVERGENCE",
+    },
+    { refundNumber: source.refundNumber, saleId: source.saleId, amount: source.amount.toFixed(), currency: source.currency },
+  ));
+
+  try {
+    const existing = await prisma.pharmacyRefundExtension.findFirst({
+      where: { organizationId, pharmacyRefundId: source.id },
+    });
+    if (existing) {
+      const [payment, creditNote] = await Promise.all([
+        prisma.enterprisePayment.findFirst({ where: { id: existing.paymentId, organizationId } }),
+        existing.salesCreditNoteId
+          ? prisma.enterpriseSalesCreditNote.findFirst({ where: { id: existing.salesCreditNoteId, organizationId } })
+          : null,
+      ]);
+      if (!payment) throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_PAYMENT_MAPPING_BROKEN", 409);
+      return { extension: existing, payment, creditNote, idempotent: true };
+    }
+
+    if (!["SUBMITTED", "VALIDATED"].includes(source.status)) {
+      if (source.status === "PAID") {
+        return markPharmacyRefundUnmapped(
+          organizationId,
+          sync.id,
+          "PHARMACY_REFUND_LEGACY_PAID_UNMAPPED",
+          { refundId: source.id, refundNumber: source.refundNumber },
+        );
+      }
+      throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_NOT_CONVERGIBLE", 409, { status: source.status });
+    }
+    if (source.requestedById === validatorUserId) {
+      throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_SELF_VALIDATION_FORBIDDEN", 409);
+    }
+
+    const saleMapping = await prisma.pharmacySalesExtension.findFirst({
+      where: { organizationId, pharmacySaleId: source.saleId },
+    });
+    if (!saleMapping) {
+      return markPharmacyRefundUnmapped(organizationId, sync.id, "PHARMACY_REFUND_SALE_MAPPING_REQUIRED");
+    }
+    const commonInvoice = await prisma.enterpriseSalesInvoice.findFirst({
+      where: { id: saleMapping.salesInvoiceId, organizationId },
+      include: { receivable: true },
+    });
+    if (!commonInvoice?.receivable) {
+      return markPharmacyRefundUnmapped(organizationId, sync.id, "PHARMACY_REFUND_COMMON_RECEIVABLE_REQUIRED");
+    }
+    if (commonInvoice.currencyCode !== source.currency) {
+      return markPharmacyRefundUnmapped(organizationId, sync.id, "PHARMACY_REFUND_CURRENCY_MISMATCH");
+    }
+
+    const pharmacyPayment = await resolvePharmacyRefundSourcePayment(organizationId, source, sync.id);
+    const sourcePaymentMapping = await prisma.pharmacyPaymentExtension.findFirst({
+      where: { organizationId, pharmacyPaymentId: pharmacyPayment.id },
+    });
+    if (!sourcePaymentMapping) {
+      return markPharmacyRefundUnmapped(organizationId, sync.id, "PHARMACY_REFUND_PAYMENT_MAPPING_REQUIRED");
+    }
+    const originalPayment = await prisma.enterprisePayment.findFirst({
+      where: {
+        id: sourcePaymentMapping.paymentId,
+        organizationId,
+        direction: "INBOUND",
+        paymentType: "CUSTOMER_PAYMENT",
+        status: { in: ["CONFIRMED", "RECONCILED"] },
+      },
+    });
+    if (!originalPayment?.financialAccountId) {
+      return markPharmacyRefundUnmapped(organizationId, sync.id, "PHARMACY_REFUND_COMMON_PAYMENT_INVALID");
+    }
+    if (originalPayment.currencyCode !== source.currency || originalPayment.businessPartyId !== saleMapping.businessPartyId) {
+      return markPharmacyRefundUnmapped(organizationId, sync.id, "PHARMACY_REFUND_COMMON_PAYMENT_SCOPE_MISMATCH");
+    }
+
+    let commonCashSessionId: string | null = null;
+    if (originalPayment.methodType === "CASH") {
+      const pharmacyCashSessionId = source.cashSessionId || pharmacyPayment.cashSessionId;
+      if (!pharmacyCashSessionId) {
+        return markPharmacyRefundUnmapped(organizationId, sync.id, "PHARMACY_REFUND_CASH_SESSION_REQUIRED");
+      }
+      const cashMapping = await prisma.pharmacyCashExtension.findFirst({
+        where: { organizationId, pharmacyCashSessionId },
+      });
+      if (!cashMapping) {
+        return markPharmacyRefundUnmapped(organizationId, sync.id, "PHARMACY_REFUND_CASH_MAPPING_REQUIRED");
+      }
+      const commonCash = await prisma.enterpriseCashSession.findFirst({
+        where: {
+          id: cashMapping.cashSessionId,
+          organizationId,
+          financialAccountId: originalPayment.financialAccountId,
+          cashierUserId: source.requestedById,
+          status: "OPEN",
+        },
+      });
+      if (!commonCash) {
+        throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_COMMON_CASH_SESSION_NOT_OPEN", 409);
+      }
+      commonCashSessionId = commonCash.id;
+    }
+
+    const paymentKey = sectorIdempotencyKey({
+      organizationId,
+      sector: "PHARMACY",
+      sourceEntityType: "PharmacyRefund",
+      sourceEntityId: source.id,
+      eventType: "PHARMACY_REFUND_PAYMENT",
+    });
+    let refundPayment = await prisma.enterprisePayment.findFirst({ where: { organizationId, idempotencyKey: paymentKey } });
+    if (!refundPayment) {
+      refundPayment = await createEnterprisePayment(organizationId, source.requestedById, {
+        direction: "OUTBOUND",
+        paymentType: "REFUND",
+        methodType: originalPayment.methodType as "CASH" | "BANK_TRANSFER" | "MOBILE_MONEY" | "CARD" | "CHEQUE" | "OTHER",
+        financialAccountId: originalPayment.financialAccountId,
+        cashSessionId: commonCashSessionId,
+        businessPartyId: saleMapping.businessPartyId,
+        currencyCode: source.currency as "USD" | "CDF" | "EUR",
+        amount: source.amount.toFixed(),
+        paymentDate: source.createdAt,
+        reference: source.refundNumber,
+        idempotencyKey: paymentKey,
+      });
+    }
+    if (refundPayment.status === "DRAFT") {
+      refundPayment = await transitionEnterprisePayment(
+        organizationId,
+        refundPayment.id,
+        source.requestedById,
+        { action: "SUBMIT", revision: refundPayment.revision, reason: source.reason },
+      );
+    }
+    if (refundPayment.status === "PENDING_APPROVAL") {
+      refundPayment = await transitionEnterprisePayment(
+        organizationId,
+        refundPayment.id,
+        validatorUserId,
+        { action: "APPROVE", revision: refundPayment.revision, reason: source.reason },
+      );
+    }
+    if (!["APPROVED", "CONFIRMED", "RECONCILED"].includes(refundPayment.status)) {
+      throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_COMMON_PAYMENT_NOT_APPROVED", 409, { status: refundPayment.status });
+    }
+
+    const creditReason = `Pharmacy refund ${source.refundNumber}: ${source.reason}`.slice(0, 1000);
+    const creditNote = await prepareSalesCreditNoteForRefundAmount(
+      organizationId,
+      commonInvoice.id,
+      validatorUserId,
+      creditReason,
+      source.amount,
+    );
+
+    const result = await prisma.$transaction(async (tx) => {
+      const mapped = await tx.pharmacyRefundExtension.findFirst({
+        where: { organizationId, pharmacyRefundId: source.id },
+      });
+      if (mapped) return mapped;
+      const extension = await tx.pharmacyRefundExtension.create({
+        data: {
+          organizationId,
+          pharmacyRefundId: source.id,
+          pharmacySaleId: source.saleId,
+          paymentId: refundPayment!.id,
+          salesCreditNoteId: creditNote.id,
+          cutoverAt: new Date(),
+        },
+      });
+      const entityLink = await tx.enterpriseEntityLink.findFirst({
+        where: {
+          organizationId,
+          sourceModule: "PHARMACY_CASH",
+          sourceEntityType: "PharmacyRefund",
+          sourceEntityId: source.id,
+          targetModule: "FINANCE_PAYMENTS",
+          targetEntityType: "EnterprisePayment",
+          targetEntityId: refundPayment!.id,
+          linkType: "SECTOR_CONVERGENCE",
+        },
+      });
+      if (!entityLink) {
+        await tx.enterpriseEntityLink.create({
+          data: {
+            organizationId,
+            sourceModule: "PHARMACY_CASH",
+            sourceEntityType: "PharmacyRefund",
+            sourceEntityId: source.id,
+            targetModule: "FINANCE_PAYMENTS",
+            targetEntityType: "EnterprisePayment",
+            targetEntityId: refundPayment!.id,
+            linkType: "SECTOR_CONVERGENCE",
+            createdById: validatorUserId,
+          },
+        });
+      }
+      await completeSectorSync(tx, sync.id, {
+        targetEntityType: "EnterprisePayment",
+        targetEntityId: refundPayment!.id,
+        metadataJson: { salesCreditNoteId: creditNote.id, sourcePaymentId: originalPayment.id },
+      });
+      return extension;
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+    return { extension: result, payment: refundPayment, creditNote, idempotent: false };
+  } catch (error) {
+    const state = await prisma.enterpriseSectorSyncState.findFirst({
+      where: { id: sync.id, organizationId },
+      select: { status: true },
+    });
+    if (state && !["LEGACY_UNMAPPED", "AMBIGUOUS"].includes(state.status)) {
+      await failSectorSync({
+        organizationId,
+        syncStateId: sync.id,
+        errorCode: error instanceof EnterpriseSectorConvergenceError ? error.code : "PHARMACY_REFUND_CONVERGENCE_FAILED",
+        errorMessage: error instanceof Error ? error.message : "Unknown Pharmacy refund convergence error",
+      });
+    }
+    throw error;
+  }
+}
+
+export async function settlePharmacyRefund(
+  organizationId: string,
+  pharmacyRefundId: string,
+  actorUserId: string,
+) {
+  const source = await prisma.pharmacyRefund.findFirst({ where: { id: pharmacyRefundId, organizationId } });
+  if (!source) throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_NOT_FOUND", 404);
+  const extension = await prisma.pharmacyRefundExtension.findFirst({
+    where: { organizationId, pharmacyRefundId: source.id },
+  });
+  if (!extension) throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_FINANCE_MAPPING_REQUIRED", 409);
+  const refundPayment = await prisma.enterprisePayment.findFirst({
+    where: { id: extension.paymentId, organizationId },
+  });
+  if (!refundPayment) throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_PAYMENT_MAPPING_BROKEN", 409);
+  if (source.status === "PAID") {
+    if (!["CONFIRMED", "RECONCILED"].includes(refundPayment.status)) {
+      throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_PAID_WITHOUT_COMMON_SETTLEMENT", 409);
+    }
+    return { refund: source, payment: refundPayment, idempotent: true };
+  }
+  if (source.status !== "VALIDATED") {
+    throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_NOT_VALIDATED", 409, { status: source.status });
+  }
+  if (source.requestedById === actorUserId || source.validatedById === actorUserId) {
+    throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_SELF_SETTLEMENT_FORBIDDEN", 409);
+  }
+
+  const saleMapping = await prisma.pharmacySalesExtension.findFirst({
+    where: { organizationId, pharmacySaleId: source.saleId },
+  });
+  if (!saleMapping) throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_SALE_MAPPING_REQUIRED", 409);
+  const commonInvoice = await prisma.enterpriseSalesInvoice.findFirst({
+    where: { id: saleMapping.salesInvoiceId, organizationId },
+    include: { receivable: true },
+  });
+  if (!commonInvoice?.receivable) throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_COMMON_RECEIVABLE_REQUIRED", 409);
+
+  const pharmacyPayment = source.paymentId
+    ? await prisma.pharmacyPayment.findFirst({ where: { id: source.paymentId, organizationId, saleId: source.saleId } })
+    : null;
+  const sourcePaymentMapping = pharmacyPayment
+    ? await prisma.pharmacyPaymentExtension.findFirst({ where: { organizationId, pharmacyPaymentId: pharmacyPayment.id } })
+    : null;
+
+  if (refundPayment.status === "APPROVED") {
+    await reverseCustomerPaymentAllocationsForRefundAmount(
+      organizationId,
+      commonInvoice.receivable.id,
+      refundPayment.id,
+      actorUserId,
+      source.reason,
+      source.amount,
+      sourcePaymentMapping?.paymentId || null,
+    );
+  } else if (!["CONFIRMED", "RECONCILED"].includes(refundPayment.status)) {
+    throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_COMMON_PAYMENT_NOT_APPROVED", 409, { status: refundPayment.status });
+  }
+
+  if (extension.salesCreditNoteId) {
+    let credit = await prisma.enterpriseSalesCreditNote.findFirst({
+      where: { id: extension.salesCreditNoteId, organizationId },
+    });
+    if (!credit) throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_CREDIT_NOTE_MAPPING_BROKEN", 409);
+    if (credit.status === "DRAFT") {
+      credit = await approveAndPostSalesCreditNote(organizationId, credit.id, actorUserId, credit.revision);
+    } else if (credit.status === "APPROVED") {
+      credit = await postApprovedSalesCreditNote(organizationId, credit.id, actorUserId, credit.revision);
+    }
+    if (credit.status !== "POSTED") {
+      throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_CREDIT_NOTE_NOT_POSTED", 409, { status: credit.status });
+    }
+  }
+
+  let confirmedPayment = await prisma.enterprisePayment.findFirst({ where: { id: refundPayment.id, organizationId } });
+  if (!confirmedPayment) throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_PAYMENT_MAPPING_BROKEN", 409);
+  if (confirmedPayment.status === "APPROVED") {
+    confirmedPayment = await confirmCustomerRefundPayment(
+      organizationId,
+      confirmedPayment.id,
+      actorUserId,
+      { revision: confirmedPayment.revision, reason: source.reason },
+    );
+  }
+  if (!["CONFIRMED", "RECONCILED"].includes(confirmedPayment.status)) {
+    throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_COMMON_PAYMENT_NOT_CONFIRMED", 409, { status: confirmedPayment.status });
+  }
+
+  const refund = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(Prisma.sql`SELECT id FROM "PharmacyRefund" WHERE id = ${source.id} AND "organizationId" = ${organizationId} FOR UPDATE`);
+    const current = await tx.pharmacyRefund.findFirst({ where: { id: source.id, organizationId } });
+    if (!current) throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_NOT_FOUND", 404);
+    if (current.status === "PAID") return current;
+    if (current.status !== "VALIDATED") throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_NOT_VALIDATED", 409);
+
+    const sale = await tx.pharmacySale.findFirst({ where: { id: current.saleId, organizationId } });
+    if (!sale) throw new EnterpriseSectorConvergenceError("PHARMACY_SALE_NOT_FOUND", 404);
+    const refundedAmount = money((sale.refundedAmount || new Prisma.Decimal(0)).plus(current.amount));
+    await tx.pharmacySale.update({
+      where: { id: sale.id },
+      data: {
+        refundedAmount,
+        status: refundedAmount.greaterThanOrEqualTo(sale.paidAmount) ? "REFUNDED" : sale.status,
+        updatedById: actorUserId,
+      },
+    });
+    return tx.pharmacyRefund.update({
+      where: { id: current.id },
+      data: { status: "PAID", paidAt: new Date() },
+    });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+  return { refund, payment: confirmedPayment, idempotent: false };
 }
