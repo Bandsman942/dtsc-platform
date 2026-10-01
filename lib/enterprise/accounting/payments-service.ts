@@ -8,7 +8,7 @@ import { reverseJournalEntryTx } from "@/lib/enterprise/accounting/reversal-serv
 import type { paymentCreateSchema } from "@/lib/enterprise/accounting/schemas";
 import type { z } from "zod";
 
-type PaymentInput = z.infer<typeof paymentCreateSchema>;
+type PaymentInput = z.infer<typeof paymentCreateSchema> & { cashSessionId?: string | null };
 
 function paymentPostingEvent(paymentType: string) {
   if (paymentType === "CUSTOMER_PAYMENT") return "CUSTOMER_PAYMENT_CONFIRMED" as const;
@@ -60,7 +60,7 @@ export function paymentCashSessionConfirmationNotice(payment: CashSessionConfirm
   return null;
 }
 
-async function resolveCashSessionForConfirmation(
+export async function resolveCashSessionForConfirmation(
   tx: Prisma.TransactionClient,
   payment: CashSessionPayment,
   actorUserId: string,
@@ -207,17 +207,28 @@ export async function createEnterprisePayment(organizationId: string, actorUserI
       const expected = input.methodType === "CASH" ? "CASH" : input.methodType === "MOBILE_MONEY" ? "MOBILE_MONEY" : null;
       if (expected && account.accountType !== expected) throw new EnterpriseAccountingError("PAYMENT_METHOD_ACCOUNT_MISMATCH", 409);
       if (input.methodType === "CASH") {
-        const cashSession = await tx.enterpriseCashSession.findFirst({
-          where: {
-            organizationId,
-            financialAccountId: account.id,
-            cashierUserId: actorUserId,
-            status: "OPEN",
-          },
-          orderBy: { openedAt: "desc" },
-          select: { id: true },
-        });
-        if (!cashSession) throw new EnterpriseAccountingError("OPEN_CASH_SESSION_REQUIRED", 409);
+        const cashSession = input.cashSessionId
+          ? await tx.enterpriseCashSession.findFirst({
+              where: {
+                id: input.cashSessionId,
+                organizationId,
+                financialAccountId: account.id,
+                cashierUserId: actorUserId,
+                status: "OPEN",
+              },
+              select: { id: true },
+            })
+          : await tx.enterpriseCashSession.findFirst({
+              where: {
+                organizationId,
+                financialAccountId: account.id,
+                cashierUserId: actorUserId,
+                status: "OPEN",
+              },
+              orderBy: { openedAt: "desc" },
+              select: { id: true },
+            });
+        if (!cashSession) throw new EnterpriseAccountingError(input.cashSessionId ? "PAYMENT_CASH_SESSION_INVALID" : "OPEN_CASH_SESSION_REQUIRED", 409);
         cashSessionId = cashSession.id;
       }
     }
