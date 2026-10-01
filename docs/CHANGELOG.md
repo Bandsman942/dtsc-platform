@@ -1,3 +1,25 @@
+## 2026-10-01 — SCALE-7A #751 : remédiation du premier 500-ramp
+
+### Corrigé
+
+- Les sondes cross-tenant 403/404 conservent leur check d’isolation à 100 %, mais sont désormais classées comme réponses HTTP attendues **uniquement pour ces probes** ; elles ne gonflent plus artificiellement `http_req_failed`.
+- Le premier run complet `36899333815` avait marqué 1 230 requêtes en échec, dont 1 158 étaient en réalité des probes d’isolation réussies ; les vrais checks métier en échec étaient 72 (~0,2 % des requêtes utiles).
+- Le candidat Neon pooled par défaut passe de `connection_limit=5` à `9` quand l’opérateur n’a pas déjà fourni une valeur explicite. `pool_timeout=5` et `connect_timeout=10` restent inchangés.
+- Ce second candidat est borné par le plan expérimental #416 : le run SCALE-7 a produit des `P2024` locaux avec 5 connexions alors que PostgreSQL global restait à 43 / 901 connexions (4,77 %), sans exhaustion ni idle-in-transaction.
+- Aucun SLO n’est abaissé. Le 500-soak reste bloqué jusqu’à un nouveau 500-ramp Production réellement PASS.
+
+### Données et sécurité
+
+- Aucune migration Prisma, aucun backfill, aucun nouveau secret.
+- Neon pooled reste obligatoire ; les paramètres explicites déjà présents dans `DATABASE_URL` continuent d’avoir priorité.
+- Les 403/404 cross-tenant restent obligatoires et explicitement vérifiés ; seul leur classement dans la métrique HTTP est corrigé.
+
+### Validation requise
+
+- CI complète + QA SCALE-1/SCALE-7.
+- Après Production READY, rerun `RUN_SCALE7_500_RAMP`.
+- PASS requis : erreurs <1 %, P95<1 s, P99<2 s, checks>99 %, isolation 100 %, DB<80 %, Redis disponible.
+
 ## 2026-10-01 — SCALE-7D #720 : délégation middleware exacte pour l’observabilité OIDC
 
 ### Corrigé
