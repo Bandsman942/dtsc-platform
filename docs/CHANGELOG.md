@@ -1,3 +1,27 @@
+## 2026-10-01 — SCALE-7A #751 : métrique d’isolation correcte et candidat Prisma 9
+
+### Corrigé
+
+- Les sondes cross-tenant 403/404 de SCALE-7 utilisent désormais un `responseCallback` k6 par requête avec `http.expectedStatuses(403, 404)`.
+- Cette correction ne change ni le check explicite d’isolation ni le gate `tenant_isolation_pass == 1`; elle empêche seulement ces refus attendus d’alimenter artificiellement `http_req_failed`.
+- Aucun 4xx n’est marqué globalement comme attendu : seules les deux sondes `tenant-isolation` utilisent ce callback.
+- Le défaut Prisma Neon pooled passe de `connection_limit=5` à `9`, uniquement lorsque l’opérateur n’a pas fourni de valeur explicite.
+- `pool_timeout=5` et `connect_timeout=10` restent inchangés.
+- L’observabilité continue d’exposer la valeur effective sans révéler DSN, hôte, rôle ou identifiants.
+
+### Preuve de départ
+
+- SCALE-7 run `36899333815` : 500 VU, 35 586 requêtes, checks 99.797%, isolation 100%, P95 1 502.52 ms, P99 5 079.16 ms.
+- 1 158 des 1 230 `http_req_failed` provenaient des 403/404 d’isolation pourtant validés.
+- PostgreSQL restait à 43 / 901 connexions max (4.77%), mais des `P2024` Prisma apparaissaient avec `connection_limit=5`.
+- #416 avait pré-autorisé 9 comme prochain et dernier candidat sans nouvelle décision.
+
+### Validation requise
+
+- CI complète avant merge.
+- Production uniquement depuis `main`, sans Preview Vercel.
+- Rerun obligatoire `RUN_SCALE7_500_RAMP`; 500-soak reste interdit tant que le ramp n’est pas PASS.
+
 ## 2026-10-01 — SCALE-7D #720 : délégation middleware exacte pour l’observabilité OIDC
 
 ### Corrigé
