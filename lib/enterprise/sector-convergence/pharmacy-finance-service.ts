@@ -459,11 +459,11 @@ export async function convergePharmacyRefund(
       refundPayment = await createEnterprisePayment(organizationId, source.requestedById, {
         direction: "OUTBOUND",
         paymentType: "REFUND",
-        methodType: originalPayment.methodType as "CASH" | "BANK_TRANSFER" | "MOBILE_MONEY" | "CARD" | "CHEQUE" | "OTHER",
+        methodType: originalPayment.methodType as "CASH" | "BANK_TRANSFER" | "MOBILE_MONEY" | "CARD" | "CHEQUE" | "CREDIT" | "OTHER",
         financialAccountId: originalPayment.financialAccountId,
         cashSessionId: commonCashSessionId,
         businessPartyId: saleMapping.businessPartyId,
-        currencyCode: source.currency as "USD" | "CDF" | "EUR",
+        currencyCode: source.currency,
         amount: source.amount.toFixed(),
         paymentDate: source.createdAt,
         reference: source.refundNumber,
