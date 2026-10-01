@@ -104,7 +104,6 @@ export async function generateReceiptForPayment(organizationId: string, paymentI
 }
 
 export async function createRefund(organizationId: string, userId: string, data: Extract<CashInput, { entityType: "refund" }>) {
-  await getEffectivePharmacySettings(organizationId, userId);
   const paymentId = nil(data.paymentId);
   const cashSessionId = nil(data.cashSessionId);
   const [sale, payment, session, aggregate] = await Promise.all([
@@ -173,7 +172,7 @@ export async function getCashDataset(organizationId: string) {
   const today = new Date().toISOString().slice(0, 10);
   const todayPayments = payments.filter((item) => item.paymentDate.toISOString().slice(0, 10) === today && activePaymentStatuses.includes(item.status));
   const sumMethod = (method: string) => todayPayments.filter((item) => item.paymentMethod === method).reduce((sum, item) => sum + Number(item.amount), 0);
-  const metrics = { cashOpen: sessions.some((item) => item.status === "OPEN") ? 1 : 0, openSessions: sessions.filter((item) => item.status === "OPEN").length, paidSalesToday: sales.filter((item) => item.saleDate.toISOString().slice(0, 10) === today && item.paymentStatus === "PAID").length, paidToday: todayPayments.reduce((sum, item) => sum + Number(item.amount), 0), cash: sumMethod("CASH"), mobileMoney: sumMethod("MOBILE_MONEY"), card: sumMethod("CARD"), credit: sumMethod("CREDIT"), insurance: sumMethod("INSURANCE"), partialSales: sales.filter((item) => item.paymentStatus === "PARTIALLY_PAID").length, unpaidSales: sales.filter((item) => item.paymentStatus === "UNPAID").length, refundsToday: refunds.filter((item) => item.createdAt.toISOString().slice(0, 10) === today).reduce((sum, item) => sum + Number(item.amount), 0), invoices: invoices.length, receipts: receipts.length, openDiscrepancies: discrepancies.filter((item) => !["RESOLVED", "CANCELLED", "REJECTED"].includes(item.status)).length, pendingClosures: sessions.filter((item) => item.status === "PENDING_VALIDATION").length };
+  const metrics = { cashOpen: sessions.some((item) => item.status === "OPEN") ? 1 : 0, openSessions: sessions.filter((item) => item.status === "OPEN").length, paidSalesToday: sales.filter((item) => item.saleDate.toISOString().slice(0, 10) === today && item.paymentStatus === "PAID").length, paidToday: todayPayments.reduce((sum, item) => sum + Number(item.amount), 0), cash: sumMethod("CASH"), mobileMoney: sumMethod("MOBILE_MONEY"), card: sumMethod("CARD"), credit: sumMethod("CREDIT"), insurance: sumMethod("INSURANCE"), partialSales: sales.filter((item) => item.paymentStatus === "PARTIALLY_PAID").length, unpaidSales: sales.filter((item) => item.paymentStatus === "UNPAID").length, refundsToday: refunds.filter((item) => item.status === "PAID" && item.paidAt?.toISOString().slice(0, 10) === today).reduce((sum, item) => sum + Number(item.amount), 0), invoices: invoices.length, receipts: receipts.length, openDiscrepancies: discrepancies.filter((item) => !["RESOLVED", "CANCELLED", "REJECTED"].includes(item.status)).length, pendingClosures: sessions.filter((item) => item.status === "PENDING_VALIDATION").length };
   const refundMappings = await prisma.pharmacyRefundExtension.findMany({
     where: { organizationId, pharmacyRefundId: { in: refunds.map((item) => item.id) } },
   });
