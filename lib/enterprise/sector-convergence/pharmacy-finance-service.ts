@@ -69,7 +69,15 @@ export async function convergePharmacySaleInvoice(
 
   const productMappings = await prisma.pharmacyProductExtension.findMany({ where: { organizationId, pharmacyProductId: { in: sale.lines.map((line) => line.productId) } } });
   const catalogByProduct = new Map(productMappings.map((item) => [item.pharmacyProductId, item.catalogItemId]));
-  const missing = sale.lines.filter((line) => !catalogByProduct.has(line.productId));
+  const catalogItems = await prisma.enterpriseCatalogItem.findMany({
+    where: { organizationId, id: { in: productMappings.map((item) => item.catalogItemId) }, archivedAt: null },
+    select: { id: true, name: true },
+  });
+  const catalogNameById = new Map(catalogItems.map((item) => [item.id, item.name]));
+  const missing = sale.lines.filter((line) => {
+    const catalogItemId = catalogByProduct.get(line.productId);
+    return !catalogItemId || !catalogNameById.has(catalogItemId);
+  });
   if (missing.length) throw new EnterpriseSectorConvergenceError("PHARMACY_PRODUCT_MAPPING_REQUIRED", 409, { sourceLineIds: missing.map((line) => line.id) });
 
   const sync = await prisma.$transaction((tx) => beginSectorSync(tx, { organizationId, sector: "PHARMACY", sourceEntityType: "PharmacySale", sourceEntityId: sale.id, eventType: "PHARMACY_SALE_INVOICED" }, { saleNumber: sale.saleNumber }));
@@ -90,7 +98,7 @@ export async function convergePharmacySaleInvoice(
       if (subtotal.isNegative()) throw new EnterpriseSectorConvergenceError("PHARMACY_SALE_SUBTOTAL_INVALID", 409);
       const invoiceItems: Prisma.EnterpriseSalesInvoiceItemCreateWithoutSalesInvoiceInput[] = current.lines.map((line) => ({
         catalogItemId: catalogByProduct.get(line.productId),
-        description: `Pharmacy item ${line.productId}`,
+        description: catalogNameById.get(catalogByProduct.get(line.productId)!)!,
         quantity: line.quantity,
         unitPrice: line.unitPrice,
         discountAmount: money(line.quantity.times(line.unitPrice).minus(line.totalLine).greaterThan(0) ? line.quantity.times(line.unitPrice).minus(line.totalLine) : 0),
