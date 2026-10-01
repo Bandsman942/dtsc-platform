@@ -58,6 +58,8 @@ La création affecte immédiatement un `EnterpriseApproval`. L’approbation est
 
 Le module transversal Validations connaît `EnterpriseFundingOperation`, expose son contexte métier et ouvre le financement précis dans Trésorerie.
 
+La lecture IA existante `FINANCE_TREASURY_READ` reste soumise au même module et aux mêmes permissions ; elle expose désormais la provenance structurée du financement (`fundingType`, numéro et statut) avec le mouvement de trésorerie autorisé. Aucun nouvel entitlement ni outil d’écriture IA n’est ajouté.
+
 ## Contrepassation
 
 Une opération confirmée n’est jamais modifiée rétroactivement. La contrepassation :
