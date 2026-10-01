@@ -432,6 +432,45 @@ test.describe.serial("Hotfix #728 Pharmacy refund Finance convergence", () => {
     expect(await prisma.enterpriseTreasuryTransaction.count({ where: { organizationId, paymentId: commonRefund.id, direction: "OUTBOUND", status: "CONFIRMED" } })).toBe(1);
     expect(await prisma.enterpriseCashMovement.count({ where: { organizationId, paymentId: commonRefund.id, direction: "OUTBOUND" } })).toBe(1);
     expect(await prisma.enterpriseJournalEntry.count({ where: { organizationId, postingEvent: "CUSTOMER_REFUND_CONFIRMED", sourceEntityId: commonRefund.id, status: "POSTED" } })).toBe(1);
+    const sourcePaymentAfterRefund = await prisma.enterprisePayment.findUniqueOrThrow({ where: { id: scenario.payment.id } });
+    expect(Number(sourcePaymentAfterRefund.unallocatedAmount)).toBe(0);
+
+    const secondReceivable = await prisma.enterpriseReceivable.create({
+      data: {
+        organizationId,
+        salesInvoiceId: (await prisma.enterpriseSalesInvoice.create({
+          data: {
+            organizationId,
+            number: `PH728-REALLOC-${Date.now()}`,
+            businessPartyId: scenario.party.id,
+            status: "ISSUED",
+            invoiceDate: new Date(),
+            currencyCode: "CDF",
+            subtotal: "10",
+            grandTotal: "10",
+            outstandingAmount: "10",
+            issuedAt: new Date(),
+            postedAt: new Date(),
+            createdByUserId: requesterUserId,
+            items: { create: { organizationId, description: "Reallocation guard #728", quantity: "1", unitPrice: "10", netAmount: "10", totalAmount: "10" } },
+          },
+        })).id,
+        businessPartyId: scenario.party.id,
+        currencyCode: "CDF",
+        originalAmount: "10",
+        allocatedAmount: "0",
+        creditedAmount: "0",
+        writtenOffAmount: "0",
+        outstandingAmount: "10",
+        status: "OPEN",
+      },
+    });
+    const reallocation = await post(validatorContext, `/api/enterprise/${organizationId}/payments/${scenario.payment.id}/allocations`, {
+      receivableId: secondReceivable.id,
+      amount: "10",
+    });
+    expect(reallocation.response.status(), JSON.stringify(reallocation.body)).toBe(409);
+    expect(reallocation.body?.error).toBe("PAYMENT_ALLOCATION_EXCEEDS_UNALLOCATED");
 
     const retry = await refundAction(settlerContext, scenario.refund.id, "mark-refund-paid");
     expect(retry.response.ok(), JSON.stringify(retry.body)).toBeTruthy();
