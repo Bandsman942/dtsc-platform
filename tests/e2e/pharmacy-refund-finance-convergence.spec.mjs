@@ -216,7 +216,7 @@ async function createScenario(total, refundAmount, suffix) {
       code: `PH728-${suffix}`.slice(0, 80),
       status: "ACTIVE",
       createdByUserId: requesterUserId,
-      roles: { create: { organizationId, roleCode: "CUSTOMER", createdByUserId: requesterUserId } },
+      roles: { create: { roleCode: "CUSTOMER", createdByUserId: requesterUserId } },
     },
   });
 
