@@ -439,7 +439,37 @@ export async function allocateEnterprisePayment(
     const payment = await tx.enterprisePayment.findFirst({ where: { id: paymentId, organizationId } });
     if (!payment || !["CONFIRMED", "RECONCILED"].includes(payment.status)) throw new EnterpriseAccountingError("PAYMENT_NOT_ALLOCATABLE", 409);
     const amount = new Prisma.Decimal(input.amount);
-    if (!amount.isPositive() || amount.greaterThan(payment.unallocatedAmount)) throw new EnterpriseAccountingError("PAYMENT_ALLOCATION_EXCEEDS_UNALLOCATED", 409);
+    const refundEvents = payment.direction === "INBOUND" && payment.paymentType === "CUSTOMER_PAYMENT"
+      ? await tx.enterprisePaymentEvent.findMany({
+          where: {
+            organizationId,
+            paymentId: payment.id,
+            eventType: { in: ["ALLOCATION_REVERSED_FOR_REFUND", "ALLOCATION_PARTIALLY_REVERSED_FOR_REFUND", "REFUND_AVAILABILITY_CONSUMED"] },
+          },
+          select: { eventType: true, metadataJson: true },
+        })
+      : [];
+    let reservedForRefund = money(0);
+    for (const event of refundEvents) {
+      const metadata = event.metadataJson;
+      if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) continue;
+      const rawAmount = (metadata as Prisma.JsonObject).amount;
+      if (typeof rawAmount !== "string" && typeof rawAmount !== "number") continue;
+      const eventAmount = money(rawAmount);
+      reservedForRefund = event.eventType === "REFUND_AVAILABILITY_CONSUMED"
+        ? money(reservedForRefund.minus(eventAmount))
+        : money(reservedForRefund.plus(eventAmount));
+    }
+    reservedForRefund = money(Prisma.Decimal.max(0, reservedForRefund));
+    const allocatableAmount = money(Prisma.Decimal.max(0, payment.unallocatedAmount.minus(reservedForRefund)));
+    if (!amount.isPositive() || amount.greaterThan(allocatableAmount)) {
+      throw new EnterpriseAccountingError("PAYMENT_ALLOCATION_EXCEEDS_UNALLOCATED", 409, {
+        requestedAmount: amount.toFixed(),
+        unallocatedAmount: payment.unallocatedAmount.toFixed(),
+        reservedForRefund: reservedForRefund.toFixed(),
+        allocatableAmount: allocatableAmount.toFixed(),
+      });
+    }
     let receivable: Awaited<ReturnType<typeof tx.enterpriseReceivable.findFirst>> = null;
     let payable: Awaited<ReturnType<typeof tx.enterprisePayable.findFirst>> = null;
     if (input.receivableId) {
