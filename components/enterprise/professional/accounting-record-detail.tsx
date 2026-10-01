@@ -86,8 +86,6 @@ function detailFields(kind: AccountingRecordDetailKind, record: AccountingRecord
     const chart = objectRecord(account?.chart);
     push(en ? "Rule" : "Règle", locale === "en" ? record.semanticLabelEn || record.semanticLabelFr : record.semanticLabelFr || record.semanticLabelEn);
     push(en ? "Semantic key" : "Clé sémantique", record.mappingKey);
-    push(en ? "Domain" : "Domaine", record.domain ? financeEnumLabel(String(record.domain), locale) : "—");
-    push(en ? "Category" : "Catégorie", record.category ? financeEnumLabel(String(record.category), locale) : "—");
     push(en ? "Target account" : "Compte cible", account ? `${text(account.code)} · ${text(locale === "en" ? account.nameEn || account.nameFr : account.nameFr || account.nameEn)}` : "—");
     push(en ? "Chart" : "Plan comptable", chart ? `${text(chart.code)} · ${text(locale === "en" ? chart.nameEn || chart.nameFr : chart.nameFr || chart.nameEn)}` : "—");
     push(en ? "Rule origin" : "Origine de la règle", record.templateManaged ? (en ? "Managed by the accounting template" : "Gérée par le template comptable") : (en ? "Manual custom-chart rule" : "Règle manuelle du plan personnalisé"));
