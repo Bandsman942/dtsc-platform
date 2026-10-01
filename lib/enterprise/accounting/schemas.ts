@@ -33,6 +33,7 @@ export const financeConfigurationSchema = z.object({
 
 export const fiscalYearCreateSchema = z.object({
   code: z.string().trim().min(2).max(30),
+  label: z.string().trim().min(2).max(160).optional(),
   startDate: dateInputSchema,
   endDate: dateInputSchema,
 }).refine((data) => data.endDate > data.startDate, { message: "Fiscal year end must be after start" });
@@ -40,6 +41,7 @@ export const fiscalYearCreateSchema = z.object({
 export const fiscalPeriodCreateSchema = z.object({
   fiscalYearId: z.string().min(1),
   code: z.string().trim().min(2).max(30),
+  label: z.string().trim().min(2).max(160).optional(),
   startDate: dateInputSchema,
   endDate: dateInputSchema,
 }).refine((data) => data.endDate > data.startDate, { message: "Period end must be after start" });
