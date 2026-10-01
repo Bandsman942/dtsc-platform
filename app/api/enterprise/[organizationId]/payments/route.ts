@@ -44,7 +44,7 @@ export async function GET(req: Request, { params }: Params) {
       orderBy: [{ paymentDate: "desc" }, { createdAt: "desc" }],
       skip: (page - 1) * pageSize,
       take: pageSize,
-      include: { cashSession: { select: { status: true } }, _count: { select: { allocations: true, events: true } } },
+      include: { cashSession: { select: { status: true, financialAccountId: true } }, _count: { select: { allocations: true, events: true } } },
     }),
     prisma.enterprisePayment.count({ where }),
     prisma.enterprisePayment.groupBy({
