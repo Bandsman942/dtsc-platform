@@ -112,8 +112,15 @@ function rowObject(row: AnyRow | null | undefined, key: string) {
 }
 function inputDate(value: unknown) {
   if (!value) return "";
-  const date = new Date(String(value));
-  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+  const raw = String(value).trim();
+  const persistedBusinessDate = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (persistedBusinessDate) return persistedBusinessDate[1];
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 function chartOriginLabel(templateCode: string, locale: FinanceLocale) {
   if (!templateCode) return locale === "en" ? "Custom chart" : "Plan personnalisé";
