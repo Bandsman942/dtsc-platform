@@ -18,6 +18,7 @@ let settlerUserId = "";
 let cashAccountId = "";
 let pharmacyCashSessionId = "";
 let commonCashSessionId = "";
+let currencyCode = "";
 let requesterContext;
 let validatorContext;
 let settlerContext;
@@ -106,10 +107,15 @@ async function prepareTenant(browser) {
       create: { organizationId, moduleCode, labelFr: moduleCode, labelEn: moduleCode, moduleCategory: "E2E", isEnabled: true, isCore: false, requiresPlanLevel: "BUSINESS", sortOrder: 2200 + index },
     });
   }
+  const existingFinanceConfiguration = await prisma.enterpriseFinanceConfiguration.findUnique({
+    where: { organizationId },
+    select: { functionalCurrencyCode: true, presentationCurrencyCode: true },
+  });
+  currencyCode = existingFinanceConfiguration?.functionalCurrencyCode || "CDF";
   await prisma.enterpriseCurrency.upsert({
-    where: { organizationId_code: { organizationId, code: "CDF" } },
-    update: { name: "Franc congolais", symbol: "FC", precision: 2, isActive: true },
-    create: { organizationId, code: "CDF", name: "Franc congolais", symbol: "FC", precision: 2, isActive: true },
+    where: { organizationId_code: { organizationId, code: currencyCode } },
+    update: { isActive: true },
+    create: { organizationId, code: currencyCode, name: `Devise E2E ${currencyCode}`, symbol: currencyCode, precision: 2, isActive: true },
   });
 
   requesterContext = await browser.newContext();
@@ -120,8 +126,8 @@ async function prepareTenant(browser) {
   await signInAs(settlerContext, settlerEmail, settlerPassword);
 
   const configuration = await patch(validatorContext, `/api/enterprise/${organizationId}/finance/configuration`, {
-    functionalCurrencyCode: "CDF",
-    presentationCurrencyCode: "CDF",
+    functionalCurrencyCode: currencyCode,
+    presentationCurrencyCode: existingFinanceConfiguration?.presentationCurrencyCode || currencyCode,
     inventoryValuationMethod: "WEIGHTED_AVERAGE",
     reconciliationTolerance: "0.01",
     automaticPostingEnabled: true,
@@ -139,7 +145,7 @@ async function prepareTenant(browser) {
       code: `PH-RF-728-${Date.now().toString(36).toUpperCase()}`,
       name: "Pharmacy refund cash #728",
       accountType: "CASH",
-      currencyCode: "CDF",
+      currencyCode,
       openingBalance: 0,
       operationalBalance: 0,
       reconciledBalance: 0,
@@ -173,7 +179,7 @@ async function prepareTenant(browser) {
       financialAccountId: cashAccountId,
       openedAt: new Date(),
       openingAmount: 0,
-      currency: "CDF",
+      currency: currencyCode,
       status: "OPEN",
       createdById: requesterUserId,
     },
@@ -221,7 +227,7 @@ async function createScenario(total, refundAmount, suffix) {
       businessPartyId: party.id,
       status: "ISSUED",
       invoiceDate: new Date(),
-      currencyCode: "CDF",
+      currencyCode,
       subtotal: String(total),
       discountTotal: "0",
       taxTotal: "0",
@@ -240,7 +246,7 @@ async function createScenario(total, refundAmount, suffix) {
       organizationId,
       salesInvoiceId: invoice.id,
       businessPartyId: party.id,
-      currencyCode: "CDF",
+      currencyCode,
       originalAmount: String(total),
       allocatedAmount: "0",
       creditedAmount: "0",
@@ -260,8 +266,8 @@ async function createScenario(total, refundAmount, suffix) {
       cashSessionId: pharmacyCashSessionId,
       saleDate: new Date(),
       subtotal: String(total),
-      currency: "CDF",
-      baseCurrency: "CDF",
+      currency: currencyCode,
+      baseCurrency: currencyCode,
       exchangeRateToBase: "1",
       subtotalBase: String(total),
       totalAmount: String(total),
@@ -286,7 +292,7 @@ async function createScenario(total, refundAmount, suffix) {
     methodType: "CASH",
     financialAccountId: cashAccountId,
     businessPartyId: party.id,
-    currencyCode: "CDF",
+    currencyCode,
     amount: String(total),
     paymentDate: new Date().toISOString(),
     reference: `PH728-ORIG-${suffix}`,
@@ -319,7 +325,7 @@ async function createScenario(total, refundAmount, suffix) {
       cashierId: requesterUserId,
       paymentMethod: "CASH",
       amount: String(total),
-      currency: "CDF",
+      currency: currencyCode,
       paymentReference: `PH728-ORIG-${suffix}`,
       paymentDate: new Date(),
       status: "PAID",
@@ -337,7 +343,7 @@ async function createScenario(total, refundAmount, suffix) {
     cashSessionId: pharmacyCashSessionId,
     refundType: refundAmount === total ? "TOTAL" : "PARTIAL",
     amount: String(refundAmount),
-    currency: "CDF",
+    currency: currencyCode,
     reason: `Remboursement #728 ${suffix}`,
     restockItems: false,
     notes: "E2E #728",
@@ -455,7 +461,7 @@ test.describe.serial("Hotfix #728 Pharmacy refund Finance convergence", () => {
             businessPartyId: scenario.party.id,
             status: "ISSUED",
             invoiceDate: new Date(),
-            currencyCode: "CDF",
+            currencyCode,
             subtotal: "10",
             grandTotal: "10",
             outstandingAmount: "10",
@@ -466,7 +472,7 @@ test.describe.serial("Hotfix #728 Pharmacy refund Finance convergence", () => {
           },
         })).id,
         businessPartyId: scenario.party.id,
-        currencyCode: "CDF",
+        currencyCode,
         originalAmount: "10",
         allocatedAmount: "0",
         creditedAmount: "0",
