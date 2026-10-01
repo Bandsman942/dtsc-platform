@@ -7,6 +7,7 @@
 - Le paiement, l’avoir, la facture, la créance, le tiers, la devise, le compte financier et la caisse restent dans le même tenant et utilisent les mappings communs existants.
 - Les remboursements CASH utilisent la caisse Finance exactement mappée à la caisse Pharmacy et échouent avant les inverses si elle n’est plus `OPEN`.
 - Les remboursements partiels inversent uniquement le montant réellement remboursé ; l’allocation restante est repostée avec une nouvelle version comptable au lieu de rouvrir toute la créance.
+- Le montant libéré par une inversion est réservé au remboursement et ne peut pas être réalloué à une autre créance ; après confirmation du REFUND, cette disponibilité est consommée de façon idempotente. Le flux Gaming existant utilise le même verrou commun.
 - L’avoir est borné au montant encore remboursable et les deux chemins de posting refusent tout montant qui rendrait la créance négative.
 - Le statut Pharmacy `PAID` n’est écrit qu’après avoir posté et après confirmation du remboursement commun dans Treasury/Cash et `CUSTOMER_REFUND_CONFIRMED`.
 - Le parcours monétaire direct `PharmacySaleRefund` depuis Ventes est retiré et redirige vers **Caisse, factures & paiements**.
