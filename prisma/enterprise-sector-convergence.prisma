@@ -189,6 +189,29 @@ model PharmacyCashExtension {
   @@index([organizationId, syncStatus])
 }
 
+model PharmacyRefundExtension {
+  id                   String   @id @default(cuid())
+  organizationId       String
+  pharmacyRefundId     String?
+  pharmacySaleRefundId String?
+  pharmacySaleId       String
+  paymentId            String
+  salesCreditNoteId    String?
+  mappingVersion       Int      @default(1)
+  syncStatus           String   @default("SYNCED")
+  cutoverAt            DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, pharmacyRefundId])
+  @@unique([organizationId, pharmacySaleRefundId])
+  @@unique([organizationId, paymentId])
+  @@index([organizationId, pharmacySaleId])
+  @@index([organizationId, salesCreditNoteId])
+  @@index([organizationId, syncStatus])
+}
+
 model EnterpriseSectorInventoryEvent {
   id                     String   @id @default(cuid())
   organizationId         String
