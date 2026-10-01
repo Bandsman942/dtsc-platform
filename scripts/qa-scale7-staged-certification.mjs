@@ -14,6 +14,7 @@ const paths = {
   oidc: "lib/scalability/github-actions-oidc.ts",
   authPool: "lib/scalability/scale7-auth-pool.ts",
   authRoute: "app/api/internal/scale7/auth-pool/route.ts",
+  middleware: "middleware.ts",
 };
 
 function fail(message) {
@@ -34,7 +35,8 @@ const docs = fs.readFileSync(paths.docs, "utf8");
 const oidc = fs.readFileSync(paths.oidc, "utf8");
 const authPool = fs.readFileSync(paths.authPool, "utf8");
 const authRoute = fs.readFileSync(paths.authRoute, "utf8");
-const all = [workflow, profile, report, archive, docs, oidc, authPool, authRoute].join("\n");
+const middleware = fs.readFileSync(paths.middleware, "utf8");
+const all = [workflow, profile, report, archive, docs, oidc, authPool, authRoute, middleware].join("\n");
 
 expect(/^on:\s*\n\s+workflow_dispatch:/m.test(workflow), "workflow_dispatch is required");
 expect(/^\s+issue_comment:\s*$/m.test(workflow), "owner issue_comment trigger is required");
@@ -136,6 +138,21 @@ for (const marker of [
 expect(
   observabilityRoute.includes('Vary: "Cookie, Authorization, Origin"'),
   "SCALE-7 observability responses must vary by human cookie and governed OIDC authorization",
+);
+
+for (const marker of [
+  'const scale7OidcDelegatedAdminApiRoute = "/api/admin/scalability/observability"',
+  'pathname === scale7OidcDelegatedAdminApiRoute',
+  'request.headers.get("authorization")?.startsWith("Bearer ")',
+  'isPathMatch(pathname, dtscInternalApiRoutes) && !delegatesScale7OidcToHandler',
+]) expect(middleware.includes(marker), `SCALE-7 middleware delegation missing ${marker}`);
+expect(
+  !middleware.includes('pathname.startsWith("/api/admin/scalability")'),
+  "SCALE-7 middleware delegation must never widen to an Admin scalability prefix",
+);
+expect(
+  middleware.includes('const dtscInternalApiRoutes = ["/api/admin", "/api/activities"]'),
+  "global DTSC internal API protection must remain authoritative",
 );
 
 expect(report.includes("authTopology"), "report must archive tenant and identity counts without secrets");
