@@ -32,6 +32,22 @@ PharmacyPurchaseOrder
   -> EnterpriseJournalEntry
 ```
 
+### Pharmacy refunds
+
+```text
+PharmacyRefund (request / regulated return context)
+  -> PharmacyRefundExtension
+  -> EnterprisePayment REFUND / OUTBOUND
+  -> bounded inverse of EnterprisePaymentAllocation
+  -> EnterpriseSalesCreditNote
+  -> EnterpriseFinancialAccount / exact mapped EnterpriseCashSession when CASH
+  -> EnterpriseTreasuryTransaction / EnterpriseCashMovement
+  -> CUSTOMER_REFUND_CONFIRMED
+  -> PharmacyRefund PAID
+```
+
+A refund is never marked `PAID` in Pharmacy before the common monetary inverse succeeds. Partial refunds reverse only the refunded amount. Legacy `PharmacySaleRefund` financial writes are retired; historical nondeterministic rows remain explicit manual-reconciliation cases.
+
 ### Pharmacy inventory accounting
 
 ```text
@@ -104,7 +120,7 @@ Mobile Money and Telco extensions keep provider-specific operational state, whil
 |---|---|---|---|
 | `PHARMACY_SALE_INVOICED` | common sales invoice create/approve/issue | sale, customer party, mapped catalog items, unique invoice extension | revenue, tax and receivable |
 | `PHARMACY_CUSTOMER_PAYMENT_CONFIRMED` | common payment create/approve/confirm + allocation | Pharmacy payment, common invoice/receivable, payer, financial account | treasury debit and receivable credit |
-| `PHARMACY_REFUND_CONFIRMED` | **canonical target — legacy runtime remains tracked in #728**: common refund payment and optional sales credit note | original payment/allocation, invoice, reason | reverse treasury and/or receivable/revenue |
+| `PHARMACY_REFUND_CONFIRMED` | common `EnterprisePayment REFUND` + bounded allocation inverse + sales credit note + common Cash/Treasury confirmation | `PharmacyRefundExtension`, original mapped payment/allocation, common invoice/receivable, exact financial account and mapped Cash session when CASH | bounded receivable/payment inverse, credit-note revenue/tax reversal, outbound Treasury/Cash and `CUSTOMER_REFUND_CONFIRMED` posting |
 | `PHARMACY_PURCHASE_RECEIVED` | common purchase receipt link | supplier, purchase, mapped catalog lines | no supplier liability by itself |
 | `PHARMACY_SUPPLIER_INVOICE_POSTED` | common supplier invoice | mapped supplier/purchase/receipt | inventory or expense and payable |
 | `PHARMACY_STOCK_ISSUED` | inventory issue valuation service | source movement, product, lot, cost | cost of sales and inventory |
