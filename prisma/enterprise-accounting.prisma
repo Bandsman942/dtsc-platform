@@ -26,6 +26,7 @@ model EnterpriseFiscalYear {
   id              String                   @id @default(cuid())
   organizationId  String
   code            String
+  label           String?
   startDate       DateTime
   endDate         DateTime
   status          String                   @default("DRAFT")
@@ -48,6 +49,7 @@ model EnterpriseFiscalPeriod {
   organizationId  String
   fiscalYearId    String
   code            String
+  label           String?
   startDate       DateTime
   endDate         DateTime
   status          String                     @default("OPEN")
