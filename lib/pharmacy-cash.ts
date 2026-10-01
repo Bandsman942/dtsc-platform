@@ -107,18 +107,44 @@ export async function generateReceiptForPayment(organizationId: string, paymentI
 export async function createRefund(organizationId: string, userId: string, data: Extract<CashInput, { entityType: "refund" }>) {
   const paymentId = nil(data.paymentId);
   const cashSessionId = nil(data.cashSessionId);
-  const [sale, payment, session, aggregate] = await Promise.all([
-    prisma.pharmacySale.findFirst({ where: { id: data.saleId, organizationId }, select: { id: true, paidAmount: true } }),
-    paymentId ? prisma.pharmacyPayment.findFirst({ where: { id: paymentId, organizationId, saleId: data.saleId } }) : null,
-    cashSessionId ? prisma.pharmacyCashSession.findFirst({ where: { id: cashSessionId, organizationId, status: "OPEN" } }) : null,
-    prisma.pharmacyRefund.aggregate({ where: { organizationId, saleId: data.saleId, status: { in: ["SUBMITTED", "VALIDATED", "PAID"] } }, _sum: { amount: true } }),
-  ]);
-  if (!sale) throw new Error("SALE_NOT_FOUND");
-  if (paymentId && !payment) throw new Error("PAYMENT_NOT_FOUND");
-  if (cashSessionId && !session) throw new Error("SESSION_NOT_OPEN");
-  if (Number(aggregate._sum.amount || 0) + data.amount > Number(sale.paidAmount)) throw new Error("REFUND_EXCEEDS_PAID");
-  if (data.restockItems && data.amount < Number(sale.paidAmount)) throw new Error("RESTOCK_REQUIRES_FULL_REFUND");
-  return prisma.pharmacyRefund.create({ data: { organizationId, refundNumber: await generatePharmacyEntityNumber(organizationId, "REFUND"), saleId: data.saleId, paymentId, cashSessionId, refundType: data.refundType, amount: data.amount, currency: data.currency, reason: data.reason, restockItems: data.restockItems, status: "SUBMITTED", requestedById: userId, validatedById: null, validatedAt: null, notes: nil(data.notes) } });
+  const refundNumber = await generatePharmacyEntityNumber(organizationId, "REFUND");
+  return prisma.$transaction(async (transaction) => {
+    await transaction.$executeRaw(Prisma.sql`SELECT id FROM "PharmacySale" WHERE id = ${data.saleId} AND "organizationId" = ${organizationId} FOR UPDATE`);
+    const [sale, payment, session, aggregate] = await Promise.all([
+      transaction.pharmacySale.findFirst({ where: { id: data.saleId, organizationId }, select: { id: true, paidAmount: true, currency: true } }),
+      paymentId ? transaction.pharmacyPayment.findFirst({ where: { id: paymentId, organizationId, saleId: data.saleId } }) : null,
+      cashSessionId ? transaction.pharmacyCashSession.findFirst({ where: { id: cashSessionId, organizationId, status: "OPEN" } }) : null,
+      transaction.pharmacyRefund.aggregate({
+        where: { organizationId, saleId: data.saleId, status: { in: ["SUBMITTED", "VALIDATED", "PAID"] } },
+        _sum: { amount: true },
+      }),
+    ]);
+    if (!sale) throw new Error("SALE_NOT_FOUND");
+    if (paymentId && !payment) throw new Error("PAYMENT_NOT_FOUND");
+    if (cashSessionId && !session) throw new Error("SESSION_NOT_OPEN");
+    if (sale.currency !== data.currency) throw new Error("REFUND_CURRENCY_MISMATCH");
+    if (Number(aggregate._sum.amount || 0) + data.amount > Number(sale.paidAmount)) throw new Error("REFUND_EXCEEDS_PAID");
+    if (data.restockItems && data.amount < Number(sale.paidAmount)) throw new Error("RESTOCK_REQUIRES_FULL_REFUND");
+    return transaction.pharmacyRefund.create({
+      data: {
+        organizationId,
+        refundNumber,
+        saleId: data.saleId,
+        paymentId,
+        cashSessionId,
+        refundType: data.refundType,
+        amount: data.amount,
+        currency: data.currency,
+        reason: data.reason,
+        restockItems: data.restockItems,
+        status: "SUBMITTED",
+        requestedById: userId,
+        validatedById: null,
+        validatedAt: null,
+        notes: nil(data.notes),
+      },
+    });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
 export async function validateCashRefund(organizationId: string, refundId: string, userId: string) {
