@@ -117,6 +117,11 @@ requireTokens("lib/enterprise/approval-targets.ts", [
   "EnterpriseFundingOperation",
   "fundingOperationId",
 ]);
+requireTokens("lib/ai/tools/executors/finance.ts", [
+  "FINANCE_TREASURY_READ",
+  "fundingOperation",
+  "fundingType",
+]);
 requireTokens("lib/enterprise/approval-presentation.ts", [
   "enterpriseFundingOperation.findMany",
   "EnterpriseFundingOperation:",
