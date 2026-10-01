@@ -1,3 +1,18 @@
+## 2026-10-01 — SCALE-7D #720 : délégation middleware exacte pour l’observabilité OIDC
+
+### Corrigé
+
+- Le run Production `36894170660` a confirmé que le pool OIDC restait opérationnel (**2 tenants / 50 identités**), mais que `middleware.ts` renvoyait `401` sur `/api/admin/scalability/observability` avant l’exécution du handler OIDC.
+- Le middleware délègue désormais uniquement l’URL exacte `/api/admin/scalability/observability` lorsqu’un header `Authorization: Bearer ...` est présent.
+- Cette délégation n’authentifie personne : le handler conserve la vérification GitHub Actions OIDC complète, l’audience `dtsc-scale7`, le workflow/ref exacts et l’Origin same-origin.
+- Toutes les autres routes `/api/admin/*` continuent d’exiger la session DTSC interne dans le middleware.
+- Les QA SCALE-7 et SCALE-0B interdisent explicitement un bypass par préfixe `/api/admin/scalability/*`.
+
+### Validation requise
+
+- CI complète avant merge.
+- Après Production READY, relancer `RUN_SCALE7_500_RAMP`; #720 reste ouverte tant que le run n’a pas franchi provisioning + observabilité et atteint k6.
+
 ## 2026-10-01 — SCALE-7D #720 : observabilité de certification gouvernée par OIDC
 
 ### Corrigé
