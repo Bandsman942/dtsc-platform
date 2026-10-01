@@ -11,6 +11,7 @@ import { getEnterpriseActivityBlocks } from "@/lib/enterprise/enterprise-activit
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { getEnterpriseNavigationModules } from "@/lib/enterprise/enterprise-navigation";
 import { ENTERPRISE_ADMIN_ROLES } from "@/lib/enterprise-sector-templates";
+import { COMPANY_RELATIONSHIP_USER_ACTION_STATUSES } from "@/lib/navigation/company-relationships";
 import { buildVisibleNotificationWhereForSession } from "@/lib/notification-access";
 import { isDtscInternalSession } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
@@ -71,7 +72,7 @@ export async function loadAppShellData({
     performanceRecorder.timed("pendingCompanyRelationships", prisma.enterpriseIdentityLink.count({
       where: {
         userId: user.id,
-        status: { in: ["INVITED", "PENDING_CONSENT", "PENDING_USER", "PENDING_USER_APPROVAL", "PENDING"] },
+        status: { in: [...COMPANY_RELATIONSHIP_USER_ACTION_STATUSES] },
       },
     })),
     performanceRecorder.timed("employeeRecord", dtscInternalContext
