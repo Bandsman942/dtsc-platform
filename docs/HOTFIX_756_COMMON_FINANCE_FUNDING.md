@@ -83,6 +83,10 @@ L’onglet **Financements** de Trésorerie réutilise les primitives professionn
 - deep-link depuis Validations ;
 - contrat mobile/responsive et mode sombre existants.
 
+## Compatibilité QA Trésorerie existante
+
+Le contrat statique du hotfix #580 sur le compteur de l’onglet Comptes financiers a été étendu, pas affaibli : chaque onglet qui affiche un compteur doit utiliser `collection.pagination.total` de sa propre collection active et la QA interdit toujours les compteurs basés sur `collection.items.length`. Cela évite qu’un compteur de page soit présenté comme un total métier et évite aussi de réutiliser le total Financements comme compteur des Comptes financiers.
+
 ## Dette
 
 - Dette créée : **aucune visée**.
