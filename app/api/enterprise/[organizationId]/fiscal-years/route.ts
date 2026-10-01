@@ -11,7 +11,7 @@ export async function GET(req: Request, { params }: Params) {
   const startedAt = Date.now(); const { organizationId } = await params;
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_ACCOUNTING", "view"); if (!auth.ok) return auth.response;
   const url = new URL(req.url); const { page, pageSize, search, status } = financeListParams(req); const recordId = url.searchParams.get("recordId")?.trim() || undefined;
-  const where: Prisma.EnterpriseFiscalYearWhereInput = { organizationId, ...(recordId ? { id: recordId } : {}), ...(status ? { status } : {}), ...(search ? { code: { contains: search, mode: "insensitive" } } : {}) };
+  const where: Prisma.EnterpriseFiscalYearWhereInput = { organizationId, ...(recordId ? { id: recordId } : {}), ...(status ? { status } : {}), ...(search ? { OR: [{ code: { contains: search, mode: "insensitive" } }, { label: { contains: search, mode: "insensitive" } }] } : {}) };
   const [items, total] = await Promise.all([
     prisma.enterpriseFiscalYear.findMany({ where, orderBy: { startDate: "desc" }, skip: recordId ? 0 : (page - 1) * pageSize, take: recordId ? 1 : pageSize, include: { periods: { orderBy: { startDate: "asc" } } } }),
     prisma.enterpriseFiscalYear.count({ where }),
