@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { CheckCircle2, Plus, RotateCcw, ShieldCheck, XCircle } from "lucide-react";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { FinanceReferenceSelect, type FinanceReferenceOption } from "@/components/enterprise/core-v2/finance-reference-select";
@@ -14,6 +14,7 @@ import {
   type FinanceRecord,
 } from "@/components/enterprise/professional/finance-professional-workspace-shared";
 import { ProfessionalError, ProfessionalFormSection, ProfessionalLoading } from "@/components/enterprise/professional/professional-erp-ui";
+import { fetchOperationalFinanceRecord } from "@/components/enterprise/professional/use-operational-finance-collection";
 import { financeDate, financeMoney, financeStatusLabel, financeStatusTone, safeFinanceError, type FinanceLocale } from "@/components/enterprise/professional/finance-professional-ui";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -61,6 +62,7 @@ type Props = {
   error: string;
   onPage: (page: number) => void;
   onChanged: (message: string) => void;
+  initialRecordId?: string | null;
 };
 
 type FundingAction = {
@@ -91,6 +93,7 @@ export function EnterpriseFinanceFundingPanel({
   error,
   onPage,
   onChanged,
+  initialRecordId,
 }: Props) {
   const t = (key: EnterpriseTreasuryCopyKey) => translateEnterpriseTreasury(locale, key);
   const [createOpen, setCreateOpen] = useState(false);
@@ -101,7 +104,23 @@ export function EnterpriseFinanceFundingPanel({
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [idempotencyKey, setIdempotencyKey] = useState(newIdempotencyKey);
+  const [deepLinkResolved, setDeepLinkResolved] = useState(false);
   useToastMessage(errorMessage, "error");
+
+  useEffect(() => {
+    if (!initialRecordId || deepLinkResolved) return;
+    const visible = items.find((item) => item.id === initialRecordId);
+    if (visible) {
+      setDetail(visible);
+      setDeepLinkResolved(true);
+      return;
+    }
+    if (loading) return;
+    void fetchOperationalFinanceRecord<FundingOperationRecord>(`/api/enterprise/${organizationId}/funding-operations`, initialRecordId)
+      .then((record) => { if (record) setDetail(record); })
+      .catch((requestError) => setErrorMessage(safeFinanceError(requestError, t("operationError"), locale)))
+      .finally(() => setDeepLinkResolved(true));
+  }, [deepLinkResolved, initialRecordId, items, loading, locale, organizationId]);
 
   function resetCreate() {
     setFundingType("CAPITAL_CONTRIBUTION");
@@ -244,12 +263,12 @@ export function EnterpriseFinanceFundingPanel({
       </form>
     </Dialog>
 
-    <Dialog open={Boolean(action)} onClose={() => { if (!busy) setAction(null); }} title={action?.action === "REVERSE" ? t("reverseFunding") : action?.action === "APPROVE" ? t("approve") : action?.action === "CONFIRM" ? t("confirm") : (locale === "en" ? "Reject funding" : "Refuser le financement")} description={t("fundingNonRevenueNotice")} presentation="editor" className="max-w-3xl">
+    <Dialog open={Boolean(action)} onClose={() => { if (!busy) setAction(null); }} title={action?.action === "REVERSE" ? t("reverseFunding") : action?.action === "APPROVE" ? t("approve") : action?.action === "CONFIRM" ? t("confirm") : t("rejectFunding")} description={t("fundingNonRevenueNotice")} presentation="editor" className="max-w-3xl">
       <form onSubmit={transitionFunding} className="grid gap-5">
         {action?.action === "REJECT" || action?.action === "REVERSE" ? <Field label={action.action === "REVERSE" ? t("reversalReason") : t("reason")}><textarea name="reason" rows={4} required minLength={4} maxLength={1000} disabled={busy} className="w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base text-dtsc-ink outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 disabled:opacity-60 md:text-sm" /></Field> : null}
         {action?.action === "REVERSE" ? <Field label={t("reversalDate")}><Input name="accountingDate" type="date" required disabled={busy} /></Field> : null}
         {action?.action === "REVERSE" && action.record.financialAccount.accountType === "CASH" ? <Field label={t("cashSession")} help={t("cashSessionHelp")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_TREASURY" kind="cash-session" name="cashSessionId" label={t("cashSession")} locale={rawLocale} parentId={action.record.financialAccountId} required disabled={busy} emptyLabel={t("cashSessionEmpty")} /></Field> : null}
-        <Button type="submit" disabled={busy}>{action?.action === "REVERSE" ? t("reverseFunding") : action?.action === "APPROVE" ? t("approve") : action?.action === "CONFIRM" ? t("confirm") : (locale === "en" ? "Reject" : "Refuser")}</Button>
+        <Button type="submit" disabled={busy}>{action?.action === "REVERSE" ? t("reverseFunding") : action?.action === "APPROVE" ? t("approve") : action?.action === "CONFIRM" ? t("confirm") : t("reject")}</Button>
       </form>
     </Dialog>
   </>;
