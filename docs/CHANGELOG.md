@@ -17,7 +17,7 @@
 
 ### Validation
 
-- CI et OWNER_E2E restent à produire.
+- CI doit être rejouée après correction de la gouvernance PR ; OWNER_E2E reste requis avant fusion.
 
 ## 2026-09-30 — Hotfix #732 : RBAC Finance budgets et convergence Couture
 
