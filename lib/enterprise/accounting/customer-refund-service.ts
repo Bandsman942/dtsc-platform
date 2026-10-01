@@ -604,6 +604,94 @@ export async function createExactSalesCreditNoteForRefund(
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
 }
 
+export async function markCustomerRefundFinancialInverseReady(
+  organizationId: string,
+  refundPaymentId: string,
+  creditNoteId: string,
+  actorUserId: string,
+) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterprisePayment" WHERE id = ${refundPaymentId} AND "organizationId" = ${organizationId} FOR UPDATE`);
+    const refundPayment = await tx.enterprisePayment.findFirst({
+      where: {
+        id: refundPaymentId,
+        organizationId,
+        paymentType: "REFUND",
+        direction: "OUTBOUND",
+        status: { in: ["APPROVED", "CONFIRMED", "RECONCILED"] },
+      },
+    });
+    if (!refundPayment) throw new EnterpriseAccountingError("REFUND_PAYMENT_INVALID", 409);
+
+    const existing = await tx.enterprisePaymentEvent.findFirst({
+      where: { organizationId, paymentId: refundPayment.id, eventType: "REFUND_FINANCIAL_INVERSE_READY" },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, metadataJson: true },
+    });
+    if (existing) {
+      const metadata = existing.metadataJson;
+      const existingCreditNoteId = metadata && typeof metadata === "object" && !Array.isArray(metadata)
+        ? (metadata as Prisma.JsonObject).creditNoteId
+        : null;
+      if (existingCreditNoteId !== creditNoteId) {
+        throw new EnterpriseAccountingError("REFUND_FINANCIAL_INVERSE_CONFLICT", 409);
+      }
+      return { idempotent: true };
+    }
+
+    const reversal = await tx.enterprisePaymentEvent.findFirst({
+      where: { organizationId, paymentId: refundPayment.id, eventType: "REFUND_ALLOCATIONS_REVERSED" },
+      orderBy: { createdAt: "desc" },
+      select: { metadataJson: true },
+    });
+    const reversalMetadata = reversal?.metadataJson;
+    const receivableId = reversalMetadata && typeof reversalMetadata === "object" && !Array.isArray(reversalMetadata)
+      ? (reversalMetadata as Prisma.JsonObject).receivableId
+      : null;
+    if (typeof receivableId !== "string" || !receivableId) {
+      throw new EnterpriseAccountingError("REFUND_ALLOCATION_INVERSE_REQUIRED", 409);
+    }
+
+    const receivable = await tx.enterpriseReceivable.findFirst({
+      where: { id: receivableId, organizationId },
+      select: { id: true, salesInvoiceId: true },
+    });
+    if (!receivable) throw new EnterpriseAccountingError("RECEIVABLE_NOT_FOUND", 404);
+    const credit = await tx.enterpriseSalesCreditNote.findFirst({
+      where: {
+        id: creditNoteId,
+        organizationId,
+        salesInvoiceId: receivable.salesInvoiceId,
+        status: "POSTED",
+      },
+    });
+    if (!credit || !credit.grandTotal.equals(refundPayment.amount)) {
+      throw new EnterpriseAccountingError("REFUND_CREDIT_NOTE_NOT_READY", 409, {
+        creditNoteId,
+        refundAmount: refundPayment.amount.toFixed(),
+        creditAmount: credit?.grandTotal.toFixed() || null,
+      });
+    }
+
+    await tx.enterprisePaymentEvent.create({
+      data: {
+        organizationId,
+        paymentId: refundPayment.id,
+        eventType: "REFUND_FINANCIAL_INVERSE_READY",
+        summary: "Customer refund financial inverse is ready for settlement",
+        actorUserId,
+        metadataJson: {
+          receivableId: receivable.id,
+          salesInvoiceId: receivable.salesInvoiceId,
+          creditNoteId: credit.id,
+          amount: refundPayment.amount.toFixed(),
+        },
+      },
+    });
+    return { idempotent: false };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
+}
+
 export async function confirmCustomerRefundPayment(
   organizationId: string,
   paymentId: string,
@@ -626,6 +714,11 @@ export async function confirmCustomerRefundPayment(
     if (current.paymentType !== "REFUND" || current.direction !== "OUTBOUND" || !current.financialAccountId) {
       throw new EnterpriseAccountingError("REFUND_PAYMENT_INVALID", 409);
     }
+    const inverseReady = await tx.enterprisePaymentEvent.findFirst({
+      where: { organizationId, paymentId: current.id, eventType: "REFUND_FINANCIAL_INVERSE_READY" },
+      select: { id: true },
+    });
+    if (!inverseReady) throw new EnterpriseAccountingError("REFUND_FINANCIAL_INVERSE_NOT_READY", 409);
     assertIndependentActor({
       actorUserId,
       relatedUserIds: [current.initiatedByUserId, current.approvedByUserId],
