@@ -25,7 +25,70 @@ export async function reverseCustomerPaymentAllocationsForRefund(
       include: { salesInvoice: true, paymentAllocations: { where: { status: "CONFIRMED" }, include: { payment: true } } },
     });
     if (!receivable) throw new EnterpriseAccountingError("RECEIVABLE_NOT_FOUND", 404);
-    if (!receivable.paymentAllocations.length) return { reversedAmount: money(0), paymentIds: [] as string[], idempotent: true };
+    if (!receivable.paymentAllocations.length) {
+      if (!refundPaymentId) return { reversedAmount: money(0), paymentIds: [] as string[], idempotent: true };
+      const refundPayment = await tx.enterprisePayment.findFirst({
+        where: { id: refundPaymentId, organizationId, paymentType: "REFUND", direction: "OUTBOUND" },
+      });
+      if (!refundPayment) throw new EnterpriseAccountingError("REFUND_PAYMENT_INVALID", 409);
+      const existingReservation = await tx.enterprisePaymentEvent.findFirst({
+        where: { organizationId, paymentId: refundPayment.id, eventType: "REFUND_ALLOCATIONS_REVERSED" },
+        select: { id: true },
+      });
+      if (existingReservation) {
+        return { reversedAmount: refundPayment.amount, paymentIds: [] as string[], idempotent: true };
+      }
+
+      const legacyReversed = await tx.enterprisePaymentAllocation.findMany({
+        where: { organizationId, receivableId, status: "REVERSED" },
+        include: { payment: true },
+        orderBy: [{ reversedAt: "asc" }, { id: "asc" }],
+      });
+      const eligibleLegacy = legacyReversed.filter((allocation) =>
+        allocation.payment.direction === "INBOUND"
+        && allocation.payment.paymentType === "CUSTOMER_PAYMENT"
+        && ["CONFIRMED", "RECONCILED"].includes(allocation.payment.status)
+      );
+      const recoveredAmount = money(eligibleLegacy.reduce(
+        (total, allocation) => total.plus(allocation.amount),
+        new Prisma.Decimal(0),
+      ));
+      if (!recoveredAmount.equals(refundPayment.amount)) {
+        throw new EnterpriseAccountingError("REFUND_LEGACY_ALLOCATION_RECOVERY_AMBIGUOUS", 409, {
+          refundAmount: refundPayment.amount.toFixed(),
+          reversedAllocationAmount: recoveredAmount.toFixed(),
+          receivableId,
+        });
+      }
+      const recoveredByPayment = new Map<string, Prisma.Decimal>();
+      for (const allocation of eligibleLegacy) {
+        recoveredByPayment.set(
+          allocation.paymentId,
+          money((recoveredByPayment.get(allocation.paymentId) || money(0)).plus(allocation.amount)),
+        );
+      }
+      await tx.enterprisePaymentEvent.create({
+        data: {
+          organizationId,
+          paymentId: refundPayment.id,
+          eventType: "REFUND_ALLOCATIONS_REVERSED",
+          summary: "Recovered legacy customer allocation reversal for refund",
+          actorUserId,
+          metadataJson: {
+            receivableId,
+            amount: recoveredAmount.toFixed(),
+            paymentAmounts: [...recoveredByPayment.entries()].map(([paymentId, value]) => ({ paymentId, amount: value.toFixed() })),
+            reason: reason.slice(0, 500),
+            recovery: "LEGACY_REVERSED_ALLOCATIONS",
+          },
+        },
+      });
+      return {
+        reversedAmount: recoveredAmount,
+        paymentIds: [...recoveredByPayment.keys()],
+        idempotent: true,
+      };
+    }
 
     let reversedAmount = money(0);
     const paymentIds: string[] = [];
