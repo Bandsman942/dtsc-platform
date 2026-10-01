@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document defines how Pharmacy and Health business events enter the common commercial, receivables, payments, treasury and accounting chains without creating duplicate balances.
+This document defines how Pharmacy, Health, Gaming, Tailoring/Manufacturing and Retail business events enter or reference the common commercial, receivables, payments, treasury and accounting chains without creating duplicate balances.
 
 ## Authoritative chains
 
@@ -55,13 +55,56 @@ HealthMedicalInvoice
   -> EnterpriseJournalEntry
 ```
 
+### Gaming checkout and close
+
+```text
+EnterpriseGamingSession
+  -> EnterpriseGamingCheckout
+  -> EnterpriseSalesInvoice
+  -> EnterpriseReceivable
+  -> EnterprisePayment + allocation
+  -> EnterpriseFinancialAccount / EnterpriseCashSession
+  -> EnterpriseJournalEntry
+  -> EnterpriseGamingDailyClose (operational snapshot only)
+```
+
+Gaming never owns a second payment, cash account, invoice or journal. Its daily close is a sector operational snapshot reconciled against common Finance; it is not a parallel ledger.
+
+### Tailoring / Manufacturing delivery-to-finance boundary
+
+```text
+CRM customer + common Catalog
+  -> Sales / order flow in shared commercial modules
+  -> EnterpriseProductionOrder + Tailoring extensions
+  -> common Inventory material issues / valuation
+  -> TAILORING_FINISHING / READY_FOR_DELIVERY
+  -> shared sales invoice / receivable
+  -> EnterprisePayment
+  -> Treasury / Accounting
+```
+
+Tailoring owns measurements, patterns, cutting, fittings, alterations, garment tracking and finishing. It does not own customer balances, payments, cash sessions, inventory valuation or journals. The Tailoring registry exposes Finance and Sales as recommended integrations rather than duplicating them or making Enterprise-only accounting a hard runtime dependency of every workshop screen.
+
+### Retail / Shop
+
+```text
+Retail POS sale
+  -> common customer/catalog/inventory authorities
+  -> provider-neutral tender state
+  -> common Treasury / Cash impact
+  -> common double-entry posting
+  -> controlled reversal / refund
+```
+
+Mobile Money and Telco extensions keep operator-specific operational state, while financial accounts, operational balances, Treasury transactions and accounting remain common Finance authorities. Retail reversals must apply the exact inverse balance, Treasury and journal effects of the original operation.
+
 ## Event mapping
 
 | Sector event | Common event or service | Required mapping keys | Accounting effect |
 |---|---|---|---|
 | `PHARMACY_SALE_INVOICED` | common sales invoice create/approve/issue | sale, customer party, mapped catalog items, unique invoice extension | revenue, tax and receivable |
 | `PHARMACY_CUSTOMER_PAYMENT_CONFIRMED` | common payment create/approve/confirm + allocation | Pharmacy payment, common invoice/receivable, payer, financial account | treasury debit and receivable credit |
-| `PHARMACY_REFUND_CONFIRMED` | common refund payment and optional sales credit note | original payment/allocation, invoice, reason | reverse treasury and/or receivable/revenue |
+| `PHARMACY_REFUND_CONFIRMED` | **cible canonique — runtime legacy incomplet, voir #728** : common refund payment and optional sales credit note | original payment/allocation, invoice, reason | reverse treasury and/or receivable/revenue |
 | `PHARMACY_PURCHASE_RECEIVED` | common purchase receipt link | supplier, purchase, mapped catalog lines | no supplier liability by itself |
 | `PHARMACY_SUPPLIER_INVOICE_POSTED` | common supplier invoice | mapped supplier/purchase/receipt | inventory or expense and payable |
 | `PHARMACY_STOCK_ISSUED` | inventory issue valuation service | source movement, product, lot, cost | cost of sales and inventory |
@@ -91,6 +134,26 @@ eventVersion
 ```
 
 The tuple is stored in `EnterpriseSectorSyncState` and, when a journal entry is produced, in the common posting batch/idempotency structures. Repeating the same event must return the existing target objects.
+
+## Health confidentiality boundary
+
+Finance receives only controlled billing data. A Health invoice projection uses the mapped common Catalog service name for the visible line description; it never copies free-text clinical invoice-line descriptions into Finance. Diagnosis, symptoms, history of present illness, allergies, prescription text, laboratory values or interpretations and medical-document content are forbidden in Finance payloads, events and metadata.
+
+Patient financial identity remains intentionally minimal and may contain billing contact details, while the clinical source stays Health-authoritative.
+
+## Inverse symmetry
+
+Every sector flow that changes money or book value must have one controlled inverse path:
+
+| Forward effect | Required inverse |
+|---|---|
+| confirmed common payment | payment reversal/refund, opposite Treasury/Cash effect, accounting reversal |
+| issued sales invoice | credit note / authorized void according to lifecycle |
+| inventory issue / cost of sale | validated return or reversal linked to original movement |
+| Mobile Money / Telco transfer | provider operation reversal plus opposite common account/Treasury/posting effects |
+| sector daily close | correction/reopen workflow; never a silent rewrite of common Finance |
+
+A sector-specific reversal may add regulated or operational state, but it must reference the original common financial object and cannot create a competing balance.
 
 ## Currency boundaries
 
