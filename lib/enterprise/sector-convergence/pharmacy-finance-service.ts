@@ -446,12 +446,14 @@ export async function convergePharmacyRefund(
           id: cashMapping.cashSessionId,
           organizationId,
           financialAccountId: originalPayment.financialAccountId,
-          cashierUserId: source.requestedById,
           status: "OPEN",
         },
       });
       if (!commonCash) {
         throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_COMMON_CASH_SESSION_NOT_OPEN", 409);
+      }
+      if (commonCash.cashierUserId !== source.requestedById) {
+        throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_REQUESTER_MUST_MATCH_CASHIER", 409);
       }
       commonCashSessionId = commonCash.id;
     }
