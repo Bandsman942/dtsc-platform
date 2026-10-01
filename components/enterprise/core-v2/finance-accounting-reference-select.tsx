@@ -28,13 +28,14 @@ export type FinanceAccountingReferenceOption = {
   amount?: string | number | null;
   accountType?: string | null;
   chartId?: string | null;
+  templateCode?: string | null;
 };
 
 type ApiBody = { items?: unknown[] };
 
 function mapOptions(kind: AccountingReferenceKind, items: unknown[], locale?: string | null): FinanceAccountingReferenceOption[] {
   const en = locale === "en";
-  if (kind === "chart") return (items as Array<{ id: string; code: string; nameFr: string; nameEn: string; status: string }>).map((item) => ({ id: item.id, code: item.code, status: item.status, label: `${item.code} · ${en ? item.nameEn : item.nameFr}` }));
+  if (kind === "chart") return (items as Array<{ id: string; code: string; nameFr: string; nameEn: string; status: string; templateCode?: string | null }>).map((item) => ({ id: item.id, code: item.code, status: item.status, templateCode: item.templateCode || null, label: `${item.code} · ${en ? item.nameEn : item.nameFr}` }));
   if (kind === "fiscal-year") return (items as Array<{ id: string; code: string; label?: string | null; status: string }>).map((item) => ({ id: item.id, code: item.code, status: item.status, label: `${item.code}${item.label ? ` · ${item.label}` : ""} · ${item.status}` }));
   if (kind === "fiscal-period") return (items as Array<{ id: string; code: string; label?: string | null; status: string; fiscalYear?: { code?: string | null; label?: string | null } }>).map((item) => ({ id: item.id, code: item.code, status: item.status, label: `${item.fiscalYear?.code ? `${item.fiscalYear.code} · ` : ""}${item.code}${item.label ? ` · ${item.label}` : ""} · ${item.status}` }));
   if (kind === "journal") return (items as Array<{ id: string; code: string; nameFr: string; nameEn: string; journalType: string }>).map((item) => ({ id: item.id, code: item.code, label: `${item.code} · ${en ? item.nameEn : item.nameFr} · ${item.journalType}` }));
