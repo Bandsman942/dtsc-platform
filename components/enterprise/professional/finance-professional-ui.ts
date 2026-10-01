@@ -201,7 +201,6 @@ export const FINANCE_ERROR_MESSAGES: Record<FinanceLocale, Record<string, string
     REGULATORY_STATEMENT_PERIOD_INVALID: "La période choisie pour l’état financier n’est pas valide.",
     REGULATORY_STATEMENT_TYPE_NOT_SUPPORTED: "Cet état financier n’est pas disponible pour le plan comptable actif.",
     CHART_TEMPLATE_UPGRADE_REQUIRES_CONTROLLED_MIGRATION: "Cette nouvelle version nécessite une revue avant application. Consultez l’analyse d’impact puis validez la migration.",
-    CHART_OF_ACCOUNTS_REVISION_CONFLICT: "Le plan comptable a été modifié entre-temps. Actualisez la page avant de recommencer.",
     ACCOUNTING_SETUP_INPUT_INVALID: "Vérifiez les informations de configuration comptable puis réessayez.",
     FINANCE_DUPLICATE: "Une donnée identique existe déjà dans cette entreprise."
   },
@@ -334,7 +333,6 @@ export const FINANCE_ERROR_MESSAGES: Record<FinanceLocale, Record<string, string
     REGULATORY_STATEMENT_PERIOD_INVALID: "The selected financial statement period is invalid.",
     REGULATORY_STATEMENT_TYPE_NOT_SUPPORTED: "This financial statement is not available for the active chart of accounts.",
     CHART_TEMPLATE_UPGRADE_REQUIRES_CONTROLLED_MIGRATION: "This new version requires review before it can be applied. Review the impact analysis, then approve the migration.",
-    CHART_OF_ACCOUNTS_REVISION_CONFLICT: "The chart of accounts changed in the meantime. Refresh the page before trying again.",
     ACCOUNTING_SETUP_INPUT_INVALID: "Review the accounting setup information and try again.",
     FINANCE_DUPLICATE: "An identical record already exists in this company."
   }
