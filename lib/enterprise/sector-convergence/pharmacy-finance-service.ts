@@ -363,6 +363,15 @@ export async function convergePharmacyRefund(
           : null,
       ]);
       if (!payment) throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_PAYMENT_MAPPING_BROKEN", 409);
+      if (
+        source.status === "SUBMITTED"
+        && (
+          (payment.approvedByUserId && payment.approvedByUserId !== validatorUserId)
+          || (creditNote?.approvedByUserId && creditNote.approvedByUserId !== validatorUserId)
+        )
+      ) {
+        throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_VALIDATOR_MISMATCH", 409);
+      }
       return { extension: existing, payment, creditNote, idempotent: true };
     }
 
@@ -500,6 +509,9 @@ export async function convergePharmacyRefund(
     if (!["APPROVED", "CONFIRMED", "RECONCILED"].includes(refundPayment.status)) {
       throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_COMMON_PAYMENT_NOT_APPROVED", 409, { status: refundPayment.status });
     }
+    if (refundPayment.approvedByUserId && refundPayment.approvedByUserId !== validatorUserId) {
+      throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_VALIDATOR_MISMATCH", 409);
+    }
 
     const creditReason = `Pharmacy refund ${source.refundNumber}: ${source.reason}`.slice(0, 1000);
     let creditNote = await prepareSalesCreditNoteForRefundAmount(
@@ -527,6 +539,9 @@ export async function convergePharmacyRefund(
     }
     if (!["APPROVED", "POSTED"].includes(creditNote.status)) {
       throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_CREDIT_NOTE_NOT_APPROVED", 409, { status: creditNote.status });
+    }
+    if (creditNote.approvedByUserId && creditNote.approvedByUserId !== validatorUserId) {
+      throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_VALIDATOR_MISMATCH", 409);
     }
 
     const result = await prisma.$transaction(async (tx) => {
@@ -626,7 +641,7 @@ export async function settlePharmacyRefund(
   }
   await requireRefundFinanceCapabilities(organizationId, actorUserId, {
     payments: ["canWrite"],
-    receivables: ["canApprove"],
+    receivables: ["canManage"],
   });
 
   const saleMapping = await prisma.pharmacySalesExtension.findFirst({
