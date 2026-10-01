@@ -22,8 +22,17 @@ export async function GET(req: Request, { params }: Params) {
   if (!auth.ok) return auth.response;
   const item = await prisma.enterpriseFiscalYear.findFirst({ where: { id: fiscalYearId, organizationId }, include: { periods: { orderBy: { startDate: "asc" } } } });
   if (!item) return NextResponse.json({ error: "FISCAL_YEAR_NOT_FOUND", message: "Cet exercice n’existe pas dans votre entreprise." }, { status: 404 });
+  const canManage = Boolean(auth.access.capabilities.canManage);
+  const projected = {
+    ...item,
+    capabilities: {
+      canEdit: canManage && item.status === "DRAFT",
+      canDelete: canManage && item.status === "DRAFT" && item.periods.length === 0,
+      canOpen: canManage && item.status === "DRAFT",
+    },
+  };
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, fiscalYearId, domain: "fiscal-year-detail" } });
-  return NextResponse.json({ item });
+  return NextResponse.json({ item: projected });
 }
 
 export async function PATCH(req: Request, { params }: Params) {
