@@ -169,8 +169,9 @@ for (const token of [
 ]) check(e2e.includes(token), `#728 E2E coverage missing: ${token}`);
 check(
   accountingWorkflow.includes("pharmacy-refund-finance-convergence.spec.mjs")
-    && accountingWorkflow.includes("qa-hotfix-728-pharmacy-refund-finance-convergence.mjs"),
-  "Accounting acceptance must execute #728 static and browser gates",
+    && accountingWorkflow.includes("qa-hotfix-728-pharmacy-refund-finance-convergence.mjs")
+    && accountingWorkflow.includes("Reset isolated Redis state before Pharmacy refund acceptance"),
+  "Accounting acceptance must execute #728 static/browser gates with isolated auth rate-limit state",
 );
 
 if (failures.length) {
