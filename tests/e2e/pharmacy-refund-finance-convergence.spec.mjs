@@ -35,6 +35,7 @@ const modules = [
   "SUPPLIERS_PURCHASES",
   "SALES_DISPENSATION",
   "CASH_INVOICES_PAYMENTS",
+  "PHARMACY_SETTINGS",
   "FINANCE_OVERVIEW",
   "FINANCE_PAYMENTS",
   "FINANCE_RECEIVABLES",
@@ -250,6 +251,15 @@ async function prepareTenant(browser) {
   await signInAs(requesterContext, requesterEmail, requesterPassword);
   await signInAs(validatorContext, adminEmail, adminPassword);
   await signInAs(settlerContext, settlerEmail, settlerPassword);
+
+  // Initialize Pharmacy through the same authenticated Settings loader used by
+  // the UI. This creates the canonical numbering sequences (including REFUND)
+  // instead of manufacturing test-only sequence rows.
+  const pharmacySettings = await requesterContext.request.get(
+    `${baseUrl}/api/enterprise/${organizationId}/pharmacy/settings`,
+    { headers: { referer: `${baseUrl}/enterprise-modules/PHARMACY_SETTINGS` } },
+  );
+  expect(pharmacySettings.ok(), await pharmacySettings.text()).toBeTruthy();
 
   const configuration = await patch(validatorContext, `/api/enterprise/${organizationId}/finance/configuration`, {
     functionalCurrencyCode: currencyCode,
