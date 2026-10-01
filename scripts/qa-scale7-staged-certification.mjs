@@ -14,6 +14,7 @@ const paths = {
   oidc: "lib/scalability/github-actions-oidc.ts",
   authPool: "lib/scalability/scale7-auth-pool.ts",
   authRoute: "app/api/internal/scale7/auth-pool/route.ts",
+  middleware: "middleware.ts",
 };
 
 function fail(message) {
@@ -34,7 +35,8 @@ const docs = fs.readFileSync(paths.docs, "utf8");
 const oidc = fs.readFileSync(paths.oidc, "utf8");
 const authPool = fs.readFileSync(paths.authPool, "utf8");
 const authRoute = fs.readFileSync(paths.authRoute, "utf8");
-const all = [workflow, profile, report, archive, docs, oidc, authPool, authRoute].join("\n");
+const middleware = fs.readFileSync(paths.middleware, "utf8");
+const all = [workflow, profile, report, archive, docs, oidc, authPool, authRoute, middleware].join("\n");
 
 expect(/^on:\s*\n\s+workflow_dispatch:/m.test(workflow), "workflow_dispatch is required");
 expect(/^\s+issue_comment:\s*$/m.test(workflow), "owner issue_comment trigger is required");
@@ -136,6 +138,29 @@ for (const marker of [
 expect(
   observabilityRoute.includes('Vary: "Cookie, Authorization, Origin"'),
   "SCALE-7 observability responses must vary by human cookie and governed OIDC authorization",
+);
+
+for (const marker of [
+  'const SCALE7_OIDC_OBSERVABILITY_PATH = "/api/admin/scalability/observability"',
+  "function isScale7OidcObservabilityRequest(request: NextRequest)",
+  "request.nextUrl.pathname === SCALE7_OIDC_OBSERVABILITY_PATH",
+  'request.method === "GET"',
+  'authorization?.startsWith("Bearer ") === true',
+  'Boolean(request.headers.get("origin"))',
+  "isSameOriginRequest(request)",
+  "if (isScale7OidcObservabilityRequest(request))",
+]) expect(middleware.includes(marker), `middleware SCALE-7 observability delegation missing ${marker}`);
+expect(
+  middleware.includes('const dtscInternalApiRoutes = ["/api/admin", "/api/activities"]'),
+  "DTSC internal API protection must remain the general authority",
+);
+expect(
+  middleware.indexOf("if (isScale7OidcObservabilityRequest(request))") < middleware.indexOf('if (!session) {'),
+  "the exact SCALE-7 observability delegation must occur before the normal DTSC session requirement",
+);
+expect(
+  !middleware.includes('pathname.startsWith("/api/admin") && authorization?.startsWith("Bearer ")'),
+  "middleware must never allow a generic bearer bypass for all admin APIs",
 );
 
 expect(report.includes("authTopology"), "report must archive tenant and identity counts without secrets");
