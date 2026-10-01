@@ -83,7 +83,9 @@ export async function GET(req: Request, { params }: Params) {
   const resultItems = items.map(({ cashSession, ...item }) => {
     const actorBlocker = item.status === "APPROVED"
       && (item.initiatedByUserId === auth.session.userId || item.approvedByUserId === auth.session.userId)
-      ? "PAYMENT_SELF_CONFIRMATION_FORBIDDEN"
+      ? item.paymentType === "REFUND"
+        ? "REFUND_PAYMENT_SELF_CONFIRMATION_FORBIDDEN"
+        : "PAYMENT_SELF_CONFIRMATION_FORBIDDEN"
       : null;
     const cashBlocker = item.status === "APPROVED"
       ? paymentCashSessionConfirmationBlocker({ ...item, cashSession })
