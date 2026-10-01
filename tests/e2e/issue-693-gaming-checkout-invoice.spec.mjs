@@ -614,6 +614,24 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
     expect(approveResponse.ok(), JSON.stringify(approved)).toBeTruthy();
     expect(approved?.payment?.status).toBe("APPROVED");
 
+    const approverPreviewResponse = await approverContext.request.get(
+      `${baseUrl}/api/enterprise/${organizationId}/payments?recordId=${added.payment.id}`,
+      { headers: { origin: baseUrl, referer: `${baseUrl}/enterprise-modules/FINANCE_PAYMENTS` } },
+    );
+    const approverPreview = await approverPreviewResponse.json().catch(() => null);
+    expect(approverPreviewResponse.ok(), JSON.stringify(approverPreview)).toBeTruthy();
+    expect(approverPreview?.items?.[0]?.capabilities?.canConfirm).toBe(false);
+    expect(approverPreview?.items?.[0]?.confirmation?.blockerCode).toBe("PAYMENT_SELF_CONFIRMATION_FORBIDDEN");
+
+    const confirmerPreviewResponse = await confirmerContext.request.get(
+      `${baseUrl}/api/enterprise/${organizationId}/payments?recordId=${added.payment.id}`,
+      { headers: { origin: baseUrl, referer: `${baseUrl}/enterprise-modules/FINANCE_PAYMENTS` } },
+    );
+    const confirmerPreview = await confirmerPreviewResponse.json().catch(() => null);
+    expect(confirmerPreviewResponse.ok(), JSON.stringify(confirmerPreview)).toBeTruthy();
+    expect(confirmerPreview?.items?.[0]?.capabilities?.canConfirm).toBe(true);
+    expect(confirmerPreview?.items?.[0]?.confirmation?.blockerCode).toBeNull();
+
     const sameApproverConfirm = await approverContext.request.post(
       `${baseUrl}/api/enterprise/${organizationId}/payments/${added.payment.id}/transition`,
       {
@@ -935,6 +953,15 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
     expect(cashList?.items?.[0]?.currencyCode).toBe("CDF");
     expect(cashList?.items?.[0]?.financialAccount?.currencyCode).toBe("CDF");
 
+    const modernPreviewResponse = await confirmerContext.request.get(
+      `${baseUrl}/api/enterprise/${organizationId}/payments?recordId=${added.payment.id}`,
+      { headers: { origin: baseUrl, referer: `${baseUrl}/enterprise-modules/FINANCE_PAYMENTS` } },
+    );
+    const modernPreview = await modernPreviewResponse.json().catch(() => null);
+    expect(modernPreviewResponse.ok(), JSON.stringify(modernPreview)).toBeTruthy();
+    expect(modernPreview?.items?.[0]?.capabilities?.canConfirm).toBe(false);
+    expect(modernPreview?.items?.[0]?.confirmation?.blockerCode).toBe("PAYMENT_CASH_SESSION_BINDING_REQUIRED");
+
     const modernRecoveryAttempt = await confirmerContext.request.post(
       `${baseUrl}/api/enterprise/${organizationId}/payments/${added.payment.id}/transition`,
       {
@@ -953,6 +980,16 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
       where: { id: added.payment.id },
       data: { createdAt: new Date("2026-09-28T12:00:00.000Z") },
     });
+
+    const legacyPreviewResponse = await confirmerContext.request.get(
+      `${baseUrl}/api/enterprise/${organizationId}/payments?recordId=${added.payment.id}`,
+      { headers: { origin: baseUrl, referer: `${baseUrl}/enterprise-modules/FINANCE_PAYMENTS` } },
+    );
+    const legacyPreview = await legacyPreviewResponse.json().catch(() => null);
+    expect(legacyPreviewResponse.ok(), JSON.stringify(legacyPreview)).toBeTruthy();
+    expect(legacyPreview?.items?.[0]?.capabilities?.canConfirm).toBe(true);
+    expect(legacyPreview?.items?.[0]?.confirmation?.blockerCode).toBeNull();
+    expect(legacyPreview?.items?.[0]?.confirmation?.noticeCode).toBe("PAYMENT_CASH_SESSION_LEGACY_RECOVERY");
 
     const confirmResponse = await confirmerContext.request.post(
       `${baseUrl}/api/enterprise/${organizationId}/payments/${added.payment.id}/transition`,

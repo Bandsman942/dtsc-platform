@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { authorizeFinanceRequest, financeErrorResponse, financeListParams } from "@/lib/enterprise/accounting/http";
-import { createEnterprisePayment } from "@/lib/enterprise/accounting/payments-service";
+import { createEnterprisePayment, paymentCashSessionConfirmationBlocker, paymentCashSessionConfirmationNotice } from "@/lib/enterprise/accounting/payments-service";
 import { paymentCreateSchema } from "@/lib/enterprise/accounting/schemas";
 import { prisma } from "@/lib/prisma";
 
@@ -44,7 +44,7 @@ export async function GET(req: Request, { params }: Params) {
       orderBy: [{ paymentDate: "desc" }, { createdAt: "desc" }],
       skip: (page - 1) * pageSize,
       take: pageSize,
-      include: { _count: { select: { allocations: true, events: true } } },
+      include: { cashSession: { select: { status: true, financialAccountId: true } }, _count: { select: { allocations: true, events: true } } },
     }),
     prisma.enterprisePayment.count({ where }),
     prisma.enterprisePayment.groupBy({
@@ -80,21 +80,40 @@ export async function GET(req: Request, { params }: Params) {
   }) : [];
   const assignedIds = new Set(assignedApprovals.map((approval) => approval.targetEntityId));
   const capabilities = auth.access.capabilities;
-  const resultItems = items.map((item) => ({
-    ...item,
-    capabilities: {
-      canSubmit: capabilities.canSubmit && item.status === "DRAFT" && item.initiatedByUserId === auth.session.userId,
-      canApprove: capabilities.canApprove && item.status === "PENDING_APPROVAL" && assignedIds.has(item.id),
-      canCancel: capabilities.canSubmit && ["DRAFT", "PENDING_APPROVAL"].includes(item.status) && item.initiatedByUserId === auth.session.userId,
-      canConfirm: capabilities.canWrite
-        && item.status === "APPROVED"
-        && item.initiatedByUserId !== auth.session.userId
-        && item.approvedByUserId !== auth.session.userId,
-      canReconcile: capabilities.canManage && item.status === "CONFIRMED",
-      canReverse: capabilities.canManage && ["CONFIRMED", "RECONCILED"].includes(item.status),
-      canAllocate: capabilities.canWrite && ["CONFIRMED", "RECONCILED"].includes(item.status) && item.unallocatedAmount.gt(0),
-    },
-  }));
+  const resultItems = items.map(({ cashSession, ...item }) => {
+    const actorBlocker = item.status === "APPROVED"
+      && (item.initiatedByUserId === auth.session.userId || item.approvedByUserId === auth.session.userId)
+      ? item.paymentType === "REFUND"
+        ? "REFUND_PAYMENT_SELF_CONFIRMATION_FORBIDDEN"
+        : "PAYMENT_SELF_CONFIRMATION_FORBIDDEN"
+      : null;
+    const cashBlocker = item.status === "APPROVED"
+      ? paymentCashSessionConfirmationBlocker({ ...item, cashSession })
+      : null;
+    const confirmationBlocker = actorBlocker || cashBlocker;
+    const confirmationNotice = item.status === "APPROVED" && !confirmationBlocker
+      ? paymentCashSessionConfirmationNotice({ ...item, cashSession })
+      : null;
+    const canConfirm = capabilities.canWrite && item.status === "APPROVED" && !confirmationBlocker;
+
+    return {
+      ...item,
+      capabilities: {
+        canSubmit: capabilities.canSubmit && item.status === "DRAFT" && item.initiatedByUserId === auth.session.userId,
+        canApprove: capabilities.canApprove && item.status === "PENDING_APPROVAL" && assignedIds.has(item.id),
+        canCancel: capabilities.canSubmit && ["DRAFT", "PENDING_APPROVAL"].includes(item.status) && item.initiatedByUserId === auth.session.userId,
+        canConfirm,
+        canReconcile: capabilities.canManage && item.status === "CONFIRMED",
+        canReverse: capabilities.canManage && ["CONFIRMED", "RECONCILED"].includes(item.status),
+        canAllocate: capabilities.canWrite && ["CONFIRMED", "RECONCILED"].includes(item.status) && item.unallocatedAmount.gt(0),
+      },
+      confirmation: {
+        ready: canConfirm,
+        blockerCode: confirmationBlocker,
+        noticeCode: confirmationNotice,
+      },
+    };
+  });
 
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "payments", page, direction, unallocatedOnly, workflowPending, recordId: Boolean(recordId) } });
   return NextResponse.json({

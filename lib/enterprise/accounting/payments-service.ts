@@ -23,7 +23,7 @@ async function addPaymentEvent(tx: Prisma.TransactionClient, organizationId: str
 
 // Cutover of migration 20260929083000_payment_cash_session_binding.
 // Only rows created before this point may use automatic Cash-session recovery/rebinding.
-const CASH_SESSION_BINDING_CUTOVER_AT = new Date("2026-09-29T08:30:00.000Z");
+export const CASH_SESSION_BINDING_CUTOVER_AT = new Date("2026-09-29T08:30:00.000Z");
 
 type CashSessionPayment = {
   id: string;
@@ -34,8 +34,30 @@ type CashSessionPayment = {
   createdAt: Date;
 };
 
-function isLegacyCashSessionBinding(payment: CashSessionPayment) {
+export function isLegacyCashSessionBinding(payment: CashSessionPayment) {
   return payment.createdAt < CASH_SESSION_BINDING_CUTOVER_AT;
+}
+
+type CashSessionConfirmationPreview = CashSessionPayment & {
+  methodType: string;
+  cashSession?: { status: string; financialAccountId: string } | null;
+};
+
+export function paymentCashSessionConfirmationBlocker(payment: CashSessionConfirmationPreview) {
+  if (payment.methodType !== "CASH" || isLegacyCashSessionBinding(payment)) return null;
+  if (!payment.financialAccountId) return "PAYMENT_FINANCIAL_ACCOUNT_REQUIRED";
+  if (!payment.cashSessionId) return "PAYMENT_CASH_SESSION_BINDING_REQUIRED";
+  if (!payment.cashSession || payment.cashSession.financialAccountId !== payment.financialAccountId) return "PAYMENT_CASH_SESSION_INVALID";
+  if (payment.cashSession.status === "OPEN") return null;
+  if (payment.cashSession.status === "PENDING_VALIDATION") return "PAYMENT_CASH_SESSION_PENDING_VALIDATION";
+  if (payment.cashSession.status === "CLOSING") return "PAYMENT_CASH_SESSION_CLOSING";
+  return "PAYMENT_CASH_SESSION_CLOSED";
+}
+
+export function paymentCashSessionConfirmationNotice(payment: CashSessionConfirmationPreview) {
+  if (payment.methodType !== "CASH" || !isLegacyCashSessionBinding(payment)) return null;
+  if (!payment.cashSessionId || payment.cashSession?.status !== "OPEN") return "PAYMENT_CASH_SESSION_LEGACY_RECOVERY";
+  return null;
 }
 
 async function resolveCashSessionForConfirmation(

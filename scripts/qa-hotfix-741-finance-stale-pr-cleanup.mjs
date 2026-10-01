@@ -52,10 +52,14 @@ check(
 );
 
 for (const token of [
-  'item.initiatedByUserId !== auth.session.userId',
-  'item.approvedByUserId !== auth.session.userId',
+  "const actorBlocker",
+  'item.initiatedByUserId === auth.session.userId',
+  'item.approvedByUserId === auth.session.userId',
+  "const confirmationBlocker = actorBlocker || cashBlocker",
+  "const canConfirm = capabilities.canWrite",
+  "&& !confirmationBlocker",
 ]) {
-  check(paymentRoute.includes(token), `payment capabilities missing: ${token}`);
+  check(paymentRoute.includes(token), `payment confirmation capability guard missing: ${token}`);
 }
 for (const source of [financeHttp, financeUi]) {
   check(source.includes("PAYMENT_CASH_SESSION_BINDING_REQUIRED"), "safe recent Cash binding message missing");

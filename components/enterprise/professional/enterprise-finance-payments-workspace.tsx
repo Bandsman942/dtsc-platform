@@ -20,7 +20,7 @@ import {
 import { useOperationalFinanceCollection, fetchOperationalFinanceRecord } from "@/components/enterprise/professional/use-operational-finance-collection";
 import { useOperationalFinanceSummary } from "@/components/enterprise/professional/use-operational-finance-summary";
 import { ProfessionalError, ProfessionalFormSection, ProfessionalHelp, ProfessionalLoading, ProfessionalSearch, ProfessionalTabs } from "@/components/enterprise/professional/professional-erp-ui";
-import { financeEnumLabel, financeMoney, financeStatusLabel, financeStatusTone, safeFinanceError, type FinanceLocale } from "@/components/enterprise/professional/finance-professional-ui";
+import { financeEnumLabel, financeErrorMessage, financeMoney, financePaymentConfirmationCopy, financeStatusLabel, financeStatusTone, safeFinanceError, type FinanceLocale } from "@/components/enterprise/professional/finance-professional-ui";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -51,6 +51,12 @@ type PaymentCapabilities = {
   canReverse?: boolean;
   canAllocate?: boolean;
 };
+type PaymentConfirmationState = {
+  ready?: boolean;
+  blockerCode?: string | null;
+  noticeCode?: string | null;
+};
+
 type Payment = FinanceRecord & {
   number: string;
   direction: string;
@@ -68,6 +74,7 @@ type Payment = FinanceRecord & {
   maskedExternalReference?: string | null;
   revision: number;
   capabilities?: PaymentCapabilities;
+  confirmation?: PaymentConfirmationState;
 };
 type ActionTarget = { record: Payment; action: string; label: string };
 
@@ -89,6 +96,7 @@ export function EnterpriseFinancePaymentsWorkspace(props: Props) {
   const { organizationId, organizationName, definition, locale: rawLocale, canCreate, canSubmit, canApprove, canWrite, canManage } = props;
   const locale: FinanceLocale = rawLocale === "en" ? "en" : "fr";
   const t = (key: EnterpriseFinanceKey) => financeT(locale, key);
+  const confirmationCopy = financePaymentConfirmationCopy(locale);
   const { context: businessContext } = useEnterpriseBusinessContext(organizationId);
   const searchParams = useSearchParams();
   const [tab, setTab] = useState(searchParams.get("tab") || "all");
@@ -277,6 +285,28 @@ export function EnterpriseFinancePaymentsWorkspace(props: Props) {
     <Dialog open={Boolean(detail)} onClose={() => setDetail(null)} title={detail?.number || t("financeDetails")} presentation="editor" className="max-w-5xl">
       {detail ? <div className="grid gap-5">
         <div className="flex flex-wrap gap-2">{detail.status ? <StatusBadge tone={financeStatusTone(detail.status)}>{financeStatusLabel(detail.status, locale)}</StatusBadge> : null}<StatusBadge>{financeEnumLabel(detail.direction, locale)}</StatusBadge><StatusBadge>{detail.currencyCode}</StatusBadge></div>
+        {detail.status === "APPROVED" && (detail.confirmation?.ready || detail.confirmation?.blockerCode || detail.confirmation?.noticeCode) ? <div
+          data-payment-confirmation-guidance
+          role={detail.confirmation?.blockerCode ? "alert" : "status"}
+          className={detail.confirmation?.blockerCode
+            ? "rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3"
+            : detail.confirmation?.noticeCode
+              ? "rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3"
+              : "rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3"}
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusBadge tone={detail.confirmation?.blockerCode ? "danger" : detail.confirmation?.noticeCode ? "warning" : "success"}>
+              {detail.confirmation?.blockerCode ? confirmationCopy.blockedTitle : detail.confirmation?.noticeCode ? confirmationCopy.noticeTitle : confirmationCopy.readyTitle}
+            </StatusBadge>
+          </div>
+          <p className="mt-2 break-words text-sm font-semibold leading-6 text-dtsc-ink">
+            {detail.confirmation?.blockerCode
+              ? financeErrorMessage(new Error(detail.confirmation.blockerCode), locale)
+              : detail.confirmation?.noticeCode
+                ? financeErrorMessage(new Error(detail.confirmation.noticeCode), locale)
+                : confirmationCopy.readyDescription}
+          </p>
+        </div> : null}
         <FinanceDetailGrid>
           <FinanceDetailValue label={t("type")}>{financeEnumLabel(detail.paymentType, locale)}</FinanceDetailValue>
           <FinanceDetailValue label={t("method")}>{financeEnumLabel(detail.methodType, locale)}</FinanceDetailValue>
