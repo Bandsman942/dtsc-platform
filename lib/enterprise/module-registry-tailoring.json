@@ -22,6 +22,7 @@
       "applicableSectors": ["MANUFACTURING"],
       "applicableBusinessSubtypes": ["TAILORING_APPAREL"],
       "dependencies": ["MANUFACTURING_OVERVIEW", "CRM_CUSTOMERS", "CATALOG"],
+      "recommendedIntegrations": ["SALES_QUOTES_ORDERS", "FINANCE_RECEIVABLES", "FINANCE_PAYMENTS"],
       "qaContract": "enterprise-tailoring-apparel"
     },
     {
@@ -114,6 +115,7 @@
       "applicableSectors": ["MANUFACTURING"],
       "applicableBusinessSubtypes": ["TAILORING_APPAREL"],
       "dependencies": ["TAILORING_OVERVIEW", "CATALOG", "INVENTORY_LOGISTICS"],
+      "recommendedIntegrations": ["FINANCE_INVENTORY"],
       "qaContract": "enterprise-tailoring-apparel"
     },
     {
@@ -229,6 +231,7 @@
       "applicableSectors": ["MANUFACTURING"],
       "applicableBusinessSubtypes": ["TAILORING_APPAREL"],
       "dependencies": ["TAILORING_GARMENT_TRACKING", "QUALITY_CONTROL"],
+      "recommendedIntegrations": ["SALES_QUOTES_ORDERS", "FINANCE_RECEIVABLES", "FINANCE_PAYMENTS"],
       "qaContract": "enterprise-tailoring-apparel"
     }
   ]

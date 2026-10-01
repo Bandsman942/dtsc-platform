@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { assertIndependentActor } from "@/lib/enterprise/accounting/access";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { financeReference, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
-import { postBusinessEvent } from "@/lib/enterprise/accounting/posting-service";
+import { postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
 import { reverseJournalEntryTx } from "@/lib/enterprise/accounting/reversal-service";
 import { prisma } from "@/lib/prisma";
 
@@ -191,14 +191,21 @@ export async function confirmCustomerRefundPayment(
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterprisePayment" WHERE id = ${paymentId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const current = await tx.enterprisePayment.findFirst({ where: { id: paymentId, organizationId } });
     if (!current) throw new EnterpriseAccountingError("PAYMENT_NOT_FOUND", 404);
-    if (["CONFIRMED", "RECONCILED"].includes(current.status)) return current;
+    if (["CONFIRMED", "RECONCILED"].includes(current.status)) {
+      await postBusinessEventTx(tx, organizationId, actorUserId, {
+        postingEvent: "CUSTOMER_REFUND_CONFIRMED",
+        sourceEntityType: "EnterprisePayment",
+        sourceEntityId: current.id,
+      });
+      return current;
+    }
     if (current.status !== "APPROVED" || current.revision !== input.revision) throw new EnterpriseAccountingError("REFUND_PAYMENT_NOT_APPROVED", 409);
     if (current.paymentType !== "REFUND" || current.direction !== "OUTBOUND" || !current.financialAccountId) {
       throw new EnterpriseAccountingError("REFUND_PAYMENT_INVALID", 409);
     }
     assertIndependentActor({
       actorUserId,
-      relatedUserIds: [current.initiatedByUserId],
+      relatedUserIds: [current.initiatedByUserId, current.approvedByUserId],
       errorCode: "REFUND_PAYMENT_SELF_CONFIRMATION_FORBIDDEN",
     });
 
@@ -278,13 +285,13 @@ export async function confirmCustomerRefundPayment(
       toStatus: "CONFIRMED",
       metadataJson: { amount: current.amount.toFixed(), currency: current.currencyCode, financialAccountId: account.id },
     });
+    await postBusinessEventTx(tx, organizationId, actorUserId, {
+      postingEvent: "CUSTOMER_REFUND_CONFIRMED",
+      sourceEntityType: "EnterprisePayment",
+      sourceEntityId: confirmed.id,
+    });
     return confirmed;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
 
-  await postBusinessEvent(organizationId, actorUserId, {
-    postingEvent: "CUSTOMER_REFUND_CONFIRMED",
-    sourceEntityType: "EnterprisePayment",
-    sourceEntityId: payment.id,
-  });
   return payment;
 }
