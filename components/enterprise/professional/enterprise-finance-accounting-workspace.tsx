@@ -106,6 +106,15 @@ const FULLSCREEN_FORM_CLASS = "h-[100dvh] w-full max-w-none rounded-none sm:h-[9
 
 function rawText(value: unknown) { return value === null || value === undefined ? "" : String(value); }
 function rowText(row: AnyRow, key: string) { return rawText(row[key]); }
+function rowObject(row: AnyRow | null | undefined, key: string) {
+  const value = row?.[key];
+  return value && typeof value === "object" ? value as Record<string, unknown> : null;
+}
+function inputDate(value: unknown) {
+  if (!value) return "";
+  const date = new Date(String(value));
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+}
 function localizedName(row: AnyRow, locale: FinanceLocale) { return locale === "en" ? rowText(row, "nameEn") || rowText(row, "nameFr") : rowText(row, "nameFr") || rowText(row, "nameEn"); }
 function dateQueryValue(date: string, end = false) { return date ? `${date}T${end ? "23:59:59.999" : "00:00:00.000"}Z` : ""; }
 
@@ -456,8 +465,11 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
     statusColumn,
   ] : [
     { key: "mapping", label: en ? "Rule" : "Règle", render: (row) => <span className="font-black">{financeEnumLabel(rowText(row, "mappingKey"), locale) || rowText(row, "mappingKey") || "—"}</span> },
-    { key: "account", label: en ? "Target account" : "Compte cible", render: (row) => `${rowText(row, "accountCode") || "—"} · ${locale === "en" ? rowText(row, "accountNameEn") || rowText(row, "accountNameFr") : rowText(row, "accountNameFr") || rowText(row, "accountNameEn")}` },
-    { key: "source", label: en ? "Scope" : "Périmètre", render: (row) => [rowText(row, "sourceModule"), rowText(row, "sourceEntityType")].filter(Boolean).map((value) => financeEnumLabel(value, locale) || value).join(" · ") || (en ? "General" : "Générale") },
+    { key: "account", label: en ? "Target account" : "Compte cible", render: (row) => {
+      const account = rowObject(row, "ledgerAccount");
+      return account ? `${rawText(account.code) || "—"} · ${locale === "en" ? rawText(account.nameEn) || rawText(account.nameFr) : rawText(account.nameFr) || rawText(account.nameEn)}` : "—";
+    } },
+    { key: "origin", label: en ? "Rule origin" : "Origine", render: (row) => row.templateManaged ? (en ? "Accounting template" : "Template comptable") : (en ? "Manual custom rule" : "Règle manuelle") },
     statusColumn,
   ];
 
