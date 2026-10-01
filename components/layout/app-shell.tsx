@@ -22,23 +22,14 @@ import { PwaNotificationBridge } from "@/components/pwa/pwa-notification-bridge"
 import { GlobalCallToast } from "@/components/calls/global-call-toast";
 import { PromotionalBannerHost } from "@/components/promotions/promotional-banner-host";
 import { getSession } from "@/lib/auth";
-import { createAppShellPerformanceRecorder } from "@/lib/app-shell-performance";
-import { getUnreadCollaborationMessageCount } from "@/lib/collaboration";
+import { loadAppShellData, type AppShellData } from "@/lib/app-shell-data";
 import { getCurrentHostType, getDashboardUrl, getProductBranding } from "@/lib/domains";
 import { dtsc } from "@/lib/dtsc";
-import { getPendingEnterpriseInvitationCount } from "@/lib/enterprise-invitations";
-import { getEnterpriseActivityBlocks } from "@/lib/enterprise/enterprise-activity-blocks-loader";
 import { organizationLogoProxyUrl } from "@/lib/enterprise/organization-logo-storage";
-import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
-import { getEnterpriseNavigationModules } from "@/lib/enterprise/enterprise-navigation";
 import { getExperienceCopy } from "@/lib/experience-i18n";
 import { initials } from "@/lib/format";
 import { formatEnumLabelForLocale } from "@/lib/labels-i18n";
-import { COMPANY_RELATIONSHIP_USER_ACTION_STATUSES } from "@/lib/navigation/company-relationships";
-import { getVisibleNotificationWhereForSession } from "@/lib/notification-access";
-import { isDtscInternalSession } from "@/lib/organizations";
-import { prisma } from "@/lib/prisma";
-import { getVisiblePromotionalBannersForUser } from "@/lib/promotional-banners";
+import type { SessionPayload } from "@/lib/session";
 
 function brandingColor(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -49,6 +40,8 @@ function brandingColor(value: unknown) {
 export async function AppShell({
   children,
   user,
+  session: providedSession,
+  preloadedData,
 }: {
   children: React.ReactNode;
   user: {
@@ -61,81 +54,33 @@ export async function AppShell({
     pushNotificationsEnabled?: boolean;
     locale?: string | null;
   };
+  session?: SessionPayload | null;
+  preloadedData?: AppShellData;
 }) {
-  const performanceRecorder = createAppShellPerformanceRecorder();
-  const session = await getSession();
-  const requestHeaders = await headers();
+  const session = providedSession === undefined ? await getSession() : providedSession;
+  const [requestHeaders, shellData] = await Promise.all([
+    headers(),
+    preloadedData ? Promise.resolve(preloadedData) : loadAppShellData({ user, session }),
+  ]);
   const currentHostType = getCurrentHostType(requestHeaders.get("host"));
   const productBranding = getProductBranding(currentHostType, user.locale);
-  const dtscInternalContext = isDtscInternalSession(session);
-  const activeOrganizationId = session?.activeOrganizationId || null;
-  const organizationContext = session?.activeContext === "ORGANIZATION" && Boolean(activeOrganizationId);
   const showCollaborationModule = Boolean(session);
   const copy = getExperienceCopy(user.locale);
-  const notificationWhere = session
-    ? await getVisibleNotificationWhereForSession(session)
-    : { userId: user.id, organizationId: null };
-  const [
+  const {
+    activeOrganizationId,
+    organizationContext,
+    dtscInternalContext,
+    organizationMemberships,
+    pendingEnterpriseInvitations,
     unreadNotifications,
     unreadCollaboratorMessages,
-    pendingEnterpriseInvitations,
     pendingCompanyRelationships,
     employeeRecord,
-    organizationMemberships,
     enterpriseModules,
     enterpriseActivityBlocks,
     enterpriseAdminDecision,
     promotionalBanners,
-  ] = await Promise.all([
-    performanceRecorder.timed("unreadNotifications", prisma.notification.count({
-      where: {
-        ...notificationWhere,
-        readAt: null,
-      },
-    })),
-    performanceRecorder.timed("unreadCollaboratorMessages", getUnreadCollaborationMessageCount(session)),
-    performanceRecorder.timed("pendingEnterpriseInvitations", getPendingEnterpriseInvitationCount(user.id)),
-    performanceRecorder.timed("pendingCompanyRelationships", prisma.enterpriseIdentityLink.count({
-      where: {
-        userId: user.id,
-        status: { in: [...COMPANY_RELATIONSHIP_USER_ACTION_STATUSES] },
-      },
-    })),
-    performanceRecorder.timed("employeeRecord", prisma.hrcfoEmployee.findFirst({
-      where: { userId: user.id, status: { not: "EXITED" } },
-      select: { id: true },
-    })),
-    performanceRecorder.timed("organizationMemberships", prisma.organizationMember.findMany({
-      where: {
-        userId: user.id,
-        status: "ACTIVE",
-        removedAt: null,
-        organization: { status: "ACTIVE", deletedAt: null },
-      },
-      select: {
-        role: true,
-        organization: { select: { id: true, name: true, organizationType: true, logoUrl: true, brandingJson: true } },
-      },
-      orderBy: { organization: { name: "asc" } },
-      take: 12,
-    })),
-    performanceRecorder.timed("enterpriseModules", organizationContext && activeOrganizationId
-      ? getEnterpriseNavigationModules(activeOrganizationId, user.id, user.locale)
-      : Promise.resolve([])),
-    performanceRecorder.timed("enterpriseActivityBlocks", organizationContext && activeOrganizationId
-      ? getEnterpriseActivityBlocks(activeOrganizationId, user.id)
-      : Promise.resolve([])),
-    performanceRecorder.timed("enterpriseAdminDecision", organizationContext && activeOrganizationId
-      ? resolveEnterpriseModuleAccess({
-          userId: user.id,
-          organizationId: activeOrganizationId,
-          moduleCode: "ADMIN_DASHBOARD",
-          action: "manage",
-        })
-      : Promise.resolve(null)),
-    performanceRecorder.timed("promotionalBanners", getVisiblePromotionalBannersForUser(user.id, user.role)),
-  ]);
-  performanceRecorder.finish({ organizationContext });
+  } = shellData;
 
   const activeOrganization = activeOrganizationId
     ? organizationMemberships.find((membership) => membership.organization.id === activeOrganizationId)?.organization || null
