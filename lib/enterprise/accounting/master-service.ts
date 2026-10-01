@@ -9,13 +9,13 @@ export { applyDraftChartTemplate } from "@/lib/enterprise/accounting/chart-templ
 export async function createFiscalYear(
   organizationId: string,
   actorUserId: string,
-  input: { code: string; startDate: Date; endDate: Date },
+  input: { code: string; label?: string; startDate: Date; endDate: Date },
 ) {
   return prisma.$transaction(async (tx) => {
     await assertActiveClientOrganization(tx, organizationId);
     const overlap = await tx.enterpriseFiscalYear.findFirst({ where: { organizationId, startDate: { lte: input.endDate }, endDate: { gte: input.startDate } } });
     if (overlap) throw new EnterpriseAccountingError("FISCAL_YEAR_OVERLAP", 409, { fiscalYearId: overlap.id });
-    const year = await tx.enterpriseFiscalYear.create({ data: { organizationId, code: input.code, startDate: input.startDate, endDate: input.endDate, createdByUserId: actorUserId } });
+    const year = await tx.enterpriseFiscalYear.create({ data: { organizationId, code: input.code, label: input.label || null, startDate: input.startDate, endDate: input.endDate, createdByUserId: actorUserId } });
     await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseFiscalYear", entityId: year.id, eventType: "FISCAL_YEAR_CREATED", summary: `Fiscal year ${year.code} created`, actorUserId, toStatus: "DRAFT" });
     return year;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
@@ -35,14 +35,14 @@ export async function openFiscalYear(organizationId: string, fiscalYearId: strin
 export async function createFiscalPeriod(
   organizationId: string,
   actorUserId: string,
-  input: { fiscalYearId: string; code: string; startDate: Date; endDate: Date },
+  input: { fiscalYearId: string; code: string; label?: string; startDate: Date; endDate: Date },
 ) {
   return prisma.$transaction(async (tx) => {
     const year = await tx.enterpriseFiscalYear.findFirst({ where: { id: input.fiscalYearId, organizationId, status: { in: ["DRAFT", "OPEN"] } } });
     if (!year || input.startDate < year.startDate || input.endDate > year.endDate) throw new EnterpriseAccountingError("FISCAL_PERIOD_OUTSIDE_YEAR", 409);
     const overlap = await tx.enterpriseFiscalPeriod.findFirst({ where: { organizationId, startDate: { lte: input.endDate }, endDate: { gte: input.startDate } } });
     if (overlap) throw new EnterpriseAccountingError("FISCAL_PERIOD_OVERLAP", 409, { fiscalPeriodId: overlap.id });
-    const period = await tx.enterpriseFiscalPeriod.create({ data: { organizationId, fiscalYearId: year.id, code: input.code, startDate: input.startDate, endDate: input.endDate, status: "OPEN", createdByUserId: actorUserId } });
+    const period = await tx.enterpriseFiscalPeriod.create({ data: { organizationId, fiscalYearId: year.id, code: input.code, label: input.label || null, startDate: input.startDate, endDate: input.endDate, status: "OPEN", createdByUserId: actorUserId } });
     await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseFiscalPeriod", entityId: period.id, eventType: "FISCAL_PERIOD_CREATED", summary: `Fiscal period ${period.code} created`, actorUserId, toStatus: "OPEN" });
     return period;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
