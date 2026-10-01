@@ -98,6 +98,7 @@ async function applyTemplateAccounts(
 async function applyTemplateMappings(
   tx: Prisma.TransactionClient,
   organizationId: string,
+  chartId: string,
   template: AccountingChartTemplateDefinition,
   accountIds: ReadonlyMap<string, string>,
   actorUserId: string,
@@ -107,12 +108,13 @@ async function applyTemplateMappings(
     const ledgerAccountId = accountIds.get(mapping.accountCode);
     if (!ledgerAccountId) throw new EnterpriseAccountingError("CHART_TEMPLATE_MAPPING_ACCOUNT_MISSING", 409, { mappingKey: mapping.mappingKey, accountCode: mapping.accountCode });
     const existing = await tx.enterpriseAccountMapping.findFirst({
-      where: { organizationId, mappingKey: mapping.mappingKey, effectiveFrom },
+      where: { organizationId, chartId, mappingKey: mapping.mappingKey, effectiveFrom },
     });
     if (existing) continue;
     await tx.enterpriseAccountMapping.create({
       data: {
         organizationId,
+        chartId,
         mappingKey: mapping.mappingKey,
         ledgerAccountId,
         sourceModule: mapping.sourceModule || null,
@@ -167,7 +169,7 @@ async function populateDraftChartTemplate(
 
   const groupIds = await applyTemplateGroups(tx, organizationId, chart.id, template);
   const accountIds = await applyTemplateAccounts(tx, organizationId, chart.id, template, groupIds);
-  await applyTemplateMappings(tx, organizationId, template, accountIds, actorUserId);
+  await applyTemplateMappings(tx, organizationId, chart.id, template, accountIds, actorUserId);
   await applyTemplateJournals(tx, organizationId, template, actorUserId);
 
   const updated = await tx.enterpriseChartOfAccounts.update({
