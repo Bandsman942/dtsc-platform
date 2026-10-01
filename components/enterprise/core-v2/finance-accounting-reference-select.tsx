@@ -16,7 +16,8 @@ export type AccountingReferenceKind =
   | "site"
   | "inventory-item"
   | "asset"
-  | "currency";
+  | "currency"
+  | "semantic-account";
 
 export type FinanceAccountingReferenceOption = {
   id: string;
@@ -44,6 +45,7 @@ function mapOptions(kind: AccountingReferenceKind, items: unknown[], locale?: st
   if (kind === "site") return (items as Array<{ id: string; code: string; name: string; city?: string | null }>).map((item) => ({ id: item.id, code: item.code, label: `${item.code} · ${item.name}${item.city ? ` · ${item.city}` : ""}` }));
   if (kind === "inventory-item") return (items as Array<{ id: string; catalogItem: { code: string; sku?: string | null; name: string } }>).map((item) => ({ id: item.id, code: item.catalogItem.code, label: `${item.catalogItem.code}${item.catalogItem.sku ? ` · ${item.catalogItem.sku}` : ""} · ${item.catalogItem.name}` }));
   if (kind === "asset") return (items as Array<{ id: string; code: string; name: string; serialNumber?: string | null; currency?: string | null; indicativeValue?: string | number | null }>).map((item) => ({ id: item.id, code: item.code, currency: item.currency, amount: item.indicativeValue, label: `${item.code} · ${item.name}${item.serialNumber ? ` · ${item.serialNumber}` : ""}${item.currency ? ` · ${item.currency}` : ""}` }));
+  if (kind === "semantic-account") return (items as Array<{ id: string; code: string; labelFr: string; labelEn: string; category: string; domain: string }>).map((item) => ({ id: item.id, code: item.code, accountType: item.category, label: `${en ? item.labelEn : item.labelFr} · ${item.domain}` }));
   return (items as Array<{ id: string; code: string; name: string }>).map((item) => ({ id: item.code, code: item.code, currency: item.code, label: `${item.code} · ${item.name}` }));
 }
 
