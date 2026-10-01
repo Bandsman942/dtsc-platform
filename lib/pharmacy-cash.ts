@@ -123,8 +123,10 @@ export async function createRefund(organizationId: string, userId: string, data:
     if (paymentId && !payment) throw new Error("PAYMENT_NOT_FOUND");
     if (cashSessionId && !session) throw new Error("SESSION_NOT_OPEN");
     if (sale.currency !== data.currency) throw new Error("REFUND_CURRENCY_MISMATCH");
-    if (Number(aggregate._sum.amount || 0) + data.amount > Number(sale.paidAmount)) throw new Error("REFUND_EXCEEDS_PAID");
-    if (data.restockItems && data.amount < Number(sale.paidAmount)) throw new Error("RESTOCK_REQUIRES_FULL_REFUND");
+    const requestedAmount = new Prisma.Decimal(data.amount);
+    const alreadyReservedAmount = new Prisma.Decimal(aggregate._sum.amount || 0);
+    if (alreadyReservedAmount.plus(requestedAmount).greaterThan(sale.paidAmount)) throw new Error("REFUND_EXCEEDS_PAID");
+    if (data.restockItems && requestedAmount.lessThan(sale.paidAmount)) throw new Error("RESTOCK_REQUIRES_FULL_REFUND");
     return transaction.pharmacyRefund.create({
       data: {
         organizationId,
