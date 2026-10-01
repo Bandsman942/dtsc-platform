@@ -430,7 +430,7 @@ test.describe.serial("Hotfix #728 Pharmacy refund Finance convergence", () => {
     expect(Number(invoice.outstandingAmount)).toBe(0);
 
     expect(await prisma.enterpriseTreasuryTransaction.count({ where: { organizationId, paymentId: commonRefund.id, direction: "OUTBOUND", status: "CONFIRMED" } })).toBe(1);
-    expect(await prisma.enterpriseCashMovement.count({ where: { organizationId, paymentId: commonRefund.id, direction: "OUT" } })).toBe(1);
+    expect(await prisma.enterpriseCashMovement.count({ where: { organizationId, paymentId: commonRefund.id, direction: "OUTBOUND" } })).toBe(1);
     expect(await prisma.enterpriseJournalEntry.count({ where: { organizationId, postingEvent: "CUSTOMER_REFUND_CONFIRMED", sourceEntityId: commonRefund.id, status: "POSTED" } })).toBe(1);
 
     const retry = await refundAction(settlerContext, scenario.refund.id, "mark-refund-paid");
