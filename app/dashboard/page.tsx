@@ -21,7 +21,9 @@ import { EmptyState } from "@/components/workspace/empty-state";
 import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
+import { getAccountMembershipSnapshot } from "@/lib/account/account-membership-snapshot";
 import { getPersonalWorkspaceSummary, type WorkspaceActionPriority } from "@/lib/account/personal-workspace";
+import { loadAppShellData } from "@/lib/app-shell-data";
 import { getSession, requireUser } from "@/lib/auth";
 import { getSupportUrl } from "@/lib/domains";
 import { fillExperienceTemplate, getExperienceCopy, getIntlLocale } from "@/lib/experience-i18n";
@@ -44,7 +46,11 @@ export default async function DashboardPage() {
 
   const copy = getExperienceCopy(user.locale).dashboard;
   const intlLocale = getIntlLocale(user.locale);
-  const workspace = await getPersonalWorkspaceSummary({ user, session });
+  const membershipSnapshot = await getAccountMembershipSnapshot(user.id);
+  const [workspace, shellData] = await Promise.all([
+    getPersonalWorkspaceSummary({ user, session, membershipSnapshot }),
+    loadAppShellData({ user, session, membershipSnapshot }),
+  ]);
   const subscription = workspace.subscription;
   const contextLabel = workspace.context.type === "PERSONAL"
     ? copy.personal
@@ -54,7 +60,7 @@ export default async function DashboardPage() {
   const organizationHint = workspace.context.organizationName || copy.globalAccount;
 
   return (
-    <AppShell user={user}>
+    <AppShell user={user} session={session} preloadedData={shellData}>
       <ModuleWorkspace>
         <ModuleHeader
           eyebrow={fillExperienceTemplate(copy.welcome, { name: user.name })}
