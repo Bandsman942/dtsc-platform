@@ -148,12 +148,11 @@ export function EnterpriseFinanceTreasuryWorkspace(props: Props) {
   useEffect(() => {
     const accountId = searchParams.get("accountId");
     const transferId = searchParams.get("transferId");
-    const fundingOperationId = searchParams.get("fundingOperationId");
-    if (!accountId && !transferId && !fundingOperationId) return;
-    const targetEndpoint = accountId ? "financial-accounts" : fundingOperationId ? "funding-operations" : "account-transfers";
-    const id = accountId || fundingOperationId || transferId || "";
+    if (!accountId && !transferId) return;
+    const targetEndpoint = accountId ? "financial-accounts" : "account-transfers";
+    const id = accountId || transferId || "";
     void fetchOperationalFinanceRecord<FinanceRecord>(`/api/enterprise/${organizationId}/${targetEndpoint}`, id)
-      .then((record) => { if (record && fundingOperationId) { setTab("funding"); setDetail(null); } else if (record) { setTab(accountId ? "accounts" : "transfers"); setDetail(record); } })
+      .then((record) => { if (record) { setTab(accountId ? "accounts" : "transfers"); setDetail(record); } })
       .catch((error) => setErrorMessage(safeFinanceError(error, t("loadError"), locale)));
   }, [organizationId, searchParams]);
 
@@ -260,6 +259,7 @@ export function EnterpriseFinanceTreasuryWorkspace(props: Props) {
         error={collection.error}
         onPage={setPage}
         onChanged={refresh}
+        initialRecordId={searchParams.get("fundingOperationId")}
       /> : <ModuleSection title={sectionTitle} description={tab === "history" ? t("historyDescription") : t("description")}>
         {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : <FinanceRecordList items={collection.items} locale={locale} emptyTitle={t("noItems")} emptyDescription={t("noItemsDescription")} onOpen={(record) => setDetail(record)} actions={tab === "accounts" ? (record) => accountActions(record as Account) : undefined} />}
         <FinancePaginationControls pagination={collection.pagination} page={page} onPage={setPage} locale={locale} />
