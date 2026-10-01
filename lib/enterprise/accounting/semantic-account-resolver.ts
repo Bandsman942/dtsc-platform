@@ -31,6 +31,7 @@ export async function resolveSemanticPostingAccount(
       isActive: true,
       OR: [{ effectiveFrom: null }, { effectiveFrom: { lte: input.accountingDate } }],
       AND: [{ OR: [{ effectiveTo: null }, { effectiveTo: { gte: input.accountingDate } }] }],
+      ledgerAccount: { chart: { status: "ACTIVE" } },
     },
     orderBy: [{ effectiveFrom: "desc" }, { createdAt: "desc" }],
   });
