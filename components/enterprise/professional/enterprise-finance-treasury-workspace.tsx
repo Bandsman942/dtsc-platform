@@ -236,8 +236,8 @@ export function EnterpriseFinanceTreasuryWorkspace(props: Props) {
   const selectedTransfer = tab === "transfers" ? detail as Transfer | null : null;
   const selectedHistory = tab === "history" ? detail as HistoryItem | null : null;
   const tabItems = [
-    { id: "accounts", label: t("financialAccounts") },
-    { id: "funding", label: t("funding") },
+    { id: "accounts", label: tab === "accounts" ? `${t("financialAccounts")} ${collection.pagination.total}` : t("financialAccounts") },
+    { id: "funding", label: tab === "funding" ? `${t("funding")} ${collection.pagination.total}` : t("funding") },
     { id: "transfers", label: t("transfers") },
     { id: "history", label: t("history") },
   ];
