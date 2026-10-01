@@ -108,7 +108,7 @@ hasAll(commonWorkspace, [
   "getControlledStatusLabel",
   'locale === "en" ? "en-US" : "fr-FR"',
 ], "Common ERP workspace i18n");
-need(!read("components/enterprise/enterprise-module-workspace.tsx").includes('tw("accessResponsibilities")'), "Le bloc décoratif Accès et responsabilités doit rester absent du shell ERP commun.");
+check(!read("components/enterprise/enterprise-module-workspace.tsx").includes('tw("accessResponsibilities")'), "Le bloc décoratif Accès et responsabilités doit rester absent du shell ERP commun.");
 check(!commonWorkspace.includes('toLocaleDateString("fr-FR")'), "Common ERP workspace must not hardcode fr-FR date rendering.");
 check(!commonWorkspace.includes('toLocaleString("fr-FR")'), "Common ERP workspace must not hardcode fr-FR date-time rendering.");
 for (const forbidden of ["Workflow actif", "Workflow inactif", "Poste actif", "Département actif", "Mis à jour le"]) {
