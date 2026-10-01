@@ -65,7 +65,7 @@ export const ledgerAccountCreateSchema = z.object({
   code: z.string().trim().min(1).max(40),
   nameFr: z.string().trim().min(2).max(180),
   nameEn: z.string().trim().min(2).max(180),
-  accountType: z.enum(ACCOUNT_TYPES),
+  accountType: z.enum(ACCOUNT_TYPES).optional(),
   accountSubtype: z.enum(ACCOUNT_SUBTYPES).optional(),
   parentId: z.string().min(1).optional(),
   currencyCode: currencyCodeSchema.optional(),
