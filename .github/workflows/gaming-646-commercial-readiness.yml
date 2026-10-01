@@ -20,6 +20,7 @@ on:
       - "scripts/qa-hotfix-693-gaming-checkout-invoice.mjs"
       - "scripts/qa-hotfix-696-gaming-session-transitions.mjs"
       - "scripts/qa-hotfix-698-gaming-payment-convergence.mjs"
+      - "scripts/qa-hotfix-741-finance-stale-pr-cleanup.mjs"
       - "scripts/qa-regression-checks.mjs"
       - "tests/e2e/issue-646-gaming-commercial-readiness.spec.mjs"
       - "tests/e2e/issue-693-gaming-checkout-invoice.spec.mjs"
@@ -123,6 +124,8 @@ jobs:
         run: node scripts/qa-hotfix-696-gaming-session-transitions.mjs
       - name: Validate hotfix 698 Gaming/Finance payment convergence
         run: node scripts/qa-hotfix-698-gaming-payment-convergence.mjs
+      - name: Validate hotfix 741 Finance cleanup
+        run: node scripts/qa-hotfix-741-finance-stale-pr-cleanup.mjs
       - name: Run regression QA
         run: pnpm qa:regression
       - name: Type-check
