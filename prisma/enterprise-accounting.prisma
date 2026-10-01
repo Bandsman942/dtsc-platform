@@ -112,6 +112,7 @@ model EnterpriseChartOfAccounts {
   updatedAt       DateTime                 @updatedAt
   groups          EnterpriseAccountGroup[]
   accounts        EnterpriseLedgerAccount[]
+  accountMappings EnterpriseAccountMapping[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, code])
@@ -183,6 +184,7 @@ model EnterpriseLedgerAccount {
 model EnterpriseAccountMapping {
   id                  String   @id @default(cuid())
   organizationId      String
+  chartId             String
   mappingKey          String
   ledgerAccountId     String
   sourceModule        String?
@@ -194,10 +196,12 @@ model EnterpriseAccountMapping {
   revision            Int      @default(1)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
+  chart               EnterpriseChartOfAccounts @relation(fields: [organizationId, chartId], references: [organizationId, id], onDelete: Restrict)
   ledgerAccount       EnterpriseLedgerAccount @relation(fields: [organizationId, ledgerAccountId], references: [organizationId, id], onDelete: Restrict)
 
   @@unique([organizationId, id])
-  @@unique([organizationId, mappingKey, effectiveFrom])
+  @@unique([organizationId, chartId, mappingKey, effectiveFrom])
+  @@index([organizationId, chartId, isActive])
   @@index([organizationId, ledgerAccountId, isActive])
 }
 
