@@ -19,6 +19,7 @@ const backfill = read("scripts/lib/sector-backfill-handlers.mjs");
 const workspace = read("components/enterprise/pharmacy-cash-workspace.tsx");
 const e2e = read("tests/e2e/pharmacy-refund-finance-convergence.spec.mjs");
 const accountingWorkflow = read(".github/workflows/accounting-acceptance.yml");
+const gamingCheckout = read("lib/enterprise/gaming/checkout-commands.ts");
 
 for (const token of [
   "model PharmacyRefundExtension",
@@ -78,6 +79,10 @@ for (const token of [
   "REFUND_ALLOCATIONS_REVERSED",
   "prepareSalesCreditNoteForRefundAmount",
   "CREDIT_NOTE_EXCEEDS_REFUNDABLE_INVOICE",
+  "consumeCustomerPaymentRefundAvailability",
+  "REFUND_SOURCE_AVAILABILITY_CONSUMED",
+  "REFUND_AVAILABILITY_CONSUMED",
+  "paymentAmounts",
 ]) check(commonRefund.includes(token), `bounded common refund primitive missing: ${token}`);
 
 check(
@@ -87,6 +92,17 @@ check(
 check(
   payments.includes("cashSessionId?: string | null") && payments.includes("id: input.cashSessionId"),
   "Internal payment creation must support exact mapped Cash session binding",
+);
+check(
+  payments.includes("reservedForRefund")
+    && payments.includes("ALLOCATION_REVERSED_FOR_REFUND")
+    && payments.includes("REFUND_AVAILABILITY_CONSUMED"),
+  "Common payment allocation must exclude amounts reserved for customer refunds",
+);
+check(
+  gamingCheckout.includes("consumeCustomerPaymentRefundAvailability")
+    && gamingCheckout.includes("refundReason, refund.id"),
+  "Gaming full refunds must use the same source-payment reservation lifecycle",
 );
 check(
   receivables.includes('throw new EnterpriseAccountingError("CREDIT_NOTE_EXCEEDS_OPEN_RECEIVABLE", 409)')
@@ -123,6 +139,8 @@ for (const token of [
   "active tenant cannot mutate a foreign Pharmacy refund",
   "PHARMACY_REFUND_SELF_VALIDATION_FORBIDDEN",
   "PHARMACY_REFUND_SELF_SETTLEMENT_FORBIDDEN",
+  "PAYMENT_ALLOCATION_EXCEEDS_UNALLOCATED",
+  "sourcePaymentAfterRefund.unallocatedAmount",
 ]) check(e2e.includes(token), `#728 E2E coverage missing: ${token}`);
 check(
   accountingWorkflow.includes("pharmacy-refund-finance-convergence.spec.mjs")
