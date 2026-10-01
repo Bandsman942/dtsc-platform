@@ -334,105 +334,115 @@ export async function reverseCustomerPaymentAllocationsForRefundAmount(
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
 }
 
+async function consumeCustomerPaymentRefundAvailabilityTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  refundPaymentId: string,
+  actorUserId: string,
+) {
+  await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterprisePayment" WHERE id = ${refundPaymentId} AND "organizationId" = ${organizationId} FOR UPDATE`);
+  const refundPayment = await tx.enterprisePayment.findFirst({
+    where: {
+      id: refundPaymentId,
+      organizationId,
+      paymentType: "REFUND",
+      direction: "OUTBOUND",
+      status: { in: ["CONFIRMED", "RECONCILED"] },
+    },
+  });
+  if (!refundPayment) throw new EnterpriseAccountingError("REFUND_PAYMENT_NOT_CONFIRMED", 409);
+
+  const alreadyConsumed = await tx.enterprisePaymentEvent.findFirst({
+    where: { organizationId, paymentId: refundPayment.id, eventType: "REFUND_SOURCE_AVAILABILITY_CONSUMED" },
+    select: { id: true },
+  });
+  if (alreadyConsumed) return { idempotent: true };
+
+  const reservation = await tx.enterprisePaymentEvent.findFirst({
+    where: { organizationId, paymentId: refundPayment.id, eventType: "REFUND_ALLOCATIONS_REVERSED" },
+    orderBy: { createdAt: "desc" },
+    select: { metadataJson: true },
+  });
+  const metadata = reservation?.metadataJson;
+  const paymentAmounts = metadata && typeof metadata === "object" && !Array.isArray(metadata)
+    ? (metadata as Prisma.JsonObject).paymentAmounts
+    : null;
+  if (!Array.isArray(paymentAmounts) || paymentAmounts.length === 0) {
+    throw new EnterpriseAccountingError("REFUND_SOURCE_RESERVATION_MISSING", 409);
+  }
+
+  const normalized = paymentAmounts.map((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) throw new EnterpriseAccountingError("REFUND_SOURCE_RESERVATION_INVALID", 409);
+    const value = item as Prisma.JsonObject;
+    const paymentId = typeof value.paymentId === "string" ? value.paymentId : "";
+    const amountValue = typeof value.amount === "string" || typeof value.amount === "number" ? value.amount : null;
+    if (!paymentId || amountValue === null) throw new EnterpriseAccountingError("REFUND_SOURCE_RESERVATION_INVALID", 409);
+    const amount = money(amountValue);
+    if (!amount.isPositive()) throw new EnterpriseAccountingError("REFUND_SOURCE_RESERVATION_INVALID", 409);
+    return { paymentId, amount };
+  });
+
+  for (const item of normalized) {
+    await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterprisePayment" WHERE id = ${item.paymentId} AND "organizationId" = ${organizationId} FOR UPDATE`);
+    const sourcePayment = await tx.enterprisePayment.findFirst({
+      where: {
+        id: item.paymentId,
+        organizationId,
+        direction: "INBOUND",
+        paymentType: "CUSTOMER_PAYMENT",
+        status: { in: ["CONFIRMED", "RECONCILED"] },
+      },
+    });
+    if (!sourcePayment || sourcePayment.unallocatedAmount.lessThan(item.amount)) {
+      throw new EnterpriseAccountingError("REFUND_SOURCE_AVAILABILITY_CONFLICT", 409, {
+        paymentId: item.paymentId,
+        requiredAmount: item.amount.toFixed(),
+        unallocatedAmount: sourcePayment?.unallocatedAmount.toFixed() || "0",
+      });
+    }
+    await tx.enterprisePayment.update({
+      where: { id: sourcePayment.id },
+      data: {
+        unallocatedAmount: money(sourcePayment.unallocatedAmount.minus(item.amount)),
+        revision: { increment: 1 },
+      },
+    });
+    await tx.enterprisePaymentEvent.create({
+      data: {
+        organizationId,
+        paymentId: sourcePayment.id,
+        eventType: "REFUND_AVAILABILITY_CONSUMED",
+        summary: "Reversed allocation availability consumed by confirmed refund",
+        actorUserId,
+        metadataJson: { refundPaymentId: refundPayment.id, amount: item.amount.toFixed() },
+      },
+    });
+  }
+
+  await tx.enterprisePaymentEvent.create({
+    data: {
+      organizationId,
+      paymentId: refundPayment.id,
+      eventType: "REFUND_SOURCE_AVAILABILITY_CONSUMED",
+      summary: "Customer payment availability consumed by refund",
+      actorUserId,
+      metadataJson: {
+        paymentAmounts: normalized.map((item) => ({ paymentId: item.paymentId, amount: item.amount.toFixed() })),
+      },
+    },
+  });
+  return { idempotent: false };
+}
+
 export async function consumeCustomerPaymentRefundAvailability(
   organizationId: string,
   refundPaymentId: string,
   actorUserId: string,
 ) {
-  return prisma.$transaction(async (tx) => {
-    await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterprisePayment" WHERE id = ${refundPaymentId} AND "organizationId" = ${organizationId} FOR UPDATE`);
-    const refundPayment = await tx.enterprisePayment.findFirst({
-      where: {
-        id: refundPaymentId,
-        organizationId,
-        paymentType: "REFUND",
-        direction: "OUTBOUND",
-        status: { in: ["CONFIRMED", "RECONCILED"] },
-      },
-    });
-    if (!refundPayment) throw new EnterpriseAccountingError("REFUND_PAYMENT_NOT_CONFIRMED", 409);
-
-    const alreadyConsumed = await tx.enterprisePaymentEvent.findFirst({
-      where: { organizationId, paymentId: refundPayment.id, eventType: "REFUND_SOURCE_AVAILABILITY_CONSUMED" },
-      select: { id: true },
-    });
-    if (alreadyConsumed) return { idempotent: true };
-
-    const reservation = await tx.enterprisePaymentEvent.findFirst({
-      where: { organizationId, paymentId: refundPayment.id, eventType: "REFUND_ALLOCATIONS_REVERSED" },
-      orderBy: { createdAt: "desc" },
-      select: { metadataJson: true },
-    });
-    const metadata = reservation?.metadataJson;
-    const paymentAmounts = metadata && typeof metadata === "object" && !Array.isArray(metadata)
-      ? (metadata as Prisma.JsonObject).paymentAmounts
-      : null;
-    if (!Array.isArray(paymentAmounts) || paymentAmounts.length === 0) {
-      throw new EnterpriseAccountingError("REFUND_SOURCE_RESERVATION_MISSING", 409);
-    }
-
-    const normalized = paymentAmounts.map((item) => {
-      if (!item || typeof item !== "object" || Array.isArray(item)) throw new EnterpriseAccountingError("REFUND_SOURCE_RESERVATION_INVALID", 409);
-      const value = item as Prisma.JsonObject;
-      const paymentId = typeof value.paymentId === "string" ? value.paymentId : "";
-      const amountValue = typeof value.amount === "string" || typeof value.amount === "number" ? value.amount : null;
-      if (!paymentId || amountValue === null) throw new EnterpriseAccountingError("REFUND_SOURCE_RESERVATION_INVALID", 409);
-      const amount = money(amountValue);
-      if (!amount.isPositive()) throw new EnterpriseAccountingError("REFUND_SOURCE_RESERVATION_INVALID", 409);
-      return { paymentId, amount };
-    });
-
-    for (const item of normalized) {
-      await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterprisePayment" WHERE id = ${item.paymentId} AND "organizationId" = ${organizationId} FOR UPDATE`);
-      const sourcePayment = await tx.enterprisePayment.findFirst({
-        where: {
-          id: item.paymentId,
-          organizationId,
-          direction: "INBOUND",
-          paymentType: "CUSTOMER_PAYMENT",
-          status: { in: ["CONFIRMED", "RECONCILED"] },
-        },
-      });
-      if (!sourcePayment || sourcePayment.unallocatedAmount.lessThan(item.amount)) {
-        throw new EnterpriseAccountingError("REFUND_SOURCE_AVAILABILITY_CONFLICT", 409, {
-          paymentId: item.paymentId,
-          requiredAmount: item.amount.toFixed(),
-          unallocatedAmount: sourcePayment?.unallocatedAmount.toFixed() || "0",
-        });
-      }
-      await tx.enterprisePayment.update({
-        where: { id: sourcePayment.id },
-        data: {
-          unallocatedAmount: money(sourcePayment.unallocatedAmount.minus(item.amount)),
-          revision: { increment: 1 },
-        },
-      });
-      await tx.enterprisePaymentEvent.create({
-        data: {
-          organizationId,
-          paymentId: sourcePayment.id,
-          eventType: "REFUND_AVAILABILITY_CONSUMED",
-          summary: "Reversed allocation availability consumed by confirmed refund",
-          actorUserId,
-          metadataJson: { refundPaymentId: refundPayment.id, amount: item.amount.toFixed() },
-        },
-      });
-    }
-
-    await tx.enterprisePaymentEvent.create({
-      data: {
-        organizationId,
-        paymentId: refundPayment.id,
-        eventType: "REFUND_SOURCE_AVAILABILITY_CONSUMED",
-        summary: "Customer payment availability consumed by refund",
-        actorUserId,
-        metadataJson: {
-          paymentAmounts: normalized.map((item) => ({ paymentId: item.paymentId, amount: item.amount.toFixed() })),
-        },
-      },
-    });
-    return { idempotent: false };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
+  return prisma.$transaction(
+    (tx) => consumeCustomerPaymentRefundAvailabilityTx(tx, organizationId, refundPaymentId, actorUserId),
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 },
+  );
 }
 
 export async function prepareSalesCreditNoteForRefundAmount(
@@ -797,6 +807,7 @@ export async function confirmCustomerRefundPayment(
       toStatus: "CONFIRMED",
       metadataJson: { amount: current.amount.toFixed(), currency: current.currencyCode, financialAccountId: account.id },
     });
+    await consumeCustomerPaymentRefundAvailabilityTx(tx, organizationId, confirmed.id, actorUserId);
     await postBusinessEventTx(tx, organizationId, actorUserId, {
       postingEvent: "CUSTOMER_REFUND_CONFIRMED",
       sourceEntityType: "EnterprisePayment",
