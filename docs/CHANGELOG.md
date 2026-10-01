@@ -1,3 +1,31 @@
+## 2026-10-01 — Hotfix #743 : extraction propre de la convergence Finance sectorielle
+
+### Corrigé
+
+- Les lignes de facturation Health projetées vers Finance n’utilisent plus la description médicale libre ; elles affichent le nom contrôlé du service provenant du Catalog commun du même tenant.
+- Les lignes Pharmacy projetées vers Finance n’utilisent plus un UUID produit comme libellé ; elles réutilisent le nom métier du Catalog commun.
+- Les mappings Catalog absents ou archivés bloquent la convergence au lieu de fabriquer un libellé technique.
+- La QA de confidentialité Health interdit désormais explicitement les diagnostics, symptômes, antécédents, allergies, prescriptions, valeurs/interprétations laboratoire et descriptions cliniques libres dans les projections Finance.
+- Le registre Couture expose des `recommendedIntegrations` vers les ventes, créances, paiements et la valorisation de stock, sans transformer ces intégrations en dépendances bloquantes ni en entitlement implicite.
+- La documentation de convergence couvre Gaming, Couture/Manufacturing, Retail, la frontière Health/Finance et la symétrie des inverses.
+- Le remboursement Pharmacy legacy reste explicitement déclaré incomplet et demeure suivi par #728.
+- La QA `qa:hotfix-743` est branchée dans la régression canonique et l’Accounting acceptance.
+
+### Nettoyage des anciennes branches
+
+- #726 et #727 restent fermées et sont supersédées par les correctifs Finance déjà fusionnés #731/#733.
+- Le reliquat encore utile de #729 est réimplémenté proprement depuis le `main` courant dans #743 ; l’ancienne branche n’est pas réutilisée comme autorité.
+
+### Données et sécurité
+
+- Aucune migration ni backfill.
+- Aucun entitlement ni permission élargi.
+- La projection Finance Health transporte moins de contenu clinique qu’auparavant.
+
+### Validation
+
+- CI et OWNER_E2E Health/Pharmacy restent à produire sur la PR de #743.
+
 ## 2026-09-30 — Hotfix #738 : navigation Finance structurée
 
 ### Corrigé
