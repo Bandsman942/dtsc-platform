@@ -17,6 +17,8 @@ const receivables = read("lib/enterprise/accounting/receivables-service.ts");
 const assignedCredit = read("lib/enterprise/accounting/accounting-document-approval-orchestration.ts");
 const backfill = read("scripts/lib/sector-backfill-handlers.mjs");
 const workspace = read("components/enterprise/pharmacy-cash-workspace.tsx");
+const e2e = read("tests/e2e/pharmacy-refund-finance-convergence.spec.mjs");
+const accountingWorkflow = read(".github/workflows/accounting-acceptance.yml");
 
 for (const token of [
   "model PharmacyRefundExtension",
@@ -103,6 +105,19 @@ check(
 check(
   workspace.includes("Finance :") && workspace.includes("Payer le remboursement"),
   "Pharmacy UI must surface common Finance refund state and settlement wording",
+);
+for (const token of [
+  "partial refund is bounded",
+  "total refund fully reverses",
+  "closed mapped Cash session",
+  "active tenant cannot mutate a foreign Pharmacy refund",
+  "PHARMACY_REFUND_SELF_VALIDATION_FORBIDDEN",
+  "PHARMACY_REFUND_SELF_SETTLEMENT_FORBIDDEN",
+]) check(e2e.includes(token), `#728 E2E coverage missing: ${token}`);
+check(
+  accountingWorkflow.includes("pharmacy-refund-finance-convergence.spec.mjs")
+    && accountingWorkflow.includes("qa-hotfix-728-pharmacy-refund-finance-convergence.mjs"),
+  "Accounting acceptance must execute #728 static and browser gates",
 );
 
 if (failures.length) {
