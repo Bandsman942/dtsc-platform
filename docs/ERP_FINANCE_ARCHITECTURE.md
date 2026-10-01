@@ -73,6 +73,12 @@ Iterations 4 and 5 expose the common finance and accounting engines through dedi
 
 The workspace layer may format labels, dates and amounts, but never recalculates a canonical financial balance or bypasses a service transition. Large lists and ledger views are paginated server-side.
 
+### Server-derived action readiness
+
+For sensitive Finance actions, the UI consumes server-derived capabilities and guidance rather than recreating business rules client-side. For payment confirmation, the API derives the current actor separation and Cash-session readiness from the canonical Finance policy and returns a bounded `confirmation` view state (`ready`, `blockerCode`, `noticeCode`). The client translates those codes into human FR/EN guidance and hides actions that are already known to be impossible.
+
+This preview never replaces mutation-time validation: confirmation services re-lock the payment and revalidate status, revision, actor independence, financial account and Cash-session binding inside the transaction. Historical pre-cutover Cash recovery remains a server compatibility path and is shown only as a non-blocking notice when applicable.
+
 ## Posting and immutability
 
 A business event is posted through the single common posting engine. The stable identity includes tenant, source type, source id, posting event and posting version. Network retries and duplicate user actions reuse the existing posting batch.
