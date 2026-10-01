@@ -114,7 +114,7 @@ For Neon Production:
 
 - `DATABASE_URL` should be the pooled `-pooler` endpoint;
 - `DIRECT_URL` may hold the direct endpoint for Prisma CLI/admin operations;
-- pooled Neon runtime URLs receive conservative defaults only when the operator did not set explicit values: `connection_limit=1`, `pool_timeout=5`, `connect_timeout=10`;
+- pooled Neon runtime URLs receive the current measured candidate only when the operator did not set explicit values: `connection_limit=9`, `pool_timeout=5`, `connect_timeout=10` (#751);
 - Prisma interactive transactions keep explicit defaults of `maxWait=2s` and `timeout=5s`;
 - a direct Neon runtime endpoint is surfaced as an operational warning rather than silently rewritten;
 - the CTO dashboard marks idle-in-transaction sessions, >1 s active queries, ≥80% connection utilization or an unverified/unpooled runtime policy as conditions to inspect.
