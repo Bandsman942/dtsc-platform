@@ -74,6 +74,8 @@ export async function PATCH(request: Request, { params }: Params) {
       if (data.action === "validate-refund") await validateCashRefund(organizationId, id, session.userId);
       else if (data.action === "reject-refund") {
         if (!reason) throw new Error("REASON_REQUIRED");
+        const financeMapping = await prisma.pharmacyRefundExtension.findFirst({ where: { organizationId, pharmacyRefundId: id }, select: { id: true } });
+        if (financeMapping) throw new Error("PHARMACY_REFUND_FINANCE_ALREADY_PREPARED");
         await prisma.pharmacyRefund.update({ where: { id }, data: { status: "REJECTED", rejectedById: session.userId, rejectedAt: new Date(), rejectionReason: reason } });
       } else if (data.action === "mark-refund-paid") {
         await settlePharmacyRefund(organizationId, id, session.userId);
@@ -110,6 +112,7 @@ export async function PATCH(request: Request, { params }: Params) {
       PHARMACY_REFUND_CASH_MAPPING_REQUIRED: "La caisse Pharmacy n'est pas reliée à une caisse Finance commune.",
       PHARMACY_REFUND_COMMON_CASH_SESSION_NOT_OPEN: "La caisse Finance liée à ce remboursement n'est plus ouverte.",
       PHARMACY_REFUND_FINANCE_MAPPING_REQUIRED: "Le remboursement n'a pas encore été validé et préparé dans Finance.",
+      PHARMACY_REFUND_FINANCE_ALREADY_PREPARED: "La préparation Finance de ce remboursement existe déjà. Reprenez la validation au lieu de rejeter la demande.",
       REFUND_EXCEEDS_CONFIRMED_ALLOCATIONS: "Le montant demandé dépasse les encaissements confirmés encore remboursables.",
       CREDIT_NOTE_EXCEEDS_REFUNDABLE_INVOICE: "Le montant de l'avoir dépasse le solde encore remboursable de la facture.",
       CREDIT_NOTE_EXCEEDS_OPEN_RECEIVABLE: "L'avoir dépasse la créance ouverte après inversion de l'encaissement.",
