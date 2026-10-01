@@ -9,6 +9,7 @@ export async function getAccountMembershipSnapshot(userId: string) {
       organization: { status: "ACTIVE", deletedAt: null },
     },
     select: {
+      id: true,
       organizationId: true,
       role: true,
       status: true,
