@@ -43,6 +43,8 @@ The managed pool uses two fixed synthetic organizations, no customer data, and s
 
 The same OIDC verifier authorizes **only** `GET /api/admin/scalability/observability` for this exact workflow. An OIDC request must also carry an exact same-origin `Origin` header. The route keeps its existing `SECURITY_READ` path for human CTO users; OIDC is not a general Console bypass and does not authorize any other Administration DTSC route.
 
+Because `/api/admin/*` is normally protected by middleware before route handlers run, the middleware contains one narrow delegation rule for this exact observability GET: bearer present + Origin present + same-origin. The middleware does **not** validate or trust the token; it only lets this request reach the handler, where the full GitHub OIDC verification remains mandatory. All other Administration DTSC APIs retain the normal DTSC-internal session requirement.
+
 To avoid measuring per-user AI/rate-limit ceilings as if they were platform capacity, the governed pool is deliberately larger than the minimum contract: it uses approximately **10% of the VU target**, i.e. 50 / 100 / 250 / 500 unique sessions for 500 / 1,000 / 2,500 / 5,000 VU, split across the two synthetic tenants.
 
 An operator may still provide `SCALE7_AUTH_CONTEXTS_JSON` as an **operator override**. When present, the workflow uses it instead of OIDC provisioning. The same harness validation still requires at least two distinct tenants, unique sessions and the stage-specific minimum `max(8, ceil(targetVus / 100))`.
