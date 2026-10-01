@@ -97,8 +97,8 @@ check(
   "Customer refund Cash settlement must reuse canonical cash-session binding rules",
 );
 check(
-  !commonRefund.includes("items: { create: items.map((item) => ({ organizationId, ...item })) }")
-    && !commonRefund.includes('create: invoice.items.map((item) => ({\\n            organizationId,'),
+  !/items:\\s*\\{\\s*create:\\s*items\\.map\\(\\(item\\) => \\(\\{\\s*organizationId,/m.test(commonRefund)
+    && !/create:\\s*invoice\\.items\\.map\\(\\(item\\) => \\(\\{\\s*organizationId,/m.test(commonRefund),
   "Nested EnterpriseSalesCreditNoteItem creation must not pass relation-owned organizationId",
 );
 check(
