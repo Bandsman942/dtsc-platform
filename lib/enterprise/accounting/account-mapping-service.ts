@@ -62,6 +62,7 @@ export async function createManualAccountMapping(
     const duplicate = await tx.enterpriseAccountMapping.findFirst({
       where: {
         organizationId,
+        chartId: account.chartId,
         mappingKey: input.mappingKey,
         isActive: true,
         ledgerAccount: { chartId: account.chartId },
@@ -115,6 +116,7 @@ export async function updateManualAccountMapping(
     const updated = await tx.enterpriseAccountMapping.update({
       where: { id: current.id },
       data: {
+        chartId: account.chartId,
         ledgerAccountId: input.ledgerAccountId,
         effectiveFrom: input.effectiveFrom ?? current.effectiveFrom,
         effectiveTo: input.effectiveTo === undefined ? current.effectiveTo : input.effectiveTo,
