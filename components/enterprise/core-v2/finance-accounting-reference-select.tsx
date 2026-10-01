@@ -65,6 +65,8 @@ export function FinanceAccountingReferenceSelect({
   emptyLabel,
   onOptionChange,
   compact = false,
+  initialOption = null,
+  customOnly = false,
 }: {
   organizationId: string;
   moduleCode: ModuleCode;
@@ -81,15 +83,17 @@ export function FinanceAccountingReferenceSelect({
   emptyLabel?: string;
   onOptionChange?: (option: FinanceAccountingReferenceOption | null) => void;
   compact?: boolean;
+  initialOption?: FinanceAccountingReferenceOption | null;
+  customOnly?: boolean;
 }) {
   const en = locale === "en";
   const [search, setSearch] = useState("");
   const [items, setItems] = useState<FinanceAccountingReferenceOption[]>([]);
-  const [selected, setSelected] = useState<FinanceAccountingReferenceOption | null>(null);
+  const [selected, setSelected] = useState<FinanceAccountingReferenceOption | null>(initialOption);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
 
-  useEffect(() => { setSelected(null); }, [accountType, directPosting, kind, moduleCode, parentId, status]);
+  useEffect(() => { setSelected(initialOption); }, [accountType, directPosting, initialOption, kind, moduleCode, parentId, status]);
 
   useEffect(() => {
     let cancelled = false;
@@ -102,6 +106,7 @@ export function FinanceAccountingReferenceSelect({
         if (status?.trim()) query.set("status", status.trim());
         if (accountType?.trim()) query.set("accountType", accountType.trim());
         if (directPosting) query.set("directPosting", "true");
+        if (customOnly) query.set("customOnly", "true");
         const response = await fetch(`/api/enterprise/${organizationId}/accounting-reference-options?${query.toString()}`, { cache: "no-store" });
         const body = await response.json().catch(() => null) as ApiBody | null;
         if (!response.ok || !body) throw new Error("ACCOUNTING_REFERENCE_LOOKUP_FAILED");
@@ -111,7 +116,7 @@ export function FinanceAccountingReferenceSelect({
       } finally { if (!cancelled) setLoading(false); }
     }, 220);
     return () => { cancelled = true; window.clearTimeout(timer); };
-  }, [accountType, directPosting, kind, locale, moduleCode, organizationId, parentId, search, status]);
+  }, [accountType, customOnly, directPosting, kind, locale, moduleCode, organizationId, parentId, search, status]);
 
   const options = useMemo(() => !selected || items.some((item) => item.id === selected.id) ? items : [selected, ...items], [items, selected]);
   const selectClass = compact
