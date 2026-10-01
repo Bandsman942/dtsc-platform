@@ -74,6 +74,20 @@ export const ledgerAccountCreateSchema = z.object({
   allowDirectPosting: z.boolean().default(true),
 });
 
+export const accountMappingCreateSchema = z.object({
+  mappingKey: z.string().trim().min(2).max(100),
+  ledgerAccountId: z.string().min(1),
+  effectiveFrom: dateInputSchema.optional(),
+});
+
+export const accountMappingUpdateSchema = z.object({
+  ledgerAccountId: z.string().min(1),
+  effectiveFrom: dateInputSchema.optional(),
+  effectiveTo: dateInputSchema.nullish(),
+  isActive: z.boolean(),
+  revision: revisionSchema,
+});
+
 export const journalCreateSchema = z.object({
   code: z.string().trim().min(2).max(30),
   nameFr: z.string().trim().min(2).max(160),
