@@ -586,7 +586,7 @@ export async function prepareSalesCreditNoteForRefundAmount(
         taxTotal,
         grandTotal: amount,
         createdByUserId: actorUserId,
-        items: { create: items.map((item) => ({ organizationId, ...item })) },
+        items: { create: items },
       },
     });
     await publishFinanceEvent(tx, {
@@ -652,7 +652,6 @@ export async function createExactSalesCreditNoteForRefund(
         createdByUserId: actorUserId,
         items: {
           create: invoice.items.map((item) => ({
-            organizationId,
             description: item.description,
             quantity: item.quantity,
             unitPrice: item.unitPrice,
