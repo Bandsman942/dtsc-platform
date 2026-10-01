@@ -129,6 +129,11 @@ check(
   "New Pharmacy monetary refunds must always require independent validation",
 );
 check(
+  pharmacyCash.includes("await getEffectivePharmacySettings(organizationId, userId)")
+    && pharmacyCash.indexOf("getEffectivePharmacySettings(organizationId, userId)") < pharmacyCash.indexOf('generatePharmacyEntityNumber(organizationId, "REFUND")'),
+  "Fresh Pharmacy tenants must lazily initialize settings and refund numbering before creating a refund",
+);
+check(
   pharmacyCash.includes('SELECT id FROM "PharmacySale"')
     && pharmacyCash.includes('SELECT id FROM "PharmacyRefund"')
     && pharmacyCash.includes("Prisma.TransactionIsolationLevel.Serializable"),
