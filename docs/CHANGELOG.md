@@ -1,3 +1,24 @@
+## 2026-09-30 — Hotfix #738 : navigation Finance structurée
+
+### Corrigé
+
+- Le groupe **Finances** du hub ERP n’est plus présenté comme une liste plate.
+- Les modules financiers visibles sont regroupés en six sous-sections : Pilotage financier, Opérations clients & fournisseurs, Trésorerie & encaissements, Comptabilité & conformité, Rapports & analyse, Finance sectorielle.
+- Les extensions de secteur autorisées restent dans le groupe Finances mais sont séparées visuellement du moteur financier commun.
+- `REPORTS` est présenté dans une section d’analyse distincte plutôt que comme un moteur comptable.
+- Le filtrage canonique `getEnterpriseNavigationModules()` reste exécuté avant tout regroupement : aucun droit, abonnement ou filtre sectoriel n’est contourné.
+- Les compteurs globaux et par sous-section reposent uniquement sur les destinations effectivement visibles.
+- La QA `qa:hotfix-738` protège l’ordre canonique, l’absence de doublons et le fallback Finance sectorielle.
+
+### Données et sécurité
+
+- Aucune migration ni modification de données.
+- Aucun changement d’entitlement, permission, route ou source financière.
+
+### Validation
+
+- CI doit être rejouée après correction de la gouvernance PR ; OWNER_E2E reste requis avant fusion.
+
 ## 2026-09-30 — Hotfix #732 : RBAC Finance budgets et convergence Couture
 
 ### Corrigé
