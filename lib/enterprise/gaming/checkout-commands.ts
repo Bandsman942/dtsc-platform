@@ -12,6 +12,7 @@ import {
   confirmCustomerRefundPayment,
   consumeCustomerPaymentRefundAvailability,
   createExactSalesCreditNoteForRefund,
+  markCustomerRefundFinancialInverseReady,
   reverseCustomerPaymentAllocationsForRefund,
 } from "@/lib/enterprise/accounting/customer-refund-service";
 import { publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
@@ -474,6 +475,12 @@ export async function commandGamingCheckout(
     if (credit.status !== "POSTED") {
       throw new EnterpriseGamingCheckoutError("GAMING_CHECKOUT_CREDIT_NOTE_NOT_POSTED", 409);
     }
+    await markCustomerRefundFinancialInverseReady(
+      organizationId,
+      refund.id,
+      credit.id,
+      actorUserId,
+    );
     if (refund.status === "APPROVED") {
       refund = await confirmCustomerRefundPayment(
         organizationId,
