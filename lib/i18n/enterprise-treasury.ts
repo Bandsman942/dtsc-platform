@@ -151,6 +151,8 @@ const fr = {
   selectFundingType: "Sélectionnez la nature du financement.",
   fundingCashRequired: "Une session de caisse ouverte est obligatoire pour recevoir physiquement des fonds sur un compte Caisse.",
   fundingCounterpartRequired: "Le compte de dette est obligatoire pour une avance d’associé.",
+  rejectFunding: "Refuser le financement",
+  reject: "Refuser",
 } as const;
 
 const en: Record<keyof typeof fr, string> = {
@@ -304,6 +306,8 @@ const en: Record<keyof typeof fr, string> = {
   selectFundingType: "Select the funding type.",
   fundingCashRequired: "An open cash session is required to physically receive funds into a Cash account.",
   fundingCounterpartRequired: "A liability account is required for a shareholder advance.",
+  rejectFunding: "Reject funding",
+  reject: "Reject",
 };
 
 export type EnterpriseTreasuryCopyKey = keyof typeof fr;
