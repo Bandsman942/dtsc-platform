@@ -321,7 +321,7 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
       if (kind === "accounts") {
         const payload = current
           ? { nameFr: String(form.get("nameFr") || ""), nameEn: String(form.get("nameEn") || ""), accountType: form.get("accountType") ? String(form.get("accountType")) : undefined, currencyCode: String(form.get("currencyCode") || "") || undefined, allowDirectPosting: form.get("allowDirectPosting") === "on", revision }
-          : { chartId: String(form.get("chartId") || ""), parentId: String(form.get("parentId") || "") || undefined, code: String(form.get("code") || ""), nameFr: String(form.get("nameFr") || ""), nameEn: String(form.get("nameEn") || ""), accountType: String(form.get("accountType") || "ASSET"), currencyCode: String(form.get("currencyCode") || "") || undefined, allowDirectPosting: form.get("allowDirectPosting") === "on", isControlAccount: false, isSystemAccount: false };
+          : { chartId: String(form.get("chartId") || ""), parentId: String(form.get("parentId") || "") || undefined, code: String(form.get("code") || ""), nameFr: String(form.get("nameFr") || ""), nameEn: String(form.get("nameEn") || ""), accountType: form.get("accountType") ? String(form.get("accountType")) : undefined, currencyCode: String(form.get("currencyCode") || "") || undefined, allowDirectPosting: form.get("allowDirectPosting") === "on", isControlAccount: false, isSystemAccount: false };
         await financeMutation(current ? `${base}/ledger-accounts/${current.id}` : `${base}/ledger-accounts`, payload, current ? "PATCH" : "POST");
       }
       if (kind === "years") {
