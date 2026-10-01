@@ -116,8 +116,7 @@ export function AccountingRecordDetail({
   locale: rawLocale,
   kind,
   record,
-  canManage,
-  onClose,
+   onClose,
   onChanged,
   onError,
   onEdit,
@@ -127,8 +126,7 @@ export function AccountingRecordDetail({
   locale?: string | null;
   kind: AccountingRecordDetailKind | null;
   record: AccountingRecord | null;
-  canManage: boolean;
-  onClose: () => void;
+   onClose: () => void;
   onChanged: (message?: string) => void;
   onError: (message: string) => void;
   onEdit?: (kind: AccountingRecordDetailKind, record: AccountingRecord) => void;
@@ -144,17 +142,17 @@ export function AccountingRecordDetail({
   const refreshRecord = useCallback(async () => {
     if (!kind || !record) return;
     const detailEndpoint = kind === "charts"
-      ? `charts-of-accounts/${currentRecord.id}`
+      ? `charts-of-accounts/${record.id}`
       : kind === "accounts"
-        ? `ledger-accounts/${currentRecord.id}`
+        ? `ledger-accounts/${record.id}`
         : kind === "years"
-          ? `fiscal-years/${currentRecord.id}`
+          ? `fiscal-years/${record.id}`
           : kind === "periods"
-            ? `fiscal-periods/${currentRecord.id}`
+            ? `fiscal-periods/${record.id}`
             : kind === "journals"
-              ? `journals/${currentRecord.id}`
+              ? `journals/${record.id}`
               : kind === "rules"
-                ? `account-mappings?recordId=${encodeURIComponent(currentRecord.id)}`
+                ? `account-mappings?recordId=${encodeURIComponent(record.id)}`
                 : null;
     if (!detailEndpoint) { setDetailRecord(record); return; }
     try {
