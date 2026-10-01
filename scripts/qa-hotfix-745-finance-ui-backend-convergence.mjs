@@ -20,8 +20,13 @@ for (const token of [
   "PAYMENT_CASH_SESSION_LEGACY_RECOVERY",
 ]) check(paymentService.includes(token), `payment cash policy missing: ${token}`);
 
+check(
+  paymentService.includes("payment.cashSession.financialAccountId !== payment.financialAccountId"),
+  "payment cash readiness must reject a cash session bound to another financial account",
+);
+
 for (const token of [
-  'cashSession: { select: { status: true } }',
+  'cashSession: { select: { status: true, financialAccountId: true } }',
   "confirmationBlocker",
   "confirmationNotice",
   "ready: canConfirm",
