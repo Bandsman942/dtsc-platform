@@ -399,6 +399,7 @@ async function confirmEnterprisePayment(organizationId: string, paymentId: strin
     const payment = await tx.enterprisePayment.findFirst({ where: { id: paymentId, organizationId } });
     if (!payment) throw new EnterpriseAccountingError("PAYMENT_NOT_FOUND", 404);
     if (["CONFIRMED", "RECONCILED"].includes(payment.status)) return payment;
+    if (payment.paymentType === "REFUND") throw new EnterpriseAccountingError("REFUND_SPECIALIZED_CONFIRMATION_REQUIRED", 409);
     if (payment.status !== "APPROVED" || payment.revision !== revision) throw new EnterpriseAccountingError("PAYMENT_NOT_APPROVED", 409);
     assertIndependentActor({ actorUserId, relatedUserIds: [payment.initiatedByUserId, payment.approvedByUserId], errorCode: "PAYMENT_SELF_CONFIRMATION_FORBIDDEN" });
     if (!payment.financialAccountId) throw new EnterpriseAccountingError("PAYMENT_FINANCIAL_ACCOUNT_REQUIRED", 409);
