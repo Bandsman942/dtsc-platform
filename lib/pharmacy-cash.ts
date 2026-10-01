@@ -105,6 +105,7 @@ export async function generateReceiptForPayment(organizationId: string, paymentI
 }
 
 export async function createRefund(organizationId: string, userId: string, data: Extract<CashInput, { entityType: "refund" }>) {
+  await getEffectivePharmacySettings(organizationId, userId);
   const paymentId = nil(data.paymentId);
   const cashSessionId = nil(data.cashSessionId);
   const refundNumber = await generatePharmacyEntityNumber(organizationId, "REFUND");
