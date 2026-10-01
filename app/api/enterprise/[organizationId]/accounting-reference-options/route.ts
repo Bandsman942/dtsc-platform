@@ -78,6 +78,7 @@ export async function GET(req: Request, { params }: Params) {
   const accountType = url.searchParams.get("accountType")?.trim().toUpperCase() || undefined;
   const directPosting = url.searchParams.get("directPosting") === "true";
   const customOnly = url.searchParams.get("customOnly") === "true";
+  const configurableOnly = url.searchParams.get("configurableOnly") === "true";
   const take = 30;
   let items: Array<Record<string, unknown>> = [];
 
@@ -85,7 +86,7 @@ export async function GET(req: Request, { params }: Params) {
     items = await prisma.enterpriseChartOfAccounts.findMany({
       where: {
         organizationId,
-        ...(status ? { status } : {}),
+        ...(status ? { status } : configurableOnly ? { status: { in: ["DRAFT", "READY", "ACTIVE"] } } : {}),
         ...(customOnly ? { templateCode: null } : {}),
         ...(search ? { OR: [
           { code: { contains: search, mode: "insensitive" } },
