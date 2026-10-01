@@ -228,7 +228,8 @@ export async function createEnterprisePayment(organizationId: string, actorUserI
               orderBy: { openedAt: "desc" },
               select: { id: true },
             });
-        if (!cashSession) throw new EnterpriseAccountingError(input.cashSessionId ? "PAYMENT_CASH_SESSION_INVALID" : "OPEN_CASH_SESSION_REQUIRED", 409);
+        if (!cashSession && input.cashSessionId) throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_INVALID", 409);
+        if (!cashSession) throw new EnterpriseAccountingError("OPEN_CASH_SESSION_REQUIRED", 409);
         cashSessionId = cashSession.id;
       }
     }
