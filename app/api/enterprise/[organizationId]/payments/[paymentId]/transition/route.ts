@@ -8,6 +8,8 @@ import {
 } from "@/lib/enterprise/accounting/accounting-human-approval-orchestration";
 import { assignedPaymentTransitionSchema } from "@/lib/enterprise/accounting/accounting-approval-schemas";
 import { transitionEnterprisePayment } from "@/lib/enterprise/accounting/payments-service";
+import { confirmCustomerRefundPayment } from "@/lib/enterprise/accounting/customer-refund-service";
+import { prisma } from "@/lib/prisma";
 import { convergeConfirmedGamingPayment } from "@/lib/enterprise/gaming/payment-convergence";
 
 type Params = { params: Promise<{ organizationId: string; paymentId: string }> };
@@ -31,13 +33,26 @@ export async function POST(req: Request, { params }: Params) {
   if (!auth.ok) return auth.response;
 
   try {
+    const currentPayment = parsed.data.action === "CONFIRM"
+      ? await prisma.enterprisePayment.findFirst({
+          where: { id: paymentId, organizationId },
+          select: { paymentType: true },
+        })
+      : null;
     const payment = parsed.data.action === "SUBMIT"
       ? await submitPaymentForAssignedApproval(organizationId, paymentId, auth.session.userId, parsed.data)
       : parsed.data.action === "APPROVE"
         ? await approvePaymentAssignedApproval(organizationId, paymentId, auth.session.userId, parsed.data)
         : parsed.data.action === "CANCEL"
           ? await cancelPaymentPendingApproval(organizationId, paymentId, auth.session.userId, parsed.data)
-          : await transitionEnterprisePayment(organizationId, paymentId, auth.session.userId, parsed.data);
+          : parsed.data.action === "CONFIRM" && currentPayment?.paymentType === "REFUND"
+            ? await confirmCustomerRefundPayment(
+                organizationId,
+                paymentId,
+                auth.session.userId,
+                { revision: parsed.data.revision, reason: parsed.data.reason || "Confirmation du remboursement client" },
+              )
+            : await transitionEnterprisePayment(organizationId, paymentId, auth.session.userId, parsed.data);
 
     if (parsed.data.action === "CONFIRM" && ["CONFIRMED", "RECONCILED"].includes(payment.status)) {
       await convergeConfirmedGamingPayment(organizationId, payment.id, auth.session.userId);

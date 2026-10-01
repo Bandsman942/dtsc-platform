@@ -8,7 +8,7 @@ import { reverseJournalEntryTx } from "@/lib/enterprise/accounting/reversal-serv
 import type { paymentCreateSchema } from "@/lib/enterprise/accounting/schemas";
 import type { z } from "zod";
 
-type PaymentInput = z.infer<typeof paymentCreateSchema>;
+type PaymentInput = z.infer<typeof paymentCreateSchema> & { cashSessionId?: string | null };
 
 function paymentPostingEvent(paymentType: string) {
   if (paymentType === "CUSTOMER_PAYMENT") return "CUSTOMER_PAYMENT_CONFIRMED" as const;
@@ -60,7 +60,7 @@ export function paymentCashSessionConfirmationNotice(payment: CashSessionConfirm
   return null;
 }
 
-async function resolveCashSessionForConfirmation(
+export async function resolveCashSessionForConfirmation(
   tx: Prisma.TransactionClient,
   payment: CashSessionPayment,
   actorUserId: string,
@@ -207,16 +207,28 @@ export async function createEnterprisePayment(organizationId: string, actorUserI
       const expected = input.methodType === "CASH" ? "CASH" : input.methodType === "MOBILE_MONEY" ? "MOBILE_MONEY" : null;
       if (expected && account.accountType !== expected) throw new EnterpriseAccountingError("PAYMENT_METHOD_ACCOUNT_MISMATCH", 409);
       if (input.methodType === "CASH") {
-        const cashSession = await tx.enterpriseCashSession.findFirst({
-          where: {
-            organizationId,
-            financialAccountId: account.id,
-            cashierUserId: actorUserId,
-            status: "OPEN",
-          },
-          orderBy: { openedAt: "desc" },
-          select: { id: true },
-        });
+        const cashSession = input.cashSessionId
+          ? await tx.enterpriseCashSession.findFirst({
+              where: {
+                id: input.cashSessionId,
+                organizationId,
+                financialAccountId: account.id,
+                cashierUserId: actorUserId,
+                status: "OPEN",
+              },
+              select: { id: true },
+            })
+          : await tx.enterpriseCashSession.findFirst({
+              where: {
+                organizationId,
+                financialAccountId: account.id,
+                cashierUserId: actorUserId,
+                status: "OPEN",
+              },
+              orderBy: { openedAt: "desc" },
+              select: { id: true },
+            });
+        if (!cashSession && input.cashSessionId) throw new EnterpriseAccountingError("PAYMENT_CASH_SESSION_INVALID", 409);
         if (!cashSession) throw new EnterpriseAccountingError("OPEN_CASH_SESSION_REQUIRED", 409);
         cashSessionId = cashSession.id;
       }
@@ -387,6 +399,7 @@ async function confirmEnterprisePayment(organizationId: string, paymentId: strin
     const payment = await tx.enterprisePayment.findFirst({ where: { id: paymentId, organizationId } });
     if (!payment) throw new EnterpriseAccountingError("PAYMENT_NOT_FOUND", 404);
     if (["CONFIRMED", "RECONCILED"].includes(payment.status)) return payment;
+    if (payment.paymentType === "REFUND") throw new EnterpriseAccountingError("REFUND_SPECIALIZED_CONFIRMATION_REQUIRED", 409);
     if (payment.status !== "APPROVED" || payment.revision !== revision) throw new EnterpriseAccountingError("PAYMENT_NOT_APPROVED", 409);
     assertIndependentActor({ actorUserId, relatedUserIds: [payment.initiatedByUserId, payment.approvedByUserId], errorCode: "PAYMENT_SELF_CONFIRMATION_FORBIDDEN" });
     if (!payment.financialAccountId) throw new EnterpriseAccountingError("PAYMENT_FINANCIAL_ACCOUNT_REQUIRED", 409);
@@ -428,7 +441,37 @@ export async function allocateEnterprisePayment(
     const payment = await tx.enterprisePayment.findFirst({ where: { id: paymentId, organizationId } });
     if (!payment || !["CONFIRMED", "RECONCILED"].includes(payment.status)) throw new EnterpriseAccountingError("PAYMENT_NOT_ALLOCATABLE", 409);
     const amount = new Prisma.Decimal(input.amount);
-    if (!amount.isPositive() || amount.greaterThan(payment.unallocatedAmount)) throw new EnterpriseAccountingError("PAYMENT_ALLOCATION_EXCEEDS_UNALLOCATED", 409);
+    const refundEvents = payment.direction === "INBOUND" && payment.paymentType === "CUSTOMER_PAYMENT"
+      ? await tx.enterprisePaymentEvent.findMany({
+          where: {
+            organizationId,
+            paymentId: payment.id,
+            eventType: { in: ["ALLOCATION_REVERSED_FOR_REFUND", "ALLOCATION_PARTIALLY_REVERSED_FOR_REFUND", "REFUND_AVAILABILITY_CONSUMED"] },
+          },
+          select: { eventType: true, metadataJson: true },
+        })
+      : [];
+    let reservedForRefund = money(0);
+    for (const event of refundEvents) {
+      const metadata = event.metadataJson;
+      if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) continue;
+      const rawAmount = (metadata as Prisma.JsonObject).amount;
+      if (typeof rawAmount !== "string" && typeof rawAmount !== "number") continue;
+      const eventAmount = money(rawAmount);
+      reservedForRefund = event.eventType === "REFUND_AVAILABILITY_CONSUMED"
+        ? money(reservedForRefund.minus(eventAmount))
+        : money(reservedForRefund.plus(eventAmount));
+    }
+    reservedForRefund = money(Prisma.Decimal.max(0, reservedForRefund));
+    const allocatableAmount = money(Prisma.Decimal.max(0, payment.unallocatedAmount.minus(reservedForRefund)));
+    if (!amount.isPositive() || amount.greaterThan(allocatableAmount)) {
+      throw new EnterpriseAccountingError("PAYMENT_ALLOCATION_EXCEEDS_UNALLOCATED", 409, {
+        requestedAmount: amount.toFixed(),
+        unallocatedAmount: payment.unallocatedAmount.toFixed(),
+        reservedForRefund: reservedForRefund.toFixed(),
+        allocatableAmount: allocatableAmount.toFixed(),
+      });
+    }
     let receivable: Awaited<ReturnType<typeof tx.enterpriseReceivable.findFirst>> = null;
     let payable: Awaited<ReturnType<typeof tx.enterprisePayable.findFirst>> = null;
     if (input.receivableId) {

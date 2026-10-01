@@ -95,20 +95,48 @@ export async function backfillPharmacyPurchases(options) {
 
 export async function backfillPharmacyFinancialLinks(options) {
   return run("pharmacy-financial-links", options, () => prisma.pharmacySale.findMany({ where: backfillWhere(options, "saleDate"), include: { generatedInvoice: true }, orderBy: { id: "asc" }, take: options.limit }), async (source) => {
+    const markLegacyRefunds = async () => {
+      const [cashRefunds, saleRefunds] = await Promise.all([
+        prisma.pharmacyRefund.findMany({
+          where: { organizationId: source.organizationId, saleId: source.id, status: { in: ["VALIDATED", "PAID"] } },
+          select: { id: true },
+        }),
+        prisma.pharmacySaleRefund.findMany({
+          where: { organizationId: source.organizationId, saleId: source.id, status: { in: ["VALIDATED", "PAID"] } },
+          select: { id: true },
+        }),
+      ]);
+      let manualCount = 0;
+      for (const refund of cashRefunds) {
+        const mapped = await prisma.pharmacyRefundExtension.findFirst({ where: { organizationId: source.organizationId, pharmacyRefundId: refund.id } });
+        if (mapped) continue;
+        manualCount += 1;
+        if (!options.dryRun) await markSync({ organizationId: source.organizationId, sector: "PHARMACY", sourceEntityType: "PharmacyRefund", sourceEntityId: refund.id, status: "LEGACY_UNMAPPED", errorCode: "LEGACY_REFUND_REQUIRES_EXPLICIT_PAYMENT_MAPPING", manual: true });
+      }
+      for (const refund of saleRefunds) {
+        const mapped = await prisma.pharmacyRefundExtension.findFirst({ where: { organizationId: source.organizationId, pharmacySaleRefundId: refund.id } });
+        if (mapped) continue;
+        manualCount += 1;
+        if (!options.dryRun) await markSync({ organizationId: source.organizationId, sector: "PHARMACY", sourceEntityType: "PharmacySaleRefund", sourceEntityId: refund.id, status: "LEGACY_UNMAPPED", errorCode: "LEGACY_SALE_REFUND_REQUIRES_MANUAL_RECONCILIATION", manual: true });
+      }
+      return manualCount;
+    };
+
     const existing = await prisma.pharmacySalesExtension.findFirst({ where: { organizationId: source.organizationId, pharmacySaleId: source.id } });
-    if (existing) return "skipped";
+    if (existing) return (await markLegacyRefunds()) > 0 ? "ambiguous" : "skipped";
     const linked = await prisma.enterpriseEntityLink.findFirst({ where: { organizationId: source.organizationId, sourceEntityType: "PharmacySale", sourceEntityId: source.id, targetEntityType: "EnterpriseSalesInvoice", linkType: "SECTOR_CONVERGENCE" } });
     if (!linked) {
       if (!options.dryRun) await markSync({ organizationId: source.organizationId, sector: "PHARMACY", sourceEntityType: "PharmacySale", sourceEntityId: source.id, status: "LEGACY_UNMAPPED", errorCode: "COMMON_INVOICE_NOT_DETERMINISTIC", manual: true });
+      await markLegacyRefunds();
       return "ambiguous";
     }
     const invoice = await prisma.enterpriseSalesInvoice.findFirst({ where: { id: linked.targetEntityId, organizationId: source.organizationId } });
     if (!invoice) return "failed";
-    if (options.dryRun) return "mapped";
+    if (options.dryRun) return (await markLegacyRefunds()) > 0 ? "ambiguous" : "mapped";
     await prisma.pharmacySalesExtension.create({ data: { organizationId: source.organizationId, pharmacySaleId: source.id, salesInvoiceId: invoice.id, businessPartyId: invoice.businessPartyId, historicalKey: undefined, createdByUserId: source.createdById } }).catch(() => null);
     if (source.generatedInvoice) await prisma.pharmacyInvoiceExtension.create({ data: { organizationId: source.organizationId, pharmacyInvoiceId: source.generatedInvoice.id, salesInvoiceId: invoice.id } }).catch(() => null);
     await markSync({ organizationId: source.organizationId, sector: "PHARMACY", sourceEntityType: "PharmacySale", sourceEntityId: source.id, targetEntityType: "EnterpriseSalesInvoice", targetEntityId: invoice.id, status: "SYNCED" });
-    return "mapped";
+    return (await markLegacyRefunds()) > 0 ? "ambiguous" : "mapped";
   });
 }
 

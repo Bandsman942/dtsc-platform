@@ -29,7 +29,7 @@ This map is based on the sector models currently present in `prisma/schema.prism
 | `PharmacyPayment` | Pharmacy | legacy collection | sector cashier, sale, prescription and point of sale | `EnterprisePayment` + extension | one-to-one FK mapping | amount, currency, payer and account must be deterministic | finance flag | non-authoritative after cutover | FINANCIAL_CONFIDENTIAL | customer payment confirmation and allocation | critical |
 | `PharmacyCashSession` | Pharmacy | legacy cash session | point of sale and operational indicators | `EnterpriseCashSession` + extension | one-to-one FK mapping | deterministic account only; otherwise `LEGACY_UNMAPPED` | cash flag | readable history | FINANCIAL_CONFIDENTIAL | cash variance | critical |
 | `PharmacyCashReceipt` | Pharmacy | legacy receipt | sector receipt rendering | common payment receipt/projection | contextual entity link | deterministic after payment mapping | finance flag | readable | FINANCIAL_CONFIDENTIAL | none independently | medium |
-| `PharmacyRefund` / `PharmacySaleRefund` | Pharmacy | legacy refund and return state | lot condition, restock and regulatory decision | common refund payment/credit note + Pharmacy return extension | mapping to `EnterprisePayment` type `REFUND`; optional credit note | deterministic only after original payment/invoice mapping | refund flag | readable | FINANCIAL_CONFIDENTIAL | refund, credit note and reverse stock event | critical |
+| `PharmacyRefund` / `PharmacySaleRefund` | Pharmacy | sector request/return state | lot condition, restock and regulatory decision | common refund payment/credit note + `PharmacyRefundExtension` | durable mapping to `EnterprisePayment` type `REFUND` and, when applicable, `EnterpriseSalesCreditNote` | new `PharmacyRefund`: deterministic only after original payment/invoice/cash mappings; legacy paid/validated rows without deterministic source remain `LEGACY_UNMAPPED` | finance/cash convergence | `PharmacyRefund` stays operational; direct monetary writes through `PharmacySaleRefund` are retired | FINANCIAL_CONFIDENTIAL | bounded allocation inverse, credit note, `CUSTOMER_REFUND_CONFIRMED`, regulated stock return | critical |
 | `PharmacyCashDiscrepancy` | Pharmacy | sector discrepancy | POS context and incident | common cash discrepancy posting + extension | mapping to cash session | deterministic after cash mapping | cash flag | readable | FINANCIAL_CONFIDENTIAL | `PHARMACY_CASH_VARIANCE_POSTED` | high |
 | `PharmacyPrescription` | Pharmacy | Pharmacy | none beyond opaque source reference | complete prescription and validation | Pharmacy | opaque `EnterpriseEntityLink` only | not applicable | unchanged | PHARMACY_RESTRICTED | none directly | low |
 | `PharmacyQualityIncident` | Pharmacy | Pharmacy | tasks/workflow links only | pharmacovigilance and regulatory content | Pharmacy | entity link | not applicable | unchanged | PHARMACY_RESTRICTED | loss/write-off only when separately approved | high |
@@ -53,3 +53,26 @@ This map is based on the sector models currently present in `prisma/schema.prism
 - `ERP_PHARMACY_CASH_CONVERGENCE`
 
 All flags are server-side, safe-off by default and scheduled for removal in Iteration 5.
+
+
+## Refund cutover — Hotfix #728
+
+For new monetary refunds, Pharmacy remains the authority for return condition, regulated stock decisions and restock. Common Finance is the authority for the monetary inverse.
+
+The runtime chain is:
+
+```text
+PharmacyRefund SUBMITTED
+  -> independent Pharmacy/Finance validation
+  -> PharmacyRefundExtension
+  -> EnterprisePayment REFUND / OUTBOUND (APPROVED)
+  -> bounded reversal of confirmed customer-payment allocations
+  -> EnterpriseSalesCreditNote (bounded or exact)
+  -> common Cash/Treasury settlement
+  -> CUSTOMER_REFUND_CONFIRMED posting
+  -> PharmacyRefund PAID
+```
+
+The requester, validator and settler are independent actors for the monetary path. A Cash refund reuses the exact mapped common Cash session and fails closed if that session is not OPEN. A partial refund reverses only the amount actually refunded; it never reopens the full receivable.
+
+The legacy Sales action no longer creates a monetary `PharmacySaleRefund`; users are redirected to **Caisse, factures & paiements**. Existing legacy refund rows remain readable. If their original common payment/invoice cannot be identified deterministically, backfill marks the source `LEGACY_UNMAPPED` for manual reconciliation rather than inventing a financial history.

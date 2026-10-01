@@ -10,7 +10,9 @@ import {
 } from "@/lib/enterprise/accounting/accounting-human-approval-orchestration";
 import {
   confirmCustomerRefundPayment,
+  consumeCustomerPaymentRefundAvailability,
   createExactSalesCreditNoteForRefund,
+  markCustomerRefundFinancialInverseReady,
   reverseCustomerPaymentAllocationsForRefund,
 } from "@/lib/enterprise/accounting/customer-refund-service";
 import { publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
@@ -453,7 +455,7 @@ export async function commandGamingCheckout(
     }
 
     const refundReason = snapshot.checkout.refundReason || input.reason;
-    await reverseCustomerPaymentAllocationsForRefund(organizationId, receivable.id, actorUserId, refundReason);
+    await reverseCustomerPaymentAllocationsForRefund(organizationId, receivable.id, actorUserId, refundReason, refund.id);
     const creditReason = `Gaming refund ${snapshot.checkout.reference}: ${refundReason}`;
     let credit = await prisma.enterpriseSalesCreditNote.findFirst({
       where: { organizationId, salesInvoiceId: snapshot.invoice.id, reason: creditReason },
@@ -473,6 +475,12 @@ export async function commandGamingCheckout(
     if (credit.status !== "POSTED") {
       throw new EnterpriseGamingCheckoutError("GAMING_CHECKOUT_CREDIT_NOTE_NOT_POSTED", 409);
     }
+    await markCustomerRefundFinancialInverseReady(
+      organizationId,
+      refund.id,
+      credit.id,
+      actorUserId,
+    );
     if (refund.status === "APPROVED") {
       refund = await confirmCustomerRefundPayment(
         organizationId,
@@ -484,6 +492,7 @@ export async function commandGamingCheckout(
     if (!["CONFIRMED", "RECONCILED"].includes(refund.status)) {
       throw new EnterpriseGamingCheckoutError("GAMING_CHECKOUT_REFUND_NOT_CONFIRMED", 409);
     }
+    await consumeCustomerPaymentRefundAvailability(organizationId, refund.id, actorUserId);
 
     await prisma.$transaction(async (tx) => {
       await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseGamingCheckout" WHERE id = ${checkoutId} AND "organizationId" = ${organizationId} FOR UPDATE`);

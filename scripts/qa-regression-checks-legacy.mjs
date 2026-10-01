@@ -849,7 +849,7 @@ check(
 check(
   "PHARMACY Ventes: routes multi-tenant sécurisées et auditées",
   containsAll(pharmacySalesApi, ["canAccessPharmacySales", "isSameOriginRequest", "await rateLimit", "pharmacySaleSchema.safeParse", "validateSaleReferences", "writeAuditLog"])
-    && containsAll(pharmacySaleApi, ["organizationId", "saleActionSchema.safeParse", "applySaleStockImpact", "reverseSaleStockImpact", "const refundAmount = data.refundAmount", "refundAmount === undefined", "writeAuditLog"])
+    && containsAll(pharmacySaleApi, ["organizationId", "saleActionSchema.safeParse", "applySaleStockImpact", "reverseSaleStockImpact", "PHARMACY_REFUND_USE_CASH_WORKFLOW", "PHARMACY_SALE_REFUND_REDIRECTED_TO_COMMON_FINANCE", "writeAuditLog"])
     && containsAll(pharmacySaleAccess, ["SALES_DISPENSATION", "organizationMember", 'sectorCode: "PHARMACY"'])
 );
 
