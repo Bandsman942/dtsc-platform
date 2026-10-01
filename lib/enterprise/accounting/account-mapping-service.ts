@@ -103,7 +103,7 @@ export async function updateManualAccountMapping(
       where: { id: mappingId, organizationId },
       include: { ledgerAccount: { include: { chart: true } } },
     });
-    if (!current) throw new EnterpriseAccountingError("ACCOUNT_MAPPING_NOT_FOUND", 404);
+    if (!current) throw new EnterpriseAccountingError("ACCOUNT_MAPPING_RECORD_NOT_FOUND", 404);
     if (current.revision !== input.revision) throw new EnterpriseAccountingError("ACCOUNT_MAPPING_REVISION_CONFLICT", 409);
     if (current.ledgerAccount.chart.templateCode) {
       throw new EnterpriseAccountingError("ACCOUNT_MAPPING_TEMPLATE_MANAGED", 409, { templateReference: current.ledgerAccount.chart.templateCode });
@@ -149,7 +149,7 @@ export async function deactivateManualAccountMapping(
       where: { id: mappingId, organizationId },
       include: { ledgerAccount: { include: { chart: true } } },
     });
-    if (!current) throw new EnterpriseAccountingError("ACCOUNT_MAPPING_NOT_FOUND", 404);
+    if (!current) throw new EnterpriseAccountingError("ACCOUNT_MAPPING_RECORD_NOT_FOUND", 404);
     if (current.revision !== revision) throw new EnterpriseAccountingError("ACCOUNT_MAPPING_REVISION_CONFLICT", 409);
     if (current.ledgerAccount.chart.templateCode) {
       throw new EnterpriseAccountingError("ACCOUNT_MAPPING_TEMPLATE_MANAGED", 409, { templateReference: current.ledgerAccount.chart.templateCode });
