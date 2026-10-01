@@ -9,9 +9,35 @@ import {
 import { approveAndPostSalesCreditNote } from "@/lib/enterprise/accounting/receivables-service";
 import { postApprovedSalesCreditNote } from "@/lib/enterprise/accounting/accounting-document-approval-orchestration";
 import { prisma } from "@/lib/prisma";
+import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
+import { ensureCanonicalFinanceModulesForOrganization } from "@/lib/enterprise/finance-modules";
 import { EnterpriseSectorConvergenceError } from "@/lib/enterprise/sector-convergence/errors";
 import { isSectorConvergenceEnabled, SECTOR_CONVERGENCE_FLAGS } from "@/lib/enterprise/sector-convergence/flags";
 import { beginSectorSync, completeSectorSync, failSectorSync, sectorIdempotencyKey } from "@/lib/enterprise/sector-convergence/sync-service";
+
+async function requireRefundFinanceCapabilities(
+  organizationId: string,
+  userId: string,
+  requirements: { payments?: Array<"canCreate" | "canSubmit" | "canWrite" | "canApprove">; receivables?: Array<"canCreate" | "canSubmit" | "canWrite" | "canApprove" | "canManage"> },
+) {
+  await ensureCanonicalFinanceModulesForOrganization({ organizationId });
+  const [payments, receivables] = await Promise.all([
+    requirements.payments?.length
+      ? resolveEnterpriseModuleCapabilities({ userId, organizationId, moduleCode: "FINANCE_PAYMENTS" })
+      : null,
+    requirements.receivables?.length
+      ? resolveEnterpriseModuleCapabilities({ userId, organizationId, moduleCode: "FINANCE_RECEIVABLES" })
+      : null,
+  ]);
+  const paymentDenied = requirements.payments?.some((key) => !payments?.[key]);
+  const receivableDenied = requirements.receivables?.some((key) => !receivables?.[key]);
+  if (paymentDenied || receivableDenied) {
+    throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_FINANCE_PERMISSION_REQUIRED", 403, {
+      payments: requirements.payments || [],
+      receivables: requirements.receivables || [],
+    });
+  }
+}
 
 async function requirePharmacyFinanceFlag(organizationId: string) {
   const enabled = await isSectorConvergenceEnabled({ organizationId, sector: "PHARMACY", domainCode: "FINANCE", flag: SECTOR_CONVERGENCE_FLAGS.PHARMACY_FINANCE });
@@ -346,6 +372,13 @@ export async function convergePharmacyRefund(
     if (source.requestedById === validatorUserId) {
       throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_SELF_VALIDATION_FORBIDDEN", 409);
     }
+    await requireRefundFinanceCapabilities(organizationId, source.requestedById, {
+      payments: ["canCreate", "canSubmit"],
+    });
+    await requireRefundFinanceCapabilities(organizationId, validatorUserId, {
+      payments: ["canApprove"],
+      receivables: ["canCreate"],
+    });
 
     const saleMapping = await prisma.pharmacySalesExtension.findFirst({
       where: { organizationId, pharmacySaleId: source.saleId },
@@ -561,6 +594,10 @@ export async function settlePharmacyRefund(
   if (source.requestedById === actorUserId || source.validatedById === actorUserId) {
     throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_SELF_SETTLEMENT_FORBIDDEN", 409);
   }
+  await requireRefundFinanceCapabilities(organizationId, actorUserId, {
+    payments: ["canWrite"],
+    receivables: ["canApprove"],
+  });
 
   const saleMapping = await prisma.pharmacySalesExtension.findFirst({
     where: { organizationId, pharmacySaleId: source.saleId },
