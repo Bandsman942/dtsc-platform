@@ -302,8 +302,8 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
     try {
       if (kind === "charts") await financeMutation(`${base}/charts-of-accounts`, { code: String(form.get("code") || ""), nameFr: String(form.get("nameFr") || ""), nameEn: String(form.get("nameEn") || "") });
       if (kind === "accounts") await financeMutation(`${base}/ledger-accounts`, { chartId: String(form.get("chartId") || ""), code: String(form.get("code") || ""), nameFr: String(form.get("nameFr") || ""), nameEn: String(form.get("nameEn") || ""), accountType: String(form.get("accountType") || "ASSET"), currencyCode: String(form.get("currencyCode") || "") || undefined, allowDirectPosting: form.get("allowDirectPosting") === "on", isControlAccount: false, isSystemAccount: false });
-      if (kind === "years") await financeMutation(`${base}/fiscal-years`, { code: String(form.get("code") || ""), startDate: String(form.get("startDate") || ""), endDate: String(form.get("endDate") || "") });
-      if (kind === "periods") await financeMutation(`${base}/fiscal-periods`, { fiscalYearId: String(form.get("fiscalYearId") || ""), code: String(form.get("code") || ""), startDate: String(form.get("startDate") || ""), endDate: String(form.get("endDate") || "") });
+      if (kind === "years") await financeMutation(`${base}/fiscal-years`, { code: String(form.get("code") || ""), label: String(form.get("label") || "") || undefined, startDate: String(form.get("startDate") || ""), endDate: String(form.get("endDate") || "") });
+      if (kind === "periods") await financeMutation(`${base}/fiscal-periods`, { fiscalYearId: String(form.get("fiscalYearId") || ""), code: String(form.get("code") || ""), label: String(form.get("label") || "") || undefined, startDate: String(form.get("startDate") || ""), endDate: String(form.get("endDate") || "") });
       if (kind === "journals") await financeMutation(`${base}/journals`, { code: String(form.get("code") || ""), nameFr: String(form.get("nameFr") || ""), nameEn: String(form.get("nameEn") || ""), journalType: String(form.get("journalType") || "GENERAL"), sequencePrefix: String(form.get("sequencePrefix") || "") || undefined, requiresApproval: form.get("requiresApproval") === "on" });
       setConfigForm({ open: false, kind: null });
       reload(en ? "Accounting configuration saved." : "Configuration comptable enregistrée.");
@@ -370,14 +370,43 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
     { key: "status", label: en ? "Status" : "Statut", render: (row) => <StatusBadge tone="danger">{financeStatusLabel(rowText(row, "status"), locale)}</StatusBadge> },
   ];
 
-  const configColumns: AccountingCompactColumn<AnyRow>[] = [
-    { key: "code", label: en ? "Code" : "Code", render: (row) => <span className="font-black">{rowText(row, "code") || (rowText(row, "mappingKey") ? financeEnumLabel(rowText(row, "mappingKey"), locale) : "—")}</span> },
-    { key: "name", label: en ? "Label" : "Libellé", cellClassName: "max-w-[28rem] truncate", render: (row) => localizedName(row, locale) || rowText(row, "description") || (rowText(row, "sourceModule") ? financeEnumLabel(rowText(row, "sourceModule"), locale) : "—") },
-    { key: "type", label: en ? "Type" : "Type", render: (row) => financeEnumLabel(rowText(row, "accountType") || rowText(row, "journalType") || rowText(row, "templateCode"), locale) || "—" },
-    { key: "status", label: en ? "Status" : "Statut", render: (row) => {
-      const currentStatus = rowText(row, "status") || (row.isActive === false ? "INACTIVE" : "ACTIVE");
-      return <StatusBadge tone={financeStatusTone(currentStatus)}>{financeStatusLabel(currentStatus, locale)}</StatusBadge>;
+  const statusColumn: AccountingCompactColumn<AnyRow> = { key: "status", label: en ? "Status" : "Statut", render: (row) => {
+    const currentStatus = rowText(row, "status") || (row.isActive === false ? "INACTIVE" : "ACTIVE");
+    return <StatusBadge tone={financeStatusTone(currentStatus)}>{financeStatusLabel(currentStatus, locale)}</StatusBadge>;
+  } };
+  const configColumns: AccountingCompactColumn<AnyRow>[] = configureView === "charts" ? [
+    { key: "code", label: "Code", render: (row) => <span className="font-black">{rowText(row, "code") || "—"}</span> },
+    { key: "name", label: en ? "Label" : "Libellé", cellClassName: "max-w-[28rem] truncate", render: (row) => localizedName(row, locale) || "—" },
+    { key: "origin", label: en ? "Chart origin" : "Origine du plan", render: (row) => rowText(row, "templateCode") ? financeEnumLabel(rowText(row, "templateCode"), locale) : (en ? "Custom chart" : "Plan personnalisé") },
+    statusColumn,
+  ] : configureView === "accounts" ? [
+    { key: "code", label: en ? "Account" : "Compte", render: (row) => <span className="font-black">{rowText(row, "code") || "—"}</span> },
+    { key: "name", label: en ? "Label" : "Libellé", cellClassName: "max-w-[28rem] truncate", render: (row) => localizedName(row, locale) || "—" },
+    { key: "type", label: en ? "Account type" : "Type de compte", render: (row) => financeEnumLabel(rowText(row, "accountType"), locale) || "—" },
+    statusColumn,
+  ] : configureView === "years" ? [
+    { key: "code", label: "Code", render: (row) => <span className="font-black">{rowText(row, "code") || "—"}</span> },
+    { key: "label", label: en ? "Label" : "Libellé", cellClassName: "max-w-[28rem] truncate", render: (row) => rowText(row, "label") || "—" },
+    { key: "dates", label: en ? "Dates" : "Dates", render: (row) => `${financeDate(rowText(row, "startDate"), locale)} → ${financeDate(rowText(row, "endDate"), locale)}` },
+    statusColumn,
+  ] : configureView === "periods" ? [
+    { key: "code", label: "Code", render: (row) => <span className="font-black">{rowText(row, "code") || "—"}</span> },
+    { key: "label", label: en ? "Label" : "Libellé", cellClassName: "max-w-[28rem] truncate", render: (row) => rowText(row, "label") || "—" },
+    { key: "year", label: en ? "Fiscal year" : "Exercice", render: (row) => {
+      const year = row.fiscalYear as Record<string, unknown> | undefined;
+      return year ? `${rawText(year.code)}${year.label ? ` · ${rawText(year.label)}` : ""}` : "—";
     } },
+    statusColumn,
+  ] : configureView === "journals" ? [
+    { key: "code", label: "Code", render: (row) => <span className="font-black">{rowText(row, "code") || "—"}</span> },
+    { key: "name", label: en ? "Label" : "Libellé", cellClassName: "max-w-[28rem] truncate", render: (row) => localizedName(row, locale) || "—" },
+    { key: "type", label: en ? "Journal type" : "Type de journal", render: (row) => financeEnumLabel(rowText(row, "journalType"), locale) || "—" },
+    statusColumn,
+  ] : [
+    { key: "mapping", label: en ? "Rule" : "Règle", render: (row) => <span className="font-black">{financeEnumLabel(rowText(row, "mappingKey"), locale) || rowText(row, "mappingKey") || "—"}</span> },
+    { key: "account", label: en ? "Target account" : "Compte cible", render: (row) => `${rowText(row, "accountCode") || "—"} · ${locale === "en" ? rowText(row, "accountNameEn") || rowText(row, "accountNameFr") : rowText(row, "accountNameFr") || rowText(row, "accountNameEn")}` },
+    { key: "source", label: en ? "Scope" : "Périmètre", render: (row) => [rowText(row, "sourceModule"), rowText(row, "sourceEntityType")].filter(Boolean).map((value) => financeEnumLabel(value, locale) || value).join(" · ") || (en ? "General" : "Générale") },
+    statusColumn,
   ];
 
   const entryDetailActions: BusinessContextAction[] = entryTrace?.entry ? [
@@ -466,6 +495,7 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
         {configForm.kind === "periods" ? <FormReferenceField label={en ? "Fiscal year" : "Exercice"} help={en ? "Choose the fiscal year that will own this period." : "Choisissez l’exercice auquel cette période sera rattachée."}><FinanceAccountingReferenceSelect organizationId={organizationId} moduleCode="FINANCE_ACCOUNTING" kind="fiscal-year" name="fiscalYearId" label={en ? "Fiscal year" : "Exercice"} locale={rawLocale} required disabled={busy} /></FormReferenceField> : null}
         {configForm.kind ? <Field label={en ? "Code" : "Code"} help={configCodeHelp(configForm.kind, en)}><Input name="code" required maxLength={40} disabled={busy} /></Field> : null}
         {configForm.kind === "charts" || configForm.kind === "accounts" || configForm.kind === "journals" ? <><Field label={en ? "French label" : "Libellé français"} help={en ? "Business label shown in the French interface." : "Libellé métier affiché dans l’interface française."}><Input name="nameFr" required maxLength={180} disabled={busy} /></Field><Field label={en ? "English label" : "Libellé anglais"} help={en ? "Business label shown in the English interface." : "Libellé métier affiché dans l’interface anglaise."}><Input name="nameEn" required maxLength={180} disabled={busy} /></Field></> : null}
+        {configForm.kind === "years" || configForm.kind === "periods" ? <Field label={en ? "Label" : "Libellé"} help={en ? "Free-text business label used to identify this accounting period." : "Libellé métier libre utilisé pour identifier cet intervalle comptable."}><Input name="label" required maxLength={160} disabled={busy} /></Field> : null}
         {configForm.kind === "years" || configForm.kind === "periods" ? <div className="grid min-w-0 gap-4 sm:grid-cols-2"><Field label={en ? "Start date" : "Date de début"} help={configForm.kind === "years" ? (en ? "First day of the fiscal year." : "Premier jour de l’exercice comptable.") : (en ? "First day included in the accounting period." : "Premier jour inclus dans la période comptable.")}><Input name="startDate" type="date" required disabled={busy} /></Field><Field label={en ? "End date" : "Date de fin"} help={configForm.kind === "years" ? (en ? "Last day of the fiscal year." : "Dernier jour de l’exercice comptable.") : (en ? "Last day included in the accounting period." : "Dernier jour inclus dans la période comptable.")}><Input name="endDate" type="date" required disabled={busy} /></Field></div> : null}
         {configForm.kind === "accounts" ? <><Field label={en ? "Account type" : "Type de compte"} help={en ? "Controls the accounting nature and compatible postings." : "Détermine la nature comptable et les comptabilisations compatibles."}><select name="accountType" defaultValue="ASSET" className="h-11 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-base md:text-sm" disabled={busy}>{ACCOUNT_TYPES.map((value) => <option key={value} value={value}>{financeEnumLabel(value, locale)}</option>)}</select></Field><FormReferenceField label={en ? "Account currency (optional)" : "Devise du compte (facultatif)"} help={en ? "Leave empty to use the accounting functional currency." : "Laissez vide pour utiliser la devise fonctionnelle de la comptabilité."}><FinanceAccountingReferenceSelect organizationId={organizationId} moduleCode="FINANCE_ACCOUNTING" kind="currency" name="currencyCode" label={en ? "Account currency (optional)" : "Devise du compte (facultatif)"} locale={rawLocale} disabled={busy} /></FormReferenceField><label className="flex min-h-11 items-center gap-3 rounded-xl border border-dtsc-border bg-dtsc-page/60 px-3 text-sm font-bold text-dtsc-ink"><input type="checkbox" name="allowDirectPosting" defaultChecked disabled={busy} />{en ? "Allow direct manual posting" : "Autoriser la saisie manuelle directe"}</label></> : null}
         {configForm.kind === "journals" ? <><Field label={en ? "Journal type" : "Type de journal"} help={en ? "Choose the operational family used by this journal." : "Choisissez la famille opérationnelle utilisée par ce journal."}><select name="journalType" defaultValue="GENERAL" className="h-11 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-base md:text-sm" disabled={busy}>{JOURNAL_TYPES.map((value) => <option key={value} value={value}>{financeEnumLabel(value, locale)}</option>)}</select></Field><Field label={en ? "Sequence prefix" : "Préfixe de séquence"} help={en ? "Optional readable prefix used by the journal numbering sequence." : "Préfixe lisible facultatif utilisé par la séquence de numérotation du journal."}><Input name="sequencePrefix" maxLength={20} disabled={busy} /></Field><label className="flex min-h-11 items-center gap-3 rounded-xl border border-dtsc-border bg-dtsc-page/60 px-3 text-sm font-bold text-dtsc-ink"><input type="checkbox" name="requiresApproval" disabled={busy} />{en ? "Require independent approval" : "Exiger une validation indépendante"}</label></> : null}
