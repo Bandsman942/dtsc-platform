@@ -48,11 +48,20 @@ for (const token of [
   "reverseCustomerPaymentAllocationsForRefundAmount",
   "prepareSalesCreditNoteForRefundAmount",
   "confirmCustomerRefundPayment",
+  "submitPaymentForAssignedApproval",
+  "approvePaymentAssignedApproval",
+  "submitSalesCreditNoteForAssignedApproval",
+  "decideSalesCreditNoteAssignedApproval",
+  "assertSalesCreditNoteStillPostable",
 ]) check(pharmacyFinance.includes(token), `Pharmacy refund convergence missing: ${token}`);
 
 check(
   hasAll(pharmacyFinance, ["pharmacyCashExtension", "commonCashSessionId", 'status: "OPEN"', "financialAccountId: originalPayment.financialAccountId"]),
   "Cash refund must use the mapped open common cash session and original financial account",
+);
+check(
+  !pharmacyFinance.includes("transitionEnterprisePayment(") && !pharmacyFinance.includes("approveAndPostSalesCreditNote("),
+  "Pharmacy refund convergence must not bypass assigned Finance approval orchestration",
 );
 check(
   pharmacyFinance.indexOf("confirmCustomerRefundPayment") < pharmacyFinance.lastIndexOf('status: "PAID"'),
