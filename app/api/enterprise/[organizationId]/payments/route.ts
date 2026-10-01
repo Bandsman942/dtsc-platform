@@ -86,7 +86,10 @@ export async function GET(req: Request, { params }: Params) {
       canSubmit: capabilities.canSubmit && item.status === "DRAFT" && item.initiatedByUserId === auth.session.userId,
       canApprove: capabilities.canApprove && item.status === "PENDING_APPROVAL" && assignedIds.has(item.id),
       canCancel: capabilities.canSubmit && ["DRAFT", "PENDING_APPROVAL"].includes(item.status) && item.initiatedByUserId === auth.session.userId,
-      canConfirm: capabilities.canWrite && item.status === "APPROVED",
+      canConfirm: capabilities.canWrite
+        && item.status === "APPROVED"
+        && item.initiatedByUserId !== auth.session.userId
+        && item.approvedByUserId !== auth.session.userId,
       canReconcile: capabilities.canManage && item.status === "CONFIRMED",
       canReverse: capabilities.canManage && ["CONFIRMED", "RECONCILED"].includes(item.status),
       canAllocate: capabilities.canWrite && ["CONFIRMED", "RECONCILED"].includes(item.status) && item.unallocatedAmount.gt(0),
