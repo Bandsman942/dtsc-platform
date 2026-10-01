@@ -296,21 +296,71 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
   async function createConfig(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const kind = configForm.kind;
+    const current = configForm.record || null;
     if (!kind || busy) return;
     const form = new FormData(event.currentTarget);
     const base = `/api/enterprise/${organizationId}`;
+    const revision = Number(current?.revision || 0);
     setBusy(true);
     setErrorMessage("");
     try {
-      if (kind === "charts") await financeMutation(`${base}/charts-of-accounts`, { code: String(form.get("code") || ""), nameFr: String(form.get("nameFr") || ""), nameEn: String(form.get("nameEn") || "") });
-      if (kind === "accounts") await financeMutation(`${base}/ledger-accounts`, { chartId: String(form.get("chartId") || ""), code: String(form.get("code") || ""), nameFr: String(form.get("nameFr") || ""), nameEn: String(form.get("nameEn") || ""), accountType: String(form.get("accountType") || "ASSET"), currencyCode: String(form.get("currencyCode") || "") || undefined, allowDirectPosting: form.get("allowDirectPosting") === "on", isControlAccount: false, isSystemAccount: false });
-      if (kind === "years") await financeMutation(`${base}/fiscal-years`, { code: String(form.get("code") || ""), label: String(form.get("label") || "") || undefined, startDate: String(form.get("startDate") || ""), endDate: String(form.get("endDate") || "") });
-      if (kind === "periods") await financeMutation(`${base}/fiscal-periods`, { fiscalYearId: String(form.get("fiscalYearId") || ""), code: String(form.get("code") || ""), label: String(form.get("label") || "") || undefined, startDate: String(form.get("startDate") || ""), endDate: String(form.get("endDate") || "") });
-      if (kind === "journals") await financeMutation(`${base}/journals`, { code: String(form.get("code") || ""), nameFr: String(form.get("nameFr") || ""), nameEn: String(form.get("nameEn") || ""), journalType: String(form.get("journalType") || "GENERAL"), sequencePrefix: String(form.get("sequencePrefix") || "") || undefined, requiresApproval: form.get("requiresApproval") === "on" });
-      setConfigForm({ open: false, kind: null });
-      reload(en ? "Accounting configuration saved." : "Configuration comptable enregistrée.");
+      if (kind === "charts") {
+        const payload = { code: String(form.get("code") || ""), nameFr: String(form.get("nameFr") || ""), nameEn: String(form.get("nameEn") || ""), ...(current ? { revision } : {}) };
+        await financeMutation(current ? `${base}/charts-of-accounts/${current.id}` : `${base}/charts-of-accounts`, payload, current ? "PATCH" : "POST");
+      }
+      if (kind === "accounts") {
+        const payload = current
+          ? { nameFr: String(form.get("nameFr") || ""), nameEn: String(form.get("nameEn") || ""), accountType: String(form.get("accountType") || "ASSET"), currencyCode: String(form.get("currencyCode") || "") || undefined, allowDirectPosting: form.get("allowDirectPosting") === "on", revision }
+          : { chartId: String(form.get("chartId") || ""), code: String(form.get("code") || ""), nameFr: String(form.get("nameFr") || ""), nameEn: String(form.get("nameEn") || ""), accountType: String(form.get("accountType") || "ASSET"), currencyCode: String(form.get("currencyCode") || "") || undefined, allowDirectPosting: form.get("allowDirectPosting") === "on", isControlAccount: false, isSystemAccount: false };
+        await financeMutation(current ? `${base}/ledger-accounts/${current.id}` : `${base}/ledger-accounts`, payload, current ? "PATCH" : "POST");
+      }
+      if (kind === "years") {
+        const payload = { code: String(form.get("code") || ""), label: String(form.get("label") || "") || undefined, startDate: String(form.get("startDate") || ""), endDate: String(form.get("endDate") || ""), ...(current ? { revision } : {}) };
+        await financeMutation(current ? `${base}/fiscal-years/${current.id}` : `${base}/fiscal-years`, payload, current ? "PATCH" : "POST");
+      }
+      if (kind === "periods") {
+        const payload = { fiscalYearId: String(form.get("fiscalYearId") || ""), code: String(form.get("code") || ""), label: String(form.get("label") || "") || undefined, startDate: String(form.get("startDate") || ""), endDate: String(form.get("endDate") || ""), ...(current ? { revision } : {}) };
+        await financeMutation(current ? `${base}/fiscal-periods/${current.id}` : `${base}/fiscal-periods`, payload, current ? "PATCH" : "POST");
+      }
+      if (kind === "journals") {
+        const payload = { code: String(form.get("code") || ""), nameFr: String(form.get("nameFr") || ""), nameEn: String(form.get("nameEn") || ""), journalType: String(form.get("journalType") || "GENERAL"), sequencePrefix: String(form.get("sequencePrefix") || "") || undefined, requiresApproval: form.get("requiresApproval") === "on", ...(current ? { isActive: form.get("isActive") === "on", revision } : {}) };
+        await financeMutation(current ? `${base}/journals/${current.id}` : `${base}/journals`, payload, current ? "PATCH" : "POST");
+      }
+      if (kind === "rules") {
+        const payload = current
+          ? { ledgerAccountId: String(form.get("ledgerAccountId") || ""), effectiveFrom: String(form.get("effectiveFrom") || "") || undefined, effectiveTo: String(form.get("effectiveTo") || "") || null, isActive: form.get("isActive") === "on", revision }
+          : { mappingKey: String(form.get("mappingKey") || ""), ledgerAccountId: String(form.get("ledgerAccountId") || ""), effectiveFrom: String(form.get("effectiveFrom") || "") || undefined };
+        await financeMutation(current ? `${base}/account-mappings/${current.id}` : `${base}/account-mappings`, payload, current ? "PATCH" : "POST");
+      }
+      setConfigForm({ open: false, kind: null, record: null });
+      setSelectedRuleChartId("");
+      reload(current ? (en ? "Accounting configuration updated." : "Configuration comptable mise à jour.") : (en ? "Accounting configuration saved." : "Configuration comptable enregistrée."));
     } catch (error) {
       setErrorMessage(safeFinanceError(error, en ? "Configuration could not be saved." : "La configuration n’a pas pu être enregistrée.", locale));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteConfig() {
+    if (!configDelete || busy) return;
+    const { kind, record } = configDelete;
+    const segment = kind === "charts" ? "charts-of-accounts"
+      : kind === "accounts" ? "ledger-accounts"
+        : kind === "years" ? "fiscal-years"
+          : kind === "periods" ? "fiscal-periods"
+            : kind === "journals" ? "journals"
+              : kind === "rules" ? "account-mappings"
+                : null;
+    if (!segment) return;
+    setBusy(true);
+    setErrorMessage("");
+    try {
+      await financeMutation(`/api/enterprise/${organizationId}/${segment}/${record.id}`, { revision: Number(record.revision || 0) }, "DELETE");
+      setConfigDelete(null);
+      reload(kind === "accounts" || kind === "rules" ? (en ? "The accounting configuration was deactivated." : "La configuration comptable a été désactivée.") : (en ? "The accounting configuration was deleted." : "La configuration comptable a été supprimée."));
+    } catch (error) {
+      setErrorMessage(safeFinanceError(error, en ? "The accounting configuration could not be removed." : "La configuration comptable n’a pas pu être retirée.", locale));
     } finally {
       setBusy(false);
     }
