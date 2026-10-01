@@ -30,10 +30,16 @@ for (const file of financeProjectionFiles) {
   forbidTokens(file, [
     "diagnosis:",
     "symptoms:",
+    "historyOfPresentIllness:",
+    "allergies:",
     "prescription:",
+    "prescriptionText:",
     "medicalHistory:",
     "laboratoryResult:",
+    "resultValue:",
+    "resultInterpretation:",
     "medicalDocumentContent:",
+    "description: item.description",
     "prisma[sourceEntityType]",
   ]);
 }
