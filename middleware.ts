@@ -11,6 +11,7 @@ const privateRoutes = ["/dashboard", "/chat", "/billing", "/company", "/calendar
 const adminRoutes = ["/admin"];
 const dtscInternalRoutes = ["/admin", "/activities"];
 const dtscInternalApiRoutes = ["/api/admin", "/api/activities"];
+const scale7OidcDelegatedAdminApiRoute = "/api/admin/scalability/observability";
 const externalWebhookRoutes = ["/api/billing/maishapay/callback", "/api/webhooks/zoho/outgoing-mail"];
 const safeMethods = ["GET", "HEAD", "OPTIONS"];
 const DTSC_INTERNAL_ORGANIZATION_ID = "dtsc-internal";
@@ -170,7 +171,9 @@ export async function middleware(request: NextRequest) {
   const hostType = getCurrentHostType(request.headers.get("host"));
 
   if (pathname.startsWith("/api/")) {
-    if (isPathMatch(pathname, dtscInternalApiRoutes)) {
+    const delegatesScale7OidcToHandler = pathname === scale7OidcDelegatedAdminApiRoute
+      && request.headers.get("authorization")?.startsWith("Bearer ");
+    if (isPathMatch(pathname, dtscInternalApiRoutes) && !delegatesScale7OidcToHandler) {
       if (!session) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
