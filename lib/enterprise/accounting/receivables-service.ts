@@ -221,6 +221,7 @@ export async function approveAndPostSalesCreditNote(organizationId: string, cred
     if (!credit?.salesInvoice.receivable) throw new EnterpriseAccountingError("RECEIVABLE_NOT_FOUND", 409);
     if (credit.status === "POSTED") return credit;
     const receivable = credit.salesInvoice.receivable;
+    if (credit.grandTotal.greaterThan(receivable.outstandingAmount)) throw new EnterpriseAccountingError("CREDIT_NOTE_EXCEEDS_OPEN_RECEIVABLE", 409);
     const outstanding = money(receivable.outstandingAmount.minus(credit.grandTotal));
     await tx.enterpriseReceivableAllocation.create({ data: { organizationId, receivableId: receivable.id, sourceType: "SALES_CREDIT_NOTE", sourceId: credit.id, amount: credit.grandTotal, allocationDate: credit.creditDate, createdByUserId: actorUserId } });
     await tx.enterpriseReceivable.update({ where: { id: receivable.id }, data: { creditedAmount: { increment: credit.grandTotal }, outstandingAmount: outstanding, status: outstanding.isZero() ? "CLOSED" : "OPEN" } });
