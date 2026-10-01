@@ -3,14 +3,15 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 const baseUrl = process.env.E2E_BASE_URL || "http://127.0.0.1:3000";
-const organizationId = process.env.E2E_ORGANIZATION_ID || "e2e-erp-professional-org";
+const runSuffix = process.env.GITHUB_RUN_ID || "local";
+const organizationId = process.env.E2E_PHARMACY_REFUND_ORGANIZATION_ID || `e2e-pharmacy-refund-org-728-${runSuffix}`;
 const adminEmail = process.env.E2E_ADMIN_EMAIL || "erp-admin@example.test";
 const adminPassword = process.env.E2E_ADMIN_PASSWORD || "E2eAdmin2026!";
 const requesterEmail = process.env.E2E_USER_EMAIL || "erp-user@example.test";
 const requesterPassword = process.env.E2E_USER_PASSWORD || "E2eUser2026!";
 const settlerEmail = "erp-pharmacy-refund-settler@example.test";
 const settlerPassword = requesterPassword;
-const foreignOrganizationId = "e2e-pharmacy-refund-foreign-org-728";
+const foreignOrganizationId = `e2e-pharmacy-refund-foreign-org-728-${runSuffix}`;
 
 let adminUserId = "";
 let requesterUserId = "";
@@ -24,6 +25,14 @@ let validatorContext;
 let settlerContext;
 
 const modules = [
+  "CRM_CUSTOMERS",
+  "CATALOG",
+  "SITES_WAREHOUSES",
+  "CRM_PIPELINE",
+  "CONTRACTS",
+  "DOCUMENTS",
+  "SALES_QUOTES_ORDERS",
+  "SUPPLIERS_PURCHASES",
   "CASH_INVOICES_PAYMENTS",
   "FINANCE_OVERVIEW",
   "FINANCE_PAYMENTS",
@@ -142,29 +151,92 @@ async function prepareTenant(browser) {
   });
   settlerUserId = settler.id;
 
-  await prisma.organization.update({
+  await prisma.organization.upsert({
     where: { id: organizationId },
-    data: { sectorCode: "PHARMACY", status: "ACTIVE", deletedAt: null, organizationType: "CLIENT", country: "CD", timezone: "Africa/Kinshasa" },
+    update: {
+      name: "Pharmacy Refund E2E #728",
+      slug: `pharmacy-refund-e2e-728-${runSuffix}`,
+      sectorCode: "PHARMACY",
+      status: "ACTIVE",
+      deletedAt: null,
+      organizationType: "CLIENT",
+      country: "CD",
+      timezone: "Africa/Kinshasa",
+      createdByDtscUserId: adminUserId,
+    },
+    create: {
+      id: organizationId,
+      name: "Pharmacy Refund E2E #728",
+      slug: `pharmacy-refund-e2e-728-${runSuffix}`,
+      sectorCode: "PHARMACY",
+      status: "ACTIVE",
+      organizationType: "CLIENT",
+      country: "CD",
+      timezone: "Africa/Kinshasa",
+      createdByDtscUserId: adminUserId,
+    },
   });
-  for (const [userId, id] of [[requesterUserId, "e2e-pharmacy-requester-member-728"], [settlerUserId, "e2e-pharmacy-settler-member-728"]]) {
+  for (const [userId, role, id] of [
+    [adminUserId, "OWNER", `e2e-pharmacy-refund-owner-728-${runSuffix}`],
+    [requesterUserId, "ADMIN_ENTERPRISE", `e2e-pharmacy-requester-member-728-${runSuffix}`],
+    [settlerUserId, "ADMIN_ENTERPRISE", `e2e-pharmacy-settler-member-728-${runSuffix}`],
+  ]) {
     await prisma.organizationMember.upsert({
       where: { organizationId_userId: { organizationId, userId } },
-      update: { role: "ADMIN_ENTERPRISE", status: "ACTIVE", removedAt: null, joinedAt: new Date() },
-      create: { id, organizationId, userId, role: "ADMIN_ENTERPRISE", status: "ACTIVE", joinedAt: new Date() },
+      update: { role, status: "ACTIVE", removedAt: null, joinedAt: new Date() },
+      create: { id, organizationId, userId, role, status: "ACTIVE", joinedAt: new Date() },
     });
   }
+
+  const plan = await prisma.billingPlan.upsert({
+    where: { id: "e2e-enterprise-plan" },
+    update: { name: "Enterprise E2E", slug: "enterprise", isActive: true },
+    create: {
+      id: "e2e-enterprise-plan",
+      name: "Enterprise E2E",
+      slug: "enterprise",
+      description: "Plan éphémère utilisé uniquement par les tests navigateur authentifiés.",
+      priceUsd: 0,
+      dailyMessageLimit: 1000,
+      dailyTokenLimit: 1_000_000,
+      maxDocuments: 100,
+      isActive: true,
+      sortOrder: 999,
+    },
+  });
+  await prisma.organizationSubscription.deleteMany({ where: { organizationId } });
+  await prisma.organizationSubscription.create({
+    data: {
+      id: `e2e-pharmacy-refund-subscription-728-${runSuffix}`,
+      organizationId,
+      planId: plan.id,
+      status: "ACTIVE",
+      startedAt: new Date(Date.now() - 86_400_000),
+      expiresAt: new Date(Date.now() + 30 * 86_400_000),
+      createdByDtscUserId: adminUserId,
+      updatedByDtscUserId: adminUserId,
+    },
+  });
+
   for (const [index, moduleCode] of modules.entries()) {
+    const starter = moduleCode === "CRM_CUSTOMERS" || moduleCode === "CATALOG";
     await prisma.enterpriseModule.upsert({
       where: { organizationId_moduleCode: { organizationId, moduleCode } },
-      update: { isEnabled: true, requiresPlanLevel: "BUSINESS" },
-      create: { organizationId, moduleCode, labelFr: moduleCode, labelEn: moduleCode, moduleCategory: "E2E", isEnabled: true, isCore: false, requiresPlanLevel: "BUSINESS", sortOrder: 2200 + index },
+      update: { isEnabled: true, requiresPlanLevel: starter ? "STARTER" : "BUSINESS" },
+      create: {
+        organizationId,
+        moduleCode,
+        labelFr: moduleCode,
+        labelEn: moduleCode,
+        moduleCategory: "E2E",
+        isEnabled: true,
+        isCore: moduleCode === "CRM_CUSTOMERS",
+        requiresPlanLevel: starter ? "STARTER" : "BUSINESS",
+        sortOrder: 2200 + index,
+      },
     });
   }
-  const existingFinanceConfiguration = await prisma.enterpriseFinanceConfiguration.findUnique({
-    where: { organizationId },
-    select: { functionalCurrencyCode: true, presentationCurrencyCode: true },
-  });
-  currencyCode = existingFinanceConfiguration?.functionalCurrencyCode || "CDF";
+  currencyCode = "CDF";
   await prisma.enterpriseCurrency.upsert({
     where: { organizationId_code: { organizationId, code: currencyCode } },
     update: { isActive: true },
@@ -180,7 +252,7 @@ async function prepareTenant(browser) {
 
   const configuration = await patch(validatorContext, `/api/enterprise/${organizationId}/finance/configuration`, {
     functionalCurrencyCode: currencyCode,
-    presentationCurrencyCode: existingFinanceConfiguration?.presentationCurrencyCode || currencyCode,
+    presentationCurrencyCode: currencyCode,
     inventoryValuationMethod: "WEIGHTED_AVERAGE",
     reconciliationTolerance: "0.01",
     automaticPostingEnabled: true,
