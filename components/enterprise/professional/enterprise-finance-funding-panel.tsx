@@ -202,9 +202,9 @@ export function EnterpriseFinanceFundingPanel({
 
   return <>
     <ModuleSection title={t("fundingList")} description={t("fundingDescription")}>
-      <div className="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-xl border border-dtsc-border bg-dtsc-surface/70 p-4">
-        <p className="min-w-0 flex-1 text-sm leading-6 text-dtsc-muted">{t("fundingNonRevenueNotice")}</p>
-        {canCreate ? <Button onClick={() => { resetCreate(); setCreateOpen(true); }}><Plus className="h-4 w-4" />{t("newFunding")}</Button> : null}
+      <div className="mb-4 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 rounded-xl border border-dtsc-border bg-dtsc-surface/70 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+        <p className="min-w-0 break-words text-sm leading-6 text-dtsc-muted">{t("fundingNonRevenueNotice")}</p>
+        {canCreate ? <Button className="w-full whitespace-normal text-center sm:w-auto" onClick={() => { resetCreate(); setCreateOpen(true); }}><Plus className="h-4 w-4 shrink-0" />{t("newFunding")}</Button> : null}
       </div>
       {error ? <ProfessionalError message={error} /> : loading ? <ProfessionalLoading /> : <FinanceRecordList items={items} locale={locale} emptyTitle={t("noItems")} emptyDescription={t("noItemsDescription")} onOpen={setDetail} />}
       <FinancePaginationControls pagination={pagination} page={page} onPage={onPage} locale={locale} />
