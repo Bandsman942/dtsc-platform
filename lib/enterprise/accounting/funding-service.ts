@@ -142,10 +142,26 @@ export async function createFundingOperation(
         },
       });
       if (existing) {
+        const existingApproval = await tx.enterpriseApproval.findFirst({
+          where: {
+            organizationId,
+            targetEntityType: "EnterpriseFundingOperation",
+            targetEntityId: existing.id,
+            archivedAt: null,
+          },
+          orderBy: [{ requestedAt: "desc" }, { createdAt: "desc" }],
+          select: { approverUserId: true },
+        });
         const sameRequest =
           existing.fundingType === input.fundingType &&
           existing.financialAccountId === input.financialAccountId &&
-          existing.amount.equals(new Prisma.Decimal(input.amount));
+          existing.amount.equals(new Prisma.Decimal(input.amount)) &&
+          existing.operationDate.getTime() === input.operationDate.getTime() &&
+          existing.reference === (input.reference || null) &&
+          existing.description === (input.description || null) &&
+          existing.counterpartyLedgerAccountId === (input.counterpartyLedgerAccountId || null) &&
+          (!input.cashSessionId || existing.cashSessionId === input.cashSessionId) &&
+          existingApproval?.approverUserId === input.approverUserId;
         if (!sameRequest) throw new EnterpriseAccountingError("FUNDING_IDEMPOTENCY_CONFLICT", 409);
         return existing;
       }
