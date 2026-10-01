@@ -78,7 +78,7 @@ export async function createLedgerAccount(
   },
 ) {
   return prisma.$transaction(async (tx) => {
-    const chart = await tx.enterpriseChartOfAccounts.findFirst({ where: { id: input.chartId, organizationId, status: { in: ["DRAFT", "ACTIVE"] } } });
+    const chart = await tx.enterpriseChartOfAccounts.findFirst({ where: { id: input.chartId, organizationId, status: { in: ["DRAFT", "READY", "ACTIVE"] } } });
     if (!chart) throw new EnterpriseAccountingError("CHART_OF_ACCOUNTS_INVALID", 409);
     let level = 1;
     if (input.parentId) {
