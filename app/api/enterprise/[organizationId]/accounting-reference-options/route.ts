@@ -77,6 +77,7 @@ export async function GET(req: Request, { params }: Params) {
   const status = url.searchParams.get("status")?.trim().toUpperCase() || undefined;
   const accountType = url.searchParams.get("accountType")?.trim().toUpperCase() || undefined;
   const directPosting = url.searchParams.get("directPosting") === "true";
+  const customOnly = url.searchParams.get("customOnly") === "true";
   const take = 30;
   let items: Array<Record<string, unknown>> = [];
 
@@ -85,6 +86,7 @@ export async function GET(req: Request, { params }: Params) {
       where: {
         organizationId,
         ...(status ? { status } : {}),
+        ...(customOnly ? { templateCode: null } : {}),
         ...(search ? { OR: [
           { code: { contains: search, mode: "insensitive" } },
           { nameFr: { contains: search, mode: "insensitive" } },
