@@ -2,6 +2,7 @@ import type { z } from "zod";
 import type { cashCreateSchema } from "@/lib/pharmacy-cash-validators";
 import { prisma } from "@/lib/prisma";
 import { generatePharmacyEntityNumber, getEffectivePharmacySettings } from "@/lib/pharmacy-settings";
+import { convergePharmacyRefund } from "@/lib/enterprise/sector-convergence/pharmacy-finance-service";
 
 type CashInput = z.infer<typeof cashCreateSchema>;
 const nil = <T>(value: T | "" | undefined) => value === "" || value === undefined ? null : value;
@@ -25,7 +26,7 @@ export async function calculateCashSessionTotals(organizationId: string, cashSes
   if (!session) throw new Error("SESSION_NOT_FOUND");
   const [payments, refunds, sales] = await Promise.all([
     prisma.pharmacyPayment.findMany({ where: { organizationId, cashSessionId, status: { in: activePaymentStatuses } }, select: { amount: true, paymentMethod: true } }),
-    prisma.pharmacyRefund.findMany({ where: { organizationId, cashSessionId, status: { in: ["VALIDATED", "PAID"] } }, select: { amount: true } }),
+    prisma.pharmacyRefund.findMany({ where: { organizationId, cashSessionId, status: "PAID" }, select: { amount: true } }),
     prisma.pharmacySale.findMany({ where: { organizationId, cashSessionId, status: { notIn: ["CANCELLED", "REJECTED"] } }, select: { totalAmount: true } }),
   ]);
   const byMethod = (method: string) => payments.filter((item) => item.paymentMethod === method).reduce((sum, item) => sum + Number(item.amount), 0);
@@ -103,7 +104,7 @@ export async function generateReceiptForPayment(organizationId: string, paymentI
 }
 
 export async function createRefund(organizationId: string, userId: string, data: Extract<CashInput, { entityType: "refund" }>) {
-  const cashSettings = (await getEffectivePharmacySettings(organizationId, userId)).sections["cash-payments"];
+  await getEffectivePharmacySettings(organizationId, userId);
   const paymentId = nil(data.paymentId);
   const cashSessionId = nil(data.cashSessionId);
   const [sale, payment, session, aggregate] = await Promise.all([
@@ -117,10 +118,11 @@ export async function createRefund(organizationId: string, userId: string, data:
   if (cashSessionId && !session) throw new Error("SESSION_NOT_OPEN");
   if (Number(aggregate._sum.amount || 0) + data.amount > Number(sale.paidAmount)) throw new Error("REFUND_EXCEEDS_PAID");
   if (data.restockItems && data.amount < Number(sale.paidAmount)) throw new Error("RESTOCK_REQUIRES_FULL_REFUND");
-  return prisma.pharmacyRefund.create({ data: { organizationId, refundNumber: await generatePharmacyEntityNumber(organizationId, "REFUND"), saleId: data.saleId, paymentId, cashSessionId, refundType: data.refundType, amount: data.amount, currency: data.currency, reason: data.reason, restockItems: data.restockItems, status: cashSettings.refundRequiresValidation ? "SUBMITTED" : "VALIDATED", requestedById: userId, validatedById: cashSettings.refundRequiresValidation ? null : userId, validatedAt: cashSettings.refundRequiresValidation ? null : new Date(), notes: nil(data.notes) } });
+  return prisma.pharmacyRefund.create({ data: { organizationId, refundNumber: await generatePharmacyEntityNumber(organizationId, "REFUND"), saleId: data.saleId, paymentId, cashSessionId, refundType: data.refundType, amount: data.amount, currency: data.currency, reason: data.reason, restockItems: data.restockItems, status: "SUBMITTED", requestedById: userId, validatedById: null, validatedAt: null, notes: nil(data.notes) } });
 }
 
 export async function validateCashRefund(organizationId: string, refundId: string, userId: string) {
+  await convergePharmacyRefund(organizationId, refundId, userId, { bypassFeatureFlag: true });
   return prisma.$transaction(async (transaction) => {
     const refund = await transaction.pharmacyRefund.findFirst({ where: { id: refundId, organizationId, status: "SUBMITTED" }, include: { sale: { include: { lines: true } } } });
     if (!refund) throw new Error("REFUND_NOT_SUBMITTED");
@@ -136,8 +138,6 @@ export async function validateCashRefund(organizationId: string, refundId: strin
         await transaction.pharmacyStockMovement.create({ data: { organizationId, productId: line.productId, batchId: line.batchId, movementType: "RETURN_CUSTOMER", direction: "IN", quantity, quantityBefore: before, quantityAfter: before + quantity, reason: refund.reason, relatedEntityType: "PharmacyRefund", relatedEntityId: refund.id, createdById: userId } });
       }
     }
-    const refundedAmount = Number(refund.sale.refundedAmount || 0) + Number(refund.amount);
-    await transaction.pharmacySale.update({ where: { id: refund.saleId }, data: { refundedAmount, status: refundedAmount >= Number(refund.sale.paidAmount) ? "REFUNDED" : refund.sale.status, updatedById: userId } });
     return transaction.pharmacyRefund.update({ where: { id: refund.id }, data: { status: "VALIDATED", validatedById: userId, validatedAt: new Date() } });
   });
 }
@@ -174,5 +174,30 @@ export async function getCashDataset(organizationId: string) {
   const todayPayments = payments.filter((item) => item.paymentDate.toISOString().slice(0, 10) === today && activePaymentStatuses.includes(item.status));
   const sumMethod = (method: string) => todayPayments.filter((item) => item.paymentMethod === method).reduce((sum, item) => sum + Number(item.amount), 0);
   const metrics = { cashOpen: sessions.some((item) => item.status === "OPEN") ? 1 : 0, openSessions: sessions.filter((item) => item.status === "OPEN").length, paidSalesToday: sales.filter((item) => item.saleDate.toISOString().slice(0, 10) === today && item.paymentStatus === "PAID").length, paidToday: todayPayments.reduce((sum, item) => sum + Number(item.amount), 0), cash: sumMethod("CASH"), mobileMoney: sumMethod("MOBILE_MONEY"), card: sumMethod("CARD"), credit: sumMethod("CREDIT"), insurance: sumMethod("INSURANCE"), partialSales: sales.filter((item) => item.paymentStatus === "PARTIALLY_PAID").length, unpaidSales: sales.filter((item) => item.paymentStatus === "UNPAID").length, refundsToday: refunds.filter((item) => item.createdAt.toISOString().slice(0, 10) === today).reduce((sum, item) => sum + Number(item.amount), 0), invoices: invoices.length, receipts: receipts.length, openDiscrepancies: discrepancies.filter((item) => !["RESOLVED", "CANCELLED", "REJECTED"].includes(item.status)).length, pendingClosures: sessions.filter((item) => item.status === "PENDING_VALIDATION").length };
-  return { metrics, sessions, payments, invoices, receipts, refunds, discrepancies, sales, members: members.map((item) => item.user), departments };
+  const refundMappings = await prisma.pharmacyRefundExtension.findMany({
+    where: { organizationId, pharmacyRefundId: { in: refunds.map((item) => item.id) } },
+  });
+  const commonRefundPayments = refundMappings.length
+    ? await prisma.enterprisePayment.findMany({
+        where: { organizationId, id: { in: refundMappings.map((item) => item.paymentId) } },
+        select: { id: true, number: true, status: true, paymentType: true, direction: true },
+      })
+    : [];
+  const paymentById = new Map(commonRefundPayments.map((item) => [item.id, item]));
+  const refundMapBySource = new Map(refundMappings.filter((item) => item.pharmacyRefundId).map((item) => [item.pharmacyRefundId!, item]));
+  const projectedRefunds = refunds.map((item) => {
+    const mapping = refundMapBySource.get(item.id);
+    const financePayment = mapping ? paymentById.get(mapping.paymentId) : null;
+    return {
+      ...item,
+      finance: mapping ? {
+        paymentId: mapping.paymentId,
+        paymentNumber: financePayment?.number || null,
+        paymentStatus: financePayment?.status || "MISSING",
+        salesCreditNoteId: mapping.salesCreditNoteId,
+        syncStatus: mapping.syncStatus,
+      } : null,
+    };
+  });
+  return { metrics, sessions, payments, invoices, receipts, refunds: projectedRefunds, discrepancies, sales, members: members.map((item) => item.user), departments };
 }
