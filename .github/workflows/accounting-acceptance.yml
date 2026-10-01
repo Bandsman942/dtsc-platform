@@ -49,6 +49,7 @@ on:
       - "scripts/qa-ci-auth-rate-limit-provisioning.mjs"
       - "tests/e2e/accounting-onboarding.spec.mjs"
       - "tests/e2e/erp-cross-module-finance.spec.mjs"
+      - "tests/e2e/pharmacy-refund-finance-convergence.spec.mjs"
       - "tests/e2e/accounting-c5-closing.spec.mjs"
       - "tests/e2e/accounting-z-close-protection.spec.mjs"
       - "playwright.config.mjs"
@@ -186,6 +187,11 @@ jobs:
         run: |
           set -o pipefail
           pnpm exec playwright test tests/e2e/erp-cross-module-finance.spec.mjs --workers=1 2>&1 | tee /tmp/dtsc-erp-cross-module-playwright.log
+      - name: Pharmacy refund Finance convergence
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm exec playwright test tests/e2e/pharmacy-refund-finance-convergence.spec.mjs --workers=1 2>&1 | tee /tmp/dtsc-pharmacy-refund-playwright.log
       - name: Accounting C5 closing acceptance
         shell: bash
         run: |
@@ -243,6 +249,7 @@ jobs:
             /tmp/dtsc-accounting-next-close.log
             /tmp/dtsc-accounting-onboarding-playwright.log
             /tmp/dtsc-erp-cross-module-playwright.log
+            /tmp/dtsc-pharmacy-refund-playwright.log
             /tmp/dtsc-accounting-c5-playwright.log
             /tmp/dtsc-accounting-close-playwright.log
             /tmp/dtsc-ci-redis-rest.log
