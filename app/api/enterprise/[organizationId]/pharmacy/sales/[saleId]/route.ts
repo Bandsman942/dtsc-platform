@@ -136,6 +136,14 @@ export async function PATCH(req: Request, { params }: Params) {
     }
     await reverseSaleStockImpact(organizationId, saleId, session.userId, cancellationReason);
   } else if (data.action === "refund") {
+    await writeAuditLog({
+      userId: session.userId,
+      action: "PHARMACY_SALE_REFUND_REDIRECTED_TO_COMMON_FINANCE",
+      entity: "PharmacySale",
+      entityId: saleId,
+      request: req,
+      metadata: { organizationId, reason: data.reason || null },
+    });
     return NextResponse.json(
       {
         error: "PHARMACY_REFUND_USE_CASH_WORKFLOW",
