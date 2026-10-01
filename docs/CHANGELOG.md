@@ -1,3 +1,28 @@
+## 2026-10-01 — Hotfix #741 : consolidation des anciennes PR Finance
+
+### Corrigé
+
+- La confirmation d’un remboursement client et son posting comptable sont désormais atomiques dans la même transaction Prisma, y compris lors d’un retry d’un remboursement déjà confirmé.
+- Les remboursements appliquent la même séparation initiateur / approbateur / confirmateur que les paiements communs.
+- La récupération ou le rebinding automatique d’une session Cash est désormais réservé aux paiements créés avant le cutover `20260929083000_payment_cash_session_binding`; les paiements récents échouent en mode fail-closed si leur rattachement Cash manque ou si leur session n’est plus ouverte.
+- Les capacités de la liste Paiements n’exposent plus `Confirmer` à l’initiateur ni à l’approbateur.
+- Les projections Finance Health utilisent le nom contrôlé du Catalog commun au lieu de recopier une description clinique libre.
+- Les projections Finance Pharmacy utilisent le nom métier du Catalog commun au lieu d’un identifiant produit technique.
+- Couture expose Ventes, Créances, Paiements et valorisation de stock comme intégrations recommandées, sans créer de moteur financier parallèle.
+- La QA de confidentialité Health couvre explicitement antécédents, allergies, prescriptions et valeurs/interprétations de laboratoire.
+- Les contrats Gaming/Couture/Retail et la symétrie des inverses sont documentés dans la matrice financière sectorielle.
+
+### Dette historique
+
+- Les PR #726, #727 et #729 sont remplacées par ce hotfix consolidé sur le `main` courant.
+- La convergence des remboursements Pharmacy legacy reste volontairement suivie séparément par #728.
+- Aucune migration ni suppression d’historique.
+
+### Validation
+
+- `qa:hotfix-741`, la régression canonique, Gaming acceptance et Accounting acceptance doivent être verts avant fusion.
+- OWNER_E2E reste requis.
+
 ## 2026-09-30 — Hotfix #738 : navigation Finance structurée
 
 ### Corrigé
