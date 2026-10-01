@@ -238,7 +238,7 @@ async function createScenario(total, refundAmount, suffix) {
       issuedAt: new Date(),
       postedAt: new Date(),
       createdByUserId: requesterUserId,
-      items: { create: { organizationId, description: `Produit test #728 ${suffix}`, quantity: "1", unitPrice: String(total), netAmount: String(total), taxAmount: "0", totalAmount: String(total) } },
+      items: { create: { description: `Produit test #728 ${suffix}`, quantity: "1", unitPrice: String(total), netAmount: String(total), taxAmount: "0", totalAmount: String(total) } },
     },
   });
   const receivable = await prisma.enterpriseReceivable.create({
@@ -468,7 +468,7 @@ test.describe.serial("Hotfix #728 Pharmacy refund Finance convergence", () => {
             issuedAt: new Date(),
             postedAt: new Date(),
             createdByUserId: requesterUserId,
-            items: { create: { organizationId, description: "Reallocation guard #728", quantity: "1", unitPrice: "10", netAmount: "10", totalAmount: "10" } },
+            items: { create: { description: "Reallocation guard #728", quantity: "1", unitPrice: "10", netAmount: "10", totalAmount: "10" } },
           },
         })).id,
         businessPartyId: scenario.party.id,
