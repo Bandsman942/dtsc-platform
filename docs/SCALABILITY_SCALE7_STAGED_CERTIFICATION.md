@@ -41,6 +41,8 @@ The application accepts the provisioning request only when the OIDC token is cry
 
 The managed pool uses two fixed synthetic organizations, no customer data, and synthetic identities that cannot authenticate with a product password. Sessions are signed by the application at run time and remain only in the GitHub Actions runner environment. The returned topology is never written to Issues, artifacts or the versioned certification registry.
 
+The same OIDC verifier authorizes **only** `GET /api/admin/scalability/observability` for this exact workflow. An OIDC request must also carry an exact same-origin `Origin` header. The route keeps its existing `SECURITY_READ` path for human CTO users; OIDC is not a general Console bypass and does not authorize any other Administration DTSC route.
+
 To avoid measuring per-user AI/rate-limit ceilings as if they were platform capacity, the governed pool is deliberately larger than the minimum contract: it uses approximately **10% of the VU target**, i.e. 50 / 100 / 250 / 500 unique sessions for 500 / 1,000 / 2,500 / 5,000 VU, split across the two synthetic tenants.
 
 An operator may still provide `SCALE7_AUTH_CONTEXTS_JSON` as an **operator override**. When present, the workflow uses it instead of OIDC provisioning. The same harness validation still requires at least two distinct tenants, unique sessions and the stage-specific minimum `max(8, ceil(targetVus / 100))`.
@@ -81,8 +83,9 @@ Manual inputs:
 
 Required configuration:
 
-- secret `VERCEL_AUTOMATION_BYPASS_SECRET`;
-- a governed CTO observability session through `SCALE7_CTO_SESSION_COOKIE` or its SCALE-1 fallback.
+- secret `VERCEL_AUTOMATION_BYPASS_SECRET`.
+
+SCALE-7 no longer requires a human CTO session cookie. The workflow mints short-lived GitHub Actions OIDC tokens with audience `dtsc-scale7` and uses them only for the governed auth-pool endpoint and the Scalability observability snapshot. The normal Administration DTSC UI still requires a human session with `SECURITY_READ`.
 
 Optional configuration:
 
@@ -90,10 +93,11 @@ Optional configuration:
 
 Governed fallbacks reduce duplicate Production configuration:
 
-- application origin: `SCALE7_LOAD_BASE_URL` overrides `SCALE1_LOAD_BASE_URL`; if neither repository variable exists, the canonical Production origin `https://app.dtsc-platform.com` is used;
-- CTO observability session: `SCALE7_CTO_SESSION_COOKIE` overrides the existing governed `SCALE1_CTO_SESSION_COOKIE`.
+- application origin: `SCALE7_LOAD_BASE_URL` overrides `SCALE1_LOAD_BASE_URL`; if neither repository variable exists, the canonical Production origin `https://app.dtsc-platform.com` is used.
 
-These fallbacks do not weaken the workload topology. A dedicated SCALE-7 multi-tenant identity pool remains mandatory; it is either generated through the governed OIDC path or supplied explicitly by the operator override.
+The older SCALE-7 CTO-cookie fallback from #687 is intentionally superseded for this workflow because a human session can expire before a certification run. SCALE-1 may continue to use its own governed CTO session contract. SCALE-7 instead renews its short-lived OIDC authorization while sampling observability.
+
+This does not weaken the workload topology. A dedicated SCALE-7 multi-tenant identity pool remains mandatory; it is either generated through the governed OIDC path or supplied explicitly by the operator override.
 
 No workflow runs on push, pull request or schedule.
 
