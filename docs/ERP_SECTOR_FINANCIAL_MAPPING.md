@@ -34,6 +34,8 @@ PharmacyPurchaseOrder
 
 ### Pharmacy refunds
 
+Hotfix #728 makes this chain authoritative for Pharmacy monetary refunds.
+
 ```text
 PharmacyRefund (request / regulated return context)
   -> PharmacyRefundExtension
