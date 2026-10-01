@@ -42,19 +42,23 @@ const expectedCommon = new Set([
   "REPORTS",
 ]);
 const declared = new Set();
+const declaredCounts = new Map();
 const arrayMatches = [...sections.matchAll(/moduleCodes:\s*\[([^\]]*)\]/gs)];
 for (const match of arrayMatches) {
-  for (const codeMatch of match[1].matchAll(/"([A-Z0-9_]+)"/g)) declared.add(codeMatch[1]);
+  for (const codeMatch of match[1].matchAll(/"([A-Z0-9_]+)"/g)) {
+    const code = codeMatch[1];
+    declared.add(code);
+    declaredCounts.set(code, (declaredCounts.get(code) || 0) + 1);
+  }
 }
 
 for (const code of expectedCommon) {
   if (!declared.has(code)) fail(`common Finance module is not explicitly assigned to a Finance section: ${code}`);
 }
 
-const duplicates = [...declared].filter((code) => {
-  const occurrences = [...sections.matchAll(new RegExp(`"${code}"`, "g"))].length;
-  return occurrences > 1;
-});
+const duplicates = [...declaredCounts.entries()]
+  .filter(([, count]) => count > 1)
+  .map(([code]) => code);
 if (duplicates.length) fail(`Finance navigation module duplicated across section declarations: ${duplicates.join(", ")}`);
 
 const reports = commonRegistry.modules.find((item) => item.code === "REPORTS");
