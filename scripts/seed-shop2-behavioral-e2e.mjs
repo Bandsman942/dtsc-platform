@@ -62,7 +62,7 @@ async function seedCanonicalTemplate(chartId, actorUserId) {
     if (!ledgerAccountId) throw new Error(`Template mapping ${mapping.mappingKey} references missing account ${mapping.accountCode}`);
 
     const existing = await prisma.enterpriseAccountMapping.findFirst({
-      where: { organizationId, mappingKey: mapping.mappingKey, effectiveFrom },
+      where: { organizationId, chartId, mappingKey: mapping.mappingKey, effectiveFrom },
       orderBy: { createdAt: "asc" },
     });
     if (existing) {
@@ -80,6 +80,7 @@ async function seedCanonicalTemplate(chartId, actorUserId) {
       await prisma.enterpriseAccountMapping.create({
         data: {
           organizationId,
+          chartId,
           mappingKey: mapping.mappingKey,
           ledgerAccountId,
           sourceModule: mapping.sourceModule || null,
@@ -124,19 +125,26 @@ async function seedCanonicalTemplate(chartId, actorUserId) {
 }
 
 async function upsertMapping(mappingKey, ledgerAccountId, actorUserId) {
+  const ledgerAccount = await prisma.enterpriseLedgerAccount.findFirst({
+    where: { id: ledgerAccountId, organizationId },
+    select: { chartId: true },
+  });
+  if (!ledgerAccount) throw new Error(`Missing ledger account ${ledgerAccountId} for mapping ${mappingKey}`);
+  const chartId = ledgerAccount.chartId;
   const existing = await prisma.enterpriseAccountMapping.findFirst({
-    where: { organizationId, mappingKey, effectiveFrom: null },
+    where: { organizationId, chartId, mappingKey, effectiveFrom: null },
     orderBy: { createdAt: "asc" },
   });
   if (existing) {
     return prisma.enterpriseAccountMapping.update({
       where: { id: existing.id },
-      data: { ledgerAccountId, isActive: true, effectiveTo: null, sourceModule: "RETAIL_POS" },
+      data: { chartId, ledgerAccountId, isActive: true, effectiveTo: null, sourceModule: "RETAIL_POS" },
     });
   }
   return prisma.enterpriseAccountMapping.create({
     data: {
       organizationId,
+      chartId,
       mappingKey,
       ledgerAccountId,
       sourceModule: "RETAIL_POS",
