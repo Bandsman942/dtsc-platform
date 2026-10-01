@@ -616,6 +616,24 @@ export async function settlePharmacyRefund(
     ? await prisma.pharmacyPaymentExtension.findFirst({ where: { organizationId, pharmacyPaymentId: pharmacyPayment.id } })
     : null;
 
+  if (refundPayment.methodType === "CASH") {
+    if (!refundPayment.cashSessionId || !refundPayment.financialAccountId) {
+      throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_COMMON_CASH_SESSION_NOT_OPEN", 409);
+    }
+    const cashSession = await prisma.enterpriseCashSession.findFirst({
+      where: {
+        id: refundPayment.cashSessionId,
+        organizationId,
+        financialAccountId: refundPayment.financialAccountId,
+        status: "OPEN",
+      },
+      select: { id: true },
+    });
+    if (!cashSession) {
+      throw new EnterpriseSectorConvergenceError("PHARMACY_REFUND_COMMON_CASH_SESSION_NOT_OPEN", 409);
+    }
+  }
+
   if (refundPayment.status === "APPROVED") {
     await reverseCustomerPaymentAllocationsForRefundAmount(
       organizationId,
