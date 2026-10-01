@@ -13,12 +13,12 @@ export type DatabaseConnectionPolicyStatus =
   | "INVALID";
 
 export const NEON_RUNTIME_CONNECTION_DEFAULTS = {
-  // SCALE-1B #416: once Neon PgBouncer is in front of the runtime, a single
-  // Prisma connection per warm Fluid Compute instance serializes otherwise
-  // parallel reads. Five is the first evidence-tuning candidate and matches
-  // Prisma v6's common 2*CPU+1 starting point for a 2-CPU process. Explicit
-  // operator URL parameters still win and can override this value.
-  connectionLimit: 5,
+  // SCALE-7A #751: five connections were sufficient for SCALE-1 but the richer
+  // 500-VU ERP/Shop/collaboration/AI mix still produced Prisma P2024 acquisition
+  // timeouts while Neon stayed below 5% global connection utilization. Nine is
+  // the second and maximum pre-authorized candidate from #416. Explicit operator
+  // URL parameters still win and can override this value.
+  connectionLimit: 9,
   poolTimeoutSeconds: 5,
   connectTimeoutSeconds: 10,
 } as const;
