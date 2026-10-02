@@ -248,7 +248,20 @@ export function EnterpriseFinanceFundingPanel({
             <FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_TREASURY" kind="financial-account" name="financialAccountId" label={t("fundingAccount")} locale={rawLocale} required disabled={busy} onOptionChange={setSelectedAccount} />
           </Field>
           {selectedAccount?.accountType === "CASH" ? <Field label={t("cashSession")} help={t("cashSessionHelp")}>
-            <FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_TREASURY" kind="cash-session" name="cashSessionId" label={t("cashSession")} locale={rawLocale} parentId={selectedAccount.id} required disabled={busy} emptyLabel={t("cashSessionEmpty")} />
+            <FinanceReferenceSelect
+              organizationId={organizationId}
+              moduleCode="FINANCE_TREASURY"
+              kind="cash-session"
+              name="cashSessionId"
+              label={t("cashSession")}
+              locale={rawLocale}
+              parentId={selectedAccount.id}
+              required
+              disabled={busy}
+              emptyLabel={t("cashSessionSelect")}
+              emptyStateLabel={t("cashSessionEmpty")}
+              autoSelectSingle
+            />
           </Field> : null}
           {fundingType === "SHAREHOLDER_ADVANCE" ? <Field label={t("counterpartAccount")} help={t("counterpartAccountHelp")}>
             <FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_TREASURY" kind="funding-counterpart-account" name="counterpartyLedgerAccountId" label={t("counterpartAccount")} locale={rawLocale} required disabled={busy} />
@@ -267,7 +280,7 @@ export function EnterpriseFinanceFundingPanel({
       <form onSubmit={transitionFunding} className="grid gap-5">
         {action?.action === "REJECT" || action?.action === "REVERSE" ? <Field label={action.action === "REVERSE" ? t("reversalReason") : t("reason")}><textarea name="reason" rows={4} required minLength={4} maxLength={1000} disabled={busy} className="w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base text-dtsc-ink outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 disabled:opacity-60 md:text-sm" /></Field> : null}
         {action?.action === "REVERSE" ? <Field label={t("reversalDate")}><Input name="accountingDate" type="date" required disabled={busy} /></Field> : null}
-        {action?.action === "REVERSE" && action.record.financialAccount.accountType === "CASH" ? <Field label={t("cashSession")} help={t("cashSessionHelp")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_TREASURY" kind="cash-session" name="cashSessionId" label={t("cashSession")} locale={rawLocale} parentId={action.record.financialAccountId} required disabled={busy} emptyLabel={t("cashSessionEmpty")} /></Field> : null}
+        {action?.action === "REVERSE" && action.record.financialAccount.accountType === "CASH" ? <Field label={t("cashSession")} help={t("cashSessionHelp")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_TREASURY" kind="cash-session" name="cashSessionId" label={t("cashSession")} locale={rawLocale} parentId={action.record.financialAccountId} required disabled={busy} emptyLabel={t("cashSessionSelect")} emptyStateLabel={t("cashSessionEmpty")} autoSelectSingle /></Field> : null}
         <Button type="submit" disabled={busy}>{action?.action === "REVERSE" ? t("reverseFunding") : action?.action === "APPROVE" ? t("approve") : action?.action === "CONFIRM" ? t("confirm") : t("reject")}</Button>
       </form>
     </Dialog>
