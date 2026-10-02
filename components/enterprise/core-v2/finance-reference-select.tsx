@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 
 type ReferenceKind =
@@ -130,7 +130,7 @@ function mapOptions(kind: ReferenceKind, items: unknown[], locale?: string | nul
   return [];
 }
 
-export function FinanceReferenceSelect({ organizationId, kind, name, label, locale, required = false, disabled = false, emptyLabel, moduleCode, parentId, onOptionChange }: {
+export function FinanceReferenceSelect({ organizationId, kind, name, label, locale, required = false, disabled = false, emptyLabel, emptyStateLabel, autoSelectSingle = false, moduleCode, parentId, onOptionChange }: {
   organizationId: string;
   kind: ReferenceKind;
   name: string;
@@ -139,6 +139,8 @@ export function FinanceReferenceSelect({ organizationId, kind, name, label, loca
   required?: boolean;
   disabled?: boolean;
   emptyLabel?: string;
+  emptyStateLabel?: string;
+  autoSelectSingle?: boolean;
   moduleCode?: OperationalFinanceModuleCode;
   parentId?: string;
   onOptionChange?: (option: FinanceReferenceOption | null) => void;
@@ -149,8 +151,16 @@ export function FinanceReferenceSelect({ organizationId, kind, name, label, loca
   const [selected, setSelected] = useState<FinanceReferenceOption | null>(null);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
+  const onOptionChangeRef = useRef(onOptionChange);
 
-  useEffect(() => { setSelected(null); }, [kind, moduleCode, parentId]);
+  useEffect(() => {
+    onOptionChangeRef.current = onOptionChange;
+  }, [onOptionChange]);
+
+  useEffect(() => {
+    setSelected(null);
+    onOptionChangeRef.current?.(null);
+  }, [kind, moduleCode, parentId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -160,13 +170,20 @@ export function FinanceReferenceSelect({ organizationId, kind, name, label, loca
         const response = await fetch(endpointFor(organizationId, kind, search, moduleCode, parentId), { cache: "no-store" });
         const body = await response.json().catch(() => null) as ApiBody | null;
         if (!response.ok || !body) throw new Error("LOOKUP_FAILED");
-        if (!cancelled) setItems(mapOptions(kind, body.items || [], locale));
+        if (!cancelled) {
+          const mappedItems = mapOptions(kind, body.items || [], locale);
+          setItems(mappedItems);
+          if (autoSelectSingle && !search.trim() && mappedItems.length === 1) {
+            setSelected(mappedItems[0]);
+            onOptionChangeRef.current?.(mappedItems[0]);
+          }
+        }
       } catch {
         if (!cancelled) { setItems([]); setFailed(true); }
       } finally { if (!cancelled) setLoading(false); }
     }, 220);
     return () => { cancelled = true; window.clearTimeout(timer); };
-  }, [kind, locale, moduleCode, organizationId, parentId, search]);
+  }, [autoSelectSingle, kind, locale, moduleCode, organizationId, parentId, search]);
 
   const options = useMemo(() => !selected || items.some((item) => item.id === selected.id) ? items : [selected, ...items], [items, selected]);
 
@@ -176,7 +193,11 @@ export function FinanceReferenceSelect({ organizationId, kind, name, label, loca
       <option value="">{loading ? (en ? "Loading…" : "Chargement…") : emptyLabel || (en ? "Select…" : "Sélectionner…")}</option>
       {options.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
     </select>
-    {failed ? <p className="text-xs font-bold text-amber-700 dark:text-amber-300">{en ? "References are temporarily unavailable. Try another search." : "Les références sont temporairement indisponibles. Essayez une autre recherche."}</p> : null}
-    {!loading && !failed && search.trim() && items.length === 0 ? <p className="text-xs text-dtsc-muted">{en ? "No matching reference." : "Aucune référence correspondante."}</p> : null}
+    {failed ? <p className="text-xs font-bold text-amber-700 dark:text-amber-300" aria-live="polite">{en ? "References are temporarily unavailable. Try another search." : "Les références sont temporairement indisponibles. Essayez une autre recherche."}</p> : null}
+    {!loading && !failed && items.length === 0 && (Boolean(search.trim()) || Boolean(emptyStateLabel)) ? (
+      <p className="text-xs text-dtsc-muted" aria-live="polite">
+        {search.trim() ? (en ? "No matching reference." : "Aucune référence correspondante.") : emptyStateLabel}
+      </p>
+    ) : null}
   </div>;
 }
