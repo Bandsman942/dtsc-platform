@@ -1,3 +1,11 @@
+## 2026-10-02 — SCALE-7F sustained-load tail stability (#770)
+
+- borne le fan-out DB du Dashboard en deux vagues 4/5 sans supprimer ni approximer de données ;
+- supprime la requête membership redondante de l'accès Core V2 tout en conservant le snapshot de capabilities fail-closed ;
+- ajoute l'âge de transaction `xact_start` au diagnostic idle-in-transaction, gate zéro inchangée ;
+- ajoute `qa:scale7f-soak-tail-stability` à la régression canonique ;
+- aucun SLO abaissé, aucune migration, aucun pool Prisma >9.
+
 ## 2026-10-02 — SCALE-7E CI-proven staged progression (#768)
 
 - remplace le registre statique vide comme verrou d'exécution par des preuves `CI_PROVEN` GitHub Actions ;
