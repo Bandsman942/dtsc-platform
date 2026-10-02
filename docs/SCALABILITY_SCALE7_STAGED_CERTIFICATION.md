@@ -11,6 +11,7 @@ Le hotfix :
 - conserve la gate idle-in-transaction à zéro et archive désormais le nombre maximal et l’âge maximal observés, sans SQL, utilisateur, tenant ni identifiant sensible.
 
 Aucun 500-soak n’est autorisé avant un nouveau 500-ramp PASS en Production.
+Si la nouvelle télémétrie confirme une session idle-in-transaction persistante, sa correction sera tracée par une Issue dédiée à partir de cette preuve Production ; aucune cause n’est présumée avant mesure.
 
 Issue: #360
 Parent programme: #352
