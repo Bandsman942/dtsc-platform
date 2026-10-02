@@ -38,9 +38,9 @@ function usageLabel(used: number, limit: number | null) {
 }
 
 export default async function DashboardPage() {
-  const user = await requireUser();
   const session = await getSession();
   if (!session) redirect("/auth/sign-in");
+  const user = await requireUser(session);
 
   const copy = getExperienceCopy(user.locale).dashboard;
   const intlLocale = getIntlLocale(user.locale);
