@@ -1,5 +1,5 @@
 import { TicketStatus } from "@prisma/client";
-import { getOrganizationEntitlements } from "@/lib/billing/entitlements";
+import { getOrganizationWorkspaceCommercialSummary } from "@/lib/billing/entitlements";
 import { listUserIdentityLinksForWorkspace } from "@/lib/enterprise/identity-links/service";
 import { buildVisibleNotificationWhereForSession } from "@/lib/notification-access";
 import { getActiveOrganizationId } from "@/lib/organizations";
@@ -119,32 +119,35 @@ export async function getPersonalWorkspaceSummary({
 }): Promise<PersonalWorkspaceSummary> {
   const context = resolveContext(session);
   const activeOrganizationId = getActiveOrganizationId(session);
-  const membershipRows = await prisma.organizationMember.findMany({
-    where: {
-      userId: user.id,
-      status: { in: ["ACTIVE", "INVITED"] },
-      removedAt: null,
-      organization: { status: "ACTIVE", deletedAt: null },
-    },
-    select: {
-      id: true,
-      organizationId: true,
-      status: true,
-      role: true,
-      invitedBy: true,
-      createdAt: true,
-      organization: {
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-          logoUrl: true,
-          organizationType: true,
+  const [membershipRows, identityLinks] = await Promise.all([
+    prisma.organizationMember.findMany({
+      where: {
+        userId: user.id,
+        status: { in: ["ACTIVE", "INVITED"] },
+        removedAt: null,
+        organization: { status: "ACTIVE", deletedAt: null },
+      },
+      select: {
+        id: true,
+        organizationId: true,
+        status: true,
+        role: true,
+        invitedBy: true,
+        createdAt: true,
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            logoUrl: true,
+            organizationType: true,
+          },
         },
       },
-    },
-    orderBy: { organization: { name: "asc" } },
-  });
+      orderBy: { organization: { name: "asc" } },
+    }),
+    listUserIdentityLinksForWorkspace(user.id),
+  ]);
   const memberships = membershipRows.filter((membership) => membership.status === "ACTIVE").slice(0, 20);
   const pendingInvitations = membershipRows
     .filter((membership) => membership.status === "INVITED" && membership.organization.organizationType === "CLIENT")
@@ -154,7 +157,6 @@ export async function getPersonalWorkspaceSummary({
   today.setHours(0, 0, 0, 0);
 
   const [
-    identityLinks,
     unreadNotificationCount,
     recentNotifications,
     openSupportTicketCount,
@@ -163,9 +165,8 @@ export async function getPersonalWorkspaceSummary({
     personalSubscription,
     usageToday,
     usedDocuments,
-    organizationEntitlements,
+    organizationCommercialSummary,
   ] = await Promise.all([
-    listUserIdentityLinksForWorkspace(user.id),
     prisma.notification.count({ where: { ...notificationWhere, readAt: null } }),
     prisma.notification.findMany({
       where: notificationWhere,
@@ -199,7 +200,7 @@ export async function getPersonalWorkspaceSummary({
       _sum: { totalTokens: true },
     }),
     prisma.knowledgeDocument.count({ where: { userId: user.id, organizationId: activeOrganizationId } }),
-    getOrganizationEntitlements(activeOrganizationId),
+    getOrganizationWorkspaceCommercialSummary(activeOrganizationId),
   ]);
 
   const actionableRelationshipStatuses = new Set(["INVITED", "PENDING_CONSENT", "PENDING_USER", "PENDING_USER_APPROVAL", "PENDING"]);
@@ -318,8 +319,8 @@ export async function getPersonalWorkspaceSummary({
     .sort((left, right) => new Date(right.occurredAt).getTime() - new Date(left.occurredAt).getTime())
     .slice(0, 12);
 
-  const organizationSubscription = organizationEntitlements && !organizationEntitlements.isDtscInternal
-    ? organizationEntitlements
+  const organizationSubscription = organizationCommercialSummary && !organizationCommercialSummary.isDtscInternal
+    ? organizationCommercialSummary
     : null;
   const plan = personalSubscription?.plan || null;
   const subscription = organizationSubscription
