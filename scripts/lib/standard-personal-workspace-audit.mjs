@@ -45,7 +45,7 @@ export function runStandardPersonalWorkspaceAudit(mode = "all") {
       "getPersonalWorkspaceSummary",
       "buildVisibleNotificationWhereForSession",
       "listUserIdentityLinksForWorkspace",
-      "getOrganizationEntitlements",
+      "getOrganizationWorkspaceCommercialSummary",
       "membershipRows",
       "Promise.all",
       "actions",
