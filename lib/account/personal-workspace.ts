@@ -159,6 +159,11 @@ export async function getPersonalWorkspaceSummary({
     recentNotifications,
     openSupportTicketCount,
     recentTickets,
+    recentConversations,
+    personalSubscription,
+    usageToday,
+    usedDocuments,
+    organizationEntitlements,
   ] = await Promise.all([
     listUserIdentityLinksForWorkspace(user.id),
     prisma.notification.count({ where: { ...notificationWhere, readAt: null } }),
@@ -177,15 +182,6 @@ export async function getPersonalWorkspaceSummary({
       take: 5,
       select: { id: true, subject: true, status: true, updatedAt: true },
     }),
-  ]);
-
-  const [
-    recentConversations,
-    personalSubscription,
-    usageToday,
-    usedDocuments,
-    organizationEntitlements,
-  ] = await Promise.all([
     prisma.conversation.findMany({
       where: { userId: user.id, organizationId: activeOrganizationId },
       orderBy: { updatedAt: "desc" },
