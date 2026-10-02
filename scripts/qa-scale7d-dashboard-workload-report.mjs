@@ -77,9 +77,14 @@ expect(
   "owner-triggered sanitized result publishes workload latency",
 );
 
+const dashboardAuditStart = workspaceAudit.indexOf('if (run("dashboard"))');
+const dashboardAuditEnd = workspaceAudit.indexOf('if (run("context"))', dashboardAuditStart);
+const dashboardAudit = workspaceAudit.slice(dashboardAuditStart, dashboardAuditEnd);
 expect(
-  workspaceAudit.includes('"getOrganizationWorkspaceCommercialSummary"') &&
-  !workspaceAudit.includes('"getOrganizationEntitlements",'),
+  dashboardAuditStart >= 0 &&
+  dashboardAuditEnd > dashboardAuditStart &&
+  dashboardAudit.includes('"getOrganizationWorkspaceCommercialSummary"') &&
+  !dashboardAudit.includes('"getOrganizationEntitlements",'),
   "standard Dashboard audit requires the lightweight commercial workspace contract",
 );
 
