@@ -27,6 +27,17 @@ const PENDING_LINK_STATUSES = [
 
 type DatabaseClient = Prisma.TransactionClient | typeof prisma;
 
+type WorkspaceIdentityLinkRow = {
+  id: string;
+  organizationId: string;
+  status: string;
+  createdAt: Date;
+  organizationRecordId: string | null;
+  organizationName: string | null;
+  organizationLogoUrl: string | null;
+};
+
+
 type BusinessTarget = Pick<
   EnterpriseIdentityInvitationInput,
   "businessPartyId" | "businessPartyContactId" | "employeeId" | "supplierId" | "supplierContactId" | "displayName" | "relationType" | "roleCode"
@@ -1019,28 +1030,36 @@ export async function listOrganizationIdentityLinks(organizationId: string) {
 }
 
 export async function listUserIdentityLinksForWorkspace(userId: string) {
-  const links = await prisma.enterpriseIdentityLink.findMany({
-    where: { userId },
-    orderBy: { createdAt: "desc" },
-    take: 200,
-    select: {
-      id: true,
-      organizationId: true,
-      status: true,
-      createdAt: true,
-    },
-  });
-  const organizationIds = [...new Set(links.map((link) => link.organizationId))];
-  const organizations = organizationIds.length
-    ? await prisma.organization.findMany({
-        where: { id: { in: organizationIds }, deletedAt: null },
-        select: { id: true, name: true, logoUrl: true },
-      })
-    : [];
-  const organizationById = new Map(organizations.map((organization) => [organization.id, organization]));
-  return links.map((link) => ({
-    ...link,
-    organization: organizationById.get(link.organizationId) || null,
+  const rows = await prisma.$queryRaw<WorkspaceIdentityLinkRow[]>`
+    SELECT
+      link."id",
+      link."organizationId",
+      link."status",
+      link."createdAt",
+      organization."id" AS "organizationRecordId",
+      organization."name" AS "organizationName",
+      organization."logoUrl" AS "organizationLogoUrl"
+    FROM "EnterpriseIdentityLink" AS link
+    LEFT JOIN "Organization" AS organization
+      ON organization."id" = link."organizationId"
+      AND organization."deletedAt" IS NULL
+    WHERE link."userId" = ${userId}
+    ORDER BY link."createdAt" DESC
+    LIMIT 200
+  `;
+
+  return rows.map((row) => ({
+    id: row.id,
+    organizationId: row.organizationId,
+    status: row.status,
+    createdAt: row.createdAt,
+    organization: row.organizationRecordId
+      ? {
+          id: row.organizationRecordId,
+          name: row.organizationName || "",
+          logoUrl: row.organizationLogoUrl,
+        }
+      : null,
   }));
 }
 
