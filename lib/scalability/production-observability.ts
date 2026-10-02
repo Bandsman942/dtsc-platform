@@ -47,6 +47,7 @@ type DbConnectionRow = {
   idleConnections: number;
   idleInTransactionConnections: number;
   oldestIdleInTransactionSeconds: number | null;
+  oldestIdleInTransactionTransactionSeconds: number | null;
   longRunningQueries: number;
   maxConnections: number;
 };
@@ -157,6 +158,10 @@ export async function getProductionObservabilitySnapshot(windowHours: number) {
         MAX(EXTRACT(EPOCH FROM (now() - state_change))) FILTER (
           WHERE state = 'idle in transaction'
         )::float8 AS "oldestIdleInTransactionSeconds",
+        MAX(EXTRACT(EPOCH FROM (now() - xact_start))) FILTER (
+          WHERE state = 'idle in transaction'
+            AND xact_start IS NOT NULL
+        )::float8 AS "oldestIdleInTransactionTransactionSeconds",
         COUNT(*) FILTER (
           WHERE state = 'active'
             AND query_start IS NOT NULL
@@ -331,6 +336,7 @@ export async function getProductionObservabilitySnapshot(windowHours: number) {
       idleConnections: database.idleConnections,
       idleInTransactionConnections: database.idleInTransactionConnections,
       oldestIdleInTransactionSeconds: finiteMetric(database.oldestIdleInTransactionSeconds),
+      oldestIdleInTransactionTransactionSeconds: finiteMetric(database.oldestIdleInTransactionTransactionSeconds),
       longRunningQueries: database.longRunningQueries,
       maxConnections: database.maxConnections,
       connectionUtilization: database.maxConnections > 0 ? database.currentConnections / database.maxConnections : null,
