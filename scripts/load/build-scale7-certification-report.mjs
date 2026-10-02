@@ -78,6 +78,22 @@ const http = {
   },
 };
 
+const idleInTransactionDiagnostics = samples
+  .flatMap((sample) => {
+    const diagnostics = Array.isArray(sample?.database?.idleInTransactionDiagnostics)
+      ? sample.database.idleInTransactionDiagnostics
+      : [];
+    return diagnostics.map((diagnostic) => ({
+      observedAt: sample?.generatedAt || null,
+      backendType: diagnostic?.backendType || "unknown",
+      applicationClass: diagnostic?.applicationClass || "OTHER",
+      statementClass: diagnostic?.statementClass || "OTHER",
+      stateAgeMs: finite(diagnostic?.stateAgeMs),
+      transactionAgeMs: finite(diagnostic?.transactionAgeMs),
+    }));
+  })
+  .slice(0, 25);
+
 const infrastructure = {
   observabilitySamples: samples.length,
   maxDbConnectionUtilization: maxOf(samples, (sample) => sample?.database?.connectionUtilization),
@@ -85,6 +101,7 @@ const infrastructure = {
   dbMaxConnections: maxOf(samples, (sample) => sample?.database?.maxConnections),
   maxIdleInTransaction: maxOf(samples, (sample) => sample?.database?.idleInTransactionConnections),
   maxIdleInTransactionAgeSeconds: maxOf(samples, (sample) => sample?.database?.oldestIdleInTransactionSeconds),
+  idleInTransactionDiagnostics,
   maxLongRunningQueries: maxOf(samples, (sample) => sample?.database?.longRunningQueries),
   redisStatuses: [...new Set(samples.map((sample) => sample?.redis?.status).filter(Boolean))],
   maxQueueDead: maxOf(samples, (sample) => sample?.queues?.dead),
@@ -172,7 +189,7 @@ const markdown = [
   `- P50/P95/P99: ${http.latencyMs.p50 ?? "n/a"} / ${http.latencyMs.p95 ?? "n/a"} / ${http.latencyMs.p99 ?? "n/a"} ms`,
   `- Max DB connection utilization: ${infrastructure.maxDbConnectionUtilization ?? "n/a"}`,
   `- Max DB connections: ${infrastructure.maxDbConnections ?? "n/a"} / ${infrastructure.dbMaxConnections ?? "n/a"}`,
-  `- Max idle-in-transaction: ${infrastructure.maxIdleInTransaction ?? "n/a"} (oldest ${infrastructure.maxIdleInTransactionAgeSeconds ?? "n/a"} s)`,
+  `- Max idle-in-transaction: ${infrastructure.maxIdleInTransaction ?? "n/a"} (oldest ${infrastructure.maxIdleInTransactionAgeSeconds ?? "n/a"} s, diagnostics ${infrastructure.idleInTransactionDiagnostics.length})`,
   `- Redis statuses: ${infrastructure.redisStatuses.join(", ") || "n/a"}`,
   `- Max AI active attempts: ${infrastructure.maxAiActiveAttempts ?? "n/a"}`,
   `- Max AI throttled attempts: ${infrastructure.maxAiThrottledAttempts ?? "n/a"}`,
