@@ -158,6 +158,8 @@ export function FinanceReferenceSelect({ organizationId, kind, name, label, loca
   }, [onOptionChange]);
 
   useEffect(() => {
+    setSearch("");
+    setItems([]);
     setSelected(null);
     onOptionChangeRef.current?.(null);
   }, [kind, moduleCode, parentId]);
