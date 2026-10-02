@@ -134,12 +134,18 @@ export async function authorizeRetailRequest(
   organizationId: string,
   moduleCode: RetailModuleCode,
   action: EnterpriseModuleAction,
-  options?: { mutation?: boolean; limit?: number },
+  options?: { mutation?: boolean; limit?: number; includeMutationCapabilities?: boolean },
 ) {
   if (options?.mutation && !isSameOriginRequest(req)) return { ok: false as const, response: NextResponse.json(retailFailureOutcome(null, { error: "Forbidden" }), { status: 403 }) };
   const session = await getSession();
   if (!session) return { ok: false as const, response: NextResponse.json(retailFailureOutcome(null, { error: "Unauthorized" }), { status: 401 }) };
-  const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode, action });
+  const access = await getEnterpriseCommonDomainAccess({
+    session,
+    organizationId,
+    moduleCode,
+    action,
+    includeMutationCapabilities: options?.includeMutationCapabilities ?? true,
+  });
   if (!access) return { ok: false as const, response: NextResponse.json(retailFailureOutcome(null, { error: "Forbidden" }), { status: 403 }) };
   if (options?.mutation) {
     const policy = getRetailMutationRateLimitPolicy(moduleCode, action, options.limit);

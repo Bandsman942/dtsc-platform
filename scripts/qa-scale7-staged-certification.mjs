@@ -92,6 +92,10 @@ expect(profile.includes('http_req_failed: ["rate<0.01"]'), "error-rate SLO is mi
 expect(profile.includes('"p(95)<1000"') && profile.includes('"p(99)<2000"'), "latency SLOs are missing");
 expect(profile.includes('checks: ["rate>0.99"]'), "check-rate SLO is missing");
 expect(profile.includes("ai-request"), "AI workload must be represented");
+expect(
+  profile.includes("JSON.stringify({ ...aiPayload, organizationId: tenant.organizationId })"),
+  "SCALE-7 AI workload must bind the canonical Enterprise AI request to the current synthetic tenant",
+);
 expect(profile.includes("enterprise-read") && profile.includes("shop-read") && profile.includes("collaboration-read"), "business workload mix is incomplete");
 expect(profile.includes("Origin: baseUrl"), "same-origin header is required for the real AI POST workload");
 
@@ -114,7 +118,10 @@ for (const marker of [
   "resolveSaasPlanCode(plan) === \"ENTERPRISE\"",
   "reconcileOrganizationModulesWithSubscription",
   "createSessionToken",
-  'aiPath: "/api/chat/v2"',
+  'aiPath: "/api/enterprise/ai/chat"',
+  'useKnowledge: false',
+  'useTools: false',
+  'reasoningEffort: "AUTO"',
   "/retail/sales?page=1&pageSize=5",
   "/tasks?page=1&pageSize=5",
   "customerData: false",

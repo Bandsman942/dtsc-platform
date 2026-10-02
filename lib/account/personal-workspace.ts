@@ -1,8 +1,7 @@
 import { TicketStatus } from "@prisma/client";
 import { getOrganizationEntitlements } from "@/lib/billing/entitlements";
-import { getPendingEnterpriseInvitationsForUser } from "@/lib/enterprise-invitations";
-import { listUserIdentityLinks } from "@/lib/enterprise/identity-links/service";
-import { getVisibleNotificationWhereForSession } from "@/lib/notification-access";
+import { listUserIdentityLinksForWorkspace } from "@/lib/enterprise/identity-links/service";
+import { buildVisibleNotificationWhereForSession } from "@/lib/notification-access";
 import { getActiveOrganizationId } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import type { SessionPayload } from "@/lib/session";
@@ -120,13 +119,41 @@ export async function getPersonalWorkspaceSummary({
 }): Promise<PersonalWorkspaceSummary> {
   const context = resolveContext(session);
   const activeOrganizationId = getActiveOrganizationId(session);
-  const notificationWhere = await getVisibleNotificationWhereForSession(session);
+  const membershipRows = await prisma.organizationMember.findMany({
+    where: {
+      userId: user.id,
+      status: { in: ["ACTIVE", "INVITED"] },
+      removedAt: null,
+      organization: { status: "ACTIVE", deletedAt: null },
+    },
+    select: {
+      id: true,
+      organizationId: true,
+      status: true,
+      role: true,
+      invitedBy: true,
+      createdAt: true,
+      organization: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          logoUrl: true,
+          organizationType: true,
+        },
+      },
+    },
+    orderBy: { organization: { name: "asc" } },
+  });
+  const memberships = membershipRows.filter((membership) => membership.status === "ACTIVE").slice(0, 20);
+  const pendingInvitations = membershipRows
+    .filter((membership) => membership.status === "INVITED" && membership.organization.organizationType === "CLIENT")
+    .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
+  const notificationWhere = buildVisibleNotificationWhereForSession(session, membershipRows);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   const [
-    memberships,
-    pendingInvitations,
     identityLinks,
     unreadNotificationCount,
     recentNotifications,
@@ -138,22 +165,7 @@ export async function getPersonalWorkspaceSummary({
     usedDocuments,
     organizationEntitlements,
   ] = await Promise.all([
-    prisma.organizationMember.findMany({
-      where: {
-        userId: user.id,
-        status: "ACTIVE",
-        removedAt: null,
-        organization: { status: "ACTIVE", deletedAt: null },
-      },
-      select: {
-        role: true,
-        organization: { select: { id: true, name: true, organizationType: true } },
-      },
-      orderBy: { organization: { name: "asc" } },
-      take: 20,
-    }),
-    getPendingEnterpriseInvitationsForUser(user.id),
-    listUserIdentityLinks(user.id),
+    listUserIdentityLinksForWorkspace(user.id),
     prisma.notification.count({ where: { ...notificationWhere, readAt: null } }),
     prisma.notification.findMany({
       where: notificationWhere,

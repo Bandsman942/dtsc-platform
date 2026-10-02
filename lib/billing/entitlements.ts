@@ -9,6 +9,7 @@ import {
   isEnterpriseModuleSectorCompatible,
   normalizeEnterpriseModuleCode,
 } from "@/lib/enterprise/module-registry";
+import { DTSC_INTERNAL_ORGANIZATION_ID } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 
 export type EntitlementDecision = {
@@ -191,10 +192,11 @@ function resolveOrganizationUsageLimits(planCode: SaasPlanCode, offer?: Commerci
 }
 
 export async function getOrganizationEntitlements(organizationId: string | null | undefined): Promise<OrganizationEntitlements | null> {
-  const commercialContext = await resolveOrganizationCommercialContext(organizationId);
-  if (!commercialContext || !commercialContext.organizationId || !commercialContext.organizationStatus || !commercialContext.organizationType) return null;
+  if (!organizationId) return null;
 
-  if (commercialContext.scope === "DTSC_INTERNAL") {
+  if (organizationId === DTSC_INTERNAL_ORGANIZATION_ID) {
+    const commercialContext = await resolveOrganizationCommercialContext(organizationId);
+    if (!commercialContext || !commercialContext.organizationId || !commercialContext.organizationStatus || !commercialContext.organizationType) return null;
     return {
       organizationId: commercialContext.organizationId,
       organizationStatus: commercialContext.organizationStatus,
@@ -222,9 +224,10 @@ export async function getOrganizationEntitlements(organizationId: string | null 
     };
   }
 
-  const [organization, subtypeSelection] = await Promise.all([
+  const [commercialContext, organization, subtypeSelection] = await Promise.all([
+    resolveOrganizationCommercialContext(organizationId),
     prisma.organization.findFirst({
-      where: { id: commercialContext.organizationId, deletedAt: null, organizationType: "CLIENT" },
+      where: { id: organizationId, deletedAt: null, organizationType: "CLIENT" },
       select: {
         id: true,
         status: true,
@@ -236,11 +239,11 @@ export async function getOrganizationEntitlements(organizationId: string | null 
       },
     }),
     prisma.enterpriseBusinessSubtypeSelection.findUnique({
-      where: { organizationId: commercialContext.organizationId },
+      where: { organizationId },
       select: { sectorCode: true, businessSubtypeCode: true },
     }),
   ]);
-  if (!organization) return null;
+  if (!commercialContext || commercialContext.scope !== "ORGANIZATION" || !commercialContext.organizationId || !commercialContext.organizationStatus || !commercialContext.organizationType || !organization) return null;
   const businessSubtypeCode = subtypeSelection?.sectorCode === organization.sectorCode
     ? subtypeSelection.businessSubtypeCode
     : null;

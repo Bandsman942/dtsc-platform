@@ -6,26 +6,14 @@ import { prisma } from "@/lib/prisma";
 export const ENTERPRISE_INVITATION_NOTIFICATION_TYPES = ["ENTERPRISE_INVITATION", "ORGANIZATION_INVITATION"] as const;
 export const GLOBAL_ACCOUNT_NOTIFICATION_TYPES = ["ENTERPRISE_IDENTITY"] as const;
 
-async function getNotificationMembershipOrganizationIds(userId: string) {
-  const memberships = await prisma.organizationMember.findMany({
-    where: {
-      userId,
-      status: { in: ["ACTIVE", "INVITED"] },
-      removedAt: null,
-      organization: { status: "ACTIVE", deletedAt: null },
-    },
-    select: { organizationId: true, status: true },
-  });
 
-  return {
-    activeOrganizationIds: memberships.filter((membership) => membership.status === "ACTIVE").map((membership) => membership.organizationId),
-    invitedOrganizationIds: memberships.filter((membership) => membership.status === "INVITED").map((membership) => membership.organizationId),
-  };
-}
-
-export async function getVisibleNotificationWhereForSession(session: SessionPayload): Promise<Prisma.NotificationWhereInput> {
+export function buildVisibleNotificationWhereForSession(
+  session: SessionPayload,
+  memberships: Array<{ organizationId: string; status: string }>,
+): Prisma.NotificationWhereInput {
   const activeOrganizationId = getActiveOrganizationId(session);
-  const { activeOrganizationIds, invitedOrganizationIds } = await getNotificationMembershipOrganizationIds(session.userId);
+  const activeOrganizationIds = memberships.filter((membership) => membership.status === "ACTIVE").map((membership) => membership.organizationId);
+  const invitedOrganizationIds = memberships.filter((membership) => membership.status === "INVITED").map((membership) => membership.organizationId);
   const allowedInvitationOrganizationIds = Array.from(new Set([...activeOrganizationIds, ...invitedOrganizationIds]));
   const contextClauses: Prisma.NotificationWhereInput[] = [
     { organizationId: null },
@@ -46,4 +34,17 @@ export async function getVisibleNotificationWhereForSession(session: SessionPayl
     userId: session.userId,
     OR: contextClauses,
   };
+}
+
+export async function getVisibleNotificationWhereForSession(session: SessionPayload): Promise<Prisma.NotificationWhereInput> {
+  const memberships = await prisma.organizationMember.findMany({
+    where: {
+      userId: session.userId,
+      status: { in: ["ACTIVE", "INVITED"] },
+      removedAt: null,
+      organization: { status: "ACTIVE", deletedAt: null },
+    },
+    select: { organizationId: true, status: true },
+  });
+  return buildVisibleNotificationWhereForSession(session, memberships);
 }

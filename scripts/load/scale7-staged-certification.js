@@ -255,7 +255,7 @@ export default function () {
     });
   } else {
     label = "ai-request";
-    response = http.post(`${baseUrl}${aiPath}`, JSON.stringify(aiPayload), {
+    response = http.post(`${baseUrl}${aiPath}`, JSON.stringify({ ...aiPayload, organizationId: tenant.organizationId }), {
       headers: headersFor(identity, true),
       redirects: 0,
       tags: { workload: label },

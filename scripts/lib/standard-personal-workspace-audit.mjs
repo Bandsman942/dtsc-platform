@@ -43,12 +43,14 @@ export function runStandardPersonalWorkspaceAudit(mode = "all") {
     const enCopy = requireFile(errors, "locales/experience.en.json");
     expectTokens(errors, "Résumé Dashboard", service, [
       "getPersonalWorkspaceSummary",
-      "getVisibleNotificationWhereForSession",
+      "buildVisibleNotificationWhereForSession",
+      "listUserIdentityLinksForWorkspace",
       "getOrganizationEntitlements",
+      "membershipRows",
       "Promise.all",
       "actions",
       "recentActivity",
-      "take: 20",
+      ".slice(0, 20)",
     ]);
     expectTokens(errors, "Dashboard i18n", page, [
       "getExperienceCopy",
