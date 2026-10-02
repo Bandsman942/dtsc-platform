@@ -93,7 +93,12 @@ export async function GET(req: Request, { params }: Params) {
     } else if (kind === "cash-session") {
       if (parentId) {
         items = await prisma.enterpriseCashSession.findMany({
-          where: { organizationId, financialAccountId: parentId, status: "OPEN" },
+          where: {
+            organizationId,
+            financialAccountId: parentId,
+            status: "OPEN",
+            ...(search ? { number: { contains: search, mode: "insensitive" } } : {}),
+          },
           orderBy: { openedAt: "desc" },
           take,
           select: { id: true, number: true, status: true, openedAt: true, openingAmount: true, financialAccountId: true },
