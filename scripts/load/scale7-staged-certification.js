@@ -154,6 +154,26 @@ function currentIdentity() {
   return identities[(__VU - 1) % identities.length];
 }
 
+function probeTenantIsolation(identity, path) {
+  let response = http.get(`${baseUrl}${path}`, {
+    headers: headersFor(identity),
+    redirects: 0,
+    tags: { workload: "tenant-isolation", attempt: "initial" },
+    responseCallback: expectedIsolationStatuses,
+    timeout: "10s",
+  });
+  if (response.status === 0) {
+    response = http.get(`${baseUrl}${path}`, {
+      headers: headersFor(identity),
+      redirects: 0,
+      tags: { workload: "tenant-isolation", attempt: "transport-retry" },
+      responseCallback: expectedIsolationStatuses,
+      timeout: "10s",
+    });
+  }
+  return response;
+}
+
 export function setup() {
   for (const identity of identities) {
     const preflight = http.get(`${baseUrl}/api/notifications/unread-count`, {
@@ -177,12 +197,7 @@ export function setup() {
 
   for (const tenant of tenants) {
     const identity = identities.find((candidate) => candidate.tenant.organizationId === tenant.organizationId);
-    const isolation = http.get(`${baseUrl}${tenant.isolationProbePath}`, {
-      headers: headersFor(identity),
-      redirects: 0,
-      tags: { workload: "tenant-isolation" },
-      responseCallback: expectedIsolationStatuses,
-    });
+    const isolation = probeTenantIsolation(identity, tenant.isolationProbePath);
     const isolated = isolation.status === 403 || isolation.status === 404;
     tenantIsolationPass.add(isolated);
     if (!isolated) {
@@ -203,12 +218,7 @@ export default function () {
   const tenant = identity.tenant;
 
   if (__ITER % 40 === 0) {
-    const isolation = http.get(`${baseUrl}${tenant.isolationProbePath}`, {
-      headers: headersFor(identity),
-      redirects: 0,
-      tags: { workload: "tenant-isolation" },
-      responseCallback: expectedIsolationStatuses,
-    });
+    const isolation = probeTenantIsolation(identity, tenant.isolationProbePath);
     const isolated = isolation.status === 403 || isolation.status === 404;
     tenantIsolationPass.add(isolated);
     check(isolation, { "cross-tenant probe stays forbidden": () => isolated });

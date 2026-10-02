@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
-import { formatEnterpriseBusinessDate, getEnterpriseBusinessContext } from "@/lib/enterprise/business-context";
+import { formatEnterpriseBusinessDate, getEnterpriseBusinessContextForAuthorizedOrganization } from "@/lib/enterprise/business-context";
 import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
 import { prisma } from "@/lib/prisma";
 
@@ -16,13 +16,23 @@ export async function GET(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const membership = await prisma.organizationMember.findFirst({
-    where: { organizationId, userId: session.userId, status: "ACTIVE", removedAt: null },
-    select: { id: true },
+    where: {
+      organizationId,
+      userId: session.userId,
+      status: "ACTIVE",
+      removedAt: null,
+      organization: { status: "ACTIVE", deletedAt: null, organizationType: "CLIENT" },
+    },
+    select: { id: true, organization: { select: { timezone: true } } },
   });
   if (!membership) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   try {
-    const context = await getEnterpriseBusinessContext(prisma, organizationId);
+    const context = await getEnterpriseBusinessContextForAuthorizedOrganization(
+      prisma,
+      organizationId,
+      membership.organization.timezone,
+    );
     const businessDate = formatEnterpriseBusinessDate(new Date(), context.timezone);
     await writeApiLog({
       request: req,

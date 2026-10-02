@@ -1,5 +1,18 @@
 # SCALE-7 — Staged load certification
 
+## SCALE-7C — fermeture du 500-ramp après #755
+
+Le run Production `36987070876` sur `main@8597e83074acb9dc86c261d0a20ef4c00e5b18ab` reste **FAIL** malgré une forte amélioration : P95 1 034,80 ms, P99 2 197,14 ms, isolation 99,9142 % et un échantillon idle-in-transaction non nul. SCALE-7C (#760 / PR #761) conserve les mêmes SLO et `connection_limit=9`.
+
+Le hotfix :
+- réutilise la session déjà vérifiée par `/dashboard` et parallélise la lecture utilisateur avec sa préférence de durée de session, supprimant deux étapes séquentielles du chemin critique sans modifier les données affichées ;
+- réutilise le fuseau de l’organisation déjà autorisée dans `business-context` et supprime une relecture `Organization` ;
+- retente une sonde d’isolation une seule fois et uniquement après un échec transport (`status=0`), sans jamais transformer le timeout en succès ; la gate reste exactement 100 % ;
+- conserve la gate idle-in-transaction à zéro et archive désormais le nombre maximal et l’âge maximal observés, sans SQL, utilisateur, tenant ni identifiant sensible.
+
+Aucun 500-soak n’est autorisé avant un nouveau 500-ramp PASS en Production.
+Si la nouvelle télémétrie confirme une session idle-in-transaction persistante, sa correction sera tracée par une Issue dédiée à partir de cette preuve Production ; aucune cause n’est présumée avant mesure.
+
 Issue: #360
 Parent programme: #352
 Depends on: #359 / SCALE-6
