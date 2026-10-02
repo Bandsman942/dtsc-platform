@@ -15,6 +15,7 @@ const governanceOnlyFiles = new Set([
   ".github/workflows/scale7-staged-certification.yml",
   "scripts/load/verify-scale7-stage-progression.mjs",
   "scripts/qa-scale7-staged-certification.mjs",
+  "scripts/qa-scale7d-dashboard-workload-report.mjs",
   "docs/SCALABILITY_SCALE7_STAGED_CERTIFICATION.md",
   "docs/CHANGELOG.md",
 ]);
