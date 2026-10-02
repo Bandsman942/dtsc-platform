@@ -4,7 +4,7 @@
 
 Le 500-ramp SCALE-7D est certifié PASS sur le run `37014598384`, artifact `11229173403`, `main@649aeeae55f005827630d09e4f28a876bb3c918f`. Le premier déclenchement du 500-soak (`37016167904`) a été bloqué avant k6 parce que le progression gate ne consultait que `data/scalability/scale7-certifications.json`, registre versionné qui n'est pas alimenté automatiquement par le workflow.
 
-SCALE-7E (#766) conserve strictement l'ordre ramp → soak → spike et 500 → 1 000 → 2 500 → 5 000, mais en CI la preuve est désormais dérivée des résultats GitHub déjà produits :
+SCALE-7E (#766 / PR #767) conserve strictement l'ordre ramp → soak → spike et 500 → 1 000 → 2 500 → 5 000, mais en CI la preuve est désormais dérivée des résultats GitHub déjà produits :
 - commentaire `github-actions[bot]` sur Issue #360 ;
 - rapport `SCALE7_RESULT_JSON` avec `PASS` et `CI_PROVEN` ;
 - même `gitSha` que `GITHUB_SHA` du candidat courant ;
