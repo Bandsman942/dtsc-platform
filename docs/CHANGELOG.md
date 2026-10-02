@@ -1,3 +1,13 @@
+## 2026-10-02 — SCALE-7E verified CI progression evidence (#766)
+
+- remplace le registre statique vide comme source unique du progression gate SCALE-7 en GitHub Actions ;
+- exige un commentaire `github-actions[bot]` contenant un rapport PASS `CI_PROVEN` du même SHA ;
+- recoupe chaque preuve avec l'API GitHub Actions : run completed/success, branche main, même SHA et workflow exact ;
+- conserve le registre versionné comme historique/local sans lui permettre de débloquer seul la CI ;
+- maintient strictement ramp → soak → spike et la progression 500 → 1 000 → 2 500 → 5 000 ;
+- ajoute `qa:scale7e-progression-evidence` à la régression canonique ;
+- aucun changement de SLO, DB, Prisma ou comportement applicatif.
+
 ## 2026-10-02 — SCALE-7D Dashboard workload and report alignment (#764)
 
 - parallélise les lectures memberships/identity-links du Dashboard ;
