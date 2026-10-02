@@ -9,7 +9,7 @@ Deux soaks consécutifs sur `main@7cc7cca3a5ff352e4445b6cd9d74fbfb36130bef` ont 
 - le second run fait passer Enterprise, Shop et Collaboration sous leurs seuils ;
 - `idle-in-transaction` reste observé au maximum à 1 session, avec un âge de 0 à 0,01 s ; la gate reste strictement zéro.
 
-SCALE-7F (#771) réduit le nombre de round-trips exacts du Dashboard sans cache ni approximation :
+SCALE-7F (#771 / PR #772) réduit le nombre de round-trips exacts du Dashboard sans cache ni approximation :
 
 - `requireUser(session)` réutilise `idleTimeoutMinutes` déjà signé dans le JWT et ne relit la préférence en DB que pour une ancienne session ne contenant pas cette valeur ;
 - `listUserIdentityLinksForWorkspace` résout le lien et l’organisation dans une seule requête SQL tenant/user-scoped ;
