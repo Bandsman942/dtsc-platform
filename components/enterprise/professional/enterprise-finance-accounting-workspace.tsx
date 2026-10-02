@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { AlertTriangle, BookOpenCheck, ChevronRight, FilePlus2, Plus, RotateCcw, Search } from "lucide-react";
 import { Field } from "@/components/enterprise/core-v2/erp-v2-ui";
-import { FinanceAccountingReferenceSelect } from "@/components/enterprise/core-v2/finance-accounting-reference-select";
+import { FinanceAccountingReferenceSelect, type FinanceAccountingReferenceOption } from "@/components/enterprise/core-v2/finance-accounting-reference-select";
 import { AccountingCompactTable, type AccountingCompactColumn } from "@/components/enterprise/professional/accounting-compact-table";
 import { AccountingJournalWorkbench } from "@/components/enterprise/professional/accounting-journal-workbench";
 import { AccountingRecordDetail, type AccountingRecordDetailKind } from "@/components/enterprise/professional/accounting-record-detail";
@@ -39,7 +39,7 @@ type Props = {
 type Space = "home" | "post" | "review" | "configure";
 type ReviewView = "ledger" | "trial" | "anomalies";
 type ConfigureView = "setup" | "charts" | "accounts" | "years" | "periods" | "journals" | "rules";
-type ConfigCreatable = Exclude<ConfigureView, "setup" | "rules">;
+type ConfigCreatable = Exclude<ConfigureView, "setup">;
 
 type Pagination = { page: number; pageSize: number; total: number; pageCount: number };
 type AnyRow = Record<string, unknown> & { id: string };
@@ -96,7 +96,7 @@ type EntryTracePayload = {
   entry?: JournalEntry & { lines?: LedgerRow[]; sourceModule?: string | null; sourceEntityId?: string | null };
   sourceLink?: { labelFr: string; labelEn: string; href: string; moduleCode: string } | null;
 };
-type ConfigFormState = { open: boolean; kind: ConfigCreatable | null };
+type ConfigFormState = { open: boolean; kind: ConfigCreatable | null; record?: AnyRow | null };
 type RecordDetailState = { kind: AccountingRecordDetailKind; row: AnyRow } | null;
 
 const EMPTY_PAGINATION: Pagination = { page: 1, pageSize: 25, total: 0, pageCount: 1 };
@@ -106,6 +106,28 @@ const FULLSCREEN_FORM_CLASS = "h-[100dvh] w-full max-w-none rounded-none sm:h-[9
 
 function rawText(value: unknown) { return value === null || value === undefined ? "" : String(value); }
 function rowText(row: AnyRow, key: string) { return rawText(row[key]); }
+function rowObject(row: AnyRow | null | undefined, key: string) {
+  const value = row?.[key];
+  return value && typeof value === "object" ? value as Record<string, unknown> : null;
+}
+function inputDate(value: unknown) {
+  if (!value) return "";
+  const raw = String(value).trim();
+  const persistedBusinessDate = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (persistedBusinessDate) return persistedBusinessDate[1];
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+function chartOriginLabel(templateCode: string, locale: FinanceLocale) {
+  if (!templateCode) return locale === "en" ? "Custom chart" : "Plan personnalisé";
+  if (templateCode.startsWith("OHADA_SYSCOHADA")) return "OHADA / SYSCOHADA";
+  return locale === "en" ? "Published accounting template" : "Template comptable publié";
+}
+
 function localizedName(row: AnyRow, locale: FinanceLocale) { return locale === "en" ? rowText(row, "nameEn") || rowText(row, "nameFr") : rowText(row, "nameFr") || rowText(row, "nameEn"); }
 function dateQueryValue(date: string, end = false) { return date ? `${date}T${end ? "23:59:59.999" : "00:00:00.000"}Z` : ""; }
 
@@ -134,7 +156,10 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
   const [recordDetail, setRecordDetail] = useState<RecordDetailState>(null);
   const [approvalTarget, setApprovalTarget] = useState<JournalEntry | null>(null);
   const [actionTarget, setActionTarget] = useState<{ entry: JournalEntry; action: "APPROVE" | "REJECT" | "POST" | "REVERSE" } | null>(null);
-  const [configForm, setConfigForm] = useState<ConfigFormState>({ open: false, kind: null });
+  const [configForm, setConfigForm] = useState<ConfigFormState>({ open: false, kind: null, record: null });
+  const [configDelete, setConfigDelete] = useState<{ kind: AccountingRecordDetailKind; record: AnyRow } | null>(null);
+  const [selectedRuleChartId, setSelectedRuleChartId] = useState("");
+  const [selectedAccountChart, setSelectedAccountChart] = useState<FinanceAccountingReferenceOption | null>(null);
   const [busy, setBusy] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -194,7 +219,7 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
           return;
         }
         if (configureView === "setup") { setRows([]); setPagination(EMPTY_PAGINATION); return; }
-        const endpoint = configureView === "rules" ? "accounting-professional?view=posting-rules" : configureView === "charts" ? "charts-of-accounts" : configureView === "accounts" ? "ledger-accounts" : configureView === "years" ? "fiscal-years" : configureView === "periods" ? "fiscal-periods" : "journals";
+        const endpoint = configureView === "rules" ? "account-mappings" : configureView === "charts" ? "charts-of-accounts" : configureView === "accounts" ? "ledger-accounts" : configureView === "years" ? "fiscal-years" : configureView === "periods" ? "fiscal-periods" : "journals";
         const separator = endpoint.includes("?") ? "&" : "?";
         const query = new URLSearchParams({ page: String(page), pageSize: "25" });
         if (search.trim()) query.set("search", search.trim());
@@ -294,21 +319,72 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
   async function createConfig(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const kind = configForm.kind;
+    const current = configForm.record || null;
     if (!kind || busy) return;
     const form = new FormData(event.currentTarget);
     const base = `/api/enterprise/${organizationId}`;
+    const revision = Number(current?.revision || 0);
     setBusy(true);
     setErrorMessage("");
     try {
-      if (kind === "charts") await financeMutation(`${base}/charts-of-accounts`, { code: String(form.get("code") || ""), nameFr: String(form.get("nameFr") || ""), nameEn: String(form.get("nameEn") || "") });
-      if (kind === "accounts") await financeMutation(`${base}/ledger-accounts`, { chartId: String(form.get("chartId") || ""), code: String(form.get("code") || ""), nameFr: String(form.get("nameFr") || ""), nameEn: String(form.get("nameEn") || ""), accountType: String(form.get("accountType") || "ASSET"), currencyCode: String(form.get("currencyCode") || "") || undefined, allowDirectPosting: form.get("allowDirectPosting") === "on", isControlAccount: false, isSystemAccount: false });
-      if (kind === "years") await financeMutation(`${base}/fiscal-years`, { code: String(form.get("code") || ""), startDate: String(form.get("startDate") || ""), endDate: String(form.get("endDate") || "") });
-      if (kind === "periods") await financeMutation(`${base}/fiscal-periods`, { fiscalYearId: String(form.get("fiscalYearId") || ""), code: String(form.get("code") || ""), startDate: String(form.get("startDate") || ""), endDate: String(form.get("endDate") || "") });
-      if (kind === "journals") await financeMutation(`${base}/journals`, { code: String(form.get("code") || ""), nameFr: String(form.get("nameFr") || ""), nameEn: String(form.get("nameEn") || ""), journalType: String(form.get("journalType") || "GENERAL"), sequencePrefix: String(form.get("sequencePrefix") || "") || undefined, requiresApproval: form.get("requiresApproval") === "on" });
-      setConfigForm({ open: false, kind: null });
-      reload(en ? "Accounting configuration saved." : "Configuration comptable enregistrée.");
+      if (kind === "charts") {
+        const payload = { code: String(form.get("code") || ""), nameFr: String(form.get("nameFr") || ""), nameEn: String(form.get("nameEn") || ""), ...(current ? { revision } : {}) };
+        await financeMutation(current ? `${base}/charts-of-accounts/${current.id}` : `${base}/charts-of-accounts`, payload, current ? "PATCH" : "POST");
+      }
+      if (kind === "accounts") {
+        const payload = current
+          ? { nameFr: String(form.get("nameFr") || ""), nameEn: String(form.get("nameEn") || ""), accountType: form.get("accountType") ? String(form.get("accountType")) : undefined, currencyCode: String(form.get("currencyCode") || "") || undefined, allowDirectPosting: form.get("allowDirectPosting") === "on", revision }
+          : { chartId: String(form.get("chartId") || ""), parentId: String(form.get("parentId") || "") || undefined, code: String(form.get("code") || ""), nameFr: String(form.get("nameFr") || ""), nameEn: String(form.get("nameEn") || ""), accountType: form.get("accountType") ? String(form.get("accountType")) : undefined, currencyCode: String(form.get("currencyCode") || "") || undefined, allowDirectPosting: form.get("allowDirectPosting") === "on", isControlAccount: false, isSystemAccount: false };
+        await financeMutation(current ? `${base}/ledger-accounts/${current.id}` : `${base}/ledger-accounts`, payload, current ? "PATCH" : "POST");
+      }
+      if (kind === "years") {
+        const payload = { code: String(form.get("code") || ""), label: String(form.get("label") || "") || undefined, startDate: String(form.get("startDate") || ""), endDate: String(form.get("endDate") || ""), ...(current ? { revision } : {}) };
+        await financeMutation(current ? `${base}/fiscal-years/${current.id}` : `${base}/fiscal-years`, payload, current ? "PATCH" : "POST");
+      }
+      if (kind === "periods") {
+        const payload = { fiscalYearId: String(form.get("fiscalYearId") || ""), code: String(form.get("code") || ""), label: String(form.get("label") || "") || undefined, startDate: String(form.get("startDate") || ""), endDate: String(form.get("endDate") || ""), ...(current ? { revision } : {}) };
+        await financeMutation(current ? `${base}/fiscal-periods/${current.id}` : `${base}/fiscal-periods`, payload, current ? "PATCH" : "POST");
+      }
+      if (kind === "journals") {
+        const payload = { code: String(form.get("code") || ""), nameFr: String(form.get("nameFr") || ""), nameEn: String(form.get("nameEn") || ""), journalType: String(form.get("journalType") || "GENERAL"), sequencePrefix: String(form.get("sequencePrefix") || "") || undefined, requiresApproval: form.get("requiresApproval") === "on", ...(current ? { isActive: form.get("isActive") === "on", revision } : {}) };
+        await financeMutation(current ? `${base}/journals/${current.id}` : `${base}/journals`, payload, current ? "PATCH" : "POST");
+      }
+      if (kind === "rules") {
+        const payload = current
+          ? { ledgerAccountId: String(form.get("ledgerAccountId") || ""), effectiveFrom: String(form.get("effectiveFrom") || "") || undefined, effectiveTo: String(form.get("effectiveTo") || "") || null, isActive: form.get("isActive") === "on", revision }
+          : { mappingKey: String(form.get("mappingKey") || ""), ledgerAccountId: String(form.get("ledgerAccountId") || ""), effectiveFrom: String(form.get("effectiveFrom") || "") || undefined };
+        await financeMutation(current ? `${base}/account-mappings/${current.id}` : `${base}/account-mappings`, payload, current ? "PATCH" : "POST");
+      }
+      setConfigForm({ open: false, kind: null, record: null });
+      setSelectedRuleChartId("");
+      setSelectedAccountChart(null);
+      reload(current ? (en ? "Accounting configuration updated." : "Configuration comptable mise à jour.") : (en ? "Accounting configuration saved." : "Configuration comptable enregistrée."));
     } catch (error) {
       setErrorMessage(safeFinanceError(error, en ? "Configuration could not be saved." : "La configuration n’a pas pu être enregistrée.", locale));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteConfig() {
+    if (!configDelete || busy) return;
+    const { kind, record } = configDelete;
+    const segment = kind === "charts" ? "charts-of-accounts"
+      : kind === "accounts" ? "ledger-accounts"
+        : kind === "years" ? "fiscal-years"
+          : kind === "periods" ? "fiscal-periods"
+            : kind === "journals" ? "journals"
+              : kind === "rules" ? "account-mappings"
+                : null;
+    if (!segment) return;
+    setBusy(true);
+    setErrorMessage("");
+    try {
+      await financeMutation(`/api/enterprise/${organizationId}/${segment}/${record.id}`, { revision: Number(record.revision || 0) }, "DELETE");
+      setConfigDelete(null);
+      reload(kind === "accounts" || kind === "rules" ? (en ? "The accounting configuration was deactivated." : "La configuration comptable a été désactivée.") : (en ? "The accounting configuration was deleted." : "La configuration comptable a été supprimée."));
+    } catch (error) {
+      setErrorMessage(safeFinanceError(error, en ? "The accounting configuration could not be removed." : "La configuration comptable n’a pas pu être retirée.", locale));
     } finally {
       setBusy(false);
     }
@@ -370,14 +446,51 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
     { key: "status", label: en ? "Status" : "Statut", render: (row) => <StatusBadge tone="danger">{financeStatusLabel(rowText(row, "status"), locale)}</StatusBadge> },
   ];
 
-  const configColumns: AccountingCompactColumn<AnyRow>[] = [
-    { key: "code", label: en ? "Code" : "Code", render: (row) => <span className="font-black">{rowText(row, "code") || (rowText(row, "mappingKey") ? financeEnumLabel(rowText(row, "mappingKey"), locale) : "—")}</span> },
-    { key: "name", label: en ? "Label" : "Libellé", cellClassName: "max-w-[28rem] truncate", render: (row) => localizedName(row, locale) || rowText(row, "description") || (rowText(row, "sourceModule") ? financeEnumLabel(rowText(row, "sourceModule"), locale) : "—") },
-    { key: "type", label: en ? "Type" : "Type", render: (row) => financeEnumLabel(rowText(row, "accountType") || rowText(row, "journalType") || rowText(row, "templateCode"), locale) || "—" },
-    { key: "status", label: en ? "Status" : "Statut", render: (row) => {
-      const currentStatus = rowText(row, "status") || (row.isActive === false ? "INACTIVE" : "ACTIVE");
-      return <StatusBadge tone={financeStatusTone(currentStatus)}>{financeStatusLabel(currentStatus, locale)}</StatusBadge>;
+  const statusColumn: AccountingCompactColumn<AnyRow> = { key: "status", label: en ? "Status" : "Statut", render: (row) => {
+    const currentStatus = rowText(row, "status") || (row.isActive === false ? "INACTIVE" : "ACTIVE");
+    return <StatusBadge tone={financeStatusTone(currentStatus)}>{financeStatusLabel(currentStatus, locale)}</StatusBadge>;
+  } };
+  const configColumns: AccountingCompactColumn<AnyRow>[] = configureView === "charts" ? [
+    { key: "code", label: "Code", render: (row) => <span className="font-black">{rowText(row, "code") || "—"}</span> },
+    { key: "name", label: en ? "Label" : "Libellé", cellClassName: "max-w-[28rem] truncate", render: (row) => localizedName(row, locale) || "—" },
+    { key: "origin", label: en ? "Chart origin" : "Origine du plan", render: (row) => chartOriginLabel(rowText(row, "templateCode"), locale) },
+    statusColumn,
+  ] : configureView === "accounts" ? [
+    { key: "code", label: en ? "Account" : "Compte", render: (row) => <span className="font-black">{rowText(row, "code") || "—"}</span> },
+    { key: "name", label: en ? "Label" : "Libellé", cellClassName: "max-w-[28rem] truncate", render: (row) => localizedName(row, locale) || "—" },
+    { key: "type", label: en ? "Account type" : "Type de compte", render: (row) => financeEnumLabel(rowText(row, "accountType"), locale) || "—" },
+    statusColumn,
+  ] : configureView === "years" ? [
+    { key: "code", label: "Code", render: (row) => <span className="font-black">{rowText(row, "code") || "—"}</span> },
+    { key: "label", label: en ? "Label" : "Libellé", cellClassName: "max-w-[28rem] truncate", render: (row) => rowText(row, "label") || "—" },
+    { key: "dates", label: en ? "Dates" : "Dates", render: (row) => `${financeDate(rowText(row, "startDate"), locale)} → ${financeDate(rowText(row, "endDate"), locale)}` },
+    statusColumn,
+  ] : configureView === "periods" ? [
+    { key: "code", label: "Code", render: (row) => <span className="font-black">{rowText(row, "code") || "—"}</span> },
+    { key: "label", label: en ? "Label" : "Libellé", cellClassName: "max-w-[28rem] truncate", render: (row) => rowText(row, "label") || "—" },
+    { key: "year", label: en ? "Fiscal year" : "Exercice", render: (row) => {
+      const year = row.fiscalYear as Record<string, unknown> | undefined;
+      return year ? `${rawText(year.code)}${year.label ? ` · ${rawText(year.label)}` : ""}` : "—";
     } },
+    statusColumn,
+  ] : configureView === "journals" ? [
+    { key: "code", label: "Code", render: (row) => <span className="font-black">{rowText(row, "code") || "—"}</span> },
+    { key: "name", label: en ? "Label" : "Libellé", cellClassName: "max-w-[28rem] truncate", render: (row) => localizedName(row, locale) || "—" },
+    { key: "type", label: en ? "Journal type" : "Type de journal", render: (row) => financeEnumLabel(rowText(row, "journalType"), locale) || "—" },
+    statusColumn,
+  ] : [
+    { key: "mapping", label: en ? "Rule" : "Règle", render: (row) => <span className="font-black">{locale === "en" ? rowText(row, "semanticLabelEn") || rowText(row, "semanticLabelFr") : rowText(row, "semanticLabelFr") || rowText(row, "semanticLabelEn") || rowText(row, "mappingKey") || "—"}</span> },
+    { key: "chart", label: en ? "Chart" : "Plan", render: (row) => {
+      const account = rowObject(row, "ledgerAccount");
+      const chart = account && typeof account.chart === "object" ? account.chart as Record<string, unknown> : null;
+      return chart ? `${rawText(chart.code)} · ${locale === "en" ? rawText(chart.nameEn) || rawText(chart.nameFr) : rawText(chart.nameFr) || rawText(chart.nameEn)}` : "—";
+    } },
+    { key: "account", label: en ? "Target account" : "Compte cible", render: (row) => {
+      const account = rowObject(row, "ledgerAccount");
+      return account ? `${rawText(account.code) || "—"} · ${locale === "en" ? rawText(account.nameEn) || rawText(account.nameFr) : rawText(account.nameFr) || rawText(account.nameEn)}` : "—";
+    } },
+    { key: "origin", label: en ? "Rule origin" : "Origine", render: (row) => row.templateManaged ? (en ? "Accounting template" : "Template comptable") : (en ? "Manual custom rule" : "Règle manuelle") },
+    statusColumn,
   ];
 
   const entryDetailActions: BusinessContextAction[] = entryTrace?.entry ? [
@@ -411,7 +524,7 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
 
     {hasToolbar ? <ModuleToolbar
       search={<label className="relative block min-w-0"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-dtsc-muted" /><Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder={en ? "Search…" : "Rechercher…"} className="pl-9" /></label>}
-      controls={<div className="flex min-w-0 flex-wrap items-end gap-2">{space === "review" && reviewView !== "anomalies" ? <><label className="grid min-w-0 gap-1 text-xs font-bold text-dtsc-muted">{en ? "From" : "Du"}<Input type="date" value={dateFrom} onChange={(event) => { setDateFrom(event.target.value); setPage(1); }} className="h-10 w-full min-w-0 sm:w-40" /></label><label className="grid min-w-0 gap-1 text-xs font-bold text-dtsc-muted">{en ? "To" : "Au"}<Input type="date" value={dateTo} onChange={(event) => { setDateTo(event.target.value); setPage(1); }} className="h-10 w-full min-w-0 sm:w-40" /></label></> : null}<Button type="button" variant="outline" size="sm" onClick={() => reload()}><RotateCcw className="mr-1.5 h-4 w-4" />{en ? "Refresh" : "Actualiser"}</Button>{space === "configure" && configureView !== "setup" && configureView !== "rules" && ((configureView === "charts" && canManage) || (configureView !== "charts" && canCreate)) ? <Button type="button" size="sm" onClick={() => setConfigForm({ open: true, kind: configureView as ConfigCreatable })}><Plus className="mr-1.5 h-4 w-4" />{en ? "Create" : "Créer"}</Button> : null}</div>}
+      controls={<div className="flex min-w-0 flex-wrap items-end gap-2">{space === "review" && reviewView !== "anomalies" ? <><label className="grid min-w-0 gap-1 text-xs font-bold text-dtsc-muted">{en ? "From" : "Du"}<Input type="date" value={dateFrom} onChange={(event) => { setDateFrom(event.target.value); setPage(1); }} className="h-10 w-full min-w-0 sm:w-40" /></label><label className="grid min-w-0 gap-1 text-xs font-bold text-dtsc-muted">{en ? "To" : "Au"}<Input type="date" value={dateTo} onChange={(event) => { setDateTo(event.target.value); setPage(1); }} className="h-10 w-full min-w-0 sm:w-40" /></label></> : null}<Button type="button" variant="outline" size="sm" onClick={() => reload()}><RotateCcw className="mr-1.5 h-4 w-4" />{en ? "Refresh" : "Actualiser"}</Button>{space === "configure" && configureView !== "setup" && ((configureView === "charts" || configureView === "rules") ? canManage : canCreate) ? <Button type="button" size="sm" onClick={() => { setSelectedRuleChartId(""); setSelectedAccountChart(null); setConfigForm({ open: true, kind: configureView as ConfigCreatable, record: null }); }}><Plus className="mr-1.5 h-4 w-4" />{configureView === "rules" ? (en ? "New rule" : "Nouvelle règle") : (en ? "Create" : "Créer")}</Button> : null}</div>}
       summary={pagination.total ? `${pagination.total} ${en ? "record(s)" : "élément(s)"}` : undefined}
     /> : null}
 
@@ -454,36 +567,121 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
       locale={rawLocale}
       kind={recordDetail?.kind || null}
       record={recordDetail?.row || null}
-      canManage={canManage}
       onClose={() => setRecordDetail(null)}
       onChanged={(success) => reload(success)}
       onError={setErrorMessage}
+      onEdit={(kind, record) => {
+        const row = record as AnyRow;
+        const account = row.ledgerAccount && typeof row.ledgerAccount === "object" ? row.ledgerAccount as Record<string, unknown> : null;
+        const chart = account?.chart && typeof account.chart === "object" ? account.chart as Record<string, unknown> : null;
+        setSelectedRuleChartId(kind === "rules" ? rawText(chart?.id) : "");
+        setRecordDetail(null);
+        if (kind === "accounts") {
+          const chart = rowObject(row, "chart");
+          setSelectedAccountChart(chart ? { id: rawText(chart.id), code: rawText(chart.code), status: rawText(chart.status), templateCode: rawText(chart.templateCode) || null, label: `${rawText(chart.code)} · ${locale === "en" ? rawText(chart.nameEn) || rawText(chart.nameFr) : rawText(chart.nameFr) || rawText(chart.nameEn)}` } : null);
+        }
+        setConfigForm({ open: true, kind: kind as ConfigCreatable, record: row });
+      }}
+      onDelete={(kind, record) => {
+        setRecordDetail(null);
+        setConfigDelete({ kind, record: record as AnyRow });
+      }}
     />
 
-    <Dialog open={configForm.open} onClose={() => !busy && setConfigForm({ open: false, kind: null })} title={configForm.kind ? configFormTitle(configForm.kind, en) : (en ? "Accounting configuration" : "Configuration comptable")} description={en ? "Complete only the fields persisted by the selected accounting object. References are constrained to this company." : "Renseignez uniquement les champs réellement persistés par l’objet comptable choisi. Les références sont limitées à cette entreprise."} presentation="editor" className={FULLSCREEN_FORM_CLASS}>
-      <form onSubmit={createConfig} className="grid min-w-0 gap-5 p-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-5">
-        {configForm.kind === "accounts" ? <FormReferenceField label={en ? "Chart of accounts" : "Plan comptable"} help={en ? "Choose an active chart owned by this company." : "Choisissez un plan comptable actif appartenant à cette entreprise."}><FinanceAccountingReferenceSelect organizationId={organizationId} moduleCode="FINANCE_ACCOUNTING" kind="chart" name="chartId" label={en ? "Chart of accounts" : "Plan comptable"} locale={rawLocale} required disabled={busy} status="ACTIVE" /></FormReferenceField> : null}
-        {configForm.kind === "periods" ? <FormReferenceField label={en ? "Fiscal year" : "Exercice"} help={en ? "Choose the fiscal year that will own this period." : "Choisissez l’exercice auquel cette période sera rattachée."}><FinanceAccountingReferenceSelect organizationId={organizationId} moduleCode="FINANCE_ACCOUNTING" kind="fiscal-year" name="fiscalYearId" label={en ? "Fiscal year" : "Exercice"} locale={rawLocale} required disabled={busy} /></FormReferenceField> : null}
-        {configForm.kind ? <Field label={en ? "Code" : "Code"} help={configCodeHelp(configForm.kind, en)}><Input name="code" required maxLength={40} disabled={busy} /></Field> : null}
-        {configForm.kind === "charts" || configForm.kind === "accounts" || configForm.kind === "journals" ? <><Field label={en ? "French label" : "Libellé français"} help={en ? "Business label shown in the French interface." : "Libellé métier affiché dans l’interface française."}><Input name="nameFr" required maxLength={180} disabled={busy} /></Field><Field label={en ? "English label" : "Libellé anglais"} help={en ? "Business label shown in the English interface." : "Libellé métier affiché dans l’interface anglaise."}><Input name="nameEn" required maxLength={180} disabled={busy} /></Field></> : null}
-        {configForm.kind === "years" || configForm.kind === "periods" ? <div className="grid min-w-0 gap-4 sm:grid-cols-2"><Field label={en ? "Start date" : "Date de début"} help={configForm.kind === "years" ? (en ? "First day of the fiscal year." : "Premier jour de l’exercice comptable.") : (en ? "First day included in the accounting period." : "Premier jour inclus dans la période comptable.")}><Input name="startDate" type="date" required disabled={busy} /></Field><Field label={en ? "End date" : "Date de fin"} help={configForm.kind === "years" ? (en ? "Last day of the fiscal year." : "Dernier jour de l’exercice comptable.") : (en ? "Last day included in the accounting period." : "Dernier jour inclus dans la période comptable.")}><Input name="endDate" type="date" required disabled={busy} /></Field></div> : null}
-        {configForm.kind === "accounts" ? <><Field label={en ? "Account type" : "Type de compte"} help={en ? "Controls the accounting nature and compatible postings." : "Détermine la nature comptable et les comptabilisations compatibles."}><select name="accountType" defaultValue="ASSET" className="h-11 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-base md:text-sm" disabled={busy}>{ACCOUNT_TYPES.map((value) => <option key={value} value={value}>{financeEnumLabel(value, locale)}</option>)}</select></Field><FormReferenceField label={en ? "Account currency (optional)" : "Devise du compte (facultatif)"} help={en ? "Leave empty to use the accounting functional currency." : "Laissez vide pour utiliser la devise fonctionnelle de la comptabilité."}><FinanceAccountingReferenceSelect organizationId={organizationId} moduleCode="FINANCE_ACCOUNTING" kind="currency" name="currencyCode" label={en ? "Account currency (optional)" : "Devise du compte (facultatif)"} locale={rawLocale} disabled={busy} /></FormReferenceField><label className="flex min-h-11 items-center gap-3 rounded-xl border border-dtsc-border bg-dtsc-page/60 px-3 text-sm font-bold text-dtsc-ink"><input type="checkbox" name="allowDirectPosting" defaultChecked disabled={busy} />{en ? "Allow direct manual posting" : "Autoriser la saisie manuelle directe"}</label></> : null}
-        {configForm.kind === "journals" ? <><Field label={en ? "Journal type" : "Type de journal"} help={en ? "Choose the operational family used by this journal." : "Choisissez la famille opérationnelle utilisée par ce journal."}><select name="journalType" defaultValue="GENERAL" className="h-11 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-base md:text-sm" disabled={busy}>{JOURNAL_TYPES.map((value) => <option key={value} value={value}>{financeEnumLabel(value, locale)}</option>)}</select></Field><Field label={en ? "Sequence prefix" : "Préfixe de séquence"} help={en ? "Optional readable prefix used by the journal numbering sequence." : "Préfixe lisible facultatif utilisé par la séquence de numérotation du journal."}><Input name="sequencePrefix" maxLength={20} disabled={busy} /></Field><label className="flex min-h-11 items-center gap-3 rounded-xl border border-dtsc-border bg-dtsc-page/60 px-3 text-sm font-bold text-dtsc-ink"><input type="checkbox" name="requiresApproval" disabled={busy} />{en ? "Require independent approval" : "Exiger une validation indépendante"}</label></> : null}
-        <div data-responsive-actions className="flex min-w-0 flex-wrap justify-end gap-2 border-t border-dtsc-border pt-4"><Button type="button" variant="outline" disabled={busy} onClick={() => setConfigForm({ open: false, kind: null })}>{en ? "Cancel" : "Annuler"}</Button><Button type="submit" disabled={busy}>{busy ? (en ? "Saving…" : "Enregistrement…") : (en ? "Save" : "Enregistrer")}</Button></div>
+    <Dialog
+      open={configForm.open}
+      onClose={() => { if (!busy) { setConfigForm({ open: false, kind: null, record: null }); setSelectedRuleChartId(""); setSelectedAccountChart(null); } }}
+      title={configForm.kind ? configFormTitle(configForm.kind, en, Boolean(configForm.record)) : (en ? "Accounting configuration" : "Configuration comptable")}
+      description={en ? "The form only exposes fields that are persisted and valid for this accounting object. References are restricted to this company." : "Le formulaire n’expose que les champs persistés et valides pour cet objet comptable. Les références sont limitées à cette entreprise."}
+      presentation="editor"
+      className={FULLSCREEN_FORM_CLASS}
+    >
+      <form key={`${configForm.kind || "none"}:${configForm.record?.id || "new"}`} onSubmit={createConfig} className="grid min-w-0 gap-5 p-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-5">
+        {configForm.kind === "accounts" && !configForm.record ? <FormReferenceField label={en ? "Chart of accounts" : "Plan comptable"} help={en ? "Choose the active chart owned by this company." : "Choisissez le plan comptable actif appartenant à cette entreprise."}><FinanceAccountingReferenceSelect organizationId={organizationId} moduleCode="FINANCE_ACCOUNTING" kind="chart" name="chartId" label={en ? "Chart of accounts" : "Plan comptable"} locale={rawLocale} required disabled={busy} configurableOnly onOptionChange={setSelectedAccountChart} /></FormReferenceField> : null}
+        {configForm.kind === "accounts" && configForm.record ? <FormReadonlyFact label={en ? "Chart of accounts" : "Plan comptable"} value={(() => { const chart = rowObject(configForm.record, "chart"); return chart ? `${rawText(chart.code)} · ${locale === "en" ? rawText(chart.nameEn) || rawText(chart.nameFr) : rawText(chart.nameFr) || rawText(chart.nameEn)}` : "—"; })()} /> : null}
+
+        {configForm.kind === "periods" ? <FormReferenceField label={en ? "Fiscal year" : "Exercice"} help={en ? "Choose the fiscal year that owns this period." : "Choisissez l’exercice auquel cette période est rattachée."}><FinanceAccountingReferenceSelect
+          organizationId={organizationId}
+          moduleCode="FINANCE_ACCOUNTING"
+          kind="fiscal-year"
+          name="fiscalYearId"
+          label={en ? "Fiscal year" : "Exercice"}
+          locale={rawLocale}
+          required
+          disabled={busy}
+          initialOption={configForm.record ? (() => { const year = rowObject(configForm.record, "fiscalYear"); const id = rawText(year?.id || configForm.record?.fiscalYearId); return id ? { id, code: rawText(year?.code), status: rawText(year?.status), label: [rawText(year?.code), rawText(year?.label)].filter(Boolean).join(" · ") || id } : null; })() : null}
+        /></FormReferenceField> : null}
+
+        {configForm.kind === "rules" && !configForm.record ? <FormReferenceField label={en ? "Custom chart" : "Plan personnalisé"} help={en ? "Manual rules are available only for custom charts. Published accounting templates remain immutable." : "Les règles manuelles sont disponibles uniquement pour les plans personnalisés. Les templates comptables publiés restent immuables."}><FinanceAccountingReferenceSelect organizationId={organizationId} moduleCode="FINANCE_ACCOUNTING" kind="chart" name="ruleChartId" label={en ? "Custom chart" : "Plan personnalisé"} locale={rawLocale} required disabled={busy} customOnly configurableOnly onOptionChange={(option) => setSelectedRuleChartId(option?.id || "")} /></FormReferenceField> : null}
+        {configForm.kind === "rules" && configForm.record ? <FormReadonlyFact label={en ? "Custom chart" : "Plan personnalisé"} value={(() => { const account = rowObject(configForm.record, "ledgerAccount"); const chart = account && typeof account.chart === "object" ? account.chart as Record<string, unknown> : null; return chart ? `${rawText(chart.code)} · ${locale === "en" ? rawText(chart.nameEn) || rawText(chart.nameFr) : rawText(chart.nameFr) || rawText(chart.nameEn)}` : "—"; })()} /> : null}
+        {configForm.kind === "rules" && !configForm.record ? <FormReferenceField label={en ? "Accounting rule" : "Règle comptable"} help={en ? "Choose the semantic business rule. Compatibility with the target account is validated by the server." : "Choisissez la règle métier sémantique. La compatibilité avec le compte cible est validée par le serveur."}><FinanceAccountingReferenceSelect organizationId={organizationId} moduleCode="FINANCE_ACCOUNTING" kind="semantic-account" name="mappingKey" label={en ? "Accounting rule" : "Règle comptable"} locale={rawLocale} required disabled={busy} /></FormReferenceField> : null}
+        {configForm.kind === "rules" && configForm.record ? <FormReadonlyFact label={en ? "Accounting rule" : "Règle comptable"} value={locale === "en" ? rowText(configForm.record, "semanticLabelEn") || rowText(configForm.record, "mappingKey") : rowText(configForm.record, "semanticLabelFr") || rowText(configForm.record, "mappingKey")} /> : null}
+        {configForm.kind === "rules" ? <FormReferenceField label={en ? "Target ledger account" : "Compte comptable cible"} help={en ? "Select an active account from this custom chart. The server verifies the expected account nature." : "Sélectionnez un compte actif de ce plan personnalisé. Le serveur vérifie la nature comptable attendue."}><FinanceAccountingReferenceSelect
+          organizationId={organizationId}
+          moduleCode="FINANCE_ACCOUNTING"
+          kind="ledger-account"
+          name="ledgerAccountId"
+          label={en ? "Target ledger account" : "Compte comptable cible"}
+          locale={rawLocale}
+          required
+          disabled={busy || !selectedRuleChartId}
+          parentId={selectedRuleChartId || undefined}
+          initialOption={configForm.record ? (() => { const account = rowObject(configForm.record, "ledgerAccount"); const id = rawText(account?.id || configForm.record?.ledgerAccountId); return id ? { id, code: rawText(account?.code), accountType: rawText(account?.accountType), chartId: rawText(account?.chartId), currency: rawText(account?.currencyCode), label: `${rawText(account?.code)} · ${locale === "en" ? rawText(account?.nameEn) || rawText(account?.nameFr) : rawText(account?.nameFr) || rawText(account?.nameEn)}` } : null; })() : null}
+          emptyLabel={!selectedRuleChartId ? (en ? "Choose a custom chart first" : "Choisissez d’abord un plan personnalisé") : undefined}
+        /></FormReferenceField> : null}
+
+        {configForm.kind && configForm.kind !== "rules" ? <Field label={en ? "Code" : "Code"} help={configCodeHelp(configForm.kind, en)}><Input name="code" defaultValue={configForm.record ? rowText(configForm.record, "code") : ""} required maxLength={40} readOnly={Boolean(configForm.record && (configForm.kind === "charts" || configForm.kind === "accounts"))} disabled={busy} /></Field> : null}
+        {configForm.kind === "charts" || configForm.kind === "accounts" || configForm.kind === "journals" ? <><Field label={en ? "French label" : "Libellé français"} help={en ? "Business label shown in the French interface." : "Libellé métier affiché dans l’interface française."}><Input name="nameFr" defaultValue={configForm.record ? rowText(configForm.record, "nameFr") : ""} required maxLength={180} disabled={busy} /></Field><Field label={en ? "English label" : "Libellé anglais"} help={en ? "Business label shown in the English interface." : "Libellé métier affiché dans l’interface anglaise."}><Input name="nameEn" defaultValue={configForm.record ? rowText(configForm.record, "nameEn") : ""} required maxLength={180} disabled={busy} /></Field></> : null}
+        {configForm.kind === "years" || configForm.kind === "periods" ? <Field label={en ? "Label" : "Libellé"} help={en ? "Free-text business label used to identify this accounting interval." : "Libellé métier libre utilisé pour identifier cet intervalle comptable."}><Input name="label" defaultValue={configForm.record ? rowText(configForm.record, "label") : ""} required maxLength={160} disabled={busy} /></Field> : null}
+        {configForm.kind === "years" || configForm.kind === "periods" ? <div className="grid min-w-0 gap-4 sm:grid-cols-2"><Field label={en ? "Start date" : "Date de début"} help={configForm.kind === "years" ? (en ? "First day of the fiscal year." : "Premier jour de l’exercice comptable.") : (en ? "First day included in the accounting period." : "Premier jour inclus dans la période comptable.")}><Input name="startDate" type="date" defaultValue={configForm.record ? inputDate(configForm.record.startDate) : ""} required disabled={busy} /></Field><Field label={en ? "End date" : "Date de fin"} help={configForm.kind === "years" ? (en ? "Last day of the fiscal year." : "Dernier jour de l’exercice comptable.") : (en ? "Last day included in the accounting period." : "Dernier jour inclus dans la période comptable.")}><Input name="endDate" type="date" defaultValue={configForm.record ? inputDate(configForm.record.endDate) : ""} required disabled={busy} /></Field></div> : null}
+
+        {configForm.kind === "accounts" && !configForm.record && selectedAccountChart?.templateCode ? <><FormReferenceField label={en ? "Parent account" : "Compte parent"} help={en ? "Template-backed charts only allow custom child accounts. The account type is inherited from this parent." : "Les plans issus d’un template autorisent uniquement des sous-comptes personnalisés. Le type est hérité de ce compte parent."}><FinanceAccountingReferenceSelect organizationId={organizationId} moduleCode="FINANCE_ACCOUNTING" kind="ledger-account" name="parentId" label={en ? "Parent account" : "Compte parent"} locale={rawLocale} required disabled={busy} parentId={selectedAccountChart.id} /></FormReferenceField></> : null}
+        {configForm.kind === "accounts" && (Boolean(configForm.record) || !selectedAccountChart?.templateCode) ? <><Field label={en ? "Account type" : "Type de compte"} help={en ? "Controls the accounting nature and compatible postings. Structural changes are blocked once the account is in use." : "Détermine la nature comptable et les comptabilisations compatibles. Les changements structurels sont bloqués dès que le compte est utilisé."}><select name="accountType" defaultValue={configForm.record ? rowText(configForm.record, "accountType") || "ASSET" : "ASSET"} className="h-11 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-base md:text-sm" disabled={busy}>{ACCOUNT_TYPES.map((value) => <option key={value} value={value}>{financeEnumLabel(value, locale)}</option>)}</select></Field><FormReferenceField required={false} label={en ? "Account currency (optional)" : "Devise du compte (facultatif)"} help={en ? "Leave empty to use the accounting functional currency." : "Laissez vide pour utiliser la devise fonctionnelle de la comptabilité."}><FinanceAccountingReferenceSelect organizationId={organizationId} moduleCode="FINANCE_ACCOUNTING" kind="currency" name="currencyCode" label={en ? "Account currency (optional)" : "Devise du compte (facultatif)"} locale={rawLocale} disabled={busy} initialOption={configForm.record && rowText(configForm.record, "currencyCode") ? { id: rowText(configForm.record, "currencyCode"), code: rowText(configForm.record, "currencyCode"), currency: rowText(configForm.record, "currencyCode"), label: rowText(configForm.record, "currencyCode") } : null} /></FormReferenceField><label className="flex min-h-11 items-center gap-3 rounded-xl border border-dtsc-border bg-dtsc-page/60 px-3 text-sm font-bold text-dtsc-ink"><input type="checkbox" name="allowDirectPosting" defaultChecked={configForm.record ? configForm.record.allowDirectPosting === true : true} disabled={busy} />{en ? "Allow direct manual posting" : "Autoriser la saisie manuelle directe"}</label></> : null}
+
+        {configForm.kind === "journals" ? <><Field label={en ? "Journal type" : "Type de journal"} help={en ? "Choose the operational family used by this journal." : "Choisissez la famille opérationnelle utilisée par ce journal."}><select name="journalType" defaultValue={configForm.record ? rowText(configForm.record, "journalType") || "GENERAL" : "GENERAL"} className="h-11 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-base md:text-sm" disabled={busy}>{JOURNAL_TYPES.map((value) => <option key={value} value={value}>{financeEnumLabel(value, locale)}</option>)}</select></Field><Field label={en ? "Sequence prefix" : "Préfixe de séquence"} help={en ? "Optional readable prefix used by the journal numbering sequence." : "Préfixe lisible facultatif utilisé par la séquence de numérotation du journal."}><Input name="sequencePrefix" defaultValue={configForm.record ? rowText(configForm.record, "sequencePrefix") : ""} maxLength={20} disabled={busy} /></Field><label className="flex min-h-11 items-center gap-3 rounded-xl border border-dtsc-border bg-dtsc-page/60 px-3 text-sm font-bold text-dtsc-ink"><input type="checkbox" name="requiresApproval" defaultChecked={configForm.record ? configForm.record.requiresApproval === true : false} disabled={busy} />{en ? "Require independent approval" : "Exiger une validation indépendante"}</label>{configForm.record ? <label className="flex min-h-11 items-center gap-3 rounded-xl border border-dtsc-border bg-dtsc-page/60 px-3 text-sm font-bold text-dtsc-ink"><input type="checkbox" name="isActive" defaultChecked={configForm.record.isActive !== false} disabled={busy} />{en ? "Journal active" : "Journal actif"}</label> : null}</> : null}
+
+        {configForm.kind === "rules" ? <div className="grid min-w-0 gap-4 sm:grid-cols-2"><Field label={en ? "Effective from (optional)" : "Effective à partir du (facultatif)"} help={en ? "Leave empty when the mapping has no lower date bound." : "Laissez vide si la règle n’a pas de borne de date minimale."}><Input name="effectiveFrom" type="date" defaultValue={configForm.record ? inputDate(configForm.record.effectiveFrom) : ""} disabled={busy} /></Field>{configForm.record ? <Field label={en ? "Effective until (optional)" : "Effective jusqu’au (facultatif)"} help={en ? "Use an end date to stop this rule while preserving history." : "Utilisez une date de fin pour arrêter cette règle tout en conservant l’historique."}><Input name="effectiveTo" type="date" defaultValue={inputDate(configForm.record.effectiveTo)} disabled={busy} /></Field> : null}</div> : null}
+        {configForm.kind === "rules" && configForm.record ? <label className="flex min-h-11 items-center gap-3 rounded-xl border border-dtsc-border bg-dtsc-page/60 px-3 text-sm font-bold text-dtsc-ink"><input type="checkbox" name="isActive" defaultChecked={configForm.record.isActive !== false} disabled={busy} />{en ? "Rule active" : "Règle active"}</label> : null}
+
+        <div data-responsive-actions className="flex min-w-0 flex-col-reverse gap-2 border-t border-dtsc-border pt-4 sm:flex-row sm:flex-wrap sm:justify-end">
+          <Button className="w-full sm:w-auto" type="button" variant="outline" disabled={busy} onClick={() => { setConfigForm({ open: false, kind: null, record: null }); setSelectedRuleChartId(""); setSelectedAccountChart(null); }}>{en ? "Cancel" : "Annuler"}</Button>
+          <Button className="w-full sm:w-auto" type="submit" disabled={busy || (configForm.kind === "rules" && !selectedRuleChartId)}>{busy ? (en ? "Saving…" : "Enregistrement…") : configForm.record ? (en ? "Save changes" : "Enregistrer les modifications") : (en ? "Save" : "Enregistrer")}</Button>
+        </div>
       </form>
+    </Dialog>
+
+    <Dialog
+      open={Boolean(configDelete)}
+      onClose={() => { if (!busy) setConfigDelete(null); }}
+      title={configDelete?.kind === "accounts" || configDelete?.kind === "rules" ? (en ? "Deactivate configuration" : "Désactiver la configuration") : (en ? "Delete configuration" : "Supprimer la configuration")}
+      description={en ? "The server rechecks accounting history and blocks any unsafe removal." : "Le serveur revérifie l’historique comptable et bloque toute suppression non sûre."}
+      className="sm:max-w-xl"
+    >
+      <div className="grid gap-5">
+        <p className="text-sm leading-6 text-dtsc-muted">{configDelete?.kind === "accounts" || configDelete?.kind === "rules"
+          ? (en ? "This action preserves accounting history and deactivates the configuration instead of erasing past usage." : "Cette action conserve l’historique comptable et désactive la configuration au lieu d’effacer son utilisation passée.")
+          : (en ? "Only an unused record in a deletable lifecycle state can be removed." : "Seul un élément inutilisé et dans un état métier supprimable peut être retiré.")}</p>
+        <div data-responsive-actions className="flex min-w-0 flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button className="w-full sm:w-auto" variant="outline" disabled={busy} onClick={() => setConfigDelete(null)}>{en ? "Cancel" : "Annuler"}</Button>
+          <Button className="w-full sm:w-auto" variant="destructive" disabled={busy} onClick={() => void deleteConfig()}>{busy ? (en ? "Processing…" : "Traitement…") : configDelete?.kind === "accounts" || configDelete?.kind === "rules" ? (en ? "Deactivate" : "Désactiver") : (en ? "Delete" : "Supprimer")}</Button>
+        </div>
+      </div>
     </Dialog>
   </ModuleWorkspace>;
 }
 
-function configFormTitle(kind: ConfigCreatable, en: boolean) {
-  if (kind === "charts") return en ? "Create chart of accounts" : "Créer un plan comptable";
-  if (kind === "accounts") return en ? "Create ledger account" : "Créer un compte comptable";
-  if (kind === "years") return en ? "Create fiscal year" : "Créer un exercice comptable";
-  if (kind === "periods") return en ? "Create accounting period" : "Créer une période comptable";
-  return en ? "Create journal" : "Créer un journal";
+function configFormTitle(kind: ConfigCreatable, en: boolean, editing = false) {
+  const verb = editing ? (en ? "Edit" : "Modifier") : (en ? "Create" : "Créer");
+  if (kind === "charts") return `${verb} ${en ? "chart of accounts" : "un plan comptable"}`;
+  if (kind === "accounts") return `${verb} ${en ? "ledger account" : "un compte comptable"}`;
+  if (kind === "years") return `${verb} ${en ? "fiscal year" : "un exercice comptable"}`;
+  if (kind === "periods") return `${verb} ${en ? "accounting period" : "une période comptable"}`;
+  if (kind === "rules") return editing ? (en ? "Edit custom accounting rule" : "Modifier la règle comptable personnalisée") : (en ? "Create custom accounting rule" : "Créer une règle comptable personnalisée");
+  return `${verb} ${en ? "journal" : "un journal"}`;
 }
 
 function configCodeHelp(kind: ConfigCreatable, en: boolean) {
+  if (kind === "rules") return "";
   if (kind === "years") return en ? "Readable fiscal-year code, for example 2026." : "Code lisible de l’exercice, par exemple 2026.";
   if (kind === "periods") return en ? "Readable period code, for example 2026-01." : "Code lisible de la période, par exemple 2026-01.";
   if (kind === "journals") return en ? "Stable journal code, for example BANK or SALES." : "Code stable du journal, par exemple BANQUE ou VENTES.";
@@ -491,6 +689,10 @@ function configCodeHelp(kind: ConfigCreatable, en: boolean) {
   return en ? "Stable code used to identify this chart." : "Code stable utilisé pour identifier ce plan comptable.";
 }
 
-function FormReferenceField({ label, help, children }: { label: string; help: string; children: ReactNode }) {
-  return <div className="grid min-w-0 gap-1.5"><span className="text-xs font-black uppercase text-dtsc-muted">{label}<span aria-hidden="true" className="ml-1 text-red-500">*</span></span>{children}<p className="break-words text-sm leading-6 text-dtsc-muted">{help}</p></div>;
+function FormReadonlyFact({ label, value }: { label: string; value: string }) {
+  return <div className="grid min-w-0 gap-1.5 rounded-xl border border-dtsc-border bg-dtsc-page/60 p-3"><span className="text-xs font-black uppercase text-dtsc-muted">{label}</span><strong className="break-words text-sm text-dtsc-ink">{value || "—"}</strong></div>;
+}
+
+function FormReferenceField({ label, help, children, required = true }: { label: string; help: string; children: ReactNode; required?: boolean }) {
+  return <div className="grid min-w-0 gap-1.5"><span className="text-xs font-black uppercase text-dtsc-muted">{label}{required ? <span aria-hidden="true" className="ml-1 text-red-500">*</span> : null}</span>{children}<p className="break-words text-sm leading-6 text-dtsc-muted">{help}</p></div>;
 }

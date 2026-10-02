@@ -144,6 +144,139 @@ export async function deactivateCustomLedgerAccount(
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
+
+export async function updateAccountingChartMetadata(
+  organizationId: string,
+  chartId: string,
+  actorUserId: string,
+  input: { code: string; nameFr: string; nameEn: string; revision: number },
+) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseChartOfAccounts" WHERE id = ${chartId} AND "organizationId" = ${organizationId} FOR UPDATE`);
+    const chart = await tx.enterpriseChartOfAccounts.findFirst({
+      where: { id: chartId, organizationId },
+      include: { _count: { select: { accounts: true, groups: true } } },
+    });
+    if (!chart) throw new EnterpriseAccountingError("CHART_OF_ACCOUNTS_NOT_FOUND", 404);
+    if (chart.revision !== input.revision) throw new EnterpriseAccountingError("CHART_OF_ACCOUNTS_REVISION_CONFLICT", 409);
+    const codeChanged = chart.code !== input.code;
+    if (codeChanged && (chart.status !== "DRAFT" || chart._count.accounts > 0 || chart._count.groups > 0)) {
+      throw new EnterpriseAccountingError("CHART_OF_ACCOUNTS_CODE_LOCKED", 409);
+    }
+    const updated = await tx.enterpriseChartOfAccounts.update({
+      where: { id: chart.id },
+      data: { code: input.code, nameFr: input.nameFr, nameEn: input.nameEn, revision: { increment: 1 } },
+    });
+    await publishFinanceEvent(tx, {
+      organizationId,
+      entityType: "EnterpriseChartOfAccounts",
+      entityId: chart.id,
+      eventType: "CHART_OF_ACCOUNTS_UPDATED",
+      summary: `Chart ${chart.code} metadata updated`,
+      actorUserId,
+      fromStatus: chart.status,
+      toStatus: chart.status,
+    });
+    return updated;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
+export async function deleteEmptyDraftAccountingChart(
+  organizationId: string,
+  chartId: string,
+  actorUserId: string,
+  revision: number,
+) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseChartOfAccounts" WHERE id = ${chartId} AND "organizationId" = ${organizationId} FOR UPDATE`);
+    const chart = await tx.enterpriseChartOfAccounts.findFirst({
+      where: { id: chartId, organizationId },
+      include: { _count: { select: { accounts: true, groups: true } } },
+    });
+    if (!chart) throw new EnterpriseAccountingError("CHART_OF_ACCOUNTS_NOT_FOUND", 404);
+    if (chart.revision !== revision) throw new EnterpriseAccountingError("CHART_OF_ACCOUNTS_REVISION_CONFLICT", 409);
+    if (chart.status !== "DRAFT" || chart._count.accounts > 0 || chart._count.groups > 0 || chart.templateCode) {
+      throw new EnterpriseAccountingError("CHART_OF_ACCOUNTS_DELETE_BLOCKED", 409);
+    }
+    await tx.enterpriseChartOfAccounts.delete({ where: { id: chart.id } });
+    await publishFinanceEvent(tx, {
+      organizationId,
+      entityType: "EnterpriseChartOfAccounts",
+      entityId: chart.id,
+      eventType: "CHART_OF_ACCOUNTS_DELETED",
+      summary: `Empty draft chart ${chart.code} deleted`,
+      actorUserId,
+      fromStatus: "DRAFT",
+      toStatus: "DELETED",
+    });
+    return chart;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
+export async function updateCustomLedgerAccount(
+  organizationId: string,
+  accountId: string,
+  actorUserId: string,
+  input: {
+    nameFr: string;
+    nameEn: string;
+    accountType: string;
+    currencyCode?: string | null;
+    allowDirectPosting: boolean;
+    revision: number;
+  },
+) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseLedgerAccount" WHERE id = ${accountId} AND "organizationId" = ${organizationId} FOR UPDATE`);
+    const account = await tx.enterpriseLedgerAccount.findFirst({
+      where: { id: accountId, organizationId, archivedAt: null },
+      include: { chart: true },
+    });
+    if (!account) throw new EnterpriseAccountingError("LEDGER_ACCOUNT_NOT_FOUND", 404);
+    if (account.revision !== input.revision) throw new EnterpriseAccountingError("LEDGER_ACCOUNT_REVISION_CONFLICT", 409);
+    if (account.isSystemAccount) throw new EnterpriseAccountingError("SYSTEM_ACCOUNT_REQUIRES_REINFORCED_PERMISSION", 403);
+    const template = account.chart.templateCode ? getChartTemplate(account.chart.templateCode) : undefined;
+    if (template?.accounts.some((source) => source.code === account.code)) {
+      throw new EnterpriseAccountingError("TEMPLATE_LEDGER_ACCOUNT_IMMUTABLE", 409, { templateReference: account.chart.templateCode });
+    }
+    const [journalUsage, mappingUsage, financialAccountUsage, childCount] = await Promise.all([
+      tx.enterpriseJournalLine.count({ where: { organizationId, ledgerAccountId: account.id } }),
+      tx.enterpriseAccountMapping.count({ where: { organizationId, ledgerAccountId: account.id, isActive: true } }),
+      tx.enterpriseFinancialAccount.count({ where: { organizationId, ledgerAccountId: account.id, archivedAt: null } }),
+      tx.enterpriseLedgerAccount.count({ where: { organizationId, parentId: account.id, archivedAt: null } }),
+    ]);
+    const structuralChange =
+      account.accountType !== input.accountType ||
+      (account.currencyCode || null) !== (input.currencyCode || null) ||
+      account.allowDirectPosting !== input.allowDirectPosting;
+    if (structuralChange && (journalUsage > 0 || mappingUsage > 0 || financialAccountUsage > 0 || childCount > 0)) {
+      throw new EnterpriseAccountingError("LEDGER_ACCOUNT_STRUCTURE_IN_USE", 409, { journalUsage, mappingUsage, financialAccountUsage, childCount });
+    }
+    const updated = await tx.enterpriseLedgerAccount.update({
+      where: { id: account.id },
+      data: {
+        nameFr: input.nameFr,
+        nameEn: input.nameEn,
+        accountType: input.accountType,
+        currencyCode: input.currencyCode || null,
+        allowDirectPosting: input.allowDirectPosting,
+        revision: { increment: 1 },
+      },
+    });
+    await publishFinanceEvent(tx, {
+      organizationId,
+      entityType: "EnterpriseLedgerAccount",
+      entityId: account.id,
+      eventType: "LEDGER_ACCOUNT_UPDATED",
+      summary: `Ledger account ${account.code} updated`,
+      actorUserId,
+      fromStatus: account.isActive ? "ACTIVE" : "INACTIVE",
+      toStatus: updated.isActive ? "ACTIVE" : "INACTIVE",
+    });
+    return updated;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
 export async function diffOrganizationChartAgainstTemplate(organizationId: string, chartId: string) {
   const chart = await prisma.enterpriseChartOfAccounts.findFirst({ where: { id: chartId, organizationId } });
   if (!chart) throw new EnterpriseAccountingError("CHART_OF_ACCOUNTS_NOT_FOUND", 404);

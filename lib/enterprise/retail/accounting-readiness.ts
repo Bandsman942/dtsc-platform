@@ -10,6 +10,7 @@ export async function getRetailAccountingReadiness(organizationId: string, at = 
     prisma.enterpriseAccountMapping.findMany({
       where: {
         organizationId,
+        chart: { status: "ACTIVE" },
         mappingKey: { in: [...RETAIL_REQUIRED_ACCOUNT_MAPPINGS] },
         isActive: true,
         OR: [{ effectiveFrom: null }, { effectiveFrom: { lte: at } }],

@@ -90,6 +90,64 @@ export async function buildAssetCapitalizationPosting(tx: Prisma.TransactionClie
   };
 }
 
+
+export async function buildFundingOperationPosting(
+  tx: Prisma.TransactionClient,
+  input: { organizationId: string; sourceEntityType: string; sourceEntityId: string },
+): Promise<PostingDocument> {
+  const funding = await tx.enterpriseFundingOperation.findFirst({
+    where: { id: input.sourceEntityId, organizationId: input.organizationId, status: "CONFIRMED" },
+    include: { financialAccount: true, counterpartyLedgerAccount: true },
+  });
+  if (!funding) throw new EnterpriseAccountingError("FUNDING_OPERATION_NOT_POSTABLE", 409);
+  const journalType = funding.financialAccount.accountType === "CASH"
+    ? "CASH"
+    : funding.financialAccount.accountType === "MOBILE_MONEY"
+      ? "MOBILE_MONEY"
+      : funding.financialAccount.accountType === "CLEARING"
+        ? "GENERAL"
+        : "BANK";
+  const counterpart = funding.fundingType === "CAPITAL_CONTRIBUTION"
+    ? "EQUITY_CAPITAL"
+    : funding.fundingType === "LOAN_DRAW"
+      ? "BORROWINGS"
+      : funding.counterpartyLedgerAccountId
+        ? `ACCOUNT_ID:${funding.counterpartyLedgerAccountId}`
+        : null;
+  if (!counterpart) throw new EnterpriseAccountingError("FUNDING_COUNTERPART_ACCOUNT_REQUIRED", 409);
+  if (funding.fundingType === "SHAREHOLDER_ADVANCE" && funding.counterpartyLedgerAccount?.accountType !== "LIABILITY") {
+    throw new EnterpriseAccountingError("FUNDING_COUNTERPART_ACCOUNT_INVALID", 409);
+  }
+  return {
+    organizationId: input.organizationId,
+    journalType,
+    accountingDate: funding.operationDate,
+    documentDate: funding.operationDate,
+    reference: funding.reference || funding.number,
+    description: `Funding ${funding.number}`,
+    sourceModule: "FINANCE_TREASURY",
+    sourceEntityType: "EnterpriseFundingOperation",
+    sourceEntityId: funding.id,
+    currencyCode: funding.currencyCode,
+    lines: [
+      {
+        accountMappingKey: `ACCOUNT_ID:${funding.financialAccount.ledgerAccountId}`,
+        description: `Funding received ${funding.number}`,
+        debit: funding.amount,
+        transactionCurrencyCode: funding.currencyCode,
+        transactionAmount: funding.amount,
+      },
+      {
+        accountMappingKey: counterpart,
+        description: `Funding counterpart ${funding.number}`,
+        credit: funding.amount,
+        transactionCurrencyCode: funding.currencyCode,
+        transactionAmount: funding.amount,
+      },
+    ],
+  };
+}
+
 export async function buildBankChargePosting(tx: Prisma.TransactionClient, input: { organizationId: string; sourceEntityType: string; sourceEntityId: string }): Promise<PostingDocument> {
   const transaction = await tx.enterpriseTreasuryTransaction.findFirst({ where: { id: input.sourceEntityId, organizationId: input.organizationId, transactionType: "BANK_CHARGE", direction: "OUTBOUND", status: "CONFIRMED" }, include: { financialAccount: true } });
   if (!transaction) throw new EnterpriseAccountingError("BANK_CHARGE_NOT_POSTABLE", 409);

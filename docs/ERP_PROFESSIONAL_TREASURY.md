@@ -1,6 +1,6 @@
 # Trésorerie professionnelle
 
-`FINANCE_TREASURY` gère les comptes bancaires, caisses, portefeuilles électroniques et comptes de transit du moteur commun.
+`FINANCE_TREASURY` gère les comptes bancaires, caisses, portefeuilles électroniques et comptes de transit du moteur commun, ainsi que les financements externes reçus (apport en capital, avance d’associé et emprunt).
 
 Chaque compte possède une devise, un compte comptable lié, un responsable, un statut, des soldes et une référence masquée. Les numéros sensibles ne sont jamais affichés intégralement.
 

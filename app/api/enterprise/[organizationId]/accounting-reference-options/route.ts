@@ -3,6 +3,7 @@ import { writeApiLog } from "@/lib/audit";
 import { listEnterpriseCurrencies } from "@/lib/enterprise/accounting/currency-service";
 import { authorizeFinanceRequest } from "@/lib/enterprise/accounting/http";
 import type { EnterpriseFinanceModuleCode } from "@/lib/enterprise/accounting/constants";
+import { SEMANTIC_ACCOUNT_REGISTRY } from "@/lib/enterprise/accounting/semantic-account-registry";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -24,7 +25,8 @@ type ReferenceKind =
   | "site"
   | "inventory-item"
   | "asset"
-  | "currency";
+  | "currency"
+  | "semantic-account";
 
 const MODULES = new Set<SupportedModule>([
   "FINANCE_ACCOUNTING",
@@ -46,10 +48,11 @@ const KINDS = new Set<ReferenceKind>([
   "inventory-item",
   "asset",
   "currency",
+  "semantic-account",
 ]);
 
 function permitted(moduleCode: SupportedModule, kind: ReferenceKind) {
-  if (moduleCode === "FINANCE_ACCOUNTING") return ["chart", "fiscal-year", "fiscal-period", "journal", "ledger-account", "business-party", "project", "department", "site", "inventory-item", "asset", "currency"].includes(kind);
+  if (moduleCode === "FINANCE_ACCOUNTING") return ["chart", "fiscal-year", "fiscal-period", "journal", "ledger-account", "business-party", "project", "department", "site", "inventory-item", "asset", "currency", "semantic-account"].includes(kind);
   if (moduleCode === "FINANCE_TAX") return ["ledger-account", "currency"].includes(kind);
   if (moduleCode === "FINANCE_CLOSE") return ["fiscal-period"].includes(kind);
   if (moduleCode === "FINANCE_STATEMENTS") return ["currency"].includes(kind);
@@ -74,6 +77,8 @@ export async function GET(req: Request, { params }: Params) {
   const status = url.searchParams.get("status")?.trim().toUpperCase() || undefined;
   const accountType = url.searchParams.get("accountType")?.trim().toUpperCase() || undefined;
   const directPosting = url.searchParams.get("directPosting") === "true";
+  const customOnly = url.searchParams.get("customOnly") === "true";
+  const configurableOnly = url.searchParams.get("configurableOnly") === "true";
   const take = 30;
   let items: Array<Record<string, unknown>> = [];
 
@@ -81,7 +86,8 @@ export async function GET(req: Request, { params }: Params) {
     items = await prisma.enterpriseChartOfAccounts.findMany({
       where: {
         organizationId,
-        ...(status ? { status } : {}),
+        ...(status ? { status } : configurableOnly ? { status: { in: ["DRAFT", "READY", "ACTIVE"] } } : {}),
+        ...(customOnly ? { templateCode: null } : {}),
         ...(search ? { OR: [
           { code: { contains: search, mode: "insensitive" } },
           { nameFr: { contains: search, mode: "insensitive" } },
@@ -97,11 +103,11 @@ export async function GET(req: Request, { params }: Params) {
       where: {
         organizationId,
         ...(status ? { status } : {}),
-        ...(search ? { code: { contains: search, mode: "insensitive" } } : {}),
+        ...(search ? { OR: [{ code: { contains: search, mode: "insensitive" } }, { label: { contains: search, mode: "insensitive" } }] } : {}),
       },
       orderBy: { startDate: "desc" },
       take,
-      select: { id: true, code: true, startDate: true, endDate: true, status: true, revision: true },
+      select: { id: true, code: true, label: true, startDate: true, endDate: true, status: true, revision: true },
     });
   } else if (kind === "fiscal-period") {
     items = await prisma.enterpriseFiscalPeriod.findMany({
@@ -109,11 +115,11 @@ export async function GET(req: Request, { params }: Params) {
         organizationId,
         ...(parentId ? { fiscalYearId: parentId } : {}),
         ...(status ? { status } : {}),
-        ...(search ? { code: { contains: search, mode: "insensitive" } } : {}),
+        ...(search ? { OR: [{ code: { contains: search, mode: "insensitive" } }, { label: { contains: search, mode: "insensitive" } }] } : {}),
       },
       orderBy: { startDate: "desc" },
       take,
-      select: { id: true, code: true, fiscalYearId: true, startDate: true, endDate: true, status: true, revision: true, fiscalYear: { select: { code: true } } },
+      select: { id: true, code: true, label: true, fiscalYearId: true, startDate: true, endDate: true, status: true, revision: true, fiscalYear: { select: { code: true, label: true } } },
     });
   } else if (kind === "journal") {
     items = await prisma.enterpriseJournal.findMany({
@@ -253,6 +259,12 @@ export async function GET(req: Request, { params }: Params) {
       take,
       select: { id: true, code: true, name: true, serialNumber: true, status: true, currency: true, indicativeValue: true, acquisitionDate: true },
     });
+  } else if (kind === "semantic-account") {
+    items = SEMANTIC_ACCOUNT_REGISTRY
+      .filter((definition) => !definition.deprecated)
+      .filter((definition) => !search || definition.key.toLowerCase().includes(search.toLowerCase()) || definition.labelFr.toLowerCase().includes(search.toLowerCase()) || definition.labelEn.toLowerCase().includes(search.toLowerCase()))
+      .slice(0, take)
+      .map((definition) => ({ id: definition.key, code: definition.key, labelFr: definition.labelFr, labelEn: definition.labelEn, category: definition.category, domain: definition.domain, expectedAccountTypes: definition.expectedAccountTypes }));
   } else if (kind === "currency") {
     items = (await listEnterpriseCurrencies(organizationId, { search })).slice(0, take).map((currency) => ({
       id: currency.id,

@@ -48,6 +48,7 @@ export async function GET(req: Request, { params }: Params) {
       include: {
         financialAccount: { select: { id: true, code: true, name: true, accountType: true, currencyCode: true } },
         payment: { select: { id: true, number: true, status: true, paymentType: true } },
+        fundingOperation: { select: { id: true, number: true, status: true, fundingType: true } },
       },
     }),
     prisma.enterpriseTreasuryTransaction.count({ where }),

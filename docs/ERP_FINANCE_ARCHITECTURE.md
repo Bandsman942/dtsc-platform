@@ -57,7 +57,7 @@ Iterations 4 and 5 expose the common finance and accounting engines through dedi
 - `FINANCE_RECEIVABLES` — customer invoices, receivables, credit notes and ageing;
 - `FINANCE_PAYABLES` — supplier invoices, payables, credit notes and three-way control;
 - `FINANCE_PAYMENTS` — payments, approvals, confirmations and bounded allocations;
-- `FINANCE_TREASURY` — financial accounts and controlled transfers;
+- `FINANCE_TREASURY` — financial accounts, external funding and controlled internal transfers;
 - `FINANCE_CASH` — cash opening, operations, physical count and independent close;
 - `FINANCE_BANK` — bounded statement import and line detail;
 - `FINANCE_RECONCILIATION` — explainable matching and controlled completion.

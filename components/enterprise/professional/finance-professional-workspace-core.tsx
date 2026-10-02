@@ -155,16 +155,17 @@ export function financeRecordAmount(item: FinanceRecord, locale: FinanceLocale) 
   if (!currencyCode) return null;
   return financeMoney(value, currencyCode, locale);
 }
-export function financeRecordDate(item: FinanceRecord, locale: FinanceLocale) { return financeDate(item.invoiceDate || item.creditDate || item.dueDate || item.paymentDate || item.transferDate || item.statementDate || item.openedAt || item.createdAt || item.updatedAt, locale); }
+export function financeRecordDate(item: FinanceRecord, locale: FinanceLocale) { return financeDate(item.invoiceDate || item.creditDate || item.dueDate || item.paymentDate || item.transferDate || item.operationDate || item.statementDate || item.openedAt || item.createdAt || item.updatedAt, locale); }
 export function financeRecordDescription(item: FinanceRecord, locale: FinanceLocale) {
   const parts: string[] = [];
   const direction = typeof item.direction === "string" ? financeEnumLabel(item.direction, locale) : "";
   const paymentType = typeof item.paymentType === "string" ? financeEnumLabel(item.paymentType, locale) : "";
   const accountType = typeof item.accountType === "string" ? financeEnumLabel(item.accountType, locale) : "";
+  const fundingType = typeof item.fundingType === "string" ? financeEnumLabel(item.fundingType, locale) : "";
   const financialAccount = item.financialAccount as { code?: string; name?: string } | undefined;
   const source = item.sourceFinancialAccount as { code?: string; name?: string } | undefined;
   const target = item.targetFinancialAccount as { code?: string; name?: string } | undefined;
-  if (direction) parts.push(direction); if (paymentType) parts.push(paymentType); if (accountType) parts.push(accountType);
+  if (direction) parts.push(direction); if (paymentType) parts.push(paymentType); if (fundingType) parts.push(fundingType); if (accountType) parts.push(accountType);
   if (financialAccount?.name) parts.push(`${financialAccount.code || ""} ${financialAccount.name}`.trim());
   if (source?.name && target?.name) parts.push(`${source.name} → ${target.name}`);
   if (item.maskedReference) parts.push(String(item.maskedReference));

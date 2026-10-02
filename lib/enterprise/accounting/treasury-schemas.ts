@@ -57,6 +57,41 @@ export const transferTransitionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("REJECT"), revision, reason: z.string().trim().min(4).max(1000) }),
   z.object({ action: z.literal("CONFIRM"), revision }),
 ]);
+
+const fundingOperationBaseSchema = z.object({
+  fundingType: z.enum(["CAPITAL_CONTRIBUTION", "SHAREHOLDER_ADVANCE", "LOAN_DRAW"]),
+  financialAccountId: id,
+  cashSessionId: id.optional(),
+  amount: positiveAmount,
+  operationDate: date,
+  reference: z.string().trim().max(160).optional(),
+  description: z.string().trim().max(1000).optional(),
+  counterpartyLedgerAccountId: id.optional(),
+  approverUserId: id,
+  idempotencyKey: z.string().trim().min(8).max(200).optional(),
+});
+
+export const fundingOperationCreateSchema = fundingOperationBaseSchema.superRefine((value, ctx) => {
+  if (value.fundingType === "SHAREHOLDER_ADVANCE" && !value.counterpartyLedgerAccountId) {
+    ctx.addIssue({ code: "custom", path: ["counterpartyLedgerAccountId"], message: "Shareholder advance liability account is required" });
+  }
+  if (value.fundingType !== "SHAREHOLDER_ADVANCE" && value.counterpartyLedgerAccountId) {
+    ctx.addIssue({ code: "custom", path: ["counterpartyLedgerAccountId"], message: "Counterpart account is only allowed for shareholder advances" });
+  }
+});
+
+export const fundingOperationTransitionSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("APPROVE"), revision }),
+  z.object({ action: z.literal("REJECT"), revision, reason: z.string().trim().min(4).max(1000) }),
+  z.object({ action: z.literal("CONFIRM"), revision }),
+]);
+
+export const fundingOperationReverseSchema = z.object({
+  revision,
+  reason: z.string().trim().min(4).max(1000),
+  accountingDate: date,
+  cashSessionId: id.optional(),
+});
 export const cashSessionOpenSchema = z.object({ financialAccountId: id, openingAmount: amount, siteId: id.optional() });
 export const cashCloseSchema = z.object({ countedClosingAmount: amount, closingReason: z.string().trim().min(3).max(1000).optional(), counts: z.array(z.object({ denomination: amount, quantity: z.coerce.number().int().nonnegative().max(1000000) })).max(100), revision });
 export const cashValidateSchema = z.object({ approve: z.boolean(), reason: z.string().trim().min(1).max(1000).optional(), revision }).superRefine((value, ctx) => {

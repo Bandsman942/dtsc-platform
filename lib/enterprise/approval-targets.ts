@@ -1,5 +1,6 @@
 export const ENTERPRISE_APPROVAL_MODULE_BY_TARGET: Readonly<Record<string, string>> = {
   EnterpriseAccountTransfer: "FINANCE_TREASURY",
+  EnterpriseFundingOperation: "FINANCE_TREASURY",
   EnterpriseJournalEntry: "FINANCE_ACCOUNTING",
   EnterprisePayment: "FINANCE_PAYMENTS",
   EnterpriseSalesInvoice: "FINANCE_RECEIVABLES",
@@ -30,6 +31,7 @@ export const ENTERPRISE_APPROVAL_MODULE_BY_TARGET: Readonly<Record<string, strin
 
 const ENTERPRISE_APPROVAL_TARGET_LABELS: Readonly<Record<string, { fr: string; en: string }>> = {
   EnterpriseAccountTransfer: { fr: "Transfert de trésorerie", en: "Treasury transfer" },
+  EnterpriseFundingOperation: { fr: "Financement reçu", en: "Funding received" },
   EnterpriseJournalEntry: { fr: "Écriture comptable", en: "Journal entry" },
   EnterprisePayment: { fr: "Paiement", en: "Payment" },
   EnterpriseSalesInvoice: { fr: "Facture client", en: "Customer invoice" },
@@ -71,6 +73,7 @@ export function enterpriseApprovalTargetLabel(targetEntityType: string, locale?:
 export function enterpriseApprovalTargetDeepLink(targetEntityType: string, targetEntityId: string, approvalId?: string | null) {
   const id = encodeURIComponent(targetEntityId);
   if (targetEntityType === "EnterpriseAccountTransfer") return `/enterprise-modules/FINANCE_TREASURY?transfer=${id}`;
+  if (targetEntityType === "EnterpriseFundingOperation") return `/enterprise-modules/FINANCE_TREASURY?tab=funding&fundingOperationId=${id}`;
   if (targetEntityType === "EnterpriseJournalEntry") return `/enterprise-modules/FINANCE_ACCOUNTING?tab=entries&entry=${id}`;
   if (targetEntityType === "EnterprisePayment") return `/enterprise-modules/FINANCE_PAYMENTS?payment=${id}`;
   if (targetEntityType === "EnterpriseSalesInvoice") return `/enterprise-modules/FINANCE_RECEIVABLES?invoice=${id}`;

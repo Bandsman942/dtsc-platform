@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type FormEvent } from "react";
-import { CreditCard, Plus, ReceiptText, RotateCcw, X } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Field, NativeSelect, formatEnterpriseAmount, formatEnterpriseDate } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { gamingCheckoutCopy } from "@/components/enterprise/gaming/gaming-checkout-i18n";
 import { ProfessionalError, ProfessionalLoading, ProfessionalSearch, ProfessionalTabs, professionalMutation, useProfessionalCollection } from "@/components/enterprise/professional/professional-erp-ui";
@@ -11,6 +11,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
+import { type BusinessContextAction } from "@/components/workspace/context-actions";
 import { EmptyState } from "@/components/workspace/empty-state";
 import { FullscreenEntityDetail } from "@/components/workspace/fullscreen-entity-detail";
 import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
@@ -268,6 +269,15 @@ export function EnterpriseGamingCheckoutWorkspace({ organizationId, organization
       ? copy.cashSessionClosing
       : copy.openCashSessionRequired;
 
+  const checkoutActions: BusinessContextAction[] = detail ? [
+    ...(detail.checkout.status === "INVOICE_PENDING" && detail.canManage ? [{ id: "approve-invoice", label: copy.approveInvoice, onSelect: () => void mutate({ action: "APPROVE_INVOICE", revision: detail.checkout.revision }) }] : []),
+    ...(["AWAITING_PAYMENT", "PARTIALLY_PAID"].includes(detail.checkout.status) && detail.canWrite ? [{ id: "add-payment", label: copy.addPayment, onSelect: () => void openAction("payment") }] : []),
+    ...(["PAID", "REFUND_PENDING", "REFUNDED"].includes(detail.checkout.status) ? [{ id: "receipt", label: copy.receipt, onSelect: () => void loadReceipt() }] : []),
+    ...(detail.checkout.status === "PAID" && detail.canManage ? [{ id: "request-refund", label: copy.requestRefund, onSelect: () => void openAction("refund") }] : []),
+    ...(detail.checkout.status === "REFUND_PENDING" && detail.canManage ? [{ id: "approve-refund", label: copy.approveRefund, onSelect: () => void openAction("approveRefund") }] : []),
+    ...(detail.checkout.status === "INVOICE_PENDING" && detail.canManage ? [{ id: "cancel-checkout", label: copy.cancel, destructive: true, separatorBefore: true, onSelect: () => void openAction("cancel") }] : []),
+  ] : [];
+
   return (
     <ModuleWorkspace>
       <ModuleHeader eyebrow={copy.eyebrow} title={copy.title} description={`${copy.description} · ${organizationName}`} count={collection.pagination.total} primaryAction={collection.canWrite ? <Button onClick={() => void openCreate()}><Plus className="h-4 w-4" />{copy.newCheckout}</Button> : undefined} />
@@ -287,7 +297,7 @@ export function EnterpriseGamingCheckoutWorkspace({ organizationId, organization
         </ModuleSection>
       </ModuleContent>
 
-      <FullscreenEntityDetail open={Boolean(detail)} onClose={() => setDetail(null)} title={detail?.checkout.reference || copy.detail} description={detail ? `${detail.checkout.session.reference} · ${detail.invoice?.number || ""}` : undefined}>
+      <FullscreenEntityDetail open={Boolean(detail)} onClose={() => setDetail(null)} title={detail?.checkout.reference || copy.detail} description={detail ? `${detail.checkout.session.reference} · ${detail.invoice?.number || ""}` : undefined} actions={checkoutActions} actionLabel={locale === "en" ? "Checkout actions" : "Actions d’encaissement"}>
         {detail ? <div className="grid gap-5">
           <div className="flex flex-wrap items-center gap-2"><StatusBadge tone={tone(detail.checkout.status)}>{statusLabel(detail.checkout.status, copy)}</StatusBadge><span className="text-sm text-dtsc-muted">{formatEnterpriseDate(detail.checkout.createdAt, locale)}</span></div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -295,14 +305,6 @@ export function EnterpriseGamingCheckoutWorkspace({ organizationId, organization
             <div><p className="text-xs font-black uppercase text-dtsc-muted">{copy.station}</p><p className="font-bold">{detail.checkout.session.station.displayName || detail.checkout.session.station.stationCode}</p></div>
             <div><p className="text-xs font-black uppercase text-dtsc-muted">{copy.invoice}</p><p className="font-bold">{detail.invoice?.number}</p></div>
             <div><p className="text-xs font-black uppercase text-dtsc-muted">{copy.total}</p><p className="font-bold">{detail.invoice ? formatEnterpriseAmount(detail.invoice.grandTotal, detail.invoice.currencyCode, locale) : "—"}</p></div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {detail.checkout.status === "INVOICE_PENDING" && detail.canManage ? <Button onClick={() => void mutate({ action: "APPROVE_INVOICE", revision: detail.checkout.revision })}>{copy.approveInvoice}</Button> : null}
-            {["AWAITING_PAYMENT", "PARTIALLY_PAID"].includes(detail.checkout.status) && detail.canWrite ? <Button onClick={() => void openAction("payment")}><CreditCard className="h-4 w-4" />{copy.addPayment}</Button> : null}
-            {["PAID", "REFUND_PENDING", "REFUNDED"].includes(detail.checkout.status) ? <Button variant="outline" onClick={() => void loadReceipt()}><ReceiptText className="h-4 w-4" />{copy.receipt}</Button> : null}
-            {detail.checkout.status === "PAID" && detail.canManage ? <Button variant="outline" onClick={() => void openAction("refund")}><RotateCcw className="h-4 w-4" />{copy.requestRefund}</Button> : null}
-            {detail.checkout.status === "REFUND_PENDING" && detail.canManage ? <Button onClick={() => void openAction("approveRefund")}>{copy.approveRefund}</Button> : null}
-            {detail.checkout.status === "INVOICE_PENDING" && detail.canManage ? <Button variant="outline" onClick={() => void openAction("cancel")}><X className="h-4 w-4" />{copy.cancel}</Button> : null}
           </div>
           <div className="border-t border-dtsc-border pt-4"><h3 className="font-black">{copy.payments}</h3><div className="mt-3 grid gap-2">{detail.payments.filter((payment) => payment.paymentType === "CUSTOMER_PAYMENT").length ? detail.payments.filter((payment) => payment.paymentType === "CUSTOMER_PAYMENT").map((payment) => <div key={payment.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-dtsc-border py-2 text-sm"><span>{payment.number} · {labels[payment.methodType as PaymentMethod] || payment.methodType}</span><span className="font-black">{formatEnterpriseAmount(payment.amount, payment.currencyCode, locale)}</span>{["PENDING_APPROVAL", "APPROVED"].includes(payment.status) && detail.canManage ? <Button size="sm" onClick={() => void mutate({ action: "APPROVE_PAYMENT", paymentId: payment.id, revision: detail.checkout.revision })}>{payment.status === "APPROVED" ? copy.confirmPayment : copy.approvePayment}</Button> : <StatusBadge tone={payment.status === "CONFIRMED" || payment.status === "RECONCILED" ? "success" : "warning"}>{payment.status}</StatusBadge>}</div>) : <p className="text-sm text-dtsc-muted">{copy.noPayments}</p>}</div></div>
           {busy ? <ProfessionalLoading rows={1} /> : null}

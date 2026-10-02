@@ -28,7 +28,9 @@ type ReferenceKind =
   | "bank-statement"
   | "reconciliation-payment"
   | "treasury-transaction"
-  | "journal-entry";
+  | "journal-entry"
+  | "cash-session"
+  | "funding-counterpart-account";
 
 type OperationalFinanceModuleCode =
   | "FINANCE_RECEIVABLES"
@@ -50,6 +52,7 @@ export type FinanceReferenceOption = {
   financialAccountId?: string | null;
   currency?: string | null;
   amount?: string | number | null;
+  accountType?: string | null;
 };
 
 type ApiBody = { items?: unknown[] };
@@ -58,7 +61,7 @@ const OPERATIONAL_KINDS = new Set<ReferenceKind>([
   "customer", "supplier", "sales-order", "fulfillment", "contract", "purchase", "purchase-receipt", "project", "expense", "asset", "catalog-item", "financial-account", "payroll-run", "employee", "expense-account",
 ]);
 const TREASURY_MODULES = new Set<OperationalFinanceModuleCode>(["FINANCE_TREASURY", "FINANCE_CASH", "FINANCE_BANK", "FINANCE_RECONCILIATION"]);
-const TREASURY_KINDS = new Set<ReferenceKind>(["financial-account", "ledger-account", "member", "site", "currency", "bank-statement", "reconciliation-payment", "treasury-transaction", "journal-entry"]);
+const TREASURY_KINDS = new Set<ReferenceKind>(["financial-account", "ledger-account", "member", "site", "currency", "bank-statement", "reconciliation-payment", "treasury-transaction", "journal-entry", "cash-session", "funding-counterpart-account"]);
 
 function endpointFor(
   organizationId: string,
@@ -110,11 +113,13 @@ function mapOptions(kind: ReferenceKind, items: unknown[], locale?: string | nul
   if (kind === "expense") return (items as Array<{ id: string; reference: string; title: string; currency: string; amount: string | number; supplierId?: string | null; purchaseId?: string | null }>).map((item) => ({ id: item.id, label: `${item.reference} · ${item.title} · ${item.currency}`, currency: item.currency, amount: item.amount, supplierId: item.supplierId, purchaseId: item.purchaseId }));
   if (kind === "asset") return (items as Array<{ id: string; code: string; name: string; serialNumber?: string | null; currency?: string | null; indicativeValue?: string | number | null; supplierId?: string | null; purchaseId?: string | null }>).map((item) => ({ id: item.id, label: `${item.code} · ${item.name}${item.serialNumber ? ` · ${item.serialNumber}` : ""}`, currency: item.currency, amount: item.indicativeValue, supplierId: item.supplierId, purchaseId: item.purchaseId }));
   if (kind === "catalog-item") return (items as Array<{ id: string; code: string; sku?: string | null; name: string; currency?: string | null; amount?: string | number | null }>).map((item) => ({ id: item.id, label: `${item.code}${item.sku ? ` · ${item.sku}` : ""} · ${item.name}`, currency: item.currency, amount: item.amount }));
-  if (kind === "financial-account") return (items as Array<{ id: string; code: string; name: string; accountType: string; currencyCode: string; maskedReference?: string | null }>).map((item) => ({ id: item.id, label: `${item.code} · ${item.name} · ${item.currencyCode}${item.maskedReference ? ` · ${item.maskedReference}` : ""}`, currency: item.currencyCode }));
+  if (kind === "financial-account") return (items as Array<{ id: string; code: string; name: string; accountType: string; currencyCode: string; maskedReference?: string | null }>).map((item) => ({ id: item.id, label: `${item.code} · ${item.name} · ${item.currencyCode}${item.maskedReference ? ` · ${item.maskedReference}` : ""}`, currency: item.currencyCode, accountType: item.accountType }));
   if (kind === "payroll-run") return (items as Array<{ id: string; reference: string; currency: string; netAmount: string | number; payrollPeriod: { code: string; name: string } }>).map((item) => ({ id: item.id, label: `${item.reference} · ${item.payrollPeriod.code} · ${item.payrollPeriod.name} · ${item.currency}`, currency: item.currency, amount: item.netAmount }));
   if (kind === "employee") return (items as Array<{ id: string; employeeNumber: string; displayName: string }>).map((item) => ({ id: item.id, label: `${item.employeeNumber} · ${item.displayName}` }));
   if (kind === "expense-account") return (items as Array<{ id: string; code: string; nameFr: string; nameEn: string }>).map((item) => ({ id: item.id, label: `${item.code} · ${en ? item.nameEn : item.nameFr}` }));
   if (kind === "ledger-account") return (items as Array<{ id: string; code: string; nameFr: string; nameEn: string; currencyCode?: string | null }>).map((item) => ({ id: item.id, label: `${item.code} · ${en ? item.nameEn : item.nameFr}${item.currencyCode ? ` · ${item.currencyCode}` : ""}`, currency: item.currencyCode }));
+  if (kind === "funding-counterpart-account") return (items as Array<{ id: string; code: string; nameFr: string; nameEn: string; currencyCode?: string | null }>).map((item) => ({ id: item.id, label: `${item.code} · ${en ? item.nameEn : item.nameFr}${item.currencyCode ? ` · ${item.currencyCode}` : ""}`, currency: item.currencyCode, accountType: "LIABILITY" }));
+  if (kind === "cash-session") return (items as Array<{ id: string; number: string; status: string; openedAt: string; openingAmount: string | number }>).map((item) => ({ id: item.id, label: `${item.number} · ${new Date(item.openedAt).toLocaleString(en ? "en" : "fr")} · ${item.openingAmount}` }));
   if (kind === "member") return (items as Array<{ id: string; label: string; email?: string; positionTitle?: string | null }>).map((item) => ({ id: item.id, label: `${item.label}${item.positionTitle ? ` · ${item.positionTitle}` : ""}` }));
   if (kind === "site") return (items as Array<{ id: string; code: string; name: string }>).map((item) => ({ id: item.id, label: `${item.code} · ${item.name}` }));
   if (kind === "currency") return (items as Array<{ id: string; code: string; name: string }>).map((item) => ({ id: item.code, label: `${item.code} · ${item.name}`, currency: item.code }));

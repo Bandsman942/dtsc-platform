@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 
 type ModuleCode = "FINANCE_ACCOUNTING" | "FINANCE_TAX" | "FINANCE_CLOSE" | "FINANCE_STATEMENTS" | "FINANCE_ASSETS";
@@ -16,7 +16,8 @@ export type AccountingReferenceKind =
   | "site"
   | "inventory-item"
   | "asset"
-  | "currency";
+  | "currency"
+  | "semantic-account";
 
 export type FinanceAccountingReferenceOption = {
   id: string;
@@ -27,15 +28,16 @@ export type FinanceAccountingReferenceOption = {
   amount?: string | number | null;
   accountType?: string | null;
   chartId?: string | null;
+  templateCode?: string | null;
 };
 
 type ApiBody = { items?: unknown[] };
 
 function mapOptions(kind: AccountingReferenceKind, items: unknown[], locale?: string | null): FinanceAccountingReferenceOption[] {
   const en = locale === "en";
-  if (kind === "chart") return (items as Array<{ id: string; code: string; nameFr: string; nameEn: string; status: string }>).map((item) => ({ id: item.id, code: item.code, status: item.status, label: `${item.code} · ${en ? item.nameEn : item.nameFr}` }));
-  if (kind === "fiscal-year") return (items as Array<{ id: string; code: string; status: string }>).map((item) => ({ id: item.id, code: item.code, status: item.status, label: `${item.code} · ${item.status}` }));
-  if (kind === "fiscal-period") return (items as Array<{ id: string; code: string; status: string; fiscalYear?: { code?: string | null } }>).map((item) => ({ id: item.id, code: item.code, status: item.status, label: `${item.fiscalYear?.code ? `${item.fiscalYear.code} · ` : ""}${item.code} · ${item.status}` }));
+  if (kind === "chart") return (items as Array<{ id: string; code: string; nameFr: string; nameEn: string; status: string; templateCode?: string | null }>).map((item) => ({ id: item.id, code: item.code, status: item.status, templateCode: item.templateCode || null, label: `${item.code} · ${en ? item.nameEn : item.nameFr}` }));
+  if (kind === "fiscal-year") return (items as Array<{ id: string; code: string; label?: string | null; status: string }>).map((item) => ({ id: item.id, code: item.code, status: item.status, label: `${item.code}${item.label ? ` · ${item.label}` : ""} · ${item.status}` }));
+  if (kind === "fiscal-period") return (items as Array<{ id: string; code: string; label?: string | null; status: string; fiscalYear?: { code?: string | null; label?: string | null } }>).map((item) => ({ id: item.id, code: item.code, status: item.status, label: `${item.fiscalYear?.code ? `${item.fiscalYear.code} · ` : ""}${item.code}${item.label ? ` · ${item.label}` : ""} · ${item.status}` }));
   if (kind === "journal") return (items as Array<{ id: string; code: string; nameFr: string; nameEn: string; journalType: string }>).map((item) => ({ id: item.id, code: item.code, label: `${item.code} · ${en ? item.nameEn : item.nameFr} · ${item.journalType}` }));
   if (kind === "ledger-account") return (items as Array<{ id: string; code: string; nameFr: string; nameEn: string; accountType: string; currencyCode?: string | null; chartId?: string | null }>).map((item) => ({ id: item.id, code: item.code, accountType: item.accountType, chartId: item.chartId, currency: item.currencyCode, label: `${item.code} · ${en ? item.nameEn : item.nameFr}${item.currencyCode ? ` · ${item.currencyCode}` : ""}` }));
   if (kind === "business-party") return (items as Array<{ id: string; code: string; legalName: string; displayName?: string | null }>).map((item) => ({ id: item.id, code: item.code, label: `${item.code} · ${item.displayName || item.legalName}` }));
@@ -44,6 +46,7 @@ function mapOptions(kind: AccountingReferenceKind, items: unknown[], locale?: st
   if (kind === "site") return (items as Array<{ id: string; code: string; name: string; city?: string | null }>).map((item) => ({ id: item.id, code: item.code, label: `${item.code} · ${item.name}${item.city ? ` · ${item.city}` : ""}` }));
   if (kind === "inventory-item") return (items as Array<{ id: string; catalogItem: { code: string; sku?: string | null; name: string } }>).map((item) => ({ id: item.id, code: item.catalogItem.code, label: `${item.catalogItem.code}${item.catalogItem.sku ? ` · ${item.catalogItem.sku}` : ""} · ${item.catalogItem.name}` }));
   if (kind === "asset") return (items as Array<{ id: string; code: string; name: string; serialNumber?: string | null; currency?: string | null; indicativeValue?: string | number | null }>).map((item) => ({ id: item.id, code: item.code, currency: item.currency, amount: item.indicativeValue, label: `${item.code} · ${item.name}${item.serialNumber ? ` · ${item.serialNumber}` : ""}${item.currency ? ` · ${item.currency}` : ""}` }));
+  if (kind === "semantic-account") return (items as Array<{ id: string; code: string; labelFr: string; labelEn: string; category: string; domain: string }>).map((item) => ({ id: item.id, code: item.code, accountType: item.category, label: `${en ? item.labelEn : item.labelFr} · ${item.domain}` }));
   return (items as Array<{ id: string; code: string; name: string }>).map((item) => ({ id: item.code, code: item.code, currency: item.code, label: `${item.code} · ${item.name}` }));
 }
 
@@ -63,6 +66,9 @@ export function FinanceAccountingReferenceSelect({
   emptyLabel,
   onOptionChange,
   compact = false,
+  initialOption = null,
+  customOnly = false,
+  configurableOnly = false,
 }: {
   organizationId: string;
   moduleCode: ModuleCode;
@@ -79,15 +85,20 @@ export function FinanceAccountingReferenceSelect({
   emptyLabel?: string;
   onOptionChange?: (option: FinanceAccountingReferenceOption | null) => void;
   compact?: boolean;
+  initialOption?: FinanceAccountingReferenceOption | null;
+  customOnly?: boolean;
+  configurableOnly?: boolean;
 }) {
   const en = locale === "en";
   const [search, setSearch] = useState("");
   const [items, setItems] = useState<FinanceAccountingReferenceOption[]>([]);
-  const [selected, setSelected] = useState<FinanceAccountingReferenceOption | null>(null);
+  const [selected, setSelected] = useState<FinanceAccountingReferenceOption | null>(initialOption);
+  const initialOptionRef = useRef<FinanceAccountingReferenceOption | null>(initialOption);
+  initialOptionRef.current = initialOption;
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
 
-  useEffect(() => { setSelected(null); }, [accountType, directPosting, kind, moduleCode, parentId, status]);
+  useEffect(() => { setSelected(initialOptionRef.current); }, [accountType, configurableOnly, customOnly, directPosting, kind, moduleCode, parentId, status]);
 
   useEffect(() => {
     let cancelled = false;
@@ -100,6 +111,8 @@ export function FinanceAccountingReferenceSelect({
         if (status?.trim()) query.set("status", status.trim());
         if (accountType?.trim()) query.set("accountType", accountType.trim());
         if (directPosting) query.set("directPosting", "true");
+        if (customOnly) query.set("customOnly", "true");
+        if (configurableOnly) query.set("configurableOnly", "true");
         const response = await fetch(`/api/enterprise/${organizationId}/accounting-reference-options?${query.toString()}`, { cache: "no-store" });
         const body = await response.json().catch(() => null) as ApiBody | null;
         if (!response.ok || !body) throw new Error("ACCOUNTING_REFERENCE_LOOKUP_FAILED");
@@ -109,7 +122,7 @@ export function FinanceAccountingReferenceSelect({
       } finally { if (!cancelled) setLoading(false); }
     }, 220);
     return () => { cancelled = true; window.clearTimeout(timer); };
-  }, [accountType, directPosting, kind, locale, moduleCode, organizationId, parentId, search, status]);
+  }, [accountType, configurableOnly, customOnly, directPosting, kind, locale, moduleCode, organizationId, parentId, search, status]);
 
   const options = useMemo(() => !selected || items.some((item) => item.id === selected.id) ? items : [selected, ...items], [items, selected]);
   const selectClass = compact

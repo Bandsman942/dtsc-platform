@@ -33,6 +33,7 @@ export const financeConfigurationSchema = z.object({
 
 export const fiscalYearCreateSchema = z.object({
   code: z.string().trim().min(2).max(30),
+  label: z.string().trim().min(2).max(160).optional(),
   startDate: dateInputSchema,
   endDate: dateInputSchema,
 }).refine((data) => data.endDate > data.startDate, { message: "Fiscal year end must be after start" });
@@ -40,6 +41,7 @@ export const fiscalYearCreateSchema = z.object({
 export const fiscalPeriodCreateSchema = z.object({
   fiscalYearId: z.string().min(1),
   code: z.string().trim().min(2).max(30),
+  label: z.string().trim().min(2).max(160).optional(),
   startDate: dateInputSchema,
   endDate: dateInputSchema,
 }).refine((data) => data.endDate > data.startDate, { message: "Period end must be after start" });
@@ -63,13 +65,27 @@ export const ledgerAccountCreateSchema = z.object({
   code: z.string().trim().min(1).max(40),
   nameFr: z.string().trim().min(2).max(180),
   nameEn: z.string().trim().min(2).max(180),
-  accountType: z.enum(ACCOUNT_TYPES),
+  accountType: z.enum(ACCOUNT_TYPES).optional(),
   accountSubtype: z.enum(ACCOUNT_SUBTYPES).optional(),
   parentId: z.string().min(1).optional(),
   currencyCode: currencyCodeSchema.optional(),
   isControlAccount: z.boolean().default(false),
   isSystemAccount: z.boolean().default(false),
   allowDirectPosting: z.boolean().default(true),
+});
+
+export const accountMappingCreateSchema = z.object({
+  mappingKey: z.string().trim().min(2).max(100),
+  ledgerAccountId: z.string().min(1),
+  effectiveFrom: dateInputSchema.optional(),
+});
+
+export const accountMappingUpdateSchema = z.object({
+  ledgerAccountId: z.string().min(1),
+  effectiveFrom: dateInputSchema.optional(),
+  effectiveTo: dateInputSchema.nullish(),
+  isActive: z.boolean(),
+  revision: revisionSchema,
 });
 
 export const journalCreateSchema = z.object({
