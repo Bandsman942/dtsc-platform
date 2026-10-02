@@ -1,5 +1,19 @@
 # SCALE-7 — Staged load certification
 
+## SCALE-7D — fermeture du workload Dashboard après #761
+
+Les runs Production SCALE-7C sur `main@c2fb6051d6d4d12315000dab5e04fc3a92edb9af` ont fermé les régressions globales, isolation et idle-in-transaction. Le run #91 (`37004079918`) reste officiellement FAIL uniquement parce que le workload Dashboard dépasse encore les seuils : P95 1 149,06 ms et P99 2 447,86 ms, alors que les seuils restent P95 < 1 000 ms et P99 < 2 000 ms.
+
+SCALE-7D (#764) :
+- lance les lectures memberships et identity-links en parallèle ;
+- borne la seconde rafale du workspace à neuf tâches DB-backed, cohérente avec `connection_limit=9` ;
+- remplace le chargement des entitlements ERP complets par un résumé commercial workspace basé sur le contexte commercial canonique, sans charger modules ERP ni sous-secteur ;
+- conserve tous les compteurs et données visibles exacts ;
+- ajoute au rapport sanitizé les gates P95/P99 de Dashboard, Enterprise, Shop et Collaboration ;
+- publie les percentiles workloads dans le commentaire OWNER afin que le statut du rapport ne puisse plus diverger de l'enforcement k6.
+
+Aucun SLO n'est abaissé, aucun cache de droits n'est ajouté et aucun 500-soak n'est autorisé avant un 500-ramp officiellement PASS.
+
 ## SCALE-7C — fermeture du 500-ramp après #755
 
 Le run Production `36987070876` sur `main@8597e83074acb9dc86c261d0a20ef4c00e5b18ab` reste **FAIL** malgré une forte amélioration : P95 1 034,80 ms, P99 2 197,14 ms, isolation 99,9142 % et un échantillon idle-in-transaction non nul. SCALE-7C (#760 / PR #761) conserve les mêmes SLO et `connection_limit=9`.
