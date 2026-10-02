@@ -132,7 +132,9 @@ SCALE-7B keeps `connection_limit=9` and all SLOs unchanged. Its first remediatio
 
 ## Stage progression
 
-The workflow enforces progression from the versioned registry: `soak` requires a PASS `ramp` at the same stage, `spike` requires PASS `ramp` + `soak`, and 1,000/2,500/5,000 cannot start until the previous stage has PASS evidence for all three profiles.
+The workflow enforces progression from **CI_PROVEN GitHub Actions evidence**, not from the static archive registry. `soak` requires a PASS `ramp` at the same stage, `spike` requires PASS `ramp` + `soak`, and 1,000/2,500/5,000 cannot start until the previous stage has PASS evidence for all three profiles.
+
+The verifier reads only `SCALE7_RESULT_JSON` comments emitted by `github-actions[bot]` on Issue #360, validates the referenced Actions run and SHA, and fails closed when evidence is absent or inconsistent. A parent-SHA proof is reusable only across a bounded governance-only SCALE-7 diff; any application/runtime file change invalidates that lineage.
 
 ## Execution
 
