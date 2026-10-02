@@ -1,5 +1,17 @@
 # SCALE-7 — Staged load certification
 
+## SCALE-7E — progression fondée sur les preuves CI
+
+Le 500-ramp SCALE-7D est certifié PASS sur le run `37014598384`, artifact `11229173403`, `main@649aeeae55f005827630d09e4f28a876bb3c918f`. Le premier déclenchement du 500-soak (`37016167904`) a été bloqué avant k6 parce que le progression gate ne consultait que `data/scalability/scale7-certifications.json`, registre versionné qui n'est pas alimenté automatiquement par le workflow.
+
+SCALE-7E (#766) conserve strictement l'ordre ramp → soak → spike et 500 → 1 000 → 2 500 → 5 000, mais en CI la preuve est désormais dérivée des résultats GitHub déjà produits :
+- commentaire `github-actions[bot]` sur Issue #360 ;
+- rapport `SCALE7_RESULT_JSON` avec `PASS` et `CI_PROVEN` ;
+- même `gitSha` que `GITHUB_SHA` du candidat courant ;
+- run GitHub Actions correspondant vérifié `completed/success`, branche `main`, même SHA et workflow SCALE-7 exact.
+
+Le registre JSON reste disponible pour l'historique et l'usage local. Il ne peut plus, à lui seul, débloquer une progression CI. Un changement de SHA invalide donc correctement les preuves de capacité antérieures et impose de recommencer la certification du candidat à partir du ramp 500.
+
 ## SCALE-7D — fermeture du workload Dashboard après #761
 
 Les runs Production SCALE-7C sur `main@c2fb6051d6d4d12315000dab5e04fc3a92edb9af` ont fermé les régressions globales, isolation et idle-in-transaction. Le run #91 (`37004079918`) reste officiellement FAIL uniquement parce que le workload Dashboard dépasse encore les seuils : P95 1 149,06 ms et P99 2 447,86 ms, alors que les seuils restent P95 < 1 000 ms et P99 < 2 000 ms.
