@@ -1,3 +1,13 @@
+## 2026-10-02 — SCALE-7D Dashboard workload and report alignment (#764)
+
+- parallélise les lectures memberships/identity-links du Dashboard ;
+- borne la seconde rafale du workspace à neuf tâches DB-backed ;
+- remplace les entitlements ERP complets par un résumé commercial minimal pour le Dashboard ;
+- ajoute les gates P95/P99 par workload au rapport SCALE-7 sanitizé ;
+- publie les percentiles workloads dans le résultat OWNER ;
+- ajoute `qa:scale7d-dashboard-workload-report` à la régression canonique ;
+- aucun SLO abaissé, aucune migration, aucun pool Prisma >9.
+
 ## 2026-10-02 — SCALE-7C 500-ramp tail/isolation/transaction hardening (#760)
 
 - réutilise la session déjà vérifiée du Dashboard et parallélise les lectures utilisateur/préférence de session sans changer le contrat métier ;
