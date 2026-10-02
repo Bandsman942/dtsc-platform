@@ -4,7 +4,7 @@
 
 Le run Production SCALE-7D `37014598384` sur `main@649aeeae55f005827630d09e4f28a876bb3c918f` a certifié le 500-ramp **PASS**. Le 500-soak suivant (`37016167904`) a été bloqué avant k6 parce que l'ancien verrou de progression lisait le registre versionné `data/scalability/scale7-certifications.json`, encore vide et jamais alimenté automatiquement par le workflow.
 
-SCALE-7E (#768) sépare désormais clairement deux responsabilités :
+SCALE-7E (#768 / PR #769) sépare désormais clairement deux responsabilités :
 
 - le **registre versionné** reste une archive secret-free destinée à l'affichage CTO et à l'archivage manuel ;
 - le **verrou d'exécution** consomme les preuves `CI_PROVEN` publiées par `github-actions[bot]` sur l'Issue #360 et recoupe chaque `githubRunId` avec l'API GitHub Actions.
