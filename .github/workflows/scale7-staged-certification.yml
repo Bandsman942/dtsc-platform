@@ -279,6 +279,7 @@ jobs:
                 requestsPerSecond: .http.requestsPerSecond,
                 failedRate: .http.failedRate,
                 latencyMs: .http.latencyMs,
+                workloads: .http.workloads,
                 tenantIsolationRate: .http.tenantIsolationRate
               },
               infrastructure: {
