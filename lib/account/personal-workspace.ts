@@ -428,7 +428,7 @@ export async function getPersonalWorkspaceSummary({
         documentLimit: organizationSubscription.limits.maxDocuments,
         usedMessagesToday: billingUsage.usedMessagesToday,
         usedTokensToday: billingUsage.usedTokensToday,
-        billingUsage.usedDocuments,
+        usedDocuments: billingUsage.usedDocuments,
       }
     : {
         source: "PERSONAL" as const,
@@ -443,7 +443,7 @@ export async function getPersonalWorkspaceSummary({
         documentLimit: plan?.maxDocuments ?? 0,
         usedMessagesToday: billingUsage.usedMessagesToday,
         usedTokensToday: billingUsage.usedTokensToday,
-        billingUsage.usedDocuments,
+        usedDocuments: billingUsage.usedDocuments,
       };
 
   return {
