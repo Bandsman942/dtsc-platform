@@ -2,6 +2,8 @@ import fs from "node:fs";
 import process from "node:process";
 import { spawnSync } from "node:child_process";
 
+const root = process.cwd();
+
 const paths = {
   workflow: ".github/workflows/scale7-staged-certification.yml",
   profile: "scripts/load/scale7-staged-certification.js",
