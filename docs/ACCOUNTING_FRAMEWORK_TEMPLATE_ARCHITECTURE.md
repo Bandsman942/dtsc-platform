@@ -166,3 +166,16 @@ Interdictions :
 - #153 : états financiers ;
 - #154 : UX/onboarding ;
 - #155 : migration de versions et acceptance Production.
+
+## Hotfix #758 — règles scindées par plan
+
+`EnterpriseAccountMapping` est désormais rattaché explicitement à `EnterpriseChartOfAccounts` via `chartId`.
+
+Cette relation permet :
+- de conserver les mappings du plan actif ;
+- de préparer un plan personnalisé DRAFT/READY sans écraser les règles du plan actif ;
+- de rendre les mappings d’un template publié en lecture seule ;
+- de créer des règles manuelles uniquement sur un plan personnalisé ;
+- de valider côté serveur que le compte cible appartient au même plan et respecte le type/sous-type attendu par le registre sémantique.
+
+Les résolveurs de posting/readiness sélectionnent uniquement les mappings du plan `ACTIVE`. La version publiée `OHADA_SYSCOHADA@0.1.0` reste immuable.

@@ -58,11 +58,14 @@ export async function POST(req: Request, { params }: Params) {
     const chart = await prisma.enterpriseChartOfAccounts.findFirst({ where: { id: parsed.data.chartId, organizationId } });
     if (!chart) return NextResponse.json({ error: "CHART_OF_ACCOUNTS_INVALID", message: "Plan comptable introuvable." }, { status: 409 });
     if (parsed.data.isSystemAccount) return NextResponse.json({ error: "SYSTEM_ACCOUNT_REQUIRES_REINFORCED_PERMISSION", message: "Un compte système ne peut pas être créé depuis ce formulaire." }, { status: 403 });
+    if (!chart.templateCode && !parsed.data.accountType) {
+      return NextResponse.json({ error: "LEDGER_ACCOUNT_TYPE_REQUIRED", message: "Choisissez le type comptable du compte personnalisé." }, { status: 400 });
+    }
     const account = chart.templateCode
       ? parsed.data.parentId
         ? await createCustomChildAccount(organizationId, chart.id, auth.session.userId, { parentId: parsed.data.parentId, code: parsed.data.code, nameFr: parsed.data.nameFr, nameEn: parsed.data.nameEn, currencyCode: parsed.data.currencyCode })
         : null
-      : await createLedgerAccount(organizationId, auth.session.userId, parsed.data);
+      : await createLedgerAccount(organizationId, auth.session.userId, { ...parsed.data, accountType: parsed.data.accountType! });
     if (!account) return NextResponse.json({ error: "CUSTOM_ACCOUNT_PARENT_REQUIRED", message: "Un sous-compte personnalisé doit être rattaché à un compte parent du template." }, { status: 409 });
     await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_LEDGER_ACCOUNT_CREATED", entity: "EnterpriseLedgerAccount", entityId: account.id, request: req, metadata: { organizationId, code: account.code, templateReference: chart.templateCode } });
     await writeApiLog({ request: req, statusCode: 201, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "ledger-accounts" } });

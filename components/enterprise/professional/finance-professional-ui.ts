@@ -123,6 +123,23 @@ export const FINANCE_ERROR_MESSAGES: Record<FinanceLocale, Record<string, string
     THREE_WAY_MATCH_VARIANCE_UNRESOLVED: "La facture présente encore des écarts avec la commande ou la réception.",
     POSTING_MAPPING_MISSING: "Un compte comptable requis n’est pas encore configuré pour cette opération.",
     ACCOUNT_MAPPING_NOT_FOUND: "Un compte comptable nécessaire manque dans la configuration de l’entreprise.",
+    CHART_OF_ACCOUNTS_NOT_FOUND: "Ce plan comptable n’existe pas dans cette entreprise.",
+    CHART_OF_ACCOUNTS_REVISION_CONFLICT: "Ce plan comptable a changé entre-temps. Actualisez-le avant de recommencer.",
+    CHART_OF_ACCOUNTS_CODE_LOCKED: "Le code du plan est verrouillé dès qu’il contient des groupes ou des comptes. Ses libellés restent modifiables.",
+    CHART_OF_ACCOUNTS_DELETE_BLOCKED: "Seul un plan personnalisé brouillon et totalement vide peut être supprimé.",
+    TEMPLATE_LEDGER_ACCOUNT_IMMUTABLE: "Ce compte provient du template comptable officiel. Créez un sous-compte personnalisé pour l’adapter.",
+    LEDGER_ACCOUNT_STRUCTURE_IN_USE: "Ce compte est déjà utilisé. Ses éléments structurels ne peuvent plus être modifiés.",
+    ACCOUNT_MAPPING_KEY_INVALID: "Cette règle comptable n’existe pas dans le registre autorisé.",
+    ACCOUNT_MAPPING_ACCOUNT_INVALID: "Le compte cible n’est plus actif ou n’appartient pas à cette entreprise.",
+    ACCOUNT_MAPPING_CHART_MISMATCH: "Choisissez un compte appartenant au même plan comptable que la règle.",
+    ACCOUNT_MAPPING_TEMPLATE_MANAGED: "Cette règle est gérée par un template comptable publié et reste en lecture seule.",
+    ACCOUNT_MAPPING_CHART_NOT_CONFIGURABLE: "Le plan lié à cette règle n’est plus configurable.",
+    ACCOUNT_MAPPING_ACCOUNT_TYPE_INCOMPATIBLE: "Le type du compte choisi n’est pas compatible avec cette règle.",
+    ACCOUNT_MAPPING_ACCOUNT_SUBTYPE_INCOMPATIBLE: "Le sous-type du compte choisi n’est pas compatible avec cette règle.",
+    ACCOUNT_MAPPING_ACTIVE_EXISTS: "Une règle active de cette nature existe déjà dans ce plan. Modifiez-la ou désactivez-la.",
+    ACCOUNT_MAPPING_RECORD_NOT_FOUND: "Cette règle comptable n’existe plus dans cette entreprise.",
+    ACCOUNT_MAPPING_REVISION_CONFLICT: "Cette règle a changé entre-temps. Actualisez-la avant de recommencer.",
+    ACCOUNT_MAPPING_DATE_RANGE_INVALID: "La date de fin ne peut pas précéder la date de début.",
     FINANCE_EXCHANGE_RATE_REQUIRED: "Aucun taux de change applicable n’est disponible pour cette date. Ajoutez un taux puis réessayez.",
     FINANCE_EXCHANGE_RATE_INVALID: "Le taux de change doit être supérieur à zéro.",
     FINANCE_EXCHANGE_RATE_PAIR_INVALID: "Choisissez deux devises différentes pour ce taux de change.",
@@ -184,7 +201,6 @@ export const FINANCE_ERROR_MESSAGES: Record<FinanceLocale, Record<string, string
     REGULATORY_STATEMENT_PERIOD_INVALID: "La période choisie pour l’état financier n’est pas valide.",
     REGULATORY_STATEMENT_TYPE_NOT_SUPPORTED: "Cet état financier n’est pas disponible pour le plan comptable actif.",
     CHART_TEMPLATE_UPGRADE_REQUIRES_CONTROLLED_MIGRATION: "Cette nouvelle version nécessite une revue avant application. Consultez l’analyse d’impact puis validez la migration.",
-    CHART_OF_ACCOUNTS_REVISION_CONFLICT: "Le plan comptable a été modifié entre-temps. Actualisez la page avant de recommencer.",
     ACCOUNTING_SETUP_INPUT_INVALID: "Vérifiez les informations de configuration comptable puis réessayez.",
     FINANCE_DUPLICATE: "Une donnée identique existe déjà dans cette entreprise."
   },
@@ -239,6 +255,23 @@ export const FINANCE_ERROR_MESSAGES: Record<FinanceLocale, Record<string, string
     THREE_WAY_MATCH_VARIANCE_UNRESOLVED: "The invoice still has variances against the purchase order or receipt.",
     POSTING_MAPPING_MISSING: "A required accounting account has not been configured for this operation yet.",
     ACCOUNT_MAPPING_NOT_FOUND: "A required accounting account is missing from the company configuration.",
+    CHART_OF_ACCOUNTS_NOT_FOUND: "This chart of accounts does not exist in this company.",
+    CHART_OF_ACCOUNTS_REVISION_CONFLICT: "This chart changed in the meantime. Refresh it before trying again.",
+    CHART_OF_ACCOUNTS_CODE_LOCKED: "The chart code is locked once groups or accounts exist. Its labels remain editable.",
+    CHART_OF_ACCOUNTS_DELETE_BLOCKED: "Only a completely empty custom draft chart can be deleted.",
+    TEMPLATE_LEDGER_ACCOUNT_IMMUTABLE: "This account comes from the published accounting template. Create a custom child account to adapt it.",
+    LEDGER_ACCOUNT_STRUCTURE_IN_USE: "This account is already in use. Its structural attributes can no longer be changed.",
+    ACCOUNT_MAPPING_KEY_INVALID: "This accounting rule is not available in the authorized semantic registry.",
+    ACCOUNT_MAPPING_ACCOUNT_INVALID: "The target account is no longer active or does not belong to this company.",
+    ACCOUNT_MAPPING_CHART_MISMATCH: "Choose a target account from the same chart as this rule.",
+    ACCOUNT_MAPPING_TEMPLATE_MANAGED: "This rule is managed by a published accounting template and remains read-only.",
+    ACCOUNT_MAPPING_CHART_NOT_CONFIGURABLE: "The chart linked to this rule is no longer configurable.",
+    ACCOUNT_MAPPING_ACCOUNT_TYPE_INCOMPATIBLE: "The selected account type is not compatible with this rule.",
+    ACCOUNT_MAPPING_ACCOUNT_SUBTYPE_INCOMPATIBLE: "The selected account subtype is not compatible with this rule.",
+    ACCOUNT_MAPPING_ACTIVE_EXISTS: "An active rule of this kind already exists in this chart. Edit or deactivate it instead.",
+    ACCOUNT_MAPPING_RECORD_NOT_FOUND: "This accounting rule no longer exists in this company.",
+    ACCOUNT_MAPPING_REVISION_CONFLICT: "This rule changed in the meantime. Refresh it before trying again.",
+    ACCOUNT_MAPPING_DATE_RANGE_INVALID: "The end date cannot be earlier than the start date.",
     FINANCE_EXCHANGE_RATE_REQUIRED: "No applicable exchange rate is available for this date. Add a rate and try again.",
     FINANCE_EXCHANGE_RATE_INVALID: "The exchange rate must be greater than zero.",
     FINANCE_EXCHANGE_RATE_PAIR_INVALID: "Choose two different currencies for this exchange rate.",
@@ -300,7 +333,6 @@ export const FINANCE_ERROR_MESSAGES: Record<FinanceLocale, Record<string, string
     REGULATORY_STATEMENT_PERIOD_INVALID: "The selected financial statement period is invalid.",
     REGULATORY_STATEMENT_TYPE_NOT_SUPPORTED: "This financial statement is not available for the active chart of accounts.",
     CHART_TEMPLATE_UPGRADE_REQUIRES_CONTROLLED_MIGRATION: "This new version requires review before it can be applied. Review the impact analysis, then approve the migration.",
-    CHART_OF_ACCOUNTS_REVISION_CONFLICT: "The chart of accounts changed in the meantime. Refresh the page before trying again.",
     ACCOUNTING_SETUP_INPUT_INVALID: "Review the accounting setup information and try again.",
     FINANCE_DUPLICATE: "An identical record already exists in this company."
   }
@@ -346,7 +378,9 @@ export function financeMetricLabel(key: string, locale: FinanceLocale = "fr") {
 }
 
 export function financeEnumLabel(value: string, locale: FinanceLocale = "fr") {
-  return ENUM_LABELS[locale][value] || (locale === "fr" ? "Autre catégorie" : "Other category");
+  const normalized = value.trim();
+  if (!normalized) return "";
+  return ENUM_LABELS[locale][normalized] || (locale === "fr" ? "Autre catégorie" : "Other category");
 }
 
 export function financeStatusTone(status?: string): StatusBadgeTone {

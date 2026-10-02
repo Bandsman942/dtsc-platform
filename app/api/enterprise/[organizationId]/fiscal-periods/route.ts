@@ -17,7 +17,7 @@ export async function GET(req: Request, { params }: Params) {
     ...(recordId ? { id: recordId } : {}),
     ...(fiscalYearId ? { fiscalYearId } : {}),
     ...(status ? { status } : {}),
-    ...(search ? { OR: [{ code: { contains: search, mode: "insensitive" } }, { fiscalYear: { code: { contains: search, mode: "insensitive" } } }] } : {}),
+    ...(search ? { OR: [{ code: { contains: search, mode: "insensitive" } }, { label: { contains: search, mode: "insensitive" } }, { fiscalYear: { code: { contains: search, mode: "insensitive" } } }] } : {}),
   };
   const [items, total] = await Promise.all([
     prisma.enterpriseFiscalPeriod.findMany({ where, orderBy: { startDate: "desc" }, skip: recordId ? 0 : (page - 1) * pageSize, take: recordId ? 1 : pageSize, include: { fiscalYear: true, closes: { orderBy: { createdAt: "desc" }, take: 1 } } }),

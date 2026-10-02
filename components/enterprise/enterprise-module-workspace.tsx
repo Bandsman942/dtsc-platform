@@ -201,15 +201,6 @@ export function EnterpriseModuleWorkspace({
           </ModuleSection>
         )}
 
-        <ModuleSection
-          title={tw("accessResponsibilities")}
-          description={tw("accessResponsibilitiesDescription")}
-        >
-          <div className="border-y border-dtsc-border py-3 text-sm leading-6 text-dtsc-muted">
-            {tw("serverPermissionsAuthority")}
-          </div>
-        </ModuleSection>
-
         {activityBlocks.length > 0 ? (
           <ModuleSection title={tw("availableActions")} count={`${activityBlocks.length}`}>
             <BusinessList ariaLabel={tw("availableActions")}>

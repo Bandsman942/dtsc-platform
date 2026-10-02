@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 
 const updateSchema = z.object({
   code: z.string().trim().min(2).max(30),
+  label: z.string().trim().min(2).max(160).nullish(),
   startDate: z.coerce.date(),
   endDate: z.coerce.date(),
   revision: z.coerce.number().int().positive(),
@@ -21,8 +22,17 @@ export async function GET(req: Request, { params }: Params) {
   if (!auth.ok) return auth.response;
   const item = await prisma.enterpriseFiscalYear.findFirst({ where: { id: fiscalYearId, organizationId }, include: { periods: { orderBy: { startDate: "asc" } } } });
   if (!item) return NextResponse.json({ error: "FISCAL_YEAR_NOT_FOUND", message: "Cet exercice n’existe pas dans votre entreprise." }, { status: 404 });
+  const canManage = Boolean(auth.access.capabilities.canManage);
+  const projected = {
+    ...item,
+    capabilities: {
+      canEdit: canManage && item.status === "DRAFT",
+      canDelete: canManage && item.status === "DRAFT" && item.periods.length === 0,
+      canOpen: canManage && item.status === "DRAFT",
+    },
+  };
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, fiscalYearId, domain: "fiscal-year-detail" } });
-  return NextResponse.json({ item });
+  return NextResponse.json({ item: projected });
 }
 
 export async function PATCH(req: Request, { params }: Params) {
@@ -41,7 +51,7 @@ export async function PATCH(req: Request, { params }: Params) {
       const overlap = await tx.enterpriseFiscalYear.findFirst({ where: { organizationId, id: { not: year.id }, startDate: { lte: parsed.data.endDate }, endDate: { gte: parsed.data.startDate } } });
       if (overlap) throw new Error("OVERLAP");
       if (year.periods.some((period) => period.startDate < parsed.data.startDate || period.endDate > parsed.data.endDate)) throw new Error("PERIOD_OUTSIDE");
-      return tx.enterpriseFiscalYear.update({ where: { id: year.id }, data: { code: parsed.data.code, startDate: parsed.data.startDate, endDate: parsed.data.endDate, revision: { increment: 1 } } });
+      return tx.enterpriseFiscalYear.update({ where: { id: year.id }, data: { code: parsed.data.code, label: parsed.data.label || null, startDate: parsed.data.startDate, endDate: parsed.data.endDate, revision: { increment: 1 } } });
     });
     await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_FISCAL_YEAR_UPDATED", entity: "EnterpriseFiscalYear", entityId: item.id, request: req, metadata: { organizationId, code: item.code } });
     await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, fiscalYearId, domain: "fiscal-year-detail" } });

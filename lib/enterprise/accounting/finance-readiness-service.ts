@@ -99,12 +99,13 @@ export async function resolveEnterpriseFinanceReadiness(
       ? db.enterpriseAccountMapping.findMany({
           where: {
             organizationId,
+            chartId,
             mappingKey: { in: requiredMappingKeys },
             isActive: true,
             OR: [{ effectiveFrom: null }, { effectiveFrom: { lte: asOf } }],
             AND: [{ OR: [{ effectiveTo: null }, { effectiveTo: { gte: asOf } }] }],
           },
-          include: { ledgerAccount: { select: { chartId: true, isActive: true, archivedAt: true } } },
+          include: { ledgerAccount: { select: { isActive: true, archivedAt: true } } },
         })
       : Promise.resolve([]),
     db.enterpriseJournal.findMany({ where: { organizationId, isActive: true }, select: { journalType: true } }),
@@ -117,7 +118,7 @@ export async function resolveEnterpriseFinanceReadiness(
 
   const mappedKeys = new Set(
     mappings
-      .filter((mapping) => mapping.ledgerAccount.chartId === chartId && mapping.ledgerAccount.isActive && !mapping.ledgerAccount.archivedAt)
+      .filter((mapping) => mapping.ledgerAccount.isActive && !mapping.ledgerAccount.archivedAt)
       .map((mapping) => mapping.mappingKey),
   );
   const missingMappings = requiredMappingKeys.filter((key) => !mappedKeys.has(key));

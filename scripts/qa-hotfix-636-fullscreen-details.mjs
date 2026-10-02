@@ -21,8 +21,9 @@ const decisionRoutePath = "app/api/account/identity-links/decision/route.ts";
 const accountDecisionPath = "lib/enterprise/identity-links/account-invitation-decision-service.ts";
 const accountingPath = "components/enterprise/professional/enterprise-finance-accounting-workspace.tsx";
 const accountingDetailPath = "components/enterprise/professional/accounting-record-detail.tsx";
+const fiscalYearDetailRoutePath = "app/api/enterprise/[organizationId]/fiscal-years/[fiscalYearId]/route.ts";
 
-for (const relativePath of [detailPath, reportsPath, identityPath, decisionRoutePath, accountDecisionPath, accountingPath, accountingDetailPath]) {
+for (const relativePath of [detailPath, reportsPath, identityPath, decisionRoutePath, accountDecisionPath, accountingPath, accountingDetailPath, fiscalYearDetailRoutePath]) {
   if (!fs.existsSync(path.join(root, relativePath))) failures.push(`Fichier requis absent: ${relativePath}`);
 }
 
@@ -75,10 +76,14 @@ requireToken(accountingPath, accounting, '<Field label=', "les formulaires compt
 forbidToken(accountingPath, accounting, 'key: "actions"', "les actions d’écriture ne doivent plus être empilées dans une cellule compacte");
 
 const accountingDetail = read(accountingDetailPath);
-requireToken(accountingDetailPath, accountingDetail, '/fiscal-years/${record.id}/open', "la fiche exercice doit utiliser la route canonique d’ouverture");
-requireToken(accountingDetailPath, accountingDetail, 'status === "DRAFT"', "l’action d’ouverture doit être bornée aux exercices brouillon");
-requireToken(accountingDetailPath, accountingDetail, 'canManage', "l’ouverture d’exercice doit respecter la permission manage");
+requireToken(accountingDetailPath, accountingDetail, '/fiscal-years/${currentRecord.id}/open', "la fiche exercice doit utiliser la route canonique d’ouverture");
+requireToken(accountingDetailPath, accountingDetail, 'status !== "DRAFT"', "l’action d’ouverture doit rester bornée aux exercices brouillon");
+requireToken(accountingDetailPath, accountingDetail, 'capabilities.canOpen !== true', "l’ouverture d’exercice doit dépendre de la capability serveur");
 requireToken(accountingDetailPath, accountingDetail, '<FullscreenEntityDetail', "les objets comptables doivent être plein écran");
+
+const fiscalYearDetailRoute = read(fiscalYearDetailRoutePath);
+requireToken(fiscalYearDetailRoutePath, fiscalYearDetailRoute, 'const canManage = Boolean(auth.access.capabilities.canManage)', "la capability d’ouverture doit être dérivée de la permission manage côté serveur");
+requireToken(fiscalYearDetailRoutePath, fiscalYearDetailRoute, 'canOpen: canManage && item.status === "DRAFT"', "la capability d’ouverture doit combiner permission manage et état DRAFT");
 
 if (failures.length) {
   for (const failure of failures) console.error(`❌ ${failure}`);

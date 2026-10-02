@@ -26,8 +26,16 @@ export async function GET(req: Request, { params }: Params) {
   if (!auth.ok) return auth.response;
   const item = await prisma.enterpriseJournal.findFirst({ where: { id: journalId, organizationId }, include: { _count: { select: { entries: true } } } });
   if (!item) return NextResponse.json({ error: "JOURNAL_NOT_FOUND", message: "Ce journal n’existe pas dans votre entreprise." }, { status: 404 });
+  const canManage = Boolean(auth.access.capabilities.canManage);
+  const projected = {
+    ...item,
+    capabilities: {
+      canEdit: canManage,
+      canDelete: canManage && item._count.entries === 0,
+    },
+  };
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, journalId, domain: "journal-detail" } });
-  return NextResponse.json({ item });
+  return NextResponse.json({ item: projected });
 }
 
 export async function PATCH(req: Request, { params }: Params) {
