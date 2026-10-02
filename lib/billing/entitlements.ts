@@ -191,6 +191,59 @@ function resolveOrganizationUsageLimits(planCode: SaasPlanCode, offer?: Commerci
   };
 }
 
+export type OrganizationWorkspaceCommercialSummary = {
+  isDtscInternal: boolean;
+  planLabel: string;
+  subscriptionStatus: string;
+  subscriptionActive: boolean;
+  trialEndsAt: string | null;
+  startedAt: string | null;
+  expiresAt: string | null;
+  limits: OrganizationUsageLimits;
+};
+
+export async function getOrganizationWorkspaceCommercialSummary(
+  organizationId: string | null | undefined,
+): Promise<OrganizationWorkspaceCommercialSummary | null> {
+  if (!organizationId) return null;
+
+  const commercialContext = await resolveOrganizationCommercialContext(organizationId);
+  if (!commercialContext) return null;
+
+  if (commercialContext.scope === "DTSC_INTERNAL") {
+    return {
+      isDtscInternal: true,
+      planLabel: commercialContext.capabilityLabel,
+      subscriptionStatus: commercialContext.subscriptionStatus,
+      subscriptionActive: true,
+      trialEndsAt: null,
+      startedAt: null,
+      expiresAt: null,
+      limits: getPlanUsageLimits("ENTERPRISE"),
+    };
+  }
+
+  if (
+    commercialContext.scope !== "ORGANIZATION" ||
+    !commercialContext.organizationId ||
+    !commercialContext.organizationStatus ||
+    !commercialContext.organizationType
+  ) {
+    return null;
+  }
+
+  return {
+    isDtscInternal: false,
+    planLabel: commercialContext.capabilityLabel,
+    subscriptionStatus: commercialContext.subscriptionStatus,
+    subscriptionActive: commercialContext.subscriptionActive,
+    trialEndsAt: commercialContext.trialEndsAt?.toISOString() || null,
+    startedAt: commercialContext.startedAt?.toISOString() || null,
+    expiresAt: commercialContext.expiresAt?.toISOString() || null,
+    limits: resolveOrganizationUsageLimits(commercialContext.capabilityCode, commercialContext.offer),
+  };
+}
+
 export async function getOrganizationEntitlements(organizationId: string | null | undefined): Promise<OrganizationEntitlements | null> {
   if (!organizationId) return null;
 
