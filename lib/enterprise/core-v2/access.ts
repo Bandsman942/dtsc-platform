@@ -1,6 +1,5 @@
 import type { Prisma } from "@prisma/client";
 import { resolveEnterpriseModuleCapabilities, type EnterpriseModuleAction } from "@/lib/enterprise/module-access";
-import { requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
 import type { SessionPayload } from "@/lib/session";
 
 export type EnterpriseCoreV2Action = "read" | "submit" | "write" | "manage";
@@ -27,12 +26,9 @@ export async function getEnterpriseCoreV2Access({
   moduleCode: string;
   action: EnterpriseCoreV2Action;
 }) {
-  const membership = await requireEnterpriseMembership(session, organizationId);
-  if (!membership) return null;
   const capabilities = await resolveEnterpriseModuleCapabilities({ userId: session.userId, organizationId, moduleCode });
   if (!capabilityAllowsAction(capabilities, action)) return null;
   return {
-    membership,
     capabilities,
     canSeeAll: capabilities.canApprove || capabilities.canManage,
     canManage: capabilities.canManage,
