@@ -191,6 +191,61 @@ function resolveOrganizationUsageLimits(planCode: SaasPlanCode, offer?: Commerci
   };
 }
 
+export type OrganizationWorkspaceEntitlements = Pick<
+  OrganizationEntitlements,
+  | "organizationId"
+  | "organizationStatus"
+  | "organizationType"
+  | "isDtscInternal"
+  | "planCode"
+  | "planLabel"
+  | "subscriptionStatus"
+  | "subscriptionActive"
+  | "trialEndsAt"
+  | "startedAt"
+  | "expiresAt"
+  | "limits"
+>;
+
+export async function getOrganizationWorkspaceEntitlements(
+  organizationId: string | null | undefined,
+): Promise<OrganizationWorkspaceEntitlements | null> {
+  if (!organizationId) return null;
+
+  const commercialContext = await resolveOrganizationCommercialContext(organizationId);
+  if (
+    !commercialContext ||
+    !commercialContext.organizationId ||
+    !commercialContext.organizationStatus ||
+    !commercialContext.organizationType
+  ) {
+    return null;
+  }
+  if (commercialContext.scope !== "ORGANIZATION" && commercialContext.scope !== "DTSC_INTERNAL") {
+    return null;
+  }
+
+  const isDtscInternal = commercialContext.scope === "DTSC_INTERNAL";
+  const limits = isDtscInternal
+    ? getPlanUsageLimits("ENTERPRISE")
+    : resolveOrganizationUsageLimits(commercialContext.capabilityCode, commercialContext.offer);
+
+  return {
+    organizationId: commercialContext.organizationId,
+    organizationStatus: commercialContext.organizationStatus,
+    organizationType: commercialContext.organizationType,
+    isDtscInternal,
+    planCode: commercialContext.capabilityCode,
+    planLabel: commercialContext.capabilityLabel,
+    subscriptionStatus: commercialContext.subscriptionStatus,
+    subscriptionActive: isDtscInternal ? true : commercialContext.subscriptionActive,
+    trialEndsAt: commercialContext.trialEndsAt?.toISOString() || null,
+    startedAt: commercialContext.startedAt?.toISOString() || null,
+    expiresAt: commercialContext.expiresAt?.toISOString() || null,
+    limits,
+  };
+}
+
 export async function getOrganizationEntitlements(organizationId: string | null | undefined): Promise<OrganizationEntitlements | null> {
   if (!organizationId) return null;
 
