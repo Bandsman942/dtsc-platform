@@ -32,7 +32,7 @@ Les financements externes sont portés par `EnterpriseFundingOperation` et reste
 
 Cycle : `DRAFT -> APPROVED -> CONFIRMED`, avec validation affectée, confirmation par un acteur indépendant et correction d'une opération confirmée uniquement par contrepassation. La confirmation est atomique avec le mouvement de trésorerie, la variation du solde opérationnel, le mouvement de caisse éventuel et le posting comptable.
 
-Pour `CASH`, le financement exige une `EnterpriseCashSession` `OPEN` du même compte. Le `openingAmount` de la session reste un comptage physique d'ouverture et ne constitue jamais une entrée de financement.
+Pour `CASH`, le financement exige une `EnterpriseCashSession` `OPEN` du même compte. Le lookup utilisateur reste strictement borné par `organizationId + financialAccountId + status=OPEN` : une session d’une autre caisse n’est jamais proposée au seul motif qu’elle utilise la même devise. L’interface distingue le placeholder « sélectionner » d’un vrai état vide et peut pré-sélectionner uniquement l’unique session compatible d’un résultat non filtré ; avec plusieurs sessions compatibles, le choix reste explicite. Le backend recharge et revalide toujours la session reçue. Le `openingAmount` de la session reste un comptage physique d'ouverture et ne constitue jamais une entrée de financement.
 
 Comptabilisation : apport en capital vers `EQUITY_CAPITAL`, emprunt vers `BORROWINGS`, avance d'associé vers un compte de passif actif explicitement sélectionné dans le plan du tenant. Ces entrées ne sont jamais des produits et n'augmentent donc pas le chiffre d'affaires.
 
