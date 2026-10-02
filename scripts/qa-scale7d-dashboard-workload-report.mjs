@@ -17,6 +17,7 @@ const entitlements = read("lib/billing/entitlements.ts");
 const report = read("scripts/load/build-scale7-certification-report.mjs");
 const load = read("scripts/load/scale7-staged-certification.js");
 const workflow = read(".github/workflows/scale7-staged-certification.yml");
+const workspaceAudit = read("scripts/lib/standard-personal-workspace-audit.mjs");
 
 expect(
   workspace.includes("const [membershipRows, identityLinks] = await Promise.all([") &&
@@ -74,6 +75,12 @@ expect(
 expect(
   workflow.includes("workloads: .http.workloads"),
   "owner-triggered sanitized result publishes workload latency",
+);
+
+expect(
+  workspaceAudit.includes('"getOrganizationWorkspaceCommercialSummary"') &&
+  !workspaceAudit.includes('"getOrganizationEntitlements",'),
+  "standard Dashboard audit requires the lightweight commercial workspace contract",
 );
 
 if (process.exitCode) process.exit(process.exitCode);
