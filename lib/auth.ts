@@ -23,13 +23,14 @@ export async function getSession(): Promise<SessionPayload | null> {
   return verifySessionToken(token, secret);
 }
 
-export async function getCurrentUser() {
-  const session = await getSession();
+export async function getCurrentUser(sessionOverride?: SessionPayload) {
+  const session = sessionOverride ?? await getSession();
   if (!session) {
     return null;
   }
 
-  const user = await prisma.user.findUnique({
+  const [user, sessionIdleTimeoutMinutes] = await Promise.all([
+    prisma.user.findUnique({
     where: { id: session.userId },
     select: {
       id: true,
@@ -78,15 +79,16 @@ export async function getCurrentUser() {
       createdAt: true,
       updatedAt: true,
     },
-  });
+    }),
+    getUserSessionIdleTimeoutMinutes(session.userId),
+  ]);
   if (!user) return null;
 
-  const sessionIdleTimeoutMinutes = await getUserSessionIdleTimeoutMinutes(user.id);
   return { ...user, sessionIdleTimeoutMinutes };
 }
 
-export async function requireUser() {
-  const user = await getCurrentUser();
+export async function requireUser(sessionOverride?: SessionPayload) {
+  const user = await getCurrentUser(sessionOverride);
   if (!user || user.status !== "ACTIVE") {
     redirect(getSignInUrl());
   }
