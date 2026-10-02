@@ -1,5 +1,24 @@
 # SCALE-7 — Staged load certification
 
+## SCALE-7F — stabilité du 500-soak après #769
+
+Le 500-ramp SCALE-7D reste certifié PASS sur le run `37014598384`. Après SCALE-7E, le verrou de progression reconnaît correctement cette preuve CI_PROVEN et le 500-soak `37021376106` a exécuté l'intégralité du profil sur `main@7cc7cca3a5ff352e4445b6cd9d74fbfb36130bef`.
+
+Le soak reste **FAIL** malgré une DB globale très peu chargée (7,77 %) :
+- global P95/P99 : 1 021,50 / 2 184,88 ms ;
+- Dashboard P95/P99 : 1 618,11 / 2 598,45 ms avec un max à 60 s ;
+- Collaboration P95/P99 : 792,60 / 2 014,21 ms ;
+- isolation tenant : 100 % ;
+- idle-in-transaction : 1 échantillon, âge d'état observé 0 s ;
+- Redis : OK.
+
+SCALE-7F (#770) traite uniquement les causes étayées par ce soak :
+- le Dashboard conserve tous ses compteurs exacts mais répartit sa seconde rafale de lectures en deux vagues bornées afin qu'une requête ne monopolise pas le pool local Prisma ;
+- l'accès Core V2 ne refait plus une requête membership avant `resolveEnterpriseModuleCapabilities()`, dont le snapshot vérifie déjà membership actif, organisation active et type CLIENT ;
+- la gate idle-in-transaction reste strictement zéro et l'observabilité ajoute l'âge de la transaction depuis `xact_start`, distinct de l'âge de l'état idle depuis `state_change`.
+
+Aucun SLO n'est abaissé et `connection_limit=9` reste inchangé. Comme SCALE-7F modifie le runtime applicatif, un nouveau 500-ramp est obligatoire avant de pouvoir retenter le 500-soak.
+
 ## SCALE-7E — progression fondée sur les preuves CI_PROVEN
 
 Le run Production SCALE-7D `37014598384` sur `main@649aeeae55f005827630d09e4f28a876bb3c918f` a certifié le 500-ramp **PASS**. Le 500-soak suivant (`37016167904`) a été bloqué avant k6 parce que l'ancien verrou de progression lisait le registre versionné `data/scalability/scale7-certifications.json`, encore vide et jamais alimenté automatiquement par le workflow.
