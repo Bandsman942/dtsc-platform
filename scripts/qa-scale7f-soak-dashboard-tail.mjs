@@ -67,7 +67,8 @@ expect(
 );
 
 expect(
-  report.includes("noIdleInTransaction: infrastructure.maxIdleInTransaction === 0"),
+  report.includes("noIdleInTransaction:") &&
+  report.includes("infrastructure.maxIdleInTransaction != null && infrastructure.maxIdleInTransaction === 0"),
   "idle-in-transaction certification remains a strict zero gate",
 );
 
