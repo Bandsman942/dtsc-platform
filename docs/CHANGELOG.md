@@ -1,6 +1,6 @@
 ## 2026-10-02 — SCALE-7C 500-ramp tail/isolation/transaction hardening (#760)
 
-- réduit le burst de lectures concurrentes du Dashboard sans changer son contrat métier ;
+- réutilise la session déjà vérifiée du Dashboard et parallélise les lectures utilisateur/préférence de session sans changer le contrat métier ;
 - retire une relecture `Organization` du GET business-context après membership actif validé ;
 - ajoute une reprise transport-only aux probes cross-tenant tout en gardant isolation = 100 % ;
 - enrichit la preuve SCALE-7 avec le nombre et l’âge maximal des sessions idle-in-transaction, gate zéro inchangée ;
