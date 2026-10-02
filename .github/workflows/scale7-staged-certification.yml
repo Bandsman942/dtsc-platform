@@ -22,6 +22,7 @@ on:
     types: [created]
 
 permissions:
+  actions: read
   contents: read
   issues: write
   id-token: write
@@ -138,6 +139,8 @@ jobs:
           echo "SCALE-7 governed auth pool ready: ${tenant_count} tenants / ${identity_count} synthetic identities."
 
       - name: Enforce staged progression
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/load/verify-scale7-stage-progression.mjs
 
       - name: Setup k6
