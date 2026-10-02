@@ -51,6 +51,14 @@ type DbConnectionRow = {
   maxConnections: number;
 };
 
+type DbIdleInTransactionDiagnosticRow = {
+  backendType: string | null;
+  applicationClass: "UNSPECIFIED" | "PRISMA" | "PGBOUNCER" | "NEON" | "OTHER";
+  statementClass: "SELECT" | "WRITE" | "BEGIN" | "COMMIT" | "ROLLBACK" | "OTHER";
+  stateAgeMs: number;
+  transactionAgeMs: number;
+};
+
 type Scale2DbPathRow = {
   presenceCheckpointCount: number;
   presenceFallbackCount: number;
@@ -109,7 +117,7 @@ export async function getProductionObservabilitySnapshot(windowHours: number) {
 
   const activeAttemptSince = new Date(generatedAt.getTime() - 90_000);
 
-  const [apiRows, aiRows, aiProviderRows, dbConnectionRows, scale2Rows, queueRows, readCacheRows, redisSnapshot] = await Promise.all([
+  const [apiRows, aiRows, aiProviderRows, dbConnectionRows, idleInTransactionRows, scale2Rows, queueRows, readCacheRows, redisSnapshot] = await Promise.all([
     prisma.$queryRaw<ApiLatencyRow[]>`
       SELECT
         COUNT(*)::int AS "sampleCount",
@@ -165,6 +173,32 @@ export async function getProductionObservabilitySnapshot(windowHours: number) {
         current_setting('max_connections')::int AS "maxConnections"
       FROM pg_stat_activity
       WHERE datname = current_database()
+    `,
+    prisma.$queryRaw<DbIdleInTransactionDiagnosticRow[]>`
+      SELECT
+        backend_type AS "backendType",
+        CASE
+          WHEN application_name IS NULL OR btrim(application_name) = '' THEN 'UNSPECIFIED'
+          WHEN lower(application_name) LIKE '%prisma%' THEN 'PRISMA'
+          WHEN lower(application_name) LIKE '%pgbouncer%' THEN 'PGBOUNCER'
+          WHEN lower(application_name) LIKE '%neon%' THEN 'NEON'
+          ELSE 'OTHER'
+        END AS "applicationClass",
+        CASE
+          WHEN query ~* '^\\s*SELECT\\b' THEN 'SELECT'
+          WHEN query ~* '^\\s*(INSERT|UPDATE|DELETE|MERGE)\\b' THEN 'WRITE'
+          WHEN query ~* '^\\s*(BEGIN|START)\\b' THEN 'BEGIN'
+          WHEN query ~* '^\\s*COMMIT\\b' THEN 'COMMIT'
+          WHEN query ~* '^\\s*ROLLBACK\\b' THEN 'ROLLBACK'
+          ELSE 'OTHER'
+        END AS "statementClass",
+        GREATEST(0, ROUND(EXTRACT(EPOCH FROM (now() - state_change)) * 1000))::int AS "stateAgeMs",
+        GREATEST(0, ROUND(EXTRACT(EPOCH FROM (now() - COALESCE(xact_start, state_change))) * 1000))::int AS "transactionAgeMs"
+      FROM pg_stat_activity
+      WHERE datname = current_database()
+        AND state = 'idle in transaction'
+      ORDER BY state_change ASC
+      LIMIT 10
     `,
     prisma.$queryRaw<Scale2DbPathRow[]>`
       SELECT
@@ -331,6 +365,13 @@ export async function getProductionObservabilitySnapshot(windowHours: number) {
       idleConnections: database.idleConnections,
       idleInTransactionConnections: database.idleInTransactionConnections,
       oldestIdleInTransactionSeconds: finiteMetric(database.oldestIdleInTransactionSeconds),
+      idleInTransactionDiagnostics: idleInTransactionRows.map((row) => ({
+        backendType: row.backendType || "unknown",
+        applicationClass: row.applicationClass,
+        statementClass: row.statementClass,
+        stateAgeMs: row.stateAgeMs,
+        transactionAgeMs: row.transactionAgeMs,
+      })),
       longRunningQueries: database.longRunningQueries,
       maxConnections: database.maxConnections,
       connectionUtilization: database.maxConnections > 0 ? database.currentConnections / database.maxConnections : null,
