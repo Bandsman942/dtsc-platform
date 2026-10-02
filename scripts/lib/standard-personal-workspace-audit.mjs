@@ -148,7 +148,7 @@ export function runStandardPersonalWorkspaceAudit(mode = "all") {
 
     expectTokens(errors, "Abonnement", page, [
       "resolvePersonalCommercialContext",
-      "getOrganizationEntitlements",
+      "getOrganizationWorkspaceCommercialSummary",
       "usageLog.aggregate",
       "knowledgeDocument.count",
       "Offre appliquée",
