@@ -46,6 +46,7 @@ type DbConnectionRow = {
   activeConnections: number;
   idleConnections: number;
   idleInTransactionConnections: number;
+  oldestIdleInTransactionSeconds: number | null;
   longRunningQueries: number;
   maxConnections: number;
 };
@@ -153,6 +154,9 @@ export async function getProductionObservabilitySnapshot(windowHours: number) {
         COUNT(*) FILTER (WHERE state = 'active')::int AS "activeConnections",
         COUNT(*) FILTER (WHERE state = 'idle')::int AS "idleConnections",
         COUNT(*) FILTER (WHERE state = 'idle in transaction')::int AS "idleInTransactionConnections",
+        MAX(EXTRACT(EPOCH FROM (now() - state_change))) FILTER (
+          WHERE state = 'idle in transaction'
+        )::float8 AS "oldestIdleInTransactionSeconds",
         COUNT(*) FILTER (
           WHERE state = 'active'
             AND query_start IS NOT NULL
@@ -266,6 +270,7 @@ export async function getProductionObservabilitySnapshot(windowHours: number) {
     activeConnections: 0,
     idleConnections: 0,
     idleInTransactionConnections: 0,
+    oldestIdleInTransactionSeconds: null,
     longRunningQueries: 0,
     maxConnections: 0,
   };
@@ -325,6 +330,7 @@ export async function getProductionObservabilitySnapshot(windowHours: number) {
       activeConnections: database.activeConnections,
       idleConnections: database.idleConnections,
       idleInTransactionConnections: database.idleInTransactionConnections,
+      oldestIdleInTransactionSeconds: finiteMetric(database.oldestIdleInTransactionSeconds),
       longRunningQueries: database.longRunningQueries,
       maxConnections: database.maxConnections,
       connectionUtilization: database.maxConnections > 0 ? database.currentConnections / database.maxConnections : null,
