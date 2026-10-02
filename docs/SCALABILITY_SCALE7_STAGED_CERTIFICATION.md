@@ -4,7 +4,7 @@
 
 Le rerun contrôlé `36993932940` sur `main@c2fb6051d6d4d12315000dab5e04fc3a92edb9af` prouve que SCALE-7C a fermé les écarts globaux : HTTP 0 %, checks 100 %, isolation 100 %, P95/P99 globaux 558,89 / 1 756,35 ms, Enterprise/Shop/Collaboration sous SLO et DB 6,33 %. Deux écarts restent : Dashboard P99 2 188,47 ms et un unique échantillon idle-in-transaction de 1 session avec âge arrondi à 0 s.
 
-SCALE-7D (#762) :
+SCALE-7D (#762 / PR #763) :
 - remplace sur le Dashboard le resolver complet d’entitlements par une projection légère dérivée du resolver commercial canonique ; les modules ERP et le sous-type métier ne sont plus chargés par une page qui ne les consomme pas ;
 - ajoute au report builder les gates P95/P99 Dashboard, Enterprise, Shop et Collaboration, avec les seuils inchangés de 1 000/2 000 ms ;
 - conserve la gate idle-in-transaction strictement à zéro et ajoute une attribution sanitisée bornée : type de backend, classe d’application, classe du dernier statement et âges en millisecondes, sans SQL, PID, utilisateur DB, IP, DSN ni identifiant tenant.
