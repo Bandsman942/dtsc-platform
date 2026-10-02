@@ -285,6 +285,7 @@ jobs:
                 maxDbConnectionUtilization: .infrastructure.maxDbConnectionUtilization,
                 maxIdleInTransaction: .infrastructure.maxIdleInTransaction,
                 maxIdleInTransactionAgeSeconds: .infrastructure.maxIdleInTransactionAgeSeconds,
+                idleInTransactionDiagnostics: .infrastructure.idleInTransactionDiagnostics,
                 redisStatuses: .infrastructure.redisStatuses,
                 maxAiActiveAttempts: .infrastructure.maxAiActiveAttempts,
                 maxAiThrottledAttempts: .infrastructure.maxAiThrottledAttempts
