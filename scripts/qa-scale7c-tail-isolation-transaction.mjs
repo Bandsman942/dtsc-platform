@@ -12,7 +12,8 @@ function expect(condition, message) {
   }
 }
 
-const workspace = read("lib/account/personal-workspace.ts");
+const auth = read("lib/auth.ts");
+const dashboard = read("app/dashboard/page.tsx");
 const route = read("app/api/enterprise/[organizationId]/business-context/route.ts");
 const businessContext = read("lib/enterprise/business-context.ts");
 const load = read("scripts/load/scale7-staged-certification.js");
@@ -21,10 +22,11 @@ const report = read("scripts/load/build-scale7-certification-report.mjs");
 const workflow = read(".github/workflows/scale7-staged-certification.yml");
 
 expect(
-  workspace.includes("identityLinks,\n    unreadNotificationCount") &&
-  workspace.includes("recentConversations,\n    personalSubscription") &&
-  (workspace.match(/await Promise\.all\(\[/g) || []).length >= 2,
-  "Dashboard reads are split into bounded waves instead of one direct ten-read burst",
+  auth.includes("getCurrentUser(sessionOverride?: SessionPayload)") &&
+  auth.includes("const [user, sessionIdleTimeoutMinutes] = await Promise.all([") &&
+  auth.includes("getUserSessionIdleTimeoutMinutes(session.userId)") &&
+  dashboard.includes("const user = await requireUser(session);"),
+  "Dashboard reuses its verified session and parallelizes user/session-preference reads",
 );
 expect(
   route.includes("getEnterpriseBusinessContextForAuthorizedOrganization") &&
