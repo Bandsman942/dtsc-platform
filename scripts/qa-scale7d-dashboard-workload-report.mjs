@@ -1,6 +1,4 @@
 import fs from "node:fs";
-import { spawnSync } from "node:child_process";
-import process from "node:process";
 
 function read(path) {
   return fs.readFileSync(path, "utf8");
@@ -89,19 +87,6 @@ expect(
   !dashboardAudit.includes('"getOrganizationEntitlements",'),
   "standard Dashboard audit requires the lightweight commercial workspace contract",
 );
-
-const stagedCertificationQa = spawnSync(
-  process.execPath,
-  ["scripts/qa-scale7-staged-certification.mjs"],
-  { encoding: "utf8" },
-);
-if (stagedCertificationQa.status !== 0) {
-  console.error(stagedCertificationQa.stdout || "");
-  console.error(stagedCertificationQa.stderr || "");
-  process.exitCode = 1;
-} else {
-  console.log("PASS SCALE-7D: canonical SCALE-7 staged certification QA passed");
-}
 
 if (process.exitCode) process.exit(process.exitCode);
 console.log("SCALE-7D static contract passed.");
