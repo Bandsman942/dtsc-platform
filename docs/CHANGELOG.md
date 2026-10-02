@@ -1,3 +1,13 @@
+## 2026-10-02 — SCALE-7F 500-soak Dashboard tail hardening (#771)
+
+- réutilise le timeout de session signé dans le JWT au lieu de relire systématiquement la préférence en DB ;
+- réduit les identity-links workspace à un seul round-trip avec jointure Organization ;
+- fusionne abonnement personnel, usage du jour et nombre de documents dans une projection DB exacte ;
+- conserve les notifications, RBAC, isolation et entitlements canoniques inchangés ;
+- conserve les SLO workload P95/P99 et la gate idle-in-transaction zéro ;
+- ajoute `qa:scale7f-soak-dashboard-tail` à la régression canonique ;
+- aucun cache RBAC, aucune migration, aucun pool Prisma >9.
+
 ## 2026-10-02 — SCALE-7E CI-proven staged progression (#768)
 
 - remplace le registre statique vide comme verrou d'exécution par des preuves `CI_PROVEN` GitHub Actions ;
