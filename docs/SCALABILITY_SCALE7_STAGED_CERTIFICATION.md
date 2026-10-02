@@ -1,5 +1,16 @@
 # SCALE-7 — Staged load certification
 
+## SCALE-7D — dernier écart 500-ramp après #761
+
+Le rerun contrôlé `36993932940` sur `main@c2fb6051d6d4d12315000dab5e04fc3a92edb9af` prouve que SCALE-7C a fermé les écarts globaux : HTTP 0 %, checks 100 %, isolation 100 %, P95/P99 globaux 558,89 / 1 756,35 ms, Enterprise/Shop/Collaboration sous SLO et DB 6,33 %. Deux écarts restent : Dashboard P99 2 188,47 ms et un unique échantillon idle-in-transaction de 1 session avec âge arrondi à 0 s.
+
+SCALE-7D (#762) :
+- remplace sur le Dashboard le resolver complet d’entitlements par une projection légère dérivée du resolver commercial canonique ; les modules ERP et le sous-type métier ne sont plus chargés par une page qui ne les consomme pas ;
+- ajoute au report builder les gates P95/P99 Dashboard, Enterprise, Shop et Collaboration, avec les seuils inchangés de 1 000/2 000 ms ;
+- conserve la gate idle-in-transaction strictement à zéro et ajoute une attribution sanitisée bornée : type de backend, classe d’application, classe du dernier statement et âges en millisecondes, sans SQL, PID, utilisateur DB, IP, DSN ni identifiant tenant.
+
+Aucun 500-soak n’est autorisé avant un nouveau 500-ramp totalement PASS.
+
 ## SCALE-7C — fermeture du 500-ramp après #755
 
 Le run Production `36987070876` sur `main@8597e83074acb9dc86c261d0a20ef4c00e5b18ab` reste **FAIL** malgré une forte amélioration : P95 1 034,80 ms, P99 2 197,14 ms, isolation 99,9142 % et un échantillon idle-in-transaction non nul. SCALE-7C (#760 / PR #761) conserve les mêmes SLO et `connection_limit=9`.
