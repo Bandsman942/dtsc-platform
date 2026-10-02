@@ -63,6 +63,21 @@ export async function getEnterpriseBusinessContext(
   };
 }
 
+export async function getEnterpriseBusinessContextForAuthorizedOrganization(
+  db: Pick<Prisma.TransactionClient, "enterpriseFinanceConfiguration">,
+  organizationId: string,
+  timezone: string,
+): Promise<EnterpriseBusinessContext> {
+  const configuration = await db.enterpriseFinanceConfiguration.findUnique({
+    where: { organizationId },
+    select: { functionalCurrencyCode: true },
+  });
+  return {
+    timezone: assertEnterpriseTimezone(timezone),
+    functionalCurrencyCode: normalizeCurrencyCode(configuration?.functionalCurrencyCode),
+  };
+}
+
 export async function resolveEnterpriseBusinessDate(
   db: EnterpriseBusinessContextDb,
   organizationId: string,
