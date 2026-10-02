@@ -1,5 +1,5 @@
 import { TicketStatus } from "@prisma/client";
-import { getOrganizationEntitlements } from "@/lib/billing/entitlements";
+import { getOrganizationWorkspaceEntitlements } from "@/lib/billing/entitlements";
 import { listUserIdentityLinksForWorkspace } from "@/lib/enterprise/identity-links/service";
 import { buildVisibleNotificationWhereForSession } from "@/lib/notification-access";
 import { getActiveOrganizationId } from "@/lib/organizations";
@@ -199,7 +199,7 @@ export async function getPersonalWorkspaceSummary({
       _sum: { totalTokens: true },
     }),
     prisma.knowledgeDocument.count({ where: { userId: user.id, organizationId: activeOrganizationId } }),
-    getOrganizationEntitlements(activeOrganizationId),
+    getOrganizationWorkspaceEntitlements(activeOrganizationId),
   ]);
 
   const actionableRelationshipStatuses = new Set(["INVITED", "PENDING_CONSENT", "PENDING_USER", "PENDING_USER_APPROVAL", "PENDING"]);
