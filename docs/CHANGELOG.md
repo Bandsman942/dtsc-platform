@@ -1,3 +1,11 @@
+## 2026-10-02 — SCALE-7D dashboard tail and idle attribution (#762)
+
+- le Dashboard utilise une projection commerciale légère et canonique au lieu de charger les modules ERP et le sous-type métier pour afficher le plan ;
+- le rapport SCALE-7 applique désormais explicitement les gates P95/P99 aux workloads Dashboard, Enterprise, Shop et Collaboration ;
+- l’observabilité idle-in-transaction conserve la gate zéro et ajoute uniquement des diagnostics agrégés non sensibles avec âges en millisecondes ;
+- ajoute `qa:scale7d-dashboard-tail-idle-attribution` à la régression canonique ;
+- aucun SLO abaissé, aucun `connection_limit > 9`, aucune migration et aucun Preview Vercel.
+
 ## 2026-10-02 — SCALE-7C 500-ramp tail/isolation/transaction hardening (#760)
 
 - réutilise la session déjà vérifiée du Dashboard et parallélise les lectures utilisateur/préférence de session sans changer le contrat métier ;
