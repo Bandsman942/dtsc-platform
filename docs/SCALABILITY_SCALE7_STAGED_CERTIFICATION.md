@@ -1,5 +1,19 @@
 # SCALE-7 — Staged load certification
 
+## SCALE-7E — progression fondée sur les preuves CI_PROVEN
+
+Le run Production SCALE-7D `37014598384` sur `main@649aeeae55f005827630d09e4f28a876bb3c918f` a certifié le 500-ramp **PASS**. Le 500-soak suivant (`37016167904`) a été bloqué avant k6 parce que l'ancien verrou de progression lisait le registre versionné `data/scalability/scale7-certifications.json`, encore vide et jamais alimenté automatiquement par le workflow.
+
+SCALE-7E (#768 / PR #769) sépare désormais clairement deux responsabilités :
+
+- le **registre versionné** reste une archive secret-free destinée à l'affichage CTO et à l'archivage manuel ;
+- le **verrou d'exécution** consomme les preuves `CI_PROVEN` publiées par `github-actions[bot]` sur l'Issue #360 et recoupe chaque `githubRunId` avec l'API GitHub Actions.
+
+Une preuve de progression n'est acceptée que si le run référencé est un vrai run SCALE-7 terminé en `success`, sur `main`, avec le SHA déclaré dans le résultat. Une preuve d'un SHA parent peut rester valable après un hotfix de gouvernance uniquement si le diff jusqu'au SHA courant ne touche que les fichiers SCALE-7 de workflow, vérification, QA et documentation explicitement autorisés. Tout changement applicatif/runtime invalide automatiquement la preuve et impose une nouvelle certification du profil préalable.
+
+Ainsi, le ramp PASS `37014598384` reste admissible après SCALE-7E, mais il ne pourrait pas être réutilisé après une nouvelle modification de code applicatif.
+
+
 ## SCALE-7D — fermeture du workload Dashboard après #761
 
 Les runs Production SCALE-7C sur `main@c2fb6051d6d4d12315000dab5e04fc3a92edb9af` ont fermé les régressions globales, isolation et idle-in-transaction. Le run #91 (`37004079918`) reste officiellement FAIL uniquement parce que le workload Dashboard dépasse encore les seuils : P95 1 149,06 ms et P99 2 447,86 ms, alors que les seuils restent P95 < 1 000 ms et P99 < 2 000 ms.
@@ -118,7 +132,9 @@ SCALE-7B keeps `connection_limit=9` and all SLOs unchanged. Its first remediatio
 
 ## Stage progression
 
-The workflow enforces progression from the versioned registry: `soak` requires a PASS `ramp` at the same stage, `spike` requires PASS `ramp` + `soak`, and 1,000/2,500/5,000 cannot start until the previous stage has PASS evidence for all three profiles.
+The workflow enforces progression from **CI_PROVEN GitHub Actions evidence**, not from the static archive registry. `soak` requires a PASS `ramp` at the same stage, `spike` requires PASS `ramp` + `soak`, and 1,000/2,500/5,000 cannot start until the previous stage has PASS evidence for all three profiles.
+
+The verifier reads only `SCALE7_RESULT_JSON` comments emitted by `github-actions[bot]` on Issue #360, validates the referenced Actions run and SHA, and fails closed when evidence is absent or inconsistent. A parent-SHA proof is reusable only across a bounded governance-only SCALE-7 diff; any application/runtime file change invalidates that lineage.
 
 ## Execution
 

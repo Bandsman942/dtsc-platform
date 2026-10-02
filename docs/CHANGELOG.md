@@ -1,3 +1,13 @@
+## 2026-10-02 — SCALE-7E CI-proven staged progression (#768)
+
+- remplace le registre statique vide comme verrou d'exécution par des preuves `CI_PROVEN` GitHub Actions ;
+- accepte uniquement les résultats `SCALE7_RESULT_JSON` publiés par `github-actions[bot]` sur l'Issue #360 ;
+- recoupe le run, le workflow, la conclusion et le SHA via l'API Actions ;
+- autorise la réutilisation d'un PASS parent uniquement à travers un diff SCALE-7 strictement gouvernance/QA/documentation ;
+- invalide automatiquement une preuve antérieure si un fichier applicatif/runtime a changé ;
+- conserve le registre versionné comme archive CTO distincte ;
+- aucun SLO, pool Prisma, schéma ou secret modifié.
+
 ## 2026-10-02 — SCALE-7D Dashboard workload and report alignment (#764)
 
 - parallélise les lectures memberships/identity-links du Dashboard ;

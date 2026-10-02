@@ -1,5 +1,8 @@
 import fs from "node:fs";
 import process from "node:process";
+import { spawnSync } from "node:child_process";
+
+const root = process.cwd();
 
 const paths = {
   workflow: ".github/workflows/scale7-staged-certification.yml",
@@ -31,12 +34,13 @@ const workflow = fs.readFileSync(paths.workflow, "utf8");
 const profile = fs.readFileSync(paths.profile, "utf8");
 const report = fs.readFileSync(paths.report, "utf8");
 const archive = fs.readFileSync(paths.archive, "utf8");
+const progression = fs.readFileSync(paths.progression, "utf8");
 const docs = fs.readFileSync(paths.docs, "utf8");
 const oidc = fs.readFileSync(paths.oidc, "utf8");
 const authPool = fs.readFileSync(paths.authPool, "utf8");
 const authRoute = fs.readFileSync(paths.authRoute, "utf8");
 const middleware = fs.readFileSync(paths.middleware, "utf8");
-const all = [workflow, profile, report, archive, docs, oidc, authPool, authRoute, middleware].join("\n");
+const all = [workflow, profile, report, archive, progression, docs, oidc, authPool, authRoute, middleware].join("\n");
 
 expect(/^on:\s*\n\s+workflow_dispatch:/m.test(workflow), "workflow_dispatch is required");
 expect(/^\s+issue_comment:\s*$/m.test(workflow), "owner issue_comment trigger is required");
@@ -49,6 +53,12 @@ expect(workflow.includes("OWNER_COMMAND:") && workflow.includes('case "${OWNER_C
 expect(workflow.includes("MANUAL_CONFIRMATION:") && workflow.includes('if [ "${MANUAL_CONFIRMATION}" != "RUN_SCALE7_CERTIFICATION" ]'), "manual confirmation must be passed through env before shell parsing");
 expect(!workflow.includes('case "${{ github.event.comment.body }}" in'), "raw issue comment must not be interpolated into shell");
 expect(workflow.includes("issues: write"), "issue result publication permission is required");
+expect(workflow.includes("actions: read"), "SCALE-7 progression must have read-only Actions evidence access");
+expect(
+  workflow.includes("Enforce staged progression") &&
+  workflow.includes("GH_TOKEN: ${{ github.token }}"),
+  "staged progression must receive only the scoped GitHub token",
+);
 expect(workflow.includes("SCALE7_RESULT_JSON"), "owner-triggered secret-free result marker is required");
 for (const target of ["500", "1000", "2500", "5000"]) {
   for (const mode of ["RAMP", "SOAK", "SPIKE"]) {
@@ -56,6 +66,17 @@ for (const target of ["500", "1000", "2500", "5000"]) {
   }
 }
 expect(workflow.includes("verify-scale7-stage-progression.mjs"), "staged progression gate is missing");
+for (const marker of [
+  'issues/\${issueNumber}/comments',
+  'actions/runs/\${runId}',
+  'compare/\${evidenceSha}...\${currentSha}',
+  'comment?.user?.login !== "github-actions[bot]"',
+  'result?.status !== "PASS"',
+  'run.conclusion !== "success"',
+  'runPath !== workflowPath',
+  'governanceOnlyFiles',
+]) expect(progression.includes(marker), `progression verifier missing ${marker}`);
+expect(!progression.includes("SCALE7_REGISTRY_PATH"), "runtime progression must not depend on the static certification registry");
 for (const target of ["500", "1000", "2500", "5000"]) expect(workflow.includes(target), `workflow missing ${target} stage`);
 for (const mode of ["ramp", "soak", "spike"]) expect(workflow.includes(mode), `workflow missing ${mode} profile`);
 expect(workflow.includes("grafana/setup-k6-action@v1"), "official k6 setup action is required");
@@ -174,7 +195,100 @@ expect(report.includes('process.env.GITHUB_ACTIONS === "true" ? "CI_PROVEN" : "L
 expect(archive.includes("Only CI-proven reports"), "archive must reject non-CI reports");
 expect(archive.includes('report.evidence?.loadExecution !== "CI_PROVEN"'), "archive must verify CI_PROVEN evidence state");
 expect(docs.includes("500 → 1,000 → 2,500 → 5,000"), "staged progression must be documented");
+expect(
+  docs.includes("CI_PROVEN") && docs.includes("github-actions[bot]"),
+  "CI-proven GitHub evidence progression must be documented",
+);
 expect(docs.includes("GitHub Actions OIDC") && docs.includes("operator override"), "governed OIDC auth-pool provisioning must be documented");
+
+
+const currentSha = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+const evidenceSha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+const workflowRun = (profileName, runId) => ({
+  conclusion: "success",
+  path: ".github/workflows/scale7-staged-certification.yml",
+  head_sha: evidenceSha,
+  head_branch: "main",
+  event: "issue_comment",
+  profileName,
+  id: Number(runId),
+});
+const resultComment = (profileName, runId, login = "github-actions[bot]") => ({
+  user: { login },
+  body: `SCALE-7 owner-triggered run completed — **PASS**.
+
+SCALE7_RESULT_JSON
+\`\`\`json
+${JSON.stringify({
+    contract: "SCALE-7",
+    targetVus: 500,
+    profile: profileName,
+    status: "PASS",
+    generatedAt: "2026-10-02T13:53:35.462Z",
+    githubRunId: String(runId),
+    gitSha: evidenceSha,
+  })}
+\`\`\``,
+});
+const compatibleComparison = {
+  status: "ahead",
+  ahead_by: 1,
+  behind_by: 0,
+  files: [{ filename: "scripts/load/verify-scale7-stage-progression.mjs" }],
+};
+const fixtureForProfiles = (profiles, options = {}) => {
+  const comments = [];
+  const runs = {};
+  profiles.forEach((profileName, index) => {
+    const runId = String(4200 + index);
+    comments.push(resultComment(profileName, runId, options.login));
+    runs[runId] = workflowRun(profileName, runId);
+  });
+  return {
+    comments,
+    runs,
+    comparisons: {
+      [`${evidenceSha}...${currentSha}`]: options.comparison || compatibleComparison,
+    },
+  };
+};
+function runProgression(targetVus, loadProfile, fixture) {
+  return spawnSync(process.execPath, [paths.progression], {
+    cwd: root,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      TARGET_VUS: String(targetVus),
+      LOAD_PROFILE: loadProfile,
+      GITHUB_REPOSITORY: "Bandsman942/dtsc-platform",
+      GITHUB_SHA: currentSha,
+      SCALE7_PROGRESSION_TEST_MODE: "true",
+      SCALE7_PROGRESS_EVIDENCE_JSON: JSON.stringify(fixture),
+      GH_TOKEN: "",
+      GITHUB_TOKEN: "",
+    },
+  });
+}
+
+expect(runProgression(500, "ramp", { comments: [], runs: {}, comparisons: {} }).status === 0, "500 ramp must not require prior evidence");
+expect(runProgression(500, "soak", fixtureForProfiles(["ramp"])).status === 0, "500 soak must accept a CI-proven ramp through governance-only lineage");
+expect(runProgression(500, "soak", fixtureForProfiles(["ramp"], { login: "owner-user" })).status !== 0, "human comments must never satisfy progression evidence");
+expect(
+  runProgression(500, "soak", fixtureForProfiles(["ramp"], {
+    comparison: {
+      status: "ahead",
+      ahead_by: 1,
+      behind_by: 0,
+      files: [{ filename: "lib/account/personal-workspace.ts" }],
+    },
+  })).status !== 0,
+  "runtime code changes after a PASS must invalidate prior-stage evidence",
+);
+expect(runProgression(500, "spike", fixtureForProfiles(["ramp"])).status !== 0, "500 spike must remain blocked without soak PASS");
+expect(runProgression(500, "spike", fixtureForProfiles(["ramp", "soak"])).status === 0, "500 spike must accept ramp plus soak PASS evidence");
+
+const full500Fixture = fixtureForProfiles(["ramp", "soak", "spike"]);
+expect(runProgression(1000, "ramp", full500Fixture).status === 0, "1000 ramp must require and accept all three 500 PASS profiles");
 
 for (const forbidden of ["postgresql://", "postgres://", "password=", "NEXT_PUBLIC_DATABASE_URL"]) {
   expect(!all.toLowerCase().includes(forbidden.toLowerCase()), `forbidden secret-like literal: ${forbidden}`);
