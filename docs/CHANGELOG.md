@@ -1,3 +1,12 @@
+## 2026-10-02 — SCALE-7C 500-ramp tail/isolation/transaction hardening (#760)
+
+- réduit le burst de lectures concurrentes du Dashboard sans changer son contrat métier ;
+- retire une relecture `Organization` du GET business-context après membership actif validé ;
+- ajoute une reprise transport-only aux probes cross-tenant tout en gardant isolation = 100 % ;
+- enrichit la preuve SCALE-7 avec le nombre et l’âge maximal des sessions idle-in-transaction, gate zéro inchangée ;
+- ajoute `qa:scale7c-tail-isolation-transaction` à la régression canonique ;
+- aucun changement de SLO, Prisma >9, migration, secret ou Preview Vercel.
+
 ## 2026-10-01 — SCALE-7B #754 : réduction des read-paths 500-ramp et IA Entreprise représentative
 
 ### Corrigé
