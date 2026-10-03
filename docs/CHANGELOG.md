@@ -8,6 +8,16 @@
 - ajoute `qa:scale7f-soak-dashboard-tail` à la régression canonique ;
 - aucun cache RBAC, aucune migration, aucun pool Prisma >9.
 
+## 2026-10-02 — Hotfix #773 : session de caisse visible dans les financements
+
+- corrige le faux état « aucune session » utilisé auparavant comme simple placeholder du select ;
+- conserve le filtrage strict par organisation, compte financier exact et statut `OPEN` ;
+- pré-sélectionne uniquement l’unique session compatible lorsque le résultat initial n’est pas filtré ;
+- conserve un choix explicite lorsqu’il existe plusieurs sessions compatibles ;
+- rend la recherche par numéro de session effective dans le lookup Trésorerie ;
+- ajoute une QA ciblée #773 à la régression canonique et prépare l’OWNER_E2E du parcours Caisse → Financement ;
+- aucune migration, aucun relâchement RBAC/multi-tenant et aucun changement d’entitlement.
+
 ## 2026-10-02 — SCALE-7E CI-proven staged progression (#768)
 
 - remplace le registre statique vide comme verrou d'exécution par des preuves `CI_PROVEN` GitHub Actions ;

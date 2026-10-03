@@ -99,6 +99,8 @@ Modules dédiés :
 
 Les factures, créances/dettes, paiements, allocations, comptes financiers, caisse, banque, transferts et rapprochements restent des objets distincts et durables.
 
+Pour un financement vers une caisse, la référence de session est résolue depuis les sessions communes `OPEN` du compte financier exact et du même tenant. Le sélecteur Finance sépare désormais l’invite de sélection de l’état vide réel et ne pré-sélectionne automatiquement qu’un résultat unique non filtré ; la route de mutation revalide ensuite la session côté serveur avant toute écriture.
+
 ## 9. Comptabilité et Finance avancée — Itération 5
 
 Modules dédiés :
