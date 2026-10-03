@@ -1,5 +1,25 @@
 # SCALE-7 — Staged load certification
 
+## SCALE-7F — fermeture du 500-soak Dashboard
+
+Deux soaks consécutifs sur `main@7cc7cca3a5ff352e4445b6cd9d74fbfb36130bef` ont confirmé un hotspot Dashboard sous plateau long, alors que la capacité DB globale reste faible (< 9 %), Redis reste OK et l’isolation tenant reste à 100 %.
+
+- run `37021376106` : Dashboard P95/P99 1 618,11 / 2 598,45 ms ;
+- run `37022663945` : Dashboard P95/P99 1 255,12 / 2 429,49 ms ;
+- le second run fait passer Enterprise, Shop et Collaboration sous leurs seuils ;
+- `idle-in-transaction` reste observé au maximum à 1 session, avec un âge de 0 à 0,01 s ; la gate reste strictement zéro.
+
+SCALE-7F (#771 / PR #772) réduit le nombre de round-trips exacts du Dashboard sans cache ni approximation :
+
+- `requireUser(session)` réutilise `idleTimeoutMinutes` déjà signé dans le JWT et ne relit la préférence en DB que pour une ancienne session ne contenant pas cette valeur ;
+- `listUserIdentityLinksForWorkspace` résout le lien et l’organisation dans une seule requête SQL tenant/user-scoped ;
+- abonnement personnel, usage du jour et nombre de documents sont regroupés dans une seule projection DB exacte ;
+- les notifications, permissions et règles d’accès restent sur leurs chemins canoniques ;
+- les SLO restent P95 < 1 000 ms et P99 < 2 000 ms ;
+- `noIdleInTransaction` reste strictement `maxIdleInTransaction === 0`.
+
+Aucun 500-spike n’est autorisé avant un nouveau 500-soak officiellement PASS.
+
 ## SCALE-7E — progression fondée sur les preuves CI_PROVEN
 
 Le run Production SCALE-7D `37014598384` sur `main@649aeeae55f005827630d09e4f28a876bb3c918f` a certifié le 500-ramp **PASS**. Le 500-soak suivant (`37016167904`) a été bloqué avant k6 parce que l'ancien verrou de progression lisait le registre versionné `data/scalability/scale7-certifications.json`, encore vide et jamais alimenté automatiquement par le workflow.

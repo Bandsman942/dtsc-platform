@@ -32,10 +32,12 @@ const secondBurst = workspace.slice(
 );
 expect(
   secondBurst.includes("organizationCommercialSummary") &&
+  secondBurst.includes("billingUsage") &&
   !secondBurst.includes("identityLinks,") &&
-  (secondBurst.match(/prisma\./g) || []).length === 8 &&
+  (secondBurst.match(/prisma\./g) || []).length === 5 &&
+  secondBurst.includes("getWorkspaceBillingUsageSnapshot(user.id, activeOrganizationId, today)") &&
   secondBurst.includes("getOrganizationWorkspaceCommercialSummary(activeOrganizationId)"),
-  "Dashboard second burst is bounded to nine database-backed tasks",
+  "Dashboard second burst is bounded to seven database-backed tasks",
 );
 
 const helperStart = entitlements.indexOf("export async function getOrganizationWorkspaceCommercialSummary");

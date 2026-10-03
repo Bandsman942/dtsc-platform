@@ -75,6 +75,94 @@ type WorkspaceUser = {
   dailyTokenLimit: number;
 };
 
+type WorkspaceBillingUsageRow = {
+  usedMessagesToday: number;
+  usedTokensToday: number;
+  usedDocuments: number;
+  subscriptionId: string | null;
+  subscriptionStatus: string | null;
+  currentPeriodStart: Date | null;
+  currentPeriodEnd: Date | null;
+  cancelAtPeriodEnd: boolean | null;
+  planName: string | null;
+  planDailyMessageLimit: number | null;
+  planDailyTokenLimit: number | null;
+  planMaxDocuments: number | null;
+};
+
+async function getWorkspaceBillingUsageSnapshot(
+  userId: string,
+  organizationId: string | null,
+  today: Date,
+): Promise<WorkspaceBillingUsageRow> {
+  const rows = await prisma.$queryRaw<WorkspaceBillingUsageRow[]>`
+    SELECT
+      (
+        SELECT COUNT(*)::int
+        FROM "UsageLog"
+        WHERE "userId" = ${userId}
+          AND "organizationId" IS NOT DISTINCT FROM ${organizationId}
+          AND "createdAt" >= ${today}
+      ) AS "usedMessagesToday",
+      (
+        SELECT COALESCE(SUM("totalTokens"), 0)::float8
+        FROM "UsageLog"
+        WHERE "userId" = ${userId}
+          AND "organizationId" IS NOT DISTINCT FROM ${organizationId}
+          AND "createdAt" >= ${today}
+      ) AS "usedTokensToday",
+      (
+        SELECT COUNT(*)::int
+        FROM "KnowledgeDocument"
+        WHERE "userId" = ${userId}
+          AND "organizationId" IS NOT DISTINCT FROM ${organizationId}
+      ) AS "usedDocuments",
+      latest."subscriptionId",
+      latest."subscriptionStatus",
+      latest."currentPeriodStart",
+      latest."currentPeriodEnd",
+      latest."cancelAtPeriodEnd",
+      latest."planName",
+      latest."planDailyMessageLimit",
+      latest."planDailyTokenLimit",
+      latest."planMaxDocuments"
+    FROM (VALUES (1)) AS seed(value)
+    LEFT JOIN LATERAL (
+      SELECT
+        subscription."id" AS "subscriptionId",
+        subscription."status"::text AS "subscriptionStatus",
+        subscription."currentPeriodStart",
+        subscription."currentPeriodEnd",
+        subscription."cancelAtPeriodEnd",
+        plan."name" AS "planName",
+        plan."dailyMessageLimit" AS "planDailyMessageLimit",
+        plan."dailyTokenLimit" AS "planDailyTokenLimit",
+        plan."maxDocuments" AS "planMaxDocuments"
+      FROM "Subscription" AS subscription
+      JOIN "BillingPlan" AS plan ON plan."id" = subscription."planId"
+      WHERE subscription."userId" = ${userId}
+      ORDER BY subscription."createdAt" DESC
+      LIMIT 1
+    ) AS latest ON TRUE
+  `;
+
+  return rows[0] ?? {
+    usedMessagesToday: 0,
+    usedTokensToday: 0,
+    usedDocuments: 0,
+    subscriptionId: null,
+    subscriptionStatus: null,
+    currentPeriodStart: null,
+    currentPeriodEnd: null,
+    cancelAtPeriodEnd: null,
+    planName: null,
+    planDailyMessageLimit: null,
+    planDailyTokenLimit: null,
+    planMaxDocuments: null,
+  };
+}
+
+
 function resolveContext(session: SessionPayload): PersonalWorkspaceSummary["context"] {
   if (session.activeContext === "DTSC_INTERNAL") {
     return {
@@ -162,9 +250,7 @@ export async function getPersonalWorkspaceSummary({
     openSupportTicketCount,
     recentTickets,
     recentConversations,
-    personalSubscription,
-    usageToday,
-    usedDocuments,
+    billingUsage,
     organizationCommercialSummary,
   ] = await Promise.all([
     prisma.notification.count({ where: { ...notificationWhere, readAt: null } }),
@@ -189,19 +275,24 @@ export async function getPersonalWorkspaceSummary({
       take: 5,
       select: { id: true, title: true, updatedAt: true, _count: { select: { messages: true } } },
     }),
-    prisma.subscription.findFirst({
-      where: { userId: user.id },
-      orderBy: { createdAt: "desc" },
-      include: { plan: true },
-    }),
-    prisma.usageLog.aggregate({
-      where: { userId: user.id, organizationId: activeOrganizationId, createdAt: { gte: today } },
-      _count: { _all: true },
-      _sum: { totalTokens: true },
-    }),
-    prisma.knowledgeDocument.count({ where: { userId: user.id, organizationId: activeOrganizationId } }),
+    getWorkspaceBillingUsageSnapshot(user.id, activeOrganizationId, today),
     getOrganizationWorkspaceCommercialSummary(activeOrganizationId),
   ]);
+
+  const personalSubscription = billingUsage.subscriptionId
+    ? {
+        status: billingUsage.subscriptionStatus || "PENDING_PAYMENT",
+        currentPeriodStart: billingUsage.currentPeriodStart,
+        currentPeriodEnd: billingUsage.currentPeriodEnd,
+        cancelAtPeriodEnd: billingUsage.cancelAtPeriodEnd || false,
+        plan: {
+          name: billingUsage.planName || "Gratuit",
+          dailyMessageLimit: billingUsage.planDailyMessageLimit ?? user.dailyMessageLimit,
+          dailyTokenLimit: billingUsage.planDailyTokenLimit ?? user.dailyTokenLimit,
+          maxDocuments: billingUsage.planMaxDocuments ?? 0,
+        },
+      }
+    : null;
 
   const actionableRelationshipStatuses = new Set(["INVITED", "PENDING_CONSENT", "PENDING_USER", "PENDING_USER_APPROVAL", "PENDING"]);
   const relationshipsWithOrganization = identityLinks.filter((identityLink) => Boolean(identityLink.organization));
@@ -335,9 +426,9 @@ export async function getPersonalWorkspaceSummary({
         messageLimit: null,
         tokenLimit: null,
         documentLimit: organizationSubscription.limits.maxDocuments,
-        usedMessagesToday: usageToday._count._all,
-        usedTokensToday: usageToday._sum.totalTokens || 0,
-        usedDocuments,
+        usedMessagesToday: billingUsage.usedMessagesToday,
+        usedTokensToday: billingUsage.usedTokensToday,
+        usedDocuments: billingUsage.usedDocuments,
       }
     : {
         source: "PERSONAL" as const,
@@ -350,9 +441,9 @@ export async function getPersonalWorkspaceSummary({
         messageLimit: plan?.dailyMessageLimit ?? user.dailyMessageLimit,
         tokenLimit: plan?.dailyTokenLimit ?? user.dailyTokenLimit,
         documentLimit: plan?.maxDocuments ?? 0,
-        usedMessagesToday: usageToday._count._all,
-        usedTokensToday: usageToday._sum.totalTokens || 0,
-        usedDocuments,
+        usedMessagesToday: billingUsage.usedMessagesToday,
+        usedTokensToday: billingUsage.usedTokensToday,
+        usedDocuments: billingUsage.usedDocuments,
       };
 
   return {
