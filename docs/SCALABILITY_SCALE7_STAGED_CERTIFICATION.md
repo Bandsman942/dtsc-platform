@@ -1,5 +1,31 @@
 # SCALE-7 — Staged load certification
 
+## SCALE-7G — fermeture du résidu 500-ramp AppShell
+
+Le 500-ramp Production `37162367435` sur `main@f725fe1ff149ceac11f00ffed6824e256806181a` a exécuté k6 jusqu’au bout et localise le résidu de capacité au Dashboard :
+
+- HTTP failed : **0 %** ;
+- global P95/P99 : **592,41 / 1 966,41 ms** — PASS ;
+- Dashboard P95/P99 : **1 034,01 / 2 525,42 ms** — FAIL ;
+- Enterprise : **270,06 / 1 467,74 ms** — PASS ;
+- Shop : **386,43 / 1 734,88 ms** — PASS ;
+- Collaboration : **394,78 / 1 805,15 ms** — PASS ;
+- isolation tenant : **100 %** ;
+- DB max : **5,77 %** ;
+- Redis : **OK** ;
+- idle-in-transaction : maximum **1**, âge maximal observé **0 s**.
+
+SCALE-7G (#775) réduit le fan-out exact du rendu `/dashboard` sans créer de cache de droits ni de seconde politique d’accès :
+
+- l’AppShell peut recevoir les compteurs notifications/invitations déjà calculés par le workspace Dashboard ; les autres pages conservent leur résolution autonome ;
+- le dossier `hrcfoEmployee` n’est interrogé qu’en contexte `DTSC_INTERNAL` ;
+- navigation ERP et décision `ADMIN_DASHBOARD` sont dérivées d’un unique snapshot produit par le résolveur d’accès canonique ;
+- les blocs d’activité réutilisent l’entitlement déjà chargé et court-circuitent les vérifications bloc par bloc uniquement pour un rôle administrateur entreprise dont le membership actif a déjà été prouvé ;
+- l’observabilité publie désormais uniquement des compteurs agrégés idle-in-transaction <100 ms, ≥100 ms et ≥1 s afin de distinguer un état transitoire d’une attente persistante ;
+- la gate de certification reste inchangée : **toute** session idle-in-transaction observée fait échouer `noIdleInTransaction`.
+
+Aucun SLO n’est abaissé, le pool Prisma n’est pas augmenté et le 500-soak reste interdit tant qu’un nouveau 500-ramp sur le SHA Production de SCALE-7G n’est pas officiellement PASS.
+
 ## SCALE-7F — fermeture du 500-soak Dashboard
 
 Deux soaks consécutifs sur `main@7cc7cca3a5ff352e4445b6cd9d74fbfb36130bef` ont confirmé un hotspot Dashboard sous plateau long, alors que la capacité DB globale reste faible (< 9 %), Redis reste OK et l’isolation tenant reste à 100 %.

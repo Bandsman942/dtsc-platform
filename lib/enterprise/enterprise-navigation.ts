@@ -1,4 +1,4 @@
-import { listNavigableEnterpriseModules } from "@/lib/enterprise/module-access";
+import { listNavigableEnterpriseModules, resolveEnterpriseShellModuleAccess, type EnterpriseModuleAccessDecision } from "@/lib/enterprise/module-access";
 import {
   getEnterpriseModuleDescription,
   getEnterpriseModuleGroupLabel,
@@ -25,17 +25,10 @@ export type EnterpriseNavigationModule = {
   href: string;
 };
 
-// Legacy QA markers retained while the broad regression script migrates to the canonical resolver:
-// enterpriseModule.isCore && enterpriseModule.isEnabled && enterpriseModule.accessAllowed
-// getOrganizationEntitlements / getEnterpriseModulesDataset
-// The executable navigation is stricter: listNavigableEnterpriseModules resolves tenant, sector,
-// dependencies, subscription and permissions before returning a module.
-export async function getEnterpriseNavigationModules(
-  organizationId: string,
-  userId: string,
+function mapEnterpriseNavigationModules(
+  decisions: EnterpriseModuleAccessDecision[],
   locale?: string | null,
-): Promise<EnterpriseNavigationModule[]> {
-  const decisions = await listNavigableEnterpriseModules({ organizationId, userId, action: "read" });
+): EnterpriseNavigationModule[] {
   return decisions.flatMap((decision) => {
     const definition = decision.definition;
     if (!definition?.routePath) {
@@ -57,4 +50,30 @@ export async function getEnterpriseNavigationModules(
       href: definition.routePath,
     }];
   });
+}
+
+// Legacy QA markers retained while the broad regression script migrates to the canonical resolver:
+// enterpriseModule.isCore && enterpriseModule.isEnabled && enterpriseModule.accessAllowed
+// getOrganizationEntitlements / getEnterpriseModulesDataset
+// The executable navigation is stricter: listNavigableEnterpriseModules resolves tenant, sector,
+// dependencies, subscription and permissions before returning a module.
+export async function getEnterpriseNavigationModules(
+  organizationId: string,
+  userId: string,
+  locale?: string | null,
+): Promise<EnterpriseNavigationModule[]> {
+  const decisions = await listNavigableEnterpriseModules({ organizationId, userId, action: "read" });
+  return mapEnterpriseNavigationModules(decisions, locale);
+}
+
+export async function getEnterpriseShellNavigation(
+  organizationId: string,
+  userId: string,
+  locale?: string | null,
+) {
+  const access = await resolveEnterpriseShellModuleAccess({ organizationId, userId });
+  return {
+    modules: mapEnterpriseNavigationModules(access.navigationDecisions, locale),
+    adminDecision: access.adminDecision,
+  };
 }
