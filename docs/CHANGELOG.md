@@ -1,3 +1,14 @@
+## 2026-10-04 — SCALE-7G AppShell Dashboard tail hardening (#775)
+
+- part du 500-ramp Production `37162367435` sur `f725fe1ff149ceac11f00ffed6824e256806181a`, où les gates globales passent mais Dashboard reste à P95/P99 1 034,01 / 2 525,42 ms ;
+- réutilise dans l’AppShell les compteurs Dashboard exacts déjà calculés pour les notifications et invitations au lieu de les relire ;
+- ne charge le dossier collaborateur interne que dans le contexte `DTSC_INTERNAL` où il est effectivement consommé ;
+- résout navigation ERP et décision Administration depuis un unique snapshot d’accès canonique ;
+- évite les vérifications bloc par bloc pour un administrateur entreprise déjà vérifié, tout en réutilisant la décision d’entitlement canonique ;
+- enrichit l’observabilité idle-in-transaction avec des classes d’âge agrégées non sensibles sans modifier la gate stricte zéro ;
+- conserve les SLO, l’isolation tenant, le pool Prisma maximal à 9 et l’absence de cache RBAC/commercial ;
+- ajoute `qa:scale7g-appshell-tail` à la régression canonique.
+
 ## 2026-10-02 — SCALE-7F 500-soak Dashboard tail hardening (#771)
 
 - réutilise le timeout de session signé dans le JWT au lieu de relire systématiquement la préférence en DB ;

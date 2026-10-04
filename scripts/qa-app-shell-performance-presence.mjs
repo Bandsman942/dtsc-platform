@@ -19,7 +19,7 @@ const foregroundBridge = read("components/pwa/pwa-notification-bridge.tsx");
 
 const aggregateBudget = Number(perf.match(/APP_SHELL_GLOBAL_AGGREGATE_BUDGET\s*=\s*(\d+)/)?.[1]);
 const aggregateCalls = [...appShell.matchAll(/performanceRecorder\.timed\(/g)].length;
-ok(aggregateBudget === 10, `AppShell aggregate budget must remain 10, got ${aggregateBudget || "missing"}.`);
+ok(aggregateBudget === 9, `AppShell aggregate budget must remain 9, got ${aggregateBudget || "missing"}.`);
 ok(aggregateCalls <= aggregateBudget, `AppShell executes ${aggregateCalls} measured global aggregate tasks, budget is ${aggregateBudget}.`);
 ok(appShell.includes("createAppShellPerformanceRecorder"), "AppShell must instrument global aggregate latency.");
 ok(appShell.includes("performanceRecorder.finish({ organizationContext })"), "AppShell must emit a bounded aggregate summary when instrumentation is enabled.");

@@ -54,7 +54,13 @@ export default async function DashboardPage() {
   const organizationHint = workspace.context.organizationName || copy.globalAccount;
 
   return (
-    <AppShell user={user}>
+    <AppShell
+      user={user}
+      precomputed={{
+        unreadNotifications: workspace.account.unreadNotificationCount,
+        pendingEnterpriseInvitations: workspace.account.pendingInvitationCount,
+      }}
+    >
       <ModuleWorkspace>
         <ModuleHeader
           eyebrow={fillExperienceTemplate(copy.welcome, { name: user.name })}

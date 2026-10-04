@@ -1,4 +1,4 @@
-export const APP_SHELL_GLOBAL_AGGREGATE_BUDGET = 10;
+export const APP_SHELL_GLOBAL_AGGREGATE_BUDGET = 9;
 
 export type AppShellAggregateName =
   | "unreadNotifications"
@@ -9,7 +9,6 @@ export type AppShellAggregateName =
   | "organizationMemberships"
   | "enterpriseModules"
   | "enterpriseActivityBlocks"
-  | "enterpriseAdminDecision"
   | "promotionalBanners";
 
 type TimingEntry = { name: AppShellAggregateName; durationMs: number };
