@@ -70,7 +70,10 @@ export async function getEnterpriseShellNavigation(
   organizationId: string,
   userId: string,
   locale?: string | null,
-) {
+): Promise<{
+  modules: EnterpriseNavigationModule[];
+  adminDecision: EnterpriseModuleAccessDecision | null;
+}> {
   const access = await resolveEnterpriseShellModuleAccess({ organizationId, userId });
   return {
     modules: mapEnterpriseNavigationModules(access.navigationDecisions, locale),
