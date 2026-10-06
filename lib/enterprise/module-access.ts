@@ -303,9 +303,7 @@ export async function resolveEnterpriseModuleCapabilities({ userId, organization
   };
 }
 
-export async function listNavigableEnterpriseModules({ userId, organizationId, action = "read" }: { userId: string; organizationId: string; action?: EnterpriseModuleAction }) {
-  const snapshot = await getEnterpriseAccessSnapshot(userId, organizationId);
-  if (!snapshot) return [];
+function listNavigableEnterpriseModulesFromSnapshot(snapshot: EnterpriseAccessSnapshot, action: EnterpriseModuleAction) {
   const candidateCodes = new Set([
     ...snapshot.tenantModuleByCanonicalCode.keys(),
     ...listEnterpriseModuleDefinitions({ statuses: ["ACTIVE", "BETA"] })
@@ -316,6 +314,37 @@ export async function listNavigableEnterpriseModules({ userId, organizationId, a
     .map((canonicalCode) => resolveFromSnapshot(snapshot, canonicalCode, action))
     .filter((decision) => decision.allowed && decision.definition && isEnterpriseModuleNavigable(decision.definition))
     .sort((left, right) => compareEnterpriseModuleDefinitions(left.definition as EnterpriseModuleDefinition, right.definition as EnterpriseModuleDefinition));
+}
+
+export async function resolveEnterpriseShellModuleAccess({
+  userId,
+  organizationId,
+}: {
+  userId: string;
+  organizationId: string;
+}) {
+  const adminDefinition = getEnterpriseModuleDefinition("ADMIN_DASHBOARD");
+  const snapshot = await getEnterpriseAccessSnapshot(userId, organizationId);
+  if (!snapshot) {
+    return {
+      navigationDecisions: [] as EnterpriseModuleAccessDecision[],
+      adminDecision: denied(
+        "NO_ACTIVE_MEMBERSHIP",
+        "Aucun accès actif à cette entreprise n’a été trouvé.",
+        adminDefinition || null,
+      ),
+    };
+  }
+  return {
+    navigationDecisions: listNavigableEnterpriseModulesFromSnapshot(snapshot, "read"),
+    adminDecision: resolveFromSnapshot(snapshot, "ADMIN_DASHBOARD", "manage"),
+  };
+}
+
+export async function listNavigableEnterpriseModules({ userId, organizationId, action = "read" }: { userId: string; organizationId: string; action?: EnterpriseModuleAction }) {
+  const snapshot = await getEnterpriseAccessSnapshot(userId, organizationId);
+  if (!snapshot) return [];
+  return listNavigableEnterpriseModulesFromSnapshot(snapshot, action);
 }
 
 export async function listEnterpriseModuleConfigurationIssues(organizationId: string): Promise<EnterpriseModuleConfigurationIssue[]> {

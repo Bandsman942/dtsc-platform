@@ -29,8 +29,7 @@ import { dtsc } from "@/lib/dtsc";
 import { getPendingEnterpriseInvitationCount } from "@/lib/enterprise-invitations";
 import { getEnterpriseActivityBlocks } from "@/lib/enterprise/enterprise-activity-blocks-loader";
 import { organizationLogoProxyUrl } from "@/lib/enterprise/organization-logo-storage";
-import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
-import { getEnterpriseNavigationModules } from "@/lib/enterprise/enterprise-navigation";
+import { getEnterpriseShellNavigation } from "@/lib/enterprise/enterprise-navigation";
 import { getExperienceCopy } from "@/lib/experience-i18n";
 import { initials } from "@/lib/format";
 import { formatEnumLabelForLocale } from "@/lib/labels-i18n";
@@ -49,6 +48,7 @@ function brandingColor(value: unknown) {
 export async function AppShell({
   children,
   user,
+  precomputed,
 }: {
   children: React.ReactNode;
   user: {
@@ -61,6 +61,10 @@ export async function AppShell({
     pushNotificationsEnabled?: boolean;
     locale?: string | null;
   };
+  precomputed?: {
+    unreadNotifications?: number;
+    pendingEnterpriseInvitations?: number;
+  };
 }) {
   const performanceRecorder = createAppShellPerformanceRecorder();
   const session = await getSession();
@@ -72,9 +76,16 @@ export async function AppShell({
   const organizationContext = session?.activeContext === "ORGANIZATION" && Boolean(activeOrganizationId);
   const showCollaborationModule = Boolean(session);
   const copy = getExperienceCopy(user.locale);
-  const notificationWhere = session
-    ? await getVisibleNotificationWhereForSession(session)
-    : { userId: user.id, organizationId: null };
+  const unreadNotificationsPromise = precomputed?.unreadNotifications !== undefined
+    ? Promise.resolve(precomputed.unreadNotifications)
+    : session
+      ? getVisibleNotificationWhereForSession(session).then((notificationWhere) => prisma.notification.count({
+          where: { ...notificationWhere, readAt: null },
+        }))
+      : prisma.notification.count({ where: { userId: user.id, organizationId: null, readAt: null } });
+  const pendingEnterpriseInvitationsPromise = precomputed?.pendingEnterpriseInvitations !== undefined
+    ? Promise.resolve(precomputed.pendingEnterpriseInvitations)
+    : getPendingEnterpriseInvitationCount(user.id);
   const [
     unreadNotifications,
     unreadCollaboratorMessages,
@@ -82,29 +93,25 @@ export async function AppShell({
     pendingCompanyRelationships,
     employeeRecord,
     organizationMemberships,
-    enterpriseModules,
+    enterpriseShell,
     enterpriseActivityBlocks,
-    enterpriseAdminDecision,
     promotionalBanners,
   ] = await Promise.all([
-    performanceRecorder.timed("unreadNotifications", prisma.notification.count({
-      where: {
-        ...notificationWhere,
-        readAt: null,
-      },
-    })),
+    performanceRecorder.timed("unreadNotifications", unreadNotificationsPromise),
     performanceRecorder.timed("unreadCollaboratorMessages", getUnreadCollaborationMessageCount(session)),
-    performanceRecorder.timed("pendingEnterpriseInvitations", getPendingEnterpriseInvitationCount(user.id)),
+    performanceRecorder.timed("pendingEnterpriseInvitations", pendingEnterpriseInvitationsPromise),
     performanceRecorder.timed("pendingCompanyRelationships", prisma.enterpriseIdentityLink.count({
       where: {
         userId: user.id,
         status: { in: [...COMPANY_RELATIONSHIP_USER_ACTION_STATUSES] },
       },
     })),
-    performanceRecorder.timed("employeeRecord", prisma.hrcfoEmployee.findFirst({
-      where: { userId: user.id, status: { not: "EXITED" } },
-      select: { id: true },
-    })),
+    performanceRecorder.timed("employeeRecord", dtscInternalContext
+      ? prisma.hrcfoEmployee.findFirst({
+          where: { userId: user.id, status: { not: "EXITED" } },
+          select: { id: true },
+        })
+      : Promise.resolve(null)),
     performanceRecorder.timed("organizationMemberships", prisma.organizationMember.findMany({
       where: {
         userId: user.id,
@@ -120,19 +127,11 @@ export async function AppShell({
       take: 12,
     })),
     performanceRecorder.timed("enterpriseModules", organizationContext && activeOrganizationId
-      ? getEnterpriseNavigationModules(activeOrganizationId, user.id, user.locale)
-      : Promise.resolve([])),
+      ? getEnterpriseShellNavigation(activeOrganizationId, user.id, user.locale)
+      : Promise.resolve({ modules: [], adminDecision: null })),
     performanceRecorder.timed("enterpriseActivityBlocks", organizationContext && activeOrganizationId
       ? getEnterpriseActivityBlocks(activeOrganizationId, user.id)
       : Promise.resolve([])),
-    performanceRecorder.timed("enterpriseAdminDecision", organizationContext && activeOrganizationId
-      ? resolveEnterpriseModuleAccess({
-          userId: user.id,
-          organizationId: activeOrganizationId,
-          moduleCode: "ADMIN_DASHBOARD",
-          action: "manage",
-        })
-      : Promise.resolve(null)),
     performanceRecorder.timed("promotionalBanners", getVisiblePromotionalBannersForUser(user.id, user.role)),
   ]);
   performanceRecorder.finish({ organizationContext });
@@ -151,9 +150,9 @@ export async function AppShell({
     organizationContext && activeOrganizationId
       ? {
           organizationName: session?.activeOrganizationName || copy.dashboard.company,
-          showAdmin: enterpriseAdminDecision?.allowed === true,
+          showAdmin: enterpriseShell.adminDecision?.allowed === true,
           showActivities: enterpriseActivityBlocks.length > 0,
-          modules: enterpriseModules,
+          modules: enterpriseShell.modules,
         }
       : null;
   const organizationOptions = organizationMemberships

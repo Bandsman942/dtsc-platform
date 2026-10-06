@@ -47,6 +47,14 @@ Une URL, un body ou une clé étrangère fournie par le navigateur n’est jamai
 
 ## 5. Isolation multi-tenant
 
+### 5.1 Chemin critique Dashboard et AppShell
+
+Le Dashboard conserve des données exactes et serveur comme autorité. Lorsqu’il a déjà calculé un compteur utilisé par l’AppShell, il peut transmettre cette valeur au shell afin d’éviter une seconde lecture identique ; les autres pages continuent à résoudre leurs compteurs normalement.
+
+En contexte entreprise, la navigation ERP et l’accès Administration sont dérivés d’un même snapshot du résolveur d’accès canonique. Cette mutualisation n’introduit ni cache RBAC ni politique parallèle : membership, organisation, secteur, module, entitlement, dépendances et permissions restent évalués par `lib/enterprise/module-access.ts`.
+
+L’observabilité SCALE-7 expose des classes d’âge **agrégées** pour les sessions PostgreSQL `idle in transaction` (<100 ms, ≥100 ms, ≥1 s) sans SQL, PID, tenant ni utilisateur. Ces classes servent uniquement au diagnostic ; la gate de certification reste strictement zéro session observée.
+
 Toute requête métier vérifie :
 
 ```text
