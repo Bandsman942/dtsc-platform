@@ -59,6 +59,17 @@ export default async function DashboardPage() {
       precomputed={{
         unreadNotifications: workspace.account.unreadNotificationCount,
         pendingEnterpriseInvitations: workspace.account.pendingInvitationCount,
+        pendingCompanyRelationships: workspace.account.pendingRelationshipCount,
+        organizationMemberships: workspace.organizations.map((organization) => ({
+          role: organization.role,
+          organization: {
+            id: organization.id,
+            name: organization.name,
+            organizationType: organization.type,
+            logoUrl: organization.logoUrl,
+            brandingJson: organization.brandingJson,
+          },
+        })),
       }}
     >
       <ModuleWorkspace>

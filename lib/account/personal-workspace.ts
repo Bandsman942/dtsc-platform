@@ -64,6 +64,8 @@ export type PersonalWorkspaceSummary = {
     type: string;
     role: string;
     active: boolean;
+    logoUrl: string | null;
+    brandingJson: unknown;
   }>;
   actions: WorkspaceAction[];
   recentActivity: WorkspaceActivity[];
@@ -228,6 +230,7 @@ export async function getPersonalWorkspaceSummary({
             name: true,
             slug: true,
             logoUrl: true,
+            brandingJson: true,
             organizationType: true,
           },
         },
@@ -462,6 +465,8 @@ export async function getPersonalWorkspaceSummary({
       type: membership.organization.organizationType,
       role: membership.role,
       active: membership.organization.id === activeOrganizationId,
+      logoUrl: membership.organization.logoUrl,
+      brandingJson: membership.organization.brandingJson,
     })),
     actions: actions
       .sort((left, right) => {

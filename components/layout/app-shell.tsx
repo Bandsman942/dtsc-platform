@@ -64,6 +64,17 @@ export async function AppShell({
   precomputed?: {
     unreadNotifications?: number;
     pendingEnterpriseInvitations?: number;
+    pendingCompanyRelationships?: number;
+    organizationMemberships?: Array<{
+      role: string;
+      organization: {
+        id: string;
+        name: string;
+        organizationType: string;
+        logoUrl: string | null;
+        brandingJson: unknown;
+      };
+    }>;
   };
 }) {
   const performanceRecorder = createAppShellPerformanceRecorder();
@@ -86,6 +97,30 @@ export async function AppShell({
   const pendingEnterpriseInvitationsPromise = precomputed?.pendingEnterpriseInvitations !== undefined
     ? Promise.resolve(precomputed.pendingEnterpriseInvitations)
     : getPendingEnterpriseInvitationCount(user.id);
+  const pendingCompanyRelationshipsPromise = precomputed?.pendingCompanyRelationships !== undefined
+    ? Promise.resolve(precomputed.pendingCompanyRelationships)
+    : prisma.enterpriseIdentityLink.count({
+        where: {
+          userId: user.id,
+          status: { in: [...COMPANY_RELATIONSHIP_USER_ACTION_STATUSES] },
+        },
+      });
+  const organizationMembershipsPromise = precomputed?.organizationMemberships
+    ? Promise.resolve(precomputed.organizationMemberships)
+    : prisma.organizationMember.findMany({
+        where: {
+          userId: user.id,
+          status: "ACTIVE",
+          removedAt: null,
+          organization: { status: "ACTIVE", deletedAt: null },
+        },
+        select: {
+          role: true,
+          organization: { select: { id: true, name: true, organizationType: true, logoUrl: true, brandingJson: true } },
+        },
+        orderBy: { organization: { name: "asc" } },
+        take: 12,
+      });
   const [
     unreadNotifications,
     unreadCollaboratorMessages,
@@ -100,32 +135,14 @@ export async function AppShell({
     performanceRecorder.timed("unreadNotifications", unreadNotificationsPromise),
     performanceRecorder.timed("unreadCollaboratorMessages", getUnreadCollaborationMessageCount(session)),
     performanceRecorder.timed("pendingEnterpriseInvitations", pendingEnterpriseInvitationsPromise),
-    performanceRecorder.timed("pendingCompanyRelationships", prisma.enterpriseIdentityLink.count({
-      where: {
-        userId: user.id,
-        status: { in: [...COMPANY_RELATIONSHIP_USER_ACTION_STATUSES] },
-      },
-    })),
+    performanceRecorder.timed("pendingCompanyRelationships", pendingCompanyRelationshipsPromise),
     performanceRecorder.timed("employeeRecord", dtscInternalContext
       ? prisma.hrcfoEmployee.findFirst({
           where: { userId: user.id, status: { not: "EXITED" } },
           select: { id: true },
         })
       : Promise.resolve(null)),
-    performanceRecorder.timed("organizationMemberships", prisma.organizationMember.findMany({
-      where: {
-        userId: user.id,
-        status: "ACTIVE",
-        removedAt: null,
-        organization: { status: "ACTIVE", deletedAt: null },
-      },
-      select: {
-        role: true,
-        organization: { select: { id: true, name: true, organizationType: true, logoUrl: true, brandingJson: true } },
-      },
-      orderBy: { organization: { name: "asc" } },
-      take: 12,
-    })),
+    performanceRecorder.timed("organizationMemberships", organizationMembershipsPromise),
     performanceRecorder.timed("enterpriseModules", organizationContext && activeOrganizationId
       ? getEnterpriseShellNavigation(activeOrganizationId, user.id, user.locale)
       : Promise.resolve({ modules: [], adminDecision: null })),
