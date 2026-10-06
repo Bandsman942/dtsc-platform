@@ -109,18 +109,13 @@ export async function getUnreadCollaborationMessageCount(session: SessionPayload
     return 0;
   }
   const scopedGroupFilter = collaborationGroupScopeWhere(session);
-  const groups = await prisma.collaborationGroup.findMany({
-    where: { status: "ACTIVE", members: { some: { userId: session.userId, status: "ACTIVE" } }, ...scopedGroupFilter },
-    select: { id: true },
-    take: 500,
-  });
-  const groupIds = groups.map((group) => group.id);
-  if (!groupIds.length) {
-    return 0;
-  }
   return prisma.collaborationGroupMessage.count({
     where: {
-      groupId: { in: groupIds },
+      group: {
+        status: "ACTIVE",
+        members: { some: { userId: session.userId, status: "ACTIVE" } },
+        ...scopedGroupFilter,
+      },
       authorId: { not: session.userId },
       deletedAt: null,
       messageType: { not: "SYSTEM" },

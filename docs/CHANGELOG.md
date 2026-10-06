@@ -1,3 +1,12 @@
+## 2026-10-06 — SCALE-7H Dashboard/Collaboration tail (#777)
+
+- part du 500-ramp Production `37426549774` sur `312033fab1ea8603df3bf15453c4046cee031ad3` : global P95/P99 930,24 / 2 148,25 ms, Dashboard 1 198,10 / 2 261,27 ms, Collaboration 898,56 / 2 114,48 ms ;
+- réutilise dans l’AppShell les memberships et le compteur de relations déjà calculés par le Dashboard ;
+- enrichit le snapshot workspace avec logo et branding déjà présents dans la même lecture membership ;
+- remplace le calcul Collaboration non-lu en deux requêtes par un unique COUNT relationnel conservant le scope tenant et les exclusions existantes ;
+- conserve strictement les SLO SCALE-7, le pool Prisma maximal à 9 et la gate idle-in-transaction à zéro ;
+- ajoute `qa:scale7h-dashboard-collaboration-tail` à la régression canonique.
+
 ## 2026-10-04 — SCALE-7G AppShell Dashboard tail hardening (#775)
 
 - part du 500-ramp Production `37162367435` sur `f725fe1ff149ceac11f00ffed6824e256806181a`, où les gates globales passent mais Dashboard reste à P95/P99 1 034,01 / 2 525,42 ms ;

@@ -1,5 +1,19 @@
 # SCALE-7 — Staged load certification
 
+## SCALE-7H — suppression des relectures Dashboard et Collaboration
+
+Le run 500-ramp `37426549774` sur `main@312033fab1ea8603df3bf15453c4046cee031ad3` échoue encore sur le P99 global, le Dashboard et le P99 Collaboration alors que l’isolation reste à 100 %, Redis est OK et la base plafonne à 5,99 % d’utilisation.
+
+SCALE-7H (#777) supprime des lectures redondantes sans cache de droits :
+
+- le Dashboard transmet à l’AppShell le compteur de relations et le snapshot des memberships déjà chargés par `getPersonalWorkspaceSummary()` ;
+- ce snapshot inclut logo et branding depuis la lecture membership existante, sans requête supplémentaire ;
+- le compteur de messages Collaboration non lus devient un unique `collaborationGroupMessage.count` relationnel borné par groupe actif, membership actif, contexte autorisé et état de lecture ;
+- les autres pages conservent l’AppShell autonome ;
+- aucun seuil SCALE-7 ni contrôle idle-in-transaction n’est assoupli.
+
+Le 500-soak reste interdit tant qu’un nouveau 500-ramp sur le SHA Production livré n’est pas PASS.
+
 ## SCALE-7G — fermeture du résidu 500-ramp AppShell
 
 Le 500-ramp Production `37162367435` sur `main@f725fe1ff149ceac11f00ffed6824e256806181a` a exécuté k6 jusqu’au bout et localise le résidu de capacité au Dashboard :
