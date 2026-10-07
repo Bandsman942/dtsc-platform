@@ -54,7 +54,7 @@ Le détail d’une relation active charge la façade :
 
 `/api/account/enterprise-relationships/[organizationId]/benefits`
 
-Elle renvoie uniquement les avantages autorisés et, lorsque Retail est actif, la projection des vrais points et avoirs du client relié.
+Elle renvoie uniquement les capacités résolues, les avantages autorisés, l’historique des demandes du membre et, lorsque Retail est actif, la projection des vrais points et avoirs du client relié. Une demande encore en attente ou approuvée mais non consommée peut être annulée par son propriétaire ; le serveur revalide l’utilisateur, la relation, le tenant et la révision.
 
 ## Révocation
 
@@ -70,11 +70,13 @@ Statut initial : **NOT_EXECUTED**.
 4. Vérifier l’affichage de l’avantage et l’absence d’accès au tenant ERP.
 5. Appuyer sur l’action de l’avantage ; vérifier toast succès et création d’une demande unique.
 6. Rejouer volontairement la même clé idempotente via le scénario E2E : aucune seconde demande ne doit être créée.
-7. Côté entreprise, approuver puis marquer la demande comme utilisée ; vérifier notification et état côté client.
-8. Vérifier que le quota restant diminue.
-9. Révoquer la relation ; l’avantage doit disparaître ou devenir inaccessible immédiatement.
-10. Tester un identifiant `identityLinkId` d’un autre tenant : refus sûr sans fuite.
-11. Avec une entreprise Commerce Retail, vérifier que points et avoirs proviennent des comptes Retail existants et qu’aucun second ledger n’est créé.
-12. Vérifier 320/360/390/414 px, desktop, clair/sombre, FR/EN et clavier mobile.
+7. Créer une deuxième demande puis l’annuler côté compte global ; vérifier qu’elle passe à `CANCELLED`, qu’elle n’est plus comptée dans le quota et qu’une autre personne ne peut pas l’annuler.
+8. Côté entreprise, approuver puis marquer la première demande comme utilisée ; vérifier notification et état côté client.
+9. Vérifier que le quota restant diminue pour les usages actifs/consommés et se rétablit après annulation/refus.
+10. Révoquer la relation ; l’avantage doit disparaître ou devenir inaccessible immédiatement.
+11. Tester un identifiant `identityLinkId`, `benefitId` ou `usageId` d’un autre tenant/utilisateur : refus sûr sans fuite.
+12. Avec une entreprise Commerce Retail, vérifier que points et avoirs proviennent des comptes Retail existants et qu’aucun second ledger n’est créé.
+13. Vérifier l’aperçu des capacités résolues (services/documents) sans lien vers un workspace tenant non autorisé.
+14. Vérifier 320/360/390/414 px, desktop, clair/sombre, FR/EN et clavier mobile.
 
 La fusion ne doit pas présenter cet E2E comme exécuté tant que le propriétaire ne l’a pas confirmé.
