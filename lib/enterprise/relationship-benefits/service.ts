@@ -393,7 +393,7 @@ export async function resolveEnterpriseRelationshipBenefits({
 }) {
   const access = await resolveEnterpriseIdentityRelationshipAccess({ userId, organizationId, identityLinkId });
   if (!access.allowed || !access.identityLinkId || !access.capabilities.includes("ENTERPRISE_BENEFITS")) {
-    return { access, items: [], retail: null };
+    return { access, items: [], requests: [], retail: null };
   }
 
   const link = await prisma.enterpriseIdentityLink.findFirst({
@@ -404,6 +404,7 @@ export async function resolveEnterpriseRelationshipBenefits({
     return {
       access: { ...access, allowed: false, code: "RELATIONSHIP_NOT_FOUND" as const, capabilities: [], message: "La relation active est introuvable." },
       items: [],
+      requests: [],
       retail: null,
     };
   }
@@ -430,8 +431,21 @@ export async function resolveEnterpriseRelationshipBenefits({
       take: 200,
     }),
     prisma.enterpriseRelationshipBenefitUsage.findMany({
-      where: { organizationId, identityLinkId: link.id, status: { notIn: ["REJECTED", "CANCELLED"] } },
-      select: { benefitId: true, requestedAt: true, status: true },
+      where: { organizationId, identityLinkId: link.id, userId },
+      select: {
+        id: true,
+        benefitId: true,
+        actionCode: true,
+        status: true,
+        note: true,
+        organizationNote: true,
+        requestedAt: true,
+        decidedAt: true,
+        consumedAt: true,
+        cancelledAt: true,
+        revision: true,
+        benefit: { select: { nameFr: true, nameEn: true } },
+      },
       orderBy: { requestedAt: "desc" },
       take: 1000,
     }),
@@ -445,6 +459,7 @@ export async function resolveEnterpriseRelationshipBenefits({
   );
   const usageByBenefit = new Map<string, Date[]>();
   for (const usage of usages) {
+    if (["REJECTED", "CANCELLED"].includes(usage.status)) continue;
     const list = usageByBenefit.get(usage.benefitId) || [];
     list.push(usage.requestedAt);
     usageByBenefit.set(usage.benefitId, list);
@@ -506,7 +521,24 @@ export async function resolveEnterpriseRelationshipBenefits({
     }];
   });
 
-  return { access, items, retail };
+  const requests = usages.slice(0, 100).map((usage) => ({
+    id: usage.id,
+    benefitId: usage.benefitId,
+    benefitNameFr: usage.benefit.nameFr,
+    benefitNameEn: usage.benefit.nameEn,
+    actionCode: usage.actionCode,
+    status: usage.status,
+    note: usage.note,
+    organizationNote: usage.organizationNote,
+    requestedAt: usage.requestedAt.toISOString(),
+    decidedAt: iso(usage.decidedAt),
+    consumedAt: iso(usage.consumedAt),
+    cancelledAt: iso(usage.cancelledAt),
+    revision: usage.revision,
+    canCancel: ["REQUESTED", "APPROVED"].includes(usage.status),
+  }));
+
+  return { access, items, requests, retail };
 }
 
 export async function createRelationshipBenefitUsage({
@@ -592,6 +624,103 @@ export async function createRelationshipBenefitUsage({
     }
     throw error;
   }
+}
+
+export async function cancelRelationshipBenefitUsageByUser({
+  organizationId,
+  usageId,
+  identityLinkId,
+  userId,
+  revision,
+}: {
+  organizationId: string;
+  usageId: string;
+  identityLinkId: string;
+  userId: string;
+  revision: number;
+}) {
+  const link = await prisma.enterpriseIdentityLink.findFirst({
+    where: { id: identityLinkId, organizationId, userId },
+    select: { id: true },
+  });
+  if (!link) {
+    throw new EnterpriseRelationshipBenefitError(
+      "RELATIONSHIP_BENEFIT_RELATION_NOT_FOUND",
+      "Cette relation avec l’entreprise est introuvable.",
+      404,
+    );
+  }
+
+  const usage = await prisma.enterpriseRelationshipBenefitUsage.findFirst({
+    where: { id: usageId, organizationId, identityLinkId, userId },
+  });
+  if (!usage) {
+    throw new EnterpriseRelationshipBenefitError(
+      "RELATIONSHIP_BENEFIT_USAGE_NOT_FOUND",
+      "Cette demande d’avantage est introuvable.",
+      404,
+    );
+  }
+  if (usage.revision !== revision) {
+    throw new EnterpriseRelationshipBenefitError(
+      "RELATIONSHIP_BENEFIT_USAGE_CONFLICT",
+      "Cette demande a changé. Actualisez avant de réessayer.",
+      409,
+    );
+  }
+  if (!["REQUESTED", "APPROVED"].includes(usage.status)) {
+    throw new EnterpriseRelationshipBenefitError(
+      "RELATIONSHIP_BENEFIT_USAGE_CANNOT_CANCEL",
+      "Cette demande ne peut plus être annulée.",
+      409,
+    );
+  }
+
+  const updated = await prisma.enterpriseRelationshipBenefitUsage.updateMany({
+    where: {
+      id: usageId,
+      organizationId,
+      identityLinkId,
+      userId,
+      revision,
+      status: { in: ["REQUESTED", "APPROVED"] },
+    },
+    data: {
+      status: "CANCELLED",
+      cancelledAt: new Date(),
+      revision: { increment: 1 },
+    },
+  });
+  if (updated.count !== 1) {
+    throw new EnterpriseRelationshipBenefitError(
+      "RELATIONSHIP_BENEFIT_USAGE_CONFLICT",
+      "Cette demande a changé. Actualisez avant de réessayer.",
+      409,
+    );
+  }
+
+  const admins = await prisma.organizationMember.findMany({
+    where: {
+      organizationId,
+      status: "ACTIVE",
+      removedAt: null,
+      role: { in: ["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE", "MANAGER"] },
+    },
+    select: { userId: true },
+    take: 50,
+  });
+  await notifyUsers({
+    userIds: admins.map((item) => item.userId),
+    organizationId,
+    type: "ENTERPRISE_RELATIONSHIP",
+    title: "Demande d’avantage annulée",
+    body: "Le membre lié a annulé une demande d’avantage qui n’était pas encore consommée.",
+    targetUrl: `/enterprise-relationship-benefits?usage=${usage.id}`,
+  });
+
+  return prisma.enterpriseRelationshipBenefitUsage.findFirst({
+    where: { id: usageId, organizationId, identityLinkId, userId },
+  });
 }
 
 export async function decideRelationshipBenefitUsage({
