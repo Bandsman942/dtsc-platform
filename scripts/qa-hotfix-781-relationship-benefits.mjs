@@ -74,7 +74,9 @@ hasAll(service, [
   "enterprisePersonBusinessReference",
   "notifyUsers",
   "notifyUser",
-], "Server authority, Retail aggregation and notifications");
+  "cancelRelationshipBenefitUsageByUser",
+  'status: { in: ["REQUESTED", "APPROVED"] }',
+], "Server authority, Retail aggregation, cancellation and notifications");
 
 expect(!service.includes("EnterpriseRetailLoyaltyProgram.create"), "Relationship engine must not duplicate Retail loyalty programs");
 expect(!service.includes("EnterpriseRetailLoyaltyAccount.create"), "Relationship engine must not duplicate Retail loyalty accounts");
@@ -104,6 +106,9 @@ hasAll(accountApi, [
   "relationshipBenefitUsageSchema",
   "rateLimit",
   "writeAuditLog",
+  "relationshipBenefitUsageCancelSchema",
+  "cancelRelationshipBenefitUsageByUser",
+  "export async function PATCH",
 ], "Global account relationship facade");
 
 hasAll(adminPage, [
@@ -127,7 +132,11 @@ hasAll(userUi, [
   "idempotencyKey",
   "Fidélité Retail",
   "Cartes-cadeaux et avoirs",
-], "Customer benefit UI and Retail projection");
+  "Services autorisés par la relation",
+  "Mes demandes d’avantages",
+  "Cancel request",
+  'method: "PATCH"',
+], "Customer benefit UI, request lifecycle and Retail projection");
 hasAll(relationshipUi, [
   "RelationshipBenefitsUserPanel",
   'selectedLink?.status === "ACTIVE"',
