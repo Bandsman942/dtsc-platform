@@ -559,7 +559,20 @@ export async function createRelationshipBenefitUsage({
   const existing = await prisma.enterpriseRelationshipBenefitUsage.findUnique({
     where: { organizationId_idempotencyKey: { organizationId, idempotencyKey } },
   });
-  if (existing) return existing;
+  if (existing) {
+    if (
+      existing.userId !== userId ||
+      existing.identityLinkId !== identityLinkId ||
+      existing.benefitId !== benefitId
+    ) {
+      throw new EnterpriseRelationshipBenefitError(
+        "RELATIONSHIP_BENEFIT_IDEMPOTENCY_COLLISION",
+        "Cette clé de reprise est déjà utilisée pour une autre demande.",
+        409,
+      );
+    }
+    return existing;
+  }
 
   const resolved = await resolveEnterpriseRelationshipBenefits({ userId, organizationId, identityLinkId });
   const benefit = resolved.items.find((item) => item.id === benefitId);
@@ -620,7 +633,21 @@ export async function createRelationshipBenefitUsage({
       const retry = await prisma.enterpriseRelationshipBenefitUsage.findUnique({
         where: { organizationId_idempotencyKey: { organizationId, idempotencyKey } },
       });
-      if (retry) return retry;
+      if (
+        retry &&
+        retry.userId === userId &&
+        retry.identityLinkId === identityLinkId &&
+        retry.benefitId === benefitId
+      ) {
+        return retry;
+      }
+      if (retry) {
+        throw new EnterpriseRelationshipBenefitError(
+          "RELATIONSHIP_BENEFIT_IDEMPOTENCY_COLLISION",
+          "Cette clé de reprise est déjà utilisée pour une autre demande.",
+          409,
+        );
+      }
     }
     throw error;
   }
@@ -769,6 +796,48 @@ export async function decideRelationshipBenefitUsage({
       "Cette demande ne peut plus passer dans l’état choisi.",
       409,
     );
+  }
+
+  if (status === "APPROVED" || status === "CONSUMED") {
+    const now = new Date();
+    const [activeLink, activeBenefit] = await Promise.all([
+      prisma.enterpriseIdentityLink.findFirst({
+        where: {
+          id: usage.identityLinkId,
+          organizationId,
+          userId: usage.userId,
+          status: "ACTIVE",
+        },
+        select: { id: true },
+      }),
+      prisma.enterpriseRelationshipBenefit.findFirst({
+        where: {
+          id: usage.benefitId,
+          organizationId,
+          status: "ACTIVE",
+          archivedAt: null,
+          AND: [
+            { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
+            { OR: [{ endsAt: null }, { endsAt: { gte: now } }] },
+          ],
+        },
+        select: { id: true },
+      }),
+    ]);
+    if (!activeLink) {
+      throw new EnterpriseRelationshipBenefitError(
+        "RELATIONSHIP_BENEFIT_RELATION_INACTIVE",
+        "La relation n’est plus active : cet avantage ne peut plus être approuvé ni consommé.",
+        409,
+      );
+    }
+    if (!activeBenefit) {
+      throw new EnterpriseRelationshipBenefitError(
+        "RELATIONSHIP_BENEFIT_INACTIVE",
+        "Cet avantage n’est plus actif : la demande peut être refusée ou annulée, mais pas consommée.",
+        409,
+      );
+    }
   }
 
   const data: Prisma.EnterpriseRelationshipBenefitUsageUpdateManyMutationInput = {
