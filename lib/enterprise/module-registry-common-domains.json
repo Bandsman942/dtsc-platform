@@ -211,13 +211,11 @@
         "enterprise.identity.",
         "enterprise.relationships."
       ],
-      "accessPolicy": "ADMIN_ONLY",
+      "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "BUSINESS",
       "requiresActiveSubscription": true,
       "applicableSectors": "ALL",
-      "dependencies": [
-        "IDENTITY_CONSENTS"
-      ],
+      "dependencies": [],
       "recommendedIntegrations": [
         "CRM_CUSTOMERS"
       ],

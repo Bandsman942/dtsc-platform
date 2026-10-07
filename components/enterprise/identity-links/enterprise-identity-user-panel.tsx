@@ -9,6 +9,7 @@ import { FullscreenEntityDetail } from "@/components/workspace/fullscreen-entity
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
 import { ProfessionalTabs } from "@/components/enterprise/professional/professional-erp-ui";
+import { RelationshipBenefitsUserPanel } from "@/components/enterprise/relationship-benefits/relationship-benefits-user-panel";
 import { StatusBadge, type StatusBadgeTone } from "@/components/workspace/status-badge";
 import {
   ENTERPRISE_IDENTITY_RELATION_TYPES,
@@ -337,7 +338,7 @@ export function EnterpriseIdentityUserPanel({
               <DetailFact label="Activée le" value={selectedLink ? readableDate(selectedLink.activatedAt) : "—"} />
               <DetailFact label="Dernière révision" value={selectedLink ? String(selectedLink.revision) : "Invitation privée"} />
             </div>
-            {detailStatus === "INVITATION_PENDING" ? <p className="rounded-xl border border-cyan-400/30 bg-cyan-400/5 p-4 text-sm leading-6 text-dtsc-muted">Votre consentement est requis. Utilisez le menu <strong className="text-dtsc-ink">…</strong> en haut de cette fiche pour accepter ou refuser. Le serveur vérifie votre compte, l’adresse invitée, l’expiration et la version de la relation avant toute décision.</p> : null}
+            {selectedLink?.status === "ACTIVE" && selectedLink.organizationId ? <RelationshipBenefitsUserPanel organizationId={selectedLink.organizationId} identityLinkId={selectedLink.id} /> : null}\n            {detailStatus === "INVITATION_PENDING" ? <p className="rounded-xl border border-cyan-400/30 bg-cyan-400/5 p-4 text-sm leading-6 text-dtsc-muted">Votre consentement est requis. Utilisez le menu <strong className="text-dtsc-ink">…</strong> en haut de cette fiche pour accepter ou refuser. Le serveur vérifie votre compte, l’adresse invitée, l’expiration et la version de la relation avant toute décision.</p> : null}
           </div>
         ) : null}
       </FullscreenEntityDetail>
