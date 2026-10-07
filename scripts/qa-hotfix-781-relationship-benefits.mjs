@@ -87,7 +87,7 @@ hasAll(service, [
 expect(!service.includes("EnterpriseRetailLoyaltyProgram.create"), "Relationship engine must not duplicate Retail loyalty programs");
 expect(!service.includes("EnterpriseRetailLoyaltyAccount.create"), "Relationship engine must not duplicate Retail loyalty accounts");
 expect(!service.includes("EnterpriseRetailStoredValueAccount.create"), "Relationship engine must not dual-write Retail stored value");
-expect(!/\\$queryRaw(?:Unsafe)?[\\s\\S]{0,220}pg_advisory_xact_lock/.test(service), "Relationship engine must not use $queryRaw for benefit quota locks");
+expect(!/\$queryRaw(?:Unsafe)?[\s\S]{0,220}pg_advisory_xact_lock/.test(service), "Relationship engine must not use $queryRaw for benefit quota locks");
 
 hasAll(http, [
   "isSameOriginRequest",
@@ -149,7 +149,7 @@ hasAll(relationshipUi, [
   "RelationshipBenefitsUserPanel",
   'selectedLink?.status === "ACTIVE"',
 ], "Active relationship integration");
-expect(!relationshipUi.includes("}\\\\n            {detailStatus"), "Active relationship UI contains an escaped newline artifact");
+expect(!relationshipUi.includes("}\\n            {detailStatus"), "Active relationship UI contains an escaped newline artifact");
 
 if (failures.length) {
   console.error("\nHotfix #781 QA failed:");
