@@ -95,8 +95,9 @@ const CAPABILITY_COPY: Record<string, { fr: string; en: string; icon: typeof Shi
   TARGETED_NOTIFICATIONS: { fr: "Notifications ciblées", en: "Targeted notifications", icon: Layers3 },
   SHARED_DOCUMENTS: { fr: "Documents partagés", en: "Shared documents", icon: FileText },
   CUSTOMER_SERVICES: { fr: "Services client", en: "Customer services", icon: Layers3 },
+  SUPPLIER_SERVICES: { fr: "Services fournisseur", en: "Supplier services", icon: Layers3 },
+  EMPLOYEE_SERVICES: { fr: "Services employé", en: "Employee services", icon: Layers3 },
   COLLABORATOR_SERVICES: { fr: "Services collaborateur", en: "Collaborator services", icon: Layers3 },
-  PURCHASES: { fr: "Achats et commandes", en: "Purchases and orders", icon: Layers3 },
   ENTERPRISE_BENEFITS: { fr: "Avantages entreprise", en: "Enterprise benefits", icon: BadgePercent },
 };
 
