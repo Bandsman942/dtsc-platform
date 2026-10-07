@@ -76,6 +76,9 @@ hasAll(service, [
   "notifyUser",
   "cancelRelationshipBenefitUsageByUser",
   'status: { in: ["REQUESTED", "APPROVED"] }',
+  "RELATIONSHIP_BENEFIT_IDEMPOTENCY_COLLISION",
+  "RELATIONSHIP_BENEFIT_RELATION_INACTIVE",
+  'status: "ACTIVE"',
 ], "Server authority, Retail aggregation, cancellation and notifications");
 
 expect(!service.includes("EnterpriseRetailLoyaltyProgram.create"), "Relationship engine must not duplicate Retail loyalty programs");
