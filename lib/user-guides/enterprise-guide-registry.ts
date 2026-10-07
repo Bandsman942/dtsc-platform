@@ -139,6 +139,15 @@ const COMMON_ENTERPRISE_USER_GUIDES: Record<string, EnterpriseGuideSource> = {
     controls: ["Créer un actif ne crée pas automatiquement une immobilisation comptable.", "Les affectations et retours restent historisés."],
     troubleshooting: ["Affectation impossible : l’actif doit être disponible et le collaborateur actif."],
   },
+  RELATIONSHIP_BENEFITS: {
+    title: "Relations & avantages",
+    purpose: "Créer et publier des avantages destinés aux personnes dont la relation DTSC avec l’entreprise est active, sans leur ouvrir le tenant ERP.",
+    prerequisites: ["Disposer du module Relations & avantages dans le plan actif.", "Disposer d’au moins une relation active pour les attributions manuelles."],
+    steps: ["Créez l’avantage en français et en anglais.", "Choisissez le ciblage automatique, manuel ou hybride.", "Définissez période, quotas et action proposée au membre.", "Publiez l’avantage.", "Traitez les demandes dans l’onglet Demandes."],
+    workflow: ["Brouillon → Actif → Suspendu ou Archivé.", "Demande membre → Approuvée ou Refusée → Utilisée ou Annulée."],
+    controls: ["Le serveur revérifie la relation et les quotas avant chaque utilisation.", "Une relation active ne donne aucun membership implicite.", "La fidélité Retail n’est jamais recopiée dans ce module."],
+    troubleshooting: ["Avantage absent côté client : vérifiez relation ACTIVE, plan, module, audience, période et quota.", "Demande introuvable : actualisez et vérifiez la relation concernée."],
+  },
 };
 
 export function getEnterpriseGuideSource(code: string): EnterpriseGuideSource | null {
