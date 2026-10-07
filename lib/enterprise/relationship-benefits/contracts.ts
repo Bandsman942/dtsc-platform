@@ -70,3 +70,10 @@ export const relationshipBenefitUsageDecisionSchema = z.object({
   revision: z.number().int().positive(),
   note: z.string().trim().max(800).optional().nullable(),
 });
+
+
+export const relationshipBenefitUsageCancelSchema = z.object({
+  identityLinkId: z.string().trim().min(1).max(191),
+  usageId: z.string().trim().min(1).max(191),
+  revision: z.number().int().positive(),
+});
