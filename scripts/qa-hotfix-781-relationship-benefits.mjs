@@ -132,6 +132,7 @@ hasAll(relationshipUi, [
   "RelationshipBenefitsUserPanel",
   'selectedLink?.status === "ACTIVE"',
 ], "Active relationship integration");
+expect(!relationshipUi.includes("}\\\\n            {detailStatus"), "Active relationship UI contains an escaped newline artifact");
 
 if (failures.length) {
   console.error("\nHotfix #781 QA failed:");
