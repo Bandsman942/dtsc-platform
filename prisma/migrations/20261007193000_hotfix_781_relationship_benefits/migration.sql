@@ -111,7 +111,7 @@ SELECT
   'Relations & avantages', 'Relationships & benefits',
   'Catalogue d’avantages et interactions des relations actives.',
   'Benefit catalogue and interactions for active relationships.',
-  'ADMINISTRATION', 'badge-percent', true, false, NULL, 'BUSINESS', 75, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+  'ADMINISTRATION', 'badge-dollar-sign', true, false, NULL, 'BUSINESS', 75, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 FROM "Organization" o
 WHERE o."organizationType" = 'CLIENT' AND o."deletedAt" IS NULL
 ON CONFLICT ("organizationId","moduleCode") DO NOTHING;
