@@ -928,6 +928,7 @@ model Organization {
   enterpriseSecurityPolicy     EnterpriseOrganizationSecurityPolicy?
   enterpriseActivityRequests   EnterpriseActivityRequest[]
   enterpriseSectorRecords      EnterpriseSectorRecord[]
+  enterpriseRelationshipBenefits EnterpriseRelationshipBenefit[]
   healthPatients               HealthPatient[]
   healthPatientEvents          HealthPatientEvent[]
   healthAppointments           HealthAppointment[]
