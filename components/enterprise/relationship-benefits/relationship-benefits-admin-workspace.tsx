@@ -4,6 +4,7 @@ import { FormEvent, useMemo, useState } from "react";
 import { BadgePercent, Check, CheckCircle2, Clock3, Loader2, Pause, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { notifyToast } from "@/lib/client-toast";
 import {
   ENTERPRISE_IDENTITY_RELATION_TYPES,
@@ -336,7 +337,7 @@ export function RelationshipBenefitsAdminWorkspace({
           <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <label className="text-sm font-black text-dtsc-ink">{english ? "Value type" : "Type de valeur"}<select name="valueType" defaultValue="NONE" className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal"><option value="NONE">{english ? "No numeric value" : "Sans valeur numérique"}</option><option value="PERCENT">{english ? "Percentage" : "Pourcentage"}</option><option value="AMOUNT">{english ? "Amount" : "Montant"}</option><option value="POINTS">Points</option></select></label>
             <label className="text-sm font-black text-dtsc-ink">{english ? "Value" : "Valeur"}<input name="valueDecimal" type="number" min="0" step="0.01" className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal" /></label>
-            <label className="text-sm font-black text-dtsc-ink">{english ? "Currency" : "Devise"}<input name="currencyCode" maxLength={3} placeholder="CDF" className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal uppercase" /></label>
+            <label className="text-sm font-black text-dtsc-ink">{english ? "Currency" : "Devise"}<Input name="currencyCode" placeholder={english ? "Select currency" : "Sélectionner une devise"} className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal" /></label>
             <label className="text-sm font-black text-dtsc-ink">{english ? "Member action" : "Action membre"}<select name="actionCode" defaultValue="REQUEST" className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal"><option value="NONE">{english ? "Informational only" : "Information uniquement"}</option><option value="REQUEST">{english ? "Request" : "Demander"}</option><option value="CLAIM">{english ? "Claim" : "Utiliser"}</option><option value="BOOK">{english ? "Book" : "Réserver"}</option><option value="CONTACT">{english ? "Contact company" : "Contacter l’entreprise"}</option></select></label>
             <label className="text-sm font-black text-dtsc-ink">{english ? "French action label" : "Libellé action FR"}<input name="actionLabelFr" placeholder="Demander une livraison" className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal" /></label>
             <label className="text-sm font-black text-dtsc-ink">{english ? "English action label" : "Libellé action EN"}<input name="actionLabelEn" placeholder="Request delivery" className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal" /></label>
