@@ -105,6 +105,7 @@ hasAll(usageApi, ["writeAuditLog", "relationshipBenefitUsageDecisionSchema"], "U
 
 hasAll(accountApi, [
   "requireIdentityLinkSession",
+  "EnterpriseIdentityLinkError",
   "resolveEnterpriseRelationshipBenefits",
   "relationshipBenefitUsageSchema",
   "rateLimit",
