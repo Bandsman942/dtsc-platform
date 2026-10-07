@@ -8,6 +8,7 @@ import { notifyToast } from "@/lib/client-toast";
 import {
   ENTERPRISE_IDENTITY_RELATION_TYPES,
   getEnterpriseIdentityRelationLabel,
+  type EnterpriseIdentityRelationType,
 } from "@/lib/enterprise/identity-links/contracts";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
@@ -216,7 +217,7 @@ export function RelationshipBenefitsAdminWorkspace({
         title={english ? "Relationships & benefits" : "Relations & avantages"}
         description={english ? "Create benefits, choose eligible relationships and process member requests without granting tenant access." : "Créez les avantages, choisissez les relations éligibles et traitez les demandes des membres sans leur donner accès au tenant."}
         count={english ? `${benefits.length} benefits` : `${benefits.length} avantage${benefits.length > 1 ? "s" : ""}`}
-        actions={canManage ? <Button type="button" onClick={() => setEditorOpen(true)}><Plus className="mr-2 h-4 w-4" />{english ? "New benefit" : "Nouvel avantage"}</Button> : null}
+        primaryAction={canManage ? <Button type="button" onClick={() => setEditorOpen(true)}><Plus className="mr-2 h-4 w-4" />{english ? "New benefit" : "Nouvel avantage"}</Button> : null}
       />
       <ModuleMetrics label={english ? "Relationship benefit indicators" : "Indicateurs des avantages relationnels"}>
         <ModuleMetric label={english ? "Active" : "Actifs"} value={benefits.filter((item) => item.status === "ACTIVE").length} />
@@ -242,9 +243,9 @@ export function RelationshipBenefitsAdminWorkspace({
                     title={english ? benefit.nameEn : benefit.nameFr}
                     leading={<BadgePercent className="h-5 w-5 text-cyan-600" />}
                     status={<StatusBadge tone={tone(benefit.status)}>{localStatus(benefit.status, english)}</StatusBadge>}
-                    meta={`${benefit.code} · ${benefit.relationTypes.length ? benefit.relationTypes.map((item) => getEnterpriseIdentityRelationLabel(item as never, locale)).join(", ") : (english ? "All active relationship types" : "Tous les types de relation active")}`}
+                    meta={`${benefit.code} · ${benefit.relationTypes.length ? benefit.relationTypes.map((item) => getEnterpriseIdentityRelationLabel(item as EnterpriseIdentityRelationType, locale)).join(", ") : (english ? "All active relationship types" : "Tous les types de relation active")}`}
                     description={english ? benefit.descriptionEn : benefit.descriptionFr}
-                    trailing={canManage ? (
+                    actions={canManage ? (
                       <div data-no-group-swipe data-responsive-actions className="flex flex-wrap gap-2">
                         {benefit.status !== "ACTIVE" && benefit.status !== "ARCHIVED" ? <Button type="button" size="sm" onClick={(event) => { event.stopPropagation(); void changeBenefitStatus(benefit, "ACTIVE"); }} disabled={busy !== null}><Check className="mr-1 h-4 w-4" />{english ? "Publish" : "Publier"}</Button> : null}
                         {benefit.status === "ACTIVE" ? <Button type="button" size="sm" variant="outline" onClick={(event) => { event.stopPropagation(); void changeBenefitStatus(benefit, "SUSPENDED"); }} disabled={busy !== null}><Pause className="mr-1 h-4 w-4" />{english ? "Suspend" : "Suspendre"}</Button> : null}
@@ -275,7 +276,7 @@ export function RelationshipBenefitsAdminWorkspace({
                         status={<StatusBadge tone={tone(usage.status)}>{localStatus(usage.status, english)}</StatusBadge>}
                         meta={benefit ? (english ? benefit.nameEn : benefit.nameFr) : (english ? "Benefit" : "Avantage")}
                         description={usage.note || (english ? "No member note." : "Aucune note du membre.")}
-                        trailing={canManage ? (
+                        actions={canManage ? (
                           <div data-no-group-swipe data-responsive-actions className="flex flex-wrap gap-2">
                             {usage.status === "REQUESTED" ? <>
                               <Button type="button" size="sm" onClick={(event) => { event.stopPropagation(); void decideUsage(usage, "APPROVED"); }} disabled={busy !== null}><Check className="mr-1 h-4 w-4" />{english ? "Approve" : "Approuver"}</Button>
@@ -327,7 +328,7 @@ export function RelationshipBenefitsAdminWorkspace({
           <fieldset className="min-w-0 rounded-xl border border-dtsc-border p-4">
             <legend className="px-2 text-sm font-black text-dtsc-ink">{english ? "Manual assignments" : "Attributions manuelles"}</legend>
             <div className="grid min-w-0 gap-2 sm:grid-cols-2">
-              {links.map((link) => <label key={link.id} className="flex min-w-0 items-center gap-2 text-sm text-dtsc-ink"><input type="checkbox" name="identityLinkIds" value={link.id} /> <span className="break-words">{link.personName} · {getEnterpriseIdentityRelationLabel(link.relationType as never, locale)}</span></label>)}
+              {links.map((link) => <label key={link.id} className="flex min-w-0 items-center gap-2 text-sm text-dtsc-ink"><input type="checkbox" name="identityLinkIds" value={link.id} /> <span className="break-words">{link.personName} · {getEnterpriseIdentityRelationLabel(link.relationType as EnterpriseIdentityRelationType, locale)}</span></label>)}
               {!links.length ? <p className="text-sm text-dtsc-muted">{english ? "No active relationship is available." : "Aucune relation active n’est disponible."}</p> : null}
             </div>
           </fieldset>
