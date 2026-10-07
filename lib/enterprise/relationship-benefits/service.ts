@@ -574,41 +574,201 @@ export async function createRelationshipBenefitUsage({
     return existing;
   }
 
-  const resolved = await resolveEnterpriseRelationshipBenefits({ userId, organizationId, identityLinkId });
-  const benefit = resolved.items.find((item) => item.id === benefitId);
-  if (!benefit) {
+  const resolved = await resolveEnterpriseRelationshipBenefits({
+    userId,
+    organizationId,
+    identityLinkId,
+  });
+  const resolvedBenefit = resolved.items.find((item) => item.id === benefitId);
+  if (!resolvedBenefit) {
     throw new EnterpriseRelationshipBenefitError(
       "RELATIONSHIP_BENEFIT_NOT_ELIGIBLE",
       "Cet avantage n’est pas disponible pour cette relation.",
       403,
     );
   }
-  if (!benefit.usable) {
+  if (!resolvedBenefit.usable) {
     throw new EnterpriseRelationshipBenefitError(
       "RELATIONSHIP_BENEFIT_LIMIT_REACHED",
       "La limite d’utilisation de cet avantage est atteinte.",
       409,
     );
   }
-  if (benefit.actionCode === "NONE") {
+  if (resolvedBenefit.actionCode === "NONE") {
     throw new EnterpriseRelationshipBenefitError(
       "RELATIONSHIP_BENEFIT_NO_ACTION",
       "Cet avantage est informatif et ne nécessite aucune demande.",
     );
   }
 
-  try {
-    const usage = await prisma.enterpriseRelationshipBenefitUsage.create({
-      data: {
+  const lockKey = `${organizationId}:relationship-benefit:${identityLinkId}:${benefitId}`;
+  const result = await prisma.$transaction(
+    async (tx) => {
+      await tx.$executeRaw(
+        Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey})::bigint)`,
+      );
+
+      const retry = await tx.enterpriseRelationshipBenefitUsage.findUnique({
+        where: { organizationId_idempotencyKey: { organizationId, idempotencyKey } },
+      });
+      if (retry) {
+        if (
+          retry.userId !== userId ||
+          retry.identityLinkId !== identityLinkId ||
+          retry.benefitId !== benefitId
+        ) {
+          throw new EnterpriseRelationshipBenefitError(
+            "RELATIONSHIP_BENEFIT_IDEMPOTENCY_COLLISION",
+            "Cette clé de reprise est déjà utilisée pour une autre demande.",
+            409,
+          );
+        }
+        return { usage: retry, created: false };
+      }
+
+      const now = new Date();
+      const link = await tx.enterpriseIdentityLink.findFirst({
+        where: {
+          id: identityLinkId,
+          organizationId,
+          userId,
+          status: "ACTIVE",
+          activatedAt: { not: null },
+          userDecisionAt: { not: null },
+          organizationDecisionAt: { not: null },
+        },
+        select: {
+          id: true,
+          requestedRelationType: true,
+          requestedRoleCode: true,
+        },
+      });
+      if (!link) {
+        throw new EnterpriseRelationshipBenefitError(
+          "RELATIONSHIP_BENEFIT_RELATION_INACTIVE",
+          "La relation n’est plus active ou approuvée : cet avantage ne peut plus être demandé.",
+          409,
+        );
+      }
+
+      const benefit = await tx.enterpriseRelationshipBenefit.findFirst({
+        where: {
+          id: benefitId,
+          organizationId,
+          status: "ACTIVE",
+          archivedAt: null,
+          AND: [
+            { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
+            { OR: [{ endsAt: null }, { endsAt: { gte: now } }] },
+          ],
+        },
+        include: { audiences: true },
+      });
+      if (!benefit) {
+        throw new EnterpriseRelationshipBenefitError(
+          "RELATIONSHIP_BENEFIT_INACTIVE",
+          "Cet avantage n’est plus actif.",
+          409,
+        );
+      }
+      if (benefit.actionCode === "NONE") {
+        throw new EnterpriseRelationshipBenefitError(
+          "RELATIONSHIP_BENEFIT_NO_ACTION",
+          "Cet avantage est informatif et ne nécessite aucune demande.",
+        );
+      }
+
+      const assignment = await tx.enterpriseRelationshipBenefitAssignment.findFirst({
+        where: {
+          organizationId,
+          benefitId,
+          identityLinkId,
+          status: "ACTIVE",
+          AND: [
+            { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
+            { OR: [{ endsAt: null }, { endsAt: { gte: now } }] },
+          ],
+        },
+        select: { id: true },
+      });
+      const audienceMatch =
+        benefit.audiences.length === 0 ||
+        benefit.audiences.some(
+          (audience) =>
+            audience.relationType === link.requestedRelationType &&
+            (!audience.roleCode || audience.roleCode === link.requestedRoleCode),
+        );
+      const assignmentMatch = Boolean(assignment);
+      const eligible =
+        benefit.assignmentMode === "MANUAL"
+          ? assignmentMatch
+          : benefit.assignmentMode === "HYBRID"
+            ? audienceMatch || assignmentMatch
+            : audienceMatch;
+      if (!eligible) {
+        throw new EnterpriseRelationshipBenefitError(
+          "RELATIONSHIP_BENEFIT_NOT_ELIGIBLE",
+          "Votre relation n’est plus éligible à cet avantage.",
+          403,
+        );
+      }
+
+      const activeUsageWhere = {
         organizationId,
         benefitId,
         identityLinkId,
         userId,
-        actionCode: benefit.actionCode,
-        idempotencyKey,
-        note: note || null,
-      },
-    });
+        status: { notIn: ["REJECTED", "CANCELLED"] },
+      } satisfies Prisma.EnterpriseRelationshipBenefitUsageWhereInput;
+      if (benefit.usageLimitTotal !== null) {
+        const totalUsed = await tx.enterpriseRelationshipBenefitUsage.count({
+          where: activeUsageWhere,
+        });
+        if (totalUsed >= benefit.usageLimitTotal) {
+          throw new EnterpriseRelationshipBenefitError(
+            "RELATIONSHIP_BENEFIT_LIMIT_REACHED",
+            "La limite totale d’utilisation de cet avantage est atteinte.",
+            409,
+          );
+        }
+      }
+      if (benefit.usageLimitPerPeriod !== null && benefit.usagePeriodDays) {
+        const periodStart = new Date(
+          now.getTime() - benefit.usagePeriodDays * 24 * 60 * 60 * 1000,
+        );
+        const periodUsed = await tx.enterpriseRelationshipBenefitUsage.count({
+          where: { ...activeUsageWhere, requestedAt: { gte: periodStart } },
+        });
+        if (periodUsed >= benefit.usageLimitPerPeriod) {
+          throw new EnterpriseRelationshipBenefitError(
+            "RELATIONSHIP_BENEFIT_PERIOD_LIMIT_REACHED",
+            "La limite d’utilisation de cet avantage pour la période en cours est atteinte.",
+            409,
+          );
+        }
+      }
+
+      const usage = await tx.enterpriseRelationshipBenefitUsage.create({
+        data: {
+          organizationId,
+          benefitId,
+          identityLinkId,
+          userId,
+          actionCode: benefit.actionCode,
+          idempotencyKey,
+          note: note || null,
+        },
+      });
+      return { usage, created: true };
+    },
+    {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      maxWait: 10000,
+      timeout: 30000,
+    },
+  );
+
+  if (result.created) {
     const admins = await prisma.organizationMember.findMany({
       where: {
         organizationId,
@@ -625,32 +785,11 @@ export async function createRelationshipBenefitUsage({
       type: "ENTERPRISE_RELATIONSHIP",
       title: "Nouvelle demande d’avantage",
       body: "Un membre lié à l’entreprise a demandé l’utilisation d’un avantage.",
-      targetUrl: `/enterprise-relationship-benefits?usage=${usage.id}`,
+      targetUrl: `/enterprise-relationship-benefits?usage=${result.usage.id}`,
     });
-    return usage;
-  } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      const retry = await prisma.enterpriseRelationshipBenefitUsage.findUnique({
-        where: { organizationId_idempotencyKey: { organizationId, idempotencyKey } },
-      });
-      if (
-        retry &&
-        retry.userId === userId &&
-        retry.identityLinkId === identityLinkId &&
-        retry.benefitId === benefitId
-      ) {
-        return retry;
-      }
-      if (retry) {
-        throw new EnterpriseRelationshipBenefitError(
-          "RELATIONSHIP_BENEFIT_IDEMPOTENCY_COLLISION",
-          "Cette clé de reprise est déjà utilisée pour une autre demande.",
-          409,
-        );
-      }
-    }
-    throw error;
   }
+
+  return result.usage;
 }
 
 export async function cancelRelationshipBenefitUsageByUser({
