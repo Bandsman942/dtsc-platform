@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { relationshipBenefitUsageCancelSchema, relationshipBenefitUsageSchema } from "@/lib/enterprise/relationship-benefits/contracts";
 import { requireIdentityLinkSession } from "@/lib/enterprise/identity-links/http";
+import { EnterpriseIdentityLinkError } from "@/lib/enterprise/identity-links/service";
 import {
   cancelRelationshipBenefitUsageByUser,
   createRelationshipBenefitUsage,
@@ -41,7 +42,7 @@ export async function GET(req: Request, { params }: Params) {
     });
     return NextResponse.json(result);
   } catch (error) {
-    const status = error instanceof EnterpriseRelationshipBenefitError ? error.status : 500;
+    const status = error instanceof EnterpriseRelationshipBenefitError || error instanceof EnterpriseIdentityLinkError ? error.status : 500;
     await writeApiLog({
       request: req,
       statusCode: status,
@@ -119,7 +120,7 @@ export async function POST(req: Request, { params }: Params) {
       { status: 201 },
     );
   } catch (error) {
-    const status = error instanceof EnterpriseRelationshipBenefitError ? error.status : 500;
+    const status = error instanceof EnterpriseRelationshipBenefitError || error instanceof EnterpriseIdentityLinkError ? error.status : 500;
     await writeApiLog({
       request: req,
       statusCode: status,
@@ -130,7 +131,7 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json(
       {
         error:
-          error instanceof EnterpriseRelationshipBenefitError
+          error instanceof EnterpriseRelationshipBenefitError || error instanceof EnterpriseIdentityLinkError
             ? error.code
             : "RELATIONSHIP_BENEFIT_REQUEST_FAILED",
         message: error instanceof Error ? error.message : "La demande n’a pas pu être envoyée.",
@@ -206,7 +207,7 @@ export async function PATCH(req: Request, { params }: Params) {
       message: "Votre demande d’avantage a été annulée.",
     });
   } catch (error) {
-    const status = error instanceof EnterpriseRelationshipBenefitError ? error.status : 500;
+    const status = error instanceof EnterpriseRelationshipBenefitError || error instanceof EnterpriseIdentityLinkError ? error.status : 500;
     await writeApiLog({
       request: req,
       statusCode: status,
@@ -221,7 +222,7 @@ export async function PATCH(req: Request, { params }: Params) {
     return NextResponse.json(
       {
         error:
-          error instanceof EnterpriseRelationshipBenefitError
+          error instanceof EnterpriseRelationshipBenefitError || error instanceof EnterpriseIdentityLinkError
             ? error.code
             : "RELATIONSHIP_BENEFIT_CANCEL_FAILED",
         message:
