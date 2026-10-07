@@ -119,19 +119,19 @@ function humanAction(item: BenefitItem, locale: "fr" | "en") {
   return locale === "en"
     ? item.actionLabelEn ||
         (item.actionCode === "BOOK"
-          ? "Book"
+          ? "Request booking"
           : item.actionCode === "CONTACT"
             ? "Contact"
             : item.actionCode === "CLAIM"
-              ? "Use"
+              ? "Request use"
               : "Request")
     : item.actionLabelFr ||
         (item.actionCode === "BOOK"
-          ? "Réserver"
+          ? "Demander une réservation"
           : item.actionCode === "CONTACT"
             ? "Contacter"
             : item.actionCode === "CLAIM"
-              ? "Utiliser"
+              ? "Demander l’utilisation"
               : "Demander");
 }
 
