@@ -241,10 +241,21 @@ async function validateRelationshipBenefitConfiguration(
       "Un avantage monétaire appliqué automatiquement au point de vente ne doit pas créer une seconde demande manuelle.",
     );
   }
-  if (config.actionCode === "NONE" && config.targetModuleCode && !automaticRetailShape) {
+  if (config.targetModuleCode && !automaticRetailShape) {
     throw new EnterpriseRelationshipBenefitError(
       "RELATIONSHIP_BENEFIT_TARGET_ADAPTER_UNSUPPORTED",
-      "Ce module ne dispose pas encore d’un adaptateur d’exécution automatique pour ce type d’avantage. Choisissez une action de demande ou une cible prise en charge.",
+      "Ce module ne dispose pas encore d’un adaptateur certifié pour exécuter ce type d’avantage. Retirez la cible métier ou utilisez un avantage Retail POS monétaire pris en charge.",
+      409,
+    );
+  }
+
+  const hasContextualRules =
+    Boolean(config.minimumAmount) ||
+    Object.keys(conditions).length > 0;
+  if (hasContextualRules && !automaticRetailShape) {
+    throw new EnterpriseRelationshipBenefitError(
+      "RELATIONSHIP_BENEFIT_CONTEXTUAL_RULES_UNSUPPORTED",
+      "Les montants minimums et conditions métier exigent un adaptateur serveur certifié. Utilisez actuellement Retail POS avec une remise ou un prix fixe automatique.",
       409,
     );
   }
