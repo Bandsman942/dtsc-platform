@@ -77,3 +77,17 @@ Le jeton ne doit jamais être journalisé. Le lien doit mener à l’objet préc
 - Isolation utilisateur.
 - Révision optimiste pour les décisions concurrentes.
 - Révocation retirant les accès dérivés sans supprimer le dossier métier.
+
+
+## Avantages et effets métier
+
+Le détail d’une relation active peut charger les avantages résolus par le serveur sans donner accès au tenant ERP.
+
+Deux états sont distingués :
+
+- **demande** : le membre sollicite l’entreprise ; la demande peut être approuvée, refusée ou annulée ;
+- **effet automatique certifié** : un module métier applique réellement l’avantage puis écrit une preuve d’usage.
+
+Retail POS applique actuellement les remises et prix fixes compatibles. Le prix est recalculé au serveur avant la revue du paiement.
+
+Une demande approuvée n’est pas affichée comme utilisée tant qu’aucun effet métier serveur n’existe. Les APIs compte n’acceptent pas de contexte transactionnel fourni par le navigateur comme preuve.
