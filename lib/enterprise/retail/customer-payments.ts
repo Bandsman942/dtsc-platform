@@ -422,6 +422,142 @@ export async function creditRetailRelationshipBenefitStoredValueTx(
   return { account: updated, entry, idempotent: false };
 }
 
+export async function reverseRetailRelationshipBenefitLoyaltyForReturnTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  actorUserId: string,
+  input: {
+    earnedEntryId: string;
+    returnId: string;
+    points: Prisma.Decimal.Value;
+    reason: string;
+  },
+) {
+  const idempotencyKey =
+    `relationship-benefit:return:${input.returnId}:loyalty:${input.earnedEntryId}`;
+  const existing = await tx.enterpriseRetailLoyaltyEntry.findFirst({
+    where: { organizationId, idempotencyKey },
+  });
+  if (existing) return existing;
+
+  const earned = await tx.enterpriseRetailLoyaltyEntry.findFirst({
+    where: {
+      id: input.earnedEntryId,
+      organizationId,
+      entryType: "EARN",
+      points: { gt: 0 },
+    },
+  });
+  if (!earned) throw new EnterpriseRetailError("RETAIL_RELATIONSHIP_BENEFIT_LOYALTY_ENTRY_NOT_FOUND", 409);
+  await assertReturnTx(tx, organizationId, input.returnId);
+  const points = decimal(input.points).toDecimalPlaces(6, Prisma.Decimal.ROUND_HALF_UP);
+  if (!points.isPositive()) return null;
+
+  await tx.$executeRaw(
+    Prisma.sql`SELECT id FROM "EnterpriseRetailLoyaltyAccount" WHERE id = ${earned.accountId} AND "organizationId" = ${organizationId} FOR UPDATE`,
+  );
+  const account = await tx.enterpriseRetailLoyaltyAccount.findFirstOrThrow({
+    where: { id: earned.accountId, organizationId },
+  });
+  if (account.pointsBalance.lessThan(points)) {
+    throw new EnterpriseRetailError(
+      "RETAIL_RELATIONSHIP_BENEFIT_LOYALTY_ALREADY_SPENT",
+      409,
+      { accountId: account.id, required: points.toFixed(), available: account.pointsBalance.toFixed() },
+    );
+  }
+  const entry = await tx.enterpriseRetailLoyaltyEntry.create({
+    data: {
+      organizationId,
+      accountId: account.id,
+      entryType: "REVERSAL",
+      points: points.negated(),
+      monetaryAmount: earned.monetaryAmount,
+      currencyCode: earned.currencyCode,
+      returnId: input.returnId,
+      reason: input.reason.slice(0, 500),
+      idempotencyKey,
+      createdByUserId: actorUserId,
+    },
+  });
+  await tx.enterpriseRetailLoyaltyAccount.update({
+    where: { id: account.id },
+    data: {
+      pointsBalance: { decrement: points },
+      revision: { increment: 1 },
+    },
+  });
+  return entry;
+}
+
+export async function reverseRetailRelationshipBenefitStoredValueForReturnTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  actorUserId: string,
+  input: {
+    creditEntryId: string;
+    returnId: string;
+    amount: Prisma.Decimal.Value;
+    reason: string;
+  },
+) {
+  const idempotencyKey =
+    `relationship-benefit:return:${input.returnId}:stored-value:${input.creditEntryId}`;
+  const existing = await tx.enterpriseRetailStoredValueEntry.findFirst({
+    where: { organizationId, idempotencyKey },
+  });
+  if (existing) return existing;
+
+  const credited = await tx.enterpriseRetailStoredValueEntry.findFirst({
+    where: {
+      id: input.creditEntryId,
+      organizationId,
+      entryType: "RELATIONSHIP_BENEFIT_CREDIT",
+      amount: { gt: 0 },
+    },
+  });
+  if (!credited) throw new EnterpriseRetailError("RETAIL_RELATIONSHIP_BENEFIT_CREDIT_ENTRY_NOT_FOUND", 409);
+  await assertReturnTx(tx, organizationId, input.returnId);
+  const amount = decimal(input.amount).toDecimalPlaces(6, Prisma.Decimal.ROUND_HALF_UP);
+  if (!amount.isPositive()) return null;
+
+  await tx.$executeRaw(
+    Prisma.sql`SELECT id FROM "EnterpriseRetailStoredValueAccount" WHERE id = ${credited.accountId} AND "organizationId" = ${organizationId} FOR UPDATE`,
+  );
+  const account = await tx.enterpriseRetailStoredValueAccount.findFirstOrThrow({
+    where: { id: credited.accountId, organizationId },
+  });
+  if (account.balance.lessThan(amount)) {
+    throw new EnterpriseRetailError(
+      "RETAIL_RELATIONSHIP_BENEFIT_CREDIT_ALREADY_SPENT",
+      409,
+      { accountId: account.id, required: amount.toFixed(), available: account.balance.toFixed() },
+    );
+  }
+  const entry = await tx.enterpriseRetailStoredValueEntry.create({
+    data: {
+      organizationId,
+      accountId: account.id,
+      entryType: "RELATIONSHIP_BENEFIT_REVERSAL",
+      amount: amount.negated(),
+      returnId: input.returnId,
+      reason: input.reason.slice(0, 500),
+      idempotencyKey,
+      createdByUserId: actorUserId,
+    },
+  });
+  const remaining = account.balance.minus(amount);
+  await tx.enterpriseRetailStoredValueAccount.update({
+    where: { id: account.id },
+    data: {
+      balance: remaining,
+      status: remaining.isZero() ? "EXHAUSTED" : "ACTIVE",
+      revision: { increment: 1 },
+    },
+  });
+  return entry;
+}
+
 export async function reverseRetailRelationshipBenefitRewardsForSaleTx(
   tx: Prisma.TransactionClient,
   organizationId: string,
