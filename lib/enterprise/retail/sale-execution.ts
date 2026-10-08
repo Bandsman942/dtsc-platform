@@ -18,6 +18,7 @@ import type { retailSaleCreateSchema } from "@/lib/enterprise/retail/schemas";
 import { createRetailSale } from "@/lib/enterprise/retail/service";
 import { withRetailTransactionRetry } from "@/lib/enterprise/retail/transaction-retry";
 import { notifyUser } from "@/lib/notifications";
+import { prisma } from "@/lib/prisma";
 
 type RetailSaleInput = z.infer<typeof retailSaleCreateSchema>;
 type RetailCommercialContext = z.infer<typeof retailCommercialContextSchema>;
@@ -130,18 +131,33 @@ export async function executeCanonicalRetailSale(args: {
   const relationshipBenefits = serializeRetailRelationshipBenefitEffects(
     relationshipResolution.effects,
   );
-  await Promise.all(
-    relationshipResolution.effects.map((effect) =>
-      notifyUser({
+  const benefitUserIds = [...new Set(
+    relationshipResolution.effects.map((effect) => effect.userId),
+  )];
+  const benefitUsers = benefitUserIds.length
+    ? await prisma.user.findMany({
+        where: { id: { in: benefitUserIds } },
+        select: { id: true, locale: true },
+      })
+    : [];
+  const localeByUserId = new Map(
+    benefitUsers.map((user) => [user.id, user.locale === "en" ? "en" : "fr"]),
+  );
+  await Promise.allSettled(
+    relationshipResolution.effects.map((effect) => {
+      const english = localeByUserId.get(effect.userId) === "en";
+      return notifyUser({
         userId: effect.userId,
         organizationId: args.organizationId,
         type: "ENTERPRISE_RELATIONSHIP",
-        title: "Avantage appliqué",
-        body: `${effect.benefitNameFr} a été appliqué automatiquement au ticket ${result.sale.number}.`,
+        title: english ? "Benefit applied" : "Avantage appliqué",
+        body: english
+          ? `${effect.benefitNameEn} was automatically applied to receipt ${result.sale.number}.`
+          : `${effect.benefitNameFr} a été appliqué automatiquement au ticket ${result.sale.number}.`,
         targetUrl: `/enterprise-links?link=${effect.identityLinkId}&view=active`,
         idempotencyKey: `relationship-benefit-auto-retail:${result.sale.id}:${effect.benefitId}`,
-      }),
-    ),
+      });
+    }),
   );
 
   return {
