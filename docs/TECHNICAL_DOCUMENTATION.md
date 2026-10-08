@@ -70,6 +70,14 @@ session
 
 Toutes les références structurantes sont revalidées dans le même `organizationId`. Les rôles globaux, un rôle `MANAGER` générique ou une relation active avec une entreprise ne donnent aucun accès implicite à la Finance d’un tenant.
 
+### 5.2 Relations & avantages
+
+Le module `RELATIONSHIP_BENEFITS` ajoute un catalogue d’avantages relationnels sans convertir un client externe en membre du tenant. La lecture compte global passe par `resolveEnterpriseIdentityRelationshipAccess()`, puis par `resolveEnterpriseRelationshipBenefits()`. Les mutations client revérifient la relation active, les entitlements, l’audience et les quotas avant d’écrire un usage idempotent.
+
+Les avantages génériques utilisent `EnterpriseRelationshipBenefit`, ses audiences, attributions et usages. Les points et avoirs Retail restent détenus par les modèles Retail existants et sont uniquement projetés vers le compte relié via `EnterprisePersonBusinessReference.businessPartyId`.
+
+Une révocation de relation coupe immédiatement les futures capacités ; l’historique d’usage n’est pas supprimé.
+
 ## 6. Registre canonique et maturité
 
 Le registre canonique ERP définit les codes, statuts, routes, workspaces, permissions, dépendances, plans et QA des modules ERP. `EnterpriseModule` active un module pour un tenant, mais ne peut ouvrir un code absent, masqué ou non entitled.

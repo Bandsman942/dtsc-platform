@@ -1,0 +1,101 @@
+model EnterpriseRelationshipBenefit {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  code                  String
+  nameFr                String
+  nameEn                String
+  descriptionFr         String
+  descriptionEn         String
+  benefitType           String
+  assignmentMode        String   @default("AUTOMATIC")
+  valueType             String   @default("NONE")
+  valueDecimal          Decimal? @db.Decimal(20, 6)
+  currencyCode          String?
+  minimumAmount         Decimal? @db.Decimal(20, 6)
+  actionCode            String   @default("NONE")
+  actionLabelFr         String?
+  actionLabelEn         String?
+  targetModuleCode      String?
+  usageLimitTotal       Int?
+  usageLimitPerPeriod   Int?
+  usagePeriodDays       Int?
+  stackable             Boolean  @default(false)
+  startsAt              DateTime?
+  endsAt                DateTime?
+  status                String   @default("DRAFT")
+  conditionsJson        Json?
+  settingsJson          Json?
+  createdByUserId       String
+  updatedByUserId       String?
+  revision              Int      @default(1)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  archivedAt            DateTime?
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  audiences             EnterpriseRelationshipBenefitAudience[]
+  assignments           EnterpriseRelationshipBenefitAssignment[]
+  usages                EnterpriseRelationshipBenefitUsage[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code])
+  @@index([organizationId, status, startsAt, endsAt])
+  @@index([organizationId, benefitType, status])
+  @@index([archivedAt])
+}
+
+model EnterpriseRelationshipBenefitAudience {
+  id             String   @id @default(cuid())
+  organizationId String
+  benefitId      String
+  relationType   String
+  roleCode       String?
+  createdAt      DateTime @default(now())
+  benefit        EnterpriseRelationshipBenefit @relation(fields: [benefitId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, benefitId, relationType, roleCode])
+  @@index([organizationId, relationType, benefitId])
+}
+
+model EnterpriseRelationshipBenefitAssignment {
+  id              String   @id @default(cuid())
+  organizationId  String
+  benefitId       String
+  identityLinkId  String
+  status          String   @default("ACTIVE")
+  startsAt        DateTime?
+  endsAt          DateTime?
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  revokedAt       DateTime?
+  benefit         EnterpriseRelationshipBenefit @relation(fields: [benefitId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, benefitId, identityLinkId])
+  @@index([organizationId, identityLinkId, status])
+}
+
+model EnterpriseRelationshipBenefitUsage {
+  id                String   @id @default(cuid())
+  organizationId    String
+  benefitId         String
+  identityLinkId    String
+  userId            String
+  actionCode        String
+  status            String   @default("REQUESTED")
+  idempotencyKey    String
+  note              String?
+  organizationNote  String?
+  requestedAt       DateTime @default(now())
+  decidedAt         DateTime?
+  consumedAt        DateTime?
+  cancelledAt       DateTime?
+  decidedByUserId   String?
+  revision          Int      @default(1)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  benefit           EnterpriseRelationshipBenefit @relation(fields: [benefitId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, identityLinkId, status, requestedAt])
+  @@index([organizationId, benefitId, status, requestedAt])
+}

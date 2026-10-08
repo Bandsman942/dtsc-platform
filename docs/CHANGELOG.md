@@ -1,3 +1,14 @@
+## 2026-10-07 — Hotfix #781 : Relations & avantages client–entreprise
+
+- ajoute le module canonique `RELATIONSHIP_BENEFITS`, BUSINESS+, avec migration additive et isolation par `organizationId` ;
+- étend les types de relation sectoriels sans modifier les relations historiques ;
+- ajoute catalogue, audiences, attributions explicites et usages idempotents avec quotas ;
+- garde `EnterpriseIdentityLink` et le résolveur serveur comme autorité avant affichage et avant utilisation ;
+- transforme le détail d’une relation active dans `/enterprise-links` en façade d’avantages utilisables sans membership tenant ;
+- agrège fidélité et avoirs Retail depuis les ledgers existants, sans dual-write ;
+- ajoute notifications, audit, rate limiting, contrôle same-origin et transitions concurrentes protégées ;
+- OWNER_E2E documenté dans `docs/HOTFIX_781_RELATIONSHIP_BENEFITS.md` et encore NOT_EXECUTED avant validation propriétaire.
+
 ## 2026-10-06 — SCALE-7H Dashboard/Collaboration tail (#777)
 
 - part du 500-ramp Production `37426549774` sur `312033fab1ea8603df3bf15453c4046cee031ad3` : global P95/P99 930,24 / 2 148,25 ms, Dashboard 1 198,10 / 2 261,27 ms, Collaboration 898,56 / 2 114,48 ms ;

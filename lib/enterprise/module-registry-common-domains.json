@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "modules": [
     {
       "code": "CRM_CUSTOMERS",
@@ -191,6 +191,35 @@
         "IDENTITY_LINKS"
       ],
       "qaContract": "enterprise-identity-consent"
+    },
+    {
+      "code": "RELATIONSHIP_BENEFITS",
+      "labelFr": "Relations & avantages",
+      "labelEn": "Relationships & benefits",
+      "descriptionFr": "Catalogue d’avantages, ciblage relationnel, demandes et utilisations des clients liés à l’entreprise.",
+      "descriptionEn": "Relationship benefit catalogue, targeting, requests and usage for customers linked to the company.",
+      "domain": "ADMINISTRATION",
+      "implementationStatus": "ACTIVE",
+      "navigationGroup": "ADMINISTRATION",
+      "navigationOrder": 75,
+      "iconKey": "badge-dollar-sign",
+      "routeKind": "DEDICATED_CORE",
+      "routePath": "/enterprise-relationship-benefits",
+      "workspaceKey": "ENTERPRISE_RELATIONSHIP_BENEFITS",
+      "permissionPrefixes": [
+        "enterprise.admin.",
+        "enterprise.identity.",
+        "enterprise.relationships."
+      ],
+      "accessPolicy": "POSITION_PERMISSION",
+      "minimumPlan": "BUSINESS",
+      "requiresActiveSubscription": true,
+      "applicableSectors": "ALL",
+      "dependencies": [],
+      "recommendedIntegrations": [
+        "CRM_CUSTOMERS"
+      ],
+      "qaContract": "enterprise-relationship-benefits"
     },
     {
       "code": "INVENTORY_LOGISTICS",
