@@ -799,6 +799,18 @@ export async function resolveEnterpriseRelationshipBenefits({
     retailSnapshot(organizationId, link.personIdentityId),
   ]);
 
+  const targetCodes = [...new Set(
+    benefits
+      .map((benefit) => benefit.targetModuleCode)
+      .filter((code): code is string => Boolean(code))
+      .map((code) => normalizeEnterpriseModuleCode(code)),
+  )];
+  const targetAccessByCode = new Map(
+    await Promise.all(
+      targetCodes.map(async (code) => [code, await canUseModule(organizationId, code)] as const),
+    ),
+  );
+
   const assignmentByBenefitId = new Map(
     assignments.map((assignment) => [assignment.benefitId, assignment]),
   );
@@ -811,6 +823,10 @@ export async function resolveEnterpriseRelationshipBenefits({
   }
 
   const items = benefits.flatMap((benefit) => {
+    if (benefit.targetModuleCode) {
+      const targetCode = normalizeEnterpriseModuleCode(benefit.targetModuleCode);
+      if (!targetAccessByCode.get(targetCode)?.allowed) return [];
+    }
     const evaluation = evaluateRelationshipBenefitSnapshot({
       benefit,
       link,
