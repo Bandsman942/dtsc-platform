@@ -65,7 +65,15 @@ export async function POST(req: Request, { params }: Params) {
   if (!commercialContext.success) return NextResponse.json({ error: "Invalid commercial context", message: commercialContext.error.issues[0]?.message || "Contexte commercial invalide." }, { status: 400 });
   try {
     const permissions = await getRetailCommercialPermissions(auth.session.userId, organizationId);
-    const { result, guarded, accounting, loyalty, promotionCount } = await executeCanonicalRetailSale({
+    const {
+      result,
+      guarded,
+      accounting,
+      loyalty,
+      promotionCount,
+      relationshipBenefitApplicationCount,
+      relationshipBenefitIds,
+    } = await executeCanonicalRetailSale({
       organizationId,
       actorUserId: auth.session.userId,
       input: parsed.data,
@@ -91,13 +99,15 @@ export async function POST(req: Request, { params }: Params) {
         overrideReason: guarded.overrideReason,
         pricingDecisionCount: guarded.decisions.length,
         promotionCount,
+        relationshipBenefitApplicationCount,
+        relationshipBenefitIds,
         saleJournalEntryId: accounting.saleJournalEntryId,
         inventoryValuationCount: accounting.inventoryPostings.length,
         inventoryJournalEntryIds: accounting.inventoryPostings.map((item) => item.journalEntryId),
       },
     });
-    await writeApiLog({ request: req, statusCode: result.idempotent ? 200 : 201, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-pos", action: "create", customerAttached: Boolean(result.sale.customerBusinessPartyId), loyaltyApplied: loyalty.applied.length, overrideApplied: guarded.overrideApplied, promotionCount, accountingPosted: true } });
-    return NextResponse.json({ ok: true, ...result, accounting, loyalty, commercial: { promotionCount, pricingDecisionCount: guarded.decisions.length, overrideApplied: guarded.overrideApplied } }, { status: result.idempotent ? 200 : 201 });
+    await writeApiLog({ request: req, statusCode: result.idempotent ? 200 : 201, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-pos", action: "create", customerAttached: Boolean(result.sale.customerBusinessPartyId), loyaltyApplied: loyalty.applied.length, overrideApplied: guarded.overrideApplied, promotionCount, relationshipBenefitApplicationCount, accountingPosted: true } });
+    return NextResponse.json({ ok: true, ...result, accounting, loyalty, commercial: { promotionCount, pricingDecisionCount: guarded.decisions.length, relationshipBenefitApplicationCount, relationshipBenefitIds, overrideApplied: guarded.overrideApplied } }, { status: result.idempotent ? 200 : 201 });
   } catch (error) {
     return retailErrorResponse(error, "RETAIL_SALE_CREATE_FAILED");
   }
