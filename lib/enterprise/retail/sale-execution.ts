@@ -70,7 +70,12 @@ export async function executeCanonicalRetailSale(args: {
   });
 
   const result = await withRetailTransactionRetry(
-    () => createRetailSale(args.organizationId, args.actorUserId, guarded.input),
+    () => createRetailSale(
+      args.organizationId,
+      args.actorUserId,
+      guarded.input,
+      guarded.relationshipBenefitApplications,
+    ),
     { maxAttempts: 3, baseDelayMs: 20 },
   );
   await persistRetailCommercialDecisions(
@@ -84,5 +89,12 @@ export async function executeCanonicalRetailSale(args: {
   const loyalty = await autoEarnRetailLoyaltyForSale(args.organizationId, args.actorUserId, result.sale.id);
   const promotionCount = new Set(guarded.decisions.flatMap((decision) => decision.promotionIds)).size;
 
-  return { result, guarded, accounting, loyalty, promotionCount };
+  return {
+    result,
+    guarded,
+    accounting,
+    loyalty,
+    promotionCount,
+    relationshipBenefitApplicationCount: guarded.relationshipBenefitApplications.length,
+  };
 }
