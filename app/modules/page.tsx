@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowUpRight, Blocks, Bot, Gauge, LifeBuoy, ShieldCheck } from "lucide-react";
+import { ArrowUpRight, BadgeDollarSign, Blocks, Bot, Gauge, LifeBuoy, ShieldCheck } from "lucide-react";
 import type { ElementType } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Accordion, AccordionItem } from "@/components/ui/accordion";
@@ -125,6 +125,10 @@ export default async function ModulesHubPage({ searchParams }: { searchParams: P
   }).filter((subgroup) => subgroup.modules.length > 0);
 
   const visibleGroups = MODULE_NAVIGATION_GROUPS.filter((item) => item.code !== "DTSC_INTERNAL" || canOpenInternalGroup);
+  const relationshipBenefitsModule =
+    requestedGroup === "ORGANIZATION_ERP"
+      ? enterpriseModules.find((item) => item.code === "RELATIONSHIP_BENEFITS") || null
+      : null;
   const GroupIcon = ICON_BY_GROUP[group.code];
   const isEnglish = user.locale === "en";
 
@@ -165,14 +169,27 @@ export default async function ModulesHubPage({ searchParams }: { searchParams: P
             </div>
           ) : null}
 
-          <div className="flex min-w-0 items-start gap-3 rounded-2xl border border-dtsc-border bg-dtsc-surface/70 p-4 sm:p-5">
+          <div className="flex min-w-0 flex-wrap items-start gap-3 rounded-2xl border border-dtsc-border bg-dtsc-surface/70 p-4 sm:p-5">
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-cyan-400/12 text-cyan-600"><GroupIcon className="h-5 w-5" /></span>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="text-xs font-black uppercase tracking-[0.14em] text-cyan-600">{isEnglish ? "Available in this workspace" : "Disponible dans cet espace"}</p>
               <p className="mt-1 break-words text-sm leading-6 text-dtsc-muted">
                 {isEnglish ? "Open a subgroup to see the destinations available in your current workspace." : "Dépliez un sous-groupe pour voir les destinations disponibles dans votre espace de travail actuel."}
               </p>
             </div>
+            {relationshipBenefitsModule ? (
+              <div data-responsive-actions className="w-full sm:w-auto">
+                <Link
+                  href={relationshipBenefitsModule.href}
+                  title={relationshipBenefitsModule.description}
+                  className="inline-flex min-h-11 w-full min-w-0 items-center justify-center gap-2 rounded-xl border border-cyan-400/40 bg-cyan-400/10 px-3 text-sm font-black text-cyan-700 transition hover:bg-cyan-400/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 sm:w-auto dark:text-cyan-300"
+                >
+                  <BadgeDollarSign className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span className="min-w-0 break-words">{relationshipBenefitsModule.label}</span>
+                  <ArrowUpRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+                </Link>
+              </div>
+            ) : null}
           </div>
 
           {subgroups.length > 0 ? (
