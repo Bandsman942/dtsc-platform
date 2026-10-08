@@ -5,6 +5,9 @@ import {
   reverseRelationshipBenefitApplicationsTx,
   type RelationshipBenefitApplicationDraft,
 } from "@/lib/enterprise/relationship-benefits/enforcement";
+import { applyRetailRelationshipBenefitRewardsTx } from "@/lib/enterprise/relationship-benefits/adapters/retail-rewards";
+import type { RetailRelationshipRewardPlan } from "@/lib/enterprise/relationship-benefits/adapters/retail-pricing";
+import { reverseRetailRelationshipBenefitRewardsForSaleTx } from "@/lib/enterprise/retail/customer-payments";
 import { ensureMobileMoneyTransactionLedgerMappingTx } from "@/lib/enterprise/accounting/mobile-money-ledger-provisioning";
 import { createAccountingApprovalAssignment, decideAccountingApproval, requireAccountingApprovalDecision } from "@/lib/enterprise/accounting/accounting-approval-service";
 import { postBusinessEvent, postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
@@ -163,6 +166,7 @@ export async function createRetailSale(
   actorUserId: string,
   input: RetailSaleInput,
   relationshipBenefitApplications: RelationshipBenefitApplicationDraft[] = [],
+  relationshipBenefitRewards: RetailRelationshipRewardPlan[] = [],
 ) {
   return prisma.$transaction(async (tx) => {
     await assertRetailOrganization(tx, organizationId);
@@ -285,6 +289,17 @@ export async function createRetailSale(
       sourceEntityId: sale.id,
       applications: relationshipBenefitApplications,
     });
+    await applyRetailRelationshipBenefitRewardsTx(tx, {
+      organizationId,
+      actorUserId,
+      sale: {
+        id: sale.id,
+        customerBusinessPartyId: sale.customerBusinessPartyId,
+        currencyCode: sale.currencyCode,
+        grandTotal: sale.grandTotal,
+      },
+      rewards: relationshipBenefitRewards,
+    });
 
     for (const line of sale.lines) {
       if (!line.trackInventory || !line.inventoryItemId) continue;
@@ -352,6 +367,13 @@ export async function reverseRetailSale(organizationId: string, saleId: string, 
       await applyAccountEffectTx(tx, { organizationId, actorUserId, account, effect: tender.amount.negated(), transactionType: "RETAIL_POS_REVERSAL", reference: sale.number, transactionDate: new Date(), cashSessionId: cashSession?.id, cashReason: input.reason });
     }
     await tx.enterpriseRetailTender.updateMany({ where: { organizationId, saleId: sale.id, status: "CONFIRMED" }, data: { status: "REVERSED" } });
+    await reverseRetailRelationshipBenefitRewardsForSaleTx(
+      tx,
+      organizationId,
+      actorUserId,
+      sale.id,
+      input.reason,
+    );
     const updated = await tx.enterpriseRetailSale.update({ where: { id: sale.id }, data: { status: "REVERSED", reversalReason: input.reason, reversedAt: new Date(), reversedByUserId: actorUserId, revision: { increment: 1 } } });
     await reverseRelationshipBenefitApplicationsTx(tx, {
       organizationId,
