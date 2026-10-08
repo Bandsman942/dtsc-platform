@@ -99,7 +99,9 @@ function activeWindow(startsAt: Date | null, endsAt: Date | null, now: Date) {
   return (!startsAt || startsAt <= now) && (!endsAt || endsAt >= now);
 }
 
-function objectValue(value: Prisma.JsonValue | null | undefined): Record<string, unknown> {
+function objectValue(
+  value: Prisma.JsonValue | Prisma.InputJsonValue | null | undefined,
+): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
@@ -129,7 +131,9 @@ function contextDate(context: RelationshipBenefitExecutionContext | null | undef
   return Number.isNaN(value.getTime()) ? fallback : value;
 }
 
-export function benefitConditionsSupported(conditionsJson: Prisma.JsonValue | null | undefined) {
+export function benefitConditionsSupported(
+  conditionsJson: Prisma.JsonValue | Prisma.InputJsonValue | null | undefined,
+) {
   const conditions = objectValue(conditionsJson);
   return Object.keys(conditions).every((key) => CONDITION_KEYS.has(key));
 }
