@@ -35,6 +35,10 @@ La même résolution est répétée lors d’une demande d’utilisation. Une ca
 
 Route : `/enterprise-relationship-benefits`
 
+### Hotfix de découvrabilité #783
+
+Le workspace est accessible depuis **Entreprise & ERP → Relations & avantages**, depuis **Administration entreprise → Relations & avantages**, ainsi que depuis l’action **Ouvrir le module** de la carte correspondante. Ces entrées utilisent toutes la destination canonique résolue côté serveur et ne sont pas affichées lorsque le module n’est pas autorisé.
+
 L’administrateur autorisé peut :
 
 - créer un avantage FR/EN ;
