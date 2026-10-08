@@ -1,5 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
+import {
+  persistRelationshipBenefitApplicationsTx,
+  reverseRelationshipBenefitApplicationsTx,
+  type RelationshipBenefitApplicationDraft,
+} from "@/lib/enterprise/relationship-benefits/enforcement";
 import { ensureMobileMoneyTransactionLedgerMappingTx } from "@/lib/enterprise/accounting/mobile-money-ledger-provisioning";
 import { createAccountingApprovalAssignment, decideAccountingApproval, requireAccountingApprovalDecision } from "@/lib/enterprise/accounting/accounting-approval-service";
 import { postBusinessEvent, postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
@@ -153,7 +158,12 @@ export async function upsertRetailProvider(organizationId: string, actorUserId: 
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
-export async function createRetailSale(organizationId: string, actorUserId: string, input: RetailSaleInput) {
+export async function createRetailSale(
+  organizationId: string,
+  actorUserId: string,
+  input: RetailSaleInput,
+  relationshipBenefitApplications: RelationshipBenefitApplicationDraft[] = [],
+) {
   return prisma.$transaction(async (tx) => {
     await assertRetailOrganization(tx, organizationId);
     await ensureRetailConfigurationTx(tx, organizationId, actorUserId);
@@ -267,6 +277,15 @@ export async function createRetailSale(organizationId: string, actorUserId: stri
       include: { lines: true, tenders: true },
     });
 
+    await persistRelationshipBenefitApplicationsTx(tx, {
+      organizationId,
+      actorUserId,
+      sourceModuleCode: "RETAIL_POS",
+      sourceEntityType: "EnterpriseRetailSale",
+      sourceEntityId: sale.id,
+      applications: relationshipBenefitApplications,
+    });
+
     for (const line of sale.lines) {
       if (!line.trackInventory || !line.inventoryItemId) continue;
       await applyStockMovementTx(tx, organizationId, actorUserId, {
@@ -334,6 +353,12 @@ export async function reverseRetailSale(organizationId: string, saleId: string, 
     }
     await tx.enterpriseRetailTender.updateMany({ where: { organizationId, saleId: sale.id, status: "CONFIRMED" }, data: { status: "REVERSED" } });
     const updated = await tx.enterpriseRetailSale.update({ where: { id: sale.id }, data: { status: "REVERSED", reversalReason: input.reason, reversedAt: new Date(), reversedByUserId: actorUserId, revision: { increment: 1 } } });
+    await reverseRelationshipBenefitApplicationsTx(tx, {
+      organizationId,
+      sourceEntityType: "EnterpriseRetailSale",
+      sourceEntityId: sale.id,
+      reason: input.reason,
+    });
     await publishEnterpriseEvent(tx, { organizationId, entityType: "EnterpriseRetailSale", entityId: sale.id, eventType: "RETAIL_POS_SALE_REVERSED", summary: `Ticket ${sale.number} annulé`, actorUserId, fromStatus: "COMPLETED", toStatus: "REVERSED", metadataJson: { reason: input.reason.slice(0, 500) } });
     await finalizeRetailSaleReversalAccountingTx(tx, organizationId, actorUserId, sale.id);
     return updated;
