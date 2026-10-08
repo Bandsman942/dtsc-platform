@@ -8,6 +8,7 @@ import {
 import {
   createRelationshipBenefit,
   listAssignableRelationshipLinks,
+  listRelationshipBenefitConfigurationOptions,
   listRelationshipBenefitsForAdmin,
 } from "@/lib/enterprise/relationship-benefits/service";
 
@@ -19,9 +20,10 @@ export async function GET(req: Request, { params }: Params) {
   const auth = await authorizeRelationshipBenefitsRequest(req, organizationId, "read");
   if (!auth.ok) return auth.response;
 
-  const [dataset, links] = await Promise.all([
+  const [dataset, links, configurationOptions] = await Promise.all([
     listRelationshipBenefitsForAdmin(organizationId),
     listAssignableRelationshipLinks(organizationId),
+    listRelationshipBenefitConfigurationOptions(organizationId),
   ]);
   await writeApiLog({
     request: req,
@@ -35,7 +37,7 @@ export async function GET(req: Request, { params }: Params) {
       benefitCount: dataset.benefits.length,
     },
   });
-  return NextResponse.json({ ...dataset, links });
+  return NextResponse.json({ ...dataset, links, configurationOptions });
 }
 
 export async function POST(req: Request, { params }: Params) {
