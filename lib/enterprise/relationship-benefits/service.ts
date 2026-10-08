@@ -264,6 +264,17 @@ async function validateBenefitConfiguration(
   const transactional =
     typeof input.benefitType === "string" &&
     (RELATIONSHIP_BENEFIT_TRANSACTIONAL_TYPES as readonly string[]).includes(input.benefitType);
+  if (!transactional) {
+    const requestConditionKeys = Object.keys(conditions);
+    if (Number(input.minimumAmount || 0) > 0 || requestConditionKeys.length > 0 || targetModuleCode) {
+      throw new EnterpriseRelationshipBenefitError(
+        "RELATIONSHIP_BENEFIT_REQUEST_CONDITION_UNSUPPORTED",
+        "Les avantages sur demande ne peuvent pas utiliser de conditions transactionnelles tant qu’aucun adaptateur métier explicite n’est configuré.",
+        409,
+      );
+    }
+  }
+
   if (transactional && targetModuleCode && targetModuleCode !== "RETAIL_POS") {
     throw new EnterpriseRelationshipBenefitError(
       "RELATIONSHIP_BENEFIT_TRANSACTIONAL_ADAPTER_UNAVAILABLE",
