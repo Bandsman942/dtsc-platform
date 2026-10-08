@@ -38,6 +38,7 @@ export type RelationshipBenefitApplicationContext = {
 
 export type EvaluatedRelationshipBenefit = {
   id: string;
+  revision: number;
   code: string;
   nameFr: string;
   nameEn: string;
@@ -84,6 +85,7 @@ export type EvaluatedRelationshipBenefit = {
 
 export type RelationshipBenefitApplicationDraft = {
   benefitId: string;
+  benefitRevision: number;
   identityLinkId: string;
   userId: string;
   applicationType: string;
@@ -407,6 +409,7 @@ export async function evaluateRelationshipBenefitsForIdentityLink({
 
     items.push({
       id: benefit.id,
+      revision: benefit.revision,
       code: benefit.code,
       nameFr: benefit.nameFr,
       nameEn: benefit.nameEn,
@@ -546,6 +549,7 @@ export function selectMonetaryRelationshipBenefitApplications(
     remaining -= appliedAmount;
     return [{
       benefitId: item.id,
+      benefitRevision: item.revision,
       identityLinkId: item.identityLinkId,
       userId: item.userId,
       applicationType: item.benefitType,
@@ -618,7 +622,7 @@ export async function persistRelationshipBenefitApplicationsTx(
         select: { id: true },
       }),
     ]);
-    if (!link || !benefit) {
+    if (!link || !benefit || benefit.revision !== draft.benefitRevision) {
       throw new RelationshipBenefitEnforcementError(
         "RELATIONSHIP_BENEFIT_APPLICATION_STALE",
         409,
