@@ -23,6 +23,7 @@ export type RetailRelationshipBenefitEffect = {
   identityLinkId: string;
   userId: string;
   amount: Prisma.Decimal;
+  eligibleAmount: Prisma.Decimal;
   currencyCode: string;
   stackable: boolean;
   context: RelationshipBenefitExecutionContext;
@@ -341,6 +342,9 @@ export async function resolveRetailRelationshipBenefitPricing(args: {
       identityLinkId: candidate.link.id,
       userId: candidate.link.userId,
       amount: appliedAmount,
+      eligibleAmount: candidate.amount.gt(0)
+        ? candidate.indexes.reduce((sum, index) => sum.plus(basis[index]), zero())
+        : zero(),
       currencyCode: args.currencyCode,
       stackable: candidate.benefit.stackable,
       context,
@@ -401,11 +405,7 @@ export async function applyRetailRelationshipBenefitEffectsTx(args: {
     (sum, effect) => sum.plus(effect.amount),
     new Prisma.Decimal(0),
   );
-  if (
-    effectTotal.lte(0) ||
-    effectTotal.gt(sale.discountTotal) ||
-    !sale.customerBusinessPartyId
-  ) {
+  if (effectTotal.lte(0) || !sale.customerBusinessPartyId) {
     throw new Error("RELATIONSHIP_BENEFIT_EFFECT_SALE_MISMATCH");
   }
 
@@ -543,8 +543,22 @@ export async function applyRetailRelationshipBenefitEffectsTx(args: {
       error.code = `RELATIONSHIP_BENEFIT_EFFECT_${evaluation.code}`;
       throw error;
     }
+    const expectedEffectAmount = calculateRetailRelationshipDiscount({
+      benefitType: benefit.benefitType,
+      valueType: benefit.valueType,
+      valueDecimal: benefit.valueDecimal!,
+      eligibleAmount: effect.eligibleAmount,
+    });
+    const transactionAmount =
+      effect.context.transactionAmount === null ||
+      effect.context.transactionAmount === undefined
+        ? null
+        : new Prisma.Decimal(effect.context.transactionAmount);
     if (
       effect.amount.lte(0) ||
+      effect.eligibleAmount.lte(0) ||
+      !expectedEffectAmount.equals(effect.amount) ||
+      (transactionAmount && effect.eligibleAmount.gt(transactionAmount)) ||
       !effect.context.currencyCode ||
       effect.context.currencyCode.toUpperCase() !== effect.currencyCode.toUpperCase()
     ) {
@@ -572,6 +586,7 @@ export async function applyRetailRelationshipBenefitEffectsTx(args: {
           siteId: effect.context.siteId || null,
           channelCode: effect.context.channelCode || null,
           benefitCode: effect.benefitCode,
+          eligibleAmount: effect.eligibleAmount.toFixed(),
         },
         requestedAt: new Date(),
         decidedAt: new Date(),
