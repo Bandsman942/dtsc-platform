@@ -63,6 +63,7 @@ export async function resolveRetailRelationshipBenefitPricing({
   siteId,
   channelCode,
   lines,
+  includeRewards = true,
 }: {
   organizationId: string;
   customerBusinessPartyId: string | null | undefined;
@@ -70,6 +71,7 @@ export async function resolveRetailRelationshipBenefitPricing({
   siteId?: string | null;
   channelCode: string;
   lines: RetailRelationshipPricingLine[];
+  includeRewards?: boolean;
 }) {
   const empty = {
     applications: [] as RelationshipBenefitApplicationDraft[],
@@ -97,7 +99,10 @@ export async function resolveRetailRelationshipBenefitPricing({
   });
 
   const transactional = candidates.filter(
-    (item) => item.applicationMode === "TRANSACTIONAL" && item.usable,
+    (item) =>
+      item.applicationMode === "TRANSACTIONAL" &&
+      item.usable &&
+      (includeRewards || ["DISCOUNT", "FIXED_PRICE"].includes(item.benefitType)),
   );
   if (!transactional.length) return empty;
 
