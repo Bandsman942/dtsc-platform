@@ -258,6 +258,297 @@ async function ensureLoyaltyAccountTx(tx: Prisma.TransactionClient, organization
   return tx.enterpriseRetailLoyaltyAccount.findFirstOrThrow({ where: { id: account.id, organizationId } });
 }
 
+export async function earnRetailRelationshipBenefitPointsTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  actorUserId: string,
+  input: {
+    programId: string;
+    customerBusinessPartyId: string;
+    points: number;
+    monetaryAmount: number;
+    currencyCode: string;
+    saleId: string;
+    benefitId: string;
+    identityLinkId: string;
+  },
+) {
+  const idempotencyKey = `relationship-benefit:retail-sale:${input.saleId}:${input.benefitId}:${input.identityLinkId}:loyalty`;
+  const existing = await tx.enterpriseRetailLoyaltyEntry.findFirst({
+    where: { organizationId, idempotencyKey },
+  });
+  if (existing) {
+    const account = await tx.enterpriseRetailLoyaltyAccount.findFirstOrThrow({
+      where: { id: existing.accountId, organizationId },
+    });
+    return { account, entry: existing, idempotent: true };
+  }
+
+  const program = await getActiveLoyaltyProgramTx(tx, organizationId, input.programId);
+  if (program.currencyCode !== input.currencyCode) {
+    throw new EnterpriseRetailError("RETAIL_LOYALTY_CURRENCY_MISMATCH", 409);
+  }
+  const sale = await assertSaleTx(tx, organizationId, input.saleId);
+  if (!sale || sale.customerBusinessPartyId !== input.customerBusinessPartyId) {
+    throw new EnterpriseRetailError("RETAIL_LOYALTY_CUSTOMER_MISMATCH", 409);
+  }
+  const account = await ensureLoyaltyAccountTx(
+    tx,
+    organizationId,
+    program.id,
+    input.customerBusinessPartyId,
+  );
+  const pointAmount = decimal(input.points);
+  if (!pointAmount.isPositive()) {
+    throw new EnterpriseRetailError("RETAIL_LOYALTY_POINTS_INVALID", 400);
+  }
+  const entry = await tx.enterpriseRetailLoyaltyEntry.create({
+    data: {
+      organizationId,
+      accountId: account.id,
+      entryType: "EARN",
+      points: pointAmount,
+      monetaryAmount: decimal(input.monetaryAmount),
+      currencyCode: input.currencyCode,
+      saleId: input.saleId,
+      reason: `Relationship benefit ${input.benefitId}`,
+      idempotencyKey,
+      createdByUserId: actorUserId,
+    },
+  });
+  const updated = await tx.enterpriseRetailLoyaltyAccount.update({
+    where: { id: account.id },
+    data: {
+      pointsBalance: { increment: pointAmount },
+      lifetimeEarned: { increment: pointAmount },
+      revision: { increment: 1 },
+    },
+  });
+  return { account: updated, entry, idempotent: false };
+}
+
+export async function creditRetailRelationshipBenefitStoredValueTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  actorUserId: string,
+  input: {
+    customerBusinessPartyId: string;
+    accountType: "STORE_CREDIT" | "GIFT_CARD";
+    currencyCode: string;
+    amount: number;
+    saleId: string;
+    benefitId: string;
+    identityLinkId: string;
+  },
+) {
+  const idempotencyKey = `relationship-benefit:retail-sale:${input.saleId}:${input.benefitId}:${input.identityLinkId}:stored-value`;
+  const existing = await tx.enterpriseRetailStoredValueEntry.findFirst({
+    where: { organizationId, idempotencyKey },
+  });
+  if (existing) {
+    const account = await tx.enterpriseRetailStoredValueAccount.findFirstOrThrow({
+      where: { id: existing.accountId, organizationId },
+    });
+    return { account, entry: existing, idempotent: true };
+  }
+
+  await assertCustomerPartyTx(tx, organizationId, input.customerBusinessPartyId);
+  const sale = await assertSaleTx(tx, organizationId, input.saleId);
+  if (!sale || sale.customerBusinessPartyId !== input.customerBusinessPartyId) {
+    throw new EnterpriseRetailError("RETAIL_STORED_VALUE_CUSTOMER_MISMATCH", 409);
+  }
+  if (sale.currencyCode !== input.currencyCode) {
+    throw new EnterpriseRetailError("RETAIL_STORED_VALUE_CURRENCY_MISMATCH", 409);
+  }
+  const amount = decimal(input.amount);
+  if (!amount.isPositive()) {
+    throw new EnterpriseRetailError("RETAIL_STORED_VALUE_AMOUNT_INVALID", 400);
+  }
+
+  let account = await tx.enterpriseRetailStoredValueAccount.findFirst({
+    where: {
+      organizationId,
+      customerBusinessPartyId: input.customerBusinessPartyId,
+      accountType: input.accountType,
+      currencyCode: input.currencyCode,
+      status: { in: ["ACTIVE", "EXHAUSTED"] },
+      archivedAt: null,
+    },
+    orderBy: { createdAt: "asc" },
+  });
+  if (!account) {
+    const bearerCode = generateStoredValueCode();
+    account = await tx.enterpriseRetailStoredValueAccount.create({
+      data: {
+        organizationId,
+        accountType: input.accountType,
+        lookupHash: hashStoredValueCode(bearerCode),
+        displayCode: storedValueDisplayCode(bearerCode),
+        customerBusinessPartyId: input.customerBusinessPartyId,
+        currencyCode: input.currencyCode,
+        initialValue: decimal(0),
+        balance: decimal(0),
+        status: "ACTIVE",
+        createdByUserId: actorUserId,
+      },
+    });
+  }
+  await tx.$executeRaw(
+    Prisma.sql`SELECT id FROM "EnterpriseRetailStoredValueAccount" WHERE id = ${account.id} AND "organizationId" = ${organizationId} FOR UPDATE`,
+  );
+  const locked = await tx.enterpriseRetailStoredValueAccount.findFirstOrThrow({
+    where: { id: account.id, organizationId },
+  });
+  const entry = await tx.enterpriseRetailStoredValueEntry.create({
+    data: {
+      organizationId,
+      accountId: locked.id,
+      entryType: "RELATIONSHIP_BENEFIT_CREDIT",
+      amount,
+      saleId: input.saleId,
+      reason: `Relationship benefit ${input.benefitId}`,
+      idempotencyKey,
+      createdByUserId: actorUserId,
+    },
+  });
+  const updated = await tx.enterpriseRetailStoredValueAccount.update({
+    where: { id: locked.id },
+    data: {
+      balance: { increment: amount },
+      status: "ACTIVE",
+      revision: { increment: 1 },
+    },
+  });
+  return { account: updated, entry, idempotent: false };
+}
+
+export async function reverseRetailRelationshipBenefitRewardsForSaleTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  actorUserId: string,
+  saleId: string,
+  reason: string,
+) {
+  const prefix = `relationship-benefit:retail-sale:${saleId}:`;
+  const [loyaltyEntries, storedEntries] = await Promise.all([
+    tx.enterpriseRetailLoyaltyEntry.findMany({
+      where: {
+        organizationId,
+        saleId,
+        entryType: "EARN",
+        idempotencyKey: { startsWith: prefix },
+        points: { gt: 0 },
+      },
+      orderBy: { createdAt: "asc" },
+    }),
+    tx.enterpriseRetailStoredValueEntry.findMany({
+      where: {
+        organizationId,
+        saleId,
+        entryType: "RELATIONSHIP_BENEFIT_CREDIT",
+        idempotencyKey: { startsWith: prefix },
+        amount: { gt: 0 },
+      },
+      orderBy: { createdAt: "asc" },
+    }),
+  ]);
+
+  const reversed = { loyaltyEntryIds: [] as string[], storedValueEntryIds: [] as string[] };
+  for (const earned of loyaltyEntries) {
+    const idempotencyKey = `${earned.idempotencyKey}:reversal`;
+    const existing = await tx.enterpriseRetailLoyaltyEntry.findFirst({
+      where: { organizationId, idempotencyKey },
+    });
+    if (existing) {
+      reversed.loyaltyEntryIds.push(existing.id);
+      continue;
+    }
+    await tx.$executeRaw(
+      Prisma.sql`SELECT id FROM "EnterpriseRetailLoyaltyAccount" WHERE id = ${earned.accountId} AND "organizationId" = ${organizationId} FOR UPDATE`,
+    );
+    const account = await tx.enterpriseRetailLoyaltyAccount.findFirstOrThrow({
+      where: { id: earned.accountId, organizationId },
+    });
+    if (account.pointsBalance.lessThan(earned.points)) {
+      throw new EnterpriseRetailError(
+        "RETAIL_RELATIONSHIP_BENEFIT_LOYALTY_ALREADY_SPENT",
+        409,
+        { accountId: account.id, required: earned.points.toFixed(), available: account.pointsBalance.toFixed() },
+      );
+    }
+    const reversal = await tx.enterpriseRetailLoyaltyEntry.create({
+      data: {
+        organizationId,
+        accountId: account.id,
+        entryType: "REVERSAL",
+        points: earned.points.negated(),
+        monetaryAmount: earned.monetaryAmount,
+        currencyCode: earned.currencyCode,
+        saleId,
+        reason: reason.slice(0, 500),
+        idempotencyKey,
+        createdByUserId: actorUserId,
+      },
+    });
+    await tx.enterpriseRetailLoyaltyAccount.update({
+      where: { id: account.id },
+      data: {
+        pointsBalance: { decrement: earned.points },
+        revision: { increment: 1 },
+      },
+    });
+    reversed.loyaltyEntryIds.push(reversal.id);
+  }
+
+  for (const credited of storedEntries) {
+    const idempotencyKey = `${credited.idempotencyKey}:reversal`;
+    const existing = await tx.enterpriseRetailStoredValueEntry.findFirst({
+      where: { organizationId, idempotencyKey },
+    });
+    if (existing) {
+      reversed.storedValueEntryIds.push(existing.id);
+      continue;
+    }
+    await tx.$executeRaw(
+      Prisma.sql`SELECT id FROM "EnterpriseRetailStoredValueAccount" WHERE id = ${credited.accountId} AND "organizationId" = ${organizationId} FOR UPDATE`,
+    );
+    const account = await tx.enterpriseRetailStoredValueAccount.findFirstOrThrow({
+      where: { id: credited.accountId, organizationId },
+    });
+    if (account.balance.lessThan(credited.amount)) {
+      throw new EnterpriseRetailError(
+        "RETAIL_RELATIONSHIP_BENEFIT_CREDIT_ALREADY_SPENT",
+        409,
+        { accountId: account.id, required: credited.amount.toFixed(), available: account.balance.toFixed() },
+      );
+    }
+    const reversal = await tx.enterpriseRetailStoredValueEntry.create({
+      data: {
+        organizationId,
+        accountId: account.id,
+        entryType: "RELATIONSHIP_BENEFIT_REVERSAL",
+        amount: credited.amount.negated(),
+        saleId,
+        reason: reason.slice(0, 500),
+        idempotencyKey,
+        createdByUserId: actorUserId,
+      },
+    });
+    const remaining = account.balance.minus(credited.amount);
+    await tx.enterpriseRetailStoredValueAccount.update({
+      where: { id: account.id },
+      data: {
+        balance: remaining,
+        status: remaining.isZero() ? "EXHAUSTED" : "ACTIVE",
+        revision: { increment: 1 },
+      },
+    });
+    reversed.storedValueEntryIds.push(reversal.id);
+  }
+
+  return reversed;
+}
+
 export async function earnRetailLoyaltyPoints(organizationId: string, actorUserId: string, input: LoyaltyEarnInput) {
   return prisma.$transaction(async (tx) => {
     const existing = await tx.enterpriseRetailLoyaltyEntry.findFirst({ where: { organizationId, idempotencyKey: input.idempotencyKey } });
