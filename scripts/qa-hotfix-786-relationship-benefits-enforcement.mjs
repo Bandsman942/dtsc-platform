@@ -30,6 +30,10 @@ const migration = read("prisma/migrations/20261008124500_hotfix_786_relationship
 const contextMigration = read("prisma/migrations/20261008131000_hotfix_786_relationship_benefit_request_context/migration.sql");
 const retailFr = read("locales/retail-workspace.fr.json");
 const retailEn = read("locales/retail-workspace.en.json");
+const ownerE2e = read("tests/e2e/issue-786-relationship-benefits-enforcement.spec.mjs");
+const e2eSeed = read("scripts/seed-erp-professional-e2e.mjs");
+const shopWorkflow = read(".github/workflows/shop2-behavioral.yml");
+const packageJson = JSON.parse(read("package.json"));
 
 const relationTypes = [
   "PROSPECT", "CUSTOMER", "CUSTOMER_CONTACT", "SUPPLIER_REPRESENTATIVE",
@@ -223,6 +227,35 @@ hasAll(posUi, [
   "effectiveTotal",
   "pricingPreviewUnavailable",
 ], "POS server pricing UX");
+hasAll(ownerE2e, [
+  "Hotfix #786 relationship benefit enforcement",
+  "RELATIONSHIP_BENEFIT_USAGE_INPUT_INVALID",
+  "RELATIONSHIP_BENEFIT_TARGET_ADAPTER_UNSUPPORTED",
+  'executionMode).toBe("AUTO_RETAIL")',
+  'status).toBe("CONSUMED")',
+  'status).toBe("CANCELLED")',
+  "identity-links/decision",
+  "not-this-tenant",
+  "scrollWidth - window.innerWidth",
+], "Hotfix #786 behavioral E2E");
+hasAll(e2eSeed, [
+  '"RELATIONSHIP_BENEFITS"',
+  "enterpriseRelationshipBenefitUsage.deleteMany",
+  "enterpriseRelationshipBenefitAssignment.deleteMany",
+  "enterpriseRelationshipBenefitAudience.deleteMany",
+  "enterpriseRelationshipBenefit.deleteMany",
+], "Canonical E2E seed");
+hasAll(shopWorkflow, [
+  "issue-786-relationship-benefits-enforcement.spec.mjs",
+  "qa-hotfix-786-relationship-benefits-enforcement.mjs",
+  "lib/enterprise/relationship-benefits/**",
+  "prisma/enterprise-relationship-benefits.prisma",
+], "Shop behavioral CI gate");
+check(
+  packageJson.scripts?.["e2e:hotfix-786"] === "playwright test tests/e2e/issue-786-relationship-benefits-enforcement.spec.mjs",
+  "package.json must expose e2e:hotfix-786",
+);
+
 for (const locale of [retailFr, retailEn]) {
   hasAll(locale, [
     "relationshipBenefitsApplied",
