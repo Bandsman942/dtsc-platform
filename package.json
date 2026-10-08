@@ -338,7 +338,8 @@
     "qa:scale7h-dashboard-collaboration-tail": "node scripts/qa-scale7h-dashboard-collaboration-tail.mjs",
     "qa:hotfix-781-relationship-benefits": "node scripts/qa-hotfix-781-relationship-benefits.mjs",
     "qa:hotfix-783-relationship-benefits-navigation": "node scripts/qa-hotfix-783-relationship-benefits-navigation.mjs",
-    "qa:hotfix-786-relationship-benefits-enforcement": "node scripts/qa-hotfix-786-relationship-benefits-enforcement.mjs"
+    "qa:hotfix-786-relationship-benefits-enforcement": "node scripts/qa-hotfix-786-relationship-benefits-enforcement.mjs",
+    "e2e:hotfix-786": "playwright test tests/e2e/issue-786-relationship-benefits-enforcement.spec.mjs"
   },
   "dependencies": {
     "@ai-sdk/gateway": "2.0.27",
