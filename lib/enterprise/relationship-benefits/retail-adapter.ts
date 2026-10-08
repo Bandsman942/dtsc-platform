@@ -305,7 +305,35 @@ export async function resolveRetailRelationshipBenefitPricing(args: {
     (sum, decision) => sum.plus(decision.discountAmount),
     zero(),
   );
-  const stackableTotal = stackable.reduce((sum, candidate) => sum.plus(candidate.amount), zero());
+  const simulatedCapacity = args.decisions.map((decision) =>
+    money(Prisma.Decimal.max(zero(), lineGross(decision).minus(decision.discountAmount))),
+  );
+  const simulatedAccumulated = args.decisions.map(() => zero());
+  let stackableTotal = zero();
+  for (const candidate of stackable) {
+    const basis = args.decisions.map((decision, index) => {
+      if (!candidate.indexes.includes(index)) return zero();
+      return simulatedCapacity[index];
+    });
+    const eligibleAmount = candidate.indexes.reduce(
+      (sum, index) => sum.plus(basis[index]),
+      zero(),
+    );
+    const calculatedAmount = calculateRetailRelationshipDiscount({
+      benefitType: candidate.benefit.benefitType,
+      valueType: candidate.benefit.valueType,
+      valueDecimal: candidate.benefit.valueDecimal!,
+      eligibleAmount,
+    });
+    const appliedAmount = allocateAmount({
+      amount: calculatedAmount,
+      indexes: candidate.indexes,
+      basis,
+      capacity: simulatedCapacity,
+      accumulated: simulatedAccumulated,
+    });
+    stackableTotal = money(stackableTotal.plus(appliedAmount));
+  }
   const bestExclusive = exclusive[0] || null;
   const useExclusive =
     Boolean(bestExclusive) &&
@@ -326,8 +354,18 @@ export async function resolveRetailRelationshipBenefitPricing(args: {
       if (!candidate.indexes.includes(index)) return zero();
       return useExclusive ? lineGross(decision) : capacity[index];
     });
+    const eligibleAmount = candidate.indexes.reduce(
+      (sum, index) => sum.plus(basis[index]),
+      zero(),
+    );
+    const calculatedAmount = calculateRetailRelationshipDiscount({
+      benefitType: candidate.benefit.benefitType,
+      valueType: candidate.benefit.valueType,
+      valueDecimal: candidate.benefit.valueDecimal!,
+      eligibleAmount,
+    });
     const appliedAmount = allocateAmount({
-      amount: candidate.amount,
+      amount: calculatedAmount,
       indexes: candidate.indexes,
       basis,
       capacity,
@@ -342,9 +380,7 @@ export async function resolveRetailRelationshipBenefitPricing(args: {
       identityLinkId: candidate.link.id,
       userId: candidate.link.userId,
       amount: appliedAmount,
-      eligibleAmount: candidate.amount.gt(0)
-        ? candidate.indexes.reduce((sum, index) => sum.plus(basis[index]), zero())
-        : zero(),
+      eligibleAmount,
       currencyCode: args.currencyCode,
       stackable: candidate.benefit.stackable,
       context,
