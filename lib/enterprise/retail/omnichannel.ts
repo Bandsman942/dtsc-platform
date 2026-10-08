@@ -55,7 +55,7 @@ async function compensateFailedReservations(args: { organizationId: string; acto
       sourceEntityType: "EnterpriseSalesOrder",
       sourceEntityId: args.orderId,
       reason: args.errorCode,
-    }).catch(() => null);
+    });
   }
 }
 
