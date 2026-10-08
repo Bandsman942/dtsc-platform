@@ -56,9 +56,17 @@ hasAll(contracts, [
   "relationshipBenefitExecutionContextSchema",
   "transactionAmount",
   "businessPartyId",
-  "context: relationshipBenefitExecutionContextSchema",
 ], "Controlled benefit contracts");
 check(!contracts.includes("conditions: z.record(z.string(), z.unknown())"), "Benefit conditions must not accept arbitrary JSON");
+const requestSchemaStart = contracts.indexOf("export const relationshipBenefitUsageSchema");
+const requestSchemaEnd = contracts.indexOf("export const relationshipBenefitUsageDecisionSchema", requestSchemaStart);
+const requestSchema = contracts.slice(requestSchemaStart, requestSchemaEnd);
+check(!requestSchema.includes("context:"), "Client request schema must not accept execution context");
+const decisionSchemaStart = requestSchemaEnd;
+const decisionSchemaEnd = contracts.indexOf("export const relationshipBenefitUsageCancelSchema", decisionSchemaStart);
+const decisionSchema = contracts.slice(decisionSchemaStart, decisionSchemaEnd);
+check(!decisionSchema.includes("context:"), "Admin decision schema must not accept unverified execution context");
+check(!decisionSchema.includes('"CONSUMED"'), "Public admin decision schema must not allow manual CONSUMED");
 
 hasAll(enforcement, [
   "evaluateRelationshipBenefitSnapshot",
@@ -111,6 +119,7 @@ hasAll(service, [
   "evaluateRelationshipBenefit",
   "RELATIONSHIP_BENEFIT_EFFECT_REQUIRED",
   "RELATIONSHIP_BENEFIT_TARGET_ADAPTER_UNSUPPORTED",
+  "RELATIONSHIP_BENEFIT_CONTEXTUAL_RULES_UNSUPPORTED",
   "RELATIONSHIP_BENEFIT_AMOUNT_CURRENCY_REQUIRED",
   "RELATIONSHIP_BENEFIT_CONTEXT_REQUIRED",
   'executionMode: "REQUEST"',
@@ -196,6 +205,7 @@ hasAll(adminUi, [
   "conditionChannelCode",
   "conditionMinimumQuantity",
   "conditionWeekdays",
+  'disabled={targetModuleCode !== "RETAIL_POS"}',
   "Business execution required",
   "Exécution métier requise",
 ], "Controlled admin UI");
