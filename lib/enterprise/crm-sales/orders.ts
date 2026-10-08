@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { persistRelationshipBenefitApplicationsTx, type RelationshipBenefitApplicationDraft } from "@/lib/enterprise/relationship-benefits/enforcement";
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { assertActiveClientOrganization, publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
 import { prisma } from "@/lib/prisma";
@@ -23,6 +24,8 @@ export type EnterpriseDirectSalesOrderInput = {
     lineTotal: number;
   }>;
   eventMetadata?: Record<string, unknown>;
+  relationshipBenefitApplications?: RelationshipBenefitApplicationDraft[];
+  relationshipBenefitSourceModuleCode?: string;
 };
 
 function deterministicOrderReference(organizationId: string, idempotencyKey: string) {
@@ -93,6 +96,19 @@ export async function createEnterpriseDirectSalesOrder(organizationId: string, a
       },
       include: { items: { orderBy: { sortOrder: "asc" } }, fulfillments: { include: { items: true } } },
     });
+    if (input.relationshipBenefitApplications?.length) {
+      if (!input.relationshipBenefitSourceModuleCode) {
+        throw new EnterpriseDomainError("RELATIONSHIP_BENEFIT_SOURCE_MODULE_REQUIRED", 400);
+      }
+      await persistRelationshipBenefitApplicationsTx(tx, {
+        organizationId,
+        actorUserId,
+        sourceModuleCode: input.relationshipBenefitSourceModuleCode,
+        sourceEntityType: "EnterpriseSalesOrder",
+        sourceEntityId: order.id,
+        applications: input.relationshipBenefitApplications,
+      });
+    }
     await publishEnterpriseEvent(tx, {
       organizationId,
       entityType: "EnterpriseSalesOrder",
