@@ -223,7 +223,7 @@ export async function evaluateRelationshipBenefitsForIdentityLink({
   }
 
   const now = new Date();
-  const [benefits, assignments, usages, modules, entitlements] = await Promise.all([
+  const [benefits, assignments, usages, applications, modules, entitlements] = await Promise.all([
     prisma.enterpriseRelationshipBenefit.findMany({
       where: {
         organizationId,
@@ -254,6 +254,17 @@ export async function evaluateRelationshipBenefitsForIdentityLink({
       orderBy: { requestedAt: "desc" },
       take: 2000,
     }),
+    prisma.enterpriseRelationshipBenefitApplication.findMany({
+      where: {
+        organizationId,
+        identityLinkId: link.id,
+        userId,
+        status: "APPLIED",
+      },
+      select: { benefitId: true, appliedAt: true },
+      orderBy: { appliedAt: "desc" },
+      take: 2000,
+    }),
     prisma.enterpriseModule.findMany({
       where: { organizationId, isEnabled: true },
       select: { moduleCode: true },
@@ -277,6 +288,11 @@ export async function evaluateRelationshipBenefitsForIdentityLink({
     const list = usageByBenefit.get(usage.benefitId) || [];
     list.push(usage.requestedAt);
     usageByBenefit.set(usage.benefitId, list);
+  }
+  for (const application of applications) {
+    const list = usageByBenefit.get(application.benefitId) || [];
+    list.push(application.appliedAt);
+    usageByBenefit.set(application.benefitId, list);
   }
 
   const items: EvaluatedRelationshipBenefit[] = [];
@@ -578,29 +594,52 @@ export async function persistRelationshipBenefitApplicationsTx(
           : audienceMatch;
     if (!eligible) throw new Error("RELATIONSHIP_BENEFIT_APPLICATION_NOT_ELIGIBLE");
 
-    const activeUsageCount = await tx.enterpriseRelationshipBenefitApplication.count({
-      where: {
-        organizationId: args.organizationId,
-        benefitId: draft.benefitId,
-        identityLinkId: draft.identityLinkId,
-        status: "APPLIED",
-      },
-    });
-    if (benefit.usageLimitTotal !== null && activeUsageCount >= benefit.usageLimitTotal) {
-      throw new Error("RELATIONSHIP_BENEFIT_APPLICATION_LIMIT_REACHED");
-    }
-    if (benefit.usageLimitPerPeriod !== null && benefit.usagePeriodDays) {
-      const periodStart = new Date(Date.now() - benefit.usagePeriodDays * 24 * 60 * 60 * 1000);
-      const periodCount = await tx.enterpriseRelationshipBenefitApplication.count({
+    const [activeApplicationCount, activeRequestCount] = await Promise.all([
+      tx.enterpriseRelationshipBenefitApplication.count({
         where: {
           organizationId: args.organizationId,
           benefitId: draft.benefitId,
           identityLinkId: draft.identityLinkId,
           status: "APPLIED",
-          appliedAt: { gte: periodStart },
         },
-      });
-      if (periodCount >= benefit.usageLimitPerPeriod) {
+      }),
+      tx.enterpriseRelationshipBenefitUsage.count({
+        where: {
+          organizationId: args.organizationId,
+          benefitId: draft.benefitId,
+          identityLinkId: draft.identityLinkId,
+          userId: draft.userId,
+          status: { notIn: ["REJECTED", "CANCELLED"] },
+        },
+      }),
+    ]);
+    if (benefit.usageLimitTotal !== null && activeApplicationCount + activeRequestCount >= benefit.usageLimitTotal) {
+      throw new Error("RELATIONSHIP_BENEFIT_APPLICATION_LIMIT_REACHED");
+    }
+    if (benefit.usageLimitPerPeriod !== null && benefit.usagePeriodDays) {
+      const periodStart = new Date(Date.now() - benefit.usagePeriodDays * 24 * 60 * 60 * 1000);
+      const [periodApplicationCount, periodRequestCount] = await Promise.all([
+        tx.enterpriseRelationshipBenefitApplication.count({
+          where: {
+            organizationId: args.organizationId,
+            benefitId: draft.benefitId,
+            identityLinkId: draft.identityLinkId,
+            status: "APPLIED",
+            appliedAt: { gte: periodStart },
+          },
+        }),
+        tx.enterpriseRelationshipBenefitUsage.count({
+          where: {
+            organizationId: args.organizationId,
+            benefitId: draft.benefitId,
+            identityLinkId: draft.identityLinkId,
+            userId: draft.userId,
+            status: { notIn: ["REJECTED", "CANCELLED"] },
+            requestedAt: { gte: periodStart },
+          },
+        }),
+      ]);
+      if (periodApplicationCount + periodRequestCount >= benefit.usageLimitPerPeriod) {
         throw new Error("RELATIONSHIP_BENEFIT_APPLICATION_PERIOD_LIMIT_REACHED");
       }
     }
