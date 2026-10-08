@@ -40,3 +40,32 @@ CREATE INDEX "EnterpriseRelationshipBenefitApplication_org_source_idx"
   ON "EnterpriseRelationshipBenefitApplication"("organizationId","sourceModuleCode","sourceEntityType","sourceEntityId");
 CREATE INDEX "EnterpriseRelationshipBenefitApplication_org_benefit_status_idx"
   ON "EnterpriseRelationshipBenefitApplication"("organizationId","benefitId","status","appliedAt");
+
+
+CREATE TABLE "EnterpriseRelationshipBenefitApplicationReversal" (
+  "id" TEXT NOT NULL,
+  "organizationId" TEXT NOT NULL,
+  "applicationId" TEXT NOT NULL,
+  "sourceEntityType" TEXT NOT NULL,
+  "sourceEntityId" TEXT NOT NULL,
+  "reversedAmount" DECIMAL(20,6) NOT NULL,
+  "idempotencyKey" TEXT NOT NULL,
+  "reason" TEXT,
+  "createdByUserId" TEXT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT "EnterpriseRelationshipBenefitApplicationReversal_pkey" PRIMARY KEY ("id"),
+  CONSTRAINT "EnterpriseRelationshipBenefitApplicationReversal_application_fkey"
+    FOREIGN KEY ("organizationId","applicationId")
+    REFERENCES "EnterpriseRelationshipBenefitApplication"("organizationId","id")
+    ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+CREATE UNIQUE INDEX "EnterpriseRelationshipBenefitApplicationReversal_org_id_key"
+  ON "EnterpriseRelationshipBenefitApplicationReversal"("organizationId","id");
+CREATE UNIQUE INDEX "EnterpriseRelationshipBenefitApplicationReversal_org_idempotency_key"
+  ON "EnterpriseRelationshipBenefitApplicationReversal"("organizationId","idempotencyKey");
+CREATE INDEX "EnterpriseRelationshipBenefitApplicationReversal_org_application_created_idx"
+  ON "EnterpriseRelationshipBenefitApplicationReversal"("organizationId","applicationId","createdAt");
+CREATE INDEX "EnterpriseRelationshipBenefitApplicationReversal_org_source_idx"
+  ON "EnterpriseRelationshipBenefitApplicationReversal"("organizationId","sourceEntityType","sourceEntityId");
