@@ -1049,6 +1049,7 @@ export async function decideRelationshipBenefitUsage({
       organizationId,
       userId: usage.userId,
       identityLinkId: usage.identityLinkId,
+      excludeUsageId: usage.id,
     });
     const eligible = reevaluated.items.find((item) => item.id === usage.benefitId);
     if (!eligible) {
