@@ -28,6 +28,7 @@ export type RetailRelationshipRewardPlan = {
   expectedAmount: number | null;
   loyaltyProgramId: string | null;
   storedValueAccountType: "STORE_CREDIT" | "GIFT_CARD" | null;
+  catalogItemIds: string[];
   stackable: boolean;
 };
 
@@ -257,6 +258,7 @@ export async function resolveRetailRelationshipBenefitPricing({
         expectedAmount,
         loyaltyProgramId: item.conditions?.retailLoyaltyProgramId || null,
         storedValueAccountType: item.conditions?.retailStoredValueAccountType || "STORE_CREDIT",
+        catalogItemIds: matching.map((line) => line.catalogItemId),
         stackable: item.stackable,
       }];
     },
