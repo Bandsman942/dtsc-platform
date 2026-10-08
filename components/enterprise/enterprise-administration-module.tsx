@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { BadgeDollarSign } from "lucide-react";
 import { EnterpriseAdminSectionActivator } from "@/components/enterprise/enterprise-admin-section-activator";
 import { EnterpriseRolesPermissionsPanel } from "@/components/enterprise/enterprise-governance-panels";
 import { EnterpriseAdministrationSummary } from "@/components/enterprise/enterprise-administration-summary";
@@ -50,7 +51,11 @@ function clientError(locale: string | null | undefined, serverMessage: string | 
 }
 
 export function EnterpriseAdministrationModule(
-  props: EnterpriseAdminDataset & { locale?: string | null; initialSection?: string | null },
+  props: EnterpriseAdminDataset & {
+    locale?: string | null;
+    initialSection?: string | null;
+    relationshipBenefitsEntry?: { href: string; label: string; description: string } | null;
+  },
 ) {
   const {
     organization,
@@ -69,6 +74,7 @@ export function EnterpriseAdministrationModule(
     configurationIssues,
     locale,
     initialSection,
+    relationshipBenefitsEntry,
   } = props;
   const router = useRouter();
   const [message, setMessage] = useState("");
@@ -156,6 +162,16 @@ export function EnterpriseAdministrationModule(
             {locale === "en" ? item.en : item.fr}
           </Link>
         ))}
+        {relationshipBenefitsEntry ? (
+          <Link
+            href={relationshipBenefitsEntry.href}
+            title={relationshipBenefitsEntry.description}
+            className="inline-flex min-h-11 shrink-0 snap-start items-center gap-2 rounded-xl border border-cyan-400/40 bg-cyan-400/10 px-3 py-2.5 text-xs font-black text-cyan-700 transition hover:bg-cyan-400/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 dark:text-cyan-300"
+          >
+            <BadgeDollarSign className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <span>{relationshipBenefitsEntry.label}</span>
+          </Link>
+        ) : null}
       </nav>
 
       <div id="enterprise-admin-overview" className="scroll-mt-24 outline-none">
