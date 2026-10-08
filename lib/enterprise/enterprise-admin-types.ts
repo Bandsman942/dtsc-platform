@@ -77,6 +77,7 @@ export type EnterpriseModuleItem = {
   implementationStatus?: string | null;
   navigationGroup?: string | null;
   routeKind?: string | null;
+  routePath?: string | null;
   sectorCompatible?: boolean;
   registryKnown?: boolean;
   createdAt?: string;
