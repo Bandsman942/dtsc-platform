@@ -169,13 +169,10 @@ export async function createRetailSale(
     await ensureRetailConfigurationTx(tx, organizationId, actorUserId);
     const existing = await tx.enterpriseRetailSale.findFirst({ where: { organizationId, idempotencyKey: input.idempotencyKey }, include: { lines: true, tenders: true } });
     if (existing) {
-      await applyRetailRelationshipBenefitEffectsTx({
-        tx,
-        organizationId,
-        actorUserId,
-        saleId: existing.id,
-        effects: relationshipBenefitEffects,
-      });
+      // The relationship-benefit ledger is written atomically with the original
+      // sale. A replay must return that committed sale as-is: re-resolving
+      // today's eligibility could otherwise attach a different benefit to an
+      // old receipt after quotas, audiences or promotions changed.
       await finalizeRetailSaleAccountingTx(tx, organizationId, actorUserId, existing.id);
       return { sale: existing, idempotent: true };
     }
