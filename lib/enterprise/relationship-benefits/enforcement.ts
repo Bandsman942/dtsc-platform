@@ -457,7 +457,7 @@ export async function evaluateRelationshipBenefitsForBusinessParty({
   return [...unique.values()];
 }
 
-function monetaryEffect(item: EvaluatedRelationshipBenefit, baseAmount: number) {
+export function calculateRelationshipBenefitMonetaryEffect(item: EvaluatedRelationshipBenefit, baseAmount: number) {
   if (!item.usable || item.valueDecimal === null || baseAmount <= 0) return 0;
   if (item.benefitType === "DISCOUNT") {
     if (item.valueType === "PERCENT") {
@@ -479,7 +479,7 @@ export function selectMonetaryRelationshipBenefitApplications(
   currencyCode: string,
 ): RelationshipBenefitApplicationDraft[] {
   const candidates = items
-    .map((item) => ({ item, amount: monetaryEffect(item, baseAmount) }))
+    .map((item) => ({ item, amount: calculateRelationshipBenefitMonetaryEffect(item, baseAmount) }))
     .filter((candidate) => candidate.amount > 0);
 
   const stackable = candidates.filter((candidate) => candidate.item.stackable);
