@@ -493,6 +493,97 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
     expect(exclusivePreview.body.lines?.[0]?.promotions || []).toHaveLength(0);
     expect(asNumber(exclusivePreview.body.grandTotal)).toBeLessThan(asNumber(afterReversal.body.grandTotal));
 
+    const exclusiveTotal = asNumber(exclusivePreview.body.grandTotal);
+    const exclusiveSaleKey = `e2e-786-exclusive-sale-${Date.now()}`;
+    const exclusiveSalePayload = {
+      siteId: fixture.siteId,
+      warehouseId: fixture.warehouseId,
+      storageLocationId: null,
+      customerBusinessPartyId: fixture.customerBusinessPartyId,
+      currencyCode: fixture.currencyCode,
+      idempotencyKey: exclusiveSaleKey,
+      lines: [{
+        catalogItemId: fixture.catalogItemId,
+        inventoryItemId: fixture.inventoryItemId,
+        quantity: 1,
+        unitPrice: 116,
+        discountAmount: 0,
+        taxAmount: 0,
+      }],
+      tenders: [{
+        methodType: "CASH",
+        financialAccountId: fixture.cashAccountId,
+        amount: exclusiveTotal,
+        reference: "E2E-786-EXCLUSIVE",
+      }],
+    };
+    const exclusiveSale = await post(
+      admin,
+      `/api/enterprise/${organizationId}/retail/sales`,
+      exclusiveSalePayload,
+      "/enterprise-modules/RETAIL_POS",
+    );
+    expect(exclusiveSale.response.status(), JSON.stringify(exclusiveSale.body)).toBe(201);
+    expect(exclusiveSale.body.commercial.promotionCount).toBe(0);
+    expect(exclusiveSale.body.relationshipBenefits.map((item) => item.benefitId)).toEqual([exclusiveBenefitId]);
+
+    const exclusiveUsagesBeforeReplay = await prisma.enterpriseRelationshipBenefitUsage.findMany({
+      where: {
+        organizationId,
+        effectEntityId: exclusiveSale.body.sale.id,
+        executionMode: "AUTO_RETAIL",
+      },
+    });
+    expect(exclusiveUsagesBeforeReplay).toHaveLength(1);
+    expect(exclusiveUsagesBeforeReplay[0].benefitId).toBe(exclusiveBenefitId);
+    expect(exclusiveUsagesBeforeReplay[0].status).toBe("CONSUMED");
+    expect(
+      await prisma.enterpriseRetailPromotionRedemption.count({
+        where: { organizationId, saleId: exclusiveSale.body.sale.id },
+      }),
+    ).toBe(0);
+
+    const exclusiveReplay = await post(
+      admin,
+      `/api/enterprise/${organizationId}/retail/sales`,
+      exclusiveSalePayload,
+      "/enterprise-modules/RETAIL_POS",
+    );
+    expect(exclusiveReplay.response.status(), JSON.stringify(exclusiveReplay.body)).toBe(200);
+    expect(exclusiveReplay.body.idempotent).toBe(true);
+    expect(exclusiveReplay.body.commercial.promotionCount).toBe(0);
+    expect(exclusiveReplay.body.relationshipBenefits.map((item) => item.benefitId)).toEqual([exclusiveBenefitId]);
+    const exclusiveUsagesAfterReplay = await prisma.enterpriseRelationshipBenefitUsage.findMany({
+      where: {
+        organizationId,
+        effectEntityId: exclusiveSale.body.sale.id,
+        executionMode: "AUTO_RETAIL",
+      },
+    });
+    expect(exclusiveUsagesAfterReplay).toHaveLength(1);
+    expect(exclusiveUsagesAfterReplay[0].benefitId).toBe(exclusiveBenefitId);
+    expect(
+      exclusiveUsagesAfterReplay.some((usage) => usage.benefitId === benefitId),
+      "Replay must not attach a newly re-resolved stackable benefit to the historical exclusive sale",
+    ).toBe(false);
+    expect(
+      await prisma.enterpriseRetailPromotionRedemption.count({
+        where: { organizationId, saleId: exclusiveSale.body.sale.id },
+      }),
+      "Replay must not add a Retail promotion that was excluded from the committed sale",
+    ).toBe(0);
+
+    const exclusiveReverse = await post(
+      admin,
+      `/api/enterprise/${organizationId}/retail/sales/${exclusiveSale.body.sale.id}/reverse`,
+      {
+        revision: exclusiveSale.body.sale.revision,
+        reason: "Hotfix #786 immutable replay verification",
+      },
+      "/enterprise-modules/RETAIL_POS",
+    );
+    expect(exclusiveReverse.response.ok(), JSON.stringify(exclusiveReverse.body)).toBeTruthy();
+
     const suspendedExclusive = await patch(
       admin,
       `/api/enterprise/${organizationId}/relationship-benefits/${exclusiveBenefitId}`,
