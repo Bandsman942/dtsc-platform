@@ -88,6 +88,7 @@ async function main() {
     "CRM_PIPELINE",
     "CONTRACTS",
     "DOCUMENTS",
+    "RELATIONSHIP_BENEFITS",
     "SALES_QUOTES_ORDERS",
     "SUPPLIERS_PURCHASES",
     "FINANCE_OVERVIEW",
@@ -111,6 +112,10 @@ async function main() {
     });
   }
 
+  await prisma.enterpriseRelationshipBenefitUsage.deleteMany({ where: { organizationId } });
+  await prisma.enterpriseRelationshipBenefitAssignment.deleteMany({ where: { organizationId } });
+  await prisma.enterpriseRelationshipBenefitAudience.deleteMany({ where: { organizationId } });
+  await prisma.enterpriseRelationshipBenefit.deleteMany({ where: { organizationId } });
   await prisma.enterpriseIdentityConsentRecord.deleteMany({ where: { organizationId } });
   await prisma.enterpriseIdentityLinkEvent.deleteMany({ where: { organizationId } });
   await prisma.enterpriseIdentityLink.deleteMany({ where: { organizationId } });
