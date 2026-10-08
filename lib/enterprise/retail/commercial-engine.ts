@@ -649,7 +649,13 @@ export async function persistRetailCommercialDecisions(
 ) {
   await prisma.$transaction(async (tx) => {
     const existing = await tx.enterpriseRetailPricingDecision.count({ where: { organizationId, saleId } });
-    if (!existing) {
+    if (existing) {
+      // Pricing decisions and promotion redemptions describe the committed
+      // sale. An idempotent replay must not project newly eligible promotions
+      // or relationship benefits onto that historical receipt.
+      return;
+    }
+    {
       await tx.enterpriseRetailPricingDecision.createMany({
         data: decisions.map((decision) => ({
           organizationId,
