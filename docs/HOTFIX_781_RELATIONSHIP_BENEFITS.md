@@ -52,7 +52,7 @@ L’administrateur autorisé peut :
 
 ### Hotfix d’enforcement #786
 
-Le catalogue s’appuie désormais sur un resolver serveur unique. Les 22 types de relation ont un contrat explicite d’avantages. `minimumAmount`, devise, conditions contrôlées, module cible, cumul et quotas sont évalués au serveur. Retail POS possède le premier adaptateur d’effet transactionnel : une remise/prix fixe compatible modifie réellement le ticket et écrit un usage lié à la vente. Les autres cibles restent des demandes tant qu’un adaptateur certifié n’existe pas ; elles ne peuvent pas être marquées consommées sans preuve métier.
+Le catalogue s’appuie désormais sur un resolver serveur unique. Les 22 types de relation ont un contrat explicite d’avantages. `minimumAmount`, devise, conditions contrôlées, module cible, cumul et quotas sont évalués au serveur. Retail POS possède le premier adaptateur d’effet transactionnel : une remise/prix fixe compatible modifie réellement le ticket et écrit un usage lié à la vente. Une cible métier sans adaptateur certifié est refusée à la configuration. Les avantages manuels sans cible transactionnelle restent des demandes et ne peuvent pas être marqués consommés sans preuve métier.
 
 ## Compte global
 
@@ -70,21 +70,6 @@ Dès que `EnterpriseIdentityLink.status` n’est plus `ACTIVE`, le résolveur ne
 
 ## OWNER_E2E requis
 
-Statut initial : **NOT_EXECUTED**.
+La certification #781 est désormais consolidée par le scénario renforcé de **#786** dans `docs/HOTFIX_786_RELATIONSHIP_BENEFITS_ENFORCEMENT.md`.
 
-1. Dans une entreprise BUSINESS ou supérieure, ouvrir **Relations & avantages**.
-2. Créer un avantage automatique ciblant `CUSTOMER`, le publier, puis vérifier sa présence dans le catalogue.
-3. Depuis un compte global possédant une relation `CUSTOMER` active et approuvée, ouvrir **Relations avec les entreprises** puis le détail de l’entreprise.
-4. Vérifier l’affichage de l’avantage et l’absence d’accès au tenant ERP.
-5. Appuyer sur l’action de l’avantage ; vérifier toast succès et création d’une demande unique.
-6. Rejouer volontairement la même clé idempotente via le scénario E2E : aucune seconde demande ne doit être créée.
-7. Créer une deuxième demande puis l’annuler côté compte global ; vérifier qu’elle passe à `CANCELLED`, qu’elle n’est plus comptée dans le quota et qu’une autre personne ne peut pas l’annuler.
-8. Côté entreprise, approuver puis marquer la première demande comme utilisée ; vérifier notification et état côté client.
-9. Vérifier que le quota restant diminue pour les usages actifs/consommés et se rétablit après annulation/refus.
-10. Révoquer la relation ; l’avantage doit disparaître ou devenir inaccessible immédiatement.
-11. Tester un identifiant `identityLinkId`, `benefitId` ou `usageId` d’un autre tenant/utilisateur : refus sûr sans fuite.
-12. Avec une entreprise Commerce Retail, vérifier que points et avoirs proviennent des comptes Retail existants et qu’aucun second ledger n’est créé.
-13. Vérifier l’aperçu des capacités résolues (services/documents) sans lien vers un workspace tenant non autorisé.
-14. Vérifier 320/360/390/414 px, desktop, clair/sombre, FR/EN et clavier mobile.
-
-La fusion ne doit pas présenter cet E2E comme exécuté tant que le propriétaire ne l’a pas confirmé.
+Statut : **NOT_EXECUTED** tant que le propriétaire ne l’a pas confirmé. Aucune fusion ne doit présenter cet E2E comme exécuté sur la seule base d’une QA statique ou d’une CI.
