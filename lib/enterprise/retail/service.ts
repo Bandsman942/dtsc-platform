@@ -380,6 +380,7 @@ export async function reverseRetailSale(organizationId: string, saleId: string, 
       sourceEntityType: "EnterpriseRetailSale",
       sourceEntityId: sale.id,
       reason: input.reason,
+      actorUserId,
     });
     await publishEnterpriseEvent(tx, { organizationId, entityType: "EnterpriseRetailSale", entityId: sale.id, eventType: "RETAIL_POS_SALE_REVERSED", summary: `Ticket ${sale.number} annulé`, actorUserId, fromStatus: "COMPLETED", toStatus: "REVERSED", metadataJson: { reason: input.reason.slice(0, 500) } });
     await finalizeRetailSaleReversalAccountingTx(tx, organizationId, actorUserId, sale.id);
