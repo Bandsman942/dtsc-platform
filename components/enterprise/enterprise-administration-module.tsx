@@ -55,6 +55,7 @@ export function EnterpriseAdministrationModule(
     locale?: string | null;
     initialSection?: string | null;
     relationshipBenefitsEntry?: { href: string; label: string; description: string } | null;
+    authorizedModuleRoutes?: Record<string, string>;
   },
 ) {
   const {
@@ -75,6 +76,7 @@ export function EnterpriseAdministrationModule(
     locale,
     initialSection,
     relationshipBenefitsEntry,
+    authorizedModuleRoutes = {},
   } = props;
   const router = useRouter();
   const [message, setMessage] = useState("");
@@ -193,7 +195,7 @@ export function EnterpriseAdministrationModule(
 
         <div id="enterprise-admin-modules" className="scroll-mt-24 outline-none">
           <ModuleSection title={tx(locale, "Modules", "Modules")} description={tx(locale, "Ouvrez un module, consultez ses utilisateurs et leurs actions autorisées, gérez une restriction temporaire ou consultez ses informations générales.", "Open a module, review its users and their allowed actions, manage a temporary restriction, or view general module information.")}>
-            <EnterpriseAdministrationModulesPanel organizationId={organization.id} modules={visibleModules} toggleModule={toggleModule} locale={locale} />
+            <EnterpriseAdministrationModulesPanel organizationId={organization.id} modules={visibleModules} authorizedModuleRoutes={authorizedModuleRoutes} toggleModule={toggleModule} locale={locale} />
             <div className="mt-4 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
               <p className="font-black text-dtsc-ink">{tx(locale, "Automatisations de travail", "Work automations")}</p>
               <p className="mt-1 text-sm text-dtsc-muted">{tx(locale, "Créez et suivez les enchaînements d’actions utilisés par vos équipes. Les anciennes configurations restent consultables sans pouvoir être modifiées.", "Create and follow the action sequences used by your teams. Previous configurations remain viewable without being editable.")}</p>
