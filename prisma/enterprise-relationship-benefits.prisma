@@ -125,6 +125,7 @@ model EnterpriseRelationshipBenefitApplication {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
   benefit           EnterpriseRelationshipBenefit @relation(fields: [organizationId, benefitId], references: [organizationId, id], onDelete: Restrict)
+  reversals         EnterpriseRelationshipBenefitApplicationReversal[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, idempotencyKey])
@@ -132,4 +133,24 @@ model EnterpriseRelationshipBenefitApplication {
   @@index([organizationId, identityLinkId, status, appliedAt])
   @@index([organizationId, sourceModuleCode, sourceEntityType, sourceEntityId])
   @@index([organizationId, benefitId, status, appliedAt])
+}
+
+
+model EnterpriseRelationshipBenefitApplicationReversal {
+  id               String   @id @default(cuid())
+  organizationId   String
+  applicationId    String
+  sourceEntityType String
+  sourceEntityId   String
+  reversedAmount   Decimal  @db.Decimal(20, 6)
+  idempotencyKey   String
+  reason           String?
+  createdByUserId  String?
+  createdAt        DateTime @default(now())
+  application      EnterpriseRelationshipBenefitApplication @relation(fields: [organizationId, applicationId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, applicationId, createdAt])
+  @@index([organizationId, sourceEntityType, sourceEntityId])
 }
