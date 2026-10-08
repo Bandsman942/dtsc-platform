@@ -279,6 +279,30 @@ async function validateBenefitConfiguration(
     );
   }
 
+  const numericValueType = String(input.valueType || "");
+  if (
+    (numericValueType === "AMOUNT" || Number(input.minimumAmount || 0) > 0) &&
+    (!input.currencyCode || String(input.currencyCode).trim().length !== 3)
+  ) {
+    throw new EnterpriseRelationshipBenefitError(
+      "RELATIONSHIP_BENEFIT_CURRENCY_REQUIRED",
+      "Une devise est requise pour les montants fixes et les minimums d’opération.",
+      400,
+    );
+  }
+  if (
+    input.benefitType === "LOYALTY" &&
+    loyaltyProgram &&
+    input.currencyCode &&
+    loyaltyProgram.currencyCode !== String(input.currencyCode).toUpperCase()
+  ) {
+    throw new EnterpriseRelationshipBenefitError(
+      "RELATIONSHIP_BENEFIT_LOYALTY_CURRENCY_MISMATCH",
+      "La devise de l’avantage doit correspondre à celle du programme de fidélité.",
+      409,
+    );
+  }
+
   if (input.benefitType === "DISCOUNT") {
     if (!["PERCENT", "AMOUNT"].includes(String(input.valueType || "")) || Number(input.valueDecimal || 0) <= 0) {
       throw new EnterpriseRelationshipBenefitError("RELATIONSHIP_BENEFIT_VALUE_INVALID", "Une remise exige un pourcentage ou un montant positif.", 400);
@@ -315,6 +339,17 @@ async function validateBenefitConfiguration(
         "Activez et autorisez d’abord le module cible avant de publier cet avantage.",
         409,
       );
+    }
+  }
+  if (input.status === "ACTIVE" && sourceModuleCodes.length) {
+    for (const sourceModuleCode of sourceModuleCodes.map(normalizeEnterpriseModuleCode)) {
+      if (!enabled.has(sourceModuleCode) || !entitled.has(sourceModuleCode)) {
+        throw new EnterpriseRelationshipBenefitError(
+          "RELATIONSHIP_BENEFIT_SOURCE_MODULE_UNAVAILABLE",
+          "Un module requis par les conditions de l’avantage n’est pas actif ou autorisé.",
+          409,
+        );
+      }
     }
   }
 
