@@ -485,6 +485,8 @@ async function resolvePricingDecisions(
   return {
     decisions,
     relationshipBenefitApplications: relationshipPricing.applications,
+    relationshipBenefitRewards: relationshipPricing.rewards,
+    relationshipBenefitIds: relationshipPricing.relationshipBenefitIds,
   };
 }
 
@@ -532,6 +534,8 @@ export async function prepareCommercialRetailSaleV2(
     },
     decisions,
     relationshipBenefitApplications: resolved.relationshipBenefitApplications,
+    relationshipBenefitRewards: resolved.relationshipBenefitRewards,
+    relationshipBenefitIds: resolved.relationshipBenefitIds,
     overrideApplied: decisions.some((decision) => decision.pricingSource === "MANUAL_OVERRIDE" || Boolean(decision.context.discountOverride) || Boolean(decision.context.taxOverride)),
     overrideReason: context.overrideReason?.trim() || null,
   };
@@ -572,7 +576,10 @@ export async function previewRetailCommercialPricing(
     customerDiscountTotal: money(decisions.reduce((sum, decision) => sum.plus(decision.discountAmount), decimal(0))).toFixed(),
     currencyCode: input.currencyCode,
     relationshipBenefitApplications: resolved.relationshipBenefitApplications,
-    relationshipBenefitApplicationCount: resolved.relationshipBenefitApplications.length,
+    relationshipBenefitRewards: resolved.relationshipBenefitRewards,
+    relationshipBenefitIds: resolved.relationshipBenefitIds,
+    relationshipBenefitApplicationCount:
+      resolved.relationshipBenefitApplications.length + resolved.relationshipBenefitRewards.length,
   };
 }
 
