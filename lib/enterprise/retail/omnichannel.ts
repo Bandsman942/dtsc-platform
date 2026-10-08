@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { createEnterpriseDirectSalesOrder } from "@/lib/enterprise/crm-sales/orders";
+import { reverseRelationshipBenefitApplications } from "@/lib/enterprise/relationship-benefits/enforcement";
 import { createEnterpriseInventoryReservation, releaseEnterpriseInventoryReservation } from "@/lib/enterprise/inventory/reservations";
 import { previewRetailCommercialPricing } from "@/lib/enterprise/retail/commercial-engine";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
@@ -49,6 +50,12 @@ async function compensateFailedReservations(args: { organizationId: string; acto
       where: { id: args.orderId, organizationId: args.organizationId, status: "CONFIRMED" },
       data: { status: "CANCELLED", cancelledAt: new Date(), cancellationReason: args.errorCode, updatedByUserId: args.actorUserId, revision: { increment: 1 } },
     });
+    await reverseRelationshipBenefitApplications({
+      organizationId: args.organizationId,
+      sourceEntityType: "EnterpriseSalesOrder",
+      sourceEntityId: args.orderId,
+      reason: args.errorCode,
+    }).catch(() => null);
   }
 }
 
@@ -129,6 +136,8 @@ export async function createRetailOmnichannelOrder(organizationId: string, actor
       lineTotal: line.lineTotal,
     })),
     eventMetadata: { channelCode: "POS", fulfillmentMode: input.fulfillmentMode, sourceSiteId: site.id, fulfillmentWarehouseId: warehouse.id, pickupSiteId: pickupSite?.id || null },
+    relationshipBenefitApplications: preview.relationshipBenefitApplications,
+    relationshipBenefitSourceModuleCode: "RETAIL_POS",
   });
 
   let orchestration;
