@@ -16,6 +16,7 @@ type RetailRelationshipPricingLine = {
 
 export type RetailRelationshipRewardPlan = {
   benefitId: string;
+  benefitRevision: number;
   identityLinkId: string;
   userId: string;
   relationType: string;
@@ -206,6 +207,7 @@ export async function resolveRetailRelationshipBenefitPricing({
 
     applications.push({
       benefitId: item.id,
+      benefitRevision: item.revision,
       identityLinkId: item.identityLinkId,
       userId: item.userId,
       applicationType: item.benefitType,
@@ -233,6 +235,7 @@ export async function resolveRetailRelationshipBenefitPricing({
       if (benefitType !== "LOYALTY" && (!expectedAmount || expectedAmount <= 0)) return [];
       return [{
         benefitId: item.id,
+        benefitRevision: item.revision,
         identityLinkId: item.identityLinkId,
         userId: item.userId,
         relationType: item.relationType,
