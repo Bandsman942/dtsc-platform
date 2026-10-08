@@ -74,6 +74,9 @@ check(!decisionSchema.includes("context:"), "Admin decision schema must not acce
 check(!decisionSchema.includes('"CONSUMED"'), "Public admin decision schema must not allow manual CONSUMED");
 
 hasAll(enforcement, [
+  "enterprisePersonBusinessReference.findMany",
+  "personIdentityIds",
+  "personIdentityId: { in: personIdentityIds }",
   "evaluateRelationshipBenefitSnapshot",
   "evaluateRelationshipBenefit",
   "resolveEnterpriseIdentityRelationshipAccess",
