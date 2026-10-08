@@ -281,7 +281,7 @@ export async function findActiveRelationshipsForBusinessParty(args: {
   organizationId: string;
   businessPartyId: string;
 }) {
-  const reference = await prisma.enterprisePersonBusinessReference.findFirst({
+  const references = await prisma.enterprisePersonBusinessReference.findMany({
     where: {
       organizationId: args.organizationId,
       businessPartyId: args.businessPartyId,
@@ -289,12 +289,14 @@ export async function findActiveRelationshipsForBusinessParty(args: {
       archivedAt: null,
     },
     select: { personIdentityId: true },
+    take: 100,
   });
-  if (!reference) return [];
+  const personIdentityIds = [...new Set(references.map((reference) => reference.personIdentityId))];
+  if (!personIdentityIds.length) return [];
   return prisma.enterpriseIdentityLink.findMany({
     where: {
       organizationId: args.organizationId,
-      personIdentityId: reference.personIdentityId,
+      personIdentityId: { in: personIdentityIds },
       status: "ACTIVE",
       userId: { not: null },
       activatedAt: { not: null },
