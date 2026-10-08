@@ -214,7 +214,6 @@ export function evaluateRelationshipBenefitSnapshot(args: {
 
   const requiresBusinessContext = Boolean(
     benefit.minimumAmount ||
-      benefit.currencyCode ||
       benefit.targetModuleCode ||
       Object.keys(objectValue(benefit.conditionsJson)).length,
   );
@@ -224,8 +223,8 @@ export function evaluateRelationshipBenefitSnapshot(args: {
       return { allowed: false, code: "TARGET_MISMATCH", reason: "Cet avantage doit être appliqué dans le module métier prévu.", totalRemaining: null, periodRemaining: null, requiresBusinessContext };
     }
   }
-  if (benefit.currencyCode && (context || args.requireBusinessContext)) {
-    if (!context?.currencyCode || context.currencyCode.toUpperCase() !== benefit.currencyCode.toUpperCase()) {
+  if (benefit.currencyCode && context) {
+    if (!context.currencyCode || context.currencyCode.toUpperCase() !== benefit.currencyCode.toUpperCase()) {
       return { allowed: false, code: "CURRENCY_MISMATCH", reason: "La devise de l’opération ne correspond pas à celle de l’avantage.", totalRemaining: null, periodRemaining: null, requiresBusinessContext };
     }
   }
