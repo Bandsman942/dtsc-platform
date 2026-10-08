@@ -118,7 +118,7 @@ type ModuleAccessPayload = {
   members: Array<{ memberId: string; userId: string; name: string; email: string; role: string; position: string | null; actions: Record<string, boolean>; temporaryRestriction: { blockedUntil: string; reason: string } | null }>;
 };
 
-export function EnterpriseAdministrationModulesPanel({ organizationId, modules, toggleModule, locale }: { organizationId: string; modules: EnterpriseModuleItem[]; toggleModule: (item: EnterpriseModuleItem) => Promise<void>; locale?: string | null }) {
+export function EnterpriseAdministrationModulesPanel({ organizationId, modules, authorizedModuleRoutes, toggleModule, locale }: { organizationId: string; modules: EnterpriseModuleItem[]; authorizedModuleRoutes: Record<string, string>; toggleModule: (item: EnterpriseModuleItem) => Promise<void>; locale?: string | null }) {
   const router = useRouter();
   const runSubmission = useFormSubmissionGuard();
   const [selected, setSelected] = useState<EnterpriseModuleItem | null>(null);
@@ -171,17 +171,21 @@ export function EnterpriseAdministrationModulesPanel({ organizationId, modules, 
   return (
     <>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {modules.map((module) => (
+        {modules.map((module) => {
+          const moduleCode = module.canonicalCode || module.moduleCode;
+          const openHref = authorizedModuleRoutes[moduleCode] || null;
+          return (
           <article key={module.id} className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
             <div className="flex items-start justify-between gap-3"><div><p className="font-black text-dtsc-ink">{isEnglish(locale) ? module.labelEn : module.labelFr}</p><p className="mt-1 line-clamp-2 text-xs leading-5 text-dtsc-muted">{isEnglish(locale) ? module.descriptionEn || t(locale, "Module métier de l’entreprise.", "Company business module.") : module.descriptionFr || t(locale, "Module métier de l’entreprise.", "Company business module.")}</p></div><StatusBadge tone={module.isEnabled ? "success" : "neutral"}>{module.isEnabled ? t(locale, "Actif", "Active") : t(locale, "Inactif", "Inactive")}</StatusBadge></div>
             <div className="mt-4 flex items-center justify-between gap-2"><span className="text-xs font-bold text-dtsc-muted">{module.requiredPlan ? `${t(locale, "Plan", "Plan")} ${module.requiredPlan}` : t(locale, "Selon abonnement", "Per subscription")}</span><details className="relative"><summary className="grid min-h-11 min-w-11 cursor-pointer list-none place-items-center rounded-xl border border-dtsc-border text-dtsc-muted" aria-label={t(locale, `Actions pour ${module.labelFr}`, `Actions for ${module.labelEn}`)}><Ellipsis className="h-5 w-5" /></summary><div className="absolute right-0 z-30 mt-2 w-64 rounded-2xl border border-dtsc-border bg-dtsc-surface p-2 shadow-xl">
-              {module.accessAllowed ? <Link href={`/enterprise-modules/${encodeURIComponent(module.canonicalCode || module.moduleCode)}`} className="flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-bold text-dtsc-ink hover:bg-dtsc-page"><ExternalLink className="h-4 w-4" />{t(locale, "Ouvrir le module", "Open module")}</Link> : null}
+              {module.isEnabled && openHref ? <Link href={openHref} className="flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-bold text-dtsc-ink hover:bg-dtsc-page"><ExternalLink className="h-4 w-4" />{t(locale, "Ouvrir le module", "Open module")}</Link> : null}
               <button type="button" onClick={() => open(module, "ACCESS")} className="flex min-h-11 w-full items-center gap-2 rounded-xl px-3 text-left text-sm font-bold text-dtsc-ink hover:bg-dtsc-page"><ShieldCheck className="h-4 w-4" />{t(locale, "Voir les accès au module", "View module access")}</button>
               <button type="button" onClick={() => open(module, "INFO")} className="flex min-h-11 w-full items-center gap-2 rounded-xl px-3 text-left text-sm font-bold text-dtsc-ink hover:bg-dtsc-page"><ChevronRight className="h-4 w-4" />{t(locale, "Infos générales du module", "Module information")}</button>
               <button type="button" onClick={() => toggleModule(module)} className="flex min-h-11 w-full items-center gap-2 rounded-xl px-3 text-left text-sm font-bold text-dtsc-ink hover:bg-dtsc-page"><LockKeyhole className="h-4 w-4" />{module.isEnabled ? t(locale, "Désactiver le module", "Disable module") : t(locale, "Activer le module", "Enable module")}</button>
             </div></details></div>
           </article>
-        ))}
+          );
+        })}
       </div>
       {selected && mode ? <Overlay locale={locale} title={mode === "ACCESS" ? t(locale, `Accès · ${selected.labelFr}`, `Access · ${selected.labelEn}`) : t(locale, `Informations · ${selected.labelFr}`, `Information · ${selected.labelEn}`)} description={mode === "ACCESS" ? t(locale, "Droits calculés par utilisateur à partir du rôle, du poste, de l’abonnement et des restrictions temporaires.", "Rights calculated per user from role, position, subscription and temporary restrictions.") : t(locale, "Informations liées au module et à l’abonnement actif de l’entreprise.", "Information related to the module and the company’s active subscription.")} onClose={() => { setMode(null); setSelected(null); setAccessData(null); setRestrictionOpen(false); }}>
         {loading ? <p className="text-sm text-dtsc-muted">{t(locale, "Chargement…", "Loading…")}</p> : !accessData ? <p className="text-sm text-dtsc-muted">{t(locale, "Les informations ne sont pas disponibles.", "Information is not available.")}</p> : mode === "INFO" ? (

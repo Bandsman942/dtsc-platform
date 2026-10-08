@@ -1,3 +1,13 @@
+## 2026-10-08 — Hotfix #783 : Découvrabilité de Relations & avantages
+
+- corrige **Administration entreprise → Modules → Ouvrir le module** pour consommer la destination canonique réellement autorisée au lieu de reconstruire `/enterprise-modules/<code>` ;
+- ajoute un raccourci **Relations & avantages** dans **Entreprise & ERP** lorsque le module est renvoyé par le resolver de navigation ;
+- ajoute le même accès dans le rail secondaire de **Administration entreprise**, sans exposer le raccourci lorsqu’il est refusé ;
+- conserve le registre ERP et `getEnterpriseNavigationModules()` comme sources de vérité uniques ;
+- ajoute `qa:hotfix-783-relationship-benefits-navigation` à la régression ;
+- aucun changement Prisma ni migration ;
+- OWNER_E2E requis avant fusion.
+
 ## 2026-10-07 — Hotfix #781 : Relations & avantages client–entreprise
 
 - ajoute le module canonique `RELATIONSHIP_BENEFITS`, BUSINESS+, avec migration additive et isolation par `organizationId` ;
