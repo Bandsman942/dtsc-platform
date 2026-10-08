@@ -162,6 +162,8 @@ check(!adapter.includes("enterpriseRetailStoredValueAccount.create"), "Adapter m
 check(!adapter.includes("enterpriseRetailPromotion.create"), "Adapter must not duplicate the Retail promotions engine");
 
 hasAll(commercialEngine, [
+  "historical receipt",
+  "if (existing) {",
   "applyRetailRelationshipBenefitPricing",
   "relationshipBenefitIds",
   "relationshipBenefitDiscount",
@@ -182,6 +184,8 @@ hasAll(saleExecution, [
   "localeByUserId",
 ], "Canonical sale execution");
 hasAll(retailService, [
+  "old receipt after quotas",
+  "return { sale: existing, idempotent: true }",
   "applyRetailRelationshipBenefitEffectsTx",
   "relationshipBenefitEffects",
   "reverseRetailRelationshipBenefitEffectsTx",
@@ -239,6 +243,8 @@ hasAll(posUi, [
   "pricingPreviewUnavailable",
 ], "POS server pricing UX");
 hasAll(ownerE2e, [
+  "Replay must not attach a newly re-resolved stackable benefit",
+  "Replay must not add a Retail promotion",
   "Hotfix #786 relationship benefit enforcement",
   "RELATIONSHIP_BENEFIT_USAGE_INPUT_INVALID",
   "RELATIONSHIP_BENEFIT_TARGET_ADAPTER_UNSUPPORTED",
