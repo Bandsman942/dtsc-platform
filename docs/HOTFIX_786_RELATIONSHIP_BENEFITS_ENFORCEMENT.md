@@ -108,9 +108,13 @@ Un avantage qui ramènerait le ticket à zéro est refusé tant que le POS exige
 
 ### Demandes / adaptateurs non encore certifiés
 
-`REQUEST`, `CLAIM`, `BOOK` et `CONTACT` peuvent créer une demande.
+`REQUEST`, `CLAIM`, `BOOK` et `CONTACT` peuvent créer une demande **sans prétendre à une exécution transactionnelle**.
 
-Ils ne peuvent plus être marqués `CONSUMED` par un simple bouton administratif. Le statut `CONSUMED` exige une preuve structurée :
+Une `targetModuleCode` n’est acceptée que lorsqu’un adaptateur serveur certifié sait produire l’effet. Dans ce hotfix, Retail POS est la seule cible automatique certifiée. Une cible métier non certifiée est refusée à la configuration au lieu de créer un avantage impossible à exécuter.
+
+Les règles dépendant d’un montant minimum, d’un panier, d’un site, d’un canal, d’un article ou d’une catégorie sont elles aussi refusées sans adaptateur certifié.
+
+Les demandes manuelles ne peuvent plus être marquées `CONSUMED` par un bouton administratif. Leur contrat public est `REQUESTED → APPROVED | REJECTED | CANCELLED`. Le statut `CONSUMED` exige une preuve structurée produite par un adaptateur serveur :
 
 - module d’effet ;
 - type d’entité ;
@@ -118,7 +122,17 @@ Ils ne peuvent plus être marqués `CONSUMED` par un simple bouton administratif
 - clé d’idempotence d’effet ;
 - horodatage d’exécution.
 
-Un module sans adaptateur certifié reste donc **request-only** et échoue de manière sûre au lieu de prétendre qu’une prestation, réservation, livraison ou document a été exécuté.
+Les schémas API de demande et de décision sont stricts et n’acceptent pas de contexte transactionnel forgé par le navigateur.
+
+## Contexte transactionnel de confiance
+
+Le type interne `RelationshipBenefitExecutionContext` existe pour les adaptateurs serveur. Il n’est pas une preuve que le navigateur peut fournir.
+
+- l’API compte n’accepte pas `context` dans une demande d’avantage ;
+- l’API d’administration n’accepte pas `context` dans une décision ;
+- une devise seule peut décrire la valeur d’un avantage manuel sans transformer cette valeur en contrainte transactionnelle ;
+- `minimumAmount` et les conditions contrôlées exigent un adaptateur métier certifié ;
+- les références de site, article et catégorie sont rechargées dans le même tenant lors de la configuration.
 
 ## Cumul avec Retail
 
@@ -172,9 +186,11 @@ Statut initial : **NOT_EXECUTED**.
 13. Tester quota total et périodique, puis deux tentatives concurrentes.
 14. Révoquer la relation puis retenter : aucun nouvel effet.
 15. Tester un `businessPartyId`, `identityLinkId`, site ou article d’un autre tenant : refus ou absence d’effet, sans fuite.
-16. Tester un avantage `BOOK` ou `CLAIM` sans adaptateur : il peut rester une demande mais l’admin ne peut pas le déclarer consommé sans preuve métier.
-17. Tester une condition JSON inconnue : refus à la création.
-18. Vérifier que fidélité et avoirs Retail n’ont pas été dupliqués ni modifiés par le moteur d’avantages.
-19. Vérifier FR/EN, clair/sombre, 320/360/375/390/414/768/1024 px et clavier mobile.
+16. Tester un avantage `BOOK` ou `CLAIM` sans cible automatique : il peut rester une demande, mais l’admin ne dispose d’aucun bouton permettant de le déclarer consommé.
+17. Tenter de configurer une cible métier sans adaptateur certifié : refus explicite.
+18. Tenter d’envoyer un `context` transactionnel forgé depuis l’API compte ou décision : validation stricte en erreur 400.
+19. Tester une condition JSON inconnue : refus à la création.
+20. Vérifier que fidélité et avoirs Retail n’ont pas été dupliqués ni modifiés par le moteur d’avantages.
+21. Vérifier FR/EN, clair/sombre, 320/360/375/390/414/768/1024 px et clavier mobile.
 
 Aucune fusion ne doit présenter cet E2E comme exécuté avant confirmation du propriétaire.
