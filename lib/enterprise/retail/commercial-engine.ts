@@ -13,6 +13,7 @@ type CommercialContext = {
   channelCode?: string | null;
   overrideReason?: string | null;
   allowRelationshipRewards?: boolean;
+  allowRelationshipBenefits?: boolean;
 };
 
 type CommercialPermissions = {
@@ -419,21 +420,29 @@ async function resolvePricingDecisions(
     throw new EnterpriseRetailError("RETAIL_PRICE_OVERRIDE_REASON_REQUIRED", 400);
   }
 
-  const relationshipPricing = await resolveRetailRelationshipBenefitPricing({
-    organizationId,
-    customerBusinessPartyId: input.customerBusinessPartyId,
-    currencyCode: input.currencyCode,
-    siteId: input.siteId || null,
-    channelCode,
-    includeRewards: context.allowRelationshipRewards !== false,
-    lines: decisions.map((decision) => ({
-      catalogItemId: decision.catalogItemId,
-      categoryId: itemById.get(decision.catalogItemId)?.categoryId || null,
-      quantity: Number(decision.quantity),
-      grossAmount: Number(decision.quantity.times(decision.resolvedUnitPrice)),
-      currentDiscountAmount: Number(decision.discountAmount),
-    })),
-  });
+  const relationshipPricing =
+    context.allowRelationshipBenefits === false
+      ? {
+          applications: [],
+          rewards: [],
+          discountByCatalogItemId: new Map<string, number>(),
+          relationshipBenefitIds: [],
+        }
+      : await resolveRetailRelationshipBenefitPricing({
+          organizationId,
+          customerBusinessPartyId: input.customerBusinessPartyId,
+          currencyCode: input.currencyCode,
+          siteId: input.siteId || null,
+          channelCode,
+          includeRewards: context.allowRelationshipRewards !== false,
+          lines: decisions.map((decision) => ({
+            catalogItemId: decision.catalogItemId,
+            categoryId: itemById.get(decision.catalogItemId)?.categoryId || null,
+            quantity: Number(decision.quantity),
+            grossAmount: Number(decision.quantity.times(decision.resolvedUnitPrice)),
+            currentDiscountAmount: Number(decision.discountAmount),
+          })),
+        });
 
   if (relationshipPricing.applications.length) {
     const benefitIdsByCatalogItemId = new Map<string, string[]>();
