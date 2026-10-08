@@ -183,16 +183,16 @@ Statut initial : **NOT_EXECUTED**.
 9. Rejouer la même vente/idempotence : aucun second usage.
 10. Rejouer une vente où un avantage non cumulable avait exclu une promotion : le replay ne doit ni ajouter une autre relation éligible entre-temps, ni créer une promotion absente du ticket original.
 11. Annuler la vente : usage relationnel `CANCELLED` et quota à nouveau disponible.
-11. Tester promotion Retail + avantage cumulable.
-12. Tester promotion Retail + avantage non cumulable : pas de double remise, meilleur résultat uniquement.
-13. Tester quota total et périodique, puis deux tentatives concurrentes.
-14. Révoquer la relation puis retenter : aucun nouvel effet.
-15. Tester un `businessPartyId`, `identityLinkId`, site ou article d’un autre tenant : refus ou absence d’effet, sans fuite.
-16. Tester un avantage `BOOK` ou `CLAIM` sans cible automatique : il peut rester une demande, mais l’admin ne dispose d’aucun bouton permettant de le déclarer consommé.
-17. Tenter de configurer une cible métier sans adaptateur certifié : refus explicite.
-18. Tenter d’envoyer un `context` transactionnel forgé depuis l’API compte ou décision : validation stricte en erreur 400.
-19. Tester une condition JSON inconnue : refus à la création.
-20. Vérifier que fidélité et avoirs Retail n’ont pas été dupliqués ni modifiés par le moteur d’avantages.
-21. Vérifier FR/EN, clair/sombre, 320/360/375/390/414/768/1024 px et clavier mobile.
+12. Tester promotion Retail + avantage cumulable.
+13. Tester promotion Retail + avantage non cumulable : pas de double remise, meilleur résultat uniquement.
+14. Tester quota total et périodique, puis deux tentatives concurrentes.
+15. Révoquer la relation puis retenter : aucun nouvel effet.
+16. Tester un `businessPartyId`, `identityLinkId`, site ou article d’un autre tenant : refus ou absence d’effet, sans fuite.
+17. Tester un avantage `BOOK` ou `CLAIM` sans cible automatique : il peut rester une demande, mais l’admin ne dispose d’aucun bouton permettant de le déclarer consommé.
+18. Tenter de configurer une cible métier sans adaptateur certifié : refus explicite.
+19. Tenter d’envoyer un `context` transactionnel forgé depuis l’API compte ou décision : validation stricte en erreur 400.
+20. Tester une condition JSON inconnue : refus à la création.
+21. Vérifier que fidélité et avoirs Retail n’ont pas été dupliqués ni modifiés par le moteur d’avantages.
+22. Vérifier FR/EN, clair/sombre, 320/360/375/390/414/768/1024 px et clavier mobile.
 
 Aucune fusion ne doit présenter cet E2E comme exécuté avant confirmation du propriétaire.
