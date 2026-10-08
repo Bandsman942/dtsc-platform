@@ -53,6 +53,7 @@ export async function applyRetailRelationshipBenefitRewardsTx(
       rewardUnit: reward.benefitType === "LOYALTY" ? "POINTS" : "MONEY",
       loyaltyProgramId: reward.loyaltyProgramId,
       storedValueAccountType: reward.storedValueAccountType,
+      catalogItemIds: reward.catalogItemIds,
     },
   }));
 
