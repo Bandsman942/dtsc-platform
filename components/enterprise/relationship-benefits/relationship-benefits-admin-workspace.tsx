@@ -42,6 +42,7 @@ type Benefit = {
   status: string;
   revision: number;
   relationTypes: string[];
+  audienceRoleCodes: string[];
   assignmentCount: number;
   createdAt: string;
 };
@@ -142,6 +143,7 @@ export function RelationshipBenefitsAdminWorkspace({
     const data = new FormData(form);
     const relationTypes = ENTERPRISE_IDENTITY_RELATION_TYPES.filter((relationType) => data.getAll("relationTypes").includes(relationType));
     const identityLinkIds = data.getAll("identityLinkIds").map(String);
+    const audienceRoleCode = String(data.get("audienceRoleCode") || "").trim() || null;
     const channelCode = String(data.get("conditionChannelCode") || "").trim();
     const weekdays = data.getAll("conditionWeekdays").map((value) => Number(value)).filter((value) => Number.isInteger(value));
     const minimumQuantity = data.get("conditionMinimumQuantity")
@@ -166,6 +168,7 @@ export function RelationshipBenefitsAdminWorkspace({
           benefitType,
           assignmentMode: String(data.get("assignmentMode") || "AUTOMATIC"),
           relationTypes,
+          audienceRoleCode,
           identityLinkIds,
           valueType: String(data.get("valueType") || "NONE"),
           valueDecimal: data.get("valueDecimal") ? Number(data.get("valueDecimal")) : null,
@@ -272,7 +275,7 @@ export function RelationshipBenefitsAdminWorkspace({
                     title={english ? benefit.nameEn : benefit.nameFr}
                     leading={<BadgePercent className="h-5 w-5 text-cyan-600" />}
                     status={<StatusBadge tone={tone(benefit.status)}>{localStatus(benefit.status, english)}</StatusBadge>}
-                    meta={`${benefit.code} · ${benefit.relationTypes.length ? benefit.relationTypes.map((item) => getEnterpriseIdentityRelationLabel(item as EnterpriseIdentityRelationType, locale)).join(", ") : (english ? "All active relationship types" : "Tous les types de relation active")}`}
+                    meta={`${benefit.code} · ${benefit.relationTypes.length ? benefit.relationTypes.map((item) => getEnterpriseIdentityRelationLabel(item as EnterpriseIdentityRelationType, locale)).join(", ") : (english ? "All active relationship types" : "Tous les types de relation active")}${benefit.audienceRoleCodes?.length ? ` · ${english ? "Role/segment" : "Rôle/segment"}: ${benefit.audienceRoleCodes.join(", ")}` : ""}`}
                     description={english ? benefit.descriptionEn : benefit.descriptionFr}
                     actions={canManage ? (
                       <div data-no-group-swipe data-responsive-actions className="flex flex-wrap gap-2">
@@ -361,7 +364,18 @@ export function RelationshipBenefitsAdminWorkspace({
             <div className="grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {ENTERPRISE_IDENTITY_RELATION_TYPES.map((relationType) => <label key={relationType} className="flex min-w-0 items-center gap-2 text-sm text-dtsc-ink"><input type="checkbox" name="relationTypes" value={relationType} /> <span className="break-words">{getEnterpriseIdentityRelationLabel(relationType, locale)}</span></label>)}
             </div>
-            <p className="mt-3 text-xs leading-5 text-dtsc-muted">{english ? "Leave empty to target every active relationship when using automatic mode." : "Laissez vide pour cibler toutes les relations actives en mode automatique."}</p>
+            <div className="mt-4 max-w-xl">
+              <label className="text-sm font-black text-dtsc-ink">
+                {english ? "Exact role / segment code (optional)" : "Code exact du rôle / segment (facultatif)"}
+                <input name="audienceRoleCode" maxLength={80} placeholder={english ? "Example: LOYAL_CUSTOMER" : "Exemple : LOYAL_CUSTOMER"} className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal" />
+              </label>
+              <p className="mt-1 text-xs leading-5 text-dtsc-muted">
+                {english
+                  ? "When filled, the benefit applies only when the active relationship has this exact role code. Select at least one relationship type."
+                  : "Si renseigné, l’avantage s’applique uniquement lorsque la relation active porte exactement ce code de rôle. Sélectionnez au moins un type de relation."}
+              </p>
+            </div>
+            <p className="mt-3 text-xs leading-5 text-dtsc-muted">{english ? "Leave relationship types empty to target every active relationship. Role targeting requires at least one selected type." : "Laissez les types de relation vides pour cibler toutes les relations actives. Le ciblage par rôle exige au moins un type sélectionné."}</p>
           </fieldset>
 
           <fieldset className="min-w-0 rounded-xl border border-dtsc-border p-4">
