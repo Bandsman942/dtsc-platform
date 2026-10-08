@@ -159,6 +159,7 @@ La projection vers le compte global passe désormais aussi par l’entitlement R
 
 - demandes : transaction `Serializable` + advisory lock relation/avantage ;
 - effets Retail : advisory lock et clé `effectIdempotencyKey` unique par vente/avantage ;
+- le replay d’une vente déjà validée retourne les effets et promotions réellement persistés ; il ne rattache jamais un nouvel avantage issu d’un recalcul différent ;
 - quotas recalculés sous verrou avant écriture ;
 - une clé d’idempotence ne peut pas être réutilisée pour un autre compte, une autre relation ou un autre avantage ;
 - chaque FK issue du navigateur est rechargée dans le même `organizationId`.
@@ -180,7 +181,8 @@ Statut initial : **NOT_EXECUTED**.
 7. Sélectionner le client relié dans le POS et vérifier que l’aperçu serveur réduit réellement le total avant paiement.
 8. Encaisser : le ticket doit contenir le total réduit et exactement un usage `AUTO_RETAIL / CONSUMED` lié au vrai `EnterpriseRetailSale`.
 9. Rejouer la même vente/idempotence : aucun second usage.
-10. Annuler la vente : usage relationnel `CANCELLED` et quota à nouveau disponible.
+10. Rejouer une vente où un avantage non cumulable avait exclu une promotion : le replay ne doit ni ajouter une autre relation éligible entre-temps, ni créer une promotion absente du ticket original.
+11. Annuler la vente : usage relationnel `CANCELLED` et quota à nouveau disponible.
 11. Tester promotion Retail + avantage cumulable.
 12. Tester promotion Retail + avantage non cumulable : pas de double remise, meilleur résultat uniquement.
 13. Tester quota total et périodique, puis deux tentatives concurrentes.
