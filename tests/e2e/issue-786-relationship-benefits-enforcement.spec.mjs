@@ -578,6 +578,7 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
         userDecisionAt: new Date(),
         organizationDecisionAt: new Date(),
         activatedAt: new Date(),
+        requestedRoleCode: null,
         revision: { increment: 1 },
       },
     });
@@ -614,6 +615,7 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
       benefitType: "FREE_SERVICE",
       assignmentMode: "AUTOMATIC",
       relationTypes: ["CUSTOMER"],
+      audienceRoleCode: "LOYAL_CUSTOMER",
       identityLinkIds: [],
       valueType: "NONE",
       actionCode: "REQUEST",
@@ -629,6 +631,28 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
     const userContext = await browser.newContext({ baseURL: baseUrl });
     const user = await userContext.newPage();
     await signIn(user, userEmail, userPassword, "/enterprise-links");
+
+    const roleMismatchSnapshot = await get(
+      user,
+      `/api/account/enterprise-relationships/${organizationId}/benefits?identityLinkId=${ids.identityLink}`,
+    );
+    expect(roleMismatchSnapshot.response.ok(), JSON.stringify(roleMismatchSnapshot.body)).toBeTruthy();
+    expect(roleMismatchSnapshot.body.items.some((item) => item.id === manualBenefitId)).toBe(false);
+
+    await prisma.enterpriseIdentityLink.update({
+      where: { id: ids.identityLink },
+      data: {
+        requestedRoleCode: "LOYAL_CUSTOMER",
+        revision: { increment: 1 },
+      },
+    });
+
+    const roleMatchSnapshot = await get(
+      user,
+      `/api/account/enterprise-relationships/${organizationId}/benefits?identityLinkId=${ids.identityLink}`,
+    );
+    expect(roleMatchSnapshot.response.ok(), JSON.stringify(roleMatchSnapshot.body)).toBeTruthy();
+    expect(roleMatchSnapshot.body.items.some((item) => item.id === manualBenefitId)).toBe(true);
 
     const requestKey = `e2e-786-manual-${Date.now()}`;
     const requested = await post(
