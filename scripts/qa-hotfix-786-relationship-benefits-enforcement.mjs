@@ -126,6 +126,7 @@ hasAll(service, [
   "RELATIONSHIP_BENEFIT_CONTEXTUAL_RULES_UNSUPPORTED",
   "RELATIONSHIP_BENEFIT_AMOUNT_CURRENCY_REQUIRED",
   "RELATIONSHIP_BENEFIT_CONTEXT_REQUIRED",
+  "targetAccessByCode",
   'executionMode: "REQUEST"',
   "requestContextJson",
   'canUseModule(organizationId, "RETAIL_POS")',
@@ -171,6 +172,8 @@ hasAll(saleExecution, [
   "createRetailSale(",
   "relationshipBenefits",
   "notifyUser",
+  "Promise.allSettled",
+  "localeByUserId",
 ], "Canonical sale execution");
 hasAll(retailService, [
   "applyRetailRelationshipBenefitEffectsTx",
