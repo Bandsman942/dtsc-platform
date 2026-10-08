@@ -77,7 +77,7 @@ for (const marker of [
 check(!pos.includes("window.prompt"), "Routed POS workspace must not use window.prompt");
 check(pos.includes("overrideNeeded && dashboard.access.canManage"), "POS override reason must remain conditional");
 check(pos.includes("selectedAccount2.id === selectedAccount1?.id"), "POS split payment must reject the same financial account twice");
-check(pos.includes("Math.abs(tenderTotal - total) > 0.005"), "POS must validate tender total before review");
+check(pos.includes("Math.abs(tenderTotal - effectiveTotal) > 0.005"), "POS must validate tender total against the authoritative server-adjusted total before review");
 check(posCash.includes("overflow-x-auto") && posCash.includes("snap-x") && posCash.includes("selectedSessionId"), "POS cash sessions must expose a synchronized horizontal rail and combobox");
 check(posCash.includes('notifyToast(copy.accountRequired, "error")') && posCash.includes("noValidate"), "POS till opening must use explicit inline/toast validation");
 
