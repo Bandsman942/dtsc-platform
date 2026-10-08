@@ -127,13 +127,60 @@ export async function executeCanonicalRetailSale(args: {
   );
   const accounting = await finalizeRetailSaleAccounting(args.organizationId, args.actorUserId, result.sale.id);
   const loyalty = await autoEarnRetailLoyaltyForSale(args.organizationId, args.actorUserId, result.sale.id);
-  const promotionCount = new Set(finalDecisions.flatMap((decision) => decision.promotionIds)).size;
-  const relationshipBenefits = serializeRetailRelationshipBenefitEffects(
-    relationshipResolution.effects,
-  );
-  const benefitUserIds = [...new Set(
-    relationshipResolution.effects.map((effect) => effect.userId),
-  )];
+
+  const persistedRelationshipUsages = result.idempotent
+    ? await prisma.enterpriseRelationshipBenefitUsage.findMany({
+        where: {
+          organizationId: args.organizationId,
+          executionMode: "AUTO_RETAIL",
+          effectModuleCode: "RETAIL_POS",
+          effectEntityType: "EnterpriseRetailSale",
+          effectEntityId: result.sale.id,
+          status: "CONSUMED",
+        },
+        include: {
+          benefit: {
+            select: { code: true, nameFr: true, nameEn: true },
+          },
+        },
+        orderBy: { createdAt: "asc" },
+      })
+    : [];
+
+  const promotionCount = result.idempotent
+    ? await prisma.enterpriseRetailPromotionRedemption.count({
+        where: { organizationId: args.organizationId, saleId: result.sale.id },
+      })
+    : new Set(finalDecisions.flatMap((decision) => decision.promotionIds)).size;
+
+  const relationshipBenefits = result.idempotent
+    ? persistedRelationshipUsages.map((usage) => ({
+        benefitId: usage.benefitId,
+        benefitCode: usage.benefit.code,
+        nameFr: usage.benefit.nameFr,
+        nameEn: usage.benefit.nameEn,
+        discountAmount: usage.effectAmount?.toFixed() || "0",
+        currencyCode: usage.effectCurrencyCode || result.sale.currencyCode,
+      }))
+    : serializeRetailRelationshipBenefitEffects(relationshipResolution.effects);
+
+  const notificationEffects = result.idempotent
+    ? persistedRelationshipUsages.map((usage) => ({
+        benefitId: usage.benefitId,
+        benefitNameFr: usage.benefit.nameFr,
+        benefitNameEn: usage.benefit.nameEn,
+        identityLinkId: usage.identityLinkId,
+        userId: usage.userId,
+      }))
+    : relationshipResolution.effects.map((effect) => ({
+        benefitId: effect.benefitId,
+        benefitNameFr: effect.benefitNameFr,
+        benefitNameEn: effect.benefitNameEn,
+        identityLinkId: effect.identityLinkId,
+        userId: effect.userId,
+      }));
+
+  const benefitUserIds = [...new Set(notificationEffects.map((effect) => effect.userId))];
   const benefitUsers = benefitUserIds.length
     ? await prisma.user.findMany({
         where: { id: { in: benefitUserIds } },
@@ -144,7 +191,7 @@ export async function executeCanonicalRetailSale(args: {
     benefitUsers.map((user) => [user.id, user.locale === "en" ? "en" : "fr"]),
   );
   await Promise.allSettled(
-    relationshipResolution.effects.map((effect) => {
+    notificationEffects.map((effect) => {
       const english = localeByUserId.get(effect.userId) === "en";
       return notifyUser({
         userId: effect.userId,
