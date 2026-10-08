@@ -44,7 +44,6 @@ export async function getEnterpriseModulesDataset(organizationId: string, entitl
       implementationStatus: definition?.implementationStatus || null,
       navigationGroup: definition?.navigationGroup || null,
       routeKind: definition?.routeKind || null,
-      routePath: definition?.routePath || null,
       sectorCompatible,
       registryKnown: Boolean(definition),
       requiredPlan: moduleEntitlement?.requiredPlan || definition?.minimumPlan || null,
