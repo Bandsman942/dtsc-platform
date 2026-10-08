@@ -59,6 +59,13 @@ type TenderDraft = {
 type RetailPricingPreview = {
   grandTotal: string;
   currencyCode: string;
+  lines: Array<{
+    catalogItemId: string;
+    resolvedUnitPrice: string;
+    discountAmount: string;
+    taxAmount: string;
+    lineTotal: string;
+  }>;
   relationshipBenefits: Array<{
     benefitId: string;
     benefitCode: string;
@@ -220,6 +227,10 @@ function PosOperate({
   const effectiveTotal = previewRequired && pricingPreview
     ? Number(pricingPreview.grandTotal)
     : total;
+  const previewLineByItem = useMemo(
+    () => new Map((pricingPreview?.lines || []).map((line) => [line.catalogItemId, line])),
+    [pricingPreview?.lines],
+  );
 
   useEffect(() => {
     if (!openSessions.length) {
@@ -805,15 +816,26 @@ function PosOperate({
             </div>
             <p className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3 text-sm font-bold text-dtsc-ink">{copy.reviewSafety}</p>
             <div className="grid gap-2">
-              {cart.map((line) => (
-                <div key={line.catalogItemId} className="flex min-w-0 items-start justify-between gap-3 rounded-xl border border-dtsc-border bg-dtsc-page p-3">
-                  <div className="min-w-0">
-                    <p className="break-words text-sm font-black text-dtsc-ink">{line.name}</p>
-                    <p className="text-xs font-semibold text-dtsc-muted">{Number(line.quantity)} × {moneyValue(line.unitPrice, line.currencyCode, locale)}{line.discountAmount ? ` · -${moneyValue(line.discountAmount, line.currencyCode, locale)}` : ""}</p>
+              {cart.map((line) => {
+                const serverLine = previewRequired ? previewLineByItem.get(line.catalogItemId) : null;
+                const shownUnitPrice = serverLine ? Number(serverLine.resolvedUnitPrice) : line.unitPrice;
+                const shownDiscount = serverLine ? Number(serverLine.discountAmount) : line.discountAmount;
+                const shownTotal = serverLine
+                  ? Number(serverLine.lineTotal)
+                  : line.quantity * line.unitPrice - line.discountAmount + line.taxAmount;
+                return (
+                  <div key={line.catalogItemId} className="flex min-w-0 items-start justify-between gap-3 rounded-xl border border-dtsc-border bg-dtsc-page p-3">
+                    <div className="min-w-0">
+                      <p className="break-words text-sm font-black text-dtsc-ink">{line.name}</p>
+                      <p className="text-xs font-semibold text-dtsc-muted">
+                        {Number(line.quantity)} × {moneyValue(shownUnitPrice, line.currencyCode, locale)}
+                        {shownDiscount ? ` · -${moneyValue(shownDiscount, line.currencyCode, locale)}` : ""}
+                      </p>
+                    </div>
+                    <p className="shrink-0 text-sm font-black text-dtsc-ink">{moneyValue(shownTotal, line.currencyCode, locale)}</p>
                   </div>
-                  <p className="shrink-0 text-sm font-black text-dtsc-ink">{moneyValue(line.quantity * line.unitPrice - line.discountAmount + line.taxAmount, line.currencyCode, locale)}</p>
-                </div>
-              ))}
+                );
+              })}
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               {pending.tenders.map((tender, index) => {
