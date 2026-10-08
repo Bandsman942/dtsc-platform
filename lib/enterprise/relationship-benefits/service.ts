@@ -360,7 +360,7 @@ export async function listRelationshipBenefitsForAdmin(organizationId: string) {
 export async function listAssignableRelationshipLinks(organizationId: string) {
   const links = await prisma.enterpriseIdentityLink.findMany({
     where: { organizationId, status: "ACTIVE", userId: { not: null } },
-    select: { id: true, requestedRelationType: true, personIdentityId: true, activatedAt: true },
+    select: { id: true, requestedRelationType: true, requestedRoleCode: true, personIdentityId: true, activatedAt: true },
     orderBy: { activatedAt: "desc" },
     take: 300,
   });
@@ -375,6 +375,7 @@ export async function listAssignableRelationshipLinks(organizationId: string) {
   return links.map((link) => ({
     id: link.id,
     relationType: link.requestedRelationType,
+    roleCode: link.requestedRoleCode,
     personName: personById.get(link.personIdentityId) || "Relation active",
     activatedAt: iso(link.activatedAt),
   }));
