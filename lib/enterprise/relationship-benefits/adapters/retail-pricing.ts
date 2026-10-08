@@ -227,11 +227,16 @@ export async function resolveRetailRelationshipBenefitPricing({
   }
 
   const rewards: RetailRelationshipRewardPlan[] = rewardSelected.flatMap(
-    ({ item, baseAmount }) => {
+    ({ item }) => {
       if (item.valueDecimal === null) return [];
       const benefitType = item.benefitType as RetailRelationshipRewardPlan["benefitType"];
+      const matching = eligibleLines(item, lines);
+      const rewardBaseAmount = matching.reduce(
+        (sum, line) => sum + (remainingByItem.get(line.catalogItemId) || 0),
+        0,
+      );
       const expectedAmount =
-        benefitType === "LOYALTY" ? null : rewardMonetaryAmount(item, baseAmount);
+        benefitType === "LOYALTY" ? null : rewardMonetaryAmount(item, rewardBaseAmount);
       if (benefitType !== "LOYALTY" && (!expectedAmount || expectedAmount <= 0)) return [];
       return [{
         benefitId: item.id,
@@ -243,7 +248,7 @@ export async function resolveRetailRelationshipBenefitPricing({
         valueType: item.valueType,
         valueDecimal: item.valueDecimal,
         currencyCode,
-        baseAmount,
+        baseAmount: rewardBaseAmount,
         expectedAmount,
         loyaltyProgramId: item.conditions?.retailLoyaltyProgramId || null,
         storedValueAccountType: item.conditions?.retailStoredValueAccountType || "STORE_CREDIT",
