@@ -585,16 +585,10 @@ export async function applyRetailRelationshipBenefitEffectsTx(args: {
       valueDecimal: benefit.valueDecimal!,
       eligibleAmount: effect.eligibleAmount,
     });
-    const transactionAmount =
-      effect.context.transactionAmount === null ||
-      effect.context.transactionAmount === undefined
-        ? null
-        : new Prisma.Decimal(effect.context.transactionAmount);
     if (
       effect.amount.lte(0) ||
       effect.eligibleAmount.lte(0) ||
       !expectedEffectAmount.equals(effect.amount) ||
-      (transactionAmount && effect.eligibleAmount.gt(transactionAmount)) ||
       !effect.context.currencyCode ||
       effect.context.currencyCode.toUpperCase() !== effect.currencyCode.toUpperCase()
     ) {
