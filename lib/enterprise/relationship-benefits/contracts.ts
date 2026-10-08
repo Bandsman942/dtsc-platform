@@ -86,15 +86,13 @@ export const relationshipBenefitUsageSchema = z.object({
   benefitId: z.string().trim().min(1).max(191),
   idempotencyKey: z.string().trim().min(8).max(160),
   note: z.string().trim().max(800).optional().nullable(),
-  context: relationshipBenefitExecutionContextSchema.optional().nullable(),
-});
+}).strict();
 
 export const relationshipBenefitUsageDecisionSchema = z.object({
-  status: z.enum(["APPROVED", "REJECTED", "CONSUMED", "CANCELLED"]),
+  status: z.enum(["APPROVED", "REJECTED", "CANCELLED"]),
   revision: z.number().int().positive(),
   note: z.string().trim().max(800).optional().nullable(),
-  context: relationshipBenefitExecutionContextSchema.optional().nullable(),
-});
+}).strict();
 
 
 export const relationshipBenefitUsageCancelSchema = z.object({
