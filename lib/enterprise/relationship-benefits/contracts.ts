@@ -58,6 +58,7 @@ export const relationshipBenefitCreateSchema = z.object({
   benefitType: z.enum(RELATIONSHIP_BENEFIT_TYPES),
   assignmentMode: z.enum(RELATIONSHIP_BENEFIT_ASSIGNMENT_MODES).default("AUTOMATIC"),
   relationTypes: z.array(z.enum(ENTERPRISE_IDENTITY_RELATION_TYPES)).max(30).default([]),
+  audienceRoleCode: z.string().trim().min(1).max(80).optional().nullable(),
   identityLinkIds: z.array(z.string().trim().min(1).max(191)).max(100).default([]),
   valueType: z.enum(["NONE", "PERCENT", "AMOUNT", "POINTS", "TEXT"]).default("NONE"),
   valueDecimal: z.number().finite().nonnegative().optional().nullable(),
