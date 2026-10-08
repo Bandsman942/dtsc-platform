@@ -293,8 +293,17 @@ async function validateBenefitConfiguration(
   if (input.benefitType === "LOYALTY" && (input.valueType !== "POINTS" || Number(input.valueDecimal || 0) <= 0 || !conditions.retailLoyaltyProgramId)) {
     throw new EnterpriseRelationshipBenefitError("RELATIONSHIP_BENEFIT_LOYALTY_CONFIGURATION_INVALID", "Un avantage fidélité exige un nombre de points positif et un programme Retail actif.", 400);
   }
-  if (["CASHBACK", "CREDIT"].includes(String(input.benefitType || "")) && (!["PERCENT", "AMOUNT"].includes(String(input.valueType || "")) || Number(input.valueDecimal || 0) <= 0)) {
-    throw new EnterpriseRelationshipBenefitError("RELATIONSHIP_BENEFIT_VALUE_INVALID", "Un cashback ou un avoir exige un pourcentage ou un montant positif.", 400);
+  if (["CASHBACK", "CREDIT"].includes(String(input.benefitType || ""))) {
+    if (!["PERCENT", "AMOUNT"].includes(String(input.valueType || "")) || Number(input.valueDecimal || 0) <= 0) {
+      throw new EnterpriseRelationshipBenefitError("RELATIONSHIP_BENEFIT_VALUE_INVALID", "Un cashback ou un avoir exige un pourcentage ou un montant positif.", 400);
+    }
+    if (!conditions.retailStoredValueAccountType) {
+      throw new EnterpriseRelationshipBenefitError(
+        "RELATIONSHIP_BENEFIT_STORED_VALUE_CONFIGURATION_REQUIRED",
+        "Un cashback ou un avoir exige un type de compte Retail (avoir client ou carte-cadeau).",
+        400,
+      );
+    }
   }
 
   if (targetModuleCode && input.status === "ACTIVE") {
