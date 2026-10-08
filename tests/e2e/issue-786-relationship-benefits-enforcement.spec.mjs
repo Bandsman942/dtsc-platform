@@ -16,6 +16,7 @@ const ids = {
 };
 const codes = {
   automatic: "E2E_786_RETAIL_STACK_5",
+  exclusive: "E2E_786_RETAIL_EXCLUSIVE_30",
   manual: "E2E_786_MANUAL_SERVICE",
 };
 
@@ -79,7 +80,7 @@ async function get(page, path) {
 
 async function cleanupFixture() {
   const benefits = await prisma.enterpriseRelationshipBenefit.findMany({
-    where: { organizationId, code: { in: [codes.automatic, codes.manual] } },
+    where: { organizationId, code: { in: [codes.automatic, codes.exclusive, codes.manual] } },
     select: { id: true },
   });
   const benefitIds = benefits.map((item) => item.id);
@@ -335,6 +336,11 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
     );
     expect(eligible.response.ok(), JSON.stringify(eligible.body)).toBeTruthy();
     expect(eligible.body.relationshipBenefits.some((item) => item.benefitId === benefitId)).toBe(true);
+    expect(
+      eligible.body.lines?.[0]?.promotions?.some(
+        (promotion) => promotion.code === "SHOP2-E2E-10PCT",
+      ),
+    ).toBe(true);
     const eligibleTotal = asNumber(eligible.body.grandTotal);
     expect(eligibleTotal).toBeLessThan(baselineTotal);
     expect(eligibleTotal).toBeGreaterThan(0);
@@ -444,6 +450,55 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
     );
     expect(afterReversal.response.ok(), JSON.stringify(afterReversal.body)).toBeTruthy();
     expect(afterReversal.body.relationshipBenefits.some((item) => item.benefitId === benefitId)).toBe(true);
+
+    const exclusive = await post(admin, `/api/enterprise/${organizationId}/relationship-benefits`, {
+      code: codes.exclusive,
+      nameFr: "Remise relationnelle exclusive E2E 30 %",
+      nameEn: "E2E exclusive relationship 30% discount",
+      descriptionFr: "Remise non cumulable qui doit remplacer les règles Retail moins favorables.",
+      descriptionEn: "Non-stackable discount that must replace less favorable Retail rules.",
+      benefitType: "DISCOUNT",
+      assignmentMode: "AUTOMATIC",
+      relationTypes: ["CUSTOMER"],
+      identityLinkIds: [],
+      valueType: "PERCENT",
+      valueDecimal: 30,
+      currencyCode: fixture.currencyCode,
+      actionCode: "NONE",
+      targetModuleCode: "RETAIL_POS",
+      stackable: false,
+      status: "ACTIVE",
+      conditions: {
+        channelCodes: ["POS"],
+        catalogItemIds: [fixture.catalogItemId],
+      },
+    });
+    expect(exclusive.response.status(), JSON.stringify(exclusive.body)).toBe(201);
+    const exclusiveBenefitId = exclusive.body.benefit.id;
+
+    const exclusivePreview = await post(
+      admin,
+      `/api/enterprise/${organizationId}/retail/pricing/preview`,
+      {
+        siteId: fixture.siteId,
+        customerBusinessPartyId: fixture.customerBusinessPartyId,
+        currencyCode: fixture.currencyCode,
+        channelCode: "POS",
+        lines: [{ catalogItemId: fixture.catalogItemId, quantity: 1 }],
+      },
+      "/enterprise-modules/RETAIL_POS",
+    );
+    expect(exclusivePreview.response.ok(), JSON.stringify(exclusivePreview.body)).toBeTruthy();
+    expect(exclusivePreview.body.relationshipBenefits.map((item) => item.benefitId)).toEqual([exclusiveBenefitId]);
+    expect(exclusivePreview.body.lines?.[0]?.promotions || []).toHaveLength(0);
+    expect(asNumber(exclusivePreview.body.grandTotal)).toBeLessThan(asNumber(afterReversal.body.grandTotal));
+
+    const suspendedExclusive = await patch(
+      admin,
+      `/api/enterprise/${organizationId}/relationship-benefits/${exclusiveBenefitId}`,
+      { revision: exclusive.body.benefit.revision, status: "SUSPENDED" },
+    );
+    expect(suspendedExclusive.response.ok(), JSON.stringify(suspendedExclusive.body)).toBeTruthy();
 
     const userContext = await browser.newContext({ baseURL: baseUrl, viewport: { width: 390, height: 844 } });
     const user = await userContext.newPage();
