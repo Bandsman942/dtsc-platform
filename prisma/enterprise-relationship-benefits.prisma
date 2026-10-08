@@ -35,6 +35,7 @@ model EnterpriseRelationshipBenefit {
   audiences             EnterpriseRelationshipBenefitAudience[]
   assignments           EnterpriseRelationshipBenefitAssignment[]
   usages                EnterpriseRelationshipBenefitUsage[]
+  applications          EnterpriseRelationshipBenefitApplication[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, code])
@@ -98,4 +99,37 @@ model EnterpriseRelationshipBenefitUsage {
   @@unique([organizationId, idempotencyKey])
   @@index([organizationId, identityLinkId, status, requestedAt])
   @@index([organizationId, benefitId, status, requestedAt])
+}
+
+
+model EnterpriseRelationshipBenefitApplication {
+  id                String   @id @default(cuid())
+  organizationId    String
+  benefitId         String
+  identityLinkId    String
+  userId            String
+  sourceModuleCode  String
+  sourceEntityType  String
+  sourceEntityId    String
+  applicationType   String
+  status            String   @default("APPLIED")
+  baseAmount        Decimal? @db.Decimal(20, 6)
+  appliedAmount     Decimal? @db.Decimal(20, 6)
+  currencyCode      String?
+  idempotencyKey    String
+  contextJson       Json?
+  appliedByUserId   String?
+  appliedAt         DateTime @default(now())
+  reversedAt        DateTime?
+  reversalReason    String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  benefit           EnterpriseRelationshipBenefit @relation(fields: [organizationId, benefitId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, idempotencyKey])
+  @@unique([organizationId, sourceEntityType, sourceEntityId, benefitId, identityLinkId])
+  @@index([organizationId, identityLinkId, status, appliedAt])
+  @@index([organizationId, sourceModuleCode, sourceEntityType, sourceEntityId])
+  @@index([organizationId, benefitId, status, appliedAt])
 }
