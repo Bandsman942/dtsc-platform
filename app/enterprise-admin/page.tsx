@@ -64,7 +64,15 @@ export default async function EnterpriseAdminPage({ searchParams }: PageProps) {
     redirect("/dashboard");
   }
   const administrationLocale = companyLocale(organization.settingsJson, user.locale);
-  const dataset = await getEnterpriseAdministrationDataset(organizationId, user.id, administrationLocale);
+  const [dataset, relationshipBenefitsAccess] = await Promise.all([
+    getEnterpriseAdministrationDataset(organizationId, user.id, administrationLocale),
+    resolveEnterpriseModuleAccess({
+      userId: user.id,
+      organizationId,
+      moduleCode: "RELATIONSHIP_BENEFITS",
+      action: "read",
+    }),
+  ]);
   if (!dataset) {
     redirect("/dashboard");
   }
@@ -75,6 +83,20 @@ export default async function EnterpriseAdminPage({ searchParams }: PageProps) {
       logoUrl: organizationLogoProxyUrl(organizationId, dataset.organization.logoUrl),
     },
   };
+  const relationshipBenefitsEntry =
+    relationshipBenefitsAccess.allowed && relationshipBenefitsAccess.definition?.routePath
+      ? {
+          href: relationshipBenefitsAccess.definition.routePath,
+          label:
+            administrationLocale === "en"
+              ? relationshipBenefitsAccess.definition.labelEn
+              : relationshipBenefitsAccess.definition.labelFr,
+          description:
+            administrationLocale === "en"
+              ? relationshipBenefitsAccess.definition.descriptionEn
+              : relationshipBenefitsAccess.definition.descriptionFr,
+        }
+      : null;
 
   return (
     <AppShell user={user}>
@@ -83,6 +105,7 @@ export default async function EnterpriseAdminPage({ searchParams }: PageProps) {
           {...normalizedDataset}
           locale={administrationLocale}
           initialSection={section}
+          relationshipBenefitsEntry={relationshipBenefitsEntry}
         />
       </LocaleProvider>
     </AppShell>
