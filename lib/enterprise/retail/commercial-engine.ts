@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
+import { resolveRetailRelationshipBenefitPricing } from "@/lib/enterprise/relationship-benefits/adapters/retail-pricing";
 import type { retailSaleCreateSchema } from "@/lib/enterprise/retail/schemas";
 import { prisma } from "@/lib/prisma";
 import type { z } from "zod";
@@ -416,7 +417,75 @@ async function resolvePricingDecisions(
   if (anyOverride && (!context.overrideReason || context.overrideReason.trim().length < 3)) {
     throw new EnterpriseRetailError("RETAIL_PRICE_OVERRIDE_REASON_REQUIRED", 400);
   }
-  return decisions;
+
+  const relationshipPricing = await resolveRetailRelationshipBenefitPricing({
+    organizationId,
+    customerBusinessPartyId: input.customerBusinessPartyId,
+    currencyCode: input.currencyCode,
+    siteId: input.siteId || null,
+    channelCode,
+    lines: decisions.map((decision) => ({
+      catalogItemId: decision.catalogItemId,
+      categoryId: itemById.get(decision.catalogItemId)?.categoryId || null,
+      quantity: Number(decision.quantity),
+      grossAmount: Number(decision.quantity.times(decision.resolvedUnitPrice)),
+      currentDiscountAmount: Number(decision.discountAmount),
+    })),
+  });
+
+  if (relationshipPricing.applications.length) {
+    const benefitIdsByCatalogItemId = new Map<string, string[]>();
+    for (const application of relationshipPricing.applications) {
+      const catalogItemIds = Array.isArray(application.context.catalogItemIds)
+        ? application.context.catalogItemIds.filter((value): value is string => typeof value === "string")
+        : [];
+      for (const catalogItemId of catalogItemIds) {
+        benefitIdsByCatalogItemId.set(
+          catalogItemId,
+          [...new Set([...(benefitIdsByCatalogItemId.get(catalogItemId) || []), application.benefitId])],
+        );
+      }
+    }
+
+    for (const decision of decisions) {
+      const relationshipDiscount = money(
+        relationshipPricing.discountByCatalogItemId.get(decision.catalogItemId) || 0,
+      );
+      if (!relationshipDiscount.isPositive()) continue;
+      const gross = money(decision.quantity.times(decision.resolvedUnitPrice));
+      const combinedDiscount = money(
+        Prisma.Decimal.min(gross, decision.discountAmount.plus(relationshipDiscount)),
+      );
+      const afterDiscountCustomerTotal = money(gross.minus(combinedDiscount));
+      const divisor = decimal(1).plus(decision.taxRate);
+
+      decision.discountAmount = combinedDiscount;
+      if (decision.taxRate.gt(0) && decision.taxIncluded) {
+        decision.serviceDiscountAmount = money(combinedDiscount.div(divisor));
+        const netAfterDiscount = money(
+          decision.quantity.times(decision.serviceUnitPrice).minus(decision.serviceDiscountAmount),
+        );
+        decision.taxAmount = money(afterDiscountCustomerTotal.minus(netAfterDiscount));
+        decision.lineTotal = afterDiscountCustomerTotal;
+      } else {
+        decision.serviceDiscountAmount = combinedDiscount;
+        decision.taxAmount = decision.taxRate.gt(0)
+          ? money(afterDiscountCustomerTotal.times(decision.taxRate))
+          : decimal(0);
+        decision.lineTotal = money(afterDiscountCustomerTotal.plus(decision.taxAmount));
+      }
+      decision.context = {
+        ...decision.context,
+        relationshipBenefitIds: benefitIdsByCatalogItemId.get(decision.catalogItemId) || [],
+        relationshipBenefitDiscountAmount: relationshipDiscount.toFixed(),
+      };
+    }
+  }
+
+  return {
+    decisions,
+    relationshipBenefitApplications: relationshipPricing.applications,
+  };
 }
 
 export async function prepareCommercialRetailSaleV2(
@@ -425,7 +494,7 @@ export async function prepareCommercialRetailSaleV2(
   context: CommercialContext,
   permissions: CommercialPermissions,
 ) {
-  const decisions = await resolvePricingDecisions(
+  const resolved = await resolvePricingDecisions(
     organizationId,
     {
       siteId: input.siteId,
@@ -445,6 +514,7 @@ export async function prepareCommercialRetailSaleV2(
     context,
     permissions,
   );
+  const decisions = resolved.decisions;
   const decisionByItem = new Map(decisions.map((decision) => [decision.catalogItemId, decision]));
   return {
     input: {
@@ -461,6 +531,7 @@ export async function prepareCommercialRetailSaleV2(
       }),
     },
     decisions,
+    relationshipBenefitApplications: resolved.relationshipBenefitApplications,
     overrideApplied: decisions.some((decision) => decision.pricingSource === "MANUAL_OVERRIDE" || Boolean(decision.context.discountOverride) || Boolean(decision.context.taxOverride)),
     overrideReason: context.overrideReason?.trim() || null,
   };
@@ -471,12 +542,13 @@ export async function previewRetailCommercialPricing(
   input: { siteId?: string | null; customerBusinessPartyId?: string | null; currencyCode: string; soldAt?: Date; lines: Array<{ catalogItemId: string; quantity: number }> },
   context: CommercialContext,
 ) {
-  const decisions = await resolvePricingDecisions(
+  const resolved = await resolvePricingDecisions(
     organizationId,
     { ...input, lines: input.lines.map((line) => ({ ...line })) },
     context,
     { canOverridePrice: false, canOverrideDiscount: false, canOverrideTax: false },
   );
+  const decisions = resolved.decisions;
   return {
     lines: decisions.map((decision) => ({
       catalogItemId: decision.catalogItemId,
@@ -499,6 +571,8 @@ export async function previewRetailCommercialPricing(
     grandTotal: money(decisions.reduce((sum, decision) => sum.plus(decision.lineTotal), decimal(0))).toFixed(),
     customerDiscountTotal: money(decisions.reduce((sum, decision) => sum.plus(decision.discountAmount), decimal(0))).toFixed(),
     currencyCode: input.currencyCode,
+    relationshipBenefitApplications: resolved.relationshipBenefitApplications,
+    relationshipBenefitApplicationCount: resolved.relationshipBenefitApplications.length,
   };
 }
 
