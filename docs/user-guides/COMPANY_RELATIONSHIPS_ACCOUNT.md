@@ -49,3 +49,17 @@ La révocation retire les capacités dérivées, invalide les accès devenus int
 - Actualisez la vue si une opération validée n’apparaît pas immédiatement.
 - Vérifiez le contexte d’organisation, les permissions, le statut du module et la connexion réseau.
 - En cas de refus persistant, conservez le message affiché et contactez le responsable du module ou le support DTSC sans partager de donnée sensible.
+
+
+## Avantages relationnels
+
+Une relation active peut présenter des avantages et services, mais l’affichage d’une carte ne prouve jamais qu’un effet a été appliqué.
+
+- Les demandes manuelles peuvent être approuvées, refusées ou annulées.
+- « Approuvé » ne signifie pas « appliqué ».
+- Les remises Retail compatibles sont recalculées et appliquées directement par le serveur dans le ticket.
+- Les montants minimums, dates, quotas, devise transactionnelle et conditions sont revérifiés lors de l’exécution.
+- La révocation bloque immédiatement toute nouvelle application.
+- Les points, cartes-cadeaux et avoirs restent ceux des ledgers Retail existants.
+
+Le navigateur ne peut pas fournir un contexte transactionnel faisant foi. Si un avantage dépend d’un panier ou d’un module métier, seul un adaptateur serveur certifié peut produire l’effet.
