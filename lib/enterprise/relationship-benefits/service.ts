@@ -527,7 +527,7 @@ async function retailSnapshot(organizationId: string, personIdentityId: string) 
   });
   if (!reference?.businessPartyId) return null;
 
-  const [loyaltyAccounts, storedValueAccounts, retailModule] = await Promise.all([
+  const [loyaltyAccounts, storedValueAccounts, retailModule, entitlements] = await Promise.all([
     prisma.enterpriseRetailLoyaltyAccount.findMany({
       where: { organizationId, customerBusinessPartyId: reference.businessPartyId, status: "ACTIVE" },
       include: { program: { select: { nameFr: true, nameEn: true, currencyCode: true, status: true, startsAt: true, endsAt: true } } },
@@ -542,8 +542,12 @@ async function retailSnapshot(organizationId: string, personIdentityId: string) 
       where: { organizationId, moduleCode: "RETAIL_POS", isEnabled: true },
       select: { id: true },
     }),
+    getOrganizationEntitlements(organizationId),
   ]);
-  if (!retailModule) return null;
+  const retailEntitled = (entitlements?.modules || []).some(
+    (item) => item.allowed && normalizeEnterpriseModuleCode(item.moduleCode) === "RETAIL_POS",
+  );
+  if (!retailModule || !retailEntitled) return null;
 
   const now = new Date();
   return {
