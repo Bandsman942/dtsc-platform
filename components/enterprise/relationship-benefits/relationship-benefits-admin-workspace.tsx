@@ -72,6 +72,20 @@ type RelationshipLink = {
   activatedAt: string | null;
 };
 
+type ConfigurationOptions = {
+  transactionalAdapters: Array<{ code: string; label: string }>;
+  loyaltyPrograms: Array<{ id: string; code: string; label: string; currencyCode: string }>;
+  storedValueAccountTypes: Array<{ code: string; label: string }>;
+};
+
+const TRANSACTIONAL_BENEFIT_TYPES = new Set([
+  "DISCOUNT",
+  "FIXED_PRICE",
+  "CASHBACK",
+  "CREDIT",
+  "LOYALTY",
+]);
+
 function tone(status: string) {
   if (status === "ACTIVE" || status === "APPROVED" || status === "CONSUMED") return "success" as const;
   if (status === "DRAFT" || status === "REQUESTED") return "warning" as const;
@@ -94,6 +108,7 @@ export function RelationshipBenefitsAdminWorkspace({
   initialBenefits,
   initialUsages,
   relationshipLinks,
+  configurationOptions,
 }: {
   organizationId: string;
   locale?: string | null;
@@ -102,6 +117,7 @@ export function RelationshipBenefitsAdminWorkspace({
   initialBenefits: Benefit[];
   initialUsages: Usage[];
   relationshipLinks: RelationshipLink[];
+  configurationOptions: ConfigurationOptions;
 }) {
   const english = locale === "en";
   const [tab, setTab] = useState<"CATALOGUE" | "REQUESTS">("CATALOGUE");
@@ -110,6 +126,9 @@ export function RelationshipBenefitsAdminWorkspace({
   const [links, setLinks] = useState(relationshipLinks);
   const [editorOpen, setEditorOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const [benefitType, setBenefitType] = useState("DISCOUNT");
+  const [options, setOptions] = useState(configurationOptions);
+  const transactionalBenefit = TRANSACTIONAL_BENEFIT_TYPES.has(benefitType);
 
   const benefitById = useMemo(() => new Map(benefits.map((item) => [item.id, item])), [benefits]);
   const pendingCount = usages.filter((item) => ["REQUESTED", "APPROVED"].includes(item.status)).length;
@@ -121,6 +140,7 @@ export function RelationshipBenefitsAdminWorkspace({
     setBenefits(body.benefits || []);
     setUsages(body.usages || []);
     setLinks(body.links || []);
+    if (body.configurationOptions) setOptions(body.configurationOptions);
   }
 
   async function createBenefit(event: FormEvent<HTMLFormElement>) {
@@ -129,6 +149,15 @@ export function RelationshipBenefitsAdminWorkspace({
     const data = new FormData(form);
     const relationTypes = ENTERPRISE_IDENTITY_RELATION_TYPES.filter((relationType) => data.getAll("relationTypes").includes(relationType));
     const identityLinkIds = data.getAll("identityLinkIds").map(String);
+    const selectedBenefitType = String(data.get("benefitType") || "OTHER");
+    const transactional = TRANSACTIONAL_BENEFIT_TYPES.has(selectedBenefitType);
+    const conditions: Record<string, unknown> = {};
+    if (selectedBenefitType === "LOYALTY" && data.get("retailLoyaltyProgramId")) {
+      conditions.retailLoyaltyProgramId = String(data.get("retailLoyaltyProgramId"));
+    }
+    if (["CASHBACK", "CREDIT"].includes(selectedBenefitType) && data.get("retailStoredValueAccountType")) {
+      conditions.retailStoredValueAccountType = String(data.get("retailStoredValueAccountType"));
+    }
     setBusy("create");
     try {
       const response = await fetch(`/api/enterprise/${organizationId}/relationship-benefits`, {
@@ -140,7 +169,7 @@ export function RelationshipBenefitsAdminWorkspace({
           nameEn: String(data.get("nameEn") || "").trim(),
           descriptionFr: String(data.get("descriptionFr") || "").trim(),
           descriptionEn: String(data.get("descriptionEn") || "").trim(),
-          benefitType: String(data.get("benefitType") || "OTHER"),
+          benefitType: selectedBenefitType,
           assignmentMode: String(data.get("assignmentMode") || "AUTOMATIC"),
           relationTypes,
           identityLinkIds,
@@ -148,9 +177,10 @@ export function RelationshipBenefitsAdminWorkspace({
           valueDecimal: data.get("valueDecimal") ? Number(data.get("valueDecimal")) : null,
           currencyCode: String(data.get("currencyCode") || "").trim().toUpperCase() || null,
           minimumAmount: data.get("minimumAmount") ? Number(data.get("minimumAmount")) : null,
-          actionCode: String(data.get("actionCode") || "NONE"),
-          actionLabelFr: String(data.get("actionLabelFr") || "").trim() || null,
-          actionLabelEn: String(data.get("actionLabelEn") || "").trim() || null,
+          actionCode: transactional ? "NONE" : String(data.get("actionCode") || "NONE"),
+          actionLabelFr: transactional ? null : String(data.get("actionLabelFr") || "").trim() || null,
+          actionLabelEn: transactional ? null : String(data.get("actionLabelEn") || "").trim() || null,
+          targetModuleCode: transactional ? String(data.get("targetModuleCode") || "").trim() || null : null,
           usageLimitTotal: data.get("usageLimitTotal") ? Number(data.get("usageLimitTotal")) : null,
           usageLimitPerPeriod: data.get("usageLimitPerPeriod") ? Number(data.get("usageLimitPerPeriod")) : null,
           usagePeriodDays: data.get("usagePeriodDays") ? Number(data.get("usagePeriodDays")) : null,
@@ -158,12 +188,14 @@ export function RelationshipBenefitsAdminWorkspace({
           startsAt: data.get("startsAt") ? new Date(String(data.get("startsAt"))).toISOString() : null,
           endsAt: data.get("endsAt") ? new Date(String(data.get("endsAt"))).toISOString() : null,
           status: String(data.get("status") || "DRAFT"),
+          conditions: Object.keys(conditions).length ? conditions : null,
         }),
       });
       const body = await response.json().catch(() => null);
       if (!response.ok) throw new Error(body?.message || (english ? "Benefit could not be saved." : "L’avantage n’a pas pu être enregistré."));
       await refresh();
       form.reset();
+      setBenefitType("DISCOUNT");
       setEditorOpen(false);
       notifyToast(body?.message || (english ? "Benefit saved." : "Avantage enregistré."), "success");
     } catch (error) {
@@ -263,7 +295,7 @@ export function RelationshipBenefitsAdminWorkspace({
         ) : null}
 
         {tab === "REQUESTS" ? (
-          <ModuleSection title={english ? "Member requests" : "Demandes des membres"} description={english ? "Approve, reject or mark an approved benefit as consumed." : "Approuvez, refusez ou marquez comme utilisé un avantage déjà approuvé."}>
+          <ModuleSection title={english ? "Member requests" : "Demandes des membres"} description={english ? "Approve, reject or mark a request benefit as fulfilled. Transactional benefits are applied by their business module instead." : "Approuvez, refusez ou marquez comme fourni un avantage sur demande. Les avantages transactionnels sont appliqués par leur module métier."}>
             {usages.length ? (
               <BusinessList ariaLabel={english ? "Benefit requests" : "Demandes d’avantages"}>
                 {usages.map((usage) => {
@@ -283,7 +315,7 @@ export function RelationshipBenefitsAdminWorkspace({
                               <Button type="button" size="sm" onClick={(event) => { event.stopPropagation(); void decideUsage(usage, "APPROVED"); }} disabled={busy !== null}><Check className="mr-1 h-4 w-4" />{english ? "Approve" : "Approuver"}</Button>
                               <Button type="button" size="sm" variant="outline" onClick={(event) => { event.stopPropagation(); void decideUsage(usage, "REJECTED"); }} disabled={busy !== null}><X className="mr-1 h-4 w-4" />{english ? "Reject" : "Refuser"}</Button>
                             </> : null}
-                            {usage.status === "APPROVED" ? <Button type="button" size="sm" onClick={(event) => { event.stopPropagation(); void decideUsage(usage, "CONSUMED"); }} disabled={busy !== null}><CheckCircle2 className="mr-1 h-4 w-4" />{english ? "Mark used" : "Marquer utilisé"}</Button> : null}
+                            {usage.status === "APPROVED" ? <Button type="button" size="sm" onClick={(event) => { event.stopPropagation(); void decideUsage(usage, "CONSUMED"); }} disabled={busy !== null}><CheckCircle2 className="mr-1 h-4 w-4" />{english ? "Mark fulfilled" : "Marquer fourni"}</Button> : null}
                           </div>
                         ) : null}
                       />
@@ -314,7 +346,26 @@ export function RelationshipBenefitsAdminWorkspace({
             <label className="text-sm font-black text-dtsc-ink">Name EN<input name="nameEn" required className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal" /></label>
             <label className="text-sm font-black text-dtsc-ink sm:col-span-2">Description FR<textarea name="descriptionFr" required rows={3} className="mt-1.5 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 font-normal" /></label>
             <label className="text-sm font-black text-dtsc-ink sm:col-span-2">Description EN<textarea name="descriptionEn" required rows={3} className="mt-1.5 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 font-normal" /></label>
-            <label className="text-sm font-black text-dtsc-ink">{english ? "Benefit type" : "Type d’avantage"}<select name="benefitType" defaultValue="DISCOUNT" className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal"><option value="DISCOUNT">{english ? "Discount" : "Remise"}</option><option value="FREE_SERVICE">{english ? "Free service" : "Service offert"}</option><option value="DELIVERY">{english ? "Delivery" : "Livraison"}</option><option value="PRIORITY">{english ? "Priority" : "Priorité"}</option><option value="ACCESS">{english ? "Exclusive access" : "Accès exclusif"}</option><option value="BOOKING">{english ? "Booking" : "Réservation"}</option><option value="OTHER">{english ? "Other" : "Autre"}</option></select></label>
+            <label className="text-sm font-black text-dtsc-ink">
+              {english ? "Benefit type" : "Type d’avantage"}
+              <select name="benefitType" value={benefitType} onChange={(event) => setBenefitType(event.target.value)} className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal">
+                <option value="DISCOUNT">{english ? "Discount" : "Remise"}</option>
+                <option value="FIXED_PRICE">{english ? "Fixed price" : "Prix fixe"}</option>
+                <option value="CASHBACK">Cashback</option>
+                <option value="CREDIT">{english ? "Store credit" : "Avoir client"}</option>
+                <option value="LOYALTY">{english ? "Loyalty points" : "Points de fidélité"}</option>
+                <option value="FREE_SERVICE">{english ? "Free service" : "Service offert"}</option>
+                <option value="DELIVERY">{english ? "Delivery" : "Livraison"}</option>
+                <option value="PRIORITY">{english ? "Priority" : "Priorité"}</option>
+                <option value="ACCESS">{english ? "Exclusive access" : "Accès exclusif"}</option>
+                <option value="SUPPORT">Support</option>
+                <option value="BOOKING">{english ? "Booking request" : "Demande de réservation"}</option>
+                <option value="DOCUMENT">{english ? "Document request" : "Demande de document"}</option>
+                <option value="EVENT">{english ? "Event access request" : "Demande d’accès événement"}</option>
+                <option value="REFERRAL">{english ? "Referral" : "Parrainage"}</option>
+                <option value="OTHER">{english ? "Other request benefit" : "Autre avantage sur demande"}</option>
+              </select>
+            </label>
             <label className="text-sm font-black text-dtsc-ink">{english ? "Targeting" : "Attribution"}<select name="assignmentMode" defaultValue="AUTOMATIC" className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal"><option value="AUTOMATIC">{english ? "Automatic by relationship" : "Automatique par relation"}</option><option value="MANUAL">{english ? "Manual" : "Manuelle"}</option><option value="HYBRID">{english ? "Hybrid" : "Hybride"}</option></select></label>
           </div>
 
@@ -334,19 +385,62 @@ export function RelationshipBenefitsAdminWorkspace({
             </div>
           </fieldset>
 
+          {transactionalBenefit ? (
+            <div className="rounded-xl border border-cyan-400/30 bg-cyan-400/5 p-4">
+              <p className="text-sm font-black text-dtsc-ink">
+                {english ? "Automatic server application" : "Application automatique serveur"}
+              </p>
+              <p className="mt-1 text-xs leading-5 text-dtsc-muted">
+                {english
+                  ? "This benefit is evaluated again by the business transaction. It cannot be manually marked as consumed."
+                  : "Cet avantage est réévalué dans la transaction métier. Il ne peut pas être marqué manuellement comme consommé."}
+              </p>
+            </div>
+          ) : null}
+
           <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <label className="text-sm font-black text-dtsc-ink">{english ? "Value type" : "Type de valeur"}<select name="valueType" defaultValue="NONE" className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal"><option value="NONE">{english ? "No numeric value" : "Sans valeur numérique"}</option><option value="PERCENT">{english ? "Percentage" : "Pourcentage"}</option><option value="AMOUNT">{english ? "Amount" : "Montant"}</option><option value="POINTS">Points</option></select></label>
             <label className="text-sm font-black text-dtsc-ink">{english ? "Value" : "Valeur"}<input name="valueDecimal" type="number" min="0" step="0.01" className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal" /></label>
             <label className="text-sm font-black text-dtsc-ink">{english ? "Currency" : "Devise"}<Input name="currencyCode" placeholder={english ? "Select currency" : "Sélectionner une devise"} className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal" /></label>
-            <label className="text-sm font-black text-dtsc-ink">{english ? "Member action" : "Action membre"}<select name="actionCode" defaultValue="REQUEST" className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal"><option value="NONE">{english ? "Informational only" : "Information uniquement"}</option><option value="REQUEST">{english ? "Request" : "Demander"}</option><option value="CLAIM">{english ? "Claim" : "Utiliser"}</option><option value="BOOK">{english ? "Book" : "Réserver"}</option><option value="CONTACT">{english ? "Contact company" : "Contacter l’entreprise"}</option></select></label>
-            <label className="text-sm font-black text-dtsc-ink">{english ? "French action label" : "Libellé action FR"}<input name="actionLabelFr" placeholder="Demander une livraison" className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal" /></label>
-            <label className="text-sm font-black text-dtsc-ink">{english ? "English action label" : "Libellé action EN"}<input name="actionLabelEn" placeholder="Request delivery" className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal" /></label>
+            <label className="text-sm font-black text-dtsc-ink">{english ? "Minimum operation amount" : "Montant minimum de l’opération"}<input name="minimumAmount" type="number" min="0" step="0.01" className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal" /></label>
+            {transactionalBenefit ? (
+              <label className="text-sm font-black text-dtsc-ink">
+                {english ? "Business adapter" : "Adaptateur métier"}
+                <select name="targetModuleCode" required className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal">
+                  <option value="">{english ? "Select an active adapter" : "Choisir un adaptateur actif"}</option>
+                  {options.transactionalAdapters.map((adapter) => <option key={adapter.code} value={adapter.code}>{adapter.label}</option>)}
+                </select>
+                {!options.transactionalAdapters.length ? <span className="mt-1 block text-xs font-normal text-amber-700 dark:text-amber-300">{english ? "No transactional adapter is available in the current plan." : "Aucun adaptateur transactionnel n’est disponible dans le plan actuel."}</span> : null}
+              </label>
+            ) : null}
+            {benefitType === "LOYALTY" ? (
+              <label className="text-sm font-black text-dtsc-ink">
+                {english ? "Loyalty program" : "Programme de fidélité"}
+                <select name="retailLoyaltyProgramId" required className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal">
+                  <option value="">{english ? "Select a program" : "Choisir un programme"}</option>
+                  {options.loyaltyPrograms.map((program) => <option key={program.id} value={program.id}>{program.label} · {program.currencyCode}</option>)}
+                </select>
+              </label>
+            ) : null}
+            {["CASHBACK", "CREDIT"].includes(benefitType) ? (
+              <label className="text-sm font-black text-dtsc-ink">
+                {english ? "Credit ledger" : "Ledger de l’avoir"}
+                <select name="retailStoredValueAccountType" required defaultValue="STORE_CREDIT" className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal">
+                  {options.storedValueAccountTypes.map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}
+                </select>
+              </label>
+            ) : null}
+            {!transactionalBenefit ? <>
+              <label className="text-sm font-black text-dtsc-ink">{english ? "Member action" : "Action membre"}<select name="actionCode" defaultValue="REQUEST" className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal"><option value="NONE">{english ? "Informational only" : "Information uniquement"}</option><option value="REQUEST">{english ? "Request" : "Demander"}</option><option value="CLAIM">{english ? "Request use" : "Demander l’utilisation"}</option><option value="BOOK">{english ? "Request booking" : "Demander une réservation"}</option><option value="CONTACT">{english ? "Contact company" : "Contacter l’entreprise"}</option></select></label>
+              <label className="text-sm font-black text-dtsc-ink">{english ? "French action label" : "Libellé action FR"}<input name="actionLabelFr" placeholder="Demander une livraison" className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal" /></label>
+              <label className="text-sm font-black text-dtsc-ink">{english ? "English action label" : "Libellé action EN"}<input name="actionLabelEn" placeholder="Request delivery" className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal" /></label>
+            </> : null}
             <label className="text-sm font-black text-dtsc-ink">{english ? "Total limit per relationship" : "Limite totale par relation"}<input name="usageLimitTotal" type="number" min="1" className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal" /></label>
             <label className="text-sm font-black text-dtsc-ink">{english ? "Period limit per relationship" : "Limite par période et relation"}<input name="usageLimitPerPeriod" type="number" min="1" className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal" /></label>
             <label className="text-sm font-black text-dtsc-ink">{english ? "Period (days)" : "Période (jours)"}<input name="usagePeriodDays" type="number" min="1" className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal" /></label>
             <label className="text-sm font-black text-dtsc-ink">{english ? "Starts at" : "Début"}<input name="startsAt" type="datetime-local" className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal" /></label>
             <label className="text-sm font-black text-dtsc-ink">{english ? "Ends at" : "Fin"}<input name="endsAt" type="datetime-local" className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal" /></label>
-            <label className="flex min-h-11 items-center gap-2 self-end text-sm font-black text-dtsc-ink"><input type="checkbox" name="stackable" /> {english ? "Can be combined" : "Cumulable"}</label>
+            <label className="flex min-h-11 items-center gap-2 self-end text-sm font-black text-dtsc-ink"><input type="checkbox" name="stackable" /> {english ? "Can be combined with other benefits" : "Cumulable avec d’autres avantages"}</label>
           </div>
 
           <div data-responsive-actions className="sticky bottom-0 -mx-4 -mb-4 flex flex-wrap justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface px-4 py-3 sm:-mx-5 sm:-mb-5 sm:px-5">
