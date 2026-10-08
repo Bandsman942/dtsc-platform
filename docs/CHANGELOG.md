@@ -2,7 +2,8 @@
 
 - donne un contrat `ENTERPRISE_BENEFITS` explicite aux 22 types de relation configurables ;
 - ajoute un resolver serveur unique pour audience, rôle, attribution, dates, devise, montant minimum, conditions contrôlées, cible module, cumul et quotas ;
-- refuse les conditions JSON inconnues et revalide les références site/article/catégorie dans le tenant ;
+- refuse les conditions JSON inconnues, revalide les références site/article/catégorie dans le tenant et refuse toute cible métier non couverte par un adaptateur certifié ;
+- refuse tout contexte transactionnel fourni par le navigateur dans les demandes/décisions : seuls les adaptateurs serveur peuvent attester un contexte d’exécution ;
 - ajoute un ledger de preuve d’effet métier et interdit le faux statut `CONSUMED` sans exécution vérifiée ;
 - applique réellement les remises/prix fixes relationnels compatibles dans le moteur Retail POS avant persistance de la vente ;
 - lie atomiquement l’effet au vrai `EnterpriseRetailSale` et au vrai `businessPartyId`, avec idempotence et verrouillage ;
