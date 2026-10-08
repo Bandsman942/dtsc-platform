@@ -322,7 +322,8 @@ export async function listRelationshipBenefitsForAdmin(organizationId: string) {
       endsAt: iso(benefit.endsAt),
       status: benefit.status,
       revision: benefit.revision,
-      relationTypes: benefit.audiences.map((audience) => audience.relationType),
+      relationTypes: [...new Set(benefit.audiences.map((audience) => audience.relationType))],
+      audienceRoleCodes: [...new Set(benefit.audiences.map((audience) => audience.roleCode).filter((value): value is string => Boolean(value)))],
       assignmentCount: benefit.assignments.length,
       createdAt: benefit.createdAt.toISOString(),
     })),
@@ -388,6 +389,7 @@ type BenefitInput = {
   benefitType: string;
   assignmentMode: string;
   relationTypes: string[];
+  audienceRoleCode?: string | null;
   identityLinkIds: string[];
   valueType: string;
   valueDecimal?: number | null;
@@ -417,8 +419,15 @@ export async function createRelationshipBenefit({
   input: BenefitInput;
 }) {
   const relationTypes = [...new Set(input.relationTypes)];
+  const audienceRoleCode = input.audienceRoleCode?.trim() || null;
   if (relationTypes.some((type) => !(ENTERPRISE_IDENTITY_RELATION_TYPES as readonly string[]).includes(type))) {
     throw new EnterpriseRelationshipBenefitError("RELATIONSHIP_BENEFIT_AUDIENCE_INVALID", "Un type de relation sélectionné n’est pas reconnu.");
+  }
+  if (audienceRoleCode && !relationTypes.length) {
+    throw new EnterpriseRelationshipBenefitError(
+      "RELATIONSHIP_BENEFIT_AUDIENCE_ROLE_INVALID",
+      "Sélectionnez au moins un type de relation avant de cibler un rôle ou segment.",
+    );
   }
   const startsAt = input.startsAt ? new Date(input.startsAt) : null;
   const endsAt = input.endsAt ? new Date(input.endsAt) : null;
@@ -489,7 +498,12 @@ export async function createRelationshipBenefit({
     });
     if (relationTypes.length) {
       await tx.enterpriseRelationshipBenefitAudience.createMany({
-        data: relationTypes.map((relationType) => ({ organizationId, benefitId: benefit.id, relationType })),
+        data: relationTypes.map((relationType) => ({
+          organizationId,
+          benefitId: benefit.id,
+          relationType,
+          roleCode: audienceRoleCode,
+        })),
       });
     }
     if (uniqueLinkIds.length) {
@@ -519,6 +533,7 @@ export async function updateRelationshipBenefit({
 }) {
   const current = await prisma.enterpriseRelationshipBenefit.findFirst({
     where: { id: benefitId, organizationId, archivedAt: null },
+    include: { audiences: true },
   });
   if (!current) throw new EnterpriseRelationshipBenefitError("RELATIONSHIP_BENEFIT_NOT_FOUND", "Cet avantage est introuvable.", 404);
   if (current.revision !== input.revision) {
@@ -531,6 +546,21 @@ export async function updateRelationshipBenefit({
   const identityLinkIds = Array.isArray(input.identityLinkIds)
     ? [...new Set(input.identityLinkIds.filter((item): item is string => typeof item === "string"))]
     : null;
+  const currentRelationTypes = [...new Set(current.audiences.map((audience) => audience.relationType))];
+  const currentRoleCodes = [...new Set(
+    current.audiences
+      .map((audience) => audience.roleCode)
+      .filter((value): value is string => Boolean(value)),
+  )];
+  const mergedAudienceRoleCode =
+    "audienceRoleCode" in input
+      ? input.audienceRoleCode
+        ? String(input.audienceRoleCode).trim() || null
+        : null
+      : currentRoleCodes.length === 1
+        ? currentRoleCodes[0]
+        : null;
+  const mergedAudienceRelationTypes = relationTypes ?? currentRelationTypes;
 
   if (
     relationTypes?.some(
@@ -540,6 +570,13 @@ export async function updateRelationshipBenefit({
     throw new EnterpriseRelationshipBenefitError(
       "RELATIONSHIP_BENEFIT_AUDIENCE_INVALID",
       "Un type de relation sélectionné n’est pas reconnu.",
+    );
+  }
+
+  if (mergedAudienceRoleCode && !mergedAudienceRelationTypes.length) {
+    throw new EnterpriseRelationshipBenefitError(
+      "RELATIONSHIP_BENEFIT_AUDIENCE_ROLE_INVALID",
+      "Sélectionnez au moins un type de relation avant de cibler un rôle ou segment.",
     );
   }
 
@@ -643,11 +680,16 @@ export async function updateRelationshipBenefit({
     if (updated.count !== 1) {
       throw new EnterpriseRelationshipBenefitError("RELATIONSHIP_BENEFIT_CONFLICT", "Cet avantage a changé. Actualisez avant de réessayer.", 409);
     }
-    if (relationTypes) {
+    if (relationTypes || "audienceRoleCode" in input) {
       await tx.enterpriseRelationshipBenefitAudience.deleteMany({ where: { organizationId, benefitId } });
-      if (relationTypes.length) {
+      if (mergedAudienceRelationTypes.length) {
         await tx.enterpriseRelationshipBenefitAudience.createMany({
-          data: relationTypes.map((relationType) => ({ organizationId, benefitId, relationType })),
+          data: mergedAudienceRelationTypes.map((relationType) => ({
+            organizationId,
+            benefitId,
+            relationType,
+            roleCode: mergedAudienceRoleCode,
+          })),
         });
       }
     }
