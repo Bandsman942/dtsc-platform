@@ -70,12 +70,7 @@ export async function executeCanonicalRetailSale(args: {
   });
 
   const result = await withRetailTransactionRetry(
-    () => createRetailSale(
-      args.organizationId,
-      args.actorUserId,
-      guarded.input,
-      guarded.relationshipBenefitApplications,
-    ),
+    () => createRetailSale(args.organizationId, args.actorUserId, guarded.input, guarded.relationshipBenefitApplications),
     { maxAttempts: 3, baseDelayMs: 20 },
   );
   await persistRetailCommercialDecisions(
