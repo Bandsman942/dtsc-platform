@@ -24,6 +24,52 @@ export const RELATIONSHIP_BENEFIT_ACTION_CODES = ["NONE", "CLAIM", "REQUEST", "B
 export const RELATIONSHIP_BENEFIT_STATUSES = ["DRAFT", "ACTIVE", "SUSPENDED", "ARCHIVED"] as const;
 export const RELATIONSHIP_BENEFIT_USAGE_STATUSES = ["REQUESTED", "APPROVED", "REJECTED", "CONSUMED", "CANCELLED"] as const;
 
+export const RELATIONSHIP_BENEFIT_TRANSACTIONAL_TYPES = [
+  "DISCOUNT",
+  "FIXED_PRICE",
+  "CASHBACK",
+  "CREDIT",
+  "LOYALTY",
+] as const;
+
+export const RELATIONSHIP_BENEFIT_REQUEST_TYPES = [
+  "FREE_SERVICE",
+  "DELIVERY",
+  "PRIORITY",
+  "ACCESS",
+  "SUPPORT",
+  "BOOKING",
+  "DOCUMENT",
+  "EVENT",
+  "REFERRAL",
+  "OTHER",
+] as const;
+
+const referenceId = z.string().trim().min(1).max(240);
+const normalizedCode = z.string().trim().min(1).max(80).transform((value) => value.toUpperCase().replace(/[^A-Z0-9_-]/g, "_"));
+const currencyCode = z.string().trim().length(3).transform((value) => value.toUpperCase());
+
+export const relationshipBenefitConditionsSchema = z.object({
+  currencyCodes: z.array(currencyCode).max(20).optional(),
+  catalogItemIds: z.array(referenceId).max(200).optional(),
+  categoryIds: z.array(referenceId).max(100).optional(),
+  siteIds: z.array(referenceId).max(100).optional(),
+  channelCodes: z.array(normalizedCode).max(20).optional(),
+  sourceModuleCodes: z.array(normalizedCode).max(30).optional(),
+  minQuantity: z.number().finite().positive().max(1_000_000).optional(),
+  maxQuantity: z.number().finite().positive().max(1_000_000).optional(),
+  retailLoyaltyProgramId: referenceId.optional(),
+  retailStoredValueAccountType: z.enum(["STORE_CREDIT", "GIFT_CARD"]).optional(),
+}).strict().superRefine((input, ctx) => {
+  if (input.minQuantity !== undefined && input.maxQuantity !== undefined && input.minQuantity > input.maxQuantity) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["maxQuantity"],
+      message: "La quantité maximale doit être supérieure ou égale à la quantité minimale.",
+    });
+  }
+});
+
 const optionalDate = z.string().datetime().optional().nullable();
 
 export const relationshipBenefitCreateSchema = z.object({
@@ -51,7 +97,7 @@ export const relationshipBenefitCreateSchema = z.object({
   startsAt: optionalDate,
   endsAt: optionalDate,
   status: z.enum(RELATIONSHIP_BENEFIT_STATUSES).default("DRAFT"),
-  conditions: z.record(z.string(), z.unknown()).optional().nullable(),
+  conditions: relationshipBenefitConditionsSchema.optional().nullable(),
 });
 
 export const relationshipBenefitPatchSchema = relationshipBenefitCreateSchema.partial().extend({
