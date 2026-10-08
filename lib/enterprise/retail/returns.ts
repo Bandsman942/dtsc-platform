@@ -4,6 +4,7 @@ import { publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
 import { applyStockMovementTx } from "@/lib/enterprise/inventory/service";
 import { finalizeRetailReturnAccountingTx } from "@/lib/enterprise/retail/accounting";
+import { reverseRetailRelationshipBenefitsForReturnTx } from "@/lib/enterprise/relationship-benefits/adapters/retail-returns";
 import type { retailReturnCreateSchema, retailReturnDecisionSchema } from "@/lib/enterprise/retail/commercial-schemas";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { prisma } from "@/lib/prisma";
@@ -375,6 +376,12 @@ export async function decideRetailReturn(
 
     const refundedTotal = money(refunds.reduce((sum, refund) => sum.plus(refund.amount), decimal(0)));
     if (!refundedTotal.equals(retailReturn.grandTotal)) throw new EnterpriseRetailError("RETAIL_REFUND_TOTAL_MISMATCH", 409, { refundedTotal: refundedTotal.toFixed(), grandTotal: retailReturn.grandTotal.toFixed() });
+    await reverseRetailRelationshipBenefitsForReturnTx(tx, {
+      organizationId,
+      actorUserId,
+      returnId: retailReturn.id,
+      reason: input.reason || retailReturn.reason,
+    });
     const completed = await tx.enterpriseRetailReturn.update({
       where: { id: retailReturn.id },
       data: {
