@@ -6,6 +6,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
 import { canUseFeature, getOrganizationEntitlements } from "@/lib/billing/entitlements";
 import { getEnterpriseAdministrationDataset, getEnterpriseOrganizationForAdmin } from "@/lib/enterprise/enterprise-admin-loader";
+import { getEnterpriseNavigationModules } from "@/lib/enterprise/enterprise-navigation";
 import { organizationLogoProxyUrl } from "@/lib/enterprise/organization-logo-storage";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
@@ -64,14 +65,9 @@ export default async function EnterpriseAdminPage({ searchParams }: PageProps) {
     redirect("/dashboard");
   }
   const administrationLocale = companyLocale(organization.settingsJson, user.locale);
-  const [dataset, relationshipBenefitsAccess] = await Promise.all([
+  const [dataset, authorizedNavigationModules] = await Promise.all([
     getEnterpriseAdministrationDataset(organizationId, user.id, administrationLocale),
-    resolveEnterpriseModuleAccess({
-      userId: user.id,
-      organizationId,
-      moduleCode: "RELATIONSHIP_BENEFITS",
-      action: "read",
-    }),
+    getEnterpriseNavigationModules(organizationId, user.id, administrationLocale),
   ]);
   if (!dataset) {
     redirect("/dashboard");
@@ -83,20 +79,18 @@ export default async function EnterpriseAdminPage({ searchParams }: PageProps) {
       logoUrl: organizationLogoProxyUrl(organizationId, dataset.organization.logoUrl),
     },
   };
-  const relationshipBenefitsEntry =
-    relationshipBenefitsAccess.allowed && relationshipBenefitsAccess.definition?.routePath
-      ? {
-          href: relationshipBenefitsAccess.definition.routePath,
-          label:
-            administrationLocale === "en"
-              ? relationshipBenefitsAccess.definition.labelEn
-              : relationshipBenefitsAccess.definition.labelFr,
-          description:
-            administrationLocale === "en"
-              ? relationshipBenefitsAccess.definition.descriptionEn
-              : relationshipBenefitsAccess.definition.descriptionFr,
-        }
-      : null;
+  const authorizedModuleRoutes = Object.fromEntries(
+    authorizedNavigationModules.map((enterpriseModule) => [enterpriseModule.code, enterpriseModule.href]),
+  );
+  const relationshipBenefitsModule =
+    authorizedNavigationModules.find((enterpriseModule) => enterpriseModule.code === "RELATIONSHIP_BENEFITS") || null;
+  const relationshipBenefitsEntry = relationshipBenefitsModule
+    ? {
+        href: relationshipBenefitsModule.href,
+        label: relationshipBenefitsModule.label,
+        description: relationshipBenefitsModule.description,
+      }
+    : null;
 
   return (
     <AppShell user={user}>
@@ -106,6 +100,7 @@ export default async function EnterpriseAdminPage({ searchParams }: PageProps) {
           locale={administrationLocale}
           initialSection={section}
           relationshipBenefitsEntry={relationshipBenefitsEntry}
+          authorizedModuleRoutes={authorizedModuleRoutes}
         />
       </LocaleProvider>
     </AppShell>
