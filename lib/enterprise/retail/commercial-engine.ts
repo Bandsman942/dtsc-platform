@@ -12,6 +12,7 @@ type CommercialContext = {
   customerSegmentCode?: string | null;
   channelCode?: string | null;
   overrideReason?: string | null;
+  allowRelationshipRewards?: boolean;
 };
 
 type CommercialPermissions = {
@@ -424,6 +425,7 @@ async function resolvePricingDecisions(
     currencyCode: input.currencyCode,
     siteId: input.siteId || null,
     channelCode,
+    includeRewards: context.allowRelationshipRewards !== false,
     lines: decisions.map((decision) => ({
       catalogItemId: decision.catalogItemId,
       categoryId: itemById.get(decision.catalogItemId)?.categoryId || null,
