@@ -369,8 +369,16 @@ export async function evaluateRelationshipBenefitsForIdentityLink({
     const conditionDecision = conditionsDecision(benefit.conditionsJson, context);
     if (!conditionDecision.matches && !conditionDecision.contextRequired) continue;
 
+    const applicationMode = relationBenefitApplicationMode(benefit.benefitType);
     let contextRequired = Boolean(conditionDecision.contextRequired);
     let blockedReason = conditionDecision.blockedReason || null;
+    if (applicationMode === "TRANSACTIONAL" && !benefit.targetModuleCode) {
+      contextRequired = true;
+      blockedReason = "TARGET_MODULE_REQUIRED";
+    } else if (applicationMode === "TRANSACTIONAL" && !context) {
+      contextRequired = true;
+      blockedReason = "CONTEXT_REQUIRED";
+    }
     if (benefit.minimumAmount !== null) {
       if (context?.amount === null || context?.amount === undefined) {
         contextRequired = true;
@@ -434,7 +442,7 @@ export async function evaluateRelationshipBenefitsForIdentityLink({
       identityLinkId: link.id,
       userId: link.userId,
       relationType: link.requestedRelationType,
-      applicationMode: relationBenefitApplicationMode(benefit.benefitType),
+      applicationMode,
       contextRequired,
       usable: quotaAvailable && !contextRequired,
       totalRemaining,
