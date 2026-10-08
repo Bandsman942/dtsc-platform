@@ -90,7 +90,7 @@ export async function createRetailOmnichannelOrder(organizationId: string, actor
   const preview = await previewRetailCommercialPricing(
     organizationId,
     { siteId: input.sourceSiteId, customerBusinessPartyId: input.customerBusinessPartyId, currencyCode: input.currencyCode, soldAt: new Date(), lines: input.lines },
-    { couponCode: null, customerSegmentCode: null, channelCode: "POS" },
+    { couponCode: null, customerSegmentCode: null, channelCode: "POS", allowRelationshipRewards: false },
   );
   const catalogById = new Map(catalog.map((item) => [item.id, item]));
   const pricedLines = preview.lines.map((line) => {
