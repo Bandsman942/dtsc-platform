@@ -76,11 +76,11 @@ Le module `RELATIONSHIP_BENEFITS` ajoute un catalogue d’avantages relationnels
 
 Le moteur canonique `lib/enterprise/relationship-benefits/enforcement.ts` évalue relation active et approuvée, entitlement, audience, rôle, attribution, dates, module cible, devise, montant minimum, conditions contrôlées, cumul et quotas. Le DSL de conditions est borné ; aucune condition JSON arbitraire n’est exécutée.
 
-Les demandes génériques utilisent `EnterpriseRelationshipBenefitUsage`. Le statut `CONSUMED` exige désormais une preuve structurée d’effet métier. Les modules sans adaptateur certifié restent request-only et ne peuvent pas simuler une exécution.
+Les demandes génériques utilisent `EnterpriseRelationshipBenefitUsage`. Leur contrat public reste demande/approuvé/refusé/annulé : le navigateur ne peut ni fournir un contexte transactionnel faisant foi, ni forcer `CONSUMED`. Une demande sans cible transactionnelle peut rester request-only ; en revanche, toute `targetModuleCode` ou règle transactionnelle exige un adaptateur serveur certifié et est refusée à la configuration lorsqu’aucun adaptateur n’existe.
 
 Pour `RETAIL_POS`, les remises en pourcentage/montant et prix fixes compatibles sont calculés dans le moteur de pricing Retail, revérifiés dans la transaction de vente puis inscrits dans le ledger avec `effectEntityType=EnterpriseRetailSale`. Le pricing preview utilisé par le POS expose le même total serveur avant encaissement. Les overrides manuels désactivent l’application automatique afin d’éviter un cumul ambigu.
 
-Les promotions Retail restent dans `EnterpriseRetailPromotion`. Les points et avoirs restent détenus par `EnterpriseRetailLoyaltyAccount` et `EnterpriseRetailStoredValueAccount` ; aucun dual-write n’est effectué. Une annulation de ticket annule aussi l’usage automatique afin de restaurer le quota.
+Les promotions Retail restent dans `EnterpriseRetailPromotion`. Les points et avoirs restent détenus par `EnterpriseRetailLoyaltyAccount` et `EnterpriseRetailStoredValueAccount` ; aucun dual-write n’est effectué. Une annulation de ticket annule aussi l’usage automatique afin de restaurer le quota. Un replay idempotent d’un ticket déjà commis conserve les décisions, promotions et usages réellement persistés : un recalcul ultérieur ne peut pas rattacher un nouvel avantage au ticket historique.
 
 Une révocation de relation coupe immédiatement les futures capacités ; l’historique d’usage n’est pas supprimé.
 
