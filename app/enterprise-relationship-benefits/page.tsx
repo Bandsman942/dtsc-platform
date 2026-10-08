@@ -6,6 +6,7 @@ import { getDashboardUrl } from "@/lib/domains";
 import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
 import {
   listAssignableRelationshipLinks,
+  listRelationshipBenefitConfigurationOptions,
   listRelationshipBenefitsForAdmin,
 } from "@/lib/enterprise/relationship-benefits/service";
 
@@ -27,10 +28,11 @@ export default async function EnterpriseRelationshipBenefitsPage({
   });
   if (!capabilities.canRead) redirect(getDashboardUrl());
 
-  const [{ usage }, dataset, links] = await Promise.all([
+  const [{ usage }, dataset, links, configurationOptions] = await Promise.all([
     searchParams,
     listRelationshipBenefitsForAdmin(organizationId),
     listAssignableRelationshipLinks(organizationId),
+    listRelationshipBenefitConfigurationOptions(organizationId, user.locale),
   ]);
 
   return (
@@ -43,6 +45,7 @@ export default async function EnterpriseRelationshipBenefitsPage({
         initialBenefits={dataset.benefits}
         initialUsages={dataset.usages}
         relationshipLinks={links}
+        configurationOptions={configurationOptions}
       />
     </AppShell>
   );
