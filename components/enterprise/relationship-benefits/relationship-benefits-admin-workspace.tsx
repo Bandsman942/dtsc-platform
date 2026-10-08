@@ -75,6 +75,7 @@ type Usage = {
 type RelationshipLink = {
   id: string;
   relationType: string;
+  roleCode: string | null;
   personName: string;
   activatedAt: string | null;
 };
@@ -381,7 +382,7 @@ export function RelationshipBenefitsAdminWorkspace({
           <fieldset className="min-w-0 rounded-xl border border-dtsc-border p-4">
             <legend className="px-2 text-sm font-black text-dtsc-ink">{english ? "Manual assignments" : "Attributions manuelles"}</legend>
             <div className="grid min-w-0 gap-2 sm:grid-cols-2">
-              {links.map((link) => <label key={link.id} className="flex min-w-0 items-center gap-2 text-sm text-dtsc-ink"><input type="checkbox" name="identityLinkIds" value={link.id} /> <span className="break-words">{link.personName} · {getEnterpriseIdentityRelationLabel(link.relationType as EnterpriseIdentityRelationType, locale)}</span></label>)}
+              {links.map((link) => <label key={link.id} className="flex min-w-0 items-center gap-2 text-sm text-dtsc-ink"><input type="checkbox" name="identityLinkIds" value={link.id} /> <span className="break-words">{link.personName} · {getEnterpriseIdentityRelationLabel(link.relationType as EnterpriseIdentityRelationType, locale)}{link.roleCode ? ` · ${link.roleCode}` : ""}</span></label>)}
               {!links.length ? <p className="text-sm text-dtsc-muted">{english ? "No active relationship is available." : "Aucune relation active n’est disponible."}</p> : null}
             </div>
           </fieldset>
