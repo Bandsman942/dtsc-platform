@@ -11,6 +11,18 @@ import {
 } from "@/lib/enterprise/relationship-benefits/contracts";
 import { prisma } from "@/lib/prisma";
 
+export class RelationshipBenefitEnforcementError extends Error {
+  code: string;
+  status: number;
+
+  constructor(code: string, status = 409, message?: string) {
+    super(message || code);
+    this.name = "RelationshipBenefitEnforcementError";
+    this.code = code;
+    this.status = status;
+  }
+}
+
 export type RelationshipBenefitApplicationContext = {
   sourceModuleCode?: string | null;
   sourceEntityType?: string | null;
@@ -189,11 +201,13 @@ export async function evaluateRelationshipBenefitsForIdentityLink({
   userId,
   identityLinkId,
   context,
+  excludeUsageId,
 }: {
   organizationId: string;
   userId: string;
   identityLinkId?: string | null;
   context?: RelationshipBenefitApplicationContext;
+  excludeUsageId?: string | null;
 }) {
   const access = await resolveEnterpriseIdentityRelationshipAccess({ organizationId, userId, identityLinkId });
   if (!access.allowed || !access.identityLinkId || !access.capabilities.includes("ENTERPRISE_BENEFITS")) {
@@ -249,6 +263,7 @@ export async function evaluateRelationshipBenefitsForIdentityLink({
         identityLinkId: link.id,
         userId,
         status: { notIn: ["REJECTED", "CANCELLED"] },
+        ...(excludeUsageId ? { id: { not: excludeUsageId } } : {}),
       },
       select: { benefitId: true, requestedAt: true },
       orderBy: { requestedAt: "desc" },
@@ -297,6 +312,33 @@ export async function evaluateRelationshipBenefitsForIdentityLink({
 
   const items: EvaluatedRelationshipBenefit[] = [];
   for (const benefit of benefits) {
+    const sourceModuleCode = normalizeEnterpriseModuleCode(args.sourceModuleCode);
+    const targetModuleCode = benefit.targetModuleCode
+      ? normalizeEnterpriseModuleCode(benefit.targetModuleCode)
+      : null;
+    if (targetModuleCode && targetModuleCode !== sourceModuleCode) {
+      throw new RelationshipBenefitEnforcementError(
+        "RELATIONSHIP_BENEFIT_APPLICATION_TARGET_MODULE_MISMATCH",
+        409,
+        "Cet avantage ne peut pas être appliqué depuis ce module.",
+      );
+    }
+    const sourceModuleEnabled = await tx.enterpriseModule.findFirst({
+      where: {
+        organizationId: args.organizationId,
+        moduleCode: sourceModuleCode,
+        isEnabled: true,
+      },
+      select: { id: true },
+    });
+    if (!sourceModuleEnabled) {
+      throw new RelationshipBenefitEnforcementError(
+        "RELATIONSHIP_BENEFIT_APPLICATION_SOURCE_MODULE_DISABLED",
+        409,
+        "Le module métier qui applique cet avantage n’est plus actif.",
+      );
+    }
+
     const audienceMatch =
       benefit.audiences.length === 0 ||
       benefit.audiences.some(
@@ -576,7 +618,13 @@ export async function persistRelationshipBenefitApplicationsTx(
         select: { id: true },
       }),
     ]);
-    if (!link || !benefit) throw new Error("RELATIONSHIP_BENEFIT_APPLICATION_STALE");
+    if (!link || !benefit) {
+      throw new RelationshipBenefitEnforcementError(
+        "RELATIONSHIP_BENEFIT_APPLICATION_STALE",
+        409,
+        "La relation ou l’avantage a changé avant l’application.",
+      );
+    }
 
     const audienceMatch =
       benefit.audiences.length === 0 ||
@@ -592,7 +640,13 @@ export async function persistRelationshipBenefitApplicationsTx(
         : benefit.assignmentMode === "HYBRID"
           ? audienceMatch || assignmentMatch
           : audienceMatch;
-    if (!eligible) throw new Error("RELATIONSHIP_BENEFIT_APPLICATION_NOT_ELIGIBLE");
+    if (!eligible) {
+      throw new RelationshipBenefitEnforcementError(
+        "RELATIONSHIP_BENEFIT_APPLICATION_NOT_ELIGIBLE",
+        409,
+        "La relation n’est plus éligible à cet avantage.",
+      );
+    }
 
     const [activeApplicationCount, activeRequestCount] = await Promise.all([
       tx.enterpriseRelationshipBenefitApplication.count({
@@ -614,7 +668,11 @@ export async function persistRelationshipBenefitApplicationsTx(
       }),
     ]);
     if (benefit.usageLimitTotal !== null && activeApplicationCount + activeRequestCount >= benefit.usageLimitTotal) {
-      throw new Error("RELATIONSHIP_BENEFIT_APPLICATION_LIMIT_REACHED");
+      throw new RelationshipBenefitEnforcementError(
+        "RELATIONSHIP_BENEFIT_APPLICATION_LIMIT_REACHED",
+        409,
+        "La limite totale d’application de cet avantage est atteinte.",
+      );
     }
     if (benefit.usageLimitPerPeriod !== null && benefit.usagePeriodDays) {
       const periodStart = new Date(Date.now() - benefit.usagePeriodDays * 24 * 60 * 60 * 1000);
@@ -640,7 +698,11 @@ export async function persistRelationshipBenefitApplicationsTx(
         }),
       ]);
       if (periodApplicationCount + periodRequestCount >= benefit.usageLimitPerPeriod) {
-        throw new Error("RELATIONSHIP_BENEFIT_APPLICATION_PERIOD_LIMIT_REACHED");
+        throw new RelationshipBenefitEnforcementError(
+          "RELATIONSHIP_BENEFIT_APPLICATION_PERIOD_LIMIT_REACHED",
+          409,
+          "La limite périodique d’application de cet avantage est atteinte.",
+        );
       }
     }
 
@@ -703,4 +765,40 @@ export async function reverseRelationshipBenefitApplicationsTx(
       reversalReason: args.reason.slice(0, 1000),
     },
   });
+}
+
+
+export async function persistRelationshipBenefitApplications(args: {
+  organizationId: string;
+  actorUserId: string;
+  sourceModuleCode: string;
+  sourceEntityType: string;
+  sourceEntityId: string;
+  applications: RelationshipBenefitApplicationDraft[];
+}) {
+  if (!args.applications.length) return [];
+  return prisma.$transaction(
+    (tx) => persistRelationshipBenefitApplicationsTx(tx, args),
+    {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      maxWait: 10000,
+      timeout: 30000,
+    },
+  );
+}
+
+export async function reverseRelationshipBenefitApplications(args: {
+  organizationId: string;
+  sourceEntityType: string;
+  sourceEntityId: string;
+  reason: string;
+}) {
+  return prisma.$transaction(
+    (tx) => reverseRelationshipBenefitApplicationsTx(tx, args),
+    {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      maxWait: 10000,
+      timeout: 30000,
+    },
+  );
 }
