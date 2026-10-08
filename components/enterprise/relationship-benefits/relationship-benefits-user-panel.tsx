@@ -35,6 +35,9 @@ type BenefitItem = {
   actionLabelEn: string | null;
   targetModuleCode: string | null;
   stackable: boolean;
+  applicationMode: "TRANSACTIONAL" | "REQUEST";
+  contextRequired: boolean;
+  blockedReason: string | null;
   startsAt: string | null;
   endsAt: string | null;
   usable: boolean;
@@ -434,7 +437,14 @@ export function RelationshipBenefitsUserPanel({
                     </span>
                   ) : null}
                 </div>
-                {item.actionCode !== "NONE" ? (
+                {item.applicationMode === "TRANSACTIONAL" ? (
+                  <div className="mt-4 rounded-xl border border-cyan-400/30 bg-cyan-400/5 p-3 text-xs font-semibold leading-5 text-dtsc-muted">
+                    {locale === "en"
+                      ? "This benefit is applied automatically by the eligible business transaction. No manual consumption is required."
+                      : "Cet avantage est appliqué automatiquement par l’opération métier éligible. Aucune consommation manuelle n’est requise."}
+                  </div>
+                ) : null}
+                {item.applicationMode === "REQUEST" && item.actionCode !== "NONE" ? (
                   <div data-responsive-actions className="mt-4">
                     <Button
                       type="button"
