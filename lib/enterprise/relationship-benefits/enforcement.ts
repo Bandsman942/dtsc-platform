@@ -276,7 +276,7 @@ export async function evaluateRelationshipBenefitsForIdentityLink({
         organizationId,
         identityLinkId: link.id,
         userId,
-        status: "APPLIED",
+        status: { in: ["APPLIED", "PARTIALLY_REVERSED"] },
       },
       select: { benefitId: true, appliedAt: true },
       orderBy: { appliedAt: "desc" },
@@ -666,7 +666,7 @@ export async function persistRelationshipBenefitApplicationsTx(
           organizationId: args.organizationId,
           benefitId: draft.benefitId,
           identityLinkId: draft.identityLinkId,
-          status: "APPLIED",
+          status: { in: ["APPLIED", "PARTIALLY_REVERSED"] },
         },
       }),
       tx.enterpriseRelationshipBenefitUsage.count({
@@ -694,7 +694,7 @@ export async function persistRelationshipBenefitApplicationsTx(
             organizationId: args.organizationId,
             benefitId: draft.benefitId,
             identityLinkId: draft.identityLinkId,
-            status: "APPLIED",
+            status: { in: ["APPLIED", "PARTIALLY_REVERSED"] },
             appliedAt: { gte: periodStart },
           },
         }),
@@ -755,6 +755,80 @@ export async function persistRelationshipBenefitApplicationsTx(
   return results;
 }
 
+export async function reverseRelationshipBenefitApplicationAmountTx(
+  tx: Prisma.TransactionClient,
+  args: {
+    organizationId: string;
+    applicationId: string;
+    reversalSourceEntityType: string;
+    reversalSourceEntityId: string;
+    amount: Prisma.Decimal.Value;
+    reason: string;
+    actorUserId?: string | null;
+  },
+) {
+  await tx.$executeRaw(
+    Prisma.sql`SELECT id FROM "EnterpriseRelationshipBenefitApplication" WHERE id = ${args.applicationId} AND "organizationId" = ${args.organizationId} FOR UPDATE`,
+  );
+  const application = await tx.enterpriseRelationshipBenefitApplication.findFirst({
+    where: {
+      id: args.applicationId,
+      organizationId: args.organizationId,
+      status: { in: ["APPLIED", "PARTIALLY_REVERSED"] },
+    },
+    include: { reversals: true },
+  });
+  if (!application) return null;
+
+  const idempotencyKey =
+    `relationship-benefit-reversal:${args.reversalSourceEntityType}:${args.reversalSourceEntityId}:${application.id}`;
+  const existing = await tx.enterpriseRelationshipBenefitApplicationReversal.findUnique({
+    where: {
+      organizationId_idempotencyKey: {
+        organizationId: args.organizationId,
+        idempotencyKey,
+      },
+    },
+  });
+  if (existing) return existing;
+
+  const previouslyReversed = application.reversals.reduce(
+    (sum, reversal) => sum.plus(reversal.reversedAmount),
+    new Prisma.Decimal(0),
+  );
+  const remaining = Prisma.Decimal.max(
+    0,
+    application.appliedAmount.minus(previouslyReversed),
+  );
+  const requested = Prisma.Decimal.max(0, new Prisma.Decimal(args.amount));
+  const reversedAmount = Prisma.Decimal.min(remaining, requested);
+  if (!reversedAmount.isPositive()) return null;
+
+  const reversal = await tx.enterpriseRelationshipBenefitApplicationReversal.create({
+    data: {
+      organizationId: args.organizationId,
+      applicationId: application.id,
+      sourceEntityType: args.reversalSourceEntityType,
+      sourceEntityId: args.reversalSourceEntityId,
+      reversedAmount,
+      idempotencyKey,
+      reason: args.reason.slice(0, 1000),
+      createdByUserId: args.actorUserId || null,
+    },
+  });
+  const totalReversed = previouslyReversed.plus(reversedAmount);
+  const fullyReversed = totalReversed.greaterThanOrEqualTo(application.appliedAmount);
+  await tx.enterpriseRelationshipBenefitApplication.update({
+    where: { id: application.id },
+    data: {
+      status: fullyReversed ? "REVERSED" : "PARTIALLY_REVERSED",
+      reversedAt: fullyReversed ? new Date() : null,
+      reversalReason: args.reason.slice(0, 1000),
+    },
+  });
+  return reversal;
+}
+
 export async function reverseRelationshipBenefitApplicationsTx(
   tx: Prisma.TransactionClient,
   args: {
@@ -762,23 +836,33 @@ export async function reverseRelationshipBenefitApplicationsTx(
     sourceEntityType: string;
     sourceEntityId: string;
     reason: string;
+    actorUserId?: string | null;
   },
 ) {
-  return tx.enterpriseRelationshipBenefitApplication.updateMany({
+  const applications = await tx.enterpriseRelationshipBenefitApplication.findMany({
     where: {
       organizationId: args.organizationId,
       sourceEntityType: args.sourceEntityType,
       sourceEntityId: args.sourceEntityId,
-      status: "APPLIED",
+      status: { in: ["APPLIED", "PARTIALLY_REVERSED"] },
     },
-    data: {
-      status: "REVERSED",
-      reversedAt: new Date(),
-      reversalReason: args.reason.slice(0, 1000),
-    },
+    select: { id: true, appliedAmount: true },
   });
+  const reversals = [];
+  for (const application of applications) {
+    const reversal = await reverseRelationshipBenefitApplicationAmountTx(tx, {
+      organizationId: args.organizationId,
+      applicationId: application.id,
+      reversalSourceEntityType: args.sourceEntityType,
+      reversalSourceEntityId: args.sourceEntityId,
+      amount: application.appliedAmount,
+      reason: args.reason,
+      actorUserId: args.actorUserId,
+    });
+    if (reversal) reversals.push(reversal);
+  }
+  return reversals;
 }
-
 
 export async function persistRelationshipBenefitApplications(args: {
   organizationId: string;
@@ -804,6 +888,7 @@ export async function reverseRelationshipBenefitApplications(args: {
   sourceEntityType: string;
   sourceEntityId: string;
   reason: string;
+  actorUserId?: string | null;
 }) {
   return prisma.$transaction(
     (tx) => reverseRelationshipBenefitApplicationsTx(tx, args),
