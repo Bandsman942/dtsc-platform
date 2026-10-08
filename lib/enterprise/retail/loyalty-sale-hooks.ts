@@ -63,7 +63,13 @@ export async function reverseRetailLoyaltyForCompletedReturn(organizationId: str
     if (!sale?.customerBusinessPartyId || !decimal(sale.grandTotal).isPositive()) return { applied: [], skipped: "NO_CUSTOMER_OR_VALUE" as const };
 
     const earnedEntries = await tx.enterpriseRetailLoyaltyEntry.findMany({
-      where: { organizationId, saleId: sale.id, entryType: "EARN", points: { gt: 0 } },
+      where: {
+        organizationId,
+        saleId: sale.id,
+        entryType: "EARN",
+        points: { gt: 0 },
+        NOT: { idempotencyKey: { startsWith: `relationship-benefit:retail-sale:${sale.id}:` } },
+      },
       orderBy: { createdAt: "asc" },
     });
     const applied = [];
