@@ -35,6 +35,7 @@ export async function executeCanonicalRetailSale(args: {
         couponCode: args.commercialContext.couponCode,
         customerSegmentCode: args.commercialContext.customerSegmentCode,
         channelCode: args.commercialContext.channelCode,
+        allowRelationshipBenefits: false,
       },
     );
     const previewByItem = new Map(preview.lines.map((line) => [line.catalogItemId, line]));
