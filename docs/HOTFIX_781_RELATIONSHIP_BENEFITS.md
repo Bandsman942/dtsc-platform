@@ -48,7 +48,11 @@ L’administrateur autorisé peut :
 - combiner ciblage automatique et attribution manuelle ;
 - définir des limites totales et périodiques ;
 - publier, suspendre ou archiver ;
-- approuver, refuser ou marquer une demande comme utilisée.
+- approuver ou refuser une demande ; depuis le hotfix #786, le statut « appliqué/consommé » exige une preuve métier serveur et ne peut plus être forcé manuellement.
+
+### Hotfix d’enforcement #786
+
+Le catalogue s’appuie désormais sur un resolver serveur unique. Les 22 types de relation ont un contrat explicite d’avantages. `minimumAmount`, devise, conditions contrôlées, module cible, cumul et quotas sont évalués au serveur. Retail POS possède le premier adaptateur d’effet transactionnel : une remise/prix fixe compatible modifie réellement le ticket et écrit un usage lié à la vente. Les autres cibles restent des demandes tant qu’un adaptateur certifié n’existe pas ; elles ne peuvent pas être marquées consommées sans preuve métier.
 
 ## Compte global
 

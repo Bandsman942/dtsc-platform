@@ -17,6 +17,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   RETAIL_INVENTORY_ITEM_REQUIRED: "Un article suivi en stock doit disposer d’un article d’inventaire actif.",
   RETAIL_CURRENCY_MISMATCH: "La devise du produit ne correspond pas à la devise de l’opération.",
   RETAIL_LINE_TOTAL_INVALID: "La remise ou la taxe rend le total de ligne invalide.",
+  RETAIL_RELATIONSHIP_BENEFIT_ZERO_TOTAL_UNSUPPORTED: "Cet avantage ramènerait le ticket à zéro. Utilisez un avantage non monétaire ou configurez une valeur laissant un montant positif à encaisser.",
   RETAIL_TENDER_TOTAL_MISMATCH: "Les paiements doivent correspondre exactement au total du ticket.",
   RETAIL_FINANCIAL_ACCOUNT_INVALID: "Le compte financier sélectionné ne correspond pas au type ou à la devise attendus.",
   RETAIL_OPEN_CASH_SESSION_REQUIRED: "Ouvrez votre session de caisse sur ce compte avant de faire cette opération cash.",

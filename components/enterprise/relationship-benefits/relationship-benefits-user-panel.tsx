@@ -41,6 +41,8 @@ type BenefitItem = {
   totalRemaining: number | null;
   periodRemaining: number | null;
   usagePeriodDays: number | null;
+  requiresBusinessContext: boolean;
+  executionMode: "AUTO_RETAIL" | "REQUEST_ONLY";
 };
 
 type BenefitRequest = {
@@ -57,6 +59,13 @@ type BenefitRequest = {
   consumedAt: string | null;
   cancelledAt: string | null;
   revision: number;
+  executionMode: string;
+  effectModuleCode: string | null;
+  effectEntityType: string | null;
+  effectEntityId: string | null;
+  effectAmount: number | null;
+  effectCurrencyCode: string | null;
+  executedAt: string | null;
   canCancel: boolean;
 };
 
@@ -140,14 +149,14 @@ function requestStatus(status: string, locale: "fr" | "en") {
     REQUESTED: "Demandée",
     APPROVED: "Approuvée",
     REJECTED: "Refusée",
-    CONSUMED: "Utilisée",
+    CONSUMED: "Appliquée",
     CANCELLED: "Annulée",
   };
   const en: Record<string, string> = {
     REQUESTED: "Requested",
     APPROVED: "Approved",
     REJECTED: "Rejected",
-    CONSUMED: "Used",
+    CONSUMED: "Applied",
     CANCELLED: "Cancelled",
   };
   return (locale === "en" ? en : fr)[status] || status;
@@ -433,7 +442,29 @@ export function RelationshipBenefitsUserPanel({
                       }).format(new Date(item.endsAt))}
                     </span>
                   ) : null}
+                  {item.minimumAmount !== null && item.currencyCode ? (
+                    <span>
+                      · {locale === "en" ? "Minimum" : "Minimum"}{" "}
+                      {new Intl.NumberFormat(locale === "en" ? "en-US" : "fr-FR", {
+                        style: "currency",
+                        currency: item.currencyCode,
+                      }).format(item.minimumAmount)}
+                    </span>
+                  ) : null}
                 </div>
+                {item.executionMode === "AUTO_RETAIL" ? (
+                  <p className="mt-3 rounded-xl border border-cyan-400/30 bg-cyan-400/5 p-3 text-xs font-semibold leading-5 text-dtsc-muted">
+                    {locale === "en"
+                      ? "This benefit is applied automatically by the server at Retail POS when the transaction meets its conditions. No separate claim is required."
+                      : "Cet avantage est appliqué automatiquement par le serveur au point de vente Retail lorsque l’opération respecte ses conditions. Aucune demande séparée n’est nécessaire."}
+                  </p>
+                ) : item.requiresBusinessContext ? (
+                  <p className="mt-3 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-xs font-semibold leading-5 text-dtsc-muted">
+                    {locale === "en"
+                      ? "Final eligibility depends on the business operation. The server checks the module, amount, currency and conditions again before execution."
+                      : "L’éligibilité finale dépend de l’opération métier. Le serveur revérifie le module, le montant, la devise et les conditions avant exécution."}
+                  </p>
+                ) : null}
                 {item.actionCode !== "NONE" ? (
                   <div data-responsive-actions className="mt-4">
                     <Button
@@ -487,6 +518,20 @@ export function RelationshipBenefitsUserPanel({
                   {request.organizationNote ? (
                     <p className="mt-2 break-words text-sm leading-6 text-dtsc-muted">
                       {request.organizationNote}
+                    </p>
+                  ) : null}
+                  {request.status === "APPROVED" && !request.executedAt ? (
+                    <p className="mt-2 text-xs font-semibold leading-5 text-dtsc-muted">
+                      {locale === "en"
+                        ? "Approved. It will be shown as applied only after a verified business execution."
+                        : "Approuvé. Il sera affiché comme appliqué uniquement après une exécution métier vérifiée."}
+                    </p>
+                  ) : null}
+                  {request.status === "CONSUMED" && request.effectEntityId ? (
+                    <p className="mt-2 text-xs font-semibold leading-5 text-cyan-700 dark:text-cyan-300">
+                      {locale === "en"
+                        ? `Applied by ${request.effectModuleCode || "business module"} · ${request.effectAmount ?? "—"} ${request.effectCurrencyCode || ""}`
+                        : `Appliqué par ${request.effectModuleCode || "module métier"} · ${request.effectAmount ?? "—"} ${request.effectCurrencyCode || ""}`}
                     </p>
                   ) : null}
                 </div>

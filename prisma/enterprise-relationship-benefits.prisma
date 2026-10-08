@@ -84,11 +84,21 @@ model EnterpriseRelationshipBenefitUsage {
   idempotencyKey    String
   note              String?
   organizationNote  String?
+  requestContextJson Json?
   requestedAt       DateTime @default(now())
   decidedAt         DateTime?
   consumedAt        DateTime?
   cancelledAt       DateTime?
   decidedByUserId   String?
+  executionMode      String   @default("REQUEST")
+  effectModuleCode   String?
+  effectEntityType   String?
+  effectEntityId     String?
+  effectAmount       Decimal? @db.Decimal(20, 6)
+  effectCurrencyCode String?
+  effectIdempotencyKey String?
+  effectMetadataJson Json?
+  executedAt         DateTime?
   revision          Int      @default(1)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -96,6 +106,8 @@ model EnterpriseRelationshipBenefitUsage {
 
   @@unique([organizationId, id])
   @@unique([organizationId, idempotencyKey])
+  @@unique([organizationId, effectIdempotencyKey])
   @@index([organizationId, identityLinkId, status, requestedAt])
+  @@index([organizationId, effectModuleCode, effectEntityType, effectEntityId])
   @@index([organizationId, benefitId, status, requestedAt])
 }

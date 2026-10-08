@@ -72,9 +72,15 @@ Toutes les références structurantes sont revalidées dans le même `organizati
 
 ### 5.2 Relations & avantages
 
-Le module `RELATIONSHIP_BENEFITS` ajoute un catalogue d’avantages relationnels sans convertir un client externe en membre du tenant. La lecture compte global passe par `resolveEnterpriseIdentityRelationshipAccess()`, puis par `resolveEnterpriseRelationshipBenefits()`. Les mutations client revérifient la relation active, les entitlements, l’audience et les quotas avant d’écrire un usage idempotent.
+Le module `RELATIONSHIP_BENEFITS` ajoute un catalogue d’avantages relationnels sans convertir un client externe en membre du tenant. Les 22 types de relation configurables possèdent un contrat explicite de capability, mais un avantage n’existe pour une personne que si le catalogue, l’audience/attribution et les règles serveur l’autorisent.
 
-Les avantages génériques utilisent `EnterpriseRelationshipBenefit`, ses audiences, attributions et usages. Les points et avoirs Retail restent détenus par les modèles Retail existants et sont uniquement projetés vers le compte relié via `EnterprisePersonBusinessReference.businessPartyId`.
+Le moteur canonique `lib/enterprise/relationship-benefits/enforcement.ts` évalue relation active et approuvée, entitlement, audience, rôle, attribution, dates, module cible, devise, montant minimum, conditions contrôlées, cumul et quotas. Le DSL de conditions est borné ; aucune condition JSON arbitraire n’est exécutée.
+
+Les demandes génériques utilisent `EnterpriseRelationshipBenefitUsage`. Le statut `CONSUMED` exige désormais une preuve structurée d’effet métier. Les modules sans adaptateur certifié restent request-only et ne peuvent pas simuler une exécution.
+
+Pour `RETAIL_POS`, les remises en pourcentage/montant et prix fixes compatibles sont calculés dans le moteur de pricing Retail, revérifiés dans la transaction de vente puis inscrits dans le ledger avec `effectEntityType=EnterpriseRetailSale`. Le pricing preview utilisé par le POS expose le même total serveur avant encaissement. Les overrides manuels désactivent l’application automatique afin d’éviter un cumul ambigu.
+
+Les promotions Retail restent dans `EnterpriseRetailPromotion`. Les points et avoirs restent détenus par `EnterpriseRetailLoyaltyAccount` et `EnterpriseRetailStoredValueAccount` ; aucun dual-write n’est effectué. Une annulation de ticket annule aussi l’usage automatique afin de restaurer le quota.
 
 Une révocation de relation coupe immédiatement les futures capacités ; l’historique d’usage n’est pas supprimé.
 

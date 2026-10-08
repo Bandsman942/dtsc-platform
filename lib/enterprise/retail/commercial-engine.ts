@@ -29,7 +29,7 @@ type PricingLineRequest = {
   stockLotId?: string | null;
 };
 
-type PricingDecision = {
+export type PricingDecision = {
   catalogItemId: string;
   catalogPriceId: string | null;
   quantity: Prisma.Decimal;
@@ -50,6 +50,85 @@ type PricingDecision = {
   inventoryItemId?: string | null;
   stockLotId?: string | null;
 };
+
+export type RetailRelationshipBenefitPricingAdjustment = {
+  mode: "STACK_WITH_RETAIL_RULES" | "REPLACE_RETAIL_RULES";
+  benefitIds: string[];
+  lineDiscounts: Array<{ catalogItemId: string; amount: Prisma.Decimal }>;
+};
+
+function relationshipDiscountMap(adjustment: RetailRelationshipBenefitPricingAdjustment) {
+  return new Map(adjustment.lineDiscounts.map((line) => [line.catalogItemId, line.amount]));
+}
+
+export function applyRetailRelationshipBenefitPricing(
+  decisions: PricingDecision[],
+  adjustment: RetailRelationshipBenefitPricingAdjustment | null,
+) {
+  if (!adjustment || !adjustment.benefitIds.length) return decisions;
+  const byItem = relationshipDiscountMap(adjustment);
+  const adjusted = decisions.map((decision) => {
+    const relationDiscount = byItem.get(decision.catalogItemId) || new Prisma.Decimal(0);
+    if (relationDiscount.lte(0)) return decision;
+
+    const customerGross = money(decision.quantity.times(decision.resolvedUnitPrice));
+    const startingDiscount =
+      adjustment.mode === "REPLACE_RETAIL_RULES"
+        ? new Prisma.Decimal(0)
+        : decision.discountAmount;
+    const discountAmount = money(
+      Prisma.Decimal.min(customerGross, startingDiscount.plus(relationDiscount)),
+    );
+    const afterDiscountCustomerTotal = money(customerGross.minus(discountAmount));
+    const divisor = new Prisma.Decimal(1).plus(decision.taxRate);
+    let serviceUnitPrice = decision.resolvedUnitPrice;
+    let serviceDiscountAmount = discountAmount;
+    let taxAmount = new Prisma.Decimal(0);
+    let lineTotal = afterDiscountCustomerTotal;
+
+    if (decision.taxRate.gt(0) && decision.taxIncluded) {
+      serviceUnitPrice = money(decision.resolvedUnitPrice.div(divisor));
+      serviceDiscountAmount = money(discountAmount.div(divisor));
+      const netAfterDiscount = money(
+        decision.quantity.times(serviceUnitPrice).minus(serviceDiscountAmount),
+      );
+      taxAmount = money(afterDiscountCustomerTotal.minus(netAfterDiscount));
+      lineTotal = afterDiscountCustomerTotal;
+    } else if (decision.taxRate.gt(0)) {
+      taxAmount = money(afterDiscountCustomerTotal.times(decision.taxRate));
+      lineTotal = money(afterDiscountCustomerTotal.plus(taxAmount));
+    }
+
+    return {
+      ...decision,
+      serviceUnitPrice,
+      discountAmount,
+      serviceDiscountAmount,
+      taxAmount,
+      lineTotal,
+      pricingSource: `${decision.pricingSource}+RELATIONSHIP_BENEFIT`,
+      promotionIds: adjustment.mode === "REPLACE_RETAIL_RULES" ? [] : decision.promotionIds,
+      promotions: adjustment.mode === "REPLACE_RETAIL_RULES" ? [] : decision.promotions,
+      context: {
+        ...decision.context,
+        relationshipBenefitIds: adjustment.benefitIds,
+        relationshipBenefitMode: adjustment.mode,
+        relationshipBenefitDiscount: relationDiscount.toFixed(),
+      },
+    };
+  });
+  const finalTotal = adjusted.reduce(
+    (sum, decision) => sum.plus(decision.lineTotal),
+    new Prisma.Decimal(0),
+  );
+  if (finalTotal.lte(0)) {
+    throw new EnterpriseRetailError(
+      "RETAIL_RELATIONSHIP_BENEFIT_ZERO_TOTAL_UNSUPPORTED",
+      409,
+    );
+  }
+  return adjusted;
+}
 
 function decimal(value: Prisma.Decimal.Value) {
   return new Prisma.Decimal(value);
@@ -466,17 +545,37 @@ export async function prepareCommercialRetailSaleV2(
   };
 }
 
-export async function previewRetailCommercialPricing(
+export async function resolveRetailCommercialPricingDecisions(
   organizationId: string,
-  input: { siteId?: string | null; customerBusinessPartyId?: string | null; currencyCode: string; soldAt?: Date; lines: Array<{ catalogItemId: string; quantity: number }> },
+  input: {
+    siteId?: string | null;
+    customerBusinessPartyId?: string | null;
+    currencyCode: string;
+    soldAt?: Date;
+    lines: Array<{ catalogItemId: string; quantity: number }>;
+  },
   context: CommercialContext,
 ) {
-  const decisions = await resolvePricingDecisions(
+  return resolvePricingDecisions(
     organizationId,
     { ...input, lines: input.lines.map((line) => ({ ...line })) },
     context,
     { canOverridePrice: false, canOverrideDiscount: false, canOverrideTax: false },
   );
+}
+
+export function serializeRetailPricingPreview(
+  decisions: PricingDecision[],
+  currencyCode: string,
+  relationshipBenefits: Array<{
+    benefitId: string;
+    benefitCode: string;
+    nameFr: string;
+    nameEn: string;
+    discountAmount: string;
+    currencyCode: string;
+  }> = [],
+) {
   return {
     lines: decisions.map((decision) => ({
       catalogItemId: decision.catalogItemId,
@@ -491,15 +590,54 @@ export async function previewRetailCommercialPricing(
       taxAmount: decision.taxAmount.toFixed(),
       lineTotal: decision.lineTotal.toFixed(),
       pricingSource: decision.pricingSource,
-      promotions: decision.promotions.map((promotion) => ({ ...promotion, discountAmount: promotion.discountAmount.toFixed() })),
+      promotions: decision.promotions.map((promotion) => ({
+        ...promotion,
+        discountAmount: promotion.discountAmount.toFixed(),
+      })),
     })),
-    subtotal: money(decisions.reduce((sum, decision) => sum.plus(decision.quantity.times(decision.serviceUnitPrice)), decimal(0))).toFixed(),
-    discountTotal: money(decisions.reduce((sum, decision) => sum.plus(decision.serviceDiscountAmount), decimal(0))).toFixed(),
-    taxTotal: money(decisions.reduce((sum, decision) => sum.plus(decision.taxAmount), decimal(0))).toFixed(),
-    grandTotal: money(decisions.reduce((sum, decision) => sum.plus(decision.lineTotal), decimal(0))).toFixed(),
-    customerDiscountTotal: money(decisions.reduce((sum, decision) => sum.plus(decision.discountAmount), decimal(0))).toFixed(),
-    currencyCode: input.currencyCode,
+    subtotal: money(
+      decisions.reduce(
+        (sum, decision) => sum.plus(decision.quantity.times(decision.serviceUnitPrice)),
+        decimal(0),
+      ),
+    ).toFixed(),
+    discountTotal: money(
+      decisions.reduce(
+        (sum, decision) => sum.plus(decision.serviceDiscountAmount),
+        decimal(0),
+      ),
+    ).toFixed(),
+    taxTotal: money(
+      decisions.reduce((sum, decision) => sum.plus(decision.taxAmount), decimal(0)),
+    ).toFixed(),
+    grandTotal: money(
+      decisions.reduce((sum, decision) => sum.plus(decision.lineTotal), decimal(0)),
+    ).toFixed(),
+    customerDiscountTotal: money(
+      decisions.reduce((sum, decision) => sum.plus(decision.discountAmount), decimal(0)),
+    ).toFixed(),
+    currencyCode,
+    relationshipBenefits,
   };
+}
+
+export async function previewRetailCommercialPricing(
+  organizationId: string,
+  input: {
+    siteId?: string | null;
+    customerBusinessPartyId?: string | null;
+    currencyCode: string;
+    soldAt?: Date;
+    lines: Array<{ catalogItemId: string; quantity: number }>;
+  },
+  context: CommercialContext,
+) {
+  const decisions = await resolveRetailCommercialPricingDecisions(
+    organizationId,
+    input,
+    context,
+  );
+  return serializeRetailPricingPreview(decisions, input.currencyCode);
 }
 
 export async function persistRetailCommercialDecisions(

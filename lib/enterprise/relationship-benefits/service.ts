@@ -1,6 +1,16 @@
 import { Prisma } from "@prisma/client";
+import { canUseModule } from "@/lib/billing/entitlements";
+import { listEnterpriseCurrencies } from "@/lib/enterprise/accounting/currency-service";
 import { resolveEnterpriseIdentityRelationshipAccess } from "@/lib/enterprise/identity-links/access";
 import { ENTERPRISE_IDENTITY_RELATION_TYPES } from "@/lib/enterprise/identity-links/contracts";
+import {
+  automaticRetailEffectSupported,
+  benefitConditionsSupported,
+  evaluateRelationshipBenefit,
+  evaluateRelationshipBenefitSnapshot,
+  type RelationshipBenefitExecutionContext,
+} from "@/lib/enterprise/relationship-benefits/enforcement";
+import { normalizeEnterpriseModuleCode } from "@/lib/enterprise/module-registry";
 import { notifyUser, notifyUsers } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 
@@ -26,6 +36,218 @@ function iso(value: Date | null | undefined) {
 
 function isDateActive(startsAt: Date | null, endsAt: Date | null, now: Date) {
   return (!startsAt || startsAt <= now) && (!endsAt || endsAt >= now);
+}
+
+function jsonObject(value: Prisma.JsonValue | null | undefined) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function stringList(value: unknown) {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}
+
+function storedExecutionContext(value: Prisma.JsonValue | null | undefined) {
+  const record = jsonObject(value);
+  if (!record.moduleCode || typeof record.moduleCode !== "string") return null;
+  return {
+    moduleCode: record.moduleCode,
+    transactionAmount:
+      typeof record.transactionAmount === "number" ? record.transactionAmount : null,
+    currencyCode: typeof record.currencyCode === "string" ? record.currencyCode : null,
+    businessPartyId:
+      typeof record.businessPartyId === "string" ? record.businessPartyId : null,
+    siteId: typeof record.siteId === "string" ? record.siteId : null,
+    channelCode: typeof record.channelCode === "string" ? record.channelCode : null,
+    catalogItemIds: stringList(record.catalogItemIds),
+    categoryIds: stringList(record.categoryIds),
+    quantity: typeof record.quantity === "number" ? record.quantity : null,
+    occurredAt: typeof record.occurredAt === "string" ? record.occurredAt : null,
+  } satisfies RelationshipBenefitExecutionContext;
+}
+
+async function assertReferenceSet(
+  organizationId: string,
+  ids: string[],
+  kind: "site" | "catalogItem" | "category",
+) {
+  if (!ids.length) return;
+  const uniqueIds = [...new Set(ids)];
+  const count =
+    kind === "site"
+      ? await prisma.enterpriseSite.count({
+          where: {
+            organizationId,
+            id: { in: uniqueIds },
+            status: "ACTIVE",
+            archivedAt: null,
+          },
+        })
+      : kind === "catalogItem"
+        ? await prisma.enterpriseCatalogItem.count({
+            where: {
+              organizationId,
+              id: { in: uniqueIds },
+              status: "ACTIVE",
+              archivedAt: null,
+            },
+          })
+        : await prisma.enterpriseCatalogCategory.count({
+            where: {
+              organizationId,
+              id: { in: uniqueIds },
+              status: "ACTIVE",
+              archivedAt: null,
+            },
+          });
+  if (count !== uniqueIds.length) {
+    throw new EnterpriseRelationshipBenefitError(
+      "RELATIONSHIP_BENEFIT_CONDITION_REFERENCE_INVALID",
+      "Une condition de l’avantage référence une donnée inactive ou appartenant à une autre entreprise.",
+      400,
+    );
+  }
+}
+
+async function validateRelationshipBenefitConfiguration(
+  organizationId: string,
+  config: {
+    benefitType: string;
+    valueType: string;
+    valueDecimal: number | Prisma.Decimal | null | undefined;
+    currencyCode: string | null | undefined;
+    minimumAmount: number | Prisma.Decimal | null | undefined;
+    targetModuleCode: string | null | undefined;
+    usageLimitPerPeriod: number | null | undefined;
+    usagePeriodDays: number | null | undefined;
+    stackable: boolean;
+    actionCode: string;
+    conditions: Record<string, unknown> | null | undefined;
+  },
+) {
+  if (
+    config.valueType === "PERCENT" &&
+    config.valueDecimal !== null &&
+    config.valueDecimal !== undefined &&
+    Number(config.valueDecimal) > 100
+  ) {
+    throw new EnterpriseRelationshipBenefitError(
+      "RELATIONSHIP_BENEFIT_PERCENT_INVALID",
+      "Un pourcentage d’avantage doit être compris entre 0 et 100.",
+    );
+  }
+  if (Boolean(config.usageLimitPerPeriod) !== Boolean(config.usagePeriodDays)) {
+    throw new EnterpriseRelationshipBenefitError(
+      "RELATIONSHIP_BENEFIT_PERIOD_LIMIT_INVALID",
+      "Une limite périodique exige une durée de période, et inversement.",
+    );
+  }
+  if (config.currencyCode) {
+    const currencies = await listEnterpriseCurrencies(organizationId);
+    const code = config.currencyCode.toUpperCase();
+    if (!currencies.some((currency) => currency.code === code && currency.isActive)) {
+      throw new EnterpriseRelationshipBenefitError(
+        "RELATIONSHIP_BENEFIT_CURRENCY_INVALID",
+        "La devise sélectionnée n’est pas active pour cette entreprise.",
+      );
+    }
+  }
+    if (config.valueType === "AMOUNT" && !config.currencyCode) {
+    throw new EnterpriseRelationshipBenefitError(
+      "RELATIONSHIP_BENEFIT_AMOUNT_CURRENCY_REQUIRED",
+      "Un avantage exprimé en montant doit préciser sa devise.",
+    );
+  }
+    if (config.minimumAmount && !config.currencyCode) {
+    throw new EnterpriseRelationshipBenefitError(
+      "RELATIONSHIP_BENEFIT_MINIMUM_CURRENCY_REQUIRED",
+      "Choisissez la devise du montant minimum.",
+    );
+  }
+  if (
+    config.benefitType === "FIXED_PRICE" &&
+    config.valueType === "AMOUNT" &&
+    !config.currencyCode
+  ) {
+    throw new EnterpriseRelationshipBenefitError(
+      "RELATIONSHIP_BENEFIT_VALUE_CURRENCY_REQUIRED",
+      "Un prix fixe doit préciser sa devise.",
+    );
+  }
+  if (config.benefitType === "FIXED_PRICE" && config.stackable) {
+    throw new EnterpriseRelationshipBenefitError(
+      "RELATIONSHIP_BENEFIT_FIXED_PRICE_STACK_FORBIDDEN",
+      "Un prix fixe ne peut pas être cumulé avec d’autres remises.",
+    );
+  }
+
+  if (config.targetModuleCode) {
+    const canonicalTarget = normalizeEnterpriseModuleCode(config.targetModuleCode);
+    const decision = await canUseModule(organizationId, canonicalTarget);
+    if (!decision.allowed) {
+      throw new EnterpriseRelationshipBenefitError(
+        "RELATIONSHIP_BENEFIT_TARGET_MODULE_DENIED",
+        decision.message,
+        decision.code === "PLAN_REQUIRED" || decision.code === "SUBSCRIPTION_REQUIRED"
+          ? 402
+          : 403,
+      );
+    }
+  }
+
+  const conditions = config.conditions || {};
+  if (!benefitConditionsSupported(conditions as Prisma.InputJsonValue)) {
+    throw new EnterpriseRelationshipBenefitError(
+      "RELATIONSHIP_BENEFIT_CONDITIONS_UNSUPPORTED",
+      "Une condition de l’avantage n’est pas prise en charge par le moteur serveur.",
+    );
+  }
+  await Promise.all([
+    assertReferenceSet(organizationId, stringList(conditions.siteIds), "site"),
+    assertReferenceSet(
+      organizationId,
+      stringList(conditions.catalogItemIds),
+      "catalogItem",
+    ),
+    assertReferenceSet(
+      organizationId,
+      stringList(conditions.categoryIds),
+      "category",
+    ),
+  ]);
+
+  const retailProbe = {
+    targetModuleCode: config.targetModuleCode
+      ? normalizeEnterpriseModuleCode(config.targetModuleCode)
+      : null,
+    benefitType: config.benefitType,
+    valueType: config.valueType,
+    valueDecimal:
+      config.valueDecimal === null || config.valueDecimal === undefined
+        ? null
+        : new Prisma.Decimal(config.valueDecimal),
+    actionCode: config.actionCode,
+  };
+  const automaticRetailShape = automaticRetailEffectSupported({
+    ...retailProbe,
+    actionCode: null,
+  });
+  if (automaticRetailShape && config.actionCode !== "NONE") {
+    throw new EnterpriseRelationshipBenefitError(
+      "RELATIONSHIP_BENEFIT_AUTOMATIC_ACTION_INVALID",
+      "Un avantage monétaire appliqué automatiquement au point de vente ne doit pas créer une seconde demande manuelle.",
+    );
+  }
+  if (config.actionCode === "NONE" && config.targetModuleCode && !automaticRetailShape) {
+    throw new EnterpriseRelationshipBenefitError(
+      "RELATIONSHIP_BENEFIT_TARGET_ADAPTER_UNSUPPORTED",
+      "Ce module ne dispose pas encore d’un adaptateur d’exécution automatique pour ce type d’avantage. Choisissez une action de demande ou une cible prise en charge.",
+      409,
+    );
+  }
 }
 
 export async function listRelationshipBenefitsForAdmin(organizationId: string) {
@@ -109,6 +331,13 @@ export async function listRelationshipBenefitsForAdmin(organizationId: string) {
         consumedAt: iso(usage.consumedAt),
         cancelledAt: iso(usage.cancelledAt),
         revision: usage.revision,
+        executionMode: usage.executionMode,
+        effectModuleCode: usage.effectModuleCode,
+        effectEntityType: usage.effectEntityType,
+        effectEntityId: usage.effectEntityId,
+        effectAmount: asNumber(usage.effectAmount),
+        effectCurrencyCode: usage.effectCurrencyCode,
+        executedAt: iso(usage.executedAt),
         relationType: link?.requestedRelationType || null,
         personName: link ? personById.get(link.personIdentityId) || null : null,
       };
@@ -186,6 +415,23 @@ export async function createRelationshipBenefit({
     throw new EnterpriseRelationshipBenefitError("RELATIONSHIP_BENEFIT_DATES_INVALID", "La date de fin doit être postérieure à la date de début.");
   }
 
+  const targetModuleCode = input.targetModuleCode
+    ? normalizeEnterpriseModuleCode(input.targetModuleCode)
+    : null;
+  await validateRelationshipBenefitConfiguration(organizationId, {
+    benefitType: input.benefitType,
+    valueType: input.valueType,
+    valueDecimal: input.valueDecimal,
+    currencyCode: input.currencyCode,
+    minimumAmount: input.minimumAmount,
+    targetModuleCode,
+    usageLimitPerPeriod: input.usageLimitPerPeriod,
+    usagePeriodDays: input.usagePeriodDays,
+    stackable: input.stackable,
+    actionCode: input.actionCode,
+    conditions: input.conditions,
+  });
+
   const uniqueLinkIds = [...new Set(input.identityLinkIds)];
   if (uniqueLinkIds.length) {
     const count = await prisma.enterpriseIdentityLink.count({
@@ -217,7 +463,7 @@ export async function createRelationshipBenefit({
         actionCode: input.actionCode,
         actionLabelFr: input.actionLabelFr || null,
         actionLabelEn: input.actionLabelEn || null,
-        targetModuleCode: input.targetModuleCode || null,
+        targetModuleCode,
         usageLimitTotal: input.usageLimitTotal ?? null,
         usageLimitPerPeriod: input.usageLimitPerPeriod ?? null,
         usagePeriodDays: input.usagePeriodDays ?? null,
@@ -275,6 +521,80 @@ export async function updateRelationshipBenefit({
     ? [...new Set(input.identityLinkIds.filter((item): item is string => typeof item === "string"))]
     : null;
 
+  if (
+    relationTypes?.some(
+      (type) => !(ENTERPRISE_IDENTITY_RELATION_TYPES as readonly string[]).includes(type),
+    )
+  ) {
+    throw new EnterpriseRelationshipBenefitError(
+      "RELATIONSHIP_BENEFIT_AUDIENCE_INVALID",
+      "Un type de relation sélectionné n’est pas reconnu.",
+    );
+  }
+
+  const mergedStartsAt =
+    "startsAt" in input
+      ? input.startsAt
+        ? new Date(String(input.startsAt))
+        : null
+      : current.startsAt;
+  const mergedEndsAt =
+    "endsAt" in input
+      ? input.endsAt
+        ? new Date(String(input.endsAt))
+        : null
+      : current.endsAt;
+  if (mergedStartsAt && mergedEndsAt && mergedEndsAt <= mergedStartsAt) {
+    throw new EnterpriseRelationshipBenefitError(
+      "RELATIONSHIP_BENEFIT_DATES_INVALID",
+      "La date de fin doit être postérieure à la date de début.",
+    );
+  }
+
+    const mergedConditions =
+    "conditions" in input
+      ? input.conditions && typeof input.conditions === "object" && !Array.isArray(input.conditions)
+        ? (input.conditions as Record<string, unknown>)
+        : null
+      : jsonObject(current.conditionsJson);
+  const mergedTargetModuleCode =
+    "targetModuleCode" in input
+      ? input.targetModuleCode
+        ? normalizeEnterpriseModuleCode(String(input.targetModuleCode))
+        : null
+      : current.targetModuleCode;
+  await validateRelationshipBenefitConfiguration(organizationId, {
+    benefitType:
+      "benefitType" in input ? String(input.benefitType) : current.benefitType,
+    valueType: "valueType" in input ? String(input.valueType) : current.valueType,
+    valueDecimal:
+      "valueDecimal" in input
+        ? (input.valueDecimal as number | null | undefined)
+        : current.valueDecimal,
+    currencyCode:
+      "currencyCode" in input
+        ? (input.currencyCode as string | null | undefined)
+        : current.currencyCode,
+    minimumAmount:
+      "minimumAmount" in input
+        ? (input.minimumAmount as number | null | undefined)
+        : current.minimumAmount,
+    targetModuleCode: mergedTargetModuleCode,
+    usageLimitPerPeriod:
+      "usageLimitPerPeriod" in input
+        ? (input.usageLimitPerPeriod as number | null | undefined)
+        : current.usageLimitPerPeriod,
+    usagePeriodDays:
+      "usagePeriodDays" in input
+        ? (input.usagePeriodDays as number | null | undefined)
+        : current.usagePeriodDays,
+    stackable:
+      "stackable" in input ? Boolean(input.stackable) : current.stackable,
+    actionCode:
+      "actionCode" in input ? String(input.actionCode) : current.actionCode,
+    conditions: mergedConditions,
+  });
+
   if (identityLinkIds?.length) {
     const count = await prisma.enterpriseIdentityLink.count({
       where: { organizationId, id: { in: identityLinkIds }, status: "ACTIVE", userId: { not: null } },
@@ -292,14 +612,15 @@ export async function updateRelationshipBenefit({
     revision: { increment: 1 },
   };
   const writable = data as Record<string, unknown>;
-  for (const key of ["nameFr", "nameEn", "descriptionFr", "descriptionEn", "benefitType", "assignmentMode", "valueType", "currencyCode", "actionCode", "actionLabelFr", "actionLabelEn", "targetModuleCode", "status"] as const) {
+  for (const key of ["nameFr", "nameEn", "descriptionFr", "descriptionEn", "benefitType", "assignmentMode", "valueType", "currencyCode", "actionCode", "actionLabelFr", "actionLabelEn", "status"] as const) {
     if (key in input) writable[key] = input[key] ?? null;
   }
   for (const key of ["valueDecimal", "minimumAmount", "usageLimitTotal", "usageLimitPerPeriod", "usagePeriodDays", "stackable"] as const) {
     if (key in input) writable[key] = input[key] ?? null;
   }
-  if ("startsAt" in input) data.startsAt = input.startsAt ? new Date(String(input.startsAt)) : null;
-  if ("endsAt" in input) data.endsAt = input.endsAt ? new Date(String(input.endsAt)) : null;
+  if ("targetModuleCode" in input) data.targetModuleCode = mergedTargetModuleCode;
+  if ("startsAt" in input) data.startsAt = mergedStartsAt;
+  if ("endsAt" in input) data.endsAt = mergedEndsAt;
   if ("conditions" in input) data.conditionsJson = input.conditions ? (input.conditions as Prisma.InputJsonValue) : Prisma.JsonNull;
   if (input.status === "ARCHIVED") data.archivedAt = new Date();
 
@@ -333,13 +654,16 @@ export async function updateRelationshipBenefit({
 }
 
 async function retailSnapshot(organizationId: string, personIdentityId: string) {
+  const retailAccess = await canUseModule(organizationId, "RETAIL_POS");
+  if (!retailAccess.allowed) return null;
+
   const reference = await prisma.enterprisePersonBusinessReference.findFirst({
     where: { organizationId, personIdentityId, status: "ACTIVE", archivedAt: null, businessPartyId: { not: null } },
     select: { businessPartyId: true },
   });
   if (!reference?.businessPartyId) return null;
 
-  const [loyaltyAccounts, storedValueAccounts, retailModule] = await Promise.all([
+  const [loyaltyAccounts, storedValueAccounts] = await Promise.all([
     prisma.enterpriseRetailLoyaltyAccount.findMany({
       where: { organizationId, customerBusinessPartyId: reference.businessPartyId, status: "ACTIVE" },
       include: { program: { select: { nameFr: true, nameEn: true, currencyCode: true, status: true, startsAt: true, endsAt: true } } },
@@ -350,12 +674,7 @@ async function retailSnapshot(organizationId: string, personIdentityId: string) 
       select: { id: true, accountType: true, displayCode: true, currencyCode: true, balance: true, expiresAt: true },
       take: 20,
     }),
-    prisma.enterpriseModule.findFirst({
-      where: { organizationId, moduleCode: "RETAIL_POS", isEnabled: true },
-      select: { id: true },
-    }),
   ]);
-  if (!retailModule) return null;
 
   const now = new Date();
   return {
@@ -398,7 +717,17 @@ export async function resolveEnterpriseRelationshipBenefits({
 
   const link = await prisma.enterpriseIdentityLink.findFirst({
     where: { id: access.identityLinkId, organizationId, userId, status: "ACTIVE" },
-    select: { id: true, personIdentityId: true, requestedRelationType: true, requestedRoleCode: true },
+    select: {
+      id: true,
+      userId: true,
+      personIdentityId: true,
+      requestedRelationType: true,
+      requestedRoleCode: true,
+      status: true,
+      activatedAt: true,
+      userDecisionAt: true,
+      organizationDecisionAt: true,
+    },
   });
   if (!link) {
     return {
@@ -444,6 +773,13 @@ export async function resolveEnterpriseRelationshipBenefits({
         consumedAt: true,
         cancelledAt: true,
         revision: true,
+        executionMode: true,
+        effectModuleCode: true,
+        effectEntityType: true,
+        effectEntityId: true,
+        effectAmount: true,
+        effectCurrencyCode: true,
+        executedAt: true,
         benefit: { select: { nameFr: true, nameEn: true } },
       },
       orderBy: { requestedAt: "desc" },
@@ -452,48 +788,27 @@ export async function resolveEnterpriseRelationshipBenefits({
     retailSnapshot(organizationId, link.personIdentityId),
   ]);
 
-  const assigned = new Set(
-    assignments
-      .filter((item) => item.status === "ACTIVE" && isDateActive(item.startsAt, item.endsAt, now))
-      .map((item) => item.benefitId),
+  const assignmentByBenefitId = new Map(
+    assignments.map((assignment) => [assignment.benefitId, assignment]),
   );
-  const usageByBenefit = new Map<string, Date[]>();
+  const usagesByBenefitId = new Map<string, Array<{ benefitId: string; status: string; requestedAt: Date }>>();
   for (const usage of usages) {
-    if (["REJECTED", "CANCELLED"].includes(usage.status)) continue;
-    const list = usageByBenefit.get(usage.benefitId) || [];
-    list.push(usage.requestedAt);
-    usageByBenefit.set(usage.benefitId, list);
+    usagesByBenefitId.set(usage.benefitId, [
+      ...(usagesByBenefitId.get(usage.benefitId) || []),
+      { benefitId: usage.benefitId, status: usage.status, requestedAt: usage.requestedAt },
+    ]);
   }
 
   const items = benefits.flatMap((benefit) => {
-    const audienceMatch =
-      benefit.audiences.length === 0 ||
-      benefit.audiences.some(
-        (audience) =>
-          audience.relationType === link.requestedRelationType &&
-          (!audience.roleCode || audience.roleCode === link.requestedRoleCode),
-      );
-    const assignmentMatch = assigned.has(benefit.id);
-    const eligibleByTarget =
-      benefit.assignmentMode === "MANUAL"
-        ? assignmentMatch
-        : benefit.assignmentMode === "HYBRID"
-          ? audienceMatch || assignmentMatch
-          : audienceMatch;
-    if (!eligibleByTarget) return [];
-
-    const usageDates = usageByBenefit.get(benefit.id) || [];
-    const totalRemaining =
-      benefit.usageLimitTotal === null ? null : Math.max(0, benefit.usageLimitTotal - usageDates.length);
-    let periodRemaining: number | null = null;
-    if (benefit.usageLimitPerPeriod !== null && benefit.usagePeriodDays) {
-      const periodStart = new Date(now.getTime() - benefit.usagePeriodDays * 24 * 60 * 60 * 1000);
-      const periodUsed = usageDates.filter((requestedAt) => requestedAt >= periodStart).length;
-      periodRemaining = Math.max(0, benefit.usageLimitPerPeriod - periodUsed);
-    }
-    const usable =
-      (totalRemaining === null || totalRemaining > 0) &&
-      (periodRemaining === null || periodRemaining > 0);
+    const evaluation = evaluateRelationshipBenefitSnapshot({
+      benefit,
+      link,
+      assignment: assignmentByBenefitId.get(benefit.id) || null,
+      usages: usagesByBenefitId.get(benefit.id) || [],
+      now,
+      requireBusinessContext: false,
+    });
+    if (!evaluation.allowed) return [];
 
     return [{
       id: benefit.id,
@@ -514,10 +829,12 @@ export async function resolveEnterpriseRelationshipBenefits({
       stackable: benefit.stackable,
       startsAt: iso(benefit.startsAt),
       endsAt: iso(benefit.endsAt),
-      usable,
-      totalRemaining,
-      periodRemaining,
+      usable: true,
+      totalRemaining: evaluation.totalRemaining,
+      periodRemaining: evaluation.periodRemaining,
       usagePeriodDays: benefit.usagePeriodDays,
+      requiresBusinessContext: evaluation.requiresBusinessContext,
+      executionMode: automaticRetailEffectSupported(benefit) ? "AUTO_RETAIL" : "REQUEST_ONLY",
     }];
   });
 
@@ -535,6 +852,13 @@ export async function resolveEnterpriseRelationshipBenefits({
     consumedAt: iso(usage.consumedAt),
     cancelledAt: iso(usage.cancelledAt),
     revision: usage.revision,
+    executionMode: usage.executionMode,
+    effectModuleCode: usage.effectModuleCode,
+    effectEntityType: usage.effectEntityType,
+    effectEntityId: usage.effectEntityId,
+    effectAmount: asNumber(usage.effectAmount),
+    effectCurrencyCode: usage.effectCurrencyCode,
+    executedAt: iso(usage.executedAt),
     canCancel: ["REQUESTED", "APPROVED"].includes(usage.status),
   }));
 
@@ -548,6 +872,7 @@ export async function createRelationshipBenefitUsage({
   benefitId,
   idempotencyKey,
   note,
+  context,
 }: {
   organizationId: string;
   userId: string;
@@ -555,6 +880,7 @@ export async function createRelationshipBenefitUsage({
   benefitId: string;
   idempotencyKey: string;
   note?: string | null;
+  context?: RelationshipBenefitExecutionContext | null;
 }) {
   const existing = await prisma.enterpriseRelationshipBenefitUsage.findUnique({
     where: { organizationId_idempotencyKey: { organizationId, idempotencyKey } },
@@ -574,30 +900,32 @@ export async function createRelationshipBenefitUsage({
     return existing;
   }
 
-  const resolved = await resolveEnterpriseRelationshipBenefits({
-    userId,
+  const resolved = await evaluateRelationshipBenefit({
     organizationId,
+    userId,
     identityLinkId,
+    benefitId,
+    context,
+    requireBusinessContext: Boolean(context),
   });
-  const resolvedBenefit = resolved.items.find((item) => item.id === benefitId);
-  if (!resolvedBenefit) {
+  if (!resolved.evaluation.allowed || !resolved.benefit) {
     throw new EnterpriseRelationshipBenefitError(
-      "RELATIONSHIP_BENEFIT_NOT_ELIGIBLE",
-      "Cet avantage n’est pas disponible pour cette relation.",
-      403,
+      resolved.evaluation.code === "RELATIONSHIP_INACTIVE"
+        ? "RELATIONSHIP_BENEFIT_RELATION_INACTIVE"
+        : "RELATIONSHIP_BENEFIT_NOT_ELIGIBLE",
+      resolved.evaluation.reason,
+      resolved.evaluation.code === "TOTAL_LIMIT_REACHED" ||
+        resolved.evaluation.code === "PERIOD_LIMIT_REACHED"
+        ? 409
+        : 403,
     );
   }
-  if (!resolvedBenefit.usable) {
-    throw new EnterpriseRelationshipBenefitError(
-      "RELATIONSHIP_BENEFIT_LIMIT_REACHED",
-      "La limite d’utilisation de cet avantage est atteinte.",
-      409,
-    );
-  }
-  if (resolvedBenefit.actionCode === "NONE") {
+  if (resolved.benefit.actionCode === "NONE") {
     throw new EnterpriseRelationshipBenefitError(
       "RELATIONSHIP_BENEFIT_NO_ACTION",
-      "Cet avantage est informatif et ne nécessite aucune demande.",
+      automaticRetailEffectSupported(resolved.benefit)
+        ? "Cet avantage est appliqué automatiquement dans l’opération métier compatible."
+        : "Cet avantage est informatif et ne nécessite aucune demande.",
     );
   }
 
@@ -626,126 +954,69 @@ export async function createRelationshipBenefitUsage({
         return { usage: retry, created: false };
       }
 
-      const now = new Date();
-      const link = await tx.enterpriseIdentityLink.findFirst({
-        where: {
-          id: identityLinkId,
-          organizationId,
-          userId,
-          status: "ACTIVE",
-          activatedAt: { not: null },
-          userDecisionAt: { not: null },
-          organizationDecisionAt: { not: null },
-        },
-        select: {
-          id: true,
-          requestedRelationType: true,
-          requestedRoleCode: true,
-        },
-      });
-      if (!link) {
+      const [benefit, link, assignment, usages] = await Promise.all([
+        tx.enterpriseRelationshipBenefit.findFirst({
+          where: { id: benefitId, organizationId },
+          include: { audiences: true },
+        }),
+        tx.enterpriseIdentityLink.findFirst({
+          where: { id: identityLinkId, organizationId, userId },
+          select: {
+            id: true,
+            userId: true,
+            requestedRelationType: true,
+            requestedRoleCode: true,
+            status: true,
+            activatedAt: true,
+            userDecisionAt: true,
+            organizationDecisionAt: true,
+          },
+        }),
+        tx.enterpriseRelationshipBenefitAssignment.findFirst({
+          where: { organizationId, benefitId, identityLinkId },
+          select: { benefitId: true, status: true, startsAt: true, endsAt: true },
+        }),
+        tx.enterpriseRelationshipBenefitUsage.findMany({
+          where: { organizationId, benefitId, identityLinkId, userId },
+          select: { benefitId: true, status: true, requestedAt: true },
+          take: 100000,
+        }),
+      ]);
+
+      if (!benefit || !link) {
         throw new EnterpriseRelationshipBenefitError(
-          "RELATIONSHIP_BENEFIT_RELATION_INACTIVE",
-          "La relation n’est plus active ou approuvée : cet avantage ne peut plus être demandé.",
-          409,
+          "RELATIONSHIP_BENEFIT_NOT_ELIGIBLE",
+          "Cet avantage ou cette relation n’est plus disponible.",
+          403,
         );
       }
-
-      const benefit = await tx.enterpriseRelationshipBenefit.findFirst({
-        where: {
-          id: benefitId,
-          organizationId,
-          status: "ACTIVE",
-          archivedAt: null,
-          AND: [
-            { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
-            { OR: [{ endsAt: null }, { endsAt: { gte: now } }] },
-          ],
-        },
-        include: { audiences: true },
+      const evaluation = evaluateRelationshipBenefitSnapshot({
+        benefit,
+        link,
+        assignment,
+        usages,
+        context,
+        now: context?.occurredAt ? new Date(context.occurredAt) : new Date(),
+        requireBusinessContext: Boolean(context),
       });
-      if (!benefit) {
+      if (!evaluation.allowed) {
         throw new EnterpriseRelationshipBenefitError(
-          "RELATIONSHIP_BENEFIT_INACTIVE",
-          "Cet avantage n’est plus actif.",
-          409,
+          evaluation.code === "TOTAL_LIMIT_REACHED" ||
+            evaluation.code === "PERIOD_LIMIT_REACHED"
+            ? "RELATIONSHIP_BENEFIT_LIMIT_REACHED"
+            : "RELATIONSHIP_BENEFIT_NOT_ELIGIBLE",
+          evaluation.reason,
+          evaluation.code === "TOTAL_LIMIT_REACHED" ||
+            evaluation.code === "PERIOD_LIMIT_REACHED"
+            ? 409
+            : 403,
         );
       }
       if (benefit.actionCode === "NONE") {
         throw new EnterpriseRelationshipBenefitError(
           "RELATIONSHIP_BENEFIT_NO_ACTION",
-          "Cet avantage est informatif et ne nécessite aucune demande.",
+          "Cet avantage ne crée pas de demande manuelle.",
         );
-      }
-
-      const assignment = await tx.enterpriseRelationshipBenefitAssignment.findFirst({
-        where: {
-          organizationId,
-          benefitId,
-          identityLinkId,
-          status: "ACTIVE",
-          AND: [
-            { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
-            { OR: [{ endsAt: null }, { endsAt: { gte: now } }] },
-          ],
-        },
-        select: { id: true },
-      });
-      const audienceMatch =
-        benefit.audiences.length === 0 ||
-        benefit.audiences.some(
-          (audience) =>
-            audience.relationType === link.requestedRelationType &&
-            (!audience.roleCode || audience.roleCode === link.requestedRoleCode),
-        );
-      const assignmentMatch = Boolean(assignment);
-      const eligible =
-        benefit.assignmentMode === "MANUAL"
-          ? assignmentMatch
-          : benefit.assignmentMode === "HYBRID"
-            ? audienceMatch || assignmentMatch
-            : audienceMatch;
-      if (!eligible) {
-        throw new EnterpriseRelationshipBenefitError(
-          "RELATIONSHIP_BENEFIT_NOT_ELIGIBLE",
-          "Votre relation n’est plus éligible à cet avantage.",
-          403,
-        );
-      }
-
-      const activeUsageWhere = {
-        organizationId,
-        benefitId,
-        identityLinkId,
-        userId,
-        status: { notIn: ["REJECTED", "CANCELLED"] },
-      } satisfies Prisma.EnterpriseRelationshipBenefitUsageWhereInput;
-      if (benefit.usageLimitTotal !== null) {
-        const totalUsed = await tx.enterpriseRelationshipBenefitUsage.count({
-          where: activeUsageWhere,
-        });
-        if (totalUsed >= benefit.usageLimitTotal) {
-          throw new EnterpriseRelationshipBenefitError(
-            "RELATIONSHIP_BENEFIT_LIMIT_REACHED",
-            "La limite totale d’utilisation de cet avantage est atteinte.",
-            409,
-          );
-        }
-      }
-      if (benefit.usageLimitPerPeriod !== null && benefit.usagePeriodDays) {
-        const periodStart = new Date(
-          now.getTime() - benefit.usagePeriodDays * 24 * 60 * 60 * 1000,
-        );
-        const periodUsed = await tx.enterpriseRelationshipBenefitUsage.count({
-          where: { ...activeUsageWhere, requestedAt: { gte: periodStart } },
-        });
-        if (periodUsed >= benefit.usageLimitPerPeriod) {
-          throw new EnterpriseRelationshipBenefitError(
-            "RELATIONSHIP_BENEFIT_PERIOD_LIMIT_REACHED",
-            "La limite d’utilisation de cet avantage pour la période en cours est atteinte.",
-            409,
-          );
-        }
       }
 
       const usage = await tx.enterpriseRelationshipBenefitUsage.create({
@@ -757,6 +1028,10 @@ export async function createRelationshipBenefitUsage({
           actionCode: benefit.actionCode,
           idempotencyKey,
           note: note || null,
+          requestContextJson: context
+            ? (context as unknown as Prisma.InputJsonValue)
+            : Prisma.JsonNull,
+          executionMode: "REQUEST",
         },
       });
       return { usage, created: true };
@@ -896,6 +1171,7 @@ export async function decideRelationshipBenefitUsage({
   revision,
   status,
   note,
+  context,
 }: {
   organizationId: string;
   usageId: string;
@@ -903,6 +1179,7 @@ export async function decideRelationshipBenefitUsage({
   revision: number;
   status: "APPROVED" | "REJECTED" | "CONSUMED" | "CANCELLED";
   note?: string | null;
+  context?: RelationshipBenefitExecutionContext | null;
 }) {
   const usage = await prisma.enterpriseRelationshipBenefitUsage.findFirst({
     where: { id: usageId, organizationId },
@@ -937,43 +1214,55 @@ export async function decideRelationshipBenefitUsage({
     );
   }
 
+  const effectiveContext =
+    context || storedExecutionContext(usage.requestContextJson);
+
   if (status === "APPROVED" || status === "CONSUMED") {
-    const now = new Date();
-    const [activeLink, activeBenefit] = await Promise.all([
-      prisma.enterpriseIdentityLink.findFirst({
-        where: {
-          id: usage.identityLinkId,
-          organizationId,
-          userId: usage.userId,
-          status: "ACTIVE",
-        },
-        select: { id: true },
-      }),
-      prisma.enterpriseRelationshipBenefit.findFirst({
-        where: {
-          id: usage.benefitId,
-          organizationId,
-          status: "ACTIVE",
-          archivedAt: null,
-          AND: [
-            { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
-            { OR: [{ endsAt: null }, { endsAt: { gte: now } }] },
-          ],
-        },
-        select: { id: true },
-      }),
-    ]);
-    if (!activeLink) {
+    const resolved = await evaluateRelationshipBenefit({
+      organizationId,
+      userId: usage.userId,
+      identityLinkId: usage.identityLinkId,
+      benefitId: usage.benefitId,
+      context: effectiveContext,
+      requireBusinessContext: status === "CONSUMED" || Boolean(effectiveContext),
+      excludeUsageId: usage.id,
+    });
+    if (!resolved.evaluation.allowed) {
       throw new EnterpriseRelationshipBenefitError(
-        "RELATIONSHIP_BENEFIT_RELATION_INACTIVE",
-        "La relation n’est plus active : cet avantage ne peut plus être approuvé ni consommé.",
+        resolved.evaluation.code === "RELATIONSHIP_INACTIVE"
+          ? "RELATIONSHIP_BENEFIT_RELATION_INACTIVE"
+          : "RELATIONSHIP_BENEFIT_NOT_ELIGIBLE",
+        resolved.evaluation.reason,
+        resolved.evaluation.code === "TOTAL_LIMIT_REACHED" ||
+          resolved.evaluation.code === "PERIOD_LIMIT_REACHED"
+          ? 409
+          : 403,
+      );
+    }
+    if (
+      status === "APPROVED" &&
+      resolved.evaluation.requiresBusinessContext &&
+      !effectiveContext
+    ) {
+      throw new EnterpriseRelationshipBenefitError(
+        "RELATIONSHIP_BENEFIT_CONTEXT_REQUIRED",
+        "Cette demande dépend d’une opération métier. Le contexte du module, du montant, de la devise et des conditions doit être vérifié avant approbation.",
         409,
       );
     }
-    if (!activeBenefit) {
+  }
+
+  if (status === "CONSUMED") {
+    if (
+      !usage.effectModuleCode ||
+      !usage.effectEntityType ||
+      !usage.effectEntityId ||
+      !usage.effectIdempotencyKey ||
+      !usage.executedAt
+    ) {
       throw new EnterpriseRelationshipBenefitError(
-        "RELATIONSHIP_BENEFIT_INACTIVE",
-        "Cet avantage n’est plus actif : la demande peut être refusée ou annulée, mais pas consommée.",
+        "RELATIONSHIP_BENEFIT_EFFECT_REQUIRED",
+        "Cet avantage ne peut pas être marqué comme utilisé sans effet métier vérifié. Exécutez d’abord l’action dans le module concerné.",
         409,
       );
     }
@@ -984,7 +1273,15 @@ export async function decideRelationshipBenefitUsage({
     organizationNote: note || null,
     decidedByUserId: actorUserId,
     revision: { increment: 1 },
-    ...(status === "APPROVED" || status === "REJECTED" ? { decidedAt: new Date() } : {}),
+    ...(effectiveContext && !usage.requestContextJson
+      ? {
+          requestContextJson:
+            effectiveContext as unknown as Prisma.InputJsonValue,
+        }
+      : {}),
+    ...(status === "APPROVED" || status === "REJECTED"
+      ? { decidedAt: new Date() }
+      : {}),
     ...(status === "CONSUMED" ? { consumedAt: new Date() } : {}),
     ...(status === "CANCELLED" ? { cancelledAt: new Date() } : {}),
   };
@@ -1008,14 +1305,20 @@ export async function decideRelationshipBenefitUsage({
       status === "APPROVED"
         ? "Avantage approuvé"
         : status === "CONSUMED"
-          ? "Avantage utilisé"
+          ? "Avantage appliqué"
           : status === "REJECTED"
             ? "Demande d’avantage refusée"
             : "Demande d’avantage annulée",
-    body: note || "Le statut de votre demande d’avantage a été mis à jour par l’entreprise.",
+    body:
+      note ||
+      (status === "APPROVED"
+        ? "Votre demande est approuvée. L’avantage sera considéré comme utilisé uniquement après un effet métier vérifié."
+        : "Le statut de votre demande d’avantage a été mis à jour par l’entreprise."),
     targetUrl: `/enterprise-links?link=${usage.identityLinkId}&view=active`,
     idempotencyKey: `relationship-benefit-usage:${usage.id}:${status}:${revision}`,
   });
 
-  return prisma.enterpriseRelationshipBenefitUsage.findFirst({ where: { id: usageId, organizationId } });
+  return prisma.enterpriseRelationshipBenefitUsage.findFirst({
+    where: { id: usageId, organizationId },
+  });
 }

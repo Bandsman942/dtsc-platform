@@ -1,3 +1,16 @@
+## 2026-10-08 — Hotfix #786 : Enforcement serveur des avantages relationnels
+
+- donne un contrat `ENTERPRISE_BENEFITS` explicite aux 22 types de relation configurables ;
+- ajoute un resolver serveur unique pour audience, rôle, attribution, dates, devise, montant minimum, conditions contrôlées, cible module, cumul et quotas ;
+- refuse les conditions JSON inconnues et revalide les références site/article/catégorie dans le tenant ;
+- ajoute un ledger de preuve d’effet métier et interdit le faux statut `CONSUMED` sans exécution vérifiée ;
+- applique réellement les remises/prix fixes relationnels compatibles dans le moteur Retail POS avant persistance de la vente ;
+- lie atomiquement l’effet au vrai `EnterpriseRetailSale` et au vrai `businessPartyId`, avec idempotence et verrouillage ;
+- rétablit le quota lors de l’annulation d’un ticket ;
+- conserve promotions, fidélité et stored value Retail comme moteurs/ledgers canoniques distincts ;
+- ajoute un aperçu serveur des avantages dans le POS avant encaissement et désactive les avantages automatiques lors d’un override manuel ;
+- OWNER_E2E requis avant fusion.
+
 ## 2026-10-08 — Hotfix #783 : Découvrabilité de Relations & avantages
 
 - corrige **Administration entreprise → Modules → Ouvrir le module** pour consommer la destination canonique réellement autorisée au lieu de reconstruire `/enterprise-modules/<code>` ;

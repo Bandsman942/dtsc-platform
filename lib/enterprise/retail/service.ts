@@ -9,6 +9,11 @@ import { applyStockMovementTx } from "@/lib/enterprise/inventory/service";
 import { finalizeRetailSaleAccountingTx, finalizeRetailSaleReversalAccountingTx } from "@/lib/enterprise/retail/accounting";
 import { RETAIL_PROFILE_CODE, RETAIL_SECTOR_CODE } from "@/lib/enterprise/retail/constants";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
+import {
+  applyRetailRelationshipBenefitEffectsTx,
+  reverseRetailRelationshipBenefitEffectsTx,
+  type RetailRelationshipBenefitEffect,
+} from "@/lib/enterprise/relationship-benefits/retail-adapter";
 import { resolveMobileMoneyFloatAccountTx } from "@/lib/enterprise/retail/mobile-money-multicurrency-service";
 import { resolveTelcoFloatAccountTx } from "@/lib/enterprise/retail/telco-multicurrency-service";
 import type { mobileMoneyCreateSchema, retailDailyCloseCreateSchema, retailDailyCloseDecisionSchema, retailProviderUpsertSchema, retailSaleCreateSchema, retailSaleReverseSchema, telcoTopupCreateSchema } from "@/lib/enterprise/retail/schemas";
@@ -153,12 +158,24 @@ export async function upsertRetailProvider(organizationId: string, actorUserId: 
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
-export async function createRetailSale(organizationId: string, actorUserId: string, input: RetailSaleInput) {
+export async function createRetailSale(
+  organizationId: string,
+  actorUserId: string,
+  input: RetailSaleInput,
+  relationshipBenefitEffects: RetailRelationshipBenefitEffect[] = [],
+) {
   return prisma.$transaction(async (tx) => {
     await assertRetailOrganization(tx, organizationId);
     await ensureRetailConfigurationTx(tx, organizationId, actorUserId);
     const existing = await tx.enterpriseRetailSale.findFirst({ where: { organizationId, idempotencyKey: input.idempotencyKey }, include: { lines: true, tenders: true } });
     if (existing) {
+      await applyRetailRelationshipBenefitEffectsTx({
+        tx,
+        organizationId,
+        actorUserId,
+        saleId: existing.id,
+        effects: relationshipBenefitEffects,
+      });
       await finalizeRetailSaleAccountingTx(tx, organizationId, actorUserId, existing.id);
       return { sale: existing, idempotent: true };
     }
@@ -267,6 +284,14 @@ export async function createRetailSale(organizationId: string, actorUserId: stri
       include: { lines: true, tenders: true },
     });
 
+    await applyRetailRelationshipBenefitEffectsTx({
+      tx,
+      organizationId,
+      actorUserId,
+      saleId: sale.id,
+      effects: relationshipBenefitEffects,
+    });
+
     for (const line of sale.lines) {
       if (!line.trackInventory || !line.inventoryItemId) continue;
       await applyStockMovementTx(tx, organizationId, actorUserId, {
@@ -332,7 +357,8 @@ export async function reverseRetailSale(organizationId: string, saleId: string, 
       const cashSession = account.accountType === "CASH" ? await assertOpenCashSession(tx, organizationId, account.id, actorUserId) : null;
       await applyAccountEffectTx(tx, { organizationId, actorUserId, account, effect: tender.amount.negated(), transactionType: "RETAIL_POS_REVERSAL", reference: sale.number, transactionDate: new Date(), cashSessionId: cashSession?.id, cashReason: input.reason });
     }
-    await tx.enterpriseRetailTender.updateMany({ where: { organizationId, saleId: sale.id, status: "CONFIRMED" }, data: { status: "REVERSED" } });
+    await reverseRetailRelationshipBenefitEffectsTx({ tx, organizationId, saleId: sale.id });
+        await tx.enterpriseRetailTender.updateMany({ where: { organizationId, saleId: sale.id, status: "CONFIRMED" }, data: { status: "REVERSED" } });
     const updated = await tx.enterpriseRetailSale.update({ where: { id: sale.id }, data: { status: "REVERSED", reversalReason: input.reason, reversedAt: new Date(), reversedByUserId: actorUserId, revision: { increment: 1 } } });
     await publishEnterpriseEvent(tx, { organizationId, entityType: "EnterpriseRetailSale", entityId: sale.id, eventType: "RETAIL_POS_SALE_REVERSED", summary: `Ticket ${sale.number} annulé`, actorUserId, fromStatus: "COMPLETED", toStatus: "REVERSED", metadataJson: { reason: input.reason.slice(0, 500) } });
     await finalizeRetailSaleReversalAccountingTx(tx, organizationId, actorUserId, sale.id);
