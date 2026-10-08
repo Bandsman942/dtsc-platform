@@ -321,6 +321,67 @@ async function validateBenefitConfiguration(
   return { conditions, targetModuleCode };
 }
 
+export async function listRelationshipBenefitConfigurationOptions(
+  organizationId: string,
+  locale?: string | null,
+) {
+  const [modules, entitlements, loyaltyPrograms] = await Promise.all([
+    prisma.enterpriseModule.findMany({
+      where: { organizationId, isEnabled: true },
+      select: { moduleCode: true },
+    }),
+    getOrganizationEntitlements(organizationId),
+    prisma.enterpriseRetailLoyaltyProgram.findMany({
+      where: {
+        organizationId,
+        status: "ACTIVE",
+        archivedAt: null,
+      },
+      select: {
+        id: true,
+        code: true,
+        nameFr: true,
+        nameEn: true,
+        currencyCode: true,
+      },
+      orderBy: { code: "asc" },
+      take: 100,
+    }),
+  ]);
+  const enabled = new Set(modules.map((item) => normalizeEnterpriseModuleCode(item.moduleCode)));
+  const entitled = new Set(
+    (entitlements?.modules || [])
+      .filter((item) => item.allowed)
+      .map((item) => normalizeEnterpriseModuleCode(item.moduleCode)),
+  );
+  const retailDefinition = getEnterpriseModuleDefinition("RETAIL_POS");
+  const retailAvailable =
+    Boolean(retailDefinition) &&
+    enabled.has("RETAIL_POS") &&
+    entitled.has("RETAIL_POS");
+
+  return {
+    transactionalAdapters: retailAvailable && retailDefinition
+      ? [{
+          code: retailDefinition.code,
+          label: locale === "en" ? retailDefinition.labelEn : retailDefinition.labelFr,
+        }]
+      : [],
+    loyaltyPrograms: retailAvailable
+      ? loyaltyPrograms.map((program) => ({
+          id: program.id,
+          code: program.code,
+          label: locale === "en" ? program.nameEn : program.nameFr,
+          currencyCode: program.currencyCode,
+        }))
+      : [],
+    storedValueAccountTypes: [
+      { code: "STORE_CREDIT", label: locale === "en" ? "Store credit" : "Avoir client" },
+      { code: "GIFT_CARD", label: locale === "en" ? "Gift card" : "Carte-cadeau" },
+    ],
+  };
+}
+
 type BenefitInput = {
   code: string;
   nameFr: string;
