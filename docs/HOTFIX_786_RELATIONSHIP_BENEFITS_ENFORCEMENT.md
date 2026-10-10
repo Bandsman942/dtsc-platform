@@ -163,6 +163,13 @@ configuration d'origine n'est plus certifiable (adaptateur, devise,
 références ou entitlement indisponibles). Il s'agit d'une transition
 restrictive qui empêche de nouveaux usages ; elle n'exécute aucun effet métier.
 
+Le schéma PATCH conserve les validations Zod des champs facultatifs mais
+**ne réapplique aucune valeur par défaut de création** aux champs absents
+(`assignmentMode`, `relationTypes`, `identityLinkIds`, `valueType`,
+`actionCode`, `stackable`, `status`). Ceci évite la remise à zéro
+silencieuse d'un avantage Retail existant lors d'un simple changement
+de statut.
+
 Toute réactivation (`ACTIVE`) et toute modification de configuration,
 y compris une modification envoyée simultanément à une suspension,
 passent toujours par la validation complète du module, de l'adaptateur,
