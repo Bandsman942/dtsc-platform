@@ -155,6 +155,21 @@ Le hotfix ne crée aucun second ledger et ne fait aucun dual-write.
 
 La projection vers le compte global passe désormais aussi par l’entitlement Retail canonique, pas seulement par `isEnabled`.
 
+## Désactivation administrative sûre
+
+Une mise à jour **exclusivement** composée de `revision` et de
+`status: SUSPENDED` ou `status: ARCHIVED` reste possible lorsque la
+configuration d'origine n'est plus certifiable (adaptateur, devise,
+références ou entitlement indisponibles). Il s'agit d'une transition
+restrictive qui empêche de nouveaux usages ; elle n'exécute aucun effet métier.
+
+Toute réactivation (`ACTIVE`) et toute modification de configuration,
+y compris une modification envoyée simultanément à une suspension,
+passent toujours par la validation complète du module, de l'adaptateur,
+de la devise et des conditions. Les permissions serveur et la révision
+optimiste sont inchangées. Le parcours E2E de suspension après la vente
+vérifie cette règle.
+
 ## Concurrence et idempotence
 
 - demandes : transaction `Serializable` + advisory lock relation/avantage ;
