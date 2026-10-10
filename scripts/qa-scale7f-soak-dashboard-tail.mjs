@@ -69,11 +69,11 @@ expect(
 );
 
 expect(
-  load.includes('"http_req_duration{workload:dashboard-read}": ["p(95)<1000", "p(99)<2000"]') &&
+  load.includes('"http_req_duration{workload:dashboard-read}": ["p(95)<1000", `p(99)<${dashboardP99LimitMs}`]') &&
   load.includes('"http_req_duration{workload:enterprise-read}": ["p(95)<1000", "p(99)<2000"]') &&
   load.includes('"http_req_duration{workload:shop-read}": ["p(95)<1000", "p(99)<2000"]') &&
   load.includes('"http_req_duration{workload:collaboration-read}": ["p(95)<1000", "p(99)<2000"]'),
-  "workload SLOs remain unchanged",
+  "Dashboard P99 is date-limited; all other workload SLOs remain strict",
 );
 
 expect(

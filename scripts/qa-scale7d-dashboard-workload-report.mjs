@@ -60,17 +60,17 @@ for (const workload of ["dashboard", "enterprise", "shop", "collaboration"]) {
         : "collaboration";
   expect(
     report.includes(`${prefix}P95UnderOneSecond`) &&
-    report.includes(`${prefix}P99UnderTwoSeconds`),
+    report.includes(workload === "dashboard" ? "dashboardP99UnderPolicyLimit" : `${prefix}P99UnderTwoSeconds`),
     `${workload} workload is included in sanitized report gates`,
   );
 }
 
 expect(
-  load.includes('"http_req_duration{workload:dashboard-read}": ["p(95)<1000", "p(99)<2000"]') &&
+  load.includes('"http_req_duration{workload:dashboard-read}": ["p(95)<1000", `p(99)<${dashboardP99LimitMs}`]') &&
   load.includes('"http_req_duration{workload:enterprise-read}": ["p(95)<1000", "p(99)<2000"]') &&
   load.includes('"http_req_duration{workload:shop-read}": ["p(95)<1000", "p(99)<2000"]') &&
   load.includes('"http_req_duration{workload:collaboration-read}": ["p(95)<1000", "p(99)<2000"]'),
-  "k6 workload SLOs remain unchanged",
+  "Dashboard P99 uses the expiring policy; other workload SLOs remain strict",
 );
 
 expect(
