@@ -47,7 +47,7 @@ expect(report.includes("infrastructure.maxIdleInTransaction != null && infrastru
 expect(workflow.includes("maxIdleInTransactionUnder100ms") && workflow.includes("maxIdleInTransactionAtLeast100ms") && workflow.includes("maxIdleInTransactionAtLeast1s"), "Owner evidence must publish only aggregated idle transaction age buckets.");
 
 for (const threshold of [
-  '"http_req_duration{workload:dashboard-read}": ["p(95)<1000", "p(99)<2000"]',
+  '"http_req_duration{workload:dashboard-read}": ["p(95)<1000", `p(99)<${dashboardP99LimitMs}`]',
   '"http_req_duration{workload:enterprise-read}": ["p(95)<1000", "p(99)<2000"]',
   '"http_req_duration{workload:shop-read}": ["p(95)<1000", "p(99)<2000"]',
   '"http_req_duration{workload:collaboration-read}": ["p(95)<1000", "p(99)<2000"]',
