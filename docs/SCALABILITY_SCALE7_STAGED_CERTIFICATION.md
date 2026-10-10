@@ -1,5 +1,17 @@
 # SCALE-7 — Staged load certification
 
+## SCALE-7 — politique temporaire P99 Dashboard 500 VUs (#789)
+
+**Décision explicite du propriétaire du 10 octobre 2026.** Seul le workload Dashboard bénéficie provisoirement d'un P99 **strictement inférieur à 2 500 ms** à **500 VUs**. Fenêtre UTC du **2026-10-10T00:00:00Z inclus** au **2026-11-10T00:00:00Z exclus**. À expiration, le P99 **< 2 000 ms** est restauré automatiquement. Pour les stages **1 000, 2 500, 5 000 VUs**, le Dashboard reste toujours à **< 2 000 ms**.
+
+Source unique versionnée : `scripts/load/scale7-dashboard-p99-policy.json`. Le seuil k6 et la gate du rapport sont calculés depuis cette même source ; le rapport conserve limite appliquée, statut temporaire, date de fin et Issues **#789 / #788**. Pas de variable d'environnement permettant de repousser l'expiration ni de changer le seuil.
+
+Invariants : Dashboard P95 **< 1 000 ms** ; global et workloads Enterprise/Shop/Collaboration P95/P99 **< 1 000/< 2 000 ms** ; HTTP failed < 1 %, isolation 100 %, DB sans épuisement, Redis toujours disponible, **noIdleInTransaction = maxIdleInTransaction === 0** sans exemption pour les sessions **<100 ms**. Ne pas augmenter les pools Prisma ou contourner les contrôles de progression/OWNER.
+
+Origine : run 500-ramp Actions **#38049082880** sur `main@99a5cd6ccd82501cd3b1194d6dd3ef4a69540878` : **FAIL**, Dashboard P95/P99 **792,65/2 293,60 ms**, global P95/P99 **539,96/1 900,19 ms**, session idle-in-transaction courte (max 1), isolation 100 %, Redis OK, DB 6,10 %. Cet ajustement de SLO **n'améliore pas les performances** et ne ferait pas passer ce run tant que le contrôle idle reste non nul.
+
+**Revue au 24 octobre 2026**. **Rétablissement automatique au 10 novembre 2026 UTC**, avec suivi durable de performance/transaction dans l'Issue **#788**. L'Issue **#779** reste ouverte jusqu'à un véritable nouveau 500-ramp PASS sur le SHA Production livré, puis 500-soak seulement après PASS. Aucun Preview Vercel ; rollback par revert de cette PR sans migration Prisma.
+
 ## SCALE-7I — chevauchement des lectures du workspace Dashboard
 
 Le 500-ramp `37466782724` sur `main@c839d19a1f65710b46cc7205e9f5257bf7f25eb4` reste FAIL avec global P95/P99 **1 058,76 / 2 221,80 ms** et Dashboard **1 425,44 / 2 472,28 ms**, alors que l’isolation tenant est à 100 %, Redis est OK et la base reste sous 7 % d’utilisation.

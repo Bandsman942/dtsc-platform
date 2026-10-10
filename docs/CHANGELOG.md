@@ -1,3 +1,11 @@
+## 2026-10-10 — SCALE-7 : P99 Dashboard temporaire daté (#789)
+
+- adapte exclusivement le seuil P99 du Dashboard à **<2 500 ms** pour le palier de **500 utilisateurs virtuels**, jusqu'au **10 novembre 2026 00:00 UTC** exclu ; retour automatique à **<2 000 ms** ensuite ;
+- partage une politique JSON versionnée entre k6 et le rapport de certification et archive le seuil effectif avec la preuve ;
+- préserve P95 Dashboard et tous les autres SLO, isolation multi-tenant, DB/Redis et gate idle-in-transaction **strictement zéro** ;
+- garde la certification 500-ramp de #779 ouverte tant que le résultat officiel n'est pas PASS ; dette P99 et transaction suivie par #788 ;
+- ne modifie ni runtime produit, ni Prisma, ni secrets ; aucun déploiement Vercel Preview.
+
 ## 2026-10-08 — Hotfix #786 : Enforcement serveur des avantages relationnels
 
 - donne un contrat `ENTERPRISE_BENEFITS` explicite aux 22 types de relation configurables ;
