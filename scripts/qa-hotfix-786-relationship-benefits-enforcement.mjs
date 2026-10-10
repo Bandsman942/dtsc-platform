@@ -193,10 +193,26 @@ hasAll(retailService, [
 ], "Atomic sale and reversal");
 const createSaleStart = retailService.indexOf("export async function createRetailSale(");
 const reverseSaleStart = retailService.indexOf("export async function reverseRetailSale(");
+check(createSaleStart >= 0 && reverseSaleStart > createSaleStart, "Retail sale transaction must be present");
 const createSaleBlock = retailService.slice(createSaleStart, reverseSaleStart);
+const originalSaleStart = createSaleBlock.indexOf("const sale = await tx.enterpriseRetailSale.create({");
+const replayBlock = createSaleBlock.slice(0, originalSaleStart);
+const newSaleBlock = originalSaleStart >= 0 ? createSaleBlock.slice(originalSaleStart) : "";
+// An idempotent replay may finalize an old receipt before returning, but it
+// must never apply newly resolved benefits. Check the NEW sale path separately.
 check(
-  createSaleBlock.indexOf("applyRetailRelationshipBenefitEffectsTx") < createSaleBlock.indexOf("finalizeRetailSaleAccountingTx"),
-  "Benefit effect must be persisted before sale transaction finalization",
+  originalSaleStart >= 0 &&
+    replayBlock.includes("return { sale: existing, idempotent: true }") &&
+    !replayBlock.includes("await applyRetailRelationshipBenefitEffectsTx({"),
+  "Idempotent Retail sale replay must not attach new relationship benefits",
+);
+const benefitPersistAt = newSaleBlock.indexOf("await applyRetailRelationshipBenefitEffectsTx({");
+const accountingFinalizeAt = newSaleBlock.indexOf("await finalizeRetailSaleAccountingTx(tx, organizationId, actorUserId, sale.id)");
+check(
+  createSaleBlock.includes("return prisma.$transaction(async (tx) =>") &&
+    benefitPersistAt >= 0 &&
+    accountingFinalizeAt > benefitPersistAt,
+  "New Retail sale must persist benefit effects in the same transaction before accounting finalization",
 );
 
 hasAll(previewRoute, [
