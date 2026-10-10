@@ -1,5 +1,17 @@
 # SCALE-7 — Staged load certification
 
+## SCALE-7J — Diagnostic comparatif des latences 500-ramp (#788)
+
+Run #38054793062 sur Production `777190f` : FAIL, global P99 2 217,39 ms, Dashboard P95 1 080,19 ms, Shop P99 2 342,53 ms, Collaboration P99 2 215,55 ms. Dashboard P99 2 383,61 ms respecte le plafond provisoire à 500 VUs de #789 (<2 500 ms, expiration 2026-11-10 UTC). Isolation 100 %, Redis OK, DB 6,44 %, idle-in-transaction max 0 sur ce run uniquement.
+
+Correction ciblée : `/dashboard` réutilise dans `AppShell` la session déjà vérifiée via `getSession` et `requireUser` durant la même requête ; les autres pages conservent leur propre `getSession`. Aucun cache d'authentification ni suppression de permission.
+
+Instrumentation : les GET autorisés des routes Shop ventes et Collaboration tâches exposent un header `Server-Timing` purement numérique (`access` : contrôle d'accès ; `data` : lecture métier paginée) et attachent les mêmes chiffres au `ApiLog` existant. Les refus ne changent pas. Aucun ID client, user, session ou tenant dans le header, aucun nouveau polling ou round-trip DB.
+
+Le profil k6 agrège ces durées uniquement pour les réponses 2xx via quatre tendances diagnostiques `scale7_shop_*` et `scale7_collaboration_*`. Le rapport sanitizé publie les P50/P95/P99 de `http.serverPhases`, sans identifiants et avec `null` lorsqu'un timing manque (jamais un faux PASS). Comparer ces phases aux durées HTTP totales pour localiser les ralentissements ; le logger AppShell `DTSC_APP_SHELL_PERF_LOG` existe déjà et demeure désactivé par défaut.
+
+Tous les seuils et la règle idle-in-transaction strictement zéro sont préservés. Les résultats de cette PR ne certifient pas la capacité. Prochain 500-ramp uniquement après merge, Production READY sur SHA exact et déclenchement OWNER sur #360 ; pas de 500-soak ni clôture de #779/#788 sans résultat PASS. Rollback via revert conforme à docs/CONTRIBUTING.md.
+
 ## SCALE-7 — politique temporaire P99 Dashboard 500 VUs (#789)
 
 **Décision explicite du propriétaire du 10 octobre 2026.** Seul le workload Dashboard bénéficie provisoirement d'un P99 **strictement inférieur à 2 500 ms** à **500 VUs**. Fenêtre UTC du **2026-10-10T00:00:00Z inclus** au **2026-11-10T00:00:00Z exclus**. À expiration, le P99 **< 2 000 ms** est restauré automatiquement. Pour les stages **1 000, 2 500, 5 000 VUs**, le Dashboard reste toujours à **< 2 000 ms**.

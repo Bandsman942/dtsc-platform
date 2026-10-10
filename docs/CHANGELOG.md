@@ -1,3 +1,10 @@
+## 2026-10-10 — SCALE-7J : diagnostics Shop/Collaboration et session Dashboard (#788)
+
+- réutilise la session déjà vérifiée du Dashboard pour AppShell sans toucher aux permissions ;
+- mesure access/data dans les GET Shop/Collaboration autorisés et les agrège sans secrets dans le rapport k6 ;
+- garde les SLO globaux, sectoriels, la politique temporaire #789 et la gate idle-in-transaction zéro inchangés ;
+- ajoute une QA comportementale ; le gain réel et le 500-ramp restent à vérifier en Production.
+
 ## 2026-10-10 — SCALE-7 : P99 Dashboard temporaire daté (#789)
 
 - adapte exclusivement le seuil P99 du Dashboard à **<2 500 ms** pour le palier de **500 utilisateurs virtuels**, jusqu'au **10 novembre 2026 00:00 UTC** exclu ; retour automatique à **<2 000 ms** ensuite ;
