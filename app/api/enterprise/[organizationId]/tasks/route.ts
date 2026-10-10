@@ -22,11 +22,13 @@ function pageParams(url: URL) {
 
 export async function GET(req: Request, { params }: Params) {
   const startedAt = Date.now();
+  const accessStartedAt = performance.now();
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { organizationId } = await params;
   const access = await getEnterpriseCoreV2Access({ session, organizationId, moduleCode: "TASKS_OPERATIONS", action: "read" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const accessMs = Number((performance.now() - accessStartedAt).toFixed(2));
 
   const url = new URL(req.url);
   const { page, pageSize } = pageParams(url);
@@ -59,12 +61,14 @@ export async function GET(req: Request, { params }: Params) {
   const where: Prisma.EnterpriseTaskWhereInput = {
     AND: [enterpriseTaskVisibilityWhere({ organizationId, userId: session.userId, canSeeAll: access.canSeeAll }), ...filters],
   };
+  const dataStartedAt = performance.now();
   const [items, total] = await Promise.all([
     prisma.enterpriseTask.findMany({ where, orderBy: [{ dueAt: "asc" }, { updatedAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize }),
     prisma.enterpriseTask.count({ where }),
   ]);
-  await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "tasks", page, pageSize, focusedId: id || null } });
-  return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, canManage: access.canManage, currentUserId: session.userId });
+  const dataMs = Number((performance.now() - dataStartedAt).toFixed(2));
+  await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "tasks", page, pageSize, focusedId: id || null, scale7ReadPhaseMs: { access: accessMs, data: dataMs } } });
+  return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, canManage: access.canManage, currentUserId: session.userId }, { headers: { "Server-Timing": `access;dur=${accessMs}, data;dur=${dataMs}` } });
 }
 
 export async function POST(req: Request, { params }: Params) {

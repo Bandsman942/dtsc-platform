@@ -22,6 +22,7 @@ import { PwaNotificationBridge } from "@/components/pwa/pwa-notification-bridge"
 import { GlobalCallToast } from "@/components/calls/global-call-toast";
 import { PromotionalBannerHost } from "@/components/promotions/promotional-banner-host";
 import { getSession } from "@/lib/auth";
+import type { SessionPayload } from "@/lib/session";
 import { createAppShellPerformanceRecorder } from "@/lib/app-shell-performance";
 import { getUnreadCollaborationMessageCount } from "@/lib/collaboration";
 import { getCurrentHostType, getDashboardUrl, getProductBranding } from "@/lib/domains";
@@ -49,6 +50,7 @@ export async function AppShell({
   children,
   user,
   precomputed,
+  verifiedSession,
 }: {
   children: React.ReactNode;
   user: {
@@ -61,6 +63,8 @@ export async function AppShell({
     pushNotificationsEnabled?: boolean;
     locale?: string | null;
   };
+  // Only a parent server component which already verified the same request session may supply this.
+  verifiedSession?: SessionPayload;
   precomputed?: {
     unreadNotifications?: number;
     pendingEnterpriseInvitations?: number;
@@ -78,7 +82,7 @@ export async function AppShell({
   };
 }) {
   const performanceRecorder = createAppShellPerformanceRecorder();
-  const session = await getSession();
+  const session = verifiedSession ?? await getSession();
   const requestHeaders = await headers();
   const currentHostType = getCurrentHostType(requestHeaders.get("host"));
   const productBranding = getProductBranding(currentHostType, user.locale);

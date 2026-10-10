@@ -96,6 +96,10 @@ const http = {
     collaboration: latency(summary, "http_req_duration{workload:collaboration-read}"),
     ai: latency(summary, "http_req_duration{workload:ai-request}"),
   },
+  serverPhases: {
+    shop: { access: latency(summary, "scale7_shop_access_ms"), data: latency(summary, "scale7_shop_data_ms") },
+    collaboration: { access: latency(summary, "scale7_collaboration_access_ms"), data: latency(summary, "scale7_collaboration_data_ms") },
+  },
 };
 
 const infrastructure = {
@@ -205,6 +209,8 @@ const markdown = [
   `- Dashboard P50/P95/P99: ${http.workloads.dashboard.p50 ?? "n/a"} / ${http.workloads.dashboard.p95 ?? "n/a"} / ${http.workloads.dashboard.p99 ?? "n/a"} ms`,
   `- Dashboard P99 objective: <${dashboardP99LimitMs} ms (temporary 500-VU policy: ${temporaryDashboardP99Active ? "ACTIVE" : "INACTIVE"}; expires ${dashboardP99Policy.temporary.expiresAt}; standard <2000 ms; #788)`,
   `- Enterprise P50/P95/P99: ${http.workloads.enterprise.p50 ?? "n/a"} / ${http.workloads.enterprise.p95 ?? "n/a"} / ${http.workloads.enterprise.p99 ?? "n/a"} ms`,
+  `- Shop internal access/data P95: ${http.serverPhases.shop.access.p95 ?? "n/a"} / ${http.serverPhases.shop.data.p95 ?? "n/a"} ms (diagnostic only)`,
+  `- Collaboration internal access/data P95: ${http.serverPhases.collaboration.access.p95 ?? "n/a"} / ${http.serverPhases.collaboration.data.p95 ?? "n/a"} ms (diagnostic only)`,
   `- Shop P50/P95/P99: ${http.workloads.shop.p50 ?? "n/a"} / ${http.workloads.shop.p95 ?? "n/a"} / ${http.workloads.shop.p99 ?? "n/a"} ms`,
   `- Collaboration P50/P95/P99: ${http.workloads.collaboration.p50 ?? "n/a"} / ${http.workloads.collaboration.p95 ?? "n/a"} / ${http.workloads.collaboration.p99 ?? "n/a"} ms`,
   `- Max DB connection utilization: ${infrastructure.maxDbConnectionUtilization ?? "n/a"}`,

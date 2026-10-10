@@ -15,9 +15,11 @@ type Params = { params: Promise<{ organizationId: string }> };
 
 export async function GET(req: Request, { params }: Params) {
   const startedAt = Date.now();
+  const accessStartedAt = performance.now();
   const { organizationId } = await params;
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "read", { includeMutationCapabilities: false });
   if (!auth.ok) return auth.response;
+  const accessMs = Number((performance.now() - accessStartedAt).toFixed(2));
   const { page, pageSize, status, search, from, to } = retailListParams(req);
   const where: Prisma.EnterpriseRetailSaleWhereInput = {
     organizationId,
@@ -34,6 +36,7 @@ export async function GET(req: Request, { params }: Params) {
   };
   const metricFrom = from || new Date(new Date().setHours(0, 0, 0, 0));
   const metricTo = to || new Date();
+  const dataStartedAt = performance.now();
   const [items, total, metrics] = await Promise.all([
     prisma.enterpriseRetailSale.findMany({
       where,
@@ -45,8 +48,9 @@ export async function GET(req: Request, { params }: Params) {
     prisma.enterpriseRetailSale.count({ where }),
     getRetailMetricsByCurrency(organizationId, metricFrom, metricTo, "RETAIL_POS"),
   ]);
-  await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-pos", page } });
-  return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metricsByCurrency: metrics.sales });
+  const dataMs = Number((performance.now() - dataStartedAt).toFixed(2));
+  await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-pos", page, scale7ReadPhaseMs: { access: accessMs, data: dataMs } } });
+  return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metricsByCurrency: metrics.sales }, { headers: { "Server-Timing": `access;dur=${accessMs}, data;dur=${dataMs}` } });
 }
 
 export async function POST(req: Request, { params }: Params) {

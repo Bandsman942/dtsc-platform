@@ -1,6 +1,6 @@
 import http from "k6/http";
 import { check, sleep } from "k6";
-import { Rate } from "k6/metrics";
+import { Rate, Trend } from "k6/metrics";
 
 const rawBaseUrl = __ENV.BASE_URL;
 const rawAuthPool = __ENV.SCALE7_AUTH_CONTEXTS_JSON;
@@ -95,6 +95,31 @@ if (!aiPath || !aiPayload) {
 }
 
 const tenantIsolationPass = new Rate("tenant_isolation_pass");
+// Informational-only phase metrics (no thresholds, no tenant/session tags).
+const shopAccessDuration = new Trend("scale7_shop_access_ms", true);
+const shopDataDuration = new Trend("scale7_shop_data_ms", true);
+const collaborationAccessDuration = new Trend("scale7_collaboration_access_ms", true);
+const collaborationDataDuration = new Trend("scale7_collaboration_data_ms", true);
+
+function recordServerPhases(response, workload) {
+  if (response.status < 200 || response.status >= 300) return;
+  if (workload !== "shop-read" && workload !== "collaboration-read") return;
+  const header = response.headers["Server-Timing"] || response.headers["server-timing"];
+  if (typeof header !== "string") return;
+  const access = /(?:^|,)\s*access;dur=(\d+(?:\.\d+)?)(?=,|$)/.exec(header);
+  const data = /(?:^|,)\s*data;dur=(\d+(?:\.\d+)?)(?=,|$)/.exec(header);
+  if (!access || !data) return;
+  const accessMs = Number(access[1]);
+  const dataMs = Number(data[1]);
+  if (!Number.isFinite(accessMs) || !Number.isFinite(dataMs)) return;
+  if (workload === "shop-read") {
+    shopAccessDuration.add(accessMs);
+    shopDataDuration.add(dataMs);
+  } else {
+    collaborationAccessDuration.add(accessMs);
+    collaborationDataDuration.add(dataMs);
+  }
+}
 const expectedIsolationStatuses = http.expectedStatuses(403, 404);
 
 function rampStages(target) {
@@ -292,6 +317,7 @@ export default function () {
     });
   }
 
+  recordServerPhases(response, label);
   check(response, {
     [`${label} succeeds`]: (result) => result.status >= 200 && result.status < 300,
   });
