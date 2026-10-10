@@ -621,35 +621,35 @@ export async function updateRelationshipBenefit({
     Object.keys(input).every((key) => key === "revision" || key === "status");
   if (!statusOnlyDeactivation) {
     await validateRelationshipBenefitConfiguration(organizationId, {
-    benefitType:
-      "benefitType" in input ? String(input.benefitType) : current.benefitType,
-    valueType: "valueType" in input ? String(input.valueType) : current.valueType,
-    valueDecimal:
-      "valueDecimal" in input
-        ? (input.valueDecimal as number | null | undefined)
-        : current.valueDecimal,
-    currencyCode:
-      "currencyCode" in input
-        ? (input.currencyCode as string | null | undefined)
-        : current.currencyCode,
-    minimumAmount:
-      "minimumAmount" in input
-        ? (input.minimumAmount as number | null | undefined)
-        : current.minimumAmount,
-    targetModuleCode: mergedTargetModuleCode,
-    usageLimitPerPeriod:
-      "usageLimitPerPeriod" in input
-        ? (input.usageLimitPerPeriod as number | null | undefined)
-        : current.usageLimitPerPeriod,
-    usagePeriodDays:
-      "usagePeriodDays" in input
-        ? (input.usagePeriodDays as number | null | undefined)
-        : current.usagePeriodDays,
-    stackable:
-      "stackable" in input ? Boolean(input.stackable) : current.stackable,
-    actionCode:
-      "actionCode" in input ? String(input.actionCode) : current.actionCode,
-    conditions: mergedConditions,
+      benefitType:
+        "benefitType" in input ? String(input.benefitType) : current.benefitType,
+      valueType: "valueType" in input ? String(input.valueType) : current.valueType,
+      valueDecimal:
+        "valueDecimal" in input
+          ? (input.valueDecimal as number | null | undefined)
+          : current.valueDecimal,
+      currencyCode:
+        "currencyCode" in input
+          ? (input.currencyCode as string | null | undefined)
+          : current.currencyCode,
+      minimumAmount:
+        "minimumAmount" in input
+          ? (input.minimumAmount as number | null | undefined)
+          : current.minimumAmount,
+      targetModuleCode: mergedTargetModuleCode,
+      usageLimitPerPeriod:
+        "usageLimitPerPeriod" in input
+          ? (input.usageLimitPerPeriod as number | null | undefined)
+          : current.usageLimitPerPeriod,
+      usagePeriodDays:
+        "usagePeriodDays" in input
+          ? (input.usagePeriodDays as number | null | undefined)
+          : current.usagePeriodDays,
+      stackable:
+        "stackable" in input ? Boolean(input.stackable) : current.stackable,
+      actionCode:
+        "actionCode" in input ? String(input.actionCode) : current.actionCode,
+      conditions: mergedConditions,
     });
   }
 
