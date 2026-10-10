@@ -1,0 +1,12 @@
+{
+  "contract": "SCALE-7-DASHBOARD-P99-TEMPORARY",
+  "standardP99Ms": 2000,
+  "temporary": {
+    "p99Ms": 2500,
+    "targetVus": 500,
+    "startsAt": "2026-10-10T00:00:00.000Z",
+    "expiresAt": "2026-11-10T00:00:00.000Z",
+    "changeIssue": 789,
+    "reversionIssue": 788
+  }
+}

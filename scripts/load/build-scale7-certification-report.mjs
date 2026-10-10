@@ -48,6 +48,26 @@ const samples = readNdjson(observabilityPath);
 const targetVus = Number.parseInt(process.env.TARGET_VUS || "0", 10);
 const profile = (process.env.LOAD_PROFILE || "").toLowerCase();
 
+// One versioned expiring policy drives both k6 and the sanitized certification report.
+const dashboardP99Policy = readJson("scripts/load/scale7-dashboard-p99-policy.json");
+if (dashboardP99Policy.contract !== "SCALE-7-DASHBOARD-P99-TEMPORARY" ||
+    dashboardP99Policy.standardP99Ms !== 2000 ||
+    dashboardP99Policy.temporary?.p99Ms !== 2500 ||
+    dashboardP99Policy.temporary?.targetVus !== 500 ||
+    !Number.isFinite(Date.parse(dashboardP99Policy.temporary.startsAt)) ||
+    !Number.isFinite(Date.parse(dashboardP99Policy.temporary.expiresAt)) ||
+    Date.parse(dashboardP99Policy.temporary.expiresAt) <= Date.parse(dashboardP99Policy.temporary.startsAt)) {
+  console.error("Invalid SCALE-7 Dashboard P99 policy");
+  process.exit(1);
+}
+const policyNowMs = Date.now();
+const temporaryDashboardP99Active = targetVus === dashboardP99Policy.temporary.targetVus &&
+  policyNowMs >= Date.parse(dashboardP99Policy.temporary.startsAt) &&
+  policyNowMs < Date.parse(dashboardP99Policy.temporary.expiresAt);
+const dashboardP99LimitMs = temporaryDashboardP99Active
+  ? dashboardP99Policy.temporary.p99Ms
+  : dashboardP99Policy.standardP99Ms;
+
 let authTopology = { tenantCount: null, identityCount: null };
 try {
   const parsed = JSON.parse(process.env.SCALE7_AUTH_CONTEXTS_JSON || "{}");
@@ -103,7 +123,7 @@ const gates = {
   p95UnderOneSecond: http.latencyMs.p95 != null && http.latencyMs.p95 < 1000,
   p99UnderTwoSeconds: http.latencyMs.p99 != null && http.latencyMs.p99 < 2000,
   dashboardP95UnderOneSecond: http.workloads.dashboard.p95 != null && http.workloads.dashboard.p95 < 1000,
-  dashboardP99UnderTwoSeconds: http.workloads.dashboard.p99 != null && http.workloads.dashboard.p99 < 2000,
+  dashboardP99UnderPolicyLimit: http.workloads.dashboard.p99 != null && http.workloads.dashboard.p99 < dashboardP99LimitMs,
   enterpriseP95UnderOneSecond: http.workloads.enterprise.p95 != null && http.workloads.enterprise.p95 < 1000,
   enterpriseP99UnderTwoSeconds: http.workloads.enterprise.p99 != null && http.workloads.enterprise.p99 < 2000,
   shopP95UnderOneSecond: http.workloads.shop.p95 != null && http.workloads.shop.p95 < 1000,
@@ -144,6 +164,15 @@ const report = {
   profile,
   durationSeconds,
   authTopology,
+  sloPolicy: {
+    dashboardP99LimitMs,
+    temporaryDashboardP99Active,
+    standardDashboardP99Ms: dashboardP99Policy.standardP99Ms,
+    temporaryExpiresAt: dashboardP99Policy.temporary.expiresAt,
+    temporaryTargetVus: dashboardP99Policy.temporary.targetVus,
+    changeIssue: dashboardP99Policy.temporary.changeIssue,
+    reversionIssue: dashboardP99Policy.temporary.reversionIssue,
+  },
   http,
   infrastructure,
   gates,
@@ -174,6 +203,7 @@ const markdown = [
   `- Tenant isolation: ${http.tenantIsolationRate ?? "n/a"}`,
   `- P50/P95/P99: ${http.latencyMs.p50 ?? "n/a"} / ${http.latencyMs.p95 ?? "n/a"} / ${http.latencyMs.p99 ?? "n/a"} ms`,
   `- Dashboard P50/P95/P99: ${http.workloads.dashboard.p50 ?? "n/a"} / ${http.workloads.dashboard.p95 ?? "n/a"} / ${http.workloads.dashboard.p99 ?? "n/a"} ms`,
+  `- Dashboard P99 objective: <${dashboardP99LimitMs} ms (temporary 500-VU policy: ${temporaryDashboardP99Active ? "ACTIVE" : "INACTIVE"}; expires ${dashboardP99Policy.temporary.expiresAt}; standard <2000 ms; #788)`,
   `- Enterprise P50/P95/P99: ${http.workloads.enterprise.p50 ?? "n/a"} / ${http.workloads.enterprise.p95 ?? "n/a"} / ${http.workloads.enterprise.p99 ?? "n/a"} ms`,
   `- Shop P50/P95/P99: ${http.workloads.shop.p50 ?? "n/a"} / ${http.workloads.shop.p95 ?? "n/a"} / ${http.workloads.shop.p99 ?? "n/a"} ms`,
   `- Collaboration P50/P95/P99: ${http.workloads.collaboration.p50 ?? "n/a"} / ${http.workloads.collaboration.p95 ?? "n/a"} / ${http.workloads.collaboration.p99 ?? "n/a"} ms`,
