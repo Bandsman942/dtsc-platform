@@ -606,7 +606,17 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
     const user = await userContext.newPage();
     await signIn(user, userEmail, userPassword, `/enterprise-links?link=${ids.identityLink}&view=ACTIVE`);
     await expect(user.getByText(/Vos services et avantages disponibles|Your available services and benefits/i)).toBeVisible();
-    await expect(user.getByText(/Remise relationnelle E2E 5 %|E2E relationship 5% discount/i)).toBeVisible();
+    // The same benefit name can legitimately appear in both the available
+    // benefits catalogue and the consumption history. Assert the catalogue
+    // card through its description instead of matching both headings.
+    const availableBenefitCard = user.getByRole("article").filter({
+      hasText: /Remise réellement appliquée au ticket Retail par le serveur|Discount actually applied to the Retail receipt by the server/i,
+    });
+    await expect(
+      availableBenefitCard.getByRole("heading", {
+        name: /Remise relationnelle E2E 5 %|E2E relationship 5% discount/i,
+      }),
+    ).toBeVisible();
     const userOverflow = await user.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(userOverflow, "Hotfix #786 account relationship UI must not overflow at 390px").toBeLessThanOrEqual(2);
 
