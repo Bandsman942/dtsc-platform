@@ -1,5 +1,17 @@
 # SCALE-7 — Staged load certification
 
+## SCALE-7J-B — réduction de fan-out des droits ERP au palier 500 VUs (#793)
+
+Le run Production `38059052637` sur SHA `a207bedaad09c2b47a4179a3ce6c900af9882f95` reste FAIL : global P95/P99 1 069/2 642 ms ; Dashboard 1 459/3 691 ms ; Enterprise P99 2 240, Shop 2 313, Collaboration 2 432 ms. Isolation 100 %, idle-in-transaction max 0, Redis OK, connexion DB max 7,21 %. Les phases `access` observées dans Shop (P99 1 249 ms) et Collaboration (P99 1 839 ms) orientent vers le fan-out des contrôles d'accès, **sans démontrer à elles seules une cause unique**.
+
+`getEnterpriseAccessSnapshot` lisait d'abord son membership et ses modules/son sous-secteur, puis appelait `getOrganizationEntitlements`, qui recharge déjà une liste complète de modules activés et de sous-secteur. Désormais, les modules et le sous-secteur sont réutilisés depuis le **même snapshot d'entitlement courant**. Le comportement canonique/alias, les modules désactivés, les dépendances et tous les refus de permission restent inchangés. Si les entitlements ne peuvent pas être résolus, la branche de repli conserve la lecture et les refus précédents ; elle n'accorde aucun droit sans membership.
+
+Dans `getEnterpriseCoreV2Access`, les deux vérifications indépendantes `requireEnterpriseMembership` et `resolveEnterpriseModuleCapabilities` sont lancées simultanément, **et les deux doivent réussir**. Aucune élévation de privilège, cache de droits ou nouvelle connexion persistante ; pour les lectures autorisées, la fenêtre d'attente séquentielle est réduite. Les refus peuvent effectuer deux lectures simultanées plutôt qu'une, coût surveillé.
+
+**Invariants** : tous les SLO, la tolérance temporaire Dashboard < 2 500 ms uniquement à 500 VUs jusqu'au 2026-11-10 UTC, isolation tenant parfaite, idle-in-transaction strictement 0, quotas/entitlements et politiques RBAC demeurent opposables. Cette refactorisation ne constitue **pas** une preuve de P95/P99 amélioré avant un run Production du SHA exact.
+
+Après Quality gates + merge + Vercel Production READY + Release, le propriétaire seul relance `RUN_SCALE7_500_RAMP` sur l'Issue #360. Comparer les nouvelles phases `access/data` Shop/Collaboration et les P95/P99 tous workloads. 500-soak interdit et #779/#788 ouverts tant que le run ne donne pas PASS. Revert de la PR si régression de permissions ou performance.
+
 ## SCALE-7J — Diagnostic comparatif des latences 500-ramp (#788)
 
 Run #38054793062 sur Production `777190f` : FAIL, global P99 2 217,39 ms, Dashboard P95 1 080,19 ms, Shop P99 2 342,53 ms, Collaboration P99 2 215,55 ms. Dashboard P99 2 383,61 ms respecte le plafond provisoire à 500 VUs de #789 (<2 500 ms, expiration 2026-11-10 UTC). Isolation 100 %, Redis OK, DB 6,44 %, idle-in-transaction max 0 sur ce run uniquement.

@@ -1,3 +1,11 @@
+## 2026-10-10 — SCALE-7J-B : réduire les lectures d'accès ERP redondantes (#793)
+
+- le résolveur de modules réutilise la liste des modules et le sous-secteur déjà présents dans les entitlements, au lieu de refaire deux requêtes indépendantes ;
+- conserve les refus et la précédence des modules canoniques/aliases et un repli restrictif en cas de snapshot absent ;
+- dans les tâches Collaboration, lance les deux vérifications membership/capabilities en parallèle sans en omettre aucune ;
+- ajoute une QA d'indexation canonique et de conservation des garde-fous RBAC/SLO, avec aucune migration ni nouvelle Preview ;
+- impact P95/P99 Production à déterminer par un nouveau 500-ramp OWNER après livraison.
+
 ## 2026-10-10 — SCALE-7J : diagnostics Shop/Collaboration et session Dashboard (#788)
 
 - réutilise la session déjà vérifiée du Dashboard pour AppShell sans toucher aux permissions ;
