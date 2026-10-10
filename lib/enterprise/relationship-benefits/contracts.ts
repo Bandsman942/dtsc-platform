@@ -78,8 +78,18 @@ export const relationshipBenefitCreateSchema = z.object({
   conditions: relationshipBenefitConditionsSchema.optional().nullable(),
 });
 
+// Creation defaults must not leak into a partial PATCH: omitted fields must
+// stay omitted, otherwise a status-only suspension can silently reset the
+// existing Retail adapter, action, audiences or stacking configuration.
 export const relationshipBenefitPatchSchema = relationshipBenefitCreateSchema.partial().extend({
   revision: z.number().int().positive(),
+  assignmentMode: z.enum(RELATIONSHIP_BENEFIT_ASSIGNMENT_MODES).optional(),
+  relationTypes: z.array(z.enum(ENTERPRISE_IDENTITY_RELATION_TYPES)).max(30).optional(),
+  identityLinkIds: z.array(z.string().trim().min(1).max(191)).max(100).optional(),
+  valueType: z.enum(["NONE", "PERCENT", "AMOUNT", "POINTS", "TEXT"]).optional(),
+  actionCode: z.enum(RELATIONSHIP_BENEFIT_ACTION_CODES).optional(),
+  stackable: z.boolean().optional(),
+  status: z.enum(RELATIONSHIP_BENEFIT_STATUSES).optional(),
 });
 
 export const relationshipBenefitUsageSchema = z.object({
