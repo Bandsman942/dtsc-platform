@@ -590,6 +590,17 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
       { revision: exclusive.body.benefit.revision, status: "SUSPENDED" },
     );
     expect(suspendedExclusive.response.ok(), JSON.stringify(suspendedExclusive.body)).toBeTruthy();
+    expect(suspendedExclusive.body.benefit.status).toBe("SUSPENDED");
+    // A status-only PATCH must not inherit create-schema defaults or mutate
+    // the certified adapter/discount configuration of a persisted benefit.
+    const suspendedPersisted = await prisma.enterpriseRelationshipBenefit.findFirstOrThrow({
+      where: { id: exclusiveBenefitId, organizationId },
+    });
+    expect(suspendedPersisted.valueType).toBe("PERCENT");
+    expect(Number(suspendedPersisted.valueDecimal)).toBe(30);
+    expect(suspendedPersisted.actionCode).toBe("NONE");
+    expect(suspendedPersisted.stackable).toBe(false);
+    expect(suspendedPersisted.targetModuleCode).toBe("RETAIL_POS");
 
     const userContext = await browser.newContext({ baseURL: baseUrl, viewport: { width: 390, height: 844 } });
     const user = await userContext.newPage();
