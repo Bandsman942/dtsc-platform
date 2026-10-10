@@ -47,15 +47,25 @@ expect(
   "workspace billing/usage projection stays exact and tenant-scoped in one query",
 );
 
-const secondBurstStart = workspace.indexOf("const [\n    unreadNotificationCount");
-const secondBurstEnd = workspace.indexOf("const personalSubscription", secondBurstStart);
-const secondBurst = workspace.slice(secondBurstStart, secondBurstEnd);
+const independentStart = workspace.indexOf("const independentWorkspaceReads = Promise.all([");
+const membershipAwait = workspace.indexOf("const membershipRows = await membershipRowsPromise;", independentStart);
+const independentReads = workspace.slice(independentStart, membershipAwait);
+const notificationScope = workspace.indexOf("const notificationWhere = buildVisibleNotificationWhereForSession", membershipAwait);
+const notificationFetch = workspace.indexOf("prisma.notification.count({ where: { ...notificationWhere, readAt: null } })", notificationScope);
+const workspaceBody = workspace.slice(workspace.indexOf("export async function getPersonalWorkspaceSummary("));
 expect(
-  secondBurst.includes("getWorkspaceBillingUsageSnapshot(user.id, activeOrganizationId, today)") &&
-  !secondBurst.includes("prisma.subscription.findFirst") &&
-  !secondBurst.includes("prisma.usageLog.aggregate") &&
-  !secondBurst.includes("prisma.knowledgeDocument.count"),
-  "Dashboard no longer performs separate subscription, usage and document reads",
+  independentStart >= 0 &&
+  membershipAwait > independentStart &&
+  independentReads.includes("getWorkspaceBillingUsageSnapshot(user.id, activeOrganizationId, today)") &&
+  independentReads.includes("listUserIdentityLinksForWorkspace(user.id)") &&
+  independentReads.includes("getOrganizationWorkspaceCommercialSummary(activeOrganizationId)") &&
+  !workspaceBody.includes("prisma.subscription.findFirst") &&
+  !workspaceBody.includes("prisma.usageLog.aggregate") &&
+  !workspaceBody.includes("prisma.knowledgeDocument.count") &&
+  (workspaceBody.match(/getWorkspaceBillingUsageSnapshot\(/g) || []).length === 1 &&
+  notificationScope > membershipAwait &&
+  notificationFetch > notificationScope,
+  "Dashboard keeps one tenant-scoped billing/usage/documents snapshot, overlapping memberships while notifications await their visibility scope",
 );
 
 expect(

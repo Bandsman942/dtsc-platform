@@ -209,60 +209,38 @@ export async function getPersonalWorkspaceSummary({
 }): Promise<PersonalWorkspaceSummary> {
   const context = resolveContext(session);
   const activeOrganizationId = getActiveOrganizationId(session);
-  const [membershipRows, identityLinks] = await Promise.all([
-    prisma.organizationMember.findMany({
-      where: {
-        userId: user.id,
-        status: { in: ["ACTIVE", "INVITED"] },
-        removedAt: null,
-        organization: { status: "ACTIVE", deletedAt: null },
-      },
-      select: {
-        id: true,
-        organizationId: true,
-        status: true,
-        role: true,
-        invitedBy: true,
-        createdAt: true,
-        organization: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            logoUrl: true,
-            brandingJson: true,
-            organizationType: true,
-          },
-        },
-      },
-      orderBy: { organization: { name: "asc" } },
-    }),
-    listUserIdentityLinksForWorkspace(user.id),
-  ]);
-  const memberships = membershipRows.filter((membership) => membership.status === "ACTIVE").slice(0, 20);
-  const pendingInvitations = membershipRows
-    .filter((membership) => membership.status === "INVITED" && membership.organization.organizationType === "CLIENT")
-    .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
-  const notificationWhere = buildVisibleNotificationWhereForSession(session, membershipRows);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const [
-    unreadNotificationCount,
-    recentNotifications,
-    openSupportTicketCount,
-    recentTickets,
-    recentConversations,
-    billingUsage,
-    organizationCommercialSummary,
-  ] = await Promise.all([
-    prisma.notification.count({ where: { ...notificationWhere, readAt: null } }),
-    prisma.notification.findMany({
-      where: notificationWhere,
-      orderBy: { createdAt: "desc" },
-      take: 10,
-      select: { id: true, title: true, body: true, type: true, targetUrl: true, organizationId: true, readAt: true, createdAt: true },
-    }),
+  const membershipRowsPromise = prisma.organizationMember.findMany({
+    where: {
+      userId: user.id,
+      status: { in: ["ACTIVE", "INVITED"] },
+      removedAt: null,
+      organization: { status: "ACTIVE", deletedAt: null },
+    },
+    select: {
+      id: true,
+      organizationId: true,
+      status: true,
+      role: true,
+      invitedBy: true,
+      createdAt: true,
+      organization: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          logoUrl: true,
+          brandingJson: true,
+          organizationType: true,
+        },
+      },
+    },
+    orderBy: { organization: { name: "asc" } },
+  });
+  const independentWorkspaceReads = Promise.all([
+    listUserIdentityLinksForWorkspace(user.id),
     prisma.supportTicket.count({
       where: { userId: user.id, status: { in: [TicketStatus.OPEN, TicketStatus.IN_PROGRESS] } },
     }),
@@ -280,6 +258,35 @@ export async function getPersonalWorkspaceSummary({
     }),
     getWorkspaceBillingUsageSnapshot(user.id, activeOrganizationId, today),
     getOrganizationWorkspaceCommercialSummary(activeOrganizationId),
+  ] as const);
+
+  const membershipRows = await membershipRowsPromise;
+  const memberships = membershipRows.filter((membership) => membership.status === "ACTIVE").slice(0, 20);
+  const pendingInvitations = membershipRows
+    .filter((membership) => membership.status === "INVITED" && membership.organization.organizationType === "CLIENT")
+    .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
+  const notificationWhere = buildVisibleNotificationWhereForSession(session, membershipRows);
+
+  const [
+    unreadNotificationCount,
+    recentNotifications,
+    [
+      identityLinks,
+      openSupportTicketCount,
+      recentTickets,
+      recentConversations,
+      billingUsage,
+      organizationCommercialSummary,
+    ],
+  ] = await Promise.all([
+    prisma.notification.count({ where: { ...notificationWhere, readAt: null } }),
+    prisma.notification.findMany({
+      where: notificationWhere,
+      orderBy: { createdAt: "desc" },
+      take: 10,
+      select: { id: true, title: true, body: true, type: true, targetUrl: true, organizationId: true, readAt: true, createdAt: true },
+    }),
+    independentWorkspaceReads,
   ]);
 
   const personalSubscription = billingUsage.subscriptionId

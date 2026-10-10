@@ -33,6 +33,15 @@
 - ajoute notifications, audit, rate limiting, contrôle same-origin et transitions concurrentes protégées ;
 - OWNER_E2E documenté dans `docs/HOTFIX_781_RELATIONSHIP_BENEFITS.md` et encore NOT_EXECUTED avant validation propriétaire.
 
+## 2026-10-06 — SCALE-7I Dashboard workspace overlap (#779)
+
+- part du 500-ramp Production `37466782724` sur `c839d19a1f65710b46cc7205e9f5257bf7f25eb4`, où le Dashboard reste le principal résidu de latence ;
+- supprime une barrière séquentielle artificielle dans `getPersonalWorkspaceSummary()` ;
+- démarre memberships, relations, support, conversations, usage billing et résumé commercial en parallèle ;
+- conserve les lectures notifications après résolution des memberships car leur scope de visibilité en dépend ;
+- ne modifie aucune donnée, permission, entitlement, SLO ou règle multi-tenant ;
+- ajoute `qa:scale7i-dashboard-workspace-barrier` à la régression canonique.
+
 ## 2026-10-06 — SCALE-7H Dashboard/Collaboration tail (#777)
 
 - part du 500-ramp Production `37426549774` sur `312033fab1ea8603df3bf15453c4046cee031ad3` : global P95/P99 930,24 / 2 148,25 ms, Dashboard 1 198,10 / 2 261,27 ms, Collaboration 898,56 / 2 114,48 ms ;
