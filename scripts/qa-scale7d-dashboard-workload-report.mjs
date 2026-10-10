@@ -20,23 +20,22 @@ const workflow = read(".github/workflows/scale7-staged-certification.yml");
 const workspaceAudit = read("scripts/lib/standard-personal-workspace-audit.mjs");
 
 expect(
-  workspace.includes("const [membershipRows, identityLinks] = await Promise.all([") &&
+  workspace.includes("const membershipRowsPromise = prisma.organizationMember.findMany({") &&
+  workspace.includes("const independentWorkspaceReads = Promise.all([") &&
   workspace.includes("listUserIdentityLinksForWorkspace(user.id)") &&
   workspace.includes("getOrganizationWorkspaceCommercialSummary(activeOrganizationId)"),
   "Dashboard overlaps membership/identity reads and uses the lightweight commercial summary",
 );
 
-const secondBurst = workspace.slice(
-  workspace.indexOf("const [\n    unreadNotificationCount"),
-  workspace.indexOf("const actionableRelationshipStatuses"),
+const independentBurst = workspace.slice(
+  workspace.indexOf("const independentWorkspaceReads = Promise.all(["),
+  workspace.indexOf("const membershipRows = await membershipRowsPromise;"),
 );
 expect(
-  secondBurst.includes("organizationCommercialSummary") &&
-  secondBurst.includes("billingUsage") &&
-  !secondBurst.includes("identityLinks,") &&
-  (secondBurst.match(/prisma\./g) || []).length === 5 &&
-  secondBurst.includes("getWorkspaceBillingUsageSnapshot(user.id, activeOrganizationId, today)") &&
-  secondBurst.includes("getOrganizationWorkspaceCommercialSummary(activeOrganizationId)"),
+  independentBurst.includes("listUserIdentityLinksForWorkspace(user.id)") &&
+  independentBurst.includes("getWorkspaceBillingUsageSnapshot(user.id, activeOrganizationId, today)") &&
+  independentBurst.includes("getOrganizationWorkspaceCommercialSummary(activeOrganizationId)") &&
+  (independentBurst.match(/prisma\./g) || []).length === 3,
   "Dashboard second burst is bounded to seven database-backed tasks",
 );
 

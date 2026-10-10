@@ -1,5 +1,19 @@
 # SCALE-7 — Staged load certification
 
+## SCALE-7I — chevauchement des lectures du workspace Dashboard
+
+Le 500-ramp `37466782724` sur `main@c839d19a1f65710b46cc7205e9f5257bf7f25eb4` reste FAIL avec global P95/P99 **1 058,76 / 2 221,80 ms** et Dashboard **1 425,44 / 2 472,28 ms**, alors que l’isolation tenant est à 100 %, Redis est OK et la base reste sous 7 % d’utilisation.
+
+SCALE-7I (#779) traite uniquement le séquencement du workspace Dashboard :
+
+- les lectures qui ne dépendent pas des memberships sont lancées immédiatement ;
+- seul le scope notifications attend la résolution des memberships ;
+- les promesses support, conversations, billing, commercial et identity links continuent pendant cette résolution au lieu d’attendre une phase suivante ;
+- aucun cache, aucune nouvelle source de vérité, aucun changement RBAC ou entitlement n’est introduit ;
+- les seuils SCALE-7 et la gate idle-in-transaction zéro restent inchangés.
+
+Le 500-soak reste bloqué tant qu’un nouveau 500-ramp sur le SHA Production livré n’est pas PASS.
+
 ## SCALE-7H — suppression des relectures Dashboard et Collaboration
 
 Le run 500-ramp `37426549774` sur `main@312033fab1ea8603df3bf15453c4046cee031ad3` échoue encore sur le P99 global, le Dashboard et le P99 Collaboration alors que l’isolation reste à 100 %, Redis est OK et la base plafonne à 5,99 % d’utilisation.

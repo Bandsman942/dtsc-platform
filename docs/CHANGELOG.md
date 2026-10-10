@@ -33,6 +33,36 @@
 - ajoute notifications, audit, rate limiting, contrôle same-origin et transitions concurrentes protégées ;
 - OWNER_E2E documenté dans `docs/HOTFIX_781_RELATIONSHIP_BENEFITS.md` et encore NOT_EXECUTED avant validation propriétaire.
 
+## 2026-10-06 — SCALE-7I Dashboard workspace overlap (#779)
+
+- part du 500-ramp Production `37466782724` sur `c839d19a1f65710b46cc7205e9f5257bf7f25eb4`, où le Dashboard reste le principal résidu de latence ;
+- supprime une barrière séquentielle artificielle dans `getPersonalWorkspaceSummary()` ;
+- démarre memberships, relations, support, conversations, usage billing et résumé commercial en parallèle ;
+- conserve les lectures notifications après résolution des memberships car leur scope de visibilité en dépend ;
+- ne modifie aucune donnée, permission, entitlement, SLO ou règle multi-tenant ;
+- ajoute `qa:scale7i-dashboard-workspace-barrier` à la régression canonique.
+
+## 2026-10-08 — Hotfix #783 : Découvrabilité de Relations & avantages
+
+- corrige **Administration entreprise → Modules → Ouvrir le module** pour consommer la destination canonique réellement autorisée au lieu de reconstruire `/enterprise-modules/<code>` ;
+- ajoute un raccourci **Relations & avantages** dans **Entreprise & ERP** lorsque le module est renvoyé par le resolver de navigation ;
+- ajoute le même accès dans le rail secondaire de **Administration entreprise**, sans exposer le raccourci lorsqu’il est refusé ;
+- conserve le registre ERP et `getEnterpriseNavigationModules()` comme sources de vérité uniques ;
+- ajoute `qa:hotfix-783-relationship-benefits-navigation` à la régression ;
+- aucun changement Prisma ni migration ;
+- OWNER_E2E requis avant fusion.
+
+## 2026-10-07 — Hotfix #781 : Relations & avantages client–entreprise
+
+- ajoute le module canonique `RELATIONSHIP_BENEFITS`, BUSINESS+, avec migration additive et isolation par `organizationId` ;
+- étend les types de relation sectoriels sans modifier les relations historiques ;
+- ajoute catalogue, audiences, attributions explicites et usages idempotents avec quotas ;
+- garde `EnterpriseIdentityLink` et le résolveur serveur comme autorité avant affichage et avant utilisation ;
+- transforme le détail d’une relation active dans `/enterprise-links` en façade d’avantages utilisables sans membership tenant ;
+- agrège fidélité et avoirs Retail depuis les ledgers existants, sans dual-write ;
+- ajoute notifications, audit, rate limiting, contrôle same-origin et transitions concurrentes protégées ;
+- OWNER_E2E documenté dans `docs/HOTFIX_781_RELATIONSHIP_BENEFITS.md` et encore NOT_EXECUTED avant validation propriétaire.
+
 ## 2026-10-06 — SCALE-7H Dashboard/Collaboration tail (#777)
 
 - part du 500-ramp Production `37426549774` sur `312033fab1ea8603df3bf15453c4046cee031ad3` : global P95/P99 930,24 / 2 148,25 ms, Dashboard 1 198,10 / 2 261,27 ms, Collaboration 898,56 / 2 114,48 ms ;
