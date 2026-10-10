@@ -56,6 +56,26 @@ type TenderDraft = {
   reference: null;
 };
 
+type RetailPricingPreview = {
+  grandTotal: string;
+  currencyCode: string;
+  lines: Array<{
+    catalogItemId: string;
+    resolvedUnitPrice: string;
+    discountAmount: string;
+    taxAmount: string;
+    lineTotal: string;
+  }>;
+  relationshipBenefits: Array<{
+    benefitId: string;
+    benefitCode: string;
+    nameFr: string;
+    nameEn: string;
+    discountAmount: string;
+    currencyCode: string;
+  }>;
+};
+
 type SaleDraft = {
   warehouseId: string;
   siteId: string | null;
@@ -191,6 +211,9 @@ function PosOperate({
   const [errors, setErrors] = useState<FormErrors>({});
   const [pending, setPending] = useState<SaleDraft | null>(null);
   const [lastReceipt, setLastReceipt] = useState<Sale | null>(null);
+  const [pricingPreview, setPricingPreview] = useState<RetailPricingPreview | null>(null);
+  const [pricingPreviewLoading, setPricingPreviewLoading] = useState(false);
+  const [pricingPreviewError, setPricingPreviewError] = useState("");
   const currency = cart[0]?.currencyCode || dashboard.configuration?.baseCurrencyCode || "CDF";
   const total = useMemo(
     () => cart.reduce((sum, line) => sum + line.quantity * line.unitPrice - line.discountAmount + line.taxAmount, 0),
@@ -199,6 +222,14 @@ function PosOperate({
   const overrideNeeded = useMemo(
     () => cart.some((line) => line.referenceUnitPrice === null || Math.abs(line.unitPrice - line.referenceUnitPrice) > 0.000001 || line.discountAmount > 0 || line.taxAmount > 0),
     [cart],
+  );
+  const previewRequired = cart.length > 0 && !overrideNeeded;
+  const effectiveTotal = previewRequired && pricingPreview
+    ? Number(pricingPreview.grandTotal)
+    : total;
+  const previewLineByItem = useMemo(
+    () => new Map((pricingPreview?.lines || []).map((line) => [line.catalogItemId, line])),
+    [pricingPreview?.lines],
   );
 
   useEffect(() => {
@@ -219,10 +250,68 @@ function PosOperate({
 
   useEffect(() => {
     if (!split) {
-      setAmount1(Number(total.toFixed(2)));
+      setAmount1(Number(effectiveTotal.toFixed(2)));
       setAmount2(0);
     }
-  }, [split, total]);
+  }, [effectiveTotal, split]);
+
+  useEffect(() => {
+    if (!previewRequired || !warehouseId) {
+      setPricingPreview(null);
+      setPricingPreviewError("");
+      setPricingPreviewLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setPricingPreviewLoading(true);
+      setPricingPreviewError("");
+      try {
+        const siteId = warehouses.find((warehouse) => warehouse.id === warehouseId)?.site.id || null;
+        const response = await fetch(
+          `/api/enterprise/${organizationId}/retail/pricing/preview`,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              siteId,
+              currencyCode: currency,
+              channelCode: "POS",
+              lines: cart.map((line) => ({
+                catalogItemId: line.catalogItemId,
+                quantity: line.quantity,
+              })),
+            }),
+            signal: controller.signal,
+          },
+        );
+        const body = await response.json().catch(() => null) as RetailPricingPreview | { message?: string; error?: string } | null;
+        if (!response.ok || !body || !("grandTotal" in body)) {
+          throw new Error(
+            (body && "message" in body && body.message) ||
+              (body && "error" in body && body.error) ||
+              retailText(locale, "pricingPreviewUnavailable"),
+          );
+        }
+        setPricingPreview(body as RetailPricingPreview);
+      } catch (caught) {
+        if (controller.signal.aborted) return;
+        setPricingPreview(null);
+        setPricingPreviewError(
+          customerFacingError(caught, locale, {
+            fr: translateRetailWorkspace("fr", "pricingPreviewUnavailable"),
+            en: translateRetailWorkspace("en", "pricingPreviewUnavailable"),
+          }),
+        );
+      } finally {
+        if (!controller.signal.aborted) setPricingPreviewLoading(false);
+      }
+    }, 220);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [cart, currency, locale, organizationId, previewRequired, warehouseId, warehouses]);
 
   useEffect(() => {
     if (!warehouseId) {
@@ -361,7 +450,10 @@ function PosOperate({
       || line.discountAmount < 0
       || line.discountAmount > line.quantity * line.unitPrice + line.taxAmount
     );
-    if (invalidLine || !Number.isFinite(total) || total <= 0) nextErrors.cart = copy.invalidCart;
+    if (invalidLine || !Number.isFinite(effectiveTotal) || effectiveTotal <= 0) nextErrors.cart = copy.invalidCart;
+    if (previewRequired && (pricingPreviewLoading || pricingPreviewError || !pricingPreview)) {
+      nextErrors.amounts = pricingPreviewError || retailText(locale, "pricingPreviewUnavailable");
+    }
     if (overrideNeeded && !dashboard.access.canManage) nextErrors.override = copy.overrideForbidden;
     if (overrideNeeded && dashboard.access.canManage && overrideReason.trim().length < 3) nextErrors.override = copy.overrideRequired;
 
@@ -374,7 +466,7 @@ function PosOperate({
       if (!selectedAccount2 || selectedAccount2.id === selectedAccount1?.id) nextErrors.payment2 = copy.missingSecondPayment;
     }
     const tenderTotal = amount1 + (split ? amount2 : 0);
-    if (!Number.isFinite(amount1) || amount1 <= 0 || (split && (!Number.isFinite(amount2) || amount2 <= 0)) || Math.abs(tenderTotal - total) > 0.005) {
+    if (!Number.isFinite(amount1) || amount1 <= 0 || (split && (!Number.isFinite(amount2) || amount2 <= 0)) || Math.abs(tenderTotal - effectiveTotal) > 0.005) {
       nextErrors.amounts = copy.paymentMismatch;
     }
 
@@ -419,6 +511,8 @@ function PosOperate({
       setSplit(false);
       setAmount2(0);
       setErrors({});
+      setPricingPreview(null);
+      setPricingPreviewError("");
       await reload();
     }
   }
@@ -496,7 +590,7 @@ function PosOperate({
           <div className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
             <div className="flex items-center justify-between gap-3">
               <h3 className="font-black text-dtsc-ink">{copy.basket}</h3>
-              <span className="text-sm font-black text-dtsc-blue">{moneyValue(total, currency, locale)}</span>
+              <span className="text-sm font-black text-dtsc-blue">{moneyValue(effectiveTotal, currency, locale)}</span>
             </div>
             <div className="mt-3 grid min-w-0 gap-3">
               {cart.map((line) => (
@@ -527,6 +621,21 @@ function PosOperate({
               ))}
               {!cart.length ? <EmptyState compact title={retailText(locale, "emptyBasket")} description={retailText(locale, "emptyBasketDescription")} /> : null}
               {errors.cart ? <p role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm font-bold text-rose-700 dark:text-rose-200">{errors.cart}</p> : null}
+              {previewRequired && pricingPreviewLoading ? <p className="rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-xs font-bold text-dtsc-muted">{retailText(locale, "pricingPreviewLoading")}</p> : null}
+              {previewRequired && pricingPreviewError ? <p role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm font-bold text-rose-700 dark:text-rose-200">{pricingPreviewError}</p> : null}
+              {pricingPreview?.relationshipBenefits?.length ? (
+                <div className="rounded-xl border border-cyan-400/30 bg-cyan-400/5 p-3">
+                  <p className="text-sm font-black text-dtsc-ink">{retailText(locale, "relationshipBenefitsApplied")}</p>
+                  <p className="mt-1 text-xs font-semibold leading-5 text-dtsc-muted">{retailText(locale, "relationshipBenefitServerApplied")}</p>
+                  <div className="mt-2 flex min-w-0 flex-wrap gap-2">
+                    {pricingPreview.relationshipBenefits.map((benefit) => (
+                      <span key={benefit.benefitId} className="rounded-full border border-cyan-400/30 bg-dtsc-surface px-3 py-1 text-xs font-black text-cyan-700 dark:text-cyan-300">
+                        {locale === "en" ? benefit.nameEn : benefit.nameFr} · -{moneyValue(benefit.discountAmount, benefit.currencyCode, locale)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
             {overrideNeeded && dashboard.access.canManage ? (
               <div className="mt-3">
@@ -647,10 +756,10 @@ function PosOperate({
 
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="text-lg font-black text-dtsc-ink">{copy.total}: {moneyValue(total, currency, locale)}</p>
+                <p className="text-lg font-black text-dtsc-ink">{copy.total}: {moneyValue(effectiveTotal, currency, locale)}</p>
                 <p className="mt-1 text-xs font-semibold text-dtsc-muted">{copy.serverAuthority}</p>
               </div>
-              <Button type="submit" disabled={Boolean(busyAction) || !dashboard.access.canWrite}>
+              <Button type="submit" disabled={Boolean(busyAction) || !dashboard.access.canWrite || (previewRequired && (pricingPreviewLoading || Boolean(pricingPreviewError) || !pricingPreview))}>
                 <ShoppingCart className="h-4 w-4" />{copy.review}
               </Button>
             </div>
@@ -702,20 +811,31 @@ function PosOperate({
           <div className="grid min-w-0 gap-4 p-4 sm:p-5">
             <div className="rounded-2xl border-2 border-amber-400/50 bg-amber-500/10 p-4">
               <p className="text-xs font-black uppercase tracking-[0.12em] text-dtsc-muted">{warehouses.find((warehouse) => warehouse.id === pending.warehouseId)?.name || copy.warehouse}</p>
-              <p className="mt-2 text-2xl font-black text-dtsc-ink">{moneyValue(total, pending.currencyCode, locale)}</p>
+              <p className="mt-2 text-2xl font-black text-dtsc-ink">{moneyValue(effectiveTotal, pending.currencyCode, locale)}</p>
               <p className="mt-1 text-sm font-bold text-dtsc-muted">{cart.length} {copy.lineCount}</p>
             </div>
             <p className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3 text-sm font-bold text-dtsc-ink">{copy.reviewSafety}</p>
             <div className="grid gap-2">
-              {cart.map((line) => (
-                <div key={line.catalogItemId} className="flex min-w-0 items-start justify-between gap-3 rounded-xl border border-dtsc-border bg-dtsc-page p-3">
-                  <div className="min-w-0">
-                    <p className="break-words text-sm font-black text-dtsc-ink">{line.name}</p>
-                    <p className="text-xs font-semibold text-dtsc-muted">{Number(line.quantity)} × {moneyValue(line.unitPrice, line.currencyCode, locale)}{line.discountAmount ? ` · -${moneyValue(line.discountAmount, line.currencyCode, locale)}` : ""}</p>
+              {cart.map((line) => {
+                const serverLine = previewRequired ? previewLineByItem.get(line.catalogItemId) : null;
+                const shownUnitPrice = serverLine ? Number(serverLine.resolvedUnitPrice) : line.unitPrice;
+                const shownDiscount = serverLine ? Number(serverLine.discountAmount) : line.discountAmount;
+                const shownTotal = serverLine
+                  ? Number(serverLine.lineTotal)
+                  : line.quantity * line.unitPrice - line.discountAmount + line.taxAmount;
+                return (
+                  <div key={line.catalogItemId} className="flex min-w-0 items-start justify-between gap-3 rounded-xl border border-dtsc-border bg-dtsc-page p-3">
+                    <div className="min-w-0">
+                      <p className="break-words text-sm font-black text-dtsc-ink">{line.name}</p>
+                      <p className="text-xs font-semibold text-dtsc-muted">
+                        {Number(line.quantity)} × {moneyValue(shownUnitPrice, line.currencyCode, locale)}
+                        {shownDiscount ? ` · -${moneyValue(shownDiscount, line.currencyCode, locale)}` : ""}
+                      </p>
+                    </div>
+                    <p className="shrink-0 text-sm font-black text-dtsc-ink">{moneyValue(shownTotal, line.currencyCode, locale)}</p>
                   </div>
-                  <p className="shrink-0 text-sm font-black text-dtsc-ink">{moneyValue(line.quantity * line.unitPrice - line.discountAmount + line.taxAmount, line.currencyCode, locale)}</p>
-                </div>
-              ))}
+                );
+              })}
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               {pending.tenders.map((tender, index) => {

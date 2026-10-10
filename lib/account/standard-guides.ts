@@ -166,7 +166,7 @@ export const STANDARD_PERSONAL_WORKSPACE_GUIDES: Record<StandardGuideSlug, Stand
     sections: [
       { title: "Demandes et consentements", steps: ["Ouvrez la relation précise depuis le Dashboard ou une notification.", "Lisez l’objectif et les conséquences avant de consentir.", "Aucune relation ne doit être créée par simple ressemblance de nom ou d’e-mail."] },
       { title: "Relation active", steps: ["Consultez l’organisation, le type de relation et le statut.", "Les capacités dérivées restent limitées aux permissions explicitement accordées.", "Une relation ne remplace jamais un membership d’organisation."] },
-      { title: "Avantages et services", steps: ["Ouvrez une relation active pour voir uniquement les avantages résolus par le serveur.", "Une demande d’utilisation est revérifiée au moment de l’action et peut être limitée par quota ou période.", "Les points, cartes-cadeaux et avoirs Retail restent calculés par leurs moteurs métier existants."] },
+      { title: "Avantages et services", steps: ["Ouvrez une relation active pour voir uniquement les avantages résolus par le serveur.", "Le serveur revérifie audience, dates, devise, montant minimum, conditions et quotas au moment utile.", "Un avantage Retail automatique apparaît comme appliqué uniquement après son effet réel sur le ticket ; une demande approuvée n’est pas encore une consommation.", "Les points, cartes-cadeaux et avoirs Retail restent calculés par leurs moteurs métier existants."] },
       { title: "Révocation", steps: ["La révocation retire les capacités dérivées.", "Les liens devenus interdits refusent l’accès de manière sûre.", "L’historique reste consultable selon la politique de conservation."] },
     ],
   },

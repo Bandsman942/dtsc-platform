@@ -292,5 +292,9 @@
   "dailyCloseIndependentApprover": "Validation indépendante des caisses",
   "dailyCloseIndependentApproverHelp": "Le validateur sélectionné recevra chaque caisse incluse dans cette clôture. Il devra disposer du droit Finance Caisse.",
   "dailyCloseApproverRequired": "Choisissez le validateur Finance qui contrôlera les caisses sélectionnées avant de soumettre la clôture.",
-  "cashSessionManageApproval": "Gérer la validation"
+  "cashSessionManageApproval": "Gérer la validation",
+  "relationshipBenefitsApplied": "Avantages relationnels appliqués",
+  "relationshipBenefitServerApplied": "Le serveur a intégré ces avantages au calcul du ticket avant l’encaissement.",
+  "pricingPreviewLoading": "Calcul serveur du prix et des avantages…",
+  "pricingPreviewUnavailable": "Le calcul serveur du prix et des avantages est indisponible. Actualisez puis réessayez."
 }

@@ -142,11 +142,11 @@ const COMMON_ENTERPRISE_USER_GUIDES: Record<string, EnterpriseGuideSource> = {
   RELATIONSHIP_BENEFITS: {
     title: "Relations & avantages",
     purpose: "Créer et publier des avantages destinés aux personnes dont la relation DTSC avec l’entreprise est active, sans leur ouvrir le tenant ERP.",
-    prerequisites: ["Disposer du module Relations & avantages dans le plan actif.", "Disposer d’au moins une relation active pour les attributions manuelles."],
-    steps: ["Créez l’avantage en français et en anglais.", "Choisissez le ciblage automatique, manuel ou hybride.", "Définissez période, quotas et action proposée au membre.", "Publiez l’avantage.", "Traitez les demandes dans l’onglet Demandes."],
-    workflow: ["Brouillon → Actif → Suspendu ou Archivé.", "Demande membre → Approuvée ou Refusée → Utilisée ou Annulée."],
-    controls: ["Le serveur revérifie la relation et les quotas avant chaque utilisation.", "Une relation active ne donne aucun membership implicite.", "La fidélité Retail n’est jamais recopiée dans ce module."],
-    troubleshooting: ["Avantage absent côté client : vérifiez relation ACTIVE, plan, module, audience, période et quota.", "Demande introuvable : actualisez et vérifiez la relation concernée."],
+    prerequisites: ["Disposer du module Relations & avantages dans le plan actif.", "Disposer d’au moins une relation active pour les attributions manuelles.", "Pour un effet automatique Retail, disposer de Retail POS et d’un client réellement relié au compte DTSC."],
+    steps: ["Créez l’avantage en français et en anglais.", "Choisissez le ciblage automatique, manuel ou hybride.", "Définissez période, quotas, devise, montant minimum et conditions contrôlées.", "Pour une remise ou un prix fixe Retail automatique, choisissez Retail POS et aucune demande manuelle.", "Publiez l’avantage.", "Traitez les demandes non automatiques dans l’onglet Demandes."],
+    workflow: ["Brouillon → Actif → Suspendu ou Archivé.", "Demande membre → Approuvée ou Refusée ; elle ne devient appliquée qu’après un effet métier vérifié.", "Retail automatique → calcul serveur → vente → usage appliqué ; annulation du ticket → usage annulé."],
+    controls: ["Le serveur revérifie relation, audience, module, devise, conditions et quotas avant l’effet.", "Une relation active ne donne aucun membership implicite.", "Un module sans adaptateur d’exécution reste request-only.", "Les promotions, la fidélité et les avoirs Retail ne sont jamais dupliqués."],
+    troubleshooting: ["Avantage absent : vérifiez relation ACTIVE, plan, module, audience, période, conditions et quota.", "Remise Retail absente : vérifiez client actif, devise, montant minimum, cible Retail POS et absence d’override manuel.", "Demande approuvée non appliquée : l’effet métier correspondant n’a pas encore été exécuté."],
   },
 };
 

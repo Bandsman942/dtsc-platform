@@ -25,6 +25,29 @@ export const RELATIONSHIP_BENEFIT_STATUSES = ["DRAFT", "ACTIVE", "SUSPENDED", "A
 export const RELATIONSHIP_BENEFIT_USAGE_STATUSES = ["REQUESTED", "APPROVED", "REJECTED", "CONSUMED", "CANCELLED"] as const;
 
 const optionalDate = z.string().datetime().optional().nullable();
+const controlledCode = z.string().trim().min(1).max(80).transform((value) => value.toUpperCase().replace(/[^A-Z0-9_-]/g, "_"));
+
+export const relationshipBenefitConditionsSchema = z.object({
+  channelCodes: z.array(controlledCode).max(20).optional(),
+  siteIds: z.array(z.string().trim().min(1).max(191)).max(50).optional(),
+  catalogItemIds: z.array(z.string().trim().min(1).max(191)).max(100).optional(),
+  categoryIds: z.array(z.string().trim().min(1).max(191)).max(100).optional(),
+  weekdays: z.array(z.number().int().min(0).max(6)).max(7).optional(),
+  minimumQuantity: z.number().finite().positive().max(1_000_000).optional(),
+}).strict();
+
+export const relationshipBenefitExecutionContextSchema = z.object({
+  moduleCode: controlledCode,
+  transactionAmount: z.number().finite().nonnegative().optional().nullable(),
+  currencyCode: z.string().trim().length(3).toUpperCase().optional().nullable(),
+  businessPartyId: z.string().trim().min(1).max(191).optional().nullable(),
+  siteId: z.string().trim().min(1).max(191).optional().nullable(),
+  channelCode: controlledCode.optional().nullable(),
+  catalogItemIds: z.array(z.string().trim().min(1).max(191)).max(200).default([]),
+  categoryIds: z.array(z.string().trim().min(1).max(191)).max(200).default([]),
+  quantity: z.number().finite().positive().optional().nullable(),
+  occurredAt: z.string().datetime().optional().nullable(),
+});
 
 export const relationshipBenefitCreateSchema = z.object({
   code: z.string().trim().min(2).max(64).regex(/^[A-Z0-9_]+$/),
@@ -35,6 +58,7 @@ export const relationshipBenefitCreateSchema = z.object({
   benefitType: z.enum(RELATIONSHIP_BENEFIT_TYPES),
   assignmentMode: z.enum(RELATIONSHIP_BENEFIT_ASSIGNMENT_MODES).default("AUTOMATIC"),
   relationTypes: z.array(z.enum(ENTERPRISE_IDENTITY_RELATION_TYPES)).max(30).default([]),
+  audienceRoleCode: z.string().trim().min(1).max(80).optional().nullable(),
   identityLinkIds: z.array(z.string().trim().min(1).max(191)).max(100).default([]),
   valueType: z.enum(["NONE", "PERCENT", "AMOUNT", "POINTS", "TEXT"]).default("NONE"),
   valueDecimal: z.number().finite().nonnegative().optional().nullable(),
@@ -51,11 +75,21 @@ export const relationshipBenefitCreateSchema = z.object({
   startsAt: optionalDate,
   endsAt: optionalDate,
   status: z.enum(RELATIONSHIP_BENEFIT_STATUSES).default("DRAFT"),
-  conditions: z.record(z.string(), z.unknown()).optional().nullable(),
+  conditions: relationshipBenefitConditionsSchema.optional().nullable(),
 });
 
+// Creation defaults must not leak into a partial PATCH: omitted fields must
+// stay omitted, otherwise a status-only suspension can silently reset the
+// existing Retail adapter, action, audiences or stacking configuration.
 export const relationshipBenefitPatchSchema = relationshipBenefitCreateSchema.partial().extend({
   revision: z.number().int().positive(),
+  assignmentMode: z.enum(RELATIONSHIP_BENEFIT_ASSIGNMENT_MODES).optional(),
+  relationTypes: z.array(z.enum(ENTERPRISE_IDENTITY_RELATION_TYPES)).max(30).optional(),
+  identityLinkIds: z.array(z.string().trim().min(1).max(191)).max(100).optional(),
+  valueType: z.enum(["NONE", "PERCENT", "AMOUNT", "POINTS", "TEXT"]).optional(),
+  actionCode: z.enum(RELATIONSHIP_BENEFIT_ACTION_CODES).optional(),
+  stackable: z.boolean().optional(),
+  status: z.enum(RELATIONSHIP_BENEFIT_STATUSES).optional(),
 });
 
 export const relationshipBenefitUsageSchema = z.object({
@@ -63,13 +97,13 @@ export const relationshipBenefitUsageSchema = z.object({
   benefitId: z.string().trim().min(1).max(191),
   idempotencyKey: z.string().trim().min(8).max(160),
   note: z.string().trim().max(800).optional().nullable(),
-});
+}).strict();
 
 export const relationshipBenefitUsageDecisionSchema = z.object({
-  status: z.enum(["APPROVED", "REJECTED", "CONSUMED", "CANCELLED"]),
+  status: z.enum(["APPROVED", "REJECTED", "CANCELLED"]),
   revision: z.number().int().positive(),
   note: z.string().trim().max(800).optional().nullable(),
-});
+}).strict();
 
 
 export const relationshipBenefitUsageCancelSchema = z.object({

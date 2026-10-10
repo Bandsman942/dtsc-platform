@@ -292,5 +292,9 @@
   "dailyCloseIndependentApprover": "Independent cash approval",
   "dailyCloseIndependentApproverHelp": "The selected approver will receive each till included in this close and must have Finance Cash approval permission.",
   "dailyCloseApproverRequired": "Select the Finance approver who will review the selected tills before submitting the close.",
-  "cashSessionManageApproval": "Manage approval"
+  "cashSessionManageApproval": "Manage approval",
+  "relationshipBenefitsApplied": "Relationship benefits applied",
+  "relationshipBenefitServerApplied": "The server included these benefits in the receipt calculation before payment.",
+  "pricingPreviewLoading": "Calculating server pricing and benefits…",
+  "pricingPreviewUnavailable": "Server pricing and benefit calculation is unavailable. Refresh and try again."
 }

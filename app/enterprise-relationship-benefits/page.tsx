@@ -3,6 +3,9 @@ import { RelationshipBenefitsAdminWorkspace } from "@/components/enterprise/rela
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
 import { getDashboardUrl } from "@/lib/domains";
+import { canUseModule } from "@/lib/billing/entitlements";
+import { listEnterpriseCurrencies } from "@/lib/enterprise/accounting/currency-service";
+import { getEnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
 import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
 import {
   listAssignableRelationshipLinks,
@@ -27,11 +30,22 @@ export default async function EnterpriseRelationshipBenefitsPage({
   });
   if (!capabilities.canRead) redirect(getDashboardUrl());
 
-  const [{ usage }, dataset, links] = await Promise.all([
+  const [{ usage }, dataset, links, currencies, retailAccess] = await Promise.all([
     searchParams,
     listRelationshipBenefitsForAdmin(organizationId),
     listAssignableRelationshipLinks(organizationId),
+    listEnterpriseCurrencies(organizationId),
+    canUseModule(organizationId, "RETAIL_POS"),
   ]);
+  const retailDefinition = retailAccess.allowed
+    ? getEnterpriseModuleDefinition("RETAIL_POS")
+    : null;
+  const supportedTargets = retailDefinition
+    ? [{
+        code: retailDefinition.code,
+        label: user.locale === "en" ? retailDefinition.labelEn : retailDefinition.labelFr,
+      }]
+    : [];
 
   return (
     <AppShell user={user}>
@@ -43,6 +57,11 @@ export default async function EnterpriseRelationshipBenefitsPage({
         initialBenefits={dataset.benefits}
         initialUsages={dataset.usages}
         relationshipLinks={links}
+        currencyOptions={currencies.map((currency) => ({
+          code: currency.code,
+          label: `${currency.code} · ${currency.name}`,
+        }))}
+        supportedTargets={supportedTargets}
       />
     </AppShell>
   );

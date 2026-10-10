@@ -4,7 +4,6 @@ import { FormEvent, useMemo, useState } from "react";
 import { BadgePercent, Check, CheckCircle2, Clock3, Loader2, Pause, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { notifyToast } from "@/lib/client-toast";
 import {
   ENTERPRISE_IDENTITY_RELATION_TYPES,
@@ -43,6 +42,7 @@ type Benefit = {
   status: string;
   revision: number;
   relationTypes: string[];
+  audienceRoleCodes: string[];
   assignmentCount: number;
   createdAt: string;
 };
@@ -61,6 +61,13 @@ type Usage = {
   consumedAt: string | null;
   cancelledAt: string | null;
   revision: number;
+  executionMode: string;
+  effectModuleCode: string | null;
+  effectEntityType: string | null;
+  effectEntityId: string | null;
+  effectAmount: number | null;
+  effectCurrencyCode: string | null;
+  executedAt: string | null;
   relationType: string | null;
   personName: string | null;
 };
@@ -68,6 +75,7 @@ type Usage = {
 type RelationshipLink = {
   id: string;
   relationType: string;
+  roleCode: string | null;
   personName: string;
   activatedAt: string | null;
 };
@@ -94,6 +102,8 @@ export function RelationshipBenefitsAdminWorkspace({
   initialBenefits,
   initialUsages,
   relationshipLinks,
+  currencyOptions,
+  supportedTargets,
 }: {
   organizationId: string;
   locale?: string | null;
@@ -102,6 +112,8 @@ export function RelationshipBenefitsAdminWorkspace({
   initialBenefits: Benefit[];
   initialUsages: Usage[];
   relationshipLinks: RelationshipLink[];
+  currencyOptions: Array<{ code: string; label: string }>;
+  supportedTargets: Array<{ code: string; label: string }>;
 }) {
   const english = locale === "en";
   const [tab, setTab] = useState<"CATALOGUE" | "REQUESTS">("CATALOGUE");
@@ -110,6 +122,9 @@ export function RelationshipBenefitsAdminWorkspace({
   const [links, setLinks] = useState(relationshipLinks);
   const [editorOpen, setEditorOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const [targetModuleCode, setTargetModuleCode] = useState("");
+  const [actionCode, setActionCode] = useState("REQUEST");
+  const [benefitType, setBenefitType] = useState("DISCOUNT");
 
   const benefitById = useMemo(() => new Map(benefits.map((item) => [item.id, item])), [benefits]);
   const pendingCount = usages.filter((item) => ["REQUESTED", "APPROVED"].includes(item.status)).length;
@@ -129,6 +144,17 @@ export function RelationshipBenefitsAdminWorkspace({
     const data = new FormData(form);
     const relationTypes = ENTERPRISE_IDENTITY_RELATION_TYPES.filter((relationType) => data.getAll("relationTypes").includes(relationType));
     const identityLinkIds = data.getAll("identityLinkIds").map(String);
+    const audienceRoleCode = String(data.get("audienceRoleCode") || "").trim() || null;
+    const channelCode = String(data.get("conditionChannelCode") || "").trim();
+    const weekdays = data.getAll("conditionWeekdays").map((value) => Number(value)).filter((value) => Number.isInteger(value));
+    const minimumQuantity = data.get("conditionMinimumQuantity")
+      ? Number(data.get("conditionMinimumQuantity"))
+      : null;
+    const conditions = {
+      ...(channelCode ? { channelCodes: [channelCode] } : {}),
+      ...(weekdays.length ? { weekdays } : {}),
+      ...(minimumQuantity ? { minimumQuantity } : {}),
+    };
     setBusy("create");
     try {
       const response = await fetch(`/api/enterprise/${organizationId}/relationship-benefits`, {
@@ -140,17 +166,19 @@ export function RelationshipBenefitsAdminWorkspace({
           nameEn: String(data.get("nameEn") || "").trim(),
           descriptionFr: String(data.get("descriptionFr") || "").trim(),
           descriptionEn: String(data.get("descriptionEn") || "").trim(),
-          benefitType: String(data.get("benefitType") || "OTHER"),
+          benefitType,
           assignmentMode: String(data.get("assignmentMode") || "AUTOMATIC"),
           relationTypes,
+          audienceRoleCode,
           identityLinkIds,
           valueType: String(data.get("valueType") || "NONE"),
           valueDecimal: data.get("valueDecimal") ? Number(data.get("valueDecimal")) : null,
           currencyCode: String(data.get("currencyCode") || "").trim().toUpperCase() || null,
           minimumAmount: data.get("minimumAmount") ? Number(data.get("minimumAmount")) : null,
-          actionCode: String(data.get("actionCode") || "NONE"),
+          actionCode,
           actionLabelFr: String(data.get("actionLabelFr") || "").trim() || null,
           actionLabelEn: String(data.get("actionLabelEn") || "").trim() || null,
+          targetModuleCode: targetModuleCode || null,
           usageLimitTotal: data.get("usageLimitTotal") ? Number(data.get("usageLimitTotal")) : null,
           usageLimitPerPeriod: data.get("usageLimitPerPeriod") ? Number(data.get("usageLimitPerPeriod")) : null,
           usagePeriodDays: data.get("usagePeriodDays") ? Number(data.get("usagePeriodDays")) : null,
@@ -158,12 +186,16 @@ export function RelationshipBenefitsAdminWorkspace({
           startsAt: data.get("startsAt") ? new Date(String(data.get("startsAt"))).toISOString() : null,
           endsAt: data.get("endsAt") ? new Date(String(data.get("endsAt"))).toISOString() : null,
           status: String(data.get("status") || "DRAFT"),
+          conditions: Object.keys(conditions).length ? conditions : null,
         }),
       });
       const body = await response.json().catch(() => null);
       if (!response.ok) throw new Error(body?.message || (english ? "Benefit could not be saved." : "L’avantage n’a pas pu être enregistré."));
       await refresh();
       form.reset();
+      setTargetModuleCode("");
+      setActionCode("REQUEST");
+      setBenefitType("DISCOUNT");
       setEditorOpen(false);
       notifyToast(body?.message || (english ? "Benefit saved." : "Avantage enregistré."), "success");
     } catch (error) {
@@ -192,7 +224,7 @@ export function RelationshipBenefitsAdminWorkspace({
     }
   }
 
-  async function decideUsage(usage: Usage, status: "APPROVED" | "REJECTED" | "CONSUMED" | "CANCELLED") {
+  async function decideUsage(usage: Usage, status: "APPROVED" | "REJECTED" | "CANCELLED") {
     setBusy(`usage:${usage.id}`);
     try {
       const response = await fetch(`/api/enterprise/${organizationId}/relationship-benefits/usages/${usage.id}`, {
@@ -244,7 +276,7 @@ export function RelationshipBenefitsAdminWorkspace({
                     title={english ? benefit.nameEn : benefit.nameFr}
                     leading={<BadgePercent className="h-5 w-5 text-cyan-600" />}
                     status={<StatusBadge tone={tone(benefit.status)}>{localStatus(benefit.status, english)}</StatusBadge>}
-                    meta={`${benefit.code} · ${benefit.relationTypes.length ? benefit.relationTypes.map((item) => getEnterpriseIdentityRelationLabel(item as EnterpriseIdentityRelationType, locale)).join(", ") : (english ? "All active relationship types" : "Tous les types de relation active")}`}
+                    meta={`${benefit.code} · ${benefit.relationTypes.length ? benefit.relationTypes.map((item) => getEnterpriseIdentityRelationLabel(item as EnterpriseIdentityRelationType, locale)).join(", ") : (english ? "All active relationship types" : "Tous les types de relation active")}${benefit.audienceRoleCodes?.length ? ` · ${english ? "Role/segment" : "Rôle/segment"}: ${benefit.audienceRoleCodes.join(", ")}` : ""}`}
                     description={english ? benefit.descriptionEn : benefit.descriptionFr}
                     actions={canManage ? (
                       <div data-no-group-swipe data-responsive-actions className="flex flex-wrap gap-2">
@@ -263,7 +295,7 @@ export function RelationshipBenefitsAdminWorkspace({
         ) : null}
 
         {tab === "REQUESTS" ? (
-          <ModuleSection title={english ? "Member requests" : "Demandes des membres"} description={english ? "Approve, reject or mark an approved benefit as consumed." : "Approuvez, refusez ou marquez comme utilisé un avantage déjà approuvé."}>
+          <ModuleSection title={english ? "Member requests" : "Demandes des membres"} description={english ? "Approve or reject requests. A benefit is marked applied only by a verified business effect." : "Approuvez ou refusez les demandes. Un avantage n’est marqué appliqué qu’après un effet métier vérifié."}>
             {usages.length ? (
               <BusinessList ariaLabel={english ? "Benefit requests" : "Demandes d’avantages"}>
                 {usages.map((usage) => {
@@ -276,14 +308,24 @@ export function RelationshipBenefitsAdminWorkspace({
                         leading={usage.status === "REQUESTED" ? <Clock3 className="h-5 w-5 text-amber-500" /> : <CheckCircle2 className="h-5 w-5 text-cyan-600" />}
                         status={<StatusBadge tone={tone(usage.status)}>{localStatus(usage.status, english)}</StatusBadge>}
                         meta={benefit ? (english ? benefit.nameEn : benefit.nameFr) : (english ? "Benefit" : "Avantage")}
-                        description={usage.note || (english ? "No member note." : "Aucune note du membre.")}
+                        description={
+                          usage.status === "CONSUMED" && usage.effectEntityId
+                            ? english
+                              ? `Applied by ${usage.effectModuleCode || "business module"} · ${usage.effectAmount ?? "—"} ${usage.effectCurrencyCode || ""} · ${usage.effectEntityType || "entity"} ${usage.effectEntityId}`
+                              : `Appliqué par ${usage.effectModuleCode || "module métier"} · ${usage.effectAmount ?? "—"} ${usage.effectCurrencyCode || ""} · ${usage.effectEntityType || "entité"} ${usage.effectEntityId}`
+                            : usage.status === "APPROVED"
+                              ? english
+                                ? "Approved — waiting for a verified business execution before consumption."
+                                : "Approuvé — en attente d’une exécution métier vérifiée avant consommation."
+                              : usage.note || (english ? "No member note." : "Aucune note du membre.")
+                        }
                         actions={canManage ? (
                           <div data-no-group-swipe data-responsive-actions className="flex flex-wrap gap-2">
                             {usage.status === "REQUESTED" ? <>
                               <Button type="button" size="sm" onClick={(event) => { event.stopPropagation(); void decideUsage(usage, "APPROVED"); }} disabled={busy !== null}><Check className="mr-1 h-4 w-4" />{english ? "Approve" : "Approuver"}</Button>
                               <Button type="button" size="sm" variant="outline" onClick={(event) => { event.stopPropagation(); void decideUsage(usage, "REJECTED"); }} disabled={busy !== null}><X className="mr-1 h-4 w-4" />{english ? "Reject" : "Refuser"}</Button>
                             </> : null}
-                            {usage.status === "APPROVED" ? <Button type="button" size="sm" onClick={(event) => { event.stopPropagation(); void decideUsage(usage, "CONSUMED"); }} disabled={busy !== null}><CheckCircle2 className="mr-1 h-4 w-4" />{english ? "Mark used" : "Marquer utilisé"}</Button> : null}
+                            {usage.status === "APPROVED" ? <span className="inline-flex min-h-9 items-center rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-xs font-bold text-dtsc-muted">{english ? "Business execution required" : "Exécution métier requise"}</span> : null}
                           </div>
                         ) : null}
                       />
@@ -314,7 +356,7 @@ export function RelationshipBenefitsAdminWorkspace({
             <label className="text-sm font-black text-dtsc-ink">Name EN<input name="nameEn" required className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal" /></label>
             <label className="text-sm font-black text-dtsc-ink sm:col-span-2">Description FR<textarea name="descriptionFr" required rows={3} className="mt-1.5 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 font-normal" /></label>
             <label className="text-sm font-black text-dtsc-ink sm:col-span-2">Description EN<textarea name="descriptionEn" required rows={3} className="mt-1.5 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 font-normal" /></label>
-            <label className="text-sm font-black text-dtsc-ink">{english ? "Benefit type" : "Type d’avantage"}<select name="benefitType" defaultValue="DISCOUNT" className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal"><option value="DISCOUNT">{english ? "Discount" : "Remise"}</option><option value="FREE_SERVICE">{english ? "Free service" : "Service offert"}</option><option value="DELIVERY">{english ? "Delivery" : "Livraison"}</option><option value="PRIORITY">{english ? "Priority" : "Priorité"}</option><option value="ACCESS">{english ? "Exclusive access" : "Accès exclusif"}</option><option value="BOOKING">{english ? "Booking" : "Réservation"}</option><option value="OTHER">{english ? "Other" : "Autre"}</option></select></label>
+            <label className="text-sm font-black text-dtsc-ink">{english ? "Benefit type" : "Type d’avantage"}<select name="benefitType" value={benefitType} onChange={(event) => { const value = event.target.value; setBenefitType(value); if (!["DISCOUNT", "FIXED_PRICE"].includes(value) && targetModuleCode === "RETAIL_POS") { setTargetModuleCode(""); setActionCode("REQUEST"); } }} className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal"><option value="DISCOUNT">{english ? "Discount" : "Remise"}</option><option value="FIXED_PRICE">{english ? "Fixed price" : "Prix fixe"}</option><option value="FREE_SERVICE">{english ? "Free service" : "Service offert"}</option><option value="DELIVERY">{english ? "Delivery" : "Livraison"}</option><option value="PRIORITY">{english ? "Priority" : "Priorité"}</option><option value="ACCESS">{english ? "Exclusive access" : "Accès exclusif"}</option><option value="BOOKING">{english ? "Booking" : "Réservation"}</option><option value="OTHER">{english ? "Other" : "Autre"}</option></select></label>
             <label className="text-sm font-black text-dtsc-ink">{english ? "Targeting" : "Attribution"}<select name="assignmentMode" defaultValue="AUTOMATIC" className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal"><option value="AUTOMATIC">{english ? "Automatic by relationship" : "Automatique par relation"}</option><option value="MANUAL">{english ? "Manual" : "Manuelle"}</option><option value="HYBRID">{english ? "Hybrid" : "Hybride"}</option></select></label>
           </div>
 
@@ -323,13 +365,24 @@ export function RelationshipBenefitsAdminWorkspace({
             <div className="grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {ENTERPRISE_IDENTITY_RELATION_TYPES.map((relationType) => <label key={relationType} className="flex min-w-0 items-center gap-2 text-sm text-dtsc-ink"><input type="checkbox" name="relationTypes" value={relationType} /> <span className="break-words">{getEnterpriseIdentityRelationLabel(relationType, locale)}</span></label>)}
             </div>
-            <p className="mt-3 text-xs leading-5 text-dtsc-muted">{english ? "Leave empty to target every active relationship when using automatic mode." : "Laissez vide pour cibler toutes les relations actives en mode automatique."}</p>
+            <div className="mt-4 max-w-xl">
+              <label className="text-sm font-black text-dtsc-ink">
+                {english ? "Exact role / segment code (optional)" : "Code exact du rôle / segment (facultatif)"}
+                <input name="audienceRoleCode" maxLength={80} placeholder={english ? "Example: LOYAL_CUSTOMER" : "Exemple : LOYAL_CUSTOMER"} className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal" />
+              </label>
+              <p className="mt-1 text-xs leading-5 text-dtsc-muted">
+                {english
+                  ? "When filled, the benefit applies only when the active relationship has this exact role code. Select at least one relationship type."
+                  : "Si renseigné, l’avantage s’applique uniquement lorsque la relation active porte exactement ce code de rôle. Sélectionnez au moins un type de relation."}
+              </p>
+            </div>
+            <p className="mt-3 text-xs leading-5 text-dtsc-muted">{english ? "Leave relationship types empty to target every active relationship. Role targeting requires at least one selected type." : "Laissez les types de relation vides pour cibler toutes les relations actives. Le ciblage par rôle exige au moins un type sélectionné."}</p>
           </fieldset>
 
           <fieldset className="min-w-0 rounded-xl border border-dtsc-border p-4">
             <legend className="px-2 text-sm font-black text-dtsc-ink">{english ? "Manual assignments" : "Attributions manuelles"}</legend>
             <div className="grid min-w-0 gap-2 sm:grid-cols-2">
-              {links.map((link) => <label key={link.id} className="flex min-w-0 items-center gap-2 text-sm text-dtsc-ink"><input type="checkbox" name="identityLinkIds" value={link.id} /> <span className="break-words">{link.personName} · {getEnterpriseIdentityRelationLabel(link.relationType as EnterpriseIdentityRelationType, locale)}</span></label>)}
+              {links.map((link) => <label key={link.id} className="flex min-w-0 items-center gap-2 text-sm text-dtsc-ink"><input type="checkbox" name="identityLinkIds" value={link.id} /> <span className="break-words">{link.personName} · {getEnterpriseIdentityRelationLabel(link.relationType as EnterpriseIdentityRelationType, locale)}{link.roleCode ? ` · ${link.roleCode}` : ""}</span></label>)}
               {!links.length ? <p className="text-sm text-dtsc-muted">{english ? "No active relationship is available." : "Aucune relation active n’est disponible."}</p> : null}
             </div>
           </fieldset>
@@ -337,8 +390,10 @@ export function RelationshipBenefitsAdminWorkspace({
           <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <label className="text-sm font-black text-dtsc-ink">{english ? "Value type" : "Type de valeur"}<select name="valueType" defaultValue="NONE" className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal"><option value="NONE">{english ? "No numeric value" : "Sans valeur numérique"}</option><option value="PERCENT">{english ? "Percentage" : "Pourcentage"}</option><option value="AMOUNT">{english ? "Amount" : "Montant"}</option><option value="POINTS">Points</option></select></label>
             <label className="text-sm font-black text-dtsc-ink">{english ? "Value" : "Valeur"}<input name="valueDecimal" type="number" min="0" step="0.01" className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal" /></label>
-            <label className="text-sm font-black text-dtsc-ink">{english ? "Currency" : "Devise"}<Input name="currencyCode" placeholder={english ? "Select currency" : "Sélectionner une devise"} className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal" /></label>
-            <label className="text-sm font-black text-dtsc-ink">{english ? "Member action" : "Action membre"}<select name="actionCode" defaultValue="REQUEST" className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal"><option value="NONE">{english ? "Informational only" : "Information uniquement"}</option><option value="REQUEST">{english ? "Request" : "Demander"}</option><option value="CLAIM">{english ? "Claim" : "Utiliser"}</option><option value="BOOK">{english ? "Book" : "Réserver"}</option><option value="CONTACT">{english ? "Contact company" : "Contacter l’entreprise"}</option></select></label>
+            <label className="text-sm font-black text-dtsc-ink">{english ? "Currency" : "Devise"}<select name="currencyCode" defaultValue="" className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal"><option value="">{english ? "No currency constraint" : "Sans contrainte de devise"}</option>{currencyOptions.map((currency) => <option key={currency.code} value={currency.code}>{currency.label}</option>)}</select></label>
+            <label className="text-sm font-black text-dtsc-ink">{english ? "Minimum transaction amount" : "Montant minimum de l’opération"}<input name="minimumAmount" type="number" min="0" step="0.01" disabled={targetModuleCode !== "RETAIL_POS"} className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal disabled:cursor-not-allowed disabled:opacity-50" /><span className="mt-1 block text-xs font-normal leading-5 text-dtsc-muted">{targetModuleCode === "RETAIL_POS" ? (english ? "Checked against the server-computed Retail transaction total." : "Contrôlé sur le total de l’opération Retail calculé par le serveur.") : (english ? "Available only with a certified execution target." : "Disponible uniquement avec une cible d’exécution certifiée.")}</span></label>
+            <label className="text-sm font-black text-dtsc-ink">{english ? "Execution target" : "Cible d’exécution"}<select name="targetModuleCode" value={targetModuleCode} onChange={(event) => { const value = event.target.value; setTargetModuleCode(value); if (value === "RETAIL_POS") setActionCode("NONE"); else if (actionCode === "NONE") setActionCode("REQUEST"); }} className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal"><option value="">{english ? "Request / manual business processing" : "Demande / traitement métier manuel"}</option>{supportedTargets.map((target) => <option key={target.code} value={target.code} disabled={target.code === "RETAIL_POS" && !["DISCOUNT", "FIXED_PRICE"].includes(benefitType)}>{target.label}</option>)}</select><span className="mt-1 block text-xs font-normal leading-5 text-dtsc-muted">{english ? "Retail POS monetary benefits are applied automatically by the server. Other benefit types remain requests until a verified adapter exists." : "Les avantages monétaires Retail POS sont appliqués automatiquement par le serveur. Les autres types restent des demandes jusqu’à l’existence d’un adaptateur vérifié."}</span></label>
+            <label className="text-sm font-black text-dtsc-ink">{english ? "Member action" : "Action membre"}<select name="actionCode" value={actionCode} onChange={(event) => setActionCode(event.target.value)} disabled={targetModuleCode === "RETAIL_POS"} className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal disabled:cursor-not-allowed disabled:opacity-50"><option value="NONE">{english ? "No manual request" : "Aucune demande manuelle"}</option><option value="REQUEST">{english ? "Request" : "Demander"}</option><option value="CLAIM">{english ? "Claim" : "Utiliser"}</option><option value="BOOK">{english ? "Book" : "Réserver"}</option><option value="CONTACT">{english ? "Contact company" : "Contacter l’entreprise"}</option></select></label>
             <label className="text-sm font-black text-dtsc-ink">{english ? "French action label" : "Libellé action FR"}<input name="actionLabelFr" placeholder="Demander une livraison" className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal" /></label>
             <label className="text-sm font-black text-dtsc-ink">{english ? "English action label" : "Libellé action EN"}<input name="actionLabelEn" placeholder="Request delivery" className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal" /></label>
             <label className="text-sm font-black text-dtsc-ink">{english ? "Total limit per relationship" : "Limite totale par relation"}<input name="usageLimitTotal" type="number" min="1" className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal" /></label>
@@ -348,6 +403,29 @@ export function RelationshipBenefitsAdminWorkspace({
             <label className="text-sm font-black text-dtsc-ink">{english ? "Ends at" : "Fin"}<input name="endsAt" type="datetime-local" className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal" /></label>
             <label className="flex min-h-11 items-center gap-2 self-end text-sm font-black text-dtsc-ink"><input type="checkbox" name="stackable" /> {english ? "Can be combined" : "Cumulable"}</label>
           </div>
+
+          <fieldset disabled={targetModuleCode !== "RETAIL_POS"} className="min-w-0 rounded-xl border border-dtsc-border p-4 disabled:opacity-50">
+            <legend className="px-2 text-sm font-black text-dtsc-ink">{english ? "Controlled business conditions" : "Conditions métier contrôlées"}</legend>
+            <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <label className="text-sm font-black text-dtsc-ink">{english ? "Channel" : "Canal"}<select name="conditionChannelCode" defaultValue="" className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal"><option value="">{english ? "Any channel" : "Tous les canaux"}</option><option value="POS">POS</option></select></label>
+              <label className="text-sm font-black text-dtsc-ink">{english ? "Minimum quantity" : "Quantité minimale"}<input name="conditionMinimumQuantity" type="number" min="0.001" step="0.001" className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 font-normal" /></label>
+              <div className="min-w-0 sm:col-span-2 lg:col-span-3">
+                <p className="text-sm font-black text-dtsc-ink">{english ? "Applicable weekdays" : "Jours applicables"}</p>
+                <div className="mt-2 flex min-w-0 flex-wrap gap-3">
+                  {[
+                    { value: 1, fr: "Lun", en: "Mon" },
+                    { value: 2, fr: "Mar", en: "Tue" },
+                    { value: 3, fr: "Mer", en: "Wed" },
+                    { value: 4, fr: "Jeu", en: "Thu" },
+                    { value: 5, fr: "Ven", en: "Fri" },
+                    { value: 6, fr: "Sam", en: "Sat" },
+                    { value: 0, fr: "Dim", en: "Sun" },
+                  ].map((day) => <label key={day.value} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border px-3 text-sm font-semibold text-dtsc-ink"><input type="checkbox" name="conditionWeekdays" value={day.value} />{english ? day.en : day.fr}</label>)}
+                </div>
+              </div>
+            </div>
+            <p className="mt-3 text-xs leading-5 text-dtsc-muted">{targetModuleCode === "RETAIL_POS" ? (english ? "Only these controlled conditions are executed by the certified Retail adapter. Unknown JSON conditions are refused server-side." : "Seules ces conditions contrôlées sont exécutées par l’adaptateur Retail certifié. Toute condition JSON inconnue est refusée côté serveur.") : (english ? "Choose a certified execution target to configure transactional conditions." : "Choisissez une cible d’exécution certifiée pour configurer des conditions transactionnelles.")}</p>
+          </fieldset>
 
           <div data-responsive-actions className="sticky bottom-0 -mx-4 -mb-4 flex flex-wrap justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface px-4 py-3 sm:-mx-5 sm:-mb-5 sm:px-5">
             <Button type="button" variant="outline" onClick={() => setEditorOpen(false)} disabled={busy !== null}>{english ? "Cancel" : "Annuler"}</Button>
