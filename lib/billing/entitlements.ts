@@ -34,6 +34,8 @@ export type OrganizationEntitlements = {
   organizationStatus: string;
   organizationType: string;
   sectorCode: string | null;
+  // From the same entitlement snapshot as modules; avoids a second subtype query in access resolution.
+  businessSubtypeCode: string | null;
   isDtscInternal: boolean;
   offerId: string | null;
   offerName: string | null;
@@ -255,6 +257,7 @@ export async function getOrganizationEntitlements(organizationId: string | null 
       organizationStatus: commercialContext.organizationStatus,
       organizationType: commercialContext.organizationType,
       sectorCode: commercialContext.sectorCode,
+      businessSubtypeCode: null,
       isDtscInternal: true,
       offerId: null,
       offerName: "DTSC Internal",
@@ -344,6 +347,7 @@ export async function getOrganizationEntitlements(organizationId: string | null 
     organizationStatus: organization.status,
     organizationType: organization.organizationType,
     sectorCode: organization.sectorCode,
+    businessSubtypeCode,
     isDtscInternal: false,
     offerId: commercialContext.offer?.id || null,
     offerName: commercialContext.offer?.name || null,

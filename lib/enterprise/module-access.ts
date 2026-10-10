@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { getOrganizationEntitlements } from "@/lib/billing/entitlements";
+import { getOrganizationEntitlements, type OrganizationEntitlements } from "@/lib/billing/entitlements";
 import { getActiveEnterpriseModuleRestriction } from "@/lib/enterprise/module-access-restrictions";
 import {
   getEnterpriseModuleDefinition,
@@ -132,8 +132,25 @@ function permissionsAllowAction(definition: EnterpriseModuleDefinition, permissi
     .some((permission) => permissionMatchesAction(permission, action));
 }
 
+// Reproduce the canonical alias precedence of the prior direct EnterpriseModule
+// query using the *same rows* carried in the computed entitlement snapshot.
+// Enabled dependencies deliberately track all enabled aliases (legacy behavior).
+export function buildCanonicalTenantModuleIndex(modules: ReadonlyArray<Pick<OrganizationEntitlements["modules"][number], "id" | "moduleCode" | "isEnabled">>) {
+  const tenantModuleByCanonicalCode = new Map<string, { id: string; moduleCode: string; isEnabled: boolean }>();
+  const enabledCanonicalCodes = new Set<string>();
+  for (const tenantModule of modules) {
+    const canonicalCode = normalizeEnterpriseModuleCode(tenantModule.moduleCode);
+    const current = tenantModuleByCanonicalCode.get(canonicalCode);
+    if (!current || tenantModule.moduleCode === canonicalCode) tenantModuleByCanonicalCode.set(canonicalCode, tenantModule);
+    if (tenantModule.isEnabled) enabledCanonicalCodes.add(canonicalCode);
+  }
+  return { tenantModuleByCanonicalCode, enabledCanonicalCodes };
+}
+
 async function getEnterpriseAccessSnapshot(userId: string, organizationId: string): Promise<EnterpriseAccessSnapshot | null> {
-  const [membership, tenantModules, entitlements, subtypeSelection] = await Promise.all([
+  // Entitlements already load the full tenant module list and its business subtype.
+  // Re-reading those same tables on every authorization adds DB fan-out at scale.
+  const [membership, entitlements] = await Promise.all([
     prisma.organizationMember.findFirst({
       where: { userId, organizationId, status: "ACTIVE", removedAt: null },
       select: {
@@ -148,20 +165,27 @@ async function getEnterpriseAccessSnapshot(userId: string, organizationId: strin
         organization: { select: { id: true, status: true, deletedAt: true, organizationType: true, sectorCode: true, settingsJson: true } },
       },
     }),
-    prisma.enterpriseModule.findMany({
-      where: { organizationId },
-      select: { id: true, moduleCode: true, isEnabled: true },
-    }),
     getOrganizationEntitlements(organizationId),
-    prisma.enterpriseBusinessSubtypeSelection.findUnique({
-      where: { organizationId },
-      select: { sectorCode: true, businessSubtypeCode: true },
-    }),
   ]);
 
   if (!membership || membership.organization.deletedAt || membership.organization.status !== "ACTIVE" || membership.organization.organizationType !== "CLIENT") {
     return null;
   }
+
+  // Rare error/fallback path: retain the original denied outcomes if an
+  // entitlement snapshot cannot be resolved, never grant access on this path.
+  const [tenantModules, subtypeSelection] = entitlements
+    ? ([entitlements.modules, null] as const)
+    : await Promise.all([
+        prisma.enterpriseModule.findMany({
+          where: { organizationId },
+          select: { id: true, moduleCode: true, isEnabled: true },
+        }),
+        prisma.enterpriseBusinessSubtypeSelection.findUnique({
+          where: { organizationId },
+          select: { sectorCode: true, businessSubtypeCode: true },
+        }),
+      ]);
 
   const position = membership.positionId || membership.positionCode
     ? await prisma.enterprisePosition.findFirst({
@@ -177,14 +201,7 @@ async function getEnterpriseAccessSnapshot(userId: string, organizationId: strin
       })
     : null;
 
-  const tenantModuleByCanonicalCode = new Map<string, { id: string; moduleCode: string; isEnabled: boolean }>();
-  const enabledCanonicalCodes = new Set<string>();
-  for (const tenantModule of tenantModules) {
-    const canonicalCode = normalizeEnterpriseModuleCode(tenantModule.moduleCode);
-    const current = tenantModuleByCanonicalCode.get(canonicalCode);
-    if (!current || tenantModule.moduleCode === canonicalCode) tenantModuleByCanonicalCode.set(canonicalCode, tenantModule);
-    if (tenantModule.isEnabled) enabledCanonicalCodes.add(canonicalCode);
-  }
+  const { tenantModuleByCanonicalCode, enabledCanonicalCodes } = buildCanonicalTenantModuleIndex(tenantModules);
 
   const entitlementByCanonicalCode = new Map<string, { allowed: boolean; message: string }>();
   for (const entitlement of entitlements?.modules || []) {
@@ -197,9 +214,11 @@ async function getEnterpriseAccessSnapshot(userId: string, organizationId: strin
 
   const inheritedRolePermissions = membership.organizationRoleAssignments.flatMap((assignment) => permissionList(assignment.role.permissionsJson));
   const permissions = Array.from(new Set([...permissionList(position?.permissionsJson), ...inheritedRolePermissions]));
-  const businessSubtypeCode = subtypeSelection?.sectorCode === membership.organization.sectorCode
-    ? subtypeSelection.businessSubtypeCode
-    : null;
+  const businessSubtypeCode = entitlements
+    ? entitlements.businessSubtypeCode
+    : subtypeSelection?.sectorCode === membership.organization.sectorCode
+      ? subtypeSelection.businessSubtypeCode
+      : null;
 
   return {
     userId,

@@ -27,10 +27,13 @@ export async function getEnterpriseCoreV2Access({
   moduleCode: string;
   action: EnterpriseCoreV2Action;
 }) {
-  const membership = await requireEnterpriseMembership(session, organizationId);
-  if (!membership) return null;
-  const capabilities = await resolveEnterpriseModuleCapabilities({ userId: session.userId, organizationId, moduleCode });
-  if (!capabilityAllowsAction(capabilities, action)) return null;
+  // Both reads enforce membership independently; overlap their I/O without
+  // relying on a session claim or widening the authorization decision.
+  const [membership, capabilities] = await Promise.all([
+    requireEnterpriseMembership(session, organizationId),
+    resolveEnterpriseModuleCapabilities({ userId: session.userId, organizationId, moduleCode }),
+  ]);
+  if (!membership || !capabilityAllowsAction(capabilities, action)) return null;
   return {
     membership,
     capabilities,
