@@ -25,6 +25,7 @@ For every successful run:
 - confirm the workflow log reports the governed multi-tenant pool topology only as tenant/identity counts, never cookies;
 - confirm the initial observability snapshot succeeds through GitHub OIDC before k6 starts and no CTO cookie is required;
 - retain the GitHub Actions artifact;
+- compare Shop/Collaboration server-phase P95/P99 (missing is null) against full k6 HTTP latency; retain all original gates;
 - archive the sanitized report with `archive-scale7-certification.mjs`;
 - verify the dashboard displays the archived stage/profile without exposing secrets.
 

@@ -56,6 +56,7 @@ export default async function DashboardPage() {
   return (
     <AppShell
       user={user}
+      verifiedSession={session}
       precomputed={{
         unreadNotifications: workspace.account.unreadNotificationCount,
         pendingEnterpriseInvitations: workspace.account.pendingInvitationCount,
