@@ -612,7 +612,15 @@ export async function updateRelationshipBenefit({
         ? normalizeEnterpriseModuleCode(String(input.targetModuleCode))
         : null
       : current.targetModuleCode;
-  await validateRelationshipBenefitConfiguration(organizationId, {
+  // A status-only suspension/archive is a restrictive transition, not a
+  // configuration change. It must remain possible even if an entitlement,
+  // reference, currency or certified adapter is no longer available. Any
+  // configuration edit or reactivation still goes through full validation.
+  const statusOnlyDeactivation =
+    (input.status === "SUSPENDED" || input.status === "ARCHIVED") &&
+    Object.keys(input).every((key) => key === "revision" || key === "status");
+  if (!statusOnlyDeactivation) {
+    await validateRelationshipBenefitConfiguration(organizationId, {
     benefitType:
       "benefitType" in input ? String(input.benefitType) : current.benefitType,
     valueType: "valueType" in input ? String(input.valueType) : current.valueType,
@@ -642,7 +650,8 @@ export async function updateRelationshipBenefit({
     actionCode:
       "actionCode" in input ? String(input.actionCode) : current.actionCode,
     conditions: mergedConditions,
-  });
+    });
+  }
 
   if (identityLinkIds?.length) {
     const count = await prisma.enterpriseIdentityLink.count({
