@@ -140,6 +140,23 @@ hasAll(service, [
 check(!service.includes('where: { organizationId, moduleCode: "RETAIL_POS", isEnabled: true }'), "Retail snapshot must not rely only on isEnabled");
 check(!service.includes('"Marquer utilisé"'), "Server service must not encode UI-only manual consumption");
 
+const updateBenefitStart = service.indexOf("export async function updateRelationshipBenefit(");
+const updateBenefitEnd = service.indexOf("async function retailSnapshot(", updateBenefitStart);
+const updateBenefitBlock = service.slice(updateBenefitStart, updateBenefitEnd);
+hasAll(updateBenefitBlock, [
+  'input.status === "SUSPENDED" || input.status === "ARCHIVED"',
+  'Object.keys(input).every((key) => key === "revision" || key === "status")',
+  "if (!statusOnlyDeactivation) {",
+  "await validateRelationshipBenefitConfiguration(organizationId, {",
+], "Restrictive status-only transitions must remain available");
+check(
+  updateBenefitStart >= 0 &&
+    updateBenefitEnd > updateBenefitStart &&
+    updateBenefitBlock.indexOf("if (!statusOnlyDeactivation) {") <
+      updateBenefitBlock.indexOf("await validateRelationshipBenefitConfiguration(organizationId, {"),
+  "Configuration edits and reactivation must still run full benefit validation",
+);
+
 hasAll(adapter, [
   'canUseModule(args.organizationId, "RELATIONSHIP_BENEFITS")',
   'canUseModule(args.organizationId, "RETAIL_POS")',
