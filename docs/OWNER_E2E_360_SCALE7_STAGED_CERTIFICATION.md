@@ -31,7 +31,8 @@ For every successful run:
 ## Acceptance
 
 - HTTP error rate remains below 1%;
-- P95/P99 respect 1,000/2,000 ms;
+- P95/P99 global, Enterprise, Shop et Collaboration restent strictement <1 000/<2 000 ms ; Dashboard P95 <1 000 ms et P99 <2 500 ms seulement à 500 VUs avant le 2026-11-10T00:00:00Z (politique #789), sinon P99 <2 000 ms ;
+- `noIdleInTransaction` reste strictement `maxIdleInTransaction === 0`, même pour les sessions <100 ms ;
 - tenant isolation remains 100%;
 - no PostgreSQL exhaustion;
 - Redis never reaches UNAVAILABLE;

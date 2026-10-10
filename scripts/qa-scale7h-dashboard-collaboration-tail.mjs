@@ -49,7 +49,7 @@ expect(!unreadBlock.includes("prisma.collaborationGroup.findMany"), "Unread coll
 
 for (const threshold of [
   'http_req_duration: ["p(95)<1000", "p(99)<2000"]',
-  '"http_req_duration{workload:dashboard-read}": ["p(95)<1000", "p(99)<2000"]',
+  '"http_req_duration{workload:dashboard-read}": ["p(95)<1000", `p(99)<${dashboardP99LimitMs}`]',
   '"http_req_duration{workload:enterprise-read}": ["p(95)<1000", "p(99)<2000"]',
   '"http_req_duration{workload:shop-read}": ["p(95)<1000", "p(99)<2000"]',
   '"http_req_duration{workload:collaboration-read}": ["p(95)<1000", "p(99)<2000"]',

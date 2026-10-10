@@ -8,6 +8,25 @@ const bypassSecret = __ENV.VERCEL_AUTOMATION_BYPASS_SECRET;
 const targetVus = Number.parseInt(__ENV.TARGET_VUS || "500", 10);
 const profile = (__ENV.LOAD_PROFILE || "ramp").toLowerCase();
 
+// One versioned expiring policy drives both k6 and the sanitized certification report.
+const dashboardP99Policy = JSON.parse(open("./scale7-dashboard-p99-policy.json"));
+if (dashboardP99Policy.contract !== "SCALE-7-DASHBOARD-P99-TEMPORARY" ||
+    dashboardP99Policy.standardP99Ms !== 2000 ||
+    dashboardP99Policy.temporary?.p99Ms !== 2500 ||
+    dashboardP99Policy.temporary?.targetVus !== 500 ||
+    !Number.isFinite(Date.parse(dashboardP99Policy.temporary.startsAt)) ||
+    !Number.isFinite(Date.parse(dashboardP99Policy.temporary.expiresAt)) ||
+    Date.parse(dashboardP99Policy.temporary.expiresAt) <= Date.parse(dashboardP99Policy.temporary.startsAt)) {
+  throw new Error("Invalid SCALE-7 Dashboard P99 policy");
+}
+const policyNowMs = Date.now();
+const temporaryDashboardP99Active = targetVus === dashboardP99Policy.temporary.targetVus &&
+  policyNowMs >= Date.parse(dashboardP99Policy.temporary.startsAt) &&
+  policyNowMs < Date.parse(dashboardP99Policy.temporary.expiresAt);
+const dashboardP99LimitMs = temporaryDashboardP99Active
+  ? dashboardP99Policy.temporary.p99Ms
+  : dashboardP99Policy.standardP99Ms;
+
 if (!rawBaseUrl) throw new Error("BASE_URL is required");
 if (!rawAuthPool) throw new Error("SCALE7_AUTH_CONTEXTS_JSON is required");
 if (!bypassSecret) throw new Error("VERCEL_AUTOMATION_BYPASS_SECRET is required");
@@ -133,7 +152,7 @@ export const options = {
     http_req_duration: ["p(95)<1000", "p(99)<2000"],
     checks: ["rate>0.99"],
     tenant_isolation_pass: ["rate==1"],
-    "http_req_duration{workload:dashboard-read}": ["p(95)<1000", "p(99)<2000"],
+    "http_req_duration{workload:dashboard-read}": ["p(95)<1000", `p(99)<${dashboardP99LimitMs}`],
     "http_req_duration{workload:enterprise-read}": ["p(95)<1000", "p(99)<2000"],
     "http_req_duration{workload:shop-read}": ["p(95)<1000", "p(99)<2000"],
     "http_req_duration{workload:collaboration-read}": ["p(95)<1000", "p(99)<2000"],

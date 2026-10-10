@@ -187,6 +187,9 @@ expect(
 );
 
 expect(report.includes("authTopology"), "report must archive tenant and identity counts without secrets");
+expect(report.includes("dashboardP99UnderPolicyLimit"), "report enforces the expiring Dashboard P99 policy gate");
+expect(report.includes("temporaryExpiresAt") && report.includes("sloPolicy:"), "sanitized report archives effective SLO and expiry");
+expect(profile.includes("dashboardP99LimitMs") && profile.includes('JSON.parse(open("./scale7-dashboard-p99-policy.json"))'), "k6 reads the same versioned policy");
 expect(report.includes("tenantIsolationPerfect"), "report must gate tenant isolation");
 expect(report.includes("dbConnectionUtilizationUnderEightyPercent"), "report must gate DB utilization");
 expect(report.includes("noDbConnectionExhaustion"), "report must gate DB exhaustion");
