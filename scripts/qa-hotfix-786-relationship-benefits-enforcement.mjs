@@ -72,6 +72,19 @@ const decisionSchemaEnd = contracts.indexOf("export const relationshipBenefitUsa
 const decisionSchema = contracts.slice(decisionSchemaStart, decisionSchemaEnd);
 check(!decisionSchema.includes("context:"), "Admin decision schema must not accept unverified execution context");
 check(!decisionSchema.includes('"CONSUMED"'), "Public admin decision schema must not allow manual CONSUMED");
+const patchSchemaStart = contracts.indexOf("export const relationshipBenefitPatchSchema");
+const patchSchemaEnd = contracts.indexOf("export const relationshipBenefitUsageSchema", patchSchemaStart);
+const patchSchema = contracts.slice(patchSchemaStart, patchSchemaEnd);
+hasAll(patchSchema, [
+  "relationshipBenefitCreateSchema.partial().extend({",
+  "assignmentMode: z.enum(RELATIONSHIP_BENEFIT_ASSIGNMENT_MODES).optional()",
+  "relationTypes: z.array(z.enum(ENTERPRISE_IDENTITY_RELATION_TYPES)).max(30).optional()",
+  "identityLinkIds: z.array(z.string().trim().min(1).max(191)).max(100).optional()",
+  'valueType: z.enum(["NONE", "PERCENT", "AMOUNT", "POINTS", "TEXT"]).optional()',
+  "actionCode: z.enum(RELATIONSHIP_BENEFIT_ACTION_CODES).optional()",
+  "stackable: z.boolean().optional()",
+  "status: z.enum(RELATIONSHIP_BENEFIT_STATUSES).optional()",
+], "Partial PATCH must not inherit any create-time default");
 
 hasAll(enforcement, [
   "enterprisePersonBusinessReference.findMany",
