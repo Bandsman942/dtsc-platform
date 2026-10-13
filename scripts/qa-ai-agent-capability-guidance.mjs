@@ -35,6 +35,9 @@ assert(agentDock.includes("Vérifier mes applications") && agentDock.includes('h
 assert(agentDock.includes("setPrompt(en ?") && !agentDock.includes("void startAgent()}/>"), "Suggested app check must populate intent, never execute agent automatically");
 assert(agentDock.includes("CONFIRMATION_REQUIRED") || agentDock.includes('snapshot?.status === "READY_TO_RESUME"'), "Structured Agent confirmation and resume remain visible");
 assert(pendingApi.includes('session.userId') && pendingApi.includes('session.activeOrganizationId') && pendingApi.includes('"Cache-Control": "private, no-store"'), "Confirmation preview must be scoped to the owner and uncached");
+assert(pendingApi.includes('z.string().uuid().safeParse(confirmationId)') && pendingApi.includes('WHERE "id" = ${confirmationId}') && pendingApi.includes('LIMIT 1'), "Exact pending confirmation lookup must verify UUID and remain user/tenant scoped");
+assert(agentDock.includes('pending?confirmationId=${encodeURIComponent(pendingId)}') && agentDock.includes('AGENT_CANCEL_FAILED'), "Agent must fetch its exact pending preview and refuse a rejected run deterministically");
+
 assert(pendingApi.includes('toolCode !== "SUPPORT_TICKET_CREATE"') && pendingApi.includes('toolCode !== "DTSC_CONTACT_EMAIL_SEND"') && pendingApi.includes('message,'), "Only supported actions expose complete, stored confirmation previews");
 assert(agentDock.includes("canApprovePreview") && agentDock.includes("disabled={confirmBusy || !canApprovePreview}"), "Unknown/incomplete mutation previews cannot be blindly approved");
 assert(agentDock.includes("confirmation.preview.message") && agentDock.includes("whitespace-pre-wrap break-words"), "Human approval must display full action text, not only a subject");
