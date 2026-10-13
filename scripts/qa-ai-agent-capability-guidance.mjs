@@ -17,6 +17,7 @@ const pendingApi = read("app/api/ai/tools/pending/route.ts");
 const activeAgentApi = read("app/api/ai/agent/runs/active/route.ts");
 const agentDock = read("components/chat/ai-agent-run-dock.tsx");
 const agentPersistence = read("lib/ai/agent/persistence.ts");
+const cancelApi = read("app/api/ai/tools/cancel/route.ts");
 
 assert(registry.includes('code: "CONNECTED_APPS_STATUS_READ"') && registry.includes('mode: "READ"'), "Connected-app status must use certified READ tool definition");
 assert(registry.includes('allowedAssistantCodes: ["DTSC_GENERAL", "ENTERPRISE_GENERAL"]'), "Only named assistants may request connected-app metadata");
@@ -43,7 +44,7 @@ assert(agentDock.includes("setPrompt(en ?") && !agentDock.includes("void startAg
 assert(agentDock.includes("CONFIRMATION_REQUIRED") || agentDock.includes('snapshot?.status === "READY_TO_RESUME"'), "Structured Agent confirmation and resume remain visible");
 assert(pendingApi.includes('session.userId') && pendingApi.includes('session.activeOrganizationId') && pendingApi.includes('"Cache-Control": "private, no-store"'), "Confirmation preview must be scoped to the owner and uncached");
 assert(pendingApi.includes('z.string().uuid().safeParse(confirmationId)') && pendingApi.includes('WHERE "id" = ${confirmationId}') && pendingApi.includes('LIMIT 1'), "Exact pending confirmation lookup must verify UUID and remain user/tenant scoped");
-assert(agentDock.includes('pending?confirmationId=${encodeURIComponent(pendingId)}') && agentDock.includes('AGENT_CANCEL_FAILED'), "Agent must fetch its exact pending preview and refuse a rejected run deterministically");
+assert(agentDock.includes('pending?confirmationId=${encodeURIComponent(pendingId)}') && agentDock.includes('if (runId) await refreshRun(runId)') && !agentDock.includes('AGENT_CANCEL_FAILED'), "Agent must fetch exact pending preview and avoid double cancel after rejection");
 assert(activeAgentApi.includes('getSession()') && activeAgentApi.includes('getActiveOrganizationId(session)') && activeAgentApi.includes('userId: session.userId') && activeAgentApi.includes('organizationId,') && activeAgentApi.includes('scope: variant === "enterprise"'), "Resumable run lookup must enforce exact authenticated user, organization and assistant scope");
 assert(activeAgentApi.includes('status: { in: ["WAITING_CONFIRMATION", "READY_TO_RESUME"] }') && !activeAgentApi.includes('"RUNNING", "WAITING_CONFIRMATION"'), "Run recovery must never assume an HTTP stream survived reload");
 assert(activeAgentApi.includes('"Cache-Control": "private, no-store"') && agentDock.includes('/api/ai/agent/runs/active?variant=') && agentDock.includes('setRunId((current) => current || body.runId)'), "Resume metadata must be uncached, scoped and must never replay a prompt on reload");
@@ -55,6 +56,9 @@ assert(agentDock.includes("confirmation.preview.message") && agentDock.includes(
 assert(agentPersistence.includes('return prisma.$transaction(async (tx) => {') && agentPersistence.includes('tx.aiToolConfirmation.updateMany({'), "Rejecting an Agent action must atomically invalidate its PENDING confirmation");
 assert(agentPersistence.includes('status: "CANCELLED", argumentsJson: Prisma.DbNull') && agentPersistence.includes('pendingConfirmationId: true'), "Rejected approval payload must be invalidated and its arguments purged");
 assert(agentPersistence.includes('where: { ...scopedWhere, status: run.status }') && agentPersistence.includes('organizationId: input.organizationId || null'), "Cancellation must be race-guarded and isolated to the current organization");
+assert(cancelApi.includes('prisma.$transaction(async (tx) => {') && cancelApi.includes('tx.aiToolConfirmation.updateMany(') && cancelApi.includes('tx.aiAgentRun.updateMany('), "Rejection must atomically cancel both confirmation and Agent run");
+assert(cancelApi.includes('argumentsJson: Prisma.DbNull') && cancelApi.includes('cancelledAt: now') && cancelApi.includes('completedAt: now'), "Rejecting a confirmation must purge its private arguments and mark the Agent terminal");
+
 
 assert(agentDock.includes("humanToolLabel(step.toolCode, en)") && agentDock.includes("humanToolLabel(confirmation.toolCode, en)") && !agentDock.includes("${confirmation.toolCode}"), "Human-facing status must not reveal raw tool codes");
 console.log("PASS AI-AGENT-01 initial tool: live scoped product status, canonical READ gateway, no MCP operational claims");
