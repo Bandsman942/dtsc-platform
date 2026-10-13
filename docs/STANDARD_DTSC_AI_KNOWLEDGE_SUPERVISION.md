@@ -71,3 +71,10 @@ Les opérations de réindexation individuelles existantes restent l'unique voie 
 ### Coût et indexation de la supervision
 
 La lecture agrégée des citations est bornée par date et exclut les messages supprimés. L'index additif `EnterpriseAiMessage(role, deletedAt, createdAt)` (`20261013210000_ai_citation_metadata_window_index`) prend en charge cette fenêtre sans nouvelle table d'analytique ni copie de contenu. Les index PostgreSQL ne garantissent pas à eux seuls une latence constante avec de très grands historiques : surveiller les plans d'exécution et la durée de cette requête en Production. Aucun nettoyage destructif des messages n'est autorisé.
+
+
+### Mesure du cache contextuel CAG à partir d'observations enregistrées
+
+Le moteur `buildAiCagPack` calcule déjà `cacheHit` à la préparation d'un tour IA ; `prepareAiTurn` l'enregistre via `auditMetadata.cagCacheHit` dans les journaux applicatifs. La Console agrège maintenant ces **booléens réellement enregistrés** depuis `ApiLog.metadata` pour les quatre routes de conversation authentifiées (chat personnel, agent personnel, chat entreprise, agent entreprise). La requête ne sélectionne ni prompt, ni identifiant de compte, ni payload, ni version de cache, uniquement les **comptes d'observations avec réutilisation / recalcul** pour la période.
+
+Le taux affiché est la part de **hits observés dans les logs de préparation**, et non un taux de cache partagé : CAG utilise une `Map` mémoire locale avec TTL, qui peut être renouvelée au redémarrage et n'est pas synchronisée entre instances. Une période sans logs est `NO_OBSERVATIONS` (taux absent) ; une erreur de base est `UNAVAILABLE` (taux absent). Les journaux peuvent comporter des événements d'échec et ne sont pas une preuve du taux de citations effectivement utilisées, ni de l'exactitude de l'IA. Ne pas exposer des clés de cache dérivées d'identité.
