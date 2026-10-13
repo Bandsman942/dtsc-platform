@@ -46,6 +46,9 @@ type DbConnectionRow = {
   activeConnections: number;
   idleConnections: number;
   idleInTransactionConnections: number;
+  idleInTransactionClientWaitConnections: number;
+  idleInTransactionLockWaitConnections: number;
+  idleInTransactionOtherWaitConnections: number;
   idleInTransactionUnder100msConnections: number;
   idleInTransactionAtLeast100msConnections: number;
   idleInTransactionAtLeast1sConnections: number;
@@ -157,6 +160,17 @@ export async function getProductionObservabilitySnapshot(windowHours: number) {
         COUNT(*) FILTER (WHERE state = 'active')::int AS "activeConnections",
         COUNT(*) FILTER (WHERE state = 'idle')::int AS "idleConnections",
         COUNT(*) FILTER (WHERE state = 'idle in transaction')::int AS "idleInTransactionConnections",
+        COUNT(*) FILTER (
+          WHERE state = 'idle in transaction' AND wait_event_type = 'Client'
+        )::int AS "idleInTransactionClientWaitConnections",
+        COUNT(*) FILTER (
+          WHERE state = 'idle in transaction' AND wait_event_type = 'Lock'
+        )::int AS "idleInTransactionLockWaitConnections",
+        COUNT(*) FILTER (
+          WHERE state = 'idle in transaction'
+            AND wait_event_type IS DISTINCT FROM 'Client'
+            AND wait_event_type IS DISTINCT FROM 'Lock'
+        )::int AS "idleInTransactionOtherWaitConnections",
         COUNT(*) FILTER (
           WHERE state = 'idle in transaction'
             AND now() - state_change < interval '100 milliseconds'
@@ -285,6 +299,9 @@ export async function getProductionObservabilitySnapshot(windowHours: number) {
     activeConnections: 0,
     idleConnections: 0,
     idleInTransactionConnections: 0,
+    idleInTransactionClientWaitConnections: 0,
+    idleInTransactionLockWaitConnections: 0,
+    idleInTransactionOtherWaitConnections: 0,
     idleInTransactionUnder100msConnections: 0,
     idleInTransactionAtLeast100msConnections: 0,
     idleInTransactionAtLeast1sConnections: 0,
@@ -348,6 +365,9 @@ export async function getProductionObservabilitySnapshot(windowHours: number) {
       activeConnections: database.activeConnections,
       idleConnections: database.idleConnections,
       idleInTransactionConnections: database.idleInTransactionConnections,
+      idleInTransactionClientWaitConnections: database.idleInTransactionClientWaitConnections,
+      idleInTransactionLockWaitConnections: database.idleInTransactionLockWaitConnections,
+      idleInTransactionOtherWaitConnections: database.idleInTransactionOtherWaitConnections,
       idleInTransactionUnder100msConnections: database.idleInTransactionUnder100msConnections,
       idleInTransactionAtLeast100msConnections: database.idleInTransactionAtLeast100msConnections,
       idleInTransactionAtLeast1sConnections: database.idleInTransactionAtLeast1sConnections,

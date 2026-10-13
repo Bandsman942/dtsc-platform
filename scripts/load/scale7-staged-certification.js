@@ -1,6 +1,7 @@
 import http from "k6/http";
 import { check, sleep } from "k6";
 import { Rate, Trend } from "k6/metrics";
+import exec from "k6/execution";
 
 const rawBaseUrl = __ENV.BASE_URL;
 const rawAuthPool = __ENV.SCALE7_AUTH_CONTEXTS_JSON;
@@ -120,6 +121,26 @@ function recordServerPhases(response, workload) {
     collaborationDataDuration.add(dataMs);
   }
 }
+// Diagnostic-only windows: no threshold and no tags that identify people or tenants.
+// Buckets are elapsed wall-clock time from the start of the k6 run (not VU iteration time).
+const soakWindowLabels = ["0_5m", "5_10m", "10_15m", "15_20m", "20_plus"];
+const soakGlobalTrends = soakWindowLabels.map((window) => new Trend("scale7_soak_global_" + window + "_ms", true));
+const soakDashboardTrends = soakWindowLabels.map((window) => new Trend("scale7_soak_dashboard_" + window + "_ms", true));
+
+function soakWindowIndex(elapsedMs) {
+  if (!Number.isFinite(elapsedMs) || elapsedMs < 0) return -1;
+  return Math.min(4, Math.floor(elapsedMs / 300000));
+}
+
+function recordSoakWindow(response, workload, elapsedMs) {
+  if (profile !== "soak") return;
+  const index = soakWindowIndex(elapsedMs);
+  const duration = response?.timings?.duration;
+  if (index < 0 || !Number.isFinite(duration) || duration < 0) return;
+  soakGlobalTrends[index].add(duration);
+  if (workload === "dashboard-read") soakDashboardTrends[index].add(duration);
+}
+
 const expectedIsolationStatuses = http.expectedStatuses(403, 404);
 
 function rampStages(target) {
@@ -318,6 +339,7 @@ export default function () {
   }
 
   recordServerPhases(response, label);
+  recordSoakWindow(response, label, exec.instance.currentTestRunDuration);
   check(response, {
     [`${label} succeeds`]: (result) => result.status >= 200 && result.status < 300,
   });
