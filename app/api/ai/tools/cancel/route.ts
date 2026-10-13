@@ -33,15 +33,11 @@ export async function POST(req: Request) {
       data: {
         status: "CANCELLED",
         cancelledAt: now,
-        argumentsJson: undefined,
+        argumentsJson: Prisma.DbNull,
         updatedAt: now,
       },
     });
     if (updated.count !== 1) return false;
-    await tx.aiToolConfirmation.updateMany({
-      where: { id: parsed.data.confirmationId, userId: session.userId, organizationId, status: "CANCELLED" },
-      data: { argumentsJson: Prisma.DbNull },
-    });
     await tx.aiAgentRun.updateMany({
       where: {
         pendingConfirmationId: parsed.data.confirmationId,
