@@ -9,13 +9,13 @@ Le Centre IA `/admin/ai-control-center` affiche uniquement des agrégats de mét
 - `AiModelCall` : échecs et annulations classés par code motif, distincts des tentatives de fournisseur.
 - `AiToolExecution` : refus de passerelle outillée, classés par code motif et non par identité utilisateur.
 - `buildAiCagPack` : utilisation CAG sans compteur persistant certifié à ce jour, donc `NOT_INSTRUMENTED`.
-- Alertes configurables de sécurité : `NOT_CONFIGURED` tant qu'une source d'autorité auditée n'a pas été livrée.
+- Alertes configurables de sécurité : règles canoniques `AiGovernanceAlertRule`, avec `NOT_CONFIGURED` uniquement pour une règle réellement absente. Les règles désactivées et indisponibles sont distinguées.
 
 La période est bornée, le rafraîchissement visible et chaque panne de requête doit produire `null` / « indisponible », sans afficher des zéros trompeurs. Le statut documentaire `READY` signifie une indexation enregistrée comme complète, pas la preuve que le retrieval a abouti ou qu'une citation a été effectivement utilisée.
 
 ## Hors de portée de cette première tranche
 
-Aucune nouvelle table de documents ni index parallèle. Aucune extraction ou reindexation globale déclenchée. Les alertes gouvernées, la preuve de citations et les versions d'index suivront dans cette même issue #804, sans valeurs extrapolées.
+Aucune nouvelle table de documents ni index parallèle. Aucune extraction ou reindexation globale déclenchée. Les règles d'alertes et la répartition legacy/versionné sont maintenant présentes ; la preuve de citations et la réindexation bornée restent explicitement hors de la première tranche.
 
 ## QA et E2E
 
