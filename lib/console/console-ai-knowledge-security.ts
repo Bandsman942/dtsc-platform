@@ -19,6 +19,12 @@ export type ConsoleAiKnowledgeSecurity = {
  * extracted text, prompts, citations, file paths, tool arguments or results.
  * A query error maps to UNKNOWN/null; never to zero or HEALTHY.
  */
+// A stored reason must never be treated as safe, displayable user content.
+// Only machine-readable reason codes are projected to global administration.
+function safeReasonCode(value: string | null) {
+  return value && /^[A-Z][A-Z0-9_]{1,119}$/.test(value) ? value : "UNKNOWN";
+}
+
 export async function getConsoleAiKnowledgeSecurity(input: { from: Date; to: Date }): Promise<ConsoleAiKnowledgeSecurity> {
   const where = { createdAt: { gte: input.from, lt: input.to } };
   const [personal, enterprise, failedModels, deniedTools] = await Promise.allSettled([
@@ -64,10 +70,10 @@ export async function getConsoleAiKnowledgeSecurity(input: { from: Date; to: Dat
         }
       : null,
     modelFailures: failedModels.status === "fulfilled"
-      ? failedModels.value.map((r) => ({ reasonCode: r.reasonCode || "UNKNOWN", status: r.status, calls: r._count._all }))
+      ? failedModels.value.map((r) => ({ reasonCode: safeReasonCode(r.reasonCode), status: r.status, calls: r._count._all }))
       : null,
     toolDenials: deniedTools.status === "fulfilled"
-      ? deniedTools.value.map((r) => ({ reasonCode: r.reasonCode || "UNKNOWN", executions: r._count._all }))
+      ? deniedTools.value.map((r) => ({ reasonCode: safeReasonCode(r.reasonCode), executions: r._count._all }))
       : null,
     cag: { status: "NOT_INSTRUMENTED", source: "buildAiCagPack", cacheHitRate: null },
     alertHealth: "NOT_CONFIGURED",
