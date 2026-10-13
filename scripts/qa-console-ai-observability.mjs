@@ -42,4 +42,35 @@ assert(ui.includes("overflow-x-auto") && ui.includes("min-w-0") && ui.includes("
 assert(ui.includes('role="group"') && ui.includes("aria-current") && ui.includes("focus-visible"), "Date navigation must be keyboard accessible");
 assert(ui.includes('formatMoment(data.period.refreshedAt, locale)') && ui.includes("sourceMeta"), "AI metrics must include source, unit, period and freshness");
 assert(ui.includes("Disponibilité non mesurée") && ui.includes("Outils MCP opérationnels"), "MCP configuration must not be presented as operational certification");
+const config = read("lib/console/console-ai-configuration.ts");
+const configUi = read("components/admin/console-ai-configuration-panel.tsx");
+assert(config.includes("getAiModelCatalog") && config.includes("getAiProviderCatalog"), "AI model and provider console must read canonical catalogs");
+assert(config.includes("SERVER_LIMITS") && config.includes("getSaasPlanLabel"), "Agent budgets must read canonical safety caps");
+assert(config.includes("prisma.billingPlan.findMany") && !config.includes("prisma.user.findMany"), "Commercial limits must read BillingPlan, never scan private users");
+assert(config.includes("credentialConfigured: configured.has") && !config.includes("apiKey: process.env"), "Expose only secret presence, never credential values");
+assert(configUi.includes("data.commercialOffers === null") && configUi.includes("BillingPlan"), "Unknown offer data must not be shown as zero or from a duplicate table");
+assert(configUi.includes("data.agentBudgets") && configUi.includes("maxDurationMs"), "Agent safety ceilings must be visible separately from offer entitlements");
+assert(configUi.includes("overflow-x-auto") && configUi.includes("text-dtsc-muted"), "Budget and model tables must remain mobile-usable");
+assert(consolePage.includes("ConsoleAiConfigurationPanel") && consolePage.includes("getConsoleAiConfiguration"), "Console must expose the canonical read projection when authorized");
+
+const runtimePolicy = read("lib/ai/platform-runtime-policy.ts");
+const policyApi = read("app/api/admin/ai/policy/route.ts");
+const policyUi = read("components/admin/console-ai-policy-manager.tsx");
+const aiRouter = read("lib/ai/orchestrator.ts");
+const agentRuntime = read("lib/ai/agent/runtime.ts");
+const agentPolicy = read("lib/ai/agent/policy.ts");
+const schema = read("prisma/schema.prisma");
+const migration = read("prisma/migrations/20261013143000_ai_platform_runtime_policy/migration.sql");
+assert(schema.includes("model AiPlatformRuntimePolicy") && migration.includes('CREATE TABLE "AiPlatformRuntimePolicy"'), "Global AI policy must have additive persisted versioning");
+assert(runtimePolicy.includes("revision: row.revision") && runtimePolicy.includes("agentCeilingsSchema.parse") && runtimePolicy.includes("disabledProviderCodes: codes.parse"), "Policy runtime must validate persisted restrictions");
+assert(policyApi.includes("isSameOriginRequest") && policyApi.includes("requireConsoleCapability(CONSOLE_CAPABILITIES.AI_MANAGE)"), "Writing policies requires same-origin and dedicated AI_MANAGE");
+assert(policyApi.includes("revision: expectedRevision") && policyApi.includes("REVISION_CONFLICT"), "Optimistic concurrency must prevent stale policy writes");
+assert(policyApi.includes("tx.platformSettingHistory.create") && policyApi.includes("writeAuditLog") && policyApi.includes("reason"), "Policy changes must be versioned and audited with a reason");
+assert(policyApi.includes("AI_POLICY_SERVER_LIMIT_EXCEEDED") && policyApi.includes("getAiProviderCatalog") && policyApi.includes("getAiModelCatalog"), "Unknown codes and Agent limit increases must be refused");
+assert(aiRouter.includes("getAiPlatformPolicy()") && aiRouter.includes("runtimePolicy.disabledModelCodes.includes") && aiRouter.includes("runtimePolicy.disabledProviderCodes.includes"), "Actual routing must obey globally disabled models and providers");
+assert(agentRuntime.includes("platformPolicy.agentCeilings[planCode]") && agentRuntime.includes("input.persistedBudget") && agentRuntime.includes("input.budgetRequest"), "Agent start and resume must reapply current global ceilings");
+assert(agentPolicy.includes("Math.min(hardLimit.maxSteps") && agentPolicy.includes("Math.min(hardLimit.maxEstimatedCost"), "Global ceilings must never broaden static server safety budgets");
+assert(policyUi.includes("canManage") && policyUi.includes('fetch("/api/admin/ai/policy"') && policyUi.includes("stageRollback"), "Policy UI must guard edit affordances and support audited previous versions");
+assert(consolePage.includes("ConsoleAiPolicyManager") && consolePage.includes("canManage={canManage}"), "AI_MANAGE must be distinct from AI_READ even inside the Console");
+
 console.log("PASS AI-CONSOLE-01 — canonical scope, cost semantics, RBAC, MCP uncertainty, FR/EN and responsive signals");
