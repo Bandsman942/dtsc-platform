@@ -96,6 +96,12 @@ const http = {
     collaboration: latency(summary, "http_req_duration{workload:collaboration-read}"),
     ai: latency(summary, "http_req_duration{workload:ai-request}"),
   },
+  // k6 Trends have no SLO threshold. "null" means insufficient evidence for that window.
+  soakWindows: ["0_5m", "5_10m", "10_15m", "15_20m", "20_plus"].map((window) => ({
+    window,
+    global: latency(summary, "scale7_soak_global_" + window + "_ms"),
+    dashboard: latency(summary, "scale7_soak_dashboard_" + window + "_ms"),
+  })),
   serverPhases: {
     shop: { access: latency(summary, "scale7_shop_access_ms"), data: latency(summary, "scale7_shop_data_ms") },
     collaboration: { access: latency(summary, "scale7_collaboration_access_ms"), data: latency(summary, "scale7_collaboration_data_ms") },
@@ -108,6 +114,23 @@ const infrastructure = {
   maxDbConnections: maxOf(samples, (sample) => sample?.database?.currentConnections),
   dbMaxConnections: maxOf(samples, (sample) => sample?.database?.maxConnections),
   maxIdleInTransaction: maxOf(samples, (sample) => sample?.database?.idleInTransactionConnections),
+  maxIdleClientWait: maxOf(samples, (sample) => sample?.database?.idleInTransactionClientWaitConnections),
+  maxIdleLockWait: maxOf(samples, (sample) => sample?.database?.idleInTransactionLockWaitConnections),
+  maxIdleOtherWait: maxOf(samples, (sample) => sample?.database?.idleInTransactionOtherWaitConnections),
+  idleTransactionEventCount: samples.filter((sample) => Number(sample?.database?.idleInTransactionConnections) > 0).length,
+  // Only UTC timestamps and aggregated counters, never pg_stat_activity query, pid, user, address or app name.
+  idleTransactionEvents: samples.filter((sample) =>
+    Number(sample?.database?.idleInTransactionConnections) > 0
+  ).slice(0, 16).map((sample) => ({
+    sampledAt: typeof sample?.generatedAt === "string" &&
+      Number.isFinite(Date.parse(sample.generatedAt))
+        ? new Date(sample.generatedAt).toISOString() : null,
+    count: sample.database.idleInTransactionConnections,
+    clientWait: sample.database.idleInTransactionClientWaitConnections ?? null,
+    lockWait: sample.database.idleInTransactionLockWaitConnections ?? null,
+    otherWait: sample.database.idleInTransactionOtherWaitConnections ?? null,
+    maxAgeSeconds: finite(sample.database.oldestIdleInTransactionSeconds),
+  })),
   maxIdleInTransactionUnder100ms: maxOf(samples, (sample) => sample?.database?.idleInTransactionUnder100msConnections),
   maxIdleInTransactionAtLeast100ms: maxOf(samples, (sample) => sample?.database?.idleInTransactionAtLeast100msConnections),
   maxIdleInTransactionAtLeast1s: maxOf(samples, (sample) => sample?.database?.idleInTransactionAtLeast1sConnections),
@@ -209,6 +232,10 @@ const markdown = [
   `- Dashboard P50/P95/P99: ${http.workloads.dashboard.p50 ?? "n/a"} / ${http.workloads.dashboard.p95 ?? "n/a"} / ${http.workloads.dashboard.p99 ?? "n/a"} ms`,
   `- Dashboard P99 objective: <${dashboardP99LimitMs} ms (temporary 500-VU policy: ${temporaryDashboardP99Active ? "ACTIVE" : "INACTIVE"}; expires ${dashboardP99Policy.temporary.expiresAt}; standard <2000 ms; #788)`,
   `- Enterprise P50/P95/P99: ${http.workloads.enterprise.p50 ?? "n/a"} / ${http.workloads.enterprise.p95 ?? "n/a"} / ${http.workloads.enterprise.p99 ?? "n/a"} ms`,
+  ...http.soakWindows.map((window) =>
+    `- 500-soak elapsed ${window.window} global P95/P99: ${window.global.p95 ?? "n/a"} / ${window.global.p99 ?? "n/a"} ms; Dashboard P95/P99: ${window.dashboard.p95 ?? "n/a"} / ${window.dashboard.p99 ?? "n/a"} ms (diagnostic only)`
+  ),
+  `- Idle transaction sample events: ${infrastructure.idleTransactionEventCount} (up to 16 sanitized events retained; max Client/Lock/other wait: ${infrastructure.maxIdleClientWait ?? "n/a"} / ${infrastructure.maxIdleLockWait ?? "n/a"} / ${infrastructure.maxIdleOtherWait ?? "n/a"}; gate always strict zero)`,
   `- Shop internal access/data P95: ${http.serverPhases.shop.access.p95 ?? "n/a"} / ${http.serverPhases.shop.data.p95 ?? "n/a"} ms (diagnostic only)`,
   `- Collaboration internal access/data P95: ${http.serverPhases.collaboration.access.p95 ?? "n/a"} / ${http.serverPhases.collaboration.data.p95 ?? "n/a"} ms (diagnostic only)`,
   `- Shop P50/P95/P99: ${http.workloads.shop.p50 ?? "n/a"} / ${http.workloads.shop.p95 ?? "n/a"} / ${http.workloads.shop.p99 ?? "n/a"} ms`,
