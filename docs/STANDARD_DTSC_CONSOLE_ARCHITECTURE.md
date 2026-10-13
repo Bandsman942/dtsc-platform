@@ -31,3 +31,10 @@ Les aliases historiques peuvent être conservés, les nouvelles mutations peuven
 `ConsoleWorkspaceShell` compose `ModuleWorkspace`, `ModuleContent` et `AdminFloatingNav` pour les sections autorisées. L'en-tête utilise le libellé et la description traduits de **la section active**, plutôt que répéter « Administration DTSC ». Les sections du même groupe sont accessibles via un rail compact ; l'annuaire complet reste ouvrable sur desktop et via le hub d'actions mobile. Les ressources du pied de page pointent vers l'app Guide, le produit Support et, avec permission, la section Accès RBAC.
 
 La navigation et le chargement conditionnel des datasets restent orchestrés par `DtscConsolePage`, avec les contrôles `DTSC_INTERNAL`, capacités et postes avant rendu. La page Maturité commerciale demeure dédiée, avec le même design system. Les contrats QA préexistants ont été mis à jour pour tester l'emplacement réel des guides et du shell (sans supprimer les validations historiques), et `qa-console-workspace-shell` est inclus dans `qa:regression`.
+
+
+## Départements internes — #826
+
+Les workspaces CEO, COO, CTO, MPO, HR & CFO, SCO et Legal Advisor utilisent `InternalDepartmentWorkspace` : un seul en-tête principal dans la Console, des sous-sections structurées avec ancres et titres FR/EN, et les panneaux métier existants en mode `embedded`. Le mode `embedded` supprime seulement les en-têtes internes redondants, **sans supprimer métriques, filtres, tableaux, formulaires, validations ni mutations**. Par défaut, les panneaux continuent à afficher leur propre en-tête lorsqu'ils sont utilisés en dehors de la Console.
+
+Les règles d'approbation CEO/COO, paie et prestations, la lecture des factures HR-CFO conditionnée à sa capacité, et les droits `DTSC_INTERNAL` et RBAC restent côté serveur. Aucun faux KPI, changement d'API ou migration n'est introduit. QA : `pnpm qa:console-internal-workspaces`, également exécutée par le contrat `qa-console-workspace-shell` déjà présent dans la suite de régression. OWNER_E2E et fusion après validation de #825 et réconciliation sur le `main` réel.

@@ -19,7 +19,7 @@ import { translate } from "@/lib/i18n";
 
 type Decision = "APPROVED" | "CHANGES_REQUESTED" | "REJECTED";
 
-export function PayrollApprovalPanel({ approverRole, locale }: { approverRole: "CEO" | "COO"; locale?: string | null }) {
+export function PayrollApprovalPanel({ approverRole, locale, embedded = false }: { approverRole: "CEO" | "COO"; locale?: string | null; embedded?: boolean }) {
   const t = useCallback((key: string) => translate(locale, `payrollWorkflow.${key}`), [locale]);
   const endpoint = approverRole === "CEO" ? "/api/admin/ceo/payroll-approvals" : "/api/admin/coo/payroll-approvals";
   const [payrolls, setPayrolls] = useState<PayrollWorkflowItem[]>([]);
@@ -81,7 +81,9 @@ export function PayrollApprovalPanel({ approverRole, locale }: { approverRole: "
   const rejected = payrolls.filter((item) => item.status === "REJECTED").length;
 
   return <ModuleWorkspace>
-    <ModuleHeader eyebrow={approverRole} title={t("approvalTitle")} count={`${filtered.length}/${payrolls.length}`} description={approverRole === "CEO" ? t("approvalDescriptionCeo") : t("approvalDescriptionCoo")} />
+    {!embedded ? (
+      <ModuleHeader eyebrow={approverRole} title={t("approvalTitle")} count={`${filtered.length}/${payrolls.length}`} description={approverRole === "CEO" ? t("approvalDescriptionCeo") : t("approvalDescriptionCoo")} />
+      ) : null}
     <ModuleMetrics label={t("approvalMetrics")}>
       <ModuleMetric label={t("metricPending")} value={pending} />
       <ModuleMetric label={t("metricValidated")} value={validated} />

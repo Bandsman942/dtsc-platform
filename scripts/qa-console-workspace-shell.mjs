@@ -38,3 +38,4 @@ for (const translations of [fr, en]) {
   }
 }
 console.log("Console workspace shell structural contract: PASS");
+import "./qa-console-internal-workspaces.mjs";
