@@ -39,6 +39,29 @@ const AVAILABILITY_MEANINGS: Record<AppAvailability, { fr: string; en: string }>
   },
 };
 
+export type ConnectedAppNextAction = "SELECT_ORGANIZATION" | "VERIFY_REMOTE_READ" | "REAUTHORIZE" | "AUTHORIZE" | "CONTACT_DTSC" | "NOT_AVAILABLE";
+
+const AVAILABILITY_NEXT_ACTION: Record<AppAvailability, ConnectedAppNextAction> = {
+  ORGANIZATION_REQUIRED: "SELECT_ORGANIZATION",
+  CONNECTED: "VERIFY_REMOTE_READ",
+  REAUTHORIZATION_REQUIRED: "REAUTHORIZE",
+  READY_TO_CONNECT: "AUTHORIZE",
+  PLATFORM_SETUP_REQUIRED: "CONTACT_DTSC",
+  CERTIFIED_BY_DTSC: "CONTACT_DTSC",
+  REQUIRES_DTSC_CERTIFICATION: "NOT_AVAILABLE",
+};
+
+/**
+ * Product-only guidance. Every actual click and READ call remains governed by
+ * the authenticated application, Tool Gateway and current entitlement.
+ */
+export function getConnectedAppGuidance(availability: AppAvailability, locale: string) {
+  return {
+    nextAction: AVAILABILITY_NEXT_ACTION[availability],
+    explanation: AVAILABILITY_MEANINGS[availability][locale === "en" ? "en" : "fr"],
+  };
+}
+
 export function buildConnectedAppsProductInstruction(locale: string) {
   if (locale === "en") {
     return [
