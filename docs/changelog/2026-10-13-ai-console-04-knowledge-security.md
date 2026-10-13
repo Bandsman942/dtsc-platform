@@ -26,3 +26,8 @@ La répartition legacy / index versionné est maintenant affichée. La réindexa
 ### Planification RAG sans exécution
 - L'aperçu Console peut compter jusqu'à 25 candidats historiques préparés par domaine, sans exposer les identifiants ni les contenus, sans déclencher la réindexation.
 - Les reindexations réelles restent des actions unitaires de leurs espaces personnels et entreprises avec permissions/audit.
+
+### Observabilité documentaire supplémentaire
+- La Console lit désormais seulement des nombres agrégés de `EnterpriseAiMessage.citationsJson` (réponses contenant des références jointes et nombre de candidats), avec filtre temporel et exclusion des messages supprimés ; aucun contenu privé ni identifiant source n'est renvoyé au navigateur.
+- Cet indicateur mesure les pièces de retrieval **jointes** et **non les citations effectivement utilisées** dans le texte. La preuve de citation effective et le taux de cache CAG restent `NOT_INSTRUMENTED`, non simulés.
+- Traduction FR/EN des statuts documentaires, du vocabulaire des tableaux et clarification du prévisualiseur de réindexation en lecture seule.
