@@ -104,3 +104,10 @@ Le registre livré contient `GOOGLE_GMAIL_OFFICIAL` et `GOOGLE_CALENDAR_OFFICIAL
 - Une suspension `AiMcpControlState` stoppe tout RPC (y compris discovery) et sa réactivation ne contourne pas OAuth, schémas, plan ni Tool Gateway.
 
 **Désactivation / rollback :** désactiver le binding à la source, suspendre le serveur en Console si nécessaire, révoquer les grants du compte de test et conserver l'audit. Ne pas supprimer les migrations personnelles ou les traces de sécurité. Toute activation Production d'un nouveau binding exige un cycle PR et E2E distinct, pas un changement secret de configuration.
+
+
+## Séparation entre validation technique et preuve d'usage réel
+
+Le panneau Console IA → MCP affiche désormais, pour une fenêtre glissante de sept jours, le **nombre d'événements d'outils distants `AiMcpAuditEvent` ayant exactement `eventType=TOOL_CALL` et `status=SUCCESS`**, ainsi que la date du dernier succès. Les événements `DISCOVERY`, les autorisations OAuth et la seule présence d'un binding sont expressément exclus de ce compteur. Une erreur de lecture de l'audit affiche un état **indisponible**, jamais un faux zéro.
+
+Cette télémétrie est **historique et globale**. Même un succès attesté sur un autre utilisateur ou avant une révocation ne prouve pas que le compte courant puisse exécuter maintenant Gmail ou Calendar. L'activation effective exige toujours une preuve READ authentifiée récente dans chaque scope attendu, le modèle de certificat de discovery, le résultat `tools/call`, les refus inter-tenant, le test de révocation et la validation E2E propriétaire. Aucun jeton, e-mail ou événement de calendrier privé n'est projeté dans la Console.
