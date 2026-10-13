@@ -331,11 +331,10 @@ export function AiAgentRunDock({ variant }: { variant: AgentVariant }) {
       });
       if (!response.ok) throw new Error("CONFIRMATION_CANCEL_FAILED");
       setConfirmation(null);
-      if (runId) {
-        const cancel = await fetch(`/api/ai/agent/runs/${encodeURIComponent(runId)}/cancel`, { method: "POST" });
-        if (!cancel.ok) throw new Error("AGENT_CANCEL_FAILED");
-        await refreshRun(runId);
-      }
+      // /api/ai/tools/cancel atomically revokes the pending approval and
+      // marks the associated Agent run CANCELLED. A second /runs/:id/cancel
+      // request is invalid (404 on a terminal run) and must not be sent.
+      if (runId) await refreshRun(runId);
       toastSuccess(en ? "Action rejected. The agent has stopped." : "Action refusée. L’agent est arrêté.");
     } catch {
       toastError(en ? "Unable to reject this action." : "Impossible de refuser cette action.");
