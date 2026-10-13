@@ -8,6 +8,7 @@ export type ConsoleAiKnowledgeSecurity = {
     enterprise: Record<"READY" | "PROCESSING" | "FAILED" | "OTHER", number>;
     source: "KnowledgeDocument + EnterpriseAiKnowledgeSource";
   } | null;
+  indexing: { legacyPersonal: number; versionedPersonal: number; legacyEnterprise: number; versionedEnterprise: number; source: string } | null;
   modelFailures: Array<{ reasonCode: string; status: string; calls: number }> | null;
   toolDenials: Array<{ reasonCode: string; executions: number }> | null;
   cag: { status: "NOT_INSTRUMENTED"; source: "buildAiCagPack"; cacheHitRate: null };
@@ -27,7 +28,7 @@ function safeReasonCode(value: string | null) {
 
 export async function getConsoleAiKnowledgeSecurity(input: { from: Date; to: Date }): Promise<ConsoleAiKnowledgeSecurity> {
   const where = { createdAt: { gte: input.from, lt: input.to } };
-  const [personal, enterprise, failedModels, deniedTools] = await Promise.allSettled([
+  const [personal, enterprise, failedModels, deniedTools, personalLegacy, enterpriseLegacy] = await Promise.allSettled([
     prisma.knowledgeDocument.groupBy({
       by: ["status"], where,
       _count: { _all: true },
@@ -50,6 +51,8 @@ export async function getConsoleAiKnowledgeSecurity(input: { from: Date; to: Dat
       orderBy: { _count: { reasonCode: "desc" } },
       take: 10,
     }),
+    prisma.knowledgeDocument.count({ where: { ...where, indexVersion: "legacy-openai-1536-v1" } }),
+    prisma.enterpriseAiKnowledgeSource.count({ where: { ...where, archivedAt: null, indexVersion: "legacy-openai-1536-v1" } }),
   ]);
 
   const statusCounts = (rows: Array<{ status: string; _count: { _all: number } }>) => {
@@ -67,6 +70,16 @@ export async function getConsoleAiKnowledgeSecurity(input: { from: Date; to: Dat
           personal: statusCounts(personal.value),
           enterprise: statusCounts(enterprise.value),
           source: "KnowledgeDocument + EnterpriseAiKnowledgeSource",
+        }
+      : null,
+    indexing: personal.status === "fulfilled" && enterprise.status === "fulfilled"
+      && personalLegacy.status === "fulfilled" && enterpriseLegacy.status === "fulfilled"
+      ? {
+          legacyPersonal: personalLegacy.value,
+          versionedPersonal: Math.max(0, personal.value.reduce((total, entry) => total + entry._count._all, 0) - personalLegacy.value),
+          legacyEnterprise: enterpriseLegacy.value,
+          versionedEnterprise: Math.max(0, enterprise.value.reduce((total, entry) => total + entry._count._all, 0) - enterpriseLegacy.value),
+          source: "KnowledgeDocument.indexVersion + EnterpriseAiKnowledgeSource.indexVersion",
         }
       : null,
     modelFailures: failedModels.status === "fulfilled"
