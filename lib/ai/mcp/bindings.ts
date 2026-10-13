@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { AiToolDefinition } from "@/lib/ai/tool-registry";
 import { assertMcpServerRegistryIntegrity, getMcpServerDefinition } from "@/lib/ai/mcp/registry";
 import { assertSupportedMcpSchema, hashMcpSchema, mcpJsonSchemaToZod } from "@/lib/ai/mcp/schema";
+import { isApprovedMcpReadToolName } from "@/lib/ai/mcp/google-read-tool-policy";
 import type { McpToolBinding } from "@/lib/ai/mcp/types";
 
 const jsonSchema = z.record(z.string(), z.unknown());
@@ -110,6 +111,7 @@ export function assertMcpToolBindingIntegrity() {
     if (remoteKeys.has(remoteKey)) failures.push(`${binding.dtscToolCode}: duplicate remote MCP tool binding ${remoteKey}`);
     remoteKeys.add(remoteKey);
     if (binding.mode !== "READ" || binding.requiresConfirmation) failures.push(`${binding.dtscToolCode}: AI07 first delivery is READ-only`);
+    if (!isApprovedMcpReadToolName(binding.serverCode, binding.remoteToolName)) failures.push(`${binding.dtscToolCode}: remote tool is not approved as read-only`);
     if (hashMcpSchema(binding.inputSchema) !== binding.inputSchemaHash) failures.push(`${binding.dtscToolCode}: certified input schema hash mismatch`);
     if (hashMcpSchema(binding.outputSchema) !== binding.outputSchemaHash) failures.push(`${binding.dtscToolCode}: certified output schema hash mismatch`);
     const inputSupport = assertSupportedMcpSchema(binding.inputSchema);

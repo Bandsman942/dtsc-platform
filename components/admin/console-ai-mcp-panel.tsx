@@ -89,6 +89,13 @@ export function ConsoleAiMcpPanel({
             </dl>
             <p className="mt-3 break-words text-xs text-dtsc-muted">{t("Découverte", "Discovery")}: {server.discovery ? `${server.discovery.discoveredAt.slice(0, 10)} · ${server.discovery.toolCount} ${t("outils", "tools")} · ${server.discovery.compatible ? t("compatible", "compatible") : t("changement incompatible", "incompatible change")}` : t("Aucune découverte enregistrée", "No recorded discovery")}</p>
             <p className="mt-2 text-xs text-dtsc-muted">{t("Événements sur 7 jours", "Events over 7 days")}: {server.audit ? `${server.audit.successful} ${t("succès", "success")} · ${server.audit.denied} ${t("refus", "denied")} · ${server.audit.failed} ${t("échecs", "failed")}` : t("Non disponibles", "Unavailable")}</p>
+            <p className="mt-2 text-xs text-dtsc-muted" role="status">{t("Lectures distantes réussies (7 jours)", "Successful remote READ calls (7 days)")}: {server.readEvidence === null
+              ? t("Preuve indisponible", "Evidence unavailable")
+              : server.readEvidence.successfulCalls7d === 0
+                ? t("Aucun appel confirmé", "No confirmed calls")
+                : `${server.readEvidence.successfulCalls7d} · ${t("Dernier succès", "Last success")} ${server.readEvidence.latestSuccessAt ? new Date(server.readEvidence.latestSuccessAt).toLocaleString(en ? "en-US" : "fr-FR") : t("date inconnue", "unknown date")}`}
+            </p>
+            <p className="mt-1 text-[0.7rem] text-dtsc-muted">{t("Cette preuve historique ne certifie ni le compte courant, ni la disponibilité actuelle du fournisseur. La recette E2E reste obligatoire.", "Historical evidence does not certify the current account or current provider availability. Real E2E acceptance is still required.")}</p>
             {canManage && server.suspended !== null && server.revision !== null ? <button type="button" onClick={() => { setSelected(server.code); setReason(""); setConfirmed(false); setFeedback(""); }} className="mt-4 min-h-11 rounded-xl border border-dtsc-border px-3 text-xs font-bold text-dtsc-ink focus-visible:outline-2 focus-visible:outline-cyan-500">{server.suspended ? t("Préparer la réactivation", "Prepare resume") : t("Préparer une suspension", "Prepare suspension")}</button> : null}
           </article>
         ))}
