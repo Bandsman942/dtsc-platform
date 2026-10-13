@@ -13,6 +13,7 @@ export function runStandardAiMcpAudit(mode = "all") {
   const security = read("lib/ai/mcp/security.ts");
   const transport = read("lib/ai/mcp/transport.ts");
   const adapter = read("lib/ai/mcp/tool-adapter.ts");
+  const userScope = read("lib/ai/mcp/user-scope.ts");
   const discovery = read("lib/ai/mcp/discovery.ts");
   const schema = read("lib/ai/mcp/schema.ts");
   const toolRegistry = read("lib/ai/tool-registry.ts");
@@ -48,7 +49,7 @@ export function runStandardAiMcpAudit(mode = "all") {
     check(transport.includes('authMode === "BEARER_ENV"'), "MCP bearer auth must be resolved server-side");
     check(transport.includes("process.env[envKey]"), "MCP token must be loaded from server environment");
     check(!adapter.includes("Authorization:"), "MCP tool adapter must not construct/export credentials");
-    check(adapter.includes("MCP_TENANT_CONTEXT_REQUIRED"), "tenant MCP servers must enforce active organization context");
+    check(adapter.includes("resolveMcpUserAuthScope") && userScope.includes("MCP_TENANT_CONTEXT_REQUIRED"), "tenant MCP servers must enforce active organization context through the shared scope resolver");
     check(adapter.includes("authorizeMcpRequiredPermissions"), "MCP tool binding permissions must be enforced before remote calls");
     check(resourceAdapter.includes("authorizeMcpRequiredPermissions"), "MCP resource binding permissions must be enforced before remote calls");
     check(authorization.includes("MCP_REQUIRED_PERMISSION_DENIED"), "missing exact MCP required-permission denial");
@@ -75,8 +76,8 @@ export function runStandardAiMcpAudit(mode = "all") {
   }
 
   if (["all", "tenant-isolation"].includes(mode)) {
-    check(adapter.includes("activeOrganizationId !== input.context.organizationId"), "MCP tenant execution must compare active organization");
-    check(adapter.includes("organizationScope === \"TENANT\""), "MCP tenant-scoped servers require explicit tenant policy");
+    check(adapter.includes("resolveMcpUserAuthScope") && userScope.includes("activeOrganizationId !== organizationId"), "MCP tenant execution must compare active organization through the shared scope resolver");
+    check(userScope.includes('organizationScope === "TENANT"'), "MCP tenant-scoped servers require explicit tenant policy");
     check(resourceAdapter.includes("activeOrganizationId !== input.context.organizationId"), "MCP tenant resource reads must compare active organization");
     check(toolRegistry.includes("requiredModuleCodes"), "MCP canonical definitions must remain subject to Tool Gateway module access");
   }

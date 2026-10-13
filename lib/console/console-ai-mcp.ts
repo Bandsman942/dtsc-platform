@@ -10,6 +10,7 @@ export type ConsoleMcpGovernance = {
     code: string; label: string; status: string; transport: string; authMode: string;
     scope: string; dataPolicy: string; certified: boolean; configured: boolean;
     connectedGrants: number | null; enabledBindings: number; reachable: null;
+    readEvidence: { successfulCalls7d: number; latestSuccessAt: string | null } | null;
     discovery: { version: string; compatible: boolean; discoveredAt: string; toolCount: number } | null;
     suspended: boolean | null; revision: number | null;
     audit: { successful: number; denied: number; failed: number } | null;
@@ -34,7 +35,7 @@ export type ConsoleMcpGovernance = {
 export async function getConsoleMcpGovernance(): Promise<ConsoleMcpGovernance> {
   const since = new Date(Date.now() - 7 * 86_400_000);
   const codes = MCP_SERVER_REGISTRY.map((s) => s.code);
-  const [discovery, audit, grants, controls] = await Promise.allSettled([
+  const [discovery, audit, grants, controls, verifiedReads] = await Promise.allSettled([
     prisma.aiMcpDiscoverySnapshot.findMany({
       where: { serverCode: { in: codes } },
       orderBy: { discoveredAt: "desc" },
@@ -56,6 +57,14 @@ export async function getConsoleMcpGovernance(): Promise<ConsoleMcpGovernance> {
       where: { serverCode: { in: codes } },
       select: { serverCode: true, suspended: true, revision: true },
     }),
+    // Only an actual tools/call SUCCESS is evidence of remote READ use.
+    // Discovery, a grant or a configured binding must never count as execution.
+    prisma.aiMcpAuditEvent.groupBy({
+      by: ["serverCode"],
+      where: { serverCode: { in: codes }, eventType: "TOOL_CALL", status: "SUCCESS", createdAt: { gte: since } },
+      _count: { _all: true },
+      _max: { createdAt: true },
+    }),
   ]);
   const latest = new Map<string, { version: string; compatible: boolean; discoveredAt: string; toolCount: number }>();
   if (discovery.status === "fulfilled") for (const item of discovery.value) {
@@ -75,6 +84,9 @@ export async function getConsoleMcpGovernance(): Promise<ConsoleMcpGovernance> {
   }
   const grantTotals = new Map(grants.status === "fulfilled" ? grants.value.map((row) => [row.serverCode, row.total] as const) : []);
   const controlStates = new Map(controls.status === "fulfilled" ? controls.value.map((row) => [row.serverCode, row] as const) : []);
+  const actualReads = new Map(verifiedReads.status === "fulfilled"
+    ? verifiedReads.value.map((row) => [row.serverCode, { successfulCalls7d: row._count._all, latestSuccessAt: row._max.createdAt?.toISOString() || null }] as const)
+    : []);
   return {
     servers: MCP_SERVER_REGISTRY.map((server) => ({
       code: server.code, label: server.label, status: server.status,
@@ -86,6 +98,9 @@ export async function getConsoleMcpGovernance(): Promise<ConsoleMcpGovernance> {
       connectedGrants: server.authMode === "OAUTH_USER" && grants.status === "fulfilled" ? grantTotals.get(server.code) || 0 : null,
       enabledBindings: MCP_TOOL_BINDINGS.filter((b) => b.serverCode === server.code && b.enabled).length,
       reachable: null,
+      readEvidence: verifiedReads.status === "fulfilled"
+        ? actualReads.get(server.code) || { successfulCalls7d: 0, latestSuccessAt: null }
+        : null,
       discovery: latest.get(server.code) || null,
       suspended: controls.status === "fulfilled" ? (controlStates.get(server.code)?.suspended || false) : null,
       revision: controls.status === "fulfilled" ? (controlStates.get(server.code)?.revision || 0) : null,
@@ -106,7 +121,7 @@ export async function getConsoleMcpGovernance(): Promise<ConsoleMcpGovernance> {
       knowledgePolicy: a.knowledgePolicyCode, modelPolicy: a.modelPolicyCode,
       dataPolicy: a.dataPolicyCode, sector: a.sectorCode || null, contexts: a.allowedContexts,
     })),
-    telemetry: [discovery, audit, grants, controls].every((r) => r.status === "fulfilled") ? "AVAILABLE" : "PARTIAL",
+    telemetry: [discovery, audit, grants, controls, verifiedReads].every((r) => r.status === "fulfilled") ? "AVAILABLE" : "PARTIAL",
     auditedSince: since.toISOString(),
   };
 }
