@@ -41,6 +41,8 @@ const mcpTypes = read("lib/ai/mcp/types.ts");
 const mcpRegistry = read("lib/ai/mcp/registry.ts");
 const mcpTransport = read("lib/ai/mcp/transport.ts");
 const mcpUserScope = read("lib/ai/mcp/user-scope.ts");
+const googleMcpReadPolicy = read("lib/ai/mcp/google-read-tool-policy.ts");
+const googleMcpBindings = read("lib/ai/mcp/bindings.ts");
 const mcpToolAdapter = read("lib/ai/mcp/tool-adapter.ts");
 const mcpResourceAdapter = read("lib/ai/mcp/resource-adapter.ts");
 const mcpOauth = read("lib/ai/mcp/oauth.ts");
@@ -187,6 +189,12 @@ assert(mcpUserScope.includes('activeContext === "ORGANIZATION" || activeContext 
 assert(mcpUserScope.includes('input.server.organizationScope === "TENANT"') && mcpUserScope.includes("MCP_TENANT_CONTEXT_REQUIRED"), "TENANT server must always require actual ORGANIZATION context");
 assert(mcpToolAdapter.includes("resolveMcpUserAuthScope({ server, context: input.context })") && mcpResourceAdapter.includes("resolveMcpUserAuthScope({ server, context: input.context })"), "Tools and resources must share the session-bound OAuth scope resolver");
 assert(!mcpToolAdapter.includes('organizationId: input.context.organizationId || ""') && !mcpResourceAdapter.includes('organizationId: input.context.organizationId || ""'), "MCP adapters must never manufacture an empty organization grant");
+assert(googleMcpReadPolicy.includes('"get_message"') && googleMcpReadPolicy.includes('"search_threads"') && googleMcpReadPolicy.includes('"list_events"') && googleMcpReadPolicy.includes('"search_events"'), "Google developer-preview MCP READ allowlists must name reviewed operations");
+for (const dangerous of ['"create_draft"', '"label_message"', '"create_event"', '"update_event"', '"delete_event"']) {
+  assert(!googleMcpReadPolicy.includes(dangerous), `Google MCP mutation ${dangerous} must not be exposed as READ`);
+}
+assert(googleMcpBindings.includes("isApprovedMcpReadToolName(binding.serverCode, binding.remoteToolName)") && mcpToolAdapter.includes("isApprovedMcpReadToolName(server.code, binding.remoteToolName)"), "Both configuration and runtime must reject unreviewed Google MCP operations");
+
 
 
 assert(collaboratorComposer.includes('aiT("aiCopilot")') && collaboratorComposer.includes("PROPOSE_REPLY") && collaboratorI18n.includes("translateCollaborationExperience") && collaboratorI18nFr.includes('"aiCopilot": "Copilote IA DTSC"') && collaboratorI18nEn.includes('"aiCopilot": "DTSC AI copilot"'), "Mes collaborateurs composer must expose the DTSC AI drafting copilot through the canonical FR/EN i18n contract");
