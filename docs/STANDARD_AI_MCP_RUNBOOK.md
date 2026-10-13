@@ -69,3 +69,28 @@ If unauthorized egress is suspected:
 ## Rollback
 
 Application rollback is a normal PR revert. The additive MCP migration may remain in place without activating any remote capability. Empty MCP configuration arrays disable all servers, tools and resources. Discovery/audit records should be preserved rather than destructively removed.
+
+
+## AI-MCP-02 — Preuves exigées pour Gmail et Google Calendar
+
+Le registre livré contient `GOOGLE_GMAIL_OFFICIAL` et `GOOGLE_CALENDAR_OFFICIAL` comme **définitions certifiées**. Ce statut ne constitue pas une preuve que l'endpoint distant est actif, que Google a accordé l'accès ou qu'un outil READ est utilisable.
+
+### Préflight par connecteur (même règle pour chacun)
+
+1. Vérifier en environnement sécurisé, sans imprimer les valeurs, la présence effective des variables `MCP_GOOGLE_CLIENT_ID`, `MCP_GOOGLE_CLIENT_SECRET`, `DTSC_MCP_OAUTH_ENCRYPTION_KEY`. Une variable manquante empêche la connexion, jamais de statut opérationnel par défaut.
+2. Dans `/ai/apps`, utiliser un **compte de test volontaire**, distinguer autorisation personnelle GLOBAL et organisation active. Exécuter OAuth PKCE, vérifier scopes minimaux requis, expiration/refresh et révocation.
+3. Confirmer que le vrai fournisseur propose l'endpoint MCP configuré avec Streamable HTTP. Vérifier négociations de protocole, host allow-list, TLS/DNS, timeout et taille réponse. Si le serveur ne répond pas ou ne respecte pas le protocole, stopper sans substituer un faux succès.
+4. Exécuter `tools/list` authentifié et enregistrer le snapshot de découverte (version, hashes entrée/sortie) ; `resources/list` facultatif n'autorise aucun outil en plus.
+5. Mettre en revue **un vrai outil READ** choisi à partir de cette découverte, avec noms et schémas réellement renvoyés. Préparer son binding sous `DTSC_MCP_TOOL_BINDINGS_JSON` avec `enabled=false`, contexte/assistant/permissions stricts, `inputSchemaHash`, `outputSchemaHash` et `certifiedDiscoveryVersion` exacts. Ne jamais inventer un nom de méthode distante ou un hash.
+6. Après revue, n'activer que le READ approuvé, puis exécuter `tools/call` sur des données de test de ce compte. Vérifier `AiMcpAuditEvent` de type `TOOL_CALL`, statut `SUCCESS`, version de discovery et sortie validée Zod.
+7. Répéter depuis le contexte entreprise **autorisé**, puis tester utilisateur sans permission, tenant différent et scope personnel non transférable. Simuler une révocation et un schéma changé : l'appel doit échouer fermé.
+8. Consigner preuves GitHub/CI, statut OAuth, résultat concret de l'appel READ, anonymisation, refus d'accès croisé et OWNER_E2E. Sans ces éléments, l'application peut être listée/CONNECTÉE, mais jamais dite `operational`.
+
+### Points de contrôle spécifiques
+
+- Gmail : OAuth lecture seule `https://www.googleapis.com/auth/gmail.readonly`. Valider sur un e-mail de test dont l'utilisateur possède l'accès ; ne jamais enregistrer son contenu dans le rapport de supervision.
+- Calendar : scopes read-only/freebusy du registre, événement de test volontaire, dates et fuseau horaire exacts. Aucune création de rendez-vous ni action MUTATE dans AI-MCP-02.
+- Un serveur `organizationScope=GLOBAL` peut fonctionner en scope PERSONNEL (`organizationId=null`) uniquement si le contexte de session l'autorise. Dans une entreprise, ne jamais réutiliser le jeton personnel.
+- Une suspension `AiMcpControlState` stoppe tout RPC (y compris discovery) et sa réactivation ne contourne pas OAuth, schémas, plan ni Tool Gateway.
+
+**Désactivation / rollback :** désactiver le binding à la source, suspendre le serveur en Console si nécessaire, révoquer les grants du compte de test et conserver l'audit. Ne pas supprimer les migrations personnelles ou les traces de sécurité. Toute activation Production d'un nouveau binding exige un cycle PR et E2E distinct, pas un changement secret de configuration.
