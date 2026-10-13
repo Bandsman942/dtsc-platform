@@ -3,7 +3,7 @@ import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
 import { classifyAiAgentFailure } from "@/lib/ai/agent/failures";
 import { getAiAgentRunForUser } from "@/lib/ai/agent/persistence";
-import { getActiveOrganizationId } from "@/lib/organizations";
+import { getActiveOrganizationId, requireActiveOrganizationMembership } from "@/lib/organizations";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -13,6 +13,9 @@ export async function GET(req: Request, { params }: Params) {
   if (!session) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
   const { id } = await params;
   const organizationId = getActiveOrganizationId(session);
+  if (session.activeContext === "ORGANIZATION" && (!organizationId || !await requireActiveOrganizationMembership(session, organizationId))) {
+    return NextResponse.json({ error: "ORGANIZATION_ACCESS_DENIED" }, { status: 403 });
+  }
   const run = await getAiAgentRunForUser({ runId: id, userId: session.userId, organizationId });
   if (!run) {
     await writeApiLog({ request: req, statusCode: 404, userId: session.userId, startedAt, metadata: { action: "ai_agent_run_not_found" } });
