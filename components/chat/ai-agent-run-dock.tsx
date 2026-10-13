@@ -46,6 +46,7 @@ type AgentSnapshot = {
   toolCallCount: number;
   pendingConfirmationId?: string | null;
   failureCategory?: AiAgentClientFailureCategory | null;
+  budgetReason?: "MAX_STEPS" | "MAX_TOOL_CALLS" | "MAX_TOKENS" | "MAX_ESTIMATED_COST" | "MAX_DURATION" | null;
   limits: {
     maxSteps: number;
     maxToolCalls: number;
@@ -76,6 +77,17 @@ type AgentFailureResponse = {
 const TERMINAL_STATUSES = new Set(["COMPLETED", "FAILED", "CANCELLED", "BUDGET_EXHAUSTED"]);
 const SUCCESS_STEP_STATUSES = new Set(["SUCCESS", "COMPLETED", "CONSUMED"]);
 const ACTIVE_STEP_STATUSES = new Set(["RUNNING", "PENDING", "RETRYING", "STARTED"]);
+
+function budgetExplanation(reason: AgentSnapshot["budgetReason"], en: boolean) {
+  const explanations: Record<NonNullable<AgentSnapshot["budgetReason"]>, [string, string]> = {
+    MAX_STEPS: ["Nombre maximal d'étapes atteint.", "Maximum number of steps reached."],
+    MAX_TOOL_CALLS: ["Nombre maximal d'appels d'outils atteint.", "Maximum number of tool calls reached."],
+    MAX_TOKENS: ["Budget de tokens consommé.", "Token budget exhausted."],
+    MAX_ESTIMATED_COST: ["Plafond de coût estimé atteint.", "Estimated cost ceiling reached."],
+    MAX_DURATION: ["Durée maximale d'exécution atteinte.", "Maximum run duration reached."],
+  };
+  return reason ? explanations[reason][en ? 1 : 0] : (en ? "This run reached a limit defined by your plan or security policy." : "Cette exécution a atteint une limite prévue par votre forfait ou par une politique de sécurité.");
+}
 
 function statusLabel(status: string, en: boolean) {
   const labels: Record<string, [string, string]> = {
@@ -324,11 +336,20 @@ export function AiAgentRunDock({ variant }: { variant: AgentVariant }) {
           <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/[0.045] p-3 text-xs leading-relaxed text-dtsc-muted">
             <strong className="text-dtsc-ink">{en ? "Human-controlled by design." : "Contrôlé par l’humain par conception."}</strong>{" "}
             {en ? "The agent can analyze and use certified tools, but sensitive mutations require an explicit approval control. Private chain-of-thought is never displayed." : "L’agent peut analyser et utiliser des outils certifiés, mais les mutations sensibles exigent une validation explicite. La chaîne de pensée privée n’est jamais affichée."}
+            <a href="/ai/apps" className="mt-2 block w-fit rounded-lg border border-dtsc-border px-3 py-2 text-xs font-bold text-dtsc-ink underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-cyan-500">{en ? "Review connected apps" : "Vérifier les applications connectées"}</a>
           </div>
 
           {answer ? (
             <div className="rounded-2xl border border-dtsc-border bg-dtsc-page p-3 text-sm text-dtsc-ink">
               <Streamdown>{answer}</Streamdown>
+            </div>
+          ) : null}
+
+          {snapshot?.status === "BUDGET_EXHAUSTED" ? (
+            <div className="rounded-2xl border border-amber-400/40 bg-amber-400/10 p-3 text-xs leading-5 text-dtsc-muted" role="status">
+              <strong className="block text-dtsc-ink">{en ? "Execution limit reached" : "Limite d'exécution atteinte"}</strong>
+              <p>{budgetExplanation(snapshot.budgetReason, en)}</p>
+              <p className="mt-1">{en ? "The agent has stopped. To continue, start a new run with a smaller request or review the plan's available quotas. A completed external action is never retried automatically." : "L'agent est arrêté. Pour poursuivre, lancez une nouvelle demande plus courte ou vérifiez les quotas du forfait. Une action externe déjà effectuée n'est jamais rejouée automatiquement."}</p>
             </div>
           ) : null}
 
