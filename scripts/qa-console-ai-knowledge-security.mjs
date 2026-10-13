@@ -33,7 +33,11 @@ const alertsApi = read("app/api/admin/ai/alerts/route.ts");
 const alertsUi = read("components/admin/console-ai-alert-panel.tsx");
 const schema = read("prisma/schema.prisma");
 const migration = read("prisma/migrations/20261013170000_ai_governance_alert_rules/migration.sql");
+const citationIndexMigration = read("prisma/migrations/20261013210000_ai_citation_metadata_window_index/migration.sql");
 assert(schema.includes("model AiGovernanceAlertRule") && migration.includes('CREATE TABLE "AiGovernanceAlertRule"'), "Alert rules must use additive versioned persistence");
+assert(schema.includes("@@index([role, deletedAt, createdAt])") && citationIndexMigration.includes('CREATE INDEX IF NOT EXISTS "EnterpriseAiMessage_role_deletedAt_createdAt_idx"'), "Citation metadata aggregation must use an additive time-window index");
+assert(!/DROP TABLE|DROP COLUMN|TRUNCATE|DELETE FROM/i.test(citationIndexMigration), "Citation observability migration cannot remove historical messages");
+
 assert(alerts.includes('import "server-only"') && alerts.includes('AI_ALERT_CODES') && alerts.includes("Promise.allSettled"), "Alert counts must read from server-only governed sources");
 assert(alerts.includes("prisma.aiModelCall.count") && alerts.includes("prisma.aiToolExecution.count") && alerts.includes("prisma.knowledgeDocument.count"), "Alert thresholds must use actual count queries, not a truncated top-ten table");
 assert(alerts.includes('"TRIGGERED"') && alerts.includes('"UNAVAILABLE"') && alerts.includes('"NOT_CONFIGURED"'), "An unmeasured signal must never be shown below threshold");
