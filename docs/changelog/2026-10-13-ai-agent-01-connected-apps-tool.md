@@ -26,3 +26,10 @@
 - QA ciblée renforcée sur la source des arguments, l'isolation de session, les aperçus complets et l'absence d'approbation aveugle. La validation CI doit être réexécutée avant toute conclusion de réussite.
 
 **Non livré** : E2E propriétaire, exécution Gmail/Calendar réelle et accès MCP certifié. Ne pas fusionner avant ces preuves.
+
+
+### Résolution ciblée des validations en attente
+- Le panneau Agent récupère désormais la **confirmation exacte** annoncée par le run via `GET /api/ai/tools/pending?confirmationId=<uuid>`, au lieu de la chercher dans les cinq derniers éléments de l'utilisateur. Cela évite qu'une confirmation valide soit masquée lorsque plusieurs actions sont en attente.
+- L'API refuse un identifiant de confirmation invalide et exige simultanément l'utilisateur authentifié, le contexte entreprise correct, un statut `PENDING` et une expiration future avant de révéler l'aperçu. Aucune donnée d'un autre utilisateur ou tenant n'est renvoyée.
+- Le refus d'une action demande maintenant explicitement l'annulation du run sans dépendre de l'état React asynchrone du bouton de validation. Aucun renvoi d'action distante déjà validée n'est déclenché.
+- Une nouvelle assertion QA contrôle le filtrage exact et la gestion du refus. L'E2E propriétaire avec compte connecté et données de test reste une preuve humaine distincte.
