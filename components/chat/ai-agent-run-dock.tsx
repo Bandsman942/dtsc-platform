@@ -414,7 +414,13 @@ export function AiAgentRunDock({ variant }: { variant: AgentVariant }) {
         </div>
 
         <div className="shrink-0 border-t border-dtsc-border/70 bg-dtsc-surface p-3">
-          {snapshot?.status === "READY_TO_RESUME" ? (
+          {!isActive && snapshot?.status !== "READY_TO_RESUME" ? (
+             <div className="mb-2 flex flex-wrap gap-2" aria-label={en ? "Suggested agent goals" : "Objectifs suggérés pour l’agent"}>
+               <button type="button" onClick={() => setPrompt(en ? "Check which applications are connected in my current account and which I can configure. Use verified status only; do not claim remote actions were executed." : "Vérifie quelles applications sont connectées dans mon espace actif et lesquelles je peux configurer. Utilise uniquement leurs états vérifiés, sans prétendre avoir exécuté d’action distante.")} className="min-h-10 rounded-xl border border-dtsc-border px-3 py-2 text-left text-xs font-semibold text-dtsc-ink hover:border-cyan-500 focus-visible:outline-2 focus-visible:outline-cyan-500">{en ? "Check my connected apps" : "Vérifier mes applications"}</button>
+               <a href="/ai/apps" className="inline-flex min-h-10 items-center rounded-xl border border-dtsc-border px-3 py-2 text-xs font-semibold text-dtsc-ink hover:border-cyan-500 focus-visible:outline-2 focus-visible:outline-cyan-500">{en ? "Manage connections" : "Gérer les connexions"}</a>
+             </div>
+           ) : null}
+           {snapshot?.status === "READY_TO_RESUME" ? (
             <Button type="button" onClick={() => void resumeRun()} disabled={busy} className="w-full rounded-xl">
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}{en ? "Resume agent" : "Reprendre l’agent"}
             </Button>
