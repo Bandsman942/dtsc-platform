@@ -57,3 +57,12 @@ Un `READY` dans la table documentaire indique seulement que l'indexation de cett
 ## Lisibilité des états (complément)
 
 L'interface du Centre IA traduit les statuts de sources `READY`/`PROCESSING`/`FAILED`/`OTHER` en libellés métier FR/EN, et n'expose plus les noms des modèles Prisma dans les intitulés. Les codes de diagnostic des refus restent des métadonnées de sécurité uniquement pour les administrateurs habilités. Il ne s'agit pas d'une nouvelle preuve de récupération ou d'utilisation des citations. La validation fonctionnelle et l'E2E propriétaire restent requis.
+
+
+## Preuve de récupération mesurée vs preuve d'utilisation (métrique additive)
+
+Sans créer une source documentaire parallèle ni exposer les contenus, la Console calcule maintenant **deux mesures agrégées** depuis les messages assistants d'entreprise effectivement persistés : nombre de réponses auxquelles au moins un candidat de citation a été joint, et nombre total de candidats joints. La requête filtre `EnterpriseAiMessage` sur `role=assistant`, `deletedAt IS NULL` et sur la fenêtre temporelle demandée. Elle calcule exclusivement les tailles des tableaux JSON en base et ne sélectionne jamais leur contenu, titre, auteur, source, ID ou entreprise. L'échec de cette requête rend le panneau indisponible, pas zéro.
+
+Ces chiffres démontrent seulement que des références de retrieval ont été **rattachées à des réponses sauvegardées**, **pas** qu'elles ont été utilisées, mentionnées ou validées dans le texte généré. Le champ `citationProof.status=NOT_INSTRUMENTED` est maintenu jusqu'à une vraie instrumentation de la correspondance des références dans la sortie du modèle. Ne pas promouvoir la disponibilité ou la qualité du RAG sur ces deux comptages seuls. Le taux réel de cache CAG reste non instrumenté.
+
+Les opérations de réindexation individuelles existantes restent l'unique voie d'exécution ; le plan Console est non mutateur et plafonné. Les E2E propriétaire sur les sources et permissions restent obligatoires.
