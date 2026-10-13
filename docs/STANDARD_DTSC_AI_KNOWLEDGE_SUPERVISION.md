@@ -66,3 +66,8 @@ Sans créer une source documentaire parallèle ni exposer les contenus, la Conso
 Ces chiffres démontrent seulement que des références de retrieval ont été **rattachées à des réponses sauvegardées**, **pas** qu'elles ont été utilisées, mentionnées ou validées dans le texte généré. Le champ `citationProof.status=NOT_INSTRUMENTED` est maintenu jusqu'à une vraie instrumentation de la correspondance des références dans la sortie du modèle. Ne pas promouvoir la disponibilité ou la qualité du RAG sur ces deux comptages seuls. Le taux réel de cache CAG reste non instrumenté.
 
 Les opérations de réindexation individuelles existantes restent l'unique voie d'exécution ; le plan Console est non mutateur et plafonné. Les E2E propriétaire sur les sources et permissions restent obligatoires.
+
+
+### Coût et indexation de la supervision
+
+La lecture agrégée des citations est bornée par date et exclut les messages supprimés. L'index additif `EnterpriseAiMessage(role, deletedAt, createdAt)` (`20261013210000_ai_citation_metadata_window_index`) prend en charge cette fenêtre sans nouvelle table d'analytique ni copie de contenu. Les index PostgreSQL ne garantissent pas à eux seuls une latence constante avec de très grands historiques : surveiller les plans d'exécution et la durée de cette requête en Production. Aucun nettoyage destructif des messages n'est autorisé.
