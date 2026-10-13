@@ -13,6 +13,7 @@ const globalAgent = read("app/api/chat/agent/route.ts");
 const enterpriseAgent = read("app/api/enterprise/ai/agent/route.ts");
 const agentStatus = read("app/api/ai/agent/runs/[id]/route.ts");
 const pendingApi = read("app/api/ai/tools/pending/route.ts");
+const activeAgentApi = read("app/api/ai/agent/runs/active/route.ts");
 const agentDock = read("components/chat/ai-agent-run-dock.tsx");
 
 assert(registry.includes('code: "CONNECTED_APPS_STATUS_READ"') && registry.includes('mode: "READ"'), "Connected-app status must use certified READ tool definition");
@@ -37,6 +38,10 @@ assert(agentDock.includes("CONFIRMATION_REQUIRED") || agentDock.includes('snapsh
 assert(pendingApi.includes('session.userId') && pendingApi.includes('session.activeOrganizationId') && pendingApi.includes('"Cache-Control": "private, no-store"'), "Confirmation preview must be scoped to the owner and uncached");
 assert(pendingApi.includes('z.string().uuid().safeParse(confirmationId)') && pendingApi.includes('WHERE "id" = ${confirmationId}') && pendingApi.includes('LIMIT 1'), "Exact pending confirmation lookup must verify UUID and remain user/tenant scoped");
 assert(agentDock.includes('pending?confirmationId=${encodeURIComponent(pendingId)}') && agentDock.includes('AGENT_CANCEL_FAILED'), "Agent must fetch its exact pending preview and refuse a rejected run deterministically");
+assert(activeAgentApi.includes('getSession()') && activeAgentApi.includes('getActiveOrganizationId(session)') && activeAgentApi.includes('userId: session.userId') && activeAgentApi.includes('organizationId,') && activeAgentApi.includes('scope: variant === "enterprise"'), "Resumable run lookup must enforce exact authenticated user, organization and assistant scope");
+assert(activeAgentApi.includes('status: { in: ["WAITING_CONFIRMATION", "READY_TO_RESUME"] }') && !activeAgentApi.includes('"RUNNING", "WAITING_CONFIRMATION"'), "Run recovery must never assume an HTTP stream survived reload");
+assert(activeAgentApi.includes('"Cache-Control": "private, no-store"') && agentDock.includes('/api/ai/agent/runs/active?variant=') && agentDock.includes('setRunId((current) => current || body.runId)'), "Resume metadata must be uncached, scoped and must never replay a prompt on reload");
+
 
 assert(pendingApi.includes('toolCode !== "SUPPORT_TICKET_CREATE"') && pendingApi.includes('toolCode !== "DTSC_CONTACT_EMAIL_SEND"') && pendingApi.includes('message,'), "Only supported actions expose complete, stored confirmation previews");
 assert(agentDock.includes("canApprovePreview") && agentDock.includes("disabled={confirmBusy || !canApprovePreview}"), "Unknown/incomplete mutation previews cannot be blindly approved");
