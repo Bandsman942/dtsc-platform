@@ -15,6 +15,7 @@ const bindingSchema = z.object({
   serverCode: z.string().regex(/^[A-Z0-9_]{3,80}$/),
   resourceCode: z.string().regex(/^MCP_RESOURCE_[A-Z0-9_]{3,100}$/),
   remoteUri: z.string().min(1).max(2000),
+  certifiedDiscoveryVersion: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   enabled: z.boolean().default(false),
   contexts: z.array(z.enum(["GLOBAL_CLIENT", "COMMUNITY", "DTSC_INTERNAL", "ORGANIZATION"])).min(1),
   requiredPermissions: z.array(z.string().min(1)).default([]),
@@ -58,6 +59,7 @@ function textByteLength(value: string) { return new TextEncoder().encode(value).
 export async function readMcpBoundResource(input: { resourceCode: string; context: AiToolRuntimeContext }) {
   const binding = MCP_RESOURCE_BINDINGS.find((entry) => entry.resourceCode === input.resourceCode && entry.enabled);
   if (!binding) throw new Error("MCP_RESOURCE_BINDING_NOT_ACTIVE");
+  if (!binding.certifiedDiscoveryVersion) throw new Error("MCP_RESOURCE_DISCOVERY_VERSION_NOT_CERTIFIED");
   const server = getMcpServerDefinition(binding.serverCode);
   if (!server || server.status !== "CERTIFIED") throw new Error("MCP_SERVER_NOT_CERTIFIED");
   const userAuth = resolveMcpUserAuthScope({ server, context: input.context });
@@ -75,6 +77,7 @@ export async function readMcpBoundResource(input: { resourceCode: string; contex
   if (!dataDecision.allowed) throw new Error(dataDecision.reasonCode);
 
   const { snapshot } = await discoverAndPersistMcpServer(server, userAuth);
+  if (snapshot.version !== binding.certifiedDiscoveryVersion) throw new Error("MCP_RESOURCE_DISCOVERY_VERSION_NOT_CERTIFIED");
   if (!snapshot.resources.some((resource) => resource.uri === binding.remoteUri)) throw new Error("MCP_BOUND_RESOURCE_NOT_DISCOVERED");
 
   const result = await callMcpJsonRpc<ResourceReadResult>({ server, method: "resources/read", params: { uri: binding.remoteUri }, userAuth });
@@ -111,6 +114,7 @@ export function assertMcpResourceBindingIntegrity() {
   const codes = new Set<string>();
   for (const binding of MCP_RESOURCE_BINDINGS) {
     if (codes.has(binding.resourceCode)) failures.push(`${binding.resourceCode}: duplicate MCP resource binding`);
+    if (binding.enabled && !binding.certifiedDiscoveryVersion) failures.push(`${binding.resourceCode}: enabled MCP resource needs certified discovery version`);
     codes.add(binding.resourceCode);
     const server = getMcpServerDefinition(binding.serverCode);
     if (!server) failures.push(`${binding.resourceCode}: unknown MCP server ${binding.serverCode}`);
