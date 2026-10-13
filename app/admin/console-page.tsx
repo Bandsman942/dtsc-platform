@@ -6,6 +6,8 @@ import { PaymentStatus, TicketPriority, TicketStatus, UserRole, UserStatus } fro
 import { AdminAccessPanel } from "@/components/admin/admin-access-panel";
 import { ConsoleAiOverview } from "@/components/admin/console-ai-overview";
 import { ConsoleAiMcpPanel } from "@/components/admin/console-ai-mcp-panel";
+import { ConsoleAiKnowledgeSecurityPanel } from "@/components/admin/console-ai-knowledge-security-panel";
+import { ConsoleAiAlertPanel } from "@/components/admin/console-ai-alert-panel";
 import { ConsoleAiConfigurationPanel } from "@/components/admin/console-ai-configuration-panel";
 import { ConsoleAiPolicyManager } from "@/components/admin/console-ai-policy-manager";
 import { AdminAuditTables } from "@/components/admin/admin-audit-tables";
@@ -46,6 +48,8 @@ import { canAccessAdminSection } from "@/lib/business-roles";
 import { getConsoleAuditDataset } from "@/lib/console/console-audit";
 import { getConsoleAiDataset } from "@/lib/console/console-ai";
 import { getConsoleMcpGovernance } from "@/lib/console/console-ai-mcp";
+import { getConsoleAiKnowledgeSecurity } from "@/lib/console/console-ai-knowledge-security";
+import { getConsoleAiAlertSnapshot } from "@/lib/ai/governance-alerts";
 import { getConsoleAiConfiguration } from "@/lib/console/console-ai-configuration";
 import { getConsoleBillingDataset } from "@/lib/console/console-billing";
 import { getConsoleAccessDecision, CONSOLE_CAPABILITIES, type ConsoleCapability } from "@/lib/console/console-capabilities";
@@ -160,11 +164,13 @@ export async function DtscConsolePage({ forcedSection, searchParams }: { forcedS
     // This service contains only global, aggregated operational metadata.
     const snapshot = await getConsoleAiDataset({ from: period.start, to: new Date(period.end.getTime() + 1) });
     const configuration = await getConsoleAiConfiguration();
+    const knowledgeSecurity = await getConsoleAiKnowledgeSecurity({ from: period.start, to: new Date(period.end.getTime() + 1) });
+    const aiAlerts = await getConsoleAiAlertSnapshot({ from: period.start, to: new Date(period.end.getTime() + 1) });
     const [mcp, mcpCapability] = await Promise.all([
       getConsoleMcpGovernance(),
       getConsoleAccessDecision({ user, capability: CONSOLE_CAPABILITIES.MCP_MANAGE, adminRoleAccess }),
     ]);
-    content = <div className="min-w-0 space-y-5"><ConsoleAiOverview data={snapshot} locale={locale} days={period.days} /><Accordion><AccordionItem title={locale === "en" ? "Models, providers and budgets" : "Modèles, fournisseurs et budgets"}><div className="space-y-4"><ConsoleAiConfigurationPanel data={configuration} locale={locale} /><ConsoleAiPolicyManager initialPolicy={configuration.policy} providerCodes={configuration.providers.map((provider) => provider.code)} modelCodes={configuration.models.map((model) => model.code)} canManage={canManage} locale={locale} /></div></AccordionItem><AccordionItem title={locale === "en" ? "MCP servers and assistants" : "Serveurs MCP et assistants"}><ConsoleAiMcpPanel initial={mcp} locale={locale} canManage={mcpCapability.allowed} /></AccordionItem></Accordion></div>;
+    content = <div className="min-w-0 space-y-5"><ConsoleAiOverview data={snapshot} locale={locale} days={period.days} /><Accordion><AccordionItem title={locale === "en" ? "Models, providers and budgets" : "Modèles, fournisseurs et budgets"}><div className="space-y-4"><ConsoleAiConfigurationPanel data={configuration} locale={locale} /><ConsoleAiPolicyManager initialPolicy={configuration.policy} providerCodes={configuration.providers.map((provider) => provider.code)} modelCodes={configuration.models.map((model) => model.code)} canManage={canManage} locale={locale} /></div></AccordionItem><AccordionItem title={locale === "en" ? "MCP servers and assistants" : "Serveurs MCP et assistants"}><ConsoleAiMcpPanel initial={mcp} locale={locale} canManage={mcpCapability.allowed} /></AccordionItem><AccordionItem title={locale === "en" ? "Knowledge and safety" : "Connaissances et sécurité"}><div className="min-w-0 space-y-4"><ConsoleAiKnowledgeSecurityPanel data={knowledgeSecurity} locale={locale} /><ConsoleAiAlertPanel initial={aiAlerts} locale={locale} canManage={canManage} /></div></AccordionItem></Accordion></div>;
   } else if (activeSection === "platform-settings") {
     const flags = await prisma.featureFlag.findMany({ orderBy: [{ environment: "asc" }, { code: "asc" }], take: 100 });
     content = <div className="space-y-5"><Accordion><AccordionItem title={t("console.sections.platform-settings.label")} defaultOpen><AdminSettingsPanel canEdit={canManage} settings={{ defaultDailyMessageLimit: settings.defaultDailyMessageLimit, defaultDailyTokenLimit: settings.defaultDailyTokenLimit, chatbotEnabled: settings.chatbotEnabled, publicAgentEnabled: settings.publicAgentEnabled, allowNonClientPublicationDrafts: settings.allowNonClientPublicationDrafts, maintenanceMode: settings.maintenanceMode, supportAutoCloseDays: settings.supportAutoCloseDays, allowClientAnnouncements: settings.allowClientAnnouncements, commentEditWindowMinutes: settings.commentEditWindowMinutes, notificationRetentionDays: settings.notificationRetentionDays, signUpOtpEnabled: settings.signUpOtpEnabled, signUpOtpExpirationMinutes: settings.signUpOtpExpirationMinutes }} /></AccordionItem></Accordion><FeatureFlagManager flags={toJsonSafe(flags)} canManage={canManage} locale={locale} /></div>;

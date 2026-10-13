@@ -720,6 +720,7 @@ model EnterpriseAiMessage {
   @@index([organizationId, conversationId, createdAt])
   @@index([organizationId, userId, createdAt])
   @@index([organizationId, conversationId, deletedAt])
+  @@index([role, deletedAt, createdAt])
 }
 
 model EnterpriseAiKnowledgeSource {
@@ -7404,6 +7405,17 @@ model AiPlatformRuntimePolicy {
 model AiMcpControlState {
   serverCode      String   @id
   suspended       Boolean  @default(false)
+  revision        Int      @default(1)
+  reason          String
+  updatedByUserId String
+  updatedAt       DateTime @updatedAt
+}
+
+model AiGovernanceAlertRule {
+  code            String   @id
+  enabled         Boolean  @default(false)
+  severity        String   @default("WARNING")
+  threshold       Int
   revision        Int      @default(1)
   reason          String
   updatedByUserId String
