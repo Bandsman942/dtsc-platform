@@ -70,32 +70,32 @@ Le runtime supporte trois modes d’authentification serveur :
 
 - `NONE` pour un serveur ne demandant aucune authentification ;
 - `BEARER_ENV` pour une credential technique DTSC gérée côté serveur ;
-- `OAUTH_USER` pour une autorisation personnelle et tenant-scoped.
+- `OAUTH_USER` pour une autorisation propre à l’utilisateur, dans un contexte **personnel** ou **organisation**, sans échange entre les deux.
 
 Une application n’obtient un bouton **Connecter** que lorsqu’un serveur correspondant est réellement `CERTIFIED`, configuré en `OAUTH_USER` et autorisé dans le contexte actif. Une connexion est liée à :
 
-`userId + organizationId + serverCode`.
+`userId + organizationId (nullable) + serverCode`. Une organisation nulle désigne le scope PERSONNEL ; une organisation non nulle désigne le scope ENTREPRISE.
 
 Le passage à une autre entreprise n’emporte donc jamais implicitement une autorisation personnelle.
 
 ### Flux de connexion
 
 1. l’utilisateur choisit **Connecter** depuis `/ai/apps` ;
-2. le serveur revalide session, organisation active, membership, contexte, certification du serveur et rate limit ;
+2. le serveur revalide session, scope PERSONNEL/ENTREPRISE, membership lorsque l’organisation est présente, certification, portée `GLOBAL`/`TENANT` du serveur et rate limit ;
 3. DTSC découvre les métadonnées OAuth uniquement sur des hôtes explicitement certifiés dans `oauthAllowedHosts` ;
 4. DTSC crée un `state` aléatoire et un verifier PKCE ;
 5. le verifier est chiffré côté serveur ;
 6. l’utilisateur est redirigé vers la page d’autorisation du fournisseur ;
-7. le callback consomme le `state` une seule fois et rejette tout changement de user ou d’organisation ;
+7. le callback consomme le `state` une seule fois et rejette tout changement d'utilisateur ou de scope organisationnel ;
 8. le code OAuth est échangé côté serveur avec PKCE S256 et Resource Indicator ;
 9. access/refresh tokens sont chiffrés avant persistance ;
 10. le centre affiche **Connecté** seulement après persistance réelle.
 
-Le transport MCP demande ensuite un access token valide uniquement avec un contexte `{ userId, organizationId }` explicite. Un token expiré est rafraîchi côté serveur et le refresh est audité.
+Le transport MCP demande ensuite un access token valide avec un contexte `{ userId, organizationId }` explicitement borné au scope courant ; l'accès aux outils d'entreprise exige toujours une organisation autorisée. Un token expiré est rafraîchi côté serveur et le refresh est audité.
 
 ### Coffre de credentials
 
-`DTSC_MCP_OAUTH_ENCRYPTION_KEY` est une clé serveur de 32 octets. Les credentials et les verifiers PKCE utilisent AES-256-GCM avec AAD contenant l’identité user/tenant/server afin qu’un ciphertext copié dans un autre contexte ne soit pas déchiffrable comme une credential valide.
+`DTSC_MCP_OAUTH_ENCRYPTION_KEY` est une clé serveur de 32 octets. Les credentials et les verifiers PKCE utilisent AES-256-GCM avec AAD contenant l’identité utilisateur/scope personnel ou organisation/serveur afin qu’un ciphertext copié dans un autre contexte ne soit pas déchiffrable comme une credential valide.
 
 Les tokens :
 
@@ -176,3 +176,16 @@ Le workflow reste :
 `feature branch → contrôles → PR → Quality Gates → revue → merge main → unique déploiement Production`.
 
 Aucun déploiement Vercel manuel depuis une branche feature n’est autorisé.
+
+
+### Hotfix AI-MCP-01 — isolation des autorisations personnelles et entreprise
+
+La migration additive `20261013010000_mcp_personal_oauth_scope` rend `organizationId` facultatif dans les deux tables OAuth et crée un index unique partiel garantissant une seule autorisation personnelle par utilisateur et serveur. L'autorisation personnelle est identifiée par `organizationId IS NULL` : aucune entreprise artificielle n'est créée. Les autorisations déjà liées à une entreprise restent inchangées et conservent leur AAD historique.
+
+- Un serveur `organizationScope: GLOBAL` peut démarrer une autorisation depuis un compte en contexte personnel ; les autres critères de certification, OAuth et scopes restent obligatoires.
+- Un serveur `organizationScope: TENANT` exige une organisation active avec membership autorisé, y compris au callback et lors de la déconnexion.
+- La clé AES-256-GCM AAD lie toujours le jeton à `userId`, au scope personnel ou à l'organisation réelle, et au serveur. La migration ne déchiffre ni ne ré-encrypte aucun jeton existant.
+- La page `/ai/apps` interroge exclusivement les droits du scope courant ; basculer entre personnel et entreprise ne transporte aucune autorisation.
+- Une connexion OAuth ne valide ni binding d'outil ni disponibilité réseau. Les outils entreprise conservent leurs contrôles tenant/Tool Gateway indépendamment du stockage OAuth personnel.
+
+**Rollback :** revenir au comportement de connexion entreprise côté code ; garder les colonnes facultatives et l'index partiel en place tant que des grants personnels existent. Ne jamais exécuter un `SET NOT NULL` ou une suppression de données sans migration inverse planifiée et auditée.

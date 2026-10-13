@@ -32,10 +32,10 @@ export function decryptMcpOAuthSecret(payload: string, aad: string) {
   return Buffer.concat([decipher.update(Buffer.from(ciphertextRaw, "base64url")), decipher.final()]).toString("utf8");
 }
 
-export function mcpOAuthConnectionAad(input: { userId: string; organizationId: string; serverCode: string }) {
-  return `mcp-oauth:connection:${input.userId}:${input.organizationId}:${input.serverCode}`;
+export function mcpOAuthConnectionAad(input: { userId: string; organizationId: string | null; serverCode: string }) {
+  return `mcp-oauth:connection:${input.userId}:${input.organizationId ?? 'PERSONAL'}:${input.serverCode}`;
 }
 
-export function mcpOAuthStateAad(input: { userId: string; organizationId: string; serverCode: string; state: string }) {
-  return `mcp-oauth:state:${input.userId}:${input.organizationId}:${input.serverCode}:${input.state}`;
+export function mcpOAuthStateAad(input: { userId: string; organizationId: string | null; serverCode: string; state: string }) {
+  return `mcp-oauth:state:${input.userId}:${input.organizationId ?? 'PERSONAL'}:${input.serverCode}:${input.state}`;
 }

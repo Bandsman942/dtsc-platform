@@ -15,7 +15,7 @@ export type McpOAuthCredentials = {
 type ConnectionRow = {
   id: string;
   userId: string;
-  organizationId: string;
+  organizationId: string | null;
   serverCode: string;
   encryptedCredentials: string;
   grantedScopes: string[];
@@ -34,7 +34,7 @@ type StateRow = {
   id: string;
   state: string;
   userId: string;
-  organizationId: string;
+  organizationId: string | null;
   serverCode: string;
   encryptedVerifier: string;
   redirectPath: string;
@@ -46,12 +46,12 @@ function connectionAad(row: Pick<ConnectionRow, "userId" | "organizationId" | "s
   return mcpOAuthConnectionAad(row);
 }
 
-export async function getMcpOAuthConnection(input: { userId: string; organizationId: string; serverCode: string }) {
+export async function getMcpOAuthConnection(input: { userId: string; organizationId: string | null; serverCode: string }) {
   const rows = await prisma.$queryRaw<ConnectionRow[]>(Prisma.sql`
     SELECT "id", "userId", "organizationId", "serverCode", "encryptedCredentials", "grantedScopes", "expiresAt", "connectedAt", "refreshedAt", "revokedAt"
     FROM "McpUserOAuthConnection"
     WHERE "userId" = ${input.userId}
-      AND "organizationId" = ${input.organizationId}
+      AND "organizationId" IS NOT DISTINCT FROM ${input.organizationId}
       AND "serverCode" = ${input.serverCode}
       AND "revokedAt" IS NULL
     LIMIT 1
@@ -62,12 +62,12 @@ export async function getMcpOAuthConnection(input: { userId: string; organizatio
   return { ...row, credentials };
 }
 
-export async function getMcpOAuthGrantedScopes(input: { userId: string; organizationId: string; serverCode: string }) {
+export async function getMcpOAuthGrantedScopes(input: { userId: string; organizationId: string | null; serverCode: string }) {
   const rows = await prisma.$queryRaw<Array<{ grantedScopes: string[] }>>(Prisma.sql`
     SELECT "grantedScopes"
     FROM "McpUserOAuthConnection"
     WHERE "userId" = ${input.userId}
-      AND "organizationId" = ${input.organizationId}
+      AND "organizationId" IS NOT DISTINCT FROM ${input.organizationId}
       AND "serverCode" = ${input.serverCode}
       AND "revokedAt" IS NULL
     LIMIT 1
@@ -75,23 +75,23 @@ export async function getMcpOAuthGrantedScopes(input: { userId: string; organiza
   return rows[0]?.grantedScopes || null;
 }
 
-export async function listMcpOAuthConnectionGrants(input: { userId: string; organizationId: string }) {
+export async function listMcpOAuthConnectionGrants(input: { userId: string; organizationId: string | null }) {
   const rows = await prisma.$queryRaw<GrantRow[]>(Prisma.sql`
     SELECT "serverCode", "grantedScopes"
     FROM "McpUserOAuthConnection"
     WHERE "userId" = ${input.userId}
-      AND "organizationId" = ${input.organizationId}
+      AND "organizationId" IS NOT DISTINCT FROM ${input.organizationId}
       AND "revokedAt" IS NULL
   `);
   return new Map(rows.map((row) => [row.serverCode, new Set(row.grantedScopes)]));
 }
 
-export async function listMcpOAuthConnectionServerCodes(input: { userId: string; organizationId: string }) {
+export async function listMcpOAuthConnectionServerCodes(input: { userId: string; organizationId: string | null }) {
   const rows = await prisma.$queryRaw<Array<{ serverCode: string }>>(Prisma.sql`
     SELECT "serverCode"
     FROM "McpUserOAuthConnection"
     WHERE "userId" = ${input.userId}
-      AND "organizationId" = ${input.organizationId}
+      AND "organizationId" IS NOT DISTINCT FROM ${input.organizationId}
       AND "revokedAt" IS NULL
   `);
   return new Set(rows.map((row) => row.serverCode));
@@ -99,7 +99,7 @@ export async function listMcpOAuthConnectionServerCodes(input: { userId: string;
 
 export async function saveMcpOAuthConnection(input: {
   userId: string;
-  organizationId: string;
+  organizationId: string | null;
   serverCode: string;
   credentials: McpOAuthCredentials;
   refreshed?: boolean;
@@ -108,6 +108,12 @@ export async function saveMcpOAuthConnection(input: {
   const encrypted = encryptMcpOAuthSecret(JSON.stringify(input.credentials), aad);
   const expiresAt = input.credentials.expiresAt ? new Date(input.credentials.expiresAt) : null;
   const id = randomUUID();
+  const target = input.organizationId === null
+    ? Prisma.sql`("userId", "serverCode") WHERE "organizationId" IS NULL`
+    : Prisma.sql`("userId", "organizationId", "serverCode")`;
+
+  // Separate partial unique arbiter for PERSONAL grants; no synthetic tenant.
+  // A genuine tenant grant continues to use the original unique constraint.
   await prisma.$executeRaw(Prisma.sql`
     INSERT INTO "McpUserOAuthConnection" (
       "id", "userId", "organizationId", "serverCode", "encryptedCredentials", "grantedScopes", "expiresAt", "connectedAt", "refreshedAt", "revokedAt", "createdAt", "updatedAt"
@@ -115,7 +121,7 @@ export async function saveMcpOAuthConnection(input: {
       ${id}, ${input.userId}, ${input.organizationId}, ${input.serverCode}, ${encrypted}, ${input.credentials.scope}, ${expiresAt}, CURRENT_TIMESTAMP,
       ${input.refreshed ? new Date() : null}, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
-    ON CONFLICT ("userId", "organizationId", "serverCode") DO UPDATE SET
+    ON CONFLICT ${target} DO UPDATE SET
       "encryptedCredentials" = EXCLUDED."encryptedCredentials",
       "grantedScopes" = EXCLUDED."grantedScopes",
       "expiresAt" = EXCLUDED."expiresAt",
@@ -125,12 +131,12 @@ export async function saveMcpOAuthConnection(input: {
   `);
 }
 
-export async function revokeMcpOAuthConnection(input: { userId: string; organizationId: string; serverCode: string }) {
+export async function revokeMcpOAuthConnection(input: { userId: string; organizationId: string | null; serverCode: string }) {
   await prisma.$executeRaw(Prisma.sql`
     UPDATE "McpUserOAuthConnection"
     SET "revokedAt" = CURRENT_TIMESTAMP, "encryptedCredentials" = '', "updatedAt" = CURRENT_TIMESTAMP
     WHERE "userId" = ${input.userId}
-      AND "organizationId" = ${input.organizationId}
+      AND "organizationId" IS NOT DISTINCT FROM ${input.organizationId}
       AND "serverCode" = ${input.serverCode}
       AND "revokedAt" IS NULL
   `);
@@ -139,7 +145,7 @@ export async function revokeMcpOAuthConnection(input: { userId: string; organiza
 export async function createMcpOAuthState(input: {
   state: string;
   userId: string;
-  organizationId: string;
+  organizationId: string | null;
   serverCode: string;
   verifier: string;
   redirectPath?: string;

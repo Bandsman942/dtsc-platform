@@ -36,21 +36,25 @@ export const CONNECTED_APP_CATALOG: ConnectedAppCatalogEntry[] = [
 
 export async function listConnectedAppsForUser(input: { locale: string | null | undefined; userId: string; organizationId: string | null }) {
   const en = input.locale === "en";
-  const connectionGrants = input.organizationId
-    ? await listMcpOAuthConnectionGrants({ userId: input.userId, organizationId: input.organizationId })
-    : new Map<string, Set<string>>();
+  const connectionGrants = await listMcpOAuthConnectionGrants({
+    userId: input.userId,
+    organizationId: input.organizationId,
+  });
 
   return CONNECTED_APP_CATALOG.map((app) => {
     const configuredServers = MCP_SERVER_REGISTRY.filter((server) => app.serverMatch.test(`${server.code} ${server.label} ${server.endpoint}`));
     const certifiedServers = configuredServers.filter((server) => server.status === "CERTIFIED");
     const oauthServer = certifiedServers.find((server) => server.authMode === "OAUTH_USER") || null;
+    const organizationRequired = Boolean(oauthServer && oauthServer.organizationScope === "TENANT" && !input.organizationId);
     const grantedScopes = oauthServer ? connectionGrants.get(oauthServer.code) || null : null;
     const connectionExists = Boolean(grantedScopes);
     const scopeCoverageCurrent = Boolean(oauthServer && grantedScopes && hasRequiredMcpOAuthScopes(grantedScopes, oauthServer.oauthScopes));
     const connected = connectionExists && scopeCoverageCurrent;
     const reauthorizationRequired = connectionExists && !scopeCoverageCurrent;
     const platformConfigured = Boolean(oauthServer && isMcpOAuthPlatformConfigured(oauthServer));
-    const availability = connected
+    const availability = organizationRequired
+      ? "ORGANIZATION_REQUIRED" as const
+      : connected
       ? "CONNECTED" as const
       : reauthorizationRequired && platformConfigured
         ? "REAUTHORIZATION_REQUIRED" as const

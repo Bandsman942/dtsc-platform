@@ -9,6 +9,7 @@ function assert(condition, message) { if (!condition) throw new Error(message); 
 const schema = read("prisma/assistant-conversation-preferences.prisma");
 const migration = read("prisma/migrations/20260730043000_add_assistant_conversation_preferences/migration.sql");
 const oauthMigration = read("prisma/migrations/20260811010000_add_mcp_user_oauth/migration.sql");
+const personalOauthMigration = read("prisma/migrations/20261013010000_mcp_personal_oauth_scope/migration.sql");
 const trustMigration = read("prisma/migrations/20260902003000_add_ai_reasoning_effort/migration.sql");
 const helper = read("lib/assistant-conversation-preferences.ts");
 const promptPolicy = read("lib/ai/prompts.ts");
@@ -86,7 +87,7 @@ assert(connectedAppsProductGuidance.includes("MCP signifie Model Context Protoco
 assert(connectedAppsProductGuidance.includes('CONNECTED_APPS_PRODUCT_PATH = "/ai/apps"') && !connectedAppsProductGuidance.includes('CONNECTED_APPS_PRODUCT_PATH = "/#/applications"'), "Product guidance must link only to the actual connected-applications route");
 assert(connectedAppsProductGuidance.includes("const apps = await loadApps(input)") && connectedAppsProductGuidance.includes('await import("@/lib/ai/mcp/app-catalog")') && connectedAppsProductGuidance.includes("AVAILABILITY_MEANINGS[app.availability]"), "Connection readiness must be derived from the existing catalog, not hardcoded or assumed");
 assert(connectedAppsProductGuidance.includes("does not prove any MCP tool is usable") && connectedAppsProductGuidance.includes("ne prouve pas qu'un outil MCP soit utilisable"), "OAuth grant must never be presented as available MCP tool");
-assert(connectedAppsProductGuidance.includes("No active organization") && connectedAppsProductGuidance.includes("Aucune organisation active"), "The chatbot must explain the actual current personal OAuth limitation instead of inventing a personal flow");
+assert(connectedAppsProductGuidance.includes("No active organization") && connectedAppsProductGuidance.includes("Aucune organisation active") && connectedAppsProductGuidance.includes("ORGANIZATION_REQUIRED"), "Product guidance must explain personal OAuth and tenant-only connector limitations");
 assert(chatRoute.includes("buildConnectedAppsAvailabilityContext") && chatRoute.includes("asksAboutConnectedApps") && chatRoute.includes("organizationId, locale"), "General chatbot must ground MCP answers in the current user's scoped metadata only when relevant");
 assert(productAwareness.includes("Release notes describe shipped product changes") && productAwareness.includes("Les notes de version décrivent des livraisons"), "A release note must not be presented as proof of live connection or plan status");
 
@@ -166,6 +167,13 @@ assert(calendarScopeRelease.includes("Renouveler l’autorisation Google Calenda
 assert(oauthMigration.includes('CREATE TABLE "McpUserOAuthConnection"') && oauthMigration.includes('CREATE TABLE "McpUserOAuthState"'), "MCP OAuth persistence migration must create connection and one-time-state tables");
 assert(!/DROP TABLE|DROP COLUMN|TRUNCATE/i.test(oauthMigration), "MCP OAuth migration must be additive");
 assert(oauthMigration.includes('"userId", "organizationId", "serverCode"') && oauthMigration.includes("ON DELETE CASCADE"), "MCP OAuth credentials must be isolated by user, organization and server");
+assert(personalOauthMigration.includes('ALTER COLUMN "organizationId" DROP NOT NULL') && personalOauthMigration.includes('McpUserOAuthConnection_personal_user_server_key'), "Personal OAuth must have a nullable FK and a partial unique index, with no synthetic tenant");
+assert(!/DROP TABLE|DROP COLUMN|TRUNCATE/i.test(personalOauthMigration), "Personal OAuth migration must preserve old tenant records");
+assert(mcpOauthCrypto.includes("?? 'PERSONAL'") && mcpOauthStore.includes("IS NOT DISTINCT FROM"), "Personal OAuth AES-GCM AAD and SQL lookups must bind to real user + nullable organization scope");
+assert(mcpOauthStore.includes('"organizationId" IS NULL') && mcpOauthStore.includes("ON CONFLICT ${target} DO UPDATE"), "Personal and tenant grants must retain independent, race-safe upsert arbitration");
+assert(mcpConnectRoute.includes('server.organizationScope === "TENANT"') && mcpCallbackRoute.includes('savedState.organizationId === null'), "TENANT MCP servers must never be connected through a personal OAuth state");
+assert(connectedAppsCatalog.includes("ORGANIZATION_REQUIRED") && connectedAppsCatalog.includes("organizationId: input.organizationId"), "Connected apps must show only grants belonging to the current real OAuth scope");
+assert(connectedAppsPage.includes("Vos autorisations restent distinctes") && !connectedAppsPage.includes("Sélectionnez une organisation active avant de connecter"), "Individuals must be able to connect GLOBAL-scope servers without an invented organization");
 assert(mcpConnectRoute.includes("isSameOriginRequest") && mcpConnectRoute.includes("requireActiveOrganizationMembership") && mcpConnectRoute.includes("rateLimit"), "OAuth connect must enforce same-origin, active tenant membership and rate limiting");
 assert(mcpCallbackRoute.includes("consumeMcpOAuthState") && mcpCallbackRoute.includes("activeOrganizationId !== savedState.organizationId"), "OAuth callback must consume state once and reject tenant-context changes");
 assert(mcpDisconnectRoute.includes("revokeMcpOAuthConnection") && mcpDisconnectRoute.includes("localCredentialsDestroyed: true"), "OAuth disconnect must destroy the local encrypted credential even when remote revocation is unavailable");

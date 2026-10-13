@@ -9,6 +9,10 @@ export const CONNECTED_APPS_PRODUCT_PATH = "/ai/apps";
 type AppAvailability = Awaited<ReturnType<typeof listConnectedAppsForUser>>[number]["availability"];
 
 const AVAILABILITY_MEANINGS: Record<AppAvailability, { fr: string; en: string }> = {
+  ORGANIZATION_REQUIRED: {
+    fr: "Ce serveur exige une organisation active ; aucune connexion personnelle n'est proposée.",
+    en: "This server requires an active organization; no personal connection is offered.",
+  },
   CONNECTED: {
     fr: "Autorisation OAuth enregistrée avec les permissions demandées ; cela ne prouve pas qu'un outil MCP soit utilisable.",
     en: "OAuth authorization recorded with the required scopes; this does not prove any MCP tool is usable.",
@@ -44,7 +48,7 @@ export function buildConnectedAppsProductInstruction(locale: string) {
       "This page lists a catalog of candidate integrations, not a promise that a specific provider, OAuth flow, remote service or tool is operational.",
       "Distinguish catalog listing, DTSC certification, provider setup, OAuth authorization, required scopes, approved tool binding and successful tool execution.",
       "A connected OAuth account does not prove that a certified READ tool is enabled or reachable. Never present tool use or resource access as already performed without an authorized tool result.",
-      "In the current implementation, personal OAuth connection requires an active organization. If none is active, explain this limitation; do not promise a personal-only OAuth flow.",
+      "Personal OAuth works for certified GLOBAL-scope servers; TENANT-only servers require an active organization. Never use a personal grant for an enterprise tool.",
       "Describe plan, pricing and effective permissions only from authorized current subscription/context data. Never assume the user's plan from the conversation or catalog.",
       "If real connection state is unavailable, explicitly ask the user to consult Connected applications rather than invent a status.",
     ].join("\n");
@@ -56,7 +60,7 @@ export function buildConnectedAppsProductInstruction(locale: string) {
     "La page présente un catalogue d'intégrations potentielles, pas une preuve qu'un fournisseur, OAuth, un serveur distant ou un outil est opérationnel.",
     "Distingue la présence au catalogue, la certification DTSC, la configuration fournisseur, l'autorisation OAuth, les permissions accordées, le binding d'outil approuvé et l'exécution réelle.",
     "Une autorisation OAuth connectée ne prouve pas qu'un outil MCP READ soit activé ou joignable. Ne prétends jamais avoir lu une ressource sans résultat d'outil autorisé.",
-    "Dans l'implémentation actuelle, la connexion OAuth personnelle exige une organisation active. Sans organisation active, signale cette limite ; ne promets pas une connexion purement personnelle.",
+    "OAuth personnel fonctionne pour les serveurs certifiés GLOBAL ; les serveurs TENANT exigent une organisation active. Une connexion personnelle ne doit jamais autoriser les outils entreprise.",
     "N'annonce le plan, les prix et les droits effectifs qu'à partir du contexte commercial actuellement vérifié et autorisé ; ne déduis jamais le plan du dialogue ou du catalogue.",
     "Si l'état réel d'une connexion n'est pas disponible, invite explicitement à consulter Applications connectées plutôt que d'inventer un statut.",
   ].join("\n");
@@ -83,8 +87,8 @@ export async function buildConnectedAppsAvailabilityContext(input: {
     const scope = input.organizationId
       ? (en ? "Current user and active organization only." : "Utilisateur courant et organisation active uniquement.")
       : (en
-        ? "No active organization. Personal OAuth cannot be started in this release; do not describe a listed application as connected."
-        : "Aucune organisation active. OAuth personnel ne peut pas être démarré dans cette version ; ne présente aucune application cataloguée comme connectée.");
+        ? "No active organization. Only GLOBAL-scope servers can connect personally; inspect each application status."
+        : "Aucune organisation active. Seuls les connecteurs GLOBAL peuvent être connectés personnellement ; vérifie chaque statut.");
     return [
       en ? "CONNECTED APPLICATIONS — CURRENT USER METADATA (not a tool execution result):" : "APPLICATIONS CONNECTÉES — MÉTADONNÉES DE L'UTILISATEUR (pas un résultat d'outil) :",
       scope,

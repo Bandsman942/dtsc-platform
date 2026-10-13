@@ -26,9 +26,11 @@ export async function POST(request: Request) {
   if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
 
   const organizationId = getActiveOrganizationId(session);
-  if (!organizationId || !await requireActiveOrganizationMembership(session, organizationId)) {
+  // PERSONAL grants are account-scoped and must never be invented as tenants.
+  // Organization grants still require active membership and are fail-closed.
+  if (organizationId && !await requireActiveOrganizationMembership(session, organizationId)) {
     await writeApiLog({ request, statusCode: 403, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Contexte entreprise requis." }, { status: 403 });
+    return NextResponse.json({ error: "Contexte entreprise invalide." }, { status: 403 });
   }
 
   const form = await request.formData();
@@ -39,8 +41,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Cette application n’est pas disponible à la connexion." }, { status: 400 });
   }
   const activeContext = session.activeContext || "GLOBAL_CLIENT";
+  if (!organizationId && activeContext !== "GLOBAL_CLIENT" && activeContext !== "COMMUNITY") {
+    return NextResponse.json({ error: "Contexte personnel requis.", reasonCode: "MCP_OAUTH_PERSONAL_CONTEXT_REQUIRED" }, { status: 403 });
+  }
   if (!server.contexts.includes(activeContext)) return NextResponse.json({ error: "Application indisponible dans ce contexte." }, { status: 403 });
-  if (server.organizationScope === "TENANT" && session.activeOrganizationId !== organizationId) return NextResponse.json({ error: "Contexte entreprise invalide." }, { status: 403 });
+  if (server.organizationScope === "TENANT" && (!organizationId || session.activeOrganizationId !== organizationId)) return NextResponse.json({ error: "Cette application exige une organisation active.", reasonCode: "MCP_OAUTH_TENANT_REQUIRED" }, { status: 403 });
 
   try {
     await deleteExpiredMcpOAuthStates();
