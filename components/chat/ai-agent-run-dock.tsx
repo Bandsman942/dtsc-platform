@@ -175,6 +175,21 @@ export function AiAgentRunDock({ variant }: { variant: AgentVariant }) {
       .catch(() => null);
   }, [variant]);
 
+  useEffect(() => {
+    // Rehydrate only server-authorized pending approval/resume metadata.
+    // Never replay a prompt, stream or sensitive action on reload.
+    void fetch(`/api/ai/agent/runs/active?variant=${variant}`, { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((body) => {
+        if (!body || typeof body.runId !== "string") return;
+        setRunId((current) => current || body.runId);
+        if (typeof body.conversationId === "string") {
+          setConversationId((current) => current || body.conversationId);
+        }
+      })
+      .catch(() => null);
+  }, [variant]);
+
   const refreshConfirmation = useCallback(async (pendingId?: string | null) => {
     if (!pendingId) {
       setConfirmation(null);
