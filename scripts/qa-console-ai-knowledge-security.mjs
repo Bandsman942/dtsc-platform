@@ -20,7 +20,10 @@ assert(data.includes('knowledge: personal.status === "fulfilled" && enterprise.s
 const cagRegistry = read("lib/ai/cag-registry.ts");
 const aiRuntime = read("lib/ai/assistant-runtime.ts");
 assert(cagRegistry.includes("cacheHit: packs.every((pack) => pack.cacheHit)") && aiRuntime.includes("cagCacheHit: cag.cacheHit"), "Observed CAG hits must derive from actual builder cache state");
-assert(data.includes('FROM "ApiLog"') && data.includes('jsonb_typeof("metadata"->\'cagCacheHit\') = \'boolean\'') && data.includes('"/api/chat/v2"') === false, "CAG metrics must aggregate verified boolean audit metadata from actual assistant paths");
+assert(data.includes('FROM "ApiLog"') && data.includes('jsonb_typeof("metadata"->\'cagCacheHit\') = \'boolean\''), "CAG metrics must aggregate verified boolean audit metadata from actual assistant paths");
+for (const path of ["/api/chat/v2", "/api/chat/agent", "/api/enterprise/ai/chat", "/api/enterprise/ai/agent"]) {
+  assert(data.includes(path), `CAG telemetry missing a prepared assistant route: ${path}`);
+}
 assert(data.includes('status: "UNAVAILABLE"') && data.includes('"NO_OBSERVATIONS"') && data.includes('"MEASURED"'), "CAG telemetry outage, missing observations and real hits must remain distinct");
 assert(panel.includes("data.cag.status === \"UNAVAILABLE\"") && panel.includes('instance-local cache') && !panel.includes("CAG cache hit rate: not instrumented"), "CAG UX must report actual local-cache observations, not fictitious global telemetry");
 assert(!data.includes("alertHealth"), "Governed alert health must come only from alert rules");
