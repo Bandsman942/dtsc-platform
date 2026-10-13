@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
+import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -36,9 +37,24 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const conversationId = url.searchParams.get("conversationId")?.trim() || null;
+  const confirmationId = url.searchParams.get("confirmationId")?.trim() || null;
+  if (confirmationId && !z.string().uuid().safeParse(confirmationId).success) {
+    return NextResponse.json({ error: "INVALID_CONFIRMATION_ID" }, { status: 400 });
+  }
   const organizationId = session.activeContext === "ORGANIZATION" ? session.activeOrganizationId || null : null;
 
-  const rows = conversationId
+  const rows = confirmationId
+    ? await prisma.$queryRaw<PendingRow[]>(Prisma.sql`
+        SELECT "id", "conversationId", "turnId", "toolCode", "argumentsJson", "expiresAt", "createdAt"
+        FROM "AiToolConfirmation"
+        WHERE "id" = ${confirmationId}
+          AND "userId" = ${session.userId}
+          AND ("organizationId" IS NOT DISTINCT FROM ${organizationId})
+          AND "status" = 'PENDING'
+          AND "expiresAt" > CURRENT_TIMESTAMP
+        LIMIT 1
+      `)
+    : conversationId
     ? await prisma.$queryRaw<PendingRow[]>(Prisma.sql`
         SELECT "id", "conversationId", "turnId", "toolCode", "argumentsJson", "expiresAt", "createdAt"
         FROM "AiToolConfirmation"
