@@ -18,7 +18,7 @@ export const CONNECTED_APP_AI_TOOL_EXECUTORS: Record<string, AiToolExecutor> = {
     if (personal && context.organizationId) throw new Error("MCP_APP_SCOPE_DENIED");
     const apps = await listConnectedAppsForUser({
       userId: context.session.userId, organizationId,
-      locale: context.session.locale || "fr",
+      locale: context.request?.headers.get("accept-language")?.toLowerCase().startsWith("en") ? "en" : "fr",
     });
     return {
       path: "/ai/apps",
