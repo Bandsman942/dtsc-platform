@@ -13,13 +13,13 @@ assert(data.includes("prisma.aiModelCall.groupBy") && data.includes("prisma.aiTo
 assert(data.includes("Promise.allSettled"), "Partial outages must be isolated by source");
 assert(data.includes('indexVersion: "legacy-openai-1536-v1"') && data.includes("legacyEnterprise: enterpriseLegacy.value"), "Index reports must use canonical metadata and preserve historical unknown models");
 assert(panel.includes("data.indexing === null") && panel.includes("No document is changed."), "UI must not imply mass reindex or hide missing measurements");
-assert(data.includes('take: 25, select: { id: true }') && data.includes("reindexPreview:") && data.includes("executable: false"), "Console may only inspect bounded private candidate IDs and return count, never execute or reveal them");
+assert(data.includes("prisma.knowledgeDocument.count") && data.includes("prisma.enterpriseAiKnowledgeSource.count") && data.includes("Math.min(25, personalReindex.value)") && data.includes("reindexPreview:") && data.includes("executable: false"), "Console previews must query only aggregate counts, cap at 25 and never load private candidate IDs");
 assert(panel.includes("data.reindexPreview === null") && panel.includes("maxPerDomain"), "Reindex preview must show the cap and unavailable state");
 assert(data.includes("safeReasonCode") && data.includes("^[A-Z][A-Z0-9_]") && data.includes("reasonCode: safeReasonCode(r.reasonCode)"), "Only strict machine-readable reason codes may reach the global Console");
 assert(data.includes('knowledge: personal.status === "fulfilled" && enterprise.status === "fulfilled"') && data.includes(': null'), "Missing knowledge data cannot be falsely displayed as zero");
 assert(data.includes('status: "NOT_INSTRUMENTED"') && !data.includes("alertHealth"), "CAG cache rate unknown; governed alert state comes only from alert rules");
 assert(data.includes('citationProof: { status: "NOT_INSTRUMENTED", certifiedUsageCount: null }') && panel.includes("Proof of citations actually used"), "Do not invent citation-use metrics without source evidence");
-assert(!data.includes("extractedText:") && !data.includes("title: true") && !data.includes("argumentsJson"), "No private knowledge, user, tool arguments or prompt data in Console projection");
+assert(!data.includes("select: { id: true }") && !data.includes("title: true") && !data.includes("argumentsJson") && !data.includes("extractedText: true"), "No document IDs, private text, user identities, tool arguments or prompts projected into Console");
 assert(panel.includes("data.knowledge === null") && panel.includes("data.modelFailures === null") && panel.includes("data.toolDenials === null"), "UI must distinguish not measured from zero");
 assert(panel.includes("overflow-x-auto") && panel.includes("aria-label") && panel.includes("toLocaleString"), "Mobile/accessible compact numbers and tables required");
 assert(page.includes("getConsoleAiKnowledgeSecurity") && page.includes("ConsoleAiKnowledgeSecurityPanel"), "Centre IA must render source-bound knowledge and safety metrics");
