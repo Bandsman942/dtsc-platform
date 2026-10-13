@@ -66,7 +66,7 @@ type AgentSnapshot = {
 type PendingConfirmation = {
   id: string;
   toolCode: string;
-  preview?: { subject?: string | null; priority?: string | null };
+  preview?: { subject?: string | null; message?: string | null; priority?: string | null } | null;
 };
 
 type AgentFailureResponse = {
@@ -89,6 +89,23 @@ function budgetExplanation(reason: AgentSnapshot["budgetReason"], en: boolean) {
   return reason ? explanations[reason][en ? 1 : 0] : (en ? "This run reached a limit defined by your plan or security policy." : "Cette exécution a atteint une limite prévue par votre forfait ou par une politique de sécurité.");
 }
 
+function humanToolLabel(code: string, en: boolean) {
+  const names: Record<string, [string, string]> = {
+    CONNECTED_APPS_STATUS_READ: ["Vérification des applications connectées", "Connected apps check"],
+    SUPPORT_TICKET_CREATE: ["Création d’un ticket d’assistance", "Create a support ticket"],
+    DTSC_CONTACT_EMAIL_SEND: ["Envoi d’un message à DTSC", "Send a message to DTSC"],
+    TASK_DRAFT_PREPARE: ["Préparation d’une tâche", "Prepare a task"],
+  };
+  return names[code]?.[en ? 1 : 0] || (en ? "Authorized business tool" : "Outil métier autorisé");
+}
+
+function humanPriorityLabel(code: string | null | undefined, en: boolean) {
+  const priorities: Record<string, [string, string]> = {
+    LOW: ["Faible", "Low"], MEDIUM: ["Normale", "Medium"], HIGH: ["Élevée", "High"], URGENT: ["Urgente", "Urgent"],
+  };
+  return code ? priorities[code]?.[en ? 1 : 0] || null : null;
+}
+
 function statusLabel(status: string, en: boolean) {
   const labels: Record<string, [string, string]> = {
     RUNNING: ["Analyse en cours", "Analysis in progress"],
@@ -99,19 +116,19 @@ function statusLabel(status: string, en: boolean) {
     CANCELLED: ["Annulé", "Cancelled"],
     BUDGET_EXHAUSTED: ["Limite atteinte", "Budget reached"],
   };
-  return labels[status]?.[en ? 1 : 0] || status;
+  return labels[status]?.[en ? 1 : 0] || (en ? "Status unavailable" : "État indisponible");
 }
 
 function stepLabel(step: AgentStep, en: boolean) {
   if (step.kind === "SYSTEM" && step.status === "RETRYING") return en ? "AI service recovery" : "Reprise du service IA";
-  if (step.toolCode) return `${en ? "Tool" : "Outil"} · ${step.toolCode}`;
+  if (step.toolCode) return humanToolLabel(step.toolCode, en);
   const labels: Record<string, [string, string]> = {
     MODEL: ["Analyse du modèle", "Model analysis"],
     TOOL: ["Exécution d’outil", "Tool execution"],
     CONFIRMATION: ["Validation humaine", "Human approval"],
     SYSTEM: ["État du service IA", "AI service status"],
   };
-  return labels[step.kind]?.[en ? 1 : 0] || step.kind;
+  return labels[step.kind]?.[en ? 1 : 0] || (en ? "Agent step" : "Étape de l’agent");
 }
 
 function safeFailureMessage(body: AgentFailureResponse | null, locale: string) {
@@ -197,6 +214,13 @@ export function AiAgentRunDock({ variant }: { variant: AgentVariant }) {
   const canStart = variant === "chatbot" || Boolean(organizationId);
   const isActive = busy || Boolean(snapshot && !TERMINAL_STATUSES.has(snapshot.status));
   const latestSteps = useMemo(() => [...(snapshot?.steps || [])].sort((a, b) => a.stepIndex - b.stepIndex).slice(-6), [snapshot?.steps]);
+  const canApprovePreview = Boolean(
+    confirmation
+    && (confirmation.toolCode === "SUPPORT_TICKET_CREATE" || confirmation.toolCode === "DTSC_CONTACT_EMAIL_SEND")
+    && confirmation.preview?.subject?.trim()
+    && confirmation.preview?.message?.trim()
+    && (confirmation.toolCode !== "SUPPORT_TICKET_CREATE" || humanPriorityLabel(confirmation.preview?.priority, en)),
+  );
 
   useFloatingAction({
     id: `ai-agent-mode-${variant}`,
@@ -261,7 +285,7 @@ export function AiAgentRunDock({ variant }: { variant: AgentVariant }) {
   }
 
   async function confirmAction() {
-    if (!confirmation || confirmBusy) return;
+    if (!confirmation || confirmBusy || !canApprovePreview) return;
     setConfirmBusy(true);
     try {
       const response = await fetch("/api/ai/tools/confirm", {
@@ -402,11 +426,19 @@ export function AiAgentRunDock({ variant }: { variant: AgentVariant }) {
                 <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
                 <div className="min-w-0 flex-1">
                   <strong className="block text-xs font-black text-dtsc-ink">{en ? "Sensitive action awaiting your approval" : "Action sensible en attente de votre validation"}</strong>
-                  <p className="mt-1 text-xs leading-5 text-dtsc-muted">{en ? `Tool: ${confirmation.toolCode}` : `Outil : ${confirmation.toolCode}`}{confirmation.preview?.subject ? ` · ${confirmation.preview.subject}` : ""}</p>
+                  <p className="mt-1 text-xs leading-5 text-dtsc-muted">{humanToolLabel(confirmation.toolCode, en)}</p>
+                  {canApprovePreview && confirmation.preview ? (
+                    <div className="mt-2 space-y-2 text-xs text-dtsc-ink">
+                      <p><strong>{en ? "Subject:" : "Objet : "}</strong> {confirmation.preview.subject}</p>
+                      {humanPriorityLabel(confirmation.preview.priority, en) ? <p><strong>{en ? "Priority:" : "Priorité : "}</strong> {humanPriorityLabel(confirmation.preview.priority, en)}</p> : null}
+                      <p className="font-bold">{en ? "Full message to send:" : "Message intégral à envoyer :"}</p>
+                      <p className="max-h-36 overflow-y-auto whitespace-pre-wrap break-words rounded-xl border border-dtsc-border bg-dtsc-surface p-2" aria-label={en ? "Full text to approve" : "Texte intégral à valider"}>{confirmation.preview.message}</p>
+                    </div>
+                  ) : <p className="mt-2 text-xs text-rose-600" role="alert">{en ? "This action has no complete, verifiable preview. Approval is disabled; reject it and submit a new request." : "Cette action ne possède pas d’aperçu complet vérifiable. La validation est désactivée ; refusez l’action et reformulez votre demande."}</p>}
                 </div>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
-                <Button type="button" size="sm" onClick={() => void confirmAction()} disabled={confirmBusy}>{confirmBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}{en ? "Approve" : "Valider"}</Button>
+                <Button type="button" size="sm" onClick={() => void confirmAction()} disabled={confirmBusy || !canApprovePreview}>{confirmBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}{en ? "Approve" : "Valider"}</Button>
                 <Button type="button" size="sm" variant="outline" onClick={() => void rejectAction()} disabled={confirmBusy}>{en ? "Reject" : "Refuser"}</Button>
               </div>
             </div>
