@@ -3,12 +3,12 @@
 ### Première tranche réalisée
 - L'Administration DTSC consulte les nombres de sources documentaires personnelles et d'entreprises, par statut READY/PROCESSING/FAILED et autres statuts, sur la période déjà sélectionnée.
 - Les erreurs d'appels modèles `AiModelCall` et refus d'outils `AiToolExecution` sont présentés en événements agrégés bornés, avec leurs motifs, sans contenu des messages ou données clients.
-- Le panneau signale explicitement le **taux de cache CAG non instrumenté** et les **alertes gouvernées non configurées**, sans simuler une santé « OK ».
+- Le panneau signale explicitement le **taux de cache CAG non instrumenté** ; les alertes sont évaluées depuis les règles effectivement publiées, sans simuler une santé « OK ».
 - Consultation dans le Centre IA déjà protégé par `CONSOLE_AI_READ`, FR/EN et tableaux mobiles.
 
 ### Restant à réaliser dans le hotfix #804
-- Indicateurs de versions d'index/réindexation, citation prouvée et retrieval si instrumentés.
-- Alertes gouvernées : seuils, criticité, désactivation contrôlée, audit des changements.
+- Preuve de citations et métriques de retrieval si une source instrumentée le permet ; ne pas les inventer.
+- Vérification E2E des seuils et de leur désactivation, déjà implémentés et audités.
 - Politique de réindexation bornée avec justification, sans lancement massif en Production.
 - Validation CI et OWNER_E2E avant fusion.
 
@@ -21,4 +21,4 @@ Aucun titre de document, contenu privé, chemin de stockage, jeton, identité de
 - Signaux affichés sur la période sélectionnée ; aucun faux état sain ni notification automatique simulée.
 - Migration additive `AiGovernanceAlertRule`, audit dans `PlatformSettingHistory`, permission `CONSOLE_AI_MANAGE`.
 
-Les preuves de versions d'index, la réindexation contrôlée et l'E2E complet restent à finaliser dans #804.
+La répartition legacy / index versionné est maintenant affichée. La réindexation contrôlée, les preuves de citations et l'E2E complet restent à finaliser dans #804.
