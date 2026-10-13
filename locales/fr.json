@@ -999,6 +999,22 @@
     "exportApprovalRequired": "Une approbation est requise pour cet export sensible."
   },
   "console": {
+    "detailSections": {
+      "platformIndicators": "Indicateurs détaillés de la plateforme",
+      "aiModels": "Modèles, fournisseurs et budgets",
+      "aiConnectors": "Serveurs MCP et assistants",
+      "aiSafety": "Connaissances et sécurité",
+      "createUser": "Créer un compte utilisateur",
+      "newsletter": "Abonnés à la newsletter",
+      "userList": "Liste des utilisateurs",
+      "platformPreferences": "Préférences générales",
+      "platformFlags": "Fonctionnalités configurables",
+      "billingPlans": "Offres et plans",
+      "billingManual": "Paiements manuels",
+      "billingSubscriptions": "Abonnements et factures",
+      "incidents": "Incidents de plateforme",
+      "auditLogs": "Journaux et traçabilité"
+    },
     "workspace": {
       "tabs": "Espaces de travail associés",
       "allSections": "Tous les espaces de travail",
