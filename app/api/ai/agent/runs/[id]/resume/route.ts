@@ -3,7 +3,7 @@ import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
 import { classifyAiAgentFailure, getAiAgentClientFailureMessage } from "@/lib/ai/agent/failures";
 import { resumeAiAgentRun, AiAgentResumeError } from "@/lib/ai/agent/resume";
-import { getActiveOrganizationId } from "@/lib/organizations";
+import { getActiveOrganizationId, requireActiveOrganizationMembership } from "@/lib/organizations";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 
@@ -38,6 +38,9 @@ export async function POST(req: Request, { params }: Params) {
 
   const { id } = await params;
   const organizationId = getActiveOrganizationId(session);
+  if (session.activeContext === "ORGANIZATION" && (!organizationId || !await requireActiveOrganizationMembership(session, organizationId))) {
+    return NextResponse.json({ error: "ORGANIZATION_ACCESS_DENIED" }, { status: 403 });
+  }
   try {
     const resumed = await resumeAiAgentRun({ runId: id, session, organizationId, request: req });
     await writeApiLog({
