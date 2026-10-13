@@ -13,6 +13,7 @@ export type ConsoleAiKnowledgeSecurity = {
   modelFailures: Array<{ reasonCode: string; status: string; calls: number }> | null;
   toolDenials: Array<{ reasonCode: string; executions: number }> | null;
   cag: { status: "NOT_INSTRUMENTED"; source: "buildAiCagPack"; cacheHitRate: null };
+  citationProof: { status: "NOT_INSTRUMENTED"; certifiedUsageCount: null };
 };
 
 /**
@@ -94,5 +95,6 @@ export async function getConsoleAiKnowledgeSecurity(input: { from: Date; to: Dat
       ? deniedTools.value.map((r) => ({ reasonCode: safeReasonCode(r.reasonCode), executions: r._count._all }))
       : null,
     cag: { status: "NOT_INSTRUMENTED", source: "buildAiCagPack", cacheHitRate: null },
+    citationProof: { status: "NOT_INSTRUMENTED", certifiedUsageCount: null },
   };
 }
