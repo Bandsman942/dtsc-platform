@@ -71,7 +71,7 @@ export async function getConsoleAiAlertSnapshot(input: { from: Date; to: Date })
         : total >= raw.threshold ? "TRIGGERED" : "BELOW_THRESHOLD";
       return {
         code, enabled: supported ? raw.enabled : null,
-        revision: supported ? raw.revision : null,
+        revision: supported ? raw.revision : records !== null && !raw ? 0 : null,
         severity: supported ? raw.severity as "WARNING" | "CRITICAL" : null,
         threshold: supported ? raw.threshold : null,
         total, state, source: sources[code],
