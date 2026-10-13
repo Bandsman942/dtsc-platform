@@ -73,6 +73,15 @@ Application rollback is a normal PR revert. The additive MCP migration may remai
 
 ## AI-MCP-02 — Preuves exigées pour Gmail et Google Calendar
 
+**Statut fournisseur vérifié** : les endpoints MCP Google Workspace Gmail et Calendar figurent dans la documentation officielle Google, mais l'accès est indiqué comme **Developer Preview** et requiert l'éligibilité/activation correspondante. Vérifier ce prérequis fournisseur avant d'afficher un statut opérationnel. Références :
+- https://developers.google.com/workspace/gmail/api/reference/mcp
+- https://developers.google.com/workspace/calendar/api/v3/reference/mcp
+- https://developers.google.com/workspace/gmail/api/guides/configure-mcp-server
+- https://developers.google.com/workspace/calendar/api/guides/configure-mcp-server
+
+**Sécurité READ** : Google expose aussi des outils distants mutables. DTSC interdit notamment `create_draft`, `label_message`, `create_event`, `update_event` et `delete_event` dans AI-MCP-02. La politique `google-read-tool-policy.ts` restreint les noms d'outils Gmail/Calendar utilisables, même si une configuration les classe accidentellement `READ`. Une entrée allowlistée n'est pas pour autant certifiée utilisable : il faut toujours les scopes, la découverte, les hashes et le parcours E2E authentifié.
+
+
 Le registre livré contient `GOOGLE_GMAIL_OFFICIAL` et `GOOGLE_CALENDAR_OFFICIAL` comme **définitions certifiées**. Ce statut ne constitue pas une preuve que l'endpoint distant est actif, que Google a accordé l'accès ou qu'un outil READ est utilisable.
 
 ### Préflight par connecteur (même règle pour chacun)
