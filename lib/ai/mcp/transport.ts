@@ -55,7 +55,7 @@ function parseSseJsonRpcResponse<T>(payload: string, expectedId: number): JsonRp
 
 export type McpUserAuthContext = {
   userId: string;
-  organizationId: string;
+  organizationId: string | null;
 };
 
 export async function callMcpJsonRpc<T>(input: {
@@ -88,7 +88,10 @@ export async function callMcpJsonRpc<T>(input: {
     if (!token) throw new Error("MCP_SERVER_AUTH_MISSING");
     headers.Authorization = `Bearer ${token}`;
   } else if (input.server.authMode === "OAUTH_USER") {
-    if (!input.userAuth?.userId || !input.userAuth.organizationId) throw new Error("MCP_OAUTH_USER_CONTEXT_REQUIRED");
+    if (!input.userAuth?.userId) throw new Error("MCP_OAUTH_USER_CONTEXT_REQUIRED");
+    if (input.server.organizationScope === "TENANT" && !input.userAuth.organizationId) {
+      throw new Error("MCP_OAUTH_ORGANIZATION_CONTEXT_REQUIRED");
+    }
     const token = await getAuthorizedMcpOAuthAccessToken({
       server: input.server,
       userId: input.userAuth.userId,

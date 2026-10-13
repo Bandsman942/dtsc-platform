@@ -4,9 +4,11 @@ import { authorizeMcpRequiredPermissions } from "@/lib/ai/mcp/authorization";
 import { getMcpToolBindingByDtscCode } from "@/lib/ai/mcp/bindings";
 import { discoverAndPersistMcpServer, getDiscoveredMcpTool } from "@/lib/ai/mcp/discovery";
 import { getMcpServerDefinition } from "@/lib/ai/mcp/registry";
+import { isApprovedMcpReadToolName } from "@/lib/ai/mcp/google-read-tool-policy";
 import { buildMcpParameterHeaders, hashMcpSchema } from "@/lib/ai/mcp/schema";
 import { authorizeMcpDataBoundary } from "@/lib/ai/mcp/security";
 import { callMcpJsonRpc } from "@/lib/ai/mcp/transport";
+import { resolveMcpUserAuthScope } from "@/lib/ai/mcp/user-scope";
 import type { McpDataClassification } from "@/lib/ai/mcp/types";
 import type { AiToolExecutor, AiToolRuntimeContext } from "@/lib/ai/tools/types";
 import { rateLimit } from "@/lib/rate-limit";
@@ -23,16 +25,6 @@ function effectiveClassifications(context: AiToolRuntimeContext): McpDataClassif
   if (context.dataClassifications?.length) return context.dataClassifications.map(normalizeClassification);
   const activeContext = context.session.activeContext || "GLOBAL_CLIENT";
   return activeContext === "ORGANIZATION" || activeContext === "DTSC_INTERNAL" ? ["CONFIDENTIAL"] : ["INTERNAL"];
-}
-
-function assertServerContext(input: { organizationScope: "GLOBAL" | "TENANT"; contexts: string[]; context: AiToolRuntimeContext }) {
-  const activeContext = input.context.session.activeContext || "GLOBAL_CLIENT";
-  if (!input.contexts.includes(activeContext)) throw new Error("MCP_CONTEXT_NOT_ALLOWED");
-  if (input.organizationScope === "TENANT") {
-    if (activeContext !== "ORGANIZATION" || !input.context.organizationId || input.context.session.activeOrganizationId !== input.context.organizationId) {
-      throw new Error("MCP_TENANT_CONTEXT_REQUIRED");
-    }
-  }
 }
 
 type McpToolCallResult = {
@@ -57,7 +49,8 @@ export async function executeMcpBoundTool(input: { dtscToolCode: string; args: u
 
   try {
     if (binding.mode !== "READ" || binding.requiresConfirmation) throw new Error("MCP_AI07_READ_ONLY_POLICY");
-    assertServerContext({ organizationScope: server.organizationScope, contexts: server.contexts, context: input.context });
+    if (!isApprovedMcpReadToolName(server.code, binding.remoteToolName)) throw new Error("MCP_READ_TOOL_NOT_APPROVED");
+    const userAuth = resolveMcpUserAuthScope({ server, context: input.context });
 
     const limiter = await rateLimit(`ai-mcp:${input.context.userId}:${server.code}`, 60, 60 * 1000);
     if (!limiter.ok) throw new Error("MCP_RATE_LIMITED");
@@ -68,12 +61,8 @@ export async function executeMcpBoundTool(input: { dtscToolCode: string; args: u
     const dataDecision = authorizeMcpDataBoundary({ server, classifications: effectiveClassifications(input.context) });
     if (!dataDecision.allowed) throw new Error(dataDecision.reasonCode);
 
-    const userAuth = server.authMode === "OAUTH_USER"
-      ? { userId: input.context.userId, organizationId: input.context.organizationId || "" }
-      : null;
-    if (server.authMode === "OAUTH_USER" && !userAuth?.organizationId) throw new Error("MCP_OAUTH_ORGANIZATION_CONTEXT_REQUIRED");
-
     const { snapshot } = await discoverAndPersistMcpServer(server, userAuth);
+    if (snapshot.version !== binding.certifiedDiscoveryVersion) throw new Error("MCP_DISCOVERY_VERSION_NOT_CERTIFIED");
     const remoteTool = getDiscoveredMcpTool(snapshot, binding.remoteToolName);
     if (!remoteTool) throw new Error("MCP_BOUND_TOOL_NOT_DISCOVERED");
     if (hashMcpSchema(remoteTool.inputSchema) !== binding.inputSchemaHash) throw new Error("MCP_TOOL_INPUT_SCHEMA_CHANGED");
