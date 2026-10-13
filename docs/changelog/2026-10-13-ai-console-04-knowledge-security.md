@@ -14,3 +14,11 @@
 
 ### Sécurité
 Aucun titre de document, contenu privé, chemin de stockage, jeton, identité de tenant, argument outil ou donnée de source RAG envoyé au navigateur. Les erreurs de lecture renvoient un état indisponible, jamais un zéro inventé.
+
+
+### Ajout supplémentaire
+- Publication administrative des seuils et criticités de trois signaux opérationnels (échecs modèle, refus d'outils, échecs d'indexation), avec désactivation auditable et protection contre les conflits concurrents.
+- Signaux affichés sur la période sélectionnée ; aucun faux état sain ni notification automatique simulée.
+- Migration additive `AiGovernanceAlertRule`, audit dans `PlatformSettingHistory`, permission `CONSOLE_AI_MANAGE`.
+
+Les preuves de versions d'index, la réindexation contrôlée et l'E2E complet restent à finaliser dans #804.
