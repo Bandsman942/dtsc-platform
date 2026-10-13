@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession } from "@/lib/auth";
+import { requireActiveOrganizationMembership } from "@/lib/organizations";
 import { writeApiLog } from "@/lib/audit";
 import { markAiAgentReadyAfterConfirmation } from "@/lib/ai/agent/persistence";
 import { confirmAiToolConfirmation, getPendingAiToolConfirmation } from "@/lib/ai/tools/confirmation";
@@ -26,6 +27,9 @@ export async function POST(req: Request) {
   if (!parsed.success) return NextResponse.json({ error: "INVALID_REQUEST" }, { status: 400 });
 
   const organizationId = session.activeContext === "ORGANIZATION" ? session.activeOrganizationId || null : null;
+  if (session.activeContext === "ORGANIZATION" && (!organizationId || !await requireActiveOrganizationMembership(session, organizationId))) {
+    return NextResponse.json({ error: "ORGANIZATION_ACCESS_DENIED" }, { status: 403 });
+  }
   const baseContext = { session, userId: session.userId, organizationId, request: req };
   const pending = await getPendingAiToolConfirmation({ confirmationId: parsed.data.confirmationId, context: baseContext });
   if (!pending || !pending.argumentsJson) {
