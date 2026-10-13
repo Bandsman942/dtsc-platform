@@ -18,22 +18,26 @@ export function CeoExecutiveSummary({
   groups,
   dateStart,
   dateEnd,
+  embedded = false,
 }: {
   groups: CeoExecutiveGroup[];
   dateStart?: string;
   dateEnd?: string;
+  embedded?: boolean;
 }) {
   const totalMetrics = groups.reduce((sum, group) => sum + group.metrics.length, 0);
   const hasFilters = Boolean(dateStart || dateEnd);
 
   return (
     <ModuleWorkspace>
+      {!embedded ? (
       <ModuleHeader
         eyebrow="Tableau de bord exécutif"
         title="Vue CEO consolidée"
         count={`${totalMetrics} indicateur${totalMetrics > 1 ? "s" : ""}`}
         description="Lecture synthétique des finances, RH, opérations COO et activités SCO. Les brouillons ne sont pas comptabilisés dans les indicateurs financiers réels."
       />
+      ) : null}
 
       <form action="/admin">
         <input type="hidden" name="section" value="ceo" />

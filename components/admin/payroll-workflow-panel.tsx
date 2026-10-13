@@ -50,7 +50,7 @@ const emptyForm: FormState = {
   notes: "",
 };
 
-export function PayrollWorkflowPanel({ locale }: { locale?: string | null }) {
+export function PayrollWorkflowPanel({ locale, embedded = false }: { locale?: string | null; embedded?: boolean }) {
   const t = useCallback((key: string) => translate(locale, `payrollWorkflow.${key}`), [locale]);
   const [employees, setEmployees] = useState<PayrollEmployeeOption[]>([]);
   const [budgets, setBudgets] = useState<PayrollBudgetOption[]>([]);
@@ -216,7 +216,9 @@ export function PayrollWorkflowPanel({ locale }: { locale?: string | null }) {
 
   return (
     <ModuleWorkspace>
+      {!embedded ? (
       <ModuleHeader eyebrow="HR & CFO" title={t("hrTitle")} count={`${filtered.length}/${payrolls.length}`} description={t("hrDescription")} />
+      ) : null}
       <ModuleMetrics label={t("metrics")}>
         <ModuleMetric label={t("metricDraft")} value={metrics.draft} />
         <ModuleMetric label={t("metricPending")} value={metrics.pending} />

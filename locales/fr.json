@@ -999,6 +999,20 @@
     "exportApprovalRequired": "Une approbation est requise pour cet export sensible."
   },
   "console": {
+    "internalSections": {
+      "navigation": "Naviguer entre les activités du département",
+      "payroll": "Paie opérationnelle",
+      "invoices": "Factures RH et finances",
+      "operations": "Opérations et dossiers",
+      "supplyChain": "Approvisionnement, stocks et logistique",
+      "payrollApprovals": "Approbation de la paie",
+      "workApprovals": "Validation des prestations",
+      "executive": "Indicateurs de direction",
+      "projects": "Projets et livrables",
+      "technology": "Projets techniques et qualité",
+      "legalOverview": "Tableau de bord juridique",
+      "legalOperations": "Dossiers, contrats et conformité"
+    },
     "detailSections": {
       "jumpNav": "Accéder à une sous-section",
       "supportIndicators": "Indicateurs du support",
