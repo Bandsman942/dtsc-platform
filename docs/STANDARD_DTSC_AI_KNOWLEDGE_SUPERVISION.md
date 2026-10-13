@@ -33,3 +33,10 @@ Les signaux sont recalculés pour **la fenêtre sélectionnée** dans la Console
 `PATCH /api/admin/ai/alerts` exige `CONSOLE_AI_MANAGE`, contexte interne, même origine, débit limité, schéma strict, motif humain et `expectedRevision` ; toute mutation est transactionnelle avec `PlatformSettingHistory` puis audit de risque élevé. Un conflit renvoie `409`. Désactiver un signal ne modifie pas la télémétrie sous-jacente. Les vraies notifications automatiques, si désirées, nécessiteraient un hotfix distinct explicitement gouverné.
 
 Le rollback conserve les données de règles et l'historique pour éviter de masquer une désactivation de surveillance. Les reindexations massives demeurent interdites ; le script dry-run existant reste l'outil de préparation, sans déclenchement en Production.
+
+
+## Planification de réindexation bornée, sans mutation
+
+La Console montre un **aperçu des candidats historiques**, au plus `25` par domaine documentaire (personnel et entreprise), selon la fenêtre sélectionnée. Le serveur filtre les sources `indexVersion=legacy-openai-1536-v1` disposant de texte préparé, trie les anciennes modifications et sélectionne les `id` seulement en mémoire côté serveur ; le navigateur reçoit uniquement deux compteurs bornés, jamais les identifiants, titres, auteurs, tenants, textes ou chemins de stockage. Une panne de source affiche « indisponible ».
+
+Cet aperçu n'est **pas une exécution** : la Console ne crée aucune tâche de réindexation, ne publie aucune écriture et n'offre aucun bouton de traitement massif. Les opérations individuelles existent déjà sous contrôle du propriétaire du document via `POST /api/documents/[id]/reindex` et du gestionnaire autorisé d'une source entreprise via `PATCH /api/enterprise/ai/knowledge-sources/[id]` avec action `reindex` ; elles conservent leurs vérifications de scope, rate-limit, audit et traitement différé. Un éventuel traitement batch global exigera une Issue dédiée, un plan dry-run, un plafond strict et une validation manuelle indépendante.
