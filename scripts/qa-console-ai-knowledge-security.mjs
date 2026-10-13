@@ -18,6 +18,7 @@ assert(panel.includes("data.reindexPreview === null") && panel.includes("maxPerD
 assert(data.includes("safeReasonCode") && data.includes("^[A-Z][A-Z0-9_]") && data.includes("reasonCode: safeReasonCode(r.reasonCode)"), "Only strict machine-readable reason codes may reach the global Console");
 assert(data.includes('knowledge: personal.status === "fulfilled" && enterprise.status === "fulfilled"') && data.includes(': null'), "Missing knowledge data cannot be falsely displayed as zero");
 assert(data.includes('status: "NOT_INSTRUMENTED"') && !data.includes("alertHealth"), "CAG cache rate unknown; governed alert state comes only from alert rules");
+assert(data.includes('citationProof: { status: "NOT_INSTRUMENTED", certifiedUsageCount: null }') && panel.includes("Proof of citations actually used"), "Do not invent citation-use metrics without source evidence");
 assert(!data.includes("extractedText:") && !data.includes("title: true") && !data.includes("argumentsJson"), "No private knowledge, user, tool arguments or prompt data in Console projection");
 assert(panel.includes("data.knowledge === null") && panel.includes("data.modelFailures === null") && panel.includes("data.toolDenials === null"), "UI must distinguish not measured from zero");
 assert(panel.includes("overflow-x-auto") && panel.includes("aria-label") && panel.includes("toLocaleString"), "Mobile/accessible compact numbers and tables required");
