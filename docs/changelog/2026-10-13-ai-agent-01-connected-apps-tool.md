@@ -33,3 +33,9 @@
 - L'API refuse un identifiant de confirmation invalide et exige simultanément l'utilisateur authentifié, le contexte entreprise correct, un statut `PENDING` et une expiration future avant de révéler l'aperçu. Aucune donnée d'un autre utilisateur ou tenant n'est renvoyée.
 - Le refus d'une action demande maintenant explicitement l'annulation du run sans dépendre de l'état React asynchrone du bouton de validation. Aucun renvoi d'action distante déjà validée n'est déclenché.
 - Une nouvelle assertion QA contrôle le filtrage exact et la gestion du refus. L'E2E propriétaire avec compte connecté et données de test reste une preuve humaine distincte.
+
+### Reprise sûre après rechargement
+- Ajout de `GET /api/ai/agent/runs/active?variant=chatbot|enterprise` en lecture uniquement, avec session réelle, portée personnelle/entreprise, type d'assistant, fenêtre temporelle bornée et réponse `no-store`.
+- Seuls les runs `WAITING_CONFIRMATION` et `READY_TO_RESUME` de l'utilisateur courant sont récupérés après actualisation de la page ; un ancien flux `RUNNING` n'est jamais déclaré vivant sur la seule base du statut persistant.
+- Le Dock restaure l'identifiant du run et la conversation sans répéter la requête initiale, sans nouvel appel externe et sans confirmer une action. La reprise reste un geste humain explicite.
+- L'E2E propriétaire reste requis pour vérifier la réapparition du run, l'aperçu des arguments et les restrictions entre comptes et entreprises.
