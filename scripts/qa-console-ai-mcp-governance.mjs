@@ -1,0 +1,31 @@
+import fs from "node:fs";
+import assert from "node:assert/strict";
+
+const read = (path) => fs.readFileSync(path, "utf8");
+const schema = read("prisma/schema.prisma");
+const migration = read("prisma/migrations/20261013153000_ai_mcp_control_state/migration.sql");
+const catalog = read("lib/console/console-capability-catalog.ts");
+const service = read("lib/console/console-ai-mcp.ts");
+const ui = read("components/admin/console-ai-mcp-panel.tsx");
+const api = read("app/api/admin/ai/mcp/control/route.ts");
+const guard = read("lib/ai/mcp/control.ts");
+const transport = read("lib/ai/mcp/transport.ts");
+const consolePage = read("app/admin/console-page.tsx");
+
+assert(schema.includes("model AiMcpControlState") && migration.includes('CREATE TABLE "AiMcpControlState"'), "Global MCP suspension must use additive, persisted state");
+assert(catalog.includes('MCP_MANAGE: "CONSOLE_AI_MCP_MANAGE"') && catalog.includes('CONSOLE_AI_MCP_MANAGE: "ai-control-center"'), "Server control must have distinct Console capability");
+assert(service.includes("MCP_SERVER_REGISTRY") && service.includes("MCP_TOOL_BINDINGS") && service.includes("getAssistantProfiles"), "MCP and assistant governance must use certified source registries");
+assert(service.includes("prisma.aiMcpDiscoverySnapshot.findMany") && service.includes("prisma.aiMcpAuditEvent.groupBy"), "MCP diagnostics must use discovery and audit aggregates, not fabricated health");
+assert(service.includes("prisma.$queryRaw") && service.includes('COUNT(*)::int AS "total"') && service.includes('reachable: null'), "OAuth grants must be aggregated while remote reachability remains unmeasured");
+assert(!service.includes("encryptedCredentials") && !service.includes('"userId"') && !service.includes('"organizationId"'), "Console must not expose user or tenant credentials and identities");
+assert(service.includes("Promise.allSettled") && service.includes(' ? "AVAILABLE" : "PARTIAL"'), "Unavailable telemetry must not be represented as a healthy zero");
+assert(api.includes("requireConsoleCapability(CONSOLE_CAPABILITIES.MCP_MANAGE)") && api.includes("isSameOriginRequest"), "MCP management requires a dedicated capability and CSRF origin boundary");
+assert(api.includes("expectedRevision") && api.includes("REVISION_CONFLICT") && api.includes("tx.aiMcpControlState.updateMany"), "Server suspensions require optimistic concurrency");
+assert(api.includes("tx.platformSettingHistory.create") && api.includes("writeAuditLog") && api.includes("reason"), "Control changes must be audited with a human reason");
+assert(!api.includes("discoverAndPersistMcpServer") && !api.includes("enabled: true"), "Admin suspension must not auto-certify discovery or enable tools");
+assert(guard.includes("prisma.aiMcpControlState.findUnique") && guard.includes("MCP_SERVER_SUSPENDED_BY_DTSC"), "Runtime control is authoritative and fail-closed");
+assert(transport.includes("await assertMcpServerNotSuspended(input.server.code)") && transport.indexOf("await assertMcpServerNotSuspended") < transport.indexOf("await validateMcpEndpointResolution"), "No suspended MCP server may reach any remote transport, including discovery");
+assert(ui.includes("confirmed") && ui.includes('fetch("/api/admin/ai/mcp/control"') && ui.includes("canManage"), "UI must require confirmation and respect capability");
+assert(ui.includes('t("Non mesurée", "Not measured")') && ui.includes("server.discovery"), "Connection configuration must not be presented as live operational readiness");
+assert(consolePage.includes("ConsoleAiMcpPanel") && consolePage.includes("getConsoleAccessDecision({ user, capability: CONSOLE_CAPABILITIES.MCP_MANAGE"), "Console must authorize MCP management independently of AI read");
+console.log("PASS AI-CONSOLE-03: certified registry, fine-grained RBAC, versioned emergency suspension, fail-closed MCP transport and no user secrets");

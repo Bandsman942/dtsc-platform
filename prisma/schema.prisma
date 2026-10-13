@@ -7400,3 +7400,12 @@ model AiPlatformRuntimePolicy {
   updatedByUserId       String?
   updatedAt             DateTime @updatedAt
 }
+
+model AiMcpControlState {
+  serverCode      String   @id
+  suspended       Boolean  @default(false)
+  revision        Int      @default(1)
+  reason          String
+  updatedByUserId String
+  updatedAt       DateTime @updatedAt
+}

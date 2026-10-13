@@ -1,4 +1,5 @@
 import type { McpServerDefinition } from "@/lib/ai/mcp/types";
+import { assertMcpServerNotSuspended } from "@/lib/ai/mcp/control";
 import { getAuthorizedMcpOAuthAccessToken } from "@/lib/ai/mcp/oauth-access";
 import { encodeMcpHeaderValue } from "@/lib/ai/mcp/schema";
 import { validateMcpEndpointResolution } from "@/lib/ai/mcp/security";
@@ -64,6 +65,7 @@ export async function callMcpJsonRpc<T>(input: {
   additionalHeaders?: Record<string, string>;
   userAuth?: McpUserAuthContext | null;
 }) {
+  await assertMcpServerNotSuspended(input.server.code);
   const endpoint = await validateMcpEndpointResolution(input.server);
   if (!endpoint.allowed) throw new Error(endpoint.reasonCode);
   if (input.server.status !== "CERTIFIED") throw new Error("MCP_SERVER_NOT_CERTIFIED");
