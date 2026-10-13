@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { getSession } from "@/lib/auth";
+import { requireActiveOrganizationMembership } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -18,6 +19,9 @@ export async function POST(req: Request) {
   if (!parsed.success) return NextResponse.json({ error: "INVALID_REQUEST" }, { status: 400 });
 
   const organizationId = session.activeContext === "ORGANIZATION" ? session.activeOrganizationId || null : null;
+  if (session.activeContext === "ORGANIZATION" && (!organizationId || !await requireActiveOrganizationMembership(session, organizationId))) {
+    return NextResponse.json({ error: "ORGANIZATION_ACCESS_DENIED" }, { status: 403 });
+  }
   // Approval invalidation and Agent state change are one operation: a
   // cancelled confirmation cannot outlive its rejected run.
   const cancelled = await prisma.$transaction(async (tx) => {
