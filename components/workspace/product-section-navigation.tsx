@@ -89,6 +89,8 @@ export function ProductSectionNavigation({
   sections,
   activeSection,
   mobileButtonLabel,
+  compactDesktop = false,
+  desktopDisclosureLabel,
   className,
 }: {
   productLabel: string;
@@ -97,6 +99,8 @@ export function ProductSectionNavigation({
   sections: ProductSectionNavigationItem[];
   activeSection: string;
   mobileButtonLabel?: string;
+  compactDesktop?: boolean;
+  desktopDisclosureLabel?: string;
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -113,9 +117,8 @@ export function ProductSectionNavigation({
     onSelect: () => setOpen(true),
   });
 
-  return (
-    <div className={cn("dtsc-product-section-navigation min-w-0", className)}>
-      <nav className="hidden min-w-0 space-y-5 lg:block" aria-label={`${productLabel} — ${title}`}>
+  const desktopNavigation = (
+    <nav className={cn("min-w-0 space-y-5", !compactDesktop && "hidden lg:block")} aria-label={`${productLabel} — ${title}`}>
         {visibleGroups.map((group) => (
           <section key={group.id} className="min-w-0" aria-labelledby={`product-navigation-${group.id}`}>
             <div className="mb-2 flex min-w-0 items-end justify-between gap-3">
@@ -133,7 +136,19 @@ export function ProductSectionNavigation({
             </div>
           </section>
         ))}
-      </nav>
+    </nav>
+  );
+
+  return (
+    <div className={cn("dtsc-product-section-navigation min-w-0", className)}>
+      {compactDesktop ? (
+        <details className="hidden min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface/60 lg:block">
+          <summary className="flex min-h-11 cursor-pointer list-item px-4 py-3 text-sm font-bold text-dtsc-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60">
+            {desktopDisclosureLabel || title}
+          </summary>
+          <div className="min-w-0 p-3 pt-0">{desktopNavigation}</div>
+        </details>
+      ) : desktopNavigation}
 
       {open ? (
         <div className="fixed inset-0 z-50 bg-[#001736]/55 p-3 backdrop-blur-sm lg:hidden" onClick={() => setOpen(false)}>

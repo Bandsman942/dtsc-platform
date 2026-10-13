@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { ContextualUserGuide } from "@/components/user-guides/contextual-user-guide";
 import { ModuleHeader } from "@/components/workspace/module-workspace";
 import {
@@ -13,6 +14,7 @@ import {
   type ConsoleSectionId,
 } from "@/lib/console/console-routes";
 import { getIteration07UserGuide, type Iteration07GuideCode } from "@/lib/user-guides/iteration07-guides";
+import { translate } from "@/lib/i18n";
 
 type AdminFloatingNavSection = {
   id: string;
@@ -70,11 +72,12 @@ const guideMap: Record<ConsoleSectionId, Iteration07GuideCode> = {
 export function AdminFloatingNav({
   sections,
   activeSection,
+  locale,
 }: {
   sections: AdminFloatingNavSection[];
   activeSection: string;
+  locale: "fr" | "en";
 }) {
-  const locale = sections.some((section) => section.label === "Overview" || section.label === "Users & access") ? "en" : "fr";
   const navigationSections: ProductSectionNavigationItem[] = sections.map((section) => {
     const sectionId = section.id as ConsoleSectionId;
     return {
@@ -89,37 +92,49 @@ export function AdminFloatingNav({
     description: locale === "en" ? group.descriptionEn : group.descriptionFr,
   }));
   const activeSectionId = (navigationSections.find((section) => section.id === activeSection)?.id || "overview") as ConsoleSectionId;
-  const activeLabel = navigationSections.find((section) => section.id === activeSection)?.label;
+  const activeItem = navigationSections.find((section) => section.id === activeSection);
+  const activeLabel = activeItem?.label || translate(locale, "console.title");
+  const activeDescription = activeItem?.description || translate(locale, "console.description");
+  const activeGroup = CONSOLE_SECTION_GROUP[activeSectionId];
+  const relatedSections = navigationSections.filter((section) => section.groupId === activeGroup);
   const guide = getIteration07UserGuide(guideMap[activeSectionId], locale);
 
   return (
     <>
       <div data-admin-modern-module-header className="min-w-0 max-w-full">
         <ModuleHeader
-          eyebrow={locale === "en" ? "DTSC management" : "Gestion DTSC"}
-          title={locale === "en" ? "DTSC Administration" : "Administration DTSC"}
-          count={activeLabel}
-          description={locale === "en"
-            ? "Manage client companies, subscriptions, support, security and internal operations from the areas available to you."
-            : "Gérez les entreprises clientes, les abonnements, l’assistance, la sécurité et les opérations internes depuis les espaces auxquels vous avez accès."}
+          eyebrow={translate(locale, "console.eyebrow")}
+          title={activeLabel}
+          description={activeDescription}
           secondaryActions={<ContextualUserGuide guide={guide} compact />}
         />
       </div>
+      <nav
+        data-admin-workspace-tabs
+        aria-label={translate(locale, "console.workspace.tabs")}
+        className="flex min-w-0 max-w-full gap-2 overflow-x-auto overscroll-x-contain pb-2 [scrollbar-width:thin]"
+      >
+        {relatedSections.map((section) => (
+          <Link
+            key={section.id}
+            href={section.href}
+            aria-current={activeSection === section.id ? "page" : undefined}
+            className={`inline-flex min-h-11 shrink-0 items-center justify-center rounded-full border px-4 py-2 text-sm font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 ${activeSection === section.id ? "border-cyan-400 bg-dtsc-blue text-white" : "border-dtsc-border bg-dtsc-surface text-dtsc-ink hover:border-cyan-400 hover:bg-dtsc-soft"}`}
+          >
+            {section.label}
+          </Link>
+        ))}
+      </nav>
       <ProductSectionNavigation
-        productLabel={locale === "en" ? "DTSC administration" : "Administration DTSC"}
-        title={locale === "en" ? "Available work areas" : "Espaces de travail disponibles"}
+        productLabel={translate(locale, "console.title")}
+        title={translate(locale, "console.workspace.allSections")}
+        desktopDisclosureLabel={translate(locale, "console.workspace.allSections")}
+        compactDesktop
+        mobileButtonLabel={translate(locale, "console.workspace.allSections")}
         groups={groups}
         sections={navigationSections}
         activeSection={activeSection}
       />
-      <style jsx global>{`
-        .dtsc-private-main > div > section.dtsc-panel:first-child {
-          display: none !important;
-        }
-        .dtsc-product-section-navigation + nav[aria-label="Sections Console DTSC"] {
-          display: none !important;
-        }
-      `}</style>
     </>
   );
 }

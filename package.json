@@ -17,6 +17,7 @@
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
+    "qa:console-workspace-shell": "node scripts/qa-console-workspace-shell.mjs",
     "qa:standard-module-registry": "node scripts/audit-standard-module-registry.mjs",
     "qa:standard-module-navigation": "node scripts/audit-standard-module-navigation.mjs",
     "qa:standard-module-routes": "node scripts/audit-standard-module-routes.mjs",

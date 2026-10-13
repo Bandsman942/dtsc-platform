@@ -295,3 +295,17 @@ Avant de migrer un autre module :
 5. migrer un module à la fois avec QA fonctionnelle ;
 6. ne pas copier le markup Activités DTSC si la nature du module exige une autre représentation (table, calendrier, conversation, dossier clinique, etc.) ;
 7. conserver le contrat visuel `module → section → liste → détail` plutôt que recréer des styles métier locaux.
+
+
+## Console DTSC — workspace partagé (Hotfix #824)
+
+La Console DTSC utilise `ConsoleWorkspaceShell` pour les sections de `DtscConsolePage`. Ce shell compose les primitives canoniques `ModuleWorkspace`, `ModuleContent`, `ModuleHeader` et la navigation `AdminFloatingNav` avec :
+
+- un titre et une description de **la section active**, issus des catalogues i18n existants ;
+- un rail compact de navigation contextuelle et un annuaire complet replié sur desktop ; sur mobile, le hub d'actions continue d'ouvrir l'annuaire des sections ;
+- un espace métier unique par section avec ses contrôles fonctionnels préexistants ;
+- un pied de page avec liens réels vers le guide standard, le support, et les accès seulement si la section RBAC est autorisée.
+
+Le vieux bandeau générique et la grille de navigation redondante ont été retirés de l'arbre React. Aucun style global ne masque désormais un ancien contenu. Les sections restent protégées par les mêmes résolveurs serveur (`DTSC_INTERNAL`, capacité Console, poste officiel et RBAC). La maturité commerciale conserve son propre workspace et les liens historiques redirigent toujours vers la route canonique. Aucune table, permission, API ni logique métier n'a été modifiée.
+
+QA ciblée : `pnpm qa:console-workspace-shell`. Scénarios E2E propriétaire à vérifier : desktop et mobile (320, 360, 375, 390, 414, 768, 1024 px), langues FR/EN, contraste clair/sombre, navigation vers toutes les sections visibles, refus des sections non autorisées, support, guide, filtrage, formulaire existant, et compatibilité du Kanban de maturité commerciale.

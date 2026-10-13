@@ -999,6 +999,14 @@
     "exportApprovalRequired": "Approval is required for this sensitive export."
   },
   "console": {
+    "workspace": {
+      "tabs": "Related work areas",
+      "allSections": "All work areas",
+      "resources": "Workspace resources",
+      "guide": "User guide",
+      "support": "Contact support",
+      "access": "Permissions and configuration"
+    },
     "title": "DTSC Platform control center",
     "eyebrow": "DTSC SaaS Console",
     "description": "Manage client organizations, subscriptions, support, security, content and internal modules through separate authorized sections.",
