@@ -33,6 +33,13 @@ Les aliases historiques peuvent être conservés, les nouvelles mutations peuven
 La navigation et le chargement conditionnel des datasets restent orchestrés par `DtscConsolePage`, avec les contrôles `DTSC_INTERNAL`, capacités et postes avant rendu. La page Maturité commerciale demeure dédiée, avec le même design system. Les contrats QA préexistants ont été mis à jour pour tester l'emplacement réel des guides et du shell (sans supprimer les validations historiques), et `qa-console-workspace-shell` est inclus dans `qa:regression`.
 
 
+## Workspaces SaaS contextualisés — Hotfix #825
+
+Les sections SaaS de la Console utilisent le shell commun livré dans #824 et présentent leur contenu **directement** plutôt que le masquer derrière un accordéon répétant le titre de la page. Les domaines à plusieurs blocs (IA, Utilisateurs, Paramètres, Abonnements, Sécurité et Vue générale) disposent de sous-sections sémantiques `ConsoleSubsection` et de liens d'ancrage `ConsoleJumpLinks` vers des cibles réellement montées. Les filtres, exports, paginations, contenus, validations, formulaires et API existants sont conservés. Les sous-sections restent visibles pendant la saisie, y compris sur mobile, sans fenêtre modale ajoutée.
+
+Les intitulés nouveaux proviennent des catalogues FR/EN. Aucun KPI, état métier, droit, requête Prisma ni entitlement n'est inventé ou modifié. La QA statique `pnpm qa:console-saas-workspaces` vérifie la conservation des panneaux fonctionnels, la disparition des wrappers redondants, les traductions, les ancres et les gardes d'accès. Elle est incluse dans `qa:regression`. La disponibilité en Production nécessite Quality Gates puis OWNER_E2E.
+
+
 ## Départements internes — #826
 
 Les workspaces CEO, COO, CTO, MPO, HR & CFO, SCO et Legal Advisor utilisent `InternalDepartmentWorkspace` : un seul en-tête principal dans la Console, des sous-sections structurées avec ancres et titres FR/EN, et les panneaux métier existants en mode `embedded`. Le mode `embedded` supprime seulement les en-têtes internes redondants, **sans supprimer métriques, filtres, tableaux, formulaires, validations ni mutations**. Par défaut, les panneaux continuent à afficher leur propre en-tête lorsqu'ils sont utilisés en dehors de la Console.

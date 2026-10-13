@@ -1013,6 +1013,28 @@
       "legalOverview": "Legal dashboard",
       "legalOperations": "Cases, contracts and compliance"
     },
+    "detailSections": {
+      "jumpNav": "Jump to a subsection",
+      "supportIndicators": "Support indicators",
+      "supportOpen": "Open tickets",
+      "supportUrgent": "Urgent tickets",
+      "supportOverdue": "Overdue SLA",
+      "supportResolution": "Average resolution",
+      "platformIndicators": "Detailed platform indicators",
+      "aiModels": "Models, providers and budgets",
+      "aiConnectors": "MCP servers and assistants",
+      "aiSafety": "Knowledge and safety",
+      "createUser": "Create a user account",
+      "newsletter": "Newsletter subscribers",
+      "userList": "User directory",
+      "platformPreferences": "General preferences",
+      "platformFlags": "Configurable features",
+      "billingPlans": "Offers and plans",
+      "billingManual": "Manual payments",
+      "billingSubscriptions": "Subscriptions and invoices",
+      "incidents": "Platform incidents",
+      "auditLogs": "Audit logs and traceability"
+    },
     "workspace": {
       "tabs": "Related work areas",
       "allSections": "All work areas",
