@@ -22,3 +22,7 @@ Aucun titre de document, contenu privé, chemin de stockage, jeton, identité de
 - Migration additive `AiGovernanceAlertRule`, audit dans `PlatformSettingHistory`, permission `CONSOLE_AI_MANAGE`.
 
 La répartition legacy / index versionné est maintenant affichée. La réindexation contrôlée, les preuves de citations et l'E2E complet restent à finaliser dans #804.
+
+### Planification RAG sans exécution
+- L'aperçu Console peut compter jusqu'à 25 candidats historiques préparés par domaine, sans exposer les identifiants ni les contenus, sans déclencher la réindexation.
+- Les reindexations réelles restent des actions unitaires de leurs espaces personnels et entreprises avec permissions/audit.
