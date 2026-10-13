@@ -56,3 +56,11 @@
 ### Révocation de membership pendant un run
 
 Les endpoints de statut, d'annulation et de reprise d'un run Agent revalident également `requireActiveOrganizationMembership` avant la lecture ou la mutation en contexte entreprise. Une entreprise retirée de la session ne reste pas implicitement autorisée à consulter les étapes, valider, relancer ou annuler un ancien run. Cette règle s'ajoute aux vérifications déjà appliquées aux confirmations, aux aperçus et à la récupération de run. La QA transverse d'isolation accepte maintenant l'implémentation transactionnelle Prisma, qui vérifie `userId`, `organizationId`, `status=PENDING` et purge les arguments, au lieu d'exiger uniquement la forme textuelle de l'ancien SQL ; elle **renforce** le contrat d'isolation plutôt que de le désactiver.
+
+
+### Reprise d'une validation encore utilisable (anti-ghost)
+- La récupération après rechargement ignore dorénavant les runs `WAITING_CONFIRMATION` dont la validation a expiré (TTL réel) et les runs `READY_TO_RESUME` dont la confirmation n'est pas **CONSUMED**. Une simple étiquette persistée en base ne suffit plus à annoncer une reprise possible.
+- La recherche est bornée aux 20 derniers runs éligibles sur sept jours, puis recoupe les identifiants de confirmation avec le compte et le tenant authentifiés. Aucune expiration n'est prolongée ; aucune action distante n'est automatiquement rejouée.
+- La Console et le Dock gardent les indicateurs d'état distincts de la preuve E2E, requise pour le parcours de confirmation et de rechargement avec utilisateurs réels.
+### Toasts de validation explicites
+- Les réponses `CONFIRMATION_NOT_FOUND_OR_EXPIRED`, `CONFIRMATION_INVALID_OR_EXPIRED`, `ORGANIZATION_ACCESS_DENIED`, `RATE_LIMITED`, `UNAUTHORIZED` et `FORBIDDEN` sont maintenant traduites en messages FR/EN utiles lors de l'approbation et du refus ; codes et détails sensibles ne sont pas exposés à l'utilisateur.
