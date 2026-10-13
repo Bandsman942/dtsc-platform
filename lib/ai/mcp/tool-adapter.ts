@@ -62,6 +62,7 @@ export async function executeMcpBoundTool(input: { dtscToolCode: string; args: u
     if (!dataDecision.allowed) throw new Error(dataDecision.reasonCode);
 
     const { snapshot } = await discoverAndPersistMcpServer(server, userAuth);
+    if (snapshot.version !== binding.certifiedDiscoveryVersion) throw new Error("MCP_DISCOVERY_VERSION_NOT_CERTIFIED");
     const remoteTool = getDiscoveredMcpTool(snapshot, binding.remoteToolName);
     if (!remoteTool) throw new Error("MCP_BOUND_TOOL_NOT_DISCOVERED");
     if (hashMcpSchema(remoteTool.inputSchema) !== binding.inputSchemaHash) throw new Error("MCP_TOOL_INPUT_SCHEMA_CHANGED");
