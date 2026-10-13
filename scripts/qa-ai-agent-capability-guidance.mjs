@@ -55,6 +55,8 @@ assert(activeAgentApi.includes('"Cache-Control": "private, no-store"') && agentD
 
 assert(pendingApi.includes('toolCode !== "SUPPORT_TICKET_CREATE"') && pendingApi.includes('toolCode !== "DTSC_CONTACT_EMAIL_SEND"') && pendingApi.includes('message,'), "Only supported actions expose complete, stored confirmation previews");
 assert(agentDock.includes("canApprovePreview") && agentDock.includes("disabled={confirmBusy || !canApprovePreview}"), "Unknown/incomplete mutation previews cannot be blindly approved");
+assert(agentDock.includes("approvalFailureMessage") && agentDock.includes("ORGANIZATION_ACCESS_DENIED") && agentDock.includes("CONFIRMATION_NOT_FOUND_OR_EXPIRED") && agentDock.includes("RATE_LIMITED"), "Agent approvals must surface specific, localized and safe error causes");
+assert(agentDock.includes('approvalFailureMessage(body?.error || body?.reasonCode, en, "approve")') && agentDock.includes('approvalFailureMessage(body?.error, en, "reject")'), "Approval and rejection must both use backend reason codes, not generic toast errors");
 assert(agentDock.includes("confirmation.preview.message") && agentDock.includes("whitespace-pre-wrap break-words"), "Human approval must display full action text, not only a subject");
 assert(agentPersistence.includes('return prisma.$transaction(async (tx) => {') && agentPersistence.includes('tx.aiToolConfirmation.updateMany({'), "Rejecting an Agent action must atomically invalidate its PENDING confirmation");
 assert(agentPersistence.includes('status: "CANCELLED", argumentsJson: Prisma.DbNull') && agentPersistence.includes('pendingConfirmationId: true'), "Rejected approval payload must be invalidated and its arguments purged");
