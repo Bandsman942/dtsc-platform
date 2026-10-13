@@ -177,7 +177,7 @@ export async function requestAiAgentCancellation(input: { runId: string; userId:
           organizationId: input.organizationId || null,
           status: "PENDING",
         },
-        data: { status: "CANCELLED", argumentsJson: Prisma.DbNull, updatedAt: now },
+        data: { status: "CANCELLED", argumentsJson: Prisma.DbNull, cancelledAt: now, updatedAt: now },
       });
     }
     return true;
