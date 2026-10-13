@@ -1,9 +1,10 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
-import { BadgePercent, BarChart3, BriefcaseBusiness, Building2, Code2, CreditCard, Crown, FileText, FolderKanban, Megaphone, MessageSquare, PackageCheck, Scale, Settings, ShieldCheck, Users, type LucideIcon } from "lucide-react";
+import { BadgePercent, BarChart3, Bot, BriefcaseBusiness, Building2, Code2, CreditCard, Crown, FileText, FolderKanban, Megaphone, MessageSquare, PackageCheck, Scale, Settings, ShieldCheck, Users, type LucideIcon } from "lucide-react";
 import { PaymentStatus, TicketPriority, TicketStatus, UserRole, UserStatus } from "@prisma/client";
 import { AdminAccessPanel } from "@/components/admin/admin-access-panel";
+import { ConsoleAiOverview } from "@/components/admin/console-ai-overview";
 import { AdminAuditTables } from "@/components/admin/admin-audit-tables";
 import { AdminBillingSubscriptions } from "@/components/admin/admin-billing-subscriptions";
 import { ManualSubscriptionPaymentsAdmin } from "@/components/admin/manual-subscription-payments-admin";
@@ -40,6 +41,7 @@ import { canAccessAdministration, parseAdminRoleAccess, type AdminBlockId } from
 import { getSession, requireUser } from "@/lib/auth";
 import { canAccessAdminSection } from "@/lib/business-roles";
 import { getConsoleAuditDataset } from "@/lib/console/console-audit";
+import { getConsoleAiDataset } from "@/lib/console/console-ai";
 import { getConsoleBillingDataset } from "@/lib/console/console-billing";
 import { getConsoleAccessDecision, CONSOLE_CAPABILITIES, type ConsoleCapability } from "@/lib/console/console-capabilities";
 import { getConsoleInternalModulesDataset } from "@/lib/console/console-internal-modules";
@@ -62,7 +64,7 @@ type ConsoleSearchParams = Record<string, string | string[] | undefined>;
 type SectionMeta = { id: ConsoleSectionId; icon: LucideIcon };
 const sectionMeta: SectionMeta[] = [
   { id: "overview", icon: BarChart3 }, { id: "module-maturity", icon: BarChart3 }, { id: "access", icon: ShieldCheck },
-  { id: "platform-settings", icon: Settings }, { id: "promotions", icon: BadgePercent }, { id: "content", icon: FileText },
+  { id: "platform-settings", icon: Settings }, { id: "ai-control-center", icon: Bot }, { id: "promotions", icon: BadgePercent }, { id: "content", icon: FileText },
   { id: "users", icon: Users }, { id: "organizations", icon: Building2 }, { id: "subscriptions", icon: CreditCard },
   { id: "support", icon: MessageSquare }, { id: "visits", icon: BarChart3 }, { id: "security-audit", icon: Megaphone },
   { id: "hr-cfo", icon: BriefcaseBusiness }, { id: "sco", icon: PackageCheck }, { id: "coo", icon: BarChart3 },
@@ -73,6 +75,7 @@ const readCapability: Partial<Record<ConsoleSectionId, ConsoleCapability>> = {
   overview: CONSOLE_CAPABILITIES.OVERVIEW_READ,
   "module-maturity": CONSOLE_CAPABILITIES.MODULE_MATURITY_READ,
   "platform-settings": CONSOLE_CAPABILITIES.SETTINGS_READ,
+  "ai-control-center": CONSOLE_CAPABILITIES.AI_READ,
   promotions: CONSOLE_CAPABILITIES.CONTENT_READ,
   content: CONSOLE_CAPABILITIES.CONTENT_READ,
   users: CONSOLE_CAPABILITIES.USERS_READ,
@@ -85,6 +88,7 @@ const readCapability: Partial<Record<ConsoleSectionId, ConsoleCapability>> = {
 const manageCapability: Partial<Record<ConsoleSectionId, ConsoleCapability>> = {
   "module-maturity": CONSOLE_CAPABILITIES.MODULE_MATURITY_MANAGE,
   "platform-settings": CONSOLE_CAPABILITIES.SETTINGS_MANAGE,
+  "ai-control-center": CONSOLE_CAPABILITIES.AI_MANAGE,
   promotions: CONSOLE_CAPABILITIES.CONTENT_MANAGE,
   content: CONSOLE_CAPABILITIES.CONTENT_MANAGE,
   users: CONSOLE_CAPABILITIES.USERS_MANAGE,
@@ -95,7 +99,7 @@ const manageCapability: Partial<Record<ConsoleSectionId, ConsoleCapability>> = {
 };
 
 const guideBySection: Record<Exclude<ConsoleSectionId, "module-maturity">, Iteration07GuideCode> = {
-  overview: "CONSOLE_OVERVIEW", access: "CONSOLE_RBAC", "platform-settings": "CONSOLE_PLATFORM_SETTINGS", promotions: "CONSOLE_CONTENT",
+  overview: "CONSOLE_OVERVIEW", access: "CONSOLE_RBAC", "platform-settings": "CONSOLE_PLATFORM_SETTINGS", "ai-control-center": "CONSOLE_AI_CONTROL", promotions: "CONSOLE_CONTENT",
   content: "CONSOLE_CONTENT", users: "CONSOLE_USERS", organizations: "CONSOLE_CLIENT_ENTERPRISES", subscriptions: "CONSOLE_SUBSCRIPTIONS",
   support: "CONSOLE_SUPPORT", visits: "CONSOLE_VISITS", "security-audit": "CONSOLE_SECURITY_AUDIT", "hr-cfo": "DTSC_HR_CFO",
   sco: "DTSC_SCO", coo: "DTSC_COO", ceo: "DTSC_CEO", mpo: "DTSC_MPO", cto: "DTSC_CTO", legal: "DTSC_LEGAL",
@@ -146,6 +150,11 @@ export async function DtscConsolePage({ forcedSection, searchParams }: { forcedS
     content = <div className="space-y-5"><ConsoleSaasOverview {...overview.consoleSaasOverview} /><Accordion><AccordionItem title={locale === "en" ? "Detailed platform indicators" : "Indicateurs détaillés plateforme"} defaultOpen><AdminOverviewMetrics selectedPeriod={period.days} selectedDate={period.selectedDate} {...overview.overviewMetrics} /></AccordionItem></Accordion></div>;
   } else if (activeSection === "access") {
     content = <Accordion><AccordionItem title={t("console.sections.access.label")} defaultOpen><AdminAccessPanel access={adminRoleAccess} /></AccordionItem></Accordion>;
+  } else if (activeSection === "ai-control-center") {
+    // The section is already guarded by CONSOLE_AI_READ and DTSC_INTERNAL.
+    // This service contains only global, aggregated operational metadata.
+    const snapshot = await getConsoleAiDataset({ from: period.start, to: new Date(period.end.getTime() + 1) });
+    content = <ConsoleAiOverview data={snapshot} locale={locale} days={period.days} />;
   } else if (activeSection === "platform-settings") {
     const flags = await prisma.featureFlag.findMany({ orderBy: [{ environment: "asc" }, { code: "asc" }], take: 100 });
     content = <div className="space-y-5"><Accordion><AccordionItem title={t("console.sections.platform-settings.label")} defaultOpen><AdminSettingsPanel canEdit={canManage} settings={{ defaultDailyMessageLimit: settings.defaultDailyMessageLimit, defaultDailyTokenLimit: settings.defaultDailyTokenLimit, chatbotEnabled: settings.chatbotEnabled, publicAgentEnabled: settings.publicAgentEnabled, allowNonClientPublicationDrafts: settings.allowNonClientPublicationDrafts, maintenanceMode: settings.maintenanceMode, supportAutoCloseDays: settings.supportAutoCloseDays, allowClientAnnouncements: settings.allowClientAnnouncements, commentEditWindowMinutes: settings.commentEditWindowMinutes, notificationRetentionDays: settings.notificationRetentionDays, signUpOtpEnabled: settings.signUpOtpEnabled, signUpOtpExpirationMinutes: settings.signUpOtpExpirationMinutes }} /></AccordionItem></Accordion><FeatureFlagManager flags={toJsonSafe(flags)} canManage={canManage} locale={locale} /></div>;

@@ -1024,6 +1024,10 @@
         "label": "RBAC access",
         "description": "Capabilities and individual permissions"
       },
+      "ai-control-center": {
+        "label": "AI & integrations",
+        "description": "Usage, costs and operational signals"
+      },
       "platform-settings": {
         "label": "Platform settings",
         "description": "Global configuration and feature flags"
