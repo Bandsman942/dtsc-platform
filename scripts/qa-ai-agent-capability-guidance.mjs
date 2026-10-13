@@ -11,6 +11,8 @@ const gateway = read("lib/ai/tools/execute.ts");
 const agentTools = read("lib/ai/agent/tools.ts");
 const globalAgent = read("app/api/chat/agent/route.ts");
 const enterpriseAgent = read("app/api/enterprise/ai/agent/route.ts");
+const agentStatus = read("app/api/ai/agent/runs/[id]/route.ts");
+const agentDock = read("components/chat/ai-agent-run-dock.tsx");
 
 assert(registry.includes('code: "CONNECTED_APPS_STATUS_READ"') && registry.includes('mode: "READ"'), "Connected-app status must use certified READ tool definition");
 assert(registry.includes('allowedAssistantCodes: ["DTSC_GENERAL", "ENTERPRISE_GENERAL"]'), "Only named assistants may request connected-app metadata");
@@ -25,4 +27,7 @@ assert(appExecutor.includes('operationalToolCallsVerified: false') && !appExecut
 assert(authorization.includes("context.session.userId !== context.userId") && authorization.includes('activeContext === "GLOBAL_CLIENT"'), "Server tool authorization must deny spoofed session/user and mixed personal/tenant scope");
 assert(gateway.includes("authorizeAiTool(input.toolCode") && gateway.includes("getAiToolOutputSchema"), "All tool calls must remain behind canonical validation and audit gateway");
 assert(agentTools.includes("CONNECTED_APPS_STATUS_READ") && globalAgent.includes("CONNECTED_APPS_STATUS_READ") && enterpriseAgent.includes("CONNECTED_APPS_STATUS_READ"), "Both Agent conversations must use the live app status tool and never invent outcomes");
+assert(agentStatus.includes('run.status === "BUDGET_EXHAUSTED"') && agentStatus.includes('"MAX_ESTIMATED_COST"') && agentStatus.includes("budgetReason:"), "Agent API may expose only allowlisted budget failure reasons");
+assert(agentDock.includes('snapshot?.status === "BUDGET_EXHAUSTED"') && agentDock.includes("budgetExplanation") && agentDock.includes('href="/ai/apps"'), "Agent UI must explain exhausted budget and guide to canonical connected applications");
+assert(agentDock.includes("Une action externe déjà effectuée n'est jamais rejouée automatiquement"), "Budget UX must never suggest blind replay of already executed actions");
 console.log("PASS AI-AGENT-01 initial tool: live scoped product status, canonical READ gateway, no MCP operational claims");
