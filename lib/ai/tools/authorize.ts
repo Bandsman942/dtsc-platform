@@ -22,6 +22,9 @@ export async function authorizeAiTool(toolCode: string, context: AiToolRuntimeCo
     return deny("TOOL_NOT_REGISTERED", "Cet outil IA n’est pas disponible dans ce contexte.");
   }
 
+  if (context.session.userId !== context.userId) {
+    return deny("CONTEXT_NOT_ALLOWED", "La session ne correspond pas à l'utilisateur de cet outil.");
+  }
   const activeContext = context.session.activeContext || "GLOBAL_CLIENT";
   if (!definition.contexts.includes(activeContext)) {
     return deny("CONTEXT_NOT_ALLOWED", "Cet outil n’est pas autorisé dans l’espace actif.");
@@ -36,6 +39,9 @@ export async function authorizeAiTool(toolCode: string, context: AiToolRuntimeCo
   }
 
   if (activeContext !== "ORGANIZATION") {
+    if ((activeContext === "GLOBAL_CLIENT" || activeContext === "COMMUNITY") && context.organizationId) {
+      return deny("CONTEXT_NOT_ALLOWED", "Une autorisation personnelle ne permet pas l'accès aux données d'une entreprise.");
+    }
     return { allowed: true, reasonCode: "ALLOWED", message: "Accès autorisé." };
   }
 

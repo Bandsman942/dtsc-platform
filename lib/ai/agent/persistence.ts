@@ -145,20 +145,43 @@ export async function requestAiAgentCancellation(input: { runId: string; userId:
   const scopedWhere = {
     id: input.runId,
     userId: input.userId,
-    ...(input.organizationId === undefined ? {} : { organizationId: input.organizationId || null }),
+    organizationId: input.organizationId || null,
   };
-  const run = await prisma.aiAgentRun.findFirst({ where: scopedWhere, select: { id: true, status: true } });
-  if (!run || !["RUNNING", "WAITING_CONFIRMATION", "READY_TO_RESUME"].includes(run.status)) return false;
-  const now = new Date();
-  if (run.status === "RUNNING") {
-    await prisma.aiAgentRun.update({ where: { id: run.id }, data: { cancelRequestedAt: now } });
-  } else {
-    await prisma.aiAgentRun.update({
-      where: { id: run.id },
+  // A rejected Agent approval must not remain executable through the
+  // independent /api/ai/tools/confirm endpoint. The run transition and
+  // invalidation of its still-pending confirmation are one DB transaction.
+  return prisma.$transaction(async (tx) => {
+    const run = await tx.aiAgentRun.findFirst({
+      where: scopedWhere,
+      select: { id: true, status: true, pendingConfirmationId: true },
+    });
+    if (!run || !["RUNNING", "WAITING_CONFIRMATION", "READY_TO_RESUME"].includes(run.status)) return false;
+    const now = new Date();
+    if (run.status === "RUNNING") {
+      const updated = await tx.aiAgentRun.updateMany({
+        where: { ...scopedWhere, status: "RUNNING" },
+        data: { cancelRequestedAt: now },
+      });
+      return updated.count === 1;
+    }
+    const updated = await tx.aiAgentRun.updateMany({
+      where: { ...scopedWhere, status: run.status },
       data: { status: "CANCELLED", cancelRequestedAt: now, cancelledAt: now, completedAt: now, reasonCode: "CANCELLED_BY_USER" },
     });
-  }
-  return true;
+    if (updated.count !== 1) return false;
+    if (run.pendingConfirmationId) {
+      await tx.aiToolConfirmation.updateMany({
+        where: {
+          id: run.pendingConfirmationId,
+          userId: input.userId,
+          organizationId: input.organizationId || null,
+          status: "PENDING",
+        },
+        data: { status: "CANCELLED", argumentsJson: Prisma.DbNull, cancelledAt: now, updatedAt: now },
+      });
+    }
+    return true;
+  });
 }
 
 export async function isAiAgentCancellationRequested(runId: string) {

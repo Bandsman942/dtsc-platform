@@ -67,7 +67,8 @@ assert(!enterpriseAgentRoute.includes("return NextResponse.json({ error:") && !e
 assert(runRoute.includes("failureCategory: classifyAiAgentFailure") && !runRoute.includes("reasonCode: run.reasonCode") && !runRoute.includes("...step"), "Agent run API must expose a safe category and explicit step fields, not raw technical diagnostics");
 assert(!runRoute.includes("providerCode: step.providerCode") && !runRoute.includes("modelCode: step.modelCode") && !runRoute.includes("reasonCode: step.reasonCode"), "Agent step API must not leak provider/model/raw reason codes");
 assert(resumeRoute.includes("safeFailureResponse") && resumeRoute.includes("getAiAgentClientFailureMessage") && !resumeRoute.includes("return NextResponse.json({ error: reasonCode, reasonCode }"), "Resume API must humanize failures without returning internal reason codes");
-assert(dock.includes("failureCategory") && dock.includes("getAiAgentClientFailureMessage") && !dock.includes("body?.reasonCode"), "Agent dock must render stable human failure categories without raw reason codes");
+assert(dock.includes("failureCategory") && dock.includes("getAiAgentClientFailureMessage") && !dock.includes("toastError(body?.reasonCode"), "Agent execution failures must render stable human categories without raw reason codes");
+assert(dock.includes("approvalFailureMessage") && dock.includes('Object.prototype.hasOwnProperty.call(known, code)') && dock.includes('typeof code === "string"') && !dock.includes("toastError(body?.error"), "Action-confirmation diagnostics may translate only explicitly allowlisted server codes, never display arbitrary raw backend errors");
 assert(dock.includes('step.kind === "SYSTEM" && step.status === "RETRYING"'), "Agent dock must show a safe recovery step without private reasoning");
 
 assert(regressionRunner.includes("qa-hotfix-545-agent-post-tool-resilience.mjs"), "Hotfix #545 QA must run inside the canonical CI regression gate");

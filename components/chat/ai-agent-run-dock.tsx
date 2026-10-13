@@ -46,6 +46,7 @@ type AgentSnapshot = {
   toolCallCount: number;
   pendingConfirmationId?: string | null;
   failureCategory?: AiAgentClientFailureCategory | null;
+  budgetReason?: "MAX_STEPS" | "MAX_TOOL_CALLS" | "MAX_TOKENS" | "MAX_ESTIMATED_COST" | "MAX_DURATION" | null;
   limits: {
     maxSteps: number;
     maxToolCalls: number;
@@ -65,7 +66,7 @@ type AgentSnapshot = {
 type PendingConfirmation = {
   id: string;
   toolCode: string;
-  preview?: { subject?: string | null; priority?: string | null };
+  preview?: { subject?: string | null; message?: string | null; priority?: string | null } | null;
 };
 
 type AgentFailureResponse = {
@@ -77,6 +78,34 @@ const TERMINAL_STATUSES = new Set(["COMPLETED", "FAILED", "CANCELLED", "BUDGET_E
 const SUCCESS_STEP_STATUSES = new Set(["SUCCESS", "COMPLETED", "CONSUMED"]);
 const ACTIVE_STEP_STATUSES = new Set(["RUNNING", "PENDING", "RETRYING", "STARTED"]);
 
+function budgetExplanation(reason: AgentSnapshot["budgetReason"], en: boolean) {
+  const explanations: Record<NonNullable<AgentSnapshot["budgetReason"]>, [string, string]> = {
+    MAX_STEPS: ["Nombre maximal d'étapes atteint.", "Maximum number of steps reached."],
+    MAX_TOOL_CALLS: ["Nombre maximal d'appels d'outils atteint.", "Maximum number of tool calls reached."],
+    MAX_TOKENS: ["Budget de tokens consommé.", "Token budget exhausted."],
+    MAX_ESTIMATED_COST: ["Plafond de coût estimé atteint.", "Estimated cost ceiling reached."],
+    MAX_DURATION: ["Durée maximale d'exécution atteinte.", "Maximum run duration reached."],
+  };
+  return reason ? explanations[reason][en ? 1 : 0] : (en ? "This run reached a limit defined by your plan or security policy." : "Cette exécution a atteint une limite prévue par votre forfait ou par une politique de sécurité.");
+}
+
+function humanToolLabel(code: string, en: boolean) {
+  const names: Record<string, [string, string]> = {
+    CONNECTED_APPS_STATUS_READ: ["Vérification des applications connectées", "Connected apps check"],
+    SUPPORT_TICKET_CREATE: ["Création d’un ticket d’assistance", "Create a support ticket"],
+    DTSC_CONTACT_EMAIL_SEND: ["Envoi d’un message à DTSC", "Send a message to DTSC"],
+    TASK_DRAFT_PREPARE: ["Préparation d’une tâche", "Prepare a task"],
+  };
+  return names[code]?.[en ? 1 : 0] || (en ? "Authorized business tool" : "Outil métier autorisé");
+}
+
+function humanPriorityLabel(code: string | null | undefined, en: boolean) {
+  const priorities: Record<string, [string, string]> = {
+    LOW: ["Faible", "Low"], MEDIUM: ["Normale", "Medium"], HIGH: ["Élevée", "High"], URGENT: ["Urgente", "Urgent"],
+  };
+  return code ? priorities[code]?.[en ? 1 : 0] || null : null;
+}
+
 function statusLabel(status: string, en: boolean) {
   const labels: Record<string, [string, string]> = {
     RUNNING: ["Analyse en cours", "Analysis in progress"],
@@ -87,24 +116,39 @@ function statusLabel(status: string, en: boolean) {
     CANCELLED: ["Annulé", "Cancelled"],
     BUDGET_EXHAUSTED: ["Limite atteinte", "Budget reached"],
   };
-  return labels[status]?.[en ? 1 : 0] || status;
+  return labels[status]?.[en ? 1 : 0] || (en ? "Status unavailable" : "État indisponible");
 }
 
 function stepLabel(step: AgentStep, en: boolean) {
   if (step.kind === "SYSTEM" && step.status === "RETRYING") return en ? "AI service recovery" : "Reprise du service IA";
-  if (step.toolCode) return `${en ? "Tool" : "Outil"} · ${step.toolCode}`;
+  if (step.toolCode) return humanToolLabel(step.toolCode, en);
   const labels: Record<string, [string, string]> = {
     MODEL: ["Analyse du modèle", "Model analysis"],
     TOOL: ["Exécution d’outil", "Tool execution"],
     CONFIRMATION: ["Validation humaine", "Human approval"],
     SYSTEM: ["État du service IA", "AI service status"],
   };
-  return labels[step.kind]?.[en ? 1 : 0] || step.kind;
+  return labels[step.kind]?.[en ? 1 : 0] || (en ? "Agent step" : "Étape de l’agent");
 }
 
 function safeFailureMessage(body: AgentFailureResponse | null, locale: string) {
   if (typeof body?.message === "string" && body.message.trim()) return body.message;
   return getAiAgentClientFailureMessage(body?.failureCategory || "UNAVAILABLE", locale);
+}
+
+function approvalFailureMessage(code: unknown, en: boolean, action: "approve" | "reject") {
+  const known: Record<string, [string, string]> = {
+    CONFIRMATION_NOT_FOUND_OR_EXPIRED: ["Cette validation a expiré ou a déjà été traitée. Actualisez l'exécution avant de réessayer.", "This approval has expired or was already handled. Refresh the run before trying again."],
+    CONFIRMATION_INVALID_OR_EXPIRED: ["La validation n'est plus applicable. Actualisez l'exécution.", "This approval is no longer applicable. Refresh the run."],
+    ORGANIZATION_ACCESS_DENIED: ["Vous n'avez plus accès à l'entreprise active. Changez de contexte ou contactez son administrateur.", "You no longer have access to the active organization. Switch context or contact its administrator."],
+    RATE_LIMITED: ["Trop de validations récentes. Réessayez après la limite de sécurité.", "Too many recent approvals. Retry after the security limit."],
+    UNAUTHORIZED: ["Votre session a expiré. Reconnectez-vous avant de valider.", "Your session has expired. Sign in before approving."],
+    FORBIDDEN: ["La validation a été bloquée par les protections de sécurité.", "Approval was blocked by security safeguards."],
+  };
+  if (typeof code === "string" && Object.prototype.hasOwnProperty.call(known, code)) return known[code][en ? 1 : 0];
+  return action === "approve"
+    ? (en ? "This action could not be confirmed. Check its status before retrying." : "Cette action n'a pas pu être confirmée. Vérifiez son état avant de réessayer.")
+    : (en ? "This action could not be rejected. Check its status before retrying." : "Cette action n'a pas pu être refusée. Vérifiez son état avant de réessayer.");
 }
 
 async function readTextStream(response: Response, onChunk: (chunk: string) => void) {
@@ -146,12 +190,27 @@ export function AiAgentRunDock({ variant }: { variant: AgentVariant }) {
       .catch(() => null);
   }, [variant]);
 
+  useEffect(() => {
+    // Rehydrate only server-authorized pending approval/resume metadata.
+    // Never replay a prompt, stream or sensitive action on reload.
+    void fetch(`/api/ai/agent/runs/active?variant=${variant}`, { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((body) => {
+        if (!body || typeof body.runId !== "string") return;
+        setRunId((current) => current || body.runId);
+        if (typeof body.conversationId === "string") {
+          setConversationId((current) => current || body.conversationId);
+        }
+      })
+      .catch(() => null);
+  }, [variant]);
+
   const refreshConfirmation = useCallback(async (pendingId?: string | null) => {
     if (!pendingId) {
       setConfirmation(null);
       return;
     }
-    const response = await fetch("/api/ai/tools/pending", { cache: "no-store" });
+    const response = await fetch(`/api/ai/tools/pending?confirmationId=${encodeURIComponent(pendingId)}`, { cache: "no-store" });
     const body = await response.json().catch(() => null);
     if (!response.ok) return;
     const item = Array.isArray(body?.confirmations)
@@ -185,6 +244,13 @@ export function AiAgentRunDock({ variant }: { variant: AgentVariant }) {
   const canStart = variant === "chatbot" || Boolean(organizationId);
   const isActive = busy || Boolean(snapshot && !TERMINAL_STATUSES.has(snapshot.status));
   const latestSteps = useMemo(() => [...(snapshot?.steps || [])].sort((a, b) => a.stepIndex - b.stepIndex).slice(-6), [snapshot?.steps]);
+  const canApprovePreview = Boolean(
+    confirmation
+    && (confirmation.toolCode === "SUPPORT_TICKET_CREATE" || confirmation.toolCode === "DTSC_CONTACT_EMAIL_SEND")
+    && confirmation.preview?.subject?.trim()
+    && confirmation.preview?.message?.trim()
+    && (confirmation.toolCode !== "SUPPORT_TICKET_CREATE" || humanPriorityLabel(confirmation.preview?.priority, en)),
+  );
 
   useFloatingAction({
     id: `ai-agent-mode-${variant}`,
@@ -249,7 +315,7 @@ export function AiAgentRunDock({ variant }: { variant: AgentVariant }) {
   }
 
   async function confirmAction() {
-    if (!confirmation || confirmBusy) return;
+    if (!confirmation || confirmBusy || !canApprovePreview) return;
     setConfirmBusy(true);
     try {
       const response = await fetch("/api/ai/tools/confirm", {
@@ -258,12 +324,12 @@ export function AiAgentRunDock({ variant }: { variant: AgentVariant }) {
         body: JSON.stringify({ confirmationId: confirmation.id }),
       });
       const body = await response.json().catch(() => null);
-      if (!response.ok || !body?.ok) throw new Error("CONFIRM_FAILED");
+      if (!response.ok || !body?.ok) throw new Error(approvalFailureMessage(body?.error || body?.reasonCode, en, "approve"));
       setConfirmation(null);
       await refreshRun(runId);
       toastSuccess(en ? "Action confirmed. The agent can now resume." : "Action confirmée. L’agent peut maintenant reprendre.");
-    } catch {
-      toastError(en ? "This action could not be confirmed." : "Cette action n’a pas pu être confirmée.");
+    } catch (error) {
+      toastError(error instanceof Error ? error.message : approvalFailureMessage(null, en, "approve"));
     } finally {
       setConfirmBusy(false);
     }
@@ -278,11 +344,17 @@ export function AiAgentRunDock({ variant }: { variant: AgentVariant }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ confirmationId: confirmation.id }),
       });
-      if (!response.ok) throw new Error("CONFIRMATION_CANCEL_FAILED");
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(approvalFailureMessage(body?.error, en, "reject"));
+      }
       setConfirmation(null);
-      await cancelRun();
-    } catch {
-      toastError(en ? "Unable to reject this action." : "Impossible de refuser cette action.");
+      // The cancellation endpoint revokes this approval AND stops the run.
+      // A redundant /runs/:id/cancel request could return a misleading 404.
+      if (runId) await refreshRun(runId);
+      toastSuccess(en ? "Action rejected. The agent has stopped." : "Action refusée. L’agent est arrêté.");
+    } catch (error) {
+      toastError(error instanceof Error ? error.message : approvalFailureMessage(null, en, "reject"));
     } finally {
       setConfirmBusy(false);
     }
@@ -324,11 +396,20 @@ export function AiAgentRunDock({ variant }: { variant: AgentVariant }) {
           <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/[0.045] p-3 text-xs leading-relaxed text-dtsc-muted">
             <strong className="text-dtsc-ink">{en ? "Human-controlled by design." : "Contrôlé par l’humain par conception."}</strong>{" "}
             {en ? "The agent can analyze and use certified tools, but sensitive mutations require an explicit approval control. Private chain-of-thought is never displayed." : "L’agent peut analyser et utiliser des outils certifiés, mais les mutations sensibles exigent une validation explicite. La chaîne de pensée privée n’est jamais affichée."}
+            <a href="/ai/apps" className="mt-2 block w-fit rounded-lg border border-dtsc-border px-3 py-2 text-xs font-bold text-dtsc-ink underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-cyan-500">{en ? "Review connected apps" : "Vérifier les applications connectées"}</a>
           </div>
 
           {answer ? (
             <div className="rounded-2xl border border-dtsc-border bg-dtsc-page p-3 text-sm text-dtsc-ink">
               <Streamdown>{answer}</Streamdown>
+            </div>
+          ) : null}
+
+          {snapshot?.status === "BUDGET_EXHAUSTED" ? (
+            <div className="rounded-2xl border border-amber-400/40 bg-amber-400/10 p-3 text-xs leading-5 text-dtsc-muted" role="status">
+              <strong className="block text-dtsc-ink">{en ? "Execution limit reached" : "Limite d'exécution atteinte"}</strong>
+              <p>{budgetExplanation(snapshot.budgetReason, en)}</p>
+              <p className="mt-1">{en ? "The agent has stopped. To continue, start a new run with a smaller request or review the plan's available quotas. A completed external action is never retried automatically." : "L'agent est arrêté. Pour poursuivre, lancez une nouvelle demande plus courte ou vérifiez les quotas du forfait. Une action externe déjà effectuée n'est jamais rejouée automatiquement."}</p>
             </div>
           ) : null}
 
@@ -381,11 +462,19 @@ export function AiAgentRunDock({ variant }: { variant: AgentVariant }) {
                 <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
                 <div className="min-w-0 flex-1">
                   <strong className="block text-xs font-black text-dtsc-ink">{en ? "Sensitive action awaiting your approval" : "Action sensible en attente de votre validation"}</strong>
-                  <p className="mt-1 text-xs leading-5 text-dtsc-muted">{en ? `Tool: ${confirmation.toolCode}` : `Outil : ${confirmation.toolCode}`}{confirmation.preview?.subject ? ` · ${confirmation.preview.subject}` : ""}</p>
+                  <p className="mt-1 text-xs leading-5 text-dtsc-muted">{humanToolLabel(confirmation.toolCode, en)}</p>
+                  {canApprovePreview && confirmation.preview ? (
+                    <div className="mt-2 space-y-2 text-xs text-dtsc-ink">
+                      <p><strong>{en ? "Subject:" : "Objet : "}</strong> {confirmation.preview.subject}</p>
+                      {humanPriorityLabel(confirmation.preview.priority, en) ? <p><strong>{en ? "Priority:" : "Priorité : "}</strong> {humanPriorityLabel(confirmation.preview.priority, en)}</p> : null}
+                      <p className="font-bold">{en ? "Full message to send:" : "Message intégral à envoyer :"}</p>
+                      <p className="max-h-36 overflow-y-auto whitespace-pre-wrap break-words rounded-xl border border-dtsc-border bg-dtsc-surface p-2" aria-label={en ? "Full text to approve" : "Texte intégral à valider"}>{confirmation.preview.message}</p>
+                    </div>
+                  ) : <p className="mt-2 text-xs text-rose-600" role="alert">{en ? "This action has no complete, verifiable preview. Approval is disabled; reject it and submit a new request." : "Cette action ne possède pas d’aperçu complet vérifiable. La validation est désactivée ; refusez l’action et reformulez votre demande."}</p>}
                 </div>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
-                <Button type="button" size="sm" onClick={() => void confirmAction()} disabled={confirmBusy}>{confirmBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}{en ? "Approve" : "Valider"}</Button>
+                <Button type="button" size="sm" onClick={() => void confirmAction()} disabled={confirmBusy || !canApprovePreview}>{confirmBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}{en ? "Approve" : "Valider"}</Button>
                 <Button type="button" size="sm" variant="outline" onClick={() => void rejectAction()} disabled={confirmBusy}>{en ? "Reject" : "Refuser"}</Button>
               </div>
             </div>
@@ -393,7 +482,13 @@ export function AiAgentRunDock({ variant }: { variant: AgentVariant }) {
         </div>
 
         <div className="shrink-0 border-t border-dtsc-border/70 bg-dtsc-surface p-3">
-          {snapshot?.status === "READY_TO_RESUME" ? (
+          {!isActive && snapshot?.status !== "READY_TO_RESUME" ? (
+             <div className="mb-2 flex flex-wrap gap-2" aria-label={en ? "Suggested agent goals" : "Objectifs suggérés pour l’agent"}>
+               <button type="button" onClick={() => setPrompt(en ? "Check which applications are connected in my current account and which I can configure. Use verified status only; do not claim remote actions were executed." : "Vérifie quelles applications sont connectées dans mon espace actif et lesquelles je peux configurer. Utilise uniquement leurs états vérifiés, sans prétendre avoir exécuté d’action distante.")} className="min-h-10 rounded-xl border border-dtsc-border px-3 py-2 text-left text-xs font-semibold text-dtsc-ink hover:border-cyan-500 focus-visible:outline-2 focus-visible:outline-cyan-500">{en ? "Check my connected apps" : "Vérifier mes applications"}</button>
+               <a href="/ai/apps" className="inline-flex min-h-10 items-center rounded-xl border border-dtsc-border px-3 py-2 text-xs font-semibold text-dtsc-ink hover:border-cyan-500 focus-visible:outline-2 focus-visible:outline-cyan-500">{en ? "Manage connections" : "Gérer les connexions"}</a>
+             </div>
+           ) : null}
+           {snapshot?.status === "READY_TO_RESUME" ? (
             <Button type="button" onClick={() => void resumeRun()} disabled={busy} className="w-full rounded-xl">
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}{en ? "Resume agent" : "Reprendre l’agent"}
             </Button>

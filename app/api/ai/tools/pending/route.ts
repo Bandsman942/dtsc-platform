@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
+import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { requireActiveOrganizationMembership } from "@/lib/organizations";
 import { isSameOriginRequest } from "@/lib/request-security";
 
 type PendingRow = {
@@ -15,9 +17,16 @@ type PendingRow = {
 };
 
 function preview(toolCode: string, args: unknown) {
+  // A human must see the *stored* action arguments before approving them.
+  // Do not render an incomplete preview for an unknown mutation.
+  if (toolCode !== "SUPPORT_TICKET_CREATE" && toolCode !== "DTSC_CONTACT_EMAIL_SEND") return null;
   const value = args && typeof args === "object" ? args as Record<string, unknown> : {};
+  const subject = typeof value.subject === "string" ? value.subject : null;
+  const message = typeof value.message === "string" ? value.message : null;
+  if (!subject || !message) return null;
   return {
-    subject: typeof value.subject === "string" ? value.subject : null,
+    subject,
+    message,
     priority: toolCode === "SUPPORT_TICKET_CREATE" && typeof value.priority === "string" ? value.priority : null,
   };
 }
@@ -29,9 +38,27 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const conversationId = url.searchParams.get("conversationId")?.trim() || null;
+  const confirmationId = url.searchParams.get("confirmationId")?.trim() || null;
+  if (confirmationId && !z.string().uuid().safeParse(confirmationId).success) {
+    return NextResponse.json({ error: "INVALID_CONFIRMATION_ID" }, { status: 400 });
+  }
   const organizationId = session.activeContext === "ORGANIZATION" ? session.activeOrganizationId || null : null;
+  if (session.activeContext === "ORGANIZATION" && (!organizationId || !await requireActiveOrganizationMembership(session, organizationId))) {
+    return NextResponse.json({ error: "ORGANIZATION_ACCESS_DENIED" }, { status: 403 });
+  }
 
-  const rows = conversationId
+  const rows = confirmationId
+    ? await prisma.$queryRaw<PendingRow[]>(Prisma.sql`
+        SELECT "id", "conversationId", "turnId", "toolCode", "argumentsJson", "expiresAt", "createdAt"
+        FROM "AiToolConfirmation"
+        WHERE "id" = ${confirmationId}
+          AND "userId" = ${session.userId}
+          AND ("organizationId" IS NOT DISTINCT FROM ${organizationId})
+          AND "status" = 'PENDING'
+          AND "expiresAt" > CURRENT_TIMESTAMP
+        LIMIT 1
+      `)
+    : conversationId
     ? await prisma.$queryRaw<PendingRow[]>(Prisma.sql`
         SELECT "id", "conversationId", "turnId", "toolCode", "argumentsJson", "expiresAt", "createdAt"
         FROM "AiToolConfirmation"
@@ -64,5 +91,5 @@ export async function GET(req: Request) {
       createdAt: row.createdAt.toISOString(),
       preview: preview(row.toolCode, row.argumentsJson),
     })),
-  });
+  }, { headers: { "Cache-Control": "private, no-store" } });
 }

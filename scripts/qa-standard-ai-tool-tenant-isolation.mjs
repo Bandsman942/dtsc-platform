@@ -14,7 +14,15 @@ const privateActions = read("lib/private-chat-actions.ts");
 if (!authorize.includes("context.session.activeOrganizationId !== organizationId")) failures.push("authorization must reject mismatched active tenant");
 if (!confirmation.includes('"organizationId" IS NOT DISTINCT FROM ${input.context.organizationId || null}')) failures.push("confirmation lookup/transition must be tenant bound");
 if (!pending.includes('"organizationId" IS NOT DISTINCT FROM ${organizationId}')) failures.push("pending confirmation list must be tenant bound");
-if (!cancel.includes('"organizationId" IS NOT DISTINCT FROM ${organizationId}')) failures.push("confirmation cancellation must be tenant bound");
+const sqlScopedCancellation = cancel.includes('"organizationId" IS NOT DISTINCT FROM ${organizationId}');
+const prismaScopedCancellation = cancel.includes('tx.aiToolConfirmation.updateMany({')
+  && cancel.includes('tx.aiAgentRun.updateMany({')
+  && cancel.includes('userId: session.userId')
+  && cancel.includes('organizationId,')
+  && cancel.includes('status: "PENDING"')
+  && cancel.includes('argumentsJson: Prisma.DbNull')
+  && cancel.includes('prisma.$transaction(async (tx) => {');
+if (!sqlScopedCancellation && !prismaScopedCancellation) failures.push("confirmation cancellation must be tenant bound and atomic for ORM updates");
 if (!privateActions.includes("session.activeOrganizationId !== organizationId")) failures.push("private action preparation must reject stale enterprise context");
 for (const model of ["pharmacyProduct", "pharmacyBatch", "pharmacyAlert", "pharmacySale", "pharmacyCashSession", "pharmacyPurchaseOrder", "pharmacyQualityIncident", "pharmacyDocument"]) {
   const index = pharmacyData.indexOf(`prisma.${model}`);

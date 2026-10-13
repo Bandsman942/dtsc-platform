@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { getSession } from "@/lib/auth";
+import { requireActiveOrganizationMembership } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -18,33 +19,48 @@ export async function POST(req: Request) {
   if (!parsed.success) return NextResponse.json({ error: "INVALID_REQUEST" }, { status: 400 });
 
   const organizationId = session.activeContext === "ORGANIZATION" ? session.activeOrganizationId || null : null;
-  const updated = await prisma.$executeRaw(Prisma.sql`
-    UPDATE "AiToolConfirmation"
-    SET "status" = 'CANCELLED', "cancelledAt" = CURRENT_TIMESTAMP, "argumentsJson" = NULL, "updatedAt" = CURRENT_TIMESTAMP
-    WHERE "id" = ${parsed.data.confirmationId}
-      AND "userId" = ${session.userId}
-      AND ("organizationId" IS NOT DISTINCT FROM ${organizationId})
-      AND "status" = 'PENDING'
-      AND "expiresAt" > CURRENT_TIMESTAMP
-  `);
-  if (!updated) return NextResponse.json({ error: "CONFIRMATION_NOT_FOUND_OR_EXPIRED" }, { status: 404 });
-
-  const now = new Date();
-  await prisma.aiAgentRun.updateMany({
-    where: {
-      pendingConfirmationId: parsed.data.confirmationId,
-      userId: session.userId,
-      organizationId,
-      status: { in: ["WAITING_CONFIRMATION", "READY_TO_RESUME"] },
-    },
-    data: {
-      status: "CANCELLED",
-      reasonCode: "CONFIRMATION_CANCELLED",
-      pendingConfirmationId: null,
-      cancelRequestedAt: now,
-      cancelledAt: now,
-    },
+  if (session.activeContext === "ORGANIZATION" && (!organizationId || !await requireActiveOrganizationMembership(session, organizationId))) {
+    return NextResponse.json({ error: "ORGANIZATION_ACCESS_DENIED" }, { status: 403 });
+  }
+  // Approval invalidation and Agent state change are one operation: a
+  // cancelled confirmation cannot outlive its rejected run.
+  const cancelled = await prisma.$transaction(async (tx) => {
+    const now = new Date();
+    const updated = await tx.aiToolConfirmation.updateMany({
+      where: {
+        id: parsed.data.confirmationId,
+        userId: session.userId,
+        organizationId,
+        status: "PENDING",
+        expiresAt: { gt: now },
+      },
+      data: {
+        status: "CANCELLED",
+        cancelledAt: now,
+        argumentsJson: Prisma.DbNull,
+        updatedAt: now,
+      },
+    });
+    if (updated.count !== 1) return false;
+    await tx.aiAgentRun.updateMany({
+      where: {
+        pendingConfirmationId: parsed.data.confirmationId,
+        userId: session.userId,
+        organizationId,
+        status: { in: ["WAITING_CONFIRMATION", "READY_TO_RESUME"] },
+      },
+      data: {
+        status: "CANCELLED",
+        reasonCode: "CONFIRMATION_CANCELLED",
+        pendingConfirmationId: null,
+        cancelRequestedAt: now,
+        cancelledAt: now,
+        completedAt: now,
+      },
+    });
+    return true;
   });
+  if (!cancelled) return NextResponse.json({ error: "CONFIRMATION_NOT_FOUND_OR_EXPIRED" }, { status: 404 });
 
   return NextResponse.json({ ok: true, status: "CANCELLED" });
 }
