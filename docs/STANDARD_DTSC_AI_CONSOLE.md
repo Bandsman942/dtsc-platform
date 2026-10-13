@@ -47,3 +47,16 @@ Section **en lecture seule**; aucune mutation, migration ou backfill. Les action
 - E2E propriétaire : accès admin DTSC, refus utilisateur client / rôle non autorisé, quatre périodes, FR/EN, 320–1024 px, unknown vs 0, absence de données sensibles.
 
 **Rollback :** revert par PR depuis `main` : la section et son service de lecture sont isolés, aucune modification de données ni configuration Vercel. Production exclusivement depuis le `main` validé.
+
+
+## Hotfix AI-CONSOLE-02 — politique globale versionnée et effective
+
+La configuration des fournisseurs et modèles se présente avec la source du catalogue, l'état de présence des clés (jamais leurs valeurs), les plafonds serveur `SERVER_LIMITS` et les offres commerciales `BillingPlan`. Aucun quota commercial n'est recopié dans une table IA.
+
+L'édition par `CONSOLE_AI_MANAGE` publie une politique **restrictive uniquement** dans `AiPlatformRuntimePolicy` avec révision optimiste. La migration `20261013143000_ai_platform_runtime_policy` ajoute cette table sans réécrire les anciens plans ou les agents en cours. Les changements nécessitent une justification (8–500 caractères), une provenance même origine, un audit de haut risque et `PlatformSettingHistory` transactionnel. Les conflits de version retournent `409 REVISION_CONFLICT`.
+
+La politique publiée contrôle les fournisseurs et modèles désactivés à la sélection de modèle et ajoute, au démarrage **et à la reprise**, des plafonds Agent plus stricts que `SERVER_LIMITS`. Aucun abaissement du degré de classification et aucun ajout de mode outil n'est autorisé ; le catalogue, l'abonnement et la politique serveur gardent priorité. Les erreurs de lecture de la politique ne doivent jamais réactiver silencieusement un fournisseur suspendu : l'orchestration échoue fermée.
+
+**Retour arrière :** consulter l'historique borné à 20 versions, préparer une ancienne configuration puis la republier avec motif, en créant une **nouvelle révision** auditée. En cas de rollback de livraison, conserver la table additive et ses données ; ne jamais supprimer les historiques de sécurité. **Secrets** : seulement un booléen de présence dans la Console ; aucune clé dans les logs, JSON de politique ou navigateur.
+
+**E2E #808 :** droits READ et MANAGE distincts, conflit concurrent 409, désactivation réelle d'un modèle et d'un fournisseur dans le routeur, réduction de budget Agent au début et à la reprise, restauration auditable, FR/EN, mobile, refus des valeurs > plafond serveur, absence de secrets, matrice de coût UNKNOWN correcte.

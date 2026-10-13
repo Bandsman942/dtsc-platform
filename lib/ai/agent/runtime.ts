@@ -4,6 +4,7 @@ import type { AiContextCode, AiDataClassification, AiProviderInputMessage, AiRea
 import type { AiAgentBudget, AiAgentBudgetRequest, AiAgentCompletion, AiAgentUsage } from "@/lib/ai/agent/types";
 import { classifyAiAgentFailure, getAiAgentClientFailureMessage, getAiAgentInternalReasonCode, isRetryableAgentModelError } from "@/lib/ai/agent/failures";
 import { resolveAiAgentBudget, isAgentBudgetExceeded } from "@/lib/ai/agent/policy";
+import { getAiPlatformPolicy } from "@/lib/ai/platform-runtime-policy";
 import { createAiAgentRun, isAiAgentCancellationRequested, recordAiAgentStep, updateAiAgentRunProgress } from "@/lib/ai/agent/persistence";
 import { listAuthorizedAgentTools } from "@/lib/ai/agent/tools";
 import { buildAgentToolResultMessage } from "@/lib/ai/agent/tool-result";
@@ -259,7 +260,8 @@ export async function createInteractiveAiAgentStream(input: {
   onFinished?: (result: AiAgentCompletion) => Promise<void> | void;
 }) {
   const planCode = await resolvePlanCode(input.userId, input.organizationId, input.contextCode);
-  const budget = resolveAiAgentBudget({ planCode, requested: input.budgetRequest, dataClassifications: input.dataClassifications });
+  const platformPolicy = await getAiPlatformPolicy();
+  const budget = resolveAiAgentBudget({ planCode, requested: input.budgetRequest, dataClassifications: input.dataClassifications, runtimeCeilings: platformPolicy.agentCeilings[planCode] });
   const run = await createAiAgentRun({ userId: input.userId, organizationId: input.organizationId, scope: input.scope, executionClass: "INTERACTIVE", contextCode: input.contextCode, assistantCode: input.assistantCode, conversationId: input.conversationId, enterpriseConversationId: input.enterpriseConversationId, budget, metadata: { locale: input.locale, taskType: input.taskType, tags: input.tags || [], planCode, requestedModel: input.requestedModel || null } });
   return createAgentLoopStream({ runId: run.id, session: input.session, userId: input.userId, organizationId: input.organizationId, sourceConversationId: input.enterpriseConversationId || input.conversationId || null, contextCode: input.contextCode, locale: input.locale, messages: input.messages, instructions: input.instructions, taskType: input.taskType, assistantCode: input.assistantCode, requestedModel: input.requestedModel, reasoningEffort: input.reasoningEffort, dataClassifications: input.dataClassifications, budget, currentStep: 0, toolCallCount: 0, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, estimatedCost: 0 }, request: input.request, signal: input.signal, tags: input.tags, onFinished: input.onFinished });
 }
@@ -271,6 +273,7 @@ export async function resumeInteractiveAiAgentStream(input: {
   onFinished?: (result: AiAgentCompletion) => Promise<void> | void;
 }) {
   const planCode = await resolvePlanCode(input.userId, input.organizationId, input.contextCode);
-  const budget = resolveAiAgentBudget({ planCode, requested: input.persistedBudget, dataClassifications: input.dataClassifications });
+  const platformPolicy = await getAiPlatformPolicy();
+  const budget = resolveAiAgentBudget({ planCode, requested: input.persistedBudget, dataClassifications: input.dataClassifications, runtimeCeilings: platformPolicy.agentCeilings[planCode] });
   return createAgentLoopStream({ runId: input.runId, session: input.session, userId: input.userId, organizationId: input.organizationId, sourceConversationId: input.sourceConversationId || null, contextCode: input.contextCode, locale: input.locale, messages: input.messages, instructions: input.instructions, taskType: input.taskType, assistantCode: input.assistantCode, requestedModel: input.requestedModel, dataClassifications: input.dataClassifications, budget, currentStep: input.currentStep, toolCallCount: input.toolCallCount, usage: input.usage, activeDurationMs: input.activeDurationMs, request: input.request, signal: input.signal, tags: input.tags, onFinished: input.onFinished });
 }

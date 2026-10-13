@@ -45,8 +45,18 @@ function intersectModes(requested: AiToolMode[] | undefined, allowed: AiToolMode
   return allowed.filter((mode) => !requestedSet || requestedSet.has(mode));
 }
 
-export function resolveAiAgentBudget(input: { planCode: SaasPlanCode; requested?: AiAgentBudgetRequest | null; dataClassifications: AiDataClassification[] }) {
-  const base = SERVER_LIMITS[input.planCode];
+export function resolveAiAgentBudget(input: { planCode: SaasPlanCode; requested?: AiAgentBudgetRequest | null; dataClassifications: AiDataClassification[]; runtimeCeilings?: AiAgentBudgetRequest | null }) {
+  const hardLimit = SERVER_LIMITS[input.planCode];
+  const override = input.runtimeCeilings;
+  const base = {
+    ...hardLimit,
+    maxSteps: Math.min(hardLimit.maxSteps, override?.maxSteps ?? hardLimit.maxSteps),
+    maxToolCalls: Math.min(hardLimit.maxToolCalls, override?.maxToolCalls ?? hardLimit.maxToolCalls),
+    maxTokens: Math.min(hardLimit.maxTokens, override?.maxTokens ?? hardLimit.maxTokens),
+    maxEstimatedCost: Math.min(hardLimit.maxEstimatedCost, override?.maxEstimatedCost ?? hardLimit.maxEstimatedCost),
+    maxDurationMs: Math.min(hardLimit.maxDurationMs, override?.maxDurationMs ?? hardLimit.maxDurationMs),
+  };
+
   const sensitive = containsSensitiveAgentDomain(input.dataClassifications);
   const serverModes = sensitive ? base.allowedToolModes.filter((mode) => mode === "READ" || mode === "PREPARE") : base.allowedToolModes;
   const requestedCodesSupplied = input.requested?.allowedToolCodes !== undefined;

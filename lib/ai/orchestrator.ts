@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { buildApplicationInterfaceContext } from "@/lib/ai/application-interface-context";
 import { getAiModelDefinition, getAiProviderDefinition, listAvailableAiModels } from "@/lib/ai/catalog";
+import { getAiPlatformPolicy } from "@/lib/ai/platform-runtime-policy";
 import { estimateAiCost } from "@/lib/ai/costs";
 import { acquireAiConcurrencyLease, releaseAiConcurrencyLease, withAiConcurrencyLease, type AiConcurrencyLease } from "@/lib/ai/concurrency";
 import { AiProviderError, toAiReasonCode } from "@/lib/ai/errors";
@@ -26,6 +27,7 @@ type RankedCandidate = {
 };
 
 async function rankCandidates(request: AiRouteRequest): Promise<RankedCandidate[]> {
+  const runtimePolicy = await getAiPlatformPolicy();
   const available = listAvailableAiModels({
     context: request.context,
     locale: request.locale,
@@ -35,7 +37,7 @@ async function rankCandidates(request: AiRouteRequest): Promise<RankedCandidate[
     requiredCapabilities: request.requiredCapabilities,
     maximumContextTokens: request.maximumContextTokens,
     allowSensitiveExternalModel: request.policyFlags?.allowSensitiveExternalModel,
-  });
+  }).filter((model) => !runtimePolicy.disabledModelCodes.includes(model.code) && !runtimePolicy.disabledProviderCodes.includes(model.providerCode));
   const requested = getAiModelDefinition(request.requestedModel);
 
   if (request.requestedModel) {

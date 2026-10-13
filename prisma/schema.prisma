@@ -7390,3 +7390,13 @@ model ManualSubscriptionPayment {
   @@index([organizationId, status, requestedAt])
   @@index([validatorUserId, status, requestedAt])
 }
+
+model AiPlatformRuntimePolicy {
+  id                    String   @id @default("global")
+  revision              Int      @default(1)
+  disabledProviderCodes Json     @default("[]")
+  disabledModelCodes    Json     @default("[]")
+  agentCeilings         Json     @default("{}")
+  updatedByUserId       String?
+  updatedAt             DateTime @updatedAt
+}

@@ -5,6 +5,8 @@ import { BadgePercent, BarChart3, Bot, BriefcaseBusiness, Building2, Code2, Cred
 import { PaymentStatus, TicketPriority, TicketStatus, UserRole, UserStatus } from "@prisma/client";
 import { AdminAccessPanel } from "@/components/admin/admin-access-panel";
 import { ConsoleAiOverview } from "@/components/admin/console-ai-overview";
+import { ConsoleAiConfigurationPanel } from "@/components/admin/console-ai-configuration-panel";
+import { ConsoleAiPolicyManager } from "@/components/admin/console-ai-policy-manager";
 import { AdminAuditTables } from "@/components/admin/admin-audit-tables";
 import { AdminBillingSubscriptions } from "@/components/admin/admin-billing-subscriptions";
 import { ManualSubscriptionPaymentsAdmin } from "@/components/admin/manual-subscription-payments-admin";
@@ -42,6 +44,7 @@ import { getSession, requireUser } from "@/lib/auth";
 import { canAccessAdminSection } from "@/lib/business-roles";
 import { getConsoleAuditDataset } from "@/lib/console/console-audit";
 import { getConsoleAiDataset } from "@/lib/console/console-ai";
+import { getConsoleAiConfiguration } from "@/lib/console/console-ai-configuration";
 import { getConsoleBillingDataset } from "@/lib/console/console-billing";
 import { getConsoleAccessDecision, CONSOLE_CAPABILITIES, type ConsoleCapability } from "@/lib/console/console-capabilities";
 import { getConsoleInternalModulesDataset } from "@/lib/console/console-internal-modules";
@@ -154,7 +157,8 @@ export async function DtscConsolePage({ forcedSection, searchParams }: { forcedS
     // The section is already guarded by CONSOLE_AI_READ and DTSC_INTERNAL.
     // This service contains only global, aggregated operational metadata.
     const snapshot = await getConsoleAiDataset({ from: period.start, to: new Date(period.end.getTime() + 1) });
-    content = <ConsoleAiOverview data={snapshot} locale={locale} days={period.days} />;
+    const configuration = await getConsoleAiConfiguration();
+    content = <div className="min-w-0 space-y-5"><ConsoleAiOverview data={snapshot} locale={locale} days={period.days} /><Accordion><AccordionItem title={locale === "en" ? "Models, providers and budgets" : "Modèles, fournisseurs et budgets"}><div className="space-y-4"><ConsoleAiConfigurationPanel data={configuration} locale={locale} /><ConsoleAiPolicyManager initialPolicy={configuration.policy} providerCodes={configuration.providers.map((provider) => provider.code)} modelCodes={configuration.models.map((model) => model.code)} canManage={canManage} locale={locale} /></div></AccordionItem></Accordion></div>;
   } else if (activeSection === "platform-settings") {
     const flags = await prisma.featureFlag.findMany({ orderBy: [{ environment: "asc" }, { code: "asc" }], take: 100 });
     content = <div className="space-y-5"><Accordion><AccordionItem title={t("console.sections.platform-settings.label")} defaultOpen><AdminSettingsPanel canEdit={canManage} settings={{ defaultDailyMessageLimit: settings.defaultDailyMessageLimit, defaultDailyTokenLimit: settings.defaultDailyTokenLimit, chatbotEnabled: settings.chatbotEnabled, publicAgentEnabled: settings.publicAgentEnabled, allowNonClientPublicationDrafts: settings.allowNonClientPublicationDrafts, maintenanceMode: settings.maintenanceMode, supportAutoCloseDays: settings.supportAutoCloseDays, allowClientAnnouncements: settings.allowClientAnnouncements, commentEditWindowMinutes: settings.commentEditWindowMinutes, notificationRetentionDays: settings.notificationRetentionDays, signUpOtpEnabled: settings.signUpOtpEnabled, signUpOtpExpirationMinutes: settings.signUpOtpExpirationMinutes }} /></AccordionItem></Accordion><FeatureFlagManager flags={toJsonSafe(flags)} canManage={canManage} locale={locale} /></div>;
