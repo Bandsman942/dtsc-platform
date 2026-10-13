@@ -13,17 +13,19 @@ type LegalChart = {
   items: Array<{ label: string; value: number }>;
 };
 
-export function LegalDashboardSummary({ metrics, charts }: { metrics: LegalMetric[]; charts: LegalChart[] }) {
+export function LegalDashboardSummary({ metrics, charts, embedded = false }: { metrics: LegalMetric[]; charts: LegalChart[]; embedded?: boolean }) {
   const maxChartValue = Math.max(1, ...charts.flatMap((chart) => chart.items.map((item) => item.value)));
 
   return (
     <ModuleWorkspace>
+      {!embedded ? (
       <ModuleHeader
         eyebrow="Tableau de bord juridique"
         title="Vue LA consolidée"
         count={`${metrics.length} indicateur${metrics.length > 1 ? "s" : ""}`}
         description="Suivi des dossiers, contrats, risques, documents officiels, litiges et demandes juridiques avec alertes CEO sur les points critiques."
       />
+      ) : null}
 
       <ModuleMetrics label="Indicateurs juridiques">
         {metrics.map((metric) => <ModuleMetric key={metric.label} label={metric.label} value={metric.value} hint={metric.detail} />)}

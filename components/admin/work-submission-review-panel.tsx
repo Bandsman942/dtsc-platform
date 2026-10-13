@@ -71,7 +71,7 @@ type Submission = {
 
 type ReviewDecision = "APPROVED" | "CHANGES_REQUESTED" | "REJECTED";
 
-export function WorkSubmissionReviewPanel({ reviewerRole, locale }: { reviewerRole: "COO" | "CEO"; locale?: string | null }) {
+export function WorkSubmissionReviewPanel({ reviewerRole, locale, embedded = false }: { reviewerRole: "COO" | "CEO"; locale?: string | null; embedded?: boolean }) {
   const t = useCallback((key: string) => translate(locale, `workPrestations.${key}`), [locale]);
   const endpoint = reviewerRole === "COO" ? "/api/admin/coo/work-submissions" : "/api/admin/ceo/work-submissions";
   const [submissions, setSubmissions] = useState<Submission[]>([]);
@@ -145,12 +145,14 @@ export function WorkSubmissionReviewPanel({ reviewerRole, locale }: { reviewerRo
 
   return (
     <ModuleWorkspace>
+      {!embedded ? (
       <ModuleHeader
         eyebrow={reviewerRole === "COO" ? "COO" : "CEO"}
         title={t("reviewTitle")}
         count={`${filtered.length}/${submissions.length}`}
         description={reviewerRole === "COO" ? t("reviewDescriptionCoo") : t("reviewDescriptionCeo")}
       />
+      ) : null}
       <ModuleMetrics label={t("reviewMetrics")}>
         <ModuleMetric label={t("queueSubmitted")} value={pendingCount} />
         <ModuleMetric label={t("queueChanges")} value={changesCount} />

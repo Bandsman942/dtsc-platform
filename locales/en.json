@@ -999,6 +999,20 @@
     "exportApprovalRequired": "Approval is required for this sensitive export."
   },
   "console": {
+    "internalSections": {
+      "navigation": "Navigate department activities",
+      "payroll": "Operational payroll",
+      "invoices": "HR and finance invoices",
+      "operations": "Operations and records",
+      "supplyChain": "Procurement, inventory and logistics",
+      "payrollApprovals": "Payroll approval",
+      "workApprovals": "Work submission approval",
+      "executive": "Executive indicators",
+      "projects": "Projects and deliverables",
+      "technology": "Technical projects and quality",
+      "legalOverview": "Legal dashboard",
+      "legalOperations": "Cases, contracts and compliance"
+    },
     "detailSections": {
       "jumpNav": "Jump to a subsection",
       "supportIndicators": "Support indicators",

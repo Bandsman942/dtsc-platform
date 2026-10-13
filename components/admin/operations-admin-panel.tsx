@@ -55,6 +55,7 @@ export function OperationsAdminPanel({
   playbook,
   datasets,
   canEdit,
+  embedded = false,
 }: {
   eyebrow: string;
   title: string;
@@ -62,6 +63,7 @@ export function OperationsAdminPanel({
   playbook: string[];
   datasets: OperationDataset[];
   canEdit: boolean;
+  embedded?: boolean;
 }) {
   const [itemsByDataset, setItemsByDataset] = useState(() =>
     Object.fromEntries(datasets.map((dataset) => [dataset.id, dataset.records]))
@@ -185,12 +187,14 @@ export function OperationsAdminPanel({
 
   return (
     <ModuleWorkspace>
+      {!embedded ? (
       <ModuleHeader
         eyebrow={eyebrow}
         title={title}
         count={`${totals.records} élément${totals.records > 1 ? "s" : ""}`}
         description={description}
       />
+      ) : null}
 
       <ModuleMetrics label={`Indicateurs ${title}`}>
         <ModuleMetric label={isCooPanel ? "Éléments COO suivis" : "Dossiers suivis"} value={totals.records} />
