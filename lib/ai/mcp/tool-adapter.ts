@@ -4,6 +4,7 @@ import { authorizeMcpRequiredPermissions } from "@/lib/ai/mcp/authorization";
 import { getMcpToolBindingByDtscCode } from "@/lib/ai/mcp/bindings";
 import { discoverAndPersistMcpServer, getDiscoveredMcpTool } from "@/lib/ai/mcp/discovery";
 import { getMcpServerDefinition } from "@/lib/ai/mcp/registry";
+import { isApprovedMcpReadToolName } from "@/lib/ai/mcp/google-read-tool-policy";
 import { buildMcpParameterHeaders, hashMcpSchema } from "@/lib/ai/mcp/schema";
 import { authorizeMcpDataBoundary } from "@/lib/ai/mcp/security";
 import { callMcpJsonRpc } from "@/lib/ai/mcp/transport";
@@ -48,6 +49,7 @@ export async function executeMcpBoundTool(input: { dtscToolCode: string; args: u
 
   try {
     if (binding.mode !== "READ" || binding.requiresConfirmation) throw new Error("MCP_AI07_READ_ONLY_POLICY");
+    if (!isApprovedMcpReadToolName(server.code, binding.remoteToolName)) throw new Error("MCP_READ_TOOL_NOT_APPROVED");
     const userAuth = resolveMcpUserAuthScope({ server, context: input.context });
 
     const limiter = await rateLimit(`ai-mcp:${input.context.userId}:${server.code}`, 60, 60 * 1000);
