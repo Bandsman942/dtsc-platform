@@ -72,7 +72,7 @@ export default async function ConnectedAiAppsPage() {
 
         {!organizationId ? (
           <section className="mb-5 rounded-2xl border border-amber-500/25 bg-amber-500/5 p-4 text-sm leading-6 text-dtsc-muted">
-            {en ? "Select an active organization before connecting an application. Connections are isolated per user and organization." : "Sélectionnez une organisation active avant de connecter une application. Les connexions sont isolées par utilisateur et par organisation."}
+            {en ? "You are connecting as an individual. Your personal authorizations are separate from every organization. Some apps require an active organization." : "Vous connectez vos applications à titre personnel. Vos autorisations restent distinctes de celles de vos entreprises. Certaines applications exigent une organisation active."}
           </section>
         ) : null}
 
@@ -108,6 +108,7 @@ export default async function ConnectedAiAppsPage() {
             const reauthorizationRequired = app.availability === "REAUTHORIZATION_REQUIRED";
             const ready = app.availability === "READY_TO_CONNECT";
             const setupRequired = app.availability === "PLATFORM_SETUP_REQUIRED";
+            const organizationRequired = app.availability === "ORGANIZATION_REQUIRED";
             const certified = app.availability !== "REQUIRES_DTSC_CERTIFICATION";
             const category = CATEGORY_LABELS[app.category]?.[en ? "en" : "fr"] || app.category;
             const permissions = [...new Set(app.scopes.map((scope) => humanPermission(scope, en)))];
@@ -118,9 +119,9 @@ export default async function ConnectedAiAppsPage() {
                     <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-dtsc-page text-dtsc-ink"><AppIcon code={app.code} /></span>
                     <div className="min-w-0"><h2 className="truncate text-base font-black text-dtsc-ink">{app.name}</h2><p className="text-xs font-bold text-dtsc-muted">{category}</p></div>
                   </div>
-                  <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[0.68rem] font-black ${connected ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : reauthorizationRequired ? "bg-amber-500/10 text-amber-700 dark:text-amber-300" : ready ? "bg-cyan-500/10 text-cyan-700 dark:text-cyan-300" : setupRequired ? "bg-blue-500/10 text-blue-700 dark:text-blue-200" : "bg-amber-500/10 text-amber-700 dark:text-amber-300"}`}>
+                  <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[0.68rem] font-black ${connected ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : reauthorizationRequired ? "bg-amber-500/10 text-amber-700 dark:text-amber-300" : ready ? "bg-cyan-500/10 text-cyan-700 dark:text-cyan-300" : organizationRequired ? "bg-amber-500/10 text-amber-700 dark:text-amber-300" : setupRequired ? "bg-blue-500/10 text-blue-700 dark:text-blue-200" : "bg-amber-500/10 text-amber-700 dark:text-amber-300"}`}>
                     {connected ? <CheckCircle2 className="h-3.5 w-3.5" /> : reauthorizationRequired ? <RefreshCw className="h-3.5 w-3.5" /> : ready ? <Link2 className="h-3.5 w-3.5" /> : setupRequired ? <LockKeyhole className="h-3.5 w-3.5" /> : <CircleOff className="h-3.5 w-3.5" />}
-                    {connected ? (en ? "Connected" : "Connecté") : reauthorizationRequired ? (en ? "Authorization update" : "Autorisation à renouveler") : ready ? (en ? "Ready" : "Prêt") : setupRequired ? (en ? "DTSC setup" : "Configuration DTSC") : certified ? (en ? "DTSC certified" : "Certifié DTSC") : (en ? "Not enabled" : "Non activé")}
+                    {connected ? (en ? "Connected" : "Connecté") : reauthorizationRequired ? (en ? "Authorization update" : "Autorisation à renouveler") : ready ? (en ? "Ready" : "Prêt") : organizationRequired ? (en ? "Organization required" : "Organisation requise") : setupRequired ? (en ? "DTSC setup" : "Configuration DTSC") : certified ? (en ? "DTSC certified" : "Certifié DTSC") : (en ? "Not enabled" : "Non activé")}
                   </span>
                 </div>
 
@@ -142,7 +143,7 @@ export default async function ConnectedAiAppsPage() {
                         <Unplug className="h-4 w-4" /> {en ? "Disconnect" : "Déconnecter"}
                       </button>
                     </form>
-                  ) : reauthorizationRequired && app.serverCode && organizationId ? (
+                  ) : reauthorizationRequired && app.serverCode ? (
                     <div className="grid gap-2">
                       <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 text-xs leading-5 text-dtsc-muted">
                         <strong className="block text-dtsc-ink">{en ? "Permissions have changed" : "Les autorisations ont évolué"}</strong>
@@ -155,7 +156,7 @@ export default async function ConnectedAiAppsPage() {
                         </button>
                       </form>
                     </div>
-                  ) : ready && app.serverCode && organizationId ? (
+                  ) : ready && app.serverCode ? (
                     <div className="grid gap-2">
                       <form action="/api/ai/apps/oauth/connect" method="post">
                         <input type="hidden" name="serverCode" value={app.serverCode} />
@@ -164,6 +165,10 @@ export default async function ConnectedAiAppsPage() {
                         </button>
                       </form>
                       <p className="text-center text-[0.68rem] leading-5 text-dtsc-muted">{en ? "You will authorize access directly with the provider, then return here automatically." : "Vous autoriserez l’accès directement chez le fournisseur, puis reviendrez ici automatiquement."}</p>
+                    </div>
+                  ) : organizationRequired ? (
+                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 text-xs leading-5 text-dtsc-muted">
+                      {en ? "Switch to an authorized organization to connect this tenant-only application." : "Sélectionnez une organisation autorisée pour connecter cette application réservée aux entreprises."}
                     </div>
                   ) : setupRequired ? (
                     <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 px-3 py-2.5 text-xs leading-5 text-dtsc-muted">

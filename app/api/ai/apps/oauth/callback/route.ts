@@ -41,7 +41,7 @@ export async function GET(request: Request) {
   }
 
   const activeOrganizationId = getActiveOrganizationId(session);
-  if (activeOrganizationId !== savedState.organizationId || !await requireActiveOrganizationMembership(session, savedState.organizationId)) {
+  if (activeOrganizationId !== savedState.organizationId || (savedState.organizationId !== null && !await requireActiveOrganizationMembership(session, savedState.organizationId))) {
     await writeAuditLog({ userId: session.userId, organizationId: savedState.organizationId, request, action: "MCP_OAUTH_CALLBACK", entity: "MCP_CONNECTION", entityId: savedState.serverCode, result: "DENIED", reasonCode: "MCP_OAUTH_TENANT_CONTEXT_CHANGED", riskLevel: "HIGH" });
     return NextResponse.redirect(appsRedirect("organization-changed"), 303);
   }
@@ -50,6 +50,16 @@ export async function GET(request: Request) {
   if (!server || server.status !== "CERTIFIED" || server.authMode !== "OAUTH_USER") {
     await writeAuditLog({ userId: session.userId, organizationId: savedState.organizationId, request, action: "MCP_OAUTH_CALLBACK", entity: "MCP_CONNECTION", entityId: savedState.serverCode, result: "DENIED", reasonCode: "MCP_OAUTH_SERVER_NOT_CERTIFIED", riskLevel: "HIGH" });
     return NextResponse.redirect(appsRedirect("not-available"), 303);
+  }
+
+  // A PERSONAL OAuth state can only complete against a global-scope server.
+  // Tenant-only configurations must not be upgraded through a personal grant.
+  const context = session.activeContext || "GLOBAL_CLIENT";
+  if (!server.contexts.includes(context)
+    || (savedState.organizationId === null && context !== "GLOBAL_CLIENT" && context !== "COMMUNITY")
+    || (server.organizationScope === "TENANT" && savedState.organizationId === null)) {
+    await writeAuditLog({ userId: session.userId, organizationId: savedState.organizationId, request, action: "MCP_OAUTH_CALLBACK", entity: "MCP_CONNECTION", entityId: server.code, result: "DENIED", reasonCode: "MCP_OAUTH_CONTEXT_FORBIDDEN", riskLevel: "HIGH" });
+    return NextResponse.redirect(appsRedirect("context-changed"), 303);
   }
 
   if (providerError || !code) {

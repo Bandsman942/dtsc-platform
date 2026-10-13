@@ -6,7 +6,7 @@ import { getMcpOAuthGrantedScopes } from "@/lib/ai/mcp/oauth-store";
 export async function getAuthorizedMcpOAuthAccessToken(input: {
   server: McpServerDefinition;
   userId: string;
-  organizationId: string;
+  organizationId: string | null;
 }) {
   const grantedScopes = await getMcpOAuthGrantedScopes({
     userId: input.userId,

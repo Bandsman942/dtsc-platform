@@ -20,11 +20,18 @@ export async function POST(request: Request) {
   if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
 
   const organizationId = getActiveOrganizationId(session);
-  if (!organizationId || !await requireActiveOrganizationMembership(session, organizationId)) return NextResponse.json({ error: "Contexte entreprise requis." }, { status: 403 });
+  if (organizationId && !await requireActiveOrganizationMembership(session, organizationId)) return NextResponse.json({ error: "Contexte entreprise invalide." }, { status: 403 });
   const form = await request.formData();
   const serverCode = String(form.get("serverCode") || "").trim();
   const server = getMcpServerDefinition(serverCode);
   if (!server || server.status !== "CERTIFIED" || server.authMode !== "OAUTH_USER") return NextResponse.json({ error: "Application indisponible." }, { status: 400 });
+
+  const context = session.activeContext || "GLOBAL_CLIENT";
+  if (!server.contexts.includes(context)
+    || (!organizationId && context !== "GLOBAL_CLIENT" && context !== "COMMUNITY")
+    || (server.organizationScope === "TENANT" && !organizationId)) {
+    return NextResponse.json({ error: "Application indisponible dans ce contexte.", reasonCode: "MCP_OAUTH_CONTEXT_FORBIDDEN" }, { status: 403 });
+  }
 
   const connection = await getMcpOAuthConnection({ userId: session.userId, organizationId, serverCode: server.code });
   if (!connection) return NextResponse.redirect(new URL("/ai/apps?oauth=disconnected", request.url), 303);

@@ -252,7 +252,7 @@ export async function exchangeMcpOAuthCode(input: {
 export async function getValidMcpOAuthAccessToken(input: {
   server: McpServerDefinition;
   userId: string;
-  organizationId: string;
+  organizationId: string | null;
 }) {
   const connection = await getMcpOAuthConnection({
     userId: input.userId,
