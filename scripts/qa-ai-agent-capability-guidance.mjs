@@ -16,6 +16,7 @@ const agentStatus = read("app/api/ai/agent/runs/[id]/route.ts");
 const pendingApi = read("app/api/ai/tools/pending/route.ts");
 const activeAgentApi = read("app/api/ai/agent/runs/active/route.ts");
 const agentDock = read("components/chat/ai-agent-run-dock.tsx");
+const agentPersistence = read("lib/ai/agent/persistence.ts");
 
 assert(registry.includes('code: "CONNECTED_APPS_STATUS_READ"') && registry.includes('mode: "READ"'), "Connected-app status must use certified READ tool definition");
 assert(registry.includes('allowedAssistantCodes: ["DTSC_GENERAL", "ENTERPRISE_GENERAL"]'), "Only named assistants may request connected-app metadata");
@@ -51,5 +52,9 @@ assert(activeAgentApi.includes('"Cache-Control": "private, no-store"') && agentD
 assert(pendingApi.includes('toolCode !== "SUPPORT_TICKET_CREATE"') && pendingApi.includes('toolCode !== "DTSC_CONTACT_EMAIL_SEND"') && pendingApi.includes('message,'), "Only supported actions expose complete, stored confirmation previews");
 assert(agentDock.includes("canApprovePreview") && agentDock.includes("disabled={confirmBusy || !canApprovePreview}"), "Unknown/incomplete mutation previews cannot be blindly approved");
 assert(agentDock.includes("confirmation.preview.message") && agentDock.includes("whitespace-pre-wrap break-words"), "Human approval must display full action text, not only a subject");
+assert(agentPersistence.includes('return prisma.$transaction(async (tx) => {') && agentPersistence.includes('tx.aiToolConfirmation.updateMany({'), "Rejecting an Agent action must atomically invalidate its PENDING confirmation");
+assert(agentPersistence.includes('status: "CANCELLED", argumentsJson: Prisma.DbNull') && agentPersistence.includes('pendingConfirmationId: true'), "Rejected approval payload must be invalidated and its arguments purged");
+assert(agentPersistence.includes('where: { ...scopedWhere, status: run.status }') && agentPersistence.includes('organizationId: input.organizationId || null'), "Cancellation must be race-guarded and isolated to the current organization");
+
 assert(agentDock.includes("humanToolLabel(step.toolCode, en)") && agentDock.includes("humanToolLabel(confirmation.toolCode, en)") && !agentDock.includes("${confirmation.toolCode}"), "Human-facing status must not reveal raw tool codes");
 console.log("PASS AI-AGENT-01 initial tool: live scoped product status, canonical READ gateway, no MCP operational claims");
