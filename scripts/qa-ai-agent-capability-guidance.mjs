@@ -12,6 +12,7 @@ const agentTools = read("lib/ai/agent/tools.ts");
 const globalAgent = read("app/api/chat/agent/route.ts");
 const enterpriseAgent = read("app/api/enterprise/ai/agent/route.ts");
 const agentStatus = read("app/api/ai/agent/runs/[id]/route.ts");
+const pendingApi = read("app/api/ai/tools/pending/route.ts");
 const agentDock = read("components/chat/ai-agent-run-dock.tsx");
 
 assert(registry.includes('code: "CONNECTED_APPS_STATUS_READ"') && registry.includes('mode: "READ"'), "Connected-app status must use certified READ tool definition");
@@ -33,4 +34,9 @@ assert(agentDock.includes("Une action externe déjà effectuée n'est jamais rej
 assert(agentDock.includes("Vérifier mes applications") && agentDock.includes('href="/ai/apps"'), "Agent provides contextual app setup and status affordances");
 assert(agentDock.includes("setPrompt(en ?") && !agentDock.includes("void startAgent()}/>"), "Suggested app check must populate intent, never execute agent automatically");
 assert(agentDock.includes("CONFIRMATION_REQUIRED") || agentDock.includes('snapshot?.status === "READY_TO_RESUME"'), "Structured Agent confirmation and resume remain visible");
+assert(pendingApi.includes('session.userId') && pendingApi.includes('session.activeOrganizationId') && pendingApi.includes('"Cache-Control": "private, no-store"'), "Confirmation preview must be scoped to the owner and uncached");
+assert(pendingApi.includes('toolCode !== "SUPPORT_TICKET_CREATE"') && pendingApi.includes('toolCode !== "DTSC_CONTACT_EMAIL_SEND"') && pendingApi.includes('message,'), "Only supported actions expose complete, stored confirmation previews");
+assert(agentDock.includes("canApprovePreview") && agentDock.includes("disabled={confirmBusy || !canApprovePreview}"), "Unknown/incomplete mutation previews cannot be blindly approved");
+assert(agentDock.includes("confirmation.preview.message") && agentDock.includes("whitespace-pre-wrap break-words"), "Human approval must display full action text, not only a subject");
+assert(agentDock.includes("humanToolLabel(step.toolCode, en)") && agentDock.includes("humanToolLabel(confirmation.toolCode, en)") && !agentDock.includes("${confirmation.toolCode}"), "Human-facing status must not reveal raw tool codes");
 console.log("PASS AI-AGENT-01 initial tool: live scoped product status, canonical READ gateway, no MCP operational claims");
