@@ -54,8 +54,8 @@ export async function getConsoleAiKnowledgeSecurity(input: { from: Date; to: Dat
     }),
     prisma.knowledgeDocument.count({ where: { ...where, indexVersion: "legacy-openai-1536-v1" } }),
     prisma.enterpriseAiKnowledgeSource.count({ where: { ...where, archivedAt: null, indexVersion: "legacy-openai-1536-v1" } }),
-    prisma.knowledgeDocument.findMany({ where: { ...where, indexVersion: "legacy-openai-1536-v1", extractedText: { not: null } }, orderBy: { updatedAt: "asc" }, take: 25, select: { id: true } }),
-    prisma.enterpriseAiKnowledgeSource.findMany({ where: { ...where, archivedAt: null, indexVersion: "legacy-openai-1536-v1", extractedText: { not: null } }, orderBy: { updatedAt: "asc" }, take: 25, select: { id: true } }),
+    prisma.knowledgeDocument.count({ where: { ...where, indexVersion: "legacy-openai-1536-v1", extractedText: { not: null } } }),
+    prisma.enterpriseAiKnowledgeSource.count({ where: { ...where, archivedAt: null, indexVersion: "legacy-openai-1536-v1", extractedText: { not: null } } }),
   ]);
 
   const statusCounts = (rows: Array<{ status: string; _count: { _all: number } }>) => {
@@ -86,7 +86,7 @@ export async function getConsoleAiKnowledgeSecurity(input: { from: Date; to: Dat
         }
       : null,
     reindexPreview: personalReindex.status === "fulfilled" && enterpriseReindex.status === "fulfilled"
-      ? { maxPerDomain: 25, personalCandidates: personalReindex.value.length, enterpriseCandidates: enterpriseReindex.value.length, executable: false }
+      ? { maxPerDomain: 25, personalCandidates: Math.min(25, personalReindex.value), enterpriseCandidates: Math.min(25, enterpriseReindex.value), executable: false }
       : null,
     modelFailures: failedModels.status === "fulfilled"
       ? failedModels.value.map((r) => ({ reasonCode: safeReasonCode(r.reasonCode), status: r.status, calls: r._count._all }))
