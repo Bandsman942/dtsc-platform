@@ -3,7 +3,7 @@
 ### Première tranche réalisée
 - L'Administration DTSC consulte les nombres de sources documentaires personnelles et d'entreprises, par statut READY/PROCESSING/FAILED et autres statuts, sur la période déjà sélectionnée.
 - Les erreurs d'appels modèles `AiModelCall` et refus d'outils `AiToolExecution` sont présentés en événements agrégés bornés, avec leurs motifs, sans contenu des messages ou données clients.
-- Le panneau signale explicitement le **taux de cache CAG non instrumenté** ; les alertes sont évaluées depuis les règles effectivement publiées, sans simuler une santé « OK ».
+- Dans la tranche initiale, le cache CAG ne disposait pas de mesure dans la Console. La tranche complémentaire mesure désormais les hits/misses réellement observés depuis les audits du cache **local par instance** ; les alertes restent évaluées uniquement depuis les règles publiées, sans simuler une santé « OK ».
 - Consultation dans le Centre IA déjà protégé par `CONSOLE_AI_READ`, FR/EN et tableaux mobiles.
 
 ### Restant à réaliser dans le hotfix #804
@@ -29,7 +29,7 @@ La répartition legacy / index versionné est maintenant affichée. La réindexa
 
 ### Observabilité documentaire supplémentaire
 - La Console lit désormais seulement des nombres agrégés de `EnterpriseAiMessage.citationsJson` (réponses contenant des références jointes et nombre de candidats), avec filtre temporel et exclusion des messages supprimés ; aucun contenu privé ni identifiant source n'est renvoyé au navigateur.
-- Cet indicateur mesure les pièces de retrieval **jointes** et **non les citations effectivement utilisées** dans le texte. La preuve de citation effective et le taux de cache CAG restent `NOT_INSTRUMENTED`, non simulés.
+- Cet indicateur mesure les pièces de retrieval **jointes** et **non les citations effectivement utilisées** dans le texte. La preuve de citation effective reste `NOT_INSTRUMENTED`. La réutilisation CAG est mesurée séparément par observations journalisées de cache local, sans simuler un taux global.
 - Traduction FR/EN des statuts documentaires, du vocabulaire des tableaux et clarification du prévisualiseur de réindexation en lecture seule.
 
 
