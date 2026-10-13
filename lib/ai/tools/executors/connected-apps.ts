@@ -1,4 +1,5 @@
 import { listConnectedAppsForUser } from "@/lib/ai/mcp/app-catalog";
+import { getConnectedAppGuidance } from "@/lib/ai/mcp/product-guidance";
 import type { AiToolExecutor } from "@/lib/ai/tools/types";
 
 /**
@@ -16,9 +17,9 @@ export const CONNECTED_APP_AI_TOOL_EXECUTORS: Record<string, AiToolExecutor> = {
       throw new Error("MCP_APP_SCOPE_DENIED");
     }
     if (personal && context.organizationId) throw new Error("MCP_APP_SCOPE_DENIED");
+    const locale = context.request?.headers.get("accept-language")?.toLowerCase().startsWith("en") ? "en" : "fr";
     const apps = await listConnectedAppsForUser({
-      userId: context.session.userId, organizationId,
-      locale: context.request?.headers.get("accept-language")?.toLowerCase().startsWith("en") ? "en" : "fr",
+      userId: context.session.userId, organizationId, locale,
     });
     return {
       path: "/ai/apps",
@@ -28,6 +29,7 @@ export const CONNECTED_APP_AI_TOOL_EXECUTORS: Record<string, AiToolExecutor> = {
         code: app.code,
         name: app.name,
         availability: app.availability,
+        ...getConnectedAppGuidance(app.availability, locale),
       })),
     };
   },
