@@ -720,6 +720,7 @@ model EnterpriseAiMessage {
   @@index([organizationId, conversationId, createdAt])
   @@index([organizationId, userId, createdAt])
   @@index([organizationId, conversationId, deletedAt])
+  @@index([role, deletedAt, createdAt])
 }
 
 model EnterpriseAiKnowledgeSource {
