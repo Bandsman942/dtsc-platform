@@ -13,7 +13,13 @@ export type ConsoleAiKnowledgeSecurity = {
   reindexPreview: { maxPerDomain: 25; personalCandidates: number; enterpriseCandidates: number; executable: false } | null;
   modelFailures: Array<{ reasonCode: string; status: string; calls: number }> | null;
   toolDenials: Array<{ reasonCode: string; executions: number }> | null;
-  cag: { status: "NOT_INSTRUMENTED"; source: "buildAiCagPack"; cacheHitRate: null };
+  cag: {
+    status: "MEASURED" | "NO_OBSERVATIONS" | "UNAVAILABLE";
+    source: "ApiLog.metadata.cagCacheHit";
+    cacheHitRate: number | null;
+    hits: number | null;
+    misses: number | null;
+  };
   citationProof: { status: "NOT_INSTRUMENTED"; certifiedUsageCount: null };
   citationAttachments: {
     assistantMessagesWithCandidates: number;
@@ -36,7 +42,7 @@ function safeReasonCode(value: string | null) {
 
 export async function getConsoleAiKnowledgeSecurity(input: { from: Date; to: Date }): Promise<ConsoleAiKnowledgeSecurity> {
   const where = { createdAt: { gte: input.from, lt: input.to } };
-  const [personal, enterprise, failedModels, deniedTools, personalLegacy, enterpriseLegacy, personalReindex, enterpriseReindex, citationAttachments] = await Promise.allSettled([
+  const [personal, enterprise, failedModels, deniedTools, personalLegacy, enterpriseLegacy, personalReindex, enterpriseReindex, citationAttachments, cagObservations] = await Promise.allSettled([
     prisma.knowledgeDocument.groupBy({
       by: ["status"], where,
       _count: { _all: true },
@@ -78,6 +84,19 @@ export async function getConsoleAiKnowledgeSecurity(input: { from: Date; to: Dat
       WHERE "createdAt" >= ${input.from} AND "createdAt" < ${input.to}
         AND "role" = 'assistant' AND "deletedAt" IS NULL
     `),
+    // The CAG builder already persists per-request boolean cacheHit in
+    // ApiLog metadata. Observe actual local-cache hits/misses, not an
+    // invented Redis/global hit rate. This reads no metadata values beyond
+    // the bool equality checks and projects aggregate counts only.
+    prisma.$queryRaw<Array<{ hits: number; misses: number }>>(Prisma.sql`
+      SELECT
+        COUNT(*) FILTER (WHERE "metadata"->>'cagCacheHit' = 'true')::int AS "hits",
+        COUNT(*) FILTER (WHERE "metadata"->>'cagCacheHit' = 'false')::int AS "misses"
+      FROM "ApiLog"
+      WHERE "path" IN ('/api/chat/v2', '/api/chat/agent', '/api/enterprise/ai/chat', '/api/enterprise/ai/agent')
+        AND "createdAt" >= ${input.from} AND "createdAt" < ${input.to}
+        AND jsonb_typeof("metadata"->'cagCacheHit') = 'boolean'
+    `),
   ]);
 
   const statusCounts = (rows: Array<{ status: string; _count: { _all: number } }>) => {
@@ -116,7 +135,20 @@ export async function getConsoleAiKnowledgeSecurity(input: { from: Date; to: Dat
     toolDenials: deniedTools.status === "fulfilled"
       ? deniedTools.value.map((r) => ({ reasonCode: safeReasonCode(r.reasonCode), executions: r._count._all }))
       : null,
-    cag: { status: "NOT_INSTRUMENTED", source: "buildAiCagPack", cacheHitRate: null },
+    cag: cagObservations.status !== "fulfilled"
+      ? { status: "UNAVAILABLE", source: "ApiLog.metadata.cagCacheHit", cacheHitRate: null, hits: null, misses: null }
+      : (() => {
+          const hits = cagObservations.value[0]?.hits ?? 0;
+          const misses = cagObservations.value[0]?.misses ?? 0;
+          const total = hits + misses;
+          return {
+            status: total > 0 ? "MEASURED" as const : "NO_OBSERVATIONS" as const,
+            source: "ApiLog.metadata.cagCacheHit" as const,
+            cacheHitRate: total > 0 ? Math.round((1000 * hits) / total) / 10 : null,
+            hits,
+            misses,
+          };
+        })(),
     citationProof: { status: "NOT_INSTRUMENTED", certifiedUsageCount: null },
     citationAttachments: citationAttachments.status === "fulfilled"
       ? {
