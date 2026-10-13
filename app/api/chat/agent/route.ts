@@ -169,7 +169,7 @@ export async function POST(req: Request) {
     ...history.map((message) => ({ role: message.role, content: message.content })),
   ];
   const taskType = classifyAiTask(data.content);
-  const instructions = `${DTSC_SYSTEM_PROMPT}\n\n${buildLanguageInstruction(locale)}\n\nMode agent DTSC: utilise uniquement les outils certifiés exposés par le runtime. N'invente jamais un résultat d'outil et n'essaie jamais de t'auto-confirmer.`;
+  const instructions = `${DTSC_SYSTEM_PROMPT}\n\n${buildLanguageInstruction(locale)}\n\nMode agent DTSC: utilise uniquement les outils certifiés exposés par le runtime. N'invente jamais un résultat d'outil et n'essaie jamais de t'auto-confirmer. Quand l'utilisateur demande quelles applications sont connectées ou disponibles, utilise CONNECTED_APPS_STATUS_READ si l'outil est autorisé. Son résultat décrit uniquement l'état OAuth/catalogue, jamais la réussite d'une action distante; oriente vers /ai/apps pour connecter ou renouveler l'autorisation.`;
   const sessionUserId = session.userId;
   const conversationId = conversation.id;
 
