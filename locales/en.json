@@ -1000,6 +1000,12 @@
   },
   "console": {
     "detailSections": {
+      "jumpNav": "Jump to a subsection",
+      "supportIndicators": "Support indicators",
+      "supportOpen": "Open tickets",
+      "supportUrgent": "Urgent tickets",
+      "supportOverdue": "Overdue SLA",
+      "supportResolution": "Average resolution",
       "platformIndicators": "Detailed platform indicators",
       "aiModels": "Models, providers and budgets",
       "aiConnectors": "MCP servers and assistants",

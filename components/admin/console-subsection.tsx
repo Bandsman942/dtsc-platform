@@ -4,9 +4,9 @@ import type { ReactNode } from "react";
 type JumpLink = { id: string; label: string };
 
 /** Accessible in-page links. All targets must be mounted in the current section. */
-export function ConsoleJumpLinks({ items }: { items: JumpLink[] }) {
+export function ConsoleJumpLinks({ items, label }: { items: JumpLink[]; label: string }) {
   return (
-    <nav data-console-jump-links aria-label="Navigation dans la section" className="flex min-w-0 flex-wrap gap-2 py-1">
+    <nav data-console-jump-links aria-label={label} className="flex min-w-0 flex-wrap gap-2 py-1">
       {items.map((item) => (
         <Link key={item.id} href={`#${item.id}`} className="inline-flex min-h-11 max-w-full items-center rounded-full border border-dtsc-border bg-dtsc-surface px-4 py-2 text-xs font-bold text-dtsc-blue transition hover:border-cyan-400 hover:bg-dtsc-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60">
           <span className="min-w-0 break-words">{item.label}</span>

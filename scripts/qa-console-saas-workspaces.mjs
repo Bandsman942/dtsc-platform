@@ -21,6 +21,8 @@ for (const lib of ["ConsoleAiConfigurationPanel", "ConsoleAiPolicyManager", "Con
 }
 assert.match(subsection, /scroll-mt-24/);
 assert.match(subsection, /<Link key=\{item.id\}/);
+assert.match(subsection, /aria-label=\{label\}/);
+assert.match(page, /<ModuleMetrics label=\{translate\(locale, "console.detailSections.supportIndicators"\)\}/);
 assert.match(subsection, /<section id=\{id\}/);
 const ids = [...page.matchAll(/<ConsoleSubsection id="([^"]+)"/g)].map((m) => m[1]);
 assert.equal(new Set(ids).size, ids.length, "subsection anchors must be unique per rendering branch");
