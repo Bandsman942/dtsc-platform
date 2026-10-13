@@ -6,6 +6,7 @@ import { discoverAndPersistMcpServer } from "@/lib/ai/mcp/discovery";
 import { getMcpServerDefinition } from "@/lib/ai/mcp/registry";
 import { authorizeMcpDataBoundary } from "@/lib/ai/mcp/security";
 import { callMcpJsonRpc } from "@/lib/ai/mcp/transport";
+import { resolveMcpUserAuthScope } from "@/lib/ai/mcp/user-scope";
 import type { McpDataClassification } from "@/lib/ai/mcp/types";
 import type { AiToolRuntimeContext } from "@/lib/ai/tools/types";
 import { rateLimit } from "@/lib/rate-limit";
@@ -59,6 +60,7 @@ export async function readMcpBoundResource(input: { resourceCode: string; contex
   if (!binding) throw new Error("MCP_RESOURCE_BINDING_NOT_ACTIVE");
   const server = getMcpServerDefinition(binding.serverCode);
   if (!server || server.status !== "CERTIFIED") throw new Error("MCP_SERVER_NOT_CERTIFIED");
+  const userAuth = resolveMcpUserAuthScope({ server, context: input.context });
   const activeContext = input.context.session.activeContext || "GLOBAL_CLIENT";
   if (!binding.contexts.includes(activeContext) || !server.contexts.includes(activeContext)) throw new Error("MCP_RESOURCE_CONTEXT_NOT_ALLOWED");
   if (server.organizationScope === "TENANT" && (activeContext !== "ORGANIZATION" || !input.context.organizationId || input.context.session.activeOrganizationId !== input.context.organizationId)) {
@@ -71,11 +73,6 @@ export async function readMcpBoundResource(input: { resourceCode: string; contex
   if (!permissionDecision.allowed) throw new Error(permissionDecision.reasonCode);
   const dataDecision = authorizeMcpDataBoundary({ server, classifications: effectiveClassifications(input.context) });
   if (!dataDecision.allowed) throw new Error(dataDecision.reasonCode);
-
-  const userAuth = server.authMode === "OAUTH_USER"
-    ? { userId: input.context.userId, organizationId: input.context.organizationId || "" }
-    : null;
-  if (server.authMode === "OAUTH_USER" && !userAuth?.organizationId) throw new Error("MCP_OAUTH_ORGANIZATION_CONTEXT_REQUIRED");
 
   const { snapshot } = await discoverAndPersistMcpServer(server, userAuth);
   if (!snapshot.resources.some((resource) => resource.uri === binding.remoteUri)) throw new Error("MCP_BOUND_RESOURCE_NOT_DISCOVERED");

@@ -40,6 +40,9 @@ const connectedAppsPage = read("app/ai/apps/page.tsx");
 const mcpTypes = read("lib/ai/mcp/types.ts");
 const mcpRegistry = read("lib/ai/mcp/registry.ts");
 const mcpTransport = read("lib/ai/mcp/transport.ts");
+const mcpUserScope = read("lib/ai/mcp/user-scope.ts");
+const mcpToolAdapter = read("lib/ai/mcp/tool-adapter.ts");
+const mcpResourceAdapter = read("lib/ai/mcp/resource-adapter.ts");
 const mcpOauth = read("lib/ai/mcp/oauth.ts");
 const mcpOauthAccess = read("lib/ai/mcp/oauth-access.ts");
 const mcpOauthScopes = read("lib/ai/mcp/oauth-scopes.ts");
@@ -178,6 +181,13 @@ assert(mcpConnectRoute.includes("isSameOriginRequest") && mcpConnectRoute.includ
 assert(mcpCallbackRoute.includes("consumeMcpOAuthState") && mcpCallbackRoute.includes("activeOrganizationId !== savedState.organizationId"), "OAuth callback must consume state once and reject tenant-context changes");
 assert(mcpDisconnectRoute.includes("revokeMcpOAuthConnection") && mcpDisconnectRoute.includes("localCredentialsDestroyed: true"), "OAuth disconnect must destroy the local encrypted credential even when remote revocation is unavailable");
 assert(mcpTransport.includes("getAuthorizedMcpOAuthAccessToken") && mcpTransport.includes("MCP_OAUTH_USER_CONTEXT_REQUIRED"), "MCP transport must resolve only scope-current user tokens with explicit user and tenant context");
+assert(mcpTransport.includes("organizationId: string | null") && mcpTransport.includes('input.server.organizationScope === "TENANT"') && mcpTransport.includes("MCP_OAUTH_ORGANIZATION_CONTEXT_REQUIRED"), "GLOBAL MCP OAuth must allow a personal null scope while TENANT servers refuse it");
+assert(mcpUserScope.includes('activeContext === "GLOBAL_CLIENT" || activeContext === "COMMUNITY"') && mcpUserScope.includes("MCP_PERSONAL_CONTEXT_REQUIRED"), "Personal OAuth scope must be bound to actual personal context");
+assert(mcpUserScope.includes('activeContext === "ORGANIZATION" || activeContext === "DTSC_INTERNAL"') && mcpUserScope.includes("activeOrganizationId !== organizationId"), "Enterprise/DTSC MCP tools must never fall back to personal credentials");
+assert(mcpUserScope.includes('input.server.organizationScope === "TENANT"') && mcpUserScope.includes("MCP_TENANT_CONTEXT_REQUIRED"), "TENANT server must always require actual ORGANIZATION context");
+assert(mcpToolAdapter.includes("resolveMcpUserAuthScope({ server, context: input.context })") && mcpResourceAdapter.includes("resolveMcpUserAuthScope({ server, context: input.context })"), "Tools and resources must share the session-bound OAuth scope resolver");
+assert(!mcpToolAdapter.includes('organizationId: input.context.organizationId || ""') && !mcpResourceAdapter.includes('organizationId: input.context.organizationId || ""'), "MCP adapters must never manufacture an empty organization grant");
+
 
 assert(collaboratorComposer.includes('aiT("aiCopilot")') && collaboratorComposer.includes("PROPOSE_REPLY") && collaboratorI18n.includes("translateCollaborationExperience") && collaboratorI18nFr.includes('"aiCopilot": "Copilote IA DTSC"') && collaboratorI18nEn.includes('"aiCopilot": "DTSC AI copilot"'), "Mes collaborateurs composer must expose the DTSC AI drafting copilot through the canonical FR/EN i18n contract");
 assert(collaboratorComposer.includes("MAX_COMPOSER_HEIGHT = 176") && collaboratorComposer.includes('className="max-h-44 min-h-12 w-full') && collaboratorComposer.includes("border-t border-dtsc-border/70"), "Collaboration AI drafts must use a full-width mobile composer with a separate professional action rail");
