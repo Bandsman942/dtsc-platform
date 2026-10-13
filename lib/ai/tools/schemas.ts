@@ -93,6 +93,8 @@ export const AI_TOOL_OUTPUT_SCHEMAS = {
       code: z.enum(["GMAIL", "GOOGLE_CALENDAR", "NOTION", "GITHUB", "LINEAR", "ATLASSIAN", "STRIPE"]),
       name: z.string().min(1).max(120),
       availability: z.enum(["ORGANIZATION_REQUIRED", "CONNECTED", "REAUTHORIZATION_REQUIRED", "READY_TO_CONNECT", "PLATFORM_SETUP_REQUIRED", "CERTIFIED_BY_DTSC", "REQUIRES_DTSC_CERTIFICATION"]),
+      nextAction: z.enum(["SELECT_ORGANIZATION", "VERIFY_REMOTE_READ", "REAUTHORIZE", "AUTHORIZE", "CONTACT_DTSC", "NOT_AVAILABLE"]),
+      explanation: z.string().min(1).max(500),
     })).max(20),
   }).strict(),
   TASK_DRAFT_PREPARE: z.object({ title: z.string(), description: z.string().nullable(), status: z.literal("DRAFT") }),
