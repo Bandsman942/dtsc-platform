@@ -11,6 +11,8 @@ assert(data.includes("prisma.knowledgeDocument.groupBy") && data.includes("prism
 assert(data.includes("archivedAt: null"), "Archived enterprise sources must be excluded from readiness");
 assert(data.includes("prisma.aiModelCall.groupBy") && data.includes("prisma.aiToolExecution.groupBy"), "AI failures and denied tools must read canonical audit metadata");
 assert(data.includes("Promise.allSettled"), "Partial outages must be isolated by source");
+assert(data.includes('indexVersion: "legacy-openai-1536-v1"') && data.includes("legacyEnterprise: enterpriseLegacy.value"), "Index reports must use canonical metadata and preserve historical unknown models");
+assert(panel.includes("data.indexing === null") && panel.includes("no automatic action"), "UI must not trigger unapproved mass reindex or hide missing measurements");
 assert(data.includes("safeReasonCode") && data.includes("^[A-Z][A-Z0-9_]") && data.includes("reasonCode: safeReasonCode(r.reasonCode)"), "Only strict machine-readable reason codes may reach the global Console");
 assert(data.includes('knowledge: personal.status === "fulfilled" && enterprise.status === "fulfilled"') && data.includes(': null'), "Missing knowledge data cannot be falsely displayed as zero");
 assert(data.includes('status: "NOT_INSTRUMENTED"') && data.includes('alertHealth: "NOT_CONFIGURED"'), "CAG and alerts must not invent operational telemetry");
