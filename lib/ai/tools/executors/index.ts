@@ -13,6 +13,7 @@ import { TAILORING_AI_ACTION_EXECUTORS } from "@/lib/ai/tools/executors/tailorin
 import { PHARMACY_AI_TOOL_EXECUTORS } from "@/lib/ai/tools/executors/pharmacy";
 import { PRIVATE_ACTION_AI_TOOL_EXECUTORS } from "@/lib/ai/tools/executors/private-actions";
 import { TASK_DRAFT_AI_TOOL_EXECUTORS } from "@/lib/ai/tools/executors/task-drafts";
+import { CONNECTED_APP_AI_TOOL_EXECUTORS } from "@/lib/ai/tools/executors/connected-apps";
 import type { AiToolExecutor } from "@/lib/ai/tools/types";
 
 const AI_TOOL_EXECUTORS: Record<string, AiToolExecutor> = {
