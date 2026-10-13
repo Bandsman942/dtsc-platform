@@ -51,3 +51,8 @@
 - L'annulation de confirmation et l'arrêt du run sont désormais **transactionnels**, bornés par propriétaire, organisation et statut. La confirmation refusée est invalidée, son contenu sensible purgé et sa date d'annulation enregistrée. L'annulation d'un run par le bouton général invalide également son approbation encore en attente, pour empêcher un envoi ultérieur depuis une autre interface.
 - Avant récupération de run, consultation d'un aperçu, approbation ou refus, une session d'entreprise doit encore posséder un membership **actif** dans cette entreprise ; un cookie périmé ne suffit pas.
 - La QA contrôle ces invariants. Les races extrêmes entre confirmation concurrente et exécution distante nécessitent encore un test E2E authentifié et ne constituent pas une promesse d'annulation d'une action déjà exécutée.
+
+
+### Révocation de membership pendant un run
+
+Les endpoints de statut, d'annulation et de reprise d'un run Agent revalident également `requireActiveOrganizationMembership` avant la lecture ou la mutation en contexte entreprise. Une entreprise retirée de la session ne reste pas implicitement autorisée à consulter les étapes, valider, relancer ou annuler un ancien run. Cette règle s'ajoute aux vérifications déjà appliquées aux confirmations, aux aperçus et à la récupération de run. La QA transverse d'isolation accepte maintenant l'implémentation transactionnelle Prisma, qui vérifie `userId`, `organizationId`, `status=PENDING` et purge les arguments, au lieu d'exiger uniquement la forme textuelle de l'ancien SQL ; elle **renforce** le contrat d'isolation plutôt que de le désactiver.
