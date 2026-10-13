@@ -21,6 +21,7 @@ assert(data.includes('status: "NOT_INSTRUMENTED"') && !data.includes("alertHealt
 assert(data.includes('citationProof: { status: "NOT_INSTRUMENTED", certifiedUsageCount: null }') && panel.includes("Proof of citations actually used"), "Do not invent citation-use metrics without source evidence");
 assert(!data.includes("select: { id: true }") && !data.includes("title: true") && !data.includes("argumentsJson") && !data.includes("extractedText: true"), "No document IDs, private text, user identities, tool arguments or prompts projected into Console");
 assert(panel.includes("data.knowledge === null") && panel.includes("data.modelFailures === null") && panel.includes("data.toolDenials === null"), "UI must distinguish not measured from zero");
+assert(panel.includes("statusLabel(status)") && !panel.includes(">KnowledgeDocument · EnterpriseAiKnowledgeSource</p>") && !panel.includes(">AiToolExecution · DENIED"), "Console must use localized business labels rather than exposing Prisma model names or raw statuses");
 assert(panel.includes("overflow-x-auto") && panel.includes("aria-label") && panel.includes("toLocaleString"), "Mobile/accessible compact numbers and tables required");
 assert(page.includes("getConsoleAiKnowledgeSecurity") && page.includes("ConsoleAiKnowledgeSecurityPanel"), "Centre IA must render source-bound knowledge and safety metrics");
 assert(page.includes('activeSection === "ai-control-center"'), "AI metrics must remain behind existing Console AI_READ boundary");
