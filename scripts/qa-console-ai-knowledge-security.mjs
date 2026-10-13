@@ -17,7 +17,13 @@ assert(data.includes("prisma.knowledgeDocument.count") && data.includes("prisma.
 assert(panel.includes("data.reindexPreview === null") && panel.includes("maxPerDomain"), "Reindex preview must show the cap and unavailable state");
 assert(data.includes("safeReasonCode") && data.includes("^[A-Z][A-Z0-9_]") && data.includes("reasonCode: safeReasonCode(r.reasonCode)"), "Only strict machine-readable reason codes may reach the global Console");
 assert(data.includes('knowledge: personal.status === "fulfilled" && enterprise.status === "fulfilled"') && data.includes(': null'), "Missing knowledge data cannot be falsely displayed as zero");
-assert(data.includes('status: "NOT_INSTRUMENTED"') && !data.includes("alertHealth"), "CAG cache rate unknown; governed alert state comes only from alert rules");
+const cagRegistry = read("lib/ai/cag-registry.ts");
+const aiRuntime = read("lib/ai/assistant-runtime.ts");
+assert(cagRegistry.includes("cacheHit: packs.every((pack) => pack.cacheHit)") && aiRuntime.includes("cagCacheHit: cag.cacheHit"), "Observed CAG hits must derive from actual builder cache state");
+assert(data.includes('FROM "ApiLog"') && data.includes('jsonb_typeof("metadata"->\'cagCacheHit\') = \'boolean\'') && data.includes('"/api/chat/v2"') === false, "CAG metrics must aggregate verified boolean audit metadata from actual assistant paths");
+assert(data.includes('status: "UNAVAILABLE"') && data.includes('"NO_OBSERVATIONS"') && data.includes('"MEASURED"'), "CAG telemetry outage, missing observations and real hits must remain distinct");
+assert(panel.includes("data.cag.status === \"UNAVAILABLE\"") && panel.includes('instance-local cache') && !panel.includes("CAG cache hit rate: not instrumented"), "CAG UX must report actual local-cache observations, not fictitious global telemetry");
+assert(!data.includes("alertHealth"), "Governed alert health must come only from alert rules");
 assert(data.includes('citationProof: { status: "NOT_INSTRUMENTED", certifiedUsageCount: null }') && panel.includes("Proof of citations actually used"), "Do not invent citation-use metrics without source evidence");
 assert(data.includes('FROM "EnterpriseAiMessage"') && data.includes('jsonb_array_length(') && data.includes('AND "deletedAt" IS NULL') && data.includes('citationAttachments.status === "fulfilled"'), "Citation metrics must aggregate only persisted answer attachments, filter deleted records and represent outage as unavailable");
 assert(data.includes('meaning: "RETRIEVAL_CANDIDATES_NOT_PROVEN_USED"') && panel.includes("data.citationAttachments === null") && panel.includes("not proof it was referenced"), "Console must distinguish retrieved candidates from actual citation usage");
