@@ -63,6 +63,18 @@ export function ConsoleAiKnowledgeSecurityPanel({
           {data.toolDenials === null ? <p className="text-sm text-dtsc-muted">{t("Indisponible", "Unavailable")}</p> : data.toolDenials.length === 0 ? <p className="text-sm text-dtsc-muted">{t("Aucun événement enregistré sur la période", "No recorded event in window")}</p> : <div className="space-y-2">{data.toolDenials.map((r, i) => <div key={i} className="flex justify-between gap-2 border-b border-dtsc-border/50 py-2 text-xs"><span className="min-w-0 break-words">{r.reasonCode}</span><strong className="tabular-nums">{n(r.executions)}</strong></div>)}</div>}
         </article>
       </div>
+      <article className="dtsc-card min-w-0 space-y-2 p-4" aria-label={t("Métadonnées de récupération de connaissances", "Knowledge retrieval metadata")}>
+        <h4 className="font-bold text-dtsc-ink">{t("Citations jointes aux réponses", "Citations attached to answers")}</h4>
+        {data.citationAttachments === null ? (
+          <p className="text-sm text-dtsc-muted">{t("Preuve de récupération indisponible", "Retrieval evidence unavailable")}</p>
+        ) : (
+          <dl className="grid grid-cols-2 gap-3 text-xs">
+            <div><dt className="text-dtsc-muted">{t("Réponses avec sources jointes", "Answers with attached sources")}</dt><dd className="text-lg font-bold tabular-nums text-dtsc-ink">{n(data.citationAttachments.assistantMessagesWithCandidates)}</dd></div>
+            <div><dt className="text-dtsc-muted">{t("Candidats de citation joints", "Attached citation candidates")}</dt><dd className="text-lg font-bold tabular-nums text-dtsc-ink">{n(data.citationAttachments.attachedCandidates)}</dd></div>
+          </dl>
+        )}
+        <p className="text-xs text-dtsc-muted">{t("Ces chiffres proviennent des métadonnées réellement enregistrées avec les réponses de l’IA entreprise. Une source jointe ne prouve pas qu'elle a été citée dans la réponse. Aucun contenu, auteur ou nom d'entreprise n'est affiché.", "These counts use actual enterprise AI answer metadata. A source attached to an answer is not proof it was referenced in the generated text. No content, authors or organization names are shown.")}</p>
+      </article>
       <p className="text-xs text-dtsc-muted">{t("Taux de cache CAG : non instrumenté. Preuve de citations effectivement utilisées : non instrumentée. Les alertes sont évaluées séparément selon les règles publiées. Aucun état sain n'est présumé.", "CAG cache hit rate: not instrumented. Proof of citations actually used: not instrumented. Alerts are evaluated separately from published rules. No healthy state is inferred.")}</p>
     </section>
   );
