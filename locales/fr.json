@@ -999,6 +999,15 @@
     "exportApprovalRequired": "Une approbation est requise pour cet export sensible."
   },
   "console": {
+    "workspace": {
+      "tabs": "Espaces de travail associés",
+      "allSections": "Tous les espaces de travail",
+      "closeSections": "Fermer les espaces de travail",
+      "resources": "Ressources du workspace",
+      "guide": "Guide utilisateur",
+      "support": "Contacter le support",
+      "access": "Permissions et configuration"
+    },
     "title": "Centre de pilotage DTSC Platform",
     "eyebrow": "Console DTSC SaaS",
     "description": "Pilotez les entreprises clientes, abonnements, support, sécurité, contenus et modules internes depuis des sections séparées et autorisées.",

@@ -1,7 +1,5 @@
-import Link from "next/link";
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
-import { BadgePercent, BarChart3, Bot, BriefcaseBusiness, Building2, Code2, CreditCard, Crown, FileText, FolderKanban, Megaphone, MessageSquare, PackageCheck, Scale, Settings, ShieldCheck, Users, type LucideIcon } from "lucide-react";
 import { PaymentStatus, TicketPriority, TicketStatus, UserRole, UserStatus } from "@prisma/client";
 import { AdminAccessPanel } from "@/components/admin/admin-access-panel";
 import { ConsoleAiOverview } from "@/components/admin/console-ai-overview";
@@ -14,7 +12,7 @@ import { AdminAuditTables } from "@/components/admin/admin-audit-tables";
 import { AdminBillingSubscriptions } from "@/components/admin/admin-billing-subscriptions";
 import { ManualSubscriptionPaymentsAdmin } from "@/components/admin/manual-subscription-payments-admin";
 import { AdminDataTables } from "@/components/admin/admin-data-tables";
-import { AdminFloatingNav } from "@/components/admin/admin-floating-nav";
+import { ConsoleWorkspaceShell } from "@/components/admin/console-workspace-shell";
 import { AdminOverviewMetrics } from "@/components/admin/admin-overview-metrics";
 import { AdminSettingsPanel } from "@/components/admin/admin-settings-panel";
 import { BillingPlanManager } from "@/components/admin/billing-plan-manager";
@@ -38,7 +36,6 @@ import { PromotionalBannerManager } from "@/components/admin/promotional-banner-
 import { PublicPublicationsManager } from "@/components/admin/public-publications-manager";
 import { SiteVisitsChart } from "@/components/admin/site-visits-chart";
 import { WorkSubmissionReviewPanel } from "@/components/admin/work-submission-review-panel";
-import { ContextualUserGuide } from "@/components/user-guides/contextual-user-guide";
 import { AppShell } from "@/components/layout/app-shell";
 import { TicketBoard } from "@/components/support/ticket-board";
 import { Accordion, AccordionItem } from "@/components/ui/accordion";
@@ -66,18 +63,11 @@ import { translate } from "@/lib/i18n";
 import { isDtscInternalSession } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { getAppSettings } from "@/lib/settings";
-import { getIteration07UserGuide, type Iteration07GuideCode } from "@/lib/user-guides/iteration07-guides";
 
 type ConsoleSearchParams = Record<string, string | string[] | undefined>;
 
-type SectionMeta = { id: ConsoleSectionId; icon: LucideIcon };
-const sectionMeta: SectionMeta[] = [
-  { id: "overview", icon: BarChart3 }, { id: "module-maturity", icon: BarChart3 }, { id: "access", icon: ShieldCheck },
-  { id: "platform-settings", icon: Settings }, { id: "ai-control-center", icon: Bot }, { id: "promotions", icon: BadgePercent }, { id: "content", icon: FileText },
-  { id: "users", icon: Users }, { id: "organizations", icon: Building2 }, { id: "subscriptions", icon: CreditCard },
-  { id: "support", icon: MessageSquare }, { id: "visits", icon: BarChart3 }, { id: "security-audit", icon: Megaphone },
-  { id: "hr-cfo", icon: BriefcaseBusiness }, { id: "sco", icon: PackageCheck }, { id: "coo", icon: BarChart3 },
-  { id: "ceo", icon: Crown }, { id: "mpo", icon: FolderKanban }, { id: "cto", icon: Code2 }, { id: "legal", icon: Scale },
+const sectionIds: ConsoleSectionId[] = [
+  "overview", "module-maturity", "access", "platform-settings", "ai-control-center", "promotions", "content", "users", "organizations", "subscriptions", "support", "visits", "security-audit", "hr-cfo", "sco", "coo", "ceo", "mpo", "cto", "legal"
 ];
 
 const readCapability: Partial<Record<ConsoleSectionId, ConsoleCapability>> = {
@@ -107,13 +97,6 @@ const manageCapability: Partial<Record<ConsoleSectionId, ConsoleCapability>> = {
   "security-audit": CONSOLE_CAPABILITIES.SECURITY_MANAGE,
 };
 
-const guideBySection: Record<Exclude<ConsoleSectionId, "module-maturity">, Iteration07GuideCode> = {
-  overview: "CONSOLE_OVERVIEW", access: "CONSOLE_RBAC", "platform-settings": "CONSOLE_PLATFORM_SETTINGS", "ai-control-center": "CONSOLE_AI_CONTROL", promotions: "CONSOLE_CONTENT",
-  content: "CONSOLE_CONTENT", users: "CONSOLE_USERS", organizations: "CONSOLE_CLIENT_ENTERPRISES", subscriptions: "CONSOLE_SUBSCRIPTIONS",
-  support: "CONSOLE_SUPPORT", visits: "CONSOLE_VISITS", "security-audit": "CONSOLE_SECURITY_AUDIT", "hr-cfo": "DTSC_HR_CFO",
-  sco: "DTSC_SCO", coo: "DTSC_COO", ceo: "DTSC_CEO", mpo: "DTSC_MPO", cto: "DTSC_CTO", legal: "DTSC_LEGAL",
-};
-
 export async function DtscConsolePage({ forcedSection, searchParams }: { forcedSection?: string; searchParams: Promise<ConsoleSearchParams> }) {
   const user = await requireUser();
   const session = await getSession();
@@ -128,16 +111,16 @@ export async function DtscConsolePage({ forcedSection, searchParams }: { forcedS
   const settings = await getAppSettings();
   const adminRoleAccess = parseAdminRoleAccess(settings.adminRoleAccess);
   const allowedMap = new Map<ConsoleSectionId, boolean>();
-  await Promise.all(sectionMeta.map(async ({ id }) => {
+  await Promise.all(sectionIds.map(async (id) => {
     if (id === "access") { allowedMap.set(id, user.role === UserRole.ADMIN); return; }
     const capability = readCapability[id];
     if (capability) { allowedMap.set(id, (await getConsoleAccessDecision({ user, capability, adminRoleAccess })).allowed); return; }
     const block = CONSOLE_SECTION_ADMIN_BLOCK[id];
     allowedMap.set(id, block ? await canAccessAdminSection(user, block, adminRoleAccess) : false);
   }));
-  const visibleSections = sectionMeta.filter(({ id }) => allowedMap.get(id));
+  const visibleSections = sectionIds.filter((id) => allowedMap.get(id));
   const activeSection = requested.section;
-  if (!allowedMap.get(activeSection)) redirect(getConsoleSectionHref(visibleSections[0]?.id || "overview"));
+  if (!allowedMap.get(activeSection)) redirect(getConsoleSectionHref(visibleSections[0] || "overview"));
 
   const activeManageCapability = manageCapability[activeSection];
   const canManage = activeManageCapability
@@ -151,7 +134,6 @@ export async function DtscConsolePage({ forcedSection, searchParams }: { forcedS
   const search = stringParams.search;
 
   const period = parsePeriod(stringParams.period, stringParams.date);
-  const guide = activeSection === "module-maturity" ? null : getIteration07UserGuide(guideBySection[activeSection], locale);
 
   let content: ReactNode = null;
   if (activeSection === "overview") {
@@ -257,19 +239,18 @@ export async function DtscConsolePage({ forcedSection, searchParams }: { forcedS
 
   return (
     <AppShell user={user}>
-      <div className="w-full min-w-0 max-w-full space-y-6">
-        <section className="dtsc-panel min-w-0 max-w-full overflow-hidden p-4 sm:p-6">
-          <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0"><p className="text-sm font-bold text-cyan-600">{t("console.eyebrow")}</p><h1 className="mt-2 break-words text-3xl font-black tracking-tight text-dtsc-ink sm:text-4xl">{t("console.title")}</h1><p className="mt-3 max-w-3xl break-words leading-7 text-dtsc-muted">{t("console.description")}</p></div>
-            {guide ? <ContextualUserGuide guide={guide} /> : null}
-          </div>
-        </section>
-        <AdminFloatingNav activeSection={activeSection} sections={visibleSections.map(({ id }) => ({ id, label: t(`console.sections.${id}.label`), description: t(`console.sections.${id}.description`), href: getConsoleSectionHref(id, retainedParams(stringParams)) }))} />
-        <nav className="hidden min-w-0 grid-cols-[repeat(2,minmax(0,1fr))] gap-3 lg:grid xl:grid-cols-[repeat(4,minmax(0,1fr))]" aria-label="Sections Console DTSC">
-          {visibleSections.map(({ id, icon: Icon }) => <Link key={id} href={getConsoleSectionHref(id, retainedParams(stringParams))} className={`min-w-0 overflow-hidden rounded-2xl border p-4 shadow-[0_12px_34px_rgba(0,43,91,0.07)] transition ${activeSection === id ? "border-cyan-300 bg-[#002b5b] text-white" : "border-dtsc-border bg-dtsc-surface text-dtsc-ink hover:border-cyan-300 hover:bg-dtsc-soft"}`}><span className="flex min-w-0 items-start gap-3"><span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${activeSection === id ? "bg-white/10 text-cyan-200" : "bg-dtsc-soft text-dtsc-blue"}`}><Icon className="h-4 w-4" /></span><span className="min-w-0"><span className="block break-words font-black">{t(`console.sections.${id}.label`)}</span><span className={`mt-1 block break-words text-xs leading-5 ${activeSection === id ? "text-slate-200" : "text-dtsc-muted"}`}>{t(`console.sections.${id}.description`)}</span></span></span></Link>)}
-        </nav>
+      <ConsoleWorkspaceShell
+        activeSection={activeSection}
+        locale={locale}
+        sections={visibleSections.map((id) => ({
+          id,
+          label: t(`console.sections.${id}.label`),
+          description: t(`console.sections.${id}.description`),
+          href: getConsoleSectionHref(id, retainedParams(stringParams)),
+        }))}
+      >
         {content}
-      </div>
+      </ConsoleWorkspaceShell>
     </AppShell>
   );
 }
