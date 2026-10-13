@@ -45,6 +45,8 @@ const googleMcpReadPolicy = read("lib/ai/mcp/google-read-tool-policy.ts");
 const googleMcpBindings = read("lib/ai/mcp/bindings.ts");
 const mcpToolAdapter = read("lib/ai/mcp/tool-adapter.ts");
 const mcpResourceAdapter = read("lib/ai/mcp/resource-adapter.ts");
+const mcpGovernance = read("lib/console/console-ai-mcp.ts");
+const mcpConsoleUi = read("components/admin/console-ai-mcp-panel.tsx");
 const mcpOauth = read("lib/ai/mcp/oauth.ts");
 const mcpOauthAccess = read("lib/ai/mcp/oauth-access.ts");
 const mcpOauthScopes = read("lib/ai/mcp/oauth-scopes.ts");
@@ -196,6 +198,9 @@ for (const dangerous of ['"create_draft"', '"label_message"', '"create_event"', 
   assert(!googleMcpReadPolicy.includes(dangerous), `Google MCP mutation ${dangerous} must not be exposed as READ`);
 }
 assert(googleMcpBindings.includes("isApprovedMcpReadToolName(binding.serverCode, binding.remoteToolName)") && mcpToolAdapter.includes("isApprovedMcpReadToolName(server.code, binding.remoteToolName)"), "Both configuration and runtime must reject unreviewed Google MCP operations");
+assert(mcpGovernance.includes('eventType: "TOOL_CALL", status: "SUCCESS"') && mcpGovernance.includes("_max: { createdAt: true }") && mcpGovernance.includes("readEvidence:"), "MCP real-READ evidence must come only from actual successful remote tool calls, never OAuth or discovery");
+assert(mcpConsoleUi.includes("server.readEvidence === null") && mcpConsoleUi.includes("La recette E2E reste obligatoire"), "MCP Console must distinguish observed historical success, telemetry outage and owner E2E certification");
+
 
 
 
