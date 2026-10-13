@@ -1002,6 +1002,7 @@
     "workspace": {
       "tabs": "Related work areas",
       "allSections": "All work areas",
+      "closeSections": "Close work areas",
       "resources": "Workspace resources",
       "guide": "User guide",
       "support": "Contact support",

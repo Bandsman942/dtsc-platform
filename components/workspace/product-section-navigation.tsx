@@ -91,6 +91,7 @@ export function ProductSectionNavigation({
   mobileButtonLabel,
   compactDesktop = false,
   desktopDisclosureLabel,
+  mobileCloseButtonLabel,
   className,
 }: {
   productLabel: string;
@@ -101,6 +102,7 @@ export function ProductSectionNavigation({
   mobileButtonLabel?: string;
   compactDesktop?: boolean;
   desktopDisclosureLabel?: string;
+  mobileCloseButtonLabel?: string;
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -168,7 +170,7 @@ export function ProductSectionNavigation({
                 type="button"
                 onClick={() => setOpen(false)}
                 className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-dtsc-border bg-dtsc-page text-dtsc-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
-                aria-label={`Fermer les sections ${productLabel}`}
+                aria-label={mobileCloseButtonLabel || `Fermer les sections ${productLabel}`}
               >
                 <X className="h-5 w-5" aria-hidden="true" />
               </button>

@@ -4,7 +4,7 @@ import { BookOpen, LifeBuoy, ShieldCheck } from "lucide-react";
 import { AdminFloatingNav } from "@/components/admin/admin-floating-nav";
 import { ModuleContent, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { getConsoleSectionHref } from "@/lib/console/console-routes";
-import { getSupportUrl } from "@/lib/domains";
+import { buildUrlForHostType, getSupportUrl } from "@/lib/domains";
 import { translate } from "@/lib/i18n";
 
 type ConsoleWorkspaceSection = {
@@ -37,7 +37,7 @@ export function ConsoleWorkspaceShell({
         aria-label={translate(locale, "console.workspace.resources")}
         className="flex min-w-0 flex-wrap items-center justify-between gap-3 border-t border-dtsc-border pt-4"
       >
-        <Link href="/help/standard" className={footerLinkClass}>
+        <Link href={buildUrlForHostType("app", "/help/standard")} className={footerLinkClass}>
           <BookOpen className="h-4 w-4 shrink-0" aria-hidden="true" />
           {translate(locale, "console.workspace.guide")}
         </Link>

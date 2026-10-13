@@ -115,7 +115,9 @@ const profiles = {
   guides() {
     const content = read("lib/user-guides/iteration07-guides.ts");
     for (const code of iteration07Codes) if (!content.includes(`\"${code}\"`) && code !== "CONSOLE_MODULE_MATURITY") throw new Error(`Guide itération 7 absent: ${code}`);
-    has("app/admin/console-page.tsx", "ContextualUserGuide");
+    has("app/admin/console-page.tsx", "ConsoleWorkspaceShell");
+    has("components/admin/console-workspace-shell.tsx", "AdminFloatingNav");
+    has("components/admin/admin-floating-nav.tsx", "ContextualUserGuide");
     has("app/admin/module-maturity/page.tsx", "COMMERCIAL_MATURITY_KANBAN");
   },
   internalDashboards() {

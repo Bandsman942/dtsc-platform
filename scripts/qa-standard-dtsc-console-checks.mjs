@@ -26,8 +26,11 @@ requireToken("app/api/admin/billing-plans/[id]/route.ts", "PLAN_AUDIENCE_IMMUTAB
 // que les autres workspaces et garder des libellés compréhensibles par l'utilisateur.
 requireToken("components/admin/admin-floating-nav.tsx", "ModuleHeader", "Administration DTSC doit utiliser le header de module canonique");
 requireToken("components/admin/admin-floating-nav.tsx", "data-admin-modern-module-header", "le nouveau header Administration DTSC doit remplacer visuellement l'ancien");
-requireToken("components/admin/admin-floating-nav.tsx", "Administration DTSC", "le titre métier Administration DTSC doit rester visible");
-requireToken("components/admin/admin-floating-nav.tsx", "Espaces de travail disponibles", "la navigation Administration DTSC doit utiliser un libellé orienté utilisateur");
+requireToken("components/admin/admin-floating-nav.tsx", "title={activeLabel}", "le titre du workspace doit refléter la section active");
+requireToken("components/admin/admin-floating-nav.tsx", 'translate(locale, "console.title")', "la marque Console doit rester visible dans la navigation");
+requireToken("components/admin/console-workspace-shell.tsx", "ModuleWorkspace", "le shell Console doit utiliser le workspace canonique");
+requireToken("components/admin/admin-floating-nav.tsx", 'translate(locale, "console.workspace.allSections")', "les sections doivent avoir un libellé utilisateur traduit");
+requireToken("components/admin/admin-floating-nav.tsx", "compactDesktop", "le menu détaillé doit rester repliable sur desktop");
 requireToken("components/admin/admin-floating-nav.tsx", "ContextualUserGuide", "le guide utilisateur doit rester accessible depuis le nouveau header");
 requireToken("lib/console/console-routes.ts", "Réglages de la plateforme", "les groupes Administration DTSC doivent utiliser un libellé métier plutôt qu'un intitulé technique");
 requireToken("lib/console/console-routes.ts", "Gérer les comptes, les droits d’accès", "la gestion des accès doit être décrite avec des termes utilisateur");

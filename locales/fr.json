@@ -1002,6 +1002,7 @@
     "workspace": {
       "tabs": "Espaces de travail associés",
       "allSections": "Tous les espaces de travail",
+      "closeSections": "Fermer les espaces de travail",
       "resources": "Ressources du workspace",
       "guide": "Guide utilisateur",
       "support": "Contacter le support",

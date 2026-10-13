@@ -131,6 +131,7 @@ export function AdminFloatingNav({
         desktopDisclosureLabel={translate(locale, "console.workspace.allSections")}
         compactDesktop
         mobileButtonLabel={translate(locale, "console.workspace.allSections")}
+        mobileCloseButtonLabel={translate(locale, "console.workspace.closeSections")}
         groups={groups}
         sections={navigationSections}
         activeSection={activeSection}
