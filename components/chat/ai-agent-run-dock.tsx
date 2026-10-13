@@ -136,6 +136,21 @@ function safeFailureMessage(body: AgentFailureResponse | null, locale: string) {
   return getAiAgentClientFailureMessage(body?.failureCategory || "UNAVAILABLE", locale);
 }
 
+function approvalFailureMessage(code: unknown, en: boolean, action: "approve" | "reject") {
+  const known: Record<string, [string, string]> = {
+    CONFIRMATION_NOT_FOUND_OR_EXPIRED: ["Cette validation a expiré ou a déjà été traitée. Actualisez l'exécution avant de réessayer.", "This approval has expired or was already handled. Refresh the run before trying again."],
+    CONFIRMATION_INVALID_OR_EXPIRED: ["La validation n'est plus applicable. Actualisez l'exécution.", "This approval is no longer applicable. Refresh the run."],
+    ORGANIZATION_ACCESS_DENIED: ["Vous n'avez plus accès à l'entreprise active. Changez de contexte ou contactez son administrateur.", "You no longer have access to the active organization. Switch context or contact its administrator."],
+    RATE_LIMITED: ["Trop de validations récentes. Réessayez après la limite de sécurité.", "Too many recent approvals. Retry after the security limit."],
+    UNAUTHORIZED: ["Votre session a expiré. Reconnectez-vous avant de valider.", "Your session has expired. Sign in before approving."],
+    FORBIDDEN: ["La validation a été bloquée par les protections de sécurité.", "Approval was blocked by security safeguards."],
+  };
+  if (typeof code === "string" && Object.prototype.hasOwnProperty.call(known, code)) return known[code][en ? 1 : 0];
+  return action === "approve"
+    ? (en ? "This action could not be confirmed. Check its status before retrying." : "Cette action n'a pas pu être confirmée. Vérifiez son état avant de réessayer.")
+    : (en ? "This action could not be rejected. Check its status before retrying." : "Cette action n'a pas pu être refusée. Vérifiez son état avant de réessayer.");
+}
+
 async function readTextStream(response: Response, onChunk: (chunk: string) => void) {
   if (!response.body) return;
   const reader = response.body.getReader();
@@ -309,12 +324,12 @@ export function AiAgentRunDock({ variant }: { variant: AgentVariant }) {
         body: JSON.stringify({ confirmationId: confirmation.id }),
       });
       const body = await response.json().catch(() => null);
-      if (!response.ok || !body?.ok) throw new Error("CONFIRM_FAILED");
+      if (!response.ok || !body?.ok) throw new Error(approvalFailureMessage(body?.error || body?.reasonCode, en, "approve"));
       setConfirmation(null);
       await refreshRun(runId);
       toastSuccess(en ? "Action confirmed. The agent can now resume." : "Action confirmée. L’agent peut maintenant reprendre.");
-    } catch {
-      toastError(en ? "This action could not be confirmed." : "Cette action n’a pas pu être confirmée.");
+    } catch (error) {
+      toastError(error instanceof Error ? error.message : approvalFailureMessage(null, en, "approve"));
     } finally {
       setConfirmBusy(false);
     }
@@ -329,15 +344,17 @@ export function AiAgentRunDock({ variant }: { variant: AgentVariant }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ confirmationId: confirmation.id }),
       });
-      if (!response.ok) throw new Error("CONFIRMATION_CANCEL_FAILED");
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(approvalFailureMessage(body?.error, en, "reject"));
+      }
       setConfirmation(null);
-      // /api/ai/tools/cancel atomically revokes the pending approval and
-      // marks the associated Agent run CANCELLED. A second /runs/:id/cancel
-      // request is invalid (404 on a terminal run) and must not be sent.
+      // The cancellation endpoint revokes this approval AND stops the run.
+      // A redundant /runs/:id/cancel request could return a misleading 404.
       if (runId) await refreshRun(runId);
       toastSuccess(en ? "Action rejected. The agent has stopped." : "Action refusée. L’agent est arrêté.");
-    } catch {
-      toastError(en ? "Unable to reject this action." : "Impossible de refuser cette action.");
+    } catch (error) {
+      toastError(error instanceof Error ? error.message : approvalFailureMessage(null, en, "reject"));
     } finally {
       setConfirmBusy(false);
     }
