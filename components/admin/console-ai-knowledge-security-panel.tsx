@@ -75,7 +75,22 @@ export function ConsoleAiKnowledgeSecurityPanel({
         )}
         <p className="text-xs text-dtsc-muted">{t("Ces chiffres proviennent des métadonnées réellement enregistrées avec les réponses de l’IA entreprise. Une source jointe ne prouve pas qu'elle a été citée dans la réponse. Aucun contenu, auteur ou nom d'entreprise n'est affiché.", "These counts use actual enterprise AI answer metadata. A source attached to an answer is not proof it was referenced in the generated text. No content, authors or organization names are shown.")}</p>
       </article>
-      <p className="text-xs text-dtsc-muted">{t("Taux de cache CAG : non instrumenté. Preuve de citations effectivement utilisées : non instrumentée. Les alertes sont évaluées séparément selon les règles publiées. Aucun état sain n'est présumé.", "CAG cache hit rate: not instrumented. Proof of citations actually used: not instrumented. Alerts are evaluated separately from published rules. No healthy state is inferred.")}</p>
+      <article className="dtsc-card min-w-0 space-y-2 p-4" aria-label={t("Observations du cache contextuel", "Context cache observations")}>
+        <h4 className="font-bold text-dtsc-ink">{t("Réutilisation du contexte IA (cache CAG)", "AI context reuse (CAG cache)")}</h4>
+        {data.cag.status === "UNAVAILABLE" ? (
+          <p className="text-xs text-dtsc-muted">{t("Mesure momentanément indisponible", "Measurement temporarily unavailable")}</p>
+        ) : data.cag.status === "NO_OBSERVATIONS" ? (
+          <p className="text-xs text-dtsc-muted">{t("Aucune observation de cache sur cette période", "No cache observations in this window")}</p>
+        ) : (
+          <div className="grid grid-cols-3 gap-2 text-xs">
+            <div><span className="block text-dtsc-muted">{t("Réutilisations", "Hits")}</span><strong className="text-lg tabular-nums text-dtsc-ink">{n(data.cag.hits ?? 0)}</strong></div>
+            <div><span className="block text-dtsc-muted">{t("Recalculs", "Misses")}</span><strong className="text-lg tabular-nums text-dtsc-ink">{n(data.cag.misses ?? 0)}</strong></div>
+            <div><span className="block text-dtsc-muted">{t("Part réutilisée", "Hit share")}</span><strong className="text-lg tabular-nums text-dtsc-ink">{data.cag.cacheHitRate?.toLocaleString(en ? "en-US" : "fr-FR")}%</strong></div>
+          </div>
+        )}
+        <p className="text-xs text-dtsc-muted">{t("Observations effectivement journalisées lors de la préparation de réponses. Le cache CAG est local à chaque instance et ces chiffres ne mesurent pas un cache global partagé ni le taux de succès des citations RAG.", "Observed request logs from response preparation. CAG is an instance-local cache; these counts do not measure a shared global cache or the success of RAG citations.")}</p>
+      </article>
+      <p className="text-xs text-dtsc-muted">{t("Preuve de citations effectivement utilisées : non instrumentée. Les alertes sont évaluées séparément selon les règles publiées. Aucun état sain n'est présumé.", "Proof of citations actually used: not instrumented. Alerts are evaluated separately from published rules. No healthy state is inferred.")}</p>
     </section>
   );
 }
