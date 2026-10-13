@@ -30,6 +30,7 @@ assert(schema.includes("model AiGovernanceAlertRule") && migration.includes('CRE
 assert(alerts.includes('import "server-only"') && alerts.includes('AI_ALERT_CODES') && alerts.includes("Promise.allSettled"), "Alert counts must read from server-only governed sources");
 assert(alerts.includes("prisma.aiModelCall.count") && alerts.includes("prisma.aiToolExecution.count") && alerts.includes("prisma.knowledgeDocument.count"), "Alert thresholds must use actual count queries, not a truncated top-ten table");
 assert(alerts.includes('"TRIGGERED"') && alerts.includes('"UNAVAILABLE"') && alerts.includes('"NOT_CONFIGURED"'), "An unmeasured signal must never be shown below threshold");
+assert(alerts.includes("records !== null && !raw ? 0 : null"), "An unconfigured rule must start at revision zero and remain configurable");
 assert(alertsApi.includes("requireConsoleCapability(CONSOLE_CAPABILITIES.AI_MANAGE)") && alertsApi.includes("isSameOriginRequest") && alertsApi.includes("await rateLimit"), "Alert mutation requires RBAC, same-origin and async rate limiting");
 assert(alertsApi.includes("expectedRevision") && alertsApi.includes("REVISION_CONFLICT") && alertsApi.includes("tx.platformSettingHistory.create") && alertsApi.includes("writeAuditLog"), "Alert policies must have optimistic concurrency and audited changes");
 assert(alertsUi.includes("canManage") && alertsUi.includes('fetch("/api/admin/ai/alerts"') && alertsUi.includes("no automatic notifications"), "UI must guard editing and state that signals are not automatic notifications");
