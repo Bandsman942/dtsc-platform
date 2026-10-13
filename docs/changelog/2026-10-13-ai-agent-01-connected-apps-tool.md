@@ -44,3 +44,10 @@
 - Le READ `CONNECTED_APPS_STATUS_READ` fournit désormais, pour chaque application, une explication FR/EN et un **code d'étape suivante** à partir de l'état de connexion réellement vérifié (choisir une organisation, autoriser, renouveler, contacter DTSC, attendre la certification ou vérifier une lecture distante réelle).
 - Cette logique réutilise le dictionnaire canonique `lib/ai/mcp/product-guidance.ts` et demeure strictement contrôlée par un schéma Zod. Elle n'exécute ni OAuth, ni `tools/call`, ni mutation et ne devine pas l'accessibilité des fournisseurs.
 - Le statut `CONNECTED` oriente vers la **vérification** d'une lecture distante, jamais vers l'affirmation qu'elle a déjà réussi.
+
+
+### Refus transactionnel et révocation des accès
+- Le rejet d'une action depuis le Dock utilise uniquement `POST /api/ai/tools/cancel` : cette route met déjà fin au run associé. Un second appel d'annulation déclenchait auparavant une erreur 404 trompeuse après un refus pourtant réussi.
+- L'annulation de confirmation et l'arrêt du run sont désormais **transactionnels**, bornés par propriétaire, organisation et statut. La confirmation refusée est invalidée, son contenu sensible purgé et sa date d'annulation enregistrée. L'annulation d'un run par le bouton général invalide également son approbation encore en attente, pour empêcher un envoi ultérieur depuis une autre interface.
+- Avant récupération de run, consultation d'un aperçu, approbation ou refus, une session d'entreprise doit encore posséder un membership **actif** dans cette entreprise ; un cookie périmé ne suffit pas.
+- La QA contrôle ces invariants. Les races extrêmes entre confirmation concurrente et exécution distante nécessitent encore un test E2E authentifié et ne constituent pas une promesse d'annulation d'une action déjà exécutée.
