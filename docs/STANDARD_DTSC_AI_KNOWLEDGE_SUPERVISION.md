@@ -37,7 +37,7 @@ Le rollback conserve les données de règles et l'historique pour éviter de mas
 
 ## Planification de réindexation bornée, sans mutation
 
-La Console montre un **aperçu des candidats historiques**, au plus `25` par domaine documentaire (personnel et entreprise), selon la fenêtre sélectionnée. Le serveur filtre les sources `indexVersion=legacy-openai-1536-v1` disposant de texte préparé, trie les anciennes modifications et sélectionne les `id` seulement en mémoire côté serveur ; le navigateur reçoit uniquement deux compteurs bornés, jamais les identifiants, titres, auteurs, tenants, textes ou chemins de stockage. Une panne de source affiche « indisponible ».
+La Console montre un **aperçu des candidats historiques**, au plus `25` par domaine documentaire (personnel et entreprise), selon la fenêtre sélectionnée. Le serveur calcule uniquement des **comptages agrégés** des sources `indexVersion=legacy-openai-1536-v1` disposant de texte préparé, puis plafonne la valeur affichée à `25`. Aucun identifiant n'est sélectionné ou chargé, aucun ordre de traitement n'est déduit de cet aperçu ; le navigateur reçoit uniquement deux compteurs bornés, jamais les identifiants, titres, auteurs, tenants, textes ou chemins de stockage. Une panne de source affiche « indisponible ».
 
 Cet aperçu n'est **pas une exécution** : la Console ne crée aucune tâche de réindexation, ne publie aucune écriture et n'offre aucun bouton de traitement massif. Les opérations individuelles existent déjà sous contrôle du propriétaire du document via `POST /api/documents/[id]/reindex` et du gestionnaire autorisé d'une source entreprise via `PATCH /api/enterprise/ai/knowledge-sources/[id]` avec action `reindex` ; elles conservent leurs vérifications de scope, rate-limit, audit et traitement différé. Un éventuel traitement batch global exigera une Issue dédiée, un plan dry-run, un plafond strict et une validation manuelle indépendante.
 
@@ -52,3 +52,8 @@ Les deux actions existantes sont **par identifiant d'objet** et non des scans gl
 La Console se limite aux **agrégats** et aux versions d'index. Pour réindexer, un utilisateur habilité agit manuellement depuis son espace propriétaire/entreprise sur **une source à la fois**, avec le contrat de permission du domaine et la preuve `KNOWLEDGE_DOCUMENT_REINDEX_REQUESTED` ou `ENTERPRISE_AI_SOURCE_REINDEX_REQUESTED`. Cela évite un nouvel endpoint réindex-global, tout déclenchement de masse et toute fuite du contenu privé vers la Console.
 
 Un `READY` dans la table documentaire indique seulement que l'indexation de cette source a été déclarée achevée ; la qualité du retrieval, la citation prouvée ou le taux de cache CAG exigent des métriques séparées.
+
+
+## Lisibilité des états (complément)
+
+L'interface du Centre IA traduit les statuts de sources `READY`/`PROCESSING`/`FAILED`/`OTHER` en libellés métier FR/EN, et n'expose plus les noms des modèles Prisma dans les intitulés. Les codes de diagnostic des refus restent des métadonnées de sécurité uniquement pour les administrateurs habilités. Il ne s'agit pas d'une nouvelle preuve de récupération ou d'utilisation des citations. La validation fonctionnelle et l'E2E propriétaire restent requis.
