@@ -15,9 +15,16 @@ type PendingRow = {
 };
 
 function preview(toolCode: string, args: unknown) {
+  // A human must see the *stored* action arguments before approving them.
+  // Do not render an incomplete preview for an unknown mutation.
+  if (toolCode !== "SUPPORT_TICKET_CREATE" && toolCode !== "DTSC_CONTACT_EMAIL_SEND") return null;
   const value = args && typeof args === "object" ? args as Record<string, unknown> : {};
+  const subject = typeof value.subject === "string" ? value.subject : null;
+  const message = typeof value.message === "string" ? value.message : null;
+  if (!subject || !message) return null;
   return {
-    subject: typeof value.subject === "string" ? value.subject : null,
+    subject,
+    message,
     priority: toolCode === "SUPPORT_TICKET_CREATE" && typeof value.priority === "string" ? value.priority : null,
   };
 }
@@ -64,5 +71,5 @@ export async function GET(req: Request) {
       createdAt: row.createdAt.toISOString(),
       preview: preview(row.toolCode, row.argumentsJson),
     })),
-  });
+  }, { headers: { "Cache-Control": "private, no-store" } });
 }
