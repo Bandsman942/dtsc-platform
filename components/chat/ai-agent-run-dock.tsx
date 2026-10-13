@@ -180,7 +180,7 @@ export function AiAgentRunDock({ variant }: { variant: AgentVariant }) {
       setConfirmation(null);
       return;
     }
-    const response = await fetch("/api/ai/tools/pending", { cache: "no-store" });
+    const response = await fetch(`/api/ai/tools/pending?confirmationId=${encodeURIComponent(pendingId)}`, { cache: "no-store" });
     const body = await response.json().catch(() => null);
     if (!response.ok) return;
     const item = Array.isArray(body?.confirmations)
@@ -316,7 +316,12 @@ export function AiAgentRunDock({ variant }: { variant: AgentVariant }) {
       });
       if (!response.ok) throw new Error("CONFIRMATION_CANCEL_FAILED");
       setConfirmation(null);
-      await cancelRun();
+      if (runId) {
+        const cancel = await fetch(`/api/ai/agent/runs/${encodeURIComponent(runId)}/cancel`, { method: "POST" });
+        if (!cancel.ok) throw new Error("AGENT_CANCEL_FAILED");
+        await refreshRun(runId);
+      }
+      toastSuccess(en ? "Action rejected. The agent has stopped." : "Action refusée. L’agent est arrêté.");
     } catch {
       toastError(en ? "Unable to reject this action." : "Impossible de refuser cette action.");
     } finally {
