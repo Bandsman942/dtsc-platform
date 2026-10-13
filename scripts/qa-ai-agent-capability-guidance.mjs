@@ -10,6 +10,7 @@ const authorization = read("lib/ai/tools/authorize.ts");
 const gateway = read("lib/ai/tools/execute.ts");
 const agentTools = read("lib/ai/agent/tools.ts");
 const globalAgent = read("app/api/chat/agent/route.ts");
+const agentDock = read("components/chat/ai-agent-run-dock.tsx");
 const enterpriseAgent = read("app/api/enterprise/ai/agent/route.ts");
 const agentStatus = read("app/api/ai/agent/runs/[id]/route.ts");
 const agentDock = read("components/chat/ai-agent-run-dock.tsx");
@@ -30,4 +31,7 @@ assert(agentTools.includes("CONNECTED_APPS_STATUS_READ") && globalAgent.includes
 assert(agentStatus.includes('run.status === "BUDGET_EXHAUSTED"') && agentStatus.includes('"MAX_ESTIMATED_COST"') && agentStatus.includes("budgetReason:"), "Agent API may expose only allowlisted budget failure reasons");
 assert(agentDock.includes('snapshot?.status === "BUDGET_EXHAUSTED"') && agentDock.includes("budgetExplanation") && agentDock.includes('href="/ai/apps"'), "Agent UI must explain exhausted budget and guide to canonical connected applications");
 assert(agentDock.includes("Une action externe déjà effectuée n'est jamais rejouée automatiquement"), "Budget UX must never suggest blind replay of already executed actions");
+assert(agentDock.includes("Vérifier mes applications") && agentDock.includes('href="/ai/apps"'), "Agent provides contextual app setup and status affordances");
+assert(agentDock.includes("setPrompt(en ?") && !agentDock.includes("void startAgent()}/>"), "Suggested app check must populate intent, never execute agent automatically");
+assert(agentDock.includes("CONFIRMATION_REQUIRED") || agentDock.includes('snapshot?.status === "READY_TO_RESUME"'), "Structured Agent confirmation and resume remain visible");
 console.log("PASS AI-AGENT-01 initial tool: live scoped product status, canonical READ gateway, no MCP operational claims");
