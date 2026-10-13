@@ -39,3 +39,8 @@
 - Seuls les runs `WAITING_CONFIRMATION` et `READY_TO_RESUME` de l'utilisateur courant sont récupérés après actualisation de la page ; un ancien flux `RUNNING` n'est jamais déclaré vivant sur la seule base du statut persistant.
 - Le Dock restaure l'identifiant du run et la conversation sans répéter la requête initiale, sans nouvel appel externe et sans confirmer une action. La reprise reste un geste humain explicite.
 - L'E2E propriétaire reste requis pour vérifier la réapparition du run, l'aperçu des arguments et les restrictions entre comptes et entreprises.
+
+### Guidage métier selon la disponibilité réelle
+- Le READ `CONNECTED_APPS_STATUS_READ` fournit désormais, pour chaque application, une explication FR/EN et un **code d'étape suivante** à partir de l'état de connexion réellement vérifié (choisir une organisation, autoriser, renouveler, contacter DTSC, attendre la certification ou vérifier une lecture distante réelle).
+- Cette logique réutilise le dictionnaire canonique `lib/ai/mcp/product-guidance.ts` et demeure strictement contrôlée par un schéma Zod. Elle n'exécute ni OAuth, ni `tools/call`, ni mutation et ne devine pas l'accessibilité des fournisseurs.
+- Le statut `CONNECTED` oriente vers la **vérification** d'une lecture distante, jamais vers l'affirmation qu'elle a déjà réussi.
