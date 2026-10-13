@@ -6,6 +6,7 @@ const registry = read("lib/ai/tool-registry.ts");
 const schemas = read("lib/ai/tools/schemas.ts");
 const executors = read("lib/ai/tools/executors/index.ts");
 const appExecutor = read("lib/ai/tools/executors/connected-apps.ts");
+const appsGuidance = read("lib/ai/mcp/product-guidance.ts");
 const authorization = read("lib/ai/tools/authorize.ts");
 const gateway = read("lib/ai/tools/execute.ts");
 const agentTools = read("lib/ai/agent/tools.ts");
@@ -21,6 +22,10 @@ assert(registry.includes('allowedAssistantCodes: ["DTSC_GENERAL", "ENTERPRISE_GE
 assert(registry.includes("requiresConfirmation: false") && registry.includes("idempotent: false"), "Status read must not create a mutation confirmation or cache prior read results");
 assert(schemas.includes("CONNECTED_APPS_STATUS_READ: emptyInput") && schemas.includes('operationalToolCallsVerified: z.literal(false)'), "Tool must never imply remote operation");
 assert(schemas.includes('path: z.literal("/ai/apps")') && schemas.includes("applications: z.array"), "Tool output must validate canonical navigation and bounded app states");
+assert(schemas.includes('nextAction: z.enum(') && schemas.includes('explanation: z.string().min(1).max(500)'), "Connected-app next steps must be validated by bounded canonical Zod schemas");
+assert(appsGuidance.includes("AVAILABILITY_NEXT_ACTION") && appsGuidance.includes('CONNECTED: "VERIFY_REMOTE_READ"') && appsGuidance.includes("getConnectedAppGuidance"), "Agent guidance must reuse canonical human statuses and distinguish OAuth from remote availability");
+assert(appExecutor.includes("getConnectedAppGuidance(app.availability, locale)") && appExecutor.includes("operationalToolCallsVerified: false"), "Agent may guide a verified connection but cannot claim a remote MCP read");
+
 assert(executors.includes("...CONNECTED_APP_AI_TOOL_EXECUTORS"), "Tool executor must be in the canonical gateway");
 assert(appExecutor.includes("listConnectedAppsForUser") && appExecutor.includes("context.session.userId !== context.userId"), "Account information must be resolved from authenticated context");
 assert(appExecutor.includes('active !== "ORGANIZATION"') && appExecutor.includes("context.session.activeOrganizationId"), "Enterprise scope must match current organization");
