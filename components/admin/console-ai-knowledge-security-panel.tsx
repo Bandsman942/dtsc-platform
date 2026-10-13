@@ -30,6 +30,18 @@ export function ConsoleAiKnowledgeSecurityPanel({
           </div>
         )}
       </article>
+      <article className="dtsc-card min-w-0 overflow-hidden p-4">
+        <h4 className="text-sm font-bold text-dtsc-ink">{t("Versions d'indexation documentaire", "Document index versions")}</h4>
+        <p className="mt-1 text-xs text-dtsc-muted">{t("Index legacy conservé, ou source réindexée selon un index versionné. Une version d'index ne prouve pas qu'une citation ait été utilisée.", "Legacy index retained or source indexed with a versioned index. Index version is not proof of a cited retrieval.")}</p>
+        {data.indexing === null ? <p className="mt-2 text-sm text-dtsc-muted">{t("Répartition indisponible", "Distribution unavailable")}</p>
+          : <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+              <div><span className="block text-dtsc-muted">{t("Personnel · historique", "Personal · legacy")}</span><strong className="text-lg text-dtsc-ink">{n(data.indexing.legacyPersonal)}</strong></div>
+              <div><span className="block text-dtsc-muted">{t("Personnel · versionné", "Personal · versioned")}</span><strong className="text-lg text-dtsc-ink">{n(data.indexing.versionedPersonal)}</strong></div>
+              <div><span className="block text-dtsc-muted">{t("Entreprise · historique", "Enterprise · legacy")}</span><strong className="text-lg text-dtsc-ink">{n(data.indexing.legacyEnterprise)}</strong></div>
+              <div><span className="block text-dtsc-muted">{t("Entreprise · versionné", "Enterprise · versioned")}</span><strong className="text-lg text-dtsc-ink">{n(data.indexing.versionedEnterprise)}</strong></div>
+            </div>}
+        <p className="mt-2 text-xs text-dtsc-muted">{t("Réindexation : aucune action automatique depuis la Console. Planification dry-run bornée au script existant.", "Reindexing: no automatic action from the Console. Use the existing bounded dry-run planner.")}</p>
+      </article>
       <div className="grid min-w-0 gap-4 lg:grid-cols-2">
         <article className="dtsc-card min-w-0 space-y-2 overflow-hidden p-4">
           <h4 className="font-bold text-dtsc-ink">{t("Échecs d'appels IA", "AI call failures")}</h4>
