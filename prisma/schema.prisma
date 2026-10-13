@@ -7409,3 +7409,14 @@ model AiMcpControlState {
   updatedByUserId String
   updatedAt       DateTime @updatedAt
 }
+
+model AiGovernanceAlertRule {
+  code            String   @id
+  enabled         Boolean  @default(false)
+  severity        String   @default("WARNING")
+  threshold       Int
+  revision        Int      @default(1)
+  reason          String
+  updatedByUserId String
+  updatedAt       DateTime @updatedAt
+}
