@@ -1,3 +1,11 @@
+## 2026-10-13 — SCALE-7K-A : isoler la dérive de latence et classifier l'idle-in-transaction (#795)
+
+- ajoute les P95/P99 globaux et Dashboard par fenêtres écoulées de 5 minutes dans k6 durant le soak, sans changer les seuils ;
+- enrichit l'observabilité PostgreSQL existante de comptages anonymes des attentes idle en transaction (Client / Lock / autre), sans nouvelle requête ;
+- archive un résumé temporel borné des événements dans la certification et une QA comportementale fail-closed ;
+- maintient toutes les protections et SLO, la dérogation Dashboard limitée au 10 novembre et la progression OWNER ;
+- le gain de capacité n'est pas revendiqué avant une nouvelle certification de charge, avec remédiation runtime encore suivie en #788.
+
 ## 2026-10-10 — SCALE-7J-B : réduire les lectures d'accès ERP redondantes (#793)
 
 - le résolveur de modules réutilise la liste des modules et le sous-secteur déjà présents dans les entitlements, au lieu de refaire deux requêtes indépendantes ;

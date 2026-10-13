@@ -1,5 +1,17 @@
 # SCALE-7 — Staged load certification
 
+## SCALE-7K-A — Diagnostic temporel du 500-soak et des transactions courtes (#795)
+
+Sur `main@cc111ffa6733a3ba42340cf42302bd52deb4c08f`, 500-ramp #38068564282 PASS, mais 500-soak #38128821947, #38133052922 et #38364600810 FAIL. Le dernier : global P95/P99 1 134,73/2 504,76 ms, Dashboard 1 427,43/3 133,67 ms, Enterprise/Shop/Collaboration P99 2 154,37/2 266,86/2 340,07 ms et idle-in-transaction max 1 (<100 ms). Isolation 100 %, Redis OK, DB max 7,55 % connexions. Ces résultats suggèrent une instabilité de queue au plateau, sans prouver un mécanisme unique.
+
+Cette tranche instrumente **sans relâcher aucun seuil** cinq fenêtres écoulées k6 `[0–5), [5–10), [10–15), [15–20), [20m+]` uniquement pendant le profil soak. Les tendances agrègent global et Dashboard P50/P95/P99 (durée HTTP complète). Les fenêtres suivent le temps total depuis le début du run, incluant montée et descente : ne pas confondre la fenêtre initiale avec un plateau à pleine charge. Aucun tag tenant/personne, aucune métrique additionnelle bloquante. Une valeur `null` signifie une absence de données pour une fenêtre, **pas un succès**.
+
+Dans la requête **existante** `pg_stat_activity`, on ajoute trois agrégats strictement numériques et anonymes des connexions `idle in transaction` classées par `wait_event_type` Client / Lock / other. On n'extrait aucun SQL, PID, client, username, tenant, application_name ou adresse. Le rapport sanitizé conserve le nombre total d'échantillons concernés et au plus 16 événements `{timestamp UTC, count, clientWait, lockWait, otherWait, maxAgeSeconds}`. L'artefact contient toujours les observabilités individuelles déjà collectées. Aucun nouveau tour DB ni sonde de fréquence accrue.
+
+**Interprétation requise** : comparer les fenêtres temporelles des P95/P99 aux échantillons de connexions/idle, phases Shop/Collaboration `access/data`, erreurs et ressources Vercel. Une observation Client-wait ne prouve pas l'identité du code responsable et n'autorise pas à relâcher `maxIdleInTransaction === 0`. Les logs d'erreur Vercel du 13 octobre comportent quelques échecs de streaming IA, dont la causalité avec la latence Dashboard n'est pas démontrée.
+
+**Décision et dette** : il s'agit de la première tranche de diagnostic de SCALE-7K, pas d'une réparation vérifiée du 500-soak. Correctif runtime ultérieur à prendre dans l'Issue **#788** à partir de l'artefact instrumenté. Pas de modification des SLO globaux/sectoriels, Dashboard P99 temporaire <2 500 ms à 500 VUs jusqu'au 2026-11-10T00:00Z, isolement 100 %, Redis ou idle zéro. Après CI et Production READY sur nouveau SHA, OWNER doit relancer `RUN_SCALE7_500_RAMP` sur #360, puis `RUN_SCALE7_500_SOAK` seulement si ramp PASS même SHA ; jamais spike ni 1 000 avant soak PASS. Rollback : revert PR, sans migration.
+
 ## SCALE-7J-B — réduction de fan-out des droits ERP au palier 500 VUs (#793)
 
 Le run Production `38059052637` sur SHA `a207bedaad09c2b47a4179a3ce6c900af9882f95` reste FAIL : global P95/P99 1 069/2 642 ms ; Dashboard 1 459/3 691 ms ; Enterprise P99 2 240, Shop 2 313, Collaboration 2 432 ms. Isolation 100 %, idle-in-transaction max 0, Redis OK, connexion DB max 7,21 %. Les phases `access` observées dans Shop (P99 1 249 ms) et Collaboration (P99 1 839 ms) orientent vers le fan-out des contrôles d'accès, **sans démontrer à elles seules une cause unique**.
