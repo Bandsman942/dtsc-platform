@@ -8,7 +8,7 @@ Le Centre IA `/admin/ai-control-center` affiche uniquement des agrégats de mét
 - `EnterpriseAiKnowledgeSource.status` : sources entreprises non archivées, selon `createdAt`.
 - `AiModelCall` : échecs et annulations classés par code motif, distincts des tentatives de fournisseur.
 - `AiToolExecution` : refus de passerelle outillée, classés par code motif et non par identité utilisateur.
-- `buildAiCagPack` : utilisation CAG sans compteur persistant certifié à ce jour, donc `NOT_INSTRUMENTED`.
+- `buildAiCagPack` : signal `cacheHit` journalisé via `prepareAiTurn` dans `ApiLog.metadata.cagCacheHit` ; la Console mesure uniquement les hits/misses **observés** du cache mémoire local par instance (voir ci-dessous), sans prétendre mesurer un cache global.
 - Alertes configurables de sécurité : règles canoniques `AiGovernanceAlertRule`, avec `NOT_CONFIGURED` uniquement pour une règle réellement absente. Les règles désactivées et indisponibles sont distinguées.
 
 La période est bornée, le rafraîchissement visible et chaque panne de requête doit produire `null` / « indisponible », sans afficher des zéros trompeurs. Le statut documentaire `READY` signifie une indexation enregistrée comme complète, pas la preuve que le retrieval a abouti ou qu'une citation a été effectivement utilisée.
@@ -63,7 +63,7 @@ L'interface du Centre IA traduit les statuts de sources `READY`/`PROCESSING`/`FA
 
 Sans créer une source documentaire parallèle ni exposer les contenus, la Console calcule maintenant **deux mesures agrégées** depuis les messages assistants d'entreprise effectivement persistés : nombre de réponses auxquelles au moins un candidat de citation a été joint, et nombre total de candidats joints. La requête filtre `EnterpriseAiMessage` sur `role=assistant`, `deletedAt IS NULL` et sur la fenêtre temporelle demandée. Elle calcule exclusivement les tailles des tableaux JSON en base et ne sélectionne jamais leur contenu, titre, auteur, source, ID ou entreprise. L'échec de cette requête rend le panneau indisponible, pas zéro.
 
-Ces chiffres démontrent seulement que des références de retrieval ont été **rattachées à des réponses sauvegardées**, **pas** qu'elles ont été utilisées, mentionnées ou validées dans le texte généré. Le champ `citationProof.status=NOT_INSTRUMENTED` est maintenu jusqu'à une vraie instrumentation de la correspondance des références dans la sortie du modèle. Ne pas promouvoir la disponibilité ou la qualité du RAG sur ces deux comptages seuls. Le taux réel de cache CAG reste non instrumenté.
+Ces chiffres démontrent seulement que des références de retrieval ont été **rattachées à des réponses sauvegardées**, **pas** qu'elles ont été utilisées, mentionnées ou validées dans le texte généré. Le champ `citationProof.status=NOT_INSTRUMENTED` est maintenu jusqu'à une vraie instrumentation de la correspondance des références dans la sortie du modèle. Ne pas promouvoir la disponibilité ou la qualité du RAG sur ces deux comptages seuls. Le taux observé de réutilisation du cache CAG local est mesuré séparément via les booléens d'audit ; cela ne constitue pas un taux de cache partagé ni une preuve de qualité RAG.
 
 Les opérations de réindexation individuelles existantes restent l'unique voie d'exécution ; le plan Console est non mutateur et plafonné. Les E2E propriétaire sur les sources et permissions restent obligatoires.
 
