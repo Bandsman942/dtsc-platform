@@ -43,6 +43,10 @@ export async function GET(req: Request, { params }: Params) {
     },
     pendingConfirmationId: run.pendingConfirmationId,
     failureCategory: classifyAiAgentFailure(run.reasonCode, run.status),
+    budgetReason: run.status === "BUDGET_EXHAUSTED"
+      && ["MAX_STEPS", "MAX_TOKENS", "MAX_ESTIMATED_COST", "MAX_DURATION", "MAX_TOOL_CALLS"].includes(run.reasonCode || "")
+      ? run.reasonCode
+      : null,
     cancelRequestedAt: run.cancelRequestedAt,
     startedAt: run.startedAt,
     completedAt: run.completedAt,
