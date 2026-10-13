@@ -1,4 +1,5 @@
 import "server-only";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 export type ConsoleAiKnowledgeSecurity = {
@@ -14,6 +15,12 @@ export type ConsoleAiKnowledgeSecurity = {
   toolDenials: Array<{ reasonCode: string; executions: number }> | null;
   cag: { status: "NOT_INSTRUMENTED"; source: "buildAiCagPack"; cacheHitRate: null };
   citationProof: { status: "NOT_INSTRUMENTED"; certifiedUsageCount: null };
+  citationAttachments: {
+    assistantMessagesWithCandidates: number;
+    attachedCandidates: number;
+    source: "EnterpriseAiMessage.citationsJson";
+    meaning: "RETRIEVAL_CANDIDATES_NOT_PROVEN_USED";
+  } | null;
 };
 
 /**
@@ -29,7 +36,7 @@ function safeReasonCode(value: string | null) {
 
 export async function getConsoleAiKnowledgeSecurity(input: { from: Date; to: Date }): Promise<ConsoleAiKnowledgeSecurity> {
   const where = { createdAt: { gte: input.from, lt: input.to } };
-  const [personal, enterprise, failedModels, deniedTools, personalLegacy, enterpriseLegacy, personalReindex, enterpriseReindex] = await Promise.allSettled([
+  const [personal, enterprise, failedModels, deniedTools, personalLegacy, enterpriseLegacy, personalReindex, enterpriseReindex, citationAttachments] = await Promise.allSettled([
     prisma.knowledgeDocument.groupBy({
       by: ["status"], where,
       _count: { _all: true },
@@ -56,6 +63,21 @@ export async function getConsoleAiKnowledgeSecurity(input: { from: Date; to: Dat
     prisma.enterpriseAiKnowledgeSource.count({ where: { ...where, archivedAt: null, indexVersion: "legacy-openai-1536-v1" } }),
     prisma.knowledgeDocument.count({ where: { ...where, indexVersion: "legacy-openai-1536-v1", extractedText: { not: null } } }),
     prisma.enterpriseAiKnowledgeSource.count({ where: { ...where, archivedAt: null, indexVersion: "legacy-openai-1536-v1", extractedText: { not: null } } }),
+    // Aggregate only: neither citation payload, source IDs nor message content
+    // leave PostgreSQL. An attached retrieval candidate is NOT proof that the
+    // model actually referenced it in its generated answer.
+    prisma.$queryRaw<Array<{ assistantMessagesWithCandidates: number; attachedCandidates: number }>>(Prisma.sql`
+      SELECT
+        COUNT(*) FILTER (WHERE jsonb_array_length(
+          CASE WHEN jsonb_typeof("citationsJson") = 'array' THEN "citationsJson" ELSE '[]'::jsonb END
+        ) > 0)::int AS "assistantMessagesWithCandidates",
+        COALESCE(SUM(jsonb_array_length(
+          CASE WHEN jsonb_typeof("citationsJson") = 'array' THEN "citationsJson" ELSE '[]'::jsonb END
+        )), 0)::int AS "attachedCandidates"
+      FROM "EnterpriseAiMessage"
+      WHERE "createdAt" >= ${input.from} AND "createdAt" < ${input.to}
+        AND "role" = 'assistant' AND "deletedAt" IS NULL
+    `),
   ]);
 
   const statusCounts = (rows: Array<{ status: string; _count: { _all: number } }>) => {
@@ -96,5 +118,13 @@ export async function getConsoleAiKnowledgeSecurity(input: { from: Date; to: Dat
       : null,
     cag: { status: "NOT_INSTRUMENTED", source: "buildAiCagPack", cacheHitRate: null },
     citationProof: { status: "NOT_INSTRUMENTED", certifiedUsageCount: null },
+    citationAttachments: citationAttachments.status === "fulfilled"
+      ? {
+          assistantMessagesWithCandidates: citationAttachments.value[0]?.assistantMessagesWithCandidates ?? 0,
+          attachedCandidates: citationAttachments.value[0]?.attachedCandidates ?? 0,
+          source: "EnterpriseAiMessage.citationsJson",
+          meaning: "RETRIEVAL_CANDIDATES_NOT_PROVEN_USED",
+        }
+      : null,
   };
 }
