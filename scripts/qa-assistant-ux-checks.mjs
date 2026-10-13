@@ -14,6 +14,7 @@ const helper = read("lib/assistant-conversation-preferences.ts");
 const promptPolicy = read("lib/ai/prompts.ts");
 const productAwareness = read("lib/ai/product-awareness.ts");
 const productAwarenessPolicy = read("docs/AI_PRODUCT_AWARENESS_POLICY.md");
+const connectedAppsProductGuidance = read("lib/ai/mcp/product-guidance.ts");
 const chatPage = read("app/chat/page.tsx");
 const chatWorkspace = read("components/chat/chat-workspace-v2.tsx");
 const legacyChatWorkspace = read("components/chat/chat-workspace.tsx");
@@ -80,6 +81,14 @@ assert(productAwareness.includes("USER_FACING_SECTIONS") && productAwareness.inc
 assert(nextConfig.includes("outputFileTracingIncludes") && nextConfig.includes("./docs/CHANGELOG.md") && nextConfig.includes("./docs/changelog/*.md"), "Product awareness release sources must be included in production server traces");
 assert(releaseFragment.includes("Les IA DTSC reçoivent automatiquement un contexte des nouveautés produit récentes"), "The current release must document automatic AI product awareness");
 assert(productAwarenessPolicy.includes("Toute PR qui ajoute, modifie ou retire un comportement visible par un utilisateur") && productAwarenessPolicy.includes("buildLanguageInstruction()") && productAwarenessPolicy.includes("qa:assistant-ux"), "Automatic AI product awareness must be a documented durable contribution policy");
+assert(promptPolicy.includes("buildConnectedAppsProductInstruction") && promptPolicy.includes("connectedAppsInstruction"), "Shared assistant language policy must include verified MCP product guidance");
+assert(connectedAppsProductGuidance.includes("MCP signifie Model Context Protocol") && connectedAppsProductGuidance.includes("MCP means Model Context Protocol"), "MCP must be expanded correctly in both user locales");
+assert(connectedAppsProductGuidance.includes('CONNECTED_APPS_PRODUCT_PATH = "/ai/apps"') && !connectedAppsProductGuidance.includes('CONNECTED_APPS_PRODUCT_PATH = "/#/applications"'), "Product guidance must link only to the actual connected-applications route");
+assert(connectedAppsProductGuidance.includes("const apps = await loadApps(input)") && connectedAppsProductGuidance.includes('await import("@/lib/ai/mcp/app-catalog")') && connectedAppsProductGuidance.includes("AVAILABILITY_MEANINGS[app.availability]"), "Connection readiness must be derived from the existing catalog, not hardcoded or assumed");
+assert(connectedAppsProductGuidance.includes("does not prove any MCP tool is usable") && connectedAppsProductGuidance.includes("ne prouve pas qu'un outil MCP soit utilisable"), "OAuth grant must never be presented as available MCP tool");
+assert(connectedAppsProductGuidance.includes("No active organization") && connectedAppsProductGuidance.includes("Aucune organisation active"), "The chatbot must explain the actual current personal OAuth limitation instead of inventing a personal flow");
+assert(chatRoute.includes("buildConnectedAppsAvailabilityContext") && chatRoute.includes("asksAboutConnectedApps") && chatRoute.includes("organizationId, locale"), "General chatbot must ground MCP answers in the current user's scoped metadata only when relevant");
+assert(productAwareness.includes("Release notes describe shipped product changes") && productAwareness.includes("Les notes de version décrivent des livraisons"), "A release note must not be presented as proof of live connection or plan status");
 
 assert(chatPage.includes("ChatWorkspaceV2") && chatPage.includes("listCatalogAiModelsForUi"), "Chat page must use the new assistant workspace with the canonical model catalog");
 assert(assistantUi.includes("<textarea") && assistantUi.includes("requestSubmit"), "Assistant composer must be multiline and keyboard accessible");
