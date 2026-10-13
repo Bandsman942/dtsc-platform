@@ -57,7 +57,7 @@ export function ConsoleAiKnowledgeSecurityPanel({
           {data.toolDenials === null ? <p className="text-sm text-dtsc-muted">{t("Indisponible", "Unavailable")}</p> : data.toolDenials.length === 0 ? <p className="text-sm text-dtsc-muted">{t("Aucun événement enregistré sur la période", "No recorded event in window")}</p> : <div className="space-y-2">{data.toolDenials.map((r, i) => <div key={i} className="flex justify-between gap-2 border-b border-dtsc-border/50 py-2 text-xs"><span className="min-w-0 break-words">{r.reasonCode}</span><strong className="tabular-nums">{n(r.executions)}</strong></div>)}</div>}
         </article>
       </div>
-      <p className="text-xs text-dtsc-muted">{t("Taux de cache CAG : non instrumenté. Les alertes sont évaluées séparément selon les règles publiées. Aucun état sain n'est présumé.", "CAG cache hit rate: not instrumented. Alerts are evaluated separately from published rules. No healthy state is inferred.")}</p>
+      <p className="text-xs text-dtsc-muted">{t("Taux de cache CAG : non instrumenté. Preuve de citations effectivement utilisées : non instrumentée. Les alertes sont évaluées séparément selon les règles publiées. Aucun état sain n'est présumé.", "CAG cache hit rate: not instrumented. Proof of citations actually used: not instrumented. Alerts are evaluated separately from published rules. No healthy state is inferred.")}</p>
     </section>
   );
 }
