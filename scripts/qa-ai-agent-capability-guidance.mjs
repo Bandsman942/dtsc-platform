@@ -10,7 +10,6 @@ const authorization = read("lib/ai/tools/authorize.ts");
 const gateway = read("lib/ai/tools/execute.ts");
 const agentTools = read("lib/ai/agent/tools.ts");
 const globalAgent = read("app/api/chat/agent/route.ts");
-const agentDock = read("components/chat/ai-agent-run-dock.tsx");
 const enterpriseAgent = read("app/api/enterprise/ai/agent/route.ts");
 const agentStatus = read("app/api/ai/agent/runs/[id]/route.ts");
 const agentDock = read("components/chat/ai-agent-run-dock.tsx");
