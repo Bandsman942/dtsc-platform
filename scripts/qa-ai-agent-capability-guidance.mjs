@@ -18,6 +18,7 @@ const activeAgentApi = read("app/api/ai/agent/runs/active/route.ts");
 const agentDock = read("components/chat/ai-agent-run-dock.tsx");
 const agentPersistence = read("lib/ai/agent/persistence.ts");
 const cancelApi = read("app/api/ai/tools/cancel/route.ts");
+const confirmApi = read("app/api/ai/tools/confirm/route.ts");
 
 assert(registry.includes('code: "CONNECTED_APPS_STATUS_READ"') && registry.includes('mode: "READ"'), "Connected-app status must use certified READ tool definition");
 assert(registry.includes('allowedAssistantCodes: ["DTSC_GENERAL", "ENTERPRISE_GENERAL"]'), "Only named assistants may request connected-app metadata");
@@ -57,6 +58,10 @@ assert(agentPersistence.includes('return prisma.$transaction(async (tx) => {') &
 assert(agentPersistence.includes('status: "CANCELLED", argumentsJson: Prisma.DbNull') && agentPersistence.includes('pendingConfirmationId: true'), "Rejected approval payload must be invalidated and its arguments purged");
 assert(agentPersistence.includes('where: { ...scopedWhere, status: run.status }') && agentPersistence.includes('organizationId: input.organizationId || null'), "Cancellation must be race-guarded and isolated to the current organization");
 assert(cancelApi.includes('prisma.$transaction(async (tx) => {') && cancelApi.includes('tx.aiToolConfirmation.updateMany(') && cancelApi.includes('tx.aiAgentRun.updateMany('), "Rejection must atomically cancel both confirmation and Agent run");
+for (const [code, source] of [["recovery", activeAgentApi], ["preview", pendingApi], ["approval", confirmApi], ["rejection", cancelApi]]) {
+  assert(source.includes("requireActiveOrganizationMembership(session, organizationId)") && source.includes("ORGANIZATION_ACCESS_DENIED"), `${code} must reject revoked enterprise memberships rather than trusting a stale context cookie`);
+}
+
 assert(cancelApi.includes('argumentsJson: Prisma.DbNull') && cancelApi.includes('cancelledAt: now') && cancelApi.includes('completedAt: now'), "Rejecting a confirmation must purge its private arguments and mark the Agent terminal");
 
 
