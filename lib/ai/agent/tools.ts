@@ -26,6 +26,7 @@ const TOOL_DESCRIPTIONS: Record<string, string> = {
   ...MANUFACTURING_AI_ACTION_DESCRIPTIONS,
   ...TAILORING_AI_TOOL_DESCRIPTIONS,
   ...TAILORING_AI_ACTION_DESCRIPTIONS,
+  CONNECTED_APPS_STATUS_READ: "Lire uniquement les états du catalogue d’applications connectées pour l’utilisateur et le contexte actif. OAuth connecté ne signifie jamais outil MCP disponible ni ressource lue.",
   TASK_DRAFT_PREPARE: "Préparer un brouillon de tâche DTSC sans créer la tâche finale.",
   SUPPORT_TICKET_CREATE: "Créer un ticket support DTSC uniquement après confirmation humaine structurelle.",
   DTSC_CONTACT_EMAIL_SEND: "Envoyer un message à DTSC uniquement après confirmation humaine structurelle.",
