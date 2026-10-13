@@ -40,7 +40,10 @@ export function ConsoleAiKnowledgeSecurityPanel({
               <div><span className="block text-dtsc-muted">{t("Entreprise · historique", "Enterprise · legacy")}</span><strong className="text-lg text-dtsc-ink">{n(data.indexing.legacyEnterprise)}</strong></div>
               <div><span className="block text-dtsc-muted">{t("Entreprise · versionné", "Enterprise · versioned")}</span><strong className="text-lg text-dtsc-ink">{n(data.indexing.versionedEnterprise)}</strong></div>
             </div>}
-        <p className="mt-2 text-xs text-dtsc-muted">{t("Réindexation : aucune action automatique depuis la Console. Planification dry-run bornée au script existant.", "Reindexing: no automatic action from the Console. Use the existing bounded dry-run planner.")}</p>
+        <p className="mt-2 text-xs text-dtsc-muted">{t("Plan de réindexation (lecture seule, sans exécution)", "Reindex plan (read-only, no execution)")}: {data.reindexPreview === null
+          ? t("candidats non disponibles", "candidates unavailable")
+          : `${n(data.reindexPreview.personalCandidates)} ${t("sources personnelles", "personal sources")} · ${n(data.reindexPreview.enterpriseCandidates)} ${t("sources entreprises", "enterprise sources")} · ${t("maximum", "at most")} ${data.reindexPreview.maxPerDomain} ${t("par domaine", "per domain")}`}</p>
+        <p className="mt-1 text-xs text-dtsc-muted">{t("Aucun document n'est modifié. Les réindexations réelles restent individuelles, autorisées et auditées via les espaces documentaires existants.", "No document is changed. Actual reindex operations remain individual, authorized and audited in existing document workspaces.")}</p>
       </article>
       <div className="grid min-w-0 gap-4 lg:grid-cols-2">
         <article className="dtsc-card min-w-0 space-y-2 overflow-hidden p-4">
