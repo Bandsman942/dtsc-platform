@@ -11,3 +11,8 @@
 - Parcours conversationnels guidés depuis les statuts OAuth vérifiés jusqu'aux outils MCP READ certifiés, avec preuves E2E réelles.
 - UX complète de préparation d'actions, confirmation humaine structurelle, reprise et diagnostic des budgets épuisés.
 - QA complète, E2E propriétaire et fusion interdite avant clôture des critères de #805.
+
+### Expérience Agent améliorée
+- Le panneau Agent propose un lien direct vers `/ai/apps` pour consulter et renouveler les autorisations de connexion dans l’espace courant.
+- Lorsqu’un run atteint sa limite, l’API renvoie uniquement un motif de budget sur une liste autorisée (étapes, outils, tokens, coût estimé ou durée), sans message technique ou données de modèle privées. Le panneau affiche une explication FR/EN contextualisée.
+- Le message rappelle qu’un outil externe déjà exécuté ne doit pas être rejoué automatiquement et qu’une nouvelle demande exige une intention explicite ; il ne promet pas d’extension de quota hors du plan.
