@@ -69,3 +69,11 @@ Lorsqu’un changement produit visible est implémenté :
 6. vérifier `qa:assistant-ux` et `qa:regression` avant fusion.
 
 Cette règle signifie qu’une nouveauté DTSC n’est pas considérée complètement livrée si elle est visible dans le produit mais absente de sa documentation versionnée utilisateur.
+
+## Aide aux connexions externes et limites du contexte produit
+
+Le contenu d'une release ne prouve ni l'autorisation OAuth du compte, ni la présence d'un outil MCP activé, ni l'état de santé d'un fournisseur. La page **Applications connectées** (`/ai/apps`) est la destination utilisateur canonique. Le terme MCP signifie **Model Context Protocol**.
+
+Le contrat `lib/ai/mcp/product-guidance.ts` décrit les états applicables au catalogue et les limites de la configuration actuelle. Lorsqu'une question concerne MCP ou une intégration externe, `/api/chat/v2` tente de consulter les métadonnées de connexion correspondant strictement au compte et à l'organisation active, sans déchiffrer de tokens ni lire les ressources externes. Un échec de lecture produit un statut non vérifié, jamais un succès inventé.
+
+Une connexion OAuth n'autorise pas d'elle-même l'exécution d'un outil. Les bindings certifiés et le Tool Gateway restent les autorités des appels externes. En l'absence d'organisation active, la version actuelle n'autorise pas encore le démarrage d'un OAuth purement personnel ; cette limitation est affichée comme telle jusqu'au hotfix d'isolation des connexions personnelles.

@@ -1,4 +1,5 @@
 import { buildAiProductAwarenessInstruction } from "@/lib/ai/product-awareness";
+import { buildConnectedAppsProductInstruction } from "@/lib/ai/mcp/product-guidance";
 
 export type AiPromptCode =
   | "GLOBAL_ASSISTANT"
@@ -15,11 +16,11 @@ export type AiPromptVersion = {
 };
 
 export const AI_PROMPT_REGISTRY: AiPromptVersion[] = [
-  { code: "GLOBAL_ASSISTANT", version: "2026-08-17.1", effectiveAt: "2026-08-17", description: "Global DTSC assistant policy with versioned product awareness and permission-scoped active capabilities" },
-  { code: "ENTERPRISE_ASSISTANT", version: "2026-08-17.1", effectiveAt: "2026-08-17", description: "Tenant-aware enterprise assistant policy with canonical UX labels, permission-scoped module vocabulary and versioned product awareness" },
+  { code: "GLOBAL_ASSISTANT", version: "2026-10-13.1", effectiveAt: "2026-10-13", description: "Global DTSC assistant policy with versioned product awareness and permission-scoped active capabilities" },
+  { code: "ENTERPRISE_ASSISTANT", version: "2026-10-13.1", effectiveAt: "2026-10-13", description: "Tenant-aware enterprise assistant policy with canonical UX labels, permission-scoped module vocabulary and versioned product awareness" },
   { code: "TASK_CLASSIFICATION", version: "2026-08-04.1", effectiveAt: "2026-08-04", description: "Deterministic task classification rules" },
   { code: "SECURITY", version: "2026-08-04.1", effectiveAt: "2026-08-04", description: "Tool, source and prompt-injection boundaries" },
-  { code: "LANGUAGE", version: "2026-08-17.1", effectiveAt: "2026-08-17", description: "Response locale, user-facing presentation contract and automatic versioned product awareness" },
+  { code: "LANGUAGE", version: "2026-10-13.1", effectiveAt: "2026-10-13", description: "Response locale, user-facing presentation contract and automatic versioned product awareness" },
 ];
 
 export function getAiPromptVersion(code: AiPromptCode) {
@@ -55,6 +56,7 @@ function buildUserFacingPresentationInstruction(locale: string) {
 export function buildLanguageInstruction(locale: string, explicitlyRequestedLanguage?: string | null) {
   const presentationInstruction = buildUserFacingPresentationInstruction(locale);
   const productAwarenessInstruction = buildAiProductAwarenessInstruction(locale);
+  const connectedAppsInstruction = buildConnectedAppsProductInstruction(locale);
   const languageInstruction = explicitlyRequestedLanguage
     ? [
         `Réponds dans la langue explicitement demandée : ${explicitlyRequestedLanguage}.`,
@@ -73,5 +75,5 @@ export function buildLanguageInstruction(locale: string, explicitlyRequestedLang
           "Les citations restent dans leur langue source sauf demande explicite de traduction.",
         ].join("\n");
 
-  return [languageInstruction, presentationInstruction, productAwarenessInstruction].filter(Boolean).join("\n\n");
+  return [languageInstruction, presentationInstruction, productAwarenessInstruction, connectedAppsInstruction].filter(Boolean).join("\n\n");
 }
