@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import type { ConsoleAiAlertSnapshot } from "@/lib/ai/governance-alerts";
+import type { ConsoleAiAlert, ConsoleAiAlertSnapshot } from "@/lib/ai/governance-alerts";
 
 const TITLES = {
   MODEL_FAILURES: { fr: "Échecs des appels IA", en: "AI model failures" },
@@ -54,9 +54,12 @@ export function ConsoleAiAlertPanel({
         setFeedback(result?.error || t("Publication non confirmée. Actualisez la règle.", "Save not confirmed. Refresh this rule."));
         return;
       }
+      const nextState = (currentTotal: number | null): ConsoleAiAlert["state"] =>
+        !result.enabled ? "DISABLED" : currentTotal === null ? "UNAVAILABLE"
+          : currentTotal >= result.threshold ? "TRIGGERED" : "BELOW_THRESHOLD";
       setAlerts((current) => current.map((alert) => alert.code === result.code ? {
         ...alert, revision: result.revision, threshold: result.threshold, severity: result.severity, enabled: result.enabled,
-        state: !result.enabled ? "DISABLED" : alert.total === null ? "UNAVAILABLE" : alert.total >= result.threshold ? "TRIGGERED" : "BELOW_THRESHOLD",
+        state: nextState(alert.total),
       } : alert));
       setEditing(null);
       setReason("");
