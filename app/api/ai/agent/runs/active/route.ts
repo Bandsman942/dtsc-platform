@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { getActiveOrganizationId } from "@/lib/organizations";
+import { getActiveOrganizationId, requireActiveOrganizationMembership } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -20,6 +20,9 @@ export async function GET(req: Request) {
   const organizationId = getActiveOrganizationId(session);
   if (variant === "enterprise" && (session.activeContext !== "ORGANIZATION" || !organizationId)) {
     return NextResponse.json({ error: "ORGANIZATION_CONTEXT_REQUIRED" }, { status: 403 });
+  }
+  if (session.activeContext === "ORGANIZATION" && (!organizationId || !await requireActiveOrganizationMembership(session, organizationId))) {
+    return NextResponse.json({ error: "ORGANIZATION_ACCESS_DENIED" }, { status: 403 });
   }
 
   const run = await prisma.aiAgentRun.findFirst({
