@@ -13,6 +13,8 @@ const agentTools = read("lib/ai/agent/tools.ts");
 const globalAgent = read("app/api/chat/agent/route.ts");
 const enterpriseAgent = read("app/api/enterprise/ai/agent/route.ts");
 const agentStatus = read("app/api/ai/agent/runs/[id]/route.ts");
+const agentCancel = read("app/api/ai/agent/runs/[id]/cancel/route.ts");
+const agentResume = read("app/api/ai/agent/runs/[id]/resume/route.ts");
 const pendingApi = read("app/api/ai/tools/pending/route.ts");
 const activeAgentApi = read("app/api/ai/agent/runs/active/route.ts");
 const agentDock = read("components/chat/ai-agent-run-dock.tsx");
@@ -58,7 +60,7 @@ assert(agentPersistence.includes('return prisma.$transaction(async (tx) => {') &
 assert(agentPersistence.includes('status: "CANCELLED", argumentsJson: Prisma.DbNull') && agentPersistence.includes('pendingConfirmationId: true'), "Rejected approval payload must be invalidated and its arguments purged");
 assert(agentPersistence.includes('where: { ...scopedWhere, status: run.status }') && agentPersistence.includes('organizationId: input.organizationId || null'), "Cancellation must be race-guarded and isolated to the current organization");
 assert(cancelApi.includes('prisma.$transaction(async (tx) => {') && cancelApi.includes('tx.aiToolConfirmation.updateMany(') && cancelApi.includes('tx.aiAgentRun.updateMany('), "Rejection must atomically cancel both confirmation and Agent run");
-for (const [code, source] of [["recovery", activeAgentApi], ["preview", pendingApi], ["approval", confirmApi], ["rejection", cancelApi]]) {
+for (const [code, source] of [["recovery", activeAgentApi], ["run-status", agentStatus], ["run-cancel", agentCancel], ["run-resume", agentResume], ["preview", pendingApi], ["approval", confirmApi], ["rejection", cancelApi]]) {
   assert(source.includes("requireActiveOrganizationMembership(session, organizationId)") && source.includes("ORGANIZATION_ACCESS_DENIED"), `${code} must reject revoked enterprise memberships rather than trusting a stale context cookie`);
 }
 
