@@ -31,3 +31,9 @@ La répartition legacy / index versionné est maintenant affichée. La réindexa
 - La Console lit désormais seulement des nombres agrégés de `EnterpriseAiMessage.citationsJson` (réponses contenant des références jointes et nombre de candidats), avec filtre temporel et exclusion des messages supprimés ; aucun contenu privé ni identifiant source n'est renvoyé au navigateur.
 - Cet indicateur mesure les pièces de retrieval **jointes** et **non les citations effectivement utilisées** dans le texte. La preuve de citation effective et le taux de cache CAG restent `NOT_INSTRUMENTED`, non simulés.
 - Traduction FR/EN des statuts documentaires, du vocabulaire des tableaux et clarification du prévisualiseur de réindexation en lecture seule.
+
+
+### Télémétrie de réutilisation CAG
+- Le taux de réutilisation du cache CAG est maintenant **mesuré sur les événements applicatifs existants** `ApiLog.metadata.cagCacheHit` : nombre de `true` (réutilisation) / `false` (recalcul) sur les quatre routes de chat/agent. Une absence d'observations ou une panne de lecture ne devient jamais un faux taux nul.
+- Le panneau explique que le cache CAG est **en mémoire et local à l'instance** ; cet indicateur ne certifie pas un cache global ni les citations effectivement utilisées dans les réponses.
+- Le comptage reste strictement agrégé sur une période et n'expose aucune conversation ou métadonnée de compte.
