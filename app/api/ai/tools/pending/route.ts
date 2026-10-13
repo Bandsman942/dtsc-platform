@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { requireActiveOrganizationMembership } from "@/lib/organizations";
 import { isSameOriginRequest } from "@/lib/request-security";
 
 type PendingRow = {
@@ -42,6 +43,9 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "INVALID_CONFIRMATION_ID" }, { status: 400 });
   }
   const organizationId = session.activeContext === "ORGANIZATION" ? session.activeOrganizationId || null : null;
+  if (session.activeContext === "ORGANIZATION" && (!organizationId || !await requireActiveOrganizationMembership(session, organizationId))) {
+    return NextResponse.json({ error: "ORGANIZATION_ACCESS_DENIED" }, { status: 403 });
+  }
 
   const rows = confirmationId
     ? await prisma.$queryRaw<PendingRow[]>(Prisma.sql`
