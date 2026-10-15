@@ -50,10 +50,10 @@ async function source(entityType) {
   if (entityType === "EnterpriseTask") return prisma.enterpriseTask.create({ data: { ...common, createdByUserId: maker } });
   if (entityType === "EnterpriseRequest") return prisma.enterpriseRequest.create({ data: { ...common, requestType: "GENERAL", description: "Test", requestedByUserId: maker, status: "SUBMITTED" } });
   if (entityType === "EnterpriseMeeting") return prisma.enterpriseMeeting.create({ data: { ...common, organizerUserId: maker, startAt: new Date(), endAt: new Date(Date.now() + 60_000) } });
-  if (entityType === "EnterpriseBudget") return prisma.enterpriseBudget.create({ data: { ...common, reference, createdByUserId: maker, periodStart: new Date("2026-01-01"), periodEnd: new Date("2026-12-31"), lines: { create: { organizationId, name: "Line", plannedAmount: "100" } } } });
+  if (entityType === "EnterpriseBudget") return prisma.enterpriseBudget.create({ data: { ...common, reference, createdByUserId: maker, periodStart: new Date("2026-01-01"), periodEnd: new Date("2026-12-31"), lines: { create: { name: "Line", plannedAmount: "100" } } } });
   if (entityType === "EnterpriseExpense") return prisma.enterpriseExpense.create({ data: { ...common, reference, createdByUserId: maker, requestedByUserId: maker, expenseDate: new Date(), amount: "10" } });
   if (entityType === "EnterprisePurchase") {
-    const purchase = await prisma.enterprisePurchase.create({ data: { ...common, reference, supplierId, createdByUserId: maker, requestedByUserId: maker, totalAmount: "10", items: { create: { organizationId, description: "Service", quantity: "1", unit: "EA", unitPrice: "10", lineSubtotal: "10", taxAmount: "0", lineTotal: "10" } } }, include: { items: true } });
+    const purchase = await prisma.enterprisePurchase.create({ data: { ...common, reference, supplierId, createdByUserId: maker, requestedByUserId: maker, totalAmount: "10", items: { create: { description: "Service", quantity: "1", unit: "EA", unitPrice: "10", lineSubtotal: "10", taxAmount: "0", lineTotal: "10" } } }, include: { items: true } });
     await prisma.enterprisePurchaseItemCatalogLink.create({ data: { organizationId, purchaseItemId: purchase.items[0].id, expectedItemType: "SERVICE" } });
     return purchase;
   }
