@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseWorkflowAccess } from "@/lib/enterprise/workflows/access";
+import { requireWorkflowDefinitionSourceAccess, requireWorkflowSourceAccess } from "@/lib/enterprise/workflows/source-access";
 import { archiveWorkflowDefinition, getWorkflowDefinition, getWorkflowVersionReadiness, updateWorkflowDefinition } from "@/lib/enterprise/workflows/definitions";
 import { normalizeWorkflowError } from "@/lib/enterprise/workflows/errors";
 import { workflowDefinitionUpdateSchema } from "@/lib/enterprise/workflows/validators";
@@ -15,6 +16,7 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId, id } = await params; const access = await getEnterpriseWorkflowAccess(session, organizationId); if (!access?.canRead) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   try {
     const definition = await getWorkflowDefinition(organizationId, id);
+    await requireWorkflowDefinitionSourceAccess({ userId: session.userId, organizationId, definitionId: id });
     const readinessEntries = await Promise.all(definition.versions.filter((version) => version.status === "DRAFT").map(async (version) => [version.id, await getWorkflowVersionReadiness(organizationId, id, version.id)] as const));
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "workflow-definition", definitionId: id } });
     return NextResponse.json({ definition, readiness: Object.fromEntries(readinessEntries), permissions: access });
@@ -28,6 +30,8 @@ export async function PATCH(req: Request, { params }: Params) {
   const { organizationId, id } = await params; const access = await getEnterpriseWorkflowAccess(session, organizationId); if (!access?.canEditDraft) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = workflowDefinitionUpdateSchema.safeParse(await req.json().catch(() => null)); if (!parsed.success) return NextResponse.json({ error: "INVALID_WORKFLOW_PAYLOAD", message: parsed.error.issues[0]?.message || "Workflow invalide." }, { status: 400 });
   try {
+    await requireWorkflowDefinitionSourceAccess({ userId: session.userId, organizationId, definitionId: id });
+    if (parsed.data.triggerEntityType) await requireWorkflowSourceAccess({ userId: session.userId, organizationId, sourceEntityType: parsed.data.triggerEntityType });
     const definition = await updateWorkflowDefinition(organizationId, id, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_WORKFLOW_UPDATED", entity: "EnterpriseWorkflowDefinition", entityId: id, request: req, metadata: { organizationId } });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "workflow-definition", definitionId: id } });
@@ -41,6 +45,7 @@ export async function DELETE(req: Request, { params }: Params) {
   const limited = await rateLimit(getRateLimitKey(req, `enterprise-workflow-archive:${session.userId}`), 30, 60 * 60 * 1000); if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   const { organizationId, id } = await params; const access = await getEnterpriseWorkflowAccess(session, organizationId); if (!access?.canRetire) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   try {
+    await requireWorkflowDefinitionSourceAccess({ userId: session.userId, organizationId, definitionId: id });
     await archiveWorkflowDefinition(organizationId, id, session.userId);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_WORKFLOW_ARCHIVED", entity: "EnterpriseWorkflowDefinition", entityId: id, request: req, metadata: { organizationId } });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "workflow-definition", definitionId: id } });
