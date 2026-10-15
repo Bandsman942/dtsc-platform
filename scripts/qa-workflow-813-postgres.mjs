@@ -87,8 +87,9 @@ try {
   assert.equal(await prisma.enterpriseTask.count({ where: { organizationId } }), 1);
   // Simulate the crash window AFTER effect+receipt commit, BEFORE step completion.
   await prisma.enterpriseWorkflowRun.update({ where: { id: concurrent.run.id }, data: { status: "RUNNING", currentStepId: concurrent.step.id, completedAt: null, executionToken: "crashed", executionLeaseUntil: new Date(Date.now() - 1) } });
-  await prisma.enterpriseWorkflowStepRun.update({ where: { id: concurrent.stepRun.id }, data: { status: "RUNNING", completedAt: null } });
+  await prisma.enterpriseWorkflowStepRun.update({ where: { id: concurrent.stepRun.id }, data: { status: "RUNNING", attemptCount: 3, completedAt: null } });
   await engine.advanceWorkflowRun(concurrent.run.id);
+  assert.equal((await prisma.enterpriseWorkflowRun.findUniqueOrThrow({ where: { id: concurrent.run.id } })).status, "COMPLETED", "A receipt at the retry limit must still finalize without another effect");
   assert.equal(taskCalls, 1, "Recovery must reuse the committed task receipt");
   const replayed = await engine.startWorkflowRun({ organizationId, workflowDefinitionId: concurrent.definition.id, sourceEntityType: concurrent.run.sourceEntityType, sourceEntityId: concurrent.run.sourceEntityId, triggerEventId: concurrent.run.triggerEventId, triggerType: "DOMAIN_EVENT" });
   assert.equal(replayed.id, concurrent.run.id, "Terminal redelivery returns the pinned run");

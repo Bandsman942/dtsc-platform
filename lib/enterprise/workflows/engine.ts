@@ -227,7 +227,12 @@ async function advanceClaimedWorkflowRun(runId: string, token: string) {
       await recoverWorkflowStep(run, stepRun.id);
       continue;
     }
-    if (stepRun.attemptCount >= WORKFLOW_LIMITS.maxAttempts) {
+    // A receipt committed on the last allowed attempt still needs its step
+    // finalized after a crash. Reusing it does not execute another effect.
+    const receiptAtLimit = stepRun.attemptCount >= WORKFLOW_LIMITS.maxAttempts
+      ? await prisma.enterpriseWorkflowActionAttempt.findFirst({ where: { organizationId: run.organizationId, stepRunId: stepRun.id, status: "SUCCEEDED" }, select: { id: true } })
+      : null;
+    if (stepRun.attemptCount >= WORKFLOW_LIMITS.maxAttempts && !receiptAtLimit) {
       await prisma.$transaction(async (tx) => {
         await requireWorkflowExecution(tx, run.id, run.organizationId, token);
         await tx.enterpriseWorkflowRun.updateMany({ where: { id: run.id, executionToken: token, revision: run.revision }, data: { status: "FAILED", failureCategory: "TERMINAL", failureCode: "WORKFLOW_MAX_ATTEMPTS_REACHED", failureMessage: "Le nombre maximal de tentatives est atteint.", revision: { increment: 1 } } });
@@ -238,7 +243,7 @@ async function advanceClaimedWorkflowRun(runId: string, token: string) {
       await requireWorkflowExecution(tx, run.id, run.organizationId, token);
       const claimed = await tx.enterpriseWorkflowStepRun.updateMany({
         where: { id: stepRun.id, organizationId: run.organizationId, status: { in: ["PENDING", "FAILED"] }, attemptCount: stepRun.attemptCount },
-        data: { status: "RUNNING", startedAt: stepRun.startedAt || new Date(), attemptCount: { increment: 1 }, failureCategory: null, failureCode: null, failureMessage: null },
+        data: { status: "RUNNING", startedAt: stepRun.startedAt || new Date(), ...(receiptAtLimit ? {} : { attemptCount: { increment: 1 } }), failureCategory: null, failureCode: null, failureMessage: null },
       });
       if (claimed.count !== 1) throw workflowLeaseLost();
       return tx.enterpriseWorkflowStepRun.findUniqueOrThrow({ where: { id: stepRun.id } });
