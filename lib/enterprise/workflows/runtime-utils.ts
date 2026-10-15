@@ -1,19 +1,12 @@
 import type { WorkflowEntityAdapter, WorkflowEntitySnapshot } from "@/lib/enterprise/workflows/adapters/types";
 import { EnterpriseWorkflowError } from "@/lib/enterprise/workflows/errors";
 import { prisma } from "@/lib/prisma";
-
-const SOURCE_MODULE_BY_ENTITY: Record<string, string> = {
-  EnterpriseTask: "TASKS_OPERATIONS",
-  EnterpriseRequest: "INTERNAL_REQUESTS",
-  EnterpriseMeeting: "MEETINGS",
-  EnterprisePurchase: "SUPPLIERS_PURCHASES",
-  EnterpriseBudget: "FINANCE_BUDGETS",
-  EnterpriseExpense: "FINANCE_BUDGETS",
-  EnterpriseReport: "REPORTS",
-};
+import { moduleCodeForEnterpriseEntity } from "@/lib/enterprise/cross-module/deep-links";
+import { getCanonicalEnterpriseModuleCode } from "@/lib/enterprise/module-registry";
 
 export function workflowSourceModule(entityType: string) {
-  const moduleCode = SOURCE_MODULE_BY_ENTITY[entityType];
+  const sourceModule = moduleCodeForEnterpriseEntity(entityType);
+  const moduleCode = sourceModule ? getCanonicalEnterpriseModuleCode(sourceModule) : null;
   if (!moduleCode) throw new EnterpriseWorkflowError("Le module source du workflow est inconnu.", 400, "WORKFLOW_SOURCE_MODULE_UNKNOWN", "CONFIGURATION");
   return moduleCode;
 }

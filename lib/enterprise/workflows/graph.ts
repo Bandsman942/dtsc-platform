@@ -35,6 +35,7 @@ export function validateWorkflowGraph(input: WorkflowVersionInput): WorkflowRead
   for (const step of steps) {
     const routes = outgoing.get(step.code) || [];
     if (step.stepType === "END" && routes.length) add(blockers, "END_HAS_OUTGOING", "Une étape de fin ne peut pas avoir de transition sortante.", step.code);
+    if (step.stepType === "START" && (incomingCount.get(step.code) || 0) > 0) add(blockers, "START_HAS_INCOMING", "L’étape de départ ne peut pas avoir de transition entrante.", step.code);
     if (step.stepType !== "END" && routes.length === 0) add(blockers, "DEAD_END_STEP", "Cette étape n'a aucune suite configurée.", step.code);
     if (step.stepType !== "START" && (incomingCount.get(step.code) || 0) === 0) add(blockers, "ORPHAN_STEP", "Cette étape n'est reliée à aucune étape précédente.", step.code);
 
@@ -51,6 +52,24 @@ export function validateWorkflowGraph(input: WorkflowVersionInput): WorkflowRead
     if (step.stepType === "CREATE_APPROVAL") {
       const outcomes = new Set(routes.map((route) => route.outcome));
       if (!outcomes.has("APPROVED") || !outcomes.has("REJECTED")) add(blockers, "APPROVAL_BRANCHES_REQUIRED", "Une validation doit définir les branches Approuvée et Rejetée.", step.code);
+    }
+    const possible = step.stepType === "END" ? [] : step.stepType === "CONDITION" ? ["TRUE", "FALSE"] : step.stepType === "CREATE_APPROVAL" ? ["APPROVED", "REJECTED", "CANCELLED"] : ["DEFAULT"];
+    for (const route of routes) {
+      if (route.outcome && route.outcome !== "DEFAULT" && !possible.includes(route.outcome)) add(blockers, "INVALID_TRANSITION_OUTCOME", "Ce résultat ne peut pas être produit par l’étape source.", step.code);
+    }
+    for (const outcome of possible) {
+      // Match runtime priority order, including DEFAULT routes. Conditional routes
+      // require an unconditional fallback; do not guess predicate exhaustiveness.
+      const applicable = routes.filter((route) => !route.outcome || route.outcome === "DEFAULT" || route.outcome === outcome).sort((a, b) => a.priority - b.priority);
+      if (!applicable.some((route) => !route.condition)) add(blockers, "UNCOVERED_TRANSITION_OUTCOME", "Ajoutez une suite sans condition pour chaque résultat possible.", step.code);
+      let covered = false;
+      let previousPriority: number | undefined;
+      for (const route of applicable) {
+        if (previousPriority === route.priority) add(blockers, "AMBIGUOUS_BRANCH", "Des branches applicables au même résultat ont la même priorité.", step.code);
+        if (covered) add(blockers, "SHADOWED_TRANSITION", "Une branche précédente sans condition empêche d’atteindre cette suite.", step.code);
+        if (!route.condition) covered = true;
+        previousPriority = route.priority;
+      }
     }
   }
 
@@ -74,5 +93,6 @@ export function validateWorkflowGraph(input: WorkflowVersionInput): WorkflowRead
     if (!endSteps.some((step) => visited.has(step.code))) add(blockers, "END_UNREACHABLE", "Aucune étape de fin n'est atteignable depuis le départ.");
   }
 
-  return { ready: blockers.length === 0, blockers, orderedStepCodes: ordered };
+  const uniqueBlockers = blockers.filter((blocker, index) => blockers.findIndex((item) => item.code === blocker.code && item.stepCode === blocker.stepCode) === index);
+  return { ready: uniqueBlockers.length === 0, blockers: uniqueBlockers, orderedStepCodes: ordered };
 }

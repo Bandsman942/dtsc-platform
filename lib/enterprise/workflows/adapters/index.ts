@@ -1,12 +1,12 @@
-import { Prisma } from "@prisma/client";
+import { workflowConditionFields } from "@/lib/enterprise/workflows/adapters/types";
 import { MEETING_ACTIONS, REQUEST_ACTIONS, TASK_ACTIONS } from "@/lib/enterprise/core-v2/constants";
-import { transitionEnterpriseMeeting, transitionEnterpriseRequest, transitionEnterpriseTask } from "@/lib/enterprise/core-v2/service";
+import { createEnterpriseApproval, transitionEnterpriseMeeting, transitionEnterpriseRequest, transitionEnterpriseTask } from "@/lib/enterprise/core-v2/service";
 import { ENTERPRISE_BUDGET_ACTIONS, ENTERPRISE_EXPENSE_ACTIONS, ENTERPRISE_REPORT_ACTIONS } from "@/lib/enterprise/finance/constants";
-import { transitionEnterpriseBudget } from "@/lib/enterprise/finance/budget-service";
-import { transitionEnterpriseExpense } from "@/lib/enterprise/finance/expense-service";
+import { createEnterpriseBudgetApproval, transitionEnterpriseBudget } from "@/lib/enterprise/finance/budget-service";
+import { createEnterpriseExpenseApproval, transitionEnterpriseExpense } from "@/lib/enterprise/finance/expense-service";
 import { transitionEnterpriseReport } from "@/lib/enterprise/finance/report-service";
 import { ENTERPRISE_PURCHASE_ACTIONS } from "@/lib/enterprise/procurement/constants";
-import { transitionEnterprisePurchase } from "@/lib/enterprise/procurement/purchase-service";
+import { createEnterprisePurchaseApproval, transitionEnterprisePurchase } from "@/lib/enterprise/procurement/purchase-service";
 import type { WorkflowAssignmentStrategy, WorkflowEntityType } from "@/lib/enterprise/workflows/constants";
 import { EnterpriseWorkflowError } from "@/lib/enterprise/workflows/errors";
 import type { WorkflowDomainActionInput, WorkflowDomainActionResult, WorkflowEntityAdapter, WorkflowEntitySnapshot } from "@/lib/enterprise/workflows/adapters/types";
@@ -59,7 +59,8 @@ async function reloadResult(adapter: WorkflowEntityAdapter, input: WorkflowDomai
 
 const taskAdapter: WorkflowEntityAdapter = {
   entityType: "EnterpriseTask",
-  conditionFields: new Set(["status", "priority", "taskType", "departmentId", "assignedToUserId", "createdByUserId", "dueAt"]),
+  createApproval: (input) => createEnterpriseApproval({ organizationId: input.organizationId, actorUserId: input.actorUserId, targetEntityType: "EnterpriseTask", targetEntityId: input.entityId, approverUserId: input.approverUserId }),
+  conditionFields: workflowConditionFields({ status: "STRING", priority: "STRING", taskType: "STRING", departmentId: "STRING", assignedToUserId: "STRING", createdByUserId: "STRING", dueAt: "DATE" }),
   placeholders: new Set(COMMON_PLACEHOLDERS),
   triggerEvents: new Set(["ENTERPRISE_TASK_CREATED", "ENTERPRISE_TASK_STARTED", "ENTERPRISE_TASK_BLOCKED", "ENTERPRISE_TASK_RESUMED", "ENTERPRISE_TASK_COMPLETED", "ENTERPRISE_TASK_CANCELLED"]),
   domainActions: new Set(TASK_ACTIONS),
@@ -79,7 +80,8 @@ const taskAdapter: WorkflowEntityAdapter = {
 
 const requestAdapter: WorkflowEntityAdapter = {
   entityType: "EnterpriseRequest",
-  conditionFields: new Set(["status", "priority", "requestType", "departmentId", "assignedToUserId", "requestedByUserId", "dueAt"]),
+  createApproval: (input) => createEnterpriseApproval({ organizationId: input.organizationId, actorUserId: input.actorUserId, targetEntityType: "EnterpriseRequest", targetEntityId: input.entityId, approverUserId: input.approverUserId }),
+  conditionFields: workflowConditionFields({ status: "STRING", priority: "STRING", requestType: "STRING", departmentId: "STRING", assignedToUserId: "STRING", requestedByUserId: "STRING", dueAt: "DATE" }),
   placeholders: new Set(COMMON_PLACEHOLDERS),
   triggerEvents: new Set(["ENTERPRISE_REQUEST_CREATED", "ENTERPRISE_REQUEST_SUBMITTED", "ENTERPRISE_REQUEST_REVIEW_STARTED", "ENTERPRISE_REQUEST_APPROVED", "ENTERPRISE_REQUEST_REJECTED", "ENTERPRISE_REQUEST_FULFILLED", "ENTERPRISE_REQUEST_CANCELLED"]),
   domainActions: new Set(REQUEST_ACTIONS),
@@ -99,7 +101,8 @@ const requestAdapter: WorkflowEntityAdapter = {
 
 const meetingAdapter: WorkflowEntityAdapter = {
   entityType: "EnterpriseMeeting",
-  conditionFields: new Set(["status", "departmentId", "organizerUserId", "locationMode", "startAt", "endAt"]),
+  createApproval: (input) => createEnterpriseApproval({ organizationId: input.organizationId, actorUserId: input.actorUserId, targetEntityType: "EnterpriseMeeting", targetEntityId: input.entityId, approverUserId: input.approverUserId }),
+  conditionFields: workflowConditionFields({ status: "STRING", departmentId: "STRING", organizerUserId: "STRING", locationMode: "STRING", startAt: "DATE", endAt: "DATE" }),
   placeholders: new Set(COMMON_PLACEHOLDERS),
   triggerEvents: new Set(["ENTERPRISE_MEETING_CREATED", "ENTERPRISE_MEETING_STARTED", "ENTERPRISE_MEETING_COMPLETED", "ENTERPRISE_MEETING_CANCELLED"]),
   domainActions: new Set(MEETING_ACTIONS),
@@ -119,7 +122,8 @@ const meetingAdapter: WorkflowEntityAdapter = {
 
 const purchaseAdapter: WorkflowEntityAdapter = {
   entityType: "EnterprisePurchase",
-  conditionFields: new Set(["status", "priority", "currency", "totalAmount", "departmentId", "supplierId", "budgetLineId", "requestedByUserId", "buyerUserId", "createdByUserId", "expectedAt"]),
+  createApproval: (input) => createEnterprisePurchaseApproval({ organizationId: input.organizationId, purchaseId: input.entityId, actorUserId: input.actorUserId, approverUserId: input.approverUserId, purchaseRevision: input.revision }),
+  conditionFields: workflowConditionFields({ status: "STRING", priority: "STRING", currency: "STRING", totalAmount: "NUMBER", departmentId: "STRING", supplierId: "STRING", budgetLineId: "STRING", requestedByUserId: "STRING", buyerUserId: "STRING", createdByUserId: "STRING", expectedAt: "DATE" }),
   placeholders: new Set(COMMON_PLACEHOLDERS),
   triggerEvents: new Set(["ENTERPRISE_PURCHASE_CREATED", "ENTERPRISE_PURCHASE_SUBMITTED", "ENTERPRISE_PURCHASE_APPROVED", "ENTERPRISE_PURCHASE_REJECTED", "ENTERPRISE_PURCHASE_ORDERED", "ENTERPRISE_PURCHASE_RECEIVED", "ENTERPRISE_PURCHASE_CLOSED", "ENTERPRISE_PURCHASE_CANCELLED"]),
   domainActions: new Set(ENTERPRISE_PURCHASE_ACTIONS.filter((action) => action !== "SUBMIT")),
@@ -140,7 +144,8 @@ const purchaseAdapter: WorkflowEntityAdapter = {
 
 const budgetAdapter: WorkflowEntityAdapter = {
   entityType: "EnterpriseBudget",
-  conditionFields: new Set(["status", "currency", "departmentId", "createdByUserId", "periodStart", "periodEnd"]),
+  createApproval: (input) => createEnterpriseBudgetApproval({ organizationId: input.organizationId, budgetId: input.entityId, actorUserId: input.actorUserId, approverUserId: input.approverUserId, budgetRevision: input.revision }),
+  conditionFields: workflowConditionFields({ status: "STRING", currency: "STRING", departmentId: "STRING", createdByUserId: "STRING", periodStart: "DATE", periodEnd: "DATE" }),
   placeholders: new Set(COMMON_PLACEHOLDERS),
   triggerEvents: new Set(["ENTERPRISE_BUDGET_CREATED", "ENTERPRISE_BUDGET_SUBMITTED", "ENTERPRISE_BUDGET_APPROVED", "ENTERPRISE_BUDGET_REJECTED", "ENTERPRISE_BUDGET_CLOSED", "ENTERPRISE_BUDGET_CANCELLED"]),
   domainActions: new Set(ENTERPRISE_BUDGET_ACTIONS.filter((action) => action !== "SUBMIT")),
@@ -161,7 +166,8 @@ const budgetAdapter: WorkflowEntityAdapter = {
 
 const expenseAdapter: WorkflowEntityAdapter = {
   entityType: "EnterpriseExpense",
-  conditionFields: new Set(["status", "currency", "amount", "category", "departmentId", "supplierId", "purchaseId", "budgetLineId", "requestedByUserId", "createdByUserId", "expenseDate"]),
+  createApproval: (input) => createEnterpriseExpenseApproval({ organizationId: input.organizationId, expenseId: input.entityId, actorUserId: input.actorUserId, approverUserId: input.approverUserId, expenseRevision: input.revision }),
+  conditionFields: workflowConditionFields({ status: "STRING", currency: "STRING", amount: "NUMBER", category: "STRING", departmentId: "STRING", supplierId: "STRING", purchaseId: "STRING", budgetLineId: "STRING", requestedByUserId: "STRING", createdByUserId: "STRING", expenseDate: "DATE" }),
   placeholders: new Set(COMMON_PLACEHOLDERS),
   triggerEvents: new Set(["ENTERPRISE_EXPENSE_CREATED", "ENTERPRISE_EXPENSE_SUBMITTED", "ENTERPRISE_EXPENSE_APPROVED", "ENTERPRISE_EXPENSE_REJECTED", "ENTERPRISE_EXPENSE_CANCELLED"]),
   domainActions: new Set(ENTERPRISE_EXPENSE_ACTIONS.filter((action) => action !== "SUBMIT")),
@@ -182,7 +188,7 @@ const expenseAdapter: WorkflowEntityAdapter = {
 
 const reportAdapter: WorkflowEntityAdapter = {
   entityType: "EnterpriseReport",
-  conditionFields: new Set(["status", "reportType", "currency", "generatedByUserId", "generatedAt", "periodStart", "periodEnd"]),
+  conditionFields: workflowConditionFields({ status: "STRING", reportType: "STRING", currency: "STRING", generatedByUserId: "STRING", generatedAt: "DATE", periodStart: "DATE", periodEnd: "DATE" }),
   placeholders: new Set(COMMON_PLACEHOLDERS),
   triggerEvents: new Set(["ENTERPRISE_REPORT_GENERATED"]),
   domainActions: new Set(ENTERPRISE_REPORT_ACTIONS),
@@ -271,27 +277,4 @@ function inferEntityType(entity: WorkflowEntitySnapshot): WorkflowEntityType {
   if ("businessPartyId" in entity && "grandTotal" in entity) return "EnterpriseSalesInvoice";
   if ("periodStart" in entity && "createdByUserId" in entity) return "EnterpriseBudget";
   throw new EnterpriseWorkflowError("Impossible de résoudre l’adapter de l’objet.", 400, "WORKFLOW_ADAPTER_RESOLUTION_FAILED", "CONFIGURATION");
-}
-
-export function compareWorkflowCondition(left: unknown, operator: string, right: unknown) {
-  const decimal = (value: unknown) => {
-    try { return new Prisma.Decimal(value as Prisma.Decimal.Value); } catch { return null; }
-  };
-  if (operator === "EXISTS") return left !== null && left !== undefined;
-  if (operator === "NOT_EXISTS") return left === null || left === undefined;
-  if (operator === "IN" || operator === "NOT_IN") {
-    const list = Array.isArray(right) ? right : [];
-    const included = list.some((item) => String(item) === String(left));
-    return operator === "IN" ? included : !included;
-  }
-  if (["GREATER_THAN", "GREATER_THAN_OR_EQUAL", "LESS_THAN", "LESS_THAN_OR_EQUAL"].includes(operator)) {
-    const a = decimal(left); const b = decimal(right);
-    if (!a || !b) throw new EnterpriseWorkflowError("Cette condition exige des valeurs numériques valides.", 400, "WORKFLOW_CONDITION_TYPE_MISMATCH", "CONFIGURATION");
-    if (operator === "GREATER_THAN") return a.gt(b);
-    if (operator === "GREATER_THAN_OR_EQUAL") return a.gte(b);
-    if (operator === "LESS_THAN") return a.lt(b);
-    return a.lte(b);
-  }
-  const equal = left instanceof Date || right instanceof Date ? new Date(String(left)).getTime() === new Date(String(right)).getTime() : String(left ?? "") === String(right ?? "");
-  return operator === "EQUALS" ? equal : operator === "NOT_EQUALS" ? !equal : false;
 }

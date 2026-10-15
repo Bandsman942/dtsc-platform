@@ -43,20 +43,22 @@ ok(!validators.includes("z.any()"), "Workflow step configuration must remain typ
 const graph = includes("lib/enterprise/workflows/graph.ts", ["MISSING_START", "MULTIPLE_START", "MISSING_END", "ORPHAN_STEP", "CYCLE_NOT_ALLOWED", "UNREACHABLE_STEP", "AMBIGUOUS_BRANCH"]);
 ok(graph.includes("CONDITION_BRANCHES_REQUIRED") && graph.includes("APPROVAL_BRANCHES_REQUIRED"), "Publication readiness must validate explicit condition and approval outcomes.");
 
-const adapters = includes("lib/enterprise/workflows/adapters/index.ts", ["getWorkflowEntityAdapter", "transitionEnterpriseTask", "transitionEnterpriseRequest", "transitionEnterpriseMeeting", "transitionEnterprisePurchase", "transitionEnterpriseBudget", "transitionEnterpriseExpense", "transitionEnterpriseReport", "Prisma.Decimal"]);
+const adapters = includes("lib/enterprise/workflows/adapters/index.ts", ["getWorkflowEntityAdapter", "transitionEnterpriseTask", "transitionEnterpriseRequest", "transitionEnterpriseMeeting", "transitionEnterprisePurchase", "transitionEnterpriseBudget", "transitionEnterpriseExpense", "transitionEnterpriseReport"]);
 for (const entity of ["EnterpriseTask", "EnterpriseRequest", "EnterpriseMeeting", "EnterprisePurchase", "EnterpriseBudget", "EnterpriseExpense", "EnterpriseReport"]) ok(adapters.includes(`${entity}:`), `Static adapter missing ${entity}`);
 ok(!/prisma\s*\[/.test(adapters), "Dynamic Prisma model selection is forbidden.");
 const workflowLibFiles = fs.readdirSync(path.join(root, "lib/enterprise/workflows"), { recursive: true }).filter((entry) => typeof entry === "string" && entry.endsWith(".ts")).map((entry) => read(path.join("lib/enterprise/workflows", entry))).join("\n");
 for (const model of ["enterpriseTask", "enterpriseRequest", "enterpriseMeeting", "enterprisePurchase", "enterpriseBudget", "enterpriseExpense", "enterpriseReport"]) ok(!workflowLibFiles.includes(`prisma.${model}.update({`) && !workflowLibFiles.includes(`prisma.${model}.updateMany({`), `Workflow engine must not directly patch ${model} status/state.`);
 
-const definitions = includes("lib/enterprise/workflows/definitions.ts", ["PUBLISHED_WORKFLOW_IMMUTABLE", "getWorkflowVersionReadiness", "publishWorkflowVersion", "duplicateWorkflowVersion", "validateTemplatePlaceholders", "INVALID_DOMAIN_ACTION"]);
-ok(definitions.includes("EnterpriseReport") && definitions.includes("APPROVAL_TARGET_UNSUPPORTED"), "Publication must reject unsupported report approvals.");
+const definitions = includes("lib/enterprise/workflows/definitions.ts", ["PUBLISHED_WORKFLOW_IMMUTABLE", "getWorkflowVersionReadiness", "publishWorkflowVersion", "duplicateWorkflowVersion", "getWorkflowContractReadiness"]);
+const capabilities = includes("lib/enterprise/workflows/capabilities.ts", ["validateTemplatePlaceholders", "INVALID_DOMAIN_ACTION", "APPROVAL_TARGET_UNSUPPORTED", "adapter.createApproval"]);
+includes("lib/enterprise/workflows/conditions.ts", ["Prisma.Decimal", "workflowConditionError", "evaluateWorkflowCondition"]);
 const engine = includes("lib/enterprise/workflows/engine.ts", ["startWorkflowRun", "advanceWorkflowRun", "executeWorkflowStep", "resumeWorkflowFromApproval", "resumeWaitingRuns", "retryWorkflowStep", "cancelWorkflowRun", "processWorkflowDomainEvent"]);
 ok(engine.includes("workflowVersionId: version.id"), "Runs must pin their initial workflow version.");
 ok(engine.includes("WORKFLOW_MAX_ATTEMPTS_REACHED") || read("lib/enterprise/workflows/action-attempts.ts").includes("WORKFLOW_MAX_ATTEMPTS_REACHED"), "Retries must be bounded.");
 ok(engine.includes("WAITING_APPROVAL") && engine.includes("WAITING_TIME") && engine.includes("BLOCKED"), "Runtime must persist waiting and blocked states.");
 
-const createApproval = includes("lib/enterprise/workflows/steps/create-approval.ts", ["createEnterpriseApproval", "createEnterprisePurchaseApproval", "createEnterpriseBudgetApproval", "createEnterpriseExpenseApproval", "WORKFLOW_SELF_APPROVAL_BLOCKED", "workflowRunId", "workflowStepRunId"]);
+const createApproval = includes("lib/enterprise/workflows/steps/create-approval.ts", ["adapter.createApproval", "WORKFLOW_APPROVAL_TARGET_UNSUPPORTED", "WORKFLOW_SELF_APPROVAL_BLOCKED", "workflowRunId", "workflowStepRunId"]);
+for (const service of ["createEnterpriseApproval", "createEnterprisePurchaseApproval", "createEnterpriseBudgetApproval", "createEnterpriseExpenseApproval"]) ok(adapters.includes(service), `Canonical approval service missing: ${service}`);
 ok(!createApproval.includes("enterpriseApproval.create({"), "Approval steps must reuse authoritative approval services.");
 const createTask = includes("lib/enterprise/workflows/steps/create-task.ts", ["createEnterpriseTask", "sourceEntityType", "sourceEntityId", "beginWorkflowActionAttempt"]);
 ok(!createTask.includes("enterpriseTask.create({"), "Task steps must reuse Sprint 6 task service.");

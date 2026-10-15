@@ -1,0 +1,42 @@
+const messages: Record<string, { fr: string; en: string }> = {
+  APPROVAL_TARGET_UNSUPPORTED: { fr: "La validation de cet objet doit être effectuée dans son module métier. Ce modèle ne peut pas la demander.", en: "This record must be approved in its business module. This template cannot request that approval." },
+  INVALID_DOMAIN_ACTION: { fr: "Cette action n’est pas disponible pour cet objet dans un workflow.", en: "This action is not available for this record in a workflow." },
+  INVALID_CONDITION_FIELD: { fr: "Choisissez un champ autorisé pour l’objet source de cette condition.", en: "Choose an allowed field for this condition’s source record." },
+  INVALID_CONDITION_VALUE: { fr: "La valeur doit correspondre au champ : texte, nombre, date ou liste du même type.", en: "The value must match the field: text, number, date or a list of the same type." },
+  INVALID_CONDITION_OPERATOR: { fr: "Cette comparaison nécessite un champ numérique ou une date.", en: "This comparison requires a number or date field." },
+  INVALID_WAIT_FIELD: { fr: "L’attente doit utiliser un champ de date autorisé pour cet objet.", en: "The wait must use an allowed date field for this record." },
+  INVALID_TRIGGER_EVENT: { fr: "Cet événement ne peut pas déclencher un workflow pour cet objet.", en: "This event cannot trigger a workflow for this record." },
+  MISSING_TRIGGER_ENTITY: { fr: "Sélectionnez un type d’objet source.", en: "Select a source record type." },
+  INVALID_TRANSITION_OUTCOME: { fr: "Ce résultat ne peut pas être produit par l’étape source.", en: "The source step cannot produce this outcome." },
+  UNCOVERED_TRANSITION_OUTCOME: { fr: "Ajoutez une suite sans condition pour chaque résultat possible, après les branches conditionnelles.", en: "Add an unconditional route for each possible outcome, after the conditional branches." },
+  SHADOWED_TRANSITION: { fr: "Une branche précédente sans condition empêche d’atteindre cette suite. Vérifiez les priorités.", en: "An earlier unconditional route hides this route. Check the priorities." },
+  DUPLICATE_STEP_CODE: { fr: "Chaque étape doit posséder un code unique.", en: "Each step must have a unique code." },
+  MISSING_START: { fr: "Ajoutez une étape de départ.", en: "Add a start step." },
+  MULTIPLE_START: { fr: "Conservez exactement une étape de départ.", en: "Keep exactly one start step." },
+  MISSING_END: { fr: "Ajoutez une étape de fin.", en: "Add an end step." },
+  UNKNOWN_FROM_STEP: { fr: "Une transition référence une étape source inexistante.", en: "A route refers to a missing source step." },
+  UNKNOWN_TO_STEP: { fr: "Une transition référence une étape cible inexistante.", en: "A route refers to a missing destination step." },
+  SELF_CYCLE: { fr: "Une étape ne peut pas pointer vers elle-même.", en: "A step cannot point to itself." },
+  END_HAS_OUTGOING: { fr: "Une étape de fin ne peut pas avoir de suite.", en: "An end step cannot have an outgoing route." },
+  START_HAS_INCOMING: { fr: "L’étape de départ ne peut pas avoir de transition entrante.", en: "The start step cannot have an incoming route." },
+  DEAD_END_STEP: { fr: "Cette étape n’a aucune suite configurée.", en: "This step has no outgoing route." },
+  ORPHAN_STEP: { fr: "Reliez cette étape à une étape précédente.", en: "Connect this step to a previous step." },
+  AMBIGUOUS_BRANCH: { fr: "Des branches applicables au même résultat ont la même priorité.", en: "Routes for the same outcome have the same priority." },
+  CONDITION_BRANCHES_REQUIRED: { fr: "La condition doit définir les branches Oui et Non.", en: "The condition must define both Yes and No routes." },
+  APPROVAL_BRANCHES_REQUIRED: { fr: "La validation doit définir les branches Approuvée et Rejetée.", en: "The approval must define Approved and Rejected routes." },
+  CYCLE_NOT_ALLOWED: { fr: "Les boucles ne sont pas autorisées.", en: "Loops are not allowed." },
+  UNREACHABLE_STEP: { fr: "Cette étape n’est pas atteignable depuis le départ.", en: "This step cannot be reached from the start." },
+  END_UNREACHABLE: { fr: "Aucune étape de fin n’est atteignable depuis le départ.", en: "No end step can be reached from the start." },
+  INVALID_SPECIFIC_USER: { fr: "Choisissez un membre actif de cette entreprise.", en: "Choose an active member of this organization." },
+  INVALID_ORGANIZATION_ROLE: { fr: "Choisissez un rôle d’entreprise pris en charge.", en: "Choose a supported organization role." },
+  DEPARTMENT_MANAGER_MISSING: { fr: "Ce département doit avoir un responsable actif.", en: "This department needs an active manager." },
+  WORKFLOW_PLACEHOLDER_NOT_ALLOWED: { fr: "Un texte du modèle utilise un champ non autorisé pour cet objet.", en: "A template text uses a field that is not allowed for this record." },
+  WORKFLOW_SOURCE_MODULE_UNKNOWN: { fr: "Aucun module métier ne correspond à cet objet.", en: "No business module matches this record." },
+  WORKFLOW_ENTITY_TYPE_UNSUPPORTED: { fr: "Ce type d’objet n’est pas pris en charge.", en: "This record type is not supported." },
+  INVALID_TYPED_CONFIGURATION: { fr: "Complétez la configuration avec des valeurs valides.", en: "Complete the configuration with valid values." },
+};
+
+export function workflowReadinessMessage(code: string, locale?: string | null) {
+  const message = messages[code] || { fr: "Vérifiez la configuration du workflow avant publication.", en: "Check the workflow configuration before publishing." };
+  return locale === "en" ? message.en : message.fr;
+}

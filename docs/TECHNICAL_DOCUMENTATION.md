@@ -575,3 +575,7 @@ Comptabilité réutilise désormais un contrat unique entre création, liste com
 - règles personnalisées créées via `EnterpriseAccountMapping` scoped par `chartId`.
 
 Les plein-écrans ERP Gaming mutables audités suivent le même contrat de menu contextuel pour les actions globales.
+
+## WF-01 — Contrats ERP des workflows (#814)
+
+Le catalogue et la publication utilisent `getWorkflowContractReadiness`. La présence de `adapter.createApproval` correspond à une fonction de création réellement déléguée au service métier ; elle n’est jamais déduite d’une capacité générale de Finance. Les champs conditionnels ont un type unique dans l’adaptateur. Le choix post-action recharge l’objet, vérifie son identité, son tenant et une révision au moins égale à celle observée après effet. Référence : [contrats, inventaire et preuves](WORKFLOW_ERP_CONTRACTS.md).

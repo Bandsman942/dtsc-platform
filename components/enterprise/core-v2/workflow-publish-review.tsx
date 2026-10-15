@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { StatusBadge } from "@/components/workspace/status-badge";
+import { workflowReadinessMessage } from "@/lib/enterprise/workflows/readiness-messages";
 import { toastSuccess } from "@/lib/client-toast";
 
 type ReviewStep = {
@@ -133,7 +134,7 @@ export function WorkflowPublishReview({ organizationId, definitionId, versionId,
               {review.readiness.ready ? <CheckCircle2 className="h-5 w-5 text-emerald-700" /> : <AlertTriangle className="h-5 w-5 text-amber-700" />}
               {review.readiness.ready ? (en ? "Ready to publish" : "Prêt à publier") : (en ? "Publication blocked" : "Publication bloquée")}
             </div>
-            {review.readiness.blockers.length ? <ul className="mt-3 grid gap-1 text-sm text-dtsc-muted">{review.readiness.blockers.map((blocker, index) => <li key={`${blocker.code}-${index}`}>• {blocker.stepCode ? `${blocker.stepCode} — ` : ""}{blocker.message}</li>)}</ul> : <p className="mt-2 text-sm text-dtsc-muted">{en ? "The server-side graph, assignments and business configuration checks are valid." : "Les contrôles serveur du graphe, des affectations et de la configuration métier sont valides."}</p>}
+            {review.readiness.blockers.length ? <ul className="mt-3 grid gap-1 text-sm text-dtsc-muted">{review.readiness.blockers.map((blocker, index) => <li key={`${blocker.code}-${index}`}>• {blocker.stepCode ? `${blocker.stepCode} — ` : ""}{workflowReadinessMessage(blocker.code, locale)}</li>)}</ul> : <p className="mt-2 text-sm text-dtsc-muted">{en ? "The server-side graph, assignments and business configuration checks are valid." : "Les contrôles serveur du graphe, des affectations et de la configuration métier sont valides."}</p>}
           </section>
 
           <section className="grid gap-3">

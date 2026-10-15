@@ -3,7 +3,9 @@ import { decideEnterpriseApproval } from "@/lib/enterprise/core-v2/service";
 import { decideEnterpriseBudgetApproval } from "@/lib/enterprise/finance/budget-service";
 import { decideEnterpriseExpenseApproval } from "@/lib/enterprise/finance/expense-service";
 import { decideEnterprisePurchaseApproval } from "@/lib/enterprise/procurement/purchase-service";
-import { getWorkflowEntityAdapter, compareWorkflowCondition } from "@/lib/enterprise/workflows/adapters";
+import { evaluateWorkflowCondition } from "@/lib/enterprise/workflows/conditions";
+import { loadWorkflowTransitionEntity } from "@/lib/enterprise/workflows/transition-entity";
+import { getWorkflowEntityAdapter } from "@/lib/enterprise/workflows/adapters";
 import { WORKFLOW_LIMITS, WORKFLOW_STEP_TYPES, type WorkflowStepType } from "@/lib/enterprise/workflows/constants";
 import { EnterpriseWorkflowError, normalizeWorkflowError, safeWorkflowFailureMessage } from "@/lib/enterprise/workflows/errors";
 import { WORKFLOW_STEP_HANDLERS } from "@/lib/enterprise/workflows/steps";
@@ -72,7 +74,7 @@ async function selectNextStep(run: Awaited<ReturnType<typeof loadRun>>, fromStep
     if (route.conditionJson) {
       const condition = workflowConditionSchema.parse(route.conditionJson);
       if (!adapter.conditionFields.has(condition.field)) throw new EnterpriseWorkflowError("Une transition utilise un champ interdit.", 409, "WORKFLOW_TRANSITION_FIELD_DENIED", "CONFIGURATION");
-      if (!compareWorkflowCondition(adapter.getConditionField(entity, condition.field), condition.operator, condition.value)) continue;
+      if (!evaluateWorkflowCondition(adapter, entity, condition)) continue;
     }
     return route.toStep;
   }
@@ -188,7 +190,10 @@ export async function advanceWorkflowRun(runId: string) {
         return loadRun(run.id);
       }
       const output = { ...(result.output && typeof result.output === "object" && !Array.isArray(result.output) ? result.output as Record<string, Prisma.InputJsonValue> : {}), outcome: result.outcome || "DEFAULT" };
-      const next = await selectNextStep(run, step.id, result.outcome || "DEFAULT", entity);
+      const transitionEntity = step.stepType === "DOMAIN_ACTION" || step.stepType === "CREATE_APPROVAL"
+        ? await loadWorkflowTransitionEntity(adapter, run.organizationId, run.sourceEntityId, entity, result.output)
+        : entity;
+      const next = await selectNextStep(run, step.id, result.outcome || "DEFAULT", transitionEntity);
       if (!next) throw new EnterpriseWorkflowError("Aucune transition ne correspond au résultat de l’étape.", 409, "WORKFLOW_NEXT_STEP_MISSING", "CONFIGURATION");
       await prisma.$transaction([
         prisma.enterpriseWorkflowStepRun.update({ where: { id: runningStep.id }, data: { status: "SUCCEEDED", completedAt: new Date(), assignedUserId: result.assignedUserId || null, outputJson: inputJson(output), failureCategory: null, failureCode: null, failureMessage: null } }),

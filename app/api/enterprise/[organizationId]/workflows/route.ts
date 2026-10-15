@@ -5,6 +5,7 @@ import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseWorkflowAccess } from "@/lib/enterprise/workflows/access";
 import { createWorkflowDefinition, createWorkflowFromTemplate, listWorkflowDefinitions } from "@/lib/enterprise/workflows/definitions";
 import { normalizeWorkflowError } from "@/lib/enterprise/workflows/errors";
+import { getWorkflowTemplateCompatibility } from "@/lib/enterprise/workflows/capabilities";
 import { ENTERPRISE_WORKFLOW_TEMPLATES } from "@/lib/enterprise/workflows/templates";
 import { workflowDefinitionCreateSchema } from "@/lib/enterprise/workflows/validators";
 import { prisma } from "@/lib/prisma";
@@ -21,6 +22,7 @@ export async function GET(req: Request, { params }: Params) {
   const access = await getEnterpriseWorkflowAccess(session, organizationId); if (!access?.canRead) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const [definitions, legacyCount] = await Promise.all([listWorkflowDefinitions(organizationId), prisma.enterpriseWorkflow.count({ where: { organizationId } })]);
   const templates = ENTERPRISE_WORKFLOW_TEMPLATES.map((template) => ({
+    compatibility: getWorkflowTemplateCompatibility(template),
     code: template.code,
     nameFr: template.nameFr,
     nameEn: template.nameEn,
