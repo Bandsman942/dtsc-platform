@@ -3,6 +3,7 @@ import { listNavigableEnterpriseModules, resolveEnterpriseModuleAccess } from "@
 import { WORKFLOW_ENTITY_TYPES } from "@/lib/enterprise/workflows/constants";
 import { workflowSourceModule } from "@/lib/enterprise/workflows/runtime-utils";
 import { EnterpriseWorkflowError } from "@/lib/enterprise/workflows/errors";
+import { prisma } from "@/lib/prisma";
 
 /** Reuse the canonical ERP register and commercial entitlements; never infer rights from workflow membership alone. */
 export async function requireWorkflowSourceAccess(input: {
@@ -34,4 +35,24 @@ export async function listReadableWorkflowEntityTypes(userId: string, organizati
   const modules = await listNavigableEnterpriseModules({ userId, organizationId, action: "read" });
   const allowed = new Set(modules.map((entry) => entry.canonicalCode));
   return WORKFLOW_ENTITY_TYPES.filter((entityType) => allowed.has(workflowSourceModule(entityType)));
+}
+
+/** Check the persisted source type, never a client-supplied substitute. */
+export async function requireWorkflowDefinitionSourceAccess(input: {
+  userId: string;
+  organizationId: string;
+  definitionId: string;
+}) {
+  const definition = await prisma.enterpriseWorkflowDefinition.findFirst({
+    where: { id: input.definitionId, organizationId: input.organizationId, archivedAt: null },
+    select: { triggerEntityType: true },
+  });
+  if (!definition) throw new EnterpriseWorkflowError("Workflow introuvable.", 404, "WORKFLOW_DEFINITION_NOT_FOUND", "BUSINESS");
+  if (definition.triggerEntityType) {
+    await requireWorkflowSourceAccess({
+      userId: input.userId, organizationId: input.organizationId,
+      sourceEntityType: definition.triggerEntityType, action: "read",
+    });
+  }
+  return definition;
 }
