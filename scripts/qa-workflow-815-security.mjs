@@ -92,6 +92,7 @@ for (const path of [
 
 const liveActors = new Set(["creator"]);
 const entitledActors = new Set(["creator"]);
+const actorAccessChecks = [];
 const runtimeLoader = workflowTestLoader({
   "@/lib/prisma": { prisma: {
     organizationMember: { findFirst: async ({ where }) => {
@@ -101,9 +102,9 @@ const runtimeLoader = workflowTestLoader({
   } },
   "@/lib/enterprise/cross-module/deep-links": { moduleCodeForEnterpriseEntity: (entityType) => entityType === "EnterpriseTask" ? "TASKS_OPERATIONS" : null },
   "@/lib/enterprise/module-registry": { getCanonicalEnterpriseModuleCode: (code) => code },
-  "@/lib/enterprise/module-access": { resolveEnterpriseModuleAccess: async ({ userId, organizationId, action }) => {
+  "@/lib/enterprise/module-access": { resolveEnterpriseModuleAccess: async ({ userId, organizationId, moduleCode, action }) => {
     assert.equal(organizationId, org);
-    assert.equal(action, "read");
+    actorAccessChecks.push({ userId, moduleCode, action });
     return { allowed: entitledActors.has(userId) };
   } },
 });
@@ -119,6 +120,9 @@ await assert.rejects(
   "An explicit revoked starter must not silently fall back to the creator",
 );
 assert.equal(await resolveWorkflowExecutionUser({ organizationId: org, startedByUserId: null, adapter: runtimeAdapter, entity: sourceEntity }), "creator");
+assert.equal(await resolveWorkflowExecutionUser({ organizationId: org, startedByUserId: null, adapter: runtimeAdapter, entity: sourceEntity, action: "write", targetModuleCode: "TASKS_OPERATIONS" }), "creator");
+assert.ok(actorAccessChecks.some((check) => check.action === "write" && check.moduleCode === "TASKS_OPERATIONS"), "Source mutation requires write");
+assert.ok(actorAccessChecks.some((check) => check.action === "submit" && check.moduleCode === "TASKS_OPERATIONS"), "Task creation requires target entitlement");
 entitledActors.delete("creator");
 await assert.rejects(
   resolveWorkflowExecutionUser({ organizationId: org, startedByUserId: null, adapter: runtimeAdapter, entity: sourceEntity }),
