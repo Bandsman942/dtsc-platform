@@ -10,13 +10,15 @@ export const executeCreateApprovalStep: WorkflowStepHandler = async ({ run, step
   const parsed = workflowStepSchema.parse({ code: step.code, name: step.name, stepType: "CREATE_APPROVAL", position: 0, configuration: step.configurationJson });
   if (parsed.stepType !== "CREATE_APPROVAL") throw new Error("Invalid CREATE_APPROVAL configuration");
 
-  if (!adapter.createApproval) throw new EnterpriseWorkflowError("Ce type d’objet ne prend pas en charge les validations métier dans un workflow.", 400, "WORKFLOW_APPROVAL_TARGET_UNSUPPORTED", "CONFIGURATION");
-
   const alreadyLinked = await prisma.enterpriseApproval.findFirst({ where: { organizationId: run.organizationId, workflowRunId: run.id, workflowStepRunId: stepRun.id, archivedAt: null }, orderBy: { requestedAt: "desc" } });
   if (alreadyLinked) {
     if (alreadyLinked.status === "PENDING") return { kind: "WAITING", runStatus: "WAITING_APPROVAL", assignedUserId: alreadyLinked.approverUserId, output: { approvalId: alreadyLinked.id } };
     return { kind: "SUCCEEDED", outcome: alreadyLinked.status, assignedUserId: alreadyLinked.approverUserId, actorUserId: alreadyLinked.status === "CANCELLED" ? null : alreadyLinked.approverUserId, output: { approvalId: alreadyLinked.id, decision: alreadyLinked.status } };
   }
+
+  // An already-linked canonical approval is recovery evidence even when the
+  // adapter no longer offers creation of fresh approvals. Never block its receipt.
+  if (!adapter.createApproval) throw new EnterpriseWorkflowError("Ce type d’objet ne prend pas en charge les validations métier dans un workflow.", 400, "WORKFLOW_APPROVAL_TARGET_UNSUPPORTED", "CONFIGURATION");
 
   const assignment = parsed.configuration.assignment;
   const approverUserId = await resolveWorkflowAssignment({ organizationId: run.organizationId, strategy: assignment.strategy, entity, userId: assignment.userId, role: assignment.role, departmentId: assignment.departmentId, previousStepActorUserId });
