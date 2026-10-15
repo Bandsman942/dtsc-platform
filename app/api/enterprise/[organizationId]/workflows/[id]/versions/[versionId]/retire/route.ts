@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseWorkflowAccess } from "@/lib/enterprise/workflows/access";
+import { requireWorkflowDefinitionSourceAccess } from "@/lib/enterprise/workflows/source-access";
 import { retireWorkflowVersion } from "@/lib/enterprise/workflows/definitions";
 import { normalizeWorkflowError } from "@/lib/enterprise/workflows/errors";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
@@ -15,6 +16,7 @@ export async function POST(req: Request, { params }: Params) {
   const limited = await rateLimit(getRateLimitKey(req, `enterprise-workflow-retire:${session.userId}`), 20, 60 * 60 * 1000); if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   const { organizationId, id, versionId } = await params; const access = await getEnterpriseWorkflowAccess(session, organizationId); if (!access?.canRetire) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   try {
+    await requireWorkflowDefinitionSourceAccess({ userId: session.userId, organizationId, definitionId: id });
     await retireWorkflowVersion(organizationId, id, versionId, session.userId);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_WORKFLOW_RETIRED", entity: "EnterpriseWorkflowVersion", entityId: versionId, request: req, metadata: { organizationId, definitionId: id } });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "workflow-retire", definitionId: id, versionId } });

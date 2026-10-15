@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseWorkflowAccess } from "@/lib/enterprise/workflows/access";
+import { requireWorkflowDefinitionSourceAccess } from "@/lib/enterprise/workflows/source-access";
 import { saveWorkflowVersion } from "@/lib/enterprise/workflows/definitions";
 import { normalizeWorkflowError } from "@/lib/enterprise/workflows/errors";
 import { workflowVersionSchema } from "@/lib/enterprise/workflows/validators";
@@ -17,6 +18,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const { organizationId, id, versionId } = await params; const access = await getEnterpriseWorkflowAccess(session, organizationId); if (!access?.canEditDraft) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = workflowVersionSchema.safeParse(await req.json().catch(() => null)); if (!parsed.success) return NextResponse.json({ error: "INVALID_WORKFLOW_VERSION_PAYLOAD", message: parsed.error.issues[0]?.message || "Version invalide." }, { status: 400 });
   try {
+    await requireWorkflowDefinitionSourceAccess({ userId: session.userId, organizationId, definitionId: id });
     const result = await saveWorkflowVersion(organizationId, id, versionId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_WORKFLOW_UPDATED", entity: "EnterpriseWorkflowVersion", entityId: versionId, request: req, metadata: { organizationId, definitionId: id, readiness: result.readiness.ready } });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "workflow-version", definitionId: id, versionId } });
