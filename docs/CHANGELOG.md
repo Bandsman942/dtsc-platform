@@ -1,3 +1,12 @@
+## 2026-10-15 — WF-02 : autorisations et visibilité des workflows (#815)
+
+- verrouille les routes Workflows derrière le module et l'entitlement canonique, sans bypass MANAGER/DTSC ;
+- vérifie les modules ERP sources pour les opérations de définition et d'exécution ;
+- limite les métriques au même périmètre visible que les runs et filtre les détails des étapes non assignées ;
+- bloque le mandat d’exécution révoqué sans choisir silencieusement un autre acteur ;
+- ajoute une QA de sécurité obligatoire et le contrat docs/WORKFLOW_SECURITY_POLICY.md ;
+- OWNER_E2E #815 reste requis avant fusion et Production.
+
 ## 2026-10-15 — WF-01 : contrats ERP des workflows (#814)
 
 - unifie les contrôles de compatibilité du catalogue et de publication avec les capacités des adaptateurs et leurs services de validation canoniques ;
