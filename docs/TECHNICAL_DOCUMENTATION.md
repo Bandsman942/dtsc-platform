@@ -582,3 +582,8 @@ Les plein-écrans ERP Gaming mutables audités suivent le même contrat de menu 
 ## WF-01 — Contrats ERP des workflows (#814)
 
 Le catalogue et la publication utilisent `getWorkflowContractReadiness`. La présence de `adapter.createApproval` correspond à une fonction de création réellement déléguée au service métier ; elle n’est jamais déduite d’une capacité générale de Finance. Les champs conditionnels ont un type unique dans l’adaptateur. Le choix post-action recharge l’objet, vérifie son identité, son tenant et une révision au moins égale à celle observée après effet. Référence : [contrats, inventaire et preuves](WORKFLOW_ERP_CONTRACTS.md).
+
+
+## WF-02 — RBAC/entitlements du moteur de workflows (#815)
+
+Les opérations du module WORKFLOWS exigent le membership CLIENT actif, le module activé et son entitlement canonique. L’accès au module source ERP est vérifié à la route et l’acteur d’exécution est revalidé à l’exécution ; MANAGER n’est pas administrateur implicite. Les métriques de runs partagent exactement le prédicat de visibilité des listes. Voir [WORKFLOW_SECURITY_POLICY.md](WORKFLOW_SECURITY_POLICY.md) pour les routes, matrices, critères E2E, cas de révocation et rollback.
