@@ -23,7 +23,7 @@ function acceptsNotification(
   return preferenceField ? user[preferenceField] : true;
 }
 
-function deterministicNotificationId(idempotencyKey: string) {
+export function deterministicNotificationId(idempotencyKey: string) {
   return `wf_${createHash("sha256").update(idempotencyKey).digest("hex").slice(0, 48)}`;
 }
 

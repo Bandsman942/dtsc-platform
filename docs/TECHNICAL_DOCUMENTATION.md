@@ -8,6 +8,9 @@
 
 Ce document est le point d’entrée technique de DTSC Platform. Les règles exécutables se trouvent dans les fichiers `AGENTS.md`. Les contrats détaillés restent dans les documents spécialisés du dossier `docs/`.
 
+La reprise durable des workflows (#813), les preuves d’effet, les états incertains
+et les précautions de déploiement sont décrits dans [WORKFLOW_RUNTIME_RECOVERY.md](WORKFLOW_RUNTIME_RECOVERY.md).
+
 La plateforme réunit : site public, compte/authentification, SaaS multi-entreprises, console interne DTSC, support, collaboration, ERP commun, extensions Health/Pharmacy, IA, PWA et notifications.
 
 ## 2. Stack

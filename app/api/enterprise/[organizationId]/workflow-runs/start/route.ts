@@ -1,3 +1,4 @@
+import { publicWorkflowRun } from "@/lib/enterprise/workflows/public-run";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
@@ -20,6 +21,6 @@ export async function POST(req: Request, { params }: Params) {
     const run = await startWorkflowRun({ organizationId, workflowDefinitionId: parsed.data.workflowDefinitionId, sourceEntityType: parsed.data.sourceEntityType, sourceEntityId: parsed.data.sourceEntityId, triggerType: "MANUAL", startedByUserId: session.userId });
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_WORKFLOW_RUN_STARTED", entity: "EnterpriseWorkflowRun", entityId: run.id, request: req, metadata: { organizationId, workflowDefinitionId: parsed.data.workflowDefinitionId, sourceEntityType: parsed.data.sourceEntityType, sourceEntityId: parsed.data.sourceEntityId } });
     await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "workflow-run-start", runId: run.id } });
-    return NextResponse.json({ ok: true, run }, { status: 201 });
+    return NextResponse.json({ ok: true, run: publicWorkflowRun(run) }, { status: 201 });
   } catch (error) { const normalized = normalizeWorkflowError(error); await writeApiLog({ request: req, statusCode: normalized.status, userId: session.userId, startedAt, metadata: { organizationId, domain: "workflow-run-start", error: normalized.code } }); return NextResponse.json({ error: normalized.code, message: normalized.message }, { status: normalized.status }); }
 }

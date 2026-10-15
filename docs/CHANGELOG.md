@@ -7,6 +7,15 @@
 - réutilise les correspondances ERP transverses et le registre canonique pour les dix-sept objets sources ; aucune migration ni conversion du catalogue historique ;
 - ajoute les tests de contrat et d’intégration PostgreSQL obligatoires ; dépend de #813 et reste soumis à OWNER_E2E avant fusion.
 
+## 2026-10-15 — WF-00 : reprise durable des workflows (#813)
+
+- conserve l’échéance des attentes et protège la reprise/finalisation par bail et révision atomiques ;
+- récupère les événements PROCESSING expirés dans les deux workers, avec retries bornés et état DEAD ;
+- enregistre les nouvelles tâches et leur reçu dans une transaction, réconcilie les validations/notifications prouvées et bloque les effets indéterminés ;
+- protège l’annulation contre les finalisations tardives et retire les jetons d’exécution des API ;
+- ajoute des messages de récupération FR/EN, une QA comportementale PostgreSQL obligatoire en CI et un runbook ;
+- migration additive ; OWNER_E2E requis avant fusion, aucune livraison Production revendiquée par cette entrée.
+
 ## 2026-10-13 — SCALE-7K-A : isoler la dérive de latence et classifier l'idle-in-transaction (#795)
 
 - ajoute les P95/P99 globaux et Dashboard par fenêtres écoulées de 5 minutes dans k6 durant le soak, sans changer les seuils ;

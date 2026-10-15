@@ -77,7 +77,7 @@ Statuses are:
 
 ### Action attempts
 
-`EnterpriseWorkflowActionAttempt` stores a stable idempotency key, attempt number, result entity and error category. Generated tasks, approvals and notifications therefore survive duplicate delivery without duplication.
+`EnterpriseWorkflowActionAttempt` stores a stable idempotency key, attempt number, result entity and error category. New tasks commit atomically with their success receipt. Interrupted approvals and notifications require structural, tenant-scoped evidence; unknown domain effects become `UNCERTAIN` and block the run instead of being blindly replayed. See [WF-00 recovery](WORKFLOW_RUNTIME_RECOVERY.md).
 
 ## 4. Publication readiness and DAG validation
 
@@ -224,7 +224,9 @@ It does not copy the complete source entity or attached private content.
 4. processes one event idempotently;
 5. marks it PROCESSED, FAILED or DEAD;
 6. applies bounded backoff;
-7. resumes due WAITING_TIME runs.
+7. resumes due WAITING_TIME runs, abandoned RUNNING/QUEUED executions and already-decided approval waits in bounded batches.
+
+Both worker modes reclaim timestamped PROCESSING leases only after expiry and fence completion with worker ID and attempt number. Run execution has a separate server-only lease; run/step completion and cancellation use atomic ownership/revision checks. A relative wait preserves its original deadline across restarts. Details and rollout precautions: [WF-00 recovery](WORKFLOW_RUNTIME_RECOVERY.md).
 
 Maximum attempts: 3.
 
@@ -249,6 +251,8 @@ Categories:
 - TERMINAL: FAILED without infinite retry.
 
 Manual retry is available only on BLOCKED/FAILED runs, only for an authorized organization administrator, and only while the step remains within the attempt limit. Retry resumes the current safe step with the same action idempotency key; it never replays from START.
+
+An uncertain effect refuses retry until a canonical receipt proves completion. Older unproven task attempts and interrupted domain actions are not inferred from entity status. Follow the recovery runbook instead of editing domain data or deleting an attempt.
 
 ## 15. Cancellation
 

@@ -12,6 +12,7 @@ import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metri
 import { StatusBadge } from "@/components/workspace/status-badge";
 import { WorkflowPublishReview } from "@/components/enterprise/core-v2/workflow-publish-review";
 import { toastError, toastSuccess } from "@/lib/client-toast";
+import { getWorkflowRecoveryMessage } from "@/lib/enterprise/workflows/recovery-messages";
 import { cn } from "@/lib/utils";
 import { workflowReadinessMessage } from "@/lib/enterprise/workflows/readiness-messages";
 
@@ -19,8 +20,8 @@ type Step = { id?: string; code: string; name: string; description?: string | nu
 type Transition = { id?: string; fromStepId?: string; toStepId?: string; fromStep?: { code: string }; toStep?: { code: string }; fromStepCode?: string; toStepCode?: string; outcome?: string | null; priority: number; conditionJson?: Record<string, unknown> | null; condition?: Record<string, unknown> };
 type Version = { id: string; versionNumber: number; status: string; steps: Step[]; transitions: Transition[]; publishedAt?: string | null };
 type Definition = { id: string; code: string; name: string; description?: string | null; status: string; triggerType: string; triggerEntityType?: string | null; triggerEventType?: string | null; currentVersionId?: string | null; updatedAt: string; versions: Version[]; _count?: { runs: number } };
-type Run = { id: string; status: string; sourceEntityType: string; sourceEntityId: string; triggerType: string; startedAt: string; updatedAt: string; revision: number; failureMessage?: string | null; definition: { id: string; code: string; name: string }; version: { versionNumber: number }; stepRuns: Array<{ step: { code: string; name: string; stepType: string } }> };
-type WorkflowEvent = { id: string; createdAt: string; summary: string; status?: string | null };
+type Run = { id: string; status: string; sourceEntityType: string; sourceEntityId: string; triggerType: string; startedAt: string; updatedAt: string; revision: number; failureMessage?: string | null; failureCode?: string | null; definition: { id: string; code: string; name: string }; version: { versionNumber: number }; stepRuns: Array<{ step: { code: string; name: string; stepType: string } }> };
+type WorkflowEvent = { eventType?: string; id: string; createdAt: string; summary: string; status?: string | null };
 type RunDetail = Run & { events: WorkflowEvent[] };
 type Template = { code: string; nameFr: string; nameEn: string; descriptionFr: string; descriptionEn: string; triggerEntityType: string; triggerEventType: string; compatibility: Readiness };
 type Readiness = { ready: boolean; blockers: Array<{ code: string; message: string; stepCode?: string }> };
@@ -90,7 +91,7 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, members, 
   async function openDefinition(id: string) {
     const response = await fetch(`/api/enterprise/${organizationId}/workflows/${id}`);
     const body = await response.json().catch(() => null);
-    if (!response.ok) return toastError(body?.message || (en ? "Workflow unavailable." : "Workflow indisponible."));
+    if (!response.ok) return toastError(getWorkflowRecoveryMessage(body?.error, locale) || body?.message || (en ? "Workflow unavailable." : "Workflow indisponible."));
     setSelected(body.definition);
     setReadiness(body.readiness || {});
     const draft = body.definition.versions.find((version: Version) => version.status === "DRAFT");
@@ -108,7 +109,7 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, members, 
     const templateCode = String(form.get("templateCode") || "");
     const response = await fetch(`/api/enterprise/${organizationId}/workflows`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ templateCode, locale: en ? "en" : "fr" }) });
     const body = await response.json().catch(() => null);
-    if (!response.ok) return toastError(body?.message || (en ? "Creation failed." : "Création impossible."));
+    if (!response.ok) return toastError(getWorkflowRecoveryMessage(body?.error, locale) || body?.message || (en ? "Creation failed." : "Création impossible."));
     setCreateOpen(false);
     toastSuccess(en ? "Draft workflow created." : "Workflow brouillon créé.");
     await load();
@@ -203,7 +204,7 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, members, 
       }),
     });
     const body = await response.json().catch(() => null);
-    if (!response.ok) return toastError(body?.message || (en ? "Save failed." : "Enregistrement impossible."));
+    if (!response.ok) return toastError(getWorkflowRecoveryMessage(body?.error, locale) || body?.message || (en ? "Save failed." : "Enregistrement impossible."));
     toastSuccess(en ? "Draft saved." : "Brouillon enregistré.");
     await openDefinition(selected.id);
     await load();
@@ -214,7 +215,7 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, members, 
     const sourceVersionId = published?.id || currentDraft?.id;
     const response = await fetch(`/api/enterprise/${organizationId}/workflows/${selected.id}/versions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sourceVersionId }) });
     const body = await response.json().catch(() => null);
-    if (!response.ok) return toastError(body?.message || (en ? "Duplication failed." : "Duplication impossible."));
+    if (!response.ok) return toastError(getWorkflowRecoveryMessage(body?.error, locale) || body?.message || (en ? "Duplication failed." : "Duplication impossible."));
     toastSuccess(en ? "New draft version created." : "Nouvelle version brouillon créée.");
     await openDefinition(selected.id);
   }
@@ -222,7 +223,7 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, members, 
   async function openRun(id: string) {
     const response = await fetch(`/api/enterprise/${organizationId}/workflow-runs/${id}`);
     const body = await response.json().catch(() => null);
-    if (!response.ok) return toastError(body?.message || (en ? "Run unavailable." : "Exécution indisponible."));
+    if (!response.ok) return toastError(getWorkflowRecoveryMessage(body?.error, locale) || body?.message || (en ? "Run unavailable." : "Exécution indisponible."));
     setRunDetail(body.run as RunDetail);
   }
 
@@ -233,7 +234,7 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, members, 
     const reason = String(form.get("reason") || "");
     const response = await fetch(`/api/enterprise/${organizationId}/workflow-runs/${runAction.run.id}/${runAction.action}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(runAction.action === "cancel" ? { reason, revision: runAction.run.revision } : { reason }) });
     const body = await response.json().catch(() => null);
-    if (!response.ok) return toastError(body?.message || (en ? "Action failed." : "Action impossible."));
+    if (!response.ok) return toastError(getWorkflowRecoveryMessage(body?.error, locale) || body?.message || (en ? "Action failed." : "Action impossible."));
     setRunAction(null);
     toastSuccess(en ? "Run updated." : "Exécution mise à jour.");
     await load();
@@ -269,7 +270,7 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, members, 
 
     {tab === "runs" ? <section>{runs.length ? <BusinessList ariaLabel={en ? "Workflow runs" : "Exécutions de workflow"}>{runs.map((run) => <BusinessListItem key={run.id} title={run.definition.name} description={`${entityLabel(run.sourceEntityType, en)} · ${new Date(run.startedAt).toLocaleString(en ? "en-US" : "fr-FR")} · v${run.version.versionNumber}`} status={<StatusBadge>{statusLabel(run.status, en)}</StatusBadge>} actions={<ActionMenu label="Run" items={[{ key: "open", label: en ? "Open timeline" : "Ouvrir la timeline", icon: Eye, onSelect: () => void openRun(run.id) }, ...(permissions.canRetry && ["BLOCKED", "FAILED"].includes(run.status) ? [{ key: "retry", label: en ? "Retry step" : "Réessayer l’étape", icon: RotateCcw, onSelect: () => setRunAction({ run, action: "retry" as const }) }] : []), ...(permissions.canCancel && !["COMPLETED", "REJECTED", "FAILED", "CANCELLED"].includes(run.status) ? [{ key: "cancel", label: en ? "Cancel run" : "Annuler l’exécution", icon: XCircle, destructive: true, onSelect: () => setRunAction({ run, action: "cancel" as const }) }] : [])]} />} />)}</BusinessList> : <EmptyState compact title={en ? "No workflow run" : "Aucune exécution"} description={en ? "Runs appear after a manual start or a matching business event." : "Les exécutions apparaissent après un lancement manuel ou un événement métier correspondant."} />}</section> : null}
 
-    {tab === "monitoring" ? <section className="grid gap-3">{monitored.length ? monitored.map((run) => <article key={run.id} className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-3"><div className="flex items-start gap-3"><span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/10 text-amber-700"><AlertTriangle className="h-4 w-4" /></span><div className="min-w-0 flex-1"><strong className="block truncate text-sm text-dtsc-ink">{run.definition.name}</strong><span className="block text-xs text-dtsc-muted">{statusLabel(run.status, en)} · {run.failureMessage || (en ? "Awaiting the next authorized action." : "En attente de la prochaine action autorisée.")}</span></div><Button size="sm" variant="outline" onClick={() => void openRun(run.id)}>{en ? "Inspect" : "Inspecter"}</Button></div></article>) : <EmptyState compact title={en ? "Nothing to monitor" : "Rien à surveiller"} description={en ? "No blocked, failed or abnormally waiting run." : "Aucune exécution bloquée, en échec ou en attente anormale."} />}</section> : null}
+    {tab === "monitoring" ? <section className="grid gap-3">{monitored.length ? monitored.map((run) => <article key={run.id} className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-3"><div className="flex items-start gap-3"><span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/10 text-amber-700"><AlertTriangle className="h-4 w-4" /></span><div className="min-w-0 flex-1"><strong className="block truncate text-sm text-dtsc-ink">{run.definition.name}</strong><span className="block text-xs text-dtsc-muted">{statusLabel(run.status, en)} · {getWorkflowRecoveryMessage(run.failureCode, locale) || run.failureMessage || (en ? "Awaiting the next authorized action." : "En attente de la prochaine action autorisée.")}</span></div><Button size="sm" variant="outline" onClick={() => void openRun(run.id)}>{en ? "Inspect" : "Inspecter"}</Button></div></article>) : <EmptyState compact title={en ? "Nothing to monitor" : "Rien à surveiller"} description={en ? "No blocked, failed or abnormally waiting run." : "Aucune exécution bloquée, en échec ou en attente anormale."} />}</section> : null}
 
     <Dialog open={createOpen} title={en ? "Create a draft workflow" : "Créer un workflow brouillon"} onClose={() => setCreateOpen(false)} presentation="editor" className="h-[94dvh] max-w-4xl">
       <form onSubmit={createFromTemplate} className="grid min-w-0 gap-3">
@@ -294,7 +295,7 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, members, 
 
     <Dialog open={transitionOpen} title={en ? "Add a branch" : "Ajouter une branche"} onClose={() => setTransitionOpen(false)} presentation="editor" className="h-[94dvh] max-w-4xl"><form onSubmit={addTransition} className="grid gap-3">{transitionError ? <p className="rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-800" role="alert">{transitionError}</p> : null}<select name="from" required aria-invalid={Boolean(transitionError)} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm">{draftSteps.map((step) => <option key={step.code} value={step.code}>{step.name}</option>)}</select><select name="to" required aria-invalid={Boolean(transitionError)} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm">{draftSteps.map((step) => <option key={step.code} value={step.code}>{step.name}</option>)}</select><select name="outcome" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm">{OUTCOMES.map((outcome) => <option key={outcome} value={outcome}>{outcomeLabel(outcome, en)}</option>)}</select><Button type="submit"><GitBranch className="h-4 w-4" />{en ? "Add branch" : "Ajouter la branche"}</Button></form></Dialog>
 
-    <Dialog open={Boolean(runDetail)} title={en ? "Workflow timeline" : "Timeline du workflow"} onClose={() => setRunDetail(null)} presentation="editor" className="h-[94dvh] max-w-5xl">{runDetail ? <div className="grid gap-3"><div className="rounded-xl bg-dtsc-page p-3"><strong className="text-dtsc-ink">{runDetail.definition.name}</strong><p className="text-xs text-dtsc-muted">{entityLabel(runDetail.sourceEntityType, en)} · {statusLabel(runDetail.status, en)} · v{runDetail.version.versionNumber}</p></div><div className="max-h-[60dvh] overflow-y-auto overscroll-contain border-l-2 border-dtsc-border pl-4">{runDetail.events.map((event) => <article key={event.id} className="relative pb-4"><span className="absolute -left-[1.35rem] top-1 h-2.5 w-2.5 rounded-full bg-cyan-500" /><p className="text-xs font-bold text-dtsc-muted">{new Date(event.createdAt).toLocaleString(en ? "en-US" : "fr-FR")}</p><strong className="text-sm text-dtsc-ink">{event.summary}</strong>{event.status ? <p className="text-xs text-dtsc-muted">{statusLabel(event.status, en)}</p> : null}</article>)}</div></div> : null}</Dialog>
+    <Dialog open={Boolean(runDetail)} title={en ? "Workflow timeline" : "Timeline du workflow"} onClose={() => setRunDetail(null)} presentation="editor" className="h-[94dvh] max-w-5xl">{runDetail ? <div className="grid gap-3"><div className="rounded-xl bg-dtsc-page p-3"><strong className="text-dtsc-ink">{runDetail.definition.name}</strong><p className="text-xs text-dtsc-muted">{entityLabel(runDetail.sourceEntityType, en)} · {statusLabel(runDetail.status, en)} · v{runDetail.version.versionNumber}</p></div><div className="max-h-[60dvh] overflow-y-auto overscroll-contain border-l-2 border-dtsc-border pl-4">{runDetail.events.map((event) => <article key={event.id} className="relative pb-4"><span className="absolute -left-[1.35rem] top-1 h-2.5 w-2.5 rounded-full bg-cyan-500" /><p className="text-xs font-bold text-dtsc-muted">{new Date(event.createdAt).toLocaleString(en ? "en-US" : "fr-FR")}</p><strong className="text-sm text-dtsc-ink">{getWorkflowRecoveryMessage(event.eventType, locale) || event.summary}</strong>{event.status ? <p className="text-xs text-dtsc-muted">{statusLabel(event.status, en)}</p> : null}</article>)}</div></div> : null}</Dialog>
 
     <Dialog open={Boolean(runAction)} title={runAction?.action === "retry" ? (en ? "Retry current step" : "Réessayer l’étape courante") : (en ? "Cancel workflow run" : "Annuler l’exécution")} onClose={() => setRunAction(null)} presentation="editor" className="h-[94dvh] max-w-3xl"><form onSubmit={submitRunAction} className="grid gap-3"><Input name="reason" required minLength={3} placeholder={en ? "Reason" : "Motif"} /><p className="text-xs text-dtsc-muted">{runAction?.action === "cancel" ? (en ? "Successful actions remain recorded; no automatic rollback is performed." : "Les actions réussies restent enregistrées; aucun rollback automatique n’est effectué.") : (en ? "Only the safe current step is retried with the same idempotency key." : "Seule l’étape courante sûre est relancée avec la même clé d’idempotence.")}</p><Button type="submit" variant={runAction?.action === "cancel" ? "destructive" : "default"}>{runAction?.action === "retry" ? <RotateCcw className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}{en ? "Confirm" : "Confirmer"}</Button></form></Dialog>
   </div>;

@@ -25,7 +25,7 @@ Le problème traité ici est la latence de scheduling et l'absence de signal sim
 
 Chaque invocation collecte un snapshot technique avant et après traitement :
 
-- `ready` : événements `PENDING`/`FAILED` disponibles et non couverts par une lease active ;
+- `ready` : événements `PENDING`/`FAILED` disponibles et non couverts par une lease active, ainsi que `PROCESSING` avec bail horodaté réellement expiré (WF-00 #813) ;
 - `processing` : événements `PROCESSING` couverts par une lease active ;
 - `dead` : événements terminaux à examiner ;
 - `oldestReadyAgeMs` : âge du plus ancien événement prêt ;
@@ -53,6 +53,12 @@ Une cadence à la minute peut faire démarrer une nouvelle invocation alors qu'u
 - une lease (`lockedAt`, `lockedBy`) protège les événements en cours ;
 - une lease expirée redevient récupérable selon le contrat existant ;
 - la Function reste bornée à 60 secondes et la lease à 90 secondes.
+
+WF-00 (#813) partage la politique de reprise entre les deux workers, borne les
+tentatives après crash, protège les finalisations par propriétaire/compteur et
+ajoute un bail d’exécution par run. Voir [le runbook de reprise](WORKFLOW_RUNTIME_RECOVERY.md)
+pour les preuves d’idempotence, les opérations incertaines et le drainage des
+anciens workers avant déploiement ou rollback.
 
 SCALE-4A ne modifie pas ces primitives.
 

@@ -10,6 +10,7 @@ if (!regression || typeof regression !== "string") {
 }
 
 const commands = regression.split(/\s+&&\s+/).map((item) => item.trim()).filter(Boolean);
+commands.unshift("node scripts/qa-workflow-813-recovery.mjs");
 commands.unshift("node scripts/qa-reporting-2-634.mjs");
 commands.unshift("node scripts/qa-workflow-814-contracts.mjs");
 commands.unshift("node scripts/qa-hotfix-547-responses-reasoning-continuation.mjs");

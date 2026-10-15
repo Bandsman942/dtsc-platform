@@ -74,6 +74,15 @@
 
 ## Idempotency et retry
 
+WF-00 (#813) : commandes et limites des preuves dans [le runbook](WORKFLOW_RUNTIME_RECOVERY.md).
+
+- [ ] QA comportementale PostgreSQL après migrations propres : deux workers, expiration réelle, tentative maximale et DEAD, dans les deux modes.
+- [ ] Reprise après effet/avant confirmation : tâches atomiques, validations liées, notifications déterministes ; aucune reprise forcée d’un effet indéterminé.
+- [ ] Attente relative à échéance conservée après crash et reprise concurrente ; redelivery d’un run terminé.
+- [ ] Annulation concurrente : aucune étape future, effet déjà réussi conservé.
+- [ ] Diagnostics de récupération FR/EN ; jeton/bail internes absents des API.
+- [ ] OWNER_E2E : interruption/reprise contrôlée, attente courte, audit et absence de doublons sur desktop/mobile.
+
 - [ ] Le même DomainEvent ne crée qu’un run par version/source.
 - [ ] Une action de step possède une clé stable.
 - [ ] Un retry de CREATE_TASK ne crée pas une seconde tâche.

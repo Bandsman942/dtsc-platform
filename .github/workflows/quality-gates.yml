@@ -91,6 +91,8 @@ jobs:
         run: pnpm prisma:deploy
       - name: Workflow ERP contracts PostgreSQL integration
         run: node scripts/qa-workflow-814-postgres.mjs
+      - name: Workflow crash recovery on PostgreSQL
+        run: node scripts/qa-workflow-813-postgres.mjs
       - name: Type check
         run: pnpm type-check
         env:
@@ -183,6 +185,8 @@ jobs:
         run: pnpm prisma:deploy
       - name: Workflow ERP contracts on clean PostgreSQL
         run: node scripts/qa-workflow-814-postgres.mjs
+      - name: Workflow crash recovery after clean migrations
+        run: node scripts/qa-workflow-813-postgres.mjs
       - name: Run Retail Telco Mobile Money migration contract
         run: node scripts/qa-retail-telco-mobile-money.mjs
       - name: Run sector onboarding commercial readiness on clean database
