@@ -3,7 +3,7 @@ import { EnterpriseWorkflowError } from "@/lib/enterprise/workflows/errors";
 import { prisma } from "@/lib/prisma";
 import { moduleCodeForEnterpriseEntity } from "@/lib/enterprise/cross-module/deep-links";
 import { getCanonicalEnterpriseModuleCode } from "@/lib/enterprise/module-registry";
-import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
+import { resolveEnterpriseModuleAccess, type EnterpriseModuleAction } from "@/lib/enterprise/module-access";
 
 export function workflowSourceModule(entityType: string) {
   const sourceModule = moduleCodeForEnterpriseEntity(entityType);
@@ -18,11 +18,13 @@ export function workflowSourceModule(entityType: string) {
  * For event runs without a starter, only live, authorized business actors may
  * be selected from the trusted entity snapshot.
  */
-export async function resolveWorkflowExecutionUser({ organizationId, startedByUserId, adapter, entity }: {
+export async function resolveWorkflowExecutionUser({ organizationId, startedByUserId, adapter, entity, action = "read", targetModuleCode }: {
   organizationId: string;
   startedByUserId?: string | null;
   adapter: WorkflowEntityAdapter;
   entity: WorkflowEntitySnapshot;
+  action?: EnterpriseModuleAction;
+  targetModuleCode?: string;
 }) {
   const candidates = startedByUserId
     ? [startedByUserId]
@@ -41,8 +43,12 @@ export async function resolveWorkflowExecutionUser({ organizationId, startedByUs
       if (startedByUserId) break;
       continue;
     }
-    const decision = await resolveEnterpriseModuleAccess({ userId: candidate, organizationId, moduleCode, action: "read" });
-    if (decision.allowed) return membership.userId;
+    const decision = await resolveEnterpriseModuleAccess({ userId: candidate, organizationId, moduleCode, action });
+    if (decision.allowed) {
+      if (!targetModuleCode) return membership.userId;
+      const targetDecision = await resolveEnterpriseModuleAccess({ userId: candidate, organizationId, moduleCode: targetModuleCode, action: "submit" });
+      if (targetDecision.allowed) return membership.userId;
+    }
     if (startedByUserId) break;
   }
   throw new EnterpriseWorkflowError(
