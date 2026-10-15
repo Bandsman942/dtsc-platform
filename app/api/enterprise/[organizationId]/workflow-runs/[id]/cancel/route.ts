@@ -1,3 +1,4 @@
+import { publicWorkflowRun } from "@/lib/enterprise/workflows/public-run";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
@@ -22,6 +23,6 @@ export async function POST(req: Request, { params }: Params) {
     const run = await cancelWorkflowRun(id, session.userId, parsed.data.reason, parsed.data.revision, access.canCancel);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_WORKFLOW_RUN_CANCELLED", entity: "EnterpriseWorkflowRun", entityId: id, request: req, metadata: { organizationId, reason: parsed.data.reason } });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "workflow-cancel", runId: id } });
-    return NextResponse.json({ ok: true, run });
+    return NextResponse.json({ ok: true, run: publicWorkflowRun(run) });
   } catch (error) { const normalized = normalizeWorkflowError(error); return NextResponse.json({ error: normalized.code, message: normalized.message }, { status: normalized.status }); }
 }

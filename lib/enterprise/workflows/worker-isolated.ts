@@ -8,13 +8,13 @@ import {
 import { enqueueCrossModuleProjections } from "@/lib/enterprise/cross-module/projection-queue";
 import { WORKFLOW_LIMITS } from "@/lib/enterprise/workflows/constants";
 import { processWorkflowDomainEvent, resumeWaitingRuns } from "@/lib/enterprise/workflows/engine";
-import { safeWorkflowFailureMessage } from "@/lib/enterprise/workflows/errors";
+import { workflowEventReadySql, renewWorkflowEventLease, workflowEventFailure } from "@/lib/enterprise/workflows/event-recovery";
 import { KNOWLEDGE_INDEX_EVENT_TYPE } from "@/lib/knowledge-index/constants";
 import { ADMIN_BROADCAST_EMAIL_DELIVERY_EVENT_TYPE } from "@/lib/mail/broadcast-constants";
 import { prisma } from "@/lib/prisma";
 import { WEB_PUSH_DOMAIN_EVENT_TYPE } from "@/lib/push/constants";
 
-type ClaimedEvent = { id: string; attemptCount: number };
+type ClaimedEvent = { id: string; attemptCount: number; processingStatus: string };
 type QueueSnapshotRow = { ready: bigint | number | string; processing: bigint | number | string; dead: bigint | number | string; oldestReadyAt: Date | null };
 
 type WorkflowQueueSnapshot = {
@@ -46,9 +46,7 @@ async function getWorkflowQueueSnapshot(): Promise<WorkflowQueueSnapshot> {
             AND "eventType" <> ${BANK_STATEMENT_IMPORT_EVENT_TYPE}
             AND "eventType" <> ${AUDIT_EXPORT_EVENT_TYPE}
             AND "eventType" <> ${FINANCE_REPORT_GENERATION_EVENT_TYPE}
-            AND "processingStatus" IN ('PENDING', 'FAILED')
-            AND "availableAt" <= NOW()
-            AND ("lockedAt" IS NULL OR "lockedAt" < ${leaseBefore})
+            AND ${workflowEventReadySql(leaseBefore)}
         ) AS "ready",
         COUNT(*) FILTER (
           WHERE "eventType" <> ${WEB_PUSH_DOMAIN_EVENT_TYPE}
@@ -77,9 +75,7 @@ async function getWorkflowQueueSnapshot(): Promise<WorkflowQueueSnapshot> {
             AND "eventType" <> ${BANK_STATEMENT_IMPORT_EVENT_TYPE}
             AND "eventType" <> ${AUDIT_EXPORT_EVENT_TYPE}
             AND "eventType" <> ${FINANCE_REPORT_GENERATION_EVENT_TYPE}
-            AND "processingStatus" IN ('PENDING', 'FAILED')
-            AND "availableAt" <= NOW()
-            AND ("lockedAt" IS NULL OR "lockedAt" < ${leaseBefore})
+            AND ${workflowEventReadySql(leaseBefore)}
         ) AS "oldestReadyAt"
       FROM "EnterpriseDomainEvent"
     `);
@@ -94,7 +90,8 @@ async function claimPendingEvents(workerId: string, batchSize: number) {
   const leaseBefore = new Date(Date.now() - WORKFLOW_LIMITS.workerLeaseSeconds * 1000);
   return prisma.$queryRaw<ClaimedEvent[]>(Prisma.sql`
     UPDATE "EnterpriseDomainEvent"
-    SET "processingStatus" = 'PROCESSING', "lockedAt" = NOW(), "lockedBy" = ${workerId}, "attemptCount" = "attemptCount" + 1, "updatedAt" = NOW()
+    SET "processingStatus" = CASE WHEN "attemptCount" >= ${WORKFLOW_LIMITS.maxAttempts} THEN 'DEAD' ELSE 'PROCESSING' END, "lockedAt" = CASE WHEN "attemptCount" >= ${WORKFLOW_LIMITS.maxAttempts} THEN NULL ELSE NOW() END, "lockedBy" = CASE WHEN "attemptCount" >= ${WORKFLOW_LIMITS.maxAttempts} THEN NULL ELSE ${workerId} END, "attemptCount" = LEAST("attemptCount" + 1, ${WORKFLOW_LIMITS.maxAttempts}),
+        "lastError" = CASE WHEN "attemptCount" >= ${WORKFLOW_LIMITS.maxAttempts} THEN 'WORKFLOW_EVENT_ATTEMPTS_EXHAUSTED' ELSE "lastError" END, "updatedAt" = NOW()
     WHERE "id" IN (
       SELECT "id" FROM "EnterpriseDomainEvent"
       WHERE "eventType" <> ${WEB_PUSH_DOMAIN_EVENT_TYPE}
@@ -103,14 +100,12 @@ async function claimPendingEvents(workerId: string, batchSize: number) {
         AND "eventType" <> ${BANK_STATEMENT_IMPORT_EVENT_TYPE}
         AND "eventType" <> ${AUDIT_EXPORT_EVENT_TYPE}
         AND "eventType" <> ${FINANCE_REPORT_GENERATION_EVENT_TYPE}
-        AND "processingStatus" IN ('PENDING', 'FAILED')
-        AND "availableAt" <= NOW()
-        AND ("lockedAt" IS NULL OR "lockedAt" < ${leaseBefore})
+        AND ${workflowEventReadySql(leaseBefore)}
       ORDER BY "availableAt" ASC, "createdAt" ASC
       LIMIT ${batchSize}
       FOR UPDATE SKIP LOCKED
     )
-    RETURNING "id", "attemptCount"
+    RETURNING "id", "attemptCount", "processingStatus"
   `);
 }
 
@@ -121,17 +116,18 @@ export async function processPendingWorkflowEventsIsolated({ batchSize = WORKFLO
   const results: Array<{ id: string; status: string; error?: string; projectionQueued?: number }> = [];
 
   for (const event of claimed) {
+    if (event.processingStatus === "DEAD") { results.push({ id: event.id, status: "DEAD" }); continue; }
+    // A previously claimed item may have expired while waiting behind the batch.
+    if (!await renewWorkflowEventLease(event, workerId)) { results.push({ id: event.id, status: "LEASE_LOST" }); continue; }
     try {
       const projectionQueue = await enqueueCrossModuleProjections(event.id);
       await processWorkflowDomainEvent(event.id);
-      await prisma.enterpriseDomainEvent.updateMany({ where: { id: event.id, processingStatus: "PROCESSING", lockedBy: workerId }, data: { processingStatus: "PROCESSED", processedAt: new Date(), lockedAt: null, lockedBy: null, lastError: null } });
-      results.push({ id: event.id, status: "PROCESSED", projectionQueued: projectionQueue.queued });
+      const completed = await prisma.enterpriseDomainEvent.updateMany({ where: { id: event.id, processingStatus: "PROCESSING", lockedBy: workerId, attemptCount: event.attemptCount }, data: { processingStatus: "PROCESSED", processedAt: new Date(), lockedAt: null, lockedBy: null, lastError: null } });
+      results.push({ id: event.id, status: completed.count === 1 ? "PROCESSED" : "LEASE_LOST", projectionQueued: projectionQueue.queued });
     } catch (error) {
-      const failure = safeWorkflowFailureMessage(error);
-      const dead = event.attemptCount >= WORKFLOW_LIMITS.maxAttempts || ["SECURITY", "TERMINAL"].includes(failure.category);
-      const backoffSeconds = Math.min(300, 10 * Math.max(1, event.attemptCount));
-      await prisma.enterpriseDomainEvent.updateMany({ where: { id: event.id, processingStatus: "PROCESSING", lockedBy: workerId }, data: { processingStatus: dead ? "DEAD" : "FAILED", availableAt: dead ? new Date() : new Date(Date.now() + backoffSeconds * 1000), lockedAt: null, lockedBy: null, lastError: `${failure.code}: ${failure.message}`.slice(0, 1000) } });
-      results.push({ id: event.id, status: dead ? "DEAD" : "FAILED", error: failure.code });
+      const { failure, dead, backoffSeconds } = workflowEventFailure(error, event.attemptCount);
+      const failed = await prisma.enterpriseDomainEvent.updateMany({ where: { id: event.id, processingStatus: "PROCESSING", lockedBy: workerId, attemptCount: event.attemptCount }, data: { processingStatus: dead ? "DEAD" : "FAILED", availableAt: dead ? new Date() : new Date(Date.now() + backoffSeconds * 1000), lockedAt: null, lockedBy: null, lastError: `${failure.code}: ${failure.message}`.slice(0, 1000) } });
+      results.push({ id: event.id, status: failed.count === 1 ? (dead ? "DEAD" : "FAILED") : "LEASE_LOST", error: failure.code });
     }
   }
 
