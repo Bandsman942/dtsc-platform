@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseWorkflowAccess } from "@/lib/enterprise/workflows/access";
+import { requireWorkflowDefinitionSourceAccess } from "@/lib/enterprise/workflows/source-access";
 import { duplicateWorkflowVersion, getWorkflowDefinition } from "@/lib/enterprise/workflows/definitions";
 import { normalizeWorkflowError } from "@/lib/enterprise/workflows/errors";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
@@ -18,6 +19,7 @@ export async function POST(req: Request, { params }: Params) {
   const { organizationId, id } = await params; const access = await getEnterpriseWorkflowAccess(session, organizationId); if (!access?.canCreateDraft) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = schema.safeParse(await req.json().catch(() => ({}))); if (!parsed.success) return NextResponse.json({ error: "INVALID_WORKFLOW_VERSION_PAYLOAD" }, { status: 400 });
   try {
+    await requireWorkflowDefinitionSourceAccess({ userId: session.userId, organizationId, definitionId: id });
     const definition = await getWorkflowDefinition(organizationId, id); const sourceVersionId = parsed.data.sourceVersionId || definition.currentVersionId || definition.versions[0]?.id;
     if (!sourceVersionId) return NextResponse.json({ error: "WORKFLOW_SOURCE_VERSION_REQUIRED", message: "Aucune version source n’est disponible." }, { status: 409 });
     const version = await duplicateWorkflowVersion(organizationId, id, sourceVersionId, session.userId);
