@@ -107,6 +107,18 @@ try {
   assert.equal((await prisma.enterpriseWorkflowRun.findUniqueOrThrow({ where: { id: approvalRun.run.id } })).status, "COMPLETED");
   assert.equal(await prisma.enterpriseApproval.count({ where: { workflowStepRunId: approvalRun.stepRun.id } }), 1);
 
+  // A past decision in a run now waiting for its next approval must not fill
+  // the bounded recovery batch and starve another run's current decision.
+  const nextApprovalStep = await prisma.enterpriseWorkflowStep.create({ data: { organizationId, workflowVersionId: approvalRun.run.workflowVersionId, code: "NEXT_APPROVAL", name: "Next approval", stepType: "CREATE_APPROVAL", position: 2, configurationJson: { assignment: { strategy: "SPECIFIC_USER", userId: prefix } } } });
+  const nextApprovalStepRun = await prisma.enterpriseWorkflowStepRun.create({ data: { organizationId, workflowRunId: approvalRun.run.id, workflowStepId: nextApprovalStep.id, status: "WAITING", attemptCount: 1 } });
+  await prisma.enterpriseApproval.create({ data: { organizationId, targetEntityType: "EnterpriseTask", targetEntityId: approvalRun.run.sourceEntityId, requestedByUserId: `${prefix}-requester`, approverUserId: prefix, workflowRunId: approvalRun.run.id, workflowStepRunId: nextApprovalStepRun.id } });
+  await prisma.enterpriseWorkflowRun.update({ where: { id: approvalRun.run.id }, data: { status: "WAITING_APPROVAL", currentStepId: nextApprovalStep.id, completedAt: null } });
+  const laterDecision = await fixture("CREATE_APPROVAL", { assignment: { strategy: "SPECIFIC_USER", userId: prefix } }, "WAITING_APPROVAL", "WAITING");
+  await prisma.enterpriseApproval.create({ data: { organizationId, targetEntityType: "EnterpriseTask", targetEntityId: laterDecision.run.sourceEntityId, requestedByUserId: `${prefix}-requester`, approverUserId: prefix, workflowRunId: laterDecision.run.id, workflowStepRunId: laterDecision.stepRun.id, status: "APPROVED", decidedAt: new Date() } });
+  await engine.resumeWaitingRuns(1);
+  assert.equal((await prisma.enterpriseWorkflowRun.findUniqueOrThrow({ where: { id: laterDecision.run.id } })).status, "COMPLETED", "Old approval decisions must not starve a bounded recovery sweep");
+  assert.equal((await prisma.enterpriseWorkflowRun.findUniqueOrThrow({ where: { id: approvalRun.run.id } })).status, "WAITING_APPROVAL");
+
   const notificationRun = await fixture("NOTIFICATION", { recipient: { strategy: "SPECIFIC_USER", userId: prefix }, titleTemplate: "Recovery", bodyTemplate: "Recovery fixture" }, "RUNNING", "RUNNING");
   const notificationKey = actions.workflowActionIdempotencyKey(notificationRun.run.id, notificationRun.step.id, "NOTIFICATION");
   await prisma.enterpriseWorkflowActionAttempt.create({ data: { organizationId, stepRunId: notificationRun.stepRun.id, actionType: "NOTIFICATION", status: "RUNNING", idempotencyKey: notificationKey } });

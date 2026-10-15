@@ -365,7 +365,7 @@ export async function resumeWaitingRuns(batchSize: number = WORKFLOW_LIMITS.work
   }
   // A decision can commit while its step is still completing. Reconcile that
   // ordering without relying on a second delivery of the approval outbox event.
-  const decided = await prisma.enterpriseApproval.findMany({ where: { workflowRunId: { not: null }, workflowStepRunId: { not: null }, status: { in: ["APPROVED", "REJECTED", "CANCELLED"] }, workflowRun: { status: "WAITING_APPROVAL" } }, orderBy: { updatedAt: "asc" }, take: Math.max(1, Math.min(batchSize, WORKFLOW_LIMITS.workerBatchSize)), select: { id: true } });
+  const decided = await prisma.enterpriseApproval.findMany({ where: { workflowRunId: { not: null }, workflowStepRunId: { not: null }, status: { in: ["APPROVED", "REJECTED", "CANCELLED"] }, workflowRun: { status: "WAITING_APPROVAL" }, workflowStepRun: { status: "WAITING" } }, orderBy: { updatedAt: "asc" }, take: Math.max(1, Math.min(batchSize, WORKFLOW_LIMITS.workerBatchSize)), select: { id: true } });
   for (const approval of decided) {
     const resumed = await resumeWorkflowFromApproval(approval.id);
     if (resumed) results.push(resumed);
