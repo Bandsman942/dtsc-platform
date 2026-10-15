@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseWorkflowAccess } from "@/lib/enterprise/workflows/access";
+import { requireWorkflowSourceAccess } from "@/lib/enterprise/workflows/source-access";
 import { startWorkflowRun } from "@/lib/enterprise/workflows/engine";
 import { normalizeWorkflowError } from "@/lib/enterprise/workflows/errors";
 import { workflowManualStartSchema } from "@/lib/enterprise/workflows/validators";
@@ -18,6 +19,7 @@ export async function POST(req: Request, { params }: Params) {
   const { organizationId } = await params; const access = await getEnterpriseWorkflowAccess(session, organizationId); if (!access?.canStartManual) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = workflowManualStartSchema.safeParse(await req.json().catch(() => null)); if (!parsed.success) return NextResponse.json({ error: "INVALID_WORKFLOW_START", message: parsed.error.issues[0]?.message || "Lancement invalide." }, { status: 400 });
   try {
+    await requireWorkflowSourceAccess({ userId: session.userId, organizationId, sourceEntityType: parsed.data.sourceEntityType, action: "submit" });
     const run = await startWorkflowRun({ organizationId, workflowDefinitionId: parsed.data.workflowDefinitionId, sourceEntityType: parsed.data.sourceEntityType, sourceEntityId: parsed.data.sourceEntityId, triggerType: "MANUAL", startedByUserId: session.userId });
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_WORKFLOW_RUN_STARTED", entity: "EnterpriseWorkflowRun", entityId: run.id, request: req, metadata: { organizationId, workflowDefinitionId: parsed.data.workflowDefinitionId, sourceEntityType: parsed.data.sourceEntityType, sourceEntityId: parsed.data.sourceEntityId } });
     await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "workflow-run-start", runId: run.id } });
