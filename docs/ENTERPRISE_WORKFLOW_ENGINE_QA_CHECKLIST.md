@@ -180,3 +180,17 @@ WF-00 (#813) : commandes et limites des preuves dans [le runbook](WORKFLOW_RUNTI
 - [ ] OWNER_E2E : achat avec validateur distinct, paiement après validation dans son module, clôture indépendante, modèle incompatible refusé avant publication ; desktop/mobile, FR/EN, clair/sombre et clavier.
 
 Automatisation : `pnpm qa:workflow-contracts` et `pnpm qa:workflow-contracts:postgres` (base PostgreSQL locale de test uniquement). Les preuves automatiques ne remplacent pas OWNER_E2E.
+
+
+## WF-02 — Accès et identité (#815)
+
+- [ ] Workflow module/entitlement interdit malgré rôle OWNER si abonnement inéligible.
+- [ ] MANAGER sans permission explicite ne peut pas démarrer, publier, voir tous les runs ou annuler.
+- [ ] Permissions du poste et des rôles d'organisation actifs sont appliquées.
+- [ ] Source ERP désactivée/interdite refuse création, publication, lancement, retry et cancel.
+- [ ] La révocation du membre initiateur bloque la prochaine mutation ; aucun remplacement automatique par un autre membre.
+- [ ] Runs/métriques/détails et événements restent tenant-scoped et limités aux données visibles.
+- [ ] Les 11 routes gardent same-origin, validation, rate limit et journaux sur leurs mutations.
+- [ ] `pnpm qa:workflow-security`, lint, type-check, régression, build et migration GitHub réussissent.
+- [ ] OWNER_E2E #815 : matrice des rôles, révocation, cross-tenant, source ERP et SoD.
+- [ ] SHA Production == SHA main après E2E et merge seulement.
