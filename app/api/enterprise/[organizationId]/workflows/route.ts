@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseWorkflowAccess } from "@/lib/enterprise/workflows/access";
+import { listReadableWorkflowEntityTypes, requireWorkflowSourceAccess } from "@/lib/enterprise/workflows/source-access";
 import { createWorkflowDefinition, createWorkflowFromTemplate, listWorkflowDefinitions } from "@/lib/enterprise/workflows/definitions";
 import { normalizeWorkflowError } from "@/lib/enterprise/workflows/errors";
 import { getWorkflowTemplateCompatibility } from "@/lib/enterprise/workflows/capabilities";
@@ -20,7 +21,13 @@ export async function GET(req: Request, { params }: Params) {
   const session = await getSession(); if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { organizationId } = await params;
   const access = await getEnterpriseWorkflowAccess(session, organizationId); if (!access?.canRead) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const [definitions, legacyCount] = await Promise.all([listWorkflowDefinitions(organizationId), prisma.enterpriseWorkflow.count({ where: { organizationId } })]);
+  const [definitions, legacyCount, readableTypes] = await Promise.all([
+    listWorkflowDefinitions(organizationId),
+    access.canViewAllRuns ? prisma.enterpriseWorkflow.count({ where: { organizationId } }) : Promise.resolve(0),
+    listReadableWorkflowEntityTypes(session.userId, organizationId),
+  ]);
+  const allowed = new Set(readableTypes);
+  const visibleDefinitions = definitions.filter((item) => item.triggerEntityType ? allowed.has(item.triggerEntityType as typeof readableTypes[number]) : access.canCreateDraft);
   const templates = ENTERPRISE_WORKFLOW_TEMPLATES.map((template) => ({
     compatibility: getWorkflowTemplateCompatibility(template),
     code: template.code,
@@ -32,7 +39,7 @@ export async function GET(req: Request, { params }: Params) {
     triggerEventType: template.triggerEventType,
   }));
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "workflow-definitions" } });
-  return NextResponse.json({ definitions, templates, legacy: { count: legacyCount, strategy: "CATALOG_READ_ONLY" }, permissions: access });
+  return NextResponse.json({ definitions: visibleDefinitions, templates, legacy: { count: legacyCount, strategy: "CATALOG_READ_ONLY" }, permissions: access });
 }
 
 export async function POST(req: Request, { params }: Params) {
@@ -45,6 +52,10 @@ export async function POST(req: Request, { params }: Params) {
   const definitionParsed = workflowDefinitionCreateSchema.safeParse(body);
   if (!templateParsed.success && !definitionParsed.success) return NextResponse.json({ error: "INVALID_WORKFLOW_PAYLOAD", message: definitionParsed.error?.issues[0]?.message || templateParsed.error?.issues[0]?.message || "Workflow invalide." }, { status: 400 });
   try {
+    const sourceEntityType = templateParsed.success
+      ? ENTERPRISE_WORKFLOW_TEMPLATES.find((template) => template.code === templateParsed.data.templateCode)?.triggerEntityType
+      : definitionParsed.data?.triggerEntityType;
+    if (sourceEntityType) await requireWorkflowSourceAccess({ userId: session.userId, organizationId, sourceEntityType });
     const definition = templateParsed.success ? await createWorkflowFromTemplate(organizationId, session.userId, templateParsed.data.templateCode, templateParsed.data.locale) : await createWorkflowDefinition(organizationId, session.userId, definitionParsed.data);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_WORKFLOW_CREATED", entity: "EnterpriseWorkflowDefinition", entityId: definition.id, request: req, metadata: { organizationId, code: definition.code, source: templateParsed.success ? "TEMPLATE" : "MANUAL" } });
     await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "workflow-definitions" } });
