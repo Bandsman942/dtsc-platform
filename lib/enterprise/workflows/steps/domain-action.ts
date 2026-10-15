@@ -12,7 +12,7 @@ export const executeDomainActionStep: WorkflowStepHandler = async ({ run, step, 
   const action = await beginWorkflowActionAttempt({ organizationId: run.organizationId, stepRunId: stepRun.id, runId: run.id, stepId: step.id, executionToken: run.executionToken, actionType: `DOMAIN_ACTION:${parsed.configuration.action}` });
   if (action.alreadySucceeded) return { kind: "SUCCEEDED", outcome: "DEFAULT", output: { entityType: action.attempt.resultEntityType, entityId: action.attempt.resultEntityId, idempotent: true } };
   try {
-    const actorUserId = await resolveWorkflowExecutionUser({ organizationId: run.organizationId, startedByUserId: run.startedByUserId, adapter, entity });
+    const actorUserId = await resolveWorkflowExecutionUser({ organizationId: run.organizationId, startedByUserId: run.startedByUserId, adapter, entity, action: "write" });
     const revision = typeof entity.revision === "number" ? entity.revision : 1;
     const comment = parsed.configuration.commentTemplate ? renderWorkflowTemplate(parsed.configuration.commentTemplate, adapter.getTemplateValues(entity, workflowName), adapter.placeholders) : `Action ${parsed.configuration.action} exécutée par le workflow ${workflowName}.`;
     const result = await adapter.executeDomainAction({ organizationId: run.organizationId, entityId: run.sourceEntityId, actorUserId, action: parsed.configuration.action, revision, comment });
