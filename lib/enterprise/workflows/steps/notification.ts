@@ -2,6 +2,7 @@ import { notifyUser } from "@/lib/notifications";
 import { resolveWorkflowAssignment } from "@/lib/enterprise/workflows/adapters";
 import { beginWorkflowActionAttempt, completeWorkflowActionAttempt, failWorkflowActionAttempt, workflowActionIdempotencyKey } from "@/lib/enterprise/workflows/action-attempts";
 import { renderWorkflowTemplate } from "@/lib/enterprise/workflows/template";
+import { resolveWorkflowExecutionUser } from "@/lib/enterprise/workflows/runtime-utils";
 import { workflowStepSchema } from "@/lib/enterprise/workflows/validators";
 import type { WorkflowStepHandler } from "@/lib/enterprise/workflows/steps/types";
 
@@ -11,6 +12,9 @@ export const executeNotificationStep: WorkflowStepHandler = async ({ run, step, 
   const action = await beginWorkflowActionAttempt({ organizationId: run.organizationId, stepRunId: stepRun.id, runId: run.id, stepId: step.id, executionToken: run.executionToken, actionType: "NOTIFICATION" });
   if (action.alreadySucceeded) return { kind: "SUCCEEDED", outcome: "DEFAULT", output: { notificationId: action.attempt.resultEntityId, idempotent: true } };
   try {
+    // A notification is an external side effect: a revoked run mandate must
+    // not notify a user under a substituted identity after restart.
+    await resolveWorkflowExecutionUser({ organizationId: run.organizationId, startedByUserId: run.startedByUserId, adapter, entity });
     const recipient = parsed.configuration.recipient;
     const userId = await resolveWorkflowAssignment({ organizationId: run.organizationId, strategy: recipient.strategy, entity, userId: recipient.userId, role: recipient.role, departmentId: recipient.departmentId, previousStepActorUserId });
     const values = adapter.getTemplateValues(entity, workflowName);
