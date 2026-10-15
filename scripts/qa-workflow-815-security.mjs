@@ -84,9 +84,13 @@ const notification = fs.readFileSync("lib/enterprise/workflows/steps/notificatio
 assert.ok(notification.includes("await resolveWorkflowExecutionUser("), "Outbound notifications require a live mandate");
 const assign = fs.readFileSync("lib/enterprise/workflows/steps/assign.ts", "utf8");
 assert.ok(assign.includes("await resolveWorkflowExecutionUser("), "Assignment updates require a live mandate");
-for (const [path, expected] of [["domain-action.ts", "action: \\"write\\""], ["create-approval.ts", "action: \\"submit\\""], ["create-task.ts", "targetModuleCode: \\"TASKS_OPERATIONS\\""]]) {
+for (const [path, expected] of [
+  ["domain-action.ts", 'action: "write"'],
+  ["create-approval.ts", 'action: "submit"'],
+  ["create-task.ts", 'targetModuleCode: "TASKS_OPERATIONS"'],
+]) {
   const step = fs.readFileSync(`lib/enterprise/workflows/steps/${path}`, "utf8");
-  assert.ok(step.includes(expected.replaceAll("\\\\"", "\\"")), `${path} must enforce action/target permissions`);
+  assert.ok(step.includes(expected), `${path} must enforce action/target permissions`);
 }
 const runtime = fs.readFileSync("lib/enterprise/workflows/runtime-utils.ts", "utf8");
 assert.ok(runtime.includes("const candidates = startedByUserId") && runtime.includes("WORKFLOW_EXECUTION_MANDATE_REVOKED"), "Revoked starter must not fall back to another actor");
