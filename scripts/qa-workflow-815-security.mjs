@@ -76,8 +76,12 @@ for (const path of [
 }
 const listing = fs.readFileSync("app/api/enterprise/[organizationId]/workflow-runs/route.ts", "utf8");
 assert.match(listing, /groupBy\(\{ by: \["status"\], where,/, "Metrics must reuse the scoped run predicate");
+assert.ok(listing.includes("entityType ? { AND: [{ sourceEntityType: entityType }] }"), "User entity filter must not replace the authorized source allowlist");
+assert.ok(listing.includes("stepRuns: run.stepRuns.filter"), "List must redact other assignees’ steps");
 const detail = fs.readFileSync("app/api/enterprise/[organizationId]/workflow-runs/[id]/route.ts", "utf8");
 assert.ok(detail.includes("events: [], stepRuns: run.stepRuns.filter"), "Assignee must not read all decisions and history");
+const notification = fs.readFileSync("lib/enterprise/workflows/steps/notification.ts", "utf8");
+assert.ok(notification.includes("await resolveWorkflowExecutionUser("), "Outbound notifications require a live mandate");
 const runtime = fs.readFileSync("lib/enterprise/workflows/runtime-utils.ts", "utf8");
 assert.ok(runtime.includes("const candidates = startedByUserId") && runtime.includes("WORKFLOW_EXECUTION_MANDATE_REVOKED"), "Revoked starter must not fall back to another actor");
 for (const path of [
