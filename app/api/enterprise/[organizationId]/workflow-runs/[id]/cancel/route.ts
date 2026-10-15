@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseWorkflowAccess } from "@/lib/enterprise/workflows/access";
+import { requireWorkflowSourceAccess } from "@/lib/enterprise/workflows/source-access";
 import { cancelWorkflowRun } from "@/lib/enterprise/workflows/engine";
 import { normalizeWorkflowError } from "@/lib/enterprise/workflows/errors";
 import { workflowCancelSchema } from "@/lib/enterprise/workflows/validators";
@@ -18,8 +19,9 @@ export async function POST(req: Request, { params }: Params) {
   const limited = await rateLimit(getRateLimitKey(req, `enterprise-workflow-cancel:${session.userId}`), 20, 60 * 60 * 1000); if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   const { organizationId, id } = await params; const access = await getEnterpriseWorkflowAccess(session, organizationId); if (!access?.canCancel) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = workflowCancelSchema.safeParse(await req.json().catch(() => null)); if (!parsed.success) return NextResponse.json({ error: "INVALID_WORKFLOW_CANCEL", message: parsed.error.issues[0]?.message || "Annulation invalide." }, { status: 400 });
-  const scoped = await prisma.enterpriseWorkflowRun.findFirst({ where: { id, organizationId }, select: { id: true } }); if (!scoped) return NextResponse.json({ error: "WORKFLOW_RUN_NOT_FOUND" }, { status: 404 });
+  const scoped = await prisma.enterpriseWorkflowRun.findFirst({ where: { id, organizationId }, select: { id: true, sourceEntityType: true } }); if (!scoped) return NextResponse.json({ error: "WORKFLOW_RUN_NOT_FOUND" }, { status: 404 });
   try {
+    await requireWorkflowSourceAccess({ userId: session.userId, organizationId, sourceEntityType: scoped.sourceEntityType, action: "write" });
     const run = await cancelWorkflowRun(id, session.userId, parsed.data.reason, parsed.data.revision, access.canCancel);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_WORKFLOW_RUN_CANCELLED", entity: "EnterpriseWorkflowRun", entityId: id, request: req, metadata: { organizationId, reason: parsed.data.reason } });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "workflow-cancel", runId: id } });
