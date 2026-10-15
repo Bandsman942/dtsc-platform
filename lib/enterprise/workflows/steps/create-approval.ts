@@ -1,7 +1,3 @@
-import { createEnterpriseApproval } from "@/lib/enterprise/core-v2/service";
-import { createEnterpriseBudgetApproval } from "@/lib/enterprise/finance/budget-service";
-import { createEnterpriseExpenseApproval } from "@/lib/enterprise/finance/expense-service";
-import { createEnterprisePurchaseApproval } from "@/lib/enterprise/procurement/purchase-service";
 import { resolveWorkflowAssignment } from "@/lib/enterprise/workflows/adapters";
 import { beginWorkflowActionAttempt, completeWorkflowActionAttempt, failWorkflowActionAttempt } from "@/lib/enterprise/workflows/action-attempts";
 import { EnterpriseWorkflowError } from "@/lib/enterprise/workflows/errors";
@@ -19,6 +15,10 @@ export const executeCreateApprovalStep: WorkflowStepHandler = async ({ run, step
     if (alreadyLinked.status === "PENDING") return { kind: "WAITING", runStatus: "WAITING_APPROVAL", assignedUserId: alreadyLinked.approverUserId, output: { approvalId: alreadyLinked.id } };
     return { kind: "SUCCEEDED", outcome: alreadyLinked.status, assignedUserId: alreadyLinked.approverUserId, actorUserId: alreadyLinked.status === "CANCELLED" ? null : alreadyLinked.approverUserId, output: { approvalId: alreadyLinked.id, decision: alreadyLinked.status } };
   }
+
+  // An already-linked canonical approval is recovery evidence even when the
+  // adapter no longer offers creation of fresh approvals. Never block its receipt.
+  if (!adapter.createApproval) throw new EnterpriseWorkflowError("Ce type d’objet ne prend pas en charge les validations métier dans un workflow.", 400, "WORKFLOW_APPROVAL_TARGET_UNSUPPORTED", "CONFIGURATION");
 
   const assignment = parsed.configuration.assignment;
   const approverUserId = await resolveWorkflowAssignment({ organizationId: run.organizationId, strategy: assignment.strategy, entity, userId: assignment.userId, role: assignment.role, departmentId: assignment.departmentId, previousStepActorUserId });
@@ -38,17 +38,7 @@ export const executeCreateApprovalStep: WorkflowStepHandler = async ({ run, step
   try {
     let approval = existingPending;
     if (!approval) {
-      if (["EnterpriseRequest", "EnterpriseTask", "EnterpriseMeeting"].includes(run.sourceEntityType)) {
-        approval = await createEnterpriseApproval({ organizationId: run.organizationId, actorUserId: requesterUserId, targetEntityType: run.sourceEntityType, targetEntityId: run.sourceEntityId, approverUserId });
-      } else if (run.sourceEntityType === "EnterprisePurchase") {
-        approval = await createEnterprisePurchaseApproval({ organizationId: run.organizationId, purchaseId: run.sourceEntityId, actorUserId: requesterUserId, approverUserId, purchaseRevision: typeof entity.revision === "number" ? entity.revision : undefined });
-      } else if (run.sourceEntityType === "EnterpriseBudget") {
-        approval = await createEnterpriseBudgetApproval({ organizationId: run.organizationId, budgetId: run.sourceEntityId, actorUserId: requesterUserId, approverUserId, budgetRevision: typeof entity.revision === "number" ? entity.revision : undefined });
-      } else if (run.sourceEntityType === "EnterpriseExpense") {
-        approval = await createEnterpriseExpenseApproval({ organizationId: run.organizationId, expenseId: run.sourceEntityId, actorUserId: requesterUserId, approverUserId, expenseRevision: typeof entity.revision === "number" ? entity.revision : undefined });
-      } else {
-        throw new EnterpriseWorkflowError("Ce type d’objet ne prend pas en charge les validations métier.", 400, "WORKFLOW_APPROVAL_TARGET_UNSUPPORTED", "CONFIGURATION");
-      }
+      approval = await adapter.createApproval({ organizationId: run.organizationId, entityId: run.sourceEntityId, actorUserId: requesterUserId, approverUserId, revision: typeof entity.revision === "number" ? entity.revision : undefined });
     }
     const linked = await prisma.enterpriseApproval.updateMany({ where: { id: approval.id, organizationId: run.organizationId, workflowRunId: null, workflowStepRunId: null }, data: { workflowRunId: run.id, workflowStepRunId: stepRun.id } });
     if (linked.count !== 1) {

@@ -406,3 +406,7 @@ Sprint 9 does not implement:
 - AI-generated or AI-executed workflows.
 
 The engine remains AI-independent and exposes a controlled registry that can later become a safe tool boundary without giving AI direct database or workflow-execution authority.
+
+## WF-01 — ERP contract and template compatibility
+
+See [WORKFLOW_ERP_CONTRACTS.md](WORKFLOW_ERP_CONTRACTS.md) for the complete nine-template inventory, typed transition rules and canonical service mapping. Catalogue compatibility is structural, not a promise that a particular user or source record is authorized. Tenant, assignment, business-state and revision checks remain mandatory at execution. Existing published versions and the legacy read-only catalogue are not rewritten.

@@ -1,3 +1,4 @@
+import { workflowConditionFields } from "@/lib/enterprise/workflows/adapters/types";
 import { transitionSalesInvoice } from "@/lib/enterprise/accounting/receivables-service";
 import { transitionSupplierInvoice } from "@/lib/enterprise/accounting/payables-service";
 import { transitionEnterprisePayment } from "@/lib/enterprise/accounting/payments-service";
@@ -82,7 +83,7 @@ function assertAction(input: WorkflowDomainActionInput, allowed: readonly string
 const salesInvoiceActions = ["ISSUE", "CANCEL", "VOID"] as const;
 const salesInvoiceAdapter: WorkflowEntityAdapter = {
   entityType: "EnterpriseSalesInvoice",
-  conditionFields: new Set(["status", "currencyCode", "grandTotal", "outstandingAmount", "businessPartyId", "projectId", "createdByUserId", "invoiceDate", "dueDate"]),
+  conditionFields: workflowConditionFields({ status: "STRING", currencyCode: "STRING", grandTotal: "NUMBER", outstandingAmount: "NUMBER", businessPartyId: "STRING", projectId: "STRING", createdByUserId: "STRING", invoiceDate: "DATE", dueDate: "DATE" }),
   placeholders: PLACEHOLDERS,
   triggerEvents: new Set(["SALES_INVOICE_CREATED", "SALES_INVOICE_SUBMIT", "SALES_INVOICE_APPROVE", "SALES_INVOICE_ISSUED"]),
   domainActions: new Set(salesInvoiceActions),
@@ -101,7 +102,7 @@ const salesInvoiceAdapter: WorkflowEntityAdapter = {
 
 const salesCreditNoteAdapter: WorkflowEntityAdapter = {
   entityType: "EnterpriseSalesCreditNote",
-  conditionFields: new Set(["status", "currencyCode", "grandTotal", "salesInvoiceId", "createdByUserId", "creditDate"]),
+  conditionFields: workflowConditionFields({ status: "STRING", currencyCode: "STRING", grandTotal: "NUMBER", salesInvoiceId: "STRING", createdByUserId: "STRING", creditDate: "DATE" }),
   placeholders: PLACEHOLDERS,
   triggerEvents: new Set(["SALES_CREDIT_NOTE_CREATED", "SALES_CREDIT_NOTE_SUBMITTED", "SALES_CREDIT_NOTE_APPROVE", "SALES_CREDIT_NOTE_POSTED"]),
   domainActions: new Set(["POST"]),
@@ -121,7 +122,7 @@ const salesCreditNoteAdapter: WorkflowEntityAdapter = {
 const supplierInvoiceActions = ["POST", "CANCEL"] as const;
 const supplierInvoiceAdapter: WorkflowEntityAdapter = {
   entityType: "EnterpriseSupplierInvoice",
-  conditionFields: new Set(["status", "currencyCode", "grandTotal", "outstandingAmount", "supplierId", "businessPartyId", "purchaseId", "expenseId", "createdByUserId", "invoiceDate", "dueDate"]),
+  conditionFields: workflowConditionFields({ status: "STRING", currencyCode: "STRING", grandTotal: "NUMBER", outstandingAmount: "NUMBER", supplierId: "STRING", businessPartyId: "STRING", purchaseId: "STRING", expenseId: "STRING", createdByUserId: "STRING", invoiceDate: "DATE", dueDate: "DATE" }),
   placeholders: PLACEHOLDERS,
   triggerEvents: new Set(["SUPPLIER_INVOICE_CREATED", "SUPPLIER_INVOICE_SUBMIT", "SUPPLIER_INVOICE_REVIEW", "SUPPLIER_INVOICE_APPROVE", "SUPPLIER_INVOICE_POSTED"]),
   domainActions: new Set(supplierInvoiceActions),
@@ -140,7 +141,7 @@ const supplierInvoiceAdapter: WorkflowEntityAdapter = {
 
 const supplierCreditNoteAdapter: WorkflowEntityAdapter = {
   entityType: "EnterpriseSupplierCreditNote",
-  conditionFields: new Set(["status", "currencyCode", "grandTotal", "supplierInvoiceId", "createdByUserId", "creditDate"]),
+  conditionFields: workflowConditionFields({ status: "STRING", currencyCode: "STRING", grandTotal: "NUMBER", supplierInvoiceId: "STRING", createdByUserId: "STRING", creditDate: "DATE" }),
   placeholders: PLACEHOLDERS,
   triggerEvents: new Set(["SUPPLIER_CREDIT_NOTE_CREATED", "SUPPLIER_CREDIT_NOTE_SUBMITTED", "SUPPLIER_CREDIT_NOTE_APPROVE", "SUPPLIER_CREDIT_NOTE_POSTED"]),
   domainActions: new Set(["POST"]),
@@ -160,7 +161,7 @@ const supplierCreditNoteAdapter: WorkflowEntityAdapter = {
 const paymentActions = ["CONFIRM", "RECONCILE", "CANCEL", "REVERSE"] as const;
 const paymentAdapter: WorkflowEntityAdapter = {
   entityType: "EnterprisePayment",
-  conditionFields: new Set(["status", "direction", "paymentType", "methodType", "currencyCode", "amount", "unallocatedAmount", "businessPartyId", "initiatedByUserId", "paymentDate"]),
+  conditionFields: workflowConditionFields({ status: "STRING", direction: "STRING", paymentType: "STRING", methodType: "STRING", currencyCode: "STRING", amount: "NUMBER", unallocatedAmount: "NUMBER", businessPartyId: "STRING", initiatedByUserId: "STRING", paymentDate: "DATE" }),
   placeholders: PLACEHOLDERS,
   triggerEvents: new Set(["PAYMENT_CREATED", "PAYMENT_SUBMIT", "PAYMENT_APPROVE", "PAYMENT_CONFIRMED", "PAYMENT_RECONCILE"]),
   domainActions: new Set(paymentActions),
@@ -179,7 +180,7 @@ const paymentAdapter: WorkflowEntityAdapter = {
 
 const cashSessionAdapter: WorkflowEntityAdapter = {
   entityType: "EnterpriseCashSession",
-  conditionFields: new Set(["status", "financialAccountId", "cashierUserId", "openingAmount", "expectedClosingAmount", "countedClosingAmount", "discrepancyAmount", "openedAt", "submittedAt"]),
+  conditionFields: workflowConditionFields({ status: "STRING", financialAccountId: "STRING", cashierUserId: "STRING", openingAmount: "NUMBER", expectedClosingAmount: "NUMBER", countedClosingAmount: "NUMBER", discrepancyAmount: "NUMBER", openedAt: "DATE", submittedAt: "DATE" }),
   placeholders: PLACEHOLDERS,
   triggerEvents: new Set(["CASH_SESSION_OPENED", "CASH_SESSION_SUBMITTED", "CASH_SESSION_CLOSED"]),
   domainActions: new Set(),
@@ -195,7 +196,7 @@ const cashSessionAdapter: WorkflowEntityAdapter = {
 const journalActions = ["POST", "CANCEL"] as const;
 const journalEntryAdapter: WorkflowEntityAdapter = {
   entityType: "EnterpriseJournalEntry",
-  conditionFields: new Set(["status", "journalId", "fiscalPeriodId", "accountingDate", "totalDebit", "totalCredit", "functionalCurrencyCode", "preparedByUserId", "sourceEntityType", "sourceEntityId"]),
+  conditionFields: workflowConditionFields({ status: "STRING", journalId: "STRING", fiscalPeriodId: "STRING", accountingDate: "DATE", totalDebit: "NUMBER", totalCredit: "NUMBER", functionalCurrencyCode: "STRING", preparedByUserId: "STRING", sourceEntityType: "STRING", sourceEntityId: "STRING" }),
   placeholders: PLACEHOLDERS,
   triggerEvents: new Set(["JOURNAL_ENTRY_CREATED", "JOURNAL_ENTRY_SUBMIT", "JOURNAL_ENTRY_APPROVE", "JOURNAL_ENTRY_POSTED", "JOURNAL_ENTRY_REVERSED"]),
   domainActions: new Set(journalActions),
@@ -214,7 +215,7 @@ const journalEntryAdapter: WorkflowEntityAdapter = {
 
 const fiscalPeriodAdapter: WorkflowEntityAdapter = {
   entityType: "EnterpriseFiscalPeriod",
-  conditionFields: new Set(["status", "fiscalYearId", "code", "startDate", "endDate", "createdByUserId"]),
+  conditionFields: workflowConditionFields({ status: "STRING", fiscalYearId: "STRING", code: "STRING", startDate: "DATE", endDate: "DATE", createdByUserId: "STRING" }),
   placeholders: PLACEHOLDERS,
   triggerEvents: new Set(["FISCAL_PERIOD_CREATED", "FINANCIAL_CLOSE_PREPARED", "FINANCIAL_CLOSE_COMPLETED", "FINANCIAL_PERIOD_REOPENED"]),
   domainActions: new Set(),
@@ -229,7 +230,7 @@ const fiscalPeriodAdapter: WorkflowEntityAdapter = {
 
 const reconciliationAdapter: WorkflowEntityAdapter = {
   entityType: "EnterpriseReconciliationSession",
-  conditionFields: new Set(["status", "financialAccountId", "bankStatementId", "bookBalance", "statementBalance", "reconciledDifference", "preparedByUserId", "periodStart", "periodEnd"]),
+  conditionFields: workflowConditionFields({ status: "STRING", financialAccountId: "STRING", bankStatementId: "STRING", bookBalance: "NUMBER", statementBalance: "NUMBER", reconciledDifference: "NUMBER", preparedByUserId: "STRING", periodStart: "DATE", periodEnd: "DATE" }),
   placeholders: PLACEHOLDERS,
   triggerEvents: new Set(["RECONCILIATION_CREATED", "RECONCILIATION_SUBMITTED", "RECONCILIATION_COMPLETED"]),
   domainActions: new Set(),
@@ -244,7 +245,7 @@ const reconciliationAdapter: WorkflowEntityAdapter = {
 
 const depreciationAdapter: WorkflowEntityAdapter = {
   entityType: "EnterpriseAssetDepreciationSchedule",
-  conditionFields: new Set(["status", "assetAccountingProfileId", "periodCode", "scheduledDate", "openingNetBookValue", "depreciationAmount", "closingNetBookValue"]),
+  conditionFields: workflowConditionFields({ status: "STRING", assetAccountingProfileId: "STRING", periodCode: "STRING", scheduledDate: "DATE", openingNetBookValue: "NUMBER", depreciationAmount: "NUMBER", closingNetBookValue: "NUMBER" }),
   placeholders: PLACEHOLDERS,
   triggerEvents: new Set(["ASSET_DEPRECIATION_POSTED"]),
   domainActions: new Set(["POST"]),

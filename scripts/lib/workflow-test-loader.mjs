@@ -13,12 +13,13 @@ export function workflowTestLoader(overrides) {
     if (Object.hasOwn(overrides, specifier)) return overrides[specifier];
     if (!specifier.startsWith("@/")) return require(specifier);
     const stem = path.join(process.cwd(), specifier.slice(2));
+    if (stem.endsWith(".json")) return JSON.parse(fs.readFileSync(stem, "utf8"));
     const filename = [stem + ".ts", path.join(stem, "index.ts")].find((candidate) => fs.existsSync(candidate));
     if (!filename) throw new Error(`Test module not found: ${specifier}`);
     if (cache.has(filename)) return cache.get(filename).exports;
     const loaded = { exports: {} };
     cache.set(filename, loaded);
-    const output = ts.transpileModule(fs.readFileSync(filename, "utf8"), { fileName: filename, compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText;
+    const output = ts.transpileModule(fs.readFileSync(filename, "utf8"), { fileName: filename, compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText;
     vm.runInThisContext(`(function(require, module, exports) {\n${output}\n})`, { filename })(load, loaded, loaded.exports);
     return loaded.exports;
   }

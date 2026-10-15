@@ -1,9 +1,9 @@
 import { Prisma } from "@prisma/client";
-import { getWorkflowEntityAdapter } from "@/lib/enterprise/workflows/adapters";
+import { getWorkflowContractReadiness, getWorkflowTemplateCompatibility } from "@/lib/enterprise/workflows/capabilities";
+import { workflowReadinessMessage } from "@/lib/enterprise/workflows/readiness-messages";
 import { EnterpriseWorkflowError } from "@/lib/enterprise/workflows/errors";
-import { validateWorkflowGraph, type WorkflowReadinessBlocker } from "@/lib/enterprise/workflows/graph";
+import { type WorkflowReadinessBlocker } from "@/lib/enterprise/workflows/graph";
 import { getEnterpriseWorkflowTemplate } from "@/lib/enterprise/workflows/templates";
-import { validateTemplatePlaceholders } from "@/lib/enterprise/workflows/template";
 import {
   workflowDefinitionCreateSchema,
   workflowDefinitionUpdateSchema,
@@ -81,6 +81,8 @@ export async function createWorkflowDefinition(organizationId: string, actorUser
 export async function createWorkflowFromTemplate(organizationId: string, actorUserId: string, templateCode: string, locale = "fr") {
   const template = getEnterpriseWorkflowTemplate(templateCode);
   if (!template) throw new EnterpriseWorkflowError("Modèle de workflow introuvable.", 404, "WORKFLOW_TEMPLATE_NOT_FOUND", "CONFIGURATION");
+  const compatibility = getWorkflowTemplateCompatibility(template);
+  if (!compatibility.ready) throw new EnterpriseWorkflowError(workflowReadinessMessage(compatibility.blockers[0].code, locale), 409, "WORKFLOW_TEMPLATE_INCOMPATIBLE", "CONFIGURATION");
   const definition = await createWorkflowDefinition(organizationId, actorUserId, {
     code: template.code,
     name: locale === "en" ? template.nameEn : template.nameFr,
@@ -161,46 +163,13 @@ async function versionToInput(organizationId: string, definitionId: string, vers
   return { definition, input: workflowVersionSchema.parse({ steps, transitions, configuration: version.configurationJson || undefined }) };
 }
 
-async function validateAssignmentsAndConfiguration(organizationId: string, definition: NonNullable<Awaited<ReturnType<typeof prisma.enterpriseWorkflowDefinition.findFirst>>>, steps: WorkflowStepInput[]) {
+async function validateAssignments(organizationId: string, steps: WorkflowStepInput[]) {
   const blockers: WorkflowReadinessBlocker[] = [];
-  if (!definition.triggerEntityType) return [{ code: "MISSING_TRIGGER_ENTITY", message: "Sélectionnez un type d’objet source." }];
-  const adapter = getWorkflowEntityAdapter(definition.triggerEntityType);
-  if (definition.triggerEventType && !adapter.triggerEvents.has(definition.triggerEventType)) blockers.push({ code: "INVALID_TRIGGER_EVENT", message: "Cet événement n’est pas autorisé pour le type d’objet sélectionné." });
-
   const assignments: Array<{ stepCode: string; value: { strategy: string; userId?: string; role?: string; departmentId?: string } }> = [];
   for (const step of steps) {
-    switch (step.stepType) {
-      case "CONDITION":
-        if (!adapter.conditionFields.has(step.configuration.condition.field)) blockers.push({ code: "INVALID_CONDITION_FIELD", message: "Ce champ ne peut pas être utilisé dans une condition.", stepCode: step.code });
-        break;
-      case "WAIT_UNTIL":
-        if (step.configuration.mode === "ENTITY_DATE" && !adapter.conditionFields.has(step.configuration.field)) blockers.push({ code: "INVALID_WAIT_FIELD", message: "Ce champ de date n’est pas autorisé.", stepCode: step.code });
-        break;
-      case "DOMAIN_ACTION":
-        if (!adapter.domainActions.has(step.configuration.action)) blockers.push({ code: "INVALID_DOMAIN_ACTION", message: "Cette action métier n’est pas autorisée par l’adapter.", stepCode: step.code });
-        if (step.configuration.commentTemplate) validateTemplatePlaceholders(step.configuration.commentTemplate, adapter.placeholders);
-        break;
-      case "ASSIGN":
-        assignments.push({ stepCode: step.code, value: step.configuration.assignment });
-        break;
-      case "CREATE_APPROVAL":
-        if (definition.triggerEntityType === "EnterpriseReport") blockers.push({ code: "APPROVAL_TARGET_UNSUPPORTED", message: "Les rapports ne prennent pas en charge une étape de validation métier.", stepCode: step.code });
-        assignments.push({ stepCode: step.code, value: step.configuration.assignment });
-        if (step.configuration.titleTemplate) validateTemplatePlaceholders(step.configuration.titleTemplate, adapter.placeholders);
-        break;
-      case "CREATE_TASK":
-        if (step.configuration.assignment) assignments.push({ stepCode: step.code, value: step.configuration.assignment });
-        validateTemplatePlaceholders(step.configuration.titleTemplate, adapter.placeholders);
-        if (step.configuration.descriptionTemplate) validateTemplatePlaceholders(step.configuration.descriptionTemplate, adapter.placeholders);
-        break;
-      case "NOTIFICATION":
-        assignments.push({ stepCode: step.code, value: step.configuration.recipient });
-        validateTemplatePlaceholders(step.configuration.titleTemplate, adapter.placeholders);
-        validateTemplatePlaceholders(step.configuration.bodyTemplate, adapter.placeholders);
-        break;
-      default:
-        break;
-    }
+    if (step.stepType === "ASSIGN" || step.stepType === "CREATE_APPROVAL") assignments.push({ stepCode: step.code, value: step.configuration.assignment });
+    if (step.stepType === "CREATE_TASK" && step.configuration.assignment) assignments.push({ stepCode: step.code, value: step.configuration.assignment });
+    if (step.stepType === "NOTIFICATION") assignments.push({ stepCode: step.code, value: step.configuration.recipient });
   }
   for (const assignment of assignments) {
     if (assignment.value.strategy === "SPECIFIC_USER") {
@@ -219,12 +188,12 @@ async function validateAssignmentsAndConfiguration(organizationId: string, defin
 export async function getWorkflowVersionReadiness(organizationId: string, definitionId: string, versionId: string) {
   try {
     const { definition, input } = await versionToInput(organizationId, definitionId, versionId);
-    const graph = validateWorkflowGraph(input);
-    const blockers = [...graph.blockers, ...(await validateAssignmentsAndConfiguration(organizationId, definition, input.steps))];
+    const graph = getWorkflowContractReadiness(definition, input);
+    const blockers = [...graph.blockers, ...(await validateAssignments(organizationId, input.steps))];
     return { ready: blockers.length === 0, blockers, orderedStepCodes: graph.orderedStepCodes };
   } catch (error) {
     if (error instanceof EnterpriseWorkflowError) return { ready: false, blockers: [{ code: error.code, message: error.message }], orderedStepCodes: [] };
-    if (error instanceof Error) return { ready: false, blockers: [{ code: "INVALID_TYPED_CONFIGURATION", message: error.message }], orderedStepCodes: [] };
+    if (error instanceof Error) return { ready: false, blockers: [{ code: "INVALID_TYPED_CONFIGURATION", message: workflowReadinessMessage("INVALID_TYPED_CONFIGURATION") }], orderedStepCodes: [] };
     return { ready: false, blockers: [{ code: "INVALID_CONFIGURATION", message: "La configuration est invalide." }], orderedStepCodes: [] };
   }
 }

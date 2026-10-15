@@ -1,3 +1,12 @@
+## 2026-10-15 — WF-01 : contrats ERP des workflows (#814)
+
+- unifie les contrôles de compatibilité du catalogue et de publication avec les capacités des adaptateurs et leurs services de validation canoniques ;
+- signale les cinq modèles financiers incompatibles en FR/EN et refuse leur création/publication sans activer de décision financière automatique ;
+- vérifie les champs, types, résultats possibles, priorités et branches de repli de toutes les transitions ;
+- recharge l’objet après action métier, contrôle son tenant/identité/révision et choisit la branche sur l’état courant ;
+- réutilise les correspondances ERP transverses et le registre canonique pour les dix-sept objets sources ; aucune migration ni conversion du catalogue historique ;
+- ajoute les tests de contrat et d’intégration PostgreSQL obligatoires ; dépend de #813 et reste soumis à OWNER_E2E avant fusion.
+
 ## 2026-10-15 — WF-00 : reprise durable des workflows (#813)
 
 - conserve l’échéance des attentes et protège la reprise/finalisation par bail et révision atomiques ;

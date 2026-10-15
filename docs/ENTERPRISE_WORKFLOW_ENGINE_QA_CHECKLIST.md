@@ -168,3 +168,15 @@ WF-00 (#813) : commandes et limites des preuves dans [le runbook](WORKFLOW_RUNTI
 - [ ] `pnpm build` production réussit.
 - [ ] Le SHA main correspond au SHA production.
 - [ ] Le worker protégé et son ordonnanceur production sont vérifiés sans exposer le secret.
+
+## WF-01 — Contrats ERP (#814)
+
+- [ ] Les quatre modèles Demande/Achat/Budget/Dépense exécutent leurs branches avec un approbateur distinct.
+- [ ] Les cinq modèles financiers restent visibles avec justification FR/EN, création désactivée et refus serveur ; aucune approbation ou action sensible ajoutée.
+- [ ] Toute condition de transition utilise un champ autorisé et une valeur de type correct ; les branches sans couverture, masquées ou impossibles bloquent la publication.
+- [ ] Après mutation, le nouvel état détermine la branche ; un changement de tenant/identité ou une révision antérieure bloque la reprise.
+- [ ] Les services canoniques refusent mauvais acteur, tenant, rôle et révision ; une décision concurrente ne produit qu’une approbation.
+- [ ] Les versions publiées et `EnterpriseWorkflow` historique restent immuables/lecture seule.
+- [ ] OWNER_E2E : achat avec validateur distinct, paiement après validation dans son module, clôture indépendante, modèle incompatible refusé avant publication ; desktop/mobile, FR/EN, clair/sombre et clavier.
+
+Automatisation : `pnpm qa:workflow-contracts` et `pnpm qa:workflow-contracts:postgres` (base PostgreSQL locale de test uniquement). Les preuves automatiques ne remplacent pas OWNER_E2E.

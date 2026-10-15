@@ -9,7 +9,7 @@ export const executeWaitUntilStep: WorkflowStepHandler = async ({ run, step, ste
   if (parsed.configuration.mode === "RELATIVE_HOURS") {
     resumeAt = run.resumeAt || new Date((stepRun.startedAt?.getTime() ?? Date.now()) + parsed.configuration.hours * 60 * 60 * 1000);
   } else {
-    if (!adapter.conditionFields.has(parsed.configuration.field)) throw new EnterpriseWorkflowError("Le champ de date d’attente n’est pas autorisé.", 400, "WORKFLOW_WAIT_FIELD_DENIED", "CONFIGURATION");
+    if (adapter.conditionFields.get(parsed.configuration.field) !== "DATE") throw new EnterpriseWorkflowError("Le champ de date d’attente n’est pas autorisé.", 400, "WORKFLOW_WAIT_FIELD_DENIED", "CONFIGURATION");
     const raw = adapter.getConditionField(entity, parsed.configuration.field);
     resumeAt = raw instanceof Date ? raw : new Date(String(raw || ""));
     if (Number.isNaN(resumeAt.getTime())) throw new EnterpriseWorkflowError("La date d’attente est invalide.", 400, "WORKFLOW_WAIT_DATE_INVALID", "CONFIGURATION");
