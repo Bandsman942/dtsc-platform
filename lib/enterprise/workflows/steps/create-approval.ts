@@ -22,7 +22,7 @@ export const executeCreateApprovalStep: WorkflowStepHandler = async ({ run, step
 
   const assignment = parsed.configuration.assignment;
   const approverUserId = await resolveWorkflowAssignment({ organizationId: run.organizationId, strategy: assignment.strategy, entity, userId: assignment.userId, role: assignment.role, departmentId: assignment.departmentId, previousStepActorUserId });
-  const requesterUserId = await resolveWorkflowExecutionUser({ organizationId: run.organizationId, startedByUserId: run.startedByUserId, adapter, entity });
+  const requesterUserId = await resolveWorkflowExecutionUser({ organizationId: run.organizationId, startedByUserId: run.startedByUserId, adapter, entity, action: "submit" });
   if (approverUserId === requesterUserId) throw new EnterpriseWorkflowError("Le workflow ne peut pas assigner l’approbation au demandeur lui-même.", 409, "WORKFLOW_SELF_APPROVAL_BLOCKED", "BUSINESS");
 
   const existingPending = await prisma.enterpriseApproval.findFirst({ where: { organizationId: run.organizationId, targetEntityType: run.sourceEntityType, targetEntityId: run.sourceEntityId, status: "PENDING", archivedAt: null }, orderBy: { requestedAt: "desc" } });
