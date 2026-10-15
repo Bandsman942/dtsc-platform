@@ -15,7 +15,7 @@ export const executeCreateTaskStep: WorkflowStepHandler = async ({ run, step, st
   if (action.alreadySucceeded) return { kind: "SUCCEEDED", outcome: "DEFAULT", output: { taskId: action.attempt.resultEntityId, idempotent: true } };
   try {
     const values = adapter.getTemplateValues(entity, workflowName);
-    const actorUserId = await resolveWorkflowExecutionUser({ organizationId: run.organizationId, startedByUserId: run.startedByUserId, adapter, entity });
+    const actorUserId = await resolveWorkflowExecutionUser({ organizationId: run.organizationId, startedByUserId: run.startedByUserId, adapter, entity, action: "submit", targetModuleCode: "TASKS_OPERATIONS" });
     const assignment = parsed.configuration.assignment;
     const assignedToUserId = assignment ? await resolveWorkflowAssignment({ organizationId: run.organizationId, strategy: assignment.strategy, entity, userId: assignment.userId, role: assignment.role, departmentId: assignment.departmentId, previousStepActorUserId }) : null;
     const task = await prisma.$transaction(async (tx) => {
