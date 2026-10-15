@@ -85,4 +85,41 @@ for (const path of [
  "app/api/enterprise/[organizationId]/workflow-runs/[id]/retry/route.ts",
  "app/api/enterprise/[organizationId]/workflow-runs/[id]/cancel/route.ts",
 ]) assert.ok(fs.readFileSync(path, "utf8").includes("requireWorkflowSourceAccess"), `${path} must protect source module`);
+
+const liveActors = new Set(["creator"]);
+const entitledActors = new Set(["creator"]);
+const runtimeLoader = workflowTestLoader({
+  "@/lib/prisma": { prisma: {
+    organizationMember: { findFirst: async ({ where }) => {
+      assert.equal(where.organizationId, org);
+      return liveActors.has(where.userId) ? { userId: where.userId } : null;
+    } },
+  } },
+  "@/lib/enterprise/cross-module/deep-links": { moduleCodeForEnterpriseEntity: (entityType) => entityType === "EnterpriseTask" ? "TASKS_OPERATIONS" : null },
+  "@/lib/enterprise/module-registry": { getCanonicalEnterpriseModuleCode: (code) => code },
+  "@/lib/enterprise/module-access": { resolveEnterpriseModuleAccess: async ({ userId, organizationId, action }) => {
+    assert.equal(organizationId, org);
+    assert.equal(action, "read");
+    return { allowed: entitledActors.has(userId) };
+  } },
+});
+const { resolveWorkflowExecutionUser } = runtimeLoader("@/lib/enterprise/workflows/runtime-utils");
+const runtimeAdapter = {
+  entityType: "EnterpriseTask",
+  resolveEntityUser: (_entity, strategy) => strategy === "ENTITY_CREATOR" ? "creator" : null,
+};
+const sourceEntity = { id: "task-1", organizationId: org };
+await assert.rejects(
+  resolveWorkflowExecutionUser({ organizationId: org, startedByUserId: "revoked-starter", adapter: runtimeAdapter, entity: sourceEntity }),
+  (error) => error.code === "WORKFLOW_EXECUTION_MANDATE_REVOKED",
+  "An explicit revoked starter must not silently fall back to the creator",
+);
+assert.equal(await resolveWorkflowExecutionUser({ organizationId: org, startedByUserId: null, adapter: runtimeAdapter, entity: sourceEntity }), "creator");
+entitledActors.delete("creator");
+await assert.rejects(
+  resolveWorkflowExecutionUser({ organizationId: org, startedByUserId: null, adapter: runtimeAdapter, entity: sourceEntity }),
+  (error) => error.code === "WORKFLOW_EXECUTION_MANDATE_REVOKED",
+  "Active membership alone is not an ERP entitlement",
+);
+
 console.log("PASS WF-02: active tenant + canonical entitlement + explicit RBAC + scoped reads + revoked mandate + mutation entrypoints.");
