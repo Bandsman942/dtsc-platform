@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseWorkflowAccess } from "@/lib/enterprise/workflows/access";
+import { requireWorkflowDefinitionSourceAccess } from "@/lib/enterprise/workflows/source-access";
 import { getWorkflowVersionReadiness, publishWorkflowVersion } from "@/lib/enterprise/workflows/definitions";
 import { EnterpriseWorkflowError, normalizeWorkflowError } from "@/lib/enterprise/workflows/errors";
 import { workflowPublishSchema } from "@/lib/enterprise/workflows/validators";
@@ -62,6 +63,7 @@ export async function GET(req: Request, { params }: Params) {
   const access = await getEnterpriseWorkflowAccess(session, organizationId);
   if (!access?.canPublish) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   try {
+    await requireWorkflowDefinitionSourceAccess({ userId: session.userId, organizationId, definitionId: id });
     const review = await loadPublishReview(organizationId, id, versionId);
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "workflow-publish-review", definitionId: id, versionId } });
     return NextResponse.json({ review });
@@ -86,6 +88,7 @@ export async function POST(req: Request, { params }: Params) {
   if (!parsed.success) return NextResponse.json({ error: "WORKFLOW_PUBLICATION_REVIEW_REQUIRED", message: "Ouvrez la revue de publication et confirmez la version affichée avant de publier." }, { status: 400 });
   if (parsed.data.reviewedVersionId !== versionId) return NextResponse.json({ error: "WORKFLOW_REVIEW_VERSION_MISMATCH", message: "La version revue ne correspond plus à la version à publier." }, { status: 409 });
   try {
+    await requireWorkflowDefinitionSourceAccess({ userId: session.userId, organizationId, definitionId: id });
     const review = await loadPublishReview(organizationId, id, versionId);
     if (!review.readiness.ready) throw new EnterpriseWorkflowError("Le workflow n’est pas prêt à être publié.", 409, "WORKFLOW_NOT_READY", "CONFIGURATION");
     if (review.reviewToken !== parsed.data.reviewToken) throw new EnterpriseWorkflowError("Le brouillon a changé depuis votre revue. Ouvrez une nouvelle revue avant de publier.", 409, "WORKFLOW_REVIEW_STALE", "CONFIGURATION");
