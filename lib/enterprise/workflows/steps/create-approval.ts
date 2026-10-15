@@ -28,7 +28,7 @@ export const executeCreateApprovalStep: WorkflowStepHandler = async ({ run, step
   const existingPending = await prisma.enterpriseApproval.findFirst({ where: { organizationId: run.organizationId, targetEntityType: run.sourceEntityType, targetEntityId: run.sourceEntityId, status: "PENDING", archivedAt: null }, orderBy: { requestedAt: "desc" } });
   if (existingPending && existingPending.approverUserId !== approverUserId) throw new EnterpriseWorkflowError("Une validation en attente existe déjà pour un autre approbateur.", 409, "WORKFLOW_APPROVAL_CONFLICT", "BUSINESS");
 
-  const action = await beginWorkflowActionAttempt({ organizationId: run.organizationId, stepRunId: stepRun.id, runId: run.id, stepId: step.id, actionType: "CREATE_APPROVAL" });
+  const action = await beginWorkflowActionAttempt({ organizationId: run.organizationId, stepRunId: stepRun.id, runId: run.id, stepId: step.id, executionToken: run.executionToken, actionType: "CREATE_APPROVAL" });
   if (action.alreadySucceeded && action.attempt.resultEntityId) {
     const approval = await prisma.enterpriseApproval.findFirst({ where: { id: action.attempt.resultEntityId, organizationId: run.organizationId } });
     if (approval?.status === "PENDING") return { kind: "WAITING", runStatus: "WAITING_APPROVAL", assignedUserId: approval.approverUserId, output: { approvalId: approval.id, idempotent: true } };
@@ -55,10 +55,10 @@ export const executeCreateApprovalStep: WorkflowStepHandler = async ({ run, step
       const current = await prisma.enterpriseApproval.findFirst({ where: { id: approval.id, organizationId: run.organizationId } });
       if (current?.workflowRunId !== run.id || current.workflowStepRunId !== stepRun.id) throw new EnterpriseWorkflowError("Cette validation est déjà liée à une autre exécution.", 409, "WORKFLOW_APPROVAL_ALREADY_LINKED", "BUSINESS");
     }
-    await completeWorkflowActionAttempt(action.attempt.id, { entityType: "EnterpriseApproval", entityId: approval.id });
+    await completeWorkflowActionAttempt(action.attempt, { entityType: "EnterpriseApproval", entityId: approval.id });
     return { kind: "WAITING", runStatus: "WAITING_APPROVAL", assignedUserId: approverUserId, output: { approvalId: approval.id } };
   } catch (error) {
-    await failWorkflowActionAttempt(action.attempt.id, error);
+    await failWorkflowActionAttempt(action.attempt, error);
     throw error;
   }
 };

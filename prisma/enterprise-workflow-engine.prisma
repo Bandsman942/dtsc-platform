@@ -102,6 +102,8 @@ model EnterpriseWorkflowRun {
   sourceEntityId       String
   currentStepId        String?
   resumeAt             DateTime?
+  executionToken       String?
+  executionLeaseUntil  DateTime?
   startedByUserId      String?
   decisionActorUserId  String?
   startedAt            DateTime                     @default(now())
@@ -126,6 +128,7 @@ model EnterpriseWorkflowRun {
   @@index([organizationId, workflowDefinitionId, startedAt])
   @@index([organizationId, sourceEntityType, sourceEntityId])
   @@index([resumeAt, status])
+  @@index([status, executionLeaseUntil, updatedAt])
 }
 
 model EnterpriseWorkflowStepRun {
@@ -185,6 +188,7 @@ model EnterpriseWorkflowActionAttempt {
   organizationId   String
   stepRunId        String
   actionType       String
+  effectProtocol   String?
   idempotencyKey   String
   status           String                    @default("PENDING")
   attemptNumber    Int                       @default(1)

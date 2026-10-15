@@ -1,3 +1,4 @@
+import { publicWorkflowRun } from "@/lib/enterprise/workflows/public-run";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
@@ -12,5 +13,5 @@ export async function GET(req: Request, { params }: Params) {
   const run = await prisma.enterpriseWorkflowRun.findFirst({ where: { id, organizationId, ...(access.canViewAllRuns ? {} : { OR: [{ startedByUserId: session.userId }, { stepRuns: { some: { assignedUserId: session.userId } } }] }) }, include: { definition: true, version: { select: { id: true, versionNumber: true, status: true } }, stepRuns: { orderBy: { createdAt: "asc" }, include: { step: { select: { code: true, name: true, stepType: true, position: true } }, actionAttempts: { orderBy: { createdAt: "asc" } }, approvals: { select: { id: true, status: true, approverUserId: true, requestedAt: true, decidedAt: true } } } }, events: { orderBy: { createdAt: "asc" } } } });
   if (!run) return NextResponse.json({ error: "WORKFLOW_RUN_NOT_FOUND" }, { status: 404 });
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "workflow-run", runId: id } });
-  return NextResponse.json({ run, permissions: access });
+  return NextResponse.json({ run: publicWorkflowRun(run), permissions: access });
 }

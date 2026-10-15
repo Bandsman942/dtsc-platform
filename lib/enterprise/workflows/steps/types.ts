@@ -12,6 +12,7 @@ export type WorkflowRuntimeRun = {
   decisionActorUserId: string | null;
   status: string;
   resumeAt: Date | null;
+  executionToken?: string | null;
 };
 
 export type WorkflowRuntimeStep = {

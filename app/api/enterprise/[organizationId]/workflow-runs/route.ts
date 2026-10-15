@@ -1,3 +1,4 @@
+import { publicWorkflowRun } from "@/lib/enterprise/workflows/public-run";
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
@@ -19,5 +20,5 @@ export async function GET(req: Request, { params }: Params) {
     prisma.enterpriseWorkflowRun.groupBy({ by: ["status"], where: { organizationId }, _count: { _all: true } }),
   ]);
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "workflow-runs", page, pageSize } });
-  return NextResponse.json({ runs, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: Object.fromEntries(metrics.map((item) => [item.status, item._count._all])), permissions: access });
+  return NextResponse.json({ runs: runs.map(publicWorkflowRun), pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: Object.fromEntries(metrics.map((item) => [item.status, item._count._all])), permissions: access });
 }
