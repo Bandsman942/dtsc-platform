@@ -54,7 +54,7 @@ export async function POST(req: Request, { params }: Params) {
   try {
     const sourceEntityType = templateParsed.success
       ? ENTERPRISE_WORKFLOW_TEMPLATES.find((template) => template.code === templateParsed.data.templateCode)?.triggerEntityType
-      : definitionParsed.data?.triggerEntityType;
+      : definitionParsed.success ? definitionParsed.data.triggerEntityType : undefined;
     if (sourceEntityType) await requireWorkflowSourceAccess({ userId: session.userId, organizationId, sourceEntityType });
     const definition = templateParsed.success ? await createWorkflowFromTemplate(organizationId, session.userId, templateParsed.data.templateCode, templateParsed.data.locale) : await createWorkflowDefinition(organizationId, session.userId, definitionParsed.data);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_WORKFLOW_CREATED", entity: "EnterpriseWorkflowDefinition", entityId: definition.id, request: req, metadata: { organizationId, code: definition.code, source: templateParsed.success ? "TEMPLATE" : "MANUAL" } });
