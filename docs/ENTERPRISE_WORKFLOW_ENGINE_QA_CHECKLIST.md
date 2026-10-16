@@ -284,3 +284,12 @@ Automatisation : `pnpm qa:workflow-contracts` et `pnpm qa:workflow-contracts:pos
 - [ ] Le DST New York 2026 (heure répétée) choisit FIRST uniquement ; le deuxième instant ne devient pas une nouvelle occurrence.
 - [ ] Les horaires restent DISABLED par défaut ; aucune route/API/cron/worker ne peut activer des exécutions à travers cette tranche. `EnterpriseWorkflowRun` reste vide pour le test.
 - [ ] Prisma generate/validate, diff-check, type-check, lint, régression, Quality/Migration, build et OWNER_E2E #841 explicitement validés avant fusion.
+
+## WF-06S2A — API de préparation DISABLED seulement (#844)
+
+- [ ] L'API liste uniquement les horaires DISABLED de l'organisation active et des sources ERP réellement lisibles, avec pagination bornée.
+- [ ] Seul un acteur avec membership/client actif, module/abonnement WORKFLOWS, permission de création et module source autorisé peut ajouter un horaire ; accès depuis tenant B ou contexte DTSC_INTERNAL refusé.
+- [ ] Le POST n'admet pas `status` client, ID étranger, ancienne version ou workflow archivé ; `nextRunAt` suit DST SKIP/FIRST.
+- [ ] Un horaire créé reste `DISABLED`, même lorsqu'il possède un prochain curseur ; 0 occurrence, 0 outbox, 0 run et 0 effet financier.
+- [ ] PostgreSQL QA `node scripts/qa-workflow-844-postgres.mjs` réussie sur Quality ET Migration ; migrations propres, lint, types, QA régression et build CI.
+- [ ] OWNER_E2E #844 explicite avant toute fusion, puis #843 couvre l'activation réelle, la source liée à une entité, l'acteur, les quotas, le scheduler, la transaction outbox/run et le replay/crash.
