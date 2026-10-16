@@ -63,11 +63,11 @@ export async function GET(req: Request, { params }: Params) {
       sources = rows; break;
     }
     case "EnterpriseBudget": {
-      const rows = await prisma.enterpriseBudget.findMany({ where: { organizationId, archivedAt: null, ...(own ? { OR: [{ ownerUserId: userId }, { createdByUserId: userId }] } : {}) }, select: { id: true, title: true, reference: true, status: true }, orderBy: { createdAt: "desc" }, take: 50 });
+      const rows = await prisma.enterpriseBudget.findMany({ where: { organizationId, archivedAt: null, status: { in: ["DRAFT", "PREPARING", "CORRECTION_REQUESTED", "PENDING_APPROVAL"] }, ...(own ? { OR: [{ ownerUserId: userId }, { createdByUserId: userId }] } : {}) }, select: { id: true, title: true, reference: true, status: true }, orderBy: { createdAt: "desc" }, take: 50 });
       sources = rows; break;
     }
     case "EnterpriseExpense": {
-      const rows = await prisma.enterpriseExpense.findMany({ where: { organizationId, archivedAt: null, ...(own ? { OR: [{ requestedByUserId: userId }, { createdByUserId: userId }] } : {}) }, select: { id: true, title: true, reference: true, status: true }, orderBy: { createdAt: "desc" }, take: 50 });
+      const rows = await prisma.enterpriseExpense.findMany({ where: { organizationId, archivedAt: null, status: { in: ["DRAFT", "PENDING_APPROVAL"] }, ...(own ? { OR: [{ requestedByUserId: userId }, { createdByUserId: userId }] } : {}) }, select: { id: true, title: true, reference: true, status: true }, orderBy: { createdAt: "desc" }, take: 50 });
       sources = rows; break;
     }
     case "EnterpriseReport": {

@@ -5,6 +5,7 @@ import { resolveWorkflowExecutionUser, workflowSourceModule } from "@/lib/enterp
 import { workflowStepSchema } from "@/lib/enterprise/workflows/validators";
 import type { WorkflowStepHandler } from "@/lib/enterprise/workflows/steps/types";
 import { prisma } from "@/lib/prisma";
+import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 
 export const executeCreateApprovalStep: WorkflowStepHandler = async ({ run, step, stepRun, adapter, entity, previousStepActorUserId }) => {
   const parsed = workflowStepSchema.parse({ code: step.code, name: step.name, stepType: "CREATE_APPROVAL", position: 0, configuration: step.configurationJson });
@@ -22,16 +23,38 @@ export const executeCreateApprovalStep: WorkflowStepHandler = async ({ run, step
 
   const assignment = parsed.configuration.assignment;
   const requesterUserId = await resolveWorkflowExecutionUser({ organizationId: run.organizationId, startedByUserId: run.startedByUserId, adapter, entity, action: "submit" });
-  const approverUserId = await resolveWorkflowAssignment({
-    organizationId: run.organizationId, strategy: assignment.strategy, entity,
-    userId: assignment.userId, role: assignment.role, departmentId: assignment.departmentId,
-    previousStepActorUserId,
-    requiredApprovalModuleCode: workflowSourceModule(run.sourceEntityType),
-    excludeUserId: assignment.strategy === "SPECIFIC_ROLE" ? requesterUserId : undefined,
+  const existingPending = await prisma.enterpriseApproval.findFirst({
+    where: { organizationId: run.organizationId, targetEntityType: run.sourceEntityType, targetEntityId: run.sourceEntityId, status: "PENDING", archivedAt: null },
+    orderBy: { requestedAt: "desc" },
   });
+  const moduleCode = workflowSourceModule(run.sourceEntityType);
+  let approverUserId: string;
+  try {
+    approverUserId = await resolveWorkflowAssignment({
+      organizationId: run.organizationId, strategy: assignment.strategy, entity,
+      userId: assignment.userId, role: assignment.role, departmentId: assignment.departmentId,
+      previousStepActorUserId, requiredApprovalModuleCode: moduleCode,
+      excludeUserId: assignment.strategy === "SPECIFIC_ROLE" ? requesterUserId : undefined,
+    });
+  } catch (error) {
+    // An ERP submission can already have an authoritative, designated
+    // approval. For an unconfigured *template default* department manager,
+    // reuse ONLY that same pending approval, never nominate another user.
+    // An explicitly configured department/user/role must still fail closed.
+    if (!(existingPending && assignment.strategy === "DEPARTMENT_MANAGER" && !assignment.departmentId
+      && error instanceof EnterpriseWorkflowError
+      && ["WORKFLOW_ASSIGNEE_NOT_FOUND", "WORKFLOW_APPROVER_MODULE_DENIED"].includes(error.code))) throw error;
+    const mandate = await resolveEnterpriseModuleAccess({
+      organizationId: run.organizationId, userId: existingPending.approverUserId,
+      moduleCode, action: "approve",
+    });
+    if (!mandate.allowed) throw new EnterpriseWorkflowError(
+      "Le validateur de la demande ERP ne possède plus le droit de valider ce module.",
+      403, "WORKFLOW_APPROVER_MODULE_DENIED", "SECURITY",
+    );
+    approverUserId = existingPending.approverUserId;
+  }
   if (approverUserId === requesterUserId) throw new EnterpriseWorkflowError("Le workflow ne peut pas assigner l’approbation au demandeur lui-même.", 409, "WORKFLOW_SELF_APPROVAL_BLOCKED", "BUSINESS");
-
-  const existingPending = await prisma.enterpriseApproval.findFirst({ where: { organizationId: run.organizationId, targetEntityType: run.sourceEntityType, targetEntityId: run.sourceEntityId, status: "PENDING", archivedAt: null }, orderBy: { requestedAt: "desc" } });
   if (existingPending && existingPending.approverUserId !== approverUserId) throw new EnterpriseWorkflowError("Une validation en attente existe déjà pour un autre approbateur.", 409, "WORKFLOW_APPROVAL_CONFLICT", "BUSINESS");
 
   const action = await beginWorkflowActionAttempt({ organizationId: run.organizationId, stepRunId: stepRun.id, runId: run.id, stepId: step.id, executionToken: run.executionToken, actionType: "CREATE_APPROVAL" });
