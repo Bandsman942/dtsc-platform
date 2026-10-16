@@ -293,3 +293,13 @@ Automatisation : `pnpm qa:workflow-contracts` et `pnpm qa:workflow-contracts:pos
 - [ ] Un horaire créé reste `DISABLED`, même lorsqu'il possède un prochain curseur ; 0 occurrence, 0 outbox, 0 run et 0 effet financier.
 - [ ] PostgreSQL QA `node scripts/qa-workflow-844-postgres.mjs` réussie sur Quality ET Migration : service réel, handlers GET/POST réels sous doubles contrôlés d'auth/source, refus 401/403/429/400, pagination et visibilité STAGED ; migrations propres, lint, types, QA régression et build CI.
 - [ ] OWNER_E2E #844 explicite avant toute fusion, puis #843 couvre l'activation réelle, la source liée à une entité, l'acteur, les quotas, le scheduler, la transaction outbox/run et le replay/crash.
+
+## WF-06S2B — Liaison de mandat métier inerte (#846, parent #843)
+
+- [ ] PATCH refusé en contexte DTSC, sans session, sans permission WORKFLOWS edit, sans accès module source, et avec mauvaise origine/rate-limit.
+- [ ] Type ERP tiré uniquement de la définition persistée ; impossible de fournir le type, l'identité d'un autre acteur ou le statut ENABLED côté client.
+- [ ] Un ID source ERP d'une autre entreprise ou archivé est refusé ; snapshot privé jamais renvoyé, source/acteur réellement mandatés en base.
+- [ ] Définition non active, version remplacée/retirée, membership révoqué et conflits revision refusés ; DB empêche une liaison partielle même via SQL direct.
+- [ ] Source/acteur/time tous NULL sur les anciens horaires ; statut toujours DISABLED, aucun run/event/occurrence créé ou consommé, aucun worker/cron modifié.
+- [ ] Quality et Migration : `node scripts/qa-workflow-846-postgres.mjs` sur DB locale propre, migrations, lint, types, régression et build CI.
+- [ ] OWNER_E2E #846 distinct, avant squash merge ; réalisation du scheduler réel reportée à #843.
