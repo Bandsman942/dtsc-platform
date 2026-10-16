@@ -144,12 +144,17 @@ export async function assertDisabledWorkflowScheduleReadiness(input: {
 
   // Hard technical ceilings, NOT a plan quota. A later live dispatcher must
   // use atomic quota reservations and commercially authorized plan limits.
-  const [tenantCount, definitionCount] = await Promise.all([
+  const [tenantCount, definitionCount, existingReceipts] = await Promise.all([
     prisma.enterpriseWorkflowSchedule.count({ where: { organizationId } }),
     prisma.enterpriseWorkflowSchedule.count({
       where: { organizationId, workflowDefinitionId: schedule.workflowDefinitionId },
     }),
+    prisma.enterpriseWorkflowScheduleOccurrence.count({ where: { organizationId, scheduleId } }),
   ]);
+  if (existingReceipts !== 0) throw new EnterpriseWorkflowError(
+    "Cet horaire possède déjà une réservation à rapprocher avant activation.",
+    409, "WORKFLOW_PREFLIGHT_UNRECONCILED_RECEIPTS", "BUSINESS",
+  );
   if (tenantCount > WORKFLOW_SCHEDULE_SAFETY.maxSchedulesPerTenant
     || definitionCount > WORKFLOW_SCHEDULE_SAFETY.maxSchedulesPerDefinition) {
     throw new EnterpriseWorkflowError(
