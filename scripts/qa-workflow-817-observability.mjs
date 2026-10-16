@@ -37,4 +37,11 @@ for (const protectedTest of ["scripts/qa-workflow-813-postgres.mjs", "scripts/qa
   if (protectedTest.includes("816")) continue; // expected only after the WF-03 dependency lands
   assert.ok(fs.existsSync(protectedTest), "Existing behavioral Postgres QA must remain: " + protectedTest);
 }
+for (const file of ["lib/enterprise/workflows/worker.ts", "lib/enterprise/workflows/worker-isolated.ts"]) {
+  const worker = fs.readFileSync(file, "utf8");
+  assert.ok(worker.includes('AS "staleProcessing"'), "Worker must report expired leases: " + file);
+  assert.ok(worker.includes('AND "lockedAt" < ${leaseBefore}'), "Lease expiry must be relative to worker TTL: " + file);
+  assert.ok(worker.includes("staleProcessing: numericCount(row?.staleProcessing)"), "Worker must expose sanitized count: " + file);
+  assert.ok(worker.includes("staleProcessing: null"), "Unavailable metrics cannot invent zero values: " + file);
+}
 console.log("PASS WF-04: bounded actor-scoped observability with real timestamps, null missing values, p50/p95/p99 and no regression removal.");
