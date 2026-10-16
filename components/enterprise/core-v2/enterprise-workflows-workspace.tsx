@@ -1,3 +1,6 @@
+import { WorkflowVisualStudio } from "@/components/enterprise/core-v2/workflow-visual-studio";
+import { applyWorkflowVisualPositions } from "@/lib/enterprise/workflows/visual-projection";
+import type { WorkflowVersionInput } from "@/lib/enterprise/workflows/validators";
 "use client";
 
 import { Activity, AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, Copy, Eye, GitBranch, PauseCircle, Plus, RefreshCw, RotateCcw, Play, Save, ShieldAlert, Trash2, XCircle } from "lucide-react";
@@ -18,7 +21,7 @@ import { workflowReadinessMessage } from "@/lib/enterprise/workflows/readiness-m
 
 type Step = { id?: string; code: string; name: string; description?: string | null; stepType: string; position: number; configurationJson?: Record<string, unknown>; configuration?: Record<string, unknown> };
 type Transition = { id?: string; fromStepId?: string; toStepId?: string; fromStep?: { code: string }; toStep?: { code: string }; fromStepCode?: string; toStepCode?: string; outcome?: string | null; priority: number; conditionJson?: Record<string, unknown> | null; condition?: Record<string, unknown> };
-type Version = { id: string; versionNumber: number; status: string; steps: Step[]; transitions: Transition[]; publishedAt?: string | null };
+type Version = { id: string; versionNumber: number; status: string; steps: Step[]; transitions: Transition[]; configurationJson?: Record<string, string | number | boolean | null> | null; publishedAt?: string | null };
 type Definition = { id: string; code: string; name: string; description?: string | null; status: string; triggerType: string; triggerEntityType?: string | null; triggerEventType?: string | null; currentVersionId?: string | null; allowManualStart?: boolean; updatedAt: string; versions: Version[]; _count?: { runs: number } };
 type Run = { id: string; status: string; sourceEntityType: string; sourceEntityId: string; triggerType: string; startedAt: string; updatedAt: string; revision: number; failureMessage?: string | null; failureCode?: string | null; definition: { id: string; code: string; name: string }; version: { versionNumber: number }; stepRuns: Array<{ step: { code: string; name: string; stepType: string } }> };
 type WorkflowEvent = { eventType?: string; id: string; createdAt: string; summary: string; status?: string | null };
@@ -62,6 +65,10 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, members, 
   const [runAction, setRunAction] = useState<{ run: Run; action: "retry" | "cancel" } | null>(null);
   const [draftSteps, setDraftSteps] = useState<Step[]>([]);
   const [draftTransitions, setDraftTransitions] = useState<Transition[]>([]);
+  const [draftConfiguration, setDraftConfiguration] = useState<Record<string, string | number | boolean | null>>({});
+  type DraftSnapshot = { steps: Step[]; transitions: Transition[]; configuration: Record<string, string | number | boolean | null> };
+  const [undoHistory, setUndoHistory] = useState<DraftSnapshot[]>([]);
+  const [redoHistory, setRedoHistory] = useState<DraftSnapshot[]>([]);
   const [draftDirty, setDraftDirty] = useState(false);
   const [stepError, setStepError] = useState("");
   const [transitionError, setTransitionError] = useState("");
@@ -110,6 +117,9 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, members, 
     const draft = body.definition.versions.find((version: Version) => version.status === "DRAFT");
     setDraftSteps((draft?.steps || []).map((step: Step) => ({ ...step, configuration: step.configurationJson || {} })));
     setDraftTransitions((draft?.transitions || []).map((transition: Transition) => ({ ...transition, fromStepCode: transition.fromStep?.code, toStepCode: transition.toStep?.code, condition: transition.conditionJson || undefined })));
+    setDraftConfiguration(draft?.configurationJson || {});
+    setUndoHistory([]);
+    setRedoHistory([]);
     setDraftDirty(false);
     setStepError("");
     setTransitionError("");
@@ -146,6 +156,56 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, members, 
     return {};
   }
 
+  function checkpoint() {
+    setUndoHistory((current) => [...current.slice(-19), { steps: draftSteps, transitions: draftTransitions, configuration: draftConfiguration }]);
+    setRedoHistory([]);
+  }
+
+  function undoDraft() {
+    if (!undoHistory.length) return;
+    const previous = undoHistory[undoHistory.length - 1];
+    setRedoHistory((current) => [...current.slice(-19), { steps: draftSteps, transitions: draftTransitions, configuration: draftConfiguration }]);
+    setUndoHistory((current) => current.slice(0, -1));
+    setDraftSteps(previous.steps);
+    setDraftTransitions(previous.transitions);
+    setDraftConfiguration(previous.configuration);
+    setDraftDirty(true);
+  }
+
+  function redoDraft() {
+    if (!redoHistory.length) return;
+    const next = redoHistory[redoHistory.length - 1];
+    setUndoHistory((current) => [...current.slice(-19), { steps: draftSteps, transitions: draftTransitions, configuration: draftConfiguration }]);
+    setRedoHistory((current) => current.slice(0, -1));
+    setDraftSteps(next.steps);
+    setDraftTransitions(next.transitions);
+    setDraftConfiguration(next.configuration);
+    setDraftDirty(true);
+  }
+
+  function moveVisualNode(code: string, x: number, y: number) {
+    checkpoint();
+    const updated = applyWorkflowVisualPositions({
+      steps: draftSteps, transitions: draftTransitions, configuration: draftConfiguration,
+    } as unknown as WorkflowVersionInput, [{ id: code, x, y }]);
+    setDraftConfiguration(updated.configuration || {});
+    setDraftDirty(true);
+  }
+
+  function renameVisualNode(code: string, name: string, description: string) {
+    if (!name.trim()) return;
+    checkpoint();
+    setDraftSteps((current) => current.map((item) => item.code === code ? { ...item, name: name.trim(), description } : item));
+    setDraftDirty(true);
+  }
+
+  function connectVisualNodes(fromStepCode: string, toStepCode: string, outcome: string) {
+    if (fromStepCode === toStepCode || draftTransitions.some((t) => t.fromStepCode === fromStepCode && t.toStepCode === toStepCode && (t.outcome || "DEFAULT") === outcome)) return;
+    checkpoint();
+    setDraftTransitions((current) => [...current, { fromStepCode, toStepCode, outcome, priority: current.filter(t => t.fromStepCode === fromStepCode).length }]);
+    setDraftDirty(true);
+  }
+
   function addStep(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -160,6 +220,7 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, members, 
       return;
     }
     setStepError("");
+    checkpoint();
     setDraftSteps((current) => [...current, { code, name: String(form.get("name") || code), stepType: type, position: current.length, configuration: stepConfig(form, type) }]);
     setDraftDirty(true);
     setStepOpen(false);
@@ -184,12 +245,16 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, members, 
       return;
     }
     setTransitionError("");
+    checkpoint();
     setDraftTransitions((current) => [...current, { fromStepCode, toStepCode, outcome, priority: current.filter((item) => item.fromStepCode === fromStepCode).length }]);
     setDraftDirty(true);
     setTransitionOpen(false);
   }
 
   function moveStep(index: number, direction: -1 | 1) {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= draftSteps.length) return;
+    checkpoint();
     setDraftSteps((current) => {
       const target = index + direction;
       if (target < 0 || target >= current.length) return current;
@@ -201,6 +266,7 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, members, 
   }
 
   function removeStep(code: string) {
+    checkpoint();
     setDraftSteps((current) => current.filter((step) => step.code !== code).map((step, position) => ({ ...step, position })));
     setDraftTransitions((current) => current.filter((transition) => transition.fromStepCode !== code && transition.toStepCode !== code));
     setDraftDirty(true);
@@ -214,6 +280,7 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, members, 
       body: JSON.stringify({
         steps: draftSteps.map(({ configurationJson, ...step }) => ({ ...step, configuration: step.configuration || configurationJson || {} })),
         transitions: draftTransitions.map((transition) => ({ fromStepCode: transition.fromStepCode, toStepCode: transition.toStepCode, outcome: transition.outcome || "DEFAULT", priority: transition.priority, ...(transition.condition ? { condition: transition.condition } : {}) })),
+        configuration: draftConfiguration,
       }),
     });
     const body = await response.json().catch(() => null);
@@ -315,6 +382,7 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, members, 
       <section className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface p-3 sm:p-4">{selected ? <div className="grid gap-4"><div className="flex items-start gap-3"><div className="min-w-0 flex-1"><p className="text-xs font-black uppercase tracking-[0.1em] text-cyan-600">{selected.code}</p><h2 className="truncate text-lg font-black text-dtsc-ink">{selected.name}</h2><p className="text-sm text-dtsc-muted">{selected.description}</p></div><StatusBadge>{statusLabel(selected.status, en)}</StatusBadge></div>
         <div className="flex flex-wrap gap-2">{permissions.canStartManual && selected.status === "ACTIVE" && selected.allowManualStart ? <Button size="sm" onClick={() => void openManualStart(selected)}><Play className="h-4 w-4" />{en ? "Start" : "Lancer"}</Button> : null}{permissions.canCreateDraft && published ? <Button size="sm" variant="outline" onClick={() => void duplicateVersion()}><Copy className="h-4 w-4" />{en ? "New version" : "Nouvelle version"}</Button> : null}{permissions.canEditDraft && currentDraft ? <Button size="sm" variant="outline" onClick={() => { setStepError(""); setStepOpen(true); }}><Plus className="h-4 w-4" />{en ? "Step" : "Étape"}</Button> : null}{permissions.canEditDraft && currentDraft ? <Button size="sm" variant="outline" onClick={() => { setTransitionError(""); setTransitionOpen(true); }}><GitBranch className="h-4 w-4" />{en ? "Transition" : "Transition"}</Button> : null}{permissions.canEditDraft && currentDraft ? <Button size="sm" onClick={() => void saveVersion()} disabled={!draftDirty}><Save className="h-4 w-4" />{en ? "Save" : "Enregistrer"}</Button> : null}{permissions.canPublish && currentDraft ? <WorkflowPublishReview organizationId={organizationId} definitionId={selected.id} versionId={currentDraft.id} locale={locale} disabled={!readinessForDraft?.ready || draftDirty} onPublished={async () => { await openDefinition(selected.id); await load(); }} /> : null}</div>
         {draftDirty ? <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900" role="status">{en ? "Unsaved graph changes are present. Save the draft before opening the publication review." : "Des modifications du graphe ne sont pas enregistrées. Enregistrez le brouillon avant d’ouvrir la revue de publication."}</div> : null}
+        {currentDraft ? <WorkflowVisualStudio key={currentDraft.id} locale={locale} steps={draftSteps} transitions={draftTransitions} configuration={draftConfiguration} editable={Boolean(permissions.canEditDraft)} onAddStep={() => { setStepError(""); setStepOpen(true); }} onMove={moveVisualNode} onRename={renameVisualNode} onConnect={connectVisualNodes} onDeleteStep={removeStep} onUndo={undoDraft} onRedo={redoDraft} undoAvailable={undoHistory.length > 0} redoAvailable={redoHistory.length > 0} /> : null}
         {currentDraft ? <><div className={cn("rounded-xl border p-3", readinessForDraft?.ready ? "border-emerald-400/40 bg-emerald-500/5" : "border-amber-400/40 bg-amber-500/5")}><p className="font-black text-dtsc-ink">{readinessForDraft?.ready ? (en ? "Ready to publish" : "Prêt à publier") : (en ? "Publication blockers" : "Blocages de publication")}</p>{readinessForDraft?.blockers?.length ? <ul className="mt-2 grid gap-1 text-xs text-dtsc-muted">{readinessForDraft.blockers.map((item, index) => <li key={`${item.code}-${index}`}>• {item.stepCode ? `${item.stepCode}: ` : ""}{workflowReadinessMessage(item.code, locale)}</li>)}</ul> : null}</div>
         <div className="grid gap-2">{[...draftSteps].sort((a, b) => a.position - b.position).map((step, index) => <article key={step.code} className="flex min-w-0 items-center gap-2 rounded-xl border border-dtsc-border p-2.5"><span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-dtsc-soft text-xs font-black text-dtsc-ink">{index + 1}</span><div className="min-w-0 flex-1"><strong className="block truncate text-sm text-dtsc-ink">{step.name}</strong><span className="block truncate text-xs text-dtsc-muted">{stepTypeLabel(step.stepType, en)} · {step.code}</span></div>{permissions.canEditDraft ? <div className="flex shrink-0"><button type="button" className="p-2 text-dtsc-muted" onClick={() => moveStep(index, -1)} aria-label={en ? "Move step up" : "Monter l’étape"}><ArrowUp className="h-4 w-4" /></button><button type="button" className="p-2 text-dtsc-muted" onClick={() => moveStep(index, 1)} aria-label={en ? "Move step down" : "Descendre l’étape"}><ArrowDown className="h-4 w-4" /></button><button type="button" className="p-2 text-rose-600" onClick={() => removeStep(step.code)} aria-label={en ? "Delete step" : "Supprimer l’étape"}><Trash2 className="h-4 w-4" /></button></div> : null}</article>)}</div>
         <div><h3 className="text-sm font-black text-dtsc-ink">{en ? "Branches" : "Branches"}</h3><div className="mt-2 grid gap-1.5">{draftTransitions.map((transition, index) => <div key={`${transition.fromStepCode}-${transition.toStepCode}-${index}`} className="flex items-center gap-2 rounded-xl bg-dtsc-page px-3 py-2 text-xs"><span className="truncate font-bold text-dtsc-ink">{transition.fromStepCode}</span><GitBranch className="h-3.5 w-3.5 shrink-0 text-cyan-600" /><span className="truncate font-bold text-dtsc-ink">{transition.toStepCode}</span><span className="ml-auto shrink-0 text-dtsc-muted">{outcomeLabel(transition.outcome, en)}</span>{permissions.canEditDraft ? <button type="button" onClick={() => { setDraftTransitions((current) => current.filter((_, itemIndex) => itemIndex !== index)); setDraftDirty(true); }} aria-label={en ? "Delete branch" : "Supprimer la branche"}><XCircle className="h-4 w-4 text-rose-600" /></button> : null}</div>)}</div></div></> : <p className="text-sm text-dtsc-muted">{en ? "Create a new draft version to edit this workflow." : "Créez une nouvelle version brouillon pour modifier ce workflow."}</p>}</div> : <EmptyState compact title={en ? "Select a workflow" : "Sélectionnez un workflow"} description={en ? "Open a definition to inspect its versions and readiness." : "Ouvrez une définition pour consulter ses versions et sa readiness."} />}</section>
