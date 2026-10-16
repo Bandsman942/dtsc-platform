@@ -149,6 +149,12 @@ try {
   assert.ok(Object.isFrozen(ready));
   await rejects({ ...payload, scheduleId: "nonexistent" }, "WORKFLOW_PREFLIGHT_SCHEDULE_NOT_FOUND");
   await rejects({ ...payload, organizationId: other }, "WORKFLOW_PREFLIGHT_SCHEDULE_NOT_FOUND");
+  await prisma.organization.update({ where: { id: org }, data: { status: "INACTIVE" } });
+  await rejects(payload, "WORKFLOW_PREFLIGHT_TENANT_INACTIVE");
+  await prisma.organization.update({ where: { id: org }, data: { status: "ACTIVE" } });
+  await prisma.enterpriseWorkflowSchedule.update({ where: { id: valid.id }, data: { status: "PAUSED" } });
+  await rejects(payload, "WORKFLOW_PREFLIGHT_SCHEDULE_NOT_FOUND");
+  await prisma.enterpriseWorkflowSchedule.update({ where: { id: valid.id }, data: { status: "DISABLED" } });
   await rejects({ ...payload, asOf: new Date("invalid") }, "WORKFLOW_PREFLIGHT_TIME_INVALID");
 
   workflowsAllowed = false;
@@ -191,6 +197,29 @@ try {
     where: { id: valid.id }, data: { nextRunAt: new Date("2026-11-01T05:30:00.000Z") },
   });
   await rejects({ ...payload, asOf: new Date("2026-11-03T12:00:00Z") }, "WORKFLOW_PREFLIGHT_CATCHUP_EXCEEDED");
+  // A legacy/internal RESERVED receipt is not an executable event; an inert
+  // schedule carrying one must be reconciled before a future activation.
+  const due = getNextWorkflowOccurrence(config, asOf, {
+    organizationId: org, scheduleId: valid.id, versionId: own.version.id,
+  });
+  const reserved = await prisma.enterpriseWorkflowScheduleOccurrence.create({
+    data: {
+      organizationId: org, scheduleId: valid.id, workflowVersionId: own.version.id,
+      localDate: due.localDate, localTime: due.localTime,
+      timeZone: due.timeZone, scheduledAt: due.scheduledAt,
+      occurrenceKey: due.occurrenceKey, status: "RESERVED",
+    },
+  });
+  await rejects(payload, "WORKFLOW_PREFLIGHT_UNRECONCILED_RECEIPTS");
+  await prisma.enterpriseWorkflowScheduleOccurrence.delete({ where: { id: reserved.id } });
+
+  const spring = getNextWorkflowOccurrence({
+    frequency: "DAILY", timeZone: "America/New_York", hour: 2, minute: 30,
+  }, new Date("2026-03-07T20:00:00Z"), {
+    organizationId: org, scheduleId: valid.id, versionId: own.version.id,
+  });
+  assert.equal(spring.scheduledAt.toISOString(), "2026-03-09T06:30:00.000Z",
+    "Nonexistent spring-forward 02:30 must be skipped, not shifted or duplicated");
   assert.equal((await preflight({ ...payload, asOf: new Date("2026-11-01T05:31:00Z") })).kind,
     "INERT_READINESS_ONLY", "One bounded catch-up remains a passive assessment");
 
