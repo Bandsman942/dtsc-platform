@@ -291,5 +291,5 @@ Automatisation : `pnpm qa:workflow-contracts` et `pnpm qa:workflow-contracts:pos
 - [ ] Seul un acteur avec membership/client actif, module/abonnement WORKFLOWS, permission de création et module source autorisé peut ajouter un horaire ; accès depuis tenant B ou contexte DTSC_INTERNAL refusé.
 - [ ] Le POST n'admet pas `status` client, ID étranger, ancienne version ou workflow archivé ; `nextRunAt` suit DST SKIP/FIRST.
 - [ ] Un horaire créé reste `DISABLED`, même lorsqu'il possède un prochain curseur ; 0 occurrence, 0 outbox, 0 run et 0 effet financier.
-- [ ] PostgreSQL QA `node scripts/qa-workflow-844-postgres.mjs` réussie sur Quality ET Migration ; migrations propres, lint, types, QA régression et build CI.
+- [ ] PostgreSQL QA `node scripts/qa-workflow-844-postgres.mjs` réussie sur Quality ET Migration : service réel, handlers GET/POST réels sous doubles contrôlés d'auth/source, refus 401/403/429/400, pagination et visibilité STAGED ; migrations propres, lint, types, QA régression et build CI.
 - [ ] OWNER_E2E #844 explicite avant toute fusion, puis #843 couvre l'activation réelle, la source liée à une entité, l'acteur, les quotas, le scheduler, la transaction outbox/run et le replay/crash.
