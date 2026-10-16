@@ -303,3 +303,13 @@ Automatisation : `pnpm qa:workflow-contracts` et `pnpm qa:workflow-contracts:pos
 - [ ] Source/acteur/time tous NULL sur les anciens horaires ; statut toujours DISABLED, aucun run/event/occurrence créé ou consommé, aucun worker/cron modifié.
 - [ ] Quality et Migration : `node scripts/qa-workflow-846-postgres.mjs` sur DB locale propre, migrations, lint, types, régression et build CI.
 - [ ] OWNER_E2E #846 distinct, avant squash merge ; réalisation du scheduler réel reportée à #843.
+
+## WF-06S2C — Préflight inerte d'éligibilité (#848, parent #843)
+
+- [ ] Preflight uniquement serveur, non appelé par cron/worker, refuse tout statut autre que DISABLED et retourne `INERT_READINESS_ONLY` sans snapshot ERP.
+- [ ] Entreprise CLIENT active, version PUBLISHED courante, mandat source+acteur complet et source ERP authentifiée dans le même tenant ; entitlements WORKFLOWS et module ERP réévalués, acteur actif.
+- [ ] Mandat révoqué, module désactivé, objet supprimé ou d'un tenant B, version retirée : échec fermé sans modification de base.
+- [ ] Curseur DST FIRST au premier 01:30 automnal, seconde occurrence refusée ; anciennes échéances >24h refusées sans catch-up massif.
+- [ ] Plafonds techniques 10 par définition et 50 par entreprise vérifiés, identifiés comme **non commerciaux**, les quotas plan resteront dans #843.
+- [ ] PostgreSQL QA `node scripts/qa-workflow-848-postgres.mjs` certifiée en Quality et Migration ; 0 run, 0 occurrence, 0 domain event, aucune API d'activation.
+- [ ] Typecheck, lint, régression et build CI SUCCESS ; **OWNER_E2E #848** explicite avant toute fusion.
