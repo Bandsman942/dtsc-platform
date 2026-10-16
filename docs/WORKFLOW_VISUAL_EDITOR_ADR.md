@@ -1,6 +1,6 @@
 # ADR WF-05 — Projection visuelle sans second moteur (#818)
 
-**État : SPIKE / non activé pour les utilisateurs.** Dépend de WF-03 (#816) et WF-04 (#817), qui requièrent encore leurs validations propriétaires.
+**État : implémentation candidate sur branche PR #836 DRAFT, non déployée.** WF-03 (#816) et WF-04 (#817) sont fusionnés et validés. Le studio exige encore la certification navigateur, la QA finale et OWNER_E2E #818.
 
 ## Décision de base
 
@@ -10,21 +10,21 @@ La première fondation est `projectWorkflowVersion` et `applyWorkflowVisualPosit
 
 Le moteur ne lit jamais ces positions ; chaque position est bornée [0, 20 000] et ignorée si non numérique. L'ordre des nœuds sans position utilise `position` et le code comme déterminants, ce qui rend le résultat stable et permet de rouvrir des graphes anciens sans migration ni backfill.
 
-## Décision d'interface en attente d'intégration
+## Studio intégré sur branche candidate
 
-- **Candidat de bibliothèque** : @xyflow/react (React Flow / XYFlow) ; comparer accessibilité réelle du clavier et des ports, licence actuelle, bundle mobile, ARIA, performance, réconciliation React/Next et politique de dépendances avant tout ajout. **Aucune bibliothèque n'est ajoutée dans ce spike** ; les critères sont opposables mais non déclarés validés.
-- Canvas desktop et tablette derrière permission canEditDraft ; fallback liste/formulaire existant sur mobile et en cas d'échec de rendu. Sans dépendance tierce validée, ne pas présenter une carte statique comme éditeur opérationnel.
-- L'édition des branches/nœuds doit passer par les DTO contrôlés et la route PATCH actuelle, puis readiness/plan/RBAC/revue. Modification de la position seule marque le brouillon dirty.
-- Zoom, déplacement, clavier, connecteurs lisibles, ARIA, mobile, dark mode, FR/EN et undo/redo doivent être certifiés par navigateur avant activation.
+- **Choix d'implémentation initial** : canevas natif React/SVG, aucun poids de bibliothèque externe ni moteur d'exécution parallèle. Un spike ultérieur pourra comparer XYFlow selon accessibilité réelle, licence, performance et maintenance avant adoption ; aucun avantage non mesuré n'est revendiqué.
+- Canvas desktop à partir de lg avec arêtes typées, zoom, déplacement par pointeur/clic-clavier et liste accessible à tous les écrans. L'édition des noms/descriptions et la connexion des étapes via champs structurés sont implémentées sur la branche. La liste/formulaires hérités reste l'alternative mobile.
+- L'édition des branches, noms et positions traverse les DTO contrôlés et la route PATCH actuelle, avec persistance de configurationJson, puis readiness/plan/RBAC/revue. Déplacement marque le brouillon dirty et n'exécute aucune étape.
+- Zoom 50–150 %, déplacement, navigation au clavier, liste mobile, labels ARIA, libellés FR/EN et undo/redo (20 snapshots maximum) sont intégrés ; **la certification navigateur responsive/contrastes/focus reste à exécuter**. Le canevas ne propose pas encore de minimap ni de configuration métier profonde depuis le panneau propriétés : les formulaires structurés restent disponibles.
 - Aucun nouveau type métier ni HTTP/script arbitraire n'est ajouté.
 
-## QA réalisée dans cette tranche
+## QA réalisée et limites de couverture
 
-`pnpm qa:workflow-visual-roundtrip` : **10 nœuds**, condition, outcomes, positions versionnées, round-trip sans perte de graphes et aucune exécution dans le module de projection. Test ciblé purement comportemental ; **pas** un E2E navigateur.
+`pnpm qa:workflow-visual-roundtrip` : **10 nœuds**, condition, outcomes, positions versionnées, round-trip sans perte de graphes et aucune exécution dans le module de projection. Test ciblé + contrôles structurels du studio intégré ; **pas** un E2E navigateur ni validation de graphes complexes simulant plusieurs utilisateurs concurrents.
 
 ## Préconditions d'activation et rollback
 
-- Merge et Production des #816 et #817 après OWNER_E2E respectifs.
-- Implémenter et certifier le canvas complet contre le même moteur (création, connexion, sauvegarde, réouverture, branches, revue, mobile/clavier) ; OWNER_E2E #818 explicite.
-- Ne pas exposer de contrôles non fonctionnels ou de promesse d'actions non certifiées.
+- #816 et #817 ont été fusionnés et déployés après OWNER_E2E respectifs. La PR #836 est réconciliée sur main@8490cf55.
+- Certifier par navigateur les parcours réels : création depuis palette/formulaire, connexions, position, enregistrement/rechargement des coordonnées, revue/publication, 10+ nœuds, contraste/focus/mobile, contrôle de concurrence. Ajouter les fonctions non couvertes par le canevas si nécessaire. OWNER_E2E #818 explicite.
+- Les positions, branches et libellés sont fonctionnels ; les propriétés métier avancées restent dans les formulaires existants et aucun clic sur canevas ne déclenche l'exécution.
 - Rollback : désactiver le canvas et revenir à l'éditeur formulaires ; positions dans configurationJson sans effet sur les définitions canoniques. Aucune migration ou suppression destructive.
