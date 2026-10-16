@@ -36,6 +36,14 @@ const definitions = [];
 const versions = [];
 
 try {
+  await prisma.user.create({
+    data: { id: actor, email: `${actor}@example.test`, name: "WF-06S1 fixture", passwordHash: "disabled-test-fixture" },
+  });
+  for (const tenant of [organizationId, otherTenant]) {
+    await prisma.organization.create({
+      data: { id: tenant, name: "WF-06S1 ledger fixture", organizationType: "CLIENT", status: "ACTIVE" },
+    });
+  }
   const a = await makeDefinition(organizationId, "A");
   const b = await makeDefinition(otherTenant, "B");
   definitions.push(a.definition.id, b.definition.id);
@@ -126,5 +134,7 @@ try {
   await prisma.enterpriseWorkflowSchedule.deleteMany({ where: { id: { in: schedules } } });
   await prisma.enterpriseWorkflowVersion.deleteMany({ where: { id: { in: versions } } });
   await prisma.enterpriseWorkflowDefinition.deleteMany({ where: { id: { in: definitions } } });
+  await prisma.organization.deleteMany({ where: { id: { in: [organizationId, otherTenant] } } });
+  await prisma.user.deleteMany({ where: { id: actor } });
   await prisma.$disconnect();
 }
