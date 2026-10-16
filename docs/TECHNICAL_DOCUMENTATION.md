@@ -609,3 +609,8 @@ La route sécurisée des exécutions Workflows réutilise son prédicat tenant +
 #### WF-05 — Conflits sur la sauvegarde du studio
 
 La route PATCH de version attend `editToken` (hash SHA-256 du graphe serveur) et `saveWorkflowVersion` compare le snapshot canonique sous verrou `FOR UPDATE` de `EnterpriseWorkflowVersion` avant toute suppression/recréation d'étapes. Le service conserve l'appel interne sans token pour les templates/fixtures, alors que le PATCH public refuse l'absence de token. Un éditeur périmé reçoit HTTP 409 `WORKFLOW_DRAFT_CONFLICT`; le brouillon local n'est pas écrasé. Cette solution n'ajoute ni seconde table de révision ni migration. Tests : `qa-workflow-818-concurrency.mjs` et `qa-workflow-818-visual-roundtrip.mjs`.
+
+
+### WF-06A — Planification horaire non activée (#837, parent #819)
+
+Le module `lib/enterprise/workflows/advanced-schedule.ts` propose un calcul strict des occurrences DAILY/WEEKLY en fuseau IANA et des clés SHA-256 tenant/schedule/version/date locale. Politique DST : saut de date quand heure inexistante, premier instant uniquement lors de l'heure répétée, fenêtre de 35 jours. Aucune route, table, worker ni capacité d'exécution est activée dans cette tranche. La garantie transactionnelle d'unicité des occurrences est un prérequis explicite avant activation ; voir [WORKFLOW_ADVANCED_RUNTIME_RFC.md](WORKFLOW_ADVANCED_RUNTIME_RFC.md).
