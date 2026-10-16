@@ -1,3 +1,11 @@
+## 2026-10-17 — HOTFIX P1 #859 : workflows template save, approbateurs et dépenses
+
+- Validation pré-sauvegarde et API avec chemins de champs localisés FR/EN pour les brouillons, sans révélation des erreurs Zod brutes. Version publiée immuable et conflit de modification conservés.
+- Formulaire guidé des étapes ASSIGN et CREATE_APPROVAL existantes : stratégie, rôle/poste, utilisateur autorisé, département. JSON avancé conservé pour les experts.
+- Candidates tenant-scoped parmi les membres actifs disposant du droit ERP approve, y compris les rôles personnalisés et postes. Le moteur revalide en temps réel cette permission, conserve le validateur désigné et les protections anti-auto-validation.
+- Source dépense dans Finance / Budgets et dépenses : état vide contextualisé et lien de création, sans révélation de dossiers d'autres membres.
+- QA spécialisée #859 en Quality et Migration. Pas de migration ni activation de scheduler, OWNER_E2E #859 nécessaire. #857 en attente.
+
 ## 2026-10-16 — WF-06S2E2 : contrat logique de lease / fencing, sans activation (#855, parent #852 / #843)
 
 - Contrat pur d'intention `INERT_LEASE_PLAN_ONLY` : clé locale tenant/schedule/version/date/heure identique à WF-06A, validation du reçu RESERVED intact, fenêtre 24h, révision attendue et tentative bornée.

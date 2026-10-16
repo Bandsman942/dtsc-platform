@@ -342,3 +342,14 @@ Automatisation : `pnpm qa:workflow-contracts` et `pnpm qa:workflow-contracts:pos
 - [ ] La contrainte réelle PostgreSQL #850 reste RESERVED-only et interdit CLAIMED ; aucune migration, job ni paiement, aucun bypass ou exécution automatique.
 - [ ] `node scripts/qa-workflow-855-lease-policy.mjs` dans Quality ET Migration, puis les autres gates GitHub Quality/Migration et OWNER_E2E #855 explicite avant squash merge.
 - [ ] Le dispatcher #852 doit encore intégrer locking + revalidation droits/entitlements/plan + CAS atomique run/outbox ; ne pas considérer la QA pure comme QA de concurrence PostgreSQL.
+
+## HOTFIX #859 — éditeur, approbateurs et dépenses (avant reprise #857)
+
+- [ ] Modifier étape CREATE_APPROVAL issue du template dans le formulaire guidé, sans JSON : role, poste, membre éligible, département ; sauvegarder/recharger et vérifier transitions inchangées.
+- [ ] FR/EN : configuration incomplète affiche nom de l'étape et champ ; statut publié immuable, conflit du brouillon, droits source et panne réseau expliqués sans erreur Zod brute.
+- [ ] Seuls les membres actifs autorisés à approuver dans le module source sont proposés. Révoquer un droit puis tenter exécution : refus par serveur. Deux tenants et plans différents ne partagent jamais les candidats.
+- [ ] Rôle organisationnel, poste et rôle personnalisé ; responsable département invalide ne débouche pas sur un fallback non autorisé ; demandeur ne peut pas s'auto-approuver.
+- [ ] Budget/dépense déjà soumise conserve le validateur ERP désigné ; absence de seconde approbation ; conflit d'approbateur explicite.
+- [ ] Finance > Budgets et dépenses > Nouvelle dépense. La liste de lancement manuel respecte les droits et la propriété des objets et propose le lien Finance si vide.
+- [ ] Tester 320/360/375/390/414 px, mobile, clavier/focus, FR/EN, clair/sombre, libellés longs.
+- [ ] CI Quality et Migration exécutent QA #859, suivies des gates de régression, lint, typecheck, build ; OWNER_E2E #859 avant merge. #857 reste en pause.
