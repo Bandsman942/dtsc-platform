@@ -274,3 +274,13 @@ Automatisation : `pnpm qa:workflow-contracts` et `pnpm qa:workflow-contracts:pos
 - [ ] Nombres décimaux précis, dates normalisées, scalaires uniquement, payload ≤4 Ko, 16 variables maximum.
 - [ ] Le moteur V1, le registre de nœuds et les données Prisma ne sont pas modifiés, la publication/exécution V1 ne reconnaît pas implicitement AND/OR.
 - [ ] Typecheck, lint, régression, build, Delivery Governance, Migration Gate du dernier SHA passent ; OWNER_E2E #839 humain nécessaire avant fusion.
+
+
+## WF-06S1 — Persistence atomique d'occurrences, non activée (#841)
+
+- [ ] `pnpm qa:workflow-schedule-ledger:postgres` passe sur PostgreSQL isolé et sous migrations from scratch.
+- [ ] Les reçus possèdent un index UNIQUE par tenant/schedule/version/date locale/heure locale et une clé SHA-256 UNIQUE ; toutes les FKs composées refusent mix de versions/définitions/tenants.
+- [ ] 12 transactions concurrentes ne créent qu'un reçu et font progresser le curseur avec CAS ; un replay ne double pas l'occurrence, un rollback ne perd pas le curseur.
+- [ ] Le DST New York 2026 (heure répétée) choisit FIRST uniquement ; le deuxième instant ne devient pas une nouvelle occurrence.
+- [ ] Les horaires restent DISABLED par défaut ; aucune route/API/cron/worker ne peut activer des exécutions à travers cette tranche. `EnterpriseWorkflowRun` reste vide pour le test.
+- [ ] Prisma generate/validate, diff-check, type-check, lint, régression, Quality/Migration, build et OWNER_E2E #841 explicitement validés avant fusion.
