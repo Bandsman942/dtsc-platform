@@ -17,6 +17,7 @@ type Props = {
   onConnect: (from: string, to: string, outcome: string) => void;
   onAddStep: () => void;
   onDeleteStep: (code: string) => void;
+  onDuplicateStep: (code: string) => void;
   onUndo: () => void;
   onRedo: () => void;
   undoAvailable: boolean;
@@ -31,7 +32,7 @@ const TOP = 24;
 
 export function WorkflowVisualStudio({
   locale, steps, transitions, configuration, editable, onMove, onRename, onConnect,
-  onAddStep, onDeleteStep, onUndo, onRedo, undoAvailable, redoAvailable,
+  onAddStep, onDeleteStep, onDuplicateStep, onUndo, onRedo, undoAvailable, redoAvailable,
 }: Props) {
   const en = locale === "en";
   const markerId = useId().replace(/:/g, "");
@@ -154,7 +155,7 @@ export function WorkflowVisualStudio({
           <p className="text-xs text-dtsc-muted">{active.stepType} · {active.code}</p>
           <label className="text-xs text-dtsc-muted">{en ? "Name" : "Nom"}<input disabled={!editable} value={label} onChange={e => setLabel(e.target.value)} maxLength={140} className="mt-1 w-full rounded-lg border border-dtsc-border bg-dtsc-page p-2 text-sm" /></label>
           <label className="text-xs text-dtsc-muted">{en ? "Description" : "Description"}<textarea disabled={!editable} value={description} onChange={e => setDescription(e.target.value)} maxLength={500} rows={3} className="mt-1 w-full rounded-lg border border-dtsc-border bg-dtsc-page p-2 text-sm" /></label>
-          {editable ? <div className="flex flex-wrap gap-2"><button type="button" disabled={!label.trim()} onClick={() => onRename(active.code, label.trim(), description.trim())} className="rounded-lg bg-dtsc-blue px-3 py-2 text-xs font-bold text-white disabled:opacity-40">{en ? "Apply" : "Appliquer"}</button><button type="button" onClick={() => { onDeleteStep(active.code); setSelected(null); }} className="rounded-lg border border-rose-300 px-3 py-2 text-xs text-rose-700">{en ? "Delete step" : "Supprimer l’étape"}</button></div> : null}
+          {editable ? <div className="flex flex-wrap gap-2"><button type="button" disabled={!label.trim()} onClick={() => onRename(active.code, label.trim(), description.trim())} className="rounded-lg bg-dtsc-blue px-3 py-2 text-xs font-bold text-white disabled:opacity-40">{en ? "Apply" : "Appliquer"}</button><button type="button" disabled={active.stepType === "START" || active.stepType === "END"} onClick={() => onDuplicateStep(active.code)} className="rounded-lg border border-dtsc-border px-3 py-2 text-xs text-dtsc-ink disabled:opacity-40">{en ? "Duplicate step" : "Dupliquer l’étape"}</button><button type="button" onClick={() => { onDeleteStep(active.code); setSelected(null); }} className="rounded-lg border border-rose-300 px-3 py-2 text-xs text-rose-700">{en ? "Delete step" : "Supprimer l’étape"}</button></div> : null}
           <p className="text-xs text-dtsc-muted">{en ? "Advanced configurations are preserved exactly in the existing structured editor." : "Les configurations avancées sont conservées dans l’éditeur structuré existant."}</p>
         </div> : <p className="mt-2 text-xs text-dtsc-muted">{en ? "Select a node or an item from the list." : "Sélectionnez un nœud ou un élément de la liste."}</p>}
       </aside>
