@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
@@ -13,13 +14,13 @@ import { isSameOriginRequest } from "@/lib/request-security";
 
 type Params = { params: Promise<{ organizationId: string; id: string; versionId: string }> };
 
-async function loadPublishReview(organizationId: string, definitionId: string, versionId: string) {
-  const definition = await prisma.enterpriseWorkflowDefinition.findFirst({
+async function loadPublishReview(organizationId: string, definitionId: string, versionId: string, db: Prisma.TransactionClient | typeof prisma = prisma) {
+  const definition = await db.enterpriseWorkflowDefinition.findFirst({
     where: { id: definitionId, organizationId, archivedAt: null },
-    select: { id: true, code: true, name: true, triggerType: true, triggerEntityType: true, triggerEventType: true },
+    select: { id: true, code: true, name: true, triggerType: true, triggerEntityType: true, triggerEventType: true, allowManualStart: true, singleActiveRun: true, status: true, currentVersionId: true },
   });
   if (!definition) throw new EnterpriseWorkflowError("Workflow introuvable.", 404, "WORKFLOW_DEFINITION_NOT_FOUND", "BUSINESS");
-  const version = await prisma.enterpriseWorkflowVersion.findFirst({
+  const version = await db.enterpriseWorkflowVersion.findFirst({
     where: { id: versionId, organizationId, definitionId },
     include: {
       steps: { orderBy: { position: "asc" }, select: { id: true, code: true, name: true, stepType: true, position: true, configurationJson: true } },
@@ -92,7 +93,13 @@ export async function POST(req: Request, { params }: Params) {
     const review = await loadPublishReview(organizationId, id, versionId);
     if (!review.readiness.ready) throw new EnterpriseWorkflowError("Le workflow n’est pas prêt à être publié.", 409, "WORKFLOW_NOT_READY", "CONFIGURATION");
     if (review.reviewToken !== parsed.data.reviewToken) throw new EnterpriseWorkflowError("Le brouillon a changé depuis votre revue. Ouvrez une nouvelle revue avant de publier.", 409, "WORKFLOW_REVIEW_STALE", "CONFIGURATION");
-    const version = await publishWorkflowVersion(organizationId, id, versionId, session.userId);
+    const version = await publishWorkflowVersion(organizationId, id, versionId, session.userId, async (tx) => {
+      const fresh = await loadPublishReview(organizationId, id, versionId, tx);
+      if (fresh.reviewToken !== parsed.data.reviewToken) throw new EnterpriseWorkflowError(
+        "Le brouillon a changé pendant la validation. Relancez la revue avant publication.",
+        409, "WORKFLOW_REVIEW_STALE", "CONFIGURATION",
+      );
+    });
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_WORKFLOW_PUBLISHED", entity: "EnterpriseWorkflowVersion", entityId: versionId, request: req, metadata: { organizationId, definitionId: id, versionNumber: version.versionNumber, reviewedVersionId: parsed.data.reviewedVersionId, reviewToken: parsed.data.reviewToken } });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "workflow-publish", definitionId: id, versionId } });
     return NextResponse.json({ ok: true, version });

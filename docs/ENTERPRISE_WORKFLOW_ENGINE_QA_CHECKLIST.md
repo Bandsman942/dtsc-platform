@@ -194,3 +194,31 @@ Automatisation : `pnpm qa:workflow-contracts` et `pnpm qa:workflow-contracts:pos
 - [ ] `pnpm qa:workflow-security`, lint, type-check, régression, build et migration GitHub réussissent.
 - [ ] OWNER_E2E #815 : matrice des rôles, révocation, cross-tenant, source ERP et SoD.
 - [ ] SHA Production == SHA main après E2E et merge seulement.
+
+
+## WF-03 — Révision immuable, lancement et suivi (#816)
+
+- [ ] Publication initiale produit définition ACTIVE + version PUBLISHED, visible dans Activités.
+- [ ] PATCH comportemental d’une définition ACTIVE ou RETIRED reçoit `WORKFLOW_PUBLISHED_TRIGGER_IMMUTABLE` (HTTP 409).
+- [ ] PATCH nom/description reste possible ; nouvelle version brouillon peut modifier étapes mais pas les triggers historiques.
+- [ ] Double publication, revue périmée et édition simultanée ne changent pas l’état publié sans relecture : transaction SERIALIZABLE et token vérifié avant mutation.
+- [ ] Module Workflows donne un formulaire manuel aux seuls utilisateurs `canStartManual`, sur définition ACTIVE avec `allowManualStart`.
+- [ ] Sélecteur de sources ne montre que l’organisation courante et les objets autorisés ; ID externe et source d’un autre membre/tenant refusés côté API.
+- [ ] Sélecteurs non encore certifiés explicitement indisponibles ; aucun champ d’UUID libre ni résultat fictif.
+- [ ] Lien profond `?runId` ouvre l’exécution précise sous permissions ; 403 vs 404 distinction vérifiée.
+- [ ] Liste paginée (20) : une exécution en page 3 reste accessible et filtres de statut réinitialisent la pagination.
+- [ ] Contrôles FR/EN, mode clair/sombre, clavier et mobile 320/360/375/390/414/768/1024.
+- [ ] `pnpm qa:workflow-publish-manual`, `pnpm qa:enterprise-workflows`, type-check, lint, régression et build réussis.
+- [ ] OWNER_E2E #816 humain requis avant merge et Production.
+
+
+## WF-04 — Monitoring et incidents (#817)
+
+- [ ] API `workflow-runs` : statistiques dérivées des mêmes runs visibles, mêmes filtres statut/module/démarreur.
+- [ ] P50/P95/P99 bornés à 500 derniers runs des 30 derniers jours ; échantillon plafonné affiché et champ `sampledAt` précis.
+- [ ] Échec sans `completedAt` et anomalie de durée négative sont exclus ; absence = null et non zéro fictif.
+- [ ] Temps d'attente estimé depuis `updatedAt` présenté comme tel, jamais SLA métier exact.
+- [ ] Tous les états d'outbox (ready, processing, staleProcessing, dead) restent privés et les totaux concernent la queue partagée, pas le tenant.
+- [ ] `pnpm qa:workflow-observability`, suites WF-00/WF-01 PostgreSQL, type-check, lint, régression, build, Migration Gate.
+- [ ] E2E réel : run terminé/WAITING/BLOCKED/FAILED/retry/cancel + récupération lease + rôles + tenant B.
+- [ ] Dépendance #816 fusionnée avant fusion #817.

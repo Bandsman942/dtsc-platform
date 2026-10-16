@@ -4,6 +4,24 @@
 - QA sur 10 nœuds et métadonnées conservant conditions, branches, ordre et configs ; ADR sur le choix futur de canvas et l'accessibilité.
 - Aucune UI de création visuelle n'est activée. Dépend de #816/#817 puis certification navigateur et OWNER_E2E #818.
 
+
+## 2026-10-16 — WF-04 : diagnostics workflow par périmètre et latences (#817)
+
+- Ajout d'échantillons p50/p95/p99 et d'âges d'attente, avec horodatage, fenêtre de 30 jours, limite explicite de 500 exécutions et null pour données manquantes.
+- Les mesures restent limitées aux exécutions autorisées au membre/tenant/module.
+- Les deux workers remontent le nombre de leases expirées du outbox interne (pas de confusion avec un KPI tenant).
+- Nouveau runbook d'incident et QA de calcul/visibilité intégrée à la régression ; aucun nouveau stockage ni secret.
+- Dépend de #816 avant toute fusion ; OWNER_E2E #817 restant à effectuer.
+
+
+## 2026-10-16 — WF-03 : publication immuable et démarrage manuel (#816)
+
+- Blocage serveur des modifications de déclencheurs, type métier et autorisation de lancement après première publication ; transaction de publication avec revue et contrôle de concurrence SERIALIZABLE.
+- Correction du catalogue Workflows d’Activités : statut de définition ACTIVE avec version PUBLISHED, sans reprise legacy.
+- Sélection d’objets ERP tenant/actor-scoped pour sept familles certifiées et lancement manuel depuis le module Workflows ; liens profonds runId.
+- Exécutions désormais paginées et filtrables côté interface ; nouvelle QA de régression WF-03.
+- Aucun changement Prisma et aucun secret ; validation OWNER_E2E #816 encore requise avant livraison.
+
 ## 2026-10-15 — WF-02 : autorisations et visibilité des workflows (#815)
 
 - verrouille les routes Workflows derrière le module et l'entitlement canonique, sans bypass MANAGER/DTSC ;
