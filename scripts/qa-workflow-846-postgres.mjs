@@ -13,7 +13,7 @@ const tenant = `${prefix}-org`, other = `${prefix}-other`, actor = `${prefix}-ac
 const schedules = [], definitions = [], versions = [], tasks = [];
 let EnterpriseWorkflowError;
 let session = { userId: actor, activeContext: "ORGANIZATION", activeOrganizationId: tenant };
-let rights = { canEditDraft: true };
+let rights = { canRead: true, canEditDraft: true };
 let sourceAllowed = true, originAllowed = true, limited = false;
 const audits = [];
 
@@ -59,6 +59,7 @@ const loader = workflowTestLoader({
       s.activeContext === "ORGANIZATION" && s.activeOrganizationId === org ? rights : null,
   },
   "@/lib/enterprise/workflows/source-access": {
+    listReadableWorkflowEntityTypes: async () => sourceAllowed ? ["EnterpriseTask"] : [],
     requireWorkflowSourceAccess: async ({ userId, organizationId, sourceEntityType }) => {
       if (!sourceAllowed || userId !== actor || organizationId !== tenant || sourceEntityType !== "EnterpriseTask") {
         throw new EnterpriseWorkflowError("Source module denied.", 403, "WORKFLOW_SOURCE_MODULE_ACCESS_DENIED", "SECURITY");
@@ -167,9 +168,9 @@ try {
   limited = true;
   assert.equal((await PATCH(request(data), routeContext(initial.id))).status, 429);
   limited = false;
-  rights = { canEditDraft: false };
+  rights = { canRead: true, canEditDraft: false };
   assert.equal((await PATCH(request(data), routeContext(initial.id))).status, 403);
-  rights = { canEditDraft: true };
+  rights = { canRead: true, canEditDraft: true };
   sourceAllowed = false;
   assert.equal((await PATCH(request({ ...data, revision: stored.revision }), routeContext(initial.id))).status, 403);
   sourceAllowed = true;
