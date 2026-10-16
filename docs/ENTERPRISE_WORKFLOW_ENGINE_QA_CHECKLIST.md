@@ -322,3 +322,13 @@ Automatisation : `pnpm qa:workflow-contracts` et `pnpm qa:workflow-contracts:pos
 - [ ] `node scripts/qa-workflow-850-postgres.mjs` sur deux tenants dans Quality + Migration : 11 mutations interdites et 0 ERP run/event.
 - [ ] Type-check, lint, régression et build CI SUCCESS, OWNER_E2E #850 explicite avant fusion.
 - [ ] Aucun worker, Cron, API, ENABLED ou effet métier ; activation sécurisée distincte #843.
+
+## WF-06S2E1 — Inventory lock probe STRICTEMENT INERTE (#853, parent #852)
+
+- [ ] La fonction est serveur uniquement, non appelée par API, Cron, worker ou service d'exécution; `INERT_DISPATCH_LOCK_PROBE_ONLY` ne confère aucun grant.
+- [ ] 3 tenants isolés (un inactif), horaires DISABLED/STAGED, uniquement reçus RESERVED, échus dans les dernières 24 h et curseur asOf récent.
+- [ ] `LIMIT 21` borne à 20 sorties; SKIP LOCKED ignore une ligne verrouillée par une transaction concurrente puis l'observe une fois libérée; pas de promesse de backlog total.
+- [ ] Aucun champ sourceEntityId, actor, payload sensible; aucun run, outbox ou mutation de reçu, statut et updatedAt inchangés.
+- [ ] PostgreSQL QA `node scripts/qa-workflow-853-postgres.mjs` dans Quality ET Migration, puis type-check, lint, regression, build CI SUCCESS.
+- [ ] OWNER_E2E #853 BON distinct avant fusion; Production READY #850 prérequis.
+- [ ] #852 doit encore ajouter le véritable claim, le droit live atomique, quotas plan, outbox/run unique, crash-retry et kill-switch avant tout ENABLED.
