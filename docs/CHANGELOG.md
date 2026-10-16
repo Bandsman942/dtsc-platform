@@ -1,3 +1,9 @@
+## 2026-10-16 — WF-06S2B : attestation métier inerte source et acteur (#846, parent #843)
+
+- PATCH sécurisé d'un mandat pour un horaire strictement DISABLED ; source ERP persistée vérifiée par adaptateur tenant-scoped et acteur personnel revalidé sans compte système implicite.
+- Migration additive de quatre colonnes nullable et contrainte CHECK tout-ou-rien ; version courante PUBLISHED, CAS revision, membership actif, same-origin, rate-limit et audit.
+- Tests PostgreSQL sur deux entreprises et API contrôlée dans Quality/Migration. L'activation, les quotas, l'outbox, les retries et le worker restent exclusivement à réaliser dans #843 ; OWNER_E2E #846 avant toute fusion.
+
 ## 2026-10-16 — WF-06S2A : préparation serveur des horaires désactivés (#844, parent #843 / #819)
 
 - Création et lecture paginée d'horaires `DISABLED` depuis une API entreprise vérifiant session, membership, permission WORKFLOWS, entitlement/source ERP, same-origin et audit ; aucun statut d'activation client.
