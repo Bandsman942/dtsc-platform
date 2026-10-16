@@ -124,6 +124,7 @@ model EnterpriseWorkflowRun {
   stepRuns             EnterpriseWorkflowStepRun[]
   events               EnterpriseWorkflowEvent[]
   approvals            EnterpriseApproval[]
+  scheduledOccurrence  EnterpriseWorkflowScheduleOccurrence? @relation("ScheduledOccurrenceRun")
 
   @@unique([organizationId, id])
   @@unique([workflowDefinitionId, triggerEventId, sourceEntityType, sourceEntityId])
@@ -263,13 +264,29 @@ model EnterpriseWorkflowScheduleOccurrence {
   scheduledAt       DateTime
   occurrenceKey     String                     @unique(map: "EW_Occurrence_occurrence_key")
   status            String                     @default("RESERVED")
+  // #850: the database CHECK prohibits using these fields before #843 activation.
+  claimToken        String?
+  leaseUntil        DateTime?
+  attemptCount      Int                        @default(0)
+  revision          Int                        @default(1)
+  claimedAt         DateTime?
+  completedAt       DateTime?
+  lastFailureCode   String?
+  workflowRunId     String?
+  outboxEventId     String?
   createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @default(now()) @updatedAt
   schedule          EnterpriseWorkflowSchedule @relation(fields: [organizationId, scheduleId, workflowVersionId], references: [organizationId, id, workflowVersionId], onDelete: Restrict, map: "EW_Occurrence_schedule_fkey")
+  run               EnterpriseWorkflowRun?     @relation("ScheduledOccurrenceRun", fields: [organizationId, workflowRunId], references: [organizationId, id], onDelete: Restrict, map: "EW_Occurrence_run_fkey")
+  outboxEvent       EnterpriseDomainEvent?     @relation("ScheduledOccurrenceOutbox", fields: [organizationId, outboxEventId], references: [organizationId, id], onDelete: Restrict, map: "EW_Occurrence_outbox_fkey")
 
   @@unique([organizationId, id], map: "EW_Occurrence_org_id_key")
   @@unique([organizationId, scheduleId, workflowVersionId, localDate, localTime], map: "EW_Occurrence_org_schedule_version_local_key")
+  @@unique([organizationId, workflowRunId], map: "EW_Occurrence_org_run_key")
+  @@unique([organizationId, outboxEventId], map: "EW_Occurrence_org_outbox_key")
   @@index([organizationId, status, scheduledAt], map: "EW_Occurrence_org_status_due_idx")
   @@index([scheduleId, scheduledAt], map: "EW_Occurrence_schedule_due_idx")
+  @@index([status, leaseUntil], map: "EW_Occurrence_status_lease_idx")
 }
 
 model EnterpriseDomainEvent {
@@ -290,6 +307,7 @@ model EnterpriseDomainEvent {
   lastError        String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+  scheduledOccurrence EnterpriseWorkflowScheduleOccurrence? @relation("ScheduledOccurrenceOutbox")
 
   @@unique([idempotencyKey])
   @@unique([organizationId, id])

@@ -313,3 +313,12 @@ Automatisation : `pnpm qa:workflow-contracts` et `pnpm qa:workflow-contracts:pos
 - [ ] Plafonds techniques 10 par définition et 50 par entreprise vérifiés, identifiés comme **non commerciaux**, les quotas plan resteront dans #843.
 - [ ] PostgreSQL QA `node scripts/qa-workflow-848-postgres.mjs` certifiée en Quality et Migration ; 0 run, 0 occurrence, 0 domain event, aucune API d'activation.
 - [ ] Typecheck, lint, régression et build CI SUCCESS ; **OWNER_E2E #848** explicite avant toute fusion.
+
+## WF-06S2D — Reçus inertes (#850, parent #843)
+
+- [ ] Migration additive depuis base vide, Prisma generate, ancien ledger toujours compatible.
+- [ ] RESERVED obligatoire, colonnes claim/run/outbox nulles, défauts et revision positif garantis par CHECKs.
+- [ ] Index uniques run/outbox, FKs composites interdisant les références cross-tenant.
+- [ ] `node scripts/qa-workflow-850-postgres.mjs` sur deux tenants dans Quality + Migration : 11 mutations interdites et 0 ERP run/event.
+- [ ] Type-check, lint, régression et build CI SUCCESS, OWNER_E2E #850 explicite avant fusion.
+- [ ] Aucun worker, Cron, API, ENABLED ou effet métier ; activation sécurisée distincte #843.
