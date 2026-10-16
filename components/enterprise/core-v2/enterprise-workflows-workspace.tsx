@@ -43,7 +43,7 @@ const STEP_TYPES = ["START", "CONDITION", "ASSIGN", "CREATE_APPROVAL", "CREATE_T
 const OUTCOMES = ["DEFAULT", "TRUE", "FALSE", "APPROVED", "REJECTED", "CANCELLED"];
 const ASSIGNMENTS = ["SPECIFIC_USER", "SPECIFIC_ROLE", "DEPARTMENT_MANAGER", "ENTITY_REQUESTER", "ENTITY_ASSIGNEE", "ENTITY_BUYER", "ENTITY_CREATOR", "PREVIOUS_STEP_ACTOR"];
 
-export function EnterpriseWorkflowsWorkspace({ organizationId, locale, members, departments, legacyWorkflows }: Props) {
+export function EnterpriseWorkflowsWorkspace({ organizationId, locale, departments, legacyWorkflows }: Props) {
   const en = locale === "en";
   const [tab, setTab] = useState<"definitions" | "runs" | "monitoring">("definitions");
   const [definitions, setDefinitions] = useState<Definition[]>([]);
