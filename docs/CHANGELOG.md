@@ -1,3 +1,10 @@
+## 2026-10-16 — WF-06S2E3 : preuve PostgreSQL de concurrence en fixtures isolées (#857, parent #852)
+
+- QA **réelle PostgreSQL** sur base locale de test uniquement : 12 transactions concurrentes avec `FOR UPDATE SKIP LOCKED` et CAS, une seule insertion **dans une outbox fictive `WF857OutboxFixture`** à la validation du reçu fictif.
+- Vérification du ROLLBACK avant commit (aucun reçu/event fictif persisté), du commit avant ACK (replay sans doublon), de deux entreprises, d'un tenant inactif, d'une mauvaise version, des fenêtres d'échéance et d'une contention de verrou PostgreSQL tenue puis libérée.
+- Les tables `WF857*` sont créées/détruites **uniquement dans la DB CI locale `*test*`** ; aucun objet Prisma/migration nouveau ni écriture dans des tables de run/outbox/receipts ERP réelles.
+- CI Quality + Migration pour cette QA ; CI transverses + OWNER_E2E #857 requis avant merge. **Ce n'est pas le dispatcher de production** : acteur/source/quotas/abonnements live, vraie migration d'état, worker, kill-switch et exactly-once d'effets métier restent #852.
+
 ## 2026-10-16 — WF-06S2E2 : contrat logique de lease / fencing, sans activation (#855, parent #852 / #843)
 
 - Contrat pur d'intention `INERT_LEASE_PLAN_ONLY` : clé locale tenant/schedule/version/date/heure identique à WF-06A, validation du reçu RESERVED intact, fenêtre 24h, révision attendue et tentative bornée.
