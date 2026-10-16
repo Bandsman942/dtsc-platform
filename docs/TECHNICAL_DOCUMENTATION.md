@@ -604,3 +604,8 @@ La route sécurisée des exécutions Workflows réutilise son prédicat tenant +
 ### WF-05 — Fondations de projection visuelle (#818, SPIKE)
 
 `visual-projection.ts` transforme uniquement `WorkflowVersionInput` vers nœuds/arêtes d'interface et sauvegarde des coordonnées bornées sous `visual.node.{code}.{x|y}` dans `configurationJson`. Ce code est pur : aucun moteur d'exécution, mutation, token, nouvelle table ou connecteur. Le test `qa-workflow-visual-roundtrip` couvre dix nœuds, branches et sauvegarde sans perte. Un composant React/SVG de studio interactif est intégré sur la branche PR #836 : déplacement (pointer/keyboard), connexion de nœuds avec outcome typé, édition des libellés, zoom, liste mobile accessible, undo/redo bornés, et sauvegarde des coordonnées par le même PATCH/version. Le composant ne publie ni n'exécute jamais un workflow. #816/#817 sont fusionnés ; **QA navigateur et OWNER_E2E #818 demeurent indispensables avant merge/Production**. Voir [WORKFLOW_VISUAL_EDITOR_ADR.md](WORKFLOW_VISUAL_EDITOR_ADR.md).
+
+
+#### WF-05 — Conflits sur la sauvegarde du studio
+
+La route PATCH de version attend `editToken` (hash SHA-256 du graphe serveur) et `saveWorkflowVersion` compare le snapshot canonique sous verrou `FOR UPDATE` de `EnterpriseWorkflowVersion` avant toute suppression/recréation d'étapes. Le service conserve l'appel interne sans token pour les templates/fixtures, alors que le PATCH public refuse l'absence de token. Un éditeur périmé reçoit HTTP 409 `WORKFLOW_DRAFT_CONFLICT`; le brouillon local n'est pas écrasé. Cette solution n'ajoute ni seconde table de révision ni migration. Tests : `qa-workflow-818-concurrency.mjs` et `qa-workflow-818-visual-roundtrip.mjs`.
