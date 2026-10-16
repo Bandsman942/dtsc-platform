@@ -59,11 +59,24 @@ async function source(entityType) {
   }
   throw new Error(`Unknown fixture ${entityType}`);
 }
+let checkedVersionCas = false;
 async function publish(entityType, version) {
   const definition = await definitions.createWorkflowDefinition(organizationId, maker, { name: `WF-01 ${sequence++}`, triggerType: "MANUAL", triggerEntityType: entityType, allowManualStart: true });
   const versionId = definition.versions[0].id;
-  const saved = await definitions.saveWorkflowVersion(organizationId, definition.id, versionId, maker, version);
+  const draftBefore = checkedVersionCas ? null : await definitions.getWorkflowDefinition(organizationId, definition.id);
+  const initialToken = draftBefore ? definitions.workflowVersionEditToken(draftBefore.versions.find(item => item.id === versionId)) : undefined;
+  const saved = await definitions.saveWorkflowVersion(organizationId, definition.id, versionId, maker, version, initialToken);
   assert.equal(saved.readiness.ready, true, JSON.stringify(saved.readiness));
+  if (!checkedVersionCas) {
+    checkedVersionCas = true;
+    const before = await prisma.enterpriseWorkflowStep.count({ where: { organizationId, workflowVersionId: versionId } });
+    await assert.rejects(
+      definitions.saveWorkflowVersion(organizationId, definition.id, versionId, checker, version, initialToken),
+      (error) => error.code === "WORKFLOW_DRAFT_CONFLICT" && error.status === 409,
+      "PostgreSQL must reject stale edits after serializing on the actual version row",
+    );
+    assert.equal(await prisma.enterpriseWorkflowStep.count({ where: { organizationId, workflowVersionId: versionId } }), before, "Conflict must not remove existing steps");
+  }
   await definitions.publishWorkflowVersion(organizationId, definition.id, versionId, maker);
   return definition;
 }
