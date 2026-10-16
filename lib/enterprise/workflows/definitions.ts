@@ -100,11 +100,26 @@ export async function createWorkflowFromTemplate(organizationId: string, actorUs
 
 export async function updateWorkflowDefinition(organizationId: string, definitionId: string, actorUserId: string, raw: unknown) {
   const input = workflowDefinitionUpdateSchema.parse(raw);
+  // Once the first version is published, the event contract becomes immutable.
+  // A new graph version is edited/reviewed separately; it cannot silently
+  // reinterpret an existing definition's trigger or manual-start policy.
+  const changesBehavior = input.triggerType !== undefined || input.triggerEntityType !== undefined
+    || input.triggerEventType !== undefined || input.allowManualStart !== undefined
+    || input.singleActiveRun !== undefined;
   const updated = await prisma.enterpriseWorkflowDefinition.updateMany({
-    where: { id: definitionId, organizationId, archivedAt: null },
+    where: { id: definitionId, organizationId, archivedAt: null, ...(changesBehavior ? { status: "DRAFT" } : {}) },
     data: { ...input, updatedByUserId: actorUserId },
   });
-  if (updated.count !== 1) throw new EnterpriseWorkflowError("Workflow introuvable.", 404, "WORKFLOW_DEFINITION_NOT_FOUND", "BUSINESS");
+  if (updated.count !== 1) {
+    const definition = await prisma.enterpriseWorkflowDefinition.findFirst({
+      where: { id: definitionId, organizationId, archivedAt: null }, select: { status: true },
+    });
+    if (definition && changesBehavior) throw new EnterpriseWorkflowError(
+      "Les déclencheurs et le lancement manuel sont figés après publication. Créez un nouveau workflow pour modifier ce contrat.",
+      409, "WORKFLOW_PUBLISHED_TRIGGER_IMMUTABLE", "CONFIGURATION",
+    );
+    throw new EnterpriseWorkflowError("Workflow introuvable.", 404, "WORKFLOW_DEFINITION_NOT_FOUND", "BUSINESS");
+  }
   return getWorkflowDefinition(organizationId, definitionId);
 }
 
