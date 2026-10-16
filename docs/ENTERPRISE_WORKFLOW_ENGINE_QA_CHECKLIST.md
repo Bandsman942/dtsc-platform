@@ -332,3 +332,13 @@ Automatisation : `pnpm qa:workflow-contracts` et `pnpm qa:workflow-contracts:pos
 - [ ] PostgreSQL QA `node scripts/qa-workflow-853-postgres.mjs` dans Quality ET Migration, puis type-check, lint, regression, build CI SUCCESS.
 - [ ] OWNER_E2E #853 BON distinct avant fusion; Production READY #850 prérequis.
 - [ ] #852 doit encore ajouter le véritable claim, le droit live atomique, quotas plan, outbox/run unique, crash-retry et kill-switch avant tout ENABLED.
+
+## WF-06S2E2 — Lease/fencing purs, NON EXÉCUTABLES (#855, parent #852)
+
+- [ ] Vérifier que `INERT_LEASE_PLAN_ONLY` et `INERT_LEASE_FENCE_ONLY` ne sont pas des permissions, qu'aucun token/acteur/payload n'est renvoyé, et que la source n'est jamais importée par worker, API ni Cron.
+- [ ] Clés d'occurrence tenant/version/local date/local time vérifiées contre le calcul WF-06A ; deuxième 01:30 New York fall-back identique, tenant B différent.
+- [ ] 12 intentions simultanées ne sont PAS 12 claims : elles ont toutes la même révision CAS attendue, mais seul un futur UPDATE conditionnel en transaction pourra établir l'unique gagnant.
+- [ ] Cas négatifs : statut non RESERVED, révision 0/overflow, claim déjà existant, linked run/outbox, future/stale >24 h, token erroné, lease expiré, échec après max 3 tentatives.
+- [ ] La contrainte réelle PostgreSQL #850 reste RESERVED-only et interdit CLAIMED ; aucune migration, job ni paiement, aucun bypass ou exécution automatique.
+- [ ] `node scripts/qa-workflow-855-lease-policy.mjs` dans Quality ET Migration, puis les autres gates GitHub Quality/Migration et OWNER_E2E #855 explicite avant squash merge.
+- [ ] Le dispatcher #852 doit encore intégrer locking + revalidation droits/entitlements/plan + CAS atomique run/outbox ; ne pas considérer la QA pure comme QA de concurrence PostgreSQL.

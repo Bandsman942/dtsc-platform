@@ -1,3 +1,10 @@
+## 2026-10-16 — WF-06S2E2 : contrat logique de lease / fencing, sans activation (#855, parent #852 / #843)
+
+- Contrat pur d'intention `INERT_LEASE_PLAN_ONLY` : clé locale tenant/schedule/version/date/heure identique à WF-06A, validation du reçu RESERVED intact, fenêtre 24h, révision attendue et tentative bornée.
+- Décision `INERT_LEASE_FENCE_ONLY` sur un reçu CLAIMED **hypothétique** : refus de token erroné/périmé, bail expiré, nombre de tentatives dépassé ou effet run/outbox déjà lié. Aucune exposition du token ni mutation SQL.
+- Tests déterministes : 12 propositions de CAS simulées (pas une preuve de concurrence DB), DST New York fall-back, deux tenants, révision/version, expiry/replay; intégrés aux pipelines Quality et Migration.
+- **Aucune modification de l'état RESERVED imposé par PostgreSQL #850**, du cron, worker, API, schéma, permissions commerciales, ni création de run/outbox. Le dispatcher transactionnel réel, les droits live sous verrou et le kill-switch restent #852. OWNER_E2E #855 requis avant merge.
+
 ## 2026-10-16 — WF-06S2E1 : inventaire verrouillé mais inerte des occurrences (#853, parent #852 / #843)
 
 - Nouveau probe SQL multi-tenant strictement **SELECT FOR UPDATE SKIP LOCKED**, borné à 20 occurrences dues dans une fenêtre de 24 h, sur entreprise CLIENT active. Le verrou est libéré en fin de transaction; aucune écriture.
