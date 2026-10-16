@@ -1,3 +1,9 @@
+## 2026-10-16 — WF-06B : conditions AND/OR et mapping typé non activés (#839 / #819)
+
+- Schéma récursif strict (profondeur 4, 24 feuilles, 31 nœuds), prévalidation intégrale des branches et évaluation via adapter conditionnel canonique.
+- Mapping de variables bornées à 16 champs / 4 Ko, chaque source exige l'allow-list métier et une permission de projection séparée. Valeurs scalaires, nombres exacts sous forme de chaîne, aucune entrée arbitraire.
+- QA ciblée intégrée à la régression ; RFC sécurité et rollback documentés. **Pas d'activation dans le moteur, aucune migration, OWNER_E2E #839 requis avant merge**.
+
 ## 2026-10-16 — WF-05 : studio visuel interactif en PR DRAFT (#818)
 
 - Ajout d'une projection pure graphe canonique ↔ coordonnées visuelles versionnées, sans moteur parallèle, migration ou effets métier.
