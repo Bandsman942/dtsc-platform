@@ -328,7 +328,7 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, members, 
       }),
     });
     const body = await response.json().catch(() => null);
-    if (!response.ok) return toastError(getWorkflowRecoveryMessage(body?.error, locale) || body?.message || (en ? "Save failed." : "Enregistrement impossible."));
+    if (!response.ok) return toastError(body?.error === "WORKFLOW_DRAFT_CONFLICT" ? (en ? "Another collaborator changed this draft. Your changes are preserved here. Compare with the latest draft and reapply them before saving." : "Un collaborateur a modifié ce brouillon. Vos changements restent affichés. Comparez-les à la dernière version et réappliquez-les avant de sauvegarder.") : getWorkflowRecoveryMessage(body?.error, locale) || body?.message || (en ? "Save failed." : "Enregistrement impossible."));
     toastSuccess(en ? "Draft saved." : "Brouillon enregistré.");
     await openDefinition(selected.id);
     await load();
