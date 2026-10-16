@@ -1,3 +1,11 @@
+## 2026-10-16 — WF-04 : diagnostics workflow par périmètre et latences (#817)
+
+- Ajout d'échantillons p50/p95/p99 et d'âges d'attente, avec horodatage, fenêtre de 30 jours, limite explicite de 500 exécutions et null pour données manquantes.
+- Les mesures restent limitées aux exécutions autorisées au membre/tenant/module.
+- Les deux workers remontent le nombre de leases expirées du outbox interne (pas de confusion avec un KPI tenant).
+- Nouveau runbook d'incident et QA de calcul/visibilité intégrée à la régression ; aucun nouveau stockage ni secret.
+- Dépend de #816 avant toute fusion ; OWNER_E2E #817 restant à effectuer.
+
 ## 2026-10-15 — WF-02 : autorisations et visibilité des workflows (#815)
 
 - verrouille les routes Workflows derrière le module et l'entitlement canonique, sans bypass MANAGER/DTSC ;
