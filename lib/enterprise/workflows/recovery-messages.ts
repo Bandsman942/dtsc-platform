@@ -62,7 +62,7 @@ export function getWorkflowValidationFieldMessage(
     outcome: ["résultat", "outcome"], priority: ["priorité", "priority"],
     titleTemplate: ["titre", "title"], recipient: ["destinataire", "recipient"],
   };
-  const fieldKey = path.filter((part) => !/^\\d+$/.test(part)).slice(-1)[0];
+  const fieldKey = path.filter((part) => !/^\d+$/.test(part)).slice(-1)[0];
   const field = fields[fieldKey]?.[en ? 1 : 0] || (en ? "field" : "champ");
   return step
     ? (en ? `Step “${step}”: invalid ${field}. Check its structured settings before saving.`

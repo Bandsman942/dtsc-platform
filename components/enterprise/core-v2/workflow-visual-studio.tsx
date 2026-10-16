@@ -85,11 +85,11 @@ export function WorkflowVisualStudio({
     if (!active) return;
     const assignment: Record<string, string> = { strategy };
     if (strategy === "SPECIFIC_USER") {
-      const userId = value ?? (typeof activeAssignment.userId === "string" ? activeAssignment.userId : "") || assignmentMembers[0]?.id;
+      const userId = value || (typeof activeAssignment.userId === "string" ? activeAssignment.userId : "") || assignmentMembers[0]?.id;
       if (!userId) { setConfigurationError(en ? "No member can approve this module." : "Aucun collaborateur n’est autorisé à valider ce module."); return; }
       assignment.userId = userId;
     } else if (strategy === "SPECIFIC_ROLE") {
-      const role = value ?? (typeof activeAssignment.role === "string" ? activeAssignment.role : "") || assignmentRoles[0]?.id;
+      const role = value || (typeof activeAssignment.role === "string" ? activeAssignment.role : "") || assignmentRoles[0]?.id;
       if (!role) { setConfigurationError(en ? "No eligible role is configured." : "Aucun rôle autorisé n’est configuré."); return; }
       assignment.role = role;
     } else if (strategy === "DEPARTMENT_MANAGER") {
