@@ -1,3 +1,9 @@
+## 2026-10-16 — WF-06S1 : ledger des horaires inactif par défaut (#841, parent #819)
+
+- Schéma Prisma/PostgreSQL additif pour horaires et occurrences tenant-scoped ; FK composites définition/version et index uniques par date/heure locale et clé d'occurrence.
+- Réservation transactionnelle du reçu et progression CAS du curseur sous verrou PostgreSQL `FOR UPDATE SKIP LOCKED`, refus de dates DST incohérentes et d'exécutions sur versions non courantes.
+- QA PostgreSQL 12 concurrents, isolation tenant, reprise/replay et absence d'effet métier intégrée aux gates Quality/Migration. **Aucune API, aucun scheduler, aucun run ou event activé** ; OWNER_E2E #841 requis avant merge.
+
 ## 2026-10-16 — WF-06B : conditions AND/OR et mapping typé non activés (#839 / #819)
 
 - Schéma récursif strict (profondeur 4, 24 feuilles, 31 nœuds), prévalidation intégrale des branches et évaluation via adapter conditionnel canonique.
