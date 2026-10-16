@@ -587,3 +587,8 @@ Le catalogue et la publication utilisent `getWorkflowContractReadiness`. La pré
 ## WF-02 — RBAC/entitlements du moteur de workflows (#815)
 
 Les opérations du module WORKFLOWS exigent le membership CLIENT actif, le module activé et son entitlement canonique. L’accès au module source ERP est vérifié à la route et l’acteur d’exécution est revalidé à l’exécution ; MANAGER n’est pas administrateur implicite. Les métriques de runs partagent exactement le prédicat de visibilité des listes. Voir [WORKFLOW_SECURITY_POLICY.md](WORKFLOW_SECURITY_POLICY.md) pour les routes, matrices, critères E2E, cas de révocation et rollback.
+
+
+### WF-05 — Fondations de projection visuelle (#818, SPIKE)
+
+`visual-projection.ts` transforme uniquement `WorkflowVersionInput` vers nœuds/arêtes d'interface et sauvegarde des coordonnées bornées sous `visual.node.{code}.{x|y}` dans `configurationJson`. Ce code est pur : aucun moteur d'exécution, mutation, token, nouvelle table ou connecteur. Le test `qa-workflow-visual-roundtrip` couvre dix nœuds, branches et sauvegarde sans perte. Le canvas utilisateur est **non implémenté** dans cette tranche et n'est pas annoncé disponible ; prérequis : #816, #817, QA navigateur et OWNER_E2E #818. Voir [WORKFLOW_VISUAL_EDITOR_ADR.md](WORKFLOW_VISUAL_EDITOR_ADR.md).
