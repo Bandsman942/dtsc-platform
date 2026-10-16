@@ -44,7 +44,7 @@ export function getWorkflowRecoveryMessage(code: string | null | undefined, loca
 
 /** Localize Zod field paths without leaking raw English validator messages. */
 export function getWorkflowValidationFieldMessage(
-  issues: readonly { path: readonly (string | number)[] }[],
+  issues: readonly { path: readonly PropertyKey[] }[],
   locale: string | null | undefined,
   stepNames: readonly string[] = [],
 ) {
