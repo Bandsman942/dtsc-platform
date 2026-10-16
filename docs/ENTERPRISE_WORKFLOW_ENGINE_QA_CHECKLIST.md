@@ -236,3 +236,14 @@ Automatisation : `pnpm qa:workflow-contracts` et `pnpm qa:workflow-contracts:pos
 - [ ] Publication uniquement via readiness et revue humaine, aucune exécution depuis le canevas ; modules source/RBAC toujours vérifiés côté serveur.
 - [ ] `pnpm qa:workflow-visual-roundtrip`, typecheck, lint, régression et Quality/Migration Gates du HEAD actuel réussis.
 - [ ] OWNER_E2E #818 explicite requis avant la fusion.
+
+
+### Vérifications complémentaires WF-05 — collisions d'édition
+
+- [ ] Deux membres ouvrent le même DRAFT, A déplace un nœud et enregistre, puis B tente de sauvegarder son ancien graphe : **409 WORKFLOW_DRAFT_CONFLICT**, étapes/branches de A conservées.
+- [ ] Le conflit ne vide ni le formulaire de B ni ses choix ; message de rechargement clair en FR/EN.
+- [ ] Un PATCH sans `editToken` ou avec token mal formé échoue HTTP 400 avant toute écriture.
+- [ ] Une version PUBLISHED répond 409 sans écriture ; une organisation différente répond 403/404 selon le contrôle d'accès.
+- [ ] Le token provient du serveur seulement si `canEditDraft`, n'est ni un JWT, ni un secret, ni un bypass RBAC.
+- [ ] La sauvegarde prend un verrou `FOR UPDATE` sur la ligne de version avant comparaison du snapshot et avant mutation ; le studio ne contourne pas le verrou.
+- [ ] `pnpm qa:workflow-visual-concurrency` et `pnpm qa:workflow-visual-roundtrip` intégrés aux Quality Gates et à la régression ; navigateur authentifié restant.
