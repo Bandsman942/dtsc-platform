@@ -1,8 +1,9 @@
-## 2026-10-16 — WF-05 : fondation de projection visuelle (SPIKE, #818)
+## 2026-10-16 — WF-05 : studio visuel interactif en PR DRAFT (#818)
 
 - Ajout d'une projection pure graphe canonique ↔ coordonnées visuelles versionnées, sans moteur parallèle, migration ou effets métier.
 - QA sur 10 nœuds et métadonnées conservant conditions, branches, ordre et configs ; ADR sur le choix futur de canvas et l'accessibilité.
-- Aucune UI de création visuelle n'est activée. Dépend de #816/#817 puis certification navigateur et OWNER_E2E #818.
+- Intégration d'un studio React/SVG sur la branche : positions par pointeur/clavier, zoom, connexions typées, édition de libellés, undo/redo, fallback liste sur mobile et sauvegarde canonique des métadonnées visuelles.
+- #816/#817 sont fusionnés en Production ; l'éditeur visuel de #818 reste **non déployé**, dans l'attente des tests navigateur et de OWNER_E2E #818.
 
 
 ## 2026-10-16 — WF-04 : diagnostics workflow par périmètre et latences (#817)
