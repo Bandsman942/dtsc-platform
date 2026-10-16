@@ -1,3 +1,13 @@
+## 2026-10-16 — WF-05 : studio visuel interactif en PR DRAFT (#818)
+
+- Ajout d'une projection pure graphe canonique ↔ coordonnées visuelles versionnées, sans moteur parallèle, migration ou effets métier.
+- QA sur 10 nœuds et métadonnées conservant conditions, branches, ordre et configs ; ADR sur le choix futur de canvas et l'accessibilité.
+- Intégration d'un studio React/SVG sur la branche : positions par pointeur/clavier, zoom, connexions typées, édition de libellés, undo/redo, fallback liste sur mobile et sauvegarde canonique des métadonnées visuelles.
+- Duplication contrôlée d'étape non terminale, édition des configurations avancées validée par schéma métier et garde serveur transactionnelle contre écrasement d'un brouillon concurrent.
+- Deux QA obligatoires : projection/éditeur 10 nœuds et conflit de sauvegarde avec verrou et refus des éditions cross-tenant/publiées.
+- #816/#817 sont fusionnés en Production ; l'éditeur visuel de #818 reste **non déployé**, dans l'attente des tests navigateur et de OWNER_E2E #818.
+
+
 ## 2026-10-16 — WF-04 : diagnostics workflow par périmètre et latences (#817)
 
 - Ajout d'échantillons p50/p95/p99 et d'âges d'attente, avec horodatage, fenêtre de 30 jours, limite explicite de 500 exécutions et null pour données manquantes.

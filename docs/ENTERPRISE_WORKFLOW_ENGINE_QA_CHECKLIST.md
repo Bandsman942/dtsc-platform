@@ -222,3 +222,35 @@ Automatisation : `pnpm qa:workflow-contracts` et `pnpm qa:workflow-contracts:pos
 - [ ] `pnpm qa:workflow-observability`, suites WF-00/WF-01 PostgreSQL, type-check, lint, régression, build, Migration Gate.
 - [ ] E2E réel : run terminé/WAITING/BLOCKED/FAILED/retry/cancel + récupération lease + rôles + tenant B.
 - [ ] Dépendance #816 fusionnée avant fusion #817.
+
+
+## WF-05 — Studio visuel et round-trip (#818)
+
+- [ ] Dans une définition DRAFT autorisée, studio fonctionnel et formulaire structuré sont disponibles, aucun droit absent n'est contourné.
+- [ ] Créer un graphe 10+ nœuds ; connecter une branche TRUE/FALSE puis APPROVED/REJECTED, modifier noms et positions par souris/clavier.
+- [ ] Enregistrer, rafraîchir, rouvrir : toutes coordonnées, conditions, configurations et transitions sont conservées, sans altération de la version PUBLISHED.
+- [ ] Undo/redo (max. 20 snapshots) gère création, suppression, déplacement, connexions et retouches de libellés.
+- [ ] Lire et éditer avec clavier seul, lecteur d’écran, focus et noms accessibles ; mode clair/sombre, FR/EN.
+- [ ] Tester largeur 320/360/375/390/414/768/1024 : liste mobile fonctionnelle, aucun débordement horizontal global, zoom desktop et labels longs.
+- [ ] Contrôle de modification concurrente du même brouillon ; aucune sauvegarde ne supprime silencieusement des transitions.
+- [ ] Publication uniquement via readiness et revue humaine, aucune exécution depuis le canevas ; modules source/RBAC toujours vérifiés côté serveur.
+- [ ] `pnpm qa:workflow-visual-roundtrip`, typecheck, lint, régression et Quality/Migration Gates du HEAD actuel réussis.
+- [ ] OWNER_E2E #818 explicite requis avant la fusion.
+
+
+### Vérifications complémentaires WF-05 — collisions d'édition
+
+- [ ] Deux membres ouvrent le même DRAFT, A déplace un nœud et enregistre, puis B tente de sauvegarder son ancien graphe : **409 WORKFLOW_DRAFT_CONFLICT**, étapes/branches de A conservées.
+- [ ] Le conflit ne vide ni le formulaire de B ni ses choix ; message de rechargement clair en FR/EN.
+- [ ] Un PATCH sans `editToken` ou avec token mal formé échoue HTTP 400 avant toute écriture.
+- [ ] Une version PUBLISHED répond 409 sans écriture ; une organisation différente répond 403/404 selon le contrôle d'accès.
+- [ ] Le token provient du serveur seulement si `canEditDraft`, n'est ni un JWT, ni un secret, ni un bypass RBAC.
+- [ ] La sauvegarde prend un verrou `FOR UPDATE` sur la ligne de version avant comparaison du snapshot et avant mutation ; le studio ne contourne pas le verrou.
+- [ ] `pnpm qa:workflow-visual-concurrency` et `pnpm qa:workflow-visual-roundtrip` intégrés aux Quality Gates et à la régression ; navigateur authentifié restant.
+
+
+### Propriétés/duplication du studio — WF-05
+
+- [ ] Duplication de CONDITION/APPROVAL/TASK conserve la configuration et ajoute un nouveau code unique sans copier les branches ; START/END ne sont pas dupliquables.
+- [ ] La modification des propriétés avancées JSON rejette valeurs mal formées et schémas invalides ; des configurations existantes sont préservées si non modifiées.
+- [ ] Après une mutation validée, l'état dirty est affiché, undo/redo fonctionnent et la sauvegarde PATCH exige un token à jour.

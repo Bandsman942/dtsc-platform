@@ -3,7 +3,7 @@ import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseWorkflowAccess } from "@/lib/enterprise/workflows/access";
 import { requireWorkflowDefinitionSourceAccess, requireWorkflowSourceAccess } from "@/lib/enterprise/workflows/source-access";
-import { archiveWorkflowDefinition, getWorkflowDefinition, getWorkflowVersionReadiness, updateWorkflowDefinition } from "@/lib/enterprise/workflows/definitions";
+import { archiveWorkflowDefinition, getWorkflowDefinition, getWorkflowVersionReadiness, updateWorkflowDefinition, workflowVersionEditToken } from "@/lib/enterprise/workflows/definitions";
 import { normalizeWorkflowError } from "@/lib/enterprise/workflows/errors";
 import { workflowDefinitionUpdateSchema } from "@/lib/enterprise/workflows/validators";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
@@ -19,7 +19,7 @@ export async function GET(req: Request, { params }: Params) {
     await requireWorkflowDefinitionSourceAccess({ userId: session.userId, organizationId, definitionId: id });
     const readinessEntries = await Promise.all(definition.versions.filter((version) => version.status === "DRAFT").map(async (version) => [version.id, await getWorkflowVersionReadiness(organizationId, id, version.id)] as const));
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "workflow-definition", definitionId: id } });
-    return NextResponse.json({ definition, readiness: Object.fromEntries(readinessEntries), permissions: access });
+    return NextResponse.json({ definition, readiness: Object.fromEntries(readinessEntries), editTokens: access.canEditDraft ? Object.fromEntries(definition.versions.filter((v) => v.status === "DRAFT").map((v) => [v.id, workflowVersionEditToken(v)])) : {}, permissions: access });
   } catch (error) { const normalized = normalizeWorkflowError(error); return NextResponse.json({ error: normalized.code, message: normalized.message }, { status: normalized.status }); }
 }
 

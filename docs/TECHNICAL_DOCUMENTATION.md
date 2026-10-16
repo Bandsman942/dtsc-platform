@@ -599,3 +599,13 @@ Le catalogue Activités filtre `EnterpriseWorkflowDefinition.status=ACTIVE` et u
 ### WF-04 — Exploitation et latences bornées (#817)
 
 La route sécurisée des exécutions Workflows réutilise son prédicat tenant + droits de membre + modules ERP pour les mesures statistiques. `observability` détaille échantillonnage (`sampledAt`, `windowDays=30`, `sampleLimit=500`, `capped`), latences `p50/p95/p99` calculées à partir des run COMPLETED/REJECTED avec dates fiables, et ancienneté des runs WAITING/BLOCKED selon `updatedAt`. Ces chiffres sont des échantillons, jamais une facturation ou un SLA exhaustif. Un compteur manquant vaut `null`, pas 0. Le worker interne compte en plus les leases `PROCESSING` expirées, sans exposer de payload. Référence : `docs/WORKFLOW_OPERATIONS_RUNBOOK.md`. Aucun changement Prisma.
+
+
+### WF-05 — Fondations de projection visuelle (#818, SPIKE)
+
+`visual-projection.ts` transforme uniquement `WorkflowVersionInput` vers nœuds/arêtes d'interface et sauvegarde des coordonnées bornées sous `visual.node.{code}.{x|y}` dans `configurationJson`. Ce code est pur : aucun moteur d'exécution, mutation, token, nouvelle table ou connecteur. Le test `qa-workflow-visual-roundtrip` couvre dix nœuds, branches et sauvegarde sans perte. Un composant React/SVG de studio interactif est intégré sur la branche PR #836 : déplacement (pointer/keyboard), connexion de nœuds avec outcome typé, édition des libellés, zoom, liste mobile accessible, undo/redo bornés, et sauvegarde des coordonnées par le même PATCH/version. Le composant ne publie ni n'exécute jamais un workflow. #816/#817 sont fusionnés ; **QA navigateur et OWNER_E2E #818 demeurent indispensables avant merge/Production**. Voir [WORKFLOW_VISUAL_EDITOR_ADR.md](WORKFLOW_VISUAL_EDITOR_ADR.md).
+
+
+#### WF-05 — Conflits sur la sauvegarde du studio
+
+La route PATCH de version attend `editToken` (hash SHA-256 du graphe serveur) et `saveWorkflowVersion` compare le snapshot canonique sous verrou `FOR UPDATE` de `EnterpriseWorkflowVersion` avant toute suppression/recréation d'étapes. Le service conserve l'appel interne sans token pour les templates/fixtures, alors que le PATCH public refuse l'absence de token. Un éditeur périmé reçoit HTTP 409 `WORKFLOW_DRAFT_CONFLICT`; le brouillon local n'est pas écrasé. Cette solution n'ajoute ni seconde table de révision ni migration. Tests : `qa-workflow-818-concurrency.mjs` et `qa-workflow-818-visual-roundtrip.mjs`.
