@@ -259,6 +259,7 @@ Automatisation : `pnpm qa:workflow-contracts` et `pnpm qa:workflow-contracts:pos
 ## WF-06B — Conditions composites et mapping (#839)
 
 - [ ] `pnpm qa:workflow-data-conditions` passe : AND/OR stricts, branches invalides ignorées par un court-circuit rejetées, profondeur ≤4, feuilles ≤24, noms de variable protégés.
+- [ ] Le tenant source et le tenant actif doivent être identiques avant toute lecture, et même un arbre de milliers de niveaux doit être refusé avant parsing récursif.
 - [ ] Seuls les champs de l'adapter également autorisés par `readableFields` peuvent être projetés, y compris pour les montants ; aucune lecture d'un champ refusé.
 - [ ] Nombres décimaux précis, dates normalisées, scalaires uniquement, payload ≤4 Ko, 16 variables maximum.
 - [ ] Le moteur V1, le registre de nœuds et les données Prisma ne sont pas modifiés, la publication/exécution V1 ne reconnaît pas implicitement AND/OR.
