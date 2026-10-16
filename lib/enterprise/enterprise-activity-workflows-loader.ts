@@ -9,7 +9,7 @@ export async function getEnterpriseActivityWorkflows(organizationId: string) {
   const definitions = await prisma.enterpriseWorkflowDefinition.findMany({
     where: {
       organizationId,
-      status: "PUBLISHED",
+      status: "ACTIVE",
       allowManualStart: true,
       archivedAt: null,
       versions: { some: { status: "PUBLISHED" } },

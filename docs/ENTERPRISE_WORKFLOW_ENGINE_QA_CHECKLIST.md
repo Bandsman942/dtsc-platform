@@ -196,6 +196,22 @@ Automatisation : `pnpm qa:workflow-contracts` et `pnpm qa:workflow-contracts:pos
 - [ ] SHA Production == SHA main après E2E et merge seulement.
 
 
+## WF-03 — Révision immuable, lancement et suivi (#816)
+
+- [ ] Publication initiale produit définition ACTIVE + version PUBLISHED, visible dans Activités.
+- [ ] PATCH comportemental d’une définition ACTIVE ou RETIRED reçoit `WORKFLOW_PUBLISHED_TRIGGER_IMMUTABLE` (HTTP 409).
+- [ ] PATCH nom/description reste possible ; nouvelle version brouillon peut modifier étapes mais pas les triggers historiques.
+- [ ] Double publication, revue périmée et édition simultanée ne changent pas l’état publié sans relecture : transaction SERIALIZABLE et token vérifié avant mutation.
+- [ ] Module Workflows donne un formulaire manuel aux seuls utilisateurs `canStartManual`, sur définition ACTIVE avec `allowManualStart`.
+- [ ] Sélecteur de sources ne montre que l’organisation courante et les objets autorisés ; ID externe et source d’un autre membre/tenant refusés côté API.
+- [ ] Sélecteurs non encore certifiés explicitement indisponibles ; aucun champ d’UUID libre ni résultat fictif.
+- [ ] Lien profond `?runId` ouvre l’exécution précise sous permissions ; 403 vs 404 distinction vérifiée.
+- [ ] Liste paginée (20) : une exécution en page 3 reste accessible et filtres de statut réinitialisent la pagination.
+- [ ] Contrôles FR/EN, mode clair/sombre, clavier et mobile 320/360/375/390/414/768/1024.
+- [ ] `pnpm qa:workflow-publish-manual`, `pnpm qa:enterprise-workflows`, type-check, lint, régression et build réussis.
+- [ ] OWNER_E2E #816 humain requis avant merge et Production.
+
+
 ## WF-04 — Monitoring et incidents (#817)
 
 - [ ] API `workflow-runs` : statistiques dérivées des mêmes runs visibles, mêmes filtres statut/module/démarreur.
