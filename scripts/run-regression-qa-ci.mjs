@@ -14,6 +14,7 @@ commands.unshift("node scripts/qa-workflow-813-recovery.mjs");
 commands.unshift("node scripts/qa-reporting-2-634.mjs");
 commands.unshift("node scripts/qa-workflow-814-contracts.mjs");
 commands.unshift("node scripts/qa-workflow-815-security.mjs");
+commands.unshift("node scripts/qa-workflow-817-observability.mjs");
 commands.unshift("node scripts/qa-hotfix-547-responses-reasoning-continuation.mjs");
 commands.unshift("node scripts/qa-hotfix-545-agent-post-tool-resilience.mjs");
 commands.unshift("node scripts/qa-hotfix-543-enterprise-ai-erp-tool-gateway.mjs");
