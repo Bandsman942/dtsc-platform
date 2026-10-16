@@ -141,6 +141,21 @@ export async function assertDisabledWorkflowScheduleReadiness(input: {
       409, "WORKFLOW_PREFLIGHT_CATCHUP_EXCEEDED", "BUSINESS",
     );
   }
+  // No more than ONE missed local occurrence may be considered. An ordinary
+  // day may be 23, 24 or 25 hours long around DST, so duration alone is not a
+  // sufficient catch-up ceiling. The next canonical occurrence must be future.
+  if (schedule.nextRunAt.getTime() <= asOf.getTime()) {
+    const following = getNextWorkflowOccurrence(
+      config, schedule.nextRunAt,
+      { organizationId, scheduleId, versionId: schedule.workflowVersionId },
+    );
+    if (!following || following.scheduledAt.getTime() <= asOf.getTime()) {
+      throw new EnterpriseWorkflowError(
+        "Plusieurs occurrences manquées nécessitent un traitement manuel.",
+        409, "WORKFLOW_PREFLIGHT_MULTIPLE_MISSED", "BUSINESS",
+      );
+    }
+  }
 
   // Hard technical ceilings, NOT a plan quota. A later live dispatcher must
   // use atomic quota reservations and commercially authorized plan limits.
