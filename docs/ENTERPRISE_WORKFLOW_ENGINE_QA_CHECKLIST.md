@@ -341,4 +341,13 @@ Automatisation : `pnpm qa:workflow-contracts` et `pnpm qa:workflow-contracts:pos
 - [ ] Cas négatifs : statut non RESERVED, révision 0/overflow, claim déjà existant, linked run/outbox, future/stale >24 h, token erroné, lease expiré, échec après max 3 tentatives.
 - [ ] La contrainte réelle PostgreSQL #850 reste RESERVED-only et interdit CLAIMED ; aucune migration, job ni paiement, aucun bypass ou exécution automatique.
 - [ ] `node scripts/qa-workflow-855-lease-policy.mjs` dans Quality ET Migration, puis les autres gates GitHub Quality/Migration et OWNER_E2E #855 explicite avant squash merge.
-- [ ] Le dispatcher #852 doit encore intégrer locking + revalidation droits/entitlements/plan + CAS atomique run/outbox ; ne pas considérer la QA pure comme QA de concurrence PostgreSQL.
+- [ ] Le dispatcher #852 doit encore intégrer locking + revalidation droits/entitlements/plan + CAS atomique run/outbox ; ne pas considérer la QA pure comme QA de concurrence PostgreSQL.\n
+## WF-06S2E3 — PostgreSQL race en fixtures *sans runtime* (#857, parent #852)
+
+- [ ] Script refusé hors `localhost/*test*`. Tables `WF857*` non présentes en migration/prisma, nettoyées en finally.
+- [ ] `node scripts/qa-workflow-857-postgres.mjs` : 12 transactions PostgreSQL en concurrence réelle sur même reçu de test, un mock outbox unique, CAS révision et verrou SKIP LOCKED ; constater qu'il ne s'agit PAS de la table ERP réelle.
+- [ ] Deux CLIENT ACTIVE séparés ; tentative cross-tenant et version incorrecte refusées ; CLIENT INACTIVE, échéance future et >24h non déclenchées.
+- [ ] Crash simulé avant commit ⇒ rollback complet, puis une tentative unique possible ; après commit avant ACK + duplicate Cron ⇒ aucun deuxième mock outbox.
+- [ ] Verrou tenu manuellement ⇒ skip non bloquant ; libération ⇒ un seul claim de fixture.
+- [ ] Les vrais `EnterpriseWorkflowRun`, `EnterpriseDomainEvent`, `EnterpriseWorkflowScheduleOccurrence` restent vides pour fixtures, CHECK #850 RESERVED-only présents. Aucun Cron/worker/API/migration ajoutés.
+- [ ] CI Quality et Migration script dédié SUCCESS + toutes autres gates ; OWNER_E2E #857 explicite avant squash merge. La transaction **runtime** de #852 reste non implémentée.
