@@ -118,7 +118,7 @@ model EnterpriseWorkflowRun {
   revision             Int                          @default(1)
   createdAt            DateTime                     @default(now())
   updatedAt            DateTime                     @updatedAt
-  definition           EnterpriseWorkflowDefinition @relation(fields: [organizationId, workflowDefinitionId], references: [organizationId, id], onDelete: Restrict)
+  definition           EnterpriseWorkflowDefinition @relation(fields: [organizationId, workflowDefinitionId], references: [organizationId, id], onDelete: Restrict, map: "EW_Schedule_definition_fkey")
   version              EnterpriseWorkflowVersion    @relation(fields: [organizationId, workflowVersionId], references: [organizationId, id], onDelete: Restrict)
   stepRuns             EnterpriseWorkflowStepRun[]
   events               EnterpriseWorkflowEvent[]
@@ -233,13 +233,13 @@ model EnterpriseWorkflowSchedule {
   createdAt            DateTime                               @default(now())
   updatedAt            DateTime                               @updatedAt
   definition           EnterpriseWorkflowDefinition           @relation(fields: [organizationId, workflowDefinitionId], references: [organizationId, id], onDelete: Restrict)
-  version              EnterpriseWorkflowVersion              @relation(fields: [organizationId, workflowVersionId], references: [organizationId, id], onDelete: Restrict)
+  version              EnterpriseWorkflowVersion              @relation(fields: [organizationId, workflowVersionId], references: [organizationId, id], onDelete: Restrict, map: "EW_Schedule_version_fkey")
   occurrences          EnterpriseWorkflowScheduleOccurrence[]
 
   @@unique([organizationId, id])
-  @@unique([organizationId, id, workflowVersionId])
+  @@unique([organizationId, id, workflowVersionId], map: "EW_Schedule_org_id_version_key")
   @@index([organizationId, status, nextRunAt])
-  @@index([organizationId, workflowDefinitionId, status])
+  @@index([organizationId, workflowDefinitionId, status], map: "EW_Schedule_org_definition_status_idx")
 }
 
 /**
@@ -258,12 +258,12 @@ model EnterpriseWorkflowScheduleOccurrence {
   occurrenceKey     String                     @unique
   status            String                     @default("RESERVED")
   createdAt         DateTime                   @default(now())
-  schedule          EnterpriseWorkflowSchedule @relation(fields: [organizationId, scheduleId, workflowVersionId], references: [organizationId, id, workflowVersionId], onDelete: Restrict)
+  schedule          EnterpriseWorkflowSchedule @relation(fields: [organizationId, scheduleId, workflowVersionId], references: [organizationId, id, workflowVersionId], onDelete: Restrict, map: "EW_Occurrence_schedule_fkey")
 
   @@unique([organizationId, id])
-  @@unique([organizationId, scheduleId, workflowVersionId, localDate, localTime])
-  @@index([organizationId, status, scheduledAt])
-  @@index([scheduleId, scheduledAt])
+  @@unique([organizationId, scheduleId, workflowVersionId, localDate, localTime], map: "EW_Occurrence_org_schedule_version_local_key")
+  @@index([organizationId, status, scheduledAt], map: "EW_Occurrence_org_status_due_idx")
+  @@index([scheduleId, scheduledAt], map: "EW_Occurrence_schedule_due_idx")
 }
 
 model EnterpriseDomainEvent {
