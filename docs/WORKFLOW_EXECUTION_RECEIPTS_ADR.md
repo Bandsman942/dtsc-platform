@@ -1,6 +1,6 @@
 # WF-06S2D — Reçus d'exécution inertes (#850 ; parent #843 / #819)
 
-**Statut : PR brouillon, non activée.** Base `main@f6e803f` ; #848 est une PR de préflight distincte sans exigence de migration pour cette tranche.
+**Statut : PR brouillon, non activée.** Base `main@db93113b` ; #848 est fusionné avec OWNER_E2E BON. La sécurité du préflight reste consultative et sans effet runtime.
 
 ## Contrat
 L'occurrence du ledger #841 gagne des métadonnées nullables de tentative, lease, révision, temps, erreur sûre, lien vers `EnterpriseWorkflowRun` et vers le **même** `EnterpriseDomainEvent` canonique. Pas de duplication d'outbox, pas de payload métier sensible, pas de worker ni de changement de droits. FKs composites `(organizationId,id)` empêchent les liens cross-tenant ; index uniques interdisent de réutiliser un run ou événement pour deux reçus du même tenant.
