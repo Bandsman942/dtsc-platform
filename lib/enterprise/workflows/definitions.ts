@@ -213,10 +213,14 @@ export async function getWorkflowVersionReadiness(organizationId: string, defini
   }
 }
 
-export async function publishWorkflowVersion(organizationId: string, definitionId: string, versionId: string, actorUserId: string) {
-  const readiness = await getWorkflowVersionReadiness(organizationId, definitionId, versionId);
-  if (!readiness.ready) throw new EnterpriseWorkflowError("Le workflow n’est pas prêt à être publié.", 409, "WORKFLOW_NOT_READY", "CONFIGURATION");
+export async function publishWorkflowVersion(organizationId: string, definitionId: string, versionId: string, actorUserId: string, assertFresh?: (tx: Prisma.TransactionClient) => Promise<void>) {
   return prisma.$transaction(async (tx) => {
+    // Recheck the exact reviewed graph in the SERIALIZABLE publication transaction.
+    // Competing graph/trigger edits must abort rather than silently changing
+    // the execution contract after the owner has reviewed it.
+    if (assertFresh) await assertFresh(tx);
+    const readiness = await getWorkflowVersionReadiness(organizationId, definitionId, versionId);
+    if (!readiness.ready) throw new EnterpriseWorkflowError("Le workflow n’est pas prêt à être publié.", 409, "WORKFLOW_NOT_READY", "CONFIGURATION");
     const version = await tx.enterpriseWorkflowVersion.findFirst({ where: { id: versionId, organizationId, definitionId } });
     if (!version) throw new EnterpriseWorkflowError("Version introuvable.", 404, "WORKFLOW_VERSION_NOT_FOUND", "BUSINESS");
     if (version.status !== "DRAFT") throw new EnterpriseWorkflowError("Seule une version brouillon peut être publiée.", 409, "WORKFLOW_VERSION_NOT_DRAFT", "BUSINESS");
@@ -224,7 +228,7 @@ export async function publishWorkflowVersion(organizationId: string, definitionI
     const published = await tx.enterpriseWorkflowVersion.update({ where: { id: versionId }, data: { status: "PUBLISHED", publishedAt: new Date(), publishedByUserId: actorUserId } });
     await tx.enterpriseWorkflowDefinition.update({ where: { id: definitionId }, data: { status: "ACTIVE", currentVersionId: versionId, updatedByUserId: actorUserId } });
     return published;
-  });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
 export async function retireWorkflowVersion(organizationId: string, definitionId: string, versionId: string, actorUserId: string) {
