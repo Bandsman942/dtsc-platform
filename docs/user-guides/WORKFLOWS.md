@@ -86,3 +86,8 @@ Dans une version **DRAFT**, le studio permet de visualiser les étapes et leurs 
 Les modifications locales marquent le brouillon comme non enregistré. Les boutons **Annuler/Rétablir** gardent au plus vingt états de travail ; ils n’annulent pas une publication déjà confirmée. Cliquez sur **Enregistrer** : les coordonnées, étapes, transitions et propriétés sont conservées par la même API de version, sans duplication du moteur. La revue de readiness puis la validation de publication demeurent obligatoires.
 
 **Important :** le studio #818 se trouve encore en PR de développement et n'est pas annoncé déployé. Les tests navigateur, les situations de modifications simultanées et l'E2E propriétaire doivent être concluants avant sa disponibilité.
+
+
+### Plusieurs collaborateurs sur le même brouillon
+
+Si une autre personne a enregistré le workflow après son ouverture, l'enregistrement est refusé pour éviter de supprimer les changements de cette personne. L'interface conserve les modifications locales et affiche un message demandant de **recharger le dernier brouillon**, puis de réappliquer les différences après comparaison. Ne confondez pas ce conflit avec un refus de publication ou un problème de permissions.
