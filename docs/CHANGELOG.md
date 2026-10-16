@@ -1,3 +1,9 @@
+## 2026-10-16 — WF-06S2E1 : inventaire verrouillé mais inerte des occurrences (#853, parent #852 / #843)
+
+- Nouveau probe SQL multi-tenant strictement **SELECT FOR UPDATE SKIP LOCKED**, borné à 20 occurrences dues dans une fenêtre de 24 h, sur entreprise CLIENT active. Le verrou est libéré en fin de transaction; aucune écriture.
+- Les informations retournées sont seulement l'identifiant d'occurrence et des métadonnées d'horaire, clairement **NON EXÉCUTABLES**; aucun acteur, document, paiement, source ERP ou droit d'exécution n'est exposé.
+- QA PostgreSQL de 3 tenants, 25 occurrences dues, compétition de verrous et 0 effet dans Quality/Migration. Aucun changement de migration, schéma, route, Cron, worker ni statut DB. OWNER_E2E #853 requis; #852 reste ouvert pour le dispatcher atomique réel.
+
 ## 2026-10-16 — WF-06S2D : reçus d'exécution inertes (#850, parent #843)
 
 - Migration additive des champs de claim/lease/tentative/run/outbox sur les occurrences ; relations tenant-aware vers les objets canoniques et unicité en base.
