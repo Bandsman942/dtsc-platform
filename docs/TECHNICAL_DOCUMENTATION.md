@@ -619,3 +619,8 @@ Le module `lib/enterprise/workflows/advanced-schedule.ts` propose un calcul stri
 ### WF-06B — Conditions composites / projection typée (#839, parent #819)
 
 Le module expérimental `lib/enterprise/workflows/advanced-data.ts` fournit un arbre AND/OR borné et une projection typée de variables sous **double contrôle** : champ déclaré par l'adapter et champ explicitement autorisé pour lecture par le contexte tenant/acteur/module. Les prédicats réutilisent `workflowConditionError` / `evaluateWorkflowCondition` ; toutes les branches sont validées avant court-circuit. Pas de nouvelle route, aucun trigger, aucune variable injectée dans le runtime V1 et aucune migration ; détail de sécurité : [WORKFLOW_TYPED_DATA_RFC.md](WORKFLOW_TYPED_DATA_RFC.md).
+
+
+### WF-06S1 — Ledger durable d'occurrences (inactif, #841)
+
+Deux nouveaux modèles `EnterpriseWorkflowSchedule` et `EnterpriseWorkflowScheduleOccurrence` portent des contraintes d'intégrité tenant/définition/version et l'unicité des reçus par date/heure locale, en complément de la clé SHA-256 WF-06A. Le service interne `reserveDueStagedWorkflowOccurrence` ne réserve que des horaires STAGED explicitement référencés (statut DISABLED par défaut), sans run, outbox, API ni worker actif : `FOR UPDATE SKIP LOCKED`, transaction unique d'insertion du reçu et progression CAS du curseur. Les droits, quotas, source métier et démarrage d'une exécution sont reportés à WF-06S2 ; voir [WORKFLOW_SCHEDULE_LEDGER_ADR.md](WORKFLOW_SCHEDULE_LEDGER_ADR.md).
