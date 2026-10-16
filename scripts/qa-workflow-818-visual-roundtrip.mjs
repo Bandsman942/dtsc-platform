@@ -48,4 +48,18 @@ assert.equal(invalid.configuration["visual.node.STEP_5.x"], 0);
 assert.equal(invalid.configuration["visual.node.STEP_5.y"], 20_000);
 const code = fs.readFileSync("lib/enterprise/workflows/visual-projection.ts", "utf8");
 for (const forbidden of ["prisma.", "fetch(", "eval(", "new Function", "workflowRun.create", "axios", "executeDomainAction"]) assert.ok(!code.includes(forbidden), `Canvas projection must not execute effects: ${forbidden}`);
+
+const visualUi = fs.readFileSync("components/enterprise/core-v2/workflow-visual-studio.tsx", "utf8");
+const workspace = fs.readFileSync("components/enterprise/core-v2/enterprise-workflows-workspace.tsx", "utf8");
+assert.ok(workspace.startsWith('"use client";'), "Next.js workspace must stay a client component");
+assert.ok(workspace.includes("<WorkflowVisualStudio"), "A working visual editor must be wired to the workflow screen");
+assert.ok(workspace.includes("configuration: draftConfiguration"), "Visual coordinates must be persisted through the canonical PATCH");
+assert.ok(workspace.includes("setDraftConfiguration(draft?.configurationJson || {})"), "Existing saved coordinates must rehydrate");
+assert.ok(workspace.includes("undoHistory") && workspace.includes("redoHistory"), "Bounded undo/redo must be available");
+for (const token of ["onPointerDown", "onPointerMove", "onPointerUp", "setPointerCapture", "onKeyDown", "ArrowRight", "onConnect", "onRename", "onDeleteStep", "onUndo", "onRedo", "Zoom", "lg:block", "Accessible step list"]) {
+  assert.ok(visualUi.includes(token), `Visual editor is missing the required interaction/accessibility: ${token}`);
+}
+assert.ok(visualUi.includes('disabled={!editable') && visualUi.includes("aria-pressed"), "Published version must be read-only and nodes selectable");
+assert.ok(workspace.includes("readinessForDraft") && workspace.includes("<WorkflowPublishReview"), "Visual editing must still use canonical readiness and human publication review");
+
 console.log("PASS WF-05: ten-node canonical graph projection, branches and all conditions preserved, versioned coordinates and no effects.");
