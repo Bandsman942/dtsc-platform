@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseWorkflowAccess } from "@/lib/enterprise/workflows/access";
@@ -16,10 +17,10 @@ export async function PATCH(req: Request, { params }: Params) {
   const session = await getSession(); if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const limited = await rateLimit(getRateLimitKey(req, `enterprise-workflow-version-edit:${session.userId}`), 100, 60 * 60 * 1000); if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   const { organizationId, id, versionId } = await params; const access = await getEnterpriseWorkflowAccess(session, organizationId); if (!access?.canEditDraft) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const parsed = workflowVersionSchema.safeParse(await req.json().catch(() => null)); if (!parsed.success) return NextResponse.json({ error: "INVALID_WORKFLOW_VERSION_PAYLOAD", message: parsed.error.issues[0]?.message || "Version invalide." }, { status: 400 });
+  const parsed = workflowVersionSchema.extend({ editToken: z.string().regex(/^[a-f0-9]{64}$/) }).safeParse(await req.json().catch(() => null)); if (!parsed.success) return NextResponse.json({ error: "INVALID_WORKFLOW_VERSION_PAYLOAD", message: parsed.error.issues[0]?.message || "Version invalide." }, { status: 400 });
   try {
     await requireWorkflowDefinitionSourceAccess({ userId: session.userId, organizationId, definitionId: id });
-    const result = await saveWorkflowVersion(organizationId, id, versionId, session.userId, parsed.data);
+    const result = await saveWorkflowVersion(organizationId, id, versionId, session.userId, parsed.data, parsed.data.editToken);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_WORKFLOW_UPDATED", entity: "EnterpriseWorkflowVersion", entityId: versionId, request: req, metadata: { organizationId, definitionId: id, readiness: result.readiness.ready } });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "workflow-version", definitionId: id, versionId } });
     return NextResponse.json({ ok: true, ...result });
