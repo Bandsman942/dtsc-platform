@@ -66,6 +66,7 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, members, 
   const [draftSteps, setDraftSteps] = useState<Step[]>([]);
   const [draftTransitions, setDraftTransitions] = useState<Transition[]>([]);
   const [draftConfiguration, setDraftConfiguration] = useState<Record<string, string | number | boolean | null>>({});
+  const [draftEditToken, setDraftEditToken] = useState("");
   type DraftSnapshot = { steps: Step[]; transitions: Transition[]; configuration: Record<string, string | number | boolean | null> };
   const [undoHistory, setUndoHistory] = useState<DraftSnapshot[]>([]);
   const [redoHistory, setRedoHistory] = useState<DraftSnapshot[]>([]);
@@ -118,6 +119,7 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, members, 
     setDraftSteps((draft?.steps || []).map((step: Step) => ({ ...step, configuration: step.configurationJson || {} })));
     setDraftTransitions((draft?.transitions || []).map((transition: Transition) => ({ ...transition, fromStepCode: transition.fromStep?.code, toStepCode: transition.toStep?.code, condition: transition.conditionJson || undefined })));
     setDraftConfiguration(draft?.configurationJson || {});
+    setDraftEditToken(draft ? (body.editTokens?.[draft.id] || "") : "");
     setUndoHistory([]);
     setRedoHistory([]);
     setDraftDirty(false);
@@ -274,6 +276,7 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, members, 
 
   async function saveVersion() {
     if (!selected || !currentDraft) return;
+    if (!draftEditToken) { toastError(en ? "Reload the draft before saving to avoid overwriting concurrent changes." : "Rechargez le brouillon avant de sauvegarder pour éviter d’écraser des modifications concurrentes."); return; }
     const response = await fetch(`/api/enterprise/${organizationId}/workflows/${selected.id}/versions/${currentDraft.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -281,6 +284,7 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, members, 
         steps: draftSteps.map(({ configurationJson, ...step }) => ({ ...step, configuration: step.configuration || configurationJson || {} })),
         transitions: draftTransitions.map((transition) => ({ fromStepCode: transition.fromStepCode, toStepCode: transition.toStepCode, outcome: transition.outcome || "DEFAULT", priority: transition.priority, ...(transition.condition ? { condition: transition.condition } : {}) })),
         configuration: draftConfiguration,
+        editToken: draftEditToken,
       }),
     });
     const body = await response.json().catch(() => null);
