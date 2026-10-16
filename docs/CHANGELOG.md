@@ -1,3 +1,11 @@
+## 2026-10-16 — WF-03 : publication immuable et démarrage manuel (#816)
+
+- Blocage serveur des modifications de déclencheurs, type métier et autorisation de lancement après première publication ; transaction de publication avec revue et contrôle de concurrence SERIALIZABLE.
+- Correction du catalogue Workflows d’Activités : statut de définition ACTIVE avec version PUBLISHED, sans reprise legacy.
+- Sélection d’objets ERP tenant/actor-scoped pour sept familles certifiées et lancement manuel depuis le module Workflows ; liens profonds runId.
+- Exécutions désormais paginées et filtrables côté interface ; nouvelle QA de régression WF-03.
+- Aucun changement Prisma et aucun secret ; validation OWNER_E2E #816 encore requise avant livraison.
+
 ## 2026-10-15 — WF-02 : autorisations et visibilité des workflows (#815)
 
 - verrouille les routes Workflows derrière le module et l'entitlement canonique, sans bypass MANAGER/DTSC ;

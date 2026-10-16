@@ -66,3 +66,14 @@ Les dialogues de création, étape, branche, revue de publication, timeline et a
 ## Dépannage
 
 Si **Revoir et publier** est désactivé, enregistrez d’abord les changements locaux et corrigez les blocages de readiness. Si la revue devient obsolète, fermez-la, rechargez le brouillon et ouvrez une nouvelle revue avant publication.
+
+
+## Lancer un workflow manuellement (WF-03)
+
+Après publication, un collaborateur disposant de la permission de démarrer un workflow trouve l’action **Lancer** dans la liste et la fiche de définition. Cette action n’est disponible que si le workflow est actif et autorise le démarrage manuel. Choisir un **objet métier** proposé dans la liste limitée aux objets accessibles, puis confirmer **Démarrer le workflow**. Aucun identifiant technique ne doit être saisi. Une action réussie ouvre directement la timeline et conserve un lien avec `?runId=...`. Une demande non autorisée ne démarre rien.
+
+Pour l’instant, le sélecteur contrôlé couvre les tâches, demandes, réunions, achats, budgets, dépenses et rapports. Pour un autre type ERP, le lancement manuel par l’interface est explicitement indisponible jusqu’à la certification de son sélecteur. Les données sont filtrées par entreprise active, module source/abonnement et propriété ou droits de supervision.
+
+Dans **Exécutions**, les résultats sont paginés (20 par page) et filtrables par statut. Précédent/Suivant n’effacent pas les résultats des pages suivantes. Le compteur affiché correspond aux seules exécutions visibles selon vos permissions.
+
+Le **déclencheur, type d’objet, événement métier, autorisation de démarrage manuel et unicité d’une exécution active** sont figés dès la première publication. Une nouvelle version brouillon permet d’éditer le graphe et ses étapes, mais ne remplace pas silencieusement le contrat de déclenchement ; pour changer ce contrat, il faut créer une nouvelle définition de workflow et la faire revoir. Une publication concurrente ou une modification du brouillon après revue impose de recommencer la revue.

@@ -587,3 +587,10 @@ Le catalogue et la publication utilisent `getWorkflowContractReadiness`. La pré
 ## WF-02 — RBAC/entitlements du moteur de workflows (#815)
 
 Les opérations du module WORKFLOWS exigent le membership CLIENT actif, le module activé et son entitlement canonique. L’accès au module source ERP est vérifié à la route et l’acteur d’exécution est revalidé à l’exécution ; MANAGER n’est pas administrateur implicite. Les métriques de runs partagent exactement le prédicat de visibilité des listes. Voir [WORKFLOW_SECURITY_POLICY.md](WORKFLOW_SECURITY_POLICY.md) pour les routes, matrices, critères E2E, cas de révocation et rollback.
+
+
+### WF-03 — Publication transactionnelle et démarrage manuel (#816)
+
+La définition de workflow après première publication conserve son contrat de déclenchement : `updateWorkflowDefinition` refuse atomiquement les modifications des champs comportementaux hors `status=DRAFT`. Le token de revue couvre également `allowManualStart`, `singleActiveRun`, `currentVersionId` et le statut ; la publication revalide le token dans une transaction PostgreSQL `SERIALIZABLE` sur les données du graphe. La concurrence échoue explicitement sans publier un état non revu.
+
+Le catalogue Activités filtre `EnterpriseWorkflowDefinition.status=ACTIVE` et une version `PUBLISHED` ; les entrées héritées ne sont pas exécutées. Le GET `/api/enterprise/:organizationId/workflow-runs/sources?definitionId=...` propose au maximum 50 identifiants métier par type certifié, avec noms et statuts, selon tenant, permission WORKFLOWS et module ERP, sans montants ni données privées. Le POST `/workflow-runs/start` revalide l’existence et la visibilité d’un même objet pour l’acteur, même avec un ID falsifié. Les exécutions se chargent par pages de 20 et peuvent être consultées par `runId` sous contrôle du backend. Pas de changement de schéma Prisma ni de secrets.
