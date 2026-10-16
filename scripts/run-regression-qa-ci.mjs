@@ -16,6 +16,7 @@ commands.unshift("node scripts/qa-workflow-814-contracts.mjs");
 commands.unshift("node scripts/qa-workflow-815-security.mjs");
 commands.unshift("node scripts/qa-workflow-818-visual-roundtrip.mjs");
 commands.unshift("node scripts/qa-workflow-839-data.mjs");
+commands.unshift("node scripts/qa-workflow-837-occurrences.mjs");
 commands.unshift("node scripts/qa-workflow-818-concurrency.mjs");
 commands.unshift("node scripts/qa-workflow-817-observability.mjs");
 commands.unshift("node scripts/qa-workflow-816-publish-manual.mjs");

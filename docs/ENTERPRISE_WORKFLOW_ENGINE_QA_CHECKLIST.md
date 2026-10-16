@@ -256,6 +256,16 @@ Automatisation : `pnpm qa:workflow-contracts` et `pnpm qa:workflow-contracts:pos
 - [ ] Après une mutation validée, l'état dirty est affiché, undo/redo fonctionnent et la sauvegarde PATCH exige un token à jour.
 
 
+## WF-06A — contrat DST non exécutable (#837)
+
+- [ ] `pnpm qa:workflow-schedule-dst` passe pour UTC, Africa/Kinshasa, Paris et New York, dont les transitions DST 2026 (spring missing SKIP, fall FIRST).
+- [ ] Les horaires NEXT strictement après UTC, hebdomadaires et date civile locale restent déterministes et bornés ; mauvaises zones IANA, champs inconnus et cron non supporté sont refusés.
+- [ ] La clé d'occurrence change selon tenant/schedule/version et reste la même pour la même date/heure locales ; son hash ne remplace pas une contrainte UNIQUE en DB.
+- [ ] Aucune nouvelle route, déclencheur exécutable, Cron Vercel, table Prisma ou mutation de données ; V1 DAG et ses tests restent identiques.
+- [ ] Quality/Migration, type-check, lint, régression, build réussis sur le SHA final ; OWNER_E2E #837 explicite avant fusion.
+- [ ] Pour #819 parent : ne pas cocher l'E2E « automation à l'heure » avant une tranche scheduler persisté et testée sur une vraie organisation.
+
+
 ## WF-06B — Conditions composites et mapping (#839)
 
 - [ ] `pnpm qa:workflow-data-conditions` passe : AND/OR stricts, branches invalides ignorées par un court-circuit rejetées, profondeur ≤4, feuilles ≤24, noms de variable protégés.
