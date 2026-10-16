@@ -229,6 +229,10 @@ model EnterpriseWorkflowSchedule {
   dayOfWeek            Int?
   status               String                                 @default("DISABLED")
   nextRunAt            DateTime?
+  sourceEntityType     String?
+  sourceEntityId       String?
+  executionActorUserId String?
+  mandateVerifiedAt    DateTime?
   createdByUserId      String
   revision             Int                                    @default(1)
   createdAt            DateTime                               @default(now())
