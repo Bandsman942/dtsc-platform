@@ -44,6 +44,8 @@ export async function GET(req: Request, { params }: Params) {
         id: true, workflowDefinitionId: true, workflowVersionId: true,
         frequency: true, timeZone: true, hour: true, minute: true, dayOfWeek: true,
         status: true, nextRunAt: true, revision: true, createdAt: true,
+        sourceEntityType: true, sourceEntityId: true, executionActorUserId: true,
+        mandateVerifiedAt: true,
         definition: { select: { code: true, name: true, triggerEntityType: true } },
       },
     }),
