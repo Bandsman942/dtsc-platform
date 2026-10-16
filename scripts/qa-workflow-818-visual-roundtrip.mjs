@@ -62,4 +62,14 @@ for (const token of ["onPointerDown", "onPointerMove", "onPointerUp", "setPointe
 assert.ok(visualUi.includes('disabled={!editable') && visualUi.includes("aria-pressed"), "Published version must be read-only and nodes selectable");
 assert.ok(workspace.includes("readinessForDraft") && workspace.includes("<WorkflowPublishReview"), "Visual editing must still use canonical readiness and human publication review");
 
+
+assert.ok(visualUi.includes("onDuplicateStep") && workspace.includes("duplicateVisualStep"), "Node duplication must be wired");
+assert.ok(visualUi.includes("onUpdateConfiguration") && workspace.includes("workflowStepSchema.safeParse"), "Advanced properties must be validated with the canonical step schema");
+assert.ok(workspace.includes('["START", "END"].includes(original.stepType)'), "Must not clone unique START or END sentinels");
+const { workflowStepSchema } = workflowTestLoader({})("@/lib/enterprise/workflows/validators");
+const validCondition = { code: "CHECK", name: "Check status", stepType: "CONDITION", position: 1, configuration: { condition: { field: "status", operator: "EQUALS", value: "OPEN" } } };
+assert.equal(workflowStepSchema.safeParse(validCondition).success, true);
+assert.equal(workflowStepSchema.safeParse({ ...validCondition, configuration: { condition: { field: "x; DROP TABLE", operator: "EQUALS" } } }).success, false, "Arbitrary fields must be rejected");
+assert.equal(workflowStepSchema.safeParse({ code: "START", name: "Start", stepType: "START", position: 0, configuration: {} }).success, true);
+
 console.log("PASS WF-05: ten-node canonical graph projection, branches and all conditions preserved, versioned coordinates and no effects.");
