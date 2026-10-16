@@ -1,7 +1,7 @@
 import { resolveWorkflowAssignment } from "@/lib/enterprise/workflows/adapters";
 import { beginWorkflowActionAttempt, completeWorkflowActionAttempt, failWorkflowActionAttempt } from "@/lib/enterprise/workflows/action-attempts";
 import { EnterpriseWorkflowError } from "@/lib/enterprise/workflows/errors";
-import { resolveWorkflowExecutionUser } from "@/lib/enterprise/workflows/runtime-utils";
+import { resolveWorkflowExecutionUser, workflowSourceModule } from "@/lib/enterprise/workflows/runtime-utils";
 import { workflowStepSchema } from "@/lib/enterprise/workflows/validators";
 import type { WorkflowStepHandler } from "@/lib/enterprise/workflows/steps/types";
 import { prisma } from "@/lib/prisma";
@@ -21,8 +21,14 @@ export const executeCreateApprovalStep: WorkflowStepHandler = async ({ run, step
   if (!adapter.createApproval) throw new EnterpriseWorkflowError("Ce type d’objet ne prend pas en charge les validations métier dans un workflow.", 400, "WORKFLOW_APPROVAL_TARGET_UNSUPPORTED", "CONFIGURATION");
 
   const assignment = parsed.configuration.assignment;
-  const approverUserId = await resolveWorkflowAssignment({ organizationId: run.organizationId, strategy: assignment.strategy, entity, userId: assignment.userId, role: assignment.role, departmentId: assignment.departmentId, previousStepActorUserId });
   const requesterUserId = await resolveWorkflowExecutionUser({ organizationId: run.organizationId, startedByUserId: run.startedByUserId, adapter, entity, action: "submit" });
+  const approverUserId = await resolveWorkflowAssignment({
+    organizationId: run.organizationId, strategy: assignment.strategy, entity,
+    userId: assignment.userId, role: assignment.role, departmentId: assignment.departmentId,
+    previousStepActorUserId,
+    requiredApprovalModuleCode: workflowSourceModule(run.sourceEntityType),
+    excludeUserId: assignment.strategy === "SPECIFIC_ROLE" ? requesterUserId : undefined,
+  });
   if (approverUserId === requesterUserId) throw new EnterpriseWorkflowError("Le workflow ne peut pas assigner l’approbation au demandeur lui-même.", 409, "WORKFLOW_SELF_APPROVAL_BLOCKED", "BUSINESS");
 
   const existingPending = await prisma.enterpriseApproval.findFirst({ where: { organizationId: run.organizationId, targetEntityType: run.sourceEntityType, targetEntityId: run.sourceEntityId, status: "PENDING", archivedAt: null }, orderBy: { requestedAt: "desc" } });

@@ -12,6 +12,7 @@ import { EnterpriseWorkflowError } from "@/lib/enterprise/workflows/errors";
 import type { WorkflowDomainActionInput, WorkflowDomainActionResult, WorkflowEntityAdapter, WorkflowEntitySnapshot } from "@/lib/enterprise/workflows/adapters/types";
 import { FINANCE_WORKFLOW_ADAPTERS } from "@/lib/enterprise/workflows/adapters/finance";
 import { prisma } from "@/lib/prisma";
+import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 
 const COMMON_PLACEHOLDERS = ["entity.id", "entity.reference", "entity.title", "entity.status", "entity.requesterName", "entity.departmentName", "workflow.name"] as const;
 
@@ -231,6 +232,8 @@ export async function resolveWorkflowAssignment({
   role,
   departmentId,
   previousStepActorUserId,
+  requiredApprovalModuleCode,
+  excludeUserId,
 }: {
   organizationId: string;
   strategy: WorkflowAssignmentStrategy;
@@ -239,12 +242,34 @@ export async function resolveWorkflowAssignment({
   role?: string;
   departmentId?: string;
   previousStepActorUserId?: string | null;
+  requiredApprovalModuleCode?: string;
+  excludeUserId?: string | null;
 }) {
   let candidate: string | null = null;
   if (strategy === "SPECIFIC_USER") candidate = userId || null;
   else if (strategy === "SPECIFIC_ROLE") {
-    const member = await prisma.organizationMember.findFirst({ where: { organizationId, role, status: "ACTIVE", removedAt: null }, orderBy: { joinedAt: "asc" }, select: { userId: true } });
-    candidate = member?.userId || null;
+    const members = await prisma.organizationMember.findMany({
+      where: {
+        organizationId, status: "ACTIVE", removedAt: null,
+        OR: [
+          { role },
+          { positionCode: role },
+          { organizationRoleAssignments: { some: { revokedAt: null, role: { code: role, isActive: true, archivedAt: null } } } },
+        ],
+      },
+      orderBy: { joinedAt: "asc" }, select: { userId: true }, take: 250,
+    });
+    for (const member of members) {
+      if (member.userId === excludeUserId) continue;
+      if (requiredApprovalModuleCode) {
+        const decision = await resolveEnterpriseModuleAccess({
+          userId: member.userId, organizationId, moduleCode: requiredApprovalModuleCode, action: "approve",
+        });
+        if (!decision.allowed) continue;
+      }
+      candidate = member.userId;
+      break;
+    }
   } else if (strategy === "DEPARTMENT_MANAGER") {
     const targetDepartmentId = departmentId || (typeof entity.departmentId === "string" ? entity.departmentId : null);
     const department = targetDepartmentId ? await prisma.enterpriseDepartment.findFirst({ where: { id: targetDepartmentId, organizationId, isActive: true }, select: { responsibleUserId: true } }) : null;
@@ -255,6 +280,15 @@ export async function resolveWorkflowAssignment({
   if (!candidate) throw new EnterpriseWorkflowError("Aucun utilisateur actif ne correspond à la règle d’assignation.", 409, "WORKFLOW_ASSIGNEE_NOT_FOUND", "CONFIGURATION");
   const active = await prisma.organizationMember.findFirst({ where: { organizationId, userId: candidate, status: "ACTIVE", removedAt: null }, select: { userId: true } });
   if (!active) throw new EnterpriseWorkflowError("Aucun utilisateur actif ne correspond à la règle d’assignation.", 409, "WORKFLOW_ASSIGNEE_NOT_FOUND", "CONFIGURATION");
+  if (requiredApprovalModuleCode) {
+    const decision = await resolveEnterpriseModuleAccess({
+      organizationId, userId: candidate, moduleCode: requiredApprovalModuleCode, action: "approve",
+    });
+    if (!decision.allowed) throw new EnterpriseWorkflowError(
+      "Le collaborateur désigné ne possède pas le droit de valider les opérations du module concerné.",
+      403, "WORKFLOW_APPROVER_MODULE_DENIED", "SECURITY",
+    );
+  }
   return candidate;
 }
 
