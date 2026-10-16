@@ -77,3 +77,12 @@ Pour l’instant, le sélecteur contrôlé couvre les tâches, demandes, réunio
 Dans **Exécutions**, les résultats sont paginés (20 par page) et filtrables par statut. Précédent/Suivant n’effacent pas les résultats des pages suivantes. Le compteur affiché correspond aux seules exécutions visibles selon vos permissions.
 
 Le **déclencheur, type d’objet, événement métier, autorisation de démarrage manuel et unicité d’une exécution active** sont figés dès la première publication. Une nouvelle version brouillon permet d’éditer le graphe et ses étapes, mais ne remplace pas silencieusement le contrat de déclenchement ; pour changer ce contrat, il faut créer une nouvelle définition de workflow et la faire revoir. Une publication concurrente ou une modification du brouillon après revue impose de recommencer la revue.
+
+
+## Studio visuel des brouillons (WF-05 — disponible après validation #818)
+
+Dans une version **DRAFT**, le studio permet de visualiser les étapes et leurs branches. Sur ordinateur, sélectionnez un nœud pour consulter ses propriétés, déplacez-le à la souris ou à l’aide des flèches du clavier, et ajustez le zoom (50–150 %). Le panneau latéral permet de modifier le nom et la description et de supprimer une étape. Utilisez « Ajouter un nœud » pour ouvrir le formulaire structuré, puis « Relier » pour définir origine, destination et résultat (Oui, Non, Approuvé, Rejeté, etc.). Une liste accessible et les formulaires existants restent disponibles sur téléphone.
+
+Les modifications locales marquent le brouillon comme non enregistré. Les boutons **Annuler/Rétablir** gardent au plus vingt états de travail ; ils n’annulent pas une publication déjà confirmée. Cliquez sur **Enregistrer** : les coordonnées, étapes, transitions et propriétés sont conservées par la même API de version, sans duplication du moteur. La revue de readiness puis la validation de publication demeurent obligatoires.
+
+**Important :** le studio #818 se trouve encore en PR de développement et n'est pas annoncé déployé. Les tests navigateur, les situations de modifications simultanées et l'E2E propriétaire doivent être concluants avant sa disponibilité.
