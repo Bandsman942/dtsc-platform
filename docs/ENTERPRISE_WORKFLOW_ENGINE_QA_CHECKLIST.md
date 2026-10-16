@@ -222,3 +222,17 @@ Automatisation : `pnpm qa:workflow-contracts` et `pnpm qa:workflow-contracts:pos
 - [ ] `pnpm qa:workflow-observability`, suites WF-00/WF-01 PostgreSQL, type-check, lint, régression, build, Migration Gate.
 - [ ] E2E réel : run terminé/WAITING/BLOCKED/FAILED/retry/cancel + récupération lease + rôles + tenant B.
 - [ ] Dépendance #816 fusionnée avant fusion #817.
+
+
+## WF-05 — Studio visuel et round-trip (#818)
+
+- [ ] Dans une définition DRAFT autorisée, studio fonctionnel et formulaire structuré sont disponibles, aucun droit absent n'est contourné.
+- [ ] Créer un graphe 10+ nœuds ; connecter une branche TRUE/FALSE puis APPROVED/REJECTED, modifier noms et positions par souris/clavier.
+- [ ] Enregistrer, rafraîchir, rouvrir : toutes coordonnées, conditions, configurations et transitions sont conservées, sans altération de la version PUBLISHED.
+- [ ] Undo/redo (max. 20 snapshots) gère création, suppression, déplacement, connexions et retouches de libellés.
+- [ ] Lire et éditer avec clavier seul, lecteur d’écran, focus et noms accessibles ; mode clair/sombre, FR/EN.
+- [ ] Tester largeur 320/360/375/390/414/768/1024 : liste mobile fonctionnelle, aucun débordement horizontal global, zoom desktop et labels longs.
+- [ ] Contrôle de modification concurrente du même brouillon ; aucune sauvegarde ne supprime silencieusement des transitions.
+- [ ] Publication uniquement via readiness et revue humaine, aucune exécution depuis le canevas ; modules source/RBAC toujours vérifiés côté serveur.
+- [ ] `pnpm qa:workflow-visual-roundtrip`, typecheck, lint, régression et Quality/Migration Gates du HEAD actuel réussis.
+- [ ] OWNER_E2E #818 explicite requis avant la fusion.
