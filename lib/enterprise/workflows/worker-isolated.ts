@@ -15,13 +15,14 @@ import { prisma } from "@/lib/prisma";
 import { WEB_PUSH_DOMAIN_EVENT_TYPE } from "@/lib/push/constants";
 
 type ClaimedEvent = { id: string; attemptCount: number; processingStatus: string };
-type QueueSnapshotRow = { ready: bigint | number | string; processing: bigint | number | string; dead: bigint | number | string; oldestReadyAt: Date | null };
+type QueueSnapshotRow = { ready: bigint | number | string; processing: bigint | number | string; dead: bigint | number | string; staleProcessing: bigint | number | string; oldestReadyAt: Date | null };
 
 type WorkflowQueueSnapshot = {
   available: boolean;
   ready: number | null;
   processing: number | null;
   dead: number | null;
+  staleProcessing: number | null;
   oldestReadyAgeMs: number | null;
   sampledAt: string;
 };
@@ -68,6 +69,17 @@ async function getWorkflowQueueSnapshot(): Promise<WorkflowQueueSnapshot> {
             AND "eventType" <> ${FINANCE_REPORT_GENERATION_EVENT_TYPE}
             AND "processingStatus" = 'DEAD'
         ) AS "dead",
+        COUNT(*) FILTER (
+          WHERE "eventType" <> ${WEB_PUSH_DOMAIN_EVENT_TYPE}
+            AND "eventType" <> ${ADMIN_BROADCAST_EMAIL_DELIVERY_EVENT_TYPE}
+            AND "eventType" <> ${KNOWLEDGE_INDEX_EVENT_TYPE}
+            AND "eventType" <> ${BANK_STATEMENT_IMPORT_EVENT_TYPE}
+            AND "eventType" <> ${AUDIT_EXPORT_EVENT_TYPE}
+            AND "eventType" <> ${FINANCE_REPORT_GENERATION_EVENT_TYPE}
+            AND "processingStatus" = 'PROCESSING'
+            AND "lockedAt" IS NOT NULL
+            AND "lockedAt" < ${leaseBefore}
+        ) AS "staleProcessing",
         MIN("availableAt") FILTER (
           WHERE "eventType" <> ${WEB_PUSH_DOMAIN_EVENT_TYPE}
             AND "eventType" <> ${ADMIN_BROADCAST_EMAIL_DELIVERY_EVENT_TYPE}
@@ -80,9 +92,9 @@ async function getWorkflowQueueSnapshot(): Promise<WorkflowQueueSnapshot> {
       FROM "EnterpriseDomainEvent"
     `);
     const oldestReadyAt = row?.oldestReadyAt ? new Date(row.oldestReadyAt) : null;
-    return { available: true, ready: numericCount(row?.ready), processing: numericCount(row?.processing), dead: numericCount(row?.dead), oldestReadyAgeMs: oldestReadyAt ? Math.max(0, sampledAt.getTime() - oldestReadyAt.getTime()) : null, sampledAt: sampledAt.toISOString() };
+    return { available: true, ready: numericCount(row?.ready), processing: numericCount(row?.processing), dead: numericCount(row?.dead), staleProcessing: numericCount(row?.staleProcessing), oldestReadyAgeMs: oldestReadyAt ? Math.max(0, sampledAt.getTime() - oldestReadyAt.getTime()) : null, sampledAt: sampledAt.toISOString() };
   } catch {
-    return { available: false, ready: null, processing: null, dead: null, oldestReadyAgeMs: null, sampledAt: sampledAt.toISOString() };
+    return { available: false, ready: null, processing: null, dead: null, staleProcessing: null, oldestReadyAgeMs: null, sampledAt: sampledAt.toISOString() };
   }
 }
 

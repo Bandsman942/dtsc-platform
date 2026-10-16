@@ -355,6 +355,7 @@
     "qa:workflow-contracts": "node scripts/qa-workflow-814-contracts.mjs",
     "qa:workflow-contracts:postgres": "node scripts/qa-workflow-814-postgres.mjs",
     "qa:workflow-publish-manual": "node scripts/qa-workflow-816-publish-manual.mjs",
+    "qa:workflow-observability": "node scripts/qa-workflow-817-observability.mjs",
     "qa:workflow-security": "node scripts/qa-workflow-815-security.mjs",
     "qa:workflow-recovery": "node scripts/qa-workflow-813-recovery.mjs",
     "qa:workflow-recovery:postgres": "node scripts/qa-workflow-813-postgres.mjs"
