@@ -22,6 +22,7 @@ type QueueSnapshotRow = {
   ready: bigint | number | string;
   processing: bigint | number | string;
   dead: bigint | number | string;
+  staleProcessing: bigint | number | string;
   oldestReadyAt: Date | null;
 };
 
@@ -30,6 +31,7 @@ export type WorkflowQueueSnapshot = {
   ready: number | null;
   processing: number | null;
   dead: number | null;
+  staleProcessing: number | null;
   oldestReadyAgeMs: number | null;
   sampledAt: string;
 };
@@ -76,6 +78,17 @@ export async function getWorkflowQueueSnapshot(): Promise<WorkflowQueueSnapshot>
             AND "eventType" <> ${FINANCE_REPORT_GENERATION_EVENT_TYPE}
             AND "processingStatus" = 'DEAD'
         ) AS "dead",
+        COUNT(*) FILTER (
+          WHERE "eventType" <> ${WEB_PUSH_DOMAIN_EVENT_TYPE}
+            AND "eventType" <> ${ADMIN_BROADCAST_EMAIL_DELIVERY_EVENT_TYPE}
+            AND "eventType" <> ${KNOWLEDGE_INDEX_EVENT_TYPE}
+            AND "eventType" <> ${BANK_STATEMENT_IMPORT_EVENT_TYPE}
+            AND "eventType" <> ${AUDIT_EXPORT_EVENT_TYPE}
+            AND "eventType" <> ${FINANCE_REPORT_GENERATION_EVENT_TYPE}
+            AND "processingStatus" = 'PROCESSING'
+            AND "lockedAt" IS NOT NULL
+            AND "lockedAt" < ${leaseBefore}
+        ) AS "staleProcessing",
         MIN("availableAt") FILTER (
           WHERE "eventType" <> ${WEB_PUSH_DOMAIN_EVENT_TYPE}
             AND "eventType" <> ${ADMIN_BROADCAST_EMAIL_DELIVERY_EVENT_TYPE}
@@ -92,7 +105,7 @@ export async function getWorkflowQueueSnapshot(): Promise<WorkflowQueueSnapshot>
       available: true,
       ready: numericCount(row?.ready),
       processing: numericCount(row?.processing),
-      dead: numericCount(row?.dead),
+      dead: numericCount(row?.dead), staleProcessing: numericCount(row?.staleProcessing),
       oldestReadyAgeMs: oldestReadyAt ? Math.max(0, sampledAt.getTime() - oldestReadyAt.getTime()) : null,
       sampledAt: sampledAt.toISOString(),
     };
@@ -101,7 +114,7 @@ export async function getWorkflowQueueSnapshot(): Promise<WorkflowQueueSnapshot>
       available: false,
       ready: null,
       processing: null,
-      dead: null,
+      dead: null, staleProcessing: null,
       oldestReadyAgeMs: null,
       sampledAt: sampledAt.toISOString(),
     };
