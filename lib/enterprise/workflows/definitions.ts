@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { getWorkflowContractReadiness, getWorkflowTemplateCompatibility } from "@/lib/enterprise/workflows/capabilities";
 import { workflowReadinessMessage } from "@/lib/enterprise/workflows/readiness-messages";
@@ -127,12 +128,48 @@ function json(value: unknown): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue;
 }
 
-export async function saveWorkflowVersion(organizationId: string, definitionId: string, versionId: string, actorUserId: string, raw: unknown) {
+/**
+ * A token for the exact persisted draft snapshot, without a second source of truth.
+ * Used by the studio for optimistic concurrency; deliberately excludes row IDs
+ * (which are recreated when a draft is saved) and sorting accidents.
+ */
+export function workflowVersionEditToken(version: {
+  configurationJson?: unknown;
+  steps: Array<{ code: string; name: string; description?: string | null; stepType: string; position: number; configurationJson: unknown }>;
+  transitions: Array<{ fromStep: { code: string }; toStep: { code: string }; outcome?: string | null; priority: number; conditionJson?: unknown }>;
+}): string {
+  const steps = version.steps.map(step => ({
+    code: step.code, name: step.name, description: step.description ?? null,
+    stepType: step.stepType, position: step.position, configuration: step.configurationJson,
+  })).sort((a, b) => a.code.localeCompare(b.code));
+  const transitions = version.transitions.map(edge => ({
+    from: edge.fromStep.code, to: edge.toStep.code, outcome: edge.outcome ?? null,
+    priority: edge.priority, condition: edge.conditionJson ?? null,
+  })).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+  return createHash("sha256").update(JSON.stringify({ configuration: version.configurationJson ?? null, steps, transitions })).digest("hex");
+}
+
+export async function saveWorkflowVersion(organizationId: string, definitionId: string, versionId: string, actorUserId: string, raw: unknown, expectedEditToken?: string) {
   const input = workflowVersionSchema.parse(raw);
   await prisma.$transaction(async (tx) => {
-    const version = await tx.enterpriseWorkflowVersion.findFirst({ where: { id: versionId, organizationId, definitionId }, select: { id: true, status: true } });
+    // Serialize writers on the canonical version row BEFORE reading its graph.
+    // Also serializes with publisher transactions updating this same row.
+    await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "EnterpriseWorkflowVersion"
+      WHERE "id" = ${versionId} AND "organizationId" = ${organizationId}
+      AND "definitionId" = ${definitionId} FOR UPDATE`);
+    const version = await tx.enterpriseWorkflowVersion.findFirst({
+      where: { id: versionId, organizationId, definitionId },
+      include: {
+        steps: true,
+        transitions: { include: { fromStep: { select: { code: true } }, toStep: { select: { code: true } } } },
+      },
+    });
     if (!version) throw new EnterpriseWorkflowError("Version de workflow introuvable.", 404, "WORKFLOW_VERSION_NOT_FOUND", "BUSINESS");
     if (version.status !== "DRAFT") throw new EnterpriseWorkflowError("Une version publiée ou retirée est immuable.", 409, "PUBLISHED_WORKFLOW_IMMUTABLE", "BUSINESS");
+    if (expectedEditToken && workflowVersionEditToken(version) !== expectedEditToken) throw new EnterpriseWorkflowError(
+      "Ce brouillon a été modifié entre-temps. Rechargez la dernière version avant de réenregistrer.",
+      409, "WORKFLOW_DRAFT_CONFLICT", "CONFIGURATION",
+    );
     await tx.enterpriseWorkflowTransition.deleteMany({ where: { organizationId, workflowVersionId: versionId } });
     await tx.enterpriseWorkflowStep.deleteMany({ where: { organizationId, workflowVersionId: versionId } });
     const createdSteps = await Promise.all(input.steps.map((step) => tx.enterpriseWorkflowStep.create({ data: { organizationId, workflowVersionId: versionId, code: step.code, name: step.name, description: step.description || null, stepType: step.stepType, position: step.position, configurationJson: json(step.configuration) } })));
