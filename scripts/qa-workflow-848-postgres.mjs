@@ -223,13 +223,32 @@ try {
   assert.equal((await preflight({ ...payload, asOf: new Date("2026-11-01T05:31:00Z") })).kind,
     "INERT_READINESS_ONLY", "One bounded catch-up remains a passive assessment");
 
+  // At EXACTLY 24h elapsed, two DAILY occurrences can be due. The policy
+  // must enforce one local occurrence, not only a millisecond-age bound.
+  const repeatedDaily = await prisma.enterpriseWorkflowSchedule.create({
+    data: {
+      organizationId: org, workflowDefinitionId: own.definition.id,
+      workflowVersionId: own.version.id, createdByUserId: actor, status: "DISABLED",
+      frequency: "DAILY", timeZone: "Africa/Kinshasa", hour: 9, minute: 0,
+      nextRunAt: new Date("2026-10-15T08:00:00Z"),
+      sourceEntityType: "EnterpriseTask", sourceEntityId: task.id,
+      executionActorUserId: actor, mandateVerifiedAt: asOf,
+    },
+  });
+  schedules.push(repeatedDaily.id);
+  const oneDue = { organizationId: org, scheduleId: repeatedDaily.id,
+    asOf: new Date("2026-10-16T07:59:00Z") };
+  assert.equal((await preflight(oneDue)).kind, "INERT_READINESS_ONLY");
+  await rejects({ ...oneDue, asOf: new Date("2026-10-16T08:00:00Z") },
+    "WORKFLOW_PREFLIGHT_MULTIPLE_MISSED");
+
   const unattested = await makeSchedule(own.definition, own.version, {
     sourceEntityType: null, sourceEntityId: null, executionActorUserId: null, mandateVerifiedAt: null,
   });
   await rejects({ ...payload, scheduleId: unattested.id }, "WORKFLOW_PREFLIGHT_MANDATE_MISSING");
 
   // Create more than 10 tenant-owned schedules on the same definition.
-  const bulkIds = Array.from({ length: limits.maxSchedulesPerDefinition - 2 }, () => randomUUID());
+  const bulkIds = Array.from({ length: limits.maxSchedulesPerDefinition - 3 }, () => randomUUID());
   await prisma.enterpriseWorkflowSchedule.createMany({
     data: bulkIds.map((id) => ({
       id, organizationId: org, workflowDefinitionId: own.definition.id, workflowVersionId: own.version.id,
