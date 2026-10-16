@@ -1,3 +1,9 @@
+## 2026-10-16 — WF-06A : contrat horaire déterministe non activé (#837 / #819)
+
+- Tranche pure : planificateur DAILY/WEEKLY à fuseau IANA, fenêtres bornées, clé tenant/version/date locale, politiques DST SKIP/FIRST explicites et testées.
+- RFC de la suite : scheduler/outbox/UNIQUE et variables, branches parallèles, loops, sous-workflows, quotas et compatibilité V1.
+- Ne crée aucune table, aucun Cron, aucun déclencheur et aucune automation client active. OWNER_E2E et Quality/Migration Gates exigés avant fusion.
+
 ## 2026-10-16 — WF-05 : studio visuel interactif en PR DRAFT (#818)
 
 - Ajout d'une projection pure graphe canonique ↔ coordonnées visuelles versionnées, sans moteur parallèle, migration ou effets métier.
