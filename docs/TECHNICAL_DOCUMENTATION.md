@@ -609,3 +609,8 @@ La route sécurisée des exécutions Workflows réutilise son prédicat tenant +
 #### WF-05 — Conflits sur la sauvegarde du studio
 
 La route PATCH de version attend `editToken` (hash SHA-256 du graphe serveur) et `saveWorkflowVersion` compare le snapshot canonique sous verrou `FOR UPDATE` de `EnterpriseWorkflowVersion` avant toute suppression/recréation d'étapes. Le service conserve l'appel interne sans token pour les templates/fixtures, alors que le PATCH public refuse l'absence de token. Un éditeur périmé reçoit HTTP 409 `WORKFLOW_DRAFT_CONFLICT`; le brouillon local n'est pas écrasé. Cette solution n'ajoute ni seconde table de révision ni migration. Tests : `qa-workflow-818-concurrency.mjs` et `qa-workflow-818-visual-roundtrip.mjs`.
+
+
+### WF-06B — Conditions composites / projection typée (#839, parent #819)
+
+Le module expérimental `lib/enterprise/workflows/advanced-data.ts` fournit un arbre AND/OR borné et une projection typée de variables sous **double contrôle** : champ déclaré par l'adapter et champ explicitement autorisé pour lecture par le contexte tenant/acteur/module. Les prédicats réutilisent `workflowConditionError` / `evaluateWorkflowCondition` ; toutes les branches sont validées avant court-circuit. Pas de nouvelle route, aucun trigger, aucune variable injectée dans le runtime V1 et aucune migration ; détail de sécurité : [WORKFLOW_TYPED_DATA_RFC.md](WORKFLOW_TYPED_DATA_RFC.md).
