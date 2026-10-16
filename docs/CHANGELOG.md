@@ -1,3 +1,9 @@
+## 2026-10-16 — WF-06S2A : préparation serveur des horaires désactivés (#844, parent #843 / #819)
+
+- Création et lecture paginée d'horaires `DISABLED` depuis une API entreprise vérifiant session, membership, permission WORKFLOWS, entitlement/source ERP, same-origin et audit ; aucun statut d'activation client.
+- Le service conserve la définition ACTIVE et la version PUBLISHED courante sous contrôle tenant, enregistre le prochain curseur selon DST SKIP/FIRST et ne produit **aucun run, événement, reçu ou effet ERP**.
+- QA PostgreSQL réelle pour source/version/tenant/membership/DST et refus ENABLED, ajoutée à Quality/Migration ; activation réelle, acteur/source et outbox restent dans #843. OWNER_E2E #844 et CI avant fusion.
+
 ## 2026-10-16 — WF-06S1 : ledger des horaires inactif par défaut (#841, parent #819)
 
 - Schéma Prisma/PostgreSQL additif pour horaires et occurrences tenant-scoped ; FK composites définition/version et index uniques par date/heure locale et clé d'occurrence.

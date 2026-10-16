@@ -95,6 +95,8 @@ jobs:
         run: node scripts/qa-workflow-813-postgres.mjs
       - name: WF-06S1 durable schedule ledger PostgreSQL integration
         run: node scripts/qa-workflow-841-postgres.mjs
+      - name: WF-06S2A disabled schedule authoring PostgreSQL integration
+        run: node scripts/qa-workflow-844-postgres.mjs
       - name: Type check
         run: pnpm type-check
         env:
@@ -191,6 +193,8 @@ jobs:
         run: node scripts/qa-workflow-813-postgres.mjs
       - name: WF-06S1 durable ledger on clean PostgreSQL migrations
         run: node scripts/qa-workflow-841-postgres.mjs
+      - name: WF-06S2A disabled authoring on clean PostgreSQL migrations
+        run: node scripts/qa-workflow-844-postgres.mjs
       - name: Run Retail Telco Mobile Money migration contract
         run: node scripts/qa-retail-telco-mobile-money.mjs
       - name: Run sector onboarding commercial readiness on clean database
