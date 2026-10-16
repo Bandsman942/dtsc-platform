@@ -1,3 +1,11 @@
+## 2026-10-16 — WF-06B : conditions AND/OR et mapping typé non activés (#839 / #819)
+
+- Schéma récursif strict (profondeur 4, 24 feuilles, 31 nœuds), prévalidation intégrale des branches et évaluation via adapter conditionnel canonique.
+- Mapping de variables bornées à 16 champs / 4 Ko, chaque source exige l'allow-list métier et une permission de projection séparée. Valeurs scalaires, nombres exacts sous forme de chaîne, aucune entrée arbitraire.
+- Rejet des sources cross-tenant avant lecture et borne pré-parsing d'arbres récursifs (même profondeur extrême), pour éviter une saturation de pile.
+- QA ciblée intégrée à la régression ; RFC sécurité et rollback documentés. **Pas d'activation dans le moteur, aucune migration, OWNER_E2E #839 requis avant merge**.
+
+
 ## 2026-10-16 — WF-06A : contrat horaire déterministe non activé (#837 / #819)
 
 - Tranche pure : planificateur DAILY/WEEKLY à fuseau IANA, fenêtres bornées, clé tenant/version/date locale, politiques DST SKIP/FIRST explicites et testées.

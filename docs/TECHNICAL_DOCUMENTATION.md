@@ -614,3 +614,8 @@ La route PATCH de version attend `editToken` (hash SHA-256 du graphe serveur) et
 ### WF-06A — Planification horaire non activée (#837, parent #819)
 
 Le module `lib/enterprise/workflows/advanced-schedule.ts` propose un calcul strict des occurrences DAILY/WEEKLY en fuseau IANA et des clés SHA-256 tenant/schedule/version/date locale. Politique DST : saut de date quand heure inexistante, premier instant uniquement lors de l'heure répétée, fenêtre de 35 jours. Aucune route, table, worker ni capacité d'exécution est activée dans cette tranche. La garantie transactionnelle d'unicité des occurrences est un prérequis explicite avant activation ; voir [WORKFLOW_ADVANCED_RUNTIME_RFC.md](WORKFLOW_ADVANCED_RUNTIME_RFC.md).
+
+
+### WF-06B — Conditions composites / projection typée (#839, parent #819)
+
+Le module expérimental `lib/enterprise/workflows/advanced-data.ts` fournit un arbre AND/OR borné et une projection typée de variables sous **double contrôle** : champ déclaré par l'adapter et champ explicitement autorisé pour lecture par le contexte tenant/acteur/module. Les prédicats réutilisent `workflowConditionError` / `evaluateWorkflowCondition` ; toutes les branches sont validées avant court-circuit. Pas de nouvelle route, aucun trigger, aucune variable injectée dans le runtime V1 et aucune migration ; détail de sécurité : [WORKFLOW_TYPED_DATA_RFC.md](WORKFLOW_TYPED_DATA_RFC.md).
