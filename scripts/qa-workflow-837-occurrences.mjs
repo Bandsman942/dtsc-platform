@@ -13,6 +13,9 @@ assert.equal(iso(next(daily("UTC", 9, 15), "2026-10-16T09:14:59Z")), "2026-10-16
 assert.equal(iso(next(daily("UTC", 9, 15), "2026-10-16T09:15:00Z")), "2026-10-17T09:15:00.000Z", "strictly exclusive after instant");
 assert.equal(iso(next(daily("Africa/Kinshasa", 9, 0), "2026-10-16T07:59:00Z")), "2026-10-16T08:00:00.000Z");
 assert.equal(iso(next(weekly("UTC", 8, 30, 1), "2026-10-16T00:00:00Z")), "2026-10-19T08:30:00.000Z");
+assert.equal(iso(next(daily("Asia/Kathmandu", 9, 0), "2026-10-16T00:00:00Z")), "2026-10-16T03:15:00.000Z", "45-minute IANA offset must be respected");
+assert.equal(iso(next(weekly("America/New_York", 2, 30, 0), "2026-03-08T00:00:00Z")), "2026-03-15T06:30:00.000Z", "Missing weekly DST hour must skip only the missing week");
+
 assert.equal(iso(next(weekly("UTC", 8, 30, 1), "2026-10-19T08:30:00Z")), "2026-10-26T08:30:00.000Z");
 
 // New York 2026 spring-forward on March 8 skips 02:00–02:59 LOCAL.
