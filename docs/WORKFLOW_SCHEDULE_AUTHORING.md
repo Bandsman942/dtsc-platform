@@ -24,7 +24,7 @@ Aucune sélection silencieuse d'utilisateur « système » ni reprise d'une auto
 - fuseaux IANA, règle DST FALL FIRST et prochaine occurrence ;
 - séparation tenant/définition/version, version retirée et membership révoqué ;
 - persistance DISABLED sans événement, receipt ou workflow run ;
-- contrôles statiques des barrières API (les tests navigateur et autorisations différenciées restent à confirmer dans OWNER_E2E).
+- contrôles statiques des barrières API (les handlers GET/POST sont aussi exercés sur la vraie DB sous frontières de session, module source et rate limit simulées ; le navigateur authentifié et la politique d'autorisation de production restent à confirmer dans OWNER_E2E).
 
 La CI est l'autorité sur Prisma, TypeScript, lint, QA régression, build et Migration. Toute validation non encore vérifiée reste `NOT_EXECUTED`.
 
