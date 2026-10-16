@@ -18,6 +18,7 @@ model EnterpriseWorkflowDefinition {
   archivedAt        DateTime?
   versions          EnterpriseWorkflowVersion[]
   runs              EnterpriseWorkflowRun[]
+  schedules         EnterpriseWorkflowSchedule[]
 
   @@unique([organizationId, code])
   @@unique([organizationId, id])
@@ -41,6 +42,7 @@ model EnterpriseWorkflowVersion {
   steps             EnterpriseWorkflowStep[]
   transitions       EnterpriseWorkflowTransition[]
   runs              EnterpriseWorkflowRun[]
+  schedules         EnterpriseWorkflowSchedule[]
 
   @@unique([organizationId, id])
   @@unique([definitionId, versionNumber])
@@ -207,6 +209,61 @@ model EnterpriseWorkflowActionAttempt {
   @@unique([organizationId, id])
   @@index([stepRunId, status])
   @@index([organizationId, status, updatedAt])
+}
+
+
+/**
+ * WF-06S1 inert durable scheduling registry. This is NOT an executable trigger.
+ * No API/worker writes schedule rows until a separate reviewed activation.
+ */
+model EnterpriseWorkflowSchedule {
+  id                   String                                 @id @default(cuid())
+  organizationId       String
+  workflowDefinitionId String
+  workflowVersionId    String
+  frequency            String
+  timeZone             String
+  hour                 Int
+  minute               Int
+  dayOfWeek            Int?
+  status               String                                 @default("DISABLED")
+  nextRunAt            DateTime?
+  createdByUserId      String
+  revision             Int                                    @default(1)
+  createdAt            DateTime                               @default(now())
+  updatedAt            DateTime                               @updatedAt
+  definition           EnterpriseWorkflowDefinition           @relation(fields: [organizationId, workflowDefinitionId], references: [organizationId, id], onDelete: Restrict)
+  version              EnterpriseWorkflowVersion              @relation(fields: [organizationId, workflowVersionId], references: [organizationId, id], onDelete: Restrict)
+  occurrences          EnterpriseWorkflowScheduleOccurrence[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, id, workflowVersionId])
+  @@index([organizationId, status, nextRunAt])
+  @@index([organizationId, workflowDefinitionId, status])
+}
+
+/**
+ * Unique immutable local wall-clock reservation. No customer payload, source
+ * entity, actor credentials or domain effect is stored on this record.
+ */
+model EnterpriseWorkflowScheduleOccurrence {
+  id                String                     @id @default(cuid())
+  organizationId    String
+  scheduleId        String
+  workflowVersionId String
+  localDate         String
+  localTime         String
+  timeZone          String
+  scheduledAt       DateTime
+  occurrenceKey     String                     @unique
+  status            String                     @default("RESERVED")
+  createdAt         DateTime                   @default(now())
+  schedule          EnterpriseWorkflowSchedule @relation(fields: [organizationId, scheduleId, workflowVersionId], references: [organizationId, id, workflowVersionId], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, scheduleId, workflowVersionId, localDate, localTime])
+  @@index([organizationId, status, scheduledAt])
+  @@index([scheduleId, scheduledAt])
 }
 
 model EnterpriseDomainEvent {
