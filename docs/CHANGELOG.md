@@ -1,3 +1,9 @@
+## 2026-10-16 — WF-05 : fondation de projection visuelle (SPIKE, #818)
+
+- Ajout d'une projection pure graphe canonique ↔ coordonnées visuelles versionnées, sans moteur parallèle, migration ou effets métier.
+- QA sur 10 nœuds et métadonnées conservant conditions, branches, ordre et configs ; ADR sur le choix futur de canvas et l'accessibilité.
+- Aucune UI de création visuelle n'est activée. Dépend de #816/#817 puis certification navigateur et OWNER_E2E #818.
+
 ## 2026-10-15 — WF-02 : autorisations et visibilité des workflows (#815)
 
 - verrouille les routes Workflows derrière le module et l'entitlement canonique, sans bypass MANAGER/DTSC ;
