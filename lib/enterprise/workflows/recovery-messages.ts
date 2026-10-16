@@ -40,3 +40,33 @@ export function getWorkflowRecoveryMessage(code: string | null | undefined, loca
   const copy = locale === "en" ? messages.en : messages.fr;
   return key && Object.prototype.hasOwnProperty.call(copy, key) ? copy[key as keyof typeof copy] : undefined;
 }
+
+
+/** Localize Zod field paths without leaking raw English validator messages. */
+export function getWorkflowValidationFieldMessage(
+  issues: readonly { path: readonly (string | number)[] }[],
+  locale: string | null | undefined,
+  stepNames: readonly string[] = [],
+) {
+  const en = locale === "en";
+  const first = issues[0];
+  if (!first) return en ? "Invalid workflow configuration." : "La configuration du workflow est invalide.";
+  const path = first.path.map(String);
+  const stepIndex = path[0] === "steps" ? Number(path[1]) : -1;
+  const step = Number.isInteger(stepIndex) && stepIndex >= 0 ? stepNames[stepIndex] : undefined;
+  const fields: Record<string, [string, string]> = {
+    configuration: ["configuration", "settings"], assignment: ["affectation", "assignment"],
+    strategy: ["stratégie", "strategy"], role: ["rôle", "role"],
+    userId: ["validateur", "approver"], departmentId: ["département", "department"],
+    transitions: ["transitions", "transitions"], steps: ["étapes", "steps"],
+    outcome: ["résultat", "outcome"], priority: ["priorité", "priority"],
+    titleTemplate: ["titre", "title"], recipient: ["destinataire", "recipient"],
+  };
+  const fieldKey = path.filter((part) => !/^\\d+$/.test(part)).slice(-1)[0];
+  const field = fields[fieldKey]?.[en ? 1 : 0] || (en ? "field" : "champ");
+  return step
+    ? (en ? `Step “${step}”: invalid ${field}. Check its structured settings before saving.`
+      : `Étape « ${step} » : ${field} invalide. Corrigez ses paramètres avant d’enregistrer.`)
+    : (en ? `Invalid workflow ${field}. Check the editor before saving.`
+      : `Workflow : ${field} invalide. Vérifiez l’éditeur avant d’enregistrer.`);
+}

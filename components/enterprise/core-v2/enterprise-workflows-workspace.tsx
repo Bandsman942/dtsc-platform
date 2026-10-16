@@ -1,7 +1,7 @@
 "use client";
 import { WorkflowVisualStudio } from "@/components/enterprise/core-v2/workflow-visual-studio";
 import { applyWorkflowVisualPositions } from "@/lib/enterprise/workflows/visual-projection";
-import { workflowStepSchema, type WorkflowVersionInput } from "@/lib/enterprise/workflows/validators";
+import { workflowStepSchema, workflowVersionSchema, type WorkflowVersionInput } from "@/lib/enterprise/workflows/validators";
 
 import { Activity, AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, Copy, Eye, GitBranch, PauseCircle, Plus, RefreshCw, RotateCcw, Play, Save, ShieldAlert, Trash2, XCircle } from "lucide-react";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
@@ -15,7 +15,7 @@ import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metri
 import { StatusBadge } from "@/components/workspace/status-badge";
 import { WorkflowPublishReview } from "@/components/enterprise/core-v2/workflow-publish-review";
 import { toastError, toastSuccess } from "@/lib/client-toast";
-import { getWorkflowRecoveryMessage } from "@/lib/enterprise/workflows/recovery-messages";
+import { getWorkflowRecoveryMessage, getWorkflowValidationFieldMessage } from "@/lib/enterprise/workflows/recovery-messages";
 import { cn } from "@/lib/utils";
 import { workflowReadinessMessage } from "@/lib/enterprise/workflows/readiness-messages";
 
@@ -31,6 +31,12 @@ type Readiness = { ready: boolean; blockers: Array<{ code: string; message: stri
 type WorkflowObservability = { sampledAt: string; windowDays: number; sampleSize: number; sampleLimit: number; capped: boolean; completedSamples: number; durationUnit: "ms"; completedLatency: { p50: number | null; p95: number | null; p99: number | null }; waitingSamples: number; oldestWaitingAgeMs: number | null };
 type Permissions = { canCreateDraft?: boolean; canEditDraft?: boolean; canPublish?: boolean; canRetire?: boolean; canStartManual?: boolean; canViewAllRuns?: boolean; canRetry?: boolean; canCancel?: boolean };
 
+type AssignmentOptions = {
+  members: Array<{ id: string; label: string; isCurrentUser: boolean }>;
+  roles: Array<{ id: string; label: string }>;
+  departments: Array<{ id: string; label: string; hasEligibleManager: boolean }>;
+};
+type SourceEmptyReason = "NO_RECORDS" | "NO_VISIBLE_RECORDS" | null;
 type Props = { organizationId: string; canManage: boolean; locale?: string | null; members: Array<{ id: string; label: string }>; departments: Array<{ id: string; label: string }>; legacyWorkflows: Array<{ id: string; labelFr: string; isEnabled: boolean; updatedAt: Date }> };
 
 const STEP_TYPES = ["START", "CONDITION", "ASSIGN", "CREATE_APPROVAL", "CREATE_TASK", "DOMAIN_ACTION", "NOTIFICATION", "WAIT_UNTIL", "END"];
@@ -51,6 +57,10 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, members, 
   const [runFilter, setRunFilter] = useState("");
   const [startDefinition, setStartDefinition] = useState<Definition | null>(null);
   const [startOptions, setStartOptions] = useState<Array<{ id: string; label: string }>>([]);
+  const [startEmptyReason, setStartEmptyReason] = useState<SourceEmptyReason>(null);
+  const [startCreateHref, setStartCreateHref] = useState<string | null>(null);
+  const [assignmentOptions, setAssignmentOptions] = useState<AssignmentOptions>({ members: [], roles: [], departments: [] });
+  const [assignmentLoadError, setAssignmentLoadError] = useState("");
   const [startLoading, setStartLoading] = useState(false);
   const [startSubmitting, setStartSubmitting] = useState(false);
   const [metrics, setMetrics] = useState<Record<string, number>>({});
@@ -125,6 +135,21 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, members, 
     setDraftDirty(false);
     setStepError("");
     setTransitionError("");
+    setAssignmentOptions({ members: [], roles: [], departments: [] });
+    setAssignmentLoadError("");
+    if (draft) {
+      try {
+        const response = await fetch(`/api/enterprise/${organizationId}/workflows/${id}/assignees`, { cache: "no-store" });
+        const options = await response.json().catch(() => null);
+        if (response.ok && Array.isArray(options?.members) && Array.isArray(options?.roles) && Array.isArray(options?.departments)) {
+          setAssignmentOptions({ members: options.members, roles: options.roles, departments: options.departments });
+        } else if (response.status !== 403) {
+          setAssignmentLoadError(getWorkflowRecoveryMessage(options?.error, locale) || (en ? "Unable to load eligible approvers." : "Impossible de charger les validateurs éligibles."));
+        }
+      } catch {
+        setAssignmentLoadError(en ? "Unable to load eligible approvers." : "Impossible de charger les validateurs éligibles.");
+      }
+    }
   }
 
   async function createFromTemplate(event: FormEvent<HTMLFormElement>) {
@@ -278,7 +303,7 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, members, 
       code: step.code, name: step.name, description: step.description || undefined,
       position: step.position, stepType: step.stepType, configuration,
     });
-    if (!candidate.success) return candidate.error.issues[0]?.message || (en ? "Invalid step settings." : "Paramètres d’étape invalides.");
+    if (!candidate.success) return getWorkflowValidationFieldMessage(candidate.error.issues, locale, [step.name]);
     checkpoint();
     setDraftSteps((current) => current.map((item) => item.code === code ? {
       ...item, configuration: candidate.data.configuration,
@@ -316,22 +341,45 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, members, 
 
   async function saveVersion() {
     if (!selected || !currentDraft) return;
-    if (!draftEditToken) { toastError(en ? "Reload the draft before saving to avoid overwriting concurrent changes." : "Rechargez le brouillon avant de sauvegarder pour éviter d’écraser des modifications concurrentes."); return; }
-    const response = await fetch(`/api/enterprise/${organizationId}/workflows/${selected.id}/versions/${currentDraft.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        steps: draftSteps.map(({ configurationJson, ...step }) => ({ ...step, configuration: step.configuration || configurationJson || {} })),
-        transitions: draftTransitions.map((transition) => ({ fromStepCode: transition.fromStepCode, toStepCode: transition.toStepCode, outcome: transition.outcome || "DEFAULT", priority: transition.priority, ...(transition.condition ? { condition: transition.condition } : {}) })),
-        configuration: draftConfiguration,
-        editToken: draftEditToken,
-      }),
-    });
-    const body = await response.json().catch(() => null);
-    if (!response.ok) return toastError(body?.error === "WORKFLOW_DRAFT_CONFLICT" ? (en ? "Another collaborator changed this draft. Your changes are preserved here. Compare with the latest draft and reapply them before saving." : "Un collaborateur a modifié ce brouillon. Vos changements restent affichés. Comparez-les à la dernière version et réappliquez-les avant de sauvegarder.") : getWorkflowRecoveryMessage(body?.error, locale) || body?.message || (en ? "Save failed." : "Enregistrement impossible."));
-    toastSuccess(en ? "Draft saved." : "Brouillon enregistré.");
-    await openDefinition(selected.id);
-    await load();
+    if (!draftEditToken) {
+      toastError(getWorkflowRecoveryMessage("WORKFLOW_DRAFT_CONFLICT", locale) || "");
+      return;
+    }
+    const payload = {
+      steps: draftSteps.map(({ configurationJson, ...step }) => ({ ...step, configuration: step.configuration || configurationJson || {} })),
+      transitions: draftTransitions.map((transition) => ({
+        fromStepCode: transition.fromStepCode, toStepCode: transition.toStepCode,
+        outcome: transition.outcome || "DEFAULT", priority: transition.priority,
+        ...(transition.condition ? { condition: transition.condition } : {}),
+      })),
+      configuration: draftConfiguration,
+    };
+    const validated = workflowVersionSchema.safeParse(payload);
+    if (!validated.success) {
+      toastError(getWorkflowValidationFieldMessage(validated.error.issues, locale, draftSteps.map((item) => item.name)));
+      return;
+    }
+    try {
+      const response = await fetch(`/api/enterprise/${organizationId}/workflows/${selected.id}/versions/${currentDraft.id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...validated.data, editToken: draftEditToken }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        toastError(
+          body?.error === "INVALID_WORKFLOW_VERSION_PAYLOAD" && Array.isArray(body?.issues)
+            ? getWorkflowValidationFieldMessage(body.issues, locale, draftSteps.map((item) => item.name))
+            : getWorkflowRecoveryMessage(body?.error, locale) ||
+              (en ? "Unable to save the draft. Verify permissions or try again." : "Enregistrement impossible. Vérifiez vos droits et réessayez."),
+        );
+        return;
+      }
+      toastSuccess(en ? "Draft saved." : "Brouillon enregistré.");
+      await openDefinition(selected.id);
+      await load();
+    } catch {
+      toastError(en ? "Network error: changes were not saved. Please retry." : "Erreur réseau : les modifications n’ont pas été enregistrées. Réessayez.");
+    }
   }
 
   async function duplicateVersion() {
@@ -359,12 +407,18 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, members, 
   async function openManualStart(definition: Definition) {
     setStartDefinition(definition);
     setStartOptions([]);
+    setStartEmptyReason(null);
+    setStartCreateHref(null);
     setStartLoading(true);
     try {
       const response = await fetch(`/api/enterprise/${organizationId}/workflow-runs/sources?definitionId=${encodeURIComponent(definition.id)}`);
       const body = await response.json().catch(() => null);
       if (!response.ok) toastError(getWorkflowRecoveryMessage(body?.error, locale) || body?.message || (en ? "Source selection unavailable." : "Sélection de la source indisponible."));
-      else setStartOptions(body?.sources || []);
+      else {
+        setStartOptions(body?.sources || []);
+        setStartEmptyReason(body?.emptyReason || null);
+        setStartCreateHref(typeof body?.createModuleHref === "string" ? body.createModuleHref : null);
+      }
     } catch { toastError(en ? "Unable to load available records." : "Chargement des objets disponibles impossible."); }
     finally { setStartLoading(false); }
   }
@@ -426,7 +480,8 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, members, 
       <section className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface p-3 sm:p-4">{selected ? <div className="grid gap-4"><div className="flex items-start gap-3"><div className="min-w-0 flex-1"><p className="text-xs font-black uppercase tracking-[0.1em] text-cyan-600">{selected.code}</p><h2 className="truncate text-lg font-black text-dtsc-ink">{selected.name}</h2><p className="text-sm text-dtsc-muted">{selected.description}</p></div><StatusBadge>{statusLabel(selected.status, en)}</StatusBadge></div>
         <div className="flex flex-wrap gap-2">{permissions.canStartManual && selected.status === "ACTIVE" && selected.allowManualStart ? <Button size="sm" onClick={() => void openManualStart(selected)}><Play className="h-4 w-4" />{en ? "Start" : "Lancer"}</Button> : null}{permissions.canCreateDraft && published ? <Button size="sm" variant="outline" onClick={() => void duplicateVersion()}><Copy className="h-4 w-4" />{en ? "New version" : "Nouvelle version"}</Button> : null}{permissions.canEditDraft && currentDraft ? <Button size="sm" variant="outline" onClick={() => { setStepError(""); setStepOpen(true); }}><Plus className="h-4 w-4" />{en ? "Step" : "Étape"}</Button> : null}{permissions.canEditDraft && currentDraft ? <Button size="sm" variant="outline" onClick={() => { setTransitionError(""); setTransitionOpen(true); }}><GitBranch className="h-4 w-4" />{en ? "Transition" : "Transition"}</Button> : null}{permissions.canEditDraft && currentDraft ? <Button size="sm" onClick={() => void saveVersion()} disabled={!draftDirty}><Save className="h-4 w-4" />{en ? "Save" : "Enregistrer"}</Button> : null}{permissions.canPublish && currentDraft ? <WorkflowPublishReview organizationId={organizationId} definitionId={selected.id} versionId={currentDraft.id} locale={locale} disabled={!readinessForDraft?.ready || draftDirty} onPublished={async () => { await openDefinition(selected.id); await load(); }} /> : null}</div>
         {draftDirty ? <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900" role="status">{en ? "Unsaved graph changes are present. Save the draft before opening the publication review." : "Des modifications du graphe ne sont pas enregistrées. Enregistrez le brouillon avant d’ouvrir la revue de publication."}</div> : null}
-        {currentDraft ? <WorkflowVisualStudio key={currentDraft.id} locale={locale} steps={draftSteps} transitions={draftTransitions} configuration={draftConfiguration} editable={Boolean(permissions.canEditDraft)} onAddStep={() => { setStepError(""); setStepOpen(true); }} onMove={moveVisualNode} onRename={renameVisualNode} onConnect={connectVisualNodes} onDeleteStep={removeStep} onDuplicateStep={duplicateVisualStep} onUpdateConfiguration={updateVisualStepConfiguration} onUndo={undoDraft} onRedo={redoDraft} undoAvailable={undoHistory.length > 0} redoAvailable={redoHistory.length > 0} /> : null}
+        {currentDraft && assignmentLoadError ? <p role="alert" className="text-sm text-amber-700">{assignmentLoadError}</p> : null}
+         {currentDraft ? <WorkflowVisualStudio key={currentDraft.id} locale={locale} assignmentMembers={assignmentOptions.members} assignmentRoles={assignmentOptions.roles} assignmentDepartments={assignmentOptions.departments} steps={draftSteps} transitions={draftTransitions} configuration={draftConfiguration} editable={Boolean(permissions.canEditDraft)} onAddStep={() => { setStepError(""); setStepOpen(true); }} onMove={moveVisualNode} onRename={renameVisualNode} onConnect={connectVisualNodes} onDeleteStep={removeStep} onDuplicateStep={duplicateVisualStep} onUpdateConfiguration={updateVisualStepConfiguration} onUndo={undoDraft} onRedo={redoDraft} undoAvailable={undoHistory.length > 0} redoAvailable={redoHistory.length > 0} /> : null}
         {currentDraft ? <><div className={cn("rounded-xl border p-3", readinessForDraft?.ready ? "border-emerald-400/40 bg-emerald-500/5" : "border-amber-400/40 bg-amber-500/5")}><p className="font-black text-dtsc-ink">{readinessForDraft?.ready ? (en ? "Ready to publish" : "Prêt à publier") : (en ? "Publication blockers" : "Blocages de publication")}</p>{readinessForDraft?.blockers?.length ? <ul className="mt-2 grid gap-1 text-xs text-dtsc-muted">{readinessForDraft.blockers.map((item, index) => <li key={`${item.code}-${index}`}>• {item.stepCode ? `${item.stepCode}: ` : ""}{workflowReadinessMessage(item.code, locale)}</li>)}</ul> : null}</div>
         <div className="grid gap-2">{[...draftSteps].sort((a, b) => a.position - b.position).map((step, index) => <article key={step.code} className="flex min-w-0 items-center gap-2 rounded-xl border border-dtsc-border p-2.5"><span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-dtsc-soft text-xs font-black text-dtsc-ink">{index + 1}</span><div className="min-w-0 flex-1"><strong className="block truncate text-sm text-dtsc-ink">{step.name}</strong><span className="block truncate text-xs text-dtsc-muted">{stepTypeLabel(step.stepType, en)} · {step.code}</span></div>{permissions.canEditDraft ? <div className="flex shrink-0"><button type="button" className="p-2 text-dtsc-muted" onClick={() => moveStep(index, -1)} aria-label={en ? "Move step up" : "Monter l’étape"}><ArrowUp className="h-4 w-4" /></button><button type="button" className="p-2 text-dtsc-muted" onClick={() => moveStep(index, 1)} aria-label={en ? "Move step down" : "Descendre l’étape"}><ArrowDown className="h-4 w-4" /></button><button type="button" className="p-2 text-rose-600" onClick={() => removeStep(step.code)} aria-label={en ? "Delete step" : "Supprimer l’étape"}><Trash2 className="h-4 w-4" /></button></div> : null}</article>)}</div>
         <div><h3 className="text-sm font-black text-dtsc-ink">{en ? "Branches" : "Branches"}</h3><div className="mt-2 grid gap-1.5">{draftTransitions.map((transition, index) => <div key={`${transition.fromStepCode}-${transition.toStepCode}-${index}`} className="flex items-center gap-2 rounded-xl bg-dtsc-page px-3 py-2 text-xs"><span className="truncate font-bold text-dtsc-ink">{transition.fromStepCode}</span><GitBranch className="h-3.5 w-3.5 shrink-0 text-cyan-600" /><span className="truncate font-bold text-dtsc-ink">{transition.toStepCode}</span><span className="ml-auto shrink-0 text-dtsc-muted">{outcomeLabel(transition.outcome, en)}</span>{permissions.canEditDraft ? <button type="button" onClick={() => { checkpoint(); setDraftTransitions((current) => current.filter((_, itemIndex) => itemIndex !== index)); setDraftDirty(true); }} aria-label={en ? "Delete branch" : "Supprimer la branche"}><XCircle className="h-4 w-4 text-rose-600" /></button> : null}</div>)}</div></div></> : <p className="text-sm text-dtsc-muted">{en ? "Create a new draft version to edit this workflow." : "Créez une nouvelle version brouillon pour modifier ce workflow."}</p>}</div> : <EmptyState compact title={en ? "Select a workflow" : "Sélectionnez un workflow"} description={en ? "Open a definition to inspect its versions and readiness." : "Ouvrez une définition pour consulter ses versions et sa readiness."} />}</section>
@@ -436,7 +491,14 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, members, 
 
     {tab === "monitoring" ? <section className="grid gap-3">{observability ? <div className="grid min-w-0 gap-3 rounded-2xl border border-dtsc-border bg-dtsc-surface p-3" aria-label={en ? "Workflow runtime statistics" : "Statistiques des workflows"}><div className="flex flex-wrap items-center justify-between gap-2 text-xs text-dtsc-muted"><strong className="text-dtsc-ink">{en ? "Recent completed run latency" : "Durée des exécutions terminées"}</strong><span>{en ? "Sampled" : "Échantillonné"} : {new Date(observability.sampledAt).toLocaleString(en ? "en-US" : "fr-FR")}</span></div><div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{(["p50", "p95", "p99"] as const).map((key) => <div key={key}><div className="text-xs uppercase text-dtsc-muted">{key}</div><strong className="text-base text-dtsc-ink">{observability.completedLatency[key] === null ? "—" : `${(observability.completedLatency[key]! / 1000).toFixed(1)} s`}</strong></div>)}<div><div className="text-xs text-dtsc-muted">{en ? "Oldest waiting" : "Plus ancienne attente"}</div><strong className="text-base text-dtsc-ink">{observability.oldestWaitingAgeMs === null ? "—" : `${Math.round(observability.oldestWaitingAgeMs / 60000)} min`}</strong></div></div><p className="text-xs text-dtsc-muted">{observability.completedSamples} {en ? "completed runs" : "exécutions terminées"} / {observability.sampleSize} {en ? "visible runs sampled across" : "exécutions visibles examinées sur"} {observability.windowDays} {en ? "days" : "jours"}{observability.capped ? (en ? " — Capped sample, not exhaustive." : " — Échantillon plafonné, non exhaustif.") : "."} {en ? "Missing values are not zero." : "Une donnée absente ne vaut pas zéro."}</p></div> : null}{monitored.length ? monitored.map((run) => <article key={run.id} className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-3"><div className="flex items-start gap-3"><span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/10 text-amber-700"><AlertTriangle className="h-4 w-4" /></span><div className="min-w-0 flex-1"><strong className="block truncate text-sm text-dtsc-ink">{run.definition.name}</strong><span className="block text-xs text-dtsc-muted">{statusLabel(run.status, en)} · {getWorkflowRecoveryMessage(run.failureCode, locale) || run.failureMessage || (en ? "Awaiting the next authorized action." : "En attente de la prochaine action autorisée.")}</span></div><Button size="sm" variant="outline" onClick={() => void openRun(run.id)}>{en ? "Inspect" : "Inspecter"}</Button></div></article>) : <EmptyState compact title={en ? "Nothing to monitor" : "Rien à surveiller"} description={en ? "No blocked, failed or abnormally waiting run." : "Aucune exécution bloquée, en échec ou en attente anormale."} />}</section> : null}
 
-    <Dialog open={Boolean(startDefinition)} title={en ? "Start a workflow" : "Lancer un workflow"} onClose={() => setStartDefinition(null)} presentation="editor" className="h-[94dvh] max-w-3xl">{startDefinition ? <form onSubmit={submitManualStart} className="grid min-w-0 gap-4"><p className="text-sm text-dtsc-muted">{startDefinition.name} · {entityLabel(startDefinition.triggerEntityType, en)}</p><label className="grid gap-1 text-sm font-semibold text-dtsc-ink">{en ? "Business record" : "Objet métier"}<select required name="sourceEntityId" disabled={startLoading || startSubmitting || !startOptions.length} className="h-11 min-w-0 max-w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3" defaultValue=""><option value="">{startLoading ? (en ? "Loading records…" : "Chargement des objets…") : (en ? "Select a record" : "Sélectionnez un objet")}</option>{startOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select></label>{!startLoading && !startOptions.length ? <p role="status" className="text-sm text-dtsc-muted">{en ? "No selectable record is available for this workflow. Your ERP access may be restricted." : "Aucun objet sélectionnable pour ce workflow. Vérifiez vos droits sur le module ERP."}</p> : null}<Button type="submit" disabled={startLoading || startSubmitting || !startOptions.length}><Play className="h-4 w-4" />{startSubmitting ? (en ? "Starting…" : "Démarrage…") : (en ? "Start workflow" : "Démarrer le workflow")}</Button></form> : null}</Dialog>
+    <Dialog open={Boolean(startDefinition)} title={en ? "Start a workflow" : "Lancer un workflow"} onClose={() => setStartDefinition(null)} presentation="editor" className="h-[94dvh] max-w-3xl">{startDefinition ? <form onSubmit={submitManualStart} className="grid min-w-0 gap-4"><p className="text-sm text-dtsc-muted">{startDefinition.name} · {entityLabel(startDefinition.triggerEntityType, en)}</p><label className="grid gap-1 text-sm font-semibold text-dtsc-ink">{en ? "Business record" : "Objet métier"}<select required name="sourceEntityId" disabled={startLoading || startSubmitting || !startOptions.length} className="h-11 min-w-0 max-w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3" defaultValue=""><option value="">{startLoading ? (en ? "Loading records…" : "Chargement des objets…") : (en ? "Select a record" : "Sélectionnez un objet")}</option>{startOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select></label>{!startLoading && !startOptions.length ? <div role="status" className="grid gap-2 text-sm text-dtsc-muted">
+          <p>{startDefinition.triggerEntityType === "EnterpriseExpense"
+            ? (startEmptyReason === "NO_RECORDS"
+              ? (en ? "No expense has been created yet in this company." : "Aucune dépense n’a encore été créée dans cette entreprise.")
+              : (en ? "No expense is available to your account. Create an expense or ask for access to its ERP module." : "Aucune dépense n’est accessible à votre compte. Créez une dépense ou vérifiez vos droits sur le module ERP."))
+            : (en ? "No eligible record is visible for this workflow." : "Aucun objet métier admissible n’est visible pour ce workflow.")}</p>
+          {startCreateHref ? <a className="inline-flex min-h-11 items-center font-bold text-cyan-600 underline underline-offset-4" href={startCreateHref}>{startDefinition.triggerEntityType === "EnterpriseExpense" ? (en ? "Open Budgets and Expenses to create an expense" : "Ouvrir Budgets et dépenses pour créer une dépense") : (en ? "Open Budgets and Expenses" : "Ouvrir Budgets et dépenses")}</a> : null}
+        </div> : null}<Button type="submit" disabled={startLoading || startSubmitting || !startOptions.length}><Play className="h-4 w-4" />{startSubmitting ? (en ? "Starting…" : "Démarrage…") : (en ? "Start workflow" : "Démarrer le workflow")}</Button></form> : null}</Dialog>
 
     <Dialog open={createOpen} title={en ? "Create a draft workflow" : "Créer un workflow brouillon"} onClose={() => setCreateOpen(false)} presentation="editor" className="h-[94dvh] max-w-4xl">
       <form onSubmit={createFromTemplate} className="grid min-w-0 gap-3">
@@ -457,7 +519,7 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, members, 
       </form>
     </Dialog>
 
-    <Dialog open={stepOpen} title={en ? "Add a structured step" : "Ajouter une étape structurée"} onClose={() => setStepOpen(false)} presentation="editor" className="h-[94dvh] max-w-4xl"><form onSubmit={addStep} className="grid gap-3">{stepError ? <p className="rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-800" role="alert">{stepError}</p> : null}<div className="grid gap-2 sm:grid-cols-2"><Input name="code" placeholder={en ? "STEP_CODE" : "CODE_ETAPE"} required aria-invalid={Boolean(stepError)} /><Input name="name" placeholder={en ? "Readable name" : "Nom lisible"} required /></div><select name="stepType" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-semibold">{STEP_TYPES.map((type) => <option key={type} value={type}>{stepTypeLabel(type, en)}</option>)}</select><Input name="field" placeholder={en ? "Condition/date field (e.g. status)" : "Champ condition/date (ex. status)"} /><select name="operator" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-semibold"><option>EQUALS</option><option>NOT_EQUALS</option><option>GREATER_THAN</option><option>LESS_THAN_OR_EQUAL</option><option>EXISTS</option></select><Input name="value" placeholder={en ? "Condition value" : "Valeur de condition"} /><select name="strategy" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-semibold">{ASSIGNMENTS.map((strategy) => <option key={strategy} value={strategy}>{assignmentLabel(strategy, en)}</option>)}</select><div className="grid gap-2 sm:grid-cols-2"><select name="userId" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm"><option value="">{en ? "Specific user (optional)" : "Utilisateur précis (optionnel)"}</option>{members.map((member) => <option key={member.id} value={member.id}>{member.label}</option>)}</select><select name="departmentId" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm"><option value="">{en ? "Department (optional)" : "Département (optionnel)"}</option>{departments.map((department) => <option key={department.id} value={department.id}>{department.label}</option>)}</select></div><Input name="role" placeholder={en ? "Organization role (optional)" : "Rôle entreprise (optionnel)"} /><Input name="titleTemplate" placeholder="Traiter {{entity.reference}}" /><Input name="bodyTemplate" placeholder={en ? "Description or notification body" : "Description ou corps de notification"} /><Input name="domainAction" placeholder={en ? "Allowed domain action" : "Action métier autorisée"} /><Input name="hours" type="number" min={1} max={8760} defaultValue={24} /><select name="endOutcome" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm"><option value="COMPLETED">{en ? "Successful end" : "Fin réussie"}</option><option value="REJECTED">{en ? "Rejected end" : "Fin rejetée"}</option></select><Button type="submit"><Plus className="h-4 w-4" />{en ? "Add step" : "Ajouter l’étape"}</Button></form></Dialog>
+    <Dialog open={stepOpen} title={en ? "Add a structured step" : "Ajouter une étape structurée"} onClose={() => setStepOpen(false)} presentation="editor" className="h-[94dvh] max-w-4xl"><form onSubmit={addStep} className="grid gap-3">{stepError ? <p className="rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-800" role="alert">{stepError}</p> : null}<div className="grid gap-2 sm:grid-cols-2"><Input name="code" placeholder={en ? "STEP_CODE" : "CODE_ETAPE"} required aria-invalid={Boolean(stepError)} /><Input name="name" placeholder={en ? "Readable name" : "Nom lisible"} required /></div><select name="stepType" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-semibold">{STEP_TYPES.map((type) => <option key={type} value={type}>{stepTypeLabel(type, en)}</option>)}</select><Input name="field" placeholder={en ? "Condition/date field (e.g. status)" : "Champ condition/date (ex. status)"} /><select name="operator" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-semibold"><option>EQUALS</option><option>NOT_EQUALS</option><option>GREATER_THAN</option><option>LESS_THAN_OR_EQUAL</option><option>EXISTS</option></select><Input name="value" placeholder={en ? "Condition value" : "Valeur de condition"} /><select name="strategy" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-semibold">{ASSIGNMENTS.map((strategy) => <option key={strategy} value={strategy}>{assignmentLabel(strategy, en)}</option>)}</select><div className="grid gap-2 sm:grid-cols-2"><select name="userId" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm"><option value="">{en ? "Eligible approver (optional)" : "Validateur autorisé (optionnel)"}</option>{assignmentOptions.members.map((member) => <option key={member.id} value={member.id}>{member.label}</option>)}</select><select name="departmentId" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm"><option value="">{en ? "Department (optional)" : "Département (optionnel)"}</option>{departments.map((department) => <option key={department.id} value={department.id}>{department.label}</option>)}</select></div><select name="role" aria-label={en ? "Eligible organization role" : "Rôle entreprise autorisé"} className="h-11 min-w-0 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm"><option value="">{en ? "Choose an eligible role" : "Choisissez un rôle autorisé"}</option>{assignmentOptions.roles.map((role) => <option key={role.id} value={role.id}>{role.label}</option>)}</select><Input name="titleTemplate" placeholder="Traiter {{entity.reference}}" /><Input name="bodyTemplate" placeholder={en ? "Description or notification body" : "Description ou corps de notification"} /><Input name="domainAction" placeholder={en ? "Allowed domain action" : "Action métier autorisée"} /><Input name="hours" type="number" min={1} max={8760} defaultValue={24} /><select name="endOutcome" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm"><option value="COMPLETED">{en ? "Successful end" : "Fin réussie"}</option><option value="REJECTED">{en ? "Rejected end" : "Fin rejetée"}</option></select><Button type="submit"><Plus className="h-4 w-4" />{en ? "Add step" : "Ajouter l’étape"}</Button></form></Dialog>
 
     <Dialog open={transitionOpen} title={en ? "Add a branch" : "Ajouter une branche"} onClose={() => setTransitionOpen(false)} presentation="editor" className="h-[94dvh] max-w-4xl"><form onSubmit={addTransition} className="grid gap-3">{transitionError ? <p className="rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-800" role="alert">{transitionError}</p> : null}<select name="from" required aria-invalid={Boolean(transitionError)} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm">{draftSteps.map((step) => <option key={step.code} value={step.code}>{step.name}</option>)}</select><select name="to" required aria-invalid={Boolean(transitionError)} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm">{draftSteps.map((step) => <option key={step.code} value={step.code}>{step.name}</option>)}</select><select name="outcome" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm">{OUTCOMES.map((outcome) => <option key={outcome} value={outcome}>{outcomeLabel(outcome, en)}</option>)}</select><Button type="submit"><GitBranch className="h-4 w-4" />{en ? "Add branch" : "Ajouter la branche"}</Button></form></Dialog>
 
