@@ -66,7 +66,7 @@ CREATE TABLE "EnterpriseWorkflowScheduleOccurrence" (
   CONSTRAINT "EnterpriseWorkflowScheduleOccurrence_pkey" PRIMARY KEY ("id"),
   CONSTRAINT "EW_Occurrence_status_check" CHECK ("status" = 'RESERVED'),
   CONSTRAINT "EW_Occurrence_key_check" CHECK ("occurrenceKey" ~ '^[0-9a-f]{64}$'),
-  CONSTRAINT "EW_Occurrence_date_check" CHECK ("localDate" ~ '^\\d{4}-\\d{2}-\\d{2}$'),
+  CONSTRAINT "EW_Occurrence_date_check" CHECK ("localDate" ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'),
   CONSTRAINT "EW_Occurrence_time_check" CHECK ("localTime" ~ '^[0-9]{2}:[0-9]{2}$')
 );
 CREATE UNIQUE INDEX "EW_Occurrence_occurrence_key"
