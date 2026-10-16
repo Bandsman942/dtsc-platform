@@ -28,3 +28,10 @@ Le moteur ne lit jamais ces positions ; chaque position est bornée [0, 20 000] 
 - Certifier par navigateur les parcours réels : création depuis palette/formulaire, connexions, position, enregistrement/rechargement des coordonnées, revue/publication, 10+ nœuds, contraste/focus/mobile, contrôle de concurrence. Ajouter les fonctions non couvertes par le canevas si nécessaire. OWNER_E2E #818 explicite.
 - Les positions, branches et libellés sont fonctionnels ; les propriétés métier avancées restent dans les formulaires existants et aucun clic sur canevas ne déclenche l'exécution.
 - Rollback : désactiver le canvas et revenir à l'éditeur formulaires ; positions dans configurationJson sans effet sur les définitions canoniques. Aucune migration ou suppression destructive.
+
+
+## Concurrence des brouillons — garde serveur WF-05
+
+Une sauvegarde du studio inclut obligatoirement un `editToken` SHA-256 déterministe calculé sur le **graphe déjà enregistré** (étapes, positions, configuration, transitions, outcomes et conditions). Le GET détail ne remet ce token qu'aux membres `canEditDraft`. Le PATCH valide sa forme et refuse les clients qui n'en ont pas. La mutation prend un verrou transactionnel PostgreSQL `FOR UPDATE` sur `EnterpriseWorkflowVersion`, relit les étapes/transitions sous ce verrou, puis compare les tokens **avant les DELETE/CREATE**. Un brouillon ayant changé renvoie HTTP 409 / `WORKFLOW_DRAFT_CONFLICT`; aucun changement local n'est supprimé dans le navigateur, le contributeur doit recharger la version et réappliquer ses différences. Les templates internes et les tests de service existants conservent l'appel direct sans token, mais aucun endpoint client ne contourne le CAS. Une version PUBLISHED reste immuable. Pas de migration/backfill.
+
+QA : `pnpm qa:workflow-visual-concurrency` garantit le verrou avant lecture, le refus des snapshots obsolètes, de publication et cross-tenant sans aucune suppression de step/transition. Un navigateur authentifié et deux utilisateurs simultanés sont encore requis pour OWNER_E2E #818.
