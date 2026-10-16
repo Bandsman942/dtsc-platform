@@ -119,7 +119,7 @@ model EnterpriseWorkflowRun {
   revision             Int                          @default(1)
   createdAt            DateTime                     @default(now())
   updatedAt            DateTime                     @updatedAt
-  definition           EnterpriseWorkflowDefinition @relation(fields: [organizationId, workflowDefinitionId], references: [organizationId, id], onDelete: Restrict, map: "EW_Schedule_definition_fkey")
+  definition           EnterpriseWorkflowDefinition @relation(fields: [organizationId, workflowDefinitionId], references: [organizationId, id], onDelete: Restrict)
   version              EnterpriseWorkflowVersion    @relation(fields: [organizationId, workflowVersionId], references: [organizationId, id], onDelete: Restrict)
   stepRuns             EnterpriseWorkflowStepRun[]
   events               EnterpriseWorkflowEvent[]
@@ -233,7 +233,7 @@ model EnterpriseWorkflowSchedule {
   revision             Int                                    @default(1)
   createdAt            DateTime                               @default(now())
   updatedAt            DateTime                               @updatedAt
-  definition           EnterpriseWorkflowDefinition           @relation(fields: [organizationId, workflowDefinitionId], references: [organizationId, id], onDelete: Restrict)
+  definition           EnterpriseWorkflowDefinition           @relation(fields: [organizationId, workflowDefinitionId], references: [organizationId, id], onDelete: Restrict, map: "EW_Schedule_definition_fkey")
   version              EnterpriseWorkflowVersion              @relation(fields: [organizationId, workflowVersionId, workflowDefinitionId], references: [organizationId, id, definitionId], onDelete: Restrict, map: "EW_Schedule_version_fkey")
   occurrences          EnterpriseWorkflowScheduleOccurrence[]
 
