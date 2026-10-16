@@ -255,12 +255,12 @@ model EnterpriseWorkflowScheduleOccurrence {
   localTime         String
   timeZone          String
   scheduledAt       DateTime
-  occurrenceKey     String                     @unique
+  occurrenceKey     String                     @unique(map: "EW_Occurrence_occurrence_key")
   status            String                     @default("RESERVED")
   createdAt         DateTime                   @default(now())
   schedule          EnterpriseWorkflowSchedule @relation(fields: [organizationId, scheduleId, workflowVersionId], references: [organizationId, id, workflowVersionId], onDelete: Restrict, map: "EW_Occurrence_schedule_fkey")
 
-  @@unique([organizationId, id])
+  @@unique([organizationId, id], map: "EW_Occurrence_org_id_key")
   @@unique([organizationId, scheduleId, workflowVersionId, localDate, localTime], map: "EW_Occurrence_org_schedule_version_local_key")
   @@index([organizationId, status, scheduledAt], map: "EW_Occurrence_org_status_due_idx")
   @@index([scheduleId, scheduledAt], map: "EW_Occurrence_schedule_due_idx")
