@@ -11,7 +11,7 @@ const prisma = new PrismaClient();
 const prefix = `wf846-${randomUUID()}`;
 const tenant = `${prefix}-org`, other = `${prefix}-other`, actor = `${prefix}-actor`;
 const schedules = [], definitions = [], versions = [], tasks = [];
-const { EnterpriseWorkflowError } = workflowTestLoader({})("@/lib/enterprise/workflows/errors");
+let EnterpriseWorkflowError;
 let session = { userId: actor, activeContext: "ORGANIZATION", activeOrganizationId: tenant };
 let rights = { canEditDraft: true };
 let sourceAllowed = true, originAllowed = true, limited = false;
@@ -69,6 +69,7 @@ const loader = workflowTestLoader({
   "@/lib/rate-limit": { getRateLimitKey: () => "wf846-test", rateLimit: async () => ({ ok: !limited }) },
 });
 
+EnterpriseWorkflowError = loader("@/lib/enterprise/workflows/errors").EnterpriseWorkflowError;
 const { bindDisabledScheduleMandate: bind, disabledScheduleMandateSchema: schema } =
   loader("@/lib/enterprise/workflows/schedule-mandate");
 const { PATCH } = loader("@/app/api/enterprise/[organizationId]/workflow-schedules/[scheduleId]/mandate/route");
