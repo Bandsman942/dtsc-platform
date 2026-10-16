@@ -21,20 +21,36 @@ const rawExpressionSchema: z.ZodType<WorkflowBooleanExpression> = z.lazy(() =>
   ]),
 );
 
-export const workflowBooleanExpressionSchema = rawExpressionSchema.superRefine((expression, ctx) => {
+// Enforce traversal bounds BEFORE recursive Zod parsing: maliciously deep
+// JSON must be rejected without exhausting the JS call stack.
+export const workflowBooleanExpressionSchema = z.unknown().superRefine((input, ctx) => {
+  const pending: Array<{ node: unknown; depth: number }> = [{ node: input, depth: 1 }];
   let nodes = 0;
   let leaves = 0;
-  function visit(node: WorkflowBooleanExpression, depth: number): void {
-    nodes++;
-    if (depth > 4) ctx.addIssue({ code: "custom", message: "Workflow condition depth exceeds 4" });
-    if (nodes > 31) ctx.addIssue({ code: "custom", message: "Workflow condition nodes exceed 31" });
-    if (node.kind === "LEAF") {
-      leaves++;
-      if (leaves > 24) ctx.addIssue({ code: "custom", message: "Workflow condition leaves exceed 24" });
-    } else if (depth <= 5) node.children.forEach((child) => visit(child, depth + 1));
+  while (pending.length > 0) {
+    const { node, depth } = pending.pop()!;
+    nodes += 1;
+    if (nodes > 31 || depth > 4) {
+      ctx.addIssue({ code: "custom", message: "Workflow condition depth/nodes limit exceeded" });
+      return;
+    }
+    if (!node || typeof node !== "object" || Array.isArray(node)) continue;
+    const value = node as Record<string, unknown>;
+    if (value.kind === "LEAF") {
+      leaves += 1;
+      if (leaves > 24) {
+        ctx.addIssue({ code: "custom", message: "Workflow condition leaves exceed 24" });
+        return;
+      }
+    } else if (value.kind === "AND" || value.kind === "OR") {
+      if (!Array.isArray(value.children) || value.children.length < 2 || value.children.length > 8) {
+        ctx.addIssue({ code: "custom", message: "Workflow condition children must be 2–8" });
+        return;
+      }
+      for (const child of value.children) pending.push({ node: child, depth: depth + 1 });
+    }
   }
-  visit(expression, 1);
-});
+}).pipe(rawExpressionSchema);
 
 /** Validates ALL predicates first, including branches skipped by AND/OR. */
 export function evaluateWorkflowBooleanExpression(
@@ -104,12 +120,15 @@ export function projectWorkflowVariables(
   adapter: WorkflowEntityAdapter,
   entity: WorkflowEntitySnapshot,
   rawMappings: unknown,
-  readableFields: ReadonlySet<string>,
+  access: { organizationId: string; readableFields: ReadonlySet<string> },
 ): Record<string, string | boolean | null> {
+  if (!access.organizationId || entity.organizationId !== access.organizationId) {
+    throw new Error("WORKFLOW_MAPPING_TENANT_MISMATCH");
+  }
   const mappings = workflowVariableMappingsSchema.parse(rawMappings);
   const output: Record<string, string | boolean | null> = Object.create(null);
   for (const mapping of mappings) {
-    if (!readableFields.has(mapping.sourceField)) throw new Error("WORKFLOW_MAPPING_PERMISSION_DENIED");
+    if (!access.readableFields.has(mapping.sourceField)) throw new Error("WORKFLOW_MAPPING_PERMISSION_DENIED");
     if (adapter.conditionFields.get(mapping.sourceField) !== mapping.type) throw new Error("WORKFLOW_MAPPING_FIELD_INVALID");
     output[mapping.target] = projectScalar(mapping.type, adapter.getConditionField(entity, mapping.sourceField));
   }
