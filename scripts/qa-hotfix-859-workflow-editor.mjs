@@ -39,6 +39,11 @@ for (const [value, needle] of [
  [i18n,"INVALID_WORKFLOW_VERSION_PAYLOAD"],
  [migration,"EW_Occurrence_inert_execution_check"]
 ]) assert.ok(value.includes(needle), "Missing #859 invariant: "+needle);
+assert.ok(approval.includes('assignment.strategy === "DEPARTMENT_MANAGER" && !assignment.departmentId'), "fallback only for an unconfigured template manager");
+assert.ok(approval.includes("mandate.allowed"), "a pre-existing ERP approver must keep approve rights");
+assert.ok(approval.includes("existingPending.approverUserId"), "retain canonical ERP approver");
+assert.ok(sources.includes('status: { in: ["DRAFT", "PENDING_APPROVAL"] }'), "expense states must be approvable");
+assert.ok(sources.includes('"PREPARING", "CORRECTION_REQUESTED", "PENDING_APPROVAL"'), "budget states must be approvable");
 assert.ok(!api.includes("message: parsed.error.issues[0]?.message"),"Do not return raw Zod English errors");
 assert.ok(!ui.includes("<Input name=\"role\""),"Use guided role selection");
 assert.ok(!members.includes("email: member.user.email"),"Do not expose unrelated member email");

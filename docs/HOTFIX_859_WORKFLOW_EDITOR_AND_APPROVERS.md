@@ -20,3 +20,8 @@ Aucune migration, aucune relaxation des contraintes READY/CLAIMED inertes du led
 
 ## Rollback
 Revert du PR #860 via PR de gouvernance ; pas de restauration DB ni backfill.
+
+## Reuse of canonical already-pending approvals
+On ERP SUBMIT, a Budget/Expense may already have an authoritative PENDING EnterpriseApproval. When a default template DEPARTMENT_MANAGER has no valid department or an unauthorized manager, the step can reuse *only* the existing, designated ERP approver after a fresh module approve check and no-self check. An explicitly selected department, member or role never silently falls back to someone else. If an eligible rule resolves to a different member, the run returns a conflict rather than creating a second approval.
+
+Manual source lists include only budget DRAFT/PREPARING/CORRECTION_REQUESTED/PENDING_APPROVAL and expense DRAFT/PENDING_APPROVAL, always scoped to ownership and tenant. Existing completed/cancelled records are not proposed for a new approval.
