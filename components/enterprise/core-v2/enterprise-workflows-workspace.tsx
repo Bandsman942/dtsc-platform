@@ -1,7 +1,7 @@
+"use client";
 import { WorkflowVisualStudio } from "@/components/enterprise/core-v2/workflow-visual-studio";
 import { applyWorkflowVisualPositions } from "@/lib/enterprise/workflows/visual-projection";
 import type { WorkflowVersionInput } from "@/lib/enterprise/workflows/validators";
-"use client";
 
 import { Activity, AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, Copy, Eye, GitBranch, PauseCircle, Plus, RefreshCw, RotateCcw, Play, Save, ShieldAlert, Trash2, XCircle } from "lucide-react";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
