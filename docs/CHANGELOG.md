@@ -1,3 +1,9 @@
+## 2026-10-16 — WF-06S2C : préflight inertiel de scheduler (#848, parent #843 / #819)
+
+- Service serveur strictement **lecture seule** pour horaires `DISABLED` : revalidation live du tenant/acteur/entitlement WORKFLOWS/source ERP/version publiée, validation DST SKIP/FIRST et curseur canonique.
+- Garde de rattrapage **24 heures** et plafonds anti-flood **50 horaires/entreprise, 10/définition** (techniques, non quotas commerciaux) ; retour `INERT_READINESS_ONLY` sans données privées ni autorisation d'exécution.
+- QA PostgreSQL multi-tenant, révocations, DST et plafonds dans Quality/Migration. **Aucun worker, nouvelle API publique, status ENABLED, run ou effet métier** ; OWNER_E2E #848 distinct avant fusion.
+
 ## 2026-10-16 — WF-06S2B : attestation métier inerte source et acteur (#846, parent #843)
 
 - PATCH sécurisé d'un mandat pour un horaire strictement DISABLED ; source ERP persistée vérifiée par adaptateur tenant-scoped et acteur personnel revalidé sans compte système implicite.
