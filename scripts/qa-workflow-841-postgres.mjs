@@ -46,8 +46,9 @@ try {
   }
   const a = await makeDefinition(organizationId, "A");
   const b = await makeDefinition(otherTenant, "B");
-  definitions.push(a.definition.id, b.definition.id);
-  versions.push(a.version.id, b.version.id);
+  const c = await makeDefinition(organizationId, "C");
+  definitions.push(a.definition.id, b.definition.id, c.definition.id);
+  versions.push(a.version.id, b.version.id, c.version.id);
 
   const staged = await prisma.enterpriseWorkflowSchedule.create({
     data: {
@@ -115,9 +116,21 @@ try {
   // Cross-definition version FKs are enforced by PostgreSQL, even if callers
   // bypass the service and attempt a direct Prisma write.
   await assert.rejects(() => prisma.enterpriseWorkflowSchedule.create({
+    data: { organizationId, workflowDefinitionId: a.definition.id, workflowVersionId: c.version.id,
+      ...scheduleConfig, nextRunAt: new Date(due), status: "STAGED", createdByUserId: actor },
+  }), "a version from another definition in SAME tenant must fail its composite FK");
+  await assert.rejects(() => prisma.enterpriseWorkflowSchedule.create({
     data: { organizationId, workflowDefinitionId: a.definition.id, workflowVersionId: b.version.id,
       ...scheduleConfig, nextRunAt: new Date(due), status: "STAGED", createdByUserId: actor },
-  }));
+  }), "cross-tenant definition/version must fail");
+  await assert.rejects(() => prisma.enterpriseWorkflowSchedule.create({
+    data: { organizationId, workflowDefinitionId: a.definition.id, workflowVersionId: a.version.id,
+      ...scheduleConfig, status: "STAGED", createdByUserId: actor },
+  }), "STAGED without a due cursor must fail DB CHECK");
+  await assert.rejects(() => prisma.enterpriseWorkflowSchedule.create({
+    data: { organizationId, workflowDefinitionId: a.definition.id, workflowVersionId: a.version.id,
+      ...scheduleConfig, status: "ENABLED", nextRunAt: new Date(due), createdByUserId: actor },
+  }), "DB must forbid ENABLED until the executable scheduler is reviewed");
   await assert.rejects(() => prisma.enterpriseWorkflowScheduleOccurrence.create({
     data: { organizationId: otherTenant, scheduleId: staged.id, workflowVersionId: a.version.id,
       localDate: "2026-11-01", localTime: "01:30", timeZone: "America/New_York",
