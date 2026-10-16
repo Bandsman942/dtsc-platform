@@ -3,7 +3,7 @@
 import { useId, useMemo, useRef, useState, type PointerEvent } from "react";
 import { projectWorkflowVersion, type WorkflowVisualNode } from "@/lib/enterprise/workflows/visual-projection";
 
-type VisualStep = { code: string; name: string; description?: string | null; stepType: string; position: number };
+type VisualStep = { code: string; name: string; description?: string | null; stepType: string; position: number; configuration?: Record<string, unknown>; configurationJson?: Record<string, unknown> };
 type VisualTransition = { fromStepCode?: string; toStepCode?: string; outcome?: string | null; priority: number };
 type Configuration = Record<string, string | number | boolean | null>;
 type Props = {
@@ -18,6 +18,7 @@ type Props = {
   onAddStep: () => void;
   onDeleteStep: (code: string) => void;
   onDuplicateStep: (code: string) => void;
+  onUpdateConfiguration: (code: string, input: string) => string | null;
   onUndo: () => void;
   onRedo: () => void;
   undoAvailable: boolean;
@@ -32,7 +33,7 @@ const TOP = 24;
 
 export function WorkflowVisualStudio({
   locale, steps, transitions, configuration, editable, onMove, onRename, onConnect,
-  onAddStep, onDeleteStep, onDuplicateStep, onUndo, onRedo, undoAvailable, redoAvailable,
+  onAddStep, onDeleteStep, onDuplicateStep, onUpdateConfiguration, onUndo, onRedo, undoAvailable, redoAvailable,
 }: Props) {
   const en = locale === "en";
   const markerId = useId().replace(/:/g, "");
@@ -59,6 +60,8 @@ export function WorkflowVisualStudio({
   const active = steps.find((step) => step.code === selected);
   const [label, setLabel] = useState("");
   const [description, setDescription] = useState("");
+  const [configurationText, setConfigurationText] = useState("{}");
+  const [configurationError, setConfigurationError] = useState("");
   const maxX = Math.max(980, ...positions.map((node) => node.x + WIDTH + 80));
   const maxY = Math.max(460, ...positions.map((node) => node.y + HEIGHT + 80));
 
@@ -66,6 +69,8 @@ export function WorkflowVisualStudio({
     setSelected(step.code);
     setLabel(step.name);
     setDescription(step.description || "");
+    setConfigurationText(JSON.stringify(step.configuration || step.configurationJson || {}, null, 2));
+    setConfigurationError("");
   }
   function pointerDown(event: PointerEvent<HTMLButtonElement>, node: WorkflowVisualNode) {
     if (!editable || event.button !== 0) return;
@@ -156,7 +161,7 @@ export function WorkflowVisualStudio({
           <label className="text-xs text-dtsc-muted">{en ? "Name" : "Nom"}<input disabled={!editable} value={label} onChange={e => setLabel(e.target.value)} maxLength={140} className="mt-1 w-full rounded-lg border border-dtsc-border bg-dtsc-page p-2 text-sm" /></label>
           <label className="text-xs text-dtsc-muted">{en ? "Description" : "Description"}<textarea disabled={!editable} value={description} onChange={e => setDescription(e.target.value)} maxLength={500} rows={3} className="mt-1 w-full rounded-lg border border-dtsc-border bg-dtsc-page p-2 text-sm" /></label>
           {editable ? <div className="flex flex-wrap gap-2"><button type="button" disabled={!label.trim()} onClick={() => onRename(active.code, label.trim(), description.trim())} className="rounded-lg bg-dtsc-blue px-3 py-2 text-xs font-bold text-white disabled:opacity-40">{en ? "Apply" : "Appliquer"}</button><button type="button" disabled={active.stepType === "START" || active.stepType === "END"} onClick={() => onDuplicateStep(active.code)} className="rounded-lg border border-dtsc-border px-3 py-2 text-xs text-dtsc-ink disabled:opacity-40">{en ? "Duplicate step" : "Dupliquer l’étape"}</button><button type="button" onClick={() => { onDeleteStep(active.code); setSelected(null); }} className="rounded-lg border border-rose-300 px-3 py-2 text-xs text-rose-700">{en ? "Delete step" : "Supprimer l’étape"}</button></div> : null}
-          <p className="text-xs text-dtsc-muted">{en ? "Advanced configurations are preserved exactly in the existing structured editor." : "Les configurations avancées sont conservées dans l’éditeur structuré existant."}</p>
+          {editable ? <details className="rounded-lg border border-dtsc-border p-2"><summary className="cursor-pointer text-xs font-bold text-dtsc-ink">{en ? "Advanced configuration (JSON)" : "Configuration avancée (JSON)"}</summary><label className="mt-2 block text-xs text-dtsc-muted">{en ? "Step settings" : "Paramètres de l’étape"}<textarea spellCheck={false} value={configurationText} onChange={(event) => { setConfigurationText(event.target.value); setConfigurationError(""); }} rows={6} maxLength={16000} className="mt-1 w-full min-w-0 rounded-lg border border-dtsc-border bg-dtsc-page p-2 font-mono text-xs" /></label>{configurationError ? <p className="mt-2 text-xs text-rose-700" role="alert">{configurationError}</p> : null}<button type="button" onClick={() => setConfigurationError(onUpdateConfiguration(active.code, configurationText) || "")} className="mt-2 rounded-lg border border-dtsc-border px-3 py-2 text-xs font-bold text-dtsc-ink">{en ? "Validate and apply" : "Valider et appliquer"}</button><p className="mt-2 text-xs text-dtsc-muted">{en ? "Only supported typed configurations are accepted; this does not execute any action." : "Seules les configurations métier autorisées sont acceptées ; aucune action n’est exécutée."}</p></details> : null}
         </div> : <p className="mt-2 text-xs text-dtsc-muted">{en ? "Select a node or an item from the list." : "Sélectionnez un nœud ou un élément de la liste."}</p>}
       </aside>
     </div>
