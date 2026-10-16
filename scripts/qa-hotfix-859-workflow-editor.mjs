@@ -44,6 +44,9 @@ assert.ok(approval.includes("mandate.allowed"), "a pre-existing ERP approver mus
 assert.ok(approval.includes("existingPending.approverUserId"), "retain canonical ERP approver");
 assert.ok(sources.includes('status: { in: ["DRAFT", "PENDING_APPROVAL"] }'), "expense states must be approvable");
 assert.ok(sources.includes('"PREPARING", "CORRECTION_REQUESTED", "PENDING_APPROVAL"'), "budget states must be approvable");
+assert.ok(resolver.includes("enterprisePosition.findFirst"), "role matching must accept positionId and active positions");
+assert.ok(resolver.includes("positionId: activePosition.id"), "a position ID must match its active position code");
+assert.ok(members.includes("positionCodesById"), "dropdown must show effective active positions by ID");
 assert.ok(!api.includes("message: parsed.error.issues[0]?.message"),"Do not return raw Zod English errors");
 assert.ok(!ui.includes("<Input name=\"role\""),"Use guided role selection");
 assert.ok(!members.includes("email: member.user.email"),"Do not expose unrelated member email");

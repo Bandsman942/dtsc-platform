@@ -30,7 +30,7 @@ export async function GET(req: Request, { params }: Params) {
     const members = await prisma.organizationMember.findMany({
       where: { organizationId, status: "ACTIVE", removedAt: null },
       select: {
-        userId: true, role: true, positionCode: true, positionTitle: true,
+        userId: true, role: true, positionId: true, positionCode: true, positionTitle: true,
         user: { select: { name: true } },
         organizationRoleAssignments: {
           where: { revokedAt: null, role: { isActive: true, archivedAt: null } },
@@ -39,6 +39,12 @@ export async function GET(req: Request, { params }: Params) {
       },
       orderBy: { user: { name: "asc" } }, take: 250,
     });
+    const positions = await prisma.enterprisePosition.findMany({
+      where: { organizationId, isActive: true },
+      select: { id: true, positionCode: true },
+    });
+    const positionCodesById = new Map(positions.map((position) => [position.id, position.positionCode]));
+    const activePositionCodes = new Set(positions.map((position) => position.positionCode));
     const decisions = await Promise.all(members.map(async (member) => ({
       member, decision: await resolveEnterpriseModuleAccess({
         userId: member.userId, organizationId, moduleCode, action: "approve",
@@ -47,8 +53,11 @@ export async function GET(req: Request, { params }: Params) {
     const eligible = decisions.filter(({ decision }) => decision.allowed).map(({ member }) => member);
     const countByRole = new Map<string, number>();
     for (const member of eligible) {
+      const activePositionCode = member.positionId
+        ? positionCodesById.get(member.positionId)
+        : (member.positionCode && activePositionCodes.has(member.positionCode) ? member.positionCode : null);
       const codes = new Set([
-        member.role, member.positionCode,
+        member.role, activePositionCode,
         ...member.organizationRoleAssignments.map((assignment) => assignment.role.code),
       ].filter((value): value is string => typeof value === "string" && Boolean(value)));
       for (const code of codes) countByRole.set(code, (countByRole.get(code) || 0) + 1);

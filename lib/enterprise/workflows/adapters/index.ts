@@ -248,12 +248,16 @@ export async function resolveWorkflowAssignment({
   let candidate: string | null = null;
   if (strategy === "SPECIFIC_USER") candidate = userId || null;
   else if (strategy === "SPECIFIC_ROLE") {
+    const activePosition = role ? await prisma.enterprisePosition.findFirst({
+      where: { organizationId, positionCode: role, isActive: true },
+      select: { id: true },
+    }) : null;
     const members = await prisma.organizationMember.findMany({
       where: {
         organizationId, status: "ACTIVE", removedAt: null,
         OR: [
           { role },
-          { positionCode: role },
+          ...(activePosition ? [{ positionId: activePosition.id }, { positionCode: role }] : []),
           { organizationRoleAssignments: { some: { revokedAt: null, role: { code: role, isActive: true, archivedAt: null } } } },
         ],
       },
