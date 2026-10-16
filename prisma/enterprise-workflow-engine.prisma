@@ -245,6 +245,7 @@ model EnterpriseWorkflowSchedule {
   @@unique([organizationId, id, workflowVersionId], map: "EW_Schedule_org_id_version_key")
   @@index([organizationId, status, nextRunAt])
   @@index([organizationId, workflowDefinitionId, status], map: "EW_Schedule_org_definition_status_idx")
+  @@index([organizationId, sourceEntityType, sourceEntityId], map: "EW_Schedule_tenant_source_idx")
 }
 
 /**
