@@ -3,6 +3,8 @@
 - Ajout d'une projection pure graphe canonique ↔ coordonnées visuelles versionnées, sans moteur parallèle, migration ou effets métier.
 - QA sur 10 nœuds et métadonnées conservant conditions, branches, ordre et configs ; ADR sur le choix futur de canvas et l'accessibilité.
 - Intégration d'un studio React/SVG sur la branche : positions par pointeur/clavier, zoom, connexions typées, édition de libellés, undo/redo, fallback liste sur mobile et sauvegarde canonique des métadonnées visuelles.
+- Duplication contrôlée d'étape non terminale, édition des configurations avancées validée par schéma métier et garde serveur transactionnelle contre écrasement d'un brouillon concurrent.
+- Deux QA obligatoires : projection/éditeur 10 nœuds et conflit de sauvegarde avec verrou et refus des éditions cross-tenant/publiées.
 - #816/#817 sont fusionnés en Production ; l'éditeur visuel de #818 reste **non déployé**, dans l'attente des tests navigateur et de OWNER_E2E #818.
 
 

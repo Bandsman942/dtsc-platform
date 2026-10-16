@@ -91,3 +91,10 @@ Les modifications locales marquent le brouillon comme non enregistré. Les bouto
 ### Plusieurs collaborateurs sur le même brouillon
 
 Si une autre personne a enregistré le workflow après son ouverture, l'enregistrement est refusé pour éviter de supprimer les changements de cette personne. L'interface conserve les modifications locales et affiche un message demandant de **recharger le dernier brouillon**, puis de réappliquer les différences après comparaison. Ne confondez pas ce conflit avec un refus de publication ou un problème de permissions.
+
+
+### Dupliquer une étape et modifier ses paramètres
+
+Sélectionnez un nœud, puis cliquez sur **Dupliquer l’étape**. Les étapes START et END ne peuvent pas être dupliquées. L'étape copiée conserve sa configuration, mais ses branches ne sont pas reproduites : reliez-la explicitement aux autres étapes avant la revue.
+
+La rubrique **Configuration avancée (JSON)** permet de modifier les paramètres techniques d'une étape avec validation immédiate du type et des champs métier autorisés. Une configuration invalide n'est pas appliquée. Les étapes gardent le formulaire structuré accessible ; aucun changement ne s'exécute automatiquement. Toute modification doit être enregistrée avant la revue de publication.

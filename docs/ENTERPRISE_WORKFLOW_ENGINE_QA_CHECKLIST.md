@@ -247,3 +247,10 @@ Automatisation : `pnpm qa:workflow-contracts` et `pnpm qa:workflow-contracts:pos
 - [ ] Le token provient du serveur seulement si `canEditDraft`, n'est ni un JWT, ni un secret, ni un bypass RBAC.
 - [ ] La sauvegarde prend un verrou `FOR UPDATE` sur la ligne de version avant comparaison du snapshot et avant mutation ; le studio ne contourne pas le verrou.
 - [ ] `pnpm qa:workflow-visual-concurrency` et `pnpm qa:workflow-visual-roundtrip` intégrés aux Quality Gates et à la régression ; navigateur authentifié restant.
+
+
+### Propriétés/duplication du studio — WF-05
+
+- [ ] Duplication de CONDITION/APPROVAL/TASK conserve la configuration et ajoute un nouveau code unique sans copier les branches ; START/END ne sont pas dupliquables.
+- [ ] La modification des propriétés avancées JSON rejette valeurs mal formées et schémas invalides ; des configurations existantes sont préservées si non modifiées.
+- [ ] Après une mutation validée, l'état dirty est affiché, undo/redo fonctionnent et la sauvegarde PATCH exige un token à jour.
