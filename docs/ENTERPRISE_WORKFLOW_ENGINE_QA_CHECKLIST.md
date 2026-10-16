@@ -303,3 +303,12 @@ Automatisation : `pnpm qa:workflow-contracts` et `pnpm qa:workflow-contracts:pos
 - [ ] Source/acteur/time tous NULL sur les anciens horaires ; statut toujours DISABLED, aucun run/event/occurrence créé ou consommé, aucun worker/cron modifié.
 - [ ] Quality et Migration : `node scripts/qa-workflow-846-postgres.mjs` sur DB locale propre, migrations, lint, types, régression et build CI.
 - [ ] OWNER_E2E #846 distinct, avant squash merge ; réalisation du scheduler réel reportée à #843.
+
+## WF-06S2D — Reçus inertes (#850, parent #843)
+
+- [ ] Migration additive depuis base vide, Prisma generate, ancien ledger toujours compatible.
+- [ ] RESERVED obligatoire, colonnes claim/run/outbox nulles, défauts et revision positif garantis par CHECKs.
+- [ ] Index uniques run/outbox, FKs composites interdisant les références cross-tenant.
+- [ ] `node scripts/qa-workflow-850-postgres.mjs` sur deux tenants dans Quality + Migration : 11 mutations interdites et 0 ERP run/event.
+- [ ] Type-check, lint, régression et build CI SUCCESS, OWNER_E2E #850 explicite avant fusion.
+- [ ] Aucun worker, Cron, API, ENABLED ou effet métier ; activation sécurisée distincte #843.

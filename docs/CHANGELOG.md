@@ -1,3 +1,9 @@
+## 2026-10-16 — WF-06S2D : reçus d'exécution inertes (#850, parent #843)
+
+- Migration additive des champs de claim/lease/tentative/run/outbox sur les occurrences ; relations tenant-aware vers les objets canoniques et unicité en base.
+- Deux CHECKs PostgreSQL maintiennent le statut RESERVED et interdisent toute utilisation anticipée des champs d'exécution.
+- QA PostgreSQL two-tenants intégrée à Quality/Migration. Aucun Cron, aucun worker, aucune API ou activation ; E2E propriétaire #850 requis avant fusion.
+
 ## 2026-10-16 — WF-06S2B : attestation métier inerte source et acteur (#846, parent #843)
 
 - PATCH sécurisé d'un mandat pour un horaire strictement DISABLED ; source ERP persistée vérifiée par adaptateur tenant-scoped et acteur personnel revalidé sans compte système implicite.
