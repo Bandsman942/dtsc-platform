@@ -45,6 +45,7 @@ model EnterpriseWorkflowVersion {
   schedules         EnterpriseWorkflowSchedule[]
 
   @@unique([organizationId, id])
+  @@unique([organizationId, id, definitionId], map: "EW_Version_org_id_definition_key")
   @@unique([definitionId, versionNumber])
   @@index([organizationId, status, createdAt])
   @@index([definitionId, status])
@@ -233,7 +234,7 @@ model EnterpriseWorkflowSchedule {
   createdAt            DateTime                               @default(now())
   updatedAt            DateTime                               @updatedAt
   definition           EnterpriseWorkflowDefinition           @relation(fields: [organizationId, workflowDefinitionId], references: [organizationId, id], onDelete: Restrict)
-  version              EnterpriseWorkflowVersion              @relation(fields: [organizationId, workflowVersionId], references: [organizationId, id], onDelete: Restrict, map: "EW_Schedule_version_fkey")
+  version              EnterpriseWorkflowVersion              @relation(fields: [organizationId, workflowVersionId, workflowDefinitionId], references: [organizationId, id, definitionId], onDelete: Restrict, map: "EW_Schedule_version_fkey")
   occurrences          EnterpriseWorkflowScheduleOccurrence[]
 
   @@unique([organizationId, id])
