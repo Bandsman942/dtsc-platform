@@ -587,3 +587,8 @@ Le catalogue et la publication utilisent `getWorkflowContractReadiness`. La pré
 ## WF-02 — RBAC/entitlements du moteur de workflows (#815)
 
 Les opérations du module WORKFLOWS exigent le membership CLIENT actif, le module activé et son entitlement canonique. L’accès au module source ERP est vérifié à la route et l’acteur d’exécution est revalidé à l’exécution ; MANAGER n’est pas administrateur implicite. Les métriques de runs partagent exactement le prédicat de visibilité des listes. Voir [WORKFLOW_SECURITY_POLICY.md](WORKFLOW_SECURITY_POLICY.md) pour les routes, matrices, critères E2E, cas de révocation et rollback.
+
+
+### WF-04 — Exploitation et latences bornées (#817)
+
+La route sécurisée des exécutions Workflows réutilise son prédicat tenant + droits de membre + modules ERP pour les mesures statistiques. `observability` détaille échantillonnage (`sampledAt`, `windowDays=30`, `sampleLimit=500`, `capped`), latences `p50/p95/p99` calculées à partir des run COMPLETED/REJECTED avec dates fiables, et ancienneté des runs WAITING/BLOCKED selon `updatedAt`. Ces chiffres sont des échantillons, jamais une facturation ou un SLA exhaustif. Un compteur manquant vaut `null`, pas 0. Le worker interne compte en plus les leases `PROCESSING` expirées, sans exposer de payload. Référence : `docs/WORKFLOW_OPERATIONS_RUNBOOK.md`. Aucun changement Prisma.
