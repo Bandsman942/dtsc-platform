@@ -52,3 +52,8 @@ Boucles avec `maxIterations`, `maxDuration`, profondeur et budget action global 
 ## Risque, gouvernance et livraison
 
 WF-06A peut être revert sans migration ni effet. Les sous-tranches suivantes ne s'activent que si leurs critères de sécurité, migrations-from-scratch et revue humaine sont verts. Aucun branchement automatique vers WF-07 OAuth/MCP tant que #819 et ses dépendances ne sont réellement livrés.
+
+
+## WF-06S1 — Persistance transactionnelle du calendrier (#841)
+
+La première tranche de persistance (distincte de WF-06C fanout/join) ajoute un registre DISABLED et une table de reçus uniques tenant-scoped avec FKs composites ; réservations STAGED internes sous verrou et transaction unique pour le curseur, **sans** déclenchement de run, worker ni API. Voir [WORKFLOW_SCHEDULE_LEDGER_ADR.md](WORKFLOW_SCHEDULE_LEDGER_ADR.md). La politique DST SKIP/FIRST a été approuvée par OWNER_E2E #837 ; les conditions et mappings WF-06B ont été fusionnés après OWNER_E2E #839. **WF-06S2 doit encore implémenter activation et outbox/run atomiques, droits, abonnement, quotas, E2E de vrais horaires, reprise et observabilité.**
