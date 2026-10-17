@@ -69,6 +69,6 @@ export async function GET(req: Request, { params }: Params) {
       : type === "EnterpriseCashSession" ? "/enterprise-modules/FINANCE_CASH"
       : type === "EnterpriseJournalEntry" ? "/enterprise-modules/FINANCE_ACCOUNTING"
       : type === "EnterpriseFinancialClose" ? "/enterprise-modules/FINANCE_CLOSE" : null,
-    sources: sources.map((item) => ({ id: item.id, label: [item.reference, item.title, item.status].filter(Boolean).join(" · ") })),
+    sources: sources.map((item) => ({ id: item.id, label: [item.reference, item.title].filter(Boolean).join(" · "), status: item.status })),
   });
 }
