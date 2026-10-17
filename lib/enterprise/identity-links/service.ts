@@ -96,6 +96,11 @@ async function validateBusinessTarget(
   organizationId: string,
   target: BusinessTarget,
 ) {
+  if (target.relationType === "SUPPLIER" &&
+      (!target.supplierId && !target.businessPartyId || target.employeeId || target.supplierContactId || target.businessPartyContactId)) {
+    throw new EnterpriseIdentityLinkError("SUPPLIER_REQUIRES_PERSON", "Choisissez une fiche fournisseur de type personne physique.", 400);
+  }
+
   if (target.supplierContactId) {
     const contact = await db.enterpriseSupplierContact.findFirst({
       where: { id: target.supplierContactId, organizationId },
@@ -126,6 +131,9 @@ async function validateBusinessTarget(
     }
     if (target.relationType === "SUPPLIER_REPRESENTATIVE" && supplier.supplierType !== "PERSON") {
       throw new EnterpriseIdentityLinkError("SUPPLIER_REPRESENTATIVE_REQUIRES_PERSON", "Sélectionnez un contact du fournisseur personne morale, et non l’organisation elle-même.", 400);
+    }
+    if (target.relationType === "SUPPLIER" && supplier.supplierType !== "PERSON") {
+      throw new EnterpriseIdentityLinkError("SUPPLIER_REQUIRES_PERSON", "Une organisation fournisseur doit sélectionner un représentant individuel et une relation « Représentant de fournisseur ».", 400);
     }
     return {
       displayName: target.displayName || supplier.displayName || supplier.legalName,
@@ -207,6 +215,7 @@ async function validateBusinessTarget(
         displayName: true,
         primaryEmail: true,
         primaryPhone: true,
+        roles: { where: { roleCode: "SUPPLIER", status: "ACTIVE", archivedAt: null }, select: { id: true }, take: 1 },
       },
     });
     if (!businessParty) {
@@ -215,6 +224,10 @@ async function validateBusinessTarget(
         "La fiche métier sélectionnée est introuvable dans cette entreprise.",
         404,
       );
+    }
+    if (target.relationType === "SUPPLIER" &&
+        (businessParty.partyType !== "PERSON" || businessParty.roles.length === 0)) {
+      throw new EnterpriseIdentityLinkError("SUPPLIER_REQUIRES_PERSON", "Choisissez un tiers personne physique disposant du rôle Fournisseur.", 400);
     }
     if (target.relationType === "SUPPLIER_REPRESENTATIVE" && businessParty.partyType !== "PERSON") {
       throw new EnterpriseIdentityLinkError(
