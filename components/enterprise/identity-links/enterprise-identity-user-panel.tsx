@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAppLocale } from "@/components/i18n/locale-provider";
 import { Building2, Check, CheckCircle2, Clock3, History, RotateCcw, Send, ShieldCheck, X } from "lucide-react";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { type BusinessContextAction } from "@/components/workspace/context-actions";
@@ -94,6 +95,7 @@ export function EnterpriseIdentityUserPanel({
   initialOrganizationCode?: string;
 }) {
   const router = useRouter();
+  const appLocale = useAppLocale();
   const [view, setView] = useState<RelationshipView>(token ? "ACTION" : initialRelationshipView(initialView));
   const [detailTarget, setDetailTarget] = useState<DetailTarget | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -214,7 +216,7 @@ export function EnterpriseIdentityUserPanel({
   const detailOrganization = selectedInvitation?.organization.name || selectedLink?.organization?.name || "Entreprise indisponible";
   const detailPerson = selectedInvitation?.person.displayName || selectedLink?.person?.displayName || "Fiche métier";
   const detailRelationType = selectedInvitation?.requestedRelationType || selectedLink?.requestedRelationType || "CUSTOMER";
-  const detailBusinessRoleLabel = selectedLink?.businessRoleSupplier ? "Fournisseur" : null;
+  const detailBusinessRoleLabel = selectedLink?.businessRoleSupplier ? (appLocale === "en" ? "Supplier" : "Fournisseur") : null;
   const detailPurpose = selectedInvitation?.purpose || selectedLink?.purpose || "—";
   const detailExpiresAt = selectedInvitation?.expiresAt || selectedLink?.expiresAt || null;
 
@@ -329,7 +331,7 @@ export function EnterpriseIdentityUserPanel({
         open={Boolean(detailTarget)}
         onClose={() => setDetailTarget(null)}
         title={detailOrganization}
-        description={`${detailBusinessRoleLabel && detailRelationType === "OTHER" ? `${detailBusinessRoleLabel} (rôle métier) · Autre relation (consentement)` : getEnterpriseIdentityRelationLabel(detailRelationType as EnterpriseIdentityRelationType, "fr")} · ${detailPerson}`}
+        description={`${detailBusinessRoleLabel && detailRelationType === "OTHER" ? `${detailBusinessRoleLabel} (${appLocale === "en" ? "business role" : "rôle métier"}) · ${appLocale === "en" ? "Other relationship (consent)" : "Autre relation (consentement)"}` : getEnterpriseIdentityRelationLabel(detailRelationType as EnterpriseIdentityRelationType, appLocale)} · ${detailPerson}`}
         actions={detailActions}
         actionLabel="Actions de la relation"
       >
@@ -364,13 +366,14 @@ export function EnterpriseIdentityUserPanel({
 
 function RelationshipListItem({ link, focused, descriptionSuffix, onOpen }: { link: UserIdentityLink; focused?: boolean; descriptionSuffix?: string; onOpen: () => void }) {
   const status = link.status as EnterpriseIdentityLinkStatus;
+  const locale = useAppLocale();
   return (
     <div id={`company-relationship-${link.id}`} className={focused ? "rounded-xl bg-cyan-400/10 px-2" : undefined}>
       <BusinessListItem
         title={link.organization?.name || "Entreprise indisponible"}
         leading={<Building2 className="h-5 w-5 text-dtsc-blue" />}
         status={<StatusBadge tone={statusTone(link.status)}>{getEnterpriseIdentityStatusLabel(status, "fr")}</StatusBadge>}
-        meta={`${link.businessRoleSupplier && link.requestedRelationType === "OTHER" ? "Fournisseur (rôle métier) · Autre relation (consentement)" : getEnterpriseIdentityRelationLabel(link.requestedRelationType as EnterpriseIdentityRelationType, "fr")} · ${link.person?.displayName || "Fiche métier"}`}
+        meta={`${link.businessRoleSupplier && link.requestedRelationType === "OTHER" ? (locale === "en" ? "Supplier (business role) · Other relationship (consent)" : "Fournisseur (rôle métier) · Autre relation (consentement)") : getEnterpriseIdentityRelationLabel(link.requestedRelationType as EnterpriseIdentityRelationType, locale)} · ${link.person?.displayName || (locale === "en" ? "Business record" : "Fiche métier")}`}
         description={`${link.purpose}${descriptionSuffix ? ` · ${descriptionSuffix}` : ""}`}
         onOpen={onOpen}
       />
