@@ -279,5 +279,9 @@
   "crm.opportunityChangedFields": "Informations modifiées",
   "crm.opportunityNoHistory": "Aucune activité enregistrée.",
   "crm.opportunityLoadMore": "Afficher les activités précédentes",
-  "crm.opportunityOriginLead": "Prospect à l’origine"
+  "crm.opportunityOriginLead": "Prospect à l’origine",
+  "crm.opportunityHistoryCreated": "Opportunité créée",
+  "crm.opportunityHistoryUpdated": "Informations commerciales modifiées",
+  "crm.opportunityHistoryNote": "Note de suivi ajoutée",
+  "crm.opportunityHistoryStage": "Étape de l'opportunité modifiée"
 }
