@@ -8,7 +8,7 @@ import { listUserIdentityLinks } from "@/lib/enterprise/identity-links/service";
 export default async function EnterpriseLinksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ token?: string; link?: string; view?: string }>;
+  searchParams: Promise<{ token?: string; link?: string; view?: string; code?: string }>;
 }) {
   const user = await requireUser();
   const { token, link, view } = await searchParams;
