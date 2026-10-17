@@ -459,7 +459,8 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, departmen
   }, [organizationId, locale, en]);
 
   useEffect(() => {
-    const runId = new URLSearchParams(window.location.search).get("runId");
+    const parameters = new URLSearchParams(window.location.search);
+    const runId = parameters.get("run") || parameters.get("runId");
     if (runId) { setTab("runs"); void openRun(runId); }
   }, [organizationId, openRun]);
 
