@@ -3,7 +3,7 @@
 - Audit de 94 actions historiques et matrice de couverture documentée : 60 demandes sectorielles explicites, 14 opérations non conformes bloquées, 6 Hôtellerie/Gaming et 14 actions médicales/Pharmacie/clinique préservées ou filtrées.
 - Suppression du fallback de formulaires par préfixe ; aucun faux enregistrement de notes, livraison, stock, paie ou fichiers sans liaison canonique.
 - Validation serveur fail-closed (`ENTERPRISE_ACTIVITY_ACTION_NOT_READY`), motifs accessibles FR/EN, CTA désactivée lorsqu'aucune intégration métier n'existe.
-- QA `pnpm qa:hotfix-876-sector-activities` dans `qa:regression`; aucune activation commerciale implicite ni changement de base.
+- QA `pnpm qa:hotfix-876-sector-activities` dans `qa:regression` (14 intégrations réelles suivies dans #878); aucune activation commerciale implicite ni changement de base.
 - OWNER_E2E requis avant toute fusion ou livraison Production.
 
 ## 2026-10-17 — Hotfix #877 : liaison Activités entreprise ↔ Demandes internes ↔ Workflows
