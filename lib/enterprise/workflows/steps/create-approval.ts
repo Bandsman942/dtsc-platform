@@ -17,6 +17,74 @@ export const executeCreateApprovalStep: WorkflowStepHandler = async ({ run, step
     return { kind: "SUCCEEDED", outcome: alreadyLinked.status, assignedUserId: alreadyLinked.approverUserId, actorUserId: alreadyLinked.status === "CANCELLED" ? null : alreadyLinked.approverUserId, output: { approvalId: alreadyLinked.id, decision: alreadyLinked.status } };
   }
 
+  // Finance steps only attach a PREEXISTING canonical decision. They cannot
+  // create a shadow approval, nominate an approver or mutate financial status.
+  const canonicalTarget = parsed.configuration.canonicalApprovalTarget;
+  if (canonicalTarget) {
+    if (!adapter.canonicalApprovalTargets?.has(canonicalTarget)) {
+      throw new EnterpriseWorkflowError("Cette validation canonique n’est pas compatible avec la source.", 409, "WORKFLOW_APPROVAL_TARGET_UNSUPPORTED", "CONFIGURATION");
+    }
+    const candidate = await prisma.enterpriseApproval.findFirst({
+      where: {
+        organizationId: run.organizationId,
+        targetEntityType: canonicalTarget,
+        targetEntityId: run.sourceEntityId,
+        status: { in: ["PENDING", "APPROVED", "REJECTED", "CANCELLED"] },
+        archivedAt: null,
+      },
+      orderBy: { requestedAt: "desc" },
+    });
+    if (!candidate) throw new EnterpriseWorkflowError(
+      "Soumettez d’abord ce document dans son module financier pour créer la validation officielle.",
+      409, "WORKFLOW_CANONICAL_APPROVAL_MISSING", "BUSINESS",
+    );
+    // Mandatory live module permission, exact active member, and SoD check.
+    const requesterUserId = await resolveWorkflowExecutionUser({
+      organizationId: run.organizationId, startedByUserId: run.startedByUserId,
+      adapter, entity, action: "read",
+    });
+    if (candidate.approverUserId === requesterUserId) throw new EnterpriseWorkflowError(
+      "Le demandeur ne peut pas valider sa propre opération.",
+      409, "WORKFLOW_SELF_APPROVAL_BLOCKED", "BUSINESS",
+    );
+    const decision = await resolveEnterpriseModuleAccess({
+      userId: candidate.approverUserId, organizationId: run.organizationId,
+      moduleCode: workflowSourceModule(run.sourceEntityType), action: "approve",
+    });
+    if (!decision.allowed) throw new EnterpriseWorkflowError(
+      "Le valideur officiel n’a plus les droits nécessaires sur le module financier.",
+      403, "WORKFLOW_APPROVER_MODULE_DENIED", "SECURITY",
+    );
+    const linked = await prisma.enterpriseApproval.updateMany({
+      where: {
+        id: candidate.id, organizationId: run.organizationId,
+        workflowRunId: null, workflowStepRunId: null,
+        status: candidate.status, revision: candidate.revision, archivedAt: null,
+      },
+      data: { workflowRunId: run.id, workflowStepRunId: stepRun.id },
+    });
+    if (linked.count !== 1) {
+      const changed = await prisma.enterpriseApproval.findFirst({
+        where: { id: candidate.id, organizationId: run.organizationId },
+      });
+      if (changed?.workflowRunId !== run.id || changed.workflowStepRunId !== stepRun.id) {
+        throw new EnterpriseWorkflowError(
+          "Cette validation a changé ou est déjà associée à une autre exécution.",
+          409, "WORKFLOW_APPROVAL_ALREADY_LINKED", "BUSINESS",
+        );
+      }
+    }
+    if (candidate.status === "PENDING") return {
+      kind: "WAITING", runStatus: "WAITING_APPROVAL",
+      assignedUserId: candidate.approverUserId, output: { approvalId: candidate.id },
+    };
+    return { kind: "SUCCEEDED", outcome: candidate.status,
+      assignedUserId: candidate.approverUserId,
+      actorUserId: candidate.status === "CANCELLED" ? null : candidate.approverUserId,
+      output: { approvalId: candidate.id, decision: candidate.status },
+    };
+  }
+
   // An already-linked canonical approval is recovery evidence even when the
   // adapter no longer offers creation of fresh approvals. Never block its receipt.
   if (!adapter.createApproval) throw new EnterpriseWorkflowError("Ce type d’objet ne prend pas en charge les validations métier dans un workflow.", 400, "WORKFLOW_APPROVAL_TARGET_UNSUPPORTED", "CONFIGURATION");

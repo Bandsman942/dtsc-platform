@@ -38,7 +38,9 @@ export function getWorkflowContractReadiness(source: Source, input: WorkflowVers
             text.push(step.configuration.commentTemplate);
             break;
           case "CREATE_APPROVAL":
-            if (!adapter.createApproval) add("APPROVAL_TARGET_UNSUPPORTED", step.code);
+            if (step.configuration.canonicalApprovalTarget
+              ? !adapter.canonicalApprovalTargets?.has(step.configuration.canonicalApprovalTarget)
+              : !adapter.createApproval) add("APPROVAL_TARGET_UNSUPPORTED", step.code);
             text.push(step.configuration.titleTemplate);
             break;
           case "CREATE_TASK": text.push(step.configuration.titleTemplate, step.configuration.descriptionTemplate); break;

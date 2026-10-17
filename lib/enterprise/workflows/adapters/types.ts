@@ -57,6 +57,8 @@ export interface WorkflowEntityAdapter {
   // Presence means the workflow can request this exact canonical approval.
   // Finance decision targets are deliberately not inferred from entity names.
   createApproval?(input: WorkflowApprovalInput): Promise<EnterpriseApproval>;
+  /** Exact preexisting approvals attachable without creating a second ERP request. */
+  canonicalApprovalTargets?: ReadonlySet<string>;
   loadEntity(organizationId: string, entityId: string): Promise<WorkflowEntitySnapshot>;
   getConditionField(entity: WorkflowEntitySnapshot, field: string): unknown;
   getTemplateValues(entity: WorkflowEntitySnapshot, workflowName: string): Record<string, unknown>;
