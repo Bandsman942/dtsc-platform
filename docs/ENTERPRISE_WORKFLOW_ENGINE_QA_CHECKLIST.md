@@ -370,3 +370,6 @@ Automatisation : `pnpm qa:workflow-contracts` et `pnpm qa:workflow-contracts:pos
 - [ ] PostgreSQL Quality+Migration / lint/types/build puis OWNER_E2E #861 BON avant merge ; vérification Vercel Production READY et activation environnement séparée.
 
 - [ ] Cas négatif : soumettre un paiement non fournisseur ; le workflow fournisseur n'attache aucune demande de validation et n'émet aucune notification fournisseur. Seuls les paiements SUPPLIER_PAYMENT figurent dans le sélecteur manuel.
+
+- [ ] Lors du premier ajout de CRON_SECRET en Production, vérifier que les 7 autres routes Vercel Cron retournent 503 au jeton Cron commun (aucun replay Web Push, email, projections, bulk, report schedules, knowledge index ou expiration d'invitation). Un secret worker dédié existant conserve son chemin de maintenance autorisé.
+- [ ] N'activer séparément chaque `*_CRON_ENABLED` qu'après inventaire lecture seule de sa propre queue et accord d'exploitation ; particulièrement 343 notifications Web Push anciennes. Ne jamais activer toutes les tâches en une fois.

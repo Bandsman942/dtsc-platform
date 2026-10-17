@@ -59,6 +59,50 @@ const source = readFileSync("app/api/internal/workflows/process/route.ts","utf8"
 const isolated = readFileSync("lib/enterprise/workflows/worker-isolated.ts","utf8");
 const worker = readFileSync("lib/enterprise/workflows/worker.ts","utf8");
 const cutoff = readFileSync("lib/enterprise/workflows/event-recovery.ts","utf8");
+
+const { isSharedCronDispatchPaused } = load("@/lib/scheduled-cron-activation");
+const otherCrons = [
+  ["app/api/internal/web-push/process/route.ts","WEB_PUSH_CRON_ENABLED"],
+  ["app/api/internal/cross-module-projections/process/route.ts","CROSS_MODULE_PROJECTIONS_CRON_ENABLED"],
+  ["app/api/internal/admin-broadcast-email/process/route.ts","ADMIN_BROADCAST_EMAIL_CRON_ENABLED"],
+  ["app/api/internal/knowledge-index/process/route.ts","KNOWLEDGE_INDEX_CRON_ENABLED"],
+  ["app/api/internal/enterprise-bulk/process/route.ts","ENTERPRISE_BULK_CRON_ENABLED"],
+  ["app/api/internal/report-schedules/process/route.ts","REPORT_SCHEDULES_CRON_ENABLED"],
+  ["app/api/internal/identity-links/expire/route.ts","IDENTITY_LINKS_CRON_ENABLED"],
+];
+for (const [route, flag] of otherCrons) {
+  const contents = readFileSync(route,"utf8");
+  assert.ok(contents.includes('isSharedCronDispatchPaused(request, "'+flag+'")'),
+    "Restoring CRON_SECRET must not automatically start "+route);
+  assert.ok(contents.includes('if (!auth.ok)') || contents.includes('if (!authorize(request))'),
+    "Existing authentication must remain before cron opt-in on "+route);
+}
+const oldCronEnv = {
+  VERCEL_ENV: process.env.VERCEL_ENV,
+  CRON_SECRET: process.env.CRON_SECRET,
+  WEB_PUSH_CRON_ENABLED: process.env.WEB_PUSH_CRON_ENABLED,
+};
+try {
+  process.env.VERCEL_ENV = "production";
+  process.env.CRON_SECRET = "isolated-qa-cron-secret";
+  delete process.env.WEB_PUSH_CRON_ENABLED;
+  const req = (secret) => ({ headers: { get: (name) =>
+    name === "authorization" ? "Bearer "+secret : null } });
+  assert.equal(isSharedCronDispatchPaused(req("isolated-qa-cron-secret"), "WEB_PUSH_CRON_ENABLED"),true);
+  assert.equal(isSharedCronDispatchPaused(req("distinct-worker-secret"), "WEB_PUSH_CRON_ENABLED"),false,
+    "Dedicated worker secret must retain its preexisting manual contract");
+  process.env.WEB_PUSH_CRON_ENABLED = "true";
+  assert.equal(isSharedCronDispatchPaused(req("isolated-qa-cron-secret"), "WEB_PUSH_CRON_ENABLED"),false);
+  process.env.WEB_PUSH_CRON_ENABLED = "false";
+  assert.equal(isSharedCronDispatchPaused(req("isolated-qa-cron-secret"), "WEB_PUSH_CRON_ENABLED"),true);
+  process.env.VERCEL_ENV = "preview";
+  assert.equal(isSharedCronDispatchPaused(req("isolated-qa-cron-secret"), "WEB_PUSH_CRON_ENABLED"),false);
+} finally {
+  for (const [key,value] of Object.entries(oldCronEnv)) {
+    if (value === undefined) delete process.env[key]; else process.env[key] = value;
+  }
+}
+
 const sourceOptions = readFileSync("app/api/enterprise/[organizationId]/workflow-runs/sources/route.ts","utf8");
 for (const sourceType of ["EnterpriseSupplierInvoice","EnterprisePayment","EnterpriseCashSession","EnterpriseJournalEntry","EnterpriseFinancialClose"]) {
   assert.ok(sourceOptions.includes('case "'+sourceType+'":'), "missing tenant-bounded manual options for "+sourceType);

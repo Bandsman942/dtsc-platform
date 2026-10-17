@@ -131,3 +131,21 @@ Mettre WORKFLOW_WORKER_ENABLED=false en Production et redéployer main. Suspendr
 Sur **424 événements PENDING échus** (n'incluant pas les autres états), 343 sont de type `PLATFORM_WEB_PUSH_NOTIFICATION` et **81 d'autres types**. Parmi ceux-ci : 4 `ENTERPRISE_APPROVAL_APPROVED`, 2 `ENTERPRISE_EXPENSE_APPROVED`, plusieurs événements de caisse et de paiements, ainsi que des traitements plus anciens ; les 424 avaient `attemptCount=0` au contrôle. Ne pas assimiler les 343 Web Push à des actions financières et ne pas déclarer les 81 autres récupérables sans examen individuel. L'inventaire est un instantané évolutif.
 
 `WORKFLOW_EVENT_CUTOVER_AT` doit respecter strictement un instant ISO UTC inférieur à cinq minutes dans le futur **et au maximum 72 heures dans le passé** ; sinon le worker ne revendique aucun événement. Le cutover n'est pas une autorisation de rejouer l'historique. Si le déploiement ou le rollback dure au-delà de 72 heures, choisir un nouveau cutoff explicitement validé plutôt que de désactiver ce contrôle.
+
+### P0 #861 — Contrôle des SEPT autres Vercel Cron avant installation de CRON_SECRET
+
+**Risque découvert dans l'audit :** `vercel.json` planifie HUIT routes, et le même `CRON_SECRET` les authentifie toutes. Le `WORKFLOW_WORKER_ENABLED` du hotfix ne protège que les workflows. Installer `CRON_SECRET` sans garde-fous pourrait donc exécuter immédiatement d'autres queues historiques (343 notifications Web Push, projections, index, e-mails de diffusion, rapports, imports bulk et expiration d'invitations).
+
+Le hotfix #861 ajoute `isSharedCronDispatchPaused` **après l'authentification existante** de chaque autre route. Par défaut en Production, un appel portant le jeton partagé `CRON_SECRET` reçoit `503 CRON_DISPATCH_DISABLED`. Le secret propre à un worker (lorsqu'il existe) garde son contrat de maintenance manuelle, afin de ne pas casser les interventions autorisées.
+
+| Route Vercel Cron | Opt-in Production requis |
+|---|---|
+| Web Push | `WEB_PUSH_CRON_ENABLED=true` |
+| Projections intermodules | `CROSS_MODULE_PROJECTIONS_CRON_ENABLED=true` |
+| Diffusion email administration | `ADMIN_BROADCAST_EMAIL_CRON_ENABLED=true` |
+| Index de connaissances | `KNOWLEDGE_INDEX_CRON_ENABLED=true` |
+| Jobs entreprise en masse | `ENTERPRISE_BULK_CRON_ENABLED=true` |
+| Planifications de rapports | `REPORT_SCHEDULES_CRON_ENABLED=true` |
+| Expiration des invitations de liaison de compte | `IDENTITY_LINKS_CRON_ENABLED=true` |
+
+La route workflows conserve **`WORKFLOW_WORKER_ENABLED=true`** et un `WORKFLOW_EVENT_CUTOVER_AT` UTC borné à 72h comme conditions d'activation. **Ne pas définir les sept autres opt-in à true** lors de l'installation initiale de `CRON_SECRET`. Avant chaque activation ultérieure, auditer la queue concernée, la catégorie et la tranche d'âge, disposer de l'autorisation de l'exploitant et de critères d'arrêt. Le statut 503 des Crons désactivés est attendu, il ne valide pas une exécution métier. Les 343 Web Push restent volontairement intacts jusqu'au plan de reprise ciblé.

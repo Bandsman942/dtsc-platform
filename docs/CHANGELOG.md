@@ -1726,3 +1726,5 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 - Added secret-free reports with API, PostgreSQL, Redis, queue, AI and tenant-isolation evidence.
 - Added enforced stage progression and a versioned certification registry consumed by the CTO scalability dashboard.
 - No capacity stage is marked certified until a real CI load run is archived.
+
+Hotfix #861 (complément) : un secret CRON_SECRET Production commun réveille potentiellement sept autres queues. Ajout de verrous par route avec opt-in explicite `*_CRON_ENABLED` après auth, sans changement des secrets dédiés ; aucune file ancienne relancée automatiquement.
