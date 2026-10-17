@@ -30,10 +30,11 @@ export async function GET(req: Request, { params }: Params) {
       select: { sourceEntityId: true },
     });
     if (origin?.sourceEntityId) {
+      const canSeeAllActivities = ["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE", "MANAGER"].includes(access.membership.role);
       const activity = await prisma.enterpriseActivityRequest.findFirst({
         where: {
           id: origin.sourceEntityId, organizationId,
-          ...(access.canViewAllRuns ? {} : { OR: [{ createdById: session.userId }, { assignedToUserId: session.userId }] }),
+          ...(canSeeAllActivities ? {} : { OR: [{ createdById: session.userId }, { assignedToUserId: session.userId }] }),
         },
         select: { id: true },
       });
