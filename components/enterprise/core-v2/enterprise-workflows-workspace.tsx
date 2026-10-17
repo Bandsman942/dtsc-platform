@@ -18,7 +18,7 @@ import { toastError, toastSuccess } from "@/lib/client-toast";
 import { getWorkflowRecoveryMessage, getWorkflowValidationFieldMessage } from "@/lib/enterprise/workflows/recovery-messages";
 import { cn } from "@/lib/utils";
 import { workflowReadinessMessage } from "@/lib/enterprise/workflows/readiness-messages";
-import { workflowManualEmptyMessage, workflowManualEntityLabel, workflowManualModuleLinkLabel, type WorkflowManualEmptyReason } from "@/lib/enterprise/workflows/manual-start-copy";
+import { workflowManualEmptyMessage, workflowManualEntityLabel, workflowManualModuleLinkLabel, workflowManualStatusLabel, type WorkflowManualEmptyReason } from "@/lib/enterprise/workflows/manual-start-copy";
 
 type Step = { id?: string; code: string; name: string; description?: string | null; stepType: string; position: number; configurationJson?: Record<string, unknown>; configuration?: Record<string, unknown> };
 type Transition = { id?: string; fromStepId?: string; toStepId?: string; fromStep?: { code: string }; toStep?: { code: string }; fromStepCode?: string; toStepCode?: string; outcome?: string | null; priority: number; conditionJson?: Record<string, unknown> | null; condition?: Record<string, unknown> };
@@ -56,7 +56,7 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, departmen
   const [runTotal, setRunTotal] = useState(0);
   const [runFilter, setRunFilter] = useState("");
   const [startDefinition, setStartDefinition] = useState<Definition | null>(null);
-  const [startOptions, setStartOptions] = useState<Array<{ id: string; label: string }>>([]);
+  const [startOptions, setStartOptions] = useState<Array<{ id: string; label: string; status: string }>>([]);
   const [startEmptyReason, setStartEmptyReason] = useState<WorkflowManualEmptyReason>(null);
   const [startLoadError, setStartLoadError] = useState("");
   const [startCreateHref, setStartCreateHref] = useState<string | null>(null);
@@ -507,7 +507,7 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, departmen
       <label className="grid min-w-0 gap-1 text-sm font-semibold text-dtsc-ink">{en ? "Business record" : "Objet métier"}
         <select required name="sourceEntityId" disabled={startLoading || startSubmitting || Boolean(startLoadError) || !startOptions.length} className="h-11 w-full min-w-0 max-w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3" defaultValue="">
           <option value="">{startLoading ? (en ? "Loading records…" : "Chargement des objets…") : (en ? "Select a record" : "Sélectionnez un objet")}</option>
-          {startOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+          {startOptions.map((option) => <option key={option.id} value={option.id}>{option.label} · {workflowManualStatusLabel(option.status, en)}</option>)}
         </select>
       </label>
       {!startLoading && startLoadError ? <p role="alert" className="break-words text-sm text-rose-600">{startLoadError}</p> : null}
