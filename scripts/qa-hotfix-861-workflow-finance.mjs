@@ -74,7 +74,8 @@ for (const [route, flag] of otherCrons) {
   const contents = readFileSync(route,"utf8");
   assert.ok(contents.includes('isSharedCronDispatchPaused(request, "'+flag+'")'),
     "Restoring CRON_SECRET must not automatically start "+route);
-  assert.ok(contents.includes('if (!auth.ok)') || contents.includes('if (!authorize(request))'),
+  assert.ok(/if\s*\(\s*!\s*auth\.ok\s*\)/.test(contents)
+    || /if\s*\(\s*!\s*authorize\(request\)\s*\)/.test(contents),
     "Existing authentication must remain before cron opt-in on "+route);
 }
 const oldCronEnv = {
