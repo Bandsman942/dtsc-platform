@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { EnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
 import { businessPartyCreateSchema } from "@/lib/enterprise/master-data/schemas";
-import { ENTERPRISE_SUPPLIER_STATUSES } from "@/lib/enterprise/procurement/constants";
+import { ENTERPRISE_SUPPLIER_CATEGORIES, ENTERPRISE_SUPPLIER_STATUSES } from "@/lib/enterprise/procurement/constants";
 import { normalizeEnterpriseSupplierName } from "@/lib/enterprise/procurement/supplier-normalization";
 import { supplierRoleStatus } from "@/lib/enterprise/procurement/supplier-party-sync";
 import { addEnterpriseOperationalEvent, nullable, requireActiveEnterpriseMember } from "@/lib/enterprise/procurement/shared";
@@ -11,7 +11,7 @@ import { prisma } from "@/lib/prisma";
 
 const optionalText = (max = 5000) => z.string().trim().max(max).optional().or(z.literal(""));
 const supplierExtensionSchema = z.object({
-  category: optionalText(120),
+  category: z.enum(ENTERPRISE_SUPPLIER_CATEGORIES).optional().or(z.literal("")),
   status: z.enum(ENTERPRISE_SUPPLIER_STATUSES).default("PROSPECT"),
   website: z.string().trim().url().max(500).optional().or(z.literal("")),
 });
