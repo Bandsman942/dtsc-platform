@@ -28,6 +28,9 @@ Issue #869, branche `fix/869-identity-supplier-relations-consent-code`, baseline
 - **OWNER_E2E non exécuté** : créer fournisseur personne physique et invitation `SUPPLIER`, accepter sur compte global, modifier nom et coordonnées dans Tiers puis fournisseur, vérifier synchronisation immédiate Relations actives et en-tête consentement courant, historique immuable; vérifier autre personne à même email n'est pas reliée. Vérifier entreprise fournisseur et `SUPPLIER_REPRESENTATIVE`; ancienne relation `OTHER` affiche rôle métier sans changer l'autorisation; nouvelle demande SUPPLIER exige un nouveau consentement et approval; code entreprise réel copiable, lien prérempli, soumission et refus tenant inexistant; vérifier absence d'annuaire.
 - UI FR/EN, dark/light, desktop/mobile 320/360/375/390/414/768/1024 px, focus, clavier, safe areas, plusieurs onglets; changements inter-tenant isolés, permissions lecture seule.
 
+## Suivi explicite de dette
+- Issue #871 : assistance au rapprochement **manuel et consenti** de données historiques sans référence relationnelle exploitable ; non résoluble sûrement par e-mail et distinct du hotfix #869.
+
 ## Risques & rollback
 - Risque de données historiques incompatibles entre fournisseur et identité de personne. Ne jamais fusionner automatiquement des identités; si aucun `EnterprisePersonBusinessReference` explicite, laisser inchangé et demander une liaison consentie.
 - Rollback de code par PR/hotfix traçable; conserver les identités, transactions, journal et consent records. Aucune migration destructive et aucun nettoyage de données historiques.
