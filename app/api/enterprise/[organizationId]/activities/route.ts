@@ -8,6 +8,7 @@ import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 import { enterpriseActivityRequestSchema } from "@/lib/validators";
 import { getBusinessActivityFields, resolveEnterpriseActivityAction, GAMING_ACTIVITY_REFERENCE_MODULE_CODES, GAMING_INCOMPATIBLE_ACTIVITY_BLOCKS } from "@/lib/enterprise/enterprise-activity-form-contract";
+import { isValidEnterpriseActivityCivilDate } from "@/lib/enterprise/enterprise-activity-civil-date";
 import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -150,7 +151,7 @@ export async function POST(req: Request, { params }: Params) {
       if (field.name === "currencyCode" && !/^[A-Z]{3}$/.test(value)) {
         return NextResponse.json({ error: "ENTERPRISE_ACTIVITY_CURRENCY_INVALID", message: "Indiquez un code devise ISO à trois lettres, comme CDF ou USD." }, { status: 400 });
       }
-      if (field.type === "date" && (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(new Date(`${value}T00:00:00Z`).getTime()) || new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) !== value)) {
+      if (field.type === "date" && !isValidEnterpriseActivityCivilDate(value)) {
         return NextResponse.json({ error: "ENTERPRISE_ACTIVITY_DATE_INVALID", message: `Indiquez une date valide pour « ${field.label} ».` }, { status: 400 });
       }
       if (field.source) {
