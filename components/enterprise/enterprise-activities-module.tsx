@@ -30,7 +30,7 @@ import { HealthDocumentsWorkspace } from "@/components/enterprise/health-documen
 const healthActivityModules = new Set(["CONSULTATIONS"]);
 type ActivityView = "ACTIONS" | "REQUESTS" | "WORKFLOWS";
 
-export function EnterpriseActivitiesModule({ organization, blocks, requests, members, departments, sectorRecords, workflows, gamingReferences, initialActivityId }: EnterpriseActivitiesDataset & { initialActivityId?: string | null }) {
+export function EnterpriseActivitiesModule({ organization, blocks, requests, members, departments, sectorRecords, workflows, gamingReferences, canonicalActionHandoffs, initialActivityId }: EnterpriseActivitiesDataset & { initialActivityId?: string | null }) {
   const locale = useAppLocale();
   const english = locale === "en";
   const [view, setView] = useState<ActivityView>(initialActivityId ? "REQUESTS" : "ACTIONS");
@@ -76,6 +76,7 @@ export function EnterpriseActivitiesModule({ organization, blocks, requests, mem
               sectorCode={organization.sectorCode}
               businessSubtypeCode={organization.businessSubtypeCode}
               blocks={blocks}
+              canonicalActionHandoffs={canonicalActionHandoffs}
               selectedBlockCode={selectedBlockCode}
               selectedBlock={selectedBlock}
               onSelectBlock={setSelectedBlockCode}
