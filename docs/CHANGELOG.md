@@ -1,3 +1,10 @@
+## 2026-10-17 — HOTFIX P0 #863 : lancement manuel des neuf templates Workflows
+
+- Correction des libellés de liens ERP trompeurs : Clôture de caisse → Caisse, Paiements fournisseurs → Paiements, Factures fournisseurs → Fournisseurs, Écritures → Comptabilité, Clôture financière → Clôture financière ; messages et statuts FR/EN sans codes Prisma.
+- Le sélecteur et le POST de lancement utilisent désormais le même contrat allow-listé et tenant-scoped pour les 12 types de sources pris en charge, y compris les cinq templates Finance du #861. Le POST refuse les états, tenants, propriétaires et sous-types de paiement interdits.
+- Messages distincts en fonction des droits : entreprise sans objets, objets présents mais état inéligible (supervision autorisée uniquement), objets non visibles, défaut d'accès. Caisse OPEN → soumettre une clôture en Caisse avant tout lancement.
+- Tests dédiés #863 sur les neuf templates (source, état, acteur, tenant, paiement fournisseur, liens, statuts et sécurité) câblés dans Quality et Migration ; E2E propriétaire requis pour la certification opérationnelle. Aucun template auto-publié, aucune mutation comptable créée, aucune migration ni variable d'environnement.
+
 ## 2026-10-17 — HOTFIX P0 #861 : reprise workflows + contrats Finance canoniques
 
 - Production : worker Cron protégé par WORKFLOW_WORKER_ENABLED et cutoff temporel obligatoire WORKFLOW_EVENT_CUTOVER_AT, lecture seule signée dryRun, sans réexécution du backlog historique par défaut. La configuration CRON_SECRET doit être ajoutée en Production seulement après CI, OWNER_E2E et main READY.
