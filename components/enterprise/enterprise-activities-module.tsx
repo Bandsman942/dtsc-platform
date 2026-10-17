@@ -30,10 +30,10 @@ import { HealthDocumentsWorkspace } from "@/components/enterprise/health-documen
 const healthActivityModules = new Set(["CONSULTATIONS"]);
 type ActivityView = "ACTIONS" | "REQUESTS" | "WORKFLOWS";
 
-export function EnterpriseActivitiesModule({ organization, blocks, requests, members, departments, sectorRecords, workflows, gamingReferences }: EnterpriseActivitiesDataset) {
+export function EnterpriseActivitiesModule({ organization, blocks, requests, members, departments, sectorRecords, workflows, gamingReferences, initialActivityId }: EnterpriseActivitiesDataset & { initialActivityId?: string | null }) {
   const locale = useAppLocale();
   const english = locale === "en";
-  const [view, setView] = useState<ActivityView>("ACTIONS");
+  const [view, setView] = useState<ActivityView>(initialActivityId ? "REQUESTS" : "ACTIONS");
   const [selectedBlockCode, setSelectedBlockCode] = useState(blocks[0]?.blockCode || "");
   const [formOpen, setFormOpen] = useState(false);
   const selectedBlock = useMemo(() => blocks.find((block) => block.blockCode === selectedBlockCode) || null, [blocks, selectedBlockCode]);
@@ -87,7 +87,7 @@ export function EnterpriseActivitiesModule({ organization, blocks, requests, mem
         )}
         {view === "REQUESTS" && (
           <ModuleSection title={english ? "Submitted requests" : "Demandes soumises"} description={english ? "Follow their real server-side status." : "Suivez leur état réel après soumission."}>
-            <EnterpriseRequestsPanel requests={requests} />
+            <EnterpriseRequestsPanel requests={requests} focusActivityId={initialActivityId} />
           </ModuleSection>
         )}
         {view === "WORKFLOWS" && (
