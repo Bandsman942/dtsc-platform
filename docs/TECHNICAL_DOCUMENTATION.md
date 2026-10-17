@@ -11,6 +11,8 @@ Ce document est le point d’entrée technique de DTSC Platform. Les règles ex�
 La reprise durable des workflows (#813), les preuves d’effet, les états incertains
 et les précautions de déploiement sont décrits dans [WORKFLOW_RUNTIME_RECOVERY.md](WORKFLOW_RUNTIME_RECOVERY.md).
 
+Le lancement manuel transverse des workflows (#863) partage les prédicats ERP de sélection et de validation POST dans `lib/enterprise/workflows/manual-source-options.ts`. Les routes conservent la validation de membership, RBAC, module et entitlement ; les informations sur les objets non visibles ne sont pas divulguées. Les cinq templates Finance suivent uniquement une validation ERP canonique préexistante : aucune comptabilisation, confirmation ou clôture ne s’effectue automatiquement depuis Workflows. Voir [WORKFLOW_ERP_CONTRACTS.md](WORKFLOW_ERP_CONTRACTS.md) et la [checklist de recette](ENTERPRISE_WORKFLOW_ENGINE_QA_CHECKLIST.md).
+
 La plateforme réunit : site public, compte/authentification, SaaS multi-entreprises, console interne DTSC, support, collaboration, ERP commun, extensions Health/Pharmacy, IA, PWA et notifications.
 
 ## 2. Stack
