@@ -397,18 +397,20 @@ async function syncCanonicalPrimaryContactTx(
     });
   }
   const selected = matching || current;
+  let selectedId = selected?.id || "";
   if (selected) {
     await tx.enterpriseBusinessPartyContact.update({
       where: { id: selected.id },
       data: { value: nextValue, normalizedValue, isPrimary: true, status: "ACTIVE", archivedAt: null, isVerified: false, revision: { increment: 1 } },
     });
   } else {
-    await tx.enterpriseBusinessPartyContact.create({
+    const created = await tx.enterpriseBusinessPartyContact.create({
       data: { organizationId, businessPartyId, contactType, value: nextValue, normalizedValue, isPrimary: true, label: contactType === "EMAIL" ? "E-mail principal" : "Téléphone principal", createdByUserId: actorUserId },
     });
+    selectedId = created.id;
   }
   await tx.enterpriseBusinessPartyContact.updateMany({
-    where: { ...where, isPrimary: true, id: { not: selected?.id || "" } },
+    where: { ...where, isPrimary: true, id: { not: selectedId } },
     data: { isPrimary: false },
   });
 }
