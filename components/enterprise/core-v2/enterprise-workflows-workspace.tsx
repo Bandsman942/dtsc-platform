@@ -9,6 +9,7 @@ import { createPortal } from "react-dom";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
+import { confirmSensitiveAction } from "@/lib/client-confirmation";
 import { Input } from "@/components/ui/input";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { EmptyState } from "@/components/workspace/empty-state";
@@ -138,10 +139,19 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, departmen
     };
   }, [detailOpen]);
 
-  const closeDefinition = useCallback(() => {
-    if (draftDirty && !window.confirm(en
-      ? "You have unsaved changes. Close this workflow and discard those changes?"
-      : "Des modifications ne sont pas enregistrées. Fermer ce workflow et abandonner ces modifications ?")) return;
+  const closeDefinition = useCallback(async () => {
+    if (draftDirty) {
+      const confirmation = await confirmSensitiveAction({
+        title: en ? "Discard unsaved workflow changes?" : "Abandonner les modifications du workflow ?",
+        description: en
+          ? "Your draft has unsaved changes. Returning to the workflow list will discard them."
+          : "Le brouillon contient des modifications non enregistrées. Revenir à la liste des workflows les abandonnera.",
+        confirmLabel: en ? "Discard changes" : "Abandonner les modifications",
+        cancelLabel: en ? "Continue editing" : "Continuer les modifications",
+        tone: "warning",
+      });
+      if (!confirmation.confirmed) return;
+    }
     setSelected(null);
   }, [draftDirty, en]);
 
@@ -152,7 +162,7 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, departmen
       if (document.querySelector("[data-dtsc-dialog-panel]")) return;
       if (event.key === "Escape") {
         event.preventDefault();
-        closeDefinition();
+        void closeDefinition();
       } else if (event.key === "Tab") {
         const nodes = detailsRef.current?.querySelectorAll<HTMLElement>(
           'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
@@ -552,7 +562,7 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, departmen
       >
         <header className="z-10 shrink-0 border-b border-dtsc-border bg-dtsc-surface px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-6">
           <div className="mx-auto flex w-full max-w-[1440px] min-w-0 flex-wrap items-center gap-3">
-            <button ref={backFromDetailsRef} type="button" onClick={closeDefinition}
+            <button ref={backFromDetailsRef} type="button" onClick={() => void closeDefinition()}
               className="inline-flex min-h-11 min-w-0 items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-black text-dtsc-blue transition hover:bg-dtsc-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 active:translate-y-px">
               <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden="true" />
               {en ? "Back to workflows" : "Retour aux workflows"}
