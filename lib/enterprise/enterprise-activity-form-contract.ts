@@ -81,4 +81,17 @@ export const GAMING_ACTIVITY_REFERENCE_MODULE_CODES = {
   businessParties: "CRM_CUSTOMERS",
 } as const;
 
+/** Adapt inherited hospitality labels to the actual Gaming Lounge operation. */
+export const GAMING_ACTIVITY_BLOCK_COPY: Record<string, { labelFr: string; labelEn: string; descriptionFr: string }> = {
+  SUBMIT_SECTOR_REPORT: { labelFr: "Soumettre un rapport Gaming", labelEn: "Submit gaming report", descriptionFr: "Période, poste ou session de jeu et observations." },
+  REPORT_SECTOR_INCIDENT: { labelFr: "Signaler un incident Gaming", labelEn: "Report gaming incident", descriptionFr: "Décrivez l'incident, sa criticité et les mesures souhaitées." },
+  REQUEST_OPERATION_VALIDATION: { labelFr: "Demander une validation Gaming", labelEn: "Request gaming approval", descriptionFr: "Demande soumise au responsable sans valider automatiquement l'opération." },
+  REQUEST_RESOURCE: { labelFr: "Demander une ressource Gaming", labelEn: "Request gaming resource", descriptionFr: "Consoles, manettes, maintenance ou équipements." },
+  UPDATE_SECTOR_INDICATOR: { labelFr: "Proposer une mise à jour d'indicateur Gaming", labelEn: "Suggest gaming indicator update", descriptionFr: "Proposition suivie, sans modifier automatiquement le tableau de bord." },
+  CONFIRM_BOOKING: { labelFr: "Demander confirmation d'une réservation Gaming", labelEn: "Request gaming booking confirmation", descriptionFr: "Sélectionnez une réservation existante ; la confirmation réelle reste dans Réservations Gaming." },
+  REPORT_CUSTOMER_INCIDENT: { labelFr: "Signaler un incident client Gaming", labelEn: "Report gaming customer incident", descriptionFr: "Incident concernant un client, un poste ou une réservation Gaming." },
+  SUBMIT_CASH_REPORT: { labelFr: "Soumettre un rapport de caisse Gaming", labelEn: "Submit gaming cash report", descriptionFr: "Rapport informatif lié à une clôture ; aucun encaissement ou rapprochement automatique." },
+  REQUEST_EXTRA_STAFF: { labelFr: "Demander du personnel Gaming", labelEn: "Request gaming staff", descriptionFr: "Renfort d'accueil, animation ou surveillance des postes de jeu." },
+  REPORT_ROOM_SERVICE_PROBLEM: { labelFr: "Signaler une panne de poste Gaming", labelEn: "Report gaming station issue", descriptionFr: "Panne de console ou d'équipement, liée au poste existant." },
+};
 export const GAMING_INCOMPATIBLE_ACTIVITY_BLOCKS = new Set(["REQUEST_KITCHEN_STOCK"]);
