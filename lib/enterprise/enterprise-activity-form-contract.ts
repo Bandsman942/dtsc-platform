@@ -75,12 +75,22 @@ export function resolveEnterpriseActivityAction(
   subtypeCode: string | null | undefined,
   blockCode: string,
 ): { mode: "REQUEST" | "UNAVAILABLE"; reasonFr?: string; reasonEn?: string } {
-  if (sectorCode === "HEALTH_CARE" || sectorCode === "PHARMACY") {
-    const blocked = sectorCode === "HEALTH_CARE"
-      && ["MY_ASSIGNED_PATIENTS", "MY_APPOINTMENTS", "REPORT_CONFIDENTIALITY_ISSUE"].includes(blockCode);
-    return blocked
-      ? { mode: "UNAVAILABLE", reasonFr: "Cette opération sensible relève du module Santé dédié ; aucune demande médicale fictive n'est créée.", reasonEn: "This sensitive operation belongs in the dedicated healthcare module, not a generic activity request." }
-      : { mode: "REQUEST" };
+  if (sectorCode === "PHARMACY") {
+    // Pharmacy Activities uses its own scoped /pharmacy/activities API, form
+    // and entitlement. The legacy generic route must never fabricate a sale,
+    // dispensing or inventory operation.
+    return { mode: "UNAVAILABLE", reasonFr: "Utilisez le module Activités Pharmacie dédié pour ce traitement.", reasonEn: "Use the dedicated Pharmacy Activities workspace for this operation." };
+  }
+  if (sectorCode === "HEALTH_CARE") {
+    const verifiedRequests = new Set([
+      "REPORT_PATIENT_INCIDENT", "REQUEST_COVERAGE", "SUBMIT_MEDICAL_REPORT",
+      "REQUEST_MEDICAL_OPINION", "REQUEST_ADMIN_VALIDATION",
+    ]);
+    return verifiedRequests.has(blockCode) ? { mode: "REQUEST" } : {
+      mode: "UNAVAILABLE",
+      reasonFr: "Cette opération médicale relève des modules Santé autorisés, avec leur propre parcours et confidentialité.",
+      reasonEn: "This healthcare operation belongs in its dedicated clinical workspace with appropriate privacy controls.",
+    };
   }
   if (common[blockCode]) return { mode: "REQUEST" };
   if (sectorCode === "HOSPITALITY_EVENTS") {
