@@ -88,7 +88,7 @@ export async function GET(req: Request, { params }: Params) {
     }
     case "EnterprisePayment": {
       const rows = await prisma.enterprisePayment.findMany({
-        where: { organizationId, status: { in: ["PENDING_APPROVAL", "APPROVED"] },
+        where: { organizationId, paymentType: "SUPPLIER_PAYMENT", status: { in: ["PENDING_APPROVAL", "APPROVED"] },
           ...(own ? { initiatedByUserId: userId } : {}) },
         select: { id: true, number: true, status: true },
         orderBy: { createdAt: "desc" }, take: 50,
@@ -120,10 +120,10 @@ export async function GET(req: Request, { params }: Params) {
       const rows = await prisma.enterpriseFinancialClose.findMany({
         where: { organizationId, status: { in: ["PENDING_APPROVAL", "APPROVED"] },
           ...(own ? { requestedByUserId: userId } : {}) },
-        select: { id: true, fiscalPeriodId: true, status: true },
+        select: { id: true, fiscalPeriod: { select: { code: true } }, status: true },
         orderBy: { createdAt: "desc" }, take: 50,
       });
-      sources = rows.map((row) => ({ id: row.id, reference: null, title: "Dossier de clôture", status: row.status }));
+      sources = rows.map((row) => ({ id: row.id, reference: row.fiscalPeriod.code, title: "Dossier de clôture", status: row.status }));
       break;
     }
     default:
