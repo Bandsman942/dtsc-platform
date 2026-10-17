@@ -3,6 +3,8 @@
  * They never mutate a Gaming, Finance or CRM business object directly.
  * The server validates every selected reference in the same organization.
  */
+import { getSectorActivityCapability } from "@/lib/enterprise/sector-activity-capabilities";
+
 export type BusinessActivityField = {
   name: string;
   label: string;
@@ -63,14 +65,43 @@ export function getBusinessActivityFields(sectorCode: string | null | undefined,
   if (sectorCode === "HOSPITALITY_EVENTS" && subtypeCode === "GAMING_LOUNGE" && gaming[blockCode]) return gaming[blockCode];
   if (sectorCode === "HOSPITALITY_EVENTS" && hospitality[blockCode]) return hospitality[blockCode];
   if (common[blockCode]) return common[blockCode];
-  // No invented business CRUD: other sector activities remain requests, but their
-  // fields describe the distinct business intent rather than a fictitious validation.
-  if (blockCode.startsWith("REPORT_") || blockCode.startsWith("DECLARE_")) return [date, priority, issue, recommendations];
-  if (blockCode.startsWith("SUBMIT_") || blockCode.startsWith("SEND_")) return [period, observed, recommendations];
-  if (blockCode.startsWith("REQUEST_")) return [requested];
-  if (blockCode.startsWith("CONFIRM_")) return [requested];
-  if (blockCode.startsWith("UPDATE_")) return [period, observed];
-  return [observed];
+  const capability = getSectorActivityCapability(sectorCode, blockCode);
+  return capability?.mode === "REQUEST" ? capability.fields : [];
+}
+// Strict contract: a visible legacy action never implies an implemented ERP
+// command. Unsupported document/grade/delivery/stock actions fail closed.
+export function resolveEnterpriseActivityAction(
+  sectorCode: string | null | undefined,
+  subtypeCode: string | null | undefined,
+  blockCode: string,
+): { mode: "REQUEST" | "UNAVAILABLE"; reasonFr?: string; reasonEn?: string } {
+  if (sectorCode === "PHARMACY") {
+    // Pharmacy Activities uses its own scoped /pharmacy/activities API, form
+    // and entitlement. The legacy generic route must never fabricate a sale,
+    // dispensing or inventory operation.
+    return { mode: "UNAVAILABLE", reasonFr: "Utilisez le module Activités Pharmacie dédié pour ce traitement.", reasonEn: "Use the dedicated Pharmacy Activities workspace for this operation." };
+  }
+  if (sectorCode === "HEALTH_CARE") {
+    const verifiedRequests = new Set([
+      "REPORT_PATIENT_INCIDENT", "REQUEST_COVERAGE", "SUBMIT_MEDICAL_REPORT",
+      "REQUEST_MEDICAL_OPINION", "REQUEST_ADMIN_VALIDATION",
+    ]);
+    return verifiedRequests.has(blockCode) ? { mode: "REQUEST" } : {
+      mode: "UNAVAILABLE",
+      reasonFr: "Cette opération médicale relève des modules Santé autorisés, avec leur propre parcours et confidentialité.",
+      reasonEn: "This healthcare operation belongs in its dedicated clinical workspace with appropriate privacy controls.",
+    };
+  }
+  if (common[blockCode]) return { mode: "REQUEST" };
+  if (sectorCode === "HOSPITALITY_EVENTS") {
+    if (subtypeCode === "GAMING_LOUNGE" && GAMING_INCOMPATIBLE_ACTIVITY_BLOCKS.has(blockCode)) {
+      return { mode: "UNAVAILABLE", reasonFr: "Cette opération cuisine ne s'applique pas à une salle de jeux.", reasonEn: "Kitchen stock requests do not apply to a gaming lounge." };
+    }
+    if ((subtypeCode === "GAMING_LOUNGE" && gaming[blockCode]) || hospitality[blockCode]) return { mode: "REQUEST" };
+    return { mode: "UNAVAILABLE" };
+  }
+  return getSectorActivityCapability(sectorCode, blockCode)
+    || { mode: "UNAVAILABLE", reasonFr: "Cette opération métier n'a pas encore de formulaire et de validation certifiés.", reasonEn: "This business operation does not yet have a verified form and server validation." };
 }
 /** Access to a reference select never grants access to its underlying ERP module. */
 export const GAMING_ACTIVITY_REFERENCE_MODULE_CODES = {

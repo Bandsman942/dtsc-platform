@@ -22,7 +22,9 @@ if (!panel.includes('response.ok ? "success" : "error"') || !moduleUi.includes('
 for (const block of ["CONFIRM_BOOKING", "REPORT_ROOM_SERVICE_PROBLEM", "SUBMIT_CASH_REPORT", "REPORT_SECTOR_INCIDENT"]) {
   if (!contract.includes('GAMING_ACTIVITY_BLOCK_COPY') || !loader.includes("GAMING_ACTIVITY_BLOCK_COPY[block.blockCode]")) fail("Gaming labels must override inherited hospitality copy");
 }
-if (!route.includes(String.raw`/^\d{4}-\d{2}-\d{2}$/`)) fail("Date validation must use a digit regex rather than a literal backslash");
+const civilDate = read("lib/enterprise/enterprise-activity-civil-date.ts");
+if (!route.includes('!isValidEnterpriseActivityCivilDate(value)') || !civilDate.includes(String.raw`/^\d{4}-\d{2}-\d{2}$/`)) fail("Date validation must call a strict Gregorian calendar guard with digit regex");
+if (!civilDate.includes("leapYear") || !civilDate.includes("daysInMonth")) fail("Civil date validation must reject impossible calendar dates");
 const page = read("app/enterprise-activities/page.tsx");
 if (!loader.includes('canAccessEnterpriseActivity(userId, organizationId, block.blockCode, "submit")') || !loader.includes("eligibleBlocks")) fail("Activity actions must be submit-authorized before rendering");
 if (page.includes("dataset.blocks.length === 0")) fail("Read-only members must retain access to previously submitted requests");
