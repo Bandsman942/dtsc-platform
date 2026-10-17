@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Building2, Link2, Plus, UserRound } from "lucide-react";
 import { EnterpriseIdentityLinkChoice, type EnterpriseIdentityLinkChoiceValue } from "@/components/enterprise/identity-links/identity-link-choice";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { BusinessPartyCommercialPanel } from "@/components/enterprise/professional/business-party-commercial-panel";
+import { publishEnterpriseCrmUpdate, subscribeEnterpriseCrmUpdates } from "@/lib/enterprise/crm-sales/client-sync";
 import { commercialHotfixCopy } from "@/components/enterprise/professional/commercial-hotfix-copy";
 import { ProfessionalError, ProfessionalFormSection, ProfessionalHelp, ProfessionalLoading, ProfessionalSearch, ProfessionalTabs, professionalMutation, useProfessionalCollection } from "@/components/enterprise/professional/professional-erp-ui";
 import { professionalErpEnumLabel, professionalErpT, useProfessionalErpLocale } from "@/components/enterprise/professional/professional-erp-i18n";
@@ -60,6 +61,7 @@ export function EnterpriseCustomersWorkspace({ organizationId, organizationName,
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
+  useEffect(() => subscribeEnterpriseCrmUpdates(organizationId, () => setRefreshKey((value) => value + 1)), [organizationId]);
   const [createOpen, setCreateOpen] = useState(false);
   const [detail, setDetail] = useState<Party | null>(null);
   const [edit, setEdit] = useState<Party | null>(null);
@@ -111,6 +113,7 @@ export function EnterpriseCustomersWorkspace({ organizationId, organizationName,
         catch { setWarning(hotfix.savedPartyInvitationPending); }
       }
       setCreateOpen(false); resetForm(); setRefreshKey((value) => value + 1); setSuccess(hotfix.savedParty);
+      publishEnterpriseCrmUpdate(organizationId, party.id);
     } catch (error) { setMessage(error instanceof Error ? error.message : t("common.createFailed")); }
     finally { setBusy(false); }
   }
@@ -124,7 +127,7 @@ export function EnterpriseCustomersWorkspace({ organizationId, organizationName,
 
   async function updateParty(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (!edit) return; resetFeedback(); const form = new FormData(event.currentTarget); setBusy(true);
-    try { await professionalMutation(`/api/enterprise/${organizationId}/business-parties`, { partyId: edit.id, displayName: String(form.get("displayName") || "") || null, primaryEmail: String(form.get("primaryEmail") || "") || null, primaryPhone: String(form.get("primaryPhone") || "") || null, primaryAddress: String(form.get("addressLine1") || "").trim() ? { addressType: "PRIMARY", line1: String(form.get("addressLine1") || "").trim(), line2: String(form.get("addressLine2") || "") || null, city: String(form.get("city") || "") || null, stateProvince: String(form.get("stateProvince") || "") || null, postalCode: String(form.get("postalCode") || "") || null, countryCode: String(form.get("countryCode") || "") || null, isPrimary: true } : null, notes: String(form.get("notes") || "") || null, status: String(form.get("status") || edit.status), revision: edit.revision }, "PATCH"); setEdit(null); setRefreshKey((value) => value + 1); setSuccess(hotfix.savedParty); }
+    try { await professionalMutation(`/api/enterprise/${organizationId}/business-parties`, { partyId: edit.id, displayName: String(form.get("displayName") || "") || null, primaryEmail: String(form.get("primaryEmail") || "") || null, primaryPhone: String(form.get("primaryPhone") || "") || null, primaryAddress: String(form.get("addressLine1") || "").trim() ? { addressType: "PRIMARY", line1: String(form.get("addressLine1") || "").trim(), line2: String(form.get("addressLine2") || "") || null, city: String(form.get("city") || "") || null, stateProvince: String(form.get("stateProvince") || "") || null, postalCode: String(form.get("postalCode") || "") || null, countryCode: String(form.get("countryCode") || "") || null, isPrimary: true } : null, notes: String(form.get("notes") || "") || null, status: String(form.get("status") || edit.status), revision: edit.revision }, "PATCH"); setEdit(null); setRefreshKey((value) => value + 1); setSuccess(hotfix.savedParty); publishEnterpriseCrmUpdate(organizationId, edit.id); }
     catch (error) { setMessage(error instanceof Error ? error.message : t("common.updateFailed")); } finally { setBusy(false); }
   }
 
