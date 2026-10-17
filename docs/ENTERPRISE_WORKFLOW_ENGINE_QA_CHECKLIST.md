@@ -368,3 +368,5 @@ Automatisation : `pnpm qa:workflow-contracts` et `pnpm qa:workflow-contracts:pos
 - [ ] Contrôles : appartenance client active, abonnement, permissions, SoD, autre tenant, perte de mandat, révision concurrente, duplicats décision/events ; versions PUBLISHED immuables.
 - [ ] UI : noms clairs (workflow = suivi d'approbation), FR/EN, mobile 320/360/375/390/414 px, modales lisibles en clair/sombre.
 - [ ] PostgreSQL Quality+Migration / lint/types/build puis OWNER_E2E #861 BON avant merge ; vérification Vercel Production READY et activation environnement séparée.
+
+- [ ] Cas négatif : soumettre un paiement non fournisseur ; le workflow fournisseur n'attache aucune demande de validation et n'émet aucune notification fournisseur. Seuls les paiements SUPPLIER_PAYMENT figurent dans le sélecteur manuel.

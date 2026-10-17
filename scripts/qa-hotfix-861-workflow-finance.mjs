@@ -59,6 +59,11 @@ const source = readFileSync("app/api/internal/workflows/process/route.ts","utf8"
 const isolated = readFileSync("lib/enterprise/workflows/worker-isolated.ts","utf8");
 const worker = readFileSync("lib/enterprise/workflows/worker.ts","utf8");
 const cutoff = readFileSync("lib/enterprise/workflows/event-recovery.ts","utf8");
+const sourceOptions = readFileSync("app/api/enterprise/[organizationId]/workflow-runs/sources/route.ts","utf8");
+for (const sourceType of ["EnterpriseSupplierInvoice","EnterprisePayment","EnterpriseCashSession","EnterpriseJournalEntry","EnterpriseFinancialClose"]) {
+  assert.ok(sourceOptions.includes('case "'+sourceType+'":'), "missing tenant-bounded manual options for "+sourceType);
+}
+assert.ok(sourceOptions.includes('paymentType: "SUPPLIER_PAYMENT"'), "supplier-payment selector must not show other payment types");
 assert.ok(source.includes('WORKFLOW_WORKER_ENABLED') && source.includes('dryRun') && source.includes('getWorkflowQueueSnapshot'));
 assert.ok(isolated.includes('workflowEventClaimCutover') && worker.includes('workflowEventClaimCutover'));
 assert.ok(isolated.includes('AND "createdAt" >= ${cutover}') && worker.includes('AND "createdAt" >= ${cutover}'));
@@ -66,6 +71,12 @@ assert.ok(cutoff.includes('VERCEL_ENV !== "production"'));
 assert.ok(cutoff.includes('WORKFLOW_EVENT_CUTOVER_AT'));
 assert.ok(cutoff.includes('9999-12-31'), "Unconfigured production worker must not claim historic events");
 
+const supplierPayment = ENTERPRISE_WORKFLOW_TEMPLATES.find(x => x.code === "SUPPLIER_PAYMENT_APPROVAL_CONFIRMATION");
+assert.ok(supplierPayment?.version.steps.some(s=>s.stepType==="CONDITION"
+  && s.configuration.condition.field==="paymentType"
+  && s.configuration.condition.value==="SUPPLIER_PAYMENT"), "generic PAYMENT_SUBMIT must be type-gated");
+assert.ok(supplierPayment.version.transitions.some(t=>t.fromStepCode==="IS_SUPPLIER_PAYMENT"&&t.outcome==="FALSE"&&t.toStepCode==="END_OUT_OF_SCOPE"),
+  "non-supplier payment must never request an unrelated approval");
 const expected = new Map([
   ["SUPPLIER_INVOICE_REVIEW_APPROVAL_POSTING",["EnterpriseSupplierInvoiceReview","EnterpriseSupplierInvoiceApproval"]],
   ["SUPPLIER_PAYMENT_APPROVAL_CONFIRMATION",["EnterprisePayment"]],

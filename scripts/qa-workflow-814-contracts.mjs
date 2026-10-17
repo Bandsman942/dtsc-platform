@@ -137,6 +137,12 @@ for (const code of financialCodes) {
   assert.equal(compatibility({ ...template, version: altered }).ready, false,
     code + " fail closed on an unlisted finance approval");
 }
+const paymentTemplate = templates.find((template) => template.code === "SUPPLIER_PAYMENT_APPROVAL_CONFIRMATION");
+assert.ok(paymentTemplate.version.steps.some((step) => step.stepType === "CONDITION"
+  && step.configuration.condition.field === "paymentType"
+  && step.configuration.condition.value === "SUPPLIER_PAYMENT"));
+assert.ok(paymentTemplate.version.transitions.some((route) => route.fromStepCode === "IS_SUPPLIER_PAYMENT"
+  && route.outcome === "FALSE" && route.toStepCode === "END_OUT_OF_SCOPE"));
 const cash = templates.find((template) => template.triggerEntityType === "EnterpriseCashSession");
 assert.equal(compatibility(cash).ready, true);
 const adapter = getWorkflowEntityAdapter("EnterprisePurchase");

@@ -56,3 +56,7 @@ La clôture de période utilise dorénavant `EnterpriseFinancialClose` et son é
 Le hotfix #861 protège `/api/internal/workflows/process` par `WORKFLOW_WORKER_ENABLED=true` en Production en plus d'un secret. L'endpoint authentifié `GET ...?dryRun=1` ne traite aucun événement. Le claim PostgreSQL ne revendique jamais, en production, un événement précédant `WORKFLOW_EVENT_CUTOVER_AT` ; si cette variable est absente ou invalide, **aucun ancien événement n'est revendiqué**. Une validation déjà décidée avec lien `workflowRunId/workflowStepRunId` peut néanmoins être rapprochée par `resumeWaitingRuns` après activation contrôlée.
 
 Le backlog de 424 anciens événements observé le 17/10/2026 reste à auditer par catégorie/ancienneté/tenant. Aucun rejeu massif de paiement, facture, stock, notification ou opération comptable ; ne pas changer directement la colonne processingStatus pour forcer leur traitement. La reprise d'une approbation déjà décidée dépend des liens canoniques, pas du ré-envoi de l'action ERP.
+
+### Paiement fournisseur : contrôle du déclencheur partagé
+
+L'événement `PAYMENT_SUBMIT` peut émettre des événements pour d'autres types de paiement. Le template `SUPPLIER_PAYMENT_APPROVAL_CONFIRMATION` comporte une étape `CONDITION` autorisée sur `paymentType == SUPPLIER_PAYMENT`. Si le paiement n'est pas un paiement fournisseur, la branche de sortie termine silencieusement le run sans chercher d'approbateur et sans notification/effet financier. La liste des objets au lancement manuel applique le même type et les états admis.
