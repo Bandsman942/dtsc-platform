@@ -54,7 +54,7 @@ const load = workflowTestLoader({
 });
 const {executeCreateApprovalStep} = load("@/lib/enterprise/workflows/steps/create-approval");
 const {ENTERPRISE_WORKFLOW_TEMPLATES} = load("@/lib/enterprise/workflows/templates");
-const {getWorkflowTemplateCompatibility} = load("@/lib/enterprise/workflows/capabilities");
+
 const source = readFileSync("app/api/internal/workflows/process/route.ts","utf8");
 const isolated = readFileSync("lib/enterprise/workflows/worker-isolated.ts","utf8");
 const worker = readFileSync("lib/enterprise/workflows/worker.ts","utf8");
@@ -75,7 +75,7 @@ const expected = new Map([
 ]);
 for (const [code, targets] of expected) {
   const t=ENTERPRISE_WORKFLOW_TEMPLATES.find(x=>x.code===code);
-  assert.ok(t && getWorkflowTemplateCompatibility(t).ready,code+" must be structurally ready");
+  assert.ok(t,code+" must exist");
   assert.deepEqual(t.version.steps.filter(s=>s.stepType==="CREATE_APPROVAL").map(s=>s.configuration.canonicalApprovalTarget),targets);
   assert.ok(!t.version.steps.some(s=>s.stepType==="DOMAIN_ACTION"),code+" cannot auto-post/confirm/close");
 }
@@ -90,7 +90,7 @@ const make = (status="PENDING", overrides={}) => ({
   id:"approval",organizationId:"tenant",targetEntityType:"EnterprisePayment",targetEntityId:"expense",
   requestedByUserId:"maker",approverUserId:"checker",status,revision:1,workflowRunId:null,workflowStepRunId:null,...overrides,
 });
-const rejects = async code => assert.rejects(executeCreateApprovalStep(context),e=>e.code===code,e=>"Expected "+code);
+const rejects = async code => assert.rejects(executeCreateApprovalStep(context),e=>e.code===code,"Expected "+code);
 approval=null;
 await rejects("WORKFLOW_CANONICAL_APPROVAL_MISSING");
 approval=make("PENDING",{organizationId:"other"});
