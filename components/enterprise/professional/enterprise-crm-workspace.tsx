@@ -5,6 +5,7 @@ import { BriefcaseBusiness, Eye, Plus, RefreshCcw, UserRound } from "lucide-reac
 import { EnterpriseIdentityLinkChoice, type EnterpriseIdentityLinkChoiceValue } from "@/components/enterprise/identity-links/identity-link-choice";
 import { currencyChoices, Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { commercialHotfixCopy } from "@/components/enterprise/professional/commercial-hotfix-copy";
+import { publishEnterpriseCrmUpdate, subscribeEnterpriseCrmUpdates } from "@/lib/enterprise/crm-sales/client-sync";
 import { professionalMutation, ProfessionalError, ProfessionalFormSection, ProfessionalHelp, ProfessionalLoading, ProfessionalSearch, ProfessionalTabs, useProfessionalCollection } from "@/components/enterprise/professional/professional-erp-ui";
 import { professionalErpDate, professionalErpEnumLabel, professionalErpMoney, professionalErpT, useProfessionalErpLocale } from "@/components/enterprise/professional/professional-erp-i18n";
 import { BusinessPartyIdentityFields, type BusinessPartyIdentityLabels } from "@/components/enterprise/shared/business-party-identity-fields";
@@ -117,6 +118,7 @@ export function EnterpriseCrmWorkspace({ organizationId, organizationName, defin
   const params = useMemo(() => { const value = new URLSearchParams({ page: String(page), pageSize: "50" }); if (search.trim()) value.set("search", search.trim()); return value; }, [page, search]);
   const leads = useProfessionalCollection<Lead>({ endpoint: `/api/enterprise/${organizationId}/leads`, params, refreshKey });
   const opportunities = useProfessionalCollection<Opportunity>({ endpoint: `/api/enterprise/${organizationId}/opportunities`, params, refreshKey });
+  useEffect(() => subscribeEnterpriseCrmUpdates(organizationId, () => setRefreshKey((value) => value + 1)), [organizationId]);
   const canWrite = leads.canWrite || opportunities.canWrite;
   const grouped = useMemo(() => Object.fromEntries(STAGES.map((stage) => [stage, opportunities.items.filter((item) => item.status === stage)])) as Record<string, Opportunity[]>, [opportunities.items]);
   const visibleValue = opportunities.items.reduce((sum, item) => sum + Number(item.estimatedValue || 0), 0);
@@ -171,6 +173,7 @@ export function EnterpriseCrmWorkspace({ organizationId, organizationName, defin
     try {
       await professionalMutation(`/api/enterprise/${organizationId}/leads/onboarding`, payload);
       setCreateKind(null); setLeadMode("NEW"); setLeadPartyType("PERSON"); setLeadPartyId(""); setRefreshKey((value) => value + 1); setSuccess(hotfix.savedLead);
+      publishEnterpriseCrmUpdate(organizationId, party?.id);
     } catch (error) { setMessage(error instanceof Error ? error.message : t("common.createFailed")); } finally { setBusy(false); }
   }
 
@@ -185,18 +188,19 @@ export function EnterpriseCrmWorkspace({ organizationId, organizationName, defin
         source: String(form.get("source") || "") || null, nextAction: String(form.get("nextAction") || "") || null, nextActionAt: String(form.get("nextActionAt") || "") || null, notes: String(form.get("notes") || "") || null,
       });
       setCreateKind(null); setRefreshKey((value) => value + 1); setSuccess(hotfix.savedOpportunity);
+      publishEnterpriseCrmUpdate(organizationId, String(form.get("businessPartyId") || ""));
     } catch (error) { setMessage(error instanceof Error ? error.message : t("common.createFailed")); } finally { setBusy(false); }
   }
 
   async function transitionLead(item: Lead, targetStatus: string, lostReason?: string) {
     resetFeedback(); setBusy(true);
-    try { await professionalMutation(`/api/enterprise/${organizationId}/leads/${item.id}/transition`, { targetStatus, lostReason: lostReason || null, revision: item.revision }); setLostLead(null); setDetailLead(null); setRefreshKey((value) => value + 1); setSuccess(`${leadLabel(targetStatus)} · ${item.displayName || item.legalName}`); }
+    try { await professionalMutation(`/api/enterprise/${organizationId}/leads/${item.id}/transition`, { targetStatus, lostReason: lostReason || null, revision: item.revision }); setLostLead(null); setDetailLead(null); setRefreshKey((value) => value + 1); setSuccess(`${leadLabel(targetStatus)} · ${item.displayName || item.legalName}`); publishEnterpriseCrmUpdate(organizationId, item.businessPartyId || undefined); }
     catch (error) { setMessage(error instanceof Error ? error.message : t("common.transitionFailed")); } finally { setBusy(false); }
   }
 
   async function transitionOpportunity(item: Opportunity, targetStatus: string, lostReason?: string) {
     resetFeedback(); setBusy(true);
-    try { await professionalMutation(`/api/enterprise/${organizationId}/opportunities/${item.id}/transition`, { targetStatus, lostReason: lostReason || null, revision: item.revision }); setLostOpportunity(null); setDetailOpportunity(null); setRefreshKey((value) => value + 1); setSuccess(`${stageLabel(targetStatus)} · ${item.name}`); }
+    try { await professionalMutation(`/api/enterprise/${organizationId}/opportunities/${item.id}/transition`, { targetStatus, lostReason: lostReason || null, revision: item.revision }); setLostOpportunity(null); setDetailOpportunity(null); setRefreshKey((value) => value + 1); setSuccess(`${stageLabel(targetStatus)} · ${item.name}`); publishEnterpriseCrmUpdate(organizationId, item.businessPartyId); }
     catch (error) { setMessage(error instanceof Error ? error.message : t("common.transitionFailed")); } finally { setBusy(false); }
   }
 
