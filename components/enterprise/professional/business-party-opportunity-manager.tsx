@@ -42,6 +42,17 @@ const NEXT_STAGE: Record<string, string[]> = {
   LOST: ["CLOSED"],
 };
 const SOURCES = ["REFERRAL", "WEBSITE", "SOCIAL", "EVENT", "OUTBOUND", "OTHER"] as const;
+function localDateTimeInput(utc: string | null | undefined) {
+  if (!utc) return "";
+  const date = new Date(utc);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+}
+function optionalDateTimeInput(value: FormDataEntryValue | null) {
+  const raw = String(value || "").trim();
+  return raw ? new Date(raw).toISOString() : null;
+}
+
 
 export function BusinessPartyOpportunityManager({
   organizationId, businessPartyId, opportunityId, locale, onClose, onChanged,
@@ -129,7 +140,7 @@ export function BusinessPartyOpportunityManager({
       expectedCloseDate: String(data.get("expectedCloseDate") || "") || null,
       source: String(data.get("source") || "") || null,
       nextAction: String(data.get("nextAction") || "") || null,
-      nextActionAt: String(data.get("nextActionAt") || "") || null,
+      nextActionAt: optionalDateTimeInput(data.get("nextActionAt")),
     }, "PATCH"), t("crm.opportunityManaged"));
     if (saved) setEditOpen(false);
   }
@@ -209,9 +220,9 @@ export function BusinessPartyOpportunityManager({
             <Field label={t("crm.currency")}><NativeSelect name="currency" defaultValue={opportunity.currency || ""} items={[{ id: "", label: t("common.none") }, ...currencyChoices(locale)]} /></Field>
             <Field label={t("crm.opportunityProbability")}><Input type="number" name="probabilityPercent" min="0" max="100" step="1" defaultValue={opportunity.probabilityPercent} /></Field>
             <Field label={t("crm.opportunityExpectedClose")}><Input type="date" name="expectedCloseDate" defaultValue={opportunity.expectedCloseDate?.slice(0, 10) || ""} /></Field>
-            <Field label={t("crm.source")}><NativeSelect name="source" defaultValue={opportunity.source || "OTHER"} items={SOURCES.map((value) => ({ id: value, label: professionalErpEnumLabel(locale, "source", value) }))} /></Field>
+            <Field label={t("crm.source")}><NativeSelect name="source" defaultValue={opportunity.source || ""} items={[{ id: "", label: t("common.none") }, ...SOURCES.map((value) => ({ id: value, label: professionalErpEnumLabel(locale, "source", value) }))]} /></Field>
             <Field label={t("crm.nextActionField")}><Input name="nextAction" defaultValue={opportunity.nextAction || ""} /></Field>
-            <Field label={t("crm.due")}><Input type="datetime-local" name="nextActionAt" defaultValue={opportunity.nextActionAt?.slice(0, 16) || ""} /></Field>
+            <Field label={t("crm.due")}><Input type="datetime-local" name="nextActionAt" defaultValue={localDateTimeInput(opportunity.nextActionAt)} /></Field>
           </ProfessionalFormSection>
           <Button type="submit" disabled={busy}><Save className="h-4 w-4" />{t("common.save")}</Button>
         </form> : null}
