@@ -10,6 +10,7 @@ import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorksp
 import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
 import { ProfessionalTabs } from "@/components/enterprise/professional/professional-erp-ui";
 import { RelationshipBenefitsUserPanel } from "@/components/enterprise/relationship-benefits/relationship-benefits-user-panel";
+import { subscribeEnterpriseCrmUpdates } from "@/lib/enterprise/crm-sales/client-sync";
 import { StatusBadge, type StatusBadgeTone } from "@/components/workspace/status-badge";
 import {
   ENTERPRISE_IDENTITY_RELATION_TYPES,
@@ -103,6 +104,16 @@ export function EnterpriseIdentityUserPanel({
   const active = useMemo(() => initialLinks.filter((link) => link.status === "ACTIVE"), [initialLinks]);
   const requests = useMemo(() => initialLinks.filter((link) => link.origin === "USER" && USER_REQUEST_STATUSES.has(link.status)), [initialLinks]);
   const history = useMemo(() => initialLinks.filter((link) => HISTORY_STATUSES.has(link.status)), [initialLinks]);
+  useEffect(() => {
+    // Only organizations where the user already holds a link can refresh this view.
+    // This is a notification to re-fetch through the account-scoped server route,
+    // never a delivery of business data across tenants.
+    const organizations = [...new Set(initialLinks.map((link) => link.organizationId))];
+    const unsubscribers = organizations.map((organizationId) =>
+      subscribeEnterpriseCrmUpdates(organizationId, () => router.refresh()));
+    return () => { unsubscribers.forEach((unsubscribe) => unsubscribe()); };
+  }, [initialLinks, router]);
+
 
   useEffect(() => {
     if (invitation && token) {
