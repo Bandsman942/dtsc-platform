@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import assert from "node:assert/strict";
+import ts from "typescript";
+import { runInNewContext } from "node:vm";
 
 const read = (p) => fs.readFileSync(path.join(process.cwd(), p), "utf8");
 const migration = read("prisma/migrations/20260527143000_enterprise_sector_templates/migration.sql");
@@ -74,6 +76,19 @@ assert.ok(contract.includes('const verifiedRequests = new Set([') && contract.in
 const healthAllowlist = contract.split("const verifiedRequests = new Set([")[1]?.split("]);")[0] || "";
 for (const name of ["MY_ASSIGNED_PATIENTS", "MY_APPOINTMENTS", "REPORT_CONFIDENTIALITY_ISSUE"]) assert.ok(!healthAllowlist.includes(name), "Sensitive health action must not be submitted through Activities: " + name);
 assert.ok(contract.includes('if (sectorCode === "PHARMACY")'), "Dedicated Pharmacy flows must remain separate");
-assert.match(route, /new Date\(\`\$\{value\}T00:00:00Z\`\)\.toISOString\(\)\.slice\(0, 10\) !== value/);
+assert.ok(route.includes('!isValidEnterpriseActivityCivilDate(value)'), "Server must reject invalid civil calendar dates without converting to UTC");
+assert.ok(!route.includes('new Date(`${value}T00:00:00Z`)'), "A user-entered calendar day must not be interpreted as a UTC instant");
+const civilSource = read("lib/enterprise/enterprise-activity-civil-date.ts");
+const compiled = ts.transpileModule(civilSource, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText;
+const sandbox = { exports: {} };
+runInNewContext(compiled, sandbox);
+const validDay = sandbox.exports.isValidEnterpriseActivityCivilDate;
+assert.equal(typeof validDay, "function", "Civil date validator must be callable");
+for (const date of ["2024-02-29", "2000-02-29", "2026-10-17", "1900-12-31", "9999-12-31"]) {
+  assert.equal(validDay(date), true, "Expected valid calendar day: " + date);
+}
+for (const date of ["2023-02-29", "1900-02-29", "2026-02-30", "2026-04-31", "2026-13-01", "2026-00-01", "0000-01-01", "2026-10-00", "2026-01-32", "2026-1-02", "2026-10-17T00:00Z", ""]) {
+  assert.equal(validDay(date), false, "Expected invalid calendar day: " + date);
+}
 for (const token of ["discountPercent", "ENTERPRISE_ACTIVITY_DISCOUNT_INVALID", "requestedAmount", "ENTERPRISE_ACTIVITY_CURRENCY_INVALID", "/^[A-Z]{3}$/"]) assert.ok(route.includes(token), "Validated amount, discount and currency contract missing: " + token);
 console.log("Hotfix #876: 94 legacy actions audited; 60 explicit request forms, 14 blocked operations, 6 hospitality and 14 clinical/dedicated actions classified. No fake business writes: PASS");
