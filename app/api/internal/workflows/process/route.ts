@@ -1,7 +1,8 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { WORKFLOW_LIMITS } from "@/lib/enterprise/workflows/constants";
-import { processPendingWorkflowEventsIsolated } from "@/lib/enterprise/workflows/worker-isolated";
+import { processPendingWorkflowEventsIsolated, getWorkflowQueueSnapshot } from "@/lib/enterprise/workflows/worker-isolated";
+import { workflowEventClaimCutover } from "@/lib/enterprise/workflows/event-recovery";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,6 +26,20 @@ function authorize(request: NextRequest) {
 async function handle(request: NextRequest) {
   const auth = authorize(request);
   if (!auth.ok) return NextResponse.json({ error: auth.message }, { status: auth.status });
+  // Authenticated read-only inventory is allowed while the financial queue
+  // remains frozen. Vercel Cron invokes GET with no dryRun flag.
+  if (request.method === "GET" && request.nextUrl.searchParams.get("dryRun") === "1") {
+    const configuredCutover = process.env.WORKFLOW_EVENT_CUTOVER_AT;
+    return NextResponse.json({
+      ok: true, dryRun: true, workerEnabled: process.env.VERCEL_ENV !== "production" || process.env.WORKFLOW_WORKER_ENABLED === "true",
+      cutoverConfigured: Boolean(configuredCutover && workflowEventClaimCutover().getUTCFullYear() < 9999),
+      queue: await getWorkflowQueueSnapshot(),
+    });
+  }
+  // Never activate a production workflow worker just by setting CRON_SECRET.
+  if (process.env.VERCEL_ENV === "production" && process.env.WORKFLOW_WORKER_ENABLED !== "true") {
+    return NextResponse.json({ error: "WORKFLOW_WORKER_DISABLED" }, { status: 503 });
+  }
   const requestedBatch = Number(request.nextUrl.searchParams.get("batch") || WORKFLOW_LIMITS.workerBatchSize);
   const batchSize = Number.isFinite(requestedBatch) ? Math.max(1, Math.min(Math.trunc(requestedBatch), WORKFLOW_LIMITS.workerBatchSize)) : WORKFLOW_LIMITS.workerBatchSize;
   const startedAt = Date.now();
