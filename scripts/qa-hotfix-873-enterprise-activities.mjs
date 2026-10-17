@@ -15,4 +15,8 @@ for (const key of ["businessSubtypeCode","businessSubtypeLabelFr","businessSubty
 for (const key of ["ModuleWorkspace","ModuleHeader","ModuleMetrics","ModuleToolbar","ModuleContent","ModuleSection","ProfessionalTabs"]) if (!moduleUi.includes(key)) fail("Missing professional UI: "+key);
 for (const key of ["data-horizontal-rail","aria-pressed",'presentation="editor"',"const description = baseDescription;","busy","fieldOptions(field)","getBusinessActivityFields"]) if (!panel.includes(key)) fail("Missing responsive UI: "+key);
 if (panel.includes("const description = details.length")) fail("Sector details copied into public description");
+for (const key of ["GAMING_ACTIVITY_REFERENCE_MODULE_CODES", 'businessParties: "CRM_CUSTOMERS"', 'gamingCloses: "GAMING_DAILY_CLOSE"']) if (!contract.includes(key)) fail("Missing canonical per-reference permission mapping: " + key);
+for (const key of ["stationAccess.canRead", "bookingAccess.canRead", "sessionAccess.canRead", "closeAccess.canRead", "customerAccess.canRead", "resolveEnterpriseModuleCapabilities"]) if (!loader.includes(key)) fail("Private references must be filtered by read permissions: " + key);
+for (const key of ["GAMING_ACTIVITY_REFERENCE_MODULE_CODES[field.source]", "capabilities.canRead", "ENTERPRISE_ACTIVITY_REFERENCE_FORBIDDEN", 'roleCode: "CUSTOMER"']) if (!route.includes(key)) fail("Reference permissions must be checked again on submit: " + key);
+if (!panel.includes('response.ok ? "success" : "error"') || !moduleUi.includes('tone = "error"')) fail("Success and failure toasts must use explicit outcome, independent of locale");
 console.log("Hotfix #873 enterprise activity form contract: PASS");
