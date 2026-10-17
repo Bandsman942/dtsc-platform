@@ -75,6 +75,11 @@ export function BusinessPartyCommercialPanel({
   const [opportunityHubOpen, setOpportunityHubOpen] = useState(false);
   const [opportunityCreateOpen, setOpportunityCreateOpen] = useState(false);
   const [managedOpportunityId, setManagedOpportunityId] = useState<string | null>(null);
+  const [hubItems, setHubItems] = useState<OpportunitySummary[]>([]);
+  const [hubPage, setHubPage] = useState(1);
+  const [hubHasMore, setHubHasMore] = useState(false);
+  const [hubLoading, setHubLoading] = useState(false);
+
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -100,6 +105,41 @@ export function BusinessPartyCommercialPanel({
   useEffect(() => subscribeEnterpriseCrmUpdates(organizationId, (partyId) => {
     if (!partyId || partyId === businessPartyId) setRefreshKey((value) => value + 1);
   }), [organizationId, businessPartyId]);
+
+  useEffect(() => {
+    if (!opportunityHubOpen) return;
+    let active = true;
+    setHubLoading(true);
+    void fetch(`/api/enterprise/${organizationId}/opportunities?businessPartyId=${encodeURIComponent(businessPartyId)}&page=1&pageSize=50`, { cache: "no-store" })
+      .then(async (response) => {
+        const body = await response.json().catch(() => null) as { items?: OpportunitySummary[]; pagination?: { pageCount: number }; message?: string } | null;
+        if (!response.ok || !body?.items) throw new Error(body?.message || t("common.loadFailed"));
+        if (active) {
+          setHubItems(body.items);
+          setHubPage(1);
+          setHubHasMore((body.pagination?.pageCount || 1) > 1);
+        }
+      })
+      .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : t("common.loadFailed")); })
+      .finally(() => { if (active) setHubLoading(false); });
+    return () => { active = false; };
+  }, [opportunityHubOpen, organizationId, businessPartyId, refreshKey, locale]);
+
+  async function loadMoreOpportunities() {
+    if (hubLoading || !hubHasMore) return;
+    setHubLoading(true);
+    try {
+      const nextPage = hubPage + 1;
+      const response = await fetch(`/api/enterprise/${organizationId}/opportunities?businessPartyId=${encodeURIComponent(businessPartyId)}&page=${nextPage}&pageSize=50`, { cache: "no-store" });
+      const body = await response.json().catch(() => null) as { items?: OpportunitySummary[]; pagination?: { pageCount: number }; message?: string } | null;
+      if (!response.ok || !body?.items) throw new Error(body?.message || t("common.loadFailed"));
+      setHubItems((items) => [...items, ...body.items!.filter((item) => !items.some((prior) => prior.id === item.id))]);
+      setHubPage(nextPage);
+      setHubHasMore(nextPage < (body.pagination?.pageCount || 1));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t("common.loadFailed"));
+    } finally { setHubLoading(false); }
+  }
 
   async function createOpportunity(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -224,13 +264,14 @@ export function BusinessPartyCommercialPanel({
       <div className="grid gap-4 p-3 sm:p-6">
         {error ? <ProfessionalError message={error} /> : null}
         {summary.lead ? <p className="rounded-xl border border-dtsc-border p-3 text-sm">{t("crm.viewLeads")} · {summary.lead.reference} · {professionalErpEnumLabel(locale, "leadStatus", summary.lead.status)}</p> : null}
-        {summary.opportunities.length ? <BusinessList ariaLabel={t("crm.opportunitiesAria")}>
-          {summary.opportunities.map((item) => <BusinessListItem key={item.id} title={item.name} status={<StatusBadge tone={statusTone(item.status)}>{professionalErpEnumLabel(locale, "opportunityStage", item.status)}</StatusBadge>}
+        {hubItems.length ? <BusinessList ariaLabel={t("crm.opportunitiesAria")}>
+          {hubItems.map((item) => <BusinessListItem key={item.id} title={item.name} status={<StatusBadge tone={statusTone(item.status)}>{professionalErpEnumLabel(locale, "opportunityStage", item.status)}</StatusBadge>}
             meta={`${item.reference} · ${professionalErpMoney(item.estimatedValue, item.currency, locale)}`}
             description={item.nextAction || t("common.none")}
             onOpen={() => { setOpportunityHubOpen(false); setManagedOpportunityId(item.id); }}
             openLabel={t("crm.opportunityOpenNamed", { name: item.name })} />)}
-        </BusinessList> : <EmptyState compact title={t("crm.noOpportunityTitle")} description={t("crm.noOpportunityDescription")} />}
+        </BusinessList> : hubLoading ? <p className="py-6 text-sm text-dtsc-muted">{t("common.loading")}</p> : <EmptyState compact title={t("crm.noOpportunityTitle")} description={t("crm.noOpportunityDescription")} />}
+        {hubHasMore ? <Button variant="outline" disabled={hubLoading} onClick={() => void loadMoreOpportunities()}>{hubLoading ? t("common.loading") : t("crm.opportunityLoadMore")}</Button> : null}
       </div>
     </Dialog>
     <Dialog
