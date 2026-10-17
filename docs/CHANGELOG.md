@@ -1,3 +1,9 @@
+## 2026-10-17 — HOTFIX P0 #863 complément : fiche de définition workflow plein écran
+
+- **Ouvrir** une définition affiche désormais une vue plein écran avec retour explicite aux workflows, scroll interne, gestion du focus et des modifications non enregistrées, à la place de l'ancienne seconde colonne descendant en bas de page sur téléphone.
+- Les commandes existantes de lancement, duplication de version, édition et publication conservent leurs contrôles. Une exécution lancée avec succès quitte la fiche et ouvre les Exécutions et sa timeline. Aucun nouveau droit ni accès ERP.
+- Regression QA #863 renforcée ; E2E propriétaire mobile/desktop, FR/EN, clair/sombre et gestion des dialogues empilés restant requis. Aucun changement Prisma, Cron ou Production.
+
 ## 2026-10-17 — HOTFIX P0 #863 : lancement manuel des neuf templates Workflows
 
 - Correction des libellés de liens ERP trompeurs : Clôture de caisse → Caisse, Paiements fournisseurs → Paiements, Factures fournisseurs → Fournisseurs, Écritures → Comptabilité, Clôture financière → Clôture financière ; messages et statuts FR/EN sans codes Prisma.
