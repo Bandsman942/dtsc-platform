@@ -74,6 +74,58 @@ export async function GET(req: Request, { params }: Params) {
       const rows = await prisma.enterpriseReport.findMany({ where: { organizationId, archivedAt: null, ...(own ? { generatedByUserId: userId } : {}) }, select: { id: true, title: true, reference: true, status: true }, orderBy: { createdAt: "desc" }, take: 50 });
       sources = rows; break;
     }
+    case "EnterpriseSupplierInvoice": {
+      const rows = await prisma.enterpriseSupplierInvoice.findMany({
+        where: { organizationId, archivedAt: null,
+          status: { in: ["PENDING_REVIEW", "PENDING_APPROVAL", "APPROVED"] },
+          ...(own ? { createdByUserId: userId } : {}),
+        },
+        select: { id: true, number: true, status: true },
+        orderBy: { createdAt: "desc" }, take: 50,
+      });
+      sources = rows.map((row) => ({ id: row.id, reference: row.number, title: "Facture fournisseur", status: row.status }));
+      break;
+    }
+    case "EnterprisePayment": {
+      const rows = await prisma.enterprisePayment.findMany({
+        where: { organizationId, status: { in: ["PENDING_APPROVAL", "APPROVED"] },
+          ...(own ? { initiatedByUserId: userId } : {}) },
+        select: { id: true, number: true, status: true },
+        orderBy: { createdAt: "desc" }, take: 50,
+      });
+      sources = rows.map((row) => ({ id: row.id, reference: row.number, title: "Paiement fournisseur", status: row.status }));
+      break;
+    }
+    case "EnterpriseCashSession": {
+      const rows = await prisma.enterpriseCashSession.findMany({
+        where: { organizationId, status: { in: ["SUBMITTED", "CLOSED"] },
+          ...(own ? { cashierUserId: userId } : {}) },
+        select: { id: true, number: true, status: true },
+        orderBy: { createdAt: "desc" }, take: 50,
+      });
+      sources = rows.map((row) => ({ id: row.id, reference: row.number, title: "Clôture de caisse", status: row.status }));
+      break;
+    }
+    case "EnterpriseJournalEntry": {
+      const rows = await prisma.enterpriseJournalEntry.findMany({
+        where: { organizationId, status: { in: ["PENDING_APPROVAL", "APPROVED"] },
+          ...(own ? { preparedByUserId: userId } : {}) },
+        select: { id: true, number: true, status: true },
+        orderBy: { createdAt: "desc" }, take: 50,
+      });
+      sources = rows.map((row) => ({ id: row.id, reference: row.number, title: "Écriture manuelle", status: row.status }));
+      break;
+    }
+    case "EnterpriseFinancialClose": {
+      const rows = await prisma.enterpriseFinancialClose.findMany({
+        where: { organizationId, status: { in: ["PENDING_APPROVAL", "APPROVED"] },
+          ...(own ? { requestedByUserId: userId } : {}) },
+        select: { id: true, fiscalPeriodId: true, status: true },
+        orderBy: { createdAt: "desc" }, take: 50,
+      });
+      sources = rows.map((row) => ({ id: row.id, reference: null, title: "Dossier de clôture", status: row.status }));
+      break;
+    }
     default:
       return NextResponse.json({ error: "WORKFLOW_MANUAL_SOURCE_NOT_SUPPORTED", message: "La sélection de cet objet métier n’est pas encore disponible." }, { status: 409 });
   }
@@ -84,7 +136,12 @@ export async function GET(req: Request, { params }: Params) {
   await writeApiLog({ request: req, statusCode: 200, userId, startedAt, metadata: { organizationId, domain: "workflow-source-options", type, count: sources.length } });
   return NextResponse.json({
     sourceEntityType: type, emptyReason,
-    createModuleHref: type === "EnterpriseExpense" || type === "EnterpriseBudget" ? "/enterprise-modules/FINANCE_BUDGETS" : null,
+    createModuleHref: type === "EnterpriseExpense" || type === "EnterpriseBudget" ? "/enterprise-modules/FINANCE_BUDGETS"
+      : type === "EnterpriseSupplierInvoice" ? "/enterprise-modules/FINANCE_PAYABLES"
+      : type === "EnterprisePayment" ? "/enterprise-modules/FINANCE_PAYMENTS"
+      : type === "EnterpriseCashSession" ? "/enterprise-modules/FINANCE_CASH"
+      : type === "EnterpriseJournalEntry" ? "/enterprise-modules/FINANCE_ACCOUNTING"
+      : type === "EnterpriseFinancialClose" ? "/enterprise-modules/FINANCE_CLOSE" : null,
     sources: sources.map((item) => ({ id: item.id, label: [item.reference, item.title, item.status].filter(Boolean).join(" · ") })),
   });
 }
