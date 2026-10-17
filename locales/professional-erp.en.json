@@ -248,5 +248,6 @@
   "crm.opportunityDefaultName": "Opportunity {{name}}",
   "crm.selectExistingRequired": "Select an existing business record.",
   "crm.conversionDecisionRequired": "Select an existing record or explicitly confirm creation of a new record.",
-  "crm.lostPrompt": "Why was this prospect lost?"
+  "crm.lostPrompt": "Why was this prospect lost?",
+  "customers.systemWalkInNoRelationship": "This is a system walk-in customer used for anonymous gaming transactions. It is not an identifiable person and cannot be linked to a DTSC account. Select a real customer to configure a relationship."
 }
