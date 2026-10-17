@@ -71,3 +71,22 @@ export function workflowManualEmptyMessage(
   }
   return en ? "No eligible record is available for this workflow." : "Aucun objet métier admissible n’est disponible pour ce workflow.";
 }
+
+const manualStatusLabels: Record<string, readonly [string, string]> = {
+  DRAFT: ["Brouillon", "Draft"],
+  PREPARING: ["En préparation", "Preparing"],
+  CORRECTION_REQUESTED: ["Correction demandée", "Correction requested"],
+  SUBMITTED: ["Soumis", "Submitted"],
+  PENDING: ["En attente", "Pending"],
+  PENDING_REVIEW: ["En attente de revue", "Awaiting review"],
+  PENDING_APPROVAL: ["En attente d’approbation", "Awaiting approval"],
+  PENDING_VALIDATION: ["En attente de validation", "Awaiting validation"],
+  APPROVED: ["Approuvé", "Approved"],
+  CLOSED: ["Clôturé", "Closed"],
+  REJECTED: ["Rejeté", "Rejected"],
+  OPEN: ["Ouvert", "Open"],
+};
+
+export function workflowManualStatusLabel(status: string | null | undefined, en: boolean) {
+  return manualStatusLabels[status || ""]?.[en ? 1 : 0] || (en ? "Current status" : "Statut actuel");
+}
