@@ -117,10 +117,13 @@ for (const token of [
   'aria-modal="true"',
   "event.key === \"Escape\"",
   "event.key === \"Tab\"",
-  "if (draftDirty && !window.confirm(",
+  "if (draftDirty) {",
+  "confirmSensitiveAction({",
+  "if (!confirmation.confirmed) return;",
   'en ? "Back to workflows" : "Retour aux workflows"',
 ]) assert.ok(ui.includes(token), "Full-screen definition regression: "+token);
 assert.ok(!ui.includes('lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]'), "Definition details must not be rendered as a second inline column");
+assert.ok(!ui.includes("window.confirm("), "Do not use native blocking confirmation; shared async dialog is required");
 assert.ok(ui.includes('setStartDefinition(null);\n      setSelected(null);\n      setTab("runs")'), "Successful start must show runs, not leave full-screen detail over timeline");
 
 console.log("PASS HOTFIX #863: nine template source contracts; same picker/POST predicates, tenant/actor/status/subtype fail-closed, ERP links, FR/EN and safe empty states");
