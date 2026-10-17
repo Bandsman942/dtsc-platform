@@ -35,6 +35,7 @@ type UserIdentityLink = {
   cancelledAt: string | null;
   organization: { id: string; name: string; logoUrl: string | null } | null;
   person: { id: string; displayName: string } | null;
+  businessRoleSupplier: boolean;
 };
 
 type InvitationPreview = {
@@ -202,6 +203,7 @@ export function EnterpriseIdentityUserPanel({
   const detailOrganization = selectedInvitation?.organization.name || selectedLink?.organization?.name || "Entreprise indisponible";
   const detailPerson = selectedInvitation?.person.displayName || selectedLink?.person?.displayName || "Fiche métier";
   const detailRelationType = selectedInvitation?.requestedRelationType || selectedLink?.requestedRelationType || "CUSTOMER";
+  const detailBusinessRoleLabel = selectedLink?.businessRoleSupplier ? "Fournisseur" : null;
   const detailPurpose = selectedInvitation?.purpose || selectedLink?.purpose || "—";
   const detailExpiresAt = selectedInvitation?.expiresAt || selectedLink?.expiresAt || null;
 
@@ -357,7 +359,7 @@ function RelationshipListItem({ link, focused, descriptionSuffix, onOpen }: { li
         title={link.organization?.name || "Entreprise indisponible"}
         leading={<Building2 className="h-5 w-5 text-dtsc-blue" />}
         status={<StatusBadge tone={statusTone(link.status)}>{getEnterpriseIdentityStatusLabel(status, "fr")}</StatusBadge>}
-        meta={`${getEnterpriseIdentityRelationLabel(link.requestedRelationType as EnterpriseIdentityRelationType, "fr")} · ${link.person?.displayName || "Fiche métier"}`}
+        meta={`${link.businessRoleSupplier && link.requestedRelationType === "OTHER" ? "Fournisseur (rôle métier) · Autre relation (consentement)" : getEnterpriseIdentityRelationLabel(link.requestedRelationType as EnterpriseIdentityRelationType, "fr")} · ${link.person?.displayName || "Fiche métier"}`}
         description={`${link.purpose}${descriptionSuffix ? ` · ${descriptionSuffix}` : ""}`}
         onOpen={onOpen}
       />
