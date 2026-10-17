@@ -1038,6 +1038,7 @@ export async function listOrganizationIdentityLinks(organizationId: string) {
   return links.map((link) => ({
     ...link,
     person: personById.get(link.personIdentityId) || null,
+    businessRoleSupplier: supplierPersonKeys.has(`${link.organizationId}:${link.personIdentityId}`),
     references: references.filter((reference) => reference.personIdentityId === link.personIdentityId),
   }));
 }
@@ -1094,6 +1095,36 @@ export async function listUserIdentityLinks(userId: string) {
       select: { id: true, displayName: true },
     }),
   ]);
+  const references = personIds.length ? await prisma.enterprisePersonBusinessReference.findMany({
+    where: {
+      personIdentityId: { in: personIds },
+      organizationId: { in: organizationIds },
+      archivedAt: null,
+      status: "ACTIVE",
+      OR: [{ businessPartyId: { not: null } }, { supplierId: { not: null } }],
+    },
+    select: { organizationId: true, personIdentityId: true, businessPartyId: true, supplierId: true },
+  }) : [];
+  const partyIds = references.flatMap((ref) => ref.businessPartyId ? [ref.businessPartyId] : []);
+  const supplierIds = references.flatMap((ref) => ref.supplierId ? [ref.supplierId] : []);
+  const [supplierParties, personSuppliers] = await Promise.all([
+    partyIds.length ? prisma.enterpriseBusinessParty.findMany({
+      where: {
+        id: { in: partyIds }, organizationId: { in: organizationIds }, partyType: "PERSON", archivedAt: null,
+        roles: { some: { roleCode: "SUPPLIER", status: "ACTIVE", archivedAt: null } },
+      },
+      select: { id: true },
+    }) : Promise.resolve([]),
+    supplierIds.length ? prisma.enterpriseSupplier.findMany({
+      where: { id: { in: supplierIds }, organizationId: { in: organizationIds }, supplierType: "PERSON", archivedAt: null },
+      select: { id: true },
+    }) : Promise.resolve([]),
+  ]);
+  const supplierPartySet = new Set(supplierParties.map((party) => party.id));
+  const personSupplierSet = new Set(personSuppliers.map((supplier) => supplier.id));
+  const supplierPersonKeys = new Set(references
+    .filter((ref) => Boolean((ref.businessPartyId && supplierPartySet.has(ref.businessPartyId)) || (ref.supplierId && personSupplierSet.has(ref.supplierId))))
+    .map((ref) => `${ref.organizationId}:${ref.personIdentityId}`));
   const organizationById = new Map(organizations.map((organization) => [organization.id, organization]));
   const personById = new Map(people.map((person) => [person.id, person]));
   return links.map((link) => ({
