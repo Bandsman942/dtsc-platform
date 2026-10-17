@@ -54,7 +54,7 @@ export async function GET(req: Request, { params }: Params) {
       id: event.id, eventType: event.eventType, summary: event.summary,
       fromStatus: event.fromStatus, toStatus: event.toStatus,
       actorUserId: event.actorUserId, actorLabel: nameById.get(event.actorUserId) || null, createdAt: event.createdAt,
-      metadataJson: event.eventType === "OPPORTUNITY_UPDATED" ? event.metadataJson : null,
+      metadataJson: event.eventType === "OPPORTUNITY_UPDATED" || (event.fromStatus && event.toStatus && event.fromStatus !== event.toStatus) ? event.metadataJson : null,
       note: commentId ? textById.get(commentId) || null : null,
     };
   });
