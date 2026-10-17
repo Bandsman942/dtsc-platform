@@ -1,16 +1,23 @@
 import { prisma } from "@/lib/prisma";
+import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
 
 /**
  * Workflow Engine v2 is the only active source exposed to collaborators.
  * The legacy archive delegate (`prisma.enterpriseWorkflow`) remains available
  * only through protected historical/read-only paths and is never queried here.
  */
-export async function getEnterpriseActivityWorkflows(organizationId: string) {
+export async function getEnterpriseActivityWorkflows(organizationId: string, userId: string) {
+  const capabilities = await resolveEnterpriseModuleCapabilities({ userId, organizationId, moduleCode: "WORKFLOWS" });
+  if (!capabilities.canRead) return [];
   const definitions = await prisma.enterpriseWorkflowDefinition.findMany({
     where: {
       organizationId,
       status: "ACTIVE",
-      allowManualStart: true,
+      OR: [
+        { allowManualStart: true },
+        { triggerEntityType: "EnterpriseRequest", triggerEventType: "ENTERPRISE_REQUEST_SUBMITTED" },
+      ],
+      currentVersionId: { not: null },
       archivedAt: null,
       versions: { some: { status: "PUBLISHED" } },
     },
@@ -22,6 +29,8 @@ export async function getEnterpriseActivityWorkflows(organizationId: string) {
       name: true,
       description: true,
       updatedAt: true,
+      triggerEntityType: true,
+      triggerEventType: true,
       versions: {
         where: { status: "PUBLISHED" },
         orderBy: { versionNumber: "desc" },
@@ -51,5 +60,7 @@ export async function getEnterpriseActivityWorkflows(organizationId: string) {
     descriptionFr: definition.description,
     stepsJson: definition.versions[0]?.steps || [],
     updatedAt: definition.updatedAt,
+    triggerEntityType: definition.triggerEntityType,
+    triggerEventType: definition.triggerEventType,
   }));
 }
