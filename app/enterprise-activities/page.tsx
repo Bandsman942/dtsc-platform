@@ -7,7 +7,7 @@ import { canUseFeature, getOrganizationEntitlements } from "@/lib/billing/entitl
 import { getEnterpriseActivitiesDataset } from "@/lib/enterprise/enterprise-activities-loader";
 import { requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
 
-export default async function EnterpriseActivitiesPage() {
+export default async function EnterpriseActivitiesPage({ searchParams }: { searchParams: Promise<{ activity?: string }> }) {
   const user = await requireUser();
   const session = await getSession();
   const organizationId = session?.activeContext === "ORGANIZATION" ? session.activeOrganizationId : null;
@@ -33,6 +33,7 @@ export default async function EnterpriseActivitiesPage() {
     );
   }
 
+  const { activity } = await searchParams;
   const dataset = await getEnterpriseActivitiesDataset({ organizationId, userId: user.id, membershipRole: membership.role });
   if (!dataset) {
     redirect("/dashboard");
@@ -40,7 +41,7 @@ export default async function EnterpriseActivitiesPage() {
 
   return (
     <AppShell user={user}>
-      <EnterpriseActivitiesModule {...dataset} />
+      <EnterpriseActivitiesModule {...dataset} initialActivityId={activity && dataset.requests.some((item) => item.id === activity) ? activity : null} />
     </AppShell>
   );
 }
