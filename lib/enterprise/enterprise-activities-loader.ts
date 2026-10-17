@@ -9,7 +9,7 @@ import { getOrganizationEntitlements } from "@/lib/billing/entitlements";
 import { prisma } from "@/lib/prisma";
 import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
 import { getBusinessSubtypeForSector } from "@/lib/enterprise/business-subtype-registry";
-import { GAMING_INCOMPATIBLE_ACTIVITY_BLOCKS } from "@/lib/enterprise/enterprise-activity-form-contract";
+import { GAMING_ACTIVITY_BLOCK_COPY, GAMING_INCOMPATIBLE_ACTIVITY_BLOCKS } from "@/lib/enterprise/enterprise-activity-form-contract";
 
 function toJson<T>(value: unknown): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -86,7 +86,10 @@ export async function getEnterpriseActivitiesDataset({
   })() : {};
   return toJson<EnterpriseActivitiesDataset>({
     organization: { ...organization, businessSubtypeCode: businessSubtype?.code || null, businessSubtypeLabelFr: businessSubtype?.labelFr || null, businessSubtypeLabelEn: businessSubtype?.labelEn || null },
-    blocks: gamingLounge ? blocks.filter((block) => !GAMING_INCOMPATIBLE_ACTIVITY_BLOCKS.has(block.blockCode)) : blocks,
+    blocks: gamingLounge
+      ? blocks.filter((block) => !GAMING_INCOMPATIBLE_ACTIVITY_BLOCKS.has(block.blockCode))
+        .map((block) => ({ ...block, ...(GAMING_ACTIVITY_BLOCK_COPY[block.blockCode] || {}) }))
+      : blocks,
     requests,
     members,
     sectorRecords,
