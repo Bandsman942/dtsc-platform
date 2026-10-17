@@ -119,7 +119,7 @@ export function EnterpriseActivitiesModule({ organization, blocks, requests, mem
         members={members}
         sectorRecords={sectorRecords}
         gamingReferences={gaming ? gamingReferences : {}}
-        onMessage={(message) => { if (message) notifyToast(message, message.startsWith("Demande envoyée") ? "success" : "error"); }}
+        onMessage={(message, tone = "error") => { if (message) notifyToast(message, tone); }}
       />
     </ModuleWorkspace>
   );
