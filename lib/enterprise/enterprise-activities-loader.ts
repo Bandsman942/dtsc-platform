@@ -109,7 +109,7 @@ export async function getEnterpriseActivitiesDataset({
       resolveEnterpriseModuleCapabilities({ userId, organizationId, moduleCode: destination.moduleCode }),
       Promise.resolve(resolveEnterpriseModuleRoute(destination.moduleCode)),
     ]);
-    if (!capabilities.canRead || !capabilities.canCreate || !route || !isEnterpriseModuleNavigable(route.definition)) return;
+    if (!capabilities.canRead || !capabilities.canCreate || !capabilities.canWrite || !route || !isEnterpriseModuleNavigable(route.definition)) return;
     canonicalActionHandoffs[blockCode] = {
       href: `${route.path}?activityAction=${destination.intent}`,
       labelFr: getEnterpriseModuleLabel(route.definition, "fr"),
