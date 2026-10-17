@@ -69,6 +69,7 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, departmen
   const [observability, setObservability] = useState<WorkflowObservability | null>(null);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Definition | null>(null);
+  const detailOpen = Boolean(selected);
   const detailsRef = useRef<HTMLElement>(null);
   const backFromDetailsRef = useRef<HTMLButtonElement>(null);
   const definitionOpenerRef = useRef<HTMLElement | null>(null);
@@ -127,7 +128,7 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, departmen
   // The details are a full-viewport workspace, not an inline second column.
   // Preserve focus and page scroll when returning to the definitions list.
   useEffect(() => {
-    if (!selected) return;
+    if (!detailOpen) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     backFromDetailsRef.current?.focus();
@@ -135,7 +136,7 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, departmen
       document.body.style.overflow = previousOverflow;
       definitionOpenerRef.current?.focus();
     };
-  }, [Boolean(selected)]);
+  }, [detailOpen]);
 
   const closeDefinition = useCallback(() => {
     if (draftDirty && !window.confirm(en
@@ -167,10 +168,10 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, departmen
   }, [selected, closeDefinition]);
 
   async function openDefinition(id: string) {
+    if (!selected) definitionOpenerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const response = await fetch(`/api/enterprise/${organizationId}/workflows/${id}`);
     const body = await response.json().catch(() => null);
     if (!response.ok) return toastError(getWorkflowRecoveryMessage(body?.error, locale) || body?.message || (en ? "Workflow unavailable." : "Workflow indisponible."));
-    if (!selected) definitionOpenerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setSelected(body.definition);
     setReadiness(body.readiness || {});
     const draft = body.definition.versions.find((version: Version) => version.status === "DRAFT");
