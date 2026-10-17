@@ -61,6 +61,24 @@ export async function getEnterpriseActivitiesDataset({
     getEnterpriseActivityWorkflows(organizationId, userId),
   ]);
 
+  // Only active departments whose designated manager is still a live member
+  // can be offered as candidates for REQUEST_MANAGER_APPROVAL.
+  const departmentCandidates = await prisma.enterpriseDepartment.findMany({
+    where: { organizationId, isActive: true, responsibleUserId: { not: null } },
+    orderBy: { sortOrder: "asc" },
+    select: { id: true, labelFr: true, labelEn: true, responsibleUserId: true },
+    take: 200,
+  });
+  const activeManagers = departmentCandidates.length
+    ? await prisma.organizationMember.findMany({
+        where: { organizationId, userId: { in: departmentCandidates.map((item) => item.responsibleUserId).filter((value): value is string => Boolean(value)) }, status: "ACTIVE", removedAt: null },
+        select: { userId: true },
+      })
+    : [];
+  const activeManagerIds = new Set(activeManagers.map((member) => member.userId));
+  const departments = departmentCandidates.filter((department) => department.responsibleUserId && activeManagerIds.has(department.responsibleUserId))
+    .map((department) => ({ value: department.id, labelFr: department.labelFr, labelEn: department.labelEn }));
+
   const workflowLinks = await projectEnterpriseActivityRequestWorkflows({
     organizationId, userId, activityIds: requests.map((request) => request.id),
   });
@@ -109,6 +127,7 @@ export async function getEnterpriseActivitiesDataset({
       : eligibleBlocks,
     requests: requestsWithCanonicalState,
     members,
+    departments,
     sectorRecords,
     workflows,
     gamingReferences,
