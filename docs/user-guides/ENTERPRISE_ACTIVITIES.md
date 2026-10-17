@@ -1,5 +1,17 @@
 # Guide utilisateur — Activités entreprise
 
+## Opérations métier disponibles dans leurs modules ERP
+
+Certaines actions professionnelles ne créent plus une simple demande : si le module correspondant est réellement activé dans l'entreprise **et** si les permissions du collaborateur l'autorisent, le bouton **Ouvrir Temps, présences & congés** ou **Ouvrir Temps & livrables** permet de poursuivre dans le module ERP propriétaire.
+
+- **Déclarer temps travaillé** : l'onglet Feuilles de temps est sélectionné ; le formulaire de déclaration est accessible si le module Temps autorise l'écriture. La durée enregistrée reste soumise à validation ; aucune feuille de temps n'est créée avant enregistrement explicite.
+- **Soumettre livrable** : le module Temps & livrables ouvre le formulaire métier réel quand le droit d'écriture est acquis. Le responsable, le projet, le document et les validations sont contrôlés par ce module.
+- Si le module n'est pas activé, si l'abonnement ne l'autorise pas ou si le rôle n'a pas les droits nécessaires, l'action reste **indisponible**. Aucun faux succès ni soumission automatique n'est possible depuis Activités.
+- Les autres opérations nécessitant une vraie API métier restent indisponibles jusqu'à leur intégration (#878).
+
+Le parcours et les critères de validation figurent dans `docs/HOTFIX_878_WAVE1_CANONICAL_HANDOFFS.md`.
+
+
 ## Demandes collaboratives et opérations métier
 
 Les actions de secteur affichent dorénavant leur disponibilité réelle.
