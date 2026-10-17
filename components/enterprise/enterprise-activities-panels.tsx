@@ -399,7 +399,7 @@ export function EnterpriseActivityFormDialog({
     if (busy) return;
     const formElement = event.currentTarget;
     if (!selectedBlockCode) {
-      onMessage("Choisissez un bloc d'activité.");
+      onMessage(english ? "Select a business activity first." : "Choisissez un bloc d'activité.", "error");
       return;
     }
     onMessage("");
@@ -442,7 +442,7 @@ export function EnterpriseActivityFormDialog({
     <Dialog
       open={open}
       title={(english ? selectedBlock?.labelEn : selectedBlock?.labelFr) || (english ? "New business request" : "Nouvelle demande entreprise")}
-      description={selectedBlock?.descriptionFr || "Cette action crée une vraie demande isolée dans l'entreprise active."}
+      description={english ? "This action creates a tracked request for the selected company." : selectedBlock?.descriptionFr || "Cette action crée une demande suivie dans l'entreprise active."}
       onClose={onClose}
       className="h-[96dvh] max-w-5xl"
       presentation="editor"
@@ -488,7 +488,7 @@ export function EnterpriseActivityFormDialog({
             ))}
           </div>
         )}
-        <FormField label="Priorité" hint="Indiquez l'urgence de traitement attendue.">
+        <FormField label={english ? "Priority" : "Priorité"} hint={english ? "Choose the expected urgency." : "Indiquez l'urgence de traitement attendue."}>
           <select name="priority" defaultValue="NORMAL" className="h-11 min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
             <option value="LOW">{english ? "Low" : "Faible"}</option>
             <option value="NORMAL">{english ? "Normal" : "Normale"}</option>
