@@ -109,6 +109,8 @@ jobs:
         run: node scripts/qa-workflow-855-lease-policy.mjs
       - name: HOTFIX 859 workflow editor and approval candidate QA
         run: node scripts/qa-hotfix-859-workflow-editor.mjs
+      - name: HOTFIX #861 finance canonical approval and cron safety QA
+        run: node scripts/qa-hotfix-861-workflow-finance.mjs
       - name: Type check
         run: pnpm type-check
         env:
@@ -219,6 +221,8 @@ jobs:
         run: node scripts/qa-workflow-855-lease-policy.mjs
       - name: HOTFIX 859 workflow editor and approval candidate QA
         run: node scripts/qa-hotfix-859-workflow-editor.mjs
+      - name: HOTFIX #861 finance canonical approval and cron safety QA
+        run: node scripts/qa-hotfix-861-workflow-finance.mjs
       - name: Run Retail Telco Mobile Money migration contract
         run: node scripts/qa-retail-telco-mobile-money.mjs
       - name: Run sector onboarding commercial readiness on clean database
