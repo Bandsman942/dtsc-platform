@@ -4,9 +4,9 @@ import { writeApiLog } from "@/lib/audit";
 import { getEnterpriseWorkflowAccess } from "@/lib/enterprise/workflows/access";
 import { requireWorkflowSourceAccess } from "@/lib/enterprise/workflows/source-access";
 import { prisma } from "@/lib/prisma";
+import { findWorkflowManualSources } from "@/lib/enterprise/workflows/manual-source-options";
 
 type Params = { params: Promise<{ organizationId: string }> };
-type Source = { id: string; title: string; reference?: string | null; status: string };
 
 /**
  * Only canonical source types with tested tenant + actor queries are offered.
@@ -41,97 +41,24 @@ export async function GET(req: Request, { params }: Params) {
   }
   const userId = session.userId;
   const own = !access.canViewAllRuns;
-  let sources: Source[];
-  let emptyReason: "NO_RECORDS" | "NO_VISIBLE_RECORDS" | null = null;
-  // These options are intentionally bounded and carry only identifiers and
-  // business labels. Clinical, finance amounts and private descriptions remain server-side.
-  switch (type) {
-    case "EnterpriseTask": {
-      const rows = await prisma.enterpriseTask.findMany({ where: { organizationId, archivedAt: null, ...(own ? { OR: [{ createdByUserId: userId }, { assignedToUserId: userId }] } : {}) }, select: { id: true, title: true, status: true }, orderBy: { updatedAt: "desc" }, take: 50 });
-      sources = rows; break;
-    }
-    case "EnterpriseRequest": {
-      const rows = await prisma.enterpriseRequest.findMany({ where: { organizationId, archivedAt: null, ...(own ? { OR: [{ requestedByUserId: userId }, { assignedToUserId: userId }] } : {}) }, select: { id: true, title: true, status: true }, orderBy: { updatedAt: "desc" }, take: 50 });
-      sources = rows; break;
-    }
-    case "EnterpriseMeeting": {
-      const rows = await prisma.enterpriseMeeting.findMany({ where: { organizationId, archivedAt: null, ...(own ? { organizerUserId: userId } : {}) }, select: { id: true, title: true, status: true }, orderBy: { updatedAt: "desc" }, take: 50 });
-      sources = rows; break;
-    }
-    case "EnterprisePurchase": {
-      const rows = await prisma.enterprisePurchase.findMany({ where: { organizationId, archivedAt: null, ...(own ? { OR: [{ requestedByUserId: userId }, { buyerUserId: userId }, { createdByUserId: userId }] } : {}) }, select: { id: true, title: true, reference: true, status: true }, orderBy: { createdAt: "desc" }, take: 50 });
-      sources = rows; break;
-    }
-    case "EnterpriseBudget": {
-      const rows = await prisma.enterpriseBudget.findMany({ where: { organizationId, archivedAt: null, status: { in: ["DRAFT", "PREPARING", "CORRECTION_REQUESTED", "PENDING_APPROVAL"] }, ...(own ? { OR: [{ ownerUserId: userId }, { createdByUserId: userId }] } : {}) }, select: { id: true, title: true, reference: true, status: true }, orderBy: { createdAt: "desc" }, take: 50 });
-      sources = rows; break;
-    }
-    case "EnterpriseExpense": {
-      const rows = await prisma.enterpriseExpense.findMany({ where: { organizationId, archivedAt: null, status: { in: ["DRAFT", "PENDING_APPROVAL"] }, ...(own ? { OR: [{ requestedByUserId: userId }, { createdByUserId: userId }] } : {}) }, select: { id: true, title: true, reference: true, status: true }, orderBy: { createdAt: "desc" }, take: 50 });
-      sources = rows; break;
-    }
-    case "EnterpriseReport": {
-      const rows = await prisma.enterpriseReport.findMany({ where: { organizationId, archivedAt: null, ...(own ? { generatedByUserId: userId } : {}) }, select: { id: true, title: true, reference: true, status: true }, orderBy: { createdAt: "desc" }, take: 50 });
-      sources = rows; break;
-    }
-    case "EnterpriseSupplierInvoice": {
-      const rows = await prisma.enterpriseSupplierInvoice.findMany({
-        where: { organizationId, archivedAt: null,
-          status: { in: ["PENDING_REVIEW", "PENDING_APPROVAL", "APPROVED"] },
-          ...(own ? { createdByUserId: userId } : {}),
-        },
-        select: { id: true, number: true, status: true },
-        orderBy: { createdAt: "desc" }, take: 50,
-      });
-      sources = rows.map((row) => ({ id: row.id, reference: row.number, title: "Facture fournisseur", status: row.status }));
-      break;
-    }
-    case "EnterprisePayment": {
-      const rows = await prisma.enterprisePayment.findMany({
-        where: { organizationId, paymentType: "SUPPLIER_PAYMENT", status: { in: ["PENDING_APPROVAL", "APPROVED"] },
-          ...(own ? { initiatedByUserId: userId } : {}) },
-        select: { id: true, number: true, status: true },
-        orderBy: { createdAt: "desc" }, take: 50,
-      });
-      sources = rows.map((row) => ({ id: row.id, reference: row.number, title: "Paiement fournisseur", status: row.status }));
-      break;
-    }
-    case "EnterpriseCashSession": {
-      const rows = await prisma.enterpriseCashSession.findMany({
-        where: { organizationId, status: { in: ["PENDING_VALIDATION", "CLOSED", "REJECTED"] },
-          ...(own ? { cashierUserId: userId } : {}) },
-        select: { id: true, number: true, status: true },
-        orderBy: { createdAt: "desc" }, take: 50,
-      });
-      sources = rows.map((row) => ({ id: row.id, reference: row.number, title: "Clôture de caisse", status: row.status }));
-      break;
-    }
-    case "EnterpriseJournalEntry": {
-      const rows = await prisma.enterpriseJournalEntry.findMany({
-        where: { organizationId, status: { in: ["PENDING_APPROVAL", "APPROVED"] },
-          ...(own ? { preparedByUserId: userId } : {}) },
-        select: { id: true, number: true, status: true },
-        orderBy: { createdAt: "desc" }, take: 50,
-      });
-      sources = rows.map((row) => ({ id: row.id, reference: row.number, title: "Écriture manuelle", status: row.status }));
-      break;
-    }
-    case "EnterpriseFinancialClose": {
-      const rows = await prisma.enterpriseFinancialClose.findMany({
-        where: { organizationId, status: { in: ["PENDING_APPROVAL", "APPROVED"] },
-          ...(own ? { requestedByUserId: userId } : {}) },
-        select: { id: true, fiscalPeriod: { select: { code: true } }, status: true },
-        orderBy: { createdAt: "desc" }, take: 50,
-      });
-      sources = rows.map((row) => ({ id: row.id, reference: row.fiscalPeriod.code, title: "Dossier de clôture", status: row.status }));
-      break;
-    }
-    default:
-      return NextResponse.json({ error: "WORKFLOW_MANUAL_SOURCE_NOT_SUPPORTED", message: "La sélection de cet objet métier n’est pas encore disponible." }, { status: 409 });
+  // The same allow-listed ERP queries power the picker and POST authorization.
+  // Only a supervisor allowed to view all runs may distinguish no records from
+  // records in inadmissible states; never disclose a colleague's private data.
+  const sources = await findWorkflowManualSources({
+    organizationId, userId, entityType: type, allowAll: access.canViewAllRuns,
+  });
+  if (sources === null) {
+    return NextResponse.json({ error: "WORKFLOW_MANUAL_SOURCE_NOT_SUPPORTED", message: "La sélection de cet objet métier n’est pas encore disponible." }, { status: 409 });
   }
+  let emptyReason: "NO_RECORDS" | "NO_ELIGIBLE_RECORDS" | "NO_VISIBLE_RECORDS" | null = null;
   if (!sources.length) {
-    // Never reveal whether other employees have private records.
-    emptyReason = own ? "NO_VISIBLE_RECORDS" : "NO_RECORDS";
+    if (own) emptyReason = "NO_VISIBLE_RECORDS";
+    else {
+      const visibleIncludingOtherStates = await findWorkflowManualSources({
+        organizationId, userId, entityType: type, allowAll: true, includeIneligibleStatus: true,
+      });
+      emptyReason = visibleIncludingOtherStates?.length ? "NO_ELIGIBLE_RECORDS" : "NO_RECORDS";
+    }
   }
   await writeApiLog({ request: req, statusCode: 200, userId, startedAt, metadata: { organizationId, domain: "workflow-source-options", type, count: sources.length } });
   return NextResponse.json({
