@@ -401,7 +401,7 @@ async function syncCanonicalPrimaryContactTx(
   if (selected) {
     await tx.enterpriseBusinessPartyContact.update({
       where: { id: selected.id },
-      data: { value: nextValue, normalizedValue, isPrimary: true, status: "ACTIVE", archivedAt: null, isVerified: false, revision: { increment: 1 } },
+      data: { value: nextValue, normalizedValue, isPrimary: true, status: "ACTIVE", archivedAt: null, ...(selected.normalizedValue !== normalizedValue ? { isVerified: false } : {}), revision: { increment: 1 } },
     });
   } else {
     const created = await tx.enterpriseBusinessPartyContact.create({
