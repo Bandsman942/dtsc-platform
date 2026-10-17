@@ -12,6 +12,8 @@ import { projectEnterpriseActivityRequestWorkflows } from "@/lib/enterprise/ente
 import { getBusinessSubtypeForSector } from "@/lib/enterprise/business-subtype-registry";
 import { canAccessEnterpriseActivity } from "@/lib/enterprise-sector-templates";
 import { GAMING_ACTIVITY_BLOCK_COPY, GAMING_INCOMPATIBLE_ACTIVITY_BLOCKS } from "@/lib/enterprise/enterprise-activity-form-contract";
+import { canonicalSectorActivityDestination } from "@/lib/enterprise/sector-activity-canonical-handoffs";
+import { resolveEnterpriseModuleRoute, isEnterpriseModuleNavigable, getEnterpriseModuleLabel } from "@/lib/enterprise/module-registry";
 
 function toJson<T>(value: unknown): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -52,7 +54,7 @@ export async function getEnterpriseActivitiesDataset({
   }
 
   const [blocks, requests, members, sectorRecords, workflows] = await Promise.all([
-    getEnterpriseActivityBlocks(organizationId, userId),
+    getEnterpriseActivityBlocks(organizationId, userId, organization.sectorCode),
     getEnterpriseActivityRequests({ organizationId, userId, membershipRole }),
     getEnterpriseActivityMembers(organizationId),
     organization.sectorCode === "PHARMACY"
@@ -94,6 +96,27 @@ export async function getEnterpriseActivitiesDataset({
     allowed: await canAccessEnterpriseActivity(userId, organizationId, block.blockCode, "submit"),
   })))).filter((item) => item.allowed).map((item) => item.block);
 
+  // Only expose real, navigable canonical ERP commands to members permitted to
+  // CREATE in the target module. This is not a write permission delegated from
+  // Activities: the destination page and API will check rights again.
+  const canonicalActionHandoffs: Record<string, { href: string; labelFr: string; labelEn: string }> = {};
+  const knownHandoffs = eligibleBlocks.flatMap((block) => {
+    const destination = canonicalSectorActivityDestination(organization.sectorCode, block.blockCode);
+    return destination ? [{ blockCode: block.blockCode, destination }] : [];
+  });
+  await Promise.all(knownHandoffs.map(async ({ blockCode, destination }) => {
+    const [capabilities, route] = await Promise.all([
+      resolveEnterpriseModuleCapabilities({ userId, organizationId, moduleCode: destination.moduleCode }),
+      Promise.resolve(resolveEnterpriseModuleRoute(destination.moduleCode)),
+    ]);
+    if (!capabilities.canRead || !capabilities.canCreate || !route || !isEnterpriseModuleNavigable(route.definition)) return;
+    canonicalActionHandoffs[blockCode] = {
+      href: `${route.path}?activityAction=${destination.intent}`,
+      labelFr: getEnterpriseModuleLabel(route.definition, "fr"),
+      labelEn: getEnterpriseModuleLabel(route.definition, "en"),
+    };
+  }));
+
   const gamingReferences = gamingLounge ? await (async () => {
     // Do not leak private Gaming/CRM references to users who may submit a
     // collaborative request but do not have read access to the target module.
@@ -126,6 +149,7 @@ export async function getEnterpriseActivitiesDataset({
         .map((block) => ({ ...block, ...(GAMING_ACTIVITY_BLOCK_COPY[block.blockCode] || {}) }))
       : eligibleBlocks,
     requests: requestsWithCanonicalState,
+    canonicalActionHandoffs,
     members,
     departments,
     sectorRecords,
