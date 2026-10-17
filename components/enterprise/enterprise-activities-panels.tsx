@@ -200,6 +200,7 @@ export function EnterpriseActivityBlocksPanel({ sectorCode, blocks, selectedBloc
           );
         })}
       </div>
+      {!blocks.length ? <p role="status" className="rounded-xl border border-dtsc-border bg-dtsc-surface p-4 text-sm text-dtsc-muted">{english ? "No actions are available with your current permissions. Your existing requests remain accessible." : "Aucune action n’est disponible avec vos permissions actuelles. Vos demandes restent consultables."}</p> : null}
       {selectedBlock && <div className="flex min-w-0 flex-col gap-3 border-t border-dtsc-border pt-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <p className="break-words font-semibold text-dtsc-ink">{english ? selectedBlock.labelEn : selectedBlock.labelFr}</p>
