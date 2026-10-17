@@ -67,6 +67,7 @@ export type EnterpriseActivitiesDataset = {
   blocks: EnterpriseActivityBlockItem[];
   requests: EnterpriseActivityRequestItem[];
   members: EnterpriseActivityMemberItem[];
+  departments: { value: string; labelFr: string; labelEn: string }[];
   sectorRecords: EnterpriseActivitySectorRecordItem[];
   workflows: EnterpriseActivityWorkflowItem[];
   gamingReferences: Partial<Record<"gamingStations" | "gamingBookings" | "gamingSessions" | "gamingCloses" | "businessParties", { value: string; label: string }[]>>;
