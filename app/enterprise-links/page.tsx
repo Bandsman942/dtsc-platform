@@ -62,6 +62,7 @@ export default async function EnterpriseLinksPage({
             cancelledAt: identityLink.cancelledAt?.toISOString() || null,
             organization: identityLink.organization,
             person: identityLink.person,
+            businessRoleSupplier: identityLink.businessRoleSupplier,
           }))}
         />
       </div>
