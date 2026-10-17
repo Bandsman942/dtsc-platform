@@ -411,7 +411,7 @@ export function EnterpriseTimeAttendanceWorkspace({ organizationId, organization
         {tab === "SCHEDULES" ? <Button onClick={() => { setError(""); setScheduleOpen(true); }}><CalendarClock className="h-4 w-4" />{copy.newSchedule}</Button> : null}
         {tab === "ATTENDANCE" ? <Button onClick={() => { setError(""); setAttendanceOpen(true); }}><UserCheck className="h-4 w-4" />{copy.recordAttendance}</Button> : null}
         {tab === "LEAVE" ? <Button onClick={() => { setError(""); setLeaveOpen(true); }}><CalendarDays className="h-4 w-4" />{t("time.requestLeave")}</Button> : null}
-        {tab === "TIMESHEETS" ? <Button onClick={() => { setError(""); setTimesheetOpen(true); }}><Clock3 className="h-4 w-4" />{t("time.declareTime")}</Button> : null}
+        {tab === "TIMESHEETS" ? <Button disabled={!timesheets.canWrite} onClick={() => { setError(""); setTimesheetOpen(true); }}><Clock3 className="h-4 w-4" />{t("time.declareTime")}</Button> : null}
       </div>}
     />
     <ModuleMetrics label={t("time.metrics")}>
