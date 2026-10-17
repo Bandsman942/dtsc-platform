@@ -17,7 +17,11 @@ export async function PATCH(req: Request, { params }: Params) {
   const session = await getSession(); if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const limited = await rateLimit(getRateLimitKey(req, `enterprise-workflow-version-edit:${session.userId}`), 100, 60 * 60 * 1000); if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   const { organizationId, id, versionId } = await params; const access = await getEnterpriseWorkflowAccess(session, organizationId); if (!access?.canEditDraft) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const parsed = workflowVersionSchema.extend({ editToken: z.string().regex(/^[a-f0-9]{64}$/) }).safeParse(await req.json().catch(() => null)); if (!parsed.success) return NextResponse.json({ error: "INVALID_WORKFLOW_VERSION_PAYLOAD", message: parsed.error.issues[0]?.message || "Version invalide." }, { status: 400 });
+  const parsed = workflowVersionSchema.extend({ editToken: z.string().regex(/^[a-f0-9]{64}$/) }).safeParse(await req.json().catch(() => null)); if (!parsed.success) return NextResponse.json({
+    error: "INVALID_WORKFLOW_VERSION_PAYLOAD",
+    message: "Le brouillon contient des champs invalides. Corrigez les éléments signalés avant d’enregistrer.",
+    issues: parsed.error.issues.slice(0, 5).map((issue) => ({ path: issue.path.map(String), code: issue.code })),
+  }, { status: 400 });
   try {
     await requireWorkflowDefinitionSourceAccess({ userId: session.userId, organizationId, definitionId: id });
     const result = await saveWorkflowVersion(organizationId, id, versionId, session.userId, parsed.data, parsed.data.editToken);

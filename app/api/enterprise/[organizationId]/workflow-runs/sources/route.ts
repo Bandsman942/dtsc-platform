@@ -42,6 +42,7 @@ export async function GET(req: Request, { params }: Params) {
   const userId = session.userId;
   const own = !access.canViewAllRuns;
   let sources: Source[];
+  let emptyReason: "NO_RECORDS" | "NO_VISIBLE_RECORDS" | null = null;
   // These options are intentionally bounded and carry only identifiers and
   // business labels. Clinical, finance amounts and private descriptions remain server-side.
   switch (type) {
@@ -62,11 +63,11 @@ export async function GET(req: Request, { params }: Params) {
       sources = rows; break;
     }
     case "EnterpriseBudget": {
-      const rows = await prisma.enterpriseBudget.findMany({ where: { organizationId, archivedAt: null, ...(own ? { OR: [{ ownerUserId: userId }, { createdByUserId: userId }] } : {}) }, select: { id: true, title: true, reference: true, status: true }, orderBy: { createdAt: "desc" }, take: 50 });
+      const rows = await prisma.enterpriseBudget.findMany({ where: { organizationId, archivedAt: null, status: { in: ["DRAFT", "PREPARING", "CORRECTION_REQUESTED", "PENDING_APPROVAL"] }, ...(own ? { OR: [{ ownerUserId: userId }, { createdByUserId: userId }] } : {}) }, select: { id: true, title: true, reference: true, status: true }, orderBy: { createdAt: "desc" }, take: 50 });
       sources = rows; break;
     }
     case "EnterpriseExpense": {
-      const rows = await prisma.enterpriseExpense.findMany({ where: { organizationId, archivedAt: null, ...(own ? { OR: [{ requestedByUserId: userId }, { createdByUserId: userId }] } : {}) }, select: { id: true, title: true, reference: true, status: true }, orderBy: { createdAt: "desc" }, take: 50 });
+      const rows = await prisma.enterpriseExpense.findMany({ where: { organizationId, archivedAt: null, status: { in: ["DRAFT", "PENDING_APPROVAL"] }, ...(own ? { OR: [{ requestedByUserId: userId }, { createdByUserId: userId }] } : {}) }, select: { id: true, title: true, reference: true, status: true }, orderBy: { createdAt: "desc" }, take: 50 });
       sources = rows; break;
     }
     case "EnterpriseReport": {
@@ -76,6 +77,14 @@ export async function GET(req: Request, { params }: Params) {
     default:
       return NextResponse.json({ error: "WORKFLOW_MANUAL_SOURCE_NOT_SUPPORTED", message: "La sélection de cet objet métier n’est pas encore disponible." }, { status: 409 });
   }
+  if (!sources.length) {
+    // Never reveal whether other employees have private records.
+    emptyReason = own ? "NO_VISIBLE_RECORDS" : "NO_RECORDS";
+  }
   await writeApiLog({ request: req, statusCode: 200, userId, startedAt, metadata: { organizationId, domain: "workflow-source-options", type, count: sources.length } });
-  return NextResponse.json({ sourceEntityType: type, sources: sources.map((item) => ({ id: item.id, label: [item.reference, item.title, item.status].filter(Boolean).join(" · ") })) });
+  return NextResponse.json({
+    sourceEntityType: type, emptyReason,
+    createModuleHref: type === "EnterpriseExpense" || type === "EnterpriseBudget" ? "/enterprise-modules/FINANCE_BUDGETS" : null,
+    sources: sources.map((item) => ({ id: item.id, label: [item.reference, item.title, item.status].filter(Boolean).join(" · ") })),
+  });
 }
