@@ -8,7 +8,7 @@ import {
 import { enqueueCrossModuleProjections } from "@/lib/enterprise/cross-module/projection-queue";
 import { WORKFLOW_LIMITS } from "@/lib/enterprise/workflows/constants";
 import { processWorkflowDomainEvent, resumeWaitingRuns } from "@/lib/enterprise/workflows/engine";
-import { workflowEventReadySql, renewWorkflowEventLease, workflowEventFailure } from "@/lib/enterprise/workflows/event-recovery";
+import { workflowEventReadySql, renewWorkflowEventLease, workflowEventFailure, workflowEventClaimCutover } from "@/lib/enterprise/workflows/event-recovery";
 import { KNOWLEDGE_INDEX_EVENT_TYPE } from "@/lib/knowledge-index/constants";
 import { ADMIN_BROADCAST_EMAIL_DELIVERY_EVENT_TYPE } from "@/lib/mail/broadcast-constants";
 import { prisma } from "@/lib/prisma";
@@ -100,6 +100,7 @@ async function getWorkflowQueueSnapshot(): Promise<WorkflowQueueSnapshot> {
 
 async function claimPendingEvents(workerId: string, batchSize: number) {
   const leaseBefore = new Date(Date.now() - WORKFLOW_LIMITS.workerLeaseSeconds * 1000);
+  const cutover = workflowEventClaimCutover();
   return prisma.$queryRaw<ClaimedEvent[]>(Prisma.sql`
     UPDATE "EnterpriseDomainEvent"
     SET "processingStatus" = CASE WHEN "attemptCount" >= ${WORKFLOW_LIMITS.maxAttempts} THEN 'DEAD' ELSE 'PROCESSING' END, "lockedAt" = CASE WHEN "attemptCount" >= ${WORKFLOW_LIMITS.maxAttempts} THEN NULL ELSE NOW() END, "lockedBy" = CASE WHEN "attemptCount" >= ${WORKFLOW_LIMITS.maxAttempts} THEN NULL ELSE ${workerId} END, "attemptCount" = LEAST("attemptCount" + 1, ${WORKFLOW_LIMITS.maxAttempts}),
@@ -113,6 +114,7 @@ async function claimPendingEvents(workerId: string, batchSize: number) {
         AND "eventType" <> ${AUDIT_EXPORT_EVENT_TYPE}
         AND "eventType" <> ${FINANCE_REPORT_GENERATION_EVENT_TYPE}
         AND ${workflowEventReadySql(leaseBefore)}
+        AND "createdAt" >= ${cutover}
       ORDER BY "availableAt" ASC, "createdAt" ASC
       LIMIT ${batchSize}
       FOR UPDATE SKIP LOCKED
