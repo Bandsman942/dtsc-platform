@@ -39,10 +39,15 @@ export const executeCreateApprovalStep: WorkflowStepHandler = async ({ run, step
       409, "WORKFLOW_CANONICAL_APPROVAL_MISSING", "BUSINESS",
     );
     // Mandatory live module permission, exact active member, and SoD check.
-    const requesterUserId = await resolveWorkflowExecutionUser({
-      organizationId: run.organizationId, startedByUserId: run.startedByUserId,
-      adapter, entity, action: "read",
+    const requesterUserId = candidate.requestedByUserId;
+    const requester = await prisma.organizationMember.findFirst({
+      where: { organizationId: run.organizationId, userId: requesterUserId, status: "ACTIVE", removedAt: null },
+      select: { userId: true },
     });
+    if (!requester) throw new EnterpriseWorkflowError(
+      "Le demandeur de cette validation n’est plus membre actif de l’entreprise.",
+      403, "WORKFLOW_EXECUTION_MANDATE_REVOKED", "SECURITY",
+    );
     if (candidate.approverUserId === requesterUserId) throw new EnterpriseWorkflowError(
       "Le demandeur ne peut pas valider sa propre opération.",
       409, "WORKFLOW_SELF_APPROVAL_BLOCKED", "BUSINESS",

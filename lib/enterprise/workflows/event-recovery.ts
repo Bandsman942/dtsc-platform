@@ -46,8 +46,7 @@ export function workflowEventClaimCutover(now: Date = new Date()): Date {
   const parsed = new Date(value);
   // Reject stale cutover choices, future skew and invalid dates.
   if (!Number.isFinite(parsed.getTime()) || parsed.toISOString() !== value ||
-    parsed.getTime() > now.getTime() + 5 * 60_000 ||
-    parsed.getTime() < now.getTime() - 72 * 60 * 60_000) {
+    parsed.getTime() > now.getTime() + 5 * 60_000) {
     return new Date("9999-12-31T00:00:00.000Z");
   }
   return parsed;

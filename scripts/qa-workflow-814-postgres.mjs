@@ -118,8 +118,10 @@ try {
     await assert.rejects(decide(entityType, approval));
   }
 
-  // Every catalogue entry goes through the real create/save/publish services.
-  // The four supported templates then execute all steps to completion.
+  // All nine catalogue entries use real create/save/publish services.
+  // The original four still execute through their canonical business services;
+  // five finance templates attach only EXISTING human approvals (separate #861 PG QA).
+  // Never fabricate a posting or payment confirmation to make a test pass.
   for (const template of templates) {
     if (!getWorkflowTemplateCompatibility(template).ready) {
       const count = await prisma.enterpriseWorkflowDefinition.count({ where: { organizationId } });
@@ -135,6 +137,13 @@ try {
     const version = definition.versions[0];
     await definitions.publishWorkflowVersion(organizationId, definition.id, version.id, maker);
     await assert.rejects(definitions.saveWorkflowVersion(organizationId, definition.id, version.id, maker, template.version), (error) => error.code === "PUBLISHED_WORKFLOW_IMMUTABLE");
+    if (template.version.steps.some((step) => step.stepType === "CREATE_APPROVAL" && step.configuration.canonicalApprovalTarget)) {
+      // A compatible template is publishable without creating or mutating any
+      // finance entity. Runtime requires an exact pre-existing approval.
+      assert.ok(template.version.steps.every((step) => step.stepType !== "DOMAIN_ACTION"),
+        "No finance DOMAIN_ACTION may bypass human decisions");
+      continue;
+    }
     const entity = await source(template.triggerEntityType);
     if (template.triggerEntityType !== "EnterpriseRequest") await adapters.getWorkflowEntityAdapter(template.triggerEntityType).createApproval({ organizationId, entityId: entity.id, actorUserId: maker, approverUserId: checker, revision: entity.revision });
     const run = await engine.startWorkflowRun({ organizationId, workflowDefinitionId: definition.id, sourceEntityType: template.triggerEntityType, sourceEntityId: entity.id, triggerType: "MANUAL", startedByUserId: maker });
