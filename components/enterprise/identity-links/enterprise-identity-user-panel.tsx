@@ -186,7 +186,9 @@ export function EnterpriseIdentityUserPanel({
 
   async function submitUserRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    // Capture the form before awaiting fetch: React clears event.currentTarget after dispatch.
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     setBusyId("request");
     setError(null);
     setSuccess(null);
@@ -213,7 +215,7 @@ export function EnterpriseIdentityUserPanel({
         const message = known[data?.error || ""]?.[english ? "en" : "fr"] || (english ? "Request could not be sent. Please retry or contact support." : data?.message || "La demande n’a pas pu être envoyée.");
         throw new Error(data?.supportReference ? `${message} · ${english ? "Support reference" : "Référence support"} : ${data.supportReference}` : message);
       }
-      event.currentTarget.reset();
+      formElement.reset();
       reportIdentitySuccess(english ? "Your request was sent. The company must approve it before any benefits become available." : data?.message || "Votre demande a été envoyée à l’entreprise.");
       setView("REQUESTS");
       router.refresh();
