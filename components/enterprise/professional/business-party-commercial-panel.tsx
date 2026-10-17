@@ -4,6 +4,8 @@ import { BriefcaseBusiness, Plus, UserRound } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { currencyChoices, Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { commercialHotfixCopy } from "@/components/enterprise/professional/commercial-hotfix-copy";
+import { BusinessPartyOpportunityManager } from "@/components/enterprise/professional/business-party-opportunity-manager";
+import { publishEnterpriseCrmUpdate, subscribeEnterpriseCrmUpdates } from "@/lib/enterprise/crm-sales/client-sync";
 import { ProfessionalError, ProfessionalFormSection, professionalMutation } from "@/components/enterprise/professional/professional-erp-ui";
 import { professionalErpDate, professionalErpEnumLabel, professionalErpMoney, professionalErpT, type ProfessionalErpLocale } from "@/components/enterprise/professional/professional-erp-i18n";
 import { Button } from "@/components/ui/button";
@@ -70,6 +72,10 @@ export function BusinessPartyCommercialPanel({
   const [summary, setSummary] = useState<CommercialSummary | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
+  const [opportunityHubOpen, setOpportunityHubOpen] = useState(false);
+  const [opportunityCreateOpen, setOpportunityCreateOpen] = useState(false);
+  const [managedOpportunityId, setManagedOpportunityId] = useState<string | null>(null);
+
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [busy, setBusy] = useState(false);
@@ -90,6 +96,40 @@ export function BusinessPartyCommercialPanel({
       });
     return () => { active = false; };
   }, [organizationId, businessPartyId, refreshKey, locale]);
+
+  useEffect(() => subscribeEnterpriseCrmUpdates(organizationId, (partyId) => {
+    if (!partyId || partyId === businessPartyId) setRefreshKey((value) => value + 1);
+  }), [organizationId, businessPartyId]);
+
+  async function createOpportunity(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(""); setSuccess("");
+    const form = new FormData(event.currentTarget);
+    setBusy(true);
+    try {
+      const result = await professionalMutation(`/api/enterprise/${organizationId}/opportunities`, {
+        businessPartyId,
+        name: String(form.get("name") || "").trim(),
+        description: String(form.get("description") || "") || null,
+        estimatedValue: String(form.get("estimatedValue") || "") || null,
+        currency: String(form.get("currency") || "") || null,
+        probabilityPercent: Number(form.get("probabilityPercent") || 0),
+        source: String(form.get("source") || "") || null,
+        expectedCloseDate: String(form.get("expectedCloseDate") || "") || null,
+        nextAction: String(form.get("nextAction") || "") || null,
+        nextActionAt: String(form.get("nextActionAt") || "") || null,
+        notes: String(form.get("notes") || "") || null,
+      });
+      setOpportunityCreateOpen(false);
+      setOpportunityHubOpen(false);
+      publishEnterpriseCrmUpdate(organizationId, businessPartyId);
+      const created = result.opportunity as { id?: string } | undefined;
+      if (created?.id) setManagedOpportunityId(created.id);
+      setSuccess(t("crm.opportunityCreated"));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t("common.createFailed"));
+    } finally { setBusy(false); }
+  }
 
   async function startProspecting(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -116,6 +156,7 @@ export function BusinessPartyCommercialPanel({
       setCreateOpen(false);
       setRefreshKey((value) => value + 1);
       setSuccess(hotfix.savedLead);
+      publishEnterpriseCrmUpdate(organizationId, businessPartyId);
     } catch (mutationError) {
       setError(mutationError instanceof Error ? mutationError.message : t("common.createFailed"));
     } finally {
@@ -128,12 +169,14 @@ export function BusinessPartyCommercialPanel({
   const currencies = currencyChoices(locale);
   const sourceItems = SOURCES.map((code) => ({ id: code, label: professionalErpEnumLabel(locale, "source", code) }));
   const canStart = Boolean(summary.canWrite && summary.partyActive && summary.commercialEligible && !summary.lead);
+  const canManageOpportunities = Boolean(summary.canWrite && summary.partyActive && summary.commercialEligible);
 
   return <>
     <ModuleSection
       title={t("crm.title")}
       description={t("crm.pipelineDescription")}
       count={summary.opportunities.length + (summary.lead ? 1 : 0)}
+      action={<Button type="button" variant="outline" onClick={() => setOpportunityHubOpen(true)}><BriefcaseBusiness className="h-4 w-4" />{t("crm.opportunityManageAll")}</Button>}
     >
       {error && !createOpen ? <ProfessionalError message={error} /> : null}
       {summary.lead ? <div className="mb-4 rounded-xl border border-dtsc-border bg-dtsc-soft p-4">
@@ -155,6 +198,8 @@ export function BusinessPartyCommercialPanel({
         {summary.opportunities.map((item) => <BusinessListItem
           key={item.id}
           title={item.name}
+          onOpen={() => { setOpportunityHubOpen(false); setManagedOpportunityId(item.id); }}
+          openLabel={t("crm.opportunityOpenNamed", { name: item.name })}
           leading={<BriefcaseBusiness className="h-5 w-5 text-dtsc-blue" />}
           status={<StatusBadge tone={statusTone(item.status)}>{professionalErpEnumLabel(locale, "opportunityStage", item.status)}</StatusBadge>}
           meta={`${item.reference} · ${professionalErpMoney(item.estimatedValue, item.currency, locale)} · ${item.probabilityPercent}%`}
@@ -162,6 +207,65 @@ export function BusinessPartyCommercialPanel({
         />)}
       </BusinessList> : <EmptyState compact title={t("crm.noOpportunityTitle")} description={t("crm.noOpportunityDescription")} />}
     </ModuleSection>
+
+
+    <Dialog
+      open={opportunityHubOpen}
+      onClose={() => setOpportunityHubOpen(false)}
+      title={t("crm.opportunityManageAll")}
+      description={t("crm.opportunityHubDescription")}
+      className="h-[96dvh] w-[calc(100vw-1rem)] sm:w-[calc(100vw-3rem)] sm:max-w-[calc(100vw-3rem)]"
+      presentation="editor"
+      footer={<>
+        <Button variant="outline" onClick={() => setOpportunityHubOpen(false)}>{t("common.cancel")}</Button>
+        {canManageOpportunities ? <Button onClick={() => { setOpportunityHubOpen(false); setOpportunityCreateOpen(true); }}><Plus className="h-4 w-4" />{t("crm.opportunityNew")}</Button> : null}
+      </>}
+    >
+      <div className="grid gap-4 p-3 sm:p-6">
+        {error ? <ProfessionalError message={error} /> : null}
+        {summary.lead ? <p className="rounded-xl border border-dtsc-border p-3 text-sm">{t("crm.viewLeads")} · {summary.lead.reference} · {professionalErpEnumLabel(locale, "leadStatus", summary.lead.status)}</p> : null}
+        {summary.opportunities.length ? <BusinessList ariaLabel={t("crm.opportunitiesAria")}>
+          {summary.opportunities.map((item) => <BusinessListItem key={item.id} title={item.name} status={<StatusBadge tone={statusTone(item.status)}>{professionalErpEnumLabel(locale, "opportunityStage", item.status)}</StatusBadge>}
+            meta={`${item.reference} · ${professionalErpMoney(item.estimatedValue, item.currency, locale)}`}
+            description={item.nextAction || t("common.none")}
+            onOpen={() => { setOpportunityHubOpen(false); setManagedOpportunityId(item.id); }}
+            openLabel={t("crm.opportunityOpenNamed", { name: item.name })} />)}
+        </BusinessList> : <EmptyState compact title={t("crm.noOpportunityTitle")} description={t("crm.noOpportunityDescription")} />}
+      </div>
+    </Dialog>
+    <Dialog
+      open={opportunityCreateOpen}
+      onClose={() => { if (!busy) setOpportunityCreateOpen(false); }}
+      title={t("crm.opportunityNew")}
+      className="h-[94dvh] max-w-4xl"
+      presentation="editor"
+      footer={<><Button variant="outline" disabled={busy} onClick={() => setOpportunityCreateOpen(false)}>{t("common.cancel")}</Button>
+        <Button type="submit" form="party-create-opportunity-form" disabled={busy}>{busy ? t("common.saving") : t("crm.opportunityCreate")}</Button></>}
+    >
+      <form id="party-create-opportunity-form" onSubmit={createOpportunity} className="grid gap-4 p-3 sm:p-6">
+        {error ? <ProfessionalError message={error} /> : null}
+        <ProfessionalFormSection title={t("crm.opportunityNew")}>
+          <Field label={t("crm.opportunityName")} required><Input name="name" required minLength={2} /></Field>
+          <Field label={t("crm.opportunityDescription")}><textarea name="description" className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-3" rows={3} /></Field>
+          <Field label={t("crm.estimatedValue")}><Input type="number" name="estimatedValue" min="0" step="0.01" /></Field>
+          <Field label={t("crm.currency")}><NativeSelect name="currency" items={currencies} /></Field>
+          <Field label={t("crm.opportunityProbability")}><Input type="number" name="probabilityPercent" min="0" max="100" defaultValue="0" /></Field>
+          <Field label={t("crm.source")}><NativeSelect name="source" items={sourceItems} /></Field>
+          <Field label={t("crm.opportunityExpectedClose")}><Input type="date" name="expectedCloseDate" /></Field>
+          <Field label={t("crm.nextActionField")}><Input name="nextAction" /></Field>
+          <Field label={t("crm.due")}><Input type="datetime-local" name="nextActionAt" /></Field>
+          <Field label={t("crm.notes")}><textarea name="notes" className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-3" rows={3} /></Field>
+        </ProfessionalFormSection>
+      </form>
+    </Dialog>
+    <BusinessPartyOpportunityManager
+      organizationId={organizationId}
+      businessPartyId={businessPartyId}
+      opportunityId={managedOpportunityId}
+      locale={locale}
+      onClose={() => setManagedOpportunityId(null)}
+      onChanged={() => setRefreshKey((value) => value + 1)}
+    />
 
     <Dialog
       open={createOpen}
