@@ -10,7 +10,7 @@ export type EnterpriseActivityRequestWorkflowStatus = {
   workflowRunId: string | null;
   workflowRunStatus: string | null;
   workflowCode: string | null;
-  workflowState: "NOT_CONFIGURED" | "NOT_STARTED" | "STARTED" | null;
+  workflowState: "NOT_CONFIGURED" | "NOT_STARTED" | "LIMITED_ACCESS" | "STARTED" | null;
   canOpenRequest: boolean;
   canOpenWorkflow: boolean;
 };
@@ -95,7 +95,7 @@ export async function projectEnterpriseActivityRequestWorkflows({
       workflowCode: run?.definition.code || null,
       workflowState: !sourceReadable
         ? null
-        : run ? "STARTED" : definitions.length ? "NOT_STARTED" : "NOT_CONFIGURED",
+        : run ? "STARTED" : definitions.length ? (viewAllRuns ? "NOT_STARTED" : "LIMITED_ACCESS") : "NOT_CONFIGURED",
       canOpenRequest,
       canOpenWorkflow: Boolean(canOpenWorkflow && run),
     });
