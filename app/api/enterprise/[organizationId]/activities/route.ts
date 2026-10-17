@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 import { enterpriseActivityRequestSchema } from "@/lib/validators";
-import { getBusinessActivityFields, GAMING_ACTIVITY_REFERENCE_MODULE_CODES, GAMING_INCOMPATIBLE_ACTIVITY_BLOCKS } from "@/lib/enterprise/enterprise-activity-form-contract";
+import { getBusinessActivityFields, resolveEnterpriseActivityAction, GAMING_ACTIVITY_REFERENCE_MODULE_CODES, GAMING_INCOMPATIBLE_ACTIVITY_BLOCKS } from "@/lib/enterprise/enterprise-activity-form-contract";
 import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -116,6 +116,15 @@ export async function POST(req: Request, { params }: Params) {
   if (!organization || (gamingLounge && GAMING_INCOMPATIBLE_ACTIVITY_BLOCKS.has(block.blockCode))) {
     return NextResponse.json({ error: "ENTERPRISE_ACTIVITY_UNAVAILABLE", message: "Cette action n'est pas disponible dans le secteur actif." }, { status: 403 });
   }
+  const action = resolveEnterpriseActivityAction(organization.sectorCode, gamingLounge ? "GAMING_LOUNGE" : null, block.blockCode);
+  if (action.mode !== "REQUEST") {
+    // Never transform a document submission, grade entry, stock mutation or
+    // approval into a generic request that falsely signals completion.
+    return NextResponse.json({
+      error: "ENTERPRISE_ACTIVITY_ACTION_NOT_READY",
+      message: action.reasonFr || "Cette opération doit être réalisée dans son module métier dédié. Aucune action n'a été enregistrée.",
+    }, { status: 422 });
+  }
   const isDedicatedSector = organization.sectorCode === "HEALTH_CARE" || organization.sectorCode === "PHARMACY";
   if (!isDedicatedSector) {
     const fields = getBusinessActivityFields(organization.sectorCode, gamingLounge ? "GAMING_LOUNGE" : null, block.blockCode);
@@ -132,7 +141,7 @@ export async function POST(req: Request, { params }: Params) {
       if (field.type === "number" && (!Number.isFinite(Number(value)) || Number(value) < 0 || (field.name === "quantity" && Number(value) <= 0))) {
         return NextResponse.json({ error: "ENTERPRISE_ACTIVITY_AMOUNT_INVALID", message: `Le champ « ${field.label} » doit contenir un nombre valide.` }, { status: 400 });
       }
-      if (field.type === "date" && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      if (field.type === "date" && (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(new Date(`${value}T00:00:00Z`).getTime()) || new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) !== value)) {
         return NextResponse.json({ error: "ENTERPRISE_ACTIVITY_DATE_INVALID", message: `Indiquez une date valide pour « ${field.label} ».` }, { status: 400 });
       }
       if (field.source) {
