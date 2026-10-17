@@ -28,7 +28,7 @@ type DuplicateCandidate = Pick<Party, "id" | "code" | "partyType" | "legalName" 
 
 const ROLES = ["PROSPECT", "CUSTOMER", "SUPPLIER", "PARTNER", "CONTRACTOR"] as const;
 function roleFilter(tab: string) { return ["PROSPECT", "CUSTOMER", "PARTNER", "CONTRACTOR", "SUPPLIER"].includes(tab) ? tab : ""; }
-function relationForRoles(roles: string[]) { if (roles.includes("CUSTOMER")) return "CUSTOMER"; if (roles.includes("PROSPECT")) return "PROSPECT"; if (roles.includes("PARTNER")) return "PARTNER"; if (roles.includes("CONTRACTOR")) return "CONTRACTOR"; return "OTHER"; }
+function relationForRoles(roles: string[]) { if (roles.includes("CUSTOMER")) return "CUSTOMER"; if (roles.includes("PROSPECT")) return "PROSPECT"; if (roles.includes("PARTNER")) return "PARTNER"; if (roles.includes("CONTRACTOR")) return "CONTRACTOR"; if (roles.includes("SUPPLIER")) return "SUPPLIER"; return "OTHER"; }
 function identityTone(status?: string | null) { if (status === "ACTIVE") return "success" as const; if (["INVITATION_PENDING", "REQUEST_PENDING", "USER_CONSENT_REQUIRED", "ORGANIZATION_APPROVAL_REQUIRED"].includes(status || "")) return "warning" as const; if (["REFUSED", "EXPIRED", "REVOKED", "CANCELLED"].includes(status || "")) return "danger" as const; return "neutral" as const; }
 
 export function EnterpriseCustomersWorkspace({ organizationId, organizationName, definition }: { organizationId: string; organizationName: string; definition: EnterpriseModuleDefinition }) {
