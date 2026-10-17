@@ -57,10 +57,11 @@ for (const spec of cases) {
   };
   const other = { ...own, id: spec.code + "-other", [spec.owner]: "actor-b" };
   const foreign = { ...own, id: spec.code + "-foreign", organizationId: "tenant-b" };
-  const inactive = { ...own, id: spec.code + "-inactive", archivedAt: new Date("2025-01-01") };
+  const hasArchivePredicate = !["EnterprisePayment", "EnterpriseCashSession", "EnterpriseJournalEntry", "EnterpriseFinancialClose"].includes(spec.type);
+  const inactive = hasArchivePredicate ? { ...own, id: spec.code + "-inactive", archivedAt: new Date("2025-01-01") } : null;
   const badStatus = spec.bad ? { ...own, id: spec.code + "-wrong-status", status: spec.bad } : null;
   const wrongSubtype = spec.type === "EnterprisePayment" ? { ...own, id: spec.code + "-other-payment", paymentType: "CUSTOMER_PAYMENT" } : null;
-  fixtures[spec.db] = [own, other, foreign, inactive, ...(badStatus ? [badStatus] : []), ...(wrongSubtype ? [wrongSubtype] : [])];
+  fixtures[spec.db] = [own, other, foreign, ...(inactive ? [inactive] : []), ...(badStatus ? [badStatus] : []), ...(wrongSubtype ? [wrongSubtype] : [])];
   const picker = await findWorkflowManualSources({ organizationId: "tenant-a", userId: "actor-a", entityType: spec.type, allowAll: false });
   assert.deepEqual(picker.map((row) => row.id), [own.id], spec.code + " picker must reveal only owned eligible rows");
   assert.equal(await isWorkflowManualSourceSelectable({ organizationId: "tenant-a", userId: "actor-a", entityType: spec.type, entityId: own.id, allowAll: false }), true);
