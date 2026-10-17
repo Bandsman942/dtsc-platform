@@ -11,6 +11,12 @@
 - Aucune mutation financière implicite : demandes liées à EnterpriseRequest avec toasts et conservation des saisies.
 - QA pnpm qa:hotfix-873-activities et OWNER_E2E requis.
 
+## 2026-10-17 — Hotfix #872 : Relations VIP / consentements et contraintes SQL
+
+- Migration non destructive des CHECK de liaison d'identité sur les 23 types canoniques (dont VIP), sans modification des consentements ou accès dérivés.
+- Feedback de demande par toasts globaux et erreur locale ; journalisation Prisma limitée au type et référence d'incident, sans données du formulaire.
+- QA de cohérence des types, contrôles serveur, bénéfices et migration ; OWNER_E2E requis avant fusion.
+
 ## 2026-10-17 — HOTFIX P0 #863 complément : fiche de définition workflow plein écran
 
 - **Ouvrir** une définition affiche désormais une vue plein écran avec retour explicite aux workflows, scroll interne, gestion du focus et des modifications non enregistrées, à la place de l'ancienne seconde colonne descendant en bas de page sur téléphone.

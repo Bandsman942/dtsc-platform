@@ -624,24 +624,34 @@ export async function createUserInitiatedIdentityRequest({
     return link;
   });
 
-  const administrators = await prisma.organizationMember.findMany({
-    where: {
+  // The transaction above already persisted the link, versioned consent
+  // and lifecycle event. Notification delivery is a secondary effect and
+  // must never report a committed request as failed or cause a duplicate retry.
+  try {
+    const administrators = await prisma.organizationMember.findMany({
+      where: {
+        organizationId,
+        status: "ACTIVE",
+        removedAt: null,
+        role: { in: ["OWNER", "ADMIN_ENTREPRISE", "MANAGER"] },
+      },
+      select: { userId: true },
+      take: 50,
+    });
+    await notifyUsers({
+      userIds: administrators.map((membership) => membership.userId),
       organizationId,
-      status: "ACTIVE",
-      removedAt: null,
-      role: { in: ["OWNER", "ADMIN_ENTREPRISE", "MANAGER"] },
-    },
-    select: { userId: true },
-    take: 50,
-  });
-  await notifyUsers({
-    userIds: administrators.map((membership) => membership.userId),
-    organizationId,
-    type: "ENTERPRISE_IDENTITY",
-    title: "Nouvelle demande de relation entreprise",
-    body: `${user.name} demande à être reconnu comme ${input.relationType.toLocaleLowerCase("fr")} dans ${organization.name}.`,
-    targetUrl: `/enterprise-identity-admin?link=${created.id}`,
-  });
+      type: "ENTERPRISE_IDENTITY",
+      title: "Nouvelle demande de relation entreprise",
+      body: `${user.name} demande à être reconnu comme ${input.relationType.toLocaleLowerCase("fr")} dans ${organization.name}.`,
+      targetUrl: `/enterprise-identity-admin?link=${created.id}`,
+    });
+  } catch {
+    // Never log the free-text purpose, the identity or the notification body.
+    console.warn("Enterprise identity request committed; notification delivery failed", {
+      stage: "POST_COMMIT_NOTIFICATION",
+    });
+  }
   return created;
 }
 
