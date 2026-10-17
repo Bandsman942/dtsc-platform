@@ -375,8 +375,8 @@ async function syncCanonicalPrimaryContactTx(
   const nextValue = rawValue?.trim() || null;
   const where = { organizationId, businessPartyId, contactType, archivedAt: null };
   const current = await tx.enterpriseBusinessPartyContact.findFirst({
-    where,
-    orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
+    where: { ...where, isPrimary: true, status: "ACTIVE" },
+    orderBy: [{ createdAt: "asc" }],
   });
   if (!nextValue) {
     if (current) await tx.enterpriseBusinessPartyContact.update({
@@ -423,8 +423,8 @@ async function syncCanonicalPrimaryAddressTx(
   address: NonNullable<BusinessPartyUpdateInput["primaryAddress"]> | null,
 ) {
   const current = await tx.enterpriseBusinessPartyAddress.findFirst({
-    where: { organizationId, businessPartyId, archivedAt: null, status: "ACTIVE" },
-    orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
+    where: { organizationId, businessPartyId, archivedAt: null, status: "ACTIVE", isPrimary: true },
+    orderBy: [{ createdAt: "asc" }],
   });
   if (!address) {
     if (current) await tx.enterpriseBusinessPartyAddress.update({
