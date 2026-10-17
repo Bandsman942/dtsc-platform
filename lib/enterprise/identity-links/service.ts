@@ -1038,7 +1038,7 @@ export async function listOrganizationIdentityLinks(organizationId: string) {
   return links.map((link) => ({
     ...link,
     person: personById.get(link.personIdentityId) || null,
-    businessRoleSupplier: supplierPersonKeys.has(`${link.organizationId}:${link.personIdentityId}`),
+
     references: references.filter((reference) => reference.personIdentityId === link.personIdentityId),
   }));
 }
@@ -1131,5 +1131,6 @@ export async function listUserIdentityLinks(userId: string) {
     ...link,
     organization: organizationById.get(link.organizationId) || null,
     person: personById.get(link.personIdentityId) || null,
+    businessRoleSupplier: supplierPersonKeys.has(`${link.organizationId}:${link.personIdentityId}`),
   }));
 }
