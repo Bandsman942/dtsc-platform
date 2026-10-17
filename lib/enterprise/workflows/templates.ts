@@ -72,7 +72,12 @@ function approvalTemplate(input: { code: string; nameFr: string; nameEn: string;
   };
 }
 
-function financeActionTemplate(input: {
+/**
+ * Financial templates follow pre-existing approvals from dedicated ERP
+ * services. They DO NOT create an approval or automatically execute a financial
+ * posting, confirmation or closing. Those require the designated human actor.
+ */
+function canonicalFinanceTemplate(input: {
   code: string;
   nameFr: string;
   nameEn: string;
@@ -80,127 +85,108 @@ function financeActionTemplate(input: {
   descriptionEn: string;
   entityType: WorkflowEntityType;
   eventType: string;
-  actions: Array<{ code: string; name: string; action: string }>;
+  approvalTargets: Array<{ code: string; name: string; target: "EnterpriseSupplierInvoiceReview" | "EnterpriseSupplierInvoiceApproval" | "EnterprisePayment" | "EnterpriseCashSession" | "EnterpriseJournalEntry" | "EnterpriseFinancialClose" }>;
   targetUrl: string;
 }): EnterpriseWorkflowTemplate {
-  const actionSteps = input.actions.map((item, index) => ({
-    code: item.code,
-    name: item.name,
-    stepType: "DOMAIN_ACTION" as const,
-    position: index + 2,
-    configuration: { action: item.action, commentTemplate: "Action exécutée par {{workflow.name}} sur {{entity.reference}}." },
-  }));
-  const notifyPosition = actionSteps.length + 2;
-  const rejectPosition = notifyPosition + 1;
-  const successPosition = rejectPosition + 1;
-  const rejectedPosition = successPosition + 1;
-  const firstAction = actionSteps[0]?.code || "NOTIFY_APPROVED";
-  const transitions: WorkflowVersionInput["transitions"] = [
-    { fromStepCode: "START", toStepCode: "APPROVAL", outcome: "DEFAULT", priority: 0 },
-    { fromStepCode: "APPROVAL", toStepCode: firstAction, outcome: "APPROVED", priority: 0 },
-    { fromStepCode: "APPROVAL", toStepCode: "NOTIFY_REJECTED", outcome: "REJECTED", priority: 0 },
-    { fromStepCode: "APPROVAL", toStepCode: "NOTIFY_REJECTED", outcome: "CANCELLED", priority: 1 },
+  const steps: WorkflowVersionInput["steps"] = [
+    { code: "START", name: "Déclencheur", stepType: "START", position: 0, configuration: {} },
+    ...input.approvalTargets.map((step, index) => ({
+      code: step.code, name: step.name, stepType: "CREATE_APPROVAL" as const, position: index + 1,
+      configuration: {
+        assignment: { strategy: "DEPARTMENT_MANAGER" as const },
+        canonicalApprovalTarget: step.target,
+        titleTemplate: "Validation officielle de {{entity.reference}}",
+      },
+    })),
+    { code: "NOTIFY_APPROVED", name: "Notifier la décision", stepType: "NOTIFICATION", position: input.approvalTargets.length + 1,
+      configuration: { recipient: { strategy: "ENTITY_CREATOR" }, titleTemplate: "Validation financière terminée",
+        bodyTemplate: "{{entity.reference}} est approuvé. Les actions comptables suivantes restent à effectuer dans le module ERP par un utilisateur habilité.",
+        targetUrl: input.targetUrl } },
+    { code: "NOTIFY_REJECTED", name: "Notifier le rejet", stepType: "NOTIFICATION", position: input.approvalTargets.length + 2,
+      configuration: { recipient: { strategy: "ENTITY_CREATOR" }, titleTemplate: "Validation financière rejetée",
+        bodyTemplate: "{{entity.reference}} a été rejeté. Consultez son module ERP.", targetUrl: input.targetUrl } },
+    { code: "END_SUCCESS", name: "Fin approbation", stepType: "END", position: input.approvalTargets.length + 3,
+      configuration: { outcome: "COMPLETED" } },
+    { code: "END_REJECTED", name: "Fin sur rejet", stepType: "END", position: input.approvalTargets.length + 4,
+      configuration: { outcome: "REJECTED" } },
   ];
-  for (let index = 0; index < actionSteps.length; index += 1) {
-    transitions.push({
-      fromStepCode: actionSteps[index].code,
-      toStepCode: actionSteps[index + 1]?.code || "NOTIFY_APPROVED",
-      outcome: "DEFAULT",
-      priority: 0,
-    });
+  const transitions: WorkflowVersionInput["transitions"] = [
+    { fromStepCode: "START", toStepCode: input.approvalTargets[0].code, outcome: "DEFAULT", priority: 0 },
+  ];
+  for (let i = 0; i < input.approvalTargets.length; i++) {
+    const from = input.approvalTargets[i].code;
+    const to = input.approvalTargets[i + 1]?.code || "NOTIFY_APPROVED";
+    transitions.push(
+      { fromStepCode: from, toStepCode: to, outcome: "APPROVED", priority: 0 },
+      { fromStepCode: from, toStepCode: "NOTIFY_REJECTED", outcome: "REJECTED", priority: 0 },
+      { fromStepCode: from, toStepCode: "NOTIFY_REJECTED", outcome: "CANCELLED", priority: 1 },
+    );
   }
   transitions.push(
     { fromStepCode: "NOTIFY_APPROVED", toStepCode: "END_SUCCESS", outcome: "DEFAULT", priority: 0 },
     { fromStepCode: "NOTIFY_REJECTED", toStepCode: "END_REJECTED", outcome: "DEFAULT", priority: 0 },
   );
   return {
-    code: input.code,
-    nameFr: input.nameFr,
-    nameEn: input.nameEn,
-    descriptionFr: input.descriptionFr,
-    descriptionEn: input.descriptionEn,
-    triggerEntityType: input.entityType,
-    triggerEventType: input.eventType,
+    code: input.code, nameFr: input.nameFr, nameEn: input.nameEn,
+    descriptionFr: input.descriptionFr, descriptionEn: input.descriptionEn,
+    triggerEntityType: input.entityType, triggerEventType: input.eventType,
     version: {
-      steps: [
-        { code: "START", name: "Déclencheur", stepType: "START", position: 0, configuration: {} },
-        { code: "APPROVAL", name: "Validation financière indépendante", stepType: "CREATE_APPROVAL", position: 1, configuration: { assignment: { strategy: "SPECIFIC_ROLE", role: "MANAGER" }, titleTemplate: "Valider {{entity.reference}}" } },
-        ...actionSteps,
-        { code: "NOTIFY_APPROVED", name: "Notifier la réussite", stepType: "NOTIFICATION", position: notifyPosition, configuration: { recipient: { strategy: "ENTITY_CREATOR" }, titleTemplate: "Traitement financier terminé", bodyTemplate: "{{entity.reference}} a été traité par {{workflow.name}}.", targetUrl: input.targetUrl } },
-        { code: "NOTIFY_REJECTED", name: "Notifier le rejet", stepType: "NOTIFICATION", position: rejectPosition, configuration: { recipient: { strategy: "ENTITY_CREATOR" }, titleTemplate: "Traitement financier rejeté", bodyTemplate: "{{entity.reference}} a été rejeté.", targetUrl: input.targetUrl } },
-        { code: "END_SUCCESS", name: "Terminé", stepType: "END", position: successPosition, configuration: { outcome: "COMPLETED" } },
-        { code: "END_REJECTED", name: "Terminé sur rejet", stepType: "END", position: rejectedPosition, configuration: { outcome: "REJECTED" } },
-      ],
-      transitions,
-      configuration: { templateStatus: "DRAFT", separationOfDutiesRequired: true },
+      steps, transitions, configuration: { templateStatus: "DRAFT", separationOfDutiesRequired: true },
     },
   };
 }
 
 const financeTemplates: EnterpriseWorkflowTemplate[] = [
-  financeActionTemplate({
+  canonicalFinanceTemplate({
     code: "SUPPLIER_INVOICE_REVIEW_APPROVAL_POSTING",
-    nameFr: "Facture fournisseur — revue, approbation et comptabilisation",
-    nameEn: "Supplier invoice — review, approval and posting",
-    descriptionFr: "Soumet une facture fournisseur à une validation indépendante avant approbation et comptabilisation.",
-    descriptionEn: "Routes a supplier invoice through independent review before approval and posting.",
-    entityType: "EnterpriseSupplierInvoice",
-    eventType: "SUPPLIER_INVOICE_SUBMIT",
-    actions: [
-      { code: "REVIEW", name: "Revue financière", action: "REVIEW" },
-      { code: "APPROVE", name: "Approuver", action: "APPROVE" },
-      { code: "POST", name: "Comptabiliser", action: "POST" },
-    ],
-    targetUrl: "/enterprise-modules/FINANCE_PAYABLES",
+    nameFr: "Facture fournisseur — revue et approbation (comptabilisation dans l’ERP)",
+    nameEn: "Supplier invoice — review and approval (posting in ERP)",
+    descriptionFr: "Suit deux validations humaines distinctes. La comptabilisation est effectuée dans le module Fournisseurs par son service métier, pas par ce workflow.",
+    descriptionEn: "Tracks separate human review and approval. Posting remains a dedicated supplier accounting action.",
+    entityType: "EnterpriseSupplierInvoice", eventType: "SUPPLIER_INVOICE_SUBMIT",
+    approvalTargets: [
+      { code: "REVIEW", name: "Revue fournisseur", target: "EnterpriseSupplierInvoiceReview" },
+      { code: "APPROVAL", name: "Validation indépendante", target: "EnterpriseSupplierInvoiceApproval" },
+    ], targetUrl: "/enterprise-modules/FINANCE_PAYABLES",
   }),
-  financeActionTemplate({
+  canonicalFinanceTemplate({
     code: "SUPPLIER_PAYMENT_APPROVAL_CONFIRMATION",
-    nameFr: "Paiement fournisseur — approbation et confirmation",
-    nameEn: "Supplier payment — approval and confirmation",
-    descriptionFr: "Fait approuver puis confirmer un paiement fournisseur avant rapprochement.",
-    descriptionEn: "Approves and confirms a supplier payment before reconciliation.",
-    entityType: "EnterprisePayment",
-    eventType: "PAYMENT_SUBMIT",
-    actions: [
-      { code: "APPROVE", name: "Approuver", action: "APPROVE" },
-      { code: "CONFIRM", name: "Confirmer", action: "CONFIRM" },
-    ],
+    nameFr: "Paiement fournisseur — approbation (confirmation dans l’ERP)",
+    nameEn: "Supplier payment — approval (confirmation in ERP)",
+    descriptionFr: "Suit la validation désignée. La confirmation du paiement exige l’action distincte d’un utilisateur autorisé dans Paiements.",
+    descriptionEn: "Tracks designated payment approval. Confirmation requires a separate authorized finance actor.",
+    entityType: "EnterprisePayment", eventType: "PAYMENT_SUBMIT",
+    approvalTargets: [{ code: "APPROVAL", name: "Valider le paiement", target: "EnterprisePayment" }],
     targetUrl: "/enterprise-modules/FINANCE_PAYMENTS",
   }),
-  financeActionTemplate({
+  canonicalFinanceTemplate({
     code: "CASH_SESSION_INDEPENDENT_CLOSE",
-    nameFr: "Clôture de caisse indépendante",
-    nameEn: "Independent cash close",
-    descriptionFr: "Soumet une clôture de caisse à un validateur différent du caissier.",
-    descriptionEn: "Routes a cash close to a validator other than the cashier.",
-    entityType: "EnterpriseCashSession",
-    eventType: "CASH_SESSION_SUBMITTED",
-    actions: [{ code: "VALIDATE", name: "Valider la clôture", action: "VALIDATE" }],
+    nameFr: "Clôture de caisse — validation indépendante",
+    nameEn: "Cash close — independent human validation",
+    descriptionFr: "Suit la validation du gérant différent du caissier. La clôture effective reste dans le service Caisse.",
+    descriptionEn: "Tracks independent manager approval. Actual cash closing is performed by the cash service.",
+    entityType: "EnterpriseCashSession", eventType: "CASH_SESSION_SUBMITTED",
+    approvalTargets: [{ code: "APPROVAL", name: "Valider la clôture", target: "EnterpriseCashSession" }],
     targetUrl: "/enterprise-modules/FINANCE_CASH",
   }),
-  financeActionTemplate({
+  canonicalFinanceTemplate({
     code: "MANUAL_JOURNAL_APPROVAL_POSTING",
-    nameFr: "Écriture manuelle — approbation et comptabilisation",
-    nameEn: "Manual journal — approval and posting",
-    descriptionFr: "Sépare la préparation, l’approbation et la comptabilisation d’une écriture manuelle.",
-    descriptionEn: "Separates preparation, approval and posting of a manual journal entry.",
-    entityType: "EnterpriseJournalEntry",
-    eventType: "JOURNAL_ENTRY_SUBMIT",
-    actions: [
-      { code: "APPROVE", name: "Approuver", action: "APPROVE" },
-      { code: "POST", name: "Comptabiliser", action: "POST" },
-    ],
+    nameFr: "Écriture manuelle — approbation (comptabilisation dans l’ERP)",
+    nameEn: "Manual journal — approval (posting in ERP)",
+    descriptionFr: "Suit la validation comptable humaine. Le journal est ensuite comptabilisé dans Comptabilité par son service canonique.",
+    descriptionEn: "Tracks independent human journal approval. Posting remains a separate authorized accounting action.",
+    entityType: "EnterpriseJournalEntry", eventType: "JOURNAL_ENTRY_SUBMIT",
+    approvalTargets: [{ code: "APPROVAL", name: "Approuver l’écriture", target: "EnterpriseJournalEntry" }],
     targetUrl: "/enterprise-modules/FINANCE_ACCOUNTING",
   }),
-  financeActionTemplate({
+  canonicalFinanceTemplate({
     code: "FISCAL_PERIOD_CLOSE_REVIEW",
-    nameFr: "Clôture de période — checklist et validation",
-    nameEn: "Period close — checklist and approval",
-    descriptionFr: "Organise la revue indépendante d’une période préparée pour clôture. La fermeture finale reste effectuée par le service de clôture dédié.",
-    descriptionEn: "Organizes independent review of a period prepared for close. Final closing remains delegated to the dedicated close service.",
-    entityType: "EnterpriseFiscalPeriod",
-    eventType: "FINANCIAL_CLOSE_PREPARED",
-    actions: [],
+    nameFr: "Clôture de période — revue de la clôture financière",
+    nameEn: "Period close — financial close review",
+    descriptionFr: "Suit la validation du dossier de clôture financière, et non de la période. La fermeture définitive est une opération ERP distincte.",
+    descriptionEn: "Tracks the actual financial-close record approval, not the fiscal period. Final closing remains a separate ERP action.",
+    entityType: "EnterpriseFinancialClose", eventType: "FINANCIAL_CLOSE_SUBMITTED",
+    approvalTargets: [{ code: "APPROVAL", name: "Approuver la clôture", target: "EnterpriseFinancialClose" }],
     targetUrl: "/enterprise-modules/FINANCE_CLOSE",
   }),
 ];
