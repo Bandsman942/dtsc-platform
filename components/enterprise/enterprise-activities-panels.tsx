@@ -313,6 +313,7 @@ export function EnterpriseRequestsPanel({ requests, focusActivityId }: { request
                   <p className="mt-1 break-words">
                     {canonical.workflowState === "STARTED" && canonical.workflowRunStatus ? workflowStage(canonical.workflowRunStatus, english)
                       : canonical.workflowState === "NOT_CONFIGURED" ? (english ? "No active published internal-request workflow. Request tracking remains available." : "Aucun workflow de demande interne actif et publié. Le suivi de la demande reste accessible.")
+                      : canonical.workflowState === "LIMITED_ACCESS" ? (english ? "Workflow execution is not accessible with your current permissions. Follow the canonical request status." : "Le suivi détaillé du workflow exige des permissions supplémentaires. Consultez le statut de votre demande interne.")
                       : (english ? "No workflow run recorded yet. This does not confirm that the event worker is active." : "Aucune exécution enregistrée pour le moment. Cela ne confirme pas que le traitement des événements est activé.")}
                   </p>
                 </div>
