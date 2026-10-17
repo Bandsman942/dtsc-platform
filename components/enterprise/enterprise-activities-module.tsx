@@ -1,14 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { BookOpenCheck } from "lucide-react";
-import { Accordion } from "@/components/ui/accordion";
+import { useAppLocale } from "@/components/i18n/locale-provider";
+import { ContextualUserGuide } from "@/components/user-guides/contextual-user-guide";
+import { notifyToast } from "@/lib/client-toast";
+import { ITERATION04_USER_GUIDES } from "@/lib/user-guides/iteration04-guides";
+import { ModuleWorkspace, ModuleHeader, ModuleContent, ModuleSection, ModuleToolbar } from "@/components/workspace/module-workspace";
+import { ModuleMetrics, ModuleMetric } from "@/components/workspace/module-metrics";
+import { ProfessionalTabs } from "@/components/enterprise/professional/professional-erp-ui";
 import {
-  EnterpriseActivitiesDashboard,
   EnterpriseActivityBlocksPanel,
   EnterpriseActivityFormDialog,
-  EnterpriseHealthcareActivitiesPanel,
-  EnterprisePharmacyActivitiesPanel,
   EnterpriseRequestsPanel,
   EnterpriseWorkflowsPanel,
 } from "@/components/enterprise/enterprise-activities-panels";
@@ -24,61 +26,90 @@ import { HealthMedicalBillingWorkspace } from "@/components/enterprise/health-me
 import { HealthInsuranceWorkspace } from "@/components/enterprise/health-insurance-workspace";
 import { HealthQualityWorkspace } from "@/components/enterprise/health-quality-workspace";
 import { HealthDocumentsWorkspace } from "@/components/enterprise/health-documents-workspace";
-import { ContextualUserGuide } from "@/components/user-guides/contextual-user-guide";
-import { useToastMessage } from "@/components/ui/use-toast-message";
-import { ITERATION04_USER_GUIDES } from "@/lib/user-guides/iteration04-guides";
 
 const healthActivityModules = new Set(["CONSULTATIONS"]);
+type ActivityView = "ACTIONS" | "REQUESTS" | "WORKFLOWS";
 
-export function EnterpriseActivitiesModule({ organization, blocks, requests, members, sectorRecords, workflows }: EnterpriseActivitiesDataset) {
+export function EnterpriseActivitiesModule({ organization, blocks, requests, members, departments, sectorRecords, workflows, gamingReferences, initialActivityId }: EnterpriseActivitiesDataset & { initialActivityId?: string | null }) {
+  const locale = useAppLocale();
+  const english = locale === "en";
+  const [view, setView] = useState<ActivityView>(initialActivityId ? "REQUESTS" : "ACTIONS");
   const [selectedBlockCode, setSelectedBlockCode] = useState(blocks[0]?.blockCode || "");
-  const [message, setMessage] = useState("");
   const [formOpen, setFormOpen] = useState(false);
-  useToastMessage(message);
   const selectedBlock = useMemo(() => blocks.find((block) => block.blockCode === selectedBlockCode) || null, [blocks, selectedBlockCode]);
-
+  const gaming = organization.businessSubtypeCode === "GAMING_LOUNGE";
+  const sectorLabel = english
+    ? organization.businessSubtypeLabelEn || organization.businessSector?.labelEn || organization.sector || (english ? "Common activities" : "Activités communes")
+    : organization.businessSubtypeLabelFr || organization.businessSector?.labelFr || organization.sector || "Socle commun";
+  const pending = requests.filter((item) => !["CLOSED", "CANCELLED", "REJECTED", "COMPLETED", "FULFILLED", "RESOLVED"].includes(item.workflowLink?.canonicalRequestStatus || item.status)).length;
+  const tabs = [
+    { id: "ACTIONS", label: english ? "Available actions" : "Actions disponibles", count: blocks.length },
+    { id: "REQUESTS", label: english ? "Requests" : "Demandes", count: requests.length },
+    { id: "WORKFLOWS", label: english ? "Workflows" : "Workflows", count: workflows.length },
+  ];
   if (organization.sectorCode === "PHARMACY") return <PharmacyActivitiesWorkspace organizationId={organization.id} />;
 
   return (
-    <div className="min-w-0 space-y-5 overflow-x-hidden">
-      <section className="dtsc-card min-w-0 overflow-hidden p-4 sm:p-5">
-        <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-cyan-600"><BookOpenCheck className="h-4 w-4" /> Aide contextuelle</p>
-            <h2 className="mt-2 break-words text-xl font-black text-dtsc-ink">Guide des activités de {organization.name}</h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-dtsc-muted">Le guide décrit les règles réelles de création, assignation, checklist, progression, commentaires, Kanban et transitions autorisées dans l’entreprise active.</p>
-          </div>
-          <ContextualUserGuide guide={ITERATION04_USER_GUIDES.ENTERPRISE_ACTIVITIES} compact />
-        </div>
-      </section>
-
-      <EnterpriseActivitiesDashboard organization={organization} />
-      {organization.sectorCode === "HEALTH_CARE" && <HealthAppointmentsWorkspace organizationId={organization.id} activeModuleCodes={healthActivityModules} />}
-      {organization.sectorCode === "HEALTH_CARE" && <HealthConsultationsWorkspace organizationId={organization.id} />}
-      {organization.sectorCode === "HEALTH_CARE" && <HealthMedicalRecordsWorkspace organizationId={organization.id} />}
-      {organization.sectorCode === "HEALTH_CARE" && <HealthStaffWorkspace organizationId={organization.id} />}
-      {organization.sectorCode === "HEALTH_CARE" && <HealthLaboratoryWorkspace organizationId={organization.id} />}
-      {organization.sectorCode === "HEALTH_CARE" && <HealthPharmacyWorkspace organizationId={organization.id} />}
-      {organization.sectorCode === "HEALTH_CARE" && <HealthMedicalBillingWorkspace organizationId={organization.id} />}
-      {organization.sectorCode === "HEALTH_CARE" && <HealthInsuranceWorkspace organizationId={organization.id} />}
-      {organization.sectorCode === "HEALTH_CARE" && <HealthQualityWorkspace organizationId={organization.id} activitiesOnly />}
-      {organization.sectorCode === "HEALTH_CARE" && <HealthDocumentsWorkspace organizationId={organization.id} activitiesOnly />}
-
-      <Accordion>
-        <EnterpriseActivityBlocksPanel
-          sectorCode={organization.sectorCode}
-          blocks={blocks}
-          selectedBlockCode={selectedBlockCode}
-          selectedBlock={selectedBlock}
-          onSelectBlock={setSelectedBlockCode}
-          onOpenForm={() => setFormOpen(true)}
-        />
-        {organization.sectorCode === "HEALTH_CARE" && <EnterpriseHealthcareActivitiesPanel sectorRecords={sectorRecords} />}
-        {organization.sectorCode === "PHARMACY" && <EnterprisePharmacyActivitiesPanel sectorRecords={sectorRecords} />}
-        <EnterpriseWorkflowsPanel workflows={workflows} />
-        <EnterpriseRequestsPanel requests={requests} />
-      </Accordion>
-
+    <ModuleWorkspace>
+      <ModuleHeader
+        eyebrow={english ? "Enterprise activities" : "Activités entreprise"}
+        title={`${english ? "Activities" : "Activités"} ${organization.name}`}
+        description={english
+          ? `Submit requests and business reports within ${sectorLabel} without accessing restricted administration data.`
+          : `Soumettez des demandes et rapports professionnels pour « ${sectorLabel} » sans accéder aux données d'administration sensibles.`}
+        count={sectorLabel}
+      />
+      <ModuleMetrics label={english ? "Enterprise activity indicators" : "Indicateurs des activités entreprise"}>
+        <ModuleMetric label={english ? "Available actions" : "Actions disponibles"} value={blocks.length} />
+        <ModuleMetric label={english ? "Pending requests" : "Demandes à traiter"} value={pending} />
+        <ModuleMetric label={english ? "My requests" : "Demandes visibles"} value={requests.length} />
+        <ModuleMetric label={english ? "Workflows" : "Workflows"} value={workflows.length} />
+      </ModuleMetrics>
+      <ModuleToolbar
+        controls={<ProfessionalTabs value={view} onChange={(value) => setView(value as ActivityView)} items={tabs} label={english ? "Activity views" : "Vues des activités"} />}
+        summary={english ? "Actions create a tracked request, not an automatic business transaction." : "Chaque action crée une demande suivie, jamais une transaction métier implicite."}
+      />
+      <ModuleContent>
+        {view === "ACTIONS" && (
+          <ModuleSection title={english ? "Submit an activity" : "Soumettre une activité"} description={english ? "Choose the specific action, then complete its dedicated fields." : "Sélectionnez une action et complétez son formulaire métier adapté."}>
+            <EnterpriseActivityBlocksPanel
+              sectorCode={organization.sectorCode}
+              blocks={blocks}
+              selectedBlockCode={selectedBlockCode}
+              selectedBlock={selectedBlock}
+              onSelectBlock={setSelectedBlockCode}
+              onOpenForm={() => setFormOpen(true)}
+            />
+            <div className="mt-5">
+              <ContextualUserGuide guide={ITERATION04_USER_GUIDES.ENTERPRISE_ACTIVITIES} compact />
+            </div>
+          </ModuleSection>
+        )}
+        {view === "REQUESTS" && (
+          <ModuleSection title={english ? "Submitted requests" : "Demandes soumises"} description={english ? "Follow their real server-side status." : "Suivez leur état réel après soumission."}>
+            <EnterpriseRequestsPanel requests={requests} focusActivityId={initialActivityId} />
+          </ModuleSection>
+        )}
+        {view === "WORKFLOWS" && (
+          <ModuleSection title={english ? "Shared workflows" : "Workflows partagés"} description={english ? "Only workflows authorized for your organization are listed." : "Seuls les workflows autorisés pour votre entreprise sont présentés."}>
+            <EnterpriseWorkflowsPanel workflows={workflows} />
+          </ModuleSection>
+        )}
+        {view === "ACTIONS" && organization.sectorCode === "HEALTH_CARE" && (
+          <ModuleSection title={english ? "Healthcare operations" : "Opérations Santé"} description={english ? "Specialized workspaces remain subject to medical permissions." : "Ces espaces spécialisés restent soumis aux permissions médicales."}>
+            <HealthAppointmentsWorkspace organizationId={organization.id} activeModuleCodes={healthActivityModules} />
+            <HealthConsultationsWorkspace organizationId={organization.id} />
+            <HealthMedicalRecordsWorkspace organizationId={organization.id} />
+            <HealthStaffWorkspace organizationId={organization.id} />
+            <HealthLaboratoryWorkspace organizationId={organization.id} />
+            <HealthPharmacyWorkspace organizationId={organization.id} />
+            <HealthMedicalBillingWorkspace organizationId={organization.id} />
+            <HealthInsuranceWorkspace organizationId={organization.id} />
+            <HealthQualityWorkspace organizationId={organization.id} activitiesOnly />
+            <HealthDocumentsWorkspace organizationId={organization.id} activitiesOnly />
+          </ModuleSection>
+        )}
+      </ModuleContent>
       <EnterpriseActivityFormDialog
         organization={organization}
         selectedBlockCode={selectedBlockCode}
@@ -86,9 +117,11 @@ export function EnterpriseActivitiesModule({ organization, blocks, requests, mem
         open={formOpen}
         onClose={() => setFormOpen(false)}
         members={members}
+        departments={departments}
         sectorRecords={sectorRecords}
-        onMessage={setMessage}
+        gamingReferences={gaming ? gamingReferences : {}}
+        onMessage={(message, tone = "error") => { if (message) notifyToast(message, tone); }}
       />
-    </div>
+    </ModuleWorkspace>
   );
 }

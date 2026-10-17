@@ -1,8 +1,12 @@
 "use client";
 
-import { useMemo, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
+import { useAppLocale } from "@/components/i18n/locale-provider";
+import { getBusinessActivityFields } from "@/lib/enterprise/enterprise-activity-form-contract";
 import { useRouter } from "next/navigation";
-import { FileText, Send, Sparkles } from "lucide-react";
+import Link from "next/link";
+import { workCoordinationDeepLink } from "@/lib/standard-work-coordination/deep-links";
+import { FileText, Send } from "lucide-react";
 import { AccordionItem } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -23,8 +27,10 @@ type ActivityField = {
   name: string;
   label: string;
   placeholder: string;
-  type?: "textarea" | "text" | "number" | "select";
-  source?: "patients" | "labRequests" | "pharmacyItems" | "members" | "pharmacyProducts" | "pharmacyBatches" | "pharmacySuppliers" | "pharmacySales" | "pharmacyPrescriptions" | "pharmacyInventories" | "pharmacyCash";
+  type?: "textarea" | "text" | "number" | "date" | "select";
+  labelEn?: string;
+  placeholderEn?: string;
+  source?: "patients" | "labRequests" | "pharmacyItems" | "members" | "pharmacyProducts" | "pharmacyBatches" | "pharmacySuppliers" | "pharmacySales" | "pharmacyPrescriptions" | "pharmacyInventories" | "pharmacyCash" | "gamingStations" | "gamingBookings" | "gamingSessions" | "gamingCloses" | "businessParties";
   options?: string[];
   required?: boolean;
 };
@@ -141,8 +147,10 @@ function payloadText(record: EnterpriseActivitySectorRecordItem, key: string) {
   return typeof value === "string" ? value : "";
 }
 
-function activityFields(blockCode: string) {
-  return healthActivityFields[blockCode] || pharmacyActivityFields[blockCode] || defaultActivityFields;
+function activityFields(blockCode: string, sectorCode: string | null, subtypeCode: string | null): ActivityField[] {
+  if (sectorCode === "HEALTH_CARE") return healthActivityFields[blockCode] || defaultActivityFields;
+  if (sectorCode === "PHARMACY") return pharmacyActivityFields[blockCode] || defaultActivityFields;
+  return getBusinessActivityFields(sectorCode, subtypeCode, blockCode);
 }
 
 export function EnterpriseActivitiesDashboard({ organization }: { organization: EnterpriseActivitiesOrganization }) {
@@ -165,14 +173,7 @@ export function EnterpriseActivitiesDashboard({ organization }: { organization: 
   );
 }
 
-export function EnterpriseActivityBlocksPanel({
-  sectorCode,
-  blocks,
-  selectedBlockCode,
-  selectedBlock,
-  onSelectBlock,
-  onOpenForm,
-}: {
+export function EnterpriseActivityBlocksPanel({ sectorCode, blocks, selectedBlockCode, selectedBlock, onSelectBlock, onOpenForm }: {
   sectorCode?: string | null;
   blocks: EnterpriseActivityBlockItem[];
   selectedBlockCode: string;
@@ -180,74 +181,108 @@ export function EnterpriseActivityBlocksPanel({
   onSelectBlock: (blockCode: string) => void;
   onOpenForm: () => void;
 }) {
+  const locale = useAppLocale();
+  const english = locale === "en";
   return (
-    <AccordionItem title={sectorCode === "PHARMACY" ? "Actions pharmacie" : sectorCode === "HEALTH_CARE" ? "Actions santé" : "Actions entreprise"} defaultOpen>
-      <div className="flex max-w-full gap-2 overflow-x-auto pb-2">
-        {blocks.map((block) => {
-          const active = selectedBlockCode === block.blockCode;
+    <div className="w-full min-w-0 space-y-4">
+      <div data-horizontal-rail tabIndex={0} aria-label={english ? "Business activity actions" : "Actions métier disponibles"} className="flex w-full min-w-0 max-w-full snap-x snap-mandatory gap-2 overflow-x-auto overscroll-x-contain pb-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-dtsc-blue">
+        {blocks.map((item) => {
+          const active = selectedBlockCode === item.blockCode;
           return (
             <button
-              key={block.id}
+              key={item.id}
               type="button"
-              onClick={() => onSelectBlock(block.blockCode)}
-              className={`min-w-0 shrink-0 rounded-2xl border px-4 py-3 text-left transition ${active ? "border-cyan-300 bg-cyan-400/16 text-cyan-600" : "border-dtsc-border bg-dtsc-surface text-dtsc-ink"}`}
+              aria-pressed={active}
+              onClick={() => onSelectBlock(item.blockCode)}
+              className={`w-[min(80vw,16rem)] min-w-0 shrink-0 snap-start rounded-xl border px-4 py-3 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-dtsc-blue ${active ? "border-cyan-400 bg-cyan-400/10 text-dtsc-ink" : "border-dtsc-border bg-dtsc-surface text-dtsc-ink hover:bg-dtsc-page"}`}
             >
-              <span className="block max-w-56 truncate text-sm font-black">{block.labelFr}</span>
-              <span className="mt-1 block max-w-56 truncate text-xs font-semibold text-dtsc-muted">{block.descriptionFr || block.targetModuleCode || "Socle commun"}</span>
+              <span className="block break-words text-sm font-bold">{english ? item.labelEn : item.labelFr}</span>
+              <span className="mt-1 block line-clamp-2 break-words text-xs text-dtsc-muted">{item.descriptionFr || (sectorCode === "HOSPITALITY_EVENTS" ? "Action sectorielle" : "Demande de service")}</span>
             </button>
           );
         })}
       </div>
-      <div className="mt-4 min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
-        <div className="flex min-w-0 items-start gap-3 rounded-2xl border border-cyan-300/30 bg-cyan-400/10 p-3">
-          <Sparkles className="mt-1 h-4 w-4 shrink-0 text-cyan-600" />
-          <div className="min-w-0">
-            <p className="break-words font-black text-dtsc-ink">{selectedBlock?.labelFr || "Choisissez une action"}</p>
-            <p className="text-xs font-semibold text-dtsc-muted">{selectedBlock?.descriptionFr || "Le formulaire créera une vraie demande liée à votre organisation."}</p>
-          </div>
+      {!blocks.length ? <p role="status" className="rounded-xl border border-dtsc-border bg-dtsc-surface p-4 text-sm text-dtsc-muted">{english ? "No actions are available with your current permissions. Your existing requests remain accessible." : "Aucune action n’est disponible avec vos permissions actuelles. Vos demandes restent consultables."}</p> : null}
+      {selectedBlock && <div className="flex min-w-0 flex-col gap-3 border-t border-dtsc-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="break-words font-semibold text-dtsc-ink">{english ? selectedBlock.labelEn : selectedBlock.labelFr}</p>
+          <p className="mt-1 break-words text-sm text-dtsc-muted">{english ? "The business form is based on this action and its real organization references." : "Le formulaire est adapté à cette action et aux références réelles de l'entreprise."}</p>
         </div>
-        <Button type="button" onClick={onOpenForm} className="mt-4 rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
-          <Send className="h-4 w-4" />
-          Ouvrir le formulaire
-        </Button>
-      </div>
-    </AccordionItem>
+        <div data-responsive-actions className="shrink-0">
+          <Button type="button" onClick={onOpenForm} className="rounded-xl bg-dtsc-blue text-white">
+            <Send className="h-4 w-4" />{english ? "Open form" : "Ouvrir le formulaire"}
+          </Button>
+        </div>
+      </div>}
+    </div>
   );
 }
 
+function requestStage(status: string, english: boolean) {
+  const labels: Record<string, [string, string]> = {
+    DRAFT: ["Brouillon", "Draft"], SUBMITTED: ["Soumise", "Submitted"],
+    ASSIGNED: ["Assignée", "Assigned"], IN_REVIEW: ["En validation", "Under review"],
+    IN_PROGRESS: ["En cours", "In progress"], WAITING_REQUESTER: ["Information attendue", "Awaiting requester"],
+    APPROVED: ["Approuvée", "Approved"], REJECTED: ["Refusée", "Rejected"],
+    RESOLVED: ["Résolue", "Resolved"], FULFILLED: ["Traitée", "Fulfilled"],
+    REOPENED: ["Rouverte", "Reopened"], CLOSED: ["Clôturée", "Closed"],
+    COMPLETED: ["Terminée", "Completed"], CANCELLED: ["Annulée", "Cancelled"],
+  };
+  return labels[status]?.[english ? 1 : 0] || (english ? "Other state" : "Autre statut");
+}
+
+function workflowStage(status: string, english: boolean) {
+  const labels: Record<string, [string, string]> = {
+    QUEUED: ["En file d'attente", "Queued"], RUNNING: ["En cours", "Running"],
+    WAITING_APPROVAL: ["Validation humaine attendue", "Awaiting human approval"],
+    WAITING_TIME: ["En attente d'une échéance", "Waiting for time"],
+    BLOCKED: ["Workflow bloqué — voir le diagnostic", "Workflow blocked — see diagnostics"],
+    COMPLETED: ["Workflow terminé", "Workflow completed"],
+    REJECTED: ["Workflow rejeté", "Workflow rejected"],
+    FAILED: ["Workflow en erreur", "Workflow failed"],
+    CANCELLED: ["Workflow annulé", "Workflow cancelled"],
+  };
+  return labels[status]?.[english ? 1 : 0] || (english ? "Unknown workflow state" : "État workflow inconnu");
+}
+
 export function EnterpriseWorkflowsPanel({ workflows }: { workflows: EnterpriseActivityWorkflowItem[] }) {
+  const locale = useAppLocale();
+  const english = locale === "en";
   return (
-    <AccordionItem title="Workflows partagés">
+    <div className="min-w-0">
       <div className="grid min-w-0 gap-3 md:grid-cols-2">
         {workflows.map((workflow) => (
           <article key={workflow.id} className="dtsc-glass-list-item min-w-0 rounded-2xl p-4">
             <div className="flex min-w-0 items-start gap-3">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-cyan-400/14 text-cyan-600">
-                <FileText className="h-4 w-4" />
-              </span>
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-cyan-400/14 text-cyan-600"><FileText className="h-4 w-4" /></span>
               <div className="min-w-0">
                 <p className="break-words text-xs font-black uppercase tracking-[0.14em] text-cyan-600">{workflow.workflowCode}</p>
-                <h3 className="mt-1 break-words font-black text-dtsc-ink">{workflow.labelFr}</h3>
-                <p className="mt-1 line-clamp-2 text-sm text-dtsc-muted">{workflow.descriptionFr || "Workflow interne partagé avec votre entreprise."}</p>
+                <h3 className="mt-1 break-words font-black text-dtsc-ink">{english ? workflow.labelEn : workflow.labelFr}</h3>
+                <p className="mt-1 break-words text-sm text-dtsc-muted">{workflow.descriptionFr || (english ? "Authorized workflow in your organization." : "Workflow autorisé dans votre entreprise.")}</p>
+                {workflow.triggerEntityType === "EnterpriseRequest" && workflow.triggerEventType === "ENTERPRISE_REQUEST_SUBMITTED" ? (
+                  <p className="mt-2 text-xs text-dtsc-muted">{english ? "Trigger: canonical internal request submission. Execution depends on active outbox processing." : "Déclencheur : soumission d'une demande interne canonique. L'exécution dépend du traitement actif des événements."}</p>
+                ) : null}
+                <Link className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-dtsc-blue underline underline-offset-4" href="/enterprise-modules/WORKFLOWS">{english ? "Open Workflows" : "Ouvrir Workflows"}</Link>
               </div>
             </div>
           </article>
         ))}
-        {!workflows.length && <p className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4 text-sm text-dtsc-muted">Aucun workflow partagé pour le moment.</p>}
+        {!workflows.length && <p className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4 text-sm text-dtsc-muted">{english ? "No published, authorized workflow is visible for your company." : "Aucun workflow publié et autorisé n'est visible pour cette entreprise."}</p>}
       </div>
-    </AccordionItem>
+    </div>
   );
 }
 
-export function EnterpriseRequestsPanel({ requests }: { requests: EnterpriseActivityRequestItem[] }) {
+export function EnterpriseRequestsPanel({ requests, focusActivityId }: { requests: EnterpriseActivityRequestItem[]; focusActivityId?: string | null }) {
+  const locale = useAppLocale();
+  const english = locale === "en";
   const list = useSmartList({
-    items: requests,
+    items: focusActivityId ? [...requests].sort((a, b) => Number(b.id === focusActivityId) - Number(a.id === focusActivityId)) : requests,
     pageSize: 8,
-    getSearchText: (request) => `${request.title} ${request.description} ${request.status} ${request.priority} ${request.blockCode}`,
+    getSearchText: (request) => `${request.title} ${request.description} ${request.workflowLink?.canonicalRequestStatus || request.status} ${request.priority} ${request.blockCode}`,
   });
-
   return (
-    <AccordionItem title="Mes demandes et rapports" defaultOpen>
+    <div className="min-w-0">
       <ListControls
         query={list.query}
         onQueryChange={list.setQuery}
@@ -255,27 +290,48 @@ export function EnterpriseRequestsPanel({ requests }: { requests: EnterpriseActi
         pageCount={list.pageCount}
         totalCount={list.totalCount}
         filteredCount={list.filteredCount}
-        placeholder="Rechercher une activité..."
+        placeholder={english ? "Search an activity…" : "Rechercher une activité..."}
         onPageChange={list.setPage}
       />
       <div className="mt-3 grid min-w-0 gap-3">
-        {list.paginatedItems.map((request) => (
-          <article key={request.id} className="dtsc-glass-list-item min-w-0 rounded-2xl p-4">
-            <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="break-words text-xs font-black uppercase tracking-[0.14em] text-cyan-600">{request.block?.labelFr || request.blockCode}</p>
-                <h3 className="mt-1 break-words font-black text-dtsc-ink">{request.title}</h3>
-                <p className="mt-1 line-clamp-2 text-sm text-dtsc-muted">{request.description}</p>
+        {list.paginatedItems.map((request) => {
+          const canonical = request.workflowLink;
+          const status = canonical?.canonicalRequestStatus || request.status;
+          return (
+            <article key={request.id} id={`activity-${request.id}`} className={`dtsc-glass-list-item min-w-0 rounded-2xl p-4 ${request.id === focusActivityId ? "ring-2 ring-cyan-400" : ""}`}>
+              <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="break-words text-xs font-black uppercase tracking-[0.14em] text-cyan-600">{(english ? request.block?.labelEn : request.block?.labelFr) || request.blockCode}</p>
+                  <h3 className="mt-1 break-words font-black text-dtsc-ink">{request.title}</h3>
+                  <p className="mt-1 line-clamp-2 break-words text-sm text-dtsc-muted">{request.description}</p>
+                </div>
+                <span className="max-w-full rounded-full border border-dtsc-border bg-dtsc-page px-3 py-1 text-xs font-bold text-dtsc-ink">{requestStage(status, english)}</span>
               </div>
-              <span className="max-w-full rounded-full bg-dtsc-page px-2 py-1 text-[0.68rem] font-black text-dtsc-muted">
-                <span className="truncate">{request.status}</span>
-              </span>
-            </div>
-          </article>
-        ))}
-        {!list.filteredCount && <p className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4 text-sm text-dtsc-muted">Aucune activité entreprise pour le moment.</p>}
+              {canonical?.workflowState ? (
+                <div className="mt-3 rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm text-dtsc-muted">
+                  <p className="font-semibold text-dtsc-ink">{english ? "Internal-request workflow" : "Workflow de demande interne"}</p>
+                  <p className="mt-1 break-words">
+                    {canonical.workflowState === "STARTED" && canonical.workflowRunStatus ? workflowStage(canonical.workflowRunStatus, english)
+                      : canonical.workflowState === "NOT_CONFIGURED" ? (english ? "No active published internal-request workflow. Request tracking remains available." : "Aucun workflow de demande interne actif et publié. Le suivi de la demande reste accessible.")
+                      : canonical.workflowState === "LIMITED_ACCESS" ? (english ? "Workflow execution is not accessible with your current permissions. Follow the canonical request status." : "Le suivi détaillé du workflow exige des permissions supplémentaires. Consultez le statut de votre demande interne.")
+                      : (english ? "No workflow run recorded yet. This does not confirm that the event worker is active." : "Aucune exécution enregistrée pour le moment. Cela ne confirme pas que le traitement des événements est activé.")}
+                  </p>
+                </div>
+              ) : null}
+              <div className="mt-3 flex min-w-0 flex-wrap gap-x-5 gap-y-2 text-sm">
+                {canonical?.canonicalRequestId && canonical.canOpenRequest ? (
+                  <Link href={workCoordinationDeepLink("REQUEST", canonical.canonicalRequestId)} className="min-h-11 inline-flex items-center font-semibold text-dtsc-blue underline underline-offset-4">{english ? "Open internal request" : "Ouvrir la demande interne"}</Link>
+                ) : null}
+                {canonical?.workflowRunId && canonical.canOpenWorkflow ? (
+                  <Link href={workCoordinationDeepLink("WORKFLOW_RUN", canonical.workflowRunId)} className="min-h-11 inline-flex items-center font-semibold text-dtsc-blue underline underline-offset-4">{english ? "View workflow run" : "Voir l'exécution du workflow"}</Link>
+                ) : null}
+              </div>
+            </article>
+          );
+        })}
+        {!list.filteredCount && <p className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4 text-sm text-dtsc-muted">{english ? "No business request found." : "Aucune activité entreprise pour le moment."}</p>}
       </div>
-    </AccordionItem>
+    </div>
   );
 }
 
@@ -341,7 +397,9 @@ export function EnterpriseActivityFormDialog({
   open,
   onClose,
   members,
+  departments,
   sectorRecords,
+  gamingReferences,
   onMessage,
 }: {
   organization: EnterpriseActivitiesOrganization;
@@ -350,11 +408,16 @@ export function EnterpriseActivityFormDialog({
   open: boolean;
   onClose: () => void;
   members: EnterpriseActivityMemberItem[];
+  departments: { value: string; labelFr: string; labelEn: string }[];
   sectorRecords: EnterpriseActivitySectorRecordItem[];
-  onMessage: (message: string) => void;
+  gamingReferences: Partial<Record<"gamingStations" | "gamingBookings" | "gamingSessions" | "gamingCloses" | "businessParties", { value: string; label: string }[]>>;
+  onMessage: (message: string, tone?: "success" | "error") => void;
 }) {
   const router = useRouter();
-  const selectedActivityFields = activityFields(selectedBlockCode);
+  const locale = useAppLocale();
+  const english = locale === "en";
+  const [busy, setBusy] = useState(false);
+  const selectedActivityFields = activityFields(selectedBlockCode, organization.sectorCode, organization.businessSubtypeCode);
   const patients = useMemo(() => sectorRecords.filter((record) => record.moduleCode === "PATIENTS" && record.status !== "ARCHIVED"), [sectorRecords]);
   const labRequests = useMemo(() => sectorRecords.filter((record) => record.moduleCode === "LABORATORY"), [sectorRecords]);
   const pharmacyItems = useMemo(() => sectorRecords.filter((record) => record.moduleCode === "INTERNAL_PHARMACY"), [sectorRecords]);
@@ -376,6 +439,9 @@ export function EnterpriseActivityFormDialog({
     if (field.source === "pharmacyItems") {
       return pharmacyItems.map((record) => ({ value: record.id, label: record.title }));
     }
+    if (field.source && gamingReferences[field.source as keyof typeof gamingReferences]) {
+      return gamingReferences[field.source as keyof typeof gamingReferences] || [];
+    }
     if (field.source === "members") {
       return members.map((member) => ({ value: member.user.id, label: member.user.name }));
     }
@@ -388,63 +454,66 @@ export function EnterpriseActivityFormDialog({
 
   async function createRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busy) return;
     const formElement = event.currentTarget;
     if (!selectedBlockCode) {
-      onMessage("Choisissez un bloc d'activité.");
+      onMessage(english ? "Select a business activity first." : "Choisissez un bloc d'activité.", "error");
       return;
     }
     onMessage("");
+    setBusy(true);
     const formData = new FormData(formElement);
     const title = String(formData.get("title") || "");
     const baseDescription = String(formData.get("description") || "");
     const priority = String(formData.get("priority") || "NORMAL");
     const assignedToUserId = String(formData.get("assignedToUserId") || "");
+    const departmentId = String(formData.get("departmentId") || "");
     const metadata: Record<string, string> = {};
-    const details = selectedActivityFields
-      .map((field) => {
-        const value = String(formData.get(field.name) || "").trim();
-        if (value) {
-          metadata[field.name] = value;
-        }
-        return value ? `${field.label}: ${value}` : "";
-      })
-      .filter(Boolean);
-    const description = details.length ? `${baseDescription}\n\n${details.join("\n")}` : baseDescription;
+    for (const field of selectedActivityFields) {
+      const value = String(formData.get(field.name) || "").trim();
+      if (value) metadata[field.name] = value;
+    }
+    // Sector details remain scoped metadata; never copy clinical or financial
+    // references into the broad description of an EnterpriseRequest.
+    const description = baseDescription;
 
     try {
       const response = await fetch(`/api/enterprise/${organization.id}/activities`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, description, priority, assignedToUserId, blockCode: selectedBlockCode, metadata }),
+        body: JSON.stringify({ title, description, priority, assignedToUserId, departmentId, blockCode: selectedBlockCode, metadata }),
       });
       const responseBody = (await response.json().catch(() => null)) as { message?: string } | null;
-      onMessage(response.ok ? "Demande envoyée au destinataire sélectionné." : responseBody?.message || "Envoi impossible.");
+      onMessage(response.ok ? (english ? "Request sent to the selected colleague." : "Demande envoyée au destinataire sélectionné.") : (english ? "Request could not be sent. Check the fields or contact the manager." : responseBody?.message || "Envoi impossible."), response.ok ? "success" : "error");
       if (response.ok) {
         formElement.reset();
         onClose();
         router.refresh();
       }
     } catch {
-      onMessage("Envoi impossible. Vérifiez votre connexion puis réessayez.");
+      onMessage(english ? "Unable to send. Check your connection and try again." : "Envoi impossible. Vérifiez votre connexion puis réessayez.");
+    } finally {
+      setBusy(false);
     }
   }
 
   return (
     <Dialog
       open={open}
-      title={selectedBlock?.labelFr || "Nouvelle demande entreprise"}
-      description={selectedBlock?.descriptionFr || "Cette action crée une vraie demande isolée dans l'entreprise active."}
+      title={(english ? selectedBlock?.labelEn : selectedBlock?.labelFr) || (english ? "New business request" : "Nouvelle demande entreprise")}
+      description={english ? "This action creates a tracked request for the selected company." : selectedBlock?.descriptionFr || "Cette action crée une demande suivie dans l'entreprise active."}
       onClose={onClose}
-      className="h-[92dvh] max-w-5xl"
+      className="h-[96dvh] max-w-5xl"
+      presentation="editor"
     >
       <form onSubmit={createRequest} className="grid min-w-0 gap-4">
         <div className="grid min-w-0 gap-4 md:grid-cols-2">
-          <FormField label="Objet de la demande" hint="Résumez précisément ce que vous envoyez au destinataire.">
-            <Input name="title" placeholder="Objet de la demande" required />
+          <FormField label={english ? "Request subject" : "Objet de la demande"} hint={english ? "Summarize what you are requesting." : "Résumez précisément ce que vous envoyez au destinataire."}>
+            <Input name="title" placeholder={english ? "Request subject" : "Objet de la demande"} required />
           </FormField>
-          <FormField label="Destinataire" hint="Choisissez un collaborateur actif de cette entreprise.">
+          <FormField label={english ? "Recipient" : "Destinataire"} hint={english ? "Choose an active team member of this company." : "Choisissez un collaborateur actif de cette entreprise."}>
             <select name="assignedToUserId" required className="h-11 min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
-              <option value="">{members.length ? "Destinataire" : "Aucun collaborateur actif"}</option>
+              <option value="">{members.length ? (english ? "Select recipient" : "Destinataire") : (english ? "No active team member" : "Aucun collaborateur actif")}</option>
               {members.map((member) => (
                 <option key={member.user.id} value={member.user.id}>
                   {member.user.name} · {member.role}
@@ -453,42 +522,48 @@ export function EnterpriseActivityFormDialog({
             </select>
           </FormField>
         </div>
-        <FormField label="Description" hint="Décrivez le contexte, le besoin, le rapport ou le problème à traiter.">
-          <textarea name="description" required placeholder="Décrivez précisément la demande, le rapport ou le problème." className="min-h-36 min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" />
+        <FormField label={english ? "Department for manager approval (optional)" : "Département de validation manager (facultatif)"} hint={english ? "If a manager-approval workflow is published, its department manager must have the right to approve internal requests. Otherwise the workflow may be blocked." : "Si un workflow de validation manager est publié, son responsable de département doit être habilité. Sans département admissible, ce workflow peut rester bloqué."}>
+          <select name="departmentId" defaultValue="" className="min-h-11 min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink">
+            <option value="">{english ? "No department specified" : "Aucun département précisé"}</option>
+            {departments.map((department) => <option key={department.value} value={department.value}>{english ? department.labelEn : department.labelFr}</option>)}
+          </select>
+        </FormField>
+        <FormField label={english ? "Description" : "Description"} hint={english ? "Describe the context, need, report or problem." : "Décrivez le contexte, le besoin, le rapport ou le problème à traiter."}>
+          <textarea name="description" required placeholder={english ? "Describe the request, report or issue." : "Décrivez précisément la demande, le rapport ou le problème."} className="min-h-36 min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" />
         </FormField>
         {!!selectedActivityFields.length && (
           <div className="grid min-w-0 gap-4 rounded-2xl border border-cyan-300/25 bg-cyan-400/10 p-3 md:grid-cols-2">
             {selectedActivityFields.map((field) => (
-              <FormField key={field.name} label={field.label} hint={field.placeholder}>
+              <FormField key={field.name} label={english ? field.labelEn || field.label : field.label} hint={english ? field.placeholderEn || field.placeholder : field.placeholder}>
                 {field.type === "textarea" ? (
-                  <textarea name={field.name} required={field.required} placeholder={field.placeholder} className="min-h-24 min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm font-semibold text-dtsc-ink" />
+                  <textarea name={field.name} required={field.required} placeholder={english ? field.placeholderEn || field.placeholder : field.placeholder} className="min-h-24 min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm font-semibold text-dtsc-ink" />
                 ) : field.type === "select" || field.source ? (
-                  <select name={field.name} required={field.required} className="h-11 min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
-                    <option value="">{field.placeholder}</option>
+                  <select name={field.name} required={field.required} disabled={Boolean(field.source && !fieldOptions(field).length)} className="h-11 min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink disabled:opacity-50">
+                    <option value="">{field.source && !fieldOptions(field).length ? (english ? "No eligible record available" : "Aucun élément éligible disponible") : (english ? field.placeholderEn || field.placeholder : field.placeholder)}</option>
                     {fieldOptions(field).map((option) => (
                       <option key={option.value} value={option.value}>
-                        {option.label}
+                        {({ LOW: english ? "Low" : "Faible", MEDIUM: english ? "Medium" : "Modérée", NORMAL: english ? "Normal" : "Normale", HIGH: english ? "High" : "Élevée", CRITICAL: english ? "Critical" : "Critique" } as Record<string,string>)[option.label] || option.label}
                       </option>
                     ))}
                   </select>
                 ) : (
-                  <Input name={field.name} type={field.type || "text"} required={field.required} placeholder={field.placeholder} />
+                  <Input name={field.name} type={field.type || "text"} required={field.required} min={field.type === "number" ? "0" : undefined} placeholder={english ? field.placeholderEn || field.placeholder : field.placeholder} />
                 )}
               </FormField>
             ))}
           </div>
         )}
-        <FormField label="Priorité" hint="Indiquez l'urgence de traitement attendue.">
+        <FormField label={english ? "Priority" : "Priorité"} hint={english ? "Choose the expected urgency." : "Indiquez l'urgence de traitement attendue."}>
           <select name="priority" defaultValue="NORMAL" className="h-11 min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
-            <option value="LOW">Faible</option>
-            <option value="NORMAL">Normale</option>
-            <option value="HIGH">Élevée</option>
-            <option value="CRITICAL">Critique</option>
+            <option value="LOW">{english ? "Low" : "Faible"}</option>
+            <option value="NORMAL">{english ? "Normal" : "Normale"}</option>
+            <option value="HIGH">{english ? "High" : "Élevée"}</option>
+            <option value="CRITICAL">{english ? "Critical" : "Critique"}</option>
           </select>
         </FormField>
-        <Button className="w-fit rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
+        <Button disabled={busy || selectedActivityFields.some((field) => field.required && field.source && !fieldOptions(field).length)} aria-busy={busy} className="w-fit rounded-xl bg-dtsc-blue text-white">
           <Send className="h-4 w-4" />
-          Envoyer la demande
+          {busy ? (english ? "Sending…" : "Envoi…") : (english ? "Submit request" : "Envoyer la demande")}
         </Button>
       </form>
     </Dialog>

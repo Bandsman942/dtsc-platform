@@ -5,6 +5,7 @@ import { writeApiLog } from "@/lib/audit";
 import { getEnterpriseWorkflowAccess } from "@/lib/enterprise/workflows/access";
 import { listReadableWorkflowEntityTypes } from "@/lib/enterprise/workflows/source-access";
 import { prisma } from "@/lib/prisma";
+import { canUseFeature } from "@/lib/billing/entitlements";
 
 type Params = { params: Promise<{ organizationId: string; id: string }> };
 
@@ -19,5 +20,26 @@ export async function GET(req: Request, { params }: Params) {
   const visible = access.canViewAllRuns || run.startedByUserId === session.userId
     ? run
     : { ...run, events: [], stepRuns: run.stepRuns.filter((stepRun) => stepRun.assignedUserId === session.userId) };
-  return NextResponse.json({ run: publicWorkflowRun(visible), permissions: access });
+  // Authorized reverse navigation to Activities, without revealing another
+  // member's activity form to workflow step participants.
+  let sourceActivityId: string | null = null;
+  if (run.sourceEntityType === "EnterpriseRequest" && (await canUseFeature(organizationId, "enterprise-activities")).allowed) {
+    const origin = await prisma.enterpriseRequest.findFirst({
+      where: { organizationId, id: run.sourceEntityId, sourceModule: "ENTERPRISE_ACTIVITIES",
+        sourceEntityType: "EnterpriseActivityRequest", archivedAt: null },
+      select: { sourceEntityId: true },
+    });
+    if (origin?.sourceEntityId) {
+      const canSeeAllActivities = ["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE", "MANAGER"].includes(access.membership.role);
+      const activity = await prisma.enterpriseActivityRequest.findFirst({
+        where: {
+          id: origin.sourceEntityId, organizationId,
+          ...(canSeeAllActivities ? {} : { OR: [{ createdById: session.userId }, { assignedToUserId: session.userId }] }),
+        },
+        select: { id: true },
+      });
+      sourceActivityId = activity?.id || null;
+    }
+  }
+  return NextResponse.json({ run: { ...publicWorkflowRun(visible), sourceActivityId }, permissions: access });
 }

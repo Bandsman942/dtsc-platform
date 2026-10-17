@@ -15,6 +15,10 @@ Le contexte d’entreprise est toujours affiché et contrôlé côté serveur. A
 
 Le bouton **Guide utilisateur** affiché au début du module ouvre une aide contextuelle recherchable. Le guide décrit les fonctions réellement actives dans l’entreprise sélectionnée.
 
+## Présentation professionnelle et Gaming
+
+Le module utilise les vues Actions, Demandes et Workflows avec indicateurs et rail tactile local. Pour une salle de jeux, Gaming Lounge présente les références réelles autorisées : poste, réservation, session, clôture et client CRM. Une demande de confirmation n'exécute jamais automatiquement une réservation, un encaissement ou une validation : l'action métier finale reste dans le module ERP correspondant.
+
 ## Créer une activité
 
 Sélectionnez un bloc d’activité actif puis renseignez les champs demandés :

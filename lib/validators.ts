@@ -309,6 +309,7 @@ export const enterpriseActivityRequestSchema = z.object({
   description: z.string().trim().min(5).max(2500),
   priority: z.enum(["LOW", "NORMAL", "HIGH", "CRITICAL"]).default("NORMAL"),
   assignedToUserId: z.string().max(160).optional().or(z.literal("")),
+  departmentId: z.string().max(160).optional().or(z.literal("")),
   metadata: z.record(z.string(), z.string().max(1000)).default({}),
 });
 

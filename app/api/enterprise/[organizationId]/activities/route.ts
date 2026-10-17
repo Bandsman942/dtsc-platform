@@ -7,6 +7,8 @@ import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 import { enterpriseActivityRequestSchema } from "@/lib/validators";
+import { getBusinessActivityFields, GAMING_ACTIVITY_REFERENCE_MODULE_CODES, GAMING_INCOMPATIBLE_ACTIVITY_BLOCKS } from "@/lib/enterprise/enterprise-activity-form-contract";
+import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -106,6 +108,76 @@ export async function POST(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 404, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+  // Every request remains an EnterpriseRequest, not a second editable Gaming object.
+  // Business references are resolved server-side and must belong to this organization.
+  const organization = await prisma.organization.findFirst({ where: { id: organizationId, status: "ACTIVE", deletedAt: null, organizationType: "CLIENT" }, select: { sectorCode: true } });
+  const subtype = await prisma.enterpriseBusinessSubtypeSelection.findUnique({ where: { organizationId }, select: { businessSubtypeCode: true } });
+  const gamingLounge = organization?.sectorCode === "HOSPITALITY_EVENTS" && subtype?.businessSubtypeCode === "GAMING_LOUNGE";
+  if (!organization || (gamingLounge && GAMING_INCOMPATIBLE_ACTIVITY_BLOCKS.has(block.blockCode))) {
+    return NextResponse.json({ error: "ENTERPRISE_ACTIVITY_UNAVAILABLE", message: "Cette action n'est pas disponible dans le secteur actif." }, { status: 403 });
+  }
+  const isDedicatedSector = organization.sectorCode === "HEALTH_CARE" || organization.sectorCode === "PHARMACY";
+  if (!isDedicatedSector) {
+    const fields = getBusinessActivityFields(organization.sectorCode, gamingLounge ? "GAMING_LOUNGE" : null, block.blockCode);
+    const names = new Set(fields.map((field) => field.name));
+    for (const field of fields) {
+      const value = data.metadata[field.name]?.trim() || "";
+      if (field.required && !value) {
+        return NextResponse.json({ error: "ENTERPRISE_ACTIVITY_FIELD_REQUIRED", message: `Complétez le champ « ${field.label} ».` }, { status: 400 });
+      }
+      if (!value) continue;
+      if (field.options && !field.options.includes(value)) {
+        return NextResponse.json({ error: "ENTERPRISE_ACTIVITY_OPTION_INVALID", message: `La valeur du champ « ${field.label} » n'est pas autorisée.` }, { status: 400 });
+      }
+      if (field.type === "number" && (!Number.isFinite(Number(value)) || Number(value) < 0 || (field.name === "quantity" && Number(value) <= 0))) {
+        return NextResponse.json({ error: "ENTERPRISE_ACTIVITY_AMOUNT_INVALID", message: `Le champ « ${field.label} » doit contenir un nombre valide.` }, { status: 400 });
+      }
+      if (field.type === "date" && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        return NextResponse.json({ error: "ENTERPRISE_ACTIVITY_DATE_INVALID", message: `Indiquez une date valide pour « ${field.label} ».` }, { status: 400 });
+      }
+      if (field.source) {
+        // A submit permission on Activities does not grant read access to
+        // restricted Gaming cash, sessions, bookings, stations or customer data.
+        const moduleCode = GAMING_ACTIVITY_REFERENCE_MODULE_CODES[field.source];
+        const capabilities = await resolveEnterpriseModuleCapabilities({ userId: session.userId, organizationId, moduleCode });
+        if (!capabilities.canRead) {
+          return NextResponse.json({ error: "ENTERPRISE_ACTIVITY_REFERENCE_FORBIDDEN", message: "Vous n'êtes pas autorisé à consulter cet élément métier. Demandez les droits nécessaires au responsable." }, { status: 403 });
+        }
+        let valid = false;
+        if (gamingLounge) {
+          if (field.source === "gamingStations") valid = Boolean(await prisma.enterpriseGamingStationProfile.findFirst({ where: { id: value, organizationId, archivedAt: null }, select: { id: true } }));
+          if (field.source === "gamingBookings") valid = Boolean(await prisma.enterpriseGamingBooking.findFirst({ where: { id: value, organizationId, archivedAt: null }, select: { id: true } }));
+          if (field.source === "gamingSessions") valid = Boolean(await prisma.enterpriseGamingSession.findFirst({ where: { id: value, organizationId, archivedAt: null }, select: { id: true } }));
+          if (field.source === "gamingCloses") valid = Boolean(await prisma.enterpriseGamingDailyClose.findFirst({ where: { id: value, organizationId }, select: { id: true } }));
+          if (field.source === "businessParties") valid = Boolean(await prisma.enterpriseBusinessParty.findFirst({ where: { id: value, organizationId, status: "ACTIVE", archivedAt: null, roles: { some: { roleCode: "CUSTOMER", status: "ACTIVE", archivedAt: null } } }, select: { id: true } }));
+        }
+        if (!valid) return NextResponse.json({ error: "ENTERPRISE_ACTIVITY_REFERENCE_INVALID", message: `La référence choisie pour « ${field.label} » est introuvable ou n'appartient pas à cette entreprise.` }, { status: 400 });
+      }
+    }
+    if (Object.keys(data.metadata).some((key) => !names.has(key))) {
+      return NextResponse.json({ error: "ENTERPRISE_ACTIVITY_FIELDS_INVALID", message: "Un champ n'est pas reconnu pour cette action. Rechargez le formulaire et réessayez." }, { status: 400 });
+    }
+  }
+  if (data.departmentId) {
+    const department = await prisma.enterpriseDepartment.findFirst({
+      where: { id: data.departmentId, organizationId, isActive: true },
+      select: { id: true, responsibleUserId: true },
+    });
+    if (!department?.responsibleUserId) {
+      return NextResponse.json({ error: "ENTERPRISE_ACTIVITY_APPROVER_DEPARTMENT_MISSING", message: "Ce département n'a pas de responsable actif désigné pour traiter la validation." }, { status: 400 });
+    }
+    const manager = await prisma.organizationMember.findFirst({
+      where: { organizationId, userId: department.responsibleUserId, status: "ACTIVE", removedAt: null },
+      select: { userId: true },
+    });
+    const mandate = manager ? await resolveEnterpriseModuleCapabilities({ organizationId, userId: manager.userId, moduleCode: "INTERNAL_REQUESTS" }) : null;
+    if (!mandate?.canApprove) {
+      return NextResponse.json({ error: "ENTERPRISE_ACTIVITY_APPROVER_NOT_AUTHORIZED", message: "Le responsable du département ne possède pas les droits de validation des demandes internes." }, { status: 400 });
+    }
+    if (manager?.userId === session.userId) {
+      return NextResponse.json({ error: "ENTERPRISE_ACTIVITY_SELF_APPROVAL", message: "Choisissez un département dont le responsable est différent du demandeur." }, { status: 400 });
+    }
+  }
   if (data.assignedToUserId) {
     const assignee = await prisma.organizationMember.findFirst({
       where: { organizationId, userId: data.assignedToUserId, status: "ACTIVE", removedAt: null },
@@ -139,6 +211,7 @@ export async function POST(req: Request, { params }: Params) {
       description: data.description,
       priority: data.priority,
       assignedToUserId: data.assignedToUserId || undefined,
+      departmentId: data.departmentId || undefined,
       sourceModule: "ENTERPRISE_ACTIVITIES",
       sourceEntityType: "EnterpriseActivityRequest",
       sourceEntityId: activityRequest.id,
