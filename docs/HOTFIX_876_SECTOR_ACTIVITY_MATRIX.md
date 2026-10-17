@@ -130,6 +130,9 @@ Les actions et leurs formulaires sont explicités dans `lib/enterprise/sector-ac
 
 ## Dette et périmètre futur
 
+**Suivi explicite : Issue [#878](https://github.com/Bandsman942/dtsc-platform/issues/878)** — intégration métier et autorisations des 14 opérations bloquées. #876 certifie la matrice et le refus de fausses opérations, mais **ne rend pas ces 14 écritures ERP opérationnelles**.
+
+
 Les 14 opérations `UNAVAILABLE` sont intentionnellement bloquées plutôt que de fabriquer un objet métier. Elles seront ouvertes uniquement après API et workflow canonique, pièces jointes privées si nécessaires, QA métier et E2E. Les champs de référence non liés restent de simples indications textuelles : si une action exige l'existence d'un objet ERP, son mode doit devenir `UNAVAILABLE` tant que la validation serveur n'est pas ajoutée. Ne jamais modifier la migration historique pour masquer cette dette.
 
 ## Rollback
