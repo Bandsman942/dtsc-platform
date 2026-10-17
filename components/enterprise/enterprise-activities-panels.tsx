@@ -173,10 +173,11 @@ export function EnterpriseActivitiesDashboard({ organization }: { organization: 
   );
 }
 
-export function EnterpriseActivityBlocksPanel({ sectorCode, businessSubtypeCode, blocks, selectedBlockCode, selectedBlock, onSelectBlock, onOpenForm }: {
+export function EnterpriseActivityBlocksPanel({ sectorCode, businessSubtypeCode, blocks, canonicalActionHandoffs, selectedBlockCode, selectedBlock, onSelectBlock, onOpenForm }: {
   sectorCode?: string | null;
   businessSubtypeCode?: string | null;
   blocks: EnterpriseActivityBlockItem[];
+  canonicalActionHandoffs: Record<string, { href: string; labelFr: string; labelEn: string }>;
   selectedBlockCode: string;
   selectedBlock: EnterpriseActivityBlockItem | null;
   onSelectBlock: (blockCode: string) => void;
@@ -186,6 +187,7 @@ export function EnterpriseActivityBlocksPanel({ sectorCode, businessSubtypeCode,
   const english = locale === "en";
   const capability = selectedBlock ? resolveEnterpriseActivityAction(sectorCode, businessSubtypeCode, selectedBlock.blockCode) : null;
   const isReady = capability?.mode === "REQUEST";
+  const canonicalHandoff = selectedBlock ? canonicalActionHandoffs[selectedBlock.blockCode] : null;
   return (
     <div className="w-full min-w-0 space-y-4">
       <div data-horizontal-rail tabIndex={0} aria-label={english ? "Business activity actions" : "Actions métier disponibles"} className="flex w-full min-w-0 max-w-full snap-x snap-mandatory gap-2 overflow-x-auto overscroll-x-contain pb-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-dtsc-blue">
@@ -201,7 +203,7 @@ export function EnterpriseActivityBlocksPanel({ sectorCode, businessSubtypeCode,
             >
               <span className="block break-words text-sm font-bold">{english ? item.labelEn : item.labelFr}</span>
               <span className="mt-1 block line-clamp-2 break-words text-xs text-dtsc-muted">{english ? "Business activity" : item.descriptionFr || "Activité sectorielle"}</span>
-              <span className="mt-2 block text-xs font-semibold text-dtsc-muted">{resolveEnterpriseActivityAction(sectorCode, businessSubtypeCode, item.blockCode).mode === "REQUEST" ? (english ? "Tracked request — no automatic business change" : "Demande suivie — sans opération automatique") : (english ? "Unavailable: dedicated business workflow required" : "Indisponible : parcours métier dédié requis")}</span>
+              <span className="mt-2 block text-xs font-semibold text-dtsc-muted">{resolveEnterpriseActivityAction(sectorCode, businessSubtypeCode, item.blockCode).mode === "REQUEST" ? (english ? "Tracked request — no automatic business change" : "Demande suivie — sans opération automatique") : canonicalActionHandoffs[item.blockCode] ? (english ? "Open real ERP workflow" : "Ouvrir le parcours ERP réel") : (english ? "Unavailable: dedicated business workflow required" : "Indisponible : parcours métier dédié requis")}</span>
             </button>
           );
         })}
@@ -210,12 +212,19 @@ export function EnterpriseActivityBlocksPanel({ sectorCode, businessSubtypeCode,
       {selectedBlock && <div className="flex min-w-0 flex-col gap-3 border-t border-dtsc-border pt-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <p className="break-words font-semibold text-dtsc-ink">{english ? selectedBlock.labelEn : selectedBlock.labelFr}</p>
-          <p className="mt-1 break-words text-sm text-dtsc-muted">{isReady ? (english ? "This sends a tracked request for processing; it does not complete the underlying ERP operation." : "Cette action envoie une demande suivie pour traitement ; elle ne réalise pas l’opération ERP.") : (english ? capability?.reasonEn || "This action is not yet available through Enterprise Activities." : capability?.reasonFr || "Cette action n’est pas encore disponible dans Activités entreprise.")}</p>
+          <p className="mt-1 break-words text-sm text-dtsc-muted">{isReady ? (english ? "This sends a tracked request for processing; it does not complete the underlying ERP operation." : "Cette action envoie une demande suivie pour traitement ; elle ne réalise pas l’opération ERP.") : canonicalHandoff ? (english ? "Continue in the real ERP module. Its permissions, validations and approval rules still apply." : "Poursuivez dans le module ERP réel : ses permissions, validations et règles d’approbation s’appliquent.") : (english ? capability?.reasonEn || "This action is not yet available through Enterprise Activities." : capability?.reasonFr || "Cette action n’est pas encore disponible dans Activités entreprise.")}</p>
         </div>
         <div data-responsive-actions className="shrink-0">
-          <Button type="button" onClick={onOpenForm} disabled={!isReady} aria-disabled={!isReady} className="rounded-xl bg-dtsc-blue text-white disabled:cursor-not-allowed disabled:opacity-55">
-            <Send className="h-4 w-4" />{isReady ? (english ? "Create request" : "Créer une demande") : (english ? "Action unavailable" : "Action indisponible")}
-          </Button>
+          {canonicalHandoff && !isReady ? (
+            <Link href={canonicalHandoff.href} className="inline-flex min-h-11 min-w-0 max-w-full items-center justify-center gap-2 rounded-xl bg-dtsc-blue px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-dtsc-blue">
+              <FileText className="h-4 w-4 shrink-0" />
+              <span className="break-words">{english ? `Open ${canonicalHandoff.labelEn}` : `Ouvrir ${canonicalHandoff.labelFr}`}</span>
+            </Link>
+          ) : (
+            <Button type="button" onClick={onOpenForm} disabled={!isReady} aria-disabled={!isReady} className="rounded-xl bg-dtsc-blue text-white disabled:cursor-not-allowed disabled:opacity-55">
+              <Send className="h-4 w-4" />{isReady ? (english ? "Create request" : "Créer une demande") : (english ? "Action unavailable" : "Action indisponible")}
+            </Button>
+          )}
         </div>
       </div>}
     </div>
