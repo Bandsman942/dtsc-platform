@@ -353,7 +353,7 @@ export function EnterpriseActivityFormDialog({
   members: EnterpriseActivityMemberItem[];
   sectorRecords: EnterpriseActivitySectorRecordItem[];
   gamingReferences: Partial<Record<"gamingStations" | "gamingBookings" | "gamingSessions" | "gamingCloses" | "businessParties", { value: string; label: string }[]>>;
-  onMessage: (message: string) => void;
+  onMessage: (message: string, tone?: "success" | "error") => void;
 }) {
   const router = useRouter();
   const locale = useAppLocale();
@@ -425,7 +425,7 @@ export function EnterpriseActivityFormDialog({
         body: JSON.stringify({ title, description, priority, assignedToUserId, blockCode: selectedBlockCode, metadata }),
       });
       const responseBody = (await response.json().catch(() => null)) as { message?: string } | null;
-      onMessage(response.ok ? "Demande envoyée au destinataire sélectionné." : responseBody?.message || "Envoi impossible.");
+      onMessage(response.ok ? (english ? "Request sent to the selected colleague." : "Demande envoyée au destinataire sélectionné.") : (english ? "Request could not be sent. Check the fields or contact the manager." : responseBody?.message || "Envoi impossible."), response.ok ? "success" : "error");
       if (response.ok) {
         formElement.reset();
         onClose();
@@ -441,7 +441,7 @@ export function EnterpriseActivityFormDialog({
   return (
     <Dialog
       open={open}
-      title={selectedBlock?.labelFr || "Nouvelle demande entreprise"}
+      title={(english ? selectedBlock?.labelEn : selectedBlock?.labelFr) || (english ? "New business request" : "Nouvelle demande entreprise")}
       description={selectedBlock?.descriptionFr || "Cette action crée une vraie demande isolée dans l'entreprise active."}
       onClose={onClose}
       className="h-[96dvh] max-w-5xl"
@@ -449,12 +449,12 @@ export function EnterpriseActivityFormDialog({
     >
       <form onSubmit={createRequest} className="grid min-w-0 gap-4">
         <div className="grid min-w-0 gap-4 md:grid-cols-2">
-          <FormField label="Objet de la demande" hint="Résumez précisément ce que vous envoyez au destinataire.">
-            <Input name="title" placeholder="Objet de la demande" required />
+          <FormField label={english ? "Request subject" : "Objet de la demande"} hint={english ? "Summarize what you are requesting." : "Résumez précisément ce que vous envoyez au destinataire."}>
+            <Input name="title" placeholder={english ? "Request subject" : "Objet de la demande"} required />
           </FormField>
-          <FormField label="Destinataire" hint="Choisissez un collaborateur actif de cette entreprise.">
+          <FormField label={english ? "Recipient" : "Destinataire"} hint={english ? "Choose an active team member of this company." : "Choisissez un collaborateur actif de cette entreprise."}>
             <select name="assignedToUserId" required className="h-11 min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
-              <option value="">{members.length ? "Destinataire" : "Aucun collaborateur actif"}</option>
+              <option value="">{members.length ? (english ? "Select recipient" : "Destinataire") : (english ? "No active team member" : "Aucun collaborateur actif")}</option>
               {members.map((member) => (
                 <option key={member.user.id} value={member.user.id}>
                   {member.user.name} · {member.role}
@@ -463,8 +463,8 @@ export function EnterpriseActivityFormDialog({
             </select>
           </FormField>
         </div>
-        <FormField label="Description" hint="Décrivez le contexte, le besoin, le rapport ou le problème à traiter.">
-          <textarea name="description" required placeholder="Décrivez précisément la demande, le rapport ou le problème." className="min-h-36 min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" />
+        <FormField label={english ? "Description" : "Description"} hint={english ? "Describe the context, need, report or problem." : "Décrivez le contexte, le besoin, le rapport ou le problème à traiter."}>
+          <textarea name="description" required placeholder={english ? "Describe the request, report or issue." : "Décrivez précisément la demande, le rapport ou le problème."} className="min-h-36 min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" />
         </FormField>
         {!!selectedActivityFields.length && (
           <div className="grid min-w-0 gap-4 rounded-2xl border border-cyan-300/25 bg-cyan-400/10 p-3 md:grid-cols-2">
@@ -490,10 +490,10 @@ export function EnterpriseActivityFormDialog({
         )}
         <FormField label="Priorité" hint="Indiquez l'urgence de traitement attendue.">
           <select name="priority" defaultValue="NORMAL" className="h-11 min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
-            <option value="LOW">Faible</option>
-            <option value="NORMAL">Normale</option>
-            <option value="HIGH">Élevée</option>
-            <option value="CRITICAL">Critique</option>
+            <option value="LOW">{english ? "Low" : "Faible"}</option>
+            <option value="NORMAL">{english ? "Normal" : "Normale"}</option>
+            <option value="HIGH">{english ? "High" : "Élevée"}</option>
+            <option value="CRITICAL">{english ? "Critical" : "Critique"}</option>
           </select>
         </FormField>
         <Button disabled={busy || selectedActivityFields.some((field) => field.required && field.source && !fieldOptions(field).length)} aria-busy={busy} className="w-fit rounded-xl bg-dtsc-blue text-white">
