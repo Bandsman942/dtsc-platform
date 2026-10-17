@@ -52,13 +52,15 @@ export async function GET(req: Request, { params }: Params) {
   }
   let emptyReason: "NO_RECORDS" | "NO_ELIGIBLE_RECORDS" | "NO_VISIBLE_RECORDS" | null = null;
   if (!sources.length) {
-    if (own) emptyReason = "NO_VISIBLE_RECORDS";
-    else {
-      const visibleIncludingOtherStates = await findWorkflowManualSources({
-        organizationId, userId, entityType: type, allowAll: true, includeIneligibleStatus: true,
-      });
-      emptyReason = visibleIncludingOtherStates?.length ? "NO_ELIGIBLE_RECORDS" : "NO_RECORDS";
-    }
+    const visibleIncludingOtherStates = await findWorkflowManualSources({
+      organizationId, userId, entityType: type,
+      allowAll: access.canViewAllRuns, includeIneligibleStatus: true,
+    });
+    // An employee may diagnose their OWN ineligible records, never the
+    // presence of another employee's private records.
+    emptyReason = visibleIncludingOtherStates?.length
+      ? "NO_ELIGIBLE_RECORDS"
+      : own ? "NO_VISIBLE_RECORDS" : "NO_RECORDS";
   }
   await writeApiLog({ request: req, statusCode: 200, userId, startedAt, metadata: { organizationId, domain: "workflow-source-options", type, count: sources.length } });
   return NextResponse.json({
