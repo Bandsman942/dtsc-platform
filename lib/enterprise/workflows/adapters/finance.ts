@@ -245,12 +245,16 @@ const financialCloseAdapter: WorkflowEntityAdapter = {
   triggerEvents: new Set(["FINANCIAL_CLOSE_SUBMITTED", "FINANCIAL_CLOSE_APPROVED", "FINANCIAL_CLOSE_COMPLETED"]),
   domainActions: new Set(),
   async loadEntity(organizationId, entityId) {
-    return snapshot(await prisma.enterpriseFinancialClose.findFirst({
+    const close = await prisma.enterpriseFinancialClose.findFirst({
       where: { id: entityId, organizationId },
       select: { id: true, organizationId: true, fiscalPeriodId: true, status: true,
         requestedByUserId: true, requestedAt: true, approvedAt: true,
-        closedAt: true, revision: true },
-    }), "EnterpriseFinancialClose");
+        closedAt: true, revision: true, fiscalPeriod: { select: { code: true } } },
+    });
+    const period = close?.fiscalPeriod?.code || close?.fiscalPeriodId;
+    return snapshot(close ? {
+      ...close, reference: period, title: period ? `Clôture ${period}` : "Dossier de clôture",
+    } : null, "EnterpriseFinancialClose");
   },
   getConditionField: valueAt,
   getTemplateValues: templateValues,
