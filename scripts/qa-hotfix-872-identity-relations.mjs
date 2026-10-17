@@ -18,6 +18,9 @@ for (const value of types) {
 }
 for (const marker of ["EnterpriseIdentityLink_relationType_check", "EnterprisePersonBusinessReference_relationType_check", "VALIDATE CONSTRAINT", "NOT VALID"]) if (!sql.includes(marker)) throw new Error("Missing migration marker: " + marker);
 for (const marker of ["notifyToast(message, \"error\")", "notifyToast(message, \"success\")", "IDENTITY_REQUEST_ALREADY_EXISTS", "IDENTITY_LINK_ORGANIZATION_NOT_FOUND", "aria-busy", "supportReference"]) if (!panel.includes(marker)) throw new Error("Missing frontend feedback: " + marker);
+if (!panel.includes("const formElement = event.currentTarget;") || !panel.includes("formElement.reset();") || panel.includes("event.currentTarget.reset();")) {
+  throw new Error("Async request must retain its form element before awaiting; avoid a false client error after HTTP 201");
+}
 if (http.includes('console.error("Enterprise identity link operation failed", error)')) throw new Error("Raw Prisma exceptions can leak form values to logs");
 for (const marker of ["supportReference", "IDENTITY_LINK_RELATION_CONFIGURATION_OUTDATED"]) if (!http.includes(marker)) throw new Error("Missing diagnostic mapping");
 if (!benefit.includes("z.enum(ENTERPRISE_IDENTITY_RELATION_TYPES)") || !resolver.includes("audience.relationType === link.requestedRelationType")) throw new Error("Relationship benefits must use the same canonical audience contract");
