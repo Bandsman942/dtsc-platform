@@ -18,6 +18,7 @@ import { toastError, toastSuccess } from "@/lib/client-toast";
 import { getWorkflowRecoveryMessage, getWorkflowValidationFieldMessage } from "@/lib/enterprise/workflows/recovery-messages";
 import { cn } from "@/lib/utils";
 import { workflowReadinessMessage } from "@/lib/enterprise/workflows/readiness-messages";
+import { workflowManualEmptyMessage, workflowManualEntityLabel, workflowManualModuleLinkLabel, type WorkflowManualEmptyReason } from "@/lib/enterprise/workflows/manual-start-copy";
 
 type Step = { id?: string; code: string; name: string; description?: string | null; stepType: string; position: number; configurationJson?: Record<string, unknown>; configuration?: Record<string, unknown> };
 type Transition = { id?: string; fromStepId?: string; toStepId?: string; fromStep?: { code: string }; toStep?: { code: string }; fromStepCode?: string; toStepCode?: string; outcome?: string | null; priority: number; conditionJson?: Record<string, unknown> | null; condition?: Record<string, unknown> };
@@ -36,7 +37,6 @@ type AssignmentOptions = {
   roles: Array<{ id: string; label: string }>;
   departments: Array<{ id: string; label: string; hasEligibleManager: boolean }>;
 };
-type SourceEmptyReason = "NO_RECORDS" | "NO_VISIBLE_RECORDS" | null;
 type Props = { organizationId: string; canManage: boolean; locale?: string | null; members: Array<{ id: string; label: string }>; departments: Array<{ id: string; label: string }>; legacyWorkflows: Array<{ id: string; labelFr: string; isEnabled: boolean; updatedAt: Date }> };
 
 const STEP_TYPES = ["START", "CONDITION", "ASSIGN", "CREATE_APPROVAL", "CREATE_TASK", "DOMAIN_ACTION", "NOTIFICATION", "WAIT_UNTIL", "END"];
@@ -57,7 +57,8 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, departmen
   const [runFilter, setRunFilter] = useState("");
   const [startDefinition, setStartDefinition] = useState<Definition | null>(null);
   const [startOptions, setStartOptions] = useState<Array<{ id: string; label: string }>>([]);
-  const [startEmptyReason, setStartEmptyReason] = useState<SourceEmptyReason>(null);
+  const [startEmptyReason, setStartEmptyReason] = useState<WorkflowManualEmptyReason>(null);
+  const [startLoadError, setStartLoadError] = useState("");
   const [startCreateHref, setStartCreateHref] = useState<string | null>(null);
   const [assignmentOptions, setAssignmentOptions] = useState<AssignmentOptions>({ members: [], roles: [], departments: [] });
   const [assignmentLoadError, setAssignmentLoadError] = useState("");
@@ -409,17 +410,27 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, departmen
     setStartOptions([]);
     setStartEmptyReason(null);
     setStartCreateHref(null);
+    setStartLoadError("");
     setStartLoading(true);
     try {
       const response = await fetch(`/api/enterprise/${organizationId}/workflow-runs/sources?definitionId=${encodeURIComponent(definition.id)}`);
       const body = await response.json().catch(() => null);
-      if (!response.ok) toastError(getWorkflowRecoveryMessage(body?.error, locale) || body?.message || (en ? "Source selection unavailable." : "Sélection de la source indisponible."));
-      else {
+      if (!response.ok) {
+        const message = response.status === 403
+          ? (en ? "You are not authorized to access this workflow's source module." : "Votre rôle ne permet pas d’accéder au module métier de ce workflow.")
+          : getWorkflowRecoveryMessage(body?.error, locale) || (en ? "Source selection unavailable. Retry or contact support." : "Sélection des objets indisponible. Réessayez ou contactez le support.");
+        setStartLoadError(message);
+        toastError(message);
+      } else {
         setStartOptions(body?.sources || []);
         setStartEmptyReason(body?.emptyReason || null);
         setStartCreateHref(typeof body?.createModuleHref === "string" ? body.createModuleHref : null);
       }
-    } catch { toastError(en ? "Unable to load available records." : "Chargement des objets disponibles impossible."); }
+    } catch {
+      const message = en ? "Unable to load available records. Retry the operation." : "Chargement des objets impossible. Réessayez.";
+      setStartLoadError(message);
+      toastError(message);
+    }
     finally { setStartLoading(false); }
   }
 
@@ -491,14 +502,21 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, departmen
 
     {tab === "monitoring" ? <section className="grid gap-3">{observability ? <div className="grid min-w-0 gap-3 rounded-2xl border border-dtsc-border bg-dtsc-surface p-3" aria-label={en ? "Workflow runtime statistics" : "Statistiques des workflows"}><div className="flex flex-wrap items-center justify-between gap-2 text-xs text-dtsc-muted"><strong className="text-dtsc-ink">{en ? "Recent completed run latency" : "Durée des exécutions terminées"}</strong><span>{en ? "Sampled" : "Échantillonné"} : {new Date(observability.sampledAt).toLocaleString(en ? "en-US" : "fr-FR")}</span></div><div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{(["p50", "p95", "p99"] as const).map((key) => <div key={key}><div className="text-xs uppercase text-dtsc-muted">{key}</div><strong className="text-base text-dtsc-ink">{observability.completedLatency[key] === null ? "—" : `${(observability.completedLatency[key]! / 1000).toFixed(1)} s`}</strong></div>)}<div><div className="text-xs text-dtsc-muted">{en ? "Oldest waiting" : "Plus ancienne attente"}</div><strong className="text-base text-dtsc-ink">{observability.oldestWaitingAgeMs === null ? "—" : `${Math.round(observability.oldestWaitingAgeMs / 60000)} min`}</strong></div></div><p className="text-xs text-dtsc-muted">{observability.completedSamples} {en ? "completed runs" : "exécutions terminées"} / {observability.sampleSize} {en ? "visible runs sampled across" : "exécutions visibles examinées sur"} {observability.windowDays} {en ? "days" : "jours"}{observability.capped ? (en ? " — Capped sample, not exhaustive." : " — Échantillon plafonné, non exhaustif.") : "."} {en ? "Missing values are not zero." : "Une donnée absente ne vaut pas zéro."}</p></div> : null}{monitored.length ? monitored.map((run) => <article key={run.id} className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-3"><div className="flex items-start gap-3"><span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/10 text-amber-700"><AlertTriangle className="h-4 w-4" /></span><div className="min-w-0 flex-1"><strong className="block truncate text-sm text-dtsc-ink">{run.definition.name}</strong><span className="block text-xs text-dtsc-muted">{statusLabel(run.status, en)} · {getWorkflowRecoveryMessage(run.failureCode, locale) || run.failureMessage || (en ? "Awaiting the next authorized action." : "En attente de la prochaine action autorisée.")}</span></div><Button size="sm" variant="outline" onClick={() => void openRun(run.id)}>{en ? "Inspect" : "Inspecter"}</Button></div></article>) : <EmptyState compact title={en ? "Nothing to monitor" : "Rien à surveiller"} description={en ? "No blocked, failed or abnormally waiting run." : "Aucune exécution bloquée, en échec ou en attente anormale."} />}</section> : null}
 
-    <Dialog open={Boolean(startDefinition)} title={en ? "Start a workflow" : "Lancer un workflow"} onClose={() => setStartDefinition(null)} presentation="editor" className="h-[94dvh] max-w-3xl">{startDefinition ? <form onSubmit={submitManualStart} className="grid min-w-0 gap-4"><p className="text-sm text-dtsc-muted">{startDefinition.name} · {entityLabel(startDefinition.triggerEntityType, en)}</p><label className="grid gap-1 text-sm font-semibold text-dtsc-ink">{en ? "Business record" : "Objet métier"}<select required name="sourceEntityId" disabled={startLoading || startSubmitting || !startOptions.length} className="h-11 min-w-0 max-w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3" defaultValue=""><option value="">{startLoading ? (en ? "Loading records…" : "Chargement des objets…") : (en ? "Select a record" : "Sélectionnez un objet")}</option>{startOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select></label>{!startLoading && !startOptions.length ? <div role="status" className="grid gap-2 text-sm text-dtsc-muted">
-          <p>{startDefinition.triggerEntityType === "EnterpriseExpense"
-            ? (startEmptyReason === "NO_RECORDS"
-              ? (en ? "No expense has been created yet in this company." : "Aucune dépense n’a encore été créée dans cette entreprise.")
-              : (en ? "No expense is available to your account. Create an expense or ask for access to its ERP module." : "Aucune dépense n’est accessible à votre compte. Créez une dépense ou vérifiez vos droits sur le module ERP."))
-            : (en ? "No eligible record is visible for this workflow." : "Aucun objet métier admissible n’est visible pour ce workflow.")}</p>
-          {startCreateHref ? <a className="inline-flex min-h-11 items-center font-bold text-cyan-600 underline underline-offset-4" href={startCreateHref}>{startDefinition.triggerEntityType === "EnterpriseExpense" ? (en ? "Open Budgets and Expenses to create an expense" : "Ouvrir Budgets et dépenses pour créer une dépense") : (en ? "Open Budgets and Expenses" : "Ouvrir Budgets et dépenses")}</a> : null}
-        </div> : null}<Button type="submit" disabled={startLoading || startSubmitting || !startOptions.length}><Play className="h-4 w-4" />{startSubmitting ? (en ? "Starting…" : "Démarrage…") : (en ? "Start workflow" : "Démarrer le workflow")}</Button></form> : null}</Dialog>
+    <Dialog open={Boolean(startDefinition)} title={en ? "Start a workflow" : "Lancer un workflow"} onClose={() => setStartDefinition(null)} presentation="editor" className="h-[94dvh] max-w-3xl">{startDefinition ? <form onSubmit={submitManualStart} className="grid min-w-0 max-w-full gap-4">
+      <p className="break-words text-sm text-dtsc-muted">{startDefinition.name} · {workflowManualEntityLabel(startDefinition.triggerEntityType, en)}</p>
+      <label className="grid min-w-0 gap-1 text-sm font-semibold text-dtsc-ink">{en ? "Business record" : "Objet métier"}
+        <select required name="sourceEntityId" disabled={startLoading || startSubmitting || Boolean(startLoadError) || !startOptions.length} className="h-11 w-full min-w-0 max-w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3" defaultValue="">
+          <option value="">{startLoading ? (en ? "Loading records…" : "Chargement des objets…") : (en ? "Select a record" : "Sélectionnez un objet")}</option>
+          {startOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+        </select>
+      </label>
+      {!startLoading && startLoadError ? <p role="alert" className="break-words text-sm text-rose-600">{startLoadError}</p> : null}
+      {!startLoading && !startLoadError && !startOptions.length ? <div role="status" className="grid min-w-0 gap-2 text-sm text-dtsc-muted">
+        <p className="break-words">{workflowManualEmptyMessage(startDefinition.triggerEntityType, startEmptyReason, en)}</p>
+        {startCreateHref ? <a className="inline-flex min-h-11 max-w-full items-center break-words font-bold text-cyan-600 underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2" href={startCreateHref}>{workflowManualModuleLinkLabel(startDefinition.triggerEntityType, en)}</a> : null}
+      </div> : null}
+      <Button type="submit" disabled={startLoading || startSubmitting || Boolean(startLoadError) || !startOptions.length}><Play className="h-4 w-4" />{startSubmitting ? (en ? "Starting…" : "Démarrage…") : (en ? "Start workflow" : "Démarrer le workflow")}</Button>
+    </form> : null}</Dialog>
 
     <Dialog open={createOpen} title={en ? "Create a draft workflow" : "Créer un workflow brouillon"} onClose={() => setCreateOpen(false)} presentation="editor" className="h-[94dvh] max-w-4xl">
       <form onSubmit={createFromTemplate} className="grid min-w-0 gap-3">
@@ -531,7 +549,7 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, departmen
 
 function statusLabel(value: string, en: boolean) { const labels: Record<string, [string, string]> = { DRAFT: ["Brouillon", "Draft"], ACTIVE: ["Actif", "Active"], PUBLISHED: ["Publiée", "Published"], RETIRED: ["Retiré", "Retired"], ARCHIVED: ["Archivé", "Archived"], QUEUED: ["En file", "Queued"], RUNNING: ["En cours", "Running"], WAITING_APPROVAL: ["En attente de validation", "Waiting approval"], WAITING_TIME: ["En attente de l’échéance", "Waiting time"], BLOCKED: ["Bloqué", "Blocked"], COMPLETED: ["Terminé", "Completed"], REJECTED: ["Terminé sur rejet", "Rejected"], FAILED: ["Échec", "Failed"], CANCELLED: ["Annulé", "Cancelled"], SUCCEEDED: ["Réussie", "Succeeded"] }; return labels[value]?.[en ? 1 : 0] || value.replaceAll("_", " ").toLowerCase(); }
 function triggerLabel(value: string, en: boolean) { const labels: Record<string, [string, string]> = { MANUAL: ["Manuel", "Manual"], ENTITY_CREATED: ["Création d’objet", "Entity created"], ENTITY_STATUS_CHANGED: ["Changement de statut", "Status changed"], DOMAIN_EVENT: ["Événement métier", "Business event"] }; return labels[value]?.[en ? 1 : 0] || value; }
-function entityLabel(value?: string | null, en = false) { const labels: Record<string, [string, string]> = { EnterpriseTask: ["Tâche", "Task"], EnterpriseRequest: ["Demande", "Request"], EnterpriseMeeting: ["Réunion", "Meeting"], EnterprisePurchase: ["Achat", "Purchase"], EnterpriseBudget: ["Budget", "Budget"], EnterpriseExpense: ["Dépense", "Expense"], EnterpriseReport: ["Rapport", "Report"] }; return value ? labels[value]?.[en ? 1 : 0] || value : (en ? "No entity" : "Aucun objet"); }
+function entityLabel(value?: string | null, en = false) { return workflowManualEntityLabel(value, en); }
 function stepTypeLabel(value: string, en: boolean) { const labels: Record<string, [string, string]> = { START: ["Départ", "Start"], CONDITION: ["Condition", "Condition"], ASSIGN: ["Affectation", "Assignment"], CREATE_APPROVAL: ["Créer une validation", "Create approval"], CREATE_TASK: ["Créer une tâche", "Create task"], DOMAIN_ACTION: ["Commande métier", "Domain action"], NOTIFICATION: ["Notification", "Notification"], WAIT_UNTIL: ["Attente", "Wait"], END: ["Fin", "End"] }; return labels[value]?.[en ? 1 : 0] || value; }
 function outcomeLabel(value?: string | null, en = false) { const labels: Record<string, [string, string]> = { DEFAULT: ["Suite normale", "Default"], TRUE: ["Oui", "True"], FALSE: ["Non", "False"], APPROVED: ["Approuvée", "Approved"], REJECTED: ["Rejetée", "Rejected"], CANCELLED: ["Annulée", "Cancelled"] }; return labels[value || "DEFAULT"]?.[en ? 1 : 0] || value || "DEFAULT"; }
 function assignmentLabel(value: string, en: boolean) { const labels: Record<string, [string, string]> = { SPECIFIC_USER: ["Utilisateur précis", "Specific user"], SPECIFIC_ROLE: ["Rôle précis", "Specific role"], DEPARTMENT_MANAGER: ["Responsable du département", "Department manager"], ENTITY_REQUESTER: ["Demandeur de l’objet", "Entity requester"], ENTITY_ASSIGNEE: ["Responsable de l’objet", "Entity assignee"], ENTITY_BUYER: ["Acheteur", "Entity buyer"], ENTITY_CREATOR: ["Créateur de l’objet", "Entity creator"], PREVIOUS_STEP_ACTOR: ["Acteur de l’étape précédente", "Previous step actor"] }; return labels[value]?.[en ? 1 : 0] || value; }
