@@ -125,3 +125,9 @@ ORDER BY events DESC;
 
 ### Rollback sans perte de preuve
 Mettre WORKFLOW_WORKER_ENABLED=false en Production et redéployer main. Suspendre l'auth Cron si nécessaire, attendre la fin des leases, puis appliquer un revert par PR selon DELIVERY_GOVERNANCE. Ne pas effacer les validations, events, runs, ni refaire le bilan de caisse ou les écritures.
+
+### Inventaire réel de la file — contrôle lecture seule du 17/10/2026
+
+Sur **424 événements PENDING échus** (n'incluant pas les autres états), 343 sont de type `PLATFORM_WEB_PUSH_NOTIFICATION` et **81 d'autres types**. Parmi ceux-ci : 4 `ENTERPRISE_APPROVAL_APPROVED`, 2 `ENTERPRISE_EXPENSE_APPROVED`, plusieurs événements de caisse et de paiements, ainsi que des traitements plus anciens ; les 424 avaient `attemptCount=0` au contrôle. Ne pas assimiler les 343 Web Push à des actions financières et ne pas déclarer les 81 autres récupérables sans examen individuel. L'inventaire est un instantané évolutif.
+
+`WORKFLOW_EVENT_CUTOVER_AT` doit respecter strictement un instant ISO UTC inférieur à cinq minutes dans le futur **et au maximum 72 heures dans le passé** ; sinon le worker ne revendique aucun événement. Le cutover n'est pas une autorisation de rejouer l'historique. Si le déploiement ou le rollback dure au-delà de 72 heures, choisir un nouveau cutoff explicitement validé plutôt que de désactiver ce contrôle.

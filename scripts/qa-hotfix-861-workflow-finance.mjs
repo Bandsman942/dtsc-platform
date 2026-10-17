@@ -71,6 +71,7 @@ assert.ok(isolated.includes('workflowEventClaimCutover') && worker.includes('wor
 assert.ok(isolated.includes('AND "createdAt" >= ${cutover}') && worker.includes('AND "createdAt" >= ${cutover}'));
 assert.ok(cutoff.includes('VERCEL_ENV !== "production"'));
 assert.ok(cutoff.includes('WORKFLOW_EVENT_CUTOVER_AT'));
+assert.ok(cutoff.includes("72 * 60 * 60_000"), "production cutover older than 72h must fail closed");
 assert.ok(cutoff.includes('9999-12-31'), "Unconfigured production worker must not claim historic events");
 
 const supplierPayment = ENTERPRISE_WORKFLOW_TEMPLATES.find(x => x.code === "SUPPLIER_PAYMENT_APPROVAL_CONFIRMATION");
