@@ -3,6 +3,7 @@ import { EnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
 import { prisma } from "@/lib/prisma";
 import { addEnterpriseOperationalEvent, nullable, requireActiveEnterpriseMember } from "@/lib/enterprise/procurement/shared";
 import { normalizeEnterpriseSupplierName } from "@/lib/enterprise/procurement/supplier-normalization";
+import { synchronizeLinkedPersonIdentityTx } from "@/lib/enterprise/identity-links/person-projection";
 import {
   ensureSupplierCanonicalPartyTx,
   syncCanonicalPartyFromSupplierTx,
@@ -117,6 +118,7 @@ export async function updateEnterpriseSupplier(organizationId: string, supplierI
     if (updated.count !== 1) throw new EnterpriseCoreV2Error("Le fournisseur a été modifié par un autre utilisateur.", 409, "REVISION_CONFLICT");
     const current = await tx.enterpriseSupplier.findUniqueOrThrow({ where: { id: supplierId } });
     await syncCanonicalPartyFromSupplierTx(tx, organizationId, actorUserId, current, canonicalSharedChanges(input));
+    await synchronizeLinkedPersonIdentityTx(tx, organizationId, convergence.party.id, actorUserId);
     await addEnterpriseOperationalEvent(tx, {
       organizationId,
       entityType: "EnterpriseSupplier",

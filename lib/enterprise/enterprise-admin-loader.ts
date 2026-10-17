@@ -40,6 +40,7 @@ export async function getEnterpriseOrganizationForAdmin(organizationId: string) 
     select: {
       id: true,
       name: true,
+      slug: true,
       sector: true,
       sectorCode: true,
       country: true,

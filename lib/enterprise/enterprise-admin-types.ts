@@ -1,6 +1,7 @@
 export type EnterpriseAdminOrganization = {
   id: string;
   name: string;
+  slug: string | null;
   sector: string | null;
   sectorCode: string | null;
   country?: string | null;

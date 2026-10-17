@@ -19,6 +19,7 @@ import { Field, NativeSelect, statusLabel } from "@/components/enterprise/core-v
 import { enterpriseV2Mutation, useEnterpriseV2Collection } from "@/components/enterprise/core-v2/use-enterprise-v2-collection";
 import { enterpriseCoreT, type EnterpriseCoreKey } from "@/lib/enterprise-core-i18n";
 import { ENTERPRISE_SUPPLIER_CATEGORIES } from "@/lib/enterprise/procurement/constants";
+import { publishEnterpriseCrmUpdate } from "@/lib/enterprise/crm-sales/client-sync";
 
 type IdentityLink = { id: string; status: string; requestedRelationType: string; activatedAt: string | null; expiresAt: string | null };
 type SupplierContact = { id: string; name: string; title: string | null; email: string | null; phone: string | null; isPrimary: boolean; identityLink: IdentityLink | null };
@@ -155,9 +156,10 @@ export function EnterpriseSuppliersWorkspace({ organizationId, canManage, locale
       if (mode === "NEW" && partyType === "PERSON" && result.party && supplierIdentityChoice !== "MANUAL_ONLY" && supplierIdentityChoice !== "LINK_LATER") {
         try {
           if (!email) throw new Error(t("suppliers.invitationEmailRequired"));
-          await enterpriseV2Mutation(`/api/enterprise/${organizationId}/identity-link-invitations`, "POST", { email, displayName: result.party.displayName || result.party.legalName, businessPartyId: result.party.id, relationType: "SUPPLIER_REPRESENTATIVE", purpose: t("suppliers.invitationPurpose.individual") });
+          await enterpriseV2Mutation(`/api/enterprise/${organizationId}/identity-link-invitations`, "POST", { email, displayName: result.party.displayName || result.party.legalName, businessPartyId: result.party.id, relationType: "SUPPLIER", purpose: t("suppliers.invitationPurpose.individual") });
         } catch (error) { setWarning(error instanceof Error ? error.message : t("suppliers.invitationEmailRequired")); }
       }
+      publishEnterpriseCrmUpdate(organizationId, result.party?.id || businessPartyId || undefined);
       setCreateOpen(false); resetCreate(); setRefreshKey((value) => value + 1); setFeedback(t("suppliers.onboarding.created"));
     } catch (error) { setCreateError(error instanceof Error ? error.message : t("suppliers.onboarding.loadFailed")); }
     finally { setBusy(false); }
