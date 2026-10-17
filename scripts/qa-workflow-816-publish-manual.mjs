@@ -37,7 +37,10 @@ currentStatus = "RETIRED";
 await assert.rejects(updateWorkflowDefinition(currentOrganization, "wf-1", "member-a", { triggerEventType: "OTHER" }), (error) => error.code === "WORKFLOW_PUBLISHED_TRIGGER_IMMUTABLE");
 
 const activity = fs.readFileSync("lib/enterprise/enterprise-activity-workflows-loader.ts", "utf8");
-assert.match(activity, /status: "ACTIVE",\s*allowManualStart: true/);
+assert.match(activity, /status: "ACTIVE"/);
+assert.match(activity, /\{ allowManualStart: true \}/, "Manual-start definitions remain visible");
+assert.match(activity, /triggerEntityType: "EnterpriseRequest", triggerEventType: "ENTERPRISE_REQUEST_SUBMITTED"/, "Published internal-request workflows are additionally visible");
+assert.match(activity, /currentVersionId: \{ not: null \}/, "Only published workflow definitions are projected");
 assert.match(activity, /versions: \{ some: \{ status: "PUBLISHED" \} \}/);
 assert.ok(!activity.includes("prisma.enterpriseWorkflow.findMany"), "Activity must not revive legacy workflow engine");
 const route = fs.readFileSync("app/api/enterprise/[organizationId]/workflows/[id]/versions/[versionId]/publish/route.ts", "utf8");
