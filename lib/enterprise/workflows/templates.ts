@@ -87,32 +87,46 @@ function canonicalFinanceTemplate(input: {
   eventType: string;
   approvalTargets: Array<{ code: string; name: string; target: "EnterpriseSupplierInvoiceReview" | "EnterpriseSupplierInvoiceApproval" | "EnterprisePayment" | "EnterpriseCashSession" | "EnterpriseJournalEntry" | "EnterpriseFinancialClose" }>;
   targetUrl: string;
+  onlySupplierPayments?: boolean;
 }): EnterpriseWorkflowTemplate {
+  const stepOffset = input.onlySupplierPayments ? 1 : 0;
   const steps: WorkflowVersionInput["steps"] = [
     { code: "START", name: "Déclencheur", stepType: "START", position: 0, configuration: {} },
+    ...(input.onlySupplierPayments ? [{
+      code: "IS_SUPPLIER_PAYMENT", name: "Paiement fournisseur ?", stepType: "CONDITION" as const,
+      position: 1, configuration: { condition: { field: "paymentType", operator: "EQUALS" as const, value: "SUPPLIER_PAYMENT" } },
+    }] : []),
     ...input.approvalTargets.map((step, index) => ({
-      code: step.code, name: step.name, stepType: "CREATE_APPROVAL" as const, position: index + 1,
+      code: step.code, name: step.name, stepType: "CREATE_APPROVAL" as const, position: index + 1 + stepOffset,
       configuration: {
         assignment: { strategy: "DEPARTMENT_MANAGER" as const },
         canonicalApprovalTarget: step.target,
         titleTemplate: "Validation officielle de {{entity.reference}}",
       },
     })),
-    { code: "NOTIFY_APPROVED", name: "Notifier la décision", stepType: "NOTIFICATION", position: input.approvalTargets.length + 1,
+    { code: "NOTIFY_APPROVED", name: "Notifier la décision", stepType: "NOTIFICATION", position: input.approvalTargets.length + 1 + stepOffset,
       configuration: { recipient: { strategy: "ENTITY_CREATOR" }, titleTemplate: "Validation financière terminée",
         bodyTemplate: "{{entity.reference}} est approuvé. Les actions comptables suivantes restent à effectuer dans le module ERP par un utilisateur habilité.",
         targetUrl: input.targetUrl } },
-    { code: "NOTIFY_REJECTED", name: "Notifier le rejet", stepType: "NOTIFICATION", position: input.approvalTargets.length + 2,
+    { code: "NOTIFY_REJECTED", name: "Notifier le rejet", stepType: "NOTIFICATION", position: input.approvalTargets.length + 2 + stepOffset,
       configuration: { recipient: { strategy: "ENTITY_CREATOR" }, titleTemplate: "Validation financière rejetée",
         bodyTemplate: "{{entity.reference}} a été rejeté. Consultez son module ERP.", targetUrl: input.targetUrl } },
-    { code: "END_SUCCESS", name: "Fin approbation", stepType: "END", position: input.approvalTargets.length + 3,
+    { code: "END_SUCCESS", name: "Fin approbation", stepType: "END", position: input.approvalTargets.length + 3 + stepOffset,
       configuration: { outcome: "COMPLETED" } },
-    { code: "END_REJECTED", name: "Fin sur rejet", stepType: "END", position: input.approvalTargets.length + 4,
+    { code: "END_REJECTED", name: "Fin sur rejet", stepType: "END", position: input.approvalTargets.length + 4 + stepOffset,
       configuration: { outcome: "REJECTED" } },
+    ...(input.onlySupplierPayments ? [{
+      code: "END_OUT_OF_SCOPE", name: "Paiement hors périmètre", stepType: "END" as const,
+      position: input.approvalTargets.length + 5 + stepOffset, configuration: { outcome: "COMPLETED" as const },
+    }] : []),
   ];
   const transitions: WorkflowVersionInput["transitions"] = [
-    { fromStepCode: "START", toStepCode: input.approvalTargets[0].code, outcome: "DEFAULT", priority: 0 },
+    { fromStepCode: "START", toStepCode: input.onlySupplierPayments ? "IS_SUPPLIER_PAYMENT" : input.approvalTargets[0].code, outcome: "DEFAULT", priority: 0 },
   ];
+  if (input.onlySupplierPayments) transitions.push(
+    { fromStepCode: "IS_SUPPLIER_PAYMENT", toStepCode: input.approvalTargets[0].code, outcome: "TRUE", priority: 0 },
+    { fromStepCode: "IS_SUPPLIER_PAYMENT", toStepCode: "END_OUT_OF_SCOPE", outcome: "FALSE", priority: 0 },
+  );
   for (let i = 0; i < input.approvalTargets.length; i++) {
     const from = input.approvalTargets[i].code;
     const to = input.approvalTargets[i + 1]?.code || "NOTIFY_APPROVED";
@@ -156,6 +170,7 @@ const financeTemplates: EnterpriseWorkflowTemplate[] = [
     descriptionFr: "Suit la validation désignée. La confirmation du paiement exige l’action distincte d’un utilisateur autorisé dans Paiements.",
     descriptionEn: "Tracks designated payment approval. Confirmation requires a separate authorized finance actor.",
     entityType: "EnterprisePayment", eventType: "PAYMENT_SUBMIT",
+    onlySupplierPayments: true,
     approvalTargets: [{ code: "APPROVAL", name: "Valider le paiement", target: "EnterprisePayment" }],
     targetUrl: "/enterprise-modules/FINANCE_PAYMENTS",
   }),
