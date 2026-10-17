@@ -7,6 +7,8 @@ import { getEnterpriseActivityWorkflows } from "@/lib/enterprise/enterprise-acti
 import type { EnterpriseActivitiesDataset } from "@/lib/enterprise/enterprise-activities-types";
 import { getOrganizationEntitlements } from "@/lib/billing/entitlements";
 import { prisma } from "@/lib/prisma";
+import { getBusinessSubtypeForSector } from "@/lib/enterprise/business-subtype-registry";
+import { GAMING_INCOMPATIBLE_ACTIVITY_BLOCKS } from "@/lib/enterprise/enterprise-activity-form-contract";
 
 function toJson<T>(value: unknown): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -36,6 +38,11 @@ export async function getEnterpriseActivitiesDataset({
     return null;
   }
 
+  const subtypeSelection = await prisma.enterpriseBusinessSubtypeSelection.findUnique({
+    where: { organizationId }, select: { businessSubtypeCode: true },
+  });
+  const businessSubtype = getBusinessSubtypeForSector(organization.sectorCode, subtypeSelection?.businessSubtypeCode);
+  const gamingLounge = businessSubtype?.code === "GAMING_LOUNGE";
   const entitlements = await getOrganizationEntitlements(organizationId);
   if (!entitlements) {
     return null;
@@ -51,13 +58,30 @@ export async function getEnterpriseActivitiesDataset({
     getEnterpriseActivityWorkflows(organizationId),
   ]);
 
+  const gamingReferences = gamingLounge ? await (async () => {
+    const [stations, bookings, sessions, closes, parties] = await Promise.all([
+      prisma.enterpriseGamingStationProfile.findMany({ where: { organizationId, archivedAt: null }, select: { id: true, stationCode: true, displayName: true }, orderBy: { sortOrder: "asc" }, take: 100 }),
+      prisma.enterpriseGamingBooking.findMany({ where: { organizationId, archivedAt: null }, select: { id: true, reference: true }, orderBy: { createdAt: "desc" }, take: 100 }),
+      prisma.enterpriseGamingSession.findMany({ where: { organizationId, archivedAt: null }, select: { id: true, reference: true }, orderBy: { createdAt: "desc" }, take: 100 }),
+      prisma.enterpriseGamingDailyClose.findMany({ where: { organizationId }, select: { id: true, reference: true }, orderBy: { submittedAt: "desc" }, take: 50 }),
+      prisma.enterpriseBusinessParty.findMany({ where: { organizationId, archivedAt: null, status: "ACTIVE", partyType: "PERSON" }, select: { id: true, name: true }, orderBy: { name: "asc" }, take: 100 }),
+    ]);
+    return {
+      gamingStations: stations.map((item) => ({ value: item.id, label: `${item.stationCode} · ${item.displayName || item.stationCode}` })),
+      gamingBookings: bookings.map((item) => ({ value: item.id, label: item.reference })),
+      gamingSessions: sessions.map((item) => ({ value: item.id, label: item.reference })),
+      gamingCloses: closes.map((item) => ({ value: item.id, label: item.reference })),
+      businessParties: parties.map((item) => ({ value: item.id, label: item.name })),
+    };
+  })() : {};
   return toJson<EnterpriseActivitiesDataset>({
-    organization,
-    blocks,
+    organization: { ...organization, businessSubtypeCode: businessSubtype?.code || null, businessSubtypeLabelFr: businessSubtype?.labelFr || null, businessSubtypeLabelEn: businessSubtype?.labelEn || null },
+    blocks: gamingLounge ? blocks.filter((block) => !GAMING_INCOMPATIBLE_ACTIVITY_BLOCKS.has(block.blockCode)) : blocks,
     requests,
     members,
     sectorRecords,
     workflows,
+    gamingReferences,
     entitlements: {
       planCode: entitlements.planCode,
       planLabel: entitlements.planLabel,
