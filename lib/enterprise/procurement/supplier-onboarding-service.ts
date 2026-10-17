@@ -9,7 +9,6 @@ import { supplierRoleStatus } from "@/lib/enterprise/procurement/supplier-party-
 import { addEnterpriseOperationalEvent, nullable, requireActiveEnterpriseMember } from "@/lib/enterprise/procurement/shared";
 import { prisma } from "@/lib/prisma";
 
-const optionalText = (max = 5000) => z.string().trim().max(max).optional().or(z.literal(""));
 const supplierExtensionSchema = z.object({
   category: z.enum(ENTERPRISE_SUPPLIER_CATEGORIES).optional().or(z.literal("")),
   status: z.enum(ENTERPRISE_SUPPLIER_STATUSES).default("PROSPECT"),
