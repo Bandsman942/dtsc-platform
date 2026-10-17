@@ -41,13 +41,19 @@ export async function GET(req: Request, { params }: Params) {
     select: { id: true, content: true },
   }) : [];
   const textById = new Map(comments.map((item) => [item.id, item.content]));
+  const actorIds = [...new Set(visible.map((event) => event.actorUserId))];
+  const actors = actorIds.length ? await prisma.user.findMany({
+    where: { id: { in: actorIds }, organizationMemberships: { some: { organizationId } } },
+    select: { id: true, name: true },
+  }) : [];
+  const nameById = new Map(actors.map((actor) => [actor.id, actor.name]));
   const timeline = visible.map((event) => {
     const metadata = event.metadataJson;
     const commentId = metadata && typeof metadata === "object" && !Array.isArray(metadata) && typeof metadata.commentId === "string" ? metadata.commentId : null;
     return {
       id: event.id, eventType: event.eventType, summary: event.summary,
       fromStatus: event.fromStatus, toStatus: event.toStatus,
-      actorUserId: event.actorUserId, createdAt: event.createdAt,
+      actorUserId: event.actorUserId, actorLabel: nameById.get(event.actorUserId) || null, createdAt: event.createdAt,
       metadataJson: event.eventType === "OPPORTUNITY_UPDATED" ? event.metadataJson : null,
       note: commentId ? textById.get(commentId) || null : null,
     };
