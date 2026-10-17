@@ -41,7 +41,7 @@ for (const token of ["canonicalSectorActivityDestination(sectorCode, block.block
 for (const token of ["membership.organization.sectorCode", "canonicalSectorActivityDestination(access.sectorCode, blockCode)", "moduleCode: handoff?.moduleCode || block.targetModuleCode"]) assert.ok(access.includes(token), token);
 for (const token of [
   "getEnterpriseActivityBlocks(organizationId, userId, organization.sectorCode)",
-  "capabilities.canRead", "capabilities.canCreate",
+  "capabilities.canRead", "capabilities.canCreate", "capabilities.canWrite",
   "resolveEnterpriseModuleRoute(destination.moduleCode)",
   "isEnterpriseModuleNavigable(route.definition)",
   "resolveEnterpriseModuleCapabilities({ userId, organizationId, moduleCode: destination.moduleCode })",
