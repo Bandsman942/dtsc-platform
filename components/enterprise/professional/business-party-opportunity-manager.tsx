@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Clock3, FileText, MessageSquareText, RefreshCcw, Save, TrendingUp } from "lucide-react";
 import { currencyChoices, Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { ProfessionalError, ProfessionalFormSection, professionalMutation } from "@/components/enterprise/professional/professional-erp-ui";
+import { publishEnterpriseCrmUpdate } from "@/lib/enterprise/crm-sales/client-sync";
 import { professionalErpDate, professionalErpDateTime, professionalErpEnumLabel, professionalErpMoney, professionalErpT, type ProfessionalErpLocale } from "@/components/enterprise/professional/professional-erp-i18n";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -86,16 +87,19 @@ export function BusinessPartyOpportunityManager({
     return () => { active = false; };
   }, [opportunityId, reload]);
 
-  async function mutate(action: () => Promise<unknown>, message: string) {
-    if (!opportunityId || busy) return;
+  async function mutate(action: () => Promise<unknown>, message: string): Promise<boolean> {
+    if (!opportunityId || busy) return false;
     setBusy(true); setError(""); setSuccess("");
     try {
       await action();
       await reload(opportunityId);
       setSuccess(message);
+      publishEnterpriseCrmUpdate(organizationId, businessPartyId);
       onChanged();
+      return true;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t("common.updateFailed"));
+      return false;
     } finally { setBusy(false); }
   }
 
@@ -103,7 +107,7 @@ export function BusinessPartyOpportunityManager({
     event.preventDefault();
     if (!detail) return;
     const data = new FormData(event.currentTarget);
-    await mutate(() => professionalMutation(`/api/enterprise/${organizationId}/opportunities/${detail.opportunity.id}`, {
+    const saved = await mutate(() => professionalMutation(`/api/enterprise/${organizationId}/opportunities/${detail.opportunity.id}`, {
       revision: detail.opportunity.revision,
       name: String(data.get("name") || "").trim(),
       description: String(data.get("description") || "") || null,
@@ -115,16 +119,16 @@ export function BusinessPartyOpportunityManager({
       nextAction: String(data.get("nextAction") || "") || null,
       nextActionAt: String(data.get("nextActionAt") || "") || null,
     }, "PATCH"), t("crm.opportunityManaged"));
-    setEditOpen(false);
+    if (saved) setEditOpen(false);
   }
 
   async function addNote(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!detail || !note.trim()) return;
-    await mutate(() => professionalMutation(`/api/enterprise/${organizationId}/opportunities/${detail.opportunity.id}/notes`, {
+    const saved = await mutate(() => professionalMutation(`/api/enterprise/${organizationId}/opportunities/${detail.opportunity.id}/notes`, {
       content: note.trim(), revision: detail.opportunity.revision,
     }), t("crm.opportunityNoteSaved"));
-    setNote("");
+    if (saved) setNote("");
   }
 
   async function applyStage() {
@@ -132,10 +136,10 @@ export function BusinessPartyOpportunityManager({
     if (stage === "LOST" && lostReason.trim().length < 2) {
       setError(t("crm.opportunityLostReasonRequired")); return;
     }
-    await mutate(() => professionalMutation(`/api/enterprise/${organizationId}/opportunities/${detail.opportunity.id}/transition`, {
+    const saved = await mutate(() => professionalMutation(`/api/enterprise/${organizationId}/opportunities/${detail.opportunity.id}/transition`, {
       targetStatus: stage, lostReason: stage === "LOST" ? lostReason.trim() : null, revision: detail.opportunity.revision,
     }), t("crm.opportunityStageSaved"));
-    setStage(""); setLostReason("");
+    if (saved) { setStage(""); setLostReason(""); }
   }
 
   const opportunity = detail?.opportunity;
