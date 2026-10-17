@@ -11,7 +11,8 @@ export default async function EnterpriseLinksPage({
   searchParams: Promise<{ token?: string; link?: string; view?: string; code?: string }>;
 }) {
   const user = await requireUser();
-  const { token, link, view } = await searchParams;
+  const { token, link, view, code } = await searchParams;
+  const initialOrganizationCode = code && /^[a-z0-9]+(?:-[a-z0-9]+)*$/i.test(code) && code.length <= 120 ? code.toLowerCase() : "";
   const [links, invitation] = await Promise.all([
     listUserIdentityLinks(user.id),
     token
@@ -35,7 +36,8 @@ export default async function EnterpriseLinksPage({
         <EnterpriseIdentityUserPanel
           token={token}
           focusedLinkId={link}
-          initialView={view}
+          initialView={initialOrganizationCode ? "requests" : view}
+          initialOrganizationCode={initialOrganizationCode}
           invitation={
             invitation
               ? {
