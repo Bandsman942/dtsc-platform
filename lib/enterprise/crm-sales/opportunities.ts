@@ -107,7 +107,7 @@ export async function transitionEnterpriseOpportunity(
       actorUserId,
       fromStatus: opportunity.status,
       toStatus: input.targetStatus,
-      metadataJson: { nextActionAt: input.nextActionAt?.toISOString() || null },
+      metadataJson: { nextActionAt: input.nextActionAt?.toISOString() || null, lostReason: input.targetStatus === "LOST" ? input.lostReason || null : null },
     });
     return tx.enterpriseOpportunity.findUniqueOrThrow({ where: { id: opportunity.id } });
   });
@@ -148,11 +148,12 @@ export async function updateEnterpriseOpportunity(
       data: { ...candidate, revision: { increment: 1 }, updatedByUserId: actorUserId },
     });
     if (updated.count !== 1) throw new EnterpriseDomainConflictError();
-    const changed = Object.keys(candidate).filter((field) => {
-      const previous = before[field as keyof typeof before];
-      const next = candidate[field as keyof typeof candidate];
-      return String(previous ?? "") !== String(next ?? "");
-    });
+    const serialized = (value: unknown) => value == null ? null : value instanceof Date ? value.toISOString() : String(value);
+    const changes = Object.fromEntries(
+      Object.entries(candidate)
+        .filter(([field, next]) => serialized(before[field as keyof typeof before]) !== serialized(next))
+        .map(([field, next]) => [field, { before: serialized(before[field as keyof typeof before]), after: serialized(next) }]),
+    );
     await publishEnterpriseEvent(tx, {
       organizationId,
       entityType: "EnterpriseOpportunity",
@@ -162,7 +163,7 @@ export async function updateEnterpriseOpportunity(
       actorUserId,
       fromStatus: before.status,
       toStatus: before.status,
-      metadataJson: { changedFields: changed, beforeRevision: input.revision, afterRevision: input.revision + 1 },
+      metadataJson: { changedFields: Object.keys(changes), changes, beforeRevision: input.revision, afterRevision: input.revision + 1 },
     });
     return tx.enterpriseOpportunity.findFirstOrThrow({ where: { id: opportunityId, organizationId, archivedAt: null } });
   });
