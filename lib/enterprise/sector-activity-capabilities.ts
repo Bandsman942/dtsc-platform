@@ -65,6 +65,10 @@ const F: Record<string, BusinessActivityField> = {
 };
 
 const CAPABILITIES: Record<string, Record<string, SectorActivityCapability>> = {
+  OTHER: {
+    REQUEST_VALIDATION: { mode: "REQUEST", fields: [F.reference, F.reason, F.action] },
+    REPORT_PROBLEM: { mode: "REQUEST", fields: [F.eventDate, F.severity, F.incident, F.action] },
+  },
   INSURANCE: {
     SUBMIT_CLAIM_FILE: { mode: "UNAVAILABLE", fields: [], reasonFr: "Le dépôt d'un dossier sinistre nécessite un module documentaire sécurisé et un rattachement vérifié.", reasonEn: "Claim files require secure documents and validated case linking." },
     REQUEST_COVERAGE_VALIDATION: { mode: "REQUEST", fields: [F.coverageRef, F.provider, F.reason, F.action] },
