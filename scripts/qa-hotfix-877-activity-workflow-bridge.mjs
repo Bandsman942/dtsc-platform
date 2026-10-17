@@ -31,5 +31,6 @@ for(const v of ["sourceActivityId","createdById: session.userId","assignedToUser
 assert(workflowUI.includes('parameters.get("run") || parameters.get("runId")') && workflowUI.includes('workCoordinationDeepLink("ACTIVITY", runDetail.sourceActivityId)'),"Workflow UI must follow bidirectional deep links");
 assert(activitiesPage.includes("dataset.requests.some((item) => item.id === activity)"),"Deep link may target only the request visible to current user");
 assert(bridge.includes('viewAllRuns ? "NOT_STARTED" : "LIMITED_ACCESS"') && panels.includes('canonical.workflowState === "LIMITED_ACCESS"'), "Do not infer absence of runs from permission-filtered workflow results");
+assert(workflowDetail.includes("canSeeAllActivities") && workflowDetail.includes("access.membership.role"),"Reverse activity link must be scoped to Activities roles, not workflow-wide visibility");
 assert(workflowAccess.includes("canViewAllRuns"),"Workflow visibility must use canonical ACL");
 console.log("Hotfix #877 canonical Activities ↔ Internal Requests ↔ Workflow bridge: PASS");
