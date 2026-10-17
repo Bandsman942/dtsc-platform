@@ -354,5 +354,22 @@
   "reports.snapshot.actual": "Actual",
   "reports.snapshot.available": "Available",
   "reports.snapshot.line": "Line",
-  "status.GENERATED": "Generated"
+  "status.GENERATED": "Generated",
+  "suppliers.category.select": "Choose a category",
+  "suppliers.category.GOODS": "Goods and merchandise",
+  "suppliers.category.SERVICES": "Professional services",
+  "suppliers.category.EQUIPMENT": "Equipment and supplies",
+  "suppliers.category.IT": "IT and digital",
+  "suppliers.category.LOGISTICS": "Transport and logistics",
+  "suppliers.category.OTHER": "Other suppliers",
+  "suppliers.detail.website": "Website",
+  "suppliers.detail.address": "Address",
+  "suppliers.detail.taxIdentifier": "Tax identifier",
+  "suppliers.detail.registrationId": "Registration number",
+  "suppliers.detail.notes": "Notes",
+  "suppliers.detail.identity": "Supplier identity",
+  "suppliers.detail.primaryEmail": "Email address",
+  "suppliers.detail.primaryPhone": "Phone number",
+  "suppliers.detail.city": "City",
+  "suppliers.detail.country": "Country"
 }
