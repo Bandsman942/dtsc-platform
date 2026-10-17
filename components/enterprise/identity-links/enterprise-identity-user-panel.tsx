@@ -318,7 +318,7 @@ export function EnterpriseIdentityUserPanel({
         open={Boolean(detailTarget)}
         onClose={() => setDetailTarget(null)}
         title={detailOrganization}
-        description={`${getEnterpriseIdentityRelationLabel(detailRelationType as EnterpriseIdentityRelationType, "fr")} · ${detailPerson}`}
+        description={`${detailBusinessRoleLabel && detailRelationType === "OTHER" ? `${detailBusinessRoleLabel} (rôle métier) · Autre relation (consentement)` : getEnterpriseIdentityRelationLabel(detailRelationType as EnterpriseIdentityRelationType, "fr")} · ${detailPerson}`}
         actions={detailActions}
         actionLabel="Actions de la relation"
       >
