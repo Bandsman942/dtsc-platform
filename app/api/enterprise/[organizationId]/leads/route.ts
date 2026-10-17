@@ -34,7 +34,7 @@ export async function GET(req: Request, { params }: Params) {
     ...(ownerUserId ? { ownerUserId } : {}),
   };
   const [items, total, fresh, qualified, converted, lost] = await Promise.all([
-    prisma.enterpriseLead.findMany({ where, orderBy: [{ createdAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { businessParty: { select: { id: true, code: true, legalName: true, displayName: true, partyType: true } } } }),
+    prisma.enterpriseLead.findMany({ where, orderBy: [{ createdAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { businessParty: { select: { id: true, code: true, legalName: true, displayName: true, partyType: true, primaryEmail: true, primaryPhone: true } } } }),
     prisma.enterpriseLead.count({ where }),
     prisma.enterpriseLead.count({ where: { organizationId, archivedAt: null, status: "NEW" } }),
     prisma.enterpriseLead.count({ where: { organizationId, archivedAt: null, status: "QUALIFIED" } }),
@@ -42,7 +42,19 @@ export async function GET(req: Request, { params }: Params) {
     prisma.enterpriseLead.count({ where: { organizationId, archivedAt: null, status: "LOST" } }),
   ]);
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "leads", page } });
-  return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { fresh, qualified, converted, lost }, canManage: access.canManage, canWrite: access.canWrite });
+  // Canonical BusinessParty is authoritative for current CRM identity details.
+  // Preserve the lead snapshot in storage for its historic commercial context.
+  const currentItems = items.map((lead) => ({
+    ...lead,
+    ...(lead.businessParty ? {
+      legalName: lead.businessParty.legalName,
+      displayName: lead.businessParty.displayName,
+      partyType: lead.businessParty.partyType,
+      email: lead.businessParty.primaryEmail,
+      phone: lead.businessParty.primaryPhone,
+    } : {}),
+  }));
+  return NextResponse.json({ items: currentItems, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { fresh, qualified, converted, lost }, canManage: access.canManage, canWrite: access.canWrite });
 }
 
 export async function POST(req: Request, { params }: Params) {

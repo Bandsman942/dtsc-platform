@@ -7,6 +7,7 @@ const ok = (condition, message) => { if (!condition) failures.push(message); };
 
 const masterService = read("lib/enterprise/master-data/service.ts");
 const businessPartyRoute = read("app/api/enterprise/[organizationId]/business-parties/route.ts");
+const masterDataService = read("lib/enterprise/master-data/service.ts");
 const commonHttp = read("lib/enterprise/common/http.ts");
 const crmLeads = read("lib/enterprise/crm-sales/leads.ts");
 const contractsService = read("lib/enterprise/crm-sales/contracts.ts");
@@ -90,7 +91,16 @@ ok(backfill.includes("if (skipped > 0) process.exitCode = 2"), "Backfill: tout c
 ok(businessPartyRoute.includes('moduleCode: "CRM_CUSTOMERS"') && businessPartyRoute.includes('action: "write"'), "RBAC: Tiers doit conserver son accès CRM_CUSTOMERS write.");
 ok(supplierRoute.includes('moduleCode: "SUPPLIERS_PURCHASES"') && supplierRoute.includes('action: "write"'), "RBAC: Fournisseurs doit conserver son accès SUPPLIERS_PURCHASES write.");
 ok(supplierLinkRoute.includes("convergeEnterpriseSupplierParty"), "Procurement: la route de liaison doit passer par la convergence canonique.");
-ok(businessPartyRoute.includes("refreshLinkedSupplierSnapshotFromParty"), "Inter-modules: les snapshots Procurement liés doivent suivre le tiers canonique.");
+ok(supplierProjection.includes("refreshLinkedSupplierSnapshotFromPartyTx") && masterDataService.includes("refreshLinkedSupplierSnapshotFromPartyTx"), "Inter-modules: projection fournisseur et tiers doivent être synchronisés dans la même transaction.");
+ok(masterDataService.includes("syncCanonicalPrimaryContactTx") && masterDataService.includes("syncCanonicalPrimaryAddressTx"), "Tiers: coordonnées et adresse principale doivent suivre le PATCH canonique.");
+ok(masterDataService.includes('await refreshLinkedSupplierSnapshotFromPartyTx(tx, organizationId, partyId, actorUserId)'), "Tiers: projection fournisseur ne doit pas être retardée après commit.");
+ok(!businessPartyRoute.includes("refreshLinkedSupplierSnapshotFromParty(organizationId"), "Tiers: interdiction de masquer un échec de projection hors transaction.");
+const supplierCategories = read("lib/enterprise/procurement/constants.ts");
+const supplierWorkspace = read("components/enterprise/core-v2/enterprise-suppliers-workspace.tsx");
+const supplierListing = read("app/api/enterprise/[organizationId]/suppliers/route.ts");
+ok(supplierCategories.includes("ENTERPRISE_SUPPLIER_CATEGORIES") && supplierWorkspace.includes("NativeSelect value={category}"), "Fournisseur: la catégorie doit être une sélection contrôlée.");
+ok(supplierListing.includes("canonicalBySupplier") && supplierListing.includes("businessPartyId"), "Relation DTSC: fournisseur et tiers doivent projeter la même liaison canonique.");
+
 
 for (const marker of ["model EnterpriseBusinessParty", "model EnterpriseBusinessPartyRole", "model EnterpriseBusinessPartyContact", "model EnterpriseBusinessPartyAddress"]) {
   ok(partySchema.includes(marker), `Prisma: modèle canonique manquant ${marker}.`);

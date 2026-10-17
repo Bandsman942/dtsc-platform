@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
+import type { Prisma } from "@prisma/client";
 import type { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { refreshLinkedSupplierSnapshotFromPartyTx } from "@/lib/enterprise/master-data/supplier-projection";
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import type {
   businessPartyCreateSchema,
@@ -361,6 +363,96 @@ export async function findEnterpriseBusinessPartyDuplicates(organizationId: stri
 }
 
 
+
+async function syncCanonicalPrimaryContactTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  businessPartyId: string,
+  actorUserId: string,
+  contactType: "EMAIL" | "PHONE",
+  rawValue: string | null,
+) {
+  const nextValue = rawValue?.trim() || null;
+  const where = { organizationId, businessPartyId, contactType, archivedAt: null };
+  const current = await tx.enterpriseBusinessPartyContact.findFirst({
+    where: { ...where, isPrimary: true, status: "ACTIVE" },
+    orderBy: [{ createdAt: "asc" }],
+  });
+  if (!nextValue) {
+    if (current) await tx.enterpriseBusinessPartyContact.update({
+      where: { id: current.id },
+      data: { isPrimary: false, status: "INACTIVE", archivedAt: new Date(), revision: { increment: 1 } },
+    });
+    return;
+  }
+  const normalizedValue = normalizeContact(nextValue);
+  // The uniqueness constraint also includes historical/archived contacts.
+  const matching = await tx.enterpriseBusinessPartyContact.findFirst({
+    where: { organizationId, businessPartyId, contactType, normalizedValue },
+  });
+  if (current && matching && current.id !== matching.id) {
+    await tx.enterpriseBusinessPartyContact.update({
+      where: { id: current.id },
+      data: { isPrimary: false, status: "INACTIVE", archivedAt: new Date(), revision: { increment: 1 } },
+    });
+  }
+  const selected = matching || current;
+  let selectedId = selected?.id || "";
+  if (selected) {
+    await tx.enterpriseBusinessPartyContact.update({
+      where: { id: selected.id },
+      data: { value: nextValue, normalizedValue, isPrimary: true, status: "ACTIVE", archivedAt: null, ...(selected.normalizedValue !== normalizedValue ? { isVerified: false } : {}), revision: { increment: 1 } },
+    });
+  } else {
+    const created = await tx.enterpriseBusinessPartyContact.create({
+      data: { organizationId, businessPartyId, contactType, value: nextValue, normalizedValue, isPrimary: true, label: contactType === "EMAIL" ? "E-mail principal" : "Téléphone principal", createdByUserId: actorUserId },
+    });
+    selectedId = created.id;
+  }
+  await tx.enterpriseBusinessPartyContact.updateMany({
+    where: { ...where, isPrimary: true, id: { not: selectedId } },
+    data: { isPrimary: false },
+  });
+}
+
+async function syncCanonicalPrimaryAddressTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  businessPartyId: string,
+  actorUserId: string,
+  address: NonNullable<BusinessPartyUpdateInput["primaryAddress"]> | null,
+) {
+  const current = await tx.enterpriseBusinessPartyAddress.findFirst({
+    where: { organizationId, businessPartyId, archivedAt: null, status: "ACTIVE", isPrimary: true },
+    orderBy: [{ createdAt: "asc" }],
+  });
+  if (!address) {
+    if (current) await tx.enterpriseBusinessPartyAddress.update({
+      where: { id: current.id },
+      data: { isPrimary: false, status: "INACTIVE", archivedAt: new Date(), revision: { increment: 1 } },
+    });
+    return;
+  }
+  const data = {
+    addressType: address.addressType,
+    label: address.label || null,
+    line1: address.line1,
+    line2: address.line2 || null,
+    city: address.city || null,
+    stateProvince: address.stateProvince || null,
+    postalCode: address.postalCode || null,
+    countryCode: address.countryCode || null,
+    isPrimary: true,
+    status: "ACTIVE",
+    archivedAt: null,
+  };
+  if (current) {
+    await tx.enterpriseBusinessPartyAddress.update({ where: { id: current.id }, data: { ...data, revision: { increment: 1 } } });
+  } else {
+    await tx.enterpriseBusinessPartyAddress.create({ data: { ...data, organizationId, businessPartyId, createdByUserId: actorUserId } });
+  }
+}
+
 export async function updateEnterpriseBusinessParty(organizationId: string, partyId: string, actorUserId: string, input: BusinessPartyUpdateInput) {
   return prisma.$transaction(async (tx) => {
     const existing = await tx.enterpriseBusinessParty.findFirst({ where: { id: partyId, organizationId, archivedAt: null } });
@@ -378,6 +470,12 @@ export async function updateEnterpriseBusinessParty(organizationId: string, part
       },
     });
     if (updated.count !== 1) throw new Error("REVISION_CONFLICT");
+
+    if (input.primaryEmail !== undefined) await syncCanonicalPrimaryContactTx(tx, organizationId, partyId, actorUserId, "EMAIL", input.primaryEmail);
+    if (input.primaryPhone !== undefined) await syncCanonicalPrimaryContactTx(tx, organizationId, partyId, actorUserId, "PHONE", input.primaryPhone);
+    if (input.primaryAddress !== undefined) await syncCanonicalPrimaryAddressTx(tx, organizationId, partyId, actorUserId, input.primaryAddress);
+    await refreshLinkedSupplierSnapshotFromPartyTx(tx, organizationId, partyId, actorUserId);
+
     await tx.enterpriseOperationalEvent.create({ data: { organizationId, entityType: "EnterpriseBusinessParty", entityId: partyId, eventType: "BUSINESS_PARTY_UPDATED", summary: `Tiers ${existing.code} modifié`, actorUserId, fromStatus: existing.status, toStatus: input.status || existing.status } });
     return tx.enterpriseBusinessParty.findUniqueOrThrow({ where: { id: partyId }, include: { roles: true, contacts: true, addresses: true } });
   });
