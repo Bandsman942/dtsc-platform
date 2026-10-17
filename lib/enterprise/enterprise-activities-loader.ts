@@ -9,6 +9,7 @@ import { getOrganizationEntitlements } from "@/lib/billing/entitlements";
 import { prisma } from "@/lib/prisma";
 import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
 import { getBusinessSubtypeForSector } from "@/lib/enterprise/business-subtype-registry";
+import { canAccessEnterpriseActivity } from "@/lib/enterprise-sector-templates";
 import { GAMING_ACTIVITY_BLOCK_COPY, GAMING_INCOMPATIBLE_ACTIVITY_BLOCKS } from "@/lib/enterprise/enterprise-activity-form-contract";
 
 function toJson<T>(value: unknown): T {
@@ -59,6 +60,13 @@ export async function getEnterpriseActivitiesDataset({
     getEnterpriseActivityWorkflows(organizationId),
   ]);
 
+  // A readable activity is not necessarily submittable; never show an action
+  // which the server will refuse for its missing submit permission.
+  const eligibleBlocks = (await Promise.all(blocks.map(async (block) => ({
+    block,
+    allowed: await canAccessEnterpriseActivity(userId, organizationId, block.blockCode, "submit"),
+  })))).filter((item) => item.allowed).map((item) => item.block);
+
   const gamingReferences = gamingLounge ? await (async () => {
     // Do not leak private Gaming/CRM references to users who may submit a
     // collaborative request but do not have read access to the target module.
@@ -87,9 +95,9 @@ export async function getEnterpriseActivitiesDataset({
   return toJson<EnterpriseActivitiesDataset>({
     organization: { ...organization, businessSubtypeCode: businessSubtype?.code || null, businessSubtypeLabelFr: businessSubtype?.labelFr || null, businessSubtypeLabelEn: businessSubtype?.labelEn || null },
     blocks: gamingLounge
-      ? blocks.filter((block) => !GAMING_INCOMPATIBLE_ACTIVITY_BLOCKS.has(block.blockCode))
+      ? eligibleBlocks.filter((block) => !GAMING_INCOMPATIBLE_ACTIVITY_BLOCKS.has(block.blockCode))
         .map((block) => ({ ...block, ...(GAMING_ACTIVITY_BLOCK_COPY[block.blockCode] || {}) }))
-      : blocks,
+      : eligibleBlocks,
     requests,
     members,
     sectorRecords,
