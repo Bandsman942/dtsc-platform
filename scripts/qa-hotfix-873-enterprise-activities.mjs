@@ -19,4 +19,8 @@ for (const key of ["GAMING_ACTIVITY_REFERENCE_MODULE_CODES", 'businessParties: "
 for (const key of ["stationAccess.canRead", "bookingAccess.canRead", "sessionAccess.canRead", "closeAccess.canRead", "customerAccess.canRead", "resolveEnterpriseModuleCapabilities"]) if (!loader.includes(key)) fail("Private references must be filtered by read permissions: " + key);
 for (const key of ["GAMING_ACTIVITY_REFERENCE_MODULE_CODES[field.source]", "capabilities.canRead", "ENTERPRISE_ACTIVITY_REFERENCE_FORBIDDEN", 'roleCode: "CUSTOMER"']) if (!route.includes(key)) fail("Reference permissions must be checked again on submit: " + key);
 if (!panel.includes('response.ok ? "success" : "error"') || !moduleUi.includes('tone = "error"')) fail("Success and failure toasts must use explicit outcome, independent of locale");
+for (const block of ["CONFIRM_BOOKING", "REPORT_ROOM_SERVICE_PROBLEM", "SUBMIT_CASH_REPORT", "REPORT_SECTOR_INCIDENT"]) {
+  if (!contract.includes('GAMING_ACTIVITY_BLOCK_COPY') || !loader.includes("GAMING_ACTIVITY_BLOCK_COPY[block.blockCode]")) fail("Gaming labels must override inherited hospitality copy");
+}
+if (!route.includes(String.raw`/^\d{4}-\d{2}-\d{2}$/`)) fail("Date validation must use a digit regex rather than a literal backslash");
 console.log("Hotfix #873 enterprise activity form contract: PASS");
