@@ -1,3 +1,9 @@
+## 2026-10-18 — Issue #878 (vague 1) : Activités vers les vrais modules Temps et Livrables
+
+- Raccordement exclusif des deux anciens blocs `PROFESSIONAL_SERVICES.DECLARE_TIME_WORKED` et `PROFESSIONAL_SERVICES.SUBMIT_DELIVERABLE` vers `TIME_ATTENDANCE` et `TIME_DELIVERABLES` après vérification du module, de l'entitlement et des permissions.
+- Ouverture des vrais formulaires Timesheets/Livrables seulement lorsque leurs propres API autorisent l'écriture ; pas de création implicite, retour 422 maintenu dans l'ancien POST Activités.
+- 12 opérations restantes inchangées et suivies dans #878. QA `qa:hotfix-878-handoffs`, documentation et OWNER_E2E requis avant toute livraison Production.
+
 ## 2026-10-17 — Hotfix #876 : contrats explicites des Activités sectorielles
 
 - Audit de 94 actions historiques et matrice de couverture documentée : 60 demandes sectorielles explicites, 14 opérations non conformes bloquées, 6 Hôtellerie/Gaming et 14 actions médicales/Pharmacie/clinique préservées ou filtrées.
