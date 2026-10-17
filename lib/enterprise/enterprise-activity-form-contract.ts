@@ -51,7 +51,7 @@ const gaming: Record<string, BusinessActivityField[]> = {
   REQUEST_OPERATION_VALIDATION: [session,station,requested],
   REQUEST_RESOURCE: [station,f({name:"resourceType",label:"Ressource pour le poste",labelEn:"Station resource",placeholder:"Console, manette, écran, maintenance...",placeholderEn:"Console, controller, display, maintenance...",required:true}),quantity,requested],
   UPDATE_SECTOR_INDICATOR: [period,f({name:"indicatorName",label:"Indicateur Gaming",labelEn:"Gaming indicator",placeholder:"Sessions, occupation, disponibilité...",placeholderEn:"Sessions, occupancy, availability...",required:true}),f({name:"proposedValue",label:"Valeur proposée",labelEn:"Suggested value",placeholder:"Valeur et unité",placeholderEn:"Value and unit",required:true}),requested],
-  CONFIRM_BOOKING: [booking,station,requested],
+  CONFIRM_BOOKING: [{...booking, required: true},station,requested],
   REPORT_CUSTOMER_INCIDENT: [party,booking,station,date,priority,issue],
   SUBMIT_CASH_REPORT: [period,closing,observed,recommendations],
   REPORT_ROOM_SERVICE_PROBLEM: [station,priority,issue,requested],
