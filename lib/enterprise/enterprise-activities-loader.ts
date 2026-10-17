@@ -64,14 +64,14 @@ export async function getEnterpriseActivitiesDataset({
       prisma.enterpriseGamingBooking.findMany({ where: { organizationId, archivedAt: null }, select: { id: true, reference: true }, orderBy: { createdAt: "desc" }, take: 100 }),
       prisma.enterpriseGamingSession.findMany({ where: { organizationId, archivedAt: null }, select: { id: true, reference: true }, orderBy: { createdAt: "desc" }, take: 100 }),
       prisma.enterpriseGamingDailyClose.findMany({ where: { organizationId }, select: { id: true, reference: true }, orderBy: { submittedAt: "desc" }, take: 50 }),
-      prisma.enterpriseBusinessParty.findMany({ where: { organizationId, archivedAt: null, status: "ACTIVE", partyType: "PERSON" }, select: { id: true, name: true }, orderBy: { name: "asc" }, take: 100 }),
+      prisma.enterpriseBusinessParty.findMany({ where: { organizationId, archivedAt: null, status: "ACTIVE", partyType: "PERSON" }, select: { id: true, legalName: true, displayName: true }, orderBy: { legalName: "asc" }, take: 100 }),
     ]);
     return {
       gamingStations: stations.map((item) => ({ value: item.id, label: `${item.stationCode} · ${item.displayName || item.stationCode}` })),
       gamingBookings: bookings.map((item) => ({ value: item.id, label: item.reference })),
       gamingSessions: sessions.map((item) => ({ value: item.id, label: item.reference })),
       gamingCloses: closes.map((item) => ({ value: item.id, label: item.reference })),
-      businessParties: parties.map((item) => ({ value: item.id, label: item.name })),
+      businessParties: parties.map((item) => ({ value: item.id, label: item.displayName || item.legalName })),
     };
   })() : {};
   return toJson<EnterpriseActivitiesDataset>({
