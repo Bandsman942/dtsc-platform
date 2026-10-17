@@ -6,6 +6,7 @@ const studio = read("components/enterprise/core-v2/workflow-visual-studio.tsx");
 const api = read("app/api/enterprise/[organizationId]/workflows/[id]/versions/[versionId]/route.ts");
 const members = read("app/api/enterprise/[organizationId]/workflows/[id]/assignees/route.ts");
 const sources = read("app/api/enterprise/[organizationId]/workflow-runs/sources/route.ts");
+const sourceOptions = read("lib/enterprise/workflows/manual-source-options.ts");
 const resolver = read("lib/enterprise/workflows/adapters/index.ts");
 const approval = read("lib/enterprise/workflows/steps/create-approval.ts");
 const i18n = read("lib/enterprise/workflows/recovery-messages.ts");
@@ -42,8 +43,8 @@ for (const [value, needle] of [
 assert.ok(approval.includes('assignment.strategy === "DEPARTMENT_MANAGER" && !assignment.departmentId'), "fallback only for an unconfigured template manager");
 assert.ok(approval.includes("mandate.allowed"), "a pre-existing ERP approver must keep approve rights");
 assert.ok(approval.includes("existingPending.approverUserId"), "retain canonical ERP approver");
-assert.ok(sources.includes('status: { in: ["DRAFT", "PENDING_APPROVAL"] }'), "expense states must be approvable");
-assert.ok(sources.includes('"PREPARING", "CORRECTION_REQUESTED", "PENDING_APPROVAL"'), "budget states must be approvable");
+assert.ok(sourceOptions.includes('status: { in: ["DRAFT","PENDING_APPROVAL"] }'), "expense states must be approvable");
+assert.ok(sourceOptions.includes('"PREPARING","CORRECTION_REQUESTED","PENDING_APPROVAL"'), "budget states must be approvable");
 assert.ok(resolver.includes("enterprisePosition.findFirst"), "role matching must accept positionId and active positions");
 assert.ok(resolver.includes("positionId: activePosition.id"), "a position ID must match its active position code");
 assert.ok(members.includes("positionCodesById"), "dropdown must show effective active positions by ID");

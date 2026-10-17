@@ -363,7 +363,8 @@
     "qa:workflow-visual-roundtrip": "node scripts/qa-workflow-818-visual-roundtrip.mjs",
     "qa:workflow-security": "node scripts/qa-workflow-815-security.mjs",
     "qa:workflow-recovery": "node scripts/qa-workflow-813-recovery.mjs",
-    "qa:workflow-recovery:postgres": "node scripts/qa-workflow-813-postgres.mjs"
+    "qa:workflow-recovery:postgres": "node scripts/qa-workflow-813-postgres.mjs",
+    "qa:hotfix-863-workflow-manual-start": "node scripts/qa-hotfix-863-workflow-manual-start.mjs"
   },
   "dependencies": {
     "@ai-sdk/gateway": "2.0.27",

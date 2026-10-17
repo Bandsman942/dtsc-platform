@@ -3,11 +3,13 @@ import { WorkflowVisualStudio } from "@/components/enterprise/core-v2/workflow-v
 import { applyWorkflowVisualPositions } from "@/lib/enterprise/workflows/visual-projection";
 import { workflowStepSchema, workflowVersionSchema, type WorkflowVersionInput } from "@/lib/enterprise/workflows/validators";
 
-import { Activity, AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, Copy, Eye, GitBranch, PauseCircle, Plus, RefreshCw, RotateCcw, Play, Save, ShieldAlert, Trash2, XCircle } from "lucide-react";
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { Activity, AlertTriangle, ArrowDown, ArrowLeft, ArrowUp, CheckCircle2, Copy, Eye, GitBranch, PauseCircle, Plus, RefreshCw, RotateCcw, Play, Save, ShieldAlert, Trash2, XCircle } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { createPortal } from "react-dom";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
+import { confirmSensitiveAction } from "@/lib/client-confirmation";
 import { Input } from "@/components/ui/input";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { EmptyState } from "@/components/workspace/empty-state";
@@ -18,6 +20,7 @@ import { toastError, toastSuccess } from "@/lib/client-toast";
 import { getWorkflowRecoveryMessage, getWorkflowValidationFieldMessage } from "@/lib/enterprise/workflows/recovery-messages";
 import { cn } from "@/lib/utils";
 import { workflowReadinessMessage } from "@/lib/enterprise/workflows/readiness-messages";
+import { workflowManualEmptyMessage, workflowManualEntityLabel, workflowManualModuleLinkLabel, workflowManualStatusLabel, type WorkflowManualEmptyReason } from "@/lib/enterprise/workflows/manual-start-copy";
 
 type Step = { id?: string; code: string; name: string; description?: string | null; stepType: string; position: number; configurationJson?: Record<string, unknown>; configuration?: Record<string, unknown> };
 type Transition = { id?: string; fromStepId?: string; toStepId?: string; fromStep?: { code: string }; toStep?: { code: string }; fromStepCode?: string; toStepCode?: string; outcome?: string | null; priority: number; conditionJson?: Record<string, unknown> | null; condition?: Record<string, unknown> };
@@ -36,7 +39,6 @@ type AssignmentOptions = {
   roles: Array<{ id: string; label: string }>;
   departments: Array<{ id: string; label: string; hasEligibleManager: boolean }>;
 };
-type SourceEmptyReason = "NO_RECORDS" | "NO_VISIBLE_RECORDS" | null;
 type Props = { organizationId: string; canManage: boolean; locale?: string | null; members: Array<{ id: string; label: string }>; departments: Array<{ id: string; label: string }>; legacyWorkflows: Array<{ id: string; labelFr: string; isEnabled: boolean; updatedAt: Date }> };
 
 const STEP_TYPES = ["START", "CONDITION", "ASSIGN", "CREATE_APPROVAL", "CREATE_TASK", "DOMAIN_ACTION", "NOTIFICATION", "WAIT_UNTIL", "END"];
@@ -56,8 +58,9 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, departmen
   const [runTotal, setRunTotal] = useState(0);
   const [runFilter, setRunFilter] = useState("");
   const [startDefinition, setStartDefinition] = useState<Definition | null>(null);
-  const [startOptions, setStartOptions] = useState<Array<{ id: string; label: string }>>([]);
-  const [startEmptyReason, setStartEmptyReason] = useState<SourceEmptyReason>(null);
+  const [startOptions, setStartOptions] = useState<Array<{ id: string; label: string; status: string }>>([]);
+  const [startEmptyReason, setStartEmptyReason] = useState<WorkflowManualEmptyReason>(null);
+  const [startLoadError, setStartLoadError] = useState("");
   const [startCreateHref, setStartCreateHref] = useState<string | null>(null);
   const [assignmentOptions, setAssignmentOptions] = useState<AssignmentOptions>({ members: [], roles: [], departments: [] });
   const [assignmentLoadError, setAssignmentLoadError] = useState("");
@@ -67,6 +70,10 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, departmen
   const [observability, setObservability] = useState<WorkflowObservability | null>(null);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Definition | null>(null);
+  const detailOpen = Boolean(selected);
+  const detailsRef = useRef<HTMLElement>(null);
+  const backFromDetailsRef = useRef<HTMLButtonElement>(null);
+  const definitionOpenerRef = useRef<HTMLElement | null>(null);
   const [readiness, setReadiness] = useState<Record<string, Readiness>>({});
   const [createOpen, setCreateOpen] = useState(false);
   const [stepOpen, setStepOpen] = useState(false);
@@ -119,7 +126,59 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, departmen
     void load();
   }, [load]);
 
+  // The details are a full-viewport workspace, not an inline second column.
+  // Preserve focus and page scroll when returning to the definitions list.
+  useEffect(() => {
+    if (!detailOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    backFromDetailsRef.current?.focus();
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      definitionOpenerRef.current?.focus();
+    };
+  }, [detailOpen]);
+
+  const closeDefinition = useCallback(async () => {
+    if (draftDirty) {
+      const confirmation = await confirmSensitiveAction({
+        title: en ? "Discard unsaved workflow changes?" : "Abandonner les modifications du workflow ?",
+        description: en
+          ? "Your draft has unsaved changes. Returning to the workflow list will discard them."
+          : "Le brouillon contient des modifications non enregistrées. Revenir à la liste des workflows les abandonnera.",
+        confirmLabel: en ? "Discard changes" : "Abandonner les modifications",
+        cancelLabel: en ? "Continue editing" : "Continuer les modifications",
+        tone: "warning",
+      });
+      if (!confirmation.confirmed) return;
+    }
+    setSelected(null);
+  }, [draftDirty, en]);
+
+  useEffect(() => {
+    if (!selected) return;
+    const handleDetailKeyDown = (event: KeyboardEvent) => {
+      // Actions open their own higher-priority dialogs, which own Escape/Tab.
+      if (document.querySelector("[data-dtsc-dialog-panel]")) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        void closeDefinition();
+      } else if (event.key === "Tab") {
+        const nodes = detailsRef.current?.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        );
+        if (!nodes?.length) return;
+        const first = nodes[0], last = nodes[nodes.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      }
+    };
+    document.addEventListener("keydown", handleDetailKeyDown);
+    return () => document.removeEventListener("keydown", handleDetailKeyDown);
+  }, [selected, closeDefinition]);
+
   async function openDefinition(id: string) {
+    if (!selected) definitionOpenerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const response = await fetch(`/api/enterprise/${organizationId}/workflows/${id}`);
     const body = await response.json().catch(() => null);
     if (!response.ok) return toastError(getWorkflowRecoveryMessage(body?.error, locale) || body?.message || (en ? "Workflow unavailable." : "Workflow indisponible."));
@@ -409,17 +468,27 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, departmen
     setStartOptions([]);
     setStartEmptyReason(null);
     setStartCreateHref(null);
+    setStartLoadError("");
     setStartLoading(true);
     try {
       const response = await fetch(`/api/enterprise/${organizationId}/workflow-runs/sources?definitionId=${encodeURIComponent(definition.id)}`);
       const body = await response.json().catch(() => null);
-      if (!response.ok) toastError(getWorkflowRecoveryMessage(body?.error, locale) || body?.message || (en ? "Source selection unavailable." : "Sélection de la source indisponible."));
-      else {
+      if (!response.ok) {
+        const message = response.status === 403
+          ? (en ? "You are not authorized to access this workflow's source module." : "Votre rôle ne permet pas d’accéder au module métier de ce workflow.")
+          : getWorkflowRecoveryMessage(body?.error, locale) || (en ? "Source selection unavailable. Retry or contact support." : "Sélection des objets indisponible. Réessayez ou contactez le support.");
+        setStartLoadError(message);
+        toastError(message);
+      } else {
         setStartOptions(body?.sources || []);
         setStartEmptyReason(body?.emptyReason || null);
         setStartCreateHref(typeof body?.createModuleHref === "string" ? body.createModuleHref : null);
       }
-    } catch { toastError(en ? "Unable to load available records." : "Chargement des objets disponibles impossible."); }
+    } catch {
+      const message = en ? "Unable to load available records. Retry the operation." : "Chargement des objets impossible. Réessayez.";
+      setStartLoadError(message);
+      toastError(message);
+    }
     finally { setStartLoading(false); }
   }
 
@@ -435,6 +504,7 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, departmen
       if (!response.ok) { toastError(getWorkflowRecoveryMessage(body?.error, locale) || body?.message || (en ? "Unable to start workflow." : "Démarrage du workflow impossible.")); return; }
       toastSuccess(en ? "Workflow started." : "Workflow démarré.");
       setStartDefinition(null);
+      setSelected(null);
       setTab("runs");
       setRunPage(1);
       window.history.replaceState(window.history.state, "", `${window.location.pathname}?runId=${encodeURIComponent(body.run.id)}`);
@@ -472,33 +542,69 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, departmen
       <Button type="button" variant="ghost" size="icon" className="ml-auto shrink-0 rounded-full" onClick={() => void load()} disabled={loading}><RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} /></Button>
     </div>
 
-    {tab === "definitions" ? <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+    {tab === "definitions" ? <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4">
       <section className="min-w-0"><div className="flex items-center justify-between gap-2"><div><h2 className="font-black text-dtsc-ink">{en ? "Workflow definitions" : "Définitions de workflow"}</h2><p className="text-xs text-dtsc-muted">{en ? "Published versions are immutable." : "Les versions publiées sont immuables."}</p></div>{permissions.canCreateDraft ? <Button size="sm" onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" />{en ? "New" : "Nouveau"}</Button> : null}</div>
-        <div className="mt-3">{definitions.length ? <BusinessList ariaLabel={en ? "Workflow definitions" : "Définitions de workflow"}>{definitions.map((definition) => <BusinessListItem key={definition.id} title={definition.name} description={`${definition.code} · ${triggerLabel(definition.triggerType, en)} · ${entityLabel(definition.triggerEntityType, en)}`} status={<StatusBadge>{statusLabel(definition.status, en)}</StatusBadge>} actions={<ActionMenu label="Workflow" items={[{ key: "open", label: en ? "Open" : "Ouvrir", icon: Eye, onSelect: () => void openDefinition(definition.id) }, ...(permissions.canStartManual && definition.status === "ACTIVE" && definition.allowManualStart ? [{ key: "start", label: en ? "Start workflow" : "Lancer le workflow", icon: Play, onSelect: () => void openManualStart(definition) }] : []), ...(permissions.canCreateDraft ? [{ key: "duplicate", label: en ? "Create new version" : "Créer une nouvelle version", icon: Copy, onSelect: async () => { await openDefinition(definition.id); } }] : [])]} />} />)}</BusinessList> : <EmptyState compact title={en ? "No workflow" : "Aucun workflow"} description={en ? "Start from a controlled draft template." : "Commencez par un modèle brouillon contrôlé."} />}</div>
+        <div className="mt-3">{definitions.length ? <BusinessList ariaLabel={en ? "Workflow definitions" : "Définitions de workflow"}>{definitions.map((definition) => <BusinessListItem key={definition.id} title={definition.name} description={`${definition.code} · ${triggerLabel(definition.triggerType, en)} · ${entityLabel(definition.triggerEntityType, en)}`} status={<StatusBadge>{statusLabel(definition.status, en)}</StatusBadge>} actions={<ActionMenu label="Workflow" items={[{ key: "open", label: en ? "Open" : "Ouvrir", icon: Eye, onSelect: () => void openDefinition(definition.id) }, ...(permissions.canStartManual && definition.status === "ACTIVE" && definition.allowManualStart ? [{ key: "start", label: en ? "Start workflow" : "Lancer le workflow", icon: Play, onSelect: () => void openManualStart(definition) }] : []), ...(permissions.canCreateDraft ? [{ key: "duplicate", label: en ? "Open to create a version" : "Ouvrir pour créer une version", icon: Copy, onSelect: async () => { await openDefinition(definition.id); } }] : [])]} />} />)}</BusinessList> : <EmptyState compact title={en ? "No workflow" : "Aucun workflow"} description={en ? "Start from a controlled draft template." : "Commencez par un modèle brouillon contrôlé."} />}</div>
         {legacyWorkflows.length ? <div className="mt-4 rounded-2xl border border-dtsc-border bg-dtsc-surface p-3"><p className="text-xs font-black uppercase tracking-[0.1em] text-dtsc-muted">{en ? "Legacy catalog" : "Catalogue historique"}</p><p className="mt-1 text-sm text-dtsc-muted">{legacyWorkflows.length} {en ? "catalog entries remain read-only and are never executed by Engine v2." : "configurations restent en lecture seule et ne sont jamais exécutées par Engine v2."}</p></div> : null}
       </section>
-      <section className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface p-3 sm:p-4">{selected ? <div className="grid gap-4"><div className="flex items-start gap-3"><div className="min-w-0 flex-1"><p className="text-xs font-black uppercase tracking-[0.1em] text-cyan-600">{selected.code}</p><h2 className="truncate text-lg font-black text-dtsc-ink">{selected.name}</h2><p className="text-sm text-dtsc-muted">{selected.description}</p></div><StatusBadge>{statusLabel(selected.status, en)}</StatusBadge></div>
+
+    </div> : null}
+
+
+    {selected && typeof document !== "undefined" ? createPortal(
+      <section
+        ref={detailsRef}
+        data-workflow-fullscreen-detail
+        role="dialog"
+        aria-modal="true"
+        aria-label={en ? "Workflow details" : "Détails du workflow"}
+        className="fixed inset-0 z-[80] flex h-[100dvh] w-full min-w-0 max-w-full flex-col overflow-hidden bg-dtsc-page text-dtsc-ink"
+      >
+        <header className="z-10 shrink-0 border-b border-dtsc-border bg-dtsc-surface px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-6">
+          <div className="mx-auto flex w-full max-w-[1440px] min-w-0 flex-wrap items-center gap-3">
+            <button ref={backFromDetailsRef} type="button" onClick={() => void closeDefinition()}
+              className="inline-flex min-h-11 min-w-0 items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-black text-dtsc-blue transition hover:bg-dtsc-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 active:translate-y-px">
+              <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden="true" />
+              {en ? "Back to workflows" : "Retour aux workflows"}
+            </button>
+            <StatusBadge>{statusLabel(selected.status, en)}</StatusBadge>
+          </div>
+        </header>
+        <div data-workflow-detail-scroll className="min-h-0 min-w-0 flex-1 touch-pan-y overflow-x-hidden overflow-y-auto overscroll-contain px-3 pb-[max(2rem,env(safe-area-inset-bottom))] pt-4 sm:px-6 sm:pt-6">
+          <div className="mx-auto w-full min-w-0 max-w-[1440px] rounded-2xl border border-dtsc-border bg-dtsc-surface p-3 sm:p-5">
+            <div className="grid gap-4"><div className="flex items-start gap-3"><div className="min-w-0 flex-1"><p className="text-xs font-black uppercase tracking-[0.1em] text-cyan-600">{selected.code}</p><h2 className="truncate text-lg font-black text-dtsc-ink">{selected.name}</h2><p className="text-sm text-dtsc-muted">{selected.description}</p></div><StatusBadge>{statusLabel(selected.status, en)}</StatusBadge></div>
         <div className="flex flex-wrap gap-2">{permissions.canStartManual && selected.status === "ACTIVE" && selected.allowManualStart ? <Button size="sm" onClick={() => void openManualStart(selected)}><Play className="h-4 w-4" />{en ? "Start" : "Lancer"}</Button> : null}{permissions.canCreateDraft && published ? <Button size="sm" variant="outline" onClick={() => void duplicateVersion()}><Copy className="h-4 w-4" />{en ? "New version" : "Nouvelle version"}</Button> : null}{permissions.canEditDraft && currentDraft ? <Button size="sm" variant="outline" onClick={() => { setStepError(""); setStepOpen(true); }}><Plus className="h-4 w-4" />{en ? "Step" : "Étape"}</Button> : null}{permissions.canEditDraft && currentDraft ? <Button size="sm" variant="outline" onClick={() => { setTransitionError(""); setTransitionOpen(true); }}><GitBranch className="h-4 w-4" />{en ? "Transition" : "Transition"}</Button> : null}{permissions.canEditDraft && currentDraft ? <Button size="sm" onClick={() => void saveVersion()} disabled={!draftDirty}><Save className="h-4 w-4" />{en ? "Save" : "Enregistrer"}</Button> : null}{permissions.canPublish && currentDraft ? <WorkflowPublishReview organizationId={organizationId} definitionId={selected.id} versionId={currentDraft.id} locale={locale} disabled={!readinessForDraft?.ready || draftDirty} onPublished={async () => { await openDefinition(selected.id); await load(); }} /> : null}</div>
         {draftDirty ? <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900" role="status">{en ? "Unsaved graph changes are present. Save the draft before opening the publication review." : "Des modifications du graphe ne sont pas enregistrées. Enregistrez le brouillon avant d’ouvrir la revue de publication."}</div> : null}
         {currentDraft && assignmentLoadError ? <p role="alert" className="text-sm text-amber-700">{assignmentLoadError}</p> : null}
          {currentDraft ? <WorkflowVisualStudio key={currentDraft.id} locale={locale} assignmentMembers={assignmentOptions.members} assignmentRoles={assignmentOptions.roles} assignmentDepartments={assignmentOptions.departments} steps={draftSteps} transitions={draftTransitions} configuration={draftConfiguration} editable={Boolean(permissions.canEditDraft)} onAddStep={() => { setStepError(""); setStepOpen(true); }} onMove={moveVisualNode} onRename={renameVisualNode} onConnect={connectVisualNodes} onDeleteStep={removeStep} onDuplicateStep={duplicateVisualStep} onUpdateConfiguration={updateVisualStepConfiguration} onUndo={undoDraft} onRedo={redoDraft} undoAvailable={undoHistory.length > 0} redoAvailable={redoHistory.length > 0} /> : null}
         {currentDraft ? <><div className={cn("rounded-xl border p-3", readinessForDraft?.ready ? "border-emerald-400/40 bg-emerald-500/5" : "border-amber-400/40 bg-amber-500/5")}><p className="font-black text-dtsc-ink">{readinessForDraft?.ready ? (en ? "Ready to publish" : "Prêt à publier") : (en ? "Publication blockers" : "Blocages de publication")}</p>{readinessForDraft?.blockers?.length ? <ul className="mt-2 grid gap-1 text-xs text-dtsc-muted">{readinessForDraft.blockers.map((item, index) => <li key={`${item.code}-${index}`}>• {item.stepCode ? `${item.stepCode}: ` : ""}{workflowReadinessMessage(item.code, locale)}</li>)}</ul> : null}</div>
         <div className="grid gap-2">{[...draftSteps].sort((a, b) => a.position - b.position).map((step, index) => <article key={step.code} className="flex min-w-0 items-center gap-2 rounded-xl border border-dtsc-border p-2.5"><span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-dtsc-soft text-xs font-black text-dtsc-ink">{index + 1}</span><div className="min-w-0 flex-1"><strong className="block truncate text-sm text-dtsc-ink">{step.name}</strong><span className="block truncate text-xs text-dtsc-muted">{stepTypeLabel(step.stepType, en)} · {step.code}</span></div>{permissions.canEditDraft ? <div className="flex shrink-0"><button type="button" className="p-2 text-dtsc-muted" onClick={() => moveStep(index, -1)} aria-label={en ? "Move step up" : "Monter l’étape"}><ArrowUp className="h-4 w-4" /></button><button type="button" className="p-2 text-dtsc-muted" onClick={() => moveStep(index, 1)} aria-label={en ? "Move step down" : "Descendre l’étape"}><ArrowDown className="h-4 w-4" /></button><button type="button" className="p-2 text-rose-600" onClick={() => removeStep(step.code)} aria-label={en ? "Delete step" : "Supprimer l’étape"}><Trash2 className="h-4 w-4" /></button></div> : null}</article>)}</div>
-        <div><h3 className="text-sm font-black text-dtsc-ink">{en ? "Branches" : "Branches"}</h3><div className="mt-2 grid gap-1.5">{draftTransitions.map((transition, index) => <div key={`${transition.fromStepCode}-${transition.toStepCode}-${index}`} className="flex items-center gap-2 rounded-xl bg-dtsc-page px-3 py-2 text-xs"><span className="truncate font-bold text-dtsc-ink">{transition.fromStepCode}</span><GitBranch className="h-3.5 w-3.5 shrink-0 text-cyan-600" /><span className="truncate font-bold text-dtsc-ink">{transition.toStepCode}</span><span className="ml-auto shrink-0 text-dtsc-muted">{outcomeLabel(transition.outcome, en)}</span>{permissions.canEditDraft ? <button type="button" onClick={() => { checkpoint(); setDraftTransitions((current) => current.filter((_, itemIndex) => itemIndex !== index)); setDraftDirty(true); }} aria-label={en ? "Delete branch" : "Supprimer la branche"}><XCircle className="h-4 w-4 text-rose-600" /></button> : null}</div>)}</div></div></> : <p className="text-sm text-dtsc-muted">{en ? "Create a new draft version to edit this workflow." : "Créez une nouvelle version brouillon pour modifier ce workflow."}</p>}</div> : <EmptyState compact title={en ? "Select a workflow" : "Sélectionnez un workflow"} description={en ? "Open a definition to inspect its versions and readiness." : "Ouvrez une définition pour consulter ses versions et sa readiness."} />}</section>
-    </div> : null}
+        <div><h3 className="text-sm font-black text-dtsc-ink">{en ? "Branches" : "Branches"}</h3><div className="mt-2 grid gap-1.5">{draftTransitions.map((transition, index) => <div key={`${transition.fromStepCode}-${transition.toStepCode}-${index}`} className="flex items-center gap-2 rounded-xl bg-dtsc-page px-3 py-2 text-xs"><span className="truncate font-bold text-dtsc-ink">{transition.fromStepCode}</span><GitBranch className="h-3.5 w-3.5 shrink-0 text-cyan-600" /><span className="truncate font-bold text-dtsc-ink">{transition.toStepCode}</span><span className="ml-auto shrink-0 text-dtsc-muted">{outcomeLabel(transition.outcome, en)}</span>{permissions.canEditDraft ? <button type="button" onClick={() => { checkpoint(); setDraftTransitions((current) => current.filter((_, itemIndex) => itemIndex !== index)); setDraftDirty(true); }} aria-label={en ? "Delete branch" : "Supprimer la branche"}><XCircle className="h-4 w-4 text-rose-600" /></button> : null}</div>)}</div></div></> : <p className="text-sm text-dtsc-muted">{en ? "Create a new draft version to edit this workflow." : "Créez une nouvelle version brouillon pour modifier ce workflow."}</p>}</div>
+          </div>
+        </div>
+      </section>,
+      document.body,
+    ) : null}
 
     {tab === "runs" ? <section className="grid gap-3"><div className="flex flex-wrap items-center justify-between gap-2"><label className="text-sm text-dtsc-muted">{en ? "Filter by status" : "Filtrer par statut"} <select className="ml-2 h-10 rounded-xl border border-dtsc-border bg-dtsc-page px-3" value={runFilter} onChange={(event) => { setRunPage(1); setRunFilter(event.target.value); }}><option value="">{en ? "All" : "Tous"}</option>{["RUNNING", "WAITING_APPROVAL", "WAITING_TIME", "BLOCKED", "FAILED", "COMPLETED", "CANCELLED"].map((status) => <option key={status} value={status}>{statusLabel(status, en)}</option>)}</select></label><span className="text-xs text-dtsc-muted">{runTotal} {en ? "visible runs" : "exécutions visibles"}</span></div>{runs.length ? <BusinessList ariaLabel={en ? "Workflow runs" : "Exécutions de workflow"}>{runs.map((run) => <BusinessListItem key={run.id} title={run.definition.name} description={`${entityLabel(run.sourceEntityType, en)} · ${new Date(run.startedAt).toLocaleString(en ? "en-US" : "fr-FR")} · v${run.version.versionNumber}`} status={<StatusBadge>{statusLabel(run.status, en)}</StatusBadge>} actions={<ActionMenu label="Run" items={[{ key: "open", label: en ? "Open timeline" : "Ouvrir la timeline", icon: Eye, onSelect: () => void openRun(run.id) }, ...(permissions.canRetry && ["BLOCKED", "FAILED"].includes(run.status) ? [{ key: "retry", label: en ? "Retry step" : "Réessayer l’étape", icon: RotateCcw, onSelect: () => setRunAction({ run, action: "retry" as const }) }] : []), ...(permissions.canCancel && !["COMPLETED", "REJECTED", "FAILED", "CANCELLED"].includes(run.status) ? [{ key: "cancel", label: en ? "Cancel run" : "Annuler l’exécution", icon: XCircle, destructive: true, onSelect: () => setRunAction({ run, action: "cancel" as const }) }] : [])]} />} />)}</BusinessList> : <EmptyState compact title={en ? "No workflow run" : "Aucune exécution"} description={en ? "Runs appear after a manual start or a matching business event." : "Les exécutions apparaissent après un lancement manuel ou un événement métier correspondant."} />}<nav aria-label={en ? "Run pages" : "Pages des exécutions"} className="flex items-center justify-between gap-2"><Button type="button" variant="outline" size="sm" disabled={runPage <= 1 || loading} onClick={() => setRunPage((page) => Math.max(1, page - 1))}>{en ? "Previous" : "Précédent"}</Button><span aria-live="polite" className="text-xs text-dtsc-muted">{runPage} / {runPageCount}</span><Button type="button" variant="outline" size="sm" disabled={runPage >= runPageCount || loading} onClick={() => setRunPage((page) => page + 1)}>{en ? "Next" : "Suivant"}</Button></nav></section> : null}
 
     {tab === "monitoring" ? <section className="grid gap-3">{observability ? <div className="grid min-w-0 gap-3 rounded-2xl border border-dtsc-border bg-dtsc-surface p-3" aria-label={en ? "Workflow runtime statistics" : "Statistiques des workflows"}><div className="flex flex-wrap items-center justify-between gap-2 text-xs text-dtsc-muted"><strong className="text-dtsc-ink">{en ? "Recent completed run latency" : "Durée des exécutions terminées"}</strong><span>{en ? "Sampled" : "Échantillonné"} : {new Date(observability.sampledAt).toLocaleString(en ? "en-US" : "fr-FR")}</span></div><div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{(["p50", "p95", "p99"] as const).map((key) => <div key={key}><div className="text-xs uppercase text-dtsc-muted">{key}</div><strong className="text-base text-dtsc-ink">{observability.completedLatency[key] === null ? "—" : `${(observability.completedLatency[key]! / 1000).toFixed(1)} s`}</strong></div>)}<div><div className="text-xs text-dtsc-muted">{en ? "Oldest waiting" : "Plus ancienne attente"}</div><strong className="text-base text-dtsc-ink">{observability.oldestWaitingAgeMs === null ? "—" : `${Math.round(observability.oldestWaitingAgeMs / 60000)} min`}</strong></div></div><p className="text-xs text-dtsc-muted">{observability.completedSamples} {en ? "completed runs" : "exécutions terminées"} / {observability.sampleSize} {en ? "visible runs sampled across" : "exécutions visibles examinées sur"} {observability.windowDays} {en ? "days" : "jours"}{observability.capped ? (en ? " — Capped sample, not exhaustive." : " — Échantillon plafonné, non exhaustif.") : "."} {en ? "Missing values are not zero." : "Une donnée absente ne vaut pas zéro."}</p></div> : null}{monitored.length ? monitored.map((run) => <article key={run.id} className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-3"><div className="flex items-start gap-3"><span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/10 text-amber-700"><AlertTriangle className="h-4 w-4" /></span><div className="min-w-0 flex-1"><strong className="block truncate text-sm text-dtsc-ink">{run.definition.name}</strong><span className="block text-xs text-dtsc-muted">{statusLabel(run.status, en)} · {getWorkflowRecoveryMessage(run.failureCode, locale) || run.failureMessage || (en ? "Awaiting the next authorized action." : "En attente de la prochaine action autorisée.")}</span></div><Button size="sm" variant="outline" onClick={() => void openRun(run.id)}>{en ? "Inspect" : "Inspecter"}</Button></div></article>) : <EmptyState compact title={en ? "Nothing to monitor" : "Rien à surveiller"} description={en ? "No blocked, failed or abnormally waiting run." : "Aucune exécution bloquée, en échec ou en attente anormale."} />}</section> : null}
 
-    <Dialog open={Boolean(startDefinition)} title={en ? "Start a workflow" : "Lancer un workflow"} onClose={() => setStartDefinition(null)} presentation="editor" className="h-[94dvh] max-w-3xl">{startDefinition ? <form onSubmit={submitManualStart} className="grid min-w-0 gap-4"><p className="text-sm text-dtsc-muted">{startDefinition.name} · {entityLabel(startDefinition.triggerEntityType, en)}</p><label className="grid gap-1 text-sm font-semibold text-dtsc-ink">{en ? "Business record" : "Objet métier"}<select required name="sourceEntityId" disabled={startLoading || startSubmitting || !startOptions.length} className="h-11 min-w-0 max-w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3" defaultValue=""><option value="">{startLoading ? (en ? "Loading records…" : "Chargement des objets…") : (en ? "Select a record" : "Sélectionnez un objet")}</option>{startOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select></label>{!startLoading && !startOptions.length ? <div role="status" className="grid gap-2 text-sm text-dtsc-muted">
-          <p>{startDefinition.triggerEntityType === "EnterpriseExpense"
-            ? (startEmptyReason === "NO_RECORDS"
-              ? (en ? "No expense has been created yet in this company." : "Aucune dépense n’a encore été créée dans cette entreprise.")
-              : (en ? "No expense is available to your account. Create an expense or ask for access to its ERP module." : "Aucune dépense n’est accessible à votre compte. Créez une dépense ou vérifiez vos droits sur le module ERP."))
-            : (en ? "No eligible record is visible for this workflow." : "Aucun objet métier admissible n’est visible pour ce workflow.")}</p>
-          {startCreateHref ? <a className="inline-flex min-h-11 items-center font-bold text-cyan-600 underline underline-offset-4" href={startCreateHref}>{startDefinition.triggerEntityType === "EnterpriseExpense" ? (en ? "Open Budgets and Expenses to create an expense" : "Ouvrir Budgets et dépenses pour créer une dépense") : (en ? "Open Budgets and Expenses" : "Ouvrir Budgets et dépenses")}</a> : null}
-        </div> : null}<Button type="submit" disabled={startLoading || startSubmitting || !startOptions.length}><Play className="h-4 w-4" />{startSubmitting ? (en ? "Starting…" : "Démarrage…") : (en ? "Start workflow" : "Démarrer le workflow")}</Button></form> : null}</Dialog>
+    <Dialog open={Boolean(startDefinition)} title={en ? "Start a workflow" : "Lancer un workflow"} onClose={() => setStartDefinition(null)} presentation="editor" className="h-[94dvh] max-w-3xl">{startDefinition ? <form onSubmit={submitManualStart} className="grid min-w-0 max-w-full gap-4">
+      <p className="break-words text-sm text-dtsc-muted">{startDefinition.name} · {workflowManualEntityLabel(startDefinition.triggerEntityType, en)}</p>
+      <label className="grid min-w-0 gap-1 text-sm font-semibold text-dtsc-ink">{en ? "Business record" : "Objet métier"}
+        <select required name="sourceEntityId" disabled={startLoading || startSubmitting || Boolean(startLoadError) || !startOptions.length} className="h-11 w-full min-w-0 max-w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3" defaultValue="">
+          <option value="">{startLoading ? (en ? "Loading records…" : "Chargement des objets…") : (en ? "Select a record" : "Sélectionnez un objet")}</option>
+          {startOptions.map((option) => <option key={option.id} value={option.id}>{option.label} · {workflowManualStatusLabel(option.status, en)}</option>)}
+        </select>
+      </label>
+      {!startLoading && startLoadError ? <p role="alert" className="break-words text-sm text-rose-600">{startLoadError}</p> : null}
+      {!startLoading && !startLoadError && !startOptions.length ? <div role="status" className="grid min-w-0 gap-2 text-sm text-dtsc-muted">
+        <p className="break-words">{workflowManualEmptyMessage(startDefinition.triggerEntityType, startEmptyReason, en)}</p>
+        {startCreateHref ? <a className="inline-flex min-h-11 max-w-full items-center break-words font-bold text-cyan-600 underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2" href={startCreateHref}>{workflowManualModuleLinkLabel(startDefinition.triggerEntityType, en)}</a> : null}
+      </div> : null}
+      <Button type="submit" disabled={startLoading || startSubmitting || Boolean(startLoadError) || !startOptions.length}><Play className="h-4 w-4" />{startSubmitting ? (en ? "Starting…" : "Démarrage…") : (en ? "Start workflow" : "Démarrer le workflow")}</Button>
+    </form> : null}</Dialog>
 
     <Dialog open={createOpen} title={en ? "Create a draft workflow" : "Créer un workflow brouillon"} onClose={() => setCreateOpen(false)} presentation="editor" className="h-[94dvh] max-w-4xl">
       <form onSubmit={createFromTemplate} className="grid min-w-0 gap-3">
@@ -531,7 +637,7 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, departmen
 
 function statusLabel(value: string, en: boolean) { const labels: Record<string, [string, string]> = { DRAFT: ["Brouillon", "Draft"], ACTIVE: ["Actif", "Active"], PUBLISHED: ["Publiée", "Published"], RETIRED: ["Retiré", "Retired"], ARCHIVED: ["Archivé", "Archived"], QUEUED: ["En file", "Queued"], RUNNING: ["En cours", "Running"], WAITING_APPROVAL: ["En attente de validation", "Waiting approval"], WAITING_TIME: ["En attente de l’échéance", "Waiting time"], BLOCKED: ["Bloqué", "Blocked"], COMPLETED: ["Terminé", "Completed"], REJECTED: ["Terminé sur rejet", "Rejected"], FAILED: ["Échec", "Failed"], CANCELLED: ["Annulé", "Cancelled"], SUCCEEDED: ["Réussie", "Succeeded"] }; return labels[value]?.[en ? 1 : 0] || value.replaceAll("_", " ").toLowerCase(); }
 function triggerLabel(value: string, en: boolean) { const labels: Record<string, [string, string]> = { MANUAL: ["Manuel", "Manual"], ENTITY_CREATED: ["Création d’objet", "Entity created"], ENTITY_STATUS_CHANGED: ["Changement de statut", "Status changed"], DOMAIN_EVENT: ["Événement métier", "Business event"] }; return labels[value]?.[en ? 1 : 0] || value; }
-function entityLabel(value?: string | null, en = false) { const labels: Record<string, [string, string]> = { EnterpriseTask: ["Tâche", "Task"], EnterpriseRequest: ["Demande", "Request"], EnterpriseMeeting: ["Réunion", "Meeting"], EnterprisePurchase: ["Achat", "Purchase"], EnterpriseBudget: ["Budget", "Budget"], EnterpriseExpense: ["Dépense", "Expense"], EnterpriseReport: ["Rapport", "Report"] }; return value ? labels[value]?.[en ? 1 : 0] || value : (en ? "No entity" : "Aucun objet"); }
+function entityLabel(value?: string | null, en = false) { return workflowManualEntityLabel(value, en); }
 function stepTypeLabel(value: string, en: boolean) { const labels: Record<string, [string, string]> = { START: ["Départ", "Start"], CONDITION: ["Condition", "Condition"], ASSIGN: ["Affectation", "Assignment"], CREATE_APPROVAL: ["Créer une validation", "Create approval"], CREATE_TASK: ["Créer une tâche", "Create task"], DOMAIN_ACTION: ["Commande métier", "Domain action"], NOTIFICATION: ["Notification", "Notification"], WAIT_UNTIL: ["Attente", "Wait"], END: ["Fin", "End"] }; return labels[value]?.[en ? 1 : 0] || value; }
 function outcomeLabel(value?: string | null, en = false) { const labels: Record<string, [string, string]> = { DEFAULT: ["Suite normale", "Default"], TRUE: ["Oui", "True"], FALSE: ["Non", "False"], APPROVED: ["Approuvée", "Approved"], REJECTED: ["Rejetée", "Rejected"], CANCELLED: ["Annulée", "Cancelled"] }; return labels[value || "DEFAULT"]?.[en ? 1 : 0] || value || "DEFAULT"; }
 function assignmentLabel(value: string, en: boolean) { const labels: Record<string, [string, string]> = { SPECIFIC_USER: ["Utilisateur précis", "Specific user"], SPECIFIC_ROLE: ["Rôle précis", "Specific role"], DEPARTMENT_MANAGER: ["Responsable du département", "Department manager"], ENTITY_REQUESTER: ["Demandeur de l’objet", "Entity requester"], ENTITY_ASSIGNEE: ["Responsable de l’objet", "Entity assignee"], ENTITY_BUYER: ["Acheteur", "Entity buyer"], ENTITY_CREATOR: ["Créateur de l’objet", "Entity creator"], PREVIOUS_STEP_ACTOR: ["Acteur de l’étape précédente", "Previous step actor"] }; return labels[value]?.[en ? 1 : 0] || value; }

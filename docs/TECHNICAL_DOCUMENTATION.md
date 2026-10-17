@@ -11,6 +11,8 @@ Ce document est le point d’entrée technique de DTSC Platform. Les règles ex�
 La reprise durable des workflows (#813), les preuves d’effet, les états incertains
 et les précautions de déploiement sont décrits dans [WORKFLOW_RUNTIME_RECOVERY.md](WORKFLOW_RUNTIME_RECOVERY.md).
 
+Le lancement manuel transverse des workflows (#863) partage les prédicats ERP de sélection et de validation POST dans `lib/enterprise/workflows/manual-source-options.ts`. Les routes conservent la validation de membership, RBAC, module et entitlement ; les informations sur les objets non visibles ne sont pas divulguées. Les cinq templates Finance suivent uniquement une validation ERP canonique préexistante : aucune comptabilisation, confirmation ou clôture ne s’effectue automatiquement depuis Workflows. Voir [WORKFLOW_ERP_CONTRACTS.md](WORKFLOW_ERP_CONTRACTS.md) et la [checklist de recette](ENTERPRISE_WORKFLOW_ENGINE_QA_CHECKLIST.md).
+
 La plateforme réunit : site public, compte/authentification, SaaS multi-entreprises, console interne DTSC, support, collaboration, ERP commun, extensions Health/Pharmacy, IA, PWA et notifications.
 
 ## 2. Stack
@@ -624,3 +626,5 @@ Le module expérimental `lib/enterprise/workflows/advanced-data.ts` fournit un a
 ### WF-06S1 — Ledger durable d'occurrences (inactif, #841)
 
 Deux nouveaux modèles `EnterpriseWorkflowSchedule` et `EnterpriseWorkflowScheduleOccurrence` portent des contraintes d'intégrité tenant/définition/version et l'unicité des reçus par date/heure locale, en complément de la clé SHA-256 WF-06A. Le service interne `reserveDueStagedWorkflowOccurrence` ne réserve que des horaires STAGED explicitement référencés (statut DISABLED par défaut), sans run, outbox, API ni worker actif : `FOR UPDATE SKIP LOCKED`, transaction unique d'insertion du reçu et progression CAS du curseur. Les droits, quotas, source métier et démarrage d'une exécution sont reportés à WF-06S2 ; voir [WORKFLOW_SCHEDULE_LEDGER_ADR.md](WORKFLOW_SCHEDULE_LEDGER_ADR.md).
+
+La fiche détaillée d'une définition Workflow (#863) est désormais rendue en vue plein écran client via un portail contrôlé, plutôt qu'en colonne intégrée à la liste. Son état est local au workspace, son scroll n'affecte pas le document, le focus retourne au déclencheur, et les sous-dialogues restent régis par la primitive de dialogue standard. Ce changement est purement UI : aucune mutation de données ni nouvelle permission.
