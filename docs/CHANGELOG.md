@@ -1,3 +1,11 @@
+## 2026-10-17 — HOTFIX P0 #861 : reprise workflows + contrats Finance canoniques
+
+- Production : worker Cron protégé par WORKFLOW_WORKER_ENABLED et cutoff temporel obligatoire WORKFLOW_EVENT_CUTOVER_AT, lecture seule signée dryRun, sans réexécution du backlog historique par défaut. La configuration CRON_SECRET doit être ajoutée en Production seulement après CI, OWNER_E2E et main READY.
+- Reprise idempotente des validations déjà décidées par le rapprochement des liens entreprise/workflow/étape ; ne pas rejouer de transaction ERP.
+- Cinq templates Finance deviennent compatibles en suivant les approbations canoniques existantes : facture fournisseur en deux décisions (review, approval), paiement, clôture de caisse, écriture, dossier financier de clôture. Aucun CREATE_APPROVAL fictif, aucun POST/CONFIRM/CLOSE automatique : décisions et mutations restent aux services et opérateurs habilités.
+- Ajout de EnterpriseFinancialClose aux types workflow et mapping de module FINANCE_CLOSE, correction de la source du template.
+- QA spécialisée #861 Quality/Migration, contrats WF-01 adaptés, docs et runbook de reprise/rollback. Aucune migration ni backfill automatique. OWNER_E2E #861 requis ; #857 et #852 restent en pause.
+
 ## 2026-10-17 — HOTFIX P1 #859 : workflows template save, approbateurs et dépenses
 
 - Validation pré-sauvegarde et API avec chemins de champs localisés FR/EN pour les brouillons, sans révélation des erreurs Zod brutes. Version publiée immuable et conflit de modification conservés.

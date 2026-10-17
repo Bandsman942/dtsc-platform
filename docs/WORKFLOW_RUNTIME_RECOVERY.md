@@ -92,3 +92,36 @@ to make the old application appear healthy.
 Adapter readiness, runtime authorization, editor/versioning and broader chaos/
 observability certification remain respectively #814, #815, #816 and #817. Studio,
 advanced nodes, certified connectors, AI building and simulation follow #818–#822.
+
+
+## HOTFIX P0 #861 — incident du 17 octobre 2026 : validations décidées, workflows WAITING
+
+### Preuves de diagnostic (lectures seules)
+- Dépense APPROVED, approbation EnterpriseApproval APPROVED, run WAITING_APPROVAL et step WAITING après décision ;
+- Deux reçus ENTERPRISE_APPROVAL_APPROVED toujours PENDING, attemptCount 0 ;
+- 424 EnterpriseDomainEvent PENDING échus, dont une grande partie historique ; aucun processedAt observé lors de l'inspection ;
+- Vercel Production sur main@fe45959c READY, WORKFLOW_WORKER_SECRET présent, CRON_SECRET seulement dans Preview.
+Le diagnostic prouve l'absence de consommation, pas le contenu ni l'innocuité du backlog.
+
+### Déploiement en deux phases (production uniquement depuis main)
+1. Corriger le code et exécuter CI Quality/Migration, tests des quatre workflows historiques, tests de compatibilité des cinq Finance et OWNER_E2E #861. Ne pas modifier les secrets pendant la PR.
+2. Squash merger sur main, attendre Vercel READY au SHA exact. Le runtime Production est désormais **fail-closed** si WORKFLOW_WORKER_ENABLED n'est pas true.
+3. Depuis l'administration Vercel, ajouter un CRON_SECRET fort **Production** (différent de WORKFLOW_WORKER_SECRET), WORKFLOW_EVENT_CUTOVER_AT en instant UTC ISO complet correspondant au début de la nouvelle période validée, et laisser WORKFLOW_WORKER_ENABLED=false. Toute mise à jour de variables nécessite le redéploiement contrôlé depuis main.
+4. Exécuter un GET signé /api/internal/workflows/process?dryRun=1. Confirmer workerEnabled=false, cutoverConfigured=true ; relever queue.before sans démarrer de worker.
+5. Activer WORKFLOW_WORKER_ENABLED=true par configuration Production et un redéploiement main contrôlé, tout en gardant le cutover. Contrôler les premiers lots <= 20, taux d'échecs et DEAD ; couper immédiatement en cas d'anomalie de Finance ou de permissions.
+6. Vérifier que la dépense déjà APPROVED n'est PAS soumise de nouveau, et que son run reprend par `resumeWaitingRuns` jusqu'aux notifications de workflow et à la fin ; plusieurs événements APPROVED identiques n'ont qu'une transition effective.
+7. Laisser l'ancien backlog (événements antérieurs au cutoff) hors claim. Produire un inventaire par eventType, tenant, date, portée et conséquence métier ; toute reprise ciblée exige vérification des effets canoniques et autorisation explicite. Aucun SQL mutatif automatique de récupération.
+
+### Lecture seule du backlog (sur la bonne branche/DB Neon)
+```sql
+SELECT "eventType", "processingStatus", COUNT(*) AS events,
+       MIN("createdAt") AS oldest, MAX("createdAt") AS newest,
+       SUM(CASE WHEN "attemptCount" = 0 THEN 1 ELSE 0 END) AS never_attempted
+FROM "EnterpriseDomainEvent"
+WHERE "availableAt" <= NOW()
+GROUP BY "eventType", "processingStatus"
+ORDER BY events DESC;
+```
+
+### Rollback sans perte de preuve
+Mettre WORKFLOW_WORKER_ENABLED=false en Production et redéployer main. Suspendre l'auth Cron si nécessaire, attendre la fin des leases, puis appliquer un revert par PR selon DELIVERY_GOVERNANCE. Ne pas effacer les validations, events, runs, ni refaire le bilan de caisse ou les écritures.

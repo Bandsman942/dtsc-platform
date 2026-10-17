@@ -10,13 +10,13 @@
 | PURCHASE_APPROVAL | Disponible en brouillon | `createEnterprisePurchaseApproval` ; après soumission, rattachement de la demande existante au même approbateur |
 | BUDGET_APPROVAL | Disponible en brouillon | `createEnterpriseBudgetApproval` ; rattachement de la validation budgétaire existante |
 | EXPENSE_APPROVAL | Disponible en brouillon | `createEnterpriseExpenseApproval` ; rattachement de la validation de dépense existante |
-| SUPPLIER_INVOICE_REVIEW_APPROVAL_POSTING | Incompatible | Le workflow ne crée pas les validations Finance de revue/approbation ; REVIEW et APPROVE ne sont pas autorisés |
-| SUPPLIER_PAYMENT_APPROVAL_CONFIRMATION | Incompatible | Le workflow ne demande pas la validation Finance du paiement ; APPROVE non autorisé |
-| CASH_SESSION_INDEPENDENT_CLOSE | Incompatible | Validation indépendante dans le service de caisse ; aucune action VALIDATE dans l’adaptateur |
-| MANUAL_JOURNAL_APPROVAL_POSTING | Incompatible | Approbation par le service comptable ; aucune action APPROVE automatisée |
-| FISCAL_PERIOD_CLOSE_REVIEW | Incompatible | La validation appartient à la clôture financière, pas directement à la période |
+| SUPPLIER_INVOICE_REVIEW_APPROVAL_POSTING | Disponible comme suivi de validations | Deux approbations canoniques distinctes `EnterpriseSupplierInvoiceReview` puis `EnterpriseSupplierInvoiceApproval`, rattachées au même objet ; `POST` demeure humain et contrôlé dans Factures fournisseurs |
+| SUPPLIER_PAYMENT_APPROVAL_CONFIRMATION | Disponible comme suivi de validation | Suivi de `EnterprisePayment` sans recréer de validation ; `CONFIRM` reste une action distincte du module Paiements, avec SoD et caisse active |
+| CASH_SESSION_INDEPENDENT_CLOSE | Disponible comme suivi de validation | `EnterpriseCashSession` est validée par le service Caisse, sans exposer de `VALIDATE` générique |
+| MANUAL_JOURNAL_APPROVAL_POSTING | Disponible comme suivi de validation | `EnterpriseJournalEntry` est approuvée dans Comptabilité ; `POST` reste une action canonique et séparée |
+| FISCAL_PERIOD_CLOSE_REVIEW | Disponible comme suivi de validation | L'objet workflow est **`EnterpriseFinancialClose`** (pas `EnterpriseFiscalPeriod`) et suit l'approbation liée ; la fermeture définitive reste une action ERP distincte |
 
-Les modèles incompatibles restent identifiables dans le catalogue, avec une raison FR/EN et un bouton de création désactivé. Le serveur refuse aussi la création, sans brouillon orphelin. Les brouillons existants sont conservés et leur publication échoue avec les mêmes bloqueurs. Aucune action financière ni autorisation n’est ajoutée pour rendre ces modèles exécutables.
+Les neuf modèles deviennent structurellement compatibles. Les cinq modèles Finance ajoutés dans le hotfix #861 **suivent seulement des approbations humaines canoniques déjà créées dans le module ERP**. Ils ne créent aucune demande d'approbation et ne déclenchent aucun POST, CONFIRM ou CLOSE automatique. Les intitulés et descriptions précisent que ces opérations restent à effectuer dans l'ERP par un acteur distinct et habilité. Le serveur bloque l'exécution si l'approbation canonique précise est absente, rattachée à un autre workflow, non habilitée, ou si la séparation des tâches est violée. La publication reste distincte de l'activation. Une modification de configuration non autorisée demeure incompatible et bloque la publication.
 
 Les cibles supplémentaires Task et Meeting utilisent la même fonction canonique d’approbation Core v2. Report et les dix cibles financières n’exposent pas `createApproval`. Les actions financières déjà autorisées restent déléguées à leurs services existants, avec leurs contrôles métier inchangés.
 
@@ -41,3 +41,18 @@ Rollback par revert applicatif, après arrêt des nouveaux lancements si nécess
 - `qa:workflow-contracts` : neuf modèles réels, dix-sept adaptateurs, fonctions canoniques observées à leur frontière, types confrontés au schéma Prisma, conditions/branches, rechargement et messages FR/EN. Les services métier y sont des espions, pas une preuve de leur exécution.
 - `qa:workflow-contracts:postgres` : services d’approbation réels sur PostgreSQL, six cibles, décisions concurrentes, tenant/acteur/révision/rôle, neuf créations de modèles et exécution complète des quatre modèles compatibles, publication immuable, contrôles sectoriels et choix post-action par le moteur réel. Seuls l’abonnement de test et le push externe sont simulés ; les services de comptabilisation non sollicités refusent tout appel.
 - Les jobs Quality et Migration exécutent la suite PostgreSQL. Aucun E2E propriétaire, affichage navigateur ou déploiement n’est déduit de ces résultats. La matrice de preuve de la PR consigne les exécutions effectivement terminées.
+
+
+## HOTFIX #861 — raccordement strict aux services comptables (sans auto-comptabilisation)
+
+Les nouvelles étapes `CREATE_APPROVAL` disposent d'un attribut typé optionnel `canonicalApprovalTarget`, dont les seules valeurs sont les six cibles de décision Finance documentées ci-dessus. Cette option est **réservée au rattachement d'une demande existante**, non à sa création. Les cibles autorisées proviennent de l'adaptateur canonique du type source ; source, identifiant métier, organisation cliente, appartenance active, approbateur et permission `approve` sont vérifiés. L'absence de demande métier crée une erreur explicite ; aucune validation fictive n'est créée.
+
+Le cas de revue des factures fournisseurs est une chaîne de deux étapes distinctes. La deuxième demande canonique devient admissible après la revue par le service financier. Le moteur ne saute pas une revue, ne forge pas d'approbation et ne modifie pas l'état financier. Le worker reprend uniquement une validation dont le statut et les liens persistants satisfont toutes les contraintes. Plusieurs événements pour la même décision ne doivent pas doubler la notification ni les effets.
+
+La clôture de période utilise dorénavant `EnterpriseFinancialClose` et son événement `FINANCIAL_CLOSE_SUBMITTED`. Une version publiée avec l'ancien type reste épinglée et immuable ; elle ne se transforme pas automatiquement en nouveau template. Les cinq codes de templates demeurent stables mais affichent des libellés adaptés à la limite réelle : le workflow est terminé lorsque la **validation** est terminée, et non lorsque l'opération comptable indépendante est exécutée. Cette distinction doit être montrée aux utilisateurs et validée en E2E.
+
+## Préflight du worker et contrôle du backlog
+
+Le hotfix #861 protège `/api/internal/workflows/process` par `WORKFLOW_WORKER_ENABLED=true` en Production en plus d'un secret. L'endpoint authentifié `GET ...?dryRun=1` ne traite aucun événement. Le claim PostgreSQL ne revendique jamais, en production, un événement précédant `WORKFLOW_EVENT_CUTOVER_AT` ; si cette variable est absente ou invalide, **aucun ancien événement n'est revendiqué**. Une validation déjà décidée avec lien `workflowRunId/workflowStepRunId` peut néanmoins être rapprochée par `resumeWaitingRuns` après activation contrôlée.
+
+Le backlog de 424 anciens événements observé le 17/10/2026 reste à auditer par catégorie/ancienneté/tenant. Aucun rejeu massif de paiement, facture, stock, notification ou opération comptable ; ne pas changer directement la colonne processingStatus pour forcer leur traitement. La reprise d'une approbation déjà décidée dépend des liens canoniques, pas du ré-envoi de l'action ERP.
