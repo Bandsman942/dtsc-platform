@@ -6,7 +6,7 @@ import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access"
 import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
 import { businessPartyCreateSchema, businessPartyUpdateSchema } from "@/lib/enterprise/master-data/schemas";
 import { createEnterpriseBusinessParty, updateEnterpriseBusinessParty } from "@/lib/enterprise/master-data/service";
-import { refreshLinkedSupplierSnapshotFromParty } from "@/lib/enterprise/master-data/supplier-projection";
+
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -110,14 +110,13 @@ export async function PATCH(req: Request, { params }: Params) {
   if (!entityId || !parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.success ? "Référence manquante." : parsed.error.issues[0]?.message || "Tiers invalide." }, { status: 400 });
   try {
     const entity = await updateEnterpriseBusinessParty(organizationId, entityId, session.userId, parsed.data);
-    // BusinessParty is the source of truth. Procurement keeps a derived supplier
-    // snapshot for operational compatibility, refreshed without granting any
-    // additional Procurement access to the caller.
-    await Promise.allSettled([
-      refreshLinkedSupplierSnapshotFromParty(organizationId, entityId, session.userId),
+    // Supplier projection now commits in the same transaction as the party.
+    // Audit/API logs remain post-commit and must never mask a persisted edit.
+    const logs = await Promise.allSettled([
       writeAuditLog({ userId: session.userId, action: "ENTERPRISE_BUSINESS_PARTY_UPDATED", entity: "EnterpriseBusinessParty", entityId, request: req, metadata: { organizationId } }),
       writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, action: "update" } }),
     ]);
+    if (logs.some((result) => result.status === "rejected")) console.error("BUSINESS_PARTY_POST_COMMIT_AUDIT_FAILED", { organizationId, entityId });
     return NextResponse.json({ ok: true, entity });
   } catch (error) {
     if (error instanceof Error && error.message === "REVISION_CONFLICT") {
