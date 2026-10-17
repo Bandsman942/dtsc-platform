@@ -15,7 +15,7 @@ Ce raccordement **n'exécute pas automatiquement** une création ni une soumissi
 
 - Seuls `PROFESSIONAL_SERVICES.DECLARE_TIME_WORKED` et `PROFESSIONAL_SERVICES.SUBMIT_DELIVERABLE` sont mappés, dans `sector-activity-canonical-handoffs.ts`, vers les vrais codes du registre. Le `targetModuleCode` historique (`TIMESHEETS`/`DELIVERABLES`) n'est **jamais** traité comme une route ou une permission.
 - Le loader filtre les blocs par entitlement canonique et par membership ; `canAccessEnterpriseActivity` utilise le secteur vérifié et l'autorisation du **module propriétaire**.
-- L'URL n'est transmise au navigateur que si les capacités serveur du même `organizationId` autorisent `canRead` et `canCreate`, et que le module est navigable.
+- L'URL n'est transmise au navigateur que si les capacités serveur du même `organizationId` autorisent `canRead`, `canCreate` et `canWrite`, et que le module est navigable.
 - La page cible réapplique son RBAC/entitlement, et l'ouverture du vrai formulaire exige `timesheets.canWrite` ou `deliverables.canWrite` issu de l'API propriétaire.
 - `POST /api/enterprise/{organizationId}/activities` **refuse toujours** les deux codes avec `422 ENTERPRISE_ACTIVITY_ACTION_NOT_READY` : aucune demande collaborative fictive n'est créée et aucune API sectorielle n'est contournée.
 - Aucun nouveau modèle Prisma, aucune migration, aucun déclencheur, aucune modification des comptes Finance/RH, aucune activation commerciale automatique.
