@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { isSharedCronDispatchPaused } from "@/lib/scheduled-cron-activation";
 import { KNOWLEDGE_INDEX_QUEUE_LIMITS } from "@/lib/knowledge-index/constants";
 import { processPendingKnowledgeIndexJobs } from "@/lib/knowledge-index/worker";
 
@@ -17,6 +18,9 @@ function authorize(request: NextRequest) {
 }
 async function handle(request: NextRequest) {
   const auth=authorize(request); if(!auth.ok) return NextResponse.json({error:auth.message},{status:auth.status});
+  if (isSharedCronDispatchPaused(request, "KNOWLEDGE_INDEX_CRON_ENABLED")) {
+    return NextResponse.json({ error: "CRON_DISPATCH_DISABLED" }, { status: 503 });
+  }
   const requested=Number(request.nextUrl.searchParams.get("batch")||KNOWLEDGE_INDEX_QUEUE_LIMITS.workerBatchSize);
   const batchSize=Number.isFinite(requested)?Math.max(1,Math.min(Math.trunc(requested),KNOWLEDGE_INDEX_QUEUE_LIMITS.workerBatchSize)):KNOWLEDGE_INDEX_QUEUE_LIMITS.workerBatchSize;
   const startedAt=Date.now(); const result=await processPendingKnowledgeIndexJobs({batchSize});

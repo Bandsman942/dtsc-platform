@@ -353,3 +353,23 @@ Automatisation : `pnpm qa:workflow-contracts` et `pnpm qa:workflow-contracts:pos
 - [ ] Finance > Budgets et dépenses > Nouvelle dépense. La liste de lancement manuel respecte les droits et la propriété des objets et propose le lien Finance si vide.
 - [ ] Tester 320/360/375/390/414 px, mobile, clavier/focus, FR/EN, clair/sombre, libellés longs.
 - [ ] CI Quality et Migration exécutent QA #859, suivies des gates de régression, lint, typecheck, build ; OWNER_E2E #859 avant merge. #857 reste en pause.
+
+## HOTFIX #861 — acceptation utilisateur et exploitation P0
+
+- [ ] Vérifier OWNER_E2E du workflow de dépense précédemment bloqué : décision canonique APPROVED, un seul réveil, timeline « validée », notifications puis COMPLETED ; aucune nouvelle dépense ni approval.
+- [ ] Qualifier 424 événements anciens par eventType/tenant/date ; surtout pas de replay financier massif.
+- [ ] Avant Vercel prod : `WORKFLOW_WORKER_ENABLED` absent/false rend GET/POST worker inerte (sauf diagnostic signé GET?dryRun=1). `WORKFLOW_EVENT_CUTOVER_AT` absent/invalide n'autorise aucun claim de backlog Production.
+- [ ] Après migration env contrôlée sur `main` READY : `CRON_SECRET` unique en Production ; cutoff fixé ; dry-run, activation et premier lot <=20 observé, aucune écriture ancienne rejouée.
+- [ ] Facture fournisseur : revue et approbation distinctes, approbateurs différents selon service canonique ; pas de double approval ni post automatique ; notification et fin, post ERP manuelle.
+- [ ] Paiement fournisseur : approval désignée terminée, confirmation uniquement dans module Paiements par opérateur autorisé différent, caisse requise, aucun paiement confirmé par workflow.
+- [ ] Caisse : soumission puis approbation indépendante, clôture effective uniquement par service Caisse, pas de VALIDATE générique.
+- [ ] Écriture comptable : approbation canonique, aucun POST par le workflow ; POST manuel idempotent dans Comptabilité.
+- [ ] Période : source `EnterpriseFinancialClose` réelle, revue validée et CLOSE ERP séparé, aucune relation avec un mauvais ID de période.
+- [ ] Contrôles : appartenance client active, abonnement, permissions, SoD, autre tenant, perte de mandat, révision concurrente, duplicats décision/events ; versions PUBLISHED immuables.
+- [ ] UI : noms clairs (workflow = suivi d'approbation), FR/EN, mobile 320/360/375/390/414 px, modales lisibles en clair/sombre.
+- [ ] PostgreSQL Quality+Migration / lint/types/build puis OWNER_E2E #861 BON avant merge ; vérification Vercel Production READY et activation environnement séparée.
+
+- [ ] Cas négatif : soumettre un paiement non fournisseur ; le workflow fournisseur n'attache aucune demande de validation et n'émet aucune notification fournisseur. Seuls les paiements SUPPLIER_PAYMENT figurent dans le sélecteur manuel.
+
+- [ ] Lors du premier ajout de CRON_SECRET en Production, vérifier que les 7 autres routes Vercel Cron retournent 503 au jeton Cron commun (aucun replay Web Push, email, projections, bulk, report schedules, knowledge index ou expiration d'invitation). Un secret worker dédié existant conserve son chemin de maintenance autorisé.
+- [ ] N'activer séparément chaque `*_CRON_ENABLED` qu'après inventaire lecture seule de sa propre queue et accord d'exploitation ; particulièrement 343 notifications Web Push anciennes. Ne jamais activer toutes les tâches en une fois.

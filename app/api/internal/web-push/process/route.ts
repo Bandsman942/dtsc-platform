@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { isSharedCronDispatchPaused } from "@/lib/scheduled-cron-activation";
 import { WEB_PUSH_QUEUE_LIMITS } from "@/lib/push/constants";
 import { processPendingWebPushJobs } from "@/lib/push/worker";
 
@@ -28,6 +29,9 @@ async function handle(request: NextRequest) {
   const auth = authorize(request);
   if (!auth.ok) return NextResponse.json({ error: auth.message }, { status: auth.status });
 
+  if (isSharedCronDispatchPaused(request, "WEB_PUSH_CRON_ENABLED")) {
+    return NextResponse.json({ error: "CRON_DISPATCH_DISABLED" }, { status: 503 });
+  }
   const requestedBatch = Number(request.nextUrl.searchParams.get("batch") || WEB_PUSH_QUEUE_LIMITS.workerBatchSize);
   const batchSize = Number.isFinite(requestedBatch)
     ? Math.max(1, Math.min(Math.trunc(requestedBatch), WEB_PUSH_QUEUE_LIMITS.workerBatchSize))

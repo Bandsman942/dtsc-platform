@@ -22,6 +22,7 @@ export type FinanceWorkflowEntityType = Extract<WorkflowEntityType,
   | "EnterpriseCashSession"
   | "EnterpriseJournalEntry"
   | "EnterpriseFiscalPeriod"
+  | "EnterpriseFinancialClose"
   | "EnterpriseReconciliationSession"
   | "EnterpriseAssetDepreciationSchedule"
 >;
@@ -122,6 +123,7 @@ const salesCreditNoteAdapter: WorkflowEntityAdapter = {
 const supplierInvoiceActions = ["POST", "CANCEL"] as const;
 const supplierInvoiceAdapter: WorkflowEntityAdapter = {
   entityType: "EnterpriseSupplierInvoice",
+  canonicalApprovalTargets: new Set(["EnterpriseSupplierInvoiceReview", "EnterpriseSupplierInvoiceApproval"]),
   conditionFields: workflowConditionFields({ status: "STRING", currencyCode: "STRING", grandTotal: "NUMBER", outstandingAmount: "NUMBER", supplierId: "STRING", businessPartyId: "STRING", purchaseId: "STRING", expenseId: "STRING", createdByUserId: "STRING", invoiceDate: "DATE", dueDate: "DATE" }),
   placeholders: PLACEHOLDERS,
   triggerEvents: new Set(["SUPPLIER_INVOICE_CREATED", "SUPPLIER_INVOICE_SUBMIT", "SUPPLIER_INVOICE_REVIEW", "SUPPLIER_INVOICE_APPROVE", "SUPPLIER_INVOICE_POSTED"]),
@@ -161,6 +163,7 @@ const supplierCreditNoteAdapter: WorkflowEntityAdapter = {
 const paymentActions = ["CONFIRM", "RECONCILE", "CANCEL", "REVERSE"] as const;
 const paymentAdapter: WorkflowEntityAdapter = {
   entityType: "EnterprisePayment",
+  canonicalApprovalTargets: new Set(["EnterprisePayment"]),
   conditionFields: workflowConditionFields({ status: "STRING", direction: "STRING", paymentType: "STRING", methodType: "STRING", currencyCode: "STRING", amount: "NUMBER", unallocatedAmount: "NUMBER", businessPartyId: "STRING", initiatedByUserId: "STRING", paymentDate: "DATE" }),
   placeholders: PLACEHOLDERS,
   triggerEvents: new Set(["PAYMENT_CREATED", "PAYMENT_SUBMIT", "PAYMENT_APPROVE", "PAYMENT_CONFIRMED", "PAYMENT_RECONCILE"]),
@@ -180,6 +183,7 @@ const paymentAdapter: WorkflowEntityAdapter = {
 
 const cashSessionAdapter: WorkflowEntityAdapter = {
   entityType: "EnterpriseCashSession",
+  canonicalApprovalTargets: new Set(["EnterpriseCashSession"]),
   conditionFields: workflowConditionFields({ status: "STRING", financialAccountId: "STRING", cashierUserId: "STRING", openingAmount: "NUMBER", expectedClosingAmount: "NUMBER", countedClosingAmount: "NUMBER", discrepancyAmount: "NUMBER", openedAt: "DATE", submittedAt: "DATE" }),
   placeholders: PLACEHOLDERS,
   triggerEvents: new Set(["CASH_SESSION_OPENED", "CASH_SESSION_SUBMITTED", "CASH_SESSION_CLOSED"]),
@@ -196,6 +200,7 @@ const cashSessionAdapter: WorkflowEntityAdapter = {
 const journalActions = ["POST", "CANCEL"] as const;
 const journalEntryAdapter: WorkflowEntityAdapter = {
   entityType: "EnterpriseJournalEntry",
+  canonicalApprovalTargets: new Set(["EnterpriseJournalEntry"]),
   conditionFields: workflowConditionFields({ status: "STRING", journalId: "STRING", fiscalPeriodId: "STRING", accountingDate: "DATE", totalDebit: "NUMBER", totalCredit: "NUMBER", functionalCurrencyCode: "STRING", preparedByUserId: "STRING", sourceEntityType: "STRING", sourceEntityId: "STRING" }),
   placeholders: PLACEHOLDERS,
   triggerEvents: new Set(["JOURNAL_ENTRY_CREATED", "JOURNAL_ENTRY_SUBMIT", "JOURNAL_ENTRY_APPROVE", "JOURNAL_ENTRY_POSTED", "JOURNAL_ENTRY_REVERSED"]),
@@ -226,6 +231,35 @@ const fiscalPeriodAdapter: WorkflowEntityAdapter = {
   getTemplateValues: templateValues,
   resolveEntityUser,
   async executeDomainAction() { return denyAction("EnterpriseFiscalPeriod"); },
+};
+
+/** Financial close has its OWN target ID; a period ID can never be substituted. */
+const financialCloseAdapter: WorkflowEntityAdapter = {
+  entityType: "EnterpriseFinancialClose",
+  canonicalApprovalTargets: new Set(["EnterpriseFinancialClose"]),
+  conditionFields: workflowConditionFields({
+    status: "STRING", fiscalPeriodId: "STRING", requestedByUserId: "STRING",
+    requestedAt: "DATE", approvedAt: "DATE", closedAt: "DATE",
+  }),
+  placeholders: PLACEHOLDERS,
+  triggerEvents: new Set(["FINANCIAL_CLOSE_SUBMITTED", "FINANCIAL_CLOSE_APPROVED", "FINANCIAL_CLOSE_COMPLETED"]),
+  domainActions: new Set(),
+  async loadEntity(organizationId, entityId) {
+    const close = await prisma.enterpriseFinancialClose.findFirst({
+      where: { id: entityId, organizationId },
+      select: { id: true, organizationId: true, fiscalPeriodId: true, status: true,
+        requestedByUserId: true, requestedAt: true, approvedAt: true,
+        closedAt: true, revision: true, fiscalPeriod: { select: { code: true } } },
+    });
+    const period = close?.fiscalPeriod?.code || close?.fiscalPeriodId;
+    return snapshot(close ? {
+      ...close, reference: period, title: period ? `Clôture ${period}` : "Dossier de clôture",
+    } : null, "EnterpriseFinancialClose");
+  },
+  getConditionField: valueAt,
+  getTemplateValues: templateValues,
+  resolveEntityUser,
+  async executeDomainAction() { return denyAction("EnterpriseFinancialClose"); },
 };
 
 const reconciliationAdapter: WorkflowEntityAdapter = {
@@ -271,6 +305,7 @@ export const FINANCE_WORKFLOW_ADAPTERS: Partial<Record<WorkflowEntityType, Workf
   EnterpriseCashSession: cashSessionAdapter,
   EnterpriseJournalEntry: journalEntryAdapter,
   EnterpriseFiscalPeriod: fiscalPeriodAdapter,
+  EnterpriseFinancialClose: financialCloseAdapter,
   EnterpriseReconciliationSession: reconciliationAdapter,
   EnterpriseAssetDepreciationSchedule: depreciationAdapter,
 };

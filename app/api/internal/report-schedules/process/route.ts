@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { isSharedCronDispatchPaused } from "@/lib/scheduled-cron-activation";
 import { processEnterpriseReportSchedules } from "@/lib/enterprise/reporting/schedule-service";
 
 export const runtime = "nodejs";
@@ -25,6 +26,9 @@ function authorize(request: NextRequest) {
 async function handle(request: NextRequest) {
   const auth = authorize(request);
   if (!auth.ok) return NextResponse.json({ error: auth.message }, { status: auth.status });
+  if (isSharedCronDispatchPaused(request, "REPORT_SCHEDULES_CRON_ENABLED")) {
+    return NextResponse.json({ error: "CRON_DISPATCH_DISABLED" }, { status: 503 });
+  }
   const requested = Number(request.nextUrl.searchParams.get("batch") || 20);
   const batchSize = Number.isFinite(requested) ? Math.max(1, Math.min(50, Math.trunc(requested))) : 20;
   const startedAt = Date.now();

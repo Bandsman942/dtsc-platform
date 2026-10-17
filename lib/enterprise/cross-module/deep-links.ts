@@ -41,6 +41,7 @@ const MODULE_BY_ENTITY: Record<string, string> = {
   EnterpriseJournalEntry: "FINANCE_ACCOUNTING",
   EnterpriseCashSession: "FINANCE_CASH",
   EnterpriseFiscalPeriod: "FINANCE_CLOSE",
+  EnterpriseFinancialClose: "FINANCE_CLOSE",
   EnterpriseReconciliationSession: "FINANCE_RECONCILIATION",
   HealthMedicalInvoice: "MEDICAL_BILLING",
   HealthPatient: "PATIENTS",

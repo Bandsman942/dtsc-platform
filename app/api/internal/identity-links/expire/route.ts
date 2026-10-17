@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { isSharedCronDispatchPaused } from "@/lib/scheduled-cron-activation";
 import { expireEnterpriseIdentityInvitations } from "@/lib/enterprise/identity-links/expiration";
 
 export const runtime = "nodejs";
@@ -22,6 +23,9 @@ function authorize(request: NextRequest) {
 
 async function handle(request: NextRequest) {
   if (!authorize(request)) return NextResponse.json({ error: "Unauthorized" }, { status: process.env.CRON_SECRET || process.env.WORKFLOW_WORKER_SECRET ? 401 : 503 });
+  if (isSharedCronDispatchPaused(request, "IDENTITY_LINKS_CRON_ENABLED")) {
+    return NextResponse.json({ error: "CRON_DISPATCH_DISABLED" }, { status: 503 });
+  }
   const requestedBatch = Number(request.nextUrl.searchParams.get("batch") || 100);
   const batchSize = Number.isFinite(requestedBatch) ? Math.max(1, Math.min(Math.trunc(requestedBatch), 250)) : 100;
   const startedAt = Date.now();
