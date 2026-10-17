@@ -33,6 +33,7 @@ export async function getEnterpriseActivityWorkflows(organizationId: string, use
       updatedAt: true,
       triggerEntityType: true,
       triggerEventType: true,
+      allowManualStart: true,
       versions: {
         where: { status: "PUBLISHED" },
         orderBy: { versionNumber: "desc" },
@@ -54,7 +55,7 @@ export async function getEnterpriseActivityWorkflows(organizationId: string, use
     },
   });
 
-  return definitions.filter((definition) => definition.triggerEntityType ? readableTypes.has(definition.triggerEntityType as "EnterpriseRequest") : false).map((definition) => ({
+  return definitions.filter((definition) => definition.allowManualStart || (definition.triggerEntityType && readableTypes.has(definition.triggerEntityType as "EnterpriseRequest"))).map((definition) => ({
     id: definition.id,
     workflowCode: definition.code,
     labelFr: definition.name,

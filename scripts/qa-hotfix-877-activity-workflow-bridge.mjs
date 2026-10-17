@@ -37,4 +37,5 @@ const activityPage = read("app/enterprise-activities/page.tsx");
 const translationsFr = JSON.parse(read("locales/fr.json")), translationsEn = JSON.parse(read("locales/en.json"));
 assert(activityPage.includes('translate(user.locale, "enterpriseActivities.unavailableTitle")'), "Activities entitlement notice must use canonical dictionary");
 assert(Boolean(translationsFr.enterpriseActivities?.unavailableTitle && translationsEn.enterpriseActivities?.unavailableTitle), "Enterprise Activities must translate notice in FR/EN");
+assert(workflowList.includes("definition.allowManualStart ||"), "Authorized manual workflows must remain listed alongside event-triggered requests");
 console.log("Hotfix #877 canonical Activities ↔ Internal Requests ↔ Workflow bridge: PASS");
