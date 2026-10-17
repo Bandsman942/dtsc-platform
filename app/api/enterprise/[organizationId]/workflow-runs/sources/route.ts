@@ -98,7 +98,7 @@ export async function GET(req: Request, { params }: Params) {
     }
     case "EnterpriseCashSession": {
       const rows = await prisma.enterpriseCashSession.findMany({
-        where: { organizationId, status: { in: ["SUBMITTED", "CLOSED"] },
+        where: { organizationId, status: { in: ["PENDING_VALIDATION", "CLOSED", "REJECTED"] },
           ...(own ? { cashierUserId: userId } : {}) },
         select: { id: true, number: true, status: true },
         orderBy: { createdAt: "desc" }, take: 50,
