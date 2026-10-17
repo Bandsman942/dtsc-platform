@@ -102,4 +102,25 @@ assert.ok(sourceRoute.includes("requireWorkflowSourceAccess") && sourceRoute.inc
 assert.ok(startRoute.includes("isWorkflowManualSourceSelectable") && startRoute.includes('action: "submit"') && startRoute.includes("isSameOriginRequest") && startRoute.includes("rateLimit("), "POST security unchanged");
 assert.ok(ui.includes("workflowManualModuleLinkLabel") && ui.includes("workflowManualEmptyMessage") && ui.includes("startLoadError"), "New UI uses canonical copy");
 assert.ok(!ui.includes('en ? "Open Budgets and Expenses" : "Ouvrir Budgets et dépenses"'), "Generic wrong CTA removed");
+for (const token of [
+  "data-workflow-fullscreen-detail",
+  "createPortal(",
+  "document.body",
+  'className="fixed inset-0 z-[80] flex h-[100dvh]',
+  "data-workflow-detail-scroll",
+  "backFromDetailsRef",
+  "closeDefinition",
+  'setSelected(null);',
+  "definitionOpenerRef.current?.focus()",
+  "document.body.style.overflow = \"hidden\"",
+  'role="dialog"',
+  'aria-modal="true"',
+  "event.key === \"Escape\"",
+  "event.key === \"Tab\"",
+  "if (draftDirty && !window.confirm(",
+  'en ? "Back to workflows" : "Retour aux workflows"',
+]) assert.ok(ui.includes(token), "Full-screen definition regression: "+token);
+assert.ok(!ui.includes('lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]'), "Definition details must not be rendered as a second inline column");
+assert.ok(ui.includes('setStartDefinition(null);\n      setSelected(null);\n      setTab("runs")'), "Successful start must show runs, not leave full-screen detail over timeline");
+
 console.log("PASS HOTFIX #863: nine template source contracts; same picker/POST predicates, tenant/actor/status/subtype fail-closed, ERP links, FR/EN and safe empty states");
