@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Clock3, FileText, MessageSquareText, RefreshCcw, Save, TrendingUp } from "lucide-react";
 import { currencyChoices, Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { ProfessionalError, ProfessionalFormSection, professionalMutation } from "@/components/enterprise/professional/professional-erp-ui";
-import { professionalErpDate, professionalErpEnumLabel, professionalErpMoney, professionalErpT, type ProfessionalErpLocale } from "@/components/enterprise/professional/professional-erp-i18n";
+import { professionalErpDate, professionalErpDateTime, professionalErpEnumLabel, professionalErpMoney, professionalErpT, type ProfessionalErpLocale } from "@/components/enterprise/professional/professional-erp-i18n";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -165,8 +165,8 @@ export function BusinessPartyOpportunityManager({
           <Info label={t("crm.nextActionField")} value={opportunity.nextAction || t("common.none")} />
           <Info label={t("crm.due")} value={professionalErpDate(opportunity.nextActionAt, locale)} />
           <Info label={t("crm.source")} value={opportunity.source ? professionalErpEnumLabel(locale, "source", opportunity.source) : t("common.none")} />
-          <Info label={t("crm.opportunityCreatedAt")} value={professionalErpDate(opportunity.createdAt, locale)} />
-          <Info label={t("crm.opportunityUpdatedAt")} value={professionalErpDate(opportunity.updatedAt, locale)} />
+          <Info label={t("crm.opportunityCreatedAt")} value={professionalErpDateTime(opportunity.createdAt, locale)} />
+          <Info label={t("crm.opportunityUpdatedAt")} value={professionalErpDateTime(opportunity.updatedAt, locale)} />
         </div>
         {opportunity.notes ? <section className="rounded-xl border border-dtsc-border p-3"><h3 className="font-bold">{t("crm.notes")}</h3><p className="whitespace-pre-wrap break-words text-sm">{opportunity.notes}</p></section> : null}
         {detail?.lead ? <p className="text-sm text-dtsc-muted">{t("crm.opportunityOriginLead")}: {detail.lead.reference}</p> : null}
@@ -206,7 +206,7 @@ export function BusinessPartyOpportunityManager({
         <ModuleSection title={t("crm.opportunityTimeline")} count={events.length}>
           <div className="grid gap-3">
             {events.map((event) => <article key={event.id} className="rounded-xl border border-dtsc-border p-3">
-              <div className="flex flex-wrap items-center gap-2 text-xs text-dtsc-muted"><Clock3 className="h-4 w-4" /><time dateTime={event.createdAt}>{professionalErpDate(event.createdAt, locale)}</time>{event.actorLabel ? <span> · {event.actorLabel}</span> : null}</div>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-dtsc-muted"><Clock3 className="h-4 w-4" /><time dateTime={event.createdAt}>{professionalErpDateTime(event.createdAt, locale)}</time>{event.actorLabel ? <span> · {event.actorLabel}</span> : null}</div>
               <p className="mt-2 font-semibold text-dtsc-ink">{event.summary}</p>
               {event.fromStatus && event.toStatus && event.fromStatus !== event.toStatus ? <p className="text-sm">{professionalErpEnumLabel(locale, "opportunityStage", event.fromStatus)} → {professionalErpEnumLabel(locale, "opportunityStage", event.toStatus)}</p> : null}
               {event.metadataJson?.changedFields?.length ? <p className="text-sm text-dtsc-muted">{t("crm.opportunityChangedFields")}: {event.metadataJson.changedFields.join(", ")}</p> : null}
