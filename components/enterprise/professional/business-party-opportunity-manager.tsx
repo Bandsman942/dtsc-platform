@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Clock3, FileText, MessageSquareText, RefreshCcw, Save, TrendingUp } from "lucide-react";
 import { currencyChoices, Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { ProfessionalError, ProfessionalFormSection, professionalMutation } from "@/components/enterprise/professional/professional-erp-ui";
-import { publishEnterpriseCrmUpdate } from "@/lib/enterprise/crm-sales/client-sync";
+import { publishEnterpriseCrmUpdate, subscribeEnterpriseCrmUpdates } from "@/lib/enterprise/crm-sales/client-sync";
 import { professionalErpDate, professionalErpDateTime, professionalErpEnumLabel, professionalErpMoney, professionalErpT, type ProfessionalErpLocale } from "@/components/enterprise/professional/professional-erp-i18n";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -24,7 +24,7 @@ type OpportunityDetail = {
 type OpportunityActivity = {
   id: string; eventType: string; summary: string; fromStatus: string | null; toStatus: string | null;
   actorUserId: string; actorLabel?: string | null; createdAt: string; note: string | null;
-  metadataJson: { changedFields?: string[] } | null;
+  metadataJson: { changedFields?: string[]; changes?: Record<string, { before: string | null; after: string | null }>; lostReason?: string | null } | null;
 };
 type DetailPayload = {
   opportunity: OpportunityDetail;
@@ -87,15 +87,27 @@ export function BusinessPartyOpportunityManager({
     return () => { active = false; };
   }, [opportunityId, reload]);
 
+  useEffect(() => subscribeEnterpriseCrmUpdates(organizationId, (partyId) => {
+    if (opportunityId && (!partyId || partyId === businessPartyId)) {
+      void reload(opportunityId).catch((cause) => setError(cause instanceof Error ? cause.message : t("common.loadFailed")));
+    }
+  }), [organizationId, businessPartyId, opportunityId, reload]);
+
   async function mutate(action: () => Promise<unknown>, message: string): Promise<boolean> {
     if (!opportunityId || busy) return false;
     setBusy(true); setError(""); setSuccess("");
     try {
       await action();
-      await reload(opportunityId);
-      setSuccess(message);
+      // The server commit is authoritative. Invalidate other screens even if
+      // re-reading the detail subsequently encounters a transient error.
       publishEnterpriseCrmUpdate(organizationId, businessPartyId);
       onChanged();
+      setSuccess(message);
+      try {
+        await reload(opportunityId);
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : t("common.loadFailed"));
+      }
       return true;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t("common.updateFailed"));
@@ -142,6 +154,20 @@ export function BusinessPartyOpportunityManager({
     if (saved) { setStage(""); setLostReason(""); }
   }
 
+  const changedFieldLabels: Record<string, string> = {
+    name: t("crm.opportunityName"), description: t("crm.opportunityDescription"),
+    estimatedValue: t("crm.estimatedValue"), currency: t("crm.currency"),
+    probabilityPercent: t("crm.opportunityProbability"), expectedCloseDate: t("crm.opportunityExpectedClose"),
+    source: t("crm.source"), nextAction: t("crm.nextActionField"),
+    nextActionAt: t("crm.due"), notes: t("crm.notes"),
+  };
+  const eventLabel = (event: OpportunityActivity) => {
+    if (event.eventType === "OPPORTUNITY_CREATED") return t("crm.opportunityHistoryCreated");
+    if (event.eventType === "OPPORTUNITY_UPDATED") return t("crm.opportunityHistoryUpdated");
+    if (event.eventType === "OPPORTUNITY_NOTE_ADDED") return t("crm.opportunityHistoryNote");
+    if (event.toStatus && event.fromStatus !== event.toStatus) return t("crm.opportunityHistoryStage");
+    return event.summary;
+  };
   const opportunity = detail?.opportunity;
   const nextStages = opportunity ? NEXT_STAGE[opportunity.status] || [] : [];
   return <Dialog
@@ -211,9 +237,16 @@ export function BusinessPartyOpportunityManager({
           <div className="grid gap-3">
             {events.map((event) => <article key={event.id} className="rounded-xl border border-dtsc-border p-3">
               <div className="flex flex-wrap items-center gap-2 text-xs text-dtsc-muted"><Clock3 className="h-4 w-4" /><time dateTime={event.createdAt}>{professionalErpDateTime(event.createdAt, locale)}</time>{event.actorLabel ? <span> · {event.actorLabel}</span> : null}</div>
-              <p className="mt-2 font-semibold text-dtsc-ink">{event.summary}</p>
+              <p className="mt-2 font-semibold text-dtsc-ink">{eventLabel(event)}</p>
               {event.fromStatus && event.toStatus && event.fromStatus !== event.toStatus ? <p className="text-sm">{professionalErpEnumLabel(locale, "opportunityStage", event.fromStatus)} → {professionalErpEnumLabel(locale, "opportunityStage", event.toStatus)}</p> : null}
-              {event.metadataJson?.changedFields?.length ? <p className="text-sm text-dtsc-muted">{t("crm.opportunityChangedFields")}: {event.metadataJson.changedFields.join(", ")}</p> : null}
+              {event.metadataJson?.changedFields?.length ? <div className="mt-2 grid gap-1 text-sm text-dtsc-muted">
+                <p className="font-semibold">{t("crm.opportunityChangedFields")}</p>
+                {event.metadataJson.changedFields.map((field) => {
+                  const change = event.metadataJson?.changes?.[field];
+                  return <p key={field} className="whitespace-pre-wrap break-words">{changedFieldLabels[field] || field}{change ? `: ${change.before || "—"} → ${change.after || "—"}` : ""}</p>;
+                })}
+              </div> : null}
+              {event.metadataJson?.lostReason ? <p className="mt-2 whitespace-pre-wrap break-words text-sm">{t("crm.opportunityLostReasonRequired")}: {event.metadataJson.lostReason}</p> : null}
               {event.note ? <p className="mt-2 whitespace-pre-wrap break-words rounded-lg bg-dtsc-soft p-3 text-sm">{event.note}</p> : null}
             </article>)}
             {!events.length ? <p className="text-sm text-dtsc-muted">{t("crm.opportunityNoHistory")}</p> : null}
