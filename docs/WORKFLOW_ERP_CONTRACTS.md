@@ -60,3 +60,11 @@ Le backlog de 424 anciens événements observé le 17/10/2026 reste à auditer p
 ### Paiement fournisseur : contrôle du déclencheur partagé
 
 L'événement `PAYMENT_SUBMIT` peut émettre des événements pour d'autres types de paiement. Le template `SUPPLIER_PAYMENT_APPROVAL_CONFIRMATION` comporte une étape `CONDITION` autorisée sur `paymentType == SUPPLIER_PAYMENT`. Si le paiement n'est pas un paiement fournisseur, la branche de sortie termine silencieusement le run sans chercher d'approbateur et sans notification/effet financier. La liste des objets au lancement manuel applique le même type et les états admis.
+
+## HOTFIX P0 #863 — cohérence de sélection et de lancement manuel
+
+Le code serveur `lib/enterprise/workflows/manual-source-options.ts` est le prédicat unique de visibilité/sous-type/statut utilisé par `GET /workflow-runs/sources` et par `POST /workflow-runs/start` via `manual-source-access.ts`. Aucun nom de delegate Prisma ne provient d'une chaîne client : douze `switch` explicites, sélection bornée à 50, recherche par ID bornée à 1. Le POST recontrôle le droit de lancer, l'accès `submit` au module et le même predicate au moment de l'action, indépendamment des options initialement proposées.
+
+Pour une absence de sources, le gestionnaire habilité à voir tous les runs peut distinguer `NO_RECORDS` et `NO_ELIGIBLE_RECORDS` sans détails financiers. L'utilisateur à visibilité restreinte reçoit `NO_VISIBLE_RECORDS` ; aucun comptage global ne peut lui révéler les objets de collègues. Les refus de module sont affichés séparément du cas « liste vide ». Libellés de module et de statuts issus du catalogue FR/EN `manual-start-copy.ts`. Les versions publiées restent immuables, aucun backfill, migration ni traitement financier ajouté.
+
+Ce hotfix rend cohérent le lancement manuel des neuf modèles compatibles avec leur source ERP ; il **ne publie ni n'active aucune définition automatiquement**. La certification de bout en bout exige encore la preuve d'une exécution par template, un approbateur distinct, le respect des décisions canoniques, l'absence d'un effet POST/CONFIRM/CLOSE en doublon, et une recette owner E2E de la PR #863.
