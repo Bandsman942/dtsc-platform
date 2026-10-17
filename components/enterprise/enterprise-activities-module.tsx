@@ -30,7 +30,7 @@ import { HealthDocumentsWorkspace } from "@/components/enterprise/health-documen
 const healthActivityModules = new Set(["CONSULTATIONS"]);
 type ActivityView = "ACTIONS" | "REQUESTS" | "WORKFLOWS";
 
-export function EnterpriseActivitiesModule({ organization, blocks, requests, members, sectorRecords, workflows, gamingReferences }: EnterpriseActivitiesDataset) {
+export function EnterpriseActivitiesModule({ organization, blocks, requests, members, departments, sectorRecords, workflows, gamingReferences }: EnterpriseActivitiesDataset) {
   const locale = useAppLocale();
   const english = locale === "en";
   const [view, setView] = useState<ActivityView>("ACTIONS");
@@ -41,7 +41,7 @@ export function EnterpriseActivitiesModule({ organization, blocks, requests, mem
   const sectorLabel = english
     ? organization.businessSubtypeLabelEn || organization.businessSector?.labelEn || organization.sector || (english ? "Common activities" : "Activités communes")
     : organization.businessSubtypeLabelFr || organization.businessSector?.labelFr || organization.sector || "Socle commun";
-  const pending = requests.filter((item) => !["CLOSED", "CANCELLED", "REJECTED", "COMPLETED"].includes(item.status)).length;
+  const pending = requests.filter((item) => !["CLOSED", "CANCELLED", "REJECTED", "COMPLETED", "FULFILLED", "RESOLVED"].includes(item.workflowLink?.canonicalRequestStatus || item.status)).length;
   const tabs = [
     { id: "ACTIONS", label: english ? "Available actions" : "Actions disponibles", count: blocks.length },
     { id: "REQUESTS", label: english ? "Requests" : "Demandes", count: requests.length },
@@ -117,6 +117,7 @@ export function EnterpriseActivitiesModule({ organization, blocks, requests, mem
         open={formOpen}
         onClose={() => setFormOpen(false)}
         members={members}
+        departments={departments}
         sectorRecords={sectorRecords}
         gamingReferences={gaming ? gamingReferences : {}}
         onMessage={(message, tone = "error") => { if (message) notifyToast(message, tone); }}
