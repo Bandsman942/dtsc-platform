@@ -47,6 +47,7 @@ type CommercialSummary = {
   commercialEligible?: boolean;
   lead: LeadSummary | null;
   opportunities: OpportunitySummary[];
+  opportunityCount?: number;
 };
 
 const SOURCES = ["REFERRAL", "WEBSITE", "SOCIAL", "EVENT", "OUTBOUND", "OTHER"] as const;
@@ -215,7 +216,7 @@ export function BusinessPartyCommercialPanel({
     <ModuleSection
       title={t("crm.title")}
       description={t("crm.pipelineDescription")}
-      count={summary.opportunities.length + (summary.lead ? 1 : 0)}
+      count={(summary.opportunityCount ?? summary.opportunities.length) + (summary.lead ? 1 : 0)}
       action={<Button type="button" variant="outline" onClick={() => setOpportunityHubOpen(true)}><BriefcaseBusiness className="h-4 w-4" />{t("crm.opportunityManageAll")}</Button>}
     >
       {error && !createOpen ? <ProfessionalError message={error} /> : null}
