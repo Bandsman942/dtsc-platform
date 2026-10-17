@@ -279,5 +279,9 @@
   "crm.opportunityChangedFields": "Updated fields",
   "crm.opportunityNoHistory": "No activity recorded yet.",
   "crm.opportunityLoadMore": "Show earlier activities",
-  "crm.opportunityOriginLead": "Original lead"
+  "crm.opportunityOriginLead": "Original lead",
+  "crm.opportunityHistoryCreated": "Opportunity created",
+  "crm.opportunityHistoryUpdated": "Sales information updated",
+  "crm.opportunityHistoryNote": "Follow-up note added",
+  "crm.opportunityHistoryStage": "Opportunity stage changed"
 }
