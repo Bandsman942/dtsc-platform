@@ -273,11 +273,11 @@ export function EnterpriseWorkflowsPanel({ workflows }: { workflows: EnterpriseA
   );
 }
 
-export function EnterpriseRequestsPanel({ requests }: { requests: EnterpriseActivityRequestItem[] }) {
+export function EnterpriseRequestsPanel({ requests, focusActivityId }: { requests: EnterpriseActivityRequestItem[]; focusActivityId?: string | null }) {
   const locale = useAppLocale();
   const english = locale === "en";
   const list = useSmartList({
-    items: requests,
+    items: focusActivityId ? [...requests].sort((a, b) => Number(b.id === focusActivityId) - Number(a.id === focusActivityId)) : requests,
     pageSize: 8,
     getSearchText: (request) => `${request.title} ${request.description} ${request.workflowLink?.canonicalRequestStatus || request.status} ${request.priority} ${request.blockCode}`,
   });
@@ -298,7 +298,7 @@ export function EnterpriseRequestsPanel({ requests }: { requests: EnterpriseActi
           const canonical = request.workflowLink;
           const status = canonical?.canonicalRequestStatus || request.status;
           return (
-            <article key={request.id} className="dtsc-glass-list-item min-w-0 rounded-2xl p-4">
+            <article key={request.id} id={`activity-${request.id}`} className={`dtsc-glass-list-item min-w-0 rounded-2xl p-4 ${request.id === focusActivityId ? "ring-2 ring-cyan-400" : ""}`}>
               <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="break-words text-xs font-black uppercase tracking-[0.14em] text-cyan-600">{(english ? request.block?.labelEn : request.block?.labelFr) || request.blockCode}</p>
