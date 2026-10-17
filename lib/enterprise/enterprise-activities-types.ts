@@ -3,6 +3,9 @@ export type EnterpriseActivitiesOrganization = {
   name: string;
   sector: string | null;
   sectorCode: string | null;
+  businessSubtypeCode: string | null;
+  businessSubtypeLabelFr: string | null;
+  businessSubtypeLabelEn: string | null;
   businessSector: { labelFr: string; labelEn: string; icon: string | null; color: string | null } | null;
 };
 
@@ -61,6 +64,7 @@ export type EnterpriseActivitiesDataset = {
   members: EnterpriseActivityMemberItem[];
   sectorRecords: EnterpriseActivitySectorRecordItem[];
   workflows: EnterpriseActivityWorkflowItem[];
+  gamingReferences: Partial<Record<"gamingStations" | "gamingBookings" | "gamingSessions" | "gamingCloses" | "businessParties", { value: string; label: string }[]>>;
   entitlements: {
     planCode: string;
     planLabel: string;
