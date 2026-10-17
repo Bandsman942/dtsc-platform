@@ -27,7 +27,7 @@ ok(purchase.includes("prepared.push({ description:") && purchase.includes("items
 ok(purchase.includes("calculated.items.map((item) => ({ ...item, organizationId, purchaseId }))"), "Purchase update createMany must keep explicit tenant key.");
 ok(!purchase.includes("items: { create: input.items.map((item) => ({ organizationId"), "Receipt nested writes must inherit tenant key.");
 const purchasePost = read("app/api/enterprise/[organizationId]/purchases/route.ts");
-ok(purchasePost.includes("P URCHASE".replace(" ", "") + "_POST_COMMIT_AUDIT_FAILED") && purchasePost.includes("Promise.allSettled"), "Successful purchase must not be reported as failed after post-commit audit failure.");
+ok(purchasePost.includes("PURCHASE_POST_COMMIT_AUDIT_FAILED") && purchasePost.includes("Promise.allSettled"), "Successful purchase must not be reported as failed after post-commit audit failure.");
 ok(purchasePost.includes("incidentId") && purchasePost.includes("PURCHASE_CREATE_INTERNAL_ERROR"), "Unexpected purchase failures must return a correlation reference.");
 
 ok(!purchase.includes("pharmacyStockMovement.create") && !purchase.includes("health" + "StockMovement.create"), "Common enterprise purchases must not mutate sector stock truth directly.");
