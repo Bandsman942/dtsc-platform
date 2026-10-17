@@ -4,6 +4,8 @@ import { useMemo, useState, type FormEvent } from "react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
 import { getBusinessActivityFields } from "@/lib/enterprise/enterprise-activity-form-contract";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { workCoordinationDeepLink } from "@/lib/standard-work-coordination/deep-links";
 import { FileText, Send } from "lucide-react";
 import { AccordionItem } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
@@ -216,37 +218,69 @@ export function EnterpriseActivityBlocksPanel({ sectorCode, blocks, selectedBloc
   );
 }
 
+function requestStage(status: string, english: boolean) {
+  const labels: Record<string, [string, string]> = {
+    DRAFT: ["Brouillon", "Draft"], SUBMITTED: ["Soumise", "Submitted"],
+    ASSIGNED: ["Assignée", "Assigned"], IN_REVIEW: ["En validation", "Under review"],
+    IN_PROGRESS: ["En cours", "In progress"], WAITING_REQUESTER: ["Information attendue", "Awaiting requester"],
+    APPROVED: ["Approuvée", "Approved"], REJECTED: ["Refusée", "Rejected"],
+    RESOLVED: ["Résolue", "Resolved"], FULFILLED: ["Traitée", "Fulfilled"],
+    REOPENED: ["Rouverte", "Reopened"], CLOSED: ["Clôturée", "Closed"],
+    COMPLETED: ["Terminée", "Completed"], CANCELLED: ["Annulée", "Cancelled"],
+  };
+  return labels[status]?.[english ? 1 : 0] || (english ? "Other state" : "Autre statut");
+}
+
+function workflowStage(status: string, english: boolean) {
+  const labels: Record<string, [string, string]> = {
+    QUEUED: ["En file d'attente", "Queued"], RUNNING: ["En cours", "Running"],
+    WAITING_APPROVAL: ["Validation humaine attendue", "Awaiting human approval"],
+    WAITING_TIME: ["En attente d'une échéance", "Waiting for time"],
+    BLOCKED: ["Workflow bloqué — voir le diagnostic", "Workflow blocked — see diagnostics"],
+    COMPLETED: ["Workflow terminé", "Workflow completed"],
+    REJECTED: ["Workflow rejeté", "Workflow rejected"],
+    FAILED: ["Workflow en erreur", "Workflow failed"],
+    CANCELLED: ["Workflow annulé", "Workflow cancelled"],
+  };
+  return labels[status]?.[english ? 1 : 0] || (english ? "Unknown workflow state" : "État workflow inconnu");
+}
+
 export function EnterpriseWorkflowsPanel({ workflows }: { workflows: EnterpriseActivityWorkflowItem[] }) {
+  const locale = useAppLocale();
+  const english = locale === "en";
   return (
     <div className="min-w-0">
       <div className="grid min-w-0 gap-3 md:grid-cols-2">
         {workflows.map((workflow) => (
           <article key={workflow.id} className="dtsc-glass-list-item min-w-0 rounded-2xl p-4">
             <div className="flex min-w-0 items-start gap-3">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-cyan-400/14 text-cyan-600">
-                <FileText className="h-4 w-4" />
-              </span>
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-cyan-400/14 text-cyan-600"><FileText className="h-4 w-4" /></span>
               <div className="min-w-0">
                 <p className="break-words text-xs font-black uppercase tracking-[0.14em] text-cyan-600">{workflow.workflowCode}</p>
-                <h3 className="mt-1 break-words font-black text-dtsc-ink">{workflow.labelFr}</h3>
-                <p className="mt-1 line-clamp-2 text-sm text-dtsc-muted">{workflow.descriptionFr || "Workflow interne partagé avec votre entreprise."}</p>
+                <h3 className="mt-1 break-words font-black text-dtsc-ink">{english ? workflow.labelEn : workflow.labelFr}</h3>
+                <p className="mt-1 break-words text-sm text-dtsc-muted">{workflow.descriptionFr || (english ? "Authorized workflow in your organization." : "Workflow autorisé dans votre entreprise.")}</p>
+                {workflow.triggerEntityType === "EnterpriseRequest" && workflow.triggerEventType === "ENTERPRISE_REQUEST_SUBMITTED" ? (
+                  <p className="mt-2 text-xs text-dtsc-muted">{english ? "Trigger: canonical internal request submission. Execution depends on active outbox processing." : "Déclencheur : soumission d'une demande interne canonique. L'exécution dépend du traitement actif des événements."}</p>
+                ) : null}
+                <Link className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-dtsc-blue underline underline-offset-4" href="/enterprise-modules/WORKFLOWS">{english ? "Open Workflows" : "Ouvrir Workflows"}</Link>
               </div>
             </div>
           </article>
         ))}
-        {!workflows.length && <p className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4 text-sm text-dtsc-muted">Aucun workflow partagé pour le moment.</p>}
+        {!workflows.length && <p className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4 text-sm text-dtsc-muted">{english ? "No published, authorized workflow is visible for your company." : "Aucun workflow publié et autorisé n'est visible pour cette entreprise."}</p>}
       </div>
     </div>
   );
 }
 
 export function EnterpriseRequestsPanel({ requests }: { requests: EnterpriseActivityRequestItem[] }) {
+  const locale = useAppLocale();
+  const english = locale === "en";
   const list = useSmartList({
     items: requests,
     pageSize: 8,
-    getSearchText: (request) => `${request.title} ${request.description} ${request.status} ${request.priority} ${request.blockCode}`,
+    getSearchText: (request) => `${request.title} ${request.description} ${request.workflowLink?.canonicalRequestStatus || request.status} ${request.priority} ${request.blockCode}`,
   });
-
   return (
     <div className="min-w-0">
       <ListControls
@@ -256,25 +290,45 @@ export function EnterpriseRequestsPanel({ requests }: { requests: EnterpriseActi
         pageCount={list.pageCount}
         totalCount={list.totalCount}
         filteredCount={list.filteredCount}
-        placeholder="Rechercher une activité..."
+        placeholder={english ? "Search an activity…" : "Rechercher une activité..."}
         onPageChange={list.setPage}
       />
       <div className="mt-3 grid min-w-0 gap-3">
-        {list.paginatedItems.map((request) => (
-          <article key={request.id} className="dtsc-glass-list-item min-w-0 rounded-2xl p-4">
-            <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="break-words text-xs font-black uppercase tracking-[0.14em] text-cyan-600">{request.block?.labelFr || request.blockCode}</p>
-                <h3 className="mt-1 break-words font-black text-dtsc-ink">{request.title}</h3>
-                <p className="mt-1 line-clamp-2 text-sm text-dtsc-muted">{request.description}</p>
+        {list.paginatedItems.map((request) => {
+          const canonical = request.workflowLink;
+          const status = canonical?.canonicalRequestStatus || request.status;
+          return (
+            <article key={request.id} className="dtsc-glass-list-item min-w-0 rounded-2xl p-4">
+              <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="break-words text-xs font-black uppercase tracking-[0.14em] text-cyan-600">{(english ? request.block?.labelEn : request.block?.labelFr) || request.blockCode}</p>
+                  <h3 className="mt-1 break-words font-black text-dtsc-ink">{request.title}</h3>
+                  <p className="mt-1 line-clamp-2 break-words text-sm text-dtsc-muted">{request.description}</p>
+                </div>
+                <span className="max-w-full rounded-full border border-dtsc-border bg-dtsc-page px-3 py-1 text-xs font-bold text-dtsc-ink">{requestStage(status, english)}</span>
               </div>
-              <span className="max-w-full rounded-full bg-dtsc-page px-2 py-1 text-[0.68rem] font-black text-dtsc-muted">
-                <span className="break-words">{({ SUBMITTED: "Soumise", PENDING: "En attente", IN_PROGRESS: "En cours", COMPLETED: "Terminée", APPROVED: "Approuvée", REJECTED: "Refusée", CLOSED: "Clôturée", CANCELLED: "Annulée" } as Record<string, string>)[request.status] || "À consulter"}</span>
-              </span>
-            </div>
-          </article>
-        ))}
-        {!list.filteredCount && <p className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4 text-sm text-dtsc-muted">Aucune activité entreprise pour le moment.</p>}
+              {canonical?.workflowState ? (
+                <div className="mt-3 rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm text-dtsc-muted">
+                  <p className="font-semibold text-dtsc-ink">{english ? "Internal-request workflow" : "Workflow de demande interne"}</p>
+                  <p className="mt-1 break-words">
+                    {canonical.workflowState === "STARTED" && canonical.workflowRunStatus ? workflowStage(canonical.workflowRunStatus, english)
+                      : canonical.workflowState === "NOT_CONFIGURED" ? (english ? "No active published internal-request workflow. Request tracking remains available." : "Aucun workflow de demande interne actif et publié. Le suivi de la demande reste accessible.")
+                      : (english ? "No workflow run recorded yet. This does not confirm that the event worker is active." : "Aucune exécution enregistrée pour le moment. Cela ne confirme pas que le traitement des événements est activé.")}
+                  </p>
+                </div>
+              ) : null}
+              <div className="mt-3 flex min-w-0 flex-wrap gap-x-5 gap-y-2 text-sm">
+                {canonical?.canonicalRequestId && canonical.canOpenRequest ? (
+                  <Link href={workCoordinationDeepLink("REQUEST", canonical.canonicalRequestId)} className="min-h-11 inline-flex items-center font-semibold text-dtsc-blue underline underline-offset-4">{english ? "Open internal request" : "Ouvrir la demande interne"}</Link>
+                ) : null}
+                {canonical?.workflowRunId && canonical.canOpenWorkflow ? (
+                  <Link href={workCoordinationDeepLink("WORKFLOW_RUN", canonical.workflowRunId)} className="min-h-11 inline-flex items-center font-semibold text-dtsc-blue underline underline-offset-4">{english ? "View workflow run" : "Voir l'exécution du workflow"}</Link>
+                ) : null}
+              </div>
+            </article>
+          );
+        })}
+        {!list.filteredCount && <p className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4 text-sm text-dtsc-muted">{english ? "No business request found." : "Aucune activité entreprise pour le moment."}</p>}
       </div>
     </div>
   );
