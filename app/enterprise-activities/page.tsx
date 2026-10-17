@@ -6,6 +6,7 @@ import { getSession, requireUser } from "@/lib/auth";
 import { canUseFeature, getOrganizationEntitlements } from "@/lib/billing/entitlements";
 import { getEnterpriseActivitiesDataset } from "@/lib/enterprise/enterprise-activities-loader";
 import { requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
+import { translate } from "@/lib/i18n";
 
 export default async function EnterpriseActivitiesPage({ searchParams }: { searchParams: Promise<{ activity?: string }> }) {
   const user = await requireUser();
@@ -24,7 +25,7 @@ export default async function EnterpriseActivitiesPage({ searchParams }: { searc
     return (
       <AppShell user={user}>
         <SaasAccessNotice
-          title="Activités entreprise indisponibles"
+          title={translate(user.locale, "enterpriseActivities.unavailableTitle")}
           message={featureAccess.message}
           planLabel={entitlements?.planLabel}
           subscriptionStatus={entitlements?.subscriptionStatus}

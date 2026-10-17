@@ -33,4 +33,8 @@ assert(activitiesPage.includes("dataset.requests.some((item) => item.id === acti
 assert(bridge.includes('viewAllRuns ? "NOT_STARTED" : "LIMITED_ACCESS"') && panels.includes('canonical.workflowState === "LIMITED_ACCESS"'), "Do not infer absence of runs from permission-filtered workflow results");
 assert(workflowDetail.includes("canSeeAllActivities") && workflowDetail.includes("access.membership.role"),"Reverse activity link must be scoped to Activities roles, not workflow-wide visibility");
 assert(workflowAccess.includes("canViewAllRuns"),"Workflow visibility must use canonical ACL");
+const activityPage = read("app/enterprise-activities/page.tsx");
+const translationsFr = JSON.parse(read("locales/fr.json")), translationsEn = JSON.parse(read("locales/en.json"));
+assert(activityPage.includes('translate(user.locale, "enterpriseActivities.unavailableTitle")'), "Activities entitlement notice must use canonical dictionary");
+assert(Boolean(translationsFr.enterpriseActivities?.unavailableTitle && translationsEn.enterpriseActivities?.unavailableTitle), "Enterprise Activities must translate notice in FR/EN");
 console.log("Hotfix #877 canonical Activities ↔ Internal Requests ↔ Workflow bridge: PASS");

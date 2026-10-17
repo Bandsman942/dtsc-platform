@@ -43,6 +43,7 @@ assert.match(activity, /triggerEntityType: "EnterpriseRequest", triggerEventType
 assert.match(activity, /currentVersionId: \{ not: null \}/, "Only published workflow definitions are projected");
 assert.match(activity, /versions: \{ some: \{ status: "PUBLISHED" \} \}/);
 assert.ok(!activity.includes("prisma.enterpriseWorkflow.findMany"), "Activity must not revive legacy workflow engine");
+assert.match(ui, /parameters\.get\("run"\)\s*\|\|\s*parameters\.get\("runId"\)/, "Both canonical and legacy run deep links must open their workflow");
 const route = fs.readFileSync("app/api/enterprise/[organizationId]/workflows/[id]/versions/[versionId]/publish/route.ts", "utf8");
 assert.ok(route.includes("allowManualStart: true, singleActiveRun: true"), "Review token covers manual-start contract");
 assert.ok(route.includes("fresh.reviewToken !== parsed.data.reviewToken"), "Concurrent mutations invalidate review token");
@@ -53,7 +54,7 @@ assert.ok(manual.includes("isWorkflowManualSourceSelectable"), "Manual starter m
 const sourceRoute = fs.readFileSync("app/api/enterprise/[organizationId]/workflow-runs/sources/route.ts", "utf8");
 assert.ok(sourceRoute.includes("requireWorkflowSourceAccess") && sourceRoute.includes("canStartManual"));
 const ui = fs.readFileSync("components/enterprise/core-v2/enterprise-workflows-workspace.tsx", "utf8");
-for (const token of ["submitManualStart", "sourceEntityId", "runPage", "runPageCount", "runTotal", "runFilter", "new URLSearchParams(window.location.search).get(\"runId\")"]) assert.ok(ui.includes(token), `Missing real UI behavior: ${token}`);
+for (const token of ["submitManualStart", "sourceEntityId", "runPage", "runPageCount", "runTotal", "runFilter", "new URLSearchParams(window.location.search)"]) assert.ok(ui.includes(token), `Missing real UI behavior: ${token}`);
 const acl = fs.readFileSync("lib/enterprise/workflows/manual-source-access.ts", "utf8");
 const sourceQueries = fs.readFileSync("lib/enterprise/workflows/manual-source-options.ts", "utf8");
 assert.ok(acl.includes("findWorkflowManualSources") && acl.includes("sourceEntityId: entityId"), "POST reuses exact picker predicate");
