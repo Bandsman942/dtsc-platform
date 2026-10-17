@@ -34,7 +34,7 @@ function numericCount(value: bigint | number | string | null | undefined) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-async function getWorkflowQueueSnapshot(): Promise<WorkflowQueueSnapshot> {
+export async function getWorkflowQueueSnapshot(): Promise<WorkflowQueueSnapshot> {
   const sampledAt = new Date();
   const leaseBefore = new Date(sampledAt.getTime() - WORKFLOW_LIMITS.workerLeaseSeconds * 1000);
   try {
