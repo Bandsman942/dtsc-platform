@@ -73,4 +73,5 @@ assert.ok(!catalog.includes("source:") && !catalog.includes('type: "file"'), "Do
 for (const name of ["MY_ASSIGNED_PATIENTS", "MY_APPOINTMENTS", "REPORT_CONFIDENTIALITY_ISSUE"]) assert.ok(contract.includes(name), "Sensitive health actions cannot use a generic request");
 assert.ok(contract.includes('if (sectorCode === "PHARMACY")'), "Dedicated Pharmacy flows must remain separate");
 assert.match(route, /new Date\(\`\$\{value\}T00:00:00Z\`\)\.toISOString\(\)\.slice\(0, 10\) !== value/);
+for (const token of ["discountPercent", "ENTERPRISE_ACTIVITY_DISCOUNT_INVALID", "requestedAmount", "ENTERPRISE_ACTIVITY_CURRENCY_INVALID", "/^[A-Z]{3}$/"]) assert.ok(route.includes(token), "Validated amount, discount and currency contract missing: " + token);
 console.log("Hotfix #876: 94 legacy actions audited; 60 explicit request forms, 14 blocked operations, 6 hospitality and 14 clinical/dedicated actions classified. No fake business writes: PASS");
