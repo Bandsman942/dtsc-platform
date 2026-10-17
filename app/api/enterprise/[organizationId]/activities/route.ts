@@ -158,6 +158,26 @@ export async function POST(req: Request, { params }: Params) {
       return NextResponse.json({ error: "ENTERPRISE_ACTIVITY_FIELDS_INVALID", message: "Un champ n'est pas reconnu pour cette action. Rechargez le formulaire et réessayez." }, { status: 400 });
     }
   }
+  if (data.departmentId) {
+    const department = await prisma.enterpriseDepartment.findFirst({
+      where: { id: data.departmentId, organizationId, isActive: true },
+      select: { id: true, responsibleUserId: true },
+    });
+    if (!department?.responsibleUserId) {
+      return NextResponse.json({ error: "ENTERPRISE_ACTIVITY_APPROVER_DEPARTMENT_MISSING", message: "Ce département n'a pas de responsable actif désigné pour traiter la validation." }, { status: 400 });
+    }
+    const manager = await prisma.organizationMember.findFirst({
+      where: { organizationId, userId: department.responsibleUserId, status: "ACTIVE", removedAt: null },
+      select: { userId: true },
+    });
+    const mandate = manager ? await resolveEnterpriseModuleCapabilities({ organizationId, userId: manager.userId, moduleCode: "INTERNAL_REQUESTS" }) : null;
+    if (!mandate?.canApprove) {
+      return NextResponse.json({ error: "ENTERPRISE_ACTIVITY_APPROVER_NOT_AUTHORIZED", message: "Le responsable du département ne possède pas les droits de validation des demandes internes." }, { status: 400 });
+    }
+    if (manager?.userId === session.userId) {
+      return NextResponse.json({ error: "ENTERPRISE_ACTIVITY_SELF_APPROVAL", message: "Choisissez un département dont le responsable est différent du demandeur." }, { status: 400 });
+    }
+  }
   if (data.assignedToUserId) {
     const assignee = await prisma.organizationMember.findFirst({
       where: { organizationId, userId: data.assignedToUserId, status: "ACTIVE", removedAt: null },
@@ -191,6 +211,7 @@ export async function POST(req: Request, { params }: Params) {
       description: data.description,
       priority: data.priority,
       assignedToUserId: data.assignedToUserId || undefined,
+      departmentId: data.departmentId || undefined,
       sourceModule: "ENTERPRISE_ACTIVITIES",
       sourceEntityType: "EnterpriseActivityRequest",
       sourceEntityId: activityRequest.id,
