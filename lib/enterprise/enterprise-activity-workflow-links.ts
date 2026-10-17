@@ -1,5 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
+import { getSession } from "@/lib/auth";
+import { getEnterpriseWorkflowAccess } from "@/lib/enterprise/workflows/access";
+import { listReadableWorkflowEntityTypes } from "@/lib/enterprise/workflows/source-access";
 
 export type EnterpriseActivityRequestWorkflowStatus = {
   canonicalRequestId: string | null;
@@ -32,9 +35,10 @@ export async function projectEnterpriseActivityRequestWorkflows({
   const projected = new Map<string, EnterpriseActivityRequestWorkflowStatus>();
   if (!activityIds.length) return projected;
 
+  const session = await getSession();
   const [requestAccess, workflowAccess, canonicalRequests] = await Promise.all([
     resolveEnterpriseModuleCapabilities({ userId, organizationId, moduleCode: "INTERNAL_REQUESTS" }),
-    resolveEnterpriseModuleCapabilities({ userId, organizationId, moduleCode: "WORKFLOWS" }),
+    session?.userId === userId ? getEnterpriseWorkflowAccess(session, organizationId) : Promise.resolve(null),
     prisma.enterpriseRequest.findMany({
       where: {
         organizationId,
@@ -48,10 +52,13 @@ export async function projectEnterpriseActivityRequestWorkflows({
     }),
   ]);
   const canOpenRequest = requestAccess.canRead;
-  const canOpenWorkflow = workflowAccess.canRead;
+  const canOpenWorkflow = Boolean(workflowAccess?.canRead);
+  const readableTypes = canOpenWorkflow ? await listReadableWorkflowEntityTypes(userId, organizationId) : [];
+  const sourceReadable = readableTypes.includes("EnterpriseRequest");
+  const viewAllRuns = workflowAccess?.canViewAllRuns === true;
   const canonicalIds = canonicalRequests.map((item) => item.id);
   const [definitions, runs] = await Promise.all([
-    canOpenWorkflow
+    sourceReadable
       ? prisma.enterpriseWorkflowDefinition.findMany({
           where: {
             organizationId,
@@ -65,9 +72,10 @@ export async function projectEnterpriseActivityRequestWorkflows({
           take: 100,
         })
       : Promise.resolve([]),
-    canOpenWorkflow && canonicalIds.length
+    sourceReadable && canonicalIds.length
       ? prisma.enterpriseWorkflowRun.findMany({
-          where: { organizationId, sourceEntityType: "EnterpriseRequest", sourceEntityId: { in: canonicalIds } },
+          where: { organizationId, sourceEntityType: "EnterpriseRequest", sourceEntityId: { in: canonicalIds },
+            ...(viewAllRuns ? {} : { OR: [{ startedByUserId: userId }, { stepRuns: { some: { assignedUserId: userId } } }] }) },
           orderBy: { startedAt: "desc" },
           select: { id: true, sourceEntityId: true, workflowDefinitionId: true, status: true, definition: { select: { code: true } } },
           take: 400,
@@ -78,18 +86,18 @@ export async function projectEnterpriseActivityRequestWorkflows({
   for (const run of runs) if (!runsByRequest.has(run.sourceEntityId)) runsByRequest.set(run.sourceEntityId, run);
   for (const request of canonicalRequests) {
     if (!request.sourceEntityId || projected.has(request.sourceEntityId)) continue;
-    const run = canOpenWorkflow ? runsByRequest.get(request.id) : null;
+    const run = sourceReadable ? runsByRequest.get(request.id) : null;
     projected.set(request.sourceEntityId, {
       canonicalRequestId: request.id,
       canonicalRequestStatus: request.status,
       workflowRunId: run?.id || null,
       workflowRunStatus: run?.status || null,
       workflowCode: run?.definition.code || null,
-      workflowState: !canOpenWorkflow
+      workflowState: !sourceReadable
         ? null
         : run ? "STARTED" : definitions.length ? "NOT_STARTED" : "NOT_CONFIGURED",
       canOpenRequest,
-      canOpenWorkflow,
+      canOpenWorkflow: Boolean(canOpenWorkflow && run),
     });
   }
   return projected;
