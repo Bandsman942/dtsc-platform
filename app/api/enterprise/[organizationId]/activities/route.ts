@@ -141,6 +141,15 @@ export async function POST(req: Request, { params }: Params) {
       if (field.type === "number" && (!Number.isFinite(Number(value)) || Number(value) < 0 || (field.name === "quantity" && Number(value) <= 0))) {
         return NextResponse.json({ error: "ENTERPRISE_ACTIVITY_AMOUNT_INVALID", message: `Le champ « ${field.label} » doit contenir un nombre valide.` }, { status: 400 });
       }
+      if (field.name === "discountPercent" && Number(value) > 100) {
+        return NextResponse.json({ error: "ENTERPRISE_ACTIVITY_DISCOUNT_INVALID", message: "La remise proposée ne peut pas dépasser 100 %." }, { status: 400 });
+      }
+      if (field.name === "requestedAmount" && Number(value) <= 0) {
+        return NextResponse.json({ error: "ENTERPRISE_ACTIVITY_AMOUNT_INVALID", message: "Indiquez un montant strictement positif." }, { status: 400 });
+      }
+      if (field.name === "currencyCode" && !/^[A-Z]{3}$/.test(value)) {
+        return NextResponse.json({ error: "ENTERPRISE_ACTIVITY_CURRENCY_INVALID", message: "Indiquez un code devise ISO à trois lettres, comme CDF ou USD." }, { status: 400 });
+      }
       if (field.type === "date" && (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(new Date(`${value}T00:00:00Z`).getTime()) || new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) !== value)) {
         return NextResponse.json({ error: "ENTERPRISE_ACTIVITY_DATE_INVALID", message: `Indiquez une date valide pour « ${field.label} ».` }, { status: 400 });
       }
