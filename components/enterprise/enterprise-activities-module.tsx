@@ -74,6 +74,7 @@ export function EnterpriseActivitiesModule({ organization, blocks, requests, mem
           <ModuleSection title={english ? "Submit an activity" : "Soumettre une activité"} description={english ? "Choose the specific action, then complete its dedicated fields." : "Sélectionnez une action et complétez son formulaire métier adapté."}>
             <EnterpriseActivityBlocksPanel
               sectorCode={organization.sectorCode}
+              businessSubtypeCode={organization.businessSubtypeCode}
               blocks={blocks}
               selectedBlockCode={selectedBlockCode}
               selectedBlock={selectedBlock}

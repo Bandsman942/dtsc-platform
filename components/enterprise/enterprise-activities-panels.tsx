@@ -2,7 +2,7 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
-import { getBusinessActivityFields } from "@/lib/enterprise/enterprise-activity-form-contract";
+import { getBusinessActivityFields, resolveEnterpriseActivityAction } from "@/lib/enterprise/enterprise-activity-form-contract";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { workCoordinationDeepLink } from "@/lib/standard-work-coordination/deep-links";
@@ -173,8 +173,9 @@ export function EnterpriseActivitiesDashboard({ organization }: { organization: 
   );
 }
 
-export function EnterpriseActivityBlocksPanel({ sectorCode, blocks, selectedBlockCode, selectedBlock, onSelectBlock, onOpenForm }: {
+export function EnterpriseActivityBlocksPanel({ sectorCode, businessSubtypeCode, blocks, selectedBlockCode, selectedBlock, onSelectBlock, onOpenForm }: {
   sectorCode?: string | null;
+  businessSubtypeCode?: string | null;
   blocks: EnterpriseActivityBlockItem[];
   selectedBlockCode: string;
   selectedBlock: EnterpriseActivityBlockItem | null;
@@ -183,6 +184,8 @@ export function EnterpriseActivityBlocksPanel({ sectorCode, blocks, selectedBloc
 }) {
   const locale = useAppLocale();
   const english = locale === "en";
+  const capability = selectedBlock ? resolveEnterpriseActivityAction(sectorCode, businessSubtypeCode, selectedBlock.blockCode) : null;
+  const isReady = capability?.mode === "REQUEST";
   return (
     <div className="w-full min-w-0 space-y-4">
       <div data-horizontal-rail tabIndex={0} aria-label={english ? "Business activity actions" : "Actions métier disponibles"} className="flex w-full min-w-0 max-w-full snap-x snap-mandatory gap-2 overflow-x-auto overscroll-x-contain pb-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-dtsc-blue">
@@ -197,7 +200,8 @@ export function EnterpriseActivityBlocksPanel({ sectorCode, blocks, selectedBloc
               className={`w-[min(80vw,16rem)] min-w-0 shrink-0 snap-start rounded-xl border px-4 py-3 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-dtsc-blue ${active ? "border-cyan-400 bg-cyan-400/10 text-dtsc-ink" : "border-dtsc-border bg-dtsc-surface text-dtsc-ink hover:bg-dtsc-page"}`}
             >
               <span className="block break-words text-sm font-bold">{english ? item.labelEn : item.labelFr}</span>
-              <span className="mt-1 block line-clamp-2 break-words text-xs text-dtsc-muted">{item.descriptionFr || (sectorCode === "HOSPITALITY_EVENTS" ? "Action sectorielle" : "Demande de service")}</span>
+              <span className="mt-1 block line-clamp-2 break-words text-xs text-dtsc-muted">{english ? "Business activity" : item.descriptionFr || "Activité sectorielle"}</span>
+              <span className="mt-2 block text-xs font-semibold text-dtsc-muted">{resolveEnterpriseActivityAction(sectorCode, businessSubtypeCode, item.blockCode).mode === "REQUEST" ? (english ? "Tracked request — no automatic business change" : "Demande suivie — sans opération automatique") : (english ? "Unavailable: dedicated business workflow required" : "Indisponible : parcours métier dédié requis")}</span>
             </button>
           );
         })}
@@ -206,11 +210,11 @@ export function EnterpriseActivityBlocksPanel({ sectorCode, blocks, selectedBloc
       {selectedBlock && <div className="flex min-w-0 flex-col gap-3 border-t border-dtsc-border pt-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <p className="break-words font-semibold text-dtsc-ink">{english ? selectedBlock.labelEn : selectedBlock.labelFr}</p>
-          <p className="mt-1 break-words text-sm text-dtsc-muted">{english ? "The business form is based on this action and its real organization references." : "Le formulaire est adapté à cette action et aux références réelles de l'entreprise."}</p>
+          <p className="mt-1 break-words text-sm text-dtsc-muted">{isReady ? (english ? "This sends a tracked request for processing; it does not complete the underlying ERP operation." : "Cette action envoie une demande suivie pour traitement ; elle ne réalise pas l’opération ERP.") : (english ? capability?.reasonEn || "This action is not yet available through Enterprise Activities." : capability?.reasonFr || "Cette action n’est pas encore disponible dans Activités entreprise.")}</p>
         </div>
         <div data-responsive-actions className="shrink-0">
-          <Button type="button" onClick={onOpenForm} className="rounded-xl bg-dtsc-blue text-white">
-            <Send className="h-4 w-4" />{english ? "Open form" : "Ouvrir le formulaire"}
+          <Button type="button" onClick={onOpenForm} disabled={!isReady} aria-disabled={!isReady} className="rounded-xl bg-dtsc-blue text-white disabled:cursor-not-allowed disabled:opacity-55">
+            <Send className="h-4 w-4" />{isReady ? (english ? "Create request" : "Créer une demande") : (english ? "Action unavailable" : "Action indisponible")}
           </Button>
         </div>
       </div>}
