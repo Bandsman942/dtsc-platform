@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import type { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { refreshLinkedSupplierSnapshotFromPartyTx } from "@/lib/enterprise/master-data/supplier-projection";
+import { synchronizeLinkedPersonIdentityTx } from "@/lib/enterprise/identity-links/person-projection";
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import type {
   businessPartyCreateSchema,
@@ -475,6 +476,7 @@ export async function updateEnterpriseBusinessParty(organizationId: string, part
     if (input.primaryPhone !== undefined) await syncCanonicalPrimaryContactTx(tx, organizationId, partyId, actorUserId, "PHONE", input.primaryPhone);
     if (input.primaryAddress !== undefined) await syncCanonicalPrimaryAddressTx(tx, organizationId, partyId, actorUserId, input.primaryAddress);
     await refreshLinkedSupplierSnapshotFromPartyTx(tx, organizationId, partyId, actorUserId);
+    await synchronizeLinkedPersonIdentityTx(tx, organizationId, partyId, actorUserId);
 
     await tx.enterpriseOperationalEvent.create({ data: { organizationId, entityType: "EnterpriseBusinessParty", entityId: partyId, eventType: "BUSINESS_PARTY_UPDATED", summary: `Tiers ${existing.code} modifié`, actorUserId, fromStatus: existing.status, toStatus: input.status || existing.status } });
     return tx.enterpriseBusinessParty.findUniqueOrThrow({ where: { id: partyId }, include: { roles: true, contacts: true, addresses: true } });
