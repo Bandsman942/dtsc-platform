@@ -104,7 +104,10 @@ try {
   }
 }
 
-const sourceOptions = readFileSync("app/api/enterprise/[organizationId]/workflow-runs/sources/route.ts","utf8");
+const sourceOptions = readFileSync("lib/enterprise/workflows/manual-source-options.ts","utf8");
+const sourceRoute = readFileSync("app/api/enterprise/[organizationId]/workflow-runs/sources/route.ts","utf8");
+const sourceGuard = readFileSync("lib/enterprise/workflows/manual-source-access.ts","utf8");
+assert.ok(sourceRoute.includes("findWorkflowManualSources") && sourceGuard.includes("findWorkflowManualSources"), "Both source picker and POST must use shared tenant/state/actor checks");
 for (const sourceType of ["EnterpriseSupplierInvoice","EnterprisePayment","EnterpriseCashSession","EnterpriseJournalEntry","EnterpriseFinancialClose"]) {
   assert.ok(sourceOptions.includes('case "'+sourceType+'":'), "missing tenant-bounded manual options for "+sourceType);
 }
