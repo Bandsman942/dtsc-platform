@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { canUseFeature } from "@/lib/billing/entitlements";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
+import { canonicalSectorActivityDestination } from "@/lib/enterprise/sector-activity-canonical-handoffs";
 import { RETAIL_SECTOR_CODE } from "@/lib/enterprise/retail/constants";
 import {
   getRetailBusinessSubtype,
@@ -58,7 +59,7 @@ async function getEnterpriseAccessContext(userId: string, organizationId: string
       removedAt: null,
       organization: { status: "ACTIVE", deletedAt: null, organizationType: "CLIENT" },
     },
-    select: { role: true, positionId: true, positionCode: true },
+    select: { role: true, positionId: true, positionCode: true, organization: { select: { sectorCode: true } } },
   });
   if (!membership) {
     return null;
@@ -76,7 +77,7 @@ async function getEnterpriseAccessContext(userId: string, organizationId: string
         select: { permissionsJson: true },
       })
     : null;
-  return { role: membership.role, permissions: permissionList(position?.permissionsJson) };
+  return { role: membership.role, permissions: permissionList(position?.permissionsJson), sectorCode: membership.organization.sectorCode };
 }
 
 export function hasEnterprisePermission(permissions: string[], permission: string) {
@@ -243,10 +244,14 @@ export async function canAccessEnterpriseActivity(userId: string, organizationId
     return hasEnterprisePermission(access.permissions, "enterprise.activities.manage");
   }
   if (block.targetModuleCode) {
+    // #878: only the explicit Professional Services legacy handoffs resolve
+    // against a canonical owner. Never interpret arbitrary template module
+    // codes as permissions or URLs.
+    const handoff = canonicalSectorActivityDestination(access.sectorCode, blockCode);
     const decision = await resolveEnterpriseModuleAccess({
       userId,
       organizationId,
-      moduleCode: block.targetModuleCode,
+      moduleCode: handoff?.moduleCode || block.targetModuleCode,
       action: action === "submit" ? "submit" : "read",
     });
     return decision.allowed;
