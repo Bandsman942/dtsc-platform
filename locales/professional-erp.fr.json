@@ -248,5 +248,6 @@
   "crm.opportunityDefaultName": "Opportunité {{name}}",
   "crm.selectExistingRequired": "Sélectionnez une fiche métier existante.",
   "crm.conversionDecisionRequired": "Sélectionnez une fiche existante ou confirmez explicitement la création d’une nouvelle fiche.",
-  "crm.lostPrompt": "Pourquoi ce prospect est-il perdu ?"
+  "crm.lostPrompt": "Pourquoi ce prospect est-il perdu ?",
+  "customers.systemWalkInNoRelationship": "Cette fiche représente un client comptoir système pour les transactions Gaming anonymes. Elle ne correspond à aucune personne identifiable et ne peut pas être liée à un compte DTSC. Sélectionnez un client réel pour configurer une relation."
 }
