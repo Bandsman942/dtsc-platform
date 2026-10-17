@@ -72,4 +72,13 @@ export function getBusinessActivityFields(sectorCode: string | null | undefined,
   if (blockCode.startsWith("UPDATE_")) return [period, observed];
   return [observed];
 }
+/** Access to a reference select never grants access to its underlying ERP module. */
+export const GAMING_ACTIVITY_REFERENCE_MODULE_CODES = {
+  gamingStations: "GAMING_STATIONS",
+  gamingBookings: "GAMING_BOOKINGS",
+  gamingSessions: "GAMING_SESSIONS",
+  gamingCloses: "GAMING_DAILY_CLOSE",
+  businessParties: "CRM_CUSTOMERS",
+} as const;
+
 export const GAMING_INCOMPATIBLE_ACTIVITY_BLOCKS = new Set(["REQUEST_KITCHEN_STOCK"]);
