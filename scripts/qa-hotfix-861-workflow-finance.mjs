@@ -64,6 +64,8 @@ for (const sourceType of ["EnterpriseSupplierInvoice","EnterprisePayment","Enter
   assert.ok(sourceOptions.includes('case "'+sourceType+'":'), "missing tenant-bounded manual options for "+sourceType);
 }
 assert.ok(sourceOptions.includes('paymentType: "SUPPLIER_PAYMENT"'), "supplier-payment selector must not show other payment types");
+assert.ok(sourceOptions.includes('"PENDING_VALIDATION"'), "cash selector must use the canonical PENDING_VALIDATION status, not SUBMITTED");
+assert.ok(sourceOptions.includes('fiscalPeriod: { select: { code: true } }'), "financial-close selector must show a business period code");
 assert.ok(source.includes('WORKFLOW_WORKER_ENABLED') && source.includes('dryRun') && source.includes('getWorkflowQueueSnapshot'));
 assert.ok(isolated.includes('workflowEventClaimCutover') && worker.includes('workflowEventClaimCutover'));
 assert.ok(isolated.includes('AND "createdAt" >= ${cutover}') && worker.includes('AND "createdAt" >= ${cutover}'));
