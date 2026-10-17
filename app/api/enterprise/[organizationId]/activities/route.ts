@@ -140,7 +140,7 @@ export async function POST(req: Request, { params }: Params) {
           if (field.source === "gamingBookings") valid = Boolean(await prisma.enterpriseGamingBooking.findFirst({ where: { id: value, organizationId, archivedAt: null }, select: { id: true } }));
           if (field.source === "gamingSessions") valid = Boolean(await prisma.enterpriseGamingSession.findFirst({ where: { id: value, organizationId, archivedAt: null }, select: { id: true } }));
           if (field.source === "gamingCloses") valid = Boolean(await prisma.enterpriseGamingDailyClose.findFirst({ where: { id: value, organizationId }, select: { id: true } }));
-          if (field.source === "businessParties") valid = Boolean(await prisma.enterpriseBusinessParty.findFirst({ where: { id: value, organizationId, status: "ACTIVE", archivedAt: null }, select: { id: true } }));
+          if (field.source === "businessParties") valid = Boolean(await prisma.enterpriseBusinessParty.findFirst({ where: { id: value, organizationId, partyType: "PERSON", status: "ACTIVE", archivedAt: null }, select: { id: true } }));
         }
         if (!valid) return NextResponse.json({ error: "ENTERPRISE_ACTIVITY_REFERENCE_INVALID", message: `La référence choisie pour « ${field.label} » est introuvable ou n'appartient pas à cette entreprise.` }, { status: 400 });
       }
