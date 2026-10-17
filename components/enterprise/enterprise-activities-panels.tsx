@@ -396,6 +396,7 @@ export function EnterpriseActivityFormDialog({
   open,
   onClose,
   members,
+  departments,
   sectorRecords,
   gamingReferences,
   onMessage,
@@ -406,6 +407,7 @@ export function EnterpriseActivityFormDialog({
   open: boolean;
   onClose: () => void;
   members: EnterpriseActivityMemberItem[];
+  departments: { value: string; labelFr: string; labelEn: string }[];
   sectorRecords: EnterpriseActivitySectorRecordItem[];
   gamingReferences: Partial<Record<"gamingStations" | "gamingBookings" | "gamingSessions" | "gamingCloses" | "businessParties", { value: string; label: string }[]>>;
   onMessage: (message: string, tone?: "success" | "error") => void;
@@ -464,6 +466,7 @@ export function EnterpriseActivityFormDialog({
     const baseDescription = String(formData.get("description") || "");
     const priority = String(formData.get("priority") || "NORMAL");
     const assignedToUserId = String(formData.get("assignedToUserId") || "");
+    const departmentId = String(formData.get("departmentId") || "");
     const metadata: Record<string, string> = {};
     for (const field of selectedActivityFields) {
       const value = String(formData.get(field.name) || "").trim();
@@ -477,7 +480,7 @@ export function EnterpriseActivityFormDialog({
       const response = await fetch(`/api/enterprise/${organization.id}/activities`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, description, priority, assignedToUserId, blockCode: selectedBlockCode, metadata }),
+        body: JSON.stringify({ title, description, priority, assignedToUserId, departmentId, blockCode: selectedBlockCode, metadata }),
       });
       const responseBody = (await response.json().catch(() => null)) as { message?: string } | null;
       onMessage(response.ok ? (english ? "Request sent to the selected colleague." : "Demande envoyée au destinataire sélectionné.") : (english ? "Request could not be sent. Check the fields or contact the manager." : responseBody?.message || "Envoi impossible."), response.ok ? "success" : "error");
@@ -518,6 +521,12 @@ export function EnterpriseActivityFormDialog({
             </select>
           </FormField>
         </div>
+        <FormField label={english ? "Department for manager approval (optional)" : "Département de validation manager (facultatif)"} hint={english ? "If a manager-approval workflow is published, its department manager must have the right to approve internal requests. Otherwise the workflow may be blocked." : "Si un workflow de validation manager est publié, son responsable de département doit être habilité. Sans département admissible, ce workflow peut rester bloqué."}>
+          <select name="departmentId" defaultValue="" className="min-h-11 min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink">
+            <option value="">{english ? "No department specified" : "Aucun département précisé"}</option>
+            {departments.map((department) => <option key={department.value} value={department.value}>{english ? department.labelEn : department.labelFr}</option>)}
+          </select>
+        </FormField>
         <FormField label={english ? "Description" : "Description"} hint={english ? "Describe the context, need, report or problem." : "Décrivez le contexte, le besoin, le rapport ou le problème à traiter."}>
           <textarea name="description" required placeholder={english ? "Describe the request, report or issue." : "Décrivez précisément la demande, le rapport ou le problème."} className="min-h-36 min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" />
         </FormField>
