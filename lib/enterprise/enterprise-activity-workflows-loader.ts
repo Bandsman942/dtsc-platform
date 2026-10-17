@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
+import { listReadableWorkflowEntityTypes } from "@/lib/enterprise/workflows/source-access";
 
 /**
  * Workflow Engine v2 is the only active source exposed to collaborators.
@@ -9,6 +10,7 @@ import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-acc
 export async function getEnterpriseActivityWorkflows(organizationId: string, userId: string) {
   const capabilities = await resolveEnterpriseModuleCapabilities({ userId, organizationId, moduleCode: "WORKFLOWS" });
   if (!capabilities.canRead) return [];
+  const readableTypes = new Set(await listReadableWorkflowEntityTypes(userId, organizationId));
   const definitions = await prisma.enterpriseWorkflowDefinition.findMany({
     where: {
       organizationId,
@@ -52,7 +54,7 @@ export async function getEnterpriseActivityWorkflows(organizationId: string, use
     },
   });
 
-  return definitions.map((definition) => ({
+  return definitions.filter((definition) => definition.triggerEntityType ? readableTypes.has(definition.triggerEntityType as "EnterpriseRequest") : false).map((definition) => ({
     id: definition.id,
     workflowCode: definition.code,
     labelFr: definition.name,
