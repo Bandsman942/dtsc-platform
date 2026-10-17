@@ -69,7 +69,7 @@ assert.ok(route.indexOf("ENTERPRISE_ACTIVITY_ACTION_NOT_READY") < route.indexOf(
 for (const token of ["resolveEnterpriseActivityAction(sectorCode, businessSubtypeCode", "disabled={!isReady}", "aria-disabled={!isReady}", 'mode === "REQUEST"', "Action indisponible", "Créer une demande"]) assert.ok(panel.includes(token), "UI readiness contract missing: " + token);
 assert.ok(moduleUi.includes("businessSubtypeCode={organization.businessSubtypeCode}"));
 assert.ok(contract.includes("getSectorActivityCapability(sectorCode, blockCode)"));
-assert.ok(!/(?:^|[,\\{]\\s*)source\\s*:/m.test(catalog) && !catalog.includes('type: "file"'), "Do not invent reference selector properties or fake file upload fields");
+assert.ok(!catalog.includes(" source:") && !catalog.includes('type: "file"'), "Do not invent reference selector properties or fake file upload fields");
 assert.ok(contract.includes('const verifiedRequests = new Set([') && contract.includes('verifiedRequests.has(blockCode)'), "Sensitive healthcare must use an explicit allowlist");
 const healthAllowlist = contract.split("const verifiedRequests = new Set([")[1]?.split("]);")[0] || "";
 for (const name of ["MY_ASSIGNED_PATIENTS", "MY_APPOINTMENTS", "REPORT_CONFIDENTIALITY_ISSUE"]) assert.ok(!healthAllowlist.includes(name), "Sensitive health action must not be submitted through Activities: " + name);
