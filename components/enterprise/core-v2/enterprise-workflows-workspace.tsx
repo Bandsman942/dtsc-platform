@@ -494,6 +494,7 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, departmen
       if (!response.ok) { toastError(getWorkflowRecoveryMessage(body?.error, locale) || body?.message || (en ? "Unable to start workflow." : "Démarrage du workflow impossible.")); return; }
       toastSuccess(en ? "Workflow started." : "Workflow démarré.");
       setStartDefinition(null);
+      setSelected(null);
       setTab("runs");
       setRunPage(1);
       window.history.replaceState(window.history.state, "", `${window.location.pathname}?runId=${encodeURIComponent(body.run.id)}`);
