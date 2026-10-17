@@ -1,4 +1,17 @@
 # Guide utilisateur — Activités entreprise
+
+## Demandes collaboratives et opérations métier
+
+Les actions de secteur affichent dorénavant leur disponibilité réelle.
+
+- **Créer une demande** : le formulaire prépare une demande interne suivie ; la saisie ne constitue pas une opération enregistrée dans les modules Ventes, Stock, Notes, Caisse ou Documents.
+- **Action indisponible** : l'interface fournit le motif et désactive l'envoi. Un appel direct à l'API est également refusé. Pour un enregistrement métier définitif, passer par le module spécialisé et ses validations.
+- Les numéros de dossier, de projet, de client ou de produit demandés dans les formulaires non intégrés sont des références **communiquées** : aucune liaison à un vrai enregistrement ERP n'est créée par simple texte.
+- Les pièces justificatives, photos, livrables et dossiers confidentiels nécessitent le téléversement privé du module dédié. Ne pas saisir de données personnelles ou financières sensibles dans un champ de référence libre.
+- Une demande enregistrée est visible dans « Demandes » et, si les permissions le permettent, dans « Demandes internes » et « Workflows », avec les statuts et approbations réels.
+
+La matrice de tous les codes et de leur état de préparation figure dans `docs/HOTFIX_876_SECTOR_ACTIVITY_MATRIX.md`.
+
 > **Contrat de guide DTSC v2** — Fonctionnalités réellement déployées, interface FR/EN, permissions serveur et parcours mobile.
 
 ## Objectif et périmètre
