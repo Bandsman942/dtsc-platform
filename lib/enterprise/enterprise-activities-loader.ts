@@ -8,6 +8,7 @@ import type { EnterpriseActivitiesDataset } from "@/lib/enterprise/enterprise-ac
 import { getOrganizationEntitlements } from "@/lib/billing/entitlements";
 import { prisma } from "@/lib/prisma";
 import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
+import { projectEnterpriseActivityRequestWorkflows } from "@/lib/enterprise/enterprise-activity-workflow-links";
 import { getBusinessSubtypeForSector } from "@/lib/enterprise/business-subtype-registry";
 import { canAccessEnterpriseActivity } from "@/lib/enterprise-sector-templates";
 import { GAMING_ACTIVITY_BLOCK_COPY, GAMING_INCOMPATIBLE_ACTIVITY_BLOCKS } from "@/lib/enterprise/enterprise-activity-form-contract";
@@ -57,8 +58,16 @@ export async function getEnterpriseActivitiesDataset({
     organization.sectorCode === "PHARMACY"
       ? getEnterpriseActivityPharmacyRecords(organizationId, organization.sectorCode)
       : getEnterpriseActivityHealthcareRecords(organizationId, organization.sectorCode),
-    getEnterpriseActivityWorkflows(organizationId),
+    getEnterpriseActivityWorkflows(organizationId, userId),
   ]);
+
+  const workflowLinks = await projectEnterpriseActivityRequestWorkflows({
+    organizationId, userId, activityIds: requests.map((request) => request.id),
+  });
+  const requestsWithCanonicalState = requests.map((request) => ({
+    ...request,
+    workflowLink: workflowLinks.get(request.id) || null,
+  }));
 
   // A readable activity is not necessarily submittable; never show an action
   // which the server will refuse for its missing submit permission.
@@ -98,7 +107,7 @@ export async function getEnterpriseActivitiesDataset({
       ? eligibleBlocks.filter((block) => !GAMING_INCOMPATIBLE_ACTIVITY_BLOCKS.has(block.blockCode))
         .map((block) => ({ ...block, ...(GAMING_ACTIVITY_BLOCK_COPY[block.blockCode] || {}) }))
       : eligibleBlocks,
-    requests,
+    requests: requestsWithCanonicalState,
     members,
     sectorRecords,
     workflows,
