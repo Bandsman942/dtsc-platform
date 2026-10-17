@@ -1,3 +1,5 @@
+import type { EnterpriseActivityRequestWorkflowStatus } from "@/lib/enterprise/enterprise-activity-workflow-links";
+
 export type EnterpriseActivitiesOrganization = {
   id: string;
   name: string;
@@ -26,6 +28,7 @@ export type EnterpriseActivityRequestItem = {
   description: string;
   status: string;
   priority: string;
+  workflowLink: EnterpriseActivityRequestWorkflowStatus | null;
   targetModuleCode: string | null;
   createdAt: string;
   createdBy: { name: string; email: string };
@@ -55,6 +58,8 @@ export type EnterpriseActivityWorkflowItem = {
   descriptionFr: string | null;
   stepsJson: unknown;
   updatedAt?: string;
+  triggerEntityType?: string | null;
+  triggerEventType?: string | null;
 };
 
 export type EnterpriseActivitiesDataset = {
