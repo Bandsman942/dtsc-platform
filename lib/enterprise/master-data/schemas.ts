@@ -100,6 +100,7 @@ export const storageLocationCreateSchema = z.object({
 });
 
 export const businessPartyUpdateSchema = z.object({
+  primaryAddress: businessPartyAddressSchema.nullable().optional(),
   displayName: z.string().trim().max(240).optional().nullable(),
   primaryEmail: z.string().trim().email().max(200).optional().nullable(),
   primaryPhone: z.string().trim().max(80).optional().nullable(),
