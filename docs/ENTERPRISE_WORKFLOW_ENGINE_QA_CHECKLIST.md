@@ -392,3 +392,12 @@ Automatisation : `pnpm qa:workflow-contracts` et `pnpm qa:workflow-contracts:pos
 - [ ] UI à 320/360/375/390/414/768/1024px, Android/iOS PWA, clavier, focus, clair/sombre, modal scrolable et sans débordement.
 - [ ] Deux événements d'approbation concurrents ne produisent qu'un effet, le worker de #861 respecte son cutoff ; aucun paiement comptabilisé automatiquement.
 - [ ] OWNER_E2E #863 explicitement « bon » avant toute fusion main. Aucun résultat de la QA statique, Postgres ou CI ne se substitue à cette validation.
+
+### #863 — Plein écran « Ouvrir » (ajout à la recette propriétaire)
+
+- [ ] Depuis une définition ACTIVE, toucher « … » puis **Ouvrir** : la fiche couvre toute la hauteur, l'arrière-plan ne défile pas et la fiche n'apparaît plus sous la liste.
+- [ ] Ouvrir depuis les définitions ACTIVE/DRAFT et vérifier titres longs, statut, description, graphique, readiness et actions autorisées, sans changement de droits.
+- [ ] Le bouton **Retour aux workflows** et la touche Échap ferment la fiche et restaurent la liste/le focus ; s'il existe des modifications non sauvegardées, l'abandon demande une confirmation.
+- [ ] Depuis la fiche en plein écran, **Lancer** ouvre le sélecteur au premier plan ; annuler revient à la fiche. Un lancement réussi affiche les Exécutions et la timeline, sans masquer ces écrans sous l'ancien détail.
+- [ ] Depuis une version DRAFT, Étape, Transition, Revoir et publier gardent leurs dialogues superposés et ne ferment pas simultanément la fiche au clavier.
+- [ ] Vérifier clavier, focus et piège Tab, scroll interne, menus d'actions, 320/360/375/390/414/768/1024 px, iOS/Android PWA, FR/EN, clair/sombre, safe area avec barre de navigation.
