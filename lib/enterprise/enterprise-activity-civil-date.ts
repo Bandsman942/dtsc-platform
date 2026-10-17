@@ -5,7 +5,7 @@
  * human-entered dates with instants and violates the ERP date-only contract.
  */
 export function isValidEnterpriseActivityCivilDate(value: string): boolean {
-  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const year = Number(value.slice(0, 4));
   const month = Number(value.slice(5, 7));
   const day = Number(value.slice(8, 10));
