@@ -12,6 +12,7 @@ const types = read("lib/enterprise/enterprise-activities-types.ts");
 const panel = read("components/enterprise/enterprise-activities-panels.tsx");
 const moduleUi = read("components/enterprise/enterprise-activities-module.tsx");
 const time = read("components/enterprise/professional/enterprise-time-attendance-workspace.tsx");
+const timesheetApi = read("app/api/enterprise/[organizationId]/timesheets/route.ts");
 const deliverables = read("components/enterprise/professional/enterprise-time-deliverables-workspace.tsx");
 const requests = read("app/api/enterprise/[organizationId]/activities/route.ts");
 const contract = read("lib/enterprise/sector-activity-capabilities.ts");
@@ -51,6 +52,9 @@ assert.ok(moduleUi.includes("canonicalActionHandoffs={canonicalActionHandoffs}")
 for (const token of ["canonicalActionHandoffs[item.blockCode]", "canonicalHandoff.href", "canonicalHandoff && !isReady", "disabled={!isReady}"]) assert.ok(panel.includes(token), token);
 assert.ok(time.includes('new URLSearchParams(window.location.search).get("activityAction") !== "DECLARE_TIME_WORKED"'));
 assert.ok(time.includes("if (timesheets.canWrite) setTimesheetOpen(true)"));
+assert.ok(time.includes("disabled={!timesheets.canWrite}"), "Manual timesheet creation must respect submit rights");
+assert.ok(timesheetApi.includes('moduleCode: "TIME_ATTENDANCE", action: "submit"'), "GET must check same authorization as POST");
+assert.ok(timesheetApi.includes("canWrite: Boolean(submitAccess)"), "GET must expose actual submit entitlement");
 assert.ok(time.includes('setTab("TIMESHEETS")'));
 assert.ok(deliverables.includes('new URLSearchParams(window.location.search).get("activityAction") !== "SUBMIT_DELIVERABLE"'));
 assert.ok(deliverables.includes("if (deliverables.canWrite) setCreateOpen(true)"));
