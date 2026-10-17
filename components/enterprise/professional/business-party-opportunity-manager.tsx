@@ -206,7 +206,7 @@ export function BusinessPartyOpportunityManager({
             <Field label={t("crm.opportunityName")} required><Input name="name" defaultValue={opportunity.name} minLength={2} required /></Field>
             <Field label={t("crm.opportunityDescription")}><textarea name="description" defaultValue={opportunity.description || ""} rows={3} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-3" /></Field>
             <Field label={t("crm.estimatedValue")}><Input type="number" name="estimatedValue" min="0" step="0.01" defaultValue={opportunity.estimatedValue == null ? "" : String(opportunity.estimatedValue)} /></Field>
-            <Field label={t("crm.currency")}><NativeSelect name="currency" defaultValue={opportunity.currency || "USD"} items={currencyChoices(locale)} /></Field>
+            <Field label={t("crm.currency")}><NativeSelect name="currency" defaultValue={opportunity.currency || ""} items={[{ id: "", label: t("common.none") }, ...currencyChoices(locale)]} /></Field>
             <Field label={t("crm.opportunityProbability")}><Input type="number" name="probabilityPercent" min="0" max="100" step="1" defaultValue={opportunity.probabilityPercent} /></Field>
             <Field label={t("crm.opportunityExpectedClose")}><Input type="date" name="expectedCloseDate" defaultValue={opportunity.expectedCloseDate?.slice(0, 10) || ""} /></Field>
             <Field label={t("crm.source")}><NativeSelect name="source" defaultValue={opportunity.source || "OTHER"} items={SOURCES.map((value) => ({ id: value, label: professionalErpEnumLabel(locale, "source", value) }))} /></Field>
