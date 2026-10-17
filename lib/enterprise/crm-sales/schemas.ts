@@ -77,6 +77,16 @@ export const opportunityCreateSchema = z.object({
   nextActionAt: z.coerce.date().optional().nullable(),
 });
 
+// Explicit edit contract: stage changes use the existing transition endpoint.
+export const opportunityUpdateSchema = opportunityCreateSchema.omit({ businessPartyId: true }).partial().extend({
+  revision: z.coerce.number().int().positive(),
+});
+
+export const opportunityNoteCreateSchema = z.object({
+  content: z.string().trim().min(2).max(4000),
+  revision: z.coerce.number().int().positive(),
+});
+
 export const opportunityTransitionSchema = z.object({
   targetStatus: z.enum(["QUALIFIED", "PROPOSAL", "NEGOTIATION", "WON", "LOST", "CLOSED"]),
   probabilityPercent: z.coerce.number().int().min(0).max(100).optional(),
