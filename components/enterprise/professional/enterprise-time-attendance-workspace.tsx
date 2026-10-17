@@ -176,6 +176,14 @@ export function EnterpriseTimeAttendanceWorkspace({ organizationId, organization
   const attendance = useProfessionalCollection<Attendance>({ endpoint: `/api/enterprise/${organizationId}/attendance`, params, refreshKey });
   const leaves = useProfessionalCollection<LeaveRequest>({ endpoint: `/api/enterprise/${organizationId}/leave-requests`, params, refreshKey });
   const timesheets = useProfessionalCollection<Timesheet>({ endpoint: `/api/enterprise/${organizationId}/timesheets`, params, refreshKey });
+  // #878: deterministic entry point from a legacy sector activity. Never
+  // create an activity request in place of a real timesheet; only open the
+  // canonical editor after the domain API confirms create/write capability.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("activityAction") !== "DECLARE_TIME_WORKED") return;
+    setTab("TIMESHEETS");
+    if (timesheets.canWrite) setTimesheetOpen(true);
+  }, [timesheets.canWrite]);
   const activeCollection = tab === "SCHEDULES" ? schedules : tab === "ATTENDANCE" ? attendance : tab === "LEAVE" ? leaves : timesheets;
 
   const attendanceStatusItems = ATTENDANCE_STATUSES.map((id) => ({
