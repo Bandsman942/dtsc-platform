@@ -1,3 +1,10 @@
+## 2026-10-17 — Hotfix #877 : liaison Activités entreprise ↔ Demandes internes ↔ Workflows
+
+- Projection en lecture du statut EnterpriseRequest et de l'exécution effective EnterpriseWorkflowRun dans « Mes demandes » ; état non configuré/non démarré explicitement, sans lancer un workflow fictif.
+- Liens profonds bidirectionnels avec contrôles RBAC/tenant ; workflow automatique visible s'il est publié et autorisé.
+- Département/manager admissible et distinct du demandeur ; validation uniquement dans les modules canoniques, sans changement du worker Production.
+- QA ciblée `pnpm qa:hotfix-877-activity-workflow` intégrée à regression ; OWNER_E2E indispensable.
+
 ## 2026-10-17 — Hotfix #873 : Activités entreprise et Gaming
 
 - Espace convergé vers les workspaces ERP, actions sectorielles, Gaming Lounge reconnu et références validées côté serveur.
