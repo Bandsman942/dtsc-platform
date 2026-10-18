@@ -9,7 +9,7 @@ Dans la migration sectorielle historique, `MANUFACTURING.DECLARE_PRODUCTION` poi
 ## Parcours implémenté
 
 1. Depuis « Activités entreprise », sélectionner l'action « Déclarer production ».
-2. Si le secteur réel de l'entreprise, son entitlement, son abonnement et les permissions `canRead`, `canCreate`, `canWrite` du module cible permettent l'accès, l'UI affiche une navigation vers **Exécution production** ; sinon l'action reste **indisponible**.
+2. Si le secteur réel de l'entreprise, son entitlement, son abonnement et les permissions `canRead` et `canWrite` du module cible permettent l'accès, l'UI affiche une navigation vers **Exécution production** ; sinon l'action reste **indisponible**.
 3. Le lien ouvre le vrai workspace `EnterpriseManufacturingWorkspace` avec l'intention contrôlée `activityAction=DECLARE_PRODUCTION`. La section d'enregistrement du journal d'exécution est présentée et mise en évidence, sans opération automatique.
 4. L'utilisateur choisit un **ordre en cours** réellement chargé par le module Manufacturing du tenant, une opération de gamme vérifiée et d'éventuels opérateur/centre de travail/équipement/temps approuvé. Il saisit le type (démarrage, fin ou travail), la quantité informative, les minutes et une note ; la soumission utilise **`RECORD_EXECUTION`**.
 5. API existante `POST /api/enterprise/{organizationId}/manufacturing/orders/{orderId}` : contrôle de session/même origine/secteur/permission `PRODUCTION_EXECUTION:write`, validation Zod, ordre appartenant à l'organisation et statut `IN_PROGRESS`, références tenant-scopées, journal et événement métier, idempotency key conservée en cas de reprise après échec. L'utilisateur peut seulement choisir les ordres fournis par le module.
