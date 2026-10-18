@@ -1,3 +1,10 @@
+## 2026-10-18 — #882 : déclaration de production Manufacturing réelle (vague 2 de #878)
+
+- Action historique `MANUFACTURING.DECLARE_PRODUCTION` redirigée sous entitlement/RBAC vers `PRODUCTION_EXECUTION` ; ouverture du journal d'exécution par intent explicite sans mutation automatique.
+- Ajout d'un formulaire `RECORD_EXECUTION` sur ordre `IN_PROGRESS`, idempotence reprise, références tenant-scopées ; distinction affichée entre journal d'exécution, réception de produits finis et consommation matière.
+- POST Activités reste 422. QA `qa:hotfix-882-manufacturing-execution` intégrée à `qa:regression` ; OWNER_E2E obligatoire avant mise en production.
+- #878 reste ouverte pour 11 autres opérations, sans activation automatique.
+
 ## 2026-10-18 — Issue #878 (vague 1) : Activités vers les vrais modules Temps et Livrables
 
 - Raccordement exclusif des deux anciens blocs `PROFESSIONAL_SERVICES.DECLARE_TIME_WORKED` et `PROFESSIONAL_SERVICES.SUBMIT_DELIVERABLE` vers `TIME_ATTENDANCE` et `TIME_DELIVERABLES` après vérification du module, de l'entitlement et des permissions.
