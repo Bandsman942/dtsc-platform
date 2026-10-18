@@ -1,5 +1,14 @@
 # Guide utilisateur — Activités entreprise
 
+## Déclarer une exécution de production (Manufacturing)
+
+Si l'entreprise est dans le secteur **Manufacturing** et dispose de la permission `PRODUCTION_EXECUTION`, l'action « Déclarer production » conduit au module **Exécution production**. Choisissez un ordre **en cours** et enregistrez un type d'exécution (début, fin d'opération, travail), les références pertinentes et les informations de réalisation.
+
+**Attention :** cet enregistrement documente l'exécution ; il ne change **pas** les quantités de stock. L'entrée de produits finis et la consommation des matières sont des opérations distinctes, avec leurs propres validations. Le module refuse les ordres non actifs ou extérieurs à l'entreprise. Sans permission ou abonnement compatible, l'action reste indisponible.
+
+Voir `docs/HOTFIX_882_MANUFACTURING_EXECUTION_HANDOFF.md` pour les contrôles et les limites de l'action.
+
+
 ## Opérations métier disponibles dans leurs modules ERP
 
 Certaines actions professionnelles ne créent plus une simple demande : si le module correspondant est réellement activé dans l'entreprise **et** si les permissions du collaborateur l'autorisent, le bouton **Ouvrir Temps, présences & congés** ou **Ouvrir Temps & livrables** permet de poursuivre dans le module ERP propriétaire.
