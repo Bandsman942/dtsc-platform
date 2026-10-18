@@ -51,9 +51,11 @@ for (const token of [
   "canonicalSectorActivityDestination(access.sectorCode, blockCode)",
   "moduleCode: handoff?.moduleCode || block.targetModuleCode",
 ]) assert.ok(access.includes(token), "Sector/membership RBAC guard missing: " + token);
+assert.ok(dataset.includes('destination.intent === "DECLARE_PRODUCTION"') && dataset.includes("? capabilities.canWrite"), "Manufacturing must gate by write, independent from legacy submit");
+assert.ok(access.includes('handoff?.intent === "DECLARE_PRODUCTION" ? "write"'), "Activity membership must use execution write permission rather than legacy submit");
 for (const token of [
   "resolveEnterpriseModuleCapabilities({ userId, organizationId, moduleCode: destination.moduleCode })",
-  "capabilities.canRead", "capabilities.canCreate", "capabilities.canWrite",
+  "capabilities.canRead", "capabilities.canCreate", "capabilities.canWrite", "canEnterOwnerWorkflow",
   "isEnterpriseModuleNavigable(route.definition)", "resolveEnterpriseModuleRoute(destination.moduleCode)",
   "activityAction=", "destination.intent",
 ]) assert.ok(dataset.includes(token), "Handoff not fail-closed: " + token);
