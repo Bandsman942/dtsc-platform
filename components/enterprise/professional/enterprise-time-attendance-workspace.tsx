@@ -176,6 +176,14 @@ export function EnterpriseTimeAttendanceWorkspace({ organizationId, organization
   const attendance = useProfessionalCollection<Attendance>({ endpoint: `/api/enterprise/${organizationId}/attendance`, params, refreshKey });
   const leaves = useProfessionalCollection<LeaveRequest>({ endpoint: `/api/enterprise/${organizationId}/leave-requests`, params, refreshKey });
   const timesheets = useProfessionalCollection<Timesheet>({ endpoint: `/api/enterprise/${organizationId}/timesheets`, params, refreshKey });
+  // #878: deterministic entry point from a legacy sector activity. Never
+  // create an activity request in place of a real timesheet; only open the
+  // canonical editor after the domain API confirms create/write capability.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("activityAction") !== "DECLARE_TIME_WORKED") return;
+    setTab("TIMESHEETS");
+    if (timesheets.canWrite) setTimesheetOpen(true);
+  }, [timesheets.canWrite]);
   const activeCollection = tab === "SCHEDULES" ? schedules : tab === "ATTENDANCE" ? attendance : tab === "LEAVE" ? leaves : timesheets;
 
   const attendanceStatusItems = ATTENDANCE_STATUSES.map((id) => ({
@@ -403,7 +411,7 @@ export function EnterpriseTimeAttendanceWorkspace({ organizationId, organization
         {tab === "SCHEDULES" ? <Button onClick={() => { setError(""); setScheduleOpen(true); }}><CalendarClock className="h-4 w-4" />{copy.newSchedule}</Button> : null}
         {tab === "ATTENDANCE" ? <Button onClick={() => { setError(""); setAttendanceOpen(true); }}><UserCheck className="h-4 w-4" />{copy.recordAttendance}</Button> : null}
         {tab === "LEAVE" ? <Button onClick={() => { setError(""); setLeaveOpen(true); }}><CalendarDays className="h-4 w-4" />{t("time.requestLeave")}</Button> : null}
-        {tab === "TIMESHEETS" ? <Button onClick={() => { setError(""); setTimesheetOpen(true); }}><Clock3 className="h-4 w-4" />{t("time.declareTime")}</Button> : null}
+        {tab === "TIMESHEETS" ? <Button disabled={!timesheets.canWrite} onClick={() => { setError(""); setTimesheetOpen(true); }}><Clock3 className="h-4 w-4" />{t("time.declareTime")}</Button> : null}
       </div>}
     />
     <ModuleMetrics label={t("time.metrics")}>

@@ -65,6 +65,7 @@ export type EnterpriseActivityWorkflowItem = {
 export type EnterpriseActivitiesDataset = {
   organization: EnterpriseActivitiesOrganization;
   blocks: EnterpriseActivityBlockItem[];
+  canonicalActionHandoffs: Record<string, { href: string; labelFr: string; labelEn: string }>;
   requests: EnterpriseActivityRequestItem[];
   members: EnterpriseActivityMemberItem[];
   departments: { value: string; labelFr: string; labelEn: string }[];
