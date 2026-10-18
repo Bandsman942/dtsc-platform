@@ -109,7 +109,12 @@ export async function getEnterpriseActivitiesDataset({
       resolveEnterpriseModuleCapabilities({ userId, organizationId, moduleCode: destination.moduleCode }),
       Promise.resolve(resolveEnterpriseModuleRoute(destination.moduleCode)),
     ]);
-    if (!capabilities.canRead || !capabilities.canCreate || !capabilities.canWrite || !route || !isEnterpriseModuleNavigable(route.definition)) return;
+    // Manufacturing uses WRITE for RECORD_EXECUTION (not SUBMIT). Existing
+    // Timesheet/Deliverable handoffs preserve their stricter create+write gate.
+    const canEnterOwnerWorkflow = destination.intent === "DECLARE_PRODUCTION"
+      ? capabilities.canWrite
+      : capabilities.canCreate && capabilities.canWrite;
+    if (!capabilities.canRead || !canEnterOwnerWorkflow || !route || !isEnterpriseModuleNavigable(route.definition)) return;
     canonicalActionHandoffs[blockCode] = {
       href: `${route.path}?activityAction=${destination.intent}`,
       labelFr: getEnterpriseModuleLabel(route.definition, "fr"),
