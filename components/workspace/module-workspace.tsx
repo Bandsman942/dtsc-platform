@@ -203,7 +203,10 @@ export function ModuleSection({
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
+      // Only the foremost layer closes. Nested entity details/confirmations own Escape.
+      if (event.key === "Escape" && !document.querySelector('[role="dialog"][aria-modal="true"]')) {
+        setOpen(false);
+      }
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => {
