@@ -23,11 +23,13 @@
 ## Points encore **non terminés** — bloquants avant merge
 
 - **Gaming :** l'adaptateur de remise sur factures Gaming et le cycle réservation → consommation → annulation sont codés, mais **non certifiés**. Les scénarios d'accès, quotas concurrents, factures émises, annulations, remboursements et non-régression Retail exigent CI et E2E. La réservation Gaming sans facture ne déclenche aucun usage : ce comportement est intentionnel.
-- **Retour contextuel :** la navigation arrière couvre les en-têtes communs et le shell principal. Il reste à prouver la conservation des filtres internes React, formulaires non enregistrés, piles dialogue/page, scroll, retour Android/PWA, et le changement de contexte entreprise.
-- **Historique :** les lignes sont maintenant extensibles, datées et filtrées par statut ; les liens directs vers les opérations métier restent à ajouter après vérification des droits par module et de l'appartenance tenant.
-- **UX FR/EN et accessibilité :** finaliser le dictionnaire de toutes les nouvelles chaînes, parcours clavier et vérification sur les sept largeurs contractuelles.
+- **Retour contextuel :** pile bornée de routes internes non sensibles, conservation des filtres/pagination CRM et du scroll, dialogue DTSC avant abandon de formulaire, et gestion du retour natif pour fermer les détails d’Identités. Prouver sur Android/PWA, autre module et changement d’entreprise dans OWNER_E2E.
+- **Historique :** lignes extensibles, datées et filtrées. Les usages Gaming associés à un checkout du tenant courant ouvrent la fiche réelle après vérification des droits de lecture Gaming et de l’appartenance tenant. Les autres modules n’exposent pas de lien profond non certifié.
+- **UX FR/EN et accessibilité :** libellés, dates et états du bloc Identités bilingues ; validation finale des parcours clavier, sept largeurs et formulaires existants exigée en navigateur.
 - **Sécurité et performance :** vérifier le comportement multi-org, rôles CRM lecture vs admin, tentatives cross-tenant, concurrence et limites de requêtes, absence de poll global et équivalence des bénéfices avec le moteur canonique.
-- **Contrôles exécutables :** exécuter `pnpm prisma:generate`, `pnpm type-check`, `pnpm qa:hotfix-884`, `pnpm qa:regression`, `pnpm lint`, `pnpm build`, QA navigateur et E2E propriétaire. Tous ont le statut `NOT_EXECUTED` tant qu'aucune preuve correspondante n'est produite.
+- **Contrôles exécutables :** vérifier les preuves du dernier SHA GitHub pour Prisma, type-check, QA #884, régression, lint, build, Gaming et navigateur. Les preuves d’un SHA précédent n’équivalent pas au SHA final. OWNER_E2E reste humain.
+
+Runbook de validation humaine : `docs/OWNER_E2E_884_RELATIONS_GAMING_NAVIGATION.md`.
 
 ## Owner E2E requis
 
