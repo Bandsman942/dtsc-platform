@@ -1263,6 +1263,11 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
             await page.getByRole("tab", { name: /Historique|History/i }).click();
             await expect(page.getByRole("tabpanel")).toBeVisible();
             await expect(page.getByRole("button", { name: /Approuver|Approve/i })).toBeDisabled();
+            await page.keyboard.press("Escape");
+            await expect(page.locator("[data-dtsc-fullscreen-detail]")).toHaveCount(0);
+            await expect(relationshipsSection).toHaveAttribute("data-workspace-section-open", "true");
+            await row.getByRole("button", { name: /Ouvrir les détails|Open relationship details/i }).click();
+            await expect(page.locator("[data-dtsc-fullscreen-detail]")).toBeVisible();
             await expect(page).toHaveURL(new RegExp(`[?&]link=${linkId}`));
 
             await page.goBack();
