@@ -1195,4 +1195,89 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
     }
   });
 
+  test("#884 browser identity consent: full-screen, seven mobile/desktop widths, native Back and tenant isolation", async ({ browser }) => {
+    test.setTimeout(240_000);
+    const suffix = Date.now().toString(36);
+    const personId = `e2e-884-browser-person-${suffix}`;
+    const linkId = `e2e-884-browser-link-${suffix}`;
+    const personLabel = `Relation navigateur #884 ${suffix}`;
+    await prisma.enterprisePersonIdentity.create({
+      data: {
+        id: personId, organizationId, displayName: personLabel,
+        primaryEmail: `identity-${suffix}@example.test`,
+        createdByUserId: adminUserId,
+      },
+    });
+    try {
+      await prisma.enterpriseIdentityLink.create({
+        data: {
+          id: linkId, organizationId, personIdentityId: personId,
+          origin: "ENTERPRISE", requestedRelationType: "CUSTOMER",
+          status: "ORGANIZATION_APPROVAL_REQUIRED",
+          initiatedByUserId: adminUserId,
+          purpose: "Contrôle d'interface et de consentement #884",
+          consentTextVersion: "enterprise-identity-consent-v1",
+        },
+      });
+
+      for (const width of [320, 360, 375, 390, 414, 768, 1024]) {
+        await test.step(`#884 identity detail and history at ${width}px`, async () => {
+          const browserContext = await browser.newContext({
+            baseURL: baseUrl, viewport: { width, height: 850 },
+          });
+          try {
+            await signInAs(browserContext, adminEmail, adminPassword, "/enterprise-identity-admin");
+            const page = await browserContext.newPage();
+            await page.goto(`${baseUrl}/enterprise-identity-admin`);
+            await expect(page.getByRole("heading", { name: /Identités et consentements|Identities and consents/i })).toBeVisible();
+            await expect(page.locator("[data-contextual-module-back]:visible")).toHaveCount(1);
+            const overflow = await page.evaluate(() =>
+              document.documentElement.scrollWidth - document.documentElement.clientWidth);
+            expect(overflow, `#884 horizontal overflow at ${width}px`).toBeLessThanOrEqual(2);
+
+            const row = page.locator("[data-business-list-item]").filter({ hasText: personLabel });
+            await expect(row).toHaveCount(1);
+            await row.getByRole("button", { name: /Ouvrir les détails|Open relationship details/i }).click();
+            await expect(page.locator("[data-dtsc-fullscreen-detail]")).toBeVisible();
+            await expect(page.locator("[data-relationship-overview]")).toBeVisible();
+            await page.getByRole("tab", { name: /Avantages|Benefits/i }).click();
+            await expect(page.getByRole("tabpanel")).toBeVisible();
+            await page.getByRole("tab", { name: /Historique|History/i }).click();
+            await expect(page.getByRole("tabpanel")).toBeVisible();
+            await expect(page.getByRole("button", { name: /Approuver|Approve/i })).toBeDisabled();
+            await expect(page).toHaveURL(new RegExp(`[?&]link=${linkId}`));
+
+            await page.goBack();
+            await expect(page.locator("[data-dtsc-fullscreen-detail]")).toHaveCount(0);
+            await expect(row).toBeVisible();
+            await page.goto(`${baseUrl}/enterprise-identity-admin?link=${linkId}`);
+            await expect(page.locator("[data-dtsc-fullscreen-detail]")).toBeVisible();
+
+            // Permissions must be enforced by the API, never just by a hidden UI control.
+            const forged = await browserContext.request.get(
+              `${baseUrl}/api/enterprise/not-this-tenant/identity-links/${linkId}/overview`);
+            expect([403, 404]).toContain(forged.status());
+          } finally {
+            await browserContext.close();
+          }
+        });
+      }
+      const anonymous = await browser.newContext();
+      try {
+        const response = await anonymous.request.get(
+          `${baseUrl}/api/enterprise/${organizationId}/identity-links/${linkId}/overview`);
+        expect([401, 403]).toContain(response.status());
+      } finally {
+        await anonymous.close();
+      }
+    } finally {
+      await prisma.enterpriseIdentityLink.deleteMany({
+        where: { organizationId, id: linkId },
+      });
+      await prisma.enterprisePersonIdentity.deleteMany({
+        where: { organizationId, id: personId },
+      });
+    }
+  });
+
 });
