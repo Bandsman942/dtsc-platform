@@ -7,6 +7,7 @@ import { finalizeRetailReturnAccountingTx } from "@/lib/enterprise/retail/accoun
 import { reverseRetailRelationshipBenefitEffectsTx } from "@/lib/enterprise/relationship-benefits/retail-adapter";
 import type { retailReturnCreateSchema, retailReturnDecisionSchema } from "@/lib/enterprise/retail/commercial-schemas";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
+import { withRetailTransactionRetry } from "@/lib/enterprise/retail/transaction-retry";
 import { prisma } from "@/lib/prisma";
 import type { z } from "zod";
 
@@ -275,7 +276,7 @@ export async function decideRetailReturn(
   actorUserId: string,
   input: RetailReturnDecisionInput,
 ) {
-  return prisma.$transaction(async (tx) => {
+  return withRetailTransactionRetry(() => prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseRetailReturn" WHERE id = ${returnId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const retailReturn = await tx.enterpriseRetailReturn.findFirst({
       where: { id: returnId, organizationId },
@@ -442,5 +443,5 @@ export async function decideRetailReturn(
       });
     }
     return { retailReturn: completed, idempotent: false, accounting };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 }));
 }
