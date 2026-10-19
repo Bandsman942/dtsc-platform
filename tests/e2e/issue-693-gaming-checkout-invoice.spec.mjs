@@ -1247,7 +1247,13 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
             }, { message: `#884 horizontal overflow at ${width}px`, timeout: 15_000 })
               .toBeLessThanOrEqual(2);
 
-            const row = page.locator("[data-business-list-item]").filter({ hasText: personLabel });
+            // Modules are collapsed by default. Enter the real full-screen workspace section
+            // before interacting with a list row (the list does not exist while collapsed).
+            const relationshipsSection = page.locator("[data-workspace-section]")
+              .filter({ hasText: "Invitations, demandes et relations" });
+            await relationshipsSection.locator("[data-workspace-section-header]").click();
+            await expect(relationshipsSection).toHaveAttribute("data-workspace-section-open", "true");
+            const row = relationshipsSection.locator("[data-business-list-item]").filter({ hasText: personLabel });
             await expect(row).toHaveCount(1);
             await row.getByRole("button", { name: /Ouvrir les détails|Open relationship details/i }).click();
             await expect(page.locator("[data-dtsc-fullscreen-detail]")).toBeVisible();
