@@ -1162,7 +1162,7 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
       );
       const detailPage = await context.newPage();
       try {
-        await detailPage.goto(consumedHistory.operationHref);
+        await detailPage.goto(`${baseUrl}${consumedHistory.operationHref}`);
         await expect(detailPage.locator("[data-dtsc-fullscreen-detail]")).toBeVisible();
         await expect(detailPage.getByText(second.checkout.reference).first()).toBeVisible();
       } finally {
