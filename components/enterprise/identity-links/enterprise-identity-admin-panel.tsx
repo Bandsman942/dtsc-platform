@@ -195,7 +195,7 @@ export function EnterpriseIdentityAdminPanel({
     <ModuleWorkspace>
       <ModuleHeader
         eyebrow={`Administration · ${organizationName}`}
-        title="Identités et consentements"
+        title={locale === "en" ? "Identities and consents" : "Identités et consentements"}
         description="Invitez une personne précise ou examinez ses demandes. La base globale des utilisateurs DTSC n’est jamais exposée."
         count={`${links.length} opération${links.length > 1 ? "s" : ""}`}
       />
@@ -271,7 +271,7 @@ export function EnterpriseIdentityAdminPanel({
                 className="mt-1.5 min-h-11 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-base font-normal"
               >
                 {ENTERPRISE_IDENTITY_RELATION_TYPES.map((type) => (
-                  <option key={type} value={type}>{getEnterpriseIdentityRelationLabel(type, "fr")}</option>
+                  <option key={type} value={type}>{getEnterpriseIdentityRelationLabel(type, locale)}</option>
                 ))}
               </select>
             </label>
@@ -317,9 +317,9 @@ export function EnterpriseIdentityAdminPanel({
                 return (
                   <BusinessListItem
                     key={link.id}
-                    title={link.person?.displayName || "Fiche métier indisponible"}
-                    status={<StatusBadge tone={statusTone(link.status)}>{getEnterpriseIdentityStatusLabel(status, "fr")}</StatusBadge>}
-                    meta={`${getEnterpriseIdentityRelationLabel(link.requestedRelationType as EnterpriseIdentityRelationType, "fr")} · ${new Date(link.createdAt).toLocaleDateString("fr-FR")}`}
+                    title={link.person?.displayName || (locale === "en" ? "Business record unavailable" : "Fiche métier indisponible")}
+                    status={<StatusBadge tone={statusTone(link.status)}>{getEnterpriseIdentityStatusLabel(status, locale)}</StatusBadge>}
+                    meta={`${getEnterpriseIdentityRelationLabel(link.requestedRelationType as EnterpriseIdentityRelationType, locale)} · ${new Date(link.createdAt).toLocaleDateString(locale === "en" ? "en-GB" : "fr-FR")}`}
                     description={link.purpose}
                     onOpen={() => openLink(link.id)}
                     openLabel={locale === "en" ? "Open relationship details" : "Ouvrir les détails de cette relation"}
@@ -333,7 +333,7 @@ export function EnterpriseIdentityAdminPanel({
             </BusinessList>
           ) : (
             <div className="border-y border-dtsc-border py-10 text-center text-sm text-dtsc-muted">
-              Aucune invitation ou demande n’a encore été créée.
+              {locale === "en" ? "No invitation or request has been created yet." : "Aucune invitation ou demande n’a encore été créée."}
             </div>
           )}
         </ModuleSection>
