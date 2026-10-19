@@ -53,6 +53,10 @@ check(back.includes("STACK_KEY") && back.includes("MAX_ROUTES") && back.includes
 check(back.includes("SCROLL_KEY") && back.includes("RESTORE_KEY") && back.includes("saveScroll"), "Navigation retains allowed page scroll and contextual search");
 check(back.includes("confirmSensitiveAction") && !back.includes("window.confirm("), "Unsaved-form confirmation uses the platform dialog");
 check(admin.includes('window.history.pushState') && admin.includes('window.addEventListener("popstate"'), "Identity details are compatible with native/Android browser Back");
+check(route.includes("resolveEnterpriseModuleCapabilities") && route.includes("authorizedCheckoutIds"), "Operation deep links require an authorized Gaming reader and a matching tenant-owned checkout");
+check(relationships.includes("usage.operationHref") && relationships.includes("Open business operation"), "Consumption history offers a permitted, openable operation link");
+check(read("components/enterprise/gaming/enterprise-gaming-checkout-workspace.tsx").includes("focusedCheckoutId"), "Gaming checkout details resolve direct deep links server-side");
+check(read("tests/e2e/issue-693-gaming-checkout-invoice.spec.mjs").includes('test("#884 exercises a real Gaming relationship discount'), "Gaming acceptance E2E covers real discounted invoice, cancel, quota and usage history");
 const failed = checks.filter((item) => !item.ok);
 console.log(`Hotfix #884 static contract: ${checks.length - failed.length}/${checks.length}`);
 if (failed.length) process.exitCode = 1;
