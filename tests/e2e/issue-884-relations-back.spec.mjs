@@ -79,7 +79,7 @@ test.describe("#884 DTSC relationships, benefits and contextual return", () => {
       await page.goBack();
       await expect(page.locator("[data-dtsc-fullscreen-detail]")).toHaveCount(0);
       await expect(row).toBeVisible();
-      
+
       await context.close();
     });
   }
