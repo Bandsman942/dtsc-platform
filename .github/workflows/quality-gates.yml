@@ -107,6 +107,8 @@ jobs:
         run: node scripts/qa-workflow-853-postgres.mjs
       - name: WF-06S2E2 inert lease fencing and replay contract QA
         run: node scripts/qa-workflow-855-lease-policy.mjs
+      - name: WF-06S2E3 PostgreSQL atomic fixture concurrency QA
+        run: node scripts/qa-workflow-857-postgres.mjs
       - name: HOTFIX 859 workflow editor and approval candidate QA
         run: node scripts/qa-hotfix-859-workflow-editor.mjs
       - name: "HOTFIX #861 finance canonical approval and cron safety QA"
@@ -221,6 +223,8 @@ jobs:
         run: node scripts/qa-workflow-853-postgres.mjs
       - name: WF-06S2E2 inert lease fencing and replay contract QA
         run: node scripts/qa-workflow-855-lease-policy.mjs
+      - name: WF-06S2E3 PostgreSQL atomic fixture concurrency QA
+        run: node scripts/qa-workflow-857-postgres.mjs
       - name: HOTFIX 859 workflow editor and approval candidate QA
         run: node scripts/qa-hotfix-859-workflow-editor.mjs
       - name: "HOTFIX #861 finance canonical approval and cron safety QA"

@@ -401,3 +401,13 @@ Automatisation : `pnpm qa:workflow-contracts` et `pnpm qa:workflow-contracts:pos
 - [ ] Depuis la fiche en plein écran, **Lancer** ouvre le sélecteur au premier plan ; annuler revient à la fiche. Un lancement réussi affiche les Exécutions et la timeline, sans masquer ces écrans sous l'ancien détail.
 - [ ] Depuis une version DRAFT, Étape, Transition, Revoir et publier gardent leurs dialogues superposés et ne ferment pas simultanément la fiche au clavier.
 - [ ] Vérifier clavier, focus et piège Tab, scroll interne, menus d'actions, 320/360/375/390/414/768/1024 px, iOS/Android PWA, FR/EN, clair/sombre, safe area avec barre de navigation.
+
+## WF-06S2E3 — PostgreSQL race en fixtures *sans runtime* (#857, parent #852)
+
+- [ ] Script refusé hors `localhost/*test*`. Tables `WF857*` non présentes en migration/prisma, nettoyées en finally.
+- [ ] `node scripts/qa-workflow-857-postgres.mjs` : 12 transactions PostgreSQL en concurrence réelle sur même reçu de test, un mock outbox unique, CAS révision et verrou SKIP LOCKED ; constater qu'il ne s'agit PAS de la table ERP réelle.
+- [ ] Deux CLIENT ACTIVE séparés ; tentative cross-tenant et version incorrecte refusées ; CLIENT INACTIVE, échéance future et >24h non déclenchées.
+- [ ] Crash simulé avant commit ⇒ rollback complet, puis une tentative unique possible ; après commit avant ACK + duplicate Cron ⇒ aucun deuxième mock outbox.
+- [ ] Verrou tenu manuellement ⇒ skip non bloquant ; libération ⇒ un seul claim de fixture.
+- [ ] Les vrais `EnterpriseWorkflowRun`, `EnterpriseDomainEvent`, `EnterpriseWorkflowScheduleOccurrence` restent vides pour fixtures, CHECK #850 RESERVED-only présents. Aucun Cron/worker/API/migration ajoutés.
+- [ ] CI Quality et Migration script dédié SUCCESS + toutes autres gates ; OWNER_E2E #857 explicite avant squash merge. La transaction **runtime** de #852 reste non implémentée.
