@@ -313,6 +313,8 @@ export function RelationshipBenefitsAdminWorkspace({
                             ? english
                               ? `Applied by ${usage.effectModuleCode || "business module"} · ${usage.effectAmount ?? "—"} ${usage.effectCurrencyCode || ""} · ${usage.effectEntityType || "entity"} ${usage.effectEntityId}`
                               : `Appliqué par ${usage.effectModuleCode || "module métier"} · ${usage.effectAmount ?? "—"} ${usage.effectCurrencyCode || ""} · ${usage.effectEntityType || "entité"} ${usage.effectEntityId}`
+                            : usage.status === "APPROVED" && usage.executionMode === "AUTO_GAMING"
+                              ? (english ? "Reserved for the Gaming invoice; not yet consumed." : "Réservé pour la facture Gaming ; pas encore consommé.")
                             : usage.status === "APPROVED"
                               ? english
                                 ? "Approved — waiting for a verified business execution before consumption."
@@ -321,11 +323,11 @@ export function RelationshipBenefitsAdminWorkspace({
                         }
                         actions={canManage ? (
                           <div data-no-group-swipe data-responsive-actions className="flex flex-wrap gap-2">
-                            {usage.status === "REQUESTED" ? <>
+                            {usage.executionMode === "REQUEST" && usage.status === "REQUESTED" ? <>
                               <Button type="button" size="sm" onClick={(event) => { event.stopPropagation(); void decideUsage(usage, "APPROVED"); }} disabled={busy !== null}><Check className="mr-1 h-4 w-4" />{english ? "Approve" : "Approuver"}</Button>
                               <Button type="button" size="sm" variant="outline" onClick={(event) => { event.stopPropagation(); void decideUsage(usage, "REJECTED"); }} disabled={busy !== null}><X className="mr-1 h-4 w-4" />{english ? "Reject" : "Refuser"}</Button>
                             </> : null}
-                            {usage.status === "APPROVED" ? <span className="inline-flex min-h-9 items-center rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-xs font-bold text-dtsc-muted">{english ? "Business execution required" : "Exécution métier requise"}</span> : null}
+                            {usage.status === "APPROVED" ? <span className="inline-flex min-h-9 items-center rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-xs font-bold text-dtsc-muted">{usage.executionMode === "AUTO_GAMING" ? (english ? "Gaming invoice approval pending" : "Émission de la facture Gaming attendue") : (english ? "Business execution required" : "Exécution métier requise")}</span> : null}
                           </div>
                         ) : null}
                       />
