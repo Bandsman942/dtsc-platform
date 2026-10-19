@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Plus } from "lucide-react";
 import { Field, NativeSelect, formatEnterpriseAmount, formatEnterpriseDate } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { gamingCheckoutCopy } from "@/components/enterprise/gaming/gaming-checkout-i18n";
@@ -89,7 +89,10 @@ async function json<T>(url: string) {
   return body;
 }
 
-export function EnterpriseGamingCheckoutWorkspace({ organizationId, organizationName, definition }: { organizationId: string; organizationName: string; definition: EnterpriseModuleDefinition }) {
+export function EnterpriseGamingCheckoutWorkspace({ organizationId, organizationName, definition, focusedCheckoutId }: {
+  organizationId: string; organizationName: string; definition: EnterpriseModuleDefinition;
+  focusedCheckoutId?: string;
+}) {
   const locale = useAppLocale();
   const copy = gamingCheckoutCopy(locale);
   const [filter, setFilter] = useState<Filter>("ALL");
@@ -98,6 +101,27 @@ export function EnterpriseGamingCheckoutWorkspace({ organizationId, organization
   const [refreshKey, setRefreshKey] = useState(0);
   const [detail, setDetail] = useState<CheckoutDetail | null>(null);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
+  useEffect(() => {
+    if (!focusedCheckoutId) return;
+    let active = true;
+    void json<CheckoutDetail>(
+      `/api/enterprise/${encodeURIComponent(organizationId)}/gaming/checkouts/${encodeURIComponent(focusedCheckoutId)}`,
+    ).then((loaded) => {
+      if (active) setDetail(loaded);
+    }).catch((reason: unknown) => {
+      if (active) setMessage(reason instanceof Error ? reason.message : copy.actionFailed);
+    });
+    return () => { active = false; };
+  }, [organizationId, focusedCheckoutId, copy.actionFailed]);
+
+  function closeDetail() {
+    setDetail(null);
+    if (focusedCheckoutId && new URLSearchParams(window.location.search).has("checkout")) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("checkout");
+      window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    }
+  }
   const [modal, setModal] = useState<Modal>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -297,7 +321,7 @@ export function EnterpriseGamingCheckoutWorkspace({ organizationId, organization
         </ModuleSection>
       </ModuleContent>
 
-      <FullscreenEntityDetail open={Boolean(detail)} onClose={() => setDetail(null)} title={detail?.checkout.reference || copy.detail} description={detail ? `${detail.checkout.session.reference} · ${detail.invoice?.number || ""}` : undefined} actions={checkoutActions} actionLabel={locale === "en" ? "Checkout actions" : "Actions d’encaissement"}>
+      <FullscreenEntityDetail open={Boolean(detail)} onClose={closeDetail} title={detail?.checkout.reference || copy.detail} description={detail ? `${detail.checkout.session.reference} · ${detail.invoice?.number || ""}` : undefined} actions={checkoutActions} actionLabel={locale === "en" ? "Checkout actions" : "Actions d’encaissement"}>
         {detail ? <div className="grid gap-5">
           <div className="flex flex-wrap items-center gap-2"><StatusBadge tone={tone(detail.checkout.status)}>{statusLabel(detail.checkout.status, copy)}</StatusBadge><span className="text-sm text-dtsc-muted">{formatEnterpriseDate(detail.checkout.createdAt, locale)}</span></div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
