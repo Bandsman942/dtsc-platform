@@ -50,9 +50,13 @@ export function IdentityAdminDetail({
       if (type === "SUPPLIER") return item.kind === "supplierId" || (
         item.kind === "businessPartyId" && item.partyType === "PERSON" && item.roleCodes?.includes("SUPPLIER")
       );
-      if (type === "SUPPLIER_REPRESENTATIVE") return item.kind === "supplierContactId" || item.kind === "businessPartyContactId";
-      if (type === "CUSTOMER_CONTACT") return item.kind === "businessPartyContactId";
+      if (type === "SUPPLIER_REPRESENTATIVE") return item.kind === "supplierContactId" ||
+        (item.kind === "businessPartyContactId" && Boolean(item.roleCodes?.includes("SUPPLIER")));
+      if (type === "CUSTOMER_CONTACT") return item.kind === "businessPartyContactId" && Boolean(item.roleCodes?.includes("CUSTOMER"));
       if (type === "EMPLOYEE" || type === "COLLABORATOR") return item.kind === "employeeId";
+      if (["CUSTOMER", "PROSPECT", "PARTNER", "CONTRACTOR"].includes(type)) {
+        return item.kind === "businessPartyId" && item.partyType === "PERSON" && Boolean(item.roleCodes?.includes(type));
+      }
       return item.kind === "businessPartyId" && item.partyType === "PERSON";
     });
   }, [link, targets]);
