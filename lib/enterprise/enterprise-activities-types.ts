@@ -1,8 +1,13 @@
+import type { EnterpriseActivityRequestWorkflowStatus } from "@/lib/enterprise/enterprise-activity-workflow-links";
+
 export type EnterpriseActivitiesOrganization = {
   id: string;
   name: string;
   sector: string | null;
   sectorCode: string | null;
+  businessSubtypeCode: string | null;
+  businessSubtypeLabelFr: string | null;
+  businessSubtypeLabelEn: string | null;
   businessSector: { labelFr: string; labelEn: string; icon: string | null; color: string | null } | null;
 };
 
@@ -23,6 +28,7 @@ export type EnterpriseActivityRequestItem = {
   description: string;
   status: string;
   priority: string;
+  workflowLink: EnterpriseActivityRequestWorkflowStatus | null;
   targetModuleCode: string | null;
   createdAt: string;
   createdBy: { name: string; email: string };
@@ -52,15 +58,20 @@ export type EnterpriseActivityWorkflowItem = {
   descriptionFr: string | null;
   stepsJson: unknown;
   updatedAt?: string;
+  triggerEntityType?: string | null;
+  triggerEventType?: string | null;
 };
 
 export type EnterpriseActivitiesDataset = {
   organization: EnterpriseActivitiesOrganization;
   blocks: EnterpriseActivityBlockItem[];
+  canonicalActionHandoffs: Record<string, { href: string; labelFr: string; labelEn: string }>;
   requests: EnterpriseActivityRequestItem[];
   members: EnterpriseActivityMemberItem[];
+  departments: { value: string; labelFr: string; labelEn: string }[];
   sectorRecords: EnterpriseActivitySectorRecordItem[];
   workflows: EnterpriseActivityWorkflowItem[];
+  gamingReferences: Partial<Record<"gamingStations" | "gamingBookings" | "gamingSessions" | "gamingCloses" | "businessParties", { value: string; label: string }[]>>;
   entitlements: {
     planCode: string;
     planLabel: string;

@@ -6,7 +6,7 @@ import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access"
 import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
 import { businessPartyCreateSchema, businessPartyUpdateSchema } from "@/lib/enterprise/master-data/schemas";
 import { createEnterpriseBusinessParty, updateEnterpriseBusinessParty } from "@/lib/enterprise/master-data/service";
-import { refreshLinkedSupplierSnapshotFromParty } from "@/lib/enterprise/master-data/supplier-projection";
+
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -64,10 +64,21 @@ export async function GET(req: Request, { params }: Params) {
     orderBy: { createdAt: "desc" },
     select: { id: true, personIdentityId: true, status: true, requestedRelationType: true, activatedAt: true, expiresAt: true },
   }) : [];
-  const linksByPerson = new Map<string, (typeof links)[number]>();
-  for (const link of links) if (!linksByPerson.has(link.personIdentityId)) linksByPerson.set(link.personIdentityId, link);
-  const referenceByParty = new Map(references.map((reference) => [reference.businessPartyId, reference]));
-  const items = rawItems.map((item) => { const reference = referenceByParty.get(item.id); return { ...item, identityLink: reference ? linksByPerson.get(reference.personIdentityId) || null : null }; });
+  const linksByPerson = new Map<string, typeof links>();
+  for (const link of links) {
+    linksByPerson.set(link.personIdentityId, [...(linksByPerson.get(link.personIdentityId) || []), link]);
+  }
+  const referencesByParty = new Map<string, typeof references>();
+  for (const reference of references) {
+    if (!reference.businessPartyId) continue;
+    referencesByParty.set(reference.businessPartyId, [...(referencesByParty.get(reference.businessPartyId) || []), reference]);
+  }
+  const items = rawItems.map((item) => {
+    const related = (referencesByParty.get(item.id) || []).flatMap((reference) => linksByPerson.get(reference.personIdentityId) || []);
+    const identityLinks = [...new Map(related.map((link) => [link.id, link])).values()]
+      .sort((left, right) => Number(right.activatedAt || 0) - Number(left.activatedAt || 0));
+    return { ...item, identityLink: identityLinks[0] || null, identityLinks };
+  });
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "business-parties", page } });
   return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { total, customers, suppliers, prospects, persons, organizations, pendingIdentity }, canManage: access.canManage });
 }
@@ -110,14 +121,13 @@ export async function PATCH(req: Request, { params }: Params) {
   if (!entityId || !parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.success ? "Référence manquante." : parsed.error.issues[0]?.message || "Tiers invalide." }, { status: 400 });
   try {
     const entity = await updateEnterpriseBusinessParty(organizationId, entityId, session.userId, parsed.data);
-    // BusinessParty is the source of truth. Procurement keeps a derived supplier
-    // snapshot for operational compatibility, refreshed without granting any
-    // additional Procurement access to the caller.
-    await Promise.allSettled([
-      refreshLinkedSupplierSnapshotFromParty(organizationId, entityId, session.userId),
+    // Supplier projection now commits in the same transaction as the party.
+    // Audit/API logs remain post-commit and must never mask a persisted edit.
+    const logs = await Promise.allSettled([
       writeAuditLog({ userId: session.userId, action: "ENTERPRISE_BUSINESS_PARTY_UPDATED", entity: "EnterpriseBusinessParty", entityId, request: req, metadata: { organizationId } }),
       writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, action: "update" } }),
     ]);
+    if (logs.some((result) => result.status === "rejected")) console.error("BUSINESS_PARTY_POST_COMMIT_AUDIT_FAILED", { organizationId, entityId });
     return NextResponse.json({ ok: true, entity });
   } catch (error) {
     if (error instanceof Error && error.message === "REVISION_CONFLICT") {

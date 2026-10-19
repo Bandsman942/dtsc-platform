@@ -26,12 +26,14 @@ export async function GET(req: Request, { params }: Params) {
   const search = url.searchParams.get("search")?.trim() || "";
   const status = url.searchParams.get("status")?.trim().toUpperCase() || "";
   const ownerUserId = url.searchParams.get("ownerUserId")?.trim() || "";
+  const businessPartyId = url.searchParams.get("businessPartyId")?.trim() || "";
   const where: Prisma.EnterpriseOpportunityWhereInput = {
     organizationId,
     archivedAt: null,
     ...(search ? { OR: [{ name: { contains: search, mode: "insensitive" } }, { reference: { contains: search, mode: "insensitive" } }] } : {}),
     ...(status ? { status } : {}),
     ...(ownerUserId ? { ownerUserId } : {}),
+    ...(businessPartyId ? { businessPartyId } : {}),
   };
   const [rawItems, total, open, proposal, won, lost] = await Promise.all([
     prisma.enterpriseOpportunity.findMany({ where, orderBy: [{ expectedCloseDate: "asc" }, { createdAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { quotes: { select: { id: true, reference: true, status: true, totalAmount: true, currency: true }, orderBy: { createdAt: "desc" }, take: 3 } } }),

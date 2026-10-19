@@ -45,12 +45,19 @@ export async function GET(req: Request, { params }: Params) {
   ]);
   const supplierIds = rawItems.map((item) => item.id);
   const contactIds = rawItems.flatMap((item) => item.contacts.map((contact) => contact.id));
+  const canonicalLinks = supplierIds.length ? await prisma.enterpriseSupplierPartyLink.findMany({
+    where: { organizationId, supplierId: { in: supplierIds }, archivedAt: null },
+    select: { supplierId: true, businessPartyId: true },
+  }) : [];
+  const canonicalBySupplier = new Map(canonicalLinks.map((link) => [link.supplierId, link.businessPartyId]));
+  const partyIds = canonicalLinks.map((link) => link.businessPartyId);
   const references = supplierIds.length || contactIds.length ? await prisma.enterprisePersonBusinessReference.findMany({
-    where: { organizationId, OR: [
+    where: { organizationId, archivedAt: null, status: "ACTIVE", OR: [
       ...(supplierIds.length ? [{ supplierId: { in: supplierIds } }] : []),
       ...(contactIds.length ? [{ supplierContactId: { in: contactIds } }] : []),
+      ...(partyIds.length ? [{ businessPartyId: { in: partyIds } }] : []),
     ] },
-    select: { supplierId: true, supplierContactId: true, personIdentityId: true },
+    select: { supplierId: true, businessPartyId: true, supplierContactId: true, personIdentityId: true },
   }) : [];
   const identityLinks = references.length ? await prisma.enterpriseIdentityLink.findMany({
     where: { organizationId, personIdentityId: { in: [...new Set(references.map((reference) => reference.personIdentityId))] } },
@@ -59,7 +66,10 @@ export async function GET(req: Request, { params }: Params) {
   }) : [];
   const linkByPerson = new Map<string, (typeof identityLinks)[number]>();
   for (const link of identityLinks) if (!linkByPerson.has(link.personIdentityId)) linkByPerson.set(link.personIdentityId, link);
-  const supplierLink = new Map(references.filter((reference) => reference.supplierId).map((reference) => [reference.supplierId as string, linkByPerson.get(reference.personIdentityId) || null]));
+  const directSupplierLink = new Map(references.filter((reference) => reference.supplierId).map((reference) => [reference.supplierId as string, linkByPerson.get(reference.personIdentityId) || null]));
+  const canonicalPartyLink = new Map(references.filter((reference) => reference.businessPartyId).map((reference) => [reference.businessPartyId as string, linkByPerson.get(reference.personIdentityId) || null]));
+  // Canonical relationship takes precedence; Procurement only projects it.
+  const supplierLink = new Map(supplierIds.map((id) => [id, canonicalPartyLink.get(canonicalBySupplier.get(id) || "") || directSupplierLink.get(id) || null]));
   const contactLink = new Map(references.filter((reference) => reference.supplierContactId).map((reference) => [reference.supplierContactId as string, linkByPerson.get(reference.personIdentityId) || null]));
   const items = rawItems.map((item) => ({ ...item, identityLink: supplierLink.get(item.id) || null, contacts: item.contacts.map((contact) => ({ ...contact, identityLink: contactLink.get(contact.id) || null })) }));
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "suppliers", page } });

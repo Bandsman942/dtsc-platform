@@ -29,3 +29,26 @@ export function workflowEventFailure(error: unknown, attemptCount: number) {
     backoffSeconds: Math.min(300, 10 * Math.max(1, attemptCount)),
   };
 }
+
+/**
+ * Production outbox cutover guard.
+ * An explicit ISO instant is required before the Vercel cron is enabled.
+ * When unset/malformed, claim NO old events: approval reconciliation may
+ * still complete safely from the canonical decided EnterpriseApproval.
+ * Non-production QA continues to exercise historical replay fixtures.
+ */
+export function workflowEventClaimCutover(now: Date = new Date()): Date {
+  if (process.env.VERCEL_ENV !== "production") return new Date(0);
+  const value = process.env.WORKFLOW_EVENT_CUTOVER_AT;
+  if (!value || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) {
+    return new Date("9999-12-31T00:00:00.000Z");
+  }
+  const parsed = new Date(value);
+  // Reject stale cutover choices, future skew and invalid dates.
+  if (!Number.isFinite(parsed.getTime()) || parsed.toISOString() !== value ||
+    parsed.getTime() > now.getTime() + 5 * 60_000 ||
+    parsed.getTime() < now.getTime() - 72 * 60 * 60_000) {
+    return new Date("9999-12-31T00:00:00.000Z");
+  }
+  return parsed;
+}

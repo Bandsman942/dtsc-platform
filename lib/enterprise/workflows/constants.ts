@@ -34,6 +34,7 @@ export const WORKFLOW_ENTITY_TYPES = [
   "EnterpriseCashSession",
   "EnterpriseJournalEntry",
   "EnterpriseFiscalPeriod",
+  "EnterpriseFinancialClose",
   "EnterpriseReconciliationSession",
   "EnterpriseAssetDepreciationSchedule",
 ] as const;
@@ -104,6 +105,8 @@ export const WORKFLOW_DOMAIN_EVENTS = [
   "JOURNAL_ENTRY_REVERSED",
   "FISCAL_PERIOD_CREATED",
   "FINANCIAL_CLOSE_PREPARED",
+  "FINANCIAL_CLOSE_SUBMITTED",
+  "FINANCIAL_CLOSE_APPROVED",
   "FINANCIAL_CLOSE_COMPLETED",
   "FINANCIAL_PERIOD_REOPENED",
   "RECONCILIATION_CREATED",

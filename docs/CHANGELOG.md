@@ -5,6 +5,68 @@
 - Les tables `WF857*` sont créées/détruites **uniquement dans la DB CI locale `*test*`** ; aucun objet Prisma/migration nouveau ni écriture dans des tables de run/outbox/receipts ERP réelles.
 - CI Quality + Migration pour cette QA ; CI transverses + OWNER_E2E #857 requis avant merge. **Ce n'est pas le dispatcher de production** : acteur/source/quotas/abonnements live, vraie migration d'état, worker, kill-switch et exactly-once d'effets métier restent #852.
 
+## 2026-10-18 — Issue #878 (vague 1) : Activités vers les vrais modules Temps et Livrables
+
+- Raccordement exclusif des deux anciens blocs `PROFESSIONAL_SERVICES.DECLARE_TIME_WORKED` et `PROFESSIONAL_SERVICES.SUBMIT_DELIVERABLE` vers `TIME_ATTENDANCE` et `TIME_DELIVERABLES` après vérification du module, de l'entitlement et des permissions.
+- Ouverture des vrais formulaires Timesheets/Livrables seulement lorsque leurs propres API autorisent l'écriture ; pas de création implicite, retour 422 maintenu dans l'ancien POST Activités.
+- 12 opérations restantes inchangées et suivies dans #878. QA `qa:hotfix-878-handoffs`, documentation et OWNER_E2E requis avant toute livraison Production.
+
+## 2026-10-17 — Hotfix #876 : contrats explicites des Activités sectorielles
+
+- Audit de 94 actions historiques et matrice de couverture documentée : 60 demandes sectorielles explicites, 14 opérations non conformes bloquées, 6 Hôtellerie/Gaming et 14 actions médicales/Pharmacie/clinique préservées ou filtrées.
+- Suppression du fallback de formulaires par préfixe ; aucun faux enregistrement de notes, livraison, stock, paie ou fichiers sans liaison canonique.
+- Validation serveur fail-closed (`ENTERPRISE_ACTIVITY_ACTION_NOT_READY`), motifs accessibles FR/EN, CTA désactivée lorsqu'aucune intégration métier n'existe.
+- QA `pnpm qa:hotfix-876-sector-activities` dans `qa:regression` (14 intégrations réelles suivies dans #878); aucune activation commerciale implicite ni changement de base.
+- OWNER_E2E requis avant toute fusion ou livraison Production.
+
+## 2026-10-17 — Hotfix #877 : liaison Activités entreprise ↔ Demandes internes ↔ Workflows
+
+- Projection en lecture du statut EnterpriseRequest et de l'exécution effective EnterpriseWorkflowRun dans « Mes demandes » ; état non configuré/non démarré explicitement, sans lancer un workflow fictif.
+- Liens profonds bidirectionnels avec contrôles RBAC/tenant ; workflow automatique visible s'il est publié et autorisé.
+- Département/manager admissible et distinct du demandeur ; validation uniquement dans les modules canoniques, sans changement du worker Production.
+- QA ciblée `pnpm qa:hotfix-877-activity-workflow` intégrée à regression ; OWNER_E2E indispensable.
+
+## 2026-10-17 — Hotfix #873 : Activités entreprise et Gaming
+
+- Espace convergé vers les workspaces ERP, actions sectorielles, Gaming Lounge reconnu et références validées côté serveur.
+- Aucune mutation financière implicite : demandes liées à EnterpriseRequest avec toasts et conservation des saisies.
+- QA pnpm qa:hotfix-873-activities et OWNER_E2E requis.
+
+## 2026-10-17 — Hotfix #872 : Relations VIP / consentements et contraintes SQL
+
+- Migration non destructive des CHECK de liaison d'identité sur les 23 types canoniques (dont VIP), sans modification des consentements ou accès dérivés.
+- Feedback de demande par toasts globaux et erreur locale ; journalisation Prisma limitée au type et référence d'incident, sans données du formulaire.
+- QA de cohérence des types, contrôles serveur, bénéfices et migration ; OWNER_E2E requis avant fusion.
+
+## 2026-10-17 — HOTFIX P0 #863 complément : fiche de définition workflow plein écran
+
+- **Ouvrir** une définition affiche désormais une vue plein écran avec retour explicite aux workflows, scroll interne, gestion du focus et des modifications non enregistrées, à la place de l'ancienne seconde colonne descendant en bas de page sur téléphone.
+- Les commandes existantes de lancement, duplication de version, édition et publication conservent leurs contrôles. Une exécution lancée avec succès quitte la fiche et ouvre les Exécutions et sa timeline. Aucun nouveau droit ni accès ERP.
+- Regression QA #863 renforcée ; E2E propriétaire mobile/desktop, FR/EN, clair/sombre et gestion des dialogues empilés restant requis. Aucun changement Prisma, Cron ou Production.
+
+## 2026-10-17 — HOTFIX P0 #863 : lancement manuel des neuf templates Workflows
+
+- Correction des libellés de liens ERP trompeurs : Clôture de caisse → Caisse, Paiements fournisseurs → Paiements, Factures fournisseurs → Fournisseurs, Écritures → Comptabilité, Clôture financière → Clôture financière ; messages et statuts FR/EN sans codes Prisma.
+- Le sélecteur et le POST de lancement utilisent désormais le même contrat allow-listé et tenant-scoped pour les 12 types de sources pris en charge, y compris les cinq templates Finance du #861. Le POST refuse les états, tenants, propriétaires et sous-types de paiement interdits.
+- Messages distincts en fonction des droits : entreprise sans objets, objets présents mais état inéligible (supervision autorisée uniquement), objets non visibles, défaut d'accès. Caisse OPEN → soumettre une clôture en Caisse avant tout lancement.
+- Tests dédiés #863 sur les neuf templates (source, état, acteur, tenant, paiement fournisseur, liens, statuts et sécurité) câblés dans Quality et Migration ; E2E propriétaire requis pour la certification opérationnelle. Aucun template auto-publié, aucune mutation comptable créée, aucune migration ni variable d'environnement.
+
+## 2026-10-17 — HOTFIX P0 #861 : reprise workflows + contrats Finance canoniques
+
+- Production : worker Cron protégé par WORKFLOW_WORKER_ENABLED et cutoff temporel obligatoire WORKFLOW_EVENT_CUTOVER_AT, lecture seule signée dryRun, sans réexécution du backlog historique par défaut. La configuration CRON_SECRET doit être ajoutée en Production seulement après CI, OWNER_E2E et main READY.
+- Reprise idempotente des validations déjà décidées par le rapprochement des liens entreprise/workflow/étape ; ne pas rejouer de transaction ERP.
+- Cinq templates Finance deviennent compatibles en suivant les approbations canoniques existantes : facture fournisseur en deux décisions (review, approval), paiement, clôture de caisse, écriture, dossier financier de clôture. Aucun CREATE_APPROVAL fictif, aucun POST/CONFIRM/CLOSE automatique : décisions et mutations restent aux services et opérateurs habilités.
+- Ajout de EnterpriseFinancialClose aux types workflow et mapping de module FINANCE_CLOSE, correction de la source du template.
+- QA spécialisée #861 Quality/Migration, contrats WF-01 adaptés, docs et runbook de reprise/rollback. Aucune migration ni backfill automatique. OWNER_E2E #861 requis ; #857 et #852 restent en pause.
+
+## 2026-10-17 — HOTFIX P1 #859 : workflows template save, approbateurs et dépenses
+
+- Validation pré-sauvegarde et API avec chemins de champs localisés FR/EN pour les brouillons, sans révélation des erreurs Zod brutes. Version publiée immuable et conflit de modification conservés.
+- Formulaire guidé des étapes ASSIGN et CREATE_APPROVAL existantes : stratégie, rôle/poste, utilisateur autorisé, département. JSON avancé conservé pour les experts.
+- Candidates tenant-scoped parmi les membres actifs disposant du droit ERP approve, y compris les rôles personnalisés et postes. Le moteur revalide en temps réel cette permission, conserve le validateur désigné et les protections anti-auto-validation.
+- Source dépense dans Finance / Budgets et dépenses : état vide contextualisé et lien de création, sans révélation de dossiers d'autres membres.
+- QA spécialisée #859 en Quality et Migration. Pas de migration ni activation de scheduler, OWNER_E2E #859 nécessaire. #857 en attente.
+
 ## 2026-10-16 — WF-06S2E2 : contrat logique de lease / fencing, sans activation (#855, parent #852 / #843)
 
 - Contrat pur d'intention `INERT_LEASE_PLAN_ONLY` : clé locale tenant/schedule/version/date/heure identique à WF-06A, validation du reçu RESERVED intact, fenêtre 24h, révision attendue et tentative bornée.
@@ -1717,3 +1779,5 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 - Added secret-free reports with API, PostgreSQL, Redis, queue, AI and tenant-isolation evidence.
 - Added enforced stage progression and a versioned certification registry consumed by the CTO scalability dashboard.
 - No capacity stage is marked certified until a real CI load run is archived.
+
+Hotfix #861 (complément) : un secret CRON_SECRET Production commun réveille potentiellement sept autres queues. Ajout de verrous par route avec opt-in explicite `*_CRON_ENABLED` après auth, sans changement des secrets dédiés ; aucune file ancienne relancée automatiquement.

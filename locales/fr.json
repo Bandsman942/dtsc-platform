@@ -1,4 +1,7 @@
 {
+  "enterpriseActivities": {
+    "unavailableTitle": "Activités entreprise indisponibles"
+  },
   "common": {
     "actions": "Actions",
     "archive": "Archiver",

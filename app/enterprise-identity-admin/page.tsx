@@ -13,11 +13,11 @@ import { prisma } from "@/lib/prisma";
 export default async function EnterpriseIdentityAdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ link?: string }>;
+  searchParams: Promise<{ link?: string; createdParty?: string }>;
 }) {
   const user = await requireUser();
   const session = await getSession();
-  const { link: focusedLinkId } = await searchParams;
+  const { link: focusedLinkId, createdParty: createdPartyId } = await searchParams;
   const organizationId = session?.activeContext === "ORGANIZATION" ? session.activeOrganizationId : null;
   if (!session || !organizationId) redirect(getDashboardUrl());
 
@@ -34,6 +34,7 @@ export default async function EnterpriseIdentityAdminPage({
         legalName: true,
         displayName: true,
         primaryEmail: true,
+        roles: { where: { status: "ACTIVE", archivedAt: null }, select: { roleCode: true } },
       },
       orderBy: { legalName: "asc" },
       take: 100,
@@ -45,7 +46,7 @@ export default async function EnterpriseIdentityAdminPage({
         label: true,
         value: true,
         contactType: true,
-        businessParty: { select: { legalName: true, displayName: true } },
+        businessParty: { select: { legalName: true, displayName: true, roles: { where: { status: "ACTIVE", archivedAt: null }, select: { roleCode: true } } } },
       },
       orderBy: { createdAt: "desc" },
       take: 100,
@@ -70,13 +71,26 @@ export default async function EnterpriseIdentityAdminPage({
     }),
   ]);
 
+  const createdParty = createdPartyId
+    ? await prisma.enterpriseBusinessParty.findFirst({
+      where: { id: createdPartyId, organizationId, status: "ACTIVE", archivedAt: null },
+      select: {
+        id: true, partyType: true, legalName: true, displayName: true, primaryEmail: true,
+        roles: { where: { status: "ACTIVE", archivedAt: null }, select: { roleCode: true } },
+      },
+    })
+    : null;
+  const extraParty = createdParty && !parties.some((item) => item.id === createdParty.id) ? [createdParty] : [];
+
   const targets = [
-    ...parties.map((party) => ({
+    ...[...extraParty, ...parties].map((party) => ({
       value: party.id,
       kind: "businessPartyId" as const,
       label: `${party.displayName || party.legalName} · ${party.partyType === "PERSON" ? "Personne" : "Organisation"}`,
       suggestedName: party.displayName || party.legalName,
       suggestedEmail: party.primaryEmail || "",
+      partyType: party.partyType === "PERSON" ? "PERSON" as const : "ORGANIZATION" as const,
+      roleCodes: party.roles.map((role) => role.roleCode),
     })),
     ...contacts.map((contact) => ({
       value: contact.id,
@@ -84,6 +98,7 @@ export default async function EnterpriseIdentityAdminPage({
       label: `${contact.label || contact.value} · Contact de ${contact.businessParty.displayName || contact.businessParty.legalName}`,
       suggestedName: contact.label || contact.businessParty.displayName || contact.businessParty.legalName,
       suggestedEmail: contact.contactType === "EMAIL" ? contact.value : "",
+      roleCodes: contact.businessParty.roles.map((role) => role.roleCode),
     })),
     ...suppliers.map((supplier) => ({
       value: supplier.id,
@@ -115,6 +130,7 @@ export default async function EnterpriseIdentityAdminPage({
         organizationName={membership.organization.name}
         targets={targets}
         focusedLinkId={focusedLinkId}
+        focusedTargetKey={createdParty ? `businessPartyId:${createdParty.id}` : undefined}
         links={links.map((link) => ({
           id: link.id,
           requestedRelationType: link.requestedRelationType,

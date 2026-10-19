@@ -85,18 +85,24 @@ export async function POST(req: Request) {
         consentTextVersion: parsed.data.consentTextVersion,
       },
     });
-    await writeAuditLog({
-      userId: session.userId,
-      action: "ENTERPRISE_IDENTITY_REQUEST_CREATED",
-      entity: "EnterpriseIdentityLink",
-      entityId: link.id,
-      metadata: {
-        organizationId: organization.id,
-        relationType: parsed.data.relationType,
-      },
-      request: req,
-    });
-    await writeApiLog({ request: req, statusCode: 201, userId, startedAt });
+    // The link and its consent/event are already committed transactionally.
+    // Auxiliary ApiLog/AuditLog failures must not turn HTTP 201 into a false 500.
+    const logResults = await Promise.allSettled([
+      writeAuditLog({
+        userId: session.userId,
+        action: "ENTERPRISE_IDENTITY_REQUEST_CREATED",
+        entity: "EnterpriseIdentityLink",
+        entityId: link.id,
+        metadata: { organizationId: organization.id, relationType: parsed.data.relationType },
+        request: req,
+      }),
+      writeApiLog({ request: req, statusCode: 201, userId, startedAt }),
+    ]);
+    if (logResults.some((result) => result.status === "rejected")) {
+      console.warn("Enterprise identity request committed; auxiliary logging failed", {
+        stage: "POST_COMMIT_LOGGING",
+      });
+    }
     return NextResponse.json(
       {
         ok: true,
@@ -107,7 +113,7 @@ export async function POST(req: Request) {
     );
   } catch (error) {
     const response = identityLinkErrorResponse(error);
-    await writeApiLog({ request: req, statusCode: response.status, userId, startedAt });
+    await writeApiLog({ request: req, statusCode: response.status, userId, startedAt }).catch(() => undefined);
     return response;
   }
 }

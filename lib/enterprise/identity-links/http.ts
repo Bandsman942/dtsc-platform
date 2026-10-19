@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
 import { getSession } from "@/lib/auth";
 import { EnterpriseIdentityLinkError } from "@/lib/enterprise/identity-links/service";
 import {
@@ -50,12 +51,28 @@ export function identityLinkErrorResponse(error: unknown) {
   if (error instanceof EnterpriseIdentityLinkError) {
     return NextResponse.json({ error: error.code, message: error.message }, { status: error.status });
   }
-  console.error("Enterprise identity link operation failed", error);
+  // Prisma's raw exception can contain the full rejected row (purpose and user IDs).
+  // Never log the exception object or its message: keep diagnostics free of user data.
+  const supportReference = randomUUID().slice(0, 8).toUpperCase();
+  const isOutdatedRelationConstraint = error instanceof Error &&
+    error.name === "PrismaClientUnknownRequestError" &&
+    /EnterpriseIdentityLink_relationType_check|EnterprisePersonBusinessReference_relationType_check/.test(error.message);
+  const safeCode = error && typeof error === "object" && "code" in error &&
+    typeof error.code === "string" && /^[A-Z][0-9]{4}$/.test(error.code)
+      ? error.code : "UNEXPECTED";
+  console.error("Enterprise identity link operation failed", {
+    kind: error instanceof Error ? error.name : "Unknown",
+    code: safeCode,
+    supportReference,
+  });
   return NextResponse.json(
     {
-      error: "IDENTITY_LINK_OPERATION_FAILED",
-      message: "L’opération n’a pas pu être terminée. Réessayez ou contactez le support si le problème persiste.",
+      error: isOutdatedRelationConstraint ? "IDENTITY_LINK_RELATION_CONFIGURATION_OUTDATED" : "IDENTITY_LINK_OPERATION_FAILED",
+      message: isOutdatedRelationConstraint
+        ? "Ce type de relation n’est pas encore autorisé par la configuration de l’entreprise. Contactez le support avec la référence indiquée."
+        : "La demande n’a pas pu être enregistrée. Réessayez puis contactez le support avec la référence indiquée si nécessaire.",
+      supportReference,
     },
-    { status: 500 },
+    { status: isOutdatedRelationConstraint ? 503 : 500 },
   );
 }

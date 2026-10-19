@@ -4,9 +4,9 @@ import { writeApiLog } from "@/lib/audit";
 import { getEnterpriseWorkflowAccess } from "@/lib/enterprise/workflows/access";
 import { requireWorkflowSourceAccess } from "@/lib/enterprise/workflows/source-access";
 import { prisma } from "@/lib/prisma";
+import { findWorkflowManualSources } from "@/lib/enterprise/workflows/manual-source-options";
 
 type Params = { params: Promise<{ organizationId: string }> };
-type Source = { id: string; title: string; reference?: string | null; status: string };
 
 /**
  * Only canonical source types with tested tenant + actor queries are offered.
@@ -41,41 +41,36 @@ export async function GET(req: Request, { params }: Params) {
   }
   const userId = session.userId;
   const own = !access.canViewAllRuns;
-  let sources: Source[];
-  // These options are intentionally bounded and carry only identifiers and
-  // business labels. Clinical, finance amounts and private descriptions remain server-side.
-  switch (type) {
-    case "EnterpriseTask": {
-      const rows = await prisma.enterpriseTask.findMany({ where: { organizationId, archivedAt: null, ...(own ? { OR: [{ createdByUserId: userId }, { assignedToUserId: userId }] } : {}) }, select: { id: true, title: true, status: true }, orderBy: { updatedAt: "desc" }, take: 50 });
-      sources = rows; break;
-    }
-    case "EnterpriseRequest": {
-      const rows = await prisma.enterpriseRequest.findMany({ where: { organizationId, archivedAt: null, ...(own ? { OR: [{ requestedByUserId: userId }, { assignedToUserId: userId }] } : {}) }, select: { id: true, title: true, status: true }, orderBy: { updatedAt: "desc" }, take: 50 });
-      sources = rows; break;
-    }
-    case "EnterpriseMeeting": {
-      const rows = await prisma.enterpriseMeeting.findMany({ where: { organizationId, archivedAt: null, ...(own ? { organizerUserId: userId } : {}) }, select: { id: true, title: true, status: true }, orderBy: { updatedAt: "desc" }, take: 50 });
-      sources = rows; break;
-    }
-    case "EnterprisePurchase": {
-      const rows = await prisma.enterprisePurchase.findMany({ where: { organizationId, archivedAt: null, ...(own ? { OR: [{ requestedByUserId: userId }, { buyerUserId: userId }, { createdByUserId: userId }] } : {}) }, select: { id: true, title: true, reference: true, status: true }, orderBy: { createdAt: "desc" }, take: 50 });
-      sources = rows; break;
-    }
-    case "EnterpriseBudget": {
-      const rows = await prisma.enterpriseBudget.findMany({ where: { organizationId, archivedAt: null, ...(own ? { OR: [{ ownerUserId: userId }, { createdByUserId: userId }] } : {}) }, select: { id: true, title: true, reference: true, status: true }, orderBy: { createdAt: "desc" }, take: 50 });
-      sources = rows; break;
-    }
-    case "EnterpriseExpense": {
-      const rows = await prisma.enterpriseExpense.findMany({ where: { organizationId, archivedAt: null, ...(own ? { OR: [{ requestedByUserId: userId }, { createdByUserId: userId }] } : {}) }, select: { id: true, title: true, reference: true, status: true }, orderBy: { createdAt: "desc" }, take: 50 });
-      sources = rows; break;
-    }
-    case "EnterpriseReport": {
-      const rows = await prisma.enterpriseReport.findMany({ where: { organizationId, archivedAt: null, ...(own ? { generatedByUserId: userId } : {}) }, select: { id: true, title: true, reference: true, status: true }, orderBy: { createdAt: "desc" }, take: 50 });
-      sources = rows; break;
-    }
-    default:
-      return NextResponse.json({ error: "WORKFLOW_MANUAL_SOURCE_NOT_SUPPORTED", message: "La sélection de cet objet métier n’est pas encore disponible." }, { status: 409 });
+  // The same allow-listed ERP queries power the picker and POST authorization.
+  // Only a supervisor allowed to view all runs may distinguish no records from
+  // records in inadmissible states; never disclose a colleague's private data.
+  const sources = await findWorkflowManualSources({
+    organizationId, userId, entityType: type, allowAll: access.canViewAllRuns,
+  });
+  if (sources === null) {
+    return NextResponse.json({ error: "WORKFLOW_MANUAL_SOURCE_NOT_SUPPORTED", message: "La sélection de cet objet métier n’est pas encore disponible." }, { status: 409 });
+  }
+  let emptyReason: "NO_RECORDS" | "NO_ELIGIBLE_RECORDS" | "NO_VISIBLE_RECORDS" | null = null;
+  if (!sources.length) {
+    const visibleIncludingOtherStates = await findWorkflowManualSources({
+      organizationId, userId, entityType: type,
+      allowAll: access.canViewAllRuns, includeIneligibleStatus: true,
+    });
+    // An employee may diagnose their OWN ineligible records, never the
+    // presence of another employee's private records.
+    emptyReason = visibleIncludingOtherStates?.length
+      ? "NO_ELIGIBLE_RECORDS"
+      : own ? "NO_VISIBLE_RECORDS" : "NO_RECORDS";
   }
   await writeApiLog({ request: req, statusCode: 200, userId, startedAt, metadata: { organizationId, domain: "workflow-source-options", type, count: sources.length } });
-  return NextResponse.json({ sourceEntityType: type, sources: sources.map((item) => ({ id: item.id, label: [item.reference, item.title, item.status].filter(Boolean).join(" · ") })) });
+  return NextResponse.json({
+    sourceEntityType: type, emptyReason,
+    createModuleHref: type === "EnterpriseExpense" || type === "EnterpriseBudget" ? "/enterprise-modules/FINANCE_BUDGETS"
+      : type === "EnterpriseSupplierInvoice" ? "/enterprise-modules/FINANCE_PAYABLES"
+      : type === "EnterprisePayment" ? "/enterprise-modules/FINANCE_PAYMENTS"
+      : type === "EnterpriseCashSession" ? "/enterprise-modules/FINANCE_CASH"
+      : type === "EnterpriseJournalEntry" ? "/enterprise-modules/FINANCE_ACCOUNTING"
+      : type === "EnterpriseFinancialClose" ? "/enterprise-modules/FINANCE_CLOSE" : null,
+    sources: sources.map((item) => ({ id: item.id, label: [item.reference, item.title].filter(Boolean).join(" · "), status: item.status })),
+  });
 }

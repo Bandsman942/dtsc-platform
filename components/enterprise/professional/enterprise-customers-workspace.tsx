@@ -1,10 +1,13 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import { Building2, Link2, Plus, UserRound } from "lucide-react";
 import { EnterpriseIdentityLinkChoice, type EnterpriseIdentityLinkChoiceValue } from "@/components/enterprise/identity-links/identity-link-choice";
+import { RelationshipOverviewPanel, type RelationshipOverviewLink } from "@/components/enterprise/identity-links/relationship-overview-panel";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { BusinessPartyCommercialPanel } from "@/components/enterprise/professional/business-party-commercial-panel";
+import { publishEnterpriseCrmUpdate, subscribeEnterpriseCrmUpdates } from "@/lib/enterprise/crm-sales/client-sync";
 import { commercialHotfixCopy } from "@/components/enterprise/professional/commercial-hotfix-copy";
 import { ProfessionalError, ProfessionalFormSection, ProfessionalHelp, ProfessionalLoading, ProfessionalSearch, ProfessionalTabs, professionalMutation, useProfessionalCollection } from "@/components/enterprise/professional/professional-erp-ui";
 import { professionalErpEnumLabel, professionalErpT, useProfessionalErpLocale } from "@/components/enterprise/professional/professional-erp-i18n";
@@ -21,16 +24,17 @@ import { StatusBadge } from "@/components/workspace/status-badge";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
 
 type Contact = { id: string; contactType: string; label: string | null; value: string; isPrimary: boolean };
-type Address = { id: string; addressType: string; line1: string; city: string | null; countryCode: string | null; isPrimary: boolean };
-type Party = { id: string; code: string; partyType: "PERSON" | "ORGANIZATION"; legalName: string; displayName: string | null; primaryEmail: string | null; primaryPhone: string | null; taxIdentifier: string | null; registrationId: string | null; status: string; notes: string | null; revision: number; roles: Array<{ id: string; roleCode: string }>; contacts: Contact[]; addresses: Address[]; identityLink: { id: string; status: string; requestedRelationType: string } | null };
+type Address = { id: string; addressType: string; line1: string; line2: string | null; city: string | null; stateProvince: string | null; postalCode: string | null; countryCode: string | null; isPrimary: boolean };
+type Party = { id: string; code: string; partyType: "PERSON" | "ORGANIZATION"; legalName: string; displayName: string | null; primaryEmail: string | null; primaryPhone: string | null; taxIdentifier: string | null; registrationId: string | null; status: string; notes: string | null; revision: number; roles: Array<{ id: string; roleCode: string }>; contacts: Contact[]; addresses: Address[]; identityLink: RelationshipOverviewLink | null; identityLinks?: RelationshipOverviewLink[] };
 type DuplicateCandidate = Pick<Party, "id" | "code" | "partyType" | "legalName" | "displayName" | "primaryEmail" | "primaryPhone" | "status">;
 
 const ROLES = ["PROSPECT", "CUSTOMER", "SUPPLIER", "PARTNER", "CONTRACTOR"] as const;
 function roleFilter(tab: string) { return ["PROSPECT", "CUSTOMER", "PARTNER", "CONTRACTOR", "SUPPLIER"].includes(tab) ? tab : ""; }
-function relationForRoles(roles: string[]) { if (roles.includes("CUSTOMER")) return "CUSTOMER"; if (roles.includes("PROSPECT")) return "PROSPECT"; if (roles.includes("PARTNER")) return "PARTNER"; if (roles.includes("CONTRACTOR")) return "CONTRACTOR"; return "OTHER"; }
+function relationForRoles(roles: string[]) { if (roles.includes("CUSTOMER")) return "CUSTOMER"; if (roles.includes("PROSPECT")) return "PROSPECT"; if (roles.includes("PARTNER")) return "PARTNER"; if (roles.includes("CONTRACTOR")) return "CONTRACTOR"; if (roles.includes("SUPPLIER")) return "SUPPLIER"; return "OTHER"; }
 function identityTone(status?: string | null) { if (status === "ACTIVE") return "success" as const; if (["INVITATION_PENDING", "REQUEST_PENDING", "USER_CONSENT_REQUIRED", "ORGANIZATION_APPROVAL_REQUIRED"].includes(status || "")) return "warning" as const; if (["REFUSED", "EXPIRED", "REVOKED", "CANCELLED"].includes(status || "")) return "danger" as const; return "neutral" as const; }
 
 export function EnterpriseCustomersWorkspace({ organizationId, organizationName, definition }: { organizationId: string; organizationName: string; definition: EnterpriseModuleDefinition }) {
+  const router = useRouter();
   const locale = useProfessionalErpLocale();
   const hotfix = commercialHotfixCopy(locale);
   const t = (key: Parameters<typeof professionalErpT>[1], values?: Record<string, string | number>) => professionalErpT(locale, key, values);
@@ -59,8 +63,38 @@ export function EnterpriseCustomersWorkspace({ organizationId, organizationName,
   const [tab, setTab] = useState("ALL");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [navigationStateReady, setNavigationStateReady] = useState(false);
+  // Preserve the CRM list context in the URL for contextual return and browser navigation.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const restoredTab = params.get("listTab");
+    if (restoredTab && ["ALL", "PROSPECT", "CUSTOMER", "ORGANIZATION", "PERSON", "PARTNER", "CONTRACTOR", "SUPPLIER"].includes(restoredTab)) setTab(restoredTab);
+    if (params.has("listSearch")) setSearch(params.get("listSearch") || "");
+    const restoredPage = Number(params.get("listPage"));
+    if (Number.isInteger(restoredPage) && restoredPage > 0 && restoredPage <= 10000) setPage(restoredPage);
+    setNavigationStateReady(true);
+  }, [organizationId]);
+  useEffect(() => {
+    if (!navigationStateReady) return;
+    const url = new URL(window.location.href);
+    if (tab !== "ALL") url.searchParams.set("listTab", tab);
+    else url.searchParams.delete("listTab");
+    if (search.trim()) url.searchParams.set("listSearch", search.trim());
+    else url.searchParams.delete("listSearch");
+    if (page > 1) url.searchParams.set("listPage", String(page));
+    else url.searchParams.delete("listPage");
+    const updated = url.pathname + url.search + url.hash;
+    if (updated !== window.location.pathname + window.location.search + window.location.hash) {
+      window.history.replaceState(window.history.state, "", updated);
+    }
+  }, [navigationStateReady, tab, search, page]);
   const [refreshKey, setRefreshKey] = useState(0);
+  useEffect(() => subscribeEnterpriseCrmUpdates(organizationId, () => setRefreshKey((value) => value + 1)), [organizationId]);
   const [createOpen, setCreateOpen] = useState(false);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("action") === "create") setCreateOpen(true);
+  }, [organizationId]);
   const [detail, setDetail] = useState<Party | null>(null);
   const [edit, setEdit] = useState<Party | null>(null);
   const [identityChoice, setIdentityChoice] = useState<EnterpriseIdentityLinkChoiceValue>("MANUAL_ONLY");
@@ -111,6 +145,11 @@ export function EnterpriseCustomersWorkspace({ organizationId, organizationName,
         catch { setWarning(hotfix.savedPartyInvitationPending); }
       }
       setCreateOpen(false); resetForm(); setRefreshKey((value) => value + 1); setSuccess(hotfix.savedParty);
+      publishEnterpriseCrmUpdate(organizationId, party.id);
+      const returnTo = new URLSearchParams(window.location.search).get("returnTo");
+      if (returnTo && new RegExp("^/enterprise-identity-admin(?:[?]link=[A-Za-z0-9_-]+)?$").test(returnTo)) {
+        router.push(`${returnTo}${returnTo.includes("?") ? "&" : "?"}createdParty=${encodeURIComponent(party.id)}`);
+      }
     } catch (error) { setMessage(error instanceof Error ? error.message : t("common.createFailed")); }
     finally { setBusy(false); }
   }
@@ -124,7 +163,7 @@ export function EnterpriseCustomersWorkspace({ organizationId, organizationName,
 
   async function updateParty(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (!edit) return; resetFeedback(); const form = new FormData(event.currentTarget); setBusy(true);
-    try { await professionalMutation(`/api/enterprise/${organizationId}/business-parties`, { partyId: edit.id, displayName: String(form.get("displayName") || "") || null, primaryEmail: String(form.get("primaryEmail") || "") || null, primaryPhone: String(form.get("primaryPhone") || "") || null, notes: String(form.get("notes") || "") || null, status: String(form.get("status") || edit.status), revision: edit.revision }, "PATCH"); setEdit(null); setRefreshKey((value) => value + 1); setSuccess(hotfix.savedParty); }
+    try { await professionalMutation(`/api/enterprise/${organizationId}/business-parties`, { partyId: edit.id, displayName: String(form.get("displayName") || "") || null, primaryEmail: String(form.get("primaryEmail") || "") || null, primaryPhone: String(form.get("primaryPhone") || "") || null, primaryAddress: String(form.get("addressLine1") || "").trim() ? { addressType: "PRIMARY", line1: String(form.get("addressLine1") || "").trim(), line2: String(form.get("addressLine2") || "") || null, city: String(form.get("city") || "") || null, stateProvince: String(form.get("stateProvince") || "") || null, postalCode: String(form.get("postalCode") || "") || null, countryCode: String(form.get("countryCode") || "") || null, isPrimary: true } : null, notes: String(form.get("notes") || "") || null, status: String(form.get("status") || edit.status), revision: edit.revision }, "PATCH"); setEdit(null); setRefreshKey((value) => value + 1); setSuccess(hotfix.savedParty); publishEnterpriseCrmUpdate(organizationId, edit.id); }
     catch (error) { setMessage(error instanceof Error ? error.message : t("common.updateFailed")); } finally { setBusy(false); }
   }
 
@@ -147,11 +186,19 @@ export function EnterpriseCustomersWorkspace({ organizationId, organizationName,
     </Dialog>
 
     <Dialog open={Boolean(detail)} onClose={() => setDetail(null)} title={detail?.displayName || detail?.legalName || t("customers.detailFallbackTitle")} description={detail ? `${detail.code} · ${professionalErpEnumLabel(locale, "partyType", detail.partyType)}` : undefined} className="h-[94dvh] max-w-5xl">
-      {detail ? <div className="grid gap-6">{message ? <ProfessionalError message={message} /> : null}<div className="grid gap-4 md:grid-cols-2"><DetailBlock title={t("customers.roles")} value={detail.roles.map((role) => professionalErpEnumLabel(locale, "role", role.roleCode)).join(", ") || t("common.none")} /><DetailBlock title={t("customers.status")} value={professionalErpEnumLabel(locale, "status", detail.status)} /><DetailBlock title={t("customers.email")} value={detail.primaryEmail || t("common.notProvided")} /><DetailBlock title={t("customers.phone")} value={detail.primaryPhone || t("common.notProvided")} /></div><ModuleSection title={t("customers.contacts")} count={detail.contacts.length}>{detail.contacts.length ? <BusinessList ariaLabel={t("customers.contactsAria")}>{detail.contacts.map((contact) => <BusinessListItem key={contact.id} title={contact.label || contact.contactType} description={contact.value} />)}</BusinessList> : <EmptyState compact title={t("customers.noContactTitle")} description={t("customers.noContactDescription")} />}</ModuleSection><ModuleSection title={t("customers.addresses")} count={detail.addresses.length}>{detail.addresses.length ? <BusinessList ariaLabel={t("customers.addressesAria")}>{detail.addresses.map((address) => <BusinessListItem key={address.id} title={address.line1} description={[address.city, address.countryCode].filter(Boolean).join(" · ")} />)}</BusinessList> : <EmptyState compact title={t("customers.noAddressTitle")} description={t("customers.noAddressDescription")} />}</ModuleSection><BusinessPartyCommercialPanel organizationId={organizationId} businessPartyId={detail.id} locale={locale} /><ModuleSection title={t("customers.relationshipSection")} description={t("customers.relationshipSectionDescription")}>{detail.identityLink ? <StatusBadge tone={identityTone(detail.identityLink.status)}>{professionalErpEnumLabel(locale, "identityStatus", detail.identityLink.status)}</StatusBadge> : <div className="grid gap-3"><EmptyState compact title={t("customers.noRelationshipTitle")} description={t("customers.noRelationshipDescription")} />{detail.partyType === "PERSON" && detail.primaryEmail && (collection.canWrite || collection.canManage) ? <Button disabled={busy} onClick={() => void retryIdentityInvitation(detail)}><Link2 className="h-4 w-4" />{t("customers.relationshipTitle")}</Button> : null}</div>}</ModuleSection>{collection.canWrite || collection.canManage ? <div className="flex justify-end border-t border-dtsc-border pt-3"><Button onClick={() => openEdit(detail)}>{t("customers.editRecord")}</Button></div> : null}</div> : null}
+      {detail ? <div className="grid gap-6">{message ? <ProfessionalError message={message} /> : null}<div className="grid gap-4 md:grid-cols-2"><DetailBlock title={t("customers.roles")} value={detail.roles.map((role) => professionalErpEnumLabel(locale, "role", role.roleCode)).join(", ") || t("common.none")} /><DetailBlock title={t("customers.status")} value={professionalErpEnumLabel(locale, "status", detail.status)} /><DetailBlock title={t("customers.email")} value={detail.primaryEmail || t("common.notProvided")} /><DetailBlock title={t("customers.phone")} value={detail.primaryPhone || t("common.notProvided")} /></div><ModuleSection title={t("customers.contacts")} count={detail.contacts.length}>{detail.contacts.length ? <BusinessList ariaLabel={t("customers.contactsAria")}>{detail.contacts.map((contact) => <BusinessListItem key={contact.id} title={contact.label || contact.contactType} description={contact.value} />)}</BusinessList> : <EmptyState compact title={t("customers.noContactTitle")} description={t("customers.noContactDescription")} />}</ModuleSection><ModuleSection title={t("customers.addresses")} count={detail.addresses.length}>{detail.addresses.length ? <BusinessList ariaLabel={t("customers.addressesAria")}>{detail.addresses.map((address) => <BusinessListItem key={address.id} title={address.line1} description={[address.city, address.countryCode].filter(Boolean).join(" · ")} />)}</BusinessList> : <EmptyState compact title={t("customers.noAddressTitle")} description={t("customers.noAddressDescription")} />}</ModuleSection><BusinessPartyCommercialPanel organizationId={organizationId} businessPartyId={detail.id} locale={locale} /><ModuleSection title={t("customers.relationshipSection")} description={t("customers.relationshipSectionDescription")}>{detail.code.startsWith("SYS-GAMING-WALKIN-") ? <p className="text-sm text-dtsc-muted">{t("customers.systemWalkInNoRelationship")}</p> : (detail.identityLinks?.length || detail.identityLink) ? <RelationshipOverviewPanel key={detail.id} organizationId={organizationId} partyId={detail.id} links={detail.identityLinks?.length ? detail.identityLinks : detail.identityLink ? [detail.identityLink] : []} /> : <div className="grid gap-3"><EmptyState compact title={t("customers.noRelationshipTitle")} description={t("customers.noRelationshipDescription")} />{detail.partyType === "PERSON" && detail.primaryEmail && (collection.canWrite || collection.canManage) ? <Button disabled={busy} onClick={() => void retryIdentityInvitation(detail)}><Link2 className="h-4 w-4" />{t("customers.relationshipTitle")}</Button> : null}</div>}</ModuleSection>{collection.canWrite || collection.canManage ? <div className="flex justify-end border-t border-dtsc-border pt-3"><Button onClick={() => openEdit(detail)}>{t("customers.editRecord")}</Button></div> : null}</div> : null}
     </Dialog>
 
     <Dialog open={Boolean(edit)} onClose={() => { if (!busy) setEdit(null); }} title={t("customers.editDialogTitle")} className="h-[90dvh] max-w-3xl" presentation="editor" footer={<><Button variant="outline" disabled={busy} onClick={() => setEdit(null)}>{t("common.cancel")}</Button><Button type="submit" form="customer-edit-form" disabled={busy}>{busy ? t("common.saving") : t("common.save")}</Button></>}>
-      {edit ? <form id="customer-edit-form" onSubmit={updateParty} className="grid gap-6 p-4 sm:p-5">{message ? <ProfessionalError message={message} /> : null}<ProfessionalFormSection title={t("customers.editableInformation")}><Field label={t("customers.displayName")}><Input name="displayName" defaultValue={edit.displayName || ""} /></Field><Field label={t("customers.primaryEmail")}><Input name="primaryEmail" type="email" defaultValue={edit.primaryEmail || ""} /></Field><Field label={t("customers.primaryPhone")}><Input name="primaryPhone" defaultValue={edit.primaryPhone || ""} /></Field><Field label={t("customers.status")}><NativeSelect name="status" defaultValue={edit.status} items={[{ id: "ACTIVE", label: professionalErpEnumLabel(locale, "status", "ACTIVE") }, { id: "INACTIVE", label: professionalErpEnumLabel(locale, "status", "INACTIVE") }]} /></Field><Field label={t("customers.notes")}><textarea name="notes" defaultValue={edit.notes || ""} rows={5} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2" /></Field></ProfessionalFormSection></form> : null}
+      {edit ? <form id="customer-edit-form" onSubmit={updateParty} className="grid gap-6 p-4 sm:p-5">{message ? <ProfessionalError message={message} /> : null}<ProfessionalFormSection title={t("customers.editableInformation")}><Field label={t("customers.displayName")}><Input name="displayName" defaultValue={edit.displayName || ""} /></Field><Field label={t("customers.primaryEmail")}><Input name="primaryEmail" type="email" defaultValue={edit.primaryEmail || ""} /></Field><Field label={t("customers.primaryPhone")}><Input name="primaryPhone" defaultValue={edit.primaryPhone || ""} /></Field><Field label={t("customers.status")}><NativeSelect name="status" defaultValue={edit.status} items={[{ id: "ACTIVE", label: professionalErpEnumLabel(locale, "status", "ACTIVE") }, { id: "INACTIVE", label: professionalErpEnumLabel(locale, "status", "INACTIVE") }]} /></Field><Field label={t("customers.notes")}><textarea name="notes" defaultValue={edit.notes || ""} rows={5} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2" /></Field></ProfessionalFormSection>
+        <ProfessionalFormSection title={t("customers.address")}>
+          <Field label={t("customers.address")}><Input name="addressLine1" defaultValue={(edit.addresses.find((entry) => entry.isPrimary) || edit.addresses[0])?.line1 || ""} /></Field>
+          <Field label={t("customers.addressLine2")}><Input name="addressLine2" defaultValue={(edit.addresses.find((entry) => entry.isPrimary) || edit.addresses[0])?.line2 || ""} /></Field>
+          <Field label={t("customers.city")}><Input name="city" defaultValue={(edit.addresses.find((entry) => entry.isPrimary) || edit.addresses[0])?.city || ""} /></Field>
+          <Field label={t("customers.stateProvince")}><Input name="stateProvince" defaultValue={(edit.addresses.find((entry) => entry.isPrimary) || edit.addresses[0])?.stateProvince || ""} /></Field>
+          <Field label={t("customers.postalCode")}><Input name="postalCode" defaultValue={(edit.addresses.find((entry) => entry.isPrimary) || edit.addresses[0])?.postalCode || ""} /></Field>
+          <Field label={t("customers.countryCode")}><Input name="countryCode" defaultValue={(edit.addresses.find((entry) => entry.isPrimary) || edit.addresses[0])?.countryCode || ""} maxLength={3} /></Field>
+        </ProfessionalFormSection></form> : null}
     </Dialog>
   </ModuleWorkspace>;
 }

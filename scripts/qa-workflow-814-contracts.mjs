@@ -34,7 +34,7 @@ const { loadWorkflowTransitionEntity } = load("@/lib/enterprise/workflows/transi
 const { workflowReadinessMessage } = load("@/lib/enterprise/workflows/readiness-messages");
 const { createWorkflowFromTemplate } = load("@/lib/enterprise/workflows/definitions");
 const supported = ["EnterpriseTask", "EnterpriseRequest", "EnterpriseMeeting", "EnterprisePurchase", "EnterpriseBudget", "EnterpriseExpense"];
-const enabled = ["REQUEST_MANAGER_APPROVAL", "PURCHASE_APPROVAL", "BUDGET_APPROVAL", "EXPENSE_APPROVAL"];
+const enabled = templates.map((template) => template.code);
 assert.equal(templates.length, 9);
 for (const template of templates) {
   const result = compatibility(template);
@@ -107,8 +107,44 @@ blocked({ ...graph, transitions: [{ ...graph.transitions[0], condition: { field:
 blocked({ ...graph, transitions: [graph.transitions[0], { ...graph.transitions[0], priority: 1 }] }, "SHADOWED_TRANSITION");
 blocked({ ...approvalGraph, transitions: approvalGraph.transitions.filter((route) => route.outcome !== "CANCELLED") }, "UNCOVERED_TRANSITION_OUTCOME");
 blocked({ ...approvalGraph, transitions: [...approvalGraph.transitions, { fromStepCode: "APPROVAL", toStepCode: "END_REJECTED", outcome: "DEFAULT", priority: 0 }] }, "AMBIGUOUS_BRANCH");
+const financialCodes = [
+  "SUPPLIER_INVOICE_REVIEW_APPROVAL_POSTING",
+  "SUPPLIER_PAYMENT_APPROVAL_CONFIRMATION",
+  "CASH_SESSION_INDEPENDENT_CLOSE",
+  "MANUAL_JOURNAL_APPROVAL_POSTING",
+  "FISCAL_PERIOD_CLOSE_REVIEW",
+];
+for (const code of financialCodes) {
+  const template = templates.find((item) => item.code === code);
+  assert.ok(template, code);
+  assert.equal(compatibility(template).ready, true, code);
+  const adapter = getWorkflowEntityAdapter(template.triggerEntityType);
+  const approvals = template.version.steps.filter((step) => step.stepType === "CREATE_APPROVAL");
+  assert.ok(approvals.length >= 1);
+  for (const step of approvals) {
+    assert.ok(adapter.canonicalApprovalTargets?.has(step.configuration.canonicalApprovalTarget),
+      code + " only attaches a correct canonical target");
+  }
+  assert.ok(template.version.steps.every((step) => step.stepType !== "DOMAIN_ACTION"),
+    "Financial posting/confirmation cannot be automated by workflow");
+  const altered = {
+    ...template.version,
+    steps: template.version.steps.map((step) =>
+      step.stepType === "CREATE_APPROVAL"
+        ? { ...step, configuration: { ...step.configuration, canonicalApprovalTarget: "EnterprisePayrollRun" } }
+        : step),
+  };
+  assert.equal(compatibility({ ...template, version: altered }).ready, false,
+    code + " fail closed on an unlisted finance approval");
+}
+const paymentTemplate = templates.find((template) => template.code === "SUPPLIER_PAYMENT_APPROVAL_CONFIRMATION");
+assert.ok(paymentTemplate.version.steps.some((step) => step.stepType === "CONDITION"
+  && step.configuration.condition.field === "paymentType"
+  && step.configuration.condition.value === "SUPPLIER_PAYMENT"));
+assert.ok(paymentTemplate.version.transitions.some((route) => route.fromStepCode === "IS_SUPPLIER_PAYMENT"
+  && route.outcome === "FALSE" && route.toStepCode === "END_OUT_OF_SCOPE"));
 const cash = templates.find((template) => template.triggerEntityType === "EnterpriseCashSession");
-assert.ok(compatibility(cash).blockers.some((item) => item.code === "INVALID_DOMAIN_ACTION"));
+assert.equal(compatibility(cash).ready, true);
 const adapter = getWorkflowEntityAdapter("EnterprisePurchase");
 const entity = { id: "source", organizationId: "tenant", revision: 7, status: "DRAFT", totalAmount: new Prisma.Decimal("9007199254740993.01"), expectedAt: new Date("2026-01-01T00:00:00Z") };
 assert.equal(evaluateWorkflowCondition(adapter, entity, { field: "totalAmount", operator: "EQUALS", value: "9007199254740993.010" }), true);
@@ -126,4 +162,4 @@ for (const code of ["INVALID_CONDITION_FIELD", "INVALID_DOMAIN_ACTION", "APPROVA
   assert.notEqual(workflowReadinessMessage(code, "fr"), workflowReadinessMessage(code, "en"));
   assert.ok(!workflowReadinessMessage(code, "en").includes(code));
 }
-console.log(`WF-01 contracts passed: ${templates.length} real templates, ${entities.length} adapters, 6 canonical approval delegations, typed branches, post-action revision/tenant checks and FR/EN blockers.`);
+console.log(`WF-01 contracts passed: ${templates.length} real templates, ${entities.length} adapters, 6 canonical approval delegations and 5 canonical finance links, typed branches, post-action revision/tenant checks and FR/EN blockers.`);

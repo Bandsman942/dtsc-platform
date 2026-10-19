@@ -40,6 +40,7 @@ const requiredModules = [
   "GAMING_SESSIONS",
   "GAMING_CHECKOUT",
   "GAMING_DAILY_CLOSE",
+  "RELATIONSHIP_BENEFITS",
 ];
 
 async function prepareTenant() {
@@ -1038,6 +1039,270 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
         discrepancyAmount: 0,
       },
     });
+  });
+
+
+  test("#884 exercises a real Gaming relationship discount, cancellation and canonical consumption", async () => {
+    const suffix = `benefit-884-${Date.now()}`;
+    const personId = `e2e-884-person-${Date.now()}`;
+    const linkId = `e2e-884-link-${Date.now()}`;
+    const benefitCode = `E2E_884_GAMING_${Date.now()}`;
+    const admin = await prisma.user.findUniqueOrThrow({ where: { email: adminEmail } });
+    const party = await prisma.enterpriseBusinessParty.findFirstOrThrow({
+      where: { id: customerId, organizationId, status: "ACTIVE", archivedAt: null },
+    });
+
+    await prisma.enterprisePersonIdentity.create({
+      data: {
+        id: personId, organizationId, displayName: "Gaming benefit E2E #884",
+        primaryEmail: approverEmail, status: "ACTIVE", createdByUserId: admin.id,
+      },
+    });
+    const reference = await prisma.enterprisePersonBusinessReference.create({
+      data: {
+        organizationId, personIdentityId: personId, businessPartyId: party.id,
+        relationType: "CUSTOMER", status: "ACTIVE", createdByUserId: admin.id,
+      },
+    });
+    await prisma.enterpriseIdentityLink.create({
+      data: {
+        id: linkId, organizationId, personIdentityId: personId, userId: approverUserId,
+        origin: "ENTERPRISE", requestedRelationType: "CUSTOMER", status: "ACTIVE",
+        initiatedByUserId: admin.id, reviewedByUserId: admin.id,
+        purpose: "Gaming relationship discount acceptance #884",
+        consentTextVersion: "enterprise-identity-consent-v1",
+        userDecisionAt: new Date(), organizationDecisionAt: new Date(), activatedAt: new Date(),
+      },
+    });
+
+    const benefitResponse = await context.request.post(
+      `${baseUrl}/api/enterprise/${organizationId}/relationship-benefits`,
+      {
+        data: {
+          code: benefitCode,
+          nameFr: "Remise Gaming E2E #884", nameEn: "Gaming discount E2E #884",
+          descriptionFr: "10 % sur le service Gaming lié à une relation consentie.",
+          descriptionEn: "10% off consented Gaming session services.",
+          benefitType: "DISCOUNT", assignmentMode: "AUTOMATIC", relationTypes: ["CUSTOMER"],
+          identityLinkIds: [], valueType: "PERCENT", valueDecimal: 10, currencyCode: "CDF",
+          minimumAmount: 100, actionCode: "NONE", targetModuleCode: "GAMING_CHECKOUT",
+          usageLimitTotal: 1, usageLimitPerPeriod: 1, usagePeriodDays: 30,
+          stackable: false, status: "ACTIVE",
+          conditions: { channelCodes: ["GAMING"], catalogItemIds: [serviceId], minimumQuantity: 1 },
+        },
+        headers: { origin: baseUrl, referer: `${baseUrl}/enterprise-relationship-benefits` },
+      },
+    );
+    const created = await benefitResponse.json().catch(() => null);
+    expect(benefitResponse.status(), JSON.stringify(created)).toBe(201);
+    const benefitId = created.benefit.id;
+
+    try {
+      const firstSession = await createLegacyEndedSession({ businessPartyId: customerId, suffix: `${suffix}-cancel` });
+      const first = await checkout(firstSession.id, `${suffix}-cancel`);
+      expect(Number(first.invoice.subtotal)).toBe(500);
+      expect(Number(first.invoice.discountTotal)).toBe(50);
+      expect(Number(first.invoice.grandTotal)).toBe(450);
+
+      const reserved = await prisma.enterpriseRelationshipBenefitUsage.findMany({
+        where: {
+          organizationId, benefitId, identityLinkId: linkId,
+          effectEntityType: "EnterpriseGamingCheckout", effectEntityId: first.checkout.id,
+        },
+      });
+      expect(reserved).toHaveLength(1);
+      expect(reserved[0].status).toBe("APPROVED");
+      expect(reserved[0].executionMode).toBe("AUTO_GAMING");
+      expect(reserved[0].executedAt).toBeNull();
+
+      const cancelledResponse = await context.request.patch(
+        `${baseUrl}/api/enterprise/${organizationId}/gaming/checkouts/${first.checkout.id}`,
+        {
+          data: { action: "CANCEL", revision: first.checkout.revision, reason: "E2E #884 cancel pending invoice for quota recovery" },
+          headers: { origin: baseUrl, referer: `${baseUrl}/enterprise-modules/GAMING_CHECKOUT` },
+        },
+      );
+      const cancelled = await cancelledResponse.json().catch(() => null);
+      expect(cancelledResponse.ok(), JSON.stringify(cancelled)).toBeTruthy();
+      const reversed = await prisma.enterpriseRelationshipBenefitUsage.findUniqueOrThrow({ where: { id: reserved[0].id } });
+      expect(reversed.status).toBe("CANCELLED");
+
+      const secondSession = await createLegacyEndedSession({ businessPartyId: customerId, suffix: `${suffix}-issue` });
+      const second = await checkout(secondSession.id, `${suffix}-issue`);
+      expect(Number(second.invoice.discountTotal)).toBe(50);
+      expect(Number(second.invoice.grandTotal)).toBe(450);
+
+      const issued = await approveInvoice(second);
+      expect(issued.invoice.status).toBe("ISSUED");
+      const consumed = await prisma.enterpriseRelationshipBenefitUsage.findFirstOrThrow({
+        where: { organizationId, benefitId, effectEntityId: second.checkout.id },
+      });
+      expect(consumed.status).toBe("CONSUMED");
+      expect(consumed.executedAt).toBeTruthy();
+      expect(Number(consumed.effectAmount)).toBe(50);
+
+      const thirdSession = await createLegacyEndedSession({ businessPartyId: customerId, suffix: `${suffix}-quota` });
+      const third = await checkout(thirdSession.id, `${suffix}-quota`);
+      expect(Number(third.invoice.discountTotal)).toBe(0);
+      expect(Number(third.invoice.grandTotal)).toBe(500);
+      const thirdUsage = await prisma.enterpriseRelationshipBenefitUsage.count({
+        where: { organizationId, benefitId, effectEntityId: third.checkout.id },
+      });
+      expect(thirdUsage).toBe(0);
+
+      const overview = await context.request.get(
+        `${baseUrl}/api/enterprise/${organizationId}/identity-links/${linkId}/overview?partyId=${encodeURIComponent(customerId)}`,
+      );
+      const overviewBody = await overview.json().catch(() => null);
+      expect(overview.ok(), JSON.stringify(overviewBody)).toBeTruthy();
+      expect(overviewBody.usages.some((usage) => usage.id === consumed.id && usage.status === "CONSUMED")).toBe(true);
+      const consumedHistory = overviewBody.usages.find((usage) => usage.id === consumed.id);
+      expect(consumedHistory?.operationHref).toBe(
+        `/enterprise-modules/GAMING_CHECKOUT?checkout=${encodeURIComponent(second.checkout.id)}`,
+      );
+      const detailPage = await context.newPage();
+      try {
+        await detailPage.goto(`${baseUrl}${consumedHistory.operationHref}`);
+        await expect(detailPage.locator("[data-dtsc-fullscreen-detail]")).toBeVisible();
+        await expect(detailPage.getByText(second.checkout.reference).first()).toBeVisible();
+      } finally {
+        await detailPage.close();
+      }
+
+      const retry = await context.request.post(
+        `${baseUrl}/api/enterprise/${organizationId}/gaming/checkouts`,
+        {
+          data: {
+            sessionId: secondSession.id, invoiceApproverUserId: approverUserId,
+            idempotencyKey: `e2e-693-checkout-${suffix}-issue`, extraItems: [],
+          },
+          headers: { origin: baseUrl, referer: `${baseUrl}/enterprise-modules/GAMING_CHECKOUT` },
+        },
+      );
+      expect(retry.ok()).toBeTruthy();
+      expect(await prisma.enterpriseRelationshipBenefitUsage.count({
+        where: { organizationId, benefitId, effectEntityId: second.checkout.id },
+      })).toBe(1);
+    } finally {
+      // Only isolated seeded E2E data is removed, never business or financial records.
+      await prisma.enterpriseRelationshipBenefitUsage.deleteMany({ where: { organizationId, benefitId } });
+      await prisma.enterpriseRelationshipBenefitAssignment.deleteMany({ where: { organizationId, benefitId } });
+      await prisma.enterpriseRelationshipBenefitAudience.deleteMany({ where: { organizationId, benefitId } });
+      await prisma.enterpriseRelationshipBenefit.deleteMany({ where: { organizationId, id: benefitId } });
+      await prisma.enterpriseIdentityLink.deleteMany({ where: { organizationId, id: linkId } });
+      await prisma.enterprisePersonBusinessReference.deleteMany({ where: { organizationId, id: reference.id } });
+      await prisma.enterprisePersonIdentity.deleteMany({ where: { organizationId, id: personId } });
+    }
+  });
+
+  test("#884 browser identity consent: full-screen, seven mobile/desktop widths, native Back and tenant isolation", async ({ browser }) => {
+    test.setTimeout(240_000);
+    const suffix = Date.now().toString(36);
+    const personId = `e2e-884-browser-person-${suffix}`;
+    const linkId = `e2e-884-browser-link-${suffix}`;
+    const personLabel = `Relation navigateur #884 ${suffix}`;
+    await prisma.enterprisePersonIdentity.create({
+      data: {
+        id: personId, organizationId, displayName: personLabel,
+        primaryEmail: `identity-${suffix}@example.test`,
+        createdByUserId: adminUserId,
+      },
+    });
+    try {
+      await prisma.enterpriseIdentityLink.create({
+        data: {
+          id: linkId, organizationId, personIdentityId: personId,
+          origin: "ENTERPRISE", requestedRelationType: "CUSTOMER",
+          status: "ORGANIZATION_APPROVAL_REQUIRED",
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          initiatedByUserId: adminUserId,
+          purpose: "Contrôle d'interface et de consentement #884",
+          consentTextVersion: "enterprise-identity-consent-v1",
+        },
+      });
+
+      // Reuse the single authenticated E2E admin session: login attempts are correctly rate-limited.
+      const adminStorageState = await context.storageState();
+      for (const width of [320, 360, 375, 390, 414, 768, 1024]) {
+        await test.step(`#884 identity detail and history at ${width}px`, async () => {
+          const browserContext = await browser.newContext({
+            baseURL: baseUrl, viewport: { width, height: 850 },
+            storageState: adminStorageState,
+          });
+          try {
+            const page = await browserContext.newPage();
+            await page.goto(`${baseUrl}/enterprise-identity-admin`);
+            await expect(page.getByRole("heading", { name: /Identités et consentements|Identities and consents/i })).toBeVisible();
+            await expect(page.locator("[data-contextual-module-back]:visible")).toHaveCount(1);
+            // A Next.js hydration or auth refresh can replace the document between visibility and evaluate.
+            // Retry the real overflow assertion; never mask a persistent overflow.
+            await expect.poll(async () => {
+              try {
+                return await page.evaluate(() =>
+                  document.documentElement.scrollWidth - document.documentElement.clientWidth);
+              } catch (error) {
+                if (error instanceof Error && /Execution context was destroyed|navigation/i.test(error.message)) {
+                  return Number.POSITIVE_INFINITY;
+                }
+                throw error;
+              }
+            }, { message: `#884 horizontal overflow at ${width}px`, timeout: 15_000 })
+              .toBeLessThanOrEqual(2);
+
+            // Modules are collapsed by default. Enter the real full-screen workspace section
+            // before interacting with a list row (the list does not exist while collapsed).
+            const relationshipsSection = page.locator("[data-workspace-section]")
+              .filter({ hasText: "Invitations, demandes et relations" });
+            await relationshipsSection.locator("[data-workspace-section-header]").click();
+            await expect(relationshipsSection).toHaveAttribute("data-workspace-section-open", "true");
+            const row = relationshipsSection.locator("[data-business-list-item]").filter({ hasText: personLabel });
+            await expect(row).toHaveCount(1);
+            await row.getByRole("button", { name: /Ouvrir les détails|Open relationship details/i }).click();
+            await expect(page.locator("[data-dtsc-fullscreen-detail]")).toBeVisible();
+            await expect(page.locator("[data-relationship-overview]")).toBeVisible();
+            await page.getByRole("tab", { name: /Avantages|Benefits/i }).click();
+            await expect(page.getByRole("tabpanel")).toBeVisible();
+            await page.getByRole("tab", { name: /Historique|History/i }).click();
+            await expect(page.getByRole("tabpanel")).toBeVisible();
+            await expect(page.getByRole("button", { name: /Approuver|Approve/i })).toBeDisabled();
+            await page.keyboard.press("Escape");
+            await expect(page.locator("[data-dtsc-fullscreen-detail]")).toHaveCount(0);
+            await expect(relationshipsSection).toHaveAttribute("data-workspace-section-open", "true");
+            await row.getByRole("button", { name: /Ouvrir les détails|Open relationship details/i }).click();
+            await expect(page.locator("[data-dtsc-fullscreen-detail]")).toBeVisible();
+            await expect(page).toHaveURL(new RegExp(`[?&]link=${linkId}`));
+
+            await page.goBack();
+            await expect(page.locator("[data-dtsc-fullscreen-detail]")).toHaveCount(0);
+            await expect(row).toBeVisible();
+            await page.goto(`${baseUrl}/enterprise-identity-admin?link=${linkId}`);
+            await expect(page.locator("[data-dtsc-fullscreen-detail]")).toBeVisible();
+
+            // Permissions must be enforced by the API, never just by a hidden UI control.
+            const forged = await browserContext.request.get(
+              `${baseUrl}/api/enterprise/not-this-tenant/identity-links/${linkId}/overview`);
+            expect([403, 404]).toContain(forged.status());
+          } finally {
+            await browserContext.close();
+          }
+        });
+      }
+      const anonymous = await browser.newContext();
+      try {
+        const response = await anonymous.request.get(
+          `${baseUrl}/api/enterprise/${organizationId}/identity-links/${linkId}/overview`);
+        expect([401, 403]).toContain(response.status());
+      } finally {
+        await anonymous.close();
+      }
+    } finally {
+      await prisma.enterpriseIdentityLink.deleteMany({
+        where: { organizationId, id: linkId },
+      });
+      await prisma.enterprisePersonIdentity.deleteMany({
+        where: { organizationId, id: personId },
+      });
+    }
   });
 
 });

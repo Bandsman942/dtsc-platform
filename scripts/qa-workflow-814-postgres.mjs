@@ -44,6 +44,7 @@ const decisions = {
   EnterpriseExpense: load("@/lib/enterprise/finance/expense-service").decideEnterpriseExpenseApproval,
 };
 let departmentId, supplierId, sequence = 0;
+const financeTemplateDefinitions = new Map();
 async function source(entityType) {
   const reference = `${organizationId}-${sequence++}`;
   const common = { organizationId, title: "WF-01 fixture", departmentId };
@@ -118,8 +119,10 @@ try {
     await assert.rejects(decide(entityType, approval));
   }
 
-  // Every catalogue entry goes through the real create/save/publish services.
-  // The four supported templates then execute all steps to completion.
+  // All nine catalogue entries use real create/save/publish services.
+  // The original four still execute through their canonical business services;
+  // five finance templates attach only EXISTING human approvals (separate #861 PG QA).
+  // Never fabricate a posting or payment confirmation to make a test pass.
   for (const template of templates) {
     if (!getWorkflowTemplateCompatibility(template).ready) {
       const count = await prisma.enterpriseWorkflowDefinition.count({ where: { organizationId } });
@@ -134,7 +137,15 @@ try {
     const definition = await definitions.createWorkflowFromTemplate(organizationId, maker, template.code, "en");
     const version = definition.versions[0];
     await definitions.publishWorkflowVersion(organizationId, definition.id, version.id, maker);
+    if (template.version.steps.some((step) => step.stepType === "CREATE_APPROVAL" && step.configuration.canonicalApprovalTarget)) financeTemplateDefinitions.set(template.code, definition.id);
     await assert.rejects(definitions.saveWorkflowVersion(organizationId, definition.id, version.id, maker, template.version), (error) => error.code === "PUBLISHED_WORKFLOW_IMMUTABLE");
+    if (template.version.steps.some((step) => step.stepType === "CREATE_APPROVAL" && step.configuration.canonicalApprovalTarget)) {
+      // A compatible template is publishable without creating or mutating any
+      // finance entity. Runtime requires an exact pre-existing approval.
+      assert.ok(template.version.steps.every((step) => step.stepType !== "DOMAIN_ACTION"),
+        "No finance DOMAIN_ACTION may bypass human decisions");
+      continue;
+    }
     const entity = await source(template.triggerEntityType);
     if (template.triggerEntityType !== "EnterpriseRequest") await adapters.getWorkflowEntityAdapter(template.triggerEntityType).createApproval({ organizationId, entityId: entity.id, actorUserId: maker, approverUserId: checker, revision: entity.revision });
     const run = await engine.startWorkflowRun({ organizationId, workflowDefinitionId: definition.id, sourceEntityType: template.triggerEntityType, sourceEntityId: entity.id, triggerType: "MANUAL", startedByUserId: maker });
@@ -147,6 +158,52 @@ try {
     assert.equal(finished.status, "COMPLETED", `${template.code}: ${finished.failureMessage}`);
     assert.equal(await prisma.notification.count({ where: { organizationId, id: { startsWith: "wf_" } } }) > 0, true);
     if (template.triggerEntityType === "EnterpriseRequest") assert.equal(await prisma.enterpriseTask.count({ where: { organizationId, sourceEntityId: entity.id } }), 1);
+  }
+
+  // HOTFIX #861: PostgreSQL end-to-end canonical payment approval with the
+  // actual ERP human assignment/decision services, workflow runtime and event
+  // recovery. No mocked or directly updated approval decision, no payment CONFIRM.
+  {
+    const {
+      submitPaymentForAssignedApproval,
+      approvePaymentAssignedApproval,
+    } = load("@/lib/enterprise/accounting/accounting-human-approval-orchestration");
+    const payment = await prisma.enterprisePayment.create({
+      data: {
+        organizationId, number: `${organizationId}-supplier-approval`,
+        direction: "OUTBOUND", paymentType: "SUPPLIER_PAYMENT", methodType: "BANK_TRANSFER",
+        currencyCode: "USD", amount: "24.50", unallocatedAmount: "24.50",
+        paymentDate: new Date("2026-10-17T00:00:00.000Z"), initiatedByUserId: maker,
+      },
+    });
+    const submitted = await submitPaymentForAssignedApproval(organizationId, payment.id, maker, {
+      revision: payment.revision, approverUserId: checker,
+    });
+    assert.equal(submitted.status, "PENDING_APPROVAL");
+    const canonicalApproval = await prisma.enterpriseApproval.findFirstOrThrow({
+      where: { organizationId, targetEntityType: "EnterprisePayment", targetEntityId: payment.id },
+    });
+    const definitionId = financeTemplateDefinitions.get("SUPPLIER_PAYMENT_APPROVAL_CONFIRMATION");
+    assert.ok(definitionId, "published financial template definition expected");
+    const run = await engine.startWorkflowRun({
+      organizationId, workflowDefinitionId: definitionId,
+      sourceEntityType: "EnterprisePayment", sourceEntityId: payment.id,
+      triggerType: "MANUAL", startedByUserId: maker,
+    });
+    assert.equal(run.status, "WAITING_APPROVAL", run.failureCode || run.failureMessage || "canonical approval must be awaited");
+    assert.equal((await prisma.enterpriseApproval.findUniqueOrThrow({ where: { id: canonicalApproval.id } })).workflowRunId, run.id);
+    assert.equal(await prisma.enterpriseApproval.count({where:{organizationId,targetEntityId:payment.id}}),1,
+      "no shadow ERP approval may be inserted");
+    const approved = await approvePaymentAssignedApproval(organizationId, payment.id, checker, {revision:submitted.revision});
+    assert.equal(approved.status, "APPROVED");
+    await Promise.all([engine.resumeWorkflowFromApproval(canonicalApproval.id),engine.resumeWorkflowFromApproval(canonicalApproval.id)]);
+    const final = await prisma.enterpriseWorkflowRun.findUniqueOrThrow({where:{id:run.id}});
+    assert.equal(final.status, "COMPLETED", final.failureCode || final.failureMessage || "Canonical payment review must finish");
+    assert.equal((await prisma.enterprisePayment.findUniqueOrThrow({where:{id:payment.id}})).status, "APPROVED",
+      "a workflow must NEVER auto-confirm a supplier payment");
+    assert.equal(await prisma.enterpriseApproval.count({where:{organizationId,targetEntityId:payment.id}}),1);
+    assert.equal(await prisma.enterprisePaymentEvent.count({where:{organizationId,paymentId:payment.id,eventType:"APPROVE"}}),1,
+      "concurrent workflow resume must not reissue the human ERP decision");
   }
 
   // Canonical access remains sector-aware; no workflow module registry bypasses it.
@@ -178,7 +235,7 @@ try {
   assert.equal(run.status, "COMPLETED", run.failureMessage || "Post-action branch must win");
   assert.equal(run.version.steps.find((step) => step.id === run.currentStepId).code, "POST_ACTION");
   assert.equal((await prisma.enterpriseTask.findUniqueOrThrow({ where: { id: task.id } })).revision, 2);
-  console.log("WF-01 PostgreSQL passed: six canonical approval targets, SoD/tenant/revision/role checks, concurrent decisions, nine templates, real enabled-template execution, sector access, immutable versions and post-action engine routing.");
+  console.log("WF-01 PostgreSQL passed: six canonical approval targets plus actual supplier payment human approval/run recovery, SoD/tenant/revision/role checks, concurrent decisions, nine templates, real enabled-template execution, sector access, immutable versions and post-action engine routing.");
 } finally {
   // Scoped cleanup only, respecting FKs; no production or remote database allowed.
   await prisma.notification.deleteMany({ where: { organizationId } });
@@ -192,6 +249,8 @@ try {
   await prisma.enterprisePurchaseItemCatalogLink.deleteMany({ where: { organizationId } });
   await prisma.enterprisePurchase.deleteMany({ where: { organizationId } });
   await prisma.enterpriseBudget.deleteMany({ where: { organizationId } });
+  await prisma.enterprisePaymentEvent.deleteMany({ where: { organizationId } });
+  await prisma.enterprisePayment.deleteMany({ where: { organizationId } });
   await prisma.enterpriseSupplier.deleteMany({ where: { organizationId } });
   await prisma.enterpriseTask.deleteMany({ where: { organizationId } });
   await prisma.enterpriseRequest.deleteMany({ where: { organizationId } });

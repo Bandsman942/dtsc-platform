@@ -5,11 +5,13 @@ import {
   enterpriseReference,
   publishEnterpriseEvent,
 } from "@/lib/enterprise/crm-sales/helpers";
-import type { opportunityCreateSchema, opportunityTransitionSchema } from "@/lib/enterprise/crm-sales/schemas";
+import type { opportunityCreateSchema, opportunityTransitionSchema, opportunityUpdateSchema, opportunityNoteCreateSchema } from "@/lib/enterprise/crm-sales/schemas";
 import { prisma } from "@/lib/prisma";
 
 type OpportunityCreateInput = z.infer<typeof opportunityCreateSchema>;
 type OpportunityTransitionInput = z.infer<typeof opportunityTransitionSchema>;
+type OpportunityUpdateInput = z.infer<typeof opportunityUpdateSchema>;
+type OpportunityNoteInput = z.infer<typeof opportunityNoteCreateSchema>;
 
 export async function createEnterpriseOpportunity(organizationId: string, actorUserId: string, input: OpportunityCreateInput) {
   return prisma.$transaction(async (tx) => {
@@ -105,8 +107,107 @@ export async function transitionEnterpriseOpportunity(
       actorUserId,
       fromStatus: opportunity.status,
       toStatus: input.targetStatus,
-      metadataJson: { nextActionAt: input.nextActionAt?.toISOString() || null },
+      metadataJson: { nextActionAt: input.nextActionAt?.toISOString() || null, lostReason: input.targetStatus === "LOST" ? input.lostReason || null : null },
     });
     return tx.enterpriseOpportunity.findUniqueOrThrow({ where: { id: opportunity.id } });
+  });
+}
+
+/**
+ * Opportunity edits preserve the canonical businessPartyId and never bypass
+ * the managed stage transitions. Events are written in the same transaction.
+ */
+export async function updateEnterpriseOpportunity(
+  organizationId: string,
+  opportunityId: string,
+  actorUserId: string,
+  input: OpportunityUpdateInput,
+) {
+  return prisma.$transaction(async (tx) => {
+    const before = await tx.enterpriseOpportunity.findFirst({
+      where: { id: opportunityId, organizationId, archivedAt: null },
+    });
+    if (!before) throw new EnterpriseDomainError("OPPORTUNITY_NOT_FOUND", 404, "Opportunité introuvable.");
+    if (before.revision !== input.revision) throw new EnterpriseDomainConflictError();
+    const candidate = {
+      ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.description !== undefined ? { description: input.description || null } : {}),
+      ...(input.estimatedValue !== undefined ? { estimatedValue: input.estimatedValue } : {}),
+      ...(input.currency !== undefined ? { currency: input.currency || null } : {}),
+      ...(input.probabilityPercent !== undefined ? { probabilityPercent: input.probabilityPercent } : {}),
+      ...(input.expectedCloseDate !== undefined ? { expectedCloseDate: input.expectedCloseDate } : {}),
+      ...(input.source !== undefined ? { source: input.source || null } : {}),
+      ...(input.notes !== undefined ? { notes: input.notes || null } : {}),
+      ...(input.nextAction !== undefined ? { nextAction: input.nextAction || null } : {}),
+      ...(input.nextActionAt !== undefined ? { nextActionAt: input.nextActionAt } : {}),
+    };
+    if (!Object.keys(candidate).length) throw new EnterpriseDomainError("OPPORTUNITY_NO_CHANGES", 400, "Aucune modification à enregistrer.");
+    if (before.status === "CLOSED") throw new EnterpriseDomainError("OPPORTUNITY_CLOSED", 409, "Cette opportunité est clôturée. Consultez son historique.");
+    const updated = await tx.enterpriseOpportunity.updateMany({
+      where: { id: opportunityId, organizationId, revision: input.revision, archivedAt: null, status: before.status },
+      data: { ...candidate, revision: { increment: 1 }, updatedByUserId: actorUserId },
+    });
+    if (updated.count !== 1) throw new EnterpriseDomainConflictError();
+    const serialized = (value: unknown) => value == null ? null : value instanceof Date ? value.toISOString() : String(value);
+    const changes = Object.fromEntries(
+      Object.entries(candidate)
+        .filter(([field, next]) => serialized(before[field as keyof typeof before]) !== serialized(next))
+        .map(([field, next]) => [field, { before: serialized(before[field as keyof typeof before]), after: serialized(next) }]),
+    );
+    await publishEnterpriseEvent(tx, {
+      organizationId,
+      entityType: "EnterpriseOpportunity",
+      entityId: opportunityId,
+      eventType: "OPPORTUNITY_UPDATED",
+      summary: `Opportunité ${before.reference} modifiée`,
+      actorUserId,
+      fromStatus: before.status,
+      toStatus: before.status,
+      metadataJson: { changedFields: Object.keys(changes), changes, beforeRevision: input.revision, afterRevision: input.revision + 1 },
+    });
+    return tx.enterpriseOpportunity.findFirstOrThrow({ where: { id: opportunityId, organizationId, archivedAt: null } });
+  });
+}
+
+export async function addEnterpriseOpportunityNote(
+  organizationId: string,
+  opportunityId: string,
+  actorUserId: string,
+  input: OpportunityNoteInput,
+) {
+  return prisma.$transaction(async (tx) => {
+    const opportunity = await tx.enterpriseOpportunity.findFirst({
+      where: { id: opportunityId, organizationId, archivedAt: null },
+      select: { id: true, reference: true, revision: true, status: true },
+    });
+    if (!opportunity) throw new EnterpriseDomainError("OPPORTUNITY_NOT_FOUND", 404, "Opportunité introuvable.");
+    const guarded = await tx.enterpriseOpportunity.updateMany({
+      where: { id: opportunityId, organizationId, revision: input.revision, archivedAt: null },
+      data: { revision: { increment: 1 }, updatedByUserId: actorUserId },
+    });
+    if (guarded.count !== 1) throw new EnterpriseDomainConflictError();
+    const note = await tx.enterpriseOperationalComment.create({
+      data: {
+        organizationId,
+        entityType: "EnterpriseOpportunity",
+        entityId: opportunityId,
+        authorUserId: actorUserId,
+        content: input.content,
+        visibility: "INTERNAL",
+      },
+    });
+    // Notes are immutable through this API; the timeline stores the stable comment ID.
+    await publishEnterpriseEvent(tx, {
+      organizationId,
+      entityType: "EnterpriseOpportunity",
+      entityId: opportunityId,
+      eventType: "OPPORTUNITY_NOTE_ADDED",
+      summary: `Note ajoutée à l’opportunité ${opportunity.reference}`,
+      actorUserId,
+      fromStatus: opportunity.status,
+      toStatus: opportunity.status,
+      metadataJson: { commentId: note.id, revision: input.revision + 1 },
+    });
+    return { note, revision: input.revision + 1 };
   });
 }

@@ -96,6 +96,11 @@ async function validateBusinessTarget(
   organizationId: string,
   target: BusinessTarget,
 ) {
+  if (target.relationType === "SUPPLIER" &&
+      (!target.supplierId && !target.businessPartyId || target.employeeId || target.supplierContactId || target.businessPartyContactId)) {
+    throw new EnterpriseIdentityLinkError("SUPPLIER_REQUIRES_PERSON", "Choisissez une fiche fournisseur de type personne physique.", 400);
+  }
+
   if (target.supplierContactId) {
     const contact = await db.enterpriseSupplierContact.findFirst({
       where: { id: target.supplierContactId, organizationId },
@@ -126,6 +131,9 @@ async function validateBusinessTarget(
     }
     if (target.relationType === "SUPPLIER_REPRESENTATIVE" && supplier.supplierType !== "PERSON") {
       throw new EnterpriseIdentityLinkError("SUPPLIER_REPRESENTATIVE_REQUIRES_PERSON", "Sélectionnez un contact du fournisseur personne morale, et non l’organisation elle-même.", 400);
+    }
+    if (target.relationType === "SUPPLIER" && supplier.supplierType !== "PERSON") {
+      throw new EnterpriseIdentityLinkError("SUPPLIER_REQUIRES_PERSON", "Une organisation fournisseur doit sélectionner un représentant individuel et une relation « Représentant de fournisseur ».", 400);
     }
     return {
       displayName: target.displayName || supplier.displayName || supplier.legalName,
@@ -207,6 +215,7 @@ async function validateBusinessTarget(
         displayName: true,
         primaryEmail: true,
         primaryPhone: true,
+        roles: { where: { roleCode: "SUPPLIER", status: "ACTIVE", archivedAt: null }, select: { id: true }, take: 1 },
       },
     });
     if (!businessParty) {
@@ -215,6 +224,10 @@ async function validateBusinessTarget(
         "La fiche métier sélectionnée est introuvable dans cette entreprise.",
         404,
       );
+    }
+    if (target.relationType === "SUPPLIER" &&
+        (businessParty.partyType !== "PERSON" || businessParty.roles.length === 0)) {
+      throw new EnterpriseIdentityLinkError("SUPPLIER_REQUIRES_PERSON", "Choisissez un tiers personne physique disposant du rôle Fournisseur.", 400);
     }
     if (target.relationType === "SUPPLIER_REPRESENTATIVE" && businessParty.partyType !== "PERSON") {
       throw new EnterpriseIdentityLinkError(
@@ -611,24 +624,34 @@ export async function createUserInitiatedIdentityRequest({
     return link;
   });
 
-  const administrators = await prisma.organizationMember.findMany({
-    where: {
+  // The transaction above already persisted the link, versioned consent
+  // and lifecycle event. Notification delivery is a secondary effect and
+  // must never report a committed request as failed or cause a duplicate retry.
+  try {
+    const administrators = await prisma.organizationMember.findMany({
+      where: {
+        organizationId,
+        status: "ACTIVE",
+        removedAt: null,
+        role: { in: ["OWNER", "ADMIN_ENTREPRISE", "MANAGER"] },
+      },
+      select: { userId: true },
+      take: 50,
+    });
+    await notifyUsers({
+      userIds: administrators.map((membership) => membership.userId),
       organizationId,
-      status: "ACTIVE",
-      removedAt: null,
-      role: { in: ["OWNER", "ADMIN_ENTREPRISE", "MANAGER"] },
-    },
-    select: { userId: true },
-    take: 50,
-  });
-  await notifyUsers({
-    userIds: administrators.map((membership) => membership.userId),
-    organizationId,
-    type: "ENTERPRISE_IDENTITY",
-    title: "Nouvelle demande de relation entreprise",
-    body: `${user.name} demande à être reconnu comme ${input.relationType.toLocaleLowerCase("fr")} dans ${organization.name}.`,
-    targetUrl: `/enterprise-identity-admin?link=${created.id}`,
-  });
+      type: "ENTERPRISE_IDENTITY",
+      title: "Nouvelle demande de relation entreprise",
+      body: `${user.name} demande à être reconnu comme ${input.relationType.toLocaleLowerCase("fr")} dans ${organization.name}.`,
+      targetUrl: `/enterprise-identity-admin?link=${created.id}`,
+    });
+  } catch {
+    // Never log the free-text purpose, the identity or the notification body.
+    console.warn("Enterprise identity request committed; notification delivery failed", {
+      stage: "POST_COMMIT_NOTIFICATION",
+    });
+  }
   return created;
 }
 
@@ -1025,6 +1048,7 @@ export async function listOrganizationIdentityLinks(organizationId: string) {
   return links.map((link) => ({
     ...link,
     person: personById.get(link.personIdentityId) || null,
+
     references: references.filter((reference) => reference.personIdentityId === link.personIdentityId),
   }));
 }
@@ -1081,11 +1105,42 @@ export async function listUserIdentityLinks(userId: string) {
       select: { id: true, displayName: true },
     }),
   ]);
+  const references = personIds.length ? await prisma.enterprisePersonBusinessReference.findMany({
+    where: {
+      personIdentityId: { in: personIds },
+      organizationId: { in: organizationIds },
+      archivedAt: null,
+      status: "ACTIVE",
+      OR: [{ businessPartyId: { not: null } }, { supplierId: { not: null } }],
+    },
+    select: { organizationId: true, personIdentityId: true, businessPartyId: true, supplierId: true },
+  }) : [];
+  const partyIds = references.flatMap((ref) => ref.businessPartyId ? [ref.businessPartyId] : []);
+  const supplierIds = references.flatMap((ref) => ref.supplierId ? [ref.supplierId] : []);
+  const [supplierParties, personSuppliers] = await Promise.all([
+    partyIds.length ? prisma.enterpriseBusinessParty.findMany({
+      where: {
+        id: { in: partyIds }, organizationId: { in: organizationIds }, partyType: "PERSON", archivedAt: null,
+        roles: { some: { roleCode: "SUPPLIER", status: "ACTIVE", archivedAt: null } },
+      },
+      select: { id: true },
+    }) : Promise.resolve([]),
+    supplierIds.length ? prisma.enterpriseSupplier.findMany({
+      where: { id: { in: supplierIds }, organizationId: { in: organizationIds }, supplierType: "PERSON", archivedAt: null },
+      select: { id: true },
+    }) : Promise.resolve([]),
+  ]);
+  const supplierPartySet = new Set(supplierParties.map((party) => party.id));
+  const personSupplierSet = new Set(personSuppliers.map((supplier) => supplier.id));
+  const supplierPersonKeys = new Set(references
+    .filter((ref) => Boolean((ref.businessPartyId && supplierPartySet.has(ref.businessPartyId)) || (ref.supplierId && personSupplierSet.has(ref.supplierId))))
+    .map((ref) => `${ref.organizationId}:${ref.personIdentityId}`));
   const organizationById = new Map(organizations.map((organization) => [organization.id, organization]));
   const personById = new Map(people.map((person) => [person.id, person]));
   return links.map((link) => ({
     ...link,
     organization: organizationById.get(link.organizationId) || null,
     person: personById.get(link.personIdentityId) || null,
+    businessRoleSupplier: supplierPersonKeys.has(`${link.organizationId}:${link.personIdentityId}`),
   }));
 }

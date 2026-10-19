@@ -50,7 +50,7 @@ export async function GET(req: Request, { params }: Params) {
   });
   if (!party) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const [lead, opportunities] = await Promise.all([
+  const [lead, opportunities, opportunityCount] = await Promise.all([
     prisma.enterpriseLead.findFirst({
       where: {
         organizationId,
@@ -87,6 +87,7 @@ export async function GET(req: Request, { params }: Params) {
         expectedCloseDate: true,
       },
     }),
+    prisma.enterpriseOpportunity.count({ where: { organizationId, businessPartyId: id, archivedAt: null } }),
   ]);
 
   await writeApiLog({
@@ -104,5 +105,6 @@ export async function GET(req: Request, { params }: Params) {
     commercialEligible: party.roles.length > 0,
     lead,
     opportunities,
+    opportunityCount,
   });
 }

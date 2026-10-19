@@ -341,7 +341,67 @@ Automatisation : `pnpm qa:workflow-contracts` et `pnpm qa:workflow-contracts:pos
 - [ ] Cas négatifs : statut non RESERVED, révision 0/overflow, claim déjà existant, linked run/outbox, future/stale >24 h, token erroné, lease expiré, échec après max 3 tentatives.
 - [ ] La contrainte réelle PostgreSQL #850 reste RESERVED-only et interdit CLAIMED ; aucune migration, job ni paiement, aucun bypass ou exécution automatique.
 - [ ] `node scripts/qa-workflow-855-lease-policy.mjs` dans Quality ET Migration, puis les autres gates GitHub Quality/Migration et OWNER_E2E #855 explicite avant squash merge.
-- [ ] Le dispatcher #852 doit encore intégrer locking + revalidation droits/entitlements/plan + CAS atomique run/outbox ; ne pas considérer la QA pure comme QA de concurrence PostgreSQL.\n
+- [ ] Le dispatcher #852 doit encore intégrer locking + revalidation droits/entitlements/plan + CAS atomique run/outbox ; ne pas considérer la QA pure comme QA de concurrence PostgreSQL.
+
+## HOTFIX #859 — éditeur, approbateurs et dépenses (avant reprise #857)
+
+- [ ] Modifier étape CREATE_APPROVAL issue du template dans le formulaire guidé, sans JSON : role, poste, membre éligible, département ; sauvegarder/recharger et vérifier transitions inchangées.
+- [ ] FR/EN : configuration incomplète affiche nom de l'étape et champ ; statut publié immuable, conflit du brouillon, droits source et panne réseau expliqués sans erreur Zod brute.
+- [ ] Seuls les membres actifs autorisés à approuver dans le module source sont proposés. Révoquer un droit puis tenter exécution : refus par serveur. Deux tenants et plans différents ne partagent jamais les candidats.
+- [ ] Rôle organisationnel, poste et rôle personnalisé ; responsable département invalide ne débouche pas sur un fallback non autorisé ; demandeur ne peut pas s'auto-approuver.
+- [ ] Budget/dépense déjà soumise conserve le validateur ERP désigné ; absence de seconde approbation ; conflit d'approbateur explicite.
+- [ ] Finance > Budgets et dépenses > Nouvelle dépense. La liste de lancement manuel respecte les droits et la propriété des objets et propose le lien Finance si vide.
+- [ ] Tester 320/360/375/390/414 px, mobile, clavier/focus, FR/EN, clair/sombre, libellés longs.
+- [ ] CI Quality et Migration exécutent QA #859, suivies des gates de régression, lint, typecheck, build ; OWNER_E2E #859 avant merge. #857 reste en pause.
+
+## HOTFIX #861 — acceptation utilisateur et exploitation P0
+
+- [ ] Vérifier OWNER_E2E du workflow de dépense précédemment bloqué : décision canonique APPROVED, un seul réveil, timeline « validée », notifications puis COMPLETED ; aucune nouvelle dépense ni approval.
+- [ ] Qualifier 424 événements anciens par eventType/tenant/date ; surtout pas de replay financier massif.
+- [ ] Avant Vercel prod : `WORKFLOW_WORKER_ENABLED` absent/false rend GET/POST worker inerte (sauf diagnostic signé GET?dryRun=1). `WORKFLOW_EVENT_CUTOVER_AT` absent/invalide n'autorise aucun claim de backlog Production.
+- [ ] Après migration env contrôlée sur `main` READY : `CRON_SECRET` unique en Production ; cutoff fixé ; dry-run, activation et premier lot <=20 observé, aucune écriture ancienne rejouée.
+- [ ] Facture fournisseur : revue et approbation distinctes, approbateurs différents selon service canonique ; pas de double approval ni post automatique ; notification et fin, post ERP manuelle.
+- [ ] Paiement fournisseur : approval désignée terminée, confirmation uniquement dans module Paiements par opérateur autorisé différent, caisse requise, aucun paiement confirmé par workflow.
+- [ ] Caisse : soumission puis approbation indépendante, clôture effective uniquement par service Caisse, pas de VALIDATE générique.
+- [ ] Écriture comptable : approbation canonique, aucun POST par le workflow ; POST manuel idempotent dans Comptabilité.
+- [ ] Période : source `EnterpriseFinancialClose` réelle, revue validée et CLOSE ERP séparé, aucune relation avec un mauvais ID de période.
+- [ ] Contrôles : appartenance client active, abonnement, permissions, SoD, autre tenant, perte de mandat, révision concurrente, duplicats décision/events ; versions PUBLISHED immuables.
+- [ ] UI : noms clairs (workflow = suivi d'approbation), FR/EN, mobile 320/360/375/390/414 px, modales lisibles en clair/sombre.
+- [ ] PostgreSQL Quality+Migration / lint/types/build puis OWNER_E2E #861 BON avant merge ; vérification Vercel Production READY et activation environnement séparée.
+
+- [ ] Cas négatif : soumettre un paiement non fournisseur ; le workflow fournisseur n'attache aucune demande de validation et n'émet aucune notification fournisseur. Seuls les paiements SUPPLIER_PAYMENT figurent dans le sélecteur manuel.
+
+- [ ] Lors du premier ajout de CRON_SECRET en Production, vérifier que les 7 autres routes Vercel Cron retournent 503 au jeton Cron commun (aucun replay Web Push, email, projections, bulk, report schedules, knowledge index ou expiration d'invitation). Un secret worker dédié existant conserve son chemin de maintenance autorisé.
+- [ ] N'activer séparément chaque `*_CRON_ENABLED` qu'après inventaire lecture seule de sa propre queue et accord d'exploitation ; particulièrement 343 notifications Web Push anciennes. Ne jamais activer toutes les tâches en une fois.
+
+## HOTFIX #863 — recette E2E propriétaire obligatoire (hors CI seule)
+
+- [ ] Les neuf templates sont visibles au catalogue selon leurs droits ; vérifier séparément les définitions effectivement DRAFT, PUBLISHED et ACTIVE, ne pas confondre compatibilité et exécution.
+- [ ] Activer en environnement de recette isolée une définition autorisée par template, sans publier automatiquement en production.
+- [ ] Cas Demande : soumettre une demande, lancer la validation manager, approbateur distinct, décision puis tâche et notification.
+- [ ] Cas Achat : soumettre un achat accessible, rattachement à la validation d'achat canonique, pas d'approbation doublée.
+- [ ] Cas Budget : approbateur réellement configuré et habilité, résolution du cas `WORKFLOW_ASSIGNEE_NOT_FOUND` par affectation valide ; aucun bypass automatique.
+- [ ] Cas Dépense : lancer une dépense admissible, APPROVED repris une seule fois, timeline COMPLETED, aucun doublon.
+- [ ] Cas Facture fournisseur : revue humaine puis validation, étapes séquentielles, POST uniquement dans l'ERP.
+- [ ] Cas Paiement fournisseur : vérifier que seul le sous-type fournisseur est proposé ; approbation suivie, CONFIRM strictement dans Paiements.
+- [ ] Cas Clôture Caisse : deux sessions OPEN → zéro candidat et CTA **Caisse** ; après soumission dans Caisse, source sélectionnable par acteur autorisé et validation indépendante sans auto-clôture.
+- [ ] Cas Écriture : validation humaine et comptabilisation distincte/immuable.
+- [ ] Cas Clôture financière : cible `EnterpriseFinancialClose`, approbation puis fermeture distincte par comptabilité.
+- [ ] Tester sur les neuf modèles le refus côté POST d'un ID extérieur, d'un objet d'un collègue invisible, d'un statut inéligible ou modifié, et d'un abonnement/rôle révoqué.
+- [ ] Toutes les sources : états vides sans fuite de données, messages refus de module précis, deep link correct, statuts et sources lisibles FR/EN.
+- [ ] UI à 320/360/375/390/414/768/1024px, Android/iOS PWA, clavier, focus, clair/sombre, modal scrolable et sans débordement.
+- [ ] Deux événements d'approbation concurrents ne produisent qu'un effet, le worker de #861 respecte son cutoff ; aucun paiement comptabilisé automatiquement.
+- [ ] OWNER_E2E #863 explicitement « bon » avant toute fusion main. Aucun résultat de la QA statique, Postgres ou CI ne se substitue à cette validation.
+
+### #863 — Plein écran « Ouvrir » (ajout à la recette propriétaire)
+
+- [ ] Depuis une définition ACTIVE, toucher « … » puis **Ouvrir** : la fiche couvre toute la hauteur, l'arrière-plan ne défile pas et la fiche n'apparaît plus sous la liste.
+- [ ] Ouvrir depuis les définitions ACTIVE/DRAFT et vérifier titres longs, statut, description, graphique, readiness et actions autorisées, sans changement de droits.
+- [ ] Le bouton **Retour aux workflows** et la touche Échap ferment la fiche et restaurent la liste/le focus ; s'il existe des modifications non sauvegardées, l'abandon demande une confirmation.
+- [ ] Depuis la fiche en plein écran, **Lancer** ouvre le sélecteur au premier plan ; annuler revient à la fiche. Un lancement réussi affiche les Exécutions et la timeline, sans masquer ces écrans sous l'ancien détail.
+- [ ] Depuis une version DRAFT, Étape, Transition, Revoir et publier gardent leurs dialogues superposés et ne ferment pas simultanément la fiche au clavier.
+- [ ] Vérifier clavier, focus et piège Tab, scroll interne, menus d'actions, 320/360/375/390/414/768/1024 px, iOS/Android PWA, FR/EN, clair/sombre, safe area avec barre de navigation.
+
 ## WF-06S2E3 — PostgreSQL race en fixtures *sans runtime* (#857, parent #852)
 
 - [ ] Script refusé hors `localhost/*test*`. Tables `WF857*` non présentes en migration/prisma, nettoyées en finally.

@@ -76,7 +76,7 @@ async function preparePurchaseItems(tx: ProcurementTransaction, organizationId: 
     subtotalAmount = subtotalAmount.add(lineSubtotal).toDecimalPlaces(2);
     taxAmount = taxAmount.add(lineTax).toDecimalPlaces(2);
     const canonicalUnit = catalogItem.unitOfMeasure.symbol || catalogItem.unitOfMeasure.code || item.unit;
-    prepared.push({ organizationId, description: item.description, quantity: itemQuantity, unit: canonicalUnit, unitPrice, taxRate, lineSubtotal, taxAmount: lineTax, lineTotal, sourceEntityType: nullable(item.sourceEntityType), sourceEntityId: nullable(item.sourceEntityId), sortOrder: index });
+    prepared.push({ description: item.description, quantity: itemQuantity, unit: canonicalUnit, unitPrice, taxRate, lineSubtotal, taxAmount: lineTax, lineTotal, sourceEntityType: nullable(item.sourceEntityType), sourceEntityId: nullable(item.sourceEntityId), sortOrder: index });
     catalogLinks.push({ catalogItemId: catalogItem.id, unitOfMeasureId: catalogItem.unitOfMeasureId, expectedItemType: catalogExpectedItemType(catalogItem.itemType, catalogItem.trackInventory), sortOrder: index });
   }
   return { items: prepared, catalogLinks, subtotalAmount, taxAmount, totalAmount: subtotalAmount.add(taxAmount).toDecimalPlaces(2) };
@@ -185,7 +185,7 @@ export async function updateEnterprisePurchase(organizationId: string, purchaseI
       const currentItems = await tx.enterprisePurchaseItem.findMany({ where: { organizationId, purchaseId }, select: { id: true } });
       await tx.enterprisePurchaseItemCatalogLink.deleteMany({ where: { organizationId, purchaseItemId: { in: currentItems.map((item) => item.id) } } });
       await tx.enterprisePurchaseItem.deleteMany({ where: { organizationId, purchaseId } });
-      await tx.enterprisePurchaseItem.createMany({ data: calculated.items.map((item) => ({ ...item, purchaseId })) });
+      await tx.enterprisePurchaseItem.createMany({ data: calculated.items.map((item) => ({ ...item, organizationId, purchaseId })) });
       await syncPurchaseItemCatalogLinks(tx, organizationId, purchaseId, calculated.catalogLinks);
       await upsertPurchaseOperationalLink(tx, organizationId, purchaseId, actorUserId, coordinates, calculated.catalogLinks);
     } else if (input.siteId !== undefined || input.destinationWarehouseId !== undefined) {
@@ -309,7 +309,7 @@ export async function receiveEnterprisePurchase(organizationId: string, purchase
     const nextStatus = fullyReceived ? "RECEIVED" : "PARTIALLY_RECEIVED";
     const locked = await tx.enterprisePurchase.updateMany({ where: { id: purchaseId, organizationId, status: purchase.status, revision: input.revision, archivedAt: null }, data: { status: nextStatus, ...(fullyReceived ? { receivedAt: input.receivedAt } : {}), updatedByUserId: actorUserId, revision: { increment: 1 } } });
     if (locked.count !== 1) throw new EnterpriseCoreV2Error("Une autre réception a été enregistrée simultanément.", 409, "PURCHASE_RECEIPT_CONFLICT");
-    const receipt = await tx.enterprisePurchaseReceipt.create({ data: { organizationId, purchaseId, reference: receiptReference(await resolveEnterpriseBusinessDate(tx, organizationId)), receivedAt: input.receivedAt, receivedByUserId: actorUserId, notes: nullable(input.notes), items: { create: input.items.map((item) => ({ organizationId, purchaseItemId: item.purchaseItemId, quantityReceived: quantity(item.quantityReceived) })) } }, include: { items: true } });
+    const receipt = await tx.enterprisePurchaseReceipt.create({ data: { organizationId, purchaseId, reference: receiptReference(await resolveEnterpriseBusinessDate(tx, organizationId)), receivedAt: input.receivedAt, receivedByUserId: actorUserId, notes: nullable(input.notes), items: { create: input.items.map((item) => ({ purchaseItemId: item.purchaseItemId, quantityReceived: quantity(item.quantityReceived) })) } }, include: { items: true } });
     const projection = await postEnterprisePurchaseReceiptToInventoryTx(tx, organizationId, receipt.id, actorUserId, {
       warehouseId: nullable(input.warehouseId),
       storageLocationId: nullable(input.storageLocationId),

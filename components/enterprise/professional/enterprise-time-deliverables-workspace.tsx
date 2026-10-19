@@ -118,6 +118,12 @@ export function EnterpriseTimeDeliverablesWorkspace({
     return value;
   }, [page, search, status]);
   const deliverables = useProfessionalCollection<Deliverable>({ endpoint: `/api/enterprise/${organizationId}/deliverables`, params, refreshKey });
+  // #878: show the actual private deliverable editor only if its own domain
+  // API authorizes creation. A query parameter cannot bypass the API checks.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("activityAction") !== "SUBMIT_DELIVERABLE") return;
+    if (deliverables.canWrite) setCreateOpen(true);
+  }, [deliverables.canWrite]);
   const statusItems = [{ id: "", label: t("projects.allStatuses") }, ...STATUSES.map((id) => ({ id, label: professionalErpEnumLabel(locale, "projectStatus", id) }))];
 
   async function loadMilestones(projectId: string) {

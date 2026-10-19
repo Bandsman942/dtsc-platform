@@ -1,8 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { getOrganizationEntitlements, resolveFeatureAccessFromEntitlements } from "@/lib/billing/entitlements";
 import { canAccessEnterpriseActivity, ENTERPRISE_ADMIN_ROLES } from "@/lib/enterprise-sector-templates";
+import { canonicalSectorActivityDestination } from "@/lib/enterprise/sector-activity-canonical-handoffs";
 
-export async function getEnterpriseActivityBlocks(organizationId: string, userId?: string) {
+export async function getEnterpriseActivityBlocks(organizationId: string, userId?: string, sectorCode?: string | null) {
   const [blocks, entitlements, membership] = await Promise.all([
     prisma.enterpriseActivityBlock.findMany({
       where: { organizationId, isEnabled: true },
@@ -32,7 +33,14 @@ export async function getEnterpriseActivityBlocks(organizationId: string, userId
       : Promise.resolve(null),
   ]);
   const allowedModuleCodes = new Set((entitlements?.modules || []).filter((enterpriseModule) => enterpriseModule.allowed).map((enterpriseModule) => enterpriseModule.moduleCode));
-  const entitledBlocks = blocks.filter((block) => !block.targetModuleCode || allowedModuleCodes.has(block.targetModuleCode));
+  // Legacy PROFESSIONAL_SERVICES template uses non-canonical TIMESHEETS / DELIVERABLES
+  // codes. Only the dedicated Activities page passes sectorCode and may expose
+  // their canonical handoffs; shells preserve the existing entitlement filter.
+  const entitledBlocks = blocks.filter((block) => {
+    if (!block.targetModuleCode || allowedModuleCodes.has(block.targetModuleCode)) return true;
+    const destination = canonicalSectorActivityDestination(sectorCode, block.blockCode);
+    return Boolean(destination && allowedModuleCodes.has(destination.moduleCode));
+  });
   if (!userId) {
     return entitledBlocks;
   }

@@ -2,6 +2,8 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAppLocale } from "@/components/i18n/locale-provider";
+import { notifyToast } from "@/lib/client-toast";
 import { Building2, Check, CheckCircle2, Clock3, History, RotateCcw, Send, ShieldCheck, X } from "lucide-react";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { type BusinessContextAction } from "@/components/workspace/context-actions";
@@ -10,6 +12,7 @@ import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorksp
 import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
 import { ProfessionalTabs } from "@/components/enterprise/professional/professional-erp-ui";
 import { RelationshipBenefitsUserPanel } from "@/components/enterprise/relationship-benefits/relationship-benefits-user-panel";
+import { subscribeEnterpriseCrmUpdates } from "@/lib/enterprise/crm-sales/client-sync";
 import { StatusBadge, type StatusBadgeTone } from "@/components/workspace/status-badge";
 import {
   ENTERPRISE_IDENTITY_RELATION_TYPES,
@@ -35,6 +38,7 @@ type UserIdentityLink = {
   cancelledAt: string | null;
   organization: { id: string; name: string; logoUrl: string | null } | null;
   person: { id: string; displayName: string } | null;
+  businessRoleSupplier: boolean;
 };
 
 type InvitationPreview = {
@@ -82,24 +86,46 @@ export function EnterpriseIdentityUserPanel({
   token,
   focusedLinkId,
   initialView,
+  initialOrganizationCode,
 }: {
   initialLinks: UserIdentityLink[];
   invitation: InvitationPreview | null;
   token?: string;
   focusedLinkId?: string;
   initialView?: string;
+  initialOrganizationCode?: string;
 }) {
   const router = useRouter();
+  const appLocale = useAppLocale();
   const [view, setView] = useState<RelationshipView>(token ? "ACTION" : initialRelationshipView(initialView));
   const [detailTarget, setDetailTarget] = useState<DetailTarget | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const english = appLocale === "en";
+  function reportIdentityError(message: string) {
+    setError(message);
+    notifyToast(message, "error");
+  }
+  function reportIdentitySuccess(message: string) {
+    setSuccess(message);
+    notifyToast(message, "success");
+  }
 
   const actionable = useMemo(() => initialLinks.filter((link) => USER_ACTION_STATUSES.has(link.status)), [initialLinks]);
   const active = useMemo(() => initialLinks.filter((link) => link.status === "ACTIVE"), [initialLinks]);
   const requests = useMemo(() => initialLinks.filter((link) => link.origin === "USER" && USER_REQUEST_STATUSES.has(link.status)), [initialLinks]);
   const history = useMemo(() => initialLinks.filter((link) => HISTORY_STATUSES.has(link.status)), [initialLinks]);
+  useEffect(() => {
+    // Only organizations where the user already holds a link can refresh this view.
+    // This is a notification to re-fetch through the account-scoped server route,
+    // never a delivery of business data across tenants.
+    const organizations = [...new Set(initialLinks.map((link) => link.organizationId))];
+    const unsubscribers = organizations.map((organizationId) =>
+      subscribeEnterpriseCrmUpdates(organizationId, () => router.refresh()));
+    return () => { unsubscribers.forEach((unsubscribe) => unsubscribe()); };
+  }, [initialLinks, router]);
+
 
   useEffect(() => {
     if (invitation && token) {
@@ -124,11 +150,12 @@ export function EnterpriseIdentityUserPanel({
       });
       const data = await response.json().catch(() => null);
       if (!response.ok) throw new Error(data?.message || "L’action n’a pas pu être terminée.");
+      notifyToast(english ? "Your decision was saved." : "Votre décision a été enregistrée.", "success");
       setDetailTarget(null);
       router.replace(`/enterprise-links?view=${destination}`);
       router.refresh();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "L’action n’a pas pu être terminée.");
+      reportIdentityError(requestError instanceof Error ? requestError.message : "L’action n’a pas pu être terminée.");
     } finally {
       setBusyId(null);
     }
@@ -147,11 +174,11 @@ export function EnterpriseIdentityUserPanel({
       const data = await response.json().catch(() => null);
       if (!response.ok) throw new Error(data?.message || "La demande n’a pas pu être annulée.");
       setDetailTarget(null);
-      setSuccess("La demande a été annulée sans supprimer son historique.");
+      reportIdentitySuccess(english ? "The request was cancelled; its history is preserved." : "La demande a été annulée sans supprimer son historique.");
       setView("HISTORY");
       router.refresh();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "La demande n’a pas pu être annulée.");
+      reportIdentityError(requestError instanceof Error ? requestError.message : "La demande n’a pas pu être annulée.");
     } finally {
       setBusyId(null);
     }
@@ -159,7 +186,9 @@ export function EnterpriseIdentityUserPanel({
 
   async function submitUserRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    // Capture the form before awaiting fetch: React clears event.currentTarget after dispatch.
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     setBusyId("request");
     setError(null);
     setSuccess(null);
@@ -174,14 +203,24 @@ export function EnterpriseIdentityUserPanel({
           purpose: String(form.get("purpose") || "").trim(),
         }),
       });
-      const data = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(data?.message || "La demande n’a pas pu être envoyée.");
-      event.currentTarget.reset();
-      setSuccess(data?.message || "Votre demande a été envoyée à l’entreprise.");
+      const data = await response.json().catch(() => null) as { message?: string; error?: string; supportReference?: string } | null;
+      if (!response.ok) {
+        const known: Record<string, { fr: string; en: string }> = {
+          IDENTITY_LINK_ORGANIZATION_NOT_FOUND: { fr: "Code entreprise introuvable. Vérifiez le code fourni par l’entreprise.", en: "Company code not found. Check the code supplied by the company." },
+          IDENTITY_REQUEST_ALREADY_EXISTS: { fr: "Une demande ou relation de ce type existe déjà. Consultez vos demandes.", en: "A request or relationship of this type already exists. See your requests." },
+          IDENTITY_LINK_RATE_LIMITED: { fr: "Trop de demandes récentes. Réessayez plus tard.", en: "Too many recent requests. Try again later." },
+          IDENTITY_LINK_RELATION_CONFIGURATION_OUTDATED: { fr: "Ce type de relation n’est pas disponible actuellement. Contactez le support.", en: "This relationship type is not available yet. Contact support." },
+          IDENTITY_LINK_INVALID_REQUEST: { fr: "Certains champs sont invalides. Vérifiez le code, la relation et la finalité (10 à 500 caractères).", en: "Some fields are invalid. Check the code, relationship and purpose (10–500 characters)." },
+        };
+        const message = known[data?.error || ""]?.[english ? "en" : "fr"] || (english ? "Request could not be sent. Please retry or contact support." : data?.message || "La demande n’a pas pu être envoyée.");
+        throw new Error(data?.supportReference ? `${message} · ${english ? "Support reference" : "Référence support"} : ${data.supportReference}` : message);
+      }
+      formElement.reset();
+      reportIdentitySuccess(english ? "Your request was sent. The company must approve it before any benefits become available." : data?.message || "Votre demande a été envoyée à l’entreprise.");
       setView("REQUESTS");
       router.refresh();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "La demande n’a pas pu être envoyée.");
+      reportIdentityError(requestError instanceof Error ? requestError.message : "La demande n’a pas pu être envoyée.");
     } finally {
       setBusyId(null);
     }
@@ -200,6 +239,7 @@ export function EnterpriseIdentityUserPanel({
   const detailOrganization = selectedInvitation?.organization.name || selectedLink?.organization?.name || "Entreprise indisponible";
   const detailPerson = selectedInvitation?.person.displayName || selectedLink?.person?.displayName || "Fiche métier";
   const detailRelationType = selectedInvitation?.requestedRelationType || selectedLink?.requestedRelationType || "CUSTOMER";
+  const detailBusinessRoleLabel = selectedLink?.businessRoleSupplier ? (appLocale === "en" ? "Supplier" : "Fournisseur") : null;
   const detailPurpose = selectedInvitation?.purpose || selectedLink?.purpose || "—";
   const detailExpiresAt = selectedInvitation?.expiresAt || selectedLink?.expiresAt || null;
 
@@ -243,8 +283,6 @@ export function EnterpriseIdentityUserPanel({
         summary="Les avantages ne sont accordés que par le résolveur serveur."
       />
 
-      {error ? <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-700 dark:text-red-300">{error}</div> : null}
-      {success ? <div role="status" className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-700 dark:text-emerald-300">{success}</div> : null}
 
       <ModuleContent>
         {view === "ACTION" ? (
@@ -292,12 +330,14 @@ export function EnterpriseIdentityUserPanel({
             </ModuleSection>
             <ModuleSection title="Demander une relation" description="Saisissez le code exact communiqué par l’entreprise. DTSC ne propose pas d’annuaire public des entreprises ou utilisateurs.">
               <form onSubmit={submitUserRequest} className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-2">
-                <label className="min-w-0 text-sm font-black text-dtsc-ink">Code de l’entreprise<input name="organizationCode" autoComplete="off" pattern="[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*" placeholder="exemple-entreprise" className="mt-1.5 min-h-11 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-base font-normal" required /><span className="mt-1 block text-xs font-normal leading-5 text-dtsc-muted">Demandez ce code directement à l’entreprise concernée.</span></label>
+                <label className="min-w-0 text-sm font-black text-dtsc-ink">Code de l’entreprise<input name="organizationCode" key={initialOrganizationCode || "manual"} defaultValue={initialOrganizationCode || ""} autoComplete="off" pattern="[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*" placeholder="exemple-entreprise" className="mt-1.5 min-h-11 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-base font-normal" required /><span className="mt-1 block text-xs font-normal leading-5 text-dtsc-muted">Demandez ce code directement à l’entreprise concernée.</span></label>
                 <label className="min-w-0 text-sm font-black text-dtsc-ink">Relation demandée<select name="relationType" defaultValue="CUSTOMER" className="mt-1.5 min-h-11 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-base font-normal">{ENTERPRISE_IDENTITY_RELATION_TYPES.map((relationType) => <option key={relationType} value={relationType}>{getEnterpriseIdentityRelationLabel(relationType, "fr")}</option>)}</select></label>
-                <label className="min-w-0 text-sm font-black text-dtsc-ink">Rôle souhaité (facultatif)<input name="roleCode" placeholder="Ex. interlocuteur autorisé" className="mt-1.5 min-h-11 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-base font-normal" /></label>
+                <label className="min-w-0 text-sm font-black text-dtsc-ink">Rôle souhaité (facultatif)<span className="mt-1 block text-xs font-normal leading-5 text-dtsc-muted">La désignation proposée reste soumise à vérification par l’entreprise. Elle ne donne aucun avantage automatique.</span><input name="roleCode" placeholder="Ex. interlocuteur autorisé" className="mt-1.5 min-h-11 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-base font-normal" /></label>
                 <label className="min-w-0 text-sm font-black text-dtsc-ink lg:col-span-2">Finalité de la relation<textarea name="purpose" rows={4} placeholder="Expliquez pourquoi vous souhaitez être reconnu et quels services sont concernés." className="mt-1.5 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base font-normal" required /></label>
                 <p className="break-words text-sm leading-6 text-dtsc-muted lg:col-span-2">La relation ne devient active qu’après confirmation de l’entreprise. Seules les informations minimales nécessaires à l’examen sont transmises.</p>
-                <div data-responsive-actions className="lg:col-span-2"><button type="submit" disabled={busyId !== null} className="min-h-11 rounded-xl bg-dtsc-blue px-4 py-2 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-50"><Send className="mr-2 inline h-4 w-4" />{busyId === "request" ? "Envoi…" : "Envoyer la demande"}</button></div>
+                <div data-responsive-actions className="lg:col-span-2"><button type="submit" disabled={busyId !== null} aria-busy={busyId === "request"} className="min-h-11 rounded-xl bg-dtsc-blue px-4 py-2 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-50"><Send className="mr-2 inline h-4 w-4" />{busyId === "request" ? "Envoi…" : "Envoyer la demande"}</button></div>
+                {error ? <p role="alert" className="lg:col-span-2 break-words text-sm text-red-700 dark:text-red-300">{error}</p> : null}
+                {success ? <p role="status" className="lg:col-span-2 break-words text-sm text-emerald-700 dark:text-emerald-300">{success}</p> : null}
               </form>
             </ModuleSection>
           </>
@@ -314,7 +354,7 @@ export function EnterpriseIdentityUserPanel({
         open={Boolean(detailTarget)}
         onClose={() => setDetailTarget(null)}
         title={detailOrganization}
-        description={`${getEnterpriseIdentityRelationLabel(detailRelationType as EnterpriseIdentityRelationType, "fr")} · ${detailPerson}`}
+        description={`${detailBusinessRoleLabel && detailRelationType === "OTHER" ? `${detailBusinessRoleLabel} (${appLocale === "en" ? "business role" : "rôle métier"}) · ${appLocale === "en" ? "Other relationship (consent)" : "Autre relation (consentement)"}` : getEnterpriseIdentityRelationLabel(detailRelationType as EnterpriseIdentityRelationType, appLocale)} · ${detailPerson}`}
         actions={detailActions}
         actionLabel="Actions de la relation"
       >
@@ -349,13 +389,14 @@ export function EnterpriseIdentityUserPanel({
 
 function RelationshipListItem({ link, focused, descriptionSuffix, onOpen }: { link: UserIdentityLink; focused?: boolean; descriptionSuffix?: string; onOpen: () => void }) {
   const status = link.status as EnterpriseIdentityLinkStatus;
+  const locale = useAppLocale();
   return (
     <div id={`company-relationship-${link.id}`} className={focused ? "rounded-xl bg-cyan-400/10 px-2" : undefined}>
       <BusinessListItem
         title={link.organization?.name || "Entreprise indisponible"}
         leading={<Building2 className="h-5 w-5 text-dtsc-blue" />}
         status={<StatusBadge tone={statusTone(link.status)}>{getEnterpriseIdentityStatusLabel(status, "fr")}</StatusBadge>}
-        meta={`${getEnterpriseIdentityRelationLabel(link.requestedRelationType as EnterpriseIdentityRelationType, "fr")} · ${link.person?.displayName || "Fiche métier"}`}
+        meta={`${link.businessRoleSupplier && link.requestedRelationType === "OTHER" ? (locale === "en" ? "Supplier (business role) · Other relationship (consent)" : "Fournisseur (rôle métier) · Autre relation (consentement)") : getEnterpriseIdentityRelationLabel(link.requestedRelationType as EnterpriseIdentityRelationType, locale)} · ${link.person?.displayName || (locale === "en" ? "Business record" : "Fiche métier")}`}
         description={`${link.purpose}${descriptionSuffix ? ` · ${descriptionSuffix}` : ""}`}
         onOpen={onOpen}
       />

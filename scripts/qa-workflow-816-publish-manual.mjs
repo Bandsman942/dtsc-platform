@@ -37,7 +37,10 @@ currentStatus = "RETIRED";
 await assert.rejects(updateWorkflowDefinition(currentOrganization, "wf-1", "member-a", { triggerEventType: "OTHER" }), (error) => error.code === "WORKFLOW_PUBLISHED_TRIGGER_IMMUTABLE");
 
 const activity = fs.readFileSync("lib/enterprise/enterprise-activity-workflows-loader.ts", "utf8");
-assert.match(activity, /status: "ACTIVE",\s*allowManualStart: true/);
+assert.match(activity, /status: "ACTIVE"/);
+assert.match(activity, /\{ allowManualStart: true \}/, "Manual-start definitions remain visible");
+assert.match(activity, /triggerEntityType: "EnterpriseRequest", triggerEventType: "ENTERPRISE_REQUEST_SUBMITTED"/, "Published internal-request workflows are additionally visible");
+assert.match(activity, /currentVersionId: \{ not: null \}/, "Only published workflow definitions are projected");
 assert.match(activity, /versions: \{ some: \{ status: "PUBLISHED" \} \}/);
 assert.ok(!activity.includes("prisma.enterpriseWorkflow.findMany"), "Activity must not revive legacy workflow engine");
 const route = fs.readFileSync("app/api/enterprise/[organizationId]/workflows/[id]/versions/[versionId]/publish/route.ts", "utf8");
@@ -50,7 +53,11 @@ assert.ok(manual.includes("isWorkflowManualSourceSelectable"), "Manual starter m
 const sourceRoute = fs.readFileSync("app/api/enterprise/[organizationId]/workflow-runs/sources/route.ts", "utf8");
 assert.ok(sourceRoute.includes("requireWorkflowSourceAccess") && sourceRoute.includes("canStartManual"));
 const ui = fs.readFileSync("components/enterprise/core-v2/enterprise-workflows-workspace.tsx", "utf8");
-for (const token of ["submitManualStart", "sourceEntityId", "runPage", "runPageCount", "runTotal", "runFilter", "new URLSearchParams(window.location.search).get(\"runId\")"]) assert.ok(ui.includes(token), `Missing real UI behavior: ${token}`);
+assert.match(ui, /parameters\.get\("run"\)\s*\|\|\s*parameters\.get\("runId"\)/, "Both canonical and legacy run deep links must open their workflow");
+for (const token of ["submitManualStart", "sourceEntityId", "runPage", "runPageCount", "runTotal", "runFilter", "new URLSearchParams(window.location.search)"]) assert.ok(ui.includes(token), `Missing real UI behavior: ${token}`);
 const acl = fs.readFileSync("lib/enterprise/workflows/manual-source-access.ts", "utf8");
-for (const token of ["organizationId", "archivedAt: null", "allowAll", "createdByUserId", "requestedByUserId", "generatedByUserId", "default:", "return false"]) assert.ok(acl.includes(token), `Missing security guard: ${token}`);
+const sourceQueries = fs.readFileSync("lib/enterprise/workflows/manual-source-options.ts", "utf8");
+assert.ok(acl.includes("findWorkflowManualSources") && acl.includes("sourceEntityId: entityId"), "POST reuses exact picker predicate");
+assert.ok(sourceRoute.includes("findWorkflowManualSources"), "Picker reuses POST predicate");
+for (const token of ["organizationId", "archivedAt: null", "allowAll", "createdByUserId", "requestedByUserId", "generatedByUserId", "default:", "return null"]) assert.ok(sourceQueries.includes(token), `Missing security guard: ${token}`);
 console.log("PASS WF-03: immutable triggers, ACTIVE Activities, serializable reviewed publication, actor-scoped manual source and paginated/deep-linked UI.");

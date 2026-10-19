@@ -1,4 +1,29 @@
 # Guide utilisateur — Activités entreprise
+
+## Opérations métier disponibles dans leurs modules ERP
+
+Certaines actions professionnelles ne créent plus une simple demande : si le module correspondant est réellement activé dans l'entreprise **et** si les permissions du collaborateur l'autorisent, le bouton **Ouvrir Temps, présences & congés** ou **Ouvrir Temps & livrables** permet de poursuivre dans le module ERP propriétaire.
+
+- **Déclarer temps travaillé** : l'onglet Feuilles de temps est sélectionné ; le formulaire de déclaration est accessible si le module Temps autorise l'écriture. La durée enregistrée reste soumise à validation ; aucune feuille de temps n'est créée avant enregistrement explicite.
+- **Soumettre livrable** : le module Temps & livrables ouvre le formulaire métier réel quand le droit d'écriture est acquis. Le responsable, le projet, le document et les validations sont contrôlés par ce module.
+- Si le module n'est pas activé, si l'abonnement ne l'autorise pas ou si le rôle n'a pas les droits nécessaires, l'action reste **indisponible**. Aucun faux succès ni soumission automatique n'est possible depuis Activités.
+- Les autres opérations nécessitant une vraie API métier restent indisponibles jusqu'à leur intégration (#878).
+
+Le parcours et les critères de validation figurent dans `docs/HOTFIX_878_WAVE1_CANONICAL_HANDOFFS.md`.
+
+
+## Demandes collaboratives et opérations métier
+
+Les actions de secteur affichent dorénavant leur disponibilité réelle.
+
+- **Créer une demande** : le formulaire prépare une demande interne suivie ; la saisie ne constitue pas une opération enregistrée dans les modules Ventes, Stock, Notes, Caisse ou Documents.
+- **Action indisponible** : l'interface fournit le motif et désactive l'envoi. Un appel direct à l'API est également refusé. Pour un enregistrement métier définitif, passer par le module spécialisé et ses validations.
+- Les numéros de dossier, de projet, de client ou de produit demandés dans les formulaires non intégrés sont des références **communiquées** : aucune liaison à un vrai enregistrement ERP n'est créée par simple texte.
+- Les pièces justificatives, photos, livrables et dossiers confidentiels nécessitent le téléversement privé du module dédié. Ne pas saisir de données personnelles ou financières sensibles dans un champ de référence libre.
+- Une demande enregistrée est visible dans « Demandes » et, si les permissions le permettent, dans « Demandes internes » et « Workflows », avec les statuts et approbations réels.
+
+La matrice de tous les codes et de leur état de préparation figure dans `docs/HOTFIX_876_SECTOR_ACTIVITY_MATRIX.md`.
+
 > **Contrat de guide DTSC v2** — Fonctionnalités réellement déployées, interface FR/EN, permissions serveur et parcours mobile.
 
 ## Objectif et périmètre
@@ -14,6 +39,10 @@ Le contexte d’entreprise est toujours affiché et contrôlé côté serveur. A
 ## Guide intégré
 
 Le bouton **Guide utilisateur** affiché au début du module ouvre une aide contextuelle recherchable. Le guide décrit les fonctions réellement actives dans l’entreprise sélectionnée.
+
+## Présentation professionnelle et Gaming
+
+Le module utilise les vues Actions, Demandes et Workflows avec indicateurs et rail tactile local. Pour une salle de jeux, Gaming Lounge présente les références réelles autorisées : poste, réservation, session, clôture et client CRM. Une demande de confirmation n'exécute jamais automatiquement une réservation, un encaissement ou une validation : l'action métier finale reste dans le module ERP correspondant.
 
 ## Créer une activité
 

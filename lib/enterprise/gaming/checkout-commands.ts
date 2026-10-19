@@ -35,6 +35,7 @@ import {
 } from "@/lib/enterprise/gaming/checkout-common";
 import type { gamingCheckoutCommandSchema } from "@/lib/enterprise/gaming/checkout-schemas";
 import { prisma } from "@/lib/prisma";
+import { finalizeGamingRelationshipBenefitTx, reverseGamingRelationshipBenefitTx } from "@/lib/enterprise/relationship-benefits/gaming-adapter";
 import type { z } from "zod";
 
 type CommandInput = z.infer<typeof gamingCheckoutCommandSchema>;
@@ -55,6 +56,7 @@ export async function commandGamingCheckout(
 
   if (input.action === "APPROVE_INVOICE") {
     if (["ISSUED", "PARTIALLY_PAID", "PAID", "CREDIT_NOTE"].includes(snapshot.invoice.status)) {
+      await finalizeGamingRelationshipBenefitTx({ organizationId, checkoutId });
       return { ...snapshot, idempotent: true };
     }
     requireCheckoutRevision(snapshot.checkout.revision, input.revision);
@@ -86,6 +88,7 @@ export async function commandGamingCheckout(
         revision: { increment: 1 },
       },
     });
+    await finalizeGamingRelationshipBenefitTx({ organizationId, checkoutId });
     await syncGamingCheckoutPaidState(organizationId, checkoutId, actorUserId);
     return { ...(await loadGamingCheckoutDetail(organizationId, checkoutId)), idempotent: false };
   }
@@ -293,6 +296,7 @@ export async function commandGamingCheckout(
         data: { status: "CANCELLED", revision: { increment: 1 } },
       });
       await restockGamingCheckoutTx(tx, organizationId, checkout.id, actorUserId, "cancel");
+      await reverseGamingRelationshipBenefitTx({ tx, organizationId, checkoutId: checkout.id });
       await tx.enterpriseGamingCheckout.update({
         where: { id: checkout.id },
         data: { status: "CANCELLED", updatedByUserId: actorUserId, revision: { increment: 1 } },
@@ -504,6 +508,7 @@ export async function commandGamingCheckout(
       if (current.status === "REFUNDED") return;
       if (current.status !== "REFUND_PENDING") throw new EnterpriseGamingCheckoutError("GAMING_CHECKOUT_REFUND_NOT_PENDING", 409);
       await restockGamingCheckoutTx(tx, organizationId, checkoutId, actorUserId, "refund");
+      await reverseGamingRelationshipBenefitTx({ tx, organizationId, checkoutId });
       await tx.enterpriseGamingCheckout.update({
         where: { id: checkoutId },
         data: { status: "REFUNDED", refundedAt: new Date(), updatedByUserId: actorUserId, revision: { increment: 1 } },

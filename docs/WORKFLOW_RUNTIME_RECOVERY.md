@@ -92,3 +92,60 @@ to make the old application appear healthy.
 Adapter readiness, runtime authorization, editor/versioning and broader chaos/
 observability certification remain respectively #814, #815, #816 and #817. Studio,
 advanced nodes, certified connectors, AI building and simulation follow #818–#822.
+
+
+## HOTFIX P0 #861 — incident du 17 octobre 2026 : validations décidées, workflows WAITING
+
+### Preuves de diagnostic (lectures seules)
+- Dépense APPROVED, approbation EnterpriseApproval APPROVED, run WAITING_APPROVAL et step WAITING après décision ;
+- Deux reçus ENTERPRISE_APPROVAL_APPROVED toujours PENDING, attemptCount 0 ;
+- 424 EnterpriseDomainEvent PENDING échus, dont une grande partie historique ; aucun processedAt observé lors de l'inspection ;
+- Vercel Production sur main@fe45959c READY, WORKFLOW_WORKER_SECRET présent, CRON_SECRET seulement dans Preview.
+Le diagnostic prouve l'absence de consommation, pas le contenu ni l'innocuité du backlog.
+
+### Déploiement en deux phases (production uniquement depuis main)
+1. Corriger le code et exécuter CI Quality/Migration, tests des quatre workflows historiques, tests de compatibilité des cinq Finance et OWNER_E2E #861. Ne pas modifier les secrets pendant la PR.
+2. Squash merger sur main, attendre Vercel READY au SHA exact. Le runtime Production est désormais **fail-closed** si WORKFLOW_WORKER_ENABLED n'est pas true.
+3. Depuis l'administration Vercel, ajouter un CRON_SECRET fort **Production** (différent de WORKFLOW_WORKER_SECRET), WORKFLOW_EVENT_CUTOVER_AT en instant UTC ISO complet correspondant au début de la nouvelle période validée, et laisser WORKFLOW_WORKER_ENABLED=false. Toute mise à jour de variables nécessite le redéploiement contrôlé depuis main.
+4. Exécuter un GET signé /api/internal/workflows/process?dryRun=1. Confirmer workerEnabled=false, cutoverConfigured=true ; relever queue.before sans démarrer de worker.
+5. Activer WORKFLOW_WORKER_ENABLED=true par configuration Production et un redéploiement main contrôlé, tout en gardant le cutover. Contrôler les premiers lots <= 20, taux d'échecs et DEAD ; couper immédiatement en cas d'anomalie de Finance ou de permissions.
+6. Vérifier que la dépense déjà APPROVED n'est PAS soumise de nouveau, et que son run reprend par `resumeWaitingRuns` jusqu'aux notifications de workflow et à la fin ; plusieurs événements APPROVED identiques n'ont qu'une transition effective.
+7. Laisser l'ancien backlog (événements antérieurs au cutoff) hors claim. Produire un inventaire par eventType, tenant, date, portée et conséquence métier ; toute reprise ciblée exige vérification des effets canoniques et autorisation explicite. Aucun SQL mutatif automatique de récupération.
+
+### Lecture seule du backlog (sur la bonne branche/DB Neon)
+```sql
+SELECT "eventType", "processingStatus", COUNT(*) AS events,
+       MIN("createdAt") AS oldest, MAX("createdAt") AS newest,
+       SUM(CASE WHEN "attemptCount" = 0 THEN 1 ELSE 0 END) AS never_attempted
+FROM "EnterpriseDomainEvent"
+WHERE "availableAt" <= NOW()
+GROUP BY "eventType", "processingStatus"
+ORDER BY events DESC;
+```
+
+### Rollback sans perte de preuve
+Mettre WORKFLOW_WORKER_ENABLED=false en Production et redéployer main. Suspendre l'auth Cron si nécessaire, attendre la fin des leases, puis appliquer un revert par PR selon DELIVERY_GOVERNANCE. Ne pas effacer les validations, events, runs, ni refaire le bilan de caisse ou les écritures.
+
+### Inventaire réel de la file — contrôle lecture seule du 17/10/2026
+
+Sur **424 événements PENDING échus** (n'incluant pas les autres états), 343 sont de type `PLATFORM_WEB_PUSH_NOTIFICATION` et **81 d'autres types**. Parmi ceux-ci : 4 `ENTERPRISE_APPROVAL_APPROVED`, 2 `ENTERPRISE_EXPENSE_APPROVED`, plusieurs événements de caisse et de paiements, ainsi que des traitements plus anciens ; les 424 avaient `attemptCount=0` au contrôle. Ne pas assimiler les 343 Web Push à des actions financières et ne pas déclarer les 81 autres récupérables sans examen individuel. L'inventaire est un instantané évolutif.
+
+`WORKFLOW_EVENT_CUTOVER_AT` doit respecter strictement un instant ISO UTC inférieur à cinq minutes dans le futur **et au maximum 72 heures dans le passé** ; sinon le worker ne revendique aucun événement. Le cutover n'est pas une autorisation de rejouer l'historique. Si le déploiement ou le rollback dure au-delà de 72 heures, choisir un nouveau cutoff explicitement validé plutôt que de désactiver ce contrôle.
+
+### P0 #861 — Contrôle des SEPT autres Vercel Cron avant installation de CRON_SECRET
+
+**Risque découvert dans l'audit :** `vercel.json` planifie HUIT routes, et le même `CRON_SECRET` les authentifie toutes. Le `WORKFLOW_WORKER_ENABLED` du hotfix ne protège que les workflows. Installer `CRON_SECRET` sans garde-fous pourrait donc exécuter immédiatement d'autres queues historiques (343 notifications Web Push, projections, index, e-mails de diffusion, rapports, imports bulk et expiration d'invitations).
+
+Le hotfix #861 ajoute `isSharedCronDispatchPaused` **après l'authentification existante** de chaque autre route. Par défaut en Production, un appel portant le jeton partagé `CRON_SECRET` reçoit `503 CRON_DISPATCH_DISABLED`. Le secret propre à un worker (lorsqu'il existe) garde son contrat de maintenance manuelle, afin de ne pas casser les interventions autorisées.
+
+| Route Vercel Cron | Opt-in Production requis |
+|---|---|
+| Web Push | `WEB_PUSH_CRON_ENABLED=true` |
+| Projections intermodules | `CROSS_MODULE_PROJECTIONS_CRON_ENABLED=true` |
+| Diffusion email administration | `ADMIN_BROADCAST_EMAIL_CRON_ENABLED=true` |
+| Index de connaissances | `KNOWLEDGE_INDEX_CRON_ENABLED=true` |
+| Jobs entreprise en masse | `ENTERPRISE_BULK_CRON_ENABLED=true` |
+| Planifications de rapports | `REPORT_SCHEDULES_CRON_ENABLED=true` |
+| Expiration des invitations de liaison de compte | `IDENTITY_LINKS_CRON_ENABLED=true` |
+
+La route workflows conserve **`WORKFLOW_WORKER_ENABLED=true`** et un `WORKFLOW_EVENT_CUTOVER_AT` UTC borné à 72h comme conditions d'activation. **Ne pas définir les sept autres opt-in à true** lors de l'installation initiale de `CRON_SECRET`. Avant chaque activation ultérieure, auditer la queue concernée, la catégorie et la tranche d'âge, disposer de l'autorisation de l'exploitant et de critères d'arrêt. Le statut 503 des Crons désactivés est attendu, il ne valide pas une exécution métier. Les 343 Web Push restent volontairement intacts jusqu'au plan de reprise ciblé.
