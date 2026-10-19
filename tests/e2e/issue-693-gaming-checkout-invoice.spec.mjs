@@ -1232,9 +1232,20 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
             await page.goto(`${baseUrl}/enterprise-identity-admin`);
             await expect(page.getByRole("heading", { name: /Identités et consentements|Identities and consents/i })).toBeVisible();
             await expect(page.locator("[data-contextual-module-back]:visible")).toHaveCount(1);
-            const overflow = await page.evaluate(() =>
-              document.documentElement.scrollWidth - document.documentElement.clientWidth);
-            expect(overflow, `#884 horizontal overflow at ${width}px`).toBeLessThanOrEqual(2);
+            // A Next.js hydration or auth refresh can replace the document between visibility and evaluate.
+            // Retry the real overflow assertion; never mask a persistent overflow.
+            await expect.poll(async () => {
+              try {
+                return await page.evaluate(() =>
+                  document.documentElement.scrollWidth - document.documentElement.clientWidth);
+              } catch (error) {
+                if (error instanceof Error && /Execution context was destroyed|navigation/i.test(error.message)) {
+                  return Number.POSITIVE_INFINITY;
+                }
+                throw error;
+              }
+            }, { message: `#884 horizontal overflow at ${width}px`, timeout: 15_000 })
+              .toBeLessThanOrEqual(2);
 
             const row = page.locator("[data-business-list-item]").filter({ hasText: personLabel });
             await expect(row).toHaveCount(1);
