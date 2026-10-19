@@ -40,6 +40,7 @@ const requiredModules = [
   "GAMING_SESSIONS",
   "GAMING_CHECKOUT",
   "GAMING_DAILY_CLOSE",
+  "RELATIONSHIP_BENEFITS",
 ];
 
 async function prepareTenant() {
@@ -1038,6 +1039,148 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
         discrepancyAmount: 0,
       },
     });
+  });
+
+
+  test("#884 exercises a real Gaming relationship discount, cancellation and canonical consumption", async () => {
+    const suffix = `benefit-884-${Date.now()}`;
+    const personId = `e2e-884-person-${Date.now()}`;
+    const linkId = `e2e-884-link-${Date.now()}`;
+    const benefitCode = `E2E_884_GAMING_${Date.now()}`;
+    const admin = await prisma.user.findUniqueOrThrow({ where: { email: adminEmail } });
+    const party = await prisma.enterpriseBusinessParty.findFirstOrThrow({
+      where: { id: customerId, organizationId, status: "ACTIVE", archivedAt: null },
+    });
+
+    await prisma.enterprisePersonIdentity.create({
+      data: {
+        id: personId, organizationId, displayName: "Gaming benefit E2E #884",
+        primaryEmail: approverEmail, status: "ACTIVE", createdByUserId: admin.id,
+      },
+    });
+    const reference = await prisma.enterprisePersonBusinessReference.create({
+      data: {
+        organizationId, personIdentityId: personId, businessPartyId: party.id,
+        relationType: "CUSTOMER", status: "ACTIVE", createdByUserId: admin.id,
+      },
+    });
+    await prisma.enterpriseIdentityLink.create({
+      data: {
+        id: linkId, organizationId, personIdentityId: personId, userId: approverUserId,
+        origin: "ENTERPRISE", requestedRelationType: "CUSTOMER", status: "ACTIVE",
+        initiatedByUserId: admin.id, reviewedByUserId: admin.id,
+        purpose: "Gaming relationship discount acceptance #884",
+        consentTextVersion: "enterprise-identity-consent-v1",
+        userDecisionAt: new Date(), organizationDecisionAt: new Date(), activatedAt: new Date(),
+      },
+    });
+
+    const benefitResponse = await context.request.post(
+      `${baseUrl}/api/enterprise/${organizationId}/relationship-benefits`,
+      {
+        data: {
+          code: benefitCode,
+          nameFr: "Remise Gaming E2E #884", nameEn: "Gaming discount E2E #884",
+          descriptionFr: "10 % sur le service Gaming lié à une relation consentie.",
+          descriptionEn: "10% off consented Gaming session services.",
+          benefitType: "DISCOUNT", assignmentMode: "AUTOMATIC", relationTypes: ["CUSTOMER"],
+          identityLinkIds: [], valueType: "PERCENT", valueDecimal: 10, currencyCode: "CDF",
+          minimumAmount: 100, actionCode: "NONE", targetModuleCode: "GAMING_CHECKOUT",
+          usageLimitTotal: 1, usageLimitPerPeriod: 1, usagePeriodDays: 30,
+          stackable: false, status: "ACTIVE",
+          conditions: { channelCodes: ["GAMING"], catalogItemIds: [serviceId], minimumQuantity: 1 },
+        },
+        headers: { origin: baseUrl, referer: `${baseUrl}/enterprise-relationship-benefits` },
+      },
+    );
+    const created = await benefitResponse.json().catch(() => null);
+    expect(benefitResponse.status(), JSON.stringify(created)).toBe(201);
+    const benefitId = created.benefit.id;
+
+    try {
+      const firstSession = await createLegacyEndedSession({ businessPartyId: customerId, suffix: `${suffix}-cancel` });
+      const first = await checkout(firstSession.id, `${suffix}-cancel`);
+      expect(Number(first.invoice.subtotal)).toBe(500);
+      expect(Number(first.invoice.discountTotal)).toBe(50);
+      expect(Number(first.invoice.grandTotal)).toBe(450);
+
+      const reserved = await prisma.enterpriseRelationshipBenefitUsage.findMany({
+        where: {
+          organizationId, benefitId, identityLinkId: linkId,
+          effectEntityType: "EnterpriseGamingCheckout", effectEntityId: first.checkout.id,
+        },
+      });
+      expect(reserved).toHaveLength(1);
+      expect(reserved[0].status).toBe("APPROVED");
+      expect(reserved[0].executionMode).toBe("AUTO_GAMING");
+      expect(reserved[0].executedAt).toBeNull();
+
+      const cancelledResponse = await context.request.patch(
+        `${baseUrl}/api/enterprise/${organizationId}/gaming/checkouts/${first.checkout.id}`,
+        {
+          data: { action: "CANCEL", revision: first.checkout.revision, reason: "E2E #884 cancel pending invoice for quota recovery" },
+          headers: { origin: baseUrl, referer: `${baseUrl}/enterprise-modules/GAMING_CHECKOUT` },
+        },
+      );
+      const cancelled = await cancelledResponse.json().catch(() => null);
+      expect(cancelledResponse.ok(), JSON.stringify(cancelled)).toBeTruthy();
+      const reversed = await prisma.enterpriseRelationshipBenefitUsage.findUniqueOrThrow({ where: { id: reserved[0].id } });
+      expect(reversed.status).toBe("CANCELLED");
+
+      const secondSession = await createLegacyEndedSession({ businessPartyId: customerId, suffix: `${suffix}-issue` });
+      const second = await checkout(secondSession.id, `${suffix}-issue`);
+      expect(Number(second.invoice.discountTotal)).toBe(50);
+      expect(Number(second.invoice.grandTotal)).toBe(450);
+
+      const issued = await approveInvoice(second);
+      expect(issued.invoice.status).toBe("ISSUED");
+      const consumed = await prisma.enterpriseRelationshipBenefitUsage.findFirstOrThrow({
+        where: { organizationId, benefitId, effectEntityId: second.checkout.id },
+      });
+      expect(consumed.status).toBe("CONSUMED");
+      expect(consumed.executedAt).toBeTruthy();
+      expect(Number(consumed.effectAmount)).toBe(50);
+
+      const thirdSession = await createLegacyEndedSession({ businessPartyId: customerId, suffix: `${suffix}-quota` });
+      const third = await checkout(thirdSession.id, `${suffix}-quota`);
+      expect(Number(third.invoice.discountTotal)).toBe(0);
+      expect(Number(third.invoice.grandTotal)).toBe(500);
+      const thirdUsage = await prisma.enterpriseRelationshipBenefitUsage.count({
+        where: { organizationId, benefitId, effectEntityId: third.checkout.id },
+      });
+      expect(thirdUsage).toBe(0);
+
+      const overview = await context.request.get(
+        `${baseUrl}/api/enterprise/${organizationId}/identity-links/${linkId}/overview?partyId=${encodeURIComponent(customerId)}`,
+      );
+      const overviewBody = await overview.json().catch(() => null);
+      expect(overview.ok(), JSON.stringify(overviewBody)).toBeTruthy();
+      expect(overviewBody.usages.some((usage) => usage.id === consumed.id && usage.status === "CONSUMED")).toBe(true);
+
+      const retry = await context.request.post(
+        `${baseUrl}/api/enterprise/${organizationId}/gaming/checkouts`,
+        {
+          data: {
+            sessionId: secondSession.id, invoiceApproverUserId: approverUserId,
+            idempotencyKey: `e2e-693-checkout-${suffix}-issue`, extraItems: [],
+          },
+          headers: { origin: baseUrl, referer: `${baseUrl}/enterprise-modules/GAMING_CHECKOUT` },
+        },
+      );
+      expect(retry.ok()).toBeTruthy();
+      expect(await prisma.enterpriseRelationshipBenefitUsage.count({
+        where: { organizationId, benefitId, effectEntityId: second.checkout.id },
+      })).toBe(1);
+    } finally {
+      // Only isolated seeded E2E data is removed, never business or financial records.
+      await prisma.enterpriseRelationshipBenefitUsage.deleteMany({ where: { organizationId, benefitId } });
+      await prisma.enterpriseRelationshipBenefitAssignment.deleteMany({ where: { organizationId, benefitId } });
+      await prisma.enterpriseRelationshipBenefitAudience.deleteMany({ where: { organizationId, benefitId } });
+      await prisma.enterpriseRelationshipBenefit.deleteMany({ where: { organizationId, id: benefitId } });
+      await prisma.enterpriseIdentityLink.deleteMany({ where: { organizationId, id: linkId } });
+      await prisma.enterprisePersonBusinessReference.deleteMany({ where: { organizationId, id: reference.id } });
+      await prisma.enterprisePersonIdentity.deleteMany({ where: { organizationId, id: personId } });
+    }
   });
 
 });
