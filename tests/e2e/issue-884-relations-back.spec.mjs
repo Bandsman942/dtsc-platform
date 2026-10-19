@@ -77,7 +77,12 @@ test.describe("#884 DTSC relationships, benefits and contextual return", () => {
       }, { message: `Horizontal viewport overflow at ${width}px`, timeout: 15_000 })
         .toBeLessThanOrEqual(2);
       await expect(page.locator("[data-contextual-module-back]:visible")).toHaveCount(1);
-      const row = page.locator("[data-business-list-item]").filter({ hasText: "Personne E2E relation #884" }).first();
+      const relationshipsSection = page.locator("[data-workspace-section]")
+        .filter({ hasText: "Invitations, demandes et relations" });
+      await relationshipsSection.locator("[data-workspace-section-header]").click();
+      await expect(relationshipsSection).toHaveAttribute("data-workspace-section-open", "true");
+      const row = relationshipsSection.locator("[data-business-list-item]")
+        .filter({ hasText: "Personne E2E relation #884" }).first();
       await expect(row).toBeVisible();
       await row.getByRole("button", { name: /Ouvrir les détails|Open relationship details/i }).click();
         await expect(page.locator("[data-dtsc-fullscreen-detail]")).toBeVisible();
