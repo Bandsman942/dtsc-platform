@@ -1,7 +1,7 @@
 /** #878 / wave 1 — Canonical destinations for genuine business operations.
  *
  * Historical block.targetModuleCode values are NOT trusted as navigation
- * codes. This allow-list links only two professionally implemented commands
+ * codes. This allow-list links only explicitly implemented business commands
  * to their current ERP owners. Never use it for writes or to assume RBAC.
  */
 const PROFESSIONAL_SERVICES_HANDOFFS = {
@@ -10,6 +10,11 @@ const PROFESSIONAL_SERVICES_HANDOFFS = {
 } as const;
 
 export function canonicalSectorActivityDestination(sectorCode: string | null | undefined, blockCode: string) {
+  if (sectorCode === "MANUFACTURING" && blockCode === "DECLARE_PRODUCTION") {
+    // Recording an operation is not receiving finished goods or moving stock.
+    // The target module owns those distinct transitions and all authorization.
+    return { moduleCode: "PRODUCTION_EXECUTION", intent: "DECLARE_PRODUCTION" } as const;
+  }
   if (sectorCode !== "PROFESSIONAL_SERVICES") return null;
   if (blockCode === "DECLARE_TIME_WORKED") return PROFESSIONAL_SERVICES_HANDOFFS.DECLARE_TIME_WORKED;
   if (blockCode === "SUBMIT_DELIVERABLE") return PROFESSIONAL_SERVICES_HANDOFFS.SUBMIT_DELIVERABLE;
