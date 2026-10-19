@@ -1156,6 +1156,18 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
       const overviewBody = await overview.json().catch(() => null);
       expect(overview.ok(), JSON.stringify(overviewBody)).toBeTruthy();
       expect(overviewBody.usages.some((usage) => usage.id === consumed.id && usage.status === "CONSUMED")).toBe(true);
+      const consumedHistory = overviewBody.usages.find((usage) => usage.id === consumed.id);
+      expect(consumedHistory?.operationHref).toBe(
+        `/enterprise-modules/GAMING_CHECKOUT?checkout=${encodeURIComponent(second.checkout.id)}`,
+      );
+      const detailPage = await context.newPage();
+      try {
+        await detailPage.goto(consumedHistory.operationHref);
+        await expect(detailPage.locator("[data-dtsc-fullscreen-detail]")).toBeVisible();
+        await expect(detailPage.getByText(second.checkout.reference).first()).toBeVisible();
+      } finally {
+        await detailPage.close();
+      }
 
       const retry = await context.request.post(
         `${baseUrl}/api/enterprise/${organizationId}/gaming/checkouts`,
