@@ -63,6 +63,8 @@ export function RelationshipOverviewPanel({
   const [page, setPage] = useState(1);
   const [filterStatus, setFilterStatus] = useState("");
   const [snapshot, setSnapshot] = useState<Overview | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const currentStatus = links.find((item) => item.id === linkId)?.status || "";
   const [expandedUsageId, setExpandedUsageId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -104,7 +106,7 @@ export function RelationshipOverviewPanel({
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [organizationId, linkId, partyId, page, filterStatus, copy.failed]);
+  }, [organizationId, linkId, partyId, page, filterStatus, currentStatus, refreshKey, copy.failed]);
 
   const fmtDate = (value: string | null) => value
     ? new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "fr-FR", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(value))
@@ -119,6 +121,12 @@ export function RelationshipOverviewPanel({
 
   return (
     <section data-relationship-overview className="grid min-w-0 max-w-full gap-4">
+      <div data-responsive-actions className="flex justify-end">
+        <button type="button" onClick={() => setRefreshKey((key) => key + 1)}
+          disabled={loading} className="min-h-11 rounded-xl border border-dtsc-border px-3 text-sm font-bold text-dtsc-blue disabled:opacity-50">
+          {locale === "en" ? "Refresh relation" : "Actualiser la relation"}
+        </button>
+      </div>
       {links.length > 1 ? (
         <label className="text-sm font-bold text-dtsc-ink">
           {copy.select}
