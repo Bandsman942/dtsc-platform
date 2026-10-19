@@ -238,6 +238,13 @@ async function validateRelationshipBenefitConfiguration(
   });
   const automaticGamingShape = automaticGamingEffectSupported({ ...retailProbe, actionCode: null });
   const supportedAutomaticShape = automaticRetailShape || automaticGamingShape;
+  if (automaticGamingShape && config.stackable) {
+    throw new EnterpriseRelationshipBenefitError(
+      "RELATIONSHIP_BENEFIT_GAMING_STACKING_UNSUPPORTED",
+      "Les remises Gaming ne sont pas cumulables. Décochez l’option « Cumulable ».",
+      409,
+    );
+  }
   if (supportedAutomaticShape && config.actionCode !== "NONE") {
     throw new EnterpriseRelationshipBenefitError(
       "RELATIONSHIP_BENEFIT_AUTOMATIC_ACTION_INVALID",
