@@ -4,7 +4,9 @@ import path from "node:path";
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const failures = [];
+let count = 0;
 const check = (ok, label) => {
+  count += 1;
   if (!ok) failures.push(label);
 };
 
@@ -59,4 +61,4 @@ if (failures.length) {
   for (const failure of failures) console.error("- " + failure);
   process.exit(1);
 }
-console.log("Hotfix #886 targeted QA passed (" + 12 + " checks).");
+console.log(`Hotfix #886 targeted QA passed (${count} checks).`);
