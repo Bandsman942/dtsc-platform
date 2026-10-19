@@ -22,6 +22,9 @@ check(returns.includes('status: "COMPLETED"') && returns.includes('saleId: retai
   "Only completed returns of the exact sale enter the quota evaluation");
 check(returns.includes('SELECT id FROM "EnterpriseRetailSale"') && returns.includes("FOR UPDATE"),
   "Decisions for multiple returns of the same sale serialize on the canonical sale row");
+check(returns.includes("withRetailTransactionRetry(() => prisma.$transaction(async (tx) => {") &&
+    returns.includes("TransactionIsolationLevel.Serializable"),
+  "Concurrent return approvals retry serialization conflicts without an external double effect");
 check(returns.includes("const returnedByLine = new Map<string, Prisma.Decimal>()") &&
     returns.includes('returnedByLine.get(line.id) || decimal(0)') &&
     returns.includes("retailReturn.sale.lines.every") &&
