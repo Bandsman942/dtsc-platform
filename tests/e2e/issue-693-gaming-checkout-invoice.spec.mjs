@@ -1221,13 +1221,15 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
         },
       });
 
+      // Reuse the single authenticated E2E admin session: login attempts are correctly rate-limited.
+      const adminStorageState = await context.storageState();
       for (const width of [320, 360, 375, 390, 414, 768, 1024]) {
         await test.step(`#884 identity detail and history at ${width}px`, async () => {
           const browserContext = await browser.newContext({
             baseURL: baseUrl, viewport: { width, height: 850 },
+            storageState: adminStorageState,
           });
           try {
-            await signInAs(browserContext, adminEmail, adminPassword, "/enterprise-identity-admin");
             const page = await browserContext.newPage();
             await page.goto(`${baseUrl}/enterprise-identity-admin`);
             await expect(page.getByRole("heading", { name: /Identités et consentements|Identities and consents/i })).toBeVisible();
