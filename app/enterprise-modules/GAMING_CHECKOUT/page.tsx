@@ -5,7 +5,12 @@ import { getSession, requireUser } from "@/lib/auth";
 import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
 import { prisma } from "@/lib/prisma";
 
-export default async function GamingCheckoutPage() {
+export default async function GamingCheckoutPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ checkout?: string }>;
+}) {
+  const { checkout: focusedCheckoutId } = await searchParams;
   const user = await requireUser();
   const session = await getSession();
   const organizationId = session?.activeContext === "ORGANIZATION" ? session.activeOrganizationId : null;
@@ -16,7 +21,7 @@ export default async function GamingCheckoutPage() {
   if (!organization) notFound();
   return (
     <AppShell user={user}>
-      <EnterpriseGamingCheckoutWorkspace organizationId={organizationId} organizationName={organization.name} definition={capabilities.definition} />
+      <EnterpriseGamingCheckoutWorkspace organizationId={organizationId} organizationName={organization.name} definition={capabilities.definition} focusedCheckoutId={focusedCheckoutId?.slice(0, 191)} />
     </AppShell>
   );
 }

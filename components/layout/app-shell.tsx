@@ -12,6 +12,7 @@ import { MobileGroupSwipeNavigation } from "@/components/dtsc/mobile-group-swipe
 import { MobileBottomNavigation, MobilePwaHeader } from "@/components/dtsc/mobile-shell";
 import { LocaleProvider } from "@/components/i18n/locale-provider";
 import { DtscFooter } from "@/components/layout/dtsc-footer";
+import { ContextualBackButton } from "@/components/workspace/contextual-back-button";
 import { NavLinks } from "@/components/layout/nav-links";
 import { OrganizationContextSwitcher } from "@/components/layout/organization-context-switcher";
 import { PrivateMobileChromeController } from "@/components/layout/private-mobile-chrome-controller";
@@ -269,7 +270,7 @@ export async function AppShell({
               </div>
             </div>
           </header>
-          <main className="dtsc-private-main min-w-0 px-4 pb-36 pt-5 sm:px-6 lg:px-8 lg:pb-6 lg:pt-6">{children}</main>
+          <main className="dtsc-private-main min-w-0 px-4 pb-36 pt-5 sm:px-6 lg:px-8 lg:pb-6 lg:pt-6"><div data-module-back-fallback className="mb-4"><ContextualBackButton /></div>{children}</main>
           <MobileBottomNavigation
             user={user}
             unreadCollaboratorMessages={unreadCollaboratorMessages}

@@ -1,8 +1,11 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { IdentityAdminDetail } from "@/components/enterprise/identity-links/identity-admin-detail";
+import { useAppLocale } from "@/components/i18n/locale-provider";
+import { notifyToast } from "@/lib/client-toast";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { StatusBadge, type StatusBadgeTone } from "@/components/workspace/status-badge";
@@ -20,6 +23,8 @@ type IdentityTarget = {
   label: string;
   suggestedName: string;
   suggestedEmail: string;
+  partyType?: "PERSON" | "ORGANIZATION";
+  roleCodes?: string[];
 };
 
 type OrganizationIdentityLink = {
@@ -61,14 +66,18 @@ export function EnterpriseIdentityAdminPanel({
   links,
   targets,
   focusedLinkId,
+  focusedTargetKey,
 }: {
   organizationId: string;
   organizationName: string;
   links: OrganizationIdentityLink[];
   targets: IdentityTarget[];
   focusedLinkId?: string;
+  focusedTargetKey?: string;
 }) {
   const router = useRouter();
+  const locale = useAppLocale() === "en" ? "en" : "fr";
+  const [openedId, setOpenedId] = useState<string | null>(focusedLinkId && links.some((link) => link.id === focusedLinkId) ? focusedLinkId : null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -112,10 +121,14 @@ export function EnterpriseIdentityAdminPanel({
       });
       const data = await response.json().catch(() => null);
       if (!response.ok) throw new Error(data?.message || "L’action n’a pas pu être terminée.");
-      setSuccess(data?.message || "L’action a été enregistrée.");
+      const message = data?.message || (locale === "en" ? "Action saved." : "L’action a été enregistrée.");
+      setSuccess(message);
+      notifyToast(message, "success");
       router.refresh();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "L’action n’a pas pu être terminée.");
+      const message = requestError instanceof Error ? requestError.message : "L’action n’a pas pu être terminée.";
+      setError(message);
+      notifyToast(message, "error");
     } finally {
       setBusy(null);
     }
@@ -143,31 +156,46 @@ export function EnterpriseIdentityAdminPanel({
     );
   }
 
-  async function decide(link: OrganizationIdentityLink, action: "APPROVE" | "REFUSE" | "CANCEL") {
-    const target = targetByComposite.get(selectedTarget);
-    const payload: Record<string, unknown> = { action, revision: link.revision };
-    if (action === "APPROVE") {
-      if (!target) {
-        setError("Sélectionnez la fiche métier à associer avant l’approbation.");
-        return;
-      }
-      Object.assign(payload, targetPayload(target), {
-        displayName: link.person?.displayName || target.suggestedName,
-        roleCode: link.requestedRoleCode || undefined,
-      });
+  useEffect(() => {
+    // Browser / Android / PWA Back closes only the uppermost relation detail.
+    const synchronizeHistory = () => {
+      const linkId = new URLSearchParams(window.location.search).get("link");
+      setOpenedId(linkId && links.some((item) => item.id === linkId) ? linkId : null);
+    };
+    window.addEventListener("popstate", synchronizeHistory);
+    return () => window.removeEventListener("popstate", synchronizeHistory);
+  }, [links]);
+
+  function openLink(id: string) {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("link") !== id) {
+      url.searchParams.set("link", id);
+      window.history.pushState(
+        { ...window.history.state, dtscIdentityDetailLink: id },
+        "",
+        url.pathname + url.search + url.hash,
+      );
     }
-    await request(
-      `/api/enterprise/${organizationId}/identity-links/${link.id}/decision`,
-      payload,
-      `${action}:${link.id}`,
-    );
+    setOpenedId(id);
+  }
+
+  function closeLink() {
+    if (window.history.state?.dtscIdentityDetailLink === openedId) {
+      window.history.back();
+      return;
+    }
+    // Direct deep links have no in-app parent entry; close without crossing origins.
+    setOpenedId(null);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("link");
+    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
   }
 
   return (
     <ModuleWorkspace>
       <ModuleHeader
         eyebrow={`Administration · ${organizationName}`}
-        title="Identités et consentements"
+        title={locale === "en" ? "Identities and consents" : "Identités et consentements"}
         description="Invitez une personne précise ou examinez ses demandes. La base globale des utilisateurs DTSC n’est jamais exposée."
         count={`${links.length} opération${links.length > 1 ? "s" : ""}`}
       />
@@ -243,7 +271,7 @@ export function EnterpriseIdentityAdminPanel({
                 className="mt-1.5 min-h-11 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-base font-normal"
               >
                 {ENTERPRISE_IDENTITY_RELATION_TYPES.map((type) => (
-                  <option key={type} value={type}>{getEnterpriseIdentityRelationLabel(type, "fr")}</option>
+                  <option key={type} value={type}>{getEnterpriseIdentityRelationLabel(type, locale)}</option>
                 ))}
               </select>
             </label>
@@ -286,62 +314,39 @@ export function EnterpriseIdentityAdminPanel({
             <BusinessList ariaLabel="Gestion des consentements entreprise">
               {orderedLinks.map((link) => {
                 const status = link.status as EnterpriseIdentityLinkStatus;
-                const canApprove = link.status === "ORGANIZATION_APPROVAL_REQUIRED";
-                const canCancel = ["INVITATION_PENDING", "REQUEST_PENDING", "USER_CONSENT_REQUIRED", "ORGANIZATION_APPROVAL_REQUIRED"].includes(link.status);
                 return (
                   <BusinessListItem
                     key={link.id}
-                    title={link.person?.displayName || "Fiche métier indisponible"}
-                    status={<StatusBadge tone={statusTone(link.status)}>{getEnterpriseIdentityStatusLabel(status, "fr")}</StatusBadge>}
-                    meta={`${getEnterpriseIdentityRelationLabel(link.requestedRelationType as EnterpriseIdentityRelationType, "fr")} · ${new Date(link.createdAt).toLocaleDateString("fr-FR")}`}
+                    title={link.person?.displayName || (locale === "en" ? "Business record unavailable" : "Fiche métier indisponible")}
+                    status={<StatusBadge tone={statusTone(link.status)}>{getEnterpriseIdentityStatusLabel(status, locale)}</StatusBadge>}
+                    meta={`${getEnterpriseIdentityRelationLabel(link.requestedRelationType as EnterpriseIdentityRelationType, locale)} · ${new Date(link.createdAt).toLocaleDateString(locale === "en" ? "en-GB" : "fr-FR")}`}
                     description={link.purpose}
-                    actions={
-                      canApprove || canCancel ? (
-                        <div className="flex min-w-0 flex-col gap-2 sm:flex-row">
-                          {canApprove ? (
-                            <button
-                              type="button"
-                              disabled={busy !== null}
-                              onClick={() => decide(link, "APPROVE")}
-                              className="min-h-10 rounded-lg bg-dtsc-blue px-3 py-2 text-xs font-black text-white disabled:opacity-50"
-                            >
-                              {busy === `APPROVE:${link.id}` ? "Approbation…" : "Approuver"}
-                            </button>
-                          ) : null}
-                          {canApprove ? (
-                            <button
-                              type="button"
-                              disabled={busy !== null}
-                              onClick={() => decide(link, "REFUSE")}
-                              className="min-h-10 rounded-lg border border-red-500/30 px-3 py-2 text-xs font-black text-red-700 disabled:opacity-50 dark:text-red-300"
-                            >
-                              Refuser
-                            </button>
-                          ) : null}
-                          {!canApprove && canCancel ? (
-                            <button
-                              type="button"
-                              disabled={busy !== null}
-                              onClick={() => decide(link, "CANCEL")}
-                              className="min-h-10 rounded-lg border border-dtsc-border px-3 py-2 text-xs font-black text-dtsc-ink disabled:opacity-50"
-                            >
-                              Annuler
-                            </button>
-                          ) : null}
-                        </div>
-                      ) : null
-                    }
+                    onOpen={() => openLink(link.id)}
+                    openLabel={locale === "en" ? "Open relationship details" : "Ouvrir les détails de cette relation"}
+                    actions={<button type="button" onClick={() => openLink(link.id)}
+                      className="min-h-11 rounded-xl border border-dtsc-border px-3 text-xs font-black text-dtsc-blue">
+                      {locale === "en" ? "View details" : "Voir détails"}
+                    </button>}
                   />
                 );
               })}
             </BusinessList>
           ) : (
             <div className="border-y border-dtsc-border py-10 text-center text-sm text-dtsc-muted">
-              Aucune invitation ou demande n’a encore été créée.
+              {locale === "en" ? "No invitation or request has been created yet." : "Aucune invitation ou demande n’a encore été créée."}
             </div>
           )}
         </ModuleSection>
       </ModuleContent>
+      <IdentityAdminDetail
+        key={openedId || "empty"}
+        organizationId={organizationId}
+        link={links.find((link) => link.id === openedId) || null}
+        targets={targets}
+        focusedTargetKey={focusedTargetKey}
+        onClose={closeLink}
+        onSaved={() => router.refresh()}
+      />
     </ModuleWorkspace>
   );
 }
