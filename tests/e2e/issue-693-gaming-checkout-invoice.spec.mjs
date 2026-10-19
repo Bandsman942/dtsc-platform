@@ -1214,6 +1214,7 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
           id: linkId, organizationId, personIdentityId: personId,
           origin: "ENTERPRISE", requestedRelationType: "CUSTOMER",
           status: "ORGANIZATION_APPROVAL_REQUIRED",
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
           initiatedByUserId: adminUserId,
           purpose: "Contrôle d'interface et de consentement #884",
           consentTextVersion: "enterprise-identity-consent-v1",
