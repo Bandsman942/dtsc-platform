@@ -89,7 +89,7 @@ export default async function EnterpriseIdentityAdminPage({
       label: `${party.displayName || party.legalName} · ${party.partyType === "PERSON" ? "Personne" : "Organisation"}`,
       suggestedName: party.displayName || party.legalName,
       suggestedEmail: party.primaryEmail || "",
-      partyType: party.partyType,
+      partyType: party.partyType === "PERSON" ? "PERSON" as const : "ORGANIZATION" as const,
       roleCodes: party.roles.map((role) => role.roleCode),
     })),
     ...contacts.map((contact) => ({
