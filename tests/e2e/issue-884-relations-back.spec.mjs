@@ -61,7 +61,7 @@ test.describe("#884 DTSC relationships, benefits and contextual return", () => {
       const context = await browser.newContext({ viewport: { width, height: 850 } });
       const page = await context.newPage();
       await signIn(page);
-      await page.goto("/enterprise-identity-admin");
+      await page.goto(`${baseUrl}/enterprise-identity-admin`);
       await expect(page.getByRole("heading", { name: /Identités et consentements|Identities and consents/i })).toBeVisible();
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       expect(overflow, `Horizontal viewport overflow at ${width}px`).toBeLessThanOrEqual(2);
