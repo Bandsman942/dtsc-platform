@@ -8,6 +8,7 @@ const organizationId = process.env.E2E_ORGANIZATION_ID || "";
 const prisma = new PrismaClient();
 const browserIdentityId = "e2e-884-browser-person";
 const browserLinkId = "e2e-884-browser-link";
+let adminStorageState;
 
 async function signIn(page) {
   const response = await page.context().request.post(`${baseUrl}/api/auth/sign-in`, {
@@ -25,7 +26,7 @@ async function signIn(page) {
 test.describe("#884 DTSC relationships, benefits and contextual return", () => {
   test.skip(!configured, "Requires authenticated E2E organization credentials.");
 
-  test.beforeAll(async () => {
+  test.beforeAll(async ({ browser }) => {
     if (!configured) return;
     const admin = await prisma.user.findUniqueOrThrow({ where: { email: process.env.E2E_ADMIN_EMAIL } });
     await prisma.enterpriseIdentityLink.deleteMany({ where: { id: browserLinkId, organizationId } });
@@ -47,6 +48,14 @@ test.describe("#884 DTSC relationships, benefits and contextual return", () => {
         consentTextVersion: "enterprise-identity-consent-v1",
       },
     });
+    const authContext = await browser.newContext();
+    try {
+      const authPage = await authContext.newPage();
+      await signIn(authPage);
+      adminStorageState = await authContext.storageState();
+    } finally {
+      await authContext.close();
+    }
   });
 
   test.afterAll(async () => {
@@ -59,9 +68,8 @@ test.describe("#884 DTSC relationships, benefits and contextual return", () => {
 
   for (const width of [320, 360, 375, 390, 414, 768, 1024]) {
     test(`identity administration fits ${width}px and opens per-row details`, async ({ browser }) => {
-      const context = await browser.newContext({ viewport: { width, height: 850 } });
+      const context = await browser.newContext({ viewport: { width, height: 850 }, storageState: adminStorageState });
       const page = await context.newPage();
-      await signIn(page);
       await page.goto(`${baseUrl}/enterprise-identity-admin`);
       await expect(page.getByRole("heading", { name: /Identités et consentements|Identities and consents/i })).toBeVisible();
       await expect.poll(async () => {
@@ -108,9 +116,7 @@ test.describe("#884 DTSC relationships, benefits and contextual return", () => {
   test("overview rejects unauthenticated access and forged tenant scope", async ({ request, browser }) => {
     const result = await request.get(`/api/enterprise/${encodeURIComponent(organizationId)}/identity-links/not-a-real-link/overview`);
     expect([401, 403, 404]).toContain(result.status());
-    const context = await browser.newContext();
-    const page = await context.newPage();
-    await signIn(page);
+    const context = await browser.newContext({ storageState: adminStorageState });
     const forged = await context.request.get(
       `${baseUrl}/api/enterprise/not-this-tenant/identity-links/${browserLinkId}/overview`,
     );
