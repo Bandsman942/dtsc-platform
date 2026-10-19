@@ -1,6 +1,6 @@
 # Hotfix #886 — Complétude des avantages Retail
 
-Parent : #785 (P0). Baseline : `main@f21a5f0be6791f73ab545d5c0d7ea23a0a047a03`.
+Issue de livraison : #888 (incrément du parent #886 / #785 P0). Baseline : `main@f21a5f0be6791f73ab545d5c0d7ea23a0a047a03`.
 Statut : **implémentation partielle, PR DRAFT, aucun merge ni activation automatique**.
 
 ## Premier incrément — retour intégral et quota relationnel
@@ -51,4 +51,4 @@ Ne pas décrire une remise omnicanale comme effectivement appliquée au checkout
 
 ## Décision de périmètre
 
-**Ne pas fermer #886 ni #785** sur ce seul incrément. Les autres objectifs exigent des adaptateurs métier canoniques et des E2E complémentaires ; les effets financiers ne seront pas simulés dans une couche parallèle.
+**Cette PR ne peut fermer que #888 : ne pas fermer #886 ni #785** sur ce seul incrément. Les autres objectifs exigent des adaptateurs métier canoniques et des E2E complémentaires ; les effets financiers ne seront pas simulés dans une couche parallèle.
