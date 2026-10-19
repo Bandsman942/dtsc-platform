@@ -49,6 +49,10 @@ check(!detail.includes("window.confirm(") && detail.includes("confirmSensitiveAc
 check(benefitConfiguration.includes("RELATIONSHIP_BENEFIT_GAMING_STACKING_UNSUPPORTED"), "Gaming does not silently stack unsupported discounts");
 check(benefitConfiguration.includes('canCancel: usage.executionMode === "REQUEST"') && benefitConfiguration.includes('RELATIONSHIP_BENEFIT_AUTOMATIC_USAGE_IMMUTABLE'), "Automatic Gaming reservations cannot be cancelled from manual requests");
 check(benefitEditor.includes('usage.executionMode === "REQUEST" && usage.status === "REQUESTED"'), "Admin decisions are hidden for automatic usages");
+check(back.includes("STACK_KEY") && back.includes("MAX_ROUTES") && back.includes("recordRoute"), "Back navigation supports a bounded, non-looping multi-level route stack");
+check(back.includes("SCROLL_KEY") && back.includes("RESTORE_KEY") && back.includes("saveScroll"), "Navigation retains allowed page scroll and contextual search");
+check(back.includes("confirmSensitiveAction") && !back.includes("window.confirm("), "Unsaved-form confirmation uses the platform dialog");
+check(admin.includes('window.history.pushState') && admin.includes('window.addEventListener("popstate"'), "Identity details are compatible with native/Android browser Back");
 const failed = checks.filter((item) => !item.ok);
 console.log(`Hotfix #884 static contract: ${checks.length - failed.length}/${checks.length}`);
 if (failed.length) process.exitCode = 1;
