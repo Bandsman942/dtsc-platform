@@ -18,6 +18,8 @@ const gaming = read("lib/enterprise/relationship-benefits/gaming-adapter.ts");
 const checkout = read("lib/enterprise/gaming/checkout-service.ts");
 const commands = read("lib/enterprise/gaming/checkout-commands.ts");
 const benefitConfiguration = read("lib/enterprise/relationship-benefits/service.ts");
+const benefitPage = read("app/enterprise-relationship-benefits/page.tsx");
+const benefitEditor = read("components/enterprise/relationship-benefits/relationship-benefits-admin-workspace.tsx");
 
 check(admin.includes("onOpen={() => openLink(link.id)}") && admin.includes("IdentityAdminDetail"), "Each admin relation opens an actual full-screen detail");
 check(detail.includes("FullscreenEntityDetail") && detail.includes("decision") && detail.includes("revision: link.revision"), "Approvals use the existing revision-guarded identity decision route");
@@ -42,6 +44,9 @@ check(commands.includes("finalizeGamingRelationshipBenefitTx") && gaming.include
 check(commands.includes("reverseGamingRelationshipBenefitTx") && commands.includes('"cancel"') && commands.includes('"refund"'), "Gaming cancellation and refund reverse the same usage");
 check(gaming.includes("effectIdempotencyKey") && gaming.includes("findUnique") && gaming.includes("pg_advisory_xact_lock"), "Gaming benefit consumption protects idempotency and quotas");
 check(gaming.includes('effectEntityType: "EnterpriseGamingCheckout"'), "Usage points to the real Gaming checkout, not a second ledger");
+check(benefitPage.includes('canUseModule(organizationId, "GAMING_CHECKOUT")') && benefitEditor.includes('"GAMING_CHECKOUT"'), "Enabled Gaming Checkout can be chosen as a benefit target in the admin UI");
+check(!detail.includes("window.confirm(") && detail.includes("confirmSensitiveAction"), "Identity decisions use platform confirmation, not native dialogs");
+check(benefitConfiguration.includes("RELATIONSHIP_BENEFIT_GAMING_STACKING_UNSUPPORTED"), "Gaming does not silently stack unsupported discounts");
 const failed = checks.filter((item) => !item.ok);
 console.log(`Hotfix #884 static contract: ${checks.length - failed.length}/${checks.length}`);
 if (failed.length) process.exitCode = 1;
