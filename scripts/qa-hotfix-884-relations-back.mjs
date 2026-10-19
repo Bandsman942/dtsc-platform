@@ -14,6 +14,8 @@ const parties = read("app/api/enterprise/[organizationId]/business-parties/route
 const crm = read("components/enterprise/professional/enterprise-customers-workspace.tsx");
 const back = read("components/workspace/contextual-back-button.tsx");
 const header = read("components/workspace/module-workspace.tsx");
+const support = read("components/support/support-product-shell.tsx");
+const globalStyles = read("app/globals.css");
 const gaming = read("lib/enterprise/relationship-benefits/gaming-adapter.ts");
 const checkout = read("lib/enterprise/gaming/checkout-service.ts");
 const commands = read("lib/enterprise/gaming/checkout-commands.ts");
@@ -57,6 +59,9 @@ check(route.includes("resolveEnterpriseModuleCapabilities") && route.includes("a
 check(relationships.includes("usage.operationHref") && relationships.includes("Open business operation"), "Consumption history offers a permitted, openable operation link");
 check(read("components/enterprise/gaming/enterprise-gaming-checkout-workspace.tsx").includes("focusedCheckoutId"), "Gaming checkout details resolve direct deep links server-side");
 check(read("tests/e2e/issue-693-gaming-checkout-invoice.spec.mjs").includes('test("#884 exercises a real Gaming relationship discount'), "Gaming acceptance E2E covers real discounted invoice, cancel, quota and usage history");
+check(support.includes("authenticated ?") && support.includes("data-support-back-fallback") && support.includes("ContextualBackButton"), "Authenticated Support exposes a return button outside the AppShell");
+check(globalStyles.includes(".dtsc-support-main:has([data-workspace-module-header])"), "Support hides duplicate return controls in native module headers");
+check(read("tests/e2e/issue-693-gaming-checkout-invoice.spec.mjs").includes("test(\"#884 browser identity consent:"), "The Gaming CI suite actually executes #884 viewport and tenant-security browser checks");
 const failed = checks.filter((item) => !item.ok);
 console.log(`Hotfix #884 static contract: ${checks.length - failed.length}/${checks.length}`);
 if (failed.length) process.exitCode = 1;
