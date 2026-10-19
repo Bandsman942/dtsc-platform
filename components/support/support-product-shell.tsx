@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 import { DtscLogo } from "@/components/brand/dtsc-logo";
 import { ProductNavigation } from "@/components/layout/product-navigation";
 import { ProductPreferencesControls } from "@/components/layout/product-preferences-controls";
+import { LocaleProvider } from "@/components/i18n/locale-provider";
+import { ContextualBackButton } from "@/components/workspace/contextual-back-button";
 import { getDashboardUrl, getPublicUrl, getSignInUrl } from "@/lib/domains";
 
 type SupportProductShellProps = {
@@ -53,7 +55,14 @@ export function SupportProductShell({ children, authenticated = false, isDtscInt
         ) : null}
       </header>
 
-      <div className="mx-auto max-w-[92rem] px-4 py-6 sm:px-6 lg:px-8">
+      <div className="dtsc-support-main mx-auto max-w-[92rem] px-4 py-6 sm:px-6 lg:px-8">
+        {authenticated ? (
+          <div data-support-back-fallback className="mb-4">
+            <LocaleProvider locale={locale}>
+              <ContextualBackButton />
+            </LocaleProvider>
+          </div>
+        ) : null}
         {children}
         {authenticated ? <ProductNavigation currentHostType="support" authenticated isDtscInternal={isDtscInternal} locale={locale} className="mt-8 border-t border-dtsc-border pt-6" /> : null}
       </div>
