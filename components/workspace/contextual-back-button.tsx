@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowLeft } from "lucide-react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { confirmSensitiveAction } from "@/lib/client-confirmation";
 import { useAppLocale } from "@/components/i18n/locale-provider";
@@ -23,7 +23,6 @@ function safeInternalPath(value: string | null): string | null {
 /** Records only user-visible module routes, never identity tokens or external origins. */
 export function ContextualBackButton() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const router = useRouter();
   const english = useAppLocale() === "en";
   const editedForms = useRef(new Set<HTMLFormElement>());
@@ -57,7 +56,7 @@ export function ContextualBackButton() {
     } catch {
       // Private browsing and restricted storage must not break navigation.
     }
-  }, [pathname, searchParams]);
+  }, [pathname]);
 
   async function goBack() {
     if (navigating) return;
