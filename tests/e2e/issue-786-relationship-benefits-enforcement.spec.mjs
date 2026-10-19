@@ -885,11 +885,16 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
       });
       expect(usage.status).toBe("CONSUMED");
 
+      const refundBankAccount = await prisma.enterpriseFinancialAccount.findFirstOrThrow({
+        where: { organizationId, code: "SHOP2-E2E-BANK", status: "ACTIVE", archivedAt: null },
+        select: { id: true },
+      });
       for (const [index, expectedStatus] of ["CONSUMED", "CANCELLED"].entries()) {
         const requested = await post(admin, `/api/enterprise/${organizationId}/retail/sales/${saleId}/returns`, {
           returnType: "RETURN",
           reason: `Retour par tranche ${index + 1} sur deux pour #886`,
-          refundMethod: "ORIGINAL_TENDER",
+          refundMethod: "BANK_TRANSFER",
+          refundFinancialAccountId: refundBankAccount.id,
           idempotencyKey: `e2e-886-return-${index}-${Date.now()}`,
           lines: [{ saleLineId, quantity: 1, productCondition: "SELLABLE", stockDisposition: "RESTOCK" }],
         }, "/enterprise-modules/RETAIL_POS");
@@ -897,6 +902,7 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
         const decision = {
           revision: requested.body.retailReturn.revision,
           decision: "APPROVE",
+          refundFinancialAccountId: refundBankAccount.id,
           refundReference: `E2E-886-REFUND-${index}`,
         };
         const approved = await post(approver, `/api/enterprise/${organizationId}/retail/returns/${requested.body.retailReturn.id}/decision`,
