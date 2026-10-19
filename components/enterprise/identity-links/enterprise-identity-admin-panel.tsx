@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { IdentityAdminDetail } from "@/components/enterprise/identity-links/identity-admin-detail";
@@ -156,14 +156,35 @@ export function EnterpriseIdentityAdminPanel({
     );
   }
 
+  useEffect(() => {
+    // Browser / Android / PWA Back closes only the uppermost relation detail.
+    const synchronizeHistory = () => {
+      const linkId = new URLSearchParams(window.location.search).get("link");
+      setOpenedId(linkId && links.some((item) => item.id === linkId) ? linkId : null);
+    };
+    window.addEventListener("popstate", synchronizeHistory);
+    return () => window.removeEventListener("popstate", synchronizeHistory);
+  }, [links]);
+
   function openLink(id: string) {
-    setOpenedId(id);
     const url = new URL(window.location.href);
-    url.searchParams.set("link", id);
-    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    if (url.searchParams.get("link") !== id) {
+      url.searchParams.set("link", id);
+      window.history.pushState(
+        { ...window.history.state, dtscIdentityDetailLink: id },
+        "",
+        url.pathname + url.search + url.hash,
+      );
+    }
+    setOpenedId(id);
   }
 
   function closeLink() {
+    if (window.history.state?.dtscIdentityDetailLink === openedId) {
+      window.history.back();
+      return;
+    }
+    // Direct deep links have no in-app parent entry; close without crossing origins.
     setOpenedId(null);
     const url = new URL(window.location.href);
     url.searchParams.delete("link");
