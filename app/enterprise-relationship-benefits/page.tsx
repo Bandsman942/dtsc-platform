@@ -30,22 +30,21 @@ export default async function EnterpriseRelationshipBenefitsPage({
   });
   if (!capabilities.canRead) redirect(getDashboardUrl());
 
-  const [{ usage }, dataset, links, currencies, retailAccess] = await Promise.all([
+  const [{ usage }, dataset, links, currencies, retailAccess, gamingAccess] = await Promise.all([
     searchParams,
     listRelationshipBenefitsForAdmin(organizationId),
     listAssignableRelationshipLinks(organizationId),
     listEnterpriseCurrencies(organizationId),
     canUseModule(organizationId, "RETAIL_POS"),
+    canUseModule(organizationId, "GAMING_CHECKOUT"),
   ]);
-  const retailDefinition = retailAccess.allowed
-    ? getEnterpriseModuleDefinition("RETAIL_POS")
-    : null;
-  const supportedTargets = retailDefinition
-    ? [{
-        code: retailDefinition.code,
-        label: user.locale === "en" ? retailDefinition.labelEn : retailDefinition.labelFr,
-      }]
-    : [];
+  const supportedTargets = ([
+    retailAccess.allowed ? getEnterpriseModuleDefinition("RETAIL_POS") : null,
+    gamingAccess.allowed ? getEnterpriseModuleDefinition("GAMING_CHECKOUT") : null,
+  ]).filter((definition) => definition !== null).map((definition) => ({
+    code: definition.code,
+    label: user.locale === "en" ? definition.labelEn : definition.labelFr,
+  }));
 
   return (
     <AppShell user={user}>

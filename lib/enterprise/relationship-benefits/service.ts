@@ -11,6 +11,7 @@ import {
   type RelationshipBenefitExecutionContext,
 } from "@/lib/enterprise/relationship-benefits/enforcement";
 import { normalizeEnterpriseModuleCode } from "@/lib/enterprise/module-registry";
+import { automaticGamingEffectSupported } from "@/lib/enterprise/relationship-benefits/gaming-adapter";
 import { notifyUser, notifyUsers } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 
@@ -235,16 +236,25 @@ async function validateRelationshipBenefitConfiguration(
     ...retailProbe,
     actionCode: null,
   });
-  if (automaticRetailShape && config.actionCode !== "NONE") {
+  const automaticGamingShape = automaticGamingEffectSupported({ ...retailProbe, actionCode: null });
+  const supportedAutomaticShape = automaticRetailShape || automaticGamingShape;
+  if (automaticGamingShape && config.stackable) {
+    throw new EnterpriseRelationshipBenefitError(
+      "RELATIONSHIP_BENEFIT_GAMING_STACKING_UNSUPPORTED",
+      "Les remises Gaming ne sont pas cumulables. Décochez l’option « Cumulable ».",
+      409,
+    );
+  }
+  if (supportedAutomaticShape && config.actionCode !== "NONE") {
     throw new EnterpriseRelationshipBenefitError(
       "RELATIONSHIP_BENEFIT_AUTOMATIC_ACTION_INVALID",
       "Un avantage monétaire appliqué automatiquement au point de vente ne doit pas créer une seconde demande manuelle.",
     );
   }
-  if (config.targetModuleCode && !automaticRetailShape) {
+  if (config.targetModuleCode && !supportedAutomaticShape) {
     throw new EnterpriseRelationshipBenefitError(
       "RELATIONSHIP_BENEFIT_TARGET_ADAPTER_UNSUPPORTED",
-      "Ce module ne dispose pas encore d’un adaptateur certifié pour exécuter ce type d’avantage. Retirez la cible métier ou utilisez un avantage Retail POS monétaire pris en charge.",
+      "Ce type d’avantage n’est pas pris en charge automatiquement par ce module. Sélectionnez une remise monétaire compatible avec Retail POS ou Gaming Checkout.",
       409,
     );
   }
@@ -252,10 +262,10 @@ async function validateRelationshipBenefitConfiguration(
   const hasContextualRules =
     Boolean(config.minimumAmount) ||
     Object.keys(conditions).length > 0;
-  if (hasContextualRules && !automaticRetailShape) {
+  if (hasContextualRules && !supportedAutomaticShape) {
     throw new EnterpriseRelationshipBenefitError(
       "RELATIONSHIP_BENEFIT_CONTEXTUAL_RULES_UNSUPPORTED",
-      "Les montants minimums et conditions métier exigent un adaptateur serveur certifié. Utilisez actuellement Retail POS avec une remise ou un prix fixe automatique.",
+      "Les montants minimums et conditions métier exigent un adaptateur serveur certifié Retail POS ou Gaming Checkout.",
       409,
     );
   }
@@ -938,7 +948,7 @@ export async function resolveEnterpriseRelationshipBenefits({
     effectAmount: asNumber(usage.effectAmount),
     effectCurrencyCode: usage.effectCurrencyCode,
     executedAt: iso(usage.executedAt),
-    canCancel: ["REQUESTED", "APPROVED"].includes(usage.status),
+    canCancel: usage.executionMode === "REQUEST" && ["REQUESTED", "APPROVED"].includes(usage.status),
   }));
 
   return { access, items, requests, retail };
@@ -1188,6 +1198,13 @@ export async function cancelRelationshipBenefitUsageByUser({
       409,
     );
   }
+  if (usage.executionMode !== "REQUEST") {
+    throw new EnterpriseRelationshipBenefitError(
+      "RELATIONSHIP_BENEFIT_AUTOMATIC_USAGE_IMMUTABLE",
+      "Cet avantage automatique est lié à une opération métier. Annulez ou remboursez l’opération depuis son module d’origine.",
+      409,
+    );
+  }
   if (!["REQUESTED", "APPROVED"].includes(usage.status)) {
     throw new EnterpriseRelationshipBenefitError(
       "RELATIONSHIP_BENEFIT_USAGE_CANNOT_CANCEL",
@@ -1203,6 +1220,7 @@ export async function cancelRelationshipBenefitUsageByUser({
       identityLinkId,
       userId,
       revision,
+      executionMode: "REQUEST",
       status: { in: ["REQUESTED", "APPROVED"] },
     },
     data: {
@@ -1274,6 +1292,14 @@ export async function decideRelationshipBenefitUsage({
     throw new EnterpriseRelationshipBenefitError(
       "RELATIONSHIP_BENEFIT_USAGE_CONFLICT",
       "Cette demande a changé. Actualisez avant de réessayer.",
+      409,
+    );
+  }
+
+  if (usage.executionMode !== "REQUEST") {
+    throw new EnterpriseRelationshipBenefitError(
+      "RELATIONSHIP_BENEFIT_AUTOMATIC_USAGE_IMMUTABLE",
+      "Ce statut est réservé au moteur du module métier. Traitez l’annulation ou le remboursement dans ce module.",
       409,
     );
   }
@@ -1365,7 +1391,7 @@ export async function decideRelationshipBenefitUsage({
     ...(status === "CANCELLED" ? { cancelledAt: new Date() } : {}),
   };
   const updated = await prisma.enterpriseRelationshipBenefitUsage.updateMany({
-    where: { id: usageId, organizationId, revision },
+    where: { id: usageId, organizationId, revision, executionMode: "REQUEST" },
     data,
   });
   if (updated.count !== 1) {

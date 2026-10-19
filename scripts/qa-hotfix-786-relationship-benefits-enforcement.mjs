@@ -270,7 +270,7 @@ hasAll(adminUi, [
   "conditionWeekdays",
   'name="audienceRoleCode"',
   "audienceRoleCodes",
-  'disabled={targetModuleCode !== "RETAIL_POS"}',
+  'disabled={!["RETAIL_POS", "GAMING_CHECKOUT"].includes(targetModuleCode)}',
   "Business execution required",
   "Exécution métier requise",
 ], "Controlled admin UI");
