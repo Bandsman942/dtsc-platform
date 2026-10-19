@@ -2,6 +2,7 @@
 
 Issue de livraison : #888 (incrément du parent #886 / #785 P0). Baseline : `main@f21a5f0be6791f73ab545d5c0d7ea23a0a047a03`.
 Statut : **implémentation partielle, PR DRAFT, aucun merge ni activation automatique**.
+Gouvernance : jalon GitHub actif **Delivery Governance v1**, issue #888 liée à la PR #887 ; les P0 parents #886/#785 demeurent OPEN.
 
 ## Premier incrément — retour intégral et quota relationnel
 
