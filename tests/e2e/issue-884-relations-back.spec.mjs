@@ -65,7 +65,7 @@ test.describe("#884 DTSC relationships, benefits and contextual return", () => {
       await expect(page.getByRole("heading", { name: /Identités et consentements|Identities and consents/i })).toBeVisible();
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       expect(overflow, `Horizontal viewport overflow at ${width}px`).toBeLessThanOrEqual(2);
-      await expect(page.locator("[data-contextual-module-back]")).toHaveCount(1);
+      await expect(page.locator("[data-contextual-module-back]:visible")).toHaveCount(1);
       const row = page.locator("[data-business-list-item]").filter({ hasText: "Personne E2E relation #884" }).first();
       await expect(row).toBeVisible();
       await row.getByRole("button", { name: /Ouvrir les détails|Open relationship details/i }).click();
@@ -76,6 +76,9 @@ test.describe("#884 DTSC relationships, benefits and contextual return", () => {
         await page.getByRole("tab", { name: /Historique|History/i }).click();
         await expect(page.getByRole("tabpanel")).toBeVisible();
         await expect(page.getByRole("button", { name: /Approuver|Approve/i })).toBeDisabled();
+      await page.goBack();
+      await expect(page.locator("[data-dtsc-fullscreen-detail]")).toHaveCount(0);
+      await expect(row).toBeVisible();
       
       await context.close();
     });
