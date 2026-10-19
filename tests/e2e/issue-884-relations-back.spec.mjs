@@ -64,8 +64,18 @@ test.describe("#884 DTSC relationships, benefits and contextual return", () => {
       await signIn(page);
       await page.goto(`${baseUrl}/enterprise-identity-admin`);
       await expect(page.getByRole("heading", { name: /Identités et consentements|Identities and consents/i })).toBeVisible();
-      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-      expect(overflow, `Horizontal viewport overflow at ${width}px`).toBeLessThanOrEqual(2);
+      await expect.poll(async () => {
+        try {
+          return await page.evaluate(() =>
+            document.documentElement.scrollWidth - document.documentElement.clientWidth);
+        } catch (error) {
+          if (error instanceof Error && /Execution context was destroyed|navigation/i.test(error.message)) {
+            return Number.POSITIVE_INFINITY;
+          }
+          throw error;
+        }
+      }, { message: `Horizontal viewport overflow at ${width}px`, timeout: 15_000 })
+        .toBeLessThanOrEqual(2);
       await expect(page.locator("[data-contextual-module-back]:visible")).toHaveCount(1);
       const row = page.locator("[data-business-list-item]").filter({ hasText: "Personne E2E relation #884" }).first();
       await expect(row).toBeVisible();
