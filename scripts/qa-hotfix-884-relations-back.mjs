@@ -47,6 +47,8 @@ check(gaming.includes('effectEntityType: "EnterpriseGamingCheckout"'), "Usage po
 check(benefitPage.includes('canUseModule(organizationId, "GAMING_CHECKOUT")') && benefitEditor.includes('"GAMING_CHECKOUT"'), "Enabled Gaming Checkout can be chosen as a benefit target in the admin UI");
 check(!detail.includes("window.confirm(") && detail.includes("confirmSensitiveAction"), "Identity decisions use platform confirmation, not native dialogs");
 check(benefitConfiguration.includes("RELATIONSHIP_BENEFIT_GAMING_STACKING_UNSUPPORTED"), "Gaming does not silently stack unsupported discounts");
+check(benefitConfiguration.includes('canCancel: usage.executionMode === "REQUEST"') && benefitConfiguration.includes('RELATIONSHIP_BENEFIT_AUTOMATIC_USAGE_IMMUTABLE'), "Automatic Gaming reservations cannot be cancelled from manual requests");
+check(benefitEditor.includes('usage.executionMode === "REQUEST" && usage.status === "REQUESTED"'), "Admin decisions are hidden for automatic usages");
 const failed = checks.filter((item) => !item.ok);
 console.log(`Hotfix #884 static contract: ${checks.length - failed.length}/${checks.length}`);
 if (failed.length) process.exitCode = 1;
