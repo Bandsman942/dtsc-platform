@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
 import { canUseModule } from "@/lib/billing/entitlements";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
+import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
 import { evaluateRelationshipBenefitSnapshot } from "@/lib/enterprise/relationship-benefits/enforcement";
 import { requireIdentityLinkOrganizationAdmin } from "@/lib/enterprise/identity-links/http";
 import { normalizeEnterpriseModuleCode } from "@/lib/enterprise/module-registry";
@@ -151,6 +152,24 @@ export async function GET(req: Request, { params }: Params) {
     };
   }));
 
+  const gamingIds = usages
+    .filter((usage) => usage.effectModuleCode === "GAMING_CHECKOUT"
+      && usage.effectEntityType === "EnterpriseGamingCheckout" && Boolean(usage.effectEntityId))
+    .map((usage) => usage.effectEntityId as string);
+  const gamingAccess = gamingIds.length
+    ? await resolveEnterpriseModuleCapabilities({
+        userId: session.userId, organizationId, moduleCode: "GAMING_CHECKOUT",
+      })
+    : null;
+  const checkedGaming = gamingAccess?.canRead
+    ? await prisma.enterpriseGamingCheckout.findMany({
+        where: { organizationId, id: { in: gamingIds } },
+        select: { id: true },
+        take: 20,
+      })
+    : [];
+  const authorizedCheckoutIds = new Set(checkedGaming.map((checkout) => checkout.id));
+
   await writeApiLog({
     request: req, statusCode: 200, userId: session.userId, startedAt,
     metadata: { organizationId, action: "identity-link-overview", page },
@@ -171,7 +190,14 @@ export async function GET(req: Request, { params }: Params) {
       consumedAt: usage.consumedAt?.toISOString() || null, cancelledAt: usage.cancelledAt?.toISOString() || null,
       executedAt: usage.executedAt?.toISOString() || null,
       effectModuleCode: usage.effectModuleCode, effectEntityType: usage.effectEntityType,
-      effectEntityId: usage.effectEntityId, effectAmount: usage.effectAmount === null ? null : Number(usage.effectAmount),
+      effectEntityId: usage.effectModuleCode === "GAMING_CHECKOUT" &&
+        usage.effectEntityId && authorizedCheckoutIds.has(usage.effectEntityId) ? usage.effectEntityId : null,
+      operationHref: usage.effectModuleCode === "GAMING_CHECKOUT" &&
+        usage.effectEntityType === "EnterpriseGamingCheckout" &&
+        usage.effectEntityId && authorizedCheckoutIds.has(usage.effectEntityId)
+          ? `/enterprise-modules/GAMING_CHECKOUT?checkout=${encodeURIComponent(usage.effectEntityId)}`
+          : null,
+      effectAmount: usage.effectAmount === null ? null : Number(usage.effectAmount),
       effectCurrencyCode: usage.effectCurrencyCode,
     })),
     pagination: { page, pageCount: Math.max(1, Math.ceil(total / 20)), total },
