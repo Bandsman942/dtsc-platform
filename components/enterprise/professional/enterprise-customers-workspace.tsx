@@ -63,6 +63,31 @@ export function EnterpriseCustomersWorkspace({ organizationId, organizationName,
   const [tab, setTab] = useState("ALL");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [navigationStateReady, setNavigationStateReady] = useState(false);
+  // Preserve the CRM list context in the URL for contextual return and browser navigation.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const restoredTab = params.get("listTab");
+    if (restoredTab && ["ALL", "PROSPECT", "CUSTOMER", "ORGANIZATION", "PERSON", "PARTNER", "CONTRACTOR", "SUPPLIER"].includes(restoredTab)) setTab(restoredTab);
+    if (params.has("listSearch")) setSearch(params.get("listSearch") || "");
+    const restoredPage = Number(params.get("listPage"));
+    if (Number.isInteger(restoredPage) && restoredPage > 0 && restoredPage <= 10000) setPage(restoredPage);
+    setNavigationStateReady(true);
+  }, [organizationId]);
+  useEffect(() => {
+    if (!navigationStateReady) return;
+    const url = new URL(window.location.href);
+    if (tab !== "ALL") url.searchParams.set("listTab", tab);
+    else url.searchParams.delete("listTab");
+    if (search.trim()) url.searchParams.set("listSearch", search.trim());
+    else url.searchParams.delete("listSearch");
+    if (page > 1) url.searchParams.set("listPage", String(page));
+    else url.searchParams.delete("listPage");
+    const updated = url.pathname + url.search + url.hash;
+    if (updated !== window.location.pathname + window.location.search + window.location.hash) {
+      window.history.replaceState(window.history.state, "", updated);
+    }
+  }, [navigationStateReady, tab, search, page]);
   const [refreshKey, setRefreshKey] = useState(0);
   useEffect(() => subscribeEnterpriseCrmUpdates(organizationId, () => setRefreshKey((value) => value + 1)), [organizationId]);
   const [createOpen, setCreateOpen] = useState(false);
