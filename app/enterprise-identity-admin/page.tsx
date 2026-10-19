@@ -46,7 +46,7 @@ export default async function EnterpriseIdentityAdminPage({
         label: true,
         value: true,
         contactType: true,
-        businessParty: { select: { legalName: true, displayName: true } },
+        businessParty: { select: { legalName: true, displayName: true, roles: { where: { status: "ACTIVE", archivedAt: null }, select: { roleCode: true } } } },
       },
       orderBy: { createdAt: "desc" },
       take: 100,
@@ -98,6 +98,7 @@ export default async function EnterpriseIdentityAdminPage({
       label: `${contact.label || contact.value} · Contact de ${contact.businessParty.displayName || contact.businessParty.legalName}`,
       suggestedName: contact.label || contact.businessParty.displayName || contact.businessParty.legalName,
       suggestedEmail: contact.contactType === "EMAIL" ? contact.value : "",
+      roleCodes: contact.businessParty.roles.map((role) => role.roleCode),
     })),
     ...suppliers.map((supplier) => ({
       value: supplier.id,
