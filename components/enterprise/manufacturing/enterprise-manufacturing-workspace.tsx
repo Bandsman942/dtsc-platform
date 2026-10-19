@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Factory, PackageSearch, PlayCircle, Plus, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
 import { EnterpriseApproverSelect } from "@/components/enterprise/enterprise-approver-select";
@@ -133,6 +133,8 @@ export function EnterpriseManufacturingWorkspace({
   const [submitting, setSubmitting] = useState(false);
   const [selectedSalesOrderId, setSelectedSalesOrderId] = useState("");
   const [executionOrderId, setExecutionOrderId] = useState("");
+  const executionIdempotencyKey = useRef<string | null>(null);
+  const [productionHandoff, setProductionHandoff] = useState(false);
   const [requirementOrderId, setRequirementOrderId] = useState("");
   const [qualityOrderId, setQualityOrderId] = useState("");
   const [scrapOrderId, setScrapOrderId] = useState("");
@@ -154,6 +156,18 @@ export function EnterpriseManufacturingWorkspace({
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [initialFocus, locale, organizationId, refreshKey]);
+
+  useEffect(() => {
+    if (initialFocus === "PRODUCTION_EXECUTION" && new URLSearchParams(window.location.search).get("activityAction") === "DECLARE_PRODUCTION") {
+      setProductionHandoff(true);
+    }
+  }, [initialFocus]);
+
+  useEffect(() => {
+    if (productionHandoff && data && !loading) {
+      document.getElementById("manufacturing-production-execution-record")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [productionHandoff, data, loading]);
 
   const references = data?.references;
   const activeOrders = useMemo(() => (data?.orders || []).filter((order) => ["RELEASED", "IN_PROGRESS"].includes(order.status)), [data?.orders]);
@@ -228,6 +242,35 @@ export function EnterpriseManufacturingWorkspace({
     event.preventDefault(); const form = new FormData(event.currentTarget); const affectsInventory = form.get("affectsInventory") === "on";
     await mutate("CREATE_SCRAP", { productionOrderId: form.get("productionOrderId"), materialRequirementId: form.get("materialRequirementId") || null, catalogItemId: form.get("catalogItemId"), warehouseId: form.get("warehouseId") || null, quantity: Number(form.get("quantity") || 0), reasonCode: form.get("reasonCode"), notes: form.get("notes") || null, affectsInventory, idempotencyKey: crypto.randomUUID() });
   }
+  async function recordExecutionFromOrder(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (submitting || !data?.capabilities.canWrite || !executionOrder || executionOrder.status !== "IN_PROGRESS") {
+      setMessage(tx(locale, "Sélectionnez un ordre de production en cours et vérifiez vos droits.", "Select an in-progress production order and check your access."));
+      return;
+    }
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    const quantity = String(form.get("quantityCompleted") || "").trim();
+    const minutes = String(form.get("minutesWorked") || "").trim();
+    executionIdempotencyKey.current ||= crypto.randomUUID();
+    const result = await orderMutate(executionOrder.id, "RECORD_EXECUTION", {
+      executionType: form.get("executionType") || "OPERATION_COMPLETE",
+      routingOperationId: form.get("routingOperationId") || null,
+      workCenterId: form.get("workCenterId") || null,
+      employeeId: form.get("employeeId") || null,
+      assetId: form.get("assetId") || null,
+      timesheetEntryId: form.get("timesheetEntryId") || null,
+      quantityCompleted: quantity ? Number(quantity) : null,
+      minutesWorked: minutes ? Number(minutes) : null,
+      notes: form.get("notes") || null,
+      idempotencyKey: executionIdempotencyKey.current,
+    });
+    if (result) {
+      executionIdempotencyKey.current = null;
+      formElement.reset();
+    }
+  }
+
   async function createShortagePurchase(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); const form = new FormData(event.currentTarget);
     await mutate("CREATE_SHORTAGE_PURCHASE", { productionOrderId: form.get("productionOrderId"), supplierId: form.get("supplierId") || null, currency: form.get("currency") || "", prices: [{ requirementId: form.get("requirementId"), unitPrice: Number(form.get("unitPrice") || 0), taxRate: Number(form.get("taxRate") || 0) }] });
@@ -278,7 +321,24 @@ export function EnterpriseManufacturingWorkspace({
       </> : null}
 
       {initialFocus === "PRODUCTION_EXECUTION" ? <>
-        {data.capabilities.canWrite && references ? <ModuleSection title={tx(locale, "Exécuter un ordre", "Execute an order")}><div className="grid gap-6"><Field label={tx(locale, "Ordre en cours", "In-progress order")}><NativeSelect value={executionOrderId} onChange={setExecutionOrderId} items={inProgressOrders.map((order) => ({ id: order.id, label: `${order.reference} · ${order.title}` }))} /></Field><form className="grid gap-4 rounded-xl border border-dtsc-border p-4 md:grid-cols-2" onSubmit={(event) => { event.preventDefault(); if (!executionOrder) return; const form = new FormData(event.currentTarget); void orderMutate(executionOrder.id, "CONSUME_MATERIAL", { requirementId: form.get("requirementId"), quantity: Number(form.get("quantity") || 0), employeeId: form.get("employeeId") || null, assetId: form.get("assetId") || null, timesheetEntryId: form.get("timesheetEntryId") || null, idempotencyKey: crypto.randomUUID() }); }}><h3 className="md:col-span-2 font-black"><PackageSearch className="mr-2 inline h-4 w-4" />{tx(locale, "Consommation matière", "Material consumption")}</h3><Field label={tx(locale, "Besoin matière", "Material requirement")}><NativeSelect name="requirementId" required items={(executionOrder?.requirements || []).filter((item) => item.status !== "CONSUMED").map((item) => ({ id: item.id, label: `${itemLabel(references.catalogItems, item.catalogItemId)} · ${numberValue(item.requiredQuantity) - numberValue(item.consumedQuantity)}` }))} /></Field><Field label={tx(locale, "Quantité", "Quantity")}><Input name="quantity" type="number" min="0.001" step="0.001" required /></Field><Field label={tx(locale, "Opérateur", "Operator")}><NativeSelect name="employeeId" items={employeeChoices} /></Field><Field label={tx(locale, "Équipement", "Equipment")}><NativeSelect name="assetId" items={assetChoices} /></Field><Field label={tx(locale, "Temps approuvé", "Approved time")}><NativeSelect name="timesheetEntryId" items={references.approvedTimesheetEntries.map((item) => ({ id: item.id, label: `${item.timesheet.reference} · ${new Date(item.workDate).toLocaleDateString(locale === "en" ? "en-US" : "fr-FR")}` }))} /></Field><Button disabled={submitting || !executionOrder} type="submit">{tx(locale, "Consommer", "Consume")}</Button></form><form className="grid gap-4 rounded-xl border border-dtsc-border p-4 md:grid-cols-2" onSubmit={(event) => { event.preventDefault(); if (!executionOrder) return; const form = new FormData(event.currentTarget); void orderMutate(executionOrder.id, "RECEIVE_OUTPUT", { quantity: Number(form.get("quantity") || 0), employeeId: form.get("employeeId") || null, assetId: form.get("assetId") || null, timesheetEntryId: form.get("timesheetEntryId") || null, idempotencyKey: crypto.randomUUID() }); }}><h3 className="md:col-span-2 font-black"><PlayCircle className="mr-2 inline h-4 w-4" />{tx(locale, "Réception du produit fini", "Receive finished output")}</h3><Field label={tx(locale, "Quantité", "Quantity")}><Input name="quantity" type="number" min="0.001" step="0.001" required /></Field><Field label={tx(locale, "Opérateur", "Operator")}><NativeSelect name="employeeId" items={employeeChoices} /></Field><Field label={tx(locale, "Équipement", "Equipment")}><NativeSelect name="assetId" items={assetChoices} /></Field><Field label={tx(locale, "Temps approuvé", "Approved time")}><NativeSelect name="timesheetEntryId" items={references.approvedTimesheetEntries.map((item) => ({ id: item.id, label: item.timesheet.reference }))} /></Field><Button disabled={submitting || !executionOrder} type="submit">{tx(locale, "Réceptionner", "Receive")}</Button></form></div></ModuleSection> : null}
+        {data.capabilities.canWrite && references ? <ModuleSection title={tx(locale, "Exécuter un ordre", "Execute an order")}><div className="grid gap-6" id="manufacturing-production-execution-record"><Field label={tx(locale, "Ordre en cours", "In-progress order")}><NativeSelect value={executionOrderId} onChange={(value) => { setExecutionOrderId(value); executionIdempotencyKey.current = null; }} items={inProgressOrders.map((order) => ({ id: order.id, label: `${order.reference} · ${order.title}` }))} /></Field><form className="grid min-w-0 gap-4 rounded-xl border border-dtsc-border p-4 md:grid-cols-2" onSubmit={(event) => void recordExecutionFromOrder(event)}>
+        <h3 className="md:col-span-2 font-black">{tx(locale, "Enregistrer une exécution de production", "Record a production execution")}</h3>
+        <p className="md:col-span-2 text-sm text-dtsc-muted">{tx(locale, "Enregistre une opération sur l'ordre sélectionné ; ne réceptionne pas de produits finis et ne modifie pas le stock. Les consommations et réceptions restent des actions distinctes.", "Records an operation against the selected order; does not receive finished goods or change inventory. Material consumption and finished output receipts are separate actions.")}</p>
+        {productionHandoff ? <p role="status" className="md:col-span-2 rounded-xl bg-dtsc-soft p-3 text-sm text-dtsc-ink">{tx(locale, "Depuis Activités entreprise : sélectionnez un ordre en cours, complétez l'opération, puis enregistrez.", "From Enterprise Activities: choose an in-progress order, complete the operation and save.")}</p> : null}
+        <Field label={tx(locale, "Type d'exécution", "Execution type")}><NativeSelect name="executionType" required defaultValue="OPERATION_COMPLETE" items={[{ id: "OPERATION_START", label: tx(locale, "Début d'opération", "Operation started") }, { id: "OPERATION_COMPLETE", label: tx(locale, "Opération terminée", "Operation completed") }, { id: "LABOR", label: tx(locale, "Travail de production", "Production labor") }]} /></Field>
+        <Field label={tx(locale, "Opération de gamme (facultatif)", "Routing operation (optional)")}><NativeSelect name="routingOperationId" items={(data.routings.find((routing) => routing.id === executionOrder?.routing?.id)?.operations || []).map((operation) => ({ id: operation.id, label: `${operation.code} · ${operation.name}` }))} /></Field>
+        <Field label={tx(locale, "Centre de travail", "Work center")}><NativeSelect name="workCenterId" items={workCenterChoices} /></Field>
+        <Field label={tx(locale, "Opérateur", "Operator")}><NativeSelect name="employeeId" items={employeeChoices} /></Field>
+        <Field label={tx(locale, "Équipement", "Equipment")}><NativeSelect name="assetId" items={assetChoices} /></Field>
+        <Field label={tx(locale, "Feuille de temps approuvée", "Approved timesheet entry")}><NativeSelect name="timesheetEntryId" items={references.approvedTimesheetEntries.map((item) => ({ id: item.id, label: item.timesheet.reference }))} /></Field>
+        <Field label={tx(locale, "Quantité exécutée (informative)", "Completed quantity (informational)")}><Input name="quantityCompleted" type="number" min="0" step="0.001" /></Field>
+        <Field label={tx(locale, "Minutes travaillées", "Minutes worked")}><Input name="minutesWorked" type="number" min="1" max="1440" step="1" /></Field>
+        <Field label={tx(locale, "Observations", "Notes")}><Input name="notes" maxLength={3000} /></Field>
+        <div className="md:col-span-2 flex flex-wrap items-center justify-between gap-2">
+          <span className="text-sm text-dtsc-muted">{tx(locale, "La quantité réellement stockée se déclare séparément par Réception du produit fini.", "Actual inventory output is recorded separately using Receive finished output.")}</span>
+          <Button disabled={submitting || !executionOrder || executionOrder.status !== "IN_PROGRESS"} type="submit">{tx(locale, "Enregistrer l'exécution", "Record execution")}</Button>
+        </div>
+      </form><form className="grid gap-4 rounded-xl border border-dtsc-border p-4 md:grid-cols-2" onSubmit={(event) => { event.preventDefault(); if (!executionOrder) return; const form = new FormData(event.currentTarget); void orderMutate(executionOrder.id, "CONSUME_MATERIAL", { requirementId: form.get("requirementId"), quantity: Number(form.get("quantity") || 0), employeeId: form.get("employeeId") || null, assetId: form.get("assetId") || null, timesheetEntryId: form.get("timesheetEntryId") || null, idempotencyKey: crypto.randomUUID() }); }}><h3 className="md:col-span-2 font-black"><PackageSearch className="mr-2 inline h-4 w-4" />{tx(locale, "Consommation matière", "Material consumption")}</h3><Field label={tx(locale, "Besoin matière", "Material requirement")}><NativeSelect name="requirementId" required items={(executionOrder?.requirements || []).filter((item) => item.status !== "CONSUMED").map((item) => ({ id: item.id, label: `${itemLabel(references.catalogItems, item.catalogItemId)} · ${numberValue(item.requiredQuantity) - numberValue(item.consumedQuantity)}` }))} /></Field><Field label={tx(locale, "Quantité", "Quantity")}><Input name="quantity" type="number" min="0.001" step="0.001" required /></Field><Field label={tx(locale, "Opérateur", "Operator")}><NativeSelect name="employeeId" items={employeeChoices} /></Field><Field label={tx(locale, "Équipement", "Equipment")}><NativeSelect name="assetId" items={assetChoices} /></Field><Field label={tx(locale, "Temps approuvé", "Approved time")}><NativeSelect name="timesheetEntryId" items={references.approvedTimesheetEntries.map((item) => ({ id: item.id, label: `${item.timesheet.reference} · ${new Date(item.workDate).toLocaleDateString(locale === "en" ? "en-US" : "fr-FR")}` }))} /></Field><Button disabled={submitting || !executionOrder} type="submit">{tx(locale, "Consommer", "Consume")}</Button></form><form className="grid gap-4 rounded-xl border border-dtsc-border p-4 md:grid-cols-2" onSubmit={(event) => { event.preventDefault(); if (!executionOrder) return; const form = new FormData(event.currentTarget); void orderMutate(executionOrder.id, "RECEIVE_OUTPUT", { quantity: Number(form.get("quantity") || 0), employeeId: form.get("employeeId") || null, assetId: form.get("assetId") || null, timesheetEntryId: form.get("timesheetEntryId") || null, idempotencyKey: crypto.randomUUID() }); }}><h3 className="md:col-span-2 font-black"><PlayCircle className="mr-2 inline h-4 w-4" />{tx(locale, "Réception du produit fini", "Receive finished output")}</h3><Field label={tx(locale, "Quantité", "Quantity")}><Input name="quantity" type="number" min="0.001" step="0.001" required /></Field><Field label={tx(locale, "Opérateur", "Operator")}><NativeSelect name="employeeId" items={employeeChoices} /></Field><Field label={tx(locale, "Équipement", "Equipment")}><NativeSelect name="assetId" items={assetChoices} /></Field><Field label={tx(locale, "Temps approuvé", "Approved time")}><NativeSelect name="timesheetEntryId" items={references.approvedTimesheetEntries.map((item) => ({ id: item.id, label: item.timesheet.reference }))} /></Field><Button disabled={submitting || !executionOrder} type="submit">{tx(locale, "Réceptionner", "Receive")}</Button></form></div></ModuleSection> : null}
         <ModuleSection title={tx(locale, "Journal d’exécution", "Execution log")}><div className="grid gap-3">{data.orders.flatMap((order) => order.executions.map((execution) => <div key={execution.id} className="rounded-xl border border-dtsc-border p-3"><strong>{order.reference} · {execution.executionType}</strong><div className="text-sm text-dtsc-muted">{execution.quantityCompleted ? `${numberValue(execution.quantityCompleted)} · ` : ""}{execution.minutesWorked ? `${execution.minutesWorked} min` : ""}</div></div>))}</div></ModuleSection>
       </> : null}
 

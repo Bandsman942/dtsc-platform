@@ -244,15 +244,16 @@ export async function canAccessEnterpriseActivity(userId: string, organizationId
     return hasEnterprisePermission(access.permissions, "enterprise.activities.manage");
   }
   if (block.targetModuleCode) {
-    // #878: only the explicit Professional Services legacy handoffs resolve
-    // against a canonical owner. Never interpret arbitrary template module
-    // codes as permissions or URLs.
+    // Only explicitly mapped sector activity handoffs may resolve to their
+    // canonical owners. Never interpret arbitrary template module codes as
+    // permissions or URLs. Manufacturing RECORD_EXECUTION is a `write` action,
+    // not `submit`; the exact owner API revalidates it on every POST.
     const handoff = canonicalSectorActivityDestination(access.sectorCode, blockCode);
     const decision = await resolveEnterpriseModuleAccess({
       userId,
       organizationId,
       moduleCode: handoff?.moduleCode || block.targetModuleCode,
-      action: action === "submit" ? "submit" : "read",
+      action: action === "submit" && handoff?.intent === "DECLARE_PRODUCTION" ? "write" : action === "submit" ? "submit" : "read",
     });
     return decision.allowed;
   }
