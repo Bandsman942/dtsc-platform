@@ -948,7 +948,7 @@ export async function resolveEnterpriseRelationshipBenefits({
     effectAmount: asNumber(usage.effectAmount),
     effectCurrencyCode: usage.effectCurrencyCode,
     executedAt: iso(usage.executedAt),
-    canCancel: ["REQUESTED", "APPROVED"].includes(usage.status),
+    canCancel: usage.executionMode === "REQUEST" && ["REQUESTED", "APPROVED"].includes(usage.status),
   }));
 
   return { access, items, requests, retail };
@@ -1198,6 +1198,13 @@ export async function cancelRelationshipBenefitUsageByUser({
       409,
     );
   }
+  if (usage.executionMode !== "REQUEST") {
+    throw new EnterpriseRelationshipBenefitError(
+      "RELATIONSHIP_BENEFIT_AUTOMATIC_USAGE_IMMUTABLE",
+      "Cet avantage automatique est lié à une opération métier. Annulez ou remboursez l’opération depuis son module d’origine.",
+      409,
+    );
+  }
   if (!["REQUESTED", "APPROVED"].includes(usage.status)) {
     throw new EnterpriseRelationshipBenefitError(
       "RELATIONSHIP_BENEFIT_USAGE_CANNOT_CANCEL",
@@ -1213,6 +1220,7 @@ export async function cancelRelationshipBenefitUsageByUser({
       identityLinkId,
       userId,
       revision,
+      executionMode: "REQUEST",
       status: { in: ["REQUESTED", "APPROVED"] },
     },
     data: {
@@ -1284,6 +1292,14 @@ export async function decideRelationshipBenefitUsage({
     throw new EnterpriseRelationshipBenefitError(
       "RELATIONSHIP_BENEFIT_USAGE_CONFLICT",
       "Cette demande a changé. Actualisez avant de réessayer.",
+      409,
+    );
+  }
+
+  if (usage.executionMode !== "REQUEST") {
+    throw new EnterpriseRelationshipBenefitError(
+      "RELATIONSHIP_BENEFIT_AUTOMATIC_USAGE_IMMUTABLE",
+      "Ce statut est réservé au moteur du module métier. Traitez l’annulation ou le remboursement dans ce module.",
       409,
     );
   }
@@ -1375,7 +1391,7 @@ export async function decideRelationshipBenefitUsage({
     ...(status === "CANCELLED" ? { cancelledAt: new Date() } : {}),
   };
   const updated = await prisma.enterpriseRelationshipBenefitUsage.updateMany({
-    where: { id: usageId, organizationId, revision },
+    where: { id: usageId, organizationId, revision, executionMode: "REQUEST" },
     data,
   });
   if (updated.count !== 1) {
