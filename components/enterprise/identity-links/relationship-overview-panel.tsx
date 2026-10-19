@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useAppLocale } from "@/components/i18n/locale-provider";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { StatusBadge } from "@/components/workspace/status-badge";
@@ -32,6 +33,7 @@ type Usage = {
   requestedAt: string; decidedAt: string | null; consumedAt: string | null;
   cancelledAt: string | null; executedAt: string | null;
   effectAmount: number | null; effectCurrencyCode: string | null;
+  operationHref?: string | null;
 };
 type Overview = {
   relation: {
@@ -229,6 +231,11 @@ export function RelationshipOverviewPanel({
                         {usage.decidedAt ? <span>{locale === "en" ? "Decision" : "Décision"} : {fmtDate(usage.decidedAt)}</span> : null}
                         {usage.cancelledAt ? <span>{locale === "en" ? "Cancellation" : "Annulation"} : {fmtDate(usage.cancelledAt)}</span> : null}
                         {usage.executedAt ? <span>{copy.consumed} : {fmtDate(usage.executedAt)}</span> : null}
+                        {usage.operationHref ? (
+                          <Link href={usage.operationHref} className="w-fit min-h-11 rounded-xl border border-dtsc-border px-3 py-2 font-bold text-dtsc-blue underline">
+                            {locale === "en" ? "Open business operation" : "Ouvrir l’opération métier"}
+                          </Link>
+                        ) : null}
                       </div>
                     ) : null}
                   </div>}
