@@ -42,6 +42,7 @@ test.describe("#884 DTSC relationships, benefits and contextual return", () => {
       data: {
         id: browserLinkId, organizationId, personIdentityId: browserIdentityId,
         origin: "ENTERPRISE", requestedRelationType: "CUSTOMER", status: "ORGANIZATION_APPROVAL_REQUIRED",
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         initiatedByUserId: admin.id, purpose: "Contrôle cliquable plein écran #884",
         consentTextVersion: "enterprise-identity-consent-v1",
       },
