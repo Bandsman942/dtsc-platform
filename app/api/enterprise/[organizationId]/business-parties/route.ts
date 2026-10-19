@@ -64,10 +64,21 @@ export async function GET(req: Request, { params }: Params) {
     orderBy: { createdAt: "desc" },
     select: { id: true, personIdentityId: true, status: true, requestedRelationType: true, activatedAt: true, expiresAt: true },
   }) : [];
-  const linksByPerson = new Map<string, (typeof links)[number]>();
-  for (const link of links) if (!linksByPerson.has(link.personIdentityId)) linksByPerson.set(link.personIdentityId, link);
-  const referenceByParty = new Map(references.map((reference) => [reference.businessPartyId, reference]));
-  const items = rawItems.map((item) => { const reference = referenceByParty.get(item.id); return { ...item, identityLink: reference ? linksByPerson.get(reference.personIdentityId) || null : null }; });
+  const linksByPerson = new Map<string, typeof links>();
+  for (const link of links) {
+    linksByPerson.set(link.personIdentityId, [...(linksByPerson.get(link.personIdentityId) || []), link]);
+  }
+  const referencesByParty = new Map<string, typeof references>();
+  for (const reference of references) {
+    if (!reference.businessPartyId) continue;
+    referencesByParty.set(reference.businessPartyId, [...(referencesByParty.get(reference.businessPartyId) || []), reference]);
+  }
+  const items = rawItems.map((item) => {
+    const related = (referencesByParty.get(item.id) || []).flatMap((reference) => linksByPerson.get(reference.personIdentityId) || []);
+    const identityLinks = [...new Map(related.map((link) => [link.id, link])).values()]
+      .sort((left, right) => Number(right.activatedAt || 0) - Number(left.activatedAt || 0));
+    return { ...item, identityLink: identityLinks[0] || null, identityLinks };
+  });
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "business-parties", page } });
   return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { total, customers, suppliers, prospects, persons, organizations, pendingIdentity }, canManage: access.canManage });
 }

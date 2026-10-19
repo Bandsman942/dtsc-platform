@@ -12,6 +12,7 @@ import {
 import type { gamingCheckoutPrepareSchema } from "@/lib/enterprise/gaming/checkout-schemas";
 import { applyStockMovementTx } from "@/lib/enterprise/inventory/service";
 import { prisma } from "@/lib/prisma";
+import { applyGamingRelationshipBenefitTx, resolveGamingRelationshipBenefitTx } from "@/lib/enterprise/relationship-benefits/gaming-adapter";
 import type { z } from "zod";
 
 type PrepareInput = z.infer<typeof gamingCheckoutPrepareSchema>;
@@ -227,9 +228,18 @@ export async function prepareGamingCheckout(organizationId: string, actorUserId:
       if (!businessParty) throw new EnterpriseGamingCheckoutError("GAMING_CHECKOUT_CUSTOMER_INVALID", 409);
 
       const serviceAmount = gamingMoney(session.finalAmount);
+      const gamingBenefit = session.businessPartyId
+        ? await resolveGamingRelationshipBenefitTx({
+            tx, organizationId, businessPartyId: businessParty.id,
+            currencyCode: session.currency, sessionServiceAmount: serviceAmount,
+            serviceCatalogItemId: service.id, siteId: stationAsset.siteId,
+          })
+        : null;
+      const serviceDiscount = gamingBenefit?.discountAmount || gamingMoney(0);
+      const serviceNetAmount = gamingMoney(serviceAmount.minus(serviceDiscount));
       const subtotal = gamingMoney(extraLines.reduce((total, line) => total.plus(line.net), serviceAmount));
       const taxTotal = gamingMoney(extraLines.reduce((total, line) => total.plus(line.tax), gamingMoney(0)));
-      const grandTotal = gamingMoney(extraLines.reduce((total, line) => total.plus(line.total), serviceAmount));
+      const grandTotal = gamingMoney(extraLines.reduce((total, line) => total.plus(line.total), serviceNetAmount));
       const serviceDescription = pricingSnapshotServiceName(session.pricingSnapshotJson) || service.name;
       const invoice = await tx.enterpriseSalesInvoice.create({
         data: {
@@ -243,7 +253,7 @@ export async function prepareGamingCheckout(organizationId: string, actorUserId:
           paymentTerms: "Point of service",
           notes: `Gaming session ${session.reference}`,
           subtotal,
-          discountTotal: gamingMoney(0),
+          discountTotal: serviceDiscount,
           taxTotal,
           grandTotal,
           outstandingAmount: grandTotal,
@@ -255,10 +265,10 @@ export async function prepareGamingCheckout(organizationId: string, actorUserId:
                 description: serviceDescription,
                 quantity: gamingMoney(1),
                 unitPrice: serviceAmount,
-                discountAmount: gamingMoney(0),
-                netAmount: serviceAmount,
+                discountAmount: serviceDiscount,
+                netAmount: serviceNetAmount,
                 taxAmount: gamingMoney(0),
-                totalAmount: serviceAmount,
+                totalAmount: serviceNetAmount,
               },
               ...extraLines.map((line) => ({
                 catalogItemId: line.item.id,
@@ -286,6 +296,11 @@ export async function prepareGamingCheckout(organizationId: string, actorUserId:
           createdByUserId: actorUserId,
         },
       });
+      if (gamingBenefit) {
+        await applyGamingRelationshipBenefitTx({
+          tx, organizationId, actorUserId, checkoutId: checkout.id, effect: gamingBenefit,
+        });
+      }
       await createAccountingApprovalAssignment(tx, {
         organizationId,
         targetEntityType: "EnterpriseSalesInvoice",

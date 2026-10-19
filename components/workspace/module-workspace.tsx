@@ -3,6 +3,7 @@
 import { ArrowLeft, ChevronRight, MoreHorizontal, Sparkles } from "lucide-react";
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
+import { ContextualBackButton } from "@/components/workspace/contextual-back-button";
 import { ModuleRefreshButton } from "@/components/workspace/module-refresh-button";
 import { getExperienceCopy } from "@/lib/experience-i18n";
 import { translate } from "@/lib/i18n";
@@ -99,6 +100,7 @@ export function ModuleHeader({
               </details>
             </>
           ) : null}
+          <div data-workspace-back-action className="min-w-0"><ContextualBackButton /></div>
           <div data-workspace-refresh-action className="min-w-0">
             <ModuleRefreshButton compact />
           </div>

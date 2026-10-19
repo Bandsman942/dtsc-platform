@@ -11,6 +11,7 @@ import {
   type RelationshipBenefitExecutionContext,
 } from "@/lib/enterprise/relationship-benefits/enforcement";
 import { normalizeEnterpriseModuleCode } from "@/lib/enterprise/module-registry";
+import { automaticGamingEffectSupported } from "@/lib/enterprise/relationship-benefits/gaming-adapter";
 import { notifyUser, notifyUsers } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 
@@ -235,16 +236,18 @@ async function validateRelationshipBenefitConfiguration(
     ...retailProbe,
     actionCode: null,
   });
-  if (automaticRetailShape && config.actionCode !== "NONE") {
+  const automaticGamingShape = automaticGamingEffectSupported({ ...retailProbe, actionCode: null });
+  const supportedAutomaticShape = automaticRetailShape || automaticGamingShape;
+  if (supportedAutomaticShape && config.actionCode !== "NONE") {
     throw new EnterpriseRelationshipBenefitError(
       "RELATIONSHIP_BENEFIT_AUTOMATIC_ACTION_INVALID",
       "Un avantage monétaire appliqué automatiquement au point de vente ne doit pas créer une seconde demande manuelle.",
     );
   }
-  if (config.targetModuleCode && !automaticRetailShape) {
+  if (config.targetModuleCode && !supportedAutomaticShape) {
     throw new EnterpriseRelationshipBenefitError(
       "RELATIONSHIP_BENEFIT_TARGET_ADAPTER_UNSUPPORTED",
-      "Ce module ne dispose pas encore d’un adaptateur certifié pour exécuter ce type d’avantage. Retirez la cible métier ou utilisez un avantage Retail POS monétaire pris en charge.",
+      "Ce type d’avantage n’est pas pris en charge automatiquement par ce module. Sélectionnez une remise monétaire compatible avec Retail POS ou Gaming Checkout.",
       409,
     );
   }
@@ -252,10 +255,10 @@ async function validateRelationshipBenefitConfiguration(
   const hasContextualRules =
     Boolean(config.minimumAmount) ||
     Object.keys(conditions).length > 0;
-  if (hasContextualRules && !automaticRetailShape) {
+  if (hasContextualRules && !supportedAutomaticShape) {
     throw new EnterpriseRelationshipBenefitError(
       "RELATIONSHIP_BENEFIT_CONTEXTUAL_RULES_UNSUPPORTED",
-      "Les montants minimums et conditions métier exigent un adaptateur serveur certifié. Utilisez actuellement Retail POS avec une remise ou un prix fixe automatique.",
+      "Les montants minimums et conditions métier exigent un adaptateur serveur certifié Retail POS ou Gaming Checkout.",
       409,
     );
   }

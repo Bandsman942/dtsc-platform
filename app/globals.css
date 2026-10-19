@@ -1390,3 +1390,6 @@
     }
   }
 }
+
+/* #884: one return action per screen. The shared module header owns its own. */
+.dtsc-private-main:has([data-workspace-module-header]) > [data-module-back-fallback] { display: none; }
