@@ -67,13 +67,14 @@ export async function POST(req: Request, { params }: Params) {
     } as const;
     const invalidFields = [...new Set(parsed.error.issues.map((issue) => String(issue.path[0])).filter((key): key is keyof typeof messages => key in messages))];
     const fieldErrors = Object.fromEntries(invalidFields.map((field) => [field, messages[field]]));
-    const reasonCode = invalidFields.length === 1 ? codes[invalidFields[0]] : "INVITATION_FIELDS_INVALID";
+    const singleField = invalidFields.length === 1 ? invalidFields[0] : null;
+    const reasonCode = singleField ? codes[singleField] : "INVITATION_FIELDS_INVALID";
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt, metadata: { action: "enterprise_invite_validation_denied", organizationId, reasonCode, invalidFields } });
     return NextResponse.json({
       error: "ENTERPRISE_INPUT_INVALID",
       reasonCode,
       fieldErrors,
-      message: invalidFields.length === 1 ? messages[invalidFields[0]] : "Vérifiez les champs signalés dans le formulaire d'invitation.",
+      message: singleField ? messages[singleField] : "Vérifiez les champs signalés dans le formulaire d'invitation.",
     }, { status: 400 });
   }
 
