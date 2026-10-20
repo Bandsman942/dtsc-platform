@@ -1,3 +1,10 @@
+## 2026-10-20 — HOTFIX P1 #889 : invitations collaborateurs / rôle administrateur dupliqué
+
+- Administration entreprise : invitation ordinaire limitée aux trois rôles attribuables (Responsable, Collaborateur, Invité), libellés « Administrateur entreprise » en doublon retirés de la combobox. OWNER et les aliases administratifs historiques restent consultables mais non attribuables depuis l'entreprise ; la désignation d'administrateur demeure exclusivement DTSC Console.
+- API des membres : validation Zod partagée entre frontend/backend, réponses `reasonCode` et `fieldErrors` par champ (email, rôle, poste, message), journalisation des codes/champs invalides sans valeur personnelle, policy default role protégée. La route PATCH refuse désormais changement de rôle privilégié (élévation ET rétrogradation) par la gestion entreprise ; la protection du dernier administrateur reste active.
+- UX : dialogue et saisie préservés lors d'un refus serveur ou réseau ; erreur locale accessible + toast, garde de double soumission, fermeture uniquement après succès HTTP+métier. Succès différencié entre email effectivement envoyé et invitation interne sans email.
+- Aucun changement de schéma Prisma, abonnement, module, email provider ou migration. QA `pnpm qa:hotfix-889-enterprise-invitations` dans `qa:regression`; Quality/Migration/Delivery governance puis OWNER_E2E requis. Production exclusivement depuis `main` après certification.
+
 ## 2026-10-18 — #882 : déclaration de production Manufacturing réelle (vague 2 de #878)
 
 - Action historique `MANUFACTURING.DECLARE_PRODUCTION` redirigée sous entitlement/RBAC vers `PRODUCTION_EXECUTION` ; ouverture du journal d'exécution par intent explicite sans mutation automatique.

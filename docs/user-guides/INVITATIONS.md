@@ -5,6 +5,14 @@
 
 Ce guide explique l’utilisation opérationnelle de **Invitations entreprise** dans DTSC Platform. Il décrit uniquement les actions disponibles dans l’application, leurs règles métier et les contrôles appliqués.
 
+## Envoyer une invitation (administration entreprise)
+
+Dans **Administration entreprise → Collaborateurs → Inviter / affecter**, indiquez l'adresse email d'un compte DTSC actif, choisissez **Responsable**, **Collaborateur** ou **Invité**, puis éventuellement un poste de l'entreprise et un message de 800 caractères maximum. L'invité doit accepter pour devenir membre actif. Un poste doit appartenir à votre entreprise et être actif.
+
+Les rôles **Administrateur entreprise** et **Propriétaire** ne peuvent pas être attribués depuis cette liste : DTSC gère exclusivement les désignations administratives depuis sa Console. Les administrateurs existants restent visibles dans les fiches, avec leur rôle en lecture seule pour éviter toute erreur d'affectation.
+
+Si un champ est invalide, son motif apparaît dans le formulaire et dans le toast ; **le formulaire reste ouvert et conserve les valeurs**. Corrigez le champ indiqué puis renvoyez. Si l'email n'a pas pu être délivré mais que l'invitation interne a été créée, l'application le précise ; le destinataire peut consulter ses invitations dans son compte DTSC.
+
 ## Réception
 
 Une invitation reçue est visible dans le compte personnel avant toute adhésion. Vérifiez l’organisation, l’initiateur et le rôle proposé.

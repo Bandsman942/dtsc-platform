@@ -124,18 +124,40 @@ export function EnterpriseAdministrationModule(
     setMessage("");
     const formElement = event.currentTarget;
     const payload = Object.fromEntries(new FormData(formElement).entries());
-    const response = await fetch(`/api/enterprise/${organization.id}/members`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const body = (await response.json().catch(() => null)) as { message?: string } | null;
-    setMessage(response.ok
-      ? tx(locale, "Invitation envoyée. Le collaborateur devra l’accepter avant intégration.", "Invitation sent. The collaborator must accept it before joining.")
-      : clientError(locale, body?.message, "Invitation impossible. Vérifiez l’adresse, le poste et la politique de sécurité de l’entreprise.", "Unable to send the invitation. Check the address, position and company security policy."));
-    if (response.ok) {
+    try {
+      const response = await fetch(`/api/enterprise/${organization.id}/members`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = (await response.json().catch(() => null)) as {
+        ok?: boolean; message?: string; reasonCode?: string; fieldErrors?: Record<string, string>; emailSent?: boolean;
+      } | null;
+      if (!response.ok || !body?.ok) {
+        const englishErrorByCode: Record<string, string> = {
+          INVITATION_EMAIL_INVALID: "Enter a valid email address (maximum 180 characters).",
+          INVITATION_ROLE_NOT_ALLOWED: "Choose Manager, Collaborator or Guest. DTSC grants company administrator roles separately.",
+          INVITATION_POSITION_INVALID: "Choose an active position belonging to this company.",
+          INVITATION_MESSAGE_TOO_LONG: "The invitation message must not exceed 800 characters.",
+          INVITATION_FIELDS_INVALID: "Review the highlighted invitation fields.",
+        };
+        const errorMessage = locale === "en"
+          ? englishErrorByCode[body?.reasonCode || ""] || "Unable to invite the collaborator. Check the account, role and company security policy."
+          : body?.message || "Invitation impossible. Vérifiez l'adresse, le rôle et la politique de sécurité de l'entreprise.";
+        setMessage(locale === "en" ? `Invitation failed. ${errorMessage}` : `Invitation impossible. ${errorMessage}`);
+        return { ok: false, message: errorMessage, fieldErrors: body?.fieldErrors || {} };
+      }
+      const successMessage = body.emailSent
+        ? tx(locale, "Invitation créée et email envoyé. Le collaborateur doit l'accepter.", "Invitation created and email sent. The collaborator must accept it.")
+        : tx(locale, "Invitation interne créée. L'email n'a pas pu être envoyé ; le collaborateur peut la retrouver dans son compte DTSC.", "Internal invitation created. Email delivery failed; the collaborator can find it in their DTSC account.");
+      setMessage(successMessage);
       formElement.reset();
       router.refresh();
+      return { ok: true };
+    } catch {
+      const errorMessage = tx(locale, "Connexion interrompue pendant l'invitation. Vérifiez votre réseau et réessayez.", "Connection interrupted while inviting. Check your network and try again.");
+      setMessage(locale === "en" ? `Invitation failed. ${errorMessage}` : `Invitation impossible. ${errorMessage}`);
+      return { ok: false, message: errorMessage };
     }
   }
 

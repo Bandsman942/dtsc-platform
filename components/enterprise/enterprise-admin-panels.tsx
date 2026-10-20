@@ -24,6 +24,7 @@ import type {
   EnterpriseWorkflowItem,
 } from "@/lib/enterprise/enterprise-admin-types";
 import { RETAIL_PERMISSION_CATALOG } from "@/lib/enterprise/retail/constants";
+import { ENTERPRISE_INVITABLE_ROLE_OPTIONS, isEnterprisePrivilegedRole } from "@/lib/enterprise/member-invitation-roles";
 import { translate } from "@/lib/i18n";
 
 export const healthcareModuleCodes = new Set([
@@ -208,7 +209,8 @@ const settingsPanelCopy = {
 } as const;
 
 type AdminMutationHandler = (event: FormEvent<HTMLFormElement>, successMessage: string) => void | Promise<void>;
-type InviteMemberHandler = (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
+type InviteMemberResult = { ok: boolean; message?: string; fieldErrors?: Record<string, string> };
+type InviteMemberHandler = (event: FormEvent<HTMLFormElement>) => Promise<InviteMemberResult>;
 type ToggleModuleHandler = (enterpriseModule: EnterpriseModuleItem) => void | Promise<void>;
 
 function jsonObject(value: unknown): Record<string, unknown> {
@@ -456,13 +458,44 @@ export function EnterpriseMembersPanel({
   updateMember: (memberId: string, payload: Record<string, unknown>, successMessage: string) => void | Promise<void>;
   removeMember: (memberId: string) => void | Promise<void>;
 }) {
+  const locale = useAppLocale();
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteError, setInviteError] = useState("");
+  const [inviteFieldErrors, setInviteFieldErrors] = useState<Record<string, string>>({});
+  const [inviting, setInviting] = useState(false);
   const [editingMember, setEditingMember] = useState<EnterpriseMemberItem | null>(null);
   const [memberToRemove, setMemberToRemove] = useState<EnterpriseMemberItem | null>(null);
 
   async function submitInvite(event: FormEvent<HTMLFormElement>) {
-    await inviteMember(event);
-    setInviteOpen(false);
+    event.preventDefault();
+    if (inviting) return;
+    setInviting(true);
+    setInviteError("");
+    setInviteFieldErrors({});
+    try {
+      const result = await inviteMember(event);
+      if (result.ok) {
+        setInviteOpen(false);
+      } else {
+        setInviteError(result.message || (locale === "en" ? "Please check the invitation fields." : "Vérifiez les champs d'invitation."));
+        setInviteFieldErrors(result.fieldErrors || {});
+      }
+    } catch {
+      setInviteError(locale === "en" ? "The invitation could not be sent. Try again." : "L'invitation n'a pas pu être envoyée. Réessayez.");
+    } finally {
+      setInviting(false);
+    }
+  }
+
+  function invitationFieldError(field: "email" | "role" | "positionId" | "message") {
+    if (!inviteFieldErrors[field]) return null;
+    if (locale !== "en") return inviteFieldErrors[field];
+    return {
+      email: "Enter a valid email address (maximum 180 characters).",
+      role: "Choose Manager, Collaborator or Guest. Company administrators are granted by DTSC.",
+      positionId: "Choose an active position in this company.",
+      message: "The invitation message must not exceed 800 characters.",
+    }[field];
   }
 
   async function submitMemberUpdate(event: FormEvent<HTMLFormElement>) {
@@ -474,7 +507,7 @@ export function EnterpriseMembersPanel({
       editingMember.id,
       {
         action: "update",
-        role: String(form.get("role") || editingMember.role),
+        ...(typeof form.get("role") === "string" && form.get("role") ? { role: String(form.get("role")) } : {}),
         ...(typeof nextStatus === "string" && nextStatus ? { status: nextStatus } : {}),
         positionId: String(form.get("positionId") || ""),
       },
@@ -517,19 +550,28 @@ export function EnterpriseMembersPanel({
         {!members.length && <EmptyState text="Aucun collaborateur ou invitation pour cette entreprise." />}
       </div>
 
-      <Dialog open={inviteOpen} title="Inviter un collaborateur" description="Le collaborateur devra accepter l'invitation avant d'accéder à l'entreprise." onClose={() => setInviteOpen(false)} className="h-[92dvh] max-w-4xl">
-        <form onSubmit={(event) => void submitInvite(event)} className="grid gap-4 md:grid-cols-2">
-          <FormField label="Email du compte DTSC" hint="L'utilisateur doit déjà avoir un compte actif.">
-            <Input name="email" type="email" placeholder="nom@entreprise.com" required />
+      <Dialog open={inviteOpen} title={locale === "en" ? "Invite a collaborator" : "Inviter un collaborateur"} description={locale === "en" ? "The collaborator must accept before joining this company." : "Le collaborateur devra accepter l'invitation avant d'accéder à l'entreprise."} onClose={() => { if (!inviting) { setInviteOpen(false); setInviteError(""); setInviteFieldErrors({}); } }} className="h-[92dvh] max-w-4xl">
+        <form onSubmit={(event) => void submitInvite(event)} className="grid min-w-0 max-w-full gap-4 md:grid-cols-2">
+          {inviteError && <p role="alert" className="min-w-0 rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 text-sm font-semibold text-rose-600 md:col-span-2">{inviteError}</p>}
+          <FormField label={locale === "en" ? "DTSC account email" : "Email du compte DTSC"} hint={locale === "en" ? "The user must already have an active account." : "L'utilisateur doit déjà avoir un compte actif."}>
+            <Input name="email" type="email" placeholder="nom@entreprise.com" required aria-invalid={Boolean(inviteFieldErrors.email)} />
+            {invitationFieldError("email") && <p role="alert" className="text-xs font-semibold text-rose-600">{invitationFieldError("email")}</p>}
           </FormField>
-          <RoleSelect defaultValue="MEMBER" />
-          <PositionSelect positions={positions} />
-          <FormField label="Message d'invitation" hint="Message visible dans l'invitation interne et l'email si disponible." className="md:col-span-2">
-            <textarea name="message" className="min-h-28 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" />
+          <div className="grid min-w-0 gap-1">
+            <RoleSelect defaultValue="MEMBER" />
+            {invitationFieldError("role") && <p role="alert" className="text-xs font-semibold text-rose-600">{invitationFieldError("role")}</p>}
+          </div>
+          <div className="grid min-w-0 gap-1">
+            <PositionSelect positions={positions} />
+            {invitationFieldError("positionId") && <p role="alert" className="text-xs font-semibold text-rose-600">{invitationFieldError("positionId")}</p>}
+          </div>
+          <FormField label={locale === "en" ? "Invitation message" : "Message d'invitation"} hint={locale === "en" ? "Shown in the invitation and email if available." : "Message visible dans l'invitation interne et l'email si disponible."} className="min-w-0 md:col-span-2">
+            <textarea name="message" maxLength={800} aria-invalid={Boolean(inviteFieldErrors.message)} className="min-h-28 w-full max-w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" />
+            {invitationFieldError("message") && <p role="alert" className="text-xs font-semibold text-rose-600">{invitationFieldError("message")}</p>}
           </FormField>
-          <Button className="w-fit rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
+          <Button disabled={inviting} aria-busy={inviting} className="w-fit rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
             <MailPlus className="h-4 w-4" />
-            Envoyer l&apos;invitation
+            {inviting ? (locale === "en" ? "Sending..." : "Envoi en cours...") : (locale === "en" ? "Send invitation" : "Envoyer l'invitation")}
           </Button>
         </form>
       </Dialog>
@@ -1012,10 +1054,18 @@ function FormField({
 }
 
 function RoleSelect({ defaultValue }: { defaultValue: string }) {
+  const locale = useAppLocale();
+  if (isEnterprisePrivilegedRole(defaultValue)) {
+    return (
+      <FormField label={locale === "en" ? "Company role" : "Rôle entreprise"} hint={locale === "en" ? "Only DTSC may change privileged roles from its Console." : "Seule DTSC peut modifier les rôles administratifs depuis sa Console."}>
+        <p className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-3 text-sm font-semibold text-dtsc-ink">{defaultValue === "OWNER" ? (locale === "en" ? "Owner" : "Propriétaire") : (locale === "en" ? "Company administrator" : "Administrateur entreprise")}</p>
+      </FormField>
+    );
+  }
   return (
-    <FormField label="Rôle global">
-      <select name="role" defaultValue={defaultValue} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
-        {Object.entries(roleLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+    <FormField label={locale === "en" ? "Company role" : "Rôle entreprise"} hint={locale === "en" ? "Administrators are designated by DTSC from its Console." : "Les administrateurs sont désignés par DTSC depuis sa Console."}>
+      <select name="role" defaultValue={defaultValue} className="h-11 w-full min-w-0 max-w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+        {ENTERPRISE_INVITABLE_ROLE_OPTIONS.map(({ value, labelFr, labelEn }) => <option key={value} value={value}>{locale === "en" ? labelEn : labelFr}</option>)}
       </select>
     </FormField>
   );

@@ -24,6 +24,17 @@ La commande effectue des controles source-level sans dependance externe: middlew
 - [ ] Le header mobile haut et la navigation basse se masquent ensemble quand l'espace de lecture est nécessaire, puis réapparaissent par tap hors contrôles.
 - [ ] Le comportement reste correct sur Dashboard, Activités DTSC, Entreprise, Abonnements, Notifications, Profil, Administration entreprise, Activités entreprise et IA Assistant Entreprise.
 
+## HOTFIX #889 — Invitation entreprise et doublon de rôles
+
+- [ ] « Inviter / affecter » n'affiche que Responsable, Collaborateur et Invité, une fois chacun ; jamais deux entrées « Administrateur entreprise ».
+- [ ] Les administrateurs existants, propriétaire compris, sont affichés sans double option et sans champ permettant un changement de rôle privilégié ; une requête PATCH forgée pour élever/rétrograder ce rôle reçoit 403.
+- [ ] POST avec rôle OWNER/ADMIN_ENTREPRISE/ADMIN_ENTERPRISE renvoie 400, `reasonCode=INVITATION_ROLE_NOT_ALLOWED` et `fieldErrors.role`; email invalide, poste inactif/autre tenant, message trop long signalent chacun le bon champ.
+- [ ] L'invitation ordinaire d'un compte DTSC actif crée INVITED, conserve l'isolation organisation et notifie le destinataire ; acceptation nécessaire pour ACTIVE.
+- [ ] Échec : dialogue maintenu ouvert, saisie conservée, toast et erreur locale `role=alert`; aucune double soumission pendant le chargement.
+- [ ] Succès : dialogue fermé, actualisation et message vrai (« email envoyé » ou « invitation interne créée, email non envoyé »).
+- [ ] Tester avec propriétaire en français/anglais, thèmes clair/sombre, téléphone 320/360/375/390/414 px, tablette 768 px et bureau 1024 px ; vérifier clavier/focus et réouverture du dialogue.
+- [ ] Vérifier observabilité sécurisée : code métier/champs invalides enregistrés, aucun email ni payload brut ; exécuter `pnpm qa:hotfix-889-enterprise-invitations` et `pnpm qa:regression` puis OWNER_E2E propriétaire avant merge.
+
 ## Administration entreprise - collaborateurs, postes et permissions
 
 - [ ] Un admin entreprise peut inviter un utilisateur actif en choisissant rôle et poste; le membre reste `INVITED` jusqu'à acceptation.

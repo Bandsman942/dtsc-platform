@@ -3,6 +3,7 @@ import { UserStatus } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { sendEnterpriseInvitationEmail } from "@/lib/enterprise-invitations-mail";
+import { isEnterpriseInvitableRole } from "@/lib/enterprise/member-invitation-roles";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
@@ -52,8 +53,29 @@ export async function POST(req: Request, { params }: Params) {
   const rawPayload = await req.json().catch(() => null);
   const parsed = enterpriseMemberInviteSchema.safeParse(rawPayload);
   if (!parsed.success) {
-    await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: "L'email ou le rôle est invalide." }, { status: 400 });
+    const messages = {
+      email: "Saisissez une adresse email valide (180 caractères maximum).",
+      role: "Ce rôle ne peut pas être attribué depuis l'administration entreprise. Choisissez Responsable, Collaborateur ou Invité.",
+      positionId: "Le poste sélectionné est invalide.",
+      message: "Le message d'invitation ne peut pas dépasser 800 caractères.",
+    } as const;
+    const codes = {
+      email: "INVITATION_EMAIL_INVALID",
+      role: "INVITATION_ROLE_NOT_ALLOWED",
+      positionId: "INVITATION_POSITION_INVALID",
+      message: "INVITATION_MESSAGE_TOO_LONG",
+    } as const;
+    const invalidFields = [...new Set(parsed.error.issues.map((issue) => String(issue.path[0])).filter((key): key is keyof typeof messages => key in messages))];
+    const fieldErrors = Object.fromEntries(invalidFields.map((field) => [field, messages[field]]));
+    const singleField = invalidFields.length === 1 ? invalidFields[0] : null;
+    const reasonCode = singleField ? codes[singleField] : "INVITATION_FIELDS_INVALID";
+    await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt, metadata: { action: "enterprise_invite_validation_denied", organizationId, reasonCode, invalidFields } });
+    return NextResponse.json({
+      error: "ENTERPRISE_INPUT_INVALID",
+      reasonCode,
+      fieldErrors,
+      message: singleField ? messages[singleField] : "Vérifiez les champs signalés dans le formulaire d'invitation.",
+    }, { status: 400 });
   }
 
   const [organization, targetUser, inviter, position, securityPolicy, pendingInvitations] = await Promise.all([
@@ -89,7 +111,7 @@ export async function POST(req: Request, { params }: Params) {
   }
   if (parsed.data.positionId && !position) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Invalid position", message: "Le poste sélectionné n'appartient pas à cette entreprise." }, { status: 400 });
+    return NextResponse.json({ error: "INVITATION_POSITION_INVALID", reasonCode: "INVITATION_POSITION_INVALID", fieldErrors: { positionId: "Le poste est inactif ou ne fait pas partie de cette entreprise. Choisissez un poste disponible." }, message: "Le poste est inactif ou ne fait pas partie de cette entreprise. Choisissez un poste disponible." }, { status: 400 });
   }
 
   const maxPendingInvitations = securityPolicy?.maxPendingInvitations ?? 100;
@@ -120,9 +142,11 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Invitation pending", message: "Une invitation est déjà en attente pour cet utilisateur." }, { status: 409 });
   }
 
+  // Une politique mal configurée ne doit jamais attribuer implicitement un rôle administrateur.
+  const configuredRole = securityPolicy?.defaultInvitationRole || "";
   const role = rawPayload && typeof rawPayload === "object" && "role" in rawPayload
     ? parsed.data.role
-    : securityPolicy?.defaultInvitationRole || parsed.data.role;
+    : isEnterpriseInvitableRole(configuredRole) ? configuredRole : parsed.data.role;
   const membership = await prisma.organizationMember.upsert({
     where: { organizationId_userId: { organizationId, userId: targetUser.id } },
     update: {
