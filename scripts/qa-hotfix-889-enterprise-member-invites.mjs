@@ -14,7 +14,7 @@ assert.match(shared, /ENTERPRISE_PRIVILEGED_ROLES = \["OWNER", "ADMIN_ENTREPRISE
 assert.equal((shared.match(/value: "(MANAGER|MEMBER|GUEST)", labelFr:/g) || []).length, 3, "Exactly three invite options without duplicate admin");
 assert.match(validators, /role: z\.enum\(ENTERPRISE_INVITABLE_ROLES\)/, "Zod and select use the same source of truth");
 
-assert.match(route, /reasonCode: "INVITATION_FIELDS_INVALID"/, "Invalid input has typed error code");
+assert.match(route, /const reasonCode = singleField \? codes\[singleField\] : "INVITATION_FIELDS_INVALID"/, "Invalid input has typed reason code with safe fallback");
 assert.match(route, /INVITATION_ROLE_NOT_ALLOWED/, "Unsupported role is identified");
 assert.match(route, /fieldErrors/, "Input errors preserve field specificity");
 assert.match(route, /invalidFields \}/, "Field names logged without request values");
