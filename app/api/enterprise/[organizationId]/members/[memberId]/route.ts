@@ -60,7 +60,7 @@ export async function PATCH(req: Request, { params }: Params) {
   }
   const criticalAdminRoles = new Set(["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE"]);
   // Une mutation client ne remplace jamais un grant administratif émis par DTSC.
-  if (data.role && criticalAdminRoles.has(data.role) && data.role !== member.role) {
+  if (data.role && data.role !== member.role && (criticalAdminRoles.has(data.role) || criticalAdminRoles.has(member.role))) {
     await writeAuditLog({
       userId: session.userId,
       organizationId,
