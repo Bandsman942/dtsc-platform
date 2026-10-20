@@ -144,7 +144,7 @@ export function EnterpriseAdministrationModule(
         const errorMessage = locale === "en"
           ? englishErrorByCode[body?.reasonCode || ""] || "Unable to invite the collaborator. Check the account, role and company security policy."
           : body?.message || "Invitation impossible. Vérifiez l'adresse, le rôle et la politique de sécurité de l'entreprise.";
-        setMessage(errorMessage);
+        setMessage(locale === "en" ? `Invitation failed. ${errorMessage}` : `Invitation impossible. ${errorMessage}`);
         return { ok: false, message: errorMessage, fieldErrors: body?.fieldErrors || {} };
       }
       const successMessage = body.emailSent
@@ -156,7 +156,7 @@ export function EnterpriseAdministrationModule(
       return { ok: true };
     } catch {
       const errorMessage = tx(locale, "Connexion interrompue pendant l'invitation. Vérifiez votre réseau et réessayez.", "Connection interrupted while inviting. Check your network and try again.");
-      setMessage(errorMessage);
+      setMessage(locale === "en" ? `Invitation failed. ${errorMessage}` : `Invitation impossible. ${errorMessage}`);
       return { ok: false, message: errorMessage };
     }
   }
