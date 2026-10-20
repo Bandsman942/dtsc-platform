@@ -59,6 +59,27 @@ export async function PATCH(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Self removal forbidden", message: "Vous ne pouvez pas retirer votre propre accès depuis cette action." }, { status: 409 });
   }
   const criticalAdminRoles = new Set(["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE"]);
+  // Une mutation client ne remplace jamais un grant administratif émis par DTSC.
+  if (data.role && criticalAdminRoles.has(data.role) && data.role !== member.role) {
+    await writeAuditLog({
+      userId: session.userId,
+      organizationId,
+      action: "ENTERPRISE_MEMBER_PRIVILEGED_ROLE_DENIED",
+      entity: "OrganizationMember",
+      entityId: memberId,
+      request: req,
+      result: "DENIED",
+      reasonCode: "ADMIN_ROLE_DTSC_ONLY",
+      riskLevel: "HIGH",
+    });
+    await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt, metadata: { action: "enterprise_member_privileged_role_denied", organizationId, reasonCode: "ADMIN_ROLE_DTSC_ONLY" } });
+    return NextResponse.json({
+      error: "ADMIN_ROLE_DTSC_ONLY",
+      reasonCode: "ADMIN_ROLE_DTSC_ONLY",
+      fieldErrors: { role: "Le rôle administrateur entreprise est attribué exclusivement par DTSC depuis sa Console." },
+      message: "Le rôle administrateur entreprise est attribué exclusivement par DTSC depuis sa Console.",
+    }, { status: 403 });
+  }
   const nextRole = data.role || member.role;
   const removesCriticalAccess = criticalAdminRoles.has(member.role) && (
     data.action === "remove" || data.action === "suspend" || data.status === "REMOVED" || data.status === "SUSPENDED" || !criticalAdminRoles.has(nextRole)
