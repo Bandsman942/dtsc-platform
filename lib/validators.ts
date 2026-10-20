@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ENTERPRISE_INVITABLE_ROLES } from "@/lib/enterprise/member-invitation-roles";
 import {
   PHARMACY_ADMINISTRATION_ROUTES,
   PHARMACY_CURRENCIES,
@@ -287,7 +288,7 @@ export const enterpriseAdministrationMutationSchema = z.discriminatedUnion("enti
 
 export const enterpriseMemberInviteSchema = z.object({
   email: z.string().email().max(180).transform((email) => email.toLowerCase()),
-  role: z.enum(["MANAGER", "MEMBER", "GUEST"]).default("MEMBER"),
+  role: z.enum(ENTERPRISE_INVITABLE_ROLES).default("MEMBER"),
   positionId: z.string().max(160).optional().or(z.literal("")),
   message: z.string().max(800).optional().or(z.literal("")),
 });
