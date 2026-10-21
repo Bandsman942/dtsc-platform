@@ -8,6 +8,8 @@
 
 Ce document est le point d’entrée technique de DTSC Platform. Les règles exécutables se trouvent dans les fichiers `AGENTS.md`. Les contrats détaillés restent dans les documents spécialisés du dossier `docs/`.
 
+> **Programme INFRA-MC (#891–#899, 21/10/2026) :** audit et ADR dans [`INFRA_MC_ARCHITECTURE_AUDIT.md`](INFRA_MC_ARCHITECTURE_AUDIT.md). Secours Vercel + autre cloud en **active-passive proposé, non approuvé**, sans activation ni certification. Production Vercel depuis `main` inchangée ; objectifs RPO/RTO, coût, régions et approbation à compléter.
+
 La reprise durable des workflows (#813), les preuves d’effet, les états incertains
 et les précautions de déploiement sont décrits dans [WORKFLOW_RUNTIME_RECOVERY.md](WORKFLOW_RUNTIME_RECOVERY.md).
 
