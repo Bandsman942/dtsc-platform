@@ -18,6 +18,7 @@ const codes = {
   automatic: "E2E_786_RETAIL_STACK_5",
   exclusive: "E2E_786_RETAIL_EXCLUSIVE_30",
   manual: "E2E_786_MANUAL_SERVICE",
+  fullReturn: "E2E_886_RETAIL_RETURN_QUOTA",
 };
 
 const fixture = {
@@ -80,7 +81,7 @@ async function get(page, path) {
 
 async function cleanupFixture() {
   const benefits = await prisma.enterpriseRelationshipBenefit.findMany({
-    where: { organizationId, code: { in: [codes.automatic, codes.exclusive, codes.manual] } },
+    where: { organizationId, code: { in: [codes.automatic, codes.exclusive, codes.manual, codes.fullReturn] } },
     select: { id: true },
   });
   const benefitIds = benefits.map((item) => item.id);
@@ -828,4 +829,112 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
     await userContext.close();
     await adminContext.close();
   });
+
+  test("#886 keeps quota consumed on a partial return and releases it exactly once after full refund", async ({ browser }) => {
+    const adminContext = await browser.newContext({ baseURL: baseUrl });
+    const admin = await adminContext.newPage();
+    await signIn(admin, adminEmail, adminPassword, "/enterprise-relationship-benefits");
+    await ensureOpenTill(admin);
+    const approverContext = await browser.newContext({ baseURL: baseUrl });
+    const approver = await approverContext.newPage();
+    await signIn(approver, userEmail, userPassword, "/enterprise-modules/RETAIL_POS");
+
+    try {
+      const newBenefit = await post(admin, `/api/enterprise/${organizationId}/relationship-benefits`, {
+        code: codes.fullReturn,
+        nameFr: "Remise sur vente remboursable E2E #886",
+        nameEn: "Returnable sale discount E2E #886",
+        descriptionFr: "Un retour partiel conserve le quota; un retour total confirmé le libère.",
+        descriptionEn: "Partial refunds keep quota reserved; a fully confirmed refund releases it.",
+        benefitType: "DISCOUNT",
+        assignmentMode: "AUTOMATIC",
+        relationTypes: ["CUSTOMER"], identityLinkIds: [],
+        valueType: "PERCENT", valueDecimal: 30, currencyCode: fixture.currencyCode,
+        actionCode: "NONE", targetModuleCode: "RETAIL_POS",
+        usageLimitTotal: 1, usageLimitPerPeriod: 1, usagePeriodDays: 30,
+        stackable: false, status: "ACTIVE",
+        conditions: { channelCodes: ["POS"], catalogItemIds: [fixture.catalogItemId] },
+      });
+      expect(newBenefit.response.status(), JSON.stringify(newBenefit.body)).toBe(201);
+      const benefitId = newBenefit.body.benefit.id;
+      const preview = await post(admin, `/api/enterprise/${organizationId}/retail/pricing/preview`, {
+        siteId: fixture.siteId,
+        customerBusinessPartyId: fixture.customerBusinessPartyId,
+        currencyCode: fixture.currencyCode, channelCode: "POS",
+        lines: [{ catalogItemId: fixture.catalogItemId, quantity: 2 }],
+      }, "/enterprise-modules/RETAIL_POS");
+      expect(preview.response.ok(), JSON.stringify(preview.body)).toBeTruthy();
+      expect(preview.body.relationshipBenefits.some((item) => item.benefitId === benefitId)).toBe(true);
+      const sale = await post(admin, `/api/enterprise/${organizationId}/retail/sales`, {
+        siteId: fixture.siteId, warehouseId: fixture.warehouseId,
+        storageLocationId: null, customerBusinessPartyId: fixture.customerBusinessPartyId,
+        currencyCode: fixture.currencyCode, idempotencyKey: `e2e-886-sale-${Date.now()}`,
+        lines: [{
+          catalogItemId: fixture.catalogItemId, inventoryItemId: fixture.inventoryItemId,
+          quantity: 2, unitPrice: 116, discountAmount: 0, taxAmount: 0,
+        }],
+        tenders: [{
+          methodType: "CASH", financialAccountId: fixture.cashAccountId,
+          amount: asNumber(preview.body.grandTotal), reference: "E2E-886-RETURN",
+        }],
+      }, "/enterprise-modules/RETAIL_POS");
+      expect(sale.response.status(), JSON.stringify(sale.body)).toBe(201);
+      const saleId = sale.body.sale.id, saleLineId = sale.body.sale.lines[0].id;
+      const usage = await prisma.enterpriseRelationshipBenefitUsage.findFirstOrThrow({
+        where: { organizationId, benefitId, effectEntityId: saleId },
+      });
+      expect(usage.status).toBe("CONSUMED");
+
+      const refundBankAccount = await prisma.enterpriseFinancialAccount.findFirstOrThrow({
+        where: { organizationId, code: "SHOP2-E2E-BANK", status: "ACTIVE", archivedAt: null },
+        select: { id: true },
+      });
+      for (const [index, expectedStatus] of ["CONSUMED", "CANCELLED"].entries()) {
+        const requested = await post(admin, `/api/enterprise/${organizationId}/retail/sales/${saleId}/returns`, {
+          returnType: "RETURN",
+          reason: `Retour par tranche ${index + 1} sur deux pour #886`,
+          refundMethod: "BANK_TRANSFER",
+          refundFinancialAccountId: refundBankAccount.id,
+          idempotencyKey: `e2e-886-return-${index}-${Date.now()}`,
+          lines: [{ saleLineId, quantity: 1, productCondition: "SELLABLE", stockDisposition: "RESTOCK" }],
+        }, "/enterprise-modules/RETAIL_POS");
+        expect(requested.response.status(), JSON.stringify(requested.body)).toBe(201);
+        const decision = {
+          revision: requested.body.retailReturn.revision,
+          decision: "APPROVE",
+          refundFinancialAccountId: refundBankAccount.id,
+          refundReference: `E2E-886-REFUND-${index}`,
+        };
+        const approved = await post(approver, `/api/enterprise/${organizationId}/retail/returns/${requested.body.retailReturn.id}/decision`,
+          decision, "/enterprise-modules/RETAIL_POS");
+        expect(approved.response.ok(), JSON.stringify(approved.body)).toBeTruthy();
+        expect(approved.body.retailReturn.status).toBe("COMPLETED");
+        const after = await prisma.enterpriseRelationshipBenefitUsage.findFirstOrThrow({
+          where: { organizationId, benefitId, effectEntityId: saleId },
+        });
+        expect(after.id).toBe(usage.id);
+        expect(after.status).toBe(expectedStatus);
+        // Replaying an already approved refund cannot double-release the quota.
+        const replay = await post(approver, `/api/enterprise/${organizationId}/retail/returns/${requested.body.retailReturn.id}/decision`,
+          decision, "/enterprise-modules/RETAIL_POS");
+        expect(replay.response.ok(), JSON.stringify(replay.body)).toBeTruthy();
+        expect(replay.body.idempotent).toBe(true);
+        expect(await prisma.enterpriseRelationshipBenefitUsage.count({
+          where: { organizationId, benefitId, effectEntityId: saleId },
+        })).toBe(1);
+        expect((await prisma.enterpriseRelationshipBenefitUsage.findUniqueOrThrow({ where: { id: usage.id } })).status).toBe(expectedStatus);
+      }
+      const availableAgain = await post(admin, `/api/enterprise/${organizationId}/retail/pricing/preview`, {
+        siteId: fixture.siteId, customerBusinessPartyId: fixture.customerBusinessPartyId,
+        currencyCode: fixture.currencyCode, channelCode: "POS",
+        lines: [{ catalogItemId: fixture.catalogItemId, quantity: 1 }],
+      }, "/enterprise-modules/RETAIL_POS");
+      expect(availableAgain.response.ok(), JSON.stringify(availableAgain.body)).toBeTruthy();
+      expect(availableAgain.body.relationshipBenefits.some((item) => item.benefitId === benefitId)).toBe(true);
+    } finally {
+      await approverContext.close();
+      await adminContext.close();
+    }
+  });
+
 });
