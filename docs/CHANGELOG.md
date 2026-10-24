@@ -1,3 +1,10 @@
+## 2026-10-21 — INFRA-MC-01 #892 : audit d'architecture et ADR multi-cloud (cadrage uniquement)
+
+- Audit en lecture seule de GitHub/Vercel et métadonnées Neon/Supabase ; inventaire des routes, sous-domaines, build/migrations, huit Crons, identité et dépendances partagées.
+- Création de `docs/INFRA_MC_ARCHITECTURE_AUDIT.md` : proposition **active-passive NON APPROUVÉE**, constats sourcés, SPOF/risques, RPO/RTO **à décider**, gates #892–#899, scénarios de validation et rollback.
+- Écarts observés : Node 22 requis dans package.json contre Vercel 24.x annoncé ; `prisma migrate deploy` dans le build Production ; rétention historique Neon affichée 6 h qui n'est pas un RPO ; affiliation exacte des projets Neon/Supabase à la Production et régions réelles à confirmer.
+- Aucun changement applicatif, migration, DNS, secret, Cron, worker, données ou Production. QA CI et OWNER_E2E restent à prouver avant merge.
+
 ## 2026-10-20 — HOTFIX P1 #889 : invitations collaborateurs / rôle administrateur dupliqué
 
 - Administration entreprise : invitation ordinaire limitée aux trois rôles attribuables (Responsable, Collaborateur, Invité), libellés « Administrateur entreprise » en doublon retirés de la combobox. OWNER et les aliases administratifs historiques restent consultables mais non attribuables depuis l'entreprise ; la désignation d'administrateur demeure exclusivement DTSC Console.
