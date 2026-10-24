@@ -1,8 +1,8 @@
 # DTSC INFRA-MC-01 — Audit d'architecture et ADR de continuité multi-cloud
 
-> **Document de cadrage, PAS une autorisation de déploiement.** Issue #892, programme #891.  
-> **Statut ADR : PROPOSÉ / décision d'exploitation NON APPROUVÉE.**  
-> **Inspection : 21 octobre 2026.** Référence source GitHub `main@535f9786686a248f0c2454fe2ab3a28981df5a92`. Toute réalisation doit revérifier le dernier `main`.  
+> **Document de cadrage, PAS une autorisation de déploiement.** Issue #892, programme #891.
+> **Statut ADR : PROPOSÉ / décision d'exploitation NON APPROUVÉE.**
+> **Inspection : 21 octobre 2026.** Référence source GitHub `main@535f9786686a248f0c2454fe2ab3a28981df5a92`. Toute réalisation doit revérifier le dernier `main`.
 > Les constats marqués **Code**, **Vercel**, **Neon**, **Supabase** proviennent d'une lecture effective. **À CONFIRMER** indique ce qui n'a pas été testé ou lié à l'environnement Production par une preuve.
 
 ## 1. Question et périmètre
