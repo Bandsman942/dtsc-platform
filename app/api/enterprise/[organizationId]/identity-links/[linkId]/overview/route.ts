@@ -93,7 +93,7 @@ export async function GET(req: Request, { params }: Params) {
       skip: (page - 1) * 20,
       take: 20,
       select: {
-        id: true, status: true, requestedAt: true, decidedAt: true, consumedAt: true,
+        id: true, status: true, executionMode: true, requestedAt: true, decidedAt: true, consumedAt: true,
         cancelledAt: true, executedAt: true, effectModuleCode: true,
         effectEntityType: true, effectEntityId: true, effectAmount: true,
         effectCurrencyCode: true, benefit: { select: { nameFr: true, nameEn: true } },
@@ -184,7 +184,7 @@ export async function GET(req: Request, { params }: Params) {
     // These are possible benefits, not a guarantee of actual transaction eligibility.
     benefits: applicable.filter((item) => item !== null),
     usages: usages.map((usage) => ({
-      id: usage.id, status: usage.status,
+      id: usage.id, status: usage.status, executionMode: usage.executionMode,
       benefitNameFr: usage.benefit.nameFr, benefitNameEn: usage.benefit.nameEn,
       requestedAt: usage.requestedAt.toISOString(), decidedAt: usage.decidedAt?.toISOString() || null,
       consumedAt: usage.consumedAt?.toISOString() || null, cancelledAt: usage.cancelledAt?.toISOString() || null,

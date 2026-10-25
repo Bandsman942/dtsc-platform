@@ -12,6 +12,9 @@ const returns = read("lib/enterprise/retail/returns.ts");
 const loyaltyHooks = read("lib/enterprise/retail/loyalty-sale-hooks.ts");
 const decision = read("app/api/enterprise/[organizationId]/retail/returns/[returnId]/decision/route.ts");
 const form = read("components/enterprise/relationship-benefits/relationship-benefits-admin-workspace.tsx");
+const overviewApi = read("app/api/enterprise/[organizationId]/identity-links/[linkId]/overview/route.ts");
+const overview = read("components/enterprise/identity-links/relationship-overview-panel.tsx");
+const memberView = read("components/enterprise/relationship-benefits/relationship-benefits-user-panel.tsx");
 const e2e = read("tests/e2e/issue-786-relationship-benefits-enforcement.spec.mjs");
 let checks = 0;
 function verify(condition, explanation) {
@@ -70,6 +73,13 @@ verify(retail.includes("reverseRetailRelationshipLoyaltyTx({ tx") &&
 verify(form.includes('valueType: benefitType === "LOYALTY" ? "POINTS"') &&
   form.includes('value === "LOYALTY"') && form.includes('name="loyaltyProgramId"'),
 "Admin form submits POINTS and requires an active program rather than an unusable disabled select");
+verify(overviewApi.includes("executionMode: usage.executionMode") &&
+  overview.includes('usage.executionMode === "AUTO_RETAIL_LOYALTY"') &&
+  overview.includes('item.valueType === "POINTS"'),
+"Relationship detail explicitly labels points without misrepresenting them as money");
+verify(memberView.includes('request.executionMode === "AUTO_RETAIL_LOYALTY"') &&
+  memberView.includes("loyalty points"),
+"Member history distinguishes earned/reversed points from a monetary discount");
 verify(e2e.includes('test("#906 earns relation-linked Retail points once') &&
   e2e.includes('expect(asNumber(account.pointsBalance)).toBeCloseTo(0') &&
   e2e.includes('expect(usage.executionMode).toBe("AUTO_RETAIL_LOYALTY")'),
