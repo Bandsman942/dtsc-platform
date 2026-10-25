@@ -20,6 +20,9 @@ const check = (predicate, reason) => { checks += 1; assert.ok(predicate, reason)
 check(model.includes("model EnterpriseRetailOmnichannelReturn") && model.includes("model EnterpriseRetailOmnichannelReturnLine") &&
   model.includes("@@unique([organizationId, idempotencyKey])"), "Tenant scoped operational return model with persisted idempotency");
 check(migration.includes('REFERENCES "EnterpriseSalesOrder"') && migration.includes('REFERENCES "EnterpriseSalesOrderItem"'), "Additive FK migration preserves tenant-scoped order sources");
+check(migration.includes('CREATE UNIQUE INDEX IF NOT EXISTS "EnterpriseSalesOrder_organizationId_id_key"') &&
+  migration.includes('CREATE UNIQUE INDEX IF NOT EXISTS "EnterpriseSalesOrderItem_organizationId_id_key"'),
+"Tenant-scoped return FKs have actual PostgreSQL composite unique indexes, even on historical clean installs");
 check(service.includes('SELECT id FROM "EnterpriseSalesOrder"') && service.includes("FOR UPDATE") &&
   service.includes("TransactionIsolationLevel.Serializable") && service.includes("withRetailTransactionRetry"),
 "Return quantities and full quota resolution are serialized on canonical order");

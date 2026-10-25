@@ -1,4 +1,14 @@
 -- New operational workflow only: never recreate a financial account or ledger.
+-- Historical CRM migrations did not materialize these Prisma-declared composite
+-- uniques. They are redundant with the global id PKs, but PostgreSQL requires
+-- an actual unique index on the exact columns of a tenant-scoped foreign key.
+-- Creating them before the new tables' FKs repairs that physical schema gap
+-- without rewriting or dropping any previous migration.
+CREATE UNIQUE INDEX IF NOT EXISTS "EnterpriseSalesOrder_organizationId_id_key"
+  ON "EnterpriseSalesOrder"("organizationId", "id");
+CREATE UNIQUE INDEX IF NOT EXISTS "EnterpriseSalesOrderItem_organizationId_id_key"
+  ON "EnterpriseSalesOrderItem"("organizationId", "id");
+
 CREATE TABLE "EnterpriseRetailOmnichannelReturn" (
   "id" TEXT NOT NULL,
   "organizationId" TEXT NOT NULL,

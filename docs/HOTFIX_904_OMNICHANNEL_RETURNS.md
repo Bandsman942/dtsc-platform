@@ -6,6 +6,7 @@ Issue : [#904](https://github.com/Bandsman942/dtsc-platform/issues/904), incrém
 
 - `EnterpriseSalesOrder` et ses lignes restent l'autorité de commande ; `EnterpriseRetailOrderOrchestration` reste l'autorité du canal et du dépôt de préparation.
 - `EnterpriseRetailOmnichannelReturn` est **uniquement** la demande opérationnelle de retour. Elle ne tient aucun solde comptable ni financier parallèle. Nouvelle migration additive et clés tenant-aware.
+- La migration matérialise également les deux uniques composites « organisation + ID » déjà déclarés dans Prisma sur les commandes et lignes de vente mais absents des migrations CRM historiques : PostgreSQL peut alors appliquer les nouvelles clés étrangères tenant-scoped sur une base vierge.
 - Le retour exige une commande réellement livrée, la preuve d'acceptation ou un document privé vérifié, **une facture client commune unique** de même tiers/devise/total et une allocation d'encaissement `CUSTOMER_PAYMENT` effectivement confirmée.
 - Quantité demandée : contrôlée par ligne et par les demandes non rejetées, transaction `SERIALIZABLE` avec verrou de la commande. La dernière tranche prend le reliquat exact du prix TTC original, sans nouvelle remise ou recalcul de taxe.
 - Séparation : créateur de la demande ≠ validateur. Le validateur possède les capacités Retail et Finance Payments/Receivables ; le règlement est réalisé par un troisième acteur habilité Finance.
