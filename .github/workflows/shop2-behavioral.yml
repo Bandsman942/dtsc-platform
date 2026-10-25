@@ -48,6 +48,8 @@ on:
       - "scripts/qa-shop2-retail-frontend-contract.mjs"
       - "scripts/qa-shop2-commercial-engine.mjs"
       - "scripts/qa-hotfix-786-relationship-benefits-enforcement.mjs"
+      - "scripts/qa-hotfix-886-retail-benefits.mjs"
+      - "lib/enterprise/retail/returns.ts"
       - "scripts/qa-shop2-customer-payments.mjs"
       - "scripts/qa-shop2-global-readiness.mjs"
       - "scripts/qa-shop2-fulfillment-reservations.mjs"
@@ -163,6 +165,7 @@ jobs:
           node scripts/qa-shop2-retail-frontend-contract.mjs
           node scripts/qa-shop2-commercial-engine.mjs
           node scripts/qa-hotfix-786-relationship-benefits-enforcement.mjs
+          node scripts/qa-hotfix-886-retail-benefits.mjs
           node scripts/qa-shop2-customer-payments.mjs
           node scripts/qa-shop2-global-readiness.mjs
           node scripts/qa-shop2-fulfillment-reservations.mjs
