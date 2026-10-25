@@ -1,10 +1,12 @@
 import { Prisma } from "@prisma/client";
 import type { z } from "zod";
+import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { EnterpriseDomainConflictError, EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { enterpriseReference, publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
 import type { fulfillmentCreateSchema } from "@/lib/enterprise/crm-sales/schemas";
 import { consumeEnterpriseInventoryReservationsTx } from "@/lib/enterprise/inventory/reservations";
 import { consumeRetailOmnichannelRelationshipBenefitsTx } from "@/lib/enterprise/relationship-benefits/omnichannel-adapter";
+import { valueRetailOmnichannelFulfillmentIssuesTx } from "@/lib/enterprise/retail/accounting";
 import { prisma } from "@/lib/prisma";
 
 type FulfillmentCreateInput = z.infer<typeof fulfillmentCreateSchema>;
@@ -115,7 +117,7 @@ export async function createEnterpriseFulfillment(organizationId: string, salesO
       });
       if (trackedItems.length) {
         if (!input.warehouseId) throw new EnterpriseDomainError("RETAIL_FULFILLMENT_WAREHOUSE_REQUIRED", 409);
-        await consumeEnterpriseInventoryReservationsTx(tx, {
+        const consumed = await consumeEnterpriseInventoryReservationsTx(tx, {
           organizationId,
           salesOrderId: order.id,
           warehouseId: input.warehouseId,
@@ -123,6 +125,15 @@ export async function createEnterpriseFulfillment(organizationId: string, salesO
           actorUserId,
           items: trackedItems.map((item) => ({ salesOrderItemId: item.salesOrderItemId, quantityFulfilled: item.quantityFulfilled })),
         });
+        try {
+          await valueRetailOmnichannelFulfillmentIssuesTx(tx, organizationId, actorUserId,
+            consumed.map((row) => row.movementId), order.currency);
+        } catch (error) {
+          if (error instanceof EnterpriseAccountingError) {
+            throw new EnterpriseDomainError("RETAIL_FULFILLMENT_ACCOUNTING_NOT_READY", 409);
+          }
+          throw error;
+        }
       }
     }
 

@@ -57,6 +57,24 @@ async function resolveRetailIssueValuationCurrencyTx(
   });
 }
 
+/** Retail omnichannel deliveries must book cost of sales in the same transaction as physical fulfillment. */
+export async function valueRetailOmnichannelFulfillmentIssuesTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  actorUserId: string,
+  movementIds: string[],
+  orderCurrencyCode: string,
+) {
+  for (const movementId of movementIds) {
+    const movement = await tx.enterpriseStockMovement.findFirst({
+      where: { id: movementId, organizationId, sourceEntityType: "EnterpriseFulfillment", movementType: "SALE_FULFILLMENT", direction: "OUT" },
+    });
+    if (!movement) throw new EnterpriseAccountingError("RETAIL_OMNICHANNEL_FULFILLMENT_MOVEMENT_INVALID", 409);
+    const currencyCode = await resolveRetailIssueValuationCurrencyTx(tx, organizationId, movement, orderCurrencyCode);
+    await valueInventoryIssueTx(tx, organizationId, movementId, actorUserId, { currencyCode });
+  }
+}
+
 export async function finalizeRetailSaleAccountingTx(
   tx: Prisma.TransactionClient,
   organizationId: string,
@@ -110,6 +128,7 @@ export async function valueRetailInventoryReturnTx(
   organizationId: string,
   stockMovementId: string,
   actorUserId: string,
+  options?: { originalStockMovementId: string },
 ) {
   await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseStockMovement" WHERE id = ${stockMovementId} AND "organizationId" = ${organizationId} FOR UPDATE`);
   const movement = await tx.enterpriseStockMovement.findFirst({
@@ -118,29 +137,69 @@ export async function valueRetailInventoryReturnTx(
       organizationId,
       direction: "IN",
       movementType: "RETURN_IN",
-      sourceEntityType: "EnterpriseRetailSale",
+      sourceEntityType: { in: ["EnterpriseRetailSale", "EnterpriseRetailOmnichannelReturn"] },
     },
   });
   if (!movement?.sourceEntityId || !movement.sourceLineId) {
     throw new EnterpriseAccountingError("RETAIL_INVENTORY_RETURN_MOVEMENT_INVALID", 409);
   }
+  const omnichannel = movement.sourceEntityType === "EnterpriseRetailOmnichannelReturn";
+  if (omnichannel !== Boolean(options?.originalStockMovementId)) {
+    throw new EnterpriseAccountingError("RETAIL_INVENTORY_RETURN_ORIGIN_REQUIRED", 409);
+  }
+  let omnichannelOriginalLineId: string | null = null;
+  if (omnichannel) {
+    const returnLine = await tx.enterpriseRetailOmnichannelReturnLine.findFirst({
+      where: {
+        id: movement.sourceLineId,
+        organizationId,
+        returnId: movement.sourceEntityId,
+        stockDisposition: "RESTOCK",
+        retailReturn: { status: { in: ["FINANCE_PENDING", "COMPLETED"] } },
+      },
+      select: { salesOrderItemId: true, retailReturn: { select: { salesOrderId: true } } },
+    });
+    if (!returnLine) throw new EnterpriseAccountingError("RETAIL_INVENTORY_RETURN_MOVEMENT_INVALID", 409);
+    omnichannelOriginalLineId = returnLine.salesOrderItemId;
+    const original = await tx.enterpriseStockMovement.findFirst({
+      where: { id: options!.originalStockMovementId, organizationId, sourceEntityType: "EnterpriseFulfillment",
+        movementType: "SALE_FULFILLMENT", direction: "OUT", sourceLineId: returnLine.salesOrderItemId },
+      select: { sourceEntityId: true },
+    });
+    const fulfillment = original?.sourceEntityId ? await tx.enterpriseFulfillment.findFirst({
+      where: { id: original.sourceEntityId, organizationId, salesOrderId: returnLine.retailReturn.salesOrderId },
+      select: { id: true },
+    }) : null;
+    if (!fulfillment) throw new EnterpriseAccountingError("RETAIL_ORIGINAL_ISSUE_MOVEMENT_REQUIRED", 409);
+  }
   const originalMovement = await tx.enterpriseStockMovement.findFirst({
-    where: {
+    where: omnichannel ? {
+      id: options!.originalStockMovementId,
+      organizationId,
+      sourceEntityType: "EnterpriseFulfillment",
+      sourceLineId: omnichannelOriginalLineId!,
+      movementType: "SALE_FULFILLMENT", direction: "OUT",
+    } : {
       organizationId,
       sourceEntityType: "EnterpriseRetailSale",
       sourceEntityId: movement.sourceEntityId,
       sourceLineId: movement.sourceLineId,
-      movementType: "SALE_FULFILLMENT",
-      direction: "OUT",
+      movementType: "SALE_FULFILLMENT", direction: "OUT",
     },
   });
   if (!originalMovement) throw new EnterpriseAccountingError("RETAIL_ORIGINAL_ISSUE_MOVEMENT_REQUIRED", 409);
+  if (omnichannel && (originalMovement.inventoryItemId !== movement.inventoryItemId ||
+      originalMovement.warehouseId !== movement.warehouseId ||
+      originalMovement.storageLocationId !== movement.storageLocationId ||
+      originalMovement.stockLotId !== movement.stockLotId)) {
+    throw new EnterpriseAccountingError("RETAIL_INVENTORY_RETURN_ORIGIN_MISMATCH", 409);
+  }
   const originalIssue = await tx.enterpriseInventoryAccountingEvent.findFirst({
     where: {
       organizationId,
       stockMovementId: originalMovement.id,
       eventType: "ISSUE",
-      status: { in: ["APPROVED", "POSTED"] },
+      status: "POSTED",
     },
   });
   if (!originalIssue) throw new EnterpriseAccountingError("RETAIL_ORIGINAL_ISSUE_VALUATION_REQUIRED", 409);

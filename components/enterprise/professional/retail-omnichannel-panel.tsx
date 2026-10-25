@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Box, CheckCircle2, MapPin, PackageCheck, RefreshCw, Search, ShoppingBag, Truck, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { customerFacingError, customerFacingFulfillmentMode, customerFacingOmnichannelCancellationCopy, customerFacingStatusLabel } from "@/lib/customer-facing-language";
+import { customerFacingError, customerFacingFulfillmentMode, customerFacingOmnichannelCancellationCopy, customerFacingOmnichannelReturnCopy, customerFacingStatusLabel } from "@/lib/customer-facing-language";
 
 type Props = { organizationId: string; locale: "fr" | "en" };
 type Site = { id: string; name: string };
@@ -14,11 +14,15 @@ type Customer = { id: string; code: string; legalName: string; displayName: stri
 type Product = { id: string; code: string; sku: string | null; name: string; indicativeSalePrice: string | number | null; currency: string | null; trackInventory: boolean; availableQuantity: string | null };
 type CartLine = { product: Product; quantity: number };
 type Fulfillment = { id: string; reference: string; status: string; createdAt: string };
-type Order = { id: string; reference: string; revision: number; status: string; currency: string; totalAmount: string | number; businessPartyId: string; expectedFulfillmentAt: string | null; fulfillments?: Fulfillment[] };
+type OrderItem = { id: string; description: string; quantityOrdered: string | number; catalogItem?: { trackInventory: boolean } | null };
+type Order = { id: string; reference: string; revision: number; status: string; currency: string; totalAmount: string | number; businessPartyId: string; expectedFulfillmentAt: string | null; items?: OrderItem[]; fulfillments?: Fulfillment[] };
 type Reservation = { id: string; status: string; quantity: string | number; warehouseId: string };
 type OrderContext = { id: string; salesOrderId: string; fulfillmentMode: string; sourceSiteId: string; fulfillmentWarehouseId: string; pickupSiteId: string | null; status: string; createdAt: string };
 type OrderRow = { context: OrderContext; order: Order | null; reservations: Reservation[] };
 type OrdersResponse = { items: OrderRow[]; pagination: { page: number; pageSize: number; total: number; pageCount: number } };
+type OmnichannelReturn = { id: string; number: string; revision: number; status: string; reason: string; refundAmount: string | number; currencyCode: string; requestedByUserId: string; validatorUserId: string; approvedByUserId: string | null; preparedByUserId: string | null; lines: Array<{ id: string; quantity: string | number; salesOrderItemId: string }> };
+type ReturnState = { items: OmnichannelReturn[]; viewerUserId: string; canPrepare: boolean; canSettle: boolean };
+type Validator = { userId: string; name: string; positionTitle: string | null };
 
 type Mode = "CLICK_COLLECT" | "PICKUP_OTHER_STORE" | "SHIP_FROM_STORE" | "CUSTOMER_DELIVERY";
 const MODES: Array<{ code: Mode; icon: typeof ShoppingBag }> = [
@@ -45,6 +49,7 @@ function statusClass(status: string) {
 
 export function RetailOmnichannelPanel({ organizationId, locale }: Props) {
   const cancelCopy = customerFacingOmnichannelCancellationCopy(locale);
+  const returnCopy = customerFacingOmnichannelReturnCopy(locale);
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [orders, setOrders] = useState<OrdersResponse | null>(null);
   const [mode, setMode] = useState<Mode>("CLICK_COLLECT");
@@ -64,6 +69,19 @@ export function RetailOmnichannelPanel({ organizationId, locale }: Props) {
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
   const [cancellationReason, setCancellationReason] = useState("");
   const [cancellationBusy, setCancellationBusy] = useState(false);
+  const [returningOrder, setReturningOrder] = useState<Order | null>(null);
+  const [returnState, setReturnState] = useState<ReturnState | null>(null);
+  const [validators, setValidators] = useState<Validator[]>([]);
+  const [returnValidatorId, setReturnValidatorId] = useState("");
+  const [returnReason, setReturnReason] = useState("");
+  const [returnDecisionReason, setReturnDecisionReason] = useState("");
+  const [returnQuantities, setReturnQuantities] = useState<Record<string, number>>({});
+  const [returnDispositions, setReturnDispositions] = useState<Record<string, "RESTOCK" | "SCRAP" | "NO_STOCK">>({});
+  const [returnConditions, setReturnConditions] = useState<Record<string, "SELLABLE" | "OPENED" | "DAMAGED" | "DEFECTIVE" | "EXPIRED" | "OTHER">>({});
+  const [returnBusy, setReturnBusy] = useState(false);
+  const [returnDraftKey, setReturnDraftKey] = useState("");
+  const [returnInspected, setReturnInspected] = useState(false);
+  const [returnInspectionNotes, setReturnInspectionNotes] = useState("");
 
   const load = useCallback(async () => {
     setBusy("load");
@@ -228,6 +246,75 @@ export function RetailOmnichannelPanel({ organizationId, locale }: Props) {
     }
   }
 
+  async function openReturns(order: Order) {
+    setReturningOrder(order);
+    setReturnState(null);
+    setReturnReason("");
+    setReturnDraftKey(`omni-return:${crypto.randomUUID()}`);
+    setReturnDecisionReason("");
+    setReturnValidatorId("");
+    setReturnQuantities({});
+    setReturnDispositions({});
+    setReturnConditions({});
+    setReturnInspected(false);
+    setReturnInspectionNotes("");
+    setReturnBusy(true);
+    setError("");
+    try {
+      const [returnsResponse, candidatesResponse] = await Promise.all([
+        fetch(`/api/enterprise/${organizationId}/retail/omnichannel/orders/${order.id}/returns`, { cache: "no-store" }),
+        fetch(`/api/enterprise/${organizationId}/retail/omnichannel/returns/validators`, { cache: "no-store" }),
+      ]);
+      const returnsBody = await returnsResponse.json().catch(() => null) as ReturnState | { error?: string; message?: string } | null;
+      const candidatesBody = await candidatesResponse.json().catch(() => null) as { candidates?: Validator[]; error?: string; message?: string } | null;
+      if (!returnsResponse.ok || !returnsBody || !("items" in returnsBody)) throw new Error((returnsBody as { error?: string; message?: string } | null)?.message || "RETAIL_OMNICHANNEL_RETURN_LOAD_FAILED");
+      setReturnState(returnsBody as ReturnState);
+      setValidators(candidatesResponse.ok ? candidatesBody?.candidates || [] : []);
+    } catch (caught) { setError(customerFacingError(caught, locale)); }
+    finally { setReturnBusy(false); }
+  }
+
+  async function returnMutation(path: string, input: Record<string, unknown>) {
+    if (!returningOrder || returnBusy) return;
+    setReturnBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch(`/api/enterprise/${organizationId}/retail/omnichannel/${path}`, {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input),
+      });
+      const body = await response.json().catch(() => null) as { error?: string; message?: string } | null;
+      if (!response.ok) throw new Error(body?.error || body?.message || "RETAIL_OMNICHANNEL_RETURN_CONFLICT");
+      setReturnReason("");
+      setReturnDraftKey(`omni-return:${crypto.randomUUID()}`);
+      setReturnDecisionReason("");
+      setReturnInspected(false);
+      setReturnInspectionNotes("");
+      const listResponse = await fetch(`/api/enterprise/${organizationId}/retail/omnichannel/orders/${returningOrder.id}/returns`, { cache: "no-store" });
+      const listBody = await listResponse.json().catch(() => null) as ReturnState | null;
+      if (listResponse.ok && listBody) setReturnState(listBody);
+      setNotice(returnCopy.success);
+      await load();
+    } catch (caught) { setError(customerFacingError(caught, locale)); }
+    finally { setReturnBusy(false); }
+  }
+
+  async function submitReturnRequest() {
+    if (!returningOrder || !returnValidatorId || returnReason.trim().length < 5) return;
+    const lines = (returningOrder.items || []).flatMap((item) => {
+      const quantity = returnQuantities[item.id] || 0;
+      if (quantity <= 0) return [];
+      return [{ salesOrderItemId: item.id, quantity,
+        stockDisposition: returnDispositions[item.id] || (item.catalogItem?.trackInventory ? "RESTOCK" : "NO_STOCK"),
+        productCondition: returnConditions[item.id] || "SELLABLE" }];
+    });
+    if (!lines.length) return;
+    await returnMutation(`orders/${returningOrder.id}/returns`, {
+      idempotencyKey: returnDraftKey, reason: returnReason.trim(),
+      validatorUserId: returnValidatorId, lines,
+    });
+  }
+
   return <section data-testid="retail-omnichannel-panel" className="min-w-0 max-w-full rounded-3xl border border-dtsc-border bg-dtsc-surface p-4 shadow-sm sm:p-5">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div><div className="flex items-center gap-2"><Truck className="h-5 w-5 text-violet-600" /><h2 className="text-lg font-black text-dtsc-ink">{locale === "en" ? "Orders, pickup & delivery" : "Commandes, retraits & livraisons"}</h2></div><p className="mt-1 max-w-3xl text-sm text-dtsc-muted">{locale === "en" ? "Create a customer order from the Shop, choose where it will be prepared, then follow it through pickup or delivery." : "Créez une commande client depuis le Shop, choisissez où elle sera préparée, puis suivez-la jusqu’au retrait ou à la livraison."}</p></div>
@@ -278,6 +365,7 @@ export function RetailOmnichannelPanel({ organizationId, locale }: Props) {
           const order = row.order;
           const latestFulfillment = order?.fulfillments?.[0];
           const canCancel = Boolean(order?.status === "CONFIRMED" && row.context.status === "RESERVED");
+          const canReturn = Boolean(order?.status === "FULFILLED" && row.context.status === "FULFILLED");
           return (
             <div key={row.context.id} className="min-w-0 max-w-full rounded-xl border border-dtsc-border bg-dtsc-page p-3">
               <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
@@ -301,6 +389,7 @@ export function RetailOmnichannelPanel({ organizationId, locale }: Props) {
                       setCancellationReason("");
                     }}><X className="h-4 w-4" />{cancelCopy.cancel}</Button>
                   ) : null}
+                  {canReturn ? <Button type="button" size="sm" variant="outline" disabled={returnBusy || Boolean(busy)} onClick={() => void openReturns(order!)}><PackageCheck className="h-4 w-4" />{returnCopy.open}</Button> : null}
                 </div>
               </div>
               {order && cancellingOrderId === order.id && canCancel ? (
@@ -321,5 +410,50 @@ export function RetailOmnichannelPanel({ organizationId, locale }: Props) {
         {!orders?.items.length ? <p className="text-sm text-dtsc-muted">{locale === "en" ? "No customer order yet." : "Aucune commande client pour le moment."}</p> : null}
       </div>
     </div>
+    {returningOrder ? <div role="presentation" data-no-group-swipe className="fixed inset-0 z-[90] flex min-w-0 items-start justify-center overflow-y-auto bg-black/65 p-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] sm:p-6">
+      <div role="dialog" aria-modal="true" aria-label={returnCopy.title} className="my-auto w-full min-w-0 max-w-3xl space-y-4 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 text-dtsc-ink shadow-2xl sm:p-6">
+        <div className="flex min-w-0 flex-wrap items-start justify-between gap-3"><div className="min-w-0"><h3 className="break-words text-lg font-black">{returnCopy.title}</h3><p className="break-words text-xs text-dtsc-muted">{returningOrder.reference} · {formatMoney(returningOrder.totalAmount, returningOrder.currency, locale)}</p></div><Button type="button" size="sm" variant="outline" onClick={() => { setReturningOrder(null); setReturnState(null); }}><X className="h-4 w-4" />{returnCopy.close}</Button></div>
+        {returnBusy ? <p role="status" className="text-sm text-dtsc-muted">{locale === "en" ? "Processing…" : "Traitement en cours…"}</p> : null}
+        {error ? <p role="alert" className="rounded-xl bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-300">{error}</p> : null}
+        {returnState ? <>
+          <section className="min-w-0 space-y-3 rounded-xl border border-dtsc-border p-3"><h4 className="font-bold">{returnCopy.open}</h4>
+            {(returningOrder.items || []).map((item) => {
+              const alreadyRequested = returnState.items.filter((request) => request.status !== "REJECTED").flatMap((request) => request.lines)
+                .filter((line) => line.salesOrderItemId === item.id).reduce((sum, line) => sum + Number(line.quantity), 0);
+              const remaining = Math.max(0, Number(item.quantityOrdered) - alreadyRequested);
+              const condition = returnConditions[item.id] || "SELLABLE";
+              const disposition = returnDispositions[item.id] || (item.catalogItem?.trackInventory ? "RESTOCK" : "NO_STOCK");
+              return <div key={item.id} className="min-w-0 space-y-2 rounded-xl bg-dtsc-page p-3"><p className="break-words text-sm font-bold">{item.description}</p>
+                <div className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-3">
+                  <label className="min-w-0 text-xs font-bold text-dtsc-muted">{returnCopy.quantity} ({remaining})<input className="mt-1 h-10 w-full min-w-0 rounded-lg border border-dtsc-border bg-dtsc-surface px-2 text-dtsc-ink" type="number" min="0" max={remaining} step="0.001" value={returnQuantities[item.id] || ""} onChange={(event) => setReturnQuantities((current) => ({ ...current, [item.id]: Math.max(0, Math.min(remaining, Number(event.target.value) || 0)) }))} /></label>
+                  <label className="min-w-0 text-xs font-bold text-dtsc-muted">{returnCopy.condition}<select className="mt-1 h-10 w-full min-w-0 rounded-lg border border-dtsc-border bg-dtsc-surface px-2 text-dtsc-ink" value={condition} onChange={(event) => { const value = event.target.value as "SELLABLE" | "OPENED" | "DAMAGED" | "DEFECTIVE" | "EXPIRED" | "OTHER"; setReturnConditions((current) => ({ ...current, [item.id]: value })); if (value !== "SELLABLE") setReturnDispositions((current) => ({ ...current, [item.id]: "NO_STOCK" })); }}><option value="SELLABLE">{returnCopy.conditionSellable}</option><option value="OPENED">{returnCopy.conditionOpened}</option><option value="DAMAGED">{returnCopy.conditionDamaged}</option><option value="DEFECTIVE">{returnCopy.conditionDefective}</option><option value="EXPIRED">{returnCopy.conditionExpired}</option><option value="OTHER">{returnCopy.conditionOther}</option></select></label>
+                  <label className="min-w-0 text-xs font-bold text-dtsc-muted">{returnCopy.disposition}<select className="mt-1 h-10 w-full min-w-0 rounded-lg border border-dtsc-border bg-dtsc-surface px-2 text-dtsc-ink" value={disposition} onChange={(event) => setReturnDispositions((current) => ({ ...current, [item.id]: event.target.value as "RESTOCK" | "SCRAP" | "NO_STOCK" }))}>{item.catalogItem?.trackInventory && condition === "SELLABLE" ? <option value="RESTOCK">{returnCopy.restock}</option> : null}<option value="NO_STOCK">{returnCopy.noStock}</option><option value="SCRAP">{returnCopy.scrap}</option></select></label>
+                </div>
+              </div>;
+            })}
+            <label className="block text-xs font-bold text-dtsc-muted">{returnCopy.reason}<textarea rows={2} maxLength={1200} className="mt-1 w-full min-w-0 resize-y rounded-lg border border-dtsc-border bg-dtsc-surface p-2 text-dtsc-ink" value={returnReason} onChange={(event) => setReturnReason(event.target.value)} placeholder={returnCopy.reasonPlaceholder} /></label>
+            <label className="block text-xs font-bold text-dtsc-muted">{returnCopy.validator}<select className="mt-1 h-10 w-full min-w-0 rounded-lg border border-dtsc-border bg-dtsc-surface px-2 text-dtsc-ink" value={returnValidatorId} onChange={(event) => setReturnValidatorId(event.target.value)}><option value="">—</option>{validators.map((candidate) => <option key={candidate.userId} value={candidate.userId}>{candidate.name}{candidate.positionTitle ? ` · ${candidate.positionTitle}` : ""}</option>)}</select></label>
+            {!validators.length ? <p className="text-xs text-amber-700 dark:text-amber-300">{returnCopy.validatorMissing}</p> : null}
+            <div data-responsive-actions className="flex flex-wrap gap-2"><Button type="button" disabled={returnBusy || !returnValidatorId || returnReason.trim().length < 5 || Object.values(returnQuantities).every((quantity) => quantity <= 0)} onClick={() => void submitReturnRequest()}>{returnCopy.submit}</Button></div>
+          </section>
+          <section className="min-w-0 space-y-3"><h4 className="font-bold">{returnCopy.history}</h4>
+            {returnState.items.map((request) => {
+              const statusLabels: Record<string, string> = { PENDING_APPROVAL: returnCopy.PENDING_APPROVAL, APPROVED: returnCopy.APPROVED, FINANCE_PENDING: returnCopy.FINANCE_PENDING, REJECTED: returnCopy.REJECTED, COMPLETED: returnCopy.COMPLETED };
+              const canDecide = request.status === "PENDING_APPROVAL" && request.validatorUserId === returnState.viewerUserId;
+              const canPrepare = request.status === "APPROVED" && returnState.canPrepare && request.validatorUserId !== returnState.viewerUserId;
+              const canSettle = request.status === "FINANCE_PENDING" && returnState.canSettle && request.requestedByUserId !== returnState.viewerUserId && request.approvedByUserId !== returnState.viewerUserId && request.preparedByUserId !== returnState.viewerUserId;
+              return <div key={request.id} className="min-w-0 space-y-2 rounded-xl border border-dtsc-border p-3"><div className="flex min-w-0 flex-wrap items-center justify-between gap-2"><p className="break-words text-sm font-bold">{request.number}</p><span className="rounded-full bg-dtsc-page px-2 py-1 text-xs font-semibold">{statusLabels[request.status] || customerFacingStatusLabel(request.status, locale)}</span></div>
+                <p className="text-sm">{formatMoney(request.refundAmount, request.currencyCode, locale)} · {request.lines.length} {locale === "en" ? "line(s)" : "ligne(s)"}</p><p className="break-words text-xs text-dtsc-muted">{request.reason}</p>
+                {canDecide ? <><label className="block text-xs font-bold text-dtsc-muted">{returnCopy.decisionReason}<textarea rows={2} className="mt-1 w-full rounded-lg border border-dtsc-border bg-dtsc-surface p-2 text-dtsc-ink" value={returnDecisionReason} onChange={(event) => setReturnDecisionReason(event.target.value)} /></label><div data-responsive-actions className="flex flex-wrap gap-2"><Button type="button" disabled={returnBusy || returnDecisionReason.trim().length < 5} onClick={() => void returnMutation(`returns/${request.id}/decision`, { revision: request.revision, decision: "APPROVE", reason: returnDecisionReason })}>{returnCopy.approve}</Button><Button type="button" variant="outline" disabled={returnBusy || returnDecisionReason.trim().length < 5} onClick={() => void returnMutation(`returns/${request.id}/decision`, { revision: request.revision, decision: "REJECT", reason: returnDecisionReason })}>{returnCopy.reject}</Button></div></> : null}
+                {canPrepare ? <Button type="button" size="sm" disabled={returnBusy} onClick={() => void returnMutation(`returns/${request.id}/prepare`, { revision: request.revision })}>{returnCopy.prepare}</Button> : null}
+                {canSettle ? <div className="min-w-0 space-y-2"><label className="flex min-w-0 items-start gap-2 text-xs text-dtsc-muted"><input type="checkbox" className="mt-0.5" checked={returnInspected} onChange={(event) => setReturnInspected(event.target.checked)} />{returnCopy.inspection}</label><label className="block text-xs font-bold text-dtsc-muted">{returnCopy.inspectionNotes}<textarea rows={2} className="mt-1 w-full rounded-lg border border-dtsc-border bg-dtsc-surface p-2 text-dtsc-ink" value={returnInspectionNotes} onChange={(event) => setReturnInspectionNotes(event.target.value)} /></label><Button type="button" size="sm" disabled={returnBusy || !returnInspected || returnInspectionNotes.trim().length < 5} onClick={() => void returnMutation(`returns/${request.id}/settle`, { revision: request.revision, receivedAndInspected: true, inspectionNotes: returnInspectionNotes.trim() })}>{returnCopy.settle}</Button></div> : null}
+              </div>;
+            })}
+            {!returnState.items.length ? <p className="text-sm text-dtsc-muted">{returnCopy.noReturns}</p> : null}
+            <p className="text-xs text-dtsc-muted">{returnCopy.financeHint}</p>
+          </section>
+        </> : null}
+      </div>
+    </div> : null}
   </section>;
 }

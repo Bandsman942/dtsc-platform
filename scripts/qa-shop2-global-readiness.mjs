@@ -44,7 +44,11 @@ check(retailSchema.includes("@@unique([organizationId, operationUuid])"), "Offli
 check(retailSchema.includes("@@unique([organizationId, idempotencyKey])"), "Omnichannel orchestration must be tenant-scoped and idempotent");
 check(!retailSchema.includes("quantityOnHand"), "Offline/omnichannel Retail schema must not create a second stock balance");
 check(!retailSchema.includes("model EnterpriseRetailSalesOrder"), "Retail must not create a parallel sales-order master");
-const orchestrationBlock = retailSchema.slice(retailSchema.indexOf("model EnterpriseRetailOrderOrchestration"));
+// Bound the assertion to this model only: subsequent operational return models
+// legitimately contain a refund currency, without duplicating sales-order state.
+const orchestrationTail = retailSchema.slice(retailSchema.indexOf("model EnterpriseRetailOrderOrchestration"));
+const nextRetailModel = orchestrationTail.indexOf("\nmodel ", 1);
+const orchestrationBlock = nextRetailModel < 0 ? orchestrationTail : orchestrationTail.slice(0, nextRetailModel);
 for (const forbidden of ["totalAmount", "subtotalAmount", "taxAmount", "currency", "quantityOrdered"]) check(!orchestrationBlock.includes(forbidden), `Retail omnichannel context must not duplicate canonical order field ${forbidden}`);
 
 const inventoryReservation = read("prisma/enterprise-inventory-reservations.prisma");

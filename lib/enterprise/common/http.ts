@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 
 const BUSINESS_ERROR_MESSAGES: Record<string, { fr: string; en: string }> = {
+  RETAIL_FULFILLMENT_ACCOUNTING_NOT_READY: { fr: "La livraison a été annulée sans mouvement de stock : sa valorisation comptable est incomplète. Vérifiez les couches de coût, les comptes de stock et de coût des ventes, ainsi que la configuration Finance, puis réessayez.", en: "Delivery was cancelled with no stock movement: inventory valuation is not ready. Check cost layers, Inventory and Cost of Sales accounts, and Finance configuration before retrying." },
   ORGANIZATION_NOT_ACTIVE: { fr: "Cette entreprise n’est pas active. Réactivez-la ou choisissez une autre entreprise.", en: "This organization is not active. Reactivate it or select another organization." },
   ORGANIZATION_TIMEZONE_INVALID: { fr: "Le fuseau horaire de cette entreprise est invalide. Corrigez-le dans Administration entreprise avant de continuer.", en: "This organization has an invalid timezone. Correct it in Company administration before continuing." },
   ENTERPRISE_CURRENCY_CONFIGURATION_REQUIRED: { fr: "La devise fonctionnelle de l’entreprise n’est pas configurée. Configurez Finance et le référentiel des devises avant de continuer.", en: "The organization's functional currency is not configured. Configure Finance and the currency registry before continuing." },

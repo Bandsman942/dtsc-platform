@@ -1046,6 +1046,14 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
         items: [{ salesOrderItemId: replacement.body.order.items[0].id, quantityFulfilled: 1 }],
       }, "/enterprise-modules/RETAIL_POS");
       expect(first.response.status(), JSON.stringify(first.body)).toBe(201);
+      const firstStockIssue = await prisma.enterpriseStockMovement.findFirstOrThrow({
+        where: { organizationId, sourceEntityType: "EnterpriseFulfillment",
+          sourceEntityId: first.body.fulfillment.id, direction: "OUT", movementType: "SALE_FULFILLMENT" },
+      });
+      const firstValuation = await prisma.enterpriseInventoryAccountingEvent.findFirstOrThrow({
+        where: { organizationId, stockMovementId: firstStockIssue.id, eventType: "ISSUE", status: "POSTED" },
+      });
+      expect(firstValuation.journalEntryId).toBeTruthy();
       expect((await prisma.enterpriseRelationshipBenefitUsage.findUniqueOrThrow({ where: { id: usage.id } })).status).toBe("REQUESTED");
 
       const updated = await prisma.enterpriseSalesOrder.findUniqueOrThrow({ where: { id: orderId } });
@@ -1064,8 +1072,28 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
         items: [{ salesOrderItemId: replacement.body.order.items[0].id, quantityFulfilled: 1 }],
       }, "/enterprise-modules/RETAIL_POS");
       expect(second.response.status(), JSON.stringify(second.body)).toBe(201);
+      const secondStockIssue = await prisma.enterpriseStockMovement.findFirstOrThrow({
+        where: { organizationId, sourceEntityType: "EnterpriseFulfillment",
+          sourceEntityId: second.body.fulfillment.id, direction: "OUT", movementType: "SALE_FULFILLMENT" },
+      });
+      expect(await prisma.enterpriseInventoryAccountingEvent.count({
+        where: { organizationId, stockMovementId: secondStockIssue.id, eventType: "ISSUE", status: "POSTED" },
+      })).toBe(1);
       expect((await prisma.enterpriseRelationshipBenefitUsage.findUniqueOrThrow({ where: { id: usage.id } })).status).toBe("CONSUMED");
       expect(await prisma.enterpriseRelationshipBenefitUsage.count({ where: { organizationId, effectEntityId: orderId } })).toBe(1);
+
+      // #904: post-delivery returns require an independent validator before any
+      // stock, credit note, refund, or relationship-quota reversal is possible.
+      const invalidReturn = await post(admin, `/api/enterprise/${organizationId}/retail/omnichannel/orders/${orderId}/returns`, {
+        idempotencyKey: `e2e-904-self-validation-${Date.now()}`,
+        reason: "Retour omnicanal de contrôle après livraison",
+        validatorUserId: fixture.adminUserId,
+        lines: [{ salesOrderItemId: replacement.body.order.items[0].id, quantity: 1,
+          productCondition: "SELLABLE", stockDisposition: "RESTOCK" }],
+      }, "/enterprise-modules/RETAIL_POS");
+      expect(invalidReturn.response.status(), JSON.stringify(invalidReturn.body)).toBe(403);
+      expect(await prisma.enterpriseRetailOmnichannelReturn.count({ where: { organizationId, salesOrderId: orderId } })).toBe(0);
+      expect((await prisma.enterpriseRelationshipBenefitUsage.findUniqueOrThrow({ where: { id: usage.id } })).status).toBe("CONSUMED");
     } finally {
       await adminContext.close();
     }
