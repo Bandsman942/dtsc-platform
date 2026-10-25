@@ -4,8 +4,10 @@ import { publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
 import { applyStockMovementTx } from "@/lib/enterprise/inventory/service";
 import { finalizeRetailReturnAccountingTx } from "@/lib/enterprise/retail/accounting";
+import { reverseRetailRelationshipBenefitEffectsTx } from "@/lib/enterprise/relationship-benefits/retail-adapter";
 import type { retailReturnCreateSchema, retailReturnDecisionSchema } from "@/lib/enterprise/retail/commercial-schemas";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
+import { withRetailTransactionRetry } from "@/lib/enterprise/retail/transaction-retry";
 import { prisma } from "@/lib/prisma";
 import type { z } from "zod";
 
@@ -274,7 +276,7 @@ export async function decideRetailReturn(
   actorUserId: string,
   input: RetailReturnDecisionInput,
 ) {
-  return prisma.$transaction(async (tx) => {
+  return withRetailTransactionRetry(() => prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseRetailReturn" WHERE id = ${returnId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const retailReturn = await tx.enterpriseRetailReturn.findFirst({
       where: { id: returnId, organizationId },
@@ -285,6 +287,9 @@ export async function decideRetailReturn(
       },
     });
     if (!retailReturn) throw new EnterpriseRetailError("RETAIL_RETURN_NOT_FOUND", 404);
+    // Serialize decisions of different returns for the same sale before changing
+    // amounts, stock, or quotas. No effect occurs outside this transaction.
+    await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseRetailSale" WHERE id = ${retailReturn.saleId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     if (retailReturn.status === "COMPLETED" && input.decision === "APPROVE") {
       const accounting = await finalizeRetailReturnAccountingTx(tx, organizationId, actorUserId, retailReturn.id);
       return { retailReturn, idempotent: true, accounting };
@@ -409,6 +414,34 @@ export async function decideRetailReturn(
       metadataJson: { saleId: retailReturn.saleId, lineCount: completed.lines.length, total: completed.grandTotal.toFixed(), currency: completed.currencyCode },
     });
     const accounting = await finalizeRetailReturnAccountingTx(tx, organizationId, actorUserId, completed.id);
+
+    // Release a consumed relationship-benefit quota only when every original
+    // sale line has been refunded. Partial returns must never release the full
+    // quota, and this must follow the confirmed refund/accounting effects.
+    const confirmedReturns = await tx.enterpriseRetailReturn.findMany({
+      where: { organizationId, saleId: retailReturn.saleId, status: "COMPLETED" },
+      select: { lines: { select: { saleLineId: true, quantity: true } } },
+    });
+    const returnedByLine = new Map<string, Prisma.Decimal>();
+    for (const record of confirmedReturns) {
+      for (const line of record.lines) {
+        returnedByLine.set(
+          line.saleLineId,
+          (returnedByLine.get(line.saleLineId) || decimal(0)).plus(line.quantity),
+        );
+      }
+    }
+    const fullyReturned = retailReturn.sale.lines.length > 0 &&
+      retailReturn.sale.lines.every((line) =>
+        (returnedByLine.get(line.id) || decimal(0)).gte(line.quantity),
+      );
+    if (fullyReturned) {
+      await reverseRetailRelationshipBenefitEffectsTx({
+        tx,
+        organizationId,
+        saleId: retailReturn.sale.id,
+      });
+    }
     return { retailReturn: completed, idempotent: false, accounting };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 }));
 }

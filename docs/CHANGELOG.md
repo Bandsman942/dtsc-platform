@@ -1,3 +1,10 @@
+## 2026-10-24 — HOTFIX P0 #888 : réconciliation du quota après remboursement Retail intégral (pré-release)
+
+- Reprise sur le dernier `main` des changements ciblés de la PR historique #887 : verrouillage tenant-scopé de la vente, transaction SERIALIZABLE avec retry, décompte des retours uniquement `COMPLETED` par ligne d'origine et libération conditionnelle du quota `AUTO_RETAIL` après comptabilisation du remboursement intégral.
+- Un retour partiel laisse l'usage `CONSUMED` ; retour intégral et rejeu passent par la transition idempotente canonique `CONSUMED → CANCELLED`, sans réécriture d'écriture `POSTED` ni source de solde parallèle.
+- QA dédiée #886 et E2E de deux retours partiels présents, intégrés au circuit Shop 2 et aux régressions. La preuve CI et l'`OWNER_E2E` du SHA réconcilié restent requis avant toute fusion ou déploiement.
+- Les effets omnicanaux, cashback, crédit, fidélité et livraison demeurent explicitement ouverts sous #886/#785 ; aucune activation n'est induite par cette PR.
+
 ## 2026-10-21 — INFRA-MC-01 #892 : audit d'architecture et ADR multi-cloud (cadrage uniquement)
 
 - Audit en lecture seule de GitHub/Vercel et métadonnées Neon/Supabase ; inventaire des routes, sous-domaines, build/migrations, huit Crons, identité et dépendances partagées.
