@@ -89,14 +89,19 @@ export async function applyRetailRelationshipLoyaltyTx(args: {
     if (!evaluation.allowed) throw new Error(`RELATIONSHIP_LOYALTY_${evaluation.code}`);
     const points = sale.grandTotal.times(benefit.valueDecimal).toDecimalPlaces(6, Prisma.Decimal.ROUND_HALF_UP);
     if (!points.isPositive()) continue;
-    let account = await args.tx.enterpriseRetailLoyaltyAccount.findFirst({
-      where: { organizationId: args.organizationId, programId: program.id, customerBusinessPartyId: sale.customerBusinessPartyId },
+    // The unique tenant/program/customer constraint is the authority. A
+    // concurrent first purchase must not race a findFirst/create pair.
+    const account = await args.tx.enterpriseRetailLoyaltyAccount.upsert({
+      where: {
+        organizationId_programId_customerBusinessPartyId: {
+          organizationId: args.organizationId,
+          programId: program.id,
+          customerBusinessPartyId: sale.customerBusinessPartyId,
+        },
+      },
+      create: { organizationId: args.organizationId, programId: program.id, customerBusinessPartyId: sale.customerBusinessPartyId },
+      update: {},
     });
-    if (!account) {
-      account = await args.tx.enterpriseRetailLoyaltyAccount.create({
-        data: { organizationId: args.organizationId, programId: program.id, customerBusinessPartyId: sale.customerBusinessPartyId },
-      });
-    }
     if (account.status !== "ACTIVE") throw new Error("RELATIONSHIP_LOYALTY_ACCOUNT_INACTIVE");
     await args.tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseRetailLoyaltyAccount" WHERE id = ${account.id} AND "organizationId" = ${args.organizationId} FOR UPDATE`);
     const entry = await args.tx.enterpriseRetailLoyaltyEntry.create({

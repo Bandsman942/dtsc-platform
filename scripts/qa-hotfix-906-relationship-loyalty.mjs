@@ -48,6 +48,9 @@ verify(ledger.includes("enterprisePersonBusinessReference.findFirst") && ledger.
 verify(ledger.includes("enterpriseRetailLoyaltyAccount") && ledger.includes("enterpriseRetailLoyaltyEntry.create") &&
   ledger.includes('entryType: "EARN"') && ledger.includes('executionMode: "AUTO_RETAIL_LOYALTY"'),
 "No fictional financial usage: canonical Retail EARN and relationship CONSUMED are both written");
+verify(ledger.includes("enterpriseRetailLoyaltyAccount.upsert") &&
+  ledger.includes("organizationId_programId_customerBusinessPartyId"),
+"Concurrent first purchases share one tenant-scoped canonical points account");
 verify(ledger.includes("!money(effect.context.transactionAmount || 0).eq(money(sale.grandTotal))"),
 "Persisted ticket value is authoritative at commit time");
 verify(loyaltyHooks.includes("reverseRetailLoyaltyForCompletedReturnTx") &&
