@@ -1,7 +1,7 @@
 # Hotfix #886 — Complétude des avantages Retail
 
 Issues de livraison : #888 (premier incrément du parent #886 / #785 P0), puis #903 pour l'incrément `fix/886-omnichannel-benefits-guard` (PR #902). Baseline du second incrément : `main@827854513cef490a7d361b539eeb665430ff5f77` (25/10/2026).
-Statut : **#888 validé E2E, fusionné et publié sur Production ; #903 publié en PR #902 brouillon, non fusionné, non déployé, E2E propriétaire toujours requis**.
+Statut actualisé au 25/10/2026 : **#888 et #903 validés OWNER_E2E, fusionnés et publiés sur Production**. La PR #902 a été fusionnée au SHA `063d927c74c47ec4e13e739cb539ed9a10594d98`. Incrément suivant : [#904](https://github.com/Bandsman942/dtsc-platform/issues/904), en développement sur la branche `fix/904-omnichannel-postdelivery-returns`, avec OWNER_E2E et CI encore à prouver.
 Gouvernance : jalon GitHub actif **Delivery Governance v1** ; le correctif de la PR historique #887 a été repris commit par commit depuis le dernier `main` sans écraser les évolutions intermédiaires. Les P0 parents #886/#785 demeurent OPEN.
 
 ## Premier incrément — retour intégral et quota relationnel
@@ -25,7 +25,7 @@ Le moteur Retail inverse déjà `AUTO_RETAIL` lors d'une annulation de vente, ma
 | Retours POS complets : quota libéré une fois | **#888 fusionné, OWNER_E2E BON** |
 | Montants et TVA dans ce circuit | Remontent exclusivement du `EnterpriseRetailReturn` confirmé et de la comptabilisation Retail canonique |
 | Omnicanal : preview et commit avec remise identique au POS, sans dette de quota | **Deuxième incrément #903 en PR #902, non déployé :** même resolver Retail POS pour la prévisualisation et la commande ; quota `REQUESTED` atomique avec commande, `CONSUMED` après livraison complète, `CANCELLED` en cas d'annulation avant livraison ; E2E à certifier |
-| Omnicanal : retours et remboursements d'une commande livrée | **NON LIVRÉ** : le circuit de remboursement d'une `EnterpriseSalesOrder` reste à définir et à prouver ; aucune inversion comptable simulée |
+| Omnicanal : retours et remboursements d'une commande livrée | **EN COURS — #904** : parcours opérationnel, Finance canonique, stock et quota à valider ; voir `docs/HOTFIX_904_OMNICHANNEL_RETURNS.md` |
 | CASHBACK/CREDIT/LOYALTY via comptes canoniques | **NON LIVRÉ :** nécessitera définition de l'événement économique, de l'autorisation, du point de reversal et du mapping vers les ledgers Retail existants |
 | DELIVERY, services non monétaires | **NON LIVRÉ :** pas de preuve structurée de fulfillment, demande ≠ consommation |
 | Matrice complète 22 relations, concurrence, retrait d'audience, devise, omnicanal | **NON CERTIFIÉE :** QA #786 / #884 continuent de couvrir la base ; extension #886 obligatoire |

@@ -119,3 +119,63 @@ model EnterpriseRetailOrderOrchestration {
   @@index([organizationId, sourceSiteId, fulfillmentWarehouseId])
   @@index([archivedAt])
 }
+
+// Operational return only: payment, credit note and accounting remain Finance authorities.
+// A return is not financially completed until the canonical refund is confirmed.
+model EnterpriseRetailOmnichannelReturn {
+  id                       String   @id @default(cuid())
+  organizationId           String
+  salesOrderId             String
+  number                   String
+  idempotencyKey           String
+  status                   String   @default("PENDING_APPROVAL")
+  reason                   String
+  currencyCode             String
+  refundAmount             Decimal  @db.Decimal(20, 6)
+  salesInvoiceId           String
+  sourcePaymentId          String
+  refundPaymentId          String?
+  salesCreditNoteId        String?
+  requestedByUserId        String
+  validatorUserId          String
+  approvedByUserId         String?
+  preparedByUserId         String?
+  settledByUserId          String?
+  inspectedByUserId        String?
+  inspectedAt              DateTime?
+  inspectionNotes          String?
+  decisionReason           String?
+  revision                 Int      @default(1)
+  approvedAt               DateTime?
+  completedAt              DateTime?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  order                    EnterpriseSalesOrder @relation(fields: [organizationId, salesOrderId], references: [organizationId, id], onDelete: Restrict)
+  lines                    EnterpriseRetailOmnichannelReturnLine[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, number])
+  @@unique([organizationId, idempotencyKey])
+  @@unique([organizationId, refundPaymentId])
+  @@unique([organizationId, salesCreditNoteId])
+  @@index([organizationId, salesOrderId, status])
+  @@index([organizationId, validatorUserId, status, createdAt])
+}
+
+model EnterpriseRetailOmnichannelReturnLine {
+  id                  String   @id @default(cuid())
+  organizationId      String
+  returnId            String
+  salesOrderItemId    String
+  quantity            Decimal  @db.Decimal(18, 3)
+  refundAmount        Decimal  @db.Decimal(20, 6)
+  stockDisposition    String
+  productCondition    String
+  createdAt           DateTime @default(now())
+  retailReturn        EnterpriseRetailOmnichannelReturn @relation(fields: [organizationId, returnId], references: [organizationId, id], onDelete: Restrict)
+  salesOrderItem      EnterpriseSalesOrderItem @relation(fields: [organizationId, salesOrderItemId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, returnId, salesOrderItemId])
+  @@index([organizationId, salesOrderItemId])
+}

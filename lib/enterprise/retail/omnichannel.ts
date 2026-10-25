@@ -352,7 +352,7 @@ export async function getRetailOmnichannelOrders(organizationId: string, page = 
   ]);
   const orderIds = contexts.map((context) => context.salesOrderId);
   const [orders, reservations] = await Promise.all([
-    orderIds.length ? prisma.enterpriseSalesOrder.findMany({ where: { organizationId, id: { in: orderIds }, archivedAt: null }, include: { items: { orderBy: { sortOrder: "asc" } }, fulfillments: { orderBy: { createdAt: "desc" }, include: { items: true } } } }) : Promise.resolve([]),
+    orderIds.length ? prisma.enterpriseSalesOrder.findMany({ where: { organizationId, id: { in: orderIds }, archivedAt: null }, include: { items: { orderBy: { sortOrder: "asc" }, include: { catalogItem: { select: { trackInventory: true } } } }, fulfillments: { orderBy: { createdAt: "desc" }, include: { items: true } } } }) : Promise.resolve([]),
     orderIds.length ? prisma.enterpriseInventoryReservation.findMany({ where: { organizationId, salesOrderId: { in: orderIds } }, orderBy: [{ createdAt: "asc" }] }) : Promise.resolve([]),
   ]);
   const orderById = new Map(orders.map((order) => [order.id, order]));

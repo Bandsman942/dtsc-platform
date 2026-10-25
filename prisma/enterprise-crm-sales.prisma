@@ -240,6 +240,7 @@ model EnterpriseSalesOrder {
   contract              EnterpriseContract?           @relation(fields: [organizationId, contractId], references: [organizationId, id], onDelete: SetNull)
   items                 EnterpriseSalesOrderItem[]
   fulfillments          EnterpriseFulfillment[]
+  omnichannelReturns    EnterpriseRetailOmnichannelReturn[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, reference])
@@ -273,6 +274,7 @@ model EnterpriseSalesOrderItem {
   salesOrder          EnterpriseSalesOrder       @relation(fields: [organizationId, salesOrderId], references: [organizationId, id], onDelete: Cascade)
   catalogItem         EnterpriseCatalogItem?      @relation(fields: [organizationId, catalogItemId], references: [organizationId, id], onDelete: Restrict)
   fulfillmentItems    EnterpriseFulfillmentItem[]
+  omnichannelReturnLines EnterpriseRetailOmnichannelReturnLine[]
 
   @@unique([organizationId, id])
   @@index([organizationId, salesOrderId, sortOrder])
