@@ -4,6 +4,7 @@ import { EnterpriseDomainConflictError, EnterpriseDomainError } from "@/lib/ente
 import { enterpriseReference, publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
 import type { fulfillmentCreateSchema } from "@/lib/enterprise/crm-sales/schemas";
 import { consumeEnterpriseInventoryReservationsTx } from "@/lib/enterprise/inventory/reservations";
+import { consumeRetailOmnichannelRelationshipBenefitsTx } from "@/lib/enterprise/relationship-benefits/omnichannel-adapter";
 import { prisma } from "@/lib/prisma";
 
 type FulfillmentCreateInput = z.infer<typeof fulfillmentCreateSchema>;
@@ -30,6 +31,12 @@ export async function createEnterpriseFulfillment(organizationId: string, salesO
       throw new EnterpriseDomainError("SALES_ORDER_NOT_FULFILLABLE", 409);
     }
     if (order.revision !== input.revision) throw new EnterpriseDomainConflictError();
+    if (retailOrchestration && !["RESERVED", "PARTIALLY_FULFILLED"].includes(retailOrchestration.status)) {
+      throw new EnterpriseDomainError("RETAIL_FULFILLMENT_RESERVATIONS_NOT_READY", 409);
+    }
+    if (retailOrchestration && input.fulfillmentType !== "PRODUCT_DELIVERY") {
+      throw new EnterpriseDomainError("RETAIL_FULFILLMENT_PRODUCT_DELIVERY_REQUIRED", 409);
+    }
     if (retailOrchestration && input.fulfillmentType === "PRODUCT_DELIVERY" && input.warehouseId !== retailOrchestration.fulfillmentWarehouseId) {
       throw new EnterpriseDomainError("RETAIL_FULFILLMENT_WAREHOUSE_MISMATCH", 409);
     }
@@ -42,6 +49,35 @@ export async function createEnterpriseFulfillment(organizationId: string, salesO
       const remaining = Number(orderItem.quantityOrdered) - Number(orderItem.quantityFulfilled);
       if (requestItem.quantityFulfilled > remaining + 0.000001) {
         throw new EnterpriseDomainError("FULFILLMENT_QUANTITY_EXCEEDED", 409);
+      }
+    }
+    if (retailOrchestration && !input.acceptedByCustomer) {
+      const willFullyDeliver = order.items.every((item) => {
+        const arriving = requestedByItem.get(item.id)?.quantityFulfilled || 0;
+        return Number(item.quantityFulfilled) + arriving >= Number(item.quantityOrdered);
+      });
+      if (willFullyDeliver) {
+        const reservedBenefits = await tx.enterpriseRelationshipBenefitUsage.count({
+          where: {
+            organizationId, effectEntityType: "EnterpriseSalesOrder", effectEntityId: order.id,
+            executionMode: "AUTO_RETAIL_OMNICHANNEL", status: "REQUESTED",
+          },
+        });
+        if (reservedBenefits > 0) {
+          const verifiedDocument = input.proofDocumentId
+            ? await tx.enterpriseDocument.findFirst({
+                where: {
+                  id: input.proofDocumentId, organizationId, archivedAt: null,
+                  sourceEntityType: "EnterpriseSalesOrder", sourceEntityId: order.id,
+                  currentVersion: { gt: 0 }, versions: { some: { organizationId } },
+                },
+                select: { id: true },
+              })
+            : null;
+          if (!verifiedDocument) {
+            throw new EnterpriseDomainError("RETAIL_RELATIONSHIP_DELIVERY_PROOF_REQUIRED", 409);
+          }
+        }
       }
     }
 
@@ -122,6 +158,13 @@ export async function createEnterpriseFulfillment(organizationId: string, salesO
           updatedByUserId: actorUserId,
         },
       });
+      if (fullyFulfilled) {
+        // The order reserved the quota without consuming it. Delivery is the
+        // canonical fulfillment proof; a partial delivery leaves it reserved.
+        await consumeRetailOmnichannelRelationshipBenefitsTx({
+          tx, organizationId, orderId: order.id, actorUserId,
+        });
+      }
     }
 
     await publishEnterpriseEvent(tx, {

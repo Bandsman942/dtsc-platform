@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Box, CheckCircle2, MapPin, PackageCheck, RefreshCw, Search, ShoppingBag, Truck, UserRound } from "lucide-react";
+import { Box, CheckCircle2, MapPin, PackageCheck, RefreshCw, Search, ShoppingBag, Truck, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { customerFacingError, customerFacingFulfillmentMode, customerFacingStatusLabel } from "@/lib/customer-facing-language";
+import { customerFacingError, customerFacingFulfillmentMode, customerFacingOmnichannelCancellationCopy, customerFacingStatusLabel } from "@/lib/customer-facing-language";
 
 type Props = { organizationId: string; locale: "fr" | "en" };
 type Site = { id: string; name: string };
@@ -14,7 +14,7 @@ type Customer = { id: string; code: string; legalName: string; displayName: stri
 type Product = { id: string; code: string; sku: string | null; name: string; indicativeSalePrice: string | number | null; currency: string | null; trackInventory: boolean; availableQuantity: string | null };
 type CartLine = { product: Product; quantity: number };
 type Fulfillment = { id: string; reference: string; status: string; createdAt: string };
-type Order = { id: string; reference: string; status: string; currency: string; totalAmount: string | number; businessPartyId: string; expectedFulfillmentAt: string | null; fulfillments?: Fulfillment[] };
+type Order = { id: string; reference: string; revision: number; status: string; currency: string; totalAmount: string | number; businessPartyId: string; expectedFulfillmentAt: string | null; fulfillments?: Fulfillment[] };
 type Reservation = { id: string; status: string; quantity: string | number; warehouseId: string };
 type OrderContext = { id: string; salesOrderId: string; fulfillmentMode: string; sourceSiteId: string; fulfillmentWarehouseId: string; pickupSiteId: string | null; status: string; createdAt: string };
 type OrderRow = { context: OrderContext; order: Order | null; reservations: Reservation[] };
@@ -44,6 +44,7 @@ function statusClass(status: string) {
 }
 
 export function RetailOmnichannelPanel({ organizationId, locale }: Props) {
+  const cancelCopy = customerFacingOmnichannelCancellationCopy(locale);
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [orders, setOrders] = useState<OrdersResponse | null>(null);
   const [mode, setMode] = useState<Mode>("CLICK_COLLECT");
@@ -60,6 +61,9 @@ export function RetailOmnichannelPanel({ organizationId, locale }: Props) {
   const [busy, setBusy] = useState<"load" | "customers" | "products" | "create" | null>("load");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
+  const [cancellationReason, setCancellationReason] = useState("");
+  const [cancellationBusy, setCancellationBusy] = useState(false);
 
   const load = useCallback(async () => {
     setBusy("load");
@@ -187,7 +191,7 @@ export function RetailOmnichannelPanel({ organizationId, locale }: Props) {
         }),
       });
       const body = await response.json().catch(() => null) as { order?: Order; orchestration?: OrderContext; reservations?: Reservation[]; error?: string; message?: string } | null;
-      if (!response.ok || !body?.order) throw new Error(body?.message || body?.error || "RETAIL_OMNICHANNEL_CREATE_FAILED");
+      if (!response.ok || !body?.order) throw new Error(body?.error || body?.message || "RETAIL_OMNICHANNEL_CREATE_FAILED");
       setNotice(locale === "en" ? `Order ${body.order.reference} confirmed. Available stock has been reserved for this customer order.` : `Commande ${body.order.reference} confirmée. Le stock disponible a été réservé pour cette commande client.`);
       setCart([]);
       setProducts([]);
@@ -200,7 +204,31 @@ export function RetailOmnichannelPanel({ organizationId, locale }: Props) {
     }
   }
 
-  return <section data-testid="retail-omnichannel-panel" className="rounded-3xl border border-dtsc-border bg-dtsc-surface p-4 shadow-sm sm:p-5">
+  async function cancelOrder(order: Order) {
+    if (cancellationBusy || cancellationReason.trim().length < 5) return;
+    setCancellationBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch(`/api/enterprise/${organizationId}/retail/omnichannel/orders/${order.id}/cancel`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ revision: order.revision, reason: cancellationReason.trim() }),
+      });
+      const body = await response.json().catch(() => null) as { error?: string; message?: string } | null;
+      if (!response.ok) throw new Error(body?.error || body?.message || "RETAIL_OMNICHANNEL_CANCEL_FAILED");
+      setCancellingOrderId(null);
+      setCancellationReason("");
+      await load();
+      setNotice(`${locale === "en" ? "Order" : "Commande"} ${order.reference} ${cancelCopy.successSuffix}`);
+    } catch (caught) {
+      setError(customerFacingError(caught, locale));
+    } finally {
+      setCancellationBusy(false);
+    }
+  }
+
+  return <section data-testid="retail-omnichannel-panel" className="min-w-0 max-w-full rounded-3xl border border-dtsc-border bg-dtsc-surface p-4 shadow-sm sm:p-5">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div><div className="flex items-center gap-2"><Truck className="h-5 w-5 text-violet-600" /><h2 className="text-lg font-black text-dtsc-ink">{locale === "en" ? "Orders, pickup & delivery" : "Commandes, retraits & livraisons"}</h2></div><p className="mt-1 max-w-3xl text-sm text-dtsc-muted">{locale === "en" ? "Create a customer order from the Shop, choose where it will be prepared, then follow it through pickup or delivery." : "Créez une commande client depuis le Shop, choisissez où elle sera préparée, puis suivez-la jusqu’au retrait ou à la livraison."}</p></div>
       <Button type="button" variant="outline" disabled={Boolean(busy)} onClick={() => void load()}><RefreshCw className={`h-4 w-4 ${busy === "load" ? "animate-spin" : ""}`} />{locale === "en" ? "Refresh" : "Actualiser"}</Button>
@@ -237,7 +265,7 @@ export function RetailOmnichannelPanel({ organizationId, locale }: Props) {
         <div className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
           <p className="text-sm font-black text-dtsc-ink">4. {locale === "en" ? "Customer order" : "Commande client"}</p>
           <div className="mt-3 space-y-2">{cart.map((line) => <div key={line.product.id} className="flex items-center justify-between gap-3 rounded-xl border border-dtsc-border bg-dtsc-surface p-3"><div className="min-w-0"><p className="truncate font-bold text-dtsc-ink">{line.product.name}</p><p className="text-xs text-dtsc-muted">{formatMoney(line.product.indicativeSalePrice, line.product.currency || currency, locale)} · {locale === "en" ? "Price checked automatically at confirmation" : "Prix vérifié automatiquement à la confirmation"}</p></div><input aria-label={`${locale === "en" ? "Quantity" : "Quantité"} ${line.product.name}`} className="h-9 w-20 rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-sm" type="number" min="0" step="1" value={line.quantity} onChange={(event) => setQuantity(line.product.id, Math.max(0, Number(event.target.value) || 0))} /></div>)}{!cart.length ? <p className="text-sm text-dtsc-muted">{locale === "en" ? "Search products and add them to the customer order." : "Recherchez des produits puis ajoutez-les à la commande client."}</p> : null}</div>
-          <div className="mt-4 flex items-center justify-between border-t border-dtsc-border pt-4"><div><p className="text-xs font-bold uppercase text-dtsc-muted">{locale === "en" ? "Estimated total" : "Total estimé"}</p><p className="text-[11px] text-dtsc-muted">{locale === "en" ? "The final total is checked against your prices, promotions and taxes." : "Le total final est vérifié selon vos tarifs, promotions et taxes."}</p></div><p className="text-lg font-black text-dtsc-ink">{formatMoney(indicativeTotal, currency, locale)}</p></div>
+          <div className="mt-4 flex items-center justify-between border-t border-dtsc-border pt-4"><div><p className="text-xs font-bold uppercase text-dtsc-muted">{locale === "en" ? "Estimated total" : "Total estimé"}</p><p className="text-[11px] text-dtsc-muted">{locale === "en" ? "The confirmed total includes verified prices, promotions, relationship benefits and taxes." : "Le montant confirmé inclut les tarifs, promotions, avantages relationnels et taxes vérifiés."}</p></div><p className="text-lg font-black text-dtsc-ink">{formatMoney(indicativeTotal, currency, locale)}</p></div>
           <Button type="button" className="mt-4 w-full" disabled={!canCreate} onClick={() => void createOrder()}><CheckCircle2 className="h-4 w-4" />{busy === "create" ? "…" : (locale === "en" ? "Confirm order & reserve stock" : "Confirmer la commande & réserver le stock")}</Button>
         </div>
       </div>
@@ -245,7 +273,53 @@ export function RetailOmnichannelPanel({ organizationId, locale }: Props) {
 
     <div className="mt-6 border-t border-dtsc-border pt-5">
       <div className="flex items-center justify-between gap-3"><div><h3 className="font-black text-dtsc-ink">{locale === "en" ? "Order tracking" : "Suivi des commandes"}</h3><p className="text-xs text-dtsc-muted">{locale === "en" ? "Follow each order from reserved stock through pickup or delivery." : "Suivez chaque commande depuis la réservation du stock jusqu’au retrait ou à la livraison."}</p></div><span className="rounded-full bg-dtsc-page px-2.5 py-1 text-xs font-black text-dtsc-muted">{orders?.pagination.total || 0}</span></div>
-      <div className="mt-3 grid gap-2">{(orders?.items || []).map((row) => { const order = row.order; const latestFulfillment = order?.fulfillments?.[0]; return <div key={row.context.id} className="grid gap-2 rounded-xl border border-dtsc-border bg-dtsc-page p-3 sm:grid-cols-[minmax(0,1fr)_auto]"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-black text-dtsc-ink">{order?.reference || row.context.salesOrderId}</span><span className={`rounded-full px-2 py-1 text-[11px] font-black ${statusClass(row.context.status)}`}>{customerFacingStatusLabel(row.context.status, locale)}</span><span className="rounded-full bg-violet-500/10 px-2 py-1 text-[11px] font-black text-violet-700 dark:text-violet-300">{customerFacingFulfillmentMode(row.context.fulfillmentMode, locale)}</span></div><p className="mt-1 text-xs text-dtsc-muted">{order ? `${customerFacingStatusLabel(order.status, locale)} · ${formatMoney(order.totalAmount, order.currency, locale)}` : "—"} · {row.reservations.length} {locale === "en" ? "stock reservation(s)" : "réservation(s) de stock"}{latestFulfillment ? ` · ${locale === "en" ? "Pickup / delivery" : "Retrait / livraison"} ${latestFulfillment.reference}: ${customerFacingStatusLabel(latestFulfillment.status, locale)}` : ""}</p></div><p className="text-xs font-semibold text-dtsc-muted">{new Date(row.context.createdAt).toLocaleString(locale === "en" ? "en-US" : "fr-FR")}</p></div>; })}{!orders?.items.length ? <p className="text-sm text-dtsc-muted">{locale === "en" ? "No customer order yet." : "Aucune commande client pour le moment."}</p> : null}</div>
+      <div className="mt-3 grid grid-cols-[minmax(0,1fr)] gap-2">
+        {(orders?.items || []).map((row) => {
+          const order = row.order;
+          const latestFulfillment = order?.fulfillments?.[0];
+          const canCancel = Boolean(order?.status === "CONFIRMED" && row.context.status === "RESERVED");
+          return (
+            <div key={row.context.id} className="min-w-0 max-w-full rounded-xl border border-dtsc-border bg-dtsc-page p-3">
+              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="break-words font-black text-dtsc-ink">{order?.reference || row.context.salesOrderId}</span>
+                    <span className={`rounded-full px-2 py-1 text-[11px] font-black ${statusClass(row.context.status)}`}>{customerFacingStatusLabel(row.context.status, locale)}</span>
+                    <span className="rounded-full bg-violet-500/10 px-2 py-1 text-[11px] font-black text-violet-700 dark:text-violet-300">{customerFacingFulfillmentMode(row.context.fulfillmentMode, locale)}</span>
+                  </div>
+                  <p className="mt-1 text-xs text-dtsc-muted">
+                    {order ? `${customerFacingStatusLabel(order.status, locale)} · ${formatMoney(order.totalAmount, order.currency, locale)}` : "—"}
+                    {` · ${row.reservations.length} ${locale === "en" ? "stock reservation(s)" : "réservation(s) de stock"}`}
+                    {latestFulfillment ? ` · ${locale === "en" ? "Pickup / delivery" : "Retrait / livraison"} ${latestFulfillment.reference}: ${customerFacingStatusLabel(latestFulfillment.status, locale)}` : ""}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-start gap-2 sm:flex-col sm:items-end">
+                  <p className="text-xs font-semibold text-dtsc-muted">{new Date(row.context.createdAt).toLocaleString(locale === "en" ? "en-US" : "fr-FR")}</p>
+                  {canCancel ? (
+                    <Button type="button" size="sm" variant="outline" disabled={cancellationBusy || Boolean(busy)} onClick={() => {
+                      setCancellingOrderId(order!.id);
+                      setCancellationReason("");
+                    }}><X className="h-4 w-4" />{cancelCopy.cancel}</Button>
+                  ) : null}
+                </div>
+              </div>
+              {order && cancellingOrderId === order.id && canCancel ? (
+                <div className="mt-3 min-w-0 max-w-full rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
+                  <label className="block text-xs font-bold text-dtsc-ink">
+                    {cancelCopy.reason}
+                    <Input className="mt-2" value={cancellationReason} onChange={(event) => setCancellationReason(event.target.value)} maxLength={1000} placeholder={cancelCopy.reasonPlaceholder} />
+                  </label>
+                  <div data-responsive-actions className="mt-3 flex flex-wrap gap-2">
+                    <Button size="sm" type="button" disabled={cancellationBusy || cancellationReason.trim().length < 5} onClick={() => void cancelOrder(order)}>{cancellationBusy ? "…" : cancelCopy.confirm}</Button>
+                    <Button size="sm" type="button" variant="outline" disabled={cancellationBusy} onClick={() => { setCancellingOrderId(null); setCancellationReason(""); }}>{cancelCopy.back}</Button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+        {!orders?.items.length ? <p className="text-sm text-dtsc-muted">{locale === "en" ? "No customer order yet." : "Aucune commande client pour le moment."}</p> : null}
+      </div>
     </div>
   </section>;
 }

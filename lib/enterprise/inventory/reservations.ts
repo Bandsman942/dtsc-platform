@@ -287,8 +287,13 @@ export async function consumeEnterpriseInventoryReservationsTx(
   return consumed;
 }
 
-export async function releaseEnterpriseInventoryReservation(organizationId: string, reservationId: string, actorUserId: string, reason: string) {
-  return reservationRetry(() => prisma.$transaction(async (tx) => {
+export async function releaseEnterpriseInventoryReservationTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  reservationId: string,
+  actorUserId: string,
+  reason: string,
+) {
     const reservation = await tx.enterpriseInventoryReservation.findFirst({ where: { id: reservationId, organizationId } });
     if (!reservation) throw new EnterpriseDomainError("INVENTORY_RESERVATION_NOT_FOUND", 404);
     if (reservation.status === "RELEASED" || reservation.status === "CANCELLED" || reservation.status === "EXPIRED") return reservation;
@@ -308,5 +313,11 @@ export async function releaseEnterpriseInventoryReservation(organizationId: stri
       metadataJson: { reason, salesOrderId: reservation.salesOrderId, warehouseId: reservation.warehouseId },
     });
     return tx.enterpriseInventoryReservation.findUniqueOrThrow({ where: { id: reservation.id } });
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 }));
+}
+
+export async function releaseEnterpriseInventoryReservation(organizationId: string, reservationId: string, actorUserId: string, reason: string) {
+  return reservationRetry(() => prisma.$transaction(
+    (tx) => releaseEnterpriseInventoryReservationTx(tx, organizationId, reservationId, actorUserId, reason),
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 },
+  ));
 }

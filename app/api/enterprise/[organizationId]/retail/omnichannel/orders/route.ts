@@ -15,7 +15,13 @@ const createSchema = z.object({
   currencyCode: z.string().trim().length(3).transform((value) => value.toUpperCase()),
   expectedFulfillmentAt: z.coerce.date().optional().nullable(),
   reservationExpiresAt: z.coerce.date().optional().nullable(),
-  lines: z.array(z.object({ catalogItemId: z.string().trim().min(1).max(240), quantity: z.coerce.number().positive().max(1_000_000) })).min(1).max(200),
+  lines: z.array(z.object({
+    catalogItemId: z.string().trim().min(1).max(240),
+    quantity: z.coerce.number().positive().max(1_000_000).refine(
+      (value) => Math.abs(value * 1000 - Math.round(value * 1000)) < 0.000001,
+      "La quantité doit respecter la précision du stock (3 décimales).",
+    ),
+  })).min(1).max(200),
 });
 
 type Params = { params: Promise<{ organizationId: string }> };

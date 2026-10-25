@@ -1,7 +1,7 @@
 # Hotfix #886 — Complétude des avantages Retail
 
-Issue de livraison : #888 (incrément du parent #886 / #785 P0). Baseline de réconciliation : `main@a606fe30c6b4a0f28acc8d0ae14f95ceb1884bb1` (24/10/2026).
-Statut : **implémentation partielle, branche de réconciliation `fix/888-retail-refund-quota-reconcile`, aucun merge ni activation automatique avant les gates et l'E2E propriétaire**.
+Issues de livraison : #888 (premier incrément du parent #886 / #785 P0), puis #903 pour l'incrément `fix/886-omnichannel-benefits-guard` (PR #902). Baseline du second incrément : `main@827854513cef490a7d361b539eeb665430ff5f77` (25/10/2026).
+Statut : **#888 validé E2E, fusionné et publié sur Production ; #903 publié en PR #902 brouillon, non fusionné, non déployé, E2E propriétaire toujours requis**.
 Gouvernance : jalon GitHub actif **Delivery Governance v1** ; le correctif de la PR historique #887 a été repris commit par commit depuis le dernier `main` sans écraser les évolutions intermédiaires. Les P0 parents #886/#785 demeurent OPEN.
 
 ## Premier incrément — retour intégral et quota relationnel
@@ -18,18 +18,44 @@ Le moteur Retail inverse déjà `AUTO_RETAIL` lors d'une annulation de vente, ma
 
 ## Matrice de couverture de #886
 
-| Critère | État de ce premier incrément |
+| Critère | État cumulé des incréments |
 |---|---|
 | Retail POS remise automatique et annulation sale | Contrat existant préservé ; régression #786 |
-| Retours POS partiels : quota maintenu | Code + scénario E2E ajouté ; CI à certifier |
-| Retours POS complets : quota libéré une fois | Code + scénario E2E ajouté ; CI à certifier |
+| Retours POS partiels : quota maintenu | **#888 fusionné, OWNER_E2E BON** |
+| Retours POS complets : quota libéré une fois | **#888 fusionné, OWNER_E2E BON** |
 | Montants et TVA dans ce circuit | Remontent exclusivement du `EnterpriseRetailReturn` confirmé et de la comptabilisation Retail canonique |
-| Omnicanal : preview et commit avec remise identique au POS, sans dette de quota | **NON LIVRÉ :** `createRetailOmnichannelOrder` crée une `EnterpriseSalesOrder`, pas une `EnterpriseRetailSale` ; aucun adaptateur certifié attaché au cycle de commande |
+| Omnicanal : preview et commit avec remise identique au POS, sans dette de quota | **Deuxième incrément #903 en PR #902, non déployé :** même resolver Retail POS pour la prévisualisation et la commande ; quota `REQUESTED` atomique avec commande, `CONSUMED` après livraison complète, `CANCELLED` en cas d'annulation avant livraison ; E2E à certifier |
+| Omnicanal : retours et remboursements d'une commande livrée | **NON LIVRÉ** : le circuit de remboursement d'une `EnterpriseSalesOrder` reste à définir et à prouver ; aucune inversion comptable simulée |
 | CASHBACK/CREDIT/LOYALTY via comptes canoniques | **NON LIVRÉ :** nécessitera définition de l'événement économique, de l'autorisation, du point de reversal et du mapping vers les ledgers Retail existants |
 | DELIVERY, services non monétaires | **NON LIVRÉ :** pas de preuve structurée de fulfillment, demande ≠ consommation |
 | Matrice complète 22 relations, concurrence, retrait d'audience, devise, omnicanal | **NON CERTIFIÉE :** QA #786 / #884 continuent de couvrir la base ; extension #886 obligatoire |
 
 Ne pas décrire une remise omnicanale comme effectivement appliquée au checkout parce que le moteur de tarif commercial affiche une promotion. Aucune `EnterpriseRelationshipBenefitUsage` ne doit être marquée `CONSUMED` par anticipation de la création de commande, de la réservation ou du seul remboursement demandé.
+
+## Deuxième incrément en attente de livraison — cycle de commande omnicanal
+
+- Résolution des tarifs via les mêmes `resolveRetailCommercialPricingDecisions`, `resolveRetailRelationshipBenefitPricing` et `applyRetailRelationshipBenefitPricing` que les tickets POS. Les montants de `EnterpriseSalesOrder` sont arrondis à 2 décimales : un écart matériel est bloqué par `RETAIL_OMNICHANNEL_PRICE_PRECISION_UNSUPPORTED` pour ne pas masquer une différence de prix ou de taxe.
+- La confirmation d'une nouvelle commande crée son usage `AUTO_RETAIL_OMNICHANNEL` en `REQUESTED` dans **la même transaction** que les lignes et montants de commande. La relation, son attribution, sa liaison au tiers, sa devise, son quota, son contexte et son module sont revalidés sous verrou de quota partagé avec le POS.
+- La transaction de commande et contexte Retail est sérialisable (maximum 30 secondes) et les erreurs PostgreSQL de sérialisation sont rejouées par le retry Retail partagé (3 tentatives bornées). Une clé identique avec un panier différent est refusée.
+- Une réservation de stock ratée après la commande déclenche une compensation avec annulation conditionnelle de l'ordre et du quota encore réservé. Une annulation explicite avant toute livraison libère les réservations de stock par le service Inventory canonique et annule le quota dans la même transaction.
+- Le formulaire Retail omnicanal affiche un bouton d'annulation uniquement pour les commandes encore réservées et non livrées ; un motif obligatoire est saisi dans une zone de confirmation responsive FR/EN. L'historique des avantages affiche **Réservée** plutôt que « consommée » tant que l'ordre n'est pas livré.
+- La livraison partielle conserve `REQUESTED`. Seule la livraison intégrale `PRODUCT_DELIVERY`, avec réservations déjà prêtes **et acceptation client ou document de preuve**, marque l'usage `CONSUMED` dans la transaction de fulfillment. Les retours après fulfillment **ne sont pas couverts** par cet incrément.
+- Le fulfillment d'une commande identifiée comme Retail nécessite désormais le droit d'écriture **Sales et Retail POS** du même tenant. Le `proofDocumentId`, lorsqu'il remplace l'acceptation client, doit viser un document réel, versionné et lié à cette commande dans la même entreprise.
+- Rejeu de création et d'annulation idempotents ; une clé de commande réutilisée avec un autre tiers, panier ou mode logistique renvoie un conflit explicite.
+- Nouveau scénario E2E navigateur/API dans le test #786 : prix, quota réservé, refus de double bénéfice, annulation, libération du stock, nouvelle commande, livraisons partielle et intégrale. **Non encore certifié par la CI ni le propriétaire**.
+
+Ne pas activer la branche avant la CI, l'E2E propriétaire et la revue des scénarios de concurrence. L'absence de pipeline de retour omnicanal signifie que #886 et #785 demeurent OPEN.
+
+### OWNER_E2E supplémentaire — commande omnicanale
+
+1. Créer une remise automatique `DISCOUNT` consentie et limitée à une utilisation pour un client Retail lié à une relation active, puis prévisualiser un panier de deux unités (prix TTC, taxes et devise).
+2. Confirmer une commande omnicanale : constater le **même total arrondi au centime** et une entrée `AUTO_RETAIL_OMNICHANNEL` en `REQUESTED`, non en `CONSUMED` ; aucun deuxième droit disponible pendant la réservation.
+3. Rejouer la commande avec la même clé : même order ID et une seule entrée d'usage. Réessayer avec la même clé mais un autre client ou panier : conflit explicite.
+4. Annuler avant livraison : réservation de stock libérée et usage `CANCELLED` ; double annulation idempotente ; le quota redevient disponible. Un utilisateur non autorisé ou un autre tenant ne peut rien annuler.
+5. Recréer une commande puis livrer une unité : usage toujours `REQUESTED`. Livrer la deuxième : usage `CONSUMED` exactement une fois, sans double sortie de stock. Refuser un fulfillment de type service, une mauvaise réserve ou un replay concurrent.
+6. Vérifier relation révoquée, quota concurrent POS/omnicanal, devise et écart de précision tarifaire. Refaire les scénarios POS remises/retours, Gaming Checkout, affichages FR/EN, mobile et thème sombre.
+
+Le retour/remboursement d'une commande omnicanale **après livraison** et les types `CASHBACK/CREDIT/LOYALTY/DELIVERY` feront l'objet de travaux distincts avant clôture de #886.
 
 ## Contrôles attendus
 
@@ -52,4 +78,4 @@ Ne pas décrire une remise omnicanale comme effectivement appliquée au checkout
 
 ## Décision de périmètre
 
-**Cette PR ne peut fermer que #888 : ne pas fermer #886 ni #785** sur ce seul incrément. Les autres objectifs exigent des adaptateurs métier canoniques et des E2E complémentaires ; les effets financiers ne seront pas simulés dans une couche parallèle.
+**La PR historique du premier incrément a fermé #888. La PR #902 ne peut fermer que #903 : ne pas fermer #886 ni #785** sur cet incrément. Les autres objectifs exigent des adaptateurs métier canoniques et des E2E complémentaires ; les effets financiers ne seront pas simulés dans une couche parallèle.

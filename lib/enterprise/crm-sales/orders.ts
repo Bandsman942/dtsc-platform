@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { Prisma } from "@prisma/client";
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { assertActiveClientOrganization, publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
 import { prisma } from "@/lib/prisma";
@@ -23,6 +24,8 @@ export type EnterpriseDirectSalesOrderInput = {
     lineTotal: number;
   }>;
   eventMetadata?: Record<string, unknown>;
+  /** Runs only for a newly created order, in the same transaction as its confirmed prices. */
+  onOrderCreatedTx?: (tx: Prisma.TransactionClient, orderId: string) => Promise<void>;
 };
 
 function deterministicOrderReference(organizationId: string, idempotencyKey: string) {
@@ -93,6 +96,7 @@ export async function createEnterpriseDirectSalesOrder(organizationId: string, a
       },
       include: { items: { orderBy: { sortOrder: "asc" } }, fulfillments: { include: { items: true } } },
     });
+    await input.onOrderCreatedTx?.(tx, order.id);
     await publishEnterpriseEvent(tx, {
       organizationId,
       entityType: "EnterpriseSalesOrder",
@@ -104,5 +108,7 @@ export async function createEnterpriseDirectSalesOrder(organizationId: string, a
       metadataJson: { directOrder: true, idempotencyFingerprint: reference, ...(input.eventMetadata || {}) },
     });
     return { order, idempotent: false };
-  });
+  }, input.onOrderCreatedTx
+    ? { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 }
+    : undefined);
 }
