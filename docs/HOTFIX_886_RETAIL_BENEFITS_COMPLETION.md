@@ -1,7 +1,7 @@
 # Hotfix #886 — Complétude des avantages Retail
 
-Issue de livraison : #888 (premier incrément du parent #886 / #785 P0), puis `fix/886-omnichannel-benefits-guard` (incrément suivant). Baseline du second incrément : `main@827854513cef490a7d361b539eeb665430ff5f77` (25/10/2026).
-Statut : **#888 validé E2E, fusionné et publié sur Production ; second incrément #886 en branche locale, non fusionné et non activé, E2E propriétaire toujours requis**.
+Issues de livraison : #888 (premier incrément du parent #886 / #785 P0), puis #903 pour l'incrément `fix/886-omnichannel-benefits-guard` (PR #902). Baseline du second incrément : `main@827854513cef490a7d361b539eeb665430ff5f77` (25/10/2026).
+Statut : **#888 validé E2E, fusionné et publié sur Production ; #903 publié en PR #902 brouillon, non fusionné, non déployé, E2E propriétaire toujours requis**.
 Gouvernance : jalon GitHub actif **Delivery Governance v1** ; le correctif de la PR historique #887 a été repris commit par commit depuis le dernier `main` sans écraser les évolutions intermédiaires. Les P0 parents #886/#785 demeurent OPEN.
 
 ## Premier incrément — retour intégral et quota relationnel
@@ -24,7 +24,7 @@ Le moteur Retail inverse déjà `AUTO_RETAIL` lors d'une annulation de vente, ma
 | Retours POS partiels : quota maintenu | **#888 fusionné, OWNER_E2E BON** |
 | Retours POS complets : quota libéré une fois | **#888 fusionné, OWNER_E2E BON** |
 | Montants et TVA dans ce circuit | Remontent exclusivement du `EnterpriseRetailReturn` confirmé et de la comptabilisation Retail canonique |
-| Omnicanal : preview et commit avec remise identique au POS, sans dette de quota | **Deuxième incrément en cours, non publié :** même resolver Retail POS pour la prévisualisation et la commande ; quota `REQUESTED` atomique avec commande, `CONSUMED` après livraison complète, `CANCELLED` en cas d'annulation avant livraison ; E2E à certifier |
+| Omnicanal : preview et commit avec remise identique au POS, sans dette de quota | **Deuxième incrément #903 en PR #902, non déployé :** même resolver Retail POS pour la prévisualisation et la commande ; quota `REQUESTED` atomique avec commande, `CONSUMED` après livraison complète, `CANCELLED` en cas d'annulation avant livraison ; E2E à certifier |
 | Omnicanal : retours et remboursements d'une commande livrée | **NON LIVRÉ** : le circuit de remboursement d'une `EnterpriseSalesOrder` reste à définir et à prouver ; aucune inversion comptable simulée |
 | CASHBACK/CREDIT/LOYALTY via comptes canoniques | **NON LIVRÉ :** nécessitera définition de l'événement économique, de l'autorisation, du point de reversal et du mapping vers les ledgers Retail existants |
 | DELIVERY, services non monétaires | **NON LIVRÉ :** pas de preuve structurée de fulfillment, demande ≠ consommation |
@@ -78,4 +78,4 @@ Le retour/remboursement d'une commande omnicanale **après livraison** et les ty
 
 ## Décision de périmètre
 
-**Cette PR ne peut fermer que #888 : ne pas fermer #886 ni #785** sur ce seul incrément. Les autres objectifs exigent des adaptateurs métier canoniques et des E2E complémentaires ; les effets financiers ne seront pas simulés dans une couche parallèle.
+**La PR historique du premier incrément a fermé #888. La PR #902 ne peut fermer que #903 : ne pas fermer #886 ni #785** sur cet incrément. Les autres objectifs exigent des adaptateurs métier canoniques et des E2E complémentaires ; les effets financiers ne seront pas simulés dans une couche parallèle.

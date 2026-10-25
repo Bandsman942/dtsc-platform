@@ -947,6 +947,8 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
         code: codes.omnichannel,
         nameFr: "Remise omnicanale #886",
         nameEn: "Omnichannel discount #886",
+        descriptionFr: "Remise omnicanale réservée jusqu'à la livraison complète prouvée.",
+        descriptionEn: "Omnichannel discount reserved until full, proven delivery.",
         benefitType: "DISCOUNT", assignmentMode: "AUTOMATIC",
         relationTypes: ["CUSTOMER"], identityLinkIds: [],
         valueType: "PERCENT", valueDecimal: 40, currencyCode: fixture.currencyCode,
