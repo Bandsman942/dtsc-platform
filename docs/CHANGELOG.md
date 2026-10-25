@@ -1,3 +1,11 @@
+## 2026-10-25 — Hotfix P0 #906 : fidélité relationnelle Retail POS (pré-release)
+
+- Ajout du type `LOYALTY` dans l'administration des avantages : sélection d'un programme Retail canonique actif, devise identique, taux positif de points proportionnel au total réel de vente, sans règle concurrente `autoEarn`.
+- Gain transactionnel `EnterpriseRetailLoyaltyEntry/EARN` et consommation `EnterpriseRelationshipBenefitUsage/CONSUMED` associés à une relation consentie et à un ticket POS réellement confirmé. Contrôle tenant, programme, client, devises, quotas, verrous et clé d'idempotence.
+- Retours partiels et intégraux : écritures de points inversement proportionnelles, remboursement et comptabilité dans la même transaction ; le quota est libéré uniquement sur retour intégral. Réversion de vente et rejeu pris en charge.
+- QA #906, scénario E2E Retail #786, formulaire FR/EN, contrats de la CI Shop 2 et documentation dédiés. **CI, E2E propriétaire et fusion sur `main` encore à réaliser.** Aucun déploiement en production n'est annoncé.
+- `CASHBACK/CREDIT` sur Stored Value, `DELIVERY` et matrice des 22 relations restent ouverts sous #886/#785.
+
 ## 2026-10-24 — HOTFIX P0 #888 : réconciliation du quota après remboursement Retail intégral (pré-release)
 
 - Reprise sur le dernier `main` des changements ciblés de la PR historique #887 : verrouillage tenant-scopé de la vente, transaction SERIALIZABLE avec retry, décompte des retours uniquement `COMPLETED` par ligne d'origine et libération conditionnelle du quota `AUTO_RETAIL` après comptabilisation du remboursement intégral.

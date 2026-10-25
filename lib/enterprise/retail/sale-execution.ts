@@ -11,6 +11,7 @@ import type { retailCommercialContextSchema } from "@/lib/enterprise/retail/comm
 import { autoEarnRetailLoyaltyForSale } from "@/lib/enterprise/retail/loyalty-sale-hooks";
 import {
   resolveRetailRelationshipBenefitPricing,
+  resolveRetailRelationshipLoyaltyEffects,
   serializeRetailRelationshipBenefitEffects,
 } from "@/lib/enterprise/relationship-benefits/retail-adapter";
 import type { getRetailCommercialPermissions } from "@/lib/enterprise/retail/permissions";
@@ -83,6 +84,17 @@ export async function executeCanonicalRetailSale(args: {
     guarded.decisions,
     relationshipResolution.adjustment,
   );
+  const loyaltyEffects = !guarded.overrideApplied && !args.commercialContext.overrideReason
+    ? await resolveRetailRelationshipLoyaltyEffects({
+        organizationId: args.organizationId,
+        customerBusinessPartyId: guarded.input.customerBusinessPartyId,
+        currencyCode: guarded.input.currencyCode,
+        siteId: guarded.input.siteId,
+        channelCode: args.commercialContext.channelCode,
+        soldAt: guarded.input.soldAt,
+        decisions: finalDecisions,
+      })
+    : [];
   const finalDecisionByItem = new Map(
     finalDecisions.map((decision) => [decision.catalogItemId, decision]),
   );
@@ -115,7 +127,7 @@ export async function executeCanonicalRetailSale(args: {
   });
 
   const result = await withRetailTransactionRetry(
-    () => createRetailSale(args.organizationId, args.actorUserId, finalInput, relationshipResolution.effects),
+    () => createRetailSale(args.organizationId, args.actorUserId, finalInput, relationshipResolution.effects, loyaltyEffects),
     { maxAttempts: 3, baseDelayMs: 20 },
   );
   await persistRetailCommercialDecisions(

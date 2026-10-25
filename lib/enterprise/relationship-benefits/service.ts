@@ -122,6 +122,7 @@ async function validateRelationshipBenefitConfiguration(
     currencyCode: string | null | undefined;
     minimumAmount: number | Prisma.Decimal | null | undefined;
     targetModuleCode: string | null | undefined;
+    loyaltyProgramId: string | null | undefined;
     usageLimitPerPeriod: number | null | undefined;
     usagePeriodDays: number | null | undefined;
     stackable: boolean;
@@ -237,7 +238,35 @@ async function validateRelationshipBenefitConfiguration(
     actionCode: null,
   });
   const automaticGamingShape = automaticGamingEffectSupported({ ...retailProbe, actionCode: null });
-  const supportedAutomaticShape = automaticRetailShape || automaticGamingShape;
+  const retailLoyaltyShape = config.benefitType === "LOYALTY" &&
+    normalizeEnterpriseModuleCode(config.targetModuleCode || "") === "RETAIL_POS" &&
+    config.valueType === "POINTS" && Number(config.valueDecimal || 0) >= 0.000001 &&
+    config.actionCode === "NONE" && config.stackable && Boolean(config.currencyCode) && Boolean(config.loyaltyProgramId);
+  if (config.benefitType === "LOYALTY" && !retailLoyaltyShape) {
+    throw new EnterpriseRelationshipBenefitError(
+      "RELATIONSHIP_BENEFIT_LOYALTY_CONFIG_INVALID",
+      "Pour attribuer des points automatiquement, choisissez Retail POS, un programme de fidélité actif, une devise et un taux de points positif ; activez le cumul.",
+      409,
+    );
+  }
+  if (retailLoyaltyShape) {
+    const program = await prisma.enterpriseRetailLoyaltyProgram.findFirst({
+      where: { id: config.loyaltyProgramId!, organizationId, archivedAt: null, status: "ACTIVE", currencyCode: config.currencyCode!.toUpperCase() },
+      select: { id: true, settingsJson: true },
+    });
+    const settings = program?.settingsJson;
+    if (!program || (settings && typeof settings === "object" && !Array.isArray(settings) && (settings as Record<string, unknown>).autoEarn === true)) {
+      throw new EnterpriseRelationshipBenefitError(
+        "RELATIONSHIP_BENEFIT_LOYALTY_PROGRAM_INVALID",
+        "Choisissez un programme de fidélité Retail actif dans la même devise, sans attribution automatique concurrente.",
+        409,
+      );
+    }
+  }
+  if (config.loyaltyProgramId && config.benefitType !== "LOYALTY") {
+    throw new EnterpriseRelationshipBenefitError("RELATIONSHIP_BENEFIT_LOYALTY_CONFIG_INVALID", "Le programme de fidélité n’est applicable qu’aux avantages de type Fidélité.", 409);
+  }
+  const supportedAutomaticShape = automaticRetailShape || automaticGamingShape || retailLoyaltyShape;
   if (automaticGamingShape && config.stackable) {
     throw new EnterpriseRelationshipBenefitError(
       "RELATIONSHIP_BENEFIT_GAMING_STACKING_UNSUPPORTED",
@@ -410,6 +439,7 @@ type BenefitInput = {
   actionLabelFr?: string | null;
   actionLabelEn?: string | null;
   targetModuleCode?: string | null;
+  loyaltyProgramId?: string | null;
   usageLimitTotal?: number | null;
   usageLimitPerPeriod?: number | null;
   usagePeriodDays?: number | null;
@@ -456,6 +486,7 @@ export async function createRelationshipBenefit({
     currencyCode: input.currencyCode,
     minimumAmount: input.minimumAmount,
     targetModuleCode,
+    loyaltyProgramId: input.loyaltyProgramId || null,
     usageLimitPerPeriod: input.usageLimitPerPeriod,
     usagePeriodDays: input.usagePeriodDays,
     stackable: input.stackable,
@@ -495,6 +526,7 @@ export async function createRelationshipBenefit({
         actionLabelFr: input.actionLabelFr || null,
         actionLabelEn: input.actionLabelEn || null,
         targetModuleCode,
+        settingsJson: input.benefitType === "LOYALTY" ? { retailLoyaltyProgramId: input.loyaltyProgramId } : Prisma.JsonNull,
         usageLimitTotal: input.usageLimitTotal ?? null,
         usageLimitPerPeriod: input.usageLimitPerPeriod ?? null,
         usagePeriodDays: input.usagePeriodDays ?? null,
@@ -622,6 +654,10 @@ export async function updateRelationshipBenefit({
         ? normalizeEnterpriseModuleCode(String(input.targetModuleCode))
         : null
       : current.targetModuleCode;
+  const previousSettings = jsonObject(current.settingsJson);
+  const mergedLoyaltyProgramId = "loyaltyProgramId" in input
+    ? (typeof input.loyaltyProgramId === "string" ? input.loyaltyProgramId.trim() || null : null)
+    : typeof previousSettings.retailLoyaltyProgramId === "string" ? previousSettings.retailLoyaltyProgramId : null;
   // A status-only suspension/archive is a restrictive transition, not a
   // configuration change. It must remain possible even if an entitlement,
   // reference, currency or certified adapter is no longer available. Any
@@ -647,6 +683,7 @@ export async function updateRelationshipBenefit({
           ? (input.minimumAmount as number | null | undefined)
           : current.minimumAmount,
       targetModuleCode: mergedTargetModuleCode,
+      loyaltyProgramId: mergedLoyaltyProgramId,
       usageLimitPerPeriod:
         "usageLimitPerPeriod" in input
           ? (input.usageLimitPerPeriod as number | null | undefined)
@@ -687,6 +724,12 @@ export async function updateRelationshipBenefit({
     if (key in input) writable[key] = input[key] ?? null;
   }
   if ("targetModuleCode" in input) data.targetModuleCode = mergedTargetModuleCode;
+  if ("loyaltyProgramId" in input || "benefitType" in input) {
+    const resultingType = "benefitType" in input ? String(input.benefitType) : current.benefitType;
+    data.settingsJson = resultingType === "LOYALTY" && mergedLoyaltyProgramId
+      ? { retailLoyaltyProgramId: mergedLoyaltyProgramId }
+      : Prisma.JsonNull;
+  }
   if ("startsAt" in input) data.startsAt = mergedStartsAt;
   if ("endsAt" in input) data.endsAt = mergedEndsAt;
   if ("conditions" in input) data.conditionsJson = input.conditions ? (input.conditions as Prisma.InputJsonValue) : Prisma.JsonNull;
