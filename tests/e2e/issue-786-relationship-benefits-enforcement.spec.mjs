@@ -19,6 +19,7 @@ const codes = {
   exclusive: "E2E_786_RETAIL_EXCLUSIVE_30",
   manual: "E2E_786_MANUAL_SERVICE",
   fullReturn: "E2E_886_RETAIL_RETURN_QUOTA",
+  omnichannel: "E2E_886_RETAIL_OMNICHANNEL_QUOTA",
 };
 
 const fixture = {
@@ -81,7 +82,7 @@ async function get(page, path) {
 
 async function cleanupFixture() {
   const benefits = await prisma.enterpriseRelationshipBenefit.findMany({
-    where: { organizationId, code: { in: [codes.automatic, codes.exclusive, codes.manual, codes.fullReturn] } },
+    where: { organizationId, code: { in: [codes.automatic, codes.exclusive, codes.manual, codes.fullReturn, codes.omnichannel] } },
     select: { id: true },
   });
   const benefitIds = benefits.map((item) => item.id);
@@ -933,6 +934,137 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
       expect(availableAgain.body.relationshipBenefits.some((item) => item.benefitId === benefitId)).toBe(true);
     } finally {
       await approverContext.close();
+      await adminContext.close();
+    }
+  });
+
+  test("#886 omnichannel reserves the discounted price, then consumes the quota only after complete delivery", async ({ browser }) => {
+    const adminContext = await browser.newContext({ baseURL: baseUrl });
+    const admin = await adminContext.newPage();
+    await signIn(admin, adminEmail, adminPassword, "/enterprise-modules/RETAIL_POS");
+    try {
+      const created = await post(admin, `/api/enterprise/${organizationId}/relationship-benefits`, {
+        code: codes.omnichannel,
+        nameFr: "Remise omnicanale #886",
+        nameEn: "Omnichannel discount #886",
+        benefitType: "DISCOUNT", assignmentMode: "AUTOMATIC",
+        relationTypes: ["CUSTOMER"], identityLinkIds: [],
+        valueType: "PERCENT", valueDecimal: 40, currencyCode: fixture.currencyCode,
+        actionCode: "NONE", targetModuleCode: "RETAIL_POS",
+        usageLimitTotal: 1, usageLimitPerPeriod: 1, usagePeriodDays: 30,
+        stackable: false, status: "ACTIVE",
+        conditions: { channelCodes: ["POS"], catalogItemIds: [fixture.catalogItemId] },
+      });
+      expect(created.response.status(), JSON.stringify(created.body)).toBe(201);
+      const benefitId = created.body.benefit.id;
+
+      const preview = await post(admin, `/api/enterprise/${organizationId}/retail/pricing/preview`, {
+        siteId: fixture.siteId, customerBusinessPartyId: fixture.customerBusinessPartyId,
+        currencyCode: fixture.currencyCode, channelCode: "POS",
+        lines: [{ catalogItemId: fixture.catalogItemId, quantity: 2 }],
+      }, "/enterprise-modules/RETAIL_POS");
+      expect(preview.response.ok(), JSON.stringify(preview.body)).toBeTruthy();
+      expect(preview.body.relationshipBenefits.map((item) => item.benefitId)).toContain(benefitId);
+
+      const payload = {
+        idempotencyKey: `e2e-886-omni-${Date.now()}`,
+        customerBusinessPartyId: fixture.customerBusinessPartyId,
+        sourceSiteId: fixture.siteId,
+        fulfillmentWarehouseId: fixture.warehouseId,
+        fulfillmentMode: "CLICK_COLLECT",
+        currencyCode: fixture.currencyCode,
+        lines: [{ catalogItemId: fixture.catalogItemId, quantity: 2 }],
+      };
+      const ordered = await post(admin, `/api/enterprise/${organizationId}/retail/omnichannel/orders`, payload,
+        "/enterprise-modules/RETAIL_POS");
+      expect(ordered.response.status(), JSON.stringify(ordered.body)).toBe(201);
+      expect(ordered.body.orchestration.status).toBe("RESERVED");
+      let orderId = ordered.body.order.id;
+      expect(asNumber(ordered.body.order.totalAmount)).toBeCloseTo(asNumber(preview.body.grandTotal), 2);
+      let usage = await prisma.enterpriseRelationshipBenefitUsage.findFirstOrThrow({
+        where: { organizationId, benefitId, effectEntityType: "EnterpriseSalesOrder", effectEntityId: orderId },
+      });
+      expect(usage.executionMode).toBe("AUTO_RETAIL_OMNICHANNEL");
+      expect(usage.status).toBe("REQUESTED");
+      expect(usage.consumedAt).toBeNull();
+
+      const replay = await post(admin, `/api/enterprise/${organizationId}/retail/omnichannel/orders`, payload,
+        "/enterprise-modules/RETAIL_POS");
+      expect(replay.response.status(), JSON.stringify(replay.body)).toBe(200);
+      expect(replay.body.order.id).toBe(orderId);
+      expect(await prisma.enterpriseRelationshipBenefitUsage.count({ where: { organizationId, effectEntityId: orderId } })).toBe(1);
+
+      const blocked = await post(admin, `/api/enterprise/${organizationId}/retail/pricing/preview`, {
+        siteId: fixture.siteId, customerBusinessPartyId: fixture.customerBusinessPartyId,
+        currencyCode: fixture.currencyCode, channelCode: "POS",
+        lines: [{ catalogItemId: fixture.catalogItemId, quantity: 2 }],
+      }, "/enterprise-modules/RETAIL_POS");
+      expect(blocked.response.ok(), JSON.stringify(blocked.body)).toBeTruthy();
+      expect(blocked.body.relationshipBenefits.map((item) => item.benefitId)).not.toContain(benefitId);
+
+      const cancelled = await post(admin, `/api/enterprise/${organizationId}/retail/omnichannel/orders/${orderId}/cancel`, {
+        revision: ordered.body.order.revision,
+        reason: "Annulation d’essai avant livraison #886",
+      }, "/enterprise-modules/RETAIL_POS");
+      expect(cancelled.response.status(), JSON.stringify(cancelled.body)).toBe(200);
+      expect(cancelled.body.order.status).toBe("CANCELLED");
+      expect((await prisma.enterpriseRelationshipBenefitUsage.findUniqueOrThrow({ where: { id: usage.id } })).status).toBe("CANCELLED");
+      expect(await prisma.enterpriseInventoryReservation.count({
+        where: { organizationId, salesOrderId: orderId, status: "ACTIVE" },
+      })).toBe(0);
+      const cancelledReplay = await post(admin, `/api/enterprise/${organizationId}/retail/omnichannel/orders/${orderId}/cancel`, {
+        revision: ordered.body.order.revision,
+        reason: "Annulation d’essai avant livraison #886",
+      }, "/enterprise-modules/RETAIL_POS");
+      expect(cancelledReplay.response.status(), JSON.stringify(cancelledReplay.body)).toBe(200);
+      expect(cancelledReplay.body.idempotent).toBe(true);
+
+      const availableAfterCancellation = await post(admin, `/api/enterprise/${organizationId}/retail/pricing/preview`, {
+        siteId: fixture.siteId, customerBusinessPartyId: fixture.customerBusinessPartyId,
+        currencyCode: fixture.currencyCode, channelCode: "POS",
+        lines: [{ catalogItemId: fixture.catalogItemId, quantity: 2 }],
+      }, "/enterprise-modules/RETAIL_POS");
+      expect(availableAfterCancellation.response.ok(), JSON.stringify(availableAfterCancellation.body)).toBeTruthy();
+      expect(availableAfterCancellation.body.relationshipBenefits.map((item) => item.benefitId)).toContain(benefitId);
+
+      const replacement = await post(admin, `/api/enterprise/${organizationId}/retail/omnichannel/orders`, {
+        ...payload, idempotencyKey: `e2e-886-omni-replacement-${Date.now()}`,
+      }, "/enterprise-modules/RETAIL_POS");
+      expect(replacement.response.status(), JSON.stringify(replacement.body)).toBe(201);
+      orderId = replacement.body.order.id;
+      usage = await prisma.enterpriseRelationshipBenefitUsage.findFirstOrThrow({
+        where: { organizationId, benefitId, effectEntityType: "EnterpriseSalesOrder", effectEntityId: orderId },
+      });
+      expect(usage.status).toBe("REQUESTED");
+
+      const first = await post(admin, `/api/enterprise/${organizationId}/sales-orders/${orderId}/fulfill`, {
+        fulfillmentType: "PRODUCT_DELIVERY", warehouseId: fixture.warehouseId,
+        acceptedByCustomer: true, idempotencyKey: `e2e-886-omni-half-${Date.now()}`,
+        revision: replacement.body.order.revision,
+        items: [{ salesOrderItemId: replacement.body.order.items[0].id, quantityFulfilled: 1 }],
+      }, "/enterprise-modules/RETAIL_POS");
+      expect(first.response.status(), JSON.stringify(first.body)).toBe(201);
+      expect((await prisma.enterpriseRelationshipBenefitUsage.findUniqueOrThrow({ where: { id: usage.id } })).status).toBe("REQUESTED");
+
+      const updated = await prisma.enterpriseSalesOrder.findUniqueOrThrow({ where: { id: orderId } });
+      const missingProof = await post(admin, `/api/enterprise/${organizationId}/sales-orders/${orderId}/fulfill`, {
+        fulfillmentType: "PRODUCT_DELIVERY", warehouseId: fixture.warehouseId,
+        acceptedByCustomer: false, idempotencyKey: `e2e-886-omni-no-proof-${Date.now()}`,
+        revision: updated.revision,
+        items: [{ salesOrderItemId: replacement.body.order.items[0].id, quantityFulfilled: 1 }],
+      }, "/enterprise-modules/RETAIL_POS");
+      expect(missingProof.response.status(), JSON.stringify(missingProof.body)).toBe(409);
+      expect((await prisma.enterpriseRelationshipBenefitUsage.findUniqueOrThrow({ where: { id: usage.id } })).status).toBe("REQUESTED");
+      const second = await post(admin, `/api/enterprise/${organizationId}/sales-orders/${orderId}/fulfill`, {
+        fulfillmentType: "PRODUCT_DELIVERY", warehouseId: fixture.warehouseId,
+        acceptedByCustomer: true, idempotencyKey: `e2e-886-omni-finish-${Date.now()}`,
+        revision: updated.revision,
+        items: [{ salesOrderItemId: replacement.body.order.items[0].id, quantityFulfilled: 1 }],
+      }, "/enterprise-modules/RETAIL_POS");
+      expect(second.response.status(), JSON.stringify(second.body)).toBe(201);
+      expect((await prisma.enterpriseRelationshipBenefitUsage.findUniqueOrThrow({ where: { id: usage.id } })).status).toBe("CONSUMED");
+      expect(await prisma.enterpriseRelationshipBenefitUsage.count({ where: { organizationId, effectEntityId: orderId } })).toBe(1);
+    } finally {
       await adminContext.close();
     }
   });

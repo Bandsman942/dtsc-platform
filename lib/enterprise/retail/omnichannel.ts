@@ -1,8 +1,22 @@
 import { Prisma } from "@prisma/client";
 import { createEnterpriseDirectSalesOrder } from "@/lib/enterprise/crm-sales/orders";
-import { createEnterpriseInventoryReservation, releaseEnterpriseInventoryReservation } from "@/lib/enterprise/inventory/reservations";
-import { previewRetailCommercialPricing } from "@/lib/enterprise/retail/commercial-engine";
+import { publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
+import {
+  createEnterpriseInventoryReservation,
+  releaseEnterpriseInventoryReservation,
+  releaseEnterpriseInventoryReservationTx,
+} from "@/lib/enterprise/inventory/reservations";
+import {
+  applyRetailRelationshipBenefitPricing,
+  resolveRetailCommercialPricingDecisions,
+} from "@/lib/enterprise/retail/commercial-engine";
+import {
+  reserveRetailOmnichannelRelationshipBenefitsTx,
+  releaseRetailOmnichannelRelationshipBenefitsTx,
+} from "@/lib/enterprise/relationship-benefits/omnichannel-adapter";
+import { resolveRetailRelationshipBenefitPricing } from "@/lib/enterprise/relationship-benefits/retail-adapter";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
+import { withRetailTransactionRetry } from "@/lib/enterprise/retail/transaction-retry";
 import { prisma } from "@/lib/prisma";
 
 export const RETAIL_OMNICHANNEL_MODES = ["CLICK_COLLECT", "PICKUP_OTHER_STORE", "SHIP_FROM_STORE", "CUSTOMER_DELIVERY"] as const;
@@ -22,18 +36,42 @@ type OmnichannelInput = {
 };
 
 function decimal(value: Prisma.Decimal.Value = 0) { return new Prisma.Decimal(value); }
-function money(value: Prisma.Decimal.Value) { return decimal(value).toDecimalPlaces(6, Prisma.Decimal.ROUND_HALF_UP); }
+function orderMoney(value: Prisma.Decimal.Value) { return decimal(value).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP); }
 
-type PreviewLine = Awaited<ReturnType<typeof previewRetailCommercialPricing>>["lines"][number];
-function serviceValues(line: PreviewLine) {
-  const resolved = decimal(line.resolvedUnitPrice);
-  const discount = decimal(line.discountAmount);
-  const rate = decimal(line.taxRate);
-  if (line.taxIncluded && rate.gt(0)) {
-    const divisor = decimal(1).plus(rate);
-    return { unitPrice: money(resolved.div(divisor)), discountAmount: money(discount.div(divisor)) };
+function assertSameOmnichannelRequest(
+  input: OmnichannelInput,
+  context: {
+    sourceSiteId: string;
+    fulfillmentWarehouseId: string;
+    pickupSiteId: string | null;
+    fulfillmentMode: string;
+  },
+  order: {
+    businessPartyId: string;
+    currency: string;
+    items: Array<{ catalogItemId: string | null; quantityOrdered: Prisma.Decimal }>;
+  },
+) {
+  const requestedLines = new Map(input.lines.map((line) => [line.catalogItemId, decimal(line.quantity)]));
+  if (
+    context.sourceSiteId !== input.sourceSiteId ||
+    context.fulfillmentWarehouseId !== input.fulfillmentWarehouseId ||
+    (context.pickupSiteId || null) !== (input.pickupSiteId || null) ||
+    context.fulfillmentMode !== input.fulfillmentMode ||
+    order.businessPartyId !== input.customerBusinessPartyId ||
+    order.currency.toUpperCase() !== input.currencyCode.toUpperCase() ||
+    requestedLines.size !== input.lines.length ||
+    requestedLines.size !== order.items.length ||
+    order.items.some((item) => !item.catalogItemId || !requestedLines.get(item.catalogItemId)?.equals(item.quantityOrdered))
+  ) {
+    throw new EnterpriseRetailError("RETAIL_OMNICHANNEL_IDEMPOTENCY_PAYLOAD_MISMATCH", 409);
   }
-  return { unitPrice: money(resolved), discountAmount: money(discount) };
+}
+
+function assertFinishedOmnichannelReservation(status: string) {
+  if (status === "RESERVING" || status === "RESERVATION_FAILED") {
+    throw new EnterpriseRetailError("RETAIL_OMNICHANNEL_RESERVATION_INCOMPLETE", 409);
+  }
 }
 
 async function compensateFailedReservations(args: { organizationId: string; actorUserId: string; orderId: string; reservationIds: string[]; cancelFreshOrder: boolean; errorCode: string }) {
@@ -45,9 +83,16 @@ async function compensateFailedReservations(args: { organizationId: string; acto
     data: { status: "RESERVATION_FAILED", updatedByUserId: args.actorUserId },
   });
   if (args.cancelFreshOrder) {
-    await prisma.enterpriseSalesOrder.updateMany({
-      where: { id: args.orderId, organizationId: args.organizationId, status: "CONFIRMED" },
-      data: { status: "CANCELLED", cancelledAt: new Date(), cancellationReason: args.errorCode, updatedByUserId: args.actorUserId, revision: { increment: 1 } },
+    await prisma.$transaction(async (tx) => {
+      const cancelled = await tx.enterpriseSalesOrder.updateMany({
+        where: { id: args.orderId, organizationId: args.organizationId, status: "CONFIRMED" },
+        data: { status: "CANCELLED", cancelledAt: new Date(), cancellationReason: args.errorCode, updatedByUserId: args.actorUserId, revision: { increment: 1 } },
+      });
+      if (cancelled.count === 1) {
+        await releaseRetailOmnichannelRelationshipBenefitsTx({
+          tx, organizationId: args.organizationId, orderId: args.orderId,
+        });
+      }
     });
   }
 }
@@ -62,6 +107,8 @@ export async function createRetailOmnichannelOrder(organizationId: string, actor
       prisma.enterpriseInventoryReservation.findMany({ where: { organizationId, salesOrderId: existingContext.salesOrderId }, orderBy: [{ createdAt: "asc" }] }),
     ]);
     if (!order) throw new EnterpriseRetailError("RETAIL_OMNICHANNEL_ORDER_NOT_FOUND", 409);
+    assertSameOmnichannelRequest(input, existingContext, order);
+    assertFinishedOmnichannelReservation(existingContext.status);
     return { order, orchestration: existingContext, reservations, idempotent: true };
   }
 
@@ -76,33 +123,64 @@ export async function createRetailOmnichannelOrder(organizationId: string, actor
   if (!warehouse) throw new EnterpriseRetailError("RETAIL_OMNICHANNEL_WAREHOUSE_INVALID", 409);
   if (input.pickupSiteId && !pickupSite) throw new EnterpriseRetailError("RETAIL_OMNICHANNEL_PICKUP_SITE_INVALID", 409);
   if (!party) throw new EnterpriseRetailError("RETAIL_OMNICHANNEL_CUSTOMER_INVALID", 409);
+  if (new Set(input.lines.map((line) => line.catalogItemId)).size !== input.lines.length) {
+    throw new EnterpriseRetailError("RETAIL_OMNICHANNEL_CATALOG_DUPLICATE", 409);
+  }
   if (catalog.length !== new Set(input.lines.map((line) => line.catalogItemId)).size) throw new EnterpriseRetailError("RETAIL_OMNICHANNEL_CATALOG_INVALID", 409);
   if (input.fulfillmentMode === "PICKUP_OTHER_STORE" && (!input.pickupSiteId || pickupSite?.id === site.id)) throw new EnterpriseRetailError("RETAIL_OMNICHANNEL_OTHER_STORE_REQUIRED", 409);
   if (input.fulfillmentMode === "CLICK_COLLECT" && pickupSite && pickupSite.id !== warehouse.siteId) throw new EnterpriseRetailError("RETAIL_OMNICHANNEL_PICKUP_WAREHOUSE_MISMATCH", 409);
 
-  const preview = await previewRetailCommercialPricing(
+  const decisions = await resolveRetailCommercialPricingDecisions(
     organizationId,
     { siteId: input.sourceSiteId, customerBusinessPartyId: input.customerBusinessPartyId, currencyCode: input.currencyCode, soldAt: new Date(), lines: input.lines },
     { couponCode: null, customerSegmentCode: null, channelCode: "POS" },
   );
+  const relationshipResolution = await resolveRetailRelationshipBenefitPricing({
+    organizationId,
+    customerBusinessPartyId: input.customerBusinessPartyId,
+    currencyCode: input.currencyCode,
+    siteId: input.sourceSiteId,
+    channelCode: "POS",
+    decisions,
+  });
+  const pricedDecisions = applyRetailRelationshipBenefitPricing(decisions, relationshipResolution.adjustment);
   const catalogById = new Map(catalog.map((item) => [item.id, item]));
-  const pricedLines = preview.lines.map((line) => {
+  const pricedLines = pricedDecisions.map((line) => {
     const item = catalogById.get(line.catalogItemId);
     if (!item) throw new EnterpriseRetailError("RETAIL_OMNICHANNEL_CATALOG_INVALID", 409);
-    const service = serviceValues(line);
+    // SalesOrder stores two decimal places, while POS pricing stores six.
+    // Reject any material drift instead of silently changing the agreed price.
+    const unitPrice = orderMoney(line.serviceUnitPrice);
+    const discount = orderMoney(line.serviceDiscountAmount);
+    let tax = orderMoney(line.taxAmount);
+    const expectedTotal = orderMoney(line.lineTotal);
+    const lineSubtotal = orderMoney(line.quantity.times(unitPrice));
+    const taxResidual = expectedTotal.minus(lineSubtotal).plus(discount);
+    if (
+      line.taxRate.gt(0) && taxResidual.gte(0) &&
+      taxResidual.minus(tax).abs().lte("0.01")
+    ) {
+      // Keep the customer's canonical total exact after SalesOrder cent rounding.
+      tax = taxResidual;
+    }
+    const computedTotal = lineSubtotal.minus(discount).plus(tax);
+    if (!computedTotal.equals(expectedTotal)) {
+      throw new EnterpriseRetailError("RETAIL_OMNICHANNEL_PRICE_PRECISION_UNSUPPORTED", 409);
+    }
     return {
       catalogItemId: line.catalogItemId,
       description: item.name,
-      quantity: Number(line.quantity),
-      unitPrice: Number(service.unitPrice.toString()),
-      discountAmount: Number(service.discountAmount.toString()),
+      quantity: Number(line.quantity.toString()),
+      unitPrice: Number(unitPrice.toString()),
+      discountAmount: Number(discount.toString()),
       taxRatePercent: Number(decimal(line.taxRate).times(100).toString()),
-      taxAmount: Number(line.taxAmount),
-      lineSubtotal: Number(money(decimal(line.quantity).times(service.unitPrice)).toString()),
-      lineTotal: Number(line.lineTotal),
+      taxAmount: Number(tax.toString()),
+      lineSubtotal: Number(lineSubtotal.toString()),
+      lineTotal: Number(expectedTotal.toString()),
       trackInventory: item.trackInventory,
     };
   });
+  const expectedOrderTotal = pricedLines.reduce((sum, line) => sum.plus(line.lineTotal), decimal(0));
 
   const modeLabel: Record<RetailOmnichannelMode, string> = {
     CLICK_COLLECT: "Click & Collect",
@@ -110,7 +188,7 @@ export async function createRetailOmnichannelOrder(organizationId: string, actor
     SHIP_FROM_STORE: "Ship from store",
     CUSTOMER_DELIVERY: "Livraison client",
   };
-  const created = await createEnterpriseDirectSalesOrder(organizationId, actorUserId, {
+  const created = await withRetailTransactionRetry(() => createEnterpriseDirectSalesOrder(organizationId, actorUserId, {
     idempotencyKey: `retail-omnichannel:${input.idempotencyKey}`,
     businessPartyId: input.customerBusinessPartyId,
     title: `${modeLabel[input.fulfillmentMode]} · ${party.displayName || party.legalName}`,
@@ -128,32 +206,45 @@ export async function createRetailOmnichannelOrder(organizationId: string, actor
       lineSubtotal: line.lineSubtotal,
       lineTotal: line.lineTotal,
     })),
-    eventMetadata: { channelCode: "POS", fulfillmentMode: input.fulfillmentMode, sourceSiteId: site.id, fulfillmentWarehouseId: warehouse.id, pickupSiteId: pickupSite?.id || null },
-  });
-
-  let orchestration;
-  try {
-    orchestration = await prisma.enterpriseRetailOrderOrchestration.create({
-      data: {
-        organizationId,
-        salesOrderId: created.order.id,
-        idempotencyKey: input.idempotencyKey,
-        channelCode: "POS",
-        fulfillmentMode: input.fulfillmentMode,
+    eventMetadata: {
+      channelCode: "POS", fulfillmentMode: input.fulfillmentMode, sourceSiteId: site.id,
+      fulfillmentWarehouseId: warehouse.id, pickupSiteId: pickupSite?.id || null,
+      relationshipBenefitIds: relationshipResolution.effects.map((effect) => effect.benefitId),
+    },
+    onOrderCreatedTx: async (tx, orderId) => {
+      await reserveRetailOmnichannelRelationshipBenefitsTx({
+        tx, organizationId, actorUserId, orderId,
         sourceSiteId: site.id,
-        fulfillmentWarehouseId: warehouse.id,
-        pickupSiteId: pickupSite?.id || null,
-        status: "RESERVING",
-        createdByUserId: actorUserId,
-      },
+        effects: relationshipResolution.effects,
+        expectedTotal: expectedOrderTotal,
+      });
+      await tx.enterpriseRetailOrderOrchestration.create({
+        data: {
+          organizationId, salesOrderId: orderId, idempotencyKey: input.idempotencyKey,
+          channelCode: "POS", fulfillmentMode: input.fulfillmentMode,
+          sourceSiteId: site.id, fulfillmentWarehouseId: warehouse.id,
+          pickupSiteId: pickupSite?.id || null, status: "RESERVING",
+          createdByUserId: actorUserId,
+        },
+      });
+    },
+  }), { maxAttempts: 3, baseDelayMs: 20 });
+
+  // The order and RESERVING context are committed together. A legacy order
+  // with this idempotency key but no context cannot be silently repurposed.
+  const orchestration = await prisma.enterpriseRetailOrderOrchestration.findFirst({
+    where: { organizationId, idempotencyKey: input.idempotencyKey, salesOrderId: created.order.id, archivedAt: null },
+  });
+  if (!orchestration) {
+    throw new EnterpriseRetailError("RETAIL_OMNICHANNEL_ORDER_CONTEXT_MISSING", 409);
+  }
+  assertSameOmnichannelRequest(input, orchestration, created.order);
+  if (created.idempotent) {
+    assertFinishedOmnichannelReservation(orchestration.status);
+    const reservations = await prisma.enterpriseInventoryReservation.findMany({
+      where: { organizationId, salesOrderId: created.order.id }, orderBy: [{ createdAt: "asc" }],
     });
-  } catch (error) {
-    const code = error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code || "") : "";
-    if (code !== "P2002") throw error;
-    const concurrent = await prisma.enterpriseRetailOrderOrchestration.findFirst({ where: { organizationId, idempotencyKey: input.idempotencyKey, archivedAt: null } });
-    if (!concurrent) throw error;
-    const reservations = await prisma.enterpriseInventoryReservation.findMany({ where: { organizationId, salesOrderId: concurrent.salesOrderId }, orderBy: [{ createdAt: "asc" }] });
-    return { order: created.order, orchestration: concurrent, reservations, idempotent: true };
+    return { order: created.order, orchestration, reservations, idempotent: true };
   }
 
   const orderItemsByCatalog = new Map(created.order.items.filter((item) => item.catalogItemId).map((item) => [item.catalogItemId as string, item]));
@@ -181,6 +272,76 @@ export async function createRetailOmnichannelOrder(organizationId: string, actor
     await compensateFailedReservations({ organizationId, actorUserId, orderId: created.order.id, reservationIds, cancelFreshOrder: !created.idempotent, errorCode });
     throw error;
   }
+}
+
+export async function cancelRetailOmnichannelOrder(
+  organizationId: string,
+  actorUserId: string,
+  salesOrderId: string,
+  input: { revision: number; reason: string },
+) {
+  return prisma.$transaction(async (tx) => {
+    const [order, orchestration, fulfillmentCount] = await Promise.all([
+      tx.enterpriseSalesOrder.findFirst({ where: { id: salesOrderId, organizationId, archivedAt: null } }),
+      tx.enterpriseRetailOrderOrchestration.findFirst({
+        where: { salesOrderId, organizationId, archivedAt: null },
+      }),
+      tx.enterpriseFulfillment.count({ where: { salesOrderId, organizationId } }),
+    ]);
+    if (!order || !orchestration) {
+      throw new EnterpriseRetailError("RETAIL_OMNICHANNEL_ORDER_NOT_FOUND", 404);
+    }
+    if (order.status === "CANCELLED" && orchestration.status === "CANCELLED") {
+      return { order, orchestration, idempotent: true };
+    }
+    if (
+      order.revision !== input.revision ||
+      order.status !== "CONFIRMED" ||
+      orchestration.status !== "RESERVED" ||
+      fulfillmentCount > 0
+    ) {
+      throw new EnterpriseRetailError("RETAIL_OMNICHANNEL_CANCELLATION_CONFLICT", 409);
+    }
+
+    const reservations = await tx.enterpriseInventoryReservation.findMany({
+      where: { organizationId, salesOrderId },
+      select: { id: true, status: true },
+    });
+    if (reservations.some((reservation) => reservation.status !== "ACTIVE")) {
+      throw new EnterpriseRetailError("RETAIL_OMNICHANNEL_CANCELLATION_CONFLICT", 409);
+    }
+    for (const reservation of reservations) {
+      await releaseEnterpriseInventoryReservationTx(
+        tx, organizationId, reservation.id, actorUserId, "OMNICHANNEL_ORDER_CANCELLED",
+      );
+    }
+    const updated = await tx.enterpriseSalesOrder.updateMany({
+      where: { id: salesOrderId, organizationId, status: "CONFIRMED", revision: input.revision },
+      data: {
+        status: "CANCELLED", cancelledAt: new Date(), cancellationReason: input.reason,
+        updatedByUserId: actorUserId, revision: { increment: 1 },
+      },
+    });
+    if (updated.count !== 1) throw new EnterpriseRetailError("RETAIL_OMNICHANNEL_CANCELLATION_CONFLICT", 409);
+    await releaseRetailOmnichannelRelationshipBenefitsTx({ tx, organizationId, orderId: salesOrderId });
+    const updatedContext = await tx.enterpriseRetailOrderOrchestration.update({
+      where: { id: orchestration.id },
+      data: { status: "CANCELLED", updatedByUserId: actorUserId },
+    });
+    await publishEnterpriseEvent(tx, {
+      organizationId,
+      entityType: "EnterpriseSalesOrder",
+      entityId: salesOrderId,
+      eventType: "SALES_ORDER_CANCELLED",
+      summary: `Commande omnicanale ${order.reference} annulée : ${input.reason}`,
+      actorUserId,
+      fromStatus: "CONFIRMED",
+      toStatus: "CANCELLED",
+      metadataJson: { retailOrchestrationId: orchestration.id, reservationCount: reservations.length },
+    });
+    const cancelled = await tx.enterpriseSalesOrder.findUniqueOrThrow({ where: { id: salesOrderId } });
+    return { order: cancelled, orchestration: updatedContext, idempotent: false };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 });
 }
 
 export async function getRetailOmnichannelOrders(organizationId: string, page = 1, pageSize = 20) {

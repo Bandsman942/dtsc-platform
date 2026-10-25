@@ -8,6 +8,7 @@ import { fulfillmentCreateSchema } from "@/lib/enterprise/crm-sales/schemas";
 import { createEnterpriseFulfillment } from "@/lib/enterprise/crm-sales/service";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
+import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string; salesOrderId: string }> };
 
@@ -21,6 +22,15 @@ export async function POST(req: Request, { params }: Params) {
   const { organizationId, salesOrderId } = await params;
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "SALES_QUOTES_ORDERS", action: "write" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const retailOrchestration = await prisma.enterpriseRetailOrderOrchestration.findFirst({
+    where: { organizationId, salesOrderId, archivedAt: null }, select: { id: true },
+  });
+  if (retailOrchestration) {
+    const retailAccess = await getEnterpriseCommonDomainAccess({
+      session, organizationId, moduleCode: "RETAIL_POS", action: "write",
+    });
+    if (!retailAccess) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   const parsed = fulfillmentCreateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "SALES_ORDERS_FULFILL_INPUT_INVALID", req);
   try {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BadgePercent,
   CircleDollarSign,
@@ -181,7 +181,7 @@ export function RelationshipBenefitsUserPanel({
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const response = await fetch(
@@ -209,11 +209,11 @@ export function RelationshipBenefitsUserPanel({
     } finally {
       setLoading(false);
     }
-  }
+  }, [organizationId, identityLinkId, locale]);
 
   useEffect(() => {
     void load();
-  }, [organizationId, identityLinkId]);
+  }, [load]);
 
   async function requestBenefit(item: BenefitItem) {
     setBusyId(item.id);
@@ -520,6 +520,13 @@ export function RelationshipBenefitsUserPanel({
                       {request.organizationNote}
                     </p>
                   ) : null}
+                  {request.executionMode === "AUTO_RETAIL_OMNICHANNEL" && request.status === "REQUESTED" ? (
+                    <p className="mt-2 text-xs font-semibold leading-5 text-cyan-700 dark:text-cyan-300">
+                      {locale === "en"
+                        ? `Discount reserved on an omnichannel order (${request.effectAmount ?? "—"} ${request.effectCurrencyCode || ""}). It is not consumed until delivery is complete.`
+                        : `Remise réservée sur une commande omnicanale (${request.effectAmount ?? "—"} ${request.effectCurrencyCode || ""}). Elle sera consommée uniquement après livraison complète.`}
+                    </p>
+                  ) : null}
                   {request.status === "APPROVED" && !request.executedAt ? (
                     <p className="mt-2 text-xs font-semibold leading-5 text-dtsc-muted">
                       {locale === "en"
@@ -536,7 +543,9 @@ export function RelationshipBenefitsUserPanel({
                   ) : null}
                 </div>
                 <StatusBadge tone={requestTone(request.status)}>
-                  {requestStatus(request.status, locale)}
+                  {request.executionMode === "AUTO_RETAIL_OMNICHANNEL" && request.status === "REQUESTED"
+                    ? locale === "en" ? "Reserved" : "Réservée"
+                    : requestStatus(request.status, locale)}
                 </StatusBadge>
               </div>
               {request.canCancel ? (

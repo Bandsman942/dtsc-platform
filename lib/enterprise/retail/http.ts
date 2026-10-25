@@ -18,6 +18,20 @@ const ERROR_MESSAGES: Record<string, string> = {
   RETAIL_CURRENCY_MISMATCH: "La devise du produit ne correspond pas à la devise de l’opération.",
   RETAIL_LINE_TOTAL_INVALID: "La remise ou la taxe rend le total de ligne invalide.",
   RETAIL_RELATIONSHIP_BENEFIT_ZERO_TOTAL_UNSUPPORTED: "Cet avantage ramènerait le ticket à zéro. Utilisez un avantage non monétaire ou configurez une valeur laissant un montant positif à encaisser.",
+  RETAIL_OMNICHANNEL_PRICE_PRECISION_UNSUPPORTED: "Les montants du panier dépassent la précision comptable de la commande (2 décimales). Ajustez le prix ou la quantité avant de confirmer.",
+  RETAIL_OMNICHANNEL_IDEMPOTENCY_PAYLOAD_MISMATCH: "Cette référence de commande a déjà été utilisée avec un autre client, panier ou mode de livraison.",
+  RETAIL_OMNICHANNEL_CATALOG_DUPLICATE: "Un même article est présent plusieurs fois dans ce panier. Regroupez les quantités avant de confirmer.",
+  RETAIL_OMNICHANNEL_CANCELLATION_CONFLICT: "La commande ne peut plus être annulée directement : elle a changé d’état ou une livraison a déjà commencé. Actualisez-la et utilisez le circuit de retour si nécessaire.",
+  RETAIL_OMNICHANNEL_ORDER_NOT_FOUND: "La commande omnicanale demandée est introuvable dans cette entreprise.",
+  RETAIL_OMNICHANNEL_ORDER_CONTEXT_MISSING: "Une ancienne commande utilise déjà cette référence sans contexte Retail vérifiable. Actualisez et contactez le support avant de poursuivre.",
+  RETAIL_OMNICHANNEL_RESERVATION_INCOMPLETE: "La réservation de cette commande est en cours ou a échoué. Actualisez dans quelques instants ; si le problème persiste, contactez le support.",
+  RELATIONSHIP_BENEFIT_OMNICHANNEL_ORDER_PRICE_MISMATCH: "Le montant de la commande a changé. Rechargez le panier avant de confirmer cet avantage.",
+  RELATIONSHIP_BENEFIT_OMNICHANNEL_MODULE_DISABLED: "Les avantages relationnels ou les ventes Retail ne sont pas activés pour cette entreprise.",
+  RELATIONSHIP_BENEFIT_OMNICHANNEL_CONTEXT_MISMATCH: "Le client ou la devise de cette commande ne correspond pas à l’avantage relationnel.",
+  RELATIONSHIP_BENEFIT_OMNICHANNEL_IDEMPOTENCY_COLLISION: "Cet avantage a déjà été enregistré pour une autre opération. Actualisez avant de réessayer.",
+  RELATIONSHIP_BENEFIT_OMNICHANNEL_EFFECT_UNSUPPORTED: "Cet avantage n’est plus éligible à une remise automatique Retail.",
+  RELATIONSHIP_BENEFIT_OMNICHANNEL_PARTY_MISMATCH: "Le bénéficiaire n’est plus lié au client de cette commande.",
+  RELATIONSHIP_BENEFIT_OMNICHANNEL_AMOUNT_INVALID: "Le montant de l’avantage a changé. Rechargez le panier avant de confirmer.",
   RETAIL_TENDER_TOTAL_MISMATCH: "Les paiements doivent correspondre exactement au total du ticket.",
   RETAIL_FINANCIAL_ACCOUNT_INVALID: "Le compte financier sélectionné ne correspond pas au type ou à la devise attendus.",
   RETAIL_OPEN_CASH_SESSION_REQUIRED: "Ouvrez votre session de caisse sur ce compte avant de faire cette opération cash.",
@@ -159,8 +173,12 @@ export async function authorizeRetailRequest(
 
 export function retailErrorResponse(error: unknown, fallback = "RETAIL_OPERATION_FAILED") {
   if (error instanceof EnterpriseRetailError) {
+    const message = ERROR_MESSAGES[error.code]
+      || (error.code.startsWith("RELATIONSHIP_BENEFIT_OMNICHANNEL_")
+        ? "Cet avantage n’est plus éligible à cette commande (relation, quota ou conditions modifiés). Actualisez le panier avant de réessayer."
+        : "L’opération Retail n’a pas pu être terminée.");
     return NextResponse.json(
-      retailFailureOutcome(null, { error: error.code, message: ERROR_MESSAGES[error.code] || "L’opération Retail n’a pas pu être terminée.", details: error.details }),
+      retailFailureOutcome(null, { error: error.code, message, details: error.details }),
       { status: error.status },
     );
   }

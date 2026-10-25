@@ -85,6 +85,38 @@ const ERROR_MESSAGES: Record<string, Bilingual> = {
     fr: "La commande client n’a pas pu être créée. Vérifiez le client, le stock et le mode de retrait ou livraison.",
     en: "The customer order could not be created. Check the customer, stock, and pickup or delivery option.",
   },
+  RETAIL_OMNICHANNEL_CANCEL_FAILED: {
+    fr: "Cette commande n’a pas pu être annulée. Actualisez son statut et réessayez.",
+    en: "This order could not be cancelled. Refresh its status and try again.",
+  },
+  RETAIL_OMNICHANNEL_CANCELLATION_CONFLICT: {
+    fr: "Cette commande a changé d’état ou une livraison a commencé. L’annulation directe n’est plus possible.",
+    en: "This order changed status or delivery started. Direct cancellation is no longer available.",
+  },
+  RETAIL_OMNICHANNEL_ORDER_NOT_FOUND: {
+    fr: "Cette commande est introuvable dans l’entreprise active.",
+    en: "This order was not found in the active company.",
+  },
+  RETAIL_OMNICHANNEL_ORDER_CONTEXT_MISSING: {
+    fr: "Cette ancienne référence de commande nécessite une vérification par le support.",
+    en: "This older order reference requires review by support.",
+  },
+  RETAIL_OMNICHANNEL_CATALOG_DUPLICATE: {
+    fr: "Un article apparaît plusieurs fois dans le panier. Regroupez ses quantités.",
+    en: "An item appears more than once in the basket. Combine its quantities.",
+  },
+  RETAIL_OMNICHANNEL_RESERVATION_INCOMPLETE: {
+    fr: "La réservation de stock est en cours ou a échoué. Actualisez avant de réessayer.",
+    en: "Stock reservation is still processing or failed. Refresh before trying again.",
+  },
+  RETAIL_OMNICHANNEL_IDEMPOTENCY_PAYLOAD_MISMATCH: {
+    fr: "Cette référence de commande a déjà été utilisée avec des informations différentes.",
+    en: "This order reference was already used with different details.",
+  },
+  RETAIL_OMNICHANNEL_PRICE_PRECISION_UNSUPPORTED: {
+    fr: "Le montant du panier ne peut pas être enregistré au centime sans écart. Ajustez le prix ou la quantité.",
+    en: "The basket amount cannot be saved to cents without changing the total. Adjust the price or quantity.",
+  },
   RETAIL_COUNTRY_PACK_UNSUPPORTED: {
     fr: "Cette configuration pays n’est pas encore disponible pour votre Shop.",
     en: "This country configuration is not yet available for your Shop.",
@@ -308,6 +340,29 @@ export function customerFacingError(error: unknown, locale: CustomerFacingLocale
   if (code) return pick(ERROR_MESSAGES[code], locale);
   if (!raw || TECHNICAL_PATTERN.test(raw)) return pick(fallback || GENERIC_ERROR, locale);
   return raw;
+}
+
+const OMNICHANNEL_CANCELLATION_COPY = {
+  fr: {
+    cancel: "Annuler la commande",
+    reason: "Motif de l’annulation (obligatoire)",
+    reasonPlaceholder: "Précisez pourquoi cette commande est annulée",
+    confirm: "Confirmer l’annulation",
+    back: "Retour",
+    successSuffix: "annulée. Les réservations de stock et les avantages ont été libérés.",
+  },
+  en: {
+    cancel: "Cancel order",
+    reason: "Reason for cancellation (required)",
+    reasonPlaceholder: "Explain why this order is cancelled",
+    confirm: "Confirm cancellation",
+    back: "Go back",
+    successSuffix: "cancelled. Inventory and reserved benefits were released.",
+  },
+} as const;
+
+export function customerFacingOmnichannelCancellationCopy(locale: CustomerFacingLocale) {
+  return OMNICHANNEL_CANCELLATION_COPY[locale];
 }
 
 export function customerFacingStatusLabel(status: string | null | undefined, locale: CustomerFacingLocale) {
