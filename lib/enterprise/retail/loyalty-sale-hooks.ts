@@ -53,7 +53,17 @@ export async function autoEarnRetailLoyaltyForSale(organizationId: string, actor
 }
 
 export async function reverseRetailLoyaltyForCompletedReturn(organizationId: string, actorUserId: string, returnId: string) {
-  return prisma.$transaction(async (tx) => {
+  return prisma.$transaction((tx) => reverseRetailLoyaltyForCompletedReturnTx(tx, organizationId, actorUserId, returnId), {
+    isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000,
+  });
+}
+
+export async function reverseRetailLoyaltyForCompletedReturnTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  actorUserId: string,
+  returnId: string,
+) {
     const retailReturn = await tx.enterpriseRetailReturn.findFirst({
       where: { id: returnId, organizationId, status: "COMPLETED" },
       select: { id: true, saleId: true, grandTotal: true, currencyCode: true },
@@ -78,7 +88,19 @@ export async function reverseRetailLoyaltyForCompletedReturn(organizationId: str
       const account = await tx.enterpriseRetailLoyaltyAccount.findFirstOrThrow({ where: { id: earned.accountId, organizationId } });
       const proportional = decimal(earned.points).times(retailReturn.grandTotal).div(sale.grandTotal).toDecimalPlaces(6, Prisma.Decimal.ROUND_HALF_UP);
       if (!proportional.isPositive()) continue;
-      const reversible = Prisma.Decimal.min(proportional, account.pointsBalance);
+      const isRelationshipAward = earned.idempotencyKey.startsWith("loyalty:relationship:");
+      const previous = await tx.enterpriseRetailLoyaltyEntry.findMany({
+        where: { organizationId, accountId: earned.accountId, entryType: "REVERSAL" },
+        select: { idempotencyKey: true, points: true },
+      });
+      const alreadyReversed = previous
+        .filter((entry) => entry.idempotencyKey.endsWith(`:${earned.id}`))
+        .reduce((sum, entry) => sum.plus(entry.points.abs()), decimal(0));
+      const remaining = Prisma.Decimal.max(decimal(0), earned.points.minus(alreadyReversed));
+      const reversible = Prisma.Decimal.min(
+        remaining,
+        isRelationshipAward ? proportional : Prisma.Decimal.min(proportional, account.pointsBalance),
+      );
       if (!reversible.isPositive()) continue;
       const entry = await tx.enterpriseRetailLoyaltyEntry.create({
         data: {
@@ -98,5 +120,4 @@ export async function reverseRetailLoyaltyForCompletedReturn(organizationId: str
       applied.push({ entryId: entry.id, points: entry.points.toString(), idempotent: false });
     }
     return { applied, skipped: earnedEntries.length ? null : "NO_EARNED_POINTS" as const };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 });
 }

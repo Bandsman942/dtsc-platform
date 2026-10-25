@@ -5,6 +5,7 @@ import {
   automaticRetailEffectSupported,
   calculateRetailRelationshipDiscount,
   evaluateRelationshipBenefitSnapshot,
+  evaluateRelationshipBenefit,
   findActiveRelationshipsForBusinessParty,
   type RelationshipBenefitExecutionContext,
 } from "@/lib/enterprise/relationship-benefits/enforcement";
@@ -33,6 +34,112 @@ export type RetailRelationshipBenefitResolution = {
   adjustment: RetailRelationshipBenefitPricingAdjustment | null;
   effects: RetailRelationshipBenefitEffect[];
 };
+
+export type RetailRelationshipLoyaltyEffect = {
+  benefitId: string;
+  identityLinkId: string;
+  userId: string;
+  programId: string;
+  pointsPerCurrencyUnit: Prisma.Decimal;
+  currencyCode: string;
+  context: RelationshipBenefitExecutionContext;
+};
+
+function loyaltyProgramId(settings: Prisma.JsonValue | null | undefined) {
+  const value = objectValue(settings).retailLoyaltyProgramId;
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+export async function resolveRetailRelationshipLoyaltyEffects(args: {
+  organizationId: string;
+  customerBusinessPartyId: string | null | undefined;
+  currencyCode: string;
+  siteId?: string | null;
+  channelCode?: string | null;
+  soldAt?: Date | null;
+  decisions: PricingDecision[];
+}): Promise<RetailRelationshipLoyaltyEffect[]> {
+  if (!args.customerBusinessPartyId || !args.decisions.length) return [];
+  const [benefitsPermission, retailPermission] = await Promise.all([
+    canUseModule(args.organizationId, "RELATIONSHIP_BENEFITS"),
+    canUseModule(args.organizationId, "RETAIL_POS"),
+  ]);
+  if (!benefitsPermission.allowed || !retailPermission.allowed) return [];
+  const links = (await findActiveRelationshipsForBusinessParty({
+    organizationId: args.organizationId,
+    businessPartyId: args.customerBusinessPartyId,
+  })).filter((link): link is typeof link & { userId: string } => Boolean(link.userId));
+  if (!links.length) return [];
+
+  const now = args.soldAt || new Date();
+  const benefits = await prisma.enterpriseRelationshipBenefit.findMany({
+    where: {
+      organizationId: args.organizationId,
+      benefitType: "LOYALTY",
+      targetModuleCode: "RETAIL_POS",
+      valueType: "POINTS",
+      actionCode: "NONE",
+      stackable: true,
+      status: "ACTIVE",
+      archivedAt: null,
+      AND: [{ OR: [{ startsAt: null }, { startsAt: { lte: now } }] }, { OR: [{ endsAt: null }, { endsAt: { gte: now } }] }],
+    },
+    orderBy: [{ createdAt: "asc" }],
+    take: 100,
+  });
+  const candidates = benefits.filter((benefit) => benefit.valueDecimal?.gt(0) && loyaltyProgramId(benefit.settingsJson));
+  if (!candidates.length) return [];
+  const catalogItems = await prisma.enterpriseCatalogItem.findMany({
+    where: { organizationId: args.organizationId, id: { in: args.decisions.map((item) => item.catalogItemId) }, archivedAt: null },
+    select: { id: true, categoryId: true },
+    take: 200,
+  });
+  const context: RelationshipBenefitExecutionContext = {
+    moduleCode: "RETAIL_POS",
+    transactionAmount: Number(args.decisions.reduce((total, item) => total.plus(item.lineTotal), zero()).toDecimalPlaces(6)),
+    currencyCode: args.currencyCode,
+    businessPartyId: args.customerBusinessPartyId,
+    siteId: args.siteId || null,
+    channelCode: (args.channelCode || "POS").toUpperCase(),
+    catalogItemIds: args.decisions.map((item) => item.catalogItemId),
+    categoryIds: [...new Set(catalogItems.map((item) => item.categoryId).filter((value): value is string => Boolean(value)))],
+    quantity: args.decisions.reduce((total, item) => total + Number(item.quantity), 0),
+    occurredAt: now,
+  };
+  const effects: RetailRelationshipLoyaltyEffect[] = [];
+  for (const benefit of candidates) {
+    const programId = loyaltyProgramId(benefit.settingsJson)!;
+    for (const link of links) {
+      const evaluated = await evaluateRelationshipBenefit({
+        organizationId: args.organizationId,
+        userId: link.userId,
+        identityLinkId: link.id,
+        benefitId: benefit.id,
+        context,
+        requireBusinessContext: true,
+      });
+      if (!evaluated.evaluation.allowed) continue;
+      const program = await prisma.enterpriseRetailLoyaltyProgram.findFirst({
+        where: { id: programId, organizationId: args.organizationId, status: "ACTIVE", archivedAt: null, currencyCode: args.currencyCode },
+        select: { id: true, settingsJson: true, startsAt: true, endsAt: true },
+      });
+      const settings = program?.settingsJson;
+      if (!program || (program.startsAt && program.startsAt > now) || (program.endsAt && program.endsAt <= now) ||
+        (settings && typeof settings === "object" && !Array.isArray(settings) && (settings as Record<string, unknown>).autoEarn === true)) continue;
+      effects.push({
+        benefitId: benefit.id,
+        identityLinkId: link.id,
+        userId: link.userId,
+        programId,
+        pointsPerCurrencyUnit: benefit.valueDecimal!,
+        currencyCode: args.currencyCode,
+        context,
+      });
+      break;
+    }
+  }
+  return effects;
+}
 
 function zero() {
   return new Prisma.Decimal(0);

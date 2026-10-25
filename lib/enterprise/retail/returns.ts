@@ -4,7 +4,9 @@ import { publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
 import { applyStockMovementTx } from "@/lib/enterprise/inventory/service";
 import { finalizeRetailReturnAccountingTx } from "@/lib/enterprise/retail/accounting";
+import { reverseRetailLoyaltyForCompletedReturnTx } from "@/lib/enterprise/retail/loyalty-sale-hooks";
 import { reverseRetailRelationshipBenefitEffectsTx } from "@/lib/enterprise/relationship-benefits/retail-adapter";
+import { reverseRetailRelationshipLoyaltyTx } from "@/lib/enterprise/relationship-benefits/retail-loyalty";
 import type { retailReturnCreateSchema, retailReturnDecisionSchema } from "@/lib/enterprise/retail/commercial-schemas";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { withRetailTransactionRetry } from "@/lib/enterprise/retail/transaction-retry";
@@ -292,9 +294,10 @@ export async function decideRetailReturn(
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseRetailSale" WHERE id = ${retailReturn.saleId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     if (retailReturn.status === "COMPLETED" && input.decision === "APPROVE") {
       const accounting = await finalizeRetailReturnAccountingTx(tx, organizationId, actorUserId, retailReturn.id);
-      return { retailReturn, idempotent: true, accounting };
+      const loyalty = await reverseRetailLoyaltyForCompletedReturnTx(tx, organizationId, actorUserId, retailReturn.id);
+      return { retailReturn, idempotent: true, accounting, loyalty };
     }
-    if (retailReturn.status === "REJECTED" && input.decision === "REJECT") return { retailReturn, idempotent: true, accounting: null };
+    if (retailReturn.status === "REJECTED" && input.decision === "REJECT") return { retailReturn, idempotent: true, accounting: null, loyalty: null };
     if (retailReturn.status !== "PENDING_APPROVAL" || retailReturn.revision !== input.revision) throw new EnterpriseRetailError("RETAIL_RETURN_CONFLICT", 409);
     if (retailReturn.requestedByUserId === actorUserId) throw new EnterpriseRetailError("RETAIL_RETURN_SELF_APPROVAL_FORBIDDEN", 403);
 
@@ -311,7 +314,7 @@ export async function decideRetailReturn(
         toStatus: "REJECTED",
         metadataJson: { reason: input.reason || null },
       });
-      return { retailReturn: rejected, idempotent: false, accounting: null };
+      return { retailReturn: rejected, idempotent: false, accounting: null, loyalty: null };
     }
 
     for (const line of retailReturn.lines) {
@@ -414,6 +417,7 @@ export async function decideRetailReturn(
       metadataJson: { saleId: retailReturn.saleId, lineCount: completed.lines.length, total: completed.grandTotal.toFixed(), currency: completed.currencyCode },
     });
     const accounting = await finalizeRetailReturnAccountingTx(tx, organizationId, actorUserId, completed.id);
+    const loyalty = await reverseRetailLoyaltyForCompletedReturnTx(tx, organizationId, actorUserId, completed.id);
 
     // Release a consumed relationship-benefit quota only when every original
     // sale line has been refunded. Partial returns must never release the full
@@ -441,7 +445,8 @@ export async function decideRetailReturn(
         organizationId,
         saleId: retailReturn.sale.id,
       });
+      await reverseRetailRelationshipLoyaltyTx({ tx, organizationId, saleId: retailReturn.sale.id, actorUserId });
     }
-    return { retailReturn: completed, idempotent: false, accounting };
+    return { retailReturn: completed, idempotent: false, accounting, loyalty };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 }));
 }

@@ -534,7 +534,13 @@ export function RelationshipBenefitsUserPanel({
                         : "Approuvé. Il sera affiché comme appliqué uniquement après une exécution métier vérifiée."}
                     </p>
                   ) : null}
-                  {request.status === "CONSUMED" && request.effectEntityId ? (
+                  {request.executionMode === "AUTO_RETAIL_LOYALTY" && request.effectEntityId && ["CONSUMED", "CANCELLED"].includes(request.status) ? (
+                    <p className="mt-2 text-xs font-semibold leading-5 text-cyan-700 dark:text-cyan-300">
+                      {locale === "en"
+                        ? `${request.status === "CANCELLED" ? "Reversed" : "Earned"} ${request.effectAmount ?? "—"} loyalty points · ${request.executedAt ? new Date(request.executedAt).toLocaleDateString("en-GB") : ""}`
+                        : `${request.status === "CANCELLED" ? "Annulés" : "Gagnés"} : ${request.effectAmount ?? "—"} points de fidélité · ${request.executedAt ? new Date(request.executedAt).toLocaleDateString("fr-FR") : ""}`}
+                    </p>
+                  ) : request.status === "CONSUMED" && request.effectEntityId ? (
                     <p className="mt-2 text-xs font-semibold leading-5 text-cyan-700 dark:text-cyan-300">
                       {locale === "en"
                         ? `Applied by ${request.effectModuleCode || "business module"} · ${request.effectAmount ?? "—"} ${request.effectCurrencyCode || ""}`

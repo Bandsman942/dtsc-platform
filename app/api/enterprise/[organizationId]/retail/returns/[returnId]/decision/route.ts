@@ -4,7 +4,6 @@ import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { finalizeRetailReturnAccounting } from "@/lib/enterprise/retail/accounting";
 import { retailReturnDecisionSchema } from "@/lib/enterprise/retail/commercial-schemas";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
-import { reverseRetailLoyaltyForCompletedReturn } from "@/lib/enterprise/retail/loyalty-sale-hooks";
 import { getRetailCommercialPermissions } from "@/lib/enterprise/retail/permissions";
 import { decideRetailReturn } from "@/lib/enterprise/retail/returns";
 
@@ -25,9 +24,8 @@ export async function POST(req: Request, { params }: Params) {
     const accounting = parsed.data.decision === "APPROVE"
       ? await finalizeRetailReturnAccounting(organizationId, auth.session.userId, result.retailReturn.id)
       : null;
-    const loyalty = parsed.data.decision === "APPROVE"
-      ? await reverseRetailLoyaltyForCompletedReturn(organizationId, auth.session.userId, result.retailReturn.id)
-      : null;
+    // Points, quota relationship, refund and accounting now commit atomically.
+    const loyalty = result.loyalty;
     await writeAuditLog({
       userId: auth.session.userId,
       action: parsed.data.decision === "APPROVE" ? "ENTERPRISE_RETAIL_RETURN_APPROVED" : "ENTERPRISE_RETAIL_RETURN_REJECTED",

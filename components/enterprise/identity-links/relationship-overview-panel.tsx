@@ -29,7 +29,7 @@ type Benefit = {
   startsAt: string | null; endsAt: string | null;
 };
 type Usage = {
-  id: string; status: string; benefitNameFr: string; benefitNameEn: string;
+  id: string; status: string; executionMode: string; benefitNameFr: string; benefitNameEn: string;
   requestedAt: string; decidedAt: string | null; consumedAt: string | null;
   cancelledAt: string | null; executedAt: string | null;
   effectAmount: number | null; effectCurrencyCode: string | null;
@@ -188,7 +188,7 @@ export function RelationshipOverviewPanel({
                   status={<StatusBadge tone={item.usable ? "success" : "warning"}>{item.usable ? (locale === "en" ? "Available" : "Disponible") : (locale === "en" ? "Quota reached" : "Quota atteint")}</StatusBadge>}
                   meta={
                     <span className="flex flex-wrap gap-x-3 gap-y-1">
-                      {item.valueDecimal !== null ? <span>{item.valueType === "PERCENT" ? `${item.valueDecimal}%` : fmtAmount(item.valueDecimal, item.currencyCode)}</span> : null}
+                      {item.valueDecimal !== null ? <span>{item.valueType === "PERCENT" ? `${item.valueDecimal}%` : item.valueType === "POINTS" ? `${item.valueDecimal} ${locale === "en" ? "points per" : "points par"} ${item.currencyCode || "—"}` : fmtAmount(item.valueDecimal, item.currencyCode)}</span> : null}
                       {item.minimumAmount !== null ? <span>{copy.minAmount}: {fmtAmount(item.minimumAmount, item.currencyCode)}</span> : null}
                       {item.usageLimitTotal ? <span>{copy.totalLimit}: {item.usageLimitTotal} · {locale === "en" ? "remaining" : "restant"}: {item.totalRemaining ?? "—"}</span> : null}
                       {item.usageLimitPerPeriod ? <span>{copy.periodLimit}: {item.usageLimitPerPeriod} / {item.usagePeriodDays} {locale === "en" ? "days" : "jours"} · {locale === "en" ? "remaining" : "restant"}: {item.periodRemaining ?? "—"}</span> : null}
@@ -224,7 +224,7 @@ export function RelationshipOverviewPanel({
                   </StatusBadge>}
                   meta={fmtDate(usage.executedAt || usage.requestedAt)}
                   description={<div className="grid gap-1">
-                    <span>{usage.executedAt ? `${copy.consumed} · ${fmtAmount(usage.effectAmount, usage.effectCurrencyCode)}` : copy.unexecuted}</span>
+                    <span>{usage.executedAt ? `${usage.status === "CANCELLED" ? (locale === "en" ? "Reversed" : "Annulé") : copy.consumed} · ${usage.executionMode === "AUTO_RETAIL_LOYALTY" ? `${usage.effectAmount ?? "—"} points` : fmtAmount(usage.effectAmount, usage.effectCurrencyCode)}` : copy.unexecuted}</span>
                     {expandedUsageId === usage.id ? (
                       <div className="grid gap-1 text-xs text-dtsc-ink">
                         <span>{copy.requested} : {fmtDate(usage.requestedAt)}</span>

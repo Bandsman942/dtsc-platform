@@ -50,6 +50,7 @@ on:
       - "scripts/qa-hotfix-786-relationship-benefits-enforcement.mjs"
       - "scripts/qa-hotfix-886-retail-benefits.mjs"
       - "scripts/qa-hotfix-904-omnichannel-returns.mjs"
+      - "scripts/qa-hotfix-906-relationship-loyalty.mjs"
       - "lib/enterprise/retail/returns.ts"
       - "scripts/qa-shop2-customer-payments.mjs"
       - "scripts/qa-shop2-global-readiness.mjs"
@@ -168,6 +169,7 @@ jobs:
           node scripts/qa-hotfix-786-relationship-benefits-enforcement.mjs
           node scripts/qa-hotfix-886-retail-benefits.mjs
           node scripts/qa-hotfix-904-omnichannel-returns.mjs
+          node scripts/qa-hotfix-906-relationship-loyalty.mjs
           node scripts/qa-shop2-customer-payments.mjs
           node scripts/qa-shop2-global-readiness.mjs
           node scripts/qa-shop2-fulfillment-reservations.mjs

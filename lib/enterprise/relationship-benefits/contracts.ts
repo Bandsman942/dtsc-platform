@@ -68,6 +68,7 @@ export const relationshipBenefitCreateSchema = z.object({
   actionLabelFr: z.string().trim().max(120).optional().nullable(),
   actionLabelEn: z.string().trim().max(120).optional().nullable(),
   targetModuleCode: z.string().trim().max(80).optional().nullable(),
+  loyaltyProgramId: z.string().trim().min(1).max(191).optional().nullable(),
   usageLimitTotal: z.number().int().positive().max(100000).optional().nullable(),
   usageLimitPerPeriod: z.number().int().positive().max(100000).optional().nullable(),
   usagePeriodDays: z.number().int().positive().max(3650).optional().nullable(),

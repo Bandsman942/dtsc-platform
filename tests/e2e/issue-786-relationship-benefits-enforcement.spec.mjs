@@ -20,6 +20,7 @@ const codes = {
   manual: "E2E_786_MANUAL_SERVICE",
   fullReturn: "E2E_886_RETAIL_RETURN_QUOTA",
   omnichannel: "E2E_886_RETAIL_OMNICHANNEL_QUOTA",
+  loyalty: "E2E_906_RETAIL_LOYALTY",
 };
 
 const fixture = {
@@ -82,7 +83,7 @@ async function get(page, path) {
 
 async function cleanupFixture() {
   const benefits = await prisma.enterpriseRelationshipBenefit.findMany({
-    where: { organizationId, code: { in: [codes.automatic, codes.exclusive, codes.manual, codes.fullReturn, codes.omnichannel] } },
+    where: { organizationId, code: { in: [codes.automatic, codes.exclusive, codes.manual, codes.fullReturn, codes.omnichannel, codes.loyalty] } },
     select: { id: true },
   });
   const benefitIds = benefits.map((item) => item.id);
@@ -105,6 +106,20 @@ async function cleanupFixture() {
     await prisma.enterpriseRelationshipBenefit.deleteMany({
       where: { organizationId, id: { in: benefitIds } },
     });
+  }
+  const loyaltyPrograms = await prisma.enterpriseRetailLoyaltyProgram.findMany({
+    where: { organizationId, code: codes.loyalty }, select: { id: true },
+  });
+  if (loyaltyPrograms.length) {
+    const programIds = loyaltyPrograms.map((item) => item.id);
+    const accounts = await prisma.enterpriseRetailLoyaltyAccount.findMany({
+      where: { organizationId, programId: { in: programIds } }, select: { id: true },
+    });
+    await prisma.enterpriseRetailLoyaltyEntry.deleteMany({
+      where: { organizationId, accountId: { in: accounts.map((item) => item.id) } },
+    });
+    await prisma.enterpriseRetailLoyaltyAccount.deleteMany({ where: { organizationId, programId: { in: programIds } } });
+    await prisma.enterpriseRetailLoyaltyProgram.deleteMany({ where: { organizationId, id: { in: programIds } } });
   }
   await prisma.enterpriseIdentityConsentRecord.deleteMany({
     where: { organizationId, identityLinkId: ids.identityLink },
@@ -932,6 +947,111 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
       }, "/enterprise-modules/RETAIL_POS");
       expect(availableAgain.response.ok(), JSON.stringify(availableAgain.body)).toBeTruthy();
       expect(availableAgain.body.relationshipBenefits.some((item) => item.benefitId === benefitId)).toBe(true);
+    } finally {
+      await approverContext.close();
+      await adminContext.close();
+    }
+  });
+
+  test("#906 earns relation-linked Retail points once and reverses them atomically on completed refunds", async ({ browser }) => {
+    const adminContext = await browser.newContext({ baseURL: baseUrl });
+    const approverContext = await browser.newContext({ baseURL: baseUrl });
+    const admin = await adminContext.newPage();
+    const approver = await approverContext.newPage();
+    await signIn(admin, adminEmail, adminPassword, "/enterprise-relationship-benefits");
+    await signIn(approver, userEmail, userPassword, "/enterprise-modules/RETAIL_POS");
+    await ensureOpenTill(admin);
+    try {
+      const program = await post(admin, `/api/enterprise/${organizationId}/retail/loyalty/programs`, {
+        code: codes.loyalty, nameFr: "Fidélité relationnelle #906", nameEn: "Relationship loyalty #906",
+        currencyCode: fixture.currencyCode, earnPointsPerCurrencyUnit: 0,
+        redeemValuePerPoint: 0.01, minimumRedeemPoints: 0, status: "ACTIVE",
+        settingsJson: { autoEarn: false },
+      }, "/enterprise-modules/RETAIL_POS");
+      expect(program.response.ok(), JSON.stringify(program.body)).toBeTruthy();
+
+      const benefit = await post(admin, `/api/enterprise/${organizationId}/relationship-benefits`, {
+        code: codes.loyalty, nameFr: "Points gagnés sur chaque vente #906",
+        nameEn: "Points earned on each sale #906",
+        descriptionFr: "Deux points par unité monétaire réellement encaissée.",
+        descriptionEn: "Two points per unit of actual completed sales value.",
+        benefitType: "LOYALTY", assignmentMode: "AUTOMATIC", relationTypes: ["CUSTOMER"], identityLinkIds: [],
+        valueType: "POINTS", valueDecimal: 2, currencyCode: fixture.currencyCode,
+        loyaltyProgramId: program.body.program.id,
+        actionCode: "NONE", targetModuleCode: "RETAIL_POS", stackable: true, status: "ACTIVE",
+        usageLimitTotal: 1, usageLimitPerPeriod: 1, usagePeriodDays: 30,
+        conditions: { channelCodes: ["POS"], catalogItemIds: [fixture.catalogItemId] },
+      });
+      expect(benefit.response.status(), JSON.stringify(benefit.body)).toBe(201);
+
+      const preview = await post(admin, `/api/enterprise/${organizationId}/retail/pricing/preview`, {
+        siteId: fixture.siteId, customerBusinessPartyId: fixture.customerBusinessPartyId,
+        currencyCode: fixture.currencyCode, channelCode: "POS",
+        lines: [{ catalogItemId: fixture.catalogItemId, quantity: 2 }],
+      }, "/enterprise-modules/RETAIL_POS");
+      expect(preview.response.ok(), JSON.stringify(preview.body)).toBeTruthy();
+      const saleInput = {
+        siteId: fixture.siteId, warehouseId: fixture.warehouseId, storageLocationId: null,
+        customerBusinessPartyId: fixture.customerBusinessPartyId, currencyCode: fixture.currencyCode,
+        idempotencyKey: `e2e-906-loyalty-sale-${Date.now()}`,
+        lines: [{ catalogItemId: fixture.catalogItemId, inventoryItemId: fixture.inventoryItemId,
+          quantity: 2, unitPrice: 116, discountAmount: 0, taxAmount: 0 }],
+        tenders: [{ methodType: "CASH", financialAccountId: fixture.cashAccountId,
+          amount: asNumber(preview.body.grandTotal), reference: "E2E-906-LOYALTY" }],
+      };
+      const sale = await post(admin, `/api/enterprise/${organizationId}/retail/sales`, saleInput, "/enterprise-modules/RETAIL_POS");
+      expect(sale.response.status(), JSON.stringify(sale.body)).toBe(201);
+      const saleId = sale.body.sale.id;
+      const earned = await prisma.enterpriseRetailLoyaltyEntry.findFirstOrThrow({
+        where: { organizationId, saleId, idempotencyKey: `loyalty:relationship:${saleId}:${benefit.body.benefit.id}` },
+      });
+      expect(earned.entryType).toBe("EARN");
+      expect(asNumber(earned.points)).toBeCloseTo(asNumber(sale.body.sale.grandTotal) * 2, 5);
+      const usage = await prisma.enterpriseRelationshipBenefitUsage.findFirstOrThrow({
+        where: { organizationId, benefitId: benefit.body.benefit.id, effectEntityId: saleId },
+      });
+      expect(usage.status).toBe("CONSUMED");
+      expect(usage.executionMode).toBe("AUTO_RETAIL_LOYALTY");
+      const replay = await post(admin, `/api/enterprise/${organizationId}/retail/sales`, saleInput, "/enterprise-modules/RETAIL_POS");
+      expect(replay.response.ok(), JSON.stringify(replay.body)).toBeTruthy();
+      expect(replay.body.idempotent || replay.body.result?.idempotent).toBeTruthy();
+      expect(await prisma.enterpriseRetailLoyaltyEntry.count({
+        where: { organizationId, idempotencyKey: earned.idempotencyKey },
+      })).toBe(1);
+
+      const bank = await prisma.enterpriseFinancialAccount.findFirstOrThrow({
+        where: { organizationId, code: "SHOP2-E2E-BANK", status: "ACTIVE", archivedAt: null },
+        select: { id: true },
+      });
+      for (const [index, expectedStatus] of ["CONSUMED", "CANCELLED"].entries()) {
+        const requested = await post(admin, `/api/enterprise/${organizationId}/retail/sales/${saleId}/returns`, {
+          returnType: "RETURN", reason: `Retour de fidélité #906 ${index + 1}`,
+          refundMethod: "BANK_TRANSFER", refundFinancialAccountId: bank.id,
+          idempotencyKey: `e2e-906-loyalty-return-${index}-${Date.now()}`,
+          lines: [{ saleLineId: sale.body.sale.lines[0].id, quantity: 1, productCondition: "SELLABLE", stockDisposition: "RESTOCK" }],
+        }, "/enterprise-modules/RETAIL_POS");
+        expect(requested.response.status(), JSON.stringify(requested.body)).toBe(201);
+        const decision = { revision: requested.body.retailReturn.revision, decision: "APPROVE",
+          refundFinancialAccountId: bank.id, refundReference: `E2E-906-${index}` };
+        const approved = await post(approver,
+          `/api/enterprise/${organizationId}/retail/returns/${requested.body.retailReturn.id}/decision`,
+          decision, "/enterprise-modules/RETAIL_POS");
+        expect(approved.response.ok(), JSON.stringify(approved.body)).toBeTruthy();
+        expect((await prisma.enterpriseRelationshipBenefitUsage.findUniqueOrThrow({ where: { id: usage.id } })).status).toBe(expectedStatus);
+        const replayApproval = await post(approver,
+          `/api/enterprise/${organizationId}/retail/returns/${requested.body.retailReturn.id}/decision`,
+          decision, "/enterprise-modules/RETAIL_POS");
+        expect(replayApproval.response.ok(), JSON.stringify(replayApproval.body)).toBeTruthy();
+        expect(replayApproval.body.idempotent).toBe(true);
+      }
+      const account = await prisma.enterpriseRetailLoyaltyAccount.findFirstOrThrow({
+        where: { organizationId, programId: program.body.program.id, customerBusinessPartyId: fixture.customerBusinessPartyId },
+      });
+      expect(asNumber(account.pointsBalance)).toBeCloseTo(0, 5);
+      const reversals = await prisma.enterpriseRetailLoyaltyEntry.findMany({
+        where: { organizationId, accountId: account.id, entryType: "REVERSAL" },
+      });
+      expect(reversals.reduce((total, item) => total + asNumber(item.points), 0)).toBeCloseTo(-asNumber(earned.points), 5);
     } finally {
       await approverContext.close();
       await adminContext.close();
