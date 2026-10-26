@@ -4,7 +4,7 @@ export const RETAIL_SECTOR_CODE = "COMMERCE_RETAIL" as const;
 export const RETAIL_MODULE_CODES = ["RETAIL_POS", "MOBILE_MONEY_AGENCY", "TELCO_TOPUPS", "RETAIL_DAILY_CLOSE"] as const;
 export type RetailModuleCode = (typeof RETAIL_MODULE_CODES)[number];
 
-export const RETAIL_TENDER_METHODS = ["CASH", "MOBILE_MONEY", "BANK_TRANSFER", "CARD"] as const;
+export const RETAIL_TENDER_METHODS = ["CASH", "MOBILE_MONEY", "BANK_TRANSFER", "CARD", "STORE_CREDIT"] as const;
 export const MOBILE_MONEY_TRANSACTION_TYPES = ["DEPOSIT", "WITHDRAWAL"] as const;
 export const MOBILE_MONEY_FEE_COLLECTION_MODES = ["NONE", "CASH", "PROVIDER"] as const;
 export const TELCO_TOPUP_STATUSES = ["SUCCESS", "FAILED"] as const;

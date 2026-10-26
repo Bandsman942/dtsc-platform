@@ -45,6 +45,94 @@ export type RetailRelationshipLoyaltyEffect = {
   context: RelationshipBenefitExecutionContext;
 };
 
+export type RetailRelationshipCashbackEffect = {
+  benefitId: string;
+  identityLinkId: string;
+  userId: string;
+  percentage: Prisma.Decimal;
+  eligibleAmount: Prisma.Decimal;
+  eligibleCatalogItemIds: string[];
+  currencyCode: string;
+  context: RelationshipBenefitExecutionContext;
+};
+
+export async function resolveRetailRelationshipCashbackEffects(args: {
+  organizationId: string;
+  customerBusinessPartyId: string | null | undefined;
+  currencyCode: string;
+  siteId?: string | null;
+  channelCode?: string | null;
+  soldAt?: Date | null;
+  decisions: PricingDecision[];
+}): Promise<RetailRelationshipCashbackEffect[]> {
+  if (!args.customerBusinessPartyId || !args.decisions.length) return [];
+  const [benefitsPermission, retailPermission] = await Promise.all([
+    canUseModule(args.organizationId, "RELATIONSHIP_BENEFITS"),
+    canUseModule(args.organizationId, "RETAIL_POS"),
+  ]);
+  if (!benefitsPermission.allowed || !retailPermission.allowed) return [];
+  const links = (await findActiveRelationshipsForBusinessParty({
+    organizationId: args.organizationId, businessPartyId: args.customerBusinessPartyId,
+  })).filter((link): link is typeof link & { userId: string } => Boolean(link.userId));
+  if (!links.length) return [];
+  const authorizedLinks = (await Promise.all(links.map(async (link) => ({
+    link,
+    access: await resolveEnterpriseIdentityRelationshipAccess({
+      userId: link.userId, organizationId: args.organizationId, identityLinkId: link.id,
+    }),
+  })))).filter(({ access }) => access.allowed && access.capabilities.includes("ENTERPRISE_BENEFITS")).map(({ link }) => link);
+  if (!authorizedLinks.length) return [];
+  const now = args.soldAt || new Date();
+  const benefits = await prisma.enterpriseRelationshipBenefit.findMany({
+    where: {
+      organizationId: args.organizationId, benefitType: "CASHBACK", targetModuleCode: "RETAIL_POS",
+      valueType: "PERCENT", actionCode: "NONE", stackable: true, status: "ACTIVE", archivedAt: null,
+      AND: [{ OR: [{ startsAt: null }, { startsAt: { lte: now } }] }, { OR: [{ endsAt: null }, { endsAt: { gte: now } }] }],
+    }, orderBy: [{ createdAt: "asc" }], take: 100,
+  });
+  if (!benefits.length) return [];
+  const items = await prisma.enterpriseCatalogItem.findMany({
+    where: { organizationId: args.organizationId, id: { in: args.decisions.map((item) => item.catalogItemId) }, archivedAt: null },
+    select: { id: true, categoryId: true }, take: 200,
+  });
+  const categoryByItem = new Map(items.map((item) => [item.id, item.categoryId]));
+  const context: RelationshipBenefitExecutionContext = {
+    moduleCode: "RETAIL_POS",
+    transactionAmount: Number(money(args.decisions.reduce((total, item) => total.plus(item.lineTotal), zero()))),
+    currencyCode: args.currencyCode,
+    businessPartyId: args.customerBusinessPartyId,
+    siteId: args.siteId || null,
+    channelCode: (args.channelCode || "POS").toUpperCase(),
+    catalogItemIds: args.decisions.map((item) => item.catalogItemId),
+    categoryIds: [...new Set(items.map((item) => item.categoryId).filter((value): value is string => Boolean(value)))],
+    quantity: args.decisions.reduce((total, item) => total + Number(item.quantity), 0),
+    occurredAt: now,
+  };
+  const effects: RetailRelationshipCashbackEffect[] = [];
+  for (const benefit of benefits) {
+    if (!benefit.valueDecimal?.gt(0) || benefit.valueDecimal.gt(100) ||
+      (benefit.currencyCode && benefit.currencyCode !== args.currencyCode)) continue;
+    const eligibleIndexes = eligibleDecisionIndexes(args.decisions, categoryByItem, benefit.conditionsJson);
+    const eligibleAmount = money(eligibleIndexes.reduce((sum, index) => sum.plus(args.decisions[index].lineTotal), zero()));
+    if (!eligibleAmount.gt(0)) continue;
+    for (const link of authorizedLinks) {
+      const decision = await evaluateRelationshipBenefit({
+        organizationId: args.organizationId, userId: link.userId,
+        identityLinkId: link.id, benefitId: benefit.id, context, requireBusinessContext: true,
+      });
+      if (!decision.evaluation.allowed) continue;
+      effects.push({
+        benefitId: benefit.id, identityLinkId: link.id, userId: link.userId,
+        percentage: benefit.valueDecimal, eligibleAmount,
+        eligibleCatalogItemIds: [...new Set(eligibleIndexes.map((index) => args.decisions[index].catalogItemId))],
+        currencyCode: args.currencyCode, context,
+      });
+      break;
+    }
+  }
+  return effects;
+}
+
 function loyaltyProgramId(settings: Prisma.JsonValue | null | undefined) {
   const value = objectValue(settings).retailLoyaltyProgramId;
   return typeof value === "string" && value.length > 0 ? value : null;

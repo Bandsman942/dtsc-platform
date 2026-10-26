@@ -37,21 +37,31 @@ export const retailSaleCreateSchema = z.object({
   })).min(1).max(200),
   tenders: z.array(z.object({
     methodType: z.enum(RETAIL_TENDER_METHODS),
-    financialAccountId: id,
+    financialAccountId: id.optional().nullable(),
+    storedValueAccountId: id.optional().nullable(),
     amount: positiveMoney,
     reference: z.string().trim().max(160).optional().nullable(),
+  }).superRefine((tender, ctx) => {
+    if (tender.methodType === "STORE_CREDIT") {
+      if (!tender.storedValueAccountId || tender.financialAccountId) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Un avoir magasin exige un compte de crédit client, sans compte financier." });
+      }
+    } else if (!tender.financialAccountId || tender.storedValueAccountId) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Choisissez un compte financier valide pour ce paiement." });
+    }
   })).min(1).max(8),
 }).superRefine((input, ctx) => {
   const seenAccounts = new Set<string>();
   input.tenders.forEach((tender, index) => {
-    if (seenAccounts.has(tender.financialAccountId)) {
+    const source = `${tender.methodType === "STORE_CREDIT" ? "STORED" : "FINANCE"}:${tender.storedValueAccountId || tender.financialAccountId}`;
+    if (seenAccounts.has(source)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "Utilisez une seule ligne de paiement par compte financier.",
         path: ["tenders", index, "financialAccountId"],
       });
     }
-    seenAccounts.add(tender.financialAccountId);
+    seenAccounts.add(source);
   });
 });
 

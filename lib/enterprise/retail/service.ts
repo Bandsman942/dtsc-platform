@@ -13,9 +13,12 @@ import {
   applyRetailRelationshipBenefitEffectsTx,
   reverseRetailRelationshipBenefitEffectsTx,
   type RetailRelationshipBenefitEffect,
+  type RetailRelationshipCashbackEffect,
   type RetailRelationshipLoyaltyEffect,
 } from "@/lib/enterprise/relationship-benefits/retail-adapter";
 import { applyRetailRelationshipLoyaltyTx, reverseRetailRelationshipLoyaltyTx } from "@/lib/enterprise/relationship-benefits/retail-loyalty";
+import { applyRetailRelationshipCashbackTx, reverseRetailRelationshipCashbackTx } from "@/lib/enterprise/relationship-benefits/retail-cashback";
+import { changeRelationalStoreCreditTx } from "@/lib/enterprise/retail/relationship-store-credit";
 import { resolveMobileMoneyFloatAccountTx } from "@/lib/enterprise/retail/mobile-money-multicurrency-service";
 import { resolveTelcoFloatAccountTx } from "@/lib/enterprise/retail/telco-multicurrency-service";
 import type { mobileMoneyCreateSchema, retailDailyCloseCreateSchema, retailDailyCloseDecisionSchema, retailProviderUpsertSchema, retailSaleCreateSchema, retailSaleReverseSchema, telcoTopupCreateSchema } from "@/lib/enterprise/retail/schemas";
@@ -166,6 +169,7 @@ export async function createRetailSale(
   input: RetailSaleInput,
   relationshipBenefitEffects: RetailRelationshipBenefitEffect[] = [],
   relationshipLoyaltyEffects: RetailRelationshipLoyaltyEffect[] = [],
+  relationshipCashbackEffects: RetailRelationshipCashbackEffect[] = [],
 ) {
   return prisma.$transaction(async (tx) => {
     await assertRetailOrganization(tx, organizationId);
@@ -181,7 +185,8 @@ export async function createRetailSale(
     }
 
     const catalogItemIds = Array.from(new Set(input.lines.map((line) => line.catalogItemId)));
-    const tenderAccountIds = Array.from(new Set(input.tenders.map((tender) => tender.financialAccountId)));
+    const tenderAccountIds = Array.from(new Set(input.tenders.map((tender) => tender.financialAccountId).filter((value): value is string => Boolean(value))));
+    const storedValueAccountIds = Array.from(new Set(input.tenders.map((tender) => tender.storedValueAccountId).filter((value): value is string => Boolean(value))));
     const [warehouse, site, location, customer, catalogItems, inventoryItems, financialAccounts] = await Promise.all([
       tx.enterpriseWarehouse.findFirst({ where: { id: input.warehouseId, organizationId, status: "ACTIVE", archivedAt: null }, select: { id: true, siteId: true } }),
       input.siteId ? tx.enterpriseSite.findFirst({ where: { id: input.siteId, organizationId, status: "ACTIVE", archivedAt: null }, select: { id: true } }) : Promise.resolve(null),
@@ -241,7 +246,13 @@ export async function createRetailSale(
 
     const cashAccountIds: string[] = [];
     for (const tender of input.tenders) {
-      const account = accountById.get(tender.financialAccountId);
+      if (tender.methodType === "STORE_CREDIT") {
+        if (!input.customerBusinessPartyId || !tender.storedValueAccountId || tender.financialAccountId) {
+          throw new EnterpriseRetailError("RETAIL_STORED_VALUE_CUSTOMER_REQUIRED", 409);
+        }
+        continue;
+      }
+      const account = accountById.get(tender.financialAccountId!);
       const expectedTypes = tender.methodType === "CASH" ? ["CASH"] : tender.methodType === "MOBILE_MONEY" ? ["MOBILE_MONEY"] : ["BANK", "CLEARING"];
       if (!account || account.currencyCode !== input.currencyCode || !expectedTypes.includes(account.accountType)) {
         throw new EnterpriseRetailError("RETAIL_FINANCIAL_ACCOUNT_INVALID", 409, { accountId: tender.financialAccountId, currencyCode: input.currencyCode, allowedTypes: expectedTypes });
@@ -261,6 +272,11 @@ export async function createRetailSale(
     for (const accountId of cashAccountIds) {
       if (!cashSessionByAccountId.has(accountId)) throw new EnterpriseRetailError("RETAIL_OPEN_CASH_SESSION_REQUIRED", 409, { financialAccountId: accountId });
     }
+    const storedValueAccounts = storedValueAccountIds.length ? await tx.enterpriseRetailStoredValueAccount.findMany({
+      where: { organizationId, id: { in: storedValueAccountIds }, archivedAt: null },
+    }) : [];
+    if (storedValueAccounts.length !== storedValueAccountIds.length) throw new EnterpriseRetailError("RETAIL_STORED_VALUE_NOT_FOUND", 409);
+    const storeCreditById = new Map(storedValueAccounts.map((account) => [account.id, account]));
 
     const sale = await tx.enterpriseRetailSale.create({
       data: {
@@ -279,7 +295,7 @@ export async function createRetailSale(
         cashierUserId: actorUserId,
         idempotencyKey: input.idempotencyKey,
         lines: { create: preparedLines },
-        tenders: { create: input.tenders.map((tender) => ({ methodType: tender.methodType, financialAccountId: tender.financialAccountId, currencyCode: input.currencyCode, amount: decimal(tender.amount), reference: tender.reference || null })) },
+        tenders: { create: input.tenders.map((tender) => ({ methodType: tender.methodType, financialAccountId: tender.financialAccountId || null, storedValueAccountId: tender.storedValueAccountId || null, currencyCode: input.currencyCode, amount: decimal(tender.amount), reference: tender.reference || null })) },
       },
       include: { lines: true, tenders: true },
     });
@@ -314,11 +330,29 @@ export async function createRetailSale(
     }
 
     for (const tender of sale.tenders) {
-      const account = accountById.get(tender.financialAccountId);
+      if (tender.methodType === "STORE_CREDIT") {
+        const account = tender.storedValueAccountId ? storeCreditById.get(tender.storedValueAccountId) : null;
+        if (!account || !sale.customerBusinessPartyId) throw new EnterpriseRetailError("RETAIL_STORED_VALUE_CUSTOMER_REQUIRED", 409);
+        await changeRelationalStoreCreditTx({
+          tx, organizationId, actorUserId, accountId: account.id,
+          customerBusinessPartyId: sale.customerBusinessPartyId, currencyCode: sale.currencyCode,
+          amount: tender.amount.negated(), entryType: "REDEEM", saleId: sale.id,
+          idempotencyKey: `retail-sale:${sale.id}:store-credit:${tender.id}`,
+          reason: `Avoir magasin consommé sur ${sale.number}`,
+        });
+        continue;
+      }
+      const account = accountById.get(tender.financialAccountId!);
       if (!account) throw new EnterpriseRetailError("RETAIL_FINANCIAL_ACCOUNT_INVALID", 409, { accountId: tender.financialAccountId });
       const cashSession = account.accountType === "CASH" ? cashSessionByAccountId.get(account.id) || null : null;
       await applyAccountEffectTx(tx, { organizationId, actorUserId, account, effect: tender.amount, transactionType: "RETAIL_POS_SALE", reference: sale.number, transactionDate: sale.soldAt, cashSessionId: cashSession?.id, cashReason: `Vente ${sale.number}` });
     }
+
+    // Credit is awarded only after confirming all tenders, so a customer
+    // cannot use the cashback of this ticket to pay for the same ticket.
+    await applyRetailRelationshipCashbackTx({
+      tx, organizationId, actorUserId, saleId: sale.id, effects: relationshipCashbackEffects,
+    });
 
     await publishEnterpriseEvent(tx, { organizationId, entityType: "EnterpriseRetailSale", entityId: sale.id, eventType: "RETAIL_POS_SALE_COMPLETED", summary: `Ticket ${sale.number} terminé`, actorUserId, toStatus: "COMPLETED", metadataJson: { total: sale.grandTotal.toFixed(), currency: sale.currencyCode, lineCount: sale.lines.length } });
     await finalizeRetailSaleAccountingTx(tx, organizationId, actorUserId, sale.id);
@@ -337,6 +371,8 @@ export async function reverseRetailSale(organizationId: string, saleId: string, 
       return sale;
     }
     if (sale.status !== "COMPLETED" || sale.revision !== input.revision) throw new EnterpriseRetailError("RETAIL_SALE_ALREADY_REVERSED", 409);
+    const confirmedReturns = await tx.enterpriseRetailReturn.count({ where: { organizationId, saleId: sale.id, status: "COMPLETED" } });
+    if (confirmedReturns > 0) throw new EnterpriseRetailError("RETAIL_SALE_HAS_CONFIRMED_RETURNS", 409);
 
     for (const line of sale.lines) {
       if (!line.trackInventory || !line.inventoryItemId) continue;
@@ -356,13 +392,25 @@ export async function reverseRetailSale(organizationId: string, saleId: string, 
       });
     }
     for (const tender of sale.tenders.filter((item) => item.status === "CONFIRMED")) {
-      const account = await assertFinancialAccount(tx, organizationId, tender.financialAccountId, tender.currencyCode);
+      if (tender.methodType === "STORE_CREDIT") {
+        if (!sale.customerBusinessPartyId || !tender.storedValueAccountId) throw new EnterpriseRetailError("RETAIL_STORED_VALUE_CUSTOMER_REQUIRED", 409);
+        await changeRelationalStoreCreditTx({
+          tx, organizationId, actorUserId, accountId: tender.storedValueAccountId,
+          customerBusinessPartyId: sale.customerBusinessPartyId, currencyCode: tender.currencyCode,
+          amount: tender.amount, entryType: "REFUND", saleId: sale.id,
+          idempotencyKey: `retail-sale-reverse:${sale.id}:store-credit:${tender.id}`,
+          reason: `Remboursement avoir, ticket ${sale.number}`,
+        });
+        continue;
+      }
+      const account = await assertFinancialAccount(tx, organizationId, tender.financialAccountId!, tender.currencyCode);
       const cashSession = account.accountType === "CASH" ? await assertOpenCashSession(tx, organizationId, account.id, actorUserId) : null;
       await applyAccountEffectTx(tx, { organizationId, actorUserId, account, effect: tender.amount.negated(), transactionType: "RETAIL_POS_REVERSAL", reference: sale.number, transactionDate: new Date(), cashSessionId: cashSession?.id, cashReason: input.reason });
     }
     await reverseRetailRelationshipBenefitEffectsTx({ tx, organizationId, saleId: sale.id });
     await reverseRetailRelationshipLoyaltyTx({ tx, organizationId, saleId: sale.id, actorUserId });
-        await tx.enterpriseRetailTender.updateMany({ where: { organizationId, saleId: sale.id, status: "CONFIRMED" }, data: { status: "REVERSED" } });
+    await reverseRetailRelationshipCashbackTx({ tx, organizationId, saleId: sale.id, actorUserId });
+    await tx.enterpriseRetailTender.updateMany({ where: { organizationId, saleId: sale.id, status: "CONFIRMED" }, data: { status: "REVERSED" } });
     const updated = await tx.enterpriseRetailSale.update({ where: { id: sale.id }, data: { status: "REVERSED", reversalReason: input.reason, reversedAt: new Date(), reversedByUserId: actorUserId, revision: { increment: 1 } } });
     await publishEnterpriseEvent(tx, { organizationId, entityType: "EnterpriseRetailSale", entityId: sale.id, eventType: "RETAIL_POS_SALE_REVERSED", summary: `Ticket ${sale.number} annulé`, actorUserId, fromStatus: "COMPLETED", toStatus: "REVERSED", metadataJson: { reason: input.reason.slice(0, 500) } });
     await finalizeRetailSaleReversalAccountingTx(tx, organizationId, actorUserId, sale.id);

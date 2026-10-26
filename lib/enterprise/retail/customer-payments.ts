@@ -367,6 +367,9 @@ export async function redeemRetailStoredValue(organizationId: string, actorUserI
     }
     const account = await tx.enterpriseRetailStoredValueAccount.findFirst({ where: { organizationId, lookupHash: hashStoredValueCode(input.code), archivedAt: null } });
     if (!account) throw new EnterpriseRetailError("RETAIL_STORED_VALUE_NOT_FOUND", 404);
+    // Relational cashback is a customer-bound liability settled exclusively
+    // through the atomic POS tender flow, never through bearer-code redemption.
+    if (account.benefitScopeKey) throw new EnterpriseRetailError("RETAIL_STORED_VALUE_CANONICAL_POS_ONLY", 409);
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseRetailStoredValueAccount" WHERE id = ${account.id} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const locked = await tx.enterpriseRetailStoredValueAccount.findFirstOrThrow({ where: { id: account.id, organizationId } });
     if (locked.status !== "ACTIVE") throw new EnterpriseRetailError("RETAIL_STORED_VALUE_INACTIVE", 409, { status: locked.status });
@@ -397,6 +400,7 @@ export async function refundRetailStoredValue(organizationId: string, actorUserI
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseRetailStoredValueAccount" WHERE id = ${input.accountId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const account = await tx.enterpriseRetailStoredValueAccount.findFirst({ where: { id: input.accountId, organizationId, archivedAt: null } });
     if (!account) throw new EnterpriseRetailError("RETAIL_STORED_VALUE_NOT_FOUND", 404);
+    if (account.benefitScopeKey) throw new EnterpriseRetailError("RETAIL_STORED_VALUE_CANONICAL_POS_ONLY", 409);
     if (account.currencyCode !== input.currencyCode) throw new EnterpriseRetailError("RETAIL_STORED_VALUE_CURRENCY_MISMATCH", 409);
     if (input.returnId) await assertReturnTx(tx, organizationId, input.returnId);
     const amount = decimal(input.amount);

@@ -1,3 +1,11 @@
+## 2026-10-26 — Hotfix P0 #908 : cashback relationnel Retail en avoir magasin (pré-release)
+
+- Ajout d'un compte canonique `STORE_CREDIT` par tenant, tiers client et devise (`benefitScopeKey` unique, indépendant du secret de carte cadeau). Attributions `EARN` seulement après vente POS confirmée ; consommation `REDEEM` sur un ticket ultérieur et restitution `REFUND` sur le même compte.
+- Tenders et remboursements Retail acceptent une source `storedValueAccountId` sans faux compte bancaire, avec contraintes SQL exclusives, validation tenant/client/devise/solde, verrouillage et idempotence. GL : compte d'avances clients pour la dette d'avoir et charge d'exploitation pour l'attribution cashback.
+- Retours partiels : reprise proportionnelle au seul montant des **lignes éligibles remboursées**, dette d'avoir signée si le crédit a déjà été consommé et libération de quota uniquement après retour intégral. Réversion de ticket interdite si un retour confirmé existe pour éviter une double annulation.
+- Interface Retail POS et administration d'avantages FR/EN, consultation ciblée des avoirs actifs sans charger l'historique client, messages d'attribution et historique relationnel précis ; migration additive, QA dédiée 31 assertions, test E2E intégré à la CI Shop 2 et runbook `docs/OWNER_E2E_908_RETAIL_CASHBACK.md`.
+- **Non livré** : migration sur une base de test isolée, CI distante, OWNER_E2E et merge. `CREDIT` forfaitaire et `DELIVERY` demeurent des hotfixes séparés sous #886 ; pas d'activation Production depuis cette branche.
+
 ## 2026-10-25 — Hotfix P0 #906 : fidélité relationnelle Retail POS (pré-release)
 
 - Ajout du type `LOYALTY` dans l'administration des avantages : sélection d'un programme Retail canonique actif, devise identique, taux positif de points proportionnel au total réel de vente, sans règle concurrente `autoEarn`.

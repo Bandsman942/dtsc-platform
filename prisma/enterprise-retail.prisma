@@ -103,7 +103,8 @@ model EnterpriseRetailTender {
   organizationId     String
   saleId             String
   methodType         String
-  financialAccountId String
+  financialAccountId String?
+  storedValueAccountId String?
   currencyCode       String
   amount             Decimal  @db.Decimal(20, 6)
   reference          String?
@@ -114,6 +115,7 @@ model EnterpriseRetailTender {
   @@unique([organizationId, id])
   @@index([organizationId, saleId])
   @@index([organizationId, financialAccountId, createdAt])
+  @@index([organizationId, storedValueAccountId, createdAt])
 }
 
 model EnterpriseMobileMoneyTransaction {
@@ -407,6 +409,7 @@ model EnterpriseRetailRefund {
   returnId           String
   methodType         String
   financialAccountId String?
+  storedValueAccountId String?
   currencyCode       String
   amount             Decimal  @db.Decimal(20, 6)
   status             String   @default("CONFIRMED")
@@ -420,4 +423,5 @@ model EnterpriseRetailRefund {
   @@unique([organizationId, idempotencyKey])
   @@index([organizationId, returnId, status])
   @@index([organizationId, financialAccountId, createdAt])
+  @@index([organizationId, storedValueAccountId, createdAt])
 }

@@ -7,6 +7,8 @@ import { finalizeRetailReturnAccountingTx } from "@/lib/enterprise/retail/accoun
 import { reverseRetailLoyaltyForCompletedReturnTx } from "@/lib/enterprise/retail/loyalty-sale-hooks";
 import { reverseRetailRelationshipBenefitEffectsTx } from "@/lib/enterprise/relationship-benefits/retail-adapter";
 import { reverseRetailRelationshipLoyaltyTx } from "@/lib/enterprise/relationship-benefits/retail-loyalty";
+import { reverseRetailRelationshipCashbackTx } from "@/lib/enterprise/relationship-benefits/retail-cashback";
+import { changeRelationalStoreCreditTx } from "@/lib/enterprise/retail/relationship-store-credit";
 import type { retailReturnCreateSchema, retailReturnDecisionSchema } from "@/lib/enterprise/retail/commercial-schemas";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { withRetailTransactionRetry } from "@/lib/enterprise/retail/transaction-retry";
@@ -119,6 +121,37 @@ async function applyRefundAccountEffectTx(
       reference: input.reference || null,
       idempotencyKey: input.idempotencyKey,
       createdByUserId: input.actorUserId,
+    },
+  });
+}
+
+async function refundOriginalStoreCreditTenderTx(args: {
+  tx: Prisma.TransactionClient;
+  organizationId: string;
+  actorUserId: string;
+  returnId: string;
+  returnNumber: string;
+  customerBusinessPartyId: string | null;
+  currencyCode: string;
+  tender: { id: string; storedValueAccountId: string | null; reference: string | null };
+  amount: Prisma.Decimal;
+}) {
+  if (!args.customerBusinessPartyId || !args.tender.storedValueAccountId) {
+    throw new EnterpriseRetailError("RETAIL_STORED_VALUE_CUSTOMER_REQUIRED", 409);
+  }
+  const key = `retail-return:${args.returnId}:refund:${args.tender.id}`;
+  await changeRelationalStoreCreditTx({
+    tx: args.tx, organizationId: args.organizationId, actorUserId: args.actorUserId,
+    accountId: args.tender.storedValueAccountId, customerBusinessPartyId: args.customerBusinessPartyId,
+    currencyCode: args.currencyCode, amount: args.amount, entryType: "REFUND", returnId: args.returnId,
+    idempotencyKey: key, reason: `Avoir magasin remboursé ${args.returnNumber}`,
+  });
+  return args.tx.enterpriseRetailRefund.create({
+    data: {
+      organizationId: args.organizationId, returnId: args.returnId, methodType: "STORE_CREDIT",
+      financialAccountId: null, storedValueAccountId: args.tender.storedValueAccountId,
+      currencyCode: args.currencyCode, amount: args.amount, reference: args.tender.reference,
+      idempotencyKey: key, createdByUserId: args.actorUserId,
     },
   });
 }
@@ -352,6 +385,15 @@ export async function decideRetailReturn(
           : money(retailReturn.grandTotal.times(tender.amount).div(tenderTotal));
         allocated = allocated.plus(amount);
         if (!amount.isPositive()) continue;
+        if (tender.methodType === "STORE_CREDIT") {
+          refunds.push(await refundOriginalStoreCreditTenderTx({
+            tx, organizationId, actorUserId, returnId: retailReturn.id, returnNumber: retailReturn.number,
+            customerBusinessPartyId: retailReturn.sale.customerBusinessPartyId, currencyCode: retailReturn.currencyCode,
+            tender, amount,
+          }));
+          continue;
+        }
+        if (!tender.financialAccountId) throw new EnterpriseRetailError("RETAIL_REFUND_ACCOUNT_INVALID", 409);
         const account = await getRefundAccountTx(tx, organizationId, tender.financialAccountId, retailReturn.currencyCode, tender.methodType);
         refunds.push(await applyRefundAccountEffectTx(tx, {
           organizationId,
@@ -416,6 +458,7 @@ export async function decideRetailReturn(
       toStatus: "COMPLETED",
       metadataJson: { saleId: retailReturn.saleId, lineCount: completed.lines.length, total: completed.grandTotal.toFixed(), currency: completed.currencyCode },
     });
+    await reverseRetailRelationshipCashbackTx({ tx, organizationId, actorUserId, saleId: retailReturn.sale.id, returnId: completed.id });
     const accounting = await finalizeRetailReturnAccountingTx(tx, organizationId, actorUserId, completed.id);
     const loyalty = await reverseRetailLoyaltyForCompletedReturnTx(tx, organizationId, actorUserId, completed.id);
 

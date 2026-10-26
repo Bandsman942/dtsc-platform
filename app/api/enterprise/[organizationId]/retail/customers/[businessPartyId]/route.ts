@@ -58,7 +58,7 @@ export async function GET(req: Request, { params }: Params) {
       prisma.enterpriseRetailStoredValueAccount.findMany({
         where: { organizationId, customerBusinessPartyId: businessPartyId, archivedAt: null },
         orderBy: { updatedAt: "desc" },
-        select: { id: true, accountType: true, displayCode: true, currencyCode: true, balance: true, status: true, expiresAt: true, updatedAt: true },
+        select: { id: true, accountType: true, benefitScopeKey: true, displayCode: true, currencyCode: true, balance: true, status: true, expiresAt: true, updatedAt: true },
       }),
     ]);
 
@@ -79,7 +79,7 @@ export async function GET(req: Request, { params }: Params) {
       sales,
       returns,
       loyaltyAccounts,
-      storedValueAccounts,
+      storedValueAccounts: storedValueAccounts.map(({ benefitScopeKey, ...account }) => ({ ...account, redeemableAtPos: Boolean(benefitScopeKey) })),
     });
   } catch (error) {
     return retailErrorResponse(error, "RETAIL_CUSTOMER_HISTORY_LOAD_FAILED");
