@@ -9,9 +9,9 @@ import { EnterpriseRelationshipBenefitError } from "@/lib/enterprise/relationshi
 import { changeRelationalStoreCreditTx, ensureRelationalStoreCreditAccountTx } from "@/lib/enterprise/retail/relationship-store-credit";
 import { prisma } from "@/lib/prisma";
 
-const failure = (code: string, message: string, status = 409): never => {
+function failure(code: string, message: string, status = 409): never {
   throw new EnterpriseRelationshipBenefitError(code, message, status);
-};
+}
 const metadata = (value: Prisma.JsonValue | null) =>
   value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const str = (value: unknown): string | null => typeof value === "string" && value.length > 0 ? value : null;
