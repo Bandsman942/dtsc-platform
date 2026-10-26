@@ -142,7 +142,7 @@ export async function createManualRelationshipCreditRequest(args: {
       return existing;
     }
     await checkDocument(tx, organizationId, args.documentId);
-    const { link: checked } = await grantEligibilityTx(tx, {
+    const { link: checked, benefit: quoted } = await grantEligibilityTx(tx, {
       organizationId, benefitId: args.benefitId, identityLinkId: args.identityLinkId,
       userId: link.userId, businessPartyId: args.businessPartyId, currencyCode,
     });
@@ -154,6 +154,7 @@ export async function createManualRelationshipCreditRequest(args: {
         requestContextJson: {
           moduleCode: "RETAIL_POS", businessPartyId: args.businessPartyId,
           currencyCode, documentId: args.documentId, requestedByUserId: args.actorUserId,
+          creditAmount: quoted.valueDecimal!.toFixed(),
         },
       },
     });
@@ -200,7 +201,9 @@ export async function decideManualRelationshipCredit(args: {
         where: { organizationId: args.organizationId, id: usage.benefitId },
         select: { code: true, valueDecimal: true },
       });
-      if (!benefit?.valueDecimal?.gt(0)) failure("RELATIONSHIP_CREDIT_VALUE_INVALID", "Le montant de l'avantage est invalide.");
+      if (!benefit?.valueDecimal?.gt(0) || context.creditAmount !== benefit.valueDecimal.toFixed()) {
+        failure("RELATIONSHIP_CREDIT_VALUE_CHANGED", "Le montant de ce crédit a été modifié depuis la demande. Créez une nouvelle attribution.");
+      }
       const account = await ensureRelationalStoreCreditAccountTx({
         tx, organizationId: args.organizationId, customerBusinessPartyId: businessPartyId,
         currencyCode, actorUserId: args.actorUserId,
