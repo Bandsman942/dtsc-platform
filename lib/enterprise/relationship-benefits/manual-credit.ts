@@ -50,7 +50,7 @@ async function grantEligibilityTx(tx: Prisma.TransactionClient, args: {
   currencyCode: string;
 }) {
   const { organizationId } = args;
-  const [benefit, link, assignment, usages, reference, party, modules] = await Promise.all([
+  const [benefit, link, assignment, usages, party, modules] = await Promise.all([
     tx.enterpriseRelationshipBenefit.findFirst({
       where: { organizationId, id: args.benefitId }, include: { audiences: true },
     }),
@@ -70,10 +70,7 @@ async function grantEligibilityTx(tx: Prisma.TransactionClient, args: {
       },
       select: { benefitId: true, status: true, requestedAt: true }, take: 100000,
     }),
-    tx.enterprisePersonBusinessReference.findFirst({
-      where: { organizationId, businessPartyId: args.businessPartyId, status: "ACTIVE", archivedAt: null },
-      select: { personIdentityId: true },
-    }),
+
     tx.enterpriseBusinessParty.findFirst({
       where: { organizationId, id: args.businessPartyId, status: "ACTIVE", archivedAt: null,
         roles: { some: { roleCode: "CUSTOMER", status: "ACTIVE", archivedAt: null } } },
@@ -84,7 +81,12 @@ async function grantEligibilityTx(tx: Prisma.TransactionClient, args: {
       select: { moduleCode: true },
     }),
   ]);
-  if (!benefit || !link || !party || !reference || reference.personIdentityId !== link.personIdentityId ||
+  const reference = link ? await tx.enterprisePersonBusinessReference.findFirst({
+    where: { organizationId, businessPartyId: args.businessPartyId, personIdentityId: link.personIdentityId,
+      status: "ACTIVE", archivedAt: null },
+    select: { id: true },
+  }) : null;
+  if (!benefit || !link || !party || !reference ||
       !["RETAIL_POS", "RELATIONSHIP_BENEFITS"].every((code) => modules.some((row) => row.moduleCode === code))) {
     failure("RELATIONSHIP_CREDIT_BENEFICIARY_INVALID", "La relation, le client ou le module n'est plus éligible.", 403);
   }
