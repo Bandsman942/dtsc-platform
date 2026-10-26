@@ -11,6 +11,7 @@ import type { retailCommercialContextSchema } from "@/lib/enterprise/retail/comm
 import { autoEarnRetailLoyaltyForSale } from "@/lib/enterprise/retail/loyalty-sale-hooks";
 import {
   resolveRetailRelationshipBenefitPricing,
+  resolveRetailRelationshipCashbackEffects,
   resolveRetailRelationshipLoyaltyEffects,
   serializeRetailRelationshipBenefitEffects,
 } from "@/lib/enterprise/relationship-benefits/retail-adapter";
@@ -95,6 +96,17 @@ export async function executeCanonicalRetailSale(args: {
         decisions: finalDecisions,
       })
     : [];
+  const cashbackEffects = !guarded.overrideApplied && !args.commercialContext.overrideReason
+    ? await resolveRetailRelationshipCashbackEffects({
+        organizationId: args.organizationId,
+        customerBusinessPartyId: guarded.input.customerBusinessPartyId,
+        currencyCode: guarded.input.currencyCode,
+        siteId: guarded.input.siteId,
+        channelCode: args.commercialContext.channelCode,
+        soldAt: guarded.input.soldAt,
+        decisions: finalDecisions,
+      })
+    : [];
   const finalDecisionByItem = new Map(
     finalDecisions.map((decision) => [decision.catalogItemId, decision]),
   );
@@ -127,7 +139,7 @@ export async function executeCanonicalRetailSale(args: {
   });
 
   const result = await withRetailTransactionRetry(
-    () => createRetailSale(args.organizationId, args.actorUserId, finalInput, relationshipResolution.effects, loyaltyEffects),
+    () => createRetailSale(args.organizationId, args.actorUserId, finalInput, relationshipResolution.effects, loyaltyEffects, cashbackEffects),
     { maxAttempts: 3, baseDelayMs: 20 },
   );
   await persistRetailCommercialDecisions(
@@ -176,6 +188,23 @@ export async function executeCanonicalRetailSale(args: {
       }))
     : serializeRetailRelationshipBenefitEffects(relationshipResolution.effects);
 
+  const cashbackUsages = await prisma.enterpriseRelationshipBenefitUsage.findMany({
+    where: {
+      organizationId: args.organizationId, effectEntityType: "EnterpriseRetailSale", effectEntityId: result.sale.id,
+      executionMode: "AUTO_RETAIL_CASHBACK", status: "CONSUMED",
+    },
+    include: { benefit: { select: { code: true, nameFr: true, nameEn: true } } },
+    orderBy: { createdAt: "asc" },
+  });
+  const cashbackCredits = cashbackUsages.map((usage) => ({
+    benefitId: usage.benefitId,
+    code: usage.benefit.code,
+    nameFr: usage.benefit.nameFr,
+    nameEn: usage.benefit.nameEn,
+    amount: usage.effectAmount?.toFixed() || "0",
+    currencyCode: usage.effectCurrencyCode || result.sale.currencyCode,
+  }));
+
   const notificationEffects = result.idempotent
     ? persistedRelationshipUsages.map((usage) => ({
         benefitId: usage.benefitId,
@@ -192,7 +221,7 @@ export async function executeCanonicalRetailSale(args: {
         userId: effect.userId,
       }));
 
-  const benefitUserIds = [...new Set(notificationEffects.map((effect) => effect.userId))];
+  const benefitUserIds = [...new Set([...notificationEffects.map((effect) => effect.userId), ...cashbackUsages.map((usage) => usage.userId)])];
   const benefitUsers = benefitUserIds.length
     ? await prisma.user.findMany({
         where: { id: { in: benefitUserIds } },
@@ -202,8 +231,8 @@ export async function executeCanonicalRetailSale(args: {
   const localeByUserId = new Map(
     benefitUsers.map((user) => [user.id, user.locale === "en" ? "en" : "fr"]),
   );
-  await Promise.allSettled(
-    notificationEffects.map((effect) => {
+  await Promise.allSettled([
+    ...notificationEffects.map((effect) => {
       const english = localeByUserId.get(effect.userId) === "en";
       return notifyUser({
         userId: effect.userId,
@@ -217,7 +246,20 @@ export async function executeCanonicalRetailSale(args: {
         idempotencyKey: `relationship-benefit-auto-retail:${result.sale.id}:${effect.benefitId}`,
       });
     }),
-  );
+    ...cashbackUsages.map((usage) => {
+      const english = localeByUserId.get(usage.userId) === "en";
+      const name = english ? usage.benefit.nameEn : usage.benefit.nameFr;
+      return notifyUser({
+        userId: usage.userId, organizationId: args.organizationId, type: "ENTERPRISE_RELATIONSHIP",
+        title: english ? "Store credit received" : "Avoir magasin crédité",
+        body: english
+          ? `${name}: ${usage.effectAmount?.toFixed() || "0"} ${usage.effectCurrencyCode || result.sale.currencyCode} in store credit after sale ${result.sale.number}.`
+          : `${name} : ${usage.effectAmount?.toFixed() || "0"} ${usage.effectCurrencyCode || result.sale.currencyCode} d’avoir magasin après la vente ${result.sale.number}.`,
+        targetUrl: `/enterprise-links?link=${usage.identityLinkId}&view=active`,
+        idempotencyKey: `relationship-cashback-retail:${result.sale.id}:${usage.benefitId}`,
+      });
+    }),
+  ]);
 
   return {
     result,
@@ -226,5 +268,6 @@ export async function executeCanonicalRetailSale(args: {
     loyalty,
     promotionCount,
     relationshipBenefits,
+    cashbackCredits,
   };
 }

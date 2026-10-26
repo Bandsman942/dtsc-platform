@@ -362,6 +362,7 @@
     "qa:hotfix-886": "node scripts/qa-hotfix-886-retail-benefits.mjs",
     "qa:hotfix-904": "node scripts/qa-hotfix-904-omnichannel-returns.mjs",
     "qa:hotfix-906": "node scripts/qa-hotfix-906-relationship-loyalty.mjs",
+    "qa:hotfix-908": "node scripts/qa-hotfix-908-retail-cashback.mjs",
     "qa:hotfix-882-manufacturing-execution": "node scripts/qa-hotfix-882-manufacturing-execution.mjs",
     "e2e:hotfix-786": "playwright test tests/e2e/issue-786-relationship-benefits-enforcement.spec.mjs",
     "qa:workflow-contracts": "node scripts/qa-workflow-814-contracts.mjs",

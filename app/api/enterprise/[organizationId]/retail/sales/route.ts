@@ -69,7 +69,7 @@ export async function POST(req: Request, { params }: Params) {
   if (!commercialContext.success) return NextResponse.json({ error: "Invalid commercial context", message: commercialContext.error.issues[0]?.message || "Contexte commercial invalide." }, { status: 400 });
   try {
     const permissions = await getRetailCommercialPermissions(auth.session.userId, organizationId);
-    const { result, guarded, accounting, loyalty, promotionCount, relationshipBenefits } = await executeCanonicalRetailSale({
+    const { result, guarded, accounting, loyalty, promotionCount, relationshipBenefits, cashbackCredits } = await executeCanonicalRetailSale({
       organizationId,
       actorUserId: auth.session.userId,
       input: parsed.data,
@@ -97,13 +97,15 @@ export async function POST(req: Request, { params }: Params) {
         promotionCount,
         relationshipBenefitCount: relationshipBenefits.length,
         relationshipBenefitIds: relationshipBenefits.map((item) => item.benefitId),
+        cashbackCreditCount: cashbackCredits.length,
+        cashbackCreditAmounts: cashbackCredits.map((item) => ({ benefitId: item.benefitId, amount: item.amount, currencyCode: item.currencyCode })),
         saleJournalEntryId: accounting.saleJournalEntryId,
         inventoryValuationCount: accounting.inventoryPostings.length,
         inventoryJournalEntryIds: accounting.inventoryPostings.map((item) => item.journalEntryId),
       },
     });
     await writeApiLog({ request: req, statusCode: result.idempotent ? 200 : 201, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-pos", action: "create", customerAttached: Boolean(result.sale.customerBusinessPartyId), loyaltyApplied: loyalty.applied.length, overrideApplied: guarded.overrideApplied, promotionCount, relationshipBenefitCount: relationshipBenefits.length, accountingPosted: true } });
-    return NextResponse.json({ ok: true, ...result, accounting, loyalty, relationshipBenefits, commercial: { promotionCount, relationshipBenefitCount: relationshipBenefits.length, pricingDecisionCount: guarded.decisions.length, overrideApplied: guarded.overrideApplied } }, { status: result.idempotent ? 200 : 201 });
+    return NextResponse.json({ ok: true, ...result, accounting, loyalty, relationshipBenefits, cashbackCredits, commercial: { promotionCount, relationshipBenefitCount: relationshipBenefits.length, cashbackCreditCount: cashbackCredits.length, pricingDecisionCount: guarded.decisions.length, overrideApplied: guarded.overrideApplied } }, { status: result.idempotent ? 200 : 201 });
   } catch (error) {
     return retailErrorResponse(error, "RETAIL_SALE_CREATE_FAILED");
   }

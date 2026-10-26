@@ -224,7 +224,7 @@ export function RelationshipOverviewPanel({
                   </StatusBadge>}
                   meta={fmtDate(usage.executedAt || usage.requestedAt)}
                   description={<div className="grid gap-1">
-                    <span>{usage.executedAt ? `${usage.status === "CANCELLED" ? (locale === "en" ? "Reversed" : "Annulé") : copy.consumed} · ${usage.executionMode === "AUTO_RETAIL_LOYALTY" ? `${usage.effectAmount ?? "—"} points` : fmtAmount(usage.effectAmount, usage.effectCurrencyCode)}` : copy.unexecuted}</span>
+                    <span>{usage.executedAt ? `${usage.status === "CANCELLED" ? (locale === "en" ? "Reversed" : "Annulé") : copy.consumed} · ${usage.executionMode === "AUTO_RETAIL_LOYALTY" ? `${usage.effectAmount ?? "—"} points` : usage.executionMode === "AUTO_RETAIL_CASHBACK" ? `${fmtAmount(usage.effectAmount, usage.effectCurrencyCode)} ${locale === "en" ? "store credit" : "d’avoir magasin"}` : fmtAmount(usage.effectAmount, usage.effectCurrencyCode)}` : copy.unexecuted}</span>
                     {expandedUsageId === usage.id ? (
                       <div className="grid gap-1 text-xs text-dtsc-ink">
                         <span>{copy.requested} : {fmtDate(usage.requestedAt)}</span>

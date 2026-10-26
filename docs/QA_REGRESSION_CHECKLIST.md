@@ -741,3 +741,16 @@ Documenter dans le ticket ou la PR:
 - PARTIAL/NONE sans justification, approbateur absent, budget/compte invalide ou snapshot incohérent apparaît comme blocage lisible avant soumission.
 - Une erreur de soumission est affichée comme erreur dans le toast et dans la modale.
 <!-- /SPRINT_05_PAYROLL_RETRY_QA -->
+
+## Hotfix #908 — cashback relationnel et avoir magasin Retail (OWNER_E2E requis)
+
+- [ ] `node scripts/qa-hotfix-908-retail-cashback.mjs` et les QA #906/#886 passent ; la migration additive est appliquée d'abord à une base isolée.
+- [ ] Une vente de 100,00 avec 5 % de cashback attribue 5,00 d'avoir au tiers lié sans mouvement bancaire/espèces additionnel ; tous les effets sont idempotents.
+- [ ] L'avoir n'est utilisable que sur un ticket ultérieur, par le même tiers et dans la bonne devise ; pas de double dépense concurrente.
+- [ ] Vente suivante : paiement mixte avoir + trésorerie ; une seule écriture comptable équilibrée et aucun compte financier fictif.
+- [ ] Retour partiel d'une ligne éligible réverse uniquement le cashback correspondante ; retour d'une ligne inéligible n'affecte pas cette prime.
+- [ ] Retour intégral restaure le quota ; cashback consommé puis remboursé crée un solde négatif bloquant les nouvelles utilisations jusqu'à compensation.
+- [ ] Remboursement sur paiement d'origine par avoir reconstitue le **même** compte, tandis que les espèces exigent la session de caisse.
+- [ ] Annulation de vente sans retour : réversion complète ; annulation après retour confirmé refusée ; pas de duplication au rejeu.
+- [ ] Les écrans POS, liste client, historique membre et configuration Cashback présentent des montants exacts et accessibles en FR/EN et sur mobile.
+- [ ] Contrats, types, lint, build et CI sont prouvés sur la PR ; E2E du propriétaire est consigné dans `docs/OWNER_E2E_908_RETAIL_CASHBACK.md` avant merge.

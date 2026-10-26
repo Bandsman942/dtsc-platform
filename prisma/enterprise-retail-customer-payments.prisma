@@ -104,6 +104,9 @@ model EnterpriseRetailStoredValueAccount {
   organizationId          String
   accountType             String
   lookupHash              String
+  /// Stable tenant/customer/currency identity for relational store credit;
+  /// unlike lookupHash this is never accepted as a bearer redemption code.
+  benefitScopeKey         String?
   displayCode             String
   customerBusinessPartyId String?
   currencyCode            String
@@ -120,6 +123,7 @@ model EnterpriseRetailStoredValueAccount {
 
   @@unique([organizationId, id])
   @@unique([organizationId, lookupHash])
+  @@unique([organizationId, benefitScopeKey])
   @@index([organizationId, customerBusinessPartyId, status])
   @@index([organizationId, accountType, status])
   @@index([organizationId, expiresAt, status])

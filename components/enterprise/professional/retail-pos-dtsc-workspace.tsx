@@ -51,7 +51,8 @@ type CartLine = {
 
 type TenderDraft = {
   methodType: string;
-  financialAccountId: string;
+  financialAccountId?: string | null;
+  storedValueAccountId?: string | null;
   amount: number;
   reference: null;
 };
@@ -81,6 +82,7 @@ type SaleDraft = {
   siteId: string | null;
   storageLocationId: null;
   currencyCode: string;
+  customerBusinessPartyId?: string | null;
   lines: Array<{
     catalogItemId: string;
     inventoryItemId: string | null;
@@ -187,7 +189,7 @@ function PosOperate({
   reload: () => Promise<void>;
 }) {
   const copy = (locale === "en" ? retailTransactionFormsEn : retailTransactionFormsFr).pos;
-  const warehouses = dashboard.warehouses || [];
+  const warehouses = useMemo(() => dashboard.warehouses || [], [dashboard.warehouses]);
   const sessions = useMemo(
     () => dashboard.cashSessions || (dashboard.cashSession ? [dashboard.cashSession as MobileMoneyCashSession] : []),
     [dashboard.cashSession, dashboard.cashSessions],
@@ -208,6 +210,8 @@ function PosOperate({
   const [method2, setMethod2] = useState("MOBILE_MONEY");
   const [account2, setAccount2] = useState("");
   const [amount2, setAmount2] = useState(0);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+  const [storeCreditAccounts, setStoreCreditAccounts] = useState<FinancialAccount[]>([]);
   const [errors, setErrors] = useState<FormErrors>({});
   const [pending, setPending] = useState<SaleDraft | null>(null);
   const [lastReceipt, setLastReceipt] = useState<Sale | null>(null);
@@ -215,6 +219,36 @@ function PosOperate({
   const [pricingPreviewLoading, setPricingPreviewLoading] = useState(false);
   const [pricingPreviewError, setPricingPreviewError] = useState("");
   const currency = cart[0]?.currencyCode || dashboard.configuration?.baseCurrencyCode || "CDF";
+  useEffect(() => {
+    let active = true;
+    const refresh = async () => {
+      try {
+        const response = await fetch(`/api/enterprise/${organizationId}/retail/active-customer`, { cache: "no-store" });
+        if (!response.ok) throw new Error("CUSTOMER_UNAVAILABLE");
+        const payload = await response.json();
+        const customerId = typeof payload.customer?.id === "string" ? payload.customer.id : null;
+        if (active) {
+          setSelectedCustomerId(customerId);
+          setStoreCreditAccounts(customerId ? (payload.storeCreditAccounts || [])
+            .filter((account: { balance: string }) => Number(account.balance) > 0)
+            .map((account: { id: string; displayCode: string; currencyCode: string; balance: string }) => ({
+              id: account.id, code: account.displayCode,
+              name: `${locale === "fr" ? "Avoir magasin" : "Store credit"} · ${Number(account.balance).toFixed(2)} ${account.currencyCode}`,
+              accountType: "STORE_CREDIT", currencyCode: account.currencyCode,
+              operationalBalance: account.balance, siteId: null,
+            })) : []);
+        }
+      } catch {
+        if (active) { setSelectedCustomerId(null); setStoreCreditAccounts([]); }
+      }
+    };
+    const onChange = (event: Event) => {
+      if ((event as CustomEvent<{ organizationId: string }>).detail?.organizationId === organizationId) void refresh();
+    };
+    void refresh();
+    window.addEventListener("dtsc-retail-customer-changed", onChange);
+    return () => { active = false; window.removeEventListener("dtsc-retail-customer-changed", onChange); };
+  }, [organizationId, locale]);
   const total = useMemo(
     () => cart.reduce((sum, line) => sum + line.quantity * line.unitPrice - line.discountAmount + line.taxAmount, 0),
     [cart],
@@ -408,6 +442,7 @@ function PosOperate({
   );
 
   const accountsFor = useCallback((method: string) => {
+    if (method === "STORE_CREDIT") return storeCreditAccounts.filter((account) => account.currencyCode === currency);
     if (method === "CASH") return openCashAccounts;
     if (method === "MOBILE_MONEY") {
       return dashboard.accounts.filter((account) => account.accountType === "MOBILE_MONEY" && account.currencyCode === currency);
@@ -416,7 +451,7 @@ function PosOperate({
       return dashboard.accounts.filter((account) => ["BANK", "CLEARING", "CARD_CLEARING"].includes(account.accountType) && account.currencyCode === currency);
     }
     return dashboard.accounts.filter((account) => ["BANK", "CLEARING"].includes(account.accountType) && account.currencyCode === currency);
-  }, [currency, dashboard.accounts, openCashAccounts]);
+  }, [currency, dashboard.accounts, openCashAccounts, storeCreditAccounts]);
 
   const paymentAccounts1 = useMemo(() => accountsFor(method1), [accountsFor, method1]);
   const paymentAccounts2 = useMemo(() => accountsFor(method2), [accountsFor, method2]);
@@ -459,11 +494,17 @@ function PosOperate({
 
     const selectedAccount1 = paymentAccounts1.find((account) => account.id === account1) || null;
     if (!selectedAccount1) nextErrors.payment1 = method1 === "CASH" && openCashAccounts.length === 0 ? copy.tillCurrency : copy.missingPayment;
+    if (selectedAccount1 && method1 === "STORE_CREDIT" && (!selectedCustomerId || amount1 > Number(selectedAccount1.operationalBalance))) {
+      nextErrors.payment1 = locale === "fr" ? "Client absent ou solde d’avoir insuffisant." : "No customer selected or insufficient store credit.";
+    }
 
     let selectedAccount2: FinancialAccount | null = null;
     if (split) {
       selectedAccount2 = paymentAccounts2.find((account) => account.id === account2) || null;
       if (!selectedAccount2 || selectedAccount2.id === selectedAccount1?.id) nextErrors.payment2 = copy.missingSecondPayment;
+      if (selectedAccount2 && method2 === "STORE_CREDIT" && (!selectedCustomerId || amount2 > Number(selectedAccount2.operationalBalance))) {
+        nextErrors.payment2 = locale === "fr" ? "Client absent ou solde d’avoir insuffisant." : "No customer selected or insufficient store credit.";
+      }
     }
     const tenderTotal = amount1 + (split ? amount2 : 0);
     if (!Number.isFinite(amount1) || amount1 <= 0 || (split && (!Number.isFinite(amount2) || amount2 <= 0)) || Math.abs(tenderTotal - effectiveTotal) > 0.005) {
@@ -479,13 +520,14 @@ function PosOperate({
     }
     if (!selectedAccount1) return;
 
-    const tenders: TenderDraft[] = [{ methodType: method1, financialAccountId: selectedAccount1.id, amount: amount1, reference: null }];
-    if (split && selectedAccount2) tenders.push({ methodType: method2, financialAccountId: selectedAccount2.id, amount: amount2, reference: null });
+    const tenders: TenderDraft[] = [{ methodType: method1, ...(method1 === "STORE_CREDIT" ? { storedValueAccountId: selectedAccount1.id } : { financialAccountId: selectedAccount1.id }), amount: amount1, reference: null }];
+    if (split && selectedAccount2) tenders.push({ methodType: method2, ...(method2 === "STORE_CREDIT" ? { storedValueAccountId: selectedAccount2.id } : { financialAccountId: selectedAccount2.id }), amount: amount2, reference: null });
     setPending({
       warehouseId,
       siteId: warehouses.find((warehouse: Warehouse) => warehouse.id === warehouseId)?.site.id || null,
       storageLocationId: null,
       currencyCode: currency,
+      customerBusinessPartyId: selectedCustomerId,
       lines: cart.map((line) => ({
         catalogItemId: line.catalogItemId,
         inventoryItemId: line.inventoryItemId,
@@ -504,6 +546,15 @@ function PosOperate({
     const body = await mutate("pos-sale", `/api/enterprise/${organizationId}/retail/sales`, pending, copy.saleCompleted);
     const sale = body?.sale as Sale | undefined;
     if (sale) {
+      const cashbackCredits = Array.isArray(body?.cashbackCredits)
+        ? body.cashbackCredits as Array<{ amount: string; currencyCode: string }>
+        : [];
+      if (cashbackCredits.length) {
+        notifyToast(
+          `${locale === "fr" ? "Avoir magasin attribué" : "Store credit earned"} : ${cashbackCredits.map((item) => `${item.amount} ${item.currencyCode}`).join(" + ")}`,
+          "success",
+        );
+      }
       setLastReceipt(sale);
       setPending(null);
       setCart([]);
@@ -514,6 +565,7 @@ function PosOperate({
       setPricingPreview(null);
       setPricingPreviewError("");
       await reload();
+      window.dispatchEvent(new CustomEvent("dtsc-retail-customer-changed", { detail: { organizationId } }));
     }
   }
 
@@ -674,6 +726,7 @@ function PosOperate({
                   <option value="MOBILE_MONEY">{copy.mobileMoney}</option>
                   <option value="BANK_TRANSFER">{copy.bank}</option>
                   <option value="CARD">{copy.card}</option>
+                  <option value="STORE_CREDIT">{locale === "fr" ? "Avoir magasin" : "Store credit"}</option>
                 </Select>
               </GuidedField>
               <GuidedField
@@ -726,6 +779,7 @@ function PosOperate({
                     <option value="MOBILE_MONEY">{copy.mobileMoney}</option>
                     <option value="BANK_TRANSFER">{copy.bank}</option>
                     <option value="CARD">{copy.card}</option>
+                    <option value="STORE_CREDIT">{locale === "fr" ? "Avoir magasin" : "Store credit"}</option>
                   </Select>
                 </GuidedField>
                 <GuidedField

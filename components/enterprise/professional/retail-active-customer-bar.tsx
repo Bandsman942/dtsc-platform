@@ -157,6 +157,7 @@ export function RetailActiveCustomerBar({ organizationId }: { organizationId: st
       ]);
       setCapabilities(permissionData.capabilities);
       setActive(activeData.customer || null);
+      window.dispatchEvent(new CustomEvent("dtsc-retail-customer-changed", { detail: { organizationId } }));
     } catch (caught) {
       showError(caught, {
         fr: "Les informations client ne sont pas disponibles pour le moment.",
@@ -230,6 +231,7 @@ export function RetailActiveCustomerBar({ organizationId }: { organizationId: st
         body: JSON.stringify({ customerBusinessPartyId: customer.id }),
       }).then(readJson);
       setActive(data.customer);
+      window.dispatchEvent(new CustomEvent("dtsc-retail-customer-changed", { detail: { organizationId } }));
       setCustomerValue(null);
       setSearch("");
       setResults([]);
@@ -246,6 +248,7 @@ export function RetailActiveCustomerBar({ organizationId }: { organizationId: st
     try {
       await fetch(`/api/enterprise/${organizationId}/retail/active-customer`, { method: "DELETE" }).then(readJson);
       setActive(null);
+      window.dispatchEvent(new CustomEvent("dtsc-retail-customer-changed", { detail: { organizationId } }));
       setCustomerValue(null);
     } catch (caught) {
       showError(caught, {

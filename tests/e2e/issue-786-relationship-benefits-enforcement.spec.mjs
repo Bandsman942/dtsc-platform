@@ -21,6 +21,7 @@ const codes = {
   fullReturn: "E2E_886_RETAIL_RETURN_QUOTA",
   omnichannel: "E2E_886_RETAIL_OMNICHANNEL_QUOTA",
   loyalty: "E2E_906_RETAIL_LOYALTY",
+  cashback: "E2E_908_RETAIL_CASHBACK",
 };
 
 const fixture = {
@@ -83,7 +84,7 @@ async function get(page, path) {
 
 async function cleanupFixture() {
   const benefits = await prisma.enterpriseRelationshipBenefit.findMany({
-    where: { organizationId, code: { in: [codes.automatic, codes.exclusive, codes.manual, codes.fullReturn, codes.omnichannel, codes.loyalty] } },
+    where: { organizationId, code: { in: [codes.automatic, codes.exclusive, codes.manual, codes.fullReturn, codes.omnichannel, codes.loyalty, codes.cashback] } },
     select: { id: true },
   });
   const benefitIds = benefits.map((item) => item.id);
@@ -1216,6 +1217,115 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
       expect((await prisma.enterpriseRelationshipBenefitUsage.findUniqueOrThrow({ where: { id: usage.id } })).status).toBe("CONSUMED");
     } finally {
       await adminContext.close();
+    }
+  });
+
+  test("#908 issues real Retail cashback as store credit, redeems it on the next ticket and reverses eligible refunds", async ({ browser }) => {
+    const adminContext = await browser.newContext({ baseURL: baseUrl, viewport: { width: 390, height: 844 } });
+    const reviewerContext = await browser.newContext({ baseURL: baseUrl });
+    const admin = await adminContext.newPage();
+    const reviewer = await reviewerContext.newPage();
+    await signIn(admin, adminEmail, adminPassword, "/enterprise-relationship-benefits");
+    await signIn(reviewer, userEmail, userPassword, "/enterprise-modules/RETAIL_POS");
+    await ensureOpenTill(admin);
+    try {
+      const benefit = await post(admin, `/api/enterprise/${organizationId}/relationship-benefits`, {
+        code: codes.cashback, nameFr: "Cashback relationnel E2E #908", nameEn: "E2E relationship cashback #908",
+        descriptionFr: "Cinq pour cent du ticket en avoir magasin non remboursable en espèces.",
+        descriptionEn: "Five percent of the confirmed ticket issued as store credit.",
+        benefitType: "CASHBACK", assignmentMode: "AUTOMATIC", relationTypes: ["CUSTOMER"], identityLinkIds: [],
+        valueType: "PERCENT", valueDecimal: 5, currencyCode: fixture.currencyCode,
+        actionCode: "NONE", targetModuleCode: "RETAIL_POS", stackable: true, status: "ACTIVE",
+        usageLimitTotal: 1, usageLimitPerPeriod: 1, usagePeriodDays: 30,
+        conditions: { channelCodes: ["POS"], catalogItemIds: [fixture.catalogItemId] },
+      });
+      expect(benefit.response.status(), JSON.stringify(benefit.body)).toBe(201);
+
+      const price = await post(admin, `/api/enterprise/${organizationId}/retail/pricing/preview`, {
+        siteId: fixture.siteId, customerBusinessPartyId: fixture.customerBusinessPartyId,
+        currencyCode: fixture.currencyCode, channelCode: "POS",
+        lines: [{ catalogItemId: fixture.catalogItemId, quantity: 2 }],
+      }, "/enterprise-modules/RETAIL_POS");
+      expect(price.response.ok(), JSON.stringify(price.body)).toBeTruthy();
+      const originalInput = {
+        warehouseId: fixture.warehouseId, siteId: fixture.siteId,
+        customerBusinessPartyId: fixture.customerBusinessPartyId, currencyCode: fixture.currencyCode,
+        idempotencyKey: `e2e-908-cashback-first-${Date.now()}`,
+        lines: [{ catalogItemId: fixture.catalogItemId, inventoryItemId: fixture.inventoryItemId,
+          quantity: 2, unitPrice: 116, discountAmount: 0, taxAmount: 0 }],
+        tenders: [{ methodType: "CASH", financialAccountId: fixture.cashAccountId,
+          amount: asNumber(price.body.grandTotal), reference: "E2E-908-CASHBACK-FIRST" }],
+      };
+      const original = await post(admin, `/api/enterprise/${organizationId}/retail/sales`, originalInput, "/enterprise-modules/RETAIL_POS");
+      expect(original.response.status(), JSON.stringify(original.body)).toBe(201);
+      expect(original.body.cashbackCredits).toHaveLength(1);
+      const saleId = original.body.sale.id;
+      const earn = await prisma.enterpriseRetailStoredValueEntry.findFirstOrThrow({
+        where: { organizationId, saleId, entryType: "EARN", idempotencyKey: `cashback:relationship:${saleId}:${benefit.body.benefit.id}` },
+      });
+      const cashbackAmount = asNumber(earn.amount);
+      expect(cashbackAmount).toBeCloseTo(asNumber(original.body.sale.grandTotal) * 0.05, 5);
+      const usage = await prisma.enterpriseRelationshipBenefitUsage.findFirstOrThrow({
+        where: { organizationId, effectEntityId: saleId, benefitId: benefit.body.benefit.id },
+      });
+      expect(usage.executionMode).toBe("AUTO_RETAIL_CASHBACK");
+      expect(usage.status).toBe("CONSUMED");
+      const account = await prisma.enterpriseRetailStoredValueAccount.findUniqueOrThrow({ where: { id: earn.accountId } });
+      expect(account.accountType).toBe("STORE_CREDIT");
+      expect(asNumber(account.balance)).toBeCloseTo(cashbackAmount, 5);
+      expect(account.customerBusinessPartyId).toBe(fixture.customerBusinessPartyId);
+      const replay = await post(admin, `/api/enterprise/${organizationId}/retail/sales`, originalInput, "/enterprise-modules/RETAIL_POS");
+      expect(replay.response.ok(), JSON.stringify(replay.body)).toBeTruthy();
+      expect(replay.body.idempotent || replay.body.result?.idempotent).toBeTruthy();
+      expect(await prisma.enterpriseRetailStoredValueEntry.count({ where: { organizationId, idempotencyKey: earn.idempotencyKey } })).toBe(1);
+
+      const nextPrice = await post(admin, `/api/enterprise/${organizationId}/retail/pricing/preview`, {
+        siteId: fixture.siteId, customerBusinessPartyId: fixture.customerBusinessPartyId,
+        currencyCode: fixture.currencyCode, channelCode: "POS",
+        lines: [{ catalogItemId: fixture.catalogItemId, quantity: 1 }],
+      }, "/enterprise-modules/RETAIL_POS");
+      expect(nextPrice.response.ok(), JSON.stringify(nextPrice.body)).toBeTruthy();
+      const secondTotal = asNumber(nextPrice.body.grandTotal);
+      expect(secondTotal).toBeGreaterThan(cashbackAmount);
+      const nextSale = await post(admin, `/api/enterprise/${organizationId}/retail/sales`, {
+        warehouseId: fixture.warehouseId, siteId: fixture.siteId,
+        customerBusinessPartyId: fixture.customerBusinessPartyId, currencyCode: fixture.currencyCode,
+        idempotencyKey: `e2e-908-store-credit-spend-${Date.now()}`,
+        lines: [{ catalogItemId: fixture.catalogItemId, inventoryItemId: fixture.inventoryItemId,
+          quantity: 1, unitPrice: 116, discountAmount: 0, taxAmount: 0 }],
+        tenders: [
+          { methodType: "STORE_CREDIT", storedValueAccountId: account.id, amount: cashbackAmount },
+          { methodType: "CASH", financialAccountId: fixture.cashAccountId, amount: Number((secondTotal - cashbackAmount).toFixed(6)) },
+        ],
+      }, "/enterprise-modules/RETAIL_POS");
+      expect(nextSale.response.status(), JSON.stringify(nextSale.body)).toBe(201);
+      const afterSpend = await prisma.enterpriseRetailStoredValueAccount.findUniqueOrThrow({ where: { id: account.id } });
+      expect(asNumber(afterSpend.balance)).toBeCloseTo(0, 5);
+      expect(nextSale.body.cashbackCredits).toHaveLength(0);
+
+      const bank = await prisma.enterpriseFinancialAccount.findFirstOrThrow({
+        where: { organizationId, code: "SHOP2-E2E-BANK", status: "ACTIVE", archivedAt: null }, select: { id: true },
+      });
+      for (const [index, remaining] of [cashbackAmount / 2, cashbackAmount].entries()) {
+        const requested = await post(admin, `/api/enterprise/${organizationId}/retail/sales/${saleId}/returns`, {
+          returnType: "RETURN", reason: `Retour cashback E2E #908 ${index + 1}`,
+          refundMethod: "BANK_TRANSFER", refundFinancialAccountId: bank.id,
+          idempotencyKey: `e2e-908-cashback-return-${index}-${Date.now()}`,
+          lines: [{ saleLineId: original.body.sale.lines[0].id, quantity: 1, productCondition: "SELLABLE", stockDisposition: "RESTOCK" }],
+        }, "/enterprise-modules/RETAIL_POS");
+        expect(requested.response.status(), JSON.stringify(requested.body)).toBe(201);
+        const decision = { revision: requested.body.retailReturn.revision, decision: "APPROVE", refundFinancialAccountId: bank.id };
+        const approved = await post(reviewer,
+          `/api/enterprise/${organizationId}/retail/returns/${requested.body.retailReturn.id}/decision`, decision, "/enterprise-modules/RETAIL_POS");
+        expect(approved.response.ok(), JSON.stringify(approved.body)).toBeTruthy();
+        const latest = await prisma.enterpriseRetailStoredValueAccount.findUniqueOrThrow({ where: { id: account.id } });
+        expect(asNumber(latest.balance)).toBeCloseTo(-remaining, 5);
+        expect((await prisma.enterpriseRelationshipBenefitUsage.findUniqueOrThrow({ where: { id: usage.id } })).status)
+          .toBe(index === 0 ? "CONSUMED" : "CANCELLED");
+      }
+    } finally {
+      await adminContext.close();
+      await reviewerContext.close();
     }
   });
 

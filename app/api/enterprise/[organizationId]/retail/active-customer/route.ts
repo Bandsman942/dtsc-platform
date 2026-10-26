@@ -36,11 +36,21 @@ export async function GET(req: Request, { params }: Params) {
   if (!permissions.canReadCustomers) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const activeCustomerId = getRetailActiveCustomerIdFromCookieHeader(req.headers.get("cookie"), organizationId);
   const customer = await getCustomer(organizationId, activeCustomerId);
+  // The POS only needs redeemable customer-bound store credit, not the
+  // customer's full sales/returns history. Never expose bearer lookup hashes.
+  const storeCreditAccounts = customer ? await prisma.enterpriseRetailStoredValueAccount.findMany({
+    where: {
+      organizationId, customerBusinessPartyId: customer.id, accountType: "STORE_CREDIT",
+      benefitScopeKey: { not: null }, status: "ACTIVE", balance: { gt: 0 }, archivedAt: null,
+      OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+    },
+    select: { id: true, displayCode: true, currencyCode: true, balance: true },
+  }) : [];
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-active-customer", action: "get", selected: Boolean(customer), requestedSelection: Boolean(activeCustomerId) } });
   // GET is deliberately side-effect free. A stale read that started before a
   // POST selection must never clear the newer active-customer cookie when it
   // finishes later. Cookie mutation is owned only by POST and DELETE.
-  return NextResponse.json({ customer });
+  return NextResponse.json({ customer, storeCreditAccounts });
 }
 
 export async function POST(req: Request, { params }: Params) {

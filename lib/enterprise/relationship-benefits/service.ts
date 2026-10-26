@@ -242,6 +242,18 @@ async function validateRelationshipBenefitConfiguration(
     normalizeEnterpriseModuleCode(config.targetModuleCode || "") === "RETAIL_POS" &&
     config.valueType === "POINTS" && Number(config.valueDecimal || 0) >= 0.000001 &&
     config.actionCode === "NONE" && config.stackable && Boolean(config.currencyCode) && Boolean(config.loyaltyProgramId);
+  const retailCashbackShape = config.benefitType === "CASHBACK" &&
+    normalizeEnterpriseModuleCode(config.targetModuleCode || "") === "RETAIL_POS" &&
+    config.valueType === "PERCENT" && Number(config.valueDecimal || 0) > 0 &&
+    Number(config.valueDecimal || 0) <= 100 && config.actionCode === "NONE" &&
+    config.stackable && Boolean(config.currencyCode);
+  if (config.benefitType === "CASHBACK" && !retailCashbackShape) {
+    throw new EnterpriseRelationshipBenefitError(
+      "RELATIONSHIP_BENEFIT_CASHBACK_CONFIG_INVALID",
+      "Le cashback nécessite Retail POS, une devise active, un taux strictement positif (100 % maximum), une attribution automatique sans demande et le cumul activé.",
+      409,
+    );
+  }
   if (config.benefitType === "LOYALTY" && !retailLoyaltyShape) {
     throw new EnterpriseRelationshipBenefitError(
       "RELATIONSHIP_BENEFIT_LOYALTY_CONFIG_INVALID",
@@ -266,7 +278,7 @@ async function validateRelationshipBenefitConfiguration(
   if (config.loyaltyProgramId && config.benefitType !== "LOYALTY") {
     throw new EnterpriseRelationshipBenefitError("RELATIONSHIP_BENEFIT_LOYALTY_CONFIG_INVALID", "Le programme de fidélité n’est applicable qu’aux avantages de type Fidélité.", 409);
   }
-  const supportedAutomaticShape = automaticRetailShape || automaticGamingShape || retailLoyaltyShape;
+  const supportedAutomaticShape = automaticRetailShape || automaticGamingShape || retailLoyaltyShape || retailCashbackShape;
   if (automaticGamingShape && config.stackable) {
     throw new EnterpriseRelationshipBenefitError(
       "RELATIONSHIP_BENEFIT_GAMING_STACKING_UNSUPPORTED",
