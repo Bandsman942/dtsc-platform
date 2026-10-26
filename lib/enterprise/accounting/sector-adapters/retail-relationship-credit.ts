@@ -35,6 +35,7 @@ async function buildManualCreditPosting(
   if (!usage || usage.benefit.benefitType !== "CREDIT" || !usage.decidedByUserId ||
       !usage.executedAt || !usage.effectAmount?.gt(0) ||
       usage.effectModuleCode !== "RETAIL_POS" ||
+      (reversal && !usage.cancelledAt) ||
       !usage.effectCurrencyCode || usage.benefit.currencyCode !== usage.effectCurrencyCode) {
     throw new EnterpriseAccountingError("RELATIONSHIP_CREDIT_POSTING_SOURCE_INVALID", 409);
   }
@@ -71,8 +72,8 @@ async function buildManualCreditPosting(
   return {
     organizationId: input.organizationId,
     journalType: "ADJUSTMENT",
-    accountingDate: reversal ? usage.cancelledAt || new Date() : usage.executedAt,
-    documentDate: reversal ? usage.cancelledAt || new Date() : usage.executedAt,
+    accountingDate: reversal ? usage.cancelledAt! : usage.executedAt,
+    documentDate: reversal ? usage.cancelledAt! : usage.executedAt,
     reference: `CREDIT-${usage.id.slice(-10)}`,
     description: `${description} · ${usage.benefit.code}`,
     sourceModule: "RETAIL_POS",

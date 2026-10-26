@@ -75,7 +75,8 @@ async function grantEligibilityTx(tx: Prisma.TransactionClient, args: {
       select: { personIdentityId: true },
     }),
     tx.enterpriseBusinessParty.findFirst({
-      where: { organizationId, id: args.businessPartyId, partyType: "CUSTOMER", status: "ACTIVE", archivedAt: null },
+      where: { organizationId, id: args.businessPartyId, status: "ACTIVE", archivedAt: null,
+        roles: { some: { roleCode: "CUSTOMER", status: "ACTIVE", archivedAt: null } } },
       select: { id: true },
     }),
     tx.enterpriseModule.findMany({

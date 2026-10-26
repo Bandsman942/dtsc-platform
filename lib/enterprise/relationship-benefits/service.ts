@@ -278,7 +278,19 @@ async function validateRelationshipBenefitConfiguration(
   if (config.loyaltyProgramId && config.benefitType !== "LOYALTY") {
     throw new EnterpriseRelationshipBenefitError("RELATIONSHIP_BENEFIT_LOYALTY_CONFIG_INVALID", "Le programme de fidélité n’est applicable qu’aux avantages de type Fidélité.", 409);
   }
-  const supportedAutomaticShape = automaticRetailShape || automaticGamingShape || retailLoyaltyShape || retailCashbackShape;
+  const manualCreditShape = config.benefitType === "CREDIT" &&
+    normalizeEnterpriseModuleCode(config.targetModuleCode || "") === "RETAIL_POS" &&
+    config.valueType === "AMOUNT" && Number(config.valueDecimal || 0) > 0 &&
+    config.actionCode === "NONE" && !config.stackable && Boolean(config.currencyCode) &&
+    !config.minimumAmount && Object.keys(conditions).length === 0;
+  if (config.benefitType === "CREDIT" && !manualCreditShape) {
+    throw new EnterpriseRelationshipBenefitError(
+      "RELATIONSHIP_CREDIT_CONFIGURATION_INVALID",
+      "Le crédit magasin manuel exige Retail POS, un montant fixe positif, une devise, aucune demande membre et aucune condition de panier.",
+      409,
+    );
+  }
+  const supportedAutomaticShape = automaticRetailShape || automaticGamingShape || retailLoyaltyShape || retailCashbackShape || manualCreditShape;
   if (automaticGamingShape && config.stackable) {
     throw new EnterpriseRelationshipBenefitError(
       "RELATIONSHIP_BENEFIT_GAMING_STACKING_UNSUPPORTED",
