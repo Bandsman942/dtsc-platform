@@ -25,12 +25,16 @@ Le builder vérifie la source `EnterpriseRelationshipBenefitUsage`, l'identité 
 Rejeux avec contexte différent = conflit, jamais double attribution.
 
 ## Gates non encore prouvées
-- [ ] Parcours serveur d'initiation/validation indépendante + preuves documentaires.
-- [ ] Migration Prisma (à éviter tant que les champs de demande existants suffisent).
-- [ ] UI administrateur FR/EN avec motif, document, approbateur et historique.
+- [x] Parcours serveur d'initiation/validation indépendante + justificatif EnterpriseDocument ACTIVE et ORGANIZATION avec version.
+- [ ] Certification par E2E réel, non acquise par la présence du code.
+- [x] Schéma existant EnterpriseRelationshipBenefitUsage réutilisé ; pas de migration nécessaire dans cet incrément.
+- [x] UI administration FR/EN avec motif, justificatif existant, états, approbation/rejet/reprise ; contrôle responsive manuel toujours à faire.
 - [ ] E2E navigateur PostgreSQL, concurrence et écritures compensatoires.
 - [ ] `pnpm prisma generate`, typecheck, lint, régression, build et CI.
 - [ ] OWNER_E2E #910 BON.
 - [ ] Production READY sur SHA exact.
 
 **Interdit :** activer commercialement CREDIT, fusionner ou déployer tant que ces gates ne sont pas toutes validées. Les parents #886/#785 restent ouverts.
+
+## Implémentation provisoire
+Le code est uniquement sur la branche `fix/910-relationship-credit-manual-approval`. Il n'est pas prêt à être fusionné avant contrôle de qualité, migration d'intégration si nécessaire et E2E PostgreSQL/Playwright. L'étape Finance applique le contrôle `FINANCE_ACCOUNTING:approve` au valideur, et requiert une autre personne que le demandeur.

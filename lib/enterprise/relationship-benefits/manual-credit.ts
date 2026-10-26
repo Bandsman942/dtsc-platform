@@ -38,7 +38,7 @@ function ensureShape(benefit: {
 
 async function checkDocument(tx: Prisma.TransactionClient, organizationId: string, documentId: string) {
   const doc = await tx.enterpriseDocument.findFirst({
-    where: { organizationId, id: documentId, archivedAt: null, status: { not: "ARCHIVED" }, currentVersion: { gt: 0 } },
+    where: { organizationId, id: documentId, archivedAt: null, status: "ACTIVE", visibility: "ORGANIZATION", currentVersion: { gt: 0 } },
     select: { id: true, versions: { take: 1, select: { id: true } } },
   });
   if (!doc?.versions.length) failure("RELATIONSHIP_CREDIT_EVIDENCE_REQUIRED", "Joignez un justificatif déjà enregistré et vérifiable.");
