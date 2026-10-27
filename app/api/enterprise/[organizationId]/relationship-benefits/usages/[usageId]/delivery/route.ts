@@ -54,7 +54,7 @@ export async function POST(req: Request, { params }: Params) {
       metadata: { organizationId, domain: "relationship-benefits", action: "delivery-attestation" },
     });
     return NextResponse.json({
-      ok: true, usage: result.usage,
+      ok: true, usage: result.usage, replayed: result.replayed,
       message: result.replayed ? "Cette livraison était déjà attestée." : "Livraison vérifiée et avantage enregistré comme utilisé.",
     });
   } catch (error) {
