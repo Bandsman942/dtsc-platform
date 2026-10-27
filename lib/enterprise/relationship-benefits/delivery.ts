@@ -63,7 +63,7 @@ export async function attestRelationshipDelivery(args: {
 
       const fulfillment = await tx.enterpriseFulfillment.findFirst({
         where: { organizationId, reference: fulfillmentReference, status: "COMPLETED", fulfillmentType: "PRODUCT_DELIVERY" },
-        include: { salesOrder: { select: { id: true, organizationId: true, businessPartyId: true, currency: true, totalAmount: true, status: true, archivedAt: true } } },
+        include: { salesOrder: { select: { id: true, organizationId: true, businessPartyId: true, currency: true, totalAmount: true, status: true, archivedAt: true, items: { select: { quantityOrdered: true, quantityFulfilled: true } } } } },
       });
       if (!fulfillment || !fulfillment.salesOrder || fulfillment.salesOrder.organizationId !== organizationId) {
         reject("RELATIONSHIP_DELIVERY_PROOF_NOT_FOUND", "Aucune livraison de produits terminée ne correspond à cette référence dans cette entreprise.", 404);
@@ -81,7 +81,9 @@ export async function attestRelationshipDelivery(args: {
       if (usage.userId === actorUserId || fulfillment.fulfilledByUserId === actorUserId) {
         reject("RELATIONSHIP_DELIVERY_INDEPENDENT_REVIEW_REQUIRED", "La livraison doit être attestée par une personne différente du bénéficiaire et du livreur.", 403);
       }
-      if (order.status !== "FULFILLED" || order.archivedAt || !fulfillment.fulfilledAt ||
+      if (order.status !== "FULFILLED" || order.archivedAt || !order.items.length ||
+          order.items.some((item) => Number(item.quantityOrdered) <= 0 || Number(item.quantityFulfilled) < Number(item.quantityOrdered)) ||
+          !fulfillment.fulfilledAt ||
           !usage.decidedAt || fulfillment.fulfilledAt < usage.decidedAt) {
         reject("RELATIONSHIP_DELIVERY_NOT_READY", "La commande doit être intégralement livrée après l'approbation de la demande.");
       }
@@ -90,7 +92,7 @@ export async function attestRelationshipDelivery(args: {
       }
       const document = await tx.enterpriseDocument.findFirst({
         where: {
-          id: fulfillment.proofDocumentId, organizationId, status: "ACTIVE", archivedAt: null,
+          id: fulfillment.proofDocumentId, organizationId, status: "ACTIVE", visibility: "ORGANIZATION", archivedAt: null,
           sourceEntityType: "EnterpriseSalesOrder", sourceEntityId: order.id,
           currentVersion: { gt: 0 }, versions: { some: { organizationId } },
         },
