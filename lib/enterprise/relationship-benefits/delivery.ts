@@ -63,12 +63,16 @@ export async function attestRelationshipDelivery(args: {
 
       const fulfillment = await tx.enterpriseFulfillment.findFirst({
         where: { organizationId, reference: fulfillmentReference, status: "COMPLETED", fulfillmentType: "PRODUCT_DELIVERY" },
-        include: { salesOrder: { select: { id: true, organizationId: true, businessPartyId: true, currency: true, totalAmount: true, status: true, archivedAt: true, items: { select: { quantityOrdered: true, quantityFulfilled: true } } } } },
+        include: { items: { select: { salesOrderItemId: true, quantityFulfilled: true } }, salesOrder: { select: { id: true, organizationId: true, businessPartyId: true, currency: true, totalAmount: true, status: true, archivedAt: true, items: { select: { id: true, quantityOrdered: true, quantityFulfilled: true } } } } },
       });
       if (!fulfillment || !fulfillment.salesOrder || fulfillment.salesOrder.organizationId !== organizationId) {
         reject("RELATIONSHIP_DELIVERY_PROOF_NOT_FOUND", "Aucune livraison de produits terminée ne correspond à cette référence dans cette entreprise.", 404);
       }
       const order = fulfillment.salesOrder;
+      if (!fulfillment.items.length || fulfillment.items.some((item) => Number(item.quantityFulfilled) <= 0 ||
+          !order.items.some((ordered) => ordered.id === item.salesOrderItemId))) {
+        reject("RELATIONSHIP_DELIVERY_ITEMS_INVALID", "La preuve doit correspondre à des lignes de livraison réellement enregistrées.");
+      }
       const effectKey = `relationship-delivery:${usage.benefitId}:${fulfillment.id}`;
 
       if (usage.status === "CONSUMED") {
