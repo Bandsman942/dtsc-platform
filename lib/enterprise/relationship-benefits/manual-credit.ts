@@ -126,6 +126,7 @@ export async function createManualRelationshipCreditRequest(args: {
   }
   const currencyCode = candidate.benefit.currencyCode;
   if (!currencyCode) failure("RELATIONSHIP_CREDIT_CURRENCY_REQUIRED", "Une devise active est obligatoire.");
+  const beneficiaryUserId = link.userId;
   const key = `manual-credit:${args.idempotencyKey}`;
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${organizationId + ":relationship-benefit:" + args.identityLinkId + ":" + args.benefitId})::bigint)`);
@@ -144,7 +145,7 @@ export async function createManualRelationshipCreditRequest(args: {
     await checkDocument(tx, organizationId, args.documentId);
     const { link: checked, benefit: quoted } = await grantEligibilityTx(tx, {
       organizationId, benefitId: args.benefitId, identityLinkId: args.identityLinkId,
-      userId: link.userId, businessPartyId: args.businessPartyId, currencyCode,
+      userId: beneficiaryUserId, businessPartyId: args.businessPartyId, currencyCode,
     });
     return tx.enterpriseRelationshipBenefitUsage.create({
       data: {

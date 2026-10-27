@@ -80,8 +80,9 @@ export async function GET(req: Request, { params }: Params) {
     linkByPerson.set(link.personIdentityId, [...(linkByPerson.get(link.personIdentityId) || []), link.id]);
   }
   const options = references.flatMap((ref) => {
+    if (!ref.businessPartyId) return [];
     const customer = customerById.get(ref.businessPartyId);
-    if (!customer || !ref.businessPartyId) return [];
+    if (!customer) return [];
     return (linkByPerson.get(ref.personIdentityId) || []).map((identityLinkId) => ({
       identityLinkId, businessPartyId: customer.id,
       customerName: customer.displayName || customer.legalName,
