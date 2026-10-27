@@ -1329,4 +1329,134 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
     }
   });
 
+  test("#912 DELIVERY uses a versioned Sales proof, a linked customer and one idempotent consumption", async ({ browser }) => {
+    const adminContext = await browser.newContext({ baseURL: baseUrl, viewport: { width: 390, height: 844 } });
+    const memberContext = await browser.newContext({ baseURL: baseUrl });
+    const admin = await adminContext.newPage();
+    const member = await memberContext.newPage();
+    let benefitId = null;
+    let orderId = null;
+    let documentId = null;
+    let fulfillmentId = null;
+    try {
+      await prisma.enterpriseIdentityLink.update({
+        where: { id: ids.identityLink },
+        data: { status: "ACTIVE", revokedAt: null, revocationReason: null, userDecisionAt: new Date(), organizationDecisionAt: new Date(), activatedAt: new Date(), requestedRoleCode: null },
+      });
+      await signIn(admin, adminEmail, adminPassword, "/enterprise-relationship-benefits");
+      await signIn(member, userEmail, userPassword, "/enterprise-links");
+      const benefit = await post(admin, `/api/enterprise/${organizationId}/relationship-benefits`, {
+        code: `E2E_912_DELIVERY_${Date.now()}`,
+        nameFr: "Livraison avec preuve", nameEn: "Evidence-backed delivery",
+        descriptionFr: "Livraison non monétaire avec justificatif commercial réel.",
+        descriptionEn: "Non-monetary benefit attested by real Sales evidence.",
+        benefitType: "DELIVERY", assignmentMode: "AUTOMATIC", relationTypes: ["CUSTOMER"],
+        identityLinkIds: [], valueType: "NONE", actionCode: "REQUEST",
+        targetModuleCode: "SALES_QUOTES_ORDERS", stackable: false, status: "ACTIVE",
+      });
+      expect(benefit.response.status(), JSON.stringify(benefit.body)).toBe(201);
+      benefitId = benefit.body.benefit.id;
+
+      const requested = await post(member, `/api/account/enterprise-relationships/${organizationId}/benefits`, {
+        identityLinkId: ids.identityLink, benefitId, idempotencyKey: `e2e-912-req-${Date.now()}`,
+        note: "Livraison demandée par le bénéficiaire",
+      }, "/enterprise-links");
+      expect(requested.response.status(), JSON.stringify(requested.body)).toBe(201);
+      const usageId = requested.body.usage.id;
+      const approved = await patch(admin,
+        `/api/enterprise/${organizationId}/relationship-benefits/usages/${usageId}`,
+        { status: "APPROVED", revision: requested.body.usage.revision });
+      expect(approved.response.ok(), JSON.stringify(approved.body)).toBeTruthy();
+      expect(approved.body.usage.effectEntityId).toBeNull();
+
+      const invalid = await post(admin,
+        `/api/enterprise/${organizationId}/relationship-benefits/usages/${usageId}/delivery`,
+        { revision: approved.body.usage.revision, fulfillmentReference: "FUL-UNKNOWN-912" });
+      expect(invalid.response.status()).toBe(404);
+
+      // Synthetic isolated DB fixture exercises the attestation API. The
+      // actual Sales and file-upload flows still require owner acceptance.
+      const suffix = String(Date.now());
+      const order = await prisma.enterpriseSalesOrder.create({
+        data: {
+          organizationId, reference: `E2E-912-ORDER-${suffix}`,
+          businessPartyId: fixture.customerBusinessPartyId,
+          title: "Commande livrée pour avantage #912", status: "FULFILLED",
+          currency: fixture.currencyCode, subtotalAmount: 10, totalAmount: 10,
+          fulfilledAt: new Date(Date.now() + 1000),
+          createdByUserId: fixture.adminUserId,
+          items: { create: [{
+            description: "Article livré", quantityOrdered: 1, quantityFulfilled: 1,
+            unitPrice: 10, lineSubtotal: 10, lineTotal: 10,
+          }] },
+        },
+        include: { items: true },
+      });
+      orderId = order.id;
+      const record = await prisma.enterpriseDocument.create({
+        data: {
+          organizationId, title: "Justificatif de livraison E2E", documentType: "OTHER",
+          status: "ACTIVE", visibility: "ORGANIZATION",
+          currentVersion: 1, sourceEntityType: "EnterpriseSalesOrder", sourceEntityId: order.id,
+          createdByUserId: fixture.adminUserId,
+          versions: { create: [{
+            versionNumber: 1, fileName: "delivery-proof.pdf", mimeType: "application/pdf",
+            sizeBytes: 128, storageBucket: "e2e-test", storagePath: `test-only/${suffix}/delivery-proof.pdf`,
+            uploadedByUserId: fixture.adminUserId,
+          }] },
+        },
+      });
+      documentId = record.id;
+      const fulfilledAt = new Date(Date.now() + 2000);
+      const shipment = await prisma.enterpriseFulfillment.create({
+        data: {
+          organizationId, salesOrderId: order.id, reference: `FUL-E2E-912-${suffix}`,
+          fulfillmentType: "PRODUCT_DELIVERY", status: "COMPLETED",
+          fulfilledAt, fulfilledByUserId: fixture.userId, createdByUserId: fixture.adminUserId,
+          items: { create: [{ salesOrderItemId: order.items[0].id, quantityFulfilled: 1 }] },
+        },
+      });
+      fulfillmentId = shipment.id;
+
+      const noDocument = await post(admin,
+        `/api/enterprise/${organizationId}/relationship-benefits/usages/${usageId}/delivery`,
+        { revision: approved.body.usage.revision, fulfillmentReference: shipment.reference });
+      expect(noDocument.response.status()).toBe(409);
+      expect(noDocument.body.error).toBe("RELATIONSHIP_DELIVERY_DOCUMENT_REQUIRED");
+
+      await prisma.enterpriseFulfillment.update({ where: { id: shipment.id }, data: { proofDocumentId: record.id } });
+      const delivered = await post(admin,
+        `/api/enterprise/${organizationId}/relationship-benefits/usages/${usageId}/delivery`,
+        { revision: approved.body.usage.revision, fulfillmentReference: shipment.reference });
+      expect(delivered.response.ok(), JSON.stringify(delivered.body)).toBeTruthy();
+      expect(delivered.body.usage.status).toBe("CONSUMED");
+      expect(delivered.body.usage.effectEntityId).toBe(shipment.id);
+
+      const replay = await post(admin,
+        `/api/enterprise/${organizationId}/relationship-benefits/usages/${usageId}/delivery`,
+        { revision: approved.body.usage.revision, fulfillmentReference: shipment.reference });
+      expect(replay.response.ok(), JSON.stringify(replay.body)).toBeTruthy();
+      expect(replay.body.replayed).toBe(true);
+      const usageCount = await prisma.enterpriseRelationshipBenefitUsage.count({
+        where: { organizationId, benefitId, status: "CONSUMED", effectEntityId: shipment.id },
+      });
+      expect(usageCount).toBe(1);
+    } finally {
+      if (benefitId) {
+        await prisma.enterpriseRelationshipBenefitUsage.deleteMany({ where: { organizationId, benefitId } });
+        await prisma.enterpriseRelationshipBenefitAssignment.deleteMany({ where: { organizationId, benefitId } });
+        await prisma.enterpriseRelationshipBenefitAudience.deleteMany({ where: { organizationId, benefitId } });
+        await prisma.enterpriseRelationshipBenefit.deleteMany({ where: { organizationId, id: benefitId } });
+      }
+      if (fulfillmentId) await prisma.enterpriseFulfillment.deleteMany({ where: { organizationId, id: fulfillmentId } });
+      if (documentId) await prisma.enterpriseDocument.deleteMany({ where: { organizationId, id: documentId } });
+      if (orderId) {
+        await prisma.enterpriseSalesOrderItem.deleteMany({ where: { organizationId, salesOrderId: orderId } });
+        await prisma.enterpriseSalesOrder.deleteMany({ where: { organizationId, id: orderId } });
+      }
+      await adminContext.close();
+      await memberContext.close();
+    }
+  });
+
 });
