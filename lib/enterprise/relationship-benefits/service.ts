@@ -291,6 +291,21 @@ async function validateRelationshipBenefitConfiguration(
       409,
     );
   }
+  // DELIVERY does not post Finance or create a second shipment. Only the
+  // canonical completed Sales fulfillment may attest an approved request.
+  const deliveryShape = config.benefitType === "DELIVERY" &&
+    normalizeEnterpriseModuleCode(config.targetModuleCode || "") === "SALES_QUOTES_ORDERS" &&
+    config.valueType === "NONE" && !config.valueDecimal && !config.currencyCode &&
+    !config.minimumAmount && !config.loyaltyProgramId &&
+    config.actionCode === "REQUEST" && !config.stackable &&
+    Object.keys(conditions).length === 0;
+  if (config.benefitType === "DELIVERY" && !deliveryShape) {
+    throw new EnterpriseRelationshipBenefitError(
+      "RELATIONSHIP_DELIVERY_CONFIGURATION_INVALID",
+      "Pour une livraison vérifiable, choisissez Commandes et livraisons, une action Demander et aucune valeur monétaire ou condition de panier.",
+      409,
+    );
+  }
   const supportedAutomaticShape = automaticRetailShape || automaticGamingShape || retailLoyaltyShape || retailCashbackShape || manualCreditShape;
   if (automaticGamingShape && config.stackable) {
     throw new EnterpriseRelationshipBenefitError(
@@ -305,7 +320,7 @@ async function validateRelationshipBenefitConfiguration(
       "Un avantage monétaire appliqué automatiquement au point de vente ne doit pas créer une seconde demande manuelle.",
     );
   }
-  if (config.targetModuleCode && !supportedAutomaticShape) {
+  if (config.targetModuleCode && !supportedAutomaticShape && !deliveryShape) {
     throw new EnterpriseRelationshipBenefitError(
       "RELATIONSHIP_BENEFIT_TARGET_ADAPTER_UNSUPPORTED",
       "Ce type d’avantage n’est pas pris en charge automatiquement par ce module. Sélectionnez une remise monétaire compatible avec Retail POS ou Gaming Checkout.",
@@ -1417,7 +1432,8 @@ export async function decideRelationshipBenefitUsage({
     if (
       status === "APPROVED" &&
       resolved.evaluation.requiresBusinessContext &&
-      !effectiveContext
+      !effectiveContext &&
+      resolved.benefit?.benefitType !== "DELIVERY"
     ) {
       throw new EnterpriseRelationshipBenefitError(
         "RELATIONSHIP_BENEFIT_CONTEXT_REQUIRED",
