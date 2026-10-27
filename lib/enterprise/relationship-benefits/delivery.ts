@@ -117,14 +117,24 @@ export async function attestRelationshipDelivery(args: {
         },
       });
       if (!link) reject("RELATIONSHIP_DELIVERY_RELATION_MISSING", "La relation du bénéficiaire est introuvable.", 403);
-      const party = await tx.enterprisePersonBusinessReference.findFirst({
-        where: {
-          organizationId, personIdentityId: link.personIdentityId, businessPartyId: order.businessPartyId,
-          status: "ACTIVE", archivedAt: null,
-        },
-        select: { id: true },
-      });
-      if (!party) reject("RELATIONSHIP_DELIVERY_CUSTOMER_MISMATCH", "La commande n'appartient pas au tiers relié à ce bénéficiaire.", 403);
+      const [party, customer] = await Promise.all([
+        tx.enterprisePersonBusinessReference.findFirst({
+          where: {
+            organizationId, personIdentityId: link.personIdentityId, businessPartyId: order.businessPartyId,
+            relationType: link.requestedRelationType,
+            status: "ACTIVE", archivedAt: null,
+          },
+          select: { id: true },
+        }),
+        tx.enterpriseBusinessParty.findFirst({
+          where: {
+            id: order.businessPartyId, organizationId, status: "ACTIVE", archivedAt: null,
+            roles: { some: { organizationId, roleCode: "CUSTOMER", status: "ACTIVE", archivedAt: null } },
+          },
+          select: { id: true },
+        }),
+      ]);
+      if (!party || !customer) reject("RELATIONSHIP_DELIVERY_CUSTOMER_MISMATCH", "La commande doit appartenir à un client actif explicitement relié à cette relation consentie.", 403);
 
       const [assignment, usages, sameEffect] = await Promise.all([
         tx.enterpriseRelationshipBenefitAssignment.findFirst({
