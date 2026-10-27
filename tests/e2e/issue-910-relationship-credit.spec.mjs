@@ -59,7 +59,7 @@ test.describe.serial("#910 manual Retail credit uses the canonical ledger and in
         organizationId, code: scope, partyType: "PERSON",
         legalName: "Client Crédit Relationnel E2E #910",
         normalizedName: scope.toLowerCase(), status: "ACTIVE", createdByUserId: admin.id,
-        roles: { create: { organizationId, roleCode: "CUSTOMER", status: "ACTIVE", createdByUserId: admin.id } },
+        roles: { create: { roleCode: "CUSTOMER", status: "ACTIVE", createdByUserId: admin.id } },
       },
     });
     state.customerId = customer.id;
@@ -84,7 +84,7 @@ test.describe.serial("#910 manual Retail credit uses the canonical ledger and in
       data: { organizationId, title: "Justificatif crédit E2E #910",
         documentType: "OTHER", status: "ACTIVE", visibility: "ORGANIZATION",
         currentVersion: 1, createdByUserId: admin.id,
-        versions: { create: { organizationId, versionNumber: 1,
+        versions: { create: { versionNumber: 1,
           fileName: "justificatif-credit-e2e.pdf", mimeType: "application/pdf",
           sizeBytes: 64, storageBucket: "e2e-fixtures",
           storagePath: `e2e/${runId}/justificatif.pdf`, uploadedByUserId: admin.id } } },
