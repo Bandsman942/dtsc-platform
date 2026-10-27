@@ -1425,6 +1425,32 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
       expect(noDocument.body.error).toBe("RELATIONSHIP_DELIVERY_DOCUMENT_REQUIRED");
 
       await prisma.enterpriseFulfillment.update({ where: { id: shipment.id }, data: { proofDocumentId: record.id } });
+
+      // Backend must verify the actual business object, not only a form field.
+      await prisma.enterpriseSalesOrder.update({ where: { id: order.id }, data: { status: "PARTIALLY_FULFILLED" } });
+      const partialOrder = await post(admin,
+        `/api/enterprise/${organizationId}/relationship-benefits/usages/${usageId}/delivery`,
+        { revision: approved.body.usage.revision, fulfillmentReference: shipment.reference });
+      expect(partialOrder.response.status()).toBe(409);
+      expect(partialOrder.body.error).toBe("RELATIONSHIP_DELIVERY_NOT_READY");
+      await prisma.enterpriseSalesOrder.update({ where: { id: order.id }, data: { status: "FULFILLED" } });
+
+      await prisma.enterpriseFulfillment.update({ where: { id: shipment.id }, data: { fulfilledByUserId: fixture.adminUserId } });
+      const selfAttestation = await post(admin,
+        `/api/enterprise/${organizationId}/relationship-benefits/usages/${usageId}/delivery`,
+        { revision: approved.body.usage.revision, fulfillmentReference: shipment.reference });
+      expect(selfAttestation.response.status()).toBe(403);
+      expect(selfAttestation.body.error).toBe("RELATIONSHIP_DELIVERY_INDEPENDENT_REVIEW_REQUIRED");
+      await prisma.enterpriseFulfillment.update({ where: { id: shipment.id }, data: { fulfilledByUserId: fixture.userId } });
+
+      await prisma.enterpriseDocument.update({ where: { id: record.id }, data: { status: "DRAFT" } });
+      const unapprovedDocument = await post(admin,
+        `/api/enterprise/${organizationId}/relationship-benefits/usages/${usageId}/delivery`,
+        { revision: approved.body.usage.revision, fulfillmentReference: shipment.reference });
+      expect(unapprovedDocument.response.status()).toBe(409);
+      expect(unapprovedDocument.body.error).toBe("RELATIONSHIP_DELIVERY_DOCUMENT_INVALID");
+      await prisma.enterpriseDocument.update({ where: { id: record.id }, data: { status: "ACTIVE" } });
+
       const delivered = await post(admin,
         `/api/enterprise/${organizationId}/relationship-benefits/usages/${usageId}/delivery`,
         { revision: approved.body.usage.revision, fulfillmentReference: shipment.reference });
@@ -1441,6 +1467,22 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
         where: { organizationId, benefitId, status: "CONSUMED", effectEntityId: shipment.id },
       });
       expect(usageCount).toBe(1);
+
+      const secondRequest = await post(member, `/api/account/enterprise-relationships/${organizationId}/benefits`, {
+        identityLinkId: ids.identityLink, benefitId,
+        idempotencyKey: `e2e-912-double-use-${Date.now()}`,
+        note: "Nouvelle demande, même preuve de livraison",
+      }, "/enterprise-links");
+      expect(secondRequest.response.status(), JSON.stringify(secondRequest.body)).toBe(201);
+      const secondApproved = await patch(admin,
+        `/api/enterprise/${organizationId}/relationship-benefits/usages/${secondRequest.body.usage.id}`,
+        { revision: secondRequest.body.usage.revision, status: "APPROVED" });
+      expect(secondApproved.response.ok(), JSON.stringify(secondApproved.body)).toBeTruthy();
+      const duplicateProof = await post(admin,
+        `/api/enterprise/${organizationId}/relationship-benefits/usages/${secondRequest.body.usage.id}/delivery`,
+        { revision: secondApproved.body.usage.revision, fulfillmentReference: shipment.reference });
+      expect(duplicateProof.response.status()).toBe(409);
+      expect(duplicateProof.body.error).toBe("RELATIONSHIP_DELIVERY_DUPLICATE_PROOF");
     } finally {
       if (benefitId) {
         await prisma.enterpriseRelationshipBenefitUsage.deleteMany({ where: { organizationId, benefitId } });
