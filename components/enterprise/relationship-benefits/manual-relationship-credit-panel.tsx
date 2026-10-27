@@ -1,5 +1,5 @@
 "use client";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { notifyToast } from "@/lib/client-toast";
 import { ModuleSection } from "@/components/workspace/module-workspace";
@@ -16,6 +16,7 @@ export function ManualRelationshipCreditPanel({ organizationId, english, canMana
   const [documents, setDocuments] = useState<Document[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const pendingIdempotencyKey = useRef<string | null>(null);
   const [reasons, setReasons] = useState<Record<string, string>>({});
   const active = benefits.filter((b) => b.benefitType === "CREDIT" && b.status === "ACTIVE");
   const items = usages.filter((usage) => usage.executionMode === "MANUAL_RETAIL_CREDIT");
@@ -41,7 +42,8 @@ export function ManualRelationshipCreditPanel({ organizationId, english, canMana
     const form = event.currentTarget;
     const values = new FormData(form);
     const selected = customers[Number(values.get("client"))];
-    if (!selected) return;
+    if (!selected || busy) return;
+    pendingIdempotencyKey.current ??= crypto.randomUUID();
     setBusy(true);
     try {
       const response = await fetch(`/api/enterprise/${organizationId}/relationship-benefits/credits`, {
@@ -49,12 +51,13 @@ export function ManualRelationshipCreditPanel({ organizationId, english, canMana
         body: JSON.stringify({
           benefitId: values.get("benefit"), identityLinkId: selected.identityLinkId,
           businessPartyId: selected.businessPartyId, documentId: values.get("evidence"),
-          reason: values.get("reason"), idempotencyKey: crypto.randomUUID(),
+          reason: values.get("reason"), idempotencyKey: pendingIdempotencyKey.current,
         }),
       });
       const data = await response.json().catch(() => null);
       if (!response.ok) throw new Error(data?.message || "Request failed");
       await onChanged();
+      pendingIdempotencyKey.current = null;
       form.reset();
       notifyToast(data?.message || "Request recorded", "success");
     } catch (e) {

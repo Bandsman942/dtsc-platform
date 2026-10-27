@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { manualRelationshipCreditErrorResponse } from "@/lib/enterprise/relationship-benefits/manual-credit-http";
+
 import { prisma } from "@/lib/prisma";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import {
@@ -6,7 +8,6 @@ import {
 } from "@/lib/enterprise/relationship-benefits/manual-credit-contracts";
 import {
   authorizeRelationshipBenefitsRequest,
-  relationshipBenefitErrorResponse,
 } from "@/lib/enterprise/relationship-benefits/http";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { createManualRelationshipCreditRequest } from "@/lib/enterprise/relationship-benefits/manual-credit";
@@ -42,7 +43,7 @@ export async function POST(req: Request, { params }: Params) {
     await writeApiLog({ request: req, userId: auth.session.userId, statusCode: 201, startedAt, metadata: { organizationId, domain: "relationship-credit", action: "request" } });
     return NextResponse.json({ ok: true, usage, message: "Demande de crédit enregistrée. Une validation indépendante est nécessaire." }, { status: 201 });
   } catch (error) {
-    const response = relationshipBenefitErrorResponse(error);
+    const response = manualRelationshipCreditErrorResponse(error);
     await writeApiLog({ request: req, userId: auth.session.userId, statusCode: response.status, startedAt, metadata: { organizationId, domain: "relationship-credit", action: "request-failed" } });
     return response;
   }

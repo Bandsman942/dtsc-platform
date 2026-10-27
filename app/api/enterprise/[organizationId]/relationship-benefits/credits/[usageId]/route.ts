@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
+import { manualRelationshipCreditErrorResponse } from "@/lib/enterprise/relationship-benefits/manual-credit-http";
+
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { manualRelationshipCreditDecisionSchema } from "@/lib/enterprise/relationship-benefits/manual-credit-contracts";
 import {
   authorizeRelationshipBenefitsRequest,
-  relationshipBenefitErrorResponse,
 } from "@/lib/enterprise/relationship-benefits/http";
 import { decideManualRelationshipCredit } from "@/lib/enterprise/relationship-benefits/manual-credit";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
@@ -38,7 +39,7 @@ export async function PATCH(req: Request, { params }: Params) {
     await writeApiLog({ request: req, userId: auth.session.userId, statusCode: 200, startedAt, metadata: { organizationId, domain: "relationship-credit", action: "decide" } });
     return NextResponse.json({ ok: true, usage, message: "Décision enregistrée et écritures vérifiées." });
   } catch (error) {
-    const response = relationshipBenefitErrorResponse(error);
+    const response = manualRelationshipCreditErrorResponse(error);
     await writeApiLog({ request: req, userId: auth.session.userId, statusCode: response.status, startedAt, metadata: { organizationId, domain: "relationship-credit", action: "decide-failed" } });
     return response;
   }

@@ -148,6 +148,7 @@ export function RelationshipBenefitsAdminWorkspace({
 
   const benefitById = useMemo(() => new Map(benefits.map((item) => [item.id, item])), [benefits]);
   const pendingCount = usages.filter((item) => ["REQUESTED", "APPROVED"].includes(item.status)).length;
+  const memberRequests = usages.filter((item) => item.executionMode !== "MANUAL_RETAIL_CREDIT");
 
   async function refresh() {
     const response = await fetch(`/api/enterprise/${organizationId}/relationship-benefits`, { cache: "no-store" });
@@ -319,9 +320,9 @@ export function RelationshipBenefitsAdminWorkspace({
         {tab === "REQUESTS" ? <ManualRelationshipCreditPanel organizationId={organizationId} english={english} canManage={canManage} benefits={benefits} usages={usages} onChanged={refresh} /> : null}
         {tab === "REQUESTS" ? (
           <ModuleSection title={english ? "Member requests" : "Demandes des membres"} description={english ? "Approve or reject requests. A benefit is marked applied only by a verified business effect." : "Approuvez ou refusez les demandes. Un avantage n’est marqué appliqué qu’après un effet métier vérifié."}>
-            {usages.length ? (
+            {memberRequests.length ? (
               <BusinessList ariaLabel={english ? "Benefit requests" : "Demandes d’avantages"}>
-                {usages.map((usage) => {
+                {memberRequests.map((usage) => {
                   const benefit = benefitById.get(usage.benefitId);
                   const focused = focusedUsageId === usage.id;
                   return (
