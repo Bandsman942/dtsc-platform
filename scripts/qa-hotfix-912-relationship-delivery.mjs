@@ -20,6 +20,7 @@ verify(route.includes('authorizeRelationshipBenefitsRequest(req, organizationId,
 verify(route.includes('getEnterpriseCommonDomainAccess'), "Separate Sales authorization");
 verify(route.includes('moduleCode: "SALES_QUOTES_ORDERS", action: "write"'), "Sales write permission required");
 verify(route.includes('deliveryAttestationSchema.safeParse'), "Strict business input validation");
+verify(route.includes("replayed: result.replayed"), "API exposes idempotent replay explicitly");
 verify(route.includes('writeAuditLog(') && route.includes('writeApiLog('), "API and business audit");
 verify(delivery.includes("resolveEnterpriseIdentityRelationshipAccess"), "Consent/capability checked at attestation");
 verify(delivery.includes("pg_advisory_xact_lock"), "Concurrent attestations are locked");
