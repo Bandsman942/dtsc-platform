@@ -363,6 +363,11 @@ export async function reverseRetailOmnichannelCashbackTx(args: {
       select: { amount: true },
     });
     const alreadyReversed = already.reduce((sum, row) => sum.plus(row.amount.abs()), zero());
+    // Financial integrity: a corrupted ledger must not silently look fully
+    // reversed, nor may a return claw back more than the original EARN.
+    if (alreadyReversed.gt(earned.amount) || target.gt(earned.amount) || target.lt(0)) {
+      reject("RELATIONSHIP_OMNI_CASHBACK_REVERSAL_OVERFLOW");
+    }
     const delta = money(Prisma.Decimal.max(zero(), target.minus(alreadyReversed)));
     if (delta.gt(0)) {
       const reversal = await changeRelationalStoreCreditTx({
