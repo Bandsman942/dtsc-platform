@@ -17,6 +17,8 @@ const checks = [
   ["invoice accounting posted before using it as evidence", "!invoices[0].postedAt"],
   ["invoices with credit notes cannot earn new cashback", "!invoices[0].amountCredited.isZero()"],
   ["duplicate invoices fail closed", "invoices.length !== 1"],
+  ["wrong customer invoice is not accepted", "invoices[0].businessPartyId !== order.businessPartyId"],
+  ["wrong currency invoice is not accepted", "invoices[0].currencyCode !== order.currency"],
   ["canonical receivable payment allocations", "paymentAllocations:"],
   ["allocation must be confirmed", 'row.status !== "CONFIRMED"'],
   ["payment must be confirmed or reconciled", '"RECONCILED"'],
