@@ -20,13 +20,14 @@ relation active
 
 Une relation n’accorde toujours aucun membership au tenant. L’interface n’est jamais l’autorité.
 
-## Contrat des 22 relations
+## Contrat des 23 relations (alignement #916)
 
-Les 22 types exposés par `ENTERPRISE_IDENTITY_RELATION_TYPES` ont désormais un contrat explicite `ENTERPRISE_BENEFITS` :
+Les 23 types exposés par `ENTERPRISE_IDENTITY_RELATION_TYPES` ont désormais un contrat explicite `ENTERPRISE_BENEFITS` :
 
 - PROSPECT
 - CUSTOMER
 - CUSTOMER_CONTACT
+- SUPPLIER
 - SUPPLIER_REPRESENTATIVE
 - EMPLOYEE
 - COLLABORATOR
