@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ChevronRight, MoreHorizontal, Sparkles } from "lucide-react";
+import { ArrowLeft, ChevronRight, MoreHorizontal } from "lucide-react";
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
 import { ContextualBackButton } from "@/components/workspace/contextual-back-button";
@@ -49,40 +49,36 @@ export function ModuleHeader({
       data-workspace-module-header
       data-dtsc-module-entry
       className={cn(
-        "relative w-full min-w-0 max-w-full overflow-hidden rounded-[1.75rem] border border-dtsc-border bg-[linear-gradient(135deg,rgba(0,43,91,0.10),rgba(34,211,238,0.07)_46%,rgba(255,255,255,0.02))] p-5 shadow-[0_20px_70px_rgba(0,23,54,0.08)] sm:p-6",
+        "relative w-full min-w-0 max-w-full rounded-2xl border border-dtsc-border bg-dtsc-surface px-3.5 py-3 shadow-[0_5px_20px_rgba(0,23,54,0.045)] sm:px-5 sm:py-4",
         className,
       )}
     >
-      <div aria-hidden="true" className="pointer-events-none absolute -right-12 -top-16 h-44 w-44 rounded-full border border-cyan-400/20 bg-cyan-400/5 blur-[1px]" />
-      <div aria-hidden="true" className="pointer-events-none absolute -bottom-20 right-16 h-36 w-36 rounded-full border border-dtsc-blue/10 bg-dtsc-blue/5" />
-      <div className="relative flex min-w-0 max-w-full flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-        <div className="min-w-0 max-w-4xl">
-          <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-cyan-400/25 bg-cyan-400/10 px-3 py-1 text-[0.64rem] font-black uppercase tracking-[0.16em] text-cyan-700 dark:text-cyan-200">
-            <Sparkles className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            <span className="break-words">{copy.signature}</span>
-          </div>
+      <div className="flex min-w-0 max-w-full flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:gap-4">
+        <div className="min-w-0 max-w-4xl border-l-[3px] border-cyan-500 pl-3">
           {eyebrow ? (
-            <div className="mt-3 text-[0.68rem] font-black uppercase tracking-[0.18em] text-cyan-600 sm:text-xs">
+            <div className="mb-0.5 text-[0.65rem] font-bold uppercase tracking-[0.09em] text-dtsc-muted sm:text-[0.7rem]">
               {eyebrow}
             </div>
           ) : null}
-          <div className="mt-1.5 flex min-w-0 max-w-full flex-wrap items-baseline gap-2.5">
-            <h1 className="min-w-0 break-words text-2xl font-black tracking-[-0.025em] text-dtsc-ink sm:text-3xl lg:text-[2rem]">
+          <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
+            <h1 className="min-w-0 break-words text-xl font-extrabold leading-tight tracking-[-0.02em] text-dtsc-ink sm:text-[1.45rem] lg:text-[1.55rem]">
               {title}
             </h1>
             {count !== undefined ? (
-              <span className="max-w-full break-words rounded-full bg-dtsc-soft px-2.5 py-1 text-xs font-black text-dtsc-blue">
+              <span className="max-w-full break-words rounded-lg border border-dtsc-border bg-dtsc-page px-2 py-0.5 text-xs font-semibold text-dtsc-muted">
                 {count}
               </span>
             ) : null}
           </div>
           {description ? (
-            <div className="mt-2.5 max-w-3xl break-words text-sm leading-6 text-dtsc-muted sm:text-[0.95rem] sm:leading-7">
+            <div className="mt-1 max-w-3xl break-words text-xs leading-5 text-dtsc-muted sm:text-sm sm:leading-5">
               {description}
             </div>
           ) : null}
         </div>
-        <div data-responsive-actions className="relative items-center lg:justify-end">
+        <div data-responsive-actions className="relative items-center lg:shrink-0 lg:justify-end">
+          <div data-workspace-back-action className="min-w-0"><ContextualBackButton /></div>
+          <div data-workspace-refresh-action className="min-w-0"><ModuleRefreshButton compact /></div>
           {secondaryActions ? (
             <>
               <div className="hidden min-w-0 sm:contents">{secondaryActions}</div>
@@ -100,10 +96,6 @@ export function ModuleHeader({
               </details>
             </>
           ) : null}
-          <div data-workspace-back-action className="min-w-0"><ContextualBackButton /></div>
-          <div data-workspace-refresh-action className="min-w-0">
-            <ModuleRefreshButton compact />
-          </div>
           {primaryAction ? <div data-workspace-primary-action className="min-w-0">{primaryAction}</div> : null}
         </div>
       </div>
@@ -156,7 +148,7 @@ export function ModuleContent({ children, className }: { children: ReactNode; cl
   return (
     <div
       data-module-content
-      className={cn("w-full min-w-0 max-w-full space-y-10 overflow-x-clip sm:space-y-12", className)}
+      className={cn("w-full min-w-0 max-w-full space-y-6 overflow-x-clip sm:space-y-8", className)}
     >
       {children}
     </div>
@@ -236,7 +228,7 @@ export function ModuleSection({
         aria-labelledby={titleId}
         className={cn("fixed inset-0 z-[80] min-w-0 max-w-full overflow-y-auto bg-dtsc-page", className)}
       >
-        <div className="sticky top-0 z-20 border-b border-dtsc-border bg-dtsc-surface/95 px-4 py-3 shadow-sm backdrop-blur-xl sm:px-6 lg:px-8">
+        <div className="sticky top-0 z-20 border-b border-dtsc-border bg-dtsc-surface/95 px-4 py-2.5 shadow-sm backdrop-blur-xl sm:px-6 lg:px-8">
           <div className="mx-auto flex w-full min-w-0 max-w-[1600px] flex-wrap items-center justify-between gap-3 sm:flex-nowrap">
             <button type="button" onClick={closeWorkspace} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-black text-dtsc-blue transition hover:bg-dtsc-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 active:translate-y-px">
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />
@@ -245,10 +237,10 @@ export function ModuleSection({
             {action ? <div data-responsive-actions>{action}</div> : null}
           </div>
         </div>
-        <div className="mx-auto w-full min-w-0 max-w-[1600px] px-4 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-6 sm:px-6 lg:px-8 lg:pt-8">
+        <div className="mx-auto w-full min-w-0 max-w-[1600px] px-4 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-4 sm:px-6 lg:px-8 lg:pt-5">
           <div data-workspace-section-header className="mb-6 min-w-0 border-l-[3px] border-cyan-500 pl-4">
             <div className="flex min-w-0 flex-wrap items-baseline gap-2.5 sm:flex-nowrap">
-              <h2 id={titleId} className="min-w-0 break-words text-2xl font-black tracking-[-0.02em] text-dtsc-ink sm:text-3xl">{title}</h2>
+              <h2 id={titleId} className="min-w-0 break-words text-xl font-black tracking-[-0.02em] text-dtsc-ink sm:text-2xl">{title}</h2>
               {count !== undefined ? <span className="shrink-0 rounded-full bg-dtsc-soft px-2.5 py-1 text-xs font-black text-dtsc-blue">{count}</span> : null}
             </div>
             {description ? <div className="mt-2 max-w-4xl break-words text-sm leading-6 text-dtsc-muted sm:text-[0.95rem] sm:leading-7">{description}</div> : null}
