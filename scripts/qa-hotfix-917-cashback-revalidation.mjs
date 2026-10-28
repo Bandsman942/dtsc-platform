@@ -1,0 +1,38 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+const read = (p) => readFileSync(p, "utf8");
+const service = read("lib/enterprise/relationship-benefits/omnichannel-cashback.ts");
+const proof = read("lib/enterprise/relationship-benefits/omnichannel-payment-proof.ts");
+const execution = read("lib/enterprise/retail/omnichannel-returns.ts");
+const posting = read("lib/enterprise/accounting/sector-adapters/retail-relationship-credit.ts");
+const behavioral = read("tests/e2e/issue-786-relationship-benefits-enforcement.spec.mjs");
+
+const grantStart = service.indexOf("export async function tryGrantRetailOmnichannelCashbackTx(");
+const grantEnd = service.indexOf("export async function reverseRetailOmnichannelCashbackTx(", grantStart);
+assert.ok(grantStart >= 0 && grantEnd > grantStart, "Canonical earn path must remain explicit");
+const grant = service.slice(grantStart, grantEnd);
+
+const expected = [
+  ["canUseModule(organizationId, \"RETAIL_POS\")", "Retail entitlement must be renewed at grant"],
+  ["canUseModule(organizationId, \"RELATIONSHIP_BENEFITS\")", "Relationship entitlement must be renewed at grant"],
+  ["include: { audiences: true }", "Current benefit audiences required at grant"],
+  ["enterpriseRelationshipBenefitAssignment.findFirst", "Current assignment required at grant"],
+  ["id: { not: usage.id }", "Current reserved quota must not self-block issuance"],
+  ["evaluateRelationshipBenefitSnapshot({", "Full eligibility must be revalidated at grant"],
+  ["context: contexts, now: new Date(), requireBusinessContext: true", "Use current date and immutable source context"],
+  ["if (!reevaluated.allowed) continue", "Fail closed on withdrawn/expired benefits"],
+  ["changeRelationalStoreCreditTx({", "Use canonical store credit ledger"],
+  ["postBusinessEventTx(tx", "GL must be posted atomically with EARN"],
+];
+for (const [needle, message] of expected) assert.ok(grant.includes(needle), message);
+assert.ok(service.includes("reservationContext: {"), "Order must record a safe context snapshot");
+assert.ok(service.includes("effect.context.occurredAt.toISOString()"), "Store JSON-safe original timestamp");
+assert.ok(proof.includes('status: "PAID"') || proof.includes('status !== "PAID"'), "Real paid invoice proof required");
+assert.ok(proof.includes("paymentAllocations"), "Confirmed Finance allocations required");
+assert.ok(execution.includes("reverseRetailOmnichannelCashbackTx({"), "Return must invoke canonical reversal");
+assert.ok(posting.includes("EnterpriseRetailStoredValueEntry"), "Financial journal must follow Store Credit source");
+assert.ok(behavioral.includes("audienceWithdrawn"), "Real E2E must withdraw audience before earning");
+assert.ok(behavioral.includes('data: { relationType: "OTHER" }'), "E2E must mutate the canonical audience");
+assert.ok(behavioral.includes('expect(withheld.status).toBe("REQUESTED")'), "E2E must prove no consumed status");
+console.log("HOTFIX #917: 17 structural checks passed. Owner E2E and financial refund suite remain independent.");
