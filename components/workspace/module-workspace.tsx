@@ -1,11 +1,12 @@
 "use client";
 
 import { ArrowLeft, ChevronRight, MoreHorizontal, Sparkles } from "lucide-react";
-import { useEffect, useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
 import { ContextualBackButton } from "@/components/workspace/contextual-back-button";
 import { ModuleRefreshButton } from "@/components/workspace/module-refresh-button";
 import { getExperienceCopy } from "@/lib/experience-i18n";
+import { containModalTab, isTopmostModal } from "@/lib/client-focus-management";
 import { translate } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
@@ -186,6 +187,8 @@ export function ModuleSection({
   const copy = getExperienceCopy(locale).workspace;
   const titleId = useId();
   const [open, setOpen] = useState(defaultOpen);
+  const sectionRef = useRef<HTMLElement>(null);
+  const openerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -200,20 +203,41 @@ export function ModuleSection({
 
   useEffect(() => {
     if (!open) return;
+    const openerHandle = openerRef;
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    const closeOnEscape = (event: KeyboardEvent) => {
-      // Only the foremost layer closes. Nested entity details/confirmations own Escape.
-      if (event.key === "Escape" && !document.querySelector('[role="dialog"][aria-modal="true"]')) {
+    const frame = window.requestAnimationFrame(() => {
+      if (isTopmostModal(sectionRef.current)) {
+        sectionRef.current?.querySelector<HTMLButtonElement>("[data-workspace-section-back]")?.focus({ preventScroll: true });
+      }
+    });
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const section = sectionRef.current;
+      if (!section || !isTopmostModal(section)) return;
+      if (document.activeElement?.closest('[role="menu"]')) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
         setOpen(false);
+        if (id && decodeURIComponent(window.location.hash.replace(/^#/, "")) === id) {
+          window.history.replaceState(window.history.state, "", `${window.location.pathname}${window.location.search}`);
+        }
+      } else if (event.key === "Tab") {
+        containModalTab(event, section);
       }
     };
-    window.addEventListener("keydown", closeOnEscape);
+    document.addEventListener("keydown", handleKeyDown);
     return () => {
+      window.cancelAnimationFrame(frame);
       document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", closeOnEscape);
+      document.removeEventListener("keydown", handleKeyDown);
+      window.requestAnimationFrame(() => {
+        const target = openerHandle.current?.isConnected ? openerHandle.current : previouslyFocused;
+        if (target?.isConnected) target.focus({ preventScroll: true });
+      });
     };
-  }, [open]);
+  }, [id, open]);
 
   function openWorkspace() {
     setOpen(true);
@@ -230,15 +254,19 @@ export function ModuleSection({
   if (open) {
     return (
       <section
+        ref={sectionRef}
         id={id}
         data-workspace-section
         data-workspace-section-open="true"
+        role="dialog"
+        aria-modal="true"
         aria-labelledby={titleId}
+        tabIndex={-1}
         className={cn("fixed inset-0 z-[80] min-w-0 max-w-full overflow-y-auto bg-dtsc-page", className)}
       >
         <div className="sticky top-0 z-20 border-b border-dtsc-border bg-dtsc-surface/95 px-4 py-3 shadow-sm backdrop-blur-xl sm:px-6 lg:px-8">
           <div className="mx-auto flex w-full min-w-0 max-w-[1600px] flex-wrap items-center justify-between gap-3 sm:flex-nowrap">
-            <button type="button" onClick={closeWorkspace} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-black text-dtsc-blue transition hover:bg-dtsc-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 active:translate-y-px">
+            <button type="button" data-workspace-section-back onClick={closeWorkspace} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-black text-dtsc-blue transition hover:bg-dtsc-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 active:translate-y-px">
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />
               {copy.backToModule}
             </button>
@@ -268,6 +296,7 @@ export function ModuleSection({
       className={cn("w-full min-w-0 max-w-full scroll-mt-24 overflow-hidden rounded-2xl border border-dtsc-border bg-dtsc-surface/72", className)}
     >
       <button
+        ref={openerRef}
         type="button"
         onClick={openWorkspace}
         aria-expanded="false"
