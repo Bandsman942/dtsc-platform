@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import type { Prisma } from "@prisma/client";
 import { effectivePharmacyBatchStatus } from "@/lib/pharmacy-batches";
 import { convertPharmacyMoneyToBase } from "@/lib/pharmacy-currencies";
 import type { pharmacySaleSchema } from "@/lib/pharmacy-sale-validators";
@@ -53,4 +54,72 @@ export async function createSale(organizationId: string, userId: string, data: S
 }
 export async function applySaleStockImpact(organizationId: string, saleId: string, userId: string) { const settings = (await getEffectivePharmacySettings(organizationId, userId)).sections; return prisma.$transaction(async (tx) => { const sale = await tx.pharmacySale.findFirst({ where: { id: saleId, organizationId }, include: { lines: true } }); if (!sale) throw new Error("SALE_NOT_FOUND"); if (sale.stockImpactApplied) return sale; if (sale.validationRequired && sale.pharmacistValidationStatus !== "VALIDATED") throw new Error("PHARMACIST_VALIDATION_REQUIRED"); for (const line of sale.lines) { const batch = await tx.pharmacyBatch.findFirst({ where: { id: line.batchId, organizationId, productId: line.productId } }); if (!batch) throw new Error("BATCH_NOT_SELLABLE"); const batchStatus = effectivePharmacyBatchStatus({ ...batch, expiryAlertDays: Number(settings["expiry-fefo"].nearExpiryThresholdDays) }); if ((batchStatus === "EXPIRED" && settings["expiry-fefo"].blockExpiredBatchSale) || (batchStatus === "RECALLED" && settings["expiry-fefo"].blockRecalledBatchSale) || (batchStatus === "QUARANTINED" && settings["expiry-fefo"].blockQuarantinedBatchSale) || (batchStatus === "BLOCKED" && settings["expiry-fefo"].blockBlockedBatchSale)) throw new Error("BATCH_NOT_SELLABLE"); const before = Number(batch.availableQuantity); const quantity = Number(line.quantity); if (before < quantity && (!settings["stock-inventory"].allowNegativeStock || settings["stock-inventory"].blockSaleWhenStockUnavailable)) throw new Error("INSUFFICIENT_STOCK"); await tx.pharmacyBatch.update({ where: { id: batch.id }, data: { availableQuantity: before - quantity, status: before - quantity === 0 ? "DEPLETED" : batch.status, updatedById: userId } }); await tx.pharmacyStockMovement.create({ data: { organizationId, productId: line.productId, batchId: line.batchId, movementType: "SALE", direction: "OUT", quantity, quantityBefore: before, quantityAfter: before - quantity, reason: `Vente ${sale.saleNumber}`, relatedEntityType: "PharmacySale", relatedEntityId: sale.id, createdById: userId } }); } return tx.pharmacySale.update({ where: { id: sale.id }, data: { stockImpactApplied: true, status: Number(sale.paidAmount) >= Number(sale.totalAmount) ? "PAID" : "VALIDATED", updatedById: userId } }); }); }
 export async function reverseSaleStockImpact(organizationId: string, saleId: string, userId: string, reason: string) { return prisma.$transaction(async (tx) => { const sale = await tx.pharmacySale.findFirst({ where: { id: saleId, organizationId }, include: { lines: true } }); if (!sale) throw new Error("SALE_NOT_FOUND"); if (sale.stockImpactApplied) for (const line of sale.lines) { const batch = await tx.pharmacyBatch.findFirst({ where: { id: line.batchId, organizationId } }); if (!batch) throw new Error("BATCH_NOT_FOUND"); const before = Number(batch.availableQuantity); const quantity = Number(line.quantity); await tx.pharmacyBatch.update({ where: { id: batch.id }, data: { availableQuantity: before + quantity, status: batch.status === "DEPLETED" ? "ACTIVE" : batch.status, updatedById: userId } }); await tx.pharmacyStockMovement.create({ data: { organizationId, productId: line.productId, batchId: line.batchId, movementType: "SALE_CANCELLATION", direction: "IN", quantity, quantityBefore: before, quantityAfter: before + quantity, reason, relatedEntityType: "PharmacySale", relatedEntityId: sale.id, createdById: userId } }); } return tx.pharmacySale.update({ where: { id: sale.id }, data: { stockImpactApplied: false, status: "CANCELLED", cancellationReason: reason, cancelledById: userId, cancelledAt: new Date(), updatedById: userId } }); }); }
-export async function getSalesDataset(organizationId: string) { const settings = await getEffectivePharmacySettings(organizationId); const currency = String(settings.sections.general.currency || "USD"); const [sales, products, batches, members, departments, prescriptions, movements] = await Promise.all([prisma.pharmacySale.findMany({ where: { organizationId }, orderBy: { saleDate: "desc" }, include: { lines: true, refunds: true, anomalies: true } }), prisma.pharmacyProduct.findMany({ where: { organizationId, status: "ACTIVE" }, orderBy: { name: "asc" } }), prisma.pharmacyBatch.findMany({ where: { organizationId, availableQuantity: { gt: 0 } }, orderBy: { expiryDate: "asc" } }), prisma.organizationMember.findMany({ where: { organizationId, status: "ACTIVE", removedAt: null }, select: { positionCode: true, positionTitle: true, user: { select: { id: true, name: true } } } }), prisma.enterpriseDepartment.findMany({ where: { organizationId, isActive: true }, select: { id: true, labelFr: true } }), prisma.pharmacyPrescription.findMany({ where: { organizationId, status: { notIn: ["REJECTED", "ARCHIVED", "CANCELLED"] } }, select: { id: true, prescriptionNumber: true } }), prisma.pharmacyStockMovement.findMany({ where: { organizationId, relatedEntityType: "PharmacySale" }, orderBy: { createdAt: "desc" }, take: 300 })]); const today = new Date().toISOString().slice(0,10); const month = new Date(new Date().getFullYear(), new Date().getMonth(), 1); const metrics = { today: sales.filter((s) => s.saleDate.toISOString().slice(0,10) === today).length, month: sales.filter((s) => s.saleDate >= month).length, todayAmount: sales.filter((s) => s.saleDate.toISOString().slice(0,10) === today).reduce((a,s)=>a+Number(s.totalAmount),0), monthAmount: sales.filter((s)=>s.saleDate>=month).reduce((a,s)=>a+Number(s.totalAmount),0), paid: sales.filter((s)=>s.paymentStatus==="PAID").length, partial: sales.filter((s)=>s.paymentStatus==="PARTIALLY_PAID").length, cancelled: sales.filter((s)=>s.status==="CANCELLED").length, refunds: sales.flatMap((s)=>s.refunds).length, pendingValidation: sales.filter((s)=>s.pharmacistValidationStatus==="PENDING").length, prescriptions: sales.filter((s)=>s.prescriptionId).length, anomalies: sales.flatMap((s)=>s.anomalies).filter((a)=>a.status==="OPEN").length, stockImpacted: sales.filter((s)=>s.stockImpactApplied && s.saleDate.toISOString().slice(0,10)===today).length }; const cashierMembers = members.filter((member) => `${member.positionCode || ""} ${member.positionTitle || ""}`.toLocaleLowerCase("fr").includes("caiss")); return { metrics, currency, sales, products, batches: batches.filter((b)=>["ACTIVE","NEAR_EXPIRY"].includes(effectivePharmacyBatchStatus(b))), members: cashierMembers.map((m)=>m.user), departments, prescriptions: prescriptions.map((prescription) => ({ id: prescription.id, title: prescription.prescriptionNumber })), movements }; }
+type PharmacySalesView = "dashboard" | "today" | "history" | "lines" | "validation" | "refunds" | "exceptional" | "receipts" | "anomalies" | "movements";
+type PharmacySalesQuery = { page: number; pageSize: number; query: string; view: PharmacySalesView };
+
+export async function getSalesDataset(organizationId: string, params: PharmacySalesQuery) {
+  const settings = await getEffectivePharmacySettings(organizationId);
+  const currency = String(settings.sections.general.currency || "USD");
+  const now = new Date();
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const tomorrow = new Date(today.getTime() + 86_400_000);
+  const month = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const todayFilter = { gte: today, lt: tomorrow };
+  const viewFilter: Prisma.PharmacySaleWhereInput =
+    params.view === "today" ? { saleDate: todayFilter } :
+    params.view === "validation" ? { pharmacistValidationStatus: "PENDING" } :
+    params.view === "refunds" ? { status: { in: ["CANCELLED", "REFUNDED"] } } :
+    params.view === "exceptional" ? { saleType: "EXCEPTIONAL_EXIT" } :
+    params.view === "receipts" ? { receiptGenerated: true } :
+    params.view === "anomalies" ? { anomalies: { some: {} } } : {};
+  const queryFilter: Prisma.PharmacySaleWhereInput = params.query ? {
+    OR: [
+      { saleNumber: { contains: params.query, mode: "insensitive" } },
+      { customerName: { contains: params.query, mode: "insensitive" } },
+      { paymentStatus: { contains: params.query, mode: "insensitive" } },
+      { status: { contains: params.query, mode: "insensitive" } },
+    ],
+  } : {};
+  const where: Prisma.PharmacySaleWhereInput = { organizationId, ...viewFilter, ...queryFilter };
+  const base = { organizationId };
+  const [
+    sales, total, totalUnfiltered, products, batches, members, departments, prescriptions, movements,
+    todayStats, monthStats, paid, partial, cancelled, refunds, pendingValidation, linkedPrescriptions, anomalies, stockImpacted,
+  ] = await Promise.all([
+    prisma.pharmacySale.findMany({ where, orderBy: [{ saleDate: "desc" }, { id: "desc" }], skip: (params.page - 1) * params.pageSize, take: params.pageSize, include: { lines: true, refunds: true, anomalies: true } }),
+    prisma.pharmacySale.count({ where }),
+    prisma.pharmacySale.count({ where: base }),
+    prisma.pharmacyProduct.findMany({ where: { organizationId, status: "ACTIVE" }, orderBy: { name: "asc" } }),
+    prisma.pharmacyBatch.findMany({ where: { organizationId, availableQuantity: { gt: 0 } }, orderBy: { expiryDate: "asc" } }),
+    prisma.organizationMember.findMany({ where: { organizationId, status: "ACTIVE", removedAt: null }, select: { positionCode: true, positionTitle: true, user: { select: { id: true, name: true } } } }),
+    prisma.enterpriseDepartment.findMany({ where: { organizationId, isActive: true }, select: { id: true, labelFr: true } }),
+    prisma.pharmacyPrescription.findMany({ where: { organizationId, status: { notIn: ["REJECTED", "ARCHIVED", "CANCELLED"] } }, select: { id: true, prescriptionNumber: true } }),
+    prisma.pharmacyStockMovement.findMany({ where: { organizationId, relatedEntityType: "PharmacySale" }, orderBy: { createdAt: "desc" }, take: 100 }),
+    prisma.pharmacySale.aggregate({ where: { ...base, saleDate: todayFilter }, _count: { _all: true }, _sum: { totalAmountBase: true } }),
+    prisma.pharmacySale.aggregate({ where: { ...base, saleDate: { gte: month } }, _count: { _all: true }, _sum: { totalAmountBase: true } }),
+    prisma.pharmacySale.count({ where: { ...base, paymentStatus: "PAID" } }),
+    prisma.pharmacySale.count({ where: { ...base, paymentStatus: "PARTIALLY_PAID" } }),
+    prisma.pharmacySale.count({ where: { ...base, status: "CANCELLED" } }),
+    prisma.pharmacySaleRefund.count({ where: base }),
+    prisma.pharmacySale.count({ where: { ...base, pharmacistValidationStatus: "PENDING" } }),
+    prisma.pharmacySale.count({ where: { ...base, prescriptionId: { not: null } } }),
+    prisma.pharmacySaleAnomaly.count({ where: { ...base, status: "OPEN" } }),
+    prisma.pharmacySale.count({ where: { ...base, stockImpactApplied: true, saleDate: todayFilter } }),
+  ]);
+  const metrics = {
+    today: todayStats._count._all, month: monthStats._count._all,
+    todayAmount: Number(todayStats._sum.totalAmountBase || 0),
+    monthAmount: Number(monthStats._sum.totalAmountBase || 0),
+    paid, partial, cancelled, refunds, pendingValidation,
+    prescriptions: linkedPrescriptions, anomalies, stockImpacted,
+  };
+  const cashierMembers = members.filter((member) => `${member.positionCode || ""} ${member.positionTitle || ""}`.toLocaleLowerCase("fr").includes("caiss"));
+  return {
+    metrics, currency, sales,
+    pagination: { page: params.page, pageSize: params.pageSize, total, totalUnfiltered, pageCount: Math.max(1, Math.ceil(total / params.pageSize)) },
+    products, batches: batches.filter((b) => ["ACTIVE", "NEAR_EXPIRY"].includes(effectivePharmacyBatchStatus(b))),
+    members: cashierMembers.map((m) => m.user), departments,
+    prescriptions: prescriptions.map((prescription) => ({ id: prescription.id, title: prescription.prescriptionNumber })),
+    movements,
+  };
+}

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getHealthPatientAccess } from "@/lib/health-patient-access";
@@ -26,13 +27,13 @@ export async function GET(req: Request, { params }: Params) {
   // Keep legacy unpaged consumers compatible while letting the patient registry request true server pages.
   const page = Math.min(100_000, Math.max(1, Number.parseInt(url.searchParams.get("page") || "1", 10) || 1));
   const pageSize = Math.min(300, Math.max(1, Number.parseInt(url.searchParams.get("pageSize") || "300", 10) || 300));
-  const where = {
+  const where: Prisma.HealthPatientWhereInput = {
       organizationId,
       ...(sex ? { sex } : {}),
       ...(status ? { status } : {}),
       ...(createdFrom || createdTo ? { createdAt: { ...(createdFrom ? { gte: new Date(createdFrom) } : {}), ...(createdTo ? { lte: new Date(`${createdTo}T23:59:59.999Z`) } : {}) } } : {}),
       ...(q ? { OR: [{ fullName: { contains: q, mode: "insensitive" } }, { phonePrimary: { contains: q, mode: "insensitive" } }, { patientNumber: { contains: q, mode: "insensitive" } }] } : {}),
-  } as const;
+  };
   const [total, totalUnfiltered, patients] = await Promise.all([
     prisma.healthPatient.count({ where }),
     prisma.healthPatient.count({ where: { organizationId } }),
