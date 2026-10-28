@@ -1481,7 +1481,7 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
               requestedByUserId: fixture.adminUserId,
               validatorUserId: fixture.userId,
               lines: { create: {
-                organizationId, salesOrderItemId: order.items[0].id,
+                salesOrderItemId: order.items[0].id,
                 quantity: 1, refundAmount: String(amount),
                 productCondition: "SELLABLE", stockDisposition: "RESTOCK",
               } },
