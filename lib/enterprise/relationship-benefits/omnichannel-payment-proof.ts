@@ -57,11 +57,10 @@ export async function resolvePaidDeliveredOmnichannelOrderTx(args: {
   // convenient one; a posted refund or a duplicate invoice must fail closed.
   const invoices = await tx.enterpriseSalesInvoice.findMany({
     where: {
-      organizationId, salesOrderId, businessPartyId: order.businessPartyId,
-      currencyCode: order.currency,
+      organizationId, salesOrderId,
     },
     select: {
-      id: true, status: true, grandTotal: true, amountCredited: true, issuedAt: true, postedAt: true,
+      id: true, status: true, businessPartyId: true, currencyCode: true, grandTotal: true, amountCredited: true, issuedAt: true, postedAt: true,
       receivable: {
         select: {
           paymentAllocations: {
@@ -82,6 +81,7 @@ export async function resolvePaidDeliveredOmnichannelOrderTx(args: {
     take: 2,
   });
   if (invoices.length !== 1 || invoices[0].status !== "PAID" ||
+      invoices[0].businessPartyId !== order.businessPartyId || invoices[0].currencyCode !== order.currency ||
       !invoices[0].issuedAt || !invoices[0].postedAt || !invoices[0].amountCredited.isZero() ||
       !invoices[0].grandTotal.equals(order.totalAmount) || !order.totalAmount.gt(0)) return null;
   const invoice = invoices[0];
