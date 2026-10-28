@@ -1354,9 +1354,18 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
       });
       expect(created.response.status(), JSON.stringify(created.body)).toBe(201);
       const benefitId = created.body.benefit.id;
-      for (const orderIndex of [0, 1, 2]) {
+      for (const orderIndex of [0, 1, 2, 3]) {
         const paymentFirst = orderIndex === 0;
         const audienceWithdrawn = orderIndex === 2;
+        const benefitExpired = orderIndex === 3;
+        if (benefitExpired) {
+          // Restore the audience after the preceding negative case, so
+          // the fourth order genuinely reserves before its benefit expires.
+          await prisma.enterpriseRelationshipBenefitAudience.updateMany({
+            where: { organizationId, benefitId },
+            data: { relationType: "CUSTOMER" },
+          });
+        }
         const payload = {
           idempotencyKey: `e2e-914-omni-${suffix}-${orderIndex}`,
           customerBusinessPartyId: fixture.customerBusinessPartyId,
@@ -1413,6 +1422,12 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
             confirmedAt: new Date(),
           },
         });
+        if (benefitExpired) {
+          await prisma.enterpriseRelationshipBenefit.update({
+            where: { id: benefitId },
+            data: { endsAt: new Date(Date.now() - 60000) },
+          });
+        }
         if (audienceWithdrawn) {
           // A reserved quota is not permission to mint an EARN after the
           // business withdraws the CUSTOMER audience before payment.
@@ -1445,7 +1460,7 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
           expect(await prisma.enterpriseRetailStoredValueEntry.count({ where: { organizationId, idempotencyKey: earnedKey } })).toBe(0);
           await allocate();
         }
-        if (audienceWithdrawn) {
+        if (audienceWithdrawn || benefitExpired) {
           expect(await prisma.enterpriseRetailStoredValueEntry.count({
             where: { organizationId, idempotencyKey: earnedKey },
           })).toBe(0);
@@ -1453,6 +1468,13 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
             where: { id: usage.id },
           });
           expect(withheld.status).toBe("REQUESTED");
+          expect(await prisma.enterpriseJournalEntry.count({
+            where: { organizationId, sourceEntityType: "EnterpriseRetailStoredValueEntry",
+              postingEvent: "RETAIL_RELATIONSHIP_CREDIT_GRANTED",
+              sourceEntityId: { in: (await prisma.enterpriseRetailStoredValueEntry.findMany({
+                where: { organizationId, idempotencyKey: earnedKey }, select: { id: true },
+              })).map((entry) => entry.id) } },
+          })).toBe(0);
           continue;
         }
         const credited = await prisma.enterpriseRetailStoredValueEntry.findFirstOrThrow({
