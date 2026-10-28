@@ -1,42 +1,56 @@
-# Hotfix #914 — Cashback relationnel omnicanal
+# Hotfix #914 — Cashback relationnel omnicanal : commande, encaissement, livraison et retour
 
-**Statut : développement partiel, non publié.** Liens : parent #886 / #785 ; après DELIVERY #912. La branche démarre du SHA `1b3a964831c3b711adf96ee8eaae426b5dbe60dd` de `main`.
+**Statut : PR #915 en brouillon, non fusionnée, non déployée.** Parent #886, autres types #785. Base réconciliée avec le `main` contenant le hotfix #912. Le propriétaire doit fournir `E2E #914 BON` seulement après sa propre recette; jamais d'auto-validation.
 
-## Sources canoniques et dépendances
+## Sources uniques et flux
 
-| Preuve / opération | Source unique |
+| Étape | Autorité | Règle |
+| --- | --- | --- |
+| Évaluation du cashback | `resolveRetailRelationshipCashbackEffects`, `evaluateRelationshipBenefitSnapshot` | Droit, consentement, audience, quota, tarif et devise contrôlés côté serveur |
+| Réservation | `EnterpriseSalesOrder` + `EnterpriseRelationshipBenefitUsage` | `AUTO_RETAIL_OMNICHANNEL_CASHBACK`, `REQUESTED`, aucun avoir monétaire à la commande |
+| Preuve de livraison | `EnterpriseFulfillment` + acceptation ou document versionné | Livraison complète et commande `FULFILLED` uniquement |
+| Preuve de paiement | `EnterpriseSalesInvoice` + `EnterpriseReceivable.paymentAllocations` + `EnterprisePayment` | Facture émise/comptabilisée, paiement client entrant confirmé et allocations confirmées couvrant le montant total; même tenant/tiers/devise |
+| Attribution | `EnterpriseRetailStoredValueAccount/Entry` | Un compte canonique `STORE_CREDIT` par entreprise/client/devise ; entrée `EARN` unique par commande/avantage |
+| Comptabilité de l'avoir | `postBusinessEventTx` et registre commun `RETAIL_RELATIONSHIP_CREDIT_GRANTED` | Charge `OPERATING_EXPENSE` au débit, dette `CUSTOMER_ADVANCES` au crédit; atomique avec l'avoir |
+| Retours | `EnterpriseRetailOmnichannelReturn`, règlement de remboursement Finance | Chaque retour confirmé : `REVERSAL` proportionnelle aux lignes éligibles, comptabilisée par `RETAIL_RELATIONSHIP_CREDIT_REVERSED` |
+| Clôture | `EnterpriseRelationshipBenefitUsage` | Reprise intégrale au retour complet ; réservation annulée si remboursement intervient avant attribution |
+
+**Ordre indifférent :** livraison puis allocation Finance, ou allocation Finance puis livraison, appellent le même moteur d'attribution idempotent. Un retour non rejeté bloque toute nouvelle attribution avant règlement.
+
+## Sécurité et intégrité
+
+- `organizationId` obligatoire sur les références Sales, tiers, Finance, justificatifs et avoirs.
+- Relation consentie `ACTIVE`, identité précise et référencement commercial `EnterprisePersonBusinessReference` de même type, client avec rôle `CUSTOMER` actif.
+- Aucun statut de facture ni paiement présenté dans l'UI ne remplace les allocations réelles, le compte financier ou la livraison complète.
+- Verrou de commande `FOR UPDATE`, réservation verrouillée par relation et avantage, transactions sérialisables, clés stables dans le registre d'avoir et dans la preuve d'utilisation.
+- Pas de deuxième solde ni d'écriture inventée. Attribution et posting équilibré dans la même transaction; retour remboursé et reprise comptable dans la même transaction finale.
+- Écriture `POSTED` jamais réécrite ; chaque reprise est une pièce indépendante. Un avoir déjà consommé peut produire un solde signé, comme le contrat POS existant.
+
+## Matrice de preuves
+
+| Test | État actuel |
 | --- | --- |
-| Commande et lignes | `EnterpriseSalesOrder`, `EnterpriseSalesOrderItem` |
-| Canal et site | `EnterpriseRetailOrderOrchestration` |
-| Livraison | `EnterpriseFulfillment` et preuve client/document versionné |
-| Facture | `EnterpriseSalesInvoice` liée explicitement à la commande, même client/devise/montant |
-| Paiement reçu | `EnterprisePaymentAllocation` `CONFIRMED` vers la créance de facture, paiement `INBOUND/CUSTOMER_PAYMENT` `CONFIRMED|RECONCILED`, compte financier réel |
-| Avoir | `EnterpriseRetailStoredValueAccount/Entry` et `changeRelationalStoreCreditTx` |
-| Bénéficiaire, attribution et quota | `EnterpriseIdentityLink`, `EnterprisePersonBusinessReference`, `EnterpriseRelationshipBenefit[Assignment/Usage]` |
+| QA structurelle dédiée | LOCAL_EXECUTED : 53 assertions (lecture du dépôt) ; également enregistrée dans `qa:regression` |
+| `pnpm type-check`, `pnpm lint`, `pnpm build`, `pnpm qa:regression` | NOT_EXECUTED localement ; attendre la preuve CI GitHub |
+| PostgreSQL / Playwright | Ajout au `tests/e2e/issue-786-relationship-benefits-enforcement.spec.mjs` ; CI en attente |
+| E2E manuelle propriétaire | NOT_EXECUTED |
+| Publication Vercel Production | NOT_EXECUTED |
 
-## Phase intégrée dans cette branche : éligibilité au paiement
+## Tests de recette attendus
 
-`resolvePaidDeliveredOmnichannelOrderTx` enregistre **zéro écriture financière**. Il retourne `null` si livraison/facture/paiement du client ne sont pas vérifiables, si plusieurs factures pourraient répondre à la commande, s'il y a un retour non rejeté ou si les paiements réellement affectés ne couvrent pas le montant total. L'autorité Finance reste les allocations confirmées, pas un montant affiché dans le navigateur.
+1. Commande omnicanale confirmée avec avantage `CASHBACK` : usage en attente, `EARN = 0`.
+2. Paiement partiel puis complet mais sans livraison : `EARN = 0`.
+3. Livraison complète avec acceptation et facture réellement acquittée : exactement un `EARN` et une écriture POSTED équilibrée.
+4. Livraison avant paiement, et ordre inverse : même résultat économique.
+5. Deux appels concurrents ou replay de commande/livraison/paiement : pas de double attribution.
+6. Autre client, autre devise, facture non postée, preuve absente, paiement non confirmé ou absence d'allocation : aucun avoir.
+7. Retour partiel confirmé : réversion proportionnelle; retour complet : réversion totale sans double exécution, quota libéré.
+8. Retours en attente/rejetés, encaissement refusé et contrôle multi-tenant : aucun faux mouvement.
+9. Contrôles mobile FR/EN et caisse/Finance : références consultables, messages explicites.
 
-Cette première phase est volontairement conservatrice : aucune acquisition d'avoir avant le justificatif client ou un document versionné lié à la commande. Un paiement partiel, même avec facture marquée `PAID`, ne suffit pas.
+## Compatibilité et rollback
 
-## Étapes restant **à développer et à prouver avant toute fusion**
-
-1. Au devis/confirmation de commande : calculer et réserver les décisions de cashback sur les lignes tarifées réelles, relation active, limites et devise ; conserver une seule source d'autorité pour les quotas.
-2. Aux événements canoniques `EnterpriseFulfillment` complet et `EnterprisePaymentAllocation` confirmé : appeler le même orchestrateur idempotent **dans la transaction appropriée**, en recontrôlant les preuves et les droits, puis écrire exactement une entrée `EARN` dans l'avoir magasin canonique.
-3. Retours `EnterpriseRetailOmnichannelReturn` et remboursement Finance réellement confirmé : `REVERSAL` proportionnelle aux lignes éligibles, sans double reprise ni suppression historique des écritures.
-4. Verrous, version de calcul et idempotency key à l'ordre et avantage ; compensation d'annulation et réconciliation contrôlée des crédits.
-5. Tests PostgreSQL et Playwright : livraison puis paiement, paiement puis livraison, paiement partiel, facture doublon, mauvais client/devise, absence de preuve, retour partiel/intégral, concurrence et replays.
-6. Owner E2E FR/EN et responsive 320–1024 px, Quality/Migration/Shop2 verts, revue, merge squash main puis Production Vercel READY.
-
-**Risque P0** : un paiement non reçu ou un simple panier pourrait produire une dette d'avoir. En l'absence de données vérifiées, ne jamais émettre de cashback. Pas de mode Preview Vercel. Aucun impact Prisma/migration/backfill, secret ou feature switch en phase de preuve. Rollback : retrait du code non appelé; si la phase d'émission est intégrée ultérieurement, les écritures seront compensées, jamais supprimées.
-
-## Matrice de preuves actuelle
-
-| Contrôle | État |
-| --- | --- |
-| Inspection des services canon Finance et Sales | LOCAL_EXECUTED (lecture GitHub) |
-| Vérification structurelle dédiée | NOT_EXECUTED (automatisée en CI PR) |
-| Type-check / lint / build / regression | NOT_EXECUTED |
-| Tests comportementaux Finance & paiement | NOT_EXECUTED |
-| OWNER_E2E et Production | NOT_EXECUTED |
+- Aucune modification du schéma Prisma, aucune migration ni backfill, aucun secret.
+- La logique existante POS `AUTO_RETAIL_CASHBACK`, CREDIT manuel et DELIVERY #912 restent séparés. L'événement Finance CREDIT existant est étendu à une source `EnterpriseRetailStoredValueEntry` vérifiable par le registre.
+- Rollback avant production : revert ciblé de la PR #915, aucune donnée en production. Après une future publication, une correction de dette devra être comptabilisée par reprise/contrepassation autorisée, jamais suppression du journal.
+- **La PR #915 doit rester en brouillon tant que tous les contrôles automatiques, E2E et revue ne sont pas prouvés.**
