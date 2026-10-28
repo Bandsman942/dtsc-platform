@@ -56,6 +56,10 @@ const LABEL: Record<string, string> = {
   NURSING: "Soins infirmiers",
   GLOBAL_INVOICE: "Facture globale",
 };
+function localCalendarDate() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
 const provider = () => ({
     name: "",
     providerCode: "",
@@ -96,7 +100,7 @@ const provider = () => ({
     description: "",
     administrativeReason: "",
     priority: "NORMAL",
-    requestDate: new Date().toISOString().slice(0, 10),
+    requestDate: localCalendarDate(),
     desiredResponseDate: "",
     preauthorization: false,
     requestedAmount: "",

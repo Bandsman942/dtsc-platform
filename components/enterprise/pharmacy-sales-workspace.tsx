@@ -89,7 +89,7 @@ const emptyForm = (data: Data | null): Form => ({
   cashierId: data?.members[0]?.id || "",
   departmentId: "",
   saleDate: new Date().toISOString().slice(0, 10),
-  currency: data?.currency || "USD",
+  currency: data?.currency || "",
   globalDiscount: "0",
   taxAmount: "0",
   paidAmount: "0",
@@ -176,8 +176,9 @@ export function PharmacySalesWorkspace({ organizationId }: { organizationId: str
         <h3 className="text-lg font-black text-dtsc-ink">Sorties, ventes & dispensation</h3>
         <p className="text-sm text-dtsc-muted">Panier, contrôle pharmacien, paiement léger et sortie stock FEFO.</p>
       </div>
-      <Button onClick={() => { setForm(emptyForm(data)); setOpen(true); }} className="w-full bg-[#002b5b] text-white sm:w-auto"><Plus />Nouvelle vente</Button>
+      <Button disabled={!data?.currency} onClick={() => { setForm(emptyForm(data)); setOpen(true); }} className="w-full bg-[#002b5b] text-white sm:w-auto"><Plus />Nouvelle vente</Button>
     </div>
+    {data && !data.currency && <p role="alert" className="mt-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">Configurez la devise principale de la pharmacie avant de créer une vente.</p>}
     <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
       {([
         ["dashboard", "Tableau de bord"],
@@ -191,7 +192,7 @@ export function PharmacySalesWorkspace({ organizationId }: { organizationId: str
         ["receipts", "Reçus / factures"],
         ["anomalies", "Anomalies de vente"],
         ["movements", "Historique des mouvements"],
-      ] as Array<[Tab, string]>).map(([code, title]) => <button key={code} type="button" onClick={() => code === "new" ? (setForm(emptyForm(data)), setOpen(true)) : changeTab(code)} aria-current={tab === code ? "page" : undefined} className={`shrink-0 rounded-full border px-3 py-2 text-xs font-black ${tab === code ? "border-emerald-400 text-emerald-700" : "border-dtsc-border text-dtsc-muted"}`}>{title}</button>)}
+      ] as Array<[Tab, string]>).map(([code, title]) => <button key={code} type="button" disabled={code === "new" && !data?.currency} onClick={() => code === "new" ? (setForm(emptyForm(data)), setOpen(true)) : changeTab(code)} aria-current={tab === code ? "page" : undefined} className={`shrink-0 rounded-full border px-3 py-2 text-xs font-black disabled:cursor-not-allowed disabled:opacity-50 ${tab === code ? "border-emerald-400 text-emerald-700" : "border-dtsc-border text-dtsc-muted"}`}>{title}</button>)}
     </div>
     {loading && <p className="py-2 text-xs text-dtsc-muted" role="status">Actualisation des ventes…</p>}
     {tab === "dashboard" ? <Metrics metrics={data?.metrics || {}} />
@@ -199,7 +200,7 @@ export function PharmacySalesWorkspace({ organizationId }: { organizationId: str
       : <>
         <ListControls query={query} onQueryChange={setQuery} page={page} pageCount={pagination?.pageCount || 1} totalCount={pagination?.totalUnfiltered || 0} filteredCount={pagination?.total || 0} onPageChange={setPage} placeholder="Numéro, client ou statut..." />
         {tab === "lines" ?
-          <Grid>{sales.flatMap((sale) => sale.lines.map((line) => <Card key={line.id} title={productMap.get(line.productId)?.name || "Produit"} text={`${line.quantity} ${line.unit} · ${line.totalLine} ${sale.currency || data?.currency || "USD"}`} />))}</Grid> :
+        <Grid>{sales.flatMap((sale) => sale.lines.map((line) => <Card key={line.id} title={productMap.get(line.productId)?.name || "Produit"} text={`${line.quantity} ${line.unit} · ${line.totalLine} ${sale.currency || data?.currency || "—"}`} />))}</Grid> :
           <Grid>{sales.map((sale) => <SaleCard key={sale.id} sale={sale} actions={actions(sale, setDetail, action)} />)}</Grid>}
         {!loading && !sales.length && <p className="py-6 text-center text-sm text-dtsc-muted">Aucune vente pour ces critères.</p>}
       </>}
@@ -237,7 +238,7 @@ function SaleCard({ sale, actions: menuActions }: { sale: Sale; actions: ActionM
       </div>
       <ActionMenu items={menuActions} />
     </div>
-    <p className="mt-2 text-xs text-dtsc-muted">{sale.lines.length} ligne(s) · {sale.totalAmount} {sale.currency || "USD"} · {label(sale.paymentStatus)} · {sale.stockImpactApplied ? "Stock impacté" : "Stock non impacté"}</p>
+    <p className="mt-2 text-xs text-dtsc-muted">{sale.lines.length} ligne(s) · {sale.totalAmount} {sale.currency || "—"} · {label(sale.paymentStatus)} · {sale.stockImpactApplied ? "Stock impacté" : "Stock non impacté"}</p>
   </article>;
 }
 
@@ -251,7 +252,7 @@ function actions(sale: Sale, setDetail: (sale: Sale) => void, action: (sale: Sal
 function Detail({ sale, products, action }: { sale: Sale; products: Map<string, Opt>; action: (sale: Sale, actionName: string, extra?: Record<string, unknown>) => Promise<void> }) {
   const [reason, setReason] = useState("");
   return <div className="grid gap-3">
-    {sale.lines.map((line) => <Card key={line.id} title={products.get(line.productId)?.name || "Produit"} text={`${line.quantity} ${line.unit} · ${line.totalLine} ${sale.currency || "USD"}`} />)}
+    {sale.lines.map((line) => <Card key={line.id} title={products.get(line.productId)?.name || "Produit"} text={`${line.quantity} ${line.unit} · ${line.totalLine} ${sale.currency || "—"}`} />)}
     {sale.stockImpactApplied && <div className="rounded-xl border border-red-300 p-3">
       <Input value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Motif obligatoire" />
       <Button className="mt-2" variant="outline" disabled={!reason} onClick={() => void action(sale, "cancel", { reason })}><Undo2 />Annuler et restaurer le stock</Button>

@@ -59,7 +59,7 @@ type PharmacySalesQuery = { page: number; pageSize: number; query: string; view:
 
 export async function getSalesDataset(organizationId: string, params: PharmacySalesQuery) {
   const settings = await getEffectivePharmacySettings(organizationId);
-  const currency = String(settings.sections.general.currency || "USD");
+  const currency = String(settings.sections.general.currency || "");
   const now = new Date();
   const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const tomorrow = new Date(today.getTime() + 86_400_000);
