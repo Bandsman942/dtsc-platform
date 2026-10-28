@@ -1349,16 +1349,24 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
         benefitType: "CASHBACK", assignmentMode: "AUTOMATIC",
         relationTypes: ["CUSTOMER"], identityLinkIds: [], valueType: "PERCENT", valueDecimal: 3,
         currencyCode: fixture.currencyCode, actionCode: "NONE", targetModuleCode: "RETAIL_POS",
-        stackable: true, status: "ACTIVE", usageLimitTotal: 5,
+        stackable: true, status: "ACTIVE", usageLimitTotal: 7,
         conditions: { channelCodes: ["POS"], catalogItemIds: [fixture.catalogItemId] },
       });
       expect(created.response.status(), JSON.stringify(created.body)).toBe(201);
       const benefitId = created.body.benefit.id;
-      for (const orderIndex of [0, 1, 2, 3, 4]) {
+      for (const orderIndex of [0, 1, 2, 3, 4, 5]) {
         const paymentFirst = orderIndex === 0;
         const audienceWithdrawn = orderIndex === 2;
         const concurrentSettlement = orderIndex === 3;
         const benefitExpired = orderIndex === 4;
+        const partialSettlement = orderIndex === 5;
+        if (partialSettlement) {
+          // Restore eligibility after the expiry-denial case. Partial
+          // Finance allocations must not earn until the outstanding is zero.
+          await prisma.enterpriseRelationshipBenefit.update({
+            where: { id: benefitId }, data: { endsAt: null },
+          });
+        }
         if (concurrentSettlement) {
           // Restore the audience after the preceding negative case so that
           // the concurrent settlement genuinely reserves and may earn.
@@ -1452,7 +1460,22 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
           }, "/enterprise-modules/RETAIL_POS");
           expect(result.response.status(), JSON.stringify(result.body)).toBe(201);
         };
-        if (concurrentSettlement) {
+        if (partialSettlement) {
+          await fulfill();
+          const half = Number((amount / 2).toFixed(2));
+          const first = await post(admin,
+            `/api/enterprise/${organizationId}/payments/${payment.id}/allocations`,
+            { receivableId: receivable.id, amount: String(half) }, "/enterprise-modules/FINANCE_PAYMENTS");
+          expect(first.response.ok(), JSON.stringify(first.body)).toBeTruthy();
+          expect(await prisma.enterpriseRetailStoredValueEntry.count({
+            where: { organizationId, idempotencyKey: earnedKey },
+          })).toBe(0);
+          const remainder = Number((amount - half).toFixed(2));
+          const second = await post(admin,
+            `/api/enterprise/${organizationId}/payments/${payment.id}/allocations`,
+            { receivableId: receivable.id, amount: String(remainder) }, "/enterprise-modules/FINANCE_PAYMENTS");
+          expect(second.response.ok(), JSON.stringify(second.body)).toBeTruthy();
+        } else if (concurrentSettlement) {
           // Two independent HTTP requests may race. The canonical Sales order
           // lock and EARN idempotency must serialize these without double credit.
           await Promise.all([allocate(), fulfill()]);
