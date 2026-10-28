@@ -52,7 +52,7 @@ const implementationChecks = [
   [cashier, "evaluateRelationshipBenefitSnapshot", "customer eligibility is evaluated server-side"],
   [cashier, "relationType: link.requestedRelationType", "proof needs the exact consented customer role"],
   [cashier, 'status: "ACTIVE", archivedAt: null', "archived identity links cannot mint credit"],
-  [cashier, "SELECT id FROM \\"EnterpriseSalesOrder\\"", "order locking serializes credit"],
+  [cashier, 'SELECT id FROM "EnterpriseSalesOrder"', "order locking serializes credit"],
   [cashier, "resolvePaidDeliveredOmnichannelOrderTx", "grant requires real combined Finance/Sales proof"],
   [cashier, "changeRelationalStoreCreditTx({", "all money entries use canonical store credit ledger"],
   [cashier, 'entryType: "EARN"', "grant is a single positive store-credit entry"],
