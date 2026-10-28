@@ -6,6 +6,7 @@ import { enterpriseReference, publishEnterpriseEvent } from "@/lib/enterprise/cr
 import type { fulfillmentCreateSchema } from "@/lib/enterprise/crm-sales/schemas";
 import { consumeEnterpriseInventoryReservationsTx } from "@/lib/enterprise/inventory/reservations";
 import { consumeRetailOmnichannelRelationshipBenefitsTx } from "@/lib/enterprise/relationship-benefits/omnichannel-adapter";
+import { tryGrantRetailOmnichannelCashbackTx } from "@/lib/enterprise/relationship-benefits/omnichannel-cashback";
 import { valueRetailOmnichannelFulfillmentIssuesTx } from "@/lib/enterprise/retail/accounting";
 import { prisma } from "@/lib/prisma";
 
@@ -62,7 +63,7 @@ export async function createEnterpriseFulfillment(organizationId: string, salesO
         const reservedBenefits = await tx.enterpriseRelationshipBenefitUsage.count({
           where: {
             organizationId, effectEntityType: "EnterpriseSalesOrder", effectEntityId: order.id,
-            executionMode: "AUTO_RETAIL_OMNICHANNEL", status: "REQUESTED",
+            executionMode: { in: ["AUTO_RETAIL_OMNICHANNEL", "AUTO_RETAIL_OMNICHANNEL_CASHBACK"] }, status: "REQUESTED",
           },
         });
         if (reservedBenefits > 0) {
@@ -173,6 +174,11 @@ export async function createEnterpriseFulfillment(organizationId: string, salesO
         // The order reserved the quota without consuming it. Delivery is the
         // canonical fulfillment proof; a partial delivery leaves it reserved.
         await consumeRetailOmnichannelRelationshipBenefitsTx({
+          tx, organizationId, orderId: order.id, actorUserId,
+        });
+        // Delivery alone never mints cashback; a confirmed Finance allocation
+        // for the same order and customer must also exist.
+        await tryGrantRetailOmnichannelCashbackTx({
           tx, organizationId, orderId: order.id, actorUserId,
         });
       }
