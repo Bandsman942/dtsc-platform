@@ -22,6 +22,7 @@ const codes = {
   omnichannel: "E2E_886_RETAIL_OMNICHANNEL_QUOTA",
   loyalty: "E2E_906_RETAIL_LOYALTY",
   cashback: "E2E_908_RETAIL_CASHBACK",
+  omnichannelCashback: "E2E_914_OMNI_CASHBACK",
 };
 
 const fixture = {
@@ -84,7 +85,7 @@ async function get(page, path) {
 
 async function cleanupFixture() {
   const benefits = await prisma.enterpriseRelationshipBenefit.findMany({
-    where: { organizationId, code: { in: [codes.automatic, codes.exclusive, codes.manual, codes.fullReturn, codes.omnichannel, codes.loyalty, codes.cashback] } },
+    where: { organizationId, code: { in: [codes.automatic, codes.exclusive, codes.manual, codes.fullReturn, codes.omnichannel, codes.loyalty, codes.cashback, codes.omnichannelCashback] } },
     select: { id: true },
   });
   const benefitIds = benefits.map((item) => item.id);
@@ -1326,6 +1327,139 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
     } finally {
       await adminContext.close();
       await reviewerContext.close();
+    }
+  });
+
+  test("#914 cashback only credits once after BOTH paid and delivered, independent of event order", async ({ browser }) => {
+    const ctx = await browser.newContext({ baseURL: baseUrl, viewport: { width: 390, height: 844 } });
+    const admin = await ctx.newPage();
+    await signIn(admin, adminEmail, adminPassword, "/enterprise-modules/RETAIL_POS");
+    const suffix = Date.now().toString(36);
+    try {
+      // A prior Retail POS cashback fixture must not capture this order.
+      await prisma.enterpriseRelationshipBenefit.updateMany({
+        where: { organizationId, code: codes.cashback },
+        data: { endsAt: new Date(Date.now() - 60000) },
+      });
+      const created = await post(admin, `/api/enterprise/${organizationId}/relationship-benefits`, {
+        code: codes.omnichannelCashback,
+        nameFr: "Cashback omnicanal #914", nameEn: "Omnichannel cashback #914",
+        descriptionFr: "Avoir seulement après paiement confirmé et livraison acceptée.",
+        descriptionEn: "Store credit only after confirmed payment and accepted delivery.",
+        benefitType: "CASHBACK", assignmentMode: "AUTOMATIC",
+        relationTypes: ["CUSTOMER"], identityLinkIds: [], valueType: "PERCENT", valueDecimal: 3,
+        currencyCode: fixture.currencyCode, actionCode: "NONE", targetModuleCode: "RETAIL_POS",
+        stackable: true, status: "ACTIVE", usageLimitTotal: 5,
+        conditions: { channelCodes: ["POS"], catalogItemIds: [fixture.catalogItemId] },
+      });
+      expect(created.response.status(), JSON.stringify(created.body)).toBe(201);
+      const benefitId = created.body.benefit.id;
+      for (const orderIndex of [0, 1]) {
+        const paymentFirst = orderIndex === 0;
+        const payload = {
+          idempotencyKey: `e2e-914-omni-${suffix}-${orderIndex}`,
+          customerBusinessPartyId: fixture.customerBusinessPartyId,
+          sourceSiteId: fixture.siteId, fulfillmentWarehouseId: fixture.warehouseId,
+          fulfillmentMode: "CLICK_COLLECT", currencyCode: fixture.currencyCode,
+          lines: [{ catalogItemId: fixture.catalogItemId, quantity: 1 }],
+        };
+        const placed = await post(admin, `/api/enterprise/${organizationId}/retail/omnichannel/orders`, payload,
+          "/enterprise-modules/RETAIL_POS");
+        expect(placed.response.status(), JSON.stringify(placed.body)).toBe(201);
+        const order = placed.body.order;
+        const amount = Number(order.totalAmount);
+        expect(amount).toBeGreaterThan(0);
+        const usage = await prisma.enterpriseRelationshipBenefitUsage.findFirstOrThrow({
+          where: { organizationId, benefitId, effectEntityType: "EnterpriseSalesOrder", effectEntityId: order.id },
+        });
+        expect(usage.executionMode).toBe("AUTO_RETAIL_OMNICHANNEL_CASHBACK");
+        expect(usage.status).toBe("REQUESTED");
+        const earnedKey = `omni-cashback:order:${order.id}:benefit:${benefitId}`;
+        expect(await prisma.enterpriseRetailStoredValueEntry.count({ where: { organizationId, idempotencyKey: earnedKey } })).toBe(0);
+
+        // Synthetic Finance objects use the real canonical invoice, receivable,
+        // confirmed customer payment and allocation. The allocation and
+        // fulfillment itself happen through the authenticated application API.
+        const invoice = await prisma.enterpriseSalesInvoice.create({
+          data: {
+            organizationId, number: `E2E914-INV-${suffix}-${orderIndex}`,
+            businessPartyId: fixture.customerBusinessPartyId, salesOrderId: order.id,
+            status: "ISSUED", invoiceDate: new Date(), issuedAt: new Date(), postedAt: new Date(),
+            currencyCode: fixture.currencyCode, subtotal: String(amount), grandTotal: String(amount),
+            outstandingAmount: String(amount), createdByUserId: fixture.adminUserId,
+            items: { create: {
+              description: `E2E #914 line ${orderIndex}`, quantity: 1,
+              unitPrice: String(amount), netAmount: String(amount), totalAmount: String(amount),
+            } },
+          },
+        });
+        const receivable = await prisma.enterpriseReceivable.create({
+          data: {
+            organizationId, salesInvoiceId: invoice.id, businessPartyId: fixture.customerBusinessPartyId,
+            currencyCode: fixture.currencyCode, originalAmount: String(amount),
+            outstandingAmount: String(amount), status: "OPEN",
+          },
+        });
+        const payment = await prisma.enterprisePayment.create({
+          data: {
+            organizationId, number: `E2E914-PAY-${suffix}-${orderIndex}`,
+            businessPartyId: fixture.customerBusinessPartyId, direction: "INBOUND",
+            paymentType: "CUSTOMER_PAYMENT", methodType: "BANK_TRANSFER",
+            financialAccountId: fixture.cashAccountId, currencyCode: fixture.currencyCode,
+            amount: String(amount), unallocatedAmount: String(amount), paymentDate: new Date(),
+            status: "CONFIRMED", initiatedByUserId: fixture.userId,
+            approvedByUserId: fixture.adminUserId, confirmedByUserId: fixture.adminUserId,
+            confirmedAt: new Date(),
+          },
+        });
+        const allocate = async () => {
+          const result = await post(admin, `/api/enterprise/${organizationId}/payments/${payment.id}/allocations`, {
+            receivableId: receivable.id, amount: String(amount),
+          }, "/enterprise-modules/FINANCE_PAYMENTS");
+          expect(result.response.ok(), JSON.stringify(result.body)).toBeTruthy();
+        };
+        const fulfill = async () => {
+          const result = await post(admin, `/api/enterprise/${organizationId}/sales-orders/${order.id}/fulfill`, {
+            fulfillmentType: "PRODUCT_DELIVERY", warehouseId: fixture.warehouseId,
+            acceptedByCustomer: true, idempotencyKey: `e2e-914-deliver-${suffix}-${orderIndex}`,
+            revision: order.revision,
+            items: [{ salesOrderItemId: order.items[0].id, quantityFulfilled: 1 }],
+          }, "/enterprise-modules/RETAIL_POS");
+          expect(result.response.status(), JSON.stringify(result.body)).toBe(201);
+        };
+        if (paymentFirst) {
+          await allocate();
+          expect(await prisma.enterpriseRetailStoredValueEntry.count({ where: { organizationId, idempotencyKey: earnedKey } })).toBe(0);
+          await fulfill();
+        } else {
+          await fulfill();
+          expect(await prisma.enterpriseRetailStoredValueEntry.count({ where: { organizationId, idempotencyKey: earnedKey } })).toBe(0);
+          await allocate();
+        }
+        const credited = await prisma.enterpriseRetailStoredValueEntry.findFirstOrThrow({
+          where: { organizationId, idempotencyKey: earnedKey, entryType: "EARN" },
+        });
+        expect(asNumber(credited.amount)).toBeCloseTo(amount * .03, 5);
+        expect((await prisma.enterpriseRelationshipBenefitUsage.findUniqueOrThrow({ where: { id: usage.id } })).status).toBe("CONSUMED");
+        const posted = await prisma.enterpriseJournalEntry.findMany({
+          where: {
+            organizationId, sourceEntityType: "EnterpriseRetailStoredValueEntry",
+            sourceEntityId: credited.id, postingEvent: "RETAIL_RELATIONSHIP_CREDIT_GRANTED",
+            status: "POSTED",
+          },
+          include: { lines: true },
+        });
+        expect(posted).toHaveLength(1);
+        expect(posted[0].lines.reduce((s, l) => s + asNumber(l.debit), 0))
+          .toBeCloseTo(posted[0].lines.reduce((s, l) => s + asNumber(l.credit), 0), 5);
+        const replay = await post(admin, `/api/enterprise/${organizationId}/retail/omnichannel/orders`, payload,
+          "/enterprise-modules/RETAIL_POS");
+        expect(replay.response.ok(), JSON.stringify(replay.body)).toBeTruthy();
+        expect(replay.body.order.id).toBe(order.id);
+        expect(await prisma.enterpriseRetailStoredValueEntry.count({ where: { organizationId, idempotencyKey: earnedKey } })).toBe(1);
+      }
+    } finally {
+      await ctx.close();
     }
   });
 

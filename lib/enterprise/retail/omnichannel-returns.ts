@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import type { z } from "zod";
 import { listEnterpriseApprovalCandidates } from "@/lib/enterprise/approval-assignment";
 import { publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
+import { reverseRetailOmnichannelCashbackTx } from "@/lib/enterprise/relationship-benefits/omnichannel-cashback";
 import { applyStockMovementTx } from "@/lib/enterprise/inventory/service";
 import { valueRetailInventoryReturnTx } from "@/lib/enterprise/retail/accounting";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
@@ -434,6 +435,12 @@ export async function settleRetailOmnichannelReturnFinance(organizationId: strin
       const sum = previousLines.filter((line) => line.salesOrderItemId === item.id)
         .reduce((total, line) => total.plus(line.quantity), d(0));
       return sum.eq(item.quantityOrdered);
+    });
+    // Finance refund is already confirmed. Only now release the proportional
+    // cashback liability from the canonical Store Credit ledger.
+    await reverseRetailOmnichannelCashbackTx({
+      tx, organizationId, orderId: order.id, returnId: current.id,
+      actorUserId, fullyReturned,
     });
     if (fullyReturned) {
       await tx.enterpriseRelationshipBenefitUsage.updateMany({

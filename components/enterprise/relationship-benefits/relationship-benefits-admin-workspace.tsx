@@ -359,7 +359,15 @@ export function RelationshipBenefitsAdminWorkspace({
                         status={<StatusBadge tone={tone(usage.status)}>{localStatus(usage.status, english)}</StatusBadge>}
                         meta={benefit ? (english ? benefit.nameEn : benefit.nameFr) : (english ? "Benefit" : "Avantage")}
                         description={
-                          usage.executionMode === "AUTO_RETAIL_CASHBACK" && usage.effectEntityId
+                          usage.executionMode === "AUTO_RETAIL_OMNICHANNEL_CASHBACK" && usage.status === "REQUESTED"
+                            ? (english
+                                ? `Omnichannel cashback reserved · ${usage.effectAmount ?? "—"} ${usage.effectCurrencyCode || ""} · awaiting full confirmed payment and accepted delivery`
+                                : `Cashback omnicanal réservé · ${usage.effectAmount ?? "—"} ${usage.effectCurrencyCode || ""} · attente du paiement confirmé intégral et de la livraison acceptée`)
+                            : usage.executionMode === "AUTO_RETAIL_OMNICHANNEL_CASHBACK" && usage.executedAt
+                            ? (english
+                                ? `${usage.status === "CANCELLED" ? "Reversed" : "Credited"} ${usage.effectAmount ?? "—"} ${usage.effectCurrencyCode || ""} store credit · omnichannel order`
+                                : `${usage.status === "CANCELLED" ? "Réversé" : "Crédité"} : ${usage.effectAmount ?? "—"} ${usage.effectCurrencyCode || ""} en avoir magasin · commande omnicanale`)
+                            :                           usage.executionMode === "AUTO_RETAIL_CASHBACK" && usage.effectEntityId
                             ? english
                               ? `${usage.status === "CANCELLED" ? "Reversed" : "Credited"} ${usage.effectAmount ?? "—"} ${usage.effectCurrencyCode || ""} as store credit · sale ${usage.effectEntityId}`
                               : `${usage.status === "CANCELLED" ? "Réversé" : "Crédité"} : ${usage.effectAmount ?? "—"} ${usage.effectCurrencyCode || ""} en avoir magasin · vente ${usage.effectEntityId}`
