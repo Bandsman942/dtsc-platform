@@ -1354,8 +1354,9 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
       });
       expect(created.response.status(), JSON.stringify(created.body)).toBe(201);
       const benefitId = created.body.benefit.id;
-      for (const orderIndex of [0, 1]) {
+      for (const orderIndex of [0, 1, 2]) {
         const paymentFirst = orderIndex === 0;
+        const audienceWithdrawn = orderIndex === 2;
         const payload = {
           idempotencyKey: `e2e-914-omni-${suffix}-${orderIndex}`,
           customerBusinessPartyId: fixture.customerBusinessPartyId,
@@ -1412,6 +1413,14 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
             confirmedAt: new Date(),
           },
         });
+        if (audienceWithdrawn) {
+          // A reserved quota is not permission to mint an EARN after the
+          // business withdraws the CUSTOMER audience before payment.
+          await prisma.enterpriseRelationshipBenefitAudience.updateMany({
+            where: { organizationId, benefitId },
+            data: { relationType: "OTHER" },
+          });
+        }
         const allocate = async () => {
           const result = await post(admin, `/api/enterprise/${organizationId}/payments/${payment.id}/allocations`, {
             receivableId: receivable.id, amount: String(amount),
@@ -1435,6 +1444,16 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
           await fulfill();
           expect(await prisma.enterpriseRetailStoredValueEntry.count({ where: { organizationId, idempotencyKey: earnedKey } })).toBe(0);
           await allocate();
+        }
+        if (audienceWithdrawn) {
+          expect(await prisma.enterpriseRetailStoredValueEntry.count({
+            where: { organizationId, idempotencyKey: earnedKey },
+          })).toBe(0);
+          const withheld = await prisma.enterpriseRelationshipBenefitUsage.findUniqueOrThrow({
+            where: { id: usage.id },
+          });
+          expect(withheld.status).toBe("REQUESTED");
+          continue;
         }
         const credited = await prisma.enterpriseRetailStoredValueEntry.findFirstOrThrow({
           where: { organizationId, idempotencyKey: earnedKey, entryType: "EARN" },
