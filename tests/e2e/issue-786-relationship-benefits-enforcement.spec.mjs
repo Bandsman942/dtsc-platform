@@ -1661,16 +1661,15 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
     expect(types).toContain("SUPPLIER");
 
     const previousLink = await prisma.enterpriseIdentityLink.findUniqueOrThrow({ where: { id: ids.identityLink } });
-    const previousReference = await prisma.enterprisePersonBusinessReference.findUniqueOrThrow({ where: { id: ids.businessReference } });
+    // The access resolver reads the consented link. Do not rewrite the shared
+    // commercial reference: other identities may already hold the same tenant/party/type.
     const ctx = await browser.newContext({ baseURL: baseUrl });
     const member = await ctx.newPage();
     await signIn(member, userEmail, userPassword, "/enterprise-links");
     try {
       for (const relationType of types) {
-        await prisma.enterprisePersonBusinessReference.update({
-          where: { id: ids.businessReference },
-          data: { relationType, status: "ACTIVE", archivedAt: null },
-        });
+        // Check identity-link catalog permissions only. Commercial execution
+        // and a matching business reference are certified by separate tests.
         await prisma.enterpriseIdentityLink.update({
           where: { id: ids.identityLink },
           data: {
@@ -1703,13 +1702,6 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
           revokedAt: previousLink.revokedAt,
           revocationReason: previousLink.revocationReason,
           revision: { increment: 1 },
-        },
-      });
-      await prisma.enterprisePersonBusinessReference.update({
-        where: { id: ids.businessReference },
-        data: {
-          relationType: previousReference.relationType,
-          status: previousReference.status, archivedAt: previousReference.archivedAt,
         },
       });
       await ctx.close();
