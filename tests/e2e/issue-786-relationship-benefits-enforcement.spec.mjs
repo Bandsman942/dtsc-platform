@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { PrismaClient } from "@prisma/client";
+import { readFileSync } from "node:fs";
 
 const prisma = new PrismaClient();
 const baseUrl = process.env.E2E_BASE_URL || "http://127.0.0.1:3000";
@@ -1644,6 +1645,74 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
       }
       await adminContext.close();
       await memberContext.close();
+    }
+  });
+
+  test("#916 resolves all canonical relation types including SUPPLIER without implying automatic business effects", async ({ browser }) => {
+    // This is a real authenticated API acceptance of relationship access.
+    // The 345 benefit combinations are separately classified in QA #916;
+    // an accessible catalog item is NOT proof of a completed business effect.
+    const contract = readFileSync("lib/enterprise/identity-links/contracts.ts", "utf8");
+    const section = contract.split("export const ENTERPRISE_IDENTITY_RELATION_TYPES = [")[1]?.split("] as const;")[0];
+    expect(section).toBeTruthy();
+    const types = [...section.matchAll(/"([A-Z_]+)"/g)].map((entry) => entry[1]);
+    expect(types).toHaveLength(23);
+    expect(new Set(types).size).toBe(23);
+    expect(types).toContain("SUPPLIER");
+
+    const previousLink = await prisma.enterpriseIdentityLink.findUniqueOrThrow({ where: { id: ids.identityLink } });
+    const previousReference = await prisma.enterprisePersonBusinessReference.findUniqueOrThrow({ where: { id: ids.businessReference } });
+    const ctx = await browser.newContext({ baseURL: baseUrl });
+    const member = await ctx.newPage();
+    await signIn(member, userEmail, userPassword, "/enterprise-links");
+    try {
+      for (const relationType of types) {
+        await prisma.enterprisePersonBusinessReference.update({
+          where: { id: ids.businessReference },
+          data: { relationType, status: "ACTIVE", archivedAt: null },
+        });
+        await prisma.enterpriseIdentityLink.update({
+          where: { id: ids.identityLink },
+          data: {
+            requestedRelationType: relationType, status: "ACTIVE", activatedAt: new Date(),
+            userDecisionAt: new Date(), organizationDecisionAt: new Date(),
+            revokedAt: null, revocationReason: null, revision: { increment: 1 },
+          },
+        });
+        const result = await get(member,
+          `/api/account/enterprise-relationships/${organizationId}/benefits?identityLinkId=${ids.identityLink}`);
+        expect(result.response.status(), `${relationType}: ${JSON.stringify(result.body)}`).toBe(200);
+        expect(result.body.access.allowed, `${relationType}: access denied`).toBe(true);
+        expect(result.body.access.relationType).toBe(relationType);
+        expect(result.body.access.capabilities).toContain("ENTERPRISE_BENEFITS");
+      }
+
+      const external = await get(member,
+        `/api/account/enterprise-relationships/not-this-tenant/benefits?identityLinkId=${ids.identityLink}`);
+      expect(external.response.ok(), JSON.stringify(external.body)).toBeTruthy();
+      expect(external.body.access.allowed).toBe(false);
+      expect(external.body.items).toEqual([]);
+    } finally {
+      await prisma.enterpriseIdentityLink.update({
+        where: { id: ids.identityLink },
+        data: {
+          requestedRelationType: previousLink.requestedRelationType,
+          status: previousLink.status, activatedAt: previousLink.activatedAt,
+          userDecisionAt: previousLink.userDecisionAt,
+          organizationDecisionAt: previousLink.organizationDecisionAt,
+          revokedAt: previousLink.revokedAt,
+          revocationReason: previousLink.revocationReason,
+          revision: { increment: 1 },
+        },
+      });
+      await prisma.enterprisePersonBusinessReference.update({
+        where: { id: ids.businessReference },
+        data: {
+          relationType: previousReference.relationType,
+          status: previousReference.status, archivedAt: previousReference.archivedAt,
+        },
+      });
+      await ctx.close();
     }
   });
 
