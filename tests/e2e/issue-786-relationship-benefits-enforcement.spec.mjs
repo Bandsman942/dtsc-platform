@@ -1452,7 +1452,7 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
       await prisma.enterpriseDocument.update({ where: { id: record.id }, data: { status: "ACTIVE" } });
 
       await prisma.enterprisePersonBusinessReference.update({
-        where: { id: ids.businessReference }, data: { status: "INACTIVE" },
+        where: { id: ids.businessReference }, data: { archivedAt: new Date() },
       });
       const disconnectedCustomer = await post(admin,
         `/api/enterprise/${organizationId}/relationship-benefits/usages/${usageId}/delivery`,
@@ -1460,7 +1460,7 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
       expect(disconnectedCustomer.response.status()).toBe(403);
       expect(disconnectedCustomer.body.error).toBe("RELATIONSHIP_DELIVERY_CUSTOMER_MISMATCH");
       await prisma.enterprisePersonBusinessReference.update({
-        where: { id: ids.businessReference }, data: { status: "ACTIVE" },
+        where: { id: ids.businessReference }, data: { archivedAt: null },
       });
 
       const delivered = await post(admin,
