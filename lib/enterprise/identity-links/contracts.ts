@@ -29,6 +29,11 @@ export const ENTERPRISE_IDENTITY_RELATION_TYPES = [
 
 export type EnterpriseIdentityRelationType = (typeof ENTERPRISE_IDENTITY_RELATION_TYPES)[number];
 
+/** Validate external/legacy relation codes against the sole canonical contract. */
+export function isEnterpriseIdentityRelationType(value: string): value is EnterpriseIdentityRelationType {
+  return (ENTERPRISE_IDENTITY_RELATION_TYPES as readonly string[]).includes(value);
+}
+
 export const ENTERPRISE_IDENTITY_LINK_STATUSES = [
   "DRAFT",
   "INVITATION_PENDING",
