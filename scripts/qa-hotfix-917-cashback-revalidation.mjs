@@ -35,6 +35,8 @@ assert.ok(posting.includes("EnterpriseRetailStoredValueEntry"), "Financial journ
 assert.ok(behavioral.includes("audienceWithdrawn"), "Real E2E must withdraw audience before earning");
 assert.ok(behavioral.includes("benefitExpired"), "Real E2E must refuse expired late benefits");
 assert.ok(behavioral.includes("concurrentSettlement"), "E2E must race Finance allocation and fulfillment");
+assert.ok(behavioral.includes("partialSettlement"), "E2E must refuse partially allocated customer payments");
+assert.ok(behavioral.includes("amount: String(half)"), "Actual partial allocation must use the canonical Finance API");
 assert.ok(behavioral.includes("Promise.all([allocate(), fulfill()])"), "Concurrent settlement must use two real HTTP operations");
 assert.ok(service.includes("RELATIONSHIP_OMNI_CASHBACK_REVERSAL_OVERFLOW"), "Over-reversed ledger must fail closed");
 assert.ok(service.includes("alreadyReversed.gt(earned.amount)"), "Reversal must never exceed original EARN");
