@@ -14,7 +14,8 @@ import {
   reserveRetailOmnichannelRelationshipBenefitsTx,
   releaseRetailOmnichannelRelationshipBenefitsTx,
 } from "@/lib/enterprise/relationship-benefits/omnichannel-adapter";
-import { resolveRetailRelationshipBenefitPricing } from "@/lib/enterprise/relationship-benefits/retail-adapter";
+import { resolveRetailRelationshipBenefitPricing, resolveRetailRelationshipCashbackEffects } from "@/lib/enterprise/relationship-benefits/retail-adapter";
+import { reserveRetailOmnichannelCashbackTx } from "@/lib/enterprise/relationship-benefits/omnichannel-cashback";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { withRetailTransactionRetry } from "@/lib/enterprise/retail/transaction-retry";
 import { prisma } from "@/lib/prisma";
@@ -144,6 +145,11 @@ export async function createRetailOmnichannelOrder(organizationId: string, actor
     decisions,
   });
   const pricedDecisions = applyRetailRelationshipBenefitPricing(decisions, relationshipResolution.adjustment);
+  const cashbackEffects = await resolveRetailRelationshipCashbackEffects({
+    organizationId, customerBusinessPartyId: input.customerBusinessPartyId,
+    currencyCode: input.currencyCode, siteId: input.sourceSiteId, channelCode: "POS",
+    decisions: pricedDecisions,
+  });
   const catalogById = new Map(catalog.map((item) => [item.id, item]));
   const pricedLines = pricedDecisions.map((line) => {
     const item = catalogById.get(line.catalogItemId);
@@ -209,7 +215,7 @@ export async function createRetailOmnichannelOrder(organizationId: string, actor
     eventMetadata: {
       channelCode: "POS", fulfillmentMode: input.fulfillmentMode, sourceSiteId: site.id,
       fulfillmentWarehouseId: warehouse.id, pickupSiteId: pickupSite?.id || null,
-      relationshipBenefitIds: relationshipResolution.effects.map((effect) => effect.benefitId),
+      relationshipBenefitIds: [...new Set([...relationshipResolution.effects, ...cashbackEffects].map((effect) => effect.benefitId))],
     },
     onOrderCreatedTx: async (tx, orderId) => {
       await reserveRetailOmnichannelRelationshipBenefitsTx({
@@ -217,6 +223,10 @@ export async function createRetailOmnichannelOrder(organizationId: string, actor
         sourceSiteId: site.id,
         effects: relationshipResolution.effects,
         expectedTotal: expectedOrderTotal,
+      });
+      await reserveRetailOmnichannelCashbackTx({
+        tx, organizationId, actorUserId, orderId,
+        sourceSiteId: site.id, effects: cashbackEffects,
       });
       await tx.enterpriseRetailOrderOrchestration.create({
         data: {
