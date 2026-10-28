@@ -20,6 +20,9 @@ async function buildManualCreditPosting(
   input: { organizationId: string; sourceEntityType: string; sourceEntityId: string },
   reversal: boolean,
 ) {
+  if (input.sourceEntityType === "EnterpriseRetailStoredValueEntry") {
+    return buildOmnichannelCashbackPosting(tx, input, reversal);
+  }
   if (input.sourceEntityType !== "EnterpriseRelationshipBenefitUsage") {
     throw new EnterpriseAccountingError("RELATIONSHIP_CREDIT_POSTING_SOURCE_INVALID", 409);
   }
@@ -106,3 +109,106 @@ export const buildRetailRelationshipCreditGrantPosting: PostingBuilder =
 
 export const buildRetailRelationshipCreditReversalPosting: PostingBuilder =
   (tx, input) => buildManualCreditPosting(tx, input, true);
+
+/**
+ * The existing relationship credit posting event is also the canonical
+ * liability/expense authority for a verified omnichannel CASHBACK entry.
+ * Each EARN/REVERSAL entry is a unique posting source, so partial returns
+ * cannot reuse a journal idempotency key or rewrite POSTED history.
+ */
+async function buildOmnichannelCashbackPosting(
+  tx: Prisma.TransactionClient,
+  input: { organizationId: string; sourceEntityType: string; sourceEntityId: string },
+  reversal: boolean,
+) {
+  const entry = await tx.enterpriseRetailStoredValueEntry.findFirst({
+    where: { id: input.sourceEntityId, organizationId: input.organizationId },
+  });
+  const match = entry?.idempotencyKey.match(reversal
+    ? /^omni-cashback:return:([^:]+):([^:]+):([^:]+)$/
+    : /^omni-cashback:order:([^:]+):benefit:([^:]+)$/);
+  if (!entry || !match || entry.entryType !== (reversal ? "REVERSAL" : "EARN") ||
+      (reversal ? !entry.amount.lt(0) : !entry.amount.gt(0))) {
+    throw new EnterpriseAccountingError("RELATIONSHIP_OMNI_CASHBACK_POSTING_INVALID", 409);
+  }
+  const [, orderId, benefitId] = match;
+  const usage = await tx.enterpriseRelationshipBenefitUsage.findFirst({
+    where: {
+      organizationId: input.organizationId, benefitId,
+      executionMode: "AUTO_RETAIL_OMNICHANNEL_CASHBACK",
+      effectEntityType: "EnterpriseSalesOrder", effectEntityId: orderId,
+      status: { in: ["CONSUMED", "CANCELLED"] },
+    },
+    include: { benefit: { select: { benefitType: true, code: true } } },
+  });
+  const details = metadata(usage?.effectMetadataJson || null);
+  const businessPartyId = field(details.customerBusinessPartyId);
+  const accountId = field(details.storedValueAccountId);
+  const earnedId = field(details.storedValueEntryId);
+  const account = await tx.enterpriseRetailStoredValueAccount.findFirst({
+    where: { id: entry.accountId, organizationId: input.organizationId, accountType: "STORE_CREDIT" },
+    select: { customerBusinessPartyId: true, currencyCode: true, benefitScopeKey: true, archivedAt: true },
+  });
+  if (!usage || !usage.effectAmount?.gt(0) || usage.benefit.benefitType !== "CASHBACK" ||
+      !businessPartyId || !accountId || !earnedId || !account || account.archivedAt ||
+      entry.accountId !== accountId || account.customerBusinessPartyId !== businessPartyId ||
+      account.currencyCode !== usage.effectCurrencyCode ||
+      account.benefitScopeKey !== relationalStoreCreditScope(businessPartyId, account.currencyCode)) {
+    throw new EnterpriseAccountingError("RELATIONSHIP_OMNI_CASHBACK_POSTING_PROOF_MISSING", 409);
+  }
+  if (reversal) {
+    const returnId = match[3];
+    const actualReturn = await tx.enterpriseRetailOmnichannelReturn.findFirst({
+      where: {
+        id: returnId, organizationId: input.organizationId,
+        salesOrderId: orderId, status: "COMPLETED",
+      }, select: { id: true, currencyCode: true, refundPaymentId: true },
+    });
+    const paidRefund = actualReturn?.refundPaymentId
+      ? await tx.enterprisePayment.findFirst({
+          where: {
+            organizationId: input.organizationId, id: actualReturn.refundPaymentId,
+            status: { in: ["CONFIRMED", "RECONCILED"] }, direction: "OUTBOUND",
+            paymentType: "REFUND", businessPartyId, currencyCode: account.currencyCode,
+          }, select: { id: true },
+        })
+      : null;
+    if (!actualReturn || actualReturn.currencyCode !== account.currencyCode ||
+        !paidRefund || entry.returnId !== returnId || entry.amount.abs().gt(usage.effectAmount)) {
+      throw new EnterpriseAccountingError("RELATIONSHIP_OMNI_CASHBACK_REFUND_PROOF_INVALID", 409);
+    }
+  } else if (earnedId !== entry.id || !entry.amount.equals(usage.effectAmount)) {
+    throw new EnterpriseAccountingError("RELATIONSHIP_OMNI_CASHBACK_EARN_PROOF_INVALID", 409);
+  }
+  const amount = entry.amount.abs();
+  return {
+    organizationId: input.organizationId,
+    journalType: "ADJUSTMENT" as const,
+    accountingDate: entry.createdAt,
+    documentDate: entry.createdAt,
+    reference: `OMNI-CASHBACK-${entry.id.slice(-10)}`,
+    description: reversal ? "Réversion cashback omnicanal" : "Attribution cashback omnicanal",
+    sourceModule: "RETAIL_POS",
+    sourceEntityType: input.sourceEntityType,
+    sourceEntityId: entry.id,
+    currencyCode: account.currencyCode,
+    lines: [
+      {
+        accountMappingKey: reversal ? "CUSTOMER_ADVANCES" : "OPERATING_EXPENSE",
+        description: reversal ? "Reprise dette cashback" : "Charge cashback omnicanal",
+        debit: amount,
+        transactionCurrencyCode: account.currencyCode,
+        transactionAmount: amount,
+        businessPartyId,
+      },
+      {
+        accountMappingKey: reversal ? "OPERATING_EXPENSE" : "CUSTOMER_ADVANCES",
+        description: reversal ? "Reprise charge cashback" : "Dette avoir cashback",
+        credit: amount,
+        transactionCurrencyCode: account.currencyCode,
+        transactionAmount: amount,
+        businessPartyId,
+      },
+    ],
+  };
+}
