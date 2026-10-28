@@ -168,9 +168,8 @@ export async function tryGrantRetailOmnichannelCashbackTx(args: {
       tx.enterprisePersonBusinessReference.findFirst({
         where: {
           organizationId, businessPartyId: proof.customerBusinessPartyId,
-          personIdentity: { links: { some: { id: usage.identityLinkId, organizationId } } },
           status: "ACTIVE", archivedAt: null,
-        }, select: { id: true, relationType: true },
+        }, select: { id: true, relationType: true, personIdentityId: true },
       }),
       tx.enterpriseBusinessParty.findFirst({
         where: {
@@ -183,7 +182,7 @@ export async function tryGrantRetailOmnichannelCashbackTx(args: {
     const percent = typeof data.percent === "string" ? money(data.percent) : zero();
     const expected = money(eligibleAmount.times(percent).div(100));
     const entryAmount = usage.effectAmount;
-    if (!benefit || !link || !accountRef || !customer || accountRef.relationType !== link.requestedRelationType ||
+    if (!benefit || !link || !accountRef || !customer || accountRef.personIdentityId !== link.personIdentityId || accountRef.relationType !== link.requestedRelationType ||
         link.status !== "ACTIVE" || !link.activatedAt || !link.userDecisionAt || !link.organizationDecisionAt ||
         benefit.benefitType !== "CASHBACK" || benefit.valueType !== "PERCENT" ||
         benefit.status !== "ACTIVE" || benefit.archivedAt ||
