@@ -47,7 +47,7 @@ assert.match(access, /if \(!enabled.has\("RELATIONSHIP_BENEFITS"\) \|\| !allowed
   "Benefit capability must be conditioned on actual module and entitlement");
 assert.match(access, /if \(!membership\)/, "Relationship must never grant employee privileges without membership");
 assert.match(oldQA, /relationTypeBlock = identityContracts.match/, "Legacy QA must use the canonical relation type list");
-assert.doesNotMatch(oldQA, /const relationTypes = \\[\\s*"/, "No 22-relation mirror list remains");
+assert.ok(!oldQA.includes("const relationTypes = [\n"), "No 22-relation mirror list remains");
 assert.match(e2e, /#916 resolves all canonical relation types including SUPPLIER/, "Real authenticated 23-type behavioral E2E missing");
 
 for (const field of ["requestedRelationType", "relationType"]) {
