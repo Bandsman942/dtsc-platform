@@ -1,3 +1,4 @@
+import { isEnterpriseIdentityRelationType, type EnterpriseIdentityRelationType } from "@/lib/enterprise/identity-links/contracts";
 import { getOrganizationEntitlements } from "@/lib/billing/entitlements";
 import { normalizeEnterpriseModuleCode } from "@/lib/enterprise/module-registry";
 import { prisma } from "@/lib/prisma";
@@ -27,7 +28,7 @@ export type EnterpriseRelationshipAccessDecision = {
   message: string;
 };
 
-const RELATION_CAPABILITIES: Record<string, EnterpriseRelationshipCapability[]> = {
+const RELATION_CAPABILITIES: Record<EnterpriseIdentityRelationType, EnterpriseRelationshipCapability[]> = {
   PROSPECT: ["RELATIONSHIP_SUMMARY", "TARGETED_NOTIFICATIONS", "CUSTOMER_SERVICES", "ENTERPRISE_BENEFITS"],
   CUSTOMER: ["RELATIONSHIP_SUMMARY", "TARGETED_NOTIFICATIONS", "SHARED_DOCUMENTS", "CUSTOMER_SERVICES", "ENTERPRISE_BENEFITS"],
   CUSTOMER_CONTACT: ["RELATIONSHIP_SUMMARY", "TARGETED_NOTIFICATIONS", "SHARED_DOCUMENTS", "CUSTOMER_SERVICES", "ENTERPRISE_BENEFITS"],
@@ -92,10 +93,15 @@ export async function resolveEnterpriseIdentityRelationshipAccess({
     return denied(organizationId, "RELATIONSHIP_NOT_ACTIVE", "La relation doit être active et approuvée avant d’accorder des avantages.", link.id, link.requestedRelationType);
   }
 
+  // Unknown legacy values must never inherit OTHER and gain benefits by default.
+  if (!isEnterpriseIdentityRelationType(link.requestedRelationType)) {
+    return denied(organizationId, "RELATIONSHIP_NOT_ACTIVE", "Le type de cette relation ne figure pas dans le référentiel autorisé.", link.id, link.requestedRelationType);
+  }
+
   const entitlements = await getOrganizationEntitlements(organizationId);
   const enabled = new Set(organization.enterpriseModules.map((item) => normalizeEnterpriseModuleCode(item.moduleCode)));
   const allowedEntitlements = new Set((entitlements?.modules || []).filter((item) => item.allowed).map((item) => normalizeEnterpriseModuleCode(item.moduleCode)));
-  const capabilities = [...(RELATION_CAPABILITIES[link.requestedRelationType] || RELATION_CAPABILITIES.OTHER)];
+  const capabilities = [...(RELATION_CAPABILITIES[link.requestedRelationType])];
 
   if (!enabled.has("DOCUMENTS") || !allowedEntitlements.has("DOCUMENTS")) {
     const index = capabilities.indexOf("SHARED_DOCUMENTS");
