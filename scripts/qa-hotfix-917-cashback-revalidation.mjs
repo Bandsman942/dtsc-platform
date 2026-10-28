@@ -39,6 +39,10 @@ assert.ok(behavioral.includes("audienceWithdrawn"), "Real E2E must withdraw audi
 assert.ok(behavioral.includes("benefitExpired"), "Real E2E must refuse expired late benefits");
 assert.ok(behavioral.includes("concurrentSettlement"), "E2E must race Finance allocation and fulfillment");
 assert.ok(behavioral.includes("partialSettlement"), "E2E must refuse partially allocated customer payments");
+assert.ok(behavioral.includes("initiallyUnconfirmed"), "E2E must deny unconfirmed customer payment before allocation");
+assert.ok(behavioral.includes("returnPending"), "E2E must block credit if a return is pending");
+assert.ok(behavioral.includes('status: "PENDING_APPROVAL", currencyCode: fixture.currencyCode'), "E2E refund request must have canonical pending status");
+assert.ok(behavioral.includes('expect(pending.response.status()).toBeGreaterThanOrEqual(400)'), "Unconfirmed payments must be rejected by Finance");
 assert.ok(behavioral.includes("amount: String(half)"), "Actual partial allocation must use the canonical Finance API");
 assert.ok(behavioral.includes("Promise.all([allocate(), fulfill()])"), "Concurrent settlement must use two real HTTP operations");
 assert.ok(service.includes("RELATIONSHIP_OMNI_CASHBACK_REVERSAL_OVERFLOW"), "Over-reversed ledger must fail closed");
