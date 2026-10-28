@@ -23,18 +23,27 @@ export async function GET(req: Request, { params }: Params) {
   const status = url.searchParams.get("status") || undefined;
   const createdFrom = url.searchParams.get("createdFrom");
   const createdTo = url.searchParams.get("createdTo");
-  const patients = await prisma.healthPatient.findMany({
-    where: {
+  // Keep legacy unpaged consumers compatible while letting the patient registry request true server pages.
+  const page = Math.min(100_000, Math.max(1, Number.parseInt(url.searchParams.get("page") || "1", 10) || 1));
+  const pageSize = Math.min(300, Math.max(1, Number.parseInt(url.searchParams.get("pageSize") || "300", 10) || 300));
+  const where = {
       organizationId,
       ...(sex ? { sex } : {}),
       ...(status ? { status } : {}),
       ...(createdFrom || createdTo ? { createdAt: { ...(createdFrom ? { gte: new Date(createdFrom) } : {}), ...(createdTo ? { lte: new Date(`${createdTo}T23:59:59.999Z`) } : {}) } } : {}),
       ...(q ? { OR: [{ fullName: { contains: q, mode: "insensitive" } }, { phonePrimary: { contains: q, mode: "insensitive" } }, { patientNumber: { contains: q, mode: "insensitive" } }] } : {}),
-    },
+  } as const;
+  const [total, totalUnfiltered, patients] = await Promise.all([
+    prisma.healthPatient.count({ where }),
+    prisma.healthPatient.count({ where: { organizationId } }),
+    prisma.healthPatient.findMany({
+    where,
     orderBy: { createdAt: "desc" },
-    take: 300,
+    skip: (page - 1) * pageSize,
+    take: pageSize,
     include: { createdBy: { select: { name: true } }, updatedBy: { select: { name: true } } },
-  });
+    }),
+  ]);
   const legacyIds = patients.flatMap((patient) => patient.legacyRecordId ? [patient.legacyRecordId] : []);
   const consultations = legacyIds.length ? await prisma.enterpriseSectorRecord.findMany({
     where: { organizationId, sectorCode: "HEALTH_CARE", moduleCode: "CONSULTATIONS", deletedAt: null, OR: legacyIds.map((legacyId) => ({ payloadJson: { path: ["patientRecordId"], equals: legacyId } })) },
@@ -50,6 +59,7 @@ export async function GET(req: Request, { params }: Params) {
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, moduleCode: "PATIENTS" } });
   return NextResponse.json({
     permissions: { canCreate: access.canCreate, canUpdate: access.canUpdate, canArchive: access.canArchive, canViewSensitive: access.canViewSensitive },
+    pagination: { page, pageSize, total, totalUnfiltered, pageCount: Math.max(1, Math.ceil(total / pageSize)) },
     patients: patients.map((patient) => maskHealthPatientSensitive({ ...patient, lastConsultation: patient.legacyRecordId ? lastConsultationByPatient.get(patient.legacyRecordId) || null : null }, access.canViewSensitive)),
   });
 }

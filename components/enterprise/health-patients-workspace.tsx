@@ -16,7 +16,6 @@ import {
   type HealthClinicalKey,
   type HealthClinicalLocale,
 } from "@/components/enterprise/health-clinical-i18n";
-import { useSmartList } from "@/lib/hooks/use-smart-list";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 
 type Patient = {
@@ -177,48 +176,65 @@ export function HealthPatientsWorkspace({
   const [related, setRelated] = useState<Related[]>([]);
   const [dispensations, setDispensations] = useState<Dispensation[]>([]);
   const [query, setQuery] = useState("");
+  const [settledQuery, setSettledQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [totalPatients, setTotalPatients] = useState(0);
+  const [totalUnfiltered, setTotalUnfiltered] = useState(0);
   const [sex, setSex] = useState("");
   const [status, setStatus] = useState("");
   const [createdFrom, setCreatedFrom] = useState("");
   const [createdTo, setCreatedTo] = useState("");
 
-  const load = useCallback(async () => {
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSettledQuery(query.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
-    const response = await fetch(`/api/enterprise/${organizationId}/healthcare/patients`, { cache: "no-store" });
-    const body = (await response.json().catch(() => null)) as { patients?: Patient[]; permissions?: Permissions; message?: string } | null;
-    if (response.ok && body?.patients && body.permissions) {
-      setPatients(body.patients);
-      setPermissions(body.permissions);
-    } else {
-      setMessage(body?.message || t("patient.loadFailed"));
+    try {
+      const params = new URLSearchParams({ page: String(page), pageSize: "12" });
+      if (settledQuery) params.set("q", settledQuery);
+      if (sex) params.set("sex", sex);
+      if (status) params.set("status", status);
+      if (createdFrom) params.set("createdFrom", createdFrom);
+      if (createdTo) params.set("createdTo", createdTo);
+      const response = await fetch(`/api/enterprise/${organizationId}/healthcare/patients?${params}`, { cache: "no-store", signal });
+      const body = (await response.json().catch(() => null)) as {
+        patients?: Patient[];
+        permissions?: Permissions;
+        pagination?: { total: number; totalUnfiltered: number };
+        message?: string;
+      } | null;
+      if (signal?.aborted) return;
+      if (response.ok && body?.patients && body.permissions && body.pagination) {
+        setPatients(body.patients);
+        setPermissions(body.permissions);
+        setTotalPatients(body.pagination.total);
+        setTotalUnfiltered(body.pagination.totalUnfiltered);
+      } else {
+        setPatients([]);
+        setMessage(body?.message || t("patient.loadFailed"));
+      }
+    } catch {
+      if (signal?.aborted) return;
+      setPatients([]);
+      setMessage(t("patient.loadFailed"));
+    } finally {
+      if (!signal?.aborted) setLoading(false);
     }
-    setLoading(false);
-  }, [organizationId, t]);
+  }, [organizationId, page, settledQuery, sex, status, createdFrom, createdTo, t]);
 
   useEffect(() => {
-    void load();
+    const controller = new AbortController();
+    void load(controller.signal);
+    return () => controller.abort();
   }, [load]);
 
-  const filtered = useMemo(
-    () => patients.filter((patient) => {
-      const text = `${patient.fullName} ${patient.phonePrimary} ${patient.patientNumber}`.toLocaleLowerCase(localeCode);
-      const created = patient.createdAt.slice(0, 10);
-      return (
-        (!query || text.includes(query.toLocaleLowerCase(localeCode)))
-        && (!sex || patient.sex === sex)
-        && (!status || patient.status === status)
-        && (!createdFrom || created >= createdFrom)
-        && (!createdTo || created <= createdTo)
-      );
-    }),
-    [patients, query, sex, status, createdFrom, createdTo, localeCode],
-  );
-
-  const list = useSmartList({
-    items: filtered,
-    pageSize: 12,
-    getSearchText: useCallback((patient: Patient) => `${patient.fullName} ${patient.phonePrimary} ${patient.patientNumber}`, []),
-  });
+  const pageCount = Math.max(1, Math.ceil(totalPatients / 12));
+  useEffect(() => {
+    if (page > pageCount) setPage(pageCount);
+  }, [page, pageCount]);
 
   async function openDetail(patient: Patient) {
     const response = await fetch(`/api/enterprise/${organizationId}/healthcare/patients/${patient.id}`, { cache: "no-store" });
@@ -285,27 +301,27 @@ export function HealthPatientsWorkspace({
 
       <div className="grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-4">
         <Filter label={t("patient.filter.sex")} help={t("patient.filter.help", { label: t("patient.filter.sex").toLocaleLowerCase(localeCode) })} helpAria={t("patient.filter.helpAria", { label: t("patient.filter.sex") })}>
-          <Choice value={sex} onChange={setSex} options={sexOptions} all={t("patient.filter.allSexes")} />
+          <Choice value={sex} onChange={(value) => { setSex(value); setPage(1); }} options={sexOptions} all={t("patient.filter.allSexes")} />
         </Filter>
         <Filter label={t("patient.filter.status")} help={t("patient.filter.help", { label: t("patient.filter.status").toLocaleLowerCase(localeCode) })} helpAria={t("patient.filter.helpAria", { label: t("patient.filter.status") })}>
-          <Choice value={status} onChange={setStatus} options={statusOptions} all={t("patient.filter.allStatuses")} />
+          <Choice value={status} onChange={(value) => { setStatus(value); setPage(1); }} options={statusOptions} all={t("patient.filter.allStatuses")} />
         </Filter>
         <Filter label={t("patient.filter.createdFrom")} help={t("patient.filter.help", { label: t("patient.filter.createdFrom").toLocaleLowerCase(localeCode) })} helpAria={t("patient.filter.helpAria", { label: t("patient.filter.createdFrom") })}>
-          <Input type="date" value={createdFrom} onChange={(event) => setCreatedFrom(event.target.value)} />
+          <Input type="date" value={createdFrom} onChange={(event) => { setCreatedFrom(event.target.value); setPage(1); }} />
         </Filter>
         <Filter label={t("patient.filter.createdTo")} help={t("patient.filter.help", { label: t("patient.filter.createdTo").toLocaleLowerCase(localeCode) })} helpAria={t("patient.filter.helpAria", { label: t("patient.filter.createdTo") })}>
-          <Input type="date" value={createdTo} onChange={(event) => setCreatedTo(event.target.value)} />
+          <Input type="date" value={createdTo} onChange={(event) => { setCreatedTo(event.target.value); setPage(1); }} />
         </Filter>
       </div>
 
       <ListControls
         query={query}
-        onQueryChange={setQuery}
-        page={list.page}
-        pageCount={list.pageCount}
-        totalCount={patients.length}
-        filteredCount={filtered.length}
-        onPageChange={list.setPage}
+        onQueryChange={(value) => { setQuery(value); setPage(1); }}
+        page={page}
+        pageCount={pageCount}
+        totalCount={totalUnfiltered}
+        filteredCount={totalPatients}
+        onPageChange={setPage}
         placeholder={t("patient.searchPlaceholder")}
       />
 
@@ -315,7 +331,7 @@ export function HealthPatientsWorkspace({
         </div>
       ) : (
         <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {list.paginatedItems.map((patient) => (
+          {patients.map((patient) => (
             <PatientCard
               key={patient.id}
               patient={patient}
@@ -332,7 +348,7 @@ export function HealthPatientsWorkspace({
         </div>
       )}
 
-      {!loading && !filtered.length && (
+      {!loading && totalPatients === 0 && (
         <div className="rounded-2xl border border-dashed border-dtsc-border bg-dtsc-page p-6 text-center">
           <p className="font-black text-dtsc-ink">{t("patient.emptyTitle")}</p>
           <p className="mt-1 text-sm text-dtsc-muted">{t("patient.emptyDescription")}</p>
