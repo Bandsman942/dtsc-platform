@@ -160,17 +160,11 @@ export async function tryGrantRetailOmnichannelCashbackTx(args: {
   for (const usage of usages) {
     const data = metadata(usage.effectMetadataJson);
     const key = creditKey(orderId, usage.benefitId);
-    const [benefit, link, accountRef, customer] = await Promise.all([
+    const [benefit, link, customer] = await Promise.all([
       tx.enterpriseRelationshipBenefit.findFirst({ where: { organizationId, id: usage.benefitId }, select: { benefitType: true, valueType: true, valueDecimal: true, status: true, archivedAt: true } }),
       tx.enterpriseIdentityLink.findFirst({
         where: { organizationId, id: usage.identityLinkId, userId: usage.userId },
         select: { personIdentityId: true, requestedRelationType: true, status: true, activatedAt: true, userDecisionAt: true, organizationDecisionAt: true },
-      }),
-      tx.enterprisePersonBusinessReference.findFirst({
-        where: {
-          organizationId, businessPartyId: proof.customerBusinessPartyId,
-          status: "ACTIVE", archivedAt: null,
-        }, select: { id: true, relationType: true, personIdentityId: true },
       }),
       tx.enterpriseBusinessParty.findFirst({
         where: {
@@ -179,11 +173,18 @@ export async function tryGrantRetailOmnichannelCashbackTx(args: {
         }, select: { id: true },
       }),
     ]);
+    const accountRef = link ? await tx.enterprisePersonBusinessReference.findFirst({
+      where: {
+        organizationId, businessPartyId: proof.customerBusinessPartyId,
+        personIdentityId: link.personIdentityId,
+        relationType: link.requestedRelationType, status: "ACTIVE", archivedAt: null,
+      }, select: { id: true },
+    }) : null;
     const eligibleAmount = typeof data.eligibleAmount === "string" ? money(data.eligibleAmount) : zero();
     const percent = typeof data.percent === "string" ? money(data.percent) : zero();
     const expected = money(eligibleAmount.times(percent).div(100));
     const entryAmount = usage.effectAmount;
-    if (!benefit || !link || !accountRef || !customer || accountRef.personIdentityId !== link.personIdentityId || accountRef.relationType !== link.requestedRelationType ||
+    if (!benefit || !link || !accountRef || !customer ||
         link.status !== "ACTIVE" || !link.activatedAt || !link.userDecisionAt || !link.organizationDecisionAt ||
         benefit.benefitType !== "CASHBACK" || benefit.valueType !== "PERCENT" ||
         benefit.status !== "ACTIVE" || benefit.archivedAt ||
@@ -266,6 +267,15 @@ export async function reverseRetailOmnichannelCashbackTx(args: {
       },
     }),
   ]);
+  // A completed return without an EARN must also release the reserved quota;
+  // the order has been refunded and can never mint the originally quoted credit.
+  await tx.enterpriseRelationshipBenefitUsage.updateMany({
+    where: {
+      organizationId, executionMode: MODE, effectEntityType: "EnterpriseSalesOrder",
+      effectEntityId: orderId, status: "REQUESTED",
+    },
+    data: { status: "CANCELLED", cancelledAt: new Date(), revision: { increment: 1 } },
+  });
   if (!usages.length) return;
   if (!order?.businessPartyId || !returned.some((x) => x.id === returnId)) reject("RELATIONSHIP_OMNI_CASHBACK_RETURN_INVALID");
   const itemById = new Map(order.items.map((x) => [x.id, x.catalogItemId]));
