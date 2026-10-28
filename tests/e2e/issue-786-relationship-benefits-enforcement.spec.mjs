@@ -1354,13 +1354,14 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
       });
       expect(created.response.status(), JSON.stringify(created.body)).toBe(201);
       const benefitId = created.body.benefit.id;
-      for (const orderIndex of [0, 1, 2, 3]) {
+      for (const orderIndex of [0, 1, 2, 3, 4]) {
         const paymentFirst = orderIndex === 0;
         const audienceWithdrawn = orderIndex === 2;
-        const benefitExpired = orderIndex === 3;
-        if (benefitExpired) {
-          // Restore the audience after the preceding negative case, so
-          // the fourth order genuinely reserves before its benefit expires.
+        const concurrentSettlement = orderIndex === 3;
+        const benefitExpired = orderIndex === 4;
+        if (concurrentSettlement) {
+          // Restore the audience after the preceding negative case so that
+          // the concurrent settlement genuinely reserves and may earn.
           await prisma.enterpriseRelationshipBenefitAudience.updateMany({
             where: { organizationId, benefitId },
             data: { relationType: "CUSTOMER" },
@@ -1451,7 +1452,11 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
           }, "/enterprise-modules/RETAIL_POS");
           expect(result.response.status(), JSON.stringify(result.body)).toBe(201);
         };
-        if (paymentFirst) {
+        if (concurrentSettlement) {
+          // Two independent HTTP requests may race. The canonical Sales order
+          // lock and EARN idempotency must serialize these without double credit.
+          await Promise.all([allocate(), fulfill()]);
+        } else if (paymentFirst) {
           await allocate();
           expect(await prisma.enterpriseRetailStoredValueEntry.count({ where: { organizationId, idempotencyKey: earnedKey } })).toBe(0);
           await fulfill();
