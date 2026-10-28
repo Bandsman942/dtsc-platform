@@ -1350,13 +1350,14 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
         benefitType: "CASHBACK", assignmentMode: "AUTOMATIC",
         relationTypes: ["CUSTOMER"], identityLinkIds: [], valueType: "PERCENT", valueDecimal: 3,
         currencyCode: fixture.currencyCode, actionCode: "NONE", targetModuleCode: "RETAIL_POS",
-        stackable: true, status: "ACTIVE", usageLimitTotal: 7,
+        stackable: true, status: "ACTIVE", usageLimitTotal: 8,
         conditions: { channelCodes: ["POS"], catalogItemIds: [fixture.catalogItemId] },
       });
       expect(created.response.status(), JSON.stringify(created.body)).toBe(201);
       const benefitId = created.body.benefit.id;
-      for (const orderIndex of [0, 1, 2, 3, 4, 5]) {
+      for (const orderIndex of [0, 1, 2, 3, 4, 5, 6]) {
         const paymentFirst = orderIndex === 0;
+        const initiallyUnconfirmed = orderIndex === 6;
         const audienceWithdrawn = orderIndex === 2;
         const concurrentSettlement = orderIndex === 3;
         const benefitExpired = orderIndex === 4;
@@ -1427,9 +1428,10 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
             paymentType: "CUSTOMER_PAYMENT", methodType: "BANK_TRANSFER",
             financialAccountId: fixture.cashAccountId, currencyCode: fixture.currencyCode,
             amount: String(amount), unallocatedAmount: String(amount), paymentDate: new Date(),
-            status: "CONFIRMED", initiatedByUserId: fixture.userId,
-            approvedByUserId: fixture.adminUserId, confirmedByUserId: fixture.adminUserId,
-            confirmedAt: new Date(),
+            status: initiallyUnconfirmed ? "DRAFT" : "CONFIRMED", initiatedByUserId: fixture.userId,
+            approvedByUserId: initiallyUnconfirmed ? null : fixture.adminUserId,
+            confirmedByUserId: initiallyUnconfirmed ? null : fixture.adminUserId,
+            confirmedAt: initiallyUnconfirmed ? null : new Date(),
           },
         });
         if (benefitExpired) {
@@ -1461,7 +1463,30 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
           }, "/enterprise-modules/RETAIL_POS");
           expect(result.response.status(), JSON.stringify(result.body)).toBe(201);
         };
-        if (partialSettlement) {
+        if (initiallyUnconfirmed) {
+          await fulfill();
+          expect(await prisma.enterpriseRetailStoredValueEntry.count({
+            where: { organizationId, idempotencyKey: earnedKey },
+          })).toBe(0);
+          const pending = await post(admin,
+            `/api/enterprise/${organizationId}/payments/${payment.id}/allocations`,
+            { receivableId: receivable.id, amount: String(amount) },
+            "/enterprise-modules/FINANCE_PAYMENTS");
+          expect(pending.response.status()).toBeGreaterThanOrEqual(400);
+          expect(await prisma.enterpriseRetailStoredValueEntry.count({
+            where: { organizationId, idempotencyKey: earnedKey },
+          })).toBe(0);
+          // The fixture changes only canonical Finance evidence; the actual
+          // allocation that mints the credit still goes through the server API.
+          await prisma.enterprisePayment.update({
+            where: { id: payment.id },
+            data: {
+              status: "CONFIRMED", approvedByUserId: fixture.adminUserId,
+              confirmedByUserId: fixture.adminUserId, confirmedAt: new Date(),
+            },
+          });
+          await allocate();
+        } else if (partialSettlement) {
           await fulfill();
           const half = Number((amount / 2).toFixed(2));
           const first = await post(admin,
