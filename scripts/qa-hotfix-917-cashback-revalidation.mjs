@@ -6,6 +6,9 @@ const service = read("lib/enterprise/relationship-benefits/omnichannel-cashback.
 const proof = read("lib/enterprise/relationship-benefits/omnichannel-payment-proof.ts");
 const execution = read("lib/enterprise/retail/omnichannel-returns.ts");
 const posting = read("lib/enterprise/accounting/sector-adapters/retail-relationship-credit.ts");
+const allocation = read("lib/enterprise/accounting/payments-service.ts");
+const fulfillment = read("lib/enterprise/crm-sales/fulfillments.ts");
+const retry = read("lib/enterprise/retail/transaction-retry.ts");
 const behavioral = read("tests/e2e/issue-786-relationship-benefits-enforcement.spec.mjs");
 
 const grantStart = service.indexOf("export async function tryGrantRetailOmnichannelCashbackTx(");
@@ -40,6 +43,10 @@ assert.ok(behavioral.includes("amount: String(half)"), "Actual partial allocatio
 assert.ok(behavioral.includes("Promise.all([allocate(), fulfill()])"), "Concurrent settlement must use two real HTTP operations");
 assert.ok(service.includes("RELATIONSHIP_OMNI_CASHBACK_REVERSAL_OVERFLOW"), "Over-reversed ledger must fail closed");
 assert.ok(service.includes("alreadyReversed.gt(earned.amount)"), "Reversal must never exceed original EARN");
+assert.ok(allocation.includes("await withRetailTransactionRetry(() => prisma.$transaction("), "Finance allocation must retry serializable clashes");
+assert.ok(fulfillment.includes("return withRetailTransactionRetry(() => prisma.$transaction("), "Sales fulfillment must retry serializable clashes");
+assert.ok(retry.includes('"P2034"'), "Retries must be restricted to Prisma serializable conflicts");
+assert.ok(retry.includes("maxAttempts"), "Retry attempts must be bounded");
 assert.ok(behavioral.includes('data: { relationType: "OTHER" }'), "E2E must mutate the canonical audience");
 assert.ok(behavioral.includes('expect(withheld.status).toBe("REQUESTED")'), "E2E must prove no consumed status");
 console.log("HOTFIX #917: structural late-eligibility, concurrency and reversal-integrity checks passed. Owner E2E and financial refund suite remain independent.");
