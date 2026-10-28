@@ -50,11 +50,17 @@ test.describe("UX-06 visual and accessible ERP acceptance", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await signIn(page);
     await page.goto(`${baseUrl}/enterprise-modules`, { waitUntil: "domcontentloaded" });
-    const moduleLink = page.locator("a[data-enterprise-module-code]").first();
+    // ERP hub cards expose accessible links, not a data-enterprise-module-code attribute.
+    const moduleLink = page.getByRole("link", { name: /^(Ouvrir|Open) / }).first();
     await expect(moduleLink).toBeVisible();
+    const destination = await moduleLink.getAttribute("href");
+    expect(destination, "Authorized ERP cards must have a real destination").toBeTruthy();
     await moduleLink.click();
+    expect(page.url()).toContain(destination);
     await expect(page.locator("main")).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(2);
     await page.screenshot({ path: testInfo.outputPath("390px-erp-module.png"), fullPage: true });
+    await page.goBack();
+    await expect(page.locator("[data-workspace-module-header]").first()).toBeVisible();
   });
 });

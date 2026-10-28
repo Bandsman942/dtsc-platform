@@ -3,6 +3,7 @@
 Un scénario Playwright authentifié est ajouté au job CI ERP existant, sur une base Postgres synthétique et un serveur local : il **ne visite ni ne modifie les données de Production**.
 
 Ce scénario contrôle huit largeurs entre 320 et 1440 px, l'absence de débordement horizontal, la présence de l'en-tête ERP, un budget de navigation configurable (20 secondes par défaut) et les règles WCAG 2.0/2.1/2.2 A/AA avec axe-core. Il produit des captures à vérifier dans les artefacts CI. Un parcours supplémentaire ouvre un module autorisé sur mobile.
+Le lien utilisé par ce parcours est identifié par son nom accessible réel (`Ouvrir …` / `Open …`), vérifie la destination puis teste le retour au hub. Le sélecteur de données inexistant a été retiré.
 
 ## Portée et limites
 
