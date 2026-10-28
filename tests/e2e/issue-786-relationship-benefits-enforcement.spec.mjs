@@ -24,6 +24,7 @@ const codes = {
   loyalty: "E2E_906_RETAIL_LOYALTY",
   cashback: "E2E_908_RETAIL_CASHBACK",
   omnichannelCashback: "E2E_914_OMNI_CASHBACK",
+  omniRefund: "E2E_917_OMNI_CASHBACK_REFUNDS",
 };
 
 const fixture = {
@@ -86,7 +87,7 @@ async function get(page, path) {
 
 async function cleanupFixture() {
   const benefits = await prisma.enterpriseRelationshipBenefit.findMany({
-    where: { organizationId, code: { in: [codes.automatic, codes.exclusive, codes.manual, codes.fullReturn, codes.omnichannel, codes.loyalty, codes.cashback, codes.omnichannelCashback] } },
+    where: { organizationId, code: { in: [codes.automatic, codes.exclusive, codes.manual, codes.fullReturn, codes.omnichannel, codes.loyalty, codes.cashback, codes.omnichannelCashback, codes.omniRefund] } },
     select: { id: true },
   });
   const benefitIds = benefits.map((item) => item.id);
@@ -1582,6 +1583,224 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
       }
     } finally {
       await ctx.close();
+    }
+  });
+
+
+  test("#917 real partial then full omnichannel refunds reverse only earned cashback with independent Finance actors", async ({ browser }) => {
+    const adminContext = await browser.newContext({ baseURL: baseUrl, viewport: { width: 390, height: 844 } });
+    const reviewerContext = await browser.newContext({ baseURL: baseUrl });
+    const settlerContext = await browser.newContext({ baseURL: baseUrl });
+    const admin = await adminContext.newPage();
+    const reviewer = await reviewerContext.newPage();
+    const settlerPage = await settlerContext.newPage();
+    const suffix = Date.now().toString(36);
+    try {
+      await signIn(admin, adminEmail, adminPassword, "/enterprise-modules/RETAIL_POS");
+      await signIn(reviewer, userEmail, userPassword, "/enterprise-modules/RETAIL_POS");
+      await ensureOpenTill(admin);
+      // Finance settlement requires a distinct active business member from
+      // both requester and validator; a test-only owner is never used in Production.
+      const owner = await prisma.user.findUniqueOrThrow({ where: { email: adminEmail } });
+      const settlerEmail = `e2e-917-settler-${suffix}@example.test`;
+      const settler = await prisma.user.create({
+        data: { name: "Responsable de règlement E2E #917", email: settlerEmail,
+          passwordHash: owner.passwordHash, role: "CLIENT", status: "ACTIVE", locale: "fr", startPage: "/dashboard" },
+      });
+      await prisma.organizationMember.create({
+        data: { organizationId, userId: settler.id, role: "OWNER", status: "ACTIVE", joinedAt: new Date() },
+      });
+      await signIn(settlerPage, settlerEmail, adminPassword, "/enterprise-modules/RETAIL_POS");
+
+      await prisma.enterpriseRelationshipBenefit.updateMany({
+        where: { organizationId, code: { in: [codes.cashback, codes.omnichannelCashback] } },
+        data: { endsAt: new Date(Date.now() - 60000) },
+      });
+      const benefit = await post(admin, `/api/enterprise/${organizationId}/relationship-benefits`, {
+        code: codes.omniRefund, nameFr: "Cashback retours omnicanaux #917",
+        nameEn: "Omnichannel refund cashback #917",
+        descriptionFr: "Crédit puis contrepassation au remboursement réellement confirmé.",
+        descriptionEn: "Earn, then reverse only on confirmed financial refund.",
+        benefitType: "CASHBACK", assignmentMode: "AUTOMATIC",
+        relationTypes: ["CUSTOMER"], identityLinkIds: [],
+        valueType: "PERCENT", valueDecimal: 4, currencyCode: fixture.currencyCode,
+        actionCode: "NONE", targetModuleCode: "RETAIL_POS", stackable: true, status: "ACTIVE",
+        usageLimitTotal: 2,
+        conditions: { channelCodes: ["POS"], catalogItemIds: [fixture.catalogItemId] },
+      });
+      expect(benefit.response.status(), JSON.stringify(benefit.body)).toBe(201);
+      const benefitId = benefit.body.benefit.id;
+      const placed = await post(admin, `/api/enterprise/${organizationId}/retail/omnichannel/orders`, {
+        idempotencyKey: `e2e-917-refund-order-${suffix}`,
+        customerBusinessPartyId: fixture.customerBusinessPartyId,
+        sourceSiteId: fixture.siteId, fulfillmentWarehouseId: fixture.warehouseId,
+        fulfillmentMode: "CLICK_COLLECT", currencyCode: fixture.currencyCode,
+        lines: [{ catalogItemId: fixture.catalogItemId, quantity: 2 }],
+      }, "/enterprise-modules/RETAIL_POS");
+      expect(placed.response.status(), JSON.stringify(placed.body)).toBe(201);
+      const order = placed.body.order;
+      const fullAmount = asNumber(order.totalAmount);
+      const invoice = await prisma.enterpriseSalesInvoice.create({
+        data: {
+          organizationId, number: `E2E917-INV-${suffix}`,
+          businessPartyId: fixture.customerBusinessPartyId, salesOrderId: order.id,
+          status: "ISSUED", invoiceDate: new Date(), issuedAt: new Date(), postedAt: new Date(),
+          currencyCode: fixture.currencyCode, subtotal: String(fullAmount), grandTotal: String(fullAmount),
+          outstandingAmount: String(fullAmount), createdByUserId: fixture.adminUserId,
+          items: { create: { description: "Deux articles remboursables #917", quantity: 2,
+            unitPrice: String(fullAmount / 2), netAmount: String(fullAmount),
+            totalAmount: String(fullAmount) } },
+        },
+      });
+      const receivable = await prisma.enterpriseReceivable.create({
+        data: { organizationId, salesInvoiceId: invoice.id,
+          businessPartyId: fixture.customerBusinessPartyId, currencyCode: fixture.currencyCode,
+          originalAmount: String(fullAmount), outstandingAmount: String(fullAmount), status: "OPEN" },
+      });
+      const payment = await prisma.enterprisePayment.create({
+        data: {
+          organizationId, number: `E2E917-PAY-${suffix}`, direction: "INBOUND", paymentType: "CUSTOMER_PAYMENT",
+          businessPartyId: fixture.customerBusinessPartyId, currencyCode: fixture.currencyCode,
+          methodType: "BANK_TRANSFER", financialAccountId: fixture.cashAccountId,
+          amount: String(fullAmount), unallocatedAmount: String(fullAmount),
+          paymentDate: new Date(), status: "CONFIRMED",
+          initiatedByUserId: fixture.userId, approvedByUserId: fixture.adminUserId,
+          confirmedByUserId: fixture.adminUserId, confirmedAt: new Date(),
+        },
+      });
+      const allocated = await post(admin, `/api/enterprise/${organizationId}/payments/${payment.id}/allocations`,
+        { receivableId: receivable.id, amount: String(fullAmount) }, "/enterprise-modules/FINANCE_PAYMENTS");
+      expect(allocated.response.ok(), JSON.stringify(allocated.body)).toBeTruthy();
+      const delivered = await post(admin, `/api/enterprise/${organizationId}/sales-orders/${order.id}/fulfill`, {
+        fulfillmentType: "PRODUCT_DELIVERY", warehouseId: fixture.warehouseId,
+        acceptedByCustomer: true, revision: order.revision,
+        idempotencyKey: `e2e-917-refund-delivery-${suffix}`,
+        items: [{ salesOrderItemId: order.items[0].id, quantityFulfilled: 2 }],
+      }, "/enterprise-modules/RETAIL_POS");
+      expect(delivered.response.status(), JSON.stringify(delivered.body)).toBe(201);
+      const earn = await prisma.enterpriseRetailStoredValueEntry.findFirstOrThrow({
+        where: { organizationId,
+          idempotencyKey: `omni-cashback:order:${order.id}:benefit:${benefitId}`, entryType: "EARN" },
+      });
+      const earnAmount = asNumber(earn.amount);
+      expect(earnAmount).toBeCloseTo(fullAmount * 0.04, 5);
+      const usage = await prisma.enterpriseRelationshipBenefitUsage.findFirstOrThrow({
+        where: { organizationId, benefitId, effectEntityId: order.id },
+      });
+      expect(usage.status).toBe("CONSUMED");
+      const account = await prisma.enterpriseRetailStoredValueAccount.findUniqueOrThrow({ where: { id: earn.accountId } });
+      const balanceBefore = asNumber(account.balance);
+
+      // Spend all available historical store credit before the first refund.
+      // A reversal must remain recorded even when its liability goes negative.
+      if (balanceBefore > 0) {
+        await prisma.enterpriseRelationshipBenefit.update({
+          where: { id: benefitId }, data: { endsAt: new Date(Date.now() - 60000) },
+        });
+        const preview = await post(admin, `/api/enterprise/${organizationId}/retail/pricing/preview`, {
+          siteId: fixture.siteId, customerBusinessPartyId: fixture.customerBusinessPartyId,
+          currencyCode: fixture.currencyCode, channelCode: "POS",
+          lines: [{ catalogItemId: fixture.catalogItemId, quantity: 2 }],
+        }, "/enterprise-modules/RETAIL_POS");
+        expect(preview.response.ok(), JSON.stringify(preview.body)).toBeTruthy();
+        const total = asNumber(preview.body.grandTotal);
+        expect(total).toBeGreaterThan(balanceBefore);
+        const sale = await post(admin, `/api/enterprise/${organizationId}/retail/sales`, {
+          warehouseId: fixture.warehouseId, siteId: fixture.siteId,
+          customerBusinessPartyId: fixture.customerBusinessPartyId, currencyCode: fixture.currencyCode,
+          idempotencyKey: `e2e-917-redeem-credit-${suffix}`,
+          lines: [{ catalogItemId: fixture.catalogItemId, inventoryItemId: fixture.inventoryItemId,
+            quantity: 2, unitPrice: 116, discountAmount: 0, taxAmount: 0 }],
+          tenders: [
+            { methodType: "STORE_CREDIT", storedValueAccountId: account.id, amount: balanceBefore },
+            { methodType: "CASH", financialAccountId: fixture.cashAccountId,
+              amount: Number((total - balanceBefore).toFixed(6)) },
+          ],
+        }, "/enterprise-modules/RETAIL_POS");
+        expect(sale.response.status(), JSON.stringify(sale.body)).toBe(201);
+      }
+      const balanceAtReturn = asNumber((await prisma.enterpriseRetailStoredValueAccount.findUniqueOrThrow({
+        where: { id: account.id },
+      })).balance);
+      const bank = await prisma.enterpriseFinancialAccount.findFirstOrThrow({
+        where: { organizationId, code: "SHOP2-E2E-BANK", status: "ACTIVE", archivedAt: null },
+        select: { id: true },
+      });
+      for (const index of [0, 1]) {
+        const requested = await post(admin,
+          `/api/enterprise/${organizationId}/retail/omnichannel/orders/${order.id}/returns`, {
+            reason: `Retour #917 de l'article ${index + 1}`,
+            idempotencyKey: `e2e-917-refund-${suffix}-${index}`,
+            validatorUserId: fixture.userId,
+            lines: [{ salesOrderItemId: order.items[0].id, quantity: 1,
+              productCondition: "SELLABLE", stockDisposition: "RESTOCK" }],
+          }, "/enterprise-modules/RETAIL_POS");
+        expect(requested.response.status(), JSON.stringify(requested.body)).toBe(201);
+        let ret = requested.body.retailReturn;
+        const approved = await post(reviewer,
+          `/api/enterprise/${organizationId}/retail/omnichannel/returns/${ret.id}/decision`, {
+            revision: ret.revision, decision: "APPROVE", reason: "Retour validé par le responsable financier",
+          }, "/enterprise-modules/RETAIL_POS");
+        expect(approved.response.ok(), JSON.stringify(approved.body)).toBeTruthy();
+        ret = approved.body.retailReturn;
+        const prepared = await post(admin,
+          `/api/enterprise/${organizationId}/retail/omnichannel/returns/${ret.id}/prepare`,
+          { revision: ret.revision }, "/enterprise-modules/RETAIL_POS");
+        expect(prepared.response.ok(), JSON.stringify(prepared.body)).toBeTruthy();
+        ret = prepared.body.retailReturn;
+        const record = await prisma.enterpriseRetailOmnichannelReturn.findUniqueOrThrow({ where: { id: ret.id } });
+        for (const [model, entityId, url] of [
+          ["enterprisePayment", record.refundPaymentId, "payments"],
+          ["enterpriseSalesCreditNote", record.salesCreditNoteId, "sales-credit-notes"],
+        ]) {
+          const source = await prisma[model].findUniqueOrThrow({ where: { id: entityId } });
+          const endpoint = url === "payments"
+            ? `/api/enterprise/${organizationId}/payments/${entityId}/transition`
+            : `/api/enterprise/${organizationId}/sales-credit-notes/${entityId}/transition`;
+          const decided = await post(reviewer, endpoint, {
+            action: "APPROVE", revision: source.revision, reason: "Approbation indépendante du remboursement",
+          }, "/enterprise-modules/FINANCE_PAYMENTS");
+          expect(decided.response.ok(), `${model} ${JSON.stringify(decided.body)}`).toBeTruthy();
+        }
+        const settled = await post(settlerPage,
+          `/api/enterprise/${organizationId}/retail/omnichannel/returns/${ret.id}/settle`, {
+            revision: ret.revision, receivedAndInspected: true,
+            inspectionNotes: "Article contrôlé et retour validé par un tiers indépendant",
+          }, "/enterprise-modules/RETAIL_POS");
+        expect(settled.response.ok(), JSON.stringify(settled.body)).toBeTruthy();
+        expect(settled.body.retailReturn.status).toBe("COMPLETED");
+        const replay = await post(settlerPage,
+          `/api/enterprise/${organizationId}/retail/omnichannel/returns/${ret.id}/settle`, {
+            revision: ret.revision, receivedAndInspected: true,
+            inspectionNotes: "Article contrôlé et retour validé par un tiers indépendant",
+          }, "/enterprise-modules/RETAIL_POS");
+        expect(replay.response.ok(), JSON.stringify(replay.body)).toBeTruthy();
+        expect(replay.body.idempotent).toBe(true);
+        const reversals = await prisma.enterpriseRetailStoredValueEntry.findMany({
+          where: { organizationId, accountId: account.id, entryType: "REVERSAL",
+            idempotencyKey: { startsWith: `omni-cashback:return:${order.id}:${benefitId}:` } },
+        });
+        expect(reversals).toHaveLength(index + 1);
+        const reversed = reversals.reduce((sum, row) => sum + Math.abs(asNumber(row.amount)), 0);
+        expect(reversed).toBeCloseTo(earnAmount * (index + 1) / 2, 4);
+        const actual = await prisma.enterpriseRetailStoredValueAccount.findUniqueOrThrow({ where: { id: account.id } });
+        expect(asNumber(actual.balance)).toBeCloseTo(balanceAtReturn - reversed, 4);
+        expect((await prisma.enterpriseRelationshipBenefitUsage.findUniqueOrThrow({ where: { id: usage.id } })).status)
+          .toBe(index === 0 ? "CONSUMED" : "CANCELLED");
+        for (const reversal of reversals) {
+          const posted = await prisma.enterpriseJournalEntry.findFirstOrThrow({
+            where: { organizationId, sourceEntityType: "EnterpriseRetailStoredValueEntry",
+              sourceEntityId: reversal.id, postingEvent: "RETAIL_RELATIONSHIP_CREDIT_REVERSED", status: "POSTED" },
+            include: { lines: true },
+          });
+          expect(posted.lines.reduce((sum, row) => sum + asNumber(row.debit), 0))
+            .toBeCloseTo(posted.lines.reduce((sum, row) => sum + asNumber(row.credit), 0), 5);
+        }
+      }
+    } finally {
+      await adminContext.close();
+      await reviewerContext.close();
+      await settlerContext.close();
     }
   });
 
