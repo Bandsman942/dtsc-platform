@@ -76,4 +76,3 @@ for (const [file, needle, description] of implementationChecks) {
   assert.ok(file.includes(needle), description);
 }
 console.log(`HOTFIX #914: ${checks.length + implementationChecks.length} structural checks passed; browser/Finance E2E and OWNER_E2E remain separate gates.`);
-
