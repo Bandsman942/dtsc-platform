@@ -44,7 +44,7 @@ check(new Set(relationTypes).size === relationTypes.length, "Duplicate canonical
 check(relationTypes.includes("SUPPLIER"), "Canonical SUPPLIER relation cannot be skipped");
 for (const relationType of relationTypes) {
   check(identityContracts.includes(`"${relationType}"`), `Relationship type missing: ${relationType}`);
-  const mapping = new RegExp(`^  ${relationType}: \\\[([^\\\]]+)\\\]`, "m").exec(identityAccess)?.[1] || "";
+  const mapping = identityAccess.split("\n").find((line) => line.startsWith(`  ${relationType}: [`)) || "";
   check(mapping.includes("ENTERPRISE_BENEFITS"), `${relationType} must have an explicit ENTERPRISE_BENEFITS contract`);
 }
 check(identityAccess.includes("isEnterpriseIdentityRelationType(link.requestedRelationType)"), "Unknown relation values must fail-closed");

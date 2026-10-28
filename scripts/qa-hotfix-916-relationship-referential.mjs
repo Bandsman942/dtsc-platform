@@ -11,9 +11,11 @@ const sql = read("prisma/migrations/20261017150000_identity_relation_types_check
 const oldQA = read("scripts/qa-hotfix-786-relationship-benefits-enforcement.mjs");
 
 function enumValues(source, name) {
-  const match = source.match(new RegExp(`export const ${name} = \\\[([\\s\\S]*?)\\\] as const;`));
-  assert.ok(match, `Canonical ${name} declaration missing`);
-  return [...match[1].matchAll(/"([A-Z_]+)"/g)].map((entry) => entry[1]);
+  const blocks = source.split(`export const ${name} = [`);
+  assert.equal(blocks.length, 2, `Canonical ${name} declaration missing or duplicated`);
+  const section = blocks[1].split("] as const;")[0];
+  assert.ok(section, `Canonical ${name} closing bracket missing`);
+  return [...section.matchAll(/"([A-Z_]+)"/g)].map((entry) => entry[1]);
 }
 const types = enumValues(identity, "ENTERPRISE_IDENTITY_RELATION_TYPES");
 const benefits = enumValues(benefit, "RELATIONSHIP_BENEFIT_TYPES");
@@ -23,8 +25,9 @@ assert.ok(types.includes("SUPPLIER"), "SUPPLIER must be covered");
 assert.equal(benefits.length, 15, "Unexpected number of benefit types");
 assert.equal(new Set(benefits).size, benefits.length, "Duplicated benefit types");
 
-const capabilityPairs = [...access.matchAll(/^  ([A-Z_]+): \\[([^\\\]\\n]*)\\\],?$/gm)]
-  .map((match) => [match[1], match[2]]);
+const capabilityPairs = access.split("\n")
+  .filter((line) => line.startsWith("  ") && line.includes(": [") && line.trimEnd().endsWith("],"))
+  .map((line) => [line.trim().split(": [")[0], line.split(": [")[1].split("]")[0]]);
 const capabilityMap = new Map(capabilityPairs);
 assert.equal(capabilityMap.size, capabilityPairs.length, "Duplicate relation capability mapping");
 assert.deepEqual([...capabilityMap.keys()].sort(), [...types].sort(),
@@ -46,14 +49,14 @@ assert.match(oldQA, /relationTypeBlock = identityContracts.match/, "Legacy QA mu
 assert.doesNotMatch(oldQA, /const relationTypes = \[/, "No 22-relation mirror list remains");
 
 for (const field of ["requestedRelationType", "relationType"]) {
-  const check = sql.match(new RegExp(`CHECK \\\( "`, "m")); // Match exact CHECK via the field-name-aware expression below.
-  const regex = new RegExp(`CHECK \\\(\\\"${field}\\\" IN \\\(\\(([^)]*)\\)\\)`);
-  // SQL contains CHECK ("field" IN ('A', ...)) with one IN opening paren.
-  const raw = sql.match(new RegExp(`CHECK \\\(\\\"${field}\\\" IN \\\(([^)]*)\\)\\)`));
-  assert.ok(raw, `Missing SQL CHECK constraint for ${field}`);
-  const values = [...raw[1].matchAll(/'([A-Z_]+)'/g)].map((entry) => entry[1]);
+  const prefix = `CHECK ("${field}" IN (`;
+  const blocks = sql.split(prefix);
+  assert.equal(blocks.length, 2, `Missing or duplicated SQL CHECK constraint for ${field}`);
+  const raw = blocks[1].split(")) NOT VALID")[0];
+  const values = [...raw.matchAll(/'([A-Z_]+)'/g)].map((entry) => entry[1]);
   assert.deepEqual(values.sort(), [...types].sort(), `SQL CHECK ${field} diverges from canonical types`);
 }
+
 
 // Only approved business paths may have monetary effects. Every relation must
 // be classified, but no relation creates a new adapter by itself.
