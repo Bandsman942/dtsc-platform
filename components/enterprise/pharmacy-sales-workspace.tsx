@@ -9,6 +9,8 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
 import { useToastMessage } from "@/components/ui/use-toast-message";
+import { actionFeedback } from "@/lib/client-action-feedback";
+import type { ToastNotice } from "@/lib/client-toast";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 
 type Opt = {
@@ -106,14 +108,14 @@ export function PharmacySalesWorkspace({ organizationId }: { organizationId: str
   const [open, setOpen] = useState(false);
   const [detail, setDetail] = useState<Sale | null>(null);
   const [form, setForm] = useState<Form>(() => emptyForm(null));
-  const [message, setMessage] = useState("");
-  useToastMessage(message);
+  const [notice, setNotice] = useState<ToastNotice | null>(null);
+  useToastMessage(notice);
 
   const load = useCallback(async () => {
     const response = await fetch(`/api/enterprise/${organizationId}/pharmacy/sales`, { cache: "no-store" });
     const body = await response.json().catch(() => null) as Data | null;
     if (response.ok && body) setData(body);
-    else setMessage("Chargement des ventes impossible.");
+    else setNotice({ description: "Chargement des ventes impossible.", tone: "error" });
   }, [organizationId]);
 
   useEffect(() => { void load(); }, [load]);
@@ -125,7 +127,7 @@ export function PharmacySalesWorkspace({ organizationId }: { organizationId: str
     event.preventDefault();
     const response = await fetch(`/api/enterprise/${organizationId}/pharmacy/sales`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
     const body = await response.json().catch(() => null) as { message?: string } | null;
-    setMessage(response.ok ? "Vente enregistrée." : body?.message || "Enregistrement impossible.");
+    setNotice(actionFeedback(response.ok, body, { success: "Vente enregistrée.", failure: "Enregistrement impossible." }));
     if (response.ok) {
       setOpen(false);
       await load();
@@ -135,7 +137,7 @@ export function PharmacySalesWorkspace({ organizationId }: { organizationId: str
   async function action(sale: Sale, actionName: string, extra: Record<string, unknown> = {}) {
     const response = await fetch(`/api/enterprise/${organizationId}/pharmacy/sales/${sale.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: actionName, ...extra }) });
     const body = await response.json().catch(() => null) as { message?: string } | null;
-    setMessage(response.ok ? "Action de vente enregistrée." : body?.message || "Action impossible.");
+    setNotice(actionFeedback(response.ok, body, { success: "Action de vente enregistrée.", failure: "Action impossible." }));
     if (response.ok) {
       setDetail(null);
       await load();

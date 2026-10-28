@@ -3,6 +3,7 @@
 import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useAppLocale } from "@/components/i18n/locale-provider";
 
 export function ListControls({
   query,
@@ -23,6 +24,9 @@ export function ListControls({
   placeholder?: string;
   onPageChange: (page: number) => void;
 }) {
+  const english = useAppLocale() === "en";
+  const previousLabel = english ? "Previous page" : "Page précédente";
+  const nextLabel = english ? "Next page" : "Page suivante";
   return (
     <div
       data-workspace-list-controls
@@ -31,6 +35,8 @@ export function ListControls({
       <div className="relative w-full min-w-0">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-dtsc-muted" />
         <Input
+          type="search"
+          aria-label={english ? "Search list" : "Rechercher dans la liste"}
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
           placeholder={placeholder}
@@ -39,7 +45,7 @@ export function ListControls({
       </div>
       <div className="flex w-full min-w-0 items-center justify-between gap-2 md:w-auto md:justify-end">
         <span className="min-w-0 flex-1 truncate text-[0.68rem] font-bold text-dtsc-muted md:flex-none md:text-xs">
-          {filteredCount}/{totalCount} élément(s) · page {page}/{pageCount}
+          {filteredCount.toLocaleString(english ? "en-US" : "fr-FR")}/{totalCount.toLocaleString(english ? "en-US" : "fr-FR")} {english ? "items" : "éléments"} · {english ? "page" : "page"} {page}/{pageCount}
         </span>
         <div className="flex shrink-0 items-center gap-2">
           <Button
@@ -49,7 +55,7 @@ export function ListControls({
             onClick={() => onPageChange(Math.max(1, page - 1))}
             disabled={page <= 1}
             className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft"
-            aria-label="Page précédente"
+            aria-label={previousLabel}
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
@@ -60,7 +66,7 @@ export function ListControls({
             onClick={() => onPageChange(Math.min(pageCount, page + 1))}
             disabled={page >= pageCount}
             className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft"
-            aria-label="Page suivante"
+            aria-label={nextLabel}
           >
             <ChevronRight className="h-4 w-4" />
           </Button>

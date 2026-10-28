@@ -1,5 +1,7 @@
 export type ToastTone = "success" | "error" | "warning" | "info";
 
+export type ToastNotice = { description: string; tone: ToastTone; id?: string };
+
 export type ToastPayload = {
   title?: string;
   description: string;

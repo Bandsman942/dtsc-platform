@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
-import { notifyToast, type ToastTone } from "@/lib/client-toast";
+import { notifyToast, type ToastNotice, type ToastTone } from "@/lib/client-toast";
 
 function inferToastTone(message: string): ToastTone {
   if (/annul|attention|bloqu|limite|maintenance|préparation|preparation|suspend/i.test(message)) {
@@ -37,21 +37,22 @@ function titleForTone(locale: string | null | undefined, tone: ToastTone) {
   return dictionary.info;
 }
 
-export function useToastMessage(message: string | null | undefined, tone?: ToastTone) {
+export function useToastMessage(message: string | ToastNotice | null | undefined, tone?: ToastTone) {
   const locale = useAppLocale();
-  const lastMessageRef = useRef("");
+  const lastMessageRef = useRef<string | ToastNotice>("");
 
   useEffect(() => {
-    const description = typeof message === "string" ? message.trim() : "";
+    const description = (typeof message === "string" ? message : message?.description || "").trim();
     if (!description) {
       lastMessageRef.current = "";
       return;
     }
-    if (description === lastMessageRef.current) {
+    const toastTone = typeof message === "object" && message ? message.tone : tone || inferToastTone(description);
+    const key = typeof message === "object" && message ? message : `${toastTone}:${description}`;
+    if (key === lastMessageRef.current) {
       return;
     }
-    lastMessageRef.current = description;
-    const toastTone = tone || inferToastTone(description);
+    lastMessageRef.current = key;
     notifyToast({
       title: titleForTone(locale, toastTone),
       description,

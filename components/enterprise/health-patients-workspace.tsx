@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
+import { actionFeedback } from "@/lib/client-action-feedback";
+import type { ToastNotice } from "@/lib/client-toast";
 import {
   healthClinicalDateTime,
   healthClinicalStatusLabel,
@@ -167,8 +169,8 @@ export function HealthPatientsWorkspace({
 
   const [patients, setPatients] = useState<Patient[]>([]);
   const [permissions, setPermissions] = useState<Permissions>({ canCreate: false, canUpdate: false, canArchive: false, canViewSensitive: false });
-  const [message, setMessage] = useState("");
-  useToastMessage(message);
+  const [notice, setNotice] = useState<ToastNotice | null>(null);
+  useToastMessage(notice);
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Patient | null>(null);
@@ -190,7 +192,7 @@ export function HealthPatientsWorkspace({
       setPatients(body.patients);
       setPermissions(body.permissions);
     } else {
-      setMessage(body?.message || t("patient.loadFailed"));
+      setNotice({ description: body?.message || t("patient.loadFailed"), tone: "error" });
     }
     setLoading(false);
   }, [organizationId, t]);
@@ -228,7 +230,7 @@ export function HealthPatientsWorkspace({
       setRelated(body.related || []);
       setDispensations(body.dispensations || []);
     } else {
-      setMessage(body?.message || t("patient.detailUnavailable"));
+      setNotice({ description: body?.message || t("patient.detailUnavailable"), tone: "error" });
     }
   }
 
@@ -255,7 +257,7 @@ export function HealthPatientsWorkspace({
       { method: editing ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) },
     );
     const body = (await response.json().catch(() => null)) as { message?: string } | null;
-    setMessage(response.ok ? (editing ? t("patient.updated") : t("patient.saved")) : body?.message || t("patient.saveFailed"));
+    setNotice(actionFeedback(response.ok, body, { success: editing ? t("patient.updated") : t("patient.saved"), failure: t("patient.saveFailed") }));
     if (response.ok) {
       setFormOpen(false);
       setDetail(null);
