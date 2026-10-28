@@ -224,7 +224,9 @@ export function RelationshipOverviewPanel({
                   </StatusBadge>}
                   meta={fmtDate(usage.executedAt || usage.requestedAt)}
                   description={<div className="grid gap-1">
-                    <span>{usage.executedAt ? `${usage.status === "CANCELLED" ? (locale === "en" ? "Reversed" : "Annulé") : copy.consumed} · ${usage.executionMode === "AUTO_RETAIL_LOYALTY" ? `${usage.effectAmount ?? "—"} points` : usage.executionMode === "AUTO_RETAIL_CASHBACK" ? `${fmtAmount(usage.effectAmount, usage.effectCurrencyCode)} ${locale === "en" ? "store credit" : "d’avoir magasin"}` : fmtAmount(usage.effectAmount, usage.effectCurrencyCode)}` : copy.unexecuted}</span>
+                    <span>{usage.executedAt ? `${usage.status === "CANCELLED" ? (locale === "en" ? "Reversed" : "Annulé") : copy.consumed} · ${usage.executionMode === "AUTO_RETAIL_LOYALTY" ? `${usage.effectAmount ?? "—"} points` : ["AUTO_RETAIL_CASHBACK", "AUTO_RETAIL_OMNICHANNEL_CASHBACK"].includes(usage.executionMode) ? `${fmtAmount(usage.effectAmount, usage.effectCurrencyCode)} ${locale === "en" ? "store credit" : "d’avoir magasin"}` : fmtAmount(usage.effectAmount, usage.effectCurrencyCode)}` : usage.executionMode === "AUTO_RETAIL_OMNICHANNEL_CASHBACK" && usage.status === "REQUESTED"
+                      ? (locale === "en" ? "Store credit reserved — awaiting verified delivery and payment" : "Avoir réservé — livraison et paiement à confirmer")
+                      : copy.unexecuted}</span>
                     {expandedUsageId === usage.id ? (
                       <div className="grid gap-1 text-xs text-dtsc-ink">
                         <span>{copy.requested} : {fmtDate(usage.requestedAt)}</span>

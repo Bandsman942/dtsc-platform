@@ -527,6 +527,13 @@ export function RelationshipBenefitsUserPanel({
                         : `Remise réservée sur une commande omnicanale (${request.effectAmount ?? "—"} ${request.effectCurrencyCode || ""}). Elle sera consommée uniquement après livraison complète.`}
                     </p>
                   ) : null}
+                  {request.executionMode === "AUTO_RETAIL_OMNICHANNEL_CASHBACK" && request.status === "REQUESTED" ? (
+                    <p className="mt-2 text-xs font-semibold leading-5 text-cyan-700 dark:text-cyan-300">
+                      {locale === "en"
+                        ? `Omnichannel cashback reserved (${request.effectAmount ?? "—"} ${request.effectCurrencyCode || ""}). Store credit is granted only after confirmed full payment and accepted delivery.`
+                        : `Cashback omnicanal réservé (${request.effectAmount ?? "—"} ${request.effectCurrencyCode || ""}). L’avoir sera crédité uniquement après paiement intégral confirmé et livraison acceptée.`}
+                    </p>
+                  ) : null}
                   {request.status === "APPROVED" && !request.executedAt ? (
                     <p className="mt-2 text-xs font-semibold leading-5 text-dtsc-muted">
                       {locale === "en"
@@ -534,7 +541,7 @@ export function RelationshipBenefitsUserPanel({
                         : "Approuvé. Il sera affiché comme appliqué uniquement après une exécution métier vérifiée."}
                     </p>
                   ) : null}
-                  {request.executionMode === "AUTO_RETAIL_CASHBACK" && request.effectEntityId && ["CONSUMED", "CANCELLED"].includes(request.status) ? (
+                  {["AUTO_RETAIL_CASHBACK", "AUTO_RETAIL_OMNICHANNEL_CASHBACK"].includes(request.executionMode) && request.effectEntityId && request.executedAt && ["CONSUMED", "CANCELLED"].includes(request.status) ? (
                     <p className="mt-2 text-xs font-semibold leading-5 text-cyan-700 dark:text-cyan-300">
                       {locale === "en"
                         ? `${request.status === "CANCELLED" ? "Reversed" : "Credited"}: ${request.effectAmount ?? "—"} ${request.effectCurrencyCode || ""} in store credit (not cash) · ${request.executedAt ? new Date(request.executedAt).toLocaleDateString("en-GB") : ""}`
@@ -555,7 +562,7 @@ export function RelationshipBenefitsUserPanel({
                   ) : null}
                 </div>
                 <StatusBadge tone={requestTone(request.status)}>
-                  {request.executionMode === "AUTO_RETAIL_OMNICHANNEL" && request.status === "REQUESTED"
+                  {["AUTO_RETAIL_OMNICHANNEL", "AUTO_RETAIL_OMNICHANNEL_CASHBACK"].includes(request.executionMode) && request.status === "REQUESTED"
                     ? locale === "en" ? "Reserved" : "Réservée"
                     : requestStatus(request.status, locale)}
                 </StatusBadge>
