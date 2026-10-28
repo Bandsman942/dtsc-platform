@@ -1,3 +1,10 @@
+## 2026-10-27 — Hotfix #912 : preuve DELIVERY relationnelle (PR de validation, non publiée)
+
+- Nouveau parcours non monétaire DELIVERY : demande et approbation de l'avantage avant l'attestation d'une livraison réellement terminée dans le module Sales canonique.
+- Preuve documentaire ACTIVE/versionnée et liée à la commande, tiers/identité consentie, validation indépendante, quotas et idempotence dans une transaction SERIALIZABLE ; aucun second moteur de livraison ou mouvement Finance.
+- Nouvelle route sécurisée, contrôle séparé des permissions Sales et Avantages, interface FR/EN et script QA contractuel #912.
+- **Statut** : branche de travail uniquement ; CI, E2E propriétaire et production non encore certifiés. Les parents #886 et #785 restent ouverts.
+
 ## 2026-10-26 — Hotfix P0 #908 : cashback relationnel Retail en avoir magasin (pré-release)
 
 - Ajout d'un compte canonique `STORE_CREDIT` par tenant, tiers client et devise (`benefitScopeKey` unique, indépendant du secret de carte cadeau). Attributions `EARN` seulement après vente POS confirmée ; consommation `REDEEM` sur un ticket ultérieur et restitution `REFUND` sur le même compte.
