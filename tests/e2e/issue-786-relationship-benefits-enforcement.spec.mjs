@@ -1657,11 +1657,15 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
           businessPartyId: fixture.customerBusinessPartyId, currencyCode: fixture.currencyCode,
           originalAmount: String(fullAmount), outstandingAmount: String(fullAmount), status: "OPEN" },
       });
+      const refundBank = await prisma.enterpriseFinancialAccount.findFirstOrThrow({
+        where: { organizationId, code: "SHOP2-E2E-BANK", status: "ACTIVE", archivedAt: null },
+        select: { id: true },
+      });
       const payment = await prisma.enterprisePayment.create({
         data: {
           organizationId, number: `E2E917-PAY-${suffix}`, direction: "INBOUND", paymentType: "CUSTOMER_PAYMENT",
           businessPartyId: fixture.customerBusinessPartyId, currencyCode: fixture.currencyCode,
-          methodType: "BANK_TRANSFER", financialAccountId: fixture.cashAccountId,
+          methodType: "BANK_TRANSFER", financialAccountId: refundBank.id,
           amount: String(fullAmount), unallocatedAmount: String(fullAmount),
           paymentDate: new Date(), status: "CONFIRMED",
           initiatedByUserId: fixture.userId, approvedByUserId: fixture.adminUserId,
@@ -1722,10 +1726,6 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
       const balanceAtReturn = asNumber((await prisma.enterpriseRetailStoredValueAccount.findUniqueOrThrow({
         where: { id: account.id },
       })).balance);
-      const bank = await prisma.enterpriseFinancialAccount.findFirstOrThrow({
-        where: { organizationId, code: "SHOP2-E2E-BANK", status: "ACTIVE", archivedAt: null },
-        select: { id: true },
-      });
       for (const index of [0, 1]) {
         const requested = await post(admin,
           `/api/enterprise/${organizationId}/retail/omnichannel/orders/${order.id}/returns`, {
