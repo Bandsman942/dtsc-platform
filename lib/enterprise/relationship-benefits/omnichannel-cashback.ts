@@ -131,7 +131,9 @@ export async function reserveRetailOmnichannelCashbackTx(args: {
             catalogItemIds: effect.context.catalogItemIds,
             categoryIds: effect.context.categoryIds,
             quantity: effect.context.quantity,
-            occurredAt: effect.context.occurredAt,
+            occurredAt: effect.context.occurredAt instanceof Date
+              ? effect.context.occurredAt.toISOString()
+              : (effect.context.occurredAt || null),
           },
         },
       },
@@ -240,7 +242,7 @@ export async function tryGrantRetailOmnichannelCashbackTx(args: {
         benefit.benefitType !== "CASHBACK" || benefit.valueType !== "PERCENT" ||
         benefit.status !== "ACTIVE" || benefit.archivedAt ||
         benefit.targetModuleCode !== "RETAIL_POS" || benefit.actionCode !== "NONE" ||
-        !benefit.stackable || benefit.assignmentMode !== "AUTOMATIC" ||
+        !benefit.stackable ||
         !benefit.valueDecimal?.equals(percent) || !entryAmount?.equals(expected) ||
         !eligibleAmount.gt(0) || eligibleAmount.gt(proof.grossTotal) ||
         data.customerBusinessPartyId !== proof.customerBusinessPartyId ||
