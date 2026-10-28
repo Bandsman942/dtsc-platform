@@ -1,3 +1,9 @@
+## 2026-10-28 — Hotfix P0 #914 : preuve de paiement du cashback omnicanal (travail en cours)
+
+- Mise en place de la vérification en lecture de la commande omnicanale intégralement livrée, preuve de remise client ou justificatif documenté, facture canonique unique et paiement client réellement affecté à la créance.
+- Refus des paiements partiels, factures ambiguës, preuves manquantes, retours non rejetés et divergences tenant/tiers/devise ; aucun faux avoir ou écriture POS n'est émis.
+- **Non livré** : réservation, attribution automatique `EARN`, réversion `REVERSAL`, tests comportementaux/OWNER_E2E, Quality CI et Publication Production. Voir `docs/HOTFIX_914_OMNICHANNEL_CASHBACK.md`. La fonctionnalité cashback omnicanale reste **indisponible**.
+
 ## 2026-10-26 — Hotfix P0 #908 : cashback relationnel Retail en avoir magasin (pré-release)
 
 - Ajout d'un compte canonique `STORE_CREDIT` par tenant, tiers client et devise (`benefitScopeKey` unique, indépendant du secret de carte cadeau). Attributions `EARN` seulement après vente POS confirmée ; consommation `REDEEM` sur un ticket ultérieur et restitution `REFUND` sur le même compte.
