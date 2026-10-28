@@ -1350,14 +1350,15 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
         benefitType: "CASHBACK", assignmentMode: "AUTOMATIC",
         relationTypes: ["CUSTOMER"], identityLinkIds: [], valueType: "PERCENT", valueDecimal: 3,
         currencyCode: fixture.currencyCode, actionCode: "NONE", targetModuleCode: "RETAIL_POS",
-        stackable: true, status: "ACTIVE", usageLimitTotal: 8,
+        stackable: true, status: "ACTIVE", usageLimitTotal: 9,
         conditions: { channelCodes: ["POS"], catalogItemIds: [fixture.catalogItemId] },
       });
       expect(created.response.status(), JSON.stringify(created.body)).toBe(201);
       const benefitId = created.body.benefit.id;
-      for (const orderIndex of [0, 1, 2, 3, 4, 5, 6]) {
+      for (const orderIndex of [0, 1, 2, 3, 4, 5, 6, 7]) {
         const paymentFirst = orderIndex === 0;
         const initiallyUnconfirmed = orderIndex === 6;
+        const returnPending = orderIndex === 7;
         const audienceWithdrawn = orderIndex === 2;
         const concurrentSettlement = orderIndex === 3;
         const benefitExpired = orderIndex === 4;
@@ -1463,7 +1464,33 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
           }, "/enterprise-modules/RETAIL_POS");
           expect(result.response.status(), JSON.stringify(result.body)).toBe(201);
         };
-        if (initiallyUnconfirmed) {
+        if (returnPending) {
+          await fulfill();
+          // Financial rejection before EARN: even an unapproved refund request
+          // must prevent a late credit against the original gross order.
+          await prisma.enterpriseRetailOmnichannelReturn.create({
+            data: {
+              organizationId, salesOrderId: order.id,
+              number: `E2E917-RETURN-${suffix}-${orderIndex}`,
+              idempotencyKey: `e2e-917-before-earn-${suffix}-${orderIndex}`,
+              reason: "Demande de retour en cours avant attribution cashback",
+              status: "PENDING_APPROVAL", currencyCode: fixture.currencyCode,
+              refundAmount: String(amount), salesInvoiceId: invoice.id,
+              sourcePaymentId: payment.id,
+              requestedByUserId: fixture.adminUserId,
+              validatorUserId: fixture.userId,
+              lines: { create: {
+                organizationId, salesOrderItemId: order.items[0].id,
+                quantity: 1, refundAmount: String(amount),
+                productCondition: "SELLABLE", stockDisposition: "RESTOCK",
+              } },
+            },
+          });
+          await allocate();
+          expect(await prisma.enterpriseRetailStoredValueEntry.count({
+            where: { organizationId, idempotencyKey: earnedKey },
+          })).toBe(0);
+        } else if (initiallyUnconfirmed) {
           await fulfill();
           expect(await prisma.enterpriseRetailStoredValueEntry.count({
             where: { organizationId, idempotencyKey: earnedKey },
@@ -1514,7 +1541,7 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
           expect(await prisma.enterpriseRetailStoredValueEntry.count({ where: { organizationId, idempotencyKey: earnedKey } })).toBe(0);
           await allocate();
         }
-        if (audienceWithdrawn || benefitExpired) {
+        if (audienceWithdrawn || benefitExpired || returnPending) {
           expect(await prisma.enterpriseRetailStoredValueEntry.count({
             where: { organizationId, idempotencyKey: earnedKey },
           })).toBe(0);
