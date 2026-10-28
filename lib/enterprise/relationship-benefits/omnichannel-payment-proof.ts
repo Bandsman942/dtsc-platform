@@ -61,7 +61,7 @@ export async function resolvePaidDeliveredOmnichannelOrderTx(args: {
       currencyCode: order.currency,
     },
     select: {
-      id: true, status: true, grandTotal: true,
+      id: true, status: true, grandTotal: true, amountCredited: true, issuedAt: true, postedAt: true,
       receivable: {
         select: {
           paymentAllocations: {
@@ -82,6 +82,7 @@ export async function resolvePaidDeliveredOmnichannelOrderTx(args: {
     take: 2,
   });
   if (invoices.length !== 1 || invoices[0].status !== "PAID" ||
+      !invoices[0].issuedAt || !invoices[0].postedAt || !invoices[0].amountCredited.isZero() ||
       !invoices[0].grandTotal.equals(order.totalAmount) || !order.totalAmount.gt(0)) return null;
   const invoice = invoices[0];
   if (!invoice.receivable) return null;
