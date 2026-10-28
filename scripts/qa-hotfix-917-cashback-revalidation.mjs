@@ -41,6 +41,13 @@ assert.ok(behavioral.includes("concurrentSettlement"), "E2E must race Finance al
 assert.ok(behavioral.includes("partialSettlement"), "E2E must refuse partially allocated customer payments");
 assert.ok(behavioral.includes("initiallyUnconfirmed"), "E2E must deny unconfirmed customer payment before allocation");
 assert.ok(behavioral.includes("returnPending"), "E2E must block credit if a return is pending");
+assert.ok(behavioral.includes('#917 real partial then full omnichannel refunds reverse only earned cashback'), "Real refund scenario missing");
+assert.ok(behavioral.includes('omnichannel/returns/${ret.id}/prepare'), "Finance refund preparation API must be exercised");
+assert.ok(behavioral.includes('omnichannel/returns/${ret.id}/settle'), "Confirmed refund settlement API must be exercised");
+assert.ok(behavioral.includes('status).toBe("COMPLETED")'), "Return must complete only after financial settlement");
+assert.ok(behavioral.includes('returnId:') || behavioral.includes("idempotent).toBe(true)"), "Refund replay must be idempotent");
+assert.ok(behavioral.includes('postingEvent: "RETAIL_RELATIONSHIP_CREDIT_REVERSED"'), "Refund must verify double-entry posted reversal");
+assert.ok(behavioral.includes('index === 0 ? "CONSUMED" : "CANCELLED"'), "Partial/full refund must preserve/release usage in sequence");
 assert.ok(behavioral.includes('status: "PENDING_APPROVAL", currencyCode: fixture.currencyCode'), "E2E refund request must have canonical pending status");
 assert.ok(behavioral.includes('expect(pending.response.status()).toBeGreaterThanOrEqual(400)'), "Unconfirmed payments must be rejected by Finance");
 assert.ok(behavioral.includes("amount: String(half)"), "Actual partial allocation must use the canonical Finance API");
