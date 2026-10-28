@@ -334,6 +334,13 @@ export async function cancelRetailOmnichannelOrder(
     });
     if (updated.count !== 1) throw new EnterpriseRetailError("RETAIL_OMNICHANNEL_CANCELLATION_CONFLICT", 409);
     await releaseRetailOmnichannelRelationshipBenefitsTx({ tx, organizationId, orderId: salesOrderId });
+    await tx.enterpriseRelationshipBenefitUsage.updateMany({
+      where: {
+        organizationId, effectEntityType: "EnterpriseSalesOrder", effectEntityId: salesOrderId,
+        executionMode: "AUTO_RETAIL_OMNICHANNEL_CASHBACK", status: "REQUESTED",
+      },
+      data: { status: "CANCELLED", cancelledAt: new Date(), revision: { increment: 1 } },
+    });
     const updatedContext = await tx.enterpriseRetailOrderOrchestration.update({
       where: { id: orchestration.id },
       data: { status: "CANCELLED", updatedByUserId: actorUserId },
