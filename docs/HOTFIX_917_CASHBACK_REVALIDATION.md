@@ -20,9 +20,9 @@ Le moteur `tryGrantRetailOmnichannelCashbackTx` vérifiait la relation active, l
 ## Preuves et suites
 
 - Contrôle statique : `pnpm qa:hotfix-917`; inscrit dans `qa:regression`.
-- Playwright #914 étendu : deux ordres paiement/livraison continuent d'attribuer; troisième parcours retire l'audience CUSTOMER après réservation; quatrième lance **allocation et livraison en concurrence** et vérifie un seul EARN; cinquième expire le bénéfice avant la double preuve et vérifie l'absence de crédit et d'écriture. Un sixième scénario alloue partiellement le paiement puis le complète : aucun avoir n'est créé avant la totalité, et un seul est créé après le solde.
+- Playwright #914 étendu : deux ordres paiement/livraison continuent d'attribuer; troisième parcours retire l'audience CUSTOMER après réservation; quatrième lance **allocation et livraison en concurrence** et vérifie un seul EARN; cinquième expire le bénéfice avant la double preuve et vérifie l'absence de crédit et d'écriture. Un sixième scénario alloue partiellement le paiement puis le complète : aucun avoir n'est créé avant la totalité, et un seul est créé après le solde. Un septième vérifie qu'un paiement encore DRAFT ne peut être alloué ni crédité avant sa confirmation. Un huitième place une demande de retour `PENDING_APPROVAL` sur la commande avant l'allocation finale et constate l'absence d'EARN (donnée Finance de test, **pas** un remboursement effectivement confirmé).
 - QA CI/Playwright/OWNER_E2E #917 : **NOT_EXECUTED** avant publication de la branche.
-- Reste dans #917 : preuves bout en bout de multi-remboursements partiels/intégraux, solde négatif, périodes Finance bloquées, concurrence multi-navigateurs avec retries et cross-tenant. Le scénario parallèle ajouté ne suffit pas à certifier toutes ces dimensions. **La PR ne ferme pas #917 tant que ces scénarios et l'E2E propriétaire ne sont pas certifiés**.
+- Reste dans #917 : preuves **réelles de bout en bout** de multi-remboursements partiels/intégraux, solde négatif, périodes Finance bloquées, concurrence multi-navigateurs avec retries et cross-tenant. Le scénario parallèle ajouté ne suffit pas à certifier toutes ces dimensions. **La PR ne ferme pas #917 tant que ces scénarios et l'E2E propriétaire ne sont pas certifiés**.
 
 ## Sécurité, migration, rollback
 
