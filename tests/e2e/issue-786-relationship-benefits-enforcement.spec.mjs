@@ -1388,7 +1388,7 @@ test.describe.serial("Hotfix #786 relationship benefit enforcement", () => {
             currencyCode: fixture.currencyCode, subtotal: String(amount), grandTotal: String(amount),
             outstandingAmount: String(amount), createdByUserId: fixture.adminUserId,
             items: { create: {
-              organizationId, description: `E2E #914 line ${orderIndex}`, quantity: 1,
+              description: `E2E #914 line ${orderIndex}`, quantity: 1,
               unitPrice: String(amount), netAmount: String(amount), totalAmount: String(amount),
             } },
           },
