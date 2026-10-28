@@ -35,18 +35,20 @@ const e2eSeed = read("scripts/seed-erp-professional-e2e.mjs");
 const shopWorkflow = read(".github/workflows/shop2-behavioral.yml");
 const packageJson = JSON.parse(read("package.json"));
 
-const relationTypes = [
-  "PROSPECT", "CUSTOMER", "CUSTOMER_CONTACT", "SUPPLIER_REPRESENTATIVE",
-  "EMPLOYEE", "COLLABORATOR", "CONTRACTOR", "PARTNER", "PATIENT", "STUDENT",
-  "PARENT_GUARDIAN", "POLICYHOLDER", "BENEFICIARY", "DONOR", "VOLUNTEER",
-  "TENANT", "OWNER_CLIENT", "DISTRIBUTOR", "RESELLER", "ALUMNI", "VIP", "OTHER",
-];
+// Read the single canonical contract; do not carry a stale 22-type mirror.
+const relationTypeBlock = identityContracts.match(/export const ENTERPRISE_IDENTITY_RELATION_TYPES = \[([\s\S]*?)\] as const;/);
+check(Boolean(relationTypeBlock), "Missing canonical identity relation types");
+const relationTypes = [...(relationTypeBlock?.[1] || "").matchAll(/"([A-Z_]+)"/g)].map((entry) => entry[1]);
+check(relationTypes.length === 23, "Expected all 23 identity relationship types including SUPPLIER");
+check(new Set(relationTypes).size === relationTypes.length, "Duplicate canonical identity relationship type");
+check(relationTypes.includes("SUPPLIER"), "Canonical SUPPLIER relation cannot be skipped");
 for (const relationType of relationTypes) {
   check(identityContracts.includes(`"${relationType}"`), `Relationship type missing: ${relationType}`);
-  const mapping = new RegExp(`${relationType}: \\\[([^\\\]]+)\\\]`).exec(identityAccess)?.[1] || "";
+  const mapping = identityAccess.split("\n").find((line) => line.startsWith(`  ${relationType}: [`)) || "";
   check(mapping.includes("ENTERPRISE_BENEFITS"), `${relationType} must have an explicit ENTERPRISE_BENEFITS contract`);
 }
-check(relationTypes.length === 22, "Expected the 22 supported relationship types");
+check(identityAccess.includes("isEnterpriseIdentityRelationType(link.requestedRelationType)"), "Unknown relation values must fail-closed");
+check(!identityAccess.includes("RELATION_CAPABILITIES.OTHER)"), "Unknown relation must not silently inherit OTHER permissions");
 
 hasAll(contracts, [
   "relationshipBenefitConditionsSchema",

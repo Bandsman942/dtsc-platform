@@ -4,6 +4,13 @@
 - Les EARN et REVERSAL restent strictement dans les ledgers et écritures Finance canoniques.
 - CI/E2E automatique et OWNER_E2E #917 **NOT_EXECUTED** à ce stade. Parents #886/#785 ouverts.
 
+## 2026-10-28 — Hotfix P0 #916 : référentiel complet 23 relations (main certifié)
+
+- `ENTERPRISE_IDENTITY_RELATION_TYPES` est l'unique source des **23** types, dont `SUPPLIER`; la QA #786 ne conserve plus une liste incomplète de 22 entrées.
+- Le resolver ne convertit plus un code de relation inconnu en `OTHER` : refus sûr, sans accès `ENTERPRISE_BENEFITS` implicite. Couverture TypeScript exhaustive de la table des capacités.
+- Matrice de contrôle **23 × 15** dérivée des contrats et tests des deux contraintes SQL; distinction entre adaptateurs autorisés, demandes et refus explicites; aucune mutation Finance ni nouvelle table.
+- OWNER E2E #916 BON ; PR #922 fusionnée sur main@1220b63cf44c5d132c316bc4abdb47946a1fa31b ; CI 11/11 SUCCESS. Parents #886 et #785 ouverts.
+
 ## 2026-10-28 — Hotfix P0 #914 : cashback relationnel omnicanal (pré-release, PR #915)
 
 - Réservation de quota cashback lors de la création d'une commande Sales omnicanale réelle, sans avoir à la commande, avec contrôle relation consentie/tiers client et tarif canonique.
