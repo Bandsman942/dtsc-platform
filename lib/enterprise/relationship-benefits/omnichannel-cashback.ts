@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
 import { evaluateRelationshipBenefitSnapshot } from "@/lib/enterprise/relationship-benefits/enforcement";
 import type { RetailRelationshipCashbackEffect } from "@/lib/enterprise/relationship-benefits/retail-adapter";
 import { resolvePaidDeliveredOmnichannelOrderTx } from "@/lib/enterprise/relationship-benefits/omnichannel-payment-proof";
@@ -224,6 +225,11 @@ export async function tryGrantRetailOmnichannelCashbackTx(args: {
       },
     });
     if (saved.count !== 1) reject("RELATIONSHIP_OMNI_CASHBACK_REVISION_CONFLICT");
+    // Posting and store-credit attribution are atomic: no unfunded liability.
+    await postBusinessEventTx(tx, organizationId, actorUserId, {
+      postingEvent: "RETAIL_RELATIONSHIP_CREDIT_GRANTED",
+      sourceEntityType: "EnterpriseRetailStoredValueEntry", sourceEntityId: entry.id,
+    });
     credited++;
   }
   return { credited, eligible: true };
@@ -285,12 +291,16 @@ export async function reverseRetailOmnichannelCashbackTx(args: {
     const alreadyReversed = already.reduce((sum, row) => sum.plus(row.amount.abs()), zero());
     const delta = money(Prisma.Decimal.max(zero(), target.minus(alreadyReversed)));
     if (delta.gt(0)) {
-      await changeRelationalStoreCreditTx({
+      const reversal = await changeRelationalStoreCreditTx({
         tx, organizationId, accountId: earned.accountId,
         customerBusinessPartyId: order.businessPartyId, currencyCode: order.currency,
         actorUserId, amount: delta.negated(), entryType: "REVERSAL",
         returnId, idempotencyKey: `omni-cashback:return:${orderId}:${usage.benefitId}:${returnId}`,
         reason: `Réversion cashback omnicanal après retour ${returnId}`,
+      });
+      await postBusinessEventTx(tx, organizationId, actorUserId, {
+        postingEvent: "RETAIL_RELATIONSHIP_CREDIT_REVERSED",
+        sourceEntityType: "EnterpriseRetailStoredValueEntry", sourceEntityId: reversal.id,
       });
     }
     if (args.fullyReturned) {
