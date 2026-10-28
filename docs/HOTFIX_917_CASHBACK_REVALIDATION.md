@@ -14,13 +14,14 @@ Le moteur `tryGrantRetailOmnichannelCashbackTx` vérifiait la relation active, l
 - Recontrôler `canUseModule` pour Retail et Avantages afin que la désactivation d'un abonnement ne laisse pas attribuer de nouveau crédit.
 - Si une règle ne peut pas être vérifiée, laisser la réservation en attente sans `EARN`; aucune écriture sans droit courant.
 - Conserver le ledger `EnterpriseRetailStoredValue*`, l'idempotence et le posting comptable atomiques.
+- Refuser toute situation où des contrepassations déjà enregistrées dépasseraient le montant d'origine EARN, plutôt que de masquer silencieusement une anomalie de ledger.
 
 ## Preuves et suites
 
 - Contrôle statique : `pnpm qa:hotfix-917`; inscrit dans `qa:regression`.
-- Playwright #914 étendu : deux ordres paiement/livraison continuent d'attribuer, troisième parcours retire l'audience CUSTOMER après réservation : **aucun EARN, usage encore REQUESTED**.
+- Playwright #914 étendu : deux ordres paiement/livraison continuent d'attribuer; troisième parcours retire l'audience CUSTOMER après réservation; quatrième lance **allocation et livraison en concurrence** et vérifie un seul EARN; cinquième expire le bénéfice avant la double preuve et vérifie l'absence de crédit et d'écriture.
 - QA CI/Playwright/OWNER_E2E #917 : **NOT_EXECUTED** avant publication de la branche.
-- Reste dans #917 : preuves multi-remboursements partiels/intégraux, solde négatif, périodes Finance bloquées, concurrence de deux navigateurs et cross-tenant. **La PR ne ferme pas #917 tant que ces scénarios et l'E2E propriétaire ne sont pas certifiés**.
+- Reste dans #917 : preuves bout en bout de multi-remboursements partiels/intégraux, solde négatif, périodes Finance bloquées, concurrence multi-navigateurs avec retries et cross-tenant. Le scénario parallèle ajouté ne suffit pas à certifier toutes ces dimensions. **La PR ne ferme pas #917 tant que ces scénarios et l'E2E propriétaire ne sont pas certifiés**.
 
 ## Sécurité, migration, rollback
 

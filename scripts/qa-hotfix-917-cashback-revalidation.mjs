@@ -33,6 +33,11 @@ assert.ok(proof.includes("paymentAllocations"), "Confirmed Finance allocations r
 assert.ok(execution.includes("reverseRetailOmnichannelCashbackTx({"), "Return must invoke canonical reversal");
 assert.ok(posting.includes("EnterpriseRetailStoredValueEntry"), "Financial journal must follow Store Credit source");
 assert.ok(behavioral.includes("audienceWithdrawn"), "Real E2E must withdraw audience before earning");
+assert.ok(behavioral.includes("benefitExpired"), "Real E2E must refuse expired late benefits");
+assert.ok(behavioral.includes("concurrentSettlement"), "E2E must race Finance allocation and fulfillment");
+assert.ok(behavioral.includes("Promise.all([allocate(), fulfill()])"), "Concurrent settlement must use two real HTTP operations");
+assert.ok(service.includes("RELATIONSHIP_OMNI_CASHBACK_REVERSAL_OVERFLOW"), "Over-reversed ledger must fail closed");
+assert.ok(service.includes("alreadyReversed.gt(earned.amount)"), "Reversal must never exceed original EARN");
 assert.ok(behavioral.includes('data: { relationType: "OTHER" }'), "E2E must mutate the canonical audience");
 assert.ok(behavioral.includes('expect(withheld.status).toBe("REQUESTED")'), "E2E must prove no consumed status");
-console.log("HOTFIX #917: 17 structural checks passed. Owner E2E and financial refund suite remain independent.");
+console.log("HOTFIX #917: structural late-eligibility, concurrency and reversal-integrity checks passed. Owner E2E and financial refund suite remain independent.");
