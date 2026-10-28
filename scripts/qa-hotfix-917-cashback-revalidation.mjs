@@ -34,6 +34,7 @@ assert.ok(service.includes("effect.context.occurredAt.toISOString()"), "Store JS
 assert.ok(proof.includes('status: "PAID"') || proof.includes('status !== "PAID"'), "Real paid invoice proof required");
 assert.ok(proof.includes("paymentAllocations"), "Confirmed Finance allocations required");
 assert.ok(execution.includes("reverseRetailOmnichannelCashbackTx({"), "Return must invoke canonical reversal");
+assert.ok(!execution.includes("({ organizationId, salesOrderItemId: line.salesOrderItemId"), "Nested return lines must inherit tenant scope through Prisma parent relation");
 assert.ok(posting.includes("EnterpriseRetailStoredValueEntry"), "Financial journal must follow Store Credit source");
 assert.ok(behavioral.includes("audienceWithdrawn"), "Real E2E must withdraw audience before earning");
 assert.ok(behavioral.includes("benefitExpired"), "Real E2E must refuse expired late benefits");

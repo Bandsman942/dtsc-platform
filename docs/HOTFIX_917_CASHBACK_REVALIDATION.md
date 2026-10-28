@@ -17,6 +17,10 @@ Le moteur `tryGrantRetailOmnichannelCashbackTx` vérifiait la relation active, l
 - Les transactions Finance Allocation et Sales Fulfillment utilisent désormais un retry **borné et limité aux erreurs P2034 / conflits de sérialisation**, afin de supporter des événements simultanés sans double mutation; les erreurs métier ne sont jamais retriées.
 - Refuser toute situation où des contrepassations déjà enregistrées dépasseraient le montant d'origine EARN, plutôt que de masquer silencieusement une anomalie de ledger.
 
+## Anomalie de création des retours identifiée par la CI
+
+Le premier run Playwright de #917 a échoué sur la fixture de retour `PENDING_APPROVAL` : Prisma n'accepte pas `organizationId` directement dans le `lines.create` imbriqué au retour parent. La même forme figurait dans le service `requestRetailOmnichannelReturn`. Le hotfix supprime ce champ **uniquement dans la création imbriquée** ; le parent conserve `organizationId` et la relation Prisma composite impose l'organisation des lignes. La recette complète sur PostgreSQL doit **prouver** la résolution avant de considérer ce correctif livré.
+
 ## Recette réelle de remboursement à trois acteurs (#917)
 
 Le test PostgreSQL/Playwright `#917 real partial then full omnichannel refunds` est ajouté dans `tests/e2e/issue-786-relationship-benefits-enforcement.spec.mjs`. Il crée un compte de **troisième membre uniquement dans la base isolée CI** pour séparer demandeur, validateur et acteur de règlement. Le paiement client est confirmé, alloué, puis la commande livrée via les routes canoniques ; l'avoir est émis une seule fois.
