@@ -5,6 +5,7 @@ import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { assertActiveClientOrganization, financeReference, money, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { postBusinessEvent, postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
 import { reverseJournalEntryTx } from "@/lib/enterprise/accounting/reversal-service";
+import { tryGrantRetailOmnichannelCashbackTx } from "@/lib/enterprise/relationship-benefits/omnichannel-cashback";
 import type { paymentCreateSchema } from "@/lib/enterprise/accounting/schemas";
 import type { z } from "zod";
 
@@ -491,6 +492,19 @@ export async function allocateEnterprisePayment(
       const outstanding = money(receivable.outstandingAmount.minus(amount));
       await tx.enterpriseReceivable.update({ where: { id: receivable.id }, data: { allocatedAmount: { increment: amount }, outstandingAmount: outstanding, status: outstanding.isZero() ? "CLOSED" : "OPEN" } });
       await tx.enterpriseSalesInvoice.update({ where: { id: receivable.salesInvoiceId }, data: { amountPaid: { increment: amount }, outstandingAmount: outstanding, status: outstanding.isZero() ? "PAID" : "PARTIALLY_PAID", revision: { increment: 1 } } });
+      if (outstanding.isZero()) {
+        const orderInvoice = await tx.enterpriseSalesInvoice.findFirst({
+          where: { id: receivable.salesInvoiceId, organizationId },
+          select: { salesOrderId: true },
+        });
+        if (orderInvoice?.salesOrderId) {
+          // The Sales fulfillment hook calls the same serialized grant when
+          // delivery happens after payment; only both proofs can issue EARN.
+          await tryGrantRetailOmnichannelCashbackTx({
+            tx, organizationId, orderId: orderInvoice.salesOrderId, actorUserId,
+          });
+        }
+      }
       await tx.enterpriseReceivableAllocation.create({ data: { organizationId, receivableId: receivable.id, sourceType: "PAYMENT", sourceId: created.id, amount, allocationDate: new Date(), createdByUserId: actorUserId } });
     }
     if (payable) {
