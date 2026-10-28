@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { canUseModule } from "@/lib/billing/entitlements";
 import { postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
 import { evaluateRelationshipBenefitSnapshot } from "@/lib/enterprise/relationship-benefits/enforcement";
 import type { RetailRelationshipCashbackEffect } from "@/lib/enterprise/relationship-benefits/retail-adapter";
@@ -124,6 +125,14 @@ export async function reserveRetailOmnichannelCashbackTx(args: {
           stage: "ORDER_RESERVED", sourceSiteId: args.sourceSiteId,
           percent: effect.percentage.toFixed(), eligibleAmount: eligible.toFixed(),
           eligibleCatalogItemIds: ids, customerBusinessPartyId: order.businessPartyId,
+          // Minimal safe snapshot allows late server-side revalidation without
+          // inventing category, channel, quantity or weekday conditions.
+          reservationContext: {
+            catalogItemIds: effect.context.catalogItemIds,
+            categoryIds: effect.context.categoryIds,
+            quantity: effect.context.quantity,
+            occurredAt: effect.context.occurredAt,
+          },
         },
       },
     });
@@ -145,6 +154,11 @@ export async function tryGrantRetailOmnichannelCashbackTx(args: {
   await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseSalesOrder" WHERE id = ${orderId} AND "organizationId" = ${organizationId} FOR UPDATE`);
   const proof = await resolvePaidDeliveredOmnichannelOrderTx({ tx, organizationId, salesOrderId: orderId });
   if (!proof) return { credited: 0, eligible: false };
+  const [retailAccess, benefitsAccess] = await Promise.all([
+    canUseModule(organizationId, "RETAIL_POS"),
+    canUseModule(organizationId, "RELATIONSHIP_BENEFITS"),
+  ]);
+  if (!retailAccess.allowed || !benefitsAccess.allowed) return { credited: 0, eligible: false };
   const modules = await tx.enterpriseModule.findMany({
     where: { organizationId, isEnabled: true, moduleCode: { in: ["RETAIL_POS", "RELATIONSHIP_BENEFITS"] } },
     select: { moduleCode: true },
@@ -160,11 +174,29 @@ export async function tryGrantRetailOmnichannelCashbackTx(args: {
   for (const usage of usages) {
     const data = metadata(usage.effectMetadataJson);
     const key = creditKey(orderId, usage.benefitId);
-    const [benefit, link, customer] = await Promise.all([
-      tx.enterpriseRelationshipBenefit.findFirst({ where: { organizationId, id: usage.benefitId }, select: { benefitType: true, valueType: true, valueDecimal: true, status: true, archivedAt: true } }),
+    const [benefit, link, assignment, priorUsages, customer] = await Promise.all([
+      tx.enterpriseRelationshipBenefit.findFirst({
+        where: { organizationId, id: usage.benefitId }, include: { audiences: true },
+      }),
       tx.enterpriseIdentityLink.findFirst({
         where: { organizationId, id: usage.identityLinkId, userId: usage.userId },
-        select: { personIdentityId: true, requestedRelationType: true, status: true, activatedAt: true, userDecisionAt: true, organizationDecisionAt: true },
+        select: {
+          id: true, userId: true, personIdentityId: true, requestedRelationType: true,
+          requestedRoleCode: true, status: true, activatedAt: true,
+          userDecisionAt: true, organizationDecisionAt: true,
+        },
+      }),
+      tx.enterpriseRelationshipBenefitAssignment.findFirst({
+        where: { organizationId, benefitId: usage.benefitId, identityLinkId: usage.identityLinkId },
+        select: { status: true, benefitId: true, startsAt: true, endsAt: true },
+      }),
+      tx.enterpriseRelationshipBenefitUsage.findMany({
+        where: {
+          organizationId, benefitId: usage.benefitId, identityLinkId: usage.identityLinkId,
+          userId: usage.userId, id: { not: usage.id },
+        },
+        select: { benefitId: true, status: true, requestedAt: true },
+        take: 100000,
       }),
       tx.enterpriseBusinessParty.findFirst({
         where: {
@@ -184,10 +216,31 @@ export async function tryGrantRetailOmnichannelCashbackTx(args: {
     const percent = typeof data.percent === "string" ? money(data.percent) : zero();
     const expected = money(eligibleAmount.times(percent).div(100));
     const entryAmount = usage.effectAmount;
+    const reserved = data.reservationContext;
+    const reservedContext = reserved && typeof reserved === "object" && !Array.isArray(reserved)
+      ? reserved as Record<string, unknown> : {};
+    const contexts = {
+      moduleCode: "RETAIL_POS",
+      transactionAmount: Number(proof.grossTotal),
+      currencyCode: proof.currencyCode,
+      businessPartyId: proof.customerBusinessPartyId,
+      siteId: proof.sourceSiteId,
+      channelCode: "POS",
+      catalogItemIds: eligibleCatalogIds(reservedContext.catalogItemIds).length
+        ? eligibleCatalogIds(reservedContext.catalogItemIds)
+        : eligibleCatalogIds(data.eligibleCatalogItemIds),
+      categoryIds: eligibleCatalogIds(reservedContext.categoryIds),
+      quantity: typeof reservedContext.quantity === "number" && Number.isFinite(reservedContext.quantity)
+        ? reservedContext.quantity : null,
+      occurredAt: typeof reservedContext.occurredAt === "string"
+        ? reservedContext.occurredAt : null,
+    };
     if (!benefit || !link || !accountRef || !customer ||
         link.status !== "ACTIVE" || !link.activatedAt || !link.userDecisionAt || !link.organizationDecisionAt ||
         benefit.benefitType !== "CASHBACK" || benefit.valueType !== "PERCENT" ||
         benefit.status !== "ACTIVE" || benefit.archivedAt ||
+        benefit.targetModuleCode !== "RETAIL_POS" || benefit.actionCode !== "NONE" ||
+        !benefit.stackable || benefit.assignmentMode !== "AUTOMATIC" ||
         !benefit.valueDecimal?.equals(percent) || !entryAmount?.equals(expected) ||
         !eligibleAmount.gt(0) || eligibleAmount.gt(proof.grossTotal) ||
         data.customerBusinessPartyId !== proof.customerBusinessPartyId ||
@@ -197,6 +250,15 @@ export async function tryGrantRetailOmnichannelCashbackTx(args: {
       // Keep reserved; never mint credit on a revoked or ambiguous relation.
       continue;
     }
+    // The original reservation is excluded from quota calculation; it already
+    // owns its slot. All OTHER active usages still count against the limit.
+    // Revoked audience, removed assignment, expired benefit or changed
+    // conditions must deny issuance even after the order was reserved.
+    const reevaluated = evaluateRelationshipBenefitSnapshot({
+      benefit, link, assignment, usages: priorUsages,
+      context: contexts, now: new Date(), requireBusinessContext: true,
+    });
+    if (!reevaluated.allowed) continue;
     const existingEntry = await tx.enterpriseRetailStoredValueEntry.findFirst({
       where: { organizationId, idempotencyKey: key },
     });
