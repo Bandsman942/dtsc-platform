@@ -1,15 +1,14 @@
-## 2026-10-28 — Hotfix P0 #914 : preuve de paiement du cashback omnicanal (travail en cours)
+## 2026-10-28 — Hotfix P0 #914 : cashback relationnel omnicanal (pré-release, PR #915)
 
-- Mise en place de la vérification en lecture de la commande omnicanale intégralement livrée, preuve de remise client ou justificatif documenté, facture canonique unique et paiement client réellement affecté à la créance.
-- Refus des paiements partiels, factures ambiguës, preuves manquantes, retours non rejetés et divergences tenant/tiers/devise ; aucun faux avoir ou écriture POS n'est émis.
-- **Non livré** : réservation, attribution automatique `EARN`, réversion `REVERSAL`, tests comportementaux/OWNER_E2E, Quality CI et Publication Production. Voir `docs/HOTFIX_914_OMNICHANNEL_CASHBACK.md`. La fonctionnalité cashback omnicanale reste **indisponible**.
+- Réservation de quota cashback lors de la création d'une commande Sales omnicanale réelle, sans avoir à la commande, avec contrôle relation consentie/tiers client et tarif canonique.
+- Attribution `EARN` uniquement après livraison complète acceptée et facture postée entièrement réglée par allocations Finance confirmées ; événements livraison/paiement dans les deux ordres, même clé d'idempotence et verrou de commande.
+- Avoir `STORE_CREDIT` et posting de la dette/charge en partie double atomiques dans le registre existant; retours remboursés avec `REVERSAL` proportionnelle et posting de contrepartie indépendant.
+- QA structurelle 53 assertions et tests PostgreSQL/Playwright en cours de certification. **Non publié** : CI globale et OWNER_E2E #914 non encore établis ; PR #915 en brouillon. Voir `docs/HOTFIX_914_OMNICHANNEL_CASHBACK.md`.
 
-## 2026-10-27 — Hotfix #912 : preuve DELIVERY relationnelle (PR de validation, non publiée)
+## 2026-10-28 — Hotfix #912 : preuve DELIVERY relationnelle (Production READY)
 
-- Nouveau parcours non monétaire DELIVERY : demande et approbation de l'avantage avant l'attestation d'une livraison réellement terminée dans le module Sales canonique.
-- Preuve documentaire ACTIVE/versionnée et liée à la commande, tiers/identité consentie, validation indépendante, quotas et idempotence dans une transaction SERIALIZABLE ; aucun second moteur de livraison ou mouvement Finance.
-- Nouvelle route sécurisée, contrôle séparé des permissions Sales et Avantages, interface FR/EN et script QA contractuel #912.
-- **Statut** : branche de travail uniquement ; CI, E2E propriétaire et production non encore certifiés. Les parents #886 et #785 restent ouverts.
+- Livraison non monétaire liée à une commande Sales réellement terminée et un justificatif actif/versionné; consentement, approbation indépendante, audit et idempotence.
+- OWNER_E2E #912 BON; CI GitHub 12/12 réussie et E2E Shop2 17/17; PR #913 fusionnée dans `main` au commit `1a0ea7df9da2eabfb26559c971c89db8c2fc28b4`. Vercel Production `dpl_2XMv7eNwKCaVCyyMUTBYhzJD844L` READY. Parent #886 / #785 restent ouverts.
 
 ## 2026-10-26 — Hotfix P0 #908 : cashback relationnel Retail en avoir magasin (pré-release)
 
