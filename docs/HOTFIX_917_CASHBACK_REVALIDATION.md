@@ -14,6 +14,7 @@ Le moteur `tryGrantRetailOmnichannelCashbackTx` vérifiait la relation active, l
 - Recontrôler `canUseModule` pour Retail et Avantages afin que la désactivation d'un abonnement ne laisse pas attribuer de nouveau crédit.
 - Si une règle ne peut pas être vérifiée, laisser la réservation en attente sans `EARN`; aucune écriture sans droit courant.
 - Conserver le ledger `EnterpriseRetailStoredValue*`, l'idempotence et le posting comptable atomiques.
+- Les transactions Finance Allocation et Sales Fulfillment utilisent désormais un retry **borné et limité aux erreurs P2034 / conflits de sérialisation**, afin de supporter des événements simultanés sans double mutation; les erreurs métier ne sont jamais retriées.
 - Refuser toute situation où des contrepassations déjà enregistrées dépasseraient le montant d'origine EARN, plutôt que de masquer silencieusement une anomalie de ledger.
 
 ## Preuves et suites
