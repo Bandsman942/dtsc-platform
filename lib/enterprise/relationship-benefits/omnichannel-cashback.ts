@@ -9,7 +9,7 @@ import { changeRelationalStoreCreditTx, ensureRelationalStoreCreditAccountTx } f
 const MODE = "AUTO_RETAIL_OMNICHANNEL_CASHBACK";
 const money = (x: Prisma.Decimal.Value) => new Prisma.Decimal(x).toDecimalPlaces(6, Prisma.Decimal.ROUND_HALF_UP);
 const zero = () => new Prisma.Decimal(0);
-const reject = (code: string): never => { throw new EnterpriseRetailError(code, 409); };
+function reject(code: string): never { throw new EnterpriseRetailError(code, 409); }
 const creditKey = (orderId: string, benefitId: string) => `omni-cashback:order:${orderId}:benefit:${benefitId}`;
 const reservedKey = (orderId: string, benefitId: string) => `omni-cashback:reserved:${orderId}:${benefitId}`;
 function metadata(raw: Prisma.JsonValue | null | undefined): Record<string, unknown> {
