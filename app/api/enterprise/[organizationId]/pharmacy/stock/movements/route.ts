@@ -33,22 +33,18 @@ export async function GET(req: Request, { params }: Params) {
     return NextResponse.json({ error: "PHARMACY_STOCK_SEARCH_TOO_LONG" }, { status: 400 });
   }
 
-  const where: Prisma.PharmacyStockMovementWhereInput = {
-    organizationId,
-    ...(query
-      ? {
-          OR: [
-            { product: { name: { contains: query, mode: "insensitive" } } },
-            { batch: { is: { batchNumber: { contains: query, mode: "insensitive" } } } },
-            { reason: { contains: query, mode: "insensitive" } },
-          ],
-        }
-      : {}),
-  };
+  const where: Prisma.PharmacyStockMovementWhereInput = { organizationId };
+  if (query) {
+    where.OR = [
+      { product: { name: { contains: query, mode: "insensitive" } } },
+      { batch: { is: { batchNumber: { contains: query, mode: "insensitive" } } } },
+      { reason: { contains: query, mode: "insensitive" } },
+    ];
+  }
 
-  const [total, totalUnfiltered, movements] = await Promise.all([
+  const [total, totalUnfilteredCount, movements] = await Promise.all([
     prisma.pharmacyStockMovement.count({ where }),
-    query ? prisma.pharmacyStockMovement.count({ where: { organizationId } }) : prisma.pharmacyStockMovement.count({ where }),
+    query ? prisma.pharmacyStockMovement.count({ where: { organizationId } }) : Promise.resolve(null),
     prisma.pharmacyStockMovement.findMany({
       where,
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
@@ -64,6 +60,7 @@ export async function GET(req: Request, { params }: Params) {
       },
     }),
   ]);
+  const totalUnfiltered = totalUnfilteredCount ?? total;
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
   return NextResponse.json(
