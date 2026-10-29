@@ -10,13 +10,25 @@ import { containModalTab, isTopmostModal } from "@/lib/client-focus-management";
 import { translate } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
-export function ModuleWorkspace({ children, className }: { children: ReactNode; className?: string }) {
+export type ModuleWorkspaceDensity = "comfortable" | "compact";
+
+export function ModuleWorkspace({
+  children,
+  className,
+  density = "comfortable",
+}: {
+  children: ReactNode;
+  className?: string;
+  density?: ModuleWorkspaceDensity;
+}) {
   return (
     <div
       data-module-workspace
+      data-workspace-density={density}
       data-responsive-scope
       className={cn(
-        "w-full min-w-0 max-w-full space-y-6 overflow-x-clip pb-[calc(1rem+env(safe-area-inset-bottom))] sm:space-y-7",
+        "w-full min-w-0 max-w-full overflow-x-clip pb-[calc(1rem+env(safe-area-inset-bottom))]",
+        density === "compact" ? "space-y-3 sm:space-y-4" : "space-y-6 sm:space-y-7",
         className,
       )}
     >
@@ -145,11 +157,24 @@ export function ModuleToolbar({
   );
 }
 
-export function ModuleContent({ children, className }: { children: ReactNode; className?: string }) {
+export function ModuleContent({
+  children,
+  className,
+  density = "comfortable",
+}: {
+  children: ReactNode;
+  className?: string;
+  density?: ModuleWorkspaceDensity;
+}) {
   return (
     <div
       data-module-content
-      className={cn("w-full min-w-0 max-w-full space-y-6 overflow-x-clip sm:space-y-8", className)}
+      data-workspace-density={density}
+      className={cn(
+        "w-full min-w-0 max-w-full overflow-x-clip",
+        density === "compact" ? "space-y-4 sm:space-y-5" : "space-y-6 sm:space-y-8",
+        className,
+      )}
     >
       {children}
     </div>
