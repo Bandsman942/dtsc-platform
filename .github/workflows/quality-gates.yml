@@ -157,6 +157,8 @@ jobs:
         run: node scripts/audit-standard-collaboration-e2e-fixes.mjs
       - name: Standard collaboration commercial readiness QA
         run: node scripts/audit-standard-collaboration-commercial-readiness.mjs
+      - name: "UX-02B #949 Pharmacy movements pagination QA"
+        run: node scripts/qa-ux-949-pharmacy-movement-pagination.mjs
       - name: Lint
         run: pnpm lint
       - name: Build
