@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import type { Prisma } from "@prisma/client";
+import { enterpriseBusinessCalendarWindows, getEnterpriseBusinessContext } from "@/lib/enterprise/business-context";
 import { effectivePharmacyBatchStatus } from "@/lib/pharmacy-batches";
 import { convertPharmacyMoneyToBase } from "@/lib/pharmacy-currencies";
 import type { pharmacySaleSchema } from "@/lib/pharmacy-sale-validators";
@@ -58,13 +59,14 @@ type PharmacySalesView = "dashboard" | "today" | "history" | "lines" | "validati
 type PharmacySalesQuery = { page: number; pageSize: number; query: string; view: PharmacySalesView };
 
 export async function getSalesDataset(organizationId: string, params: PharmacySalesQuery) {
-  const settings = await getEffectivePharmacySettings(organizationId);
+  const [settings, businessContext] = await Promise.all([
+    getEffectivePharmacySettings(organizationId),
+    getEnterpriseBusinessContext(prisma, organizationId),
+  ]);
   const currency = String(settings.sections.general.currency || "");
-  const now = new Date();
-  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  const tomorrow = new Date(today.getTime() + 86_400_000);
-  const month = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  const todayFilter = { gte: today, lt: tomorrow };
+  const businessCalendar = enterpriseBusinessCalendarWindows(new Date(), businessContext.timezone);
+  const todayFilter = businessCalendar.day;
+  const monthFilter = businessCalendar.month;
   const viewFilter: Prisma.PharmacySaleWhereInput =
     params.view === "today" ? { saleDate: todayFilter } :
     params.view === "validation" ? { pharmacistValidationStatus: "PENDING" } :
@@ -96,7 +98,7 @@ export async function getSalesDataset(organizationId: string, params: PharmacySa
     prisma.pharmacyPrescription.findMany({ where: { organizationId, status: { notIn: ["REJECTED", "ARCHIVED", "CANCELLED"] } }, select: { id: true, prescriptionNumber: true } }),
     prisma.pharmacyStockMovement.findMany({ where: { organizationId, relatedEntityType: "PharmacySale" }, orderBy: { createdAt: "desc" }, take: 100 }),
     prisma.pharmacySale.aggregate({ where: { ...base, saleDate: todayFilter }, _count: { _all: true }, _sum: { totalAmountBase: true } }),
-    prisma.pharmacySale.aggregate({ where: { ...base, saleDate: { gte: month } }, _count: { _all: true }, _sum: { totalAmountBase: true } }),
+    prisma.pharmacySale.aggregate({ where: { ...base, saleDate: monthFilter }, _count: { _all: true }, _sum: { totalAmountBase: true } }),
     prisma.pharmacySale.count({ where: { ...base, paymentStatus: "PAID" } }),
     prisma.pharmacySale.count({ where: { ...base, paymentStatus: "PARTIALLY_PAID" } }),
     prisma.pharmacySale.count({ where: { ...base, status: "CANCELLED" } }),
