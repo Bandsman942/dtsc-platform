@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowRight, Layers3 } from "lucide-react";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
+import { EnterpriseQuickAccess } from "@/components/enterprise/enterprise-quick-access";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { EmptyState } from "@/components/workspace/empty-state";
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleWorkspace } from "@/components/workspace/module-workspace";
@@ -44,6 +45,7 @@ export default async function EnterpriseModulesHubPage() {
             actions={(
               <Link
                 href={enterpriseModule.href}
+                data-enterprise-module-code={enterpriseModule.code}
                 aria-label={`${user.locale === "en" ? "Open" : "Ouvrir"} ${enterpriseModule.label}`}
                 className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-dtsc-blue hover:bg-dtsc-soft"
               >
@@ -73,6 +75,13 @@ export default async function EnterpriseModulesHubPage() {
           )}
         />
         <ModuleContent>
+          <EnterpriseQuickAccess
+            organizationId={organizationId}
+            userId={user.id}
+            activeOrganizationRole={session.activeOrganizationRole}
+            modules={modules}
+            locale={user.locale}
+          />
           {Array.from(groupedModules.entries()).map(([groupLabel, groupModules]) => (
             <ModuleSection
               key={groupLabel}

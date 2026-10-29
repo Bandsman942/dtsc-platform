@@ -9,7 +9,8 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
 import { useToastMessage } from "@/components/ui/use-toast-message";
-import { useSmartList } from "@/lib/hooks/use-smart-list";
+import { actionFeedback } from "@/lib/client-action-feedback";
+import type { ToastNotice } from "@/lib/client-toast";
 
 type Opt = {
   id: string;
@@ -28,7 +29,7 @@ type Opt = {
 };
 type Line = { id: string; productId: string; batchId: string; quantity: string; unit: string; unitPrice: string; totalLine: string; requiresPrescription: boolean; requiresPharmacistValidation: boolean };
 type Sale = { id: string; saleNumber: string; saleType: string; customerName: string | null; prescriptionId: string | null; cashierId: string; saleDate: string; currency: string; totalAmount: string; paidAmount: string; remainingAmount: string; paymentMethod: string | null; paymentStatus: string; pharmacistValidationStatus: string; status: string; stockImpactApplied: boolean; lines: Line[]; refunds: unknown[]; anomalies: unknown[] };
-type Data = { metrics: Record<string, number>; currency: string; sales: Sale[]; products: Opt[]; batches: Opt[]; members: Opt[]; departments: Opt[]; prescriptions: Opt[]; movements: Array<{ id: string; movementType: string; quantity: string; createdAt: string }> };
+type Data = { metrics: Record<string, number>; currency: string; sales: Sale[]; pagination: { page: number; pageSize: number; total: number; totalUnfiltered: number; pageCount: number }; products: Opt[]; batches: Opt[]; members: Opt[]; departments: Opt[]; prescriptions: Opt[]; movements: Array<{ id: string; movementType: string; quantity: string; createdAt: string }> };
 type FLine = { productId: string; batchId: string; quantity: string; unit: string; unitPrice: string; lineDiscount: string; notes: string };
 type Form = { saleNumber: string; saleType: string; customerName: string; customerPhone: string; customerType: string; prescriptionId: string; prescriberName: string; cashierId: string; departmentId: string; saleDate: string; currency: string; globalDiscount: string; taxAmount: string; paidAmount: string; paymentMethod: string; paymentReference: string; notes: string; lines: FLine[] };
 type Tab = "dashboard" | "new" | "today" | "history" | "lines" | "validation" | "refunds" | "exceptional" | "receipts" | "anomalies" | "movements";
@@ -90,7 +91,7 @@ const emptyForm = (data: Data | null): Form => ({
   cashierId: data?.members[0]?.id || "",
   departmentId: "",
   saleDate: new Date().toISOString().slice(0, 10),
-  currency: data?.currency || "USD",
+  currency: data?.currency || "",
   globalDiscount: "0",
   taxAmount: "0",
   paidAmount: "0",
@@ -106,26 +107,47 @@ export function PharmacySalesWorkspace({ organizationId }: { organizationId: str
   const [open, setOpen] = useState(false);
   const [detail, setDetail] = useState<Sale | null>(null);
   const [form, setForm] = useState<Form>(() => emptyForm(null));
-  const [message, setMessage] = useState("");
-  useToastMessage(message);
+  const [notice, setNotice] = useState<ToastNotice | null>(null);
+  const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(false);
+  useToastMessage(notice);
 
-  const load = useCallback(async () => {
-    const response = await fetch(`/api/enterprise/${organizationId}/pharmacy/sales`, { cache: "no-store" });
-    const body = await response.json().catch(() => null) as Data | null;
-    if (response.ok && body) setData(body);
-    else setMessage("Chargement des ventes impossible.");
-  }, [organizationId]);
+  useEffect(() => {
+    const timeout = setTimeout(() => { setPage(1); setDebouncedQuery(query); }, 250);
+    return () => clearTimeout(timeout);
+  }, [query]);
 
-  useEffect(() => { void load(); }, [load]);
+  const load = useCallback(async (signal?: AbortSignal) => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ page: String(page), pageSize: "12", q: debouncedQuery, view: tab });
+      const response = await fetch(`/api/enterprise/${organizationId}/pharmacy/sales?${params.toString()}`, { cache: "no-store", signal });
+      const body = await response.json().catch(() => null) as Data | null;
+      if (signal?.aborted) return;
+      if (response.ok && body) setData(body);
+      else setNotice({ description: "Chargement des ventes impossible. Vérifiez votre connexion ou réessayez.", tone: "error" });
+    } catch {
+      if (!signal?.aborted) setNotice({ description: "Impossible de charger les ventes. Vérifiez votre connexion.", tone: "error" });
+    } finally {
+      if (!signal?.aborted) setLoading(false);
+    }
+  }, [organizationId, page, debouncedQuery, tab]);
 
-  const list = useSmartList({ items: data?.sales || [], pageSize: 12, getSearchText: useCallback((sale: Sale) => `${sale.saleNumber} ${sale.status} ${sale.customerName || ""} ${sale.paymentStatus}`, []) });
+  useEffect(() => {
+    const controller = new AbortController();
+    void load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
+
   const productMap = useMemo(() => new Map((data?.products || []).map((product) => [product.id, product])), [data]);
 
   async function save(event: FormEvent) {
     event.preventDefault();
     const response = await fetch(`/api/enterprise/${organizationId}/pharmacy/sales`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
     const body = await response.json().catch(() => null) as { message?: string } | null;
-    setMessage(response.ok ? "Vente enregistrée." : body?.message || "Enregistrement impossible.");
+    setNotice(actionFeedback(response.ok, body, { success: "Vente enregistrée.", failure: "Enregistrement impossible." }));
     if (response.ok) {
       setOpen(false);
       await load();
@@ -135,7 +157,7 @@ export function PharmacySalesWorkspace({ organizationId }: { organizationId: str
   async function action(sale: Sale, actionName: string, extra: Record<string, unknown> = {}) {
     const response = await fetch(`/api/enterprise/${organizationId}/pharmacy/sales/${sale.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: actionName, ...extra }) });
     const body = await response.json().catch(() => null) as { message?: string } | null;
-    setMessage(response.ok ? "Action de vente enregistrée." : body?.message || "Action impossible.");
+    setNotice(actionFeedback(response.ok, body, { success: "Action de vente enregistrée.", failure: "Action impossible." }));
     if (response.ok) {
       setDetail(null);
       await load();
@@ -147,8 +169,8 @@ export function PharmacySalesWorkspace({ organizationId }: { organizationId: str
   }
 
   const sales = data?.sales || [];
-  const today = new Date().toISOString().slice(0, 10);
-  const shown = tab === "today" ? sales.filter((sale) => sale.saleDate.slice(0, 10) === today) : sales;
+  const pagination = data?.pagination;
+  const changeTab = (next: Tab) => { setPage(1); setTab(next); };
 
   return <section className="w-full min-w-0 overflow-hidden rounded-2xl border border-dtsc-border bg-dtsc-page p-3 sm:p-4">
     <div className="flex flex-wrap justify-between gap-3">
@@ -156,8 +178,9 @@ export function PharmacySalesWorkspace({ organizationId }: { organizationId: str
         <h3 className="text-lg font-black text-dtsc-ink">Sorties, ventes & dispensation</h3>
         <p className="text-sm text-dtsc-muted">Panier, contrôle pharmacien, paiement léger et sortie stock FEFO.</p>
       </div>
-      <Button onClick={() => { setForm(emptyForm(data)); setOpen(true); }} className="w-full bg-[#002b5b] text-white sm:w-auto"><Plus />Nouvelle vente</Button>
+      <Button disabled={!data?.currency} onClick={() => { setForm(emptyForm(data)); setOpen(true); }} className="w-full bg-[#002b5b] text-white sm:w-auto"><Plus />Nouvelle vente</Button>
     </div>
+    {data && !data.currency && <p role="alert" className="mt-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">Configurez la devise principale de la pharmacie avant de créer une vente.</p>}
     <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
       {([
         ["dashboard", "Tableau de bord"],
@@ -171,17 +194,17 @@ export function PharmacySalesWorkspace({ organizationId }: { organizationId: str
         ["receipts", "Reçus / factures"],
         ["anomalies", "Anomalies de vente"],
         ["movements", "Historique des mouvements"],
-      ] as Array<[Tab, string]>).map(([code, title]) => <button key={code} type="button" onClick={() => code === "new" ? setOpen(true) : setTab(code)} className={`shrink-0 rounded-full border px-3 py-2 text-xs font-black ${tab === code ? "border-emerald-400 text-emerald-700" : "border-dtsc-border text-dtsc-muted"}`}>{title}</button>)}
+      ] as Array<[Tab, string]>).map(([code, title]) => <button key={code} type="button" disabled={code === "new" && !data?.currency} onClick={() => code === "new" ? (setForm(emptyForm(data)), setOpen(true)) : changeTab(code)} aria-current={tab === code ? "page" : undefined} className={`shrink-0 rounded-full border px-3 py-2 text-xs font-black disabled:cursor-not-allowed disabled:opacity-50 ${tab === code ? "border-emerald-400 text-emerald-700" : "border-dtsc-border text-dtsc-muted"}`}>{title}</button>)}
     </div>
+    {loading && <p className="py-2 text-xs text-dtsc-muted" role="status">Actualisation des ventes…</p>}
     {tab === "dashboard" ? <Metrics metrics={data?.metrics || {}} />
-      : tab === "movements" ? <Grid>{(data?.movements || []).map((movement) => <Card key={movement.id} title={label(movement.movementType)} text={`${movement.quantity} · ${formatDate(movement.createdAt)}`} />)}</Grid>
-      : tab === "lines" ? <Grid>{sales.flatMap((sale) => sale.lines.map((line) => <Card key={line.id} title={productMap.get(line.productId)?.name || "Produit"} text={`${line.quantity} ${line.unit} · ${line.totalLine} ${sale.currency || data?.currency || "USD"}`} />))}</Grid>
-      : tab === "validation" ? <Grid>{sales.filter((sale) => sale.pharmacistValidationStatus === "PENDING").map((sale) => <SaleCard key={sale.id} sale={sale} actions={actions(sale, setDetail, action)} />)}</Grid>
-      : tab === "refunds" ? <Grid>{sales.filter((sale) => ["CANCELLED", "REFUNDED"].includes(sale.status)).map((sale) => <SaleCard key={sale.id} sale={sale} actions={actions(sale, setDetail, action)} />)}</Grid>
-      : tab === "anomalies" ? <Grid>{sales.filter((sale) => sale.anomalies.length).map((sale) => <SaleCard key={sale.id} sale={sale} actions={actions(sale, setDetail, action)} />)}</Grid>
+      : tab === "movements" ? <><p className="mb-2 text-xs text-dtsc-muted">100 derniers mouvements (historique récent).</p><Grid>{(data?.movements || []).map((movement) => <Card key={movement.id} title={label(movement.movementType)} text={`${movement.quantity} · ${formatDate(movement.createdAt)}`} />)}</Grid></>
       : <>
-        <ListControls query={list.query} onQueryChange={list.setQuery} page={list.page} pageCount={list.pageCount} totalCount={list.totalCount} filteredCount={list.filteredCount} onPageChange={list.setPage} placeholder="Numéro, client ou statut..." />
-        <Grid>{(tab === "history" ? list.paginatedItems : shown).map((sale) => <SaleCard key={sale.id} sale={sale} actions={actions(sale, setDetail, action)} />)}</Grid>
+        <ListControls query={query} onQueryChange={setQuery} page={page} pageCount={pagination?.pageCount || 1} totalCount={pagination?.totalUnfiltered || 0} filteredCount={pagination?.total || 0} onPageChange={setPage} placeholder="Numéro, client ou statut..." />
+        {tab === "lines" ?
+        <Grid>{sales.flatMap((sale) => sale.lines.map((line) => <Card key={line.id} title={productMap.get(line.productId)?.name || "Produit"} text={`${line.quantity} ${line.unit} · ${line.totalLine} ${sale.currency || data?.currency || "—"}`} />))}</Grid> :
+          <Grid>{sales.map((sale) => <SaleCard key={sale.id} sale={sale} actions={actions(sale, setDetail, action)} />)}</Grid>}
+        {!loading && !sales.length && <p className="py-6 text-center text-sm text-dtsc-muted">Aucune vente pour ces critères.</p>}
       </>}
     <SaleForm open={open} close={() => setOpen(false)} form={form} setForm={setForm} data={data} updateLine={updateLine} save={save} />
     <Dialog open={Boolean(detail)} title={detail?.saleNumber || "Détail vente"} description="Traçabilité de la vente et actions contrôlées." onClose={() => setDetail(null)} className="h-[94dvh] max-w-5xl">
@@ -217,7 +240,7 @@ function SaleCard({ sale, actions: menuActions }: { sale: Sale; actions: ActionM
       </div>
       <ActionMenu items={menuActions} />
     </div>
-    <p className="mt-2 text-xs text-dtsc-muted">{sale.lines.length} ligne(s) · {sale.totalAmount} {sale.currency || "USD"} · {label(sale.paymentStatus)} · {sale.stockImpactApplied ? "Stock impacté" : "Stock non impacté"}</p>
+    <p className="mt-2 text-xs text-dtsc-muted">{sale.lines.length} ligne(s) · {sale.totalAmount} {sale.currency || "—"} · {label(sale.paymentStatus)} · {sale.stockImpactApplied ? "Stock impacté" : "Stock non impacté"}</p>
   </article>;
 }
 
@@ -231,7 +254,7 @@ function actions(sale: Sale, setDetail: (sale: Sale) => void, action: (sale: Sal
 function Detail({ sale, products, action }: { sale: Sale; products: Map<string, Opt>; action: (sale: Sale, actionName: string, extra?: Record<string, unknown>) => Promise<void> }) {
   const [reason, setReason] = useState("");
   return <div className="grid gap-3">
-    {sale.lines.map((line) => <Card key={line.id} title={products.get(line.productId)?.name || "Produit"} text={`${line.quantity} ${line.unit} · ${line.totalLine} ${sale.currency || "USD"}`} />)}
+    {sale.lines.map((line) => <Card key={line.id} title={products.get(line.productId)?.name || "Produit"} text={`${line.quantity} ${line.unit} · ${line.totalLine} ${sale.currency || "—"}`} />)}
     {sale.stockImpactApplied && <div className="rounded-xl border border-red-300 p-3">
       <Input value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Motif obligatoire" />
       <Button className="mt-2" variant="outline" disabled={!reason} onClick={() => void action(sale, "cancel", { reason })}><Undo2 />Annuler et restaurer le stock</Button>

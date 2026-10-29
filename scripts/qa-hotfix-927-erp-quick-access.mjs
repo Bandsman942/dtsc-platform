@@ -1,0 +1,36 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+const hub = readFileSync("app/enterprise-modules/page.tsx", "utf8");
+const quick = readFileSync("components/enterprise/enterprise-quick-access.tsx", "utf8");
+const command = readFileSync("components/enterprise/enterprise-command-palette.tsx", "utf8");
+const dialog = readFileSync("components/enterprise/enterprise-command-dialog.tsx", "utf8");
+const shell = readFileSync("components/layout/app-shell.tsx", "utf8");
+const mobile = readFileSync("components/dtsc/mobile-shell.tsx", "utf8");
+const nav = readFileSync("lib/enterprise/enterprise-navigation.ts", "utf8");
+
+assert.match(hub, /getEnterpriseNavigationModules\(organizationId, user\.id, user\.locale\)/);
+assert.match(hub, /<EnterpriseQuickAccess/);
+assert.match(hub, /activeOrganizationRole=\{session\.activeOrganizationRole\}/);
+assert.match(hub, /data-enterprise-module-code=\{enterpriseModule\.code\}/);
+assert.match(quick, /new Map\(modules\.map/);
+assert.match(quick, /allowed\.has\(code\)/);
+assert.match(quick, /dtsc:erp-shortcuts:v1:\$\{organizationId\}:\$\{userId\}/);
+assert.match(quick, /window\.localStorage/);
+assert.match(quick, /<input ref=\{searchInputRef\} type="search"/);
+assert.match(quick, /aria-pressed=\{isFavorite\}/);
+assert.match(quick, /activeOrganizationRole/);
+assert.match(quick, /href=\{module\.href\}/);
+assert.match(nav, /listNavigableEnterpriseModules/);
+assert.match(command, /event\.metaKey/);
+assert.match(command, /event\.ctrlKey/);
+assert.match(command, /event\.preventDefault\(\)/);
+assert.match(command, /dynamic\(/);
+assert.match(command, /focusSearch=\{focusSearch\}/);
+assert.match(dialog, /searchInputRef\.current\?\.focus/);
+assert.match(dialog, /<EnterpriseQuickAccess/);
+assert.match(shell, /<EnterpriseCommandPalette/);
+assert.match(shell, /modules=\{enterpriseShell\.modules\}/);
+assert.match(shell, /<EnterpriseCommandTrigger/);
+assert.match(mobile, /showEnterpriseCommand \? <EnterpriseCommandTrigger/);
+console.log("PASS UX-04: tenant/user-scoped favorites, authorized global Ctrl/Cmd+K palette and mobile trigger");

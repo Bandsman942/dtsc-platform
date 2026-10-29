@@ -10,7 +10,7 @@ import {
   ShieldCheck,
   UserCircle,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 
 import type { HostType } from "@/lib/domains";
 import { cn } from "@/lib/utils";
@@ -42,14 +42,62 @@ export function ProductNavigationMenu({
   destinations: ProductDestination[];
 }) {
   const [open, setOpen] = useState(false);
+  const menuId = useId();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const ActiveIcon = destinationIcons[activeDestination.key];
 
+  useEffect(() => {
+    if (!open) return;
+    const frame = window.requestAnimationFrame(() => {
+      menuRef.current?.querySelector<HTMLAnchorElement>('[role="menuitem"]')?.focus({ preventScroll: true });
+    });
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.target instanceof Node && !rootRef.current?.contains(event.target)) setOpen(false);
+    };
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || !rootRef.current?.contains(document.activeElement)) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setOpen(false);
+      triggerRef.current?.focus({ preventScroll: true });
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onEscape);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onEscape);
+    };
+  }, [open]);
+
+  function handleMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Tab") {
+      event.preventDefault();
+      setOpen(false);
+      triggerRef.current?.focus({ preventScroll: true });
+      return;
+    }
+    const links = Array.from(menuRef.current?.querySelectorAll<HTMLAnchorElement>('[role="menuitem"]') || []);
+    if (!links.length) return;
+    const activeIndex = links.indexOf(document.activeElement as HTMLAnchorElement);
+    const nextIndex = event.key === "ArrowDown" ? (activeIndex + 1) % links.length
+      : event.key === "ArrowUp" ? (activeIndex <= 0 ? links.length - 1 : activeIndex - 1)
+      : event.key === "Home" ? 0 : event.key === "End" ? links.length - 1 : -1;
+    if (nextIndex < 0) return;
+    event.preventDefault();
+    links[nextIndex]?.focus({ preventScroll: true });
+  }
+
   return (
-    <div className="relative">
+    <div ref={rootRef} className="relative">
       <button
+        ref={triggerRef}
         type="button"
         aria-expanded={open}
         aria-haspopup="menu"
+        aria-controls={open ? menuId : undefined}
         onClick={() => setOpen((current) => !current)}
         className={cn(
           "flex w-full items-center gap-3 rounded-2xl border border-dtsc-primary/15 bg-white/90 px-3 py-3 text-left shadow-sm transition hover:border-dtsc-primary/35 hover:bg-white dark:border-slate-700 dark:bg-slate-900 dark:hover:border-dtsc-accent/50",
@@ -75,7 +123,10 @@ export function ProductNavigationMenu({
 
       {open ? (
         <div
+          ref={menuRef}
+          id={menuId}
           role="menu"
+          onKeyDown={handleMenuKeyDown}
           className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-40 max-h-72 min-w-56 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-900/15 dark:border-slate-700 dark:bg-slate-950"
         >
           {destinations.map((destination) => {

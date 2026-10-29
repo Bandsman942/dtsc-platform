@@ -8,6 +8,7 @@ import { Bell, Blocks, Gauge, LifeBuoy, LogOut, MessagesSquare, ShieldCheck } fr
 import type { ElementType } from "react";
 import type { UserRole } from "@prisma/client";
 import { MobileAvatar } from "@/components/dtsc/ui-components";
+import { EnterpriseCommandTrigger } from "@/components/enterprise/enterprise-command-palette";
 import { useCollaborationPresenceLease } from "@/components/dtsc/use-collaboration-presence-lease";
 import { OrganizationContextSwitcher } from "@/components/layout/organization-context-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -52,12 +53,14 @@ export function MobilePwaHeader({
   currentOrganizationId,
   organizationOptions = [],
   productBranding = "Espace SaaS",
+  showEnterpriseCommand = false,
 }: {
   user: MobileShellUser;
   unreadNotifications: number;
   currentOrganizationId?: string | null;
   organizationOptions?: Array<{ id: string; label: string; role?: string | null }>;
   productBranding?: string;
+  showEnterpriseCommand?: boolean;
 }) {
   const locale = user.locale || "fr";
   const copy = getExperienceCopy(locale).mobile;
@@ -113,6 +116,7 @@ export function MobilePwaHeader({
         data-horizontal-rail
         className="mt-3 flex min-w-0 snap-x items-start gap-2 overflow-x-auto pb-1 scrollbar-hide"
       >
+        {showEnterpriseCommand ? <EnterpriseCommandTrigger locale={locale} variant="rail" /> : null}
         {organizationOptions.length > 0 ? (
           <OrganizationContextSwitcher
             currentOrganizationId={currentOrganizationId || null}

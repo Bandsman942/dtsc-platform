@@ -1,10 +1,11 @@
 "use client";
 
-import { isValidElement, useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { isValidElement, useCallback, useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Minimize2, X } from "lucide-react";
 import { requestPersistentCallHandoff, PERSISTENT_CALL_RESTORE_EVENT } from "@/components/calls/persistent-call-events";
 import { Button } from "@/components/ui/button";
+import { containModalTab, isTopmostModal } from "@/lib/client-focus-management";
 import { cn } from "@/lib/utils";
 
 type DialogProps = {
@@ -52,7 +53,9 @@ export function Dialog({
   presentation = "default",
 }: DialogProps) {
   const titleId = useId();
+  const descriptionId = useId();
   const overlayRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [minimized, setMinimized] = useState(false);
   const persistentCallDialog = isPersistentCallContent(children);
@@ -76,22 +79,41 @@ export function Dialog({
     return () => window.removeEventListener(PERSISTENT_CALL_RESTORE_EVENT, restore);
   }, [persistentCallDialog]);
 
-  async function minimizePersistentCall() {
+  const minimizePersistentCall = useCallback(async () => {
     if (onMinimize) {
       onMinimize();
       return;
     }
     await requestPersistentCallHandoff();
     setMinimized(true);
-  }
+  }, [onMinimize]);
 
-  function handleClose() {
+  const handleClose = useCallback(() => {
     if (persistentCallDialog) {
       void minimizePersistentCall().catch(() => undefined);
       return;
     }
     onClose();
-  }
+  }, [minimizePersistentCall, onClose, persistentCallDialog]);
+
+  useEffect(() => {
+    if (!open || minimized) {
+      return;
+    }
+
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const initialFocusFrame = window.requestAnimationFrame(() => {
+      if (isTopmostModal(overlayRef.current)) titleRef.current?.focus({ preventScroll: true });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(initialFocusFrame);
+      // A nested confirmation should return to its invoking control, not the page behind its parent dialog.
+      window.requestAnimationFrame(() => {
+        if (previouslyFocused?.isConnected) previouslyFocused.focus({ preventScroll: true });
+      });
+    };
+  }, [minimized, open]);
 
   useEffect(() => {
     if (!open || minimized) {
@@ -103,8 +125,16 @@ export function Dialog({
     let secondFocusTimer = 0;
 
     function handleKeyDown(event: KeyboardEvent) {
+      const overlay = overlayRef.current;
+      if (!overlay || !isTopmostModal(overlay)) return;
+      // Portalled action menus are visually above the dialog and handle their own keyboard events.
+      if (document.activeElement?.closest('[role="menu"]')) return;
       if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
         handleClose();
+      } else if (event.key === "Tab") {
+        containModalTab(event, overlay);
       }
     }
 
@@ -174,7 +204,7 @@ export function Dialog({
       window.clearTimeout(focusTimer);
       window.clearTimeout(secondFocusTimer);
     };
-  }, [minimized, onClose, open, persistentCallDialog]);
+  }, [handleClose, minimized, open]);
 
   if (!open || minimized || typeof document === "undefined") {
     return null;
@@ -196,8 +226,10 @@ export function Dialog({
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
+      aria-describedby={description ? descriptionId : undefined}
+      tabIndex={-1}
       onClick={(event) => {
-        if (event.target === event.currentTarget) {
+        if (event.target === event.currentTarget && isTopmostModal(overlayRef.current)) {
           handleClose();
         }
       }}
@@ -221,6 +253,8 @@ export function Dialog({
           <div className="min-w-0 border-l-[3px] border-cyan-500 pl-3.5">
             <h2
               id={titleId}
+              ref={titleRef}
+              tabIndex={-1}
               className={cn(
                 "break-words font-black tracking-[-0.02em] text-dtsc-ink",
                 isEditorPresentation ? "text-lg sm:text-2xl" : "text-xl sm:text-2xl",
@@ -230,6 +264,7 @@ export function Dialog({
             </h2>
             {description && (
               <p
+                id={descriptionId}
                 className={cn(
                   "mt-1.5 break-words text-sm leading-6 text-dtsc-muted",
                   isEditorPresentation && "hidden sm:block",

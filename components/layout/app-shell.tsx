@@ -10,6 +10,7 @@ import { SessionTimeoutGuard } from "@/components/auth/session-timeout-guard";
 import { DtscLogo } from "@/components/brand/dtsc-logo";
 import { MobileGroupSwipeNavigation } from "@/components/dtsc/mobile-group-swipe-navigation";
 import { MobileBottomNavigation, MobilePwaHeader } from "@/components/dtsc/mobile-shell";
+import { EnterpriseCommandPalette, EnterpriseCommandTrigger } from "@/components/enterprise/enterprise-command-palette";
 import { LocaleProvider } from "@/components/i18n/locale-provider";
 import { DtscFooter } from "@/components/layout/dtsc-footer";
 import { ContextualBackButton } from "@/components/workspace/contextual-back-button";
@@ -189,6 +190,15 @@ export async function AppShell({
         <AppResumeSync pushEnabled={Boolean(user.pushNotificationsEnabled)} />
         <PrivateMobileChromeController />
         <GlobalCallToast />
+        {organizationContext && activeOrganizationId && enterpriseShell.modules.length ? (
+          <EnterpriseCommandPalette
+            organizationId={activeOrganizationId}
+            userId={user.id}
+            activeOrganizationRole={session?.activeOrganizationRole}
+            locale={user.locale}
+            modules={enterpriseShell.modules}
+          />
+        ) : null}
         <PromotionalBannerHost banners={promotionalBanners} />
         <MobilePwaHeader
           user={user}
@@ -196,6 +206,7 @@ export async function AppShell({
           currentOrganizationId={activeOrganizationId}
           organizationOptions={organizationOptions}
           productBranding={productBranding}
+          showEnterpriseCommand={organizationContext && enterpriseShell.modules.length > 0}
         />
         <MobileGroupSwipeNavigation
           role={user.role}
@@ -251,6 +262,7 @@ export async function AppShell({
                 <span>{organizationContext && activeOrganization ? activeOrganization.name : productBranding} · {dtsc.slogan}</span>
               </div>
               <div className="flex items-center gap-3">
+                {organizationContext && enterpriseShell.modules.length > 0 ? <EnterpriseCommandTrigger locale={user.locale} /> : null}
                 {organizationOptions.length > 0 && (
                   <OrganizationContextSwitcher currentOrganizationId={activeOrganizationId} organizations={organizationOptions} />
                 )}

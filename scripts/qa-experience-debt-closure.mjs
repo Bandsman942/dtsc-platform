@@ -61,13 +61,15 @@ ok(!/size:\s*\{[\s\S]*?default:\s*"h-9\b/.test(button), "Shared Button default s
 const moduleWorkspace = read("components/workspace/module-workspace.tsx");
 includesAll(moduleWorkspace, [
   "getExperienceCopy",
-  "copy.signature",
+  "data-workspace-module-header",
+  "border-l-[3px] border-cyan-500",
   "MoreHorizontal",
   "ModuleRefreshButton compact",
   "copy.openSection",
   "copy.backToModule",
   'translate(locale, "common.actions")',
 ], "module-workspace");
+ok(!moduleWorkspace.includes("copy.signature"), "Compact ERP header must not reintroduce the permanent marketing signature.");
 ok(!moduleWorkspace.includes('>DTSC · Workspace<'), "Module workspace must not hardcode the English signature in JSX.");
 ok(!moduleWorkspace.includes('Ouvrir le workspace'), "Module section controls must come from the experience dictionary.");
 ok(!moduleWorkspace.includes('ariaLabel = "Contrôles du module"'), "Shared toolbar accessibility label must follow the active locale.");
