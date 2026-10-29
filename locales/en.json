@@ -2,6 +2,14 @@
   "enterpriseActivities": {
     "unavailableTitle": "Enterprise activities unavailable"
   },
+  "pharmacyStockHistory": {
+    "searchPlaceholder": "Search product, batch or reason...",
+    "loading": "Loading stock movements...",
+    "loadError": "Unable to load stock movements. Check your connection or try again.",
+    "retry": "Try again",
+    "withoutBatch": "no batch",
+    "empty": "No stock movements match your search."
+  },
   "common": {
     "actions": "Actions",
     "archive": "Archive",
