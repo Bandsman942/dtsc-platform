@@ -157,6 +157,8 @@ jobs:
         run: node scripts/audit-standard-collaboration-e2e-fixes.mjs
       - name: Standard collaboration commercial readiness QA
         run: node scripts/audit-standard-collaboration-commercial-readiness.mjs
+      - name: HOTFIX #945 payroll approval typed-feedback QA
+        run: node scripts/qa-hotfix-945-payroll-feedback.mjs
       - name: Lint
         run: pnpm lint
       - name: Build
