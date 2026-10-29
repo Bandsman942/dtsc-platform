@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Clock3, Search, Star, Zap } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type Ref } from "react";
 import type { EnterpriseNavigationModule } from "@/lib/enterprise/enterprise-navigation";
 
 type Shortcuts = { favorites: string[]; recent: string[] };
@@ -31,12 +31,14 @@ export function EnterpriseQuickAccess({
   activeOrganizationRole,
   modules,
   locale,
+  searchInputRef,
 }: {
   organizationId: string;
   userId: string;
   activeOrganizationRole?: string | null;
   modules: EnterpriseNavigationModule[];
   locale?: string | null;
+  searchInputRef?: Ref<HTMLInputElement>;
 }) {
   const english = locale === "en";
   const storageKey = `dtsc:erp-shortcuts:v1:${organizationId}:${userId}`;
@@ -118,7 +120,7 @@ export function EnterpriseQuickAccess({
       <label className="mt-3 flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-page px-3 focus-within:ring-2 focus-within:ring-cyan-400">
         <Search className="h-4 w-4 shrink-0 text-dtsc-muted" aria-hidden="true" />
         <span className="sr-only">{english ? "Find an ERP module" : "Rechercher un module ERP"}</span>
-        <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={english ? "Find a module..." : "Rechercher un module..."} className="min-h-11 w-full min-w-0 bg-transparent text-base text-dtsc-ink outline-none placeholder:text-dtsc-muted sm:text-sm" />
+        <input ref={searchInputRef} type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={english ? "Find a module..." : "Rechercher un module..."} className="min-h-11 w-full min-w-0 bg-transparent text-base text-dtsc-ink outline-none placeholder:text-dtsc-muted sm:text-sm" />
       </label>
       <div className="mt-3 grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-3" aria-live="polite">
         {displayed.map((module) => {
