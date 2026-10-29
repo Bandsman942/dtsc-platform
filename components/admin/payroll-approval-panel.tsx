@@ -7,6 +7,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToastMessage } from "@/components/ui/use-toast-message";
+import type { ToastNotice } from "@/lib/client-toast";
 import { BusinessDetail, BusinessDetailField, BusinessDetailGrid, BusinessDetailHeader, BusinessDetailSection } from "@/components/workspace/business-detail";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { ContextActions } from "@/components/workspace/context-actions";
@@ -28,18 +29,30 @@ export function PayrollApprovalPanel({ approverRole, locale, embedded = false }:
   const [comment, setComment] = useState("");
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("PENDING_APPROVAL");
-  const [message, setMessage] = useState("");
+  const [notice, setNotice] = useState<ToastNotice | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  useToastMessage(message);
+  useToastMessage(notice);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const response = await fetch(endpoint, { cache: "no-store" });
-    const body = (await response.json().catch(() => null)) as { payrolls?: PayrollWorkflowItem[]; message?: string } | null;
-    if (response.ok) setPayrolls(body?.payrolls || []);
-    else setMessage(body?.message || t("approvalLoadError"));
-    setLoading(false);
+    try {
+      const response = await fetch(endpoint, { cache: "no-store" });
+      const body = (await response.json().catch(() => null)) as { payrolls?: PayrollWorkflowItem[] } | null;
+      if (!response.ok) {
+        setNotice({ tone: "error", description: payrollFeedbackForStatus(response.status, t, "approvalLoadError") });
+        return;
+      }
+      if (!Array.isArray(body?.payrolls)) {
+        setNotice({ tone: "error", description: t("approvalUnexpectedResponse") });
+        return;
+      }
+      setPayrolls(body.payrolls);
+    } catch {
+      setNotice({ tone: "error", description: t("approvalNetworkError") });
+    } finally {
+      setLoading(false);
+    }
   }, [endpoint, t]);
 
   useEffect(() => { void load(); }, [load]);
@@ -55,24 +68,36 @@ export function PayrollApprovalPanel({ approverRole, locale, embedded = false }:
   }, [locale, payrolls, query, status]);
 
   async function review() {
-    if (!selected || !decision) return;
+    if (!selected || !decision || saving) return;
     setSaving(true);
-    const response = await fetch(`${endpoint}/${selected.id}/review`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: decision, comment }),
-    });
-    const body = (await response.json().catch(() => null)) as { payroll?: PayrollWorkflowItem; message?: string } | null;
-    setSaving(false);
-    if (!response.ok) {
-      setMessage(body?.message || t("reviewError"));
-      return;
+    try {
+      const response = await fetch(`${endpoint}/${selected.id}/review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: decision, comment }),
+      });
+      const body = (await response.json().catch(() => null)) as { ok?: boolean; payroll?: PayrollWorkflowItem } | null;
+      if (!response.ok) {
+        setNotice({ tone: "error", description: payrollFeedbackForStatus(response.status, t, "reviewError") });
+        return;
+      }
+      if (body?.ok !== true || !body.payroll) {
+        setNotice({ tone: "error", description: t("approvalUnexpectedResponse") });
+        return;
+      }
+      setNotice({
+        tone: "success",
+        description: decision === "APPROVED" ? t("approved") : decision === "CHANGES_REQUESTED" ? t("changesRequested") : t("rejected"),
+      });
+      setDecision(null);
+      setComment("");
+      setSelected(null);
+      await load();
+    } catch {
+      setNotice({ tone: "error", description: t("approvalNetworkError") });
+    } finally {
+      setSaving(false);
     }
-    setMessage(decision === "APPROVED" ? t("approved") : decision === "CHANGES_REQUESTED" ? t("changesRequested") : t("rejected"));
-    setDecision(null);
-    setComment("");
-    setSelected(null);
-    await load();
   }
 
   const pending = payrolls.filter((item) => item.status === "PENDING_APPROVAL").length;
@@ -172,6 +197,16 @@ function ApprovalDetail({ payroll, locale, t }: { payroll: PayrollWorkflowItem; 
       {payroll.reviewHistory.length ? <BusinessList ariaLabel={t("history")}>{payroll.reviewHistory.map((item) => <BusinessListItem key={item.id} title={reviewActionLabel(t, item.action)} meta={`${item.actorName} · ${formatDateTime(item.createdAt, locale)}`} description={item.comment || t("noComment")} />)}</BusinessList> : <EmptyState compact title={t("noHistory")} description={t("noHistoryDescription")} icon={Clock3} />}
     </BusinessDetailSection>
   </BusinessDetail>;
+}
+
+function payrollFeedbackForStatus(status: number, t: (key: string) => string, fallbackKey: string): string {
+  if (status === 401) return t("approvalSessionExpired");
+  if (status === 403) return t("approvalForbidden");
+  if (status === 409) return t("approvalConflict");
+  if (status === 429) return t("approvalRateLimited");
+  if (status === 400 || status === 422) return t("approvalInvalidDecision");
+  if (status >= 500) return t("approvalServiceUnavailable");
+  return t(fallbackKey);
 }
 
 function formatMoney(value: number) { return new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value) + " USD"; }
