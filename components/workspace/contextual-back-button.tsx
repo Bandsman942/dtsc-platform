@@ -98,10 +98,20 @@ export function ContextualBackButton() {
   }, [pathname]);
 
   useEffect(() => {
+    const forms = editedForms.current;
     const track = (event: Event) => {
       if (!(event.target instanceof Element)) return;
       const form = event.target.closest("form");
-      if (form) editedForms.current.add(form);
+      // Filters and searches change the view; they are not unsaved business records.
+      if (form && !form.matches('[role="search"], [data-navigation-filter-form]') &&
+        !form.querySelector('[data-form-no-unsaved-warning]')) {
+        const target = event.target;
+        if (target instanceof HTMLInputElement && ["search", "hidden"].includes(target.type)) return;
+        editedForms.current.add(form);
+      }
+    };
+    const markSaved = (event: Event) => {
+      if (event.target instanceof HTMLFormElement) editedForms.current.delete(event.target);
     };
     const rememberLink = (event: MouseEvent) => {
       if (!(event.target instanceof Element)) return;
@@ -114,12 +124,16 @@ export function ContextualBackButton() {
     };
     document.addEventListener("input", track, true);
     document.addEventListener("change", track, true);
+    document.addEventListener("reset", markSaved, true);
+    document.addEventListener("dtsc:form-saved", markSaved, true);
     document.addEventListener("click", rememberLink, true);
     return () => {
       document.removeEventListener("input", track, true);
       document.removeEventListener("change", track, true);
+      document.removeEventListener("reset", markSaved, true);
+      document.removeEventListener("dtsc:form-saved", markSaved, true);
       document.removeEventListener("click", rememberLink, true);
-      editedForms.current.clear();
+      forms.clear();
     };
   }, []);
 

@@ -35,7 +35,7 @@ expect(
     workspace.includes("safe-area-inset-bottom"),
 );
 expect("workspace sections have explicit semantic hierarchy", workspace.includes("data-workspace-section") && workspace.includes("data-workspace-section-header") && workspace.includes("border-l-[3px] border-cyan-500") && workspace.includes("text-lg font-black") && workspace.includes("sm:text-xl"));
-expect("module content keeps strong vertical separation between sections", workspace.includes("space-y-10") && workspace.includes("sm:space-y-12"));
+expect("module content keeps a compact but distinct section rhythm", workspace.includes("space-y-6") && workspace.includes("sm:space-y-8"));
 expect("toolbar is visually distinct from business content", workspace.includes("data-workspace-toolbar") && workspace.includes("bg-dtsc-page/70") && workspace.includes("rounded-2xl"));
 expect("metrics preserve a compact mobile horizontal rail", metrics.includes("overflow-x-auto") && metrics.includes("flex-nowrap") && metrics.includes("touch-pan-x") && metrics.includes("snap-mandatory") && metrics.includes("lg:grid") && metrics.includes("data-workspace-metric") && !metrics.includes("dtsc-card"));
 expect("business list is row/separator based", businessList.includes("divide-y") && businessList.includes("BusinessListItem") && businessList.includes("data-business-list-item") && !businessList.includes("dtsc-card"));

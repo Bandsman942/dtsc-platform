@@ -1,7 +1,7 @@
 "use client";
 
 import { MoreHorizontal, MoreVertical } from "lucide-react";
-import { Fragment, useEffect, useRef, useState, type ElementType } from "react";
+import { Fragment, useEffect, useRef, useState, type ElementType, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 
@@ -37,12 +37,25 @@ export function ActionMenu({
 
   useEffect(() => {
     if (!open) return;
+    const frame = window.requestAnimationFrame(() => {
+      menuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
     function onPointerDown(event: PointerEvent) {
       const target = event.target as Node;
       if (!rootRef.current?.contains(target) && !menuRef.current?.contains(target)) setOpen(false);
     }
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape" && menuRef.current?.contains(document.activeElement)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setOpen(false);
+        triggerRef.current?.focus({ preventScroll: true });
+      }
     }
     function closeOnViewportChange(event: Event) {
       if (event.type === "scroll" && event.target instanceof Node && menuRef.current?.contains(event.target)) return;
@@ -93,6 +106,26 @@ export function ActionMenu({
     setOpen(true);
   }
 
+  function handleMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    const menuItems = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') || []);
+    if (!menuItems.length) return;
+    if (event.key === "Tab") {
+      event.preventDefault();
+      setOpen(false);
+      triggerRef.current?.focus({ preventScroll: true });
+      return;
+    }
+    const currentIndex = menuItems.indexOf(document.activeElement as HTMLButtonElement);
+    let nextIndex: number;
+    if (event.key === "ArrowDown") nextIndex = (currentIndex + 1) % menuItems.length;
+    else if (event.key === "ArrowUp") nextIndex = currentIndex <= 0 ? menuItems.length - 1 : currentIndex - 1;
+    else if (event.key === "Home") nextIndex = 0;
+    else if (event.key === "End") nextIndex = menuItems.length - 1;
+    else return;
+    event.preventDefault();
+    menuItems[nextIndex]?.focus({ preventScroll: true });
+  }
+
   if (!visibleItems.length) return null;
 
   return (
@@ -112,6 +145,7 @@ export function ActionMenu({
         <div
           ref={menuRef}
           role="menu"
+          onKeyDown={handleMenuKeyDown}
           style={{ left: menuPosition.left, top: menuPosition.top, zIndex: 1200 }}
           className="fixed z-[1000] max-h-[min(24rem,calc(100dvh-1.5rem))] max-w-[calc(100vw-1.5rem)] min-w-40 touch-pan-y overflow-y-auto overscroll-contain rounded-2xl border border-dtsc-border bg-dtsc-surface/95 p-1 shadow-[0_18px_60px_rgba(0,23,54,0.28)] backdrop-blur-xl [-webkit-overflow-scrolling:touch] sm:min-w-56"
         >
@@ -125,6 +159,7 @@ export function ActionMenu({
                   role="menuitem"
                   onClick={() => {
                     setOpen(false);
+                    triggerRef.current?.focus({ preventScroll: true });
                     item.onSelect();
                   }}
                   className={cn(

@@ -335,6 +335,8 @@ jobs:
           exit 1
       - name: Authenticated ERP browser acceptance
         run: pnpm e2e:erp-professional
+      - name: UX-06 visual, WCAG and navigation budgets (synthetic ERP tenant)
+        run: pnpm exec playwright test tests/e2e/ux-visual-accessibility.spec.mjs
       - name: Hotfix 574 Finance owner acceptance
         run: pnpm exec playwright test tests/e2e/hotfix-574-finance-owner.spec.mjs
       - name: Hotfix 576 Finance owner acceptance
@@ -355,3 +357,10 @@ jobs:
             playwright-report
             test-results
             /tmp/dtsc-next.log
+      - name: Upload UX-06 visual evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ux-06-visual-evidence
+          if-no-files-found: ignore
+          path: test-results/**/*.png

@@ -60,8 +60,16 @@ check(
 );
 
 check(
-  "dialog partagé ne bloque ni le body ni le focus natif",
-  !dialog.includes('document.body.style.overflow = "hidden"') && !dialog.includes("preventDefault()") && !dialog.includes(".focus()")
+  "dialog partagé ne bloque ni le body ni le focus natif des contrôles iOS",
+  !dialog.includes('document.body.style.overflow = "hidden"')
+    // Keyboard-only focus isolation is intentional; the user-gesture focusin path must remain native.
+    && dialog.includes('containModalTab(event, overlay)')
+    && (() => {
+      const focusHandler = dialog.split("function handleFocusIn(event: FocusEvent)")[1]?.split("const viewport = window.visualViewport")[0] || "";
+      return focusHandler.includes("ensureFocusedControlVisible")
+        && !focusHandler.includes("preventDefault()")
+        && !focusHandler.includes(".focus(");
+    })()
 );
 
 check(
