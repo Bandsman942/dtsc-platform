@@ -163,6 +163,8 @@ jobs:
         run: node scripts/qa-ux-947-compact-density.mjs
       - name: "UX-02B #949 Pharmacy movements pagination QA"
         run: node scripts/qa-ux-949-pharmacy-movement-pagination.mjs
+      - name: "UX-07B #959 Section toolbar compact density QA"
+        run: node scripts/qa-ux-959-workspace-section-density.mjs
       - name: Lint
         run: pnpm lint
       - name: Build
