@@ -31,7 +31,7 @@ assert.ok(stock.includes("<ListControls"), "Movement tab must have page controls
 assert.ok(stock.includes("setMovementPage(1)"), "New searches reset page");
 assert.ok(stock.includes("movementResult.movements.map"), "History must render returned page");
 assert.ok(!stock.includes('(dataset?.movements || []).map((item)'), "History must not render the overview subset");
-assert.match(dataset, /pharmacyStockMovement\.findMany\(\{ where: \{ organizationId \}, orderBy: \[\{ createdAt: "desc" \}, \{ id: "desc" \} \], take: 5/, "Dashboard only fetches five recent movements");
+assert.match(dataset, /pharmacyStockMovement\.findMany\(\{ where: \{ organizationId \}, orderBy: \[\{ createdAt: "desc" \}, \{ id: "desc" \}\], take: 5\b/, "Dashboard only fetches five recent movements");
 for (const key of ["searchPlaceholder","loading","loadError","retry","withoutBatch","empty"]) {
   assert.equal(typeof fr[key], "string", `Missing FR ${key}`);
   assert.equal(typeof en[key], "string", `Missing EN ${key}`);
