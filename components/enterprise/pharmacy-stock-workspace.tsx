@@ -6,6 +6,9 @@ import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { ListControls } from "@/components/ui/list-controls";
+import { useAppLocale } from "@/components/i18n/locale-provider";
+import { translate } from "@/lib/i18n";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 
 import { useToastMessage } from "@/components/ui/use-toast-message";
@@ -18,6 +21,7 @@ type Adjustment = { id: string; adjustmentType: string; direction: string; quant
 type Location = { id: string; name: string; code: string; locationType: string; status: string; refrigerated: boolean; temperatureControlled: boolean };
 type Member = { id: string; name: string; email: string };
 type Dataset = { metrics: Record<string, number>; productStock: ProductStock[]; batches: BatchStock[]; movements: Movement[]; sessions: Session[]; adjustments: Adjustment[]; locations: Location[]; members: Member[]; departments: Array<{ id: string; labelFr: string }> };
+type MovementPage = { movements: Movement[]; pagination: { page: number; pageSize: number; pageCount: number; total: number; totalUnfiltered: number } };
 type Tab = "overview" | "products" | "batches" | "movements" | "sessions" | "variances" | "adjustments" | "locations" | "alerts" | "history";
 type FormKind = "session" | "adjustment" | "location";
 
@@ -73,12 +77,53 @@ export function PharmacyStockWorkspace({ organizationId }: { organizationId: str
   const [detail, setDetail] = useState<Session | ProductStock | BatchStock | null>(null);
   const [form, setForm] = useState<Record<string, string | boolean>>({});
   const [query, setQuery] = useState("");
+  const locale = useAppLocale();
+  const t = useCallback((key: string) => translate(locale, `pharmacyStockHistory.${key}`), [locale]);
+  const [movementPage, setMovementPage] = useState(1);
+  const [movementQuery, setMovementQuery] = useState("");
+  const [movementResult, setMovementResult] = useState<MovementPage | null>(null);
+  const [movementLoading, setMovementLoading] = useState(false);
+  const [movementError, setMovementError] = useState("");
+  const [movementRefreshKey, setMovementRefreshKey] = useState(0);
+
+  useEffect(() => {
+    if (tab !== "movements" && tab !== "history") return;
+    const controller = new AbortController();
+    setMovementLoading(true);
+    setMovementError("");
+    const timer = window.setTimeout(() => {
+      const params = new URLSearchParams({
+        page: String(movementPage),
+        pageSize: "20",
+        q: movementQuery.trim(),
+      });
+      void fetch(`/api/enterprise/${organizationId}/pharmacy/stock/movements?${params}`, {
+        cache: "no-store",
+        signal: controller.signal,
+      }).then(async (response) => {
+        const body = (await response.json().catch(() => null)) as MovementPage | null;
+        if (!response.ok || !body || !Array.isArray(body.movements) || !body.pagination) {
+          throw new Error("Movement history unavailable");
+        }
+        if (!controller.signal.aborted) setMovementResult(body);
+      }).catch(() => {
+        if (!controller.signal.aborted) setMovementError(t("loadError"));
+      }).finally(() => {
+        if (!controller.signal.aborted) setMovementLoading(false);
+      });
+    }, movementQuery.trim() ? 300 : 0);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [organizationId, tab, movementPage, movementQuery, movementRefreshKey, t]);
+
 
   const load = useCallback(async () => {
     setLoading(true);
     const response = await fetch(`/api/enterprise/${organizationId}/pharmacy/stock`);
     const body = (await response.json().catch(() => null)) as Dataset | { message?: string } | null;
-    if (response.ok) setDataset(body as Dataset); else setMessage((body as { message?: string } | null)?.message || "Chargement du stock impossible.");
+    if (response.ok) { setDataset(body as Dataset); setMovementRefreshKey((value) => value + 1); } else setMessage((body as { message?: string } | null)?.message || "Chargement du stock impossible.");
     setLoading(false);
   }, [organizationId]);
   useEffect(() => { void load(); }, [load]);
@@ -113,7 +158,23 @@ export function PharmacyStockWorkspace({ organizationId }: { organizationId: str
     {tab === "overview" && <Overview metrics={dataset?.metrics || {}} movements={dataset?.movements || []} sessions={dataset?.sessions || []} />}
     {tab === "products" && <><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Rechercher un produit..." className="mt-3 max-w-xl" /><CardGrid>{visibleProducts.map((item) => <StockCard key={item.id} title={item.name} status={item.status} details={[`${item.available} ${item.stockUnit} disponibles`, `${item.activeLots} lots actifs`, `Seuil minimal: ${item.minStock}`, `Valeur estimée: ${item.value.toFixed(2)}`]} actions={[{ key: "view", label: "Voir les lots liés", icon: Eye, onSelect: () => setDetail(item) }]} />)}</CardGrid></>}
     {tab === "batches" && <CardGrid>{(dataset?.batches || []).map((item) => <StockCard key={item.id} title={`${item.product.name} · lot ${item.batchNumber}`} status={item.effectiveStatus} details={[`${item.availableQuantity} disponibles`, `Péremption: ${formatDate(item.expiryDate)}`, `Emplacement: ${item.location || "Non défini"}`, `Dernier mouvement: ${item.stockMovements[0] ? formatDate(item.stockMovements[0].createdAt) : "Aucun"}`]} actions={[{ key: "view", label: "Voir le lot", icon: Eye, onSelect: () => setDetail(item) }]} />)}</CardGrid>}
-    {(tab === "movements" || tab === "history") && <CardGrid>{(dataset?.movements || []).map((item) => <StockCard key={item.id} title={`${item.product.name} · ${item.batch?.batchNumber || "sans lot"}`} status={item.movementType} details={[`${label(item.direction)} ${item.quantity}`, `${item.quantityBefore || "?"} → ${item.quantityAfter || "?"}`, item.reason, `${item.createdBy.name} · ${formatDate(item.createdAt)}`]} />)}</CardGrid>}
+    {(tab === "movements" || tab === "history") && <div className="mt-3 min-w-0">
+      <ListControls
+        query={movementQuery}
+        onQueryChange={(value) => { setMovementQuery(value); setMovementPage(1); }}
+        page={movementResult?.pagination.page || movementPage}
+        pageCount={movementResult?.pagination.pageCount || 1}
+        totalCount={movementResult?.pagination.totalUnfiltered || 0}
+        filteredCount={movementResult?.pagination.total || 0}
+        placeholder={t("searchPlaceholder")}
+        onPageChange={setMovementPage}
+      />
+      {movementLoading ? <p role="status" className="p-3 text-sm text-dtsc-muted">{t("loading")}</p> :
+        movementError ? <div role="alert" className="rounded-xl border border-red-500/30 p-3 text-sm text-red-700 dark:text-red-300">{movementError}<Button type="button" variant="outline" className="ml-2" onClick={() => setMovementRefreshKey((value) => value + 1)}>{t("retry")}</Button></div> :
+        movementResult?.movements.length ? <CardGrid>{movementResult.movements.map((item) =>
+          <StockCard key={item.id} title={`${item.product.name} · ${item.batch?.batchNumber || t("withoutBatch")}`} status={item.movementType} details={[`${label(item.direction)} ${item.quantity}`, `${item.quantityBefore ?? "?"} → ${item.quantityAfter ?? "?"}`, item.reason, `${item.createdBy.name} · ${formatDate(item.createdAt)}`]} />
+        )}</CardGrid> : <p role="status" className="rounded-xl border border-dtsc-border bg-dtsc-surface p-4 text-sm text-dtsc-muted">{t("empty")}</p>}
+    </div>}
     {tab === "sessions" && <><Toolbar action={() => openForm("session")} labelText="Nouvel inventaire" /><CardGrid>{(dataset?.sessions || []).map((item) => <StockCard key={item.id} title={item.title} status={item.status} details={[formatDate(item.inventoryDate), `${item.lines.length} lignes`, `${item.lines.filter((line) => Number(line.variance || 0) !== 0).length} écarts`, `Responsable: ${item.responsible.name}`]} actions={sessionActions(item, action, setDetail)} />)}</CardGrid></>}
     {tab === "variances" && <CardGrid>{variances.map((item) => <StockCard key={item.id} title={`${item.product.name} · ${item.batch?.batchNumber || "sans lot"}`} status={item.varianceType || "VARIANCE_DETECTED"} details={[`Session: ${item.sessionTitle}`, `Système: ${item.systemQuantity}`, `Compté: ${item.countedQuantity || "Non saisi"}`, `Écart: ${item.variance || "0"}`]} />)}</CardGrid>}
     {tab === "adjustments" && <><Toolbar action={() => openForm("adjustment")} labelText="Nouvel ajustement" /><CardGrid>{(dataset?.adjustments || []).map((item) => <StockCard key={item.id} title={`${item.product.name} · ${item.batch?.batchNumber || "sans lot"}`} status={item.status} details={[`${label(item.direction)} ${item.quantity}`, label(item.adjustmentType), item.reason, `Demandé par ${item.requestedBy.name}`]} actions={adjustmentActions(item, action)} />)}</CardGrid></>}

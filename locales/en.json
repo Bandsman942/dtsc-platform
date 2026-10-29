@@ -2,6 +2,14 @@
   "enterpriseActivities": {
     "unavailableTitle": "Enterprise activities unavailable"
   },
+  "pharmacyStockHistory": {
+    "searchPlaceholder": "Search product, batch or reason...",
+    "loading": "Loading stock movements...",
+    "loadError": "Unable to load stock movements. Check your connection or try again.",
+    "retry": "Try again",
+    "withoutBatch": "no batch",
+    "empty": "No stock movements match your search."
+  },
   "common": {
     "actions": "Actions",
     "archive": "Archive",
@@ -637,6 +645,14 @@
     "noHistory": "No history",
     "noHistoryDescription": "Decisions will appear here.",
     "approvalLoadError": "Unable to load payroll approvals.",
+    "approvalSessionExpired": "Your session has expired. Sign in again before reviewing this payroll.",
+    "approvalForbidden": "You do not have permission to review this payroll.",
+    "approvalConflict": "This payroll status has changed. Refresh the list and review it again.",
+    "approvalRateLimited": "Too many approval attempts. Please try again shortly.",
+    "approvalInvalidDecision": "The decision is invalid. Check the reason and try again.",
+    "approvalServiceUnavailable": "Payroll approval is temporarily unavailable. Please try again.",
+    "approvalNetworkError": "Connection interrupted. Check your network and try again.",
+    "approvalUnexpectedResponse": "The service response is incomplete. Refresh the list before trying again.",
     "approvalTitle": "Payroll approvals",
     "approvalDescriptionCeo": "Independent financial control for DTSC payrolls except the CEO payroll.",
     "approvalDescriptionCoo": "Financial counter-approval restricted to the CEO payroll.",

@@ -2,6 +2,14 @@
   "enterpriseActivities": {
     "unavailableTitle": "Activités entreprise indisponibles"
   },
+  "pharmacyStockHistory": {
+    "searchPlaceholder": "Rechercher un produit, un lot ou un motif...",
+    "loading": "Chargement des mouvements...",
+    "loadError": "Impossible de charger les mouvements. Vérifiez la connexion ou réessayez.",
+    "retry": "Réessayer",
+    "withoutBatch": "sans lot",
+    "empty": "Aucun mouvement correspondant à votre recherche."
+  },
   "common": {
     "actions": "Actions",
     "archive": "Archiver",
@@ -637,6 +645,14 @@
     "noHistory": "Aucun historique",
     "noHistoryDescription": "Les décisions apparaîtront ici.",
     "approvalLoadError": "Chargement des paies à approuver impossible.",
+    "approvalSessionExpired": "Votre session a expiré. Reconnectez-vous avant de traiter cette paie.",
+    "approvalForbidden": "Vous n'avez pas les droits nécessaires pour décider de cette paie.",
+    "approvalConflict": "Cette paie a changé de statut. Actualisez la liste et examinez-la à nouveau.",
+    "approvalRateLimited": "Trop de tentatives de validation. Réessayez dans quelques instants.",
+    "approvalInvalidDecision": "La décision est invalide. Vérifiez le motif et recommencez.",
+    "approvalServiceUnavailable": "La validation de la paie est momentanément indisponible. Réessayez.",
+    "approvalNetworkError": "Connexion interrompue. Vérifiez votre réseau puis réessayez.",
+    "approvalUnexpectedResponse": "La réponse du service est incomplète. Actualisez la liste avant de recommencer.",
     "approvalTitle": "Paies à approuver",
     "approvalDescriptionCeo": "Contrôle financier indépendant des paies DTSC hors paie CEO.",
     "approvalDescriptionCoo": "Contre-validation financière réservée à la paie du CEO.",
