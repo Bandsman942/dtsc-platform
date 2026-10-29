@@ -18,7 +18,7 @@ assert.match(panel, /body\?\.ok !== true \|\| body\.submission\?\.id !== selecte
 assert.match(panel, /if \(!response\.ok\)/);
 assert.match(panel, /setNotice\(\{\s*tone: "success"/);
 assert.match(panel, /setNotice\(\{ tone: "error", description: t\("reviewNetworkError"\) \}\)/);
-assert.match(panel, /if \(saving\) return; setDecision\(null\); setComment\(" "\);/.source? /disabled=\{saving\}/ : /disabled=\{saving\}/);
+assert.match(panel, /disabled=\{saving\}/, "Review cancel must stay disabled while submitting");
 for (const status of ["401", "403", "409", "429", "400", "422", "500"]) {
   assert.ok(panel.includes(status), `Missing HTTP status handling: ${status}`);
 }
