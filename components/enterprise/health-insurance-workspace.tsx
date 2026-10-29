@@ -56,10 +56,7 @@ const LABEL: Record<string, string> = {
   NURSING: "Soins infirmiers",
   GLOBAL_INVOICE: "Facture globale",
 };
-function localCalendarDate() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-}
+
 const provider = () => ({
     name: "",
     providerCode: "",
@@ -86,7 +83,7 @@ const provider = () => ({
     status: "ACTIVE",
     isPrimary: false,
   }),
-  request = () => ({
+  request = (businessDate = "") => ({
     patientId: "",
     patientCoverageId: "",
     insuranceProviderId: "",
@@ -100,7 +97,7 @@ const provider = () => ({
     description: "",
     administrativeReason: "",
     priority: "NORMAL",
-    requestDate: localCalendarDate(),
+    requestDate: businessDate,
     desiredResponseDate: "",
     preauthorization: false,
     requestedAmount: "",
@@ -187,7 +184,7 @@ export function HealthInsuranceWorkspace({
         ? provider()
         : kind === "coverage"
           ? coverage()
-          : request(),
+          : request(typeof d?.businessDate === "string" ? d.businessDate : ""),
     );
   }
   async function save(e: FormEvent) {
