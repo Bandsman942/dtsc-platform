@@ -6,8 +6,10 @@ const shared = file("components/workspace/module-workspace.tsx");
 const finance = file("components/enterprise/professional/enterprise-finance-overview-workspace.tsx");
 
 assert.match(shared, /export type ModuleWorkspaceDensity = "comfortable" \| "compact"/);
-assert.equal((shared.match(/density = "comfortable"/g) || []).length, 2, "Default should stay comfortable in both primitives");
+assert.equal((shared.match(/density = "comfortable"/g) || []).length, 4, "Root, content, toolbar and section must all default to comfortable");
 assert.match(shared, /data-workspace-density=\{density\}/, "Density variant must be visible to automation");
+assert.match(shared, /export function ModuleToolbar\(\{[\s\S]*?density = "comfortable"/, "Toolbar defaults to comfortable");
+assert.match(shared, /export function ModuleSection\(\{[\s\S]*?density = "comfortable"/, "Section defaults to comfortable");
 assert.match(shared, /"space-y-3 sm:space-y-4" : "space-y-6 sm:space-y-7"/, "Root compact variant may not change default");
 assert.match(shared, /"space-y-4 sm:space-y-5" : "space-y-6 sm:space-y-8"/, "Content compact variant may not change default");
 assert.match(finance, /<ModuleWorkspace density="compact">/, "Finance overview must opt into compact mode");
