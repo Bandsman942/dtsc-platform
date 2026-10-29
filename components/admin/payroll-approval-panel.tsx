@@ -154,8 +154,8 @@ export function PayrollApprovalPanel({ approverRole, locale, embedded = false }:
       {selected ? <ApprovalDetail payroll={selected} locale={locale} t={t} /> : null}
     </Dialog>
 
-    <Dialog open={Boolean(decision)} title={decision === "APPROVED" ? t("approveTitle") : decision === "CHANGES_REQUESTED" ? t("changesTitle") : t("rejectTitle")} description={decision === "APPROVED" ? t("approveDescription") : t("reviewReasonDescription")} onClose={() => { setDecision(null); setComment(""); }} footer={<>
-      <Button type="button" variant="outline" onClick={() => { setDecision(null); setComment(""); }} className="rounded-xl">{t("close")}</Button>
+    <Dialog open={Boolean(decision)} title={decision === "APPROVED" ? t("approveTitle") : decision === "CHANGES_REQUESTED" ? t("changesTitle") : t("rejectTitle")} description={decision === "APPROVED" ? t("approveDescription") : t("reviewReasonDescription")} onClose={() => { if (saving) return; setDecision(null); setComment(""); }} footer={<>
+      <Button type="button" variant="outline" onClick={() => { setDecision(null); setComment(""); }} disabled={saving} className="rounded-xl">{t("close")}</Button>
       <Button type="button" onClick={() => void review()} disabled={saving || ((decision === "CHANGES_REQUESTED" || decision === "REJECTED") && !comment.trim())} className="rounded-xl bg-dtsc-blue text-white">{decision === "APPROVED" ? t("approve") : decision === "CHANGES_REQUESTED" ? t("requestChanges") : t("reject")}</Button>
     </>}>
       {decision === "APPROVED" ? <div className="flex gap-3 rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-3 text-sm text-emerald-800 dark:text-emerald-200"><CheckCircle2 className="h-5 w-5 shrink-0" />{t("approveFinancialConfirmation")}</div> : <label className="grid gap-2 text-xs font-black uppercase tracking-[0.08em] text-dtsc-muted"><span>{t("comment")}</span><textarea value={comment} onChange={(event) => setComment(event.target.value)} maxLength={1800} rows={6} className="min-h-32 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm normal-case tracking-normal text-dtsc-ink" /></label>}
