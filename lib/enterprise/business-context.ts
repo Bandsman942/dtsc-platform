@@ -42,6 +42,62 @@ export function formatEnterpriseBusinessDate(at: Date, timezone: string) {
   return `${year}-${month}-${day}`;
 }
 
+/**
+ * UTC half-open windows for an organization's local calendar day and month.
+ * Resolve both endpoints independently: a day spanning a DST transition
+ * must not be assumed to last 86,400 seconds.
+ */
+export function enterpriseBusinessCalendarWindows(at: Date, timezone: string) {
+  const safeTimezone = assertEnterpriseTimezone(timezone);
+  const businessDate = formatEnterpriseBusinessDate(at, safeTimezone);
+  const [year, month, day] = businessDate.split("-").map(Number);
+
+  function utcForLocalMidnight(yearValue: number, monthValue: number, dayValue: number) {
+    const desiredUtc = Date.UTC(yearValue, monthValue - 1, dayValue);
+    let candidate = desiredUtc;
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: safeTimezone,
+      calendar: "gregory",
+      numberingSystem: "latn",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23",
+    });
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const values = new Map(formatter.formatToParts(new Date(candidate)).map((part) => [part.type, part.value]));
+      const representedUtc = Date.UTC(
+        Number(values.get("year")), Number(values.get("month")) - 1,
+        Number(values.get("day")), Number(values.get("hour")),
+        Number(values.get("minute")), Number(values.get("second")),
+      );
+      const correction = desiredUtc - representedUtc;
+      candidate += correction;
+      if (correction === 0) return new Date(candidate);
+    }
+    // Refuse to invent a midnight for a timezone with a skipped local date.
+    throw new EnterpriseDomainError("ORGANIZATION_TIMEZONE_INVALID", 409);
+  }
+
+  const tomorrow = new Date(Date.UTC(year, month - 1, day + 1));
+  const nextMonth = new Date(Date.UTC(year, month, 1));
+  return {
+    businessDate,
+    timezone: safeTimezone,
+    day: {
+      gte: utcForLocalMidnight(year, month, day),
+      lt: utcForLocalMidnight(tomorrow.getUTCFullYear(), tomorrow.getUTCMonth() + 1, tomorrow.getUTCDate()),
+    },
+    month: {
+      gte: utcForLocalMidnight(year, month, 1),
+      lt: utcForLocalMidnight(nextMonth.getUTCFullYear(), nextMonth.getUTCMonth() + 1, 1),
+    },
+  };
+}
+
 export async function getEnterpriseBusinessContext(
   db: EnterpriseBusinessContextDb,
   organizationId: string,
