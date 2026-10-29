@@ -123,6 +123,7 @@ export function ModuleToolbar({
   summary,
   ariaLabel,
   className,
+  density = "comfortable",
 }: {
   search?: ReactNode;
   controls?: ReactNode;
@@ -130,6 +131,7 @@ export function ModuleToolbar({
   summary?: ReactNode;
   ariaLabel?: string;
   className?: string;
+  density?: ModuleWorkspaceDensity;
 }) {
   const locale = useAppLocale();
   const resolvedAriaLabel = ariaLabel || translate(locale, "common.actions");
@@ -137,8 +139,10 @@ export function ModuleToolbar({
   return (
     <section
       data-workspace-toolbar
+      data-workspace-density={density}
       className={cn(
-        "w-full min-w-0 max-w-full overflow-hidden rounded-2xl border border-dtsc-border bg-dtsc-page/70 p-3.5 sm:p-4",
+        "w-full min-w-0 max-w-full overflow-hidden rounded-2xl border border-dtsc-border bg-dtsc-page/70",
+        density === "compact" ? "p-2.5 sm:p-3" : "p-3.5 sm:p-4",
         className,
       )}
       aria-label={resolvedAriaLabel}
@@ -190,6 +194,7 @@ export function ModuleSection({
   children,
   className,
   defaultOpen = false,
+  density = "comfortable",
 }: {
   id?: string;
   title: ReactNode;
@@ -199,6 +204,7 @@ export function ModuleSection({
   children: ReactNode;
   className?: string;
   defaultOpen?: boolean;
+  density?: ModuleWorkspaceDensity;
 }) {
   const locale = useAppLocale();
   const copy = getExperienceCopy(locale).workspace;
@@ -274,6 +280,7 @@ export function ModuleSection({
         ref={sectionRef}
         id={id}
         data-workspace-section
+        data-workspace-density={density}
         data-workspace-section-open="true"
         role="dialog"
         aria-modal="true"
@@ -308,6 +315,7 @@ export function ModuleSection({
     <section
       id={id}
       data-workspace-section
+      data-workspace-density={density}
       data-workspace-section-open="false"
       aria-labelledby={titleId}
       className={cn("w-full min-w-0 max-w-full scroll-mt-24 overflow-hidden rounded-2xl border border-dtsc-border bg-dtsc-surface/72", className)}
@@ -318,7 +326,10 @@ export function ModuleSection({
         onClick={openWorkspace}
         aria-expanded="false"
         data-workspace-section-header
-        className="group flex w-full min-w-0 max-w-full flex-wrap items-center justify-between gap-4 px-4 py-4 text-left transition hover:bg-dtsc-soft/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 sm:flex-nowrap sm:px-5 sm:py-5"
+        className={cn(
+          "group flex min-h-11 w-full min-w-0 max-w-full flex-wrap items-center justify-between text-left transition hover:bg-dtsc-soft/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 sm:flex-nowrap",
+          density === "compact" ? "gap-2 px-3 py-3 sm:px-4 sm:py-3" : "gap-4 px-4 py-4 sm:px-5 sm:py-5",
+        )}
       >
         <span className="min-w-0 flex-1 border-l-[3px] border-cyan-500 pl-3.5 sm:pl-4">
           <span className="flex min-w-0 max-w-full flex-wrap items-baseline gap-2.5 sm:flex-nowrap">
