@@ -150,12 +150,12 @@ export function EnterpriseFinanceOverviewWorkspace({ organizationId, organizatio
     { href: "/enterprise-modules/FINANCE_RECONCILIATION?tab=pending", label: financeT(locale, "completeReconciliations"), metric: summary.pendingReconciliations },
   ];
 
-  return <ModuleWorkspace>
+  return <ModuleWorkspace density="compact">
     <ModuleHeader eyebrow={`${financeT(locale, "financeReadiness")} · ${organizationName}`} title={financeT(locale, "financeOverviewTitle")} description={locale === "en" ? definition.descriptionEn : definition.descriptionFr} count={`${percentage}%`} primaryAction={canManage ? <Button onClick={() => setConfigurationOpen(true)}><Settings2 className="h-4 w-4" />{financeT(locale, "configureFinance")}</Button> : undefined} secondaryActions={<div className="flex flex-wrap gap-2"><Link href="/enterprise-modules/FINANCE_OVERVIEW/currencies"><Button variant="outline"><Coins className="h-4 w-4" />{translateEnterpriseCurrency(locale, "title")}</Button></Link><ReloadButton onClick={() => void load()} locale={locale} loading={loading} /></div>} />
     <ModuleMetrics label={financeT(locale, "financeMetrics")}>
       <ModuleMetric label={financeMetricLabel("openReceivables", locale)} value={metricDisplay(summary.openReceivables, locale)} /><ModuleMetric label={financeMetricLabel("openPayables", locale)} value={metricDisplay(summary.openPayables, locale)} /><ModuleMetric label={financeMetricLabel("unallocatedPayments", locale)} value={metricDisplay(summary.unallocatedPayments, locale)} /><ModuleMetric label={financeMetricLabel("openCashSessions", locale)} value={metricDisplay(summary.openCashSessions, locale)} /><ModuleMetric label={financeMetricLabel("pendingReconciliations", locale)} value={metricDisplay(summary.pendingReconciliations, locale)} /><ModuleMetric label={financeMetricLabel("invoicesToPost", locale)} value={metricDisplay(summary.invoicesToPost, locale)} /><ModuleMetric label={financeMetricLabel("pendingApprovals", locale)} value={metricDisplay(summary.pendingApprovals, locale)} />
     </ModuleMetrics>
-    <ModuleContent>
+    <ModuleContent density="compact">
       {message ? <div role="status" className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-bold text-emerald-800 dark:text-emerald-200">{message}</div> : null}
       {degradedMetrics > 0 ? <div role="status" className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm font-bold text-amber-800 dark:text-amber-200"><AlertTriangle className="h-5 w-5 shrink-0" />{degradedMetrics} {financeT(locale, "metricsUnavailable")}</div> : null}
       {error ? <ProfessionalError message={error} /> : null}
