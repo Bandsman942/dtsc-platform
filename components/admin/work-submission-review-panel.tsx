@@ -7,6 +7,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToastMessage } from "@/components/ui/use-toast-message";
+import type { ToastNotice } from "@/lib/client-toast";
 import { BusinessDetail, BusinessDetailField, BusinessDetailGrid, BusinessDetailHeader, BusinessDetailSection } from "@/components/workspace/business-detail";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { ContextActions } from "@/components/workspace/context-actions";
@@ -81,18 +82,28 @@ export function WorkSubmissionReviewPanel({ reviewerRole, locale, embedded = fal
   const [detailLoading, setDetailLoading] = useState(false);
   const [decision, setDecision] = useState<ReviewDecision | null>(null);
   const [comment, setComment] = useState("");
-  const [message, setMessage] = useState("");
+  const [notice, setNotice] = useState<ToastNotice | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  useToastMessage(message);
+  useToastMessage(notice);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const response = await fetch(endpoint, { cache: "no-store" });
-    const body = (await response.json().catch(() => null)) as { submissions?: Submission[]; message?: string } | null;
-    if (response.ok) setSubmissions(body?.submissions || []);
-    else setMessage(body?.message || t("reviewLoadError"));
-    setLoading(false);
+    try {
+      const response = await fetch(endpoint, { cache: "no-store" });
+      const body = (await response.json().catch(() => null)) as { submissions?: Submission[] } | null;
+      if (!response.ok) {
+        setNotice({ tone: "error", description: workReviewErrorForStatus(response.status, t, "reviewLoadError") });
+      } else if (!Array.isArray(body?.submissions)) {
+        setNotice({ tone: "error", description: t("reviewUnexpectedResponse") });
+      } else {
+        setSubmissions(body.submissions);
+      }
+    } catch {
+      setNotice({ tone: "error", description: t("reviewNetworkError") });
+    } finally {
+      setLoading(false);
+    }
   }, [endpoint, t]);
 
   useEffect(() => { void load(); }, [load]);
@@ -115,32 +126,54 @@ export function WorkSubmissionReviewPanel({ reviewerRole, locale, embedded = fal
   const openSubmission = useCallback(async (submission: Submission) => {
     setSelected(submission);
     setDetailLoading(true);
-    const response = await fetch(`${endpoint}/${submission.id}`, { cache: "no-store" });
-    const body = (await response.json().catch(() => null)) as { submission?: Submission; message?: string } | null;
-    if (response.ok && body?.submission) setSelected(body.submission);
-    else setMessage(body?.message || t("reviewLoadError"));
-    setDetailLoading(false);
+    try {
+      const response = await fetch(`${endpoint}/${submission.id}`, { cache: "no-store" });
+      const body = (await response.json().catch(() => null)) as { submission?: Submission } | null;
+      if (!response.ok) {
+        setNotice({ tone: "error", description: workReviewErrorForStatus(response.status, t, "reviewLoadError") });
+      } else if (!body?.submission || body.submission.id !== submission.id) {
+        setNotice({ tone: "error", description: t("reviewUnexpectedResponse") });
+      } else {
+        setSelected(body.submission);
+      }
+    } catch {
+      setNotice({ tone: "error", description: t("reviewNetworkError") });
+    } finally {
+      setDetailLoading(false);
+    }
   }, [endpoint, t]);
 
   async function review() {
-    if (!selected || !decision) return;
+    if (!selected || !decision || saving) return;
     setSaving(true);
-    const response = await fetch(`${endpoint}/${selected.id}/review`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: decision, comment }),
-    });
-    const body = (await response.json().catch(() => null)) as { submission?: Submission; message?: string } | null;
-    if (response.ok) {
-      setMessage(decision === "APPROVED" ? t("approved") : decision === "CHANGES_REQUESTED" ? t("changesRequested") : t("rejected"));
+    try {
+      const response = await fetch(`${endpoint}/${selected.id}/review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: decision, comment }),
+      });
+      const body = (await response.json().catch(() => null)) as { ok?: boolean; submission?: Submission } | null;
+      if (!response.ok) {
+        setNotice({ tone: "error", description: workReviewErrorForStatus(response.status, t, "reviewError") });
+        return;
+      }
+      if (body?.ok !== true || body.submission?.id !== selected.id) {
+        setNotice({ tone: "error", description: t("reviewUnexpectedResponse") });
+        return;
+      }
+      setNotice({
+        tone: "success",
+        description: decision === "APPROVED" ? t("approved") : decision === "CHANGES_REQUESTED" ? t("changesRequested") : t("rejected"),
+      });
       setDecision(null);
       setComment("");
       setSelected(null);
       await load();
-    } else {
-      setMessage(body?.message || t("reviewError"));
+    } catch {
+      setNotice({ tone: "error", description: t("reviewNetworkError") });
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   }
 
   return (
@@ -212,7 +245,7 @@ export function WorkSubmissionReviewPanel({ reviewerRole, locale, embedded = fal
         open={Boolean(selected)}
         title={selected ? `${selected.employee.fullName} · ${formatDate(selected.periodStart, locale)} → ${formatDate(selected.periodEnd, locale)}` : t("review")}
         description={t("reviewDetailDescription")}
-        onClose={() => { setSelected(null); setDecision(null); setComment(""); }}
+        onClose={() => { if (saving) return; setSelected(null); setDecision(null); setComment(""); }}
         className="h-[94dvh] sm:h-[92dvh]"
         footer={selected?.status === "SUBMITTED" && !detailLoading ? (
           <>
@@ -229,10 +262,10 @@ export function WorkSubmissionReviewPanel({ reviewerRole, locale, embedded = fal
         open={Boolean(decision)}
         title={decision === "APPROVED" ? t("approveTitle") : decision === "CHANGES_REQUESTED" ? t("changesTitle") : t("rejectTitle")}
         description={decision === "APPROVED" ? t("approveDescription") : t("reviewReasonDescription")}
-        onClose={() => { setDecision(null); setComment(""); }}
+        onClose={() => { if (saving) return; setDecision(null); setComment(""); }}
         footer={(
           <>
-            <Button type="button" variant="outline" onClick={() => { setDecision(null); setComment(""); }} className="rounded-xl">{t("cancel")}</Button>
+            <Button type="button" variant="outline" onClick={() => { setDecision(null); setComment(""); }} disabled={saving} className="rounded-xl">{t("cancel")}</Button>
             <Button type="button" onClick={() => void review()} disabled={saving || ((decision === "CHANGES_REQUESTED" || decision === "REJECTED") && !comment.trim())} className="rounded-xl bg-dtsc-blue text-white">
               {decision === "APPROVED" ? t("approve") : decision === "CHANGES_REQUESTED" ? t("requestChanges") : t("reject")}
             </Button>
@@ -254,6 +287,16 @@ export function WorkSubmissionReviewPanel({ reviewerRole, locale, embedded = fal
       </Dialog>
     </ModuleWorkspace>
   );
+}
+
+function workReviewErrorForStatus(status: number, t: (key: string) => string, fallback: string): string {
+  if (status === 401) return t("reviewSessionExpired");
+  if (status === 403) return t("reviewForbidden");
+  if (status === 409) return t("reviewConflict");
+  if (status === 429) return t("reviewRateLimited");
+  if (status === 400 || status === 422) return t("reviewInvalidDecision");
+  if (status >= 500) return t("reviewServiceUnavailable");
+  return t(fallback);
 }
 
 function SubmissionDetail({ submission, locale, t }: { submission: Submission; locale?: string | null; t: (key: string) => string }) {
