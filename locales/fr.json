@@ -2,6 +2,14 @@
   "enterpriseActivities": {
     "unavailableTitle": "Activités entreprise indisponibles"
   },
+  "pharmacyStockHistory": {
+    "searchPlaceholder": "Rechercher un produit, un lot ou un motif...",
+    "loading": "Chargement des mouvements...",
+    "loadError": "Impossible de charger les mouvements. Vérifiez la connexion ou réessayez.",
+    "retry": "Réessayer",
+    "withoutBatch": "sans lot",
+    "empty": "Aucun mouvement correspondant à votre recherche."
+  },
   "common": {
     "actions": "Actions",
     "archive": "Archiver",
