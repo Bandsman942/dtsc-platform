@@ -115,6 +115,8 @@ jobs:
         run: node scripts/qa-hotfix-861-workflow-finance.mjs
       - name: "HOTFIX #863 nine-template manual starter eligibility QA"
         run: pnpm qa:hotfix-863-workflow-manual-start
+      - name: PUBLIC-UX-01 rich HTML sanitizer safety tests
+        run: pnpm qa:public-ux-01
       - name: Type check
         run: pnpm type-check
         env:
