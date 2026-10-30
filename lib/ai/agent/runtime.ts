@@ -67,7 +67,22 @@ async function createAgentLoopStream(input: AgentLoopInput) {
   };
   const authorizedTools = await listAuthorizedAgentTools({ context: toolContextBase, budget: input.budget });
   const authorizedByCode = new Map(authorizedTools.map((entry) => [entry.definition.code, entry]));
-  const providerTools = authorizedTools.map((entry) => entry.providerTool);
+  const governance = await getAiPlatformPolicy();
+  const maxReadTools = Math.min(input.budget.maxToolCalls, governance.assistantSettings.agentMaxReadToolsPerRun);
+  const mostRecentUserQuestion = [...input.messages].reverse().find((message) => message.role === "user")?.content.slice(0, 1000) || "";
+  const isOperationalRiskAnalysis = /(?:risqu(?:e|es)|risk(?:s)?|anomal(?:ie|ies)|opérationnel|operational)/i.test(mostRecentUserQuestion);
+  // Broad risk analysis must not offer the entire ERP registry in one turn.
+  // Keep only already-authorized read tools; never add an entitlement.
+  const riskPriorities = [
+    "ERP_TASKS_READ", "ERP_PROJECTS_READ", "ERP_REQUESTS_READ",
+    "FINANCE_OVERVIEW_READ", "ERP_INVENTORY_READ", "ERP_WORKFLOWS_READ",
+  ];
+  const riskToolSet = new Set(riskPriorities);
+  const scopedTools = isOperationalRiskAnalysis
+    ? authorizedTools.filter((entry) => entry.definition.mode === "READ" && riskToolSet.has(entry.definition.code))
+    : authorizedTools;
+  const offeredTools = scopedTools.length ? scopedTools : authorizedTools;
+  const providerTools = offeredTools.map((entry) => entry.providerTool);
   const controllerAbort = new AbortController();
   if (input.signal) {
     if (input.signal.aborted) controllerAbort.abort();
@@ -81,6 +96,7 @@ async function createAgentLoopStream(input: AgentLoopInput) {
       const messages: AiProviderInputMessage[] = [...input.messages];
       let currentStep = input.currentStep;
       let toolCallCount = input.toolCallCount;
+      let readToolCallCount = Math.min(input.toolCallCount, maxReadTools);
       let usage: AiAgentUsage = { ...input.usage };
       let lastProviderCode: string | null = null;
       let lastModelCode: string | null = null;
@@ -108,6 +124,17 @@ async function createAgentLoopStream(input: AgentLoopInput) {
           let modelRetryAttempt = 0;
           while (true) {
             try {
+              const shouldSynthesize = hasStructuredToolContext && (
+                readToolCallCount >= maxReadTools ||
+                toolCallCount >= input.budget.maxToolCalls ||
+                currentStep >= input.budget.maxSteps - 1
+              );
+              const turnTools = shouldSynthesize
+                ? []
+                : providerTools.filter((tool) => {
+                    const definition = authorizedByCode.get(tool.code)?.definition;
+                    return definition?.mode !== "READ" || readToolCallCount < maxReadTools;
+                  });
               routed = await routeAiStream({
                 requestedModel: input.requestedModel,
                 taskType: input.taskType,
@@ -119,8 +146,8 @@ async function createAgentLoopStream(input: AgentLoopInput) {
                 organizationId: input.organizationId,
                 assistantCode: input.assistantCode,
                 dataClassifications: input.dataClassifications,
-                requiredCapabilities: providerTools.length ? { tools: true } : undefined,
-                tools: providerTools,
+                requiredCapabilities: turnTools.length ? { tools: true } : undefined,
+                tools: turnTools,
                 tags: [...(input.tags || []), "runtime:agent-v1", `agent-run:${input.runId}`],
                 signal: controllerAbort.signal,
                 reasoningEffort: input.reasoningEffort,
@@ -204,7 +231,14 @@ async function createAgentLoopStream(input: AgentLoopInput) {
               return;
             }
             const toolCode = toolCall.name;
-            if (!authorizedByCode.has(toolCode)) {
+            const authorizedTool = authorizedByCode.get(toolCode);
+            if (authorizedTool?.definition.mode === "READ" && readToolCallCount >= maxReadTools) {
+              await recordAiAgentStep({ runId: input.runId, stepIndex: currentStep, kind: "TOOL", status: "DENIED", toolCode, reasonCode: "TOOL_READ_BUDGET_REACHED" });
+              messages.push({ role: "tool", toolCallId: toolCall.id, name: toolCode, content: buildAgentToolResultMessage({ toolCode, status: "DENIED", reasonCode: "TOOL_READ_BUDGET_REACHED" }) });
+              hasStructuredToolContext = true;
+              continue;
+            }
+            if (!authorizedTool) {
               await recordAiAgentStep({ runId: input.runId, stepIndex: currentStep, kind: "TOOL", status: "DENIED", toolCode: toolCode || null, reasonCode: "TOOL_NOT_ALLOWED", metadata: { providerToolCallId: toolCall.id } });
               messages.push({ role: "tool", toolCallId: toolCall.id, name: toolCode, content: buildAgentToolResultMessage({ toolCode, status: "DENIED", reasonCode: "TOOL_NOT_ALLOWED" }) });
               hasStructuredToolContext = true;
@@ -213,6 +247,7 @@ async function createAgentLoopStream(input: AgentLoopInput) {
 
             const execution = await executeAiTool({ toolCode, args: toolCall.arguments ?? {}, context: { ...toolContextBase, turnId: `${input.runId}:${currentStep}:${toolCallCount + 1}` } });
             toolCallCount += 1;
+            if (authorizedTool.definition.mode === "READ") readToolCallCount += 1;
             await recordAiAgentStep({ runId: input.runId, stepIndex: currentStep, kind: "TOOL", status: execution.status, toolCode, reasonCode: execution.reasonCode || null, metadata: { auditId: execution.auditId || null, providerToolCallId: toolCall.id } });
             await updateAiAgentRunProgress({ runId: input.runId, currentStep, toolCallCount, usage });
 
