@@ -50,7 +50,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
     ? sanitizeRichHtml(publication.content).match(/<img\s[^>]*src="([^"]+)"/i)
     : null;
   const coverSource = sanitizedImageMatch?.[1]?.replace(/&amp;/g, "&") || "/dtsc-logo.png";
-  const coverUrl = new URL(coverSource, getPublicBaseUrl()).toString();
+  const coverUrl = new URL(coverSource, getPublicBaseUrl() || "https://dtsc-platform.com").toString();
 
   return {
     title: seoTitle,
@@ -58,7 +58,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
     alternates: { canonical: `/ressources/${slug}` },
     openGraph: {
       type: "article",
-      url: new URL(`/ressources/${slug}`, getPublicBaseUrl()).toString(),
+      url: new URL(`/ressources/${slug}`, getPublicBaseUrl() || "https://dtsc-platform.com").toString(),
       title: seoTitle,
       description: seoDescription,
       images: [{ url: coverUrl, alt: publication.title }],
@@ -96,7 +96,7 @@ export default async function PublicationPage({ params, searchParams }: Params) 
     ? { tocLabel: "Article table of contents", tocHeading: "In this article" }
     : { tocLabel: "Sommaire de l’article", tocHeading: "Dans cet article" };
   const readingMinutes = estimateReadingMinutes(publication.content);
-  const articleUrl = new URL(`/ressources/${publication.slug}`, getPublicBaseUrl()).toString();
+  const articleUrl = new URL(`/ressources/${publication.slug}`, getPublicBaseUrl() || "https://dtsc-platform.com").toString();
   const articleStructuredData = {
     "@context": "https://schema.org",
     "@type": "Article",
