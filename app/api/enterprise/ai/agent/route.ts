@@ -198,7 +198,8 @@ export async function POST(req: Request) {
       length: preference?.responseLength,
       customInstructions: preference?.customInstructions,
     });
-    const instructions = `${baseInstructions}\n\n${buildLanguageInstruction(locale)}\n\nPréférences de cette conversation:\n${preferenceInstructions}\n\nMode agent DTSC: utilise uniquement les outils certifiés exposés par le runtime. N'invente jamais un résultat d'outil et n'essaie jamais de t'auto-confirmer. Quand l'utilisateur demande quelles applications sont connectées ou disponibles, utilise CONNECTED_APPS_STATUS_READ si l'outil est autorisé. Son résultat décrit uniquement l'état OAuth/catalogue, jamais la réussite d'une action distante; oriente vers /ai/apps pour connecter ou renouveler l'autorisation.`;
+    const governance = await getAiPlatformPolicy();
+    const instructions = `${baseInstructions}\n\n${buildLanguageInstruction(locale)}\n\nPréférences de cette conversation:\n${preferenceInstructions}\n\n${governance.assistantSettings.enterpriseGuidance ? `Orientation éditoriale DTSC (sans changement de permissions ou outils) : ${governance.assistantSettings.enterpriseGuidance}` : ""}\n\nMode agent DTSC: utilise uniquement les outils certifiés exposés par le runtime. N'invente jamais un résultat d'outil et n'essaie jamais de t'auto-confirmer. Quand l'utilisateur demande quelles applications sont connectées ou disponibles, utilise CONNECTED_APPS_STATUS_READ si l'outil est autorisé. Son résultat décrit uniquement l'état OAuth/catalogue, jamais la réussite d'une action distante; oriente vers /ai/apps pour connecter ou renouveler l'autorisation.`;
     const prompt = buildEnterpriseAiPrompt({ question: data.content, knowledgeContext: knowledge.context, citations: knowledge.citations, toolResults: [] });
     const messages = [
       ...previousMessages.reverse().map((historyMessage) => ({
