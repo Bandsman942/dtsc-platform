@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { Prisma } from "@prisma/client";
 import { cookies, headers } from "next/headers";
 import Link from "next/link";
+import Image from "next/image";
 import { ArrowRight, ArrowLeft, Search, CalendarDays } from "lucide-react";
 import { PublicFooter, PublicHeader } from "@/components/public/public-shell";
 import { prisma } from "@/lib/prisma";
@@ -95,7 +96,7 @@ export default async function RessourcesPage({ searchParams }: Props) {
     select: {
       id: true, slug: true, title: true, excerpt: true, category: true,
       publishedAt: true, createdAt: true,
-      author: { select: { name: true, publicProfileConsent: true } },
+      author: { select: { name: true, avatarUrl: true, publicProfileConsent: true } },
     },
   });
 
@@ -205,6 +206,9 @@ export default async function RessourcesPage({ searchParams }: Props) {
                   <p className="mt-3 flex flex-wrap items-center gap-2 text-xs text-dtsc-muted">
                     <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
                     {dateFormat.format(publication.publishedAt || publication.createdAt)}
+                    {publication.author?.publicProfileConsent && publication.author.avatarUrl ? (
+                      <Image src={publication.author.avatarUrl} alt="" width={24} height={24} unoptimized className="h-6 w-6 shrink-0 rounded-full object-cover" />
+                    ) : null}
                     {publication.author?.publicProfileConsent ? " · " + publication.author.name : ""}
                   </p>
                 </div>
