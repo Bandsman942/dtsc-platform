@@ -153,7 +153,7 @@ export default function HomePage() {
       <section className="border-y border-dtsc-border bg-dtsc-surface">
         <div className="mx-auto max-w-[92rem] px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
           <div className="max-w-3xl">
-            <p className="dtsc-label text-dtsc-blue">Les sept leviers</p>
+            <p className="dtsc-label text-dtsc-blue">Sept leviers numériques</p>
             <h2 className="dtsc-h2 mt-4">Sept domaines d’expertise, adaptés à vos priorités.</h2>
             <p className="mt-5 leading-7 text-dtsc-muted">Nous combinons les bonnes compétences selon votre situation : données, automatisation, outils métiers, accompagnement et communication.</p>
           </div>
