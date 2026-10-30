@@ -33,6 +33,26 @@ type Publication = {
   } | null;
 };
 
+type PublicationVersionSummary = {
+  version: number;
+  title: string;
+  category: string;
+  published: boolean;
+  createdAt: string;
+};
+
+const versionCopy = {
+  section: "Historique des versions",
+  load: "Afficher les versions",
+  loading: "Chargement de l’historique…",
+  empty: "Aucune version enregistrée.",
+  restore: "Restaurer cette version",
+  restoreTitle: "Restaurer une ancienne version ?",
+  restoreDescription: "Le contenu public sera remplacé par cette version. Une nouvelle version conservera l’historique.",
+  confirmed: "Version restaurée.",
+  failed: "Restauration refusée. Vérifiez vos autorisations ou la version.",
+} as const;
+
 type PublicationDraft = Pick<Publication, "title" | "slug" | "category" | "excerpt" | "coverLabel" | "published"> & {
   content: string;
   contentHtml: string;
@@ -67,6 +87,10 @@ export function PublicPublicationsManager({
   const [showCreate, setShowCreate] = useState(false);
   const [createDirty, setCreateDirty] = useState(false);
   const [editingDirty, setEditingDirty] = useState(false);
+  const [versionHistory, setVersionHistory] = useState<PublicationVersionSummary[] | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
+  const [restoringVersion, setRestoringVersion] = useState<number | null>(null);
   const [editingDraft, setEditingDraft] = useState<PublicationDraft | null>(null);
   const editingFormRef = useRef<HTMLFormElement | null>(null);
   const [confirmEditSave, setConfirmEditSave] = useState(false);
@@ -109,6 +133,60 @@ export function PublicPublicationsManager({
     return result.confirmed;
   }
 
+  async function loadVersionHistory(publicationId: string) {
+    setHistoryLoading(true);
+    setHistoryError("");
+    try {
+      const response = await fetch("/api/admin/publications/" + publicationId + "/versions", { cache: "no-store" });
+      if (!response.ok) throw new Error("History unavailable");
+      const data = await response.json() as { versions: PublicationVersionSummary[] };
+      setVersionHistory(data.versions);
+    } catch {
+      setHistoryError("Impossible de consulter cet historique.");
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  async function restoreVersion(publication: Publication, version: number) {
+    if (!canPublish || restoringVersion !== null) return;
+    const decision = await confirmSensitiveAction({
+      title: versionCopy.restoreTitle,
+      description: versionCopy.restoreDescription,
+      tone: "warning",
+      confirmLabel: "Restaurer",
+      cancelLabel: "Annuler",
+    });
+    if (!decision.confirmed) return;
+    setRestoringVersion(version);
+    try {
+      const response = await fetch("/api/admin/publications/" + publication.id + "/restore", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ version }),
+      });
+      if (!response.ok) {
+        setMessage(versionCopy.failed);
+        return;
+      }
+      const body = await response.json() as { publication?: Publication };
+      const restoredPublication = body.publication;
+      if (restoredPublication) {
+        setItems((current) => current.map((item) => item.id === publication.id ? { ...item, ...restoredPublication } : item));
+      }
+      setEditing(null);
+      setEditingDraft(null);
+      setEditingDirty(false);
+      setVersionHistory(null);
+      setMessage(versionCopy.confirmed);
+      router.refresh();
+    } catch {
+      setMessage(versionCopy.failed);
+    } finally {
+      setRestoringVersion(null);
+    }
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>, publicationId?: string) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -138,8 +216,6 @@ export function PublicPublicationsManager({
       setEditingDraft(null);
       setCreatePreviewHtml("");
       setEditingPreviewHtml("");
-      setCreateDirty(false);
-      setEditingDirty(false);
       router.refresh();
     }
   }
@@ -205,6 +281,8 @@ export function PublicPublicationsManager({
                   <Button type="button" variant="outline" size="sm" disabled={!canEditPublication(publication)} onClick={() => {
                     setEditing(publication);
                     setEditingDirty(false);
+                    setVersionHistory(null);
+                    setHistoryError("");
                     setEditingDraft({
                       seoTitle: typeof publication.seoJson === "object" && publication.seoJson && !Array.isArray(publication.seoJson) && typeof (publication.seoJson as Record<string, unknown>).title === "string" ? (publication.seoJson as { title: string }).title : "",
                       seoDescription: typeof publication.seoJson === "object" && publication.seoJson && !Array.isArray(publication.seoJson) && typeof (publication.seoJson as Record<string, unknown>).description === "string" ? (publication.seoJson as { description: string }).description : "",
@@ -348,6 +426,38 @@ export function PublicPublicationsManager({
               placeholder="Contenu long de la publication"
             />
             <PublicationPreview html={editingPreviewHtml} />
+            {canPublish ? (
+              <details className="rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3">
+                <summary className="cursor-pointer font-semibold text-dtsc-blue">{versionCopy.section}</summary>
+                <div className="mt-4">
+                  <Button type="button" variant="outline" disabled={historyLoading} onClick={() => void loadVersionHistory(editing.id)}>
+                    {historyLoading ? versionCopy.loading : versionCopy.load}
+                  </Button>
+                  {historyError ? <p role="alert" className="mt-3 text-sm text-red-600">{historyError}</p> : null}
+                  {versionHistory ? (
+                    versionHistory.length ? (
+                      <ol className="mt-4 divide-y divide-dtsc-border">
+                        {versionHistory.map((version) => (
+                          <li key={version.version} className="flex min-w-0 flex-wrap items-center justify-between gap-3 py-3">
+                            <div className="min-w-0">
+                              <p className="break-words text-sm font-semibold text-dtsc-ink">V{version.version} · {version.title}</p>
+                              <p className="mt-1 text-xs text-dtsc-muted">{formatPublicationDate(version.createdAt)} · {formatEnumLabel(version.category)}</p>
+                            </div>
+                            <Button type="button" variant="outline" size="sm"
+                              disabled={restoringVersion !== null}
+                              onClick={() => void restoreVersion(editing, version.version)}
+                              aria-label={versionCopy.restore + " " + version.version}>
+                              {versionCopy.restore}
+                            </Button>
+                          </li>
+                        ))}
+                      </ol>
+                    ) : <p className="mt-3 text-sm text-dtsc-muted">{versionCopy.empty}</p>
+                  ) : null}
+                </div>
+              </details>
+            ) : null}
+
             <p className="rounded-2xl border border-cyan-300/30 bg-cyan-400/10 px-3 py-2 text-xs font-bold text-cyan-700 dark:text-cyan-100">Vous modifiez une copie locale. La publication publique sera synchronisée uniquement après confirmation.</p>
             <label className="flex items-center justify-between rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-bold text-dtsc-ink">
               Publié
