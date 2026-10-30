@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { Dialog } from "@/components/ui/dialog";
 
@@ -13,6 +13,7 @@ export function PublicArticleContent({ html }: { html: string }) {
   useEffect(() => {
     const root = contentRef.current;
     if (!root) return;
+    const listeners: Array<{ button: HTMLButtonElement; handler: () => void }> = [];
     for (const element of root.querySelectorAll("img")) {
       if (element.closest("a,button")) continue;
       const button = document.createElement("button");
@@ -20,36 +21,25 @@ export function PublicArticleContent({ html }: { html: string }) {
       button.dataset.dtscArticleZoom = "true";
       button.className = "inline-flex max-w-full items-center justify-center rounded-xl focus-visible:outline-2 focus-visible:outline-dtsc-blue";
       button.setAttribute("aria-label", "Agrandir l’image : " + (element.alt || "illustration"));
+      const handler = () => setImage({
+        src: element.currentSrc || element.src,
+        alt: element.alt || "Illustration de l’article",
+      });
+      button.addEventListener("click", handler);
+      listeners.push({ button, handler });
       element.replaceWith(button);
       button.appendChild(element);
     }
+    return () => {
+      for (const { button, handler } of listeners) button.removeEventListener("click", handler);
+    };
   }, [html]);
-
-  function findZoomableImage(target: EventTarget | null) {
-    if (!(target instanceof HTMLElement)) return null;
-    const wrapper = target.closest("button[data-dtsc-article-zoom]");
-    const candidate = wrapper?.querySelector("img") || target.closest("img");
-    if (!(candidate instanceof HTMLImageElement)) return null;
-    if (!contentRef.current?.contains(candidate) || candidate.closest("a")) return null;
-    return candidate;
-  }
-
-  function openImage(target: EventTarget | null) {
-    const img = findZoomableImage(target);
-    if (!img) return;
-    setImage({ src: img.currentSrc || img.src, alt: img.alt || "Illustration de l’article" });
-  }
-
-  function handleClick(event: MouseEvent<HTMLDivElement>) {
-    if (findZoomableImage(event.target)) openImage(event.target);
-  }
 
   return (
     <>
       <div
         ref={contentRef}
         className="dtsc-publication-content text-dtsc-muted"
-        onClick={handleClick}
         dangerouslySetInnerHTML={{ __html: html }}
       />
       <Dialog
