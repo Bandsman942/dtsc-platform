@@ -15,7 +15,8 @@ test.describe.serial("PUBLIC-UX-07 public experience", () => {
       slug, title,
       excerpt: "Contenu synthétique DTSC pour vérifier la lecture éditoriale et la recherche.",
       category: "ARTICLE", published: true, publishedAt: new Date(),
-      content: '<h2>Analyse</h2><p>Contenu et <a href="https://example.org">lien externe</a>.</p><figure><img src="/dtsc-logo.png" alt="Diagramme DTSC"></figure><script>alert(1)</script>',
+      seoJson: { title: "DTSC E2E SEO preview", description: "Extrait SEO validé pour la publication DTSC." },
+      content: '<h2>Analyse</h2><h3>Application</h3><p>Contenu et <a href="https://example.org">lien externe</a>.</p><figure><img src="/dtsc-logo.png" alt="Diagramme DTSC"></figure><script>alert(1)</script>',
     } });
   });
   test.afterAll(async () => {
@@ -38,6 +39,13 @@ test.describe.serial("PUBLIC-UX-07 public experience", () => {
       await noOverflow(page, width);
       const img = page.getByRole("img", { name: "Diagramme DTSC" });
       await expect(img).toBeVisible();
+      await expect(page.locator('meta[property="og:type"]')).toHaveAttribute("content", "article");
+      await expect(page.locator('meta[property="og:title"]')).toHaveAttribute("content", /DTSC E2E SEO preview/);
+      await expect(page.getByRole("navigation", { name: /Sommaire de l’article|Article table of contents/ })).toBeVisible();
+      await page.getByRole("button", { name: /Agrandir l’image|Zoom image/i }).first().click();
+      await expect(page.getByRole("dialog", { name: "Diagramme DTSC" })).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("dialog", { name: "Diagramme DTSC" })).toHaveCount(0);
       const sizes = await img.evaluate(n => ({ nw: n.naturalWidth, nh: n.naturalHeight, w: n.clientWidth, h: n.clientHeight }));
       expect(sizes.nw).toBeGreaterThan(0);
       expect(Math.abs(sizes.nw / sizes.nh - sizes.w / Math.max(1, sizes.h))).toBeLessThan(0.12);
