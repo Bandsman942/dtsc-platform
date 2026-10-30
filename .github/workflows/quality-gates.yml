@@ -355,6 +355,8 @@ jobs:
         run: pnpm exec playwright test tests/e2e/hotfix-574-finance-owner.spec.mjs
       - name: Hotfix 576 Finance owner acceptance
         run: pnpm exec playwright test tests/e2e/hotfix-576-finance-owner.spec.mjs
+      - name: Public Experience V2 isolated browser acceptance
+        run: pnpm exec playwright test tests/e2e/public-experience-v2.spec.mjs
       - name: Stop application
         if: always()
         run: |
