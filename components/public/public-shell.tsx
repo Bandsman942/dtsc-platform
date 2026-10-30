@@ -1,3 +1,4 @@
+import { cookies, headers } from "next/headers";
 import Link from "next/link";
 import { ArrowUpRight, Mail, MapPin, MessageCircleMore, Sparkles } from "lucide-react";
 import { VisitTracker } from "@/components/analytics/visit-tracker";
@@ -12,7 +13,10 @@ const columns = [
   { title: "Ressources", links: [["Publications", "/ressources"], ["Conditions", "/conditions-utilisation"], ["Confidentialité", "/politique-confidentialite"], ["Cookies", "/politique-cookies"]] },
 ] as const;
 
-export function PublicHeader() {
+export async function PublicHeader() {
+  const [cookieStore, headerStore] = await Promise.all([cookies(), headers()]);
+  const cookieLocale = cookieStore.get("dtsc_locale")?.value || cookieStore.get("NEXT_LOCALE")?.value;
+  const locale = cookieLocale === "fr" || cookieLocale === "en" ? cookieLocale : headerStore.get("accept-language")?.toLowerCase().startsWith("en") ? "en" : "fr";
   return (
     <header className="dtsc-public-header sticky top-0 z-[90] border-b border-dtsc-border/80 backdrop-blur-2xl">
       <PublicScrollAnimator />
@@ -21,7 +25,7 @@ export function PublicHeader() {
         <div className="min-w-0 max-w-[min(68vw,19rem)] sm:max-w-sm">
           <DtscLogo href="/" />
         </div>
-        <PublicNav />
+        <PublicNav locale={locale} />
       </div>
     </header>
   );

@@ -23,6 +23,7 @@ import { PublicSearchDialog } from "@/components/public/public-search-dialog";
 import { publicLinks } from "@/components/public/public-links";
 import { getSignInUrl } from "@/lib/domains";
 import { cn } from "@/lib/utils";
+import { publicNavigationCopy } from "@/lib/public-navigation-i18n";
 
 const mobileLinkIcons = {
   "/": Home,
@@ -47,27 +48,21 @@ const mobileLinkAccents = [
 ] as const;
 
 const desktopGroups = [
-  { label: "Solutions", links: [
-    { label: "Services et expertises", href: "/services" },
-    { label: "Solutions numériques", href: "/solutions" },
-    { label: "Data et indicateurs", href: "/bi-kpi" },
-    { label: "Intelligence artificielle", href: "/ia-entreprise" },
+  { key: "solutions", links: [
+    { key: "services", href: "/services" }, { key: "digital", href: "/solutions" },
+    { key: "data", href: "/bi-kpi" }, { key: "ai", href: "/ia-entreprise" },
   ] },
-  { label: "Plateforme", links: [
-    { label: "Accéder à DTSC Platform", href: getSignInUrl("/dashboard") },
-    { label: "Offres et tarifs", href: "/tarifs" },
+  { key: "platform", links: [
+    { key: "access", href: getSignInUrl("/dashboard") }, { key: "pricing", href: "/tarifs" },
   ] },
-  { label: "Secteurs", links: [
-    { label: "Secteurs d'activité", href: "/secteurs" },
-    { label: "Projets et démonstrations", href: "/projets" },
+  { key: "industries", links: [
+    { key: "industry", href: "/secteurs" }, { key: "projects", href: "/projets" },
   ] },
-  { label: "Ressources", links: [
-    { label: "Publications et guides", href: "/ressources" },
-    { label: "Data en Afrique", href: "/data-afrique" },
+  { key: "resources", links: [
+    { key: "publications", href: "/ressources" }, { key: "africa", href: "/data-afrique" },
   ] },
-  { label: "Entreprise", links: [
-    { label: "À propos", href: "/a-propos" },
-    { label: "Nous contacter", href: "/contact" },
+  { key: "company", links: [
+    { key: "about", href: "/a-propos" }, { key: "contact", href: "/contact" },
   ] },
 ] as const;
 
@@ -75,7 +70,8 @@ function isActive(pathname: string, href: string) {
   return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function PublicNav() {
+export function PublicNav({ locale }: { locale: "fr" | "en" }) {
+  const copy = publicNavigationCopy[locale];
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -156,7 +152,7 @@ export function PublicNav() {
           className="dtsc-mobile-menu fixed inset-0 z-[999] isolate flex h-[100dvh] min-h-[100dvh] w-screen flex-col overflow-hidden"
           role="dialog"
           aria-modal="true"
-          aria-label="Navigation publique DTSC"
+          aria-label={copy.mobileNavigation}
         >
           <div className="dtsc-mobile-menu-orb dtsc-mobile-menu-orb-one" aria-hidden="true" />
           <div className="dtsc-mobile-menu-orb dtsc-mobile-menu-orb-two" aria-hidden="true" />
@@ -165,15 +161,15 @@ export function PublicNav() {
           <div className="relative z-10 flex min-h-0 flex-1 flex-col">
             <div className="dtsc-safe-top flex shrink-0 items-center justify-between gap-4 border-b border-white/10 px-4 pb-4 sm:px-6">
               <div className="min-w-0">
-                <p className="text-xs font-black uppercase tracking-[0.22em] text-cyan-300">Navigation</p>
-                <p className="mt-1 text-xl font-black tracking-[-0.03em] text-white">Explorer l’écosystème DTSC</p>
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-cyan-300">{copy.navigation}</p>
+                <p className="mt-1 text-xl font-black tracking-[-0.03em] text-white">{copy.exploreEcosystem}</p>
               </div>
               <button
                 ref={closeRef}
                 type="button"
                 onClick={() => setOpen(false)}
                 className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-white shadow-lg backdrop-blur-xl transition hover:rotate-3 hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
-                aria-label="Fermer le menu"
+                aria-label={copy.closeMenu}
               >
                 <X className="h-6 w-6" />
               </button>
@@ -188,7 +184,7 @@ export function PublicNav() {
                   </p>
                 </div>
 
-                <nav className="grid gap-3 sm:grid-cols-2" aria-label="Pages du site public">
+                <nav className="grid gap-3 sm:grid-cols-2" aria-label={copy.sitePages}>
                   {publicLinks.map((link, index) => {
                     const active = isActive(pathname, link.href);
                     const Icon = mobileLinkIcons[link.href as keyof typeof mobileLinkIcons] || ArrowRight;
@@ -209,8 +205,8 @@ export function PublicNav() {
                           <Icon className="h-5 w-5" />
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-base font-black tracking-[-0.02em] text-white">{link.label}</span>
-                          <span className="mt-1 block text-xs font-semibold text-slate-300">Découvrir cette rubrique</span>
+                          <span className="block text-base font-black tracking-[-0.02em] text-white">{copy.sections[link.href as keyof typeof copy.sections] || link.label}</span>
+                          <span className="mt-1 block text-xs font-semibold text-slate-300">{copy.discoverSection}</span>
                         </span>
                         <ArrowRight className="h-4 w-4 shrink-0 text-slate-400 transition group-hover:translate-x-1 group-hover:text-white" />
                       </Link>
@@ -248,30 +244,30 @@ export function PublicNav() {
 
   return (
     <div className="flex min-w-0 items-center gap-2">
-      <div ref={desktopNavRef} className="hidden min-w-0 items-center gap-0.5 xl:flex" aria-label="Navigation principale">
+      <div ref={desktopNavRef} className="hidden min-w-0 items-center gap-0.5 xl:flex" aria-label={copy.mainNavigation}>
         {desktopGroups.map((group, index) => {
-          const expanded = openDesktopGroup === group.label;
+          const expanded = openDesktopGroup === group.key;
           const active = group.links.some((link) => isActive(pathname, link.href));
           const popupId = "public-navigation-group-" + index;
           return (
-            <div key={group.label} className="relative">
+            <div key={group.key} className="relative">
               <button
                 type="button"
                 aria-expanded={expanded}
                 aria-controls={popupId}
-                onClick={() => setOpenDesktopGroup(expanded ? null : group.label)}
+                onClick={() => setOpenDesktopGroup(expanded ? null : group.key)}
                 className={cn(
                   "inline-flex min-h-10 items-center gap-1 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-dtsc-blue",
                   active || expanded ? "bg-dtsc-soft text-dtsc-blue" : "text-dtsc-ink hover:bg-dtsc-soft hover:text-dtsc-blue",
                 )}
               >
-                {group.label}
+                {copy.groups[group.key]}
                 <span aria-hidden="true" className={cn("text-xs transition-transform", expanded && "rotate-180")}>⌄</span>
               </button>
               {expanded ? (
                 <nav
                   id={popupId}
-                  aria-label={"Explorer " + group.label}
+                  aria-label={copy.explore + " " + copy.groups[group.key]}
                   className={cn(
                     "absolute top-[calc(100%+0.75rem)] z-[110] w-72 rounded-2xl border border-dtsc-border bg-dtsc-surface p-2 shadow-[var(--dtsc-shadow-lg)]",
                     index >= 3 ? "right-0" : "left-0",
@@ -279,13 +275,13 @@ export function PublicNav() {
                 >
                   {group.links.map((link) => (
                     <Link
-                      key={group.label + link.href}
+                      key={group.key + link.href}
                       href={link.href}
                       onClick={() => setOpenDesktopGroup(null)}
                       aria-current={isActive(pathname, link.href) ? "page" : undefined}
                       className="block rounded-xl px-3 py-3 text-sm font-medium text-dtsc-ink transition-colors hover:bg-dtsc-soft hover:text-dtsc-blue focus-visible:outline-2 focus-visible:outline-dtsc-blue"
                     >
-                      {link.label}
+                      {copy.links[link.key]}
                     </Link>
                   ))}
                 </nav>
