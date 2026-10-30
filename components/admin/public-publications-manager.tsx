@@ -56,6 +56,8 @@ export function PublicPublicationsManager({
   const [message, setMessage] = useState("");
   const [editing, setEditing] = useState<Publication | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [createDirty, setCreateDirty] = useState(false);
+  const [editingDirty, setEditingDirty] = useState(false);
   const [editingDraft, setEditingDraft] = useState<PublicationDraft | null>(null);
   const editingFormRef = useRef<HTMLFormElement | null>(null);
   const [confirmEditSave, setConfirmEditSave] = useState(false);
@@ -110,9 +112,13 @@ export function PublicPublicationsManager({
       }
       setEditing(null);
       setShowCreate(false);
+      setCreateDirty(false);
+      setEditingDirty(false);
       setEditingDraft(null);
       setCreatePreviewHtml("");
       setEditingPreviewHtml("");
+      setCreateDirty(false);
+      setEditingDirty(false);
       router.refresh();
     }
   }
@@ -136,7 +142,7 @@ export function PublicPublicationsManager({
           <p className="mt-3 text-sm leading-6 text-dtsc-muted">
             Réservez ici les articles, guides, annonces publiques, projets ou cas pratiques qui alimenteront la page Ressources. Les publications non publiées restent en brouillon.
           </p>
-          <Button type="button" disabled={!canCreateDrafts} onClick={() => setShowCreate(true)} className="mt-6 w-full rounded-xl bg-dtsc-blue px-5 py-3 text-white">
+          <Button type="button" disabled={!canCreateDrafts} onClick={() => { setCreateDirty(false); setShowCreate(true); }} className="mt-6 w-full rounded-xl bg-dtsc-blue px-5 py-3 text-white">
             <Edit3 className="h-4 w-4" />
             Rédiger une publication
           </Button>
@@ -177,6 +183,7 @@ export function PublicPublicationsManager({
                   <Button type="button" variant="outline" size="sm" onClick={() => window.open(`/admin/content/preview/${publication.id}`, "_blank", "noopener,noreferrer")} className="rounded-xl" aria-label="Prévisualiser"><Eye className="h-4 w-4" /></Button>
                   <Button type="button" variant="outline" size="sm" disabled={!canEditPublication(publication)} onClick={() => {
                     setEditing(publication);
+                    setEditingDirty(false);
                     setEditingDraft({
                       title: publication.title,
                       slug: publication.slug,
@@ -214,9 +221,12 @@ export function PublicPublicationsManager({
         description="Préparez votre article, ajoutez des médias, vérifiez son aperçu et enregistrez selon vos autorisations."
         presentation="editor"
         className="sm:max-w-[min(96vw,84rem)]"
-        onClose={() => { setShowCreate(false); setCreatePreviewHtml(""); }}
+        onClose={() => {
+          if (createDirty && !window.confirm("Quitter sans enregistrer les modifications ?")) return;
+          setShowCreate(false); setCreateDirty(false); setCreatePreviewHtml("");
+        }}
       >
-        <form onSubmit={(event) => submit(event)} className="grid min-w-0 gap-4 px-1 pb-5 sm:px-2">
+        <form onSubmit={(event) => submit(event)} onChangeCapture={() => setCreateDirty(true)} onInputCapture={() => setCreateDirty(true)} className="grid min-w-0 gap-4 px-1 pb-5 sm:px-2">
             <Input name="title" placeholder="Titre de la publication" required disabled={!canCreateDrafts} />
             <Input name="slug" placeholder="slug-url-sans-accents" pattern="[a-z0-9]+(-[a-z0-9]+)*" required disabled={!canCreateDrafts} />
             <div className="grid gap-3 sm:grid-cols-2">
@@ -257,6 +267,8 @@ export function PublicPublicationsManager({
       </Dialog>
 
       <Dialog open={Boolean(editing)} title="Modifier la publication" presentation="editor" className="sm:max-w-[min(96vw,84rem)]" onClose={() => {
+        if (editingDirty && !window.confirm("Quitter sans enregistrer les modifications ?")) return;
+        setEditingDirty(false);
         setEditing(null);
         setEditingDraft(null);
         setEditingPreviewHtml("");
@@ -265,6 +277,8 @@ export function PublicPublicationsManager({
         {editing && editingDraft && (
           <form
             ref={editingFormRef}
+            onChangeCapture={() => setEditingDirty(true)}
+            onInputCapture={() => setEditingDirty(true)}
             onSubmit={(event) => {
               event.preventDefault();
               setConfirmEditSave(true);
