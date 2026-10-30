@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import {
   ArrowRight,
   BarChart3,
@@ -13,13 +14,17 @@ import {
   Network,
   ShieldCheck,
   Sparkles,
-  Target,
-  Workflow,
 } from "lucide-react";
 import { ContactNewsletterSection } from "@/components/public/contact-newsletter-section";
 import { LazyPublicAgent } from "@/components/public/lazy-public-agent";
 import { PublicFooter, PublicHeader } from "@/components/public/public-shell";
 import { getDashboardUrl } from "@/lib/domains";
+
+export const metadata: Metadata = {
+  title: "Conseil, data, IA et transformation digitale",
+  description: "DTSC accompagne les organisations dans la transformation de leurs données et processus en solutions concrètes. Conseil, Data & BI, IA, développement numérique et DTSC Platform.",
+  alternates: { canonical: "/" },
+};
 
 const levers = [
   { title: "Data & BI", description: "Transformer les données dispersées en indicateurs fiables, dashboards et décisions lisibles.", icon: Database, href: "/bi-kpi" },
@@ -73,12 +78,12 @@ export default function HomePage() {
             <p className="dtsc-label inline-flex items-center gap-2 rounded-full border border-cyan-300/40 bg-cyan-300/10 px-3 py-2 text-dtsc-blue">
               <Sparkles className="h-4 w-4" /> Conseil · Technologie · Data · IA
             </p>
-            <h1 className="dtsc-display mt-7 max-w-5xl text-dtsc-ink">Sept leviers numériques pour une performance plus claire.</h1>
+            <h1 className="dtsc-display mt-7 max-w-5xl text-dtsc-ink">Transformez vos données et vos processus en résultats concrets.</h1>
             <p className="dtsc-body-lg mt-7 max-w-2xl text-dtsc-muted">
-              DTSC aide les organisations à améliorer leur performance grâce à sept leviers complémentaires, depuis le diagnostic jusqu’à la mesure des résultats.
+              Du diagnostic à la mise en œuvre, DTSC relie conseil, technologie, data et intelligence artificielle pour simplifier votre activité, éclairer les décisions et accompagner vos équipes.
             </p>
             <p className="mt-4 max-w-2xl text-sm leading-7 text-dtsc-blue">
-              Les sept leviers structurent notre offre. DTSC Platform est le produit qui prolonge cette offre en centralisant l’exécution, la collaboration et le suivi quotidien.
+              Nos expertises répondent à vos défis métier. DTSC Platform prolonge cet accompagnement par des outils de collaboration, de gestion et de pilotage.
             </p>
 
             <div className="mt-9 flex flex-wrap gap-3">
@@ -86,7 +91,7 @@ export default function HomePage() {
                 Demander une consultation <ArrowRight className="h-4 w-4" />
               </Link>
               <Link href="/services" className="inline-flex items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-surface px-5 py-3 font-semibold text-dtsc-blue transition hover:bg-dtsc-soft">
-                Découvrir les 7 leviers
+                Explorer nos expertises
               </Link>
               <Link href={dashboardUrl} className="inline-flex items-center gap-2 px-2 py-3 font-semibold text-dtsc-muted hover:text-dtsc-blue">
                 Ouvrir DTSC Platform
@@ -100,27 +105,30 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="dtsc-product-surface relative overflow-hidden p-6 sm:p-8">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="dtsc-label text-dtsc-blue">Écosystème DTSC</p>
-                <h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em]">Une offre de services, un produit de continuité</h2>
-              </div>
-              <Workflow className="h-9 w-9 text-cyan-500" />
-            </div>
-            <div className="mt-8 grid gap-3">
-              {levers.map((lever, index) => {
+          <aside className="min-w-0 border-l border-dtsc-border pl-6 sm:pl-10 lg:pl-12">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-dtsc-blue">Comment DTSC vous accompagne</p>
+            <h2 className="mt-3 text-2xl font-semibold leading-snug tracking-tight text-dtsc-ink sm:text-3xl">
+              Des réponses concrètes à vos défis quotidiens.
+            </h2>
+            <div className="mt-7 divide-y divide-dtsc-border border-t border-dtsc-border">
+              {levers.slice(0, 3).map((lever) => {
                 const Icon = lever.icon;
                 return (
-                  <Link key={lever.title} href={lever.href} className="group flex items-center gap-4 rounded-xl border border-dtsc-border bg-dtsc-page p-3 transition hover:border-cyan-300 hover:bg-dtsc-soft">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-dtsc-surface text-dtsc-blue shadow-sm"><Icon className="h-5 w-5" /></span>
-                    <span className="min-w-0 flex-1"><span className="text-xs font-bold text-dtsc-muted">0{index + 1}</span><span className="ml-2 font-semibold text-dtsc-ink">{lever.title}</span></span>
-                    <ArrowRight className="h-4 w-4 text-dtsc-muted transition group-hover:translate-x-0.5 group-hover:text-dtsc-blue" />
+                  <Link href={lever.href} key={lever.title} className="group flex min-w-0 items-start gap-4 py-5">
+                    <Icon className="mt-1 h-5 w-5 shrink-0 text-dtsc-blue" aria-hidden="true" />
+                    <span className="min-w-0 flex-1">
+                      <strong className="block text-base font-semibold group-hover:text-dtsc-blue">{lever.title}</strong>
+                      <span className="mt-1 block text-sm leading-6 text-dtsc-muted">{lever.description}</span>
+                    </span>
+                    <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-dtsc-blue transition group-hover:translate-x-1" aria-hidden="true" />
                   </Link>
                 );
               })}
             </div>
-          </div>
+            <Link href="/solutions" className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-dtsc-blue underline underline-offset-4">
+              Voir les solutions <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </Link>
+          </aside>
         </div>
       </section>
 
@@ -146,31 +154,24 @@ export default function HomePage() {
         <div className="mx-auto max-w-[92rem] px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
           <div className="max-w-3xl">
             <p className="dtsc-label text-dtsc-blue">Les sept leviers</p>
-            <h2 className="dtsc-h2 mt-4">Une offre lisible, sans huitième service inventé.</h2>
-            <p className="mt-5 leading-7 text-dtsc-muted">Les dashboards, chatbots, ERP, applications et campagnes sont des réalisations rattachées à ces leviers. DTSC Platform reste un produit transversal, pas un service supplémentaire.</p>
+            <h2 className="dtsc-h2 mt-4">Sept domaines d’expertise, adaptés à vos priorités.</h2>
+            <p className="mt-5 leading-7 text-dtsc-muted">Nous combinons les bonnes compétences selon votre situation : données, automatisation, outils métiers, accompagnement et communication.</p>
           </div>
 
-          <div className="mt-10 grid gap-px overflow-hidden rounded-[var(--dtsc-panel-radius)] border border-dtsc-border bg-dtsc-border md:grid-cols-2 xl:grid-cols-3">
+          <div className="mt-10 grid min-w-0 gap-x-10 md:grid-cols-2 xl:grid-cols-3">
             {levers.map((lever) => {
               const Icon = lever.icon;
               return (
-                <Link key={lever.title} href={lever.href} className="group bg-dtsc-surface p-6 transition hover:bg-dtsc-soft">
-                  <Icon className="h-6 w-6 text-dtsc-blue" />
-                  <h3 className="mt-5 text-xl font-semibold tracking-[-0.025em] text-dtsc-ink">{lever.title}</h3>
-                  <p className="mt-3 text-sm leading-6 text-dtsc-muted">{lever.description}</p>
-                  <span className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-dtsc-blue">Explorer <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" /></span>
+                <Link key={lever.title} href={lever.href} className="group block min-w-0 border-t border-dtsc-border py-6 transition-colors">
+                  <Icon className="h-6 w-6 text-dtsc-blue" aria-hidden="true" />
+                  <h3 className="mt-4 text-xl font-semibold tracking-tight text-dtsc-ink group-hover:text-dtsc-blue">{lever.title}</h3>
+                  <p className="mt-2 text-sm leading-7 text-dtsc-muted">{lever.description}</p>
+                  <span className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-dtsc-blue">
+                    Explorer <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" aria-hidden="true" />
+                  </span>
                 </Link>
               );
             })}
-
-            <Link href="/services" className="relative flex min-h-64 flex-col justify-between overflow-hidden bg-[#001736] p-6 text-white shadow-[inset_0_1px_0_rgba(255,255,255,.08)]">
-              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_16%_10%,rgba(34,211,238,.24),transparent_34%),radial-gradient(circle_at_90%_90%,rgba(139,92,246,.22),transparent_38%)]" />
-              <Target className="relative h-7 w-7 text-cyan-300" />
-              <div className="relative">
-                <p className="text-xl font-semibold text-white">Choisir le bon point de départ</p>
-                <p className="mt-3 text-sm leading-6 text-slate-200">Comparez le problème, le levier principal, les capacités complémentaires et le premier résultat à mesurer.</p>
-              </div>
-            </Link>
           </div>
         </div>
       </section>
@@ -179,10 +180,10 @@ export default function HomePage() {
         <div className="grid gap-12 lg:grid-cols-2">
           <div>
             <p className="dtsc-label text-dtsc-blue">Secteurs</p>
-            <h2 className="dtsc-h2 mt-4">Adapter les 7 leviers au contexte métier de chaque organisation.</h2>
+            <h2 className="dtsc-h2 mt-4">Des solutions adaptées à votre secteur et à vos contraintes.</h2>
             <div className="mt-8 grid gap-3 sm:grid-cols-2">
               {sectors.map((sector) => (
-                <Link key={sector} href="/secteurs" className="flex items-center gap-3 rounded-xl border border-dtsc-border bg-dtsc-surface p-4 font-semibold text-dtsc-ink transition hover:bg-dtsc-soft">
+                <Link key={sector} href="/secteurs" className="flex min-w-0 items-center gap-3 border-b border-dtsc-border py-4 font-medium text-dtsc-ink transition-colors hover:text-dtsc-blue">
                   <ShieldCheck className="h-5 w-5 text-dtsc-blue" />{sector}
                 </Link>
               ))}
@@ -226,10 +227,22 @@ export default function HomePage() {
             <p className="mt-5 leading-7 text-dtsc-muted">Consultez les publications réellement disponibles, les guides et les analyses DTSC. Aucun cas client ou résultat n’est présenté sans preuve autorisée.</p>
             <Link href="/ressources" className="mt-7 inline-flex items-center gap-2 font-semibold text-dtsc-blue">Voir les ressources publiées <ArrowRight className="h-4 w-4" /></Link>
           </div>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="dtsc-product-surface p-5"><BarChart3 className="h-6 w-6 text-dtsc-blue" /><h3 className="mt-4 font-semibold">Data & KPI</h3><p className="mt-2 text-sm leading-6 text-dtsc-muted">Comprendre les indicateurs utiles et leurs limites.</p></div>
-            <div className="dtsc-product-surface p-5"><Bot className="h-6 w-6 text-dtsc-blue" /><h3 className="mt-4 font-semibold">IA appliquée</h3><p className="mt-2 text-sm leading-6 text-dtsc-muted">Identifier les usages responsables et mesurables.</p></div>
-            <div className="dtsc-product-surface p-5"><Megaphone className="h-6 w-6 text-dtsc-blue" /><h3 className="mt-4 font-semibold">Croissance digitale</h3><p className="mt-2 text-sm leading-6 text-dtsc-muted">Relier contenu, acquisition et supports commerciaux.</p></div>
+          <div className="grid min-w-0 gap-6 sm:grid-cols-3">
+            <Link href="/bi-kpi" className="group block border-t border-dtsc-border pt-5">
+              <BarChart3 className="h-6 w-6 text-dtsc-blue" aria-hidden="true" />
+              <h3 className="mt-3 font-semibold group-hover:text-dtsc-blue">Data & KPI</h3>
+              <p className="mt-2 text-sm leading-6 text-dtsc-muted">Comprendre les indicateurs utiles et leurs limites.</p>
+            </Link>
+            <Link href="/ia-entreprise" className="group block border-t border-dtsc-border pt-5">
+              <Bot className="h-6 w-6 text-dtsc-blue" aria-hidden="true" />
+              <h3 className="mt-3 font-semibold group-hover:text-dtsc-blue">IA appliquée</h3>
+              <p className="mt-2 text-sm leading-6 text-dtsc-muted">Identifier les usages responsables et mesurables.</p>
+            </Link>
+            <Link href="/ressources" className="group block border-t border-dtsc-border pt-5">
+              <Megaphone className="h-6 w-6 text-dtsc-blue" aria-hidden="true" />
+              <h3 className="mt-3 font-semibold group-hover:text-dtsc-blue">Croissance digitale</h3>
+              <p className="mt-2 text-sm leading-6 text-dtsc-muted">Relier contenu, acquisition et supports commerciaux.</p>
+            </Link>
           </div>
         </div>
       </section>
