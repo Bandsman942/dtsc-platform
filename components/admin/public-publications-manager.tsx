@@ -36,7 +36,7 @@ type PublicationDraft = Pick<Publication, "title" | "slug" | "category" | "excer
   contentHtml: string;
 };
 
-const categories = ["RESSOURCE", "ARTICLE", "GUIDE", "CAS_PRATIQUE", "ANNONCE", "PROJET"];
+const categories = ["RESSOURCE", "ARTICLE", "GUIDE", "CAS_PRATIQUE", "DEMONSTRATION", "PROJET", "ANNONCE", "REFLEXION_BUSINESS_TECH"];
 
 export function PublicPublicationsManager({
   publications,

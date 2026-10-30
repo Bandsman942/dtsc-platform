@@ -1794,7 +1794,7 @@ export const publicPublicationSchema = z.object({
     .min(3)
     .max(140)
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
-  category: z.enum(["RESSOURCE", "ARTICLE", "GUIDE", "CAS_PRATIQUE", "ANNONCE", "PROJET"]).default("RESSOURCE"),
+  category: z.enum(["RESSOURCE", "ARTICLE", "GUIDE", "CAS_PRATIQUE", "DEMONSTRATION", "PROJET", "ANNONCE", "REFLEXION_BUSINESS_TECH"]).default("RESSOURCE"),
   excerpt: z.string().min(20).max(500),
   content: z.string().min(80).max(12000),
   contentHtml: z.string().max(60000).optional().or(z.literal("")),
