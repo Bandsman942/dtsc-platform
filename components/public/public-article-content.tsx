@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import Image from "next/image";
 import { Dialog } from "@/components/ui/dialog";
 
@@ -14,16 +14,21 @@ export function PublicArticleContent({ html }: { html: string }) {
     const root = contentRef.current;
     if (!root) return;
     for (const element of root.querySelectorAll("img")) {
-      if (element.closest("a")) continue;
-      element.tabIndex = 0;
-      element.setAttribute("role", "button");
-      element.setAttribute("aria-label", "Agrandir l’image : " + (element.alt || "illustration"));
+      if (element.closest("a,button")) continue;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.dtscArticleZoom = "true";
+      button.className = "inline-flex max-w-full items-center justify-center rounded-xl focus-visible:outline-2 focus-visible:outline-dtsc-blue";
+      button.setAttribute("aria-label", "Agrandir l’image : " + (element.alt || "illustration"));
+      element.replaceWith(button);
+      button.appendChild(element);
     }
   }, [html]);
 
   function findZoomableImage(target: EventTarget | null) {
     if (!(target instanceof HTMLElement)) return null;
-    const candidate = target.closest("img");
+    const wrapper = target.closest("button[data-dtsc-article-zoom]");
+    const candidate = wrapper?.querySelector("img") || target.closest("img");
     if (!(candidate instanceof HTMLImageElement)) return null;
     if (!contentRef.current?.contains(candidate) || candidate.closest("a")) return null;
     return candidate;
@@ -39,20 +44,12 @@ export function PublicArticleContent({ html }: { html: string }) {
     if (findZoomableImage(event.target)) openImage(event.target);
   }
 
-  function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (event.key !== "Enter" && event.key !== " ") return;
-    if (!findZoomableImage(event.target)) return;
-    event.preventDefault();
-    openImage(event.target);
-  }
-
   return (
     <>
       <div
         ref={contentRef}
         className="dtsc-publication-content text-dtsc-muted"
         onClick={handleClick}
-        onKeyDown={handleKeyDown}
         dangerouslySetInnerHTML={{ __html: html }}
       />
       <Dialog
