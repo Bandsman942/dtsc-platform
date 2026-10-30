@@ -174,7 +174,9 @@ export async function POST(req: Request) {
     const agent = await createInteractiveAiAgentStream({
       session,
       userId: sessionUserId,
-      organizationId: null,
+      // Keep the conversation ownership scope for run status/confirmation;
+      // the runtime forces PERSONAL model and tool access independently.
+      organizationId,
       scope: "GLOBAL_CHAT",
       contextCode,
       locale,
